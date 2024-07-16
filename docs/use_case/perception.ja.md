@@ -279,7 +279,7 @@ perception では、シナリオに指定した条件で perception_eval が評�
 
 Objectsデータのフォーマット
 
-[json schema](../../driving_log_replayer/config/object_output_schema.json)を参照
+[json schema](../../log_evaluator/config/perception/object_output_schema.json)を参照
 
 メトリクスデータのフォーマット
 

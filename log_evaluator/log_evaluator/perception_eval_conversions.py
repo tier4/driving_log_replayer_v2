@@ -304,8 +304,11 @@ class FrameDescriptionWriter:
     def load_schema(cls) -> None:
         if cls.schema is None:
             package_share_directory = get_package_share_directory("driving_log_replayer")
-            schema_file_path = (
-                Path(package_share_directory) / "config" / "object_output_schema.json"
+            schema_file_path = Path(
+                package_share_directory,
+                "config",
+                "perception",
+                "object_output_schema.json",
             )
             with schema_file_path.open() as file:
                 cls.schema = json.load(file)
@@ -381,7 +384,7 @@ class FrameDescriptionWriter:
         ----
             pass_fail (PassFailResult): PassFailResult object
 
-        Returns: see json schema in config/object_output_schema.json
+        Returns: see json schema in config/perception/object_output_schema.json
         -------
             list[dict]: List of objects descriptions.
                 Each element is a dictionary with the following keys:
