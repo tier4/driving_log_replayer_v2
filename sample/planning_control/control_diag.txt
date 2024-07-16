@@ -32,3 +32,6181 @@ name: lane_info # kinematicでないので分離するほうがいいかも？�
     value:
   - key: t # laneの中心からの横距離
     value:
+
+
+~/ros_ws/planning_control dlr/test-platform* 5m 49s
+❯ ros2 topic echo /diagnostic/control_evaluator/metrics
+1721114673.647621 [77]       ros2: determined eno1 (udp/10.0.55.137) as highest quality interface, selected for automatic interface.
+header:
+  stamp:
+    sec: 1709009632
+    nanosec: 404397388
+  frame_id: ''
+status:
+- level: "\0"
+  name: 'autonomous_emergency_braking: aeb_emergency_stop'
+  message: ''
+  hardware_id: ''
+  values:
+  - key: decision
+    value: none
+- level: "\0"
+  name: ego_lane_info
+  message: ''
+  hardware_id: ''
+  values:
+  - key: lane_id
+    value: '176472'
+  - key: s
+    value: '11.807869'
+  - key: t
+    value: '-0.027418'
+- level: "\0"
+  name: kinematic_state
+  message: ''
+  hardware_id: ''
+  values:
+  - key: vel
+    value: '4.164290'
+  - key: acc
+    value: '-0.245304'
+  - key: jerk
+    value: '-0.860871'
+---
+header:
+  stamp:
+    sec: 1709009632
+    nanosec: 504355839
+  frame_id: ''
+status:
+- level: "\0"
+  name: 'autonomous_emergency_braking: aeb_emergency_stop'
+  message: ''
+  hardware_id: ''
+  values:
+  - key: decision
+    value: none
+- level: "\0"
+  name: ego_lane_info
+  message: ''
+  hardware_id: ''
+  values:
+  - key: lane_id
+    value: '176472'
+  - key: s
+    value: '12.224617'
+  - key: t
+    value: '-0.018463'
+- level: "\0"
+  name: kinematic_state
+  message: ''
+  hardware_id: ''
+  values:
+  - key: vel
+    value: '4.157930'
+  - key: acc
+    value: '-0.162705'
+  - key: jerk
+    value: '0.824320'
+---
+header:
+  stamp:
+    sec: 1709009632
+    nanosec: 604399852
+  frame_id: ''
+status:
+- level: "\0"
+  name: 'autonomous_emergency_braking: aeb_emergency_stop'
+  message: ''
+  hardware_id: ''
+  values:
+  - key: decision
+    value: none
+- level: "\0"
+  name: ego_lane_info
+  message: ''
+  hardware_id: ''
+  values:
+  - key: lane_id
+    value: '176472'
+  - key: s
+    value: '12.638497'
+  - key: t
+    value: '-0.005600'
+- level: "\0"
+  name: kinematic_state
+  message: ''
+  hardware_id: ''
+  values:
+  - key: vel
+    value: '4.114442'
+  - key: acc
+    value: '-0.262229'
+  - key: jerk
+    value: '-0.995871'
+---
+header:
+  stamp:
+    sec: 1709009632
+    nanosec: 704401222
+  frame_id: ''
+status:
+- level: "\0"
+  name: 'autonomous_emergency_braking: aeb_emergency_stop'
+  message: ''
+  hardware_id: ''
+  values:
+  - key: decision
+    value: none
+- level: "\0"
+  name: ego_lane_info
+  message: ''
+  hardware_id: ''
+  values:
+  - key: lane_id
+    value: '176472'
+  - key: s
+    value: '13.048985'
+  - key: t
+    value: '-0.017200'
+- level: "\0"
+  name: kinematic_state
+  message: ''
+  hardware_id: ''
+  values:
+  - key: vel
+    value: '4.077619'
+  - key: acc
+    value: '-0.306019'
+  - key: jerk
+    value: '-0.434886'
+---
+header:
+  stamp:
+    sec: 1709009632
+    nanosec: 804405494
+  frame_id: ''
+status:
+- level: "\0"
+  name: 'autonomous_emergency_braking: aeb_emergency_stop'
+  message: ''
+  hardware_id: ''
+  values:
+  - key: decision
+    value: none
+- level: "\0"
+  name: ego_lane_info
+  message: ''
+  hardware_id: ''
+  values:
+  - key: lane_id
+    value: '176472'
+  - key: s
+    value: '13.459571'
+  - key: t
+    value: '-0.026677'
+- level: "\0"
+  name: kinematic_state
+  message: ''
+  hardware_id: ''
+  values:
+  - key: vel
+    value: '4.051801'
+  - key: acc
+    value: '-0.290056'
+  - key: jerk
+    value: '0.159762'
+---
+header:
+  stamp:
+    sec: 1709009632
+    nanosec: 904397276
+  frame_id: ''
+status:
+- level: "\0"
+  name: 'autonomous_emergency_braking: aeb_emergency_stop'
+  message: ''
+  hardware_id: ''
+  values:
+  - key: decision
+    value: none
+- level: "\0"
+  name: ego_lane_info
+  message: ''
+  hardware_id: ''
+  values:
+  - key: lane_id
+    value: '176472'
+  - key: s
+    value: '13.864332'
+  - key: t
+    value: '-0.032471'
+- level: "\0"
+  name: kinematic_state
+  message: ''
+  hardware_id: ''
+  values:
+  - key: vel
+    value: '4.039792'
+  - key: acc
+    value: '-0.237908'
+  - key: jerk
+    value: '0.522073'
+---
+header:
+  stamp:
+    sec: 1709009633
+    nanosec: 4402718
+  frame_id: ''
+status:
+- level: "\0"
+  name: 'autonomous_emergency_braking: aeb_emergency_stop'
+  message: ''
+  hardware_id: ''
+  values:
+  - key: decision
+    value: none
+- level: "\0"
+  name: ego_lane_info
+  message: ''
+  hardware_id: ''
+  values:
+  - key: lane_id
+    value: '176472'
+  - key: s
+    value: '14.268093'
+  - key: t
+    value: '-0.031601'
+- level: "\0"
+  name: kinematic_state
+  message: ''
+  hardware_id: ''
+  values:
+  - key: vel
+    value: '4.024280'
+  - key: acc
+    value: '-0.192781'
+  - key: jerk
+    value: '0.450397'
+---
+header:
+  stamp:
+    sec: 1709009633
+    nanosec: 104399187
+  frame_id: ''
+status:
+- level: "\0"
+  name: 'autonomous_emergency_braking: aeb_emergency_stop'
+  message: ''
+  hardware_id: ''
+  values:
+  - key: decision
+    value: none
+- level: "\0"
+  name: ego_lane_info
+  message: ''
+  hardware_id: ''
+  values:
+  - key: lane_id
+    value: '176472'
+  - key: s
+    value: '14.668894'
+  - key: t
+    value: '-0.027730'
+- level: "\0"
+  name: kinematic_state
+  message: ''
+  hardware_id: ''
+  values:
+  - key: vel
+    value: '3.993165'
+  - key: acc
+    value: '-0.238488'
+  - key: jerk
+    value: '-0.460506'
+---
+header:
+  stamp:
+    sec: 1709009633
+    nanosec: 204398359
+  frame_id: ''
+status:
+- level: "\0"
+  name: 'autonomous_emergency_braking: aeb_emergency_stop'
+  message: ''
+  hardware_id: ''
+  values:
+  - key: decision
+    value: none
+- level: "\0"
+  name: ego_lane_info
+  message: ''
+  hardware_id: ''
+  values:
+  - key: lane_id
+    value: '176472'
+  - key: s
+    value: '15.068897'
+  - key: t
+    value: '-0.018027'
+- level: "\0"
+  name: kinematic_state
+  message: ''
+  hardware_id: ''
+  values:
+  - key: vel
+    value: '3.987874'
+  - key: acc
+    value: '-0.164279'
+  - key: jerk
+    value: '0.737804'
+---
+header:
+  stamp:
+    sec: 1709009633
+    nanosec: 304349655
+  frame_id: ''
+status:
+- level: "\0"
+  name: 'autonomous_emergency_braking: aeb_emergency_stop'
+  message: ''
+  hardware_id: ''
+  values:
+  - key: decision
+    value: none
+- level: "\0"
+  name: lateral_deviation
+  message: ''
+  hardware_id: ''
+  values:
+  - key: metric_value
+    value: '0.025369'
+- level: "\0"
+  name: yaw_deviation
+  message: ''
+  hardware_id: ''
+  values:
+  - key: metric_value
+    value: '0.004000'
+- level: "\0"
+  name: ego_lane_info
+  message: ''
+  hardware_id: ''
+  values:
+  - key: lane_id
+    value: '176472'
+  - key: s
+    value: '15.465595'
+  - key: t
+    value: '-0.002923'
+- level: "\0"
+  name: kinematic_state
+  message: ''
+  hardware_id: ''
+  values:
+  - key: vel
+    value: '3.988385'
+  - key: acc
+    value: '-0.093019'
+  - key: jerk
+    value: '0.718444'
+---
+header:
+  stamp:
+    sec: 1709009633
+    nanosec: 404406859
+  frame_id: ''
+status:
+- level: "\0"
+  name: 'autonomous_emergency_braking: aeb_emergency_stop'
+  message: ''
+  hardware_id: ''
+  values:
+  - key: decision
+    value: none
+- level: "\0"
+  name: lateral_deviation
+  message: ''
+  hardware_id: ''
+  values:
+  - key: metric_value
+    value: '0.026010'
+- level: "\0"
+  name: yaw_deviation
+  message: ''
+  hardware_id: ''
+  values:
+  - key: metric_value
+    value: '0.004765'
+- level: "\0"
+  name: ego_lane_info
+  message: ''
+  hardware_id: ''
+  values:
+  - key: lane_id
+    value: '176472'
+  - key: s
+    value: '15.860878'
+  - key: t
+    value: '0.018357'
+- level: "\0"
+  name: kinematic_state
+  message: ''
+  hardware_id: ''
+  values:
+  - key: vel
+    value: '3.951453'
+  - key: acc
+    value: '-0.201406'
+  - key: jerk
+    value: '-1.084758'
+---
+header:
+  stamp:
+    sec: 1709009633
+    nanosec: 504402461
+  frame_id: ''
+status:
+- level: "\0"
+  name: 'autonomous_emergency_braking: aeb_emergency_stop'
+  message: ''
+  hardware_id: ''
+  values:
+  - key: decision
+    value: none
+- level: "\0"
+  name: lateral_deviation
+  message: ''
+  hardware_id: ''
+  values:
+  - key: metric_value
+    value: '0.043618'
+- level: "\0"
+  name: yaw_deviation
+  message: ''
+  hardware_id: ''
+  values:
+  - key: metric_value
+    value: '0.001869'
+- level: "\0"
+  name: ego_lane_info
+  message: ''
+  hardware_id: ''
+  values:
+  - key: lane_id
+    value: '176472'
+  - key: s
+    value: '16.253703'
+  - key: t
+    value: '0.045773'
+- level: "\0"
+  name: kinematic_state
+  message: ''
+  hardware_id: ''
+  values:
+  - key: vel
+    value: '3.933332'
+  - key: acc
+    value: '-0.190086'
+  - key: jerk
+    value: '0.112204'
+---
+header:
+  stamp:
+    sec: 1709009633
+    nanosec: 604397104
+  frame_id: ''
+status:
+- level: "\0"
+  name: 'autonomous_emergency_braking: aeb_emergency_stop'
+  message: ''
+  hardware_id: ''
+  values:
+  - key: decision
+    value: none
+- level: "\0"
+  name: lateral_deviation
+  message: ''
+  hardware_id: ''
+  values:
+  - key: metric_value
+    value: '0.033925'
+- level: "\0"
+  name: yaw_deviation
+  message: ''
+  hardware_id: ''
+  values:
+  - key: metric_value
+    value: '0.005160'
+- level: "\0"
+  name: ego_lane_info
+  message: ''
+  hardware_id: ''
+  values:
+  - key: lane_id
+    value: '176472'
+  - key: s
+    value: '16.646073'
+  - key: t
+    value: '0.078742'
+- level: "\0"
+  name: kinematic_state
+  message: ''
+  hardware_id: ''
+  values:
+  - key: vel
+    value: '3.924233'
+  - key: acc
+    value: '-0.147421'
+  - key: jerk
+    value: '0.427608'
+---
+header:
+  stamp:
+    sec: 1709009633
+    nanosec: 704398088
+  frame_id: ''
+status:
+- level: "\0"
+  name: 'autonomous_emergency_braking: aeb_emergency_stop'
+  message: ''
+  hardware_id: ''
+  values:
+  - key: decision
+    value: none
+- level: "\0"
+  name: lateral_deviation
+  message: ''
+  hardware_id: ''
+  values:
+  - key: metric_value
+    value: '0.032928'
+- level: "\0"
+  name: yaw_deviation
+  message: ''
+  hardware_id: ''
+  values:
+  - key: metric_value
+    value: '0.003028'
+- level: "\0"
+  name: ego_lane_info
+  message: ''
+  hardware_id: ''
+  values:
+  - key: lane_id
+    value: '176472'
+  - key: s
+    value: '17.054920'
+  - key: t
+    value: '0.067871'
+- level: "\0"
+  name: kinematic_state
+  message: ''
+  hardware_id: ''
+  values:
+  - key: vel
+    value: '3.897449'
+  - key: acc
+    value: '-0.176098'
+  - key: jerk
+    value: '-0.283933'
+---
+header:
+  stamp:
+    sec: 1709009633
+    nanosec: 804396573
+  frame_id: ''
+status:
+- level: "\0"
+  name: 'autonomous_emergency_braking: aeb_emergency_stop'
+  message: ''
+  hardware_id: ''
+  values:
+  - key: decision
+    value: none
+- level: "\0"
+  name: lateral_deviation
+  message: ''
+  hardware_id: ''
+  values:
+  - key: metric_value
+    value: '0.034375'
+- level: "\0"
+  name: yaw_deviation
+  message: ''
+  hardware_id: ''
+  values:
+  - key: metric_value
+    value: '0.002316'
+- level: "\0"
+  name: ego_lane_info
+  message: ''
+  hardware_id: ''
+  values:
+  - key: lane_id
+    value: '176472'
+  - key: s
+    value: '17.438880'
+  - key: t
+    value: '0.033011'
+- level: "\0"
+  name: kinematic_state
+  message: ''
+  hardware_id: ''
+  values:
+  - key: vel
+    value: '3.864558'
+  - key: acc
+    value: '-0.224534'
+  - key: jerk
+    value: '-0.484897'
+---
+header:
+  stamp:
+    sec: 1709009633
+    nanosec: 904370804
+  frame_id: ''
+status:
+- level: "\0"
+  name: 'autonomous_emergency_braking: aeb_emergency_stop'
+  message: ''
+  hardware_id: ''
+  values:
+  - key: decision
+    value: none
+- level: "\0"
+  name: lateral_deviation
+  message: ''
+  hardware_id: ''
+  values:
+  - key: metric_value
+    value: '0.033854'
+- level: "\0"
+  name: yaw_deviation
+  message: ''
+  hardware_id: ''
+  values:
+  - key: metric_value
+    value: '0.000219'
+- level: "\0"
+  name: ego_lane_info
+  message: ''
+  hardware_id: ''
+  values:
+  - key: lane_id
+    value: '176472'
+  - key: s
+    value: '17.822643'
+  - key: t
+    value: '0.003604'
+- level: "\0"
+  name: kinematic_state
+  message: ''
+  hardware_id: ''
+  values:
+  - key: vel
+    value: '3.815756'
+  - key: acc
+    value: '-0.324810'
+  - key: jerk
+    value: '-1.014564'
+---
+header:
+  stamp:
+    sec: 1709009634
+    nanosec: 4622345
+  frame_id: ''
+status:
+- level: "\0"
+  name: 'autonomous_emergency_braking: aeb_emergency_stop'
+  message: ''
+  hardware_id: ''
+  values:
+  - key: decision
+    value: none
+- level: "\0"
+  name: lateral_deviation
+  message: ''
+  hardware_id: ''
+  values:
+  - key: metric_value
+    value: '0.032416'
+- level: "\0"
+  name: yaw_deviation
+  message: ''
+  hardware_id: ''
+  values:
+  - key: metric_value
+    value: '0.003169'
+- level: "\0"
+  name: ego_lane_info
+  message: ''
+  hardware_id: ''
+  values:
+  - key: lane_id
+    value: '176472'
+  - key: s
+    value: '18.202224'
+  - key: t
+    value: '-0.016596'
+- level: "\0"
+  name: kinematic_state
+  message: ''
+  hardware_id: ''
+  values:
+  - key: vel
+    value: '3.793325'
+  - key: acc
+    value: '-0.269849'
+  - key: jerk
+    value: '0.551987'
+---
+header:
+  stamp:
+    sec: 1709009634
+    nanosec: 104403083
+  frame_id: ''
+status:
+- level: "\0"
+  name: 'autonomous_emergency_braking: aeb_emergency_stop'
+  message: ''
+  hardware_id: ''
+  values:
+  - key: decision
+    value: none
+- level: "\0"
+  name: lateral_deviation
+  message: ''
+  hardware_id: ''
+  values:
+  - key: metric_value
+    value: '0.032518'
+- level: "\0"
+  name: yaw_deviation
+  message: ''
+  hardware_id: ''
+  values:
+  - key: metric_value
+    value: '0.017093'
+- level: "\0"
+  name: ego_lane_info
+  message: ''
+  hardware_id: ''
+  values:
+  - key: lane_id
+    value: '176472'
+  - key: s
+    value: '18.578890'
+  - key: t
+    value: '-0.029997'
+- level: "\0"
+  name: kinematic_state
+  message: ''
+  hardware_id: ''
+  values:
+  - key: vel
+    value: '3.758273'
+  - key: acc
+    value: '-0.317572'
+  - key: jerk
+    value: '-0.474196'
+---
+header:
+  stamp:
+    sec: 1709009634
+    nanosec: 204407371
+  frame_id: ''
+status:
+- level: "\0"
+  name: 'autonomous_emergency_braking: aeb_emergency_stop'
+  message: ''
+  hardware_id: ''
+  values:
+  - key: decision
+    value: none
+- level: "\0"
+  name: lateral_deviation
+  message: ''
+  hardware_id: ''
+  values:
+  - key: metric_value
+    value: '0.032112'
+- level: "\0"
+  name: yaw_deviation
+  message: ''
+  hardware_id: ''
+  values:
+  - key: metric_value
+    value: '0.015094'
+- level: "\0"
+  name: ego_lane_info
+  message: ''
+  hardware_id: ''
+  values:
+  - key: lane_id
+    value: '176472'
+  - key: s
+    value: '18.950500'
+  - key: t
+    value: '-0.035818'
+- level: "\0"
+  name: kinematic_state
+  message: ''
+  hardware_id: ''
+  values:
+  - key: vel
+    value: '3.728484'
+  - key: acc
+    value: '-0.300998'
+  - key: jerk
+    value: '0.166093'
+---
+header:
+  stamp:
+    sec: 1709009634
+    nanosec: 304399499
+  frame_id: ''
+status:
+- level: "\0"
+  name: 'autonomous_emergency_braking: aeb_emergency_stop'
+  message: ''
+  hardware_id: ''
+  values:
+  - key: decision
+    value: none
+- level: "\0"
+  name: lateral_deviation
+  message: ''
+  hardware_id: ''
+  values:
+  - key: metric_value
+    value: '0.027861'
+- level: "\0"
+  name: yaw_deviation
+  message: ''
+  hardware_id: ''
+  values:
+  - key: metric_value
+    value: '0.011690'
+- level: "\0"
+  name: ego_lane_info
+  message: ''
+  hardware_id: ''
+  values:
+  - key: lane_id
+    value: '176472'
+  - key: s
+    value: '19.317634'
+  - key: t
+    value: '-0.030101'
+- level: "\0"
+  name: kinematic_state
+  message: ''
+  hardware_id: ''
+  values:
+  - key: vel
+    value: '3.693635'
+  - key: acc
+    value: '-0.332801'
+  - key: jerk
+    value: '-0.315577'
+---
+header:
+  stamp:
+    sec: 1709009634
+    nanosec: 404400912
+  frame_id: ''
+status:
+- level: "\0"
+  name: 'autonomous_emergency_braking: aeb_emergency_stop'
+  message: ''
+  hardware_id: ''
+  values:
+  - key: decision
+    value: none
+- level: "\0"
+  name: lateral_deviation
+  message: ''
+  hardware_id: ''
+  values:
+  - key: metric_value
+    value: '0.020459'
+- level: "\0"
+  name: yaw_deviation
+  message: ''
+  hardware_id: ''
+  values:
+  - key: metric_value
+    value: '0.014390'
+- level: "\0"
+  name: ego_lane_info
+  message: ''
+  hardware_id: ''
+  values:
+  - key: lane_id
+    value: '176472'
+  - key: s
+    value: '19.683569'
+  - key: t
+    value: '-0.018609'
+- level: "\0"
+  name: kinematic_state
+  message: ''
+  hardware_id: ''
+  values:
+  - key: vel
+    value: '3.644010'
+  - key: acc
+    value: '-0.417998'
+  - key: jerk
+    value: '-0.860537'
+---
+header:
+  stamp:
+    sec: 1709009634
+    nanosec: 504402082
+  frame_id: ''
+status:
+- level: "\0"
+  name: 'autonomous_emergency_braking: aeb_emergency_stop'
+  message: ''
+  hardware_id: ''
+  values:
+  - key: decision
+    value: none
+- level: "\0"
+  name: lateral_deviation
+  message: ''
+  hardware_id: ''
+  values:
+  - key: metric_value
+    value: '0.033513'
+- level: "\0"
+  name: yaw_deviation
+  message: ''
+  hardware_id: ''
+  values:
+  - key: metric_value
+    value: '0.013516'
+- level: "\0"
+  name: ego_lane_info
+  message: ''
+  hardware_id: ''
+  values:
+  - key: lane_id
+    value: '176472'
+  - key: s
+    value: '20.047342'
+  - key: t
+    value: '0.001176'
+- level: "\0"
+  name: kinematic_state
+  message: ''
+  hardware_id: ''
+  values:
+  - key: vel
+    value: '3.651010'
+  - key: acc
+    value: '-0.219605'
+  - key: jerk
+    value: '1.982136'
+---
+header:
+  stamp:
+    sec: 1709009634
+    nanosec: 604408766
+  frame_id: ''
+status:
+- level: "\0"
+  name: 'autonomous_emergency_braking: aeb_emergency_stop'
+  message: ''
+  hardware_id: ''
+  values:
+  - key: decision
+    value: none
+- level: "\0"
+  name: lateral_deviation
+  message: ''
+  hardware_id: ''
+  values:
+  - key: metric_value
+    value: '0.036433'
+- level: "\0"
+  name: yaw_deviation
+  message: ''
+  hardware_id: ''
+  values:
+  - key: metric_value
+    value: '0.014549'
+- level: "\0"
+  name: ego_lane_info
+  message: ''
+  hardware_id: ''
+  values:
+  - key: lane_id
+    value: '176472'
+  - key: s
+    value: '20.411824'
+  - key: t
+    value: '0.028157'
+- level: "\0"
+  name: kinematic_state
+  message: ''
+  hardware_id: ''
+  values:
+  - key: vel
+    value: '3.631270'
+  - key: acc
+    value: '-0.224491'
+  - key: jerk
+    value: '-0.048567'
+---
+header:
+  stamp:
+    sec: 1709009634
+    nanosec: 704401891
+  frame_id: ''
+status:
+- level: "\0"
+  name: 'autonomous_emergency_braking: aeb_emergency_stop'
+  message: ''
+  hardware_id: ''
+  values:
+  - key: decision
+    value: none
+- level: "\0"
+  name: lateral_deviation
+  message: ''
+  hardware_id: ''
+  values:
+  - key: metric_value
+    value: '0.021742'
+- level: "\0"
+  name: yaw_deviation
+  message: ''
+  hardware_id: ''
+  values:
+  - key: metric_value
+    value: '0.012889'
+- level: "\0"
+  name: ego_lane_info
+  message: ''
+  hardware_id: ''
+  values:
+  - key: lane_id
+    value: '176472'
+  - key: s
+    value: '20.770255'
+  - key: t
+    value: '0.063837'
+- level: "\0"
+  name: kinematic_state
+  message: ''
+  hardware_id: ''
+  values:
+  - key: vel
+    value: '3.609732'
+  - key: acc
+    value: '-0.223466'
+  - key: jerk
+    value: '0.010292'
+---
+header:
+  stamp:
+    sec: 1709009634
+    nanosec: 804402528
+  frame_id: ''
+status:
+- level: "\0"
+  name: 'autonomous_emergency_braking: aeb_emergency_stop'
+  message: ''
+  hardware_id: ''
+  values:
+  - key: decision
+    value: none
+- level: "\0"
+  name: lateral_deviation
+  message: ''
+  hardware_id: ''
+  values:
+  - key: metric_value
+    value: '0.033043'
+- level: "\0"
+  name: yaw_deviation
+  message: ''
+  hardware_id: ''
+  values:
+  - key: metric_value
+    value: '0.010015'
+- level: "\0"
+  name: ego_lane_info
+  message: ''
+  hardware_id: ''
+  values:
+  - key: lane_id
+    value: '176472'
+  - key: s
+    value: '21.172657'
+  - key: t
+    value: '0.060088'
+- level: "\0"
+  name: kinematic_state
+  message: ''
+  hardware_id: ''
+  values:
+  - key: vel
+    value: '3.602591'
+  - key: acc
+    value: '-0.176368'
+  - key: jerk
+    value: '0.444927'
+---
+header:
+  stamp:
+    sec: 1709009634
+    nanosec: 904401578
+  frame_id: ''
+status:
+- level: "\0"
+  name: 'autonomous_emergency_braking: aeb_emergency_stop'
+  message: ''
+  hardware_id: ''
+  values:
+  - key: decision
+    value: none
+- level: "\0"
+  name: lateral_deviation
+  message: ''
+  hardware_id: ''
+  values:
+  - key: metric_value
+    value: '0.023385'
+- level: "\0"
+  name: yaw_deviation
+  message: ''
+  hardware_id: ''
+  values:
+  - key: metric_value
+    value: '0.009472'
+- level: "\0"
+  name: ego_lane_info
+  message: ''
+  hardware_id: ''
+  values:
+  - key: lane_id
+    value: '176472'
+  - key: s
+    value: '21.504707'
+  - key: t
+    value: '0.016219'
+- level: "\0"
+  name: kinematic_state
+  message: ''
+  hardware_id: ''
+  values:
+  - key: vel
+    value: '3.563133'
+  - key: acc
+    value: '-0.277536'
+  - key: jerk
+    value: '-1.073808'
+---
+header:
+  stamp:
+    sec: 1709009635
+    nanosec: 4409379
+  frame_id: ''
+status:
+- level: "\0"
+  name: 'autonomous_emergency_braking: aeb_emergency_stop'
+  message: ''
+  hardware_id: ''
+  values:
+  - key: decision
+    value: none
+- level: "\0"
+  name: lateral_deviation
+  message: ''
+  hardware_id: ''
+  values:
+  - key: metric_value
+    value: '0.028143'
+- level: "\0"
+  name: yaw_deviation
+  message: ''
+  hardware_id: ''
+  values:
+  - key: metric_value
+    value: '0.010353'
+- level: "\0"
+  name: ego_lane_info
+  message: ''
+  hardware_id: ''
+  values:
+  - key: lane_id
+    value: '176472'
+  - key: s
+    value: '21.855572'
+  - key: t
+    value: '-0.020629'
+- level: "\0"
+  name: kinematic_state
+  message: ''
+  hardware_id: ''
+  values:
+  - key: vel
+    value: '3.547458'
+  - key: acc
+    value: '-0.228453'
+  - key: jerk
+    value: '0.490374'
+---
+header:
+  stamp:
+    sec: 1709009635
+    nanosec: 104402212
+  frame_id: ''
+status:
+- level: "\0"
+  name: 'autonomous_emergency_braking: aeb_emergency_stop'
+  message: ''
+  hardware_id: ''
+  values:
+  - key: decision
+    value: none
+- level: "\0"
+  name: lateral_deviation
+  message: ''
+  hardware_id: ''
+  values:
+  - key: metric_value
+    value: '0.024038'
+- level: "\0"
+  name: yaw_deviation
+  message: ''
+  hardware_id: ''
+  values:
+  - key: metric_value
+    value: '0.009086'
+- level: "\0"
+  name: ego_lane_info
+  message: ''
+  hardware_id: ''
+  values:
+  - key: lane_id
+    value: '176472'
+  - key: s
+    value: '22.208145'
+  - key: t
+    value: '-0.049282'
+- level: "\0"
+  name: kinematic_state
+  message: ''
+  hardware_id: ''
+  values:
+  - key: vel
+    value: '3.531702'
+  - key: acc
+    value: '-0.214168'
+  - key: jerk
+    value: '0.143816'
+---
+header:
+  stamp:
+    sec: 1709009635
+    nanosec: 204399984
+  frame_id: ''
+status:
+- level: "\0"
+  name: 'autonomous_emergency_braking: aeb_emergency_stop'
+  message: ''
+  hardware_id: ''
+  values:
+  - key: decision
+    value: none
+- level: "\0"
+  name: lateral_deviation
+  message: ''
+  hardware_id: ''
+  values:
+  - key: metric_value
+    value: '0.027309'
+- level: "\0"
+  name: yaw_deviation
+  message: ''
+  hardware_id: ''
+  values:
+  - key: metric_value
+    value: '0.009630'
+- level: "\0"
+  name: ego_lane_info
+  message: ''
+  hardware_id: ''
+  values:
+  - key: lane_id
+    value: '176472'
+  - key: s
+    value: '22.558326'
+  - key: t
+    value: '-0.071643'
+- level: "\0"
+  name: kinematic_state
+  message: ''
+  hardware_id: ''
+  values:
+  - key: vel
+    value: '3.516410'
+  - key: acc
+    value: '-0.189944'
+  - key: jerk
+    value: '0.237638'
+---
+header:
+  stamp:
+    sec: 1709009635
+    nanosec: 304401060
+  frame_id: ''
+status:
+- level: "\0"
+  name: 'autonomous_emergency_braking: aeb_emergency_stop'
+  message: ''
+  hardware_id: ''
+  values:
+  - key: decision
+    value: none
+- level: "\0"
+  name: lateral_deviation
+  message: ''
+  hardware_id: ''
+  values:
+  - key: metric_value
+    value: '0.036380'
+- level: "\0"
+  name: yaw_deviation
+  message: ''
+  hardware_id: ''
+  values:
+  - key: metric_value
+    value: '0.009749'
+- level: "\0"
+  name: ego_lane_info
+  message: ''
+  hardware_id: ''
+  values:
+  - key: lane_id
+    value: '176472'
+  - key: s
+    value: '22.906186'
+  - key: t
+    value: '-0.087145'
+- level: "\0"
+  name: kinematic_state
+  message: ''
+  hardware_id: ''
+  values:
+  - key: vel
+    value: '3.496249'
+  - key: acc
+    value: '-0.192153'
+  - key: jerk
+    value: '-0.022431'
+---
+header:
+  stamp:
+    sec: 1709009635
+    nanosec: 404403684
+  frame_id: ''
+status:
+- level: "\0"
+  name: 'autonomous_emergency_braking: aeb_emergency_stop'
+  message: ''
+  hardware_id: ''
+  values:
+  - key: decision
+    value: none
+- level: "\0"
+  name: lateral_deviation
+  message: ''
+  hardware_id: ''
+  values:
+  - key: metric_value
+    value: '0.051493'
+- level: "\0"
+  name: yaw_deviation
+  message: ''
+  hardware_id: ''
+  values:
+  - key: metric_value
+    value: '0.006277'
+- level: "\0"
+  name: ego_lane_info
+  message: ''
+  hardware_id: ''
+  values:
+  - key: lane_id
+    value: '176472'
+  - key: s
+    value: '23.251555'
+  - key: t
+    value: '-0.092226'
+- level: "\0"
+  name: kinematic_state
+  message: ''
+  hardware_id: ''
+  values:
+  - key: vel
+    value: '3.488161'
+  - key: acc
+    value: '-0.141204'
+  - key: jerk
+    value: '0.508395'
+---
+header:
+  stamp:
+    sec: 1709009635
+    nanosec: 504404540
+  frame_id: ''
+status:
+- level: "\0"
+  name: 'autonomous_emergency_braking: aeb_emergency_stop'
+  message: ''
+  hardware_id: ''
+  values:
+  - key: decision
+    value: none
+- level: "\0"
+  name: lateral_deviation
+  message: ''
+  hardware_id: ''
+  values:
+  - key: metric_value
+    value: '0.034991'
+- level: "\0"
+  name: yaw_deviation
+  message: ''
+  hardware_id: ''
+  values:
+  - key: metric_value
+    value: '0.014021'
+- level: "\0"
+  name: ego_lane_info
+  message: ''
+  hardware_id: ''
+  values:
+  - key: lane_id
+    value: '176472'
+  - key: s
+    value: '23.596912'
+  - key: t
+    value: '-0.090172'
+- level: "\0"
+  name: kinematic_state
+  message: ''
+  hardware_id: ''
+  values:
+  - key: vel
+    value: '3.472385'
+  - key: acc
+    value: '-0.165042'
+  - key: jerk
+    value: '-0.239460'
+---
+header:
+  stamp:
+    sec: 1709009635
+    nanosec: 604401859
+  frame_id: ''
+status:
+- level: "\0"
+  name: 'autonomous_emergency_braking: aeb_emergency_stop'
+  message: ''
+  hardware_id: ''
+  values:
+  - key: decision
+    value: none
+- level: "\0"
+  name: lateral_deviation
+  message: ''
+  hardware_id: ''
+  values:
+  - key: metric_value
+    value: '0.069065'
+- level: "\0"
+  name: yaw_deviation
+  message: ''
+  hardware_id: ''
+  values:
+  - key: metric_value
+    value: '0.007616'
+- level: "\0"
+  name: ego_lane_info
+  message: ''
+  hardware_id: ''
+  values:
+  - key: lane_id
+    value: '176472'
+  - key: s
+    value: '23.943344'
+  - key: t
+    value: '-0.079462'
+- level: "\0"
+  name: kinematic_state
+  message: ''
+  hardware_id: ''
+  values:
+  - key: vel
+    value: '3.464842'
+  - key: acc
+    value: '-0.133225'
+  - key: jerk
+    value: '0.316310'
+---
+header:
+  stamp:
+    sec: 1709009635
+    nanosec: 704401363
+  frame_id: ''
+status:
+- level: "\0"
+  name: 'autonomous_emergency_braking: aeb_emergency_stop'
+  message: ''
+  hardware_id: ''
+  values:
+  - key: decision
+    value: none
+- level: "\0"
+  name: lateral_deviation
+  message: ''
+  hardware_id: ''
+  values:
+  - key: metric_value
+    value: '0.069201'
+- level: "\0"
+  name: yaw_deviation
+  message: ''
+  hardware_id: ''
+  values:
+  - key: metric_value
+    value: '0.002540'
+- level: "\0"
+  name: ego_lane_info
+  message: ''
+  hardware_id: ''
+  values:
+  - key: lane_id
+    value: '176472'
+  - key: s
+    value: '24.286892'
+  - key: t
+    value: '-0.059856'
+- level: "\0"
+  name: kinematic_state
+  message: ''
+  hardware_id: ''
+  values:
+  - key: vel
+    value: '3.459577'
+  - key: acc
+    value: '-0.105967'
+  - key: jerk
+    value: '0.275366'
+---
+header:
+  stamp:
+    sec: 1709009635
+    nanosec: 804404624
+  frame_id: ''
+status:
+- level: "\0"
+  name: 'autonomous_emergency_braking: aeb_emergency_stop'
+  message: ''
+  hardware_id: ''
+  values:
+  - key: decision
+    value: none
+- level: "\0"
+  name: lateral_deviation
+  message: ''
+  hardware_id: ''
+  values:
+  - key: metric_value
+    value: '0.065768'
+- level: "\0"
+  name: yaw_deviation
+  message: ''
+  hardware_id: ''
+  values:
+  - key: metric_value
+    value: '0.003422'
+- level: "\0"
+  name: ego_lane_info
+  message: ''
+  hardware_id: ''
+  values:
+  - key: lane_id
+    value: '176472'
+  - key: s
+    value: '24.632572'
+  - key: t
+    value: '-0.033874'
+- level: "\0"
+  name: kinematic_state
+  message: ''
+  hardware_id: ''
+  values:
+  - key: vel
+    value: '3.459042'
+  - key: acc
+    value: '-0.065826'
+  - key: jerk
+    value: '0.398159'
+---
+header:
+  stamp:
+    sec: 1709009635
+    nanosec: 904385192
+  frame_id: ''
+status:
+- level: "\0"
+  name: 'autonomous_emergency_braking: aeb_emergency_stop'
+  message: ''
+  hardware_id: ''
+  values:
+  - key: decision
+    value: none
+- level: "\0"
+  name: lateral_deviation
+  message: ''
+  hardware_id: ''
+  values:
+  - key: metric_value
+    value: '0.056024'
+- level: "\0"
+  name: yaw_deviation
+  message: ''
+  hardware_id: ''
+  values:
+  - key: metric_value
+    value: '0.006617'
+- level: "\0"
+  name: ego_lane_info
+  message: ''
+  hardware_id: ''
+  values:
+  - key: lane_id
+    value: '176472'
+  - key: s
+    value: '24.971668'
+  - key: t
+    value: '0.000769'
+- level: "\0"
+  name: kinematic_state
+  message: ''
+  hardware_id: ''
+  values:
+  - key: vel
+    value: '3.431239'
+  - key: acc
+    value: '-0.159842'
+  - key: jerk
+    value: '-0.936098'
+---
+header:
+  stamp:
+    sec: 1709009636
+    nanosec: 4414142
+  frame_id: ''
+status:
+- level: "\0"
+  name: 'autonomous_emergency_braking: aeb_emergency_stop'
+  message: ''
+  hardware_id: ''
+  values:
+  - key: decision
+    value: none
+- level: "\0"
+  name: lateral_deviation
+  message: ''
+  hardware_id: ''
+  values:
+  - key: metric_value
+    value: '0.078727'
+- level: "\0"
+  name: yaw_deviation
+  message: ''
+  hardware_id: ''
+  values:
+  - key: metric_value
+    value: '0.001546'
+- level: "\0"
+  name: ego_lane_info
+  message: ''
+  hardware_id: ''
+  values:
+  - key: lane_id
+    value: '176472'
+  - key: s
+    value: '25.314088'
+  - key: t
+    value: '0.007231'
+- level: "\0"
+  name: kinematic_state
+  message: ''
+  hardware_id: ''
+  values:
+  - key: vel
+    value: '3.406308'
+  - key: acc
+    value: '-0.197551'
+  - key: jerk
+    value: '-0.378975'
+---
+header:
+  stamp:
+    sec: 1709009636
+    nanosec: 104402382
+  frame_id: ''
+status:
+- level: "\0"
+  name: 'autonomous_emergency_braking: aeb_emergency_stop'
+  message: ''
+  hardware_id: ''
+  values:
+  - key: decision
+    value: none
+- level: "\0"
+  name: lateral_deviation
+  message: ''
+  hardware_id: ''
+  values:
+  - key: metric_value
+    value: '0.077044'
+- level: "\0"
+  name: yaw_deviation
+  message: ''
+  hardware_id: ''
+  values:
+  - key: metric_value
+    value: '0.003557'
+- level: "\0"
+  name: ego_lane_info
+  message: ''
+  hardware_id: ''
+  values:
+  - key: lane_id
+    value: '176472'
+  - key: s
+    value: '25.647174'
+  - key: t
+    value: '-0.029318'
+- level: "\0"
+  name: kinematic_state
+  message: ''
+  hardware_id: ''
+  values:
+  - key: vel
+    value: '3.385903'
+  - key: acc
+    value: '-0.199265'
+  - key: jerk
+    value: '-0.017086'
+---
+header:
+  stamp:
+    sec: 1709009636
+    nanosec: 204404017
+  frame_id: ''
+status:
+- level: "\0"
+  name: 'autonomous_emergency_braking: aeb_emergency_stop'
+  message: ''
+  hardware_id: ''
+  values:
+  - key: decision
+    value: none
+- level: "\0"
+  name: lateral_deviation
+  message: ''
+  hardware_id: ''
+  values:
+  - key: metric_value
+    value: '0.087602'
+- level: "\0"
+  name: yaw_deviation
+  message: ''
+  hardware_id: ''
+  values:
+  - key: metric_value
+    value: '0.000475'
+- level: "\0"
+  name: ego_lane_info
+  message: ''
+  hardware_id: ''
+  values:
+  - key: lane_id
+    value: '176472'
+  - key: s
+    value: '25.983543'
+  - key: t
+    value: '-0.058872'
+- level: "\0"
+  name: kinematic_state
+  message: ''
+  hardware_id: ''
+  values:
+  - key: vel
+    value: '3.373357'
+  - key: acc
+    value: '-0.156002'
+  - key: jerk
+    value: '0.435549'
+---
+header:
+  stamp:
+    sec: 1709009636
+    nanosec: 304404689
+  frame_id: ''
+status:
+- level: "\0"
+  name: 'autonomous_emergency_braking: aeb_emergency_stop'
+  message: ''
+  hardware_id: ''
+  values:
+  - key: decision
+    value: none
+- level: "\0"
+  name: lateral_deviation
+  message: ''
+  hardware_id: ''
+  values:
+  - key: metric_value
+    value: '0.083968'
+- level: "\0"
+  name: yaw_deviation
+  message: ''
+  hardware_id: ''
+  values:
+  - key: metric_value
+    value: '0.003294'
+- level: "\0"
+  name: ego_lane_info
+  message: ''
+  hardware_id: ''
+  values:
+  - key: lane_id
+    value: '176472'
+  - key: s
+    value: '26.317021'
+  - key: t
+    value: '-0.078753'
+- level: "\0"
+  name: kinematic_state
+  message: ''
+  hardware_id: ''
+  values:
+  - key: vel
+    value: '3.339658'
+  - key: acc
+    value: '-0.234312'
+  - key: jerk
+    value: '-0.780355'
+---
+header:
+  stamp:
+    sec: 1709009636
+    nanosec: 404400526
+  frame_id: ''
+status:
+- level: "\0"
+  name: 'autonomous_emergency_braking: aeb_emergency_stop'
+  message: ''
+  hardware_id: ''
+  values:
+  - key: decision
+    value: none
+- level: "\0"
+  name: lateral_deviation
+  message: ''
+  hardware_id: ''
+  values:
+  - key: metric_value
+    value: '0.090360'
+- level: "\0"
+  name: yaw_deviation
+  message: ''
+  hardware_id: ''
+  values:
+  - key: metric_value
+    value: '0.006444'
+- level: "\0"
+  name: ego_lane_info
+  message: ''
+  hardware_id: ''
+  values:
+  - key: lane_id
+    value: '176472'
+  - key: s
+    value: '26.646357'
+  - key: t
+    value: '-0.091089'
+- level: "\0"
+  name: kinematic_state
+  message: ''
+  hardware_id: ''
+  values:
+  - key: vel
+    value: '3.318838'
+  - key: acc
+    value: '-0.227483'
+  - key: jerk
+    value: '0.067870'
+---
+header:
+  stamp:
+    sec: 1709009636
+    nanosec: 504401874
+  frame_id: ''
+status:
+- level: "\0"
+  name: 'autonomous_emergency_braking: aeb_emergency_stop'
+  message: ''
+  hardware_id: ''
+  values:
+  - key: decision
+    value: none
+- level: "\0"
+  name: lateral_deviation
+  message: ''
+  hardware_id: ''
+  values:
+  - key: metric_value
+    value: '0.094138'
+- level: "\0"
+  name: yaw_deviation
+  message: ''
+  hardware_id: ''
+  values:
+  - key: metric_value
+    value: '0.010599'
+- level: "\0"
+  name: ego_lane_info
+  message: ''
+  hardware_id: ''
+  values:
+  - key: lane_id
+    value: '176472'
+  - key: s
+    value: '26.973981'
+  - key: t
+    value: '-0.094759'
+- level: "\0"
+  name: kinematic_state
+  message: ''
+  hardware_id: ''
+  values:
+  - key: vel
+    value: '3.289312'
+  - key: acc
+    value: '-0.259603'
+  - key: jerk
+    value: '-0.323090'
+---
+header:
+  stamp:
+    sec: 1709009636
+    nanosec: 604399116
+  frame_id: ''
+status:
+- level: "\0"
+  name: 'autonomous_emergency_braking: aeb_emergency_stop'
+  message: ''
+  hardware_id: ''
+  values:
+  - key: decision
+    value: none
+- level: "\0"
+  name: lateral_deviation
+  message: ''
+  hardware_id: ''
+  values:
+  - key: metric_value
+    value: '0.085571'
+- level: "\0"
+  name: yaw_deviation
+  message: ''
+  hardware_id: ''
+  values:
+  - key: metric_value
+    value: '0.014195'
+- level: "\0"
+  name: ego_lane_info
+  message: ''
+  hardware_id: ''
+  values:
+  - key: lane_id
+    value: '176472'
+  - key: s
+    value: '27.298338'
+  - key: t
+    value: '-0.089062'
+- level: "\0"
+  name: kinematic_state
+  message: ''
+  hardware_id: ''
+  values:
+  - key: vel
+    value: '3.282849'
+  - key: acc
+    value: '-0.167568'
+  - key: jerk
+    value: '0.921623'
+---
+header:
+  stamp:
+    sec: 1709009636
+    nanosec: 704403027
+  frame_id: ''
+status:
+- level: "\0"
+  name: 'autonomous_emergency_braking: aeb_emergency_stop'
+  message: ''
+  hardware_id: ''
+  values:
+  - key: decision
+    value: none
+- level: "\0"
+  name: lateral_deviation
+  message: ''
+  hardware_id: ''
+  values:
+  - key: metric_value
+    value: '0.076062'
+- level: "\0"
+  name: yaw_deviation
+  message: ''
+  hardware_id: ''
+  values:
+  - key: metric_value
+    value: '0.010848'
+- level: "\0"
+  name: ego_lane_info
+  message: ''
+  hardware_id: ''
+  values:
+  - key: lane_id
+    value: '176472'
+  - key: s
+    value: '27.624338'
+  - key: t
+    value: '-0.075814'
+- level: "\0"
+  name: kinematic_state
+  message: ''
+  hardware_id: ''
+  values:
+  - key: vel
+    value: '3.276570'
+  - key: acc
+    value: '-0.116953'
+  - key: jerk
+    value: '0.507004'
+---
+header:
+  stamp:
+    sec: 1709009636
+    nanosec: 804409130
+  frame_id: ''
+status:
+- level: "\0"
+  name: 'autonomous_emergency_braking: aeb_emergency_stop'
+  message: ''
+  hardware_id: ''
+  values:
+  - key: decision
+    value: none
+- level: "\0"
+  name: lateral_deviation
+  message: ''
+  hardware_id: ''
+  values:
+  - key: metric_value
+    value: '0.070814'
+- level: "\0"
+  name: yaw_deviation
+  message: ''
+  hardware_id: ''
+  values:
+  - key: metric_value
+    value: '0.015993'
+- level: "\0"
+  name: ego_lane_info
+  message: ''
+  hardware_id: ''
+  values:
+  - key: lane_id
+    value: '176472'
+  - key: s
+    value: '27.949007'
+  - key: t
+    value: '-0.056075'
+- level: "\0"
+  name: kinematic_state
+  message: ''
+  hardware_id: ''
+  values:
+  - key: vel
+    value: '3.285428'
+  - key: acc
+    value: '-0.024339'
+  - key: jerk
+    value: '0.929589'
+---
+header:
+  stamp:
+    sec: 1709009636
+    nanosec: 904401159
+  frame_id: ''
+status:
+- level: "\0"
+  name: 'autonomous_emergency_braking: aeb_emergency_stop'
+  message: ''
+  hardware_id: ''
+  values:
+  - key: decision
+    value: none
+- level: "\0"
+  name: lateral_deviation
+  message: ''
+  hardware_id: ''
+  values:
+  - key: metric_value
+    value: '0.063623'
+- level: "\0"
+  name: yaw_deviation
+  message: ''
+  hardware_id: ''
+  values:
+  - key: metric_value
+    value: '0.013067'
+- level: "\0"
+  name: ego_lane_info
+  message: ''
+  hardware_id: ''
+  values:
+  - key: lane_id
+    value: '176472'
+  - key: s
+    value: '28.274616'
+  - key: t
+    value: '-0.027441'
+- level: "\0"
+  name: kinematic_state
+  message: ''
+  hardware_id: ''
+  values:
+  - key: vel
+    value: '3.294343'
+  - key: acc
+    value: '0.020471'
+  - key: jerk
+    value: '0.436154'
+---
+header:
+  stamp:
+    sec: 1709009637
+    nanosec: 4401350
+  frame_id: ''
+status:
+- level: "\0"
+  name: 'autonomous_emergency_braking: aeb_emergency_stop'
+  message: ''
+  hardware_id: ''
+  values:
+  - key: decision
+    value: none
+- level: "\0"
+  name: lateral_deviation
+  message: ''
+  hardware_id: ''
+  values:
+  - key: metric_value
+    value: '0.060313'
+- level: "\0"
+  name: yaw_deviation
+  message: ''
+  hardware_id: ''
+  values:
+  - key: metric_value
+    value: '0.001066'
+- level: "\0"
+  name: ego_lane_info
+  message: ''
+  hardware_id: ''
+  values:
+  - key: lane_id
+    value: '176472'
+  - key: s
+    value: '28.602352'
+  - key: t
+    value: '0.009481'
+- level: "\0"
+  name: kinematic_state
+  message: ''
+  hardware_id: ''
+  values:
+  - key: vel
+    value: '3.299993'
+  - key: acc
+    value: '0.033551'
+  - key: jerk
+    value: '0.134107'
+---
+header:
+  stamp:
+    sec: 1709009637
+    nanosec: 104377720
+  frame_id: ''
+status:
+- level: "\0"
+  name: 'autonomous_emergency_braking: aeb_emergency_stop'
+  message: ''
+  hardware_id: ''
+  values:
+  - key: decision
+    value: none
+- level: "\0"
+  name: lateral_deviation
+  message: ''
+  hardware_id: ''
+  values:
+  - key: metric_value
+    value: '0.063324'
+- level: "\0"
+  name: yaw_deviation
+  message: ''
+  hardware_id: ''
+  values:
+  - key: metric_value
+    value: '0.006147'
+- level: "\0"
+  name: ego_lane_info
+  message: ''
+  hardware_id: ''
+  values:
+  - key: lane_id
+    value: '176472'
+  - key: s
+    value: '28.930982'
+  - key: t
+    value: '0.055127'
+- level: "\0"
+  name: kinematic_state
+  message: ''
+  hardware_id: ''
+  values:
+  - key: vel
+    value: '3.310351'
+  - key: acc
+    value: '0.051750'
+  - key: jerk
+    value: '0.181860'
+---
+header:
+  stamp:
+    sec: 1709009637
+    nanosec: 204400741
+  frame_id: ''
+status:
+- level: "\0"
+  name: 'autonomous_emergency_braking: aeb_emergency_stop'
+  message: ''
+  hardware_id: ''
+  values:
+  - key: decision
+    value: none
+- level: "\0"
+  name: lateral_deviation
+  message: ''
+  hardware_id: ''
+  values:
+  - key: metric_value
+    value: '0.065196'
+- level: "\0"
+  name: yaw_deviation
+  message: ''
+  hardware_id: ''
+  values:
+  - key: metric_value
+    value: '0.009482'
+- level: "\0"
+  name: ego_lane_info
+  message: ''
+  hardware_id: ''
+  values:
+  - key: lane_id
+    value: '176472'
+  - key: s
+    value: '29.253953'
+  - key: t
+    value: '0.107721'
+- level: "\0"
+  name: kinematic_state
+  message: ''
+  hardware_id: ''
+  values:
+  - key: vel
+    value: '3.327083'
+  - key: acc
+    value: '0.110871'
+  - key: jerk
+    value: '0.581150'
+---
+header:
+  stamp:
+    sec: 1709009637
+    nanosec: 304399357
+  frame_id: ''
+status:
+- level: "\0"
+  name: 'autonomous_emergency_braking: aeb_emergency_stop'
+  message: ''
+  hardware_id: ''
+  values:
+  - key: decision
+    value: none
+- level: "\0"
+  name: lateral_deviation
+  message: ''
+  hardware_id: ''
+  values:
+  - key: metric_value
+    value: '0.061152'
+- level: "\0"
+  name: yaw_deviation
+  message: ''
+  hardware_id: ''
+  values:
+  - key: metric_value
+    value: '0.010437'
+- level: "\0"
+  name: ego_lane_info
+  message: ''
+  hardware_id: ''
+  values:
+  - key: lane_id
+    value: '176472'
+  - key: s
+    value: '29.625718'
+  - key: t
+    value: '0.076836'
+- level: "\0"
+  name: kinematic_state
+  message: ''
+  hardware_id: ''
+  values:
+  - key: vel
+    value: '3.322890'
+  - key: acc
+    value: '0.046393'
+  - key: jerk
+    value: '-0.633029'
+---
+header:
+  stamp:
+    sec: 1709009637
+    nanosec: 404402047
+  frame_id: ''
+status:
+- level: "\0"
+  name: 'autonomous_emergency_braking: aeb_emergency_stop'
+  message: ''
+  hardware_id: ''
+  values:
+  - key: decision
+    value: none
+- level: "\0"
+  name: lateral_deviation
+  message: ''
+  hardware_id: ''
+  values:
+  - key: metric_value
+    value: '0.045513'
+- level: "\0"
+  name: yaw_deviation
+  message: ''
+  hardware_id: ''
+  values:
+  - key: metric_value
+    value: '0.009830'
+- level: "\0"
+  name: ego_lane_info
+  message: ''
+  hardware_id: ''
+  values:
+  - key: lane_id
+    value: '176472'
+  - key: s
+    value: '29.951530'
+  - key: t
+    value: '0.029930'
+- level: "\0"
+  name: kinematic_state
+  message: ''
+  hardware_id: ''
+  values:
+  - key: vel
+    value: '3.332101'
+  - key: acc
+    value: '0.062972'
+  - key: jerk
+    value: '0.171483'
+---
+header:
+  stamp:
+    sec: 1709009637
+    nanosec: 504399264
+  frame_id: ''
+status:
+- level: "\0"
+  name: 'autonomous_emergency_braking: aeb_emergency_stop'
+  message: ''
+  hardware_id: ''
+  values:
+  - key: decision
+    value: none
+- level: "\0"
+  name: lateral_deviation
+  message: ''
+  hardware_id: ''
+  values:
+  - key: metric_value
+    value: '0.027418'
+- level: "\0"
+  name: yaw_deviation
+  message: ''
+  hardware_id: ''
+  values:
+  - key: metric_value
+    value: '0.002446'
+- level: "\0"
+  name: ego_lane_info
+  message: ''
+  hardware_id: ''
+  values:
+  - key: lane_id
+    value: '176472'
+  - key: s
+    value: '30.282104'
+  - key: t
+    value: '-0.009942'
+- level: "\0"
+  name: kinematic_state
+  message: ''
+  hardware_id: ''
+  values:
+  - key: vel
+    value: '3.348156'
+  - key: acc
+    value: '0.094798'
+  - key: jerk
+    value: '0.313989'
+---
+header:
+  stamp:
+    sec: 1709009637
+    nanosec: 604402430
+  frame_id: ''
+status:
+- level: "\0"
+  name: 'autonomous_emergency_braking: aeb_emergency_stop'
+  message: ''
+  hardware_id: ''
+  values:
+  - key: decision
+    value: none
+- level: "\0"
+  name: lateral_deviation
+  message: ''
+  hardware_id: ''
+  values:
+  - key: metric_value
+    value: '0.067232'
+- level: "\0"
+  name: yaw_deviation
+  message: ''
+  hardware_id: ''
+  values:
+  - key: metric_value
+    value: '0.016803'
+- level: "\0"
+  name: ego_lane_info
+  message: ''
+  hardware_id: ''
+  values:
+  - key: lane_id
+    value: '176472'
+  - key: s
+    value: '30.617080'
+  - key: t
+    value: '-0.044809'
+- level: "\0"
+  name: kinematic_state
+  message: ''
+  hardware_id: ''
+  values:
+  - key: vel
+    value: '3.376559'
+  - key: acc
+    value: '0.177190'
+  - key: jerk
+    value: '0.839564'
+---
+header:
+  stamp:
+    sec: 1709009637
+    nanosec: 704400683
+  frame_id: ''
+status:
+- level: "\0"
+  name: 'autonomous_emergency_braking: aeb_emergency_stop'
+  message: ''
+  hardware_id: ''
+  values:
+  - key: decision
+    value: none
+- level: "\0"
+  name: lateral_deviation
+  message: ''
+  hardware_id: ''
+  values:
+  - key: metric_value
+    value: '0.077263'
+- level: "\0"
+  name: yaw_deviation
+  message: ''
+  hardware_id: ''
+  values:
+  - key: metric_value
+    value: '0.010312'
+- level: "\0"
+  name: ego_lane_info
+  message: ''
+  hardware_id: ''
+  values:
+  - key: lane_id
+    value: '176472'
+  - key: s
+    value: '30.955830'
+  - key: t
+    value: '-0.071936'
+- level: "\0"
+  name: kinematic_state
+  message: ''
+  hardware_id: ''
+  values:
+  - key: vel
+    value: '3.403736'
+  - key: acc
+    value: '0.216875'
+  - key: jerk
+    value: '0.392260'
+---
+header:
+  stamp:
+    sec: 1709009637
+    nanosec: 804399832
+  frame_id: ''
+status:
+- level: "\0"
+  name: 'autonomous_emergency_braking: aeb_emergency_stop'
+  message: ''
+  hardware_id: ''
+  values:
+  - key: decision
+    value: none
+- level: "\0"
+  name: lateral_deviation
+  message: ''
+  hardware_id: ''
+  values:
+  - key: metric_value
+    value: '0.103227'
+- level: "\0"
+  name: yaw_deviation
+  message: ''
+  hardware_id: ''
+  values:
+  - key: metric_value
+    value: '0.007414'
+- level: "\0"
+  name: ego_lane_info
+  message: ''
+  hardware_id: ''
+  values:
+  - key: lane_id
+    value: '176472'
+  - key: s
+    value: '31.295542'
+  - key: t
+    value: '-0.092534'
+- level: "\0"
+  name: kinematic_state
+  message: ''
+  hardware_id: ''
+  values:
+  - key: vel
+    value: '3.422113'
+  - key: acc
+    value: '0.205161'
+  - key: jerk
+    value: '-0.116102'
+---
+header:
+  stamp:
+    sec: 1709009637
+    nanosec: 904404386
+  frame_id: ''
+status:
+- level: "\0"
+  name: 'autonomous_emergency_braking: aeb_emergency_stop'
+  message: ''
+  hardware_id: ''
+  values:
+  - key: decision
+    value: none
+- level: "\0"
+  name: lateral_deviation
+  message: ''
+  hardware_id: ''
+  values:
+  - key: metric_value
+    value: '0.114550'
+- level: "\0"
+  name: yaw_deviation
+  message: ''
+  hardware_id: ''
+  values:
+  - key: metric_value
+    value: '0.006291'
+- level: "\0"
+  name: ego_lane_info
+  message: ''
+  hardware_id: ''
+  values:
+  - key: lane_id
+    value: '176472'
+  - key: s
+    value: '31.637928'
+  - key: t
+    value: '-0.106168'
+- level: "\0"
+  name: kinematic_state
+  message: ''
+  hardware_id: ''
+  values:
+  - key: vel
+    value: '3.433946'
+  - key: acc
+    value: '0.164503'
+  - key: jerk
+    value: '-0.413887'
+---
+header:
+  stamp:
+    sec: 1709009638
+    nanosec: 4380889
+  frame_id: ''
+status:
+- level: "\0"
+  name: 'autonomous_emergency_braking: aeb_emergency_stop'
+  message: ''
+  hardware_id: ''
+  values:
+  - key: decision
+    value: none
+- level: "\0"
+  name: lateral_deviation
+  message: ''
+  hardware_id: ''
+  values:
+  - key: metric_value
+    value: '0.097242'
+- level: "\0"
+  name: yaw_deviation
+  message: ''
+  hardware_id: ''
+  values:
+  - key: metric_value
+    value: '0.010474'
+- level: "\0"
+  name: ego_lane_info
+  message: ''
+  hardware_id: ''
+  values:
+  - key: lane_id
+    value: '176472'
+  - key: s
+    value: '31.976767'
+  - key: t
+    value: '-0.112751'
+- level: "\0"
+  name: kinematic_state
+  message: ''
+  hardware_id: ''
+  values:
+  - key: vel
+    value: '3.423078'
+  - key: acc
+    value: '0.047411'
+  - key: jerk
+    value: '-1.155156'
+---
+header:
+  stamp:
+    sec: 1709009638
+    nanosec: 104401638
+  frame_id: ''
+status:
+- level: "\0"
+  name: 'autonomous_emergency_braking: aeb_emergency_stop'
+  message: ''
+  hardware_id: ''
+  values:
+  - key: decision
+    value: none
+- level: "\0"
+  name: lateral_deviation
+  message: ''
+  hardware_id: ''
+  values:
+  - key: metric_value
+    value: '0.120685'
+- level: "\0"
+  name: yaw_deviation
+  message: ''
+  hardware_id: ''
+  values:
+  - key: metric_value
+    value: '0.015547'
+- level: "\0"
+  name: ego_lane_info
+  message: ''
+  hardware_id: ''
+  values:
+  - key: lane_id
+    value: '176472'
+  - key: s
+    value: '32.330131'
+  - key: t
+    value: '-0.110941'
+- level: "\0"
+  name: kinematic_state
+  message: ''
+  hardware_id: ''
+  values:
+  - key: vel
+    value: '3.409248'
+  - key: acc
+    value: '-0.028400'
+  - key: jerk
+    value: '-0.739542'
+---
+header:
+  stamp:
+    sec: 1709009638
+    nanosec: 204401112
+  frame_id: ''
+status:
+- level: "\0"
+  name: 'autonomous_emergency_braking: aeb_emergency_stop'
+  message: ''
+  hardware_id: ''
+  values:
+  - key: decision
+    value: none
+- level: "\0"
+  name: lateral_deviation
+  message: ''
+  hardware_id: ''
+  values:
+  - key: metric_value
+    value: '0.129125'
+- level: "\0"
+  name: yaw_deviation
+  message: ''
+  hardware_id: ''
+  values:
+  - key: metric_value
+    value: '0.012326'
+- level: "\0"
+  name: ego_lane_info
+  message: ''
+  hardware_id: ''
+  values:
+  - key: lane_id
+    value: '176472'
+  - key: s
+    value: '32.653723'
+  - key: t
+    value: '-0.103303'
+- level: "\0"
+  name: kinematic_state
+  message: ''
+  hardware_id: ''
+  values:
+  - key: vel
+    value: '3.392227'
+  - key: acc
+    value: '-0.089833'
+  - key: jerk
+    value: '-0.636760'
+---
+header:
+  stamp:
+    sec: 1709009638
+    nanosec: 304399600
+  frame_id: ''
+status:
+- level: "\0"
+  name: 'autonomous_emergency_braking: aeb_emergency_stop'
+  message: ''
+  hardware_id: ''
+  values:
+  - key: decision
+    value: none
+- level: "\0"
+  name: lateral_deviation
+  message: ''
+  hardware_id: ''
+  values:
+  - key: metric_value
+    value: '0.094222'
+- level: "\0"
+  name: yaw_deviation
+  message: ''
+  hardware_id: ''
+  values:
+  - key: metric_value
+    value: '0.004253'
+- level: "\0"
+  name: ego_lane_info
+  message: ''
+  hardware_id: ''
+  values:
+  - key: lane_id
+    value: '176472'
+  - key: s
+    value: '32.991292'
+  - key: t
+    value: '-0.092907'
+- level: "\0"
+  name: kinematic_state
+  message: ''
+  hardware_id: ''
+  values:
+  - key: vel
+    value: '3.375724'
+  - key: acc
+    value: '-0.119411'
+  - key: jerk
+    value: '-0.292589'
+---
+header:
+  stamp:
+    sec: 1709009638
+    nanosec: 404406320
+  frame_id: ''
+status:
+- level: "\0"
+  name: 'autonomous_emergency_braking: aeb_emergency_stop'
+  message: ''
+  hardware_id: ''
+  values:
+  - key: decision
+    value: none
+- level: "\0"
+  name: lateral_deviation
+  message: ''
+  hardware_id: ''
+  values:
+  - key: metric_value
+    value: '0.094543'
+- level: "\0"
+  name: yaw_deviation
+  message: ''
+  hardware_id: ''
+  values:
+  - key: metric_value
+    value: '0.030371'
+- level: "\0"
+  name: ego_lane_info
+  message: ''
+  hardware_id: ''
+  values:
+  - key: lane_id
+    value: '176472'
+  - key: s
+    value: '33.328334'
+  - key: t
+    value: '-0.080002'
+- level: "\0"
+  name: kinematic_state
+  message: ''
+  hardware_id: ''
+  values:
+  - key: vel
+    value: '3.347397'
+  - key: acc
+    value: '-0.181810'
+  - key: jerk
+    value: '-0.624531'
+---
+header:
+  stamp:
+    sec: 1709009638
+    nanosec: 504404271
+  frame_id: ''
+status:
+- level: "\0"
+  name: 'autonomous_emergency_braking: aeb_emergency_stop'
+  message: ''
+  hardware_id: ''
+  values:
+  - key: decision
+    value: none
+- level: "\0"
+  name: lateral_deviation
+  message: ''
+  hardware_id: ''
+  values:
+  - key: metric_value
+    value: '0.081011'
+- level: "\0"
+  name: yaw_deviation
+  message: ''
+  hardware_id: ''
+  values:
+  - key: metric_value
+    value: '0.057709'
+- level: "\0"
+  name: ego_lane_info
+  message: ''
+  hardware_id: ''
+  values:
+  - key: lane_id
+    value: '176472'
+  - key: s
+    value: '33.638464'
+  - key: t
+    value: '-0.090885'
+- level: "\0"
+  name: kinematic_state
+  message: ''
+  hardware_id: ''
+  values:
+  - key: vel
+    value: '3.302839'
+  - key: acc
+    value: '-0.287816'
+  - key: jerk
+    value: '-1.071392'
+---
+header:
+  stamp:
+    sec: 1709009638
+    nanosec: 604400878
+  frame_id: ''
+status:
+- level: "\0"
+  name: 'autonomous_emergency_braking: aeb_emergency_stop'
+  message: ''
+  hardware_id: ''
+  values:
+  - key: decision
+    value: none
+- level: "\0"
+  name: lateral_deviation
+  message: ''
+  hardware_id: ''
+  values:
+  - key: metric_value
+    value: '0.035806'
+- level: "\0"
+  name: yaw_deviation
+  message: ''
+  hardware_id: ''
+  values:
+  - key: metric_value
+    value: '0.083509'
+- level: "\0"
+  name: ego_lane_info
+  message: ''
+  hardware_id: ''
+  values:
+  - key: lane_id
+    value: '176472'
+  - key: s
+    value: '33.957364'
+  - key: t
+    value: '-0.146791'
+- level: "\0"
+  name: kinematic_state
+  message: ''
+  hardware_id: ''
+  values:
+  - key: vel
+    value: '3.250613'
+  - key: acc
+    value: '-0.395964'
+  - key: jerk
+    value: '-1.082415'
+---
+header:
+  stamp:
+    sec: 1709009638
+    nanosec: 704405284
+  frame_id: ''
+status:
+- level: "\0"
+  name: 'autonomous_emergency_braking: aeb_emergency_stop'
+  message: ''
+  hardware_id: ''
+  values:
+  - key: decision
+    value: none
+- level: "\0"
+  name: lateral_deviation
+  message: ''
+  hardware_id: ''
+  values:
+  - key: metric_value
+    value: '0.002404'
+- level: "\0"
+  name: yaw_deviation
+  message: ''
+  hardware_id: ''
+  values:
+  - key: metric_value
+    value: '0.109910'
+- level: "\0"
+  name: ego_lane_info
+  message: ''
+  hardware_id: ''
+  values:
+  - key: lane_id
+    value: '176472'
+  - key: s
+    value: '34.271024'
+  - key: t
+    value: '-0.207536'
+- level: "\0"
+  name: kinematic_state
+  message: ''
+  hardware_id: ''
+  values:
+  - key: vel
+    value: '3.201738'
+  - key: acc
+    value: '-0.424839'
+  - key: jerk
+    value: '-0.288387'
+---
+header:
+  stamp:
+    sec: 1709009638
+    nanosec: 804405072
+  frame_id: ''
+status:
+- level: "\0"
+  name: 'autonomous_emergency_braking: aeb_emergency_stop'
+  message: ''
+  hardware_id: ''
+  values:
+  - key: decision
+    value: deceleration
+- level: "\0"
+  name: lateral_deviation
+  message: ''
+  hardware_id: ''
+  values:
+  - key: metric_value
+    value: '0.038727'
+- level: "\0"
+  name: yaw_deviation
+  message: ''
+  hardware_id: ''
+  values:
+  - key: metric_value
+    value: '0.139692'
+- level: "\0"
+  name: ego_lane_info
+  message: ''
+  hardware_id: ''
+  values:
+  - key: lane_id
+    value: '176472'
+  - key: s
+    value: '34.610130'
+  - key: t
+    value: '-0.275624'
+- level: "\0"
+  name: kinematic_state
+  message: ''
+  hardware_id: ''
+  values:
+  - key: vel
+    value: '3.164714'
+  - key: acc
+    value: '-0.400825'
+  - key: jerk
+    value: '0.217844'
+---
+header:
+  stamp:
+    sec: 1709009638
+    nanosec: 904416356
+  frame_id: ''
+status:
+- level: "\0"
+  name: 'autonomous_emergency_braking: aeb_emergency_stop'
+  message: ''
+  hardware_id: ''
+  values:
+  - key: decision
+    value: deceleration
+- level: "\0"
+  name: lateral_deviation
+  message: ''
+  hardware_id: ''
+  values:
+  - key: metric_value
+    value: '0.196166'
+- level: "\0"
+  name: yaw_deviation
+  message: ''
+  hardware_id: ''
+  values:
+  - key: metric_value
+    value: '0.154997'
+- level: "\0"
+  name: ego_lane_info
+  message: ''
+  hardware_id: ''
+  values:
+  - key: lane_id
+    value: '176472'
+  - key: s
+    value: '34.882375'
+  - key: t
+    value: '-0.334608'
+- level: "\0"
+  name: kinematic_state
+  message: ''
+  hardware_id: ''
+  values:
+  - key: vel
+    value: '3.133997'
+  - key: acc
+    value: '-0.404052'
+  - key: jerk
+    value: '-0.035990'
+---
+header:
+  stamp:
+    sec: 1709009639
+    nanosec: 4417901
+  frame_id: ''
+status:
+- level: "\0"
+  name: 'autonomous_emergency_braking: aeb_emergency_stop'
+  message: ''
+  hardware_id: ''
+  values:
+  - key: decision
+    value: deceleration
+- level: "\0"
+  name: lateral_deviation
+  message: ''
+  hardware_id: ''
+  values:
+  - key: metric_value
+    value: '0.247082'
+- level: "\0"
+  name: yaw_deviation
+  message: ''
+  hardware_id: ''
+  values:
+  - key: metric_value
+    value: '0.168040'
+- level: "\0"
+  name: ego_lane_info
+  message: ''
+  hardware_id: ''
+  values:
+  - key: lane_id
+    value: '176472'
+  - key: s
+    value: '35.183540'
+  - key: t
+    value: '-0.399925'
+- level: "\0"
+  name: kinematic_state
+  message: ''
+  hardware_id: ''
+  values:
+  - key: vel
+    value: '3.108041'
+  - key: acc
+    value: '-0.337578'
+  - key: jerk
+    value: '0.643050'
+---
+header:
+  stamp:
+    sec: 1709009639
+    nanosec: 104411118
+  frame_id: ''
+status:
+- level: "\0"
+  name: 'autonomous_emergency_braking: aeb_emergency_stop'
+  message: ''
+  hardware_id: ''
+  values:
+  - key: decision
+    value: deceleration
+- level: "\0"
+  name: lateral_deviation
+  message: ''
+  hardware_id: ''
+  values:
+  - key: metric_value
+    value: '0.292116'
+- level: "\0"
+  name: yaw_deviation
+  message: ''
+  hardware_id: ''
+  values:
+  - key: metric_value
+    value: '0.176340'
+- level: "\0"
+  name: ego_lane_info
+  message: ''
+  hardware_id: ''
+  values:
+  - key: lane_id
+    value: '176472'
+  - key: s
+    value: '35.484670'
+  - key: t
+    value: '-0.464261'
+- level: "\0"
+  name: kinematic_state
+  message: ''
+  hardware_id: ''
+  values:
+  - key: vel
+    value: '3.068601'
+  - key: acc
+    value: '-0.366837'
+  - key: jerk
+    value: '-0.304465'
+---
+header:
+  stamp:
+    sec: 1709009639
+    nanosec: 204407354
+  frame_id: ''
+status:
+- level: "\0"
+  name: 'autonomous_emergency_braking: aeb_emergency_stop'
+  message: ''
+  hardware_id: ''
+  values:
+  - key: decision
+    value: deceleration
+- level: "\0"
+  name: lateral_deviation
+  message: ''
+  hardware_id: ''
+  values:
+  - key: metric_value
+    value: '0.341302'
+- level: "\0"
+  name: yaw_deviation
+  message: ''
+  hardware_id: ''
+  values:
+  - key: metric_value
+    value: '0.182917'
+- level: "\0"
+  name: ego_lane_info
+  message: ''
+  hardware_id: ''
+  values:
+  - key: lane_id
+    value: '176472'
+  - key: s
+    value: '35.778943'
+  - key: t
+    value: '-0.529533'
+- level: "\0"
+  name: kinematic_state
+  message: ''
+  hardware_id: ''
+  values:
+  - key: vel
+    value: '3.023590'
+  - key: acc
+    value: '-0.409510'
+  - key: jerk
+    value: '-0.421688'
+---
+header:
+  stamp:
+    sec: 1709009639
+    nanosec: 304410525
+  frame_id: ''
+status:
+- level: "\0"
+  name: 'autonomous_emergency_braking: aeb_emergency_stop'
+  message: ''
+  hardware_id: ''
+  values:
+  - key: decision
+    value: deceleration
+- level: "\0"
+  name: lateral_deviation
+  message: ''
+  hardware_id: ''
+  values:
+  - key: metric_value
+    value: '0.417672'
+- level: "\0"
+  name: yaw_deviation
+  message: ''
+  hardware_id: ''
+  values:
+  - key: metric_value
+    value: '0.186204'
+- level: "\0"
+  name: ego_lane_info
+  message: ''
+  hardware_id: ''
+  values:
+  - key: lane_id
+    value: '176472'
+  - key: s
+    value: '36.095905'
+  - key: t
+    value: '-0.597037'
+- level: "\0"
+  name: kinematic_state
+  message: ''
+  hardware_id: ''
+  values:
+  - key: vel
+    value: '2.995624'
+  - key: acc
+    value: '-0.345813'
+  - key: jerk
+    value: '0.593408'
+---
+header:
+  stamp:
+    sec: 1709009639
+    nanosec: 404414696
+  frame_id: ''
+status:
+- level: "\0"
+  name: 'autonomous_emergency_braking: aeb_emergency_stop'
+  message: ''
+  hardware_id: ''
+  values:
+  - key: decision
+    value: deceleration
+- level: "\0"
+  name: lateral_deviation
+  message: ''
+  hardware_id: ''
+  values:
+  - key: metric_value
+    value: '0.459117'
+- level: "\0"
+  name: yaw_deviation
+  message: ''
+  hardware_id: ''
+  values:
+  - key: metric_value
+    value: '0.189278'
+- level: "\0"
+  name: ego_lane_info
+  message: ''
+  hardware_id: ''
+  values:
+  - key: lane_id
+    value: '176472'
+  - key: s
+    value: '36.359724'
+  - key: t
+    value: '-0.654262'
+- level: "\0"
+  name: kinematic_state
+  message: ''
+  hardware_id: ''
+  values:
+  - key: vel
+    value: '2.972544'
+  - key: acc
+    value: '-0.299326'
+  - key: jerk
+    value: '0.508477'
+---
+header:
+  stamp:
+    sec: 1709009639
+    nanosec: 504406939
+  frame_id: ''
+status:
+- level: "\0"
+  name: 'autonomous_emergency_braking: aeb_emergency_stop'
+  message: ''
+  hardware_id: ''
+  values:
+  - key: decision
+    value: deceleration
+- level: "\0"
+  name: lateral_deviation
+  message: ''
+  hardware_id: ''
+  values:
+  - key: metric_value
+    value: '0.511652'
+- level: "\0"
+  name: yaw_deviation
+  message: ''
+  hardware_id: ''
+  values:
+  - key: metric_value
+    value: '0.191124'
+- level: "\0"
+  name: ego_lane_info
+  message: ''
+  hardware_id: ''
+  values:
+  - key: lane_id
+    value: '176472'
+  - key: s
+    value: '36.645451'
+  - key: t
+    value: '-0.712760'
+- level: "\0"
+  name: kinematic_state
+  message: ''
+  hardware_id: ''
+  values:
+  - key: vel
+    value: '2.944074'
+  - key: acc
+    value: '-0.285829'
+  - key: jerk
+    value: '0.132708'
+---
+header:
+  stamp:
+    sec: 1709009639
+    nanosec: 604409723
+  frame_id: ''
+status:
+- level: "\0"
+  name: 'autonomous_emergency_braking: aeb_emergency_stop'
+  message: ''
+  hardware_id: ''
+  values:
+  - key: decision
+    value: deceleration
+- level: "\0"
+  name: lateral_deviation
+  message: ''
+  hardware_id: ''
+  values:
+  - key: metric_value
+    value: '0.587826'
+- level: "\0"
+  name: yaw_deviation
+  message: ''
+  hardware_id: ''
+  values:
+  - key: metric_value
+    value: '0.188456'
+- level: "\0"
+  name: ego_lane_info
+  message: ''
+  hardware_id: ''
+  values:
+  - key: lane_id
+    value: '176472'
+  - key: s
+    value: '36.933826'
+  - key: t
+    value: '-0.770362'
+- level: "\0"
+  name: kinematic_state
+  message: ''
+  hardware_id: ''
+  values:
+  - key: vel
+    value: '2.919497'
+  - key: acc
+    value: '-0.274788'
+  - key: jerk
+    value: '0.111478'
+---
+header:
+  stamp:
+    sec: 1709009639
+    nanosec: 704403639
+  frame_id: ''
+status:
+- level: "\0"
+  name: 'autonomous_emergency_braking: aeb_emergency_stop'
+  message: ''
+  hardware_id: ''
+  values:
+  - key: decision
+    value: deceleration
+- level: "\0"
+  name: lateral_deviation
+  message: ''
+  hardware_id: ''
+  values:
+  - key: metric_value
+    value: '0.659352'
+- level: "\0"
+  name: yaw_deviation
+  message: ''
+  hardware_id: ''
+  values:
+  - key: metric_value
+    value: '0.184065'
+- level: "\0"
+  name: ego_lane_info
+  message: ''
+  hardware_id: ''
+  values:
+  - key: lane_id
+    value: '176472'
+  - key: s
+    value: '37.217586'
+  - key: t
+    value: '-0.824414'
+- level: "\0"
+  name: kinematic_state
+  message: ''
+  hardware_id: ''
+  values:
+  - key: vel
+    value: '2.877049'
+  - key: acc
+    value: '-0.330259'
+  - key: jerk
+    value: '-0.558135'
+---
+header:
+  stamp:
+    sec: 1709009639
+    nanosec: 804407921
+  frame_id: ''
+status:
+- level: "\0"
+  name: 'autonomous_emergency_braking: aeb_emergency_stop'
+  message: ''
+  hardware_id: ''
+  values:
+  - key: decision
+    value: deceleration
+- level: "\0"
+  name: lateral_deviation
+  message: ''
+  hardware_id: ''
+  values:
+  - key: metric_value
+    value: '0.710881'
+- level: "\0"
+  name: yaw_deviation
+  message: ''
+  hardware_id: ''
+  values:
+  - key: metric_value
+    value: '0.178507'
+- level: "\0"
+  name: ego_lane_info
+  message: ''
+  hardware_id: ''
+  values:
+  - key: lane_id
+    value: '176472'
+  - key: s
+    value: '37.496811'
+  - key: t
+    value: '-0.876442'
+- level: "\0"
+  name: kinematic_state
+  message: ''
+  hardware_id: ''
+  values:
+  - key: vel
+    value: '2.849749'
+  - key: acc
+    value: '-0.320258'
+  - key: jerk
+    value: '0.099428'
+---
+header:
+  stamp:
+    sec: 1709009639
+    nanosec: 904405274
+  frame_id: ''
+status:
+- level: "\0"
+  name: 'autonomous_emergency_braking: aeb_emergency_stop'
+  message: ''
+  hardware_id: ''
+  values:
+  - key: decision
+    value: deceleration
+- level: "\0"
+  name: lateral_deviation
+  message: ''
+  hardware_id: ''
+  values:
+  - key: metric_value
+    value: '0.765217'
+- level: "\0"
+  name: yaw_deviation
+  message: ''
+  hardware_id: ''
+  values:
+  - key: metric_value
+    value: '0.172269'
+- level: "\0"
+  name: ego_lane_info
+  message: ''
+  hardware_id: ''
+  values:
+  - key: lane_id
+    value: '176472'
+  - key: s
+    value: '37.738132'
+  - key: t
+    value: '-0.925174'
+- level: "\0"
+  name: kinematic_state
+  message: ''
+  hardware_id: ''
+  values:
+  - key: vel
+    value: '2.809040'
+  - key: acc
+    value: '-0.352498'
+  - key: jerk
+    value: '-0.321446'
+---
+header:
+  stamp:
+    sec: 1709009640
+    nanosec: 4411217
+  frame_id: ''
+status:
+- level: "\0"
+  name: 'autonomous_emergency_braking: aeb_emergency_stop'
+  message: ''
+  hardware_id: ''
+  values:
+  - key: decision
+    value: deceleration
+- level: "\0"
+  name: lateral_deviation
+  message: ''
+  hardware_id: ''
+  values:
+  - key: metric_value
+    value: '0.832975'
+- level: "\0"
+  name: yaw_deviation
+  message: ''
+  hardware_id: ''
+  values:
+  - key: metric_value
+    value: '0.161679'
+- level: "\0"
+  name: ego_lane_info
+  message: ''
+  hardware_id: ''
+  values:
+  - key: lane_id
+    value: '1500'
+  - key: s
+    value: '0.254821'
+  - key: t
+    value: '-0.983676'
+- level: "\0"
+  name: kinematic_state
+  message: ''
+  hardware_id: ''
+  values:
+  - key: vel
+    value: '2.780202'
+  - key: acc
+    value: '-0.322109'
+  - key: jerk
+    value: '0.299525'
+---
+header:
+  stamp:
+    sec: 1709009640
+    nanosec: 104409667
+  frame_id: ''
+status:
+- level: "\0"
+  name: 'autonomous_emergency_braking: aeb_emergency_stop'
+  message: ''
+  hardware_id: ''
+  values:
+  - key: decision
+    value: deceleration
+- level: "\0"
+  name: lateral_deviation
+  message: ''
+  hardware_id: ''
+  values:
+  - key: metric_value
+    value: '0.876415'
+- level: "\0"
+  name: yaw_deviation
+  message: ''
+  hardware_id: ''
+  values:
+  - key: metric_value
+    value: '0.153313'
+- level: "\0"
+  name: ego_lane_info
+  message: ''
+  hardware_id: ''
+  values:
+  - key: lane_id
+    value: '1500'
+  - key: s
+    value: '0.524374'
+  - key: t
+    value: '-1.038678'
+- level: "\0"
+  name: kinematic_state
+  message: ''
+  hardware_id: ''
+  values:
+  - key: vel
+    value: '2.778970'
+  - key: acc
+    value: '-0.193682'
+  - key: jerk
+    value: '1.284198'
+---
+header:
+  stamp:
+    sec: 1709009640
+    nanosec: 204408500
+  frame_id: ''
+status:
+- level: "\0"
+  name: 'autonomous_emergency_braking: aeb_emergency_stop'
+  message: ''
+  hardware_id: ''
+  values:
+  - key: decision
+    value: deceleration
+- level: "\0"
+  name: lateral_deviation
+  message: ''
+  hardware_id: ''
+  values:
+  - key: metric_value
+    value: '0.914800'
+- level: "\0"
+  name: yaw_deviation
+  message: ''
+  hardware_id: ''
+  values:
+  - key: metric_value
+    value: '0.142017'
+- level: "\0"
+  name: ego_lane_info
+  message: ''
+  hardware_id: ''
+  values:
+  - key: lane_id
+    value: '1500'
+  - key: s
+    value: '0.797716'
+  - key: t
+    value: '-1.089461'
+- level: "\0"
+  name: kinematic_state
+  message: ''
+  hardware_id: ''
+  values:
+  - key: vel
+    value: '2.766703'
+  - key: acc
+    value: '-0.157067'
+  - key: jerk
+    value: '0.374411'
+---
+header:
+  stamp:
+    sec: 1709009640
+    nanosec: 304402334
+  frame_id: ''
+status:
+- level: "\0"
+  name: 'autonomous_emergency_braking: aeb_emergency_stop'
+  message: ''
+  hardware_id: ''
+  values:
+  - key: decision
+    value: deceleration
+- level: "\0"
+  name: lateral_deviation
+  message: ''
+  hardware_id: ''
+  values:
+  - key: metric_value
+    value: '0.951588'
+- level: "\0"
+  name: yaw_deviation
+  message: ''
+  hardware_id: ''
+  values:
+  - key: metric_value
+    value: '0.128978'
+- level: "\0"
+  name: ego_lane_info
+  message: ''
+  hardware_id: ''
+  values:
+  - key: lane_id
+    value: '1500'
+  - key: s
+    value: '1.072910'
+  - key: t
+    value: '-1.137064'
+- level: "\0"
+  name: kinematic_state
+  message: ''
+  hardware_id: ''
+  values:
+  - key: vel
+    value: '2.774931'
+  - key: acc
+    value: '-0.064950'
+  - key: jerk
+    value: '0.919988'
+---
+header:
+  stamp:
+    sec: 1709009640
+    nanosec: 404404029
+  frame_id: ''
+status:
+- level: "\0"
+  name: 'autonomous_emergency_braking: aeb_emergency_stop'
+  message: ''
+  hardware_id: ''
+  values:
+  - key: decision
+    value: deceleration
+- level: "\0"
+  name: lateral_deviation
+  message: ''
+  hardware_id: ''
+  values:
+  - key: metric_value
+    value: '1.016150'
+- level: "\0"
+  name: yaw_deviation
+  message: ''
+  hardware_id: ''
+  values:
+  - key: metric_value
+    value: '0.118127'
+- level: "\0"
+  name: ego_lane_info
+  message: ''
+  hardware_id: ''
+  values:
+  - key: lane_id
+    value: '1500'
+  - key: s
+    value: '1.345795'
+  - key: t
+    value: '-1.181963'
+- level: "\0"
+  name: kinematic_state
+  message: ''
+  hardware_id: ''
+  values:
+  - key: vel
+    value: '2.785044'
+  - key: acc
+    value: '0.000635'
+  - key: jerk
+    value: '0.654367'
+---
+header:
+  stamp:
+    sec: 1709009640
+    nanosec: 504402608
+  frame_id: ''
+status:
+- level: "\0"
+  name: 'autonomous_emergency_braking: aeb_emergency_stop'
+  message: ''
+  hardware_id: ''
+  values:
+  - key: decision
+    value: deceleration
+- level: "\0"
+  name: lateral_deviation
+  message: ''
+  hardware_id: ''
+  values:
+  - key: metric_value
+    value: '1.043522'
+- level: "\0"
+  name: yaw_deviation
+  message: ''
+  hardware_id: ''
+  values:
+  - key: metric_value
+    value: '0.104031'
+- level: "\0"
+  name: ego_lane_info
+  message: ''
+  hardware_id: ''
+  values:
+  - key: lane_id
+    value: '1500'
+  - key: s
+    value: '1.619427'
+  - key: t
+    value: '-1.222165'
+- level: "\0"
+  name: kinematic_state
+  message: ''
+  hardware_id: ''
+  values:
+  - key: vel
+    value: '2.806327'
+  - key: acc
+    value: '0.093698'
+  - key: jerk
+    value: '0.929944'
+---
+header:
+  stamp:
+    sec: 1709009640
+    nanosec: 604408011
+  frame_id: ''
+status:
+- level: "\0"
+  name: 'autonomous_emergency_braking: aeb_emergency_stop'
+  message: ''
+  hardware_id: ''
+  values:
+  - key: decision
+    value: deceleration
+- level: "\0"
+  name: lateral_deviation
+  message: ''
+  hardware_id: ''
+  values:
+  - key: metric_value
+    value: '1.069969'
+- level: "\0"
+  name: yaw_deviation
+  message: ''
+  hardware_id: ''
+  values:
+  - key: metric_value
+    value: '0.091281'
+- level: "\0"
+  name: ego_lane_info
+  message: ''
+  hardware_id: ''
+  values:
+  - key: lane_id
+    value: '1500'
+  - key: s
+    value: '1.899189'
+  - key: t
+    value: '-1.257947'
+- level: "\0"
+  name: kinematic_state
+  message: ''
+  hardware_id: ''
+  values:
+  - key: vel
+    value: '2.826436'
+  - key: acc
+    value: '0.134591'
+  - key: jerk
+    value: '0.411654'
+---
+header:
+  stamp:
+    sec: 1709009640
+    nanosec: 704403572
+  frame_id: ''
+status:
+- level: "\0"
+  name: 'autonomous_emergency_braking: aeb_emergency_stop'
+  message: ''
+  hardware_id: ''
+  values:
+  - key: decision
+    value: deceleration
+- level: "\0"
+  name: lateral_deviation
+  message: ''
+  hardware_id: ''
+  values:
+  - key: metric_value
+    value: '1.103021'
+- level: "\0"
+  name: yaw_deviation
+  message: ''
+  hardware_id: ''
+  values:
+  - key: metric_value
+    value: '0.076999'
+- level: "\0"
+  name: ego_lane_info
+  message: ''
+  hardware_id: ''
+  values:
+  - key: lane_id
+    value: '1500'
+  - key: s
+    value: '2.180388'
+  - key: t
+    value: '-1.287927'
+- level: "\0"
+  name: kinematic_state
+  message: ''
+  hardware_id: ''
+  values:
+  - key: vel
+    value: '2.855254'
+  - key: acc
+    value: '0.206083'
+  - key: jerk
+    value: '0.706992'
+---
+header:
+  stamp:
+    sec: 1709009640
+    nanosec: 804400090
+  frame_id: ''
+status:
+- level: "\0"
+  name: 'autonomous_emergency_braking: aeb_emergency_stop'
+  message: ''
+  hardware_id: ''
+  values:
+  - key: decision
+    value: deceleration
+- level: "\0"
+  name: lateral_deviation
+  message: ''
+  hardware_id: ''
+  values:
+  - key: metric_value
+    value: '1.166697'
+- level: "\0"
+  name: yaw_deviation
+  message: ''
+  hardware_id: ''
+  values:
+  - key: metric_value
+    value: '0.064772'
+- level: "\0"
+  name: ego_lane_info
+  message: ''
+  hardware_id: ''
+  values:
+  - key: lane_id
+    value: '1500'
+  - key: s
+    value: '2.463578'
+  - key: t
+    value: '-1.315164'
+- level: "\0"
+  name: kinematic_state
+  message: ''
+  hardware_id: ''
+  values:
+  - key: vel
+    value: '2.871829'
+  - key: acc
+    value: '0.189194'
+  - key: jerk
+    value: '-0.169536'
+---
+header:
+  stamp:
+    sec: 1709009640
+    nanosec: 904408423
+  frame_id: ''
+status:
+- level: "\0"
+  name: 'autonomous_emergency_braking: aeb_emergency_stop'
+  message: ''
+  hardware_id: ''
+  values:
+  - key: decision
+    value: deceleration
+- level: "\0"
+  name: lateral_deviation
+  message: ''
+  hardware_id: ''
+  values:
+  - key: metric_value
+    value: '1.185643'
+- level: "\0"
+  name: yaw_deviation
+  message: ''
+  hardware_id: ''
+  values:
+  - key: metric_value
+    value: '0.049794'
+- level: "\0"
+  name: ego_lane_info
+  message: ''
+  hardware_id: ''
+  values:
+  - key: lane_id
+    value: '1500'
+  - key: s
+    value: '2.756252'
+  - key: t
+    value: '-1.339019'
+- level: "\0"
+  name: kinematic_state
+  message: ''
+  hardware_id: ''
+  values:
+  - key: vel
+    value: '2.924632'
+  - key: acc
+    value: '0.313097'
+  - key: jerk
+    value: '1.232130'
+---
+header:
+  stamp:
+    sec: 1709009641
+    nanosec: 4410489
+  frame_id: ''
+status:
+- level: "\0"
+  name: 'autonomous_emergency_braking: aeb_emergency_stop'
+  message: ''
+  hardware_id: ''
+  values:
+  - key: decision
+    value: none
+- level: "\0"
+  name: lateral_deviation
+  message: ''
+  hardware_id: ''
+  values:
+  - key: metric_value
+    value: '1.200281'
+- level: "\0"
+  name: yaw_deviation
+  message: ''
+  hardware_id: ''
+  values:
+  - key: metric_value
+    value: '0.034773'
+- level: "\0"
+  name: ego_lane_info
+  message: ''
+  hardware_id: ''
+  values:
+  - key: lane_id
+    value: '1500'
+  - key: s
+    value: '3.048498'
+  - key: t
+    value: '-1.357804'
+- level: "\0"
+  name: kinematic_state
+  message: ''
+  hardware_id: ''
+  values:
+  - key: vel
+    value: '2.973334'
+  - key: acc
+    value: '0.388577'
+  - key: jerk
+    value: '0.757059'
+---
+header:
+  stamp:
+    sec: 1709009641
+    nanosec: 104403955
+  frame_id: ''
+status:
+- level: "\0"
+  name: 'autonomous_emergency_braking: aeb_emergency_stop'
+  message: ''
+  hardware_id: ''
+  values:
+  - key: decision
+    value: none
+- level: "\0"
+  name: lateral_deviation
+  message: ''
+  hardware_id: ''
+  values:
+  - key: metric_value
+    value: '1.241443'
+- level: "\0"
+  name: yaw_deviation
+  message: ''
+  hardware_id: ''
+  values:
+  - key: metric_value
+    value: '0.020706'
+- level: "\0"
+  name: ego_lane_info
+  message: ''
+  hardware_id: ''
+  values:
+  - key: lane_id
+    value: '1500'
+  - key: s
+    value: '3.348355'
+  - key: t
+    value: '-1.371031'
+- level: "\0"
+  name: kinematic_state
+  message: ''
+  hardware_id: ''
+  values:
+  - key: vel
+    value: '3.031645'
+  - key: acc
+    value: '0.492628'
+  - key: jerk
+    value: '1.050884'
+---
+header:
+  stamp:
+    sec: 1709009641
+    nanosec: 204406868
+  frame_id: ''
+status:
+- level: "\0"
+  name: 'autonomous_emergency_braking: aeb_emergency_stop'
+  message: ''
+  hardware_id: ''
+  values:
+  - key: decision
+    value: none
+- level: "\0"
+  name: lateral_deviation
+  message: ''
+  hardware_id: ''
+  values:
+  - key: metric_value
+    value: '1.256049'
+- level: "\0"
+  name: yaw_deviation
+  message: ''
+  hardware_id: ''
+  values:
+  - key: metric_value
+    value: '0.005195'
+- level: "\0"
+  name: ego_lane_info
+  message: ''
+  hardware_id: ''
+  values:
+  - key: lane_id
+    value: '1500'
+  - key: s
+    value: '3.654895'
+  - key: t
+    value: '-1.378377'
+- level: "\0"
+  name: kinematic_state
+  message: ''
+  hardware_id: ''
+  values:
+  - key: vel
+    value: '3.088592'
+  - key: acc
+    value: '0.524980'
+  - key: jerk
+    value: '0.322604'
+---
+header:
+  stamp:
+    sec: 1709009641
+    nanosec: 304403545
+  frame_id: ''
+status:
+- level: "\0"
+  name: 'autonomous_emergency_braking: aeb_emergency_stop'
+  message: ''
+  hardware_id: ''
+  values:
+  - key: decision
+    value: none
+- level: "\0"
+  name: lateral_deviation
+  message: ''
+  hardware_id: ''
+  values:
+  - key: metric_value
+    value: '1.255756'
+- level: "\0"
+  name: yaw_deviation
+  message: ''
+  hardware_id: ''
+  values:
+  - key: metric_value
+    value: '0.010914'
+- level: "\0"
+  name: ego_lane_info
+  message: ''
+  hardware_id: ''
+  values:
+  - key: lane_id
+    value: '1500'
+  - key: s
+    value: '3.967671'
+  - key: t
+    value: '-1.380667'
+- level: "\0"
+  name: kinematic_state
+  message: ''
+  hardware_id: ''
+  values:
+  - key: vel
+    value: '3.152821'
+  - key: acc
+    value: '0.584220'
+  - key: jerk
+    value: '0.590881'
+---
+header:
+  stamp:
+    sec: 1709009641
+    nanosec: 404414036
+  frame_id: ''
+status:
+- level: "\0"
+  name: 'autonomous_emergency_braking: aeb_emergency_stop'
+  message: ''
+  hardware_id: ''
+  values:
+  - key: decision
+    value: none
+- level: "\0"
+  name: lateral_deviation
+  message: ''
+  hardware_id: ''
+  values:
+  - key: metric_value
+    value: '1.259759'
+- level: "\0"
+  name: yaw_deviation
+  message: ''
+  hardware_id: ''
+  values:
+  - key: metric_value
+    value: '0.025090'
+- level: "\0"
+  name: ego_lane_info
+  message: ''
+  hardware_id: ''
+  values:
+  - key: lane_id
+    value: '1500'
+  - key: s
+    value: '4.286699'
+  - key: t
+    value: '-1.378690'
+- level: "\0"
+  name: kinematic_state
+  message: ''
+  hardware_id: ''
+  values:
+  - key: vel
+    value: '3.220785'
+  - key: acc
+    value: '0.655660'
+  - key: jerk
+    value: '0.710801'
+---
+header:
+  stamp:
+    sec: 1709009641
+    nanosec: 504407066
+  frame_id: ''
+status:
+- level: "\0"
+  name: 'autonomous_emergency_braking: aeb_emergency_stop'
+  message: ''
+  hardware_id: ''
+  values:
+  - key: decision
+    value: none
+- level: "\0"
+  name: lateral_deviation
+  message: ''
+  hardware_id: ''
+  values:
+  - key: metric_value
+    value: '1.221319'
+- level: "\0"
+  name: yaw_deviation
+  message: ''
+  hardware_id: ''
+  values:
+  - key: metric_value
+    value: '0.040636'
+- level: "\0"
+  name: ego_lane_info
+  message: ''
+  hardware_id: ''
+  values:
+  - key: lane_id
+    value: '1500'
+  - key: s
+    value: '4.614102'
+  - key: t
+    value: '-1.371985'
+- level: "\0"
+  name: kinematic_state
+  message: ''
+  hardware_id: ''
+  values:
+  - key: vel
+    value: '3.287503'
+  - key: acc
+    value: '0.687749'
+  - key: jerk
+    value: '0.320499'
+---
+header:
+  stamp:
+    sec: 1709009641
+    nanosec: 604411210
+  frame_id: ''
+status:
+- level: "\0"
+  name: 'autonomous_emergency_braking: aeb_emergency_stop'
+  message: ''
+  hardware_id: ''
+  values:
+  - key: decision
+    value: none
+- level: "\0"
+  name: lateral_deviation
+  message: ''
+  hardware_id: ''
+  values:
+  - key: metric_value
+    value: '1.215403'
+- level: "\0"
+  name: yaw_deviation
+  message: ''
+  hardware_id: ''
+  values:
+  - key: metric_value
+    value: '0.052577'
+- level: "\0"
+  name: ego_lane_info
+  message: ''
+  hardware_id: ''
+  values:
+  - key: lane_id
+    value: '1500'
+  - key: s
+    value: '4.954561'
+  - key: t
+    value: '-1.359024'
+- level: "\0"
+  name: kinematic_state
+  message: ''
+  hardware_id: ''
+  values:
+  - key: vel
+    value: '3.346353'
+  - key: acc
+    value: '0.642912'
+  - key: jerk
+    value: '-0.443885'
+---
+header:
+  stamp:
+    sec: 1709009641
+    nanosec: 704414774
+  frame_id: ''
+status:
+- level: "\0"
+  name: 'autonomous_emergency_braking: aeb_emergency_stop'
+  message: ''
+  hardware_id: ''
+  values:
+  - key: decision
+    value: none
+- level: "\0"
+  name: lateral_deviation
+  message: ''
+  hardware_id: ''
+  values:
+  - key: metric_value
+    value: '1.227203'
+- level: "\0"
+  name: yaw_deviation
+  message: ''
+  hardware_id: ''
+  values:
+  - key: metric_value
+    value: '0.061235'
+- level: "\0"
+  name: ego_lane_info
+  message: ''
+  hardware_id: ''
+  values:
+  - key: lane_id
+    value: '1500'
+  - key: s
+    value: '5.289516'
+  - key: t
+    value: '-1.341692'
+- level: "\0"
+  name: kinematic_state
+  message: ''
+  hardware_id: ''
+  values:
+  - key: vel
+    value: '3.407900'
+  - key: acc
+    value: '0.626983'
+  - key: jerk
+    value: '-0.162374'
+---
+header:
+  stamp:
+    sec: 1709009641
+    nanosec: 804408603
+  frame_id: ''
+status:
+- level: "\0"
+  name: 'autonomous_emergency_braking: aeb_emergency_stop'
+  message: ''
+  hardware_id: ''
+  values:
+  - key: decision
+    value: none
+- level: "\0"
+  name: lateral_deviation
+  message: ''
+  hardware_id: ''
+  values:
+  - key: metric_value
+    value: '1.203615'
+- level: "\0"
+  name: yaw_deviation
+  message: ''
+  hardware_id: ''
+  values:
+  - key: metric_value
+    value: '0.071551'
+- level: "\0"
+  name: ego_lane_info
+  message: ''
+  hardware_id: ''
+  values:
+  - key: lane_id
+    value: '1500'
+  - key: s
+    value: '5.636661'
+  - key: t
+    value: '-1.319875'
+- level: "\0"
+  name: kinematic_state
+  message: ''
+  hardware_id: ''
+  values:
+  - key: vel
+    value: '3.475030'
+  - key: acc
+    value: '0.605346'
+  - key: jerk
+    value: '-0.217098'
+---
+header:
+  stamp:
+    sec: 1709009641
+    nanosec: 904408132
+  frame_id: ''
+status:
+- level: "\0"
+  name: 'autonomous_emergency_braking: aeb_emergency_stop'
+  message: ''
+  hardware_id: ''
+  values:
+  - key: decision
+    value: none
+- level: "\0"
+  name: lateral_deviation
+  message: ''
+  hardware_id: ''
+  values:
+  - key: metric_value
+    value: '1.175841'
+- level: "\0"
+  name: yaw_deviation
+  message: ''
+  hardware_id: ''
+  values:
+  - key: metric_value
+    value: '0.080601'
+- level: "\0"
+  name: ego_lane_info
+  message: ''
+  hardware_id: ''
+  values:
+  - key: lane_id
+    value: '1500'
+  - key: s
+    value: '5.989970'
+  - key: t
+    value: '-1.294059'
+- level: "\0"
+  name: kinematic_state
+  message: ''
+  hardware_id: ''
+  values:
+  - key: vel
+    value: '3.537443'
+  - key: acc
+    value: '0.650080'
+  - key: jerk
+    value: '0.445461'
+---
+header:
+  stamp:
+    sec: 1709009642
+    nanosec: 4359569
+  frame_id: ''
+status:
+- level: "\0"
+  name: 'autonomous_emergency_braking: aeb_emergency_stop'
+  message: ''
+  hardware_id: ''
+  values:
+  - key: decision
+    value: none
+- level: "\0"
+  name: lateral_deviation
+  message: ''
+  hardware_id: ''
+  values:
+  - key: metric_value
+    value: '1.152956'
+- level: "\0"
+  name: yaw_deviation
+  message: ''
+  hardware_id: ''
+  values:
+  - key: metric_value
+    value: '0.087397'
+- level: "\0"
+  name: ego_lane_info
+  message: ''
+  hardware_id: ''
+  values:
+  - key: lane_id
+    value: '1500'
+  - key: s
+    value: '6.348585'
+  - key: t
+    value: '-1.265829'
+- level: "\0"
+  name: kinematic_state
+  message: ''
+  hardware_id: ''
+  values:
+  - key: vel
+    value: '3.609332'
+  - key: acc
+    value: '0.664397'
+  - key: jerk
+    value: '0.140656'
+---
+header:
+  stamp:
+    sec: 1709009642
+    nanosec: 104407311
+  frame_id: ''
+status:
+- level: "\0"
+  name: 'autonomous_emergency_braking: aeb_emergency_stop'
+  message: ''
+  hardware_id: ''
+  values:
+  - key: decision
+    value: none
+- level: "\0"
+  name: lateral_deviation
+  message: ''
+  hardware_id: ''
+  values:
+  - key: metric_value
+    value: '1.118816'
+- level: "\0"
+  name: yaw_deviation
+  message: ''
+  hardware_id: ''
+  values:
+  - key: metric_value
+    value: '0.093438'
+- level: "\0"
+  name: ego_lane_info
+  message: ''
+  hardware_id: ''
+  values:
+  - key: lane_id
+    value: '1500'
+  - key: s
+    value: '6.715403'
+  - key: t
+    value: '-1.232613'
+- level: "\0"
+  name: kinematic_state
+  message: ''
+  hardware_id: ''
+  values:
+  - key: vel
+    value: '3.693096'
+  - key: acc
+    value: '0.754094'
+  - key: jerk
+    value: '0.908683'
+---
+header:
+  stamp:
+    sec: 1709009642
+    nanosec: 204410579
+  frame_id: ''
+status:
+- level: "\0"
+  name: 'autonomous_emergency_braking: aeb_emergency_stop'
+  message: ''
+  hardware_id: ''
+  values:
+  - key: decision
+    value: none
+- level: "\0"
+  name: lateral_deviation
+  message: ''
+  hardware_id: ''
+  values:
+  - key: metric_value
+    value: '1.083005'
+- level: "\0"
+  name: yaw_deviation
+  message: ''
+  hardware_id: ''
+  values:
+  - key: metric_value
+    value: '0.097700'
+- level: "\0"
+  name: ego_lane_info
+  message: ''
+  hardware_id: ''
+  values:
+  - key: lane_id
+    value: '1500'
+  - key: s
+    value: '7.089984'
+  - key: t
+    value: '-1.197086'
+- level: "\0"
+  name: kinematic_state
+  message: ''
+  hardware_id: ''
+  values:
+  - key: vel
+    value: '3.774627'
+  - key: acc
+    value: '0.811998'
+  - key: jerk
+    value: '0.580573'
+---
+header:
+  stamp:
+    sec: 1709009642
+    nanosec: 304407858
+  frame_id: ''
+status:
+- level: "\0"
+  name: 'autonomous_emergency_braking: aeb_emergency_stop'
+  message: ''
+  hardware_id: ''
+  values:
+  - key: decision
+    value: none
+- level: "\0"
+  name: lateral_deviation
+  message: ''
+  hardware_id: ''
+  values:
+  - key: metric_value
+    value: '1.048047'
+- level: "\0"
+  name: yaw_deviation
+  message: ''
+  hardware_id: ''
+  values:
+  - key: metric_value
+    value: '0.100630'
+- level: "\0"
+  name: ego_lane_info
+  message: ''
+  hardware_id: ''
+  values:
+  - key: lane_id
+    value: '1500'
+  - key: s
+    value: '7.473814'
+  - key: t
+    value: '-1.158361'
+- level: "\0"
+  name: kinematic_state
+  message: ''
+  hardware_id: ''
+  values:
+  - key: vel
+    value: '3.848118'
+  - key: acc
+    value: '0.791756'
+  - key: jerk
+    value: '-0.201294'
+---
+header:
+  stamp:
+    sec: 1709009642
+    nanosec: 404405559
+  frame_id: ''
+status:
+- level: "\0"
+  name: 'autonomous_emergency_braking: aeb_emergency_stop'
+  message: ''
+  hardware_id: ''
+  values:
+  - key: decision
+    value: none
+- level: "\0"
+  name: lateral_deviation
+  message: ''
+  hardware_id: ''
+  values:
+  - key: metric_value
+    value: '1.006286'
+- level: "\0"
+  name: yaw_deviation
+  message: ''
+  hardware_id: ''
+  values:
+  - key: metric_value
+    value: '0.102594'
+- level: "\0"
+  name: ego_lane_info
+  message: ''
+  hardware_id: ''
+  values:
+  - key: lane_id
+    value: '1500'
+  - key: s
+    value: '7.863955'
+  - key: t
+    value: '-1.116921'
+- level: "\0"
+  name: kinematic_state
+  message: ''
+  hardware_id: ''
+  values:
+  - key: vel
+    value: '3.930269'
+  - key: acc
+    value: '0.825974'
+  - key: jerk
+    value: '0.344808'
+---
+header:
+  stamp:
+    sec: 1709009642
+    nanosec: 504405783
+  frame_id: ''
+status:
+- level: "\0"
+  name: 'autonomous_emergency_braking: aeb_emergency_stop'
+  message: ''
+  hardware_id: ''
+  values:
+  - key: decision
+    value: none
+- level: "\0"
+  name: lateral_deviation
+  message: ''
+  hardware_id: ''
+  values:
+  - key: metric_value
+    value: '0.966912'
+- level: "\0"
+  name: yaw_deviation
+  message: ''
+  hardware_id: ''
+  values:
+  - key: metric_value
+    value: '0.102802'
+- level: "\0"
+  name: ego_lane_info
+  message: ''
+  hardware_id: ''
+  values:
+  - key: lane_id
+    value: '1500'
+  - key: s
+    value: '8.264956'
+  - key: t
+    value: '-1.076771'
+- level: "\0"
+  name: kinematic_state
+  message: ''
+  hardware_id: ''
+  values:
+  - key: vel
+    value: '4.006945'
+  - key: acc
+    value: '0.811871'
+  - key: jerk
+    value: '-0.140155'
+---
+header:
+  stamp:
+    sec: 1709009642
+    nanosec: 604410778
+  frame_id: ''
+status:
+- level: "\0"
+  name: 'autonomous_emergency_braking: aeb_emergency_stop'
+  message: ''
+  hardware_id: ''
+  values:
+  - key: decision
+    value: none
+- level: "\0"
+  name: lateral_deviation
+  message: ''
+  hardware_id: ''
+  values:
+  - key: metric_value
+    value: '0.927086'
+- level: "\0"
+  name: yaw_deviation
+  message: ''
+  hardware_id: ''
+  values:
+  - key: metric_value
+    value: '0.102103'
+- level: "\0"
+  name: ego_lane_info
+  message: ''
+  hardware_id: ''
+  values:
+  - key: lane_id
+    value: '1500'
+  - key: s
+    value: '8.687818'
+  - key: t
+    value: '-1.034342'
+- level: "\0"
+  name: kinematic_state
+  message: ''
+  hardware_id: ''
+  values:
+  - key: vel
+    value: '4.083466'
+  - key: acc
+    value: '0.789160'
+  - key: jerk
+    value: '-0.220425'
+---
+header:
+  stamp:
+    sec: 1709009642
+    nanosec: 704406881
+  frame_id: ''
+status:
+- level: "\0"
+  name: 'autonomous_emergency_braking: aeb_emergency_stop'
+  message: ''
+  hardware_id: ''
+  values:
+  - key: decision
+    value: none
+- level: "\0"
+  name: lateral_deviation
+  message: ''
+  hardware_id: ''
+  values:
+  - key: metric_value
+    value: '0.887594'
+- level: "\0"
+  name: yaw_deviation
+  message: ''
+  hardware_id: ''
+  values:
+  - key: metric_value
+    value: '0.101057'
+- level: "\0"
+  name: ego_lane_info
+  message: ''
+  hardware_id: ''
+  values:
+  - key: lane_id
+    value: '1500'
+  - key: s
+    value: '9.086423'
+  - key: t
+    value: '-0.993832'
+- level: "\0"
+  name: kinematic_state
+  message: ''
+  hardware_id: ''
+  values:
+  - key: vel
+    value: '4.153996'
+  - key: acc
+    value: '0.769382'
+  - key: jerk
+    value: '-0.205345'
+---
+header:
+  stamp:
+    sec: 1709009642
+    nanosec: 804408753
+  frame_id: ''
+status:
+- level: "\0"
+  name: 'autonomous_emergency_braking: aeb_emergency_stop'
+  message: ''
+  hardware_id: ''
+  values:
+  - key: decision
+    value: none
+- level: "\0"
+  name: lateral_deviation
+  message: ''
+  hardware_id: ''
+  values:
+  - key: metric_value
+    value: '0.847435'
+- level: "\0"
+  name: yaw_deviation
+  message: ''
+  hardware_id: ''
+  values:
+  - key: metric_value
+    value: '0.099233'
+- level: "\0"
+  name: ego_lane_info
+  message: ''
+  hardware_id: ''
+  values:
+  - key: lane_id
+    value: '1500'
+  - key: s
+    value: '9.505482'
+  - key: t
+    value: '-0.951828'
+- level: "\0"
+  name: kinematic_state
+  message: ''
+  hardware_id: ''
+  values:
+  - key: vel
+    value: '4.233492'
+  - key: acc
+    value: '0.802354'
+  - key: jerk
+    value: '0.328948'
+---
+header:
+  stamp:
+    sec: 1709009642
+    nanosec: 904416934
+  frame_id: ''
+status:
+- level: "\0"
+  name: 'autonomous_emergency_braking: aeb_emergency_stop'
+  message: ''
+  hardware_id: ''
+  values:
+  - key: decision
+    value: none
+- level: "\0"
+  name: lateral_deviation
+  message: ''
+  hardware_id: ''
+  values:
+  - key: metric_value
+    value: '0.802559'
+- level: "\0"
+  name: yaw_deviation
+  message: ''
+  hardware_id: ''
+  values:
+  - key: metric_value
+    value: '0.097481'
+- level: "\0"
+  name: ego_lane_info
+  message: ''
+  hardware_id: ''
+  values:
+  - key: lane_id
+    value: '1500'
+  - key: s
+    value: '9.943206'
+  - key: t
+    value: '-0.906019'
+- level: "\0"
+  name: kinematic_state
+  message: ''
+  hardware_id: ''
+  values:
+  - key: vel
+    value: '4.281736'
+  - key: acc
+    value: '0.657596'
+  - key: jerk
+    value: '-1.443561'
+---
+header:
+  stamp:
+    sec: 1709009643
+    nanosec: 4414587
+  frame_id: ''
+status:
+- level: "\0"
+  name: 'autonomous_emergency_braking: aeb_emergency_stop'
+  message: ''
+  hardware_id: ''
+  values:
+  - key: decision
+    value: none
+- level: "\0"
+  name: lateral_deviation
+  message: ''
+  hardware_id: ''
+  values:
+  - key: metric_value
+    value: '0.760994'
+- level: "\0"
+  name: yaw_deviation
+  message: ''
+  hardware_id: ''
+  values:
+  - key: metric_value
+    value: '0.095718'
+- level: "\0"
+  name: ego_lane_info
+  message: ''
+  hardware_id: ''
+  values:
+  - key: lane_id
+    value: '1500'
+  - key: s
+    value: '10.377127'
+  - key: t
+    value: '-0.859918'
+- level: "\0"
+  name: kinematic_state
+  message: ''
+  hardware_id: ''
+  values:
+  - key: vel
+    value: '4.371687'
+  - key: acc
+    value: '0.765366'
+  - key: jerk
+    value: '1.085507'
+---
+header:
+  stamp:
+    sec: 1709009643
+    nanosec: 104420505
+  frame_id: ''
+status:
+- level: "\0"
+  name: 'autonomous_emergency_braking: aeb_emergency_stop'
+  message: ''
+  hardware_id: ''
+  values:
+  - key: decision
+    value: none
+- level: "\0"
+  name: lateral_deviation
+  message: ''
+  hardware_id: ''
+  values:
+  - key: metric_value
+    value: '0.718341'
+- level: "\0"
+  name: yaw_deviation
+  message: ''
+  hardware_id: ''
+  values:
+  - key: metric_value
+    value: '0.093899'
+- level: "\0"
+  name: ego_lane_info
+  message: ''
+  hardware_id: ''
+  values:
+  - key: lane_id
+    value: '1500'
+  - key: s
+    value: '10.819839'
+  - key: t
+    value: '-0.813713'
+- level: "\0"
+  name: kinematic_state
+  message: ''
+  hardware_id: ''
+  values:
+  - key: vel
+    value: '4.449620'
+  - key: acc
+    value: '0.759741'
+  - key: jerk
+    value: '-0.056001'
+---
+header:
+  stamp:
+    sec: 1709009643
+    nanosec: 204414143
+  frame_id: ''
+status:
+- level: "\0"
+  name: 'autonomous_emergency_braking: aeb_emergency_stop'
+  message: ''
+  hardware_id: ''
+  values:
+  - key: decision
+    value: none
+- level: "\0"
+  name: lateral_deviation
+  message: ''
+  hardware_id: ''
+  values:
+  - key: metric_value
+    value: '0.677567'
+- level: "\0"
+  name: yaw_deviation
+  message: ''
+  hardware_id: ''
+  values:
+  - key: metric_value
+    value: '0.091658'
+- level: "\0"
+  name: ego_lane_info
+  message: ''
+  hardware_id: ''
+  values:
+  - key: lane_id
+    value: '1500'
+  - key: s
+    value: '11.269511'
+  - key: t
+    value: '-0.769288'
+- level: "\0"
+  name: kinematic_state
+  message: ''
+  hardware_id: ''
+  values:
+  - key: vel
+    value: '4.515152'
+  - key: acc
+    value: '0.705259'
+  - key: jerk
+    value: '-0.547844'
+---
+header:
+  stamp:
+    sec: 1709009643
+    nanosec: 304409405
+  frame_id: ''
+status:
+- level: "\0"
+  name: 'autonomous_emergency_braking: aeb_emergency_stop'
+  message: ''
+  hardware_id: ''
+  values:
+  - key: decision
+    value: none
+- level: "\0"
+  name: lateral_deviation
+  message: ''
+  hardware_id: ''
+  values:
+  - key: metric_value
+    value: '0.636199'
+- level: "\0"
+  name: yaw_deviation
+  message: ''
+  hardware_id: ''
+  values:
+  - key: metric_value
+    value: '0.089442'
+- level: "\0"
+  name: ego_lane_info
+  message: ''
+  hardware_id: ''
+  values:
+  - key: lane_id
+    value: '1500'
+  - key: s
+    value: '11.732517'
+  - key: t
+    value: '-0.723596'
+- level: "\0"
+  name: kinematic_state
+  message: ''
+  hardware_id: ''
+  values:
+  - key: vel
+    value: '4.643522'
+  - key: acc
+    value: '0.936769'
+  - key: jerk
+    value: '2.295276'
+---
+header:
+  stamp:
+    sec: 1709009643
+    nanosec: 404408357
+  frame_id: ''
+status:
+- level: "\0"
+  name: 'autonomous_emergency_braking: aeb_emergency_stop'
+  message: ''
+  hardware_id: ''
+  values:
+  - key: decision
+    value: none
+- level: "\0"
+  name: lateral_deviation
+  message: ''
+  hardware_id: ''
+  values:
+  - key: metric_value
+    value: '0.595805'
+- level: "\0"
+  name: yaw_deviation
+  message: ''
+  hardware_id: ''
+  values:
+  - key: metric_value
+    value: '0.086742'
+- level: "\0"
+  name: ego_lane_info
+  message: ''
+  hardware_id: ''
+  values:
+  - key: lane_id
+    value: '1500'
+  - key: s
+    value: '12.203680'
+  - key: t
+    value: '-0.679467'
+- level: "\0"
+  name: kinematic_state
+  message: ''
+  hardware_id: ''
+  values:
+  - key: vel
+    value: '4.714383'
+  - key: acc
+    value: '0.870530'
+  - key: jerk
+    value: '-0.665125'
+---
+header:
+  stamp:
+    sec: 1709009643
+    nanosec: 504408288
+  frame_id: ''
+status:
+- level: "\0"
+  name: 'autonomous_emergency_braking: aeb_emergency_stop'
+  message: ''
+  hardware_id: ''
+  values:
+  - key: decision
+    value: none
+- level: "\0"
+  name: lateral_deviation
+  message: ''
+  hardware_id: ''
+  values:
+  - key: metric_value
+    value: '0.556659'
+- level: "\0"
+  name: yaw_deviation
+  message: ''
+  hardware_id: ''
+  values:
+  - key: metric_value
+    value: '0.083749'
+- level: "\0"
+  name: ego_lane_info
+  message: ''
+  hardware_id: ''
+  values:
+  - key: lane_id
+    value: '1500'
+  - key: s
+    value: '12.681458'
+  - key: t
+    value: '-0.636197'
+- level: "\0"
+  name: kinematic_state
+  message: ''
+  hardware_id: ''
+  values:
+  - key: vel
+    value: '4.781159'
+  - key: acc
+    value: '0.782888'
+  - key: jerk
+    value: '-0.871966'
+---
+header:
+  stamp:
+    sec: 1709009643
+    nanosec: 604416966
+  frame_id: ''
+status:
+- level: "\0"
+  name: 'autonomous_emergency_braking: aeb_emergency_stop'
+  message: ''
+  hardware_id: ''
+  values:
+  - key: decision
+    value: none
+- level: "\0"
+  name: lateral_deviation
+  message: ''
+  hardware_id: ''
+  values:
+  - key: metric_value
+    value: '0.518422'
+- level: "\0"
+  name: yaw_deviation
+  message: ''
+  hardware_id: ''
+  values:
+  - key: metric_value
+    value: '0.080730'
+- level: "\0"
+  name: ego_lane_info
+  message: ''
+  hardware_id: ''
+  values:
+  - key: lane_id
+    value: '1500'
+  - key: s
+    value: '13.165103'
+  - key: t
+    value: '-0.594228'
+- level: "\0"
+  name: kinematic_state
+  message: ''
+  hardware_id: ''
+  values:
+  - key: vel
+    value: '4.845298'
+  - key: acc
+    value: '0.875744'
+  - key: jerk
+    value: '0.938267'
+---
+header:
+  stamp:
+    sec: 1709009643
+    nanosec: 704412200
+  frame_id: ''
+status:
+- level: "\0"
+  name: 'autonomous_emergency_braking: aeb_emergency_stop'
+  message: ''
+  hardware_id: ''
+  values:
+  - key: decision
+    value: none
+- level: "\0"
+  name: lateral_deviation
+  message: ''
+  hardware_id: ''
+  values:
+  - key: metric_value
+    value: '0.478444'
+- level: "\0"
+  name: yaw_deviation
+  message: ''
+  hardware_id: ''
+  values:
+  - key: metric_value
+    value: '0.077884'
+- level: "\0"
+  name: ego_lane_info
+  message: ''
+  hardware_id: ''
+  values:
+  - key: lane_id
+    value: '1500'
+  - key: s
+    value: '13.659722'
+  - key: t
+    value: '-0.550278'
+- level: "\0"
+  name: kinematic_state
+  message: ''
+  hardware_id: ''
+  values:
+  - key: vel
+    value: '4.961584'
+  - key: acc
+    value: '0.963578'
+  - key: jerk
+    value: '0.874294'
+---
+header:
+  stamp:
+    sec: 1709009643
+    nanosec: 804416329
+  frame_id: ''
+status:
+- level: "\0"
+  name: 'autonomous_emergency_braking: aeb_emergency_stop'
+  message: ''
+  hardware_id: ''
+  values:
+  - key: decision
+    value: none
+- level: "\0"
+  name: lateral_deviation
+  message: ''
+  hardware_id: ''
+  values:
+  - key: metric_value
+    value: '0.438143'
+- level: "\0"
+  name: yaw_deviation
+  message: ''
+  hardware_id: ''
+  values:
+  - key: metric_value
+    value: '0.075065'
+- level: "\0"
+  name: ego_lane_info
+  message: ''
+  hardware_id: ''
+  values:
+  - key: lane_id
+    value: '1500'
+  - key: s
+    value: '14.164645'
+  - key: t
+    value: '-0.506251'
+- level: "\0"
+  name: kinematic_state
+  message: ''
+  hardware_id: ''
+  values:
+  - key: vel
+    value: '5.028357'
+  - key: acc
+    value: '0.830937'
+  - key: jerk
+    value: '-1.324163'
+---
+header:
+  stamp:
+    sec: 1709009643
+    nanosec: 904411958
+  frame_id: ''
+status:
+- level: "\0"
+  name: 'autonomous_emergency_braking: aeb_emergency_stop'
+  message: ''
+  hardware_id: ''
+  values:
+  - key: decision
+    value: none
+- level: "\0"
+  name: lateral_deviation
+  message: ''
+  hardware_id: ''
+  values:
+  - key: metric_value
+    value: '0.399433'
+- level: "\0"
+  name: yaw_deviation
+  message: ''
+  hardware_id: ''
+  values:
+  - key: metric_value
+    value: '0.071776'
+- level: "\0"
+  name: ego_lane_info
+  message: ''
+  hardware_id: ''
+  values:
+  - key: lane_id
+    value: '1500'
+  - key: s
+    value: '14.675367'
+  - key: t
+    value: '-0.463699'
+- level: "\0"
+  name: kinematic_state
+  message: ''
+  hardware_id: ''
+  values:
+  - key: vel
+    value: '5.105083'
+  - key: acc
+    value: '0.820178'
+  - key: jerk
+    value: '-0.107559'
+---
+header:
+  stamp:
+    sec: 1709009644
+    nanosec: 4412436
+  frame_id: ''
+status:
+- level: "\0"
+  name: 'autonomous_emergency_braking: aeb_emergency_stop'
+  message: ''
+  hardware_id: ''
+  values:
+  - key: decision
+    value: none
+- level: "\0"
+  name: lateral_deviation
+  message: ''
+  hardware_id: ''
+  values:
+  - key: metric_value
+    value: '0.363026'
+- level: "\0"
+  name: yaw_deviation
+  message: ''
+  hardware_id: ''
+  values:
+  - key: metric_value
+    value: '0.067987'
+- level: "\0"
+  name: ego_lane_info
+  message: ''
+  hardware_id: ''
+  values:
+  - key: lane_id
+    value: '1500'
+  - key: s
+    value: '15.195114'
+  - key: t
+    value: '-0.423452'
+- level: "\0"
+  name: kinematic_state
+  message: ''
+  hardware_id: ''
+  values:
+  - key: vel
+    value: '5.183570'
+  - key: acc
+    value: '0.803005'
+  - key: jerk
+    value: '-0.171691'
+---
+header:
+  stamp:
+    sec: 1709009644
+    nanosec: 104404806
+  frame_id: ''
+status:
+- level: "\0"
+  name: 'autonomous_emergency_braking: aeb_emergency_stop'
+  message: ''
+  hardware_id: ''
+  values:
+  - key: decision
+    value: none
+- level: "\0"
+  name: lateral_deviation
+  message: ''
+  hardware_id: ''
+  values:
+  - key: metric_value
+    value: '0.327198'
+- level: "\0"
+  name: yaw_deviation
+  message: ''
+  hardware_id: ''
+  values:
+  - key: metric_value
+    value: '0.064287'
+- level: "\0"
+  name: ego_lane_info
+  message: ''
+  hardware_id: ''
+  values:
+  - key: lane_id
+    value: '1500'
+  - key: s
+    value: '15.720697'
+  - key: t
+    value: '-0.383685'
+- level: "\0"
+  name: kinematic_state
+  message: ''
+  hardware_id: ''
+  values:
+  - key: vel
+    value: '5.263354'
+  - key: acc
+    value: '0.804745'
+  - key: jerk
+    value: '0.017441'
+---
+header:
+  stamp:
+    sec: 1709009644
+    nanosec: 204374578
+  frame_id: ''
+status:
+- level: "\0"
+  name: 'autonomous_emergency_braking: aeb_emergency_stop'
+  message: ''
+  hardware_id: ''
+  values:
+  - key: decision
+    value: none
+- level: "\0"
+  name: lateral_deviation
+  message: ''
+  hardware_id: ''
+  values:
+  - key: metric_value
+    value: '0.294181'
+- level: "\0"
+  name: yaw_deviation
+  message: ''
+  hardware_id: ''
+  values:
+  - key: metric_value
+    value: '0.060668'
+- level: "\0"
+  name: ego_lane_info
+  message: ''
+  hardware_id: ''
+  values:
+  - key: lane_id
+    value: '1500'
+  - key: s
+    value: '16.255231'
+  - key: t
+    value: '-0.346902'
+- level: "\0"
+  name: kinematic_state
+  message: ''
+  hardware_id: ''
+  values:
+  - key: vel
+    value: '5.344423'
+  - key: acc
+    value: '0.821352'
+  - key: jerk
+    value: '0.166395'
+---
+header:
+  stamp:
+    sec: 1709009644
+    nanosec: 304407810
+  frame_id: ''
+status:
+- level: "\0"
+  name: 'autonomous_emergency_braking: aeb_emergency_stop'
+  message: ''
+  hardware_id: ''
+  values:
+  - key: decision
+    value: none
+- level: "\0"
+  name: lateral_deviation
+  message: ''
+  hardware_id: ''
+  values:
+  - key: metric_value
+    value: '0.264649'
+- level: "\0"
+  name: yaw_deviation
+  message: ''
+  hardware_id: ''
+  values:
+  - key: metric_value
+    value: '0.056752'
+- level: "\0"
+  name: ego_lane_info
+  message: ''
+  hardware_id: ''
+  values:
+  - key: lane_id
+    value: '1500'
+  - key: s
+    value: '16.797438'
+  - key: t
+    value: '-0.313619'
+- level: "\0"
+  name: kinematic_state
+  message: ''
+  hardware_id: ''
+  values:
+  - key: vel
+    value: '5.409145'
+  - key: acc
+    value: '0.724561'
+  - key: jerk
+    value: '-0.960358'
+---
+header:
+  stamp:
+    sec: 1709009644
+    nanosec: 404406024
+  frame_id: ''
+status:
+- level: "\0"
+  name: 'autonomous_emergency_braking: aeb_emergency_stop'
+  message: ''
+  hardware_id: ''
+  values:
+  - key: decision
+    value: none
+- level: "\0"
+  name: lateral_deviation
+  message: ''
+  hardware_id: ''
+  values:
+  - key: metric_value
+    value: '0.230520'
+- level: "\0"
+  name: yaw_deviation
+  message: ''
+  hardware_id: ''
+  values:
+  - key: metric_value
+    value: '0.052595'
+- level: "\0"
+  name: ego_lane_info
+  message: ''
+  hardware_id: ''
+  values:
+  - key: lane_id
+    value: '1500'
+  - key: s
+    value: '17.374075'
+  - key: t
+    value: '-0.275700'
+- level: "\0"
+  name: kinematic_state
+  message: ''
+  hardware_id: ''
+  values:
+  - key: vel
+    value: '5.488134'
+  - key: acc
+    value: '0.744188'
+  - key: jerk
+    value: '0.188219'
+---
+header:
+  stamp:
+    sec: 1709009644
+    nanosec: 504406423
+  frame_id: ''
+status:
+- level: "\0"
+  name: 'autonomous_emergency_braking: aeb_emergency_stop'
+  message: ''
+  hardware_id: ''
+  values:
+  - key: decision
+    value: none
+- level: "\0"
+  name: lateral_deviation
+  message: ''
+  hardware_id: ''
+  values:
+  - key: metric_value
+    value: '0.209591'
+- level: "\0"
+  name: yaw_deviation
+  message: ''
+  hardware_id: ''
+  values:
+  - key: metric_value
+    value: '0.049251'
+- level: "\0"
+  name: ego_lane_info
+  message: ''
+  hardware_id: ''
+  values:
+  - key: lane_id
+    value: '1500'
+  - key: s
+    value: '17.792559'
+  - key: t
+    value: '-0.252145'
+- level: "\0"
+  name: kinematic_state
+  message: ''
+  hardware_id: ''
+  values:
+  - key: vel
+    value: '5.567167'
+  - key: acc
+    value: '0.861748'
+  - key: jerk
+    value: '1.555661'
+---
+header:
+  stamp:
+    sec: 1709009644
+    nanosec: 604407422
+  frame_id: ''
+status:
+- level: "\0"
+  name: 'autonomous_emergency_braking: aeb_emergency_stop'
+  message: ''
+  hardware_id: ''
+  values:
+  - key: decision
+    value: none
+- level: "\0"
+  name: lateral_deviation
+  message: ''
+  hardware_id: ''
+  values:
+  - key: metric_value
+    value: '0.177184'
+- level: "\0"
+  name: yaw_deviation
+  message: ''
+  hardware_id: ''
+  values:
+  - key: metric_value
+    value: '0.044099'
+- level: "\0"
+  name: ego_lane_info
+  message: ''
+  hardware_id: ''
+  values:
+  - key: lane_id
+    value: '1500'
+  - key: s
+    value: '18.469470'
+  - key: t
+    value: '-0.215682'
+- level: "\0"
+  name: kinematic_state
+  message: ''
+  hardware_id: ''
+  values:
+  - key: vel
+    value: '5.639301'
+  - key: acc
+    value: '1.686702'
+  - key: jerk
+    value: '6.896215'
+---
+header:
+  stamp:
+    sec: 1709009644
+    nanosec: 704407151
+  frame_id: ''
+status:
+- level: "\0"
+  name: 'autonomous_emergency_braking: aeb_emergency_stop'
+  message: ''
+  hardware_id: ''
+  values:
+  - key: decision
+    value: none
+- level: "\0"
+  name: lateral_deviation
+  message: ''
+  hardware_id: ''
+  values:
+  - key: metric_value
+    value: '0.154012'
+- level: "\0"
+  name: yaw_deviation
+  message: ''
+  hardware_id: ''
+  values:
+  - key: metric_value
+    value: '0.039584'
+- level: "\0"
+  name: ego_lane_info
+  message: ''
+  hardware_id: ''
+  values:
+  - key: lane_id
+    value: '1500'
+  - key: s
+    value: '19.048558'
+  - key: t
+    value: '-0.189305'
+- level: "\0"
+  name: kinematic_state
+  message: ''
+  hardware_id: ''
+  values:
+  - key: vel
+    value: '5.704660'
+  - key: acc
+    value: '1.253791'
+  - key: jerk
+    value: '-4.334988'
+---
+header:
+  stamp:
+    sec: 1709009644
+    nanosec: 804415775
+  frame_id: ''
+status:
+- level: "\0"
+  name: 'autonomous_emergency_braking: aeb_emergency_stop'
+  message: ''
+  hardware_id: ''
+  values:
+  - key: decision
+    value: none
+- level: "\0"
+  name: lateral_deviation
+  message: ''
+  hardware_id: ''
+  values:
+  - key: metric_value
+    value: '0.134210'
+- level: "\0"
+  name: yaw_deviation
+  message: ''
+  hardware_id: ''
+  values:
+  - key: metric_value
+    value: '0.035080'
+- level: "\0"
+  name: ego_lane_info
+  message: ''
+  hardware_id: ''
+  values:
+  - key: lane_id
+    value: '1500'
+  - key: s
+    value: '19.624477'
+  - key: t
+    value: '-0.166634'
+- level: "\0"
+  name: kinematic_state
+  message: ''
+  hardware_id: ''
+  values:
+  - key: vel
+    value: '5.789560'
+  - key: acc
+    value: '1.094605'
+  - key: jerk
+    value: '-1.583055'
+---
+header:
+  stamp:
+    sec: 1709009644
+    nanosec: 904406820
+  frame_id: ''
+status:
+- level: "\0"
+  name: 'autonomous_emergency_braking: aeb_emergency_stop'
+  message: ''
+  hardware_id: ''
+  values:
+  - key: decision
+    value: none
+- level: "\0"
+  name: lateral_deviation
+  message: ''
+  hardware_id: ''
+  values:
+  - key: metric_value
+    value: '0.112861'
+- level: "\0"
+  name: yaw_deviation
+  message: ''
+  hardware_id: ''
+  values:
+  - key: metric_value
+    value: '0.031182'
+- level: "\0"
+  name: ego_lane_info
+  message: ''
+  hardware_id: ''
+  values:
+  - key: lane_id
+    value: '1500'
+  - key: s
+    value: '20.211304'
+  - key: t
+    value: '-0.142367'
+- level: "\0"
+  name: kinematic_state
+  message: ''
+  hardware_id: ''
+  values:
+  - key: vel
+    value: '5.862113'
+  - key: acc
+    value: '0.953421'
+  - key: jerk
+    value: '-1.418752'

@@ -1,14 +1,15 @@
-ScenarioFormatVersion: 2.2.0
+ScenarioFormatVersion: 3.0.0
 ScenarioName: sample_planning_control
 ScenarioDescription: sample_planning_control
-SensorModel: sample_sensor_kit
-VehicleModel: sample_vehicle
-VehicleId: default
-LocalMapPath: $HOME/autoware_map/sample-map-planning
-DataSetPath: /home/hyt/dlr_data/auto/t4_pc/xx1
+SensorModel: aip_xx1
+VehicleModel: lexus
 Evaluation:
   UseCaseName: planning_control
   UseCaseFormatVersion: 0.1.0
+  Datasets:
+    - odaiba:
+        VehicleId: default
+        LaunchSensing: true
   Conditions:
     ControlConditions:
       - module: aeb

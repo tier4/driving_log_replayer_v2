@@ -43,8 +43,13 @@ class MinMax(BaseModel):
 
 
 class LeftRight(BaseModel):
-    left: float = Field(float_info.max, gt=0.0)
-    right: float = Field(float_info.max, gt=0.0)
+    left: float = Field(float_info.max, gt=0.0) # +
+    right: float = Field(float_info.max, gt=0.0) # -
+
+    def match_condition(self, t: float):
+        if (-1)*self.right <= t <= self.left:
+            return True
+        return False
 
 
 class LaneInfo(BaseModel):
@@ -58,11 +63,7 @@ class LaneInfo(BaseModel):
             return False
         if self.s is not None and self.s > s:
             return False
-        return True
-
-    def match_condition(self, lane_info: tuple) -> bool:
-        _, _, t = lane_info
-        if self.t is not None and not ((-1.0) * self.t.right <= t <= self.left):
+        if self.t is not None and not self.t.match_condition(t):
             return False
         return True
 
@@ -70,17 +71,14 @@ class LaneInfo(BaseModel):
         lane_id, s, _ = lane_info
         if self.id != lane_id:
             return False
-        # sを指定しない場合は、lane_idが切り替わる前までとかやりたいに違いない。
         if self.s is not None and self.s < s:
             return False
         return True
 
 
 class LaneCondition(BaseModel):
-    start: LaneInfo
+    start: LaneInfo | None = None
     end: LaneInfo | None = None
-    started = False
-    finished = False
 
     @classmethod
     def diag_lane_info(cls, lane_info: DiagnosticStatus) -> tuple[float, float, float]:
@@ -121,7 +119,7 @@ class KinematicCondition(BaseModel):
 class PlanningControlCondition(BaseModel):
     module: str
     decision: str
-    condition_type: Literal["any_of", "all_of"] | None = "any_of"
+    condition_type: Literal["any_of", "all_of"]
     lane_condition: LaneCondition | None = None
     kinematic_condition: KinematicCondition | None = None
 
@@ -143,14 +141,13 @@ class PlanningControlScenario(Scenario):
 
 @dataclass
 class Metrics(EvaluationItem):
-    lane_info_list: list = field(default_factory=list)
-    kinematic_state_list: list = field(default_factory=list)
-    started: bool = False
+    is_under_evaluation: bool = False
 
     def set_frame(self, msg: DiagnosticArray) -> dict | None:
         self.condition: PlanningControlCondition
 
         for status in msg.status:
+            status: DiagnosticStatus
             if status.name != self.condition.module:
                 continue
             if status.values[0].key != "decision":
@@ -176,10 +173,10 @@ class Metrics(EvaluationItem):
 
 
 class MetricsClassContainer:
-    def __init__(self, conditions: list[PlanningControlCondition], hz: float, module: str) -> None:
+    def __init__(self, conditions: list[PlanningControlCondition], module: str) -> None:
         self.__container: list[Metrics] = []
-        for i, time_cond in enumerate(conditions):
-            self.__container.append(Metrics(f"{module}_{i}", time_cond, hz=hz))
+        for i, module_cond in enumerate(conditions):
+            self.__container.append(Metrics(f"{module}_{i}", module_cond))
 
     def set_frame(self, msg: DiagnosticArray) -> dict:
         frame_result: dict[int, dict] = {}
@@ -208,12 +205,10 @@ class PlanningControlResult(ResultBase):
         super().__init__()
         self.__control_container = MetricsClassContainer(
             condition.ControlConditions,
-            condition.Hertz,
             "control",
         )
         self.__planning_container = MetricsClassContainer(
             condition.PlanningConditions,
-            condition.Hertz,
             "planning",
         )
 
