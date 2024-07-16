@@ -252,6 +252,9 @@ Format of each frame:
           "TP": "Number of filtered objects determined to be TP",
           "FP": "Number of filtered objects determined to be FP",
           "FN": "Number of filtered objects determined to be FN"
+        },
+        "Objects": {
+          // Evaluated objects information. See the [json schema](../../driving_log_replayer/config/object_output_schema.json) for details.
         }
       }
     },
@@ -273,6 +276,10 @@ Warning Data Format:
   }
 }
 ```
+
+Objects Data Format:
+
+See [json schema](../../driving_log_replayer/config/object_output_schema.json)
 
 Metrics Data Format:
 

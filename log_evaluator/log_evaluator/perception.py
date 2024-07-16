@@ -25,6 +25,7 @@ from visualization_msgs.msg import MarkerArray
 
 from log_evaluator.criteria import PerceptionCriteria
 import log_evaluator.perception_eval_conversions as eval_conversions
+from log_evaluator.perception_eval_conversions import FrameDescriptionWriter
 from log_evaluator.perception_eval_conversions import summarize_pass_fail_result
 from log_evaluator.result import EvaluationItem
 from log_evaluator.result import ResultBase
@@ -129,6 +130,9 @@ class Perception(EvaluationItem):
                 "Result": {"Total": self.success_str(), "Frame": frame_success},
                 "Info": summarize_pass_fail_result(ret_frame.pass_fail_result),
             },
+            "Objects": FrameDescriptionWriter.extract_pass_fail_objects_description(
+                ret_frame.pass_fail_result,
+            ),
         }
 
 

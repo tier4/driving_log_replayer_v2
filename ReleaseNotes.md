@@ -1,5 +1,21 @@
 # Release Notes
 
+## Version 2.1.1
+
+Minor Tweak
+
+| Module       | Feature | Brief summary                       | Pull request                                                   | Jira | Contributor                           |
+| ------------ | ------- | ----------------------------------- | -------------------------------------------------------------- | ---- | ------------------------------------- |
+| `perception` | result  | add perception object info to jsonl | [#452](https://github.com/tier4/driving_log_replayer/pull/452) | -    | [YoshiRi](https://github.com/YoshiRi) |
+
+## Version 2.1.0
+
+Minor Tweak
+
+| Module | Feature       | Brief summary             | Pull request                                                   | Jira | Contributor                                   |
+| ------ | ------------- | ------------------------- | -------------------------------------------------------------- | ---- | --------------------------------------------- |
+| `all`  | visualization | use autoware project rviz | [#516](https://github.com/tier4/driving_log_replayer/pull/516) | -    | [hayato-m126](https://github.com/hayato-m126) |
+
 ## Version 2.0.12
 
 Bug fix
