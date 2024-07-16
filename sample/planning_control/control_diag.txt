@@ -1,0 +1,34 @@
+# pos_x, pos_yでなくてstart_s, start_t, end_s, end_tとするのは区間指定・重複対応のため。
+# s,tは求めづらいのでrvizで可視化できると良い。
+
+#----------
+# planning/control evaluator側
+# Decision
+name: aeb  # crosswalk, obstacle_cruise_planner....
+  - key: decision
+    value: 'deceleration' #  'deceleration', 'none'
+
+name: crosswalk
+  - key: decision
+    value: 'none' # 複数ある場合は一番近いの計算して送る
+
+name: ... # その他色んなモジュールがdecisionを出す。
+
+# 現在のvel, acc, jerkもだす
+# planning/control evaluatorどちらから出すべき
+name: kinematic_state # こっちは詳細条件で指定された場合に使うやつ
+  - key: vel
+    value:
+  - key: acc
+    value:
+  - key: jerk
+    value:
+#----------
+
+name: lane_info # kinematicでないので分離するほうがいいかも？これがモジュールの条件判定に使われる。lanelet2_extension_pythonで計算できるならlog_evaluatorで計算も可。sとtの計算はよくわからない。
+  - key: lane_id
+    value:
+  - key: s # laneの開始からの縦距離
+    value:
+  - key: t # laneの中心からの横距離
+    value:

@@ -201,6 +201,17 @@ ANNOTATIONLESS_PERCEPTION_NODE_PARAMS = {
     ),
 }
 
+PLANNING_CONTROL_RECORD_TOPIC = """^/tf$\
+|^/diagnostic/control_evaluator/metrics$\
+|^/diagnostic/planning_evaluator/metrics$\
+"""
+
+PLANNING_CONTROL_AUTOWARE_ARGS = {
+    "localization": "false",
+}
+
+PLANNING_CONTROL_NODE_PARAMS = {}
+
 log_evaluator_config = {
     "localization": {
         "record": LOCALIZATION_RECORD_TOPIC,
@@ -251,5 +262,10 @@ log_evaluator_config = {
         "record": ANNOTATIONLESS_PERCEPTION_RECORD_TOPIC,
         "autoware": ANNOTATIONLESS_PERCEPTION_AUTOWARE_ARGS,
         "node": ANNOTATIONLESS_PERCEPTION_NODE_PARAMS,
+    },
+    "planning_control": {
+        "record": PLANNING_CONTROL_RECORD_TOPIC,
+        "autoware": PLANNING_CONTROL_AUTOWARE_ARGS,
+        "node": PLANNING_CONTROL_NODE_PARAMS,
     },
 }
