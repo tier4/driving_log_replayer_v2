@@ -153,6 +153,7 @@ class Evaluation(BaseModel):
     UseCaseName: Literal["planning_control"]
     UseCaseFormatVersion: Literal["0.1.0"]
     Conditions: Conditions
+    Datasets: list[dict]
 
 
 class PlanningControlScenario(Scenario):
