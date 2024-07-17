@@ -1,0 +1,24 @@
+ScenarioFormatVersion: 3.0.0
+ScenarioName: sample_planning_control
+ScenarioDescription: sample_planning_control
+SensorModel: aip_xx1
+VehicleModel: lexus
+Evaluation:
+  UseCaseName: planning_control
+  UseCaseFormatVersion: 0.1.0
+  Datasets:
+    - odaiba:
+        VehicleId: default
+        LaunchSensing: true
+  Conditions:
+    ControlConditions:
+      - module: aeb
+        decision: deceleration
+        condition_type: all_of
+        lane_condition:
+          start:
+            id: 1500
+          end:
+            id: 1500
+            s: 2.5
+        kinematic_condition: null
