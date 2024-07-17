@@ -13,7 +13,6 @@
 # limitations under the License.
 
 from dataclasses import dataclass
-from dataclasses import field
 from sys import float_info
 from typing import Literal
 
@@ -43,11 +42,11 @@ class MinMax(BaseModel):
 
 
 class LeftRight(BaseModel):
-    left: float = Field(float_info.max, gt=0.0) # +
-    right: float = Field(float_info.max, gt=0.0) # -
+    left: float = Field(float_info.max, gt=0.0)  # +
+    right: float = Field(float_info.max, gt=0.0)  # -
 
-    def match_condition(self, t: float):
-        if (-1)*self.right <= t <= self.left:
+    def match_condition(self, t: float) -> bool:
+        if (-1.0) * self.right <= t <= self.left:
             return True
         return False
 
@@ -67,7 +66,7 @@ class LaneInfo(BaseModel):
             return False
         return True
 
-    def is_finished(self, lane_info: tuple) -> bool:
+    def is_ended(self, lane_info: tuple) -> bool:
         lane_id, s, _ = lane_info
         if self.id != lane_id:
             return False
@@ -77,11 +76,14 @@ class LaneInfo(BaseModel):
 
 
 class LaneCondition(BaseModel):
-    start: LaneInfo | None = None
-    end: LaneInfo | None = None
+    start: LaneInfo
+    end: LaneInfo
+    started: bool = False
+    ended: bool = False
 
     @classmethod
     def diag_lane_info(cls, lane_info: DiagnosticStatus) -> tuple[float, float, float]:
+        lane_id, s, t = None, None, None
         for kv in lane_info.values:
             kv: KeyValue
             if kv.key == "lane_id":
@@ -92,28 +94,46 @@ class LaneCondition(BaseModel):
                 t = kv.value
         return (lane_id, s, t)
 
-    def match_condition(self, lane_info: DiagnosticStatus) -> bool:
-        diag_lane_info = LaneCondition.diag_lane_info(lane_info)
+    def is_started(self, lane_info_tuple: tuple) -> bool:
+        # 一度Trueになったら変更しない
         if not self.started:
-            self.started = self.start.is_started(diag_lane_info)
-        if not self.finished:
-            self.finished = self.end.is_finished(diag_lane_info)
-        if not self.finished:
-            self.
+            self.started = self.start.is_started(lane_info_tuple)
+        return self.started
 
-    def is_started(self, lane_info: DiagnosticStatus) -> bool:
-        self.start.is_started(lane_info)
-
-    def is_finished(self, lane_info: DiagnosticStatus) -> bool:
-        if self.end is None:
-            return False
-        return self.end.is_finished(lane_info)
+    def is_ended(self, lane_info_tuple: tuple) -> bool:
+        # 一度Trueになったら変更しない
+        if not self.ended:
+            self.ended = self.end.is_ended(lane_info_tuple)
+        return self.ended
 
 
 class KinematicCondition(BaseModel):
     vel: MinMax
     acc: MinMax
     jerk: MinMax
+
+    @classmethod
+    def diag_kinematic_state(cls, kinematic_state: DiagnosticStatus) -> tuple[float, float, float]:
+        vel, acc, jerk = None, None, None
+        for kv in kinematic_state.values:
+            kv: KeyValue
+            if kv.key == "vel":
+                vel = kv.value
+            if kv.key == "acc":
+                acc = kv.value
+            if kv.key == "jerk":
+                jerk = kv.value
+        return (vel, acc, jerk)
+
+    def match_condition(self, kinematic_state_tuple: tuple) -> bool:
+        vel, acc, jerk = kinematic_state_tuple
+        if not self.vel.min <= vel <= self.vel.max:
+            return False
+        if not self.acc.min <= acc <= self.acc.max:
+            return False
+        if not self.jerk.min <= jerk <= self.jerk.max:
+            return False
+        return True
 
 
 class PlanningControlCondition(BaseModel):
@@ -141,35 +161,57 @@ class PlanningControlScenario(Scenario):
 
 @dataclass
 class Metrics(EvaluationItem):
-    is_under_evaluation: bool = False
-
-    def set_frame(self, msg: DiagnosticArray) -> dict | None:
+    def __post_init__(self) -> None:
         self.condition: PlanningControlCondition
+        self.use_lane_condition = self.condition.lane_condition is not None
+        self.use_kinetic_condition = self.condition.kinematic_condition is not None
 
-        for status in msg.status:
+    def set_frame(self, msg: DiagnosticArray) -> dict | None:  # noqa
+        if len(msg.status) == 0:
+            return None
+
+        # key check
+        status0: DiagnosticStatus = msg.status[0]
+        if status0.name != self.condition.module:
+            return None
+        if status0.values[0].key != "decision":
+            return None
+
+        # get additional condition
+        for _, status in enumerate(msg.status, 1):
             status: DiagnosticStatus
-            if status.name != self.condition.module:
-                continue
-            if status.values[0].key != "decision":
-                continue
-            if status.values[0].value != self.condition.decision:
-                continue
+            if status.name == "ego_lane_info":
+                lane_info_tuple = LaneCondition.diag_lane_info(status)
+            if status.name == "kinematic_state":
+                kinetic_state_tuple = KinematicCondition.diag_kinematic_state(status)
 
-            self.total += 1
+        if self.use_lane_condition and not (
+            self.condition.lane_condition.is_started(lane_info_tuple)
+            and not self.condition.lane_condition.is_ended(lane_info_tuple)
+        ):
+            return None
 
-            frame_success = "Fail"
-            if (self.condition.Value0Value == status.values[0].value) and (
-                self.condition.DetailedConditions is None
-                or self.check_detailed_condition(status.values[1:])
-            ):
+        self.total += 1
+        frame_success = "Fail"
+        # decisionが一致している、且つkinetic_stateが条件を満たしていればOK
+        if self.condition.decision == status0.values[0].value:
+            if self.use_kinetic_condition:
+                if self.condition.kinematic_condition.match_condition(kinetic_state_tuple):
+                    frame_success = "Success"
+                    self.passed += 1
+            else:
                 frame_success = "Success"
                 self.passed += 1
-            self.success = self.passed >= required_successes
-            return {
-                "Result": {"Total": self.success_str(), "Frame": frame_success},
-                "Info": {"TotalPassed": self.passed, "RequiredSuccess": required_successes},
-            }
-        return None
+        # any_ofなら1個あればいい。all_ofは全部
+        self.success = (
+            self.passed > 0
+            if self.condition.condition_type == "any_of"
+            else self.passed == self.total
+        )
+        return {
+            "Result": {"Total": self.success_str(), "Frame": frame_success},
+            "Info": {"TotalPassed": self.passed},
+        }
 
 
 class MetricsClassContainer:
