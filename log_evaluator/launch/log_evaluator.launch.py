@@ -85,6 +85,14 @@ def ensure_arg_compatibility(context: LaunchContext) -> list:
     scenario_path = Path(conf["scenario_path"])
     dataset_dir = scenario_path.parent if conf["dataset_dir"] == "" else Path(conf["dataset_dir"])
 
+    time_now = datetime.datetime.now().strftime("%Y-%m%d-%H%M%S")  # noqa
+    output_dir = (
+        scenario_path.parent.joinpath("out", time_now)
+        if conf["output_dir"] == ""
+        else Path(conf["output_dir"])
+    )
+    conf["output_dir"] = output_dir.as_posix()
+
     with scenario_path.open() as scenario_file:
         yaml_obj = yaml.safe_load(scenario_file)
     # check datasets length and index
@@ -118,7 +126,6 @@ def ensure_arg_compatibility(context: LaunchContext) -> list:
     conf["sensor_model"] = yaml_obj["SensorModel"]
     conf["t4_dataset_path"] = dataset_path.as_posix()
     conf["input_bag"] = dataset_path.joinpath("input_bag").as_posix()
-    output_dir = Path(conf["output_dir"])
     conf["result_json_path"] = output_dir.joinpath("result.json").as_posix()
     conf["result_bag_path"] = output_dir.joinpath("result_bag").as_posix()
     conf["result_archive_path"] = output_dir.joinpath("result_archive_path").as_posix()
@@ -128,14 +135,7 @@ def ensure_arg_compatibility(context: LaunchContext) -> list:
     conf["annotationless_pass_range"] = ""
 
     # create output directory
-    time_now = datetime.datetime.now().strftime("%Y-%m%d-%H%M%S")  # noqa
-    output_dir = (
-        scenario_path.parent.joinpath("out", time_now)
-        if conf["output_dir"] == ""
-        else Path(conf["output_dir"])
-    )
     output_dir.mkdir(exist_ok=True, parents=True)
-    conf["output_dir"] = output_dir.as_posix()
 
     return [
         LogInfo(
