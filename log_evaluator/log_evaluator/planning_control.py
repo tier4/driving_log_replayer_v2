@@ -29,8 +29,8 @@ from log_evaluator.scenario import Scenario
 
 
 class MinMax(BaseModel):
-    min: float | None = float_info.min
-    max: float | None = float_info.max
+    min: float = float_info.min
+    max: float = float_info.max
 
     @model_validator(mode="after")
     def validate_min_max(self) -> "MinMax":
@@ -87,20 +87,20 @@ class LaneCondition(BaseModel):
         for kv in lane_info.values:
             kv: KeyValue
             if kv.key == "lane_id":
-                lane_id = kv.value
+                lane_id = int(kv.value)
             if kv.key == "s":
-                s = kv.value
+                s = float(kv.value)
             if kv.key == "t":
-                t = kv.value
+                t = float(kv.value)
         return (lane_id, s, t)
 
-    def is_started(self, lane_info_tuple: tuple) -> bool:
+    def is_started(self, lane_info_tuple: tuple[float, float, float]) -> bool:
         # 一度Trueになったら変更しない
         if not self.started:
             self.started = self.start.is_started(lane_info_tuple)
         return self.started
 
-    def is_ended(self, lane_info_tuple: tuple) -> bool:
+    def is_ended(self, lane_info_tuple: tuple[float, float, float]) -> bool:
         # 一度Trueになったら変更しない
         if not self.ended:
             self.ended = self.end.is_ended(lane_info_tuple)
@@ -118,14 +118,14 @@ class KinematicCondition(BaseModel):
         for kv in kinematic_state.values:
             kv: KeyValue
             if kv.key == "vel":
-                vel = kv.value
+                vel = float(kv.value)
             if kv.key == "acc":
-                acc = kv.value
+                acc = float(kv.value)
             if kv.key == "jerk":
-                jerk = kv.value
+                jerk = float(kv.value)
         return (vel, acc, jerk)
 
-    def match_condition(self, kinematic_state_tuple: tuple) -> bool:
+    def match_condition(self, kinematic_state_tuple: tuple[float, float, float]) -> bool:
         vel, acc, jerk = kinematic_state_tuple
         if not self.vel.min <= vel <= self.vel.max:
             return False
