@@ -60,7 +60,7 @@ class LaneInfo(BaseModel):
         lane_id, s, t = lane_info
         if self.id != lane_id:
             return False
-        if self.s is not None and self.s > s:
+        if self.s is not None and self.s < s:
             return False
         if self.t is not None and not self.t.match_condition(t):
             return False
@@ -70,7 +70,7 @@ class LaneInfo(BaseModel):
         lane_id, s, _ = lane_info
         if self.id != lane_id:
             return False
-        if self.s is not None and self.s < s:
+        if self.s is not None and self.s > s:
             return False
         return True
 
@@ -196,11 +196,21 @@ class Metrics(EvaluationItem):
             if status.name == "kinematic_state":
                 kinetic_state_tuple = KinematicCondition.diag_kinematic_state(status)
 
-        if self.use_lane_condition and not (
-            self.condition.lane_condition.is_started(lane_info_tuple)
-            and not self.condition.lane_condition.is_ended(lane_info_tuple)
-        ):
-            return None
+        if self.use_lane_condition:
+            started = self.condition.lane_condition.is_started(lane_info_tuple)
+            ended = self.condition.lane_condition.is_ended(lane_info_tuple)
+            if not (started and not ended):
+                """
+                return {
+                    "Error": {
+                        "LaneInfo": lane_info_tuple,
+                        "KinematicState": kinetic_state_tuple,
+                        "started": started,
+                        "ended": ended,
+                    },
+                }
+                """
+                return None
 
         self.total += 1
         frame_success = "Fail"
