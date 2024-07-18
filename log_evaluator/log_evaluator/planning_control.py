@@ -100,9 +100,9 @@ class LaneCondition(BaseModel):
 
 
 class KinematicCondition(BaseModel):
-    vel: MinMax
-    acc: MinMax
-    jerk: MinMax
+    vel: MinMax | None = None
+    acc: MinMax | None = None
+    jerk: MinMax | None = None
 
     @classmethod
     def diag_kinematic_state(cls, kinematic_state: DiagnosticStatus) -> tuple[float, float, float]:
@@ -119,11 +119,11 @@ class KinematicCondition(BaseModel):
 
     def match_condition(self, kinematic_state_tuple: tuple[float, float, float]) -> bool:
         vel, acc, jerk = kinematic_state_tuple
-        if not self.vel.min <= vel <= self.vel.max:
+        if self.vel is not None and not self.vel.min <= vel <= self.vel.max:
             return False
-        if not self.acc.min <= acc <= self.acc.max:
+        if self.acc is not None and not self.acc.min <= acc <= self.acc.max:
             return False
-        if not self.jerk.min <= jerk <= self.jerk.max:
+        if self.jerk is not None and not self.jerk.min <= jerk <= self.jerk.max:
             return False
         return True
 
