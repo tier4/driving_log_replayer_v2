@@ -171,9 +171,19 @@ class Metrics(EvaluationItem):
         if len(msg.status) == 0:
             return None
 
+        # temporary
+        if len(msg.status) == 1:
+            # to avoid local variable 'lane_info_tuple' referenced before assignment
+            return None
+
         # key check
         status0: DiagnosticStatus = msg.status[0]
         if status0.name != self.condition.module:
+            """
+            return {
+                "Error": f"{status0.name=}, {self.condition.module=} module name is not matched",
+            }
+            """
             return None
         if status0.values[0].key != "decision":
             return None
@@ -211,7 +221,11 @@ class Metrics(EvaluationItem):
         )
         return {
             "Result": {"Total": self.success_str(), "Frame": frame_success},
-            "Info": {"TotalPassed": self.passed},
+            "Info": {
+                "TotalPassed": self.passed,
+                "LaneInfo": lane_info_tuple,
+                "KinematicState": kinetic_state_tuple,
+            },
         }
 
 
