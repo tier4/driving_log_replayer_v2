@@ -49,9 +49,9 @@ When the normal condition is not met
 
 Subscribed topics:
 
-| Topic name                                | Data type                             |
-| ----------------------------------------- | ------------------------------------- |
-| /diagnostic/control_evaluator/metrics        | diagnostic_msgs::msg::DiagnosticArray |
+| Topic name                                  | Data type                             |
+| ------------------------------------------- | ------------------------------------- |
+| /diagnostic/control_evaluator/metrics       | diagnostic_msgs::msg::DiagnosticArray |
 | /diagnostic/planning_evaluator/metrics (仮) | diagnostic_msgs::msg::DiagnosticArray |
 
 Published topics:
@@ -73,7 +73,7 @@ State the information required to run the simulation.
 
 ### Topic to be included in the input rosbag
 
-| Topic name                         | Data type                                    |
+| Topic name                             | Data type                                    |
 | -------------------------------------- | -------------------------------------------- |
 | /gsm8/from_can_bus                     | can_msgs/msg/Frame                           |
 | /localization/kinematic_state          | nav_msgs/msg/Odometry                        |
@@ -84,7 +84,7 @@ State the information required to run the simulation.
 
 The vehicle topics can be included instead of CAN.
 
-| Topic name                         | Data type                                    |
+| Topic name                             | Data type                                           |
 | -------------------------------------- | --------------------------------------------------- |
 | /localization/kinematic_state          | nav_msgs/msg/Odometry                               |
 | /localization/acceleration             | geometry_msgs/msg/AccelWithCovarianceStamped        |
@@ -99,10 +99,10 @@ The vehicle topics can be included instead of CAN.
 
 ### Topics that must not be included in the input rosbag
 
-| Topic name                         | Data type                                    |
-| -------------------------------------- | -------------------------------------------------
-| -------- | ----------------------- |
-| /clock   | rosgraph_msgs/msg/Clock |
+| Topic name | Data type               |
+| ---------- | ----------------------- |
+| --------   | ----------------------- |
+| /clock     | rosgraph_msgs/msg/Clock |
 
 The clock is output by the --clock option of ros2 bag play, so if it is recorded in the bag itself, it is output twice, so it is not included in the bag.
 

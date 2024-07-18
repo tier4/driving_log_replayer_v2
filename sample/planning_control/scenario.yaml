@@ -22,9 +22,9 @@ Evaluation:
             id: 1500
             s: 2.3
         kinematic_condition:
-          vel: {min: 2.5, max: 3.0}
-          acc: {min: -0.5, max: 0.5}
-          jerk: {min: 0.2, max: 1.5}
+          vel: { min: 2.5, max: 3.0 }
+          acc: { min: -0.5, max: 0.5 }
+          jerk: { min: 0.2, max: 1.5 }
       - module: "autonomous_emergency_braking: aeb_emergency_stop"
         decision: none
         condition_type: all_of

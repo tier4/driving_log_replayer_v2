@@ -84,16 +84,8 @@
         "Info": {
           "TotalPassed": 1,
           "Decision": "deceleration",
-          "LaneInfo": [
-            1500,
-            0.254821,
-            -0.983676
-          ],
-          "KinematicState": [
-            2.780202,
-            -0.322109,
-            0.299525
-          ]
+          "LaneInfo": [1500, 0.254821, -0.983676],
+          "KinematicState": [2.780202, -0.322109, 0.299525]
         }
       }
     }
@@ -116,16 +108,8 @@
         "Info": {
           "TotalPassed": 2,
           "Decision": "deceleration",
-          "LaneInfo": [
-            1500,
-            0.524374,
-            -1.038678
-          ],
-          "KinematicState": [
-            2.77897,
-            -0.193682,
-            1.284198
-          ]
+          "LaneInfo": [1500, 0.524374, -1.038678],
+          "KinematicState": [2.77897, -0.193682, 1.284198]
         }
       }
     }
@@ -148,16 +132,8 @@
         "Info": {
           "TotalPassed": 3,
           "Decision": "deceleration",
-          "LaneInfo": [
-            1500,
-            0.797716,
-            -1.089461
-          ],
-          "KinematicState": [
-            2.766703,
-            -0.157067,
-            0.374411
-          ]
+          "LaneInfo": [1500, 0.797716, -1.089461],
+          "KinematicState": [2.766703, -0.157067, 0.374411]
         }
       }
     }
@@ -180,16 +156,8 @@
         "Info": {
           "TotalPassed": 4,
           "Decision": "deceleration",
-          "LaneInfo": [
-            1500,
-            1.07291,
-            -1.137064
-          ],
-          "KinematicState": [
-            2.774931,
-            -0.06495,
-            0.919988
-          ]
+          "LaneInfo": [1500, 1.07291, -1.137064],
+          "KinematicState": [2.774931, -0.06495, 0.919988]
         }
       }
     }
@@ -212,16 +180,8 @@
         "Info": {
           "TotalPassed": 5,
           "Decision": "deceleration",
-          "LaneInfo": [
-            1500,
-            1.345795,
-            -1.181963
-          ],
-          "KinematicState": [
-            2.785044,
-            0.000635,
-            0.654367
-          ]
+          "LaneInfo": [1500, 1.345795, -1.181963],
+          "KinematicState": [2.785044, 0.000635, 0.654367]
         }
       }
     }
@@ -244,16 +204,8 @@
         "Info": {
           "TotalPassed": 6,
           "Decision": "deceleration",
-          "LaneInfo": [
-            1500,
-            1.619427,
-            -1.222165
-          ],
-          "KinematicState": [
-            2.806327,
-            0.093698,
-            0.929944
-          ]
+          "LaneInfo": [1500, 1.619427, -1.222165],
+          "KinematicState": [2.806327, 0.093698, 0.929944]
         }
       }
     }
@@ -276,16 +228,8 @@
         "Info": {
           "TotalPassed": 7,
           "Decision": "deceleration",
-          "LaneInfo": [
-            1500,
-            1.899189,
-            -1.257947
-          ],
-          "KinematicState": [
-            2.826436,
-            0.134591,
-            0.411654
-          ]
+          "LaneInfo": [1500, 1.899189, -1.257947],
+          "KinematicState": [2.826436, 0.134591, 0.411654]
         }
       }
     }
@@ -308,16 +252,8 @@
         "Info": {
           "TotalPassed": 8,
           "Decision": "deceleration",
-          "LaneInfo": [
-            1500,
-            2.180388,
-            -1.287927
-          ],
-          "KinematicState": [
-            2.855254,
-            0.206083,
-            0.706992
-          ]
+          "LaneInfo": [1500, 2.180388, -1.287927],
+          "KinematicState": [2.855254, 0.206083, 0.706992]
         }
       }
     }
@@ -340,16 +276,8 @@
         "Info": {
           "TotalPassed": 1,
           "Decision": "none",
-          "LaneInfo": [
-            1500,
-            3.048498,
-            -1.357804
-          ],
-          "KinematicState": [
-            2.973334,
-            0.388577,
-            0.757059
-          ]
+          "LaneInfo": [1500, 3.048498, -1.357804],
+          "KinematicState": [2.973334, 0.388577, 0.757059]
         }
       }
     }
@@ -372,16 +300,8 @@
         "Info": {
           "TotalPassed": 2,
           "Decision": "none",
-          "LaneInfo": [
-            1500,
-            3.348355,
-            -1.371031
-          ],
-          "KinematicState": [
-            3.031645,
-            0.492628,
-            1.050884
-          ]
+          "LaneInfo": [1500, 3.348355, -1.371031],
+          "KinematicState": [3.031645, 0.492628, 1.050884]
         }
       }
     }
@@ -404,16 +324,8 @@
         "Info": {
           "TotalPassed": 3,
           "Decision": "none",
-          "LaneInfo": [
-            1500,
-            3.654895,
-            -1.378377
-          ],
-          "KinematicState": [
-            3.088592,
-            0.52498,
-            0.322604
-          ]
+          "LaneInfo": [1500, 3.654895, -1.378377],
+          "KinematicState": [3.088592, 0.52498, 0.322604]
         }
       }
     }
@@ -436,16 +348,8 @@
         "Info": {
           "TotalPassed": 4,
           "Decision": "none",
-          "LaneInfo": [
-            1500,
-            3.967671,
-            -1.380667
-          ],
-          "KinematicState": [
-            3.152821,
-            0.58422,
-            0.590881
-          ]
+          "LaneInfo": [1500, 3.967671, -1.380667],
+          "KinematicState": [3.152821, 0.58422, 0.590881]
         }
       }
     }
@@ -468,16 +372,8 @@
         "Info": {
           "TotalPassed": 5,
           "Decision": "none",
-          "LaneInfo": [
-            1500,
-            4.286699,
-            -1.37869
-          ],
-          "KinematicState": [
-            3.220785,
-            0.65566,
-            0.710801
-          ]
+          "LaneInfo": [1500, 4.286699, -1.37869],
+          "KinematicState": [3.220785, 0.65566, 0.710801]
         }
       }
     }
@@ -500,16 +396,8 @@
         "Info": {
           "TotalPassed": 6,
           "Decision": "none",
-          "LaneInfo": [
-            1500,
-            4.614102,
-            -1.371985
-          ],
-          "KinematicState": [
-            3.287503,
-            0.687749,
-            0.320499
-          ]
+          "LaneInfo": [1500, 4.614102, -1.371985],
+          "KinematicState": [3.287503, 0.687749, 0.320499]
         }
       }
     }
@@ -532,16 +420,8 @@
         "Info": {
           "TotalPassed": 7,
           "Decision": "none",
-          "LaneInfo": [
-            1500,
-            4.954561,
-            -1.359024
-          ],
-          "KinematicState": [
-            3.346353,
-            0.642912,
-            -0.443885
-          ]
+          "LaneInfo": [1500, 4.954561, -1.359024],
+          "KinematicState": [3.346353, 0.642912, -0.443885]
         }
       }
     }
@@ -564,16 +444,8 @@
         "Info": {
           "TotalPassed": 8,
           "Decision": "none",
-          "LaneInfo": [
-            1500,
-            5.289516,
-            -1.341692
-          ],
-          "KinematicState": [
-            3.4079,
-            0.626983,
-            -0.162374
-          ]
+          "LaneInfo": [1500, 5.289516, -1.341692],
+          "KinematicState": [3.4079, 0.626983, -0.162374]
         }
       }
     }
@@ -596,16 +468,8 @@
         "Info": {
           "TotalPassed": 9,
           "Decision": "none",
-          "LaneInfo": [
-            1500,
-            5.636661,
-            -1.319875
-          ],
-          "KinematicState": [
-            3.47503,
-            0.605346,
-            -0.217098
-          ]
+          "LaneInfo": [1500, 5.636661, -1.319875],
+          "KinematicState": [3.47503, 0.605346, -0.217098]
         }
       }
     }
@@ -628,16 +492,8 @@
         "Info": {
           "TotalPassed": 10,
           "Decision": "none",
-          "LaneInfo": [
-            1500,
-            5.98997,
-            -1.294059
-          ],
-          "KinematicState": [
-            3.537443,
-            0.65008,
-            0.445461
-          ]
+          "LaneInfo": [1500, 5.98997, -1.294059],
+          "KinematicState": [3.537443, 0.65008, 0.445461]
         }
       }
     }
@@ -660,16 +516,8 @@
         "Info": {
           "TotalPassed": 11,
           "Decision": "none",
-          "LaneInfo": [
-            1500,
-            6.348585,
-            -1.265829
-          ],
-          "KinematicState": [
-            3.609332,
-            0.664397,
-            0.140656
-          ]
+          "LaneInfo": [1500, 6.348585, -1.265829],
+          "KinematicState": [3.609332, 0.664397, 0.140656]
         }
       }
     }
@@ -692,16 +540,8 @@
         "Info": {
           "TotalPassed": 12,
           "Decision": "none",
-          "LaneInfo": [
-            1500,
-            6.715403,
-            -1.232613
-          ],
-          "KinematicState": [
-            3.693096,
-            0.754094,
-            0.908683
-          ]
+          "LaneInfo": [1500, 6.715403, -1.232613],
+          "KinematicState": [3.693096, 0.754094, 0.908683]
         }
       }
     }
@@ -724,16 +564,8 @@
         "Info": {
           "TotalPassed": 13,
           "Decision": "none",
-          "LaneInfo": [
-            1500,
-            7.089984,
-            -1.197086
-          ],
-          "KinematicState": [
-            3.774627,
-            0.811998,
-            0.580573
-          ]
+          "LaneInfo": [1500, 7.089984, -1.197086],
+          "KinematicState": [3.774627, 0.811998, 0.580573]
         }
       }
     }
@@ -756,16 +588,8 @@
         "Info": {
           "TotalPassed": 14,
           "Decision": "none",
-          "LaneInfo": [
-            1500,
-            7.473814,
-            -1.158361
-          ],
-          "KinematicState": [
-            3.848118,
-            0.791756,
-            -0.201294
-          ]
+          "LaneInfo": [1500, 7.473814, -1.158361],
+          "KinematicState": [3.848118, 0.791756, -0.201294]
         }
       }
     }
@@ -788,16 +612,8 @@
         "Info": {
           "TotalPassed": 15,
           "Decision": "none",
-          "LaneInfo": [
-            1500,
-            7.863955,
-            -1.116921
-          ],
-          "KinematicState": [
-            3.930269,
-            0.825974,
-            0.344808
-          ]
+          "LaneInfo": [1500, 7.863955, -1.116921],
+          "KinematicState": [3.930269, 0.825974, 0.344808]
         }
       }
     }
@@ -820,16 +636,8 @@
         "Info": {
           "TotalPassed": 16,
           "Decision": "none",
-          "LaneInfo": [
-            1500,
-            8.264956,
-            -1.076771
-          ],
-          "KinematicState": [
-            4.006945,
-            0.811871,
-            -0.140155
-          ]
+          "LaneInfo": [1500, 8.264956, -1.076771],
+          "KinematicState": [4.006945, 0.811871, -0.140155]
         }
       }
     }
@@ -852,16 +660,8 @@
         "Info": {
           "TotalPassed": 17,
           "Decision": "none",
-          "LaneInfo": [
-            1500,
-            8.687818,
-            -1.034342
-          ],
-          "KinematicState": [
-            4.083466,
-            0.78916,
-            -0.220425
-          ]
+          "LaneInfo": [1500, 8.687818, -1.034342],
+          "KinematicState": [4.083466, 0.78916, -0.220425]
         }
       }
     }
@@ -884,16 +684,8 @@
         "Info": {
           "TotalPassed": 18,
           "Decision": "none",
-          "LaneInfo": [
-            1500,
-            9.086423,
-            -0.993832
-          ],
-          "KinematicState": [
-            4.153996,
-            0.769382,
-            -0.205345
-          ]
+          "LaneInfo": [1500, 9.086423, -0.993832],
+          "KinematicState": [4.153996, 0.769382, -0.205345]
         }
       }
     }
@@ -916,16 +708,8 @@
         "Info": {
           "TotalPassed": 19,
           "Decision": "none",
-          "LaneInfo": [
-            1500,
-            9.505482,
-            -0.951828
-          ],
-          "KinematicState": [
-            4.233492,
-            0.802354,
-            0.328948
-          ]
+          "LaneInfo": [1500, 9.505482, -0.951828],
+          "KinematicState": [4.233492, 0.802354, 0.328948]
         }
       }
     }
@@ -948,16 +732,8 @@
         "Info": {
           "TotalPassed": 20,
           "Decision": "none",
-          "LaneInfo": [
-            1500,
-            9.943206,
-            -0.906019
-          ],
-          "KinematicState": [
-            4.281736,
-            0.657596,
-            -1.443561
-          ]
+          "LaneInfo": [1500, 9.943206, -0.906019],
+          "KinematicState": [4.281736, 0.657596, -1.443561]
         }
       }
     }
