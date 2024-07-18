@@ -56,21 +56,13 @@ class LaneInfo(BaseModel):
     s: float | None = None
     t: LeftRight | None = None
 
-    def is_started(self, lane_info: tuple) -> bool:
+    def match_condition(self, lane_info: tuple, *, start_condition: bool = False) -> bool:
         lane_id, s, t = lane_info
         if self.id != lane_id:
             return False
-        if self.s is not None and self.s < s:
+        if self.s is not None and self.s >= s:  # 超えたら開始、または終了
             return False
-        if self.t is not None and not self.t.match_condition(t):
-            return False
-        return True
-
-    def is_ended(self, lane_info: tuple) -> bool:
-        lane_id, s, _ = lane_info
-        if self.id != lane_id:
-            return False
-        if self.s is not None and self.s > s:
+        if start_condition and self.t is not None and not self.t.match_condition(t):
             return False
         return True
 
@@ -97,13 +89,13 @@ class LaneCondition(BaseModel):
     def is_started(self, lane_info_tuple: tuple[float, float, float]) -> bool:
         # 一度Trueになったら変更しない
         if not self.started:
-            self.started = self.start.is_started(lane_info_tuple)
+            self.started = self.start.match_condition(lane_info_tuple, start_condition=True)
         return self.started
 
     def is_ended(self, lane_info_tuple: tuple[float, float, float]) -> bool:
         # 一度Trueになったら変更しない
         if not self.ended:
-            self.ended = self.end.is_ended(lane_info_tuple)
+            self.ended = self.end.match_condition(lane_info_tuple)
         return self.ended
 
 
