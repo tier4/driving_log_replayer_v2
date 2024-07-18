@@ -225,6 +225,7 @@ class Metrics(EvaluationItem):
             "Result": {"Total": self.success_str(), "Frame": frame_success},
             "Info": {
                 "TotalPassed": self.passed,
+                "Decision": status0.values[0].value,
                 "LaneInfo": lane_info_tuple,
                 "KinematicState": kinetic_state_tuple,
             },
