@@ -12,13 +12,27 @@ Evaluation:
         LaunchSensing: true
   Conditions:
     ControlConditions:
-      - module: aeb
-        decision: deceleration
+      - module: "autonomous_emergency_braking: aeb_emergency_stop"
+        decision: deceleration # module の KeyValueのkeyをkeyにvalueをvalueに指定。今後decision以外が評価したいとなったらkey-valueが追加して対応する
         condition_type: all_of
         lane_condition:
           start:
             id: 1500
           end:
             id: 1500
-            s: 2.5
-        kinematic_condition: null
+            s: 2.3
+        kinematic_condition:
+          vel: {min: 2.5, max: 3.0}
+          acc: {min: -0.5, max: 0.5}
+          jerk: {min: 0.2, max: 1.5}
+      - module: "autonomous_emergency_braking: aeb_emergency_stop"
+        decision: none
+        condition_type: all_of
+        lane_condition: # optional
+          start:
+            id: 1500
+            s: 3.0
+          end:
+            id: 1500
+            s: 10.0
+        kinematic_condition: null # optional
