@@ -254,6 +254,9 @@ def launch_bag_player(
         remap_list.append(
             "/localization/kinematic_state:=/unused/localization/kinematic_state",
         )
+        remap_list.append(
+            "/localization/acceleration:=/unused/localization/acceleration",
+        )
     if len(remap_list) != 1:
         play_cmd.extend(remap_list)
     bag_player = ExecuteProcess(cmd=play_cmd, output="screen")
