@@ -13,7 +13,6 @@
 # limitations under the License.
 
 import datetime
-from os.path import expandvars
 from pathlib import Path
 
 from ament_index_python.packages import get_package_share_directory
