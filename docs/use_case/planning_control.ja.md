@@ -15,7 +15,7 @@ launch を立ち上げると以下のことが実行され、評価される。
 ## 評価結果
 
 topicのstatus[0].nameがシナリオで指定したモジュール名と一致し、且つ、status[0].value[0].keyがdecisionの場合に評価される。
-また、シナリオでレーン条件を追加した場合は、レーン条件も満たした場合に評価される。
+また、シナリオでレーン条件を記述した場合は、レーン条件も満たした場合に評価される。
 評価の条件を満たさない場合は、ログも出力されない。
 
 ### 正常
@@ -107,12 +107,13 @@ planning と controlで設定した全ての評価条件で成功している場
 ```json
 {
   "Frame": {
-    "CONDITION_INDEX": {
-      // 評価条件毎に結果が出力される
+    "[Planning|Control]_CONDITION_INDEX": {
       "Result": { "Total": "Success or Fail", "Frame": "Success or Fail" },
       "Info": {
         "TotalPassed": "評価条件をパスしたtopicの総数",
-        "RequiredSuccess": "現在時刻で必要な成功数(TotalPassed >= RequiredSuccessでTotalが成功になる)"
+        "Decision": "取得したtopicのdecision",
+        "LaneInfo": "[lane_id, s, t]",
+        "KinematicState": "[vel, acc, jerk]"
       }
     }
   }

@@ -4,42 +4,24 @@ Evaluate whether Planning / Control metrics are output at specified times and co
 
 ## Evaluation Method
 
-The planning_control evaluation is executed by launching the `planning_control.launch.py` file.
 Launching the file executes the following steps:
 
 1. Execute launch of evaluation node (`planning_control_evaluator_node`), `logging_simulator.launch` file and `ros2 bag play` command
 2. Autoware receives sensor data output from input rosbag and the perception module performs recognition.
-3. Using the results of perception, Autoware output Metrics to `/diagnostic/planning_evaluator/metrics(temporary)` for planning and `/diagnostic/control_evaluator/metrics` for control.
+3. Using the results of perception, Autoware output Metrics to `/diagnostic/planning_evaluator/metrics` for planning and `/diagnostic/control_evaluator/metrics` for control.
 4. The evaluation node subscribes to the topic and evaluates data. The result is dumped into a file.
 5. When the playback of the rosbag is finished, Autoware's launch is automatically terminated, and the evaluation is completed.
 
 ## Evaluation Result
 
-The output from control_evaluator is in the form of the following sample TOPIC.
-[control sample](https://github.com/tier4/driving_log_replayer/blob/main/sample/planning_control/control_diag.txt)
-
-If there is a condition to be evaluated at the time of the header, it is evaluated and the judgment result is output.
-If there is no evaluation condition corresponding to the time of the header, it is discarded and no log is output.
+It is evaluated when status[0].name of the topic matches the module name specified in the scenario and status[0].value[0].key is a decision.
+If a lane condition is described in the scenario, it is evaluated when the lane condition is also satisfied.
+If the conditions for evaluation are not met, no log is output.
 
 ### Normal
 
-If more than (current time - evaluation start time)\*Hertz\*AllowableRate(=0.95) topics are obtained that satisfy the evaluation conditions.
-
-In the following example, if the current time is 2, starting from 1 second, at the 2 second mark, (2-1)*10.0=10 topics should be retrieved.
-However, the output rate is not exactly the specified rate.
-Therefore, if the AllowableRate is applied and floor(10*0.95)=9 or more autonomous_emergency_braking: aeb_emergency_stop decision value stop is obtained, it is considered a success.
-At 3 seconds, floor(20\*0.95)=19 or more is success.
-
-```yaml
-Conditions:
-  Hertz: 10.0 # How many Hz the METRICS will come in. (current time - evaluation start time)* Hertz * AllowableRate(=0.95) or more TOPICS that match the condition must be output. AllowableRate is currently fixed.
-  ControlConditions:
-    - TimeRange: { start: 1, end: 3 } # Evaluation start time and end time, end is optional and if omitted, sys.float_info.max
-      Module: "autonomous_emergency_braking: aeb_emergency_stop" # Modules to be evaluated
-      Value0Key: decision # Key to be evaluated
-      Value0Value: stop # Value to be evaluated
-      DetailedConditions: null # Additional conditions to be determined, such as position, speed, etc. If null, succeeds when Value0Value is matched. If not null, DetailedConditions must also satisfy the condition.
-```
+Normal if status[0].values[0].value matches the decision in the scenario.
+If kinematic_condition is specified, additionally, kinematic_state must meet the condition.
 
 ### Error
 
@@ -49,10 +31,10 @@ When the normal condition is not met
 
 Subscribed topics:
 
-| Topic name                                  | Data type                             |
-| ------------------------------------------- | ------------------------------------- |
-| /diagnostic/control_evaluator/metrics       | diagnostic_msgs::msg::DiagnosticArray |
-| /diagnostic/planning_evaluator/metrics (仮) | diagnostic_msgs::msg::DiagnosticArray |
+| Topic name                             | Data type                             |
+| -------------------------------------- | ------------------------------------- |
+| /diagnostic/control_evaluator/metrics  | diagnostic_msgs::msg::DiagnosticArray |
+| /diagnostic/planning_evaluator/metrics | diagnostic_msgs::msg::DiagnosticArray |
 
 Published topics:
 
@@ -126,12 +108,13 @@ Success is determined when all evaluation conditions set in planning and control
 ```json
 {
   "Frame": {
-    "CONDITION_INDEX": {
-      // Results are output for each evaluation condition.
+    "[Planning|Control]_CONDITION_INDEX": {
       "Result": { "Total": "Success or Fail", "Frame": "Success or Fail" },
       "Info": {
         "TotalPassed": "Total number of topics that passed the evaluation criteria",
-        "RequiredSuccess": "Number of successes required at current time (TotalPassed >= RequiredSuccess makes Total a success)"
+        "Decision": "Decision of the acquired TOPIC",
+        "LaneInfo": "[lane_id, s, t]",
+        "KinematicState": "[vel, acc, jerk]"
       }
     }
   }

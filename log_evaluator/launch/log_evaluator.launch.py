@@ -109,18 +109,22 @@ def ensure_arg_compatibility(context: LaunchContext) -> list:
         dataset_index = int(idx_str)
     for k, v in datasets[dataset_index].items():
         dataset_path = dataset_dir.joinpath(k)
-        map_path_str: str | None = v.get("LocalMapPath")
         conf["vehicle_id"] = v["VehicleId"]
-        launch_sensing = yaml_obj["Evaluation"].get("LaunchSensing")
-        launch_localization = yaml_obj["Evaluation"].get("LaunchLocalization")
+        launch_sensing = v.get("LaunchSensing")
+        launch_localization = v.get("LaunchLocalization")
+        launch_perception = v.get("LaunchPerception")
+        launch_planning = v.get("LaunchPlanning")
         if launch_sensing is not None:
-            conf["sensing"] = str(launch_sensing)
+            # str(bool) だと True/Falseになって文字列比較で問題でるのでlowerで全小文字にする
+            conf["sensing"] = str(launch_sensing).lower()
         if launch_localization is not None:
-            conf["localization"] = str(launch_localization)
+            conf["localization"] = str(launch_localization).lower()
+        if launch_perception is not None:
+            conf["perception"] = str(launch_perception).lower()
+        if launch_planning is not None:
+            conf["planning"] = str(launch_planning).lower()
 
-    map_path = (
-        dataset_path.joinpath("map") if map_path_str is None else Path(expandvars(map_path_str))
-    )
+    map_path = dataset_path.joinpath("map")
     conf["map_path"] = map_path.as_posix()
     conf["vehicle_model"] = yaml_obj["VehicleModel"]
     conf["sensor_model"] = yaml_obj["SensorModel"]

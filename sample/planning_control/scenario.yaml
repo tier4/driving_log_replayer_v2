@@ -9,7 +9,9 @@ Evaluation:
   Datasets:
     - odaiba:
         VehicleId: default
-        LaunchSensing: true # trueの場合はbagの中に入っている/sensing/lidar/concatenated/pointcloudはremapされ、packetsから点群を作る。
+        LaunchSensing: true # trueの場合はlidarのpacketsから点群を作る。falseの場合、bagに/sensing/lidar/concatenated/pointcloudが入っている必要がある
+        LaunchPerception: true # falseの場合はplanning/controlで使用するperceptionのtopicをbagに入れておく必要がある
+        LaunchPlanning: true # falseの場合はcontrolで使用するplanningのtopicをbagに入れておく必要がある
   Conditions:
     ControlConditions:
       - module: "autonomous_emergency_braking: aeb_emergency_stop"
