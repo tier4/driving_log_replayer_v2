@@ -1,45 +1,27 @@
 # Planning Controlの評価
 
-Planning / ControlのMetricsが指定の時刻、条件で出力されているか評価する
+Planning / ControlのMetricsが指定の条件で出力されているか評価する
 
 ## 評価方法
 
-`planning_control.launch.py` を使用して評価する。
 launch を立ち上げると以下のことが実行され、評価される。
 
 1. launch で評価ノード(`planning_control_evaluator_node`)と `logging_simulator.launch`、`ros2 bag play`コマンドを立ち上げる
 2. bag から出力されたセンサーデータを autoware が受け取って、perception モジュールが認識を行う
-3. perceptionの結果を使って、planningは `/diagnostic/planning_evaluator/metrics(仮)` に controlは `/diagnostic/control_evaluator/metrics`にMetricsを出力する
+3. perceptionの結果を使って、planningは `/diagnostic/planning_evaluator/metrics` に controlは `/diagnostic/control_evaluator/metrics`にMetricsを出力する
 4. 評価ノードが topic を subscribe して、各基準を満たしているかを判定して結果をファイルに記録する
 5. bag の再生が終了すると自動で launch が終了して評価が終了する
 
 ## 評価結果
 
-controlが出力するtopicは以下のサンプルのような形式となっている。
-[control sample](https://github.com/tier4/driving_log_replayer/blob/main/sample/planning_control/control_diag.txt)
-
-headerの時刻で評価する条件があれば評価され判定結果が出力される。
-headerの時刻に該当する評価条件がない場合は捨てられるのでログも出力されない。
+topicのstatus[0].nameがシナリオで指定したモジュール名と一致し、且つ、status[0].value[0].keyがdecisionの場合に評価される。
+また、シナリオでレーン条件を追加した場合は、レーン条件も満たした場合に評価される。
+評価の条件を満たさない場合は、ログも出力されない。
 
 ### 正常
 
-評価条件を満たすtopic が (現在時刻-評価開始時刻)\*Hertz\*AllowableRate(=0.95)個以上取得できた場合。
-
-以下の例の場合、現在時刻が2だとすると、1秒からスタートして2秒の時点で (2-1)*10.0=10 topic程度metricsが出てくるはず。
-しかし、出力レートは厳密に指定のレートにはならない。
-よってAllowableRateをかけて floor(10*0.95)=9個以上 autonomous_emergency_braking: aeb_emergency_stop のdecisionの値stopが出ていたら成功とする
-3秒時点では、floor(20\*0.95)=19以上で成功となる。
-
-```yaml
-Conditions:
-  Hertz: 10.0 # metricsが何Hzで来るか。 (現在時刻-評価開始時刻)* Hertz * AllowableRate(=0.95)以上条件に合致するtopicが出力される必要がある。AllowableRateは現在固定されている
-  ControlConditions:
-    - TimeRange: { start: 1, end: 3 } # 評価開始時間と終了時刻、endは省略可能で省略した場合はsys.float_info.max
-      Module: "autonomous_emergency_braking: aeb_emergency_stop" # 評価対象のモジュール
-      Value0Key: decision # 評価対象のキー
-      Value0Value: stop # 評価対象の値
-      DetailedConditions: null # 位置、速度など、追加で判定したい条件。nullの場合はValue0Valueが一致した時点で成功。nullではない時はDetailedConditionsも条件を満たす必要がある
-```
+status[0].values[0].valueがシナリオのdecisionと一致した場合に正常となる。
+kinematic_conditionを指定した場合は追加で、kinematic_stateが条件を満たしている必要がある。
 
 ### 異常
 
@@ -52,7 +34,7 @@ Subscribed topics:
 | Topic name                                  | Data type                             |
 | ------------------------------------------- | ------------------------------------- |
 | /diagnostic/control_evaluator/metrics       | diagnostic_msgs::msg::DiagnosticArray |
-| /diagnostic/planning_evaluator/metrics (仮) | diagnostic_msgs::msg::DiagnosticArray |
+| /diagnostic/planning_evaluator/metrics | diagnostic_msgs::msg::DiagnosticArray |
 
 Published topics:
 
@@ -64,7 +46,7 @@ Published topics:
 
 autoware の処理を軽くするため、評価に関係のないモジュールは launch の引数に false を渡すことで無効化する。以下を設定している。
 
-- sensing: true / false (launch引数で指定。現状true固定)
+- sensing: true / false (シナリオにLaunchSensingのキーを指定することで切り替え可能)
 - localization: false
 
 ## simulation
