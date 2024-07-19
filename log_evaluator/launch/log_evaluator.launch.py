@@ -261,6 +261,18 @@ def launch_bag_player(
         remap_list.append(
             "/localization/acceleration:=/unused/localization/acceleration",
         )
+    if conf.get("perception", "true") == "true":
+        # remap perception msgs in bag
+        remap_list.append(
+            "/perception/obstacle_segmentation/pointcloud:=/unused/perception/obstacle_segmentation/pointcloud",
+        )
+        remap_list.append(
+            "/perception/object_recognition/objects:=/unused/perception/object_recognition/objects",
+        )
+    if conf.get("planning", "true") == "true":
+        remap_list.append(
+            "/planning/mission_planning/route:=/unused/planning/mission_planning/route",
+        )
     if len(remap_list) != 1:
         play_cmd.extend(remap_list)
     bag_player = ExecuteProcess(cmd=play_cmd, output="screen")
