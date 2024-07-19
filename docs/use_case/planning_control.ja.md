@@ -31,9 +31,9 @@ kinematic_conditionを指定した場合は追加で、kinematic_stateが条件�
 
 Subscribed topics:
 
-| Topic name                                  | Data type                             |
-| ------------------------------------------- | ------------------------------------- |
-| /diagnostic/control_evaluator/metrics       | diagnostic_msgs::msg::DiagnosticArray |
+| Topic name                             | Data type                             |
+| -------------------------------------- | ------------------------------------- |
+| /diagnostic/control_evaluator/metrics  | diagnostic_msgs::msg::DiagnosticArray |
 | /diagnostic/planning_evaluator/metrics | diagnostic_msgs::msg::DiagnosticArray |
 
 Published topics:
@@ -57,7 +57,7 @@ autoware の処理を軽くするため、評価に関係のないモジュー�
 
 | topic 名                               | データ型                                     |
 | -------------------------------------- | -------------------------------------------- |
-| /gsm8/from_can_bus                     | can_msgs/msg/Frame                           |
+| /pacmod/from_can_bus                   | can_msgs/msg/Frame                           |
 | /localization/kinematic_state          | nav_msgs/msg/Odometry                        |
 | /localization/acceleration             | geometry_msgs/msg/AccelWithCovarianceStamped |
 | /sensing/lidar/concatenated/pointcloud | sensor_msgs/msg/PointCloud2                  |

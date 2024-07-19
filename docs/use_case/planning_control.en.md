@@ -75,7 +75,7 @@ State the information required to run the simulation.
 
 | Topic name                             | Data type                                    |
 | -------------------------------------- | -------------------------------------------- |
-| /gsm8/from_can_bus                     | can_msgs/msg/Frame                           |
+| /pacmod/from_can_bus                   | can_msgs/msg/Frame                           |
 | /localization/kinematic_state          | nav_msgs/msg/Odometry                        |
 | /localization/acceleration             | geometry_msgs/msg/AccelWithCovarianceStamped |
 | /sensing/lidar/concatenated/pointcloud | sensor_msgs/msg/PointCloud2                  |
