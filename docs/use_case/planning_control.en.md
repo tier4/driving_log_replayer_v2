@@ -46,8 +46,13 @@ Published topics:
 
 To make Autoware processing less resource-consuming, modules that are not relevant to evaluation are disabled by passing the `false` parameter as a launch argument.
 
-- sensing: true / false (Specified by the launch argument. Currently fixed to true.)
 - localization: false
+
+### Arguments specified in the scenario or launch command
+
+- sensing: It can be disabled by specifying LaunchSensing: false in the scenario. Or specify sensing:=false in the launch command
+- perception: It can be disabled by specifying LaunchPerception: false in the scenario. Or specify perception:=false in the launch command
+- planning: It can be disabled by specifying LaunchPlanning: false in the scenario. Or specify planning:=false in the launch command
 
 ## About simulation
 

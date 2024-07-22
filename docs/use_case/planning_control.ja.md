@@ -46,8 +46,13 @@ Published topics:
 
 autoware の処理を軽くするため、評価に関係のないモジュールは launch の引数に false を渡すことで無効化する。以下を設定している。
 
-- sensing: true / false (シナリオにLaunchSensingのキーを指定することで切り替え可能)
 - localization: false
+
+### シナリオまたはlaunchコマンドで指定する引数
+
+- sensing: シナリオにLaunchSensing: falseを指定することで無効化できる。またはlaunchコマンドでsensing:=falseを指定する
+- perception: シナリオにLaunchPerception: falseを指定することで無効化できる。またはlaunchコマンドでperception:=falseを指定する
+- planning: シナリオにLaunchPlanning: falseを指定することで無効化できる。またはlaunchコマンドでplanning:=falseを指定する
 
 ## simulation
 
