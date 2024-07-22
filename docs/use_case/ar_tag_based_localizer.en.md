@@ -58,6 +58,8 @@ The following parameters are set to `false`:
 - perception: false
 - planning: false
 - control: false
+- pose_source: artag
+- twist_source: gyro_odom
 
 ## About simulation
 

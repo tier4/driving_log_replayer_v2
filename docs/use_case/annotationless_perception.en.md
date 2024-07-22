@@ -194,7 +194,11 @@ The following parameters are set to `false`:
 - perception: true
 - planning: false
 - control: false
-- sensing: false / true (default false, set by launch argument)
+- use_perception_online_evaluator: true
+
+### Arguments specified in the scenario or launch command
+
+- sensing: It can be disabled by specifying LaunchSensing: false in the scenario. Or specify sensing:=false in the launch command
 
 ### How to specify the sensing argument
 

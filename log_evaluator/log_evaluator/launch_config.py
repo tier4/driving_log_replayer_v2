@@ -187,6 +187,8 @@ ANNOTATIONLESS_PERCEPTION_RECORD_TOPIC = """^/tf$\
 
 ANNOTATIONLESS_PERCEPTION_AUTOWARE_ARGS = {
     "localization": "false",
+    "planning": "false",
+    "control": "false",
     "use_perception_online_evaluator": "true",
 }
 

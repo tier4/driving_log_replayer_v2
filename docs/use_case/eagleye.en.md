@@ -57,6 +57,8 @@ The following parameters are set to `false`:
 - perception: false
 - planning: false
 - control: false
+- pose_source: eagleye
+- twist_source: eagleye
 
 ## About simulation
 
