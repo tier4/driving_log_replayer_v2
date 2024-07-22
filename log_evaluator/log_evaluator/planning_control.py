@@ -160,12 +160,7 @@ class Metrics(EvaluationItem):
         self.use_kinetic_condition = self.condition.kinematic_condition is not None
 
     def set_frame(self, msg: DiagnosticArray) -> dict | None:  # noqa
-        if len(msg.status) == 0:
-            return None
-
-        # temporary
-        if len(msg.status) == 1:
-            # to avoid local variable 'lane_info_tuple' referenced before assignment
+        if len(msg.status) <= 1:
             return None
 
         # key check
