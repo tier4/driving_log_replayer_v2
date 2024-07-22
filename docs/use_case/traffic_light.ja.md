@@ -121,10 +121,12 @@ autoware の処理を軽くするため、評価に関係のないモジュー�
 - localization: false
 - planning: false
 - control: false
-- sensing: false / true (デフォルト false、シナリオの `LaunchSensing` キーで t4_dataset 毎に指定する)
-- perception_mode: camera_lidar_fusion
 
 **注:アノーテション時とシミュレーション時で自己位置を合わせたいので bag に入っている tf を使い回す。そのため localization は無効である。**
+
+### シナリオまたはlaunchコマンドで指定する引数
+
+- sensing: シナリオにLaunchSensing: falseを指定することで無効化できる。またはlaunchコマンドでsensing:=falseを指定する
 
 ## 依存ライブラリ
 

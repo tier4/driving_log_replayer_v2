@@ -193,7 +193,11 @@ autoware の処理を軽くするため、評価に関係のないモジュー�
 - perception: true
 - planning: false
 - control: false
-- sensing: false / true (デフォルト false、launch引数で与える)
+- use_perception_online_evaluator: true
+
+### シナリオまたはlaunchコマンドで指定する引数
+
+- sensing: シナリオにLaunchSensing: falseを指定することで無効化できる。またはlaunchコマンドでsensing:=falseを指定する
 
 ### sensingの引数指定方法
 

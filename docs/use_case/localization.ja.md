@@ -113,6 +113,8 @@ autoware の処理を軽くするため、評価に関係のないモジュー�
 - perception: false
 - planning: false
 - control: false
+- pose_source: ndt
+- twist_source: gyro_odom
 
 ## simulation
 
