@@ -269,9 +269,7 @@ def launch_bag_player(
             "/perception/object_recognition/objects:=/unused/perception/object_recognition/objects",
         )
     if conf.get("planning", "true") == "true":
-        remap_list.append(
-            "/planning/mission_planning/route:=/unused/planning/mission_planning/route",
-        )
+        pass
     if len(remap_list) != 1:
         play_cmd.extend(remap_list)
     bag_player = ExecuteProcess(cmd=play_cmd, output="screen")
