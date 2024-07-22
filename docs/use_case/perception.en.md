@@ -140,9 +140,12 @@ The following parameters are set to `false`:
 - localization: false
 - planning: false
 - control: false
-- sensing: false / true (default value is false. Specify by `LaunchSensing` key for each t4_dataset in the scenario)
 
 **NOTE: The `tf` in the bag is used to align the localization during annotation and simulation. Therefore, localization is invalid.**
+
+### Arguments specified in the scenario or launch command
+
+- sensing: It can be disabled by specifying LaunchSensing: false in the scenario. Or specify sensing:=false in the launch command
 
 ## Dependent libraries
 

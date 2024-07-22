@@ -88,9 +88,13 @@ Published topics:
 
 autoware の処理を軽くするため、評価に関係のないモジュールは launch の引数に false を渡すことで無効化する。以下を設定している。
 
+- perception: false
 - planning: false
 - control: false
-- localization: false / true (デフォルト false、シナリオで指定する)
+
+### シナリオまたはlaunchコマンドで指定する引数
+
+- localization: シナリオにLaunchLocalization: falseを指定することで無効化できる。またはlaunchコマンドでlocalization:=falseを指定する
 
 ## simulation
 
