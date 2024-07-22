@@ -54,6 +54,10 @@ autoware の処理を軽くするため、評価に関係のないモジュー�
 - perception: シナリオにLaunchPerception: falseを指定することで無効化できる。またはlaunchコマンドでperception:=falseを指定する
 - planning: シナリオにLaunchPlanning: falseを指定することで無効化できる。またはlaunchコマンドでplanning:=falseを指定する
 
+```shell
+ros2 launch log_evaluator log_evaluator.launch.py scenario_path:=${planning_control_scenario_path} sensing:=false perception:=false planning:=false
+```
+
 ## simulation
 
 シミュレーション実行に必要な情報を述べる。

@@ -9,9 +9,9 @@ Evaluation:
   Datasets:
     - odaiba:
         VehicleId: default
-        LaunchSensing: true # If true, make pointcloud from lidar packets; if false, publish from bag. Therefore, /sensing/lidar/concatenated/pointcloud must be in the bag.
-        LaunchPerception: true # If false, the TOPIC of PERCEPTION to be used in PLANNING / CONTROL must be in the BAG.
-        LaunchPlanning: true # If false, the TOPIC of PLANNING to be used in CONTROL must be in the BAG.
+        LaunchSensing: false # If false, the TOPIC of SENSING to be used in PERCEPTION must be in the BAG.
+        # LaunchPerception: false # If false, the TOPIC of PERCEPTION to be used in PLANNING / CONTROL must be in the BAG.
+        # LaunchPlanning: false # If false, the TOPIC of PLANNING to be used in CONTROL must be in the BAG.
   Conditions:
     ControlConditions:
       - module: "autonomous_emergency_braking: aeb_emergency_stop"

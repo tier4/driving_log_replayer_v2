@@ -54,6 +54,10 @@ To make Autoware processing less resource-consuming, modules that are not releva
 - perception: It can be disabled by specifying LaunchPerception: false in the scenario. Or specify perception:=false in the launch command
 - planning: It can be disabled by specifying LaunchPlanning: false in the scenario. Or specify planning:=false in the launch command
 
+```shell
+ros2 launch log_evaluator log_evaluator.launch.py scenario_path:=${planning_control_scenario_path} sensing:=false perception:=false planning:=false
+```
+
 ## About simulation
 
 State the information required to run the simulation.
