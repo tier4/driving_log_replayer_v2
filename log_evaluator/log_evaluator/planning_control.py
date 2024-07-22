@@ -175,6 +175,9 @@ class Metrics(EvaluationItem):
         if status0.values[0].key != "decision":
             return None
 
+        lane_info_tuple = None
+        kinetic_state_tuple = None
+
         # get additional condition
         for _, status in enumerate(msg.status, 1):
             status: DiagnosticStatus
@@ -182,6 +185,9 @@ class Metrics(EvaluationItem):
                 lane_info_tuple = LaneCondition.diag_lane_info(status)
             if status.name == "kinematic_state":
                 kinetic_state_tuple = KinematicCondition.diag_kinematic_state(status)
+
+        if lane_info_tuple is None or kinetic_state_tuple is None:
+            return None
 
         if self.use_lane_condition:
             started = self.condition.lane_condition.is_started(lane_info_tuple)
