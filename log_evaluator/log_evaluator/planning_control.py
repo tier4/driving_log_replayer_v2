@@ -60,7 +60,7 @@ class LaneInfo(BaseModel):
         lane_id, s, t = lane_info
         if self.id != lane_id:
             return False
-        if self.s is not None and self.s >= s:  # 超えたら開始、または終了
+        if self.s is not None and self.s >= s:  # Start or end when exceeded
             return False
         if start_condition and self.t is not None and not self.t.match_condition(t):
             return False
@@ -87,13 +87,13 @@ class LaneCondition(BaseModel):
         return (lane_id, s, t)
 
     def is_started(self, lane_info_tuple: tuple[float, float, float]) -> bool:
-        # 一度Trueになったら変更しない
+        # Once True, do not change.
         if not self.started:
             self.started = self.start.match_condition(lane_info_tuple, start_condition=True)
         return self.started
 
     def is_ended(self, lane_info_tuple: tuple[float, float, float]) -> bool:
-        # 一度Trueになったら変更しない
+        # Once True, do not change.
         if not self.ended:
             self.ended = self.end.match_condition(lane_info_tuple)
         return self.ended
@@ -201,7 +201,7 @@ class Metrics(EvaluationItem):
 
         self.total += 1
         frame_success = "Fail"
-        # decisionが一致している、且つkinetic_stateが条件を満たしていればOK
+        # OK if decision matches and kinetic_state satisfies the condition
         if self.condition.decision == status0.values[0].value:
             if self.use_kinetic_condition:
                 if self.condition.kinematic_condition.match_condition(kinetic_state_tuple):
@@ -210,7 +210,7 @@ class Metrics(EvaluationItem):
             else:
                 frame_success = "Success"
                 self.passed += 1
-        # any_ofなら1個あればいい。all_ofは全部
+        # any_of would only need one, all_of would need all of them.
         self.success = (
             self.passed > 0
             if self.condition.condition_type == "any_of"
