@@ -13,7 +13,6 @@
 # limitations under the License.
 
 import datetime
-from os.path import expandvars
 from pathlib import Path
 
 from ament_index_python.packages import get_package_share_directory
@@ -109,7 +108,6 @@ def ensure_arg_compatibility(context: LaunchContext) -> list:
         dataset_index = int(idx_str)
     for k, v in datasets[dataset_index].items():
         dataset_path = dataset_dir.joinpath(k)
-        map_path_str: str | None = v.get("LocalMapPath")
         conf["vehicle_id"] = v["VehicleId"]
         launch_sensing = yaml_obj["Evaluation"].get("LaunchSensing")
         launch_localization = yaml_obj["Evaluation"].get("LaunchLocalization")
@@ -117,11 +115,7 @@ def ensure_arg_compatibility(context: LaunchContext) -> list:
             conf["sensing"] = str(launch_sensing)
         if launch_localization is not None:
             conf["localization"] = str(launch_localization)
-
-    map_path = (
-        dataset_path.joinpath("map") if map_path_str is None else Path(expandvars(map_path_str))
-    )
-    conf["map_path"] = map_path.as_posix()
+    conf["map_path"] = dataset_path.joinpath("map").as_posix()
     conf["vehicle_model"] = yaml_obj["VehicleModel"]
     conf["sensor_model"] = yaml_obj["SensorModel"]
     conf["t4_dataset_path"] = dataset_path.as_posix()
