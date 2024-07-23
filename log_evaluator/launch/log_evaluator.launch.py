@@ -123,8 +123,7 @@ def ensure_arg_compatibility(context: LaunchContext) -> list:
         if launch_planning is not None:
             conf["planning"] = str(launch_planning).lower()
 
-    map_path = dataset_path.joinpath("map")
-    conf["map_path"] = map_path.as_posix()
+    conf["map_path"] = dataset_path.joinpath("map").as_posix()
     conf["vehicle_model"] = yaml_obj["VehicleModel"]
     conf["sensor_model"] = yaml_obj["SensorModel"]
     conf["t4_dataset_path"] = dataset_path.as_posix()
