@@ -34,7 +34,6 @@ def convert_scenario(scenario_path: Path) -> None:
         migration_dict |= {"LocalMapPath": local_map_path}
     if launch_localization != KEY_NOT_EXIST:
         yaml_obj["Evaluation"].pop("LaunchLocalization")
-        migration_dict |= {"LaunchLocalization": launch_localization}
     if initial_pose != KEY_NOT_EXIST:
         yaml_obj["Evaluation"].pop("InitialPose")
         migration_dict |= {"InitialPose": initial_pose}
@@ -94,6 +93,9 @@ def move_dataset_and_map(scenario_path: Path) -> None:
                         )
                     else:
                         print(f"cannot copy {local_map_path}")  # noqa
+                launch_sensing_str: str | None = v.get("LaunchSensing")
+                if launch_sensing_str is not None:
+                    v.pop("LaunchSensing")
         # remove base dir
         t4_dataset_path.rmdir()
 
