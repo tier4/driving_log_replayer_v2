@@ -44,15 +44,10 @@ Published topics:
 
 ## logging_simulator.launch に渡す引数
 
-autoware の処理を軽くするため、評価に関係のないモジュールは launch の引数に false を渡すことで無効化する。以下を設定している。
-
 - localization: false
 
-### シナリオまたはlaunchコマンドで指定する引数
-
-- sensing: シナリオにLaunchSensing: falseを指定することで無効化できる。またはlaunchコマンドでsensing:=falseを指定する
-- perception: シナリオにLaunchPerception: falseを指定することで無効化できる。またはlaunchコマンドでperception:=falseを指定する
-- planning: シナリオにLaunchPlanning: falseを指定することで無効化できる。またはlaunchコマンドでplanning:=falseを指定する
+bagの中に入っている、/sensing/lidar/concatenated/pointcloudを利用する場合は、launchの引数にsensing:=falseを追加する
+perception、planningも同様にbagから出力する場合は、launchの引数にperception:=false planning:=falseを追加する
 
 ```shell
 ros2 launch log_evaluator log_evaluator.launch.py scenario_path:=${planning_control_scenario_path} sensing:=false perception:=false planning:=false

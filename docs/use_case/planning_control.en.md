@@ -44,15 +44,10 @@ Published topics:
 
 ## Arguments passed to logging_simulator.launch
 
-To make Autoware processing less resource-consuming, modules that are not relevant to evaluation are disabled by passing the `false` parameter as a launch argument.
-
 - localization: false
 
-### Arguments specified in the scenario or launch command
-
-- sensing: It can be disabled by specifying LaunchSensing: false in the scenario. Or specify sensing:=false in the launch command
-- perception: It can be disabled by specifying LaunchPerception: false in the scenario. Or specify perception:=false in the launch command
-- planning: It can be disabled by specifying LaunchPlanning: false in the scenario. Or specify planning:=false in the launch command
+To use /sensing/lidar/concatenated/pointcloud in the bag, add sensing:=false to the launch argument.
+If you want to use perception and planning from the bag as well, add “perception:=false planning:=false” to the “launch” argument.
 
 ```shell
 ros2 launch log_evaluator log_evaluator.launch.py scenario_path:=${planning_control_scenario_path} sensing:=false perception:=false planning:=false
