@@ -163,18 +163,12 @@ Published topics:
 
 ## logging_simulator.launch に渡す引数
 
-autoware の処理を軽くするため、評価に関係のないモジュールは launch の引数に false を渡すことで無効化する。以下を設定している。
-
 - localization: false
 - planning: false
 - control: false
 - perception_mode: camera_lidar_fusion
 
 **注:アノーテション時とシミュレーション時で自己位置を合わせたいので bag に入っている tf を使い回す。そのため localization は無効である。**
-
-### シナリオまたはlaunchコマンドで指定する引数
-
-- sensing: シナリオにLaunchSensing: falseを指定することで無効化できる。またはlaunchコマンドでsensing:=falseを指定する
 
 ## 依存ライブラリ
 
