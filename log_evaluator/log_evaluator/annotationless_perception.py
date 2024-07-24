@@ -90,43 +90,9 @@ class ClassConditionValue(BaseModel):
             },
         )
 
-    def set_threshold(self, threshold_dict: dict[str, dict]) -> None:
-        threshold_diag: dict[str, DiagValue] = {}
-        for k, v in threshold_dict.items():
-            threshold_diag[k] = DiagValue(**v)
-        self.Threshold = threshold_diag
-
-    def update_threshold(self, threshold_dict: dict[str, dict]) -> None:
-        for k, v in self.Threshold.items():
-            if threshold_dict.get(k) is None:
-                continue
-            diag_value = DiagValue(**threshold_dict[k])
-            if v.min is None:
-                diag_value.min = None
-            if v.max is None:
-                diag_value.max = None
-            if v.mean is None:
-                diag_value.mean = None
-            if v.metric_value is None:
-                diag_value.metric_value = None
-            self.Threshold[k] = diag_value
-
-    def set_pass_range(self, v: dict) -> None:
-        if v != "":  # skip if launch arg is not set
-            self.PassRange = ClassConditionValue.validate_pass_range(v)
-
 
 class Conditions(BaseModel):
     ClassConditions: dict[OBJECT_CLASSIFICATION, ClassConditionValue]
-
-    def update_threshold_from_file(self, file_path: str) -> None:
-        # this method update condition only in scenario
-        final_metrics = Conditions.load_final_metrics(file_path)
-        if final_metrics is None:
-            return
-        for class_name in self.ClassConditions:
-            if final_metrics.get(class_name) is not None:
-                self.ClassConditions[class_name].update_threshold(final_metrics[class_name])
 
     @classmethod
     def load_final_metrics(cls, file_path: str) -> dict | None:
@@ -140,18 +106,6 @@ class Conditions(BaseModel):
             return result_json_dict["Frame"]["FinalMetrics"]
         except json.JSONDecodeError:
             return None
-
-    def set_pass_range(self, v: str) -> None:
-        if v == "":  # skip if launch arg is not set
-            return
-        try:
-            range_dict = json.loads(v)
-            for class_name, range_str in range_dict.items():
-                if self.ClassConditions.get(class_name) is None:
-                    self.ClassConditions[class_name] = ClassConditionValue.get_default_condition()
-                self.ClassConditions[class_name].set_pass_range(range_str)
-        except json.JSONDecodeError:
-            pass
 
 
 class Evaluation(BaseModel):

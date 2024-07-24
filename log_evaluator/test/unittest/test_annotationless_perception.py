@@ -70,67 +70,6 @@ def test_range_validation_lower_limit() -> None:
         )
 
 
-def test_path_with_empty_str() -> None:
-    f = Path("")  # noqa
-    assert f.exists()
-
-
-def test_set_threshold() -> None:
-    class_cond = ClassConditionValue.get_default_condition()
-    input_threshold = {
-        "lateral_deviation": {
-            "min": 0.0007570793650793651,
-            "max": 0.01905171904761904,
-            "mean": 0.006783434920634924,
-        },
-    }
-
-    class_cond.set_threshold(input_threshold)
-    assert class_cond.Threshold["lateral_deviation"] == DiagValue(
-        min=0.0007570793650793651,
-        max=0.01905171904761904,
-        mean=0.006783434920634924,
-    )
-
-
-def test_update_threshold_from_file() -> None:
-    scenario: AnnotationlessPerceptionScenario = load_sample_scenario(
-        "annotationless_perception",
-        AnnotationlessPerceptionScenario,
-    )
-    scenario.Evaluation.Conditions.update_threshold_from_file(
-        get_sample_result_path("annotationless_perception", "result.jsonl").as_posix(),
-    )
-    # update_threshold_from_file update only keys written in scenario.yaml
-    bus_threshold = scenario.Evaluation.Conditions.ClassConditions["BUS"].Threshold
-    assert bus_threshold == {
-        "yaw_rate": DiagValue(max=0.077258),
-    }
-
-
-def test_set_pass_range() -> None:
-    class_cond = ClassConditionValue.get_default_condition()
-    class_cond.set_pass_range({"min": "0.0-1.1", "max": "0.0-1.2", "mean": "0.4-1.3"})
-    assert class_cond.PassRange == {"min": (0.0, 1.1), "max": (0.0, 1.2), "mean": (0.4, 1.3)}
-
-
-def test_set_pass_range_from_launch_arg() -> None:
-    scenario: AnnotationlessPerceptionScenario = load_sample_scenario(
-        "annotationless_perception",
-        AnnotationlessPerceptionScenario,
-    )
-    scenario.Evaluation.Conditions.set_pass_range(
-        '{"CAR":{"min":"0.3-1.2","max":"0.3-1.2","mean":"0.3-1.2"},"BUS":{"max":"0.2-1.3"}}',
-    )
-    cond = scenario.Evaluation.Conditions
-    assert cond.ClassConditions["CAR"].PassRange == {
-        "min": (0.3, 1.2),
-        "max": (0.3, 1.2),
-        "mean": (0.3, 1.2),
-    }
-    assert cond.ClassConditions["BUS"].PassRange == {"max": (0.2, 1.3)}
-
-
 @pytest.fixture()
 def create_obj_metrics() -> ObjectMetrics:
     condition = ClassConditionValue(
