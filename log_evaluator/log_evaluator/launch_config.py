@@ -108,7 +108,6 @@ PERCEPTION_RECORD_TOPIC = """^/tf$\
 """
 
 PERCEPTION_AUTOWARE_DISABLE = {
-    "sensing": "false",
     "localization": "false",
     "planning": "false",
     "control": "false",
@@ -146,7 +145,6 @@ TRAFFIC_LIGHT_RECORD_TOPIC = """^/tf$\
 """
 
 TRAFFIC_LIGHT_AUTOWARE_DISABLE = {
-    "sensing": "false",
     "localization": "false",
     "planning": "false",
     "control": "false",
@@ -165,7 +163,6 @@ PERFORMANCE_DIAG_RECORD_TOPIC = """^/tf$\
 """
 
 PERFORMANCE_DIAG_AUTOWARE_DISABLE = {
-    "localization": "false",
     "perception": "false",
     "planning": "false",
     "control": "false",
@@ -186,7 +183,6 @@ PERCEPTION_2D_RECORD_TOPIC = """^/tf$\
 """
 
 PERCEPTION_2D_AUTOWARE_DISABLE = {
-    "sensing": "false",
     "localization": "false",
     "planning": "false",
     "control": "false",
@@ -209,7 +205,6 @@ ANNOTATIONLESS_PERCEPTION_RECORD_TOPIC = """^/tf$\
 """
 
 ANNOTATIONLESS_PERCEPTION_AUTOWARE_DISABLE = {
-    "sensing": "false",
     "localization": "false",
     "planning": "false",
     "control": "false",

@@ -188,48 +188,10 @@ dlr simulation run -p annotationless_perception -u ${existing|all}
 
 ## logging_simulator.launch に渡す引数
 
-autoware の処理を軽くするため、評価に関係のないモジュールは launch の引数に false を渡すことで無効化する。以下を設定している。
-
-- perception: true
+- localization: false
 - planning: false
 - control: false
 - use_perception_online_evaluator: true
-
-### シナリオまたはlaunchコマンドで指定する引数
-
-- sensing: シナリオにLaunchSensing: falseを指定することで無効化できる。またはlaunchコマンドでsensing:=falseを指定する
-
-### sensingの引数指定方法
-
-#### driving-log-replayer-cli
-
-```shell
-dlr simulation run -p annotationless_perception -l sensing:=true
-```
-
-#### WebAutoCLI
-
-```shell
-webauto ci scenario run --project-id ${project-id} --scenario-id ${scenario-id} --scenario-version-id ${scenario-version-id} --simulator-parameter-overrides 'sensing=true'
-```
-
-#### Autoware Evaluator
-
-.webauto-ci.ymlのsimulatorの設定でparametersに追加する。
-
-```yaml
-simulations:
-  - name: annotationless_perception
-    type: annotationless_perception
-    simulator:
-      deployment:
-        type: container
-        artifact: main
-      runtime:
-        type: simulator/standard1/amd64/medium
-      parameters:
-        sensing: "true"
-```
 
 ## simulation
 
