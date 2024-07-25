@@ -13,7 +13,7 @@ Evaluation:
       # When specifying conditions from result.jsonl, only keys described here will be updated.
       # Even though TRUCK metrics appear in result.jsonl, they are not added to the evaluation condition because the TRUCK key is not specified in this example.
       CAR: # classification key
-        lateral_deviation: {  mean: { lower: 0.01, upper: 0.03 } }
+        lateral_deviation: { mean: { lower: 0.01, upper: 0.03 } }
         yaw_deviation: { mean: { lower: 0.05, upper: 0.09 } }
         predicted_path_deviation_5.00: { mean: { lower: 1.5, upper: 3.0 } }
         yaw_rate: { mean: { lower: 0.01, upper: 0.03 } }
