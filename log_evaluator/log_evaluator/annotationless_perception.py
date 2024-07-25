@@ -14,7 +14,6 @@
 
 from dataclasses import dataclass
 from dataclasses import field
-from pathlib import Path
 import sys
 from typing import Literal
 
@@ -22,7 +21,6 @@ from diagnostic_msgs.msg import DiagnosticArray
 from diagnostic_msgs.msg import DiagnosticStatus
 from pydantic import BaseModel
 from pydantic import field_validator
-import simplejson as json
 
 from log_evaluator.result import EvaluationItem
 from log_evaluator.result import ResultBase
@@ -93,19 +91,6 @@ class ClassConditionValue(BaseModel):
 
 class Conditions(BaseModel):
     ClassConditions: dict[OBJECT_CLASSIFICATION, ClassConditionValue]
-
-    @classmethod
-    def load_final_metrics(cls, file_path: str) -> dict | None:
-        result_file = Path(file_path)
-        if file_path == "" or not result_file.exists():  # Path("") is current path
-            return None
-        with result_file.open() as f:
-            last_line = f.readlines()[-1]
-        try:
-            result_json_dict = json.loads(last_line)
-            return result_json_dict["Frame"]["FinalMetrics"]
-        except json.JSONDecodeError:
-            return None
 
 
 class Evaluation(BaseModel):

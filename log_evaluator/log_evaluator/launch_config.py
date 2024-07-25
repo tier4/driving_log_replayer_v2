@@ -13,7 +13,6 @@
 # limitations under the License.
 
 from launch.substitutions import LaunchConfiguration
-from launch_ros.descriptions import ParameterValue
 
 ANNOTATIONLESS_PERCEPTION_RECORD_TOPIC = """^/tf$\
 |^/sensing/lidar/concatenated/pointcloud$\

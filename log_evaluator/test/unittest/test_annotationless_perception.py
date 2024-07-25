@@ -13,7 +13,6 @@
 # limitations under the License.
 
 from collections.abc import Callable
-from pathlib import Path
 from typing import Literal
 
 from pydantic import ValidationError
@@ -23,7 +22,6 @@ from log_evaluator.annotationless_perception import AnnotationlessPerceptionScen
 from log_evaluator.annotationless_perception import ClassConditionValue
 from log_evaluator.annotationless_perception import DiagValue
 from log_evaluator.annotationless_perception import ObjectMetrics
-from log_evaluator.result import get_sample_result_path
 from log_evaluator.scenario import load_sample_scenario
 
 
