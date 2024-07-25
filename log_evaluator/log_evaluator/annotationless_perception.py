@@ -93,7 +93,7 @@ class ObjectMetrics(EvaluationItem):
                 frame_fail_items += f", {status_name}"
             frame_success = frame_success and diag_success
         self.success = frame_success
-        if self.condition.Threshold == {}:  # not evaluation target
+        if self.condition == {}:  # not evaluation target
             self.summary = f"{self.name} (NotTested)"
         else:
             self.summary = f"{self.name} ({self.success_str()}{frame_fail_items})"
@@ -204,7 +204,7 @@ class ObjectMetricsClassContainer:
                 # Add default ObjectMetricsClass for metrics aggregation
                 self.__container[class_name] = ObjectMetrics(
                     name=class_name,
-                    condition=DiagValue(),
+                    condition={},
                 )
             frame_result[class_name] = self.__container[class_name].set_frame(
                 diag_array_class[class_name],
