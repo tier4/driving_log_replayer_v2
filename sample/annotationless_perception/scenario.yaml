@@ -5,7 +5,7 @@ SensorModel: sample_sensor_kit
 VehicleModel: sample_vehicle
 Evaluation:
   UseCaseName: annotationless_perception
-  UseCaseFormatVersion: 1.0.0
+  UseCaseFormatVersion: 2.0.0
   Conditions:
     ClassConditions:
       # Describe the conditions for each class. If a class with no conditions is output, only the metrics are calculated. It does not affect the evaluation.
@@ -13,26 +13,11 @@ Evaluation:
       # When specifying conditions from result.jsonl, only keys described here will be updated.
       # Even though TRUCK metrics appear in result.jsonl, they are not added to the evaluation condition because the TRUCK key is not specified in this example.
       CAR: # classification key
-        Threshold:
-          # Keys not described will not be evaluated (will always be a success)
-          lateral_deviation: { max: 0.4, mean: 0.019 }
-          yaw_deviation: { max: 3.1411, mean: 0.05 }
-          predicted_path_deviation_5.00: { max: 16.464, mean: 1.8 }
-          total_objects_count_r60.00_h10.00: { metric_value: 10 }
-        PassRange:
-          min: 0.0-2.0 # lower[<=1.0]-upper[>=1.0]
-          max: 0.0-2.0 # lower[<=1.0]-upper[>=1.0]
-          mean: 0.5-2.0 # lower[<=1.0]-upper[>=1.0]
-          metric_value: 0.9-1.1
+        lateral_deviation: { max: { lower: 0.0, upper: 0.6 }, mean: { lower: 0.01, upper: 0.03 } }
+        predicted_path_deviation_5.00: { max: { lower: 0.0, upper: 16.48 }, mean: { lower: 1.7, upper: 1.9 } }
+        total_objects_count_r60.00_h10.00: { metric_value: { lower: 10.0, upper: 11.0 } }
       BUS: # classification key
-        Threshold:
-          # Only lateral_deviation is evaluated.
-          yaw_rate: { max: 0.05 } # Only max is evaluated.
-        PassRange:
-          min: 0.0-2.0 # lower[<=1.0]-upper[>=1.0]
-          max: 0.0-2.0 # lower[<=1.0]-upper[>=1.0]
-          mean: 0.5-2.0 # lower[<=1.0]-upper[>=1.0]
-          metric_value: 0.9-1.1
+        yaw_rate: { max: { lower: 0.04, upper: 0.06 } } # Only max is evaluated.
   Datasets:
     - sample_dataset:
         VehicleId: default
