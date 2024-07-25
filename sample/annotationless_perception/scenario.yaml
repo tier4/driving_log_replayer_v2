@@ -13,11 +13,12 @@ Evaluation:
       # When specifying conditions from result.jsonl, only keys described here will be updated.
       # Even though TRUCK metrics appear in result.jsonl, they are not added to the evaluation condition because the TRUCK key is not specified in this example.
       CAR: # classification key
-        lateral_deviation: { max: { lower: 0.0, upper: 0.6 }, mean: { lower: 0.01, upper: 0.03 } }
-        predicted_path_deviation_5.00: { max: { lower: 0.0, upper: 16.48 }, mean: { lower: 1.7, upper: 1.9 } }
-        total_objects_count_r60.00_h10.00: { metric_value: { lower: 10.0, upper: 11.0 } }
+        lateral_deviation: {  mean: { lower: 0.01, upper: 0.03 } }
+        yaw_deviation: { mean: { lower: 0.05, upper: 0.09 } }
+        predicted_path_deviation_5.00: { mean: { lower: 1.5, upper: 3.0 } }
+        yaw_rate: { mean: { lower: 0.01, upper: 0.03 } }
       BUS: # classification key
-        yaw_rate: { max: { lower: 0.04, upper: 0.06 } } # Only max is evaluated.
+        yaw_rate: { mean: { lower: 0, upper: 0.01 } }
   Datasets:
     - sample_dataset:
         VehicleId: default
