@@ -10,8 +10,6 @@ Evaluation:
     ClassConditions:
       # Describe the conditions for each class. If a class with no conditions is output, only the metrics are calculated. It does not affect the evaluation.
       # In the sample data, the class of TRUCK is also output, but the condition is not described, so TRUCK is always Success.
-      # When specifying conditions from result.jsonl, only keys described here will be updated.
-      # Even though TRUCK metrics appear in result.jsonl, they are not added to the evaluation condition because the TRUCK key is not specified in this example.
       CAR: # classification key
         lateral_deviation: { mean: { lower: 0.01, upper: 0.03 } }
         yaw_deviation: { mean: { lower: 0.05, upper: 0.09 } }
