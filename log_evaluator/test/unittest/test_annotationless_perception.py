@@ -15,12 +15,11 @@
 from collections.abc import Callable
 from typing import Literal
 
-from pydantic import ValidationError
 import pytest
 
 from log_evaluator.annotationless_perception import AnnotationlessPerceptionScenario
-from log_evaluator.annotationless_perception import ClassConditionValue
 from log_evaluator.annotationless_perception import DiagValue
+from log_evaluator.annotationless_perception import LowerUpper
 from log_evaluator.annotationless_perception import ObjectMetrics
 from log_evaluator.scenario import load_sample_scenario
 
@@ -31,49 +30,20 @@ def test_scenario() -> None:
         AnnotationlessPerceptionScenario,
     )
     assert scenario.ScenarioName == "sample_annotationless_perception"
-    assert scenario.Evaluation.Conditions.ClassConditions["BUS"].Threshold == {
-        "yaw_rate": DiagValue(max=0.05),
+    assert scenario.Evaluation.Conditions.ClassConditions["BUS"] == {
+        "yaw_rate": DiagValue(mean=LowerUpper(lower=0, upper=0.01)),
     }
-    assert scenario.Evaluation.Conditions.ClassConditions["BUS"].PassRange == {
-        "min": (0.0, 2.0),
-        "max": (0.0, 2.0),
-        "mean": (0.5, 2.0),
-        "metric_value": (0.9, 1.1),
-    }
-
-
-def test_range_validation_upper_limit() -> None:
-    with pytest.raises(ValidationError):
-        ClassConditionValue(
-            Threshold={},
-            PassRange={
-                "min": "0.0-0.95",
-                "max": "0.0-2.0",
-                "mean": "0.5-2.0",
-                "metric_value": "0.9-1.1",
-            },
-        )
-
-
-def test_range_validation_lower_limit() -> None:
-    with pytest.raises(ValidationError):
-        ClassConditionValue(
-            Threshold={},
-            PassRange={
-                "min": "1.1-2.0",
-                "max": "0.0-2.0",
-                "mean": "0.5-2.0",
-                "metric_value": "0.9-1.1",
-            },
-        )
 
 
 @pytest.fixture()
 def create_obj_metrics() -> ObjectMetrics:
-    condition = ClassConditionValue(
-        Threshold={"lateral_deviation": DiagValue(min=1.0, max=10.0, mean=5.0)},
-        PassRange={"min": "0.2-1.05", "max": "0.0-1.05", "mean": "0.95-1.05"},
-    )
+    condition = {
+        "lateral_deviation": DiagValue(
+            min=LowerUpper(lower=0.2, upper=1.05),
+            max=LowerUpper(lower=0, upper=10.5),
+            mean=LowerUpper(lower=4.75, upper=5.25),
+        ),
+    }
     return ObjectMetrics(
         name="CAR",
         condition=condition,
