@@ -162,19 +162,12 @@ Published topics:
 
 ## Arguments passed to logging_simulator.launch
 
-To make Autoware processing less resource-consuming, modules that are not relevant to evaluation are disabled by passing the `false` parameter as a launch argument.
-The following parameters are set to `false`:
-
 - localization: false
 - planning: false
 - control: false
 - perception_mode: camera_lidar_fusion
 
 **NOTE: The `tf` in the bag is used to align the localization during annotation and simulation. Therefore, localization is invalid.**
-
-### Arguments specified in the scenario or launch command
-
-- sensing: It can be disabled by specifying LaunchSensing: false in the scenario. Or specify sensing:=false in the launch command
 
 ## Dependent libraries
 
@@ -201,7 +194,7 @@ Must contain the required topics in `t4_dataset` format.
 The vehicle's ECU CAN and sensors data topics are required for the evaluation to be run correctly.
 The following example shows the topic list available in evaluation input rosbag when multiple LiDARs and Cameras are used in a real-world vehicle configuration.
 
-/sensing/lidar/concatenated/pointcloud is used if the scenario LaunchSensing: false.
+/sensing/lidar/concatenated/pointcloud is used when sensing:=false is added to the launch argument.
 
 If there is more than one CAMERA, include all on-board camera_info and image_rect_color_compressed.
 

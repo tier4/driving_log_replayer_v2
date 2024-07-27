@@ -86,15 +86,9 @@ Published topics:
 
 ## logging_simulator.launch に渡す引数
 
-autoware の処理を軽くするため、評価に関係のないモジュールは launch の引数に false を渡すことで無効化する。以下を設定している。
-
 - perception: false
 - planning: false
 - control: false
-
-### シナリオまたはlaunchコマンドで指定する引数
-
-- localization: シナリオにLaunchLocalization: falseを指定することで無効化できる。またはlaunchコマンドでlocalization:=falseを指定する
 
 ## simulation
 

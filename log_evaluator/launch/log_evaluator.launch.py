@@ -109,12 +109,6 @@ def ensure_arg_compatibility(context: LaunchContext) -> list:
     for k, v in datasets[dataset_index].items():
         dataset_path = dataset_dir.joinpath(k)
         conf["vehicle_id"] = v["VehicleId"]
-        launch_sensing = yaml_obj["Evaluation"].get("LaunchSensing")
-        launch_localization = yaml_obj["Evaluation"].get("LaunchLocalization")
-        if launch_sensing is not None:
-            conf["sensing"] = str(launch_sensing)
-        if launch_localization is not None:
-            conf["localization"] = str(launch_localization)
     conf["map_path"] = dataset_path.joinpath("map").as_posix()
     conf["vehicle_model"] = yaml_obj["VehicleModel"]
     conf["sensor_model"] = yaml_obj["SensorModel"]
@@ -124,6 +118,16 @@ def ensure_arg_compatibility(context: LaunchContext) -> list:
     conf["result_bag_path"] = output_dir.joinpath("result_bag").as_posix()
     conf["result_archive_path"] = output_dir.joinpath("result_archive_path").as_posix()
     conf["use_case"] = yaml_obj["Evaluation"]["UseCaseName"]
+    use_case_launch_arg = log_evaluator_config[conf["use_case"]]["disable"]
+    # update autoware component launch or not
+    autoware_components = ["sensing", "localization", "perception", "planning", "control"]
+    launch_component = {}
+    for component in autoware_components:
+        # argument has higher priority than the launch_config.py setting.
+        if conf.get(component) is None and use_case_launch_arg.get(component) is not None:
+            conf[component] = use_case_launch_arg[component]
+        launch_component[component] = conf.get(component, "true")
+
     # annotationless
     conf["annotationless_threshold_file"] = ""
     conf["annotationless_pass_range"] = ""
@@ -134,6 +138,9 @@ def ensure_arg_compatibility(context: LaunchContext) -> list:
     return [
         LogInfo(
             msg=f"{dataset_path=}, {dataset_index=}, {output_dir=}, use_case={conf['use_case']}",
+        ),
+        LogInfo(
+            msg=f"{launch_component=}",
         ),
     ]
 
