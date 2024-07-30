@@ -141,7 +141,7 @@ Must contain the required topics in `t4_dataset` format.
 The vehicle's ECU CAN and sensors data topics are required for the evaluation to be run correctly.
 The following example shows the topic list available in evaluation input rosbag when multiple LiDARs and Cameras are used in a real-world vehicle configuration.
 
-/sensing/lidar/concatenated/pointcloud is used if the scenario LaunchSensing: false.
+/sensing/lidar/concatenated/pointcloud is used when sensing:=false is added to the launch argument.
 
 If there is more than one CAMERA, include all on-board camera_info and image_rect_color_compressed.
 
