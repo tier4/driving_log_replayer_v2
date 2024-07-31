@@ -8,7 +8,7 @@ Launching the file executes the following steps:
 
 1. Execute launch of evaluation node (`planning_control_evaluator_node`), `logging_simulator.launch` file and `ros2 bag play` command
 2. Autoware receives sensor data output from input rosbag and the perception module performs recognition.
-3. Using the results of perception, Autoware output Metrics to `/diagnostic/planning_evaluator/metrics` for planning and `/diagnostic/control_evaluator/metrics` for control.
+3. Using the results of perception, Autoware output Metrics to `/planning/planning_evaluator/metrics` for planning and `/control/control_evaluator/metrics` for control.
 4. The evaluation node subscribes to the topic and evaluates data. The result is dumped into a file.
 5. When the playback of the rosbag is finished, Autoware's launch is automatically terminated, and the evaluation is completed.
 
@@ -33,8 +33,8 @@ Subscribed topics:
 
 | Topic name                             | Data type                             |
 | -------------------------------------- | ------------------------------------- |
-| /diagnostic/control_evaluator/metrics  | diagnostic_msgs::msg::DiagnosticArray |
-| /diagnostic/planning_evaluator/metrics | diagnostic_msgs::msg::DiagnosticArray |
+| /control/control_evaluator/metrics  | diagnostic_msgs::msg::DiagnosticArray |
+| /planning/planning_evaluator/metrics | diagnostic_msgs::msg::DiagnosticArray |
 
 Published topics:
 

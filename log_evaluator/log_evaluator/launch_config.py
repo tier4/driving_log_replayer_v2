@@ -178,8 +178,8 @@ PERFORMANCE_DIAG_AUTOWARE_ARGS = {}
 PERFORMANCE_DIAG_NODE_PARAMS = {}
 
 PLANNING_CONTROL_RECORD_TOPIC = """^/tf$\
-|^/diagnostic/control_evaluator/metrics$\
-|^/diagnostic/planning_evaluator/metrics$\
+|^/control/control_evaluator/metrics$\
+|^/planning/planning_evaluator/metrics$\
 """
 
 PLANNING_CONTROL_AUTOWARE_DISABLE = {

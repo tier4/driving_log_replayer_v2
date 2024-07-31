@@ -1,5 +1,5 @@
 ~/ros_ws/planning_control dlr/test-platform* 5m 49s
-❯ ros2 topic echo /diagnostic/control_evaluator/metrics
+❯ ros2 topic echo /control/control_evaluator/metrics
 1721114673.647621 [77]       ros2: determined eno1 (udp/10.0.55.137) as highest quality interface, selected for automatic interface.
 ---
 header:

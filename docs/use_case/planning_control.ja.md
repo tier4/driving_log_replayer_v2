@@ -8,7 +8,7 @@ launch を立ち上げると以下のことが実行され、評価される。
 
 1. launch で評価ノード(`planning_control_evaluator_node`)と `logging_simulator.launch`、`ros2 bag play`コマンドを立ち上げる
 2. bag から出力されたセンサーデータを autoware が受け取って、perception モジュールが認識を行う
-3. perceptionの結果を使って、planningは `/diagnostic/planning_evaluator/metrics` に controlは `/diagnostic/control_evaluator/metrics`にMetricsを出力する
+3. perceptionの結果を使って、planningは `/planning/planning_evaluator/metrics` に controlは `/control/control_evaluator/metrics`にMetricsを出力する
 4. 評価ノードが topic を subscribe して、各基準を満たしているかを判定して結果をファイルに記録する
 5. bag の再生が終了すると自動で launch が終了して評価が終了する
 
@@ -33,8 +33,8 @@ Subscribed topics:
 
 | Topic name                             | Data type                             |
 | -------------------------------------- | ------------------------------------- |
-| /diagnostic/control_evaluator/metrics  | diagnostic_msgs::msg::DiagnosticArray |
-| /diagnostic/planning_evaluator/metrics | diagnostic_msgs::msg::DiagnosticArray |
+| /control/control_evaluator/metrics  | diagnostic_msgs::msg::DiagnosticArray |
+| /planning/planning_evaluator/metrics | diagnostic_msgs::msg::DiagnosticArray |
 
 Published topics:
 
