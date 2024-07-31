@@ -128,10 +128,6 @@ def ensure_arg_compatibility(context: LaunchContext) -> list:
             conf[component] = use_case_launch_arg[component]
         launch_component[component] = conf.get(component, "true")
 
-    # annotationless
-    conf["annotationless_threshold_file"] = ""
-    conf["annotationless_pass_range"] = ""
-
     # create output directory
     output_dir.mkdir(exist_ok=True, parents=True)
 
