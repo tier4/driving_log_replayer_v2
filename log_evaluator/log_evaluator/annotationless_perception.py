@@ -14,15 +14,12 @@
 
 from dataclasses import dataclass
 from dataclasses import field
-from pathlib import Path
 import sys
 from typing import Literal
 
 from diagnostic_msgs.msg import DiagnosticArray
 from diagnostic_msgs.msg import DiagnosticStatus
 from pydantic import BaseModel
-from pydantic import field_validator
-import simplejson as json
 
 from log_evaluator.result import EvaluationItem
 from log_evaluator.result import ResultBase
@@ -45,118 +42,25 @@ METRICS_KEY_TUPLE = ("min", "max", "mean", "metric_value")
 METRICS_KEY = Literal[METRICS_KEY_TUPLE]
 
 
+class LowerUpper(BaseModel):
+    lower: float
+    upper: float
+
+
 class DiagValue(BaseModel):
-    min: float | None = None
-    max: float | None = None
-    mean: float | None = None
-    metric_value: float | None = None
-
-
-class ClassConditionValue(BaseModel):
-    Threshold: dict[str, DiagValue]
-    PassRange: dict[METRICS_KEY, tuple[float, float]]
-
-    @field_validator("PassRange", mode="before")
-    @classmethod
-    def validate_pass_range(cls, range_dict: dict) -> dict[METRICS_KEY, tuple[float, float]]:
-        rtn_dict = {}
-        for k, v in range_dict.items():
-            if k not in METRICS_KEY_TUPLE:
-                key_error = "pass_range key must be 'min', 'max', 'mean', and 'metric_value'"
-                raise ValueError(key_error)
-            boundary = 1.0
-            s_lower, s_upper = v.split("-")
-            lower = float(s_lower)
-            upper = float(s_upper)
-
-            if lower > boundary:
-                lower_error = f"lower value must be <= {boundary}"
-                raise ValueError(lower_error)
-            if upper < boundary:
-                upper_error = f"upper value must be >= {boundary}"
-                raise ValueError(upper_error)
-            rtn_dict[k] = (lower, upper)
-        return rtn_dict
-
-    @classmethod
-    def get_default_condition(cls) -> "ClassConditionValue":
-        return ClassConditionValue(
-            Threshold={},
-            PassRange={
-                "min": "0.0-1.0",
-                "max": "0.0-1.0",
-                "mean": "0.5-1.0",
-                "metric_value": "0.9-1.1",
-            },
-        )
-
-    def set_threshold(self, threshold_dict: dict[str, dict]) -> None:
-        threshold_diag: dict[str, DiagValue] = {}
-        for k, v in threshold_dict.items():
-            threshold_diag[k] = DiagValue(**v)
-        self.Threshold = threshold_diag
-
-    def update_threshold(self, threshold_dict: dict[str, dict]) -> None:
-        for k, v in self.Threshold.items():
-            if threshold_dict.get(k) is None:
-                continue
-            diag_value = DiagValue(**threshold_dict[k])
-            if v.min is None:
-                diag_value.min = None
-            if v.max is None:
-                diag_value.max = None
-            if v.mean is None:
-                diag_value.mean = None
-            if v.metric_value is None:
-                diag_value.metric_value = None
-            self.Threshold[k] = diag_value
-
-    def set_pass_range(self, v: dict) -> None:
-        if v != "":  # skip if launch arg is not set
-            self.PassRange = ClassConditionValue.validate_pass_range(v)
+    min: LowerUpper | None = None
+    max: LowerUpper | None = None
+    mean: LowerUpper | None = None
+    metric_value: LowerUpper | None = None
 
 
 class Conditions(BaseModel):
-    ClassConditions: dict[OBJECT_CLASSIFICATION, ClassConditionValue]
-
-    def update_threshold_from_file(self, file_path: str) -> None:
-        # this method update condition only in scenario
-        final_metrics = Conditions.load_final_metrics(file_path)
-        if final_metrics is None:
-            return
-        for class_name in self.ClassConditions:
-            if final_metrics.get(class_name) is not None:
-                self.ClassConditions[class_name].update_threshold(final_metrics[class_name])
-
-    @classmethod
-    def load_final_metrics(cls, file_path: str) -> dict | None:
-        result_file = Path(file_path)
-        if file_path == "" or not result_file.exists():  # Path("") is current path
-            return None
-        with result_file.open() as f:
-            last_line = f.readlines()[-1]
-        try:
-            result_json_dict = json.loads(last_line)
-            return result_json_dict["Frame"]["FinalMetrics"]
-        except json.JSONDecodeError:
-            return None
-
-    def set_pass_range(self, v: str) -> None:
-        if v == "":  # skip if launch arg is not set
-            return
-        try:
-            range_dict = json.loads(v)
-            for class_name, range_str in range_dict.items():
-                if self.ClassConditions.get(class_name) is None:
-                    self.ClassConditions[class_name] = ClassConditionValue.get_default_condition()
-                self.ClassConditions[class_name].set_pass_range(range_str)
-        except json.JSONDecodeError:
-            pass
+    ClassConditions: dict[OBJECT_CLASSIFICATION, dict[str, DiagValue]]
 
 
 class Evaluation(BaseModel):
     UseCaseName: Literal["annotationless_perception"]
-    UseCaseFormatVersion: Literal["1.0.0"]
+    UseCaseFormatVersion: Literal["2.0.0"]
     Conditions: Conditions
     Datasets: list[dict]
 
@@ -173,7 +77,7 @@ class ObjectMetrics(EvaluationItem):
     fail_details: dict = field(default_factory=dict)
 
     def set_frame(self, msg: dict[str, dict]) -> dict:
-        self.condition: ClassConditionValue
+        self.condition: dict[str, DiagValue]
         frame_success = True
         info_dict = {}
         frame_fail_items = ""
@@ -189,7 +93,7 @@ class ObjectMetrics(EvaluationItem):
                 frame_fail_items += f", {status_name}"
             frame_success = frame_success and diag_success
         self.success = frame_success
-        if self.condition.Threshold == {}:  # not evaluation target
+        if self.condition == {}:  # not evaluation target
             self.summary = f"{self.name} (NotTested)"
         else:
             self.summary = f"{self.name} ({self.success_str()}{frame_fail_items})"
@@ -204,16 +108,15 @@ class ObjectMetrics(EvaluationItem):
         key: str,
         values: dict,
     ) -> tuple[dict, bool]:
-        threshold_key: DiagValue | None = self.condition.Threshold.get(key)
-        pass_range = self.condition.PassRange
+        threshold_key: DiagValue | None = self.condition.get(key)
         # metric_value type
         if "metric_value" in values:
             if threshold_key is None or threshold_key.metric_value is None:
                 return {}, True
             metric_value_success = (
-                threshold_key.metric_value * pass_range["metric_value"][0]
+                threshold_key.metric_value.lower
                 <= values["metric_value"]
-                <= threshold_key.metric_value * pass_range["metric_value"][1]
+                <= threshold_key.metric_value.upper
             )
             return {}, metric_value_success
 
@@ -243,38 +146,26 @@ class ObjectMetrics(EvaluationItem):
             is_success_mean = True  # if threshold mean is not set
             if threshold_key.min is not None:
                 # Once min_success is false, it is not calculated thereafter.
-                is_success_min = (
-                    threshold_key.min * pass_range["min"][0]
-                    <= rdk["min"]
-                    <= threshold_key.min * pass_range["min"][1]
-                )
+                is_success_min = threshold_key.min.lower <= rdk["min"] <= threshold_key.min.upper
             if threshold_key.max is not None:
                 # Once max_success is false, it is not calculated thereafter.
-                is_success_max = (
-                    threshold_key.max * pass_range["max"][0]
-                    <= rdk["max"]
-                    <= threshold_key.max * pass_range["max"][1]
-                )
+                is_success_max = threshold_key.max.lower <= rdk["max"] <= threshold_key.max.upper
             if threshold_key.mean is not None:
-                is_success_mean = (
-                    threshold_key.mean * pass_range["mean"][0]
-                    <= a_mean
-                    <= threshold_key.mean * pass_range["mean"][1]
-                )
+                is_success_mean = threshold_key.mean.lower <= a_mean <= threshold_key.mean.upper
             is_success = is_success_min and is_success_max and is_success_mean
 
             # Store the measured value and threshold value for
             if not is_success_min:
                 self.fail_details[key + "_min"] = (
                     rdk["min"],
-                    threshold_key.min * pass_range["min"][0],
-                    threshold_key.min * pass_range["min"][1],
+                    threshold_key.min.lower,
+                    threshold_key.min.upper,
                 )
             if not is_success_max:
                 self.fail_details[key + "_max"] = (
                     rdk["max"],
-                    threshold_key.max * pass_range["max"][0],
-                    threshold_key.max * pass_range["max"][1],
+                    threshold_key.max.lower,
+                    threshold_key.max.upper,
                 )
             if is_success_mean:
                 # If mean is successful, remove it from fail_details if it exists
@@ -282,8 +173,8 @@ class ObjectMetrics(EvaluationItem):
             else:
                 self.fail_details[key + "_mean"] = (
                     a_mean,
-                    threshold_key.mean * pass_range["mean"][0],
-                    threshold_key.mean * pass_range["mean"][1],
+                    threshold_key.mean.lower,
+                    threshold_key.mean.upper,
                 )
         return {"min": rdk["min"], "max": rdk["max"], "mean": a_mean}, is_success
 
@@ -313,7 +204,7 @@ class ObjectMetricsClassContainer:
                 # Add default ObjectMetricsClass for metrics aggregation
                 self.__container[class_name] = ObjectMetrics(
                     name=class_name,
-                    condition=ClassConditionValue.get_default_condition(),
+                    condition={},
                 )
             frame_result[class_name] = self.__container[class_name].set_frame(
                 diag_array_class[class_name],

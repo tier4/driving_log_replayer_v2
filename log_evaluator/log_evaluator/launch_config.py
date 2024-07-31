@@ -13,7 +13,6 @@
 # limitations under the License.
 
 from launch.substitutions import LaunchConfiguration
-from launch_ros.descriptions import ParameterValue
 
 ANNOTATIONLESS_PERCEPTION_RECORD_TOPIC = """^/tf$\
 |^/sensing/lidar/concatenated/pointcloud$\
@@ -35,16 +34,7 @@ ANNOTATIONLESS_PERCEPTION_AUTOWARE_ARGS = {
     "use_perception_online_evaluator": "true",
 }
 
-ANNOTATIONLESS_PERCEPTION_NODE_PARAMS = {
-    "annotationless_threshold_file": LaunchConfiguration("annotationless_threshold_file"),
-    # annotationless_pass_range is json format string. Avoid interpreting json format strings as dict
-    # [ERROR] [launch]: Caught exception in launch (see debug for traceback): Allowed value types are bytes, bool, int, float, str, Sequence[bool], Sequence[int], Sequence[float], Sequence[str].
-    # Got <class 'dict'>.If the parameter is meant to be a string, try wrapping it in launch_ros.parameter_descriptions.ParameterValue(value, value_type=str)
-    "annotationless_pass_range": ParameterValue(
-        LaunchConfiguration("annotationless_pass_range"),
-        value_type=str,
-    ),
-}
+ANNOTATIONLESS_PERCEPTION_NODE_PARAMS = {}
 
 AR_TAG_BASED_LOCALIZER_RECORD_TOPIC = """^/tf$\
 |^/diagnostics$"\
