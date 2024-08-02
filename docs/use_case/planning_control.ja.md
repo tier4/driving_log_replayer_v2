@@ -31,9 +31,9 @@ kinematic_conditionを指定した場合は追加で、kinematic_stateが条件�
 
 Subscribed topics:
 
-| Topic name                             | Data type                             |
-| -------------------------------------- | ------------------------------------- |
-| /control/control_evaluator/metrics  | diagnostic_msgs::msg::DiagnosticArray |
+| Topic name                           | Data type                             |
+| ------------------------------------ | ------------------------------------- |
+| /control/control_evaluator/metrics   | diagnostic_msgs::msg::DiagnosticArray |
 | /planning/planning_evaluator/metrics | diagnostic_msgs::msg::DiagnosticArray |
 
 Published topics:

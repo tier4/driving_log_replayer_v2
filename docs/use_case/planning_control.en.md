@@ -31,9 +31,9 @@ When the normal condition is not met
 
 Subscribed topics:
 
-| Topic name                             | Data type                             |
-| -------------------------------------- | ------------------------------------- |
-| /control/control_evaluator/metrics  | diagnostic_msgs::msg::DiagnosticArray |
+| Topic name                           | Data type                             |
+| ------------------------------------ | ------------------------------------- |
+| /control/control_evaluator/metrics   | diagnostic_msgs::msg::DiagnosticArray |
 | /planning/planning_evaluator/metrics | diagnostic_msgs::msg::DiagnosticArray |
 
 Published topics:
