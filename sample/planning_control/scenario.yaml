@@ -1,0 +1,37 @@
+ScenarioFormatVersion: 3.0.0
+ScenarioName: sample_planning_control
+ScenarioDescription: sample_planning_control
+SensorModel: aip_xx1
+VehicleModel: lexus
+Evaluation:
+  UseCaseName: planning_control
+  UseCaseFormatVersion: 0.1.0
+  Datasets:
+    - odaiba:
+        VehicleId: default
+  Conditions:
+    ControlConditions:
+      - module: "autonomous_emergency_braking: aeb_emergency_stop"
+        decision: deceleration # Specify key as key and value as value in KeyValue of module.
+        condition_type: all_of
+        lane_condition:
+          start:
+            id: 1500
+          end:
+            id: 1500
+            s: 2.3
+        kinematic_condition:
+          vel: { min: 2.5, max: 3.0 }
+          acc: { min: -0.5, max: 0.5 }
+          jerk: { min: 0.2, max: 1.5 }
+      - module: "autonomous_emergency_braking: aeb_emergency_stop"
+        decision: none
+        condition_type: all_of
+        lane_condition: # optional
+          start:
+            id: 1500
+            s: 3.0
+          end:
+            id: 1500
+            s: 10.0
+        kinematic_condition: null # optional

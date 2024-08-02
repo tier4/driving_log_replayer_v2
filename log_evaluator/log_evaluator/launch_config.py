@@ -177,6 +177,19 @@ PERFORMANCE_DIAG_AUTOWARE_ARGS = {}
 
 PERFORMANCE_DIAG_NODE_PARAMS = {}
 
+PLANNING_CONTROL_RECORD_TOPIC = """^/tf$\
+|^/control/control_evaluator/metrics$\
+|^/planning/planning_evaluator/metrics$\
+"""
+
+PLANNING_CONTROL_AUTOWARE_DISABLE = {
+    "localization": "false",
+}
+
+PLANNING_CONTROL_AUTOWARE_ARGS = {}
+
+PLANNING_CONTROL_NODE_PARAMS = {}
+
 TRAFFIC_LIGHT_RECORD_TOPIC = """^/tf$\
 |^/sensing/camera/camera[67]/image_raw/compressed$\
 |^/perception/.*/traffic_signals$\
@@ -262,6 +275,12 @@ log_evaluator_config = {
         "disable": PERFORMANCE_DIAG_AUTOWARE_DISABLE,
         "autoware": PERFORMANCE_DIAG_AUTOWARE_ARGS,
         "node": PERFORMANCE_DIAG_NODE_PARAMS,
+    },
+    "planning_control": {
+        "record": PLANNING_CONTROL_RECORD_TOPIC,
+        "disable": PLANNING_CONTROL_AUTOWARE_DISABLE,
+        "autoware": PLANNING_CONTROL_AUTOWARE_ARGS,
+        "node": PLANNING_CONTROL_NODE_PARAMS,
     },
     "traffic_light": {
         "record": TRAFFIC_LIGHT_RECORD_TOPIC,
