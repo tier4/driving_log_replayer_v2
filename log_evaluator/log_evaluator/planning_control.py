@@ -157,7 +157,7 @@ class Metrics(EvaluationItem):
     def __post_init__(self) -> None:
         self.condition: PlanningControlCondition
         self.use_lane_condition = self.condition.lane_condition is not None
-        self.use_kinetic_condition = self.condition.kinematic_condition is not None
+        self.use_kinematic_condition = self.condition.kinematic_condition is not None
 
     def set_frame(self, msg: DiagnosticArray) -> dict | None:  # noqa
         if len(msg.status) <= 1:
@@ -176,7 +176,7 @@ class Metrics(EvaluationItem):
             return None
 
         lane_info_tuple = None
-        kinetic_state_tuple = None
+        kinematic_state_tuple = None
 
         # get additional condition
         for _, status in enumerate(msg.status, 1):
@@ -184,9 +184,9 @@ class Metrics(EvaluationItem):
             if status.name == "ego_lane_info":
                 lane_info_tuple = LaneCondition.diag_lane_info(status)
             if status.name == "kinematic_state":
-                kinetic_state_tuple = KinematicCondition.diag_kinematic_state(status)
+                kinematic_state_tuple = KinematicCondition.diag_kinematic_state(status)
 
-        if lane_info_tuple is None or kinetic_state_tuple is None:
+        if lane_info_tuple is None or kinematic_state_tuple is None:
             return None
 
         if self.use_lane_condition:
@@ -197,7 +197,7 @@ class Metrics(EvaluationItem):
                 return {
                     "Error": {
                         "LaneInfo": lane_info_tuple,
-                        "KinematicState": kinetic_state_tuple,
+                        "KinematicState": kinematic_state_tuple,
                         "started": started,
                         "ended": ended,
                     },
@@ -207,10 +207,10 @@ class Metrics(EvaluationItem):
 
         self.total += 1
         frame_success = "Fail"
-        # OK if decision matches and kinetic_state satisfies the condition
+        # OK if decision matches and kinematic_state satisfies the condition
         if self.condition.decision == status0.values[0].value:
-            if self.use_kinetic_condition:
-                if self.condition.kinematic_condition.match_condition(kinetic_state_tuple):
+            if self.use_kinematic_condition:
+                if self.condition.kinematic_condition.match_condition(kinematic_state_tuple):
                     frame_success = "Success"
                     self.passed += 1
             else:
@@ -228,7 +228,7 @@ class Metrics(EvaluationItem):
                 "TotalPassed": self.passed,
                 "Decision": status0.values[0].value,
                 "LaneInfo": lane_info_tuple,
-                "KinematicState": kinetic_state_tuple,
+                "KinematicState": kinematic_state_tuple,
             },
         }
 
