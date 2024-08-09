@@ -161,6 +161,11 @@ class Metrics(EvaluationItem):
 
     def set_frame(self, msg: DiagnosticArray) -> dict | None:  # noqa
         if len(msg.status) <= 1:
+            """
+            return {
+                "Error": "len(msg.status) <= 1",
+            }
+            """
             return None
 
         # key check
@@ -173,6 +178,11 @@ class Metrics(EvaluationItem):
             """
             return None
         if status0.values[0].key != "decision":
+            """
+            return {
+                "Error": f"{status0.values[0].key=} is not decision",
+            }
+            """
             return None
 
         lane_info_tuple = None
@@ -187,6 +197,9 @@ class Metrics(EvaluationItem):
                 kinematic_state_tuple = KinematicCondition.diag_kinematic_state(status)
 
         if lane_info_tuple is None or kinematic_state_tuple is None:
+            """
+            return {"Error": "lane_info_tuple or kinematic_state_tuple is None"}
+            """
             return None
 
         if self.use_lane_condition:
