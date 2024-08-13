@@ -40,11 +40,17 @@ class PoseNode(Node):
         self.declare_parameter("direct_initial_pose", "")
 
         self._initial_pose_str = (
-            self.get_parameter("initial_pose").get_parameter_value().string_value,
+            self.get_parameter("initial_pose").get_parameter_value().string_value
         )
         self._direct_initial_pose_str = (
-            self.get_parameter("direct_initial_pose").get_parameter_value().string_value,
+            self.get_parameter("direct_initial_pose").get_parameter_value().string_value
         )
+        """
+        self.get_logger().error(f"{type(self._initial_pose_str)=}")
+        self.get_logger().error(f"{self._initial_pose_str=}")
+        self.get_logger().error(f"{type(self._direct_initial_pose_str)=}")
+        self.get_logger().error(f"{self._direct_initial_pose_str=}")
+        """
 
         if self._initial_pose_str == "" and self._direct_initial_pose_str == "":
             rclpy.shutdown()

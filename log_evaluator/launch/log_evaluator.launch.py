@@ -28,6 +28,7 @@ from launch.actions import OpaqueFunction
 from launch.conditions import IfCondition
 from launch.launch_description_sources import AnyLaunchDescriptionSource
 from launch_ros.actions import Node
+from launch_ros.descriptions import ParameterValue
 import yaml
 
 from log_evaluator.launch_config import log_evaluator_config
@@ -147,7 +148,9 @@ def ensure_arg_compatibility(context: LaunchContext) -> list:
         LogInfo(
             msg=f"{launch_component=}",
         ),
-        LogInfo(msg=f"{conf.get('initial_pose')=}, {conf.get('direct_initial_pose')=}"),
+        LogInfo(
+            msg=f"{conf.get('initial_pose')=}, {conf.get('direct_initial_pose')=}",
+        ),
     ]
 
 
@@ -336,8 +339,8 @@ def launch_initial_pose_node(context: LaunchContext) -> list:
     conf = context.launch_configurations
     params = {
         "use_sim_time": True,
-        "initial_pose": conf.get("initial_pose", ""),
-        "direct_initial_pose": conf.get("direct_initial_pose", ""),
+        "initial_pose": ParameterValue(conf.get("initial_pose", ""), value_type=str),
+        "direct_initial_pose": ParameterValue(conf.get("direct_initial_pose", ""), value_type=str),
     }
 
     return [
