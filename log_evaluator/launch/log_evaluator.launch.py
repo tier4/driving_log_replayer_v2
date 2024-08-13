@@ -13,6 +13,7 @@
 # limitations under the License.
 
 import datetime
+import json
 from pathlib import Path
 
 from ament_index_python.packages import get_package_share_directory
@@ -109,6 +110,14 @@ def ensure_arg_compatibility(context: LaunchContext) -> list:
     for k, v in datasets[dataset_index].items():
         dataset_path = dataset_dir.joinpath(k)
         conf["vehicle_id"] = v["VehicleId"]
+        init_pose: dict | None = v.get(
+            "InitialPose",
+        )  # nullに設定されている。または書かれてない場合はNone
+        if init_pose is not None:
+            conf["initial_pose"] = json.dumps(init_pose)
+        direct_pose: dict | None = v.get("DirectInitialPose")
+        if direct_pose is not None:
+            conf["direct_initial_pose"] = json.dumps(direct_pose)
     conf["map_path"] = dataset_path.joinpath("map").as_posix()
     conf["vehicle_model"] = yaml_obj["VehicleModel"]
     conf["sensor_model"] = yaml_obj["SensorModel"]
@@ -138,6 +147,7 @@ def ensure_arg_compatibility(context: LaunchContext) -> list:
         LogInfo(
             msg=f"{launch_component=}",
         ),
+        LogInfo(msg=f"{conf.get("initial_pose")=}, {conf.get("direct_initial_pose")=}"),
     ]
 
 
@@ -262,8 +272,10 @@ def launch_bag_player(
         remap_list.append(
             "/perception/object_recognition/objects:=/unused/perception/object_recognition/objects",
         )
-    if conf.get("planning", "true") == "true":
-        pass
+    if conf.get("goal_pose") is not None:
+        remap_list.append(
+            "/planning/mission_planning/route:=/unused/planning/mission_planning/route",
+        )
     if len(remap_list) != 1:
         play_cmd.extend(remap_list)
     bag_player = ExecuteProcess(cmd=play_cmd, output="screen")
@@ -320,6 +332,26 @@ def launch_topic_state_monitor(context: LaunchContext) -> list:
     ]
 
 
+def launch_initial_pose_node(context: LaunchContext) -> list:
+    conf = context.launch_configurations
+    params = {
+        "use_sim_time": True,
+        "initial_pose": conf.get("initial_pose", ""),
+        "direct_initial_pose": conf.get("direct_initial_pose", ""),
+    }
+
+    return [
+        Node(
+            package="log_evaluator",
+            namespace="/log_evaluator",
+            executable="initial_pose_node.py",
+            output="screen",
+            name="initial_pose_node",
+            parameters=[params],
+        ),
+    ]
+
+
 def generate_launch_description() -> LaunchDescription:
     launch_arguments = get_launch_arguments()
     return LaunchDescription(
@@ -332,5 +364,6 @@ def generate_launch_description() -> LaunchDescription:
             OpaqueFunction(function=launch_bag_player),
             OpaqueFunction(function=launch_bag_recorder),
             OpaqueFunction(function=launch_topic_state_monitor),
+            OpaqueFunction(function=launch_initial_pose_node),
         ],
     )
