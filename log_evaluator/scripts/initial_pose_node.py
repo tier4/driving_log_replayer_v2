@@ -65,7 +65,8 @@ class PoseNode(Node):
             self._initial_pose = arg_to_msg(self._direct_initial_pose_str)
             self._initial_pose_method: int = InitializeLocalization.Request.DIRECT
 
-        # start service
+        # The service must be up and running beforehand.
+        # If you try to start this node by itself with ros2 run, it will not work.
         self._initial_pose_client = self.create_client(
             InitializeLocalization,
             "/localization/initialize",
