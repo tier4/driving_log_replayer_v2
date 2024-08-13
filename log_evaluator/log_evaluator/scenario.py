@@ -23,24 +23,6 @@ import yaml
 number = int | float
 
 
-class Position(BaseModel):
-    x: float
-    y: float
-    z: float
-
-
-class Orientation(BaseModel):
-    x: float
-    y: float
-    z: float
-    w: float
-
-
-class InitialPose(BaseModel):
-    position: Position
-    orientation: Orientation
-
-
 class Scenario(BaseModel):
     ScenarioFormatVersion: Literal["3.0.0"]
     ScenarioName: str
