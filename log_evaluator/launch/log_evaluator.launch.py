@@ -147,7 +147,7 @@ def ensure_arg_compatibility(context: LaunchContext) -> list:
         LogInfo(
             msg=f"{launch_component=}",
         ),
-        LogInfo(msg=f"{conf.get("initial_pose")=}, {conf.get("direct_initial_pose")=}"),
+        LogInfo(msg=f"{conf.get('initial_pose')=}, {conf.get('direct_initial_pose')=}"),
     ]
 
 
