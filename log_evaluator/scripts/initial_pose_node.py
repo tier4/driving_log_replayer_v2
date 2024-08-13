@@ -63,7 +63,7 @@ class PoseNode(Node):
             self._initial_pose_method: int = InitializeLocalization.Request.AUTO
         if self._direct_initial_pose_str != "":
             self._initial_pose = arg_to_msg(self._direct_initial_pose_str)
-            self._initial_pose_method: int = InitializeLocalization.Request.Direct
+            self._initial_pose_method: int = InitializeLocalization.Request.DIRECT
 
         # start service
         self._initial_pose_client = self.create_client(
