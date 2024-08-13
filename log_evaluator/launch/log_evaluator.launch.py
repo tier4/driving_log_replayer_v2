@@ -118,6 +118,9 @@ def ensure_arg_compatibility(context: LaunchContext) -> list:
         direct_pose: dict | None = v.get("DirectInitialPose")
         if direct_pose is not None:
             conf["direct_initial_pose"] = json.dumps(direct_pose)
+        goal_pose: dict | None = v.get("GoalPose")
+        if goal_pose is not None:
+            conf["goal_pose"] = json.dumps(goal_pose)
     conf["map_path"] = dataset_path.joinpath("map").as_posix()
     conf["vehicle_model"] = yaml_obj["VehicleModel"]
     conf["sensor_model"] = yaml_obj["SensorModel"]
@@ -149,6 +152,9 @@ def ensure_arg_compatibility(context: LaunchContext) -> list:
         ),
         LogInfo(
             msg=f"{conf.get('initial_pose')=}, {conf.get('direct_initial_pose')=}",
+        ),
+        LogInfo(
+            msg=f"{conf.get('goal_pose')=}",
         ),
     ]
 
@@ -359,6 +365,29 @@ def launch_initial_pose_node(context: LaunchContext) -> list:
     ]
 
 
+def launch_goal_pose_node(context: LaunchContext) -> list:
+    conf = context.launch_configurations
+    goal_pose = conf.get("goal", "")
+    params = {
+        "use_sim_time": True,
+        "goal_pose": goal_pose,
+    }
+
+    if goal_pose == "":
+        return [LogInfo(msg="goal_pose_node is not activated")]
+
+    return [
+        Node(
+            package="log_evaluator",
+            namespace="/log_evaluator",
+            executable="goal_pose_node.py",
+            output="screen",
+            name="goal_pose_node",
+            parameters=[params],
+        ),
+    ]
+
+
 def generate_launch_description() -> LaunchDescription:
     launch_arguments = get_launch_arguments()
     return LaunchDescription(
@@ -372,5 +401,6 @@ def generate_launch_description() -> LaunchDescription:
             OpaqueFunction(function=launch_bag_recorder),
             OpaqueFunction(function=launch_topic_state_monitor),
             OpaqueFunction(function=launch_initial_pose_node),
+            OpaqueFunction(function=launch_goal_pose_node),
         ],
     )

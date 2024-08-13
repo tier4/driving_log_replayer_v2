@@ -27,7 +27,7 @@ from rclpy.time import Time
 from tier4_localization_msgs.srv import InitializeLocalization
 from tier4_localization_msgs.srv import PoseWithCovarianceStamped as PoseWithCovarianceStampedSrv
 
-from log_evaluator.pose import arg_to_msg
+from log_evaluator.pose import arg_to_initial_pose
 
 if TYPE_CHECKING:
     from autoware_common_msgs.msg import ResponseStatus
@@ -59,10 +59,10 @@ class PoseNode(Node):
         self._initial_pose_running: bool = False
         self._initial_pose_success: bool = False
         if self._initial_pose_str != "":
-            self._initial_pose = arg_to_msg(self._initial_pose_str)
+            self._initial_pose = arg_to_initial_pose(self._initial_pose_str)
             self._initial_pose_method: int = InitializeLocalization.Request.AUTO
         if self._direct_initial_pose_str != "":
-            self._initial_pose = arg_to_msg(self._direct_initial_pose_str)
+            self._initial_pose = arg_to_initial_pose(self._direct_initial_pose_str)
             self._initial_pose_method: int = InitializeLocalization.Request.DIRECT
 
         # The service must be up and running beforehand.
@@ -86,7 +86,6 @@ class PoseNode(Node):
 
         self._current_time = Time().to_msg()
         self._prev_time = Time().to_msg()
-        self._clock_stop_counter = 0
 
         self._timer_group = MutuallyExclusiveCallbackGroup()
         self._timer = self.create_timer(

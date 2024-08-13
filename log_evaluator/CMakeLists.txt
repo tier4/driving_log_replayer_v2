@@ -32,6 +32,7 @@ install(PROGRAMS
   scripts/annotationless_perception_evaluator_node.py
   scripts/planning_control_evaluator_node.py
   scripts/initial_pose_node.py
+  scripts/goal_pose_node.py
   DESTINATION lib/${PROJECT_NAME}
 )
 
