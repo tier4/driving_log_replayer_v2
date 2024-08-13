@@ -34,8 +34,8 @@ if TYPE_CHECKING:
 
 
 class PoseNode(Node):
-    def __init__(self, name: str) -> None:
-        super().__init__(name)
+    def __init__(self) -> None:
+        super().__init__("initial_pose")
         self.declare_parameter("initial_pose", "")
         self.declare_parameter("direct_initial_pose", "")
 
