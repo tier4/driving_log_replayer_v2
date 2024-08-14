@@ -108,7 +108,7 @@ class PoseNode(Node):
             future_clear_route.add_done_callback(self.clear_route_cb)
 
     def goal_pose_cb(self, future: Future) -> None:
-        result = future.result()
+        result: SetRoutePoints.Response | None = future.result()
         if result is not None:
             res_status: ResponseStatus = result.status
             self._goal_pose_success = res_status.success
@@ -123,9 +123,9 @@ class PoseNode(Node):
         self._goal_pose_running = False
 
     def clear_route_cb(self, future: Future) -> None:
-        result = future.result()
+        result: ClearRoute.Response | None = future.result()
         if result is not None:
-            if result.success:
+            if result.status.success:
                 self._clear_route_success = True
                 future_goal_pose = self._goal_pose_client.call_async(
                     SetRoutePoints.Request(

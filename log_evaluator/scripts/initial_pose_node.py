@@ -126,7 +126,7 @@ class PoseNode(Node):
             future_direct_init_pose.add_done_callback(self.initial_pose_cb)
 
     def map_fit_cb(self, future: Future) -> None:
-        result = future.result()
+        result: PoseWithCovarianceStampedSrv.Response | None = future.result()
         if result is not None:
             if result.success:
                 future_init_pose = self._initial_pose_client.call_async(
@@ -146,7 +146,7 @@ class PoseNode(Node):
             self.get_logger().error(f"Exception for service: {future.exception()}")
 
     def initial_pose_cb(self, future: Future) -> None:
-        result = future.result()
+        result: InitializeLocalization.Response | None = future.result()
         if result is not None:
             res_status: ResponseStatus = result.status
             self._initial_pose_success = res_status.success
