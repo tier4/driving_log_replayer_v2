@@ -27,7 +27,7 @@ from rclpy.time import Time
 from tier4_localization_msgs.srv import InitializeLocalization
 from tier4_localization_msgs.srv import PoseWithCovarianceStamped as PoseWithCovarianceStampedSrv
 
-from log_evaluator.pose import arg_to_msg
+from log_evaluator.pose import arg_to_initial_pose
 
 if TYPE_CHECKING:
     from autoware_common_msgs.msg import ResponseStatus
@@ -59,10 +59,10 @@ class PoseNode(Node):
         self._initial_pose_running: bool = False
         self._initial_pose_success: bool = False
         if self._initial_pose_str != "":
-            self._initial_pose = arg_to_msg(self._initial_pose_str)
+            self._initial_pose = arg_to_initial_pose(self._initial_pose_str)
             self._initial_pose_method: int = InitializeLocalization.Request.AUTO
         if self._direct_initial_pose_str != "":
-            self._initial_pose = arg_to_msg(self._direct_initial_pose_str)
+            self._initial_pose = arg_to_initial_pose(self._direct_initial_pose_str)
             self._initial_pose_method: int = InitializeLocalization.Request.DIRECT
 
         # The service must be up and running beforehand.
@@ -86,7 +86,6 @@ class PoseNode(Node):
 
         self._current_time = Time().to_msg()
         self._prev_time = Time().to_msg()
-        self._clock_stop_counter = 0
 
         self._timer_group = MutuallyExclusiveCallbackGroup()
         self._timer = self.create_timer(
@@ -101,10 +100,10 @@ class PoseNode(Node):
         # to debug callback use: self.get_logger().error(f"time: {self._current_time.sec}.{self._current_time.nanosec}")
         if self._current_time.sec <= 0:  # Stop PLAYER after standing for 1 second.
             return
-        self.call_initialpose_service()
+        self.call_initial_pose_service()
         self._prev_time = self._current_time
 
-    def call_initialpose_service(self) -> None:
+    def call_initial_pose_service(self) -> None:
         if self._initial_pose_success or self._initial_pose_running:
             return
         self.get_logger().info(
@@ -127,7 +126,7 @@ class PoseNode(Node):
             future_direct_init_pose.add_done_callback(self.initial_pose_cb)
 
     def map_fit_cb(self, future: Future) -> None:
-        result = future.result()
+        result: PoseWithCovarianceStampedSrv.Response | None = future.result()
         if result is not None:
             if result.success:
                 future_init_pose = self._initial_pose_client.call_async(
@@ -147,12 +146,12 @@ class PoseNode(Node):
             self.get_logger().error(f"Exception for service: {future.exception()}")
 
     def initial_pose_cb(self, future: Future) -> None:
-        result = future.result()
+        result: InitializeLocalization.Response | None = future.result()
         if result is not None:
             res_status: ResponseStatus = result.status
             self._initial_pose_success = res_status.success
             self.get_logger().info(
-                f"initial_pose_success: {self._initial_pose_success}",
+                f"{self._initial_pose_success=}",
             )  # debug msg
             if self._initial_pose_success:
                 rclpy.shutdown()
