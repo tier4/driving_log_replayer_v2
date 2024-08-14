@@ -16,7 +16,6 @@ import json
 
 from geometry_msgs.msg import Point
 from geometry_msgs.msg import Pose
-from geometry_msgs.msg import PoseStamped
 from geometry_msgs.msg import PoseWithCovariance
 from geometry_msgs.msg import PoseWithCovarianceStamped
 from geometry_msgs.msg import Quaternion
@@ -76,10 +75,9 @@ def arg_to_initial_pose(pose_str: str) -> PoseWithCovarianceStamped:
     return PoseWithCovarianceStamped(header=Header(frame_id="map"), pose=pose)
 
 
-def arg_to_goal_pose(pose_str: str) -> PoseStamped:
+def arg_to_goal_pose(pose_str: str) -> Pose:
     pose_dict = json.loads(pose_str)
-    pose = Pose(
+    return Pose(
         position=Point(**pose_dict["position"]),
         orientation=Quaternion(**pose_dict["orientation"]),
     )
-    return PoseStamped(header=Header(frame_id="map"), pose=pose)

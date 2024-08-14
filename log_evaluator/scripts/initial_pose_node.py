@@ -100,10 +100,10 @@ class PoseNode(Node):
         # to debug callback use: self.get_logger().error(f"time: {self._current_time.sec}.{self._current_time.nanosec}")
         if self._current_time.sec <= 0:  # Stop PLAYER after standing for 1 second.
             return
-        self.call_initialpose_service()
+        self.call_initial_pose_service()
         self._prev_time = self._current_time
 
-    def call_initialpose_service(self) -> None:
+    def call_initial_pose_service(self) -> None:
         if self._initial_pose_success or self._initial_pose_running:
             return
         self.get_logger().info(
@@ -151,7 +151,7 @@ class PoseNode(Node):
             res_status: ResponseStatus = result.status
             self._initial_pose_success = res_status.success
             self.get_logger().info(
-                f"initial_pose_success: {self._initial_pose_success}",
+                f"{self._initial_pose_success=}",
             )  # debug msg
             if self._initial_pose_success:
                 rclpy.shutdown()
