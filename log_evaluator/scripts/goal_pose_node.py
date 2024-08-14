@@ -16,6 +16,7 @@
 
 from typing import TYPE_CHECKING
 
+from autoware_adapi_v1_msgs.srv import ClearRoute
 from autoware_adapi_v1_msgs.srv import SetRoutePoints
 import rclpy
 from rclpy.callback_groups import MutuallyExclusiveCallbackGroup
@@ -43,13 +44,23 @@ class PoseNode(Node):
             rclpy.shutdown()
 
         self._goal_pose_running: bool = False
+        self._clear_route_success: bool = False
         self._goal_pose_success: bool = False
         self._goal_pose = arg_to_goal_pose(self._goal_pose_str)
+
+        self._clear_route_client = self.create_client(
+            ClearRoute,
+            "/api/routing/clear_route",
+        )
 
         self._goal_pose_client = self.create_client(
             SetRoutePoints,
             "/api/routing/set_route_points",
         )
+
+        while not self._clear_route_client.wait_for_service(timeout_sec=1.0):
+            self.get_logger().warning("goal pose service not available, waiting again...")
+
         while not self._goal_pose_client.wait_for_service(timeout_sec=1.0):
             self.get_logger().warning("goal pose service not available, waiting again...")
 
@@ -80,14 +91,21 @@ class PoseNode(Node):
             f"call goal_pose time: {self._current_time.sec}.{self._current_time.nanosec}",
         )
         self._goal_pose_running = True
-        future_goal_pose = self._goal_pose_client.call_async(
-            SetRoutePoints.Request(
-                header=Header(stamp=self._current_time, frame_id="map"),
-                goal=self._goal_pose,
-                waypoints=[],
-            ),
-        )
-        future_goal_pose.add_done_callback(self.goal_pose_cb)
+        if self._clear_route_success:
+            future_goal_pose = self._goal_pose_client.call_async(
+                SetRoutePoints.Request(
+                    header=Header(stamp=self._current_time, frame_id="map"),
+                    goal=self._goal_pose,
+                    waypoints=[],
+                ),
+            )
+            future_goal_pose.add_done_callback(self.goal_pose_cb)
+        else:
+            # clear route and then call goal pose
+            future_clear_route = self._clear_route_client.call_async(
+                ClearRoute.Request(),
+            )
+            future_clear_route.add_done_callback(self.clear_route_cb)
 
     def goal_pose_cb(self, future: Future) -> None:
         result = future.result()
@@ -103,6 +121,28 @@ class PoseNode(Node):
             self.get_logger().error(f"Exception for service: {future.exception()}")
         # free self._initial_pose_running
         self._goal_pose_running = False
+
+    def clear_route_cb(self, future: Future) -> None:
+        result = future.result()
+        if result is not None:
+            if result.success:
+                self._clear_route_success = True
+                future_goal_pose = self._goal_pose_client.call_async(
+                    SetRoutePoints.Request(
+                        header=Header(stamp=self._current_time, frame_id="map"),
+                        goal=self._goal_pose,
+                        waypoints=[],
+                    ),
+                )
+                future_goal_pose.add_done_callback(self.goal_pose_cb)
+            else:
+                # free self._initial_pose_running when the service call fails
+                self._goal_pose_running = False
+                self.get_logger().warn("clear route service result is fail")
+        else:
+            # free self._initial_pose_running when the service call fails
+            self._goal_pose_running = False
+            self.get_logger().error(f"Exception for service: {future.exception()}")
 
 
 def main() -> None:
