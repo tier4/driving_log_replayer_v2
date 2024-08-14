@@ -57,7 +57,6 @@ class PoseNode(Node):
 
         # initial pose estimation
         self._initial_pose_running: bool = False
-        self._initial_pose_success: bool = False
         if self._initial_pose_str != "":
             self._initial_pose = arg_to_initial_pose(self._initial_pose_str)
             self._initial_pose_method: int = InitializeLocalization.Request.AUTO
@@ -104,7 +103,7 @@ class PoseNode(Node):
         self._prev_time = self._current_time
 
     def call_initial_pose_service(self) -> None:
-        if self._initial_pose_success or self._initial_pose_running:
+        if self._initial_pose_running:
             return
         self.get_logger().info(
             f"call initial_pose time: {self._current_time.sec}.{self._current_time.nanosec}",
@@ -149,11 +148,10 @@ class PoseNode(Node):
         result: InitializeLocalization.Response | None = future.result()
         if result is not None:
             res_status: ResponseStatus = result.status
-            self._initial_pose_success = res_status.success
             self.get_logger().info(
-                f"{self._initial_pose_success=}",
+                f"{res_status.success=}",
             )  # debug msg
-            if self._initial_pose_success:
+            if res_status.success:
                 rclpy.shutdown()
         else:
             self.get_logger().error(f"Exception for service: {future.exception()}")

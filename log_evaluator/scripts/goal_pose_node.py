@@ -45,7 +45,6 @@ class PoseNode(Node):
 
         self._goal_pose_running: bool = False
         self._clear_route_success: bool = False
-        self._goal_pose_success: bool = False
         self._goal_pose = arg_to_goal_pose(self._goal_pose_str)
 
         self._clear_route_client = self.create_client(
@@ -85,7 +84,7 @@ class PoseNode(Node):
         self._prev_time = self._current_time
 
     def call_goal_pose_service(self) -> None:
-        if self._goal_pose_success or self._goal_pose_running:
+        if self._goal_pose_running:
             return
         self.get_logger().info(
             f"call goal_pose time: {self._current_time.sec}.{self._current_time.nanosec}",
@@ -111,15 +110,14 @@ class PoseNode(Node):
         result: SetRoutePoints.Response | None = future.result()
         if result is not None:
             res_status: ResponseStatus = result.status
-            self._goal_pose_success = res_status.success
             self.get_logger().info(
-                f"{self._goal_pose_success=}",
+                f"{res_status.success=}",
             )  # debug msg
-            if self._goal_pose_success:
+            if res_status.success:
                 rclpy.shutdown()
         else:
             self.get_logger().error(f"Exception for service: {future.exception()}")
-        # free self._initial_pose_running
+        # free self._goal_pose_running
         self._goal_pose_running = False
 
     def clear_route_cb(self, future: Future) -> None:
@@ -136,11 +134,9 @@ class PoseNode(Node):
                 )
                 future_goal_pose.add_done_callback(self.goal_pose_cb)
             else:
-                # free self._initial_pose_running when the service call fails
                 self._goal_pose_running = False
                 self.get_logger().warn("clear route service result is fail")
         else:
-            # free self._initial_pose_running when the service call fails
             self._goal_pose_running = False
             self.get_logger().error(f"Exception for service: {future.exception()}")
 
@@ -148,10 +144,10 @@ class PoseNode(Node):
 def main() -> None:
     rclpy.init()
     executor = MultiThreadedExecutor()
-    initial_pose_node = PoseNode()
-    executor.add_node(initial_pose_node)
+    goal_pose_node = PoseNode()
+    executor.add_node(goal_pose_node)
     executor.spin()
-    initial_pose_node.destroy_node()
+    goal_pose_node.destroy_node()
     rclpy.shutdown()
 
 
