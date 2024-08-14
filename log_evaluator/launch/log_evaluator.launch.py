@@ -367,7 +367,7 @@ def launch_initial_pose_node(context: LaunchContext) -> list:
 
 def launch_goal_pose_node(context: LaunchContext) -> list:
     conf = context.launch_configurations
-    goal_pose = conf.get("goal", "")
+    goal_pose = conf.get("goal_pose", "")
     params = {
         "use_sim_time": True,
         "goal_pose": goal_pose,
