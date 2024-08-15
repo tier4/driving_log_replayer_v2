@@ -65,7 +65,6 @@ class PoseNode(Node):
 
         self._current_time = Time().to_msg()
         self._prev_time = Time().to_msg()
-        self._count_pub = 0
 
         self._timer_group = MutuallyExclusiveCallbackGroup()
         self._timer = self.create_timer(
