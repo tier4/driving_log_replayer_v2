@@ -96,8 +96,8 @@ Subscribed topics:
 
 Published topics:
 
-| topic 名                                     | データ型                         |
-| -------------------------------------------- | -------------------------------- |
+| topic 名                                               | データ型                         |
+| ------------------------------------------------------ | -------------------------------- |
 | /driving_log_replayer_v2/localization/lateral_distance | example_interfaces::msg::Float64 |
 
 ## 評価ノードが使用する Service 名とデータ型

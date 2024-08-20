@@ -68,8 +68,8 @@ Subscribed topics:
 
 Published topics:
 
-| Topic name                                        | Data type                        |
-| ------------------------------------------------- | -------------------------------- |
+| Topic name                                                  | Data type                        |
+| ----------------------------------------------------------- | -------------------------------- |
 | /driving_log_replayer_v2/visibility/value                   | example_interfaces::msg::Float64 |
 | /driving_log_replayer_v2/visibility/level                   | example_interfaces::msg::Byte    |
 | /driving_log_replayer_v2/blockage/{lidar_name}/ground/ratio | example_interfaces::msg::Float64 |

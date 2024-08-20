@@ -96,8 +96,8 @@ Subscribed topics:
 
 Published topics:
 
-| Topic name                                   | Data type                        |
-| -------------------------------------------- | -------------------------------- |
+| Topic name                                             | Data type                        |
+| ------------------------------------------------------ | -------------------------------- |
 | /driving_log_replayer_v2/localization/lateral_distance | example_interfaces::msg::Float64 |
 
 ## Service name and data type used by the evaluation node

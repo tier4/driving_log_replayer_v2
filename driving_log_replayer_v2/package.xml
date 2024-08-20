@@ -20,9 +20,9 @@
   <depend>autoware_map_msgs</depend>
   <depend>autoware_perception_msgs</depend>
   <depend>diagnostic_msgs</depend>
+  <depend>driving_log_replayer_v2_msgs</depend>
   <depend>example_interfaces</depend>
   <depend>geometry_msgs</depend>
-  <depend>driving_log_replayer_v2_msgs</depend>
   <depend>nav_msgs</depend>
   <depend>sensor_msgs</depend>
   <depend>std_msgs</depend>
@@ -33,8 +33,8 @@
   <depend>tier4_localization_msgs</depend>
   <depend>visualization_msgs</depend>
 
-  <exec_depend>lanelet2_extension_python</exec_depend>
   <exec_depend>driving_log_replayer_v2_analyzer</exec_depend>
+  <exec_depend>lanelet2_extension_python</exec_depend>
   <exec_depend>perception_eval</exec_depend>
   <exec_depend>python3-jsonschema</exec_depend>
   <exec_depend>python3-pandas</exec_depend>
