@@ -50,7 +50,7 @@ To use /sensing/lidar/concatenated/pointcloud in the bag, add sensing:=false to 
 If you want to use perception and planning from the bag as well, add “perception:=false planning:=false” to the “launch” argument.
 
 ```shell
-ros2 launch log_evaluator log_evaluator.launch.py scenario_path:=${planning_control_scenario_path} sensing:=false perception:=false planning:=false
+ros2 launch driving_log_replayer_v2 driving_log_replayer_v2.launch.py scenario_path:=${planning_control_scenario_path} sensing:=false perception:=false planning:=false
 ```
 
 ## About simulation

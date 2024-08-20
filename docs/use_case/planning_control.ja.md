@@ -50,7 +50,7 @@ bagの中に入っている、/sensing/lidar/concatenated/pointcloudを利用す
 perception、planningも同様にbagから出力する場合は、launchの引数にperception:=false planning:=falseを追加する
 
 ```shell
-ros2 launch log_evaluator log_evaluator.launch.py scenario_path:=${planning_control_scenario_path} sensing:=false perception:=false planning:=false
+ros2 launch driving_log_replayer_v2 driving_log_replayer_v2.launch.py scenario_path:=${planning_control_scenario_path} sensing:=false perception:=false planning:=false
 ```
 
 ## simulation

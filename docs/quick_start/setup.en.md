@@ -2,7 +2,7 @@
 
 !!! note
 
-    Running the log_evaluator requires some additional steps on top of building and installing Autoware, so make sure that [log_evaluator installation](installation.md) has been completed first before proceeding.
+    Running the driving_log_replayer_v2 requires some additional steps on top of building and installing Autoware, so make sure that [driving_log_replayer_v2 installation](installation.md) has been completed first before proceeding.
 
     Sample map: Copyright 2020 TIER IV, Inc.
 
@@ -13,12 +13,12 @@
 1. Dataset and Map Setup (annotationless_perception, localization, obstacle_segmentation, perception)
 
    ```shell
-   mkdir -p ~/log_evaluator
-   gdown -O ~/log_evaluator/sample_dataset_v2.tar.zst 'https://docs.google.com/uc?export=download&id=1iCoykBBETI_rGfKEFYYb7LFydF-RJVkC'
-   tar -I zstd -xvf ~/log_evaluator/sample_dataset_v2.tar.zst -C ~/log_evaluator/
-   gdown -O ~/log_evaluator/sample-map-planning.zip 'https://docs.google.com/uc?export=download&id=1499_nsbUbIeturZaDj7jhUownh5fvXHd'
-   unzip -d ~/log_evaluator/ ~/log_evaluator/sample-map-planning.zip
-   mv ~/log_evaluator/sample-map-planning ~/log_evaluator/sample_dataset/map
+   mkdir -p ~/driving_log_replayer_v2
+   gdown -O ~/driving_log_replayer_v2/sample_dataset_v2.tar.zst 'https://docs.google.com/uc?export=download&id=1iCoykBBETI_rGfKEFYYb7LFydF-RJVkC'
+   tar -I zstd -xvf ~/driving_log_replayer_v2/sample_dataset_v2.tar.zst -C ~/driving_log_replayer_v2/
+   gdown -O ~/driving_log_replayer_v2/sample-map-planning.zip 'https://docs.google.com/uc?export=download&id=1499_nsbUbIeturZaDj7jhUownh5fvXHd'
+   unzip -d ~/driving_log_replayer_v2/ ~/driving_log_replayer_v2/sample-map-planning.zip
+   mv ~/driving_log_replayer_v2/sample-map-planning ~/driving_log_replayer_v2/sample_dataset/map
    ```
 
    You can also download manually.
@@ -30,12 +30,12 @@
 2. Dataset and Map Setup(yabloc, eagleye, ar_tag_based_localizer)
 
    ```shell
-   gdown -O ~/log_evaluator/sample_bag.tar.zst 'https://docs.google.com/uc?export=download&id=17ppdMKi4IC8J_2-_9nyYv-LAfW0M1re5'
-   tar -I zstd -xvf ~/log_evaluator/sample_bag.tar.zst -C ~/log_evaluator/
-   mv ~/log_evaluator/sample_bag/*  ~/log_evaluator/
-   rmdir ~/log_evaluator/sample_bag
-   cp -r ~/log_evaluator/ar_tag_based_localizer/map ~/log_evaluator/eagleye/
-   cp -r ~/log_evaluator/ar_tag_based_localizer/map ~/log_evaluator/yabloc/
+   gdown -O ~/driving_log_replayer_v2/sample_bag.tar.zst 'https://docs.google.com/uc?export=download&id=17ppdMKi4IC8J_2-_9nyYv-LAfW0M1re5'
+   tar -I zstd -xvf ~/driving_log_replayer_v2/sample_bag.tar.zst -C ~/driving_log_replayer_v2/
+   mv ~/driving_log_replayer_v2/sample_bag/*  ~/driving_log_replayer_v2/
+   rmdir ~/driving_log_replayer_v2/sample_bag
+   cp -r ~/driving_log_replayer_v2/ar_tag_based_localizer/map ~/driving_log_replayer_v2/eagleye/
+   cp -r ~/driving_log_replayer_v2/ar_tag_based_localizer/map ~/driving_log_replayer_v2/yabloc/
    ```
 
    You can also download manually.
@@ -47,15 +47,15 @@
    ```shell
    # Specify the directory where autoware is installed. Change according to your environment.
    AUTOWARE_PATH=$HOME/ros_ws/awf
-   # SAMPLE_ROOT=${AUTOWARE_PATH}/src/simulator/log_evaluator/sample
-   SAMPLE_ROOT=${AUTOWARE_PATH}/src/simulator/log_evaluator/sample
-   cp ${SAMPLE_ROOT}/annotationless_perception/scenario.yaml ~/log_evaluator/annotationless_perception.yaml
-   cp ${SAMPLE_ROOT}/ar_tag_based_localizer/scenario.yaml ~/log_evaluator/ar_tag_based_localizer.yaml
-   cp ${SAMPLE_ROOT}/eagleye/scenario.yaml ~/log_evaluator/eagleye.yaml
-   cp ${SAMPLE_ROOT}/localization/scenario.yaml ~/log_evaluator/localization.yaml
-   cp ${SAMPLE_ROOT}/obstacle_segmentation/scenario.yaml ~/log_evaluator/obstacle_segmentation.yaml
-   cp ${SAMPLE_ROOT}/perception/scenario.yaml ~/log_evaluator/perception.yaml
-   cp ${SAMPLE_ROOT}/yabloc/scenario.yaml ~/log_evaluator/yabloc.yaml
+   # SAMPLE_ROOT=${AUTOWARE_PATH}/src/simulator/driving_log_replayer_v2/sample
+   SAMPLE_ROOT=${AUTOWARE_PATH}/src/simulator/driving_log_replayer_v2/sample
+   cp ${SAMPLE_ROOT}/annotationless_perception/scenario.yaml ~/driving_log_replayer_v2/annotationless_perception.yaml
+   cp ${SAMPLE_ROOT}/ar_tag_based_localizer/scenario.yaml ~/driving_log_replayer_v2/ar_tag_based_localizer.yaml
+   cp ${SAMPLE_ROOT}/eagleye/scenario.yaml ~/driving_log_replayer_v2/eagleye.yaml
+   cp ${SAMPLE_ROOT}/localization/scenario.yaml ~/driving_log_replayer_v2/localization.yaml
+   cp ${SAMPLE_ROOT}/obstacle_segmentation/scenario.yaml ~/driving_log_replayer_v2/obstacle_segmentation.yaml
+   cp ${SAMPLE_ROOT}/perception/scenario.yaml ~/driving_log_replayer_v2/perception.yaml
+   cp ${SAMPLE_ROOT}/yabloc/scenario.yaml ~/driving_log_replayer_v2/yabloc.yaml
    ```
 
 4. Transform machine learning trained models

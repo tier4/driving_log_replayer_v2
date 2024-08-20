@@ -1,6 +1,6 @@
-# log_evaluator シナリオフォーマット定義
+# driving_log_replayer_v2 シナリオフォーマット定義
 
-log_evaluator で用いるシナリオのフォーマットについて述べる。
+driving_log_replayer_v2 で用いるシナリオのフォーマットについて述べる。
 
 ## フォーマットに関する注意事項
 
@@ -17,7 +17,7 @@ log_evaluator で用いるシナリオのフォーマットについて述べる
 
 ## サンプル
 
-シナリオのサンプルを[sample](https://github.com/tier4/log_evaluator/tree/develop/sample) フォルダに置いている。
+シナリオのサンプルを[sample](https://github.com/tier4/driving_log_replayer_v2/tree/develop/sample) フォルダに置いている。
 
 ## フォーマット
 
@@ -94,10 +94,10 @@ indexは0番から始まる。
 
 ```shell
 # シナリオに記述したdataset数が1個の場合。dataset_index:=0は省略可能
-ros2 launch log_evaluator dlr.launch.py scenario_path:=${scenario_path} [dataset_index:=0]
+ros2 launch driving_log_replayer_v2 driving_log_replayer_v2.launch.py scenario_path:=${scenario_path} [dataset_index:=0]
 
 # シナリオに記述したdataset数が複数の場合
-ros2 launch log_evaluator dlr.launch.py scenario_path:=${scenario_path} dataset_index:=${index_number}
+ros2 launch driving_log_replayer_v2 driving_log_replayer_v2.launch.py scenario_path:=${scenario_path} dataset_index:=${index_number}
 ```
 
 #### DatasetName

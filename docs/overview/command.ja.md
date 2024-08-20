@@ -1,12 +1,12 @@
 # コマンド
 
-log_evaluatorはシナリオのパスを指定することで起動できる。
+driving_log_replayer_v2はシナリオのパスを指定することで起動できる。
 
 ```shell
-ros2 launch log_evaluator log_evaluator.launch.py scenario_path:=${scenario_path} [output_dir:=${output_dir} dataset_dir:=${dataset_dir}]
+ros2 launch driving_log_replayer_v2 driving_log_replayer_v2.launch.py scenario_path:=${scenario_path} [output_dir:=${output_dir} dataset_dir:=${dataset_dir}]
 ```
 
-## wasim による log_evaluator 実行
+## wasim による driving_log_replayer_v2 実行
 
 TIER IV が提供している[Autoware Evaluator](https://docs.web.auto/user-manuals/evaluator/introduction)へ
 アクセス権がある場合は[wasim](https://docs.web.auto/developers-guides/wasim/introduction)を利用することもできる。

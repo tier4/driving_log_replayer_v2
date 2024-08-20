@@ -1,6 +1,6 @@
 # 概要
 
-log_evaluator は、log(rosbag2)を用いて Autoware の open loop simulation を実行し、Autoware が出力するトピックを評価するパッケージです。
+driving_log_replayer_v2 は、log(rosbag2)を用いて Autoware の open loop simulation を実行し、Autoware が出力するトピックを評価するパッケージです。
 Sensing, Localization, Perception の性能確認と、ソフトウェアのリグレッションテストに使用します。
 
 ## 関連ドキュメント
@@ -16,14 +16,14 @@ Sensing, Localization, Perception の性能確認と、ソフトウェアのリ�
 
 ## アーキテクチャ
 
-log_evaluator は、Autoware の評価ノードを Autoware の標準機能に付加した構成となっている。
+driving_log_replayer_v2 は、Autoware の評価ノードを Autoware の標準機能に付加した構成となっている。
 アーキテクチャ図を以下に示す。
 
 ![architecture](images/architecture.png)
 
 ## パッケージ構成
 
-log_evaluator の評価ノードは、以下のように動作します。
+driving_log_replayer_v2 の評価ノードは、以下のように動作します。
 
 - 評価の条件が記載されたシナリオをパッケージが読み取る
 - autoware を起動する
@@ -39,7 +39,7 @@ log_evaluator の評価ノードは、以下のように動作します。
 2. 取得した rosbag を必要な時間、topic だけ残るようにフィルタする
    - フィルタ処理には TIER IV で開発した [ros2bag_extensions](https://github.com/tier4/ros2bag_extensions) を使用する
 3. シナリオを作成する
-   1. [sample folder](https://github.com/tier4/log_evaluator/tree/main/sample) 内にシナリオの例あり
+   1. [sample folder](https://github.com/tier4/driving_log_replayer_v2/tree/main/sample) 内にシナリオの例あり
    2. 記述内容は[フォーマット定義](../result_format/index.md)を参照
 4. ユースケースが obstacle_segmentation, perception の場合、t4_dataset への変換に対応したアノテーションツールでアノテーションを実施する。
    1. [Deepen.AI](https://www.deepen.ai/)が利用可能

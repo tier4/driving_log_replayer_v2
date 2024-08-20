@@ -1,6 +1,6 @@
-# log_evaluator for ROS 2 Autoware.Universe
+# driving_log_replayer_v2 for ROS 2 Autoware.Universe
 
-log_evaluator is a ROS package that evaluates the functionality of Autoware.Universe
+driving_log_replayer_v2 is a ROS package that evaluates the functionality of Autoware.Universe
 
 ## Requirements
 
@@ -19,12 +19,12 @@ If you want to change the rosbag format from ros1 to ros2.
 Use colcon build
 
 ```shell
-colcon build --symlink-install --cmake-args -DCMAKE_EXPORT_COMPILE_COMMANDS=ON -DCMAKE_BUILD_TYPE=Release --packages-up-to log_evaluator
+colcon build --symlink-install --cmake-args -DCMAKE_EXPORT_COMPILE_COMMANDS=ON -DCMAKE_BUILD_TYPE=Release --packages-up-to driving_log_replayer_v2
 ```
 
 ## Usage
 
-refer [document](https://tier4.github.io/log_evaluator/)
+refer [document](https://tier4.github.io/driving_log_replayer_v2/)
 
 ## (For Developer) Release Process
 

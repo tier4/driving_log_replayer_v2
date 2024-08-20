@@ -1,12 +1,12 @@
 # Command
 
-The log_evaluator can be started by specifying the scenario path.
+The driving_log_replayer_v2 can be started by specifying the scenario path.
 
 ```shell
-ros2 launch log_evaluator log_evaluator.launch.py scenario_path:=${scenario_path} [output_dir:=${output_dir} dataset_dir:=${dataset_dir}]
+ros2 launch driving_log_replayer_v2 driving_log_replayer_v2.launch.py scenario_path:=${scenario_path} [output_dir:=${output_dir} dataset_dir:=${dataset_dir}]
 ```
 
-## Run log_evaluator with wasim
+## Run driving_log_replayer_v2 with wasim
 
 If you have access rights to [Autoware Evaluator](https://docs.web.auto/user-manuals/evaluator/introduction) provided by TIER IV,
 you can also use [wasim](https://docs.web.auto/developers-guides/wasim/introduction).

@@ -1,13 +1,13 @@
-# log_evaluator_analyzer
+# driving_log_replayer_v2_analyzer
 
-log_evaluator で行ったテストの結果ファイルを分析するパッケージ。
+driving_log_replayer_v2 で行ったテストの結果ファイルを分析するパッケージ。
 
 ## ディレクトリ構成
 
 以下のようなディレクトリ構成を取る。
 
 ```shell
-log_evaluator_analyzer
+driving_log_replayer_v2_analyzer
 ├── __init__.py
 ├── __main__.py      # CLIのエントリーポイント
 ├── analysis         # CLIの解析コマンド
@@ -30,8 +30,8 @@ analysis, config, data に use_case_name.py ファイルを追加する。
 
 ## インストール方法
 
-- log_evaluator_cli と一緒にインストールされる
-- log_evaluator と一緒に ros のパッケージとしてインストールされる
+- driving_log_replayer_v2_cli と一緒にインストールされる
+- driving_log_replayer_v2 と一緒に ros のパッケージとしてインストールされる
 
 ## 使い方
 
