@@ -1,13 +1,13 @@
-# log_evaluator_analyzer
+# driving_log_replayer_v2_analyzer
 
-Package to analyze the result files of tests performed by log_evaluator.
+Package to analyze the result files of tests performed by driving_log_replayer_v2.
 
 ## Directory Structure
 
 The directory structure is as follows.
 
 ```shell
-log_evaluator_analyzer
+driving_log_replayer_v2_analyzer
 ├── __init__.py
 ├── __main__.py    # Entry point for CLI
 ├── analysis       # CLI analysis command
@@ -30,8 +30,8 @@ Add use_case_name.py files to analysis, config, and data.
 
 ## How to install
 
-- Installed with log_evaluator_cli
-- Installed with log_evaluator as a ros package
+- Installed with driving_log_replayer_v2_cli
+- Installed with driving_log_replayer_v2 as a ros package
 
 ## Usage
 

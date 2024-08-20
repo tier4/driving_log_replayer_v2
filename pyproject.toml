@@ -1,5 +1,5 @@
 [project]
-name = "log-evaluator"
+name = "driving-log-replayer-v2"
 version = "0.1.0"
 authors = [
   { name = "Hayato Mizushima", email = "hayato.mizushima@tier4.jp" },

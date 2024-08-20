@@ -11,7 +11,7 @@ Evaluation:
         VehicleId: ps1/20210620/CAL_000015 # Specify VehicleId for each data set.
   Conditions:
     PassRate: 99.0 # How much (%) of the evaluation attempts are considered successful.
-    CriteriaMethod: num_gt_tp # refer https://github.com/tier4/log_evaluator/blob/develop/log_evaluator/log_evaluator/criteria/perception.py#L136-L152
+    CriteriaMethod: num_gt_tp # refer https://github.com/tier4/driving_log_replayer_v2/blob/develop/driving_log_replayer_v2/driving_log_replayer_v2/criteria/perception.py#L136-L152
     CriteriaLevel: easy # Level of criteria (perfect/hard/normal/easy, or custom value [0.0, 100.0])
     TargetCameras: # Describes the type of camera to be evaluated as a key and the camera number as a value.
       cam_front: 0

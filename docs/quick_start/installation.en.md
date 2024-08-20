@@ -1,6 +1,6 @@
 # Installation
 
-This document contains step-by-step instruction on how to build [AWF Autoware Core/Universe](https://github.com/autowarefoundation/autoware) with `log_evaluator`.
+This document contains step-by-step instruction on how to build [AWF Autoware Core/Universe](https://github.com/autowarefoundation/autoware) with `driving_log_replayer_v2`.
 
 ## Requirements
 
@@ -32,9 +32,9 @@ This document contains step-by-step instruction on how to build [AWF Autoware Co
        type: git
        url: https://github.com/tier4/autoware_perception_evaluation.git
        version: main
-     simulator/log_evaluator:
+     simulator/driving_log_replayer_v2:
        type: git
-       url: https://github.com/tier4/log_evaluator.git
+       url: https://github.com/tier4/driving_log_replayer_v2.git
        version: main
      simulator/vendor/ros2_numpy:
        type: git

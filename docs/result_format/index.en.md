@@ -1,4 +1,4 @@
-# log_evaluator Result File Format
+# driving_log_replayer_v2 Result File Format
 
 It is in JSONL format, with each line containing a string in JSON format.
 

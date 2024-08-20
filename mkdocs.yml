@@ -1,7 +1,7 @@
-site_name: log_evaluator Documentation
-site_url: https://tier4.github.io/log_evaluator
+site_name: driving_log_replayer_v2 Documentation
+site_url: https://tier4.github.io/driving_log_replayer_v2
 edit_uri: edit/main/docs/
-repo_url: https://github.com/tier4/log_evaluator
+repo_url: https://github.com/tier4/driving_log_replayer_v2
 
 docs_dir: docs
 copyright: Copyright &copy; 2024 TIER IV Inc.

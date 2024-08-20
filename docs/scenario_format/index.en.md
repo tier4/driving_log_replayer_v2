@@ -1,6 +1,6 @@
-# log_evaluator Scenario Format Definition
+# driving_log_replayer_v2 Scenario Format Definition
 
-This section describes the scenario format used in log_evaluator.
+This section describes the scenario format used in driving_log_replayer_v2.
 
 ## Notes on the format
 
@@ -17,7 +17,7 @@ Time: s
 
 ## Samples
 
-Sample scenarios are stored in the [sample](https://github.com/tier4/log_evaluator/tree/develop/sample) folder.
+Sample scenarios are stored in the [sample](https://github.com/tier4/driving_log_replayer_v2/tree/develop/sample) folder.
 
 ## Format
 
@@ -95,10 +95,10 @@ If there is only one dataset, dataset_index:=0 may be used.
 
 ```shell
 # If the number of datasets described in the scenario is 1. datsaet_index:=0 can be omitted.
-ros2 launch log_evaluator dlr.launch.py scenario_path:=${scenario_path} [dataset_index:=0]
+ros2 launch driving_log_replayer_v2 dlr.launch.py scenario_path:=${scenario_path} [dataset_index:=0]
 
 # If the number of datasets described in the scenario is more than one
-ros2 launch log_evaluator dlr.launch.py scenario_path:=${scenario_path} dataset_index:=${index_number}
+ros2 launch driving_log_replayer_v2 dlr.launch.py scenario_path:=${scenario_path} dataset_index:=${index_number}
 ```
 
 #### DatasetName
