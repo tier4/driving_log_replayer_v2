@@ -40,7 +40,7 @@ from driving_log_replayer_v2.result import ResultWriter
 from driving_log_replayer_v2.scenario import load_scenario
 
 
-class LogEvaluator(Node):
+class DLREvaluatorV2(Node):
     COUNT_SHUTDOWN_NODE = 5
 
     def __init__(self, name: str, scenario_class: Callable, result_class: Callable) -> None:
@@ -131,7 +131,7 @@ class LogEvaluator(Node):
             self._clock_stop_counter + 1 if self._current_time == self._prev_time else 0
         )
         self._prev_time = self._current_time
-        if self._clock_stop_counter >= LogEvaluator.COUNT_SHUTDOWN_NODE:
+        if self._clock_stop_counter >= DLREvaluatorV2.COUNT_SHUTDOWN_NODE:
             if register_shutdown_func is not None:
                 register_shutdown_func()
             self._result_writer.close()

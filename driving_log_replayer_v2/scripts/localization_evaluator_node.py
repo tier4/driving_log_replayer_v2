@@ -21,8 +21,8 @@ from geometry_msgs.msg import PoseStamped
 from tier4_debug_msgs.msg import Float32Stamped
 from tier4_debug_msgs.msg import Int32Stamped
 
+from driving_log_replayer_v2.evaluator import DLREvaluatorV2
 from driving_log_replayer_v2.evaluator import evaluator_main
-from driving_log_replayer_v2.evaluator import LogEvaluator
 from driving_log_replayer_v2.localization import calc_pose_horizontal_distance
 from driving_log_replayer_v2.localization import calc_pose_lateral_distance
 from driving_log_replayer_v2.localization import LocalizationResult
@@ -31,7 +31,7 @@ from driving_log_replayer_v2.localization import LocalizationScenario
 TARGET_DIAG_NAME = "topic_state_monitor_ndt_scan_matcher_exe_time: localization_topic_status"
 
 
-class LocalizationEvaluator(LogEvaluator):
+class LocalizationEvaluator(DLREvaluatorV2):
     def __init__(self, name: str) -> None:
         super().__init__(name, LocalizationScenario, LocalizationResult)
         self._scenario: LocalizationScenario
@@ -100,7 +100,7 @@ class LocalizationEvaluator(LogEvaluator):
         map_to_baselink = self.lookup_transform(msg.stamp)
         self._result.set_frame(
             msg,
-            LogEvaluator.transform_stamped_with_euler_angle(map_to_baselink),
+            DLREvaluatorV2.transform_stamped_with_euler_angle(map_to_baselink),
             self.__latest_nvtl,
         )
         self._result_writer.write_result(self._result)
@@ -113,7 +113,7 @@ class LocalizationEvaluator(LogEvaluator):
         map_to_baselink = self.lookup_transform(msg.stamp)
         self._result.set_frame(
             msg,
-            LogEvaluator.transform_stamped_with_euler_angle(map_to_baselink),
+            DLREvaluatorV2.transform_stamped_with_euler_angle(map_to_baselink),
             self.__latest_tp,
         )
         self._result_writer.write_result(self._result)
@@ -123,7 +123,7 @@ class LocalizationEvaluator(LogEvaluator):
         msg_lateral_distance = self._result.set_frame(
             calc_pose_lateral_distance(msg),
             calc_pose_horizontal_distance(msg),
-            LogEvaluator.transform_stamped_with_euler_angle(map_to_baselink),
+            DLREvaluatorV2.transform_stamped_with_euler_angle(map_to_baselink),
             self.__latest_exe_time,
             self.__latest_iteration_num,
         )
@@ -141,7 +141,7 @@ class LocalizationEvaluator(LogEvaluator):
 
 
 @evaluator_main
-def main() -> LogEvaluator:
+def main() -> DLREvaluatorV2:
     return LocalizationEvaluator("localization_evaluator")
 
 

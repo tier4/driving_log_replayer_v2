@@ -30,8 +30,8 @@ import rclpy
 from tier4_perception_msgs.msg import DetectedObjectsWithFeature
 from tier4_perception_msgs.msg import DetectedObjectWithFeature
 
+from driving_log_replayer_v2.evaluator import DLREvaluatorV2
 from driving_log_replayer_v2.evaluator import evaluator_main
-from driving_log_replayer_v2.evaluator import LogEvaluator
 from driving_log_replayer_v2.perception_2d import Perception2DResult
 from driving_log_replayer_v2.perception_2d import Perception2DScenario
 import driving_log_replayer_v2.perception_eval_conversions as eval_conversions
@@ -40,7 +40,7 @@ if TYPE_CHECKING:
     from perception_eval.evaluation import PerceptionFrameResult
 
 
-class Perception2DEvaluator(LogEvaluator):
+class Perception2DEvaluator(DLREvaluatorV2):
     def __init__(self, name: str) -> None:
         super().__init__(name, Perception2DScenario, Perception2DResult)
         self._scenario: Perception2DScenario
@@ -139,11 +139,11 @@ class Perception2DEvaluator(LogEvaluator):
     ) -> list[DynamicObject2D]:
         estimated_objects: list[DynamicObject2D] = []
         for perception_object in feature_objects:
-            most_probable_classification = LogEvaluator.get_most_probable_classification(
+            most_probable_classification = DLREvaluatorV2.get_most_probable_classification(
                 perception_object.object.classification,
             )
             label = self.__evaluator.evaluator_config.label_converter.convert_label(
-                name=LogEvaluator.get_perception_label_str(most_probable_classification),
+                name=DLREvaluatorV2.get_perception_label_str(most_probable_classification),
             )
             obj_roi = perception_object.feature.roi
             roi = obj_roi.x_offset, obj_roi.y_offset, obj_roi.width, obj_roi.height
@@ -184,7 +184,7 @@ class Perception2DEvaluator(LogEvaluator):
             self._result.set_frame(
                 frame_result,
                 self.__skip_counter[camera_type],
-                LogEvaluator.transform_stamped_with_euler_angle(map_to_baselink),
+                DLREvaluatorV2.transform_stamped_with_euler_angle(map_to_baselink),
                 camera_type,
             )
             self._result_writer.write_result(self._result)
@@ -198,7 +198,7 @@ class Perception2DEvaluator(LogEvaluator):
 
 
 @evaluator_main
-def main() -> LogEvaluator:
+def main() -> DLREvaluatorV2:
     return Perception2DEvaluator("perception_2d_evaluator")
 
 

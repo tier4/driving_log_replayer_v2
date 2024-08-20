@@ -22,8 +22,8 @@ from diagnostic_msgs.msg import DiagnosticStatus
 from example_interfaces.msg import Byte
 from example_interfaces.msg import Float64
 
+from driving_log_replayer_v2.evaluator import DLREvaluatorV2
 from driving_log_replayer_v2.evaluator import evaluator_main
-from driving_log_replayer_v2.evaluator import LogEvaluator
 from driving_log_replayer_v2.performance_diag import PerformanceDiagResult
 from driving_log_replayer_v2.performance_diag import PerformanceDiagScenario
 
@@ -36,7 +36,7 @@ def extract_lidar_name(diag_name: str) -> str:
     return remove_prefix.replace(": blockage_validation", "")
 
 
-class PerformanceDiagEvaluator(LogEvaluator):
+class PerformanceDiagEvaluator(DLREvaluatorV2):
     def __init__(self, name: str) -> None:
         super().__init__(name, PerformanceDiagScenario, PerformanceDiagResult)
         self._scenario: PerformanceDiagScenario
@@ -88,7 +88,7 @@ class PerformanceDiagEvaluator(LogEvaluator):
         if is_visibility:
             msg_visibility_value, msg_visibility_level = self._result.set_visibility_frame(
                 diag_status,
-                LogEvaluator.transform_stamped_with_euler_angle(map_to_baselink),
+                DLREvaluatorV2.transform_stamped_with_euler_angle(map_to_baselink),
             )
             if msg_visibility_value is not None:
                 self.__pub_visibility_value.publish(msg_visibility_value)
@@ -99,7 +99,7 @@ class PerformanceDiagEvaluator(LogEvaluator):
             msg_blockage_sky_ratio, msg_blockage_ground_ratio, msg_blockage_level = (
                 self._result.set_blockage_frame(
                     diag_status,
-                    LogEvaluator.transform_stamped_with_euler_angle(map_to_baselink),
+                    DLREvaluatorV2.transform_stamped_with_euler_angle(map_to_baselink),
                     lidar_name,
                 )
             )
@@ -113,7 +113,7 @@ class PerformanceDiagEvaluator(LogEvaluator):
 
 
 @evaluator_main
-def main() -> LogEvaluator:
+def main() -> DLREvaluatorV2:
     return PerformanceDiagEvaluator("performance_diag_evaluator")
 
 

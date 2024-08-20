@@ -19,13 +19,13 @@ from diagnostic_msgs.msg import DiagnosticStatus
 
 from driving_log_replayer_v2.ar_tag_based_localizer import ArTagBasedLocalizerResult
 from driving_log_replayer_v2.ar_tag_based_localizer import ArtagBasedLocalizerScenario
+from driving_log_replayer_v2.evaluator import DLREvaluatorV2
 from driving_log_replayer_v2.evaluator import evaluator_main
-from driving_log_replayer_v2.evaluator import LogEvaluator
 
 TARGET_DIAG_NAME = "localization: ar_tag_based_localizer"
 
 
-class ArTagBasedLocalizerEvaluator(LogEvaluator):
+class ArTagBasedLocalizerEvaluator(DLREvaluatorV2):
     def __init__(self, name: str) -> None:
         super().__init__(name, ArtagBasedLocalizerScenario, ArTagBasedLocalizerResult)
         self._result: ArTagBasedLocalizerResult
@@ -48,7 +48,7 @@ class ArTagBasedLocalizerEvaluator(LogEvaluator):
 
 
 @evaluator_main
-def main() -> LogEvaluator:
+def main() -> DLREvaluatorV2:
     return ArTagBasedLocalizerEvaluator("ar_tag_based_localizer_evaluator")
 
 

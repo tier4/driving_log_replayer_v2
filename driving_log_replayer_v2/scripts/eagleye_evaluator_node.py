@@ -19,13 +19,13 @@ from diagnostic_msgs.msg import DiagnosticStatus
 
 from driving_log_replayer_v2.eagleye import EagleyeResult
 from driving_log_replayer_v2.eagleye import EagleyeScenario
+from driving_log_replayer_v2.evaluator import DLREvaluatorV2
 from driving_log_replayer_v2.evaluator import evaluator_main
-from driving_log_replayer_v2.evaluator import LogEvaluator
 
 TARGET_DIAG_NAME = "monitor: eagleye_enu_absolute_pos_interpolate"
 
 
-class EagleyeEvaluator(LogEvaluator):
+class EagleyeEvaluator(DLREvaluatorV2):
     def __init__(self, name: str) -> None:
         super().__init__(name, EagleyeScenario, EagleyeResult)
         self._result: EagleyeResult
@@ -47,7 +47,7 @@ class EagleyeEvaluator(LogEvaluator):
 
 
 @evaluator_main
-def main() -> LogEvaluator:
+def main() -> DLREvaluatorV2:
     return EagleyeEvaluator("eagleye_evaluator")
 
 

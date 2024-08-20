@@ -39,14 +39,14 @@ from perception_eval.util.logger_config import configure_logger
 import rclpy
 from visualization_msgs.msg import MarkerArray
 
+from driving_log_replayer_v2.evaluator import DLREvaluatorV2
 from driving_log_replayer_v2.evaluator import evaluator_main
-from driving_log_replayer_v2.evaluator import LogEvaluator
 from driving_log_replayer_v2.perception import PerceptionResult
 from driving_log_replayer_v2.perception import PerceptionScenario
 import driving_log_replayer_v2.perception_eval_conversions as eval_conversions
 
 
-class PerceptionEvaluator(LogEvaluator):
+class PerceptionEvaluator(DLREvaluatorV2):
     def __init__(self, name: str) -> None:
         super().__init__(name, PerceptionScenario, PerceptionResult)
         self._scenario: PerceptionScenario
@@ -179,11 +179,11 @@ class PerceptionEvaluator(LogEvaluator):
                     f"Unexpected footprint length: {len(perception_object.shape.footprint.points)=}"
                 )
 
-            most_probable_classification = LogEvaluator.get_most_probable_classification(
+            most_probable_classification = DLREvaluatorV2.get_most_probable_classification(
                 perception_object.classification,
             )
             label = self.__evaluator.evaluator_config.label_converter.convert_label(
-                name=LogEvaluator.get_perception_label_str(most_probable_classification),
+                name=DLREvaluatorV2.get_perception_label_str(most_probable_classification),
             )
 
             uuid = None
@@ -266,7 +266,7 @@ class PerceptionEvaluator(LogEvaluator):
             frame_result,
             self.__skip_counter,
             msg.header,
-            LogEvaluator.transform_stamped_with_euler_angle(map_to_baselink),
+            DLREvaluatorV2.transform_stamped_with_euler_angle(map_to_baselink),
         )
         self._result_writer.write_result(self._result)
         self.__pub_marker_ground_truth.publish(marker_ground_truth)
@@ -341,7 +341,7 @@ class PerceptionEvaluator(LogEvaluator):
 
 
 @evaluator_main
-def main() -> LogEvaluator:
+def main() -> DLREvaluatorV2:
     return PerceptionEvaluator("perception_evaluator")
 
 

@@ -14,10 +14,10 @@
 
 import pytest
 
-from driving_log_replayer_v2.evaluator import LogEvaluator
+from driving_log_replayer_v2.evaluator import DLREvaluatorV2
 
 
-class SampleEvaluator(LogEvaluator):
+class SampleEvaluator(DLREvaluatorV2):
     def __init__(self, name: str) -> None:
         super().__init__(name)
 
@@ -26,7 +26,7 @@ class SampleEvaluator(LogEvaluator):
 
 
 @pytest.fixture()
-def create_sample_evaluator() -> LogEvaluator:
+def create_sample_evaluator() -> DLREvaluatorV2:
     return SampleEvaluator("sample_evaluator")
 
 
@@ -79,4 +79,4 @@ def test_transform_stamped_with_euler_angle() -> None:
             "yaw": -2.7022185830310637,
         },
     }
-    assert LogEvaluator.transform_stamped_with_euler_angle(tf) == dict_tf_euler
+    assert DLREvaluatorV2.transform_stamped_with_euler_angle(tf) == dict_tf_euler

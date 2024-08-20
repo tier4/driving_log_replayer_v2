@@ -17,13 +17,13 @@
 
 from diagnostic_msgs.msg import DiagnosticArray
 
+from driving_log_replayer_v2.evaluator import DLREvaluatorV2
 from driving_log_replayer_v2.evaluator import evaluator_main
-from driving_log_replayer_v2.evaluator import LogEvaluator
 from driving_log_replayer_v2.planning_control import PlanningControlResult
 from driving_log_replayer_v2.planning_control import PlanningControlScenario
 
 
-class PlanningControlEvaluator(LogEvaluator):
+class PlanningControlEvaluator(DLREvaluatorV2):
     def __init__(self, name: str) -> None:
         super().__init__(name, PlanningControlScenario, PlanningControlResult)
         self._scenario: PlanningControlScenario
@@ -50,7 +50,7 @@ class PlanningControlEvaluator(LogEvaluator):
 
 
 @evaluator_main
-def main() -> LogEvaluator:
+def main() -> DLREvaluatorV2:
     return PlanningControlEvaluator("planning_control_evaluator")
 
 
