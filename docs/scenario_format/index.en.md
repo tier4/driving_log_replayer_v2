@@ -95,10 +95,10 @@ If there is only one dataset, dataset_index:=0 may be used.
 
 ```shell
 # If the number of datasets described in the scenario is 1. datsaet_index:=0 can be omitted.
-ros2 launch driving_log_replayer_v2 dlr.launch.py scenario_path:=${scenario_path} [dataset_index:=0]
+ros2 launch driving_log_replayer_v2 driving_log_replayer_v2.launch.py scenario_path:=${scenario_path} [dataset_index:=0]
 
 # If the number of datasets described in the scenario is more than one
-ros2 launch driving_log_replayer_v2 dlr.launch.py scenario_path:=${scenario_path} dataset_index:=${index_number}
+ros2 launch driving_log_replayer_v2 driving_log_replayer_v2.launch.py scenario_path:=${scenario_path} dataset_index:=${index_number}
 ```
 
 #### DatasetName
