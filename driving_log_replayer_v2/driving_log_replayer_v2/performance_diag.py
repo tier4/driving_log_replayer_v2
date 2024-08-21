@@ -54,12 +54,12 @@ def convert_str_to_int(str_float: str) -> float:
 
 class VisibilityCondition(BaseModel):
     ScenarioType: Literal["TP", "FP"] | None
-    PassFrameCount: int
+    PassRate: float
 
 
 class BlockageCondition(BaseModel):
     ScenarioType: Literal["TP", "FP"] | None
-    PassFrameCount: int
+    PassRate: float
     BlockageType: Literal["both", "ground", "sky"]
 
 
@@ -110,7 +110,7 @@ class Visibility(EvaluationItem):
             if diag_level == DiagnosticStatus.ERROR:
                 frame_success = "Success"
                 self.passed += 1
-            self.success = self.passed >= self.condition.PassFrameCount
+            self.success = self.rate() >= self.condition.PassRate
         elif self.scenario_type == "FP":
             if diag_level != DiagnosticStatus.ERROR:
                 frame_success = "Success"
@@ -140,7 +140,6 @@ class Blockage(EvaluationItem):
         self.condition: BlockageCondition
         self.scenario_type: str | None = self.condition.ScenarioType
         self.blockage_type: str = self.condition.BlockageType
-        self.pass_frame_count: int = self.condition.PassFrameCount
         self.valid: bool = self.scenario_type is not None
 
     def set_frame(
@@ -170,7 +169,7 @@ class Blockage(EvaluationItem):
             if diag_level == DiagnosticStatus.ERROR and self.blockage_type in diag_status.message:
                 frame_success = "Success"
                 self.passed += 1
-            self.success = self.passed >= self.pass_frame_count
+            self.success = self.rate() >= self.condition.PassRate
         elif self.scenario_type == "FP":
             if not (
                 diag_level == DiagnosticStatus.ERROR and self.blockage_type in diag_status.message
