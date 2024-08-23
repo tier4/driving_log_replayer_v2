@@ -193,7 +193,7 @@ def launch_autoware(context: LaunchContext) -> list:
 
 def launch_map_height_fitter(context: LaunchContext) -> list:
     fitter_launch_file = Path(
-        get_package_share_directory("map_height_fitter"),
+        get_package_share_directory("autoware_map_height_fitter"),
         "launch",
         "map_height_fitter.launch.xml",
     )
