@@ -21,3 +21,5 @@ nav:
   - traffic_light.ja.md
   - perception_2d.ja.md
   - perception_2d.en.md
+  - planning_control.en.md
+  - planning_control.ja.md
