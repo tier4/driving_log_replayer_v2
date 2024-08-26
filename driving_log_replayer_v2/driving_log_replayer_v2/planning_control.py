@@ -46,9 +46,7 @@ class LeftRight(BaseModel):
     right: float = Field(float_info.max, gt=0.0)  # -
 
     def match_condition(self, t: float) -> bool:
-        if (-1.0) * self.right <= t <= self.left:
-            return True
-        return False
+        return (-1.0) * self.right <= t <= self.left
 
 
 class LaneInfo(BaseModel):
@@ -62,7 +60,7 @@ class LaneInfo(BaseModel):
             return False
         if self.s is not None and self.s >= s:  # Start or end when exceeded
             return False
-        if start_condition and self.t is not None and not self.t.match_condition(t):
+        if start_condition and self.t is not None and not self.t.match_condition(t):  # noqa
             return False
         return True
 
@@ -123,7 +121,7 @@ class KinematicCondition(BaseModel):
             return False
         if self.acc is not None and not self.acc.min <= acc <= self.acc.max:
             return False
-        if self.jerk is not None and not self.jerk.min <= jerk <= self.jerk.max:
+        if self.jerk is not None and not self.jerk.min <= jerk <= self.jerk.max:  # noqa
             return False
         return True
 
