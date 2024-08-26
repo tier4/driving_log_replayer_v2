@@ -19,7 +19,7 @@ Sensing, Localization, Perception の性能確認と、ソフトウェアのリ�
 driving_log_replayer_v2 は、Autoware の評価ノードを Autoware の標準機能に付加した構成となっている。
 アーキテクチャ図を以下に示す。
 
-![architecture](images/architecture.png)
+![architecture](images/architecture.drawio.svg)
 
 ## パッケージ構成
 

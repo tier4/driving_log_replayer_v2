@@ -20,7 +20,7 @@ Its use is to test the software regression and check Autoware's performance of s
 driving_log_replayer_v2 package contains an evaluation node that extends Autoware's standard functionality.
 The architecture graph is shown below.
 
-![architecture](images/architecture.png)
+![architecture](images/architecture.drawio.svg)
 
 ## Package structure
 
