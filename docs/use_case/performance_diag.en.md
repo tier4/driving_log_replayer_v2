@@ -141,11 +141,11 @@ State the information necessary for the evaluation.
 
 ### Scenario Format
 
-See [sample](https://github.com/tier4/driving_log_replayer_v2/blob/main/sample/performance_diag/scenario.yaml).
+See [sample](https://github.com/tier4/driving_log_replayer_v2/blob/develop/sample/performance_diag/scenario.yaml).
 
 ### Evaluation Result Format
 
-See [sample](https://github.com/tier4/driving_log_replayer_v2/blob/main/sample/performance_diag/result.json).
+See [sample](https://github.com/tier4/driving_log_replayer_v2/blob/develop/sample/performance_diag/result.json).
 
 In `performance_diag` evaluation scenario visibility and blockage are evaluated.
 The `Result` is `true` if both visibility and blockage evaluation steps have passed. Otherwise, the `Result` is `false`.

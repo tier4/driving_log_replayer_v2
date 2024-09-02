@@ -163,11 +163,11 @@ clock は、ros2 bag play の--clock オプションによって出力してい�
 
 ### シナリオフォーマット
 
-[サンプル](https://github.com/tier4/driving_log_replayer_v2/blob/main/sample/localization/scenario.ja.yaml)参照
+[サンプル](https://github.com/tier4/driving_log_replayer_v2/blob/develop/sample/localization/scenario.ja.yaml)参照
 
 ### 評価結果フォーマット
 
-[サンプル](https://github.com/tier4/driving_log_replayer_v2/blob/main/sample/localization/result.json)参照
+[サンプル](https://github.com/tier4/driving_log_replayer_v2/blob/develop/sample/localization/result.json)参照
 
 localization では、収束性、信頼度、可用性の 3 つを評価しているので、行毎に収束性、信頼度、可用性のいずれかの結果が入っている。
 Result は収束性、信頼度、可用性のすべてをパスしていれば true でそれ以外は false 失敗となる。

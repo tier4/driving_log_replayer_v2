@@ -153,11 +153,11 @@ clock は、ros2 bag play の--clock オプションによって出力してい�
 
 ### シナリオフォーマット
 
-[サンプル](https://github.com/tier4/driving_log_replayer_v2/blob/main/sample/obstacle_segmentation/scenario.ja.yaml)参照
+[サンプル](https://github.com/tier4/driving_log_replayer_v2/blob/develop/sample/obstacle_segmentation/scenario.ja.yaml)参照
 
 ### 評価結果フォーマット
 
-[サンプル](https://github.com/tier4/driving_log_replayer_v2/blob/main/sample/obstalce_segmentation/result.json)参照
+[サンプル](https://github.com/tier4/driving_log_replayer_v2/blob/develop/sample/obstalce_segmentation/result.json)参照
 
 obstacle_segmentation では、検知(Detection)と非検知(NonDetection)の 2 つを評価している。
 1 回の点群の callback で同時に評価しているが、それぞれ別にカウントしている。

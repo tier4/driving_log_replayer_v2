@@ -254,11 +254,11 @@ clock は、ros2 bag play の--clock オプションによって出力してい�
 データベース評価では、キャリブレーション値の変更があり得るので vehicle_id をデータセット毎に設定出来るようにする。
 また、Sensing モジュールを起動するかどうかの設定も行う。
 
-[サンプル](https://github.com/tier4/driving_log_replayer_v2/blob/main/sample/perception_2d/scenario.ja.yaml)参照
+[サンプル](https://github.com/tier4/driving_log_replayer_v2/blob/develop/sample/perception_2d/scenario.ja.yaml)参照
 
 ### 評価結果フォーマット
 
-[サンプル](https://github.com/tier4/driving_log_replayer_v2/blob/main/sample/perception_2d/result.json)参照
+[サンプル](https://github.com/tier4/driving_log_replayer_v2/blob/develop/sample/perception_2d/result.json)参照
 
 perception では、シナリオに指定した条件で perception_eval が評価した結果を各 frame 毎に出力する。
 全てのデータを流し終わったあとに、最終的なメトリクスを計算しているため、最終行だけ、他の行と形式が異なる。

@@ -250,11 +250,11 @@ Use case evaluation is performed on a single dataset, while database evaluation 
 In the database evaluation, the `vehicle_id` should be able to be set for each data set, since the calibration values may change.
 Also, it is necessary to set whether or not to activate the sensing module.
 
-See [sample](https://github.com/tier4/driving_log_replayer_v2/blob/main/sample/perception_2d/scenario.yaml).
+See [sample](https://github.com/tier4/driving_log_replayer_v2/blob/develop/sample/perception_2d/scenario.yaml).
 
 ### Evaluation Result Format
 
-See [sample](https://github.com/tier4/driving_log_replayer_v2/blob/main/sample/perception_2d/result.json).
+See [sample](https://github.com/tier4/driving_log_replayer_v2/blob/develop/sample/perception_2d/result.json).
 
 The evaluation results by [perception_eval](https://github.com/tier4/autoware_perception_evaluation) under the conditions specified in the scenario are output for each frame.
 Only the final line has a different format from the other lines since the final metrics are calculated after all data has been flushed.

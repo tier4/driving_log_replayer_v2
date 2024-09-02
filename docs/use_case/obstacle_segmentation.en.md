@@ -150,11 +150,11 @@ State the information necessary for the evaluation.
 
 ### Scenario Format
 
-See [sample](https://github.com/tier4/driving_log_replayer_v2/blob/main/sample/obstacle_segmentation/scenario.yaml).
+See [sample](https://github.com/tier4/driving_log_replayer_v2/blob/develop/sample/obstacle_segmentation/scenario.yaml).
 
 ### Evaluation Result Format
 
-See [sample](https://github.com/tier4/driving_log_replayer_v2/blob/main/sample/obstacle_segmentation/result.json).
+See [sample](https://github.com/tier4/driving_log_replayer_v2/blob/develop/sample/obstacle_segmentation/result.json).
 
 In `obstacle_segmentation` evaluation scenario, two types of checks, detection (Detection) and non-detection (NonDetection), are evaluated.
 Although they are evaluated simultaneously, in one callback function, they are counted separately.

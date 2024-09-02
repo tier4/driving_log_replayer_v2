@@ -161,11 +161,11 @@ State the information necessary for the evaluation.
 
 ### Scenario Format
 
-See [sample](https://github.com/tier4/driving_log_replayer_v2/blob/main/sample/localization/scenario.yaml).
+See [sample](https://github.com/tier4/driving_log_replayer_v2/blob/develop/sample/localization/scenario.yaml).
 
 ### Evaluation Result Format
 
-See [sample](https://github.com/tier4/driving_log_replayer_v2/blob/main/sample/localization/result.json).
+See [sample](https://github.com/tier4/driving_log_replayer_v2/blob/develop/sample/localization/result.json).
 
 Since localization evaluates convergence, reliability, and availability, each line contains the result of convergence, reliability, or availability.
 The Result is `true` if convergence, reliability, and availability all pass, and `false` otherwise.

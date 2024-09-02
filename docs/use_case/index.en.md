@@ -12,3 +12,6 @@ This section describes how driving_log_replayer_v2 can be used for evaluation.
 - [Perception](perception.md)
 - [Performance Diag](performance_diag.md)
 - [Annotationless Perception](annotationless_perception.md)
+- [Traffic Light](traffic_light.md)
+- [Perception 2D](perception_2d.md)
+- [Planning Control](planning_control.md)
