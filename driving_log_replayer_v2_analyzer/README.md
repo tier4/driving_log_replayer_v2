@@ -4,7 +4,7 @@ driving_log_replayer_v2 Analyzer is a package that analyses result files.
 
 ## Notice
 
-Currently only [use_case obstacle_segmentation](https://github.com/tier4/driving_log_replayer_v2/blob/main/docs/use_case/obstacle_segmentation.ja.md) is supported.
+Currently only [use_case obstacle_segmentation](https://github.com/tier4/driving_log_replayer_v2/blob/develop/docs/use_case/obstacle_segmentation.ja.md) is supported.
 
 ## Requirements
 

@@ -98,11 +98,11 @@ State the information necessary for the evaluation.
 
 ### Scenario Format
 
-See [sample](https://github.com/tier4/driving_log_replayer/blob/main/sample/planning_control/scenario.ja.yaml).
+See [sample](https://github.com/tier4/driving_log_replayer_v2/blob/develop/sample/planning_control/scenario.yaml).
 
 ### Evaluation Result Format
 
-See [sample](https://github.com/tier4/driving_log_replayer/blob/main/sample/planning_control/result.json).
+See [sample](https://github.com/tier4/driving_log_replayer_v2/blob/develop/sample/planning_control/result.json).
 
 The result format is shown below.
 **NOTE: common part of the result file format, which has already been explained, is omitted.**
