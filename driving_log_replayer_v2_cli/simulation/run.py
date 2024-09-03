@@ -101,7 +101,7 @@ sleep 1
 
 def create_launch_cmd(
     scenario_path: Path,
-    output_path: Path,
+    output_dir: Path,
     launch_args_dict: dict[str, str],
 ) -> str | None:
     launch_command_for_all_dataset = ""
@@ -110,12 +110,12 @@ def create_launch_cmd(
 
     dataset_count = len(yaml_obj["Evaluation"]["Datasets"])
     for dataset_index in range(dataset_count):
-        output_dataset = output_path.joinpath(str(dataset_index))
+        output_dataset = output_dir.joinpath(str(dataset_index))
         output_dataset.mkdir()
         launch_command = "ros2 launch driving_log_replayer_v2 driving_log_replayer_v2.launch.py"
         launch_arg_dict_dataset = {
             "scenario_path": scenario_path.as_posix(),
-            "output_path": output_dataset.as_posix(),
+            "output_dir": output_dir.as_posix(),
             "dataset_index": dataset_index,
         }
         launch_arg_dict_dataset.update(launch_args_dict)
