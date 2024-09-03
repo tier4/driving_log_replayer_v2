@@ -15,6 +15,7 @@
 import datetime
 import json
 from pathlib import Path
+import subprocess
 
 from ament_index_python.packages import get_package_share_directory
 from launch import LaunchContext
@@ -80,18 +81,18 @@ def get_launch_arguments() -> list:
     return launch_arguments
 
 
-def ensure_arg_compatibility(context: LaunchContext) -> list:
+def ensure_arg_compatibility(context: LaunchContext) -> list:  # noqa
     conf = context.launch_configurations
     scenario_path = Path(conf["scenario_path"])
     dataset_dir = scenario_path.parent if conf["dataset_dir"] == "" else Path(conf["dataset_dir"])
 
     time_now = datetime.datetime.now().strftime("%Y-%m%d-%H%M%S")  # noqa
-    output_dir = (
-        scenario_path.parent.joinpath("out", time_now)
-        if conf["output_dir"] == ""
-        else Path(conf["output_dir"])
-    )
-    conf["output_dir"] = output_dir.as_posix()
+    create_symlink = False
+    output_dir = Path(conf["output_dir"])
+    if conf["output_dir"] == "":
+        create_symlink = True
+        output_dir = scenario_path.parent.joinpath("out", time_now)
+        conf["output_dir"] = output_dir.as_posix()
 
     with scenario_path.open() as scenario_file:
         yaml_obj = yaml.safe_load(scenario_file)
@@ -142,6 +143,10 @@ def ensure_arg_compatibility(context: LaunchContext) -> list:
 
     # create output directory
     output_dir.mkdir(exist_ok=True, parents=True)
+    if create_symlink:
+        symlink_dst = output_dir.parent.joinpath("latest").as_posix()
+        update_symlink = ["ln", "-snf", output_dir.as_posix(), symlink_dst]
+        subprocess.run(update_symlink, check=False)
 
     return [
         LogInfo(
