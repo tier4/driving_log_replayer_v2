@@ -115,7 +115,7 @@ def create_launch_cmd(
         launch_command = "ros2 launch driving_log_replayer_v2 driving_log_replayer_v2.launch.py"
         launch_arg_dict_dataset = {
             "scenario_path": scenario_path.as_posix(),
-            "output_dir": output_dir.as_posix(),
+            "output_dir": output_dataset.as_posix(),
             "dataset_index": dataset_index,
         }
         launch_arg_dict_dataset.update(launch_args_dict)
