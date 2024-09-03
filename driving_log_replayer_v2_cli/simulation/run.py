@@ -23,7 +23,6 @@ def run(scenario_root_directory: Path, launch_args: list[str]) -> None:
         launch_arg_dict = args_to_dict(launch_args)
         launch_cmd = create_launch_cmd(
             scenario_file,
-            scenario_dir,
             output_case,
             launch_arg_dict,
         )
