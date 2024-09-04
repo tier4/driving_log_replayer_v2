@@ -43,7 +43,5 @@ def display(result_path: Path) -> None:
 def display_all(output_directory: Path, target_dir_name: str) -> None:
     result_paths = output_directory.glob(f"**/{target_dir_name}/**/result.jsonl")
     for result_path in result_paths:
-        if result_path.is_symlink():
-            result_path = result_path.resolve()  # noqa
-        print(f"{result_path=}")  # noqa
+        termcolor.cprint(f"{result_path.as_posix()}", "white")
         display(result_path)
