@@ -19,7 +19,7 @@ Since wasim downloads and executes scenarios from Autoware Evaluator, it can onl
 
 Using CLI, multiple scenarios can be executed consecutively with a single command input.
 
-For example, suppose that multiple scenarios are placed in subdirectories (SCENARIO_DIR1, SCENARIO_DIR2...) under SCENRIO_ROOT as shown below.
+For example, suppose that multiple scenarios are placed in subdirectories (SCENARIO_DIR1, SCENARIO_DIR2...) under SCENARIO_ROOT as shown below.
 
 ```shell
 SCENARIO_ROOT
@@ -34,7 +34,7 @@ SCENARIO_ROOT
 │   └── SCENARIO_DIR1_DATASET1 # t4_dataset
 │   │  └── ...
 │   │  ...
-│   └── scenario.yaml  # sceanrio fixed name
+│   └── scenario.yaml  # scenario fixed name
 │
 ├── SCENARIO_DIR2
 │   ├── out # output directyory
@@ -44,7 +44,7 @@ SCENARIO_ROOT
 │   │  ├── input_bag
 │   │  ├── map
 │   │  └── status.json
-│   └── scenario.yaml  # sceanrio fixed name
+│   └── scenario.yaml  # scenario fixed name
 ...
 ```
 
@@ -84,8 +84,8 @@ pipx uninstall driving-log-replayer-v2
 
 The following limitations apply because of the automatic search for scenario files in CLI.
 
-- The scenario file must be named sceanrio.yaml
-- sceanrio.yaml must exist in a subdirectory under SCENARIO_ROOT (no sub-sub-directories allowed)
+- The scenario file must be named scenario.yaml
+- scenario.yaml must exist in a subdirectory under SCENARIO_ROOT (no sub-sub-directories allowed)
 
 ### cli output
 

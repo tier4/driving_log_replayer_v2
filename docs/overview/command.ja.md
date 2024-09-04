@@ -19,7 +19,7 @@ wasim は Autoware Evaluator からシナリオをダウンロードして実行
 
 cliを利用すると、1回のコマンド入力で複数のシナリオを連続で実行できます。
 
-例えば以下のように、SCENRIO_ROOT配下に複数のシナリオがサブディレクトリ(SCENARIO_DIR1, SCENARIO_DIR2...)に置かれているとします。
+例えば以下のように、SCENARIO_ROOT配下に複数のシナリオがサブディレクトリ(SCENARIO_DIR1, SCENARIO_DIR2...)に置かれているとします。
 
 ```shell
 SCENARIO_ROOT
@@ -34,7 +34,7 @@ SCENARIO_ROOT
 │   └── SCENARIO_DIR1_DATASET1 # t4_dataset
 │   │  └── ...
 │   │  ...
-│   └── scenario.yaml  # sceanrio fixed name
+│   └── scenario.yaml  # scenario fixed name
 │
 ├── SCENARIO_DIR2
 │   ├── out # output directyory
@@ -44,7 +44,7 @@ SCENARIO_ROOT
 │   │  ├── input_bag
 │   │  ├── map
 │   │  └── status.json
-│   └── scenario.yaml  # sceanrio fixed name
+│   └── scenario.yaml  # scenario fixed name
 ...
 ```
 
@@ -84,8 +84,8 @@ pipx uninstall driving-log-replayer-v2
 
 cliでシナリオファイルを自動で探すため以下の制約がある。
 
-- シナリオファイルの名前がsceanrio.yamlでなければならない
-- SCENARIO_ROOTの下のサブディレクトリにsceanrio.yamlが存在しなければならない(サブサブディレクトリは不可)
+- シナリオファイルの名前がscenario.yamlでなければならない
+- SCENARIO_ROOTの下のサブディレクトリにscenanrio.yamlが存在しなければならない(サブサブディレクトリは不可)
 
 ### cli output
 
