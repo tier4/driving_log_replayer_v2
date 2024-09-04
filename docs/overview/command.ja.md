@@ -85,7 +85,7 @@ pipx uninstall driving-log-replayer-v2
 cliでシナリオファイルを自動で探すため以下の制約がある。
 
 - シナリオファイルの名前がscenario.yamlでなければならない
-- SCENARIO_ROOTの下のサブディレクトリにscenanrio.yamlが存在しなければならない(サブサブディレクトリは不可)
+- SCENARIO_ROOTの下のサブディレクトリにscenario.yamlが存在しなければならない(サブサブディレクトリは不可)
 
 ### cli output
 
