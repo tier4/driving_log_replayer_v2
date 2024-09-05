@@ -129,7 +129,7 @@ def ensure_arg_compatibility(context: LaunchContext) -> list:  # noqa
     conf["input_bag"] = dataset_path.joinpath("input_bag").as_posix()
     conf["result_json_path"] = output_dir.joinpath("result.json").as_posix()
     conf["result_bag_path"] = output_dir.joinpath("result_bag").as_posix()
-    conf["result_archive_path"] = output_dir.joinpath("result_archive_path").as_posix()
+    conf["result_archive_path"] = output_dir.joinpath("result_archive").as_posix()
     conf["use_case"] = yaml_obj["Evaluation"]["UseCaseName"]
     use_case_launch_arg = driving_log_replayer_v2_config[conf["use_case"]]["disable"]
     # update autoware component launch or not
