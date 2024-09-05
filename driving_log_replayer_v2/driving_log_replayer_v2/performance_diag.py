@@ -74,7 +74,7 @@ class Conditions(BaseModel):
 
 class Evaluation(BaseModel):
     UseCaseName: Literal["performance_diag"]
-    UseCaseFormatVersion: Literal["2.0.0"]
+    UseCaseFormatVersion: Literal["3.0.0"]
     Conditions: Conditions
     Datasets: list[dict]
 

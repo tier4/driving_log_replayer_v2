@@ -5,7 +5,7 @@ SensorModel: aip_x2
 VehicleModel: gsm8
 Evaluation:
   UseCaseName: performance_diag
-  UseCaseFormatVersion: 2.0.0
+  UseCaseFormatVersion: 3.0.0
   Conditions:
     LiDAR:
       Visibility:
