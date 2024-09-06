@@ -81,18 +81,27 @@ def get_launch_arguments() -> list:
     return launch_arguments
 
 
-def ensure_arg_compatibility(context: LaunchContext) -> list:  # noqa
+def create_output_dir(output_dir_str: str, scenario_path: Path) -> Path:
+    if output_dir_str != "":
+        output_dir = Path(output_dir_str)
+        output_dir.mkdir(exist_ok=True, parents=True)
+        return output_dir
+    # create output_dir in scenario path
+    time_now = datetime.datetime.now().strftime("%Y-%m%d-%H%M%S")  # noqa
+    output_dir = scenario_path.parent.joinpath("out", time_now)
+    output_dir.mkdir(exist_ok=True, parents=True)
+    symlink_dst = output_dir.parent.joinpath("latest").as_posix()
+    update_symlink = ["ln", "-snf", output_dir.as_posix(), symlink_dst]
+    subprocess.run(update_symlink, check=False)
+    return output_dir
+
+
+def ensure_arg_compatibility(context: LaunchContext) -> list:
     conf = context.launch_configurations
     scenario_path = Path(conf["scenario_path"])
     dataset_dir = scenario_path.parent if conf["dataset_dir"] == "" else Path(conf["dataset_dir"])
-
-    time_now = datetime.datetime.now().strftime("%Y-%m%d-%H%M%S")  # noqa
-    create_symlink = False
-    output_dir = Path(conf["output_dir"])
-    if conf["output_dir"] == "":
-        create_symlink = True
-        output_dir = scenario_path.parent.joinpath("out", time_now)
-        conf["output_dir"] = output_dir.as_posix()
+    output_dir = create_output_dir(conf["output_dir"], scenario_path)
+    conf["output_dir"] = output_dir.as_posix()
 
     with scenario_path.open() as scenario_file:
         yaml_obj = yaml.safe_load(scenario_file)
@@ -140,13 +149,6 @@ def ensure_arg_compatibility(context: LaunchContext) -> list:  # noqa
         if conf.get(component) is None and use_case_launch_arg.get(component) is not None:
             conf[component] = use_case_launch_arg[component]
         launch_component[component] = conf.get(component, "true")
-
-    # create output directory
-    output_dir.mkdir(exist_ok=True, parents=True)
-    if create_symlink:
-        symlink_dst = output_dir.parent.joinpath("latest").as_posix()
-        update_symlink = ["ln", "-snf", output_dir.as_posix(), symlink_dst]
-        subprocess.run(update_symlink, check=False)
 
     return [
         LogInfo(
