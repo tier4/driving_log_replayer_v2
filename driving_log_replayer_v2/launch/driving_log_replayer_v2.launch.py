@@ -43,6 +43,7 @@ def get_launch_arguments() -> list:
     output_dir
     dataset_dir
     dataset_index
+    t4_dataset_path
     play_rate
     play_delay
     with_autoware
@@ -69,7 +70,16 @@ def get_launch_arguments() -> list:
         default_value="",
         description="Directory where the dataset is located. If not specified, the directory where the scenario is located.",
     )
-    add_launch_arg("dataset_index", default_value="", description="index number of dataset")
+    add_launch_arg(
+        "dataset_index",
+        default_value="",
+        description="index number of dataset. t4_dataset_path = dataset_dir.joinpath(Datasets[dataset_index])",
+    )
+    add_launch_arg(
+        "t4_dataset_path",
+        default_value="",
+        description="Set t4_dataset_path directory. Compatible with v1. Mutually exclusive with dataset_dir.",
+    )
     add_launch_arg("play_rate", default_value="1.0", description="ros2 bag play rate")
     add_launch_arg("play_delay", default_value="10.0", description="ros2 bag play delay")
     add_launch_arg(
@@ -122,9 +132,40 @@ def get_dataset_index(idx_str: str, dataset_length: int) -> int | None:
         return None
 
 
+def extract_index_from_path(t4_dataset_path_str: str, datasets: list[dict]) -> int | None:
+    t4_dataset_path = Path(t4_dataset_path_str)
+    """
+    webauto dataset directory is like below
+    ~/.webauto/simulation/data/t4_dataset/${PROJECT_ID}/${SCENARIO_ID}/${SCENARIO_VERSION}/${DATASET_ID}/${DATASET_VERSION}
+
+    The scenario's key is DATASET_ID. not DATASET_VERSION.
+    For local usage, t4_dataset_path.name must be DATASET_ID
+    For webauto, t4_dataset_path.name must be DATASET_VERSION, t4_dataset_path.parent.name is DATASET_ID
+    """
+    if not t4_dataset_path.exists():
+        return None
+    for dataset_dict in datasets:
+        for idx, dataset_id in enumerate(dataset_dict.keys()):
+            if t4_dataset_path.name == dataset_id:
+                # this block is for local usage
+                return idx
+            if t4_dataset_path.parent.name == dataset_id:
+                # this block is for webauto
+                return idx
+    # index not found
+    return None
+
+
 def ensure_arg_compatibility(context: LaunchContext) -> list:
     conf = context.launch_configurations
     scenario_path = Path(conf["scenario_path"])
+    if conf["dataset_dir"] != "" and conf["t4_dataset_path"] != "":
+        return [
+            LogInfo(
+                msg="Both dataset_dir and t4_dataset_path are specified. Only one of them can be specified."
+            )
+        ]
+
     dataset_dir = scenario_path.parent if conf["dataset_dir"] == "" else Path(conf["dataset_dir"])
     output_dir = create_output_dir(conf["output_dir"], scenario_path)
     conf["output_dir"] = output_dir.as_posix()
@@ -133,12 +174,19 @@ def ensure_arg_compatibility(context: LaunchContext) -> list:
         yaml_obj = yaml.safe_load(scenario_file)
 
     datasets = yaml_obj["Evaluation"]["Datasets"]
-    dataset_index = get_dataset_index(conf["dataset_index"], len(datasets))
+    if conf["t4_dataset_path"] != "":
+        dataset_index = extract_index_from_path(conf["t4_dataset_path"], datasets)
+    else:
+        dataset_index = get_dataset_index(conf["dataset_index"], len(datasets))
     if dataset_index is None:
         return [LogInfo(msg=f"dataset_index={conf['dataset_index']} is invalid")]
 
     for k, v in datasets[dataset_index].items():
-        t4_dataset_path = dataset_dir.joinpath(k)
+        t4_dataset_path = (
+            Path(conf["t4_dataset_path"])
+            if conf["t4_dataset_path"] != ""
+            else dataset_dir.joinpath(k)
+        )  # t4_dataset_pathが引数で渡されていたら更新しない。指定ない場合はdata_dirから作る
         conf["vehicle_id"] = v["VehicleId"]
         init_pose: dict | None = v.get("InitialPose")
         if init_pose is not None:
