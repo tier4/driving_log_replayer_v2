@@ -109,6 +109,19 @@ def check_launch_component(conf: dict) -> dict:
     return launch_component
 
 
+def get_dataset_index(idx_str: str, dataset_length: int) -> int | None:
+    if idx_str == "":  # default value
+        if dataset_length == 1:
+            return 0
+        return None
+    try:
+        idx_int = int(idx_str)
+        if idx_int < 0 or idx_int > dataset_length:
+            return None
+    except ValueError:
+        return None
+
+
 def ensure_arg_compatibility(context: LaunchContext) -> list:
     conf = context.launch_configurations
     scenario_path = Path(conf["scenario_path"])
@@ -118,24 +131,16 @@ def ensure_arg_compatibility(context: LaunchContext) -> list:
 
     with scenario_path.open() as scenario_file:
         yaml_obj = yaml.safe_load(scenario_file)
-    # check datasets length and index
+
     datasets = yaml_obj["Evaluation"]["Datasets"]
-    idx_str = conf["dataset_index"]
-    if idx_str == "":  # default value
-        if len(datasets) == 1:
-            dataset_index = 0
-        else:
-            return [
-                LogInfo(msg="launch argument 'dataset_index:=i' is required"),
-            ]
-    else:
-        dataset_index = int(idx_str)
+    dataset_index = get_dataset_index(conf["dataset_index"], len(datasets))
+    if dataset_index is None:
+        return [LogInfo(msg=f"dataset_index={conf['dataset_index']} is invalid")]
+
     for k, v in datasets[dataset_index].items():
-        dataset_path = dataset_dir.joinpath(k)
+        t4_dataset_path = dataset_dir.joinpath(k)
         conf["vehicle_id"] = v["VehicleId"]
-        init_pose: dict | None = v.get(
-            "InitialPose",
-        )  # nullに設定されている。または書かれてない場合はNone
+        init_pose: dict | None = v.get("InitialPose")
         if init_pose is not None:
             conf["initial_pose"] = json.dumps(init_pose)
         direct_pose: dict | None = v.get("DirectInitialPose")
@@ -144,11 +149,11 @@ def ensure_arg_compatibility(context: LaunchContext) -> list:
         goal_pose: dict | None = v.get("GoalPose")
         if goal_pose is not None:
             conf["goal_pose"] = json.dumps(goal_pose)
-    conf["map_path"] = dataset_path.joinpath("map").as_posix()
+    conf["t4_dataset_path"] = t4_dataset_path.as_posix()
     conf["vehicle_model"] = yaml_obj["VehicleModel"]
     conf["sensor_model"] = yaml_obj["SensorModel"]
-    conf["t4_dataset_path"] = dataset_path.as_posix()
-    conf["input_bag"] = dataset_path.joinpath("input_bag").as_posix()
+    conf["map_path"] = t4_dataset_path.joinpath("map").as_posix()
+    conf["input_bag"] = t4_dataset_path.joinpath("input_bag").as_posix()
     conf["result_json_path"] = output_dir.joinpath("result.json").as_posix()
     conf["result_bag_path"] = output_dir.joinpath("result_bag").as_posix()
     conf["result_archive_path"] = output_dir.joinpath("result_archive").as_posix()
@@ -156,7 +161,7 @@ def ensure_arg_compatibility(context: LaunchContext) -> list:
 
     return [
         LogInfo(
-            msg=f"{dataset_path=}, {dataset_index=}, {output_dir=}, use_case={conf['use_case']}",
+            msg=f"{t4_dataset_path=}, {dataset_index=}, {output_dir=}, use_case={conf['use_case']}",
         ),
         LogInfo(
             msg=f"{check_launch_component(conf)=}",
