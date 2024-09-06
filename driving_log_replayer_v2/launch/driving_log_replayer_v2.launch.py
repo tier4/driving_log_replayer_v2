@@ -96,6 +96,19 @@ def create_output_dir(output_dir_str: str, scenario_path: Path) -> Path:
     return output_dir
 
 
+def check_launch_component(conf: dict) -> dict:
+    use_case_launch_arg = driving_log_replayer_v2_config[conf["use_case"]]["disable"]
+    # update autoware component launch or not
+    autoware_components = ["sensing", "localization", "perception", "planning", "control"]
+    launch_component = {}
+    for component in autoware_components:
+        # argument has higher priority than the launch_config.py setting.
+        if conf.get(component) is None and use_case_launch_arg.get(component) is not None:
+            conf[component] = use_case_launch_arg[component]
+        launch_component[component] = conf.get(component, "true")
+    return launch_component
+
+
 def ensure_arg_compatibility(context: LaunchContext) -> list:
     conf = context.launch_configurations
     scenario_path = Path(conf["scenario_path"])
@@ -140,22 +153,13 @@ def ensure_arg_compatibility(context: LaunchContext) -> list:
     conf["result_bag_path"] = output_dir.joinpath("result_bag").as_posix()
     conf["result_archive_path"] = output_dir.joinpath("result_archive").as_posix()
     conf["use_case"] = yaml_obj["Evaluation"]["UseCaseName"]
-    use_case_launch_arg = driving_log_replayer_v2_config[conf["use_case"]]["disable"]
-    # update autoware component launch or not
-    autoware_components = ["sensing", "localization", "perception", "planning", "control"]
-    launch_component = {}
-    for component in autoware_components:
-        # argument has higher priority than the launch_config.py setting.
-        if conf.get(component) is None and use_case_launch_arg.get(component) is not None:
-            conf[component] = use_case_launch_arg[component]
-        launch_component[component] = conf.get(component, "true")
 
     return [
         LogInfo(
             msg=f"{dataset_path=}, {dataset_index=}, {output_dir=}, use_case={conf['use_case']}",
         ),
         LogInfo(
-            msg=f"{launch_component=}",
+            msg=f"{check_launch_component(conf)=}",
         ),
         LogInfo(
             msg=f"{conf.get('initial_pose')=}, {conf.get('direct_initial_pose')=}",
