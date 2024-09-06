@@ -132,7 +132,7 @@ def get_dataset_index(idx_str: str, dataset_length: int) -> int | None:
         return None
 
 
-def extract_index_from_path(t4_dataset_path_str: str, dataset_ids: list) -> int | None:
+def extract_index_from_path(t4_dataset_path_str: str, datasets: list[dict]) -> int | None:
     t4_dataset_path = Path(t4_dataset_path_str)
     """
     webauto dataset directory is like below
@@ -144,13 +144,14 @@ def extract_index_from_path(t4_dataset_path_str: str, dataset_ids: list) -> int 
     """
     if not t4_dataset_path.exists():
         return None
-    for idx, dataset_id in enumerate(dataset_ids):
-        if t4_dataset_path.name == dataset_id:
-            # this block is for local usage
-            return idx
-        if t4_dataset_path.parent.name == dataset_id:
-            # this block is for webauto
-            return idx
+    for dataset_dict in datasets:
+        for idx, dataset_id in enumerate(dataset_dict.keys()):
+            if t4_dataset_path.name == dataset_id:
+                # this block is for local usage
+                return idx
+            if t4_dataset_path.parent.name == dataset_id:
+                # this block is for webauto
+                return idx
     # index not found
     return None
 
@@ -174,7 +175,7 @@ def ensure_arg_compatibility(context: LaunchContext) -> list:
 
     datasets = yaml_obj["Evaluation"]["Datasets"]
     if conf["t4_dataset_path"] != "":
-        dataset_index = extract_index_from_path(conf["t4_dataset_path"], list(datasets.keys()))
+        dataset_index = extract_index_from_path(conf["t4_dataset_path"], datasets)
     else:
         dataset_index = get_dataset_index(conf["dataset_index"], len(datasets))
     if dataset_index is None:
