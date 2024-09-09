@@ -43,6 +43,7 @@ def get_launch_arguments() -> list:
     output_dir
     dataset_dir
     dataset_index
+    t4_dataset_path
     play_rate
     play_delay
     with_autoware
@@ -69,7 +70,21 @@ def get_launch_arguments() -> list:
         default_value="",
         description="Directory where the dataset is located. If not specified, the directory where the scenario is located.",
     )
-    add_launch_arg("dataset_index", default_value="", description="index number of dataset")
+    add_launch_arg(
+        "dataset_index",
+        default_value="",
+        description="index number of dataset. t4_dataset_path = dataset_dir.joinpath(Datasets[dataset_index])",
+    )
+    add_launch_arg(
+        "t4_dataset_path",
+        default_value="",
+        description="Set t4_dataset_path directly. Compatible with v1. Mutually exclusive with dataset_dir.",
+    )
+    add_launch_arg(
+        "t4_dataset_id",
+        default_value="",
+        description="Required when passing t4_dataset_path. Specify the Datasets[i].key",
+    )
     add_launch_arg("play_rate", default_value="1.0", description="ros2 bag play rate")
     add_launch_arg("play_delay", default_value="10.0", description="ros2 bag play delay")
     add_launch_arg(
@@ -81,56 +96,22 @@ def get_launch_arguments() -> list:
     return launch_arguments
 
 
-def ensure_arg_compatibility(context: LaunchContext) -> list:  # noqa
-    conf = context.launch_configurations
-    scenario_path = Path(conf["scenario_path"])
-    dataset_dir = scenario_path.parent if conf["dataset_dir"] == "" else Path(conf["dataset_dir"])
-
+def create_output_dir(output_dir_str: str, scenario_path: Path) -> Path:
+    if output_dir_str != "":
+        output_dir = Path(output_dir_str)
+        output_dir.mkdir(exist_ok=True, parents=True)
+        return output_dir
+    # create output_dir in scenario path
     time_now = datetime.datetime.now().strftime("%Y-%m%d-%H%M%S")  # noqa
-    create_symlink = False
-    output_dir = Path(conf["output_dir"])
-    if conf["output_dir"] == "":
-        create_symlink = True
-        output_dir = scenario_path.parent.joinpath("out", time_now)
-        conf["output_dir"] = output_dir.as_posix()
+    output_dir = scenario_path.parent.joinpath("out", time_now)
+    output_dir.mkdir(exist_ok=True, parents=True)
+    symlink_dst = output_dir.parent.joinpath("latest").as_posix()
+    update_symlink = ["ln", "-snf", output_dir.as_posix(), symlink_dst]
+    subprocess.run(update_symlink, check=False)
+    return output_dir
 
-    with scenario_path.open() as scenario_file:
-        yaml_obj = yaml.safe_load(scenario_file)
-    # check datasets length and index
-    datasets = yaml_obj["Evaluation"]["Datasets"]
-    idx_str = conf["dataset_index"]
-    if idx_str == "":  # default value
-        if len(datasets) == 1:
-            dataset_index = 0
-        else:
-            return [
-                LogInfo(msg="launch argument 'dataset_index:=i' is required"),
-            ]
-    else:
-        dataset_index = int(idx_str)
-    for k, v in datasets[dataset_index].items():
-        dataset_path = dataset_dir.joinpath(k)
-        conf["vehicle_id"] = v["VehicleId"]
-        init_pose: dict | None = v.get(
-            "InitialPose",
-        )  # nullに設定されている。または書かれてない場合はNone
-        if init_pose is not None:
-            conf["initial_pose"] = json.dumps(init_pose)
-        direct_pose: dict | None = v.get("DirectInitialPose")
-        if direct_pose is not None:
-            conf["direct_initial_pose"] = json.dumps(direct_pose)
-        goal_pose: dict | None = v.get("GoalPose")
-        if goal_pose is not None:
-            conf["goal_pose"] = json.dumps(goal_pose)
-    conf["map_path"] = dataset_path.joinpath("map").as_posix()
-    conf["vehicle_model"] = yaml_obj["VehicleModel"]
-    conf["sensor_model"] = yaml_obj["SensorModel"]
-    conf["t4_dataset_path"] = dataset_path.as_posix()
-    conf["input_bag"] = dataset_path.joinpath("input_bag").as_posix()
-    conf["result_json_path"] = output_dir.joinpath("result.json").as_posix()
-    conf["result_bag_path"] = output_dir.joinpath("result_bag").as_posix()
-    conf["result_archive_path"] = output_dir.joinpath("result_archive_path").as_posix()
-    conf["use_case"] = yaml_obj["Evaluation"]["UseCaseName"]
+
+def check_launch_component(conf: dict) -> dict:
     use_case_launch_arg = driving_log_replayer_v2_config[conf["use_case"]]["disable"]
     # update autoware component launch or not
     autoware_components = ["sensing", "localization", "perception", "planning", "control"]
@@ -140,20 +121,91 @@ def ensure_arg_compatibility(context: LaunchContext) -> list:  # noqa
         if conf.get(component) is None and use_case_launch_arg.get(component) is not None:
             conf[component] = use_case_launch_arg[component]
         launch_component[component] = conf.get(component, "true")
+    return launch_component
 
-    # create output directory
-    output_dir.mkdir(exist_ok=True, parents=True)
-    if create_symlink:
-        symlink_dst = output_dir.parent.joinpath("latest").as_posix()
-        update_symlink = ["ln", "-snf", output_dir.as_posix(), symlink_dst]
-        subprocess.run(update_symlink, check=False)
+
+def get_dataset_index(idx_str: str, dataset_length: int) -> int | None:
+    if idx_str == "":  # default value
+        if dataset_length == 1:
+            return 0
+        return None
+    try:
+        idx_int = int(idx_str)
+        if idx_int < 0 or idx_int > dataset_length:
+            return None
+    except ValueError:
+        return None
+
+
+def extract_index_from_id(t4_dataset_id: str, datasets: list[dict]) -> int | None:
+    for idx, dataset_dict in enumerate(datasets):
+        for dataset_id in dataset_dict:
+            if t4_dataset_id == dataset_id:
+                # this block is for local usage
+                return idx
+    # index not found
+    return None
+
+
+def ensure_arg_compatibility(context: LaunchContext) -> list:
+    conf = context.launch_configurations
+    scenario_path = Path(conf["scenario_path"])
+    if conf["dataset_dir"] != "" and conf["t4_dataset_path"] != "":
+        return [
+            LogInfo(
+                msg="Both dataset_dir and t4_dataset_path are specified. Only one of them can be specified."
+            )
+        ]
+    if conf["t4_dataset_path"] != "" and conf["t4_dataset_id"] == "":
+        return [LogInfo(msg="t4_dataset_id is required when passing t4_dataset_path.")]
+
+    dataset_dir = scenario_path.parent if conf["dataset_dir"] == "" else Path(conf["dataset_dir"])
+    output_dir = create_output_dir(conf["output_dir"], scenario_path)
+    conf["output_dir"] = output_dir.as_posix()
+
+    with scenario_path.open() as scenario_file:
+        yaml_obj = yaml.safe_load(scenario_file)
+
+    datasets = yaml_obj["Evaluation"]["Datasets"]
+    if conf["t4_dataset_path"] != "":
+        dataset_index = extract_index_from_id(conf["t4_dataset_id"], datasets)
+    else:
+        dataset_index = get_dataset_index(conf["dataset_index"], len(datasets))
+    if dataset_index is None:
+        return [LogInfo(msg=f"dataset_index={conf['dataset_index']} is invalid")]
+
+    for k, v in datasets[dataset_index].items():
+        t4_dataset_path = (
+            Path(conf["t4_dataset_path"])
+            if conf["t4_dataset_path"] != ""
+            else dataset_dir.joinpath(k)
+        )  # t4_dataset_pathが引数で渡されていたら更新しない。指定ない場合はdata_dirから作る
+        conf["vehicle_id"] = v["VehicleId"]
+        init_pose: dict | None = v.get("InitialPose")
+        if init_pose is not None:
+            conf["initial_pose"] = json.dumps(init_pose)
+        direct_pose: dict | None = v.get("DirectInitialPose")
+        if direct_pose is not None:
+            conf["direct_initial_pose"] = json.dumps(direct_pose)
+        goal_pose: dict | None = v.get("GoalPose")
+        if goal_pose is not None:
+            conf["goal_pose"] = json.dumps(goal_pose)
+    conf["t4_dataset_path"] = t4_dataset_path.as_posix()
+    conf["vehicle_model"] = yaml_obj["VehicleModel"]
+    conf["sensor_model"] = yaml_obj["SensorModel"]
+    conf["map_path"] = t4_dataset_path.joinpath("map").as_posix()
+    conf["input_bag"] = t4_dataset_path.joinpath("input_bag").as_posix()
+    conf["result_json_path"] = output_dir.joinpath("result.json").as_posix()
+    conf["result_bag_path"] = output_dir.joinpath("result_bag").as_posix()
+    conf["result_archive_path"] = output_dir.joinpath("result_archive").as_posix()
+    conf["use_case"] = yaml_obj["Evaluation"]["UseCaseName"]
 
     return [
         LogInfo(
-            msg=f"{dataset_path=}, {dataset_index=}, {output_dir=}, use_case={conf['use_case']}",
+            msg=f"{t4_dataset_path=}, {dataset_index=}, {output_dir=}, use_case={conf['use_case']}",
         ),
         LogInfo(
-            msg=f"{launch_component=}",
+            msg=f"{check_launch_component(conf)=}",
         ),
         LogInfo(
             msg=f"{conf.get('initial_pose')=}, {conf.get('direct_initial_pose')=}",
