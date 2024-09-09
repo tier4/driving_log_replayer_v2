@@ -124,27 +124,26 @@ def check_launch_component(conf: dict) -> dict:
     return launch_component
 
 
-def get_dataset_index(idx_str: str, dataset_length: int) -> int | None:
+def get_dataset_index(idx_str: str, dataset_length: int) -> int | str:
     if idx_str == "":  # default value
         if dataset_length == 1:
             return 0
-        return None
+        return "You need to set dataset_index"
     try:
         idx_int = int(idx_str)
         if idx_int < 0 or idx_int > dataset_length:
-            return None
+            return f"dataset_index {idx_int} not in index range"
     except ValueError:
-        return None
+        return f"cannot parser dataset_index {idx_str}"
 
 
-def extract_index_from_id(t4_dataset_id: str, datasets: list[dict]) -> int | None:
+def extract_index_from_id(t4_dataset_id: str, datasets: list[dict]) -> int | str:
     for idx, dataset_dict in enumerate(datasets):
         for dataset_id in dataset_dict:
             if t4_dataset_id == dataset_id:
                 # this block is for local usage
                 return idx
-    # index not found
-    return None
+    return "index not found"
 
 
 def ensure_arg_compatibility(context: LaunchContext) -> list:
@@ -171,8 +170,8 @@ def ensure_arg_compatibility(context: LaunchContext) -> list:
         dataset_index = extract_index_from_id(conf["t4_dataset_id"], datasets)
     else:
         dataset_index = get_dataset_index(conf["dataset_index"], len(datasets))
-    if dataset_index is None:
-        return [LogInfo(msg=f"dataset_index={conf['dataset_index']} is invalid")]
+    if isinstance(dataset_index, str):
+        return [LogInfo(msg=dataset_index)]
 
     for k, v in datasets[dataset_index].items():
         t4_dataset_path = (
