@@ -135,6 +135,8 @@ def get_dataset_index(idx_str: str, dataset_length: int) -> int | str:
             return f"dataset_index {idx_int} not in index range"
     except ValueError:
         return f"cannot parser dataset_index {idx_str}"
+    else:
+        return idx_int
 
 
 def extract_index_from_id(t4_dataset_id: str, datasets: list[dict]) -> int | str:
@@ -170,7 +172,7 @@ def ensure_arg_compatibility(context: LaunchContext) -> list:
         dataset_index = extract_index_from_id(conf["t4_dataset_id"], datasets)
     else:
         dataset_index = get_dataset_index(conf["dataset_index"], len(datasets))
-    if isinstance(dataset_index, str):
+    if isinstance(dataset_dir, str):
         return [LogInfo(msg=dataset_index)]
 
     for k, v in datasets[dataset_index].items():
