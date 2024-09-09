@@ -24,6 +24,10 @@ readme = "README.md"
 requires-python = ">= 3.10"
 license = "Apache-2.0"
 
+[project.scripts]
+dlr2 = "driving_log_replayer_v2_cli:main"
+dlr2-analyzer = "driving_log_replayer_v2_analyzer:main"
+
 [project.optional-dependencies]
 docs = [
     "mkdocs>=1.5.3",
@@ -47,6 +51,9 @@ dev-dependencies = [
 
 [tool.hatch.metadata]
 allow-direct-references = true
+
+[tool.hatch.build.targets.wheel]
+packages = ["driving_log_replayer_v2_cli", "driving_log_replayer_v2_analyzer/driving_log_replayer_v2_analyzer"]
 
 [tool.ruff]
 line-length = 100

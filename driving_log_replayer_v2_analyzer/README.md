@@ -17,5 +17,5 @@ This package is installed with driving_log_replayer_v2_cli
 ## How to use
 
 ```shell
-dlr-analyzer analysis ${use-case-name} ${result.jsonl_path} [-c ${config_path}]
+dlr2-analyzer analysis ${use-case-name} ${result.jsonl_path} [-c ${config_path}]
 ```

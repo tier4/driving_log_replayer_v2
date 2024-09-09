@@ -11,7 +11,7 @@
 ### 例1
 
 ```shell
-❯ ros2 launch driving_log_replayer_v2 driving_log_replayer_v2.launch.py scenrio_path:=$HOME/driving_log_replayer_v2/sample.yaml
+❯ ros2 launch driving_log_replayer_v2 driving_log_replayer_v2.launch.py scenario_path:=$HOME/driving_log_replayer_v2/sample.yaml
 [INFO] [launch]: All log files can be found below /home/hyt/.ros/log/2024-06-07-12-37-19-365597-dpc2405001-1360746
 [INFO] [launch]: Default logging verbosity is set to INFO
 1717731451.040883 [77]       ros2: determined eno1 (udp/10.0.55.137) as highest quality interface, selected for automatic interface.
