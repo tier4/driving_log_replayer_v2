@@ -51,7 +51,7 @@ def create_output_dir_by_time(base_path: Path) -> Path:
     output_dir_by_time = base_path.joinpath(
         datetime.datetime.now().strftime("%Y-%m%d-%H%M%S")  # noqa
     )
-    output_dir_by_time.mkdir(exist_ok=True)
+    output_dir_by_time.mkdir(exist_ok=True, parents=True)
     symlink_dst = base_path.joinpath("latest").as_posix()
     update_symlink = ["ln", "-snf", output_dir_by_time.as_posix(), symlink_dst]
     subprocess.run(update_symlink, check=False)
