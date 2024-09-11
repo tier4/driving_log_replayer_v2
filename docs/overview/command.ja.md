@@ -112,3 +112,42 @@ OUTPUT_LATEST
 ├── console.log # コンソールに表示されているログをファイル化したもの
 └── run.bash # simulationの実行コマンド
 ```
+
+### cli command
+
+`dlr2` コマンドは、サブコマンドを持っています。
+各コマンドに必要な引数は `--help` オプションを指定すると表示できるます。
+
+```shell
+# dlr2 top level help
+dlr2 --help
+
+# show version
+dlr2 --version
+
+# show subcommand help
+dlr2 subcommand --help
+
+# show subsubcommand help
+dlr2 subcommand subsubcommand --help
+```
+
+#### dlr2 simulation
+
+simulation に関するサブコマンド
+
+```shell
+# scenario_root配下のscenarioを連続で実行する
+dlr2 simulation run ${scenario_root}
+
+# launchのargumentを-lオプションで追加する。-lを複数記述できる。
+# 以下のコマンドを実行して表示されるargumentが指定可能
+# ros2 launch driving_log_replayer_v2 driving_log_replayer_v2.launch.py -s
+# ros2 launch autoware_launch logging_simulator.launch.xml -s
+
+# 例：bagの再生速度を0.5倍にして、rvizを無効にする
+dl2 simulation run -l play_rate:=0.5 -l rviz:=false
+
+# output_directory以下の結果ファイルのサマリーを表示する
+dlr2 simulation show-result ${output_directory}
+```
