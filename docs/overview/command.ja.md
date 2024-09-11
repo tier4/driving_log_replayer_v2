@@ -140,7 +140,7 @@ simulation に関するサブコマンド
 # scenario_root配下のscenarioを連続で実行する
 dlr2 simulation run ${scenario_root}
 
-# launchのargumentを-lオプションで追加する。-lを複数記述できる。 
+# launchのargumentを-lオプションで追加する。-lを複数記述できる。
 # 以下のコマンドを実行して表示されるargumentが指定可能
 # ros2 launch driving_log_replayer_v2 driving_log_replayer_v2.launch.py -s
 # ros2 launch autoware_launch logging_simulator.launch.xml -s
