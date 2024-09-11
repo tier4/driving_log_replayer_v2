@@ -146,7 +146,7 @@ dlr2 simulation run ${scenario_root}
 # ros2 launch autoware_launch logging_simulator.launch.xml -s
 
 # 例：bagの再生速度を0.5倍にして、rvizを無効にする
-dl2 simulation run -l play_rate:=0.5 rviz:=false
+dl2 simulation run -l play_rate:=0.5 -l rviz:=false
 
 # output_directory以下の結果ファイルのサマリーを表示する
 dlr2 simulation show-result ${output_directory}
