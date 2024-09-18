@@ -23,7 +23,7 @@ Sample scenarios are stored in the [sample](https://github.com/tier4/driving_log
 
 The basic structure is as follows. Details of each key are described below.
 
-### 3.x.x Format
+### driving_log_replayer_v2 Scenario Format version 3.x.x
 
 ```yaml
 ScenarioFormatVersion: 3.x.x

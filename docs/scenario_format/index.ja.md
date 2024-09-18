@@ -23,7 +23,7 @@ driving_log_replayer_v2 で用いるシナリオのフォーマットについ�
 
 基本構造は以下の通り。各キーの詳細は以下で記述する。
 
-### 3.x.x フォーマット
+### driving_log_replayer_v2 Scenario Format version 3.x.x
 
 ```yaml
 ScenarioFormatVersion: 3.x.x
