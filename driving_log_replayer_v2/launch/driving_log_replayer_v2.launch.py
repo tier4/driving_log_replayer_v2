@@ -26,7 +26,6 @@ from launch.actions import GroupAction
 from launch.actions import IncludeLaunchDescription
 from launch.actions import LogInfo
 from launch.actions import OpaqueFunction
-from launch.conditions import IfCondition
 from launch.launch_description_sources import AnyLaunchDescriptionSource
 from launch_ros.actions import Node
 import yaml
@@ -219,6 +218,8 @@ def ensure_arg_compatibility(context: LaunchContext) -> list:
 
 def launch_autoware(context: LaunchContext) -> list:
     conf = context.launch_configurations
+    if conf["with_autoware"] != "true":
+        return [LogInfo(msg="Autoware is not launched. Only the evaluation node is launched.")]
     autoware_launch_file = Path(
         get_package_share_directory("autoware_launch"),
         "launch",
@@ -240,7 +241,6 @@ def launch_autoware(context: LaunchContext) -> list:
                         autoware_launch_file.as_posix(),
                     ),
                     launch_arguments=launch_args.items(),
-                    condition=IfCondition(conf["with_autoware"]),
                 ),
             ],
             scoped=False,
@@ -250,19 +250,15 @@ def launch_autoware(context: LaunchContext) -> list:
 
 
 def launch_map_height_fitter(context: LaunchContext) -> list:
+    if context.launch_configurations["localization"] != "true":
+        return [LogInfo(msg="map_height_fitter is not launched because localization is false")]
+
     fitter_launch_file = Path(
         get_package_share_directory("autoware_map_height_fitter"),
         "launch",
         "map_height_fitter.launch.xml",
     )
-    return [
-        IncludeLaunchDescription(
-            AnyLaunchDescriptionSource(
-                fitter_launch_file.as_posix(),
-            ),
-            condition=IfCondition(context.launch_configurations["localization"]),
-        ),
-    ]
+    return [IncludeLaunchDescription(AnyLaunchDescriptionSource(fitter_launch_file.as_posix()))]
 
 
 def launch_evaluator_node(context: LaunchContext) -> list:
@@ -372,6 +368,10 @@ def launch_bag_recorder(context: LaunchContext) -> list:
 
 def launch_topic_state_monitor(context: LaunchContext) -> list:
     conf = context.launch_configurations
+    if conf["use_case"] != "localization":
+        return [
+            LogInfo(msg="topic_state_monitor is not launched because use_case is not localization.")
+        ]
     # component_state_monitor launch
     component_state_monitor_launch_file = Path(
         get_package_share_directory("component_state_monitor"),
@@ -386,14 +386,11 @@ def launch_topic_state_monitor(context: LaunchContext) -> list:
     )
     return [
         IncludeLaunchDescription(
-            AnyLaunchDescriptionSource(
-                component_state_monitor_launch_file.as_posix(),
-            ),
+            AnyLaunchDescriptionSource(component_state_monitor_launch_file.as_posix()),
             launch_arguments={
                 "file": topic_monitor_config_path.as_posix(),
                 "mode": "logging_simulation",
             }.items(),
-            condition=IfCondition(str(conf["use_case"] == "localization")),
         ),
     ]
 
