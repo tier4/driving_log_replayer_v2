@@ -46,6 +46,8 @@ def get_launch_arguments() -> list:
     play_rate
     play_delay
     with_autoware
+    record_only
+    override_topics_regex
     """
     launch_arguments = []
 
@@ -90,6 +92,16 @@ def get_launch_arguments() -> list:
         "with_autoware",
         default_value="true",
         description="Whether to launch Autoware or not. set false if Autoware is started on a different PC.",
+    )
+    add_launch_arg(
+        "record_only",
+        default_value="false",
+        description="Do only bag record without starting evaluator node",
+    )
+    add_launch_arg(
+        "override_topics_regex",
+        default_value="",
+        description="use allowlist. Ex: override_topics_regex:=\^/clock\$\|\^/tf\$\|/sensing/lidar/concatenated/pointcloud",  # noqa
     )
 
     return launch_arguments
@@ -263,6 +275,8 @@ def launch_map_height_fitter(context: LaunchContext) -> list:
 
 def launch_evaluator_node(context: LaunchContext) -> list:
     conf = context.launch_configurations
+    if conf["record_only"] != "false":
+        return [LogInfo(msg="evaluator_node is not launched because record_only is set")]
     params = {
         "use_sim_time": True,
         "scenario_path": conf["scenario_path"],
@@ -357,10 +371,13 @@ def launch_bag_recorder(context: LaunchContext) -> list:
             "config",
             "qos.yaml",
         ).as_posix(),
-        "-e",
-        driving_log_replayer_v2_config[conf["use_case"]]["record"],
         "--use-sim-time",
+        "-e",
     ]
+    if conf["override_topics_regex"] == "":
+        record_cmd.append(driving_log_replayer_v2_config[conf["use_case"]]["record"])
+    else:
+        record_cmd.append(conf["override_topics_regex"])
     return [ExecuteProcess(cmd=record_cmd)]
 
 
