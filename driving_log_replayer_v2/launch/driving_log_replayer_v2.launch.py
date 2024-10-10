@@ -307,7 +307,6 @@ def launch_bag_player(
         Path(
             get_package_share_directory("driving_log_replayer_v2"),
             "config",
-            conf["use_case"],
             "qos.yaml",
         ).as_posix(),
     ]
@@ -356,7 +355,6 @@ def launch_bag_recorder(context: LaunchContext) -> list:
         Path(
             get_package_share_directory("driving_log_replayer_v2"),
             "config",
-            conf["use_case"],
             "qos.yaml",
         ).as_posix(),
         "-e",

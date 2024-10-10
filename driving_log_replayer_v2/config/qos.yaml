@@ -8,8 +8,18 @@
   history: keep_last
   depth: 10
   durability: volatile
+/localization/util/downsample/pointcloud:
+  reliability: best_effort
+  history: keep_last
+  depth: 10
+  durability: volatile
 /sensing/lidar/concatenated/pointcloud:
   reliability: best_effort
   history: keep_last
   depth: 10
   durability: volatile
+/planning/mission_planning/route:
+  reliability: reliable
+  history: keep_last
+  depth: 1
+  durability: transient_local
