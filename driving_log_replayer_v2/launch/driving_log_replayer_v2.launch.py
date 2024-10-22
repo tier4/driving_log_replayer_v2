@@ -353,7 +353,11 @@ def launch_bag_player(
         )
     if len(remap_list) != 1:
         play_cmd.extend(remap_list)
-    bag_player = ExecuteProcess(cmd=play_cmd, output="screen")
+    bag_player = (
+        ExecuteProcess(cmd=play_cmd, output="screen", on_exit=[ShutdownOnce()])
+        if conf["record_only"] == "true"
+        else ExecuteProcess(cmd=play_cmd, output="screen")
+    )
     return [bag_player]
 
 
