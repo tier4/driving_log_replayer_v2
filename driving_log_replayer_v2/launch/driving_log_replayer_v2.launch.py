@@ -122,6 +122,13 @@ def create_output_dir(output_dir_str: str, scenario_path: Path) -> Path:
     return output_dir
 
 
+def output_dummy_result_jsonl(result_json_path: str) -> None:
+    jsonl_path_str = result_json_path + "l"
+    with Path(jsonl_path_str).open("w") as f:
+        dummy_str = '{"Result": {"Success": true, "Summary": "RecordOnlyMode"}, "Stamp": {"System": 0.0}, "Frame": {}}'
+        f.write(dummy_str + "\n")
+
+
 def check_launch_component(conf: dict) -> dict:
     use_case_launch_arg = driving_log_replayer_v2_config[conf["use_case"]]["disable"]
     # update autoware component launch or not
@@ -276,6 +283,8 @@ def launch_map_height_fitter(context: LaunchContext) -> list:
 def launch_evaluator_node(context: LaunchContext) -> list:
     conf = context.launch_configurations
     if conf["record_only"] != "false":
+        # output dummy result for Evaluator
+        output_dummy_result_jsonl(conf["result_json_path"])
         return [LogInfo(msg="evaluator_node is not launched because record_only is set")]
     params = {
         "use_sim_time": True,
