@@ -363,7 +363,11 @@ def launch_bag_player(
     if len(remap_list) != 1:
         play_cmd.extend(remap_list)
     bag_player = (
-        ExecuteProcess(cmd=play_cmd, output="screen", on_exit=[ShutdownOnce()])
+        ExecuteProcess(
+            cmd=play_cmd,
+            output="screen",
+            on_exit=[ExecuteProcess(cmd=["sleep", "3"], on_exit=[ShutdownOnce()])],
+        )  # 圧縮入れると書き込みに時間かかってplayが終わって即終了だとrecordの終了間に合わない
         if conf["record_only"] == "true"
         else ExecuteProcess(cmd=play_cmd, output="screen")
     )
@@ -376,6 +380,8 @@ def launch_bag_recorder(context: LaunchContext) -> list:
         "ros2",
         "bag",
         "record",
+        "-s",
+        "mcap",
         "-o",
         conf["result_bag_path"],
         "--qos-profile-overrides-path",
@@ -384,6 +390,8 @@ def launch_bag_recorder(context: LaunchContext) -> list:
             "config",
             "qos.yaml",
         ).as_posix(),
+        "--storage-preset-profile",
+        "zstd_fast",
         "--use-sim-time",
         "-e",
     ]
