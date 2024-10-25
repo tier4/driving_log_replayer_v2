@@ -48,6 +48,7 @@ def get_launch_arguments() -> list:
     with_autoware
     record_only
     override_topics_regex
+    storage
     """
     launch_arguments = []
 
@@ -102,6 +103,11 @@ def get_launch_arguments() -> list:
         "override_topics_regex",
         default_value="",
         description="use allowlist. Ex: override_topics_regex:=\^/tf\$\|/sensing/lidar/concatenated/pointcloud\|\^/perception/.\*/objects\$",  # noqa
+    )
+    add_launch_arg(
+        "storage",
+        default_value="mcap",
+        description="select storage type mcap or sqlite3",
     )
 
     return launch_arguments
@@ -381,7 +387,7 @@ def launch_bag_recorder(context: LaunchContext) -> list:
         "bag",
         "record",
         "-s",
-        "mcap",
+        conf["storage"],
         "-o",
         conf["result_bag_path"],
         "--qos-profile-overrides-path",
@@ -390,15 +396,14 @@ def launch_bag_recorder(context: LaunchContext) -> list:
             "config",
             "qos.yaml",
         ).as_posix(),
-        "--storage-preset-profile",
-        "zstd_fast",
         "--use-sim-time",
-        "-e",
     ]
+    if conf["storage"] == "mcap":
+        record_cmd += ["--storage-preset-profile", "zstd_fast"]
     if conf["override_topics_regex"] == "":
-        record_cmd.append(driving_log_replayer_v2_config[conf["use_case"]]["record"])
+        record_cmd += ["-e", driving_log_replayer_v2_config[conf["use_case"]]["record"]]
     else:
-        record_cmd.append(conf["override_topics_regex"])
+        record_cmd += ["-e", conf["override_topics_regex"]]
     return [ExecuteProcess(cmd=record_cmd)]
 
 
