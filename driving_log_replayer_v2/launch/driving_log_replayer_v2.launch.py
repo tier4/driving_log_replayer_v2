@@ -106,7 +106,7 @@ def get_launch_arguments() -> list:
     )
     add_launch_arg(
         "storage",
-        default_value="mcap",
+        default_value="sqlite3",  # Settings are adjusted to ros distro standards. Currently autoware is humble, so use sqlite3. Change to mcap when updated to jazzy.
         description="select storage type mcap or sqlite3",
     )
 
