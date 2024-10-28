@@ -46,6 +46,9 @@ def get_launch_arguments() -> list:
     play_rate
     play_delay
     with_autoware
+    record_only
+    override_topics_regex
+    storage
     """
     launch_arguments = []
 
@@ -91,6 +94,21 @@ def get_launch_arguments() -> list:
         default_value="true",
         description="Whether to launch Autoware or not. set false if Autoware is started on a different PC.",
     )
+    add_launch_arg(
+        "record_only",
+        default_value="false",
+        description="Do only bag record without starting evaluator node",
+    )
+    add_launch_arg(
+        "override_topics_regex",
+        default_value="",
+        description="use allowlist. Ex: override_topics_regex:=\^/tf\$\|/sensing/lidar/concatenated/pointcloud\|\^/perception/.\*/objects\$",  # noqa
+    )
+    add_launch_arg(
+        "storage",
+        default_value="sqlite3",  # Settings are adjusted to ros distro standards. Currently autoware is humble, so use sqlite3. Change to mcap when updated to jazzy.
+        description="select storage type mcap or sqlite3",
+    )
 
     return launch_arguments
 
@@ -108,6 +126,13 @@ def create_output_dir(output_dir_str: str, scenario_path: Path) -> Path:
     update_symlink = ["ln", "-snf", output_dir.as_posix(), symlink_dst]
     subprocess.run(update_symlink, check=False)
     return output_dir
+
+
+def output_dummy_result_jsonl(result_json_path: str) -> None:
+    jsonl_path_str = result_json_path + "l"
+    with Path(jsonl_path_str).open("w") as f:
+        dummy_str = '{"Result": {"Success": true, "Summary": "RecordOnlyMode"}, "Stamp": {"System": 0.0}, "Frame": {}}'
+        f.write(dummy_str + "\n")
 
 
 def check_launch_component(conf: dict) -> dict:
@@ -263,6 +288,10 @@ def launch_map_height_fitter(context: LaunchContext) -> list:
 
 def launch_evaluator_node(context: LaunchContext) -> list:
     conf = context.launch_configurations
+    if conf["record_only"] != "false":
+        # output dummy result for Evaluator
+        output_dummy_result_jsonl(conf["result_json_path"])
+        return [LogInfo(msg="evaluator_node is not launched because record_only is set")]
     params = {
         "use_sim_time": True,
         "scenario_path": conf["scenario_path"],
@@ -339,7 +368,15 @@ def launch_bag_player(
         )
     if len(remap_list) != 1:
         play_cmd.extend(remap_list)
-    bag_player = ExecuteProcess(cmd=play_cmd, output="screen")
+    bag_player = (
+        ExecuteProcess(
+            cmd=play_cmd,
+            output="screen",
+            on_exit=[ExecuteProcess(cmd=["sleep", "3"], on_exit=[ShutdownOnce()])],
+        )  # 圧縮入れると書き込みに時間かかってplayが終わって即終了だとrecordの終了間に合わない
+        if conf["record_only"] == "true"
+        else ExecuteProcess(cmd=play_cmd, output="screen")
+    )
     return [bag_player]
 
 
@@ -349,6 +386,8 @@ def launch_bag_recorder(context: LaunchContext) -> list:
         "ros2",
         "bag",
         "record",
+        "-s",
+        conf["storage"],
         "-o",
         conf["result_bag_path"],
         "--qos-profile-overrides-path",
@@ -357,10 +396,14 @@ def launch_bag_recorder(context: LaunchContext) -> list:
             "config",
             "qos.yaml",
         ).as_posix(),
-        "-e",
-        driving_log_replayer_v2_config[conf["use_case"]]["record"],
         "--use-sim-time",
     ]
+    if conf["storage"] == "mcap":
+        record_cmd += ["--storage-preset-profile", "zstd_fast"]
+    if conf["override_topics_regex"] == "":
+        record_cmd += ["-e", driving_log_replayer_v2_config[conf["use_case"]]["record"]]
+    else:
+        record_cmd += ["-e", conf["override_topics_regex"]]
     return [ExecuteProcess(cmd=record_cmd)]
 
 
