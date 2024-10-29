@@ -321,7 +321,7 @@ def launch_map_height_fitter(context: LaunchContext) -> list:
         return [LogInfo(msg="map_height_fitter is not launched because localization is false")]
 
     fitter_launch_file = Path(
-        get_package_share_directory("autoware_map_height_fitter"),
+        get_package_share_directory("map_height_fitter"),
         "launch",
         "map_height_fitter.launch.xml",
     )

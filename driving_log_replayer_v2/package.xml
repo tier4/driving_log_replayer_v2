@@ -34,7 +34,7 @@
   <depend>tier4_metric_msgs</depend>
   <depend>visualization_msgs</depend>
 
-  <exec_depend>autoware_map_height_fitter</exec_depend>
+  <exec_depend>map_height_fitter</exec_depend>
   <exec_depend>component_state_monitor</exec_depend>
   <exec_depend>driving_log_replayer_v2_analyzer</exec_depend>
   <exec_depend>lanelet2_extension_python</exec_depend>
