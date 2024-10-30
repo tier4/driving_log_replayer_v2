@@ -22,6 +22,7 @@ from diagnostic_msgs.msg import KeyValue
 from pydantic import BaseModel
 from pydantic import Field
 from pydantic import model_validator
+from tier4_metric_msgs.msg import MetricArray
 
 from driving_log_replayer_v2.result import EvaluationItem
 from driving_log_replayer_v2.result import ResultBase
@@ -290,9 +291,18 @@ class PlanningControlResult(ResultBase):
         self._success = control_success and planning_success
         self._summary = "Control: " + control_summary + " Planning: " + planning_summary
 
-    def set_frame(self, msg: DiagnosticArray, module: str) -> None:
-        if module == "control":
-            self._frame = self.__control_container.set_frame(msg)
-        if module == "planning":
-            self._frame = self.__planning_container.set_frame(msg)
+    def set_frame(self) -> None:
+        pass
+
+    def set_metric_frame(self, msg: MetricArray, module: str) -> None:
+        self._frame = {}
+        self.update()
+        # if module == "control":
+        #     self._frame = self.__control_container.set_frame(msg)
+        # if module == "planning":
+        #     self._frame = self.__planning_container.set_frame(msg)
+        # self.update()
+
+    def set_diag_frame(self, msg: DiagnosticArray) -> None:
+        self._frame = {}
         self.update()
