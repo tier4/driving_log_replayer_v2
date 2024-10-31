@@ -5,27 +5,29 @@ SensorModel: aip_xx1
 VehicleModel: lexus
 Evaluation:
   UseCaseName: planning_control
-  UseCaseFormatVersion: 0.1.0
+  UseCaseFormatVersion: 1.0.0
   Datasets:
     - odaiba:
         VehicleId: default
   Conditions:
-    ControlConditions:
-      - module: "autonomous_emergency_braking: aeb_emergency_stop"
-        decision: deceleration # Specify key as key and value as value in KeyValue of module.
+    MetricConditions:
+      - module: autonomous_emergency_braking # 現時点ではautonomous_emergency_brakingにしか対応していない
+        name: decision
+        value: brake
         condition_type: all_of
-        lane_condition:
+        lane_condition: # /planning/planning_evaluator/metrics ego_lane_info/lane_idから取る
           start:
             id: 1500
           end:
             id: 1500
             s: 2.3
-        kinematic_condition:
+        kinematic_condition: # /control/control_evaluator/metricsから取る
           vel: { min: 2.5, max: 3.0 }
           acc: { min: -0.5, max: 0.5 }
           jerk: { min: 0.2, max: 1.5 }
-      - module: "autonomous_emergency_braking: aeb_emergency_stop"
-        decision: none
+      - module: autonomous_emergency_braking
+        name: decision
+        value: none
         condition_type: all_of
         lane_condition: # optional
           start:
@@ -35,3 +37,8 @@ Evaluation:
             id: 1500
             s: 10.0
         kinematic_condition: null # optional
+    DiagConditions:
+      - module: "'control_validator: control_validation_rolling_back"
+        level: ["OK"] # OK, WARN, ERROR, STALE の中か判定したい状態を指定する複数可
+        time: { start: 0.0, end: 10.0} # ROS timeで start-endの間に指定したレベルであった場合にOKとする。
+

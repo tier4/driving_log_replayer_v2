@@ -14,6 +14,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from collections.abc import Callable
+
 from diagnostic_msgs.msg import DiagnosticArray
 from tier4_metric_msgs.msg import MetricArray
 
@@ -26,36 +28,59 @@ TARGET_DIAG_NAME = "control_validator: control_validation_rolling_back"
 
 
 class PlanningControlEvaluator(DLREvaluatorV2):
-    def __init__(self, name: str) -> None:
-        super().__init__(name, PlanningControlScenario, PlanningControlResult)
+    def __init__(
+        self,
+        name: str,
+        scenario_class: Callable = PlanningControlScenario,
+        result_class: Callable = PlanningControlResult,
+    ) -> None:
+        super().__init__(name, scenario_class, result_class)
         self._scenario: PlanningControlScenario
         self._result: PlanningControlResult
 
-        self.__sub_planning_metrics = self.create_subscription(
-            MetricArray,
-            "/planning/planning_evaluator/metrics",
-            lambda msg, module_type="planning": self.metrics_cb(msg, module_type),
-            1,
-        )  # 今これを出すやつがいない
+        self._latest_planning_metrics = MetricArray()
+        self._latest_control_metrics = MetricArray()
 
-        self.__sub_control_metrics = self.create_subscription(
-            MetricArray,
-            "/control/control_evaluator/metrics",
-            lambda msg, module_type="control": self.metrics_cb(msg, module_type),
-            1,
-        )
+        if self._scenario.Evaluation.Conditions.MetricConditions != []:
+            self.__sub_planning_metrics = self.create_subscription(
+                MetricArray,
+                "/planning/planning_evaluator/metrics",
+                self.planning_cb,
+                1,
+            )
 
-        self.__sub_validator_diagnostics = self.create_subscription(
-            DiagnosticArray,
-            "/diagnostics",
-            self.diagnostics_cb,
-            100,
-        )
+            self.__sub_control_metrics = self.create_subscription(
+                MetricArray,
+                "/control/control_evaluator/metrics",
+                self.control_cb,
+                1,
+            )
 
-    def metrics_cb(self, msg: MetricArray, module: str) -> None:
-        self._result.set_metric_frame(msg, module)
+            self.__sub_autonomous_emergency_braking = self.create_subscription(
+                MetricArray,
+                "/control/autonomous_emergency_braking/metrics",
+                self.aeb_cb,
+                1,
+            )
+
+        if self._scenario.Evaluation.Conditions.DiagConditions != []:
+            self.__sub_validator_diagnostics = self.create_subscription(
+                DiagnosticArray,
+                "/diagnostics",
+                self.diagnostics_cb,
+                100,
+            )
+
+    def aeb_cb(self, msg: MetricArray) -> None:
+        self._result.set_aeb_frame(msg, self._latest_planning_metrics, self._latest_control_metrics)
         if self._result.frame != {}:
             self._result_writer.write_result(self._result)
+
+    def planning_cb(self, msg: MetricArray) -> None:
+        self._latest_planning_metrics = msg
+
+    def control_cb(self, msg: MetricArray) -> None:
+        self._latest_control_metrics = msg
 
     def diagnostics_cb(self, msg: DiagnosticArray) -> None:
         if len(msg.status) == 0:
