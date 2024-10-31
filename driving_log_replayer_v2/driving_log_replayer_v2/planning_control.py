@@ -17,8 +17,6 @@ from sys import float_info
 from typing import Literal
 
 from diagnostic_msgs.msg import DiagnosticArray
-from diagnostic_msgs.msg import DiagnosticStatus
-from diagnostic_msgs.msg import KeyValue
 from pydantic import BaseModel
 from pydantic import Field
 from pydantic import model_validator
@@ -87,16 +85,16 @@ class LaneCondition(BaseModel):
     ended: bool = False
 
     @classmethod
-    def diag_lane_info(cls, lane_info: MetricArray) -> tuple[float, float, float]:
+    def metric_lane_info(cls, msg: MetricArray) -> tuple[float, float, float]:
         lane_id, s, t = None, None, None
-        for kv in lane_info.values:
-            kv: KeyValue
-            if kv.key == "lane_id":
-                lane_id = int(kv.value)
-            if kv.key == "s":
-                s = float(kv.value)
-            if kv.key == "t":
-                t = float(kv.value)
+        for metric in msg.metric_array:
+            metric: Metric
+            if metric.name == "ego_lane_info/lane_id":
+                lane_id = int(metric.value)
+            if metric.name == "ego_lane_info/s":
+                s = float(metric.value)
+            if metric.name == "ego_lane_info/t":
+                t = float(metric.value)
         return (lane_id, s, t)
 
     def is_started(self, lane_info_tuple: tuple[float, float, float]) -> bool:
@@ -118,16 +116,16 @@ class KinematicCondition(BaseModel):
     jerk: MinMax | None = None
 
     @classmethod
-    def diag_kinematic_state(cls, kinematic_state: DiagnosticStatus) -> tuple[float, float, float]:
+    def metric_kinematic_state(cls, msg: MetricArray) -> tuple[float, float, float]:
         vel, acc, jerk = None, None, None
-        for kv in kinematic_state.values:
-            kv: KeyValue
-            if kv.key == "vel":
-                vel = float(kv.value)
-            if kv.key == "acc":
-                acc = float(kv.value)
-            if kv.key == "jerk":
-                jerk = float(kv.value)
+        for metric in msg.metric_array:
+            metric: Metric
+            if metric.name == "kinematic_state/vel":
+                vel = float(metric.value)
+            if metric.name == "kinematic_state/acc":
+                acc = float(metric.value)
+            if metric.name == "kinematic_state/jerk":
+                jerk = float(metric.value)
         return (vel, acc, jerk)
 
     def match_condition(self, kinematic_state_tuple: tuple[float, float, float]) -> bool:
@@ -185,16 +183,16 @@ class Metrics(EvaluationItem):
         if len(msg.metric_array) == 0:
             """
             return {
-                "Error": "len(msg.status) == 0",
+                "Error": "len(msg.metric_array) == 0",
             }
             """
             return None
 
-        status0: Metric = msg.status[0]
-        if status0.name != self.condition.name:
+        metric_array0: Metric = msg.metric_array[0]
+        if metric_array0.name != self.condition.name:
             """
             return {
-                "Error": f"{status0.name=}, {self.condition.module=} module name is not matched",
+                "Error": f"{metric_array0.name=}, {self.condition.module=} module name is not matched",
             }
             """
             return None
@@ -202,7 +200,7 @@ class Metrics(EvaluationItem):
         lane_info_tuple = None
         kinematic_state_tuple = None
 
-        lane_info_tuple = LaneCondition.diag_lane_info(planning_metrics)
+        lane_info_tuple = LaneCondition.metric_lane_info(control_metrics)
         kinematic_state_tuple = KinematicCondition.diag_kinematic_state(control_metrics)
 
         if lane_info_tuple is None or kinematic_state_tuple is None:
@@ -230,7 +228,7 @@ class Metrics(EvaluationItem):
         self.total += 1
         frame_success = "Fail"
         # OK if decision matches and kinematic_state satisfies the condition
-        if self.condition.decision == status0.values[0].value:
+        if self.condition.value == metric_array0.value:
             if self.use_kinematic_condition:
                 if self.condition.kinematic_condition.match_condition(kinematic_state_tuple):
                     frame_success = "Success"
@@ -248,7 +246,7 @@ class Metrics(EvaluationItem):
             "Result": {"Total": self.success_str(), "Frame": frame_success},
             "Info": {
                 "TotalPassed": self.passed,
-                "Decision": status0.values[0].value,
+                "Decision": metric_array0.value,
                 "LaneInfo": lane_info_tuple,
                 "KinematicState": kinematic_state_tuple,
             },
@@ -259,7 +257,7 @@ class MetricsClassContainer:
     def __init__(self, conditions: list[MetricCondition]) -> None:
         self.__container: list[Metrics] = []
         for i, module_cond in enumerate(conditions):
-            self.__container.append(Metrics(f"{i}", module_cond))
+            self.__container.append(Metrics(f"Metrics_{i}", module_cond))
 
     def set_frame(
         self, msg: MetricArray, planning_metrics: MetricArray, control_metrics: MetricArray
@@ -300,9 +298,8 @@ class PlanningControlResult(ResultBase):
     def set_metrics_frame(
         self, msg: MetricArray, planning_metrics: MetricArray, control_metrics: MetricArray
     ) -> None:
-        self._frame = {}
+        self._frame = self.__metrics_container.set_frame(msg, planning_metrics, control_metrics)
         self.update()
 
     def set_diag_frame(self, msg: DiagnosticArray) -> None:
-        self._frame = {}
-        self.update()
+        pass
