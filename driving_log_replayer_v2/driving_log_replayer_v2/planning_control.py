@@ -140,7 +140,7 @@ class KinematicCondition(BaseModel):
 
 
 class MetricCondition(BaseModel):
-    module: str
+    topic: str
     name: str
     value: str
     condition_type: Literal["any_of", "all_of"]

@@ -11,7 +11,7 @@ Evaluation:
         VehicleId: default
   Conditions:
     MetricConditions:
-      - module: autonomous_emergency_braking # 現時点ではautonomous_emergency_brakingにしか対応していない
+      - topic: /control/autonomous_emergency_braking/metrics # 現時点ではautonomous_emergency_brakingにしか対応していない
         name: decision
         value: brake
         condition_type: all_of
@@ -25,7 +25,7 @@ Evaluation:
           vel: { min: 2.5, max: 3.0 }
           acc: { min: -0.5, max: 0.5 }
           jerk: { min: 0.2, max: 1.5 }
-      - module: autonomous_emergency_braking
+      - topic: /control/autonomous_emergency_braking/metrics
         name: decision
         value: none
         condition_type: all_of
