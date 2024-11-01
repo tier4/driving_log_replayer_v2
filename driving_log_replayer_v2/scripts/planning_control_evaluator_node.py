@@ -16,15 +16,12 @@
 
 from collections.abc import Callable
 
-from diagnostic_msgs.msg import DiagnosticArray
 from tier4_metric_msgs.msg import MetricArray
 
 from driving_log_replayer_v2.evaluator import DLREvaluatorV2
 from driving_log_replayer_v2.evaluator import evaluator_main
 from driving_log_replayer_v2.planning_control import PlanningControlResult
 from driving_log_replayer_v2.planning_control import PlanningControlScenario
-
-TARGET_DIAG_NAME = "control_validator: control_validation_rolling_back"
 
 
 class PlanningControlEvaluator(DLREvaluatorV2):
@@ -38,58 +35,29 @@ class PlanningControlEvaluator(DLREvaluatorV2):
         self._scenario: PlanningControlScenario
         self._result: PlanningControlResult
 
-        self._latest_planning_metrics = MetricArray()
         self._latest_control_metrics = MetricArray()
 
-        if self._scenario.Evaluation.Conditions.MetricConditions != []:
-            self.__sub_planning_metrics = self.create_subscription(
-                MetricArray,
-                "/planning/planning_evaluator/metrics",
-                self.planning_cb,
-                1,
-            )
+        self.__sub_control_metrics = self.create_subscription(
+            MetricArray,
+            "/control/control_evaluator/metrics",
+            self.control_cb,
+            1,
+        )
 
-            self.__sub_control_metrics = self.create_subscription(
-                MetricArray,
-                "/control/control_evaluator/metrics",
-                self.control_cb,
-                1,
-            )
-
-            self.__sub_autonomous_emergency_braking = self.create_subscription(
-                MetricArray,
-                "/control/autonomous_emergency_braking/metrics",
-                self.aeb_cb,
-                1,
-            )
-
-        if self._scenario.Evaluation.Conditions.DiagConditions != []:
-            self.__sub_validator_diagnostics = self.create_subscription(
-                DiagnosticArray,
-                "/diagnostics",
-                self.diagnostics_cb,
-                100,
-            )
+        self.__sub_autonomous_emergency_braking = self.create_subscription(
+            MetricArray,
+            "/control/autonomous_emergency_braking/metrics",
+            self.aeb_cb,
+            1,
+        )
 
     def aeb_cb(self, msg: MetricArray) -> None:
-        self._result.set_aeb_frame(msg, self._latest_planning_metrics, self._latest_control_metrics)
+        self._result.set_frame(msg, self._latest_control_metrics)
         if self._result.frame != {}:
             self._result_writer.write_result(self._result)
 
-    def planning_cb(self, msg: MetricArray) -> None:
-        self._latest_planning_metrics = msg
-
     def control_cb(self, msg: MetricArray) -> None:
         self._latest_control_metrics = msg
-
-    def diagnostics_cb(self, msg: DiagnosticArray) -> None:
-        if len(msg.status) == 0:
-            return
-        diag_status = msg.status[0]
-        if diag_status.name != TARGET_DIAG_NAME:
-            return
-        self._result.set_diag_frame(diag_status)
-        self._result_writer.write_result(self._result)
 
 
 @evaluator_main

@@ -16,7 +16,6 @@ from dataclasses import dataclass
 from sys import float_info
 from typing import Literal
 
-from diagnostic_msgs.msg import DiagnosticArray
 from pydantic import BaseModel
 from pydantic import Field
 from pydantic import model_validator
@@ -26,19 +25,6 @@ from tier4_metric_msgs.msg import MetricArray
 from driving_log_replayer_v2.result import EvaluationItem
 from driving_log_replayer_v2.result import ResultBase
 from driving_log_replayer_v2.scenario import Scenario
-
-
-class StartEnd(BaseModel):
-    start: float = Field(float_info.max, ge=0.0)
-    end: float = float_info.max
-
-    @model_validator(mode="after")
-    def validate_min_max(self) -> "StartEnd":
-        err_msg = "end must be a greater number than start"
-
-        if self.end < self.start:
-            raise ValueError(err_msg)
-        return self
 
 
 class MinMax(BaseModel):
@@ -67,7 +53,12 @@ class LaneInfo(BaseModel):
     s: float | None = None
     t: LeftRight | None = None
 
-    def match_condition(self, lane_info: tuple, *, start_condition: bool = False) -> bool:
+    def match_condition(
+        self,
+        lane_info: tuple[int, float, float],
+        *,
+        start_condition: bool = False,
+    ) -> bool:
         lane_id, s, t = lane_info
         if self.id != lane_id:
             return False
@@ -85,8 +76,9 @@ class LaneCondition(BaseModel):
     ended: bool = False
 
     @classmethod
-    def metric_lane_info(cls, msg: MetricArray) -> tuple[float, float, float]:
-        lane_id, s, t = None, None, None
+    def metric_lane_info(cls, msg: MetricArray) -> tuple[int, float, float]:
+        # If conditions cannot be taken, return conditions that can never be met.
+        lane_id, s, t = -1, float_info.max, 0.0
         for metric in msg.metric_array:
             metric: Metric
             if metric.name == "ego_lane_info/lane_id":
@@ -97,13 +89,13 @@ class LaneCondition(BaseModel):
                 t = float(metric.value)
         return (lane_id, s, t)
 
-    def is_started(self, lane_info_tuple: tuple[float, float, float]) -> bool:
+    def is_started(self, lane_info_tuple: tuple[int, float, float]) -> bool:
         # Once True, do not change.
         if not self.started:
             self.started = self.start.match_condition(lane_info_tuple, start_condition=True)
         return self.started
 
-    def is_ended(self, lane_info_tuple: tuple[float, float, float]) -> bool:
+    def is_ended(self, lane_info_tuple: tuple[int, float, float]) -> bool:
         # Once True, do not change.
         if not self.ended:
             self.ended = self.end.match_condition(lane_info_tuple)
@@ -117,7 +109,7 @@ class KinematicCondition(BaseModel):
 
     @classmethod
     def metric_kinematic_state(cls, msg: MetricArray) -> tuple[float, float, float]:
-        vel, acc, jerk = None, None, None
+        vel, acc, jerk = 0.0, 0.0, 0.0
         for metric in msg.metric_array:
             metric: Metric
             if metric.name == "kinematic_state/vel":
@@ -148,15 +140,8 @@ class MetricCondition(BaseModel):
     kinematic_condition: KinematicCondition | None = None
 
 
-class DiagCondition(BaseModel):
-    module: str
-    level: list[Literal["OK", "WARN", "ERROR", "STALE"]]
-    time: StartEnd | None = None
-
-
 class Conditions(BaseModel):
     MetricConditions: list[MetricCondition] = []
-    DiagConditions: list[DiagCondition] = []
 
 
 class Evaluation(BaseModel):
@@ -177,38 +162,8 @@ class Metrics(EvaluationItem):
         self.use_lane_condition = self.condition.lane_condition is not None
         self.use_kinematic_condition = self.condition.kinematic_condition is not None
 
-    def set_frame(
-        self, msg: MetricArray, planning_metrics: MetricArray, control_metrics: MetricArray
-    ) -> dict | None:  # noqa
-        if len(msg.metric_array) == 0:
-            """
-            return {
-                "Error": "len(msg.metric_array) == 0",
-            }
-            """
-            return None
-
-        metric_array0: Metric = msg.metric_array[0]
-        if metric_array0.name != self.condition.name:
-            """
-            return {
-                "Error": f"{metric_array0.name=}, {self.condition.module=} module name is not matched",
-            }
-            """
-            return None
-
-        lane_info_tuple = None
-        kinematic_state_tuple = None
-
+    def set_frame(self, msg: MetricArray, control_metrics: MetricArray) -> dict | None:
         lane_info_tuple = LaneCondition.metric_lane_info(control_metrics)
-        kinematic_state_tuple = KinematicCondition.diag_kinematic_state(control_metrics)
-
-        if lane_info_tuple is None or kinematic_state_tuple is None:
-            """
-            return {"Error": "lane_info_tuple or kinematic_state_tuple is None"}
-            """
-            return None
-
         if self.use_lane_condition:
             started = self.condition.lane_condition.is_started(lane_info_tuple)
             ended = self.condition.lane_condition.is_ended(lane_info_tuple)
@@ -227,8 +182,12 @@ class Metrics(EvaluationItem):
 
         self.total += 1
         frame_success = "Fail"
+
+        aeb_value: str = "none" if len(msg.metric_array) == 0 else msg.metric_array[0].value
+        kinematic_state_tuple = KinematicCondition.metric_kinematic_state(control_metrics)
+
         # OK if decision matches and kinematic_state satisfies the condition
-        if self.condition.value == metric_array0.value:
+        if self.condition.value == aeb_value:
             if self.use_kinematic_condition:
                 if self.condition.kinematic_condition.match_condition(kinematic_state_tuple):
                     frame_success = "Success"
@@ -246,7 +205,7 @@ class Metrics(EvaluationItem):
             "Result": {"Total": self.success_str(), "Frame": frame_success},
             "Info": {
                 "TotalPassed": self.passed,
-                "Decision": metric_array0.value,
+                "Decision": aeb_value,
                 "LaneInfo": lane_info_tuple,
                 "KinematicState": kinematic_state_tuple,
             },
@@ -259,12 +218,10 @@ class MetricsClassContainer:
         for i, module_cond in enumerate(conditions):
             self.__container.append(Metrics(f"Metrics_{i}", module_cond))
 
-    def set_frame(
-        self, msg: MetricArray, planning_metrics: MetricArray, control_metrics: MetricArray
-    ) -> dict:
+    def set_frame(self, msg: MetricArray, control_metrics: MetricArray) -> dict:
         frame_result: dict[int, dict] = {}
         for evaluation_item in self.__container:
-            result_i = evaluation_item.set_frame(msg, planning_metrics, control_metrics)
+            result_i = evaluation_item.set_frame(msg, control_metrics)
             if result_i is not None:
                 frame_result[f"{evaluation_item.name}"] = result_i
         return frame_result
@@ -287,19 +244,10 @@ class PlanningControlResult(ResultBase):
     def __init__(self, condition: Conditions) -> None:
         super().__init__()
         self.__metrics_container = MetricsClassContainer(condition.MetricConditions)
-        # self.__diag_container = DiagClassContainer(condition.DiagConditions)
 
     def update(self) -> None:
-        pass
+        self._success, self._summary = self.__metrics_container.update()
 
-    def set_frame(self) -> None:
-        pass
-
-    def set_metrics_frame(
-        self, msg: MetricArray, planning_metrics: MetricArray, control_metrics: MetricArray
-    ) -> None:
-        self._frame = self.__metrics_container.set_frame(msg, planning_metrics, control_metrics)
+    def set_frame(self, msg: MetricArray, control_metrics: MetricArray) -> None:
+        self._frame = self.__metrics_container.set_frame(msg, control_metrics)
         self.update()
-
-    def set_diag_frame(self, msg: DiagnosticArray) -> None:
-        pass

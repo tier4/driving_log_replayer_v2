@@ -11,7 +11,7 @@ Evaluation:
         VehicleId: default
   Conditions:
     MetricConditions:
-      - topic: /control/autonomous_emergency_braking/metrics # 現時点ではautonomous_emergency_brakingにしか対応していない
+      - topic: /control/autonomous_emergency_braking/metrics # 現時点では/control/autonomous_emergency_braking/metrics固定。
         name: decision
         value: brake
         condition_type: all_of
@@ -37,8 +37,4 @@ Evaluation:
             id: 1500
             s: 10.0
         kinematic_condition: null # optional
-    DiagConditions:
-      - module: "'control_validator: control_validation_rolling_back"
-        level: ["OK"] # OK, WARN, ERROR, STALE の中か判定したい状態を指定する複数可
-        time: { start: 0.0, end: 10.0} # ROS timeで start-endの間に指定したレベルであった場合にOKとする。
 
