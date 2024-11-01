@@ -48,9 +48,9 @@ class DiagnosticsEvaluator(DLREvaluatorV2):
         if len(msg.status) == 0:
             return
         diag_status: DiagnosticStatus = msg.status[0]
-        if diag_status.name not in self._scenario.Evaluation.Conditions.module_names:
+        if diag_status.hardware_id not in self._scenario.Evaluation.Conditions.target_ids:
             return
-        self._result.set_frame(diag_status)
+        self._result.set_frame(msg)
         self._result_writer.write_result(self._result)
 
 

@@ -1,0 +1,19 @@
+ScenarioFormatVersion: 3.0.0
+ScenarioName: sample_diagnostics
+ScenarioDescription: sample_diagnostics
+SensorModel: aip_xx1
+VehicleModel: lexus
+Evaluation:
+  UseCaseName: diagnostics
+  UseCaseFormatVersion: 0.1.0
+  Datasets:
+    - odaiba:
+        VehicleId: default
+  Conditions:
+    DiagConditions:
+      - hardware_id: control_validator
+        name: 'control_validator: control_validation_max_distance_deviation'
+        level: ["OK"] # OK, WARN, ERROR, STALE の中か判定したい状態を指定する複数可
+        time: { start: 0.0, end: 10.0} # ROS timeで start-endの間に指定したレベルであった場合にOKとする。
+        condition_type: any_of
+
