@@ -233,6 +233,16 @@ YABLOC_AUTOWARE_ARGS = {
 
 YABLOC_NODE_PARAMS = {}
 
+DIAGNOSTICS_RECORD_TOPIC = """^/tf$\
+|^/diagnostics$\
+"""
+
+DIAGNOSTICS_AUTOWARE_DISABLE = {}
+
+DIAGNOSTICS_AUTOWARE_ARGS = {}
+
+DIAGNOSTICS_NODE_PARAMS = {}
+
 driving_log_replayer_v2_config = {
     "annotationless_perception": {
         "record": ANNOTATIONLESS_PERCEPTION_RECORD_TOPIC,
@@ -299,5 +309,11 @@ driving_log_replayer_v2_config = {
         "disable": YABLOC_AUTOWARE_DISABLE,
         "autoware": YABLOC_AUTOWARE_ARGS,
         "node": YABLOC_NODE_PARAMS,
+    },
+    "diagnostics": {
+        "record": DIAGNOSTICS_RECORD_TOPIC,
+        "disable": DIAGNOSTICS_AUTOWARE_DISABLE,
+        "autoware": DIAGNOSTICS_AUTOWARE_ARGS,
+        "node": DIAGNOSTICS_NODE_PARAMS,
     },
 }
