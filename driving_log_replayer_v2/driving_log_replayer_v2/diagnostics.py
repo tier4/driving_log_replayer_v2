@@ -32,6 +32,21 @@ def stamp_to_float(stamp: Time) -> float:
     return stamp.sec + (stamp.nanosec / 1e9)
 
 
+def get_diagnostic_level_string(level: int | DiagnosticStatus) -> str:
+    # DiagnosticStatusオブジェクトが渡された場合はlevel値を取得
+    if isinstance(level, DiagnosticStatus):
+        level = level.level
+
+    level_map = {
+        DiagnosticStatus.OK: "OK",
+        DiagnosticStatus.WARN: "WARN",
+        DiagnosticStatus.ERROR: "ERROR",
+        DiagnosticStatus.STALE: "STALE",
+    }
+
+    return level_map.get(level, f"UNKNOWN({level})")
+
+
 class StartEnd(BaseModel):
     start: float = Field(0.0, ge=0.0)
     end: float = Field(float_info.max, ge=0.0)
@@ -53,6 +68,7 @@ class DiagCondition(BaseModel):
     name: str
     level: list[Literal["OK", "WARN", "ERROR", "STALE"]]
     time: StartEnd
+    condition_type: Literal["any_of", "all_of"]
 
 
 class Conditions(BaseModel):
@@ -60,7 +76,7 @@ class Conditions(BaseModel):
     target_hardware_ids: list[str] = []
 
     @model_validator(mode="after")
-    def check_target_hardware_ids(self) -> "Conditions":
+    def validate_target_hardware_ids(self) -> "Conditions":
         err_msg = "No condition is set"
 
         for diag_condition in self.DiagConditions:
@@ -96,7 +112,8 @@ class DiagClass(EvaluationItem):
             if status.name == self.condition.name:
                 self.total += 1
                 frame_success = "Fail"
-                if status.level in self.condition.level:
+                level_str = get_diagnostic_level_string(status)
+                if level_str in self.condition.level:
                     frame_success = "Success"
                     self.passed += 1
                 self.success = (
@@ -108,7 +125,7 @@ class DiagClass(EvaluationItem):
                     "Result": {"Total": self.success_str(), "Frame": frame_success},
                     "Info": {
                         "TotalPassed": self.passed,
-                        "Level": status.level,
+                        "Level": level_str,
                     },
                 }
         # not match status.name
