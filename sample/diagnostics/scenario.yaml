@@ -12,7 +12,7 @@ Evaluation:
   Conditions:
     DiagConditions:
       - hardware_id: control_validator
-        name: 'control_validator: control_validation_rolling_back'
+        name: "control_validator: control_validation_rolling_back"
         level: ["OK"] # OK, WARN, ERROR, STALE の中か判定したい状態を指定する複数可
-        time: { start: 1730266438.2, end: 1730266482.42} # ROS timeで start-endの間に指定したレベルであった場合に成功になる
+        time: { start: 1730266438.2, end: 1730266482.42 } # ROS timeで start-endの間に指定したレベルであった場合に成功になる
         condition_type: all_of
