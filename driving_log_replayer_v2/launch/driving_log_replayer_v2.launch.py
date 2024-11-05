@@ -136,6 +136,8 @@ def output_dummy_result_jsonl(result_json_path: str) -> None:
 
 
 def check_launch_component(conf: dict) -> dict:
+    if conf["with_autoware"] != "true":
+        return {"autoware": "disable"}
     use_case_launch_arg = driving_log_replayer_v2_config[conf["use_case"]]["disable"]
     # update autoware component launch or not
     autoware_components = ["sensing", "localization", "perception", "planning", "control"]
@@ -275,7 +277,7 @@ def launch_autoware(context: LaunchContext) -> list:
 
 
 def launch_map_height_fitter(context: LaunchContext) -> list:
-    if context.launch_configurations["localization"] != "true":
+    if context.launch_configurations.get("localization", "true") != "true":
         return [LogInfo(msg="map_height_fitter is not launched because localization is false")]
 
     fitter_launch_file = Path(
