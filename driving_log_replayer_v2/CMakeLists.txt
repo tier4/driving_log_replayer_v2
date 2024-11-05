@@ -33,6 +33,7 @@ install(PROGRAMS
   scripts/planning_control_evaluator_node.py
   scripts/initial_pose_node.py
   scripts/goal_pose_node.py
+  scripts/diagnostics_evaluator_node.py
   DESTINATION lib/${PROJECT_NAME}
 )
 
