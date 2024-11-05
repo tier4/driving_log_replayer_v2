@@ -3,13 +3,13 @@
 diagnosticsが指定の時間に指定のレベルになっているかを評価する
 
 類似の評価にperformance_diagがあるが、そちらはLiDARに特化している。
-こちらは、levelを評価するシンプルな機能しかないが、任意のstatus.nameに対応
+diagnostics_evaluator_nodeは、levelを評価するシンプルな機能しかないが、任意のstatus.nameに対応
 
 ## 評価方法
 
 launch を立ち上げると以下のことが実行され、評価される。
 
-1. launch で評価ノード(`diagnositcs_evaluator_node`)と `logging_simulator.launch`、`ros2 bag play`コマンドを立ち上げる
+1. launch で評価ノード(`diagnostics_evaluator_node`)と `logging_simulator.launch`、`ros2 bag play`コマンドを立ち上げる
 2. bag から出力されたセンサーデータを autoware が受け取って、`/diagnostics`に診断情報を出力する
 3. 評価ノードが topic を subscribe して、各基準を満たしているかを判定して結果をファイルに記録する
 4. bag の再生が終了すると自動で launch が終了して評価が終了する
@@ -58,7 +58,7 @@ ros2 launch driving_log_replayer_v2 driving_log_replayer_v2.launch.py scenario_p
 
 ### 入力 rosbag に含まれるべき topic
 
-autowareのコンポーネントをfalseにして、bagからtopic出力を固定するということをやらないので、どれが必要かはやりたいこと次第。
+どのtopicが必要かはやりたいこと次第。
 
 ### 入力 rosbag に含まれてはいけない topic
 
