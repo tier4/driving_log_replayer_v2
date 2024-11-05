@@ -5,9 +5,7 @@
         {
           "hardware_id": "control_validator",
           "name": "control_validator: control_validation_rolling_back",
-          "level": [
-            "OK"
-          ],
+          "level": ["OK"],
           "time": {
             "start": 1730266438.2,
             "end": 1730266482.42
@@ -15,9 +13,7 @@
           "condition_type": "all_of"
         }
       ],
-      "target_hardware_ids": [
-        "control_validator"
-      ]
+      "target_hardware_ids": ["control_validator"]
     }
   },
   {

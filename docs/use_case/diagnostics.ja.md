@@ -89,7 +89,7 @@ clock は、ros2 bag play の--clock オプションによって出力してい�
 {
   "Frame": {
     "Condition_IDNEX": {
-      "Result": {"Total": "Success or Fail", "Frame": "Success or Fail"},
+      "Result": { "Total": "Success or Fail", "Frame": "Success or Fail" },
       "Info": {
         "TotalPassed": "評価条件をパスしたtopicの総数",
         "Level": "取得したstatusのLevel"

@@ -90,7 +90,7 @@ Success is determined when all evaluation conditions are met.
 {
   "Frame": {
     "Condition_IDNEX": {
-      "Result": {"Total": "Success or Fail", "Frame": "Success or Fail"},
+      "Result": { "Total": "Success or Fail", "Frame": "Success or Fail" },
       "Info": {
         "TotalPassed": "Total number of topics that passed the evaluation criteria",
         "Level": "Level of acquired status"
