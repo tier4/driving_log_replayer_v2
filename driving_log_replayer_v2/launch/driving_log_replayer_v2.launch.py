@@ -137,7 +137,7 @@ def output_dummy_result_jsonl(result_json_path: str) -> None:
 
 def check_launch_component(conf: dict) -> dict:
     if conf["with_autoware"] != "true":
-        return {"autoware": "disable"}
+        return {"autoware": "false"}
     use_case_launch_arg = driving_log_replayer_v2_config[conf["use_case"]]["disable"]
     # update autoware component launch or not
     autoware_components = ["sensing", "localization", "perception", "planning", "control"]
