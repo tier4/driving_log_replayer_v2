@@ -35,7 +35,7 @@ def test_scenario() -> None:
     }
 
 
-@pytest.fixture()
+@pytest.fixture
 def create_obj_metrics() -> ObjectMetrics:
     condition = {
         "lateral_deviation": DiagValue(
