@@ -14,11 +14,11 @@
 
 from dataclasses import dataclass
 from sys import float_info
-from typing import ClassVar
 from typing import Literal
 
+from builtin_interfaces.msg import Time
+from diagnostic_msgs.msg import DiagnosticArray
 from diagnostic_msgs.msg import DiagnosticStatus
-from diagnostic_msgs.msg import KeyValue
 from pydantic import BaseModel
 from pydantic import Field
 from pydantic import model_validator
@@ -26,6 +26,10 @@ from pydantic import model_validator
 from driving_log_replayer_v2.result import EvaluationItem
 from driving_log_replayer_v2.result import ResultBase
 from driving_log_replayer_v2.scenario import Scenario
+
+
+def stamp_to_float(stamp: Time) -> float:
+    return stamp.sec + (stamp.nanosec / 1e9)
 
 
 class StartEnd(BaseModel):
@@ -40,6 +44,9 @@ class StartEnd(BaseModel):
             raise ValueError(err_msg)
         return self
 
+    def match_condition(self, float_time: float) -> bool:
+        return self.start <= float_time <= self.end
+
 
 class DiagCondition(BaseModel):
     hardware_id: str
@@ -50,7 +57,18 @@ class DiagCondition(BaseModel):
 
 class Conditions(BaseModel):
     DiagConditions: list[DiagCondition]
-    target_hardware_ids: list[str] | None = None
+    target_hardware_ids: list[str] = []
+
+    @model_validator(mode="after")
+    def check_target_hardware_ids(self) -> "Conditions":
+        err_msg = "No condition is set"
+
+        for diag_condition in self.DiagConditions:
+            self.target_hardware_ids.append(diag_condition.hardware_id)
+
+        if self.target_hardware_ids == []:
+            raise ValueError(err_msg)
+        return self
 
 
 class Evaluation(BaseModel):
@@ -64,21 +82,75 @@ class DiagnosticsScenario(Scenario):
     Evaluation: Evaluation
 
 
+@dataclass
+class DiagClass(EvaluationItem):
+    def set_frame(self, msg: DiagnosticArray) -> dict | None:
+        self.condition: DiagCondition
+        if len(msg.status) == 0:
+            return None
+        # check time condition
+        if not self.condition.time.match_condition(stamp_to_float(msg.header.stamp)):
+            return None
+        for status in msg.status:
+            status: DiagnosticStatus
+            if status.name == self.condition.name:
+                self.total += 1
+                frame_success = "Fail"
+                if status.level in self.condition.level:
+                    frame_success = "Success"
+                    self.passed += 1
+                self.success = (
+                    self.passed > 0
+                    if self.condition.condition_type == "any_of"
+                    else self.passed == self.total
+                )
+                return {
+                    "Result": {"Total": self.success_str(), "Frame": frame_success},
+                    "Info": {
+                        "TotalPassed": self.passed,
+                        "Level": status.level,
+                    },
+                }
+        # not match status.name
+        return None
+
+
+class DiagClassContainer:
+    def __init__(self, conditions: list[DiagCondition]) -> None:
+        self.__container: list[DiagClass] = []
+        for i, cond in enumerate(conditions):
+            self.__container.append(DiagClass(f"Condition_{i}", cond))
+
+    def set_frame(self, msg: DiagnosticArray) -> dict:
+        frame_result: dict[int, dict] = {}
+        for evaluation_item in self.__container:
+            result_i = evaluation_item.set_frame(msg)
+            if result_i is not None:
+                frame_result[f"{evaluation_item.name}"] = result_i
+        return frame_result
+
+    def update(self) -> tuple[bool, str]:
+        rtn_success = True
+        rtn_summary = [] if len(self.__container) != 0 else ["NotTestTarget"]
+        for evaluation_item in self.__container:
+            if not evaluation_item.success:
+                rtn_success = False
+                rtn_summary.append(f"{evaluation_item.name} (Fail)")
+            else:
+                rtn_summary.append(f"{evaluation_item.name} (Success)")
+        prefix_str = "Passed" if rtn_success else "Failed"
+        rtn_summary_str = prefix_str + ":" + ", ".join(rtn_summary)
+        return (rtn_success, rtn_summary_str)
+
+
 class DiagnosticsResult(ResultBase):
     def __init__(self, condition: Conditions) -> None:
         super().__init__()
+        self.__diag_container = DiagClassContainer(condition.DiagConditions)
 
     def update(self) -> None:
-        tmp_success = self.__visibility.success
-        tmp_summary = self.__visibility.summary + " Blockage:"
-        for v in self.__blockages.values():
-            tmp_summary += " " + v.summary
-            if not v.success:
-                tmp_success = False
-        prefix_str = "Passed: " if tmp_success else "Failed: "
-        self._success = tmp_success
-        self._summary = prefix_str + tmp_summary
+        self._success, self._summary = self.__diag_container.update()
 
-    def set_frame(self) -> None:
-        # abstract method
-        pass
+    def set_frame(self, msg: DiagnosticArray) -> None:
+        self._frame = self.__diag_container.set_frame(msg)
+        self.update()
