@@ -32,10 +32,8 @@ def stamp_to_float(stamp: Time) -> float:
     return stamp.sec + (stamp.nanosec / 1e9)
 
 
-def get_diagnostic_level_string(level: int | DiagnosticStatus) -> str:
-    # DiagnosticStatusオブジェクトが渡された場合はlevel値を取得
-    if isinstance(level, DiagnosticStatus):
-        level = level.level
+def get_diagnostic_level_string(status: DiagnosticStatus) -> str:
+    level = status.level
 
     level_map = {
         DiagnosticStatus.OK: "OK",
