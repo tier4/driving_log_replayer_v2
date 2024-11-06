@@ -17,14 +17,10 @@ from sys import float_info
 from typing import Literal
 
 from builtin_interfaces.msg import Time
-from diagnostic_msgs.msg import DiagnosticArray
-from diagnostic_msgs.msg import DiagnosticStatus
-from pydantic import BaseModel
-from pydantic import Field
-from pydantic import model_validator
+from diagnostic_msgs.msg import DiagnosticArray, DiagnosticStatus
+from pydantic import BaseModel, Field, model_validator
 
-from driving_log_replayer_v2.result import EvaluationItem
-from driving_log_replayer_v2.result import ResultBase
+from driving_log_replayer_v2.result import EvaluationItem, ResultBase
 from driving_log_replayer_v2.scenario import Scenario
 
 
@@ -97,11 +93,9 @@ class DiagnosticsScenario(Scenario):
 
 
 @dataclass
-class DiagClass(EvaluationItem):
+class Diag(EvaluationItem):
     def set_frame(self, msg: DiagnosticArray) -> dict | None:
         self.condition: DiagCondition
-        if len(msg.status) == 0:
-            return None
         # check time condition
         if not self.condition.time.match_condition(stamp_to_float(msg.header.stamp)):
             return None
@@ -132,9 +126,9 @@ class DiagClass(EvaluationItem):
 
 class DiagClassContainer:
     def __init__(self, conditions: list[DiagCondition]) -> None:
-        self.__container: list[DiagClass] = []
+        self.__container: list[Diag] = []
         for i, cond in enumerate(conditions):
-            self.__container.append(DiagClass(f"Condition_{i}", cond))
+            self.__container.append(Diag(f"Condition_{i}", cond))
 
     def set_frame(self, msg: DiagnosticArray) -> dict:
         frame_result: dict[int, dict] = {}
