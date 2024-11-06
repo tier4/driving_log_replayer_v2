@@ -12,7 +12,7 @@ Evaluation:
   Conditions:
     MetricConditions:
       - topic: /control/autonomous_emergency_braking/metrics # 現時点では/control/autonomous_emergency_braking/metrics固定。
-        name: decision
+        name: decision # decision固定
         value: brake
         condition_type: all_of
         lane_condition: # /planning/planning_evaluator/metrics ego_lane_info/lane_idから取る
@@ -27,7 +27,7 @@ Evaluation:
           jerk: { min: 0.2, max: 1.5 }
       - topic: /control/autonomous_emergency_braking/metrics
         name: decision
-        value: none
+        value: none # noneという値は実際には出力されない。空配列が来たとき判断する
         condition_type: all_of
         lane_condition: # optional
           start:

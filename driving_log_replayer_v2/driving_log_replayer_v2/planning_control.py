@@ -215,8 +215,8 @@ class Metrics(EvaluationItem):
 class MetricsClassContainer:
     def __init__(self, conditions: list[MetricCondition]) -> None:
         self.__container: list[Metrics] = []
-        for i, module_cond in enumerate(conditions):
-            self.__container.append(Metrics(f"Metrics_{i}", module_cond))
+        for i, cond in enumerate(conditions):
+            self.__container.append(Metrics(f"Condition_{i}", cond))
 
     def set_frame(self, msg: MetricArray, control_metrics: MetricArray) -> dict:
         frame_result: dict[int, dict] = {}
