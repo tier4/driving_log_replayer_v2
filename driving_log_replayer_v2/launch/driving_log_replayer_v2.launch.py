@@ -49,6 +49,7 @@ def get_launch_arguments() -> list:
     record_only
     override_topics_regex
     storage
+    remap
     """
     launch_arguments = []
 
@@ -108,6 +109,11 @@ def get_launch_arguments() -> list:
         "storage",
         default_value="sqlite3",  # Settings are adjusted to ros distro standards. Currently autoware is humble, so use sqlite3. Change to mcap when updated to jazzy.
         description="select storage type mcap or sqlite3",
+    )
+    add_launch_arg(
+        "remap",
+        default_value="",  # Settings are adjusted to ros distro standards. Currently autoware is humble, so use sqlite3. Change to mcap when updated to jazzy.
+        description="use comma separated string. Ex: remap:=/tf,/sensing/lidar/concatenated/pointcloud",
     )
 
     return launch_arguments
@@ -368,6 +374,12 @@ def launch_bag_player(
         remap_list.append(
             "/planning/mission_planning/route:=/unused/planning/mission_planning/route",
         )
+    # user defined remap
+    if conf["remap"] != "":
+        remap_topics: list[str] = conf["remap"].split(",")
+        for topic in remap_topics:
+            if topic.startswith("/") and topic not in remap_list:
+                remap_list.append(f"{topic}:=/unused{topic}")
     if len(remap_list) != 1:
         play_cmd.extend(remap_list)
     bag_player = (
@@ -379,7 +391,7 @@ def launch_bag_player(
         if conf["record_only"] == "true"
         else ExecuteProcess(cmd=play_cmd, output="screen")
     )
-    return [bag_player]
+    return [bag_player, LogInfo(msg=f"remap_command is {remap_list}")]
 
 
 def launch_bag_recorder(context: LaunchContext) -> list:
