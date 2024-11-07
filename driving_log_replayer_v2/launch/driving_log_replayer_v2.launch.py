@@ -49,6 +49,7 @@ def get_launch_arguments() -> list:
     record_only
     override_topics_regex
     storage
+    remap
     """
     launch_arguments = []
 
@@ -108,6 +109,11 @@ def get_launch_arguments() -> list:
         "storage",
         default_value="sqlite3",  # Settings are adjusted to ros distro standards. Currently autoware is humble, so use sqlite3. Change to mcap when updated to jazzy.
         description="select storage type mcap or sqlite3",
+    )
+    add_launch_arg(
+        "remap",
+        default_value="",  # Settings are adjusted to ros distro standards. Currently autoware is humble, so use sqlite3. Change to mcap when updated to jazzy.
+        description="use comma separated string. Ex: remap:=/tf,/sensing/lidar/concatenated/pointcloud",
     )
 
     return launch_arguments
@@ -341,35 +347,41 @@ def launch_bag_player(
             "qos.yaml",
         ).as_posix(),
     ]
-    remap_list = ["--remap"]
+    remap_set = {"--remap"}
     if conf.get("sensing", "true") == "true":
-        remap_list.append(
+        remap_set.add(
             "/sensing/lidar/concatenated/pointcloud:=/unused/concatenated/pointcloud",
         )
     if conf.get("localization", "true") == "true":
-        remap_list.append(
+        remap_set.add(
             "/tf:=/unused/tf",
         )
-        remap_list.append(
+        remap_set.add(
             "/localization/kinematic_state:=/unused/localization/kinematic_state",
         )
-        remap_list.append(
+        remap_set.add(
             "/localization/acceleration:=/unused/localization/acceleration",
         )
     if conf.get("perception", "true") == "true":
         # remap perception msgs in bag
-        remap_list.append(
+        remap_set.add(
             "/perception/obstacle_segmentation/pointcloud:=/unused/perception/obstacle_segmentation/pointcloud",
         )
-        remap_list.append(
+        remap_set.add(
             "/perception/object_recognition/objects:=/unused/perception/object_recognition/objects",
         )
     if conf.get("goal_pose") is not None:
-        remap_list.append(
+        remap_set.add(
             "/planning/mission_planning/route:=/unused/planning/mission_planning/route",
         )
-    if len(remap_list) != 1:
-        play_cmd.extend(remap_list)
+    # user defined remap
+    if conf["remap"] != "":
+        remap_topics: list[str] = conf["remap"].split(",")
+        for topic in remap_topics:
+            if topic.startswith("/"):
+                remap_set.add(f"{topic}:=/unused{topic}")
+    if len(remap_set) != 1:
+        play_cmd.extend(list(remap_set))
     bag_player = (
         ExecuteProcess(
             cmd=play_cmd,
@@ -379,7 +391,7 @@ def launch_bag_player(
         if conf["record_only"] == "true"
         else ExecuteProcess(cmd=play_cmd, output="screen")
     )
-    return [bag_player]
+    return [bag_player, LogInfo(msg=f"The displayed topics are remapped {remap_set}")]
 
 
 def launch_bag_recorder(context: LaunchContext) -> list:
