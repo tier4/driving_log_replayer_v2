@@ -347,41 +347,41 @@ def launch_bag_player(
             "qos.yaml",
         ).as_posix(),
     ]
-    remap_set = {"--remap"}
+    remap_list = ["--remap"]
     if conf.get("sensing", "true") == "true":
-        remap_set.add(
+        remap_list.append(
             "/sensing/lidar/concatenated/pointcloud:=/unused/concatenated/pointcloud",
         )
     if conf.get("localization", "true") == "true":
-        remap_set.add(
+        remap_list.append(
             "/tf:=/unused/tf",
         )
-        remap_set.add(
+        remap_list.append(
             "/localization/kinematic_state:=/unused/localization/kinematic_state",
         )
-        remap_set.add(
+        remap_list.append(
             "/localization/acceleration:=/unused/localization/acceleration",
         )
     if conf.get("perception", "true") == "true":
         # remap perception msgs in bag
-        remap_set.add(
+        remap_list.append(
             "/perception/obstacle_segmentation/pointcloud:=/unused/perception/obstacle_segmentation/pointcloud",
         )
-        remap_set.add(
+        remap_list.append(
             "/perception/object_recognition/objects:=/unused/perception/object_recognition/objects",
         )
     if conf.get("goal_pose") is not None:
-        remap_set.add(
+        remap_list.append(
             "/planning/mission_planning/route:=/unused/planning/mission_planning/route",
         )
     # user defined remap
     if conf["remap"] != "":
         remap_topics: list[str] = conf["remap"].split(",")
         for topic in remap_topics:
-            if topic.startswith("/"):
-                remap_set.add(f"{topic}:=/unused{topic}")
-    if len(remap_set) != 1:
-        play_cmd.extend(list(remap_set))
+            if topic.startswith("/") and topic not in remap_list:
+                remap_list.append(f"{topic}:=/unused{topic}")
+    if len(remap_list) != 1:
+        play_cmd.extend(remap_list)
     bag_player = (
         ExecuteProcess(
             cmd=play_cmd,
@@ -391,7 +391,7 @@ def launch_bag_player(
         if conf["record_only"] == "true"
         else ExecuteProcess(cmd=play_cmd, output="screen")
     )
-    return [bag_player, LogInfo(msg=f"The displayed topics are remapped {remap_set}")]
+    return [bag_player, LogInfo(msg=f"remap_command is {remap_list}")]
 
 
 def launch_bag_recorder(context: LaunchContext) -> list:
