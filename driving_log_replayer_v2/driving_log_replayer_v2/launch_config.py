@@ -192,7 +192,7 @@ PLANNING_CONTROL_AUTOWARE_DISABLE = {
     "localization": "false",
 }
 
-PLANNING_CONTROL_AUTOWARE_ARGS = {}
+PLANNING_CONTROL_AUTOWARE_ARGS = {"use_aeb_autoware_state_check": "false"}
 
 PLANNING_CONTROL_NODE_PARAMS = {}
 
