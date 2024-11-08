@@ -378,8 +378,10 @@ def launch_bag_player(
     if conf["remap"] != "":
         remap_topics: list[str] = conf["remap"].split(",")
         for topic in remap_topics:
-            if topic.startswith("/") and topic not in remap_list:
-                remap_list.append(f"{topic}:=/unused{topic}")
+            if topic.startswith("/"):
+                remap_str = f"{topic}:=/unused{topic}"
+                if remap_str not in remap_list:
+                    remap_list.append(remap_str)
     if len(remap_list) != 1:
         play_cmd.extend(remap_list)
     bag_player = (
