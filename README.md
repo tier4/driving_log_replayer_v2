@@ -22,6 +22,42 @@ Use colcon build
 colcon build --symlink-install --cmake-args -DCMAKE_EXPORT_COMPILE_COMMANDS=ON -DCMAKE_BUILD_TYPE=Release --packages-up-to driving_log_replayer_v2
 ```
 
+### How to install driving_log_replayer_v2_cli package
+
+Use pipx **Do not use pip**
+
+```shell
+# install
+pipx install git+https://github.com/tier4/driving_log_replayer_v2.git
+
+# upgrade
+pipx upgrade driving-log-replayer-v2
+
+# uninstall
+pipx uninstall driving-log-replayer-v2
+```
+
+### Shell Completion
+
+Execute the following command so that you can complete the command in the shell.
+
+#### bash
+
+```shell
+_DLR2_COMPLETE=bash_source dlr2 > $HOME/.dlr2-complete.bash
+_DLR2_COMPLETE=bash_source dlr2 > $HOME/.dlr2-analyzer-complete.bash
+
+echo "source $HOME/.dlr2-complete.bash" >> ~/.bashrc
+echo "source $HOME/.dlr2-analyzer-complete.bash" >> ~/.bashrc
+```
+
+#### fish
+
+```shell
+_DLR2_COMPLETE=fish_source dlr2 > $HOME/.config/fish/completions/dlr2.fish
+_DLR2_ANALYZER_COMPLETE=fish_source dlr2-analyzer > $HOME/.config/fish/completions/dlr2-analyzer.fish
+```
+
 ## Usage
 
 refer [document](https://tier4.github.io/driving_log_replayer_v2/)
