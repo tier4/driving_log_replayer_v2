@@ -210,10 +210,14 @@ class PerceptionEvaluator(DLREvaluatorV2):
                 unix_time=unix_time,
                 frame_id=self.__frame_id,
                 position=eval_conversions.position_from_ros_msg(
-                    perception_object.kinematics.pose_with_covariance.pose.position,
+                    perception_object.kinematics.pose_with_covariance.pose.position
+                    if isinstance(perception_object, DetectedObject | TrackedObject)
+                    else perception_object.kinematics.initial_pose_with_covariance.pose.position
                 ),
                 orientation=eval_conversions.orientation_from_ros_msg(
-                    perception_object.kinematics.pose_with_covariance.pose.orientation,
+                    perception_object.kinematics.pose_with_covariance.pose.orientation
+                    if isinstance(perception_object, DetectedObject | TrackedObject)
+                    else perception_object.kinematics.initial_pose_with_covariance.pose.orientation
                 ),
                 shape=Shape(
                     shape_type=shape_type,
@@ -226,10 +230,16 @@ class PerceptionEvaluator(DLREvaluatorV2):
                     ),
                 ),
                 velocity=eval_conversions.velocity_from_ros_msg(
-                    perception_object.kinematics.twist_with_covariance.twist.linear,
+                    perception_object.kinematics.twist_with_covariance.twist.linear
+                    if isinstance(perception_object, DetectedObject | TrackedObject)
+                    else perception_object.kinematics.initial_twist_with_covariance.twist.linear
                 ),
-                pose_covariance=perception_object.kinematics.pose_with_covariance.covariance,
-                twist_covariance=perception_object.kinematics.twist_with_covariance.covariance,
+                pose_covariance=perception_object.kinematics.pose_with_covariance.covariance
+                if isinstance(perception_object, DetectedObject | TrackedObject)
+                else perception_object.kinematics.initial_pose_with_covariance.covariance,
+                twist_covariance=perception_object.kinematics.twist_with_covariance.covariance
+                if isinstance(perception_object, DetectedObject | TrackedObject)
+                else perception_object.kinematics.initial_twist_with_covariance.covariance,
                 semantic_score=most_probable_classification.probability,
                 semantic_label=label,
                 uuid=uuid,
