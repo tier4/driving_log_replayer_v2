@@ -406,12 +406,12 @@ def launch_bag_player(
             "/planning/mission_planning/route:=/unused/planning/mission_planning/route",
         )
     # user defined remap
-    remap_topics = []
-    if conf["remap_arg"] != "":
-        remap_topics: list[str] = conf["remap_arg"].split(",")
-    if conf["remap_profile"] != "":
-        remap_topics = extract_remap_topics(conf["remap_profile"])
-    for topic in remap_topics:
+    user_remap_topics: list[str] = (
+        conf["remap_arg"].split(",")
+        if conf["remap_arg"] != ""
+        else extract_remap_topics(conf["remap_profile"])
+    )
+    for topic in user_remap_topics:
         if topic.startswith("/"):
             remap_str = f"{topic}:=/unused{topic}"
             if remap_str not in remap_list:
