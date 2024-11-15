@@ -185,12 +185,13 @@ def extract_index_from_id(t4_dataset_id: str, datasets: list[dict]) -> int | str
                 return idx
     return "index not found"
 
+
 def extract_remap_topics(profile_name: str) -> list[str]:
     profile_file = Path(
         get_package_share_directory("driving_log_replayer_v2"),
         "config",
         "remap",
-        f"{profile_name}.yaml"
+        f"{profile_name}.yaml",
     )
     # Make it work with symlink install as well.
     if profile_file.is_symlink():
