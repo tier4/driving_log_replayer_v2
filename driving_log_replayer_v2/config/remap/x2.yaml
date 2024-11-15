@@ -1,0 +1,9 @@
+remap:
+  - /perception/object_recognition/detection/rois0
+  - /perception/object_recognition/detection/rois1
+  - /perception/object_recognition/detection/rois2
+  - /perception/object_recognition/detection/rois3
+  - /perception/object_recognition/detection/rois4
+  - /perception/object_recognition/detection/rois5
+  - /perception/object_recognition/detection/rois6
+  - /perception/object_recognition/detection/rois7
