@@ -192,6 +192,9 @@ def extract_remap_topics(profile_name: str) -> list[str]:
         "remap",
         f"{profile_name}.yaml"
     )
+    # Make it work with symlink install as well.
+    if profile_file.is_symlink():
+        profile_file = profile_file.resolve()
     if not profile_file.exists():
         return []
     with profile_file.open("r") as f:
