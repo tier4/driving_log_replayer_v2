@@ -377,7 +377,7 @@ def launch_bag_player(
     remap_list = ["--remap"]
     if conf.get("sensing", "true") == "true":
         remap_list.append(
-            "/sensing/lidar/concatenated/pointcloud:=/unused/concatenated/pointcloud",
+            "/sensing/lidar/concatenated/pointcloud:=/unused/sensing/lidar/concatenated/pointcloud",
         )
     if conf.get("localization", "true") == "true":
         remap_list.append(
@@ -404,7 +404,7 @@ def launch_bag_player(
     # user defined remap
     remap_topics = []
     if conf["remap_arg"] != "":
-        remap_topics: list[str] = conf["remap"].split(",")
+        remap_topics: list[str] = conf["remap_arg"].split(",")
     if conf["remap_profile"] != "":
         remap_topics = extract_remap_topics(conf["remap_profile"])
     for topic in remap_topics:
