@@ -22,6 +22,8 @@ ANNOTATIONLESS_PERCEPTION_RECORD_TOPIC = """^/tf$\
 |^/perception/object_recognition/tracking/multi_object_tracker/debug/.*\
 |^/perception/object_recognition/detection/.*/debug/pipeline_latency_ms$\
 |^/perception/perception_online_evaluator/.*\
+|^/diagnostics$\
+|^/localization/kinematic_state$\
 """
 
 ANNOTATIONLESS_PERCEPTION_AUTOWARE_DISABLE = {
