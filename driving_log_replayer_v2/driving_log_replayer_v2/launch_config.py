@@ -24,6 +24,9 @@ ANNOTATIONLESS_PERCEPTION_RECORD_TOPIC = """^/tf$\
 |^/perception/perception_online_evaluator/.*\
 |^/diagnostics$\
 |^/localization/kinematic_state$\
+|^/perception/object_recognition/detection/rois0$\
+|^/sensing/camera/camera0/camera_info$\
+|^/sensing/camera/camera0/image_rect_color/compressed$\
 """
 
 ANNOTATIONLESS_PERCEPTION_AUTOWARE_DISABLE = {
