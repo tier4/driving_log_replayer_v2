@@ -19,8 +19,12 @@ ANNOTATIONLESS_PERCEPTION_RECORD_TOPIC = """^/tf$\
 |^/perception/object_recognition/detection/objects$\
 |^/perception/object_recognition/tracking/objects$\
 |^/perception/object_recognition/objects$\
-|^/perception/object_recognition/tracking/multi_object_tracker/debug/.*\
 |^/perception/object_recognition/detection/.*/debug/pipeline_latency_ms$\
+|^/perception/object_recognition/detection/.*/debug/processing_time_ms$\
+|^/perception/object_recognition/tracking/.*/debug/pipeline_latency_ms$\
+|^/perception/object_recognition/tracking/.*/debug/processing_time_ms$\
+|^/perception/object_recognition/prediction/.*/debug/pipeline_latency_ms$\
+|^/perception/object_recognition/prediction/.*/debug/processing_time_ms$\
 |^/perception/perception_online_evaluator/.*\
 |^/diagnostics$\
 |^/localization/kinematic_state$\
