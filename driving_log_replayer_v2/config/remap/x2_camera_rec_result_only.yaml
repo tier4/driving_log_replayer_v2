@@ -1,0 +1,24 @@
+remap:
+  - /sensing/camera/camera0/image_rect_color/compressed
+  - /sensing/camera/camera1/image_rect_color/compressed
+  - /sensing/camera/camera2/image_rect_color/compressed
+  - /sensing/camera/camera3/image_rect_color/compressed
+  - /sensing/camera/camera4/image_rect_color/compressed
+  - /sensing/camera/camera5/image_rect_color/compressed
+  - /sensing/camera/camera6/image_rect_color/compressed
+  - /sensing/camera/camera7/image_rect_color/compressed
+  - /sensing/radar/front_center/objects_raw
+  - /sensing/radar/front_left/objects_raw
+  - /sensing/radar/front_right/objects_raw
+  - /sensing/radar/rear_center/objects_raw
+  - /sensing/radar/rear_left/objects_raw
+  - /sensing/radar/rear_right/objects_raw
+  - /sensing/lidar/concatenated/pointcloud
+  - /sensing/lidar/front_lower/pandar_packets
+  - /sensing/lidar/front_upper/pandar_packets
+  - /sensing/lidar/left_lower/pandar_packets
+  - /sensing/lidar/left_upper/pandar_packets
+  - /sensing/lidar/rear_lower/pandar_packets
+  - /sensing/lidar/rear_upper/pandar_packets
+  - /sensing/lidar/right_lower/pandar_packets
+  - /sensing/lidar/right_upper/pandar_packets

@@ -49,7 +49,8 @@ def get_launch_arguments() -> list:
     record_only
     override_topics_regex
     storage
-    remap
+    remap_arg
+    remap_profile
     """
     launch_arguments = []
 
@@ -111,9 +112,14 @@ def get_launch_arguments() -> list:
         description="select storage type mcap or sqlite3",
     )
     add_launch_arg(
-        "remap",
-        default_value="",  # Settings are adjusted to ros distro standards. Currently autoware is humble, so use sqlite3. Change to mcap when updated to jazzy.
-        description="use comma separated string. Ex: remap:=/tf,/sensing/lidar/concatenated/pointcloud",
+        "remap_arg",
+        default_value="",
+        description="use comma separated string. Ex: remap_arg:=/tf,/sensing/lidar/concatenated/pointcloud",
+    )
+    add_launch_arg(
+        "remap_profile",
+        default_value="",
+        description="Specify the name of the profile. config/remap/{profile_name}.yaml. Ex: remap_profile:=x2",
     )
 
     return launch_arguments
@@ -180,9 +186,27 @@ def extract_index_from_id(t4_dataset_id: str, datasets: list[dict]) -> int | str
     return "index not found"
 
 
+def extract_remap_topics(profile_name: str) -> list[str]:
+    profile_file = Path(
+        get_package_share_directory("driving_log_replayer_v2"),
+        "config",
+        "remap",
+        f"{profile_name}.yaml",
+    )
+    # Make it work with symlink install as well.
+    if profile_file.is_symlink():
+        profile_file = profile_file.resolve()
+    if not profile_file.exists():
+        return []
+    with profile_file.open("r") as f:
+        remap_dict = yaml.safe_load(f)
+        return remap_dict.get("remap")
+
+
 def ensure_arg_compatibility(context: LaunchContext) -> list:
     conf = context.launch_configurations
-    scenario_path = Path(conf["scenario_path"])
+
+    # check conf
     if conf["dataset_dir"] != "" and conf["t4_dataset_path"] != "":
         return [
             LogInfo(
@@ -191,7 +215,14 @@ def ensure_arg_compatibility(context: LaunchContext) -> list:
         ]
     if conf["t4_dataset_path"] != "" and conf["t4_dataset_id"] == "":
         return [LogInfo(msg="t4_dataset_id is required when passing t4_dataset_path.")]
+    if conf["remap_arg"] != "" and conf["remap_profile"] != "":
+        return [
+            LogInfo(
+                msg="Both remap_arg and remap_profile are specified. Only one of them can be specified."
+            )
+        ]
 
+    scenario_path = Path(conf["scenario_path"])
     dataset_dir = scenario_path.parent if conf["dataset_dir"] == "" else Path(conf["dataset_dir"])
     output_dir = create_output_dir(conf["output_dir"], scenario_path)
     conf["output_dir"] = output_dir.as_posix()
@@ -350,7 +381,7 @@ def launch_bag_player(
     remap_list = ["--remap"]
     if conf.get("sensing", "true") == "true":
         remap_list.append(
-            "/sensing/lidar/concatenated/pointcloud:=/unused/concatenated/pointcloud",
+            "/sensing/lidar/concatenated/pointcloud:=/unused/sensing/lidar/concatenated/pointcloud",
         )
     if conf.get("localization", "true") == "true":
         remap_list.append(
@@ -375,13 +406,17 @@ def launch_bag_player(
             "/planning/mission_planning/route:=/unused/planning/mission_planning/route",
         )
     # user defined remap
-    if conf["remap"] != "":
-        remap_topics: list[str] = conf["remap"].split(",")
-        for topic in remap_topics:
-            if topic.startswith("/"):
-                remap_str = f"{topic}:=/unused{topic}"
-                if remap_str not in remap_list:
-                    remap_list.append(remap_str)
+    user_remap_topics: list[str] = (
+        conf["remap_arg"].split(",")
+        if conf["remap_arg"] != ""
+        else extract_remap_topics(conf["remap_profile"])
+    )
+    for topic in user_remap_topics:
+        if topic.startswith("/"):
+            remap_str = f"{topic}:=/unused{topic}"
+            if remap_str not in remap_list:
+                remap_list.append(remap_str)
+
     if len(remap_list) != 1:
         play_cmd.extend(remap_list)
     bag_player = (

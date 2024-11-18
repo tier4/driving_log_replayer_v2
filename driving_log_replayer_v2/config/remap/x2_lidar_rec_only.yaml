@@ -1,0 +1,23 @@
+remap:
+  - /sensing/camera/camera0/image_rect_color/compressed
+  - /sensing/camera/camera1/image_rect_color/compressed
+  - /sensing/camera/camera2/image_rect_color/compressed
+  - /sensing/camera/camera3/image_rect_color/compressed
+  - /sensing/camera/camera4/image_rect_color/compressed
+  - /sensing/camera/camera5/image_rect_color/compressed
+  - /sensing/camera/camera6/image_rect_color/compressed
+  - /sensing/camera/camera7/image_rect_color/compressed
+  - /perception/object_recognition/detection/rois0
+  - /perception/object_recognition/detection/rois1
+  - /perception/object_recognition/detection/rois2
+  - /perception/object_recognition/detection/rois3
+  - /perception/object_recognition/detection/rois4
+  - /perception/object_recognition/detection/rois5
+  - /perception/object_recognition/detection/rois6
+  - /perception/object_recognition/detection/rois7
+  - /sensing/radar/front_center/objects_raw
+  - /sensing/radar/front_left/objects_raw
+  - /sensing/radar/front_right/objects_raw
+  - /sensing/radar/rear_center/objects_raw
+  - /sensing/radar/rear_left/objects_raw
+  - /sensing/radar/rear_right/objects_raw
