@@ -365,8 +365,6 @@ def launch_bag_player(
         "bag",
         "play",
         conf["input_bag"],
-        "--delay",
-        conf["play_delay"],
         "--rate",
         conf["play_rate"],
         "--clock",
@@ -428,7 +426,8 @@ def launch_bag_player(
         if conf["record_only"] == "true"
         else ExecuteProcess(cmd=play_cmd, output="screen")
     )
-    return [bag_player, LogInfo(msg=f"remap_command is {remap_list}")]
+    delay_player = ExecuteProcess(cmd=["sleep", conf["play_delay"]], on_exit=[bag_player])
+    return [delay_player, LogInfo(msg=f"remap_command is {remap_list}")]
 
 
 def launch_bag_recorder(context: LaunchContext) -> list:
