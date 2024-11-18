@@ -15,6 +15,8 @@
 from launch.substitutions import LaunchConfiguration
 
 ANNOTATIONLESS_PERCEPTION_RECORD_TOPIC = """^/tf$\
+|^/tf_static$\
+|^/perception/object_recognition/detection/clustering/clusters$\
 |^/sensing/lidar/concatenated/pointcloud$\
 |^/perception/object_recognition/detection/objects$\
 |^/perception/object_recognition/tracking/objects$\
