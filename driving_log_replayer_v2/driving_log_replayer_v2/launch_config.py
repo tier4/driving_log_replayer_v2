@@ -71,6 +71,23 @@ EAGLEYE_AUTOWARE_ARGS = {
 
 EAGLEYE_NODE_PARAMS = {}
 
+GROUND_SEGMENTATION_RECORD_TOPIC = """^/tf$\
+|^/diagnostics$"\
+"""
+
+GROUND_SEGMENTATION_AUTOWARE_DISABLE = {
+    "localization": "false",
+    "planning": "false",
+    "control": "false",
+}
+
+GROUND_SEGMENTATION_AUTOWARE_ARGS = {"perception_mode": "lidar"}
+
+GROUND_SEGMENTATION_NODE_PARAMS = {
+    "vehicle_model": LaunchConfiguration("vehicle_model"),
+    "evaluation_target_topic": LaunchConfiguration("evaluation_target_topic"),
+}
+
 LOCALIZATION_RECORD_TOPIC = """^/tf$\
 |^/diagnostics$\
 |^/localization/pose_estimator/exe_time_ms$\
@@ -251,6 +268,12 @@ driving_log_replayer_v2_config = {
         "disable": EAGLEYE_AUTOWARE_DISABLE,
         "autoware": EAGLEYE_AUTOWARE_ARGS,
         "node": EAGLEYE_NODE_PARAMS,
+    },
+    "ground_segmentation": {
+        "record": GROUND_SEGMENTATION_RECORD_TOPIC,
+        "disable": GROUND_SEGMENTATION_AUTOWARE_DISABLE,
+        "autoware": GROUND_SEGMENTATION_AUTOWARE_ARGS,
+        "node": GROUND_SEGMENTATION_NODE_PARAMS,
     },
     "localization": {
         "record": LOCALIZATION_RECORD_TOPIC,

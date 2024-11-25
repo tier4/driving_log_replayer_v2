@@ -24,7 +24,7 @@ import ros2_numpy
 from scipy.spatial import cKDTree
 from sensor_msgs.msg import PointCloud2
 
-from driving_log_replayer_v2.evaluator import DLREvaluator
+from driving_log_replayer_v2.evaluator import DLREvaluatorV2
 from driving_log_replayer_v2.evaluator import evaluator_main
 from driving_log_replayer_v2.ground_segmentation import Condition
 from driving_log_replayer_v2.ground_segmentation import GroundSegmentationResult
@@ -33,7 +33,7 @@ import driving_log_replayer_v2.perception_eval_conversions as eval_conversions
 from driving_log_replayer_v2_msgs.msg import GroundSegmentationEvalResult
 
 
-class GroundSegmentationEvaluator(DLREvaluator):
+class GroundSegmentationEvaluator(DLREvaluatorV2):
     CLOUD_DIM = 6
     TS_DIFF_THRESH = 75000
 
@@ -217,7 +217,7 @@ class GroundSegmentationEvaluator(DLREvaluator):
 
 
 @evaluator_main
-def main() -> DLREvaluator:
+def main() -> DLREvaluatorV2:
     return GroundSegmentationEvaluator("ground_segmentation_evaluator")
 
 
