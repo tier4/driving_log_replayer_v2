@@ -13,6 +13,7 @@
 # limitations under the License.
 
 import datetime
+from importlib import import_module
 import json
 from pathlib import Path
 import subprocess
@@ -30,7 +31,6 @@ from launch.launch_description_sources import AnyLaunchDescriptionSource
 from launch_ros.actions import Node
 import yaml
 
-from driving_log_replayer_v2.launch_config import driving_log_replayer_v2_config
 from driving_log_replayer_v2.shutdown_once import ShutdownOnce
 
 
@@ -150,14 +150,15 @@ def output_dummy_result_jsonl(result_json_path: str) -> None:
 def check_launch_component(conf: dict) -> dict:
     if conf["with_autoware"] != "true":
         return {"autoware": "false"}
-    use_case_launch_arg = driving_log_replayer_v2_config[conf["use_case"]]["disable"]
+    launch_config = import_module(f"driving_log_replayer_v2.launch.{conf['use_case']}")
+    arg_disable = launch_config.AUTOWARE_DISABLE
     # update autoware component launch or not
     autoware_components = ["sensing", "localization", "perception", "planning", "control"]
     launch_component = {}
     for component in autoware_components:
         # argument has higher priority than the launch_config.py setting.
-        if conf.get(component) is None and use_case_launch_arg.get(component) is not None:
-            conf[component] = use_case_launch_arg[component]
+        if conf.get(component) is None and arg_disable.get(component) is not None:
+            conf[component] = arg_disable[component]
         launch_component[component] = conf.get(component, "true")
     return launch_component
 
@@ -296,7 +297,8 @@ def launch_autoware(context: LaunchContext) -> list:
         "vehicle_id": conf["vehicle_id"],
         "launch_vehicle_interface": "true",
     }
-    launch_args |= driving_log_replayer_v2_config[conf["use_case"]]["autoware"]
+    launch_config = import_module(f"driving_log_replayer_v2.launch.{conf['use_case']}")
+    launch_args |= launch_config.AUTOWARE_ARGS
     return [
         GroupAction(
             [
@@ -339,7 +341,8 @@ def launch_evaluator_node(context: LaunchContext) -> list:
         "result_archive_path": conf["result_archive_path"],
         "dataset_index": conf["dataset_index"],
     }
-    params |= driving_log_replayer_v2_config[conf["use_case"]]["node"]
+    launch_config = import_module(f"driving_log_replayer_v2.launch.{conf['use_case']}")
+    params |= launch_config.NODE_PARAMS
 
     evaluator_name = conf["use_case"] + "_evaluator"
 
@@ -451,7 +454,8 @@ def launch_bag_recorder(context: LaunchContext) -> list:
     if conf["storage"] == "mcap":
         record_cmd += ["--storage-preset-profile", "zstd_fast"]
     if conf["override_topics_regex"] == "":
-        record_cmd += ["-e", driving_log_replayer_v2_config[conf["use_case"]]["record"]]
+        launch_config = import_module(f"driving_log_replayer_v2.launch.{conf['use_case']}")
+        record_cmd += ["-e", launch_config.RECORD_TOPIC]
     else:
         record_cmd += ["-e", conf["override_topics_regex"]]
     return [ExecuteProcess(cmd=record_cmd)]
@@ -534,12 +538,22 @@ def launch_goal_pose_node(context: LaunchContext) -> list:
     ]
 
 
+def add_use_case_arguments(context: LaunchContext) -> list:
+    conf = context.launch_configurations
+    launch_config = import_module(f"driving_log_replayer_v2.launch.{conf['use_case']}")
+    use_case_launch_arg: list = launch_config.USE_CASE_ARGS
+    if len(use_case_launch_arg) == 0:
+        return [LogInfo(msg="no use case launch argument")]
+    return use_case_launch_arg
+
+
 def generate_launch_description() -> LaunchDescription:
     launch_arguments = get_launch_arguments()
     return LaunchDescription(
         [
             *launch_arguments,
             OpaqueFunction(function=ensure_arg_compatibility),
+            OpaqueFunction(function=add_use_case_arguments),  # after ensure_arg_compatibility
             OpaqueFunction(function=launch_autoware),
             OpaqueFunction(function=launch_map_height_fitter),
             OpaqueFunction(function=launch_evaluator_node),
