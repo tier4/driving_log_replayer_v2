@@ -31,6 +31,7 @@
   <depend>tf2_ros</depend>
   <depend>tier4_debug_msgs</depend>
   <depend>tier4_localization_msgs</depend>
+  <depend>tier4_metric_msgs</depend>
   <depend>visualization_msgs</depend>
 
   <exec_depend>autoware_map_height_fitter</exec_depend>

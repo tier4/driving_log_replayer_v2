@@ -1,4 +1,4 @@
-# Copyright (c) 2022 TIER IV.inc
+# Copyright (c) 2024 TIER IV.inc
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -12,14 +12,25 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from launch.substitutions import LaunchConfiguration
 
-from importlib.metadata import version
+RECORD_TOPIC = """^/tf$\
+|^/perception/obstacle_segmentation/pointcloud$\
+|^/planning/scenario_planning/trajectory$\
+|^/planning/scenario_planning/status/stop_reasons$\
+|^/driving_log_replayer_v2/.*\
+"""
 
-try:
-    __version__ = version("driving_log_replayer_v2_cli")
-except Exception:  # noqa
-    __version__ = "0.0.0"
+AUTOWARE_DISABLE = {
+    "localization": "false",
+    "control": "false",
+}
 
+AUTOWARE_ARGS = {
+    "scenario_simulation": "true",
+}
 
-def main() -> None:
-    from . import __main__  # noqa
+NODE_PARAMS = {
+    "vehicle_model": LaunchConfiguration("vehicle_model"),
+    "map_path": LaunchConfiguration("map_path"),
+}

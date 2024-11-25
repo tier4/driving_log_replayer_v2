@@ -1,4 +1,4 @@
-# Copyright (c) 2022 TIER IV.inc
+# Copyright (c) 2024 TIER IV.inc
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -11,3 +11,16 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+
+RECORD_TOPIC = """^/tf$\
+|^/control/control_evaluator/metrics$\
+|^/planning/planning_evaluator/metrics$\
+"""
+
+AUTOWARE_DISABLE = {
+    "localization": "false",
+}
+
+AUTOWARE_ARGS = {"use_aeb_autoware_state_check": "false"}
+
+NODE_PARAMS = {}

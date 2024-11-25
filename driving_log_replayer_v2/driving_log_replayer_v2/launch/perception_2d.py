@@ -1,4 +1,4 @@
-# Copyright (c) 2022 TIER IV.inc
+# Copyright (c) 2024 TIER IV.inc
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -11,3 +11,24 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+
+RECORD_TOPIC = """^/tf$\
+|^/sensing/lidar/concatenated/pointcloud$\
+|^/perception/object_recognition/detection/objects$\
+|^/perception/object_recognition/tracking/objects$\
+|^/perception/object_recognition/objects$\
+|^/sensing/camera/.*\
+|^/driving_log_replayer_v2/.*\
+"""
+
+AUTOWARE_DISABLE = {
+    "localization": "false",
+    "planning": "false",
+    "control": "false",
+}
+
+AUTOWARE_ARGS = {
+    "perception_mode": "camera_lidar_fusion",
+}
+
+NODE_PARAMS = {}

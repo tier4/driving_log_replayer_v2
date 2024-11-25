@@ -1,4 +1,4 @@
-# Copyright (c) 2022 TIER IV.inc
+# Copyright (c) 2024 TIER IV.inc
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -11,3 +11,20 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+
+RECORD_TOPIC = """^/tf$\
+|^/diagnostics$"\
+|^/localization/kinematic_state$\
+|^/localization/pose_estimator/pose$\
+|^/localization/util/downsample/pointcloud$\
+|^/localization/pose_estimator/points_aligned$\
+"""
+
+AUTOWARE_DISABLE = {"perception": "false", "planning": "false", "control": "false"}
+
+AUTOWARE_ARGS = {
+    "pose_source": "eagleye",
+    "twist_source": "eagleye",
+}
+
+NODE_PARAMS = {}

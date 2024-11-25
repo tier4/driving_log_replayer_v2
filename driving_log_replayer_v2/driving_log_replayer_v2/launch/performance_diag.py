@@ -1,4 +1,4 @@
-# Copyright (c) 2022 TIER IV.inc
+# Copyright (c) 2024 TIER IV.inc
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -11,3 +11,22 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+
+RECORD_TOPIC = """^/tf$\
+|^/perception/obstacle_segmentation/pointcloud$\
+|^/diagnostics$\
+|^/sensing/lidar/.*/blockage_diag/debug/blockage_mask_image$\
+|^/sensing/lidar/.*/pointcloud_raw_ex$\
+|^/driving_log_replayer_v2/.*\
+"""
+
+AUTOWARE_DISABLE = {
+    "perception": "false",
+    "planning": "false",
+    "control": "false",
+}
+
+
+AUTOWARE_ARGS = {}
+
+NODE_PARAMS = {}

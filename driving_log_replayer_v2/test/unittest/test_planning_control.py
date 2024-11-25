@@ -14,19 +14,18 @@
 
 from typing import Literal
 
-from diagnostic_msgs.msg import DiagnosticArray
-from diagnostic_msgs.msg import DiagnosticStatus
-from diagnostic_msgs.msg import KeyValue
 from pydantic import ValidationError
 import pytest
+from tier4_metric_msgs.msg import Metric
+from tier4_metric_msgs.msg import MetricArray
 
 from driving_log_replayer_v2.planning_control import KinematicCondition
 from driving_log_replayer_v2.planning_control import LaneCondition
 from driving_log_replayer_v2.planning_control import LaneInfo
 from driving_log_replayer_v2.planning_control import LeftRight
+from driving_log_replayer_v2.planning_control import MetricCondition
 from driving_log_replayer_v2.planning_control import Metrics
 from driving_log_replayer_v2.planning_control import MinMax
-from driving_log_replayer_v2.planning_control import PlanningControlCondition
 from driving_log_replayer_v2.planning_control import PlanningControlScenario
 from driving_log_replayer_v2.scenario import load_sample_scenario
 
@@ -37,7 +36,7 @@ def test_scenario() -> None:
         PlanningControlScenario,
     )
     assert scenario.ScenarioName == "sample_planning_control"
-    assert scenario.Evaluation.Conditions.ControlConditions[0].condition_type == "all_of"
+    assert scenario.Evaluation.Conditions.MetricConditions[0].condition_type == "all_of"
 
 
 def test_min_max_validation() -> None:
@@ -92,10 +91,11 @@ def test_kinematic_state_match_condition() -> None:
     assert kinematic_condition.match_condition((0.5, 1.0, -1.0)) is False
 
 
-def create_condition(condition_type: Literal["any_of", "all_of"]) -> PlanningControlCondition:
-    return PlanningControlCondition(
-        module="autonomous_emergency_braking: aeb_emergency_stop",
-        decision="deceleration",
+def create_condition(condition_type: Literal["any_of", "all_of"]) -> MetricCondition:
+    return MetricCondition(
+        topic="/control/autonomous_emergency_braking/metrics",
+        name="decision",
+        value="brake",
         condition_type=condition_type,
         lane_condition=LaneCondition(
             start=LaneInfo(id=1, s=1.0, t=LeftRight(left=1.0, right=1.0)),
@@ -109,101 +109,68 @@ def create_condition(condition_type: Literal["any_of", "all_of"]) -> PlanningCon
     )
 
 
-def create_diag_msg(
+def create_metric_msg(
     *,
-    match_module: bool = True,
-    match_decision: bool = True,
     is_started: bool = True,
     is_ended: bool = False,
     match_kinematic_state: bool = True,
-) -> DiagnosticArray:
-    module = DiagnosticStatus(
-        name=(
-            "autonomous_emergency_braking: aeb_emergency_stop"
-            if match_module
-            else "module_not_matched"
-        ),
-        values=[
-            KeyValue(key="decision" if match_decision else "not_decision", value="deceleration"),
-        ],
+) -> tuple[MetricArray, MetricArray]:
+    aeb_metric = Metric(name="decision", unit="", value="brake")
+
+    lane_id = Metric(name="ego_lane_info/lane_id", value="1" if is_ended is False else "2")
+    lane_s = Metric(name="ego_lane_info/s", value="2.0" if is_started else "1.0")
+    lane_t = Metric(name="ego_lane_info/t", value="0.5")
+
+    ks_vel = Metric(name="kinematic_state/vel", value="0.5" if match_kinematic_state else "2.0")
+    ks_acc = Metric(name="kinematic_state/acc", value="1.0")
+    ks_jerk = Metric(name="kinematic_state/jerk", value="2.0")
+
+    aeb_metric = MetricArray(metric_array=[aeb_metric])
+    control_evaluator_metric = MetricArray(
+        metric_array=[lane_id, lane_s, lane_t, ks_vel, ks_acc, ks_jerk]
     )
-    lane_info = DiagnosticStatus(
-        name="ego_lane_info",
-        values=[
-            KeyValue(key="lane_id", value="1" if is_ended is False else "2"),
-            KeyValue(key="s", value="2.0" if is_started else "1.0"),
-            KeyValue(key="t", value="0.5"),
-        ],
-    )
-    kinematic_state = DiagnosticStatus(
-        name="kinematic_state",
-        values=[
-            KeyValue(key="vel", value="0.5" if match_kinematic_state else "2.0"),
-            KeyValue(key="acc", value="1.0"),
-            KeyValue(key="jerk", value="2.0"),
-        ],
-    )
-    return DiagnosticArray(status=[module, lane_info, kinematic_state])
-
-
-def test_msg_has_not_required_fields() -> None:
-    condition = create_condition("any_of")
-    evaluation_item: Metrics = Metrics(name="control_0", condition=condition)
-    diag_msg = DiagnosticArray(status=[])
-    assert evaluation_item.set_frame(diag_msg) is None
-
-
-def test_metrics_not_match_module_name() -> None:
-    condition = create_condition("any_of")
-    evaluation_item: Metrics = Metrics(name="control_0", condition=condition)
-    diag_msg = create_diag_msg(match_module=False)
-    assert evaluation_item.set_frame(diag_msg) is None
-
-
-def test_metrics_not_match_decision() -> None:
-    condition = create_condition("any_of")
-    evaluation_item: Metrics = Metrics(name="control_0", condition=condition)
-    diag_msg = create_diag_msg(match_decision=False)
-    assert evaluation_item.set_frame(diag_msg) is None
+    return aeb_metric, control_evaluator_metric
 
 
 def test_metrics_not_started() -> None:
     condition = create_condition("any_of")
     evaluation_item: Metrics = Metrics(name="control_0", condition=condition)
-    diag_msg = create_diag_msg(is_started=False)
-    assert evaluation_item.set_frame(diag_msg) is None
+    aeb_metric, control_metric = create_metric_msg(is_started=False)
+    assert evaluation_item.set_frame(aeb_metric, control_metric) is None
 
 
 def test_metrics_finished() -> None:
     condition = create_condition("any_of")
     evaluation_item: Metrics = Metrics(name="control_0", condition=condition)
-    diag_msg = create_diag_msg(is_ended=True)
-    assert evaluation_item.set_frame(diag_msg) is None
+    aeb_metric, control_metric = create_metric_msg(is_started=False)
+    assert evaluation_item.set_frame(aeb_metric, control_metric) is None
 
 
 def test_metrics_success_any_of() -> None:
     condition = create_condition("any_of")
     evaluation_item: Metrics = Metrics(name="control_0", condition=condition)
-    diag_msg = create_diag_msg()
-    frame_dict = evaluation_item.set_frame(diag_msg)
+    aeb_metric, control_metric = create_metric_msg()
+    frame_dict = evaluation_item.set_frame(aeb_metric, control_metric)
     assert evaluation_item.success is True
     assert frame_dict == {
         "Result": {"Total": "Success", "Frame": "Success"},
         "Info": {
             "TotalPassed": 1,
-            "Decision": "deceleration",
+            "Decision": "brake",
             "LaneInfo": (1, 2.0, 0.5),
             "KinematicState": (0.5, 1.0, 2.0),
         },
     }
-    diag_msg = create_diag_msg(match_kinematic_state=False)
-    frame_dict = evaluation_item.set_frame(diag_msg)  # any_of is OK if one of them succeeds.
+    aeb_metric, control_metric = create_metric_msg(match_kinematic_state=False)
+    frame_dict = evaluation_item.set_frame(
+        aeb_metric, control_metric
+    )  # any_of is OK if one of them succeeds.
     assert evaluation_item.success is True
     assert frame_dict == {
         "Result": {"Total": "Success", "Frame": "Fail"},
         "Info": {
             "TotalPassed": 1,
-            "Decision": "deceleration",
+            "Decision": "brake",
             "LaneInfo": (1, 2.0, 0.5),
             "KinematicState": (2.0, 1.0, 2.0),
         },
@@ -213,14 +180,14 @@ def test_metrics_success_any_of() -> None:
 def test_metrics_fail_any_of() -> None:
     condition = create_condition("any_of")
     evaluation_item: Metrics = Metrics(name="control_0", condition=condition)
-    diag_msg = create_diag_msg(match_kinematic_state=False)
-    frame_dict = evaluation_item.set_frame(diag_msg)  # any_of is OK if one of them succeeds.
+    aeb_metric, control_metric = create_metric_msg(match_kinematic_state=False)
+    frame_dict = evaluation_item.set_frame(aeb_metric, control_metric)
     assert evaluation_item.success is False
     assert frame_dict == {
         "Result": {"Total": "Fail", "Frame": "Fail"},
         "Info": {
             "TotalPassed": 0,
-            "Decision": "deceleration",
+            "Decision": "brake",
             "LaneInfo": (1, 2.0, 0.5),
             "KinematicState": (2.0, 1.0, 2.0),
         },
@@ -230,26 +197,28 @@ def test_metrics_fail_any_of() -> None:
 def test_metrics_fail_all_of() -> None:
     condition = create_condition("all_of")
     evaluation_item: Metrics = Metrics(name="control_0", condition=condition)
-    diag_msg = create_diag_msg()
-    frame_dict = evaluation_item.set_frame(diag_msg)
+    aeb_metric, control_metric = create_metric_msg()
+    frame_dict = evaluation_item.set_frame(aeb_metric, control_metric)
     assert evaluation_item.success is True
     assert frame_dict == {
         "Result": {"Total": "Success", "Frame": "Success"},
         "Info": {
             "TotalPassed": 1,
-            "Decision": "deceleration",
+            "Decision": "brake",
             "LaneInfo": (1, 2.0, 0.5),
             "KinematicState": (0.5, 1.0, 2.0),
         },
     }
-    diag_msg = create_diag_msg(match_kinematic_state=False)
-    frame_dict = evaluation_item.set_frame(diag_msg)  # ALL_OF is not allowed if even one fails.
+    aeb_metric, control_metric = create_metric_msg(match_kinematic_state=False)
+    frame_dict = evaluation_item.set_frame(
+        aeb_metric, control_metric
+    )  # ALL_OF is not allowed if even one fails.
     assert evaluation_item.success is False
     assert frame_dict == {
         "Result": {"Total": "Fail", "Frame": "Fail"},
         "Info": {
             "TotalPassed": 1,
-            "Decision": "deceleration",
+            "Decision": "brake",
             "LaneInfo": (1, 2.0, 0.5),
             "KinematicState": (2.0, 1.0, 2.0),
         },
