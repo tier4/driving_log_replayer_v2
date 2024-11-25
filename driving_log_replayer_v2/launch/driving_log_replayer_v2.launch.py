@@ -552,8 +552,8 @@ def generate_launch_description() -> LaunchDescription:
     return LaunchDescription(
         [
             *launch_arguments,
-            OpaqueFunction(function=add_use_case_arguments),
             OpaqueFunction(function=ensure_arg_compatibility),
+            OpaqueFunction(function=add_use_case_arguments),  # after ensure_arg_compatibility
             OpaqueFunction(function=launch_autoware),
             OpaqueFunction(function=launch_map_height_fitter),
             OpaqueFunction(function=launch_evaluator_node),
