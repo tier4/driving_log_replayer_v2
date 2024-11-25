@@ -267,7 +267,7 @@ driving_log_replayer_v2_config = {
     "perception_2d": {
         "record": PERCEPTION_2D_RECORD_TOPIC,
         "disable": PERCEPTION_2D_AUTOWARE_DISABLE,
-        "autoware": PERCEPTION_AUTOWARE_ARGS,
+        "autoware": PERCEPTION_2D_AUTOWARE_ARGS,
         "node": PERCEPTION_2D_NODE_PARAMS,
     },
     "perception": {
