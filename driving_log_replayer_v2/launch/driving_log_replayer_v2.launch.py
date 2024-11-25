@@ -150,7 +150,7 @@ def output_dummy_result_jsonl(result_json_path: str) -> None:
 def check_launch_component(conf: dict) -> dict:
     if conf["with_autoware"] != "true":
         return {"autoware": "false"}
-    launch_config = import_module(f"driving_log_replayer_v2.launch.{conf["use_case"]}")
+    launch_config = import_module(f"driving_log_replayer_v2.launch.{conf['use_case']}")
     use_case_launch_arg = launch_config.AUTOWARE_DISABLE
     # update autoware component launch or not
     autoware_components = ["sensing", "localization", "perception", "planning", "control"]
@@ -297,7 +297,7 @@ def launch_autoware(context: LaunchContext) -> list:
         "vehicle_id": conf["vehicle_id"],
         "launch_vehicle_interface": "true",
     }
-    launch_config = import_module(f"driving_log_replayer_v2.launch.{conf["use_case"]}")
+    launch_config = import_module(f"driving_log_replayer_v2.launch.{conf['use_case']}")
     launch_args |= launch_config.AUTOWARE_ARGS
     return [
         GroupAction(
@@ -341,7 +341,7 @@ def launch_evaluator_node(context: LaunchContext) -> list:
         "result_archive_path": conf["result_archive_path"],
         "dataset_index": conf["dataset_index"],
     }
-    launch_config = import_module(f"driving_log_replayer_v2.launch.{conf["use_case"]}")
+    launch_config = import_module(f"driving_log_replayer_v2.launch.{conf['use_case']}")
     params |= launch_config.NODE_PARAMS
 
     evaluator_name = conf["use_case"] + "_evaluator"
@@ -454,7 +454,7 @@ def launch_bag_recorder(context: LaunchContext) -> list:
     if conf["storage"] == "mcap":
         record_cmd += ["--storage-preset-profile", "zstd_fast"]
     if conf["override_topics_regex"] == "":
-        launch_config = import_module(f"driving_log_replayer_v2.launch.{conf["use_case"]}")
+        launch_config = import_module(f"driving_log_replayer_v2.launch.{conf['use_case']}")
         record_cmd += ["-e", launch_config.RECORD_TOPIC]
     else:
         record_cmd += ["-e", conf["override_topics_regex"]]
