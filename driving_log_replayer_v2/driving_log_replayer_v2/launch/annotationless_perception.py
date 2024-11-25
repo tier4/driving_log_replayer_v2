@@ -12,6 +12,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from launch.actions import DeclareLaunchArgument
+
 RECORD_TOPIC = """^/tf$\
 |^/sensing/lidar/concatenated/pointcloud$\
 |^/perception/object_recognition/detection/objects$\
@@ -21,6 +23,7 @@ RECORD_TOPIC = """^/tf$\
 |^/perception/object_recognition/detection/.*/debug/pipeline_latency_ms$\
 |^/perception/perception_online_evaluator/.*\
 """
+
 
 AUTOWARE_DISABLE = {
     "localization": "false",
@@ -33,3 +36,5 @@ AUTOWARE_ARGS = {
 }
 
 NODE_PARAMS = {}
+
+USE_CASE_ARGS: list[DeclareLaunchArgument] = []

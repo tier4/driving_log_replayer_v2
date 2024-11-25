@@ -12,6 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from launch.actions import DeclareLaunchArgument
 from launch.substitutions import LaunchConfiguration
 
 RECORD_TOPIC = """^/tf$\
@@ -29,3 +30,5 @@ AUTOWARE_DISABLE = {
 AUTOWARE_ARGS = {}
 
 NODE_PARAMS = {"map_path": LaunchConfiguration("map_path")}
+
+USE_CASE_ARGS: list[DeclareLaunchArgument] = []
