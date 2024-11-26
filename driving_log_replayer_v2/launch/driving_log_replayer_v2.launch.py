@@ -151,14 +151,14 @@ def check_launch_component(conf: dict) -> dict:
     if conf["with_autoware"] != "true":
         return {"autoware": "false"}
     launch_config = import_module(f"driving_log_replayer_v2.launch.{conf['use_case']}")
-    use_case_launch_arg = launch_config.AUTOWARE_DISABLE
+    arg_disable = launch_config.AUTOWARE_DISABLE
     # update autoware component launch or not
     autoware_components = ["sensing", "localization", "perception", "planning", "control"]
     launch_component = {}
     for component in autoware_components:
         # argument has higher priority than the launch_config.py setting.
-        if conf.get(component) is None and use_case_launch_arg.get(component) is not None:
-            conf[component] = use_case_launch_arg[component]
+        if conf.get(component) is None and arg_disable.get(component) is not None:
+            conf[component] = arg_disable[component]
         launch_component[component] = conf.get(component, "true")
     return launch_component
 
@@ -538,12 +538,22 @@ def launch_goal_pose_node(context: LaunchContext) -> list:
     ]
 
 
+def add_use_case_arguments(context: LaunchContext) -> list:
+    conf = context.launch_configurations
+    launch_config = import_module(f"driving_log_replayer_v2.launch.{conf['use_case']}")
+    use_case_launch_arg: list = launch_config.USE_CASE_ARGS
+    if len(use_case_launch_arg) == 0:
+        return [LogInfo(msg="no use case launch argument")]
+    return use_case_launch_arg
+
+
 def generate_launch_description() -> LaunchDescription:
     launch_arguments = get_launch_arguments()
     return LaunchDescription(
         [
             *launch_arguments,
             OpaqueFunction(function=ensure_arg_compatibility),
+            OpaqueFunction(function=add_use_case_arguments),  # after ensure_arg_compatibility
             OpaqueFunction(function=launch_autoware),
             OpaqueFunction(function=launch_map_height_fitter),
             OpaqueFunction(function=launch_evaluator_node),
