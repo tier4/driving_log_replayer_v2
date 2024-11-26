@@ -12,6 +12,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from launch.actions import DeclareLaunchArgument
+
 RECORD_TOPIC = """^/tf$\
 |^/control/control_evaluator/metrics$\
 |^/planning/planning_evaluator/metrics$\
@@ -24,3 +26,5 @@ AUTOWARE_DISABLE = {
 AUTOWARE_ARGS = {"use_aeb_autoware_state_check": "false"}
 
 NODE_PARAMS = {}
+
+USE_CASE_ARGS: list[DeclareLaunchArgument] = []

@@ -12,6 +12,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from launch.actions import DeclareLaunchArgument
+
 RECORD_TOPIC = """^/tf$\
 |^/diagnostics$"\
 |^/localization/kinematic_state$\
@@ -29,3 +31,5 @@ AUTOWARE_ARGS = {
 }
 
 NODE_PARAMS = {}
+
+USE_CASE_ARGS: list[DeclareLaunchArgument] = []
