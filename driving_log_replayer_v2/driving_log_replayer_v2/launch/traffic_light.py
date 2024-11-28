@@ -16,6 +16,7 @@ from launch.actions import DeclareLaunchArgument
 from launch.substitutions import LaunchConfiguration
 
 RECORD_TOPIC = """^/tf$\
+|^/diagnostics$\
 |^/sensing/camera/camera[67]/image_raw/compressed$\
 |^/perception/.*/traffic_signals$\
 |^/driving_log_replayer_v2/.*\

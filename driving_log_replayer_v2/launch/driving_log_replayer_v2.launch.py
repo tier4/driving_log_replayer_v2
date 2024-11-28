@@ -296,6 +296,7 @@ def launch_autoware(context: LaunchContext) -> list:
         "sensor_model": conf["sensor_model"],
         "vehicle_id": conf["vehicle_id"],
         "launch_vehicle_interface": "true",
+        "launch_system_monitor": "true",
     }
     launch_config = import_module(f"driving_log_replayer_v2.launch.{conf['use_case']}")
     launch_args |= launch_config.AUTOWARE_ARGS
