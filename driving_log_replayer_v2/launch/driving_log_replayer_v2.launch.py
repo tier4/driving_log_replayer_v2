@@ -246,6 +246,7 @@ def ensure_arg_compatibility(context: LaunchContext) -> list:
             else dataset_dir.joinpath(k)
         )  # t4_dataset_pathが引数で渡されていたら更新しない。指定ない場合はdata_dirから作る
         conf["vehicle_id"] = v["VehicleId"]
+        conf["sensing"] = v["LaunchSensing"]
         init_pose: dict | None = v.get("InitialPose")
         if init_pose is not None:
             conf["initial_pose"] = json.dumps(init_pose)
