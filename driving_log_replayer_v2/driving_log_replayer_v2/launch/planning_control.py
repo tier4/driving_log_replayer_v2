@@ -15,6 +15,7 @@
 from launch.actions import DeclareLaunchArgument
 
 RECORD_TOPIC = """^/tf$\
+|^/diagnostics$\
 |^/control/control_evaluator/metrics$\
 |^/planning/planning_evaluator/metrics$\
 """

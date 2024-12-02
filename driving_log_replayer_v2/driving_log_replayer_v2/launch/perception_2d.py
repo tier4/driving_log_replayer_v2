@@ -15,6 +15,7 @@
 from launch.actions import DeclareLaunchArgument
 
 RECORD_TOPIC = """^/tf$\
+|^/diagnostics$\
 |^/sensing/lidar/concatenated/pointcloud$\
 |^/perception/object_recognition/detection/objects$\
 |^/perception/object_recognition/tracking/objects$\

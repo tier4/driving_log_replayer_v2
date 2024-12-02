@@ -16,6 +16,7 @@ from launch.actions import DeclareLaunchArgument
 from launch.substitutions import LaunchConfiguration
 
 RECORD_TOPIC = """^/tf$\
+|^/diagnostics$\
 |^/perception/obstacle_segmentation/pointcloud$\
 |^/planning/scenario_planning/trajectory$\
 |^/planning/scenario_planning/status/stop_reasons$\

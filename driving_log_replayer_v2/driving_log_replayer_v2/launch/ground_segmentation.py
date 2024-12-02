@@ -16,10 +16,7 @@ from launch.actions import DeclareLaunchArgument
 from launch.substitutions import LaunchConfiguration
 
 RECORD_TOPIC = """^/tf$\
-|^/diagnostics$\
-|^/sensing/camera/camera[67]/image_raw/compressed$\
-|^/perception/.*/traffic_signals$\
-|^/driving_log_replayer_v2/.*\
+|^/diagnostics$"\
 """
 
 AUTOWARE_DISABLE = {
@@ -28,8 +25,16 @@ AUTOWARE_DISABLE = {
     "control": "false",
 }
 
-AUTOWARE_ARGS = {}
+AUTOWARE_ARGS = {"perception_mode": "lidar"}
 
-NODE_PARAMS = {"map_path": LaunchConfiguration("map_path")}
+NODE_PARAMS = {
+    "vehicle_model": LaunchConfiguration("vehicle_model"),
+    "evaluation_target_topic": LaunchConfiguration("evaluation_target_topic"),
+}
 
-USE_CASE_ARGS: list[DeclareLaunchArgument] = []
+USE_CASE_ARGS: list[DeclareLaunchArgument] = [
+    DeclareLaunchArgument(
+        "evaluation_target_topic",
+        default_value="/perception/obstacle_segmentation/single_frame/pointcloud",
+    )
+]
