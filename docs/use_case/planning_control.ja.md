@@ -1,27 +1,26 @@
 # Planning Controlの評価
 
-Metricsが指定の条件で出力されているか評価する
+Planning / ControlのMetricsが指定の条件で出力されているか評価する
 
 ## 評価方法
 
 launch を立ち上げると以下のことが実行され、評価される。
 
 1. launch で評価ノード(`planning_control_evaluator_node`)と `logging_simulator.launch`、`ros2 bag play`コマンドを立ち上げる
-2. bag から出力されたセンサーデータを autoware が受け取って、metrics型のメッセージを出力する
-3. 評価ノードが topic を subscribe して、各基準を満たしているかを判定して結果をファイルに記録する
-4. bag の再生が終了すると自動で launch が終了して評価が終了する
+2. bag から出力されたセンサーデータを autoware が受け取って、perception モジュールが認識を行う
+3. perceptionの結果を使って、planningは `/planning/planning_evaluator/metrics` に controlは `/control/control_evaluator/metrics`にMetricsを出力する
+4. 評価ノードが topic を subscribe して、各基準を満たしているかを判定して結果をファイルに記録する
+5. bag の再生が終了すると自動で launch が終了して評価が終了する
 
 ## 評価結果
 
-`/control/autonomous_emergency_braking/metrics`と`/control/control_evaluator/metrics`を利用する。
-`/control/autonomous_emergency_braking/metrics`がシナリオで指定されたvalueになっているかを評価する。
-シナリオでレーン条件を記述した場合は、`/control/control_evaluator/metrics`から取得できるレーンが条件を満たした場合に評価される。
+topicのstatus[0].nameがシナリオで指定したモジュール名と一致し、且つ、status[0].value[0].keyがdecisionの場合に評価される。
+また、シナリオでレーン条件を記述した場合は、レーン条件も満たした場合に評価される。
 評価の条件を満たさない場合は、ログも出力されない。
 
 ### 正常
 
-`/control/control_evaluator/metrics`のvalueがシナリオ指定の値と一致した場合に正常となる。
-ただし、`none`が指定された場合は、topicのmetric_arrayが空配列の場合にnoneと判断する。
+status[0].values[0].valueがシナリオのdecisionと一致した場合に正常となる。
 kinematic_conditionを指定した場合は追加で、kinematic_stateが条件を満たしている必要がある。
 
 ### 異常
@@ -32,10 +31,10 @@ kinematic_conditionを指定した場合は追加で、kinematic_stateが条件�
 
 Subscribed topics:
 
-| Topic name                                    | Data type                            |
-| --------------------------------------------- | ------------------------------------ |
-| /control/control_evaluator/metrics            | tier4_metric_msg/msg/MetricArray     |
-| /control/autonomous_emergency_braking/metrics | tier4_metric_msg/msg/DiagnosticArray |
+| Topic name                           | Data type                             |
+| ------------------------------------ | ------------------------------------- |
+| /control/control_evaluator/metrics   | diagnostic_msgs/msg/DiagnosticArray |
+| /planning/planning_evaluator/metrics | diagnostic_msgs/msg/DiagnosticArray |
 
 Published topics:
 

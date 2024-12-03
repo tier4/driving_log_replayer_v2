@@ -5,29 +5,27 @@ SensorModel: aip_xx1
 VehicleModel: lexus
 Evaluation:
   UseCaseName: planning_control
-  UseCaseFormatVersion: 1.0.0
+  UseCaseFormatVersion: 0.1.0
   Datasets:
     - odaiba:
         VehicleId: default
   Conditions:
-    MetricConditions:
-      - topic: /control/autonomous_emergency_braking/metrics # 現時点では/control/autonomous_emergency_braking/metrics固定。
-        name: decision # decision固定
-        value: brake
+    ControlConditions:
+      - module: "autonomous_emergency_braking: aeb_emergency_stop"
+        decision: deceleration # Specify key as key and value as value in KeyValue of module.
         condition_type: all_of
-        lane_condition: # /planning/planning_evaluator/metrics ego_lane_info/lane_idから取る
+        lane_condition:
           start:
             id: 1500
           end:
             id: 1500
             s: 2.3
-        kinematic_condition: # /control/control_evaluator/metricsから取る
+        kinematic_condition:
           vel: { min: 2.5, max: 3.0 }
           acc: { min: -0.5, max: 0.5 }
           jerk: { min: 0.2, max: 1.5 }
-      - topic: /control/autonomous_emergency_braking/metrics
-        name: decision
-        value: none # noneという値は実際には出力されない。空配列が来たとき判断する
+      - module: "autonomous_emergency_braking: aeb_emergency_stop"
+        decision: none
         condition_type: all_of
         lane_condition: # optional
           start:

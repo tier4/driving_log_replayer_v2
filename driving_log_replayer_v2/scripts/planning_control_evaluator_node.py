@@ -14,9 +14,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from collections.abc import Callable
 
-from tier4_metric_msgs.msg import MetricArray
+from diagnostic_msgs.msg import DiagnosticArray
 
 from driving_log_replayer_v2.evaluator import DLREvaluatorV2
 from driving_log_replayer_v2.evaluator import evaluator_main
@@ -25,39 +24,29 @@ from driving_log_replayer_v2.planning_control import PlanningControlScenario
 
 
 class PlanningControlEvaluator(DLREvaluatorV2):
-    def __init__(
-        self,
-        name: str,
-        scenario_class: Callable = PlanningControlScenario,
-        result_class: Callable = PlanningControlResult,
-    ) -> None:
-        super().__init__(name, scenario_class, result_class)
+    def __init__(self, name: str) -> None:
+        super().__init__(name, PlanningControlScenario, PlanningControlResult)
         self._scenario: PlanningControlScenario
         self._result: PlanningControlResult
 
-        self._latest_control_metrics = MetricArray()
+        self.__sub_planning_diagnostics = self.create_subscription(
+            DiagnosticArray,
+            "/planning/planning_evaluator/metrics",
+            lambda msg, module_type="planning": self.diagnostics_cb(msg, module_type),
+            1,
+        )
 
-        self.__sub_control_metrics = self.create_subscription(
-            MetricArray,
+        self.__sub_control_diagnostics = self.create_subscription(
+            DiagnosticArray,
             "/control/control_evaluator/metrics",
-            self.control_cb,
+            lambda msg, module_type="control": self.diagnostics_cb(msg, module_type),
             1,
         )
 
-        self.__sub_autonomous_emergency_braking = self.create_subscription(
-            MetricArray,
-            "/control/autonomous_emergency_braking/metrics",
-            self.aeb_cb,
-            1,
-        )
-
-    def aeb_cb(self, msg: MetricArray) -> None:
-        self._result.set_frame(msg, self._latest_control_metrics)
+    def diagnostics_cb(self, msg: DiagnosticArray, module: str) -> None:
+        self._result.set_frame(msg, module)
         if self._result.frame != {}:
             self._result_writer.write_result(self._result)
-
-    def control_cb(self, msg: MetricArray) -> None:
-        self._latest_control_metrics = msg
 
 
 @evaluator_main

@@ -1,27 +1,26 @@
 # Evaluate Planning Control
 
-Evaluate Metrics are output at specified times and conditions
+Evaluate whether Planning / Control metrics are output at specified times and conditions
 
 ## Evaluation Method
 
 Launching the file executes the following steps:
 
 1. Execute launch of evaluation node (`planning_control_evaluator_node`), `logging_simulator.launch` file and `ros2 bag play` command
-2. Autoware receives sensor data output from bag and publishes a metrics type message
-3. The evaluation node subscribes to the topic and evaluates data. The result is dumped into a file.
-4. When the playback of the rosbag is finished, Autoware's launch is automatically terminated, and the evaluation is completed.
+2. Autoware receives sensor data output from input rosbag and the perception module performs recognition.
+3. Using the results of perception, Autoware output Metrics to `/planning/planning_evaluator/metrics` for planning and `/control/control_evaluator/metrics` for control.
+4. The evaluation node subscribes to the topic and evaluates data. The result is dumped into a file.
+5. When the playback of the rosbag is finished, Autoware's launch is automatically terminated, and the evaluation is completed.
 
 ## Evaluation Result
 
-This node uses `/control/autonomous_emergency_braking/metrics` and `/control/control_evaluator/metrics`.
-Evaluate if `/control/autonomous_emergency_braking/metrics` is the value specified in the scenario.
-If a lane condition is described in the scenario, it is evaluated when a lane that can be obtained from `/control/control_evaluator/metrics` satisfies the condition.
+It is evaluated when status[0].name of the topic matches the module name specified in the scenario and status[0].value[0].key is a decision.
+If a lane condition is described in the scenario, it is evaluated when the lane condition is also satisfied.
 If the conditions for evaluation are not met, no log is output.
 
 ### Normal
 
-Normal if the value in `/control/control_evaluator/metrics` matches the value specified in the scenario.
-Though, if `none` is specified, it is judged as `none` if the metric_array of topic is an empty array.
+Normal if status[0].values[0].value matches the decision in the scenario.
 If kinematic_condition is specified, additionally, kinematic_state must meet the condition.
 
 ### Error
@@ -32,10 +31,10 @@ When the normal condition is not met
 
 Subscribed topics:
 
-| Topic name                                    | Data type                            |
-| --------------------------------------------- | ------------------------------------ |
-| /control/control_evaluator/metrics            | tier4_metric_msg/msg/MetricArray     |
-| /control/autonomous_emergency_braking/metrics | tier4_metric_msg/msg/DiagnosticArray |
+| Topic name                           | Data type                             |
+| ------------------------------------ | ------------------------------------- |
+| /control/control_evaluator/metrics   | diagnostic_msgs/msg/DiagnosticArray |
+| /planning/planning_evaluator/metrics | diagnostic_msgs/msg/DiagnosticArray |
 
 Published topics:
 
