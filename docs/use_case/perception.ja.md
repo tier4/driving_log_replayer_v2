@@ -125,8 +125,8 @@ Published topics:
 
 | topic 名                                     | データ型                             |
 | -------------------------------------------- | ------------------------------------ |
-| /driving_log_replayer_v2/marker/ground_truth | visualization_msgs::msg::MarkerArray |
-| /driving_log_replayer_v2/marker/results      | visualization_msgs::msg::MarkerArray |
+| /driving_log_replayer_v2/marker/ground_truth | visualization_msgs/msg/MarkerArray |
+| /driving_log_replayer_v2/marker/results      | visualization_msgs/msg/MarkerArray |
 
 ## logging_simulator.launch に渡す引数
 

@@ -67,7 +67,7 @@ Subscribed topics:
 
 | Topic name                                      | Data type                             |
 | ----------------------------------------------- | ------------------------------------- |
-| /perception/perception_online_evaluator/metrics | diagnostic_msgs::msg::DiagnosticArray |
+| /perception/perception_online_evaluator/metrics | diagnostic_msgs/msg/DiagnosticArray |
 
 Published topics:
 

@@ -84,21 +84,21 @@ Subscribed topics:
 
 | Topic name                                                           | Data type                             |
 | -------------------------------------------------------------------- | ------------------------------------- |
-| /diagnostics                                                         | diagnostic_msgs::msg::DiagnosticArray |
-| /localization/pose_estimator/transform_probability                   | tier4_debug_msgs::msg::Float32Stamped |
-| /localization/pose_estimator/nearest_voxel_transformation_likelihood | tier4_debug_msgs::msg::Float32Stamped |
-| /localization/pose_estimator/initial_to_result_relative_pose         | geometry_msgs::msg::PoseStamped       |
-| /localization/pose_estimator/exe_time_ms                             | tier4_debug_msgs::msg::Float32Stamped |
-| /localization/pose_estimator/iteration_num                           | tier4_debug_msgs::msg::Int32Stamped   |
+| /diagnostics                                                         | diagnostic_msgs/msg/DiagnosticArray |
+| /localization/pose_estimator/transform_probability                   | tier4_debug_msgs/msg/Float32Stamped |
+| /localization/pose_estimator/nearest_voxel_transformation_likelihood | tier4_debug_msgs/msg/Float32Stamped |
+| /localization/pose_estimator/initial_to_result_relative_pose         | geometry_msgs/msg/PoseStamped       |
+| /localization/pose_estimator/exe_time_ms                             | tier4_debug_msgs/msg/Float32Stamped |
+| /localization/pose_estimator/iteration_num                           | tier4_debug_msgs/msg/Int32Stamped   |
 | /tf                                                                  | tf2_msgs/msg/TFMessage                |
-| /localization/util/downsample/pointcloud                             | sensor_msgs::msg::PointCloud2         |
-| /localization/pose_estimator/points_aligned                          | sensor_msgs::msg::PointCloud2         |
+| /localization/util/downsample/pointcloud                             | sensor_msgs/msg/PointCloud2         |
+| /localization/pose_estimator/points_aligned                          | sensor_msgs/msg/PointCloud2         |
 
 Published topics:
 
 | Topic name                                             | Data type                        |
 | ------------------------------------------------------ | -------------------------------- |
-| /driving_log_replayer_v2/localization/lateral_distance | example_interfaces::msg::Float64 |
+| /driving_log_replayer_v2/localization/lateral_distance | example_interfaces/msg/Float64 |
 
 ## Service name and data type used by the evaluation node
 

@@ -35,7 +35,7 @@ Subscribed topics:
 
 | Topic name   | Data type                             |
 | ------------ | ------------------------------------- |
-| /diagnostics | diagnostic_msgs::msg::DiagnosticArray |
+| /diagnostics | diagnostic_msgs/msg/DiagnosticArray |
 
 Published topics:
 

@@ -34,8 +34,8 @@ Subscribed topics:
 
 | Topic name                                    | Data type                              |
 | --------------------------------------------- | -------------------------------------- |
-| /control/control_evaluator/metrics            | tier4_metric_msg::msg::MetricArray     |
-| /control/autonomous_emergency_braking/metrics | tier4_metric_msg::msg::DiagnosticArray |
+| /control/control_evaluator/metrics            | tier4_metric_msg/msg/MetricArray     |
+| /control/autonomous_emergency_braking/metrics | tier4_metric_msg/msg/DiagnosticArray |
 
 Published topics:
 
