@@ -32,10 +32,10 @@ kinematic_conditionを指定した場合は追加で、kinematic_stateが条件�
 
 Subscribed topics:
 
-| Topic name                                    | Data type                              |
-| --------------------------------------------- | -------------------------------------- |
-| /control/control_evaluator/metrics            | tier4_metric_msg::msg::MetricArray     |
-| /control/autonomous_emergency_braking/metrics | tier4_metric_msg::msg::DiagnosticArray |
+| Topic name                                    | Data type                            |
+| --------------------------------------------- | ------------------------------------ |
+| /control/control_evaluator/metrics            | tier4_metric_msg/msg/MetricArray     |
+| /control/autonomous_emergency_braking/metrics | tier4_metric_msg/msg/DiagnosticArray |
 
 Published topics:
 
