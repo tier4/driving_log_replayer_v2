@@ -60,29 +60,29 @@ LiDAR の診断結果の subscribe 1 回につき、以下に記述する判定�
 
 Subscribed topics:
 
-| topic 名                                     | データ型                              |
-| -------------------------------------------- | ------------------------------------- |
-| /perception/obstacle_segmentation/pointcloud | sensor_msgs::msg::PointCloud2         |
-| /diagnostics                                 | diagnostic_msgs::msg::DiagnosticArray |
-| /tf                                          | tf2_msgs/msg/TFMessage                |
+| topic 名                                     | データ型                            |
+| -------------------------------------------- | ----------------------------------- |
+| /perception/obstacle_segmentation/pointcloud | sensor_msgs/msg/PointCloud2         |
+| /diagnostics                                 | diagnostic_msgs/msg/DiagnosticArray |
+| /tf                                          | tf2_msgs/msg/TFMessage              |
 
 Published topics:
 
-| topic 名                                                    | データ型                         |
-| ----------------------------------------------------------- | -------------------------------- |
-| /driving_log_replayer_v2/visibility/value                   | example_interfaces::msg::Float64 |
-| /driving_log_replayer_v2/visibility/level                   | example_interfaces::msg::Byte    |
-| /driving_log_replayer_v2/blockage/{lidar_name}/ground/ratio | example_interfaces::msg::Float64 |
-| /driving_log_replayer_v2/blockage/{lidar_name}/sky/ratio    | example_interfaces::msg::Float64 |
-| /driving_log_replayer_v2/blockage/{lidar_name}/level        | example_interfaces::msg::Byte    |
+| topic 名                                                    | データ型                       |
+| ----------------------------------------------------------- | ------------------------------ |
+| /driving_log_replayer_v2/visibility/value                   | example_interfaces/msg/Float64 |
+| /driving_log_replayer_v2/visibility/level                   | example_interfaces/msg/Byte    |
+| /driving_log_replayer_v2/blockage/{lidar_name}/ground/ratio | example_interfaces/msg/Float64 |
+| /driving_log_replayer_v2/blockage/{lidar_name}/sky/ratio    | example_interfaces/msg/Float64 |
+| /driving_log_replayer_v2/blockage/{lidar_name}/level        | example_interfaces/msg/Byte    |
 
 {lidar_name}には、搭載されている lidar の名前が入る。
 
 ## 評価ノードが使用する Service 名とデータ型
 
-| service 名                   | データ型               |
-| ---------------------------- | ---------------------- |
-| /api/localization/initialize | InitializeLocalization |
+| service 名               | データ型                                           |
+| ------------------------ | -------------------------------------------------- |
+| /localization/initialize | tier4_localization_msgs/srv/InitializeLocalization |
 
 ## logging_simulator.launch に渡す引数
 

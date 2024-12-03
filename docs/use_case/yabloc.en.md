@@ -33,9 +33,9 @@ The YabLoc availability evaluation output is marked as `Error` when conditions f
 
 Subscribed topics:
 
-| Topic name   | Data type                             |
-| ------------ | ------------------------------------- |
-| /diagnostics | diagnostic_msgs::msg::DiagnosticArray |
+| Topic name   | Data type                           |
+| ------------ | ----------------------------------- |
+| /diagnostics | diagnostic_msgs/msg/DiagnosticArray |
 
 Published topics:
 
@@ -45,9 +45,9 @@ Published topics:
 
 ## Service name and data type used by the evaluation node
 
-| Service name                 | Data type              |
-| ---------------------------- | ---------------------- |
-| /api/localization/initialize | InitializeLocalization |
+| Service name             | Data type                                          |
+| ------------------------ | -------------------------------------------------- |
+| /localization/initialize | tier4_localization_msgs/srv/InitializeLocalization |
 
 ## Arguments passed to logging_simulator.launch
 

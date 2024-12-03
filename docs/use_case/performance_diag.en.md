@@ -60,29 +60,29 @@ If the scenario type is FP and the level in the diagnostic information is ERROR.
 
 Subscribed topics:
 
-| Topic name                                   | Data type                             |
-| -------------------------------------------- | ------------------------------------- |
-| /perception/obstacle_segmentation/pointcloud | sensor_msgs::msg::PointCloud2         |
-| /diagnostics                                 | diagnostic_msgs::msg::DiagnosticArray |
-| /tf                                          | tf2_msgs/msg/TFMessage                |
+| Topic name                                   | Data type                           |
+| -------------------------------------------- | ----------------------------------- |
+| /perception/obstacle_segmentation/pointcloud | sensor_msgs/msg/PointCloud2         |
+| /diagnostics                                 | diagnostic_msgs/msg/DiagnosticArray |
+| /tf                                          | tf2_msgs/msg/TFMessage              |
 
 Published topics:
 
-| Topic name                                                  | Data type                        |
-| ----------------------------------------------------------- | -------------------------------- |
-| /driving_log_replayer_v2/visibility/value                   | example_interfaces::msg::Float64 |
-| /driving_log_replayer_v2/visibility/level                   | example_interfaces::msg::Byte    |
-| /driving_log_replayer_v2/blockage/{lidar_name}/ground/ratio | example_interfaces::msg::Float64 |
-| /driving_log_replayer_v2/blockage/{lidar_name}/sky/ratio    | example_interfaces::msg::Float64 |
-| /driving_log_replayer_v2/blockage/{lidar_name}/level        | example_interfaces::msg::Byte    |
+| Topic name                                                  | Data type                      |
+| ----------------------------------------------------------- | ------------------------------ |
+| /driving_log_replayer_v2/visibility/value                   | example_interfaces/msg/Float64 |
+| /driving_log_replayer_v2/visibility/level                   | example_interfaces/msg/Byte    |
+| /driving_log_replayer_v2/blockage/{lidar_name}/ground/ratio | example_interfaces/msg/Float64 |
+| /driving_log_replayer_v2/blockage/{lidar_name}/sky/ratio    | example_interfaces/msg/Float64 |
+| /driving_log_replayer_v2/blockage/{lidar_name}/level        | example_interfaces/msg/Byte    |
 
 {lidar_name} contains the name of the mounted lidar.
 
 ## Service name and data type used by the evaluation node
 
-| Service name                 | Data type              |
-| ---------------------------- | ---------------------- |
-| /api/localization/initialize | InitializeLocalization |
+| Service name             | Data type                                          |
+| ------------------------ | -------------------------------------------------- |
+| /localization/initialize | tier4_localization_msgs/srv/InitializeLocalization |
 
 ## Arguments passed to logging_simulator.launch
 

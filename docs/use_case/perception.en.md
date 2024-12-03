@@ -127,10 +127,10 @@ Subscribed topics:
 
 Published topics:
 
-| Topic name                                   | Data type                            |
-| -------------------------------------------- | ------------------------------------ |
-| /driving_log_replayer_v2/marker/ground_truth | visualization_msgs::msg::MarkerArray |
-| /driving_log_replayer_v2/marker/results      | visualization_msgs::msg::MarkerArray |
+| Topic name                                   | Data type                          |
+| -------------------------------------------- | ---------------------------------- |
+| /driving_log_replayer_v2/marker/ground_truth | visualization_msgs/msg/MarkerArray |
+| /driving_log_replayer_v2/marker/results      | visualization_msgs/msg/MarkerArray |
 
 ## Arguments passed to logging_simulator.launch
 

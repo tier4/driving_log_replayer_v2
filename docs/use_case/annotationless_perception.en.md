@@ -65,9 +65,9 @@ When the normal condition is not met
 
 Subscribed topics:
 
-| Topic name                                      | Data type                             |
-| ----------------------------------------------- | ------------------------------------- |
-| /perception/perception_online_evaluator/metrics | diagnostic_msgs::msg::DiagnosticArray |
+| Topic name                                      | Data type                           |
+| ----------------------------------------------- | ----------------------------------- |
+| /perception/perception_online_evaluator/metrics | diagnostic_msgs/msg/DiagnosticArray |
 
 Published topics:
 

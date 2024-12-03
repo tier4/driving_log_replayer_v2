@@ -73,23 +73,23 @@ The state is `Error` when any point was found in the non-detection area.
 
 Subscribed topics:
 
-| Topic name                                      | Data type                                 |
-| ----------------------------------------------- | ----------------------------------------- |
-| /perception/obstacle_segmentation/pointcloud    | sensor_msgs::msg::PointCloud2             |
-| /diagnostics                                    | diagnostic_msgs::msg::DiagnosticArray     |
-| /tf                                             | tf2_msgs/msg/TFMessage                    |
-| /planning/scenario_planning/status/stop_reasons | tier4_planning_msgs::msg::StopReasonArray |
-| /planning/scenario_planning/trajectory          | autoware_planning_msgs::msg::Trajectory   |
+| Topic name                                      | Data type                               |
+| ----------------------------------------------- | --------------------------------------- |
+| /perception/obstacle_segmentation/pointcloud    | sensor_msgs/msg/PointCloud2             |
+| /diagnostics                                    | diagnostic_msgs/msg/DiagnosticArray     |
+| /tf                                             | tf2_msgs/msg/TFMessage                  |
+| /planning/scenario_planning/status/stop_reasons | tier4_planning_msgs/msg/StopReasonArray |
+| /planning/scenario_planning/trajectory          | autoware_planning_msgs/msg/Trajectory   |
 
 Published topics:
 
-| Topic name                                    | Data type                            |
-| --------------------------------------------- | ------------------------------------ |
-| /driving_log_replayer_v2/marker/detection     | visualization_msgs::msg::MarkerArray |
-| /driving_log_replayer_v2/marker/non_detection | visualization_msgs::msg::MarkerArray |
-| /driving_log_replayer_v2/pcd/detection        | sensor_msgs::msg::PointCloud2        |
-| /driving_log_replayer_v2/pcd/non_detection    | sensor_msgs::msg::PointCloud2        |
-| /planning/mission_planning/goal               | geometry_msgs::msg::PoseStamped      |
+| Topic name                                    | Data type                          |
+| --------------------------------------------- | ---------------------------------- |
+| /driving_log_replayer_v2/marker/detection     | visualization_msgs/msg/MarkerArray |
+| /driving_log_replayer_v2/marker/non_detection | visualization_msgs/msg/MarkerArray |
+| /driving_log_replayer_v2/pcd/detection        | sensor_msgs/msg/PointCloud2        |
+| /driving_log_replayer_v2/pcd/non_detection    | sensor_msgs/msg/PointCloud2        |
+| /planning/mission_planning/goal               | geometry_msgs/msg/PoseStamped      |
 
 ## Arguments passed to logging_simulator.launch
 
