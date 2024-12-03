@@ -32,8 +32,8 @@ When the normal condition is not met
 
 Subscribed topics:
 
-| Topic name                                    | Data type                              |
-| --------------------------------------------- | -------------------------------------- |
+| Topic name                                    | Data type                            |
+| --------------------------------------------- | ------------------------------------ |
 | /control/control_evaluator/metrics            | tier4_metric_msg/msg/MetricArray     |
 | /control/autonomous_emergency_braking/metrics | tier4_metric_msg/msg/DiagnosticArray |
 

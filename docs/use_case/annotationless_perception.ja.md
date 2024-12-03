@@ -65,8 +65,8 @@ metric_valueは現在の値だけで判定され、min, max, meanのmetricsの�
 
 Subscribed topics:
 
-| Topic name                                      | Data type                             |
-| ----------------------------------------------- | ------------------------------------- |
+| Topic name                                      | Data type                           |
+| ----------------------------------------------- | ----------------------------------- |
 | /perception/perception_online_evaluator/metrics | diagnostic_msgs/msg/DiagnosticArray |
 
 Published topics:

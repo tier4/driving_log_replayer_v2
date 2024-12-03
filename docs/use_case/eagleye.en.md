@@ -33,8 +33,8 @@ The Eagleye availability evaluation output is marked as `Error` when conditions 
 
 Subscribed topics:
 
-| Topic name   | Data type                             |
-| ------------ | ------------------------------------- |
+| Topic name   | Data type                           |
+| ------------ | ----------------------------------- |
 | /diagnostics | diagnostic_msgs/msg/DiagnosticArray |
 
 Published topics:

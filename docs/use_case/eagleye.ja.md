@@ -43,8 +43,8 @@ Eagleye Monitorが出力する `/diagnostics` の中から、監視トピック�
 
 Subscribed topics:
 
-| Topic name   | Data type                             |
-| ------------ | ------------------------------------- |
+| Topic name   | Data type                           |
+| ------------ | ----------------------------------- |
 | /diagnostics | diagnostic_msgs/msg/DiagnosticArray |
 
 Published topics:
