@@ -2,8 +2,8 @@
 Changelog for package driving_log_replayer_v2_analyzer
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-Forthcoming
------------
+3.0.0 (2024-12-05)
+------------------
 * fix: replace TierIV with TIER IV (`#51 <https://github.com/tier4/driving_log_replayer_v2/issues/51>`_)
 * fix: replace TierIV with TIER IV
 * feat: `#21 <https://github.com/tier4/driving_log_replayer_v2/issues/21>`_ recreate cli (`#23 <https://github.com/tier4/driving_log_replayer_v2/issues/23>`_)
