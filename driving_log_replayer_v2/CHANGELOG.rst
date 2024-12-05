@@ -2,6 +2,136 @@
 Changelog for package driving_log_replayer
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
+Forthcoming
+-----------
+* feat: import changelog from v1
+* feat: diag evaluator (`#42 <https://github.com/tier4/driving_log_replayer_v2/issues/42>`_)
+  * feat: add node
+  * feat(WIP): DiagConditions
+  * feat: update
+  * fix: CMakeLists.txt
+  * fix: add launch config
+  * fix: level check
+  * docs: add ja
+  * docs: add en document
+  * fix: pre-commit
+  * fix: pre-commit
+  * feat: unit test
+  * feat: update unit test
+  * fix: lint
+  * feat: add use case args
+  ---------
+* Merge pull request `#55 <https://github.com/tier4/driving_log_replayer_v2/issues/55>`_ from tier4/feat/merge-ground-segmentation-evaluator
+  feat: merge ground segmentation evaluator
+* feat: enable system_monitor (`#56 <https://github.com/tier4/driving_log_replayer_v2/issues/56>`_)
+* feat: add use case launch argument (`#54 <https://github.com/tier4/driving_log_replayer_v2/issues/54>`_)
+  * feat: support use case launch argument
+  * fix: order
+  ---------
+* Merge branch 'feat/add-use-case-launch-argument' into feat/merge-ground-segmentation-evaluator
+* fix: order
+* feat: support use case launch argument
+* feat: split launch config by use case (`#53 <https://github.com/tier4/driving_log_replayer_v2/issues/53>`_)
+  * feat: split launch config by use case
+  * feat: import launch_config
+  * fix: replace " with '
+  * fix: typo
+  * fix: copyright
+  ---------
+* fix: use wrong setting (`#52 <https://github.com/tier4/driving_log_replayer_v2/issues/52>`_)
+* fix: replace TierIV with TIER IV (`#51 <https://github.com/tier4/driving_log_replayer_v2/issues/51>`_)
+* feat: update launch config
+* fix: replace TierIV with TIER IV
+* Merge remote-tracking branch 'v1/main' into feat/merge-ground-segmentation-evaluator
+* feat: planning control metric msg (`#43 <https://github.com/tier4/driving_log_replayer_v2/issues/43>`_)
+  * feat: add metric msg
+  * feat: update scenario format
+  * feat: aeb evaluation
+  * feat: update
+  * feat: update
+  * feat: delete sample
+  * feat: update unit test
+  * fix: lint
+  * fix: update repos
+  * fix: update depend
+  * docs: update
+  * revert: dependency.repos
+  ---------
+* feat: use cmd sleep for delay (`#50 <https://github.com/tier4/driving_log_replayer_v2/issues/50>`_)
+* feat: remap profile (`#48 <https://github.com/tier4/driving_log_replayer_v2/issues/48>`_)
+  * feat: add launch argument remap_profile
+  * fix: access invalid field
+  * fix: resolve symlink
+  * fix: ruff lint
+  * fix: ruff C901
+  * Rename and add remap profiles
+  * Remove empty lines
+  * Add an empty line at the last
+  * Remove unnecessary tabs
+  ---------
+  Co-authored-by: TadaKazuto <kazuto.tada@tier4.jp>
+* feat: set use_aeb_autoware_state_check (`#46 <https://github.com/tier4/driving_log_replayer_v2/issues/46>`_)
+* fix: remap topic to be unique (`#45 <https://github.com/tier4/driving_log_replayer_v2/issues/45>`_)
+* feat: bag play remap (`#44 <https://github.com/tier4/driving_log_replayer_v2/issues/44>`_)
+  * feat: remap topics
+  * fix: remap command
+  ---------
+* fix: get launch context (`#41 <https://github.com/tier4/driving_log_replayer_v2/issues/41>`_)
+  * fix: with_autoware false mode
+  * chore: value
+  * fix: ruff lint
+  ---------
+* Merge branch 'main' into v2/develop
+* Merge branch 'main' into v2/develop
+* Merge branch 'main' into v2/develop
+* feat: support record only mode (`#38 <https://github.com/tier4/driving_log_replayer_v2/issues/38>`_)
+  * feat: support record only mode
+  * chore: update sample argument
+  * fix: shutdown when bag play ends
+  * fix: sample record regex
+  * fix: output dummy result.jsonl
+  * feat: mcap zstd_fast
+  * feat: support storage type switch
+  * feat: update default value
+  ---------
+* Merge branch 'main' into v2/develop
+* feat: merge qos.yaml (`#37 <https://github.com/tier4/driving_log_replayer_v2/issues/37>`_)
+* refactor(launch): Output message if module is not launched (`#36 <https://github.com/tier4/driving_log_replayer_v2/issues/36>`_)
+* Merge branch 'main' into v2/develop
+* Merge branch 'main' into v2/develop
+* fix: return dataset index (`#31 <https://github.com/tier4/driving_log_replayer_v2/issues/31>`_)
+  * chore: return error msg
+  * fix: return idx_int
+  ---------
+* feat: add t4_dataset_id (`#30 <https://github.com/tier4/driving_log_replayer_v2/issues/30>`_)
+* feat: add argument t4_dataset_path for compatibility with v1 (`#29 <https://github.com/tier4/driving_log_replayer_v2/issues/29>`_)
+  * feat: add argument t4_dataset_path for compatibility with v1
+  * fix: extract_index
+  ---------
+* feat: set dataset index (`#28 <https://github.com/tier4/driving_log_replayer_v2/issues/28>`_)
+* refactor: launch (`#27 <https://github.com/tier4/driving_log_replayer_v2/issues/27>`_)
+* refactor: launch (`#26 <https://github.com/tier4/driving_log_replayer_v2/issues/26>`_)
+* fix: path name to keep compatibility of v1 (`#25 <https://github.com/tier4/driving_log_replayer_v2/issues/25>`_)
+* fix: update diag UseCaseFormatVersion (`#24 <https://github.com/tier4/driving_log_replayer_v2/issues/24>`_)
+* feat: create latest log directory symlink (`#22 <https://github.com/tier4/driving_log_replayer_v2/issues/22>`_)
+* docs: update architecture graph (`#19 <https://github.com/tier4/driving_log_replayer_v2/issues/19>`_)
+  * docs: add planning_control use case
+  * docs: update architecture graph
+  * fix: ruff SIM103
+  ---------
+* Merge branch 'main' into v2
+* Merge branch 'develop' into v2
+* Merge branch 'develop' into v2
+* Merge branch 'main' into v2
+* feat: rename driving log replayer v2 (`#18 <https://github.com/tier4/driving_log_replayer_v2/issues/18>`_)
+  * feat: replace log_evaluator with driving_log_replayer_v2
+  * feat: replace LogEvaluator with DLREvaluatorV2
+  * fix: pre-commit
+  * fix: command
+  * chore: update graph
+  ---------
+* Contributors: Hayato Mizushima, iwatake
+
 2.4.0 (2024-11-20)
 ------------------
 * feat: add ground_segmentation_evaluator  (`#528 <https://github.com/tier4/driving_log_replayer/issues/528>`_)
