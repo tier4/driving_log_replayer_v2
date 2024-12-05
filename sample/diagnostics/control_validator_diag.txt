@@ -1,0 +1,21 @@
+header:
+  stamp:
+    sec: 1709009626
+    nanosec: 460763573
+  frame_id: ''
+status:
+- level: "\x02"
+  name: 'control_validator: control_validation_max_distance_deviation'
+  message: control output is deviated from trajectory
+  hardware_id: control_validator
+  values: []
+- level: "\0"
+  name: 'control_validator: control_validation_rolling_back'
+  message: validated.
+  hardware_id: control_validator
+  values: []
+- level: "\0"
+  name: 'control_validator: control_validation_over_velocity'
+  message: validated.
+  hardware_id: control_validator
+  values: []
