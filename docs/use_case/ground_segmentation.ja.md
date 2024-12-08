@@ -31,7 +31,7 @@ launch を立ち上げると以下のことが実行され、評価される。
 
 ### 評価時の注意点
 
-- **annotated_rosbagモード**
+- **annotated_rosbagモード**  
     [autoware.universeのsensingモジュール](https://github.com/autowarefoundation/autoware.universe/blob/main/sensing/autoware_pointcloud_preprocessor/src/filter.cpp#L383-L390)を以下のように書き換える必要がある。
     ```diff
          if (utils::is_data_layout_compatible_with_point_xyzi(*cloud)) {
@@ -46,7 +46,7 @@ launch を立ち上げると以下のことが実行され、評価される。
     }
     ```
 
-- **annotated_pcdモード**
+- **annotated_pcdモード**  
     評価処理に時間がかかるため、rosbagの再生レートを下げる必要がある。
     `ros2 launch driving_log_replayer_v2 driving_log_replayer_v2.launch.py scenario_path:=${scenario_file} play_rate:=0.1`
 

@@ -31,7 +31,7 @@ Launching the file executes the following steps:
 
 ### Points to note during evaluation
 
-- **annotated_rosbag mode**
+- **annotated_rosbag mode**  
     The [sensing module of autoware.universe](https://github.com/autowarefoundation/autoware.universe/blob/main/sensing/autoware_pointcloud_preprocessor/src/filter.cpp#L383-L390) needs to be modified as follows:
     ```diff
          if (utils::is_data_layout_compatible_with_point_xyzi(*cloud)) {
@@ -46,7 +46,7 @@ Launching the file executes the following steps:
     }
     ```
 
-- **annotated_pcd mode**
+- **annotated_pcd mode**  
     Since the evaluation process takes time, the playback rate of the rosbag needs to be reduced.
     Example:
     `ros2 launch driving_log_replayer_v2 driving_log_replayer_v2.launch.py scenario_path:=${scenario_file} play_rate:=0.1`
