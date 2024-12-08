@@ -1,4 +1,4 @@
-# Evaluate Ground Segmentaion
+# Evaluate Ground Segmentation
 
 Evaluate the function of segmenting and removing ground point clouds from input point clouds.
 
