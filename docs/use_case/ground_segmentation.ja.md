@@ -6,7 +6,7 @@
 
 評価のために必要となるGround Truthデータは以下の2種類の方法で与えることが可能であり、それぞれシナリオの`Evaluation.Conditions.Method`を変更することにより使用できる。
 
-**annotated_rosbag**
+### annotated_rosbag
 
 bagデータに含まれる点群データに、セマンティックラベルを表すフィールドを持たせる方法。
 
@@ -14,8 +14,8 @@ bagデータに含まれる点群データに、セマンティックラベル�
 
 本評価基盤では、セマンティックラベルは`INT32`型の`entity_id`フィールドに記述されていることが前提となっている。
 
-**annotated_pcd**
-    
+### annotated_pcd
+
 データセットとして与える点群データ(`~/driving_log_replayer_v2/ground_segmentation/dataset/data/LIDAR_CONCAT/*.pnd.bin`)に、セマンティックラベルを表すフィールドを持たせる方法。
 
 地面点群除去処理後の点群と、pcd.binファイルに含まれる点群同士を比較し、処理後点群が持つラベルを見ることで精度評価を行う。
@@ -32,23 +32,24 @@ launch を立ち上げると以下のことが実行され、評価される。
 ### 評価時の注意点
 
 - **annotated_rosbagモード**  
-    [autoware.universeのsensingモジュール](https://github.com/autowarefoundation/autoware.universe/blob/main/sensing/autoware_pointcloud_preprocessor/src/filter.cpp#L383-L390)を以下のように書き換える必要がある。
-    ```diff
-         if (utils::is_data_layout_compatible_with_point_xyzi(*cloud)) {
-          RCLCPP_ERROR(
-            get_logger(),
-            "The pointcloud layout is compatible with PointXYZI. You may be using legacy "
-            "code/data");
-         }
-    
-    - return;
-    + // return; <- comment out!
-    }
-    ```
+   [autoware.universeのsensingモジュール](https://github.com/autowarefoundation/autoware.universe/blob/main/sensing/autoware_pointcloud_preprocessor/src/filter.cpp#L383-L390)を以下のように書き換える必要がある。
+
+  ```diff
+       if (utils::is_data_layout_compatible_with_point_xyzi(*cloud)) {
+        RCLCPP_ERROR(
+          get_logger(),
+          "The pointcloud layout is compatible with PointXYZI. You may be using legacy "
+          "code/data");
+       }
+
+  - return;
+  + // return; <- comment out!
+  }
+  ```
 
 - **annotated_pcdモード**  
-    評価処理に時間がかかるため、rosbagの再生レートを下げる必要がある。
-    `ros2 launch driving_log_replayer_v2 driving_log_replayer_v2.launch.py scenario_path:=${scenario_file} play_rate:=0.1`
+   評価処理に時間がかかるため、rosbagの再生レートを下げる必要がある。
+  `ros2 launch driving_log_replayer_v2 driving_log_replayer_v2.launch.py scenario_path:=${scenario_file} play_rate:=0.1`
 
 ## 評価結果
 
@@ -66,18 +67,18 @@ topic の subscribe 1 回につき、以下に記述する判定結果が出力�
 
 Subscribed topics:
 
-| topic 名                                                             | データ型                            |
-| -------------------------------------------------------------------- | ----------------------------------- |
-| /sensing/lidar/concatenated/pointcloud                            　　 | sensor_msgs/msg/PointCloud2         |
-| /perception/obstacle_segmentation/single_frame/pointcloud                          | sensor_msgs/msg/PointCloud2         |
+| topic 名                                                  | データ型                    |
+| --------------------------------------------------------- | --------------------------- |
+| /sensing/lidar/concatenated/pointcloud 　　               | sensor_msgs/msg/PointCloud2 |
+| /perception/obstacle_segmentation/single_frame/pointcloud | sensor_msgs/msg/PointCloud2 |
 
 **注:`/perception/obstacle_segmentation/single_frame/pointcloud`topicは、launch引数`evaluation_target_topic`で変更可能である。**
 
 Published topics:
 
-| topic 名                                               | データ型                       |
-| ------------------------------------------------------ | ------------------------------ |
-| - | - |
+| topic 名 | データ型 |
+| -------- | -------- |
+| -        | -        |
 
 ## logging_simulator.launch に渡す引数
 
@@ -92,11 +93,10 @@ Published topics:
 
 ### 入力 rosbag に含まれるべき topic
 
-| topic 名                           | データ型                                     |
-| ---------------------------------- | -------------------------------------------- |
-| /sensing/lidar/concatenated/pointcloud               | sensor_msgs/msg/PointCloud2                           |
-| /tf | tf2_msgs/msg/TFMessage |
-
+| topic 名                               | データ型                    |
+| -------------------------------------- | --------------------------- |
+| /sensing/lidar/concatenated/pointcloud | sensor_msgs/msg/PointCloud2 |
+| /tf                                    | tf2_msgs/msg/TFMessage      |
 
 ### 入力 rosbag に含まれてはいけない topic
 
