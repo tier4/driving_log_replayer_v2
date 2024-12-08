@@ -32,18 +32,18 @@ launch を立ち上げると以下のことが実行され、評価される。
 ### 評価時の注意点
 
 - **annotated_rosbagモード**  
-   [autoware.universeのsensingモジュール](https://github.com/autowarefoundation/autoware.universe/blob/main/sensing/autoware_pointcloud_preprocessor/src/filter.cpp#L383-L390)を以下のように書き換える必要がある。
+   [autoware.universeのsensingモジュール](https://github.com/autowarefoundation/autoware.universe/blob/main/sensing/autoware_pointcloud_preprocessor/src/filter.cpp#L386-L394)を以下のように書き換える必要がある。
 
   ```diff
-       if (utils::is_data_layout_compatible_with_point_xyzi(*cloud)) {
-        RCLCPP_ERROR(
-          get_logger(),
-          "The pointcloud layout is compatible with PointXYZI. You may be using legacy "
-          "code/data");
-       }
+    if (utils::is_data_layout_compatible_with_point_xyzi(*cloud)) {
+      RCLCPP_ERROR(
+        get_logger(),
+        "The pointcloud layout is compatible with PointXYZI. You may be using legacy "
+        "code/data");
+    }
 
   - return;
-  + // return; <- comment out!
+  + //return;
   }
   ```
 

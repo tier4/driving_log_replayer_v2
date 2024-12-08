@@ -32,18 +32,18 @@ Launching the file executes the following steps:
 ### Points to note during evaluation
 
 - **annotated_rosbag mode**  
-   The [sensing module of autoware.universe](https://github.com/autowarefoundation/autoware.universe/blob/main/sensing/autoware_pointcloud_preprocessor/src/filter.cpp#L383-L390) needs to be modified as follows:
+   The [sensing module of autoware.universe](https://github.com/autowarefoundation/autoware.universe/blob/main/sensing/autoware_pointcloud_preprocessor/src/filter.cpp#L386-L394) needs to be modified as follows:
 
   ```diff
-       if (utils::is_data_layout_compatible_with_point_xyzi(*cloud)) {
-        RCLCPP_ERROR(
-          get_logger(),
-          "The pointcloud layout is compatible with PointXYZI. You may be using legacy "
-          "code/data");
-       }
+    if (utils::is_data_layout_compatible_with_point_xyzi(*cloud)) {
+      RCLCPP_ERROR(
+        get_logger(),
+        "The pointcloud layout is compatible with PointXYZI. You may be using legacy "
+        "code/data");
+    }
 
   - return;
-  + // return; <- comment out!
+  + //return;
   }
   ```
 
