@@ -16,7 +16,7 @@ bagデータに含まれる点群データに、セマンティックラベル�
 
 ### annotated_pcd
 
-データセットとして与える点群データ(`~/driving_log_replayer_v2/ground_segmentation/dataset/data/LIDAR_CONCAT/*.pcd.bin`)に、セマンティックラベルを表すフィールドを持たせる方法。
+データセットとして与える点群データ(`dataset/data/LIDAR_CONCAT/*.pcd.bin`)に、セマンティックラベルを表すフィールドを持たせる方法。
 
 地面点群除去処理後の点群と、pcd.binファイルに含まれる点群同士を比較し、処理後点群が持つラベルを見ることで精度評価を行う。
 

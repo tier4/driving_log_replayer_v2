@@ -16,7 +16,7 @@ In this evaluation framework, the semantic labels are assumed to be recorded in 
 
 ### annotated_pcd
 
-This method involves adding a field to the point cloud data provided as a dataset (~/driving_log_replayer_v2/ground_segmentation/dataset/data/LIDAR_CONCAT/\*.pcd.bin) to represent semantic labels.
+This method involves adding a field to the point cloud data provided as a dataset (`dataset/data/LIDAR_CONCAT/\*.pcd.bin`) to represent semantic labels.
 
 Compare the point cloud after ground removal with the point cloud in the `pcd.bin` file, and evaluate accuracy by examining the labels associated with the points in the processed point cloud.
 
