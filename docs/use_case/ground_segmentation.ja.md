@@ -135,7 +135,7 @@ ground_segmentation では、Accuracy、Precision、Recall、Specificity、F1-sc
       "Accuracy": "Accuracyの値",
       "Precision": "Precisionの値",
       "Recall": "Recallの値",
-      "Specificity": "Specificitの値",
+      "Specificity": "Specificityの値",
       "F1-score": "F1-scoreの値"
     }
   }

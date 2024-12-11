@@ -136,7 +136,7 @@ The format of each frame and the metrics format are shown below.
       "Accuracy": "Accuracy value",
       "Precision": "Precision value",
       "Recall": "Recall value",
-      "Specificity": "Specificit value",
+      "Specificity": "Specificity value",
       "F1-score": "F1-score value`"
     }
   }
