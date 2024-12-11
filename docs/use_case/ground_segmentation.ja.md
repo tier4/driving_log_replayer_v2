@@ -85,6 +85,7 @@ Published topics:
 - localization: false
 - planning: false
 - control: false
+- sensing: false
 - perception_mode: lidar
 
 ## simulation
