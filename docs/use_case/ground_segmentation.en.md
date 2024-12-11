@@ -10,7 +10,7 @@ The Ground Truth data required for evaluation can be provided using the followin
 
 This method involves adding a field to the point cloud data in the bag file to represent semantic labels.
 
-Synchronize and subscribe to topics before and after ground removal, and evaluate accuracy by comparing the number of points with ground labels.
+Synchronize and subscribe to topics before and after ground removal, and evaluate the accuracy by comparing the number of points with ground and non-ground labels.
 
 In this evaluation framework, the semantic labels are assumed to be recorded in an `INT32` field named `entity_id`.
 
