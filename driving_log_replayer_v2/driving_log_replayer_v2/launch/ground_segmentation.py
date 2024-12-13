@@ -20,6 +20,7 @@ RECORD_TOPIC = """^/tf$\
 """
 
 AUTOWARE_DISABLE = {
+    "sensing": "false",
     "localization": "false",
     "planning": "false",
     "control": "false",
