@@ -1,5 +1,16 @@
 # Release Notes
 
+## Version 3.0.1
+
+Start version tagging in v2.
+Documentation
+Minor Tweak
+
+| Module                | Feature         | Brief summary                    | Pull request                                                    | Contributor                                         |
+| --------------------- | --------------- | -------------------------------- | --------------------------------------------------------------- | --------------------------------------------------- |
+| `ground_segmentation` | launch argument | set sensing false                | [#63](https://github.com/tier4/driving_log_replayer_v2/pull/63) | [hayato-m126](https://github.com/hayato-m126)       |
+| `ground_segmentation` | documentation   | add ground_segmentation document | [#63](https://github.com/tier4/driving_log_replayer_v2/pull/63) | [nanoshimarobot](https://github.com/nanoshimarobot) |
+
 ## Version 3.0.0
 
 Start version tagging in v2.
