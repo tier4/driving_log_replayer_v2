@@ -2,8 +2,8 @@
 Changelog for package driving_log_replayer
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-Forthcoming
------------
+3.0.1 (2024-12-13)
+------------------
 * docs: add ground segmentation (`#63 <https://github.com/tier4/driving_log_replayer_v2/issues/63>`_)
   * docs: add ground segmentation document
   * modified
