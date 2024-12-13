@@ -2,6 +2,9 @@
 Changelog for package driving_log_replayer_v2_msgs
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
+Forthcoming
+-----------
+
 3.0.0 (2024-12-05)
 ------------------
 * Merge pull request `#55 <https://github.com/tier4/driving_log_replayer_v2/issues/55>`_ from tier4/feat/merge-ground-segmentation-evaluator

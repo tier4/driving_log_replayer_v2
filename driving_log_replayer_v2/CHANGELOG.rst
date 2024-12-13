@@ -2,6 +2,28 @@
 Changelog for package driving_log_replayer
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
+Forthcoming
+-----------
+* docs: add ground segmentation (`#63 <https://github.com/tier4/driving_log_replayer_v2/issues/63>`_)
+  * docs: add ground segmentation document
+  * modified
+  * modified
+  * typo
+  * modify url
+  * fix: typo
+  * Update docs/use_case/ground_segmentation.ja.md
+  * Update docs/use_case/ground_segmentation.ja.md
+  * Update docs/use_case/ground_segmentation.en.md
+  * Update docs/use_case/ground_segmentation.en.md
+  * Update docs/use_case/ground_segmentation.en.md
+  * Update docs/use_case/ground_segmentation.en.md
+  * docs: fix dataset path absolute to relative
+  * feat: disable sensing
+  ---------
+  Co-authored-by: Hayato Mizushima <hayato-m126@users.noreply.github.com>
+  Co-authored-by: badai nguyen <94814556+badai-nguyen@users.noreply.github.com>
+* Contributors: Toyozo Shimada
+
 3.0.0 (2024-12-05)
 ------------------
 * feat: import changelog from v1
