@@ -34,18 +34,18 @@ from driving_log_replayer_v2.scenario import Scenario
 
 
 class Region(BaseModel):
-    axis_x: tuple[float, float]
-    axis_y: tuple[float, float]
+    x_position: tuple[float, float] | None = None
+    y_position: tuple[float, float] | None = None
 
-    @field_validator("axis_x, axis_y", mode="before")
+    @field_validator("x_position", "y_position", mode="before")
     @classmethod
-    def validate_area_range(cls, v: dict | None) -> tuple[number, number] | None:
+    def validate_region_range(cls, v: float | None) -> float | None:
         if v is None:
             return None
 
         err_msg = f"{v} is not valid distance range, expected ordering min-max with min < max."
 
-        s_lower, s_upper = v.split("-")
+        s_lower, s_upper = v.split(",")
         if s_upper == "":
             s_upper = sys.float_info.max
 
@@ -60,7 +60,7 @@ class Region(BaseModel):
 
 class Filter(BaseModel):
     Distance: tuple[float, float] | None = None
-    Region: Region | None = None
+    Region: Region
     # add filter condition here
 
     @field_validator("Distance", mode="before")

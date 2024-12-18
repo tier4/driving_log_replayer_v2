@@ -508,9 +508,9 @@ class CriteriaFilter:
             min_distance, max_distance = self.distance_range
             return filter_frame_by_distance(frame, min_distance, max_distance)
         if self.region is not None:
-            axis_x: tuple[Number, Number] = self.region.axis_x
-            axis_y: tuple[Number, Number] = self.region.axis_y
-            return filter_frame_by_region(frame, axis_x, axis_y)
+            x_position: tuple[Number, Number] = self.region.x_position
+            y_position: tuple[Number, Number] = self.region.y_position
+            return filter_frame_by_region(frame, x_position, y_position)
 
 
 class PerceptionCriteria:
@@ -533,7 +533,7 @@ class PerceptionCriteria:
         levels: (
             str | list[str] | Number | list[Number] | CriteriaLevel | list[CriteriaLevel] | None
         ) = None,
-        filter: Filter | None = None,
+        filters: Filter | None = None,
     ) -> None:
         methods = [CriteriaMethod.NUM_TP] if methods is None else self.load_methods(methods)
         levels = [CriteriaLevel.EASY] if levels is None else self.load_levels(levels)
