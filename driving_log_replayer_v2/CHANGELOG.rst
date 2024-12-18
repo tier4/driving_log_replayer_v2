@@ -2,8 +2,8 @@
 Changelog for package driving_log_replayer
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-Forthcoming
------------
+3.0.2 (2024-12-19)
+------------------
 * fix: type hint (`#65 <https://github.com/tier4/driving_log_replayer_v2/issues/65>`_)
   * fix: type hint
   * fix: type hint
