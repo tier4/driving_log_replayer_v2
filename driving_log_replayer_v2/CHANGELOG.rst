@@ -2,6 +2,14 @@
 Changelog for package driving_log_replayer
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
+Forthcoming
+-----------
+* fix: type hint (`#65 <https://github.com/tier4/driving_log_replayer_v2/issues/65>`_)
+  * fix: type hint
+  * fix: type hint
+  ---------
+* Contributors: Hayato Mizushima
+
 3.0.1 (2024-12-13)
 ------------------
 * docs: add ground segmentation (`#63 <https://github.com/tier4/driving_log_replayer_v2/issues/63>`_)

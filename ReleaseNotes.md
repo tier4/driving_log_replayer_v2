@@ -1,8 +1,16 @@
 # Release Notes
 
+## Version 3.0.2
+
+Minor Tweak
+
+| Module | Feature   | Brief summary         | Pull request                                                    | Contributor                                   |
+| ------ | --------- | --------------------- | --------------------------------------------------------------- | --------------------------------------------- |
+| `all`  | type hint | fix type hint         | [#65](https://github.com/tier4/driving_log_replayer_v2/pull/65) | [hayato-m126](https://github.com/hayato-m126) |
+| `all`  | CI        | update github actions | [#66](https://github.com/tier4/driving_log_replayer_v2/pull/66) | [hayato-m126](https://github.com/hayato-m126) |
+
 ## Version 3.0.1
 
-Start version tagging in v2.
 Documentation
 Minor Tweak
 
