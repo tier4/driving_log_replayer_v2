@@ -25,10 +25,11 @@ from typing import TYPE_CHECKING
 import numpy as np
 from perception_eval.common.evaluation_task import EvaluationTask
 from perception_eval.evaluation.matching import MatchingMode
-from perception_eval.tool.utils import filter_frame_by_distance
+from perception_eval.tool.utils import filter_frame_by_distance, filter_frame_by_region
 
 if TYPE_CHECKING:
     from perception_eval.evaluation import PerceptionFrameResult
+    from driving_log_replayer_v2.perception import Filter
 
 
 class SuccessFail(Enum):
@@ -471,8 +472,9 @@ class MetricsScoreMAPH(CriteriaMethodImpl):
 
 
 class CriteriaFilter:
-    def __init__(self, distance_range: tuple[Number, Number] | None = None) -> None:
-        self.distance_range = distance_range
+    def __init__(self, filter: Filter | None = None) -> None:
+        self.distance_range = getattr(filter, "Distance", None)
+        self.region = getattr(filter, "Region", None)
 
     def is_all_none(self) -> bool:
         """
@@ -483,7 +485,7 @@ class CriteriaFilter:
             bool: True if all filter params are None.
 
         """
-        return self.distance_range is None
+        return self.distance_range is None and self.region is None
 
     def filter_frame_result(self, frame: PerceptionFrameResult) -> PerceptionFrameResult:
         """
@@ -500,10 +502,15 @@ class CriteriaFilter:
             PerceptionFrameResult: Filtered result.
 
         """
-        if self.is_all_none() or self.distance_range is None:
+        if self.is_all_none():
             return frame
-        min_distance, max_distance = self.distance_range
-        return filter_frame_by_distance(frame, min_distance, max_distance)
+        if self.distance_range is not None:
+            min_distance, max_distance = self.distance_range
+            return filter_frame_by_distance(frame, min_distance, max_distance)
+        if self.region is not None:
+            axis_x: tuple[Number, Number] = self.region.axis_x
+            axis_y: tuple[Number, Number] = self.region.axis_y
+            return filter_frame_by_region(frame, axis_x, axis_y)
 
 
 class PerceptionCriteria:
@@ -526,7 +533,7 @@ class PerceptionCriteria:
         levels: (
             str | list[str] | Number | list[Number] | CriteriaLevel | list[CriteriaLevel] | None
         ) = None,
-        distance_range: tuple[Number, Number] | None = None,
+        filter: Filter | None = None,
     ) -> None:
         methods = [CriteriaMethod.NUM_TP] if methods is None else self.load_methods(methods)
         levels = [CriteriaLevel.EASY] if levels is None else self.load_levels(levels)
@@ -558,7 +565,7 @@ class PerceptionCriteria:
                 error_msg: str = f"Unsupported method: {method}"
                 raise NotImplementedError(error_msg)
 
-        self.criteria_filter = CriteriaFilter(distance_range)
+        self.criteria_filter = CriteriaFilter(filter)
 
     @staticmethod
     def load_methods(
