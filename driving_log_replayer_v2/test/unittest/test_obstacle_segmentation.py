@@ -12,7 +12,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from collections.abc import Callable
 from math import pi
 
 from builtin_interfaces.msg import Duration
@@ -272,11 +271,11 @@ def create_annotation_dict() -> dict:
 
 
 def test_detection_fail_has_no_object(
-    create_detection: Callable,
-    create_frame_result: Callable,
+    create_detection: Detection,
+    create_frame_result: SensingFrameResult,
 ) -> None:
-    evaluation_item: Detection = create_detection
-    result: SensingFrameResult = create_frame_result
+    evaluation_item = create_detection
+    result = create_frame_result
     # add no detection_success_results, detection_fail_results
     frame_dict, _, _, _ = evaluation_item.set_frame(
         result,
@@ -292,10 +291,10 @@ def test_detection_fail_has_no_object(
 
 
 def test_detection_invalid(
-    create_frame_result: Callable,
+    create_frame_result: SensingFrameResult,
 ) -> None:
     evaluation_item: Detection = Detection(condition=None)
-    result: SensingFrameResult = create_frame_result
+    result = create_frame_result
     frame_dict, _, _, _ = evaluation_item.set_frame(
         result,
         header=Header(),
@@ -310,14 +309,14 @@ def test_detection_invalid(
 
 
 def test_detection_warn(
-    create_detection: Callable,
-    create_frame_result: Callable,
-    create_dynamic_object: Callable,
-    create_annotation_dict: Callable,
+    create_detection: Detection,
+    create_frame_result: SensingFrameResult,
+    create_dynamic_object: DynamicObjectWithSensingResult,
+    create_annotation_dict: dict,
 ) -> None:
-    evaluation_item: Detection = create_detection
-    result: SensingFrameResult = create_frame_result
-    annotation_dict: dict = create_annotation_dict
+    evaluation_item = create_detection
+    result = create_frame_result
+    annotation_dict = create_annotation_dict
     result.detection_warning_results: list[DynamicObjectWithSensingResult] = [
         create_dynamic_object,
     ]
@@ -344,14 +343,14 @@ def test_detection_warn(
 
 
 def test_detection_success(
-    create_detection: Callable,
-    create_frame_result: Callable,
-    create_dynamic_object: Callable,
-    create_annotation_dict: Callable,
+    create_detection: Detection,
+    create_frame_result: SensingFrameResult,
+    create_dynamic_object: DynamicObjectWithSensingResult,
+    create_annotation_dict: dict,
 ) -> None:
-    evaluation_item: Detection = create_detection
-    result: SensingFrameResult = create_frame_result
-    annotation_dict: dict = create_annotation_dict
+    evaluation_item = create_detection
+    result = create_frame_result
+    annotation_dict = create_annotation_dict
     result.detection_success_results: list[DynamicObjectWithSensingResult] = [
         create_dynamic_object,
     ]
@@ -378,14 +377,14 @@ def test_detection_success(
 
 
 def test_detection_topic_rate_fail(
-    create_detection: Callable,
-    create_frame_result: Callable,
-    create_dynamic_object: Callable,
-    create_annotation_dict: Callable,
+    create_detection: Detection,
+    create_frame_result: SensingFrameResult,
+    create_dynamic_object: DynamicObjectWithSensingResult,
+    create_annotation_dict: dict,
 ) -> None:
-    evaluation_item: Detection = create_detection
-    result: SensingFrameResult = create_frame_result
-    annotation_dict: dict = create_annotation_dict
+    evaluation_item = create_detection
+    result = create_frame_result
+    annotation_dict = create_annotation_dict
     result.detection_success_results: list[DynamicObjectWithSensingResult] = [
         create_dynamic_object,
     ]
@@ -412,14 +411,14 @@ def test_detection_topic_rate_fail(
 
 
 def test_detection_fail(
-    create_detection: Callable,
-    create_frame_result: Callable,
-    create_dynamic_object: Callable,
-    create_annotation_dict: Callable,
+    create_detection: Detection,
+    create_frame_result: SensingFrameResult,
+    create_dynamic_object: DynamicObjectWithSensingResult,
+    create_annotation_dict: dict,
 ) -> None:
-    evaluation_item: Detection = create_detection
-    result: SensingFrameResult = create_frame_result
-    annotation_dict: dict = create_annotation_dict
+    evaluation_item = create_detection
+    result = create_frame_result
+    annotation_dict = create_annotation_dict
     result.detection_success_results: list[DynamicObjectWithSensingResult] = [
         create_dynamic_object,
     ]
@@ -473,10 +472,10 @@ def test_non_detection_invalid() -> None:
 
 
 def test_non_detection_fail(
-    create_non_detection: Callable,
-    create_distance_dict: Callable,
+    create_non_detection: NonDetection,
+    create_distance_dict: dict,
 ) -> None:
-    evaluation_item: NonDetection = create_non_detection
+    evaluation_item = create_non_detection
     pointcloud = np.array([[1.0, 1.0, 1.0, 0.5], [1.2, 1.2, 1.2, 0.5]])
     frame_dict, _, _ = evaluation_item.set_frame(
         [pointcloud],
@@ -497,9 +496,9 @@ def test_non_detection_fail(
 
 
 def test_non_detection_topic_rate_fail(
-    create_non_detection: Callable,
+    create_non_detection: NonDetection,
 ) -> None:
-    evaluation_item: NonDetection = create_non_detection
+    evaluation_item = create_non_detection
     # no pointcloud
     frame_dict, _, _ = evaluation_item.set_frame(
         [],
@@ -515,9 +514,9 @@ def test_non_detection_topic_rate_fail(
 
 
 def test_non_detection_success(
-    create_non_detection: Callable,
+    create_non_detection: NonDetection,
 ) -> None:
-    evaluation_item: NonDetection = create_non_detection
+    evaluation_item = create_non_detection
     # no pointcloud
     frame_dict, _, _ = evaluation_item.set_frame([], header=Header(), topic_rate=True)
     assert evaluation_item.success is True

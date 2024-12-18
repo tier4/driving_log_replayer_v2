@@ -12,7 +12,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from collections.abc import Callable
 from typing import Literal
 
 import pytest
@@ -51,37 +50,37 @@ def create_obj_metrics() -> ObjectMetrics:
     )
 
 
-def test_deviation_success(create_obj_metrics: Callable) -> None:
-    evaluation_item: ObjectMetrics = create_obj_metrics
+def test_deviation_success(create_obj_metrics: ObjectMetrics) -> None:
+    evaluation_item = create_obj_metrics
     status_dict = {"lateral_deviation": {"min": 1.0, "max": 10.0, "mean": 5.0}}
     evaluation_item.set_frame(status_dict)
     assert evaluation_item.success is True
 
 
-def test_deviation_fail_lower_limit_min(create_obj_metrics: Callable) -> None:
-    evaluation_item: ObjectMetrics = create_obj_metrics
+def test_deviation_fail_lower_limit_min(create_obj_metrics: ObjectMetrics) -> None:
+    evaluation_item = create_obj_metrics
     status_dict = {"lateral_deviation": {"min": 0.1, "max": 10.0, "mean": 5.0}}
     evaluation_item.set_frame(status_dict)
     assert evaluation_item.success is False
 
 
-def test_deviation_fail_upper_limit_max(create_obj_metrics: Callable) -> None:
-    evaluation_item: ObjectMetrics = create_obj_metrics
+def test_deviation_fail_upper_limit_max(create_obj_metrics: ObjectMetrics) -> None:
+    evaluation_item = create_obj_metrics
     status_dict = {"lateral_deviation": {"min": 1.0, "max": 12.0, "mean": 5.0}}
     evaluation_item.set_frame(status_dict)
     assert evaluation_item.success is False
 
 
-def test_deviation_fail_upper_limit_mean(create_obj_metrics: Callable) -> None:
-    evaluation_item: ObjectMetrics = create_obj_metrics
+def test_deviation_fail_upper_limit_mean(create_obj_metrics: ObjectMetrics) -> None:
+    evaluation_item = create_obj_metrics
     # sum_mean = 45.0 + 8.0 = 53.0 average = 53.0 / 10 = 5.3 > 5.0*1.05 = 5.25
     status_dict = {"lateral_deviation": {"min": 1.0, "max": 10.0, "mean": 8.0}}
     evaluation_item.set_frame(status_dict)
     assert evaluation_item.success is False
 
 
-def test_deviation_fail_lower_limit(create_obj_metrics: Callable) -> None:
-    evaluation_item: ObjectMetrics = create_obj_metrics
+def test_deviation_fail_lower_limit(create_obj_metrics: ObjectMetrics) -> None:
+    evaluation_item = create_obj_metrics
     # sum_mean = 45.0 + 2.0 = 47.0 average = 47.0 / 10 = 4.7 < 5.0*0.95 = 4.75
     status_dict = {"lateral_deviation": {"min": 1.0, "max": 10.0, "mean": 2.0}}
     evaluation_item.set_frame(status_dict)

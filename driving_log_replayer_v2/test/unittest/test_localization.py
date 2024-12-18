@@ -12,8 +12,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from collections.abc import Callable
-
 from builtin_interfaces.msg import Time
 from diagnostic_msgs.msg import DiagnosticStatus
 from diagnostic_msgs.msg import KeyValue
@@ -113,8 +111,8 @@ def create_convergence() -> Convergence:
     )
 
 
-def test_convergence_success(create_convergence: Callable) -> None:
-    evaluation_item: Convergence = create_convergence
+def test_convergence_success(create_convergence: Convergence) -> None:
+    evaluation_item = create_convergence
     frame_dict, pub_msg = evaluation_item.set_frame(
         0.1,
         0.2,
@@ -139,8 +137,8 @@ def test_convergence_success(create_convergence: Callable) -> None:
     assert pub_msg == Float64(data=0.1)
 
 
-def test_convergence_fail(create_convergence: Callable) -> None:
-    evaluation_item: Convergence = create_convergence
+def test_convergence_fail(create_convergence: Convergence) -> None:
+    evaluation_item = create_convergence
     frame_dict, pub_msg = evaluation_item.set_frame(
         0.3,
         0.2,
@@ -180,8 +178,8 @@ def create_reliability() -> Reliability:
     )
 
 
-def test_reliability_success(create_reliability: Callable) -> None:
-    evaluation_item: Reliability = create_reliability
+def test_reliability_success(create_reliability: Reliability) -> None:
+    evaluation_item = create_reliability
     nvtl = Float32Stamped(stamp=Time(sec=123, nanosec=456), data=2.3)
     # The function to create dict of map_to_baselink is checked in the evaluator test.
     map_to_baselink = {}
@@ -217,8 +215,8 @@ def test_reliability_success(create_reliability: Callable) -> None:
     }
 
 
-def test_reliability_fail(create_reliability: Callable) -> None:
-    evaluation_item: Reliability = create_reliability
+def test_reliability_fail(create_reliability: Reliability) -> None:
+    evaluation_item = create_reliability
     nvtl = Float32Stamped(stamp=Time(sec=123, nanosec=456), data=2.0)
     # The function to create dict of map_to_baselink is checked in the evaluator test.
     map_to_baselink = {}
