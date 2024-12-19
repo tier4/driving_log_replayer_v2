@@ -12,16 +12,22 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from __future__ import annotations
+
 from dataclasses import dataclass
 import sys
 from typing import Literal
+from typing import TYPE_CHECKING
 
-from perception_eval.evaluation import PerceptionFrameResult
 from pydantic import BaseModel
 from pydantic import field_validator
+from pydantic import model_validator
 from std_msgs.msg import ColorRGBA
 from std_msgs.msg import Header
 from visualization_msgs.msg import MarkerArray
+
+if TYPE_CHECKING:
+    from perception_eval.evaluation import PerceptionFrameResult
 
 from driving_log_replayer_v2.criteria import PerceptionCriteria
 import driving_log_replayer_v2.perception_eval_conversions as eval_conversions
@@ -81,6 +87,13 @@ class Filter(BaseModel):
         if lower >= upper:
             raise ValueError(err_msg)
         return (lower, upper)
+
+    @model_validator(mode="after")
+    def validate_duplicate_filter(self) -> Filter:
+        if self.Distance is not None and self.Region is not None:
+            error_msg = "Distance and Region filter cannot be used at the same time."
+            raise ValueError(error_msg)
+        return self
 
 
 class Criteria(BaseModel):
