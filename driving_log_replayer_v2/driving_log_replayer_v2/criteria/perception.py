@@ -25,10 +25,12 @@ from typing import TYPE_CHECKING
 import numpy as np
 from perception_eval.common.evaluation_task import EvaluationTask
 from perception_eval.evaluation.matching import MatchingMode
-from perception_eval.tool.utils import filter_frame_by_distance, filter_frame_by_region
+from perception_eval.tool.utils import filter_frame_by_distance
+from perception_eval.tool.utils import filter_frame_by_region
 
 if TYPE_CHECKING:
     from perception_eval.evaluation import PerceptionFrameResult
+
     from driving_log_replayer_v2.perception import Filter
 
 
@@ -472,9 +474,9 @@ class MetricsScoreMAPH(CriteriaMethodImpl):
 
 
 class CriteriaFilter:
-    def __init__(self, filter: Filter | None = None) -> None:
-        self.distance_range = getattr(filter, "Distance", None)
-        self.region = getattr(filter, "Region", None)
+    def __init__(self, filters: Filter | None = None) -> None:
+        self.distance_range = getattr(filters, "Distance", None)
+        self.region = getattr(filters, "Region", None)
 
     def is_all_none(self) -> bool:
         """
@@ -511,6 +513,8 @@ class CriteriaFilter:
             x_position: tuple[Number, Number] = self.region.x_position
             y_position: tuple[Number, Number] = self.region.y_position
             return filter_frame_by_region(frame, x_position, y_position)
+        error_msg = "only select one filter condition"
+        raise ValueError(error_msg)
 
 
 class PerceptionCriteria:
@@ -523,7 +527,7 @@ class PerceptionCriteria:
             If None, `CriteriaMethod.NUM_TP` is used. Defaults to None.
         levels (str | list[str] | Number | list[Number] | CriteriaLevel | list[CriteriaLevel]): Criteria level instance or name.
             If None, `CriteriaLevel.Easy` is used. Defaults to None.
-        distance_range (tuple[Number, Number] | None): Range of distance to filter frame result. Defaults to None.
+        filters (Filter | None): Filter instance. Defaults to None.
 
     """
 
@@ -565,7 +569,7 @@ class PerceptionCriteria:
                 error_msg: str = f"Unsupported method: {method}"
                 raise NotImplementedError(error_msg)
 
-        self.criteria_filter = CriteriaFilter(filter)
+        self.criteria_filter = CriteriaFilter(filters)
 
     @staticmethod
     def load_methods(
