@@ -89,6 +89,22 @@ class Filter(BaseModel):
             raise ValueError(err_msg)
         return (lower, upper)
 
+    @field_validator("Region", mode="after")
+    @classmethod
+    def validate_region_value(cls, v: Region | None) -> Region | None:
+        if v is None:
+            return None
+        if v.x_position is None and v.y_position is None:
+            return None
+        return v
+
+    @model_validator(mode="before")
+    @classmethod
+    def set_region_default_value(cls, v: dict) -> dict:
+        if "Region" not in v:
+            v["Region"] = None
+        return v
+
     @model_validator(mode="after")
     def validate_duplicate_filter(self) -> Filter:
         if self.Distance is not None and self.Region is not None:
