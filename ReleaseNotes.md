@@ -1,5 +1,13 @@
 # Release Notes
 
+## Version 3.1.0
+
+Major changes
+
+| Module | Feature | Brief summary                            | Pull request                                                   | Contributor                                   |
+| ------ | ------- | ---------------------------------------- | -------------------------------------------------------------- | --------------------------------------------- |
+| `all`  | library | use `autoware_lanelet2_extension_python` | [#586](https://github.com/tier4/driving_log_replayer/pull/586) | [hayato-m126](https://github.com/hayato-m126) |
+
 ## Version 3.0.2
 
 Minor Tweak
