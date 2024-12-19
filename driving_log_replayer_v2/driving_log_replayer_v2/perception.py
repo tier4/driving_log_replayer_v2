@@ -45,28 +45,29 @@ class Region(BaseModel):
 
     @field_validator("x_position", "y_position", mode="before")
     @classmethod
-    def validate_region_range(cls, v: float | None) -> float | None:
+    def validate_region_range(cls, v: str | None) -> tuple[number, number] | None:
         if v is None:
             return None
 
-        err_msg = f"{v} is not valid distance range, expected ordering min-max with min < max."
+        err_non_specify_msg = "both min and max values must be specified."
+        err_range_msg = f"{v} is not valid distance range, expected ordering min-max with min < max."
 
         s_lower, s_upper = v.split(",")
-        if s_upper == "":
-            s_upper = sys.float_info.max
+        
+        assert s_upper != "" and s_lower != "", err_non_specify_msg
 
         lower = float(s_lower)
         upper = float(s_upper)
 
         if lower >= upper:
-            raise ValueError(err_msg)
+            raise ValueError(err_range_msg)
 
         return (lower, upper)
 
 
 class Filter(BaseModel):
     Distance: tuple[float, float] | None = None
-    Region: Region
+    Region: Region | None
     # add filter condition here
 
     @field_validator("Distance", mode="before")
