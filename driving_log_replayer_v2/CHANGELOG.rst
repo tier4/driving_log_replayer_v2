@@ -2,6 +2,23 @@
 Changelog for package driving_log_replayer
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
+Forthcoming
+-----------
+* Merge pull request `#70 <https://github.com/tier4/driving_log_replayer_v2/issues/70>`_ from tier4/feat/merge-autoware-lenelet2-extension
+  feat: merge autoware lenelet2 extension
+* Revert "feat: merge autoware lenelet2 extension (`#69 <https://github.com/tier4/driving_log_replayer_v2/issues/69>`_)"
+  This reverts commit c1e10d62f6c20878136b0d314e2d9f1c9c9a4520.
+* feat: merge autoware lenelet2 extension (`#69 <https://github.com/tier4/driving_log_replayer_v2/issues/69>`_)
+  * feat: no longer be maintained
+  * fix: update lanelet2 extension (`#586 <https://github.com/tier4/driving_log_replayer_v2/issues/586>`_)
+  * chore: release 2.5.0 (`#587 <https://github.com/tier4/driving_log_replayer_v2/issues/587>`_)
+  * 2.5.0
+  * fix: merge
+  ---------
+* fix: merge
+* Merge remote-tracking branch 'v1/main' into feat/merge-autoware-lenelet2-extension
+* Contributors: Hayato Mizushima
+
 3.0.2 (2024-12-19)
 ------------------
 * fix: type hint (`#65 <https://github.com/tier4/driving_log_replayer_v2/issues/65>`_)
