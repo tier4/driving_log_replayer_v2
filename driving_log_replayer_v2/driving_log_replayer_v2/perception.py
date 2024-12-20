@@ -50,11 +50,14 @@ class Region(BaseModel):
             return None
 
         err_non_specify_msg = "both min and max values must be specified."
-        err_range_msg = f"{v} is not valid distance range, expected ordering min-max with min < max."
+        err_range_msg = (
+            f"{v} is not valid distance range, expected ordering min-max with min < max."
+        )
 
         s_lower, s_upper = v.split(",")
-        
-        assert s_upper != "" and s_lower != "", err_non_specify_msg
+
+        if s_upper != "" or s_lower != "":
+            raise ValueError(err_non_specify_msg)
 
         lower = float(s_lower)
         upper = float(s_upper)
