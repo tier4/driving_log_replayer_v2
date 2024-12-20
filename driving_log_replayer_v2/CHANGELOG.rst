@@ -2,8 +2,8 @@
 Changelog for package driving_log_replayer
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-Forthcoming
------------
+3.1.0 (2024-12-20)
+------------------
 * Merge pull request `#70 <https://github.com/tier4/driving_log_replayer_v2/issues/70>`_ from tier4/feat/merge-autoware-lenelet2-extension
   feat: merge autoware lenelet2 extension
 * Revert "feat: merge autoware lenelet2 extension (`#69 <https://github.com/tier4/driving_log_replayer_v2/issues/69>`_)"
