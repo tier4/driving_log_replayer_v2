@@ -17,16 +17,16 @@ Evaluation:
         Filter:
           Distance: 0.0-50.0 # [m] null [Do not filter by distance] or lower_limit-(upper_limit) [Upper limit can be omitted. If omitted value is 1.7976931348623157e+308]
           Region:
-            x_position: null # [m] null [Do not filter by x_position] or lower_limit,upper_limit [Upper limit can be omitted. If omitted value is 1.7976931348623157e+308]
-            y_position: null # [m] null [Do not filter by y_position] or lower_limit,upper_limit [Upper limit can be omitted. If omitted value is 1.7976931348623157e+308]
+            x_position: null # [m] null [Do not filter by x_position] or lower_limit,upper_limit [Lower and upper limit can be omitted. If omitted value is +-1.7976931348623157e+308]
+            y_position: null # [m] null [Do not filter by y_position] or lower_limit,upper_limit [Lower and upper limit can be omitted. If omitted value is +-1.7976931348623157e+308]
       - PassRate: 95.0 # How much (%) of the evaluation attempts are considered successful.
         CriteriaMethod: num_gt_tp # Method name of criteria (num_tp/metrics_score/metrics_score_mph/label/velocity_x_error/velocity_y_error/speed_error/yaw_error)
         CriteriaLevel: easy # Level of criteria (perfect/hard/normal/easy, or custom value 0.0-100.0. For error criteria, set custom value.)
         Filter:
           Distance: 50.0- # [m] null [Do not filter by distance] or lower_limit-(upper_limit) [Upper limit can be omitted. If omitted value is 1.7976931348623157e+308]
           Region:
-            x_position: null # [m] null [Do not filter by x_position] or lower_limit,upper_limit [Upper limit can be omitted. If omitted value is 1.7976931348623157e+308]
-            y_position: null # [m] null [Do not filter by y_position] or lower_limit,upper_limit [Upper limit can be omitted. If omitted value is 1.7976931348623157e+308]
+            x_position: null # [m] null [Do not filter by x_position] or lower_limit,upper_limit [Lower and upper limit can be omitted. If omitted value is +-1.7976931348623157e+308]
+            y_position: null # [m] null [Do not filter by y_position] or lower_limit,upper_limit [Lower and upper limit can be omitted. If omitted value is +-1.7976931348623157e+308]
   PerceptionEvaluationConfig:
     evaluation_config_dict:
       evaluation_task: detection # detection or tracking. Evaluate the objects specified here
