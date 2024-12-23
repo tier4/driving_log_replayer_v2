@@ -56,7 +56,7 @@ class Region(BaseModel):
 
         s_lower, s_upper = v.split(",")
 
-        if s_upper != "" or s_lower != "":
+        if s_upper == "" or s_lower == "":
             raise ValueError(err_non_specify_msg)
 
         lower = float(s_lower)
