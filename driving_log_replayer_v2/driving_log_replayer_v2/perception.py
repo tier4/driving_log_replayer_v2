@@ -12,16 +12,22 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from __future__ import annotations
+
 from dataclasses import dataclass
 import sys
 from typing import Literal
+from typing import TYPE_CHECKING
 
-from perception_eval.evaluation import PerceptionFrameResult
 from pydantic import BaseModel
 from pydantic import field_validator
+from pydantic import model_validator
 from std_msgs.msg import ColorRGBA
 from std_msgs.msg import Header
 from visualization_msgs.msg import MarkerArray
+
+if TYPE_CHECKING:
+    from perception_eval.evaluation import PerceptionFrameResult
 
 from driving_log_replayer_v2.criteria import PerceptionCriteria
 import driving_log_replayer_v2.perception_eval_conversions as eval_conversions
@@ -33,8 +39,38 @@ from driving_log_replayer_v2.scenario import number
 from driving_log_replayer_v2.scenario import Scenario
 
 
+class Region(BaseModel):
+    x_position: tuple[float, float] | None = None
+    y_position: tuple[float, float] | None = None
+
+    @field_validator("x_position", "y_position", mode="before")
+    @classmethod
+    def validate_region_range(cls, v: str | None) -> tuple[number, number] | None:
+        if v is None:
+            return None
+
+        err_non_specify_msg = "both min and max values must be specified."
+        err_range_msg = (
+            f"{v} is not valid distance range, expected ordering min-max with min < max."
+        )
+
+        s_lower, s_upper = v.split(",")
+
+        if s_upper == "" or s_lower == "":
+            raise ValueError(err_non_specify_msg)
+
+        lower = float(s_lower)
+        upper = float(s_upper)
+
+        if lower >= upper:
+            raise ValueError(err_range_msg)
+
+        return (lower, upper)
+
+
 class Filter(BaseModel):
     Distance: tuple[float, float] | None = None
+    Region: Region | None
     # add filter condition here
 
     @field_validator("Distance", mode="before")
@@ -55,6 +91,29 @@ class Filter(BaseModel):
         if lower >= upper:
             raise ValueError(err_msg)
         return (lower, upper)
+
+    @field_validator("Region", mode="after")
+    @classmethod
+    def validate_region_value(cls, v: Region | None) -> Region | None:
+        if v is None:
+            return None
+        if v.x_position is None and v.y_position is None:
+            return None
+        return v
+
+    @model_validator(mode="before")
+    @classmethod
+    def set_region_default_value(cls, v: dict) -> dict:
+        if "Region" not in v:
+            v["Region"] = None
+        return v
+
+    @model_validator(mode="after")
+    def validate_duplicate_filter(self) -> Filter:
+        if self.Distance is not None and self.Region is not None:
+            error_msg = "Distance and Region filter cannot be used at the same time."
+            raise ValueError(error_msg)
+        return self
 
 
 class Criteria(BaseModel):
@@ -86,7 +145,7 @@ class Conditions(BaseModel):
 
 class Evaluation(BaseModel):
     UseCaseName: Literal["perception"]
-    UseCaseFormatVersion: Literal["1.0.0"]
+    UseCaseFormatVersion: Literal["1.0.0", "1.1.0"]
     Datasets: list[dict]
     Conditions: Conditions
     PerceptionEvaluationConfig: dict
@@ -106,7 +165,7 @@ class Perception(EvaluationItem):
         self.criteria = PerceptionCriteria(
             methods=self.condition.CriteriaMethod,
             levels=self.condition.CriteriaLevel,
-            distance_range=self.condition.Filter.Distance,
+            filters=self.condition.Filter,
         )
 
     def set_frame(self, frame: PerceptionFrameResult) -> dict:
