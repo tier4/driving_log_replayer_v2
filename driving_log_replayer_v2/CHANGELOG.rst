@@ -2,8 +2,8 @@
 Changelog for package driving_log_replayer
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-Forthcoming
------------
+3.1.1 (2024-12-25)
+------------------
 * feat(perception): enable to specify `region` filter. (`#68 <https://github.com/tier4/driving_log_replayer_v2/issues/68>`_)
   * fundamental commit
   * fix
