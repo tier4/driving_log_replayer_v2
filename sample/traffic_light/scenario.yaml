@@ -16,11 +16,17 @@ Evaluation:
         CriteriaLevel: hard # Level of criteria (perfect/hard/normal/easy, or custom value 0.0-100.0)
         Filter:
           Distance: 0.0-50.0 # [m] null [Do not filter by distance] or lower_limit-(upper_limit) [Upper limit can be omitted. If omitted value is 1.7976931348623157e+308]
+          Region:
+            x_position: null # [m] null [Do not filter by x_position] or lower_limit,upper_limit [Lower and upper limit can be omitted. If omitted value is +-1.7976931348623157e+308]
+            y_position: null # [m] null [Do not filter by y_position] or lower_limit,upper_limit [Lower and upper limit can be omitted. If omitted value is +-1.7976931348623157e+308]
       - PassRate: 95.0 # How much (%) of the evaluation attempts are considered successful.
         CriteriaMethod: num_gt_tp # refer https://github.com/tier4/driving_log_replayer_v2/blob/develop/driving_log_replayer_v2/driving_log_replayer_v2/criteria/perception.py#L136-L152
         CriteriaLevel: easy # Level of criteria (perfect/hard/normal/easy, or custom value 0.0-100.0)
         Filter:
           Distance: 50.0- # [m] null [Do not filter by distance] or lower_limit-(upper_limit) [Upper limit can be omitted. If omitted value is 1.7976931348623157e+308]
+          Region:
+            x_position: null # [m] null [Do not filter by x_position] or lower_limit,upper_limit [Lower and upper limit can be omitted. If omitted value is +-1.7976931348623157e+308]
+            y_position: null # [m] null [Do not filter by y_position] or lower_limit,upper_limit [Lower and upper limit can be omitted. If omitted value is +-1.7976931348623157e+308]
   PerceptionEvaluationConfig:
     camera_type: cam_traffic_light_near # Specifies the type of camera for traffic_light.
     evaluation_config_dict:
@@ -30,6 +36,7 @@ Evaluation:
       min_distance: 0.0 # Maximum distance of traffic lights to be evaluated
       allow_matching_unknown: true # Whether or not to match objects whose labels are unknown
       merge_similar_labels: false # Whether or not to merge similar labels https://github.com/tier4/autoware_perception_evaluation/blob/develop/docs/en/perception/label.md#merge-similar-labels-option
+      uuid_matching_first: false # Whether or not to match by UUID first
   CriticalObjectFilterConfig:
     target_labels: [green, red, yellow, unknown]
   PerceptionPassFailConfig:
