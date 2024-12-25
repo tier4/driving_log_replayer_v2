@@ -13,29 +13,15 @@
 # limitations under the License.
 
 from launch.actions import DeclareLaunchArgument
-from launch.substitutions import LaunchConfiguration
 
 RECORD_TOPIC = """^/tf$\
-|^/diagnostics$"\
+|^/diagnostics$\
 """
 
-AUTOWARE_DISABLE = {
-    "sensing": "false",
-    "localization": "false",
-    "planning": "false",
-    "control": "false",
-}
+AUTOWARE_DISABLE = {}
 
-AUTOWARE_ARGS = {"perception_mode": "lidar"}
+AUTOWARE_ARGS = {}
 
-NODE_PARAMS = {
-    "vehicle_model": LaunchConfiguration("vehicle_model"),
-    "evaluation_target_topic": LaunchConfiguration("evaluation_target_topic"),
-}
+NODE_PARAMS = {}
 
-USE_CASE_ARGS: list[DeclareLaunchArgument] = [
-    DeclareLaunchArgument(
-        "evaluation_target_topic",
-        default_value="/perception/obstacle_segmentation/single_frame/pointcloud",
-    )
-]
+USE_CASE_ARGS: list[DeclareLaunchArgument] = []

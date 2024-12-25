@@ -15,3 +15,4 @@ driving_log_replayer_v2 を用いてどのような評価を行えるか述べ�
 - [Traffic Light](traffic_light.ja.md)
 - [Perception 2D](perception_2d.ja.md)
 - [Planning Control](planning_control.ja.md)
+- [Diagnostics](diagnostics.ja.md)

@@ -5,7 +5,7 @@ SensorModel: sample_sensor_kit
 VehicleModel: sample_vehicle
 Evaluation:
   UseCaseName: perception
-  UseCaseFormatVersion: 1.0.0
+  UseCaseFormatVersion: 1.1.0
   Datasets:
     - sample_dataset:
         VehicleId: default # データセット毎にVehicleIdを指定する
@@ -16,11 +16,17 @@ Evaluation:
         CriteriaLevel: hard # クライテリアレベル(perfect/hard/normal/easy、もしくはカスタム値0.0〜100.0の数値でエラーの場合は許容誤差を指定。)
         Filter:
           Distance: 0.0-50.0 # [m] null [距離でフィルタしない] or 下限-(上限) [上限は省略可。省略した場合1.7976931348623157e+308]
+          Region:
+            x_position: null # [m] null [x座標でフィルタしない] or 下限,上限
+            y_position: null # [m] null [y座標でフィルタしない] or 下限,上限
       - PassRate: 95.0 # 評価試行回数の内、どの程度(%)評価成功だったら成功とするか
         CriteriaMethod: num_gt_tp # refer https://github.com/tier4/driving_log_replayer_v2/blob/develop/driving_log_replayer_v2/driving_log_replayer_v2/criteria/perception.py#L136-L152
         CriteriaLevel: easy # クライテリアレベル(perfect/hard/normal/easy、もしくはカスタム値0.0〜100.0の数値でエラーの場合は許容誤差を指定。)
         Filter:
           Distance: 50.0- # [m] null [距離でフィルタしない] or 下限-(上限) [上限は省略可。省略した場合1.7976931348623157e+308]
+          Region:
+            x_position: null # [m] null [x座標でフィルタしない] or 下限,上限
+            y_position: null # [m] null [y座標でフィルタしない] or 下限,上限
   PerceptionEvaluationConfig:
     evaluation_config_dict:
       evaluation_task: detection # detection/tracking ここで指定したobjectsを評価する

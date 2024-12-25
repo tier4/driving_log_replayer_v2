@@ -1,4 +1,4 @@
-# Evaluate diagnostics
+# Evaluate LiDAR diagnostics
 
 Evaluate whether Autoware's diagnostics functionality behaves as expected.
 

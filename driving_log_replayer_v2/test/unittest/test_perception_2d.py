@@ -12,8 +12,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from collections.abc import Callable
-
 from perception_eval.common import DynamicObject2D
 from perception_eval.common.dataset import FrameGroundTruth
 from perception_eval.common.evaluation_task import EvaluationTask
@@ -126,11 +124,11 @@ def create_dynamic_object() -> DynamicObjectWithPerceptionResult:
 
 
 def test_perception_fail_has_no_object(
-    create_tp_normal: Callable,
-    create_frame_result: Callable,
+    create_tp_normal: Perception,
+    create_frame_result: PerceptionFrameResult,
 ) -> None:
-    evaluation_item: Perception = create_tp_normal
-    result: PerceptionFrameResult = create_frame_result
+    evaluation_item = create_tp_normal
+    result = create_frame_result
     # add no tp_object_results, fp_object_results
     frame_dict = evaluation_item.set_frame(result)
     # check total is not changed (skip count)
@@ -140,12 +138,12 @@ def test_perception_fail_has_no_object(
 
 
 def test_perception_success_tp_normal(
-    create_tp_normal: Callable,
-    create_frame_result: Callable,
-    create_dynamic_object: Callable,
+    create_tp_normal: Perception,
+    create_frame_result: PerceptionFrameResult,
+    create_dynamic_object: DynamicObjectWithPerceptionResult,
 ) -> None:
-    evaluation_item: Perception = create_tp_normal
-    result: PerceptionFrameResult = create_frame_result
+    evaluation_item = create_tp_normal
+    result = create_frame_result
     tp_objects_results: list[DynamicObjectWithPerceptionResult] = [
         create_dynamic_object for i in range(5)
     ]
@@ -171,12 +169,12 @@ def test_perception_success_tp_normal(
 
 
 def test_perception_fail_tp_normal(
-    create_tp_normal: Callable,
-    create_frame_result: Callable,
-    create_dynamic_object: Callable,
+    create_tp_normal: Perception,
+    create_frame_result: PerceptionFrameResult,
+    create_dynamic_object: DynamicObjectWithPerceptionResult,
 ) -> None:
-    evaluation_item: Perception = create_tp_normal
-    result: PerceptionFrameResult = create_frame_result
+    evaluation_item = create_tp_normal
+    result = create_frame_result
     tp_objects_results: list[DynamicObjectWithPerceptionResult] = [
         create_dynamic_object for i in range(5)
     ]
@@ -202,12 +200,12 @@ def test_perception_fail_tp_normal(
 
 
 def test_perception_fail_tp_hard(
-    create_tp_hard: Callable,
-    create_frame_result: Callable,
-    create_dynamic_object: Callable,
+    create_tp_hard: Perception,
+    create_frame_result: PerceptionFrameResult,
+    create_dynamic_object: DynamicObjectWithPerceptionResult,
 ) -> None:
-    evaluation_item: Perception = create_tp_hard
-    result: PerceptionFrameResult = create_frame_result
+    evaluation_item = create_tp_hard
+    result = create_frame_result
     tp_objects_results: list[DynamicObjectWithPerceptionResult] = [
         create_dynamic_object for i in range(5)
     ]

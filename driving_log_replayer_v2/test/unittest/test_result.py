@@ -12,7 +12,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from collections.abc import Callable
 from os.path import expandvars
 
 from pydantic import BaseModel
@@ -55,13 +54,13 @@ def create_writer() -> ResultWriter:
     writer.delete_result_file()
 
 
-def test_create_jsonl_path(create_writer: Callable) -> None:
-    writer: ResultWriter = create_writer
+def test_create_jsonl_path(create_writer: ResultWriter) -> None:
+    writer = create_writer
     assert writer.result_path.as_posix() == expandvars("$HOME/dlr_result.jsonl")
 
 
-def test_get_result(create_writer: Callable) -> None:
-    writer: ResultWriter = create_writer
+def test_get_result(create_writer: ResultWriter) -> None:
+    writer = create_writer
     sample_result = SampleResult()
     sample_result.set_frame()
     sample_result.update()

@@ -38,7 +38,7 @@
     "${workspaceFolder}/../../../install/tier4_localization_msgs/local/lib/python3.10/dist-packages",
     "${workspaceFolder}/../../../install/tier4_api_msgs/local/lib/python3.10/dist-packages",
     "${workspaceFolder}/../../../install/tier4_perception_msgs/local/lib/python3.10/dist-packages",
-    "${workspaceFolder}/../../../install/lanelet2_extension_python/local/lib/python3.10/dist-packages",
+    "${workspaceFolder}/../../../install/autoware_lanelet2_extension_python/local/lib/python3.10/dist-packages",
     "${workspaceFolder}/../../../install/autoware_common_msgs/local/lib/python3.10/dist-packages",
     "${workspaceFolder}/../../../install/autoware_adapi_v1_msgs/local/lib/python3.10/dist-packages"
   ],
@@ -56,7 +56,7 @@
     "${workspaceFolder}/../../../install/tier4_localization_msgs/local/lib/python3.10/dist-packages",
     "${workspaceFolder}/../../../install/tier4_api_msgs/local/lib/python3.10/dist-packages",
     "${workspaceFolder}/../../../install/tier4_perception_msgs/local/lib/python3.10/dist-packages",
-    "${workspaceFolder}/../../../install/lanelet2_extension_python/local/lib/python3.10/dist-packages",
+    "${workspaceFolder}/../../../install/autoware_lanelet2_extension_python/local/lib/python3.10/dist-packages",
     "${workspaceFolder}/../../../install/autoware_common_msgs/local/lib/python3.10/dist-packages",
     "${workspaceFolder}/../../../install/autoware_adapi_v1_msgs/local/lib/python3.10/dist-packages"
   ],

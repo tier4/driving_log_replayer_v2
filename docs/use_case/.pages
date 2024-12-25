@@ -23,3 +23,5 @@ nav:
   - perception_2d.en.md
   - planning_control.en.md
   - planning_control.ja.md
+  - diagnostics.en.md
+  - diagnostics.ja.md
