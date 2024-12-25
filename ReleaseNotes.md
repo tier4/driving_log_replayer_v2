@@ -1,5 +1,13 @@
 # Release Notes
 
+## Version 3.1.1
+
+Minor Tweak
+
+| Module                      | Feature  | Brief summary                   | Pull request                                                    | Contributor                                   |
+| --------------------------- | -------- | ------------------------------- | --------------------------------------------------------------- | --------------------------------------------- |
+| `perception, traffic_light` | criteria | enable to specify region filter | [#68](https://github.com/tier4/driving_log_replayer_v2/pull/68) | [MasatoSaeki](https://github.com/MasatoSaeki) |
+
 ## Version 3.1.0
 
 Major changes

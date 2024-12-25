@@ -2,6 +2,26 @@
 Changelog for package driving_log_replayer
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
+Forthcoming
+-----------
+* feat(perception): enable to specify `region` filter. (`#68 <https://github.com/tier4/driving_log_replayer_v2/issues/68>`_)
+  * fundamental commit
+  * fix
+  * fix bug
+  * add validator
+  * fix validation
+  * set default value
+  * add sample
+  * fix validate and run pre-commit
+  * fix check algo
+  * fix docs
+  * adopt it for traffic light
+  * fix sample scenario file
+  * chore: update UseCaseFormatVersion of perception and traffic_light
+  ---------
+  Co-authored-by: Hayato Mizushima <hayato-m126@users.noreply.github.com>
+* Contributors: Masato Saeki
+
 3.1.0 (2024-12-20)
 ------------------
 * Merge pull request `#70 <https://github.com/tier4/driving_log_replayer_v2/issues/70>`_ from tier4/feat/merge-autoware-lenelet2-extension
