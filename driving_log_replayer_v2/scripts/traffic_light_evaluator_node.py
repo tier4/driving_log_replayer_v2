@@ -212,7 +212,6 @@ class TrafficLightEvaluator(DLREvaluatorV2):
     def get_min_traffic_light_distance(
         self, traffic_lights: list[LineString3d], p2d: BasicPoint2d
     ) -> tuple[float, float, float, float]:
-        self.get_logger().error(f"traffic_light type: {type(traffic_lights[0])}")
         min_distance: float = sys.float_info.max
         for tl in traffic_lights:
             l2d = to2D(tl)
