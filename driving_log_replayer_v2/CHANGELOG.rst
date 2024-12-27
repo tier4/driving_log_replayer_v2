@@ -2,8 +2,8 @@
 Changelog for package driving_log_replayer
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-Forthcoming
------------
+3.1.2 (2024-12-27)
+------------------
 * fix(traffic_light): enable to calculate correct distance from ego to traffic light (`#74 <https://github.com/tier4/driving_log_replayer_v2/issues/74>`_)
   * fix distance from ego to tl
   * remove debug code
