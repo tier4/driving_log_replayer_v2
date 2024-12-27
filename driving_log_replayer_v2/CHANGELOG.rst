@@ -2,6 +2,14 @@
 Changelog for package driving_log_replayer
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
+Forthcoming
+-----------
+* fix(traffic_light): enable to calculate correct distance from ego to traffic light (`#74 <https://github.com/tier4/driving_log_replayer_v2/issues/74>`_)
+  * fix distance from ego to tl
+  * remove debug code
+  ---------
+* Contributors: Masato Saeki
+
 3.1.1 (2024-12-25)
 ------------------
 * feat(perception): enable to specify `region` filter. (`#68 <https://github.com/tier4/driving_log_replayer_v2/issues/68>`_)

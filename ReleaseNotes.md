@@ -1,5 +1,13 @@
 # Release Notes
 
+## Version 3.1.2
+
+Minor Tweak
+
+| Module          | Feature           | Brief summary                                                  | Pull request                                                    | Contributor                                   |
+| --------------- | ----------------- | -------------------------------------------------------------- | --------------------------------------------------------------- | --------------------------------------------- |
+| `traffic_light` | calculation logic | enable to calculate correct distance from ego to traffic light | [#74](https://github.com/tier4/driving_log_replayer_v2/pull/74) | [MasatoSaeki](https://github.com/MasatoSaeki) |
+
 ## Version 3.1.1
 
 Minor Tweak
