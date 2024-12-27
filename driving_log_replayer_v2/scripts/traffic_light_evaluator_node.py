@@ -17,6 +17,7 @@
 import logging
 from os.path import expandvars
 from pathlib import Path
+import sys
 from typing import TYPE_CHECKING
 
 from autoware_perception_msgs.msg import TrafficLightGroup
@@ -24,6 +25,7 @@ from autoware_perception_msgs.msg import TrafficLightGroupArray
 from geometry_msgs.msg import TransformStamped
 import lanelet2  # noqa
 from lanelet2.core import BasicPoint2d
+from lanelet2.core import LineString3d
 from lanelet2.geometry import distance
 from lanelet2.geometry import to2D
 from perception_eval.common.object2d import DynamicObject2D
@@ -152,6 +154,7 @@ class TrafficLightEvaluator(DLREvaluatorV2):
         unix_time: int,
         traffic_light_groups: list[TrafficLightGroup],
         cam2map: TransformDict,
+        map_to_baselink: TransformStamped,
     ) -> list[DynamicObject2D]:
         estimated_objects: list[DynamicObject2D] = []
         for signal in traffic_light_groups:
@@ -159,7 +162,9 @@ class TrafficLightEvaluator(DLREvaluatorV2):
                 get_traffic_light_label_str(signal.elements),
             )
             confidence: float = max(signal.elements, key=lambda x: x.confidence).confidence
-            signal_pos = self.get_traffic_light_pos(signal.traffic_light_group_id, cam2map)
+            signal_pos = self.get_traffic_light_pos(
+                signal.traffic_light_group_id, cam2map, map_to_baselink
+            )
             # debug self.get_logger().error(f"{signal_pos=}")
 
             estimated_object = DynamicObject2D(
@@ -178,10 +183,15 @@ class TrafficLightEvaluator(DLREvaluatorV2):
         self,
         traffic_light_uuid: int,
         cam2map: TransformDict,
-    ) -> tuple[float, float, float, float]:
+        map_to_baselink: TransformStamped,
+    ) -> tuple[float, float, float]:
         traffic_light_obj = self.__lanelet_map.regulatoryElementLayer.get(traffic_light_uuid)
-        light_ls = traffic_light_obj.trafficLights[0]  # とりあえず1個目のline string
-        return cam2map.inv().transform((light_ls[0].x, light_ls[0].y, light_ls[0].z))
+        ego_position = map_to_baselink.transform.translation
+        p2d = BasicPoint2d(ego_position.x, ego_position.y)
+        tl_x, tl_y, tl_z, _ = self.get_min_traffic_light_distance(
+            traffic_light_obj.trafficLights, p2d
+        )
+        return cam2map.inv().transform((tl_x, tl_y, tl_z))
 
     def get_traffic_light_pos_and_dist(
         self,
@@ -196,11 +206,23 @@ class TrafficLightEvaluator(DLREvaluatorV2):
         else:
             traffic_light_obj = self.__lanelet_map.regulatoryElementLayer.get(int_uuid)
             ego_position = map_to_baselink.transform.translation
-            light_ls = traffic_light_obj.trafficLights[0]  # とりあえず1個目のline string
-            # 左右の端の位置が入っている。とりあえず大きな差はないとみなして0を取る https://tech.tier4.jp/entry/2021/06/23/160000
-            l2d = to2D(light_ls)
             p2d = BasicPoint2d(ego_position.x, ego_position.y)
-            return (light_ls[0].x, light_ls[0].y, light_ls[0].z, distance(l2d, p2d))
+            return self.get_min_traffic_light_distance(traffic_light_obj.trafficLights, p2d)
+
+    def get_min_traffic_light_distance(
+        self, traffic_lights: list[LineString3d], p2d: BasicPoint2d
+    ) -> tuple[float, float, float, float]:
+        min_distance: float = sys.float_info.max
+        for tl in traffic_lights:
+            l2d = to2D(tl)
+            cur_distance = distance(l2d, p2d)
+            if cur_distance < min_distance:
+                min_tl = tl
+                min_distance = cur_distance
+        min_tl_center = tuple(
+            (getattr(min_tl[0], attr) + getattr(min_tl[1], attr)) / 2.0 for attr in ("x", "y", "z")
+        )
+        return (*min_tl_center, min_distance)
 
     def traffic_signals_cb(self, msg: TrafficLightGroupArray) -> None:
         map_to_baselink = self.lookup_transform(msg.stamp)
@@ -224,6 +246,7 @@ class TrafficLightEvaluator(DLREvaluatorV2):
             unix_time,
             msg.traffic_light_groups,
             cam2map,
+            map_to_baselink,
         )
         frame_result: PerceptionFrameResult = self.__evaluator.add_frame_result(
             unix_time=unix_time,
