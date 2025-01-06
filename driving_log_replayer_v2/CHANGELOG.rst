@@ -2,8 +2,8 @@
 Changelog for package driving_log_replayer
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-Forthcoming
------------
+3.1.3 (2025-01-06)
+------------------
 * feat: update github actions (`#76 <https://github.com/tier4/driving_log_replayer_v2/issues/76>`_)
   * feat: update github actions
   * fix: remove Removed Rules
