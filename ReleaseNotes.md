@@ -4,10 +4,9 @@
 
 Minor Tweak
 
-| Module          | Feature           | Brief summary                                                  | Pull request                                                    | Contributor                                   |
-| --------------- | ----------------- | -------------------------------------------------------------- | --------------------------------------------------------------- | --------------------------------------------- |
-| `all` | linter and formatter | update linter and formatter version | [#76](https://github.com/tier4/driving_log_replayer_v2/pull/76) | [hayato-m126](https://github.com/hayato-m126) |
-
+| Module | Feature              | Brief summary                       | Pull request                                                    | Contributor                                   |
+| ------ | -------------------- | ----------------------------------- | --------------------------------------------------------------- | --------------------------------------------- |
+| `all`  | linter and formatter | update linter and formatter version | [#76](https://github.com/tier4/driving_log_replayer_v2/pull/76) | [hayato-m126](https://github.com/hayato-m126) |
 
 ## Version 3.1.2
 
