@@ -2,6 +2,15 @@
 Changelog for package driving_log_replayer
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
+Forthcoming
+-----------
+* feat: update github actions (`#76 <https://github.com/tier4/driving_log_replayer_v2/issues/76>`_)
+  * feat: update github actions
+  * fix: remove Removed Rules
+  * chore: noqa PLC0206
+  ---------
+* Contributors: Hayato Mizushima
+
 3.1.2 (2024-12-27)
 ------------------
 * fix(traffic_light): enable to calculate correct distance from ego to traffic light (`#74 <https://github.com/tier4/driving_log_replayer_v2/issues/74>`_)

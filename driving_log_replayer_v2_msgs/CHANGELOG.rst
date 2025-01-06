@@ -2,6 +2,9 @@
 Changelog for package driving_log_replayer_v2_msgs
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
+Forthcoming
+-----------
+
 3.1.2 (2024-12-27)
 ------------------
 
