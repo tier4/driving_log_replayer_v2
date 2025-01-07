@@ -106,9 +106,11 @@ class PerceptionEvaluator(DLREvaluatorV2):
             confidence_threshold_list=self.__f_cfg.get("confidence_threshold_list", None),
         )
         self.__evaluator = PerceptionEvaluationManager(evaluation_config=evaluation_config)
+        self.__topic_ns = "centerpoint" # for this branch
+        subscribe_topic:str = "/perception/object_recognition/" + self.__topic_ns + "/objects"
         self.__sub_perception = self.create_subscription(
             self.__msg_type,
-            "/perception/object_recognition/" + self.__topic_ns + "/objects",
+            subscribe_topic,
             self.perception_cb,
             1,
         )
