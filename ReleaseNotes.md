@@ -1,5 +1,13 @@
 # Release Notes
 
+## Version 3.2.0
+
+Major changes
+
+| Module | Feature | Brief summary                                                  | Pull request                                                    | Contributor                                         |
+| ------ | ------- | -------------------------------------------------------------- | --------------------------------------------------------------- | --------------------------------------------------- |
+| `all`  | message | replace `tier4_debug_msgs` with `autoware_internal_debug_msgs` | [#78](https://github.com/tier4/driving_log_replayer_v2/pull/78) | [SakodaShintaro](https://github.com/SakodaShintaro) |
+
 ## Version 3.1.3
 
 Minor Tweak

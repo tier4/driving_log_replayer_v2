@@ -2,6 +2,13 @@
 Changelog for package driving_log_replayer
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
+Forthcoming
+-----------
+* Merge pull request `#78 <https://github.com/tier4/driving_log_replayer_v2/issues/78>`_ from tier4/feat/merge-message-update-from-v1
+  feat: merge message update
+* feat: merge message update
+* Contributors: Hayato Mizushima
+
 3.1.3 (2025-01-06)
 ------------------
 * feat: update github actions (`#76 <https://github.com/tier4/driving_log_replayer_v2/issues/76>`_)
