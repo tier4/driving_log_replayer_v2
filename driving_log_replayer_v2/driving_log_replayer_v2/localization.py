@@ -19,14 +19,14 @@ import statistics
 from typing import ClassVar
 from typing import Literal
 
+from autoware_internal_debug_msgs.msg import Float32Stamped
+from autoware_internal_debug_msgs.msg import Int32Stamped
 from diagnostic_msgs.msg import DiagnosticStatus
 from example_interfaces.msg import Float64
 from geometry_msgs.msg import PoseStamped
 import numpy as np
 from pydantic import BaseModel
 from rosidl_runtime_py import message_to_ordereddict
-from tier4_debug_msgs.msg import Float32Stamped
-from tier4_debug_msgs.msg import Int32Stamped
 
 from driving_log_replayer_v2.result import EvaluationItem
 from driving_log_replayer_v2.result import ResultBase
