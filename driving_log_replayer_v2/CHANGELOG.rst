@@ -216,6 +216,12 @@ Changelog for package driving_log_replayer
   ---------
 * Contributors: Hayato Mizushima, iwatake
 
+2.6.0 (2025-01-14)
+------------------
+* feat: update message type (`#589 <https://github.com/tier4/driving_log_replayer/issues/589>`_)
+  Co-authored-by: Shintaro Sakoda <shintaro.sakoda@tier4.jp>
+* Contributors: Hayato Mizushima
+
 2.5.0 (2024-12-19)
 ------------------
 * fix: update lanelet2 extension (`#586 <https://github.com/tier4/driving_log_replayer/issues/586>`_)

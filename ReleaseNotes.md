@@ -61,6 +61,14 @@ Major changes
 | `planning_control` | use case | add planning_control_evaluator | [#43](https://github.com/tier4/driving_log_replayer_v2/pull/43) | [hayato-m126](https://github.com/hayato-m126) |
 | `diagnostics`      | use case | add diagnostics_evaluator      | [#42](https://github.com/tier4/driving_log_replayer_v2/pull/42) | [hayato-m126](https://github.com/hayato-m126) |
 
+## Version 2.6.0
+
+Major changes
+
+| Module | Feature | Brief summary                                                  | Pull request                                                   | Jira     | Contributor                                         |
+| ------ | ------- | -------------------------------------------------------------- | -------------------------------------------------------------- | -------- | --------------------------------------------------- |
+| `all`  | message | replace `tier4_debug_msgs` with `autoware_internal_debug_msgs` | [#589](https://github.com/tier4/driving_log_replayer/pull/589) | RT1-9020 | [SakodaShintaro](https://github.com/SakodaShintaro) |
+
 ## Version 2.5.0
 
 Major changes
