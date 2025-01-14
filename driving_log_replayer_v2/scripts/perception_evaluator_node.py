@@ -20,6 +20,8 @@ from pathlib import Path
 
 from autoware_perception_msgs.msg import DetectedObject
 from autoware_perception_msgs.msg import DetectedObjects
+from autoware_perception_msgs.msg import PredictedObject
+from autoware_perception_msgs.msg import PredictedObjects
 from autoware_perception_msgs.msg import Shape as MsgShape
 from autoware_perception_msgs.msg import TrackedObject
 from autoware_perception_msgs.msg import TrackedObjects
@@ -108,7 +110,7 @@ class PerceptionEvaluator(DLREvaluatorV2):
         self.__evaluator = PerceptionEvaluationManager(evaluation_config=evaluation_config)
         self.__sub_perception = self.create_subscription(
             self.__msg_type,
-            "/perception/object_recognition/" + self.__topic_ns + "/objects",
+            "/perception/object_recognition/" + self.__topic_ns + "objects",
             self.perception_cb,
             1,
         )
@@ -124,12 +126,17 @@ class PerceptionEvaluator(DLREvaluatorV2):
         if self.__evaluation_task in ["detection", "fp_validation"]:
             self.__frame_id_str = "base_link"
             self.__msg_type = DetectedObjects
-            self.__topic_ns = "detection"
+            self.__topic_ns = "detection/"
             return True
         if self.__evaluation_task == "tracking":
             self.__frame_id_str = "map"
             self.__msg_type = TrackedObjects
-            self.__topic_ns = "tracking"
+            self.__topic_ns = "tracking/"
+            return True
+        if self.__evaluation_task == "prediction":
+            self.__frame_id_str = "map"
+            self.__msg_type = PredictedObjects
+            self.__topic_ns = ""  # prediction name space is ""
             return True
         self.get_logger().error(f"Unexpected evaluation task: {self.__evaluation_task}")
         return False
@@ -172,7 +179,7 @@ class PerceptionEvaluator(DLREvaluatorV2):
     def list_dynamic_object_from_ros_msg(
         self,
         unix_time: int,
-        objects: list[DetectedObject] | list[TrackedObject],
+        objects: list[DetectedObject] | list[TrackedObject] | list[PredictedObject],
     ) -> list[DynamicObject] | str:
         # return str(error_msg) when footprint points are invalid
         estimated_objects: list[DynamicObject] = []
@@ -191,7 +198,7 @@ class PerceptionEvaluator(DLREvaluatorV2):
             )
 
             uuid = None
-            if isinstance(perception_object, TrackedObject):
+            if isinstance(perception_object, TrackedObject | PredictedObject):
                 uuid = eval_conversions.uuid_from_ros_msg(perception_object.object_id.uuid)
 
             shape_type = ShapeType.BOUNDING_BOX
@@ -203,10 +210,14 @@ class PerceptionEvaluator(DLREvaluatorV2):
                 unix_time=unix_time,
                 frame_id=self.__frame_id,
                 position=eval_conversions.position_from_ros_msg(
-                    perception_object.kinematics.pose_with_covariance.pose.position,
+                    perception_object.kinematics.pose_with_covariance.pose.position
+                    if isinstance(perception_object, DetectedObject | TrackedObject)
+                    else perception_object.kinematics.initial_pose_with_covariance.pose.position
                 ),
                 orientation=eval_conversions.orientation_from_ros_msg(
-                    perception_object.kinematics.pose_with_covariance.pose.orientation,
+                    perception_object.kinematics.pose_with_covariance.pose.orientation
+                    if isinstance(perception_object, DetectedObject | TrackedObject)
+                    else perception_object.kinematics.initial_pose_with_covariance.pose.orientation
                 ),
                 shape=Shape(
                     shape_type=shape_type,
@@ -219,10 +230,16 @@ class PerceptionEvaluator(DLREvaluatorV2):
                     ),
                 ),
                 velocity=eval_conversions.velocity_from_ros_msg(
-                    perception_object.kinematics.twist_with_covariance.twist.linear,
+                    perception_object.kinematics.twist_with_covariance.twist.linear
+                    if isinstance(perception_object, DetectedObject | TrackedObject)
+                    else perception_object.kinematics.initial_twist_with_covariance.twist.linear
                 ),
-                pose_covariance=perception_object.kinematics.pose_with_covariance.covariance,
-                twist_covariance=perception_object.kinematics.twist_with_covariance.covariance,
+                pose_covariance=perception_object.kinematics.pose_with_covariance.covariance
+                if isinstance(perception_object, DetectedObject | TrackedObject)
+                else perception_object.kinematics.initial_pose_with_covariance.covariance,
+                twist_covariance=perception_object.kinematics.twist_with_covariance.covariance
+                if isinstance(perception_object, DetectedObject | TrackedObject)
+                else perception_object.kinematics.initial_twist_with_covariance.covariance,
                 semantic_score=most_probable_classification.probability,
                 semantic_label=label,
                 uuid=uuid,
@@ -230,12 +247,12 @@ class PerceptionEvaluator(DLREvaluatorV2):
             estimated_objects.append(estimated_object)
         return estimated_objects
 
-    def perception_cb(self, msg: DetectedObjects | TrackedObjects) -> None:
+    def perception_cb(self, msg: DetectedObjects | TrackedObjects | PredictedObjects) -> None:
         map_to_baselink = self.lookup_transform(msg.header.stamp)
-        # DetectedObjectとTrackedObjectで違う型ではあるが、estimated_objectを作る上で使用している項目は共通で保持しているので同じ関数で処理できる
+        # Although there are multiple msg types to receive, the items used to create the estimated_object are held in common, so they can be processed by the same function.
         unix_time: int = eval_conversions.unix_time_from_ros_msg(msg.header)
-        # Tracking objectはtimestampがズレていることがあるのでGTの補間を行う
-        if isinstance(msg, TrackedObjects):
+        # Tracking object以降はtimestampがズレていることがあるのでGTの補間を行う
+        if isinstance(msg, TrackedObjects | PredictedObjects):
             interpolation: bool = True
         else:
             interpolation = False
