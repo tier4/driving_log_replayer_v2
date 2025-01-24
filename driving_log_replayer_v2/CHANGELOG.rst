@@ -2,6 +2,11 @@
 Changelog for package driving_log_replayer
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
+Forthcoming
+-----------
+* Merge tag '2.7.0' into chore/merge-v1-2.7.0
+* Contributors: Hayato Mizushima
+
 3.2.0 (2025-01-14)
 ------------------
 * Merge pull request `#78 <https://github.com/tier4/driving_log_replayer_v2/issues/78>`_ from tier4/feat/merge-message-update-from-v1

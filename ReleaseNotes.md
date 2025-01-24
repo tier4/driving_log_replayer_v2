@@ -1,5 +1,13 @@
 # Release Notes
 
+## Version 3.3.0
+
+Major changes
+
+| Module | Feature    | Brief summary                                                                       | Pull request                                                   | Contributor                                   |
+| ------ | ---------- | ----------------------------------------------------------------------------------- | -------------------------------------------------------------- | --------------------------------------------- |
+| `all`  | dependency | Update package name `component_state_monitor` -> `autoware_component_state_monitor` | [#591](https://github.com/tier4/driving_log_replayer/pull/591) | [mitsudome-r](https://github.com/mitsudome-r) |
+
 ## Version 3.2.0
 
 Major changes
