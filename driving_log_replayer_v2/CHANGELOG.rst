@@ -2,8 +2,8 @@
 Changelog for package driving_log_replayer
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-Forthcoming
------------
+3.3.0 (2025-01-24)
+------------------
 * Merge tag '2.7.0' into chore/merge-v1-2.7.0
 * Contributors: Hayato Mizushima
 
