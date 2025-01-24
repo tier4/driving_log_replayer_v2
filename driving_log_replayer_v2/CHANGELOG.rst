@@ -2,6 +2,11 @@
 Changelog for package driving_log_replayer
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
+Forthcoming
+-----------
+* Merge tag '2.7.0' into chore/merge-v1-2.7.0
+* Contributors: Hayato Mizushima
+
 3.2.0 (2025-01-14)
 ------------------
 * Merge pull request `#78 <https://github.com/tier4/driving_log_replayer_v2/issues/78>`_ from tier4/feat/merge-message-update-from-v1
@@ -222,6 +227,12 @@ Changelog for package driving_log_replayer
   * chore: update graph
   ---------
 * Contributors: Hayato Mizushima, iwatake
+
+2.7.0 (2025-01-24)
+------------------
+* feat: add autoware\_ prefix to component_state_monitor (`#591 <https://github.com/tier4/driving_log_replayer/issues/591>`_)
+  Co-authored-by: Hayato Mizushima <hayato-m126@users.noreply.github.com>
+* Contributors: Ryohsuke Mitsudome
 
 2.6.0 (2025-01-14)
 ------------------

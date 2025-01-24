@@ -468,9 +468,9 @@ def launch_topic_state_monitor(context: LaunchContext) -> list:
         return [
             LogInfo(msg="topic_state_monitor is not launched because use_case is not localization.")
         ]
-    # component_state_monitor launch
+    # autoware_component_state_monitor launch
     component_state_monitor_launch_file = Path(
-        get_package_share_directory("component_state_monitor"),
+        get_package_share_directory("autoware_component_state_monitor"),
         "launch",
         "component_state_monitor.launch.py",
     )

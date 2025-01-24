@@ -1,5 +1,13 @@
 # Release Notes
 
+## Version 3.3.0
+
+Major changes
+
+| Module | Feature    | Brief summary                                                                       | Pull request                                                   | Contributor                                   |
+| ------ | ---------- | ----------------------------------------------------------------------------------- | -------------------------------------------------------------- | --------------------------------------------- |
+| `all`  | dependency | Update package name `component_state_monitor` -> `autoware_component_state_monitor` | [#591](https://github.com/tier4/driving_log_replayer/pull/591) | [mitsudome-r](https://github.com/mitsudome-r) |
+
 ## Version 3.2.0
 
 Major changes
@@ -68,6 +76,14 @@ Major changes
 | ------------------ | -------- | ------------------------------ | --------------------------------------------------------------- | --------------------------------------------- |
 | `planning_control` | use case | add planning_control_evaluator | [#43](https://github.com/tier4/driving_log_replayer_v2/pull/43) | [hayato-m126](https://github.com/hayato-m126) |
 | `diagnostics`      | use case | add diagnostics_evaluator      | [#42](https://github.com/tier4/driving_log_replayer_v2/pull/42) | [hayato-m126](https://github.com/hayato-m126) |
+
+## Version 2.7.0
+
+Major changes
+
+| Module | Feature    | Brief summary                                                                       | Pull request                                                   | Jira | Contributor                                   |
+| ------ | ---------- | ----------------------------------------------------------------------------------- | -------------------------------------------------------------- | ---- | --------------------------------------------- |
+| `all`  | dependency | Update package name `component_state_monitor` -> `autoware_component_state_monitor` | [#591](https://github.com/tier4/driving_log_replayer/pull/591) | -    | [mitsudome-r](https://github.com/mitsudome-r) |
 
 ## Version 2.6.0
 
