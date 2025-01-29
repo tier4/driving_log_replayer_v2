@@ -15,16 +15,21 @@
 from launch.actions import DeclareLaunchArgument
 
 RECORD_TOPIC = """^/tf$\
-|^/diagnostics$\
 |^/sensing/lidar/concatenated/pointcloud$\
-|^/perception/object_recognition/detection/objects$\
-|^/perception/object_recognition/tracking/objects$\
 |^/perception/object_recognition/objects$\
-|^/perception/object_recognition/tracking/multi_object_tracker/debug/.*\
-|^/perception/object_recognition/detection/.*/debug/pipeline_latency_ms$\
-|^/perception/perception_online_evaluator/.*\
+|^/perception/obstacle_segmentation/pointcloud$\
+|^/perception/object_recognition/detection/rois(11|10|[0-9])$\
+|^/perception/traffic_light_recognition/camera(11|10|[0-9])/detection/rois$\
+|^/perception/traffic_light_recognition/camera(11|10|[0-9])/detection/rough/rois$\
+|^/perception/traffic_light_recognition/camera(11|10|[0-9])/classification/traffic_signals$\
+|^/perception/traffic_light_recognition/traffic_signals$\
+|^/tf_static$\
+|^/diagnostics$\
+|^/planning/scenario_planning/lane_driving/behavior_planning/path$\
+|^/planning/scenario_planning/trajectory$\
+|^/.*/virtual_wall/.*$\
+|^/.*/path_candidate/.*\
 """
-
 
 AUTOWARE_DISABLE = {
     "localization": "false",
