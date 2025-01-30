@@ -1,5 +1,13 @@
 # Release Notes
 
+## Version 3.3.1
+
+Bug fix
+
+| Module      | Feature       | Brief summary              | Pull request                                                    | Contributor                                   |
+| ----------- | ------------- | -------------------------- | --------------------------------------------------------------- | --------------------------------------------- |
+| `pose_node` | message field | convert int value to float | [#82](https://github.com/tier4/driving_log_replayer_v2/pull/82) | [hayato-m126](https://github.com/hayato-m126) |
+
 ## Version 3.3.0
 
 Major changes
