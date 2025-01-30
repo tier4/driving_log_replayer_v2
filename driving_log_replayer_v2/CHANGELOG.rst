@@ -2,6 +2,14 @@
 Changelog for package driving_log_replayer
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
+Forthcoming
+-----------
+* Merge pull request `#82 <https://github.com/tier4/driving_log_replayer_v2/issues/82>`_ from tier4/fix/cast-pose-value-to-float
+  fix: convert int value to float
+* fix: add copyright
+* fix: convert int value to float
+* Contributors: Hayato Mizushima
+
 3.3.0 (2025-01-24)
 ------------------
 * Merge tag '2.7.0' into chore/merge-v1-2.7.0
