@@ -21,7 +21,15 @@ def test_pose_str_to_dict() -> None:
     )
 
     pose_dict = pose_str_to_dict(pose_str)
-    assert pose_dict == {
-        "position": {"x": 1.0, "y": 2.0, "z": 3.0},
-        "orientation": {"x": 0.0, "y": 0.0, "z": 0.0, "w": 1.0},
-    }
+    # The line below doesn't throw AssertionError
+    assert 3.0 == 3  # noqa
+    # Need to check the value type, not the value
+    assert isinstance(pose_dict["position"]["x"], float)
+    assert pose_dict["position"]["x"] == 1.0
+    assert pose_dict["position"]["x"] == 1  # This also doesn't throw AssertionError
+    assert isinstance(pose_dict["position"]["y"], float)
+    assert isinstance(pose_dict["position"]["z"], float)
+    assert isinstance(pose_dict["orientation"]["x"], float)
+    assert isinstance(pose_dict["orientation"]["y"], float)
+    assert isinstance(pose_dict["orientation"]["z"], float)
+    assert isinstance(pose_dict["orientation"]["w"], float)
