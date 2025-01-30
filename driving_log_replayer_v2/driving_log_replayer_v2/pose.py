@@ -13,6 +13,7 @@
 # limitations under the License.
 
 import json
+from typing import Any
 
 from geometry_msgs.msg import Point
 from geometry_msgs.msg import Pose
@@ -23,8 +24,23 @@ import numpy as np
 from std_msgs.msg import Header
 
 
+def convert_to_float(obj: Any) -> Any:
+    if isinstance(obj, dict):
+        return {k: convert_to_float(v) for k, v in obj.items()}
+    if isinstance(obj, list):
+        return [convert_to_float(v) for v in obj]
+    if isinstance(obj, int | float):
+        return float(obj)
+    return obj
+
+
+def pose_str_to_dict(pose_str: str) -> dict:
+    pose_dict_number = json.loads(pose_str)
+    return convert_to_float(pose_dict_number)
+
+
 def arg_to_initial_pose(pose_str: str) -> PoseWithCovarianceStamped:
-    pose_dict = json.loads(pose_str)
+    pose_dict = pose_str_to_dict(pose_str)
     covariance = np.array(
         [
             0.25,
@@ -76,7 +92,7 @@ def arg_to_initial_pose(pose_str: str) -> PoseWithCovarianceStamped:
 
 
 def arg_to_goal_pose(pose_str: str) -> Pose:
-    pose_dict = json.loads(pose_str)
+    pose_dict = pose_str_to_dict(pose_str)
     return Pose(
         position=Point(**pose_dict["position"]),
         orientation=Quaternion(**pose_dict["orientation"]),
