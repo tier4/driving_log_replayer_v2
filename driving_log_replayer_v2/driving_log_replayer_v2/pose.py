@@ -76,10 +76,10 @@ def arg_to_initial_pose(pose_str: str) -> PoseWithCovarianceStamped:
 
 
 def arg_to_goal_pose(pose_str: str) -> Pose:
+    pose_dict = json.loads(pose_str)
     for _, value in pose_dict.items():
         for key, _ in value.items():
             value[key] = float(value[key])
-    pose_dict = json.loads(pose_str)
     return Pose(
         position=Point(**pose_dict["position"]),
         orientation=Quaternion(**pose_dict["orientation"]),
