@@ -2,6 +2,9 @@
 Changelog for package driving_log_replayer
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
+Forthcoming
+-----------
+
 3.3.1 (2025-01-30)
 ------------------
 * Merge pull request `#82 <https://github.com/tier4/driving_log_replayer_v2/issues/82>`_ from tier4/fix/cast-pose-value-to-float
