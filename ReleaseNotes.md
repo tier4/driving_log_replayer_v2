@@ -1,5 +1,13 @@
 # Release Notes
 
+## Version 3.3.2
+
+Documentation
+
+| Module                | Feature   | Brief summary                                                     | Pull request                                                    | Contributor                                   |
+| --------------------- | --------- | ----------------------------------------------------------------- | --------------------------------------------------------------- | --------------------------------------------- |
+| `ground_segmentation` | add index | Added to index and changed so that it can be traced from use_case | [#84](https://github.com/tier4/driving_log_replayer_v2/pull/84) | [hayato-m126](https://github.com/hayato-m126) |
+
 ## Version 3.3.1
 
 Bug fix
