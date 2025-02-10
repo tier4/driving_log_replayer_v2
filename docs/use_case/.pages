@@ -25,3 +25,5 @@ nav:
   - planning_control.ja.md
   - diagnostics.en.md
   - diagnostics.ja.md
+  - ground_segmentation.en.md
+  - ground_segmentation.ja.md
