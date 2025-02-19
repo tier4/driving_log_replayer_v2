@@ -266,7 +266,7 @@ def ensure_arg_compatibility(context: LaunchContext) -> list:
     conf["use_case"] = yaml_obj["Evaluation"]["UseCaseName"]
 
     if conf["use_case"] == "ndt_convergence":
-        conf["record_only"] = True
+        conf["record_only"] = "true"
 
     return [
         LogInfo(
