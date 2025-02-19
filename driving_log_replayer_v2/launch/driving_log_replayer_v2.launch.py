@@ -265,6 +265,9 @@ def ensure_arg_compatibility(context: LaunchContext) -> list:
     conf["result_archive_path"] = output_dir.joinpath("result_archive").as_posix()
     conf["use_case"] = yaml_obj["Evaluation"]["UseCaseName"]
 
+    if conf["use_case"] == "ndt_convergence":
+        conf["record_only"] = True
+
     return [
         LogInfo(
             msg=f"{t4_dataset_path=}, {dataset_index=}, {output_dir=}, use_case={conf['use_case']}",
@@ -330,7 +333,7 @@ def launch_map_height_fitter(context: LaunchContext) -> list:
 
 def launch_evaluator_node(context: LaunchContext) -> list:
     conf = context.launch_configurations
-    if conf["record_only"] != "false" or conf["use_case"] == "ndt_convergence":
+    if conf["record_only"] != "false":
         # output dummy result for Evaluator
         output_dummy_result_jsonl(conf["result_json_path"])
         return [LogInfo(msg="evaluator_node is not launched due to record only mode")]
