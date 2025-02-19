@@ -330,10 +330,10 @@ def launch_map_height_fitter(context: LaunchContext) -> list:
 
 def launch_evaluator_node(context: LaunchContext) -> list:
     conf = context.launch_configurations
-    if conf["record_only"] != "false":
+    if conf["record_only"] != "false" or conf["use_case"] == "ndt_convergence":
         # output dummy result for Evaluator
         output_dummy_result_jsonl(conf["result_json_path"])
-        return [LogInfo(msg="evaluator_node is not launched because record_only is set")]
+        return [LogInfo(msg="evaluator_node is not launched due to record only mode")]
     params = {
         "use_sim_time": True,
         "scenario_path": conf["scenario_path"],
