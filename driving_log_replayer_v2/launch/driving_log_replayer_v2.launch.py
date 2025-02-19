@@ -204,7 +204,7 @@ def extract_remap_topics(profile_name: str) -> list[str]:
         return remap_dict.get("remap")
 
 
-def ensure_arg_compatibility(context: LaunchContext) -> list:
+def ensure_arg_compatibility(context: LaunchContext) -> list:  # noqa
     conf = context.launch_configurations
 
     # check conf
