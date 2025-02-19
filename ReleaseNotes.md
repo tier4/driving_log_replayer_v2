@@ -4,10 +4,9 @@
 
 Documentation
 
-| Module                | Feature   | Brief summary                                                     | Pull request                                                    | Contributor                                   |
-| --------------------- | --------- | ----------------------------------------------------------------- | --------------------------------------------------------------- | --------------------------------------------- |
-| `all` | architecture | update architecture | [#86](https://github.com/tier4/driving_log_replayer_v2/pull/86) | [hayato-m126](https://github.com/hayato-m126) |
-
+| Module | Feature      | Brief summary       | Pull request                                                    | Contributor                                   |
+| ------ | ------------ | ------------------- | --------------------------------------------------------------- | --------------------------------------------- |
+| `all`  | architecture | update architecture | [#86](https://github.com/tier4/driving_log_replayer_v2/pull/86) | [hayato-m126](https://github.com/hayato-m126) |
 
 ## Version 3.3.2
 
