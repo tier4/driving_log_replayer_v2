@@ -14,8 +14,21 @@
 
 from launch.actions import DeclareLaunchArgument
 
-RECORD_TOPIC = """^/localization/util/downsample/pointcloud$\
-|^/localization/pose_twist_fusion_filter/biased_pose_with_covariance$\
+RECORD_TOPIC = """^/diagnostics$\
+|^/sensing/lidar/concatenated/pointcloud$\
+|^/perception/object_recognition/objects$\
+|^/perception/obstacle_segmentation/pointcloud$\
+|^/perception/object_recognition/detection/rois(11|10|[0-9])$\
+|^/perception/traffic_light_recognition/camera(11|10|[0-9])/detection/rois$\
+|^/perception/traffic_light_recognition/camera(11|10|[0-9])/detection/rough/rois$\
+|^/perception/traffic_light_recognition/camera(11|10|[0-9])/classification/traffic_signals$\
+|^/perception/traffic_light_recognition/traffic_signals$\
+|^/tf$\
+|^/tf_static$\
+|^/planning/scenario_planning/lane_driving/behavior_planning/path$\
+|^/planning/scenario_planning/trajectory$\
+|^/.*/virtual_wall/.*$\
+|^/.*/path_candidate/.*\
 """
 
 AUTOWARE_DISABLE = {}
