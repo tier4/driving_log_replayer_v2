@@ -204,7 +204,7 @@ def extract_remap_topics(profile_name: str) -> list[str]:
         return remap_dict.get("remap")
 
 
-def ensure_arg_compatibility(context: LaunchContext) -> list:
+def ensure_arg_compatibility(context: LaunchContext) -> list:  # noqa
     conf = context.launch_configurations
 
     # check conf
@@ -264,6 +264,9 @@ def ensure_arg_compatibility(context: LaunchContext) -> list:
     conf["result_bag_path"] = output_dir.joinpath("result_bag").as_posix()
     conf["result_archive_path"] = output_dir.joinpath("result_archive").as_posix()
     conf["use_case"] = yaml_obj["Evaluation"]["UseCaseName"]
+
+    if conf["use_case"] == "all":
+        conf["record_only"] = "true"
 
     return [
         LogInfo(
@@ -333,7 +336,7 @@ def launch_evaluator_node(context: LaunchContext) -> list:
     if conf["record_only"] != "false":
         # output dummy result for Evaluator
         output_dummy_result_jsonl(conf["result_json_path"])
-        return [LogInfo(msg="evaluator_node is not launched because record_only is set")]
+        return [LogInfo(msg="evaluator_node is not launched due to record only mode")]
     params = {
         "use_sim_time": True,
         "scenario_path": conf["scenario_path"],
