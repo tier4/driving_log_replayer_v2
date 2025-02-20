@@ -1,5 +1,13 @@
 # Release Notes
 
+## Version 3.4.0
+
+Major changes
+
+| Module | Feature  | Brief summary                | Pull request                                                    | Contributor                                   |
+| ------ | -------- | ---------------------------- | --------------------------------------------------------------- | --------------------------------------------- |
+| `all`  | use case | add all_component_evaluation | [#90](https://github.com/tier4/driving_log_replayer_v2/pull/90) | [hayato-m126](https://github.com/hayato-m126) |
+
 ## Version 3.3.3
 
 Documentation

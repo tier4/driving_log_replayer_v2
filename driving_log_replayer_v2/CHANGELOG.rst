@@ -2,6 +2,16 @@
 Changelog for package driving_log_replayer
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
+Forthcoming
+-----------
+* feat: all component test (`#90 <https://github.com/tier4/driving_log_replayer_v2/issues/90>`_)
+  * feat: add all component setting
+  * feat: all component evaluation uses record only mode
+  * add record topic for all component test
+  ---------
+  Co-authored-by: MasatoSaeki <masato.saeki@tier4.jp>
+* Contributors: Hayato Mizushima
+
 3.3.3 (2025-02-19)
 ------------------
 
