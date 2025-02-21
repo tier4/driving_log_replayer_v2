@@ -265,7 +265,7 @@ def ensure_arg_compatibility(context: LaunchContext) -> list:  # noqa
     conf["result_archive_path"] = output_dir.joinpath("result_archive").as_posix()
     conf["use_case"] = yaml_obj["Evaluation"]["UseCaseName"]
 
-    if conf["use_case"] == "dlr2_all":
+    if conf["use_case"] == "dlr_all":
         conf["record_only"] = "true"
 
     return [
