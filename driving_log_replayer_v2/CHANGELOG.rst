@@ -2,6 +2,14 @@
 Changelog for package driving_log_replayer
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
+Forthcoming
+-----------
+* feat: change use case name (`#92 <https://github.com/tier4/driving_log_replayer_v2/issues/92>`_)
+  * feat: change all -> dlr2_all
+  * feat: update use case name
+  ---------
+* Contributors: Hayato Mizushima
+
 3.4.0 (2025-02-20)
 ------------------
 * feat: all component test (`#90 <https://github.com/tier4/driving_log_replayer_v2/issues/90>`_)
