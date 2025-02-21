@@ -363,27 +363,8 @@ def launch_evaluator_node(context: LaunchContext) -> list:
     ]
 
 
-def launch_bag_player(
-    context: LaunchContext,
-) -> IncludeLaunchDescription:
-    conf = context.launch_configurations
-    play_cmd = [
-        "ros2",
-        "bag",
-        "play",
-        conf["input_bag"],
-        "--rate",
-        conf["play_rate"],
-        "--clock",
-        "200",
-        "--qos-profile-overrides-path",
-        Path(
-            get_package_share_directory("driving_log_replayer_v2"),
-            "config",
-            "qos.yaml",
-        ).as_posix(),
-    ]
-    remap_list = ["--remap"]
+def system_defined_remap(conf: dict) -> list[str]:
+    remap_list = []
     if conf.get("sensing", "true") == "true":
         remap_list.append(
             "/sensing/lidar/concatenated/pointcloud:=/unused/sensing/lidar/concatenated/pointcloud",
@@ -410,6 +391,11 @@ def launch_bag_player(
         remap_list.append(
             "/planning/mission_planning/route:=/unused/planning/mission_planning/route",
         )
+    return remap_list
+
+
+def user_defined_remap(conf: dict) -> list[str]:
+    remap_list = []
     # user defined remap
     user_remap_topics: list[str] = (
         conf["remap_arg"].split(",")
@@ -421,7 +407,32 @@ def launch_bag_player(
             remap_str = f"{topic}:=/unused{topic}"
             if remap_str not in remap_list:
                 remap_list.append(remap_str)
+    return remap_list
 
+
+def launch_bag_player(
+    context: LaunchContext,
+) -> IncludeLaunchDescription:
+    conf = context.launch_configurations
+    play_cmd = [
+        "ros2",
+        "bag",
+        "play",
+        conf["input_bag"],
+        "--rate",
+        conf["play_rate"],
+        "--clock",
+        "200",
+        "--qos-profile-overrides-path",
+        Path(
+            get_package_share_directory("driving_log_replayer_v2"),
+            "config",
+            "qos.yaml",
+        ).as_posix(),
+    ]
+    remap_list = ["--remap"]
+    remap_list.extend(system_defined_remap(conf))
+    remap_list.extend(user_defined_remap(conf))
     if len(remap_list) != 1:
         play_cmd.extend(remap_list)
     bag_player = (
@@ -429,7 +440,7 @@ def launch_bag_player(
             cmd=play_cmd,
             output="screen",
             on_exit=[ExecuteProcess(cmd=["sleep", "3"], on_exit=[ShutdownOnce()])],
-        )  # 圧縮入れると書き込みに時間かかってplayが終わって即終了だとrecordの終了間に合わない
+        )  # If compression is enabled, it takes a long time to write the record, and if the play finishes immediately, the record will not be finished in time.
         if conf["record_only"] == "true"
         else ExecuteProcess(cmd=play_cmd, output="screen")
     )
