@@ -2,8 +2,8 @@
 Changelog for package driving_log_replayer
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-Forthcoming
------------
+3.4.1 (2025-02-21)
+------------------
 * feat: change use case name (`#92 <https://github.com/tier4/driving_log_replayer_v2/issues/92>`_)
   * feat: change all -> dlr2_all
   * feat: update use case name
