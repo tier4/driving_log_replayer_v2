@@ -33,6 +33,9 @@ import yaml
 
 from driving_log_replayer_v2.shutdown_once import ShutdownOnce
 
+PACKAGE_SHARE = get_package_share_directory("driving_log_replayer_v2")
+QOS_PROFILE_PATH_STR = Path(PACKAGE_SHARE, "config", "qos.yaml").as_posix()
+
 
 def get_launch_arguments() -> list:
     """
@@ -424,11 +427,7 @@ def launch_bag_player(
         "--clock",
         "200",
         "--qos-profile-overrides-path",
-        Path(
-            get_package_share_directory("driving_log_replayer_v2"),
-            "config",
-            "qos.yaml",
-        ).as_posix(),
+        QOS_PROFILE_PATH_STR,
     ]
     remap_list = ["--remap"]
     remap_list.extend(system_defined_remap(conf))
@@ -459,11 +458,7 @@ def launch_bag_recorder(context: LaunchContext) -> list:
         "-o",
         conf["result_bag_path"],
         "--qos-profile-overrides-path",
-        Path(
-            get_package_share_directory("driving_log_replayer_v2"),
-            "config",
-            "qos.yaml",
-        ).as_posix(),
+        QOS_PROFILE_PATH_STR,
         "--use-sim-time",
     ]
     if conf["storage"] == "mcap":
