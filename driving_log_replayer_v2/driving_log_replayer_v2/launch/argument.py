@@ -170,9 +170,7 @@ def get_launch_arguments() -> list:
     return launch_arguments
 
 
-def ensure_arg_compatibility(context: LaunchContext) -> list:  # noqa
-    conf = context.launch_configurations
-
+def is_arg_valid(conf: dict) -> LogInfo | None:
     # check conf
     if conf["dataset_dir"] != "" and conf["t4_dataset_path"] != "":
         return [
@@ -188,6 +186,14 @@ def ensure_arg_compatibility(context: LaunchContext) -> list:  # noqa
                 msg="Both remap_arg and remap_profile are specified. Only one of them can be specified."
             )
         ]
+    return None
+
+
+def ensure_arg_compatibility(context: LaunchContext) -> list:
+    conf = context.launch_configurations
+    is_valid = is_arg_valid(conf)
+    if is_valid is not None:
+        return is_valid
 
     scenario_path = Path(conf["scenario_path"])
     dataset_dir = scenario_path.parent if conf["dataset_dir"] == "" else Path(conf["dataset_dir"])
@@ -205,22 +211,20 @@ def ensure_arg_compatibility(context: LaunchContext) -> list:  # noqa
     if isinstance(dataset_dir, str):
         return [LogInfo(msg=dataset_index)]
 
-    for k, v in datasets[dataset_index].items():
-        t4_dataset_path = (
-            Path(conf["t4_dataset_path"])
-            if conf["t4_dataset_path"] != ""
-            else dataset_dir.joinpath(k)
-        )  # t4_dataset_pathが引数で渡されていたら更新しない。指定ない場合はdata_dirから作る
-        conf["vehicle_id"] = v["VehicleId"]
-        init_pose: dict | None = v.get("InitialPose")
-        if init_pose is not None:
-            conf["initial_pose"] = json.dumps(init_pose)
-        direct_pose: dict | None = v.get("DirectInitialPose")
-        if direct_pose is not None:
-            conf["direct_initial_pose"] = json.dumps(direct_pose)
-        goal_pose: dict | None = v.get("GoalPose")
-        if goal_pose is not None:
-            conf["goal_pose"] = json.dumps(goal_pose)
+    k, v = next(iter(datasets[dataset_index].items()))
+    t4_dataset_path = (
+        Path(conf["t4_dataset_path"]) if conf["t4_dataset_path"] != "" else dataset_dir.joinpath(k)
+    )  # t4_dataset_pathが引数で渡されていたら更新しない。指定ない場合はdata_dirから作る
+    conf["vehicle_id"] = v["VehicleId"]
+    init_pose: dict | None = v.get("InitialPose")
+    if init_pose is not None:
+        conf["initial_pose"] = json.dumps(init_pose)
+    direct_pose: dict | None = v.get("DirectInitialPose")
+    if direct_pose is not None:
+        conf["direct_initial_pose"] = json.dumps(direct_pose)
+    goal_pose: dict | None = v.get("GoalPose")
+    if goal_pose is not None:
+        conf["goal_pose"] = json.dumps(goal_pose)
     conf["t4_dataset_path"] = t4_dataset_path.as_posix()
     conf["vehicle_model"] = yaml_obj["VehicleModel"]
     conf["sensor_model"] = yaml_obj["SensorModel"]
