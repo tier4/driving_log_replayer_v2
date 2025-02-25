@@ -72,6 +72,15 @@ class ObstacleSegmentationEvaluator(DLREvaluatorV2):
         super().__init__(name, ObstacleSegmentationScenario, ObstacleSegmentationResult)
         self._result: ObstacleSegmentationResult
 
+        # pub_goal_pose must be created before timer_cb is called
+        self.__goal_pose_counter = 0
+        self.__goal_pose = get_goal_pose_from_t4_dataset(self._t4_dataset_paths[0])
+        self.__pub_goal_pose = self.create_publisher(
+            PoseStamped,
+            "/planning/mission_planning/goal",
+            1,
+        )
+
         self._scenario: ObstacleSegmentationScenario
         self.__s_cfg = self._scenario.Evaluation.SensingEvaluationConfig
         self.__s_cfg["evaluation_config_dict"]["label_prefix"] = "autoware"
@@ -84,6 +93,7 @@ class ObstacleSegmentationEvaluator(DLREvaluatorV2):
             "lanelet2_map.osm",
         ).as_posix()
         self.__road_lanelets = road_lanelets_from_file(map_path)
+
         if self._scenario.Evaluation.Conditions.NonDetection is not None:
             self.__search_range = (
                 self._scenario.Evaluation.Conditions.NonDetection.ProposedArea.search_range()
@@ -94,8 +104,6 @@ class ObstacleSegmentationEvaluator(DLREvaluatorV2):
         self.__vehicle_model = (
             self.get_parameter("vehicle_model").get_parameter_value().string_value
         )
-        self.__goal_pose_counter = 0
-        self.__goal_pose = get_goal_pose_from_t4_dataset(self._t4_dataset_paths[0])
 
         evaluation_config: SensingEvaluationConfig = SensingEvaluationConfig(
             dataset_paths=self._t4_dataset_paths,
@@ -148,11 +156,6 @@ class ObstacleSegmentationEvaluator(DLREvaluatorV2):
         self.__pub_marker_non_detection = self.create_publisher(
             MarkerArray,
             "marker/non_detection",
-            1,
-        )
-        self.__pub_goal_pose = self.create_publisher(
-            PoseStamped,
-            "/planning/mission_planning/goal",
             1,
         )
         # for Autoware Evaluator visualization
