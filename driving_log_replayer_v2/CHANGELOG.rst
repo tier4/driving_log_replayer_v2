@@ -2,6 +2,32 @@
 Changelog for package driving_log_replayer
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
+Forthcoming
+-----------
+* fix: initialization order (`#101 <https://github.com/tier4/driving_log_replayer_v2/issues/101>`_)
+  * fix: initialization order
+  * fix: order
+  ---------
+* refactor: prepare paths (`#99 <https://github.com/tier4/driving_log_replayer_v2/issues/99>`_)
+  * refactor: prepare paths
+  * refactor: variable
+  ---------
+* refactor: launch argument (`#98 <https://github.com/tier4/driving_log_replayer_v2/issues/98>`_)
+  * refactor: ensure_arg_compatibility
+  * chore: update
+  * feat: update default value of pose
+  * fix: default pose_str value
+  ---------
+* refactor: launch argument (`#97 <https://github.com/tier4/driving_log_replayer_v2/issues/97>`_)
+* refactor: bag operation (`#96 <https://github.com/tier4/driving_log_replayer_v2/issues/96>`_)
+  * refactor: bag operation
+  * refactor: launch argument
+  * fix: add copyright
+  ---------
+* refactor: launch const (`#95 <https://github.com/tier4/driving_log_replayer_v2/issues/95>`_)
+* refactor: launch remap (`#94 <https://github.com/tier4/driving_log_replayer_v2/issues/94>`_)
+* Contributors: Hayato Mizushima
+
 3.4.1 (2025-02-21)
 ------------------
 * feat: change use case name (`#92 <https://github.com/tier4/driving_log_replayer_v2/issues/92>`_)
