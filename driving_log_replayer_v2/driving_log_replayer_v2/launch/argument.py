@@ -226,17 +226,21 @@ def update_conf_with_dataset_info(
         conf["record_only"] = "true"
 
 
+def prepare_paths(conf: dict) -> tuple[Path, Path, Path]:
+    scenario_path = Path(conf["scenario_path"])
+    dataset_dir = scenario_path.parent if conf["dataset_dir"] == "" else Path(conf["dataset_dir"])
+    output_dir = create_output_dir(conf["output_dir"], scenario_path)
+    conf["output_dir"] = output_dir.as_posix()
+    return scenario_path, dataset_dir, output_dir
+
+
 def ensure_arg_compatibility(context: LaunchContext) -> list:
     conf = context.launch_configurations
     is_valid = is_arg_valid(conf)
     if is_valid is not None:
         return is_valid
 
-    scenario_path = Path(conf["scenario_path"])
-    dataset_dir = scenario_path.parent if conf["dataset_dir"] == "" else Path(conf["dataset_dir"])
-    output_dir = create_output_dir(conf["output_dir"], scenario_path)
-    conf["output_dir"] = output_dir.as_posix()
-
+    scenario_path, dataset_dir, output_dir = prepare_paths(conf)
     yaml_obj = load_scenario(scenario_path)
     datasets = yaml_obj["Evaluation"]["Datasets"]
     dataset_index = get_dataset_index_from_conf(conf, datasets)
