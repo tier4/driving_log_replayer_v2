@@ -200,12 +200,11 @@ def get_dataset_index_from_conf(conf: dict, datasets: list[dict]) -> int | str:
     return get_dataset_index(conf["dataset_index"], len(datasets))
 
 
-def get_t4_dataset_path(
-    conf: dict, dataset_dir: Path, datasets: list[dict], dataset_index: int
-) -> Path:
-    k, v = next(iter(datasets[dataset_index].items()))
+def get_t4_dataset_path(conf: dict, dataset_dir: Path, dataset_label: str) -> Path:
     return (
-        Path(conf["t4_dataset_path"]) if conf["t4_dataset_path"] != "" else dataset_dir.joinpath(k)
+        Path(conf["t4_dataset_path"])
+        if conf["t4_dataset_path"] != ""
+        else dataset_dir.joinpath(dataset_label)
     )
 
 
@@ -213,11 +212,10 @@ def update_conf_with_dataset_info(
     conf: dict,
     t4_dataset_path: Path,
     yaml_obj: dict,
-    datasets: list,
-    dataset_index: int,
+    dataset_info: dict,
     output_dir: Path,
 ) -> None:
-    k, v = next(iter(datasets[dataset_index].items()))
+    v = dataset_info
     conf["vehicle_id"] = v["VehicleId"]
     conf["initial_pose"] = json.dumps(v.get("InitialPose", {}))
     conf["direct_initial_pose"] = json.dumps(v.get("DirectInitialPose", {}))
@@ -253,10 +251,9 @@ def ensure_arg_compatibility(context: LaunchContext) -> list:
     if isinstance(dataset_dir, str):
         return [LogInfo(msg=dataset_index)]
 
-    t4_dataset_path = get_t4_dataset_path(conf, dataset_dir, datasets, dataset_index)
-    update_conf_with_dataset_info(
-        conf, t4_dataset_path, yaml_obj, datasets, dataset_index, output_dir
-    )
+    k, v = next(iter(datasets[dataset_index].items()))
+    t4_dataset_path = get_t4_dataset_path(conf, dataset_dir, k)
+    update_conf_with_dataset_info(conf, t4_dataset_path, yaml_obj, v, output_dir)
 
     return [
         LogInfo(
