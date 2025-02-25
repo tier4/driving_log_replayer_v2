@@ -200,14 +200,6 @@ def get_dataset_index_from_conf(conf: dict, datasets: list[dict]) -> int | str:
     return get_dataset_index(conf["dataset_index"], len(datasets))
 
 
-def get_t4_dataset_path(conf: dict, dataset_dir: Path, dataset_label: str) -> Path:
-    return (
-        Path(conf["t4_dataset_path"])
-        if conf["t4_dataset_path"] != ""
-        else dataset_dir.joinpath(dataset_label)
-    )
-
-
 def update_conf_with_dataset_info(
     conf: dict,
     t4_dataset_path: Path,
@@ -252,7 +244,9 @@ def ensure_arg_compatibility(context: LaunchContext) -> list:
         return [LogInfo(msg=dataset_index)]
 
     k, v = next(iter(datasets[dataset_index].items()))
-    t4_dataset_path = get_t4_dataset_path(conf, dataset_dir, k)
+    t4_dataset_path = (
+        Path(conf["t4_dataset_path"]) if conf["t4_dataset_path"] != "" else dataset_dir.joinpath(k)
+    )  # Do not update if t4_dataset_path is set by argument. If not, create t4_dataset_path from data_dir
     update_conf_with_dataset_info(conf, t4_dataset_path, yaml_obj, v, output_dir)
 
     return [
