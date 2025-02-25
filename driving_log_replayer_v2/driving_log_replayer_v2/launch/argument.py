@@ -207,11 +207,10 @@ def update_conf_with_dataset_info(
     dataset_info: dict,
     output_dir: Path,
 ) -> None:
-    v = dataset_info
-    conf["vehicle_id"] = v["VehicleId"]
-    conf["initial_pose"] = json.dumps(v.get("InitialPose", {}))
-    conf["direct_initial_pose"] = json.dumps(v.get("DirectInitialPose", {}))
-    conf["goal_pose"] = json.dumps(v.get("GoalPose", {}))
+    conf["vehicle_id"] = dataset_info["VehicleId"]
+    conf["initial_pose"] = json.dumps(dataset_info.get("InitialPose", {}))
+    conf["direct_initial_pose"] = json.dumps(dataset_info.get("DirectInitialPose", {}))
+    conf["goal_pose"] = json.dumps(dataset_info.get("GoalPose", {}))
     conf["t4_dataset_path"] = t4_dataset_path.as_posix()
     conf["vehicle_model"] = yaml_obj["VehicleModel"]
     conf["sensor_model"] = yaml_obj["SensorModel"]
