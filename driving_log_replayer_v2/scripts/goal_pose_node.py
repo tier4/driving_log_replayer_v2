@@ -40,7 +40,7 @@ class PoseNode(Node):
         self.declare_parameter("goal_pose", "")
         self._goal_pose_str = self.get_parameter("goal_pose").get_parameter_value().string_value
 
-        if self._goal_pose_str == "":
+        if self._goal_pose_str == "{}":
             rclpy.shutdown()
 
         self._goal_pose_running: bool = False

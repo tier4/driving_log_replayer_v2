@@ -52,15 +52,15 @@ class PoseNode(Node):
         self.get_logger().error(f"{self._direct_initial_pose_str=}")
         """
 
-        if self._initial_pose_str == "" and self._direct_initial_pose_str == "":
+        if self._initial_pose_str == "{}" and self._direct_initial_pose_str == "{}":
             rclpy.shutdown()
 
         # initial pose estimation
         self._initial_pose_running: bool = False
-        if self._initial_pose_str != "":
+        if self._initial_pose_str != "{}":
             self._initial_pose = arg_to_initial_pose(self._initial_pose_str)
             self._initial_pose_method: int = InitializeLocalization.Request.AUTO
-        if self._direct_initial_pose_str != "":
+        if self._direct_initial_pose_str != "{}":
             self._initial_pose = arg_to_initial_pose(self._direct_initial_pose_str)
             self._initial_pose_method: int = InitializeLocalization.Request.DIRECT
 

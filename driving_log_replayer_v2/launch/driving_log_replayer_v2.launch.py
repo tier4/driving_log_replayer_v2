@@ -151,16 +151,17 @@ def launch_topic_state_monitor(context: LaunchContext) -> list:
 
 def launch_initial_pose_node(context: LaunchContext) -> list:
     conf = context.launch_configurations
-    initial_pose = conf.get("initial_pose", "")
-    direct_initial_pose = conf.get("direct_initial_pose", "")
+    initial_pose = conf["initial_pose"]
+    direct_initial_pose = conf["direct_initial_pose"]
+
+    if initial_pose == "{}" and direct_initial_pose == "{}":
+        return [LogInfo(msg="initial_pose_node is not activated")]
+
     params = {
         "use_sim_time": True,
         "initial_pose": initial_pose,
         "direct_initial_pose": direct_initial_pose,
     }
-
-    if initial_pose == "" and direct_initial_pose == "":
-        return [LogInfo(msg="initial_pose_node is not activated")]
 
     return [
         Node(
@@ -176,14 +177,15 @@ def launch_initial_pose_node(context: LaunchContext) -> list:
 
 def launch_goal_pose_node(context: LaunchContext) -> list:
     conf = context.launch_configurations
-    goal_pose = conf.get("goal_pose", "")
+    goal_pose = conf["goal_pose"]
+
+    if goal_pose == "{}":
+        return [LogInfo(msg="goal_pose_node is not activated")]
+
     params = {
         "use_sim_time": True,
         "goal_pose": goal_pose,
     }
-
-    if goal_pose == "":
-        return [LogInfo(msg="goal_pose_node is not activated")]
 
     return [
         Node(
