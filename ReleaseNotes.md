@@ -1,5 +1,21 @@
 # Release Notes
 
+## Version 3.4.2
+
+Bug fix
+Refactoring
+
+| Module                  | Feature        | Brief summary            | Pull request                                                      | Contributor                                   |
+| ----------------------- | -------------- | ------------------------ | ----------------------------------------------------------------- | --------------------------------------------- |
+| `obstacle_segmentation` | initialization | fix initialization order | [#101](https://github.com/tier4/driving_log_replayer_v2/pull/101) | [hayato-m126](https://github.com/hayato-m126) |
+| `common`                | ci             | update github actions    | [#100](https://github.com/tier4/driving_log_replayer_v2/pull/100) | [hayato-m126](https://github.com/hayato-m126) |
+| `common`                | refactor       | launch                   | [#99](https://github.com/tier4/driving_log_replayer_v2/pull/99)   | [hayato-m126](https://github.com/hayato-m126) |
+| `common`                | refactor       | launch                   | [#98](https://github.com/tier4/driving_log_replayer_v2/pull/98)   | [hayato-m126](https://github.com/hayato-m126) |
+| `common`                | refactor       | launch                   | [#97](https://github.com/tier4/driving_log_replayer_v2/pull/97)   | [hayato-m126](https://github.com/hayato-m126) |
+| `common`                | refactor       | launch                   | [#96](https://github.com/tier4/driving_log_replayer_v2/pull/96)   | [hayato-m126](https://github.com/hayato-m126) |
+| `common`                | refactor       | launch                   | [#95](https://github.com/tier4/driving_log_replayer_v2/pull/95)   | [hayato-m126](https://github.com/hayato-m126) |
+| `common`                | refactor       | launch                   | [#94](https://github.com/tier4/driving_log_replayer_v2/pull/94)   | [hayato-m126](https://github.com/hayato-m126) |
+
 ## Version 3.4.1
 
 Major changes
