@@ -189,42 +189,39 @@ def is_arg_valid(conf: dict) -> LogInfo | None:
     return None
 
 
-def ensure_arg_compatibility(context: LaunchContext) -> list:
-    conf = context.launch_configurations
-    is_valid = is_arg_valid(conf)
-    if is_valid is not None:
-        return is_valid
-
-    scenario_path = Path(conf["scenario_path"])
-    dataset_dir = scenario_path.parent if conf["dataset_dir"] == "" else Path(conf["dataset_dir"])
-    output_dir = create_output_dir(conf["output_dir"], scenario_path)
-    conf["output_dir"] = output_dir.as_posix()
-
+def load_scenario(scenario_path: Path) -> dict:
     with scenario_path.open() as scenario_file:
-        yaml_obj = yaml.safe_load(scenario_file)
+        return yaml.safe_load(scenario_file)
 
-    datasets = yaml_obj["Evaluation"]["Datasets"]
+
+def get_dataset_index_from_conf(conf: dict, datasets: list[dict]) -> int | str:
     if conf["t4_dataset_path"] != "":
-        dataset_index = extract_index_from_id(conf["t4_dataset_id"], datasets)
-    else:
-        dataset_index = get_dataset_index(conf["dataset_index"], len(datasets))
-    if isinstance(dataset_dir, str):
-        return [LogInfo(msg=dataset_index)]
+        return extract_index_from_id(conf["t4_dataset_id"], datasets)
+    return get_dataset_index(conf["dataset_index"], len(datasets))
 
+
+def get_t4_dataset_path(
+    conf: dict, dataset_dir: Path, datasets: list[dict], dataset_index: int
+) -> Path:
     k, v = next(iter(datasets[dataset_index].items()))
-    t4_dataset_path = (
+    return (
         Path(conf["t4_dataset_path"]) if conf["t4_dataset_path"] != "" else dataset_dir.joinpath(k)
-    )  # t4_dataset_pathが引数で渡されていたら更新しない。指定ない場合はdata_dirから作る
+    )
+
+
+def update_conf_with_dataset_info(
+    conf: dict,
+    t4_dataset_path: Path,
+    yaml_obj: dict,
+    datasets: list,
+    dataset_index: int,
+    output_dir: Path,
+) -> None:
+    k, v = next(iter(datasets[dataset_index].items()))
     conf["vehicle_id"] = v["VehicleId"]
-    init_pose: dict | None = v.get("InitialPose")
-    if init_pose is not None:
-        conf["initial_pose"] = json.dumps(init_pose)
-    direct_pose: dict | None = v.get("DirectInitialPose")
-    if direct_pose is not None:
-        conf["direct_initial_pose"] = json.dumps(direct_pose)
-    goal_pose: dict | None = v.get("GoalPose")
-    if goal_pose is not None:
-        conf["goal_pose"] = json.dumps(goal_pose)
+    conf["initial_pose"] = json.dumps(v.get("InitialPose", {}))
+    conf["direct_initial_pose"] = json.dumps(v.get("DirectInitialPose", {}))
+    conf["goal_pose"] = json.dumps(v.get("GoalPose", {}))
     conf["t4_dataset_path"] = t4_dataset_path.as_posix()
     conf["vehicle_model"] = yaml_obj["VehicleModel"]
     conf["sensor_model"] = yaml_obj["SensorModel"]
@@ -237,6 +234,29 @@ def ensure_arg_compatibility(context: LaunchContext) -> list:
 
     if conf["use_case"] == "dlr_all":
         conf["record_only"] = "true"
+
+
+def ensure_arg_compatibility(context: LaunchContext) -> list:
+    conf = context.launch_configurations
+    is_valid = is_arg_valid(conf)
+    if is_valid is not None:
+        return is_valid
+
+    scenario_path = Path(conf["scenario_path"])
+    dataset_dir = scenario_path.parent if conf["dataset_dir"] == "" else Path(conf["dataset_dir"])
+    output_dir = create_output_dir(conf["output_dir"], scenario_path)
+    conf["output_dir"] = output_dir.as_posix()
+
+    yaml_obj = load_scenario(scenario_path)
+    datasets = yaml_obj["Evaluation"]["Datasets"]
+    dataset_index = get_dataset_index_from_conf(conf, datasets)
+    if isinstance(dataset_dir, str):
+        return [LogInfo(msg=dataset_index)]
+
+    t4_dataset_path = get_t4_dataset_path(conf, dataset_dir, datasets, dataset_index)
+    update_conf_with_dataset_info(
+        conf, t4_dataset_path, yaml_obj, datasets, dataset_index, output_dir
+    )
 
     return [
         LogInfo(
