@@ -69,7 +69,10 @@ class ObstacleSegmentationEvaluator(DLREvaluatorV2):
     COUNT_FINISH_PUB_GOAL_POSE = 5
 
     def __init__(self, name: str) -> None:
-        # pub_goal_pose must be initialized before timer callback
+        super().__init__(name, ObstacleSegmentationScenario, ObstacleSegmentationResult)
+        self._result: ObstacleSegmentationResult
+
+        # pub_goal_pose must be created before timer_cb is called
         self.__goal_pose_counter = 0
         self.__goal_pose = get_goal_pose_from_t4_dataset(self._t4_dataset_paths[0])
         self.__pub_goal_pose = self.create_publisher(
@@ -77,9 +80,6 @@ class ObstacleSegmentationEvaluator(DLREvaluatorV2):
             "/planning/mission_planning/goal",
             1,
         )
-
-        super().__init__(name, ObstacleSegmentationScenario, ObstacleSegmentationResult)
-        self._result: ObstacleSegmentationResult
 
         self._scenario: ObstacleSegmentationScenario
         self.__s_cfg = self._scenario.Evaluation.SensingEvaluationConfig
