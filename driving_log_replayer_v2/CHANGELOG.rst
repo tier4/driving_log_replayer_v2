@@ -2,8 +2,8 @@
 Changelog for package driving_log_replayer
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-Forthcoming
------------
+3.4.2 (2025-02-25)
+------------------
 * fix: initialization order (`#101 <https://github.com/tier4/driving_log_replayer_v2/issues/101>`_)
   * fix: initialization order
   * fix: order
