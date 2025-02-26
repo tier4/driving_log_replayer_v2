@@ -207,7 +207,7 @@ def select_launch(context: LaunchContext) -> list:
 
 
 def launch_ndt_convergence() -> list:
-    return [LogInfo("ndt_convergence")]
+    return [LogInfo(msg="ndt_convergence")]
 
 
 def launch_use_case() -> list:
