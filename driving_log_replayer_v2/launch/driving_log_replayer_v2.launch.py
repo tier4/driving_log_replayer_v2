@@ -199,20 +199,37 @@ def launch_goal_pose_node(context: LaunchContext) -> list:
     ]
 
 
+def select_launch(context: LaunchContext) -> list:
+    conf = context.launch_configurations
+    if conf["use_case"] == "ndt_convergence":
+        return launch_ndt_convergence()
+    return launch_use_case()
+
+
+def launch_ndt_convergence() -> list:
+    return [LogInfo("ndt_convergence")]
+
+
+def launch_use_case() -> list:
+    return [
+        OpaqueFunction(function=add_use_case_arguments),  # after ensure_arg_compatibility
+        OpaqueFunction(function=launch_autoware),
+        OpaqueFunction(function=launch_map_height_fitter),
+        OpaqueFunction(function=launch_evaluator_node),
+        OpaqueFunction(function=launch_bag_player),
+        OpaqueFunction(function=launch_bag_recorder),
+        OpaqueFunction(function=launch_topic_state_monitor),
+        OpaqueFunction(function=launch_initial_pose_node),
+        OpaqueFunction(function=launch_goal_pose_node),
+    ]
+
+
 def generate_launch_description() -> LaunchDescription:
     launch_arguments = get_launch_arguments()
     return LaunchDescription(
         [
             *launch_arguments,
             OpaqueFunction(function=ensure_arg_compatibility),
-            OpaqueFunction(function=add_use_case_arguments),  # after ensure_arg_compatibility
-            OpaqueFunction(function=launch_autoware),
-            OpaqueFunction(function=launch_map_height_fitter),
-            OpaqueFunction(function=launch_evaluator_node),
-            OpaqueFunction(function=launch_bag_player),
-            OpaqueFunction(function=launch_bag_recorder),
-            OpaqueFunction(function=launch_topic_state_monitor),
-            OpaqueFunction(function=launch_initial_pose_node),
-            OpaqueFunction(function=launch_goal_pose_node),
+            OpaqueFunction(function=select_launch),
         ],
     )
