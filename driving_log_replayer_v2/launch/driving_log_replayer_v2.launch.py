@@ -204,15 +204,32 @@ def launch_goal_pose_node(context: LaunchContext) -> list:
     ]
 
 
-def select_launch(context: LaunchContext) -> list:
+def launch_ndt_convergence(context: LaunchContext) -> list:
     conf = context.launch_configurations
-    if conf["use_case"] == "ndt_convergence":
-        return launch_ndt_convergence()
-    return launch_use_case()
-
-
-def launch_ndt_convergence() -> list:
-    return [LogInfo(msg="ndt_convergence")]
+    ndt_convergence_launch_file = Path(
+        get_package_share_directory("ndt_convergence_evaluation"),
+        "launch",
+        "ndt_convergence_evaluation.launch.py",
+    )
+    if not ndt_convergence_launch_file.exists():
+        return [LogInfo(msg="ndt_convergence_evaluation is not launched. The file does not exist.")]
+    launch_args = {
+        "map_path": conf["map_path"] + "/pointcloud_map.pcd",
+        "rosbag_file_name": conf["input_bag"],
+        "save_dir": conf["result_archive_path"],
+    }
+    return [
+        GroupAction(
+            [
+                IncludeLaunchDescription(
+                    AnyLaunchDescriptionSource(
+                        ndt_convergence_launch_file.as_posix(),
+                    ),
+                    launch_arguments=launch_args.items(),
+                ),
+            ]
+        )
+    ]
 
 
 def launch_use_case() -> list:
@@ -227,6 +244,13 @@ def launch_use_case() -> list:
         OpaqueFunction(function=launch_initial_pose_node),
         OpaqueFunction(function=launch_goal_pose_node),
     ]
+
+
+def select_launch(context: LaunchContext) -> list:
+    conf = context.launch_configurations
+    if conf["use_case"] == "ndt_convergence":
+        return launch_ndt_convergence(context)
+    return launch_use_case()
 
 
 def generate_launch_description() -> LaunchDescription:
