@@ -15,27 +15,25 @@
 import json
 from pathlib import Path
 
-from ament_index_python.packages import get_package_share_directory
-from builtin_interfaces.msg import Time
 import fastjsonschema
+import numpy as np
+from ament_index_python.packages import get_package_share_directory
+from autoware_perception_msgs.msg import PredictedPath
+from builtin_interfaces.msg import Time
 from geometry_msgs.msg import Point
 from geometry_msgs.msg import Polygon as RosPolygon
 from geometry_msgs.msg import Pose
 from geometry_msgs.msg import Quaternion as RosQuaternion
 from geometry_msgs.msg import Vector3
-import numpy as np
 from perception_eval.common import ObjectType
-from perception_eval.common.object import DynamicObject
-from perception_eval.common.object import ObjectState
+from perception_eval.common.object import DynamicObject, ObjectState
 from perception_eval.evaluation.result.object_result import DynamicObjectWithPerceptionResult
 from perception_eval.evaluation.result.perception_pass_fail_result import PassFailResult
 from pyquaternion.quaternion import Quaternion
 from rclpy.time import Duration
 from shapely.geometry import Polygon
-from std_msgs.msg import ColorRGBA
-from std_msgs.msg import Header
-from visualization_msgs.msg import Marker
-from visualization_msgs.msg import MarkerArray
+from std_msgs.msg import ColorRGBA, Header
+from visualization_msgs.msg import Marker, MarkerArray
 
 
 def unix_time_from_ros_msg(ros_header: Header) -> int:
@@ -52,6 +50,14 @@ def position_from_ros_msg(ros_position: Point) -> tuple[int, int, int]:
 
 def orientation_from_ros_msg(ros_orientation: RosQuaternion) -> Quaternion:
     return Quaternion(ros_orientation.w, ros_orientation.x, ros_orientation.y, ros_orientation.z)
+
+
+def path_positions_from_ros_msg(ros_path: PredictedPath) -> list[tuple[float, float, float]]:
+    return [position_from_ros_msg(pose.position) for pose in ros_path.path]
+
+
+def path_orientations_from_ros_msg(ros_path: PredictedPath) -> list[Quaternion]:
+    return [orientation_from_ros_msg(pose.orientation) for pose in ros_path.path]
 
 
 def dimensions_from_ros_msg(
