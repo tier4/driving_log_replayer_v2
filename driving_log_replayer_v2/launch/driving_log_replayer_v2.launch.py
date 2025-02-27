@@ -213,6 +213,7 @@ def launch_ndt_convergence(context: LaunchContext) -> list:
     )
     if not ndt_convergence_launch_file.exists():
         return [LogInfo(msg="ndt_convergence_evaluation is not launched. The file does not exist.")]
+    output_dummy_result_jsonl(conf["result_json_path"], summary="NDT Convergence always success")
     launch_args = {
         "map_path": conf["map_path"] + "/pointcloud_map.pcd",
         "rosbag_file_name": conf["input_bag"],
