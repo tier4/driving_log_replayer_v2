@@ -14,6 +14,7 @@
 
 
 from importlib import import_module
+import json
 from pathlib import Path
 
 from ament_index_python.packages import get_package_share_directory
@@ -34,11 +35,15 @@ from driving_log_replayer_v2.launch.rosbag import launch_bag_recorder
 from driving_log_replayer_v2.shutdown_once import ShutdownOnce
 
 
-def output_dummy_result_jsonl(result_json_path: str) -> None:
+def output_dummy_result_jsonl(result_json_path: str, summary: str = "RecordOnlyMode") -> None:
     jsonl_path_str = result_json_path + "l"
+    dummy_result = {
+        "Result": {"Success": True, "Summary": summary},
+        "Stamp": {"System": 0.0},
+        "Frame": {},
+    }
     with Path(jsonl_path_str).open("w") as f:
-        dummy_str = '{"Result": {"Success": true, "Summary": "RecordOnlyMode"}, "Stamp": {"System": 0.0}, "Frame": {}}'
-        f.write(dummy_str + "\n")
+        json.dump(dummy_result, f)
 
 
 def launch_autoware(context: LaunchContext) -> list:
