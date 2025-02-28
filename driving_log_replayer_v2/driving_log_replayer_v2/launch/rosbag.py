@@ -45,34 +45,30 @@ def extract_remap_topics(profile_name: str) -> list[str]:
         return remap_dict.get("remap")
 
 
+def remap_str(topic: str) -> str:
+    return f"{topic}:=/unused{topic}"
+
+
+def add_remap(topic: str, remap_list: list) -> None:
+    remap_list.append(remap_str(topic))
+
+
 def system_defined_remap(conf: dict) -> list[str]:
     remap_list = []
     if conf.get("sensing", "true") == "true":
-        remap_list.append(
-            "/sensing/lidar/concatenated/pointcloud:=/unused/sensing/lidar/concatenated/pointcloud",
-        )
+        add_remap("/sensing/lidar/concatenated/pointcloud", remap_list)
     if conf.get("localization", "true") == "true":
-        remap_list.append(
-            "/tf:=/unused/tf",
-        )
-        remap_list.append(
-            "/localization/kinematic_state:=/unused/localization/kinematic_state",
-        )
-        remap_list.append(
-            "/localization/acceleration:=/unused/localization/acceleration",
-        )
+        add_remap("/tf", remap_list)
+        add_remap("/localization/kinematic_state", remap_list)
+        add_remap("/localization/acceleration", remap_list)
+        add_remap("/localization/util/downsample/pointcloud", remap_list)
+        add_remap("/localization/pose_twist_fusion_filter/biased_pose_with_covariance", remap_list)
     if conf.get("perception", "true") == "true":
         # remap perception msgs in bag
-        remap_list.append(
-            "/perception/obstacle_segmentation/pointcloud:=/unused/perception/obstacle_segmentation/pointcloud",
-        )
-        remap_list.append(
-            "/perception/object_recognition/objects:=/unused/perception/object_recognition/objects",
-        )
+        add_remap("/perception/obstacle_segmentation/pointcloud", remap_list)
+        add_remap("/perception/object_recognition/objects", remap_list)
     if conf.get("goal_pose") is not None:
-        remap_list.append(
-            "/planning/mission_planning/route:=/unused/planning/mission_planning/route",
-        )
+        add_remap("/planning/mission_planning/route", remap_list)
     return remap_list
 
 
@@ -86,9 +82,9 @@ def user_defined_remap(conf: dict) -> list[str]:
     )
     for topic in user_remap_topics:
         if topic.startswith("/"):
-            remap_str = f"{topic}:=/unused{topic}"
-            if remap_str not in remap_list:
-                remap_list.append(remap_str)
+            user_remap_str = remap_str(topic)
+            if user_remap_str not in remap_list:
+                remap_list.append(user_remap_str)
     return remap_list
 
 
