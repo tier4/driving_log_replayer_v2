@@ -16,6 +16,7 @@ import json
 from pathlib import Path
 
 from ament_index_python.packages import get_package_share_directory
+from autoware_perception_msgs.msg import PredictedPath
 from builtin_interfaces.msg import Time
 import fastjsonschema
 from geometry_msgs.msg import Point
@@ -52,6 +53,14 @@ def position_from_ros_msg(ros_position: Point) -> tuple[int, int, int]:
 
 def orientation_from_ros_msg(ros_orientation: RosQuaternion) -> Quaternion:
     return Quaternion(ros_orientation.w, ros_orientation.x, ros_orientation.y, ros_orientation.z)
+
+
+def path_positions_from_ros_msg(ros_path: PredictedPath) -> list[tuple[float, float, float]]:
+    return [position_from_ros_msg(pose.position) for pose in ros_path.path]
+
+
+def path_orientations_from_ros_msg(ros_path: PredictedPath) -> list[Quaternion]:
+    return [orientation_from_ros_msg(pose.orientation) for pose in ros_path.path]
 
 
 def dimensions_from_ros_msg(
