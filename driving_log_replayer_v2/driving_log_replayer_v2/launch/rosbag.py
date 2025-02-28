@@ -61,6 +61,12 @@ def system_defined_remap(conf: dict) -> list[str]:
         remap_list.append(
             "/localization/acceleration:=/unused/localization/acceleration",
         )
+        remap_list.append(
+            "/localization/util/downsample/pointcloud:=/unused/localization/util/downsample/pointcloud"
+        )
+        remap_list.append(
+            "/localization/pose_twist_fusion_filter/biased_pose_with_covariance:=/unused/localization/pose_twist_fusion_filter/biased_pose_with_covariance"
+        )
     if conf.get("perception", "true") == "true":
         # remap perception msgs in bag
         remap_list.append(
