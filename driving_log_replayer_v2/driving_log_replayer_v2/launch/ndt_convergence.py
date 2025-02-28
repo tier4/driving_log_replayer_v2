@@ -12,9 +12,17 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from launch.actions import DeclareLaunchArgument
+from pathlib import Path
 
-# This file is a dummy file prepared for compatibility with the existing system.
+from ament_index_python.packages import get_package_share_directory
+from launch import LaunchContext
+from launch.actions import DeclareLaunchArgument
+from launch.actions import GroupAction
+from launch.actions import IncludeLaunchDescription
+from launch.actions import LogInfo
+from launch.launch_description_sources import AnyLaunchDescriptionSource
+
+from driving_log_replayer_v2.launch.util import output_dummy_result_jsonl
 
 RECORD_TOPIC = ""
 
@@ -25,3 +33,32 @@ AUTOWARE_ARGS = {}
 NODE_PARAMS = {}
 
 USE_CASE_ARGS: list[DeclareLaunchArgument] = []
+
+
+def launch_ndt_convergence(context: LaunchContext) -> list:
+    conf = context.launch_configurations
+    ndt_convergence_launch_file = Path(
+        get_package_share_directory("ndt_convergence_evaluation"),
+        "launch",
+        "ndt_convergence_evaluation.launch.py",
+    )
+    if not ndt_convergence_launch_file.exists():
+        return [LogInfo(msg="ndt_convergence_evaluation is not launched. The file does not exist.")]
+    output_dummy_result_jsonl(conf["result_json_path"], summary="NDT Convergence always success")
+    launch_args = {
+        "map_path": conf["map_path"] + "/pointcloud_map.pcd",
+        "rosbag_file_name": conf["input_bag"],
+        "save_dir": conf["result_archive_path"],
+    }
+    return [
+        GroupAction(
+            [
+                IncludeLaunchDescription(
+                    AnyLaunchDescriptionSource(
+                        ndt_convergence_launch_file.as_posix(),
+                    ),
+                    launch_arguments=launch_args.items(),
+                ),
+            ]
+        )
+    ]

@@ -14,7 +14,6 @@
 
 
 from importlib import import_module
-import json
 from pathlib import Path
 
 from ament_index_python.packages import get_package_share_directory
@@ -30,20 +29,11 @@ from launch_ros.actions import Node
 from driving_log_replayer_v2.launch.argument import add_use_case_arguments
 from driving_log_replayer_v2.launch.argument import ensure_arg_compatibility
 from driving_log_replayer_v2.launch.argument import get_launch_arguments
+from driving_log_replayer_v2.launch.ndt_convergence import launch_ndt_convergence
 from driving_log_replayer_v2.launch.rosbag import launch_bag_player
 from driving_log_replayer_v2.launch.rosbag import launch_bag_recorder
+from driving_log_replayer_v2.launch.util import output_dummy_result_jsonl
 from driving_log_replayer_v2.shutdown_once import ShutdownOnce
-
-
-def output_dummy_result_jsonl(result_json_path: str, summary: str = "RecordOnlyMode") -> None:
-    jsonl_path_str = result_json_path + "l"
-    dummy_result = {
-        "Result": {"Success": True, "Summary": summary},
-        "Stamp": {"System": 0.0},
-        "Frame": {},
-    }
-    with Path(jsonl_path_str).open("w") as f:
-        json.dump(dummy_result, f)
 
 
 def launch_autoware(context: LaunchContext) -> list:
@@ -201,35 +191,6 @@ def launch_goal_pose_node(context: LaunchContext) -> list:
             name="goal_pose_node",
             parameters=[params],
         ),
-    ]
-
-
-def launch_ndt_convergence(context: LaunchContext) -> list:
-    conf = context.launch_configurations
-    ndt_convergence_launch_file = Path(
-        get_package_share_directory("ndt_convergence_evaluation"),
-        "launch",
-        "ndt_convergence_evaluation.launch.py",
-    )
-    if not ndt_convergence_launch_file.exists():
-        return [LogInfo(msg="ndt_convergence_evaluation is not launched. The file does not exist.")]
-    output_dummy_result_jsonl(conf["result_json_path"], summary="NDT Convergence always success")
-    launch_args = {
-        "map_path": conf["map_path"] + "/pointcloud_map.pcd",
-        "rosbag_file_name": conf["input_bag"],
-        "save_dir": conf["result_archive_path"],
-    }
-    return [
-        GroupAction(
-            [
-                IncludeLaunchDescription(
-                    AnyLaunchDescriptionSource(
-                        ndt_convergence_launch_file.as_posix(),
-                    ),
-                    launch_arguments=launch_args.items(),
-                ),
-            ]
-        )
     ]
 
 
