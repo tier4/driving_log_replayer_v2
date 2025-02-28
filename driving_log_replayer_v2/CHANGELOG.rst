@@ -2,8 +2,8 @@
 Changelog for package driving_log_replayer
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-Forthcoming
------------
+3.5.0 (2025-02-28)
+------------------
 * feat: ndt convergence (`#105 <https://github.com/tier4/driving_log_replayer_v2/issues/105>`_)
   * feat: update
   * feat: output dummy result.jsonl
