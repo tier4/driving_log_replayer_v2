@@ -14,7 +14,6 @@
 
 
 from importlib import import_module
-import json
 from pathlib import Path
 
 from ament_index_python.packages import get_package_share_directory
@@ -30,20 +29,11 @@ from launch_ros.actions import Node
 from driving_log_replayer_v2.launch.argument import add_use_case_arguments
 from driving_log_replayer_v2.launch.argument import ensure_arg_compatibility
 from driving_log_replayer_v2.launch.argument import get_launch_arguments
+from driving_log_replayer_v2.launch.ndt_convergence import launch_ndt_convergence
 from driving_log_replayer_v2.launch.rosbag import launch_bag_player
 from driving_log_replayer_v2.launch.rosbag import launch_bag_recorder
+from driving_log_replayer_v2.launch.util import output_dummy_result_jsonl
 from driving_log_replayer_v2.shutdown_once import ShutdownOnce
-
-
-def output_dummy_result_jsonl(result_json_path: str, summary: str = "RecordOnlyMode") -> None:
-    jsonl_path_str = result_json_path + "l"
-    dummy_result = {
-        "Result": {"Success": True, "Summary": summary},
-        "Stamp": {"System": 0.0},
-        "Frame": {},
-    }
-    with Path(jsonl_path_str).open("w") as f:
-        json.dump(dummy_result, f)
 
 
 def launch_autoware(context: LaunchContext) -> list:
@@ -204,17 +194,6 @@ def launch_goal_pose_node(context: LaunchContext) -> list:
     ]
 
 
-def select_launch(context: LaunchContext) -> list:
-    conf = context.launch_configurations
-    if conf["use_case"] == "ndt_convergence":
-        return launch_ndt_convergence()
-    return launch_use_case()
-
-
-def launch_ndt_convergence() -> list:
-    return [LogInfo(msg="ndt_convergence")]
-
-
 def launch_use_case() -> list:
     return [
         OpaqueFunction(function=add_use_case_arguments),  # after ensure_arg_compatibility
@@ -227,6 +206,13 @@ def launch_use_case() -> list:
         OpaqueFunction(function=launch_initial_pose_node),
         OpaqueFunction(function=launch_goal_pose_node),
     ]
+
+
+def select_launch(context: LaunchContext) -> list:
+    conf = context.launch_configurations
+    if conf["use_case"] == "ndt_convergence":
+        return launch_ndt_convergence(context)
+    return launch_use_case()
 
 
 def generate_launch_description() -> LaunchDescription:
