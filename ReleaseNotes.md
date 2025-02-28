@@ -1,5 +1,16 @@
 # Release Notes
 
+## Version 3.5.0
+
+Major changes
+
+| Module            | Feature  | Brief summary                                     | Pull request                                                      | Contributor                                   |
+| ----------------- | -------- | ------------------------------------------------- | ----------------------------------------------------------------- | --------------------------------------------- |
+| `ndt_convergence` | use case | add ndt_convergence_evaluation (TIER IV internal) | [#105](https://github.com/tier4/driving_log_replayer_v2/pull/105) | [hayato-m126](https://github.com/hayato-m126) |
+| `ndt_convergence` | use case | add ndt_convergence_evaluation (TIER IV internal) | [#103](https://github.com/tier4/driving_log_replayer_v2/pull/103) | [hayato-m126](https://github.com/hayato-m126) |
+| `common`          | refactor | launch                                            | [#106](https://github.com/tier4/driving_log_replayer_v2/pull/100) | [hayato-m126](https://github.com/hayato-m126) |
+| `common`          | refactor | launch                                            | [#104](https://github.com/tier4/driving_log_replayer_v2/pull/100) | [hayato-m126](https://github.com/hayato-m126) |
+
 ## Version 3.4.2
 
 Bug fix
