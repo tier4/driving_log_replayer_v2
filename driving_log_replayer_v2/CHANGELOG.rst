@@ -2,6 +2,24 @@
 Changelog for package driving_log_replayer
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
+Forthcoming
+-----------
+* feat: ndt convergence (`#105 <https://github.com/tier4/driving_log_replayer_v2/issues/105>`_)
+  * feat: update
+  * feat: output dummy result.jsonl
+  * feat: remove launch_ndt_convergence to ndt_convergence.py
+  * feat: output dummy bag for evaluator
+  * feat: add remap
+  * refactor: remap operation
+  ---------
+* refactor: remap operation (`#106 <https://github.com/tier4/driving_log_replayer_v2/issues/106>`_)
+* refactor: output dummy result jsonl (`#104 <https://github.com/tier4/driving_log_replayer_v2/issues/104>`_)
+* feat: ndt convergence (`#103 <https://github.com/tier4/driving_log_replayer_v2/issues/103>`_)
+  * feat: switch launch
+  * fix: LogInfo
+  ---------
+* Contributors: Hayato Mizushima
+
 3.4.2 (2025-02-25)
 ------------------
 * fix: initialization order (`#101 <https://github.com/tier4/driving_log_replayer_v2/issues/101>`_)
