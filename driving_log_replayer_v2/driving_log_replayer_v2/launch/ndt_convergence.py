@@ -22,6 +22,7 @@ from launch.actions import IncludeLaunchDescription
 from launch.actions import LogInfo
 from launch.launch_description_sources import AnyLaunchDescriptionSource
 
+from driving_log_replayer_v2.launch.util import output_dummy_result_bag
 from driving_log_replayer_v2.launch.util import output_dummy_result_jsonl
 
 RECORD_TOPIC = ""
@@ -44,7 +45,11 @@ def launch_ndt_convergence(context: LaunchContext) -> list:
     )
     if not ndt_convergence_launch_file.exists():
         return [LogInfo(msg="ndt_convergence_evaluation is not launched. The file does not exist.")]
+
+    # Output dummies to comply with Evaluator specifications
     output_dummy_result_jsonl(conf["result_json_path"], summary="NDT Convergence always success")
+    output_dummy_result_bag(conf["result_bag_path"])
+
     launch_args = {
         "map_path": conf["map_path"] + "/pointcloud_map.pcd",
         "rosbag_file_name": conf["input_bag"],
