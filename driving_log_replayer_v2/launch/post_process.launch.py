@@ -19,13 +19,13 @@ from launch.actions import LogInfo
 from launch.actions import OpaqueFunction
 
 
-def echo_pre_process(context: LaunchContext) -> list:  # noqa
-    return [LogInfo(msg="Pre-process is done.")]
+def post_process(context: LaunchContext) -> list:  # noqa
+    return [LogInfo(msg="Post-process is done.")]
 
 
 def generate_launch_description() -> LaunchDescription:
     return LaunchDescription(
         [
-            OpaqueFunction(function=echo_pre_process),
+            OpaqueFunction(function=post_process),
         ],
     )
