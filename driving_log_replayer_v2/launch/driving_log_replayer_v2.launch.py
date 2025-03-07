@@ -13,29 +13,46 @@
 # limitations under the License.
 
 
+from ament_index_python.packages import get_package_share_directory
 from launch import LaunchContext
 from launch import LaunchDescription
+from launch.actions import GroupAction
+from launch.actions import IncludeLaunchDescription
 from launch.actions import OpaqueFunction
+from launch.launch_description_sources import PythonLaunchDescriptionSource
 
-from driving_log_replayer_v2.launch.argument import ensure_arg_compatibility
 from driving_log_replayer_v2.launch.argument import get_launch_arguments
-from driving_log_replayer_v2.launch.ndt_convergence import launch_ndt_convergence
-from driving_log_replayer_v2.launch.use_case import launch_use_case
+
+PACKAGE_NAME = "driving_log_replayer_v2"
 
 
-def select_launch(context: LaunchContext) -> list:
-    conf = context.launch_configurations
-    if conf["use_case"] == "ndt_convergence":
-        return launch_ndt_convergence(context)
-    return launch_use_case()
+def launch_setup(context: LaunchContext) -> None:
+    pre_process_launch = IncludeLaunchDescription(
+        PythonLaunchDescriptionSource(
+            [get_package_share_directory(PACKAGE_NAME), "/launch/pre-process.launch.py"]
+        ),
+    )
+    pre_process_launch.execute(context)
+
+    # simulation_launch = IncludeLaunchDescription(
+    #     PythonLaunchDescriptionSource(
+    #         [get_package_share_directory(PACKAGE_NAME), "/launch/simulation.launch.py"]
+    #     ),
+    # )
+    # simulation_launch.execute(context)
+
+    # # post-process.launch.pyを実行
+    # post_process_launch = IncludeLaunchDescription(
+    #     PythonLaunchDescriptionSource(
+    #         [get_package_share_directory("your_package_name"), "/launch/post-process.launch.py"]
+    #     ),
+    # )
+    # post_process_launch.execute(context)
+    return
 
 
 def generate_launch_description() -> LaunchDescription:
     launch_arguments = get_launch_arguments()
     return LaunchDescription(
-        [
-            *launch_arguments,
-            OpaqueFunction(function=ensure_arg_compatibility),
-            OpaqueFunction(function=select_launch),
-        ],
+        [*launch_arguments, OpaqueFunction(function=launch_setup)],
     )
