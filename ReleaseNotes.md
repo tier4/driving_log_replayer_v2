@@ -1,5 +1,14 @@
 # Release Notes
 
+## Version 3.6.0
+
+Major changes
+
+| Module                 | Feature      | Brief summary                  | Pull request                                                      | Contributor                                   |
+| ---------------------- | ------------ | ------------------------------ | ----------------------------------------------------------------- | --------------------------------------------- |
+| `localization, common` | post_process | add localization post analysis | [#109](https://github.com/tier4/driving_log_replayer_v2/pull/109) | [hayato-m126](https://github.com/hayato-m126) |
+| `common`               | refactor     | split use_case launch          | [#108](https://github.com/tier4/driving_log_replayer_v2/pull/108) | [hayato-m126](https://github.com/hayato-m126) |
+
 ## Version 3.5.0
 
 Major changes
