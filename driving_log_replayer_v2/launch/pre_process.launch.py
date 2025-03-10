@@ -12,9 +12,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-
-import time
-
 from launch import LaunchContext
 from launch import LaunchDescription
 from launch.actions import LogInfo
@@ -22,7 +19,6 @@ from launch.actions import OpaqueFunction
 
 
 def pre_process(context: LaunchContext) -> list:  # noqa
-    time.sleep(5)
     return [LogInfo(msg="Pre-process is done.")]
 
 
