@@ -46,6 +46,8 @@ def extract_remap_topics(profile_name: str) -> list[str]:
 
 
 def remap_str(topic: str) -> str:
+    if topic == "/localization/kinematic_state":
+        return "/localization/kinematic_state:=/localization/reference_kinematic_state"
     return f"{topic}:=/unused{topic}"
 
 
