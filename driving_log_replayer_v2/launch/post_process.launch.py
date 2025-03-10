@@ -18,14 +18,20 @@ from launch import LaunchDescription
 from launch.actions import LogInfo
 from launch.actions import OpaqueFunction
 
+from driving_log_replayer_v2.launch.argument import ensure_arg_compatibility
+from driving_log_replayer_v2.launch.argument import get_launch_arguments
+
 
 def post_process(context: LaunchContext) -> list:  # noqa
     return [LogInfo(msg="Post-process is done.")]
 
 
 def generate_launch_description() -> LaunchDescription:
+    launch_arguments = get_launch_arguments()
     return LaunchDescription(
         [
+            *launch_arguments,
+            OpaqueFunction(function=ensure_arg_compatibility),
             OpaqueFunction(function=post_process),
         ],
     )

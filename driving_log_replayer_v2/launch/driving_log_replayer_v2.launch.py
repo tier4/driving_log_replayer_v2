@@ -6,6 +6,7 @@ from launch.actions import OpaqueFunction
 from launch.actions import RegisterEventHandler
 from launch.event_handlers import OnProcessExit
 
+from driving_log_replayer_v2.launch.argument import ensure_arg_compatibility
 from driving_log_replayer_v2.launch.argument import get_launch_arguments
 
 
@@ -21,9 +22,13 @@ def parse_launch_arguments(context: LaunchContext) -> list:
 def launch_setup(context: LaunchContext) -> list:
     arguments = parse_launch_arguments(context)
     launch_base_cmd = ["ros2", "launch", "driving_log_replayer_v2"]
-    pre_process_cmd = [*launch_base_cmd, "pre_process.launch.py", *arguments]
+    # Specify output_dir for “ensure_launch_arugment” in child launch, because it creates several directories and fails.
+    output_dir = context.launch_configurations.get("output_dir")
+    launch_post_fix = [f"output_dir:={output_dir}", *arguments]
+
+    pre_process_cmd = [*launch_base_cmd, "pre_process.launch.py", *launch_post_fix]
     pre_process = ExecuteProcess(cmd=pre_process_cmd, output="screen", name="pre_process")
-    simulation_cmd = [*launch_base_cmd, "simulation.launch.py", *arguments]
+    simulation_cmd = [*launch_base_cmd, "simulation.launch.py", *launch_post_fix]
     simulation = ExecuteProcess(cmd=simulation_cmd, output="screen", name="simulation")
     start_simulation = RegisterEventHandler(
         OnProcessExit(
@@ -31,7 +36,7 @@ def launch_setup(context: LaunchContext) -> list:
             on_exit=[LogInfo(msg="Pre-process done. start Simulation"), simulation],
         )
     )
-    post_process_cmd = [*launch_base_cmd, "post_process.launch.py", *arguments]
+    post_process_cmd = [*launch_base_cmd, "post_process.launch.py", *launch_post_fix]
     post_process = ExecuteProcess(cmd=post_process_cmd, output="screen", name="post_process")
     start_post_process = RegisterEventHandler(
         OnProcessExit(
@@ -49,6 +54,7 @@ def generate_launch_description() -> LaunchDescription:
     return LaunchDescription(
         [
             *launch_arguments,
+            OpaqueFunction(function=ensure_arg_compatibility),
             OpaqueFunction(function=launch_setup),
         ],
     )
