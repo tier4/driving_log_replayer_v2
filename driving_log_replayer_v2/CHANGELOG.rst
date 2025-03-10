@@ -2,8 +2,8 @@
 Changelog for package driving_log_replayer
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-Forthcoming
------------
+3.6.0 (2025-03-10)
+------------------
 * feat: support localization post process (`#109 <https://github.com/tier4/driving_log_replayer_v2/issues/109>`_)
   * refactor: split pre-task, simulation
   * feat: launch pre_process and post_process
