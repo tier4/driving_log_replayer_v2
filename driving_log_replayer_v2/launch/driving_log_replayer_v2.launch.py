@@ -22,7 +22,7 @@ def parse_launch_arguments(context: LaunchContext) -> list:
 def launch_setup(context: LaunchContext) -> list:
     arguments = parse_launch_arguments(context)
     launch_base_cmd = ["ros2", "launch", "driving_log_replayer_v2"]
-    # Specify output_dir for “ensure_launch_arugment” in child launch, because it creates several directories and fails.
+    # Specify the output dir from the parent because it will be created in the child process if the output dir is not specified.
     output_dir = context.launch_configurations.get("output_dir")
     launch_post_fix = [f"output_dir:={output_dir}", *arguments]
 

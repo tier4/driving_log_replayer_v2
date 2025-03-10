@@ -31,7 +31,7 @@ def post_process(context: LaunchContext) -> list:
             "run",
             "autoware_localization_evaluation_scripts",
             "analyze_rosbags_parallel.py",
-            f"{conf['output_dir'].as_posix()}",
+            f"{conf['output_dir']}",
         ]
         localization_analysis = ExecuteProcess(
             cmd=localization_analysis_cmd, output="screen", name="localization_analyze"
