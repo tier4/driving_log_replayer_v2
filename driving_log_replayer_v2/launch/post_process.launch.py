@@ -15,6 +15,7 @@
 
 from launch import LaunchContext
 from launch import LaunchDescription
+from launch.actions import ExecuteProcess
 from launch.actions import LogInfo
 from launch.actions import OpaqueFunction
 
@@ -22,8 +23,22 @@ from driving_log_replayer_v2.launch.argument import ensure_arg_compatibility
 from driving_log_replayer_v2.launch.argument import get_launch_arguments
 
 
-def post_process(context: LaunchContext) -> list:  # noqa
-    return [LogInfo(msg="Post-process is done.")]
+def post_process(context: LaunchContext) -> list:
+    conf = context.launch_configurations
+    if conf["use_case"] == "localization":
+        localization_analysis_cmd = [
+            "ros2",
+            "run",
+            "autoware_localization_evaluation_scripts",
+            "analyze_rosbags_parallel.py",
+            f"{conf['output_dir'].as_posix()}",
+        ]
+        localization_analysis = ExecuteProcess(
+            cmd=localization_analysis_cmd, output="screen", name="localization_analyze"
+        )
+        return [LogInfo(msg="run localization analysis."), localization_analysis]
+
+    return [LogInfo(msg="No post-processing is performed.")]
 
 
 def generate_launch_description() -> LaunchDescription:

@@ -22,7 +22,7 @@ from driving_log_replayer_v2.launch.argument import get_launch_arguments
 
 
 def pre_process(context: LaunchContext) -> list:  # noqa
-    return [LogInfo(msg="Pre-process is done.")]
+    return [LogInfo(msg="No pre-processing is implemented.")]
 
 
 def generate_launch_description() -> LaunchDescription:
