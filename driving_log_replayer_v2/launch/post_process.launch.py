@@ -34,6 +34,8 @@ def post_process(context: LaunchContext) -> list:
             f"{conf['output_dir']}",
             "--save_dir_relative",
             "result_archive",
+            "--topic_reference",
+            "/localization/reference_kinematic_state"
         ]
         localization_analysis = ExecuteProcess(
             cmd=localization_analysis_cmd, output="screen", name="localization_analyze"
