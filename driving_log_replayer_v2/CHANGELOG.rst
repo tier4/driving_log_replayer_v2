@@ -2,6 +2,28 @@
 Changelog for package driving_log_replayer
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
+Forthcoming
+-----------
+* feat: support localization post process (`#109 <https://github.com/tier4/driving_log_replayer_v2/issues/109>`_)
+  * refactor: split pre-task, simulation
+  * feat: launch pre_process and post_process
+  * feat: launch step
+  * feat: parse argument and launch simulation
+  * feat: pass output dir
+  * feat: run post process
+  * fix: output_dir
+  * feat: add save-dir-relative option
+  * fix: update copyright
+  * Update driving_log_replayer_v2/launch/post_process.launch.py
+  Co-authored-by: SakodaShintaro <shintaro.sakoda@tier4.jp>
+  * feat: update remap_str
+  * fix: lint
+  * feat: add exec_depend
+  ---------
+  Co-authored-by: SakodaShintaro <shintaro.sakoda@tier4.jp>
+* refactor: launch (`#108 <https://github.com/tier4/driving_log_replayer_v2/issues/108>`_)
+* Contributors: Hayato Mizushima
+
 3.5.0 (2025-02-28)
 ------------------
 * feat: ndt convergence (`#105 <https://github.com/tier4/driving_log_replayer_v2/issues/105>`_)
