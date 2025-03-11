@@ -52,19 +52,26 @@
    vcs import src < simulator.repos
    ```
 
-4. 依存解決のために rosdep を更新する:
+4. (Optional) 基本的にdriving_log_replayer_v2のmainブランチは最新のautowareと共に利用することを前提としているため、必要に応じてnightly.reposをimportする
+
+   ```shell
+   vcs import src < autoware-nightly.repos
+   vcs import src < tools-nightly.repos
+   ```
+
+5. 依存解決のために rosdep を更新する:
 
    ```shell
    rosdep update
    ```
 
-5. rosdep で依存のパッケージをインストールする:
+6. rosdep で依存のパッケージをインストールする:
 
    ```shell
    rosdep install -y --from-paths src --ignore-src --rosdistro $ROS_DISTRO
    ```
 
-6. ワークスペースをビルドする:
+7. ワークスペースをビルドする:
 
    ```shell
    colcon build --symlink-install --cmake-args -DCMAKE_BUILD_TYPE=Release

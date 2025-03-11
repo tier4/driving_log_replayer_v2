@@ -52,19 +52,26 @@ This document contains step-by-step instruction on how to build [AWF Autoware Co
    vcs import src < simulator.repos
    ```
 
-4. Update rosdep:
+4. (Optional) Basically, the main branch of driving_log_replayer_v2 is intended to be used with the latest autoware, so import nightly.repos as needed.
+
+   ```shell
+   vcs import src < autoware-nightly.repos
+   vcs import src < tools-nightly.repos
+   ```
+
+5. Update rosdep:
 
    ```shell
    rosdep update
    ```
 
-5. Install dependent ROS packages:
+6. Install dependent ROS packages:
 
    ```shell
    rosdep install -y --from-paths src --ignore-src --rosdistro $ROS_DISTRO
    ```
 
-6. Build the workspace:
+7. Build the workspace:
 
    ```shell
    colcon build --symlink-install --cmake-args -DCMAKE_BUILD_TYPE=Release
