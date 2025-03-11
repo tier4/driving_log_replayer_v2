@@ -2,8 +2,8 @@
 Changelog for package driving_log_replayer
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-Forthcoming
------------
+3.6.1 (2025-03-11)
+------------------
 * change saved topic (`#111 <https://github.com/tier4/driving_log_replayer_v2/issues/111>`_)
 * Contributors: Masato Saeki
 
