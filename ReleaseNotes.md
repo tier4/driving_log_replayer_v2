@@ -1,5 +1,14 @@
 # Release Notes
 
+## Version 3.6.1
+
+Minor Tweak
+
+| Module          | Feature       | Brief summary                          | Pull request                                                      | Contributor                                         |
+| --------------- | ------------- | -------------------------------------- | ----------------------------------------------------------------- | --------------------------------------------------- |
+| `common`        | documentation | add instructions for importing nightly | [#112](https://github.com/tier4/driving_log_replayer_v2/pull/112) | [SakodaShintaro](https://github.com/SakodaShintaro) |
+| `traffic_light` | bag record    | change the topic to save               | [#111](https://github.com/tier4/driving_log_replayer_v2/pull/111) | [MasatoSaeki](https://github.com/MasatoSaeki)       |
+
 ## Version 3.6.0
 
 Major changes

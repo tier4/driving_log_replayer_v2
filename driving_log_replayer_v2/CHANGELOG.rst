@@ -2,6 +2,11 @@
 Changelog for package driving_log_replayer
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
+Forthcoming
+-----------
+* change saved topic (`#111 <https://github.com/tier4/driving_log_replayer_v2/issues/111>`_)
+* Contributors: Masato Saeki
+
 3.6.0 (2025-03-10)
 ------------------
 * feat: support localization post process (`#109 <https://github.com/tier4/driving_log_replayer_v2/issues/109>`_)
