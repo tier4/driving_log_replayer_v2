@@ -2,6 +2,11 @@
 Changelog for package driving_log_replayer
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
+Forthcoming
+-----------
+* feat: dlr_all -> all_components (`#114 <https://github.com/tier4/driving_log_replayer_v2/issues/114>`_)
+* Contributors: Hayato Mizushima
+
 3.6.1 (2025-03-11)
 ------------------
 * change saved topic (`#111 <https://github.com/tier4/driving_log_replayer_v2/issues/111>`_)

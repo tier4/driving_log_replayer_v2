@@ -1,5 +1,13 @@
 # Release Notes
 
+## Version 3.6.2
+
+Major changes
+
+| Module          | Feature  | Brief summary                               | Pull request                                                      | Contributor                                   |
+| --------------- | -------- | ------------------------------------------- | ----------------------------------------------------------------- | --------------------------------------------- |
+| `all_component` | use case | fix use case name dlr_all -> all_components | [#114](https://github.com/tier4/driving_log_replayer_v2/pull/114) | [hayato-m126](https://github.com/hayato-m126) |
+
 ## Version 3.6.1
 
 Minor Tweak
