@@ -2,8 +2,8 @@
 Changelog for package driving_log_replayer
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-Forthcoming
------------
+3.6.2 (2025-03-14)
+------------------
 * feat: dlr_all -> all_components (`#114 <https://github.com/tier4/driving_log_replayer_v2/issues/114>`_)
 * Contributors: Hayato Mizushima
 
