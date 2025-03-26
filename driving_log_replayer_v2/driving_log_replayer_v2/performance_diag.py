@@ -126,14 +126,14 @@ class Visibility(EvaluationItem):
 
         info_values = {
             "Level": int.from_bytes(diag_level, byteorder="little"),
-            "Value": float('nan') if not valid_value else float_value,
+            "Value": float("nan") if not valid_value else float_value,
         }
 
         return (
             {
                 "Result": {
                     "Total": self.success_str(),
-                    "Frame": frame_success if valid_value else "Nan"
+                    "Frame": frame_success if valid_value else "Nan",
                 },
                 "Info": info_values,
             },
@@ -186,13 +186,17 @@ class Blockage(EvaluationItem):
         if valid_ratio:
             self.total += 1
             if self.scenario_type == "TP":
-                if diag_level == DiagnosticStatus.ERROR and self.blockage_type in diag_status.message:
+                if (
+                    diag_level == DiagnosticStatus.ERROR
+                    and self.blockage_type in diag_status.message
+                ):
                     frame_success = "Success"
                     self.passed += 1
                 self.success = self.rate() >= self.condition.PassRate
             elif self.scenario_type == "FP":
                 if not (
-                    diag_level == DiagnosticStatus.ERROR and self.blockage_type in diag_status.message
+                    diag_level == DiagnosticStatus.ERROR
+                    and self.blockage_type in diag_status.message
                 ):
                     frame_success = "Success"
                     self.passed += 1
@@ -203,10 +207,10 @@ class Blockage(EvaluationItem):
         if not valid_ratio:
             info_values = {
                 "Level": int.from_bytes(diag_level, byteorder="little"),
-                "GroundBlockageRatio": float('nan'),
-                "GroundBlockageCount": float('nan'),
-                "SkyBlockageRatio": float('nan'),
-                "SkyBlockageCount": float('nan'),
+                "GroundBlockageRatio": float("nan"),
+                "GroundBlockageCount": float("nan"),
+                "SkyBlockageRatio": float("nan"),
+                "SkyBlockageCount": float("nan"),
             }
         else:
             info_values = {
