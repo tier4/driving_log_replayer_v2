@@ -57,6 +57,14 @@ class GroundSegmentationEvaluator(DLREvaluatorV2):
             sample_data = json.load(sample_data_path.open())
             sample_data = list(filter(lambda d: d["filename"].split(".")[-2] == "pcd", sample_data))
 
+            # load gt annotation data
+            lidarseg_dir_path = Path(self._t4_dataset_paths[0], "lidar_semseg_sample", "data")
+            lidarseg_json_path = Path(lidarseg_dir_path, "lidar_annotations_accepted_deepen2.json")
+            lidarseg_data = json.load(lidarseg_json_path.open())
+            pcd_to_lidarseg_data = {}
+            for annotation_data in lidarseg_data:
+                pcd_to_lidarseg_data[annotation_data["filename"]] = annotation_data
+
             self.ground_truth: dict[int, np.ndarray] = {}
             for i in range(len(sample_data)):
                 pcd_file_path = Path(
@@ -64,6 +72,10 @@ class GroundSegmentationEvaluator(DLREvaluatorV2):
                     sample_data[i]["filename"],
                 ).as_posix()
                 raw_points = np.fromfile(pcd_file_path, dtype=np.float32)
+            
+                annotation_file_path = lidarseg_dir_path + pcd_to_lidarseg_data[str(int(sample_data[i]["filename"].split("/")[-1].split(".")[0])) + ".pcd"]["lidarseg_anno_file"]
+                labels = np.fromfile(annotation_file_path, dtype=np.uint8)
+
                 points: np.ndarray = raw_points.reshape((-1, self.CLOUD_DIM))
                 self.ground_truth[int(sample_data[i]["timestamp"])] = points
 
