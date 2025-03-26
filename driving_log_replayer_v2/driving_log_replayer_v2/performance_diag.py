@@ -175,7 +175,6 @@ class Blockage(EvaluationItem):
         ground_ratio = get_diag_value(diag_status, "ground_blockage_ratio")
         sky_ratio = get_diag_value(diag_status, "sky_blockage_ratio")
         diag_level = diag_status.level
-        
         float_sky_ratio = convert_str_to_float(sky_ratio)
         float_ground_ratio = convert_str_to_float(ground_ratio)
         valid_ratio = (
@@ -201,7 +200,6 @@ class Blockage(EvaluationItem):
                     frame_success = "Success"
                     self.passed += 1
                 self.success = self.passed == self.total
-        
         self.summary = f"{self.name} ({self.success_str()}): {self.passed} / {self.total}"
 
         if not valid_ratio:
