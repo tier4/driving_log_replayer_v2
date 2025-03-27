@@ -170,7 +170,6 @@ class Blockage(EvaluationItem):
                 None,
                 None,
             )
-        
         frame_success = "Fail"
         ground_ratio = get_diag_value(diag_status, "ground_blockage_ratio")
         sky_ratio = get_diag_value(diag_status, "sky_blockage_ratio")
