@@ -4,9 +4,9 @@
 
 Minor Tweak
 
-| Module         | Feature     | Brief summary        | Pull request                                                      | Contributor                                   |
-| -------------- | ----------- | -------------------- | ----------------------------------------------------------------- | --------------------------------------------- |
-| `performance_diag` | result | do not count invalid frame | [#116](https://github.com/tier4/driving_log_replayer_v2/pull/116) | [TadaKazuto](https://github.com/TadaKazuto) |
+| Module             | Feature | Brief summary              | Pull request                                                      | Contributor                                 |
+| ------------------ | ------- | -------------------------- | ----------------------------------------------------------------- | ------------------------------------------- |
+| `performance_diag` | result  | do not count invalid frame | [#116](https://github.com/tier4/driving_log_replayer_v2/pull/116) | [TadaKazuto](https://github.com/TadaKazuto) |
 
 ## Version 3.6.3
 
