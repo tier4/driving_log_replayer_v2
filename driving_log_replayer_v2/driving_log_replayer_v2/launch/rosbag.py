@@ -63,8 +63,6 @@ def system_defined_remap(conf: dict) -> list[str]:
         add_remap("/tf", remap_list)
         add_remap("/localization/kinematic_state", remap_list)
         add_remap("/localization/acceleration", remap_list)
-        add_remap("/localization/util/downsample/pointcloud", remap_list)
-        add_remap("/localization/pose_twist_fusion_filter/biased_pose_with_covariance", remap_list)
     if conf.get("perception", "true") == "true":
         # remap perception msgs in bag
         add_remap("/perception/obstacle_segmentation/pointcloud", remap_list)
