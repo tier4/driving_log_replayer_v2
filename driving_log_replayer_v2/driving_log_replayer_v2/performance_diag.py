@@ -102,30 +102,40 @@ class Visibility(EvaluationItem):
                 None,
                 None,
             )
+
         frame_success = "Fail"
-        self.total += 1
         visibility_value = get_diag_value(diag_status, "value")
         diag_level = diag_status.level
-        if self.scenario_type == "TP":
-            if diag_level == DiagnosticStatus.ERROR:
-                frame_success = "Success"
-                self.passed += 1
-            self.success = self.rate() >= self.condition.PassRate
-        elif self.scenario_type == "FP":
-            if diag_level != DiagnosticStatus.ERROR:
-                frame_success = "Success"
-                self.passed += 1
-            self.success = self.passed == self.total
-        self.summary = f"{self.name} ({self.success_str()}): {self.passed} / {self.total}"
         float_value = convert_str_to_float(visibility_value)
         valid_value = float_value >= Visibility.VALID_VALUE_THRESHOLD
+
+        if valid_value:
+            self.total += 1
+            if self.scenario_type == "TP":
+                if diag_level == DiagnosticStatus.ERROR:
+                    frame_success = "Success"
+                    self.passed += 1
+                self.success = self.rate() >= self.condition.PassRate
+            elif self.scenario_type == "FP":
+                if diag_level != DiagnosticStatus.ERROR:
+                    frame_success = "Success"
+                    self.passed += 1
+                self.success = self.passed == self.total
+
+        self.summary = f"{self.name} ({self.success_str()}): {self.passed} / {self.total}"
+
+        info_values = {
+            "Level": int.from_bytes(diag_level, byteorder="little"),
+            "Value": float("nan") if not valid_value else float_value,
+        }
+
         return (
             {
-                "Result": {"Total": self.success_str(), "Frame": frame_success},
-                "Info": {
-                    "Level": int.from_bytes(diag_level, byteorder="little"),
-                    "Value": float_value,
+                "Result": {
+                    "Total": self.success_str(),
+                    "Frame": frame_success if valid_value else "Invalid",
                 },
+                "Info": info_values,
             },
             Float64(data=float_value) if valid_value else None,
             Byte(data=diag_level) if valid_value else None,
@@ -161,47 +171,65 @@ class Blockage(EvaluationItem):
                 None,
             )
         frame_success = "Fail"
-        self.total += 1
         ground_ratio = get_diag_value(diag_status, "ground_blockage_ratio")
         sky_ratio = get_diag_value(diag_status, "sky_blockage_ratio")
         diag_level = diag_status.level
-        if self.scenario_type == "TP":
-            if diag_level == DiagnosticStatus.ERROR and self.blockage_type in diag_status.message:
-                frame_success = "Success"
-                self.passed += 1
-            self.success = self.rate() >= self.condition.PassRate
-        elif self.scenario_type == "FP":
-            if not (
-                diag_level == DiagnosticStatus.ERROR and self.blockage_type in diag_status.message
-            ):
-                frame_success = "Success"
-                self.passed += 1
-            self.success = self.passed == self.total
-        self.summary = f"{self.name} ({self.success_str()}): {self.passed} / {self.total}"
         float_sky_ratio = convert_str_to_float(sky_ratio)
         float_ground_ratio = convert_str_to_float(ground_ratio)
         valid_ratio = (
             float_sky_ratio >= Blockage.VALID_VALUE_THRESHOLD
             and float_ground_ratio >= Blockage.VALID_VALUE_THRESHOLD
         )
+
+        if valid_ratio:
+            self.total += 1
+            if self.scenario_type == "TP":
+                if (
+                    diag_level == DiagnosticStatus.ERROR
+                    and self.blockage_type in diag_status.message
+                ):
+                    frame_success = "Success"
+                    self.passed += 1
+                self.success = self.rate() >= self.condition.PassRate
+            elif self.scenario_type == "FP":
+                if not (
+                    diag_level == DiagnosticStatus.ERROR
+                    and self.blockage_type in diag_status.message
+                ):
+                    frame_success = "Success"
+                    self.passed += 1
+                self.success = self.passed == self.total
+        self.summary = f"{self.name} ({self.success_str()}): {self.passed} / {self.total}"
+
+        if not valid_ratio:
+            info_values = {
+                "Level": int.from_bytes(diag_level, byteorder="little"),
+                "GroundBlockageRatio": float("nan"),
+                "GroundBlockageCount": float("nan"),
+                "SkyBlockageRatio": float("nan"),
+                "SkyBlockageCount": float("nan"),
+            }
+        else:
+            info_values = {
+                "Level": int.from_bytes(diag_level, byteorder="little"),
+                "GroundBlockageRatio": float_ground_ratio,
+                "GroundBlockageCount": convert_str_to_int(
+                    get_diag_value(diag_status, "ground_blockage_count"),
+                ),
+                "SkyBlockageRatio": float_sky_ratio,
+                "SkyBlockageCount": convert_str_to_int(
+                    get_diag_value(diag_status, "sky_blockage_count"),
+                ),
+            }
+
         return (
             {
                 self.name: {
                     "Result": {
                         "Total": self.success_str(),
-                        "Frame": frame_success,
+                        "Frame": frame_success if valid_ratio else "Invalid",
                     },
-                    "Info": {
-                        "Level": int.from_bytes(diag_level, byteorder="little"),
-                        "GroundBlockageRatio": float_ground_ratio,
-                        "GroundBlockageCount": convert_str_to_int(
-                            get_diag_value(diag_status, "ground_blockage_count"),
-                        ),
-                        "SkyBlockageRatio": float_sky_ratio,
-                        "SkyBlockageCount": convert_str_to_int(
-                            get_diag_value(diag_status, "sky_blockage_count"),
-                        ),
-                    },
+                    "Info": info_values,
                 },
             },
             Float64(data=float_sky_ratio) if valid_ratio else None,

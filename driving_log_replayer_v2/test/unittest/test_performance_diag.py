@@ -57,7 +57,7 @@ def test_visibility_tp_success() -> None:
     status = DiagnosticStatus(
         name="dual_return_filter: /sensing/lidar/front_lower: visibility_validation",
         level=DiagnosticStatus.ERROR,
-        values=[KeyValue(key="value", value="-1.00")],
+        values=[KeyValue(key="value", value="0.15")],
     )
     evaluation_item = Visibility(
         condition=VisibilityCondition(ScenarioType="TP", PassRate=90.0),
@@ -72,11 +72,11 @@ def test_visibility_tp_success() -> None:
         "Result": {"Total": "Success", "Frame": "Success"},
         "Info": {
             "Level": 2,
-            "Value": -1.0,
+            "Value": 0.15,
         },
     }
-    assert msg_visibility_value is None
-    assert msg_visibility_level is None
+    assert msg_visibility_value == Float64(data=0.15)
+    assert msg_visibility_level == Byte(data=bytes([2]))
 
 
 def test_visibility_tp_fail() -> None:
@@ -135,7 +135,7 @@ def test_visibility_fp_fail() -> None:
     status = DiagnosticStatus(
         name="dual_return_filter: /sensing/lidar/front_lower: visibility_validation",
         level=DiagnosticStatus.ERROR,
-        values=[KeyValue(key="value", value="-1.00")],
+        values=[KeyValue(key="value", value="0.00")],
     )
     evaluation_item = Visibility(
         condition=VisibilityCondition(ScenarioType="FP", PassRate=90.0),
@@ -150,11 +150,11 @@ def test_visibility_fp_fail() -> None:
         "Result": {"Total": "Fail", "Frame": "Fail"},
         "Info": {
             "Level": 2,
-            "Value": -1.0,
+            "Value": 0.0,
         },
     }
-    assert msg_visibility_value is None
-    assert msg_visibility_level is None
+    assert msg_visibility_value == Float64(data=0.0)
+    assert msg_visibility_level == Byte(data=bytes([2]))
 
 
 def test_blockage_invalid() -> None:
@@ -235,7 +235,7 @@ def test_blockage_tp_fail() -> None:
         level=DiagnosticStatus.ERROR,
         message="ERROR: LIDAR ground blockage",
         values=[
-            KeyValue(key="ground_blockage_ratio", value="-1.000000"),
+            KeyValue(key="ground_blockage_ratio", value="0.000000"),
             KeyValue(key="ground_blockage_count", value="1"),
             KeyValue(key="sky_blockage_ratio", value="0.824167"),
             KeyValue(key="sky_blockage_count", value="100"),
@@ -261,16 +261,16 @@ def test_blockage_tp_fail() -> None:
             "Result": {"Total": "Fail", "Frame": "Fail"},
             "Info": {
                 "Level": 2,
-                "GroundBlockageRatio": -1.0,
+                "GroundBlockageRatio": 0.0,
                 "GroundBlockageCount": 1,
                 "SkyBlockageRatio": 0.824167,
                 "SkyBlockageCount": 100,
             },
         },
     }
-    assert msg_blockage_sky_ratio is None
-    assert msg_blockage_ground_ratio is None
-    assert msg_blockage_level is None
+    assert msg_blockage_sky_ratio == Float64(data=0.824167)
+    assert msg_blockage_ground_ratio == Float64(data=0.0)
+    assert msg_blockage_level == Byte(data=bytes([2]))
 
 
 def test_blockage_fp_success() -> None:
