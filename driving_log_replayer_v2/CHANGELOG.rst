@@ -2,8 +2,8 @@
 Changelog for package driving_log_replayer
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-Forthcoming
------------
+3.6.3 (2025-03-27)
+------------------
 * revert: remap localization topic (`#117 <https://github.com/tier4/driving_log_replayer_v2/issues/117>`_)
 * Contributors: Hayato Mizushima
 
