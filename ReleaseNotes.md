@@ -1,5 +1,13 @@
 # Release Notes
 
+## Version 3.6.3
+
+Minor Tweak
+
+| Module         | Feature     | Brief summary        | Pull request                                                      | Contributor                                   |
+| -------------- | ----------- | -------------------- | ----------------------------------------------------------------- | --------------------------------------------- |
+| `localization` | rosbag play | revert: remap topics | [#117](https://github.com/tier4/driving_log_replayer_v2/pull/117) | [hayato-m126](https://github.com/hayato-m126) |
+
 ## Version 3.6.2
 
 Major changes
