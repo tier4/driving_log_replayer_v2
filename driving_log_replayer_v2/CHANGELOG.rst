@@ -2,6 +2,19 @@
 Changelog for package driving_log_replayer
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
+Forthcoming
+-----------
+* feat: exclude data while initialization from performance diag total evaluation (`#116 <https://github.com/tier4/driving_log_replayer_v2/issues/116>`_)
+  * Exclude data while initialization from eval
+  * Fix pre-commit issue
+  * Remove unnecessary line space
+  * Remove unnecessary line space
+  * fix: value
+  * fix: unit test
+  ---------
+  Co-authored-by: Hayato Mizushima <hayato-m126@users.noreply.github.com>
+* Contributors: TadaKazuto
+
 3.6.3 (2025-03-27)
 ------------------
 * revert: remap localization topic (`#117 <https://github.com/tier4/driving_log_replayer_v2/issues/117>`_)
