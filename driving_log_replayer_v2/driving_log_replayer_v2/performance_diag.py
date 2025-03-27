@@ -133,7 +133,7 @@ class Visibility(EvaluationItem):
             {
                 "Result": {
                     "Total": self.success_str(),
-                    "Frame": frame_success if valid_value else "Nan",
+                    "Frame": frame_success if valid_value else "Invalid",
                 },
                 "Info": info_values,
             },
@@ -227,7 +227,7 @@ class Blockage(EvaluationItem):
                 self.name: {
                     "Result": {
                         "Total": self.success_str(),
-                        "Frame": frame_success if valid_ratio else "Nan",
+                        "Frame": frame_success if valid_ratio else "Invalid",
                     },
                     "Info": info_values,
                 },
