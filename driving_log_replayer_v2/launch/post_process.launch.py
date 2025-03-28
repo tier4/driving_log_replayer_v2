@@ -21,6 +21,7 @@ from launch.actions import OpaqueFunction
 
 from driving_log_replayer_v2.launch.argument import ensure_arg_compatibility
 from driving_log_replayer_v2.launch.argument import get_launch_arguments
+from driving_log_replayer_v2.analysis.perception.analysis import analysis
 
 
 def post_process(context: LaunchContext) -> list:
@@ -41,8 +42,10 @@ def post_process(context: LaunchContext) -> list:
             cmd=localization_analysis_cmd, output="screen", name="localization_analyze"
         )
         return [LogInfo(msg="run localization analysis."), localization_analysis]
-
-    return [LogInfo(msg="No post-processing is performed.")]
+    
+    if conf["use_case"] == "perception" and conf["record_only"]:
+        analysis("", conf["result_json_path"], conf["result_archive_path"], [conf["result_bag_path"]])
+        return [LogInfo(msg="run perception analysis."),]
 
 
 def generate_launch_description() -> LaunchDescription:
