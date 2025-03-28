@@ -14,16 +14,33 @@
 
 from launch.actions import DeclareLaunchArgument
 
-RECORD_TOPIC = """^/tf$\
-|^/diagnostics$\
-|^/sensing/lidar/concatenated/pointcloud$\
+EVALUATION_DETECTION_TOPIC = """\
 |^/perception/object_recognition/detection/objects$\
+"""
+
+EVALUATION_TRACKING_TOPIC = """\
 |^/perception/object_recognition/tracking/objects$\
-|^/perception/object_recognition/objects$\
-|^/perception/object_recognition/tracking/multi_object_tracker/debug/.*\
-|^/perception/object_recognition/detection/.*/debug/pipeline_latency_ms$\
-|^/driving_log_replayer_v2/.*\
+"""
+
+EVALUATION_PREDICTION_TOPIC = ""
+
+EVALUATION_DEGRADATION_TOPIC = """\
+|^/perception/object_recognition/detection/objects$\
+"""
+
+RECORD_TOPIC = f"""^/tf$\
+|^/tf_static$\
+|^/diagnostics$\
 |^/sensing/camera/.*\
+|^/sensing/lidar/concatenated/pointcloud$\
+|^/perception/object_recognition/objects$\
+|^/perception/object_recognition/detection/.*/debug/pipeline_latency_ms$\
+|^/perception/object_recognition/tracking/multi_object_tracker/debug/.*\
+|^/perception/object_recognition/prediction/map_based_prediction/debug/pipeline_latency_ms$\
+|^/driving_log_replayer_v2/.*\
+{EVALUATION_DETECTION_TOPIC}\
+{EVALUATION_TRACKING_TOPIC}\
+{EVALUATION_PREDICTION_TOPIC}\
 """
 
 AUTOWARE_DISABLE = {

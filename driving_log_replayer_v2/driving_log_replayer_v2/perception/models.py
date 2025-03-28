@@ -22,15 +22,11 @@ from typing import TYPE_CHECKING
 from pydantic import BaseModel
 from pydantic import field_validator
 from pydantic import model_validator
-from std_msgs.msg import ColorRGBA
-from std_msgs.msg import Header
-from visualization_msgs.msg import MarkerArray
 
 if TYPE_CHECKING:
     from perception_eval.evaluation import PerceptionFrameResult
 
 from driving_log_replayer_v2.criteria import PerceptionCriteria
-import driving_log_replayer_v2.perception_eval_conversions as eval_conversions
 from driving_log_replayer_v2.perception_eval_conversions import FrameDescriptionWriter
 from driving_log_replayer_v2.perception_eval_conversions import summarize_pass_fail_result
 from driving_log_replayer_v2.result import EvaluationItem
@@ -219,9 +215,8 @@ class PerceptionResult(ResultBase):
         self,
         frame: PerceptionFrameResult,
         skip: int,
-        header: Header,
         map_to_baselink: dict,
-    ) -> tuple[MarkerArray, MarkerArray]:
+    ) -> None:
         self._frame = {
             "Ego": {"TransformStamped": map_to_baselink},
             "FrameName": frame.frame_name,
@@ -230,40 +225,18 @@ class PerceptionResult(ResultBase):
         for criterion in self.__perception_criterion:
             self._frame[criterion.name] = criterion.set_frame(frame)
         self.update()
-        marker_ground_truth, marker_results = self.create_ros_msg(frame, header)
-        return marker_ground_truth, marker_results
+
+    def set_info_frame(self, msg: str, skip: int) -> None:
+        self._frame = {
+            "Info": msg,
+            "FrameSkip": skip,
+        }
 
     def set_warn_frame(self, msg: str, skip: int) -> None:
         self._frame = {
             "Warning": msg,
             "FrameSkip": skip,
         }
-
-    def create_ros_msg(
-        self,
-        frame: PerceptionFrameResult,
-        header: Header,
-    ) -> tuple[MarkerArray, MarkerArray]:
-        marker_ground_truth = MarkerArray()
-        color_success = ColorRGBA(r=0.0, g=1.0, b=0.0, a=0.3)
-
-        for cnt, obj in enumerate(frame.frame_ground_truth.objects, start=1):
-            bbox, uuid = eval_conversions.object_state_to_ros_box_and_uuid(
-                obj.state,
-                header,
-                "ground_truth",
-                cnt,
-                color_success,
-                obj.uuid,
-            )
-            marker_ground_truth.markers.append(bbox)
-            marker_ground_truth.markers.append(uuid)
-
-        marker_results = eval_conversions.pass_fail_result_to_ros_points_array(
-            frame.pass_fail_result,
-            header,
-        )
-        return marker_ground_truth, marker_results
 
     def set_final_metrics(self, final_metrics: dict) -> None:
         self._frame = {"FinalScore": final_metrics}

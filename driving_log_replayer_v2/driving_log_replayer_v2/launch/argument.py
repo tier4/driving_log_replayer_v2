@@ -166,7 +166,26 @@ def get_launch_arguments() -> list:
         default_value="",
         description="Specify the name of the profile. config/remap/{profile_name}.yaml. Ex: remap_profile:=x2",
     )
-
+    add_launch_arg(
+        "evaluation_detection_topic_regex",
+        default_value="",
+        description="",
+    )
+    add_launch_arg(
+        "evaluation_tracking_topic_regex",
+        default_value="",
+        description="",
+    )
+    add_launch_arg(
+        "evaluation_prediction_topic_regex",
+        default_value="",
+        description="",
+    )
+    add_launch_arg(
+        "evaluation_degradation_topic_regex",
+        default_value="",
+        description="",
+    )
     return launch_arguments
 
 
@@ -222,6 +241,8 @@ def update_conf_with_dataset_info(
     conf["use_case"] = yaml_obj["Evaluation"]["UseCaseName"]
 
     if conf["use_case"] == "all_components":
+        conf["record_only"] = "true"
+    if conf["use_case"] == "perception":
         conf["record_only"] = "true"
 
 
