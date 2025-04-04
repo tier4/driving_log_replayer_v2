@@ -41,6 +41,10 @@ USE_CASE_ARGS: list[DeclareLaunchArgument] = [
         "evaluation_detection_topic_regex",
         default_value="""\
             |^/perception/object_recognition/detection/objects$\
+            |^/perception/object_recognition/detection/centerpoint/objects$\
+            |^/perception/object_recognition/detection/centerpoint/validation/objects$\
+            |^/perception/object_recognition/detection/clustering/objects$\
+            |^/perception/object_recognition/detection/detection_by_tracker/objects$\
             """,
     ),
     DeclareLaunchArgument(

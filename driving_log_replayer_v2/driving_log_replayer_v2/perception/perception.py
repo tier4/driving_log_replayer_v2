@@ -15,7 +15,6 @@
 from __future__ import annotations
 
 import argparse
-import logging
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -151,8 +150,6 @@ def evaluate(
     result_json_path: str,
     result_archive_path: str,
 ) -> None:
-    logging.info("Starting analysis...")
-
     evaluation_topics = load_evaluation_topics(
         evaluation_detection_topic_regex,
         evaluation_tracking_topic_regex,
