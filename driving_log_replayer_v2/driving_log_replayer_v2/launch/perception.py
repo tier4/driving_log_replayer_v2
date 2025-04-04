@@ -13,10 +13,8 @@
 # limitations under the License.
 
 from launch.actions import DeclareLaunchArgument
-from launch.substitutions import LaunchConfiguration
 
-
-RECORD_TOPIC = f"""^/tf$\
+RECORD_TOPIC = """^/tf$\
 |^/tf_static$\
 |^/diagnostics$\
 |^/sensing/camera/.*\
@@ -41,22 +39,19 @@ NODE_PARAMS = {}
 USE_CASE_ARGS: list[DeclareLaunchArgument] = [
     DeclareLaunchArgument(
         "evaluation_detection_topic_regex",
-        default_value=
-            """\
+        default_value="""\
             |^/perception/object_recognition/detection/objects$\
             """,
-        ),
+    ),
     DeclareLaunchArgument(
         "evaluation_tracking_topic_regex",
-        default_value=
-            """\
+        default_value="""\
             |^/perception/object_recognition/tracking/objects$\
             """,
-        ),
+    ),
     DeclareLaunchArgument(
         "evaluation_prediction_topic_regex",
-        default_value=
-            """\
+        default_value="""\
             """,
-        ),
+    ),
 ]

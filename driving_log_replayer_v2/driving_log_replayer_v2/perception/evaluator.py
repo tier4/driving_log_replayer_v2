@@ -21,7 +21,6 @@ import pickle
 from typing import TYPE_CHECKING
 
 from perception_eval.common import DynamicObject
-from perception_eval.common.evaluation_task import EvaluationTask
 from perception_eval.common.status import get_scene_rates
 from perception_eval.config import PerceptionEvaluationConfig
 from perception_eval.evaluation import get_object_status
@@ -33,6 +32,7 @@ from perception_eval.tool import PerceptionAnalyzer3D
 from perception_eval.util.logger_config import configure_logger
 
 if TYPE_CHECKING:
+    from perception_eval.common.evaluation_task import EvaluationTask
     from perception_eval.evaluation.metrics import MetricsScore
 
 
@@ -58,9 +58,7 @@ class PerceptionEvaluator:
 
         perception_evaluation_config["evaluation_config_dict"]["label_prefix"] = "autoware"
 
-        perception_evaluation_config["evaluation_config_dict"]["evaluation_task"] = (
-            evaluation_task
-        )
+        perception_evaluation_config["evaluation_config_dict"]["evaluation_task"] = evaluation_task
         if not self.__check_evaluation_task(evaluation_task):
             err_msg = f"Invalid evaluation task: {evaluation_task}. "
             raise ValueError(err_msg)

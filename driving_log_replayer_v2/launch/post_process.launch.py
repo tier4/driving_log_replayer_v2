@@ -21,9 +21,9 @@ from launch.actions import ExecuteProcess
 from launch.actions import LogInfo
 from launch.actions import OpaqueFunction
 
+from driving_log_replayer_v2.launch.argument import add_use_case_arguments
 from driving_log_replayer_v2.launch.argument import ensure_arg_compatibility
 from driving_log_replayer_v2.launch.argument import get_launch_arguments
-from driving_log_replayer_v2.launch.argument import add_use_case_arguments
 from driving_log_replayer_v2.perception.perception import evaluate
 
 
