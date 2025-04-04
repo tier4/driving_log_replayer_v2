@@ -137,6 +137,7 @@ class Criteria(BaseModel):
 
 class Conditions(BaseModel):
     Criterion: list[Criteria]
+    DegradationTopic: str
 
 
 class Evaluation(BaseModel):

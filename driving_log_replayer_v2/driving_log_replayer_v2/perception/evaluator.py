@@ -58,10 +58,9 @@ class PerceptionEvaluator:
 
         perception_evaluation_config["evaluation_config_dict"]["label_prefix"] = "autoware"
 
-        if evaluation_task is not None:
-            perception_evaluation_config["evaluation_config_dict"]["evaluation_task"] = (
-                evaluation_task
-            )
+        perception_evaluation_config["evaluation_config_dict"]["evaluation_task"] = (
+            evaluation_task
+        )
         if not self.__check_evaluation_task(evaluation_task):
             err_msg = f"Invalid evaluation task: {evaluation_task}. "
             raise ValueError(err_msg)
@@ -210,13 +209,14 @@ class PerceptionEvaluator:
         raise RuntimeError(err_msg)
 
     def __check_evaluation_task(self, evaluation_task: EvaluationTask) -> bool:
-        if evaluation_task in [EvaluationTask.DETECTION, EvaluationTask.FP_VALIDATION]:
+        if evaluation_task in ["detection", "fp_validation"]:
             self.__frame_id_str = "base_link"
             return True
-        if evaluation_task == EvaluationTask.TRACKING:
+        if evaluation_task == "tracking":
             self.__frame_id_str = "map"
             return True
-        if evaluation_task == EvaluationTask.PREDICTION:
+        if evaluation_task == "prediction":
+            self.__frame_id_str = "map"
             return False
         return False
 

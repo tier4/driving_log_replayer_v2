@@ -25,7 +25,6 @@ from driving_log_replayer_v2.perception.models import PerceptionScenario
 from driving_log_replayer_v2.scenario import load_scenario
 
 if TYPE_CHECKING:
-    from perception_eval.common.evaluation_task import EvaluationTask
     from perception_eval.common.object import DynamicObject
     from perception_eval.config import PerceptionEvaluationConfig
     from perception_eval.evaluation import PerceptionFrameResult
@@ -38,7 +37,7 @@ class EvaluationManager:
         scenario_path: str,
         t4_dataset_path: str,
         result_archive_path: str,
-        evaluation_topics: dict[EvaluationTask, list[str]],
+        evaluation_topics: dict[str, list[str]],
     ) -> None:
         self._scenario: PerceptionScenario
         self._evaluation_condition: dict[str, str]
@@ -81,6 +80,9 @@ class EvaluationManager:
 
     def get_evaluation_topics(self) -> list[str]:
         return self._evaluators.keys()
+
+    def get_degradation_topic(self) -> str:
+        return self._scenario.Evaluation.Conditions.DegradationTopic
 
     def get_evaluation_config(self, topic_name: str) -> PerceptionEvaluationConfig:
         evaluator = self._evaluators[topic_name]

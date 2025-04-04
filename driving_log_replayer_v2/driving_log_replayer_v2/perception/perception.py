@@ -34,7 +34,6 @@ from driving_log_replayer_v2.perception.manager import EvaluationManager
 from driving_log_replayer_v2.perception.models import PerceptionResult
 from driving_log_replayer_v2.perception.ros2_utils import lookup_transform
 from driving_log_replayer_v2.perception.ros2_utils import RosBagManager
-from driving_log_replayer_v2.perception.topics import load_degradation_topics
 from driving_log_replayer_v2.perception.topics import load_evaluation_topics
 import driving_log_replayer_v2.perception_eval_conversions as eval_conversions
 from driving_log_replayer_v2.result import ResultWriter
@@ -147,7 +146,6 @@ def evaluate(
     evaluation_detection_topic_regex: str,
     evaluation_tracking_topic_regex: str,
     evaluation_prediction_topic_regex: str,
-    evaluation_degradation_topic_regex: str,
     rosbag_dir_path: str,
     t4dataset_path: str,
     result_json_path: str,
@@ -159,9 +157,6 @@ def evaluate(
         evaluation_detection_topic_regex,
         evaluation_tracking_topic_regex,
         evaluation_prediction_topic_regex,
-    )
-    degradation_topic = load_degradation_topics(
-        evaluation_degradation_topic_regex,
     )
 
     evaluator = EvaluationManager(
@@ -185,6 +180,7 @@ def evaluate(
         result_writer.write_line(error_dict)
         result_writer.close()
         raise error
+    degradation_topic = evaluator.get_degradation_topic()
 
     result_writer = ResultWriter(
         result_json_path,
@@ -283,11 +279,6 @@ def parse_args() -> argparse.Namespace:
         default="",
         help="Regex for prediction topic",
     )
-    parser.add_argument(
-        "--evaluation-degradation-topic-regex",
-        default="",
-        help="Regex for degradation topic",
-    )
     parser.add_argument("--rosbag-dir-path", help="Directory path to rosbags")
     parser.add_argument("--t4dataset-path", help="Directory path to T4 dataset files")
     parser.add_argument("--result-json-path", help="Output filepath for the result in JSONL format")
@@ -304,7 +295,6 @@ def main() -> None:
         args.evaluation_detection_topic_regex,
         args.evaluation_tracking_topic_regex,
         args.evaluation_prediction_topic_regex,
-        args.evaluation_degradation_topic_regex,
         args.rosbag_dir_path,
         args.t4dataset_path,
         args.result_json_path,

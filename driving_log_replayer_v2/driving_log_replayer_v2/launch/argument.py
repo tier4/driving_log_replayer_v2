@@ -166,26 +166,6 @@ def get_launch_arguments() -> list:
         default_value="",
         description="Specify the name of the profile. config/remap/{profile_name}.yaml. Ex: remap_profile:=x2",
     )
-    add_launch_arg(
-        "evaluation_detection_topic_regex",
-        default_value="",
-        description="",
-    )
-    add_launch_arg(
-        "evaluation_tracking_topic_regex",
-        default_value="",
-        description="",
-    )
-    add_launch_arg(
-        "evaluation_prediction_topic_regex",
-        default_value="",
-        description="",
-    )
-    add_launch_arg(
-        "evaluation_degradation_topic_regex",
-        default_value="",
-        description="",
-    )
     return launch_arguments
 
 
