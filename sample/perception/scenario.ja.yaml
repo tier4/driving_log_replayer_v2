@@ -27,6 +27,7 @@ Evaluation:
           Region:
             x_position: null # [m] null [x座標でフィルタしない] or 下限,上限
             y_position: null # [m] null [y座標でフィルタしない] or 下限,上限
+    DegradationTopic: "/perception/object_recognition/detection/objects" # pass/fail対象のトピック名
   PerceptionEvaluationConfig:
     evaluation_config_dict:
       evaluation_task: detection # detection/tracking ここで指定したobjectsを評価する

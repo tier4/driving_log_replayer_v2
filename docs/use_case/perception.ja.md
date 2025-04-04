@@ -2,9 +2,9 @@
 
 Autoware の認識機能(perception)の認識結果から mAP(mean Average Precision)などの指標を計算して性能を評価する。
 
-perception モジュールを起動して出力される perception の topic を評価用ライブラリに渡して評価を行う。
+Autoware の実行時には perception topic を保存する。その後、後処理の中で評価を行う。
 
-シナリオに記述したperception_modeで起動されるので、評価対象のセンサーを変更したい場合はシナリオを変更する。
+pass/fail を判定する topic はシナリオに記述する。解析したい topic は launch arguments から指定する。指定しない場合はデフォルトの値が使用される。
 
 ## 事前準備
 
@@ -14,8 +14,8 @@ perception では、機械学習の学習済みモデルを使用する。
 
 ### モデルファイルのダウンロード
 
-モデルはAutowareのセットアップ時にダウンロードされる。
-モデルのダウンロード方法は、使用しているにAutowareのバージョンによって異なるのでどちらの手法が使われているか確認する。
+モデルは Autoware のセットアップ時にダウンロードされる。
+モデルのダウンロード方法は、使用しているに Autoware のバージョンによって異なるのでどちらの手法が使われているか確認する。
 以下のパターンが存在する。
 
 #### ansibleでダウンロード
@@ -25,15 +25,15 @@ perception では、機械学習の学習済みモデルを使用する。
 
 #### パッケージのビルド時に自動でダウンロード
 
-少し古いAutoware.universeを使用している場合はこちら、`13b96ad3c636389b32fea3a47dfb7cfb7813cadc`のコミットハッシュまではこちらが使用される。
+少し古い Autoware.universe を使用している場合はこちら、`13b96ad3c636389b32fea3a47dfb7cfb7813cadc`のコミットハッシュまではこちらが使用される。
 [lidar_centerpoint/CMakeList.txt](https://github.com/autowarefoundation/autoware.universe/blob/13b96ad3c636389b32fea3a47dfb7cfb7813cadc/perception/lidar_centerpoint/CMakeLists.txt#L112-L118)
 
 ### モデルファイルの変換
 
 ダウンロードした onnx ファイルはそのまま使用するのではなく、TensorRT の engine ファイルに変換して利用する。
-変換用のコマンドが用意されているので、autoware のワークスペースを source してコマンドを実行する。
+変換用のコマンドが用意されているので、Autoware のワークスペースを source してコマンドを実行する。
 
-`$HOME/autoware`にautowareをインストールしたとして説明する。
+`$HOME/autoware`に Autoware をインストールしたとして説明する。
 
 ```shell
 source $HOME/autoware/install/setup.bash
@@ -61,16 +61,17 @@ $HOME/autoware/install/lidar_centerpoint/share/lidar_centerpoint/data/pts_voxel_
 
 ## 評価方法
 
-launch を立ち上げると以下のことが実行され、評価される。
+launch を立ち上げると以下が順に実行され、評価される。
 
-1. launch で評価ノード(`perception_evaluator_node`)と `logging_simulator.launch`、`ros2 bag play`コマンドを立ち上げる
-2. bag から出力されたセンサーデータを autoware が受け取って、点群データを出力し、perception モジュールが認識を行う
-3. 評価ノードが/perception/object_recognition/{detection, tracking}/objects を subscribe して、コールバックで perception_eval の関数を用いて評価し結果をファイルに記録する
-4. bag の再生が終了すると自動で launch が終了して評価が終了する
+1. `logging_simulator.launch`、`ros2 bag play`コマンドを立ち上げる
+2. rosbag から出力されたセンサーデータを Autoware が受け取り、perception モジュールが認識を行う
+3. そこで出力された対象の topic を保存しておく
+4. rosbag の再生が終了した後、保存した rosbag を1つのメッセージごとにparseさせ対象の topic を評価する
+
 
 ## 評価結果
 
-topic の subscribe 1 回につき、以下に記述する判定結果が出力される。
+pass/fail を判定する topic の subscribe 1 回につき、以下に記述する判定結果が出力される。
 
 ### 正常
 
@@ -92,8 +93,8 @@ Criterion:
       Distance: 50.0- # [m] null [Do not filter by distance] or lower_limit-(upper_limit) [Upper limit can be omitted. If omitted value is 1.7976931348623157e+308]
 ```
 
-- `/perception/object_recognition/{detection, tracking}/objects`のsubscribe 1回に対して、0.0-50.0[m]の距離にあるobjectで、tpのobject数がhard(75.0%)以上の場合。ResultのFrameがSuccessになる。
-- `/perception/object_recognition/{detection, tracking}/objects`のsubscribe 1回に対して、50.0-1.7976931348623157e+308[m]の距離にあるobjectで、tpのobject数がeasy(25.0%)以上の場合。ResultのFrameがSuccessになる。
+- pass/fail を判定する topic のsubscribe 1回に対して、0.0-50.0[m]の距離にあるobjectで、tpのobject数がhard(75.0%)以上の場合。ResultのFrameがSuccessになる。
+- pass/fail を判定する topic のsubscribe 1回に対して、50.0-1.7976931348623157e+308[m]の距離にあるobjectで、tpのobject数がeasy(25.0%)以上の場合。ResultのFrameがSuccessになる。
 - また、`PassRate >= 正常数 / 全受信数 * 100`の条件を満たすとき、ResultのTotalがSuccessになる。
 
 ### 異常
@@ -116,12 +117,14 @@ FrameSkipは評価をskipした回数のカウンタ。
 
 Subscribed topics:
 
-| topic 名                                         | データ型                                     |
-| ------------------------------------------------ | -------------------------------------------- |
-| /perception/object_recognition/detection/objects | autoware_perception_msgs/msg/DetectedObjects |
-| /perception/object_recognition/tracking/objects  | autoware_perception_msgs/msg/TrackedObjects  |
+| topic 名 | データ型                                      |
+| -------- | -------------------------------------------- |
+| *        | autoware_perception_msgs/msg/DetectedObjects |
+| *        | autoware_perception_msgs/msg/TrackedObjects  |
 
 Published topics:
+
+publish はされないが、最終的に保存される rosbag には以下が付与される
 
 | topic 名                                     | データ型                           |
 | -------------------------------------------- | ---------------------------------- |
@@ -134,7 +137,7 @@ Published topics:
 - planning: false
 - control: false
 
-**注:アノーテション時とシミュレーション時で自己位置を合わせたいので bag に入っている tf を使い回す。そのため localization は無効である。**
+**注:アノテーション時とシミュレーション時で自己位置を合わせたいので bag に入っている tf を使い回す。そのため localization は無効である。**
 
 ## 依存ライブラリ
 
@@ -142,15 +145,14 @@ Published topics:
 
 ### 依存ライブラリとの driving_log_replayer_v2 の役割分担
 
-driving_log_replayer_v2 が ROS との接続部分を担当し、perception_eval がデータセットを使って実際に評価する部分を担当するという分担になっている。
+driving_log_replayer_v2 が ROS との関係部分や pass/fail を判定する部分を担当する。perception_eval がデータセットを使って実際に評価する部分を担当するという分担になっている。
 perception_eval は ROS 非依存のライブラリなので、ROS のオブジェクトを受け取ることができない。
-また、timestamp が ROS ではナノ秒、t4_dataset は `nuScenes` をベースしているためミリ秒が採用されている。
+また、timestamp が ROS ではナノ秒、t4_dataset は `nuScenes` をベースしているためマイクロ秒が採用されている。
 このため、ライブラリ使用前に適切な変換が必要となる。
 
-driving_log_replayer_v2 は、autoware の perception モジュールから出力された topic を subscribe し、perception_eval で定義されている class に合わせたデータ形式に変換して渡す。
-また、perception_eval から返ってくる評価結果の ROS の topic で publish し可視化する部分も担当する。
+また、perception_eval から返ってくる評価結果を ROS の topic で 保存し可視化する部分も担当する。
 
-perception_eval は、driving_log_replayer_v2 から渡された検知結果と GroundTruth を比較して指標を計算し、結果を出力する部分を担当する。
+perception_eval は、driving_log_replayer_v2 から渡された検知結果と GroundTruth を比較して指標を計算し、評価を出力する部分を担当する。
 
 ## simulation
 
@@ -160,7 +162,7 @@ perception_eval は、driving_log_replayer_v2 から渡された検知結果と 
 
 t4_dataset で必要なトピックが含まれていること
 
-車両の ECU の CAN と、使用している sensor の topic が必要
+車両の ECU の CAN と、使用している sensor の topic が必要である。 しかし、sensing:=falseにした場合CANから得られる車速情報を利用しなくなるため必要ない。
 以下は例であり、違うセンサーを使っている場合は適宜読み替える。
 
 LiDAR が複数ついている場合は、搭載されているすべての LiDAR の packets を含める。
@@ -259,6 +261,18 @@ perception では、シナリオに指定した条件で perception_eval が評�
       // criteria1の結果、真値と認識結果が存在しない場合
       "NoGTNoObj": "真値と認識結果がフィルタされて評価できなかった回数"
     }
+  }
+}
+```
+
+
+情報のフォーマット
+
+```json
+{
+  "Frame": {
+    "Info": "情報のメッセージ",
+    "FrameSkip": "評価が飛ばされた回数の合計。objectの評価を依頼したがdatasetに75msec以内の真値がなく場合、または、footprint.pointsの数が1か2の場合に発生する"
   }
 }
 ```

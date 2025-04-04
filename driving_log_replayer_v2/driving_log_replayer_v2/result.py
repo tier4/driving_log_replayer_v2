@@ -125,7 +125,10 @@ class ResultWriter:
         self._result_file.write(str_record)
 
     def write_result(self, result: ResultBase) -> None:
-        self.write_line(self.get_result(result))
+        self.write_line(self.get_result(result, None))
+
+    def write_result_with_time(self, result: ResultBase, ros_timestamp: int) -> None:
+        self.write_line(self.get_result(result, ros_timestamp))
 
     def write_condition(self, condition: BaseModel | dict, *, updated: bool = False) -> None:
         condition_dict = condition if isinstance(condition, dict) else condition.model_dump()
@@ -142,10 +145,12 @@ class ResultWriter:
             "Frame": {},
         }
 
-    def get_result(self, result: ResultBase) -> dict:
+    def get_result(self, result: ResultBase, ros_timestamp: int | None = None) -> dict:
         system_time = self._system_clock.now()
         time_dict = {"System": system_time.nanoseconds / pow(10, 9)}
-        if self._ros_clock.ros_time_is_active:
+        if ros_timestamp is not None:
+            time_dict["ROS"] = ros_timestamp / pow(10, 9)
+        elif self._ros_clock.ros_time_is_active:
             ros_time = self._ros_clock.now()
             time_dict["ROS"] = ros_time.nanoseconds / pow(10, 9)
         else:

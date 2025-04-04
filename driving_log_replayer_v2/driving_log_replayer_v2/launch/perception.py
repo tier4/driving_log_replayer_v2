@@ -15,15 +15,15 @@
 from launch.actions import DeclareLaunchArgument
 
 RECORD_TOPIC = """^/tf$\
+|^/tf_static$\
 |^/diagnostics$\
-|^/sensing/lidar/concatenated/pointcloud$\
-|^/perception/object_recognition/detection/objects$\
-|^/perception/object_recognition/tracking/objects$\
-|^/perception/object_recognition/objects$\
-|^/perception/object_recognition/tracking/multi_object_tracker/debug/.*\
-|^/perception/object_recognition/detection/.*/debug/pipeline_latency_ms$\
-|^/driving_log_replayer_v2/.*\
 |^/sensing/camera/.*\
+|^/sensing/lidar/concatenated/pointcloud$\
+|^/perception/object_recognition/detection/.*/debug/pipeline_latency_ms$\
+|^/perception/object_recognition/tracking/multi_object_tracker/debug/.*\
+|^/perception/object_recognition/prediction/map_based_prediction/debug/pipeline_latency_ms$\
+|^/perception/object_recognition/.*/objects$\
+|^/perception/object_recognition/objects$\
 """
 
 AUTOWARE_DISABLE = {
@@ -36,4 +36,26 @@ AUTOWARE_ARGS = {}
 
 NODE_PARAMS = {}
 
-USE_CASE_ARGS: list[DeclareLaunchArgument] = []
+USE_CASE_ARGS: list[DeclareLaunchArgument] = [
+    DeclareLaunchArgument(
+        "evaluation_detection_topic_regex",
+        default_value="""\
+            |^/perception/object_recognition/detection/objects$\
+            |^/perception/object_recognition/detection/centerpoint/objects$\
+            |^/perception/object_recognition/detection/centerpoint/validation/objects$\
+            |^/perception/object_recognition/detection/clustering/objects$\
+            |^/perception/object_recognition/detection/detection_by_tracker/objects$\
+            """,
+    ),
+    DeclareLaunchArgument(
+        "evaluation_tracking_topic_regex",
+        default_value="""\
+            |^/perception/object_recognition/tracking/objects$\
+            """,
+    ),
+    DeclareLaunchArgument(
+        "evaluation_prediction_topic_regex",
+        default_value="""\
+            """,
+    ),
+]
