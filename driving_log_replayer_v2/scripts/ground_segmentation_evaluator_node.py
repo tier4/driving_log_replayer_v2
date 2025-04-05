@@ -32,9 +32,11 @@ from driving_log_replayer_v2.ground_segmentation import GroundSegmentationScenar
 import driving_log_replayer_v2.perception_eval_conversions as eval_conversions
 from driving_log_replayer_v2_msgs.msg import GroundSegmentationEvalResult
 
+from typing import List, Dict, Tuple
+
 
 class GroundSegmentationEvaluator(DLREvaluatorV2):
-    CLOUD_DIM = 6
+    CLOUD_DIM = 5
     TS_DIFF_THRESH = 75000
 
     def __init__(self, name: str) -> None:
@@ -58,26 +60,34 @@ class GroundSegmentationEvaluator(DLREvaluatorV2):
             sample_data = list(filter(lambda d: d["filename"].split(".")[-2] == "pcd", sample_data))
 
             # load gt annotation data
-            lidarseg_dir_path = Path(self._t4_dataset_paths[0], "lidar_semseg_sample", "data")
-            lidarseg_json_path = Path(lidarseg_dir_path, "lidar_annotations_accepted_deepen2.json")
+            lidarseg_dir_path = Path(self._t4_dataset_paths[0], "lidar_semseg_sample")
+            lidarseg_json_path = Path(lidarseg_dir_path, "data", "deepen_format", "lidar_annotations_accepted_deepen2.json")
             lidarseg_data = json.load(lidarseg_json_path.open())
-            pcd_to_lidarseg_data = {}
+            raw_points_to_seg_data = {}
             for annotation_data in lidarseg_data:
-                pcd_to_lidarseg_data[annotation_data["filename"]] = annotation_data
+                raw_points_file = annotation_data["file_id"] + ".bin"
+                raw_points_to_seg_data[raw_points_file] = annotation_data
 
-            self.ground_truth: dict[int, np.ndarray] = {}
+            self.ground_truth: Dict[int, Tuple[np.ndarray, np.ndarray]] = {}
             for i in range(len(sample_data)):
-                pcd_file_path = Path(
+                raw_points_file_path = Path(
                     self._t4_dataset_paths[0],
                     sample_data[i]["filename"],
                 ).as_posix()
-                raw_points = np.fromfile(pcd_file_path, dtype=np.float32)
-            
-                annotation_file_path = lidarseg_dir_path + pcd_to_lidarseg_data[str(int(sample_data[i]["filename"].split("/")[-1].split(".")[0])) + ".pcd"]["lidarseg_anno_file"]
+                raw_points_file_name = str(int(raw_points_file_path.split("/")[-1].split(".")[0])) + ".pcd.bin"
+                raw_points = np.fromfile(raw_points_file_path, dtype=np.float32)
+
+                label_file_path = Path(lidarseg_dir_path, raw_points_to_seg_data[raw_points_file_name]["lidarseg_anno_file"])
+                self.get_logger().info(f"label_file_path: {label_file_path}")
+                annotation_file_path = Path(lidarseg_dir_path, label_file_path).as_posix()
                 labels = np.fromfile(annotation_file_path, dtype=np.uint8)
 
+                self.get_logger().info(f"raw_poitns shape: {raw_points.shape}")
+                self.get_logger().info(f"labels shape: {labels.shape}")
+
                 points: np.ndarray = raw_points.reshape((-1, self.CLOUD_DIM))
-                self.ground_truth[int(sample_data[i]["timestamp"])] = points
+                self.get_logger().info(f"points shape: {points.shape}")
+                self.ground_truth[int(sample_data[i]["timestamp"])] = (points, labels)
 
             self.__sub_pointcloud = self.create_subscription(
                 PointCloud2,
@@ -118,7 +128,8 @@ class GroundSegmentationEvaluator(DLREvaluatorV2):
 
         # get ground truth pointcloud in this frame
         # construct kd-tree from gt cloud
-        gt_frame_cloud: np.ndarray = self.ground_truth[gt_frame_ts]
+        gt_frame_cloud: np.ndarray = self.ground_truth[gt_frame_ts][0]
+        gt_frame_label: np.ndarray = self.ground_truth[gt_frame_ts][1]
         kdtree = cKDTree(gt_frame_cloud[:, 0:3])
 
         # convert ros2 pointcloud to numpy
@@ -129,8 +140,8 @@ class GroundSegmentationEvaluator(DLREvaluatorV2):
         pointcloud[:, 2] = numpy_pcd["z"]
 
         # count TP+FN, TN+FP
-        tp_fn = np.count_nonzero(gt_frame_cloud[:, 5] == self.ground_label)
-        fp_tn = np.count_nonzero(gt_frame_cloud[:, 5] == self.obstacle_label)
+        tp_fn = np.count_nonzero(gt_frame_label[:, 0] == self.ground_label)
+        fp_tn = np.count_nonzero(gt_frame_label[:, 0] == self.obstacle_label)
         tn: int = 0
         fn: int = 0
         for p in pointcloud:
