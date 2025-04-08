@@ -116,7 +116,7 @@ FrameSkipは評価をskipした回数のカウンタ。
 
 pass/fail を判定する topic は scenario.yaml で定義する evaluation_task に基づく。
 
-| evaluation_task | topic 名                                     |
+| evaluation_task | データ型                                     |
 | --------------- | -------------------------------------------- |
 | detection       | autoware_perception_msgs/msg/DetectedObjects |
 | tracking        | autoware_perception_msgs/msg/TrackedObjects  |

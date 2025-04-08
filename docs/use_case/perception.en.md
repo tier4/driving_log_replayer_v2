@@ -2,9 +2,9 @@
 
 The performance of Autoware's recognition function (perception) is evaluated by calculating mAP (mean Average Precision) and other indices from the recognition results.
 
-Run the perception module and pass the output perception topic to the evaluation library for evaluation.
+The perception topic is saved when Autoware is executed. The evaluation is then performed during post-processing.
 
-Since it is activated in the perception_mode described in the scenario, change the scenario if you want to change the sensor to be evaluated.
+The topic for pass/fail is based on the evaluation_task described in scenario.yaml. The topic to be analyzed can be specified from terminal arguments. If not specified, the default value is used.
 
 ## Preparation
 
@@ -67,14 +67,14 @@ $HOME/autoware/install/lidar_centerpoint/share/lidar_centerpoint/data/pts_voxel_
 
 Launching the file executes the following steps:
 
-1. Execute launch of evaluation node (`perception_evaluator_node`), `logging_simulator.launch` file and `ros2 bag play` command
-2. Autoware receives sensor data output from input rosbag and outputs point cloud data, and the perception module performs recognition.
-3. The evaluation node subscribes to `/perception/object_recognition/{detection, tracking}/objects` and evaluates data. The result is dumped into a file.
-4. When the playback of the rosbag is finished, Autoware's launch is automatically terminated, and the evaluation is completed.
+1. launch the commands `logging_simulator.launch` and `ros2 bag play`
+2. Autoware receives the sensor data output from the rosbag and the perception module recognizes it
+3. Save it
+4. After rosbag playback is finished, parse the saved rosbag one message at a time and evaluate the target topic.
 
 ## Evaluation results
 
-The results are calculated for each subscription. The format and available states are described below.
+The results are calculated for each subscription to judge pass/fail. The format and available states are described below.
 
 ### Perception Normal
 
@@ -96,8 +96,8 @@ Criterion:
       Distance: 50.0- # [m] null [Do not filter by distance] or lower_limit-(upper_limit) [Upper limit can be omitted. If omitted value is 1.7976931348623157e+308]
 ```
 
-- For each subscription of `/perception/object_recognition/{detection, tracking}/objects`, the number of objects in tp is hard (75.0%) or more for objects at a distance of 0.0-50.0[m]. Frame of Result becomes Success.
-- For one subscription of `/perception/object_recognition/{detection, tracking}/objects`, the number of objects in tp is easy (25.0%) or more for objects at a distance of 50.0-1.7976931348623157e+308[m]. Frame of Result becomes Success.
+- For each subscription of topic to judge pass/fail, the number of objects in tp is hard (75.0%) or more for objects at a distance of 0.0-50.0[m]. Frame of Result becomes Success.
+- For one subscription of topic to judge pass/fail, the number of objects in tp is easy (25.0%) or more for objects at a distance of 50.0-1.7976931348623157e+308[m]. Frame of Result becomes Success.
 - If the condition `PassRate >= Normal / Total Received * 100` is satisfied, the Total of Result becomes Success.
 
 ### Perception Error
@@ -116,16 +116,27 @@ FrameSkip is a counter for the number of times evaluation is skipped.
 
 - When the Ground Truth and the recognition objects are filtered by the filter condition and not evaluated (when the content of the evaluation result PassFail object is empty).
 
-## Topic name and data type used by evaluation node
+## Topic name and data type used by evaluation script
 
-Subscribed topics:
+The topic to determine pass/fail is based on the evaluation_task defined in scenario.yaml.
 
-| Topic name                                       | Data type                                    |
-| ------------------------------------------------ | -------------------------------------------- |
-| /perception/object_recognition/detection/objects | autoware_perception_msgs/msg/DetectedObjects |
-| /perception/object_recognition/tracking/objects  | autoware_perception_msgs/msg/TrackedObjects  |
+| evaluation_task | Data type                                    |
+| --------------- | -------------------------------------------- |
+| detection       | autoware_perception_msgs/msg/DetectedObjects |
+| tracking        | autoware_perception_msgs/msg/TrackedObjects  |
+| prediction      | TBD                                          |
+| fp_validation   | autoware_perception_msgs/msg/DetectedObjects |
 
-Published topics:
+The topic to be analyzed, independent of pass/fail, can be defined with the terminal argument USE_CASE_ARGS.
+
+| Arguments                            | Data type                                    |
+| ------------------------------------ | -------------------------------------------- |
+| evaluation_detection_topic_regex     | autoware_perception_msgs/msg/DetectedObjects |
+| evaluation_tracking_topic_regex      | autoware_perception_msgs/msg/TrackedObjects  |
+| evaluation_prediction_topic_regex    | TBD                                          |
+| evaluation_fp_validation_topic_regex | autoware_perception_msgs/msg/DetectedObjects |
+
+The results obtained through the evaluation are also written in rosbag.
 
 | Topic name                                   | Data type                          |
 | -------------------------------------------- | ---------------------------------- |
@@ -146,13 +157,13 @@ The perception evaluation step bases on the [perception_eval](https://github.com
 
 ### Division of roles of driving_log_replayer_v2 with dependent libraries
 
-`driving_log_replayer_v2` package is in charge of the connection with ROS. The actual perception evaluation is conducted in [perception_eval](https://github.com/tier4/autoware_perception_evaluation) library.
-The [perception_eval](https://github.com/tier4/autoware_perception_evaluation) is a ROS-independent library, it cannot receive ROS objects. Also, ROS timestamps use nanoseconds while the `t4_dataset` format is based on milliseconds (because it uses `nuScenes`), so the values must be properly converted before using the library's functions.
+`driving_log_replayer_v2` package is in charge of the part of the relationship with ROS and the part that determines pass/fail. The actual perception evaluation is conducted in [perception_eval](https://github.com/tier4/autoware_perception_evaluation) library.
+The [perception_eval](https://github.com/tier4/autoware_perception_evaluation) is a ROS-independent library, it cannot receive ROS objects. Also, ROS timestamps use nanoseconds while the `t4_dataset` format is based on microseconds (because it uses `nuScenes`), so the values must be properly converted before using the library's functions.
 
 `driving_log_replayer_v2` subscribes the topic output from the perception module of Autoware, converts it to the data format defined in [perception_eval](https://github.com/tier4/autoware_perception_evaluation), and passes it on.
 It is also responsible for publishing and visualizing the evaluation results from [perception_eval](https://github.com/tier4/autoware_perception_evaluation) on proper ROS topic.
 
-[perception_eval](https://github.com/tier4/autoware_perception_evaluation) is in charge of the part that compares the detection results passed from `driving_log_replayer_v2` with ground truth data, calculates the index, and outputs the results.
+[perception_eval](https://github.com/tier4/autoware_perception_evaluation) is in charge of the part that compares the detection results passed from `driving_log_replayer_v2` with ground truth data, calculates the index, and outputs the evaluations.
 
 ## About simulation
 
@@ -163,35 +174,26 @@ State the information required to run the simulation.
 Must contain the required topics in `t4_dataset` format.
 
 The vehicle's ECU CAN and sensors data topics are required for the evaluation to be run correctly.
-The following example shows the topic list available in evaluation input rosbag when multiple LiDARs and Cameras are used in a real-world vehicle configuration.
 
-/sensing/lidar/concatenated/pointcloud is used when sensing:=false is added to the launch argument.
+If more than one CAMERA is attached, all camera_info and image_rect_color_compressed should be included.
+In addition, /sensing/lidar/concatenated/pointcloud is remapped to avoid duplication depending on true or false of sensing.
 
-| Topic name                                           | Data type                                    |
-| ---------------------------------------------------- | -------------------------------------------- |
-| /pacmod/from_can_bus                                 | can_msgs/msg/Frame                           |
-| /localization/kinematic_state                        | nav_msgs/msg/Odometry                        |
-| /sensing/camera/camera\*/camera_info                 | sensor_msgs/msg/CameraInfo                   |
-| /sensing/camera/camera\*/image_rect_color/compressed | sensor_msgs/msg/CompressedImage              |
-| /sensing/gnss/ublox/fix_velocity                     | geometry_msgs/msg/TwistWithCovarianceStamped |
-| /sensing/gnss/ublox/nav_sat_fix                      | sensor_msgs/msg/NavSatFix                    |
-| /sensing/gnss/ublox/navpvt                           | ublox_msgs/msg/NavPVT                        |
-| /sensing/imu/tamagawa/imu_raw                        | sensor_msgs/msg/Imu                          |
-| /sensing/lidar/concatenated/pointcloud               | sensor_msgs/msg/PointCloud2                  |
-| /sensing/lidar/\*/velodyne_packets                   | velodyne_msgs/VelodyneScan                   |
-| /tf                                                  | tf2_msgs/msg/TFMessage                       |
+| Topic name                                           | Data type                       |
+| ---------------------------------------------------- | ------------------------------- |
+| /pacmod/from_can_bus                                 | can_msgs/msg/Frame              |
+| /sensing/camera/camera\*/camera_info                 | sensor_msgs/msg/CameraInfo      |
+| /sensing/camera/camera\*/image_rect_color/compressed | sensor_msgs/msg/CompressedImage |
+| /sensing/lidar/concatenated/pointcloud               | sensor_msgs/msg/PointCloud2     |
+| /sensing/lidar/\*/velodyne_packets                   | velodyne_msgs/VelodyneScan      |
+| /tf                                                  | tf2_msgs/msg/TFMessage          |
 
 The vehicle topics can be included instead of CAN.
 
 | Topic name                                           | Data type                                      |
 | ---------------------------------------------------- | ---------------------------------------------- |
-| /localization/kinematic_state                        | nav_msgs/msg/Odometry                          |
+| /pacmod/from_can_bus                                 | can_msgs/msg/Frame                             |
 | /sensing/camera/camera\*/camera_info                 | sensor_msgs/msg/CameraInfo                     |
 | /sensing/camera/camera\*/image_rect_color/compressed | sensor_msgs/msg/CompressedImage                |
-| /sensing/gnss/ublox/fix_velocity                     | geometry_msgs/msg/TwistWithCovarianceStamped   |
-| /sensing/gnss/ublox/nav_sat_fix                      | sensor_msgs/msg/NavSatFix                      |
-| /sensing/gnss/ublox/navpvt                           | ublox_msgs/msg/NavPVT                          |
-| /sensing/imu/tamagawa/imu_raw                        | sensor_msgs/msg/Imu                            |
 | /sensing/lidar/concatenated/pointcloud               | sensor_msgs/msg/PointCloud2                    |
 | /sensing/lidar/\*/velodyne_packets                   | velodyne_msgs/VelodyneScan                     |
 | /tf                                                  | tf2_msgs/msg/TFMessage                         |
@@ -258,6 +260,17 @@ Format of each frame:
       // result of criteria 1. If the Ground Truth and the recognition objects do not exist
       "NoGTNoObj": "Number of times that the Ground Truth and the recognition objects were filtered and could not be evaluated."
     }
+  }
+}
+```
+
+Information Data Format:
+
+```json
+{
+  "Frame": {
+    "Info": "情報のメッセージ",
+    "FrameSkip": "評価が飛ばされた回数の合計。objectの評価を依頼したがdatasetに75msec以内の真値がなく場合、または、footprint.pointsの数が1か2の場合に発生する"
   }
 }
 ```
