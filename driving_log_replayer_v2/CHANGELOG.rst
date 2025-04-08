@@ -2,6 +2,15 @@
 Changelog for package driving_log_replayer
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
+Forthcoming
+-----------
+* chore: update tool version (`#122 <https://github.com/tier4/driving_log_replayer_v2/issues/122>`_)
+  * chore: update ruff and pre-commit tool version
+  * fix: auto fix
+  * fix: ruff C420
+  ---------
+* Contributors: Hayato Mizushima
+
 3.6.4 (2025-03-27)
 ------------------
 * feat: exclude data while initialization from performance diag total evaluation (`#116 <https://github.com/tier4/driving_log_replayer_v2/issues/116>`_)

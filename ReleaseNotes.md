@@ -1,5 +1,14 @@
 # Release Notes
 
+## Version 3.6.5
+
+Minor Tweak
+
+| Module           | Feature          | Brief summary                           | Pull request                                                      | Contributor                                   |
+| ---------------- | ---------------- | --------------------------------------- | ----------------------------------------------------------------- | --------------------------------------------- |
+| `all_components` | documentation    | add all_components documentation        | [#121](https://github.com/tier4/driving_log_replayer_v2/pull/121) | [hayato-m126](https://github.com/hayato-m126) |
+| `common`         | linter formatter | update ruff and pre-commit tool version | [#122](https://github.com/tier4/driving_log_replayer_v2/pull/122) | [hayato-m126](https://github.com/hayato-m126) |
+
 ## Version 3.6.4
 
 Minor Tweak
