@@ -24,7 +24,7 @@ from launch.actions import OpaqueFunction
 from driving_log_replayer_v2.launch.argument import add_use_case_arguments
 from driving_log_replayer_v2.launch.argument import ensure_arg_compatibility
 from driving_log_replayer_v2.launch.argument import get_launch_arguments
-from driving_log_replayer_v2.perception.perception import evaluate
+from driving_log_replayer_v2.perception.runner import evaluate
 
 
 def post_process(context: LaunchContext) -> list:

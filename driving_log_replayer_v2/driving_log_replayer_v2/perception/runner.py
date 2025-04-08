@@ -247,7 +247,7 @@ def evaluate(
                 subscribed_ros_timestamp,
                 {"frame": frame_result, "skip": skip_counter},
             )
-    rosbag_manager.finish_write()
+    rosbag_manager.close_writer()
 
     # calculation of the overall evaluation like mAP, TP Rate, etc and save evaluated data.
     final_metrics: dict[str, dict] = evaluator.get_evaluation_results()

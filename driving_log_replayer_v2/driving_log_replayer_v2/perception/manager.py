@@ -45,9 +45,7 @@ class EvaluationManager:
         self._evaluators: dict[str, PerceptionEvaluator]
 
         try:
-            self._scenario: PerceptionScenario = load_scenario(
-                Path(scenario_path), PerceptionScenario
-            )
+            self._scenario = load_scenario(Path(scenario_path), PerceptionScenario)
             evaluation_condition = {}
             if (
                 hasattr(self._scenario.Evaluation, "Conditions")
@@ -59,7 +57,7 @@ class EvaluationManager:
             self._error = e
             return
 
-        self._evaluators: dict[str, PerceptionEvaluator] = {
+        self._evaluators = {
             topic: PerceptionEvaluator(
                 copy.deepcopy(self._scenario.Evaluation.PerceptionEvaluationConfig),
                 copy.deepcopy(self._scenario.Evaluation.CriticalObjectFilterConfig),
@@ -83,7 +81,7 @@ class EvaluationManager:
         return self._evaluators.keys()
 
     def get_degradation_topic(self) -> str:
-        # TODO: Defined topic itself in the same line as Criterion in Conditions
+        # TODO: Define topic itself in the same line as Criterion in Conditions
         evaluation_task = self._scenario.Evaluation.PerceptionEvaluationConfig[
             "evaluation_config_dict"
         ]["evaluation_task"]

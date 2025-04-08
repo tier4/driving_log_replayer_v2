@@ -57,7 +57,7 @@ class RosBagManager:
         self._writer: SequentialWriter
         self._writer_storage_options: StorageOptions
         self._evaluate_topic: list[str]
-        self._topic_name2type: dict[str, str]
+        self._topic_name2type: dict[str, str] = {}
         self._last_ros_timestamp: int
         self._tf_buffer: Buffer
 
@@ -74,15 +74,14 @@ class RosBagManager:
         self._writer.open(self._writer_storage_options, converter_options)
 
         # writer preparation
-        self._topic_name2type: dict[str, str] = {}
         for topic_type in self._reader.get_all_topics_and_types():
             self._writer.create_topic(topic_type)
             self._topic_name2type[topic_type.name] = topic_type.type
         for topic_type in additional_record_topic:
             self._writer.create_topic(topic_type)
 
-        self._evaluate_topic: list[str] = evaluation_topic
-        self._tf_buffer: Buffer = Buffer()
+        self._evaluate_topic = evaluation_topic
+        self._tf_buffer = Buffer()
 
     def _get_default_converter_options(self) -> ConverterOptions:
         return ConverterOptions(
@@ -147,7 +146,7 @@ class RosBagManager:
         msg_bytes = serialize_message(msg)
         self._writer.write(topic_name, msg_bytes, ros_timestamp)
 
-    def finish_write(self) -> None:
+    def close_writer(self) -> None:
         del self._writer
         Reindexer().reindex(self._writer_storage_options)
 

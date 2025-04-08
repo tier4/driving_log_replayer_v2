@@ -32,7 +32,6 @@ from perception_eval.tool import PerceptionAnalyzer3D
 from perception_eval.util.logger_config import configure_logger
 
 if TYPE_CHECKING:
-    from perception_eval.common.evaluation_task import EvaluationTask
     from perception_eval.evaluation.metrics import MetricsScore
 
 
@@ -49,7 +48,6 @@ class PerceptionEvaluator:
     ) -> None:
         self.__skip_counter = 0
         self.__frame_id_str: str
-        evaluation_config: PerceptionEvaluationConfig
         self.__critical_object_filter_config: CriticalObjectFilterConfig
         self.__frame_pass_fail_config: PerceptionPassFailConfig
         self.__evaluator: PerceptionEvaluationManager
@@ -73,7 +71,7 @@ class PerceptionEvaluator:
         ).as_posix()
 
         # parameters underlying evaluation
-        evaluation_config = PerceptionEvaluationConfig(
+        evaluation_config: PerceptionEvaluationConfig = PerceptionEvaluationConfig(
             dataset_paths=[t4_dataset_path],
             frame_id=self.__frame_id_str,
             result_root_directory=Path(
@@ -210,7 +208,7 @@ class PerceptionEvaluator:
         err_msg = "Analyzer is not available. Please call get_evaluation_results() first or evaluation_task is fp_validation."
         raise RuntimeError(err_msg)
 
-    def __check_evaluation_task(self, evaluation_task: EvaluationTask) -> bool:
+    def __check_evaluation_task(self, evaluation_task: str) -> bool:
         if evaluation_task in ["detection", "fp_validation"]:
             self.__frame_id_str = "base_link"
             return True
