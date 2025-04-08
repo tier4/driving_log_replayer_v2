@@ -7,15 +7,15 @@ Evaluation:
   UseCaseName: all_components
   UseCaseFormatVersion: 0.1.0
   Datasets:
-  - sample_dataset:
-      VehicleId: default
-      InitialPose:
-        position:
-          x: 3839.340576171875
-          y: 73731.3359375
-          z: 19.639482498168945
-        orientation:
-          x: -0.023971009814459248
-          y: 0.005891999600528019
-          z: -0.9709848597542231
-          w: 0.237863568369043
+    - sample_dataset:
+        VehicleId: default
+        InitialPose:
+          position:
+            x: 3839.340576171875
+            y: 73731.3359375
+            z: 19.639482498168945
+          orientation:
+            x: -0.023971009814459248
+            y: 0.005891999600528019
+            z: -0.9709848597542231
+            w: 0.237863568369043
