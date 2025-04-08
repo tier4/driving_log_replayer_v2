@@ -576,7 +576,7 @@ class NonDetection(EvaluationItem):
             # 詳細情報の追記を書く
             dist_dict = {}
             for i in range(100):
-                dist_dict[f"{i}-{i+1}"] = np.count_nonzero(
+                dist_dict[f"{i}-{i + 1}"] = np.count_nonzero(
                     (i <= dist_array) & (dist_array < i + 1),
                 )
             info = {

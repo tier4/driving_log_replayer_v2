@@ -129,9 +129,9 @@ class CriteriaLevel(Enum):
         """
         min_range = 0.0
         max_range = 100.0
-        assert (
-            min_range <= value <= max_range
-        ), f"Custom level must be [0.0, 100.0], but got {value}."
+        assert min_range <= value <= max_range, (
+            f"Custom level must be [0.0, 100.0], but got {value}."
+        )
         cls.CUSTOM._value_ = float(value)
         return cls.CUSTOM
 
@@ -179,9 +179,9 @@ class CriteriaMethod(Enum):
 
         """
         name: str = value.upper()
-        assert (
-            name in cls.__members__
-        ), "value must be NUM_TP, LABEL, METRICS_SCORE, or METRICS_SCORE_MAPH"
+        assert name in cls.__members__, (
+            "value must be NUM_TP, LABEL, METRICS_SCORE, or METRICS_SCORE_MAPH"
+        )
         return cls.__members__[name]
 
 
