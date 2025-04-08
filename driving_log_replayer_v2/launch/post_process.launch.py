@@ -69,7 +69,7 @@ def post_process(context: LaunchContext) -> list:
                 .as_posix(),
                 Path(context.launch_configurations["result_bag_path"]).as_posix(),
             )
-            return []
+            return [LogInfo(msg="perception post process finished.")]
 
         return [
             LogInfo(msg="run perception analysis."),
