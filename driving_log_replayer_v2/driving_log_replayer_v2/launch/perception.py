@@ -45,17 +45,26 @@ USE_CASE_ARGS: list[DeclareLaunchArgument] = [
             |^/perception/object_recognition/detection/centerpoint/validation/objects$\
             |^/perception/object_recognition/detection/clustering/objects$\
             |^/perception/object_recognition/detection/detection_by_tracker/objects$\
-            """,
+        """,
+        description="Regex pattern for evaluation detection topic name. Must start with '^' and end with '$'. Wildcards (e.g. '.*', '+', '?', '[...]') are not allowed.",
     ),
     DeclareLaunchArgument(
         "evaluation_tracking_topic_regex",
         default_value="""\
             |^/perception/object_recognition/tracking/objects$\
-            """,
+        """,
+        description="Regex pattern for evaluation tracking topic name. Must start with '^' and end with '$'. Wildcards (e.g. '.*', '+', '?', '[...]') are not allowed.",
     ),
     DeclareLaunchArgument(
         "evaluation_prediction_topic_regex",
         default_value="""\
-            """,
+        """,
+        description="Regex pattern for evaluation prediction topic name. Must start with '^' and end with '$'. Wildcards (e.g. '.*', '+', '?', '[...]') are not allowed.",
+    ),
+    DeclareLaunchArgument(
+        "evaluation_fp_validation_topic_regex",
+        default_value="""\
+        """,
+        description="Regex pattern for evaluation fp_validation topic name. Must start with '^' and end with '$'. Wildcards (e.g. '.*', '+', '?', '[...]') are not allowed.",
     ),
 ]

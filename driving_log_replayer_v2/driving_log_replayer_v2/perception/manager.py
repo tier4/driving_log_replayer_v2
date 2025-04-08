@@ -14,6 +14,7 @@
 
 from __future__ import annotations
 
+import copy
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -60,9 +61,9 @@ class EvaluationManager:
 
         self._evaluators: dict[str, PerceptionEvaluator] = {
             topic: PerceptionEvaluator(
-                self._scenario.Evaluation.PerceptionEvaluationConfig,
-                self._scenario.Evaluation.CriticalObjectFilterConfig,
-                self._scenario.Evaluation.PerceptionPassFailConfig,
+                copy.deepcopy(self._scenario.Evaluation.PerceptionEvaluationConfig),
+                copy.deepcopy(self._scenario.Evaluation.CriticalObjectFilterConfig),
+                copy.deepcopy(self._scenario.Evaluation.PerceptionPassFailConfig),
                 t4_dataset_path,
                 result_archive_path,
                 topic,
@@ -82,7 +83,17 @@ class EvaluationManager:
         return self._evaluators.keys()
 
     def get_degradation_topic(self) -> str:
-        return self._scenario.Evaluation.Conditions.DegradationTopic
+        # TODO: Defined topic itself in the same line as Criterion in Conditions
+        evaluation_task = self._scenario.Evaluation.PerceptionEvaluationConfig[
+            "evaluation_config_dict"
+        ]["evaluation_task"]
+        if evaluation_task in ["detection", "fp_validation"]:
+            return "/perception/object_recognition/detection/objects"
+        if evaluation_task == "tracking":
+            return "/perception/object_recognition/tracking/objects"
+        if evaluation_task == "prediction":
+            return "/perception/object_recognition/objects"
+        return ""
 
     def get_evaluation_config(self, topic_name: str) -> PerceptionEvaluationConfig:
         evaluator = self._evaluators[topic_name]

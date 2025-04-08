@@ -142,18 +142,20 @@ def write_result(
 
 def evaluate(
     scenario_path: str,
-    evaluation_detection_topic_regex: str,
-    evaluation_tracking_topic_regex: str,
-    evaluation_prediction_topic_regex: str,
     rosbag_dir_path: str,
     t4dataset_path: str,
     result_json_path: str,
     result_archive_path: str,
+    evaluation_detection_topic_regex: str,
+    evaluation_tracking_topic_regex: str,
+    evaluation_prediction_topic_regex: str,
+    evaluation_fp_validation_topic_regex: str,
 ) -> None:
     evaluation_topics = load_evaluation_topics(
         evaluation_detection_topic_regex,
         evaluation_tracking_topic_regex,
         evaluation_prediction_topic_regex,
+        evaluation_fp_validation_topic_regex,
     )
 
     evaluator = EvaluationManager(
@@ -261,26 +263,35 @@ def evaluate(
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Analyze perception rosbags")
     parser.add_argument("--scenario-path", help="Directory path to scenario files")
-    parser.add_argument(
-        "--evaluation-detection-topic-regex",
-        default="",
-        help="Regex for detection topic",
-    )
-    parser.add_argument(
-        "--evaluation-tracking-topic-regex",
-        default="",
-        help="Regex for tracking topic",
-    )
-    parser.add_argument(
-        "--evaluation-prediction-topic-regex",
-        default="",
-        help="Regex for prediction topic",
-    )
     parser.add_argument("--rosbag-dir-path", help="Directory path to rosbags")
     parser.add_argument("--t4dataset-path", help="Directory path to T4 dataset files")
     parser.add_argument("--result-json-path", help="Output filepath for the result in JSONL format")
     parser.add_argument(
         "--result-archive-path", help="Output filepath for the result in CSV format"
+    )
+    parser.add_argument(
+        "--evaluation-detection-topic-regex",
+        default="""\
+        """,
+        help="Regex pattern for evaluation detection topic name. Must start with '^' and end with '$'. Wildcards (e.g. '.*', '+', '?', '[...]') are not allowed.",
+    )
+    parser.add_argument(
+        "--evaluation-tracking-topic-regex",
+        default="""\
+        """,
+        help="Regex pattern for evaluation tracking topic name. Must start with '^' and end with '$'. Wildcards (e.g. '.*', '+', '?', '[...]') are not allowed.",
+    )
+    parser.add_argument(
+        "--evaluation-prediction-topic-regex",
+        default="""\
+        """,
+        help="Regex pattern for evaluation prediction topic name. Must start with '^' and end with '$'. Wildcards (e.g. '.*', '+', '?', '[...]') are not allowed.",
+    )
+    parser.add_argument(
+        "--evaluation-fp-validation-topic-regex",
+        default="""\
+        """,
+        help="Regex pattern for evaluation fp_validation topic name. Must start with '^' and end with '$'. Wildcards (e.g. '.*', '+', '?', '[...]') are not allowed.",
     )
     return parser.parse_args()
 
@@ -289,13 +300,14 @@ def main() -> None:
     args = parse_args()
     evaluate(
         args.scenario_path,
-        args.evaluation_detection_topic_regex,
-        args.evaluation_tracking_topic_regex,
-        args.evaluation_prediction_topic_regex,
         args.rosbag_dir_path,
         args.t4dataset_path,
         args.result_json_path,
         args.result_archive_path,
+        args.evaluation_detection_topic_regex,
+        args.evaluation_tracking_topic_regex,
+        args.evaluation_prediction_topic_regex,
+        args.evaluation_fp_validation_topic_regex,
     )
 
 

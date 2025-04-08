@@ -9,7 +9,7 @@ pass/fail を判定する topic はシナリオに記述する。解析したい
 ## 事前準備
 
 perception では、機械学習の学習済みモデルを使用する。
-モデルを事前に準備していないとAutowareから認識結果が出力されない。
+モデルを事前に準備していないと Autoware から認識結果が出力されない。
 何も評価結果が出てこない場合は、この作業が正しく出来ているか確認する。
 
 ### モデルファイルのダウンロード
@@ -68,7 +68,6 @@ launch を立ち上げると以下が順に実行され、評価される。
 3. そこで出力された対象の topic を保存しておく
 4. rosbag の再生が終了した後、保存した rosbag を1つのメッセージごとにparseさせ対象の topic を評価する
 
-
 ## 評価結果
 
 pass/fail を判定する topic の subscribe 1 回につき、以下に記述する判定結果が出力される。
@@ -77,7 +76,7 @@ pass/fail を判定する topic の subscribe 1 回につき、以下に記述�
 
 シナリオのCriterionタグのCriteriaを満たすこと。
 
-sampleのscenario.yamlは以下のようなっており、
+sample の scenario.yaml は以下のようなっており、
 
 ```yaml
 Criterion:
@@ -113,18 +112,29 @@ FrameSkipは評価をskipした回数のカウンタ。
 
 - フィルタ条件によって真値と認識結果がフィルタされ評価されなかった場合(評価結果PassFailのオブジェクトの中身が空の場合)
 
-## 評価ノードが使用する Topic 名とデータ型
+## 評価スクリプトが使用する Topic 名とデータ型
 
-Subscribed topics:
+degradation check topics:
 
-| topic 名 | データ型                                      |
-| -------- | -------------------------------------------- |
-| *        | autoware_perception_msgs/msg/DetectedObjects |
-| *        | autoware_perception_msgs/msg/TrackedObjects  |
+評価及び分析をする topic は
 
-Published topics:
+pass/fail を判定する topic は scenario.yaml に記載する。
 
-publish はされないが、最終的に保存される rosbag には以下が付与される
+分析をする topic は別途
+
+```yaml
+DegradationTopic: "/perception/object_recognition/detection/objects"
+Criterion:
+......
+```
+
+| topic 名 | データ型                                                                                    |
+| -------- | ------------------------------------------------------------------------------------------- |
+| \*       | autoware_perception_msgs/msg/DetectedObjects or autoware_perception_msgs/msg/TrackedObjects |
+
+written topics:
+
+評価を通じて得られた結果を rosbag に書き込む。
 
 | topic 名                                     | データ型                           |
 | -------------------------------------------- | ---------------------------------- |
@@ -162,39 +172,27 @@ perception_eval は、driving_log_replayer_v2 から渡された検知結果と 
 
 t4_dataset で必要なトピックが含まれていること
 
-車両の ECU の CAN と、使用している sensor の topic が必要である。 しかし、sensing:=falseにした場合CANから得られる車速情報を利用しなくなるため必要ない。
+車両の ECU の CAN と、使用している sensor の topic が必要
 以下は例であり、違うセンサーを使っている場合は適宜読み替える。
+CAMERA が複数ついている場合は、搭載されているすべての camera_info と image_rect_color_compressed を含める。
+尚、sensing の true or false によって/sensing/lidar/concatenated/pointcloudは重複しないように remap される。
 
-LiDAR が複数ついている場合は、搭載されているすべての LiDAR の packets を含める。
-/sensing/lidar/concatenated/pointcloudはlaunchのargumentにsensing:=falseを追加した場合に利用される。
-
-CAMERA が複数ついている場合は、搭載されているすべての camera_info と image_rect_color_compressed を含める
-
-| topic 名                                             | データ型                                     |
-| ---------------------------------------------------- | -------------------------------------------- |
-| /pacmod/from_can_bus                                 | can_msgs/msg/Frame                           |
-| /localization/kinematic_state                        | nav_msgs/msg/Odometry                        |
-| /sensing/camera/camera\*/camera_info                 | sensor_msgs/msg/CameraInfo                   |
-| /sensing/camera/camera\*/image_rect_color/compressed | sensor_msgs/msg/CompressedImage              |
-| /sensing/gnss/ublox/fix_velocity                     | geometry_msgs/msg/TwistWithCovarianceStamped |
-| /sensing/gnss/ublox/nav_sat_fix                      | sensor_msgs/msg/NavSatFix                    |
-| /sensing/gnss/ublox/navpvt                           | ublox_msgs/msg/NavPVT                        |
-| /sensing/imu/tamagawa/imu_raw                        | sensor_msgs/msg/Imu                          |
-| /sensing/lidar/concatenated/pointcloud               | sensor_msgs/msg/PointCloud2                  |
-| /sensing/lidar/\*/velodyne_packets                   | velodyne_msgs/VelodyneScan                   |
-| /tf                                                  | tf2_msgs/msg/TFMessage                       |
+| topic 名                                             | データ型                        |
+| ---------------------------------------------------- | ------------------------------- |
+| /pacmod/from_can_bus                                 | can_msgs/msg/Frame              |
+| /sensing/camera/camera\*/camera_info                 | sensor_msgs/msg/CameraInfo      |
+| /sensing/camera/camera\*/image_rect_color/compressed | sensor_msgs/msg/CompressedImage |
+| /sensing/lidar/concatenated/pointcloud               | sensor_msgs/msg/PointCloud2     |
+| /sensing/lidar/\*/velodyne_packets                   | velodyne_msgs/VelodyneScan      |
+| /tf                                                  | tf2_msgs/msg/TFMessage          |
 
 CAN の代わりに vehicle の topic を含めても良い。
 
 | topic 名                                             | データ型                                       |
 | ---------------------------------------------------- | ---------------------------------------------- |
-| /localization/kinematic_state                        | nav_msgs/msg/Odometry                          |
+| /pacmod/from_can_bus                                 | can_msgs/msg/Frame                             |
 | /sensing/camera/camera\*/camera_info                 | sensor_msgs/msg/CameraInfo                     |
 | /sensing/camera/camera\*/image_rect_color/compressed | sensor_msgs/msg/CompressedImage                |
-| /sensing/gnss/ublox/fix_velocity                     | geometry_msgs/msg/TwistWithCovarianceStamped   |
-| /sensing/gnss/ublox/nav_sat_fix                      | sensor_msgs/msg/NavSatFix                      |
-| /sensing/gnss/ublox/navpvt                           | ublox_msgs/msg/NavPVT                          |
-| /sensing/imu/tamagawa/imu_raw                        | sensor_msgs/msg/Imu                            |
 | /sensing/lidar/concatenated/pointcloud               | sensor_msgs/msg/PointCloud2                    |
 | /sensing/lidar/\*/velodyne_packets                   | velodyne_msgs/VelodyneScan                     |
 | /tf                                                  | tf2_msgs/msg/TFMessage                         |
@@ -264,7 +262,6 @@ perception では、シナリオに指定した条件で perception_eval が評�
   }
 }
 ```
-
 
 情報のフォーマット
 

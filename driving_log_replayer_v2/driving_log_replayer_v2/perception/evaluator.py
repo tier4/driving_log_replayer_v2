@@ -55,13 +55,14 @@ class PerceptionEvaluator:
         self.__evaluator: PerceptionEvaluationManager
         self.__result_archive_w_topic_path: Path
         self.__analyzer: PerceptionAnalyzer3D
+        self.__logger: logging.Logger
 
         perception_evaluation_config["evaluation_config_dict"]["label_prefix"] = "autoware"
 
-        perception_evaluation_config["evaluation_config_dict"]["evaluation_task"] = evaluation_task
         if not self.__check_evaluation_task(evaluation_task):
             err_msg = f"Invalid evaluation task: {evaluation_task}. "
             raise ValueError(err_msg)
+        perception_evaluation_config["evaluation_config_dict"]["evaluation_task"] = evaluation_task
 
         self.__result_archive_w_topic_path = Path(result_archive_path)
         self.__result_archive_w_topic_path.mkdir(exist_ok=True)
@@ -84,10 +85,12 @@ class PerceptionEvaluator:
             load_raw_data=False,
         )
 
-        _ = configure_logger(
+        # TODO: add annotation load log
+        self.__logger = configure_logger(
             log_file_directory=evaluation_config.log_directory,
             console_log_level=logging.INFO,
             file_log_level=logging.INFO,
+            logger_name=dir_name,
         )
 
         # parameters for which to focus on
@@ -130,7 +133,9 @@ class PerceptionEvaluator:
             and all(isinstance(obj, DynamicObject) for obj in estimated_objects)
         ):
             self.__skip_counter += 1
-            logging.warning("Estimated objects is invalid for timestamp: %s", header_unix_time)
+            self.__logger.warning(
+                "Estimated objects is invalid for timestamp: %s", header_unix_time
+            )
             return "Invalid Estimated Objects", self.__skip_counter
 
         ground_truth_now_frame = self.__evaluator.get_ground_truth_now_frame(
@@ -140,7 +145,7 @@ class PerceptionEvaluator:
 
         if ground_truth_now_frame is None:
             self.__skip_counter += 1
-            logging.warning("Ground truth not found for timestamp %s", header_unix_time)
+            self.__logger.warning("Ground truth not found for timestamp %s", header_unix_time)
             return "No Ground Truth", self.__skip_counter
 
         frame_result: PerceptionFrameResult = self.__evaluator.add_frame_result(
@@ -152,9 +157,8 @@ class PerceptionEvaluator:
         )
 
         # TODO: add topic delay
-        logging.info(
-            "evaluation task %s: %d",
-            self.__evaluator.evaluator_config.evaluation_task,
+        self.__logger.info(
+            "difference between header and subscribe [micro sec]: %d",
             subscribed_unix_time - header_unix_time,
         )
         # TODO: decide whether to add skip counter or not
@@ -225,11 +229,11 @@ class PerceptionEvaluator:
                 for frame_result in self.__evaluator.frame_results
             ],
         )
-        logging.info("Number of fails for critical objects: %d", num_critical_fail)
+        self.__logger.info("Number of fails for critical objects: %d", num_critical_fail)
 
         # scene metrics score
         final_metric_score = self.__evaluator.get_scene_result()
-        logging.info("final metrics result %s", final_metric_score)
+        self.__logger.info("final metrics result %s", final_metric_score)
         return final_metric_score
 
     def __get_fp_results(self) -> dict:
@@ -238,7 +242,7 @@ class PerceptionEvaluator:
         for status_info in status_list:
             tp_rate, fp_rate, tn_rate, fn_rate = status_info.get_status_rates()
             # display
-            logging.info(
+            self.__logger.info(
                 "uuid: %s, TP: %0.3f, FP: %0.3f, TN: %0.3f, FN: %0.3f\n Total: %s, TP: %s, FP: %s, TN: %s, FN: %s",
                 status_info.uuid,
                 tp_rate.rate,
@@ -268,7 +272,7 @@ class PerceptionEvaluator:
             }
 
         scene_tp_rate, scene_fp_rate, scene_tn_rate, scene_fn_rate = get_scene_rates(status_list)
-        logging.info(
+        self.__logger.info(
             "[scene] TP: %f, FP: %f, TN: %f, FN: %f",
             scene_tp_rate,
             scene_fp_rate,
