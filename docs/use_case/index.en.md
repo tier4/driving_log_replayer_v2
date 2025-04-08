@@ -16,3 +16,5 @@ This section describes how driving_log_replayer_v2 can be used for evaluation.
 - [Perception 2D](perception_2d.md)
 - [Planning Control](planning_control.md)
 - [Diagnostics](diagnostics.md)
+- [GroundSegmentation](ground_semgnetation.md)
+- [AllComponents](all_components.md)
