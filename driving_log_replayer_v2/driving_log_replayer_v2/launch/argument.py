@@ -220,9 +220,7 @@ def update_conf_with_dataset_info(
     conf["result_archive_path"] = output_dir.joinpath("result_archive").as_posix()
     conf["use_case"] = yaml_obj["Evaluation"]["UseCaseName"]
 
-    if conf["use_case"] == "all_components":
-        conf["record_only"] = "true"
-    if conf["use_case"] == "perception":
+    if conf["use_case"] in ["all_components", "perception"]:
         conf["record_only"] = "true"
 
 
