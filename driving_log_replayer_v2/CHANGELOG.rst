@@ -2,8 +2,8 @@
 Changelog for package driving_log_replayer
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-Forthcoming
------------
+3.6.5 (2025-04-08)
+------------------
 * chore: update tool version (`#122 <https://github.com/tier4/driving_log_replayer_v2/issues/122>`_)
   * chore: update ruff and pre-commit tool version
   * fix: auto fix
