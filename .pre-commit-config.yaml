@@ -19,7 +19,7 @@ repos:
         args: [--markdown-linebreak-ext=md]
 
   - repo: https://github.com/igorshubovych/markdownlint-cli
-    rev: v0.43.0
+    rev: v0.44.0
     hooks:
       - id: markdownlint
         args: [-c, .markdownlint.yaml, --fix, -i, CONTRIBUTING.md]
@@ -30,7 +30,7 @@ repos:
       - id: prettier
 
   - repo: https://github.com/adrienverge/yamllint
-    rev: v1.35.1
+    rev: v1.37.0
     hooks:
       - id: yamllint
 
@@ -49,13 +49,13 @@ repos:
       - id: shellcheck
 
   - repo: https://github.com/scop/pre-commit-shfmt
-    rev: v3.10.0-2
+    rev: v3.11.0-1
     hooks:
       - id: shfmt
         args: [-w, -s, -i=4]
 
   - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.8.0 # Match the version used by the vscode extension. Otherwise, the editor and the command may say different things.
+    rev: v0.11.2 # Match the version used by the vscode extension. Otherwise, the editor and the command may say different things.
     hooks:
       - id: ruff
         args: [--fix]
