@@ -348,9 +348,7 @@ class FrameDescriptionWriter:
     def dynamic_object_result_to_error_description(
         obj: DynamicObjectWithPerceptionResult | None,
     ) -> dict:
-        null_return = {
-            key: None for key in ["pose_error", "heading_error", "velocity_error", "bev_error"]
-        }
+        null_return = dict.fromkeys(["pose_error", "heading_error", "velocity_error", "bev_error"])
         if obj is None or obj.ground_truth_object is None:
             return null_return
 
