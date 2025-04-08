@@ -27,3 +27,5 @@ nav:
   - diagnostics.ja.md
   - ground_segmentation.en.md
   - ground_segmentation.ja.md
+  - all_components.en.md
+  - all_components.ja.md
