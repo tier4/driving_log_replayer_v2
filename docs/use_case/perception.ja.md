@@ -4,7 +4,7 @@ Autoware の認識機能(perception)の認識結果から mAP(mean Average Preci
 
 Autoware の実行時には perception topic を保存する。その後、後処理の中で評価を行う。
 
-pass/fail を判定する topic はシナリオに記述する。解析したい topic は launch arguments から指定する。指定しない場合はデフォルトの値が使用される。
+pass/fail を判定する topic は scenario.yaml に記述される evaluation_task に基づく。解析したい topic はターミナル引数から指定する。指定しない場合はデフォルトの値が使用される。
 
 ## 事前準備
 
@@ -114,27 +114,25 @@ FrameSkipは評価をskipした回数のカウンタ。
 
 ## 評価スクリプトが使用する Topic 名とデータ型
 
-degradation check topics:
+pass/fail を判定する topic は scenario.yaml で定義する evaluation_task に基づく。
 
-評価及び分析をする topic は
+| evaluation_task | topic 名                                     |
+| --------------- | -------------------------------------------- |
+| detection       | autoware_perception_msgs/msg/DetectedObjects |
+| tracking        | autoware_perception_msgs/msg/TrackedObjects  |
+| prediction      | TBD                                          |
+| fp_validation   | autoware_perception_msgs/msg/DetectedObjects |
 
-pass/fail を判定する topic は scenario.yaml に記載する。
+pass/fail とは関係なしに分析をしたい topic はターミナル引数の USE_CASE_ARGS で定義できる。
 
-分析をする topic は別途
+| 引数                                 | データ型                                     |
+| ------------------------------------ | -------------------------------------------- |
+| evaluation_detection_topic_regex     | autoware_perception_msgs/msg/DetectedObjects |
+| evaluation_tracking_topic_regex      | autoware_perception_msgs/msg/TrackedObjects  |
+| evaluation_prediction_topic_regex    | TBD                                          |
+| evaluation_fp_validation_topic_regex | autoware_perception_msgs/msg/DetectedObjects |
 
-```yaml
-DegradationTopic: "/perception/object_recognition/detection/objects"
-Criterion:
-......
-```
-
-| topic 名 | データ型                                                                                    |
-| -------- | ------------------------------------------------------------------------------------------- |
-| \*       | autoware_perception_msgs/msg/DetectedObjects or autoware_perception_msgs/msg/TrackedObjects |
-
-written topics:
-
-評価を通じて得られた結果を rosbag に書き込む。
+また、評価を通じて得られた結果を rosbag に書き込む。
 
 | topic 名                                     | データ型                           |
 | -------------------------------------------- | ---------------------------------- |

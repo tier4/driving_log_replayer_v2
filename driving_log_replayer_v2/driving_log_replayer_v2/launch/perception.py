@@ -24,6 +24,7 @@ RECORD_TOPIC = """^/tf$\
 |^/perception/object_recognition/prediction/map_based_prediction/debug/pipeline_latency_ms$\
 |^/perception/object_recognition/.*/objects$\
 |^/perception/object_recognition/objects$\
+|^/perception/object_recognition/detection/objects_before_filter$\
 """
 
 AUTOWARE_DISABLE = {
@@ -45,6 +46,7 @@ USE_CASE_ARGS: list[DeclareLaunchArgument] = [
             |^/perception/object_recognition/detection/centerpoint/validation/objects$\
             |^/perception/object_recognition/detection/clustering/objects$\
             |^/perception/object_recognition/detection/detection_by_tracker/objects$\
+            |^/perception/object_recognition/detection/objects_before_filter$\
         """,
         description="Regex pattern for evaluation detection topic name. Must start with '^' and end with '$'. Wildcards (e.g. '.*', '+', '?', '[...]') are not allowed.",
     ),
