@@ -269,8 +269,8 @@ Information Data Format:
 ```json
 {
   "Frame": {
-    "Info": "情報のメッセージ",
-    "FrameSkip": "評価が飛ばされた回数の合計。objectの評価を依頼したがdatasetに75msec以内の真値がなく場合、または、footprint.pointsの数が1か2の場合に発生する"
+    "Info": "Information Message",
+    "FrameSkip": "Total number of times the evaluation was skipped. This occurs when you request the evaluation of an object but there is no ground truth value within 75msec in the dataset or footprint.points is 1 or 2."
   }
 }
 ```
