@@ -69,7 +69,7 @@ Launching the file executes the following steps:
 
 1. launch the commands `logging_simulator.launch` and `ros2 bag play`
 2. Autoware receives the sensor data output from the rosbag and the perception module recognizes it
-3. Save it
+3. Record the output topics in the bag file
 4. After rosbag playback is finished, parse the saved rosbag one message at a time and evaluate the target topic.
 
 ## Evaluation results
