@@ -72,7 +72,7 @@ State the information necessary for the evaluation.
 
 ### Scenario Format
 
-See [sample](https://github.com/tier4/driving_log_replayer_v2/blob/develop/sample/all_components.yaml)
+See [sample](https://github.com/tier4/driving_log_replayer_v2/blob/develop/sample/all_components/scenario.yaml)
 
 ### Evaluation Result Format
 

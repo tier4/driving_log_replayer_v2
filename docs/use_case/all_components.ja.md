@@ -70,7 +70,7 @@ clock は、ros2 bag play の--clock オプションによって出力してい�
 
 ### シナリオフォーマット
 
-[サンプル](https://github.com/tier4/driving_log_replayer_v2/blob/develop/sample/all_components.yaml)参照
+[サンプル](https://github.com/tier4/driving_log_replayer_v2/blob/develop/sample/all_components/scenario.yaml)参照
 
 ### 評価結果フォーマット
 
