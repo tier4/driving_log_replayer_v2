@@ -22,6 +22,7 @@ from autoware_perception_msgs.msg import DetectedObjects
 from autoware_perception_msgs.msg import PredictedObjects
 from autoware_perception_msgs.msg import TrackedObjects
 from builtin_interfaces.msg import Time
+from geometry_msgs.msg import TransformStamped
 from rclpy.serialization import deserialize_message
 from rclpy.serialization import serialize_message
 from rosbag2_py import ConverterOptions
@@ -39,7 +40,6 @@ if TYPE_CHECKING:
     from collections.abc import Generator
 
     from builtin_interfaces.msg import Time as Stamp
-    from geometry_msgs.msg import TransformStamped
 
 MsgType = TypeVar("MsgType", DetectedObjects, TrackedObjects, PredictedObjects)
 
@@ -162,7 +162,7 @@ def lookup_transform(
             from_,
             to,
             stamp,
-            Duration(seconds=0.5),
+            Duration(seconds=0.0),
         )
-    except TransformException as ex:
-        return f"Could not transform map to baselink: {ex}"
+    except TransformException:
+        return TransformStamped()

@@ -101,6 +101,8 @@ def write_result(
     frame_info: dict[PerceptionFrameResult | str, int],
 ) -> None:
     """Write result.jsonl and rosbag."""
+    # NOTE: In offline evaluation using rosbag with SequentialReader(), messages are processed one-by-one.
+    #       So it is impossible to get transform of future unless explicitly set the tf of future in the buffer.
     map_to_baselink: TransformStamped = lookup_transform(
         rosbag_manager.get_tf_buffer(),
         msg.header.stamp,
