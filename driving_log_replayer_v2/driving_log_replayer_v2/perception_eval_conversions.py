@@ -16,6 +16,10 @@ import json
 from pathlib import Path
 
 from ament_index_python.packages import get_package_share_directory
+from autoware_perception_msgs.msg import DetectedObject
+from autoware_perception_msgs.msg import ObjectClassification
+from autoware_perception_msgs.msg import Shape as MsgShape
+from autoware_perception_msgs.msg import TrackedObject
 from builtin_interfaces.msg import Time
 import fastjsonschema
 from geometry_msgs.msg import Point
@@ -27,6 +31,9 @@ import numpy as np
 from perception_eval.common import ObjectType
 from perception_eval.common.object import DynamicObject
 from perception_eval.common.object import ObjectState
+from perception_eval.common.shape import Shape
+from perception_eval.common.shape import ShapeType
+from perception_eval.config import PerceptionEvaluationConfig
 from perception_eval.evaluation.result.object_result import DynamicObjectWithPerceptionResult
 from perception_eval.evaluation.result.perception_pass_fail_result import PassFailResult
 from pyquaternion.quaternion import Quaternion
@@ -44,6 +51,10 @@ def unix_time_from_ros_msg(ros_header: Header) -> int:
 
 def unix_time_from_ros_timestamp(ros_timestamp: Time) -> int:
     return ros_timestamp.sec * pow(10, 6) + ros_timestamp.nanosec // 1000
+
+
+def unix_time_from_ros_clock_int(ros_clock_time: int) -> int:
+    return ros_clock_time // 1000
 
 
 def position_from_ros_msg(ros_position: Point) -> tuple[int, int, int]:
@@ -300,6 +311,89 @@ def fill_xyzw_quat(q: Quaternion | None) -> dict:
         "z": q.z,
         "w": q.w,
     }
+
+
+def get_perception_label_str(classification: ObjectClassification) -> str:
+    label_str_dict = {
+        ObjectClassification.UNKNOWN: "unknown",
+        ObjectClassification.CAR: "car",
+        ObjectClassification.TRUCK: "truck",
+        ObjectClassification.BUS: "bus",
+        ObjectClassification.TRAILER: "trailer",
+        ObjectClassification.MOTORCYCLE: "motorbike",
+        ObjectClassification.BICYCLE: "bicycle",
+        ObjectClassification.PEDESTRIAN: "pedestrian",
+    }
+    return label_str_dict.get(classification.label, "other")
+
+
+def list_dynamic_object_from_ros_msg(
+    unix_time: int,
+    objects: list[DetectedObject] | list[TrackedObject],
+    evaluator_config: PerceptionEvaluationConfig,
+) -> list[DynamicObject] | str:
+    def get_most_probable_classification(
+        array_classification: list[ObjectClassification],
+    ) -> ObjectClassification:
+        index: int = array_classification.index(
+            max(array_classification, key=lambda x: x.probability),
+        )
+        return array_classification[index]
+
+    # return str(error_msg) when footprint points are invalid
+    estimated_objects: list[DynamicObject] = []
+    for perception_object in objects:
+        # check footprint length
+        if 1 <= len(perception_object.shape.footprint.points) < 3:  # noqa
+            return f"Unexpected footprint length: {len(perception_object.shape.footprint.points)=}"
+
+        most_probable_classification = get_most_probable_classification(
+            perception_object.classification,
+        )
+        label = evaluator_config.label_converter.convert_label(
+            name=get_perception_label_str(most_probable_classification),
+        )
+
+        uuid = None
+        if isinstance(perception_object, TrackedObject):
+            uuid = uuid_from_ros_msg(perception_object.object_id.uuid)
+
+        shape_type = ShapeType.BOUNDING_BOX
+        shape_type_num = perception_object.shape.type
+        if shape_type_num == MsgShape.POLYGON:
+            shape_type = ShapeType.POLYGON
+
+        assert len(evaluator_config.frame_ids) == 1, "Only one frame id is supported"
+        estimated_object = DynamicObject(
+            unix_time=unix_time,
+            frame_id=evaluator_config.frame_ids[0],
+            position=position_from_ros_msg(
+                perception_object.kinematics.pose_with_covariance.pose.position,
+            ),
+            orientation=orientation_from_ros_msg(
+                perception_object.kinematics.pose_with_covariance.pose.orientation,
+            ),
+            shape=Shape(
+                shape_type=shape_type,
+                size=dimensions_from_ros_msg(
+                    perception_object.shape.dimensions,
+                    shape_type_num,
+                ),
+                footprint=footprint_from_ros_msg(
+                    perception_object.shape.footprint,
+                ),
+            ),
+            velocity=velocity_from_ros_msg(
+                perception_object.kinematics.twist_with_covariance.twist.linear,
+            ),
+            pose_covariance=perception_object.kinematics.pose_with_covariance.covariance,
+            twist_covariance=perception_object.kinematics.twist_with_covariance.covariance,
+            semantic_score=most_probable_classification.probability,
+            semantic_label=label,
+            uuid=uuid,
+        )
+        estimated_objects.append(estimated_object)
+    return estimated_objects
 
 
 # utils for writing each perception frame result to a file
