@@ -154,6 +154,9 @@ def evaluate(
     evaluation_prediction_topic_regex: str,
     evaluation_fp_validation_topic_regex: str,
 ) -> None:
+    with open(result_json_path, "w") as result_json_file:
+        result_json_file.write(scenario_path + "\n")
+
     evaluation_topics = load_evaluation_topics(
         evaluation_detection_topic_regex,
         evaluation_tracking_topic_regex,
