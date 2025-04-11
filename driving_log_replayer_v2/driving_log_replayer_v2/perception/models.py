@@ -23,9 +23,6 @@ from pydantic import BaseModel
 from pydantic import field_validator
 from pydantic import model_validator
 
-if TYPE_CHECKING:
-    from perception_eval.evaluation import PerceptionFrameResult
-
 from driving_log_replayer_v2.criteria import PerceptionCriteria
 from driving_log_replayer_v2.perception_eval_conversions import FrameDescriptionWriter
 from driving_log_replayer_v2.perception_eval_conversions import summarize_pass_fail_result
@@ -33,6 +30,11 @@ from driving_log_replayer_v2.result import EvaluationItem
 from driving_log_replayer_v2.result import ResultBase
 from driving_log_replayer_v2.scenario import number
 from driving_log_replayer_v2.scenario import Scenario
+
+if TYPE_CHECKING:
+    from perception_eval.evaluation import PerceptionFrameResult
+    from perception_eval.label import AutowareLabel
+    from perception_eval.label import TrafficLightLabel
 
 
 class Region(BaseModel):
@@ -240,3 +242,26 @@ class PerceptionResult(ResultBase):
 
     def set_final_metrics(self, final_metrics: dict) -> None:
         self._frame = {"FinalScore": final_metrics}
+
+
+class Metrics(BaseModel):
+    Distance: Literal[
+        str(distance*10) for distance in range(0, 21)
+    ]
+    ObjectLabel: list[AutowareLabel] = [
+        str(label) for label in AutowareLabel
+    ]
+    TrafficLightLabel: list[TrafficLightLabel] = [
+        str(label) for label in TrafficLightLabel
+    ]
+    Score: Literal[
+        "TP", "FP", "FN", "TN",
+        "AP(Center Distance)",
+        "APH(Center Distance)",
+        "MOTA(Center Distance)",
+        "MOTP(Center Distance)",
+        "IDswitch(Center Distance)",
+    ]
+    Error: Literal[
+        "x", "y", "yaw", "vx", "vy", "speed", "nn_plane"
+    ]
