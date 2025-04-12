@@ -2,6 +2,32 @@
 Changelog for package driving_log_replayer
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
+Forthcoming
+-----------
+* feat(perception): replace evaluation in runtime to evaluation in post-processing (`#120 <https://github.com/tier4/driving_log_replayer_v2/issues/120>`_)
+  * fundamental commit
+  * fix arch
+  * pre-commit
+  * chore
+  * backward compatibility
+  * modify readme
+  * pass ci
+  * fix: delete duplicated method (`#124 <https://github.com/tier4/driving_log_replayer_v2/issues/124>`_)
+  * merge if condition about record_only
+  Co-authored-by: Hayato Mizushima <hayato-m126@users.noreply.github.com>
+  * add loginfo for finishing post process of perception
+  Co-authored-by: Hayato Mizushima <hayato-m126@users.noreply.github.com>
+  * add readme in English
+  * refactor
+  * handle with futuer tf
+  * modify English README
+  Co-authored-by: Hayato Mizushima <hayato-m126@users.noreply.github.com>
+  * translate from Japanese to English
+  Co-authored-by: Hayato Mizushima <hayato-m126@users.noreply.github.com>
+  ---------
+  Co-authored-by: Hayato Mizushima <hayato-m126@users.noreply.github.com>
+* Contributors: Masato Saeki
+
 3.6.5 (2025-04-08)
 ------------------
 * chore: update tool version (`#122 <https://github.com/tier4/driving_log_replayer_v2/issues/122>`_)
