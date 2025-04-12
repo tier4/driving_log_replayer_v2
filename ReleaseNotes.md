@@ -1,5 +1,13 @@
 # Release Notes
 
+## Version 3.7.0
+
+Major changes
+
+| Module       | Feature    | Brief summary                 | Pull request                                                      | Contributor                                   |
+| ------------ | ---------- | ----------------------------- | ----------------------------------------------------------------- | --------------------------------------------- |
+| `perception` | evaluation | evaluation in post-processing | [#120](https://github.com/tier4/driving_log_replayer_v2/pull/120) | [MasatoSaeki](https://github.com/MasatoSaeki) |
+
 ## Version 3.6.5
 
 Minor Tweak
