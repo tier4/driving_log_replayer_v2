@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import argparse
 from pathlib import Path
+import shutil
 from typing import TYPE_CHECKING
 
 from autoware_perception_msgs.msg import DetectedObjects
@@ -29,6 +30,7 @@ from std_msgs.msg import Header
 from visualization_msgs.msg import MarkerArray
 
 from driving_log_replayer_v2.evaluator import DLREvaluatorV2
+from driving_log_replayer_v2.perception.analyze import analyze
 from driving_log_replayer_v2.perception.manager import EvaluationManager
 from driving_log_replayer_v2.perception.models import PerceptionResult
 from driving_log_replayer_v2.perception.ros2_utils import lookup_transform
@@ -36,7 +38,6 @@ from driving_log_replayer_v2.perception.ros2_utils import RosBagManager
 from driving_log_replayer_v2.perception.topics import load_evaluation_topics
 import driving_log_replayer_v2.perception_eval_conversions as eval_conversions
 from driving_log_replayer_v2.result import ResultWriter
-from driving_log_replayer_v2.perception.analyze import analyze
 
 if TYPE_CHECKING:
     from geometry_msgs.msg import TransformStamped
@@ -154,8 +155,7 @@ def evaluate(
     evaluation_prediction_topic_regex: str,
     evaluation_fp_validation_topic_regex: str,
 ) -> None:
-    with open(result_json_path, "w") as result_json_file:
-        result_json_file.write(scenario_path + "\n")
+    shutil.copy(scenario_path, Path(result_archive_path).joinpath("scenario.yaml").as_posix())
 
     evaluation_topics = load_evaluation_topics(
         evaluation_detection_topic_regex,
@@ -261,11 +261,11 @@ def evaluate(
     result_writer.write_result_with_time(result, rosbag_manager.get_last_ros_timestamp())
     result_writer.close()
 
-    # analysis of the evaluation result
+    # analysis of the evaluation result and save it as csv
     analyzers: dict[str, PerceptionAnalyzer3D] = evaluator.get_analyzers()
-    result: dict[str, dict] = {
-        topic: analyze(analyzer) for topic, analyzer in analyzers.items()
-    }
+    for topic, analyzer in analyzers.items():
+        save_path = evaluator.get_archive_path(topic)
+        analyze(topic, analyzer, save_path)
 
 
 def parse_args() -> argparse.Namespace:

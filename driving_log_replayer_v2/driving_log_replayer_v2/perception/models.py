@@ -33,8 +33,6 @@ from driving_log_replayer_v2.scenario import Scenario
 
 if TYPE_CHECKING:
     from perception_eval.evaluation import PerceptionFrameResult
-    from perception_eval.label import AutowareLabel
-    from perception_eval.label import TrafficLightLabel
 
 
 class Region(BaseModel):
@@ -242,26 +240,3 @@ class PerceptionResult(ResultBase):
 
     def set_final_metrics(self, final_metrics: dict) -> None:
         self._frame = {"FinalScore": final_metrics}
-
-
-class Metrics(BaseModel):
-    Distance: Literal[
-        str(distance*10) for distance in range(0, 21)
-    ]
-    ObjectLabel: list[AutowareLabel] = [
-        str(label) for label in AutowareLabel
-    ]
-    TrafficLightLabel: list[TrafficLightLabel] = [
-        str(label) for label in TrafficLightLabel
-    ]
-    Score: Literal[
-        "TP", "FP", "FN", "TN",
-        "AP(Center Distance)",
-        "APH(Center Distance)",
-        "MOTA(Center Distance)",
-        "MOTP(Center Distance)",
-        "IDswitch(Center Distance)",
-    ]
-    Error: Literal[
-        "x", "y", "yaw", "vx", "vy", "speed", "nn_plane"
-    ]
