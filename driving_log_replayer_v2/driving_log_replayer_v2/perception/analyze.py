@@ -25,9 +25,9 @@ DISTANCE_RANGE = tuple(i * 10 for i in range(21))
 def analyze(topic_name: str, analyzer: PerceptionAnalyzer3D, save_path: Path) -> None:
     """Analyze evaluation results in detail and export them as a flattened csv table."""
     evaluation_task = analyzer.config.evaluation_task
+    # decide the columns to be used
     sample = analyzer.analyze()
     if sample.score is not None and sample.error is not None:
-        # analysis setting
         distance_range = DISTANCE_RANGE
         labels = sample.score.index.to_list()
         score_metrics = sample.score.columns.to_list()
