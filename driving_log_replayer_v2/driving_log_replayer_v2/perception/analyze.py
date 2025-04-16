@@ -40,7 +40,7 @@ def analyze(topic_name: str, analyzer: PerceptionAnalyzer3D, save_path: Path) ->
                 "topic_name": topic_name,
             }
         ]
-        pd.DataFrame(output_table).to_csv(save_path.joinpath("output_table.csv"), index=False)
+        pd.DataFrame(output_table).to_csv(save_path.joinpath("analysis_result.csv"), index=False)
         return
 
     output_table = []
@@ -67,32 +67,46 @@ def analyze(topic_name: str, analyzer: PerceptionAnalyzer3D, save_path: Path) ->
                     row[error + "_" + stat] = error_result[stat][(label, error)]
 
             output_table.append(row)
-    pd.DataFrame(output_table).to_csv(save_path.joinpath("output_table.csv"), index=False)
+    pd.DataFrame(output_table).to_csv(save_path.joinpath("analysis_result.csv"), index=False)
 
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Analyze perception result")
     parser.add_argument(
-        "--evaluation-config-path", help="File path to scenario evaluation_config.pkl"
+        "--evaluation-config-path", type=Path, help="File path to evaluation_config.pkl"
     )
-    parser.add_argument("--scene-result-path", help="File path to scenario scene_result.pkl")
+    parser.add_argument("--scene-result", type=Path, help="File or Directory path to scene_result.pkl")
+    parser.add_argument("--save-path", type=Path, help="Directory path to save the output csv file")
     parser.add_argument("--topic-name", default="", help="Evaluated topic name")
-    parser.add_argument("--save-path", help="Directory path to save the output csv file")
     return parser.parse_args()
 
 
 def main() -> None:
     args = parse_args()
-    with Path.open(Path(args.evaluation_config_path), "rb") as f:
+    with args.evaluation_config_path.open("rb") as f:
         evaluation_config = pickle.load(f)
 
+    if args.scene_result.is_dir():
+        scene_result_list = list(args.scene_result.rglob("scene_result.pkl"))
+        all_scene_result = []
+        for scene_result in scene_result_list:
+            with scene_result.open("rb") as f:
+                frame_result = pickle.load(f)
+                all_scene_result.extend(frame_result)
+    elif args.scene_result.name == "scene_result.pkl":
+        with args.scene_result.open("rb") as f:
+            all_scene_result = pickle.load(f)
+    else:
+        err_msg = f"Invalid scene result path: {args.scene_result}"
+        raise ValueError(err_msg)
+
     analyzer = PerceptionAnalyzer3D(evaluation_config)
-    analyzer.add_from_pkl(args.scene_result_path)
+    analyzer.add(all_scene_result)
 
     analyze(
         args.topic_name,
         analyzer,
-        Path(args.save_path),
+        args.save_path,
     )
 
 
