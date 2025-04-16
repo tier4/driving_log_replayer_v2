@@ -155,8 +155,6 @@ def evaluate(
     evaluation_prediction_topic_regex: str,
     evaluation_fp_validation_topic_regex: str,
 ) -> None:
-    shutil.copy(scenario_path, Path(result_archive_path).joinpath("scenario.yaml").as_posix())
-
     evaluation_topics = load_evaluation_topics(
         evaluation_detection_topic_regex,
         evaluation_tracking_topic_regex,
@@ -215,6 +213,8 @@ def evaluate(
         additional_record_topic=additional_record_topic,
     )
 
+    shutil.copy(scenario_path, Path(result_archive_path).joinpath("scenario.yaml").as_posix())
+
     for topic_name, msg, subscribed_ros_timestamp in rosbag_manager.read_messages():
         # See RosBagManager for `time relationships`.
 
@@ -269,14 +269,16 @@ def evaluate(
 
 
 def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Analyze perception rosbags")
-    parser.add_argument("--scenario-path", help="Directory path to scenario files")
-    parser.add_argument("--rosbag-dir-path", help="Directory path to rosbags")
-    parser.add_argument("--t4dataset-path", help="Directory path to T4 dataset files")
-    parser.add_argument("--result-json-path", help="Output filepath for the result in JSONL format")
+    parser = argparse.ArgumentParser(description="Evaluate perception rosbag w/ t4dataset")
+    parser.add_argument("--scenario-path", help="File path to scenario files")
     parser.add_argument(
-        "--result-archive-path", help="Output filepath for the result in CSV format"
+        "--rosbag-dir-path", help="Directory path to rosbag which is outputted by Autoware"
     )
+    parser.add_argument("--t4dataset-path", help="Directory path to t4dataset")
+    parser.add_argument(
+        "--result-json-path", help="Output file path for the result in JSONL format"
+    )
+    parser.add_argument("--result-archive-path", help="Output directory path for the result")
     parser.add_argument(
         "--evaluation-detection-topic-regex",
         default="""\

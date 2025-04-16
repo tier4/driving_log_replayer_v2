@@ -12,7 +12,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import argparse
 from pathlib import Path
+import pickle
 
 import pandas as pd
 from perception_eval.tool import PerceptionAnalyzer3D
@@ -66,3 +68,33 @@ def analyze(topic_name: str, analyzer: PerceptionAnalyzer3D, save_path: Path) ->
 
             output_table.append(row)
     pd.DataFrame(output_table).to_csv(save_path.joinpath("output_table.csv"), index=False)
+
+
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(description="Analyze perception result")
+    parser.add_argument(
+        "--evaluation-config-path", help="File path to scenario evaluation_config.pkl"
+    )
+    parser.add_argument("--scene-result-path", help="File path to scenario scene_result.pkl")
+    parser.add_argument("--topic-name", default="", help="Evaluated topic name")
+    parser.add_argument("--save-path", help="Directory path to save the output csv file")
+    return parser.parse_args()
+
+
+def main() -> None:
+    args = parse_args()
+    with Path.open(Path(args.evaluation_config_path), "rb") as f:
+        evaluation_config = pickle.load(f)
+
+    analyzer = PerceptionAnalyzer3D(evaluation_config)
+    analyzer.add_from_pkl(args.scene_result_path)
+
+    analyze(
+        args.topic_name,
+        analyzer,
+        Path(args.save_path),
+    )
+
+
+if __name__ == "__main__":
+    main()
