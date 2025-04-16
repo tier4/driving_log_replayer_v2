@@ -75,7 +75,9 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--evaluation-config-path", type=Path, help="File path to evaluation_config.pkl"
     )
-    parser.add_argument("--scene-result", type=Path, help="File or Directory path to scene_result.pkl")
+    parser.add_argument(
+        "--scene-result", type=Path, help="File or Directory path to scene_result.pkl"
+    )
     parser.add_argument("--save-path", type=Path, help="Directory path to save the output csv file")
     parser.add_argument("--topic-name", default="", help="Evaluated topic name")
     return parser.parse_args()
