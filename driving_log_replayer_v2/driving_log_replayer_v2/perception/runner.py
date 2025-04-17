@@ -213,7 +213,7 @@ def evaluate(
         additional_record_topic=additional_record_topic,
     )
 
-    shutil.copy(scenario_path, Path(result_archive_path).joinpath("scenario.yaml").as_posix())
+    shutil.copy(scenario_path, Path(result_archive_path).joinpath("scenario.yaml"))
 
     for topic_name, msg, subscribed_ros_timestamp in rosbag_manager.read_messages():
         # See RosBagManager for `time relationships`.
