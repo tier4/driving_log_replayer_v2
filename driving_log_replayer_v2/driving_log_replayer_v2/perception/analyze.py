@@ -19,7 +19,7 @@ import pickle
 import pandas as pd
 from perception_eval.tool import PerceptionAnalyzer3D
 
-DISTANCE_RANGE = tuple(i * 10 for i in range(15))
+DISTANCE_RANGE = tuple((i * 10, (i + 1) * 10) for i in range(15))
 
 
 def analyze(topic_name: str, analyzer: PerceptionAnalyzer3D, save_path: Path) -> None:
@@ -44,24 +44,24 @@ def analyze(topic_name: str, analyzer: PerceptionAnalyzer3D, save_path: Path) ->
         return
 
     output_table = []
-    for i in range(len(distance_range) - 1):
-        analysis_result = analyzer.analyze(distance=(distance_range[i], distance_range[i + 1]))
+    for distance_min, distance_max in distance_range:
+        analysis_result = analyzer.analyze(distance=(distance_min, distance_max))
         for label in labels:
             # make base table
             row: dict[str, str | float] = {
                 "evaluation_task": evaluation_task,
                 "topic_name": topic_name,
                 "label": label,
-                "distance": f"{distance_range[i]}-{distance_range[i + 1]}",
+                "distance": f"{distance_min}-{distance_max}",
             }
 
             # add each score as column
-            score_result = analysis_result.score
+            score_result: pd.DataFrame = analysis_result.score
             for score in score_metrics:
                 row[score] = score_result.loc[label, score]
 
             # add each error w/ statistics as column
-            error_result = analysis_result.error
+            error_result: pd.DataFrame = analysis_result.error
             for error in error_metrics:
                 for stat in error_statistics:
                     row[error + "_" + stat] = error_result.loc[(label, error), stat]
