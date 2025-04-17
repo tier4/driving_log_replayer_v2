@@ -263,9 +263,10 @@ def evaluate(
 
     # analysis of the evaluation result and save it as csv
     analyzers: dict[str, PerceptionAnalyzer3D] = evaluator.get_analyzers()
-    for topic, analyzer in analyzers.items():
-        save_path = evaluator.get_archive_path(topic)
-        analyze(topic, analyzer, save_path)
+    # TODO: analysis other topic
+    analyzer = analyzers[degradation_topic]
+    save_path = evaluator.get_archive_path(degradation_topic)
+    analyze(degradation_topic, analyzer, save_path)
 
 
 def parse_args() -> argparse.Namespace:

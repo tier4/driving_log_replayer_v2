@@ -19,7 +19,7 @@ import pickle
 import pandas as pd
 from perception_eval.tool import PerceptionAnalyzer3D
 
-DISTANCE_RANGE = tuple(i * 10 for i in range(21))
+DISTANCE_RANGE = tuple(i * 10 for i in range(15))
 
 
 def analyze(topic_name: str, analyzer: PerceptionAnalyzer3D, save_path: Path) -> None:
@@ -56,15 +56,17 @@ def analyze(topic_name: str, analyzer: PerceptionAnalyzer3D, save_path: Path) ->
             }
 
             # add each score as column
-            score_result = analysis_result.score.to_dict()
+            score_result = analysis_result.score
             for score in score_metrics:
-                row[score] = score_result[score][label]
+                row[score] = score_result.loc[label, score]
 
-            # add each error as column w/ statistics
-            error_result = analysis_result.error.to_dict()
+            # add each error w/ statistics as column
+            error_result = analysis_result.error
             for error in error_metrics:
                 for stat in error_statistics:
-                    row[error + "_" + stat] = error_result[stat][(label, error)]
+                    row[error + "_" + stat] = error_result.loc[(label, error), stat]
+
+            # TODO: add experimental metrics as column
 
             output_table.append(row)
     pd.DataFrame(output_table).to_csv(save_path.joinpath("analysis_result.csv"), index=False)
