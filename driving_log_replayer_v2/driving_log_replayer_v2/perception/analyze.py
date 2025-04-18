@@ -75,12 +75,12 @@ def analyze(topic_name: str, analyzer: PerceptionAnalyzer3D, save_path: Path) ->
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Analyze perception result")
     parser.add_argument(
-        "--evaluation-config-path", type=Path, help="File path to evaluation_config.pkl"
+        "--evaluation-config-path", required=True, type=Path, help="File path to evaluation_config.pkl"
     )
     parser.add_argument(
-        "--scene-result", type=Path, help="File or Directory path to scene_result.pkl"
+        "--scene-result", required=True, type=Path, help="File or Directory path to scene_result.pkl"
     )
-    parser.add_argument("--save-path", type=Path, help="Directory path to save the output csv file")
+    parser.add_argument("--save-path", required=True, type=Path, help="Directory path to save the output csv file")
     parser.add_argument("--topic-name", default="", help="Evaluated topic name")
     return parser.parse_args()
 
