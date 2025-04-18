@@ -18,6 +18,8 @@ from pathlib import Path
 from ament_index_python.packages import get_package_share_directory
 from autoware_perception_msgs.msg import DetectedObject
 from autoware_perception_msgs.msg import ObjectClassification
+from autoware_perception_msgs.msg import PredictedObject
+from autoware_perception_msgs.msg import PredictedPath
 from autoware_perception_msgs.msg import Shape as MsgShape
 from autoware_perception_msgs.msg import TrackedObject
 from builtin_interfaces.msg import Time
@@ -63,6 +65,14 @@ def position_from_ros_msg(ros_position: Point) -> tuple[int, int, int]:
 
 def orientation_from_ros_msg(ros_orientation: RosQuaternion) -> Quaternion:
     return Quaternion(ros_orientation.w, ros_orientation.x, ros_orientation.y, ros_orientation.z)
+
+
+def path_positions_from_ros_msg(ros_path: PredictedPath) -> list[tuple[float, float, float]]:
+    return [position_from_ros_msg(pose.position) for pose in ros_path.path]
+
+
+def path_orientations_from_ros_msg(ros_path: PredictedPath) -> list[Quaternion]:
+    return [orientation_from_ros_msg(pose.orientation) for pose in ros_path.path]
 
 
 def dimensions_from_ros_msg(
@@ -329,7 +339,7 @@ def get_perception_label_str(classification: ObjectClassification) -> str:
 
 def list_dynamic_object_from_ros_msg(
     unix_time: int,
-    objects: list[DetectedObject] | list[TrackedObject],
+    objects: list[DetectedObject] | list[TrackedObject] | list[PredictedObject],
     evaluator_config: PerceptionEvaluationConfig,
 ) -> list[DynamicObject] | str:
     def get_most_probable_classification(
@@ -355,7 +365,7 @@ def list_dynamic_object_from_ros_msg(
         )
 
         uuid = None
-        if isinstance(perception_object, TrackedObject):
+        if isinstance(perception_object, TrackedObject | PredictedObject):
             uuid = uuid_from_ros_msg(perception_object.object_id.uuid)
 
         shape_type = ShapeType.BOUNDING_BOX
@@ -368,10 +378,14 @@ def list_dynamic_object_from_ros_msg(
             unix_time=unix_time,
             frame_id=evaluator_config.frame_ids[0],
             position=position_from_ros_msg(
-                perception_object.kinematics.pose_with_covariance.pose.position,
+                perception_object.kinematics.pose_with_covariance.pose.position
+                if isinstance(perception_object, DetectedObject | TrackedObject)
+                else perception_object.kinematics.initial_pose_with_covariance.pose.position
             ),
             orientation=orientation_from_ros_msg(
-                perception_object.kinematics.pose_with_covariance.pose.orientation,
+                perception_object.kinematics.pose_with_covariance.pose.orientation
+                if isinstance(perception_object, DetectedObject | TrackedObject)
+                else perception_object.kinematics.initial_pose_with_covariance.pose.orientation
             ),
             shape=Shape(
                 shape_type=shape_type,
@@ -384,13 +398,36 @@ def list_dynamic_object_from_ros_msg(
                 ),
             ),
             velocity=velocity_from_ros_msg(
-                perception_object.kinematics.twist_with_covariance.twist.linear,
+                perception_object.kinematics.twist_with_covariance.twist.linear
+                if isinstance(perception_object, DetectedObject | TrackedObject)
+                else perception_object.kinematics.initial_twist_with_covariance.twist.linear
             ),
-            pose_covariance=perception_object.kinematics.pose_with_covariance.covariance,
-            twist_covariance=perception_object.kinematics.twist_with_covariance.covariance,
+            pose_covariance=perception_object.kinematics.pose_with_covariance.covariance
+            if isinstance(perception_object, DetectedObject | TrackedObject)
+            else perception_object.kinematics.initial_pose_with_covariance.covariance,
+            twist_covariance=perception_object.kinematics.twist_with_covariance.covariance
+            if isinstance(perception_object, DetectedObject | TrackedObject)
+            else perception_object.kinematics.initial_twist_with_covariance.covariance,
             semantic_score=most_probable_classification.probability,
             semantic_label=label,
             uuid=uuid,
+            predicted_positions=[
+                path_positions_from_ros_msg(path)
+                for path in perception_object.kinematics.predicted_paths
+            ]
+            if isinstance(perception_object, PredictedObject)
+            else None,
+            predicted_orientations=[
+                path_orientations_from_ros_msg(path)
+                for path in perception_object.kinematics.predicted_paths
+            ]
+            if isinstance(perception_object, PredictedObject)
+            else None,
+            predicted_scores=[
+                path.confidence for path in perception_object.kinematics.predicted_paths
+            ]
+            if isinstance(perception_object, PredictedObject)
+            else None,
         )
         estimated_objects.append(estimated_object)
     return estimated_objects
