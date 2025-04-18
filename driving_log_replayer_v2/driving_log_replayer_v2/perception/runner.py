@@ -273,13 +273,17 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Evaluate perception rosbag w/ t4dataset")
     parser.add_argument("--scenario-path", required=True, help="File path to scenario files")
     parser.add_argument(
-        "--rosbag-dir-path", required=True, help="Directory path to rosbag which is outputted by Autoware"
+        "--rosbag-dir-path",
+        required=True,
+        help="Directory path to rosbag which is outputted by Autoware",
     )
     parser.add_argument("--t4dataset-path", required=True, help="Directory path to t4dataset")
     parser.add_argument(
         "--result-json-path", required=True, help="Output file path for the result in JSONL format"
     )
-    parser.add_argument("--result-archive-path", required=True, help="Output directory path for the result")
+    parser.add_argument(
+        "--result-archive-path", required=True, help="Output directory path for the result"
+    )
     parser.add_argument(
         "--evaluation-detection-topic-regex",
         default="""\
