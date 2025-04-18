@@ -55,21 +55,28 @@ def analyze(topic_name: str, analyzer: PerceptionAnalyzer3D, save_path: Path) ->
                 "distance": f"{distance_min}-{distance_max}",
             }
 
-            # add each score as column
+            # add each score as column or nan if target object does not exist
             score_result: pd.DataFrame = analysis_result.score
             for score in score_metrics:
-                row[score] = score_result.loc[label, score]
+                row[score] = (
+                    score_result.loc[label, score] if score_result is not None else float("nan")
+                )
 
-            # add each error w/ statistics as column
+            # add each error w/ statistics as column or nan if target object does not exist
             error_result: pd.DataFrame = analysis_result.error
             for error in error_metrics:
                 for stat in error_statistics:
-                    row[error + "_" + stat] = error_result.loc[(label, error), stat]
+                    row[error + "_" + stat] = (
+                        error_result.loc[(label, error), stat]
+                        if error_result is not None
+                        else float("nan")
+                    )
 
             # TODO: add experimental metrics as column
 
             output_table.append(row)
-    pd.DataFrame(output_table).to_csv(save_path.joinpath("analysis_result.csv"), index=False)
+    output_table = pd.DataFrame(output_table)
+    output_table.fillna("nan").to_csv(save_path.joinpath("analysis_result.csv"), index=False)
 
 
 def parse_args() -> argparse.Namespace:
