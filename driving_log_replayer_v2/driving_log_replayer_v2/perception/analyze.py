@@ -79,6 +79,13 @@ def analyze(topic_name: str, analyzer: PerceptionAnalyzer3D, save_path: Path) ->
     output_table.fillna("nan").to_csv(save_path.joinpath("analysis_result.csv"), index=False)
 
 
+def get_raw_df(analyzer: PerceptionAnalyzer3D, distance: tuple[int, int] | None, labels: list[str] | None) -> pd.DataFrame:
+    df = analyzer.filter_by_distance(df=df, distance=distance) if distance is not None else df
+    # extract matching data in the specified columns
+    df = analyzer.get(label=labels) if labels is not None else df
+    return df
+
+
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Analyze perception result")
     parser.add_argument(
