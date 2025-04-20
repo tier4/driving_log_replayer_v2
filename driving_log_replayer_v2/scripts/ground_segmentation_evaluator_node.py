@@ -78,15 +78,15 @@ class GroundSegmentationEvaluator(DLREvaluatorV2):
                 raw_points = np.fromfile(raw_points_file_path, dtype=np.float32)
 
                 label_file_path = Path(lidarseg_dir_path, raw_points_to_seg_data[raw_points_file_name]["lidarseg_anno_file"])
-                self.get_logger().info(f"label_file_path: {label_file_path}")
+                # self.get_logger().info(f"label_file_path: {label_file_path}")
                 annotation_file_path = Path(lidarseg_dir_path, label_file_path).as_posix()
                 labels = np.fromfile(annotation_file_path, dtype=np.uint8)
 
-                self.get_logger().info(f"raw_poitns shape: {raw_points.shape}")
-                self.get_logger().info(f"labels shape: {labels.shape}")
+                # self.get_logger().info(f"raw_poitns shape: {raw_points.shape}")
+                # self.get_logger().info(f"labels shape: {labels.shape}")
 
                 points: np.ndarray = raw_points.reshape((-1, self.CLOUD_DIM))
-                self.get_logger().info(f"points shape: {points.shape}")
+                # self.get_logger().info(f"points shape: {points.shape}")
                 self.ground_truth[int(sample_data[i]["timestamp"])] = (points, labels)
 
             self.__sub_pointcloud = self.create_subscription(
@@ -120,6 +120,9 @@ class GroundSegmentationEvaluator(DLREvaluatorV2):
             raise ValueError(err)
 
     def annotated_pcd_eval_cb(self, msg: PointCloud2) -> None:
+        self.get_logger().info("annotated_pcd_eval_cb")
+        # return
+        # raise ValueError("annotated_pcd_eval_cb is not implemented")
         unix_time: int = eval_conversions.unix_time_from_ros_msg(msg.header)
         gt_frame_ts = self.__get_gt_frame_ts(unix_time=unix_time)
 
@@ -140,15 +143,15 @@ class GroundSegmentationEvaluator(DLREvaluatorV2):
         pointcloud[:, 2] = numpy_pcd["z"]
 
         # count TP+FN, TN+FP
-        tp_fn = np.count_nonzero(gt_frame_label[:, 0] == self.ground_label)
-        fp_tn = np.count_nonzero(gt_frame_label[:, 0] == self.obstacle_label)
+        tp_fn = np.count_nonzero(gt_frame_label[:] == self.ground_label)
+        fp_tn = np.count_nonzero(gt_frame_label[:] == self.obstacle_label)
         tn: int = 0
         fn: int = 0
         for p in pointcloud:
             _, idx = kdtree.query(p, k=1)
-            if gt_frame_cloud[idx][5] == self.ground_label:
+            if gt_frame_label[idx] == self.ground_label:
                 fn += 1
-            elif gt_frame_cloud[idx][5] == self.obstacle_label:
+            elif gt_frame_label[idx] == self.obstacle_label:
                 tn += 1
         tp = tp_fn - fn
         fp = fp_tn - tn
