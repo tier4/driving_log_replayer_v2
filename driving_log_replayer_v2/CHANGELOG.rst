@@ -2,6 +2,59 @@
 Changelog for package driving_log_replayer
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
+3.7.0 (2025-04-12)
+------------------
+* feat(perception): replace evaluation in runtime to evaluation in post-processing (`#120 <https://github.com/tier4/driving_log_replayer_v2/issues/120>`_)
+  * fundamental commit
+  * fix arch
+  * pre-commit
+  * chore
+  * backward compatibility
+  * modify readme
+  * pass ci
+  * fix: delete duplicated method (`#124 <https://github.com/tier4/driving_log_replayer_v2/issues/124>`_)
+  * merge if condition about record_only
+  Co-authored-by: Hayato Mizushima <hayato-m126@users.noreply.github.com>
+  * add loginfo for finishing post process of perception
+  Co-authored-by: Hayato Mizushima <hayato-m126@users.noreply.github.com>
+  * add readme in English
+  * refactor
+  * handle with futuer tf
+  * modify English README
+  Co-authored-by: Hayato Mizushima <hayato-m126@users.noreply.github.com>
+  * translate from Japanese to English
+  Co-authored-by: Hayato Mizushima <hayato-m126@users.noreply.github.com>
+  ---------
+  Co-authored-by: Hayato Mizushima <hayato-m126@users.noreply.github.com>
+* Contributors: Masato Saeki
+
+3.6.5 (2025-04-08)
+------------------
+* chore: update tool version (`#122 <https://github.com/tier4/driving_log_replayer_v2/issues/122>`_)
+  * chore: update ruff and pre-commit tool version
+  * fix: auto fix
+  * fix: ruff C420
+  ---------
+* Contributors: Hayato Mizushima
+
+3.6.4 (2025-03-27)
+------------------
+* feat: exclude data while initialization from performance diag total evaluation (`#116 <https://github.com/tier4/driving_log_replayer_v2/issues/116>`_)
+  * Exclude data while initialization from eval
+  * Fix pre-commit issue
+  * Remove unnecessary line space
+  * Remove unnecessary line space
+  * fix: value
+  * fix: unit test
+  ---------
+  Co-authored-by: Hayato Mizushima <hayato-m126@users.noreply.github.com>
+* Contributors: TadaKazuto
+
+3.6.3 (2025-03-27)
+------------------
+* revert: remap localization topic (`#117 <https://github.com/tier4/driving_log_replayer_v2/issues/117>`_)
+* Contributors: Hayato Mizushima
+
 3.6.2 (2025-03-14)
 ------------------
 * feat: dlr_all -> all_components (`#114 <https://github.com/tier4/driving_log_replayer_v2/issues/114>`_)

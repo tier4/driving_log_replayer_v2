@@ -1,5 +1,38 @@
 # Release Notes
 
+## Version 3.7.0
+
+Major changes
+
+| Module       | Feature    | Brief summary                 | Pull request                                                      | Contributor                                   |
+| ------------ | ---------- | ----------------------------- | ----------------------------------------------------------------- | --------------------------------------------- |
+| `perception` | evaluation | evaluation in post-processing | [#120](https://github.com/tier4/driving_log_replayer_v2/pull/120) | [MasatoSaeki](https://github.com/MasatoSaeki) |
+
+## Version 3.6.5
+
+Minor Tweak
+
+| Module           | Feature          | Brief summary                           | Pull request                                                      | Contributor                                   |
+| ---------------- | ---------------- | --------------------------------------- | ----------------------------------------------------------------- | --------------------------------------------- |
+| `all_components` | documentation    | add all_components documentation        | [#121](https://github.com/tier4/driving_log_replayer_v2/pull/121) | [hayato-m126](https://github.com/hayato-m126) |
+| `common`         | linter formatter | update ruff and pre-commit tool version | [#122](https://github.com/tier4/driving_log_replayer_v2/pull/122) | [hayato-m126](https://github.com/hayato-m126) |
+
+## Version 3.6.4
+
+Minor Tweak
+
+| Module             | Feature | Brief summary              | Pull request                                                      | Contributor                                 |
+| ------------------ | ------- | -------------------------- | ----------------------------------------------------------------- | ------------------------------------------- |
+| `performance_diag` | result  | do not count invalid frame | [#116](https://github.com/tier4/driving_log_replayer_v2/pull/116) | [TadaKazuto](https://github.com/TadaKazuto) |
+
+## Version 3.6.3
+
+Minor Tweak
+
+| Module         | Feature     | Brief summary        | Pull request                                                      | Contributor                                   |
+| -------------- | ----------- | -------------------- | ----------------------------------------------------------------- | --------------------------------------------- |
+| `localization` | rosbag play | revert: remap topics | [#117](https://github.com/tier4/driving_log_replayer_v2/pull/117) | [hayato-m126](https://github.com/hayato-m126) |
+
 ## Version 3.6.2
 
 Major changes

@@ -166,7 +166,6 @@ def get_launch_arguments() -> list:
         default_value="",
         description="Specify the name of the profile. config/remap/{profile_name}.yaml. Ex: remap_profile:=x2",
     )
-
     return launch_arguments
 
 
@@ -221,7 +220,7 @@ def update_conf_with_dataset_info(
     conf["result_archive_path"] = output_dir.joinpath("result_archive").as_posix()
     conf["use_case"] = yaml_obj["Evaluation"]["UseCaseName"]
 
-    if conf["use_case"] == "all_components":
+    if conf["use_case"] in ["all_components", "perception"]:
         conf["record_only"] = "true"
 
 

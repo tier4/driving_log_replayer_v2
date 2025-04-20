@@ -139,7 +139,7 @@ class Perception2DEvaluator(DLREvaluatorV2):
                 perception_object.object.classification,
             )
             label = self.__evaluator.evaluator_config.label_converter.convert_label(
-                name=DLREvaluatorV2.get_perception_label_str(most_probable_classification),
+                name=eval_conversions.get_perception_label_str(most_probable_classification),
             )
             obj_roi = perception_object.feature.roi
             roi = obj_roi.x_offset, obj_roi.y_offset, obj_roi.width, obj_roi.height
