@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import argparse
 from pathlib import Path
+import shutil
 from typing import TYPE_CHECKING
 
 from autoware_perception_msgs.msg import DetectedObjects
@@ -29,6 +30,7 @@ from std_msgs.msg import Header
 from visualization_msgs.msg import MarkerArray
 
 from driving_log_replayer_v2.evaluator import DLREvaluatorV2
+from driving_log_replayer_v2.perception.analyze import analyze
 from driving_log_replayer_v2.perception.manager import EvaluationManager
 from driving_log_replayer_v2.perception.models import PerceptionResult
 from driving_log_replayer_v2.perception.ros2_utils import lookup_transform
@@ -211,6 +213,8 @@ def evaluate(
         additional_record_topic=additional_record_topic,
     )
 
+    shutil.copy(scenario_path, Path(result_archive_path).joinpath("scenario.yaml"))
+
     for topic_name, msg, subscribed_ros_timestamp in rosbag_manager.read_messages():
         # See RosBagManager for `time relationships`.
 
@@ -257,19 +261,28 @@ def evaluate(
     result_writer.write_result_with_time(result, rosbag_manager.get_last_ros_timestamp())
     result_writer.close()
 
-    # TODO: analyze each scene result for the corresponding topic
+    # analysis of the evaluation result and save it as csv
     analyzers: dict[str, PerceptionAnalyzer3D] = evaluator.get_analyzers()
-    analyzers[degradation_topic].analyze()
+    # TODO: analysis other topic
+    analyzer = analyzers[degradation_topic]
+    save_path = evaluator.get_archive_path(degradation_topic)
+    analyze(degradation_topic, analyzer, save_path)
 
 
 def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Analyze perception rosbags")
-    parser.add_argument("--scenario-path", help="Directory path to scenario files")
-    parser.add_argument("--rosbag-dir-path", help="Directory path to rosbags")
-    parser.add_argument("--t4dataset-path", help="Directory path to T4 dataset files")
-    parser.add_argument("--result-json-path", help="Output filepath for the result in JSONL format")
+    parser = argparse.ArgumentParser(description="Evaluate perception rosbag w/ t4dataset")
+    parser.add_argument("--scenario-path", required=True, help="File path to scenario files")
     parser.add_argument(
-        "--result-archive-path", help="Output filepath for the result in CSV format"
+        "--rosbag-dir-path",
+        required=True,
+        help="Directory path to rosbag which is outputted by Autoware",
+    )
+    parser.add_argument("--t4dataset-path", required=True, help="Directory path to t4dataset")
+    parser.add_argument(
+        "--result-json-path", required=True, help="Output file path for the result in JSONL format"
+    )
+    parser.add_argument(
+        "--result-archive-path", required=True, help="Output directory path for the result"
     )
     parser.add_argument(
         "--evaluation-detection-topic-regex",

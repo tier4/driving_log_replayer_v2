@@ -175,6 +175,10 @@ class PerceptionEvaluator:
                 expandvars(self.__result_archive_w_topic_path.joinpath("scene_result.pkl"))
             ).open("wb") as pkl_file:
                 pickle.dump(self.__evaluator.frame_results, pkl_file)
+            with Path(
+                expandvars(self.__result_archive_w_topic_path.joinpath("evaluation_config.pkl"))
+            ).open("wb") as pkl_file:
+                pickle.dump(self.__evaluator.evaluator_config, pkl_file)
         if self.__evaluator.evaluator_config.evaluation_task == "fp_validation":
             final_metrics = self.__get_fp_results()
         else:

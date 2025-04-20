@@ -23,9 +23,6 @@ from pydantic import BaseModel
 from pydantic import field_validator
 from pydantic import model_validator
 
-if TYPE_CHECKING:
-    from perception_eval.evaluation import PerceptionFrameResult
-
 from driving_log_replayer_v2.criteria import PerceptionCriteria
 from driving_log_replayer_v2.perception_eval_conversions import FrameDescriptionWriter
 from driving_log_replayer_v2.perception_eval_conversions import summarize_pass_fail_result
@@ -33,6 +30,9 @@ from driving_log_replayer_v2.result import EvaluationItem
 from driving_log_replayer_v2.result import ResultBase
 from driving_log_replayer_v2.scenario import number
 from driving_log_replayer_v2.scenario import Scenario
+
+if TYPE_CHECKING:
+    from perception_eval.evaluation import PerceptionFrameResult
 
 
 class Region(BaseModel):
