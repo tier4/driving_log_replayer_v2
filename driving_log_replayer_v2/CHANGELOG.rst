@@ -2,6 +2,28 @@
 Changelog for package driving_log_replayer
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
+Forthcoming
+-----------
+* feat(perception): add analyzer (`#125 <https://github.com/tier4/driving_log_replayer_v2/issues/125>`_)
+  * add analyze
+  * save scenario yaml
+  * fix
+  * add external interface
+  * expand for cli
+  * run pre-commit
+  * chore
+  * chore
+  * refactor
+  * remove as_posix()
+  Co-authored-by: Copilot <175728472+Copilot@users.noreply.github.com>
+  * add require tag in argparse
+  * run pre-commit
+  * add np.nan if object to evaluate is nothing and fill str(nan)
+  * add cspell
+  ---------
+  Co-authored-by: Copilot <175728472+Copilot@users.noreply.github.com>
+* Contributors: Masato Saeki
+
 3.7.0 (2025-04-12)
 ------------------
 * feat(perception): replace evaluation in runtime to evaluation in post-processing (`#120 <https://github.com/tier4/driving_log_replayer_v2/issues/120>`_)
