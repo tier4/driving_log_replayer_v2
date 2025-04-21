@@ -12,6 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from os.path import expandvars
 from pathlib import Path
 import shutil
 
@@ -47,8 +48,14 @@ def post_process(context: LaunchContext) -> list:
         return [LogInfo(msg="run localization analysis."), localization_analysis]
 
     if conf["use_case"] == "perception":
+        absolute_result_json_path = Path(
+            expandvars(context.launch_configurations["result_json_path"])
+        )
 
         def _run_perception_and_replace_rosbag(context: LaunchContext) -> list:
+            absolute_result_json_path.parent.joinpath(
+                absolute_result_json_path.stem + ".jsonl"
+            ).unlink()
             evaluate(
                 context.launch_configurations["scenario_path"],
                 context.launch_configurations["result_bag_path"],
