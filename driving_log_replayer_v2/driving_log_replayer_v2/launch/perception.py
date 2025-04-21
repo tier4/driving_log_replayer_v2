@@ -47,6 +47,8 @@ USE_CASE_ARGS: list[DeclareLaunchArgument] = [
             |^/perception/object_recognition/detection/clustering/objects$\
             |^/perception/object_recognition/detection/detection_by_tracker/objects$\
             |^/perception/object_recognition/detection/objects_before_filter$\
+            |^/perception/object_recognition/tracking/radar/far_objects$\
+            |^/sensing/radar/detected_objects$\
         """,
         description="Regex pattern for evaluation detection topic name. Must start with '^' and end with '$'. Wildcards (e.g. '.*', '+', '?', '[...]') are not allowed.",
     ),
