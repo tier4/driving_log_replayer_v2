@@ -106,6 +106,7 @@ def get_consecutive_fn_spans(
         frame_diff_list = np.diff(fn_df["frame"], append=0)
         timestamp = fn_df["timestamp"].tolist()  # TODO: is it correct?
 
+        # check in time series
         consecutive_fn_count: int = 0
         spans: list[float] = []
         for i, frame_diff in enumerate(frame_diff_list):
@@ -125,7 +126,7 @@ def get_consecutive_fn_spans(
             spans.append(timestamp[-1] - start_timestamp)
 
         object_spans[uuid] = spans
-    # calculate statistics of each consecutive fn spans
+    # calculate statistics of each consecutive fn spans of objects
     return [
         statistics(each_span) if len(each_span) > 0 else float("nan")
         for each_span in object_spans.values()
@@ -145,7 +146,7 @@ def get_value_after_statistics(value: list[float], statistics: str) -> float:
         value = np.max(np.abs(value))
     elif statistics == "min":
         value = np.min(np.abs(value))
-    elif statistics == "99percentile":
+    elif statistics == "percentile_99":
         value = np.percentile(np.abs(value), 99)
     else:
         err_msg = f"Invalid statistics: {statistics}"
