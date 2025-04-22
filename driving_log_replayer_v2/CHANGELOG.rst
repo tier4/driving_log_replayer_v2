@@ -2,8 +2,8 @@
 Changelog for package driving_log_replayer
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-Forthcoming
------------
+3.7.2 (2025-04-22)
+------------------
 * add prediction impl (`#127 <https://github.com/tier4/driving_log_replayer_v2/issues/127>`_)
 * add remove command to check even if post-process is fail (`#131 <https://github.com/tier4/driving_log_replayer_v2/issues/131>`_)
 * Contributors: Masato Saeki
