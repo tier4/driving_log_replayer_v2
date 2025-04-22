@@ -79,7 +79,7 @@ def analyze(topic_name: str, analyzer: PerceptionAnalyzer3D, save_path: Path) ->
                 analyzer, distance=(distance_min, distance_max), label=label, statistics=np.max
             )
             for stat in error_statistics:
-                row["consecutive_fn_spans" + "_" + stat] = get_value_after_statistics(
+                row["consecutive_fn_spans" + "_" + stat] = apply_statistics(
                     consecutive_fn_spans, stat
                 )
 
@@ -89,53 +89,55 @@ def analyze(topic_name: str, analyzer: PerceptionAnalyzer3D, save_path: Path) ->
 
 
 def get_consecutive_fn_spans(
-    analyzer: PerceptionAnalyzer3D, distance: tuple[int, int], label: str, statistics: Callable
+    analyzer: PerceptionAnalyzer3D,
+    distance: tuple[int, int],
+    label: list[str] | str,
+    statistics: Callable,
 ) -> list[float]:
-    df = get_df(analyzer, distance=distance, labels=[label])
+    df = get_df(analyzer, distance=distance, columns={"label": label})
 
-    if df.empty:
+    if len(df) == 0:
         return []
 
     # calculate each consecutive fn spans of objects
     object_spans: dict[str, list[float]] = {}
-    for uuid in pd.unique(df.xs("ground_truth", level=1)["uuid"]):
+    for uuid in pd.unique(df.loc[pd.IndexSlice[:, "ground_truth"], "uuid"]):
         if uuid is None:
             continue
 
-        fn_df = df[np.bitwise_and(df["uuid"] == uuid, df["status"] == "FN")]
+        fn_df = df.loc[(df["uuid"] == uuid) & (df["status"] == "FN")]
         frame_diff_list = np.diff(fn_df["frame"], append=0)
-        timestamp = fn_df["timestamp"].tolist()  # TODO: is it correct?
+        timestamp_list = fn_df["timestamp"].to_list()
 
         # check in time series
+        # NOTE: only one fn frame is not considered
         consecutive_fn_count: int = 0
         spans: list[float] = []
-        for i, frame_diff in enumerate(frame_diff_list):
+        start_timestamp: float
+        for frame_diff, timestamp in zip(frame_diff_list, timestamp_list, strict=True):
             # status is consecutive fn
             if frame_diff == 1.0:
                 if consecutive_fn_count == 0:
-                    start_timestamp = timestamp[i]
+                    start_timestamp = timestamp
                 consecutive_fn_count += 1
-            # status is start of new fn
+            # status is start of new fn and handle the last consecutive fn
             else:
                 if consecutive_fn_count > 0:
-                    spans.append((timestamp[i - 1] - start_timestamp) * 1e-6)
-                start_timestamp = timestamp[i]
+                    spans.append((timestamp - start_timestamp) * 1e-6)
                 consecutive_fn_count = 0
-        # handle the last consecutive fn
-        if consecutive_fn_count > 0:
-            spans.append(timestamp[-1] - start_timestamp)
 
         object_spans[uuid] = spans
     # calculate statistics of each consecutive fn spans of objects
-    return [
-        statistics(each_span) if len(each_span) > 0 else float("nan")
-        for each_span in object_spans.values()
-    ]
+    return [statistics(each_span) for each_span in object_spans.values() if len(each_span) > 0]
 
 
-def get_value_after_statistics(value: list[float], statistics: str) -> float:
+def apply_statistics(value: list[float], statistics: str) -> float:
     if len(value) == 0:
         return float("nan")
+
+    value = np.array(value)
+    value = value[~np.isnan(value)]
+
     if statistics == "average":
         value = np.average(value)
     elif statistics == "rms":
@@ -155,10 +157,12 @@ def get_value_after_statistics(value: list[float], statistics: str) -> float:
 
 
 def get_df(
-    analyzer: PerceptionAnalyzer3D, distance: tuple[int, int] | None, labels: list[str] | None
+    analyzer: PerceptionAnalyzer3D,
+    distance: tuple[int, int] | None,
+    columns: dict[str, list[str] | str] | None,
 ) -> pd.DataFrame:
     # extract matching data in the specified columns
-    df = analyzer.get(label=labels) if labels is not None else pd.DataFrame()
+    df = analyzer.get(**columns) if columns is not None else analyzer.get()
     return analyzer.filter_by_distance(df=df, distance=distance) if distance is not None else df
 
 
