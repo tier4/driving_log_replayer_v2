@@ -1,5 +1,14 @@
 # Release Notes
 
+## Version 3.7.2
+
+Minor Tweak
+
+| Module       | Feature         | Brief summary            | Pull request                                                      | Contributor                                   |
+| ------------ | --------------- | ------------------------ | ----------------------------------------------------------------- | --------------------------------------------- |
+| `perception` | error_handling  | remove dummy result file | [#131](https://github.com/tier4/driving_log_replayer_v2/pull/131) | [MasatoSaeki](https://github.com/MasatoSaeki) |
+| `perception` | evaluation_task | add prediction           | [#127](https://github.com/tier4/driving_log_replayer_v2/pull/127) | [MasatoSaeki](https://github.com/MasatoSaeki) |
+
 ## Version 3.7.1
 
 Minor Tweak
