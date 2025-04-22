@@ -60,6 +60,7 @@ USE_CASE_ARGS: list[DeclareLaunchArgument] = [
     DeclareLaunchArgument(
         "evaluation_prediction_topic_regex",
         default_value="""\
+            |^/perception/object_recognition/objects$\
         """,
         description="Regex pattern for evaluation prediction topic name. Must start with '^' and end with '$'. Wildcards (e.g. '.*', '+', '?', '[...]') are not allowed.",
     ),

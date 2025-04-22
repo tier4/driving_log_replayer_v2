@@ -221,7 +221,7 @@ class PerceptionEvaluator:
             return True
         if evaluation_task == "prediction":
             self.__frame_id_str = "map"
-            return False
+            return True
         return False
 
     def __get_scene_results(self) -> MetricsScore:

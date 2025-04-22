@@ -23,7 +23,7 @@ Evaluation:
           Distance: 50.0- # [m] null [距離でフィルタしない] or 下限-(上限) [上限は省略可。省略した場合1.7976931348623157e+308]
   PerceptionEvaluationConfig:
     evaluation_config_dict:
-      evaluation_task: fp_validation # detection/tracking/fp_validation ここで指定したobjectsを評価する
+      evaluation_task: fp_validation # detection/tracking/prediction/fp_validation ここで指定したobjectsを評価する
       target_labels: [car, bicycle, pedestrian, motorbike] # 評価ラベル
       max_x_position: 102.4 # 評価対象 object の最大 x 位置
       max_y_position: 102.4 # 評価対象 object の最大 y 位置
