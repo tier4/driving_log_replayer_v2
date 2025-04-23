@@ -2,6 +2,11 @@
 Changelog for package driving_log_replayer
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
+Forthcoming
+-----------
+* Added `/localization/acceleration` into the record topic list (`#132 <https://github.com/tier4/driving_log_replayer_v2/issues/132>`_)
+* Contributors: SakodaShintaro
+
 3.7.2 (2025-04-22)
 ------------------
 * add prediction impl (`#127 <https://github.com/tier4/driving_log_replayer_v2/issues/127>`_)

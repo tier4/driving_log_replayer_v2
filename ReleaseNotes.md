@@ -1,5 +1,13 @@
 # Release Notes
 
+## Version 3.7.3
+
+Minor Tweak
+
+| Module         | Feature | Brief summary                     | Pull request                                                      | Contributor                                         |
+| -------------- | ------- | --------------------------------- | ----------------------------------------------------------------- | --------------------------------------------------- |
+| `localization` | rosbag  | record /localization/acceleration | [#132](https://github.com/tier4/driving_log_replayer_v2/pull/132) | [SakodaShintaro](https://github.com/SakodaShintaro) |
+
 ## Version 3.7.2
 
 Minor Tweak
