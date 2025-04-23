@@ -2,8 +2,8 @@
 Changelog for package driving_log_replayer
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-Forthcoming
------------
+3.8.0 (2025-04-24)
+------------------
 * feat: set mcap as default (`#135 <https://github.com/tier4/driving_log_replayer_v2/issues/135>`_)
 * feat(perception): handle storage options (`#136 <https://github.com/tier4/driving_log_replayer_v2/issues/136>`_)
   * handle_storage_options
