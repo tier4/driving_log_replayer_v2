@@ -287,6 +287,7 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--storage",
+        required=True,
         help="Storage type for rosbag2",
     )
     parser.add_argument(
