@@ -2,6 +2,15 @@
 Changelog for package driving_log_replayer
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
+Forthcoming
+-----------
+* feat: set mcap as default (`#135 <https://github.com/tier4/driving_log_replayer_v2/issues/135>`_)
+* feat(perception): handle storage options (`#136 <https://github.com/tier4/driving_log_replayer_v2/issues/136>`_)
+  * handle_storage_options
+  * add tag require
+  ---------
+* Contributors: Hayato Mizushima, Masato Saeki
+
 3.7.3 (2025-04-23)
 ------------------
 * Added `/localization/acceleration` into the record topic list (`#132 <https://github.com/tier4/driving_log_replayer_v2/issues/132>`_)
