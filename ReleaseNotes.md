@@ -1,5 +1,14 @@
 # Release Notes
 
+## Version 3.8.0
+
+Major changes
+
+| Module       | Feature | Brief summary          | Pull request                                                      | Contributor                                   |
+| ------------ | ------- | ---------------------- | ----------------------------------------------------------------- | --------------------------------------------- |
+| `perception` | rosbag  | handle storage options | [#136](https://github.com/tier4/driving_log_replayer_v2/pull/136) | [MasatoSaeki](https://github.com/MasatoSaeki) |
+| `common`     | rosbag  | set mcap as default    | [#135](https://github.com/tier4/driving_log_replayer_v2/pull/135) | [hayato-m126](https://github.com/hayato-m126) |
+
 ## Version 3.7.3
 
 Minor Tweak
