@@ -150,6 +150,7 @@ def evaluate(
     t4dataset_path: str,
     result_json_path: str,
     result_archive_path: str,
+    storage: str,
     evaluation_detection_topic_regex: str,
     evaluation_tracking_topic_regex: str,
     evaluation_prediction_topic_regex: str,
@@ -208,7 +209,7 @@ def evaluate(
     rosbag_manager = RosBagManager(
         bag_dir=rosbag_dir_path,
         output_bag_dir=Path(result_archive_path).joinpath("result_bag").as_posix(),
-        storage_type="sqlite3",
+        storage_type=storage,
         evaluation_topic=evaluator.get_evaluation_topics(),
         additional_record_topic=additional_record_topic,
     )
@@ -285,6 +286,10 @@ def parse_args() -> argparse.Namespace:
         "--result-archive-path", required=True, help="Output directory path for the result"
     )
     parser.add_argument(
+        "--storage",
+        help="Storage type for rosbag2",
+    )
+    parser.add_argument(
         "--evaluation-detection-topic-regex",
         default="""\
         """,
@@ -319,6 +324,7 @@ def main() -> None:
         args.t4dataset_path,
         args.result_json_path,
         args.result_archive_path,
+        args.storage,
         args.evaluation_detection_topic_regex,
         args.evaluation_tracking_topic_regex,
         args.evaluation_prediction_topic_regex,
