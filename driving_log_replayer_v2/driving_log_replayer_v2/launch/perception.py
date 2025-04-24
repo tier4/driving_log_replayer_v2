@@ -66,7 +66,7 @@ USE_CASE_ARGS: list[DeclareLaunchArgument] = [
     DeclareLaunchArgument(
         "evaluation_tracking_topic_regex",
         default_value=EVALUATION_TRACKING_TOPIC_REGEX,
-        description="Regex pattern for evaluation tracking topic name. Must start with '^' and end with '$'. Wildcards (e.g. '.*', '+', '?', '[...]') are not allowed. If you do not want to use this feature, set it to '' or  None'.",
+        description="Regex pattern for evaluation tracking topic name. Must start with '^' and end with '$'. Wildcards (e.g. '.*', '+', '?', '[...]') are not allowed. If you do not want to use this feature, set it to '' or 'None'.",
     ),
     DeclareLaunchArgument(
         "evaluation_prediction_topic_regex",
