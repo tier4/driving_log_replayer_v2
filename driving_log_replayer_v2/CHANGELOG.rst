@@ -2,8 +2,8 @@
 Changelog for package driving_log_replayer
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-Forthcoming
------------
+3.8.1 (2025-04-25)
+------------------
 * feat(perception): regular expression and the way to represent None (`#137 <https://github.com/tier4/driving_log_replayer_v2/issues/137>`_)
   * fix regular expression and the way to represent None
   * add missing quotation
