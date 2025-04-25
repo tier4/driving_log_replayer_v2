@@ -1,5 +1,13 @@
 # Release Notes
 
+## Version 3.8.1
+
+Minor Tweak
+
+| Module       | Feature | Brief summary                                 | Pull request                                                      | Contributor                                   |
+| ------------ | ------- | --------------------------------------------- | ----------------------------------------------------------------- | --------------------------------------------- |
+| `perception` | launch  | allow None to be treated as an argument value | [#137](https://github.com/tier4/driving_log_replayer_v2/pull/137) | [MasatoSaeki](https://github.com/MasatoSaeki) |
+
 ## Version 3.8.0
 
 Major changes
