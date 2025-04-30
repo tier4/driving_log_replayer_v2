@@ -16,6 +16,7 @@
 
 from collections.abc import Callable
 
+from autoware_internal_planning_msgs.msg import PlanningFactorArray
 from diagnostic_msgs.msg import DiagnosticArray
 from diagnostic_msgs.msg import DiagnosticStatus
 from tier4_metric_msgs.msg import MetricArray
@@ -54,6 +55,16 @@ class PlanningControlEvaluator(DLREvaluatorV2):
             self.aeb_cb,
             1,
         )
+        self.__sub_factors = []
+        for pfc in self._scenario.Evaluation.Conditions.PlanningFactorConditions:
+            self.__sub_factors.append(
+                self.create_subscription(
+                    PlanningFactorArray,
+                    pfc.topic,
+                    lambda msg, topic=pfc.topic: self.factor_cb(msg, topic),
+                    1,
+                )
+            )
 
         if self._scenario.include_use_case is not None:
             self._diag_result: DiagnosticsResult = DiagnosticsResult(
@@ -93,6 +104,11 @@ class PlanningControlEvaluator(DLREvaluatorV2):
         self._diag_result.set_frame(msg)
         if self._diag_result.frame != {}:
             self._diag_result_writer.write_result(self._diag_result)
+
+    def factor_cb(self, msg: PlanningFactorArray, topic: str) -> None:
+        self._result.set_frame(msg, self._latest_control_metrics)
+        if self._result.frame != {}:
+            self._result_writer.write_result(self._result)
 
 
 @evaluator_main

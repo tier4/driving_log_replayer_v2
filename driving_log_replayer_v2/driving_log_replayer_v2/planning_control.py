@@ -13,9 +13,11 @@
 # limitations under the License.
 
 from dataclasses import dataclass
+from functools import singledispatchmethod
 from sys import float_info
 from typing import Literal
 
+from autoware_internal_planning_msgs.msg import PlanningFactorArray
 from pydantic import BaseModel
 from pydantic import Field
 from pydantic import model_validator
@@ -141,13 +143,43 @@ class MetricCondition(BaseModel):
     kinematic_condition: KinematicCondition | None = None
 
 
+class StartEnd(BaseModel):
+    start: float = Field(0.0, ge=0.0)
+    end: float = Field(float_info.max, ge=0.0)
+
+    @model_validator(mode="after")
+    def validate_start_end(self) -> "StartEnd":
+        err_msg = "end must be a greater number than start"
+
+        if self.end < self.start:
+            raise ValueError(err_msg)
+        return self
+
+    def match_condition(self, float_time: float) -> bool:
+        return self.start <= float_time <= self.end
+
+
+class XYPos(BaseModel):
+    x: float
+    y: float
+
+
+class PlanningFactorCondition(BaseModel):
+    topic: str
+    time: StartEnd
+    condition_type: Literal["any_of", "all_of"]
+    position: XYPos
+    range: float = Field(gt=0.0)
+
+
 class Conditions(BaseModel):
     MetricConditions: list[MetricCondition] = []
+    PlanningFactorConditions: list[PlanningFactorCondition] = []
 
 
 class Evaluation(BaseModel):
     UseCaseName: Literal["planning_control"]
-    UseCaseFormatVersion: Literal["1.0.0"]
+    UseCaseFormatVersion: Literal["2.0.0"]
     Conditions: Conditions
     Datasets: list[dict]
 
@@ -248,14 +280,61 @@ class MetricsClassContainer:
         return (rtn_success, rtn_summary_str)
 
 
+@dataclass
+class PlanningFactor(EvaluationItem):
+    def set_frame(self, msg: PlanningFactorArray) -> dict | None:
+        self.total += 1
+        frame_success = "Fail"
+        return None
+
+
+class FactorsClassContainer:
+    def __init__(self, conditions: list[PlanningFactorCondition]) -> None:
+        self.__container: list[PlanningFactor] = []
+        for i, cond in enumerate(conditions):
+            self.__container.append(PlanningFactor(f"Condition_{i}", cond))
+
+    def set_frame(self, msg: PlanningFactorArray) -> dict:
+        frame_result: dict[int, dict] = {}
+        for evaluation_item in self.__container:
+            result_i = evaluation_item.set_frame(msg)
+            if result_i is not None:
+                frame_result[f"{evaluation_item.name}"] = result_i
+        return frame_result
+
+    def update(self) -> tuple[bool, str]:
+        rtn_success = True
+        rtn_summary = [] if len(self.__container) != 0 else ["NotTestTarget"]
+        for evaluation_item in self.__container:
+            if not evaluation_item.success:
+                rtn_success = False
+                rtn_summary.append(f"{evaluation_item.name} (Fail)")
+            else:
+                rtn_summary.append(f"{evaluation_item.name} (Success)")
+        prefix_str = "Passed" if rtn_success else "Failed"
+        rtn_summary_str = prefix_str + ":" + ", ".join(rtn_summary)
+        return (rtn_success, rtn_summary_str)
+
+
 class PlanningControlResult(ResultBase):
     def __init__(self, condition: Conditions) -> None:
         super().__init__()
         self.__metrics_container = MetricsClassContainer(condition.MetricConditions)
+        self.__factors_container = FactorsClassContainer(condition.PlanningFactorConditions)
 
     def update(self) -> None:
         self._success, self._summary = self.__metrics_container.update()
 
-    def set_frame(self, msg: MetricArray, control_metrics: MetricArray) -> None:
+    @singledispatchmethod
+    def set_frame(self) -> None:
+        raise NotImplementedError
+
+    @set_frame.register
+    def set_metric_frame(self, msg: MetricArray, control_metrics: MetricArray) -> None:
         self._frame = self.__metrics_container.set_frame(msg, control_metrics)
+        self.update()
+
+    @set_frame.register
+    def set_factor_frame(self, msg: PlanningFactorArray) -> None:
+        self._frame = self.__factors_container.set_frame(msg)
         self.update()
