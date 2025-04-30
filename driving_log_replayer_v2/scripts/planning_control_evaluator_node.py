@@ -16,6 +16,7 @@
 
 from collections.abc import Callable
 
+from autoware_internal_planning_msgs.msg import PlanningFactorArray
 from tier4_metric_msgs.msg import MetricArray
 
 from driving_log_replayer_v2.evaluator import DLREvaluatorV2
@@ -50,6 +51,16 @@ class PlanningControlEvaluator(DLREvaluatorV2):
             self.aeb_cb,
             1,
         )
+        self.__sub_factors = []
+        for pfc in self._scenario.Evaluation.Conditions.PlanningFactorConditions:
+            self.__sub_factors.append(
+                self.create_subscription(
+                    PlanningFactorArray,
+                    pfc.topic,
+                    lambda msg, topic=pfc.topic: self.factor_cb(msg, topic),
+                    1,
+                )
+            )
 
     def aeb_cb(self, msg: MetricArray) -> None:
         self._result.set_frame(msg, self._latest_control_metrics)
@@ -58,6 +69,11 @@ class PlanningControlEvaluator(DLREvaluatorV2):
 
     def control_cb(self, msg: MetricArray) -> None:
         self._latest_control_metrics = msg
+
+    def factor_cb(self, msg: PlanningFactorArray, topic: str) -> None:
+        self._result.set_frame(msg, self._latest_control_metrics)
+        if self._result.frame != {}:
+            self._result_writer.write_result(self._result)
 
 
 @evaluator_main
