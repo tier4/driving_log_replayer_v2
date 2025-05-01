@@ -80,7 +80,7 @@ USE_CASE_ARGS: list[DeclareLaunchArgument] = [
     ),
     DeclareLaunchArgument(
         "max_distance",
-        default_value="130",
+        default_value="100",
         description="Maximum distance for analysis. Default is 100m.",
     ),
     DeclareLaunchArgument(
