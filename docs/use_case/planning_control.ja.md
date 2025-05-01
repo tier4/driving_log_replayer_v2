@@ -1,13 +1,13 @@
 # Planning Controlの評価
 
-Metricsが指定の条件で出力されているか評価する
+Metrics、PlanningFactorsが指定の条件で出力されているか評価する
 
 ## 評価方法
 
 launch を立ち上げると以下のことが実行され、評価される。
 
 1. launch で評価ノード(`planning_control_evaluator_node`)と `logging_simulator.launch`、`ros2 bag play`コマンドを立ち上げる
-2. bag から出力されたセンサーデータを autoware が受け取って、metrics型のメッセージを出力する
+2. bag から出力されたセンサーデータを autoware が受け取って、metrics型、PlanningFactor型のメッセージを出力する
 3. 評価ノードが topic を subscribe して、各基準を満たしているかを判定して結果をファイルに記録する
 4. bag の再生が終了すると自動で launch が終了して評価が終了する
 
@@ -17,6 +17,8 @@ launch を立ち上げると以下のことが実行され、評価される。
 `/control/autonomous_emergency_braking/metrics`がシナリオで指定されたvalueになっているかを評価する。
 シナリオでレーン条件を記述した場合は、`/control/control_evaluator/metrics`から取得できるレーンが条件を満たした場合に評価される。
 評価の条件を満たさない場合は、ログも出力されない。
+
+`/planning/planning_factors/**`のtopicを利用する。
 
 ### 正常
 
@@ -36,6 +38,7 @@ Subscribed topics:
 | --------------------------------------------- | ------------------------------------ |
 | /control/control_evaluator/metrics            | tier4_metric_msg/msg/MetricArray     |
 | /control/autonomous_emergency_braking/metrics | tier4_metric_msg/msg/DiagnosticArray |
+| /planning/planning_factors/** | autoware_internal_planning_msgs/msg/PlanningFactorArray |
 
 Published topics:
 

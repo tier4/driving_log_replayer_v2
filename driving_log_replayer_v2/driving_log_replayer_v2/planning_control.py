@@ -335,6 +335,6 @@ class PlanningControlResult(ResultBase):
         self.update()
 
     @set_frame.register
-    def set_factor_frame(self, msg: PlanningFactorArray) -> None:
-        self._frame = self.__factors_container.set_frame(msg)
+    def set_factor_frame(self, msg: PlanningFactorArray, topic: str) -> None:
+        self._frame = self.__factors_container.set_frame(msg, topic)
         self.update()
