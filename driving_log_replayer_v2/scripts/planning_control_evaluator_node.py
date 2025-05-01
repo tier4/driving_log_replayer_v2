@@ -71,7 +71,7 @@ class PlanningControlEvaluator(DLREvaluatorV2):
         self._latest_control_metrics = msg
 
     def factor_cb(self, msg: PlanningFactorArray, topic: str) -> None:
-        self._result.set_frame(msg, self._latest_control_metrics)
+        self._result.set_frame(msg, topic)
         if self._result.frame != {}:
             self._result_writer.write_result(self._result)
 
