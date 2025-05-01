@@ -169,7 +169,7 @@ class PerceptionEvaluator:
     def get_archive_path(self) -> Path:
         return self.__result_archive_w_topic_path
 
-    def get_evaluation_results(self, *, save_frame_results: bool) -> dict:
+    def get_evaluation_results(self, *, save_frame_results: bool) -> None:
         if save_frame_results:
             with Path(
                 expandvars(self.__result_archive_w_topic_path.joinpath("scene_result.pkl"))
@@ -180,31 +180,11 @@ class PerceptionEvaluator:
             ).open("wb") as pkl_file:
                 pickle.dump(self.__evaluator.evaluator_config, pkl_file)
         if self.__evaluator.evaluator_config.evaluation_task == "fp_validation":
-            final_metrics = self.__get_fp_results()
+            self.__get_fp_results()
         else:
-            _ = self.__get_scene_results()  # TODO: use this result
-            score_dict = {}
-            error_dict = {}
-            conf_mat_dict = {}
+            self.__get_scene_results()
             self.__analyzer = PerceptionAnalyzer3D(self.__evaluator.evaluator_config)
             self.__analyzer.add(self.__evaluator.frame_results)
-            result = self.__analyzer.analyze()
-            if result.score is not None:
-                score_dict = result.score.to_dict()
-            if result.error is not None:
-                error_dict = (
-                    result.error.groupby(level=0)
-                    .apply(lambda df: df.xs(df.name).to_dict())
-                    .to_dict()
-                )
-            if result.confusion_matrix is not None:
-                conf_mat_dict = result.confusion_matrix.to_dict()
-            final_metrics = {
-                "Score": score_dict,
-                "Error": error_dict,
-                "ConfusionMatrix": conf_mat_dict,
-            }
-        return final_metrics
 
     def get_analyzer(self) -> PerceptionAnalyzer3D:
         if hasattr(self, f"_{self.__class__.__name__}__analyzer"):
@@ -224,7 +204,7 @@ class PerceptionEvaluator:
             return True
         return False
 
-    def __get_scene_results(self) -> MetricsScore:
+    def __get_scene_results(self) -> None:
         num_critical_fail: int = sum(
             [
                 frame_result.pass_fail_result.get_num_fail()
@@ -234,11 +214,10 @@ class PerceptionEvaluator:
         self.__logger.info("Number of fails for critical objects: %d", num_critical_fail)
 
         # scene metrics score
-        final_metric_score = self.__evaluator.get_scene_result()
+        final_metric_score: MetricsScore = self.__evaluator.get_scene_result()
         self.__logger.info("final metrics result %s", final_metric_score)
-        return final_metric_score
 
-    def __get_fp_results(self) -> dict:
+    def __get_fp_results(self) -> None:
         status_list = get_object_status(self.__evaluator.frame_results)
         gt_status = {}
         for status_info in status_list:
@@ -281,12 +260,3 @@ class PerceptionEvaluator:
             scene_tn_rate,
             scene_fn_rate,
         )
-        return {
-            "GroundTruthStatus": gt_status,
-            "Scene": {
-                "TP": scene_tp_rate,
-                "FP": scene_fp_rate,
-                "TN": scene_tn_rate,
-                "FN": scene_fn_rate,
-            },
-        }

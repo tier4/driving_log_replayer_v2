@@ -103,7 +103,7 @@ class EvaluationManager:
     def get_archive_path(self, topic_name: str) -> Path:
         return self._evaluators[topic_name].get_archive_path()
 
-    def get_evaluation_results(self) -> dict[str, dict]:
+    def get_evaluation_results(self) -> None:
         return {
             topic: evaluator.get_evaluation_results(save_frame_results=True)
             for topic, evaluator in self._evaluators.items()

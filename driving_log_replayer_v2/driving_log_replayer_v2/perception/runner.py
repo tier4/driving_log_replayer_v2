@@ -100,7 +100,7 @@ def write_result(
     rosbag_manager: RosBagManager,
     msg: MsgType,
     subscribed_ros_timestamp: int,
-    frame_info: dict[PerceptionFrameResult | str, int],
+    frame_info: dict[str, PerceptionFrameResult | str] | dict[str, int],
 ) -> None:
     """Write result.jsonl and rosbag."""
     # NOTE: In offline evaluation using rosbag with SequentialReader(), messages are processed one-by-one.
@@ -255,12 +255,10 @@ def evaluate(
                 {"frame": frame_result, "skip": skip_counter},
             )
     rosbag_manager.close_writer()
+    result_writer.close()
 
     # calculation of the overall evaluation like mAP, TP Rate, etc and save evaluated data.
-    final_metrics: dict[str, dict] = evaluator.get_evaluation_results()
-    result.set_final_metrics(final_metrics[degradation_topic])
-    result_writer.write_result_with_time(result, rosbag_manager.get_last_ros_timestamp())
-    result_writer.close()
+    evaluator.get_evaluation_results()
 
     # analysis of the evaluation result and save it as csv
     analyzers: dict[str, PerceptionAnalyzer3D] = evaluator.get_analyzers()
