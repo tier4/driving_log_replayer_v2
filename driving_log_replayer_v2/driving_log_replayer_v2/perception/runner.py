@@ -155,6 +155,8 @@ def evaluate(
     evaluation_tracking_topic_regex: str,
     evaluation_prediction_topic_regex: str,
     evaluation_fp_validation_topic_regex: str,
+    max_distance: str,
+    distance_interval: str,
 ) -> None:
     evaluation_topics = load_evaluation_topics(
         evaluation_detection_topic_regex,
@@ -267,7 +269,7 @@ def evaluate(
     # TODO: analysis other topic
     analyzer = analyzers[degradation_topic]
     save_path = evaluator.get_archive_path(degradation_topic)
-    analyze(degradation_topic, analyzer, save_path)
+    analyze(analyzer, save_path, max_distance, distance_interval, degradation_topic)
 
 
 def parse_args() -> argparse.Namespace:
@@ -310,6 +312,16 @@ def parse_args() -> argparse.Namespace:
         default="",
         help="Regex pattern for evaluation fp_validation topic name. Must start with '^' and end with '$'. Wildcards (e.g. '.*', '+', '?', '[...]') are not allowed. If you do not want to use this feature, set it to '' or 'None'.",
     )
+    parser.add_argument(
+        "--max-distance",
+        required=True,
+        help="Maximum distance for analysis.",
+    )
+    parser.add_argument(
+        "--distance-interval",
+        required=True,
+        help="Distance interval for analysis.",
+    )
     return parser.parse_args()
 
 
@@ -326,6 +338,8 @@ def main() -> None:
         args.evaluation_tracking_topic_regex,
         args.evaluation_prediction_topic_regex,
         args.evaluation_fp_validation_topic_regex,
+        args.max_distance,
+        args.distance_interval,
     )
 
 

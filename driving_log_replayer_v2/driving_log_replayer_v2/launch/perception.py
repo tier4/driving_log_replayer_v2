@@ -78,4 +78,14 @@ USE_CASE_ARGS: list[DeclareLaunchArgument] = [
         default_value=EVALUATION_FP_VALIDATION_TOPIC_REGEX,
         description="Regex pattern for evaluation fp_validation topic name. Must start with '^' and end with '$'. Wildcards (e.g. '.*', '+', '?', '[...]') are not allowed. If you do not want to use this feature, set it to '' or 'None'.",
     ),
+    DeclareLaunchArgument(
+        "max_distance",
+        default_value="100",
+        description="Maximum distance for analysis. Default is 100m.",
+    ),
+    DeclareLaunchArgument(
+        "distance_interval",
+        default_value="10",
+        description="Distance interval for analysis. Default is 10m.",
+    ),
 ]
