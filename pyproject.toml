@@ -1,6 +1,6 @@
 [project]
 name = "driving-log-replayer-v2"
-version = "3.8.1"
+version = "3.8.2"
 authors = [
   { name = "Hayato Mizushima", email = "hayato.mizushima@tier4.jp" },
   { name = "Masato Saeki", email = "masato.saeki@tier4.jp" },

@@ -1,5 +1,14 @@
 # Release Notes
 
+## Version 3.8.2
+
+Minor Tweak
+
+| Module       | Feature | Brief summary                      | Pull request                                                      | Contributor                                   |
+| ------------ | ------- | ---------------------------------- | ----------------------------------------------------------------- | --------------------------------------------- |
+| `perception` | launch  | add args range                     | [#142](https://github.com/tier4/driving_log_replayer_v2/pull/142) | [MasatoSaeki](https://github.com/MasatoSaeki) |
+| `perception` | analyze | delete final metrics in perception | [#143](https://github.com/tier4/driving_log_replayer_v2/pull/143) | [MasatoSaeki](https://github.com/MasatoSaeki) |
+
 ## Version 3.8.1
 
 Minor Tweak

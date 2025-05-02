@@ -2,6 +2,22 @@
 Changelog for package driving_log_replayer
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
+Forthcoming
+-----------
+* feat(perception): delete final metrics in perception (`#143 <https://github.com/tier4/driving_log_replayer_v2/issues/143>`_)
+  * diet
+  * delete sample
+  * split dict to each variable
+  * change  variable
+  * change function name and adjust order
+  ---------
+  Co-authored-by: Hayato Mizushima <hayato-m126@users.noreply.github.com>
+* feat(perception): add args range (`#142 <https://github.com/tier4/driving_log_replayer_v2/issues/142>`_)
+  * add args range
+  * change default distance
+  ---------
+* Contributors: Masato Saeki
+
 3.8.1 (2025-04-25)
 ------------------
 * feat(perception): regular expression and the way to represent None (`#137 <https://github.com/tier4/driving_log_replayer_v2/issues/137>`_)
