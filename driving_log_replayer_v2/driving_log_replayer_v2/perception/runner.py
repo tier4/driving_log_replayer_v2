@@ -100,8 +100,8 @@ def write_result(
     rosbag_manager: RosBagManager,
     msg: MsgType,
     subscribed_ros_timestamp: int,
-    frame: PerceptionFrameResult | str,
-    skip: int,
+    frame_result: PerceptionFrameResult | str,
+    skip_counter: int,
 ) -> None:
     """Write result.jsonl and rosbag."""
     # NOTE: In offline evaluation using rosbag with SequentialReader(), messages are processed one-by-one.
@@ -111,18 +111,18 @@ def write_result(
         msg.header.stamp,
     )
 
-    if isinstance(frame, PerceptionFrameResult):
+    if isinstance(frame_result, PerceptionFrameResult):
         # handle when add_frame is success
         result.set_frame(
-            frame,
-            skip,
+            frame_result,
+            skip_counter,
             map_to_baselink=DLREvaluatorV2.transform_stamped_with_euler_angle(map_to_baselink),
         )
 
         # this topic is written to rosbag with msg.header.timestamp, so it can show the accuracy of the result itself
         # but this topic is actually subscribed to subscribed_ros_timestamp, so ignoring delay
         marker_ground_truth, marker_results = convert_to_ros_msg(
-            frame,
+            frame_result,
             msg.header,
         )
         rosbag_manager.write_results(
@@ -131,17 +131,17 @@ def write_result(
         rosbag_manager.write_results(
             additional_record_topic_name["results"], marker_results, msg.header.stamp
         )  # results including evaluation topic and ground truth
-    elif isinstance(frame, str):
+    elif isinstance(frame_result, str):
         # handle when add_frame is fail caused by failed object conversion or no ground truth
-        if frame == "No Ground Truth":
-            result.set_info_frame(frame, skip)
-        elif frame == "Invalid Estimated Objects":
-            result.set_warn_frame(frame, skip)
+        if frame_result == "No Ground Truth":
+            result.set_info_frame(frame_result, skip_counter)
+        elif frame_result == "Invalid Estimated Objects":
+            result.set_warn_frame(frame_result, skip_counter)
         else:
-            err_msg = f"Unknown add_frame failure: {frame}"
+            err_msg = f"Unknown add_frame failure: {frame_result}"
             raise TypeError(err_msg)
     else:
-        err_msg = f"Unknown frame result: {frame}"
+        err_msg = f"Unknown frame result: {frame_result}"
         raise TypeError(err_msg)
     result_writer.write_result_with_time(result, subscribed_ros_timestamp)
 
