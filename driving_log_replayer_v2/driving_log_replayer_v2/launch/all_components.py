@@ -17,7 +17,6 @@ from launch.actions import DeclareLaunchArgument
 RECORD_TOPIC = """^/diagnostics$\
 |^/sensing/lidar/concatenated/pointcloud$\
 |^/perception/object_recognition/objects$\
-|^/perception/obstacle_segmentation/pointcloud$\
 |^/perception/object_recognition/detection/rois(11|10|[0-9])$\
 |^/perception/traffic_light_recognition/camera(11|10|[0-9])/detection/rois$\
 |^/perception/traffic_light_recognition/camera(11|10|[0-9])/detection/rough/rois$\
