@@ -25,6 +25,7 @@ RECORD_TOPIC = """^/tf$\
 |^/localization/pose_estimator/pose$\
 |^/localization/pose_estimator/pose_with_covariance$\
 |^/localization/kinematic_state$\
+|^/localization/acceleration$\
 |^/localization/reference_kinematic_state$\
 |^/localization/util/downsample/pointcloud$\
 |^/localization/pose_estimator/points_aligned$\

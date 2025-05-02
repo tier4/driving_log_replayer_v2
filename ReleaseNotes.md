@@ -1,5 +1,48 @@
 # Release Notes
 
+## Version 3.8.2
+
+Minor Tweak
+
+| Module       | Feature | Brief summary                      | Pull request                                                      | Contributor                                   |
+| ------------ | ------- | ---------------------------------- | ----------------------------------------------------------------- | --------------------------------------------- |
+| `perception` | launch  | add args range                     | [#142](https://github.com/tier4/driving_log_replayer_v2/pull/142) | [MasatoSaeki](https://github.com/MasatoSaeki) |
+| `perception` | analyze | delete final metrics in perception | [#143](https://github.com/tier4/driving_log_replayer_v2/pull/143) | [MasatoSaeki](https://github.com/MasatoSaeki) |
+
+## Version 3.8.1
+
+Minor Tweak
+
+| Module       | Feature | Brief summary                                 | Pull request                                                      | Contributor                                   |
+| ------------ | ------- | --------------------------------------------- | ----------------------------------------------------------------- | --------------------------------------------- |
+| `perception` | launch  | allow None to be treated as an argument value | [#137](https://github.com/tier4/driving_log_replayer_v2/pull/137) | [MasatoSaeki](https://github.com/MasatoSaeki) |
+
+## Version 3.8.0
+
+Major changes
+
+| Module       | Feature | Brief summary          | Pull request                                                      | Contributor                                   |
+| ------------ | ------- | ---------------------- | ----------------------------------------------------------------- | --------------------------------------------- |
+| `perception` | rosbag  | handle storage options | [#136](https://github.com/tier4/driving_log_replayer_v2/pull/136) | [MasatoSaeki](https://github.com/MasatoSaeki) |
+| `common`     | rosbag  | set mcap as default    | [#135](https://github.com/tier4/driving_log_replayer_v2/pull/135) | [hayato-m126](https://github.com/hayato-m126) |
+
+## Version 3.7.3
+
+Minor Tweak
+
+| Module         | Feature | Brief summary                     | Pull request                                                      | Contributor                                         |
+| -------------- | ------- | --------------------------------- | ----------------------------------------------------------------- | --------------------------------------------------- |
+| `localization` | rosbag  | record /localization/acceleration | [#132](https://github.com/tier4/driving_log_replayer_v2/pull/132) | [SakodaShintaro](https://github.com/SakodaShintaro) |
+
+## Version 3.7.2
+
+Minor Tweak
+
+| Module       | Feature         | Brief summary            | Pull request                                                      | Contributor                                   |
+| ------------ | --------------- | ------------------------ | ----------------------------------------------------------------- | --------------------------------------------- |
+| `perception` | error_handling  | remove dummy result file | [#131](https://github.com/tier4/driving_log_replayer_v2/pull/131) | [MasatoSaeki](https://github.com/MasatoSaeki) |
+| `perception` | evaluation_task | add prediction           | [#127](https://github.com/tier4/driving_log_replayer_v2/pull/127) | [MasatoSaeki](https://github.com/MasatoSaeki) |
+
 ## Version 3.7.1
 
 Minor Tweak

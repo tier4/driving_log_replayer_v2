@@ -86,12 +86,15 @@ class EvaluationManager:
             "evaluation_config_dict"
         ]["evaluation_task"]
         if evaluation_task in ["detection", "fp_validation"]:
-            return "/perception/object_recognition/detection/objects"
-        if evaluation_task == "tracking":
-            return "/perception/object_recognition/tracking/objects"
-        if evaluation_task == "prediction":
-            return "/perception/object_recognition/objects"
-        return ""
+            topic = "/perception/object_recognition/detection/objects"
+        elif evaluation_task == "tracking":
+            topic = "/perception/object_recognition/tracking/objects"
+        elif evaluation_task == "prediction":
+            topic = "/perception/object_recognition/objects"
+        else:
+            err_msg = f"Invalid evaluation task: {evaluation_task}"
+            raise ValueError(err_msg)
+        return topic
 
     def get_evaluation_config(self, topic_name: str) -> PerceptionEvaluationConfig:
         evaluator = self._evaluators[topic_name]
@@ -99,12 +102,6 @@ class EvaluationManager:
 
     def get_archive_path(self, topic_name: str) -> Path:
         return self._evaluators[topic_name].get_archive_path()
-
-    def get_evaluation_results(self) -> dict[str, dict]:
-        return {
-            topic: evaluator.get_evaluation_results(save_frame_results=True)
-            for topic, evaluator in self._evaluators.items()
-        }
 
     def get_analyzers(self) -> dict[str, PerceptionAnalyzer3D]:
         return {topic: evaluator.get_analyzer() for topic, evaluator in self._evaluators.items()}
@@ -128,3 +125,7 @@ class EvaluationManager:
         )
 
         return frame_result, skip_counter
+
+    def evaluate_all_frames(self) -> None:
+        for _, evaluator in self._evaluators.items():
+            evaluator.evaluate_all_frames(save_frame_results=False)

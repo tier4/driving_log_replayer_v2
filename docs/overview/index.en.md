@@ -2,7 +2,7 @@
 
 driving_log_replayer_v2 is a package that runs Autoware in an open loop by supplying previously recorded input data using log(rosbag2) API.
 The package gathers information and evaluates topics output produced by Autoware.
-Its use is to test the software regression and check Autoware's performance of sensing, localization, and perception components.
+This software is used to verify the performance of each Autoware component and for software regression testing.
 
 ## Related Documents
 

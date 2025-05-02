@@ -37,36 +37,55 @@ AUTOWARE_ARGS = {}
 
 NODE_PARAMS = {}
 
+EVALUATION_DETECTION_TOPIC_REGEX = """\
+^/perception/object_recognition/detection/objects$\
+|^/perception/object_recognition/detection/centerpoint/objects$\
+|^/perception/object_recognition/detection/centerpoint/validation/objects$\
+|^/perception/object_recognition/detection/clustering/objects$\
+|^/perception/object_recognition/detection/detection_by_tracker/objects$\
+|^/perception/object_recognition/detection/objects_before_filter$\
+"""
+
+EVALUATION_TRACKING_TOPIC_REGEX = """\
+^/perception/object_recognition/tracking/objects$\
+"""
+
+EVALUATION_PREDICTION_TOPIC_REGEX = """\
+^/perception/object_recognition/objects$\
+"""
+
+EVALUATION_FP_VALIDATION_TOPIC_REGEX = """\
+"""
+
 USE_CASE_ARGS: list[DeclareLaunchArgument] = [
     DeclareLaunchArgument(
         "evaluation_detection_topic_regex",
-        default_value="""\
-            |^/perception/object_recognition/detection/objects$\
-            |^/perception/object_recognition/detection/centerpoint/objects$\
-            |^/perception/object_recognition/detection/centerpoint/validation/objects$\
-            |^/perception/object_recognition/detection/clustering/objects$\
-            |^/perception/object_recognition/detection/detection_by_tracker/objects$\
-            |^/perception/object_recognition/detection/objects_before_filter$\
-        """,
-        description="Regex pattern for evaluation detection topic name. Must start with '^' and end with '$'. Wildcards (e.g. '.*', '+', '?', '[...]') are not allowed.",
+        default_value=EVALUATION_DETECTION_TOPIC_REGEX,
+        description="Regex pattern for evaluation detection topic name. Must start with '^' and end with '$'. Wildcards (e.g. '.*', '+', '?', '[...]') are not allowed. If you do not want to use this feature, set it to '' or 'None'.",
     ),
     DeclareLaunchArgument(
         "evaluation_tracking_topic_regex",
-        default_value="""\
-            |^/perception/object_recognition/tracking/objects$\
-        """,
-        description="Regex pattern for evaluation tracking topic name. Must start with '^' and end with '$'. Wildcards (e.g. '.*', '+', '?', '[...]') are not allowed.",
+        default_value=EVALUATION_TRACKING_TOPIC_REGEX,
+        description="Regex pattern for evaluation tracking topic name. Must start with '^' and end with '$'. Wildcards (e.g. '.*', '+', '?', '[...]') are not allowed. If you do not want to use this feature, set it to '' or 'None'.",
     ),
     DeclareLaunchArgument(
         "evaluation_prediction_topic_regex",
-        default_value="""\
-        """,
-        description="Regex pattern for evaluation prediction topic name. Must start with '^' and end with '$'. Wildcards (e.g. '.*', '+', '?', '[...]') are not allowed.",
+        default_value=EVALUATION_PREDICTION_TOPIC_REGEX,
+        description="Regex pattern for evaluation prediction topic name. Must start with '^' and end with '$'. Wildcards (e.g. '.*', '+', '?', '[...]') are not allowed. If you do not want to use this feature, set it to '' or 'None'.",
     ),
     DeclareLaunchArgument(
         "evaluation_fp_validation_topic_regex",
-        default_value="""\
-        """,
-        description="Regex pattern for evaluation fp_validation topic name. Must start with '^' and end with '$'. Wildcards (e.g. '.*', '+', '?', '[...]') are not allowed.",
+        default_value=EVALUATION_FP_VALIDATION_TOPIC_REGEX,
+        description="Regex pattern for evaluation fp_validation topic name. Must start with '^' and end with '$'. Wildcards (e.g. '.*', '+', '?', '[...]') are not allowed. If you do not want to use this feature, set it to '' or 'None'.",
+    ),
+    DeclareLaunchArgument(
+        "max_distance",
+        default_value="100",
+        description="Maximum distance for analysis. Default is 100m.",
+    ),
+    DeclareLaunchArgument(
+        "distance_interval",
+        default_value="10",
+        description="Distance interval for analysis. Default is 10m.",
     ),
 ]

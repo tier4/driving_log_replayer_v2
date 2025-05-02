@@ -21,16 +21,23 @@ import numpy as np
 import pandas as pd
 from perception_eval.tool import PerceptionAnalyzer3D
 
-DISTANCE_RANGE = tuple((i * 10, (i + 1) * 10) for i in range(15))
 
-
-def analyze(topic_name: str, analyzer: PerceptionAnalyzer3D, save_path: Path) -> None:
+def analyze(
+    analyzer: PerceptionAnalyzer3D,
+    save_path: Path,
+    max_distance: str,
+    distance_interval: str,
+    topic_name: str,
+) -> None:
     """Analyze evaluation results in detail and export them as a flattened csv table."""
     evaluation_task = analyzer.config.evaluation_task
     # decide the columns to be used
     sample = analyzer.analyze()
     if sample.score is not None and sample.error is not None:
-        distance_range = DISTANCE_RANGE
+        distance_range = tuple(
+            (i * int(distance_interval), (i + 1) * int(distance_interval))
+            for i in range(int(max_distance) // int(distance_interval))
+        )
         labels = sample.score.index.to_list()
         score_metrics = sample.score.columns.to_list()
         error_metrics = sample.error.index.get_level_values(1).unique().tolist()
@@ -183,6 +190,10 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--save-path", required=True, type=Path, help="Directory path to save the output csv file"
     )
+    parser.add_argument("--max-distance", required=True, help="Maximum distance for analysis")
+    parser.add_argument(
+        "--distance-interval", required=True, help="Distance interval for analysis."
+    )
     parser.add_argument("--topic-name", default="", help="Evaluated topic name")
     return parser.parse_args()
 
@@ -210,9 +221,11 @@ def main() -> None:
     analyzer.add(all_scene_result)
 
     analyze(
-        args.topic_name,
         analyzer,
         args.save_path,
+        args.max_distance,
+        args.distance_interval,
+        args.topic_name,
     )
 
 
