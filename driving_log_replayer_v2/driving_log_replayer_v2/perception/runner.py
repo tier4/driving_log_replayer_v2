@@ -263,7 +263,7 @@ def evaluate(
     result_writer.close()
 
     # calculation of the overall evaluation like mAP, TP Rate, etc and save evaluated data.
-    evaluator.get_evaluation_results()
+    evaluator.evaluate_all_frames()
 
     # analysis of the evaluation result and save it as csv
     analyzers: dict[str, PerceptionAnalyzer3D] = evaluator.get_analyzers()

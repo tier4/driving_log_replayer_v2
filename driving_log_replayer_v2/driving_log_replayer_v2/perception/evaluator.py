@@ -117,6 +117,18 @@ class PerceptionEvaluator:
 
         self.__evaluator = PerceptionEvaluationManager(evaluation_config=evaluation_config)
 
+    def get_evaluation_config(self) -> PerceptionEvaluationConfig:
+        return self.__evaluator.evaluator_config
+
+    def get_archive_path(self) -> Path:
+        return self.__result_archive_w_topic_path
+
+    def get_analyzer(self) -> PerceptionAnalyzer3D:
+        if hasattr(self, f"_{self.__class__.__name__}__analyzer"):
+            return self.__analyzer
+        err_msg = "Analyzer is not available. Please call get_evaluation_results() first or evaluation_task is fp_validation."
+        raise RuntimeError(err_msg)
+
     def add_frame(
         self,
         estimated_objects: list[DynamicObject] | str,
@@ -163,13 +175,7 @@ class PerceptionEvaluator:
 
         return frame_result, self.__skip_counter
 
-    def get_evaluation_config(self) -> PerceptionEvaluationConfig:
-        return self.__evaluator.evaluator_config
-
-    def get_archive_path(self) -> Path:
-        return self.__result_archive_w_topic_path
-
-    def get_evaluation_results(self, *, save_frame_results: bool) -> None:
+    def evaluate_all_frames(self, *, save_frame_results: bool) -> None:
         if save_frame_results:
             with Path(
                 expandvars(self.__result_archive_w_topic_path.joinpath("scene_result.pkl"))
@@ -180,17 +186,11 @@ class PerceptionEvaluator:
             ).open("wb") as pkl_file:
                 pickle.dump(self.__evaluator.evaluator_config, pkl_file)
         if self.__evaluator.evaluator_config.evaluation_task == "fp_validation":
-            self.__get_fp_results()
+            self.__log_fp_results()
         else:
-            self.__get_scene_results()
+            self.__log_scene_results()
             self.__analyzer = PerceptionAnalyzer3D(self.__evaluator.evaluator_config)
             self.__analyzer.add(self.__evaluator.frame_results)
-
-    def get_analyzer(self) -> PerceptionAnalyzer3D:
-        if hasattr(self, f"_{self.__class__.__name__}__analyzer"):
-            return self.__analyzer
-        err_msg = "Analyzer is not available. Please call get_evaluation_results() first or evaluation_task is fp_validation."
-        raise RuntimeError(err_msg)
 
     def __check_evaluation_task(self, evaluation_task: str) -> bool:
         if evaluation_task in ["detection", "fp_validation"]:
@@ -204,7 +204,7 @@ class PerceptionEvaluator:
             return True
         return False
 
-    def __get_scene_results(self) -> None:
+    def __log_scene_results(self) -> None:
         num_critical_fail: int = sum(
             [
                 frame_result.pass_fail_result.get_num_fail()
@@ -217,7 +217,7 @@ class PerceptionEvaluator:
         final_metric_score: MetricsScore = self.__evaluator.get_scene_result()
         self.__logger.info("final metrics result %s", final_metric_score)
 
-    def __get_fp_results(self) -> None:
+    def __log_fp_results(self) -> None:
         status_list = get_object_status(self.__evaluator.frame_results)
         gt_status = {}
         for status_info in status_list:
