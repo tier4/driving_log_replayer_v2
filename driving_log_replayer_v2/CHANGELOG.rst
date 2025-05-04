@@ -2,6 +2,16 @@
 Changelog for package driving_log_replayer
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
+Forthcoming
+-----------
+* feat(perception): add consecutive fn spans (`#130 <https://github.com/tier4/driving_log_replayer_v2/issues/130>`_)
+  * fundamental commit
+  * add consecutive_fn_spans
+  * chore
+  * refactor
+  ---------
+* Contributors: Masato Saeki
+
 3.8.2 (2025-05-02)
 ------------------
 * feat(perception): delete final metrics in perception (`#143 <https://github.com/tier4/driving_log_replayer_v2/issues/143>`_)

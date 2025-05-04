@@ -1,5 +1,13 @@
 # Release Notes
 
+## Version 3.8.3
+
+Minor Tweak
+
+| Module       | Feature | Brief summary            | Pull request                                                      | Contributor                                   |
+| ------------ | ------- | ------------------------ | ----------------------------------------------------------------- | --------------------------------------------- |
+| `perception` | analyze | add consecutive fn spans | [#130](https://github.com/tier4/driving_log_replayer_v2/pull/130) | [MasatoSaeki](https://github.com/MasatoSaeki) |
+
 ## Version 3.8.2
 
 Minor Tweak
