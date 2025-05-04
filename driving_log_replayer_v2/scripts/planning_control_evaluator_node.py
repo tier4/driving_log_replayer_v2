@@ -16,6 +16,8 @@
 
 from collections.abc import Callable
 
+from diagnostic_msgs.msg import DiagnosticArray
+from diagnostic_msgs.msg import DiagnosticStatus
 from tier4_metric_msgs.msg import MetricArray
 
 from driving_log_replayer_v2.evaluator import DLREvaluatorV2
@@ -51,6 +53,13 @@ class PlanningControlEvaluator(DLREvaluatorV2):
             1,
         )
 
+        self.__sub_diag = self.create_subscription(
+            DiagnosticArray,
+            "/diagnostics",
+            self.diag_cb,
+            100,
+        )
+
     def aeb_cb(self, msg: MetricArray) -> None:
         self._result.set_frame(msg, self._latest_control_metrics)
         if self._result.frame != {}:
@@ -58,6 +67,16 @@ class PlanningControlEvaluator(DLREvaluatorV2):
 
     def control_cb(self, msg: MetricArray) -> None:
         self._latest_control_metrics = msg
+
+    def diag_cb(self, msg: DiagnosticArray) -> None:
+        if len(msg.status) == 0:
+            return
+        diag_status: DiagnosticStatus = msg.status[0]
+        if diag_status.hardware_id not in self._scenario.Evaluation.Conditions.target_hardware_ids:
+            return
+        self._diag_result.set_frame(msg)
+        if self._diag_result.frame != {}:
+            self._result_writer.write_result(self._result)
 
 
 @evaluator_main
