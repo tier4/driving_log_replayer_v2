@@ -2,8 +2,8 @@
 Changelog for package driving_log_replayer
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-Forthcoming
------------
+3.8.3 (2025-05-04)
+------------------
 * feat(perception): add consecutive fn spans (`#130 <https://github.com/tier4/driving_log_replayer_v2/issues/130>`_)
   * fundamental commit
   * add consecutive_fn_spans
