@@ -20,6 +20,7 @@ from diagnostic_msgs.msg import DiagnosticArray
 from diagnostic_msgs.msg import DiagnosticStatus
 from tier4_metric_msgs.msg import MetricArray
 
+from driving_log_replayer_v2.diagnostics import DiagnosticsResult
 from driving_log_replayer_v2.evaluator import DLREvaluatorV2
 from driving_log_replayer_v2.evaluator import evaluator_main
 from driving_log_replayer_v2.planning_control import PlanningControlResult
@@ -36,6 +37,9 @@ class PlanningControlEvaluator(DLREvaluatorV2):
         super().__init__(name, scenario_class, result_class)
         self._scenario: PlanningControlScenario
         self._result: PlanningControlResult
+        self._diag_result: DiagnosticsResult = DiagnosticsResult(
+            self._scenario.IncludeUseCase.Conditions
+        )
 
         self._latest_control_metrics = MetricArray()
 
@@ -72,7 +76,10 @@ class PlanningControlEvaluator(DLREvaluatorV2):
         if len(msg.status) == 0:
             return
         diag_status: DiagnosticStatus = msg.status[0]
-        if diag_status.hardware_id not in self._scenario.Evaluation.Conditions.target_hardware_ids:
+        if (
+            diag_status.hardware_id
+            not in self._scenario.IncludeUseCase.Conditions.target_hardware_ids
+        ):
             return
         self._diag_result.set_frame(msg)
         if self._diag_result.frame != {}:
