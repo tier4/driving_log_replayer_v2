@@ -25,6 +25,7 @@ from driving_log_replayer_v2.evaluator import DLREvaluatorV2
 from driving_log_replayer_v2.evaluator import evaluator_main
 from driving_log_replayer_v2.planning_control import PlanningControlResult
 from driving_log_replayer_v2.planning_control import PlanningControlScenario
+from driving_log_replayer_v2.result import ResultWriter
 
 
 class PlanningControlEvaluator(DLREvaluatorV2):
@@ -41,6 +42,11 @@ class PlanningControlEvaluator(DLREvaluatorV2):
             self._scenario.IncludeUseCase.Conditions
         )
 
+        self._diag_result_writer: ResultWriter = ResultWriter(
+            self._result_archive_path.joinpath("diag_result.jsonl"),
+            self.get_clock(),
+            self._scenario.IncludeUseCase.Conditions,
+        )
         self._latest_control_metrics = MetricArray()
 
         self.__sub_control_metrics = self.create_subscription(
