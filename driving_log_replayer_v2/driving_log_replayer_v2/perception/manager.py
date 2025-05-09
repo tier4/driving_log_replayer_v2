@@ -128,4 +128,4 @@ class EvaluationManager:
 
     def evaluate_all_frames(self) -> None:
         for _, evaluator in self._evaluators.items():
-            evaluator.evaluate_all_frames(save_frame_results=False)
+            evaluator.evaluate_all_frames(save_frame_results=True)
