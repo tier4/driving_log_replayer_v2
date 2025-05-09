@@ -2,8 +2,8 @@
 Changelog for package driving_log_replayer
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-Forthcoming
------------
+3.8.4 (2025-05-09)
+------------------
 * change args False to True (`#147 <https://github.com/tier4/driving_log_replayer_v2/issues/147>`_)
 * Contributors: Masato Saeki
 
