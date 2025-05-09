@@ -2,6 +2,11 @@
 Changelog for package driving_log_replayer
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
+Forthcoming
+-----------
+* change args False to True (`#147 <https://github.com/tier4/driving_log_replayer_v2/issues/147>`_)
+* Contributors: Masato Saeki
+
 3.8.3 (2025-05-04)
 ------------------
 * feat(perception): add consecutive fn spans (`#130 <https://github.com/tier4/driving_log_replayer_v2/issues/130>`_)

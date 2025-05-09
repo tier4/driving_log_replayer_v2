@@ -2,6 +2,9 @@
 Changelog for package driving_log_replayer_v2_analyzer
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
+Forthcoming
+-----------
+
 3.8.3 (2025-05-04)
 ------------------
 
