@@ -403,6 +403,12 @@ def launch_bag_player(
         remap_list.append(
             "/perception/object_recognition/objects:=/unused/perception/object_recognition/objects",
         )
+        remap_list.append(
+            "/perception/object_recognition/tracking/objects:=/unused/perception/object_recognition/tracking/objects",
+        )
+        remap_list.append(
+            "/perception/object_recognition/detection/objects:=/unused/perception/object_recognition/detection/objects",
+        )
     if conf.get("goal_pose") is not None:
         remap_list.append(
             "/planning/mission_planning/route:=/unused/planning/mission_planning/route",
