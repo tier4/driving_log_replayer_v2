@@ -67,6 +67,8 @@ def system_defined_remap(conf: dict) -> list[str]:
         # remap perception msgs in bag
         add_remap("/perception/obstacle_segmentation/pointcloud", remap_list)
         add_remap("/perception/object_recognition/objects", remap_list)
+        add_remap("/perception/object_recognition/tracking/objects", remap_list)
+        add_remap("/perception/object_recognition/detection/objects", remap_list)
     if conf.get("goal_pose") is not None:
         add_remap("/planning/mission_planning/route", remap_list)
     return remap_list
