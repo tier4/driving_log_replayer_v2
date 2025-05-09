@@ -1,5 +1,13 @@
 # Release Notes
 
+## Version 3.8.4
+
+Minor Tweak
+
+| Module       | Feature | Brief summary                                      | Pull request                                                      | Contributor                                   |
+| ------------ | ------- | -------------------------------------------------- | ----------------------------------------------------------------- | --------------------------------------------- |
+| `perception` | result  | change args False to True to save scene_result.pkl | [#147](https://github.com/tier4/driving_log_replayer_v2/pull/147) | [MasatoSaeki](https://github.com/MasatoSaeki) |
+
 ## Version 3.8.3
 
 Minor Tweak
