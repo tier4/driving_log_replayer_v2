@@ -38,7 +38,7 @@ class PlanningControlEvaluator(DLREvaluatorV2):
         super().__init__(name, scenario_class, result_class)
         self._scenario: PlanningControlScenario
         self._result: PlanningControlResult
-        
+
         self._latest_control_metrics = MetricArray()
 
         self.__sub_control_metrics = self.create_subscription(
