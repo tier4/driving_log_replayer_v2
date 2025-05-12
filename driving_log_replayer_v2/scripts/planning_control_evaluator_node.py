@@ -89,7 +89,7 @@ class PlanningControlEvaluator(DLREvaluatorV2):
             return
         self._diag_result.set_frame(msg)
         if self._diag_result.frame != {}:
-            self._result_writer.write_result(self._result)
+            self._diag_result_writer.write_result(self._diag_result)
 
 
 @evaluator_main
