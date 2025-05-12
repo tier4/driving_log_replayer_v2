@@ -160,7 +160,7 @@ class IncludeUseCase(BaseModel):
 
 class PlanningControlScenario(Scenario):
     Evaluation: Evaluation
-    IncludeUseCase: IncludeUseCase
+    include_use_case: IncludeUseCase | None = None
 
 
 @dataclass

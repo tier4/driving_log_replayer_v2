@@ -37,7 +37,7 @@ Evaluation:
             id: 1500
             s: 10.0
         kinematic_condition: null # optional
-IncludeUseCase:
+include_use_case:
   UseCaseName: diagnostics
   UseCaseFormatVersion: 0.1.0
   Conditions:

@@ -38,15 +38,7 @@ class PlanningControlEvaluator(DLREvaluatorV2):
         super().__init__(name, scenario_class, result_class)
         self._scenario: PlanningControlScenario
         self._result: PlanningControlResult
-        self._diag_result: DiagnosticsResult = DiagnosticsResult(
-            self._scenario.IncludeUseCase.Conditions
-        )
-
-        self._diag_result_writer: ResultWriter = ResultWriter(
-            self._result_archive_path.joinpath("diag_result.jsonl"),
-            self.get_clock(),
-            self._scenario.IncludeUseCase.Conditions,
-        )
+        
         self._latest_control_metrics = MetricArray()
 
         self.__sub_control_metrics = self.create_subscription(
@@ -63,12 +55,23 @@ class PlanningControlEvaluator(DLREvaluatorV2):
             1,
         )
 
-        self.__sub_diag = self.create_subscription(
-            DiagnosticArray,
-            "/diagnostics",
-            self.diag_cb,
-            100,
-        )
+        if self._scenario.include_use_case is not None:
+            self._diag_result: DiagnosticsResult = DiagnosticsResult(
+                self._scenario.include_use_case.Conditions
+            )
+
+            self._diag_result_writer: ResultWriter = ResultWriter(
+                self._result_archive_path.joinpath("diag_result.jsonl"),
+                self.get_clock(),
+                self._scenario.include_use_case.Conditions,
+            )
+
+            self.__sub_diag = self.create_subscription(
+                DiagnosticArray,
+                "/diagnostics",
+                self.diag_cb,
+                100,
+            )
 
     def aeb_cb(self, msg: MetricArray) -> None:
         self._result.set_frame(msg, self._latest_control_metrics)
@@ -84,7 +87,7 @@ class PlanningControlEvaluator(DLREvaluatorV2):
         diag_status: DiagnosticStatus = msg.status[0]
         if (
             diag_status.hardware_id
-            not in self._scenario.IncludeUseCase.Conditions.target_hardware_ids
+            not in self._scenario.include_use_case.Conditions.target_hardware_ids
         ):
             return
         self._diag_result.set_frame(msg)

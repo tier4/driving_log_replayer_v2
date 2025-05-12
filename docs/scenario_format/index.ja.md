@@ -4,7 +4,8 @@ driving_log_replayer_v2 で用いるシナリオのフォーマットについ�
 
 ## フォーマットに関する注意事項
 
-- キーは CamelCase にて定義する。
+- キーは CamelCase にて定義する。Scenario Format Version 3.0まで
+- pydanticを用いたシナリオのバリデーションのため、新規に追加するキーはsnake_caseを推奨 Scenario Formart Version 3.1より
 - 座標系に関しては、 `map` 座標系を使用する
 - 単位系に関しては、特に指定がなければ以下を使用する。
 
@@ -38,13 +39,17 @@ Evaluation:
   Datasets:
     - DatasetName:
         VehicleId: String
+include_use_case:
+  UseCaseName: String
+  UseCaseFormatVersion: String
+  Conditions: Dictionary
 ```
 
 ### ScenarioFormatVersion
 
 シナリオフォーマットのバージョン情報を記述する。セマンティックバージョンを用いる。
 
-現在は、3.0.0
+現在は、3.1.0
 
 フォーマットの更新の度にマイナーバージョンを更新する。
 
@@ -109,3 +114,7 @@ t4_datasetのデータセット名
 autoware_launch/launch/logging_simulator.launch.xml の引数の vehicle_id を指定する。
 
 車両 ID が不明な場合は、`default` を設定する。
+
+### include_use_case
+
+Evaluationで指定したユースケースとは別のユースケースの評価を同時に行う場合に使用する。
