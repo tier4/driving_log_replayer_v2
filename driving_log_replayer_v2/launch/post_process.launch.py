@@ -85,7 +85,17 @@ def post_process(context: LaunchContext) -> list:
             LogInfo(msg="run perception analysis."),
             OpaqueFunction(function=_run_perception_and_replace_rosbag),
         ]
-
+    
+    if conf["use_case"] == "planning_control":
+        # merge diagnostic result.jsonl
+        diag_result_path = Path(conf["result_archive_path"]).joinpath("diag_result.jsonl")
+        if not diag_result_path.exists():
+            return [LogInfo(msg="No diagnostics result.jsonl found. Abort merging result.jsonl")]
+        else:
+            # read diag_result.jsonl
+            # merge with result.jsonl
+            # write merged result.jsonl
+            pass
     return [LogInfo(msg="No post-processing is performed.")]
 
 

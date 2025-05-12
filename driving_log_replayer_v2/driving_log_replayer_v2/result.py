@@ -167,3 +167,15 @@ class PickleWriter:
     def __init__(self, out_pkl_path: str, write_object: Any) -> None:
         with Path(expandvars(out_pkl_path)).open("wb") as pkl_file:
             pickle.dump(write_object, pkl_file)
+
+class ResultReader:
+    def __init__(
+        self,
+        result_json_path: str,
+    ) -> None:
+        self._result_path = self.create_jsonl_path(result_json_path)
+        self._result_file = self._result_path.open("w")
+        self._ros_clock = ros_clock
+        self._system_clock = Clock(clock_type=ClockType.SYSTEM_TIME)
+        self.write_condition(condition)
+        self.write_line(self.get_header())
