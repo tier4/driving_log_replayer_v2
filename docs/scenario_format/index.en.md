@@ -119,3 +119,9 @@ If you don't know `vehicle_id`, set `default`.
 ### include_use_case
 
 Use this when you want to perform evaluation with a different use case simultaneously with the use case specified in Evaluation.
+Note that the nodes for the use cases specified here will not be automatically started.
+
+Each use case's evaluator node needs to add processing to evaluate with the conditions specified in include_use_case.
+Since the evaluator processes the last line of result.jsonl to determine success or failure, it is necessary to merge the results of result.jsonl from Evaluation and result.jsonl output from include_use_case in post_process.
+
+Currently, the functionality to evaluate diagnostics in planning_control has been implemented.

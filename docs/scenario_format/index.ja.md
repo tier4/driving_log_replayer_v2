@@ -118,3 +118,10 @@ autoware_launch/launch/logging_simulator.launch.xml の引数の vehicle_id を�
 ### include_use_case
 
 Evaluationで指定したユースケースとは別のユースケースの評価を同時に行う場合に使用する。
+ここに記載したuse_caseのノードが自動で立ち上がるわけではない。
+
+各use_caseのevaluatorノードにinclude_use_caseで指定された条件で評価する処理を追加する必要がある。
+Evaluatorでは、result.jsonlの最終行を処理して、成否の判定が行われるので、Evaluationの結果result.jsonlと、include_use_caseで出力されるresult.jsonlの結果をpost_processでマージする必要がある。
+
+現状、planning_controlでdiagnosticsを評価する機能が実装されている。
+
