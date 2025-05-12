@@ -168,6 +168,7 @@ class PickleWriter:
         with Path(expandvars(out_pkl_path)).open("wb") as pkl_file:
             pickle.dump(write_object, pkl_file)
 
+
 class ResultReader:
     def __init__(
         self,

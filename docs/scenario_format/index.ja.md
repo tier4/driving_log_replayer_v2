@@ -124,4 +124,3 @@ Evaluationで指定したユースケースとは別のユースケースの評�
 Evaluatorでは、result.jsonlの最終行を処理して、成否の判定が行われるので、Evaluationの結果result.jsonlと、include_use_caseで出力されるresult.jsonlの結果をpost_processでマージする必要がある。
 
 現状、planning_controlでdiagnosticsを評価する機能が実装されている。
-

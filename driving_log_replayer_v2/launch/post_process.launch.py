@@ -85,7 +85,7 @@ def post_process(context: LaunchContext) -> list:
             LogInfo(msg="run perception analysis."),
             OpaqueFunction(function=_run_perception_and_replace_rosbag),
         ]
-    
+
     if conf["use_case"] == "planning_control":
         # merge diagnostic result.jsonl
         diag_result_path = Path(conf["result_archive_path"]).joinpath("diag_result.jsonl")
