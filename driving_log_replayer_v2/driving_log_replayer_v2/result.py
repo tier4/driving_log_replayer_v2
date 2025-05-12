@@ -170,10 +170,7 @@ class PickleWriter:
 
 
 class ResultReader:
-    def __init__(
-        self,
-        result_json_path: str,
-    ) -> None:
+    def __init__(self, result_json_path: str) -> None:
         self._result_path = self.create_jsonl_path(result_json_path)
         self._result_file = self._result_path.open("w")
         self._ros_clock = ros_clock
