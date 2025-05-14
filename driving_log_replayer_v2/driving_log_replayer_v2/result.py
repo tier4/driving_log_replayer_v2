@@ -170,10 +170,25 @@ class PickleWriter:
 
 
 class ResultReader:
-    def __init__(self, result_json_path: str) -> None:
-        self._result_path = self.create_jsonl_path(result_json_path)
-        self._result_file = self._result_path.open("w")
-        self._ros_clock = ros_clock
-        self._system_clock = Clock(clock_type=ClockType.SYSTEM_TIME)
-        self.write_condition(condition)
-        self.write_line(self.get_header())
+    def __init__(self, result_jsonl_path: str) -> None:
+        self._result_path = Path(expandvars(result_jsonl_path))
+        self._last_result = self.load_last_result()
+        self.success: bool = self._last_result["Result"]["Success"]
+        self.summary: str = self._last_result["Result"]["Summary"]
+
+    def load_last_result(self) -> dict:
+        with self._result_path.open() as jsonl_file:
+            for line in jsonl_file:  # noqa
+                pass
+            return json.loads(line)
+
+
+class MultiResultReader:
+    def __init__(self, result_jsonl_paths: list[str]) -> None:
+        self.success = True
+        self.summary = "MergedSummary:"
+        for result_jsonl_path in result_jsonl_paths:
+            result = ResultReader(result_jsonl_path)
+            if not result.summary:
+                self.success = False
+            self.summary += " " + result.summary
