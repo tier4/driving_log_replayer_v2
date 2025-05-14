@@ -95,14 +95,16 @@ class ResultWriter:
         result_json_path: str,
         ros_clock: Clock,
         condition: BaseModel | dict,
+        *,
+        append: bool = False,
     ) -> None:
         self._result_path = self.create_jsonl_path(result_json_path)
         # Open file in append mode if it exists, otherwise create new file
-        self._result_file = self._result_path.open("a" if self._result_path.exists() else "w")
+        self._result_file = self._result_path.open("a" if append else "w")
         self._ros_clock = ros_clock
         self._system_clock = Clock(clock_type=ClockType.SYSTEM_TIME)
         # Only write condition and header if this is a new file
-        if not self._result_path.exists():
+        if not append:
             self.write_condition(condition)
             self.write_line(self.get_header())
 
