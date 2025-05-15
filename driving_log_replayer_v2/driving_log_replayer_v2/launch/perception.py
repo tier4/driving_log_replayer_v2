@@ -24,12 +24,13 @@ RECORD_TOPIC = """^/tf$\
 |^/perception/object_recognition/detection/.*/debug/pipeline_latency_ms$\
 |^/driving_log_replayer_v2/.*\
 |^/sensing/camera/.*\
+|^/awapi/autoware/get/status$\
 """
 
 AUTOWARE_DISABLE = {
     "localization": "false",
-    "planning": "false",
-    "control": "false",
+    "planning": "true",
+    "control": "true",
 }
 
 AUTOWARE_ARGS = {}
