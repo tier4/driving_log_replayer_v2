@@ -40,11 +40,15 @@ NODE_PARAMS = {}
 EVALUATION_DETECTION_TOPIC_REGEX = """\
 ^/perception/object_recognition/detection/objects$\
 |^/perception/object_recognition/detection/centerpoint/objects$\
-|^/perception/object_recognition/detection/centerpoint/validation/objects$\
 |^/perception/object_recognition/detection/clustering/objects$\
 |^/perception/object_recognition/detection/detection_by_tracker/objects$\
-|^/perception/object_recognition/detection/objects_before_filter$\
+|^/perception/object_recognition/detection/camera_lidar_fusion/objects$\
+|^/sensing/radar/detected_objects$\
 """
+# |^/perception/object_recognition/detection/centerpoint/validation/objects$\
+# |^/perception/object_recognition/detection/objects_before_filter$\
+
+
 
 EVALUATION_TRACKING_TOPIC_REGEX = """\
 ^/perception/object_recognition/tracking/objects$\
