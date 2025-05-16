@@ -29,8 +29,8 @@ RECORD_TOPIC = """^/tf$\
 
 AUTOWARE_DISABLE = {
     "localization": "false",
-    "planning": "true",
-    "control": "true",
+    "planning": "false",
+    "control": "false",
 }
 
 AUTOWARE_ARGS = {}
