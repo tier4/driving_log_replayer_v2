@@ -25,6 +25,8 @@ RECORD_TOPIC = """^/tf$\
 |^/driving_log_replayer_v2/.*\
 |^/sensing/camera/.*\
 |^/awapi/autoware/get/status$\
+|^/api/planning/velocity_factors$\
+|^/api/planning/steering_factors$\
 """
 
 AUTOWARE_DISABLE = {
