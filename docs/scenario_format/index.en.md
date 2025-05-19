@@ -4,7 +4,8 @@ This section describes the scenario format used in driving_log_replayer_v2.
 
 ## Notes on the format
 
-- Keys are defined in CamelCase.
+- Keys are defined in CamelCase until Scenario Format Version 3.0
+- Due to scenario validation using pydantic, snake_case is recommended for newly added keys from Scenario Format Version 3.1
 - Unless otherwise specified, the coordinate system is `map` coordinate system.
 - Unless otherwise specified, the following unit system is used.
 
@@ -38,13 +39,17 @@ Evaluation:
   Datasets:
     - DatasetName:
         VehicleId: String
+include_use_case:
+  UseCaseName: String
+  UseCaseFormatVersion: String
+  Conditions: Dictionary
 ```
 
 ### ScenarioFormatVersion
 
 Describe the version information of the scenario format. Use the semantic version.
 
-Current Version is 3.0.0
+Current Version is 3.1.0
 
 Minor versions are updated each time the format is updated.
 
@@ -94,7 +99,7 @@ The index starts with the number 0.
 If there is only one dataset, dataset_index:=0 may be used.
 
 ```shell
-# If the number of datasets described in the scenario is 1. datsaet_index:=0 can be omitted.
+# If the number of datasets described in the scenario is 1. dataset_index:=0 can be omitted.
 ros2 launch driving_log_replayer_v2 driving_log_replayer_v2.launch.py scenario_path:=${scenario_path} [dataset_index:=0]
 
 # If the number of datasets described in the scenario is more than one
@@ -110,3 +115,13 @@ dataset name of t4_dataset
 Specify `vehicle_id` as an argument in `autoware_launch/launch/logging_simulator.launch.xml`
 
 If you don't know `vehicle_id`, set `default`.
+
+### include_use_case
+
+Use this when you want to perform evaluation with a different use case simultaneously with the use case specified in Evaluation.
+Note that the nodes for the use cases specified here will not be automatically started.
+
+Each use case's evaluator node needs to add processing to evaluate with the conditions specified in include_use_case.
+Since the evaluator processes the last line of result.jsonl to determine success or failure, it is necessary to merge the results of result.jsonl from Evaluation and result.jsonl output from include_use_case in post_process.
+
+Currently, the functionality to evaluate diagnostics in planning_control has been implemented.

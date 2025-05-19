@@ -24,13 +24,14 @@ number = int | float
 
 
 class Scenario(BaseModel):
-    ScenarioFormatVersion: Literal["3.0.0"]
+    ScenarioFormatVersion: Literal["3.0.0", "3.1.0"]
     ScenarioName: str
     ScenarioDescription: str
     SensorModel: str
     VehicleModel: str
     VehicleId: str | None = None
     Evaluation: dict
+    include_use_case: dict | None = None
 
 
 def load_scenario(scenario_path: Path, scenario_class: Callable) -> Any:

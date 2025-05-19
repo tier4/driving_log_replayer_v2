@@ -22,6 +22,7 @@ from pydantic import model_validator
 from tier4_metric_msgs.msg import Metric
 from tier4_metric_msgs.msg import MetricArray
 
+from driving_log_replayer_v2.diagnostics import Conditions as DiagnosticsConditions
 from driving_log_replayer_v2.result import EvaluationItem
 from driving_log_replayer_v2.result import ResultBase
 from driving_log_replayer_v2.scenario import Scenario
@@ -151,8 +152,15 @@ class Evaluation(BaseModel):
     Datasets: list[dict]
 
 
+class IncludeUseCase(BaseModel):
+    UseCaseName: Literal["diagnostics"]
+    UseCaseFormatVersion: Literal["0.1.0"]
+    Conditions: DiagnosticsConditions
+
+
 class PlanningControlScenario(Scenario):
     Evaluation: Evaluation
+    include_use_case: IncludeUseCase | None = None
 
 
 @dataclass
