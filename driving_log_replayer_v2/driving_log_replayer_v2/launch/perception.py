@@ -27,6 +27,7 @@ RECORD_TOPIC = """^/tf$\
 |^/awapi/autoware/get/status$\
 |^/api/planning/velocity_factors$\
 |^/api/planning/steering_factors$\
+|^/planning/planning_factors/obstacle_stop$\
 """
 
 AUTOWARE_DISABLE = {
