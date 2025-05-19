@@ -180,7 +180,7 @@ class ResultEditor:
     def __enter__(self) -> "ResultEditor":
         return self
 
-    def __exit__(self, exc_type, exc_val, exc_tb) -> None:
+    def __exit__(self, typ, exc, tb) -> None:  # noqa
         self.close()
 
     def load_last_result(self) -> dict:
