@@ -184,10 +184,12 @@ class ResultEditor:
         self.close()
 
     def load_last_result(self) -> dict:
-        with self._result_file as jsonl_file:
-            for line in jsonl_file:  # noqa
-                pass
-            return json.loads(line)
+        last_line = ""
+        for line in self._result_file:
+            last_line = line
+        if not last_line:
+            return {"Result": {"Success": False, "Summary": "NoData"}}
+        return json.loads(last_line)
 
     def close(self) -> None:
         if not self._result_file.closed:
@@ -197,18 +199,19 @@ class ResultEditor:
         self._result_file.seek(0, 2)  # end of file
         result_str = json.dumps(write_obj, ignore_nan=True) + "\n"
         self._result_file.write(result_str)
+        self._result_file.flush()  # Ensure data is written to disk
 
 
 class MultiResultEditor:
     def __init__(self, result_jsonl_paths: list[str]) -> None:
         self._result_jsonl_paths = result_jsonl_paths
         self.success = True
-        self.summary = "MergedSummary:"
+        self.summary = "MergedSummary"
         for result_jsonl_path in result_jsonl_paths:
             with ResultEditor(result_jsonl_path) as result:
-                if not result.summary:
+                if not result.success:
                     self.success = False
-                self.summary += " " + result.summary
+                self.summary += "-" + result.summary
 
     def write_back_result(self) -> None:
         with ResultEditor(self._result_jsonl_paths[0]) as main_result_file:
