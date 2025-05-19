@@ -169,26 +169,48 @@ class PickleWriter:
             pickle.dump(write_object, pkl_file)
 
 
-class ResultReader:
+class ResultEditor:
     def __init__(self, result_jsonl_path: str) -> None:
         self._result_path = Path(expandvars(result_jsonl_path))
+        self._result_file = self._result_path.open("r+")
         self._last_result = self.load_last_result()
         self.success: bool = self._last_result["Result"]["Success"]
         self.summary: str = self._last_result["Result"]["Summary"]
 
     def load_last_result(self) -> dict:
-        with self._result_path.open() as jsonl_file:
+        with self._result_file as jsonl_file:
             for line in jsonl_file:  # noqa
                 pass
             return json.loads(line)
 
+    def close(self) -> None:
+        if not self._result_file.closed:
+            self._result_file.close()
 
-class MultiResultReader:
+    def add_result(self, write_obj: Any) -> None:
+        self._result_file.seek(0, 2)  # end of file
+        result_str = json.dumps(write_obj, ignore_nan=True) + "\n"
+        self._result_file.write(result_str)
+
+
+class MultiResultEditor:
     def __init__(self, result_jsonl_paths: list[str]) -> None:
+        self._result_jsonl_paths = result_jsonl_paths
         self.success = True
         self.summary = "MergedSummary:"
         for result_jsonl_path in result_jsonl_paths:
-            result = ResultReader(result_jsonl_path)
+            result = ResultEditor(result_jsonl_path)
             if not result.summary:
                 self.success = False
             self.summary += " " + result.summary
+            result.close()
+
+    def write_back_result(self) -> None:
+        main_result_file = ResultEditor(self._result_jsonl_paths[0])
+        final_result = {
+            "Result": {"Success": self.success, "Summary": self.summary},
+            "Stamp": {},
+            "Frame": {},
+        }
+        main_result_file.add_result(final_result)
+        main_result_file.close()
