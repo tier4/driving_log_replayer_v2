@@ -94,7 +94,7 @@ def post_process(context: LaunchContext) -> list:
             return [LogInfo(msg="No diagnostics result.jsonl found. Abort merging result.jsonl")]
         multi_result_editor = MultiResultEditor(
             [
-                Path(conf["result_json_path"]).as_posix(),
+                Path(conf["result_json_path"]).as_posix() + "l",  # "json + l"
                 diag_result_path.as_posix(),
             ]
         )

@@ -177,6 +177,12 @@ class ResultEditor:
         self.success: bool = self._last_result["Result"]["Success"]
         self.summary: str = self._last_result["Result"]["Summary"]
 
+    def __enter__(self) -> "ResultEditor":
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb) -> None:
+        self.close()
+
     def load_last_result(self) -> dict:
         with self._result_file as jsonl_file:
             for line in jsonl_file:  # noqa
@@ -199,18 +205,16 @@ class MultiResultEditor:
         self.success = True
         self.summary = "MergedSummary:"
         for result_jsonl_path in result_jsonl_paths:
-            result = ResultEditor(result_jsonl_path)
-            if not result.summary:
-                self.success = False
-            self.summary += " " + result.summary
-            result.close()
+            with ResultEditor(result_jsonl_path) as result:
+                if not result.summary:
+                    self.success = False
+                self.summary += " " + result.summary
 
     def write_back_result(self) -> None:
-        main_result_file = ResultEditor(self._result_jsonl_paths[0])
-        final_result = {
-            "Result": {"Success": self.success, "Summary": self.summary},
-            "Stamp": {},
-            "Frame": {},
-        }
-        main_result_file.add_result(final_result)
-        main_result_file.close()
+        with ResultEditor(self._result_jsonl_paths[0]) as main_result_file:
+            final_result = {
+                "Result": {"Success": self.success, "Summary": self.summary},
+                "Stamp": {},
+                "Frame": {},
+            }
+            main_result_file.add_result(final_result)
