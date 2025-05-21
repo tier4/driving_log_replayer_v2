@@ -13,7 +13,6 @@
 # limitations under the License.
 
 from dataclasses import dataclass
-from functools import singledispatchmethod
 from sys import float_info
 from typing import Literal
 
@@ -316,25 +315,27 @@ class FactorsClassContainer:
         return (rtn_success, rtn_summary_str)
 
 
-class PlanningControlResult(ResultBase):
+class MetricResult(ResultBase):
     def __init__(self, condition: Conditions) -> None:
         super().__init__()
         self.__metrics_container = MetricsClassContainer(condition.MetricConditions)
-        self.__factors_container = FactorsClassContainer(condition.PlanningFactorConditions)
 
     def update(self) -> None:
         self._success, self._summary = self.__metrics_container.update()
 
-    @singledispatchmethod
-    def set_frame(self) -> None:
-        raise NotImplementedError
-
-    @set_frame.register
-    def set_metric_frame(self, msg: MetricArray, control_metrics: MetricArray) -> None:
+    def set_frame(self, msg: MetricArray, control_metrics: MetricArray) -> None:
         self._frame = self.__metrics_container.set_frame(msg, control_metrics)
         self.update()
 
-    @set_frame.register
-    def set_factor_frame(self, msg: PlanningFactorArray, topic: str) -> None:
-        self._frame = self.__factors_container.set_frame(msg, topic)
+
+class PlanningFactorResult(ResultBase):
+    def __init__(self, condition: Conditions) -> None:
+        super().__init__()
+        self.__factors_container = FactorsClassContainer(condition.PlanningFactorConditions)
+
+    def update(self) -> None:
+        self._success, self._summary = self.__factors_container.update()
+
+    def set_frame(self, msg: MetricArray, control_metrics: MetricArray) -> None:
+        self._frame = self.__metrics_container.set_frame(msg, control_metrics)
         self.update()

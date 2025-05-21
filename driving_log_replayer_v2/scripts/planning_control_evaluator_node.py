@@ -24,8 +24,9 @@ from tier4_metric_msgs.msg import MetricArray
 from driving_log_replayer_v2.diagnostics import DiagnosticsResult
 from driving_log_replayer_v2.evaluator import DLREvaluatorV2
 from driving_log_replayer_v2.evaluator import evaluator_main
-from driving_log_replayer_v2.planning_control import PlanningControlResult
+from driving_log_replayer_v2.planning_control import MetricResult
 from driving_log_replayer_v2.planning_control import PlanningControlScenario
+from driving_log_replayer_v2.planning_control import PlanningFactorResult
 from driving_log_replayer_v2.result import ResultWriter
 
 
@@ -34,11 +35,11 @@ class PlanningControlEvaluator(DLREvaluatorV2):
         self,
         name: str,
         scenario_class: Callable = PlanningControlScenario,
-        result_class: Callable = PlanningControlResult,
+        result_class: Callable = MetricResult,
     ) -> None:
         super().__init__(name, scenario_class, result_class)
         self._scenario: PlanningControlScenario
-        self._result: PlanningControlResult
+        self._result: MetricResult
 
         self._latest_control_metrics = MetricArray()
 
@@ -55,26 +56,35 @@ class PlanningControlEvaluator(DLREvaluatorV2):
             self.aeb_cb,
             1,
         )
-        self.__sub_factors = []
-        for pfc in self._scenario.Evaluation.Conditions.PlanningFactorConditions:
-            self.__sub_factors.append(
-                self.create_subscription(
-                    PlanningFactorArray,
-                    pfc.topic,
-                    lambda msg, topic=pfc.topic: self.factor_cb(msg, topic),
-                    1,
-                )
+
+        pf_conditions = self._scenario.Evaluation.Conditions.PlanningFactorConditions
+        if pf_conditions is not None:
+            self._planning_factor_result = PlanningFactorResult(pf_conditions)
+            self._planning_factor_result_writer: ResultWriter = ResultWriter(
+                self._result_archive_path.joinpath("planning_factor_result.jsonl"),
+                self.get_clock(),
+                pf_conditions,
             )
 
+            self.__sub_factors = []
+            for pfc in pf_conditions:
+                self.__sub_factors.append(
+                    self.create_subscription(
+                        PlanningFactorArray,
+                        pfc.topic,
+                        lambda msg, topic=pfc.topic: self.factor_cb(msg, topic),
+                        1,
+                    )
+                )
+
         if self._scenario.include_use_case is not None:
-            self._diag_result: DiagnosticsResult = DiagnosticsResult(
-                self._scenario.include_use_case.Conditions
-            )
+            diag_conditions = self._scenario.include_use_case.Conditions
+            self._diag_result: DiagnosticsResult = DiagnosticsResult(diag_conditions)
 
             self._diag_result_writer: ResultWriter = ResultWriter(
                 self._result_archive_path.joinpath("diag_result.jsonl"),
                 self.get_clock(),
-                self._scenario.include_use_case.Conditions,
+                diag_conditions,
             )
 
             self.__sub_diag = self.create_subscription(
@@ -106,9 +116,9 @@ class PlanningControlEvaluator(DLREvaluatorV2):
             self._diag_result_writer.write_result(self._diag_result)
 
     def factor_cb(self, msg: PlanningFactorArray, topic: str) -> None:
-        self._result.set_frame(msg, topic)
-        if self._result.frame != {}:
-            self._result_writer.write_result(self._result)
+        self._planning_factor_result.set_frame(msg, topic)
+        if self._planning_factor_result.frame != {}:
+            self._planning_factor_result_writer.write_result(self._planning_factor_result)
 
 
 @evaluator_main
