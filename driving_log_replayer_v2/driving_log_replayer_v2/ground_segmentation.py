@@ -25,7 +25,6 @@ from driving_log_replayer_v2_msgs.msg import GroundSegmentationEvalResult
 
 
 class Condition(BaseModel):
-    Method: Literal["annotated_pcd", "annotated_rosbag"]
     ground_label: number
     obstacle_label: number
     accuracy_min: number

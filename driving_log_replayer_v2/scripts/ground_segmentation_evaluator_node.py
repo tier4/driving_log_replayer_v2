@@ -17,7 +17,6 @@
 import json
 from pathlib import Path
 
-import message_filters
 import numpy as np
 from rclpy.qos import qos_profile_sensor_data
 import ros2_numpy
@@ -31,8 +30,6 @@ from driving_log_replayer_v2.ground_segmentation import GroundSegmentationResult
 from driving_log_replayer_v2.ground_segmentation import GroundSegmentationScenario
 import driving_log_replayer_v2.perception_eval_conversions as eval_conversions
 from driving_log_replayer_v2_msgs.msg import GroundSegmentationEvalResult
-
-from typing import List, Dict, Tuple
 
 
 class GroundSegmentationEvaluator(DLREvaluatorV2):
@@ -53,76 +50,53 @@ class GroundSegmentationEvaluator(DLREvaluatorV2):
             self.get_parameter("evaluation_target_topic").get_parameter_value().string_value
         )
 
-        if eval_condition.Method == "annotated_pcd":
-            # pcd eval mode
-            sample_data_path = Path(self._t4_dataset_paths[0], "annotation", "sample_data.json")
-            sample_data = json.load(sample_data_path.open())
-            sample_data = list(filter(lambda d: d["filename"].split(".")[-2] == "pcd", sample_data))
+        sample_data_path = Path(self._t4_dataset_paths[0], "annotation", "sample_data.json")
+        sample_data = json.load(sample_data_path.open())
+        sample_data = list(filter(lambda d: d["filename"].split(".")[-2] == "pcd", sample_data))
 
-            # load gt annotation data
-            lidarseg_dir_path = Path(self._t4_dataset_paths[0], "lidar_semseg_sample")
-            lidarseg_json_path = Path(lidarseg_dir_path, "data", "deepen_format", "lidar_annotations_accepted_deepen2.json")
-            lidarseg_data = json.load(lidarseg_json_path.open())
-            raw_points_to_seg_data = {}
-            for annotation_data in lidarseg_data:
-                raw_points_file = annotation_data["file_id"] + ".bin"
-                raw_points_to_seg_data[raw_points_file] = annotation_data
+        # load gt annotation data
+        lidarseg_dir_path = Path(self._t4_dataset_paths[0], "lidar_semseg_sample")
+        lidarseg_json_path = Path(
+            lidarseg_dir_path, "data", "deepen_format", "lidar_annotations_accepted_deepen2.json"
+        )
+        lidarseg_data = json.load(lidarseg_json_path.open())
+        raw_points_to_seg_data = {}
+        for annotation_data in lidarseg_data:
+            raw_points_file = annotation_data["file_id"] + ".bin"
+            raw_points_to_seg_data[raw_points_file] = annotation_data
 
-            self.ground_truth: Dict[int, Tuple[np.ndarray, np.ndarray]] = {}
-            for i in range(len(sample_data)):
-                raw_points_file_path = Path(
-                    self._t4_dataset_paths[0],
-                    sample_data[i]["filename"],
-                ).as_posix()
-                raw_points_file_name = str(int(raw_points_file_path.split("/")[-1].split(".")[0])) + ".pcd.bin"
-                raw_points = np.fromfile(raw_points_file_path, dtype=np.float32)
-
-                label_file_path = Path(lidarseg_dir_path, raw_points_to_seg_data[raw_points_file_name]["lidarseg_anno_file"])
-                # self.get_logger().info(f"label_file_path: {label_file_path}")
-                annotation_file_path = Path(lidarseg_dir_path, label_file_path).as_posix()
-                labels = np.fromfile(annotation_file_path, dtype=np.uint8)
-
-                # self.get_logger().info(f"raw_poitns shape: {raw_points.shape}")
-                # self.get_logger().info(f"labels shape: {labels.shape}")
-
-                points: np.ndarray = raw_points.reshape((-1, self.CLOUD_DIM))
-                # self.get_logger().info(f"points shape: {points.shape}")
-                self.ground_truth[int(sample_data[i]["timestamp"])] = (points, labels)
-
-            self.__sub_pointcloud = self.create_subscription(
-                PointCloud2,
-                self.eval_target_topic,
-                self.annotated_pcd_eval_cb,
-                qos_profile_sensor_data,
+        self.ground_truth: dict[
+            int, tuple[np.ndarray, np.ndarray]
+        ] = {}  # timestamp: (points, labels)
+        for i in range(len(sample_data)):
+            raw_points_file_path = Path(
+                self._t4_dataset_paths[0],
+                sample_data[i]["filename"],
+            ).as_posix()
+            raw_points_file_name = (
+                str(int(raw_points_file_path.split("/")[-1].split(".")[0])) + ".pcd.bin"
             )
-        elif eval_condition.Method == "annotated_rosbag":
-            # rosbag (AWSIM) eval mode
+            raw_points = np.fromfile(raw_points_file_path, dtype=np.float32)
 
-            self.__sub_gt_cloud = message_filters.Subscriber(
-                self,
-                PointCloud2,
-                "/sensing/lidar/concatenated/pointcloud",
-                qos_profile=qos_profile_sensor_data,
+            label_file_path = Path(
+                lidarseg_dir_path,
+                raw_points_to_seg_data[raw_points_file_name]["lidarseg_anno_file"],
             )
-            self.__sub_eval_target_cloud = message_filters.Subscriber(
-                self,
-                PointCloud2,
-                self.eval_target_topic,
-                qos_profile=qos_profile_sensor_data,
-            )
-            self.__sync_sub = message_filters.TimeSynchronizer(
-                [self.__sub_gt_cloud, self.__sub_eval_target_cloud],
-                1000,
-            )
-            self.__sync_sub.registerCallback(self.annotated_rosbag_eval_cb)
-        else:
-            err = 'The "Method" field must be set to either "annotated_rosbag" or "annotated_pcd"'
-            raise ValueError(err)
+            annotation_file_path = Path(lidarseg_dir_path, label_file_path).as_posix()
+            labels = np.fromfile(annotation_file_path, dtype=np.uint8)
+
+            points: np.ndarray = raw_points.reshape((-1, self.CLOUD_DIM))
+
+            self.ground_truth[int(sample_data[i]["timestamp"])] = (points, labels)
+
+        self.__sub_pointcloud = self.create_subscription(
+            PointCloud2,
+            self.eval_target_topic,
+            self.annotated_pcd_eval_cb,
+            qos_profile_sensor_data,
+        )
 
     def annotated_pcd_eval_cb(self, msg: PointCloud2) -> None:
-        self.get_logger().info("annotated_pcd_eval_cb")
-        # return
-        # raise ValueError("annotated_pcd_eval_cb is not implemented")
         unix_time: int = eval_conversions.unix_time_from_ros_msg(msg.header)
         gt_frame_ts = self.__get_gt_frame_ts(unix_time=unix_time)
 
@@ -142,9 +116,14 @@ class GroundSegmentationEvaluator(DLREvaluatorV2):
         pointcloud[:, 1] = numpy_pcd["y"]
         pointcloud[:, 2] = numpy_pcd["z"]
 
+        assert gt_frame_cloud.shape[0] == gt_frame_label.shape[0], (
+            "ground truth cloud and label size mismatch"
+        )
+
         # count TP+FN, TN+FP
         tp_fn = np.count_nonzero(gt_frame_label[:] == self.ground_label)
         fp_tn = np.count_nonzero(gt_frame_label[:] == self.obstacle_label)
+
         tn: int = 0
         fn: int = 0
         for p in pointcloud:
@@ -160,46 +139,6 @@ class GroundSegmentationEvaluator(DLREvaluatorV2):
 
         metrics_list = self.__compute_metrics(tp, fp, tn, fn)
 
-        frame_result = GroundSegmentationEvalResult()
-        frame_result.tp = tp
-        frame_result.fp = fp
-        frame_result.tn = tn
-        frame_result.fn = fn
-        frame_result.accuracy = metrics_list[0]
-        frame_result.precision = metrics_list[1]
-        frame_result.recall = metrics_list[2]
-        frame_result.specificity = metrics_list[3]
-        frame_result.f1_score = metrics_list[4]
-
-        self._result.set_frame(frame_result)
-        self._result_writer.write_result(self._result)
-
-    def annotated_rosbag_eval_cb(
-        self,
-        gt_cloud_msg: PointCloud2,
-        eval_target_cloud_msg: PointCloud2,
-    ) -> None:
-        np_gt_cloud: np.array = ros2_numpy.numpify(gt_cloud_msg)
-        np_target_cloud: np.array = ros2_numpy.numpify(eval_target_cloud_msg)
-
-        # guard
-        if (
-            "entity_id" not in np_gt_cloud.dtype.fields
-            or "entity_id" not in np_target_cloud.dtype.fields
-        ):
-            self.get_logger().warn('The input PointCloud doesn\'t have a field named "entity_id"')
-            return
-
-        tp_fn = np.count_nonzero(np_gt_cloud["entity_id"] == self.ground_label)
-        tn_fp = np_gt_cloud.size - tp_fn
-        fn = np.count_nonzero(np_target_cloud["entity_id"] == self.ground_label)
-        tn = np_target_cloud.size - fn
-
-        tp = tp_fn - fn
-        fp = tn_fp - tn
-        self.get_logger().info(f"TP+FN = {tp_fn}, TN+FP = {tn_fp}")
-        self.get_logger().info(f"TP {tp}, FP {fp}, TN {tn}, FN {fn}")
-        metrics_list = self.__compute_metrics(tp, fp, tn, fn)
         frame_result = GroundSegmentationEvalResult()
         frame_result.tp = tp
         frame_result.fp = fp
