@@ -167,3 +167,57 @@ class PickleWriter:
     def __init__(self, out_pkl_path: str, write_object: Any) -> None:
         with Path(expandvars(out_pkl_path)).open("wb") as pkl_file:
             pickle.dump(write_object, pkl_file)
+
+
+class ResultEditor:
+    def __init__(self, result_jsonl_path: str) -> None:
+        self._result_path = Path(expandvars(result_jsonl_path))
+        self._result_file = self._result_path.open("r+")
+        self._last_result = self.load_last_result()
+        self.success: bool = self._last_result["Result"]["Success"]
+        self.summary: str = self._last_result["Result"]["Summary"]
+
+    def __enter__(self) -> "ResultEditor":
+        return self
+
+    def __exit__(self, typ, exc, tb) -> None:  # noqa
+        self.close()
+
+    def load_last_result(self) -> dict:
+        last_line = ""
+        for line in self._result_file:
+            last_line = line
+        if not last_line:
+            return {"Result": {"Success": False, "Summary": "NoData"}}
+        return json.loads(last_line)
+
+    def close(self) -> None:
+        if not self._result_file.closed:
+            self._result_file.close()
+
+    def add_result(self, write_obj: Any) -> None:
+        self._result_file.seek(0, 2)  # end of file
+        result_str = json.dumps(write_obj, ignore_nan=True) + "\n"
+        self._result_file.write(result_str)
+        self._result_file.flush()  # Ensure data is written to disk
+
+
+class MultiResultEditor:
+    def __init__(self, result_jsonl_paths: list[str]) -> None:
+        self._result_jsonl_paths = result_jsonl_paths
+        self.success = True
+        self.summary = "MergedSummary"
+        for result_jsonl_path in result_jsonl_paths:
+            with ResultEditor(result_jsonl_path) as result:
+                if not result.success:
+                    self.success = False
+                self.summary += "-" + result.summary
+
+    def write_back_result(self) -> None:
+        with ResultEditor(self._result_jsonl_paths[0]) as main_result_file:
+            final_result = {
+                "Result": {"Success": self.success, "Summary": self.summary},
+                "Stamp": {},
+                "Frame": {},
+            }
+            main_result_file.add_result(final_result)

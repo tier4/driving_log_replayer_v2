@@ -2,6 +2,89 @@
 Changelog for package driving_log_replayer
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
+3.8.4 (2025-05-09)
+------------------
+* change args False to True (`#147 <https://github.com/tier4/driving_log_replayer_v2/issues/147>`_)
+* Contributors: Masato Saeki
+
+3.8.3 (2025-05-04)
+------------------
+* feat(perception): add consecutive fn spans (`#130 <https://github.com/tier4/driving_log_replayer_v2/issues/130>`_)
+  * fundamental commit
+  * add consecutive_fn_spans
+  * chore
+  * refactor
+  ---------
+* Contributors: Masato Saeki
+
+3.8.2 (2025-05-02)
+------------------
+* feat(perception): delete final metrics in perception (`#143 <https://github.com/tier4/driving_log_replayer_v2/issues/143>`_)
+  * diet
+  * delete sample
+  * split dict to each variable
+  * change  variable
+  * change function name and adjust order
+  ---------
+  Co-authored-by: Hayato Mizushima <hayato-m126@users.noreply.github.com>
+* feat(perception): add args range (`#142 <https://github.com/tier4/driving_log_replayer_v2/issues/142>`_)
+  * add args range
+  * change default distance
+  ---------
+* Contributors: Masato Saeki
+
+3.8.1 (2025-04-25)
+------------------
+* feat(perception): regular expression and the way to represent None (`#137 <https://github.com/tier4/driving_log_replayer_v2/issues/137>`_)
+  * fix regular expression and the way to represent None
+  * add missing quotation
+  Co-authored-by: Copilot <175728472+Copilot@users.noreply.github.com>
+  ---------
+  Co-authored-by: Copilot <175728472+Copilot@users.noreply.github.com>
+* Contributors: Masato Saeki
+
+3.8.0 (2025-04-24)
+------------------
+* feat: set mcap as default (`#135 <https://github.com/tier4/driving_log_replayer_v2/issues/135>`_)
+* feat(perception): handle storage options (`#136 <https://github.com/tier4/driving_log_replayer_v2/issues/136>`_)
+  * handle_storage_options
+  * add tag require
+  ---------
+* Contributors: Hayato Mizushima, Masato Saeki
+
+3.7.3 (2025-04-23)
+------------------
+* Added `/localization/acceleration` into the record topic list (`#132 <https://github.com/tier4/driving_log_replayer_v2/issues/132>`_)
+* Contributors: SakodaShintaro
+
+3.7.2 (2025-04-22)
+------------------
+* add prediction impl (`#127 <https://github.com/tier4/driving_log_replayer_v2/issues/127>`_)
+* add remove command to check even if post-process is fail (`#131 <https://github.com/tier4/driving_log_replayer_v2/issues/131>`_)
+* Contributors: Masato Saeki
+
+3.7.1 (2025-04-20)
+------------------
+* feat(perception): add analyzer (`#125 <https://github.com/tier4/driving_log_replayer_v2/issues/125>`_)
+  * add analyze
+  * save scenario yaml
+  * fix
+  * add external interface
+  * expand for cli
+  * run pre-commit
+  * chore
+  * chore
+  * refactor
+  * remove as_posix()
+  Co-authored-by: Copilot <175728472+Copilot@users.noreply.github.com>
+  * add require tag in argparse
+  * run pre-commit
+  * add np.nan if object to evaluate is nothing and fill str(nan)
+  * add cspell
+  ---------
+  Co-authored-by: Copilot <175728472+Copilot@users.noreply.github.com>
+* Contributors: Masato Saeki
+
 3.7.0 (2025-04-12)
 ------------------
 * feat(perception): replace evaluation in runtime to evaluation in post-processing (`#120 <https://github.com/tier4/driving_log_replayer_v2/issues/120>`_)

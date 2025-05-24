@@ -29,7 +29,7 @@ Evaluation:
             y_position: null # [m] null [y座標でフィルタしない] or 下限,上限
   PerceptionEvaluationConfig:
     evaluation_config_dict:
-      evaluation_task: detection # detection/tracking ここで指定したobjectsを評価する
+      evaluation_task: detection # detection/tracking/prediction ここで指定したobjectsを評価する
       target_labels: [car, bicycle, pedestrian, motorbike] # 評価ラベル
       max_x_position: 102.4 # 評価対象 object の最大 x 位置
       max_y_position: 102.4 # 評価対象 object の最大 y 位置
