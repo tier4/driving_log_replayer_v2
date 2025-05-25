@@ -25,6 +25,8 @@ RECORD_TOPIC = """^/tf$\
 |^/perception/object_recognition/.*/objects$\
 |^/perception/object_recognition/objects$\
 |^/perception/object_recognition/detection/objects_before_filter$\
+|^/sensing/.*detected_objects$\
+|^/sensing/.*tracked_objects$\
 """
 
 AUTOWARE_DISABLE = {
@@ -42,7 +44,7 @@ EVALUATION_DETECTION_TOPIC_REGEX = """\
 |^/perception/object_recognition/detection/centerpoint/objects$\
 |^/perception/object_recognition/detection/clustering/objects$\
 |^/perception/object_recognition/detection/detection_by_tracker/objects$\
-|^/perception/object_recognition/detection/camera_lidar_fusion/objects$\
+|^/perception/object_recognition/detection/clustering/camera_lidar_fusion/objects$\
 |^/sensing/radar/detected_objects$\
 """
 # |^/perception/object_recognition/detection/centerpoint/validation/objects$\
