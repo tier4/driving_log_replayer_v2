@@ -158,22 +158,22 @@ class StartEnd(BaseModel):
         return self.start <= float_time <= self.end
 
 
-class XYPos(BaseModel):
+class Area(BaseModel):
     x: float
     y: float
+    range: float = Field(gt=0.0)
 
 
 class PlanningFactorCondition(BaseModel):
     topic: str
     time: StartEnd
     condition_type: Literal["any_of", "all_of"]
-    position: XYPos
-    range: float = Field(gt=0.0)
+    area: Area
 
 
 class Conditions(BaseModel):
-    MetricConditions: list[MetricCondition] | None = None
-    PlanningFactorConditions: list[PlanningFactorCondition] | None = None
+    MetricConditions: list[MetricCondition] = []
+    PlanningFactorConditions: list[PlanningFactorCondition] = []
 
 
 class Evaluation(BaseModel):
@@ -337,5 +337,6 @@ class PlanningFactorResult(ResultBase):
         self._success, self._summary = self.__factors_container.update()
 
     def set_frame(self, msg: MetricArray, control_metrics: MetricArray) -> None:
-        self._frame = self.__metrics_container.set_frame(msg, control_metrics)
-        self.update()
+        self._frame = {}
+        # self.__metrics_container.set_frame(msg, control_metrics)
+        # self.update()
