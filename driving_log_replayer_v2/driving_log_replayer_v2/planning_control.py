@@ -279,42 +279,6 @@ class MetricsClassContainer:
         return (rtn_success, rtn_summary_str)
 
 
-@dataclass
-class PlanningFactor(EvaluationItem):
-    def set_frame(self, msg: PlanningFactorArray) -> dict | None:
-        self.total += 1
-        frame_success = "Fail"
-        return None
-
-
-class FactorsClassContainer:
-    def __init__(self, conditions: list[PlanningFactorCondition]) -> None:
-        self.__container: list[PlanningFactor] = []
-        for i, cond in enumerate(conditions):
-            self.__container.append(PlanningFactor(f"Condition_{i}", cond))
-
-    def set_frame(self, msg: PlanningFactorArray) -> dict:
-        frame_result: dict[int, dict] = {}
-        for evaluation_item in self.__container:
-            result_i = evaluation_item.set_frame(msg)
-            if result_i is not None:
-                frame_result[f"{evaluation_item.name}"] = result_i
-        return frame_result
-
-    def update(self) -> tuple[bool, str]:
-        rtn_success = True
-        rtn_summary = [] if len(self.__container) != 0 else ["NotTestTarget"]
-        for evaluation_item in self.__container:
-            if not evaluation_item.success:
-                rtn_success = False
-                rtn_summary.append(f"{evaluation_item.name} (Fail)")
-            else:
-                rtn_summary.append(f"{evaluation_item.name} (Success)")
-        prefix_str = "Passed" if rtn_success else "Failed"
-        rtn_summary_str = prefix_str + ":" + ", ".join(rtn_summary)
-        return (rtn_success, rtn_summary_str)
-
-
 class MetricResult(ResultBase):
     def __init__(self, condition: Conditions) -> None:
         super().__init__()
@@ -328,6 +292,42 @@ class MetricResult(ResultBase):
         self.update()
 
 
+@dataclass
+class PlanningFactor(EvaluationItem):
+    def set_frame(self, msg: PlanningFactorArray) -> dict | None:
+        self.total += 1
+        frame_success = "Fail"
+        return {
+            "Result": {"Total": self.success_str(), "Frame": frame_success},
+            "Info": {
+                "TotalPassed": self.passed,
+            },
+        }
+
+
+class FactorsClassContainer:
+    def __init__(self, conditions: list[PlanningFactorCondition]) -> None:
+        self.__container: dict[PlanningFactor] = {}
+        for i, cond in enumerate(conditions):
+            self.__container[cond.topic] = PlanningFactor(f"Condition_{i}", cond)
+
+    def set_frame(self, msg: PlanningFactorArray, topic: str) -> dict:
+        return self.__container[topic].set_frame(msg)
+
+    def update(self) -> tuple[bool, str]:
+        rtn_success = True
+        rtn_summary = [] if len(self.__container) != 0 else ["NotTestTarget"]
+        for _, evaluation_item in self.__container.items():
+            if not evaluation_item.success:
+                rtn_success = False
+                rtn_summary.append(f"{evaluation_item.name} (Fail)")
+            else:
+                rtn_summary.append(f"{evaluation_item.name} (Success)")
+        prefix_str = "Passed" if rtn_success else "Failed"
+        rtn_summary_str = prefix_str + ":" + ", ".join(rtn_summary)
+        return (rtn_success, rtn_summary_str)
+
+
 class PlanningFactorResult(ResultBase):
     def __init__(self, condition: Conditions) -> None:
         super().__init__()
@@ -336,7 +336,6 @@ class PlanningFactorResult(ResultBase):
     def update(self) -> None:
         self._success, self._summary = self.__factors_container.update()
 
-    def set_frame(self, msg: MetricArray, control_metrics: MetricArray) -> None:
-        self._frame = {}
-        # self.__metrics_container.set_frame(msg, control_metrics)
-        # self.update()
+    def set_frame(self, msg: MetricArray, topic: str) -> None:
+        self.__metrics_container.set_frame(msg, topic)
+        self.update()
