@@ -130,8 +130,13 @@ class ResultWriter:
     def write_result_with_time(self, result: ResultBase, ros_timestamp: int) -> None:
         self.write_line(self.get_result(result, ros_timestamp))
 
-    def write_condition(self, condition: BaseModel | dict, *, updated: bool = False) -> None:
-        condition_dict = condition if isinstance(condition, dict) else condition.model_dump()
+    def write_condition(self, condition: BaseModel | dict | list, *, updated: bool = False) -> None:
+        if isinstance(condition, list):
+            condition_dict = {condition}
+        elif isinstance(condition, BaseModel):
+            condition_dict = condition.model_dump()
+        else:
+            condition_dict = condition
         key = "Condition"
         if updated:
             key = "UpdatedCondition"
