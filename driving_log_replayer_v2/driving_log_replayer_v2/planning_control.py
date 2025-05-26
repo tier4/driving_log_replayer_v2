@@ -172,8 +172,8 @@ class PlanningFactorCondition(BaseModel):
 
 
 class Conditions(BaseModel):
-    MetricConditions: list[MetricCondition] = []
-    PlanningFactorConditions: list[PlanningFactorCondition] = []
+    MetricConditions: list[MetricCondition] | None = None
+    PlanningFactorConditions: list[PlanningFactorCondition] | None = None
 
 
 class Evaluation(BaseModel):

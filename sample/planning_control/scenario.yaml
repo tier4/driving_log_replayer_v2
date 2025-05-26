@@ -41,8 +41,7 @@ Evaluation:
       - topic: /planning/planning_factors/obstacle_stop # /planning/planning_factors/** のトピック
         time: { start: 1730266438.2, end: 1730266482.42 } # Success if the level is specified between start and end in ROS time
         condition_type: all_of # [any_of, all_of] any_of only needs to be satisfied once in time. all_of requires all topics in time to satisfy the condition
-        position: {x: 10.0, y: 10.0}
-        range: 1.0
+        area: {x: 10.0, y: 10.0, range: 1.0}
 include_use_case:
   UseCaseName: diagnostics
   UseCaseFormatVersion: 0.1.0
