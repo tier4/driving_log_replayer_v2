@@ -44,30 +44,29 @@ class PlanningControlEvaluator(DLREvaluatorV2):
         self._latest_control_metrics = MetricArray()
 
         metric_conditions = self._scenario.Evaluation.Conditions.MetricConditions
-        if metric_conditions is not None:
+        if metric_conditions == []:
+            skip_test = {
+                "Result": {"Success": True, "Summary": "Metric Test is Skipped"},
+                "Stamp": {"System": 0.0},
+                "Frame": {},
+            }
+            self._result_writer.write_line(skip_test)
+        else:
             self.__sub_control_metrics = self.create_subscription(
                 MetricArray,
                 "/control/control_evaluator/metrics",
                 self.control_cb,
                 1,
             )
-
             self.__sub_autonomous_emergency_braking = self.create_subscription(
                 MetricArray,
                 "/control/autonomous_emergency_braking/metrics",
                 self.aeb_cb,
                 1,
             )
-        else:
-            skip_test = {
-                "Result": {"Success": True, "Summary": "Metric Test isSkipped"},
-                "Stamp": {"System": 0.0},
-                "Frame": {},
-            }
-            self._result_writer.write_line(skip_test)
 
         pf_conditions = self._scenario.Evaluation.Conditions.PlanningFactorConditions
-        if pf_conditions is not None:
+        if pf_conditions != []:
             self._planning_factor_result = PlanningFactorResult(pf_conditions)
             self._planning_factor_result_writer: ResultWriter = ResultWriter(
                 self._result_archive_path.joinpath("planning_factor_result.jsonl"),
