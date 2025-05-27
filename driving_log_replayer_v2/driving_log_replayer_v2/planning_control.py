@@ -351,7 +351,11 @@ class FactorsClassContainer:
             self.__container[cond.topic] = PlanningFactor(f"Condition_{i}", cond)
 
     def set_frame(self, msg: PlanningFactorArray, topic: str) -> dict:
-        return self.__container[topic].set_frame(msg)
+        frame_result: dict[str, dict] = {}
+        topic_result = self.__container[topic].set_frame(msg)
+        if topic_result is not None:
+            frame_result[topic] = topic_result
+        return frame_result
 
     def update(self) -> tuple[bool, str]:
         rtn_success = True
