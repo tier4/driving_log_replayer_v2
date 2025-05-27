@@ -297,10 +297,13 @@ class PlanningFactor(EvaluationItem):
     def set_frame(self, msg: PlanningFactorArray) -> dict | None:
         self.total += 1
         frame_success = "Fail"
+        if len(msg.factors) == 0:
+            frame_success = "NoFactors"
         return {
             "Result": {"Total": self.success_str(), "Frame": frame_success},
             "Info": {
                 "TotalPassed": self.passed,
+                "TotalFactors": len(msg.factors),
             },
         }
 

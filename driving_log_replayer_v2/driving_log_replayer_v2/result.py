@@ -132,7 +132,10 @@ class ResultWriter:
 
     def write_condition(self, condition: BaseModel | dict | list, *, updated: bool = False) -> None:
         if isinstance(condition, list):
-            condition_dict = {condition}
+            # Convert list of BaseModel objects to list of dictionaries
+            condition_dict = [
+                item.model_dump() if isinstance(item, BaseModel) else item for item in condition
+            ]
         elif isinstance(condition, BaseModel):
             condition_dict = condition.model_dump()
         else:
@@ -140,7 +143,8 @@ class ResultWriter:
         key = "Condition"
         if updated:
             key = "UpdatedCondition"
-        self.write_line({key: condition_dict})
+        write_obj = {key: condition_dict}
+        self.write_line(write_obj)
 
     def get_header(self) -> dict:
         system_time = self._system_clock.now()
