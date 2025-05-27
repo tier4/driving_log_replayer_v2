@@ -329,13 +329,13 @@ class FactorsClassContainer:
 
 
 class PlanningFactorResult(ResultBase):
-    def __init__(self, condition: Conditions) -> None:
+    def __init__(self, conditions: list[PlanningFactorCondition]) -> None:
         super().__init__()
-        self.__factors_container = FactorsClassContainer(condition.PlanningFactorConditions)
+        self.__factors_container = FactorsClassContainer(conditions)
 
     def update(self) -> None:
         self._success, self._summary = self.__factors_container.update()
 
-    def set_frame(self, msg: MetricArray, topic: str) -> None:
-        self.__metrics_container.set_frame(msg, topic)
+    def set_frame(self, msg: PlanningFactorArray, topic: str) -> None:
+        self._frame = self.__factors_container.set_frame(msg, topic)
         self.update()
