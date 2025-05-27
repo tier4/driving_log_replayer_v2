@@ -13,10 +13,13 @@
 # limitations under the License.
 
 from dataclasses import dataclass
+import math
 from sys import float_info
 from typing import Literal
 
 from autoware_internal_planning_msgs.msg import PlanningFactorArray
+from builtin_interfaces.msg import Time
+from geometry_msgs.msg import Pose
 from pydantic import BaseModel
 from pydantic import Field
 from pydantic import model_validator
@@ -27,6 +30,10 @@ from driving_log_replayer_v2.diagnostics import Conditions as DiagnosticsConditi
 from driving_log_replayer_v2.result import EvaluationItem
 from driving_log_replayer_v2.result import ResultBase
 from driving_log_replayer_v2.scenario import Scenario
+
+
+def stamp_to_float(stamp: Time) -> float:
+    return stamp.sec + (stamp.nanosec / 1e9)
 
 
 class MinMax(BaseModel):
@@ -295,17 +302,46 @@ class MetricResult(ResultBase):
 @dataclass
 class PlanningFactor(EvaluationItem):
     def set_frame(self, msg: PlanningFactorArray) -> dict | None:
+        self.condition: PlanningFactorCondition
+        # check time condition
+        if not self.condition.time.match_condition(stamp_to_float(msg.header.stamp)):
+            return None
+        if len(msg.factors) == 0:
+            return None
+
         self.total += 1
         frame_success = "Fail"
-        if len(msg.factors) == 0:
-            frame_success = "NoFactors"
+
+        # get factors[0] # factorsはarrayになっているが、実際には1個しか入ってない。
+        success, info_dict = self.judge_in_range(msg.factors[0].control_points[0].pose)
+        if success:
+            frame_success = "Success"
+            self.passed += 1
+        self.success = (
+            self.passed > 0
+            if self.condition.condition_type == "any_of"
+            else self.passed == self.total
+        )
         return {
             "Result": {"Total": self.success_str(), "Frame": frame_success},
-            "Info": {
-                "TotalPassed": self.passed,
-                "TotalFactors": len(msg.factors),
-            },
+            "Info": {info_dict},
         }
+
+    def judge_in_range(self, msg: Pose) -> tuple[bool, dict]:
+        control_point_pose_pos_x = msg.pose.position.x
+        control_point_pose_pos_y = msg.pose.position.y
+        distance = math.sqrt(
+            (control_point_pose_pos_x - self.condition.area.x) ** 2
+            + (control_point_pose_pos_y - self.condition.area.y) ** 2
+        )
+        info_dict = {
+            "Distance": distance,
+            "ControlPointPoseX": msg.pose.position.x,
+            "ControlPointPoseY": msg.pose.position.y,
+        }
+        if distance <= self.condition.area.range:
+            return True, info_dict
+        return False, info_dict
 
 
 class FactorsClassContainer:
