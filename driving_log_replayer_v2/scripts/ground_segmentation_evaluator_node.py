@@ -55,15 +55,11 @@ class GroundSegmentationEvaluator(DLREvaluatorV2):
         sample_data = list(filter(lambda d: d["filename"].split(".")[-2] == "pcd", sample_data))
 
         # load gt annotation data
-        lidarseg_dir_path = Path(self._t4_dataset_paths[0], "lidar_semseg_sample")
-        lidarseg_json_path = Path(
-            lidarseg_dir_path, "data", "deepen_format", "lidar_annotations_accepted_deepen2.json"
-        )
+        lidarseg_json_path = Path(self._t4_dataset_paths[0], "annotation", "lidarseg.json")
         lidarseg_data = json.load(lidarseg_json_path.open())
-        raw_points_to_seg_data = {}
+        token_to_seg_data = {}
         for annotation_data in lidarseg_data:
-            raw_points_file = annotation_data["file_id"] + ".bin"
-            raw_points_to_seg_data[raw_points_file] = annotation_data
+            token_to_seg_data[annotation_data["sample_data_token"]] = annotation_data
 
         self.ground_truth: dict[
             int, tuple[np.ndarray, np.ndarray]
@@ -73,16 +69,14 @@ class GroundSegmentationEvaluator(DLREvaluatorV2):
                 self._t4_dataset_paths[0],
                 sample_data[i]["filename"],
             ).as_posix()
-            raw_points_file_name = (
-                str(int(raw_points_file_path.split("/")[-1].split(".")[0])) + ".pcd.bin"
-            )
             raw_points = np.fromfile(raw_points_file_path, dtype=np.float32)
+            token = sample_data[i]["token"]
 
-            label_file_path = Path(
-                lidarseg_dir_path,
-                raw_points_to_seg_data[raw_points_file_name]["lidarseg_anno_file"],
-            )
-            annotation_file_path = Path(lidarseg_dir_path, label_file_path).as_posix()
+            if token not in token_to_seg_data:
+                continue
+            annotation_file_path = Path(
+                self._t4_dataset_paths[0], token_to_seg_data[token]["filename"]
+            ).as_posix()
             labels = np.fromfile(annotation_file_path, dtype=np.uint8)
 
             points: np.ndarray = raw_points.reshape((-1, self.CLOUD_DIM))
