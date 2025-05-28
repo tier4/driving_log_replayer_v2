@@ -7,7 +7,7 @@ Evaluation:
   UseCaseName: planning_control
   UseCaseFormatVersion: 2.0.0
   Datasets:
-    - odaiba:
+    - obstacle_stop:
         VehicleId: default
   Conditions:
     MetricConditions:
@@ -39,9 +39,9 @@ Evaluation:
         kinematic_condition: null # optional
     PlanningFactorConditions:
       - topic: /planning/planning_factors/obstacle_stop # /planning/planning_factors/** のトピック
-        time: { start: 1730266438.2, end: 1730266482.42 } # Success if the level is specified between start and end in ROS time
+        time: { start: 1748195183.4, end: 1748195213.8 } # Success if the level is specified between start and end in ROS time
         condition_type: all_of # [any_of, all_of] any_of only needs to be satisfied once in time. all_of requires all topics in time to satisfy the condition
-        area: {x: 10.0, y: 10.0, range: 1.0}
+        area: {x: 71.5, y: 345.1, range: 1.0}
 include_use_case:
   UseCaseName: diagnostics
   UseCaseFormatVersion: 0.1.0
@@ -50,7 +50,5 @@ include_use_case:
       - hardware_id: control_validator
         name: "control_validator: control_validation_rolling_back"
         level: [OK] # Specify the status to be judged among OK, WARN, ERROR, and STALE. More than one is allowed.
-        time: { start: 1730266438.2, end: 1730266482.42 } # Success if the level is specified between start and end in ROS time
+        time: { start: 1748195183.4, end: 1748195213.8 } # Success if the level is specified between start and end in ROS time
         condition_type: all_of # [any_of, all_of] any_of only needs to be satisfied once in time. all_of requires all topics in time to satisfy the condition
-
-
