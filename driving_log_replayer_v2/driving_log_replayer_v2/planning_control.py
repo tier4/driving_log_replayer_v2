@@ -324,7 +324,7 @@ class PlanningFactor(EvaluationItem):
         )
         return {
             "Result": {"Total": self.success_str(), "Frame": frame_success},
-            "Info": {info_dict},
+            "Info": info_dict,
         }
 
     def judge_in_range(self, msg: Pose) -> tuple[bool, dict]:
