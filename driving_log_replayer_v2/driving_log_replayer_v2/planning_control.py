@@ -328,16 +328,16 @@ class PlanningFactor(EvaluationItem):
         }
 
     def judge_in_range(self, msg: Pose) -> tuple[bool, dict]:
-        control_point_pose_pos_x = msg.pose.position.x
-        control_point_pose_pos_y = msg.pose.position.y
+        control_point_pose_pos_x = msg.position.x
+        control_point_pose_pos_y = msg.position.y
         distance = math.sqrt(
             (control_point_pose_pos_x - self.condition.area.x) ** 2
             + (control_point_pose_pos_y - self.condition.area.y) ** 2
         )
         info_dict = {
             "Distance": distance,
-            "ControlPointPoseX": msg.pose.position.x,
-            "ControlPointPoseY": msg.pose.position.y,
+            "ControlPointPoseX": control_point_pose_pos_x,
+            "ControlPointPoseY": control_point_pose_pos_y,
         }
         if distance <= self.condition.area.range:
             return True, info_dict
