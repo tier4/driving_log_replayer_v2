@@ -6,14 +6,6 @@
 
 評価のために必要となるGround Truthデータは以下の2種類の方法で与えることが可能であり、それぞれシナリオの`Evaluation.Conditions.Method`を変更することにより使用できる。
 
-### annotated_rosbag
-
-bagデータに含まれる点群データに、セマンティックラベルを表すフィールドを持たせる方法。
-
-地面点群除去前後の topic を同期 subscribe し、地面ラベルを持つ点数の比較により精度評価を行う。
-
-本評価基盤では、セマンティックラベルは`INT32`型の`entity_id`フィールドに記述されていることが前提となっている。
-
 ### annotated_pcd
 
 データセットとして与える点群データ(`dataset/data/LIDAR_CONCAT/*.pcd.bin`)に、セマンティックラベルを表すフィールドを持たせる方法。
@@ -30,22 +22,6 @@ launch を立ち上げると以下のことが実行され、評価される。
 4. bag の再生が終了すると自動で launch が終了して評価が終了する
 
 ### 評価時の注意点
-
-- **annotated_rosbagモード**  
-   [autoware.universeのsensingモジュール](https://github.com/autowarefoundation/autoware.universe/blob/main/sensing/autoware_pointcloud_preprocessor/src/filter.cpp#L386-L394)を以下のように書き換える必要がある。
-
-  ```diff
-    if (utils::is_data_layout_compatible_with_point_xyzi(*cloud)) {
-      RCLCPP_ERROR(
-        get_logger(),
-        "The pointcloud layout is compatible with PointXYZI. You may be using legacy "
-        "code/data");
-    }
-
-  - return;
-  + //return;
-  }
-  ```
 
 - **annotated_pcdモード**  
    評価処理に時間がかかるため、rosbagの再生レートを下げる必要がある。
