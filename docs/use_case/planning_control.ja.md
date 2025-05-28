@@ -53,7 +53,6 @@ metricの評価結果が記述される。
 Evaluatorで実行する場合は、このファイルの最終行が参照されて成否が決定される。
 このため、planning_factor_result.jsonlとdiag_result.jsonlの結果をマージした最終的な成否の情報がpost_processで書き込まれる。
 
-
 ## planning_factor_result.jsonl
 
 output_dir/result_archive/planning_factor_result.jsonlに出力される。
@@ -171,7 +170,22 @@ planning と controlで設定した全ての評価条件で成功している場
 以下に、それぞれの評価の例を記述する。
 **注:結果ファイルフォーマットで解説済みの共通部分については省略する。**
 
-planning と controlで設定した全ての評価条件で成功している場合に成功と判定される。
+PlanningFactorのすべての評価条件で成功している場合に成功と判定される。
+
+```json
+{
+  "Frame": {
+    "TopicName": {
+      "Result": { "Total": "Success or Fail", "Frame": "Success or Fail" },
+      "Info": {
+        "Distance": "control_pointの座標とシナリオに指定された座標の距離",
+        "ControlPointPoseX": "control_pointのposeのx座標",
+        "ControlPointPoseY": "control_pointのposeのy座標"
+      }
+    }
+  }
+}
+```
 
 #### diagnostics
 
