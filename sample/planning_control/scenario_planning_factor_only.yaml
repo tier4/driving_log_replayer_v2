@@ -1,0 +1,17 @@
+ScenarioFormatVersion: 3.1.0
+ScenarioName: sample_planning_control
+ScenarioDescription: sample_planning_control
+SensorModel: aip_xx1
+VehicleModel: lexus
+Evaluation:
+  UseCaseName: planning_control
+  UseCaseFormatVersion: 2.0.0
+  Datasets:
+    - obstacle_stop:
+        VehicleId: default
+  Conditions:
+    PlanningFactorConditions:
+      - topic: /planning/planning_factors/obstacle_stop # /planning/planning_factors/** のトピック
+        time: { start: 1748195183.4, end: 1748195213.8 } # Success if the level is specified between start and end in ROS time
+        condition_type: all_of # [any_of, all_of] any_of only needs to be satisfied once in time. all_of requires all topics in time to satisfy the condition
+        area: {x: 71.5, y: 345.1, range: 1.0}

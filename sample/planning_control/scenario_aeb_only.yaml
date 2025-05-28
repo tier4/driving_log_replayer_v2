@@ -1,0 +1,39 @@
+ScenarioFormatVersion: 3.1.0
+ScenarioName: sample_planning_control
+ScenarioDescription: sample_planning_control
+SensorModel: aip_xx1
+VehicleModel: lexus
+Evaluation:
+  UseCaseName: planning_control
+  UseCaseFormatVersion: 2.0.0
+  Datasets:
+    - obstacle_stop:
+        VehicleId: default
+  Conditions:
+    MetricConditions:
+      - topic: /control/autonomous_emergency_braking/metrics # 現時点では/control/autonomous_emergency_braking/metrics固定。
+        name: decision # decision固定
+        value: brake
+        condition_type: all_of
+        lane_condition: # /planning/planning_evaluator/metrics ego_lane_info/lane_idから取る
+          start:
+            id: 1500
+          end:
+            id: 1500
+            s: 2.3
+        kinematic_condition: # /control/control_evaluator/metricsから取る
+          vel: { min: 2.5, max: 3.0 }
+          acc: { min: -0.5, max: 0.5 }
+          jerk: { min: 0.2, max: 1.5 }
+      - topic: /control/autonomous_emergency_braking/metrics
+        name: decision
+        value: none # noneという値は実際には出力されない。空配列が来たとき判断する
+        condition_type: all_of
+        lane_condition: # optional
+          start:
+            id: 1500
+            s: 3.0
+          end:
+            id: 1500
+            s: 10.0
+        kinematic_condition: null # optional
