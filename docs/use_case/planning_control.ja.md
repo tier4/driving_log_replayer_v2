@@ -1,6 +1,7 @@
 # Planning Controlの評価
 
-Metrics、PlanningFactorsが指定の条件で出力されているか評価する
+Metrics、PlanningFactorsが指定の条件で出力されているか評価する。
+include_use_caseでdiagnosticsを指定すれば、diagnosticsの評価も可能。
 
 ## 評価方法
 
@@ -18,17 +19,50 @@ launch を立ち上げると以下のことが実行され、評価される。
 シナリオでレーン条件を記述した場合は、`/control/control_evaluator/metrics`から取得できるレーンが条件を満たした場合に評価される。
 評価の条件を満たさない場合は、ログも出力されない。
 
-`/planning/planning_factors/**`のtopicを利用する。
+`/planning/planning_factors/**`のtopicを利用する。評価対象のtopicはシナリオファイルでtopic名を指定する。
+PlanningFactorのcontrol_pointの位置がシナリオに指定された条件を満たすかを評価する。
 
-### 正常
+### Metric正常
 
 `/control/control_evaluator/metrics`のvalueがシナリオ指定の値と一致した場合に正常となる。
 ただし、`none`が指定された場合は、topicのmetric_arrayが空配列の場合にnoneと判断する。
 kinematic_conditionを指定した場合は追加で、kinematic_stateが条件を満たしている必要がある。
 
-### 異常
+### Metric正常異常
 
-正常の条件を満たさないとき
+Metric正常の条件を満たさないとき
+
+### PlanningFactor正常
+
+`/planning/planning_factors/**`のcontrol_points[0].poseのx,yの位置がシナリオで指定したx,y座標からrangeの範囲に入っている場合に正常となる。
+
+### PlanningFactor異常
+
+PlanningFactor正常の条件を満たさないとき
+
+## 評価結果の出力先ファイル
+
+planning_controlにおいては、以下の3つのファイルにそれぞれresult.jsonlが作成される。
+result.jsonlは必ず出力されるが、planning_factor_result.jsonlとdiag_result.jsonlはシナリオで指定した場合にのみ出力される
+
+### result.jsonl
+
+output_dir/result.jsonlに出力される。
+metricの評価結果が記述される。
+
+Evaluatorで実行する場合は、このファイルの最終行が参照されて成否が決定される。
+このため、planning_factor_result.jsonlとdiag_result.jsonlの結果をマージした最終的な成否の情報がpost_processで書き込まれる。
+
+
+## planning_factor_result.jsonl
+
+output_dir/result_archive/planning_factor_result.jsonlに出力される。
+planning_factorの評価結果が記述される。
+
+## diag_result.jsonl
+
+output_dir/result_archive/diag_result.jsonlに出力される。
+diagnosticsの評価結果が記述される。
 
 ## 評価ノードが使用する Topic 名とデータ型
 
@@ -105,6 +139,8 @@ clock は、ros2 bag play の--clock オプションによって出力してい�
 
 ### 評価結果フォーマット
 
+#### metric
+
 [サンプル](https://github.com/tier4/driving_log_replayer_v2/blob/develop/sample/planning_control/result.json)参照
 
 以下に、それぞれの評価の例を記述する。
@@ -127,3 +163,16 @@ planning と controlで設定した全ての評価条件で成功している場
   }
 }
 ```
+
+#### planning_factor
+
+[サンプル](https://github.com/tier4/driving_log_replayer_v2/blob/develop/sample/planning_control/planning_factor_result.json)参照
+
+以下に、それぞれの評価の例を記述する。
+**注:結果ファイルフォーマットで解説済みの共通部分については省略する。**
+
+planning と controlで設定した全ての評価条件で成功している場合に成功と判定される。
+
+#### diagnostics
+
+diagnosticsのユースケースと同じ
