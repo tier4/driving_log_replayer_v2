@@ -4,13 +4,13 @@
 
 ## Ground Truthデータ
 
-評価のために必要となるGround Truthデータは以下の2種類の方法で与えることが可能であり、それぞれシナリオの`Evaluation.Conditions.Method`を変更することにより使用できる。
+評価のために必要となるGround Truthデータは以下の方法で与えられる．
 
 ### annotated_pcd
 
-データセットとして与える点群データ(`dataset/data/LIDAR_CONCAT/*.pcd.bin`)に、セマンティックラベルを表すフィールドを持たせる方法。
+データセットとして与える点群データ(`dataset/data/LIDAR_CONCAT/\*.pcd.bin`)と対応するラベルデータ(`dataset/lidarseg/annotation/\*.bin`)を用いる方法。
 
-地面点群除去処理後の点群と、pcd.binファイルに含まれる点群同士を比較し、処理後点群が持つラベルを見ることで精度評価を行う。
+地面点群除去処理後の点群と、pcd.binファイルに含まれる点群同士を比較し、処理後点群が持つラベルを確認することで精度評価を行う。
 
 ## 評価方法
 
