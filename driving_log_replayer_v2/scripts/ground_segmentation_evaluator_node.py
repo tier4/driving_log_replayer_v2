@@ -55,10 +55,10 @@ class GroundSegmentationEvaluator(DLREvaluatorV2):
         sample_data = list(filter(lambda d: d["filename"].split(".")[-2] == "pcd", sample_data))
 
         # load gt annotation data
-        lidarseg_json_path = Path(self._t4_dataset_paths[0], "annotation", "lidarseg.json")
-        lidarseg_data = json.load(lidarseg_json_path.open())
+        lidar_seg_json_path = Path(self._t4_dataset_paths[0], "annotation", "lidarseg.json")
+        lidar_seg_data = json.load(lidar_seg_json_path.open())
         token_to_seg_data = {}
-        for annotation_data in lidarseg_data:
+        for annotation_data in lidar_seg_data:
             token_to_seg_data[annotation_data["sample_data_token"]] = annotation_data
 
         self.ground_truth: dict[
