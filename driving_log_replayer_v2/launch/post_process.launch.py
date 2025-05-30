@@ -31,18 +31,21 @@ from driving_log_replayer_v2.perception.runner import evaluate
 
 
 def check_and_create_metadata_yaml(conf: dict) -> None:
-    # for debug
-    import time
+    """
+    For debug.
 
-    print("please delete the metadata.yaml file")  # noqa
+    Import time
+
+    print("please delete the metadata.yaml file manually to confirm the reindexer is working")  # noqa
     time.sleep(10)
+    """
     metadata_path = Path(conf["result_bag_path"]).joinpath("metadata.yaml")
     if metadata_path.exists():
         return
-    storage_type = "sqlite3"
-    mcap_bag_path = Path(conf["result_bag_path"]).joinpath("result_bag_0.mcap")
-    if not mcap_bag_path.exists():
-        storage_type = "mcap"
+    storage_type = "mcap"
+    db3_bag_path = Path(conf["result_bag_path"]).joinpath("result_bag_0.db3")
+    if db3_bag_path.exists():
+        storage_type = "sqlite3"
     storage_options = StorageOptions(
         storage_id=storage_type, uri=Path(conf["result_bag_path"]).as_posix()
     )
