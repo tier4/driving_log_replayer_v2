@@ -21,6 +21,8 @@ from launch import LaunchDescription
 from launch.actions import ExecuteProcess
 from launch.actions import LogInfo
 from launch.actions import OpaqueFunction
+from rosbag2_py import Reindexer
+from rosbag2_py import StorageOptions
 
 from driving_log_replayer_v2.launch.argument import add_use_case_arguments
 from driving_log_replayer_v2.launch.argument import ensure_arg_compatibility
@@ -28,24 +30,45 @@ from driving_log_replayer_v2.launch.argument import get_launch_arguments
 from driving_log_replayer_v2.perception.runner import evaluate
 
 
+def check_and_create_metadata_yaml(conf: dict) -> None:
+    # for debug
+    import time
+
+    print("please delete the metadata.yaml file")  # noqa
+    time.sleep(10)
+    metadata_path = Path(conf["result_bag_path"]).joinpath("metadata.yaml")
+    if metadata_path.exists():
+        return
+    storage_type = "sqlite3"
+    mcap_bag_path = Path(conf["result_bag_path"]).joinpath("result_bag_0.mcap")
+    if not mcap_bag_path.exists():
+        storage_type = "mcap"
+    storage_options = StorageOptions(
+        storage_id=storage_type, uri=Path(conf["result_bag_path"]).as_posix()
+    )
+    Reindexer().reindex(storage_options)
+
+
 def post_process(context: LaunchContext) -> list:
     conf = context.launch_configurations
-    # if conf["use_case"] == "localization":
-    #     localization_analysis_cmd = [
-    #         "ros2",
-    #         "run",
-    #         "autoware_localization_evaluation_scripts",
-    #         "analyze_rosbags_parallel.py",
-    #         f"{conf['output_dir']}",
-    #         "--save_dir_relative",
-    #         "result_archive",
-    #         "--topic_reference",
-    #         "/localization/reference_kinematic_state",
-    #     ]
-    #     localization_analysis = ExecuteProcess(
-    #         cmd=localization_analysis_cmd, output="screen", name="localization_analyze"
-    #     )
-    #     return [LogInfo(msg="run localization analysis."), localization_analysis]
+    check_and_create_metadata_yaml(conf)
+
+    #if conf["use_case"] == "localization":
+    #    localization_analysis_cmd = [
+    #        "ros2",
+    #        "run",
+    #        "autoware_localization_evaluation_scripts",
+    #        "analyze_rosbags_parallel.py",
+    #        f"{conf['output_dir']}",
+    #        "--save_dir_relative",
+    #        "result_archive",
+    #        "--topic_reference",
+    #        "/localization/reference_kinematic_state",
+    #    ]
+    #    localization_analysis = ExecuteProcess(
+    #        cmd=localization_analysis_cmd, output="screen", name="localization_analyze"
+    #    )
+    #    return [LogInfo(msg="run localization analysis."), localization_analysis]
 
     if conf["use_case"] == "perception":
         absolute_result_json_path = Path(
