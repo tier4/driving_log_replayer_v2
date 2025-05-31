@@ -42,14 +42,15 @@ class GroundSegmentationEvaluator(DLREvaluatorV2):
         eval_condition: Condition = self._scenario.Evaluation.Conditions
         self.ground_label = eval_condition.ground_label
         self.obstacle_label = eval_condition.obstacle_label
-        self.declare_parameter(
-            "evaluation_target_topic",
-            "/perception/obstacle_segmentation/pointcloud",
-        )
         self.eval_target_topic = (
-            self.get_parameter("evaluation_target_topic").get_parameter_value().string_value
+            self.declare_parameter(
+                "evaluation_target_topic", "/perception/obstacle_segmentation/pointcloud"
+            )
+            .get_parameter_value()
+            .string_value
         )
 
+        # load point cloud data
         sample_data_path = Path(self._t4_dataset_paths[0], "annotation", "sample_data.json")
         sample_data = json.load(sample_data_path.open())
         sample_data = list(filter(lambda d: d["filename"].split(".")[-2] == "pcd", sample_data))
