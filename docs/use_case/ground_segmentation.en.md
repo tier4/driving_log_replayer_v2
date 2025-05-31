@@ -44,12 +44,12 @@ When the normal condition is not met
 
 Subscribed topics:
 
-| topic name                                                | Data type                   |
-| --------------------------------------------------------- | --------------------------- |
-| /sensing/lidar/concatenated/pointcloud 　　               | sensor_msgs/msg/PointCloud2 |
-| /perception/obstacle_segmentation/single_frame/pointcloud | sensor_msgs/msg/PointCloud2 |
+| topic name                                   | Data type                   |
+| -------------------------------------------- | --------------------------- |
+| /sensing/lidar/concatenated/pointcloud 　　  | sensor_msgs/msg/PointCloud2 |
+| /perception/obstacle_segmentation/pointcloud | sensor_msgs/msg/PointCloud2 |
 
-**NOTE: the`/perception/obstacle_segmentation/single_frame/pointcloud`topic can be modified by changing the `evaluation_target_topic` launch argument.**
+**NOTE: the`/perception/obstacle_segmentation/pointcloud`topic can be modified by changing the `evaluation_target_topic` launch argument.**
 
 Published topics:
 

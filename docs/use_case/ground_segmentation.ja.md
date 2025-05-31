@@ -43,12 +43,12 @@ topic の subscribe 1 回につき、以下に記述する判定結果が出力�
 
 Subscribed topics:
 
-| topic 名                                                  | データ型                    |
-| --------------------------------------------------------- | --------------------------- |
-| /sensing/lidar/concatenated/pointcloud 　　               | sensor_msgs/msg/PointCloud2 |
-| /perception/obstacle_segmentation/single_frame/pointcloud | sensor_msgs/msg/PointCloud2 |
+| topic 名                                     | データ型                    |
+| -------------------------------------------- | --------------------------- |
+| /sensing/lidar/concatenated/pointcloud 　　  | sensor_msgs/msg/PointCloud2 |
+| /perception/obstacle_segmentation/pointcloud | sensor_msgs/msg/PointCloud2 |
 
-**注:`/perception/obstacle_segmentation/single_frame/pointcloud`topicは、launch引数`evaluation_target_topic`で変更可能である。**
+**注:`/perception/obstacle_segmentation/pointcloud`topicは、launch引数`evaluation_target_topic`で変更可能である。**
 
 Published topics:
 
