@@ -176,6 +176,7 @@ class PlanningFactorCondition(BaseModel):
     time: StartEnd
     condition_type: Literal["any_of", "all_of"]
     area: Area
+    judgement: Literal["positive", "negative"]  # positive or negative
 
 
 class Conditions(BaseModel):
@@ -313,10 +314,14 @@ class PlanningFactor(EvaluationItem):
         frame_success = "Fail"
 
         # get factors[0] # factorsはarrayになっているが、実際には1個しか入ってない。
-        success, info_dict = self.judge_in_range(msg.factors[0].control_points[0].pose)
-        if success:
+        in_range, info_dict = self.judge_in_range(msg.factors[0].control_points[0].pose)
+
+        # Check if the condition is met based on judgement type
+        condition_met = in_range if self.condition.judgement == "positive" else not in_range
+        if condition_met:
             frame_success = "Success"
             self.passed += 1
+
         self.success = (
             self.passed > 0
             if self.condition.condition_type == "any_of"
