@@ -32,9 +32,13 @@ kinematic_conditionを指定した場合は追加で、kinematic_stateが条件�
 
 Metric正常の条件を満たさないとき
 
-### PlanningFactor正常
+### PlanningFactor正常(judgement: positive)
 
 `/planning/planning_factors/**`のcontrol_points[0].poseのx,yの位置がシナリオで指定したx,y座標からrangeの範囲に入っている場合に正常となる。
+
+### PlanningFactor正常(judgement: negative)
+
+`/planning/planning_factors/**`のcontrol_points[0].poseのx,yの位置がシナリオで指定したx,y座標からrangeの範囲に入っていない場合に正常となる。
 
 ### PlanningFactor異常
 

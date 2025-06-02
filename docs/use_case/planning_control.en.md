@@ -32,9 +32,13 @@ If kinematic_condition is specified, additionally, kinematic_state must meet the
 
 When the Metric Normal condition is not met
 
-### PlanningFactor Normal
+### PlanningFactor Normal(judgement: positive)
 
 Normal if the x,y position of control_points[0].pose in `/planning/planning_factors/**` is within the range specified in the scenario from the x,y coordinates.
+
+### PlanningFactor Normal(judgement: negative)
+
+Normal if the x,y position of control_points[0].pose in `/planning/planning_factors/**` is without the range specified in the scenario from the x,y coordinates.
 
 ### PlanningFactor Error
 
