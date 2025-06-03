@@ -2,8 +2,8 @@
 Changelog for package driving_log_replayer
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-Forthcoming
------------
+3.8.5 (2025-06-03)
+------------------
 * feat: post process reindex (`#158 <https://github.com/tier4/driving_log_replayer_v2/issues/158>`_)
   * chore: reindex bag in post process
   * chore: reindex in post process
