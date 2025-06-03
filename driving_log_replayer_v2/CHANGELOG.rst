@@ -2,6 +2,37 @@
 Changelog for package driving_log_replayer
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
+Forthcoming
+-----------
+* feat: post process reindex (`#158 <https://github.com/tier4/driving_log_replayer_v2/issues/158>`_)
+  * chore: reindex bag in post process
+  * chore: reindex in post process
+  ---------
+* feat: use diagnostics in planning control (`#146 <https://github.com/tier4/driving_log_replayer_v2/issues/146>`_)
+  * feat: subscribe
+  * feat: update scenario format
+  * feat: support version
+  * feat: diag
+  * feat: update
+  * fix: diag
+  * feat: update
+  * fix: pre-commit
+  * docs: update docs
+  * feat(WIP): merge result
+  * fix: pre-commit
+  * fix: spell
+  * feat: update
+  * feat: add additional mode
+  * feat: add post process
+  * revert: additional mode
+  * fix: file handler
+  * fix: summary
+  * fix: noqa
+  ---------
+* feat: ResultEditor (`#153 <https://github.com/tier4/driving_log_replayer_v2/issues/153>`_)
+* feat: add ResultReader (`#151 <https://github.com/tier4/driving_log_replayer_v2/issues/151>`_)
+* Contributors: Hayato Mizushima
+
 3.8.4 (2025-05-09)
 ------------------
 * change args False to True (`#147 <https://github.com/tier4/driving_log_replayer_v2/issues/147>`_)
