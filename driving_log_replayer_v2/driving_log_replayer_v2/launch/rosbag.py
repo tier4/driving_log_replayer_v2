@@ -55,6 +55,23 @@ def add_remap(topic: str, remap_list: list) -> None:
     remap_list.append(remap_str(topic))
 
 
+def system_defined_remap(conf: dict) -> list[str]:
+    remap_list = []
+    if conf.get("sensing", "true") == "true":
+        add_remap("/sensing/lidar/concatenated/pointcloud", remap_list)
+    if conf.get("localization", "true") == "true":
+        add_remap("/tf", remap_list)
+        add_remap("/localization/kinematic_state", remap_list)
+        add_remap("/localization/acceleration", remap_list)
+    if conf.get("perception", "true") == "true":
+        # remap perception msgs in bag
+        add_remap("/perception/obstacle_segmentation/pointcloud", remap_list)
+        add_remap("/perception/object_recognition/objects", remap_list)
+    if conf.get("goal_pose") is not None:
+        add_remap("/planning/mission_planning/route", remap_list)
+    return remap_list
+
+
 def user_defined_remap(conf: dict) -> list[str]:
     remap_list = []
     # user defined remap
@@ -88,6 +105,7 @@ def launch_bag_player(
         QOS_PROFILE_PATH_STR,
     ]
     remap_list = ["--remap"]
+    remap_list.extend(system_defined_remap(conf))
     remap_list.extend(user_defined_remap(conf))
     if len(remap_list) != 1:
         play_cmd.extend(remap_list)
