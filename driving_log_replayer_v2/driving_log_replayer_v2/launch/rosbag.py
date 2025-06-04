@@ -57,7 +57,7 @@ def add_remap(topic: str, remap_list: list) -> None:
 
 def system_defined_remap(conf: dict) -> list[str]:
     remap_list = []
-    if conf["use_case"] = ”localization":
+    if conf["use_case"] == "localization":
         add_remap("/tf", remap_list)
         add_remap("/localization/kinematic_state", remap_list)
         add_remap("/localization/acceleration", remap_list)
