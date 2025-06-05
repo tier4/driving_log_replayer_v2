@@ -1,4 +1,5 @@
 remap:
+  - /sensing/lidar/concatenated/pointcloud
   - /perception/obstacle_segmentation/pointcloud
   - /perception/object_recognition/objects
   - /perception/object_recognition/tracking/objects
