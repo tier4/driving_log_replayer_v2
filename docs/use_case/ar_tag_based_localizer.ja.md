@@ -50,7 +50,7 @@ Published topics:
 
 | service 名               | データ型                                           |
 | ------------------------ | -------------------------------------------------- |
-| /localization/initialize | tier4_localization_msgs/srv/InitializeLocalization |
+| /localization/initialize | autoware_internal_localization_msgs/srv/InitializeLocalization |
 
 ## logging_simulator.launch に渡す引数
 

@@ -82,7 +82,7 @@ Published topics:
 
 | Service name             | Data type                                          |
 | ------------------------ | -------------------------------------------------- |
-| /localization/initialize | tier4_localization_msgs/srv/InitializeLocalization |
+| /localization/initialize | autoware_internal_localization_msgs/srv/InitializeLocalization |
 
 ## Arguments passed to logging_simulator.launch
 
