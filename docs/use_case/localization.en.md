@@ -102,8 +102,8 @@ Published topics:
 
 ## Service name and data type used by the evaluation node
 
-| Service name             | Data type                                          |
-| ------------------------ | -------------------------------------------------- |
+| Service name             | Data type                                                      |
+| ------------------------ | -------------------------------------------------------------- |
 | /localization/initialize | autoware_internal_localization_msgs/srv/InitializeLocalization |
 
 ## Arguments passed to logging_simulator.launch
