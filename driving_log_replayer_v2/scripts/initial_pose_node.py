@@ -16,6 +16,10 @@
 
 from typing import TYPE_CHECKING
 
+from autoware_internal_localization_msgs.srv import InitializeLocalization
+from autoware_internal_localization_msgs.srv import (
+    PoseWithCovarianceStamped as PoseWithCovarianceStampedSrv,
+)
 import rclpy
 from rclpy.callback_groups import MutuallyExclusiveCallbackGroup
 from rclpy.clock import Clock
@@ -24,10 +28,6 @@ from rclpy.executors import MultiThreadedExecutor
 from rclpy.node import Node
 from rclpy.task import Future
 from rclpy.time import Time
-from autoware_internal_localization_msgs.srv import InitializeLocalization
-from autoware_internal_localization_msgs.srv import (
-    PoseWithCovarianceStamped as PoseWithCovarianceStampedSrv,
-)
 
 from driving_log_replayer_v2.pose import arg_to_initial_pose
 

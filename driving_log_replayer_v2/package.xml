@@ -18,6 +18,7 @@
 
   <depend>autoware_common_msgs</depend>
   <depend>autoware_internal_debug_msgs</depend>
+  <depend>autoware_internal_localization_msgs</depend>
   <depend>autoware_map_msgs</depend>
   <depend>autoware_perception_msgs</depend>
   <depend>diagnostic_msgs</depend>
@@ -30,7 +31,6 @@
   <depend>tf2_geometry_msgs</depend>
   <depend>tf2_msgs</depend>
   <depend>tf2_ros</depend>
-  <depend>autoware_internal_localization_msgs</depend>
   <depend>tier4_metric_msgs</depend>
   <depend>visualization_msgs</depend>
 
