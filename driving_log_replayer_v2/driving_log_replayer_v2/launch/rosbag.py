@@ -57,16 +57,10 @@ def add_remap(topic: str, remap_list: list) -> None:
 
 def system_defined_remap(conf: dict) -> list[str]:
     remap_list = []
-    if conf.get("sensing", "true") == "true":
-        add_remap("/sensing/lidar/concatenated/pointcloud", remap_list)
-    if conf.get("localization", "true") == "true":
+    if conf["use_case"] == "localization":
         add_remap("/tf", remap_list)
         add_remap("/localization/kinematic_state", remap_list)
         add_remap("/localization/acceleration", remap_list)
-    if conf.get("perception", "true") == "true":
-        # remap perception msgs in bag
-        add_remap("/perception/obstacle_segmentation/pointcloud", remap_list)
-        add_remap("/perception/object_recognition/objects", remap_list)
     if conf.get("goal_pose") is not None:
         add_remap("/planning/mission_planning/route", remap_list)
     return remap_list
