@@ -80,9 +80,9 @@ Published topics:
 
 ## 評価ノードが使用する Service 名とデータ型
 
-| service 名               | データ型                                           |
-| ------------------------ | -------------------------------------------------- |
-| /localization/initialize | tier4_localization_msgs/srv/InitializeLocalization |
+| service 名               | データ型                                                       |
+| ------------------------ | -------------------------------------------------------------- |
+| /localization/initialize | autoware_internal_localization_msgs/srv/InitializeLocalization |
 
 ## logging_simulator.launch に渡す引数
 
