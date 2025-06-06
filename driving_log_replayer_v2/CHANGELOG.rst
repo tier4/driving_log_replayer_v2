@@ -2,8 +2,8 @@
 Changelog for package driving_log_replayer
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-Forthcoming
------------
+3.10.0 (2025-06-06)
+-------------------
 * feat: `#140 <https://github.com/tier4/driving_log_replayer_v2/issues/140>`_ update planning control evlauator (`#155 <https://github.com/tier4/driving_log_replayer_v2/issues/155>`_)
   * feat: evaluate PlanningFactorArray
   * feat: update
