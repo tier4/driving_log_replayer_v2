@@ -2,6 +2,40 @@
 Changelog for package driving_log_replayer
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
+Forthcoming
+-----------
+* feat: `#140 <https://github.com/tier4/driving_log_replayer_v2/issues/140>`_ update planning control evlauator (`#155 <https://github.com/tier4/driving_log_replayer_v2/issues/155>`_)
+  * feat: evaluate PlanningFactorArray
+  * feat: update
+  * feat: update scenario
+  * feat: update node
+  * chore: add sample
+  * feat: skip test
+  * fix: default value
+  * fix: skip condition
+  * feat: update PlanningFactorContainer
+  * fix: condition
+  * fix: set variable
+  * fix: list condition
+  * fix: additional result check
+  * feat: set frame
+  * fix: update
+  * fix: access field
+  * fix: unhashable
+  * docs: update sample scenario
+  * docs: update scenario
+  * fix: pre-commit
+  * docs: add sample result.json
+  * docs: update
+  * docs: update
+  * fix: add dependency
+  * docs: add English document
+  * feat: add judgement flag
+  * docs: update document
+  * fix: sort
+  ---------
+* Contributors: Hayato Mizushima
+
 3.9.0 (2025-06-06)
 ------------------
 * fix: replace InitializeLocalization srv (`#161 <https://github.com/tier4/driving_log_replayer_v2/issues/161>`_)

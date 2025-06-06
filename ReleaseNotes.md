@@ -1,5 +1,13 @@
 # Release Notes
 
+## Version 3.10.0
+
+Major changes
+
+| Module             | Feature    | Brief summary                  | Pull request                                                        | Contributor                                   |
+| ------------------ | ---------- | ------------------------------ | ------------------------------------------------------------------- | --------------------------------------------- |
+| `planning_control` | evaluation | add Planning Factor evaluation | [#155](https://github.com/tier4/driving_log_replayer_v2/issues/155) | [hayato-m126](https://github.com/hayato-m126) |
+
 ## Version 3.9.0
 
 Major changes
