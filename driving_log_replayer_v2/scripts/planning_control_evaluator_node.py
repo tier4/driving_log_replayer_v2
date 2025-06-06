@@ -16,6 +16,7 @@
 
 from collections.abc import Callable
 
+from autoware_internal_planning_msgs.msg import PlanningFactorArray
 from diagnostic_msgs.msg import DiagnosticArray
 from diagnostic_msgs.msg import DiagnosticStatus
 from tier4_metric_msgs.msg import MetricArray
@@ -23,8 +24,9 @@ from tier4_metric_msgs.msg import MetricArray
 from driving_log_replayer_v2.diagnostics import DiagnosticsResult
 from driving_log_replayer_v2.evaluator import DLREvaluatorV2
 from driving_log_replayer_v2.evaluator import evaluator_main
-from driving_log_replayer_v2.planning_control import PlanningControlResult
+from driving_log_replayer_v2.planning_control import MetricResult
 from driving_log_replayer_v2.planning_control import PlanningControlScenario
+from driving_log_replayer_v2.planning_control import PlanningFactorResult
 from driving_log_replayer_v2.result import ResultWriter
 
 
@@ -33,37 +35,64 @@ class PlanningControlEvaluator(DLREvaluatorV2):
         self,
         name: str,
         scenario_class: Callable = PlanningControlScenario,
-        result_class: Callable = PlanningControlResult,
+        result_class: Callable = MetricResult,
     ) -> None:
         super().__init__(name, scenario_class, result_class)
         self._scenario: PlanningControlScenario
-        self._result: PlanningControlResult
+        self._result: MetricResult
 
         self._latest_control_metrics = MetricArray()
 
-        self.__sub_control_metrics = self.create_subscription(
-            MetricArray,
-            "/control/control_evaluator/metrics",
-            self.control_cb,
-            1,
-        )
+        metric_conditions = self._scenario.Evaluation.Conditions.MetricConditions
+        if metric_conditions == []:
+            skip_test = {
+                "Result": {"Success": True, "Summary": "Metric Test is Skipped"},
+                "Stamp": {"System": 0.0},
+                "Frame": {},
+            }
+            self._result_writer.write_line(skip_test)
+        else:
+            self.__sub_control_metrics = self.create_subscription(
+                MetricArray,
+                "/control/control_evaluator/metrics",
+                self.control_cb,
+                1,
+            )
+            self.__sub_autonomous_emergency_braking = self.create_subscription(
+                MetricArray,
+                "/control/autonomous_emergency_braking/metrics",
+                self.aeb_cb,
+                1,
+            )
 
-        self.__sub_autonomous_emergency_braking = self.create_subscription(
-            MetricArray,
-            "/control/autonomous_emergency_braking/metrics",
-            self.aeb_cb,
-            1,
-        )
+        pf_conditions = self._scenario.Evaluation.Conditions.PlanningFactorConditions
+        if pf_conditions != []:
+            self._planning_factor_result = PlanningFactorResult(pf_conditions)
+            self._planning_factor_result_writer: ResultWriter = ResultWriter(
+                self._result_archive_path.joinpath("planning_factor_result.jsonl"),
+                self.get_clock(),
+                pf_conditions,
+            )
+
+            self.__sub_factors = []
+            for pfc in pf_conditions:
+                self.__sub_factors.append(
+                    self.create_subscription(
+                        PlanningFactorArray,
+                        pfc.topic,
+                        lambda msg, topic=pfc.topic: self.factor_cb(msg, topic),
+                        1,
+                    )
+                )
 
         if self._scenario.include_use_case is not None:
-            self._diag_result: DiagnosticsResult = DiagnosticsResult(
-                self._scenario.include_use_case.Conditions
-            )
+            diag_conditions = self._scenario.include_use_case.Conditions
+            self._diag_result: DiagnosticsResult = DiagnosticsResult(diag_conditions)
 
             self._diag_result_writer: ResultWriter = ResultWriter(
                 self._result_archive_path.joinpath("diag_result.jsonl"),
                 self.get_clock(),
-                self._scenario.include_use_case.Conditions,
+                diag_conditions,
             )
 
             self.__sub_diag = self.create_subscription(
@@ -93,6 +122,11 @@ class PlanningControlEvaluator(DLREvaluatorV2):
         self._diag_result.set_frame(msg)
         if self._diag_result.frame != {}:
             self._diag_result_writer.write_result(self._diag_result)
+
+    def factor_cb(self, msg: PlanningFactorArray, topic: str) -> None:
+        self._planning_factor_result.set_frame(msg, topic)
+        if self._planning_factor_result.frame != {}:
+            self._planning_factor_result_writer.write_result(self._planning_factor_result)
 
 
 @evaluator_main

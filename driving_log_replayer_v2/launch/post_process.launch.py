@@ -116,14 +116,20 @@ def post_process(context: LaunchContext) -> list:
     if conf["use_case"] == "planning_control":
         # merge diagnostic result.jsonl
         diag_result_path = Path(conf["result_archive_path"]).joinpath("diag_result.jsonl")
-        if not diag_result_path.exists():
-            return [LogInfo(msg="No diagnostics result.jsonl found. Abort merging result.jsonl")]
-        multi_result_editor = MultiResultEditor(
-            [
-                Path(conf["result_json_path"]).as_posix() + "l",  # "json + l"
-                diag_result_path.as_posix(),
-            ]
+        planning_factor_result_path = Path(conf["result_archive_path"]).joinpath(
+            "planning_factor_result.jsonl"
         )
+        result_paths = [Path(conf["result_json_path"]).as_posix() + "l"]  # "json + l"
+
+        if diag_result_path.exists():
+            result_paths.append(diag_result_path.as_posix())
+        if planning_factor_result_path.exists():
+            result_paths.append(planning_factor_result_path.as_posix())
+
+        if len(result_paths) == 1:
+            return [LogInfo(msg="No additional result.jsonl found. Abort merging result.jsonl")]
+
+        multi_result_editor = MultiResultEditor(result_paths)
         multi_result_editor.write_back_result()
         return [LogInfo(msg="Merge results")]
     return [LogInfo(msg="No post-processing is performed.")]
