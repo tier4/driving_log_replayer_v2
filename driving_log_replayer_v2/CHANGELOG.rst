@@ -2,8 +2,8 @@
 Changelog for package driving_log_replayer
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-Forthcoming
------------
+3.9.0 (2025-06-06)
+------------------
 * fix: replace InitializeLocalization srv (`#161 <https://github.com/tier4/driving_log_replayer_v2/issues/161>`_)
   * Replaced InitializeLocalization srv
   * Sorted
