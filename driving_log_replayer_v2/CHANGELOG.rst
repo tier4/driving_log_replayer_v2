@@ -2,6 +2,17 @@
 Changelog for package driving_log_replayer
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
+Forthcoming
+-----------
+* fix: replace InitializeLocalization srv (`#161 <https://github.com/tier4/driving_log_replayer_v2/issues/161>`_)
+  * Replaced InitializeLocalization srv
+  * Sorted
+  * Test commit after fixing npm dependencies
+  * Applied the formatter
+  ---------
+* feat: delete system defined remap (`#159 <https://github.com/tier4/driving_log_replayer_v2/issues/159>`_)
+* Contributors: Hayato Mizushima, SakodaShintaro
+
 3.8.5 (2025-06-03)
 ------------------
 * feat: post process reindex (`#158 <https://github.com/tier4/driving_log_replayer_v2/issues/158>`_)

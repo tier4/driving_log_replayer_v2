@@ -1,5 +1,15 @@
 # Release Notes
 
+## Version 3.9.0
+
+Major changes
+Ensure that you are using Autoware.universe that incorporates [this PR](https://github.com/autowarefoundation/autoware_universe/pull/10567)
+
+| Module   | Feature        | Brief summary                      | Pull request                                                        | Contributor                                         |
+| -------- | -------------- | ---------------------------------- | ------------------------------------------------------------------- | --------------------------------------------------- |
+| `common` | bag play remap | delete module status based remap   | [#159](https://github.com/tier4/driving_log_replayer_v2/issues/159) | [hayato-m126](https://github.com/hayato-m126)       |
+| `common` | initial pose   | replace InitializeLocalization srv | [#161](https://github.com/tier4/driving_log_replayer_v2/issues/161) | [SakodaShintaro](https://github.com/SakodaShintaro) |
+
 ## Version 3.8.5
 
 Minor Tweak
