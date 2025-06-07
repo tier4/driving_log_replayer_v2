@@ -15,36 +15,35 @@
 import json
 from pathlib import Path
 
+import fastjsonschema
+import numpy as np
 from ament_index_python.packages import get_package_share_directory
-from autoware_perception_msgs.msg import DetectedObject
-from autoware_perception_msgs.msg import ObjectClassification
-from autoware_perception_msgs.msg import PredictedObject
-from autoware_perception_msgs.msg import PredictedPath
+from autoware_perception_msgs.msg import (
+    DetectedObject,
+    ObjectClassification,
+    PredictedObject,
+    PredictedPath,
+)
 from autoware_perception_msgs.msg import Shape as MsgShape
 from autoware_perception_msgs.msg import TrackedObject
+from builtin_interfaces.msg import Duration as DurationMsg
 from builtin_interfaces.msg import Time
-import fastjsonschema
 from geometry_msgs.msg import Point
 from geometry_msgs.msg import Polygon as RosPolygon
 from geometry_msgs.msg import Pose
 from geometry_msgs.msg import Quaternion as RosQuaternion
 from geometry_msgs.msg import Vector3
-import numpy as np
 from perception_eval.common import ObjectType
-from perception_eval.common.object import DynamicObject
-from perception_eval.common.object import ObjectState
-from perception_eval.common.shape import Shape
-from perception_eval.common.shape import ShapeType
+from perception_eval.common.object import DynamicObject, ObjectState
+from perception_eval.common.shape import Shape, ShapeType
 from perception_eval.config import PerceptionEvaluationConfig
 from perception_eval.evaluation.result.object_result import DynamicObjectWithPerceptionResult
 from perception_eval.evaluation.result.perception_pass_fail_result import PassFailResult
 from pyquaternion.quaternion import Quaternion
 from rclpy.time import Duration
 from shapely.geometry import Polygon
-from std_msgs.msg import ColorRGBA
-from std_msgs.msg import Header
-from visualization_msgs.msg import Marker
-from visualization_msgs.msg import MarkerArray
+from std_msgs.msg import ColorRGBA, Header
+from visualization_msgs.msg import Marker, MarkerArray
 
 
 def unix_time_from_ros_msg(ros_header: Header) -> int:
@@ -59,12 +58,21 @@ def unix_time_from_ros_clock_int(ros_clock_time: int) -> int:
     return ros_clock_time // 1000
 
 
+def unix_time_from_ros_duration(ros_duration: DurationMsg) -> int:
+    return ros_duration.sec * pow(10, 6) + ros_duration.nanosec // 1000
+
+
 def position_from_ros_msg(ros_position: Point) -> tuple[int, int, int]:
     return (ros_position.x, ros_position.y, ros_position.z)
 
 
 def orientation_from_ros_msg(ros_orientation: RosQuaternion) -> Quaternion:
     return Quaternion(ros_orientation.w, ros_orientation.x, ros_orientation.y, ros_orientation.z)
+
+
+def path_timestamps_from_ros_msg(unix_time: int, ros_path: PredictedPath) -> list[int]:
+    duration = unix_time_from_ros_duration(ros_path.time_step)
+    return [unix_time + duration * i for i in range(len(ros_path.path))]
 
 
 def path_positions_from_ros_msg(ros_path: PredictedPath) -> list[tuple[float, float, float]]:
@@ -411,6 +419,10 @@ def list_dynamic_object_from_ros_msg(
             semantic_score=most_probable_classification.probability,
             semantic_label=label,
             uuid=uuid,
+            predicted_timestamps=[
+                path_timestamps_from_ros_msg(unix_time, path)
+                for path in perception_object.kinematics.predicted_paths
+            ],
             predicted_positions=[
                 path_positions_from_ros_msg(path)
                 for path in perception_object.kinematics.predicted_paths
