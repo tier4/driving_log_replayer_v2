@@ -1,0 +1,8 @@
+remap:
+  - /tf
+  - /localization/kinematic_state
+  - /pacmod/from_can_bus
+  - /sensing/lidar/left/velodyne_packets
+  - /sensing/lidar/right/velodyne_packets
+  - /sensing/lidar/top/velodyne_packets
+  - /sensing/lidar/rear/velodyne_packets 
