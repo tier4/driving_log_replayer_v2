@@ -21,6 +21,8 @@ from launch import LaunchDescription
 from launch.actions import ExecuteProcess
 from launch.actions import LogInfo
 from launch.actions import OpaqueFunction
+from launch.actions import RegisterEventHandler
+from launch.event_handlers import OnProcessExit
 from rosbag2_py import Reindexer
 from rosbag2_py import StorageOptions
 
@@ -72,7 +74,29 @@ def post_process(context: LaunchContext) -> list:
         localization_analysis = ExecuteProcess(
             cmd=localization_analysis_cmd, output="screen", name="localization_analyze"
         )
-        return [LogInfo(msg="run localization analysis."), localization_analysis]
+        localization_update_jsonl_cmd = [
+            "ros2",
+            "run",
+            "driving_log_replayer_v2",
+            "localization_update_result_json.py",
+            f"{conf['output_dir']}/result.jsonl",
+            f"{conf['output_dir']}/result_archive",
+        ]
+        localization_update_jsonl = ExecuteProcess(
+            cmd=localization_update_jsonl_cmd, output="screen", name="localization_update"
+        )
+
+        localization_update_event_handler = RegisterEventHandler(
+            OnProcessExit(
+                target_action=localization_analysis,
+                on_exit=[localization_update_jsonl],
+            )
+        )
+        return [
+            LogInfo(msg="run localization analysis."),
+            localization_analysis,
+            localization_update_event_handler,
+        ]
 
     if conf["use_case"] == "perception":
         absolute_result_json_path = Path(

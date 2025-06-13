@@ -26,6 +26,7 @@ install(PROGRAMS
   scripts/obstacle_segmentation_evaluator_node.py
   scripts/performance_diag_evaluator_node.py
   scripts/localization_evaluator_node.py
+  scripts/localization_update_result_json.py
   scripts/yabloc_evaluator_node.py
   scripts/eagleye_evaluator_node.py
   scripts/ar_tag_based_localizer_evaluator_node.py
