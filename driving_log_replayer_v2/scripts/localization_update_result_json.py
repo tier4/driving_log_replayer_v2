@@ -36,6 +36,16 @@ if __name__ == "__main__":
 
     relative_pose_summary_tsv_path = result_archive_path / "summary.json"
     summary_data = json.loads((relative_pose_summary_tsv_path).read_text(encoding="utf-8"))
+
+    if len(result_data) > 0:
+        last_data = result_data[-1]
+        summary_data["Result"]["Success"] = (
+            last_data["Result"]["Success"] and summary_data["Result"]["Success"]
+        )
+        summary_data["Result"]["Summary"] = (
+            last_data["Result"]["Summary"] + summary_data["Result"]["Summary"]
+        )
+
     result_data.append(summary_data)
 
     with result_jsonl_path.open("w") as f:
