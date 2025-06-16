@@ -39545,5 +39545,11 @@
         }
       }
     }
+  },
+  {
+    "Result": {
+      "Success": false,
+      "Summary": "mean_position_norm=0.159 [m]|mean_angle_norm=0.031 [deg]|mean_linear_velocity_norm=0.003 [m/s]|mean_angular_velocity_norm=0.001 [rad/s]|localization__ekf_localizer 12.811 [%] is too large.|localization__pose_instability_detector 1.042 [%] is too large.|localization_error_monitor__ellipse_error_status 12.811 [%] is too large.|ndt_scan_matcher__scan_matching_status 57.342 [%] is too large."
+    }
   }
 ]
