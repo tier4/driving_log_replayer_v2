@@ -43,7 +43,7 @@ if __name__ == "__main__":
             last_data["Result"]["Success"] and summary_data["Result"]["Success"]
         )
         summary_data["Result"]["Summary"] = (
-            last_data["Result"]["Summary"] + summary_data["Result"]["Summary"]
+            last_data["Result"]["Summary"] + ", " + summary_data["Result"]["Summary"]
         )
 
     result_data.append(summary_data)
