@@ -39549,7 +39549,7 @@
   {
     "Result": {
       "Success": false,
-      "Summary": "mean_position_norm=0.159 [m]|mean_angle_norm=0.031 [deg]|mean_linear_velocity_norm=0.003 [m/s]|mean_angular_velocity_norm=0.001 [rad/s]|localization__ekf_localizer 12.811 [%] is too large.|localization__pose_instability_detector 1.042 [%] is too large.|localization_error_monitor__ellipse_error_status 12.811 [%] is too large.|ndt_scan_matcher__scan_matching_status 57.342 [%] is too large."
+      "Summary": "Failed: Convergence (Fail): 598 / 663 -> 90.20%, Reliability (Fail): NVTL Sequential NG Count: 10 (Total Test: 663, Average: 2.46885, StdDev: 0.15908), NDT Availability (Success): NDT availablemean_position_norm=0.156 [m]|mean_angle_norm=0.031 [deg]|mean_linear_velocity_norm=0.003 [m/s]|mean_angular_velocity_norm=0.001 [rad/s]|localization__ekf_localizer 12.779 [%] is too large.|localization__pose_instability_detector 0.000 [%]|localization_error_monitor__ellipse_error_status 12.779 [%] is too large.|ndt_scan_matcher__scan_matching_status 56.713 [%] is too large."
     }
   }
 ]
