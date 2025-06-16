@@ -31,8 +31,13 @@ if __name__ == "__main__":
     result_jsonl_path = args.result_jsonl_path
     result_archive_path = args.result_archive_path
 
+    with result_jsonl_path.open("r") as f:
+        result_data = [json.loads(line) for line in f.readlines()]
+
     relative_pose_summary_tsv_path = result_archive_path / "summary.json"
     summary_data = json.loads((relative_pose_summary_tsv_path).read_text(encoding="utf-8"))
+    result_data.append(summary_data)
 
-    with result_jsonl_path.open("a") as f:
-        f.write(json.dumps(summary_data) + "\n")
+    with result_jsonl_path.open("w") as f:
+        for entry in result_data:
+            f.write(json.dumps(entry) + "\n")
