@@ -18,8 +18,6 @@ import argparse
 import json
 from pathlib import Path
 
-import pandas as pd
-
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser()
@@ -36,31 +34,9 @@ if __name__ == "__main__":
     with result_jsonl_path.open("r") as f:
         result_data = [json.loads(line) for line in f.readlines()]
 
-    relative_pose_summary_tsv_path = (
-        result_archive_path
-        / "compare_trajectories/localization__kinematic_state_result/relative_pose_summary.tsv"
-    )
-    df = pd.read_csv(relative_pose_summary_tsv_path, sep="\t")
-
-    final_success = True
-    final_summary = ""
-
-    error_mean = df["error_mean"].item()
-    ERROR_MEAN_THRESHOLD = 0.5
-    if error_mean > ERROR_MEAN_THRESHOLD:
-        final_success = False
-        final_summary += f"{error_mean=} is too large."
-    else:
-        final_summary += f"{error_mean=}"
-
-    result_data.append(
-        {
-            "Result": {
-                "Success": final_success,
-                "Summary": final_summary,
-            }
-        }
-    )
+    relative_pose_summary_tsv_path = result_archive_path / "summary.json"
+    summary_data = json.loads((relative_pose_summary_tsv_path).read_text(encoding="utf-8"))
+    result_data.append(summary_data)
 
     with result_jsonl_path.open("w") as f:
         for entry in result_data:
