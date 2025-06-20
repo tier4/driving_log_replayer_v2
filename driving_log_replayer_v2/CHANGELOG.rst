@@ -2,6 +2,26 @@
 Changelog for package driving_log_replayer
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
+Forthcoming
+-----------
+* feat: update localization result (`#165 <https://github.com/tier4/driving_log_replayer_v2/issues/165>`_)
+  * Added localization_update_jsonl
+  * Fixed to use "summary.json"
+  * Fixed to open as "a"
+  * Updated the sample
+  * Revert "Fixed to open as "a""
+  This reverts commit 14516364723b5d566819c7e9589d85c00c2dee50.
+  * Fixed the update script
+  * Updated result.json
+  * Added ,
+  * Update driving_log_replayer_v2/scripts/localization_update_result_json.py
+  Co-authored-by: Hayato Mizushima <hayato-m126@users.noreply.github.com>
+  * fix: append when result_data > 0
+  ---------
+  Co-authored-by: Hayato Mizushima <hayato-m126@users.noreply.github.com>
+* remove minoda-san and add saeki as maintainer (`#166 <https://github.com/tier4/driving_log_replayer_v2/issues/166>`_)
+* Contributors: Masato Saeki, SakodaShintaro
+
 3.10.0 (2025-06-06)
 -------------------
 * feat: `#140 <https://github.com/tier4/driving_log_replayer_v2/issues/140>`_ update planning control evlauator (`#155 <https://github.com/tier4/driving_log_replayer_v2/issues/155>`_)

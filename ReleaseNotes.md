@@ -1,5 +1,14 @@
 # Release Notes
 
+## Version 3.10.1
+
+Minor Tweak
+
+| Module         | Feature     | Brief summary              | Pull request                                                        | Contributor                                         |
+| -------------- | ----------- | -------------------------- | ------------------------------------------------------------------- | --------------------------------------------------- |
+| `localization` | result      | update localization result | [#165](https://github.com/tier4/driving_log_replayer_v2/issues/165) | [SakodaShintaro](https://github.com/SakodaShintaro) |
+| `common`       | package.xml | update maintainer          | [#166](https://github.com/tier4/driving_log_replayer_v2/issues/166) | [MasatoSaeki](https://github.com/MasatoSaeki)       |
+
 ## Version 3.10.0
 
 Major changes
