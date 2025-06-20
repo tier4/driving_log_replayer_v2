@@ -20,7 +20,7 @@ def test_load_perception_config() -> None:
     launch_config = import_module(module_name)
     assert (
         launch_config.RECORD_TOPIC
-        == "^/tf$|^/tf_static$|^/diagnostics$|^/sensing/camera/.*|^/sensing/lidar/concatenated/pointcloud$|^/perception/object_recognition/detection/.*/debug/pipeline_latency_ms$|^/perception/object_recognition/tracking/multi_object_tracker/debug/.*|^/perception/object_recognition/prediction/map_based_prediction/debug/pipeline_latency_ms$|^/perception/object_recognition/.*/objects$|^/perception/object_recognition/objects$|^/perception/object_recognition/detection/objects_before_filter$"
+        == "^/tf$|^/tf_static$|^/diagnostics$|^/sensing/camera/.*|^/sensing/lidar/concatenated/pointcloud$|^/perception/object_recognition/detection/.*/debug/pipeline_latency_ms$|^/perception/object_recognition/tracking/multi_object_tracker/debug/.*|^/perception/object_recognition/prediction/map_based_prediction/debug/pipeline_latency_ms$|^/perception/object_recognition/.*/objects$|^/perception/object_recognition/objects$|^/perception/object_recognition/detection/objects_before_filter$|^/sensing/.*detected_objects$|^/sensing/.*tracked_objects$"
     )
     assert launch_config.AUTOWARE_DISABLE == {
         "localization": "false",
