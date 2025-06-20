@@ -100,8 +100,7 @@ def write_result(
     rosbag_manager: RosBagManager,
     msg: MsgType,
     subscribed_ros_timestamp: int,
-    frame_result: PerceptionFrameResult | str,
-    skip_counter: int,
+    frame_info: dict[PerceptionFrameResult | str, int],
 ) -> None:
     """Write result.jsonl and rosbag."""
     # NOTE: In offline evaluation using rosbag with SequentialReader(), messages are processed one-by-one.
@@ -111,18 +110,17 @@ def write_result(
         msg.header.stamp,
     )
 
-    if isinstance(frame_result, PerceptionFrameResult):
+    if isinstance(frame_info["frame"], PerceptionFrameResult):
         # handle when add_frame is success
         result.set_frame(
-            frame_result,
-            skip_counter,
+            **frame_info,
             map_to_baselink=DLREvaluatorV2.transform_stamped_with_euler_angle(map_to_baselink),
         )
 
         # this topic is written to rosbag with msg.header.timestamp, so it can show the accuracy of the result itself
         # but this topic is actually subscribed to subscribed_ros_timestamp, so ignoring delay
         marker_ground_truth, marker_results = convert_to_ros_msg(
-            frame_result,
+            frame_info["frame"],
             msg.header,
         )
         rosbag_manager.write_results(
@@ -131,17 +129,17 @@ def write_result(
         rosbag_manager.write_results(
             additional_record_topic_name["results"], marker_results, msg.header.stamp
         )  # results including evaluation topic and ground truth
-    elif isinstance(frame_result, str):
+    elif isinstance(frame_info["frame"], str):
         # handle when add_frame is fail caused by failed object conversion or no ground truth
-        if frame_result == "No Ground Truth":
-            result.set_info_frame(frame_result, skip_counter)
-        elif frame_result == "Invalid Estimated Objects":
-            result.set_warn_frame(frame_result, skip_counter)
+        if frame_info["frame"] == "No Ground Truth":
+            result.set_info_frame(frame_info["frame"], frame_info["skip"])
+        elif frame_info["frame"] == "Invalid Estimated Objects":
+            result.set_warn_frame(frame_info["frame"], frame_info["skip"])
         else:
-            err_msg = f"Unknown add_frame failure: {frame_result}"
+            err_msg = f"Unknown add_frame failure: {frame_info['frame']}"
             raise TypeError(err_msg)
     else:
-        err_msg = f"Unknown frame result: {frame_result}"
+        err_msg = f"Unknown frame result: {frame_info['frame']}"
         raise TypeError(err_msg)
     result_writer.write_result_with_time(result, subscribed_ros_timestamp)
 
@@ -256,14 +254,15 @@ def evaluate(
                 rosbag_manager,
                 msg,
                 subscribed_ros_timestamp,
-                frame_result,
-                skip_counter,
+                {"frame": frame_result, "skip": skip_counter},
             )
     rosbag_manager.close_writer()
-    result_writer.close()
 
     # calculation of the overall evaluation like mAP, TP Rate, etc and save evaluated data.
-    evaluator.evaluate_all_frames()
+    final_metrics: dict[str, dict] = evaluator.get_evaluation_results()
+    result.set_final_metrics(final_metrics[degradation_topic])
+    result_writer.write_result_with_time(result, rosbag_manager.get_last_ros_timestamp())
+    result_writer.close()
 
     # analysis of the evaluation result and save it as csv
     analyzers: dict[str, PerceptionAnalyzer3D] = evaluator.get_analyzers()
