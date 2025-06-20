@@ -183,9 +183,6 @@ class PerceptionEvaluator:
             final_metrics = self.__get_fp_results()
         else:
             _ = self.__get_scene_results()  # TODO: use this result
-            score_dict = {}
-            error_dict = {}
-            conf_mat_dict = {}
             self.__analyzer = PerceptionAnalyzer3D(self.__evaluator.evaluator_config)
             self.__analyzer.add(self.__evaluator.frame_results)
             result = self.__analyzer.analyze()
