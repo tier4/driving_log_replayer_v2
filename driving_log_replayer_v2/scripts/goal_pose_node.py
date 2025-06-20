@@ -27,6 +27,7 @@ from rclpy.node import Node
 from rclpy.task import Future
 from rclpy.time import Time
 from std_msgs.msg import Header
+from autoware_adapi_v1_msgs.msg import LocalizationInitializationState
 
 from driving_log_replayer_v2.pose import arg_to_goal_pose
 
@@ -73,6 +74,18 @@ class PoseNode(Node):
             callback_group=self._timer_group,
             clock=Clock(clock_type=ClockType.SYSTEM_TIME),
         )  # wall timer
+
+        self._localization_pub = self.create_publisher(
+            LocalizationInitializationState,
+            "/localization/state",
+            1,
+        )
+        self._localization_pub.publish(
+            LocalizationInitializationState(
+                stamp=self._current_time,
+                status=LocalizationInitializationState.STATUS_INITIALIZED,
+            )
+        )
 
     def timer_cb(self) -> None:
         self._current_time = self.get_clock().now().to_msg()
