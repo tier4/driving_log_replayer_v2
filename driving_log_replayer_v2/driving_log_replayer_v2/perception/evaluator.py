@@ -186,16 +186,15 @@ class PerceptionEvaluator:
             self.__analyzer = PerceptionAnalyzer3D(self.__evaluator.evaluator_config)
             self.__analyzer.add(self.__evaluator.frame_results)
             result = self.__analyzer.analyze()
-            if result.score is not None:
-                score_dict = result.score.to_dict()
-            if result.error is not None:
-                error_dict = (
-                    result.error.groupby(level=0)
-                    .apply(lambda df: df.xs(df.name).to_dict())
-                    .to_dict()
-                )
-            if result.confusion_matrix is not None:
-                conf_mat_dict = result.confusion_matrix.to_dict()
+            score_dict = result.score.to_dict() if result.score is not None else {}
+            error_dict = (
+                (result.error.groupby(level=0).apply(lambda df: df.xs(df.name).to_dict()).to_dict())
+                if result.error is not None
+                else {}
+            )
+            conf_mat_dict = (
+                result.confusion_matrix.to_dict() if result.confusion_matrix is not None else {}
+            )
             final_metrics = {
                 "Score": score_dict,
                 "Error": error_dict,
