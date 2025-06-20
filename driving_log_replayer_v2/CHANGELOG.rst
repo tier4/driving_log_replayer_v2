@@ -2,8 +2,8 @@
 Changelog for package driving_log_replayer
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-Forthcoming
------------
+3.10.1 (2025-06-20)
+-------------------
 * feat: update localization result (`#165 <https://github.com/tier4/driving_log_replayer_v2/issues/165>`_)
   * Added localization_update_jsonl
   * Fixed to use "summary.json"
