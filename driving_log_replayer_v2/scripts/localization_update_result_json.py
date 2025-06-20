@@ -46,5 +46,5 @@ if __name__ == "__main__":
             last_data["Result"]["Summary"] + ", " + summary_data["Result"]["Summary"]
         )
 
-    with result_jsonl_path.open("a") as f:
-        f.write(json.dumps(summary_data) + "\n")
+        with result_jsonl_path.open("a") as f:
+            f.write(json.dumps(summary_data) + "\n")
