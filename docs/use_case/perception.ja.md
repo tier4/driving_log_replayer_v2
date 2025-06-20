@@ -227,6 +227,7 @@ clock は、ros2 bag play の--clock オプションによって出力してい�
 [サンプル](https://github.com/tier4/driving_log_replayer_v2/blob/develop/sample/perception/result.json)参照
 
 perception では、シナリオに指定した条件で perception_eval が評価した結果を各 frame 毎に出力する。
+全てのデータを流し終わったあとに、最終的なメトリクスを計算しているため、最終行だけ、他の行と形式が異なる。
 
 以下に、各フレームのフォーマットとメトリクスのフォーマットを示す。
 **注:結果ファイルフォーマットで解説済みの共通部分については省略する。**
@@ -285,6 +286,173 @@ perception では、シナリオに指定した条件で perception_eval が評�
 Objectsデータのフォーマット
 
 [json schema](../../driving_log_replayer_v2/config/perception/object_output_schema.json)を参照
+
+メトリクスデータのフォーマット
+
+evaluation_taskがdetectionまたはtrackingの場合
+
+```json
+{
+  "Frame": {
+    "FinalScore": {
+      "Score": {
+        "TP": {
+          "ALL": "すべてのラベルのTP率",
+          "label0": "label0のTP率",
+          "label1": "label1のTP率"
+        },
+        "FP": {
+          "ALL": "すべてのラベルのFP率",
+          "label0": "label0のFP率",
+          "label1": "label1のFP率"
+        },
+        "FN": {
+          "ALL": "すべてのラベルのFN率",
+          "label0": "label0のFN率",
+          "label1": "label1のFN率"
+        },
+        "TN": {
+          "ALL": "すべてのラベルのTN率",
+          "label0": "label0のTN率",
+          "label1": "label1のTN率"
+        },
+        "AP(Center Distance)": {
+          "ALL": "すべてのラベルのAP率(Center Distance)",
+          "label0": "label0のAP率(Center Distance)",
+          "label1": "label1のAP率(Center Distance)"
+        },
+        "APH(Center Distance)": {
+          "ALL": "すべてのラベルのAPH率(Center Distance)",
+          "label0": "label0のAPH率(Center Distance)",
+          "label1": "label1のAPH率(Center Distance)"
+        },
+        "AP(IoU 2D)": {
+          "ALL": "すべてのラベルのAP率(IoU 2D)",
+          "label0": "label0のAP率(IoU 2D)",
+          "label1": "label1のAP率(IoU 2D)"
+        },
+        "APH(IoU 2D)": {
+          "ALL": "すべてのラベルのAPH率(IoU 2D)",
+          "label0": "label0のAPH率(IoU 2D)",
+          "label1": "label1のAPH率(IoU 2D)"
+        },
+        "AP(IoU 3D)": {
+          "ALL": "すべてのラベルのAP率(IoU 3D)",
+          "label0": "label0のAP率(IoU 3D)",
+          "label1": "label1のAP率(IoU 3D)"
+        },
+        "APH(IoU 3D)": {
+          "ALL": "すべてのラベルのAPH率(IoU 3D)",
+          "label0": "label0のAPH率(IoU 3D)",
+          "label1": "label1のAPH率(IoU 3D)"
+        },
+        "AP(Plane Distance)": {
+          "ALL": "すべてのラベルのAP率(Plane Distance)",
+          "label0": "label0のAP率(Plane Distance)",
+          "label1": "label1のAP率(Plane Distance)"
+        },
+        "APH(Plane Distance)": {
+          "ALL": "すべてのラベルのAPH率(Plane Distance)",
+          "label0": "label0のAPH率(Plane Distance)",
+          "label1": "label1のAPH率(Plane Distance)"
+        }
+      },
+      "MOTA": {"https://github.com/tier4/autoware_perception_evaluation/blob/develop/docs/ja/perception/metrics.md#tracking"},
+      "MOTA": {"https://github.com/tier4/autoware_perception_evaluation/blob/develop/docs/ja/perception/metrics.md#tracking"},
+      "IDswitch": {"https://github.com/tier4/autoware_perception_evaluation/blob/develop/docs/ja/perception/metrics.md#id-switch"},
+      "Error": {
+        "ALL": {
+          "average": {
+            "x": "x座標",
+            "y": "y座標",
+            "yaw": "ヨー角",
+            "length": "長さ",
+            "width": "幅",
+            "vx": "x方向の速度",
+            "vy": "y方向の速度",
+            "nn_plane": "最近傍面の距離"
+          },
+          "rms": {
+            "x": "x座標",
+            "y": "y座標",
+            "yaw": "ヨー角",
+            "length": "長さ",
+            "width": "幅",
+            "vx": "x方向の速度",
+            "vy": "y方向の速度",
+            "nn_plane": "最近傍面の距離"
+          },
+          "std": {
+            "x": "x座標",
+            "y": "y座標",
+            "yaw": "ヨー角",
+            "length": "長さ",
+            "width": "幅",
+            "vx": "x方向の速度",
+            "vy": "y方向の速度",
+            "nn_plane": "最近傍面の距離"
+          },
+          "max": {
+            "x": "x座標",
+            "y": "y座標",
+            "yaw": "ヨー角",
+            "length": "長さ",
+            "width": "幅",
+            "vx": "x方向の速度",
+            "vy": "y方向の速度",
+            "nn_plane": "最近傍面の距離"
+          },
+          "min": {
+            "x": "x座標",
+            "y": "y座標",
+            "yaw": "ヨー角",
+            "length": "長さ",
+            "width": "幅",
+            "vx": "x方向の速度",
+            "vy": "y方向の速度",
+            "nn_plane": "最近傍面の距離"
+          }
+        },
+        "label0": "label0の誤差メトリクス"
+      }
+    }
+  }
+}
+```
+
+evaluation_taskがfp_validationの場合
+
+```json
+{
+  "Frame": {
+    "FinalScore": {
+      "GroundTruthStatus": {
+        "UUID": {
+          "rate": {
+            "TP": "表示UUIDのTP率",
+            "FP": "表示UUIDのFP率",
+            "TN": "表示UUIDのTN率",
+            "FN": "表示UUIDのFN率"
+          },
+          "frame_nums": {
+            "total": "GTが評価されるフレーム番号のリスト",
+            "TP": "GTがTPとして評価されるフレーム番号のリスト",
+            "FP": "GTがFPとして評価されるフレーム番号のリスト",
+            "TN": "GTがTNとして評価されるフレーム番号のリスト",
+            "FN": "GTがFNとして評価されるフレーム番号のリスト"
+          }
+        }
+      },
+      "Scene": {
+        "TP": "シーンのTP率",
+        "FP": "シーンのFP率",
+        "TN": "シーンのTN率",
+        "FN": "シーンのFN率"
+      }
+    }
+  }
+}
+```
 
 ### pickle ファイル
 

@@ -237,3 +237,6 @@ class PerceptionResult(ResultBase):
             "Warning": msg,
             "FrameSkip": skip,
         }
+
+    def set_final_metrics(self, final_metrics: dict) -> None:
+        self._frame = {"FinalScore": final_metrics}

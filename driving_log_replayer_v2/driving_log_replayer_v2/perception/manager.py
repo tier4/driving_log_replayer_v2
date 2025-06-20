@@ -71,7 +71,7 @@ class EvaluationManager:
             for topic in topics
         }
 
-    def check_error(self) -> Exception | None:
+    def check_scenario_error(self) -> Exception | None:
         return self._error if hasattr(self, "_error") else None
 
     def get_evaluation_condition(self) -> dict[str, str]:
@@ -96,14 +96,40 @@ class EvaluationManager:
             raise ValueError(err_msg)
         return topic
 
-    def get_evaluation_config(self, topic_name: str) -> PerceptionEvaluationConfig:
-        evaluator = self._evaluators[topic_name]
-        return evaluator.get_evaluation_config()
+    def get_evaluation_config(
+        self, topic_name: str | None = None
+    ) -> PerceptionEvaluationConfig | dict[str, PerceptionEvaluationConfig]:
+        if topic_name is not None:
+            evaluator = self._evaluators[topic_name]
+            return evaluator.get_evaluation_config()
+        return {
+            topic: evaluator.get_evaluation_config()
+            for topic, evaluator in self._evaluators.items()
+        }
 
-    def get_archive_path(self, topic_name: str) -> Path:
-        return self._evaluators[topic_name].get_archive_path()
+    def get_archive_path(self, topic_name: str | None = None) -> Path | dict[str, Path]:
+        if topic_name is not None:
+            evaluator = self._evaluators[topic_name]
+            return evaluator.get_archive_path()
+        return {
+            topic: evaluator.get_archive_path() for topic, evaluator in self._evaluators.items()
+        }
 
-    def get_analyzers(self) -> dict[str, PerceptionAnalyzer3D]:
+    def get_evaluation_results(self, topic_name: str | None = None) -> dict | dict[str, dict]:
+        if topic_name is not None:
+            evaluator = self._evaluators[topic_name]
+            return evaluator.get_evaluation_results(save_frame_results=True)
+        return {
+            topic: evaluator.get_evaluation_results(save_frame_results=True)
+            for topic, evaluator in self._evaluators.items()
+        }
+
+    def get_analyzers(
+        self, topic_name: str | None = None
+    ) -> PerceptionAnalyzer3D | dict[str, PerceptionAnalyzer3D]:
+        if topic_name is not None:
+            evaluator = self._evaluators[topic_name]
+            return evaluator.get_analyzer()
         return {topic: evaluator.get_analyzer() for topic, evaluator in self._evaluators.items()}
 
     def add_frame(
@@ -125,7 +151,3 @@ class EvaluationManager:
         )
 
         return frame_result, skip_counter
-
-    def evaluate_all_frames(self) -> None:
-        for _, evaluator in self._evaluators.items():
-            evaluator.evaluate_all_frames(save_frame_results=True)
