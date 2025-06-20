@@ -83,9 +83,10 @@ class PoseNode(Node):
         self._localization_pub.publish(
             LocalizationInitializationState(
                 stamp=self._current_time,
-                status=LocalizationInitializationState.STATUS_INITIALIZED,
+                status=LocalizationInitializationState.INITIALIZED,
             )
         )
+        self.get_logger().info("localization state published")
 
     def timer_cb(self) -> None:
         self._current_time = self.get_clock().now().to_msg()
