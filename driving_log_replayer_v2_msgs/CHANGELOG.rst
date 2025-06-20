@@ -2,6 +2,11 @@
 Changelog for package driving_log_replayer_v2_msgs
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
+Forthcoming
+-----------
+* remove minoda-san and add saeki as maintainer (`#166 <https://github.com/tier4/driving_log_replayer_v2/issues/166>`_)
+* Contributors: Masato Saeki
+
 3.10.0 (2025-06-06)
 -------------------
 
