@@ -80,6 +80,13 @@ class PoseNode(Node):
             "/localization/state",
             1,
         )
+
+    def timer_cb(self) -> None:
+        self._current_time = self.get_clock().now().to_msg()
+        # to debug callback use: self.get_logger().error(f"time: {self._current_time.sec}.{self._current_time.nanosec}")
+        if self._current_time.sec <= 0:  # Stop PLAYER after standing for 1 second.
+            return
+        
         self._localization_pub.publish(
             LocalizationInitializationState(
                 stamp=self._current_time,
@@ -87,12 +94,6 @@ class PoseNode(Node):
             )
         )
         self.get_logger().info("localization state published")
-
-    def timer_cb(self) -> None:
-        self._current_time = self.get_clock().now().to_msg()
-        # to debug callback use: self.get_logger().error(f"time: {self._current_time.sec}.{self._current_time.nanosec}")
-        if self._current_time.sec <= 0:  # Stop PLAYER after standing for 1 second.
-            return
         self.call_goal_pose_service()
         self._prev_time = self._current_time
 
