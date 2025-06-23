@@ -46,6 +46,7 @@ class PoseNode(Node):
 
         self._goal_pose_running: bool = False
         self._clear_route_success: bool = False
+        self._route_set_success: bool = False
         self._goal_pose = arg_to_goal_pose(self._goal_pose_str)
 
         self._clear_route_client = self.create_client(
@@ -94,7 +95,8 @@ class PoseNode(Node):
             )
         )
         self.get_logger().info("localization state published")
-        self.call_goal_pose_service()
+        if not self._route_set_success:
+            self.call_goal_pose_service()
         self._prev_time = self._current_time
 
     def call_goal_pose_service(self) -> None:
@@ -128,7 +130,8 @@ class PoseNode(Node):
                 f"{res_status.success=}",
             )  # debug msg
             if res_status.success:
-                rclpy.shutdown()
+                #rclpy.shutdown()
+                self._route_set_success = True
         else:
             self.get_logger().error(f"Exception for service: {future.exception()}")
         # free self._goal_pose_running
