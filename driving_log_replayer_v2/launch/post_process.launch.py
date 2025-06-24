@@ -118,8 +118,8 @@ def post_process(context: LaunchContext) -> list:
                 context.launch_configurations["evaluation_tracking_topic_regex"],
                 context.launch_configurations["evaluation_prediction_topic_regex"],
                 context.launch_configurations["evaluation_fp_validation_topic_regex"],
-                context.launch_configurations["max_distance"],
-                context.launch_configurations["distance_interval"],
+                context.launch_configurations["analysis_max_distance"],
+                context.launch_configurations["analysis_distance_interval"],
             )
             shutil.rmtree(
                 Path(context.launch_configurations["result_bag_path"]).as_posix(),
