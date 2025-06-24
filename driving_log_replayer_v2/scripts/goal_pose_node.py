@@ -78,7 +78,7 @@ class PoseNode(Node):
 
         self._localization_pub = self.create_publisher(
             LocalizationInitializationState,
-            "/api/localization/initialization_state",
+            "/localization/state",
             1,
         )
 
