@@ -94,7 +94,7 @@ class PoseNode(Node):
                 state=LocalizationInitializationState.INITIALIZED,
             )
         )
-        self.get_logger().info("localization state published")
+        self.get_logger().info("localization state published at %s", self._current_time.sec)
         if not self._route_set_success:
             self.call_goal_pose_service()
         self._prev_time = self._current_time
