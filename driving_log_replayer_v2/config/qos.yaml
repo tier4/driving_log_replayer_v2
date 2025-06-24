@@ -23,3 +23,8 @@
   history: keep_last
   depth: 1
   durability: transient_local
+/api/localization/initialization_state:
+  reliability: reliable
+  history: keep_last
+  depth: 3
+  durability: transient_local

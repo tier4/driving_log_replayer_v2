@@ -24,6 +24,10 @@ from rclpy.clock import Clock
 from rclpy.clock import ClockType
 from rclpy.executors import MultiThreadedExecutor
 from rclpy.node import Node
+from rclpy.qos import QoSDurabilityPolicy
+from rclpy.qos import QoSHistoryPolicy
+from rclpy.qos import QoSProfile
+from rclpy.qos import QoSReliabilityPolicy
 from rclpy.task import Future
 from rclpy.time import Time
 from std_msgs.msg import Header
@@ -76,11 +80,18 @@ class PoseNode(Node):
             clock=Clock(clock_type=ClockType.SYSTEM_TIME),
         )  # wall timer
 
+        # Create QoS profile with Transient Local durability
+        qos_profile = QoSProfile(
+            reliability=QoSReliabilityPolicy.RELIABLE,
+            history=QoSHistoryPolicy.KEEP_LAST,
+            depth=3,
+            durability=QoSDurabilityPolicy.TRANSIENT_LOCAL,
+        )
+
         self._localization_pub = self.create_publisher(
             LocalizationInitializationState,
             "/api/localization/initialization_state",
-            #"/localization/initialization_state",
-            1,
+            qos_profile,
         )
 
     def timer_cb(self) -> None:
