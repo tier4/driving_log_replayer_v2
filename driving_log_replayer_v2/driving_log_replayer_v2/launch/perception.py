@@ -29,6 +29,7 @@ RECORD_TOPIC = """^/tf$\
 |^/api/planning/velocity_factors$\
 |^/api/planning/steering_factors$\
 |^/planning/planning_factors/obstacle_stop$\
+|^/planning/autoware_planning_evaluator/metrics$\
 |^/localization/initialization_state$\
 |^/api/localization/initialization_state$\
 |^/api/operation_mode/state$\
