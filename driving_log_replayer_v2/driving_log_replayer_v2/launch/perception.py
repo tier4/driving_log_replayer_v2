@@ -31,6 +31,7 @@ RECORD_TOPIC = """^/tf$\
 |^/planning/planning_factors/obstacle_stop$\
 |^/localization/initialization_state$\
 |^/api/localization/initialization_state$\
+|^/api/operation_mode/state$\
 """
 
 AUTOWARE_DISABLE = {

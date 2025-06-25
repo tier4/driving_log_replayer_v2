@@ -32,6 +32,7 @@ from rclpy.task import Future
 from rclpy.time import Time
 from std_msgs.msg import Header
 from autoware_adapi_v1_msgs.msg import LocalizationInitializationState
+from autoware_adapi_v1_msgs.msg import OperationModeState
 
 from driving_log_replayer_v2.pose import arg_to_goal_pose
 
@@ -81,17 +82,29 @@ class PoseNode(Node):
         )  # wall timer
 
         # Create QoS profile with Transient Local durability
-        qos_profile = QoSProfile(
+        qos_profile_localization = QoSProfile(
             reliability=QoSReliabilityPolicy.RELIABLE,
             history=QoSHistoryPolicy.KEEP_LAST,
             depth=3,
+            durability=QoSDurabilityPolicy.TRANSIENT_LOCAL,
+        )
+        qos_profile_operation_mode = QoSProfile(
+            reliability=QoSReliabilityPolicy.RELIABLE,
+            history=QoSHistoryPolicy.KEEP_LAST,
+            depth=1,
             durability=QoSDurabilityPolicy.TRANSIENT_LOCAL,
         )
 
         self._localization_pub = self.create_publisher(
             LocalizationInitializationState,
             "/api/localization/initialization_state",
-            qos_profile,
+            qos_profile_localization,
+        )
+
+        self._operation_mode_pub = self.create_publisher(
+            OperationModeState,
+            "/api/operation_mode/state",
+            qos_profile_operation_mode,
         )
 
     def timer_cb(self) -> None:
@@ -104,6 +117,18 @@ class PoseNode(Node):
             LocalizationInitializationState(
                 stamp=self._current_time,
                 state=LocalizationInitializationState.INITIALIZED,
+            )
+        )
+        self._operation_mode_pub.publish(
+            OperationModeState(
+                stamp=self._current_time,
+                mode=OperationModeState.AUTONOMOUS,
+                is_autoware_control_enabled=True,
+                is_in_transition=False,
+                is_stop_mode_available=True,
+                is_autonomous_mode_available=True,
+                is_local_mode_available=True,
+                is_remote_mode_available=True,
             )
         )
         self.get_logger().info(f"localization state published at {self._current_time.sec}")
