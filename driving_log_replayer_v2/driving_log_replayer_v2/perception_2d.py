@@ -15,7 +15,7 @@
 from dataclasses import dataclass
 from typing import Literal
 
-from perception_eval.evaluation import PerceptionFrameResult
+from perception_eval.evaluation.result.perception_frame_result import PerceptionFrameResult
 from pydantic import BaseModel
 
 from driving_log_replayer_v2.criteria import PerceptionCriteria

@@ -23,10 +23,10 @@ from typing import TYPE_CHECKING
 from perception_eval.common import DynamicObject
 from perception_eval.common.status import get_scene_rates
 from perception_eval.config import PerceptionEvaluationConfig
-from perception_eval.evaluation import get_object_status
-from perception_eval.evaluation import PerceptionFrameResult
 from perception_eval.evaluation.result.perception_frame_config import CriticalObjectFilterConfig
 from perception_eval.evaluation.result.perception_frame_config import PerceptionPassFailConfig
+from perception_eval.evaluation.result.perception_frame_result import get_object_status
+from perception_eval.evaluation.result.perception_frame_result import PerceptionFrameResult
 from perception_eval.manager import PerceptionEvaluationManager
 from perception_eval.tool import PerceptionAnalyzer3D
 from perception_eval.util.logger_config import configure_logger
@@ -54,6 +54,7 @@ class PerceptionEvaluator:
         self.__result_archive_w_topic_path: Path
         self.__analyzer: PerceptionAnalyzer3D
         self.__logger: logging.Logger
+        self.__evaluation_topic = evaluation_topic
 
         perception_evaluation_config["evaluation_config_dict"]["label_prefix"] = "autoware"
 
@@ -156,7 +157,12 @@ class PerceptionEvaluator:
 
         # TODO: add topic delay
         self.__logger.info(
-            "difference between header and subscribe [micro sec]: %d",
+            "Estimation header: %d, Ground truth header: %d (frame_name: %s), Difference: %d, "
+            "Subscribe delay [micro sec]: %d",
+            header_unix_time,
+            ground_truth_now_frame.unix_time,
+            ground_truth_now_frame.frame_name,
+            header_unix_time - ground_truth_now_frame.unix_time,
             subscribed_unix_time - header_unix_time,
         )
         # TODO: decide whether to add skip counter or not
@@ -170,6 +176,7 @@ class PerceptionEvaluator:
         return self.__result_archive_w_topic_path
 
     def get_evaluation_results(self, *, save_frame_results: bool) -> dict:
+        self.__logger.info("Evaluating topic: %s", self.__evaluation_topic)
         if save_frame_results:
             with Path(
                 expandvars(self.__result_archive_w_topic_path.joinpath("scene_result.pkl"))

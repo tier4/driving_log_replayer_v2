@@ -28,7 +28,7 @@ from driving_log_replayer_v2.scenario import load_scenario
 if TYPE_CHECKING:
     from perception_eval.common.object import DynamicObject
     from perception_eval.config import PerceptionEvaluationConfig
-    from perception_eval.evaluation import PerceptionFrameResult
+    from perception_eval.evaluation.result.perception_frame_result import PerceptionFrameResult
     from perception_eval.tool import PerceptionAnalyzer3D
 
 
