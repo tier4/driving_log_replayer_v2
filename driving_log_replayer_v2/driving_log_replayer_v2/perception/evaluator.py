@@ -117,18 +117,6 @@ class PerceptionEvaluator:
 
         self.__evaluator = PerceptionEvaluationManager(evaluation_config=evaluation_config)
 
-    def get_evaluation_config(self) -> PerceptionEvaluationConfig:
-        return self.__evaluator.evaluator_config
-
-    def get_archive_path(self) -> Path:
-        return self.__result_archive_w_topic_path
-
-    def get_analyzer(self) -> PerceptionAnalyzer3D:
-        if hasattr(self, f"_{self.__class__.__name__}__analyzer"):
-            return self.__analyzer
-        err_msg = "Analyzer is not available. Please call get_evaluation_results() first or evaluation_task is fp_validation."
-        raise RuntimeError(err_msg)
-
     def add_frame(
         self,
         estimated_objects: list[DynamicObject] | str,
@@ -175,7 +163,13 @@ class PerceptionEvaluator:
 
         return frame_result, self.__skip_counter
 
-    def evaluate_all_frames(self, *, save_frame_results: bool) -> None:
+    def get_evaluation_config(self) -> PerceptionEvaluationConfig:
+        return self.__evaluator.evaluator_config
+
+    def get_archive_path(self) -> Path:
+        return self.__result_archive_w_topic_path
+
+    def get_evaluation_results(self, *, save_frame_results: bool) -> dict:
         if save_frame_results:
             with Path(
                 expandvars(self.__result_archive_w_topic_path.joinpath("scene_result.pkl"))
@@ -186,11 +180,33 @@ class PerceptionEvaluator:
             ).open("wb") as pkl_file:
                 pickle.dump(self.__evaluator.evaluator_config, pkl_file)
         if self.__evaluator.evaluator_config.evaluation_task == "fp_validation":
-            self.__log_fp_results()
+            final_metrics = self.__get_fp_results()
         else:
-            self.__log_scene_results()
+            _ = self.__get_scene_results()  # TODO: use this result
             self.__analyzer = PerceptionAnalyzer3D(self.__evaluator.evaluator_config)
             self.__analyzer.add(self.__evaluator.frame_results)
+            result = self.__analyzer.analyze()
+            score_dict = result.score.to_dict() if result.score is not None else {}
+            error_dict = (
+                (result.error.groupby(level=0).apply(lambda df: df.xs(df.name).to_dict()).to_dict())
+                if result.error is not None
+                else {}
+            )
+            conf_mat_dict = (
+                result.confusion_matrix.to_dict() if result.confusion_matrix is not None else {}
+            )
+            final_metrics = {
+                "Score": score_dict,
+                "Error": error_dict,
+                "ConfusionMatrix": conf_mat_dict,
+            }
+        return final_metrics
+
+    def get_analyzer(self) -> PerceptionAnalyzer3D:
+        if hasattr(self, f"_{self.__class__.__name__}__analyzer"):
+            return self.__analyzer
+        err_msg = "Analyzer is not available. Please call get_evaluation_results() first or evaluation_task is fp_validation."
+        raise RuntimeError(err_msg)
 
     def __check_evaluation_task(self, evaluation_task: str) -> bool:
         if evaluation_task in ["detection", "fp_validation"]:
@@ -204,7 +220,7 @@ class PerceptionEvaluator:
             return True
         return False
 
-    def __log_scene_results(self) -> None:
+    def __get_scene_results(self) -> MetricsScore:
         num_critical_fail: int = sum(
             [
                 frame_result.pass_fail_result.get_num_fail()
@@ -214,10 +230,11 @@ class PerceptionEvaluator:
         self.__logger.info("Number of fails for critical objects: %d", num_critical_fail)
 
         # scene metrics score
-        final_metric_score: MetricsScore = self.__evaluator.get_scene_result()
+        final_metric_score = self.__evaluator.get_scene_result()
         self.__logger.info("final metrics result %s", final_metric_score)
+        return final_metric_score
 
-    def __log_fp_results(self) -> None:
+    def __get_fp_results(self) -> dict:
         status_list = get_object_status(self.__evaluator.frame_results)
         gt_status = {}
         for status_info in status_list:
@@ -260,3 +277,12 @@ class PerceptionEvaluator:
             scene_tn_rate,
             scene_fn_rate,
         )
+        return {
+            "GroundTruthStatus": gt_status,
+            "Scene": {
+                "TP": scene_tp_rate,
+                "FP": scene_fp_rate,
+                "TN": scene_tn_rate,
+                "FN": scene_fn_rate,
+            },
+        }
