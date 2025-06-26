@@ -1,5 +1,15 @@
 # Release Notes
 
+## Version 3.10.2
+
+Minor Tweak
+
+| Module       | Feature    | Brief summary                     | Pull request                                                        | Contributor                                   |
+| ------------ | ---------- | --------------------------------- | ------------------------------------------------------------------- | --------------------------------------------- |
+| `perception` | prediction | add timestamps for predicted path | [#164](https://github.com/tier4/driving_log_replayer_v2/issues/164) | [ktro2828](https://github.com/ktro2828)       |
+| `perception` | evaluate   | add topic to evaluate             | [#169](https://github.com/tier4/driving_log_replayer_v2/issues/169) | [MasatoSaeki](https://github.com/MasatoSaeki) |
+| `perception` | result     | show final metrics (revert)       | [#168](https://github.com/tier4/driving_log_replayer_v2/issues/168) | [MasatoSaeki](https://github.com/MasatoSaeki) |
+
 ## Version 3.10.1
 
 Minor Tweak

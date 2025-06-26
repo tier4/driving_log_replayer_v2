@@ -2,6 +2,21 @@
 Changelog for package driving_log_replayer
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
+Forthcoming
+-----------
+* revert(perception): show final metrics (`#168 <https://github.com/tier4/driving_log_replayer_v2/issues/168>`_)
+  * Revert "feat(perception): delete final metrics in perception (`#143 <https://github.com/tier4/driving_log_replayer_v2/issues/143>`_)"
+  This reverts commit 7d63425f4953e51000610dc85c82140be1bc508c.
+  * refactor
+  * fix init variable
+  ---------
+* feat(perception): change variable name for analysis and default value, and add topic to evaluate (`#169 <https://github.com/tier4/driving_log_replayer_v2/issues/169>`_)
+  * change variable name for analysis and default value
+  * fix test
+  ---------
+* feat: add timestamps for predicted path (`#164 <https://github.com/tier4/driving_log_replayer_v2/issues/164>`_)
+* Contributors: Kotaro Uetake, Masato Saeki
+
 3.10.1 (2025-06-20)
 -------------------
 * feat: update localization result (`#165 <https://github.com/tier4/driving_log_replayer_v2/issues/165>`_)
