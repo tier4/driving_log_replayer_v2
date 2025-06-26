@@ -2,8 +2,8 @@
 Changelog for package driving_log_replayer
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-Forthcoming
------------
+3.10.2 (2025-06-26)
+-------------------
 * revert(perception): show final metrics (`#168 <https://github.com/tier4/driving_log_replayer_v2/issues/168>`_)
   * Revert "feat(perception): delete final metrics in perception (`#143 <https://github.com/tier4/driving_log_replayer_v2/issues/143>`_)"
   This reverts commit 7d63425f4953e51000610dc85c82140be1bc508c.
