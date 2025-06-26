@@ -113,6 +113,7 @@ class PoseNode(Node):
         if self._current_time.sec <= 0:  # Stop PLAYER after standing for 1 second.
             return
         
+        """
         self._localization_pub.publish(
             LocalizationInitializationState(
                 stamp=self._current_time,
@@ -131,6 +132,7 @@ class PoseNode(Node):
                 is_remote_mode_available=True,
             )
         )
+        """
         self.get_logger().info(f"localization state published at {self._current_time.sec}")
         if not self._route_set_success:
             self.call_goal_pose_service()
