@@ -17,6 +17,8 @@ from launch.actions import DeclareLaunchArgument
 RECORD_TOPIC = """^/tf$\
 |^/tf_static$\
 |^/diagnostics$\
+|^/map/vector_map$\
+|^/map/pointcloud_map$\
 |^/sensing/camera/.*\
 |^/sensing/lidar/concatenated/pointcloud$\
 |^/perception/object_recognition/detection/.*/debug/pipeline_latency_ms$\
@@ -25,14 +27,18 @@ RECORD_TOPIC = """^/tf$\
 |^/perception/object_recognition/.*/objects$\
 |^/perception/object_recognition/objects$\
 |^/perception/object_recognition/detection/objects_before_filter$\
+|^/perception/occupancy_grid_map/map$\
 |^/awapi/autoware/get/status$\
-|^/api/planning/velocity_factors$\
-|^/api/planning/steering_factors$\
+|^/awapi/tmp/virtual_traffic_light_states$\
 |^/planning/planning_factors/obstacle_stop$\
 |^/planning/mission_planning/route$\
+|^/planning/scenario_planning/scenario$\
+|^/planning/scenario_planning/parking/costmap_generator/occupancy_grid$\
 |^/localization/initialization_state$\
 |^/api/localization/initialization_state$\
 |^/api/operation_mode/state$\
+|^/api/planning/velocity_factors$\
+|^/api/planning/steering_factors$\
 """
 
 AUTOWARE_DISABLE = {
