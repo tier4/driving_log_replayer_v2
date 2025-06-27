@@ -29,7 +29,7 @@ from perception_eval.tool.utils import filter_frame_by_distance
 from perception_eval.tool.utils import filter_frame_by_region
 
 if TYPE_CHECKING:
-    from perception_eval.evaluation import PerceptionFrameResult
+    from perception_eval.evaluation.result.perception_frame_result import PerceptionFrameResult
 
     from driving_log_replayer_v2.perception import Filter
 

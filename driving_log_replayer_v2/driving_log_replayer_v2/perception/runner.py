@@ -22,7 +22,7 @@ from typing import TYPE_CHECKING
 from autoware_perception_msgs.msg import DetectedObjects
 from autoware_perception_msgs.msg import PredictedObjects
 from autoware_perception_msgs.msg import TrackedObjects
-from perception_eval.evaluation import PerceptionFrameResult
+from perception_eval.evaluation.result.perception_frame_result import PerceptionFrameResult
 from rclpy.clock import Clock
 from rosbag2_py import TopicMetadata
 from std_msgs.msg import ColorRGBA

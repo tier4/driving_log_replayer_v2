@@ -50,7 +50,7 @@ from driving_log_replayer_v2.traffic_light import TrafficLightResult
 from driving_log_replayer_v2.traffic_light import TrafficLightScenario
 
 if TYPE_CHECKING:
-    from perception_eval.evaluation import PerceptionFrameResult
+    from perception_eval.evaluation.result.perception_frame_result import PerceptionFrameResult
 
 
 class TrafficLightEvaluator(DLREvaluatorV2):

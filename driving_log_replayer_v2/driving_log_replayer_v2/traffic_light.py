@@ -22,14 +22,14 @@ from typing import Literal
 from typing import TYPE_CHECKING
 
 from autoware_perception_msgs.msg import TrafficSignalElement
-from perception_eval.evaluation import PerceptionFrameResult
+from perception_eval.evaluation.result.perception_frame_result import PerceptionFrameResult
 from pydantic import BaseModel
 from pydantic import field_validator
 from pydantic import model_validator
 import simplejson as json
 
 if TYPE_CHECKING:
-    from perception_eval.evaluation import PerceptionFrameResult
+    from perception_eval.evaluation.result.perception_frame_result import PerceptionFrameResult
 
 from driving_log_replayer_v2.criteria import PerceptionCriteria
 from driving_log_replayer_v2.perception_eval_conversions import summarize_pass_fail_result
