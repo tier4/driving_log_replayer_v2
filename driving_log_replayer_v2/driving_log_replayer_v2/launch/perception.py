@@ -37,11 +37,15 @@ RECORD_TOPIC = """^/tf$\
 |^/planning/scenario_planning/parking/costmap_generator/occupancy_grid$\
 |^/planning/scenario_planning/lane_driving/behavior_planning/behavior_velocity_planner/debug/intersection/ego_ttc$\
 |^/planning/scenario_planning/lane_driving/behavior_planning/behavior_velocity_planner/debug/intersection/object_ttc$\
+|^/planning/scenario_planning/lane_driving/behavior_planning/behavior_velocity_planner/debug/intersection$\
+|^/planning/scenario_planning/lane_driving/behavior_planning/behavior_velocity_planner/debug/intersection/decision_state$\
 |^/localization/initialization_state$\
 |^/api/localization/initialization_state$\
 |^/api/operation_mode/state$\
 |^/api/planning/velocity_factors$\
 |^/api/planning/steering_factors$\
+|^/api/external/get/rtc_auto_mode$\
+|^/api/external/get/rtc_status$\
 """
 
 AUTOWARE_DISABLE = {
