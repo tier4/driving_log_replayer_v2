@@ -6,17 +6,9 @@ Evaluate the performance of the Obstacle Segmentation sub-component in Autoware,
 
 The Ground Truth data required for evaluation can be provided using the following two methods, and each can be used by changing the `Evaluation.Conditions.Method` of the scenario.
 
-### annotated_rosbag
-
-This method involves adding a field to the point cloud data in the bag file to represent semantic labels.
-
-Synchronize and subscribe to topics before and after ground removal, and evaluate the accuracy by comparing the number of points with ground and non-ground labels.
-
-In this evaluation framework, the semantic labels are assumed to be recorded in an `INT32` field named `entity_id`.
-
 ### annotated_pcd
 
-This method involves adding a field to the point cloud data provided as a dataset (`dataset/data/LIDAR_CONCAT/\*.pcd.bin`) to represent semantic labels.
+This method involves using the point cloud data provided as a dataset (`dataset/data/LIDAR_CONCAT/\*.pcd.bin`) together with the corresponding label data (`dataset/lidarseg/\*.bin`).
 
 Compare the point cloud after ground removal with the point cloud in the `pcd.bin` file, and evaluate accuracy by examining the labels associated with the points in the processed point cloud.
 
@@ -31,24 +23,8 @@ Launching the file executes the following steps:
 
 ### Points to note during evaluation
 
-- **annotated_rosbag mode**  
-   The [sensing module of autoware.universe](https://github.com/autowarefoundation/autoware.universe/blob/main/sensing/autoware_pointcloud_preprocessor/src/filter.cpp#L386-L394) needs to be modified as follows:
-
-  ```diff
-    if (utils::is_data_layout_compatible_with_point_xyzi(*cloud)) {
-      RCLCPP_ERROR(
-        get_logger(),
-        "The pointcloud layout is compatible with PointXYZI. You may be using legacy "
-        "code/data");
-    }
-
-  - return;
-  + //return;
-  }
-  ```
-
-- **annotated_pcd mode**  
-   Since the evaluation process takes time, the playback rate of the rosbag needs to be reduced.
+- **annotated_pcd mode**
+  Since the evaluation process takes time, the playback rate of the rosbag needs to be reduced.
   Example:
   `ros2 launch driving_log_replayer_v2 driving_log_replayer_v2.launch.py scenario_path:=${scenario_file} play_rate:=0.1`
 
@@ -68,12 +44,12 @@ When the normal condition is not met
 
 Subscribed topics:
 
-| topic name                                                | Data type                   |
-| --------------------------------------------------------- | --------------------------- |
-| /sensing/lidar/concatenated/pointcloud 　　               | sensor_msgs/msg/PointCloud2 |
-| /perception/obstacle_segmentation/single_frame/pointcloud | sensor_msgs/msg/PointCloud2 |
+| topic name                                   | Data type                   |
+| -------------------------------------------- | --------------------------- |
+| /sensing/lidar/concatenated/pointcloud 　　  | sensor_msgs/msg/PointCloud2 |
+| /perception/obstacle_segmentation/pointcloud | sensor_msgs/msg/PointCloud2 |
 
-**NOTE: the`/perception/obstacle_segmentation/single_frame/pointcloud`topic can be modified by changing the `evaluation_target_topic` launch argument.**
+**NOTE: the`/perception/obstacle_segmentation/pointcloud`topic can be modified by changing the `evaluation_target_topic` launch argument.**
 
 Published topics:
 
