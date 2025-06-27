@@ -28,12 +28,15 @@ RECORD_TOPIC = """^/tf$\
 |^/perception/object_recognition/objects$\
 |^/perception/object_recognition/detection/objects_before_filter$\
 |^/perception/occupancy_grid_map/map$\
+|^/perception/traffic_light_recognition/traffic_signals$\
 |^/awapi/autoware/get/status$\
 |^/awapi/tmp/virtual_traffic_light_states$\
 |^/planning/planning_factors/obstacle_stop$\
 |^/planning/mission_planning/route$\
 |^/planning/scenario_planning/scenario$\
 |^/planning/scenario_planning/parking/costmap_generator/occupancy_grid$\
+|^/planning/scenario_planning/lane_driving/behavior_planning/behavior_velocity_planner/debug/intersection/ego_ttc$\
+|^/planning/scenario_planning/lane_driving/behavior_planning/behavior_velocity_planner/debug/intersection/object_ttc$\
 |^/localization/initialization_state$\
 |^/api/localization/initialization_state$\
 |^/api/operation_mode/state$\
