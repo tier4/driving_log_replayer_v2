@@ -65,7 +65,19 @@ $HOME/autoware/install/lidar_centerpoint/share/lidar_centerpoint/data/pts_voxel_
 
 ## Evaluation method
 
-Launching the file executes the following steps:
+First, complete the setup procedure described in [Setup Instructions](/docs/quick_start/setup.en.md).
+
+Once the setup is finished, user can start the perception evaluation using the sample rosbag provided at `~/driving_log_replayer_v2/sample_dataset`. with the command:
+
+```shell
+ros2 launch driving_log_replayer_v2 driving_log_replayer_v2.launch.py \
+    play_rate:=0.5 \
+    play_delay:=10.0 \
+    remap_arg:="/sensing/lidar/top/velodyne_packets,/sensing/lidar/left/velodyne_packets,/sensing/lidar/right/velodyne_packets" \
+    scenario_path:=$HOME/driving_log_replayer_v2/perception.yaml
+```
+
+This command will perform the following steps:
 
 1. launch the commands `logging_simulator.launch` and `ros2 bag play`
 2. Autoware receives the sensor data output from the rosbag and the perception module recognizes it
