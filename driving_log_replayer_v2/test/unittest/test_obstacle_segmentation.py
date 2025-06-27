@@ -27,9 +27,9 @@ from perception_eval.common.label import Label
 from perception_eval.common.schema import FrameID
 from perception_eval.common.shape import Shape
 from perception_eval.common.shape import ShapeType
-from perception_eval.evaluation import DynamicObjectWithSensingResult
 from perception_eval.evaluation.sensing.sensing_frame_config import SensingFrameConfig
 from perception_eval.evaluation.sensing.sensing_frame_result import SensingFrameResult
+from perception_eval.evaluation.sensing.sensing_result import DynamicObjectWithSensingResult
 from pydantic import ValidationError
 from pyquaternion import Quaternion as PyQuaternion
 import pytest
