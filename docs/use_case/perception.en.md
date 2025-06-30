@@ -71,11 +71,20 @@ Once the setup is finished, user can start the perception evaluation using the s
 
 ```shell
 ros2 launch driving_log_replayer_v2 driving_log_replayer_v2.launch.py \
-    play_rate:=0.5 \
-    play_delay:=10.0 \
-    remap_arg:="/sensing/lidar/top/velodyne_packets,/sensing/lidar/left/velodyne_packets,/sensing/lidar/right/velodyne_packets" \
-    scenario_path:=$HOME/driving_log_replayer_v2/perception.yaml
+    scenario_path:=$HOME/driving_log_replayer_v2/perception.yaml \
+    sensing:=false
 ```
+
+or
+
+```shell
+ros2 launch driving_log_replayer_v2 driving_log_replayer_v2.launch.py \
+    scenario_path:=$HOME/driving_log_replayer_v2/perception.yaml \
+    remap_arg:="/sensing/lidar/top/velodyne_packets,/sensing/lidar/left/velodyne_packets,/sensing/lidar/right/velodyne_packets"
+```
+
+> [!NOTE]  
+> sample rosbag includes packets to produce pointcloud and /sensing/lidar/concatenated/pointcloud. So it is necessary to either remap or not activate `sensing` to avoid topic duplication.
 
 This command will perform the following steps:
 
