@@ -16,10 +16,18 @@ from __future__ import annotations
 
 import csv
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 import logging
 
-from tier4_api_msgs.msg import AwapiAutowareStatus
+# Try to import ROS messages, but don't fail if they're not available
+try:
+    from tier4_api_msgs.msg import AwapiAutowareStatus
+    ROS_AVAILABLE = True
+except ImportError:
+    ROS_AVAILABLE = False
+    # Create a placeholder for type hints
+    class AwapiAutowareStatus:
+        pass
 
 if TYPE_CHECKING:
     from rosidl_runtime_py.utilities import message_to_ordereddict
@@ -38,7 +46,7 @@ class StopReasonProcessor:
         self.stop_reasons_data: list[dict] = []
         self.csv_file_path = output_path / "stop_reasons.csv"
         
-    def process_message(self, msg: AwapiAutowareStatus, timestamp: float) -> None:
+    def process_message(self, msg: Any, timestamp: float) -> None:
         """Process a single AwapiAutowareStatus message.
         
         Args:
@@ -55,16 +63,17 @@ class StopReasonProcessor:
 
         try:
             for idx, stop_reason in enumerate(msg.stop_reason.stop_reasons):
+                #logging.info(f"stop_reason: {stop_reason.stop_factors[0]}")
                 reason_data = {
                     'timestamp': timestamp,
                     'idx': idx,
                     'reason': stop_reason.reason,
-                    'dist_to_stop_pos': stop_reason.stop_factors.stop_factors[0].dist_to_stop_pos,
-                    'x': stop_reason.stop_factors.stop_factors[0].stop_pos.position.x,
-                    'y': stop_reason.stop_factors.stop_factors[0].stop_pos.position.y,
-                    'z': stop_reason.stop_factors.stop_factors[0].stop_pos.position.z,
-                    'qz': stop_reason.stop_factors.stop_factors[0].stop_pos.orientation.z,
-                    'qw': stop_reason.stop_factors.stop_factors[0].stop_pos.orientation.w,
+                    'dist_to_stop_pos': stop_reason.stop_factors[0].dist_to_stop_pose,
+                    'x': stop_reason.stop_factors[0].stop_pose.position.x,
+                    'y': stop_reason.stop_factors[0].stop_pose.position.y,
+                    'z': stop_reason.stop_factors[0].stop_pose.position.z,
+                    'qz': stop_reason.stop_factors[0].stop_pose.orientation.z,
+                    'qw': stop_reason.stop_factors[0].stop_pose.orientation.w,
                 }
                 self.stop_reasons_data.append(reason_data)
         except Exception as e:
