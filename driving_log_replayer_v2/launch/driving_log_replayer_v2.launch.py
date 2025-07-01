@@ -113,7 +113,7 @@ def get_launch_arguments() -> list:
     )
     add_launch_arg(
         "remap_arg",
-        default_value="",
+        default_value="/perception/object_recognition/detection/rois3,/perception/object_recognition/detection/rois5",
         description="use comma separated string. Ex: remap_arg:=/tf,/sensing/lidar/concatenated/pointcloud",
     )
     add_launch_arg(
