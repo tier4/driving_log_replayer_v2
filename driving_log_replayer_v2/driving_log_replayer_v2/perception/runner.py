@@ -29,6 +29,7 @@ from std_msgs.msg import ColorRGBA
 from std_msgs.msg import Header
 from tier4_api_msgs.msg import AwapiAutowareStatus
 from visualization_msgs.msg import MarkerArray
+import logging
 
 from driving_log_replayer_v2.evaluator import DLREvaluatorV2
 from driving_log_replayer_v2.perception.analyze import analyze
@@ -225,6 +226,8 @@ def evaluate(
     # Initialize stop reason processor
     stop_reason_processor = StopReasonProcessor(Path(result_archive_path))
 
+    logging.info(f"evaluation topics begin")
+
     for topic_name, msg, subscribed_ros_timestamp in rosbag_manager.read_messages():
         # See RosBagManager for `time relationships`.
 
@@ -274,6 +277,8 @@ def evaluate(
     rosbag_manager.close_writer()
     result_writer.close()
 
+    logging.info(f"evaluation topics end")
+
     # calculation of the overall evaluation like mAP, TP Rate, etc and save evaluated data.
     evaluator.evaluate_all_frames()
 
@@ -284,8 +289,12 @@ def evaluate(
     save_path = evaluator.get_archive_path(degradation_topic)
     analyze(analyzer, save_path, max_distance, distance_interval, degradation_topic)
 
+    logging.info(f"stop_reason_processor begin")
+
     # Save stop_reason data to spreadsheet
     stop_reason_processor.save_to_spreadsheet()
+
+    logging.info(f"stop_reason_processor end")
 
 
 def parse_args() -> argparse.Namespace:
