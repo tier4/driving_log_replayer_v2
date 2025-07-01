@@ -17,6 +17,7 @@ from __future__ import annotations
 import csv
 from pathlib import Path
 from typing import TYPE_CHECKING
+import logging
 
 from tier4_api_msgs.msg import AwapiAutowareStatus
 
@@ -50,19 +51,26 @@ class StopReasonProcessor:
         if not msg.stop_reason.stop_reasons:
             return
             
-        for idx, stop_reason in enumerate(msg.stop_reason.stop_reasons):
-            reason_data = {
-                'timestamp': timestamp,
-                'idx': idx,
-                'reason': stop_reason.reason,
-                'dist_to_stop_pos': stop_reason.stop_factors.stop_factors[0].dist_to_stop_pos,
-                'x': stop_reason.stop_factors.stop_factors[0].stop_pos.position.x,
-                'y': stop_reason.stop_factors.stop_factors[0].stop_pos.position.y,
-                'z': stop_reason.stop_factors.stop_factors[0].stop_pos.position.z,
-                'qz': stop_reason.stop_factors.stop_factors[0].stop_pos.orientation.z,
-                'qw': stop_reason.stop_factors.stop_factors[0].stop_pos.orientation.w,
-            }
-            self.stop_reasons_data.append(reason_data)
+        logging.info(f"stop_reason loop begin")
+
+        try:
+            for idx, stop_reason in enumerate(msg.stop_reason.stop_reasons):
+                reason_data = {
+                    'timestamp': timestamp,
+                    'idx': idx,
+                    'reason': stop_reason.reason,
+                    'dist_to_stop_pos': stop_reason.stop_factors.stop_factors[0].dist_to_stop_pos,
+                    'x': stop_reason.stop_factors.stop_factors[0].stop_pos.position.x,
+                    'y': stop_reason.stop_factors.stop_factors[0].stop_pos.position.y,
+                    'z': stop_reason.stop_factors.stop_factors[0].stop_pos.position.z,
+                    'qz': stop_reason.stop_factors.stop_factors[0].stop_pos.orientation.z,
+                    'qw': stop_reason.stop_factors.stop_factors[0].stop_pos.orientation.w,
+                }
+                self.stop_reasons_data.append(reason_data)
+        except Exception as e:
+            logging.error(f"Error processing stop_reason: {e}")
+        finally:
+            logging.info(f"stop_reason loop end")
     
     def save_to_spreadsheet(self) -> None:
         """Save the collected stop_reason data to a CSV file."""
@@ -71,6 +79,8 @@ class StopReasonProcessor:
             
         # Ensure output directory exists
         self.output_path.mkdir(parents=True, exist_ok=True)
+
+        logging.info(f"save_to_spreadsheet begin")
         
         # Write to CSV
         with open(self.csv_file_path, 'w', newline='', encoding='utf-8') as csvfile:
@@ -80,6 +90,5 @@ class StopReasonProcessor:
             writer.writeheader()
             for data in self.stop_reasons_data:
                 writer.writerow(data)
-        
-        print(f"Stop reasons data saved to: {self.csv_file_path}")
-        print(f"Total stop reasons recorded: {len(self.stop_reasons_data)}") 
+        logging.info(f"Stop reasons data saved to: {self.csv_file_path}")
+        logging.info(f"Total stop reasons recorded: {len(self.stop_reasons_data)}") 
