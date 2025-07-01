@@ -27,6 +27,7 @@ from rclpy.clock import Clock
 from rosbag2_py import TopicMetadata
 from std_msgs.msg import ColorRGBA
 from std_msgs.msg import Header
+from tier4_api_msgs.msg import AwapiAutowareStatus
 from visualization_msgs.msg import MarkerArray
 
 from driving_log_replayer_v2.evaluator import DLREvaluatorV2
@@ -35,6 +36,7 @@ from driving_log_replayer_v2.perception.manager import EvaluationManager
 from driving_log_replayer_v2.perception.models import PerceptionResult
 from driving_log_replayer_v2.perception.ros2_utils import lookup_transform
 from driving_log_replayer_v2.perception.ros2_utils import RosBagManager
+from driving_log_replayer_v2.perception.stop_reason_processor import StopReasonProcessor
 from driving_log_replayer_v2.perception.topics import load_evaluation_topics
 import driving_log_replayer_v2.perception_eval_conversions as eval_conversions
 from driving_log_replayer_v2.result import ResultWriter
@@ -220,8 +222,18 @@ def evaluate(
 
     shutil.copy(scenario_path, Path(result_archive_path).joinpath("scenario.yaml"))
 
+    # Initialize stop reason processor
+    stop_reason_processor = StopReasonProcessor(Path(result_archive_path))
+
     for topic_name, msg, subscribed_ros_timestamp in rosbag_manager.read_messages():
         # See RosBagManager for `time relationships`.
+
+        # Process stop_reason data from AwapiAutowareStatus messages
+        if isinstance(msg, AwapiAutowareStatus):
+            # Convert timestamp to unix time for consistency
+            unix_timestamp = eval_conversions.unix_time_from_ros_clock_int(subscribed_ros_timestamp) / 1e6  # Convert to seconds
+            stop_reason_processor.process_message(msg, unix_timestamp)
+            continue
 
         if isinstance(msg, DetectedObjects):
             interpolation: bool = False
@@ -271,6 +283,9 @@ def evaluate(
     analyzer = analyzers[degradation_topic]
     save_path = evaluator.get_archive_path(degradation_topic)
     analyze(analyzer, save_path, max_distance, distance_interval, degradation_topic)
+
+    # Save stop_reason data to spreadsheet
+    stop_reason_processor.save_to_spreadsheet()
 
 
 def parse_args() -> argparse.Namespace:
