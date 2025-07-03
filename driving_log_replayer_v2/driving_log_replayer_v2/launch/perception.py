@@ -39,7 +39,7 @@ def get_autoware_disable_config(scenario_path: str) -> dict[str, str]:
         
         # Check if stop reason evaluation is configured
         eval_conditions = scenario_data.get('Evaluation', {}).get('Conditions', {})
-        has_stop_reason_eval = eval_conditions.get('eval_stop_reason') is not None
+        has_stop_reason_eval = eval_conditions.get('StopReasonCriterion') is not None
         
         if has_stop_reason_eval:
             # Enable planning and control for stop reason evaluation

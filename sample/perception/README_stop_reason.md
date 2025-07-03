@@ -12,10 +12,10 @@ The stop reason evaluation feature:
 
 ## Configuration
 
-Add an `eval_stop_reason` section to your perception scenario YAML under `Evaluation.Conditions`:
+Add a `StopReasonCriterion` section to your perception scenario YAML under `Evaluation.Conditions`:
 
 ```yaml
-eval_stop_reason:
+StopReasonCriterion:
   INTERSECTION:
     start_time: 1649138880.0  # Start time for evaluation (Unix timestamp)
     end_time: 1649138900.0    # End time for evaluation (Unix timestamp)
@@ -65,7 +65,7 @@ Evaluates multiple stop reason types with different criteria for each.
 
 ## Running the Evaluation
 
-1. Use one of the sample scenarios or create your own with `eval_stop_reason` configuration
+1. Use one of the sample scenarios or create your own with `StopReasonCriterion` configuration
 2. Run the perception simulation as usual:
    ```bash
    dlr2 simulation run /path/to/scenario/directory
@@ -112,7 +112,7 @@ Stop reason data is also saved to `stop_reasons.csv` in the result archive direc
 
 ## Notes
 
-- When `eval_stop_reason` is configured, planning and control components are automatically enabled
+- When `StopReasonCriterion` is configured, planning and control components are automatically enabled
 - The evaluation only considers stop reasons that match the configured reason type
 - Events outside the time window or within the tolerance interval are skipped
 - The final evaluation passes only if all configured stop reasons meet their pass rate requirements 

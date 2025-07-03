@@ -155,7 +155,7 @@ class StopReasonEvaluation(BaseModel):
 
 class Conditions(BaseModel):
     Criterion: list[Criteria]
-    eval_stop_reason: dict[str, StopReasonEvaluation] | None = None
+    StopReasonCriterion: dict[str, StopReasonEvaluation] | None = None
 
 
 class Evaluation(BaseModel):
@@ -348,8 +348,8 @@ class PerceptionResult(ResultBase):
             )
         # Initialize stop reason evaluation items
         self.__stop_reason_criterion: list[StopReasonEvaluationItem] = []
-        if condition.eval_stop_reason:
-            for reason_name, reason_config in condition.eval_stop_reason.items():
+        if condition.StopReasonCriterion:
+            for reason_name, reason_config in condition.StopReasonCriterion.items():
                 self.__stop_reason_criterion.append(
                     StopReasonEvaluationItem(name=reason_name, condition=reason_config),
                 )
