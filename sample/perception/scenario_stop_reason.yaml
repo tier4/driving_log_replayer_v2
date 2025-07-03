@@ -28,7 +28,7 @@ Evaluation:
             x_position: null # [m] null [Do not filter by x_position] or lower_limit,upper_limit
             y_position: null # [m] null [Do not filter by y_position] or lower_limit,upper_limit
     # Stop reason evaluation configuration
-    eval_stop_reason:
+    StopReasonCriterion:
       INTERSECTION:
         start_time: 1649138880.0  # Start time for evaluation (Unix timestamp)
         end_time: 1649138900.0    # End time for evaluation (Unix timestamp)
