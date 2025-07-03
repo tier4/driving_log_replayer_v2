@@ -16,7 +16,7 @@ Add a `StopReasonCriterion` section to your perception scenario YAML under `Eval
 
 ```yaml
 StopReasonCriterion:
-  INTERSECTION:
+  Intersection:
     start_time: 1649138880.0  # Start time for evaluation (Unix timestamp)
     end_time: 1649138900.0    # End time for evaluation (Unix timestamp)
     base_stop_line_dist:
@@ -49,11 +49,11 @@ StopReasonCriterion:
 ## Stop Reason Types
 
 Common stop reason types that can be evaluated:
-- `INTERSECTION`: Stop at intersection
-- `TRAFFIC_LIGHT`: Stop at traffic light
-- `OBSTACLE`: Stop due to obstacle
-- `CROSSWALK`: Stop at crosswalk
-- `STOP_SIGN`: Stop at stop sign
+- `Intersection`: Stop at intersection
+- `TrafficLight`: Stop at traffic light
+- `ObstacleStop`: Stop due to obstacle
+- `Crosswalk`: Stop at crosswalk
+- `Walkway`: Stop at walkway
 
 ## Example Scenarios
 
@@ -78,20 +78,21 @@ Evaluates multiple stop reason types with different criteria for each.
 Each frame in `result.jsonl` will include stop reason evaluation results:
 ```json
 {
-  "INTERSECTION": {
+  "Intersection": {
     "StopReason": {
       "Result": {
         "Total": "Success",
         "Frame": "Success"
       },
       "Info": {
-        "Reason": "INTERSECTION",
+        "Reason": "Intersection",
         "Distance": 0.5,
         "Timestamp": 1649138885.0
       }
     }
   }
 }
+```
 ```
 
 ### Summary Results

@@ -18,7 +18,7 @@ Evaluation:
           Distance: 0.0-100.0
     # Stop reason evaluation configuration
     StopReasonCriterion:
-      INTERSECTION:
+      Intersection:
         start_time: 1649138880.0
         end_time: 1649138900.0
         base_stop_line_dist:
