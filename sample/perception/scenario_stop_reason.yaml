@@ -29,7 +29,7 @@ Evaluation:
             y_position: null # [m] null [Do not filter by y_position] or lower_limit,upper_limit
     # Stop reason evaluation configuration
     StopReasonCriterion:
-      INTERSECTION:
+      Intersection:
         start_time: 1649138880.0  # Start time for evaluation (Unix timestamp)
         end_time: 1649138900.0    # End time for evaluation (Unix timestamp)
         base_stop_line_dist:
@@ -37,7 +37,7 @@ Evaluation:
           max: 1.0  # Maximum distance to stop line (meters)
         tolerance_interval: 0.5   # Minimum time between accepted events (seconds)
         pass_rate: 90.0           # Required pass rate percentage
-      TRAFFIC_LIGHT:
+      TrafficLight:
         start_time: 1649138885.0  # Start time for evaluation (Unix timestamp)
         end_time: 1649138895.0    # End time for evaluation (Unix timestamp)
         base_stop_line_dist:
@@ -45,7 +45,7 @@ Evaluation:
           max: 2.0  # Maximum distance to stop line (meters)
         tolerance_interval: 0.3   # Minimum time between accepted events (seconds)
         pass_rate: 85.0           # Required pass rate percentage
-      OBSTACLE:
+      ObstacleStop:
         start_time: 1649138890.0  # Start time for evaluation (Unix timestamp)
         end_time: 1649138905.0    # End time for evaluation (Unix timestamp)
         base_stop_line_dist:
