@@ -231,11 +231,40 @@ def evaluate(
     for topic_name, msg, subscribed_ros_timestamp in rosbag_manager.read_messages():
         # See RosBagManager for `time relationships`.
 
+        # Convert timestamp to unix time for consistency
+        unix_timestamp = eval_conversions.unix_time_from_ros_clock_int(subscribed_ros_timestamp) / 1e6  # Convert to seconds
+
+        # Check for stop reason timeouts before processing messages
+        timeout_results = result.check_stop_reason_timeouts(unix_timestamp)
+        if timeout_results:
+            for reason_name, timeout_result in timeout_results.items():
+                result._frame[reason_name] = timeout_result
+            result_writer.write_result_with_time(result, subscribed_ros_timestamp)
+
         # Process stop_reason data from AwapiAutowareStatus messages
         if isinstance(msg, AwapiAutowareStatus):
-            # Convert timestamp to unix time for consistency
-            unix_timestamp = eval_conversions.unix_time_from_ros_clock_int(subscribed_ros_timestamp) / 1e6  # Convert to seconds
             stop_reason_processor.process_message(msg, unix_timestamp)
+            
+            # Process stop reason evaluation if configured
+            if hasattr(msg, 'stop_reason') and hasattr(msg.stop_reason, 'stop_reasons'):
+                for stop_reason in msg.stop_reason.stop_reasons:
+                    if stop_reason.stop_factors:
+                        # Only include in frame results if it matches target reason and is within time window
+                        should_include_in_frame = False
+                        for target_reason, evaluation_config in result.stop_reason_evaluations.items():
+                            if (stop_reason.reason == target_reason and 
+                                evaluation_config.start_time <= unix_timestamp <= evaluation_config.end_time):
+                                should_include_in_frame = True
+                                break
+                        
+                        if should_include_in_frame:
+                            stop_reason_data = {
+                                'timestamp': unix_timestamp,
+                                'reason': stop_reason.reason,
+                                'dist_to_stop_pos': stop_reason.stop_factors[0].dist_to_stop_pose,
+                            }
+                            result.set_stop_reason_frame(stop_reason_data)
+                            result_writer.write_result_with_time(result, subscribed_ros_timestamp)
             continue
 
         if isinstance(msg, DetectedObjects):

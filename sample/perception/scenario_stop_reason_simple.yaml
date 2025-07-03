@@ -1,0 +1,45 @@
+ScenarioFormatVersion: 3.0.0
+ScenarioName: perception_stop_reason_simple
+ScenarioDescription: Simple perception evaluation with stop reason evaluation enabled
+SensorModel: sample_sensor_kit
+VehicleModel: sample_vehicle
+Evaluation:
+  UseCaseName: perception
+  UseCaseFormatVersion: 1.1.0
+  Datasets:
+    - sample_dataset:
+        VehicleId: default
+  Conditions:
+    Criterion:
+      - PassRate: 95.0
+        CriteriaMethod: num_gt_tp
+        CriteriaLevel: easy
+        Filter:
+          Distance: 0.0-100.0
+    # Stop reason evaluation configuration
+    eval_stop_reason:
+      INTERSECTION:
+        start_time: 1649138880.0
+        end_time: 1649138900.0
+        base_stop_line_dist:
+          min: 0.0
+          max: 1.0
+        tolerance_interval: 0.5
+        pass_rate: 90.0
+  PerceptionEvaluationConfig:
+    evaluation_config_dict:
+      evaluation_task: detection
+      target_labels: [car, bicycle, pedestrian, motorbike]
+      max_x_position: 102.4
+      max_y_position: 102.4
+      max_matchable_radii: [5.0, 3.0, 3.0, 3.0]
+      merge_similar_labels: false
+      allow_matching_unknown: true
+      ignore_attributes: [cycle_state.without_rider]
+      center_distance_thresholds: [[1.0, 1.0, 1.0, 1.0], [2.0, 2.0, 2.0, 2.0]]
+  CriticalObjectFilterConfig:
+    target_labels: [car, bicycle, pedestrian, motorbike]
+    ignore_attributes: [cycle_state.without_rider]
+  PerceptionPassFailConfig:
+    target_labels: [car, bicycle, pedestrian, motorbike]
+    ignore_attributes: [cycle_state.without_rider] 
