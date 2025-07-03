@@ -13,6 +13,8 @@
 # limitations under the License.
 
 from launch.actions import DeclareLaunchArgument
+import yaml
+from pathlib import Path
 
 RECORD_TOPIC = """^/tf$\
 |^/tf_static$\
@@ -29,6 +31,39 @@ RECORD_TOPIC = """^/tf$\
 |^/sensing/.*tracked_objects$\
 """
 
+def get_autoware_disable_config(scenario_path: str) -> dict[str, str]:
+    """Get Autoware disable configuration based on scenario."""
+    try:
+        with open(scenario_path, 'r') as f:
+            scenario_data = yaml.safe_load(f)
+        
+        # Check if stop reason evaluation is configured
+        eval_conditions = scenario_data.get('Evaluation', {}).get('Conditions', {})
+        has_stop_reason_eval = eval_conditions.get('eval_stop_reason') is not None
+        
+        if has_stop_reason_eval:
+            # Enable planning and control for stop reason evaluation
+            return {
+                "localization": "false",
+                "planning": "true",
+                "control": "true",
+            }
+        else:
+            # Default configuration
+            return {
+                "localization": "false",
+                "planning": "false",
+                "control": "false",
+            }
+    except Exception:
+        # Fallback to default configuration if scenario loading fails
+        return {
+            "localization": "false",
+            "planning": "false",
+            "control": "false",
+        }
+
+# Default configuration (will be overridden by get_autoware_disable_config)
 AUTOWARE_DISABLE = {
     "localization": "false",
     "planning": "false",
