@@ -156,7 +156,6 @@ def evaluate(
     evaluation_detection_topic_regex: str,
     evaluation_tracking_topic_regex: str,
     evaluation_prediction_topic_regex: str,
-    evaluation_fp_validation_topic_regex: str,
     analysis_max_distance: str,
     analysis_distance_interval: str,
 ) -> None:
@@ -164,7 +163,6 @@ def evaluate(
         evaluation_detection_topic_regex,
         evaluation_tracking_topic_regex,
         evaluation_prediction_topic_regex,
-        evaluation_fp_validation_topic_regex,
     )
 
     # initialize EvaluationManager to evaluate multiple topics
@@ -273,13 +271,18 @@ def evaluate(
     result_writer.close()
 
     # analysis of the evaluation result and save it as csv
-    analyzers: dict[str, PerceptionAnalyzer3D] = evaluator.get_analyzers()
-    # TODO: analysis other topic
-    analyzer = analyzers[degradation_topic]
-    save_path = evaluator.get_archive_path(degradation_topic)
-    analyze(
-        analyzer, save_path, analysis_max_distance, analysis_distance_interval, degradation_topic
-    )
+    if evaluator.get_degradation_evaluation_task() != "fp_validation":
+        analyzers: dict[str, PerceptionAnalyzer3D] = evaluator.get_analyzers()
+        # TODO: analysis other topic
+        analyzer = analyzers[degradation_topic]
+        save_path = evaluator.get_archive_path(degradation_topic)
+        analyze(
+            analyzer,
+            save_path,
+            analysis_max_distance,
+            analysis_distance_interval,
+            degradation_topic,
+        )
 
 
 def parse_args() -> argparse.Namespace:
@@ -318,11 +321,6 @@ def parse_args() -> argparse.Namespace:
         help="Regex pattern for evaluation prediction topic name. Must start with '^' and end with '$'. Wildcards (e.g. '.*', '+', '?', '[...]') are not allowed. If you do not want to use this feature, set it to '' or 'None'.",
     )
     parser.add_argument(
-        "--evaluation-fp-validation-topic-regex",
-        default="",
-        help="Regex pattern for evaluation fp_validation topic name. Must start with '^' and end with '$'. Wildcards (e.g. '.*', '+', '?', '[...]') are not allowed. If you do not want to use this feature, set it to '' or 'None'.",
-    )
-    parser.add_argument(
         "--analysis-max-distance",
         required=True,
         help="Maximum distance for analysis.",
@@ -347,7 +345,6 @@ def main() -> None:
         args.evaluation_detection_topic_regex,
         args.evaluation_tracking_topic_regex,
         args.evaluation_prediction_topic_regex,
-        args.evaluation_fp_validation_topic_regex,
         args.analysis_max_distance,
         args.analysis_distance_interval,
     )
