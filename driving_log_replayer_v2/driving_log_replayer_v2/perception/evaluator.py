@@ -210,9 +210,12 @@ class PerceptionEvaluator:
         return final_metrics
 
     def get_analyzer(self) -> PerceptionAnalyzer3D:
+        if self.__evaluator.evaluator_config.evaluation_task == "fp_validation":
+            err_msg = "Analyzer is not available for fp_validation."
+            raise RuntimeError(err_msg)
         if hasattr(self, f"_{self.__class__.__name__}__analyzer"):
             return self.__analyzer
-        err_msg = "Analyzer is not available. Please call get_evaluation_results() first or evaluation_task is fp_validation."
+        err_msg = "Analyzer is not available. Please call get_evaluation_results() first."
         raise RuntimeError(err_msg)
 
     def __check_evaluation_task(self, evaluation_task: str) -> bool:

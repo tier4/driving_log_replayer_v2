@@ -56,9 +56,6 @@ EVALUATION_PREDICTION_TOPIC_REGEX = """\
 ^/perception/object_recognition/objects$\
 """
 
-EVALUATION_FP_VALIDATION_TOPIC_REGEX = """\
-"""
-
 USE_CASE_ARGS: list[DeclareLaunchArgument] = [
     DeclareLaunchArgument(
         "evaluation_detection_topic_regex",
@@ -74,11 +71,6 @@ USE_CASE_ARGS: list[DeclareLaunchArgument] = [
         "evaluation_prediction_topic_regex",
         default_value=EVALUATION_PREDICTION_TOPIC_REGEX,
         description="Regex pattern for evaluation prediction topic name. Must start with '^' and end with '$'. Wildcards (e.g. '.*', '+', '?', '[...]') are not allowed. If you do not want to use this feature, set it to '' or 'None'.",
-    ),
-    DeclareLaunchArgument(
-        "evaluation_fp_validation_topic_regex",
-        default_value=EVALUATION_FP_VALIDATION_TOPIC_REGEX,
-        description="Regex pattern for evaluation fp_validation topic name. Must start with '^' and end with '$'. Wildcards (e.g. '.*', '+', '?', '[...]') are not allowed. If you do not want to use this feature, set it to '' or 'None'.",
     ),
     DeclareLaunchArgument(
         "analysis_max_distance",

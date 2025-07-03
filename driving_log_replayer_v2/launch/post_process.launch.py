@@ -117,7 +117,6 @@ def post_process(context: LaunchContext) -> list:
                 context.launch_configurations["evaluation_detection_topic_regex"],
                 context.launch_configurations["evaluation_tracking_topic_regex"],
                 context.launch_configurations["evaluation_prediction_topic_regex"],
-                context.launch_configurations["evaluation_fp_validation_topic_regex"],
                 context.launch_configurations["analysis_max_distance"],
                 context.launch_configurations["analysis_distance_interval"],
             )

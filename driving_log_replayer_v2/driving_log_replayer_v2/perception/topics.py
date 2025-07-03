@@ -52,7 +52,6 @@ def load_evaluation_topics(
     evaluation_detection_topic_regex: str,
     evaluation_tracking_topic_regex: str,
     evaluation_prediction_topic_regex: str,
-    evaluation_fp_validation_topic_regex: str,
 ) -> dict[str, list[str]]:
     evaluation_topics: dict[str, list[str]] = {}
     evaluation_topics["detection"] = convert_topic_list_from_regex_str(
@@ -63,8 +62,5 @@ def load_evaluation_topics(
     )
     evaluation_topics["prediction"] = convert_topic_list_from_regex_str(
         evaluation_prediction_topic_regex,
-    )
-    evaluation_topics["fp_validation"] = convert_topic_list_from_regex_str(
-        evaluation_fp_validation_topic_regex,
     )
     return evaluation_topics

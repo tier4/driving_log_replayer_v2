@@ -42,6 +42,7 @@ class EvaluationManager:
     ) -> None:
         self._scenario: PerceptionScenario
         self._evaluation_condition: dict[str, str]
+        self._degradation_evaluation_task: str
         self._evaluators: dict[str, PerceptionEvaluator]
 
         try:
@@ -57,19 +58,40 @@ class EvaluationManager:
             self._error = e
             return
 
-        self._evaluators = {
-            topic: PerceptionEvaluator(
-                copy.deepcopy(self._scenario.Evaluation.PerceptionEvaluationConfig),
-                copy.deepcopy(self._scenario.Evaluation.CriticalObjectFilterConfig),
-                copy.deepcopy(self._scenario.Evaluation.PerceptionPassFailConfig),
-                t4_dataset_path,
-                result_archive_path,
-                topic,
-                task,
-            )
-            for task, topics in evaluation_topics.items()
-            for topic in topics
-        }
+        self._degradation_evaluation_task = self._scenario.Evaluation.PerceptionEvaluationConfig[
+            "evaluation_config_dict"
+        ]["evaluation_task"]
+
+        if self._degradation_evaluation_task == "fp_validation":
+            # If fp_validation is specified, use only detection topic as `fp_validation` evaluation task.
+            self._evaluators = {
+                topic: PerceptionEvaluator(
+                    copy.deepcopy(self._scenario.Evaluation.PerceptionEvaluationConfig),
+                    copy.deepcopy(self._scenario.Evaluation.CriticalObjectFilterConfig),
+                    copy.deepcopy(self._scenario.Evaluation.PerceptionPassFailConfig),
+                    t4_dataset_path,
+                    result_archive_path,
+                    topic,
+                    "fp_validation",
+                )
+                for task, topics in evaluation_topics.items()
+                for topic in topics
+                if task == "detection"
+            }
+        else:
+            self._evaluators = {
+                topic: PerceptionEvaluator(
+                    copy.deepcopy(self._scenario.Evaluation.PerceptionEvaluationConfig),
+                    copy.deepcopy(self._scenario.Evaluation.CriticalObjectFilterConfig),
+                    copy.deepcopy(self._scenario.Evaluation.PerceptionPassFailConfig),
+                    t4_dataset_path,
+                    result_archive_path,
+                    topic,
+                    task,
+                )
+                for task, topics in evaluation_topics.items()
+                for topic in topics
+            }
 
     def check_scenario_error(self) -> Exception | None:
         return self._error if hasattr(self, "_error") else None
@@ -80,19 +102,19 @@ class EvaluationManager:
     def get_evaluation_topics(self) -> list[str]:
         return self._evaluators.keys()
 
+    def get_degradation_evaluation_task(self) -> str:
+        return self._degradation_evaluation_task
+
     def get_degradation_topic(self) -> str:
         # TODO: Define topic itself in the same line as Criterion in Conditions
-        evaluation_task = self._scenario.Evaluation.PerceptionEvaluationConfig[
-            "evaluation_config_dict"
-        ]["evaluation_task"]
-        if evaluation_task in ["detection", "fp_validation"]:
+        if self._degradation_evaluation_task in ["detection", "fp_validation"]:
             topic = "/perception/object_recognition/detection/objects"
-        elif evaluation_task == "tracking":
+        elif self._degradation_evaluation_task == "tracking":
             topic = "/perception/object_recognition/tracking/objects"
-        elif evaluation_task == "prediction":
+        elif self._degradation_evaluation_task == "prediction":
             topic = "/perception/object_recognition/objects"
         else:
-            err_msg = f"Invalid evaluation task: {evaluation_task}"
+            err_msg = f"Invalid evaluation task: {self._degradation_evaluation_task}"
             raise ValueError(err_msg)
         return topic
 
