@@ -249,24 +249,6 @@ class StopReasonEvaluationItem(EvaluationItem):
         reason = stop_reason_data.get("reason")
         timestamp = stop_reason_data.get("timestamp", 0.0)
         dist_to_stop_pos = stop_reason_data.get("dist_to_stop_pos", 0.0)
-        # Only evaluate if reason matches and within time window
-        if reason != self.target_reason or not (self.start_time <= timestamp <= self.end_time):
-            self.per_frame_results.append({
-                "StopReason": {
-                    "Result": "Skip",
-                    "Info": f"Not target or outside time window ({reason})"
-                }
-            })
-            return {"StopReason": {"Result": "Skip", "Info": "Not target or outside time window"}}
-        # Enforce tolerance interval
-        if timestamp - self.last_accepted_time < self.tolerance_interval:
-            self.per_frame_results.append({
-                "StopReason": {
-                    "Result": "Skip",
-                    "Info": f"Within tolerance interval ({timestamp - self.last_accepted_time:.2f}s)"
-                }
-            })
-            return {"StopReason": {"Result": "Skip", "Info": "Within tolerance interval"}}
         self.total += 1
         if self.min_distance <= dist_to_stop_pos <= self.max_distance:
             self.passed += 1
