@@ -24,6 +24,9 @@ RECORD_TOPIC = """^/tf$\
 |^/perception/object_recognition/detection/.*/debug/pipeline_latency_ms$\
 |^/driving_log_replayer_v2/.*\
 |^/sensing/camera/.*\
+|^/perception/object_recognition/detection/rois.*\
+|^/unused/perception/object_recognition/detection/rois.*\
+|^/perception/object_recognition/detection/objects_before_filter$\
 """
 
 AUTOWARE_DISABLE = {
