@@ -223,6 +223,7 @@ class StopReasonEvaluationItem(EvaluationItem):
     pass_rate: float = 0.0
     # For tracking
     last_accepted_time: float = -float('inf')
+    last_target_reason_time: float = -float('inf')  # Last time the specific target reason was received
     last_check_time: float = -float('inf')  # Last time we checked for timeout
     passed: int = 0
     total: int = 0
@@ -238,6 +239,7 @@ class StopReasonEvaluationItem(EvaluationItem):
         self.tolerance_interval = self.condition.tolerance_interval
         self.pass_rate = self.condition.pass_rate
         self.last_accepted_time = -float('inf')
+        self.last_target_reason_time = -float('inf')
         self.last_check_time = -float('inf')
         self.passed = 0
         self.total = 0
@@ -249,6 +251,11 @@ class StopReasonEvaluationItem(EvaluationItem):
         reason = stop_reason_data.get("reason")
         timestamp = stop_reason_data.get("timestamp", 0.0)
         dist_to_stop_pos = stop_reason_data.get("dist_to_stop_pos", 0.0)
+        
+        # Update last_target_reason_time if this is the target reason
+        if reason == self.target_reason:
+            self.last_target_reason_time = timestamp
+        
         self.total += 1
         if self.min_distance <= dist_to_stop_pos <= self.max_distance:
             self.passed += 1
@@ -298,9 +305,9 @@ class StopReasonEvaluationItem(EvaluationItem):
             
         self.last_check_time = current_time
         
-        # If we haven't received the target reason within tolerance_interval, it's a timeout
-        if (self.last_accepted_time < self.start_time and 
-            current_time - self.start_time >= self.tolerance_interval):
+        # Check if we haven't received the target reason for tolerance_interval seconds
+        if (self.last_target_reason_time >= self.start_time and 
+            current_time - self.last_target_reason_time >= self.tolerance_interval):
             self.total += 1
             self.success = self.rate() >= self.pass_rate
             self.summary = f"{self.name} ({self.success_str()}): {self.passed} / {self.total} -> {self.rate():.2f}%"
@@ -312,7 +319,7 @@ class StopReasonEvaluationItem(EvaluationItem):
                         "Reason": "TIMEOUT",
                         "Distance": 0.0,
                         "Timestamp": current_time,
-                        "Message": f"No {self.target_reason} received within {self.tolerance_interval}s",
+                        "Message": f"No {self.target_reason} received for {self.tolerance_interval}s (last at {self.last_target_reason_time})",
                         "Passed": self.passed,
                         "Total": self.total,
                     },
