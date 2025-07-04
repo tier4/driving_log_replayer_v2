@@ -390,12 +390,14 @@ class PerceptionResult(ResultBase):
         for criterion in self.__stop_reason_criterion:
             if criterion.per_frame_results:
                 self._frame[criterion.name] = criterion.per_frame_results[-1]
+        self.update()
 
     def set_stop_reason_frame(self, stop_reason_data: dict) -> None:
         """Set stop reason evaluation frame result."""
         for criterion in self.__stop_reason_criterion:
             criterion_result = criterion.set_frame(stop_reason_data)
             self._frame[criterion.name] = criterion_result
+        self.update()
 
     def set_info_frame(self, msg: str, skip: int) -> None:
         """Set info frame when no ground truth or no objects."""
