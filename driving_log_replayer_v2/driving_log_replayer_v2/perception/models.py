@@ -263,6 +263,8 @@ class StopReasonEvaluationItem(EvaluationItem):
                     "Reason": reason,
                     "Distance": dist_to_stop_pos,
                     "Timestamp": timestamp,
+                    "Passed": self.passed,
+                    "Total": self.total,
                 },
             },
         }
@@ -310,7 +312,9 @@ class StopReasonEvaluationItem(EvaluationItem):
                         "Reason": "TIMEOUT",
                         "Distance": 0.0,
                         "Timestamp": current_time,
-                        "Message": f"No {self.target_reason} received within {self.tolerance_interval}s"
+                        "Message": f"No {self.target_reason} received within {self.tolerance_interval}s",
+                        "Passed": self.passed,
+                        "Total": self.total,
                     },
                 },
             }

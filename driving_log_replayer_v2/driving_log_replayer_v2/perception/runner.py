@@ -149,6 +149,141 @@ def write_result(
     result_writer.write_result_with_time(result, subscribed_ros_timestamp)
 
 
+def process_stop_reason_message(
+    msg: AwapiAutowareStatus,
+    unix_timestamp: float,
+    subscribed_ros_timestamp: int,
+    stop_reason_processor: StopReasonProcessor,
+    result: PerceptionResult,
+    result_writer: ResultWriter,
+) -> bool:
+    """
+    Process stop reason data from AwapiAutowareStatus messages.
+    
+    Args:
+        msg: The AwapiAutowareStatus message
+        unix_timestamp: Unix timestamp in seconds
+        subscribed_ros_timestamp: ROS timestamp
+        stop_reason_processor: Processor for stop reason data
+        result: Perception result object
+        result_writer: Writer for results
+        
+    Returns:
+        bool: True if message was processed as stop reason, False otherwise
+    """
+    stop_reason_processor.process_message(msg, unix_timestamp)
+    
+    # Process stop reason evaluation if configured
+    if hasattr(msg, 'stop_reason') and hasattr(msg.stop_reason, 'stop_reasons'):
+        for stop_reason in msg.stop_reason.stop_reasons:
+            if stop_reason.stop_factors:
+                # Only include in frame results if it matches target reason and is within time window
+                should_include_in_frame = False
+                for target_reason, evaluation_config in result.stop_reason_evaluations.items():
+                    if (stop_reason.reason == target_reason and 
+                        evaluation_config.start_time <= unix_timestamp <= evaluation_config.end_time):
+                        should_include_in_frame = True
+                        break
+                
+                if should_include_in_frame:
+                    stop_reason_data = {
+                        'timestamp': unix_timestamp,
+                        'reason': stop_reason.reason,
+                        'dist_to_stop_pos': stop_reason.stop_factors[0].dist_to_stop_pose,
+                    }
+                    result.set_stop_reason_frame(stop_reason_data)
+                    result_writer.write_result_with_time(result, subscribed_ros_timestamp)
+        return True
+    return False
+
+
+def process_perception_message(
+    msg: MsgType,
+    topic_name: str,
+    unix_timestamp: float,
+    subscribed_ros_timestamp: int,
+    evaluator: EvaluationManager,
+    result: PerceptionResult,
+    result_writer: ResultWriter,
+    rosbag_manager: RosBagManager,
+    additional_record_topic_name: dict[str],
+    degradation_topic: str,
+) -> None:
+    """
+    Process perception messages (DetectedObjects, TrackedObjects, PredictedObjects).
+    
+    Args:
+        msg: The perception message
+        topic_name: Name of the topic
+        unix_timestamp: Unix timestamp in seconds
+        subscribed_ros_timestamp: ROS timestamp
+        evaluator: Perception evaluator
+        result: Perception result object
+        result_writer: Writer for results
+        rosbag_manager: ROS bag manager
+        additional_record_topic_name: Additional topic names for recording
+        degradation_topic: Name of the degradation topic
+    """
+    if isinstance(msg, DetectedObjects):
+        interpolation: bool = False
+    elif isinstance(msg, TrackedObjects | PredictedObjects):
+        interpolation: bool = True
+    else:
+        err_msg = f"Unknown message type: {type(msg)}"
+        raise TypeError(err_msg)
+
+    # convert ros to perception_eval
+    header_unix_time, subscribed_unix_time, estimated_objects = convert_to_perception_eval(
+        msg,
+        subscribed_ros_timestamp,
+        evaluator.get_evaluation_config(topic_name),
+    )
+
+    # matching process between estimated_objects and ground truth for evaluation
+    frame_result, skip_counter = evaluator.add_frame(
+        topic_name,
+        estimated_objects,
+        header_unix_time,
+        subscribed_unix_time,
+        interpolation=interpolation,
+    )
+
+    # write rosbag result only degradation topic
+    if topic_name == degradation_topic:
+        write_result(
+            additional_record_topic_name,
+            result,
+            result_writer,
+            rosbag_manager,
+            msg,
+            subscribed_ros_timestamp,
+            frame_result,
+            skip_counter,
+        )
+
+
+def process_stop_reason_timeouts(
+    unix_timestamp: float,
+    subscribed_ros_timestamp: int,
+    result: PerceptionResult,
+    result_writer: ResultWriter,
+) -> None:
+    """
+    Check for stop reason timeouts and process them.
+    
+    Args:
+        unix_timestamp: Unix timestamp in seconds
+        subscribed_ros_timestamp: ROS timestamp
+        result: Perception result object
+        result_writer: Writer for results
+    """
+    timeout_results = result.check_stop_reason_timeouts(unix_timestamp)
+    if timeout_results:
+        for reason_name, timeout_result in timeout_results.items():
+            result._frame[reason_name] = timeout_result
+        result_writer.write_result_with_time(result, subscribed_ros_timestamp)
+
+
 def evaluate(
     scenario_path: str,
     rosbag_dir_path: str,
@@ -237,74 +372,26 @@ def evaluate(
         unix_timestamp = eval_conversions.unix_time_from_ros_clock_int(subscribed_ros_timestamp) / 1e6  # Convert to seconds
 
         # Check for stop reason timeouts before processing messages
-        timeout_results = result.check_stop_reason_timeouts(unix_timestamp)
-        if timeout_results:
-            for reason_name, timeout_result in timeout_results.items():
-                result._frame[reason_name] = timeout_result
-            result_writer.write_result_with_time(result, subscribed_ros_timestamp)
+        process_stop_reason_timeouts(unix_timestamp, subscribed_ros_timestamp, result, result_writer)
 
         # Process stop_reason data from AwapiAutowareStatus messages
         if isinstance(msg, AwapiAutowareStatus):
-            stop_reason_processor.process_message(msg, unix_timestamp)
-            
-            # Process stop reason evaluation if configured
-            if hasattr(msg, 'stop_reason') and hasattr(msg.stop_reason, 'stop_reasons'):
-                for stop_reason in msg.stop_reason.stop_reasons:
-                    if stop_reason.stop_factors:
-                        # Only include in frame results if it matches target reason and is within time window
-                        should_include_in_frame = False
-                        for target_reason, evaluation_config in result.stop_reason_evaluations.items():
-                            if (stop_reason.reason == target_reason and 
-                                evaluation_config.start_time <= unix_timestamp <= evaluation_config.end_time):
-                                should_include_in_frame = True
-                                break
-                        
-                        if should_include_in_frame:
-                            stop_reason_data = {
-                                'timestamp': unix_timestamp,
-                                'reason': stop_reason.reason,
-                                'dist_to_stop_pos': stop_reason.stop_factors[0].dist_to_stop_pose,
-                            }
-                            result.set_stop_reason_frame(stop_reason_data)
-                            result_writer.write_result_with_time(result, subscribed_ros_timestamp)
-            continue
+            if process_stop_reason_message(msg, unix_timestamp, subscribed_ros_timestamp, stop_reason_processor, result, result_writer):
+                continue
 
-        if isinstance(msg, DetectedObjects):
-            interpolation: bool = False
-        elif isinstance(msg, TrackedObjects | PredictedObjects):
-            interpolation: bool = True
-        else:
-            err_msg = f"Unknown message type: {type(msg)}"
-            raise TypeError(err_msg)
-
-        # convert ros to perception_eval
-        header_unix_time, subscribed_unix_time, estimated_objects = convert_to_perception_eval(
+        # Process perception messages (DetectedObjects, TrackedObjects, PredictedObjects)
+        process_perception_message(
             msg,
-            subscribed_ros_timestamp,
-            evaluator.get_evaluation_config(topic_name),
-        )
-
-        # matching process between estimated_objects and ground truth for evaluation
-        frame_result, skip_counter = evaluator.add_frame(
             topic_name,
-            estimated_objects,
-            header_unix_time,
-            subscribed_unix_time,
-            interpolation=interpolation,
+            unix_timestamp,
+            subscribed_ros_timestamp,
+            evaluator,
+            result,
+            result_writer,
+            rosbag_manager,
+            additional_record_topic_name,
+            degradation_topic,
         )
-
-        # write rosbag result only degradation topic
-        if topic_name == degradation_topic:
-            write_result(
-                additional_record_topic_name,
-                result,
-                result_writer,
-                rosbag_manager,
-                msg,
-                subscribed_ros_timestamp,
-                frame_result,
-                skip_counter,
-            )
     rosbag_manager.close_writer()
 
     logging.info(f"evaluation topics end")
