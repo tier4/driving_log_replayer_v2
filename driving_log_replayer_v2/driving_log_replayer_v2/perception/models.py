@@ -210,6 +210,8 @@ class Perception(EvaluationItem):
         }
 
 
+
+
 @dataclass
 class StopReasonEvaluationItem(EvaluationItem):
     """Evaluation item for stop reason evaluation."""
@@ -331,6 +333,8 @@ class StopReasonEvaluationItem(EvaluationItem):
         return None
 
 
+
+
 class PerceptionResult(ResultBase):
     def __init__(self, condition: Conditions) -> None:
         super().__init__()
@@ -351,14 +355,12 @@ class PerceptionResult(ResultBase):
         """Update success and summary."""
         success_list = []
         summary_list = []
-        # Update perception criteria
+        # Collect current success and summary from criteria (already updated during frame processing)
         for criterion in self.__perception_criterion:
-            criterion.update()
             success_list.append(criterion.success)
             summary_list.append(criterion.summary)
-        # Update stop reason criteria
+        # Collect stop reason criteria
         for criterion in self.__stop_reason_criterion:
-            criterion.update()
             success_list.append(criterion.success)
             summary_list.append(criterion.summary)
         # Add stop reason summary in required format
