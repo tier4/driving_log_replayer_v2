@@ -387,7 +387,6 @@ def evaluate(
                 continue
 
         # Process perception messages (DetectedObjects, TrackedObjects, PredictedObjects)
-        """
         process_perception_message(
             msg,
             topic_name,
@@ -400,11 +399,12 @@ def evaluate(
             additional_record_topic_name,
             degradation_topic,
         )
-        """
+
     rosbag_manager.close_writer()
 
     logging.info(f"evaluation topics end")
 
+    """
     # calculation of the overall evaluation like mAP, TP Rate, etc and save evaluated data.
     final_metrics: dict[str, dict] = evaluator.get_evaluation_results()
     result.set_final_metrics(final_metrics[degradation_topic])
@@ -424,6 +424,7 @@ def evaluate(
             analysis_distance_interval,
             degradation_topic,
         )
+    """
 
     logging.info(f"stop_reason_processor begin")
 
