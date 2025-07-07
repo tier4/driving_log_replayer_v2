@@ -68,8 +68,9 @@ def get_autoware_disable_config(scenario_path: str) -> dict[str, str]:
 # Default configuration (will be overridden by get_autoware_disable_config)
 AUTOWARE_DISABLE = {
     "localization": "false",
-    "planning": "false",
-    "control": "false",
+    # Tmp for debug
+    "planning": "true",
+    "control": "true",
 }
 
 AUTOWARE_ARGS = {}
