@@ -177,13 +177,20 @@ def process_stop_reason_message(
     if hasattr(msg, 'stop_reason') and hasattr(msg.stop_reason, 'stop_reasons'):
         for stop_reason in msg.stop_reason.stop_reasons:
             if stop_reason.stop_factors:
-                # Only include in frame results if it matches target reason and is within time window
+                # Check if this message should be included in frame results
                 should_include_in_frame = False
                 for target_reason, evaluation_config in result.stop_reason_evaluations.items():
-                    if (stop_reason.reason == target_reason and 
-                        evaluation_config.start_time <= unix_timestamp <= evaluation_config.end_time):
-                        should_include_in_frame = True
-                        break
+                    if evaluation_config.start_time <= unix_timestamp <= evaluation_config.end_time:
+                        if evaluation_config.evaluation_type == "TP":
+                            # True Positive: only include if it matches target reason
+                            if stop_reason.reason == target_reason:
+                                should_include_in_frame = True
+                                break
+                        elif evaluation_config.evaluation_type == "TN":
+                            # True Negative: include all messages during evaluation window
+                            # The evaluation logic will handle whether it's a success or failure
+                            should_include_in_frame = True
+                            break
                 
                 if should_include_in_frame:
                     stop_reason_data = {
@@ -380,6 +387,7 @@ def evaluate(
                 continue
 
         # Process perception messages (DetectedObjects, TrackedObjects, PredictedObjects)
+        """
         process_perception_message(
             msg,
             topic_name,
@@ -392,6 +400,7 @@ def evaluate(
             additional_record_topic_name,
             degradation_topic,
         )
+        """
     rosbag_manager.close_writer()
 
     logging.info(f"evaluation topics end")
