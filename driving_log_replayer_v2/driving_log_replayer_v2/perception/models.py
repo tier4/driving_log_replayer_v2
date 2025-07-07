@@ -278,6 +278,7 @@ class StopReasonEvaluationItem(EvaluationItem):
                 frame_success = "Fail"
             else:
                 # We didn't receive the target reason, which is good for TN
+                reason = "Not target reason"
                 self.passed += 1
                 frame_success = "Success"
         
