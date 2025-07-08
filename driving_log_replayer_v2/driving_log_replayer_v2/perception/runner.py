@@ -385,7 +385,6 @@ def evaluate(
                 continue
 
         # Process perception messages (DetectedObjects, TrackedObjects, PredictedObjects)
-        """
         process_perception_message(
             msg,
             topic_name,
@@ -398,7 +397,7 @@ def evaluate(
             additional_record_topic_name,
             degradation_topic,
         )
-        """
+        
     rosbag_manager.close_writer()
     result_writer.close()
 
