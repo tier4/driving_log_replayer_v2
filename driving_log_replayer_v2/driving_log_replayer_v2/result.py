@@ -20,6 +20,7 @@ from pathlib import Path
 import pickle
 from typing import Any
 
+from ament_index_python.packages import get_package_share_directory
 from pydantic import BaseModel
 from rclpy.clock import Clock
 from rclpy.clock import ClockType
@@ -30,8 +31,6 @@ def get_sample_result_path(
     use_case_name: str,
     result_file_name: str = "result.json",
 ) -> Path:
-    from ament_index_python.packages import get_package_share_directory
-
     return Path(
         get_package_share_directory("driving_log_replayer_v2"),
         "sample",

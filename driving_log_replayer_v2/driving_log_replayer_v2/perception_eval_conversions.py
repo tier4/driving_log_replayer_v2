@@ -34,6 +34,7 @@ import numpy as np
 from perception_eval.common import ObjectType
 from perception_eval.common.object import DynamicObject
 from perception_eval.common.object import ObjectState
+from perception_eval.common.schema import FrameID
 from perception_eval.common.shape import Shape
 from perception_eval.common.shape import ShapeType
 from perception_eval.config import PerceptionEvaluationConfig
@@ -576,7 +577,6 @@ class FrameDescriptionWriter:
             has_map_to_base_link = ego2map_matrix is not None and len(ego2map_matrix) > 0
         except AttributeError:
             ego2map_matrix = pass_fail.transforms
-            from perception_eval.common.schema import FrameID
 
             has_map_to_base_link = ego2map_matrix.get((FrameID.BASE_LINK, FrameID.MAP)) is not None
 

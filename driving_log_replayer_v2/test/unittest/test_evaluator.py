@@ -12,7 +12,13 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from builtin_interfaces.msg import Time
+from geometry_msgs.msg import Quaternion
+from geometry_msgs.msg import Transform
+from geometry_msgs.msg import TransformStamped
+from geometry_msgs.msg import Vector3
 import pytest
+from std_msgs.msg import Header
 
 from driving_log_replayer_v2.evaluator import DLREvaluatorV2
 
@@ -31,13 +37,6 @@ def create_sample_evaluator() -> DLREvaluatorV2:
 
 
 def test_transform_stamped_with_euler_angle() -> None:
-    from builtin_interfaces.msg import Time
-    from geometry_msgs.msg import Quaternion
-    from geometry_msgs.msg import Transform
-    from geometry_msgs.msg import TransformStamped
-    from geometry_msgs.msg import Vector3
-    from std_msgs.msg import Header
-
     tf = TransformStamped(
         header=Header(stamp=Time(sec=123, nanosec=456), frame_id="map"),
         child_frame_id="base_link",
