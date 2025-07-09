@@ -232,6 +232,8 @@ class StopReasonEvaluationItem(EvaluationItem):
     passed: int = 0
     total: int = 0
     per_frame_results: list[dict] = None
+    # For preventing spam
+    tn_success_logged: bool = False  # Track if TN_SUCCESS has been logged
 
     def __post_init__(self) -> None:
         self.condition: StopReasonEvaluation
@@ -249,6 +251,7 @@ class StopReasonEvaluationItem(EvaluationItem):
         self.passed = 0
         self.total = 0
         self.per_frame_results = []
+        self.tn_success_logged = False
 
     def set_frame(self, stop_reason_data: dict) -> dict:
         """Set frame result for stop reason evaluation."""
@@ -360,6 +363,10 @@ class StopReasonEvaluationItem(EvaluationItem):
                 return None
             # True Negative: Check if we've reached the end of evaluation window without receiving the target reason
             if current_time >= self.end_time:
+                # Skip if TN_SUCCESS has already been logged
+                if self.tn_success_logged:
+                    return None
+                
                 # For TN, reaching the end without receiving the target reason is a success
                 self.total += 1
                 self.passed += 1  # Success for TN: no stop event occurred
@@ -381,6 +388,7 @@ class StopReasonEvaluationItem(EvaluationItem):
                     },
                 }
                 self.per_frame_results.append(timeout_result)
+                self.tn_success_logged = True  # Mark as logged to prevent spam
                 return timeout_result
             
         return None
