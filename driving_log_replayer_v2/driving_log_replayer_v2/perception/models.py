@@ -318,10 +318,7 @@ class StopReasonEvaluationItem(EvaluationItem):
 
     def check_timeout(self, current_time: float) -> dict | None:
         """Check if we've exceeded the tolerance interval without receiving the target stop reason."""
-        # Only check if we're within the evaluation time window
-        if not (self.start_time <= current_time <= self.end_time):
-            return None
-            
+
         # Only check if we haven't checked recently (avoid spam)
         if current_time - self.last_check_time < 0.1:  # Check at most every 0.1 seconds
             return None
@@ -329,6 +326,9 @@ class StopReasonEvaluationItem(EvaluationItem):
         self.last_check_time = current_time
         
         if self.evaluation_type == "TP":
+            # Only check if we're within the evaluation time window
+            if not (self.start_time <= current_time <= self.end_time):
+                return None
             # True Positive: Check if we haven't received the target reason for tolerance_interval seconds
             if (self.last_target_reason_time >= self.start_time and 
                 current_time - self.last_target_reason_time >= self.tolerance_interval) or (
@@ -355,6 +355,9 @@ class StopReasonEvaluationItem(EvaluationItem):
                 self.per_frame_results.append(timeout_result)
                 return timeout_result
         elif self.evaluation_type == "TN":
+            # Only check if we're within the evaluation time window
+            if not (self.start_time <= current_time):
+                return None
             # True Negative: Check if we've reached the end of evaluation window without receiving the target reason
             if current_time >= self.end_time:
                 # For TN, reaching the end without receiving the target reason is a success
