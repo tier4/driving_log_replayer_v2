@@ -226,9 +226,9 @@ class StopReasonEvaluationItem(EvaluationItem):
     pass_rate: float = 0.0
     evaluation_type: str = "TP"  # TP: True Positive (expect stop), TN: True Negative (expect no stop)
     # For tracking
-    last_accepted_time: float = -float('inf')
-    last_target_reason_time: float = -float('inf')  # Last time the specific target reason was received
-    last_check_time: float = -float('inf')  # Last time we checked for timeout
+    last_accepted_time: float = -1.0
+    last_target_reason_time: float = -1.0  # Last time the specific target reason was received
+    last_check_time: float = -1.0  # Last time we checked for timeout
     passed: int = 0
     total: int = 0
     per_frame_results: list[dict] = None
@@ -243,9 +243,9 @@ class StopReasonEvaluationItem(EvaluationItem):
         self.tolerance_interval = self.condition.tolerance_interval
         self.pass_rate = self.condition.pass_rate
         self.evaluation_type = self.condition.evaluation_type
-        self.last_accepted_time = -float('inf')
-        self.last_target_reason_time = -float('inf')
-        self.last_check_time = -float('inf')
+        self.last_accepted_time = -1.0
+        self.last_target_reason_time = -1.0
+        self.last_check_time = -1.0
         self.passed = 0
         self.total = 0
         self.per_frame_results = []
@@ -331,7 +331,9 @@ class StopReasonEvaluationItem(EvaluationItem):
         if self.evaluation_type == "TP":
             # True Positive: Check if we haven't received the target reason for tolerance_interval seconds
             if (self.last_target_reason_time >= self.start_time and 
-                current_time - self.last_target_reason_time >= self.tolerance_interval):
+                current_time - self.last_target_reason_time >= self.tolerance_interval) or (
+               (self.last_target_reason_time == -1.0 and 
+                current_time >= self.start_time + self.tolerance_interval)):
                 self.total += 1
                 self.success = self.rate() >= self.pass_rate
                 self.summary = f"{self.name} ({self.success_str()}): {self.passed} / {self.total} -> {self.rate():.2f}%"
