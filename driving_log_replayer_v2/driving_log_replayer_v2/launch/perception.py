@@ -66,9 +66,8 @@ def get_autoware_disable_config(scenario_path: str) -> dict[str, str]:
 # Default configuration (will be overridden by get_autoware_disable_config)
 AUTOWARE_DISABLE = {
     "localization": "false",
-    # Tmp for debug
-    "planning": "true",
-    "control": "true",
+    "planning": "false",
+    "control": "false",
 }
 
 AUTOWARE_ARGS = {}
@@ -78,10 +77,10 @@ NODE_PARAMS = {}
 EVALUATION_DETECTION_TOPIC_REGEX = """\
 ^/perception/object_recognition/detection/objects$\
 |^/perception/object_recognition/detection/centerpoint/objects$\
-|^/perception/object_recognition/detection/centerpoint/validation/objects$\
 |^/perception/object_recognition/detection/clustering/objects$\
 |^/perception/object_recognition/detection/detection_by_tracker/objects$\
-|^/perception/object_recognition/detection/objects_before_filter$\
+|^/perception/object_recognition/detection/clustering/camera_lidar_fusion/objects$\
+|^/sensing/radar/detected_objects$\
 """
 
 EVALUATION_TRACKING_TOPIC_REGEX = """\

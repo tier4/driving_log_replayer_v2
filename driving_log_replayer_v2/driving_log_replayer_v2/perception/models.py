@@ -461,12 +461,16 @@ class PerceptionResult(ResultBase):
         self.update()
 
     def set_info_frame(self, msg: str, skip: int) -> None:
-        """Set info frame when no ground truth or no objects."""
-        self._frame = {"Info": msg, "FrameSkip": skip}
+        self._frame = {
+            "Info": msg,
+            "FrameSkip": skip,
+        }
 
     def set_warn_frame(self, msg: str, skip: int) -> None:
-        """Set warning frame when invalid estimated objects."""
-        self._frame = {"Warn": msg, "FrameSkip": skip}
+        self._frame = {
+            "Warning": msg,
+            "FrameSkip": skip,
+        }
 
     def set_final_metrics(self, final_metrics: dict) -> None:
         self._frame = {"FinalScore": final_metrics}
