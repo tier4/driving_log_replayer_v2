@@ -10,7 +10,6 @@ Evaluation:
     - sample_dataset:
         VehicleId: default
   Conditions:
-    Method: annotated_pcd # ground truthデータとして使用するデータの種類(annotated_pcd : ラベルデータが格納されたbinファイル(t4_dataset/dataset/lidarseg/annotation/*.bin))
     ground_label: 6 # 地面点群のアノテーションラベル
     obstacle_label: 7 # 障害物点群のアノテーションラベル
     accuracy_min: 0.7 # 精度がこの値以上なら評価成功とみなす

@@ -10,7 +10,6 @@ Evaluation:
     - sample_dataset:
         VehicleId: default
   Conditions:
-    Method: annotated_pcd # Data types used as GroundTruth data.(annotated_pcd : binary .bin files that store label data, found in t4_dataset/dataset/lidarseg/annotation/.bin)
     ground_label: 6 # Annotation label for ground pointcloud.
     obstacle_label: 7 # Annotation label for obstacle pointcloud.
     accuracy_min: 0.7 # If the accuracy is lower than the threshold value, the evaluation is considered to have failed.
