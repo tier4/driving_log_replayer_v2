@@ -36,6 +36,6 @@ NODE_PARAMS = {
 USE_CASE_ARGS: list[DeclareLaunchArgument] = [
     DeclareLaunchArgument(
         "evaluation_target_topic",
-        default_value="/perception/obstacle_segmentation/single_frame/pointcloud",
+        default_value="/perception/obstacle_segmentation/pointcloud",
     )
 ]
