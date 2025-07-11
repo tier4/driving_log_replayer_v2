@@ -41,7 +41,7 @@ driving_log_replayer_v2 の評価ノードは、以下のように動作しま�
    - フィルタでどのtopicを残すかは、docs/use_case/のドキュメント参照
 3. シナリオを作成する
    1. [sample folder](https://github.com/tier4/driving_log_replayer_v2/tree/main/sample) 内にシナリオの例あり
-   2. 記述内容は[フォーマット定義](../result_format/index.md)を参照
+   2. 記述内容は[フォーマット定義](../scenario_format/index.md)を参照
 4. datasetを作成する
    1. localization, eagleye, yabloc, ar_tag_based_localizer, performance_diagに関しては、[Evaluator](https://docs.web.auto/user-manuals/evaluator/introduction)を利用しないなら任意
    2. [perception_dataset tools_overview](https://github.com/tier4/tier4_perception_dataset/blob/main/docs/tools_overview.md)を参考にT4 non-annotated format dataまで作る。
