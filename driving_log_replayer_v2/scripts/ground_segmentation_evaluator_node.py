@@ -62,9 +62,7 @@ class GroundSegmentationEvaluator(DLREvaluatorV2):
         for annotation_data in lidar_seg_data:
             token_to_seg_data[annotation_data["sample_data_token"]] = annotation_data
 
-        self.ground_truth: dict[
-            int, tuple[np.ndarray, np.ndarray]
-        ] = {}  # timestamp: (points, labels)
+        self.ground_truth: dict[int, dict[str, np.ndarray]] = {}
         for i in range(len(sample_data)):
             raw_points_file_path = Path(
                 self._t4_dataset_paths[0],
@@ -82,7 +80,10 @@ class GroundSegmentationEvaluator(DLREvaluatorV2):
 
             points: np.ndarray = raw_points.reshape((-1, self.CLOUD_DIM))
 
-            self.ground_truth[int(sample_data[i]["timestamp"])] = (points, labels)
+            self.ground_truth[int(sample_data[i]["timestamp"])] = {
+                "points": points,
+                "labels": labels,
+            }
 
         self.__sub_pointcloud = self.create_subscription(
             PointCloud2,
@@ -100,8 +101,8 @@ class GroundSegmentationEvaluator(DLREvaluatorV2):
 
         # get ground truth pointcloud in this frame
         # construct kd-tree from gt cloud
-        gt_frame_cloud: np.ndarray = self.ground_truth[gt_frame_ts][0]
-        gt_frame_label: np.ndarray = self.ground_truth[gt_frame_ts][1]
+        gt_frame_cloud: np.ndarray = self.ground_truth[gt_frame_ts]["points"]
+        gt_frame_label: np.ndarray = self.ground_truth[gt_frame_ts]["labels"]
         kdtree = cKDTree(gt_frame_cloud[:, 0:3])
 
         # convert ros2 pointcloud to numpy
