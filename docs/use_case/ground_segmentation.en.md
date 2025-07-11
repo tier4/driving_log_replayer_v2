@@ -1,6 +1,6 @@
 # Evaluate Ground Segmentation
 
-Evaluate the performance of the Obstacle Segmentation sub-component in Autoware, which is responsible for identifying point clouds originating from obstacle that vehicle should avoid.
+Evaluate the performance of the Ground Segmentation sub-component in Autoware, which is responsible for segmenting and removing ground points from the input point cloud.
 
 ## Ground Truth data
 
