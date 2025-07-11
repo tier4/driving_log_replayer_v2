@@ -8,9 +8,10 @@
 
 ### annotated_pcd
 
-データセットとして与える点群データ(`dataset/data/LIDAR_CONCAT/\*.pcd.bin`)と対応するラベルデータ(`dataset/lidarseg/annotation/\*.bin`)を用いる方法。
+3D Semantic Segmentationのアノテーションが含まれる t4_datasetを用いる方法。([format](https://github.com/tier4/tier4_perception_dataset/blob/main/docs/t4_format_3d_detailed.md#3d-lidarseg-annotation-format-in-t4-format))
 
-地面点群除去処理後の点群と、pcd.binファイルに含まれる点群同士を比較し、処理後点群が持つラベルを確認することで精度評価を行う。
+1. 地面除去された点群と t4_dataset内の`/sensing/lidar/concatenated/pointcloud`に相当する点群(`dataset/data/LIDAR_CONCAT/*.pcd.bin`)を最近傍探索でマッチングさせる
+2. その点群が地面であるのか障害物であるのかチェックする
 
 ## 評価方法
 
