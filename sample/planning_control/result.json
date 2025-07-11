@@ -737,5 +737,13 @@
         }
       }
     }
+  },
+  {
+    "Result": {
+      "Success": true,
+      "Summary": "MergedSummary-Control: Passed:control_0 (Success), control_1 (Success) Planning: Passed:NotTestTarget-Passed:Condition_0 (Success)-Passed:Condition_0 (Success)"
+    },
+    "Stamp": {},
+    "Frame": {}
   }
 ]

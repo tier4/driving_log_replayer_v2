@@ -22,7 +22,7 @@ from typing import TYPE_CHECKING
 from autoware_perception_msgs.msg import DetectedObjects
 from autoware_perception_msgs.msg import PredictedObjects
 from autoware_perception_msgs.msg import TrackedObjects
-from perception_eval.evaluation import PerceptionFrameResult
+from perception_eval.evaluation.result.perception_frame_result import PerceptionFrameResult
 from rclpy.clock import Clock
 from rosbag2_py import TopicMetadata
 from std_msgs.msg import ColorRGBA
@@ -119,12 +119,12 @@ def write_result(
             map_to_baselink=DLREvaluatorV2.transform_stamped_with_euler_angle(map_to_baselink),
         )
 
-        # this topic is written to rosbag with msg.header.timestamp, so it can show the accuracy of the result itself
-        # but this topic is actually subscribed to subscribed_ros_timestamp, so ignoring delay
         marker_ground_truth, marker_results = convert_to_ros_msg(
             frame_result,
             msg.header,
         )
+
+        # write ground truth as ROS message
         rosbag_manager.write_results(
             additional_record_topic_name["ground_truth"], marker_ground_truth, msg.header.stamp
         )  # ground truth
@@ -156,25 +156,24 @@ def evaluate(
     evaluation_detection_topic_regex: str,
     evaluation_tracking_topic_regex: str,
     evaluation_prediction_topic_regex: str,
-    evaluation_fp_validation_topic_regex: str,
-    max_distance: str,
-    distance_interval: str,
+    analysis_max_distance: str,
+    analysis_distance_interval: str,
 ) -> None:
     evaluation_topics = load_evaluation_topics(
         evaluation_detection_topic_regex,
         evaluation_tracking_topic_regex,
         evaluation_prediction_topic_regex,
-        evaluation_fp_validation_topic_regex,
     )
 
+    # initialize EvaluationManager to evaluate multiple topics
     evaluator = EvaluationManager(
         scenario_path,
         t4dataset_path,
         result_archive_path,
         evaluation_topics,
     )
-    if evaluator.check_error() is not None:
-        error = evaluator.check_error()
+    if evaluator.check_scenario_error() is not None:
+        error = evaluator.check_scenario_error()
         result_writer = ResultWriter(
             result_json_path,
             Clock(),
@@ -190,6 +189,7 @@ def evaluate(
         raise error
     degradation_topic = evaluator.get_degradation_topic()
 
+    # initialize ResultWriter to write result.jsonl which Evaluator will use
     result_writer = ResultWriter(
         result_json_path,
         Clock(),
@@ -197,6 +197,7 @@ def evaluate(
     )
     result = PerceptionResult(evaluator.get_evaluation_condition())
 
+    # initialize RosBagManager to read and save rosbag and write into it
     additional_record_topic_name = {
         "ground_truth": "/driving_log_replayer_v2/marker/ground_truth",
         "results": "/driving_log_replayer_v2/marker/results",
@@ -211,15 +212,17 @@ def evaluate(
         for topic_name in additional_record_topic_name.values()
     ]
     rosbag_manager = RosBagManager(
-        bag_dir=rosbag_dir_path,
-        output_bag_dir=Path(result_archive_path).joinpath("result_bag").as_posix(),
-        storage_type=storage,
-        evaluation_topic=evaluator.get_evaluation_topics(),
-        additional_record_topic=additional_record_topic,
+        rosbag_dir_path,
+        Path(result_archive_path).joinpath("result_bag").as_posix(),
+        storage,
+        evaluator.get_evaluation_topics(),
+        additional_record_topic,
     )
 
+    # save scenario.yaml to check later
     shutil.copy(scenario_path, Path(result_archive_path).joinpath("scenario.yaml"))
 
+    # main evaluation process
     for topic_name, msg, subscribed_ros_timestamp in rosbag_manager.read_messages():
         # See RosBagManager for `time relationships`.
 
@@ -260,17 +263,26 @@ def evaluate(
                 skip_counter,
             )
     rosbag_manager.close_writer()
-    result_writer.close()
 
     # calculation of the overall evaluation like mAP, TP Rate, etc and save evaluated data.
-    evaluator.evaluate_all_frames()
+    final_metrics: dict[str, dict] = evaluator.get_evaluation_results()
+    result.set_final_metrics(final_metrics[degradation_topic])
+    result_writer.write_result_with_time(result, rosbag_manager.get_last_ros_timestamp())
+    result_writer.close()
 
     # analysis of the evaluation result and save it as csv
-    analyzers: dict[str, PerceptionAnalyzer3D] = evaluator.get_analyzers()
-    # TODO: analysis other topic
-    analyzer = analyzers[degradation_topic]
-    save_path = evaluator.get_archive_path(degradation_topic)
-    analyze(analyzer, save_path, max_distance, distance_interval, degradation_topic)
+    if evaluator.get_degradation_evaluation_task() != "fp_validation":
+        analyzers: dict[str, PerceptionAnalyzer3D] = evaluator.get_analyzers()
+        # TODO: analysis other topic
+        analyzer = analyzers[degradation_topic]
+        save_path = evaluator.get_archive_path(degradation_topic)
+        analyze(
+            analyzer,
+            save_path,
+            analysis_max_distance,
+            analysis_distance_interval,
+            degradation_topic,
+        )
 
 
 def parse_args() -> argparse.Namespace:
@@ -309,17 +321,12 @@ def parse_args() -> argparse.Namespace:
         help="Regex pattern for evaluation prediction topic name. Must start with '^' and end with '$'. Wildcards (e.g. '.*', '+', '?', '[...]') are not allowed. If you do not want to use this feature, set it to '' or 'None'.",
     )
     parser.add_argument(
-        "--evaluation-fp-validation-topic-regex",
-        default="",
-        help="Regex pattern for evaluation fp_validation topic name. Must start with '^' and end with '$'. Wildcards (e.g. '.*', '+', '?', '[...]') are not allowed. If you do not want to use this feature, set it to '' or 'None'.",
-    )
-    parser.add_argument(
-        "--max-distance",
+        "--analysis-max-distance",
         required=True,
         help="Maximum distance for analysis.",
     )
     parser.add_argument(
-        "--distance-interval",
+        "--analysis-distance-interval",
         required=True,
         help="Distance interval for analysis.",
     )
@@ -338,9 +345,8 @@ def main() -> None:
         args.evaluation_detection_topic_regex,
         args.evaluation_tracking_topic_regex,
         args.evaluation_prediction_topic_regex,
-        args.evaluation_fp_validation_topic_regex,
-        args.max_distance,
-        args.distance_interval,
+        args.analysis_max_distance,
+        args.analysis_distance_interval,
     )
 
 

@@ -20,6 +20,7 @@ from pathlib import Path
 import pickle
 from typing import Any
 
+from ament_index_python.packages import get_package_share_directory
 from pydantic import BaseModel
 from rclpy.clock import Clock
 from rclpy.clock import ClockType
@@ -30,8 +31,6 @@ def get_sample_result_path(
     use_case_name: str,
     result_file_name: str = "result.json",
 ) -> Path:
-    from ament_index_python.packages import get_package_share_directory
-
     return Path(
         get_package_share_directory("driving_log_replayer_v2"),
         "sample",
@@ -130,12 +129,21 @@ class ResultWriter:
     def write_result_with_time(self, result: ResultBase, ros_timestamp: int) -> None:
         self.write_line(self.get_result(result, ros_timestamp))
 
-    def write_condition(self, condition: BaseModel | dict, *, updated: bool = False) -> None:
-        condition_dict = condition if isinstance(condition, dict) else condition.model_dump()
+    def write_condition(self, condition: BaseModel | dict | list, *, updated: bool = False) -> None:
+        if isinstance(condition, list):
+            # Convert list of BaseModel objects to list of dictionaries
+            condition_dict = [
+                item.model_dump() if isinstance(item, BaseModel) else item for item in condition
+            ]
+        elif isinstance(condition, BaseModel):
+            condition_dict = condition.model_dump()
+        else:
+            condition_dict = condition
         key = "Condition"
         if updated:
             key = "UpdatedCondition"
-        self.write_line({key: condition_dict})
+        write_obj = {key: condition_dict}
+        self.write_line(write_obj)
 
     def get_header(self) -> dict:
         system_time = self._system_clock.now()

@@ -13,9 +13,13 @@
 # limitations under the License.
 
 from dataclasses import dataclass
+import math
 from sys import float_info
 from typing import Literal
 
+from autoware_internal_planning_msgs.msg import PlanningFactorArray
+from builtin_interfaces.msg import Time
+from geometry_msgs.msg import Pose
 from pydantic import BaseModel
 from pydantic import Field
 from pydantic import model_validator
@@ -26,6 +30,10 @@ from driving_log_replayer_v2.diagnostics import Conditions as DiagnosticsConditi
 from driving_log_replayer_v2.result import EvaluationItem
 from driving_log_replayer_v2.result import ResultBase
 from driving_log_replayer_v2.scenario import Scenario
+
+
+def stamp_to_float(stamp: Time) -> float:
+    return stamp.sec + (stamp.nanosec / 1e9)
 
 
 class MinMax(BaseModel):
@@ -141,13 +149,44 @@ class MetricCondition(BaseModel):
     kinematic_condition: KinematicCondition | None = None
 
 
+class StartEnd(BaseModel):
+    start: float = Field(0.0, ge=0.0)
+    end: float = Field(float_info.max, ge=0.0)
+
+    @model_validator(mode="after")
+    def validate_start_end(self) -> "StartEnd":
+        err_msg = "end must be a greater number than start"
+
+        if self.end < self.start:
+            raise ValueError(err_msg)
+        return self
+
+    def match_condition(self, float_time: float) -> bool:
+        return self.start <= float_time <= self.end
+
+
+class Area(BaseModel):
+    x: float
+    y: float
+    range: float = Field(gt=0.0)
+
+
+class PlanningFactorCondition(BaseModel):
+    topic: str
+    time: StartEnd
+    condition_type: Literal["any_of", "all_of"]
+    area: Area
+    judgement: Literal["positive", "negative"]  # positive or negative
+
+
 class Conditions(BaseModel):
     MetricConditions: list[MetricCondition] = []
+    PlanningFactorConditions: list[PlanningFactorCondition] = []
 
 
 class Evaluation(BaseModel):
     UseCaseName: Literal["planning_control"]
-    UseCaseFormatVersion: Literal["1.0.0"]
+    UseCaseFormatVersion: Literal["2.0.0"]
     Conditions: Conditions
     Datasets: list[dict]
 
@@ -248,7 +287,7 @@ class MetricsClassContainer:
         return (rtn_success, rtn_summary_str)
 
 
-class PlanningControlResult(ResultBase):
+class MetricResult(ResultBase):
     def __init__(self, condition: Conditions) -> None:
         super().__init__()
         self.__metrics_container = MetricsClassContainer(condition.MetricConditions)
@@ -258,4 +297,93 @@ class PlanningControlResult(ResultBase):
 
     def set_frame(self, msg: MetricArray, control_metrics: MetricArray) -> None:
         self._frame = self.__metrics_container.set_frame(msg, control_metrics)
+        self.update()
+
+
+@dataclass
+class PlanningFactor(EvaluationItem):
+    def set_frame(self, msg: PlanningFactorArray) -> dict | None:
+        self.condition: PlanningFactorCondition
+        # check time condition
+        if not self.condition.time.match_condition(stamp_to_float(msg.header.stamp)):
+            return None
+        if len(msg.factors) == 0:
+            return None
+
+        self.total += 1
+        frame_success = "Fail"
+
+        # get factors[0] # factorsはarrayになっているが、実際には1個しか入ってない。
+        in_range, info_dict = self.judge_in_range(msg.factors[0].control_points[0].pose)
+
+        # Check if the condition is met based on judgement type
+        condition_met = in_range if self.condition.judgement == "positive" else not in_range
+        if condition_met:
+            frame_success = "Success"
+            self.passed += 1
+
+        self.success = (
+            self.passed > 0
+            if self.condition.condition_type == "any_of"
+            else self.passed == self.total
+        )
+        return {
+            "Result": {"Total": self.success_str(), "Frame": frame_success},
+            "Info": info_dict,
+        }
+
+    def judge_in_range(self, msg: Pose) -> tuple[bool, dict]:
+        control_point_pose_pos_x = msg.position.x
+        control_point_pose_pos_y = msg.position.y
+        distance = math.sqrt(
+            (control_point_pose_pos_x - self.condition.area.x) ** 2
+            + (control_point_pose_pos_y - self.condition.area.y) ** 2
+        )
+        info_dict = {
+            "Distance": distance,
+            "ControlPointPoseX": control_point_pose_pos_x,
+            "ControlPointPoseY": control_point_pose_pos_y,
+        }
+        if distance <= self.condition.area.range:
+            return True, info_dict
+        return False, info_dict
+
+
+class FactorsClassContainer:
+    def __init__(self, conditions: list[PlanningFactorCondition]) -> None:
+        self.__container: dict[PlanningFactor] = {}
+        for i, cond in enumerate(conditions):
+            self.__container[cond.topic] = PlanningFactor(f"Condition_{i}", cond)
+
+    def set_frame(self, msg: PlanningFactorArray, topic: str) -> dict:
+        frame_result: dict[str, dict] = {}
+        topic_result = self.__container[topic].set_frame(msg)
+        if topic_result is not None:
+            frame_result[topic] = topic_result
+        return frame_result
+
+    def update(self) -> tuple[bool, str]:
+        rtn_success = True
+        rtn_summary = [] if len(self.__container) != 0 else ["NotTestTarget"]
+        for _, evaluation_item in self.__container.items():
+            if not evaluation_item.success:
+                rtn_success = False
+                rtn_summary.append(f"{evaluation_item.name} (Fail)")
+            else:
+                rtn_summary.append(f"{evaluation_item.name} (Success)")
+        prefix_str = "Passed" if rtn_success else "Failed"
+        rtn_summary_str = prefix_str + ":" + ", ".join(rtn_summary)
+        return (rtn_success, rtn_summary_str)
+
+
+class PlanningFactorResult(ResultBase):
+    def __init__(self, conditions: list[PlanningFactorCondition]) -> None:
+        super().__init__()
+        self.__factors_container = FactorsClassContainer(conditions)
+
+    def update(self) -> None:
+        self._success, self._summary = self.__factors_container.update()
+
+    def set_frame(self, msg: PlanningFactorArray, topic: str) -> None:
+        self._frame = self.__factors_container.set_frame(msg, topic)
         self.update()

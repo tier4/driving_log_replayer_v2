@@ -1,13 +1,14 @@
 # Planning Controlの評価
 
-Metricsが指定の条件で出力されているか評価する
+Metrics、PlanningFactorsが指定の条件で出力されているか評価する。
+include_use_caseでdiagnosticsを指定すれば、diagnosticsの評価も可能。
 
 ## 評価方法
 
 launch を立ち上げると以下のことが実行され、評価される。
 
 1. launch で評価ノード(`planning_control_evaluator_node`)と `logging_simulator.launch`、`ros2 bag play`コマンドを立ち上げる
-2. bag から出力されたセンサーデータを autoware が受け取って、metrics型のメッセージを出力する
+2. bag から出力されたセンサーデータを autoware が受け取って、metrics型、PlanningFactor型のメッセージを出力する
 3. 評価ノードが topic を subscribe して、各基準を満たしているかを判定して結果をファイルに記録する
 4. bag の再生が終了すると自動で launch が終了して評価が終了する
 
@@ -18,24 +19,63 @@ launch を立ち上げると以下のことが実行され、評価される。
 シナリオでレーン条件を記述した場合は、`/control/control_evaluator/metrics`から取得できるレーンが条件を満たした場合に評価される。
 評価の条件を満たさない場合は、ログも出力されない。
 
-### 正常
+`/planning/planning_factors/**`のtopicを利用する。評価対象のtopicはシナリオファイルでtopic名を指定する。
+PlanningFactorのcontrol_pointの位置がシナリオに指定された条件を満たすかを評価する。
+
+### Metric正常
 
 `/control/control_evaluator/metrics`のvalueがシナリオ指定の値と一致した場合に正常となる。
 ただし、`none`が指定された場合は、topicのmetric_arrayが空配列の場合にnoneと判断する。
 kinematic_conditionを指定した場合は追加で、kinematic_stateが条件を満たしている必要がある。
 
-### 異常
+### Metric正常異常
 
-正常の条件を満たさないとき
+Metric正常の条件を満たさないとき
+
+### PlanningFactor正常(judgement: positive)
+
+`/planning/planning_factors/**`のcontrol_points[0].poseのx,yの位置がシナリオで指定したx,y座標からrangeの範囲に入っている場合に正常となる。
+
+### PlanningFactor正常(judgement: negative)
+
+`/planning/planning_factors/**`のcontrol_points[0].poseのx,yの位置がシナリオで指定したx,y座標からrangeの範囲に入っていない場合に正常となる。
+
+### PlanningFactor異常
+
+PlanningFactor正常の条件を満たさないとき
+
+## 評価結果の出力先ファイル
+
+planning_controlにおいては、以下の3つのファイルにそれぞれresult.jsonlが作成される。
+result.jsonlは必ず出力されるが、planning_factor_result.jsonlとdiag_result.jsonlはシナリオで指定した場合にのみ出力される
+
+### result.jsonl
+
+output_dir/result.jsonlに出力される。
+metricの評価結果が記述される。
+
+Evaluatorで実行する場合は、このファイルの最終行が参照されて成否が決定される。
+このため、planning_factor_result.jsonlとdiag_result.jsonlの結果をマージした最終的な成否の情報がpost_processで書き込まれる。
+
+## planning_factor_result.jsonl
+
+output_dir/result_archive/planning_factor_result.jsonlに出力される。
+planning_factorの評価結果が記述される。
+
+## diag_result.jsonl
+
+output_dir/result_archive/diag_result.jsonlに出力される。
+diagnosticsの評価結果が記述される。
 
 ## 評価ノードが使用する Topic 名とデータ型
 
 Subscribed topics:
 
-| Topic name                                    | Data type                            |
-| --------------------------------------------- | ------------------------------------ |
-| /control/control_evaluator/metrics            | tier4_metric_msg/msg/MetricArray     |
-| /control/autonomous_emergency_braking/metrics | tier4_metric_msg/msg/DiagnosticArray |
+| Topic name                                    | Data type                                               |
+| --------------------------------------------- | ------------------------------------------------------- |
+| /control/control_evaluator/metrics            | tier4_metric_msg/msg/MetricArray                        |
+| /control/autonomous_emergency_braking/metrics | tier4_metric_msg/msg/DiagnosticArray                    |
+| /planning/planning_factors/\*\*               | autoware_internal_planning_msgs/msg/PlanningFactorArray |
 
 Published topics:
 
@@ -102,6 +142,8 @@ clock は、ros2 bag play の--clock オプションによって出力してい�
 
 ### 評価結果フォーマット
 
+#### metric
+
 [サンプル](https://github.com/tier4/driving_log_replayer_v2/blob/develop/sample/planning_control/result.json)参照
 
 以下に、それぞれの評価の例を記述する。
@@ -124,3 +166,31 @@ planning と controlで設定した全ての評価条件で成功している場
   }
 }
 ```
+
+#### planning_factor
+
+[サンプル](https://github.com/tier4/driving_log_replayer_v2/blob/develop/sample/planning_control/planning_factor_result.json)参照
+
+以下に、それぞれの評価の例を記述する。
+**注:結果ファイルフォーマットで解説済みの共通部分については省略する。**
+
+PlanningFactorのすべての評価条件で成功している場合に成功と判定される。
+
+```json
+{
+  "Frame": {
+    "TopicName": {
+      "Result": { "Total": "Success or Fail", "Frame": "Success or Fail" },
+      "Info": {
+        "Distance": "control_pointの座標とシナリオに指定された座標の距離",
+        "ControlPointPoseX": "control_pointのposeのx座標",
+        "ControlPointPoseY": "control_pointのposeのy座標"
+      }
+    }
+  }
+}
+```
+
+#### diagnostics
+
+diagnosticsのユースケースと同じ

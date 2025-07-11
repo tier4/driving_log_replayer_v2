@@ -2,6 +2,23 @@
 Changelog for package driving_log_replayer_v2_analyzer
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
+3.10.2 (2025-06-26)
+-------------------
+
+3.10.1 (2025-06-20)
+-------------------
+* remove minoda-san and add saeki as maintainer (`#166 <https://github.com/tier4/driving_log_replayer_v2/issues/166>`_)
+* Contributors: Masato Saeki
+
+3.10.0 (2025-06-06)
+-------------------
+
+3.9.0 (2025-06-06)
+------------------
+
+3.8.5 (2025-06-03)
+------------------
+
 3.8.4 (2025-05-09)
 ------------------
 

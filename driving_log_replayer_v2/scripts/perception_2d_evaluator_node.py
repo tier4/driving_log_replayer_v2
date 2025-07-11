@@ -37,7 +37,7 @@ from driving_log_replayer_v2.perception_2d import Perception2DScenario
 import driving_log_replayer_v2.perception_eval_conversions as eval_conversions
 
 if TYPE_CHECKING:
-    from perception_eval.evaluation import PerceptionFrameResult
+    from perception_eval.evaluation.result.perception_frame_result import PerceptionFrameResult
 
 
 class Perception2DEvaluator(DLREvaluatorV2):

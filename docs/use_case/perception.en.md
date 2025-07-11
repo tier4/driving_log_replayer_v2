@@ -65,7 +65,28 @@ $HOME/autoware/install/lidar_centerpoint/share/lidar_centerpoint/data/pts_voxel_
 
 ## Evaluation method
 
-Launching the file executes the following steps:
+First, complete the setup procedure described in [Setup Instructions](/docs/quick_start/setup.en.md).
+
+Once the setup is finished, user can start the perception evaluation using the sample rosbag provided at `~/driving_log_replayer_v2/sample_dataset`. with the command:
+
+```shell
+ros2 launch driving_log_replayer_v2 driving_log_replayer_v2.launch.py \
+    scenario_path:=$HOME/driving_log_replayer_v2/perception.yaml \
+    sensing:=false
+```
+
+or
+
+```shell
+ros2 launch driving_log_replayer_v2 driving_log_replayer_v2.launch.py \
+    scenario_path:=$HOME/driving_log_replayer_v2/perception.yaml \
+    remap_arg:="/sensing/lidar/top/velodyne_packets,/sensing/lidar/left/velodyne_packets,/sensing/lidar/right/velodyne_packets"
+```
+
+> [!NOTE]  
+> sample rosbag includes packets to produce pointcloud and /sensing/lidar/concatenated/pointcloud. So it is necessary to either remap or not activate `sensing` to avoid topic duplication.
+
+This command will perform the following steps:
 
 1. launch the commands `logging_simulator.launch` and `ros2 bag play`
 2. Autoware receives the sensor data output from the rosbag and the perception module recognizes it
@@ -289,6 +310,173 @@ Warning Data Format:
 Objects Data Format:
 
 See [json schema](../../driving_log_replayer_v2/config/perception/object_output_schema.json)
+
+Metrics Data Format:
+
+When the `evaluation_task` is detection or tracking
+
+```json
+{
+  "Frame": {
+    "FinalScore": {
+      "Score": {
+        "TP": {
+          "ALL": "TP rate for all labels",
+          "label0": "TP rate of label0",
+          "label1": "TP rate of label1"
+        },
+        "FP": {
+          "ALL": "FP rate for all labels",
+          "label0": "FP rate of label0",
+          "label1": "FP rate of label1"
+        },
+        "FN": {
+          "ALL": "FN rate for all labels",
+          "label0": "FN rate of label0",
+          "label1": "FN rate of label1"
+        },
+        "TN": {
+          "ALL": "TN rate for all labels",
+          "label0": "TN rate of label0",
+          "label1": "TN rate of label1"
+        },
+        "AP(Center Distance)": {
+          "ALL": "AP(Center Distance) rate for all labels",
+          "label0": "AP(Center Distance) rate of label0",
+          "label1": "AP(Center Distance) rate of label1"
+        },
+        "APH(Center Distance)": {
+          "ALL": "APH(Center Distance) rate for all labels",
+          "label0": "APH(Center Distance) rate of label0",
+          "label1": "APH(Center Distance) rate of label1"
+        },
+        "AP(IoU 2D)": {
+          "ALL": "AP(IoU 2D) rate for all labels",
+          "label0": "AP(IoU 2D) rate of label0",
+          "label1": "AP(IoU 2D) rate of label1"
+        },
+        "APH(IoU 2D)": {
+          "ALL": "APH(IoU 2D) rate for all labels",
+          "label0": "APH(IoU 2D) rate of label0",
+          "label1": "APH(IoU 2D) rate of label1"
+        },
+        "AP(IoU 3D)": {
+          "ALL": "AP(IoU 3D) rate for all labels",
+          "label0": "AP(IoU 3D) rate of label0",
+          "label1": "AP(IoU 3D) rate of label1"
+        },
+        "APH(IoU 3D)": {
+          "ALL": "APH(IoU 3D) rate for all labels",
+          "label0": "APH(IoU 3D) rate of label0",
+          "label1": "APH(IoU 3D) rate of label1"
+        },
+        "AP(Plane Distance)": {
+          "ALL": "AP(Plane Distance) rate for all labels",
+          "label0": "AP(Plane Distance) rate of label0",
+          "label1": "AP(Plane Distance) rate of label1"
+        },
+        "APH(Plane Distance)": {
+          "ALL": "APH(Plane Distance) rate for all labels",
+          "label0": "APH(Plane Distance) rate of label0",
+          "label1": "APH(Plane Distance) rate of label1"
+        }
+      },
+      "MOTA": {"https://github.com/tier4/autoware_perception_evaluation/blob/develop/docs/en/perception/metrics.md#tracking"},
+      "MOTA": {"https://github.com/tier4/autoware_perception_evaluation/blob/develop/docs/en/perception/metrics.md#tracking"},
+      "IDswitch": {"https://github.com/tier4/autoware_perception_evaluation/blob/develop/docs/en/perception/metrics.md#id-switch"},
+      "Error": {
+        "ALL": {
+          "average": {
+            "x": "x position",
+            "y": "y position",
+            "yaw": "yaw",
+            "length": "length",
+            "width": "width",
+            "vx": "x velocity",
+            "vy": "y velocity",
+            "nn_plane": "Nearest neighbor plane distance"
+          },
+          "rms": {
+            "x": "x position",
+            "y": "y position",
+            "yaw": "yaw",
+            "length": "length",
+            "width": "width",
+            "vx": "x velocity",
+            "vy": "y velocity",
+            "nn_plane": "Nearest neighbor plane distance"
+          },
+          "std": {
+            "x": "x position",
+            "y": "y position",
+            "yaw": "yaw",
+            "length": "length",
+            "width": "width",
+            "vx": "x velocity",
+            "vy": "y velocity",
+            "nn_plane": "Nearest neighbor plane distance"
+          },
+          "max": {
+            "x": "x position",
+            "y": "y position",
+            "yaw": "yaw",
+            "length": "length",
+            "width": "width",
+            "vx": "x velocity",
+            "vy": "y velocity",
+            "nn_plane": "Nearest neighbor plane distance"
+          },
+          "min": {
+            "x": "x position",
+            "y": "y position",
+            "yaw": "yaw",
+            "length": "length",
+            "width": "width",
+            "vx": "x velocity",
+            "vy": "y velocity",
+            "nn_plane": "Nearest neighbor plane distance"
+          }
+        },
+        "label0": "Error metrics for the label0"
+      }
+    }
+  }
+}
+```
+
+When the `evaluation_task` is fp_validation
+
+```json
+{
+  "Frame": {
+    "FinalScore": {
+      "GroundTruthStatus": {
+        "UUID": {
+          "rate": {
+            "TP": "TP rate of the displyed UUID",
+            "FP": "FP rate of the displyed UUID",
+            "TN": "TN rate of the displyed UUID",
+            "FN": "FN rate of the displyed UUID"
+          },
+          "frame_nums": {
+            "total": "List of frame numbers, which GT is evaluated",
+            "TP": "List of frame numbers, which GT is evaluated as TP",
+            "FP": "List of frame numbers, which GT is evaluated as FP",
+            "TN": "List of frame numbers, which GT is evaluated as TN",
+            "FN": "List of frame numbers, which GT is evaluated as FN"
+          }
+        }
+      },
+      "Scene": {
+        "TP": "TP rate of the scene",
+        "FP": "FP rate of the scene",
+        "TN": "TN rate of the scene",
+        "FN": "FN rate of the scene"
+      }
+    }
+  }
+}
+```
 
 ### pickle file
 

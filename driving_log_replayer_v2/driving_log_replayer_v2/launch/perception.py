@@ -25,6 +25,8 @@ RECORD_TOPIC = """^/tf$\
 |^/perception/object_recognition/.*/objects$\
 |^/perception/object_recognition/objects$\
 |^/perception/object_recognition/detection/objects_before_filter$\
+|^/sensing/.*detected_objects$\
+|^/sensing/.*tracked_objects$\
 """
 
 AUTOWARE_DISABLE = {
@@ -40,10 +42,10 @@ NODE_PARAMS = {}
 EVALUATION_DETECTION_TOPIC_REGEX = """\
 ^/perception/object_recognition/detection/objects$\
 |^/perception/object_recognition/detection/centerpoint/objects$\
-|^/perception/object_recognition/detection/centerpoint/validation/objects$\
 |^/perception/object_recognition/detection/clustering/objects$\
 |^/perception/object_recognition/detection/detection_by_tracker/objects$\
-|^/perception/object_recognition/detection/objects_before_filter$\
+|^/perception/object_recognition/detection/clustering/camera_lidar_fusion/objects$\
+|^/sensing/radar/detected_objects$\
 """
 
 EVALUATION_TRACKING_TOPIC_REGEX = """\
@@ -52,9 +54,6 @@ EVALUATION_TRACKING_TOPIC_REGEX = """\
 
 EVALUATION_PREDICTION_TOPIC_REGEX = """\
 ^/perception/object_recognition/objects$\
-"""
-
-EVALUATION_FP_VALIDATION_TOPIC_REGEX = """\
 """
 
 USE_CASE_ARGS: list[DeclareLaunchArgument] = [
@@ -74,18 +73,13 @@ USE_CASE_ARGS: list[DeclareLaunchArgument] = [
         description="Regex pattern for evaluation prediction topic name. Must start with '^' and end with '$'. Wildcards (e.g. '.*', '+', '?', '[...]') are not allowed. If you do not want to use this feature, set it to '' or 'None'.",
     ),
     DeclareLaunchArgument(
-        "evaluation_fp_validation_topic_regex",
-        default_value=EVALUATION_FP_VALIDATION_TOPIC_REGEX,
-        description="Regex pattern for evaluation fp_validation topic name. Must start with '^' and end with '$'. Wildcards (e.g. '.*', '+', '?', '[...]') are not allowed. If you do not want to use this feature, set it to '' or 'None'.",
+        "analysis_max_distance",
+        default_value="150",
+        description="Maximum distance for analysis.",
     ),
     DeclareLaunchArgument(
-        "max_distance",
-        default_value="100",
-        description="Maximum distance for analysis. Default is 100m.",
-    ),
-    DeclareLaunchArgument(
-        "distance_interval",
-        default_value="10",
-        description="Distance interval for analysis. Default is 10m.",
+        "analysis_distance_interval",
+        default_value="150",
+        description="Distance interval for analysis.",
     ),
 ]

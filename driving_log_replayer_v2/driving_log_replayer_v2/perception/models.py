@@ -32,7 +32,7 @@ from driving_log_replayer_v2.scenario import number
 from driving_log_replayer_v2.scenario import Scenario
 
 if TYPE_CHECKING:
-    from perception_eval.evaluation import PerceptionFrameResult
+    from perception_eval.evaluation.result.perception_frame_result import PerceptionFrameResult
 
 
 class Region(BaseModel):
@@ -237,3 +237,6 @@ class PerceptionResult(ResultBase):
             "Warning": msg,
             "FrameSkip": skip,
         }
+
+    def set_final_metrics(self, final_metrics: dict) -> None:
+        self._frame = {"FinalScore": final_metrics}

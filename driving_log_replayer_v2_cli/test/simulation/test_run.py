@@ -1,3 +1,5 @@
+import json
+
 from driving_log_replayer_v2_cli.simulation.run import args_to_dict
 from driving_log_replayer_v2_cli.simulation.run import launch_dict_to_str
 
@@ -31,7 +33,6 @@ def test_extract_dict_string() -> None:
     )
     # confirm json load
     json_str = '{"CAR":{"min":"0.0-1.1","max":"0.0-1.2","mean":"0.5-1.3"},"BUS":{"min":"0.0-1.1","max":"0.0-1.2","mean":"0.5-1.3"}}'
-    import json
 
     json.loads(json_str)  # check valid json string
 

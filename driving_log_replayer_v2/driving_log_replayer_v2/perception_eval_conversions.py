@@ -22,6 +22,7 @@ from autoware_perception_msgs.msg import PredictedObject
 from autoware_perception_msgs.msg import PredictedPath
 from autoware_perception_msgs.msg import Shape as MsgShape
 from autoware_perception_msgs.msg import TrackedObject
+from builtin_interfaces.msg import Duration as DurationMsg
 from builtin_interfaces.msg import Time
 import fastjsonschema
 from geometry_msgs.msg import Point
@@ -33,6 +34,7 @@ import numpy as np
 from perception_eval.common import ObjectType
 from perception_eval.common.object import DynamicObject
 from perception_eval.common.object import ObjectState
+from perception_eval.common.schema import FrameID
 from perception_eval.common.shape import Shape
 from perception_eval.common.shape import ShapeType
 from perception_eval.config import PerceptionEvaluationConfig
@@ -51,7 +53,7 @@ def unix_time_from_ros_msg(ros_header: Header) -> int:
     return ros_header.stamp.sec * pow(10, 6) + ros_header.stamp.nanosec // 1000
 
 
-def unix_time_from_ros_timestamp(ros_timestamp: Time) -> int:
+def unix_time_from_ros_timestamp(ros_timestamp: Time | DurationMsg) -> int:
     return ros_timestamp.sec * pow(10, 6) + ros_timestamp.nanosec // 1000
 
 
@@ -67,12 +69,20 @@ def orientation_from_ros_msg(ros_orientation: RosQuaternion) -> Quaternion:
     return Quaternion(ros_orientation.w, ros_orientation.x, ros_orientation.y, ros_orientation.z)
 
 
+def path_timestamps_from_ros_msg(ros_path: PredictedPath) -> list[int]:
+    # NOTE: predicted path starts from the current object pose
+    duration = unix_time_from_ros_timestamp(ros_path.time_step)
+    return [duration * i for i in range(1, len(ros_path.path))]
+
+
 def path_positions_from_ros_msg(ros_path: PredictedPath) -> list[tuple[float, float, float]]:
-    return [position_from_ros_msg(pose.position) for pose in ros_path.path]
+    # NOTE: predicted path starts from the current object pose
+    return [position_from_ros_msg(pose.position) for pose in ros_path.path[1:]]
 
 
 def path_orientations_from_ros_msg(ros_path: PredictedPath) -> list[Quaternion]:
-    return [orientation_from_ros_msg(pose.orientation) for pose in ros_path.path]
+    # NOTE: predicted path starts from the current object pose
+    return [orientation_from_ros_msg(pose.orientation) for pose in ros_path.path[1:]]
 
 
 def dimensions_from_ros_msg(
@@ -411,6 +421,12 @@ def list_dynamic_object_from_ros_msg(
             semantic_score=most_probable_classification.probability,
             semantic_label=label,
             uuid=uuid,
+            relative_timestamps=[
+                path_timestamps_from_ros_msg(path)
+                for path in perception_object.kinematics.predicted_paths
+            ]
+            if isinstance(perception_object, PredictedObject)
+            else None,
             predicted_positions=[
                 path_positions_from_ros_msg(path)
                 for path in perception_object.kinematics.predicted_paths
@@ -561,7 +577,6 @@ class FrameDescriptionWriter:
             has_map_to_base_link = ego2map_matrix is not None and len(ego2map_matrix) > 0
         except AttributeError:
             ego2map_matrix = pass_fail.transforms
-            from perception_eval.common.schema import FrameID
 
             has_map_to_base_link = ego2map_matrix.get((FrameID.BASE_LINK, FrameID.MAP)) is not None
 
