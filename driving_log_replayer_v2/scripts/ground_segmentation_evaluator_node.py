@@ -116,8 +116,8 @@ class GroundSegmentationEvaluator(DLREvaluatorV2):
         )
 
         # count TP+FN, TN+FP
-        tp_fn = np.count_nonzero(gt_frame_label[:] == self.ground_label)
-        fp_tn = np.count_nonzero(gt_frame_label[:] == self.obstacle_label)
+        tp_fn = np.count_nonzero(gt_frame_label == self.ground_label)
+        fp_tn = np.count_nonzero(gt_frame_label == self.obstacle_label)
 
         tn: int = 0
         fn: int = 0
