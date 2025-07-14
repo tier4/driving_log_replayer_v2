@@ -5,7 +5,7 @@ SensorModel: sample_sensor_kit
 VehicleModel: sample_vehicle
 Evaluation:
   UseCaseName: perception
-  UseCaseFormatVersion: 1.1.0
+  UseCaseFormatVersion: 1.2.0
   Datasets:
     - sample_dataset:
         VehicleId: default # Specify VehicleId for each data set.
@@ -27,6 +27,7 @@ Evaluation:
           Region:
             x_position: null # [m] null [Do not filter by x_position] or lower_limit,upper_limit
             y_position: null # [m] null [Do not filter by y_position] or lower_limit,upper_limit
+  degradation_topic: /perception/object_recognition/detection/objects # Topic for degradation evaluation. If not specified, decide the topic based on the evaluation task.
   PerceptionEvaluationConfig:
     evaluation_config_dict:
       evaluation_task: detection # detection, tracking or prediction. Evaluate the objects specified here

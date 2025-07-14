@@ -21,6 +21,7 @@ Evaluation:
         CriteriaLevel: easy # クライテリアレベル(perfect/hard/normal/easy、もしくはカスタム値0.0〜100.0の数値)
         Filter: #
           Distance: 50.0- # [m] null [距離でフィルタしない] or 下限-(上限) [上限は省略可。省略した場合1.7976931348623157e+308]
+  degradation_topic: /perception/object_recognition/detection/objects # デグレード評価用のトピック。指定しない場合は評価タスクに基づいてトピックを決定する。
   PerceptionEvaluationConfig:
     evaluation_config_dict:
       evaluation_task: fp_validation # detection/tracking/prediction/fp_validation ここで指定したobjectsを評価する

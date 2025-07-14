@@ -21,6 +21,7 @@ Evaluation:
         CriteriaLevel: easy # Level of criteria (perfect/hard/normal/easy, or custom value 0.0-100.0)
         Filter:
           Distance: 50.0- # [m] null [Do not filter by distance] or lower_limit-(upper_limit) [Upper limit can be omitted. If omitted value is 1.7976931348623157e+308]
+  degradation_topic: /perception/object_recognition/detection/objects # Topic for degradation evaluation. If not specified, decide the topic based on the evaluation task.
   PerceptionEvaluationConfig:
     evaluation_config_dict:
       evaluation_task: fp_validation # detection, tracking, prediction, or fp_validation. Evaluate the objects specified here
