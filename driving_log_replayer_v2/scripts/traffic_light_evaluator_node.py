@@ -115,7 +115,7 @@ class TrafficLightEvaluator(DLREvaluatorV2):
         )
         self.__sub_traffic_signals = self.create_subscription(
             TrafficLightGroupArray,
-            "/perception/traffic_light_recognition/traffic_signals",
+            "/perception/traffic_light_recognition/internal/traffic_signals",
             self.traffic_signals_cb,
             1,
         )
