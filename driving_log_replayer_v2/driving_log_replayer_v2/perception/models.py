@@ -141,12 +141,13 @@ class Conditions(BaseModel):
 
 class Evaluation(BaseModel):
     UseCaseName: Literal["perception"]
-    UseCaseFormatVersion: Literal["1.0.0", "1.1.0"]
+    UseCaseFormatVersion: Literal["1.0.0", "1.1.0", "1.2.0"]
     Datasets: list[dict]
     Conditions: Conditions
     PerceptionEvaluationConfig: dict
     CriticalObjectFilterConfig: dict
     PerceptionPassFailConfig: dict
+    degradation_topic: str | None = None
 
 
 class PerceptionScenario(Scenario):

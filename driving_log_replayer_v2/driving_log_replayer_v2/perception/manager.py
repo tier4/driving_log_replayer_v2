@@ -43,6 +43,7 @@ class EvaluationManager:
         self._scenario: PerceptionScenario
         self._evaluation_condition: dict[str, str]
         self._degradation_evaluation_task: str
+        self._degradation_topic: str
         self._evaluators: dict[str, PerceptionEvaluator]
 
         try:
@@ -62,36 +63,35 @@ class EvaluationManager:
             "evaluation_config_dict"
         ]["evaluation_task"]
 
-        if self._degradation_evaluation_task == "fp_validation":
-            # If fp_validation is specified, use only detection topic as `fp_validation` evaluation task.
-            self._evaluators = {
-                topic: PerceptionEvaluator(
-                    copy.deepcopy(self._scenario.Evaluation.PerceptionEvaluationConfig),
-                    copy.deepcopy(self._scenario.Evaluation.CriticalObjectFilterConfig),
-                    copy.deepcopy(self._scenario.Evaluation.PerceptionPassFailConfig),
-                    t4_dataset_path,
-                    result_archive_path,
-                    topic,
-                    "fp_validation",
-                )
-                for task, topics in evaluation_topics.items()
-                for topic in topics
-                if task == "detection"
-            }
+        self.set_degradation_topic()
+
+        self._evaluators = {
+            topic: PerceptionEvaluator(
+                copy.deepcopy(self._scenario.Evaluation.PerceptionEvaluationConfig),
+                copy.deepcopy(self._scenario.Evaluation.CriticalObjectFilterConfig),
+                copy.deepcopy(self._scenario.Evaluation.PerceptionPassFailConfig),
+                t4_dataset_path,
+                result_archive_path,
+                topic,
+                task if self._degradation_evaluation_task != "fp_validation" else "fp_validation",
+            )
+            for task, topics in evaluation_topics.items()
+            for topic in topics
+        }
+
+    def set_degradation_topic(self) -> None:
+        if self._scenario.Evaluation.degradation_topic is not None:
+            self._degradation_topic = self._scenario.Evaluation.degradation_topic
+        # If degradation topic is not set, set it based on the evaluation task.
+        elif self._degradation_evaluation_task in ["detection", "fp_validation"]:
+            self._degradation_topic = "/perception/object_recognition/detection/objects"
+        elif self._degradation_evaluation_task == "tracking":
+            self._degradation_topic = "/perception/object_recognition/tracking/objects"
+        elif self._degradation_evaluation_task == "prediction":
+            self._degradation_topic = "/perception/object_recognition/objects"
         else:
-            self._evaluators = {
-                topic: PerceptionEvaluator(
-                    copy.deepcopy(self._scenario.Evaluation.PerceptionEvaluationConfig),
-                    copy.deepcopy(self._scenario.Evaluation.CriticalObjectFilterConfig),
-                    copy.deepcopy(self._scenario.Evaluation.PerceptionPassFailConfig),
-                    t4_dataset_path,
-                    result_archive_path,
-                    topic,
-                    task,
-                )
-                for task, topics in evaluation_topics.items()
-                for topic in topics
-            }
+            err_msg = f"Invalid evaluation task: {self._degradation_evaluation_task}"
+            raise ValueError(err_msg)
 
     def check_scenario_error(self) -> Exception | None:
         return self._error if hasattr(self, "_error") else None
@@ -106,17 +106,7 @@ class EvaluationManager:
         return self._degradation_evaluation_task
 
     def get_degradation_topic(self) -> str:
-        # TODO: Define topic itself in the same line as Criterion in Conditions
-        if self._degradation_evaluation_task in ["detection", "fp_validation"]:
-            topic = "/perception/object_recognition/detection/objects"
-        elif self._degradation_evaluation_task == "tracking":
-            topic = "/perception/object_recognition/tracking/objects"
-        elif self._degradation_evaluation_task == "prediction":
-            topic = "/perception/object_recognition/objects"
-        else:
-            err_msg = f"Invalid evaluation task: {self._degradation_evaluation_task}"
-            raise ValueError(err_msg)
-        return topic
+        return self._degradation_topic
 
     def get_evaluation_config(
         self, topic_name: str | None = None

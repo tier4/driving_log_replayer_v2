@@ -5,7 +5,7 @@ SensorModel: sample_sensor_kit
 VehicleModel: sample_vehicle
 Evaluation:
   UseCaseName: perception
-  UseCaseFormatVersion: 1.1.0
+  UseCaseFormatVersion: 1.2.0
   Datasets:
     - sample_dataset:
         VehicleId: default # データセット毎にVehicleIdを指定する
@@ -27,6 +27,7 @@ Evaluation:
           Region:
             x_position: null # [m] null [x座標でフィルタしない] or 下限,上限
             y_position: null # [m] null [y座標でフィルタしない] or 下限,上限
+  degradation_topic: /perception/object_recognition/detection/objects # デグレード評価用のトピック。指定しない場合は評価タスクに基づいてトピックを決定する。
   PerceptionEvaluationConfig:
     evaluation_config_dict:
       evaluation_task: detection # detection/tracking/prediction ここで指定したobjectsを評価する
