@@ -439,7 +439,7 @@ class MetricsScore(CriteriaMethodImpl):
         else:
             scores = [
                 map_.map
-                for map_ in frame.metrics_score.maps
+                for map_ in frame.metrics_score.mean_ap_values
                 if map_.map != float("inf") and map_.matching_mode == MatchingMode.CENTERDISTANCE
             ]
 
@@ -461,7 +461,7 @@ class MetricsScoreMAPH(CriteriaMethodImpl):
         assert frame.metrics_score.evaluation_task.is_3d(), "Evaluation task must be 3D for MAPH."
         scores = [
             map_.maph
-            for map_ in frame.metrics_score.maps
+            for map_ in frame.metrics_score.mean_ap_values
             if map_.maph != float("inf") and map_.matching_mode == MatchingMode.CENTERDISTANCE
         ]
 
