@@ -1,5 +1,19 @@
 # Release Notes
 
+## Version 3.11.0
+
+Major changes
+
+| Module       | Feature       | Brief summary                                | Pull request                                                        | Contributor                                     |
+| ------------ | ------------- | -------------------------------------------- | ------------------------------------------------------------------- | ----------------------------------------------- |
+| `perception` | scenario      | fix scenario for perception                  | [#185](https://github.com/tier4/driving_log_replayer_v2/issues/185) | [MasatoSaeki](https://github.com/MasatoSaeki)   |
+| `perception` | scenario      | add key to specify degradation topic         | [#182](https://github.com/tier4/driving_log_replayer_v2/issues/182) | [MasatoSaeki](https://github.com/MasatoSaeki)   |
+| `perception` | remap         | add x2_perception remap profile              | [#178](https://github.com/tier4/driving_log_replayer_v2/issues/178) | [badai-nguyen](https://github.com/badai-nguyen) |
+| `common`     | ci            | update ruff version                          | [#176](https://github.com/tier4/driving_log_replayer_v2/issues/176) | [hayato-m126](https://github.com/hayato-m126)   |
+| `perception` | calculation   | use function get_num_gt() of perception_eval | [#177](https://github.com/tier4/driving_log_replayer_v2/issues/177) | [MasatoSaeki](https://github.com/MasatoSaeki)   |
+| `perception` | fp_validation | enable to use fp_validation                  | [#175](https://github.com/tier4/driving_log_replayer_v2/issues/175) | [MasatoSaeki](https://github.com/MasatoSaeki)   |
+| `perception` | common        | import from absolute source                  | [#172](https://github.com/tier4/driving_log_replayer_v2/issues/172) | [vividf](https://github.com/vividf)             |
+
 ## Version 3.10.2
 
 Minor Tweak

@@ -2,6 +2,26 @@
 Changelog for package driving_log_replayer
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
+Forthcoming
+-----------
+* fix(perception): fix scenario for perception (`#185 <https://github.com/tier4/driving_log_replayer_v2/issues/185>`_)
+  * fix(perception): fix scenario for perception
+  * fix test code
+  ---------
+* feat(perception): add key to specify degradation topic (`#182 <https://github.com/tier4/driving_log_replayer_v2/issues/182>`_)
+  * add key to specify degradation topic
+  * update scenario
+  ---------
+* feat: add x2_perception remap profile (`#178 <https://github.com/tier4/driving_log_replayer_v2/issues/178>`_)
+* feat: update ruff version (`#176 <https://github.com/tier4/driving_log_replayer_v2/issues/176>`_)
+* use function get_num_gt() of perception_eval (`#177 <https://github.com/tier4/driving_log_replayer_v2/issues/177>`_)
+* enable to use fp_validation (`#175 <https://github.com/tier4/driving_log_replayer_v2/issues/175>`_)
+* chore(evaluation_detection): import from absolute source  (`#172 <https://github.com/tier4/driving_log_replayer_v2/issues/172>`_)
+  * feat: changes for new perception eval feat
+  * chore: absolute path in test
+  ---------
+* Contributors: Hayato Mizushima, Masato Saeki, Yi-Hsiang Fang (Vivid), badai nguyen
+
 3.10.2 (2025-06-26)
 -------------------
 * revert(perception): show final metrics (`#168 <https://github.com/tier4/driving_log_replayer_v2/issues/168>`_)
