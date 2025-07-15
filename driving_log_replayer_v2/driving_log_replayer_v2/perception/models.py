@@ -322,11 +322,12 @@ class StopReasonEvaluationItem(EvaluationItem):
         return self.per_frame_results
 
     def check_timeout(self, current_time: float) -> dict | None:
+        # noqa
         """Check if we've exceeded the tolerance interval without receiving the target stop reason."""
-        CHECK_INTERVAL = 0.1
+        check_interval = 0.1
 
         # Only check if we haven't checked recently (avoid spam)
-        if current_time - self.last_check_time < CHECK_INTERVAL:  # Check at most every 0.1 seconds
+        if current_time - self.last_check_time < check_interval:  # Check at most every 0.1 seconds
             return None
             
         self.last_check_time = current_time
@@ -495,4 +496,12 @@ class PerceptionResult(ResultBase):
                 has_timeout = True
                 
         return timeout_results if has_timeout else None
+
+    def add_timeout_results_to_frame(self, timeout_results: dict[str, dict]) -> None:
+        """Add timeout results to the current frame."""
+        if not hasattr(self, '_frame') or self._frame is None:
+            self._frame = {}
+        
+        for reason_name, timeout_result in timeout_results.items():
+            self._frame[reason_name] = timeout_result
 

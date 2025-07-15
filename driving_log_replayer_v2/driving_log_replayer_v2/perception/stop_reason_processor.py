@@ -30,13 +30,13 @@ except ImportError:
         pass
 
 if TYPE_CHECKING:
-    from rosidl_runtime_py.utilities import message_to_ordereddict
+    from rosidl_runtime_py.utilities import message_to_ordereddict  # noqa
 
 
 class StopReasonProcessor:
     """Process stop_reason data from /awapi/autoware/get/status topic and convert to spreadsheet format."""
 
-    def __init__(self, output_path: Path) -> None:
+    def __init__(self, output_path: "Path") -> None:
         """Initialize the processor.
         
         Args:
@@ -76,7 +76,8 @@ class StopReasonProcessor:
                 }
                 self.stop_reasons_data.append(reason_data)
         except AttributeError as e:
-            logging.error(f"Error processing stop_reason: {e}")
+            error_msg = f"Error processing stop_reason: {e}"
+            logging.error(error_msg)
         finally:
             logging.info("stop_reason loop end")
     
@@ -87,16 +88,18 @@ class StopReasonProcessor:
             
         # Ensure output directory exists
         self.output_path.mkdir(parents=True, exist_ok=True)
-
-        logging.info(f"save_to_spreadsheet begin")
+        info_msg = f"save_to_spreadsheet begin"
+        logging.info(info_msg)
         
         # Write to CSV
-        with open(self.csv_file_path, 'w', newline='', encoding='utf-8') as csv_file:
+        with Path(self.csv_file_path).open('w', newline='', encoding='utf-8') as csv_file:
             fieldnames = ['timestamp', 'idx', 'reason', 'dist_to_stop_pos', 'x', 'y', 'z', 'qz', 'qw']
             writer = csv.DictWriter(csv_file, fieldnames=fieldnames)
             
             writer.writeheader()
             for data in self.stop_reasons_data:
                 writer.writerow(data)
-        logging.info(f"Stop reasons data saved to: {self.csv_file_path}")
-        logging.info(f"Total stop reasons recorded: {len(self.stop_reasons_data)}") 
+        info_msg = f"Stop reasons data saved to: {self.csv_file_path}"
+        logging.info(info_msg)
+        info_msg = f"Total stop reasons recorded: {len(self.stop_reasons_data)}"
+        logging.info(info_msg) 

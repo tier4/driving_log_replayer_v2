@@ -14,6 +14,7 @@
 
 from launch.actions import DeclareLaunchArgument
 import yaml
+from pathlib import Path
 
 RECORD_TOPIC = """^/tf$\
 |^/tf_static$\
@@ -33,7 +34,7 @@ RECORD_TOPIC = """^/tf$\
 def get_autoware_disable_config(scenario_path: str) -> dict[str, str]:
     """Get Autoware disable configuration based on scenario."""
     try:
-        with open(scenario_path, 'r') as f:
+        with Path(scenario_path).open() as f:
             scenario_data = yaml.safe_load(f)
         
         # Check if stop reason evaluation is configured
@@ -47,13 +48,13 @@ def get_autoware_disable_config(scenario_path: str) -> dict[str, str]:
                 "planning": "true",
                 "control": "true",
             }
-        else:
-            # Default configuration
-            return {
-                "localization": "false",
-                "planning": "false",
-                "control": "false",
-            }
+        
+        # Default configuration
+        return {
+            "localization": "false",
+            "planning": "false",
+            "control": "false",
+        }
     except FileNotFoundError:
         # Fallback to default configuration if scenario loading fails
         return {

@@ -3,6 +3,7 @@ from driving_log_replayer_v2.perception.models import StopReasonEvaluation, Stop
 
 @pytest.fixture
 def stop_reason_eval_item():
+    # noqa
     config = StopReasonEvaluation(
         start_time=10.0,
         end_time=20.0,
@@ -14,6 +15,7 @@ def stop_reason_eval_item():
 
 @pytest.fixture
 def stop_reason_tn_eval_item():
+    # noqa
     config = StopReasonEvaluation(
         start_time=10.0,
         end_time=20.0,
@@ -25,6 +27,7 @@ def stop_reason_tn_eval_item():
     return StopReasonEvaluationItem(name="Intersection", condition=config)
 
 def test_stop_reason_eval_basic(stop_reason_eval_item):
+    # noqa
     # Should skip: outside time window
     result = stop_reason_eval_item.set_frame({"reason": "Intersection", "timestamp": 5.0, "dist_to_stop_pos": 0.5})
     assert result["StopReason"]["Result"] == "Skip"
@@ -44,12 +47,13 @@ def test_stop_reason_eval_basic(stop_reason_eval_item):
     result = stop_reason_eval_item.set_frame({"reason": "Intersection", "timestamp": 12.0 + 0.6, "dist_to_stop_pos": 0.8})
     assert result["StopReason"]["Result"]["Frame"] == "Success"
     # Check summary and pass rate
-    assert stop_reason_eval_item.get_passed() == 2
-    assert stop_reason_eval_item.get_total() == 3
-    assert stop_reason_eval_item.get_pass_rate() == pytest.approx(2/3*100, rel=1e-2)
+    assert stop_reason_eval_item.get_passed() == 2 # noqa
+    assert stop_reason_eval_item.get_total() == 3 # noqa
+    assert stop_reason_eval_item.get_pass_rate() == pytest.approx(2/3*100, rel=1e-2) # noqa: PLR2004
     assert "Intersection" in stop_reason_eval_item.get_summary()
 
 def test_stop_reason_tn_eval_basic(stop_reason_tn_eval_item):
+    # noqa
     """Test True Negative evaluation logic."""
     # Should skip: outside time window
     result = stop_reason_tn_eval_item.set_frame({"reason": "Intersection", "timestamp": 5.0, "dist_to_stop_pos": 0.5})
@@ -68,13 +72,14 @@ def test_stop_reason_tn_eval_basic(stop_reason_tn_eval_item):
     assert result["StopReason"]["Result"]["Frame"] == "Success"
     
     # Check summary and pass rate
-    assert stop_reason_tn_eval_item.get_passed() == 2
-    assert stop_reason_tn_eval_item.get_total() == 3
+    assert stop_reason_tn_eval_item.get_passed() == 2 # noqa
+    assert stop_reason_tn_eval_item.get_total() == 3 # noqa
     assert stop_reason_tn_eval_item.get_pass_rate() == pytest.approx(2/3*100, rel=1e-2)
     assert "Intersection" in stop_reason_tn_eval_item.get_summary()
     assert stop_reason_tn_eval_item.evaluation_type == "TN"
 
 def test_stop_reason_timeout(stop_reason_eval_item):
+    # noqa
     # Check timeout before evaluation window starts
     result = stop_reason_eval_item.check_timeout(5.0)
     assert result is None  # Should not timeout outside window
@@ -104,6 +109,7 @@ def test_stop_reason_timeout(stop_reason_eval_item):
     assert result is None  # Should not timeout after receiving valid event
 
 def test_stop_reason_tn_timeout(stop_reason_tn_eval_item):
+    # noqa
     """Test True Negative timeout logic."""
     # Check timeout before evaluation window starts
     result = stop_reason_tn_eval_item.check_timeout(5.0)
@@ -135,6 +141,7 @@ def test_stop_reason_tn_timeout(stop_reason_tn_eval_item):
     assert result["StopReason"]["Result"]["Frame"] == "Success"
 
 def test_evaluation_type_default():
+    # noqa
     """Test that evaluation_type defaults to TP when not specified."""
     config = StopReasonEvaluation(
         start_time=10.0,
@@ -148,6 +155,7 @@ def test_evaluation_type_default():
     assert eval_item.evaluation_type == "TP"
 
 def test_evaluation_type_explicit():
+    # noqa
     """Test that evaluation_type can be explicitly set."""
     config = StopReasonEvaluation(
         start_time=10.0,

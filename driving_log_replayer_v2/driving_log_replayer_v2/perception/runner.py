@@ -285,8 +285,7 @@ def process_stop_reason_timeouts(
     """
     timeout_results = result.check_stop_reason_timeouts(unix_timestamp)
     if timeout_results:
-        for reason_name, timeout_result in timeout_results.items():
-            result._frame[reason_name] = timeout_result
+        result.add_timeout_results_to_frame(timeout_results)
         result_writer.write_result_with_time(result, subscribed_ros_timestamp)
 
 
