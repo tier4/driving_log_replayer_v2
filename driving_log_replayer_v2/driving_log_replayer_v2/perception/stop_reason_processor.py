@@ -36,7 +36,7 @@ if TYPE_CHECKING:
 class StopReasonProcessor:
     """Process stop_reason data from /awapi/autoware/get/status topic and convert to spreadsheet format."""
 
-    def __init__(self, output_path: "Path") -> None:
+    def __init__(self, output_path: "Path") -> None: # noqa
         """Initialize the processor.
         
         Args:
@@ -77,7 +77,7 @@ class StopReasonProcessor:
                 self.stop_reasons_data.append(reason_data)
         except AttributeError as e:
             error_msg = f"Error processing stop_reason: {e}"
-            logging.error(error_msg)
+            logging.exception(error_msg)
         finally:
             logging.info("stop_reason loop end")
     
@@ -88,7 +88,7 @@ class StopReasonProcessor:
             
         # Ensure output directory exists
         self.output_path.mkdir(parents=True, exist_ok=True)
-        info_msg = f"save_to_spreadsheet begin"
+        info_msg = "save_to_spreadsheet begin"
         logging.info(info_msg)
         
         # Write to CSV

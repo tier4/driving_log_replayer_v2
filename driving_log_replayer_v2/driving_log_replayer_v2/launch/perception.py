@@ -50,7 +50,7 @@ def get_autoware_disable_config(scenario_path: str) -> dict[str, str]:
             }
         
         # Default configuration
-        return {
+        return {            # noqa
             "localization": "false",
             "planning": "false",
             "control": "false",

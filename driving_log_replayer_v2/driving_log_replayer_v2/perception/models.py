@@ -321,8 +321,7 @@ class StopReasonEvaluationItem(EvaluationItem):
     def get_per_frame_results(self) -> list[dict]:
         return self.per_frame_results
 
-    def check_timeout(self, current_time: float) -> dict | None:
-        # noqa
+    def check_timeout(self, current_time: float) -> dict | None: # noqa
         """Check if we've exceeded the tolerance interval without receiving the target stop reason."""
         check_interval = 0.1
 
