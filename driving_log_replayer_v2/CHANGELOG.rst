@@ -2,8 +2,8 @@
 Changelog for package driving_log_replayer
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-Forthcoming
------------
+3.11.0 (2025-07-15)
+-------------------
 * fix(perception): fix scenario for perception (`#185 <https://github.com/tier4/driving_log_replayer_v2/issues/185>`_)
   * fix(perception): fix scenario for perception
   * fix test code
