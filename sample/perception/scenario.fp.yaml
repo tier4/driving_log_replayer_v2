@@ -31,16 +31,16 @@ Evaluation:
   PerceptionEvaluationConfig:
     evaluation_config_dict:
       evaluation_task: fp_validation # detection, tracking, prediction, or fp_validation. Evaluate the objects specified here
-      target_labels: [car, bicycle, pedestrian, motorbike] # evaluation label
+      target_labels: [car, bicycle, pedestrian, motorbike, unknown] # evaluation label
       max_x_position: 102.4 # Maximum x position of object to be evaluated
       max_y_position: 102.4 # Maximum y position of object to be evaluated
-      max_matchable_radii: [5.0, 3.0, 3.0, 3.0]
+      max_matchable_radii: [5.0, 3.0, 3.0, 3.0, 3.0]
       merge_similar_labels: false # Whether or not to merge similar labels https://github.com/tier4/autoware_perception_evaluation/blob/develop/docs/en/perception/label.md#merge-similar-labels-option
       allow_matching_unknown: true # Whether or not to match objects whose labels are unknown
   CriticalObjectFilterConfig:
-    target_labels: [car, bicycle, pedestrian, motorbike]
-    max_x_position_list: [100.0, 100.0, 100.0, 100.0]
-    max_y_position_list: [100.0, 100.0, 100.0, 100.0]
+    target_labels: [car, bicycle, pedestrian, motorbike, unknown]
+    max_x_position_list: [100.0, 100.0, 100.0, 100.0, 100.0]
+    max_y_position_list: [100.0, 100.0, 100.0, 100.0, 100.0]
   PerceptionPassFailConfig:
-    target_labels: [car, bicycle, pedestrian, motorbike]
-    matching_threshold_list: [2.0, 2.0, 2.0, 2.0] # Threshold for planar distance matching
+    target_labels: [car, bicycle, pedestrian, motorbike, unknown]
+    matching_threshold_list: [2.0, 2.0, 2.0, 2.0, 2.0] # Threshold for planar distance matching
