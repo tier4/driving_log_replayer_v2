@@ -46,7 +46,7 @@ Evaluation:
       plane_distance_thresholds: [2.0, 30.0] # 平面距離マッチング時の閾値
       iou_2d_thresholds: [0.5] # 2D IoU マッチング時の閾値
       iou_3d_thresholds: [0.5] # 3D IoU マッチング時の閾値
-      min_point_numbers: [0, 0, 0, 0] # ground truth object における，bbox 内の最小点群数．min_point_numbers=0 の場合は，全 ground truth object を評価
+      min_point_numbers: [0, 0, 0, 0, 0] # ground truth object における，bbox 内の最小点群数．min_point_numbers=0 の場合は，全 ground truth object を評価
   CriticalObjectFilterConfig: # 必ず検出できてほしいオブジェクトに対する config
     target_labels: [car, bicycle, pedestrian, motorbike, unknown]
     ignore_attributes: [cycle_state.without_rider]
@@ -54,7 +54,7 @@ Evaluation:
     max_y_position_list: [30.0, 30.0, 30.0, 30.0, 30.0]
     # max_distance_list: null
     # min_distance_list: null
-    # min_point_numbers: [0, 0, 0, 0]
+    # min_point_numbers: [0, 0, 0, 0, 0]
     # confidence_threshold_list: null
     # target_uuids: null
   PerceptionPassFailConfig: # Pass fail を決める config

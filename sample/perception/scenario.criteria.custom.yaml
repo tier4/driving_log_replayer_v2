@@ -42,7 +42,7 @@ Evaluation:
     max_y_position_list: [30.0, 30.0, 30.0, 30.0, 30.0]
     # max_distance_list: null
     # min_distance_list: null
-    # min_point_numbers: [0, 0, 0, 0]
+    # min_point_numbers: [0, 0, 0, 0, 0]
     # confidence_threshold_list: null
     # target_uuids: null
   PerceptionPassFailConfig:

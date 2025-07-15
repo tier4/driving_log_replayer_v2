@@ -111,8 +111,8 @@ def create_frame_result() -> PerceptionFrameResult:
         critical_object_filter_config=CriticalObjectFilterConfig(
             evaluation_config,
             evaluation_config_dict["target_labels"],
-            max_x_position_list=[30.0, 30.0, 30.0, 30.0],
-            max_y_position_list=[30.0, 30.0, 30.0, 30.0],
+            max_x_position_list=[30.0, 30.0, 30.0, 30.0, 30.0],
+            max_y_position_list=[30.0, 30.0, 30.0, 30.0, 30.0],
         ),
         frame_pass_fail_config=PerceptionPassFailConfig(
             evaluation_config,
