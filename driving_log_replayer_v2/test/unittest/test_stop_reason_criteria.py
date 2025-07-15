@@ -46,7 +46,7 @@ def test_stop_reason_eval_basic(stop_reason_eval_item): # noqa
     # Check summary and pass rate
     assert stop_reason_eval_item.get_passed() == 2 # noqa
     assert stop_reason_eval_item.get_total() == 3 # noqa
-    assert stop_reason_eval_item.get_pass_rate() == pytest.approx(2/3*100, rel=1e-2) # noqa: PLR2004
+    assert stop_reason_eval_item.get_pass_rate() == pytest.approx(2/3*100, rel=1e-2)
     assert "Intersection" in stop_reason_eval_item.get_summary()
 
 def test_stop_reason_tn_eval_basic(stop_reason_tn_eval_item): # noqa
