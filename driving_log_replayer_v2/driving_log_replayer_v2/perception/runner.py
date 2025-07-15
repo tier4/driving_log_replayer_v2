@@ -207,7 +207,6 @@ def process_stop_reason_message(
 def process_perception_message(
     msg: MsgType,
     topic_name: str,
-    unix_timestamp: float,
     subscribed_ros_timestamp: int,
     evaluator: EvaluationManager,
     result: PerceptionResult,
@@ -370,7 +369,7 @@ def evaluate(
     # Initialize stop reason processor
     stop_reason_processor = StopReasonProcessor(Path(result_archive_path))
 
-    logging.info(f"evaluation topics begin")
+    logging.info("evaluation topics begin")
     # main evaluation process
     for topic_name, msg, subscribed_ros_timestamp in rosbag_manager.read_messages():
         # See RosBagManager for `time relationships`.
@@ -382,9 +381,8 @@ def evaluate(
         process_stop_reason_timeouts(unix_timestamp, subscribed_ros_timestamp, result, result_writer)
 
         # Process stop_reason data from AwapiAutowareStatus messages
-        if isinstance(msg, AwapiAutowareStatus):
-            if process_stop_reason_message(msg, unix_timestamp, subscribed_ros_timestamp, stop_reason_processor, result, result_writer):
-                continue
+        if isinstance(msg, AwapiAutowareStatus) and process_stop_reason_message(msg, unix_timestamp, subscribed_ros_timestamp, stop_reason_processor, result, result_writer):
+            continue
 
         # Process perception messages (DetectedObjects, TrackedObjects, PredictedObjects)
         process_perception_message(
@@ -402,7 +400,7 @@ def evaluate(
         
     rosbag_manager.close_writer()
 
-    logging.info(f"evaluation topics end")
+    logging.info("evaluation topics end")
 
     # calculation of the overall evaluation like mAP, TP Rate, etc and save evaluated data.
     final_metrics: dict[str, dict] = evaluator.get_evaluation_results()
@@ -424,12 +422,12 @@ def evaluate(
             degradation_topic,
         )
 
-    logging.info(f"stop_reason_processor begin")
+    logging.info("stop_reason_processor begin")
 
     # Save stop_reason data to spreadsheet
     stop_reason_processor.save_to_spreadsheet()
 
-    logging.info(f"stop_reason_processor end")
+    logging.info("stop_reason_processor end")
 
 
 def parse_args() -> argparse.Namespace:

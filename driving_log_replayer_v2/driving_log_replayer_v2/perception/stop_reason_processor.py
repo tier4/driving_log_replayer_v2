@@ -59,11 +59,10 @@ class StopReasonProcessor:
         if not msg.stop_reason.stop_reasons:
             return
             
-        logging.info(f"stop_reason loop begin")
+        logging.info("stop_reason loop begin")
 
         try:
             for idx, stop_reason in enumerate(msg.stop_reason.stop_reasons):
-                #logging.info(f"stop_reason: {stop_reason.stop_factors[0]}")
                 reason_data = {
                     'timestamp': timestamp,
                     'idx': idx,
@@ -76,10 +75,10 @@ class StopReasonProcessor:
                     'qw': stop_reason.stop_factors[0].stop_pose.orientation.w,
                 }
                 self.stop_reasons_data.append(reason_data)
-        except Exception as e:
+        except AttributeError as e:
             logging.error(f"Error processing stop_reason: {e}")
         finally:
-            logging.info(f"stop_reason loop end")
+            logging.info("stop_reason loop end")
     
     def save_to_spreadsheet(self) -> None:
         """Save the collected stop_reason data to a CSV file."""
@@ -92,9 +91,9 @@ class StopReasonProcessor:
         logging.info(f"save_to_spreadsheet begin")
         
         # Write to CSV
-        with open(self.csv_file_path, 'w', newline='', encoding='utf-8') as csvfile:
+        with open(self.csv_file_path, 'w', newline='', encoding='utf-8') as csv_file:
             fieldnames = ['timestamp', 'idx', 'reason', 'dist_to_stop_pos', 'x', 'y', 'z', 'qz', 'qw']
-            writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
+            writer = csv.DictWriter(csv_file, fieldnames=fieldnames)
             
             writer.writeheader()
             for data in self.stop_reasons_data:

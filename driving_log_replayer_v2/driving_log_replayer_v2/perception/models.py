@@ -148,9 +148,11 @@ class StopReasonEvaluation(BaseModel):
     @classmethod
     def validate_base_stop_line_dist(cls, v: dict) -> dict:
         if "min" not in v or "max" not in v:
-            raise ValueError("base_stop_line_dist must contain 'min' and 'max' values")
+            err_msg = "base_stop_line_dist must contain 'min' and 'max' values"
+            raise ValueError(err_msg)
         if v["min"] >= v["max"]:
-            raise ValueError("base_stop_line_dist min must be less than max")
+            err_msg = "base_stop_line_dist min must be less than max"
+            raise ValueError(err_msg)
         return v
 
 
@@ -321,9 +323,10 @@ class StopReasonEvaluationItem(EvaluationItem):
 
     def check_timeout(self, current_time: float) -> dict | None:
         """Check if we've exceeded the tolerance interval without receiving the target stop reason."""
+        CHECK_INTERVAL = 0.1
 
         # Only check if we haven't checked recently (avoid spam)
-        if current_time - self.last_check_time < 0.1:  # Check at most every 0.1 seconds
+        if current_time - self.last_check_time < CHECK_INTERVAL:  # Check at most every 0.1 seconds
             return None
             
         self.last_check_time = current_time
@@ -334,9 +337,9 @@ class StopReasonEvaluationItem(EvaluationItem):
                 return None
             # True Positive: Check if we haven't received the target reason for tolerance_interval seconds
             if (self.last_target_reason_time >= self.start_time and 
-                current_time - self.last_target_reason_time >= self.tolerance_interval) or (
+                current_time - self.last_target_reason_time >= self.tolerance_interval) or \
                (self.last_target_reason_time == -1.0 and 
-                current_time >= self.start_time + self.tolerance_interval)):
+                current_time >= self.start_time + self.tolerance_interval):
                 self.total += 1
                 self.success = self.rate() >= self.pass_rate
                 self.summary = f"{self.name} ({self.success_str()}): {self.passed} / {self.total} -> {self.rate():.2f}%"
@@ -434,7 +437,7 @@ class PerceptionResult(ResultBase):
 
     def set_frame(
         self,
-        frame: 'PerceptionFrameResult',
+        frame: PerceptionFrameResult,
         skip: int,
         map_to_baselink: dict,
     ) -> None:

@@ -14,7 +14,6 @@
 
 from launch.actions import DeclareLaunchArgument
 import yaml
-from pathlib import Path
 
 RECORD_TOPIC = """^/tf$\
 |^/tf_static$\
@@ -55,7 +54,7 @@ def get_autoware_disable_config(scenario_path: str) -> dict[str, str]:
                 "planning": "false",
                 "control": "false",
             }
-    except Exception:
+    except FileNotFoundError:
         # Fallback to default configuration if scenario loading fails
         return {
             "localization": "false",

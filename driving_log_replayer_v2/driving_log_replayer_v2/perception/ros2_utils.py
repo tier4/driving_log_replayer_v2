@@ -131,9 +131,7 @@ class RosBagManager:
             elif topic_name == "/tf":
                 for transform in msg.transforms:
                     self._tf_buffer.set_transform(transform, "rosbag_import")
-            elif topic_name in self._evaluate_topic:
-                yield topic_name, msg, ros_timestamp
-            elif topic_name == "/awapi/autoware/get/status":
+            elif topic_name in self._evaluate_topic or topic_name == "/awapi/autoware/get/status":
                 yield topic_name, msg, ros_timestamp
         self._last_ros_timestamp = ros_timestamp
         del self._reader
