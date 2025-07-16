@@ -135,8 +135,30 @@ class Criteria(BaseModel):
     Filter: Filter
 
 
+class StopReasonEvaluation(BaseModel):
+    """Configuration for stop reason evaluation."""
+    start_time: number
+    end_time: number
+    base_stop_line_dist: dict[str, number]  # min and max values
+    tolerance_interval: number
+    pass_rate: number
+    evaluation_type: Literal["TP", "TN"] = "TP"  # TP: True Positive (expect stop), TN: True Negative (expect no stop)
+
+    @field_validator("base_stop_line_dist")
+    @classmethod
+    def validate_base_stop_line_dist(cls, v: dict) -> dict:
+        if "min" not in v or "max" not in v:
+            err_msg = "base_stop_line_dist must contain 'min' and 'max' values"
+            raise ValueError(err_msg)
+        if v["min"] >= v["max"]:
+            err_msg = "base_stop_line_dist min must be less than max"
+            raise ValueError(err_msg)
+        return v
+
+
 class Conditions(BaseModel):
     Criterion: list[Criteria]
+    StopReasonCriterion: dict[str, StopReasonEvaluation] | None = None
 
 
 class Evaluation(BaseModel):
@@ -192,6 +214,192 @@ class Perception(EvaluationItem):
         }
 
 
+
+
+@dataclass
+class StopReasonEvaluationItem(EvaluationItem):
+    """Evaluation item for stop reason evaluation."""
+    success: bool = True
+    target_reason: str = ""
+    start_time: float = 0.0
+    end_time: float = 0.0
+    min_distance: float = 0.0
+    max_distance: float = 0.0
+    tolerance_interval: float = 0.0
+    pass_rate: float = 0.0
+    evaluation_type: str = "TP"  # TP: True Positive (expect stop), TN: True Negative (expect no stop)
+    # For tracking
+    last_accepted_time: float = -1.0
+    last_target_reason_time: float = -1.0  # Last time the specific target reason was received
+    last_check_time: float = -1.0  # Last time we checked for timeout
+    passed: int = 0
+    total: int = 0
+    per_frame_results: list[dict] = None
+    # For preventing spam
+    tn_success_logged: bool = False  # Track if TN_SUCCESS has been logged
+
+    def __post_init__(self) -> None:
+        self.condition: StopReasonEvaluation
+        self.target_reason = self.name
+        self.start_time = self.condition.start_time
+        self.end_time = self.condition.end_time
+        self.min_distance = self.condition.base_stop_line_dist["min"]
+        self.max_distance = self.condition.base_stop_line_dist["max"]
+        self.tolerance_interval = self.condition.tolerance_interval
+        self.pass_rate = self.condition.pass_rate
+        self.evaluation_type = self.condition.evaluation_type
+        self.last_accepted_time = -1.0
+        self.last_target_reason_time = -1.0
+        self.last_check_time = -1.0
+        self.passed = 0
+        self.total = 0
+        self.per_frame_results = []
+        self.tn_success_logged = False
+
+    def set_frame(self, stop_reason_data: dict) -> dict:
+        """Set frame result for stop reason evaluation."""
+        frame_success = "Fail"
+        reason = stop_reason_data.get("reason")
+        timestamp = stop_reason_data.get("timestamp", 0.0)
+        dist_to_stop_pos = stop_reason_data.get("dist_to_stop_pos", 0.0)
+        
+        # Update last_target_reason_time if this is the target reason
+        if reason == self.target_reason:
+            self.last_target_reason_time = timestamp
+        
+        self.total += 1
+        
+        # Handle different evaluation types
+        if self.evaluation_type == "TP":
+            # True Positive: expect stop event to occur
+            if self.min_distance <= dist_to_stop_pos <= self.max_distance:
+                self.passed += 1
+                frame_success = "Success"
+        elif self.evaluation_type == "TN":
+            # True Negative: expect NO stop event to occur
+            # If we receive the target reason, it's a failure (false positive)
+            if reason == self.target_reason:
+                # We received the target reason when we shouldn't have
+                self.passed += 0  # Don't increment passed for TN
+                frame_success = "Fail"
+            else:
+                # We didn't receive the target reason, which is good for TN
+                reason = "Not target reason"
+                self.passed += 1
+                frame_success = "Success"
+        
+        self.last_accepted_time = timestamp
+        self.success = self.rate() >= self.pass_rate
+        self.summary = f"{self.name} ({self.success_str()}): {self.passed} / {self.total} -> {self.rate():.2f}%"
+        frame_result = {
+            "StopReason": {
+                "Result": {"Total": self.success_str(), "Frame": frame_success},
+                "Info": {
+                    "Reason": reason,
+                    "Distance": dist_to_stop_pos,
+                    "Timestamp": timestamp,
+                    "EvaluationType": self.evaluation_type,
+                    "Passed": self.passed,
+                    "Total": self.total,
+                },
+            },
+        }
+        self.per_frame_results.append(frame_result)
+        return frame_result
+
+    def get_summary(self) -> str:
+        return self.summary
+
+    def get_pass_rate(self) -> float:
+        return self.rate()
+
+    def get_total(self) -> int:
+        return self.total
+
+    def get_passed(self) -> int:
+        return self.passed
+
+    def get_per_frame_results(self) -> list[dict]:
+        return self.per_frame_results
+
+    def check_timeout(self, current_time: float) -> dict | None: # noqa
+        """Check if we've exceeded the tolerance interval without receiving the target stop reason."""
+        check_interval = 0.1
+
+        # Only check if we haven't checked recently (avoid spam)
+        if current_time - self.last_check_time < check_interval:  # Check at most every 0.1 seconds
+            return None
+            
+        self.last_check_time = current_time
+        
+        if self.evaluation_type == "TP":
+            # Only check if we're within the evaluation time window
+            if not (self.start_time <= current_time <= self.end_time):
+                return None
+            # True Positive: Check if we haven't received the target reason for tolerance_interval seconds
+            if (self.last_target_reason_time >= self.start_time and 
+                current_time - self.last_target_reason_time >= self.tolerance_interval) or \
+               (self.last_target_reason_time == -1.0 and 
+                current_time >= self.start_time + self.tolerance_interval):
+                self.total += 1
+                self.success = self.rate() >= self.pass_rate
+                self.summary = f"{self.name} ({self.success_str()}): {self.passed} / {self.total} -> {self.rate():.2f}%"
+                
+                timeout_result = {
+                    "StopReason": {
+                        "Result": {"Total": self.success_str(), "Frame": "Fail"},
+                        "Info": {
+                            "Reason": "TIMEOUT",
+                            "Distance": 0.0,
+                            "Timestamp": current_time,
+                            "EvaluationType": self.evaluation_type,
+                            "Message": f"No {self.target_reason} received for {self.tolerance_interval}s (last at {self.last_target_reason_time})",
+                            "Passed": self.passed,
+                            "Total": self.total,
+                        },
+                    },
+                }
+                self.per_frame_results.append(timeout_result)
+                return timeout_result
+        elif self.evaluation_type == "TN":
+            # Only check if we're within the evaluation time window
+            if not (self.start_time <= current_time):
+                return None
+            # True Negative: Check if we've reached the end of evaluation window without receiving the target reason
+            if current_time >= self.end_time:
+                # Skip if TN_SUCCESS has already been logged
+                if self.tn_success_logged:
+                    return None
+                
+                # For TN, reaching the end without receiving the target reason is a success
+                self.total += 1
+                self.passed += 1  # Success for TN: no stop event occurred
+                self.success = self.rate() >= self.pass_rate
+                self.summary = f"{self.name} ({self.success_str()}): {self.passed} / {self.total} -> {self.rate():.2f}%"
+                
+                timeout_result = {
+                    "StopReason": {
+                        "Result": {"Total": self.success_str(), "Frame": "Success"},
+                        "Info": {
+                            "Reason": "TN_SUCCESS",
+                            "Distance": 0.0,
+                            "Timestamp": current_time,
+                            "EvaluationType": self.evaluation_type,
+                            "Message": f"No {self.target_reason} received during evaluation window - TN success",
+                            "Passed": self.passed,
+                            "Total": self.total,
+                        },
+                    },
+                }
+                self.per_frame_results.append(timeout_result)
+                self.tn_success_logged = True  # Mark as logged to prevent spam
+                return timeout_result
+            
+        return None
+
+
+
+
 class PerceptionResult(ResultBase):
     def __init__(self, condition: Conditions) -> None:
         super().__init__()
@@ -200,17 +408,33 @@ class PerceptionResult(ResultBase):
             self.__perception_criterion.append(
                 Perception(name=f"criteria{i}", condition=criteria),
             )
+        # Initialize stop reason evaluation items
+        self.__stop_reason_criterion: list[StopReasonEvaluationItem] = []
+        if condition.StopReasonCriterion:
+            for reason_name, reason_config in condition.StopReasonCriterion.items():
+                self.__stop_reason_criterion.append(
+                    StopReasonEvaluationItem(name=reason_name, condition=reason_config),
+                )
 
     def update(self) -> None:
-        all_summary: list[str] = []
-        all_success: list[bool] = []
+        """Update success and summary."""
+        success_list = []
+        summary_list = []
+        # Collect current success and summary from criteria (already updated during frame processing)
         for criterion in self.__perception_criterion:
-            tmp_success = criterion.success
-            prefix_str = "Passed: " if tmp_success else "Failed: "
-            all_summary.append(prefix_str + criterion.summary)
-            all_success.append(tmp_success)
-        self._summary = ", ".join(all_summary)
-        self._success = all(all_success)
+            success_list.append(criterion.success)
+            summary_list.append(criterion.summary)
+        # Collect stop reason criteria
+        for criterion in self.__stop_reason_criterion:
+            success_list.append(criterion.success)
+            summary_list.append(criterion.summary)
+        # Add stop reason summary in required format
+        for criterion in self.__stop_reason_criterion:
+            summary_list.append(
+                f"stop reason({criterion.success_str()}): {criterion.get_passed()} / {criterion.get_total()} -> {criterion.get_pass_rate():.2f}%"
+            )
+        self._success = all(success_list)
+        self._summary = ", ".join(summary_list)
 
     def set_frame(
         self,
@@ -218,13 +442,26 @@ class PerceptionResult(ResultBase):
         skip: int,
         map_to_baselink: dict,
     ) -> None:
+        """Set the result of one frame from the subscribe ros message."""
         self._frame = {
             "Ego": {"TransformStamped": map_to_baselink},
-            "FrameName": frame.frame_name,
             "FrameSkip": skip,
         }
+        # Add perception evaluation results
         for criterion in self.__perception_criterion:
-            self._frame[criterion.name] = criterion.set_frame(frame)
+            criterion_result = criterion.set_frame(frame)
+            self._frame[criterion.name] = criterion_result
+        # Add per-frame stop reason results if any
+        for criterion in self.__stop_reason_criterion:
+            if criterion.per_frame_results:
+                self._frame[criterion.name] = criterion.per_frame_results[-1]
+        self.update()
+
+    def set_stop_reason_frame(self, stop_reason_data: dict) -> None:
+        """Set stop reason evaluation frame result."""
+        for criterion in self.__stop_reason_criterion:
+            criterion_result = criterion.set_frame(stop_reason_data)
+            self._frame[criterion.name] = criterion_result
         self.update()
 
     def set_info_frame(self, msg: str, skip: int) -> None:
@@ -241,3 +478,30 @@ class PerceptionResult(ResultBase):
 
     def set_final_metrics(self, final_metrics: dict) -> None:
         self._frame = {"FinalScore": final_metrics}
+
+    @property
+    def stop_reason_evaluations(self) -> dict[str, StopReasonEvaluationItem]:
+        """Get stop reason evaluations as a dictionary."""
+        return {criterion.target_reason: criterion for criterion in self.__stop_reason_criterion}
+
+    def check_stop_reason_timeouts(self, current_time: float) -> dict[str, dict] | None:
+        """Check for timeouts in all stop reason evaluations."""
+        timeout_results = {}
+        has_timeout = False
+        
+        for criterion in self.__stop_reason_criterion:
+            timeout_result = criterion.check_timeout(current_time)
+            if timeout_result:
+                timeout_results[criterion.name] = timeout_result
+                has_timeout = True
+                
+        return timeout_results if has_timeout else None
+
+    def add_timeout_results_to_frame(self, timeout_results: dict[str, dict]) -> None:
+        """Add timeout results to the current frame."""
+        if not hasattr(self, '_frame') or self._frame is None:
+            self._frame = {}
+        
+        for reason_name, timeout_result in timeout_results.items():
+            self._frame[reason_name] = timeout_result
+
