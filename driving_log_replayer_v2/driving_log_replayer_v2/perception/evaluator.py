@@ -222,7 +222,7 @@ class PerceptionEvaluator:
         raise RuntimeError(err_msg)
 
     def __check_evaluation_task_and_frame_id(self, evaluation_task: str) -> bool:
-        # for fp_validation, it can be either base_link or map because it can handle with DetectedObjects, TrackedObjects and PredictedObjects.
+        # for fp_validation, it can be either base_link or map because it can handle DetectedObjects, TrackedObjects and PredictedObjects.
         return (
             (evaluation_task == "detection" and self.__frame_id_str == "base_link")
             or (evaluation_task in ("tracking", "prediction") and self.__frame_id_str == "map")
