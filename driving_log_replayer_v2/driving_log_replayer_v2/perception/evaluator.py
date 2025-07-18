@@ -45,9 +45,10 @@ class PerceptionEvaluator:
         result_archive_path: str,
         evaluation_topic: str,
         evaluation_task: str,
+        frame_id_str: str,
     ) -> None:
         self.__skip_counter = 0
-        self.__frame_id_str: str
+        self.__frame_id_str = frame_id_str
         self.__critical_object_filter_config: CriticalObjectFilterConfig
         self.__frame_pass_fail_config: PerceptionPassFailConfig
         self.__evaluator: PerceptionEvaluationManager
@@ -58,8 +59,10 @@ class PerceptionEvaluator:
 
         perception_evaluation_config["evaluation_config_dict"]["label_prefix"] = "autoware"
 
-        if not self.__check_evaluation_task(evaluation_task):
-            err_msg = f"Invalid evaluation task: {evaluation_task}. "
+        if not self.__check_evaluation_task_and_frame_id(evaluation_task):
+            err_msg = (
+                f"Invalid evaluation task: {evaluation_task} or frame id: {self.__frame_id_str}. "
+            )
             raise ValueError(err_msg)
         perception_evaluation_config["evaluation_config_dict"]["evaluation_task"] = evaluation_task
 
@@ -218,17 +221,13 @@ class PerceptionEvaluator:
         err_msg = "Analyzer is not available. Please call get_evaluation_results() first."
         raise RuntimeError(err_msg)
 
-    def __check_evaluation_task(self, evaluation_task: str) -> bool:
-        if evaluation_task in ["detection", "fp_validation"]:
-            self.__frame_id_str = "base_link"
-            return True
-        if evaluation_task == "tracking":
-            self.__frame_id_str = "map"
-            return True
-        if evaluation_task == "prediction":
-            self.__frame_id_str = "map"
-            return True
-        return False
+    def __check_evaluation_task_and_frame_id(self, evaluation_task: str) -> bool:
+        # for fp_validation, it can be either base_link or map because it can handle with DetectedObjects, TrackedObjects and PredictedObjects.
+        return (
+            (evaluation_task == "detection" and self.__frame_id_str == "base_link")
+            or (evaluation_task in ("tracking", "prediction") and self.__frame_id_str == "map")
+            or (evaluation_task == "fp_validation" and self.__frame_id_str in ("base_link", "map"))
+        )
 
     def __get_scene_results(self) -> MetricsScore:
         num_critical_fail: int = sum(
