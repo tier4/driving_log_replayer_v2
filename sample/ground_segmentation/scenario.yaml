@@ -10,8 +10,8 @@ Evaluation:
     - sample_dataset:
         VehicleId: default
   Conditions:
-    ground_label: 6 # Annotation label for ground pointcloud.
-    obstacle_label: 7 # Annotation label for obstacle pointcloud.
+    ground_label: [20, 21] # Annotation label list for ground pointcloud.
+    obstacle_label: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 22, 23] # Annotation label list for obstacle pointcloud.
     accuracy_min: 0.7 # If the accuracy is lower than the threshold value, the evaluation is considered to have failed.
     accuracy_max: 1.0
     PassRate: 99.0 # How much (%) of the evaluation attempts are considered successful.
