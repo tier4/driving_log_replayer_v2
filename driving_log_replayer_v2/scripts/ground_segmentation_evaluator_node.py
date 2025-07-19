@@ -117,16 +117,21 @@ class GroundSegmentationEvaluator(DLREvaluatorV2):
         )
 
         # count TP+FN, TN+FP
-        tp_fn = np.count_nonzero(gt_frame_label == self.ground_label)
-        fp_tn = np.count_nonzero(gt_frame_label == self.obstacle_label)
+        tp_fn = 0
+        for ground_label in self.ground_label:
+            tp_fn += np.count_nonzero(gt_frame_label == ground_label)
+
+        fp_tn = 0
+        for obstacle_label in self.obstacle_label:
+            fp_tn += np.count_nonzero(gt_frame_label == obstacle_label)
 
         tn: int = 0
         fn: int = 0
         for p in pointcloud:
             _, idx = kdtree.query(p, k=1)
-            if gt_frame_label[idx] == self.ground_label:
+            if gt_frame_label[idx] in self.ground_label:
                 fn += 1
-            elif gt_frame_label[idx] == self.obstacle_label:
+            elif gt_frame_label[idx] in self.obstacle_label:
                 tn += 1
         tp = tp_fn - fn
         fp = fp_tn - tn
