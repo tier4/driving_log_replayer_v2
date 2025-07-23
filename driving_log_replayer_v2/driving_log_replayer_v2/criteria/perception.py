@@ -434,13 +434,13 @@ class MetricsScore(CriteriaMethodImpl):
                 acc.accuracy
                 for score in frame.metrics_score.classification_scores
                 for acc in score.accuracies
-                if acc.accuracy != float("inf")
+                if not np.isnan(acc.accuracy)
             ]
         else:
             scores = [
                 map_.map
                 for map_ in frame.metrics_score.mean_ap_values
-                if map_.map != float("inf") and map_.matching_mode == MatchingMode.CENTERDISTANCE
+                if not np.isnan(map_.map) and map_.matching_mode == MatchingMode.CENTERDISTANCE
             ]
 
         return 100.0 * sum(scores) / len(scores) if len(scores) != 0 else 0.0
@@ -462,7 +462,7 @@ class MetricsScoreMAPH(CriteriaMethodImpl):
         scores = [
             map_.maph
             for map_ in frame.metrics_score.mean_ap_values
-            if map_.maph != float("inf") and map_.matching_mode == MatchingMode.CENTERDISTANCE
+            if not np.isnan(map_.maph) and map_.matching_mode == MatchingMode.CENTERDISTANCE
         ]
 
         return 100.0 * sum(scores) / len(scores) if len(scores) != 0 else 0.0
