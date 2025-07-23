@@ -39,7 +39,7 @@ def test_scenario() -> None:
 
 @pytest.fixture
 def create_frame_result() -> PerceptionFrameResult:
-    target_labels = ["car", "truck", "bicycle", "pedestrian", "motorbike"]
+    target_labels = ["car", "truck", "bicycle", "pedestrian", "motorbike", "unknown"]
     evaluation_config_dict = {
         "evaluation_task": "detection2d",
         "center_distance_thresholds": [100, 200],
