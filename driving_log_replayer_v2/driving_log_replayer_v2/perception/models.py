@@ -376,7 +376,7 @@ class StopReasonEvaluationItem(EvaluationItem):
                 # Skip if TN_SUCCESS has already been logged
                 if self.tn_success_logged:
                     return None
-                
+
                 # For TN, reaching the end without receiving the target reason is a success
                 self.total += 1
                 self.passed += 1  # Success for TN: no stop event occurred

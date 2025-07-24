@@ -74,4 +74,3 @@ Evaluation:
   PerceptionPassFailConfig:
     target_labels: [car, bicycle, pedestrian, motorbike]
     ignore_attributes: [cycle_state.without_rider] # ignore labels with the specified attribute, name in attribute.json of t4_dataset
-    

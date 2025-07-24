@@ -42,4 +42,4 @@ Evaluation:
     ignore_attributes: [cycle_state.without_rider]
   PerceptionPassFailConfig:
     target_labels: [car, bicycle, pedestrian, motorbike]
-    ignore_attributes: [cycle_state.without_rider] 
+    ignore_attributes: [cycle_state.without_rider]

@@ -120,4 +120,4 @@ class StopReasonProcessor:
         info_msg = f"Stop reasons data saved to: {self.csv_file_path}"
         logging.info(info_msg)
         info_msg = f"Total stop reasons recorded: {len(self.stop_reasons_data)}"
-        logging.info(info_msg) 
+        logging.info(info_msg)

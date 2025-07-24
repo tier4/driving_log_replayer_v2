@@ -170,6 +170,7 @@ def process_stop_reason_message(
 
     Returns:
         bool: True if message was processed as stop reason, False otherwise
+
     """
     stop_reason_processor.process_message(msg, unix_timestamp)
 
