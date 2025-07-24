@@ -23,12 +23,15 @@ from typing import TYPE_CHECKING
 # Try to import ROS messages, but don't fail if they're not available
 try:
     from tier4_api_msgs.msg import AwapiAutowareStatus
+
     ROS_AVAILABLE = True
 except ImportError:
     ROS_AVAILABLE = False
+
     # Create a placeholder for type hints
     class AwapiAutowareStatus:
         pass
+
 
 if TYPE_CHECKING:
     from rosidl_runtime_py.utilities import message_to_ordereddict  # noqa
@@ -40,18 +43,19 @@ class StopReasonProcessor:
     def __init__(self, output_path: "Path") -> None:  # noqa
         """
         Initialize the processor.
-        
+
         Args:
             output_path: Path to save the spreadsheet file
+
         """
         self.output_path = output_path
         self.stop_reasons_data: list[dict] = []
         self.csv_file_path = output_path / "stop_reasons.csv"
-        
+
     def process_message(self, msg: Any, timestamp: float) -> None:
         """
         Process a single AwapiAutowareStatus message.
-        
+
         Args:
             msg: The AwapiAutowareStatus message
             timestamp: Unix timestamp when the message was received
@@ -59,10 +63,10 @@ class StopReasonProcessor:
         """
         if not hasattr(msg, "stop_reason") or not hasattr(msg.stop_reason, "stop_reasons"):
             return
-            
+
         if not msg.stop_reason.stop_reasons:
             return
-            
+
         logging.info("stop_reason loop begin")
 
         try:
@@ -84,17 +88,17 @@ class StopReasonProcessor:
             logging.exception(error_msg)
         finally:
             logging.info("stop_reason loop end")
-    
+
     def save_to_spreadsheet(self) -> None:
         """Save the collected stop_reason data to a CSV file."""
         if not self.stop_reasons_data:
             return
-            
+
         # Ensure output directory exists
         self.output_path.mkdir(parents=True, exist_ok=True)
         info_msg = "save_to_spreadsheet begin"
         logging.info(info_msg)
-        
+
         # Write to CSV
         with Path(self.csv_file_path).open("w", newline="", encoding="utf-8") as csv_file:
             fieldnames = [
@@ -109,7 +113,7 @@ class StopReasonProcessor:
                 "qw",
             ]
             writer = csv.DictWriter(csv_file, fieldnames=fieldnames)
-            
+
             writer.writeheader()
             for data in self.stop_reasons_data:
                 writer.writerow(data)
@@ -117,4 +121,3 @@ class StopReasonProcessor:
         logging.info(info_msg)
         info_msg = f"Total stop reasons recorded: {len(self.stop_reasons_data)}"
         logging.info(info_msg) 
-        

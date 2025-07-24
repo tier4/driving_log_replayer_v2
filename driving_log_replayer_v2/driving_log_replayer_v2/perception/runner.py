@@ -159,7 +159,7 @@ def process_stop_reason_message(
 ) -> bool:
     """
     Process stop reason data from AwapiAutowareStatus messages.
-    
+
     Args:
         msg: The AwapiAutowareStatus message
         unix_timestamp: Unix timestamp in seconds
@@ -167,12 +167,12 @@ def process_stop_reason_message(
         stop_reason_processor: Processor for stop reason data
         result: Perception result object
         result_writer: Writer for results
-        
+
     Returns:
         bool: True if message was processed as stop reason, False otherwise
     """
     stop_reason_processor.process_message(msg, unix_timestamp)
-    
+
     # Process stop reason evaluation if configured
     if hasattr(msg, "stop_reason") and hasattr(msg.stop_reason, "stop_reasons"):
         for stop_reason in msg.stop_reason.stop_reasons:
@@ -191,7 +191,7 @@ def process_stop_reason_message(
                             # The evaluation logic will handle whether it's a success or failure
                             should_include_in_frame = True
                             break
-                
+
                 if should_include_in_frame:
                     stop_reason_data = {
                         "timestamp": unix_timestamp,
@@ -217,7 +217,7 @@ def process_perception_message(
 ) -> None:
     """
     Process perception messages (DetectedObjects, TrackedObjects, PredictedObjects).
-    
+
     Args:
         msg: The perception message
         topic_name: Name of the topic
@@ -277,7 +277,7 @@ def process_stop_reason_timeouts(
 ) -> None:
     """
     Check for stop reason timeouts and process them.
-    
+
     Args:
         unix_timestamp: Unix timestamp in seconds
         subscribed_ros_timestamp: ROS timestamp
@@ -394,7 +394,7 @@ def evaluate(
             result,
             result_writer,
         ):
-             continue
+            continue
 
         # Process perception messages (DetectedObjects, TrackedObjects, PredictedObjects)
         process_perception_message(
@@ -409,7 +409,7 @@ def evaluate(
             additional_record_topic_name,
             degradation_topic,
         )
-        
+
     rosbag_manager.close_writer()
 
     logging.info("evaluation topics end")

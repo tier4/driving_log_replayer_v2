@@ -137,6 +137,7 @@ class Criteria(BaseModel):
 
 class StopReasonEvaluation(BaseModel):
     """Configuration for stop reason evaluation."""
+
     start_time: number
     end_time: number
     base_stop_line_dist: dict[str, number]  # min and max values
@@ -218,7 +219,7 @@ class Perception(EvaluationItem):
 @dataclass
 class StopReasonEvaluationItem(EvaluationItem):
     """Evaluation item for stop reason evaluation."""
-    
+
     success: bool = True
     target_reason: str = ""
     start_time: float = 0.0
@@ -227,7 +228,9 @@ class StopReasonEvaluationItem(EvaluationItem):
     max_distance: float = 0.0
     tolerance_interval: float = 0.0
     pass_rate: float = 0.0
-    evaluation_type: str = "TP"  # TP: True Positive (expect stop), TN: True Negative (expect no stop)
+    evaluation_type: str = (
+        "TP"  # TP: True Positive (expect stop), TN: True Negative (expect no stop)
+    )
     # For tracking
     last_accepted_time: float = -1.0
     last_target_reason_time: float = -1.0  # Last time the specific target reason was received
@@ -262,13 +265,13 @@ class StopReasonEvaluationItem(EvaluationItem):
         reason = stop_reason_data.get("reason")
         timestamp = stop_reason_data.get("timestamp", 0.0)
         dist_to_stop_pos = stop_reason_data.get("dist_to_stop_pos", 0.0)
-        
+
         # Update last_target_reason_time if this is the target reason
         if reason == self.target_reason:
             self.last_target_reason_time = timestamp
-        
+
         self.total += 1
-        
+
         # Handle different evaluation types
         if self.evaluation_type == "TP":
             # True Positive: expect stop event to occur
@@ -287,7 +290,7 @@ class StopReasonEvaluationItem(EvaluationItem):
                 reason = "Not target reason"
                 self.passed += 1
                 frame_success = "Success"
-        
+
         self.last_accepted_time = timestamp
         self.success = self.rate() >= self.pass_rate
         self.summary = f"{self.name} ({self.success_str()}): {self.passed} / {self.total} -> {self.rate():.2f}%"
@@ -322,16 +325,16 @@ class StopReasonEvaluationItem(EvaluationItem):
     def get_per_frame_results(self) -> list[dict]:
         return self.per_frame_results
 
-    def check_timeout(self, current_time: float) -> dict | None: #  noqa
+    def check_timeout(self, current_time: float) -> dict | None:  #  noqa
         """Check if we've exceeded the tolerance interval without receiving the target stop reason."""
         check_interval = 0.1
 
         # Only check if we haven't checked recently (avoid spam)
         if current_time - self.last_check_time < check_interval:  # Check at most every 0.1 seconds
             return None
-            
+
         self.last_check_time = current_time
-        
+
         if self.evaluation_type == "TP":
             # Only check if we're within the evaluation time window
             if not (self.start_time <= current_time <= self.end_time):
@@ -347,7 +350,7 @@ class StopReasonEvaluationItem(EvaluationItem):
                 self.total += 1
                 self.success = self.rate() >= self.pass_rate
                 self.summary = f"{self.name} ({self.success_str()}): {self.passed} / {self.total} -> {self.rate():.2f}%"
-                
+
                 timeout_result = {
                     "StopReason": {
                         "Result": {"Total": self.success_str(), "Frame": "Fail"},
@@ -379,7 +382,7 @@ class StopReasonEvaluationItem(EvaluationItem):
                 self.passed += 1  # Success for TN: no stop event occurred
                 self.success = self.rate() >= self.pass_rate
                 self.summary = f"{self.name} ({self.success_str()}): {self.passed} / {self.total} -> {self.rate():.2f}%"
-                
+
                 timeout_result = {
                     "StopReason": {
                         "Result": {"Total": self.success_str(), "Frame": "Success"},
@@ -397,7 +400,7 @@ class StopReasonEvaluationItem(EvaluationItem):
                 self.per_frame_results.append(timeout_result)
                 self.tn_success_logged = True  # Mark as logged to prevent spam
                 return timeout_result
-            
+
         return None
 
 
@@ -489,20 +492,19 @@ class PerceptionResult(ResultBase):
         """Check for timeouts in all stop reason evaluations."""
         timeout_results = {}
         has_timeout = False
-        
+
         for criterion in self.__stop_reason_criterion:
             timeout_result = criterion.check_timeout(current_time)
             if timeout_result:
                 timeout_results[criterion.name] = timeout_result
                 has_timeout = True
-                
+
         return timeout_results if has_timeout else None
 
     def add_timeout_results_to_frame(self, timeout_results: dict[str, dict]) -> None:
         """Add timeout results to the current frame."""
         if not hasattr(self, "_frame") or self._frame is None:
             self._frame = {}
-        
+
         for reason_name, timeout_result in timeout_results.items():
             self._frame[reason_name] = timeout_result
-

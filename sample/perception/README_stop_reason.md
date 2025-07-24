@@ -5,6 +5,7 @@ This feature adds stop reason evaluation to the perception simulation, allowing 
 ## Overview
 
 The stop reason evaluation feature:
+
 - Monitors `/awapi/autoware/get/status` messages for stop reasons
 - Evaluates stop reasons against configurable criteria
 - Supports both True Positive (TP) and True Negative (TN) evaluation modes
@@ -94,6 +95,7 @@ Evaluates multiple stop reason types with different criteria for each using TP e
 ### True Negative Example (`scenario_stop_reason_tn.yaml`)
 
 Demonstrates both TP and TN evaluation modes using actual stop reason names:
+
 ```yaml
 StopReasonCriterion:
   # True Positive: expect Intersection stop to occur
