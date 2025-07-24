@@ -86,6 +86,9 @@ class Perception(EvaluationItem):
                     "TP": len(frame.pass_fail_result.tp_object_results),
                     "FP": len(frame.pass_fail_result.fp_object_results),
                     "FN": len(frame.pass_fail_result.fn_objects),
+                    "TN": len(frame.pass_fail_result.tn_objects)
+                    if frame.pass_fail_result.frame_pass_fail_config.evaluation_task.is_fp_validation()
+                    else "null",
                 },
             },
         }
