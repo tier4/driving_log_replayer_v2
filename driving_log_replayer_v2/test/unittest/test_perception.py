@@ -207,6 +207,7 @@ def test_perception_success_tp_normal(
             "TP": "5 [car, car, car, car, car]",
             "FP": "5 [car, car, car, car, car]",
             "FN": "0 []",
+            "TN": "null",
         },
     }
 
@@ -236,6 +237,7 @@ def test_perception_fail_tp_normal(
             "TP": "5 [car, car, car, car, car]",
             "FP": "10 [car, car, car, car, car, car, car, car, car, car]",
             "FN": "0 []",
+            "TN": "null",
         },
     }
 
@@ -265,5 +267,6 @@ def test_perception_fail_tp_hard(
             "TP": "5 [car, car, car, car, car]",
             "FP": "5 [car, car, car, car, car]",
             "FN": "0 []",
+            "TN": "null",
         },
     }

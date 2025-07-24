@@ -167,6 +167,7 @@ def test_perception_success_tp_normal(
                 "TP": "5 [green, green, green, green, green]",
                 "FP": "5 [green, green, green, green, green]",
                 "FN": "0 []",
+                "TN": "null",
             },
         },
     }
@@ -198,6 +199,7 @@ def test_perception_fail_tp_normal(
                 "TP": "5 [green, green, green, green, green]",
                 "FP": "10 [green, green, green, green, green, green, green, green, green, green]",
                 "FN": "0 []",
+                "TN": "null",
             },
         },
     }
@@ -229,6 +231,7 @@ def test_perception_fail_tp_hard(
                 "TP": "5 [green, green, green, green, green]",
                 "FP": "5 [green, green, green, green, green]",
                 "FN": "0 []",
+                "TN": "null",
             },
         },
     }

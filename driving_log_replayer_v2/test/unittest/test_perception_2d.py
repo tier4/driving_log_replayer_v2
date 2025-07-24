@@ -163,6 +163,7 @@ def test_perception_success_tp_normal(
                 "TP": 5,
                 "FP": 5,
                 "FN": 0,
+                "TN": "null",
             },
         },
     }
@@ -194,6 +195,7 @@ def test_perception_fail_tp_normal(
                 "TP": 5,
                 "FP": 10,
                 "FN": 0,
+                "TN": "null",
             },
         },
     }
@@ -225,6 +227,7 @@ def test_perception_fail_tp_hard(
                 "TP": 5,
                 "FP": 5,
                 "FN": 0,
+                "TN": "null",
             },
         },
     }
