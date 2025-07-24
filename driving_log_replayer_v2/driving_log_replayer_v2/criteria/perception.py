@@ -127,7 +127,7 @@ class CriteriaLevel(Enum):
             CriteriaLevel: `CriteriaLevel.CUSTOM` with custom value.
 
         """
-        if cls.CUSTOM is not None:
+        if cls.CUSTOM._value_ is not None:
             err_msg = "Custom level is already set."
             raise RuntimeError(err_msg)
         min_range = 0.0
