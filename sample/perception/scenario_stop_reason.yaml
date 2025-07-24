@@ -30,29 +30,29 @@ Evaluation:
     # Stop reason evaluation configuration
     StopReasonCriterion:
       Intersection:
-        start_time: 1649138880.0  # Start time for evaluation (Unix timestamp)
-        end_time: 1649138900.0    # End time for evaluation (Unix timestamp)
+        start_time: 1649138880.0 # Start time for evaluation (Unix timestamp)
+        end_time: 1649138900.0 # End time for evaluation (Unix timestamp)
         base_stop_line_dist:
-          min: 0.0  # Minimum distance to stop line (meters)
-          max: 1.0  # Maximum distance to stop line (meters)
-        tolerance_interval: 0.5   # Minimum time between accepted events (seconds)
-        pass_rate: 90.0           # Required pass rate percentage
+          min: 0.0 # Minimum distance to stop line (meters)
+          max: 1.0 # Maximum distance to stop line (meters)
+        tolerance_interval: 0.5 # Minimum time between accepted events (seconds)
+        pass_rate: 90.0 # Required pass rate percentage
       TrafficLight:
-        start_time: 1649138885.0  # Start time for evaluation (Unix timestamp)
-        end_time: 1649138895.0    # End time for evaluation (Unix timestamp)
+        start_time: 1649138885.0 # Start time for evaluation (Unix timestamp)
+        end_time: 1649138895.0 # End time for evaluation (Unix timestamp)
         base_stop_line_dist:
-          min: 0.0  # Minimum distance to stop line (meters)
-          max: 2.0  # Maximum distance to stop line (meters)
-        tolerance_interval: 0.3   # Minimum time between accepted events (seconds)
-        pass_rate: 85.0           # Required pass rate percentage
+          min: 0.0 # Minimum distance to stop line (meters)
+          max: 2.0 # Maximum distance to stop line (meters)
+        tolerance_interval: 0.3 # Minimum time between accepted events (seconds)
+        pass_rate: 85.0 # Required pass rate percentage
       ObstacleStop:
-        start_time: 1649138890.0  # Start time for evaluation (Unix timestamp)
-        end_time: 1649138905.0    # End time for evaluation (Unix timestamp)
+        start_time: 1649138890.0 # Start time for evaluation (Unix timestamp)
+        end_time: 1649138905.0 # End time for evaluation (Unix timestamp)
         base_stop_line_dist:
-          min: 0.0  # Minimum distance to stop line (meters)
-          max: 3.0  # Maximum distance to stop line (meters)
-        tolerance_interval: 1.0   # Minimum time between accepted events (seconds)
-        pass_rate: 80.0           # Required pass rate percentage
+          min: 0.0 # Minimum distance to stop line (meters)
+          max: 3.0 # Maximum distance to stop line (meters)
+        tolerance_interval: 1.0 # Minimum time between accepted events (seconds)
+        pass_rate: 80.0 # Required pass rate percentage
   PerceptionEvaluationConfig:
     evaluation_config_dict:
       evaluation_task: detection # detection, tracking or prediction. Evaluate the objects specified here
@@ -73,4 +73,5 @@ Evaluation:
     ignore_attributes: [cycle_state.without_rider] # ignore labels with the specified attribute, name in attribute.json of t4_dataset
   PerceptionPassFailConfig:
     target_labels: [car, bicycle, pedestrian, motorbike]
-    ignore_attributes: [cycle_state.without_rider] # ignore labels with the specified attribute, name in attribute.json of t4_dataset 
+    ignore_attributes: [cycle_state.without_rider] # ignore labels with the specified attribute, name in attribute.json of t4_dataset
+    

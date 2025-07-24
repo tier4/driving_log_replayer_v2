@@ -15,9 +15,10 @@
 from __future__ import annotations
 
 import csv
-from pathlib import Path
-from typing import TYPE_CHECKING, Any
 import logging
+from pathlib import Path
+from typing import Any
+from typing import TYPE_CHECKING
 
 # Try to import ROS messages, but don't fail if they're not available
 try:
@@ -36,8 +37,9 @@ if TYPE_CHECKING:
 class StopReasonProcessor:
     """Process stop_reason data from /awapi/autoware/get/status topic and convert to spreadsheet format."""
 
-    def __init__(self, output_path: "Path") -> None: # noqa
-        """Initialize the processor.
+    def __init__(self, output_path: "Path") -> None:  # noqa
+        """
+        Initialize the processor.
         
         Args:
             output_path: Path to save the spreadsheet file
@@ -47,13 +49,15 @@ class StopReasonProcessor:
         self.csv_file_path = output_path / "stop_reasons.csv"
         
     def process_message(self, msg: Any, timestamp: float) -> None:
-        """Process a single AwapiAutowareStatus message.
+        """
+        Process a single AwapiAutowareStatus message.
         
         Args:
             msg: The AwapiAutowareStatus message
             timestamp: Unix timestamp when the message was received
+
         """
-        if not hasattr(msg, 'stop_reason') or not hasattr(msg.stop_reason, 'stop_reasons'):
+        if not hasattr(msg, "stop_reason") or not hasattr(msg.stop_reason, "stop_reasons"):
             return
             
         if not msg.stop_reason.stop_reasons:
@@ -64,15 +68,15 @@ class StopReasonProcessor:
         try:
             for idx, stop_reason in enumerate(msg.stop_reason.stop_reasons):
                 reason_data = {
-                    'timestamp': timestamp,
-                    'idx': idx,
-                    'reason': stop_reason.reason,
-                    'dist_to_stop_pos': stop_reason.stop_factors[0].dist_to_stop_pose,
-                    'x': stop_reason.stop_factors[0].stop_pose.position.x,
-                    'y': stop_reason.stop_factors[0].stop_pose.position.y,
-                    'z': stop_reason.stop_factors[0].stop_pose.position.z,
-                    'qz': stop_reason.stop_factors[0].stop_pose.orientation.z,
-                    'qw': stop_reason.stop_factors[0].stop_pose.orientation.w,
+                    "timestamp": timestamp,
+                    "idx": idx,
+                    "reason": stop_reason.reason,
+                    "dist_to_stop_pos": stop_reason.stop_factors[0].dist_to_stop_pose,
+                    "x": stop_reason.stop_factors[0].stop_pose.position.x,
+                    "y": stop_reason.stop_factors[0].stop_pose.position.y,
+                    "z": stop_reason.stop_factors[0].stop_pose.position.z,
+                    "qz": stop_reason.stop_factors[0].stop_pose.orientation.z,
+                    "qw": stop_reason.stop_factors[0].stop_pose.orientation.w,
                 }
                 self.stop_reasons_data.append(reason_data)
         except AttributeError as e:
@@ -92,8 +96,18 @@ class StopReasonProcessor:
         logging.info(info_msg)
         
         # Write to CSV
-        with Path(self.csv_file_path).open('w', newline='', encoding='utf-8') as csv_file:
-            fieldnames = ['timestamp', 'idx', 'reason', 'dist_to_stop_pos', 'x', 'y', 'z', 'qz', 'qw']
+        with Path(self.csv_file_path).open("w", newline="", encoding="utf-8") as csv_file:
+            fieldnames = [
+                "timestamp",
+                "idx",
+                "reason",
+                "dist_to_stop_pos",
+                "x",
+                "y",
+                "z",
+                "qz",
+                "qw",
+            ]
             writer = csv.DictWriter(csv_file, fieldnames=fieldnames)
             
             writer.writeheader()
@@ -103,3 +117,4 @@ class StopReasonProcessor:
         logging.info(info_msg)
         info_msg = f"Total stop reasons recorded: {len(self.stop_reasons_data)}"
         logging.info(info_msg) 
+        

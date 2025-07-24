@@ -27,7 +27,7 @@ Evaluation:
           max: 1.0
         tolerance_interval: 0.5
         pass_rate: 90.0
-        evaluation_type: TP  # True Positive: expect stop event
+        evaluation_type: TP # True Positive: expect stop event
       # True Negative: expect NO TrafficLight stop to occur
       TrafficLight:
         start_time: 1649138885.0
@@ -37,7 +37,7 @@ Evaluation:
           max: 2.0
         tolerance_interval: 0.3
         pass_rate: 85.0
-        evaluation_type: TN  # True Negative: expect NO stop event
+        evaluation_type: TN # True Negative: expect NO stop event
       # True Negative: expect NO ObstacleStop to occur
       ObstacleStop:
         start_time: 1649138890.0
@@ -47,7 +47,7 @@ Evaluation:
           max: 3.0
         tolerance_interval: 1.0
         pass_rate: 80.0
-        evaluation_type: TN  # True Negative: expect NO stop event
+        evaluation_type: TN # True Negative: expect NO stop event
   PerceptionEvaluationConfig:
     evaluation_config_dict:
       evaluation_task: detection
@@ -64,4 +64,4 @@ Evaluation:
     ignore_attributes: [cycle_state.without_rider]
   PerceptionPassFailConfig:
     target_labels: [car, bicycle, pedestrian, motorbike]
-    ignore_attributes: [cycle_state.without_rider] 
+    ignore_attributes: [cycle_state.without_rider]

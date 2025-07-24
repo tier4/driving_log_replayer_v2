@@ -15,6 +15,7 @@
 from __future__ import annotations
 
 import argparse
+import logging
 from pathlib import Path
 import shutil
 from typing import TYPE_CHECKING
@@ -29,7 +30,6 @@ from std_msgs.msg import ColorRGBA
 from std_msgs.msg import Header
 from tier4_api_msgs.msg import AwapiAutowareStatus
 from visualization_msgs.msg import MarkerArray
-import logging
 
 from driving_log_replayer_v2.evaluator import DLREvaluatorV2
 from driving_log_replayer_v2.perception.analyze import analyze
@@ -174,7 +174,7 @@ def process_stop_reason_message(
     stop_reason_processor.process_message(msg, unix_timestamp)
     
     # Process stop reason evaluation if configured
-    if hasattr(msg, 'stop_reason') and hasattr(msg.stop_reason, 'stop_reasons'):
+    if hasattr(msg, "stop_reason") and hasattr(msg.stop_reason, "stop_reasons"):
         for stop_reason in msg.stop_reason.stop_reasons:
             if stop_reason.stop_factors:
                 # Check if this message should be included in frame results
@@ -194,9 +194,9 @@ def process_stop_reason_message(
                 
                 if should_include_in_frame:
                     stop_reason_data = {
-                        'timestamp': unix_timestamp,
-                        'reason': stop_reason.reason,
-                        'dist_to_stop_pos': stop_reason.stop_factors[0].dist_to_stop_pose,
+                        "timestamp": unix_timestamp,
+                        "reason": stop_reason.reason,
+                        "dist_to_stop_pos": stop_reason.stop_factors[0].dist_to_stop_pose,
                     }
                     result.set_stop_reason_frame(stop_reason_data)
                     result_writer.write_result_with_time(result, subscribed_ros_timestamp)
@@ -229,6 +229,7 @@ def process_perception_message(
         rosbag_manager: ROS bag manager
         additional_record_topic_name: Additional topic names for recording
         degradation_topic: Name of the degradation topic
+
     """
     if isinstance(msg, DetectedObjects):
         interpolation: bool = False
@@ -282,6 +283,7 @@ def process_stop_reason_timeouts(
         subscribed_ros_timestamp: ROS timestamp
         result: Perception result object
         result_writer: Writer for results
+
     """
     timeout_results = result.check_stop_reason_timeouts(unix_timestamp)
     if timeout_results:
@@ -374,14 +376,25 @@ def evaluate(
         # See RosBagManager for `time relationships`.
 
         # Convert timestamp to unix time for consistency
-        unix_timestamp = eval_conversions.unix_time_from_ros_clock_int(subscribed_ros_timestamp) / 1e6  # Convert to seconds
+        unix_timestamp = (
+            eval_conversions.unix_time_from_ros_clock_int(subscribed_ros_timestamp) / 1e6
+        )  # Convert to seconds
 
         # Check for stop reason timeouts before processing messages
-        process_stop_reason_timeouts(unix_timestamp, subscribed_ros_timestamp, result, result_writer)
+        process_stop_reason_timeouts(
+            unix_timestamp, subscribed_ros_timestamp, result, result_writer
+        )
 
         # Process stop_reason data from AwapiAutowareStatus messages
-        if isinstance(msg, AwapiAutowareStatus) and process_stop_reason_message(msg, unix_timestamp, subscribed_ros_timestamp, stop_reason_processor, result, result_writer):
-            continue
+        if isinstance(msg, AwapiAutowareStatus) and process_stop_reason_message(
+            msg,
+            unix_timestamp,
+            subscribed_ros_timestamp,
+            stop_reason_processor,
+            result,
+            result_writer,
+        ):
+             continue
 
         # Process perception messages (DetectedObjects, TrackedObjects, PredictedObjects)
         process_perception_message(

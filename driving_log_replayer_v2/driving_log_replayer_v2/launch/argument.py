@@ -69,8 +69,8 @@ def check_launch_component(conf: dict) -> dict:
     launch_config = import_module(f"driving_log_replayer_v2.launch.{conf['use_case']}")
     
     # For perception use case, check if stop reason evaluation is configured
-    if conf['use_case'] == 'perception' and hasattr(launch_config, 'get_autoware_disable_config'):
-        arg_disable = launch_config.get_autoware_disable_config(conf['scenario_path'])
+    if conf["use_case"] == "perception" and hasattr(launch_config, "get_autoware_disable_config"):
+        arg_disable = launch_config.get_autoware_disable_config(conf["scenario_path"])
     else:
         arg_disable = launch_config.AUTOWARE_DISABLE
     

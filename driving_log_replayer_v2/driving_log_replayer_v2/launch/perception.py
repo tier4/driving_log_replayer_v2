@@ -12,9 +12,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from pathlib import Path
 from launch.actions import DeclareLaunchArgument
 import yaml
-from pathlib import Path
 
 RECORD_TOPIC = """^/tf$\
 |^/tf_static$\
@@ -38,8 +38,8 @@ def get_autoware_disable_config(scenario_path: str) -> dict[str, str]:
             scenario_data = yaml.safe_load(f)
         
         # Check if stop reason evaluation is configured
-        eval_conditions = scenario_data.get('Evaluation', {}).get('Conditions', {})
-        has_stop_reason_eval = eval_conditions.get('StopReasonCriterion') is not None
+        eval_conditions = scenario_data.get("Evaluation", {}).get("Conditions", {})
+        has_stop_reason_eval = eval_conditions.get("StopReasonCriterion") is not None
         
         if has_stop_reason_eval:
             # Enable planning and control for stop reason evaluation
@@ -50,7 +50,7 @@ def get_autoware_disable_config(scenario_path: str) -> dict[str, str]:
             }
         
         # Default configuration
-        return {            # noqa
+        return {  # noqa
             "localization": "false",
             "planning": "false",
             "control": "false",

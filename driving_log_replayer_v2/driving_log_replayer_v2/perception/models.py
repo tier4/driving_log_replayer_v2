@@ -142,7 +142,9 @@ class StopReasonEvaluation(BaseModel):
     base_stop_line_dist: dict[str, number]  # min and max values
     tolerance_interval: number
     pass_rate: number
-    evaluation_type: Literal["TP", "TN"] = "TP"  # TP: True Positive (expect stop), TN: True Negative (expect no stop)
+    evaluation_type: Literal["TP", "TN"] = (
+        "TP"  # TP: True Positive (expect stop), TN: True Negative (expect no stop)
+    )
 
     @field_validator("base_stop_line_dist")
     @classmethod
@@ -213,11 +215,10 @@ class Perception(EvaluationItem):
         }
 
 
-
-
 @dataclass
 class StopReasonEvaluationItem(EvaluationItem):
     """Evaluation item for stop reason evaluation."""
+    
     success: bool = True
     target_reason: str = ""
     start_time: float = 0.0
@@ -321,7 +322,7 @@ class StopReasonEvaluationItem(EvaluationItem):
     def get_per_frame_results(self) -> list[dict]:
         return self.per_frame_results
 
-    def check_timeout(self, current_time: float) -> dict | None: # noqa
+    def check_timeout(self, current_time: float) -> dict | None: #  noqa
         """Check if we've exceeded the tolerance interval without receiving the target stop reason."""
         check_interval = 0.1
 
@@ -336,10 +337,13 @@ class StopReasonEvaluationItem(EvaluationItem):
             if not (self.start_time <= current_time <= self.end_time):
                 return None
             # True Positive: Check if we haven't received the target reason for tolerance_interval seconds
-            if (self.last_target_reason_time >= self.start_time and 
-                current_time - self.last_target_reason_time >= self.tolerance_interval) or \
-               (self.last_target_reason_time == -1.0 and 
-                current_time >= self.start_time + self.tolerance_interval):
+            if (
+                self.last_target_reason_time >= self.start_time
+                and current_time - self.last_target_reason_time >= self.tolerance_interval
+            ) or (
+                self.last_target_reason_time == -1.0
+                and current_time >= self.start_time + self.tolerance_interval
+            ):
                 self.total += 1
                 self.success = self.rate() >= self.pass_rate
                 self.summary = f"{self.name} ({self.success_str()}): {self.passed} / {self.total} -> {self.rate():.2f}%"
@@ -395,8 +399,6 @@ class StopReasonEvaluationItem(EvaluationItem):
                 return timeout_result
             
         return None
-
-
 
 
 class PerceptionResult(ResultBase):
@@ -498,7 +500,7 @@ class PerceptionResult(ResultBase):
 
     def add_timeout_results_to_frame(self, timeout_results: dict[str, dict]) -> None:
         """Add timeout results to the current frame."""
-        if not hasattr(self, '_frame') or self._frame is None:
+        if not hasattr(self, "_frame") or self._frame is None:
             self._frame = {}
         
         for reason_name, timeout_result in timeout_results.items():
