@@ -74,6 +74,7 @@ class EvaluationManager:
                 result_archive_path,
                 topic,
                 task if self._degradation_evaluation_task != "fp_validation" else "fp_validation",
+                "base_link" if task == "detection" else "map",
             )
             for task, topics in evaluation_topics.items()
             for topic in topics
