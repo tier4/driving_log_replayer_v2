@@ -222,10 +222,6 @@ def evaluate(
     # save scenario.yaml to check later
     shutil.copy(scenario_path, Path(result_archive_path).joinpath("scenario.yaml"))
 
-    import time
-
-    start_time = time.perf_counter()
-
     # main evaluation process
     for topic_name, msg, subscribed_ros_timestamp in rosbag_manager.read_messages():
         # See RosBagManager for `time relationships`.
@@ -268,15 +264,8 @@ def evaluate(
             )
     rosbag_manager.close_writer()
 
-    elapsed = time.perf_counter() - start_time
-    print(f"add_frame total execution time: {elapsed * 1000:.3f} ms")
-
-    start_time = time.perf_counter()
     # calculation of the overall evaluation like mAP, TP Rate, etc and save evaluated data.
     final_metrics: dict[str, dict] = evaluator.get_evaluation_results()
-
-    elapsed = time.perf_counter() - start_time
-    print(f"final_metrics total execution time: {elapsed * 1000:.3f} ms")
 
     result.set_final_metrics(final_metrics[degradation_topic])
     result_writer.write_result_with_time(result, rosbag_manager.get_last_ros_timestamp())
