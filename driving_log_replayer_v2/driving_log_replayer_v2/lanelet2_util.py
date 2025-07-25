@@ -15,13 +15,40 @@
 from typing import Any
 
 import lanelet2  # isort:skip
+import yaml
 from autoware_lanelet2_extension_python.projection import MGRSProjector
 from autoware_lanelet2_extension_python.utility import query
 from lanelet2.core import Lanelet
+from lanelet2.projection import UtmProjector
 from shapely.geometry import Polygon
-
+from pathlib import Path
 
 def load_map(map_path: str) -> lanelet2.core.LaneletMap:
+    map_dir = Path(map_path).parent
+    projector_path = map_dir / "map_projector_info.yaml"
+
+    if projector_path.exists():
+        with open(projector_path, "r") as f:
+            projector_config = yaml.safe_load(f)
+
+        projector_type = projector_config.get("projector_type", "MGRS")
+
+        if projector_type == "MGRS":
+            projection = MGRSProjector(lanelet2.io.Origin(0.0, 0.0))
+        else:
+            try:
+                lat = projector_config["map_origin"]["latitude"]
+                lon = projector_config["map_origin"]["longitude"]
+            except KeyError as e:
+                raise ValueError(f"map_projector_info.yaml is missing required key for UTM: {e}")
+            origin = lanelet2.io.Origin(lat, lon)
+            projection = UtmProjector(origin)
+    else:
+       projection = MGRSProjector(lanelet2.io.Origin(0.0, 0.0))
+
+    return lanelet2.io.load(map_path, projection)
+
+def load_map2(map_path: str) -> lanelet2.core.LaneletMap:
     projection = MGRSProjector(lanelet2.io.Origin(0.0, 0.0))
     return lanelet2.io.load(map_path, projection)
 
