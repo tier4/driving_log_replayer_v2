@@ -195,7 +195,7 @@ Each frame in `result.jsonl` will include stop reason evaluation results:
 
 The final result summary will include stop reason evaluation:
 
-```
+```text
 Passed: criteria0 (Success): 95 / 100 -> 95.00%, stop reason(Success): 8 / 10 -> 80.00%
 ```
 
