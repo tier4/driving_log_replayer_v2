@@ -212,8 +212,8 @@ class CriteriaMethodImpl(ABC):
             SuccessFail: Success or fail.
 
         """
-        # No ground truth and No result is considered as Not Available, return None.
-        if self.has_objects(frame) is False:
+        # No ground truth is considered as Not Available, return None.
+        if self.has_gt_objects(frame) is False:
             return None
         score: float = self.calculate_score(frame)
         return (
@@ -223,9 +223,9 @@ class CriteriaMethodImpl(ABC):
         )
 
     @staticmethod
-    def has_objects(frame: PerceptionFrameResult) -> bool:
+    def has_gt_objects(frame: PerceptionFrameResult) -> bool:
         """
-        Return whether the frame result contains at least one objects.
+        Return whether the frame result contains at least one gt objects.
 
         Args:
         ----
@@ -233,12 +233,10 @@ class CriteriaMethodImpl(ABC):
 
         Returns:
         -------
-            bool: Whether the frame result has objects is.
+            bool: Whether the frame result has gt objects is.
 
         """
-        num_success: int = frame.pass_fail_result.get_num_success()
-        num_fail: int = frame.pass_fail_result.get_num_fail()
-        return num_success + num_fail > 0
+        return frame.pass_fail_result.get_num_gt() > 0
 
     @staticmethod
     @abstractmethod
