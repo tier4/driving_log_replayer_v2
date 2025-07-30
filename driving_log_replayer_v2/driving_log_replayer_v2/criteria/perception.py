@@ -233,7 +233,7 @@ class CriteriaMethodImpl(ABC):
 
         Returns:
         -------
-            bool: Whether the frame result has gt objects is.
+            bool: Whether the frame result has gt objects.
 
         """
         return frame.pass_fail_result.get_num_gt() > 0
