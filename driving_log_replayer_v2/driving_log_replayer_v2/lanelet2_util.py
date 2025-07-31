@@ -18,13 +18,27 @@ import lanelet2  # isort:skip
 from pathlib import Path
 import warnings
 
+from autoware_lanelet2_extension_python._autoware_lanelet2_extension_python_boost_python_projection import (
+    TransverseMercatorProjector,
+)
 from autoware_lanelet2_extension_python.projection import MGRSProjector
-from autoware_lanelet2_extension_python.projection import TransverseMercatorProjector
 from autoware_lanelet2_extension_python.utility import query
 from lanelet2.core import Lanelet
 from lanelet2.projection import UtmProjector
+from pydantic import BaseModel
 from shapely.geometry import Polygon
 import yaml
+
+
+class MapOrigin(BaseModel):
+    latitude: float
+    longitude: float
+
+
+class MapProjectorInfo(BaseModel):
+    projector_type: str
+    map_origin: MapOrigin
+    scale_factor: float | None = None
 
 
 def load_map(map_path: str) -> lanelet2.core.LaneletMap:
@@ -32,21 +46,22 @@ def load_map(map_path: str) -> lanelet2.core.LaneletMap:
 
     if projector_path.exists():
         with projector_path.open(mode="r") as f:
-            projector_info = yaml.safe_load(f)
+            data = yaml.safe_load(f)
+        map_projector_info = MapProjectorInfo(**data)
 
-        projector_type = projector_info.get("projector_type")
+        projector_type = map_projector_info.projector_type
 
         if projector_type == "MGRS":
             projection = MGRSProjector(lanelet2.io.Origin(0.0, 0.0))
         elif projector_type == "LocalCartesianUTM":
-            lat = projector_info["map_origin"]["latitude"]
-            lon = projector_info["map_origin"]["longitude"]
+            lat = map_projector_info.map_origin.latitude
+            lon = map_projector_info.map_origin.longitude
             origin = lanelet2.io.Origin(lat, lon)
             projection = UtmProjector(origin)
         elif projector_type == "TransverseMercator":
-            lat = projector_info["map_origin"]["latitude"]
-            lon = projector_info["map_origin"]["longitude"]
-            scale_factor = projector_info.get("scale_factor")
+            lat = map_projector_info.map_origin.latitude
+            lon = map_projector_info.map_origin.longitude
+            scale_factor = map_projector_info.scale_factor
             origin = lanelet2.io.Origin(lat, lon)
             projection = (
                 TransverseMercatorProjector(origin, scale_factor)
