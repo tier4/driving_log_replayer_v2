@@ -32,7 +32,7 @@ from driving_log_replayer_v2.scenario import number
 from driving_log_replayer_v2.scenario import Scenario
 
 if TYPE_CHECKING:
-    from perception_eval.evaluation import PerceptionFrameResult
+    from perception_eval.evaluation.result.perception_frame_result import PerceptionFrameResult
 
 
 class Region(BaseModel):
@@ -141,12 +141,13 @@ class Conditions(BaseModel):
 
 class Evaluation(BaseModel):
     UseCaseName: Literal["perception"]
-    UseCaseFormatVersion: Literal["1.0.0", "1.1.0"]
+    UseCaseFormatVersion: Literal["1.0.0", "1.1.0", "1.2.0"]
     Datasets: list[dict]
     Conditions: Conditions
     PerceptionEvaluationConfig: dict
     CriticalObjectFilterConfig: dict
     PerceptionPassFailConfig: dict
+    degradation_topic: str | None = None
 
 
 class PerceptionScenario(Scenario):

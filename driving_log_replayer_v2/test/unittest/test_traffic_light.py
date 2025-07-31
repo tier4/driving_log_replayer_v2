@@ -19,11 +19,11 @@ from perception_eval.common.label import Label
 from perception_eval.common.label import TrafficLightLabel
 from perception_eval.common.schema import FrameID
 from perception_eval.config import PerceptionEvaluationConfig
-from perception_eval.evaluation import DynamicObjectWithPerceptionResult
-from perception_eval.evaluation import PerceptionFrameResult
 from perception_eval.evaluation.metrics import MetricsScoreConfig
+from perception_eval.evaluation.result.object_result import DynamicObjectWithPerceptionResult
 from perception_eval.evaluation.result.perception_frame_config import CriticalObjectFilterConfig
 from perception_eval.evaluation.result.perception_frame_config import PerceptionPassFailConfig
+from perception_eval.evaluation.result.perception_frame_result import PerceptionFrameResult
 import pytest
 
 from driving_log_replayer_v2.scenario import load_sample_scenario
@@ -167,6 +167,7 @@ def test_perception_success_tp_normal(
                 "TP": "5 [green, green, green, green, green]",
                 "FP": "5 [green, green, green, green, green]",
                 "FN": "0 []",
+                "TN": "null",
             },
         },
     }
@@ -198,6 +199,7 @@ def test_perception_fail_tp_normal(
                 "TP": "5 [green, green, green, green, green]",
                 "FP": "10 [green, green, green, green, green, green, green, green, green, green]",
                 "FN": "0 []",
+                "TN": "null",
             },
         },
     }
@@ -229,6 +231,7 @@ def test_perception_fail_tp_hard(
                 "TP": "5 [green, green, green, green, green]",
                 "FP": "5 [green, green, green, green, green]",
                 "FN": "0 []",
+                "TN": "null",
             },
         },
     }

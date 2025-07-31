@@ -1,5 +1,109 @@
 # Release Notes
 
+## Version 3.11.0
+
+Major changes
+
+| Module       | Feature       | Brief summary                                | Pull request                                                        | Contributor                                     |
+| ------------ | ------------- | -------------------------------------------- | ------------------------------------------------------------------- | ----------------------------------------------- |
+| `perception` | scenario      | fix scenario for perception                  | [#185](https://github.com/tier4/driving_log_replayer_v2/issues/185) | [MasatoSaeki](https://github.com/MasatoSaeki)   |
+| `perception` | scenario      | add key to specify degradation topic         | [#182](https://github.com/tier4/driving_log_replayer_v2/issues/182) | [MasatoSaeki](https://github.com/MasatoSaeki)   |
+| `perception` | remap         | add x2_perception remap profile              | [#178](https://github.com/tier4/driving_log_replayer_v2/issues/178) | [badai-nguyen](https://github.com/badai-nguyen) |
+| `common`     | ci            | update ruff version                          | [#176](https://github.com/tier4/driving_log_replayer_v2/issues/176) | [hayato-m126](https://github.com/hayato-m126)   |
+| `perception` | calculation   | use function get_num_gt() of perception_eval | [#177](https://github.com/tier4/driving_log_replayer_v2/issues/177) | [MasatoSaeki](https://github.com/MasatoSaeki)   |
+| `perception` | fp_validation | enable to use fp_validation                  | [#175](https://github.com/tier4/driving_log_replayer_v2/issues/175) | [MasatoSaeki](https://github.com/MasatoSaeki)   |
+| `perception` | common        | import from absolute source                  | [#172](https://github.com/tier4/driving_log_replayer_v2/issues/172) | [vividf](https://github.com/vividf)             |
+
+## Version 3.10.2
+
+Minor Tweak
+
+| Module       | Feature    | Brief summary                     | Pull request                                                        | Contributor                                   |
+| ------------ | ---------- | --------------------------------- | ------------------------------------------------------------------- | --------------------------------------------- |
+| `perception` | prediction | add timestamps for predicted path | [#164](https://github.com/tier4/driving_log_replayer_v2/issues/164) | [ktro2828](https://github.com/ktro2828)       |
+| `perception` | evaluate   | add topic to evaluate             | [#169](https://github.com/tier4/driving_log_replayer_v2/issues/169) | [MasatoSaeki](https://github.com/MasatoSaeki) |
+| `perception` | result     | show final metrics (revert)       | [#168](https://github.com/tier4/driving_log_replayer_v2/issues/168) | [MasatoSaeki](https://github.com/MasatoSaeki) |
+
+## Version 3.10.1
+
+Minor Tweak
+
+| Module         | Feature     | Brief summary              | Pull request                                                        | Contributor                                         |
+| -------------- | ----------- | -------------------------- | ------------------------------------------------------------------- | --------------------------------------------------- |
+| `localization` | result      | update localization result | [#165](https://github.com/tier4/driving_log_replayer_v2/issues/165) | [SakodaShintaro](https://github.com/SakodaShintaro) |
+| `common`       | package.xml | update maintainer          | [#166](https://github.com/tier4/driving_log_replayer_v2/issues/166) | [MasatoSaeki](https://github.com/MasatoSaeki)       |
+
+## Version 3.10.0
+
+Major changes
+
+| Module             | Feature    | Brief summary                  | Pull request                                                        | Contributor                                   |
+| ------------------ | ---------- | ------------------------------ | ------------------------------------------------------------------- | --------------------------------------------- |
+| `planning_control` | evaluation | add Planning Factor evaluation | [#155](https://github.com/tier4/driving_log_replayer_v2/issues/155) | [hayato-m126](https://github.com/hayato-m126) |
+
+## Version 3.9.0
+
+Major changes
+Ensure that you are using Autoware.universe that incorporates [this PR](https://github.com/autowarefoundation/autoware_universe/pull/10567)
+
+| Module   | Feature        | Brief summary                      | Pull request                                                        | Contributor                                         |
+| -------- | -------------- | ---------------------------------- | ------------------------------------------------------------------- | --------------------------------------------------- |
+| `common` | bag play remap | delete module status based remap   | [#159](https://github.com/tier4/driving_log_replayer_v2/issues/159) | [hayato-m126](https://github.com/hayato-m126)       |
+| `common` | initial pose   | replace InitializeLocalization srv | [#161](https://github.com/tier4/driving_log_replayer_v2/issues/161) | [SakodaShintaro](https://github.com/SakodaShintaro) |
+
+## Version 3.8.5
+
+Minor Tweak
+
+| Module             | Feature       | Brief summary                       | Pull request                                                        | Contributor                                   |
+| ------------------ | ------------- | ----------------------------------- | ------------------------------------------------------------------- | --------------------------------------------- |
+| `common`           | post-process  | post process reindex                | [#158](https://github.com/tier4/driving_log_replayer_v2/issues/158) | [hayato-m126](https://github.com/hayato-m126) |
+| `planning_control` | scenario_type | use diagnostics in planning control | [#146](https://github.com/tier4/driving_log_replayer_v2/issues/146) | [hayato-m126](https://github.com/hayato-m126) |
+| `common`           | i/o interface | add result editor                   | [#153](https://github.com/tier4/driving_log_replayer_v2/issues/153) | [hayato-m126](https://github.com/hayato-m126) |
+| `common`           | i/o interface | add result reader                   | [#151](https://github.com/tier4/driving_log_replayer_v2/issues/151) | [hayato-m126](https://github.com/hayato-m126) |
+
+## Version 3.8.4
+
+Minor Tweak
+
+| Module       | Feature | Brief summary                                      | Pull request                                                      | Contributor                                   |
+| ------------ | ------- | -------------------------------------------------- | ----------------------------------------------------------------- | --------------------------------------------- |
+| `perception` | result  | change args False to True to save scene_result.pkl | [#147](https://github.com/tier4/driving_log_replayer_v2/pull/147) | [MasatoSaeki](https://github.com/MasatoSaeki) |
+
+## Version 3.8.3
+
+Minor Tweak
+
+| Module       | Feature | Brief summary            | Pull request                                                      | Contributor                                   |
+| ------------ | ------- | ------------------------ | ----------------------------------------------------------------- | --------------------------------------------- |
+| `perception` | analyze | add consecutive fn spans | [#130](https://github.com/tier4/driving_log_replayer_v2/pull/130) | [MasatoSaeki](https://github.com/MasatoSaeki) |
+
+## Version 3.8.2
+
+Minor Tweak
+
+| Module       | Feature | Brief summary                      | Pull request                                                      | Contributor                                   |
+| ------------ | ------- | ---------------------------------- | ----------------------------------------------------------------- | --------------------------------------------- |
+| `perception` | launch  | add args range                     | [#142](https://github.com/tier4/driving_log_replayer_v2/pull/142) | [MasatoSaeki](https://github.com/MasatoSaeki) |
+| `perception` | analyze | delete final metrics in perception | [#143](https://github.com/tier4/driving_log_replayer_v2/pull/143) | [MasatoSaeki](https://github.com/MasatoSaeki) |
+
+## Version 3.8.1
+
+Minor Tweak
+
+| Module       | Feature | Brief summary                                 | Pull request                                                      | Contributor                                   |
+| ------------ | ------- | --------------------------------------------- | ----------------------------------------------------------------- | --------------------------------------------- |
+| `perception` | launch  | allow None to be treated as an argument value | [#137](https://github.com/tier4/driving_log_replayer_v2/pull/137) | [MasatoSaeki](https://github.com/MasatoSaeki) |
+
+## Version 3.8.0
+
+Major changes
+
+| Module       | Feature | Brief summary          | Pull request                                                      | Contributor                                   |
+| ------------ | ------- | ---------------------- | ----------------------------------------------------------------- | --------------------------------------------- |
+| `perception` | rosbag  | handle storage options | [#136](https://github.com/tier4/driving_log_replayer_v2/pull/136) | [MasatoSaeki](https://github.com/MasatoSaeki) |
+| `common`     | rosbag  | set mcap as default    | [#135](https://github.com/tier4/driving_log_replayer_v2/pull/135) | [hayato-m126](https://github.com/hayato-m126) |
+
 ## Version 3.7.3
 
 Minor Tweak

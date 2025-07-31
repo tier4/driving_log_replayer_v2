@@ -28,7 +28,7 @@ from driving_log_replayer_v2.scenario import load_scenario
 if TYPE_CHECKING:
     from perception_eval.common.object import DynamicObject
     from perception_eval.config import PerceptionEvaluationConfig
-    from perception_eval.evaluation import PerceptionFrameResult
+    from perception_eval.evaluation.result.perception_frame_result import PerceptionFrameResult
     from perception_eval.tool import PerceptionAnalyzer3D
 
 
@@ -42,6 +42,8 @@ class EvaluationManager:
     ) -> None:
         self._scenario: PerceptionScenario
         self._evaluation_condition: dict[str, str]
+        self._degradation_evaluation_task: str
+        self._degradation_topic: str
         self._evaluators: dict[str, PerceptionEvaluator]
 
         try:
@@ -57,6 +59,12 @@ class EvaluationManager:
             self._error = e
             return
 
+        self._degradation_evaluation_task = self._scenario.Evaluation.PerceptionEvaluationConfig[
+            "evaluation_config_dict"
+        ]["evaluation_task"]
+
+        self.set_degradation_topic()
+
         self._evaluators = {
             topic: PerceptionEvaluator(
                 copy.deepcopy(self._scenario.Evaluation.PerceptionEvaluationConfig),
@@ -65,13 +73,28 @@ class EvaluationManager:
                 t4_dataset_path,
                 result_archive_path,
                 topic,
-                task,
+                task if self._degradation_evaluation_task != "fp_validation" else "fp_validation",
+                "base_link" if task == "detection" else "map",
             )
             for task, topics in evaluation_topics.items()
             for topic in topics
         }
 
-    def check_error(self) -> Exception | None:
+    def set_degradation_topic(self) -> None:
+        if self._scenario.Evaluation.degradation_topic is not None:
+            self._degradation_topic = self._scenario.Evaluation.degradation_topic
+        # If degradation topic is not set, set it based on the evaluation task.
+        elif self._degradation_evaluation_task in ["detection", "fp_validation"]:
+            self._degradation_topic = "/perception/object_recognition/detection/objects"
+        elif self._degradation_evaluation_task == "tracking":
+            self._degradation_topic = "/perception/object_recognition/tracking/objects"
+        elif self._degradation_evaluation_task == "prediction":
+            self._degradation_topic = "/perception/object_recognition/objects"
+        else:
+            err_msg = f"Invalid evaluation task: {self._degradation_evaluation_task}"
+            raise ValueError(err_msg)
+
+    def check_scenario_error(self) -> Exception | None:
         return self._error if hasattr(self, "_error") else None
 
     def get_evaluation_condition(self) -> dict[str, str]:
@@ -80,36 +103,46 @@ class EvaluationManager:
     def get_evaluation_topics(self) -> list[str]:
         return self._evaluators.keys()
 
+    def get_degradation_evaluation_task(self) -> str:
+        return self._degradation_evaluation_task
+
     def get_degradation_topic(self) -> str:
-        # TODO: Define topic itself in the same line as Criterion in Conditions
-        evaluation_task = self._scenario.Evaluation.PerceptionEvaluationConfig[
-            "evaluation_config_dict"
-        ]["evaluation_task"]
-        if evaluation_task in ["detection", "fp_validation"]:
-            topic = "/perception/object_recognition/detection/objects"
-        elif evaluation_task == "tracking":
-            topic = "/perception/object_recognition/tracking/objects"
-        elif evaluation_task == "prediction":
-            topic = "/perception/object_recognition/objects"
-        else:
-            err_msg = f"Invalid evaluation task: {evaluation_task}"
-            raise ValueError(err_msg)
-        return topic
+        return self._degradation_topic
 
-    def get_evaluation_config(self, topic_name: str) -> PerceptionEvaluationConfig:
-        evaluator = self._evaluators[topic_name]
-        return evaluator.get_evaluation_config()
+    def get_evaluation_config(
+        self, topic_name: str | None = None
+    ) -> PerceptionEvaluationConfig | dict[str, PerceptionEvaluationConfig]:
+        if topic_name is not None:
+            evaluator = self._evaluators[topic_name]
+            return evaluator.get_evaluation_config()
+        return {
+            topic: evaluator.get_evaluation_config()
+            for topic, evaluator in self._evaluators.items()
+        }
 
-    def get_archive_path(self, topic_name: str) -> Path:
-        return self._evaluators[topic_name].get_archive_path()
+    def get_archive_path(self, topic_name: str | None = None) -> Path | dict[str, Path]:
+        if topic_name is not None:
+            evaluator = self._evaluators[topic_name]
+            return evaluator.get_archive_path()
+        return {
+            topic: evaluator.get_archive_path() for topic, evaluator in self._evaluators.items()
+        }
 
-    def get_evaluation_results(self) -> dict[str, dict]:
+    def get_evaluation_results(self, topic_name: str | None = None) -> dict | dict[str, dict]:
+        if topic_name is not None:
+            evaluator = self._evaluators[topic_name]
+            return evaluator.get_evaluation_results(save_frame_results=True)
         return {
             topic: evaluator.get_evaluation_results(save_frame_results=True)
             for topic, evaluator in self._evaluators.items()
         }
 
-    def get_analyzers(self) -> dict[str, PerceptionAnalyzer3D]:
+    def get_analyzers(
+        self, topic_name: str | None = None
+    ) -> PerceptionAnalyzer3D | dict[str, PerceptionAnalyzer3D]:
+        if topic_name is not None:
+            evaluator = self._evaluators[topic_name]
+            return evaluator.get_analyzer()
         return {topic: evaluator.get_analyzer() for topic, evaluator in self._evaluators.items()}
 
     def add_frame(

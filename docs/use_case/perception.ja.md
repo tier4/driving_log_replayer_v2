@@ -61,6 +61,27 @@ $HOME/autoware/install/lidar_centerpoint/share/lidar_centerpoint/data/pts_voxel_
 
 ## 評価方法
 
+まずはじめに、[セットアップ手順](/docs/quick_start/setup.ja.md)に従ってセットアップを完了させます。
+
+セットアップが終了したら、`~/driving_log_replayer_v2/sample_dataset`にあるサンプル rosbagを使用して認識機能の評価を行うことができます。
+
+```shell
+ros2 launch driving_log_replayer_v2 driving_log_replayer_v2.launch.py \
+    scenario_path:=$HOME/driving_log_replayer_v2/perception.yaml \
+    sensing:=false
+```
+
+あるいは
+
+```shell
+ros2 launch driving_log_replayer_v2 driving_log_replayer_v2.launch.py \
+    scenario_path:=$HOME/driving_log_replayer_v2/perception.yaml \
+    remap_arg:="/sensing/lidar/top/velodyne_packets,/sensing/lidar/left/velodyne_packets,/sensing/lidar/right/velodyne_packets"
+```
+
+> [!NOTE]  
+> サンプル rosbagは、点群を生成するためのpacketsと/sensing/lidar/concatenated/pointcloudが含まれています。そのため、トピックを重複させないためにremapもしくはsensingの非有効化をする必要があります。
+
 launch を立ち上げると以下が順に実行され、評価される。
 
 1. `logging_simulator.launch`、`ros2 bag play`コマンドを立ち上げる

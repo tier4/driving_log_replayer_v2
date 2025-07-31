@@ -17,6 +17,7 @@ from pathlib import Path
 from typing import Any
 from typing import Literal
 
+from ament_index_python.packages import get_package_share_directory
 from pydantic import BaseModel
 import yaml
 
@@ -24,13 +25,14 @@ number = int | float
 
 
 class Scenario(BaseModel):
-    ScenarioFormatVersion: Literal["3.0.0"]
+    ScenarioFormatVersion: Literal["3.0.0", "3.1.0"]
     ScenarioName: str
     ScenarioDescription: str
     SensorModel: str
     VehicleModel: str
     VehicleId: str | None = None
     Evaluation: dict
+    include_use_case: dict | None = None
 
 
 def load_scenario(scenario_path: Path, scenario_class: Callable) -> Any:
@@ -45,8 +47,6 @@ def load_sample_scenario(
     scenario_class: Callable,
     scenario_name: str = "scenario.yaml",
 ) -> Any:
-    from ament_index_python.packages import get_package_share_directory
-
     sample_scenario_path = Path(
         get_package_share_directory("driving_log_replayer_v2"),
         "sample",

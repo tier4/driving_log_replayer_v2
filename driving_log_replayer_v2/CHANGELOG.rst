@@ -2,6 +2,187 @@
 Changelog for package driving_log_replayer
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
+3.11.0 (2025-07-15)
+-------------------
+* fix(perception): fix scenario for perception (`#185 <https://github.com/tier4/driving_log_replayer_v2/issues/185>`_)
+  * fix(perception): fix scenario for perception
+  * fix test code
+  ---------
+* feat(perception): add key to specify degradation topic (`#182 <https://github.com/tier4/driving_log_replayer_v2/issues/182>`_)
+  * add key to specify degradation topic
+  * update scenario
+  ---------
+* feat: add x2_perception remap profile (`#178 <https://github.com/tier4/driving_log_replayer_v2/issues/178>`_)
+* feat: update ruff version (`#176 <https://github.com/tier4/driving_log_replayer_v2/issues/176>`_)
+* use function get_num_gt() of perception_eval (`#177 <https://github.com/tier4/driving_log_replayer_v2/issues/177>`_)
+* enable to use fp_validation (`#175 <https://github.com/tier4/driving_log_replayer_v2/issues/175>`_)
+* chore(evaluation_detection): import from absolute source  (`#172 <https://github.com/tier4/driving_log_replayer_v2/issues/172>`_)
+  * feat: changes for new perception eval feat
+  * chore: absolute path in test
+  ---------
+* Contributors: Hayato Mizushima, Masato Saeki, Yi-Hsiang Fang (Vivid), badai nguyen
+
+3.10.2 (2025-06-26)
+-------------------
+* revert(perception): show final metrics (`#168 <https://github.com/tier4/driving_log_replayer_v2/issues/168>`_)
+  * Revert "feat(perception): delete final metrics in perception (`#143 <https://github.com/tier4/driving_log_replayer_v2/issues/143>`_)"
+  This reverts commit 7d63425f4953e51000610dc85c82140be1bc508c.
+  * refactor
+  * fix init variable
+  ---------
+* feat(perception): change variable name for analysis and default value, and add topic to evaluate (`#169 <https://github.com/tier4/driving_log_replayer_v2/issues/169>`_)
+  * change variable name for analysis and default value
+  * fix test
+  ---------
+* feat: add timestamps for predicted path (`#164 <https://github.com/tier4/driving_log_replayer_v2/issues/164>`_)
+* Contributors: Kotaro Uetake, Masato Saeki
+
+3.10.1 (2025-06-20)
+-------------------
+* feat: update localization result (`#165 <https://github.com/tier4/driving_log_replayer_v2/issues/165>`_)
+  * Added localization_update_jsonl
+  * Fixed to use "summary.json"
+  * Fixed to open as "a"
+  * Updated the sample
+  * Revert "Fixed to open as "a""
+  This reverts commit 14516364723b5d566819c7e9589d85c00c2dee50.
+  * Fixed the update script
+  * Updated result.json
+  * Added ,
+  * Update driving_log_replayer_v2/scripts/localization_update_result_json.py
+  Co-authored-by: Hayato Mizushima <hayato-m126@users.noreply.github.com>
+  * fix: append when result_data > 0
+  ---------
+  Co-authored-by: Hayato Mizushima <hayato-m126@users.noreply.github.com>
+* remove minoda-san and add saeki as maintainer (`#166 <https://github.com/tier4/driving_log_replayer_v2/issues/166>`_)
+* Contributors: Masato Saeki, SakodaShintaro
+
+3.10.0 (2025-06-06)
+-------------------
+* feat: `#140 <https://github.com/tier4/driving_log_replayer_v2/issues/140>`_ update planning control evlauator (`#155 <https://github.com/tier4/driving_log_replayer_v2/issues/155>`_)
+  * feat: evaluate PlanningFactorArray
+  * feat: update
+  * feat: update scenario
+  * feat: update node
+  * chore: add sample
+  * feat: skip test
+  * fix: default value
+  * fix: skip condition
+  * feat: update PlanningFactorContainer
+  * fix: condition
+  * fix: set variable
+  * fix: list condition
+  * fix: additional result check
+  * feat: set frame
+  * fix: update
+  * fix: access field
+  * fix: unhashable
+  * docs: update sample scenario
+  * docs: update scenario
+  * fix: pre-commit
+  * docs: add sample result.json
+  * docs: update
+  * docs: update
+  * fix: add dependency
+  * docs: add English document
+  * feat: add judgement flag
+  * docs: update document
+  * fix: sort
+  ---------
+* Contributors: Hayato Mizushima
+
+3.9.0 (2025-06-06)
+------------------
+* fix: replace InitializeLocalization srv (`#161 <https://github.com/tier4/driving_log_replayer_v2/issues/161>`_)
+  * Replaced InitializeLocalization srv
+  * Sorted
+  * Test commit after fixing npm dependencies
+  * Applied the formatter
+  ---------
+* feat: delete system defined remap (`#159 <https://github.com/tier4/driving_log_replayer_v2/issues/159>`_)
+* Contributors: Hayato Mizushima, SakodaShintaro
+
+3.8.5 (2025-06-03)
+------------------
+* feat: post process reindex (`#158 <https://github.com/tier4/driving_log_replayer_v2/issues/158>`_)
+  * chore: reindex bag in post process
+  * chore: reindex in post process
+  ---------
+* feat: use diagnostics in planning control (`#146 <https://github.com/tier4/driving_log_replayer_v2/issues/146>`_)
+  * feat: subscribe
+  * feat: update scenario format
+  * feat: support version
+  * feat: diag
+  * feat: update
+  * fix: diag
+  * feat: update
+  * fix: pre-commit
+  * docs: update docs
+  * feat(WIP): merge result
+  * fix: pre-commit
+  * fix: spell
+  * feat: update
+  * feat: add additional mode
+  * feat: add post process
+  * revert: additional mode
+  * fix: file handler
+  * fix: summary
+  * fix: noqa
+  ---------
+* feat: ResultEditor (`#153 <https://github.com/tier4/driving_log_replayer_v2/issues/153>`_)
+* feat: add ResultReader (`#151 <https://github.com/tier4/driving_log_replayer_v2/issues/151>`_)
+* Contributors: Hayato Mizushima
+
+3.8.4 (2025-05-09)
+------------------
+* change args False to True (`#147 <https://github.com/tier4/driving_log_replayer_v2/issues/147>`_)
+* Contributors: Masato Saeki
+
+3.8.3 (2025-05-04)
+------------------
+* feat(perception): add consecutive fn spans (`#130 <https://github.com/tier4/driving_log_replayer_v2/issues/130>`_)
+  * fundamental commit
+  * add consecutive_fn_spans
+  * chore
+  * refactor
+  ---------
+* Contributors: Masato Saeki
+
+3.8.2 (2025-05-02)
+------------------
+* feat(perception): delete final metrics in perception (`#143 <https://github.com/tier4/driving_log_replayer_v2/issues/143>`_)
+  * diet
+  * delete sample
+  * split dict to each variable
+  * change  variable
+  * change function name and adjust order
+  ---------
+  Co-authored-by: Hayato Mizushima <hayato-m126@users.noreply.github.com>
+* feat(perception): add args range (`#142 <https://github.com/tier4/driving_log_replayer_v2/issues/142>`_)
+  * add args range
+  * change default distance
+  ---------
+* Contributors: Masato Saeki
+
+3.8.1 (2025-04-25)
+------------------
+* feat(perception): regular expression and the way to represent None (`#137 <https://github.com/tier4/driving_log_replayer_v2/issues/137>`_)
+  * fix regular expression and the way to represent None
+  * add missing quotation
+  Co-authored-by: Copilot <175728472+Copilot@users.noreply.github.com>
+  ---------
+  Co-authored-by: Copilot <175728472+Copilot@users.noreply.github.com>
+* Contributors: Masato Saeki
+
+3.8.0 (2025-04-24)
+------------------
+* feat: set mcap as default (`#135 <https://github.com/tier4/driving_log_replayer_v2/issues/135>`_)
+* feat(perception): handle storage options (`#136 <https://github.com/tier4/driving_log_replayer_v2/issues/136>`_)
+  * handle_storage_options
+  * add tag require
+  ---------
+* Contributors: Hayato Mizushima, Masato Saeki
+
 3.7.3 (2025-04-23)
 ------------------
 * Added `/localization/acceleration` into the record topic list (`#132 <https://github.com/tier4/driving_log_replayer_v2/issues/132>`_)

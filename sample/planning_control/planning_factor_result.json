@@ -1,0 +1,7021 @@
+[
+  {
+    "Condition": [
+      {
+        "topic": "/planning/planning_factors/obstacle_stop",
+        "time": {
+          "start": 1748195183.4,
+          "end": 1748195213.8
+        },
+        "condition_type": "all_of",
+        "area": {
+          "x": 71.5,
+          "y": 345.1,
+          "range": 1
+        }
+      }
+    ]
+  },
+  {
+    "Result": {
+      "Success": false,
+      "Summary": "NoData"
+    },
+    "Stamp": {
+      "System": 1748403945.0236819
+    },
+    "Frame": {}
+  },
+  {
+    "Result": {
+      "Success": true,
+      "Summary": "Passed:Condition_0 (Success)"
+    },
+    "Stamp": {
+      "System": 1748403985.773698,
+      "ROS": 1748195183.431571
+    },
+    "Frame": {
+      "/planning/planning_factors/obstacle_stop": {
+        "Result": {
+          "Total": "Success",
+          "Frame": "Success"
+        },
+        "Info": {
+          "Distance": 0.009999999767330852,
+          "ControlPointPoseX": 71.50000000110036,
+          "ControlPointPoseY": 345.10999999976735
+        }
+      }
+    }
+  },
+  {
+    "Result": {
+      "Success": true,
+      "Summary": "Passed:Condition_0 (Success)"
+    },
+    "Stamp": {
+      "System": 1748403985.8796456,
+      "ROS": 1748195183.5373886
+    },
+    "Frame": {
+      "/planning/planning_factors/obstacle_stop": {
+        "Result": {
+          "Total": "Success",
+          "Frame": "Success"
+        },
+        "Info": {
+          "Distance": 0.009999999767387696,
+          "ControlPointPoseX": 71.50000000110035,
+          "ControlPointPoseY": 345.1099999997674
+        }
+      }
+    }
+  },
+  {
+    "Result": {
+      "Success": true,
+      "Summary": "Passed:Condition_0 (Success)"
+    },
+    "Stamp": {
+      "System": 1748403985.9796698,
+      "ROS": 1748195183.6367972
+    },
+    "Frame": {
+      "/planning/planning_factors/obstacle_stop": {
+        "Result": {
+          "Total": "Success",
+          "Frame": "Success"
+        },
+        "Info": {
+          "Distance": 0.009999999767387696,
+          "ControlPointPoseX": 71.50000000110035,
+          "ControlPointPoseY": 345.1099999997674
+        }
+      }
+    }
+  },
+  {
+    "Result": {
+      "Success": true,
+      "Summary": "Passed:Condition_0 (Success)"
+    },
+    "Stamp": {
+      "System": 1748403986.0723848,
+      "ROS": 1748195183.731777
+    },
+    "Frame": {
+      "/planning/planning_factors/obstacle_stop": {
+        "Result": {
+          "Total": "Success",
+          "Frame": "Success"
+        },
+        "Info": {
+          "Distance": 0.009999999767330852,
+          "ControlPointPoseX": 71.50000000110035,
+          "ControlPointPoseY": 345.10999999976735
+        }
+      }
+    }
+  },
+  {
+    "Result": {
+      "Success": true,
+      "Summary": "Passed:Condition_0 (Success)"
+    },
+    "Stamp": {
+      "System": 1748403986.1724036,
+      "ROS": 1748195183.8316042
+    },
+    "Frame": {
+      "/planning/planning_factors/obstacle_stop": {
+        "Result": {
+          "Total": "Success",
+          "Frame": "Success"
+        },
+        "Info": {
+          "Distance": 0.009999999767387696,
+          "ControlPointPoseX": 71.50000000110035,
+          "ControlPointPoseY": 345.1099999997674
+        }
+      }
+    }
+  },
+  {
+    "Result": {
+      "Success": true,
+      "Summary": "Passed:Condition_0 (Success)"
+    },
+    "Stamp": {
+      "System": 1748403986.2751112,
+      "ROS": 1748195183.9314845
+    },
+    "Frame": {
+      "/planning/planning_factors/obstacle_stop": {
+        "Result": {
+          "Total": "Success",
+          "Frame": "Success"
+        },
+        "Info": {
+          "Distance": 0.009999999767330852,
+          "ControlPointPoseX": 71.50000000110035,
+          "ControlPointPoseY": 345.10999999976735
+        }
+      }
+    }
+  },
+  {
+    "Result": {
+      "Success": true,
+      "Summary": "Passed:Condition_0 (Success)"
+    },
+    "Stamp": {
+      "System": 1748403986.373471,
+      "ROS": 1748195184.0314949
+    },
+    "Frame": {
+      "/planning/planning_factors/obstacle_stop": {
+        "Result": {
+          "Total": "Success",
+          "Frame": "Success"
+        },
+        "Info": {
+          "Distance": 0.009999999767387696,
+          "ControlPointPoseX": 71.50000000110035,
+          "ControlPointPoseY": 345.1099999997674
+        }
+      }
+    }
+  },
+  {
+    "Result": {
+      "Success": true,
+      "Summary": "Passed:Condition_0 (Success)"
+    },
+    "Stamp": {
+      "System": 1748403986.4737144,
+      "ROS": 1748195184.1315238
+    },
+    "Frame": {
+      "/planning/planning_factors/obstacle_stop": {
+        "Result": {
+          "Total": "Success",
+          "Frame": "Success"
+        },
+        "Info": {
+          "Distance": 0.009999999767330852,
+          "ControlPointPoseX": 71.50000000110035,
+          "ControlPointPoseY": 345.10999999976735
+        }
+      }
+    }
+  },
+  {
+    "Result": {
+      "Success": true,
+      "Summary": "Passed:Condition_0 (Success)"
+    },
+    "Stamp": {
+      "System": 1748403986.5749724,
+      "ROS": 1748195184.2315633
+    },
+    "Frame": {
+      "/planning/planning_factors/obstacle_stop": {
+        "Result": {
+          "Total": "Success",
+          "Frame": "Success"
+        },
+        "Info": {
+          "Distance": 0.009999999767330852,
+          "ControlPointPoseX": 71.50000000110036,
+          "ControlPointPoseY": 345.10999999976735
+        }
+      }
+    }
+  },
+  {
+    "Result": {
+      "Success": true,
+      "Summary": "Passed:Condition_0 (Success)"
+    },
+    "Stamp": {
+      "System": 1748403986.671748,
+      "ROS": 1748195184.3314834
+    },
+    "Frame": {
+      "/planning/planning_factors/obstacle_stop": {
+        "Result": {
+          "Total": "Success",
+          "Frame": "Success"
+        },
+        "Info": {
+          "Distance": 0.009999999767330852,
+          "ControlPointPoseX": 71.50000000110033,
+          "ControlPointPoseY": 345.10999999976735
+        }
+      }
+    }
+  },
+  {
+    "Result": {
+      "Success": true,
+      "Summary": "Passed:Condition_0 (Success)"
+    },
+    "Stamp": {
+      "System": 1748403986.770121,
+      "ROS": 1748195184.4282002
+    },
+    "Frame": {
+      "/planning/planning_factors/obstacle_stop": {
+        "Result": {
+          "Total": "Success",
+          "Frame": "Success"
+        },
+        "Info": {
+          "Distance": 0.009999999767330852,
+          "ControlPointPoseX": 71.50000000110036,
+          "ControlPointPoseY": 345.10999999976735
+        }
+      }
+    }
+  },
+  {
+    "Result": {
+      "Success": true,
+      "Summary": "Passed:Condition_0 (Success)"
+    },
+    "Stamp": {
+      "System": 1748403986.8706226,
+      "ROS": 1748195184.5269237
+    },
+    "Frame": {
+      "/planning/planning_factors/obstacle_stop": {
+        "Result": {
+          "Total": "Success",
+          "Frame": "Success"
+        },
+        "Info": {
+          "Distance": 0.009999999767330852,
+          "ControlPointPoseX": 71.50000000110036,
+          "ControlPointPoseY": 345.10999999976735
+        }
+      }
+    }
+  },
+  {
+    "Result": {
+      "Success": true,
+      "Summary": "Passed:Condition_0 (Success)"
+    },
+    "Stamp": {
+      "System": 1748403986.972377,
+      "ROS": 1748195184.6315532
+    },
+    "Frame": {
+      "/planning/planning_factors/obstacle_stop": {
+        "Result": {
+          "Total": "Success",
+          "Frame": "Success"
+        },
+        "Info": {
+          "Distance": 0.009999999767387696,
+          "ControlPointPoseX": 71.50000000110033,
+          "ControlPointPoseY": 345.1099999997674
+        }
+      }
+    }
+  },
+  {
+    "Result": {
+      "Success": true,
+      "Summary": "Passed:Condition_0 (Success)"
+    },
+    "Stamp": {
+      "System": 1748403987.0716708,
+      "ROS": 1748195184.7314727
+    },
+    "Frame": {
+      "/planning/planning_factors/obstacle_stop": {
+        "Result": {
+          "Total": "Success",
+          "Frame": "Success"
+        },
+        "Info": {
+          "Distance": 0.009999999767330852,
+          "ControlPointPoseX": 71.50000000110035,
+          "ControlPointPoseY": 345.10999999976735
+        }
+      }
+    }
+  },
+  {
+    "Result": {
+      "Success": true,
+      "Summary": "Passed:Condition_0 (Success)"
+    },
+    "Stamp": {
+      "System": 1748403987.1841073,
+      "ROS": 1748195184.843441
+    },
+    "Frame": {
+      "/planning/planning_factors/obstacle_stop": {
+        "Result": {
+          "Total": "Success",
+          "Frame": "Success"
+        },
+        "Info": {
+          "Distance": 0.009999999767330852,
+          "ControlPointPoseX": 71.50000000110033,
+          "ControlPointPoseY": 345.10999999976735
+        }
+      }
+    }
+  },
+  {
+    "Result": {
+      "Success": true,
+      "Summary": "Passed:Condition_0 (Success)"
+    },
+    "Stamp": {
+      "System": 1748403987.2833016,
+      "ROS": 1748195184.9386685
+    },
+    "Frame": {
+      "/planning/planning_factors/obstacle_stop": {
+        "Result": {
+          "Total": "Success",
+          "Frame": "Success"
+        },
+        "Info": {
+          "Distance": 0.009999999767330852,
+          "ControlPointPoseX": 71.50000000110035,
+          "ControlPointPoseY": 345.10999999976735
+        }
+      }
+    }
+  },
+  {
+    "Result": {
+      "Success": true,
+      "Summary": "Passed:Condition_0 (Success)"
+    },
+    "Stamp": {
+      "System": 1748403987.3736753,
+      "ROS": 1748195185.0314639
+    },
+    "Frame": {
+      "/planning/planning_factors/obstacle_stop": {
+        "Result": {
+          "Total": "Success",
+          "Frame": "Success"
+        },
+        "Info": {
+          "Distance": 0.009999999767330852,
+          "ControlPointPoseX": 71.50000000110035,
+          "ControlPointPoseY": 345.10999999976735
+        }
+      }
+    }
+  },
+  {
+    "Result": {
+      "Success": true,
+      "Summary": "Passed:Condition_0 (Success)"
+    },
+    "Stamp": {
+      "System": 1748403987.4769037,
+      "ROS": 1748195185.1364887
+    },
+    "Frame": {
+      "/planning/planning_factors/obstacle_stop": {
+        "Result": {
+          "Total": "Success",
+          "Frame": "Success"
+        },
+        "Info": {
+          "Distance": 0.009999999767387696,
+          "ControlPointPoseX": 71.50000000110035,
+          "ControlPointPoseY": 345.1099999997674
+        }
+      }
+    }
+  },
+  {
+    "Result": {
+      "Success": true,
+      "Summary": "Passed:Condition_0 (Success)"
+    },
+    "Stamp": {
+      "System": 1748403987.5731013,
+      "ROS": 1748195185.2317085
+    },
+    "Frame": {
+      "/planning/planning_factors/obstacle_stop": {
+        "Result": {
+          "Total": "Success",
+          "Frame": "Success"
+        },
+        "Info": {
+          "Distance": 0.009999999767330852,
+          "ControlPointPoseX": 71.50000000110036,
+          "ControlPointPoseY": 345.10999999976735
+        }
+      }
+    }
+  },
+  {
+    "Result": {
+      "Success": true,
+      "Summary": "Passed:Condition_0 (Success)"
+    },
+    "Stamp": {
+      "System": 1748403987.676871,
+      "ROS": 1748195185.3366106
+    },
+    "Frame": {
+      "/planning/planning_factors/obstacle_stop": {
+        "Result": {
+          "Total": "Success",
+          "Frame": "Success"
+        },
+        "Info": {
+          "Distance": 0.009999999767387696,
+          "ControlPointPoseX": 71.50000000110035,
+          "ControlPointPoseY": 345.1099999997674
+        }
+      }
+    }
+  },
+  {
+    "Result": {
+      "Success": true,
+      "Summary": "Passed:Condition_0 (Success)"
+    },
+    "Stamp": {
+      "System": 1748403987.7734427,
+      "ROS": 1748195185.4315577
+    },
+    "Frame": {
+      "/planning/planning_factors/obstacle_stop": {
+        "Result": {
+          "Total": "Success",
+          "Frame": "Success"
+        },
+        "Info": {
+          "Distance": 0.009999999767330852,
+          "ControlPointPoseX": 71.50000000110035,
+          "ControlPointPoseY": 345.10999999976735
+        }
+      }
+    }
+  },
+  {
+    "Result": {
+      "Success": true,
+      "Summary": "Passed:Condition_0 (Success)"
+    },
+    "Stamp": {
+      "System": 1748403987.880853,
+      "ROS": 1748195185.5366793
+    },
+    "Frame": {
+      "/planning/planning_factors/obstacle_stop": {
+        "Result": {
+          "Total": "Success",
+          "Frame": "Success"
+        },
+        "Info": {
+          "Distance": 0.009999999767330852,
+          "ControlPointPoseX": 71.50000000110033,
+          "ControlPointPoseY": 345.10999999976735
+        }
+      }
+    }
+  },
+  {
+    "Result": {
+      "Success": true,
+      "Summary": "Passed:Condition_0 (Success)"
+    },
+    "Stamp": {
+      "System": 1748403987.9916987,
+      "ROS": 1748195185.6515133
+    },
+    "Frame": {
+      "/planning/planning_factors/obstacle_stop": {
+        "Result": {
+          "Total": "Success",
+          "Frame": "Success"
+        },
+        "Info": {
+          "Distance": 0.009999999767330852,
+          "ControlPointPoseX": 71.50000000110035,
+          "ControlPointPoseY": 345.10999999976735
+        }
+      }
+    }
+  },
+  {
+    "Result": {
+      "Success": true,
+      "Summary": "Passed:Condition_0 (Success)"
+    },
+    "Stamp": {
+      "System": 1748403988.0829875,
+      "ROS": 1748195185.741468
+    },
+    "Frame": {
+      "/planning/planning_factors/obstacle_stop": {
+        "Result": {
+          "Total": "Success",
+          "Frame": "Success"
+        },
+        "Info": {
+          "Distance": 0.009999999767387696,
+          "ControlPointPoseX": 71.50000000110035,
+          "ControlPointPoseY": 345.1099999997674
+        }
+      }
+    }
+  },
+  {
+    "Result": {
+      "Success": true,
+      "Summary": "Passed:Condition_0 (Success)"
+    },
+    "Stamp": {
+      "System": 1748403988.1821194,
+      "ROS": 1748195185.8414881
+    },
+    "Frame": {
+      "/planning/planning_factors/obstacle_stop": {
+        "Result": {
+          "Total": "Success",
+          "Frame": "Success"
+        },
+        "Info": {
+          "Distance": 0.009999999767330852,
+          "ControlPointPoseX": 71.50000000110036,
+          "ControlPointPoseY": 345.10999999976735
+        }
+      }
+    }
+  },
+  {
+    "Result": {
+      "Success": true,
+      "Summary": "Passed:Condition_0 (Success)"
+    },
+    "Stamp": {
+      "System": 1748403988.2855425,
+      "ROS": 1748195185.9414985
+    },
+    "Frame": {
+      "/planning/planning_factors/obstacle_stop": {
+        "Result": {
+          "Total": "Success",
+          "Frame": "Success"
+        },
+        "Info": {
+          "Distance": 0.009999999767330852,
+          "ControlPointPoseX": 71.50000000110035,
+          "ControlPointPoseY": 345.10999999976735
+        }
+      }
+    }
+  },
+  {
+    "Result": {
+      "Success": true,
+      "Summary": "Passed:Condition_0 (Success)"
+    },
+    "Stamp": {
+      "System": 1748403988.3862655,
+      "ROS": 1748195186.0464516
+    },
+    "Frame": {
+      "/planning/planning_factors/obstacle_stop": {
+        "Result": {
+          "Total": "Success",
+          "Frame": "Success"
+        },
+        "Info": {
+          "Distance": 0.009999999767387696,
+          "ControlPointPoseX": 71.50000000110035,
+          "ControlPointPoseY": 345.1099999997674
+        }
+      }
+    }
+  },
+  {
+    "Result": {
+      "Success": true,
+      "Summary": "Passed:Condition_0 (Success)"
+    },
+    "Stamp": {
+      "System": 1748403988.4814267,
+      "ROS": 1748195186.1328654
+    },
+    "Frame": {
+      "/planning/planning_factors/obstacle_stop": {
+        "Result": {
+          "Total": "Success",
+          "Frame": "Success"
+        },
+        "Info": {
+          "Distance": 0.009999999767330852,
+          "ControlPointPoseX": 71.50000000110035,
+          "ControlPointPoseY": 345.10999999976735
+        }
+      }
+    }
+  },
+  {
+    "Result": {
+      "Success": true,
+      "Summary": "Passed:Condition_0 (Success)"
+    },
+    "Stamp": {
+      "System": 1748403988.58301,
+      "ROS": 1748195186.241431
+    },
+    "Frame": {
+      "/planning/planning_factors/obstacle_stop": {
+        "Result": {
+          "Total": "Success",
+          "Frame": "Success"
+        },
+        "Info": {
+          "Distance": 0.009999999767330852,
+          "ControlPointPoseX": 71.50000000110035,
+          "ControlPointPoseY": 345.10999999976735
+        }
+      }
+    }
+  },
+  {
+    "Result": {
+      "Success": true,
+      "Summary": "Passed:Condition_0 (Success)"
+    },
+    "Stamp": {
+      "System": 1748403988.6853874,
+      "ROS": 1748195186.3414166
+    },
+    "Frame": {
+      "/planning/planning_factors/obstacle_stop": {
+        "Result": {
+          "Total": "Success",
+          "Frame": "Success"
+        },
+        "Info": {
+          "Distance": 0.009999999767330852,
+          "ControlPointPoseX": 71.50000000110035,
+          "ControlPointPoseY": 345.10999999976735
+        }
+      }
+    }
+  },
+  {
+    "Result": {
+      "Success": true,
+      "Summary": "Passed:Condition_0 (Success)"
+    },
+    "Stamp": {
+      "System": 1748403988.7724164,
+      "ROS": 1748195186.4314377
+    },
+    "Frame": {
+      "/planning/planning_factors/obstacle_stop": {
+        "Result": {
+          "Total": "Success",
+          "Frame": "Success"
+        },
+        "Info": {
+          "Distance": 0.009999999767330852,
+          "ControlPointPoseX": 71.50000000110035,
+          "ControlPointPoseY": 345.10999999976735
+        }
+      }
+    }
+  },
+  {
+    "Result": {
+      "Success": true,
+      "Summary": "Passed:Condition_0 (Success)"
+    },
+    "Stamp": {
+      "System": 1748403988.869685,
+      "ROS": 1748195186.526583
+    },
+    "Frame": {
+      "/planning/planning_factors/obstacle_stop": {
+        "Result": {
+          "Total": "Success",
+          "Frame": "Success"
+        },
+        "Info": {
+          "Distance": 0.009999999767330852,
+          "ControlPointPoseX": 71.50000000110035,
+          "ControlPointPoseY": 345.10999999976735
+        }
+      }
+    }
+  },
+  {
+    "Result": {
+      "Success": true,
+      "Summary": "Passed:Condition_0 (Success)"
+    },
+    "Stamp": {
+      "System": 1748403988.9710324,
+      "ROS": 1748195186.6314204
+    },
+    "Frame": {
+      "/planning/planning_factors/obstacle_stop": {
+        "Result": {
+          "Total": "Success",
+          "Frame": "Success"
+        },
+        "Info": {
+          "Distance": 0.009999999767330852,
+          "ControlPointPoseX": 71.50000000110035,
+          "ControlPointPoseY": 345.10999999976735
+        }
+      }
+    }
+  },
+  {
+    "Result": {
+      "Success": true,
+      "Summary": "Passed:Condition_0 (Success)"
+    },
+    "Stamp": {
+      "System": 1748403989.0773437,
+      "ROS": 1748195186.73664
+    },
+    "Frame": {
+      "/planning/planning_factors/obstacle_stop": {
+        "Result": {
+          "Total": "Success",
+          "Frame": "Success"
+        },
+        "Info": {
+          "Distance": 0.009999999767330852,
+          "ControlPointPoseX": 71.50000000110035,
+          "ControlPointPoseY": 345.10999999976735
+        }
+      }
+    }
+  },
+  {
+    "Result": {
+      "Success": true,
+      "Summary": "Passed:Condition_0 (Success)"
+    },
+    "Stamp": {
+      "System": 1748403989.1742625,
+      "ROS": 1748195186.8320625
+    },
+    "Frame": {
+      "/planning/planning_factors/obstacle_stop": {
+        "Result": {
+          "Total": "Success",
+          "Frame": "Success"
+        },
+        "Info": {
+          "Distance": 0.009999999767387696,
+          "ControlPointPoseX": 71.50000000110035,
+          "ControlPointPoseY": 345.1099999997674
+        }
+      }
+    }
+  },
+  {
+    "Result": {
+      "Success": true,
+      "Summary": "Passed:Condition_0 (Success)"
+    },
+    "Stamp": {
+      "System": 1748403989.2765696,
+      "ROS": 1748195186.9365578
+    },
+    "Frame": {
+      "/planning/planning_factors/obstacle_stop": {
+        "Result": {
+          "Total": "Success",
+          "Frame": "Success"
+        },
+        "Info": {
+          "Distance": 0.009999999767330852,
+          "ControlPointPoseX": 71.50000000110035,
+          "ControlPointPoseY": 345.10999999976735
+        }
+      }
+    }
+  },
+  {
+    "Result": {
+      "Success": true,
+      "Summary": "Passed:Condition_0 (Success)"
+    },
+    "Stamp": {
+      "System": 1748403989.3739054,
+      "ROS": 1748195187.0316398
+    },
+    "Frame": {
+      "/planning/planning_factors/obstacle_stop": {
+        "Result": {
+          "Total": "Success",
+          "Frame": "Success"
+        },
+        "Info": {
+          "Distance": 0.009999999767330852,
+          "ControlPointPoseX": 71.50000000110035,
+          "ControlPointPoseY": 345.10999999976735
+        }
+      }
+    }
+  },
+  {
+    "Result": {
+      "Success": true,
+      "Summary": "Passed:Condition_0 (Success)"
+    },
+    "Stamp": {
+      "System": 1748403989.4720902,
+      "ROS": 1748195187.131653
+    },
+    "Frame": {
+      "/planning/planning_factors/obstacle_stop": {
+        "Result": {
+          "Total": "Success",
+          "Frame": "Success"
+        },
+        "Info": {
+          "Distance": 0.009999999767330852,
+          "ControlPointPoseX": 71.50000000110035,
+          "ControlPointPoseY": 345.10999999976735
+        }
+      }
+    }
+  },
+  {
+    "Result": {
+      "Success": true,
+      "Summary": "Passed:Condition_0 (Success)"
+    },
+    "Stamp": {
+      "System": 1748403989.567929,
+      "ROS": 1748195187.2264996
+    },
+    "Frame": {
+      "/planning/planning_factors/obstacle_stop": {
+        "Result": {
+          "Total": "Success",
+          "Frame": "Success"
+        },
+        "Info": {
+          "Distance": 0.009999999767330852,
+          "ControlPointPoseX": 71.50000000110035,
+          "ControlPointPoseY": 345.10999999976735
+        }
+      }
+    }
+  },
+  {
+    "Result": {
+      "Success": true,
+      "Summary": "Passed:Condition_0 (Success)"
+    },
+    "Stamp": {
+      "System": 1748403989.6733935,
+      "ROS": 1748195187.3314915
+    },
+    "Frame": {
+      "/planning/planning_factors/obstacle_stop": {
+        "Result": {
+          "Total": "Success",
+          "Frame": "Success"
+        },
+        "Info": {
+          "Distance": 0.009999999767387696,
+          "ControlPointPoseX": 71.50000000110035,
+          "ControlPointPoseY": 345.1099999997674
+        }
+      }
+    }
+  },
+  {
+    "Result": {
+      "Success": true,
+      "Summary": "Passed:Condition_0 (Success)"
+    },
+    "Stamp": {
+      "System": 1748403989.7766342,
+      "ROS": 1748195187.4364126
+    },
+    "Frame": {
+      "/planning/planning_factors/obstacle_stop": {
+        "Result": {
+          "Total": "Success",
+          "Frame": "Success"
+        },
+        "Info": {
+          "Distance": 0.009999999767330852,
+          "ControlPointPoseX": 71.50000000110035,
+          "ControlPointPoseY": 345.10999999976735
+        }
+      }
+    }
+  },
+  {
+    "Result": {
+      "Success": true,
+      "Summary": "Passed:Condition_0 (Success)"
+    },
+    "Stamp": {
+      "System": 1748403989.8680775,
+      "ROS": 1748195187.5264094
+    },
+    "Frame": {
+      "/planning/planning_factors/obstacle_stop": {
+        "Result": {
+          "Total": "Success",
+          "Frame": "Success"
+        },
+        "Info": {
+          "Distance": 0.009999999767387696,
+          "ControlPointPoseX": 71.50000000110035,
+          "ControlPointPoseY": 345.1099999997674
+        }
+      }
+    }
+  },
+  {
+    "Result": {
+      "Success": true,
+      "Summary": "Passed:Condition_0 (Success)"
+    },
+    "Stamp": {
+      "System": 1748403989.9748595,
+      "ROS": 1748195187.6316059
+    },
+    "Frame": {
+      "/planning/planning_factors/obstacle_stop": {
+        "Result": {
+          "Total": "Success",
+          "Frame": "Success"
+        },
+        "Info": {
+          "Distance": 0.009999999767330852,
+          "ControlPointPoseX": 71.50000000110036,
+          "ControlPointPoseY": 345.10999999976735
+        }
+      }
+    }
+  },
+  {
+    "Result": {
+      "Success": true,
+      "Summary": "Passed:Condition_0 (Success)"
+    },
+    "Stamp": {
+      "System": 1748403990.0703537,
+      "ROS": 1748195187.7264402
+    },
+    "Frame": {
+      "/planning/planning_factors/obstacle_stop": {
+        "Result": {
+          "Total": "Success",
+          "Frame": "Success"
+        },
+        "Info": {
+          "Distance": 0.009999999767330852,
+          "ControlPointPoseX": 71.50000000110036,
+          "ControlPointPoseY": 345.10999999976735
+        }
+      }
+    }
+  },
+  {
+    "Result": {
+      "Success": true,
+      "Summary": "Passed:Condition_0 (Success)"
+    },
+    "Stamp": {
+      "System": 1748403990.1736317,
+      "ROS": 1748195187.8314135
+    },
+    "Frame": {
+      "/planning/planning_factors/obstacle_stop": {
+        "Result": {
+          "Total": "Success",
+          "Frame": "Success"
+        },
+        "Info": {
+          "Distance": 0.009999999767330852,
+          "ControlPointPoseX": 71.50000000110035,
+          "ControlPointPoseY": 345.10999999976735
+        }
+      }
+    }
+  },
+  {
+    "Result": {
+      "Success": true,
+      "Summary": "Passed:Condition_0 (Success)"
+    },
+    "Stamp": {
+      "System": 1748403990.2744942,
+      "ROS": 1748195187.9315412
+    },
+    "Frame": {
+      "/planning/planning_factors/obstacle_stop": {
+        "Result": {
+          "Total": "Success",
+          "Frame": "Success"
+        },
+        "Info": {
+          "Distance": 0.009999999767330852,
+          "ControlPointPoseX": 71.50000000110035,
+          "ControlPointPoseY": 345.10999999976735
+        }
+      }
+    }
+  },
+  {
+    "Result": {
+      "Success": true,
+      "Summary": "Passed:Condition_0 (Success)"
+    },
+    "Stamp": {
+      "System": 1748403990.3698127,
+      "ROS": 1748195188.0265157
+    },
+    "Frame": {
+      "/planning/planning_factors/obstacle_stop": {
+        "Result": {
+          "Total": "Success",
+          "Frame": "Success"
+        },
+        "Info": {
+          "Distance": 0.009999999767330852,
+          "ControlPointPoseX": 71.50000000110036,
+          "ControlPointPoseY": 345.10999999976735
+        }
+      }
+    }
+  },
+  {
+    "Result": {
+      "Success": true,
+      "Summary": "Passed:Condition_0 (Success)"
+    },
+    "Stamp": {
+      "System": 1748403990.4767501,
+      "ROS": 1748195188.1364036
+    },
+    "Frame": {
+      "/planning/planning_factors/obstacle_stop": {
+        "Result": {
+          "Total": "Success",
+          "Frame": "Success"
+        },
+        "Info": {
+          "Distance": 0.009999999767387696,
+          "ControlPointPoseX": 71.50000000110035,
+          "ControlPointPoseY": 345.1099999997674
+        }
+      }
+    }
+  },
+  {
+    "Result": {
+      "Success": true,
+      "Summary": "Passed:Condition_0 (Success)"
+    },
+    "Stamp": {
+      "System": 1748403990.5763836,
+      "ROS": 1748195188.2314441
+    },
+    "Frame": {
+      "/planning/planning_factors/obstacle_stop": {
+        "Result": {
+          "Total": "Success",
+          "Frame": "Success"
+        },
+        "Info": {
+          "Distance": 0.009999999767387696,
+          "ControlPointPoseX": 71.50000000110035,
+          "ControlPointPoseY": 345.1099999997674
+        }
+      }
+    }
+  },
+  {
+    "Result": {
+      "Success": true,
+      "Summary": "Passed:Condition_0 (Success)"
+    },
+    "Stamp": {
+      "System": 1748403990.6737359,
+      "ROS": 1748195188.3315017
+    },
+    "Frame": {
+      "/planning/planning_factors/obstacle_stop": {
+        "Result": {
+          "Total": "Success",
+          "Frame": "Success"
+        },
+        "Info": {
+          "Distance": 0.009999999767330852,
+          "ControlPointPoseX": 71.50000000110035,
+          "ControlPointPoseY": 345.10999999976735
+        }
+      }
+    }
+  },
+  {
+    "Result": {
+      "Success": true,
+      "Summary": "Passed:Condition_0 (Success)"
+    },
+    "Stamp": {
+      "System": 1748403990.780235,
+      "ROS": 1748195188.4378707
+    },
+    "Frame": {
+      "/planning/planning_factors/obstacle_stop": {
+        "Result": {
+          "Total": "Success",
+          "Frame": "Success"
+        },
+        "Info": {
+          "Distance": 0.009999999767387696,
+          "ControlPointPoseX": 71.50000000110035,
+          "ControlPointPoseY": 345.1099999997674
+        }
+      }
+    }
+  },
+  {
+    "Result": {
+      "Success": true,
+      "Summary": "Passed:Condition_0 (Success)"
+    },
+    "Stamp": {
+      "System": 1748403990.8719969,
+      "ROS": 1748195188.5313916
+    },
+    "Frame": {
+      "/planning/planning_factors/obstacle_stop": {
+        "Result": {
+          "Total": "Success",
+          "Frame": "Success"
+        },
+        "Info": {
+          "Distance": 0.009999999767330852,
+          "ControlPointPoseX": 71.50000000110035,
+          "ControlPointPoseY": 345.10999999976735
+        }
+      }
+    }
+  },
+  {
+    "Result": {
+      "Success": true,
+      "Summary": "Passed:Condition_0 (Success)"
+    },
+    "Stamp": {
+      "System": 1748403990.977247,
+      "ROS": 1748195188.6365135
+    },
+    "Frame": {
+      "/planning/planning_factors/obstacle_stop": {
+        "Result": {
+          "Total": "Success",
+          "Frame": "Success"
+        },
+        "Info": {
+          "Distance": 0.009999999767330852,
+          "ControlPointPoseX": 71.50000000110035,
+          "ControlPointPoseY": 345.10999999976735
+        }
+      }
+    }
+  },
+  {
+    "Result": {
+      "Success": true,
+      "Summary": "Passed:Condition_0 (Success)"
+    },
+    "Stamp": {
+      "System": 1748403991.0739675,
+      "ROS": 1748195188.73143
+    },
+    "Frame": {
+      "/planning/planning_factors/obstacle_stop": {
+        "Result": {
+          "Total": "Success",
+          "Frame": "Success"
+        },
+        "Info": {
+          "Distance": 0.009999999767330852,
+          "ControlPointPoseX": 71.50000000110036,
+          "ControlPointPoseY": 345.10999999976735
+        }
+      }
+    }
+  },
+  {
+    "Result": {
+      "Success": true,
+      "Summary": "Passed:Condition_0 (Success)"
+    },
+    "Stamp": {
+      "System": 1748403991.1678917,
+      "ROS": 1748195188.8264282
+    },
+    "Frame": {
+      "/planning/planning_factors/obstacle_stop": {
+        "Result": {
+          "Total": "Success",
+          "Frame": "Success"
+        },
+        "Info": {
+          "Distance": 0.009999999767330852,
+          "ControlPointPoseX": 71.50000000110035,
+          "ControlPointPoseY": 345.10999999976735
+        }
+      }
+    }
+  },
+  {
+    "Result": {
+      "Success": true,
+      "Summary": "Passed:Condition_0 (Success)"
+    },
+    "Stamp": {
+      "System": 1748403991.2858372,
+      "ROS": 1748195188.9444659
+    },
+    "Frame": {
+      "/planning/planning_factors/obstacle_stop": {
+        "Result": {
+          "Total": "Success",
+          "Frame": "Success"
+        },
+        "Info": {
+          "Distance": 0.009999999767330852,
+          "ControlPointPoseX": 71.50000000110035,
+          "ControlPointPoseY": 345.10999999976735
+        }
+      }
+    }
+  },
+  {
+    "Result": {
+      "Success": true,
+      "Summary": "Passed:Condition_0 (Success)"
+    },
+    "Stamp": {
+      "System": 1748403991.3681183,
+      "ROS": 1748195189.0264134
+    },
+    "Frame": {
+      "/planning/planning_factors/obstacle_stop": {
+        "Result": {
+          "Total": "Success",
+          "Frame": "Success"
+        },
+        "Info": {
+          "Distance": 0.009999999767330852,
+          "ControlPointPoseX": 71.50000000110035,
+          "ControlPointPoseY": 345.10999999976735
+        }
+      }
+    }
+  },
+  {
+    "Result": {
+      "Success": true,
+      "Summary": "Passed:Condition_0 (Success)"
+    },
+    "Stamp": {
+      "System": 1748403991.472292,
+      "ROS": 1748195189.1314645
+    },
+    "Frame": {
+      "/planning/planning_factors/obstacle_stop": {
+        "Result": {
+          "Total": "Success",
+          "Frame": "Success"
+        },
+        "Info": {
+          "Distance": 0.009999999767330852,
+          "ControlPointPoseX": 71.50000000110035,
+          "ControlPointPoseY": 345.10999999976735
+        }
+      }
+    }
+  },
+  {
+    "Result": {
+      "Success": true,
+      "Summary": "Passed:Condition_0 (Success)"
+    },
+    "Stamp": {
+      "System": 1748403991.5663352,
+      "ROS": 1748195189.2263782
+    },
+    "Frame": {
+      "/planning/planning_factors/obstacle_stop": {
+        "Result": {
+          "Total": "Success",
+          "Frame": "Success"
+        },
+        "Info": {
+          "Distance": 0.009999999767330852,
+          "ControlPointPoseX": 71.50000000110036,
+          "ControlPointPoseY": 345.10999999976735
+        }
+      }
+    }
+  },
+  {
+    "Result": {
+      "Success": true,
+      "Summary": "Passed:Condition_0 (Success)"
+    },
+    "Stamp": {
+      "System": 1748403991.675804,
+      "ROS": 1748195189.3314064
+    },
+    "Frame": {
+      "/planning/planning_factors/obstacle_stop": {
+        "Result": {
+          "Total": "Success",
+          "Frame": "Success"
+        },
+        "Info": {
+          "Distance": 0.009999999767330852,
+          "ControlPointPoseX": 71.50000000110036,
+          "ControlPointPoseY": 345.10999999976735
+        }
+      }
+    }
+  },
+  {
+    "Result": {
+      "Success": true,
+      "Summary": "Passed:Condition_0 (Success)"
+    },
+    "Stamp": {
+      "System": 1748403991.7831903,
+      "ROS": 1748195189.436845
+    },
+    "Frame": {
+      "/planning/planning_factors/obstacle_stop": {
+        "Result": {
+          "Total": "Success",
+          "Frame": "Success"
+        },
+        "Info": {
+          "Distance": 0.009999999767330852,
+          "ControlPointPoseX": 71.50000000110035,
+          "ControlPointPoseY": 345.10999999976735
+        }
+      }
+    }
+  },
+  {
+    "Result": {
+      "Success": true,
+      "Summary": "Passed:Condition_0 (Success)"
+    },
+    "Stamp": {
+      "System": 1748403991.8729115,
+      "ROS": 1748195189.531391
+    },
+    "Frame": {
+      "/planning/planning_factors/obstacle_stop": {
+        "Result": {
+          "Total": "Success",
+          "Frame": "Success"
+        },
+        "Info": {
+          "Distance": 0.009999999767330852,
+          "ControlPointPoseX": 71.50000000110036,
+          "ControlPointPoseY": 345.10999999976735
+        }
+      }
+    }
+  },
+  {
+    "Result": {
+      "Success": true,
+      "Summary": "Passed:Condition_0 (Success)"
+    },
+    "Stamp": {
+      "System": 1748403991.9722524,
+      "ROS": 1748195189.6313899
+    },
+    "Frame": {
+      "/planning/planning_factors/obstacle_stop": {
+        "Result": {
+          "Total": "Success",
+          "Frame": "Success"
+        },
+        "Info": {
+          "Distance": 0.009999999767387696,
+          "ControlPointPoseX": 71.50000000110035,
+          "ControlPointPoseY": 345.1099999997674
+        }
+      }
+    }
+  },
+  {
+    "Result": {
+      "Success": true,
+      "Summary": "Passed:Condition_0 (Success)"
+    },
+    "Stamp": {
+      "System": 1748403992.0694964,
+      "ROS": 1748195189.726719
+    },
+    "Frame": {
+      "/planning/planning_factors/obstacle_stop": {
+        "Result": {
+          "Total": "Success",
+          "Frame": "Success"
+        },
+        "Info": {
+          "Distance": 0.009999999767330852,
+          "ControlPointPoseX": 71.50000000110035,
+          "ControlPointPoseY": 345.10999999976735
+        }
+      }
+    }
+  },
+  {
+    "Result": {
+      "Success": true,
+      "Summary": "Passed:Condition_0 (Success)"
+    },
+    "Stamp": {
+      "System": 1748403992.1687315,
+      "ROS": 1748195189.8265886
+    },
+    "Frame": {
+      "/planning/planning_factors/obstacle_stop": {
+        "Result": {
+          "Total": "Success",
+          "Frame": "Success"
+        },
+        "Info": {
+          "Distance": 0.009999999767330852,
+          "ControlPointPoseX": 71.50000000110035,
+          "ControlPointPoseY": 345.10999999976735
+        }
+      }
+    }
+  },
+  {
+    "Result": {
+      "Success": true,
+      "Summary": "Passed:Condition_0 (Success)"
+    },
+    "Stamp": {
+      "System": 1748403992.2701757,
+      "ROS": 1748195189.9265199
+    },
+    "Frame": {
+      "/planning/planning_factors/obstacle_stop": {
+        "Result": {
+          "Total": "Success",
+          "Frame": "Success"
+        },
+        "Info": {
+          "Distance": 0.009999999767330852,
+          "ControlPointPoseX": 71.50000000110035,
+          "ControlPointPoseY": 345.10999999976735
+        }
+      }
+    }
+  },
+  {
+    "Result": {
+      "Success": true,
+      "Summary": "Passed:Condition_0 (Success)"
+    },
+    "Stamp": {
+      "System": 1748403992.373537,
+      "ROS": 1748195190.0320263
+    },
+    "Frame": {
+      "/planning/planning_factors/obstacle_stop": {
+        "Result": {
+          "Total": "Success",
+          "Frame": "Success"
+        },
+        "Info": {
+          "Distance": 0.009999999767330852,
+          "ControlPointPoseX": 71.50000000110035,
+          "ControlPointPoseY": 345.10999999976735
+        }
+      }
+    }
+  },
+  {
+    "Result": {
+      "Success": true,
+      "Summary": "Passed:Condition_0 (Success)"
+    },
+    "Stamp": {
+      "System": 1748403992.4726207,
+      "ROS": 1748195190.1315186
+    },
+    "Frame": {
+      "/planning/planning_factors/obstacle_stop": {
+        "Result": {
+          "Total": "Success",
+          "Frame": "Success"
+        },
+        "Info": {
+          "Distance": 0.009999999767387696,
+          "ControlPointPoseX": 71.50000000110035,
+          "ControlPointPoseY": 345.1099999997674
+        }
+      }
+    }
+  },
+  {
+    "Result": {
+      "Success": true,
+      "Summary": "Passed:Condition_0 (Success)"
+    },
+    "Stamp": {
+      "System": 1748403992.5754569,
+      "ROS": 1748195190.2313735
+    },
+    "Frame": {
+      "/planning/planning_factors/obstacle_stop": {
+        "Result": {
+          "Total": "Success",
+          "Frame": "Success"
+        },
+        "Info": {
+          "Distance": 0.009999999767330852,
+          "ControlPointPoseX": 71.50000000110035,
+          "ControlPointPoseY": 345.10999999976735
+        }
+      }
+    }
+  },
+  {
+    "Result": {
+      "Success": true,
+      "Summary": "Passed:Condition_0 (Success)"
+    },
+    "Stamp": {
+      "System": 1748403992.6719491,
+      "ROS": 1748195190.3313608
+    },
+    "Frame": {
+      "/planning/planning_factors/obstacle_stop": {
+        "Result": {
+          "Total": "Success",
+          "Frame": "Success"
+        },
+        "Info": {
+          "Distance": 0.009999999767330852,
+          "ControlPointPoseX": 71.50000000110035,
+          "ControlPointPoseY": 345.10999999976735
+        }
+      }
+    }
+  },
+  {
+    "Result": {
+      "Success": true,
+      "Summary": "Passed:Condition_0 (Success)"
+    },
+    "Stamp": {
+      "System": 1748403992.775148,
+      "ROS": 1748195190.4313555
+    },
+    "Frame": {
+      "/planning/planning_factors/obstacle_stop": {
+        "Result": {
+          "Total": "Success",
+          "Frame": "Success"
+        },
+        "Info": {
+          "Distance": 0.009999999767387696,
+          "ControlPointPoseX": 71.50000000110033,
+          "ControlPointPoseY": 345.1099999997674
+        }
+      }
+    }
+  },
+  {
+    "Result": {
+      "Success": true,
+      "Summary": "Passed:Condition_0 (Success)"
+    },
+    "Stamp": {
+      "System": 1748403992.882016,
+      "ROS": 1748195190.5416052
+    },
+    "Frame": {
+      "/planning/planning_factors/obstacle_stop": {
+        "Result": {
+          "Total": "Success",
+          "Frame": "Success"
+        },
+        "Info": {
+          "Distance": 0.009999999767387696,
+          "ControlPointPoseX": 71.50000000110035,
+          "ControlPointPoseY": 345.1099999997674
+        }
+      }
+    }
+  },
+  {
+    "Result": {
+      "Success": true,
+      "Summary": "Passed:Condition_0 (Success)"
+    },
+    "Stamp": {
+      "System": 1748403992.9709747,
+      "ROS": 1748195190.6313527
+    },
+    "Frame": {
+      "/planning/planning_factors/obstacle_stop": {
+        "Result": {
+          "Total": "Success",
+          "Frame": "Success"
+        },
+        "Info": {
+          "Distance": 0.009999999767387696,
+          "ControlPointPoseX": 71.50000000110033,
+          "ControlPointPoseY": 345.1099999997674
+        }
+      }
+    }
+  },
+  {
+    "Result": {
+      "Success": true,
+      "Summary": "Passed:Condition_0 (Success)"
+    },
+    "Stamp": {
+      "System": 1748403993.0727642,
+      "ROS": 1748195190.731398
+    },
+    "Frame": {
+      "/planning/planning_factors/obstacle_stop": {
+        "Result": {
+          "Total": "Success",
+          "Frame": "Success"
+        },
+        "Info": {
+          "Distance": 0.009999999767387696,
+          "ControlPointPoseX": 71.50000000110035,
+          "ControlPointPoseY": 345.1099999997674
+        }
+      }
+    }
+  },
+  {
+    "Result": {
+      "Success": true,
+      "Summary": "Passed:Condition_0 (Success)"
+    },
+    "Stamp": {
+      "System": 1748403993.1713548,
+      "ROS": 1748195190.826483
+    },
+    "Frame": {
+      "/planning/planning_factors/obstacle_stop": {
+        "Result": {
+          "Total": "Success",
+          "Frame": "Success"
+        },
+        "Info": {
+          "Distance": 0.009999999767330852,
+          "ControlPointPoseX": 71.50000000110035,
+          "ControlPointPoseY": 345.10999999976735
+        }
+      }
+    }
+  },
+  {
+    "Result": {
+      "Success": true,
+      "Summary": "Passed:Condition_0 (Success)"
+    },
+    "Stamp": {
+      "System": 1748403993.2724164,
+      "ROS": 1748195190.9313471
+    },
+    "Frame": {
+      "/planning/planning_factors/obstacle_stop": {
+        "Result": {
+          "Total": "Success",
+          "Frame": "Success"
+        },
+        "Info": {
+          "Distance": 0.009999999767387696,
+          "ControlPointPoseX": 71.50000000110035,
+          "ControlPointPoseY": 345.1099999997674
+        }
+      }
+    }
+  },
+  {
+    "Result": {
+      "Success": true,
+      "Summary": "Passed:Condition_0 (Success)"
+    },
+    "Stamp": {
+      "System": 1748403993.3707418,
+      "ROS": 1748195191.0264013
+    },
+    "Frame": {
+      "/planning/planning_factors/obstacle_stop": {
+        "Result": {
+          "Total": "Success",
+          "Frame": "Success"
+        },
+        "Info": {
+          "Distance": 0.009999999767387696,
+          "ControlPointPoseX": 71.50000000110035,
+          "ControlPointPoseY": 345.1099999997674
+        }
+      }
+    }
+  },
+  {
+    "Result": {
+      "Success": true,
+      "Summary": "Passed:Condition_0 (Success)"
+    },
+    "Stamp": {
+      "System": 1748403993.4756994,
+      "ROS": 1748195191.1323037
+    },
+    "Frame": {
+      "/planning/planning_factors/obstacle_stop": {
+        "Result": {
+          "Total": "Success",
+          "Frame": "Success"
+        },
+        "Info": {
+          "Distance": 0.009999999767330852,
+          "ControlPointPoseX": 71.50000000110036,
+          "ControlPointPoseY": 345.10999999976735
+        }
+      }
+    }
+  },
+  {
+    "Result": {
+      "Success": true,
+      "Summary": "Passed:Condition_0 (Success)"
+    },
+    "Stamp": {
+      "System": 1748403993.571226,
+      "ROS": 1748195191.231344
+    },
+    "Frame": {
+      "/planning/planning_factors/obstacle_stop": {
+        "Result": {
+          "Total": "Success",
+          "Frame": "Success"
+        },
+        "Info": {
+          "Distance": 0.009999999767330852,
+          "ControlPointPoseX": 71.50000000110035,
+          "ControlPointPoseY": 345.10999999976735
+        }
+      }
+    }
+  },
+  {
+    "Result": {
+      "Success": true,
+      "Summary": "Passed:Condition_0 (Success)"
+    },
+    "Stamp": {
+      "System": 1748403993.6783488,
+      "ROS": 1748195191.3364046
+    },
+    "Frame": {
+      "/planning/planning_factors/obstacle_stop": {
+        "Result": {
+          "Total": "Success",
+          "Frame": "Success"
+        },
+        "Info": {
+          "Distance": 0.009999999767330852,
+          "ControlPointPoseX": 71.50000000110033,
+          "ControlPointPoseY": 345.10999999976735
+        }
+      }
+    }
+  },
+  {
+    "Result": {
+      "Success": true,
+      "Summary": "Passed:Condition_0 (Success)"
+    },
+    "Stamp": {
+      "System": 1748403993.7766967,
+      "ROS": 1748195191.436373
+    },
+    "Frame": {
+      "/planning/planning_factors/obstacle_stop": {
+        "Result": {
+          "Total": "Success",
+          "Frame": "Success"
+        },
+        "Info": {
+          "Distance": 0.009999999767387696,
+          "ControlPointPoseX": 71.50000000110033,
+          "ControlPointPoseY": 345.1099999997674
+        }
+      }
+    }
+  },
+  {
+    "Result": {
+      "Success": true,
+      "Summary": "Passed:Condition_0 (Success)"
+    },
+    "Stamp": {
+      "System": 1748403993.8722634,
+      "ROS": 1748195191.531409
+    },
+    "Frame": {
+      "/planning/planning_factors/obstacle_stop": {
+        "Result": {
+          "Total": "Success",
+          "Frame": "Success"
+        },
+        "Info": {
+          "Distance": 0.009999999767330852,
+          "ControlPointPoseX": 71.50000000110035,
+          "ControlPointPoseY": 345.10999999976735
+        }
+      }
+    }
+  },
+  {
+    "Result": {
+      "Success": true,
+      "Summary": "Passed:Condition_0 (Success)"
+    },
+    "Stamp": {
+      "System": 1748403993.9712,
+      "ROS": 1748195191.6313457
+    },
+    "Frame": {
+      "/planning/planning_factors/obstacle_stop": {
+        "Result": {
+          "Total": "Success",
+          "Frame": "Success"
+        },
+        "Info": {
+          "Distance": 0.009999999767330852,
+          "ControlPointPoseX": 71.50000000110035,
+          "ControlPointPoseY": 345.10999999976735
+        }
+      }
+    }
+  },
+  {
+    "Result": {
+      "Success": true,
+      "Summary": "Passed:Condition_0 (Success)"
+    },
+    "Stamp": {
+      "System": 1748403994.0762744,
+      "ROS": 1748195191.7363718
+    },
+    "Frame": {
+      "/planning/planning_factors/obstacle_stop": {
+        "Result": {
+          "Total": "Success",
+          "Frame": "Success"
+        },
+        "Info": {
+          "Distance": 0.009999999767330852,
+          "ControlPointPoseX": 71.50000000110035,
+          "ControlPointPoseY": 345.10999999976735
+        }
+      }
+    }
+  },
+  {
+    "Result": {
+      "Success": true,
+      "Summary": "Passed:Condition_0 (Success)"
+    },
+    "Stamp": {
+      "System": 1748403994.1715856,
+      "ROS": 1748195191.8271365
+    },
+    "Frame": {
+      "/planning/planning_factors/obstacle_stop": {
+        "Result": {
+          "Total": "Success",
+          "Frame": "Success"
+        },
+        "Info": {
+          "Distance": 0.009999999767330852,
+          "ControlPointPoseX": 71.50000000110035,
+          "ControlPointPoseY": 345.10999999976735
+        }
+      }
+    }
+  },
+  {
+    "Result": {
+      "Success": true,
+      "Summary": "Passed:Condition_0 (Success)"
+    },
+    "Stamp": {
+      "System": 1748403994.2685518,
+      "ROS": 1748195191.9263308
+    },
+    "Frame": {
+      "/planning/planning_factors/obstacle_stop": {
+        "Result": {
+          "Total": "Success",
+          "Frame": "Success"
+        },
+        "Info": {
+          "Distance": 0.009999999767330852,
+          "ControlPointPoseX": 71.50000000110035,
+          "ControlPointPoseY": 345.10999999976735
+        }
+      }
+    }
+  },
+  {
+    "Result": {
+      "Success": true,
+      "Summary": "Passed:Condition_0 (Success)"
+    },
+    "Stamp": {
+      "System": 1748403994.3687139,
+      "ROS": 1748195192.026428
+    },
+    "Frame": {
+      "/planning/planning_factors/obstacle_stop": {
+        "Result": {
+          "Total": "Success",
+          "Frame": "Success"
+        },
+        "Info": {
+          "Distance": 0.009999999767330852,
+          "ControlPointPoseX": 71.50000000110035,
+          "ControlPointPoseY": 345.10999999976735
+        }
+      }
+    }
+  },
+  {
+    "Result": {
+      "Success": true,
+      "Summary": "Passed:Condition_0 (Success)"
+    },
+    "Stamp": {
+      "System": 1748403994.4699423,
+      "ROS": 1748195192.1263669
+    },
+    "Frame": {
+      "/planning/planning_factors/obstacle_stop": {
+        "Result": {
+          "Total": "Success",
+          "Frame": "Success"
+        },
+        "Info": {
+          "Distance": 0.009999999767330852,
+          "ControlPointPoseX": 71.50000000110035,
+          "ControlPointPoseY": 345.10999999976735
+        }
+      }
+    }
+  },
+  {
+    "Result": {
+      "Success": true,
+      "Summary": "Passed:Condition_0 (Success)"
+    },
+    "Stamp": {
+      "System": 1748403994.5720809,
+      "ROS": 1748195192.2313716
+    },
+    "Frame": {
+      "/planning/planning_factors/obstacle_stop": {
+        "Result": {
+          "Total": "Success",
+          "Frame": "Success"
+        },
+        "Info": {
+          "Distance": 0.009999999767387696,
+          "ControlPointPoseX": 71.50000000110035,
+          "ControlPointPoseY": 345.1099999997674
+        }
+      }
+    }
+  },
+  {
+    "Result": {
+      "Success": true,
+      "Summary": "Passed:Condition_0 (Success)"
+    },
+    "Stamp": {
+      "System": 1748403994.6730754,
+      "ROS": 1748195192.3313887
+    },
+    "Frame": {
+      "/planning/planning_factors/obstacle_stop": {
+        "Result": {
+          "Total": "Success",
+          "Frame": "Success"
+        },
+        "Info": {
+          "Distance": 0.009999999767330852,
+          "ControlPointPoseX": 71.50000000110035,
+          "ControlPointPoseY": 345.10999999976735
+        }
+      }
+    }
+  },
+  {
+    "Result": {
+      "Success": true,
+      "Summary": "Passed:Condition_0 (Success)"
+    },
+    "Stamp": {
+      "System": 1748403994.7731442,
+      "ROS": 1748195192.4314892
+    },
+    "Frame": {
+      "/planning/planning_factors/obstacle_stop": {
+        "Result": {
+          "Total": "Success",
+          "Frame": "Success"
+        },
+        "Info": {
+          "Distance": 0.009999999767330852,
+          "ControlPointPoseX": 71.50000000110036,
+          "ControlPointPoseY": 345.10999999976735
+        }
+      }
+    }
+  },
+  {
+    "Result": {
+      "Success": true,
+      "Summary": "Passed:Condition_0 (Success)"
+    },
+    "Stamp": {
+      "System": 1748403994.876479,
+      "ROS": 1748195192.5363925
+    },
+    "Frame": {
+      "/planning/planning_factors/obstacle_stop": {
+        "Result": {
+          "Total": "Success",
+          "Frame": "Success"
+        },
+        "Info": {
+          "Distance": 0.009999999767387696,
+          "ControlPointPoseX": 71.50000000110035,
+          "ControlPointPoseY": 345.1099999997674
+        }
+      }
+    }
+  },
+  {
+    "Result": {
+      "Success": true,
+      "Summary": "Passed:Condition_0 (Success)"
+    },
+    "Stamp": {
+      "System": 1748403994.9653454,
+      "ROS": 1748195192.6214488
+    },
+    "Frame": {
+      "/planning/planning_factors/obstacle_stop": {
+        "Result": {
+          "Total": "Success",
+          "Frame": "Success"
+        },
+        "Info": {
+          "Distance": 0.009999999767387696,
+          "ControlPointPoseX": 71.50000000110035,
+          "ControlPointPoseY": 345.1099999997674
+        }
+      }
+    }
+  },
+  {
+    "Result": {
+      "Success": true,
+      "Summary": "Passed:Condition_0 (Success)"
+    },
+    "Stamp": {
+      "System": 1748403995.070391,
+      "ROS": 1748195192.7264278
+    },
+    "Frame": {
+      "/planning/planning_factors/obstacle_stop": {
+        "Result": {
+          "Total": "Success",
+          "Frame": "Success"
+        },
+        "Info": {
+          "Distance": 0.009999999767387696,
+          "ControlPointPoseX": 71.50000000110035,
+          "ControlPointPoseY": 345.1099999997674
+        }
+      }
+    }
+  },
+  {
+    "Result": {
+      "Success": true,
+      "Summary": "Passed:Condition_0 (Success)"
+    },
+    "Stamp": {
+      "System": 1748403995.1727345,
+      "ROS": 1748195192.83129
+    },
+    "Frame": {
+      "/planning/planning_factors/obstacle_stop": {
+        "Result": {
+          "Total": "Success",
+          "Frame": "Success"
+        },
+        "Info": {
+          "Distance": 0.009999999767330852,
+          "ControlPointPoseX": 71.50000000110036,
+          "ControlPointPoseY": 345.10999999976735
+        }
+      }
+    }
+  },
+  {
+    "Result": {
+      "Success": true,
+      "Summary": "Passed:Condition_0 (Success)"
+    },
+    "Stamp": {
+      "System": 1748403995.2704253,
+      "ROS": 1748195192.9265268
+    },
+    "Frame": {
+      "/planning/planning_factors/obstacle_stop": {
+        "Result": {
+          "Total": "Success",
+          "Frame": "Success"
+        },
+        "Info": {
+          "Distance": 0.009999999767330852,
+          "ControlPointPoseX": 71.50000000110035,
+          "ControlPointPoseY": 345.10999999976735
+        }
+      }
+    }
+  },
+  {
+    "Result": {
+      "Success": true,
+      "Summary": "Passed:Condition_0 (Success)"
+    },
+    "Stamp": {
+      "System": 1748403995.3773656,
+      "ROS": 1748195193.036427
+    },
+    "Frame": {
+      "/planning/planning_factors/obstacle_stop": {
+        "Result": {
+          "Total": "Success",
+          "Frame": "Success"
+        },
+        "Info": {
+          "Distance": 0.009999999767387696,
+          "ControlPointPoseX": 71.50000000110035,
+          "ControlPointPoseY": 345.1099999997674
+        }
+      }
+    }
+  },
+  {
+    "Result": {
+      "Success": true,
+      "Summary": "Passed:Condition_0 (Success)"
+    },
+    "Stamp": {
+      "System": 1748403995.4733725,
+      "ROS": 1748195193.1312993
+    },
+    "Frame": {
+      "/planning/planning_factors/obstacle_stop": {
+        "Result": {
+          "Total": "Success",
+          "Frame": "Success"
+        },
+        "Info": {
+          "Distance": 0.009999999767330852,
+          "ControlPointPoseX": 71.50000000110035,
+          "ControlPointPoseY": 345.10999999976735
+        }
+      }
+    }
+  },
+  {
+    "Result": {
+      "Success": true,
+      "Summary": "Passed:Condition_0 (Success)"
+    },
+    "Stamp": {
+      "System": 1748403995.572856,
+      "ROS": 1748195193.2285278
+    },
+    "Frame": {
+      "/planning/planning_factors/obstacle_stop": {
+        "Result": {
+          "Total": "Success",
+          "Frame": "Success"
+        },
+        "Info": {
+          "Distance": 0.009999999767330852,
+          "ControlPointPoseX": 71.50000000110035,
+          "ControlPointPoseY": 345.10999999976735
+        }
+      }
+    }
+  },
+  {
+    "Result": {
+      "Success": true,
+      "Summary": "Passed:Condition_0 (Success)"
+    },
+    "Stamp": {
+      "System": 1748403995.6769028,
+      "ROS": 1748195193.3363519
+    },
+    "Frame": {
+      "/planning/planning_factors/obstacle_stop": {
+        "Result": {
+          "Total": "Success",
+          "Frame": "Success"
+        },
+        "Info": {
+          "Distance": 0.009999999767330852,
+          "ControlPointPoseX": 71.50000000110035,
+          "ControlPointPoseY": 345.10999999976735
+        }
+      }
+    }
+  },
+  {
+    "Result": {
+      "Success": true,
+      "Summary": "Passed:Condition_0 (Success)"
+    },
+    "Stamp": {
+      "System": 1748403995.7736187,
+      "ROS": 1748195193.432178
+    },
+    "Frame": {
+      "/planning/planning_factors/obstacle_stop": {
+        "Result": {
+          "Total": "Success",
+          "Frame": "Success"
+        },
+        "Info": {
+          "Distance": 0.009999999767387696,
+          "ControlPointPoseX": 71.50000000110035,
+          "ControlPointPoseY": 345.1099999997674
+        }
+      }
+    }
+  },
+  {
+    "Result": {
+      "Success": true,
+      "Summary": "Passed:Condition_0 (Success)"
+    },
+    "Stamp": {
+      "System": 1748403995.8721383,
+      "ROS": 1748195193.5314722
+    },
+    "Frame": {
+      "/planning/planning_factors/obstacle_stop": {
+        "Result": {
+          "Total": "Success",
+          "Frame": "Success"
+        },
+        "Info": {
+          "Distance": 0.009999999767387696,
+          "ControlPointPoseX": 71.50000000110035,
+          "ControlPointPoseY": 345.1099999997674
+        }
+      }
+    }
+  },
+  {
+    "Result": {
+      "Success": true,
+      "Summary": "Passed:Condition_0 (Success)"
+    },
+    "Stamp": {
+      "System": 1748403995.9726593,
+      "ROS": 1748195193.6312962
+    },
+    "Frame": {
+      "/planning/planning_factors/obstacle_stop": {
+        "Result": {
+          "Total": "Success",
+          "Frame": "Success"
+        },
+        "Info": {
+          "Distance": 0.009999999767387696,
+          "ControlPointPoseX": 71.50000000110035,
+          "ControlPointPoseY": 345.1099999997674
+        }
+      }
+    }
+  },
+  {
+    "Result": {
+      "Success": true,
+      "Summary": "Passed:Condition_0 (Success)"
+    },
+    "Stamp": {
+      "System": 1748403996.0762358,
+      "ROS": 1748195193.7363636
+    },
+    "Frame": {
+      "/planning/planning_factors/obstacle_stop": {
+        "Result": {
+          "Total": "Success",
+          "Frame": "Success"
+        },
+        "Info": {
+          "Distance": 0.009999999767387696,
+          "ControlPointPoseX": 71.50000000110035,
+          "ControlPointPoseY": 345.1099999997674
+        }
+      }
+    }
+  },
+  {
+    "Result": {
+      "Success": true,
+      "Summary": "Passed:Condition_0 (Success)"
+    },
+    "Stamp": {
+      "System": 1748403996.167283,
+      "ROS": 1748195193.8263593
+    },
+    "Frame": {
+      "/planning/planning_factors/obstacle_stop": {
+        "Result": {
+          "Total": "Success",
+          "Frame": "Success"
+        },
+        "Info": {
+          "Distance": 0.009999999767387696,
+          "ControlPointPoseX": 71.50000000110035,
+          "ControlPointPoseY": 345.1099999997674
+        }
+      }
+    }
+  },
+  {
+    "Result": {
+      "Success": true,
+      "Summary": "Passed:Condition_0 (Success)"
+    },
+    "Stamp": {
+      "System": 1748403996.269744,
+      "ROS": 1748195193.926792
+    },
+    "Frame": {
+      "/planning/planning_factors/obstacle_stop": {
+        "Result": {
+          "Total": "Success",
+          "Frame": "Success"
+        },
+        "Info": {
+          "Distance": 0.009999999767330852,
+          "ControlPointPoseX": 71.50000000110035,
+          "ControlPointPoseY": 345.10999999976735
+        }
+      }
+    }
+  },
+  {
+    "Result": {
+      "Success": true,
+      "Summary": "Passed:Condition_0 (Success)"
+    },
+    "Stamp": {
+      "System": 1748403996.373622,
+      "ROS": 1748195194.031525
+    },
+    "Frame": {
+      "/planning/planning_factors/obstacle_stop": {
+        "Result": {
+          "Total": "Success",
+          "Frame": "Success"
+        },
+        "Info": {
+          "Distance": 0.009999999767387696,
+          "ControlPointPoseX": 71.50000000110035,
+          "ControlPointPoseY": 345.1099999997674
+        }
+      }
+    }
+  },
+  {
+    "Result": {
+      "Success": true,
+      "Summary": "Passed:Condition_0 (Success)"
+    },
+    "Stamp": {
+      "System": 1748403996.4759164,
+      "ROS": 1748195194.1316688
+    },
+    "Frame": {
+      "/planning/planning_factors/obstacle_stop": {
+        "Result": {
+          "Total": "Success",
+          "Frame": "Success"
+        },
+        "Info": {
+          "Distance": 0.009999999767387696,
+          "ControlPointPoseX": 71.50000000110035,
+          "ControlPointPoseY": 345.1099999997674
+        }
+      }
+    }
+  },
+  {
+    "Result": {
+      "Success": true,
+      "Summary": "Passed:Condition_0 (Success)"
+    },
+    "Stamp": {
+      "System": 1748403996.5677636,
+      "ROS": 1748195194.2265036
+    },
+    "Frame": {
+      "/planning/planning_factors/obstacle_stop": {
+        "Result": {
+          "Total": "Success",
+          "Frame": "Success"
+        },
+        "Info": {
+          "Distance": 0.009999999767330852,
+          "ControlPointPoseX": 71.50000000110035,
+          "ControlPointPoseY": 345.10999999976735
+        }
+      }
+    }
+  },
+  {
+    "Result": {
+      "Success": true,
+      "Summary": "Passed:Condition_0 (Success)"
+    },
+    "Stamp": {
+      "System": 1748403996.6730387,
+      "ROS": 1748195194.3323457
+    },
+    "Frame": {
+      "/planning/planning_factors/obstacle_stop": {
+        "Result": {
+          "Total": "Success",
+          "Frame": "Success"
+        },
+        "Info": {
+          "Distance": 0.009999999767387696,
+          "ControlPointPoseX": 71.50000000110035,
+          "ControlPointPoseY": 345.1099999997674
+        }
+      }
+    }
+  },
+  {
+    "Result": {
+      "Success": true,
+      "Summary": "Passed:Condition_0 (Success)"
+    },
+    "Stamp": {
+      "System": 1748403996.768685,
+      "ROS": 1748195194.4265392
+    },
+    "Frame": {
+      "/planning/planning_factors/obstacle_stop": {
+        "Result": {
+          "Total": "Success",
+          "Frame": "Success"
+        },
+        "Info": {
+          "Distance": 0.009999999767387696,
+          "ControlPointPoseX": 71.50000000110035,
+          "ControlPointPoseY": 345.1099999997674
+        }
+      }
+    }
+  },
+  {
+    "Result": {
+      "Success": true,
+      "Summary": "Passed:Condition_0 (Success)"
+    },
+    "Stamp": {
+      "System": 1748403996.8843648,
+      "ROS": 1748195194.5413265
+    },
+    "Frame": {
+      "/planning/planning_factors/obstacle_stop": {
+        "Result": {
+          "Total": "Success",
+          "Frame": "Success"
+        },
+        "Info": {
+          "Distance": 0.009999999767330852,
+          "ControlPointPoseX": 71.50000000110035,
+          "ControlPointPoseY": 345.10999999976735
+        }
+      }
+    }
+  },
+  {
+    "Result": {
+      "Success": true,
+      "Summary": "Passed:Condition_0 (Success)"
+    },
+    "Stamp": {
+      "System": 1748403996.9669354,
+      "ROS": 1748195194.6262836
+    },
+    "Frame": {
+      "/planning/planning_factors/obstacle_stop": {
+        "Result": {
+          "Total": "Success",
+          "Frame": "Success"
+        },
+        "Info": {
+          "Distance": 0.009999999767387696,
+          "ControlPointPoseX": 71.50000000110035,
+          "ControlPointPoseY": 345.1099999997674
+        }
+      }
+    }
+  },
+  {
+    "Result": {
+      "Success": true,
+      "Summary": "Passed:Condition_0 (Success)"
+    },
+    "Stamp": {
+      "System": 1748403997.077558,
+      "ROS": 1748195194.7366397
+    },
+    "Frame": {
+      "/planning/planning_factors/obstacle_stop": {
+        "Result": {
+          "Total": "Success",
+          "Frame": "Success"
+        },
+        "Info": {
+          "Distance": 0.009999999767387696,
+          "ControlPointPoseX": 71.50000000110035,
+          "ControlPointPoseY": 345.1099999997674
+        }
+      }
+    }
+  },
+  {
+    "Result": {
+      "Success": true,
+      "Summary": "Passed:Condition_0 (Success)"
+    },
+    "Stamp": {
+      "System": 1748403997.1721056,
+      "ROS": 1748195194.8312972
+    },
+    "Frame": {
+      "/planning/planning_factors/obstacle_stop": {
+        "Result": {
+          "Total": "Success",
+          "Frame": "Success"
+        },
+        "Info": {
+          "Distance": 0.009999999767387696,
+          "ControlPointPoseX": 71.50000000110035,
+          "ControlPointPoseY": 345.1099999997674
+        }
+      }
+    }
+  },
+  {
+    "Result": {
+      "Success": true,
+      "Summary": "Passed:Condition_0 (Success)"
+    },
+    "Stamp": {
+      "System": 1748403997.2730896,
+      "ROS": 1748195194.9312758
+    },
+    "Frame": {
+      "/planning/planning_factors/obstacle_stop": {
+        "Result": {
+          "Total": "Success",
+          "Frame": "Success"
+        },
+        "Info": {
+          "Distance": 0.009999999767387696,
+          "ControlPointPoseX": 71.50000000110033,
+          "ControlPointPoseY": 345.1099999997674
+        }
+      }
+    }
+  },
+  {
+    "Result": {
+      "Success": true,
+      "Summary": "Passed:Condition_0 (Success)"
+    },
+    "Stamp": {
+      "System": 1748403997.3684876,
+      "ROS": 1748195195.0264735
+    },
+    "Frame": {
+      "/planning/planning_factors/obstacle_stop": {
+        "Result": {
+          "Total": "Success",
+          "Frame": "Success"
+        },
+        "Info": {
+          "Distance": 0.009999999767330852,
+          "ControlPointPoseX": 71.50000000110035,
+          "ControlPointPoseY": 345.10999999976735
+        }
+      }
+    }
+  },
+  {
+    "Result": {
+      "Success": true,
+      "Summary": "Passed:Condition_0 (Success)"
+    },
+    "Stamp": {
+      "System": 1748403997.4727552,
+      "ROS": 1748195195.1312528
+    },
+    "Frame": {
+      "/planning/planning_factors/obstacle_stop": {
+        "Result": {
+          "Total": "Success",
+          "Frame": "Success"
+        },
+        "Info": {
+          "Distance": 0.009999999767330852,
+          "ControlPointPoseX": 71.50000000110035,
+          "ControlPointPoseY": 345.10999999976735
+        }
+      }
+    }
+  },
+  {
+    "Result": {
+      "Success": true,
+      "Summary": "Passed:Condition_0 (Success)"
+    },
+    "Stamp": {
+      "System": 1748403997.5923853,
+      "ROS": 1748195195.2461565
+    },
+    "Frame": {
+      "/planning/planning_factors/obstacle_stop": {
+        "Result": {
+          "Total": "Success",
+          "Frame": "Success"
+        },
+        "Info": {
+          "Distance": 0.009999999767330852,
+          "ControlPointPoseX": 71.50000000110035,
+          "ControlPointPoseY": 345.10999999976735
+        }
+      }
+    }
+  },
+  {
+    "Result": {
+      "Success": true,
+      "Summary": "Passed:Condition_0 (Success)"
+    },
+    "Stamp": {
+      "System": 1748403997.6711688,
+      "ROS": 1748195195.3312562
+    },
+    "Frame": {
+      "/planning/planning_factors/obstacle_stop": {
+        "Result": {
+          "Total": "Success",
+          "Frame": "Success"
+        },
+        "Info": {
+          "Distance": 0.009999999767330852,
+          "ControlPointPoseX": 71.50000000110035,
+          "ControlPointPoseY": 345.10999999976735
+        }
+      }
+    }
+  },
+  {
+    "Result": {
+      "Success": true,
+      "Summary": "Passed:Condition_0 (Success)"
+    },
+    "Stamp": {
+      "System": 1748403997.7695444,
+      "ROS": 1748195195.4263868
+    },
+    "Frame": {
+      "/planning/planning_factors/obstacle_stop": {
+        "Result": {
+          "Total": "Success",
+          "Frame": "Success"
+        },
+        "Info": {
+          "Distance": 0.009999999767330852,
+          "ControlPointPoseX": 71.50000000110035,
+          "ControlPointPoseY": 345.10999999976735
+        }
+      }
+    }
+  },
+  {
+    "Result": {
+      "Success": true,
+      "Summary": "Passed:Condition_0 (Success)"
+    },
+    "Stamp": {
+      "System": 1748403997.874443,
+      "ROS": 1748195195.5313482
+    },
+    "Frame": {
+      "/planning/planning_factors/obstacle_stop": {
+        "Result": {
+          "Total": "Success",
+          "Frame": "Success"
+        },
+        "Info": {
+          "Distance": 0.009999999767330852,
+          "ControlPointPoseX": 71.50000000110035,
+          "ControlPointPoseY": 345.10999999976735
+        }
+      }
+    }
+  },
+  {
+    "Result": {
+      "Success": true,
+      "Summary": "Passed:Condition_0 (Success)"
+    },
+    "Stamp": {
+      "System": 1748403997.9828987,
+      "ROS": 1748195195.6412885
+    },
+    "Frame": {
+      "/planning/planning_factors/obstacle_stop": {
+        "Result": {
+          "Total": "Success",
+          "Frame": "Success"
+        },
+        "Info": {
+          "Distance": 0.009999999767330852,
+          "ControlPointPoseX": 71.50000000110035,
+          "ControlPointPoseY": 345.10999999976735
+        }
+      }
+    }
+  },
+  {
+    "Result": {
+      "Success": true,
+      "Summary": "Passed:Condition_0 (Success)"
+    },
+    "Stamp": {
+      "System": 1748403998.0726693,
+      "ROS": 1748195195.7316225
+    },
+    "Frame": {
+      "/planning/planning_factors/obstacle_stop": {
+        "Result": {
+          "Total": "Success",
+          "Frame": "Success"
+        },
+        "Info": {
+          "Distance": 0.009999999767330852,
+          "ControlPointPoseX": 71.50000000110035,
+          "ControlPointPoseY": 345.10999999976735
+        }
+      }
+    }
+  },
+  {
+    "Result": {
+      "Success": true,
+      "Summary": "Passed:Condition_0 (Success)"
+    },
+    "Stamp": {
+      "System": 1748403998.1734836,
+      "ROS": 1748195195.8312836
+    },
+    "Frame": {
+      "/planning/planning_factors/obstacle_stop": {
+        "Result": {
+          "Total": "Success",
+          "Frame": "Success"
+        },
+        "Info": {
+          "Distance": 0.009999999767330852,
+          "ControlPointPoseX": 71.50000000110036,
+          "ControlPointPoseY": 345.10999999976735
+        }
+      }
+    }
+  },
+  {
+    "Result": {
+      "Success": true,
+      "Summary": "Passed:Condition_0 (Success)"
+    },
+    "Stamp": {
+      "System": 1748403998.2810068,
+      "ROS": 1748195195.9312732
+    },
+    "Frame": {
+      "/planning/planning_factors/obstacle_stop": {
+        "Result": {
+          "Total": "Success",
+          "Frame": "Success"
+        },
+        "Info": {
+          "Distance": 0.009999999767387696,
+          "ControlPointPoseX": 71.50000000110035,
+          "ControlPointPoseY": 345.1099999997674
+        }
+      }
+    }
+  },
+  {
+    "Result": {
+      "Success": true,
+      "Summary": "Passed:Condition_0 (Success)"
+    },
+    "Stamp": {
+      "System": 1748403998.3727715,
+      "ROS": 1748195196.0312996
+    },
+    "Frame": {
+      "/planning/planning_factors/obstacle_stop": {
+        "Result": {
+          "Total": "Success",
+          "Frame": "Success"
+        },
+        "Info": {
+          "Distance": 0.009999999767330852,
+          "ControlPointPoseX": 71.50000000110036,
+          "ControlPointPoseY": 345.10999999976735
+        }
+      }
+    }
+  },
+  {
+    "Result": {
+      "Success": true,
+      "Summary": "Passed:Condition_0 (Success)"
+    },
+    "Stamp": {
+      "System": 1748403998.485982,
+      "ROS": 1748195196.1415746
+    },
+    "Frame": {
+      "/planning/planning_factors/obstacle_stop": {
+        "Result": {
+          "Total": "Success",
+          "Frame": "Success"
+        },
+        "Info": {
+          "Distance": 0.009999999767330852,
+          "ControlPointPoseX": 71.50000000110035,
+          "ControlPointPoseY": 345.10999999976735
+        }
+      }
+    }
+  },
+  {
+    "Result": {
+      "Success": true,
+      "Summary": "Passed:Condition_0 (Success)"
+    },
+    "Stamp": {
+      "System": 1748403998.5716128,
+      "ROS": 1748195196.2312703
+    },
+    "Frame": {
+      "/planning/planning_factors/obstacle_stop": {
+        "Result": {
+          "Total": "Success",
+          "Frame": "Success"
+        },
+        "Info": {
+          "Distance": 0.009999999767330852,
+          "ControlPointPoseX": 71.50000000110035,
+          "ControlPointPoseY": 345.10999999976735
+        }
+      }
+    }
+  },
+  {
+    "Result": {
+      "Success": true,
+      "Summary": "Passed:Condition_0 (Success)"
+    },
+    "Stamp": {
+      "System": 1748403998.6769934,
+      "ROS": 1748195196.3363264
+    },
+    "Frame": {
+      "/planning/planning_factors/obstacle_stop": {
+        "Result": {
+          "Total": "Success",
+          "Frame": "Success"
+        },
+        "Info": {
+          "Distance": 0.009999999767330852,
+          "ControlPointPoseX": 71.50000000110035,
+          "ControlPointPoseY": 345.10999999976735
+        }
+      }
+    }
+  },
+  {
+    "Result": {
+      "Success": true,
+      "Summary": "Passed:Condition_0 (Success)"
+    },
+    "Stamp": {
+      "System": 1748403998.7813241,
+      "ROS": 1748195196.4370065
+    },
+    "Frame": {
+      "/planning/planning_factors/obstacle_stop": {
+        "Result": {
+          "Total": "Success",
+          "Frame": "Success"
+        },
+        "Info": {
+          "Distance": 0.009999999767387696,
+          "ControlPointPoseX": 71.50000000110035,
+          "ControlPointPoseY": 345.1099999997674
+        }
+      }
+    }
+  },
+  {
+    "Result": {
+      "Success": true,
+      "Summary": "Passed:Condition_0 (Success)"
+    },
+    "Stamp": {
+      "System": 1748403998.8718169,
+      "ROS": 1748195196.531476
+    },
+    "Frame": {
+      "/planning/planning_factors/obstacle_stop": {
+        "Result": {
+          "Total": "Success",
+          "Frame": "Success"
+        },
+        "Info": {
+          "Distance": 0.009999999767330852,
+          "ControlPointPoseX": 71.50000000110035,
+          "ControlPointPoseY": 345.10999999976735
+        }
+      }
+    }
+  },
+  {
+    "Result": {
+      "Success": true,
+      "Summary": "Passed:Condition_0 (Success)"
+    },
+    "Stamp": {
+      "System": 1748403998.974356,
+      "ROS": 1748195196.631559
+    },
+    "Frame": {
+      "/planning/planning_factors/obstacle_stop": {
+        "Result": {
+          "Total": "Success",
+          "Frame": "Success"
+        },
+        "Info": {
+          "Distance": 0.009999999767387696,
+          "ControlPointPoseX": 71.50000000110035,
+          "ControlPointPoseY": 345.1099999997674
+        }
+      }
+    }
+  },
+  {
+    "Result": {
+      "Success": true,
+      "Summary": "Passed:Condition_0 (Success)"
+    },
+    "Stamp": {
+      "System": 1748403999.0732083,
+      "ROS": 1748195196.7312431
+    },
+    "Frame": {
+      "/planning/planning_factors/obstacle_stop": {
+        "Result": {
+          "Total": "Success",
+          "Frame": "Success"
+        },
+        "Info": {
+          "Distance": 0.009999999767330852,
+          "ControlPointPoseX": 71.50000000110035,
+          "ControlPointPoseY": 345.10999999976735
+        }
+      }
+    }
+  },
+  {
+    "Result": {
+      "Success": true,
+      "Summary": "Passed:Condition_0 (Success)"
+    },
+    "Stamp": {
+      "System": 1748403999.1695266,
+      "ROS": 1748195196.8263268
+    },
+    "Frame": {
+      "/planning/planning_factors/obstacle_stop": {
+        "Result": {
+          "Total": "Success",
+          "Frame": "Success"
+        },
+        "Info": {
+          "Distance": 0.009999999767330852,
+          "ControlPointPoseX": 71.50000000110035,
+          "ControlPointPoseY": 345.10999999976735
+        }
+      }
+    }
+  },
+  {
+    "Result": {
+      "Success": true,
+      "Summary": "Passed:Condition_0 (Success)"
+    },
+    "Stamp": {
+      "System": 1748403999.2738178,
+      "ROS": 1748195196.931344
+    },
+    "Frame": {
+      "/planning/planning_factors/obstacle_stop": {
+        "Result": {
+          "Total": "Success",
+          "Frame": "Success"
+        },
+        "Info": {
+          "Distance": 0.009999999767330852,
+          "ControlPointPoseX": 71.50000000110035,
+          "ControlPointPoseY": 345.10999999976735
+        }
+      }
+    }
+  },
+  {
+    "Result": {
+      "Success": true,
+      "Summary": "Passed:Condition_0 (Success)"
+    },
+    "Stamp": {
+      "System": 1748403999.3756504,
+      "ROS": 1748195197.0312395
+    },
+    "Frame": {
+      "/planning/planning_factors/obstacle_stop": {
+        "Result": {
+          "Total": "Success",
+          "Frame": "Success"
+        },
+        "Info": {
+          "Distance": 0.009999999767330852,
+          "ControlPointPoseX": 71.50000000110035,
+          "ControlPointPoseY": 345.10999999976735
+        }
+      }
+    }
+  },
+  {
+    "Result": {
+      "Success": true,
+      "Summary": "Passed:Condition_0 (Success)"
+    },
+    "Stamp": {
+      "System": 1748403999.472519,
+      "ROS": 1748195197.131339
+    },
+    "Frame": {
+      "/planning/planning_factors/obstacle_stop": {
+        "Result": {
+          "Total": "Success",
+          "Frame": "Success"
+        },
+        "Info": {
+          "Distance": 0.009999999767330852,
+          "ControlPointPoseX": 71.50000000110036,
+          "ControlPointPoseY": 345.10999999976735
+        }
+      }
+    }
+  },
+  {
+    "Result": {
+      "Success": true,
+      "Summary": "Passed:Condition_0 (Success)"
+    },
+    "Stamp": {
+      "System": 1748403999.5691435,
+      "ROS": 1748195197.22631
+    },
+    "Frame": {
+      "/planning/planning_factors/obstacle_stop": {
+        "Result": {
+          "Total": "Success",
+          "Frame": "Success"
+        },
+        "Info": {
+          "Distance": 0.009999999767330852,
+          "ControlPointPoseX": 71.50000000110035,
+          "ControlPointPoseY": 345.10999999976735
+        }
+      }
+    }
+  },
+  {
+    "Result": {
+      "Success": true,
+      "Summary": "Passed:Condition_0 (Success)"
+    },
+    "Stamp": {
+      "System": 1748403999.6747525,
+      "ROS": 1748195197.3312318
+    },
+    "Frame": {
+      "/planning/planning_factors/obstacle_stop": {
+        "Result": {
+          "Total": "Success",
+          "Frame": "Success"
+        },
+        "Info": {
+          "Distance": 0.009999999767387696,
+          "ControlPointPoseX": 71.50000000110033,
+          "ControlPointPoseY": 345.1099999997674
+        }
+      }
+    }
+  },
+  {
+    "Result": {
+      "Success": true,
+      "Summary": "Passed:Condition_0 (Success)"
+    },
+    "Stamp": {
+      "System": 1748403999.7734215,
+      "ROS": 1748195197.4313662
+    },
+    "Frame": {
+      "/planning/planning_factors/obstacle_stop": {
+        "Result": {
+          "Total": "Success",
+          "Frame": "Success"
+        },
+        "Info": {
+          "Distance": 0.009999999767330852,
+          "ControlPointPoseX": 71.50000000110066,
+          "ControlPointPoseY": 345.10999999976735
+        }
+      }
+    }
+  },
+  {
+    "Result": {
+      "Success": true,
+      "Summary": "Passed:Condition_0 (Success)"
+    },
+    "Stamp": {
+      "System": 1748403999.8812978,
+      "ROS": 1748195197.5415883
+    },
+    "Frame": {
+      "/planning/planning_factors/obstacle_stop": {
+        "Result": {
+          "Total": "Success",
+          "Frame": "Success"
+        },
+        "Info": {
+          "Distance": 0.009999999767330852,
+          "ControlPointPoseX": 71.50000000110015,
+          "ControlPointPoseY": 345.10999999976735
+        }
+      }
+    }
+  },
+  {
+    "Result": {
+      "Success": true,
+      "Summary": "Passed:Condition_0 (Success)"
+    },
+    "Stamp": {
+      "System": 1748403999.9721339,
+      "ROS": 1748195197.6312406
+    },
+    "Frame": {
+      "/planning/planning_factors/obstacle_stop": {
+        "Result": {
+          "Total": "Success",
+          "Frame": "Success"
+        },
+        "Info": {
+          "Distance": 0.009999999767330852,
+          "ControlPointPoseX": 71.50000000110066,
+          "ControlPointPoseY": 345.10999999976735
+        }
+      }
+    }
+  },
+  {
+    "Result": {
+      "Success": true,
+      "Summary": "Passed:Condition_0 (Success)"
+    },
+    "Stamp": {
+      "System": 1748404000.071735,
+      "ROS": 1748195197.7301435
+    },
+    "Frame": {
+      "/planning/planning_factors/obstacle_stop": {
+        "Result": {
+          "Total": "Success",
+          "Frame": "Success"
+        },
+        "Info": {
+          "Distance": 0.009999999767387696,
+          "ControlPointPoseX": 71.50000000109937,
+          "ControlPointPoseY": 345.1099999997674
+        }
+      }
+    }
+  },
+  {
+    "Result": {
+      "Success": true,
+      "Summary": "Passed:Condition_0 (Success)"
+    },
+    "Stamp": {
+      "System": 1748404000.1688318,
+      "ROS": 1748195197.8263144
+    },
+    "Frame": {
+      "/planning/planning_factors/obstacle_stop": {
+        "Result": {
+          "Total": "Success",
+          "Frame": "Success"
+        },
+        "Info": {
+          "Distance": 0.009999999767330852,
+          "ControlPointPoseX": 71.50000000109704,
+          "ControlPointPoseY": 345.10999999976735
+        }
+      }
+    }
+  },
+  {
+    "Result": {
+      "Success": true,
+      "Summary": "Passed:Condition_0 (Success)"
+    },
+    "Stamp": {
+      "System": 1748404000.2686212,
+      "ROS": 1748195197.9269938
+    },
+    "Frame": {
+      "/planning/planning_factors/obstacle_stop": {
+        "Result": {
+          "Total": "Success",
+          "Frame": "Success"
+        },
+        "Info": {
+          "Distance": 0.009999999767330852,
+          "ControlPointPoseX": 71.50000000109782,
+          "ControlPointPoseY": 345.10999999976735
+        }
+      }
+    }
+  },
+  {
+    "Result": {
+      "Success": true,
+      "Summary": "Passed:Condition_0 (Success)"
+    },
+    "Stamp": {
+      "System": 1748404000.3687646,
+      "ROS": 1748195198.0262713
+    },
+    "Frame": {
+      "/planning/planning_factors/obstacle_stop": {
+        "Result": {
+          "Total": "Success",
+          "Frame": "Success"
+        },
+        "Info": {
+          "Distance": 0.009999999767330852,
+          "ControlPointPoseX": 71.50000000110309,
+          "ControlPointPoseY": 345.10999999976735
+        }
+      }
+    }
+  },
+  {
+    "Result": {
+      "Success": true,
+      "Summary": "Passed:Condition_0 (Success)"
+    },
+    "Stamp": {
+      "System": 1748404000.4806733,
+      "ROS": 1748195198.1375544
+    },
+    "Frame": {
+      "/planning/planning_factors/obstacle_stop": {
+        "Result": {
+          "Total": "Success",
+          "Frame": "Success"
+        },
+        "Info": {
+          "Distance": 0.009999999767330852,
+          "ControlPointPoseX": 71.5000000011,
+          "ControlPointPoseY": 345.10999999976735
+        }
+      }
+    }
+  },
+  {
+    "Result": {
+      "Success": true,
+      "Summary": "Passed:Condition_0 (Success)"
+    },
+    "Stamp": {
+      "System": 1748404000.5721378,
+      "ROS": 1748195198.231251
+    },
+    "Frame": {
+      "/planning/planning_factors/obstacle_stop": {
+        "Result": {
+          "Total": "Success",
+          "Frame": "Success"
+        },
+        "Info": {
+          "Distance": 0.009999999767217166,
+          "ControlPointPoseX": 71.50000000110374,
+          "ControlPointPoseY": 345.10999999976724
+        }
+      }
+    }
+  },
+  {
+    "Result": {
+      "Success": true,
+      "Summary": "Passed:Condition_0 (Success)"
+    },
+    "Stamp": {
+      "System": 1748404000.6818955,
+      "ROS": 1748195198.3412747
+    },
+    "Frame": {
+      "/planning/planning_factors/obstacle_stop": {
+        "Result": {
+          "Total": "Success",
+          "Frame": "Success"
+        },
+        "Info": {
+          "Distance": 0.009999999767217166,
+          "ControlPointPoseX": 71.50000000110371,
+          "ControlPointPoseY": 345.10999999976724
+        }
+      }
+    }
+  },
+  {
+    "Result": {
+      "Success": true,
+      "Summary": "Passed:Condition_0 (Success)"
+    },
+    "Stamp": {
+      "System": 1748404000.7764196,
+      "ROS": 1748195198.4361978
+    },
+    "Frame": {
+      "/planning/planning_factors/obstacle_stop": {
+        "Result": {
+          "Total": "Success",
+          "Frame": "Success"
+        },
+        "Info": {
+          "Distance": 0.009999999767330852,
+          "ControlPointPoseX": 71.5000000010985,
+          "ControlPointPoseY": 345.10999999976735
+        }
+      }
+    }
+  },
+  {
+    "Result": {
+      "Success": true,
+      "Summary": "Passed:Condition_0 (Success)"
+    },
+    "Stamp": {
+      "System": 1748404000.8757083,
+      "ROS": 1748195198.533861
+    },
+    "Frame": {
+      "/planning/planning_factors/obstacle_stop": {
+        "Result": {
+          "Total": "Success",
+          "Frame": "Success"
+        },
+        "Info": {
+          "Distance": 0.009999999767046637,
+          "ControlPointPoseX": 71.50000000110884,
+          "ControlPointPoseY": 345.10999999976707
+        }
+      }
+    }
+  },
+  {
+    "Result": {
+      "Success": true,
+      "Summary": "Passed:Condition_0 (Success)"
+    },
+    "Stamp": {
+      "System": 1748404000.9769433,
+      "ROS": 1748195198.6365764
+    },
+    "Frame": {
+      "/planning/planning_factors/obstacle_stop": {
+        "Result": {
+          "Total": "Success",
+          "Frame": "Success"
+        },
+        "Info": {
+          "Distance": 0.009999999767274009,
+          "ControlPointPoseX": 71.50000000110326,
+          "ControlPointPoseY": 345.1099999997673
+        }
+      }
+    }
+  },
+  {
+    "Result": {
+      "Success": true,
+      "Summary": "Passed:Condition_0 (Success)"
+    },
+    "Stamp": {
+      "System": 1748404001.0756752,
+      "ROS": 1748195198.730367
+    },
+    "Frame": {
+      "/planning/planning_factors/obstacle_stop": {
+        "Result": {
+          "Total": "Success",
+          "Frame": "Success"
+        },
+        "Info": {
+          "Distance": 0.009999999767274009,
+          "ControlPointPoseX": 71.50000000110329,
+          "ControlPointPoseY": 345.1099999997673
+        }
+      }
+    }
+  },
+  {
+    "Result": {
+      "Success": true,
+      "Summary": "Passed:Condition_0 (Success)"
+    },
+    "Stamp": {
+      "System": 1748404001.1740057,
+      "ROS": 1748195198.8330474
+    },
+    "Frame": {
+      "/planning/planning_factors/obstacle_stop": {
+        "Result": {
+          "Total": "Success",
+          "Frame": "Success"
+        },
+        "Info": {
+          "Distance": 0.00999999976716032,
+          "ControlPointPoseX": 71.50000000109418,
+          "ControlPointPoseY": 345.1099999997672
+        }
+      }
+    }
+  },
+  {
+    "Result": {
+      "Success": true,
+      "Summary": "Passed:Condition_0 (Success)"
+    },
+    "Stamp": {
+      "System": 1748404001.269556,
+      "ROS": 1748195198.9290016
+    },
+    "Frame": {
+      "/planning/planning_factors/obstacle_stop": {
+        "Result": {
+          "Total": "Success",
+          "Frame": "Success"
+        },
+        "Info": {
+          "Distance": 0.009999999767387696,
+          "ControlPointPoseX": 71.50000000109988,
+          "ControlPointPoseY": 345.1099999997674
+        }
+      }
+    }
+  },
+  {
+    "Result": {
+      "Success": true,
+      "Summary": "Passed:Condition_0 (Success)"
+    },
+    "Stamp": {
+      "System": 1748404001.3737411,
+      "ROS": 1748195199.0313199
+    },
+    "Frame": {
+      "/planning/planning_factors/obstacle_stop": {
+        "Result": {
+          "Total": "Success",
+          "Frame": "Success"
+        },
+        "Info": {
+          "Distance": 0.009999999767330852,
+          "ControlPointPoseX": 71.50000000109785,
+          "ControlPointPoseY": 345.10999999976735
+        }
+      }
+    }
+  },
+  {
+    "Result": {
+      "Success": true,
+      "Summary": "Passed:Condition_0 (Success)"
+    },
+    "Stamp": {
+      "System": 1748404001.4721665,
+      "ROS": 1748195199.1312876
+    },
+    "Frame": {
+      "/planning/planning_factors/obstacle_stop": {
+        "Result": {
+          "Total": "Success",
+          "Frame": "Success"
+        },
+        "Info": {
+          "Distance": 0.009999999767330852,
+          "ControlPointPoseX": 71.50000000110079,
+          "ControlPointPoseY": 345.10999999976735
+        }
+      }
+    }
+  },
+  {
+    "Result": {
+      "Success": true,
+      "Summary": "Passed:Condition_0 (Success)"
+    },
+    "Stamp": {
+      "System": 1748404001.5725274,
+      "ROS": 1748195199.2312672
+    },
+    "Frame": {
+      "/planning/planning_factors/obstacle_stop": {
+        "Result": {
+          "Total": "Success",
+          "Frame": "Success"
+        },
+        "Info": {
+          "Distance": 0.009999999767330852,
+          "ControlPointPoseX": 71.50000000110268,
+          "ControlPointPoseY": 345.10999999976735
+        }
+      }
+    }
+  },
+  {
+    "Result": {
+      "Success": true,
+      "Summary": "Passed:Condition_0 (Success)"
+    },
+    "Stamp": {
+      "System": 1748404001.669599,
+      "ROS": 1748195199.325969
+    },
+    "Frame": {
+      "/planning/planning_factors/obstacle_stop": {
+        "Result": {
+          "Total": "Success",
+          "Frame": "Success"
+        },
+        "Info": {
+          "Distance": 0.00999999976733085,
+          "ControlPointPoseX": 71.5000000010945,
+          "ControlPointPoseY": 345.10999999976735
+        }
+      }
+    }
+  },
+  {
+    "Result": {
+      "Success": true,
+      "Summary": "Passed:Condition_0 (Success)"
+    },
+    "Stamp": {
+      "System": 1748404001.7731922,
+      "ROS": 1748195199.4314206
+    },
+    "Frame": {
+      "/planning/planning_factors/obstacle_stop": {
+        "Result": {
+          "Total": "Success",
+          "Frame": "Success"
+        },
+        "Info": {
+          "Distance": 0.009999999767274009,
+          "ControlPointPoseX": 71.50000000110025,
+          "ControlPointPoseY": 345.1099999997673
+        }
+      }
+    }
+  },
+  {
+    "Result": {
+      "Success": true,
+      "Summary": "Passed:Condition_0 (Success)"
+    },
+    "Stamp": {
+      "System": 1748404001.8762145,
+      "ROS": 1748195199.5362194
+    },
+    "Frame": {
+      "/planning/planning_factors/obstacle_stop": {
+        "Result": {
+          "Total": "Success",
+          "Frame": "Success"
+        },
+        "Info": {
+          "Distance": 0.009999999767046635,
+          "ControlPointPoseX": 71.50000000109826,
+          "ControlPointPoseY": 345.10999999976707
+        }
+      }
+    }
+  },
+  {
+    "Result": {
+      "Success": true,
+      "Summary": "Passed:Condition_0 (Success)"
+    },
+    "Stamp": {
+      "System": 1748404001.9739006,
+      "ROS": 1748195199.631286
+    },
+    "Frame": {
+      "/planning/planning_factors/obstacle_stop": {
+        "Result": {
+          "Total": "Success",
+          "Frame": "Success"
+        },
+        "Info": {
+          "Distance": 0.009999999766932948,
+          "ControlPointPoseX": 71.50000000110137,
+          "ControlPointPoseY": 345.10999999976696
+        }
+      }
+    }
+  },
+  {
+    "Result": {
+      "Success": true,
+      "Summary": "Passed:Condition_0 (Success)"
+    },
+    "Stamp": {
+      "System": 1748404002.0729904,
+      "ROS": 1748195199.7312388
+    },
+    "Frame": {
+      "/planning/planning_factors/obstacle_stop": {
+        "Result": {
+          "Total": "Success",
+          "Frame": "Success"
+        },
+        "Info": {
+          "Distance": 0.009999999766932948,
+          "ControlPointPoseX": 71.50000000109807,
+          "ControlPointPoseY": 345.10999999976696
+        }
+      }
+    }
+  },
+  {
+    "Result": {
+      "Success": true,
+      "Summary": "Passed:Condition_0 (Success)"
+    },
+    "Stamp": {
+      "System": 1748404002.1772892,
+      "ROS": 1748195199.8361897
+    },
+    "Frame": {
+      "/planning/planning_factors/obstacle_stop": {
+        "Result": {
+          "Total": "Success",
+          "Frame": "Success"
+        },
+        "Info": {
+          "Distance": 0.009999999767274007,
+          "ControlPointPoseX": 71.50000000109354,
+          "ControlPointPoseY": 345.1099999997673
+        }
+      }
+    }
+  },
+  {
+    "Result": {
+      "Success": true,
+      "Summary": "Passed:Condition_0 (Success)"
+    },
+    "Stamp": {
+      "System": 1748404002.2730324,
+      "ROS": 1748195199.931208
+    },
+    "Frame": {
+      "/planning/planning_factors/obstacle_stop": {
+        "Result": {
+          "Total": "Success",
+          "Frame": "Success"
+        },
+        "Info": {
+          "Distance": 0.009999999767274009,
+          "ControlPointPoseX": 71.50000000110238,
+          "ControlPointPoseY": 345.1099999997673
+        }
+      }
+    }
+  },
+  {
+    "Result": {
+      "Success": true,
+      "Summary": "Passed:Condition_0 (Success)"
+    },
+    "Stamp": {
+      "System": 1748404002.3706145,
+      "ROS": 1748195200.0261867
+    },
+    "Frame": {
+      "/planning/planning_factors/obstacle_stop": {
+        "Result": {
+          "Total": "Success",
+          "Frame": "Success"
+        },
+        "Info": {
+          "Distance": 0.009999999767160322,
+          "ControlPointPoseX": 71.50000000110097,
+          "ControlPointPoseY": 345.1099999997672
+        }
+      }
+    }
+  },
+  {
+    "Result": {
+      "Success": true,
+      "Summary": "Passed:Condition_0 (Success)"
+    },
+    "Stamp": {
+      "System": 1748404002.4733284,
+      "ROS": 1748195200.1265821
+    },
+    "Frame": {
+      "/planning/planning_factors/obstacle_stop": {
+        "Result": {
+          "Total": "Success",
+          "Frame": "Success"
+        },
+        "Info": {
+          "Distance": 0.009999999767217166,
+          "ControlPointPoseX": 71.50000000110117,
+          "ControlPointPoseY": 345.10999999976724
+        }
+      }
+    }
+  },
+  {
+    "Result": {
+      "Success": true,
+      "Summary": "Passed:Condition_0 (Success)"
+    },
+    "Stamp": {
+      "System": 1748404002.5703647,
+      "ROS": 1748195200.2269268
+    },
+    "Frame": {
+      "/planning/planning_factors/obstacle_stop": {
+        "Result": {
+          "Total": "Success",
+          "Frame": "Success"
+        },
+        "Info": {
+          "Distance": 0.009999999767330852,
+          "ControlPointPoseX": 71.50000000109834,
+          "ControlPointPoseY": 345.10999999976735
+        }
+      }
+    }
+  },
+  {
+    "Result": {
+      "Success": true,
+      "Summary": "Passed:Condition_0 (Success)"
+    },
+    "Stamp": {
+      "System": 1748404002.6734967,
+      "ROS": 1748195200.3312767
+    },
+    "Frame": {
+      "/planning/planning_factors/obstacle_stop": {
+        "Result": {
+          "Total": "Success",
+          "Frame": "Success"
+        },
+        "Info": {
+          "Distance": 0.009999999767274009,
+          "ControlPointPoseX": 71.50000000109627,
+          "ControlPointPoseY": 345.1099999997673
+        }
+      }
+    }
+  },
+  {
+    "Result": {
+      "Success": true,
+      "Summary": "Passed:Condition_0 (Success)"
+    },
+    "Stamp": {
+      "System": 1748404002.7763002,
+      "ROS": 1748195200.436346
+    },
+    "Frame": {
+      "/planning/planning_factors/obstacle_stop": {
+        "Result": {
+          "Total": "Success",
+          "Frame": "Success"
+        },
+        "Info": {
+          "Distance": 0.009999999767217166,
+          "ControlPointPoseX": 71.50000000110121,
+          "ControlPointPoseY": 345.10999999976724
+        }
+      }
+    }
+  },
+  {
+    "Result": {
+      "Success": true,
+      "Summary": "Passed:Condition_0 (Success)"
+    },
+    "Stamp": {
+      "System": 1748404002.8739362,
+      "ROS": 1748195200.5312133
+    },
+    "Frame": {
+      "/planning/planning_factors/obstacle_stop": {
+        "Result": {
+          "Total": "Success",
+          "Frame": "Success"
+        },
+        "Info": {
+          "Distance": 0.009999999767160322,
+          "ControlPointPoseX": 71.5000000011025,
+          "ControlPointPoseY": 345.1099999997672
+        }
+      }
+    }
+  },
+  {
+    "Result": {
+      "Success": true,
+      "Summary": "Passed:Condition_0 (Success)"
+    },
+    "Stamp": {
+      "System": 1748404002.9780784,
+      "ROS": 1748195200.635548
+    },
+    "Frame": {
+      "/planning/planning_factors/obstacle_stop": {
+        "Result": {
+          "Total": "Success",
+          "Frame": "Success"
+        },
+        "Info": {
+          "Distance": 0.009999999767330852,
+          "ControlPointPoseX": 71.50000000109894,
+          "ControlPointPoseY": 345.10999999976735
+        }
+      }
+    }
+  },
+  {
+    "Result": {
+      "Success": true,
+      "Summary": "Passed:Condition_0 (Success)"
+    },
+    "Stamp": {
+      "System": 1748404003.0737283,
+      "ROS": 1748195200.73118
+    },
+    "Frame": {
+      "/planning/planning_factors/obstacle_stop": {
+        "Result": {
+          "Total": "Success",
+          "Frame": "Success"
+        },
+        "Info": {
+          "Distance": 0.009999999767330852,
+          "ControlPointPoseX": 71.50000000109824,
+          "ControlPointPoseY": 345.10999999976735
+        }
+      }
+    }
+  },
+  {
+    "Result": {
+      "Success": true,
+      "Summary": "Passed:Condition_0 (Success)"
+    },
+    "Stamp": {
+      "System": 1748404003.174544,
+      "ROS": 1748195200.831218
+    },
+    "Frame": {
+      "/planning/planning_factors/obstacle_stop": {
+        "Result": {
+          "Total": "Success",
+          "Frame": "Success"
+        },
+        "Info": {
+          "Distance": 0.009999999767387696,
+          "ControlPointPoseX": 71.50000000110136,
+          "ControlPointPoseY": 345.1099999997674
+        }
+      }
+    }
+  },
+  {
+    "Result": {
+      "Success": true,
+      "Summary": "Passed:Condition_0 (Success)"
+    },
+    "Stamp": {
+      "System": 1748404003.2755866,
+      "ROS": 1748195200.9312146
+    },
+    "Frame": {
+      "/planning/planning_factors/obstacle_stop": {
+        "Result": {
+          "Total": "Success",
+          "Frame": "Success"
+        },
+        "Info": {
+          "Distance": 0.009999999767330852,
+          "ControlPointPoseX": 71.50000000110084,
+          "ControlPointPoseY": 345.10999999976735
+        }
+      }
+    }
+  },
+  {
+    "Result": {
+      "Success": true,
+      "Summary": "Passed:Condition_0 (Success)"
+    },
+    "Stamp": {
+      "System": 1748404003.3665934,
+      "ROS": 1748195201.0261898
+    },
+    "Frame": {
+      "/planning/planning_factors/obstacle_stop": {
+        "Result": {
+          "Total": "Success",
+          "Frame": "Success"
+        },
+        "Info": {
+          "Distance": 0.009999999767330852,
+          "ControlPointPoseX": 71.50000000110057,
+          "ControlPointPoseY": 345.10999999976735
+        }
+      }
+    }
+  },
+  {
+    "Result": {
+      "Success": true,
+      "Summary": "Passed:Condition_0 (Success)"
+    },
+    "Stamp": {
+      "System": 1748404003.4747527,
+      "ROS": 1748195201.1310976
+    },
+    "Frame": {
+      "/planning/planning_factors/obstacle_stop": {
+        "Result": {
+          "Total": "Success",
+          "Frame": "Success"
+        },
+        "Info": {
+          "Distance": 0.009999999767217166,
+          "ControlPointPoseX": 71.50000000110428,
+          "ControlPointPoseY": 345.10999999976724
+        }
+      }
+    }
+  },
+  {
+    "Result": {
+      "Success": true,
+      "Summary": "Passed:Condition_0 (Success)"
+    },
+    "Stamp": {
+      "System": 1748404003.5756888,
+      "ROS": 1748195201.2312195
+    },
+    "Frame": {
+      "/planning/planning_factors/obstacle_stop": {
+        "Result": {
+          "Total": "Success",
+          "Frame": "Success"
+        },
+        "Info": {
+          "Distance": 0.009999999767330852,
+          "ControlPointPoseX": 71.50000000110069,
+          "ControlPointPoseY": 345.10999999976735
+        }
+      }
+    }
+  },
+  {
+    "Result": {
+      "Success": true,
+      "Summary": "Passed:Condition_0 (Success)"
+    },
+    "Stamp": {
+      "System": 1748404003.672526,
+      "ROS": 1748195201.3262281
+    },
+    "Frame": {
+      "/planning/planning_factors/obstacle_stop": {
+        "Result": {
+          "Total": "Success",
+          "Frame": "Success"
+        },
+        "Info": {
+          "Distance": 0.009999999767330852,
+          "ControlPointPoseX": 71.50000000110015,
+          "ControlPointPoseY": 345.10999999976735
+        }
+      }
+    }
+  },
+  {
+    "Result": {
+      "Success": true,
+      "Summary": "Passed:Condition_0 (Success)"
+    },
+    "Stamp": {
+      "System": 1748404003.7760046,
+      "ROS": 1748195201.4362018
+    },
+    "Frame": {
+      "/planning/planning_factors/obstacle_stop": {
+        "Result": {
+          "Total": "Success",
+          "Frame": "Success"
+        },
+        "Info": {
+          "Distance": 0.009999999767387696,
+          "ControlPointPoseX": 71.50000000109819,
+          "ControlPointPoseY": 345.1099999997674
+        }
+      }
+    }
+  },
+  {
+    "Result": {
+      "Success": true,
+      "Summary": "Passed:Condition_0 (Success)"
+    },
+    "Stamp": {
+      "System": 1748404003.8683386,
+      "ROS": 1748195201.5261576
+    },
+    "Frame": {
+      "/planning/planning_factors/obstacle_stop": {
+        "Result": {
+          "Total": "Success",
+          "Frame": "Success"
+        },
+        "Info": {
+          "Distance": 0.009999999767330852,
+          "ControlPointPoseX": 71.50000000110083,
+          "ControlPointPoseY": 345.10999999976735
+        }
+      }
+    }
+  },
+  {
+    "Result": {
+      "Success": true,
+      "Summary": "Passed:Condition_0 (Success)"
+    },
+    "Stamp": {
+      "System": 1748404003.9765844,
+      "ROS": 1748195201.6361878
+    },
+    "Frame": {
+      "/planning/planning_factors/obstacle_stop": {
+        "Result": {
+          "Total": "Success",
+          "Frame": "Success"
+        },
+        "Info": {
+          "Distance": 0.009999999767274009,
+          "ControlPointPoseX": 71.5000000011014,
+          "ControlPointPoseY": 345.1099999997673
+        }
+      }
+    }
+  },
+  {
+    "Result": {
+      "Success": true,
+      "Summary": "Passed:Condition_0 (Success)"
+    },
+    "Stamp": {
+      "System": 1748404004.0748448,
+      "ROS": 1748195201.7311766
+    },
+    "Frame": {
+      "/planning/planning_factors/obstacle_stop": {
+        "Result": {
+          "Total": "Success",
+          "Frame": "Success"
+        },
+        "Info": {
+          "Distance": 0.009999999767330852,
+          "ControlPointPoseX": 71.500000001102,
+          "ControlPointPoseY": 345.10999999976735
+        }
+      }
+    }
+  },
+  {
+    "Result": {
+      "Success": true,
+      "Summary": "Passed:Condition_0 (Success)"
+    },
+    "Stamp": {
+      "System": 1748404004.1698656,
+      "ROS": 1748195201.8261747
+    },
+    "Frame": {
+      "/planning/planning_factors/obstacle_stop": {
+        "Result": {
+          "Total": "Success",
+          "Frame": "Success"
+        },
+        "Info": {
+          "Distance": 0.009999999767330852,
+          "ControlPointPoseX": 71.50000000109954,
+          "ControlPointPoseY": 345.10999999976735
+        }
+      }
+    }
+  },
+  {
+    "Result": {
+      "Success": true,
+      "Summary": "Passed:Condition_0 (Success)"
+    },
+    "Stamp": {
+      "System": 1748404004.2727673,
+      "ROS": 1748195201.9311533
+    },
+    "Frame": {
+      "/planning/planning_factors/obstacle_stop": {
+        "Result": {
+          "Total": "Success",
+          "Frame": "Success"
+        },
+        "Info": {
+          "Distance": 0.009999999767274009,
+          "ControlPointPoseX": 71.50000000110059,
+          "ControlPointPoseY": 345.1099999997673
+        }
+      }
+    }
+  },
+  {
+    "Result": {
+      "Success": true,
+      "Summary": "Passed:Condition_0 (Success)"
+    },
+    "Stamp": {
+      "System": 1748404004.3721604,
+      "ROS": 1748195202.031215
+    },
+    "Frame": {
+      "/planning/planning_factors/obstacle_stop": {
+        "Result": {
+          "Total": "Success",
+          "Frame": "Success"
+        },
+        "Info": {
+          "Distance": 0.009999999767330852,
+          "ControlPointPoseX": 71.50000000109902,
+          "ControlPointPoseY": 345.10999999976735
+        }
+      }
+    }
+  },
+  {
+    "Result": {
+      "Success": true,
+      "Summary": "Passed:Condition_0 (Success)"
+    },
+    "Stamp": {
+      "System": 1748404004.471611,
+      "ROS": 1748195202.131224
+    },
+    "Frame": {
+      "/planning/planning_factors/obstacle_stop": {
+        "Result": {
+          "Total": "Success",
+          "Frame": "Success"
+        },
+        "Info": {
+          "Distance": 0.009999999767160322,
+          "ControlPointPoseX": 71.500000001106,
+          "ControlPointPoseY": 345.1099999997672
+        }
+      }
+    }
+  },
+  {
+    "Result": {
+      "Success": true,
+      "Summary": "Passed:Condition_0 (Success)"
+    },
+    "Stamp": {
+      "System": 1748404004.5719323,
+      "ROS": 1748195202.2311842
+    },
+    "Frame": {
+      "/planning/planning_factors/obstacle_stop": {
+        "Result": {
+          "Total": "Success",
+          "Frame": "Success"
+        },
+        "Info": {
+          "Distance": 0.009999999767330852,
+          "ControlPointPoseX": 71.50000000109918,
+          "ControlPointPoseY": 345.10999999976735
+        }
+      }
+    }
+  },
+  {
+    "Result": {
+      "Success": true,
+      "Summary": "Passed:Condition_0 (Success)"
+    },
+    "Stamp": {
+      "System": 1748404004.6748872,
+      "ROS": 1748195202.3328724
+    },
+    "Frame": {
+      "/planning/planning_factors/obstacle_stop": {
+        "Result": {
+          "Total": "Success",
+          "Frame": "Success"
+        },
+        "Info": {
+          "Distance": 0.009999999767330852,
+          "ControlPointPoseX": 71.50000000109851,
+          "ControlPointPoseY": 345.10999999976735
+        }
+      }
+    }
+  },
+  {
+    "Result": {
+      "Success": true,
+      "Summary": "Passed:Condition_0 (Success)"
+    },
+    "Stamp": {
+      "System": 1748404004.77136,
+      "ROS": 1748195202.43126
+    },
+    "Frame": {
+      "/planning/planning_factors/obstacle_stop": {
+        "Result": {
+          "Total": "Success",
+          "Frame": "Success"
+        },
+        "Info": {
+          "Distance": 0.009999999767330852,
+          "ControlPointPoseX": 71.50000000110154,
+          "ControlPointPoseY": 345.10999999976735
+        }
+      }
+    }
+  },
+  {
+    "Result": {
+      "Success": true,
+      "Summary": "Passed:Condition_0 (Success)"
+    },
+    "Stamp": {
+      "System": 1748404004.8686955,
+      "ROS": 1748195202.5262046
+    },
+    "Frame": {
+      "/planning/planning_factors/obstacle_stop": {
+        "Result": {
+          "Total": "Success",
+          "Frame": "Success"
+        },
+        "Info": {
+          "Distance": 0.009999999767217166,
+          "ControlPointPoseX": 71.50000000110415,
+          "ControlPointPoseY": 345.10999999976724
+        }
+      }
+    }
+  },
+  {
+    "Result": {
+      "Success": true,
+      "Summary": "Passed:Condition_0 (Success)"
+    },
+    "Stamp": {
+      "System": 1748404004.9700413,
+      "ROS": 1748195202.6264105
+    },
+    "Frame": {
+      "/planning/planning_factors/obstacle_stop": {
+        "Result": {
+          "Total": "Success",
+          "Frame": "Success"
+        },
+        "Info": {
+          "Distance": 0.009999999767274009,
+          "ControlPointPoseX": 71.50000000110181,
+          "ControlPointPoseY": 345.1099999997673
+        }
+      }
+    }
+  },
+  {
+    "Result": {
+      "Success": true,
+      "Summary": "Passed:Condition_0 (Success)"
+    },
+    "Stamp": {
+      "System": 1748404005.070097,
+      "ROS": 1748195202.7261698
+    },
+    "Frame": {
+      "/planning/planning_factors/obstacle_stop": {
+        "Result": {
+          "Total": "Success",
+          "Frame": "Success"
+        },
+        "Info": {
+          "Distance": 0.009999999767274009,
+          "ControlPointPoseX": 71.50000000110403,
+          "ControlPointPoseY": 345.1099999997673
+        }
+      }
+    }
+  },
+  {
+    "Result": {
+      "Success": true,
+      "Summary": "Passed:Condition_0 (Success)"
+    },
+    "Stamp": {
+      "System": 1748404005.173062,
+      "ROS": 1748195202.8312683
+    },
+    "Frame": {
+      "/planning/planning_factors/obstacle_stop": {
+        "Result": {
+          "Total": "Success",
+          "Frame": "Success"
+        },
+        "Info": {
+          "Distance": 0.009999999767330852,
+          "ControlPointPoseX": 71.50000000110288,
+          "ControlPointPoseY": 345.10999999976735
+        }
+      }
+    }
+  },
+  {
+    "Result": {
+      "Success": true,
+      "Summary": "Passed:Condition_0 (Success)"
+    },
+    "Stamp": {
+      "System": 1748404005.2730305,
+      "ROS": 1748195202.9313595
+    },
+    "Frame": {
+      "/planning/planning_factors/obstacle_stop": {
+        "Result": {
+          "Total": "Success",
+          "Frame": "Success"
+        },
+        "Info": {
+          "Distance": 0.009999999767330852,
+          "ControlPointPoseX": 71.50000000110177,
+          "ControlPointPoseY": 345.10999999976735
+        }
+      }
+    }
+  },
+  {
+    "Result": {
+      "Success": true,
+      "Summary": "Passed:Condition_0 (Success)"
+    },
+    "Stamp": {
+      "System": 1748404005.36897,
+      "ROS": 1748195203.0263205
+    },
+    "Frame": {
+      "/planning/planning_factors/obstacle_stop": {
+        "Result": {
+          "Total": "Success",
+          "Frame": "Success"
+        },
+        "Info": {
+          "Distance": 0.009999999767274009,
+          "ControlPointPoseX": 71.500000001099,
+          "ControlPointPoseY": 345.1099999997673
+        }
+      }
+    }
+  },
+  {
+    "Result": {
+      "Success": true,
+      "Summary": "Passed:Condition_0 (Success)"
+    },
+    "Stamp": {
+      "System": 1748404005.478039,
+      "ROS": 1748195203.1313508
+    },
+    "Frame": {
+      "/planning/planning_factors/obstacle_stop": {
+        "Result": {
+          "Total": "Success",
+          "Frame": "Success"
+        },
+        "Info": {
+          "Distance": 0.009999999767330852,
+          "ControlPointPoseX": 71.50000000110013,
+          "ControlPointPoseY": 345.10999999976735
+        }
+      }
+    }
+  },
+  {
+    "Result": {
+      "Success": true,
+      "Summary": "Passed:Condition_0 (Success)"
+    },
+    "Stamp": {
+      "System": 1748404005.569825,
+      "ROS": 1748195203.2264476
+    },
+    "Frame": {
+      "/planning/planning_factors/obstacle_stop": {
+        "Result": {
+          "Total": "Success",
+          "Frame": "Success"
+        },
+        "Info": {
+          "Distance": 0.009999999767387696,
+          "ControlPointPoseX": 71.50000000109789,
+          "ControlPointPoseY": 345.1099999997674
+        }
+      }
+    }
+  },
+  {
+    "Result": {
+      "Success": true,
+      "Summary": "Passed:Condition_0 (Success)"
+    },
+    "Stamp": {
+      "System": 1748404005.6728518,
+      "ROS": 1748195203.3311327
+    },
+    "Frame": {
+      "/planning/planning_factors/obstacle_stop": {
+        "Result": {
+          "Total": "Success",
+          "Frame": "Success"
+        },
+        "Info": {
+          "Distance": 0.009999999767330852,
+          "ControlPointPoseX": 71.50000000109893,
+          "ControlPointPoseY": 345.10999999976735
+        }
+      }
+    }
+  },
+  {
+    "Result": {
+      "Success": true,
+      "Summary": "Passed:Condition_0 (Success)"
+    },
+    "Stamp": {
+      "System": 1748404005.7749867,
+      "ROS": 1748195203.4296477
+    },
+    "Frame": {
+      "/planning/planning_factors/obstacle_stop": {
+        "Result": {
+          "Total": "Success",
+          "Frame": "Success"
+        },
+        "Info": {
+          "Distance": 0.009999999767160322,
+          "ControlPointPoseX": 71.50000000109794,
+          "ControlPointPoseY": 345.1099999997672
+        }
+      }
+    }
+  },
+  {
+    "Result": {
+      "Success": true,
+      "Summary": "Passed:Condition_0 (Success)"
+    },
+    "Stamp": {
+      "System": 1748404005.8735852,
+      "ROS": 1748195203.5313334
+    },
+    "Frame": {
+      "/planning/planning_factors/obstacle_stop": {
+        "Result": {
+          "Total": "Success",
+          "Frame": "Success"
+        },
+        "Info": {
+          "Distance": 0.009999999767330852,
+          "ControlPointPoseX": 71.50000000109833,
+          "ControlPointPoseY": 345.10999999976735
+        }
+      }
+    }
+  },
+  {
+    "Result": {
+      "Success": true,
+      "Summary": "Passed:Condition_0 (Success)"
+    },
+    "Stamp": {
+      "System": 1748404005.9674928,
+      "ROS": 1748195203.6262515
+    },
+    "Frame": {
+      "/planning/planning_factors/obstacle_stop": {
+        "Result": {
+          "Total": "Success",
+          "Frame": "Success"
+        },
+        "Info": {
+          "Distance": 0.009999999767387696,
+          "ControlPointPoseX": 71.50000000109645,
+          "ControlPointPoseY": 345.1099999997674
+        }
+      }
+    }
+  },
+  {
+    "Result": {
+      "Success": true,
+      "Summary": "Passed:Condition_0 (Success)"
+    },
+    "Stamp": {
+      "System": 1748404006.0699143,
+      "ROS": 1748195203.7266402
+    },
+    "Frame": {
+      "/planning/planning_factors/obstacle_stop": {
+        "Result": {
+          "Total": "Success",
+          "Frame": "Success"
+        },
+        "Info": {
+          "Distance": 0.009999999767160322,
+          "ControlPointPoseX": 71.50000000110231,
+          "ControlPointPoseY": 345.1099999997672
+        }
+      }
+    }
+  },
+  {
+    "Result": {
+      "Success": true,
+      "Summary": "Passed:Condition_0 (Success)"
+    },
+    "Stamp": {
+      "System": 1748404006.1664355,
+      "ROS": 1748195203.826151
+    },
+    "Frame": {
+      "/planning/planning_factors/obstacle_stop": {
+        "Result": {
+          "Total": "Success",
+          "Frame": "Success"
+        },
+        "Info": {
+          "Distance": 0.009999999767274009,
+          "ControlPointPoseX": 71.50000000109956,
+          "ControlPointPoseY": 345.1099999997673
+        }
+      }
+    }
+  },
+  {
+    "Result": {
+      "Success": true,
+      "Summary": "Passed:Condition_0 (Success)"
+    },
+    "Stamp": {
+      "System": 1748404006.26901,
+      "ROS": 1748195203.9262135
+    },
+    "Frame": {
+      "/planning/planning_factors/obstacle_stop": {
+        "Result": {
+          "Total": "Success",
+          "Frame": "Success"
+        },
+        "Info": {
+          "Distance": 0.009999999767330852,
+          "ControlPointPoseX": 71.50000000110103,
+          "ControlPointPoseY": 345.10999999976735
+        }
+      }
+    }
+  },
+  {
+    "Result": {
+      "Success": true,
+      "Summary": "Passed:Condition_0 (Success)"
+    },
+    "Stamp": {
+      "System": 1748404006.3670297,
+      "ROS": 1748195204.0262706
+    },
+    "Frame": {
+      "/planning/planning_factors/obstacle_stop": {
+        "Result": {
+          "Total": "Success",
+          "Frame": "Success"
+        },
+        "Info": {
+          "Distance": 0.009999999767330852,
+          "ControlPointPoseX": 71.50000000109873,
+          "ControlPointPoseY": 345.10999999976735
+        }
+      }
+    }
+  },
+  {
+    "Result": {
+      "Success": true,
+      "Summary": "Passed:Condition_0 (Success)"
+    },
+    "Stamp": {
+      "System": 1748404006.47459,
+      "ROS": 1748195204.131138
+    },
+    "Frame": {
+      "/planning/planning_factors/obstacle_stop": {
+        "Result": {
+          "Total": "Success",
+          "Frame": "Success"
+        },
+        "Info": {
+          "Distance": 0.009999999767330852,
+          "ControlPointPoseX": 71.50000000109877,
+          "ControlPointPoseY": 345.10999999976735
+        }
+      }
+    }
+  },
+  {
+    "Result": {
+      "Success": true,
+      "Summary": "Passed:Condition_0 (Success)"
+    },
+    "Stamp": {
+      "System": 1748404006.573838,
+      "ROS": 1748195204.2311666
+    },
+    "Frame": {
+      "/planning/planning_factors/obstacle_stop": {
+        "Result": {
+          "Total": "Success",
+          "Frame": "Success"
+        },
+        "Info": {
+          "Distance": 0.009999999767387696,
+          "ControlPointPoseX": 71.50000000109922,
+          "ControlPointPoseY": 345.1099999997674
+        }
+      }
+    }
+  },
+  {
+    "Result": {
+      "Success": true,
+      "Summary": "Passed:Condition_0 (Success)"
+    },
+    "Stamp": {
+      "System": 1748404006.6765394,
+      "ROS": 1748195204.3361673
+    },
+    "Frame": {
+      "/planning/planning_factors/obstacle_stop": {
+        "Result": {
+          "Total": "Success",
+          "Frame": "Success"
+        },
+        "Info": {
+          "Distance": 0.009999999767274009,
+          "ControlPointPoseX": 71.50000000109912,
+          "ControlPointPoseY": 345.1099999997673
+        }
+      }
+    }
+  },
+  {
+    "Result": {
+      "Success": true,
+      "Summary": "Passed:Condition_0 (Success)"
+    },
+    "Stamp": {
+      "System": 1748404006.7754989,
+      "ROS": 1748195204.4313066
+    },
+    "Frame": {
+      "/planning/planning_factors/obstacle_stop": {
+        "Result": {
+          "Total": "Success",
+          "Frame": "Success"
+        },
+        "Info": {
+          "Distance": 0.009999999767217166,
+          "ControlPointPoseX": 71.5000000011032,
+          "ControlPointPoseY": 345.10999999976724
+        }
+      }
+    }
+  },
+  {
+    "Result": {
+      "Success": true,
+      "Summary": "Passed:Condition_0 (Success)"
+    },
+    "Stamp": {
+      "System": 1748404006.8751686,
+      "ROS": 1748195204.5263312
+    },
+    "Frame": {
+      "/planning/planning_factors/obstacle_stop": {
+        "Result": {
+          "Total": "Success",
+          "Frame": "Success"
+        },
+        "Info": {
+          "Distance": 0.009999999767274009,
+          "ControlPointPoseX": 71.50000000109883,
+          "ControlPointPoseY": 345.1099999997673
+        }
+      }
+    }
+  },
+  {
+    "Result": {
+      "Success": true,
+      "Summary": "Passed:Condition_0 (Success)"
+    },
+    "Stamp": {
+      "System": 1748404006.9700205,
+      "ROS": 1748195204.6261373
+    },
+    "Frame": {
+      "/planning/planning_factors/obstacle_stop": {
+        "Result": {
+          "Total": "Success",
+          "Frame": "Success"
+        },
+        "Info": {
+          "Distance": 0.009999999767274009,
+          "ControlPointPoseX": 71.5000000011001,
+          "ControlPointPoseY": 345.1099999997673
+        }
+      }
+    }
+  },
+  {
+    "Result": {
+      "Success": true,
+      "Summary": "Passed:Condition_0 (Success)"
+    },
+    "Stamp": {
+      "System": 1748404007.0754201,
+      "ROS": 1748195204.7313282
+    },
+    "Frame": {
+      "/planning/planning_factors/obstacle_stop": {
+        "Result": {
+          "Total": "Success",
+          "Frame": "Success"
+        },
+        "Info": {
+          "Distance": 0.009999999767330852,
+          "ControlPointPoseX": 71.5000000011014,
+          "ControlPointPoseY": 345.10999999976735
+        }
+      }
+    }
+  },
+  {
+    "Result": {
+      "Success": true,
+      "Summary": "Passed:Condition_0 (Success)"
+    },
+    "Stamp": {
+      "System": 1748404007.1693728,
+      "ROS": 1748195204.8262627
+    },
+    "Frame": {
+      "/planning/planning_factors/obstacle_stop": {
+        "Result": {
+          "Total": "Success",
+          "Frame": "Success"
+        },
+        "Info": {
+          "Distance": 0.009999999767330852,
+          "ControlPointPoseX": 71.50000000110138,
+          "ControlPointPoseY": 345.10999999976735
+        }
+      }
+    }
+  },
+  {
+    "Result": {
+      "Success": true,
+      "Summary": "Passed:Condition_0 (Success)"
+    },
+    "Stamp": {
+      "System": 1748404007.2776477,
+      "ROS": 1748195204.9354713
+    },
+    "Frame": {
+      "/planning/planning_factors/obstacle_stop": {
+        "Result": {
+          "Total": "Success",
+          "Frame": "Success"
+        },
+        "Info": {
+          "Distance": 0.009999999767103479,
+          "ControlPointPoseX": 71.50000000110497,
+          "ControlPointPoseY": 345.1099999997671
+        }
+      }
+    }
+  },
+  {
+    "Result": {
+      "Success": true,
+      "Summary": "Passed:Condition_0 (Success)"
+    },
+    "Stamp": {
+      "System": 1748404007.3722908,
+      "ROS": 1748195205.0311122
+    },
+    "Frame": {
+      "/planning/planning_factors/obstacle_stop": {
+        "Result": {
+          "Total": "Success",
+          "Frame": "Success"
+        },
+        "Info": {
+          "Distance": 0.009999999767217166,
+          "ControlPointPoseX": 71.50000000110226,
+          "ControlPointPoseY": 345.10999999976724
+        }
+      }
+    }
+  },
+  {
+    "Result": {
+      "Success": true,
+      "Summary": "Passed:Condition_0 (Success)"
+    },
+    "Stamp": {
+      "System": 1748404007.4684231,
+      "ROS": 1748195205.126085
+    },
+    "Frame": {
+      "/planning/planning_factors/obstacle_stop": {
+        "Result": {
+          "Total": "Success",
+          "Frame": "Success"
+        },
+        "Info": {
+          "Distance": 0.009999999767274009,
+          "ControlPointPoseX": 71.50000000110113,
+          "ControlPointPoseY": 345.1099999997673
+        }
+      }
+    }
+  },
+  {
+    "Result": {
+      "Success": true,
+      "Summary": "Passed:Condition_0 (Success)"
+    },
+    "Stamp": {
+      "System": 1748404007.5696228,
+      "ROS": 1748195205.2266436
+    },
+    "Frame": {
+      "/planning/planning_factors/obstacle_stop": {
+        "Result": {
+          "Total": "Success",
+          "Frame": "Success"
+        },
+        "Info": {
+          "Distance": 0.009999999767160322,
+          "ControlPointPoseX": 71.50000000110232,
+          "ControlPointPoseY": 345.1099999997672
+        }
+      }
+    }
+  },
+  {
+    "Result": {
+      "Success": true,
+      "Summary": "Passed:Condition_0 (Success)"
+    },
+    "Stamp": {
+      "System": 1748404007.667606,
+      "ROS": 1748195205.3261206
+    },
+    "Frame": {
+      "/planning/planning_factors/obstacle_stop": {
+        "Result": {
+          "Total": "Success",
+          "Frame": "Success"
+        },
+        "Info": {
+          "Distance": 0.009999999767330852,
+          "ControlPointPoseX": 71.50000000110201,
+          "ControlPointPoseY": 345.10999999976735
+        }
+      }
+    }
+  },
+  {
+    "Result": {
+      "Success": true,
+      "Summary": "Passed:Condition_0 (Success)"
+    },
+    "Stamp": {
+      "System": 1748404007.7677577,
+      "ROS": 1748195205.426211
+    },
+    "Frame": {
+      "/planning/planning_factors/obstacle_stop": {
+        "Result": {
+          "Total": "Success",
+          "Frame": "Success"
+        },
+        "Info": {
+          "Distance": 0.009999999767330852,
+          "ControlPointPoseX": 71.50000000109627,
+          "ControlPointPoseY": 345.10999999976735
+        }
+      }
+    }
+  },
+  {
+    "Result": {
+      "Success": true,
+      "Summary": "Passed:Condition_0 (Success)"
+    },
+    "Stamp": {
+      "System": 1748404007.8696327,
+      "ROS": 1748195205.5260942
+    },
+    "Frame": {
+      "/planning/planning_factors/obstacle_stop": {
+        "Result": {
+          "Total": "Success",
+          "Frame": "Success"
+        },
+        "Info": {
+          "Distance": 0.009999999767387696,
+          "ControlPointPoseX": 71.50000000109922,
+          "ControlPointPoseY": 345.1099999997674
+        }
+      }
+    }
+  },
+  {
+    "Result": {
+      "Success": true,
+      "Summary": "Passed:Condition_0 (Success)"
+    },
+    "Stamp": {
+      "System": 1748404007.9735012,
+      "ROS": 1748195205.6315665
+    },
+    "Frame": {
+      "/planning/planning_factors/obstacle_stop": {
+        "Result": {
+          "Total": "Success",
+          "Frame": "Success"
+        },
+        "Info": {
+          "Distance": 0.009999999767217166,
+          "ControlPointPoseX": 71.50000000110276,
+          "ControlPointPoseY": 345.10999999976724
+        }
+      }
+    }
+  },
+  {
+    "Result": {
+      "Success": true,
+      "Summary": "Passed:Condition_0 (Success)"
+    },
+    "Stamp": {
+      "System": 1748404008.0682886,
+      "ROS": 1748195205.7271183
+    },
+    "Frame": {
+      "/planning/planning_factors/obstacle_stop": {
+        "Result": {
+          "Total": "Success",
+          "Frame": "Success"
+        },
+        "Info": {
+          "Distance": 0.009999999767274009,
+          "ControlPointPoseX": 71.50000000110083,
+          "ControlPointPoseY": 345.1099999997673
+        }
+      }
+    }
+  },
+  {
+    "Result": {
+      "Success": true,
+      "Summary": "Passed:Condition_0 (Success)"
+    },
+    "Stamp": {
+      "System": 1748404008.1668634,
+      "ROS": 1748195205.8254242
+    },
+    "Frame": {
+      "/planning/planning_factors/obstacle_stop": {
+        "Result": {
+          "Total": "Success",
+          "Frame": "Success"
+        },
+        "Info": {
+          "Distance": 0.009999999767217166,
+          "ControlPointPoseX": 71.50000000110208,
+          "ControlPointPoseY": 345.10999999976724
+        }
+      }
+    }
+  },
+  {
+    "Result": {
+      "Success": true,
+      "Summary": "Passed:Condition_0 (Success)"
+    },
+    "Stamp": {
+      "System": 1748404008.273553,
+      "ROS": 1748195205.9315152
+    },
+    "Frame": {
+      "/planning/planning_factors/obstacle_stop": {
+        "Result": {
+          "Total": "Success",
+          "Frame": "Success"
+        },
+        "Info": {
+          "Distance": 0.009999999767217166,
+          "ControlPointPoseX": 71.50000000110165,
+          "ControlPointPoseY": 345.10999999976724
+        }
+      }
+    }
+  },
+  {
+    "Result": {
+      "Success": true,
+      "Summary": "Passed:Condition_0 (Success)"
+    },
+    "Stamp": {
+      "System": 1748404008.367496,
+      "ROS": 1748195206.0260954
+    },
+    "Frame": {
+      "/planning/planning_factors/obstacle_stop": {
+        "Result": {
+          "Total": "Success",
+          "Frame": "Success"
+        },
+        "Info": {
+          "Distance": 0.009999999767330852,
+          "ControlPointPoseX": 71.50000000109952,
+          "ControlPointPoseY": 345.10999999976735
+        }
+      }
+    }
+  },
+  {
+    "Result": {
+      "Success": true,
+      "Summary": "Passed:Condition_0 (Success)"
+    },
+    "Stamp": {
+      "System": 1748404008.4726267,
+      "ROS": 1748195206.1310842
+    },
+    "Frame": {
+      "/planning/planning_factors/obstacle_stop": {
+        "Result": {
+          "Total": "Success",
+          "Frame": "Success"
+        },
+        "Info": {
+          "Distance": 0.009999999767330852,
+          "ControlPointPoseX": 71.50000000110039,
+          "ControlPointPoseY": 345.10999999976735
+        }
+      }
+    }
+  },
+  {
+    "Result": {
+      "Success": true,
+      "Summary": "Passed:Condition_0 (Success)"
+    },
+    "Stamp": {
+      "System": 1748404008.5692637,
+      "ROS": 1748195206.2261481
+    },
+    "Frame": {
+      "/planning/planning_factors/obstacle_stop": {
+        "Result": {
+          "Total": "Success",
+          "Frame": "Success"
+        },
+        "Info": {
+          "Distance": 0.009999999767330852,
+          "ControlPointPoseX": 71.50000000109695,
+          "ControlPointPoseY": 345.10999999976735
+        }
+      }
+    }
+  },
+  {
+    "Result": {
+      "Success": true,
+      "Summary": "Passed:Condition_0 (Success)"
+    },
+    "Stamp": {
+      "System": 1748404008.6703482,
+      "ROS": 1748195206.3264315
+    },
+    "Frame": {
+      "/planning/planning_factors/obstacle_stop": {
+        "Result": {
+          "Total": "Success",
+          "Frame": "Success"
+        },
+        "Info": {
+          "Distance": 0.009999999767217166,
+          "ControlPointPoseX": 71.50000000109775,
+          "ControlPointPoseY": 345.10999999976724
+        }
+      }
+    }
+  },
+  {
+    "Result": {
+      "Success": true,
+      "Summary": "Passed:Condition_0 (Success)"
+    },
+    "Stamp": {
+      "System": 1748404008.7771366,
+      "ROS": 1748195206.4360976
+    },
+    "Frame": {
+      "/planning/planning_factors/obstacle_stop": {
+        "Result": {
+          "Total": "Success",
+          "Frame": "Success"
+        },
+        "Info": {
+          "Distance": 0.009999999767330852,
+          "ControlPointPoseX": 71.50000000109637,
+          "ControlPointPoseY": 345.10999999976735
+        }
+      }
+    }
+  },
+  {
+    "Result": {
+      "Success": true,
+      "Summary": "Passed:Condition_0 (Success)"
+    },
+    "Stamp": {
+      "System": 1748404008.872701,
+      "ROS": 1748195206.5312586
+    },
+    "Frame": {
+      "/planning/planning_factors/obstacle_stop": {
+        "Result": {
+          "Total": "Success",
+          "Frame": "Success"
+        },
+        "Info": {
+          "Distance": 0.009999999767330852,
+          "ControlPointPoseX": 71.50000000110084,
+          "ControlPointPoseY": 345.10999999976735
+        }
+      }
+    }
+  },
+  {
+    "Result": {
+      "Success": true,
+      "Summary": "Passed:Condition_0 (Success)"
+    },
+    "Stamp": {
+      "System": 1748404008.972425,
+      "ROS": 1748195206.6311207
+    },
+    "Frame": {
+      "/planning/planning_factors/obstacle_stop": {
+        "Result": {
+          "Total": "Success",
+          "Frame": "Success"
+        },
+        "Info": {
+          "Distance": 0.009999999767274009,
+          "ControlPointPoseX": 71.50000000110309,
+          "ControlPointPoseY": 345.1099999997673
+        }
+      }
+    }
+  },
+  {
+    "Result": {
+      "Success": true,
+      "Summary": "Passed:Condition_0 (Success)"
+    },
+    "Stamp": {
+      "System": 1748404009.0649843,
+      "ROS": 1748195206.7218223
+    },
+    "Frame": {
+      "/planning/planning_factors/obstacle_stop": {
+        "Result": {
+          "Total": "Success",
+          "Frame": "Success"
+        },
+        "Info": {
+          "Distance": 0.009999999767274009,
+          "ControlPointPoseX": 71.50000000109661,
+          "ControlPointPoseY": 345.1099999997673
+        }
+      }
+    }
+  },
+  {
+    "Result": {
+      "Success": true,
+      "Summary": "Passed:Condition_0 (Success)"
+    },
+    "Stamp": {
+      "System": 1748404009.168206,
+      "ROS": 1748195206.8261662
+    },
+    "Frame": {
+      "/planning/planning_factors/obstacle_stop": {
+        "Result": {
+          "Total": "Success",
+          "Frame": "Success"
+        },
+        "Info": {
+          "Distance": 0.009999999767274009,
+          "ControlPointPoseX": 71.50000000109858,
+          "ControlPointPoseY": 345.1099999997673
+        }
+      }
+    }
+  },
+  {
+    "Result": {
+      "Success": true,
+      "Summary": "Passed:Condition_0 (Success)"
+    },
+    "Stamp": {
+      "System": 1748404009.2673132,
+      "ROS": 1748195206.926096
+    },
+    "Frame": {
+      "/planning/planning_factors/obstacle_stop": {
+        "Result": {
+          "Total": "Success",
+          "Frame": "Success"
+        },
+        "Info": {
+          "Distance": 0.009999999767330852,
+          "ControlPointPoseX": 71.50000000109888,
+          "ControlPointPoseY": 345.10999999976735
+        }
+      }
+    }
+  },
+  {
+    "Result": {
+      "Success": true,
+      "Summary": "Passed:Condition_0 (Success)"
+    },
+    "Stamp": {
+      "System": 1748404009.3692005,
+      "ROS": 1748195207.0261364
+    },
+    "Frame": {
+      "/planning/planning_factors/obstacle_stop": {
+        "Result": {
+          "Total": "Success",
+          "Frame": "Success"
+        },
+        "Info": {
+          "Distance": 0.009999999767274009,
+          "ControlPointPoseX": 71.50000000110462,
+          "ControlPointPoseY": 345.1099999997673
+        }
+      }
+    }
+  },
+  {
+    "Result": {
+      "Success": true,
+      "Summary": "Passed:Condition_0 (Success)"
+    },
+    "Stamp": {
+      "System": 1748404009.4705777,
+      "ROS": 1748195207.1265368
+    },
+    "Frame": {
+      "/planning/planning_factors/obstacle_stop": {
+        "Result": {
+          "Total": "Success",
+          "Frame": "Success"
+        },
+        "Info": {
+          "Distance": 0.009999999767330852,
+          "ControlPointPoseX": 71.50000000110184,
+          "ControlPointPoseY": 345.10999999976735
+        }
+      }
+    }
+  },
+  {
+    "Result": {
+      "Success": true,
+      "Summary": "Passed:Condition_0 (Success)"
+    },
+    "Stamp": {
+      "System": 1748404009.5686753,
+      "ROS": 1748195207.2260761
+    },
+    "Frame": {
+      "/planning/planning_factors/obstacle_stop": {
+        "Result": {
+          "Total": "Success",
+          "Frame": "Success"
+        },
+        "Info": {
+          "Distance": 0.009999999767274009,
+          "ControlPointPoseX": 71.50000000109915,
+          "ControlPointPoseY": 345.1099999997673
+        }
+      }
+    }
+  },
+  {
+    "Result": {
+      "Success": true,
+      "Summary": "Passed:Condition_0 (Success)"
+    },
+    "Stamp": {
+      "System": 1748404009.6688201,
+      "ROS": 1748195207.3262093
+    },
+    "Frame": {
+      "/planning/planning_factors/obstacle_stop": {
+        "Result": {
+          "Total": "Success",
+          "Frame": "Success"
+        },
+        "Info": {
+          "Distance": 0.009999999767274009,
+          "ControlPointPoseX": 71.50000000109763,
+          "ControlPointPoseY": 345.1099999997673
+        }
+      }
+    }
+  },
+  {
+    "Result": {
+      "Success": true,
+      "Summary": "Passed:Condition_0 (Success)"
+    },
+    "Stamp": {
+      "System": 1748404009.771667,
+      "ROS": 1748195207.426814
+    },
+    "Frame": {
+      "/planning/planning_factors/obstacle_stop": {
+        "Result": {
+          "Total": "Success",
+          "Frame": "Success"
+        },
+        "Info": {
+          "Distance": 0.009999999767217166,
+          "ControlPointPoseX": 71.50000000110124,
+          "ControlPointPoseY": 345.10999999976724
+        }
+      }
+    }
+  },
+  {
+    "Result": {
+      "Success": true,
+      "Summary": "Passed:Condition_0 (Success)"
+    },
+    "Stamp": {
+      "System": 1748404009.873967,
+      "ROS": 1748195207.5311015
+    },
+    "Frame": {
+      "/planning/planning_factors/obstacle_stop": {
+        "Result": {
+          "Total": "Success",
+          "Frame": "Success"
+        },
+        "Info": {
+          "Distance": 0.009999999767217166,
+          "ControlPointPoseX": 71.50000000109998,
+          "ControlPointPoseY": 345.10999999976724
+        }
+      }
+    }
+  },
+  {
+    "Result": {
+      "Success": true,
+      "Summary": "Passed:Condition_0 (Success)"
+    },
+    "Stamp": {
+      "System": 1748404009.9697888,
+      "ROS": 1748195207.626158
+    },
+    "Frame": {
+      "/planning/planning_factors/obstacle_stop": {
+        "Result": {
+          "Total": "Success",
+          "Frame": "Success"
+        },
+        "Info": {
+          "Distance": 0.009999999767160322,
+          "ControlPointPoseX": 71.5000000011035,
+          "ControlPointPoseY": 345.1099999997672
+        }
+      }
+    }
+  },
+  {
+    "Result": {
+      "Success": true,
+      "Summary": "Passed:Condition_0 (Success)"
+    },
+    "Stamp": {
+      "System": 1748404010.0734437,
+      "ROS": 1748195207.7310512
+    },
+    "Frame": {
+      "/planning/planning_factors/obstacle_stop": {
+        "Result": {
+          "Total": "Success",
+          "Frame": "Success"
+        },
+        "Info": {
+          "Distance": 0.009999999767387696,
+          "ControlPointPoseX": 71.50000000109993,
+          "ControlPointPoseY": 345.1099999997674
+        }
+      }
+    }
+  },
+  {
+    "Result": {
+      "Success": true,
+      "Summary": "Passed:Condition_0 (Success)"
+    },
+    "Stamp": {
+      "System": 1748404010.1635613,
+      "ROS": 1748195207.821143
+    },
+    "Frame": {
+      "/planning/planning_factors/obstacle_stop": {
+        "Result": {
+          "Total": "Success",
+          "Frame": "Success"
+        },
+        "Info": {
+          "Distance": 0.009999999767274009,
+          "ControlPointPoseX": 71.50000000109873,
+          "ControlPointPoseY": 345.1099999997673
+        }
+      }
+    }
+  },
+  {
+    "Result": {
+      "Success": true,
+      "Summary": "Passed:Condition_0 (Success)"
+    },
+    "Stamp": {
+      "System": 1748404010.2761106,
+      "ROS": 1748195207.9361968
+    },
+    "Frame": {
+      "/planning/planning_factors/obstacle_stop": {
+        "Result": {
+          "Total": "Success",
+          "Frame": "Success"
+        },
+        "Info": {
+          "Distance": 0.009999999767330852,
+          "ControlPointPoseX": 71.50000000110198,
+          "ControlPointPoseY": 345.10999999976735
+        }
+      }
+    }
+  },
+  {
+    "Result": {
+      "Success": true,
+      "Summary": "Passed:Condition_0 (Success)"
+    },
+    "Stamp": {
+      "System": 1748404010.3650267,
+      "ROS": 1748195208.021053
+    },
+    "Frame": {
+      "/planning/planning_factors/obstacle_stop": {
+        "Result": {
+          "Total": "Success",
+          "Frame": "Success"
+        },
+        "Info": {
+          "Distance": 0.009999999767330852,
+          "ControlPointPoseX": 71.5000000011001,
+          "ControlPointPoseY": 345.10999999976735
+        }
+      }
+    }
+  },
+  {
+    "Result": {
+      "Success": true,
+      "Summary": "Passed:Condition_0 (Success)"
+    },
+    "Stamp": {
+      "System": 1748404010.4684753,
+      "ROS": 1748195208.1261396
+    },
+    "Frame": {
+      "/planning/planning_factors/obstacle_stop": {
+        "Result": {
+          "Total": "Success",
+          "Frame": "Success"
+        },
+        "Info": {
+          "Distance": 0.009999999767330852,
+          "ControlPointPoseX": 71.50000000109848,
+          "ControlPointPoseY": 345.10999999976735
+        }
+      }
+    }
+  },
+  {
+    "Result": {
+      "Success": true,
+      "Summary": "Passed:Condition_0 (Success)"
+    },
+    "Stamp": {
+      "System": 1748404010.5695434,
+      "ROS": 1748195208.226061
+    },
+    "Frame": {
+      "/planning/planning_factors/obstacle_stop": {
+        "Result": {
+          "Total": "Success",
+          "Frame": "Success"
+        },
+        "Info": {
+          "Distance": 0.009999999767330852,
+          "ControlPointPoseX": 71.50000000109952,
+          "ControlPointPoseY": 345.10999999976735
+        }
+      }
+    }
+  },
+  {
+    "Result": {
+      "Success": true,
+      "Summary": "Passed:Condition_0 (Success)"
+    },
+    "Stamp": {
+      "System": 1748404010.6728477,
+      "ROS": 1748195208.331053
+    },
+    "Frame": {
+      "/planning/planning_factors/obstacle_stop": {
+        "Result": {
+          "Total": "Success",
+          "Frame": "Success"
+        },
+        "Info": {
+          "Distance": 0.009999999767160322,
+          "ControlPointPoseX": 71.5000000010957,
+          "ControlPointPoseY": 345.1099999997672
+        }
+      }
+    }
+  },
+  {
+    "Result": {
+      "Success": true,
+      "Summary": "Passed:Condition_0 (Success)"
+    },
+    "Stamp": {
+      "System": 1748404010.7668633,
+      "ROS": 1748195208.4260573
+    },
+    "Frame": {
+      "/planning/planning_factors/obstacle_stop": {
+        "Result": {
+          "Total": "Success",
+          "Frame": "Success"
+        },
+        "Info": {
+          "Distance": 0.009999999767217166,
+          "ControlPointPoseX": 71.50000000110164,
+          "ControlPointPoseY": 345.10999999976724
+        }
+      }
+    }
+  },
+  {
+    "Result": {
+      "Success": true,
+      "Summary": "Passed:Condition_0 (Success)"
+    },
+    "Stamp": {
+      "System": 1748404010.8643148,
+      "ROS": 1748195208.5211737
+    },
+    "Frame": {
+      "/planning/planning_factors/obstacle_stop": {
+        "Result": {
+          "Total": "Success",
+          "Frame": "Success"
+        },
+        "Info": {
+          "Distance": 0.009999999767160322,
+          "ControlPointPoseX": 71.50000000110221,
+          "ControlPointPoseY": 345.1099999997672
+        }
+      }
+    }
+  },
+  {
+    "Result": {
+      "Success": true,
+      "Summary": "Passed:Condition_0 (Success)"
+    },
+    "Stamp": {
+      "System": 1748404010.9664884,
+      "ROS": 1748195208.6261008
+    },
+    "Frame": {
+      "/planning/planning_factors/obstacle_stop": {
+        "Result": {
+          "Total": "Success",
+          "Frame": "Success"
+        },
+        "Info": {
+          "Distance": 0.009999999767274009,
+          "ControlPointPoseX": 71.50000000110141,
+          "ControlPointPoseY": 345.1099999997673
+        }
+      }
+    }
+  },
+  {
+    "Result": {
+      "Success": true,
+      "Summary": "Passed:Condition_0 (Success)"
+    },
+    "Stamp": {
+      "System": 1748404011.0698073,
+      "ROS": 1748195208.7261562
+    },
+    "Frame": {
+      "/planning/planning_factors/obstacle_stop": {
+        "Result": {
+          "Total": "Success",
+          "Frame": "Success"
+        },
+        "Info": {
+          "Distance": 0.009999999767330852,
+          "ControlPointPoseX": 71.50000000109917,
+          "ControlPointPoseY": 345.10999999976735
+        }
+      }
+    }
+  },
+  {
+    "Result": {
+      "Success": true,
+      "Summary": "Passed:Condition_0 (Success)"
+    },
+    "Stamp": {
+      "System": 1748404011.1703975,
+      "ROS": 1748195208.8283694
+    },
+    "Frame": {
+      "/planning/planning_factors/obstacle_stop": {
+        "Result": {
+          "Total": "Success",
+          "Frame": "Success"
+        },
+        "Info": {
+          "Distance": 0.009999999767274009,
+          "ControlPointPoseX": 71.5000000011008,
+          "ControlPointPoseY": 345.1099999997673
+        }
+      }
+    }
+  },
+  {
+    "Result": {
+      "Success": true,
+      "Summary": "Passed:Condition_0 (Success)"
+    },
+    "Stamp": {
+      "System": 1748404011.271867,
+      "ROS": 1748195208.9311626
+    },
+    "Frame": {
+      "/planning/planning_factors/obstacle_stop": {
+        "Result": {
+          "Total": "Success",
+          "Frame": "Success"
+        },
+        "Info": {
+          "Distance": 0.009999999767217166,
+          "ControlPointPoseX": 71.50000000110282,
+          "ControlPointPoseY": 345.10999999976724
+        }
+      }
+    }
+  },
+  {
+    "Result": {
+      "Success": true,
+      "Summary": "Passed:Condition_0 (Success)"
+    },
+    "Stamp": {
+      "System": 1748404011.3685377,
+      "ROS": 1748195209.0260825
+    },
+    "Frame": {
+      "/planning/planning_factors/obstacle_stop": {
+        "Result": {
+          "Total": "Success",
+          "Frame": "Success"
+        },
+        "Info": {
+          "Distance": 0.009999999767330852,
+          "ControlPointPoseX": 71.50000000109924,
+          "ControlPointPoseY": 345.10999999976735
+        }
+      }
+    }
+  },
+  {
+    "Result": {
+      "Success": true,
+      "Summary": "Passed:Condition_0 (Success)"
+    },
+    "Stamp": {
+      "System": 1748404011.4651194,
+      "ROS": 1748195209.1210444
+    },
+    "Frame": {
+      "/planning/planning_factors/obstacle_stop": {
+        "Result": {
+          "Total": "Success",
+          "Frame": "Success"
+        },
+        "Info": {
+          "Distance": 0.009999999767330852,
+          "ControlPointPoseX": 71.50000000109806,
+          "ControlPointPoseY": 345.10999999976735
+        }
+      }
+    }
+  },
+  {
+    "Result": {
+      "Success": true,
+      "Summary": "Passed:Condition_0 (Success)"
+    },
+    "Stamp": {
+      "System": 1748404011.5674393,
+      "ROS": 1748195209.2265494
+    },
+    "Frame": {
+      "/planning/planning_factors/obstacle_stop": {
+        "Result": {
+          "Total": "Success",
+          "Frame": "Success"
+        },
+        "Info": {
+          "Distance": 0.009999999767274007,
+          "ControlPointPoseX": 71.50000000109438,
+          "ControlPointPoseY": 345.1099999997673
+        }
+      }
+    }
+  },
+  {
+    "Result": {
+      "Success": true,
+      "Summary": "Passed:Condition_0 (Success)"
+    },
+    "Stamp": {
+      "System": 1748404011.6681135,
+      "ROS": 1748195209.3263307
+    },
+    "Frame": {
+      "/planning/planning_factors/obstacle_stop": {
+        "Result": {
+          "Total": "Success",
+          "Frame": "Success"
+        },
+        "Info": {
+          "Distance": 0.009999999767330852,
+          "ControlPointPoseX": 71.50000000109887,
+          "ControlPointPoseY": 345.10999999976735
+        }
+      }
+    }
+  },
+  {
+    "Result": {
+      "Success": true,
+      "Summary": "Passed:Condition_0 (Success)"
+    },
+    "Stamp": {
+      "System": 1748404011.7677789,
+      "ROS": 1748195209.4260948
+    },
+    "Frame": {
+      "/planning/planning_factors/obstacle_stop": {
+        "Result": {
+          "Total": "Success",
+          "Frame": "Success"
+        },
+        "Info": {
+          "Distance": 0.009999999767274009,
+          "ControlPointPoseX": 71.5000000011015,
+          "ControlPointPoseY": 345.1099999997673
+        }
+      }
+    }
+  },
+  {
+    "Result": {
+      "Success": true,
+      "Summary": "Passed:Condition_0 (Success)"
+    },
+    "Stamp": {
+      "System": 1748404011.8679347,
+      "ROS": 1748195209.526351
+    },
+    "Frame": {
+      "/planning/planning_factors/obstacle_stop": {
+        "Result": {
+          "Total": "Success",
+          "Frame": "Success"
+        },
+        "Info": {
+          "Distance": 0.009999999767274009,
+          "ControlPointPoseX": 71.5000000010973,
+          "ControlPointPoseY": 345.1099999997673
+        }
+      }
+    }
+  },
+  {
+    "Result": {
+      "Success": true,
+      "Summary": "Passed:Condition_0 (Success)"
+    },
+    "Stamp": {
+      "System": 1748404011.9660099,
+      "ROS": 1748195209.626093
+    },
+    "Frame": {
+      "/planning/planning_factors/obstacle_stop": {
+        "Result": {
+          "Total": "Success",
+          "Frame": "Success"
+        },
+        "Info": {
+          "Distance": 0.009999999767387696,
+          "ControlPointPoseX": 71.50000000110083,
+          "ControlPointPoseY": 345.1099999997674
+        }
+      }
+    }
+  },
+  {
+    "Result": {
+      "Success": true,
+      "Summary": "Passed:Condition_0 (Success)"
+    },
+    "Stamp": {
+      "System": 1748404012.069906,
+      "ROS": 1748195209.7261634
+    },
+    "Frame": {
+      "/planning/planning_factors/obstacle_stop": {
+        "Result": {
+          "Total": "Success",
+          "Frame": "Success"
+        },
+        "Info": {
+          "Distance": 0.009999999767330852,
+          "ControlPointPoseX": 71.5000000010998,
+          "ControlPointPoseY": 345.10999999976735
+        }
+      }
+    }
+  },
+  {
+    "Result": {
+      "Success": true,
+      "Summary": "Passed:Condition_0 (Success)"
+    },
+    "Stamp": {
+      "System": 1748404012.17223,
+      "ROS": 1748195209.8262165
+    },
+    "Frame": {
+      "/planning/planning_factors/obstacle_stop": {
+        "Result": {
+          "Total": "Success",
+          "Frame": "Success"
+        },
+        "Info": {
+          "Distance": 0.009999999767330852,
+          "ControlPointPoseX": 71.50000000110144,
+          "ControlPointPoseY": 345.10999999976735
+        }
+      }
+    }
+  },
+  {
+    "Result": {
+      "Success": true,
+      "Summary": "Passed:Condition_0 (Success)"
+    },
+    "Stamp": {
+      "System": 1748404012.2660036,
+      "ROS": 1748195209.9260747
+    },
+    "Frame": {
+      "/planning/planning_factors/obstacle_stop": {
+        "Result": {
+          "Total": "Success",
+          "Frame": "Success"
+        },
+        "Info": {
+          "Distance": 0.009999999767330852,
+          "ControlPointPoseX": 71.50000000110028,
+          "ControlPointPoseY": 345.10999999976735
+        }
+      }
+    }
+  },
+  {
+    "Result": {
+      "Success": true,
+      "Summary": "Passed:Condition_0 (Success)"
+    },
+    "Stamp": {
+      "System": 1748404012.366958,
+      "ROS": 1748195210.0260296
+    },
+    "Frame": {
+      "/planning/planning_factors/obstacle_stop": {
+        "Result": {
+          "Total": "Success",
+          "Frame": "Success"
+        },
+        "Info": {
+          "Distance": 0.009999999767330852,
+          "ControlPointPoseX": 71.50000000110002,
+          "ControlPointPoseY": 345.10999999976735
+        }
+      }
+    }
+  },
+  {
+    "Result": {
+      "Success": true,
+      "Summary": "Passed:Condition_0 (Success)"
+    },
+    "Stamp": {
+      "System": 1748404012.471767,
+      "ROS": 1748195210.1310456
+    },
+    "Frame": {
+      "/planning/planning_factors/obstacle_stop": {
+        "Result": {
+          "Total": "Success",
+          "Frame": "Success"
+        },
+        "Info": {
+          "Distance": 0.009999999767274009,
+          "ControlPointPoseX": 71.50000000110325,
+          "ControlPointPoseY": 345.1099999997673
+        }
+      }
+    }
+  },
+  {
+    "Result": {
+      "Success": true,
+      "Summary": "Passed:Condition_0 (Success)"
+    },
+    "Stamp": {
+      "System": 1748404012.5644796,
+      "ROS": 1748195210.2210953
+    },
+    "Frame": {
+      "/planning/planning_factors/obstacle_stop": {
+        "Result": {
+          "Total": "Success",
+          "Frame": "Success"
+        },
+        "Info": {
+          "Distance": 0.009999999767330852,
+          "ControlPointPoseX": 71.50000000109983,
+          "ControlPointPoseY": 345.10999999976735
+        }
+      }
+    }
+  },
+  {
+    "Result": {
+      "Success": true,
+      "Summary": "Passed:Condition_0 (Success)"
+    },
+    "Stamp": {
+      "System": 1748404012.6710286,
+      "ROS": 1748195210.3311212
+    },
+    "Frame": {
+      "/planning/planning_factors/obstacle_stop": {
+        "Result": {
+          "Total": "Success",
+          "Frame": "Success"
+        },
+        "Info": {
+          "Distance": 0.009999999767330852,
+          "ControlPointPoseX": 71.50000000110151,
+          "ControlPointPoseY": 345.10999999976735
+        }
+      }
+    }
+  },
+  {
+    "Result": {
+      "Success": true,
+      "Summary": "Passed:Condition_0 (Success)"
+    },
+    "Stamp": {
+      "System": 1748404012.7668612,
+      "ROS": 1748195210.4260807
+    },
+    "Frame": {
+      "/planning/planning_factors/obstacle_stop": {
+        "Result": {
+          "Total": "Success",
+          "Frame": "Success"
+        },
+        "Info": {
+          "Distance": 0.009999999767217166,
+          "ControlPointPoseX": 71.50000000110377,
+          "ControlPointPoseY": 345.10999999976724
+        }
+      }
+    }
+  },
+  {
+    "Result": {
+      "Success": true,
+      "Summary": "Passed:Condition_0 (Success)"
+    },
+    "Stamp": {
+      "System": 1748404012.8673408,
+      "ROS": 1748195210.526017
+    },
+    "Frame": {
+      "/planning/planning_factors/obstacle_stop": {
+        "Result": {
+          "Total": "Success",
+          "Frame": "Success"
+        },
+        "Info": {
+          "Distance": 0.009999999767330852,
+          "ControlPointPoseX": 71.5000000010954,
+          "ControlPointPoseY": 345.10999999976735
+        }
+      }
+    }
+  },
+  {
+    "Result": {
+      "Success": true,
+      "Summary": "Passed:Condition_0 (Success)"
+    },
+    "Stamp": {
+      "System": 1748404012.9686475,
+      "ROS": 1748195210.6260638
+    },
+    "Frame": {
+      "/planning/planning_factors/obstacle_stop": {
+        "Result": {
+          "Total": "Success",
+          "Frame": "Success"
+        },
+        "Info": {
+          "Distance": 0.009999999767217166,
+          "ControlPointPoseX": 71.50000000110114,
+          "ControlPointPoseY": 345.10999999976724
+        }
+      }
+    }
+  },
+  {
+    "Result": {
+      "Success": true,
+      "Summary": "Passed:Condition_0 (Success)"
+    },
+    "Stamp": {
+      "System": 1748404013.0698645,
+      "ROS": 1748195210.7281759
+    },
+    "Frame": {
+      "/planning/planning_factors/obstacle_stop": {
+        "Result": {
+          "Total": "Success",
+          "Frame": "Success"
+        },
+        "Info": {
+          "Distance": 0.009999999767274009,
+          "ControlPointPoseX": 71.50000000109823,
+          "ControlPointPoseY": 345.1099999997673
+        }
+      }
+    }
+  },
+  {
+    "Result": {
+      "Success": true,
+      "Summary": "Passed:Condition_0 (Success)"
+    },
+    "Stamp": {
+      "System": 1748404013.1657355,
+      "ROS": 1748195210.826003
+    },
+    "Frame": {
+      "/planning/planning_factors/obstacle_stop": {
+        "Result": {
+          "Total": "Success",
+          "Frame": "Success"
+        },
+        "Info": {
+          "Distance": 0.009999999767274009,
+          "ControlPointPoseX": 71.5000000011007,
+          "ControlPointPoseY": 345.1099999997673
+        }
+      }
+    }
+  },
+  {
+    "Result": {
+      "Success": true,
+      "Summary": "Passed:Condition_0 (Success)"
+    },
+    "Stamp": {
+      "System": 1748404013.2668772,
+      "ROS": 1748195210.9259713
+    },
+    "Frame": {
+      "/planning/planning_factors/obstacle_stop": {
+        "Result": {
+          "Total": "Success",
+          "Frame": "Success"
+        },
+        "Info": {
+          "Distance": 0.009999999767217166,
+          "ControlPointPoseX": 71.50000000109748,
+          "ControlPointPoseY": 345.10999999976724
+        }
+      }
+    }
+  },
+  {
+    "Result": {
+      "Success": true,
+      "Summary": "Passed:Condition_0 (Success)"
+    },
+    "Stamp": {
+      "System": 1748404013.3662078,
+      "ROS": 1748195211.02606
+    },
+    "Frame": {
+      "/planning/planning_factors/obstacle_stop": {
+        "Result": {
+          "Total": "Success",
+          "Frame": "Success"
+        },
+        "Info": {
+          "Distance": 0.009999999767330852,
+          "ControlPointPoseX": 71.50000000109995,
+          "ControlPointPoseY": 345.10999999976735
+        }
+      }
+    }
+  },
+  {
+    "Result": {
+      "Success": true,
+      "Summary": "Passed:Condition_0 (Success)"
+    },
+    "Stamp": {
+      "System": 1748404013.465782,
+      "ROS": 1748195211.1260426
+    },
+    "Frame": {
+      "/planning/planning_factors/obstacle_stop": {
+        "Result": {
+          "Total": "Success",
+          "Frame": "Success"
+        },
+        "Info": {
+          "Distance": 0.009999999767330852,
+          "ControlPointPoseX": 71.50000000110059,
+          "ControlPointPoseY": 345.10999999976735
+        }
+      }
+    }
+  },
+  {
+    "Result": {
+      "Success": true,
+      "Summary": "Passed:Condition_0 (Success)"
+    },
+    "Stamp": {
+      "System": 1748404013.5751138,
+      "ROS": 1748195211.2312384
+    },
+    "Frame": {
+      "/planning/planning_factors/obstacle_stop": {
+        "Result": {
+          "Total": "Success",
+          "Frame": "Success"
+        },
+        "Info": {
+          "Distance": 0.009999999767330852,
+          "ControlPointPoseX": 71.50000000110276,
+          "ControlPointPoseY": 345.10999999976735
+        }
+      }
+    }
+  },
+  {
+    "Result": {
+      "Success": true,
+      "Summary": "Passed:Condition_0 (Success)"
+    },
+    "Stamp": {
+      "System": 1748404013.6645324,
+      "ROS": 1748195211.3211787
+    },
+    "Frame": {
+      "/planning/planning_factors/obstacle_stop": {
+        "Result": {
+          "Total": "Success",
+          "Frame": "Success"
+        },
+        "Info": {
+          "Distance": 0.009999999767330852,
+          "ControlPointPoseX": 71.50000000110211,
+          "ControlPointPoseY": 345.10999999976735
+        }
+      }
+    }
+  },
+  {
+    "Result": {
+      "Success": true,
+      "Summary": "Passed:Condition_0 (Success)"
+    },
+    "Stamp": {
+      "System": 1748404013.7647457,
+      "ROS": 1748195211.4209988
+    },
+    "Frame": {
+      "/planning/planning_factors/obstacle_stop": {
+        "Result": {
+          "Total": "Success",
+          "Frame": "Success"
+        },
+        "Info": {
+          "Distance": 0.009999999767330852,
+          "ControlPointPoseX": 71.50000000110047,
+          "ControlPointPoseY": 345.10999999976735
+        }
+      }
+    }
+  },
+  {
+    "Result": {
+      "Success": true,
+      "Summary": "Passed:Condition_0 (Success)"
+    },
+    "Stamp": {
+      "System": 1748404013.8703008,
+      "ROS": 1748195211.526058
+    },
+    "Frame": {
+      "/planning/planning_factors/obstacle_stop": {
+        "Result": {
+          "Total": "Success",
+          "Frame": "Success"
+        },
+        "Info": {
+          "Distance": 0.009999999767330852,
+          "ControlPointPoseX": 71.50000000109915,
+          "ControlPointPoseY": 345.10999999976735
+        }
+      }
+    }
+  },
+  {
+    "Result": {
+      "Success": true,
+      "Summary": "Passed:Condition_0 (Success)"
+    },
+    "Stamp": {
+      "System": 1748404013.969498,
+      "ROS": 1748195211.6260624
+    },
+    "Frame": {
+      "/planning/planning_factors/obstacle_stop": {
+        "Result": {
+          "Total": "Success",
+          "Frame": "Success"
+        },
+        "Info": {
+          "Distance": 0.009999999767330852,
+          "ControlPointPoseX": 71.50000000110087,
+          "ControlPointPoseY": 345.10999999976735
+        }
+      }
+    }
+  },
+  {
+    "Result": {
+      "Success": true,
+      "Summary": "Passed:Condition_0 (Success)"
+    },
+    "Stamp": {
+      "System": 1748404014.0636158,
+      "ROS": 1748195211.7210073
+    },
+    "Frame": {
+      "/planning/planning_factors/obstacle_stop": {
+        "Result": {
+          "Total": "Success",
+          "Frame": "Success"
+        },
+        "Info": {
+          "Distance": 0.009999999767387696,
+          "ControlPointPoseX": 71.50000000109647,
+          "ControlPointPoseY": 345.1099999997674
+        }
+      }
+    }
+  },
+  {
+    "Result": {
+      "Success": true,
+      "Summary": "Passed:Condition_0 (Success)"
+    },
+    "Stamp": {
+      "System": 1748404014.1679618,
+      "ROS": 1748195211.826036
+    },
+    "Frame": {
+      "/planning/planning_factors/obstacle_stop": {
+        "Result": {
+          "Total": "Success",
+          "Frame": "Success"
+        },
+        "Info": {
+          "Distance": 0.009999999767330852,
+          "ControlPointPoseX": 71.50000000109743,
+          "ControlPointPoseY": 345.10999999976735
+        }
+      }
+    }
+  },
+  {
+    "Result": {
+      "Success": true,
+      "Summary": "Passed:Condition_0 (Success)"
+    },
+    "Stamp": {
+      "System": 1748404014.2673118,
+      "ROS": 1748195211.9260285
+    },
+    "Frame": {
+      "/planning/planning_factors/obstacle_stop": {
+        "Result": {
+          "Total": "Success",
+          "Frame": "Success"
+        },
+        "Info": {
+          "Distance": 0.009999999767330852,
+          "ControlPointPoseX": 71.50000000109819,
+          "ControlPointPoseY": 345.10999999976735
+        }
+      }
+    }
+  },
+  {
+    "Result": {
+      "Success": true,
+      "Summary": "Passed:Condition_0 (Success)"
+    },
+    "Stamp": {
+      "System": 1748404014.3671694,
+      "ROS": 1748195212.0259843
+    },
+    "Frame": {
+      "/planning/planning_factors/obstacle_stop": {
+        "Result": {
+          "Total": "Success",
+          "Frame": "Success"
+        },
+        "Info": {
+          "Distance": 0.009999999767387696,
+          "ControlPointPoseX": 71.50000000109995,
+          "ControlPointPoseY": 345.1099999997674
+        }
+      }
+    }
+  },
+  {
+    "Result": {
+      "Success": true,
+      "Summary": "Passed:Condition_0 (Success)"
+    },
+    "Stamp": {
+      "System": 1748404014.467541,
+      "ROS": 1748195212.1259656
+    },
+    "Frame": {
+      "/planning/planning_factors/obstacle_stop": {
+        "Result": {
+          "Total": "Success",
+          "Frame": "Success"
+        },
+        "Info": {
+          "Distance": 0.009999999767330852,
+          "ControlPointPoseX": 71.50000000109763,
+          "ControlPointPoseY": 345.10999999976735
+        }
+      }
+    }
+  },
+  {
+    "Result": {
+      "Success": true,
+      "Summary": "Passed:Condition_0 (Success)"
+    },
+    "Stamp": {
+      "System": 1748404014.5664353,
+      "ROS": 1748195212.226044
+    },
+    "Frame": {
+      "/planning/planning_factors/obstacle_stop": {
+        "Result": {
+          "Total": "Success",
+          "Frame": "Success"
+        },
+        "Info": {
+          "Distance": 0.009999999767217166,
+          "ControlPointPoseX": 71.50000000110055,
+          "ControlPointPoseY": 345.10999999976724
+        }
+      }
+    }
+  },
+  {
+    "Result": {
+      "Success": true,
+      "Summary": "Passed:Condition_0 (Success)"
+    },
+    "Stamp": {
+      "System": 1748404014.666033,
+      "ROS": 1748195212.3260972
+    },
+    "Frame": {
+      "/planning/planning_factors/obstacle_stop": {
+        "Result": {
+          "Total": "Success",
+          "Frame": "Success"
+        },
+        "Info": {
+          "Distance": 0.009999999767330852,
+          "ControlPointPoseX": 71.50000000110005,
+          "ControlPointPoseY": 345.10999999976735
+        }
+      }
+    }
+  },
+  {
+    "Result": {
+      "Success": true,
+      "Summary": "Passed:Condition_0 (Success)"
+    },
+    "Stamp": {
+      "System": 1748404014.7663355,
+      "ROS": 1748195212.4261935
+    },
+    "Frame": {
+      "/planning/planning_factors/obstacle_stop": {
+        "Result": {
+          "Total": "Success",
+          "Frame": "Success"
+        },
+        "Info": {
+          "Distance": 0.009999999767330852,
+          "ControlPointPoseX": 71.50000000110165,
+          "ControlPointPoseY": 345.10999999976735
+        }
+      }
+    }
+  },
+  {
+    "Result": {
+      "Success": true,
+      "Summary": "Passed:Condition_0 (Success)"
+    },
+    "Stamp": {
+      "System": 1748404014.8700984,
+      "ROS": 1748195212.5286613
+    },
+    "Frame": {
+      "/planning/planning_factors/obstacle_stop": {
+        "Result": {
+          "Total": "Success",
+          "Frame": "Success"
+        },
+        "Info": {
+          "Distance": 0.009999999767330852,
+          "ControlPointPoseX": 71.50000000110006,
+          "ControlPointPoseY": 345.10999999976735
+        }
+      }
+    }
+  },
+  {
+    "Result": {
+      "Success": true,
+      "Summary": "Passed:Condition_0 (Success)"
+    },
+    "Stamp": {
+      "System": 1748404014.9668934,
+      "ROS": 1748195212.6261156
+    },
+    "Frame": {
+      "/planning/planning_factors/obstacle_stop": {
+        "Result": {
+          "Total": "Success",
+          "Frame": "Success"
+        },
+        "Info": {
+          "Distance": 0.009999999767274009,
+          "ControlPointPoseX": 71.50000000109955,
+          "ControlPointPoseY": 345.1099999997673
+        }
+      }
+    }
+  },
+  {
+    "Result": {
+      "Success": true,
+      "Summary": "Passed:Condition_0 (Success)"
+    },
+    "Stamp": {
+      "System": 1748404015.0760336,
+      "ROS": 1748195212.736032
+    },
+    "Frame": {
+      "/planning/planning_factors/obstacle_stop": {
+        "Result": {
+          "Total": "Success",
+          "Frame": "Success"
+        },
+        "Info": {
+          "Distance": 0.009999999767330852,
+          "ControlPointPoseX": 71.50000000109858,
+          "ControlPointPoseY": 345.10999999976735
+        }
+      }
+    }
+  },
+  {
+    "Result": {
+      "Success": true,
+      "Summary": "Passed:Condition_0 (Success)"
+    },
+    "Stamp": {
+      "System": 1748404015.1730483,
+      "ROS": 1748195212.831353
+    },
+    "Frame": {
+      "/planning/planning_factors/obstacle_stop": {
+        "Result": {
+          "Total": "Success",
+          "Frame": "Success"
+        },
+        "Info": {
+          "Distance": 0.009999999767160322,
+          "ControlPointPoseX": 71.50000000109918,
+          "ControlPointPoseY": 345.1099999997672
+        }
+      }
+    }
+  },
+  {
+    "Result": {
+      "Success": true,
+      "Summary": "Passed:Condition_0 (Success)"
+    },
+    "Stamp": {
+      "System": 1748404015.2677498,
+      "ROS": 1748195212.9261372
+    },
+    "Frame": {
+      "/planning/planning_factors/obstacle_stop": {
+        "Result": {
+          "Total": "Success",
+          "Frame": "Success"
+        },
+        "Info": {
+          "Distance": 0.009999999767274009,
+          "ControlPointPoseX": 71.50000000109989,
+          "ControlPointPoseY": 345.1099999997673
+        }
+      }
+    }
+  },
+  {
+    "Result": {
+      "Success": true,
+      "Summary": "Passed:Condition_0 (Success)"
+    },
+    "Stamp": {
+      "System": 1748404015.3662248,
+      "ROS": 1748195213.026015
+    },
+    "Frame": {
+      "/planning/planning_factors/obstacle_stop": {
+        "Result": {
+          "Total": "Success",
+          "Frame": "Success"
+        },
+        "Info": {
+          "Distance": 0.009999999767330852,
+          "ControlPointPoseX": 71.50000000110028,
+          "ControlPointPoseY": 345.10999999976735
+        }
+      }
+    }
+  },
+  {
+    "Result": {
+      "Success": true,
+      "Summary": "Passed:Condition_0 (Success)"
+    },
+    "Stamp": {
+      "System": 1748404015.4742515,
+      "ROS": 1748195213.1324916
+    },
+    "Frame": {
+      "/planning/planning_factors/obstacle_stop": {
+        "Result": {
+          "Total": "Success",
+          "Frame": "Success"
+        },
+        "Info": {
+          "Distance": 0.009999999767274009,
+          "ControlPointPoseX": 71.50000000110049,
+          "ControlPointPoseY": 345.1099999997673
+        }
+      }
+    }
+  },
+  {
+    "Result": {
+      "Success": true,
+      "Summary": "Passed:Condition_0 (Success)"
+    },
+    "Stamp": {
+      "System": 1748404015.565993,
+      "ROS": 1748195213.2260833
+    },
+    "Frame": {
+      "/planning/planning_factors/obstacle_stop": {
+        "Result": {
+          "Total": "Success",
+          "Frame": "Success"
+        },
+        "Info": {
+          "Distance": 0.009999999767274009,
+          "ControlPointPoseX": 71.5000000010995,
+          "ControlPointPoseY": 345.1099999997673
+        }
+      }
+    }
+  },
+  {
+    "Result": {
+      "Success": true,
+      "Summary": "Passed:Condition_0 (Success)"
+    },
+    "Stamp": {
+      "System": 1748404015.6668522,
+      "ROS": 1748195213.3259802
+    },
+    "Frame": {
+      "/planning/planning_factors/obstacle_stop": {
+        "Result": {
+          "Total": "Success",
+          "Frame": "Success"
+        },
+        "Info": {
+          "Distance": 0.009999999767330852,
+          "ControlPointPoseX": 71.50000000110224,
+          "ControlPointPoseY": 345.10999999976735
+        }
+      }
+    }
+  },
+  {
+    "Result": {
+      "Success": true,
+      "Summary": "Passed:Condition_0 (Success)"
+    },
+    "Stamp": {
+      "System": 1748404015.763281,
+      "ROS": 1748195213.4211104
+    },
+    "Frame": {
+      "/planning/planning_factors/obstacle_stop": {
+        "Result": {
+          "Total": "Success",
+          "Frame": "Success"
+        },
+        "Info": {
+          "Distance": 0.009999999767330852,
+          "ControlPointPoseX": 71.50000000110224,
+          "ControlPointPoseY": 345.10999999976735
+        }
+      }
+    }
+  },
+  {
+    "Result": {
+      "Success": true,
+      "Summary": "Passed:Condition_0 (Success)"
+    },
+    "Stamp": {
+      "System": 1748404015.8666048,
+      "ROS": 1748195213.5259979
+    },
+    "Frame": {
+      "/planning/planning_factors/obstacle_stop": {
+        "Result": {
+          "Total": "Success",
+          "Frame": "Success"
+        },
+        "Info": {
+          "Distance": 0.009999999767274009,
+          "ControlPointPoseX": 71.50000000109864,
+          "ControlPointPoseY": 345.1099999997673
+        }
+      }
+    }
+  },
+  {
+    "Result": {
+      "Success": true,
+      "Summary": "Passed:Condition_0 (Success)"
+    },
+    "Stamp": {
+      "System": 1748404015.9680145,
+      "ROS": 1748195213.6260128
+    },
+    "Frame": {
+      "/planning/planning_factors/obstacle_stop": {
+        "Result": {
+          "Total": "Success",
+          "Frame": "Success"
+        },
+        "Info": {
+          "Distance": 0.009999999767330852,
+          "ControlPointPoseX": 71.50000000110026,
+          "ControlPointPoseY": 345.10999999976735
+        }
+      }
+    }
+  },
+  {
+    "Result": {
+      "Success": true,
+      "Summary": "Passed:Condition_0 (Success)"
+    },
+    "Stamp": {
+      "System": 1748404016.0705898,
+      "ROS": 1748195213.7273717
+    },
+    "Frame": {
+      "/planning/planning_factors/obstacle_stop": {
+        "Result": {
+          "Total": "Success",
+          "Frame": "Success"
+        },
+        "Info": {
+          "Distance": 0.009999999767217166,
+          "ControlPointPoseX": 71.50000000110238,
+          "ControlPointPoseY": 345.10999999976724
+        }
+      }
+    }
+  }
+]

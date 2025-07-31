@@ -23,22 +23,24 @@ def convert_topic_list_from_regex_str(record_topic_str: str) -> list[str]:
     Raises ValueError if a pattern contains wildcards or special regex syntax.
     """
     topics = []
-    for raw in record_topic_str.strip().split("|"):
-        line = raw.strip().rstrip("\\")
-        if not line:
-            continue
+    if record_topic_str in ("", "None"):
+        return topics
 
-        # Raise error if line contains any special regex characters except ^ and $
+    for raw in record_topic_str.split("|"):
+        # remove trailing backslash
+        line = raw.rstrip("\\")
+
+        # raise error if line contains any special regex characters except ^ and $
         if re.search(r"[.*+?[\](){}|]", line):
             err_msg = f"Invalid wildcard or regex syntax found in topic regex: '{line}'"
             raise ValueError(err_msg)
 
-        # Enforce ^...$ form
+        # enforce ^...$ form
         if not (line.startswith("^") and line.endswith("$")):
             err_msg = f"Regex must start with '^' and end with '$': '{line}'"
             raise ValueError(err_msg)
 
-        # Normalize to ROS topic
+        # remove the leading ^ and trailing $ from the regex
         line = re.sub(r"^\^/?", "/", line)
         line = re.sub(r"\$$", "", line)
         topics.append(line)
@@ -50,7 +52,6 @@ def load_evaluation_topics(
     evaluation_detection_topic_regex: str,
     evaluation_tracking_topic_regex: str,
     evaluation_prediction_topic_regex: str,
-    evaluation_fp_validation_topic_regex: str,
 ) -> dict[str, list[str]]:
     evaluation_topics: dict[str, list[str]] = {}
     evaluation_topics["detection"] = convert_topic_list_from_regex_str(
@@ -61,8 +62,5 @@ def load_evaluation_topics(
     )
     evaluation_topics["prediction"] = convert_topic_list_from_regex_str(
         evaluation_prediction_topic_regex,
-    )
-    evaluation_topics["fp_validation"] = convert_topic_list_from_regex_str(
-        evaluation_fp_validation_topic_regex,
     )
     return evaluation_topics

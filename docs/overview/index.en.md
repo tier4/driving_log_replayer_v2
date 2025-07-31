@@ -2,7 +2,7 @@
 
 driving_log_replayer_v2 is a package that runs Autoware in an open loop by supplying previously recorded input data using log(rosbag2) API.
 The package gathers information and evaluates topics output produced by Autoware.
-Its use is to test the software regression and check Autoware's performance of sensing, localization, and perception components.
+This software is used to verify the performance of each Autoware component and for software regression testing.
 
 ## Related Documents
 
@@ -42,7 +42,7 @@ The details of the node's operation are shown in the figure below.
    - See docs/use_case/ documentations for which topics to leave in the filter.
 3. Create an evaluation scenario
    1. Example scenarios could be found in the repository's [sample folder](https://github.com/tier4/driving_log_replayer_v2/tree/main/sample)
-   2. Refer to the [format definition](../result_format/index.md) section of this document for description contents.
+   2. Refer to the [format definition](../scenario_format/index.md) section of this document for description contents.
 4. Create a dataset
    1. localization, eagleye, yabloc, ar_tag_based_localizer, and performance_diag are optional if you will not use [Evaluator](https://docs.web.auto/user-manuals/evaluator/introduction).
    2. Create up to T4 non-annotated format data with reference to [perception_dataset tools_overview](https://github.com/tier4/tier4_perception_dataset/blob/main/docs/tools_overview.md).

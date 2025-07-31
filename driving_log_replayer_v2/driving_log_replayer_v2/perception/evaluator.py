@@ -23,10 +23,10 @@ from typing import TYPE_CHECKING
 from perception_eval.common import DynamicObject
 from perception_eval.common.status import get_scene_rates
 from perception_eval.config import PerceptionEvaluationConfig
-from perception_eval.evaluation import get_object_status
-from perception_eval.evaluation import PerceptionFrameResult
 from perception_eval.evaluation.result.perception_frame_config import CriticalObjectFilterConfig
 from perception_eval.evaluation.result.perception_frame_config import PerceptionPassFailConfig
+from perception_eval.evaluation.result.perception_frame_result import get_object_status
+from perception_eval.evaluation.result.perception_frame_result import PerceptionFrameResult
 from perception_eval.manager import PerceptionEvaluationManager
 from perception_eval.tool import PerceptionAnalyzer3D
 from perception_eval.util.logger_config import configure_logger
@@ -45,20 +45,24 @@ class PerceptionEvaluator:
         result_archive_path: str,
         evaluation_topic: str,
         evaluation_task: str,
+        frame_id_str: str,
     ) -> None:
         self.__skip_counter = 0
-        self.__frame_id_str: str
+        self.__frame_id_str = frame_id_str
         self.__critical_object_filter_config: CriticalObjectFilterConfig
         self.__frame_pass_fail_config: PerceptionPassFailConfig
         self.__evaluator: PerceptionEvaluationManager
         self.__result_archive_w_topic_path: Path
         self.__analyzer: PerceptionAnalyzer3D
         self.__logger: logging.Logger
+        self.__evaluation_topic = evaluation_topic
 
         perception_evaluation_config["evaluation_config_dict"]["label_prefix"] = "autoware"
 
-        if not self.__check_evaluation_task(evaluation_task):
-            err_msg = f"Invalid evaluation task: {evaluation_task}. "
+        if not self.__check_evaluation_task_and_frame_id(evaluation_task):
+            err_msg = (
+                f"Invalid evaluation task: {evaluation_task} or frame id: {self.__frame_id_str}. "
+            )
             raise ValueError(err_msg)
         perception_evaluation_config["evaluation_config_dict"]["evaluation_task"] = evaluation_task
 
@@ -156,7 +160,12 @@ class PerceptionEvaluator:
 
         # TODO: add topic delay
         self.__logger.info(
-            "difference between header and subscribe [micro sec]: %d",
+            "Estimation header: %d, Ground truth header: %d (frame_name: %s), Difference: %d, "
+            "Subscribe delay [micro sec]: %d",
+            header_unix_time,
+            ground_truth_now_frame.unix_time,
+            ground_truth_now_frame.frame_name,
+            header_unix_time - ground_truth_now_frame.unix_time,
             subscribed_unix_time - header_unix_time,
         )
         # TODO: decide whether to add skip counter or not
@@ -170,6 +179,7 @@ class PerceptionEvaluator:
         return self.__result_archive_w_topic_path
 
     def get_evaluation_results(self, *, save_frame_results: bool) -> dict:
+        self.__logger.info("Evaluating topic: %s", self.__evaluation_topic)
         if save_frame_results:
             with Path(
                 expandvars(self.__result_archive_w_topic_path.joinpath("scene_result.pkl"))
@@ -183,22 +193,18 @@ class PerceptionEvaluator:
             final_metrics = self.__get_fp_results()
         else:
             _ = self.__get_scene_results()  # TODO: use this result
-            score_dict = {}
-            error_dict = {}
-            conf_mat_dict = {}
             self.__analyzer = PerceptionAnalyzer3D(self.__evaluator.evaluator_config)
             self.__analyzer.add(self.__evaluator.frame_results)
             result = self.__analyzer.analyze()
-            if result.score is not None:
-                score_dict = result.score.to_dict()
-            if result.error is not None:
-                error_dict = (
-                    result.error.groupby(level=0)
-                    .apply(lambda df: df.xs(df.name).to_dict())
-                    .to_dict()
-                )
-            if result.confusion_matrix is not None:
-                conf_mat_dict = result.confusion_matrix.to_dict()
+            score_dict = result.score.to_dict() if result.score is not None else {}
+            error_dict = (
+                (result.error.groupby(level=0).apply(lambda df: df.xs(df.name).to_dict()).to_dict())
+                if result.error is not None
+                else {}
+            )
+            conf_mat_dict = (
+                result.confusion_matrix.to_dict() if result.confusion_matrix is not None else {}
+            )
             final_metrics = {
                 "Score": score_dict,
                 "Error": error_dict,
@@ -207,22 +213,21 @@ class PerceptionEvaluator:
         return final_metrics
 
     def get_analyzer(self) -> PerceptionAnalyzer3D:
+        if self.__evaluator.evaluator_config.evaluation_task == "fp_validation":
+            err_msg = "Analyzer is not available for fp_validation."
+            raise RuntimeError(err_msg)
         if hasattr(self, f"_{self.__class__.__name__}__analyzer"):
             return self.__analyzer
-        err_msg = "Analyzer is not available. Please call get_evaluation_results() first or evaluation_task is fp_validation."
+        err_msg = "Analyzer is not available. Please call get_evaluation_results() first."
         raise RuntimeError(err_msg)
 
-    def __check_evaluation_task(self, evaluation_task: str) -> bool:
-        if evaluation_task in ["detection", "fp_validation"]:
-            self.__frame_id_str = "base_link"
-            return True
-        if evaluation_task == "tracking":
-            self.__frame_id_str = "map"
-            return True
-        if evaluation_task == "prediction":
-            self.__frame_id_str = "map"
-            return True
-        return False
+    def __check_evaluation_task_and_frame_id(self, evaluation_task: str) -> bool:
+        # for fp_validation, it can be either base_link or map because it can handle DetectedObjects, TrackedObjects and PredictedObjects.
+        return (
+            (evaluation_task == "detection" and self.__frame_id_str == "base_link")
+            or (evaluation_task in ("tracking", "prediction") and self.__frame_id_str == "map")
+            or (evaluation_task == "fp_validation" and self.__frame_id_str in ("base_link", "map"))
+        )
 
     def __get_scene_results(self) -> MetricsScore:
         num_critical_fail: int = sum(

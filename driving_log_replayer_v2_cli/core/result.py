@@ -4,21 +4,18 @@ import simplejson as json
 import termcolor
 
 
-def load_result(result_path: Path) -> list[dict]:
-    if not result_path.exists():
-        return []
-    with result_path.open() as jsonl_file:
-        try:
-            return [json.loads(line) for line in jsonl_file]
-        except json.JSONDecodeError:
-            return []
-
-
 def load_last_result(result_path: Path) -> dict:
-    result_list = load_result(result_path)
-    if result_list == []:
+    if not result_path.exists():
         return {}
-    return result_list[-1]
+
+    try:
+        with result_path.open() as jsonl_file:
+            # Read the last line efficiently
+            for line in jsonl_file:  # noqa
+                pass
+            return json.loads(line)
+    except (json.JSONDecodeError, UnboundLocalError):
+        return {}
 
 
 def load_final_metrics(result_path: Path) -> dict:

@@ -13,37 +13,46 @@
 # limitations under the License.
 
 import argparse
+from collections.abc import Callable
 from pathlib import Path
 import pickle
 
+import numpy as np
 import pandas as pd
 from perception_eval.tool import PerceptionAnalyzer3D
 
-DISTANCE_RANGE = tuple((i * 10, (i + 1) * 10) for i in range(15))
 
-
-def analyze(topic_name: str, analyzer: PerceptionAnalyzer3D, save_path: Path) -> None:
+def analyze(
+    analyzer: PerceptionAnalyzer3D,
+    save_path: Path,
+    max_distance: str,
+    distance_interval: str,
+    topic_name: str,
+) -> None:
     """Analyze evaluation results in detail and export them as a flattened csv table."""
     evaluation_task = analyzer.config.evaluation_task
     # decide the columns to be used
     sample = analyzer.analyze()
     if sample.score is not None and sample.error is not None:
-        distance_range = DISTANCE_RANGE
+        distance_range = tuple(
+            (i * int(distance_interval), (i + 1) * int(distance_interval))
+            for i in range(int(max_distance) // int(distance_interval))
+        )
         labels = sample.score.index.to_list()
         score_metrics = sample.score.columns.to_list()
         error_metrics = sample.error.index.get_level_values(1).unique().tolist()
         error_statistics = sample.error.columns.to_list()
     else:
-        output_table = [
+        all_row = [
             {
                 "evaluation_task": evaluation_task,
                 "topic_name": topic_name,
             }
         ]
-        pd.DataFrame(output_table).to_csv(save_path.joinpath("analysis_result.csv"), index=False)
+        pd.DataFrame(all_row).to_csv(save_path.joinpath("analysis_result.csv"), index=False)
         return
 
-    output_table = []
+    all_row = []
     for distance_min, distance_max in distance_range:
         analysis_result = analyzer.analyze(distance=(distance_min, distance_max))
         for label in labels:
@@ -72,11 +81,96 @@ def analyze(topic_name: str, analyzer: PerceptionAnalyzer3D, save_path: Path) ->
                         else float("nan")
                     )
 
-            # TODO: add experimental metrics as column
+            # add consecutive fn spans w/ statistics as column or nan if target object does not exist
+            consecutive_fn_spans = get_consecutive_fn_spans(
+                analyzer, distance=(distance_min, distance_max), label=label, statistics=np.max
+            )
+            for stat in error_statistics:
+                row["consecutive_fn_spans" + "_" + stat] = apply_statistics(
+                    consecutive_fn_spans, stat
+                )
 
-            output_table.append(row)
-    output_table = pd.DataFrame(output_table)
-    output_table.fillna("nan").to_csv(save_path.joinpath("analysis_result.csv"), index=False)
+            all_row.append(row)
+    all_row = pd.DataFrame(all_row)
+    all_row.fillna("nan").to_csv(save_path.joinpath("analysis_result.csv"), index=False)
+
+
+def get_consecutive_fn_spans(
+    analyzer: PerceptionAnalyzer3D,
+    distance: tuple[int, int],
+    label: list[str] | str,
+    statistics: Callable,
+) -> list[float]:
+    df = get_df(analyzer, distance=distance, columns={"label": label})
+
+    if len(df) == 0:
+        return []
+
+    # calculate each consecutive fn spans of objects
+    object_spans: dict[str, list[float]] = {}
+    for uuid in pd.unique(df.loc[pd.IndexSlice[:, "ground_truth"], "uuid"]):
+        if uuid is None:
+            continue
+
+        fn_df = df.loc[(df["uuid"] == uuid) & (df["status"] == "FN")]
+        frame_diff_list = np.diff(fn_df["frame"], append=0)
+        timestamp_list = fn_df["timestamp"].to_list()
+
+        # check in time series
+        # NOTE: only one fn frame is not considered
+        consecutive_fn_count: int = 0
+        spans: list[float] = []
+        start_timestamp: float
+        for frame_diff, timestamp in zip(frame_diff_list, timestamp_list, strict=True):
+            # status is consecutive fn
+            if frame_diff == 1.0:
+                if consecutive_fn_count == 0:
+                    start_timestamp = timestamp
+                consecutive_fn_count += 1
+            # status is start of new fn and handle the last consecutive fn
+            else:
+                if consecutive_fn_count > 0:
+                    spans.append((timestamp - start_timestamp) * 1e-6)
+                consecutive_fn_count = 0
+
+        object_spans[uuid] = spans
+    # calculate statistics of each consecutive fn spans of objects
+    return [statistics(each_span) for each_span in object_spans.values() if len(each_span) > 0]
+
+
+def apply_statistics(value: list[float], statistics: str) -> float:
+    if len(value) == 0:
+        return float("nan")
+
+    value = np.array(value)
+    value = value[~np.isnan(value)]
+
+    if statistics == "average":
+        value = np.average(value)
+    elif statistics == "rms":
+        value = np.sqrt(np.square(value).mean())
+    elif statistics == "std":
+        value = np.std(value)
+    elif statistics == "max":
+        value = np.max(np.abs(value))
+    elif statistics == "min":
+        value = np.min(np.abs(value))
+    elif statistics == "percentile_99":
+        value = np.percentile(np.abs(value), 99)
+    else:
+        err_msg = f"Invalid statistics: {statistics}"
+        raise ValueError(err_msg)
+    return value
+
+
+def get_df(
+    analyzer: PerceptionAnalyzer3D,
+    distance: tuple[int, int] | None,
+    columns: dict[str, list[str] | str] | None,
+) -> pd.DataFrame:
+    # extract matching data in the specified columns
+    df = analyzer.get(**columns) if columns is not None else analyzer.get()
+    return analyzer.filter_by_distance(df=df, distance=distance) if distance is not None else df
 
 
 def parse_args() -> argparse.Namespace:
@@ -95,6 +189,10 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--save-path", required=True, type=Path, help="Directory path to save the output csv file"
+    )
+    parser.add_argument("--max-distance", required=True, help="Maximum distance for analysis")
+    parser.add_argument(
+        "--distance-interval", required=True, help="Distance interval for analysis."
     )
     parser.add_argument("--topic-name", default="", help="Evaluated topic name")
     return parser.parse_args()
@@ -123,9 +221,11 @@ def main() -> None:
     analyzer.add(all_scene_result)
 
     analyze(
-        args.topic_name,
         analyzer,
         args.save_path,
+        args.max_distance,
+        args.distance_interval,
+        args.topic_name,
     )
 
 

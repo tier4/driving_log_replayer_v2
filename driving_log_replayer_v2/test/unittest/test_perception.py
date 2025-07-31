@@ -23,11 +23,11 @@ from perception_eval.common.schema import FrameID
 from perception_eval.common.shape import Shape
 from perception_eval.common.shape import ShapeType
 from perception_eval.config import PerceptionEvaluationConfig
-from perception_eval.evaluation import DynamicObjectWithPerceptionResult
-from perception_eval.evaluation import PerceptionFrameResult
 from perception_eval.evaluation.metrics import MetricsScoreConfig
+from perception_eval.evaluation.result.object_result import DynamicObjectWithPerceptionResult
 from perception_eval.evaluation.result.perception_frame_config import CriticalObjectFilterConfig
 from perception_eval.evaluation.result.perception_frame_config import PerceptionPassFailConfig
+from perception_eval.evaluation.result.perception_frame_result import PerceptionFrameResult
 from pyquaternion import Quaternion
 import pytest
 
@@ -111,8 +111,8 @@ def create_frame_result() -> PerceptionFrameResult:
         critical_object_filter_config=CriticalObjectFilterConfig(
             evaluation_config,
             evaluation_config_dict["target_labels"],
-            max_x_position_list=[30.0, 30.0, 30.0, 30.0],
-            max_y_position_list=[30.0, 30.0, 30.0, 30.0],
+            max_x_position_list=[30.0, 30.0, 30.0, 30.0, 30.0],
+            max_y_position_list=[30.0, 30.0, 30.0, 30.0, 30.0],
         ),
         frame_pass_fail_config=PerceptionPassFailConfig(
             evaluation_config,
@@ -207,6 +207,7 @@ def test_perception_success_tp_normal(
             "TP": "5 [car, car, car, car, car]",
             "FP": "5 [car, car, car, car, car]",
             "FN": "0 []",
+            "TN": "null",
         },
     }
 
@@ -236,6 +237,7 @@ def test_perception_fail_tp_normal(
             "TP": "5 [car, car, car, car, car]",
             "FP": "10 [car, car, car, car, car, car, car, car, car, car]",
             "FN": "0 []",
+            "TN": "null",
         },
     }
 
@@ -265,5 +267,6 @@ def test_perception_fail_tp_hard(
             "TP": "5 [car, car, car, car, car]",
             "FP": "5 [car, car, car, car, car]",
             "FN": "0 []",
+            "TN": "null",
         },
     }

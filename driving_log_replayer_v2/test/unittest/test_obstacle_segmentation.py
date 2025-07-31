@@ -20,6 +20,8 @@ from geometry_msgs.msg import Quaternion
 from geometry_msgs.msg import Transform
 from geometry_msgs.msg import TransformStamped
 from geometry_msgs.msg import Vector3
+from matplotlib import patches
+from matplotlib import pyplot as plt
 import numpy as np
 from perception_eval.common import DynamicObject
 from perception_eval.common.label import AutowareLabel
@@ -27,9 +29,9 @@ from perception_eval.common.label import Label
 from perception_eval.common.schema import FrameID
 from perception_eval.common.shape import Shape
 from perception_eval.common.shape import ShapeType
-from perception_eval.evaluation import DynamicObjectWithSensingResult
-from perception_eval.evaluation import SensingFrameResult
 from perception_eval.evaluation.sensing.sensing_frame_config import SensingFrameConfig
+from perception_eval.evaluation.sensing.sensing_frame_result import SensingFrameResult
+from perception_eval.evaluation.sensing.sensing_result import DynamicObjectWithSensingResult
 from pydantic import ValidationError
 from pyquaternion import Quaternion as PyQuaternion
 import pytest
@@ -633,9 +635,6 @@ def test_search_range() -> None:
 
 
 def draw_search_range() -> None:
-    from matplotlib import patches
-    from matplotlib import pyplot as plt
-
     points = [[1.0, 1.0], [2.0, -2.0], [-3.0, -3.0], [-2.0, 4.0], [1.0, 1.0]]
     poly = patches.Polygon(xy=points, closed=True)
     bound = patches.Rectangle(xy=(-3, -3), width=5, height=7, ec="g", linewidth="2.0", fill=False)
