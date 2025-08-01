@@ -39,6 +39,7 @@ import ros2_numpy
 from rosidl_runtime_py import message_to_ordereddict
 from sensor_msgs.msg import PointCloud2
 from shapely.geometry import Polygon
+from shapely.geometry import MultiPolygon
 import simplejson as json
 from std_msgs.msg import ColorRGBA
 from std_msgs.msg import Header
@@ -386,13 +387,23 @@ def get_non_detection_area_in_base_link(
     )
     list_intersection_area = []
     list_p_stamped_base_link: list[PointStamped] = []
-    for i, shapely_point in enumerate(intersection_polygon.exterior.coords):
-        if i != len(intersection_polygon.exterior.coords) - 1:
-            p_stamped_map = PointStamped(
-                header=header,
-                point=Point(x=shapely_point[0], y=shapely_point[1], z=average_z),
-            )
-            list_p_stamped_base_link.append(do_transform_point(p_stamped_map, base_link_to_map))
+    if isinstance(intersection_polygon, Polygon):
+        for i, shapely_point in enumerate(intersection_polygon.exterior.coords):
+            if i != len(intersection_polygon.exterior.coords) - 1:
+                p_stamped_map = PointStamped(
+                    header=header,
+                    point=Point(x=shapely_point[0], y=shapely_point[1], z=average_z),
+                )
+                list_p_stamped_base_link.append(do_transform_point(p_stamped_map, base_link_to_map))
+    elif isinstance(intersection_polygon, MultiPolygon):
+        for poly in MultiPolygon.geoms:
+            for i, shapely_point in enumerate(poly.exterior.coords):
+                if i != len(intersection_polygon.exterior.coords) - 1:
+                    p_stamped_map = PointStamped(
+                        header=header,
+                        point=Point(x=shapely_point[0], y=shapely_point[1], z=average_z),
+                    )
+                    list_p_stamped_base_link.append(do_transform_point(p_stamped_map, base_link_to_map))
     # create floor polygon
     for p_base_link in list_p_stamped_base_link:
         p_base_link.point.z = z_min
