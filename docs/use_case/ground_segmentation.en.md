@@ -4,13 +4,14 @@ Evaluate the performance of the Ground Segmentation sub-component in Autoware, w
 
 ## Ground Truth data
 
-The Ground Truth data required for evaluation can be provided using the following two methods, and each can be used by changing the `Evaluation.Conditions.Method` of the scenario.
+The Ground Truth data required for evaluation can be provided using the following method.
 
 ### annotated_pcd
 
-This method involves using the point cloud data provided as a dataset (`dataset/data/LIDAR_CONCAT/\*.pcd.bin`) together with the corresponding label data (`dataset/lidarseg/\*.bin`).
+This method uses the t4_dataset, which contains 3D semantic-segmentation annotations. ([format](https://github.com/tier4/tier4_perception_dataset/blob/main/docs/t4_format_3d_detailed.md#3d-lidarseg-annotation-format-in-t4-format))
 
-Compare the point cloud after ground removal with the point cloud in the `pcd.bin` file, and evaluate accuracy by examining the labels associated with the points in the processed point cloud.
+1. Use a nearest neighbor search to match the ground-removed point cloud with the point cloud in the t4_dataset that corresponds to `/sensing/lidar/concatenated/pointcloud` (stored as `dataset/data/LIDAR_CONCAT/*.pcd.bin`).
+2. Check each matched point to determine whether it belongs to ground or obstacle.
 
 ## Evaluation method
 
@@ -114,7 +115,7 @@ The format of each frame and the metrics format are shown below.
       "Precision": "Precision value",
       "Recall": "Recall value",
       "Specificity": "Specificity value",
-      "F1-score": "F1-score value`"
+      "F1-score": "F1-score value"
     }
   }
 }
