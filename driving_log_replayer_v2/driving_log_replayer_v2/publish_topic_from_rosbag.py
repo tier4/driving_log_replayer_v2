@@ -23,7 +23,6 @@ from rosbag2_py import SequentialReader
 from rosbag2_py import StorageOptions
 from rosidl_runtime_py.utilities import get_message
 
-
 if TYPE_CHECKING:
     from collections.abc import Generator
 
