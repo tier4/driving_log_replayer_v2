@@ -34,7 +34,7 @@ class Condition(BaseModel):
 
 class Evaluation(BaseModel):
     UseCaseName: Literal["ground_segmentation"]
-    UseCaseFormatVersion: Literal["0.3.0"]
+    UseCaseFormatVersion: Literal["0.4.0"]
     Conditions: Condition
     Datasets: list[dict]
 
