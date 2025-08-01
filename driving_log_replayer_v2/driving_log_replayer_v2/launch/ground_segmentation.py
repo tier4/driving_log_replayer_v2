@@ -29,7 +29,6 @@ AUTOWARE_DISABLE = {
 AUTOWARE_ARGS = {"perception_mode": "lidar"}
 
 NODE_PARAMS = {
-    "vehicle_model": LaunchConfiguration("vehicle_model"),
     "evaluation_target_topic": LaunchConfiguration("evaluation_target_topic"),
 }
 
