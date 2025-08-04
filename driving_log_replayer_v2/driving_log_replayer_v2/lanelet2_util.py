@@ -37,7 +37,7 @@ class MapOrigin(BaseModel):
 
 class MapProjectorInfo(BaseModel):
     projector_type: str
-    map_origin: MapOrigin
+    map_origin: MapOrigin | None = None
     scale_factor: float | None = None
 
 
