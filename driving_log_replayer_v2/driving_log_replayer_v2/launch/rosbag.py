@@ -88,22 +88,32 @@ def get_pre_task_before_play_rosbag(
 ) -> Node | ExecuteProcess:
     conf = context.launch_configurations
     if conf["publish_topic_from_rosbag_regex"] not in ["", "None"]:
-        return Node(
-            package="driving_log_replayer_v2",
-            namespace="/driving_log_replayer_v2",
-            executable="publish_topic_from_rosbag_node.py",
-            output="screen",
-            name="publish_topic_from_rosbag_node",
-            parameters=[
-                {
-                    "use_sim_time": False,  # In order to trigger the timer without play rosbag
-                    "input_bag": conf["input_bag"],
-                    "storage_type": "sqlite3",
-                    "publish_topic_from_rosbag_regex": conf["publish_topic_from_rosbag_regex"],
-                }
-            ],
-            on_exit=[on_exit],
+        # Parse comma-separated topic names similar to remap_arg format
+        publish_topics = (
+            conf["publish_topic_from_rosbag_regex"].split(",")
+            if conf["publish_topic_from_rosbag_regex"] != ""
+            else []
         )
+        # Filter out empty strings and strip whitespace
+        publish_topics = [topic.strip() for topic in publish_topics if topic.strip()]
+        
+        if publish_topics:
+            return Node(
+                package="driving_log_replayer_v2",
+                namespace="/driving_log_replayer_v2",
+                executable="publish_topic_from_rosbag_node.py",
+                output="screen",
+                name="publish_topic_from_rosbag_node",
+                parameters=[
+                    {
+                        "use_sim_time": False,  # In order to trigger the timer without play rosbag
+                        "input_bag": conf["input_bag"],
+                        "storage_type": "sqlite3",
+                        "publish_topic_from_rosbag_regex": conf["publish_topic_from_rosbag_regex"],
+                    }
+                ],
+                on_exit=[on_exit],
+            )
     return ExecuteProcess(
         cmd=["echo", "pre-task before play rosbag is not activated"],
         on_exit=[on_exit],
