@@ -396,7 +396,8 @@ def get_non_detection_area_in_base_link(
                 )
                 list_p_stamped_base_link.append(do_transform_point(p_stamped_map, base_link_to_map))
     elif isinstance(intersection_polygon, MultiPolygon):
-        for poly in MultiPolygon.geoms:
+        single_polygon_multipolygon = MultiPolygon([Polygon])
+        for poly in single_polygon_multipolygon.geoms:
             for i, shapely_point in enumerate(poly.exterior.coords):
                 if i != len(intersection_polygon.exterior.coords) - 1:
                     p_stamped_map = PointStamped(
