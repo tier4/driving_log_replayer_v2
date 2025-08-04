@@ -98,6 +98,9 @@ def get_pre_task_before_play_rosbag(
         publish_topics = [topic.strip() for topic in publish_topics if topic.strip()]
         
         if publish_topics:
+            # Convert comma-separated topics to regex format
+            regex_pattern = "|".join([f"^{topic}$" for topic in publish_topics])
+            
             return Node(
                 package="driving_log_replayer_v2",
                 namespace="/driving_log_replayer_v2",
@@ -109,7 +112,7 @@ def get_pre_task_before_play_rosbag(
                         "use_sim_time": False,  # In order to trigger the timer without play rosbag
                         "input_bag": conf["input_bag"],
                         "storage_type": "sqlite3",
-                        "publish_topic_from_rosbag_regex": conf["publish_topic_from_rosbag_regex"],
+                        "publish_topic_from_rosbag_regex": regex_pattern,
                     }
                 ],
                 on_exit=[on_exit],
