@@ -28,7 +28,7 @@ def parse_launch_arguments(context: LaunchContext) -> list:
     launch_args = []
     conf = context.launch_configurations
     for k, v in conf.items():
-        if v != "" and v is not None:
+        if v != "" and v is not None and k != "publish_topic_from_rosbag_regex":
             launch_args.append(f"{k}:={v}")
     return launch_args
 
