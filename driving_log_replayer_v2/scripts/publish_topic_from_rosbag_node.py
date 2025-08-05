@@ -73,7 +73,6 @@ def main() -> None:
     executor.add_node(publish_topic_from_rosbag_node)
     executor.spin()
     publish_topic_from_rosbag_node.destroy_node()
-    rclpy.shutdown()
 
 
 if __name__ == "__main__":
