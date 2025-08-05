@@ -38,8 +38,8 @@ from pydantic import field_validator
 import ros2_numpy
 from rosidl_runtime_py import message_to_ordereddict
 from sensor_msgs.msg import PointCloud2
-from shapely.geometry import Polygon
-from shapely.geometry import MultiPolygon
+from shapely.geometry import Polygon, MultiPolygon
+from typing import Union
 import simplejson as json
 from std_msgs.msg import ColorRGBA
 from std_msgs.msg import Header
@@ -397,6 +397,7 @@ def get_non_detection_area_in_base_link(
                 list_p_stamped_base_link.append(do_transform_point(p_stamped_map, base_link_to_map))
     elif isinstance(intersection_polygon, MultiPolygon):
         single_polygon_multipolygon = MultiPolygon([Polygon])
+        poly: Union[Polygon, MultiPolygon]
         for poly in single_polygon_multipolygon.geoms:
             for i, shapely_point in enumerate(poly.exterior.coords):
                 if i != len(intersection_polygon.exterior.coords) - 1:
