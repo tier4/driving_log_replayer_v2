@@ -401,7 +401,6 @@ def evaluate(
         process_perception_message(
             msg,
             topic_name,
-            unix_timestamp,
             subscribed_ros_timestamp,
             evaluator,
             result,
