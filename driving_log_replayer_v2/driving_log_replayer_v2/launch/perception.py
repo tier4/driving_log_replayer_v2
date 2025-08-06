@@ -30,6 +30,10 @@ RECORD_TOPIC = """^/tf$\
 |^/perception/object_recognition/detection/objects_before_filter$\
 |^/sensing/.*detected_objects$\
 |^/sensing/.*tracked_objects$\
+|^/awapi/autoware/get/status$\
+|^/api/planning/velocity_factors$\
+|^/api/planning/steering_factors$\
+|^/planning/planning_factors/obstacle_stop$\
 """
 
 
