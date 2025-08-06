@@ -387,20 +387,14 @@ def get_non_detection_area_in_base_link(
     )
     list_intersection_area = []
     list_p_stamped_base_link: list[PointStamped] = []
-    if isinstance(intersection_polygon, Polygon):
-        for i, shapely_point in enumerate(intersection_polygon.exterior.coords):
-            if i != len(intersection_polygon.exterior.coords) - 1:
-                p_stamped_map = PointStamped(
-                    header=header,
-                    point=Point(x=shapely_point[0], y=shapely_point[1], z=average_z),
-                )
-                list_p_stamped_base_link.append(do_transform_point(p_stamped_map, base_link_to_map))
+    polygons_to_process = []    
+    if isinstance(intersection_polygon, Polygon):  # Handle single Polygon
+        polygons_to_process.append(intersection_polygon)
     elif isinstance(intersection_polygon, MultiPolygon):
-        single_polygon_multipolygon = MultiPolygon([Polygon])
-        poly: Union[Polygon, MultiPolygon]
-        for poly in single_polygon_multipolygon.geoms:
-            for i, shapely_point in enumerate(poly.exterior.coords):
-                if i != len(intersection_polygon.exterior.coords) - 1:
+        polygons_to_process.extend(intersection_polygon.geoms) # Use .geoms to get a list of individual polygons from the MultiPolygon
+    for poly in polygons_to_process:
+        for i, shapely_point in enumerate(poly.exterior.coords):
+                if i != len(poly.exterior.coords) - 1:
                     p_stamped_map = PointStamped(
                         header=header,
                         point=Point(x=shapely_point[0], y=shapely_point[1], z=average_z),
