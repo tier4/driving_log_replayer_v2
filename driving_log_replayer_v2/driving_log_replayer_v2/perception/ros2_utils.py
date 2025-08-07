@@ -35,14 +35,14 @@ from rosidl_runtime_py.utilities import get_message
 from tf2_ros import Buffer
 from tf2_ros import Duration
 from tf2_ros import TransformException
-from tier4_api_msgs.msg import AwapiAutowareStatus
+from tier4_planning_msgs.msg import StopReasonArray
 
 if TYPE_CHECKING:
     from collections.abc import Generator
 
     from builtin_interfaces.msg import Time as Stamp
 
-MsgType = TypeVar("MsgType", DetectedObjects, TrackedObjects, PredictedObjects, AwapiAutowareStatus)
+MsgType = TypeVar("MsgType", DetectedObjects, TrackedObjects, PredictedObjects, StopReasonArray)
 
 
 class RosBagManager:
@@ -131,7 +131,7 @@ class RosBagManager:
             elif topic_name == "/tf":
                 for transform in msg.transforms:
                     self._tf_buffer.set_transform(transform, "rosbag_import")
-            elif topic_name in self._evaluate_topic or topic_name == "/awapi/autoware/get/status":
+            elif topic_name in self._evaluate_topic or topic_name == "/planning/scenario_planning/status/stop_reasons":
                 yield topic_name, msg, ros_timestamp
         self._last_ros_timestamp = ros_timestamp
         del self._reader

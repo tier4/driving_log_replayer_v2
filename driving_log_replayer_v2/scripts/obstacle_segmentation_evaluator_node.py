@@ -37,7 +37,7 @@ from rosidl_runtime_py import message_to_ordereddict
 from sensor_msgs.msg import PointCloud2
 import simplejson as json
 from std_msgs.msg import Header
-from tier4_api_msgs.msg import AwapiAutowareStatus
+from tier4_planning_msgs.msg import StopReasonArray
 from visualization_msgs.msg import MarkerArray
 
 from driving_log_replayer_v2.evaluator import DLREvaluatorV2
@@ -126,10 +126,10 @@ class ObstacleSegmentationEvaluator(DLREvaluatorV2):
         self.__evaluator = SensingEvaluationManager(evaluation_config=evaluation_config)
 
         self.__latest_stop_reasons: list[dict] = []
-        self.__sub_awapi_autoware_status = self.create_subscription(
-            AwapiAutowareStatus,
-            "/awapi/autoware/get/status",
-            self.awapi_status_cb,
+        self.__sub_stop_reasons = self.create_subscription(
+            StopReasonArray,
+            "/planning/scenario_planning/status/stop_reasons",
+            self.stop_reasons_cb,
             1,
         )
 
@@ -295,9 +295,9 @@ class ObstacleSegmentationEvaluator(DLREvaluatorV2):
         if graph_non_detection is not None:
             self.__pub_graph_non_detection.publish(graph_non_detection)
 
-    def awapi_status_cb(self, msg: AwapiAutowareStatus) -> None:
+    def stop_reasons_cb(self, msg: StopReasonArray) -> None:
         self.__latest_stop_reasons = []
-        if reasons := msg.stop_reason.stop_reasons:
+        if reasons := msg.stop_reasons:
             for msg_reason in reasons:
                 # to debug reason use: self.get_logger().error(f"stop_reason: {msg_reason.reason}")
                 if msg_reason.reason == "ObstacleStop":

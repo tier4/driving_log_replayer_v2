@@ -28,7 +28,7 @@ from rclpy.clock import Clock
 from rosbag2_py import TopicMetadata
 from std_msgs.msg import ColorRGBA
 from std_msgs.msg import Header
-from tier4_api_msgs.msg import AwapiAutowareStatus
+from tier4_planning_msgs.msg import StopReasonArray
 from visualization_msgs.msg import MarkerArray
 
 from driving_log_replayer_v2.evaluator import DLREvaluatorV2
@@ -150,7 +150,7 @@ def write_result(
 
 
 def process_stop_reason_message(
-    msg: AwapiAutowareStatus,
+    msg: StopReasonArray,
     unix_timestamp: float,
     subscribed_ros_timestamp: int,
     stop_reason_processor: StopReasonProcessor,
@@ -158,10 +158,10 @@ def process_stop_reason_message(
     result_writer: ResultWriter,
 ) -> bool:
     """
-    Process stop reason data from AwapiAutowareStatus messages.
+    Process stop reason data from StopReasonArray messages.
 
     Args:
-        msg: The AwapiAutowareStatus message
+        msg: The StopReasonArray message
         unix_timestamp: Unix timestamp in seconds
         subscribed_ros_timestamp: ROS timestamp
         stop_reason_processor: Processor for stop reason data
@@ -175,8 +175,8 @@ def process_stop_reason_message(
     stop_reason_processor.process_message(msg, unix_timestamp)
 
     # Process stop reason evaluation if configured
-    if hasattr(msg, "stop_reason") and hasattr(msg.stop_reason, "stop_reasons"):
-        for stop_reason in msg.stop_reason.stop_reasons:
+    if hasattr(msg, "stop_reasons"):
+        for stop_reason in msg.stop_reasons:
             if stop_reason.stop_factors:
                 # Check if this message should be included in frame results
                 should_include_in_frame = False
@@ -386,8 +386,8 @@ def evaluate(
             unix_timestamp, subscribed_ros_timestamp, result, result_writer
         )
 
-        # Process stop_reason data from AwapiAutowareStatus messages
-        if isinstance(msg, AwapiAutowareStatus) and process_stop_reason_message(
+        # Process stop_reason data from StopReasonArray messages
+        if isinstance(msg, StopReasonArray) and process_stop_reason_message(
             msg,
             unix_timestamp,
             subscribed_ros_timestamp,

@@ -2,11 +2,63 @@
 
 This feature adds stop reason evaluation to the perception simulation, allowing you to evaluate whether the vehicle stops for specific reasons (like intersections, traffic lights, obstacles) within specified time windows and distance ranges.
 
+## Topic and Message Type Update
+
+**Important**: The stop reason evaluation has been updated to use the new topic and message type:
+
+- **Old**: Topic: `/awapi/autoware/get/status`, Message Type: `AwapiAutowareStatus`
+- **New**: Topic: `/planning/scenario_planning/status/stop_reasons`, Message Type: `tier4_planning_msgs/msg/StopReasonArray`
+
+The new message structure provides more detailed stop reason information with the following format:
+
+```yaml
+header:
+  stamp:
+    sec: 1703123456
+    nanosec: 789123456
+  frame_id: "map"
+stop_reasons:
+  - reason: "Intersection"
+    stop_factors:
+      - stop_pose:
+          position:
+            x: 1234.56
+            y: 789.01
+            z: 0.0
+          orientation:
+            x: 0.0
+            y: 0.0
+            z: 0.7071068
+            w: 0.7071068
+        dist_to_stop_pose: 15.5
+        stop_factor_points:
+          - x: 1234.56
+            y: 789.01
+            z: 0.0
+  - reason: "TrafficLight"
+    stop_factors:
+      - stop_pose:
+          position:
+            x: 1234.56
+            y: 789.01
+            z: 0.0
+          orientation:
+            x: 0.0
+            y: 0.0
+            z: 0.0
+            w: 1.0
+        dist_to_stop_pose: 3.5
+        stop_factor_points:
+          - x: 1234.56
+            y: 789.01
+            z: 0.0
+```
+
 ## Overview
 
 The stop reason evaluation feature:
 
-- Monitors `/awapi/autoware/get/status` messages for stop reasons
+- Monitors `/planning/scenario_planning/status/stop_reasons` messages for stop reasons
 - Evaluates stop reasons against configurable criteria
 - Supports both True Positive (TP) and True Negative (TN) evaluation modes
 - Enforces minimum time intervals between events (tolerance_interval)
@@ -130,7 +182,7 @@ StopReasonCriterion:
     evaluation_type: TN # True Negative: expect NO stop event
 ```
 
-**Note**: The stop reason names in the configuration must match exactly with the stop reason names that appear in the `/awapi/autoware/get/status` topic messages (e.g., "Intersection", "TrafficLight", "ObstacleStop", etc.).
+**Note**: The stop reason names in the configuration must match exactly with the stop reason names that appear in the `/planning/scenario_planning/status/stop_reasons` topic messages (e.g., "Intersection", "TrafficLight", "ObstacleStop", etc.).
 
 ## Running the Evaluation
 

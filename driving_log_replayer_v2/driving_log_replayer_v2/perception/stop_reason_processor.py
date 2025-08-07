@@ -22,14 +22,14 @@ from typing import TYPE_CHECKING
 
 # Try to import ROS messages, but don't fail if they're not available
 try:
-    from tier4_api_msgs.msg import AwapiAutowareStatus
+    from tier4_planning_msgs.msg import StopReasonArray
 
     ROS_AVAILABLE = True
 except ImportError:
     ROS_AVAILABLE = False
 
     # Create a placeholder for type hints
-    class AwapiAutowareStatus:
+    class StopReasonArray:
         pass
 
 
@@ -38,7 +38,7 @@ if TYPE_CHECKING:
 
 
 class StopReasonProcessor:
-    """Process stop_reason data from /awapi/autoware/get/status topic and convert to spreadsheet format."""
+    """Process stop_reason data from /planning/scenario_planning/status/stop_reasons topic and convert to spreadsheet format."""
 
     def __init__(self, output_path: "Path") -> None:  # noqa
         """
@@ -54,23 +54,23 @@ class StopReasonProcessor:
 
     def process_message(self, msg: Any, timestamp: float) -> None:
         """
-        Process a single AwapiAutowareStatus message.
+        Process a single StopReasonArray message.
 
         Args:
-            msg: The AwapiAutowareStatus message
+            msg: The StopReasonArray message
             timestamp: Unix timestamp when the message was received
 
         """
-        if not hasattr(msg, "stop_reason") or not hasattr(msg.stop_reason, "stop_reasons"):
+        if not hasattr(msg, "stop_reasons"):
             return
 
-        if not msg.stop_reason.stop_reasons:
+        if not msg.stop_reasons:
             return
 
         logging.info("stop_reason loop begin")
 
         try:
-            for idx, stop_reason in enumerate(msg.stop_reason.stop_reasons):
+            for idx, stop_reason in enumerate(msg.stop_reasons):
                 reason_data = {
                     "timestamp": timestamp,
                     "idx": idx,
