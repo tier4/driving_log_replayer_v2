@@ -358,7 +358,10 @@ class FactorsClassContainer:
     def __init__(self, conditions: list[PlanningFactorCondition]) -> None:
         self.__container: dict[PlanningFactor] = {}
         for i, cond in enumerate(conditions):
-            self.__container[cond.topic] = PlanningFactor(f"Condition_{i}", cond)
+            condition_name = (
+                cond.condition_name if cond.condition_name is not None else f"Condition_{i}"
+            )
+            self.__container[cond.topic] = PlanningFactor(condition_name, cond)
 
     def set_frame(self, msg: PlanningFactorArray, topic: str) -> dict:
         frame_result: dict[str, dict] = {}
