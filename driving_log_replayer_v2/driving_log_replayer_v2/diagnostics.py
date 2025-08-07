@@ -62,6 +62,7 @@ class StartEnd(BaseModel):
 
 
 class DiagCondition(BaseModel):
+    condition_name: str | None = None
     hardware_id: str
     name: str
     level: list[Literal["OK", "WARN", "ERROR", "STALE"]]
@@ -132,7 +133,10 @@ class DiagClassContainer:
     def __init__(self, conditions: list[DiagCondition]) -> None:
         self.__container: list[Diag] = []
         for i, cond in enumerate(conditions):
-            self.__container.append(Diag(f"Condition_{i}", cond))
+            condition_name = (
+                cond.condition_name if cond.condition_name is not None else f"Condition_{i}"
+            )
+            self.__container.append(Diag(condition_name, cond))
 
     def set_frame(self, msg: DiagnosticArray) -> dict:
         frame_result: dict[int, dict] = {}

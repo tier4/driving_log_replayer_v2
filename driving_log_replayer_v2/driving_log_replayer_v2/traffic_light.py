@@ -186,6 +186,7 @@ class Filter(BaseModel):
 
 
 class Criteria(BaseModel):
+    CriteriaName: str | None = None
     PassRate: number
     CriteriaMethod: Literal["num_tp", "num_gt_tp", "label", "metrics_score"] | list[str] | None = (
         None
@@ -286,8 +287,11 @@ class TrafficLightResult(ResultBase):
         super().__init__()
         self.__perception_criterion: list[Perception] = []
         for i, criteria in enumerate(condition.Criterion):
+            criteria_name = (
+                criteria.CriteriaName if criteria.CriteriaName is not None else f"criteria_{i}"
+            )
             self.__perception_criterion.append(
-                Perception(name=f"criteria{i}", condition=criteria),
+                Perception(name=criteria_name, condition=criteria),
             )
 
     def update(self) -> None:

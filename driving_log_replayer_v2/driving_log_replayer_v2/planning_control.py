@@ -141,6 +141,7 @@ class KinematicCondition(BaseModel):
 
 
 class MetricCondition(BaseModel):
+    condition_name: str | None = None
     topic: str
     name: str
     value: str
@@ -172,6 +173,7 @@ class Area(BaseModel):
 
 
 class PlanningFactorCondition(BaseModel):
+    condition_name: str | None = None
     topic: str
     time: StartEnd
     condition_type: Literal["any_of", "all_of"]
@@ -263,7 +265,10 @@ class MetricsClassContainer:
     def __init__(self, conditions: list[MetricCondition]) -> None:
         self.__container: list[Metrics] = []
         for i, cond in enumerate(conditions):
-            self.__container.append(Metrics(f"Condition_{i}", cond))
+            condition_name = (
+                cond.condition_name if cond.condition_name is not None else f"Condition_{i}"
+            )
+            self.__container.append(Metrics(condition_name, cond))
 
     def set_frame(self, msg: MetricArray, control_metrics: MetricArray) -> dict:
         frame_result: dict[int, dict] = {}
