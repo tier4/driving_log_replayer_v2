@@ -389,13 +389,13 @@ def get_non_detection_area_in_base_link(
     list_p_stamped_base_link: list[PointStamped] = []
     poly: Union[Polygon, MultiPolygon]
     for poly in poly.geoms:
-            for i, shapely_point in enumerate(poly.exterior.coords):
+        for i, shapely_point in enumerate(poly.exterior.coords):
                 if i != len(poly.exterior.coords) - 1:
                     p_stamped_map = PointStamped(
                         header=header,
                         point=Point(x=shapely_point[0], y=shapely_point[1], z=average_z),
                     )
-                    list_p_stamped_base_link.append(do_transform_point(p_stamped_map, base_link_to_map))     
+                    list_p_stamped_base_link.append(do_transform_point(p_stamped_map, base_link_to_map))         
     # create floor polygon
     for p_base_link in list_p_stamped_base_link:
         p_base_link.point.z = z_min
