@@ -61,7 +61,7 @@ class PublishTopicFromRosbagNode(Node):
         for topic_name, msg, _ in self._rosbag_reader.read_messages():
             self._publisher_map[topic_name].publish(msg)
             self._clock.sleep_for(
-                Duration(0.1)
+                Duration(seconds=0.1)
             )  # sleep to wait for Autoware to process the message
         rclpy.shutdown()
 

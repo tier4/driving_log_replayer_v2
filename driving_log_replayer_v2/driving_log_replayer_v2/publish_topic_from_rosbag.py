@@ -57,3 +57,5 @@ class RosbagReader:
                 self._topic_list.remove(topic_name)
                 msg = deserialize_message(msg_bytes, self._topic_name2type[topic_name])
                 yield topic_name, msg, ros_timestamp
+            if len(self._topic_list) == 0:
+                break
