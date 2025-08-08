@@ -39,7 +39,6 @@ import ros2_numpy
 from rosidl_runtime_py import message_to_ordereddict
 from sensor_msgs.msg import PointCloud2
 from shapely.geometry import Polygon, MultiPolygon
-from typing import Union
 import simplejson as json
 from std_msgs.msg import ColorRGBA
 from std_msgs.msg import Header
