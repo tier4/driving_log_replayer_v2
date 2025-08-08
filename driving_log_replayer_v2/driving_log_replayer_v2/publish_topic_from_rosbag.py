@@ -50,7 +50,7 @@ class RosbagReader:
     def get_topic_name2type(self) -> dict[str, Any]:
         return self._topic_name2type
 
-    def read_messages(self) -> Generator[str, Any, int]:
+    def read_messages(self) -> Generator[tuple[str, Any, int], None, None]:
         while self._reader.has_next():
             topic_name, msg_bytes, ros_timestamp = self._reader.read_next()
             if topic_name in self._topic_list:
