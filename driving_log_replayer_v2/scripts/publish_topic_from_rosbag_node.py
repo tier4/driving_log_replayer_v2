@@ -15,11 +15,11 @@
 # limitations under the License.
 
 import rclpy
+from rclpy.duration import Duration
 from rclpy.executors import MultiThreadedExecutor
 from rclpy.node import Node
 
-from driving_log_replayer_v2.perception.topics import convert_topic_list_from_regex_str
-from driving_log_replayer_v2.publish_topic_from_rosbag import RosBagReader
+from driving_log_replayer_v2.publish_topic_from_rosbag import RosbagReader
 
 
 class PublishTopicFromRosbagNode(Node):
@@ -28,21 +28,21 @@ class PublishTopicFromRosbagNode(Node):
 
         self.declare_parameter("input_bag", "")
         self.declare_parameter("storage_type", "")
-        self.declare_parameter("publish_topic_from_rosbag_regex", "")
+        self.declare_parameter("publish_topic_from_rosbag", "")
 
         bag_dir = self.get_parameter("input_bag").get_parameter_value().string_value
         storage_type = self.get_parameter("storage_type").get_parameter_value().string_value
-        topic_regex = (
-            self.get_parameter("publish_topic_from_rosbag_regex").get_parameter_value().string_value
+        topics_with_comma = (
+            self.get_parameter("publish_topic_from_rosbag").get_parameter_value().string_value
         )
 
         # load the topic to publish
-        topic_list = convert_topic_list_from_regex_str(topic_regex)
+        topic_list = topics_with_comma.split(",") if topics_with_comma != "" else []
         if len(topic_list) == 0:
             rclpy.shutdown()
 
         # load the rosbag
-        self._rosbag_reader = RosBagReader(bag_dir, storage_type, topic_list)
+        self._rosbag_reader = RosbagReader(bag_dir, storage_type, topic_list)
         topic_name2type = self._rosbag_reader.get_topic_name2type()
 
         # create the publisher
@@ -55,14 +55,14 @@ class PublishTopicFromRosbagNode(Node):
                 self.get_logger().error(f"Topic {topic} not found in the rosbag.")
 
         # create timer
-        self.create_timer(0.1, self.publish)
-        self._rate = self.create_rate(10)
+        self.create_timer(10, self.publish)
 
     def publish(self) -> None:
         for topic_name, msg, _ in self._rosbag_reader.read_messages():
             self._publisher_map[topic_name].publish(msg)
-            self._rate.sleep()
-        self._rate.sleep()
+            self._clock.sleep_for(
+                Duration(0.1)
+            )  # sleep to wait for Autoware to process the message
         rclpy.shutdown()
 
 

@@ -87,7 +87,7 @@ def get_pre_task_before_play_rosbag(
     context: LaunchContext, on_exit: ExecuteProcess
 ) -> Node | ExecuteProcess:
     conf = context.launch_configurations
-    if conf["publish_topic_from_rosbag_regex"] not in ["", "None"]:
+    if conf["publish_topic_from_rosbag"] not in ["", "None"]:
         return Node(
             package="driving_log_replayer_v2",
             namespace="/driving_log_replayer_v2",
@@ -99,7 +99,7 @@ def get_pre_task_before_play_rosbag(
                     "use_sim_time": False,  # In order to trigger the timer without play rosbag
                     "input_bag": conf["input_bag"],
                     "storage_type": "sqlite3",
-                    "publish_topic_from_rosbag_regex": conf["publish_topic_from_rosbag_regex"],
+                    "publish_topic_from_rosbag": conf["publish_topic_from_rosbag"],
                 }
             ],
             on_exit=[on_exit],

@@ -83,8 +83,8 @@ USE_CASE_ARGS: list[DeclareLaunchArgument] = [
         description="Distance interval for analysis.",
     ),
     DeclareLaunchArgument(
-        "publish_topic_from_rosbag_regex",
+        "publish_topic_from_rosbag",
         default_value="",
-        description="Regex pattern for the topic to publish in rosbag before play rosbag. Must start with '^' and end with '$'. Wildcards (e.g. '.*', '+', '?', '[...]') are not allowed. If you do not want to use this feature, set it to '' or 'None'.",
+        description="The topic to publish in rosbag before play rosbag. Using comma separated string.",
     ),
 ]

@@ -27,7 +27,7 @@ if TYPE_CHECKING:
     from collections.abc import Generator
 
 
-class RosBagReader:
+class RosbagReader:
     def __init__(self, bag_dir: str, storage_type: str, topic_list: list[str]) -> None:
         converter_options = self._get_default_converter_options()
         storage_options = StorageOptions(
