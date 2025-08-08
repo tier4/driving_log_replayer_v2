@@ -55,7 +55,7 @@ class PublishTopicFromRosbagNode(Node):
                 self.get_logger().error(f"Topic {topic} not found in the rosbag.")
 
         # create timer
-        self.create_timer(10, self.publish)
+        self.create_timer(0.1, self.publish)
 
     def publish(self) -> None:
         for topic_name, msg, _ in self._rosbag_reader.read_messages():
