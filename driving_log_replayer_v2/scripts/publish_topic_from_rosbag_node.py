@@ -23,6 +23,9 @@ from driving_log_replayer_v2.publish_topic_from_rosbag import RosbagReader
 
 
 class PublishTopicFromRosbagNode(Node):
+    SLEEP_DURATION_BETWEEN_PUBLISH = Duration(seconds=0.1)
+    TIMER_PERIOD = 0.1
+
     def __init__(self) -> None:
         super().__init__("publish_topic_from_rosbag_node")
 
@@ -55,13 +58,13 @@ class PublishTopicFromRosbagNode(Node):
                 self.get_logger().error(f"Topic {topic} not found in the rosbag.")
 
         # create timer
-        self.create_timer(0.1, self.publish)
+        self.create_timer(self.TIMER_PERIOD, self.publish)
 
     def publish(self) -> None:
         for topic_name, msg, _ in self._rosbag_reader.read_messages():
             self._publisher_map[topic_name].publish(msg)
             self._clock.sleep_for(
-                Duration(seconds=0.1)
+                self.SLEEP_DURATION_BETWEEN_PUBLISH
             )  # sleep to wait for Autoware to process the message
         rclpy.shutdown()
 
