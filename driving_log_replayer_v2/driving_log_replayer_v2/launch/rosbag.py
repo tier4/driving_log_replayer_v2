@@ -87,7 +87,7 @@ def get_pre_task_before_play_rosbag(
     context: LaunchContext, on_exit: ExecuteProcess
 ) -> Node | ExecuteProcess:
     conf = context.launch_configurations
-    if conf["publish_topic_from_rosbag"] not in ["", "None"]:
+    if conf.get("publish_topic_from_rosbag", "None") not in ["", "None"]:
         return Node(
             package="driving_log_replayer_v2",
             namespace="/driving_log_replayer_v2",
