@@ -61,7 +61,7 @@ def system_defined_remap(conf: dict) -> list[str]:
         add_remap("/tf", remap_list)
         add_remap("/localization/kinematic_state", remap_list)
         add_remap("/localization/acceleration", remap_list)
-    if conf.get("goal_pose") is not None and conf["goal_pose"] != "{}":
+    if conf.get("goal_pose", "{}") != "{}":
         add_remap("/planning/mission_planning/route", remap_list)
     return remap_list
 
