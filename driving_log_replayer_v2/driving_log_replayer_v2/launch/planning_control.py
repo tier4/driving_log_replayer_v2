@@ -34,11 +34,14 @@ RECORD_TOPIC = """^/tf$\
 |^/localization/acceleration$\
 |^/planning/.*$\
 |^/control/.*$\
-|^/system/processing_time_checker/metrics$\
-|^/driving_log_replayer/.*\
+|^/map/vector_map$\
+|^/map/vector_map_marker$\
+|^/planning/diffusion_planner/trajectory$\
 """
 
 AUTOWARE_DISABLE = {
+    "control": "false",
+    "perception": "false",
     "localization": "false",
 }
 
