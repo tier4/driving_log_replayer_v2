@@ -15,12 +15,17 @@
 from launch.actions import DeclareLaunchArgument
 
 RECORD_TOPIC = """^/tf$\
-|^/diagnostics$\
-|^/control/control_evaluator/metrics$\
-|^/planning/planning_evaluator/metrics$\
+|^/localization/kinematic_state$\
+|^/localization/acceleration$\
+|^/planning/mission_planning/route$\
+|^/map/vector_map$\
+|^/map/vector_map_marker$\
+|^/planning/diffusion_planner/trajectory$\
 """
 
 AUTOWARE_DISABLE = {
+    "control": "false",
+    "perception": "false",
     "localization": "false",
 }
 
