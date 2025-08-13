@@ -199,16 +199,44 @@ def post_process(context: LaunchContext) -> list:  # noqa: C901, PLR0911
             "-p", f"bag_path:={conf['result_bag_path']}/result_bag_0.mcap",
             "-p", "evaluation.mode:=open_loop",
             "-p", "trajectory_topic:=/planning/diffusion_planner/trajectory",
-            "-p", f"evaluation_output_bag_path:={conf['output_dir']}/evaluation_output.mcap",
+            "-p", f"evaluation_output_bag_path:={conf['result_bag_path']}/post_process",
         ]
 
         openloop_analysis = ExecuteProcess(
             cmd=openloop_analysis_cmd,
             output="screen",
-            name="openloop_analyze",
-            on_exit=[ShutdownOnce()])
+            name="openloop_analyze")
 
-        return [LogInfo(msg="Open loop analysis done"), openloop_analysis]
+        def _replace_rosbag_after_evaluation(context: LaunchContext) -> list:
+            """Replace original rosbag with evaluation output rosbag"""
+            original_bag_path = Path(context.launch_configurations["result_bag_path"]).joinpath("result_bag_0.mcap")
+            evaluation_bag_path = Path(context.launch_configurations["result_bag_path"]).joinpath("post_process/evaluation_output.mcap")
+            
+            if not evaluation_bag_path.exists():
+                return [LogInfo(msg=f"Evaluation output not found: {evaluation_bag_path}")]
+                        
+            # Move evaluation output to original location
+            shutil.move(evaluation_bag_path.as_posix(), original_bag_path.as_posix())
+            
+            return [
+                LogInfo(msg=f"Replaced rosbag with evaluation output: {original_bag_path}"),
+                ShutdownOnce()
+            ]
+        
+        replace_rosbag_action = OpaqueFunction(function=_replace_rosbag_after_evaluation)
+        
+        openloop_analysis_event_handler = RegisterEventHandler(
+            OnProcessExit(
+                target_action=openloop_analysis,
+                on_exit=[replace_rosbag_action]
+            )
+        )
+
+        return [
+            LogInfo(msg="Starting open loop analysis..."),
+            openloop_analysis,
+            openloop_analysis_event_handler
+        ]
 
 
     return [LogInfo(msg="No post-processing is performed.")]
