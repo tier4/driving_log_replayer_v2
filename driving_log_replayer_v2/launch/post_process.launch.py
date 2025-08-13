@@ -34,6 +34,7 @@ from driving_log_replayer_v2.launch.argument import ensure_arg_compatibility
 from driving_log_replayer_v2.launch.argument import get_launch_arguments
 from driving_log_replayer_v2.perception.runner import evaluate as evaluate_perception
 from driving_log_replayer_v2.result import MultiResultEditor
+from driving_log_replayer_v2.shutdown_once import ShutdownOnce
 
 
 def check_and_create_metadata_yaml(conf: dict) -> None:
@@ -171,23 +172,45 @@ def post_process(context: LaunchContext) -> list:  # noqa: C901, PLR0911
 
     if conf["use_case"] == "planning_control":
         # merge diagnostic result.jsonl
-        diag_result_path = Path(conf["result_archive_path"]).joinpath("diag_result.jsonl")
-        planning_factor_result_path = Path(conf["result_archive_path"]).joinpath(
-            "planning_factor_result.jsonl"
-        )
-        result_paths = [Path(conf["result_json_path"]).as_posix() + "l"]  # "json + l"
+        # diag_result_path = Path(conf["result_archive_path"]).joinpath("diag_result.jsonl")
+        # planning_factor_result_path = Path(conf["result_archive_path"]).joinpath(
+        #     "planning_factor_result.jsonl"
+        # )
+        # result_paths = [Path(conf["result_json_path"]).as_posix() + "l"]  # "json + l"
 
-        if diag_result_path.exists():
-            result_paths.append(diag_result_path.as_posix())
-        if planning_factor_result_path.exists():
-            result_paths.append(planning_factor_result_path.as_posix())
+        # if diag_result_path.exists():
+        #     result_paths.append(diag_result_path.as_posix())
+        # if planning_factor_result_path.exists():
+        #     result_paths.append(planning_factor_result_path.as_posix())
 
-        if len(result_paths) == 1:
-            return [LogInfo(msg="No additional result.jsonl found. Abort merging result.jsonl")]
+        # if len(result_paths) == 1:
+        #     return [LogInfo(msg="No additional result.jsonl found. Abort merging result.jsonl")]
 
-        multi_result_editor = MultiResultEditor(result_paths)
-        multi_result_editor.write_back_result()
-        return [LogInfo(msg="Merge results")]
+        # multi_result_editor = MultiResultEditor(result_paths)
+        # multi_result_editor.write_back_result()
+        # return [LogInfo(msg="Merge results")]
+
+        openloop_analysis_cmd = [
+            "ros2",
+            "run",
+            "autoware_offline_evaluation_tools",
+            "offline_evaluator_node",
+            "--ros-args",
+            "-p", f"bag_path:={conf['result_bag_path']}/result_bag_0.mcap",
+            "-p", "evaluation.mode:=open_loop",
+            "-p", "trajectory_topic:=/planning/diffusion_planner/trajectory",
+            "-p", f"evaluation_output_bag_path:={conf['output_dir']}/evaluation_output.mcap",
+        ]
+
+        openloop_analysis = ExecuteProcess(
+            cmd=openloop_analysis_cmd,
+            output="screen",
+            name="openloop_analyze",
+            on_exit=[ShutdownOnce()])
+
+        return [LogInfo(msg="Open loop analysis done"), openloop_analysis]
+
+
     return [LogInfo(msg="No post-processing is performed.")]
 
 
