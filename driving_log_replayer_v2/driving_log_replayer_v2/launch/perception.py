@@ -71,7 +71,6 @@ EVALUATION_DETECTION_TOPIC_REGEX = """\
 |^/perception/object_recognition/detection/clustering/objects$\
 |^/perception/object_recognition/detection/detection_by_tracker/objects$\
 |^/perception/object_recognition/detection/clustering/camera_lidar_fusion/objects$\
-|^/sensing/radar/detected_objects$\
 |^/perception/object_recognition/camera_only/objects$\
 """
 
@@ -80,9 +79,11 @@ EVALUATION_TRACKING_TOPIC_REGEX = """\
 |^/sensing/radar/front_center/tracked_objects$\
 """
 
-EVALUATION_PREDICTION_TOPIC_REGEX = """\
-^/perception/object_recognition/objects$\
-"""
+# EVALUATION_PREDICTION_TOPIC_REGEX = """\
+# ^/perception/object_recognition/objects$\
+# """
+# skip prediction evaluation for now
+EVALUATION_PREDICTION_TOPIC_REGEX = ""
 
 USE_CASE_ARGS: list[DeclareLaunchArgument] = [
     DeclareLaunchArgument(
