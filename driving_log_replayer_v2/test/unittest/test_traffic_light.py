@@ -71,6 +71,7 @@ def create_frame_result() -> PerceptionFrameResult:
 
     return PerceptionFrameResult(
         object_results=[],
+        nuscene_object_results=None,
         frame_ground_truth=FrameGroundTruth(123, "12", []),
         metrics_config=MetricsScoreConfig(
             EvaluationTask.CLASSIFICATION2D,
