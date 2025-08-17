@@ -77,7 +77,9 @@ def create_frame_result() -> PerceptionFrameResult:
             evaluation_config,
             target_labels,
         ),
-        frame_pass_fail_config=PerceptionPassFailConfig(evaluation_config, target_labels),
+        frame_pass_fail_config=PerceptionPassFailConfig(
+            evaluation_config, target_labels, matching_threshold_list=[2.0, 2.0, 2.0, 2.0, 2.0, 2.0]
+        ),
         unix_time=123,
         target_labels=[AutowareLabel.CAR],
     )
