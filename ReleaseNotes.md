@@ -1,5 +1,17 @@
 # Release Notes
 
+## Version 3.11.1
+
+Minor Tweak
+
+| Module             | Feature       | Brief summary                                                                | Pull request                                                        | Contributor                                   |
+| ------------------ | ------------- | ---------------------------------------------------------------------------- | ------------------------------------------------------------------- | --------------------------------------------- |
+| `perception`       | test          | update test caused by adding the `nuscene_object_results` in perception_eval | [#198](https://github.com/tier4/driving_log_replayer_v2/issues/198) | [MasatoSaeki](https://github.com/MasatoSaeki) |
+| `planning_control` | remap         | fix the invalid remapping                                                    | [#196](https://github.com/tier4/driving_log_replayer_v2/issues/196) | [xtk8532704](https://github.com/xtk8532704)   |
+| `perception`       | evaluate      | fix variable name                                                            | [#183](https://github.com/tier4/driving_log_replayer_v2/issues/183) | [vividf](https://github.com/vividf)           |
+| `perception`       | fp_validation | add TN to jsonl for fp validation                                            | [#187](https://github.com/tier4/driving_log_replayer_v2/issues/187) | [MasatoSaeki](https://github.com/MasatoSaeki) |
+| `perception`       | fp_validation | handle TrackedObjects and PredictedObjects type in fp validation             | [#186](https://github.com/tier4/driving_log_replayer_v2/issues/186) | [MasatoSaeki](https://github.com/MasatoSaeki) |
+
 ## Version 3.11.0
 
 Major changes
