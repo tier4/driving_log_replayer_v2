@@ -2,8 +2,8 @@
 Changelog for package driving_log_replayer
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-Forthcoming
------------
+3.11.1 (2025-08-17)
+-------------------
 * feat(perception): update test caused by adding the `nuscene_object_results` in perception_eval (`#198 <https://github.com/tier4/driving_log_replayer_v2/issues/198>`_)
   * update test for perception_eval
   * update dependancy and cspell
