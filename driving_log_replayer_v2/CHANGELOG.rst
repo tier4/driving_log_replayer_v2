@@ -2,6 +2,40 @@
 Changelog for package driving_log_replayer
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
+3.11.1 (2025-08-17)
+-------------------
+* feat(perception): update test caused by adding the `nuscene_object_results` in perception_eval (`#198 <https://github.com/tier4/driving_log_replayer_v2/issues/198>`_)
+  * update test for perception_eval
+  * update dependancy and cspell
+  * update
+  * update
+  * update
+  ---------
+* fix(topic remapping): a bug of remapping regarding goal_pose (`#196 <https://github.com/tier4/driving_log_replayer_v2/issues/196>`_)
+  * fix planning control route msg remapping bug
+  * refactor code
+  ---------
+* chore(Metric Score): fix variable name (`#183 <https://github.com/tier4/driving_log_replayer_v2/issues/183>`_)
+  * chore: fix variable name
+  * chore: add timing
+  * chore: fix inf to nan
+  * chore: fix unittest
+  * chore: remove time
+  ---------
+* feat(perception): add TN to jsonl  for fp validation (`#187 <https://github.com/tier4/driving_log_replayer_v2/issues/187>`_)
+  * add TN to jsonl  for fp validation
+  * fix test
+  * fix test
+  * fix test
+  ---------
+* feat(perception): handle TrackedObjects and PredictedObjects type in fp validation (`#186 <https://github.com/tier4/driving_log_replayer_v2/issues/186>`_)
+  * handle other type in fp validation
+  * fix typo
+  Co-authored-by: Copilot <175728472+Copilot@users.noreply.github.com>
+  ---------
+  Co-authored-by: Copilot <175728472+Copilot@users.noreply.github.com>
+* Contributors: Kem (TiankuiXian), Masato Saeki, Yi-Hsiang Fang (Vivid)
+
 3.11.0 (2025-07-15)
 -------------------
 * fix(perception): fix scenario for perception (`#185 <https://github.com/tier4/driving_log_replayer_v2/issues/185>`_)
