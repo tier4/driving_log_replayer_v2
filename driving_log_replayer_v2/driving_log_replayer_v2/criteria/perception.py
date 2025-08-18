@@ -127,6 +127,9 @@ class CriteriaLevel(Enum):
             CriteriaLevel: `CriteriaLevel.CUSTOM` with custom value.
 
         """
+        if cls.CUSTOM._value_ is not None and float(value) != cls.CUSTOM._value_:
+            err_msg = "Cannot use different value for CUSTOM of CriteriaLevel."
+            raise ValueError(err_msg)
         min_range = 0.0
         max_range = 100.0
         assert min_range <= value <= max_range, (
@@ -657,5 +660,5 @@ class PerceptionCriteria:
             method_result = method.get_result(ret_frame)
             if method_result is None:
                 return None, ret_frame
-            result &= method.get_result(ret_frame)
+            result &= method_result
         return result, ret_frame
