@@ -85,6 +85,8 @@ def create_frame_result() -> PerceptionFrameResult:
     evaluation_config_dict = scenario.Evaluation.PerceptionEvaluationConfig[
         "evaluation_config_dict"
     ]
+    critical_object_filter_config = scenario.Evaluation.CriticalObjectFilterConfig
+    perception_pass_fail_config = scenario.Evaluation.PerceptionPassFailConfig
     evaluation_config_dict["label_prefix"] = "autoware"
     m_params: dict = {
         "target_labels": evaluation_config_dict["target_labels"],
@@ -102,7 +104,8 @@ def create_frame_result() -> PerceptionFrameResult:
     )
 
     return PerceptionFrameResult(
-        object_results=[],
+        object_results=None,
+        nuscene_object_results=[],
         frame_ground_truth=FrameGroundTruth(123, "12", []),
         metrics_config=MetricsScoreConfig(
             EvaluationTask.DETECTION,
@@ -110,13 +113,14 @@ def create_frame_result() -> PerceptionFrameResult:
         ),
         critical_object_filter_config=CriticalObjectFilterConfig(
             evaluation_config,
-            evaluation_config_dict["target_labels"],
-            max_x_position_list=[30.0, 30.0, 30.0, 30.0, 30.0],
-            max_y_position_list=[30.0, 30.0, 30.0, 30.0, 30.0],
+            critical_object_filter_config["target_labels"],
+            max_x_position_list=critical_object_filter_config["max_x_position_list"],
+            max_y_position_list=critical_object_filter_config["max_y_position_list"],
         ),
         frame_pass_fail_config=PerceptionPassFailConfig(
             evaluation_config,
-            evaluation_config_dict["target_labels"],
+            perception_pass_fail_config["target_labels"],
+            matching_threshold_list=perception_pass_fail_config["matching_threshold_list"],
         ),
         unix_time=123,
         target_labels=[AutowareLabel.CAR],
