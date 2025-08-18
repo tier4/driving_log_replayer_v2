@@ -270,6 +270,9 @@ def summarize_pass_fail_result(pass_fail: PassFailResult) -> dict:
         "TP": f"{len(pass_fail.tp_object_results)} {result_label_list(pass_fail.tp_object_results)}",
         "FP": f"{len(pass_fail.fp_object_results)} {result_label_list(pass_fail.fp_object_results)}",
         "FN": f"{len(pass_fail.fn_objects)} {object_label_list(pass_fail.fn_objects)}",
+        "TN": f"{len(pass_fail.tn_objects)} {object_label_list(pass_fail.tn_objects)}"
+        if pass_fail.frame_pass_fail_config.evaluation_task.is_fp_validation()
+        else "null",
     }
 
 

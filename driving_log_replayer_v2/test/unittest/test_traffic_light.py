@@ -71,6 +71,7 @@ def create_frame_result() -> PerceptionFrameResult:
 
     return PerceptionFrameResult(
         object_results=[],
+        nuscene_object_results=None,
         frame_ground_truth=FrameGroundTruth(123, "12", []),
         metrics_config=MetricsScoreConfig(
             EvaluationTask.CLASSIFICATION2D,
@@ -167,6 +168,7 @@ def test_perception_success_tp_normal(
                 "TP": "5 [green, green, green, green, green]",
                 "FP": "5 [green, green, green, green, green]",
                 "FN": "0 []",
+                "TN": "null",
             },
         },
     }
@@ -198,6 +200,7 @@ def test_perception_fail_tp_normal(
                 "TP": "5 [green, green, green, green, green]",
                 "FP": "10 [green, green, green, green, green, green, green, green, green, green]",
                 "FN": "0 []",
+                "TN": "null",
             },
         },
     }
@@ -229,6 +232,7 @@ def test_perception_fail_tp_hard(
                 "TP": "5 [green, green, green, green, green]",
                 "FP": "5 [green, green, green, green, green]",
                 "FN": "0 []",
+                "TN": "null",
             },
         },
     }

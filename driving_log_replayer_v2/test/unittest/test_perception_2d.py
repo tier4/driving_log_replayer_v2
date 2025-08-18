@@ -39,7 +39,7 @@ def test_scenario() -> None:
 
 @pytest.fixture
 def create_frame_result() -> PerceptionFrameResult:
-    target_labels = ["car", "truck", "bicycle", "pedestrian", "motorbike"]
+    target_labels = ["car", "truck", "bicycle", "pedestrian", "motorbike", "unknown"]
     evaluation_config_dict = {
         "evaluation_task": "detection2d",
         "center_distance_thresholds": [100, 200],
@@ -67,6 +67,7 @@ def create_frame_result() -> PerceptionFrameResult:
 
     return PerceptionFrameResult(
         object_results=[],
+        nuscene_object_results=None,
         frame_ground_truth=FrameGroundTruth(123, "12", []),
         metrics_config=MetricsScoreConfig(
             EvaluationTask.DETECTION2D,
@@ -76,7 +77,9 @@ def create_frame_result() -> PerceptionFrameResult:
             evaluation_config,
             target_labels,
         ),
-        frame_pass_fail_config=PerceptionPassFailConfig(evaluation_config, target_labels),
+        frame_pass_fail_config=PerceptionPassFailConfig(
+            evaluation_config, target_labels, matching_threshold_list=[2.0, 2.0, 2.0, 2.0, 2.0, 2.0]
+        ),
         unix_time=123,
         target_labels=[AutowareLabel.CAR],
     )
@@ -163,6 +166,7 @@ def test_perception_success_tp_normal(
                 "TP": 5,
                 "FP": 5,
                 "FN": 0,
+                "TN": "null",
             },
         },
     }
@@ -194,6 +198,7 @@ def test_perception_fail_tp_normal(
                 "TP": 5,
                 "FP": 10,
                 "FN": 0,
+                "TN": "null",
             },
         },
     }
@@ -225,6 +230,7 @@ def test_perception_fail_tp_hard(
                 "TP": 5,
                 "FP": 5,
                 "FN": 0,
+                "TN": "null",
             },
         },
     }
