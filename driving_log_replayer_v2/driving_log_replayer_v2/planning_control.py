@@ -398,10 +398,11 @@ class PlanningFactor(EvaluationItem):
         return False, info_dict
 
     def judge_behavior(self, msg: PlanningFactorMsg) -> tuple[bool, dict]:
+        behavior = get_planning_factor_behavior_string(msg)
         info_dict = {
-            "Behavior": get_planning_factor_behavior_string(msg),
+            "Behavior": behavior,
         }
-        return get_planning_factor_behavior_string(msg) in self.condition.behavior, info_dict
+        return behavior in self.condition.behavior, info_dict
 
 
 class FactorsClassContainer:
