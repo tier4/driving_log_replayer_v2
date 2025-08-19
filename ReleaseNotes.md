@@ -10,7 +10,7 @@ Major changes
 | `perception`       | criteria | add validation for CUSTOM of CriteriaLevel                 | [#188](https://github.com/tier4/driving_log_replayer_v2/issues/188) | [MasatoSaeki](https://github.com/MasatoSaeki)           |
 | `common`           | criteria | add naming of condition and criteria                       | [#194](https://github.com/tier4/driving_log_replayer_v2/issues/194) | [xtk8532704](https://github.com/xtk8532704)             |
 | `common`           | pre-task | publish the topic in rosbag as pre-task before play rosbag | [#192](https://github.com/tier4/driving_log_replayer_v2/issues/192) | [MasatoSaeki](https://github.com/MasatoSaeki)           |
-| `lanelet`          | map      | support multi-ple map loading                              | [#189](https://github.com/tier4/driving_log_replayer_v2/issues/189) | [ManabuSasaki0811](https://github.com/ManabuSasaki0811) |
+| `lanelet`          | map      | support multiple map loading                               | [#189](https://github.com/tier4/driving_log_replayer_v2/issues/189) | [ManabuSasaki0811](https://github.com/ManabuSasaki0811) |
 
 ## Version 3.11.1
 
