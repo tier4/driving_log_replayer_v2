@@ -20,7 +20,10 @@ launch を立ち上げると以下のことが実行され、評価される。
 評価の条件を満たさない場合は、ログも出力されない。
 
 `/planning/planning_factors/**`のtopicを利用する。評価対象のtopicはシナリオファイルでtopic名を指定する。
-PlanningFactorのcontrol_pointの位置がシナリオに指定された条件を満たすかを評価する。
+以下の条件を評価できる。
+
+- PlanningFactorのcontrol_pointの位置がシナリオに指定された条件を満たすか
+- PlanningFactorのbehaviorが指定のbehaviorになってるか
 
 ### Metric正常
 
@@ -34,11 +37,17 @@ Metric正常の条件を満たさないとき
 
 ### PlanningFactor正常(judgement: positive)
 
-`/planning/planning_factors/**`のcontrol_points[0].poseのx,yの位置がシナリオで指定したx,y座標からrangeの範囲に入っている場合に正常となる。
+`/planning/planning_factors/**`が以下の条件を全部満たす場合に正常となる。
+
+- シナリオにarea条件がある場合、control_points[0].poseのx,yの位置がシナリオで指定したx,y座標からrangeの範囲に入っている。
+- シナリオにbehavior条件がある場合、planning_factorのbehaviorがシナリオで指定したbehaviorにある。
 
 ### PlanningFactor正常(judgement: negative)
 
-`/planning/planning_factors/**`のcontrol_points[0].poseのx,yの位置がシナリオで指定したx,y座標からrangeの範囲に入っていない場合に正常となる。
+`/planning/planning_factors/**`が以下の任意条件を満たさない場合に正常となる。
+
+- シナリオにarea条件がある場合、control_points[0].poseのx,yの位置がシナリオで指定したx,y座標からrangeの範囲に入っている。
+- シナリオにbehavior条件がある場合、planning_factorのbehaviorがシナリオで指定したbehaviorにある。
 
 ### PlanningFactor異常
 
@@ -184,7 +193,8 @@ PlanningFactorのすべての評価条件で成功している場合に成功と
       "Info": {
         "Distance": "control_pointの座標とシナリオに指定された座標の距離",
         "ControlPointPoseX": "control_pointのposeのx座標",
-        "ControlPointPoseY": "control_pointのposeのy座標"
+        "ControlPointPoseY": "control_pointのposeのy座標",
+        "Behavior": "planning_factorのbehavior"
       }
     }
   }
