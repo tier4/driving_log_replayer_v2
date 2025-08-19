@@ -2,8 +2,8 @@
 Changelog for package driving_log_replayer
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-Forthcoming
------------
+3.12.0 (2025-08-19)
+-------------------
 * feat(planning_control): add checking the behavior of planning_factor  (`#193 <https://github.com/tier4/driving_log_replayer_v2/issues/193>`_)
   * refactoring planning control
   * pre-commit
