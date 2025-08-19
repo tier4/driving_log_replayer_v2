@@ -2,6 +2,61 @@
 Changelog for package driving_log_replayer
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
+Forthcoming
+-----------
+* feat(planning_control): add checking the behavior of planning_factor  (`#193 <https://github.com/tier4/driving_log_replayer_v2/issues/193>`_)
+  * refactoring planning control
+  * pre-commit
+  * Apply suggestions from code review
+  Thank you for polishing the code, you are right!
+  Co-authored-by: Masato Saeki  <78376491+MasatoSaeki@users.noreply.github.com>
+  * update docs
+  * feat(planning_control): update format version for planning_control (`#199 <https://github.com/tier4/driving_log_replayer_v2/issues/199>`_)
+  * update format version
+  * Update planning_control.py
+  ---------
+  * fix docs errors
+  ---------
+  Co-authored-by: Masato Saeki <78376491+MasatoSaeki@users.noreply.github.com>
+* chore(perception): add validation for CUSTOM of CriteriaLevel (`#188 <https://github.com/tier4/driving_log_replayer_v2/issues/188>`_)
+  * chore
+  * Update driving_log_replayer_v2/driving_log_replayer_v2/criteria/perception.py
+  Co-authored-by: Copilot <175728472+Copilot@users.noreply.github.com>
+  * chore
+  * update conditions
+  ---------
+  Co-authored-by: Copilot <175728472+Copilot@users.noreply.github.com>
+* feat: add naming of conditon and criteria (`#194 <https://github.com/tier4/driving_log_replayer_v2/issues/194>`_)
+  * add naming for conditon and criteria
+  * update planning factor
+  * change criteriaName to criteria_name
+  * update UseCaseFormatVersion
+  ---------
+  Co-authored-by: MasatoSaeki <masato.saeki@tier4.jp>
+* feat: publish the topic in rosbag as pre-task before play rosbag (`#192 <https://github.com/tier4/driving_log_replayer_v2/issues/192>`_)
+  * init impl
+  * fix
+  * run pre-commit
+  * use comma separate instead of using regex
+  * change start time to 0.1 sec
+  * fix typehint in generator
+  Co-authored-by: Copilot <175728472+Copilot@users.noreply.github.com>
+  * add break conditions
+  * change magic number to variable
+  * adopt not existing publish_topic_from_rosbag
+  ---------
+  Co-authored-by: Copilot <175728472+Copilot@users.noreply.github.com>
+* feat(lanelet): support TM-based map loading (`#189 <https://github.com/tier4/driving_log_replayer_v2/issues/189>`_)
+  * Support TM-based map loading
+  * feat(lanelet): support multiple map projector (`#191 <https://github.com/tier4/driving_log_replayer_v2/issues/191>`_)
+  * update code
+  * use pydantic
+  * change MapOrigin to optional variable
+  ---------
+  ---------
+  Co-authored-by: Masato Saeki <78376491+MasatoSaeki@users.noreply.github.com>
+* Contributors: Kem (TiankuiXian), ManabuSasaki0811, Masato Saeki
+
 3.11.1 (2025-08-17)
 -------------------
 * feat(perception): update test caused by adding the `nuscene_object_results` in perception_eval (`#198 <https://github.com/tier4/driving_log_replayer_v2/issues/198>`_)
