@@ -46,8 +46,8 @@ Metric正常の条件を満たさないとき
 
 `/planning/planning_factors/**`が以下の任意条件を満たさない場合に正常となる。
 
-- シナリオにarea条件がある場合、control_points[0].poseのx,yの位置がシナリオで指定したx,y座標からrangeの範囲に入っていない。
-- シナリオにbehavior条件がある場合、planning_factorのbehaviorがシナリオで指定したbehaviorにない。
+- シナリオにarea条件がある場合、control_points[0].poseのx,yの位置がシナリオで指定したx,y座標からrangeの範囲に入っている。
+- シナリオにbehavior条件がある場合、planning_factorのbehaviorがシナリオで指定したbehaviorにある。
 
 ### PlanningFactor異常
 

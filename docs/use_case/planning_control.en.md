@@ -46,8 +46,8 @@ Normal if `/planning/planning_factors/**` meets all of the following conditions:
 
 Normal if `/planning/planning_factors/**` does not meet any of the following conditions:
 
-- If there is an area condition in the scenario, the x,y position of control_points[0].pose is not within the range from the x,y coordinates specified in the scenario.
-- If there is a behavior condition in the scenario, the planning_factor's behavior does not match the behavior specified in the scenario.
+- If there is an area condition in the scenario, the x,y position of control_points[0].pose is within the range from the x,y coordinates specified in the scenario.
+- If there is a behavior condition in the scenario, the planning_factor's behavior matches the behavior specified in the scenario.
 
 ### PlanningFactor Error
 
