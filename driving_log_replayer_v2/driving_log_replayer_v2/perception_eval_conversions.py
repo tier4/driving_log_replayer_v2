@@ -17,11 +17,14 @@ from pathlib import Path
 
 from ament_index_python.packages import get_package_share_directory
 from autoware_perception_msgs.msg import DetectedObject
+from autoware_perception_msgs.msg import DetectedObjects
 from autoware_perception_msgs.msg import ObjectClassification
 from autoware_perception_msgs.msg import PredictedObject
+from autoware_perception_msgs.msg import PredictedObjects
 from autoware_perception_msgs.msg import PredictedPath
 from autoware_perception_msgs.msg import Shape as MsgShape
 from autoware_perception_msgs.msg import TrackedObject
+from autoware_perception_msgs.msg import TrackedObjects
 from builtin_interfaces.msg import Duration as DurationMsg
 from builtin_interfaces.msg import Time
 import fastjsonschema
@@ -39,6 +42,7 @@ from perception_eval.common.shape import Shape
 from perception_eval.common.shape import ShapeType
 from perception_eval.config import PerceptionEvaluationConfig
 from perception_eval.evaluation.result.object_result import DynamicObjectWithPerceptionResult
+from perception_eval.evaluation.result.perception_frame_result import PerceptionFrameResult
 from perception_eval.evaluation.result.perception_pass_fail_result import PassFailResult
 from pyquaternion.quaternion import Quaternion
 from rclpy.time import Duration
@@ -447,6 +451,47 @@ def list_dynamic_object_from_ros_msg(
         )
         estimated_objects.append(estimated_object)
     return estimated_objects
+
+
+def convert_to_perception_eval(
+    msg: DetectedObjects | PredictedObjects | TrackedObjects,
+    subscribed_ros_timestamp: int,
+    evaluation_config: PerceptionEvaluationConfig,
+) -> tuple[int, int, list[DynamicObject] | str]:
+    header_unix_time: int = unix_time_from_ros_msg(msg.header)
+    subscribed_unix_time: int = unix_time_from_ros_clock_int(subscribed_ros_timestamp)
+    estimated_objects: list[DynamicObject] | str = list_dynamic_object_from_ros_msg(
+        header_unix_time,
+        msg.objects,
+        evaluation_config,
+    )
+    return header_unix_time, subscribed_unix_time, estimated_objects
+
+
+def convert_to_ros_msg(
+    frame: PerceptionFrameResult,
+    header: Header,
+) -> tuple[MarkerArray, MarkerArray]:
+    marker_ground_truth = MarkerArray()
+    color_success = ColorRGBA(r=0.0, g=1.0, b=0.0, a=0.3)
+
+    for cnt, obj in enumerate(frame.frame_ground_truth.objects, start=1):
+        bbox, uuid = object_state_to_ros_box_and_uuid(
+            obj.state,
+            header,
+            "ground_truth",
+            cnt,
+            color_success,
+            obj.uuid,
+        )
+        marker_ground_truth.markers.append(bbox)
+        marker_ground_truth.markers.append(uuid)
+
+    marker_results = pass_fail_result_to_ros_points_array(
+        frame.pass_fail_result,
+        header,
+    )
+    return marker_ground_truth, marker_results
 
 
 # utils for writing each perception frame result to a file
