@@ -46,6 +46,7 @@
     "youtalk",
     "zeroline",
     "zerolinecolor",
-    "zerolinewidth"
+    "zerolinewidth",
+    "lidarseg"
   ]
 }
