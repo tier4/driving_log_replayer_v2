@@ -112,9 +112,12 @@ class GroundSegmentationEvaluator(DLREvaluatorV2):
         pointcloud[:, 1] = numpy_pcd["y"]
         pointcloud[:, 2] = numpy_pcd["z"]
 
-        assert gt_frame_cloud.shape[0] == gt_frame_label.shape[0], (
-            "ground truth cloud and label size mismatch"
-        )
+        if gt_frame_cloud.shape[0] != gt_frame_label.shape[0]:
+            err_msg = (
+                f"ground truth cloud and label size mismatch: "
+                f"cloud points={gt_frame_cloud.shape[0]}, labels={gt_frame_label.shape[0]}"
+            )
+            raise ValueError(err_msg)
 
         # count TP+FN, TN+FP
         tp_fn = 0
