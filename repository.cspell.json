@@ -23,6 +23,7 @@
     "MOTA",
     "MOTP",
     "nums",
+    "nuscene",
     "nuscenes",
     "objdata",
     "pydantic",

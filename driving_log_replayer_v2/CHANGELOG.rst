@@ -2,6 +2,115 @@
 Changelog for package driving_log_replayer
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
+3.12.0 (2025-08-19)
+-------------------
+* feat(planning_control): add checking the behavior of planning_factor  (`#193 <https://github.com/tier4/driving_log_replayer_v2/issues/193>`_)
+  * refactoring planning control
+  * pre-commit
+  * Apply suggestions from code review
+  Thank you for polishing the code, you are right!
+  Co-authored-by: Masato Saeki  <78376491+MasatoSaeki@users.noreply.github.com>
+  * update docs
+  * feat(planning_control): update format version for planning_control (`#199 <https://github.com/tier4/driving_log_replayer_v2/issues/199>`_)
+  * update format version
+  * Update planning_control.py
+  ---------
+  * fix docs errors
+  ---------
+  Co-authored-by: Masato Saeki <78376491+MasatoSaeki@users.noreply.github.com>
+* chore(perception): add validation for CUSTOM of CriteriaLevel (`#188 <https://github.com/tier4/driving_log_replayer_v2/issues/188>`_)
+  * chore
+  * Update driving_log_replayer_v2/driving_log_replayer_v2/criteria/perception.py
+  Co-authored-by: Copilot <175728472+Copilot@users.noreply.github.com>
+  * chore
+  * update conditions
+  ---------
+  Co-authored-by: Copilot <175728472+Copilot@users.noreply.github.com>
+* feat: add naming of conditon and criteria (`#194 <https://github.com/tier4/driving_log_replayer_v2/issues/194>`_)
+  * add naming for conditon and criteria
+  * update planning factor
+  * change criteriaName to criteria_name
+  * update UseCaseFormatVersion
+  ---------
+  Co-authored-by: MasatoSaeki <masato.saeki@tier4.jp>
+* feat: publish the topic in rosbag as pre-task before play rosbag (`#192 <https://github.com/tier4/driving_log_replayer_v2/issues/192>`_)
+  * init impl
+  * fix
+  * run pre-commit
+  * use comma separate instead of using regex
+  * change start time to 0.1 sec
+  * fix typehint in generator
+  Co-authored-by: Copilot <175728472+Copilot@users.noreply.github.com>
+  * add break conditions
+  * change magic number to variable
+  * adopt not existing publish_topic_from_rosbag
+  ---------
+  Co-authored-by: Copilot <175728472+Copilot@users.noreply.github.com>
+* feat(lanelet): support TM-based map loading (`#189 <https://github.com/tier4/driving_log_replayer_v2/issues/189>`_)
+  * Support TM-based map loading
+  * feat(lanelet): support multiple map projector (`#191 <https://github.com/tier4/driving_log_replayer_v2/issues/191>`_)
+  * update code
+  * use pydantic
+  * change MapOrigin to optional variable
+  ---------
+  ---------
+  Co-authored-by: Masato Saeki <78376491+MasatoSaeki@users.noreply.github.com>
+* Contributors: Kem (TiankuiXian), ManabuSasaki0811, Masato Saeki
+
+3.11.1 (2025-08-17)
+-------------------
+* feat(perception): update test caused by adding the `nuscene_object_results` in perception_eval (`#198 <https://github.com/tier4/driving_log_replayer_v2/issues/198>`_)
+  * update test for perception_eval
+  * update dependancy and cspell
+  * update
+  * update
+  * update
+  ---------
+* fix(topic remapping): a bug of remapping regarding goal_pose (`#196 <https://github.com/tier4/driving_log_replayer_v2/issues/196>`_)
+  * fix planning control route msg remapping bug
+  * refactor code
+  ---------
+* chore(Metric Score): fix variable name (`#183 <https://github.com/tier4/driving_log_replayer_v2/issues/183>`_)
+  * chore: fix variable name
+  * chore: add timing
+  * chore: fix inf to nan
+  * chore: fix unittest
+  * chore: remove time
+  ---------
+* feat(perception): add TN to jsonl  for fp validation (`#187 <https://github.com/tier4/driving_log_replayer_v2/issues/187>`_)
+  * add TN to jsonl  for fp validation
+  * fix test
+  * fix test
+  * fix test
+  ---------
+* feat(perception): handle TrackedObjects and PredictedObjects type in fp validation (`#186 <https://github.com/tier4/driving_log_replayer_v2/issues/186>`_)
+  * handle other type in fp validation
+  * fix typo
+  Co-authored-by: Copilot <175728472+Copilot@users.noreply.github.com>
+  ---------
+  Co-authored-by: Copilot <175728472+Copilot@users.noreply.github.com>
+* Contributors: Kem (TiankuiXian), Masato Saeki, Yi-Hsiang Fang (Vivid)
+
+3.11.0 (2025-07-15)
+-------------------
+* fix(perception): fix scenario for perception (`#185 <https://github.com/tier4/driving_log_replayer_v2/issues/185>`_)
+  * fix(perception): fix scenario for perception
+  * fix test code
+  ---------
+* feat(perception): add key to specify degradation topic (`#182 <https://github.com/tier4/driving_log_replayer_v2/issues/182>`_)
+  * add key to specify degradation topic
+  * update scenario
+  ---------
+* feat: add x2_perception remap profile (`#178 <https://github.com/tier4/driving_log_replayer_v2/issues/178>`_)
+* feat: update ruff version (`#176 <https://github.com/tier4/driving_log_replayer_v2/issues/176>`_)
+* use function get_num_gt() of perception_eval (`#177 <https://github.com/tier4/driving_log_replayer_v2/issues/177>`_)
+* enable to use fp_validation (`#175 <https://github.com/tier4/driving_log_replayer_v2/issues/175>`_)
+* chore(evaluation_detection): import from absolute source  (`#172 <https://github.com/tier4/driving_log_replayer_v2/issues/172>`_)
+  * feat: changes for new perception eval feat
+  * chore: absolute path in test
+  ---------
+* Contributors: Hayato Mizushima, Masato Saeki, Yi-Hsiang Fang (Vivid), badai nguyen
+
 3.10.2 (2025-06-26)
 -------------------
 * revert(perception): show final metrics (`#168 <https://github.com/tier4/driving_log_replayer_v2/issues/168>`_)

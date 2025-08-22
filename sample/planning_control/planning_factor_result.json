@@ -44,7 +44,8 @@
         "Info": {
           "Distance": 0.009999999767330852,
           "ControlPointPoseX": 71.50000000110036,
-          "ControlPointPoseY": 345.10999999976735
+          "ControlPointPoseY": 345.10999999976735,
+          "Behavior": "STOP"
         }
       }
     }
@@ -67,7 +68,8 @@
         "Info": {
           "Distance": 0.009999999767387696,
           "ControlPointPoseX": 71.50000000110035,
-          "ControlPointPoseY": 345.1099999997674
+          "ControlPointPoseY": 345.1099999997674,
+          "Behavior": "STOP"
         }
       }
     }
@@ -90,7 +92,8 @@
         "Info": {
           "Distance": 0.009999999767387696,
           "ControlPointPoseX": 71.50000000110035,
-          "ControlPointPoseY": 345.1099999997674
+          "ControlPointPoseY": 345.1099999997674,
+          "Behavior": "STOP"
         }
       }
     }
@@ -113,7 +116,8 @@
         "Info": {
           "Distance": 0.009999999767330852,
           "ControlPointPoseX": 71.50000000110035,
-          "ControlPointPoseY": 345.10999999976735
+          "ControlPointPoseY": 345.10999999976735,
+          "Behavior": "STOP"
         }
       }
     }
@@ -136,7 +140,8 @@
         "Info": {
           "Distance": 0.009999999767387696,
           "ControlPointPoseX": 71.50000000110035,
-          "ControlPointPoseY": 345.1099999997674
+          "ControlPointPoseY": 345.1099999997674,
+          "Behavior": "STOP"
         }
       }
     }
@@ -159,7 +164,8 @@
         "Info": {
           "Distance": 0.009999999767330852,
           "ControlPointPoseX": 71.50000000110035,
-          "ControlPointPoseY": 345.10999999976735
+          "ControlPointPoseY": 345.10999999976735,
+          "Behavior": "STOP"
         }
       }
     }
@@ -182,7 +188,8 @@
         "Info": {
           "Distance": 0.009999999767387696,
           "ControlPointPoseX": 71.50000000110035,
-          "ControlPointPoseY": 345.1099999997674
+          "ControlPointPoseY": 345.1099999997674,
+          "Behavior": "STOP"
         }
       }
     }
@@ -205,7 +212,8 @@
         "Info": {
           "Distance": 0.009999999767330852,
           "ControlPointPoseX": 71.50000000110035,
-          "ControlPointPoseY": 345.10999999976735
+          "ControlPointPoseY": 345.10999999976735,
+          "Behavior": "STOP"
         }
       }
     }
@@ -228,7 +236,8 @@
         "Info": {
           "Distance": 0.009999999767330852,
           "ControlPointPoseX": 71.50000000110036,
-          "ControlPointPoseY": 345.10999999976735
+          "ControlPointPoseY": 345.10999999976735,
+          "Behavior": "STOP"
         }
       }
     }
@@ -251,7 +260,8 @@
         "Info": {
           "Distance": 0.009999999767330852,
           "ControlPointPoseX": 71.50000000110033,
-          "ControlPointPoseY": 345.10999999976735
+          "ControlPointPoseY": 345.10999999976735,
+          "Behavior": "STOP"
         }
       }
     }
@@ -274,7 +284,8 @@
         "Info": {
           "Distance": 0.009999999767330852,
           "ControlPointPoseX": 71.50000000110036,
-          "ControlPointPoseY": 345.10999999976735
+          "ControlPointPoseY": 345.10999999976735,
+          "Behavior": "STOP"
         }
       }
     }
@@ -297,7 +308,8 @@
         "Info": {
           "Distance": 0.009999999767330852,
           "ControlPointPoseX": 71.50000000110036,
-          "ControlPointPoseY": 345.10999999976735
+          "ControlPointPoseY": 345.10999999976735,
+          "Behavior": "STOP"
         }
       }
     }
@@ -320,7 +332,8 @@
         "Info": {
           "Distance": 0.009999999767387696,
           "ControlPointPoseX": 71.50000000110033,
-          "ControlPointPoseY": 345.1099999997674
+          "ControlPointPoseY": 345.1099999997674,
+          "Behavior": "STOP"
         }
       }
     }
@@ -343,7 +356,8 @@
         "Info": {
           "Distance": 0.009999999767330852,
           "ControlPointPoseX": 71.50000000110035,
-          "ControlPointPoseY": 345.10999999976735
+          "ControlPointPoseY": 345.10999999976735,
+          "Behavior": "STOP"
         }
       }
     }
@@ -366,7 +380,8 @@
         "Info": {
           "Distance": 0.009999999767330852,
           "ControlPointPoseX": 71.50000000110033,
-          "ControlPointPoseY": 345.10999999976735
+          "ControlPointPoseY": 345.10999999976735,
+          "Behavior": "STOP"
         }
       }
     }
@@ -389,7 +404,8 @@
         "Info": {
           "Distance": 0.009999999767330852,
           "ControlPointPoseX": 71.50000000110035,
-          "ControlPointPoseY": 345.10999999976735
+          "ControlPointPoseY": 345.10999999976735,
+          "Behavior": "STOP"
         }
       }
     }
@@ -412,7 +428,8 @@
         "Info": {
           "Distance": 0.009999999767330852,
           "ControlPointPoseX": 71.50000000110035,
-          "ControlPointPoseY": 345.10999999976735
+          "ControlPointPoseY": 345.10999999976735,
+          "Behavior": "STOP"
         }
       }
     }
@@ -435,7 +452,8 @@
         "Info": {
           "Distance": 0.009999999767387696,
           "ControlPointPoseX": 71.50000000110035,
-          "ControlPointPoseY": 345.1099999997674
+          "ControlPointPoseY": 345.1099999997674,
+          "Behavior": "STOP"
         }
       }
     }
@@ -458,7 +476,8 @@
         "Info": {
           "Distance": 0.009999999767330852,
           "ControlPointPoseX": 71.50000000110036,
-          "ControlPointPoseY": 345.10999999976735
+          "ControlPointPoseY": 345.10999999976735,
+          "Behavior": "STOP"
         }
       }
     }
@@ -481,7 +500,8 @@
         "Info": {
           "Distance": 0.009999999767387696,
           "ControlPointPoseX": 71.50000000110035,
-          "ControlPointPoseY": 345.1099999997674
+          "ControlPointPoseY": 345.1099999997674,
+          "Behavior": "STOP"
         }
       }
     }
@@ -504,7 +524,8 @@
         "Info": {
           "Distance": 0.009999999767330852,
           "ControlPointPoseX": 71.50000000110035,
-          "ControlPointPoseY": 345.10999999976735
+          "ControlPointPoseY": 345.10999999976735,
+          "Behavior": "STOP"
         }
       }
     }
@@ -527,7 +548,8 @@
         "Info": {
           "Distance": 0.009999999767330852,
           "ControlPointPoseX": 71.50000000110033,
-          "ControlPointPoseY": 345.10999999976735
+          "ControlPointPoseY": 345.10999999976735,
+          "Behavior": "STOP"
         }
       }
     }
@@ -550,7 +572,8 @@
         "Info": {
           "Distance": 0.009999999767330852,
           "ControlPointPoseX": 71.50000000110035,
-          "ControlPointPoseY": 345.10999999976735
+          "ControlPointPoseY": 345.10999999976735,
+          "Behavior": "STOP"
         }
       }
     }
@@ -573,7 +596,8 @@
         "Info": {
           "Distance": 0.009999999767387696,
           "ControlPointPoseX": 71.50000000110035,
-          "ControlPointPoseY": 345.1099999997674
+          "ControlPointPoseY": 345.1099999997674,
+          "Behavior": "STOP"
         }
       }
     }
@@ -596,7 +620,8 @@
         "Info": {
           "Distance": 0.009999999767330852,
           "ControlPointPoseX": 71.50000000110036,
-          "ControlPointPoseY": 345.10999999976735
+          "ControlPointPoseY": 345.10999999976735,
+          "Behavior": "STOP"
         }
       }
     }
@@ -619,7 +644,8 @@
         "Info": {
           "Distance": 0.009999999767330852,
           "ControlPointPoseX": 71.50000000110035,
-          "ControlPointPoseY": 345.10999999976735
+          "ControlPointPoseY": 345.10999999976735,
+          "Behavior": "STOP"
         }
       }
     }
@@ -642,7 +668,8 @@
         "Info": {
           "Distance": 0.009999999767387696,
           "ControlPointPoseX": 71.50000000110035,
-          "ControlPointPoseY": 345.1099999997674
+          "ControlPointPoseY": 345.1099999997674,
+          "Behavior": "STOP"
         }
       }
     }
@@ -665,7 +692,8 @@
         "Info": {
           "Distance": 0.009999999767330852,
           "ControlPointPoseX": 71.50000000110035,
-          "ControlPointPoseY": 345.10999999976735
+          "ControlPointPoseY": 345.10999999976735,
+          "Behavior": "STOP"
         }
       }
     }
@@ -688,7 +716,8 @@
         "Info": {
           "Distance": 0.009999999767330852,
           "ControlPointPoseX": 71.50000000110035,
-          "ControlPointPoseY": 345.10999999976735
+          "ControlPointPoseY": 345.10999999976735,
+          "Behavior": "STOP"
         }
       }
     }
@@ -711,7 +740,8 @@
         "Info": {
           "Distance": 0.009999999767330852,
           "ControlPointPoseX": 71.50000000110035,
-          "ControlPointPoseY": 345.10999999976735
+          "ControlPointPoseY": 345.10999999976735,
+          "Behavior": "STOP"
         }
       }
     }
@@ -734,7 +764,8 @@
         "Info": {
           "Distance": 0.009999999767330852,
           "ControlPointPoseX": 71.50000000110035,
-          "ControlPointPoseY": 345.10999999976735
+          "ControlPointPoseY": 345.10999999976735,
+          "Behavior": "STOP"
         }
       }
     }
@@ -757,7 +788,8 @@
         "Info": {
           "Distance": 0.009999999767330852,
           "ControlPointPoseX": 71.50000000110035,
-          "ControlPointPoseY": 345.10999999976735
+          "ControlPointPoseY": 345.10999999976735,
+          "Behavior": "STOP"
         }
       }
     }
@@ -780,7 +812,8 @@
         "Info": {
           "Distance": 0.009999999767330852,
           "ControlPointPoseX": 71.50000000110035,
-          "ControlPointPoseY": 345.10999999976735
+          "ControlPointPoseY": 345.10999999976735,
+          "Behavior": "STOP"
         }
       }
     }
@@ -803,7 +836,8 @@
         "Info": {
           "Distance": 0.009999999767330852,
           "ControlPointPoseX": 71.50000000110035,
-          "ControlPointPoseY": 345.10999999976735
+          "ControlPointPoseY": 345.10999999976735,
+          "Behavior": "STOP"
         }
       }
     }
@@ -826,7 +860,8 @@
         "Info": {
           "Distance": 0.009999999767387696,
           "ControlPointPoseX": 71.50000000110035,
-          "ControlPointPoseY": 345.1099999997674
+          "ControlPointPoseY": 345.1099999997674,
+          "Behavior": "STOP"
         }
       }
     }
@@ -849,7 +884,8 @@
         "Info": {
           "Distance": 0.009999999767330852,
           "ControlPointPoseX": 71.50000000110035,
-          "ControlPointPoseY": 345.10999999976735
+          "ControlPointPoseY": 345.10999999976735,
+          "Behavior": "STOP"
         }
       }
     }
@@ -872,7 +908,8 @@
         "Info": {
           "Distance": 0.009999999767330852,
           "ControlPointPoseX": 71.50000000110035,
-          "ControlPointPoseY": 345.10999999976735
+          "ControlPointPoseY": 345.10999999976735,
+          "Behavior": "STOP"
         }
       }
     }
@@ -895,7 +932,8 @@
         "Info": {
           "Distance": 0.009999999767330852,
           "ControlPointPoseX": 71.50000000110035,
-          "ControlPointPoseY": 345.10999999976735
+          "ControlPointPoseY": 345.10999999976735,
+          "Behavior": "STOP"
         }
       }
     }
@@ -918,7 +956,8 @@
         "Info": {
           "Distance": 0.009999999767330852,
           "ControlPointPoseX": 71.50000000110035,
-          "ControlPointPoseY": 345.10999999976735
+          "ControlPointPoseY": 345.10999999976735,
+          "Behavior": "STOP"
         }
       }
     }
@@ -941,7 +980,8 @@
         "Info": {
           "Distance": 0.009999999767387696,
           "ControlPointPoseX": 71.50000000110035,
-          "ControlPointPoseY": 345.1099999997674
+          "ControlPointPoseY": 345.1099999997674,
+          "Behavior": "STOP"
         }
       }
     }
@@ -964,7 +1004,8 @@
         "Info": {
           "Distance": 0.009999999767330852,
           "ControlPointPoseX": 71.50000000110035,
-          "ControlPointPoseY": 345.10999999976735
+          "ControlPointPoseY": 345.10999999976735,
+          "Behavior": "STOP"
         }
       }
     }
@@ -987,7 +1028,8 @@
         "Info": {
           "Distance": 0.009999999767387696,
           "ControlPointPoseX": 71.50000000110035,
-          "ControlPointPoseY": 345.1099999997674
+          "ControlPointPoseY": 345.1099999997674,
+          "Behavior": "STOP"
         }
       }
     }
@@ -1010,7 +1052,8 @@
         "Info": {
           "Distance": 0.009999999767330852,
           "ControlPointPoseX": 71.50000000110036,
-          "ControlPointPoseY": 345.10999999976735
+          "ControlPointPoseY": 345.10999999976735,
+          "Behavior": "STOP"
         }
       }
     }
@@ -1033,7 +1076,8 @@
         "Info": {
           "Distance": 0.009999999767330852,
           "ControlPointPoseX": 71.50000000110036,
-          "ControlPointPoseY": 345.10999999976735
+          "ControlPointPoseY": 345.10999999976735,
+          "Behavior": "STOP"
         }
       }
     }
@@ -1056,7 +1100,8 @@
         "Info": {
           "Distance": 0.009999999767330852,
           "ControlPointPoseX": 71.50000000110035,
-          "ControlPointPoseY": 345.10999999976735
+          "ControlPointPoseY": 345.10999999976735,
+          "Behavior": "STOP"
         }
       }
     }
@@ -1079,7 +1124,8 @@
         "Info": {
           "Distance": 0.009999999767330852,
           "ControlPointPoseX": 71.50000000110035,
-          "ControlPointPoseY": 345.10999999976735
+          "ControlPointPoseY": 345.10999999976735,
+          "Behavior": "STOP"
         }
       }
     }
@@ -1102,7 +1148,8 @@
         "Info": {
           "Distance": 0.009999999767330852,
           "ControlPointPoseX": 71.50000000110036,
-          "ControlPointPoseY": 345.10999999976735
+          "ControlPointPoseY": 345.10999999976735,
+          "Behavior": "STOP"
         }
       }
     }
@@ -1125,7 +1172,8 @@
         "Info": {
           "Distance": 0.009999999767387696,
           "ControlPointPoseX": 71.50000000110035,
-          "ControlPointPoseY": 345.1099999997674
+          "ControlPointPoseY": 345.1099999997674,
+          "Behavior": "STOP"
         }
       }
     }
@@ -1148,7 +1196,8 @@
         "Info": {
           "Distance": 0.009999999767387696,
           "ControlPointPoseX": 71.50000000110035,
-          "ControlPointPoseY": 345.1099999997674
+          "ControlPointPoseY": 345.1099999997674,
+          "Behavior": "STOP"
         }
       }
     }
@@ -1171,7 +1220,8 @@
         "Info": {
           "Distance": 0.009999999767330852,
           "ControlPointPoseX": 71.50000000110035,
-          "ControlPointPoseY": 345.10999999976735
+          "ControlPointPoseY": 345.10999999976735,
+          "Behavior": "STOP"
         }
       }
     }
@@ -1194,7 +1244,8 @@
         "Info": {
           "Distance": 0.009999999767387696,
           "ControlPointPoseX": 71.50000000110035,
-          "ControlPointPoseY": 345.1099999997674
+          "ControlPointPoseY": 345.1099999997674,
+          "Behavior": "STOP"
         }
       }
     }
@@ -1217,7 +1268,8 @@
         "Info": {
           "Distance": 0.009999999767330852,
           "ControlPointPoseX": 71.50000000110035,
-          "ControlPointPoseY": 345.10999999976735
+          "ControlPointPoseY": 345.10999999976735,
+          "Behavior": "STOP"
         }
       }
     }
@@ -1240,7 +1292,8 @@
         "Info": {
           "Distance": 0.009999999767330852,
           "ControlPointPoseX": 71.50000000110035,
-          "ControlPointPoseY": 345.10999999976735
+          "ControlPointPoseY": 345.10999999976735,
+          "Behavior": "STOP"
         }
       }
     }
@@ -1263,7 +1316,8 @@
         "Info": {
           "Distance": 0.009999999767330852,
           "ControlPointPoseX": 71.50000000110036,
-          "ControlPointPoseY": 345.10999999976735
+          "ControlPointPoseY": 345.10999999976735,
+          "Behavior": "STOP"
         }
       }
     }
@@ -1286,7 +1340,8 @@
         "Info": {
           "Distance": 0.009999999767330852,
           "ControlPointPoseX": 71.50000000110035,
-          "ControlPointPoseY": 345.10999999976735
+          "ControlPointPoseY": 345.10999999976735,
+          "Behavior": "STOP"
         }
       }
     }
@@ -1309,7 +1364,8 @@
         "Info": {
           "Distance": 0.009999999767330852,
           "ControlPointPoseX": 71.50000000110035,
-          "ControlPointPoseY": 345.10999999976735
+          "ControlPointPoseY": 345.10999999976735,
+          "Behavior": "STOP"
         }
       }
     }
@@ -1332,7 +1388,8 @@
         "Info": {
           "Distance": 0.009999999767330852,
           "ControlPointPoseX": 71.50000000110035,
-          "ControlPointPoseY": 345.10999999976735
+          "ControlPointPoseY": 345.10999999976735,
+          "Behavior": "STOP"
         }
       }
     }
@@ -1355,7 +1412,8 @@
         "Info": {
           "Distance": 0.009999999767330852,
           "ControlPointPoseX": 71.50000000110035,
-          "ControlPointPoseY": 345.10999999976735
+          "ControlPointPoseY": 345.10999999976735,
+          "Behavior": "STOP"
         }
       }
     }
@@ -1378,7 +1436,8 @@
         "Info": {
           "Distance": 0.009999999767330852,
           "ControlPointPoseX": 71.50000000110036,
-          "ControlPointPoseY": 345.10999999976735
+          "ControlPointPoseY": 345.10999999976735,
+          "Behavior": "STOP"
         }
       }
     }
@@ -1401,7 +1460,8 @@
         "Info": {
           "Distance": 0.009999999767330852,
           "ControlPointPoseX": 71.50000000110036,
-          "ControlPointPoseY": 345.10999999976735
+          "ControlPointPoseY": 345.10999999976735,
+          "Behavior": "STOP"
         }
       }
     }
@@ -1424,7 +1484,8 @@
         "Info": {
           "Distance": 0.009999999767330852,
           "ControlPointPoseX": 71.50000000110035,
-          "ControlPointPoseY": 345.10999999976735
+          "ControlPointPoseY": 345.10999999976735,
+          "Behavior": "STOP"
         }
       }
     }
@@ -1447,7 +1508,8 @@
         "Info": {
           "Distance": 0.009999999767330852,
           "ControlPointPoseX": 71.50000000110036,
-          "ControlPointPoseY": 345.10999999976735
+          "ControlPointPoseY": 345.10999999976735,
+          "Behavior": "STOP"
         }
       }
     }
@@ -1470,7 +1532,8 @@
         "Info": {
           "Distance": 0.009999999767387696,
           "ControlPointPoseX": 71.50000000110035,
-          "ControlPointPoseY": 345.1099999997674
+          "ControlPointPoseY": 345.1099999997674,
+          "Behavior": "STOP"
         }
       }
     }
@@ -1493,7 +1556,8 @@
         "Info": {
           "Distance": 0.009999999767330852,
           "ControlPointPoseX": 71.50000000110035,
-          "ControlPointPoseY": 345.10999999976735
+          "ControlPointPoseY": 345.10999999976735,
+          "Behavior": "STOP"
         }
       }
     }
@@ -1516,7 +1580,8 @@
         "Info": {
           "Distance": 0.009999999767330852,
           "ControlPointPoseX": 71.50000000110035,
-          "ControlPointPoseY": 345.10999999976735
+          "ControlPointPoseY": 345.10999999976735,
+          "Behavior": "STOP"
         }
       }
     }
@@ -1539,7 +1604,8 @@
         "Info": {
           "Distance": 0.009999999767330852,
           "ControlPointPoseX": 71.50000000110035,
-          "ControlPointPoseY": 345.10999999976735
+          "ControlPointPoseY": 345.10999999976735,
+          "Behavior": "STOP"
         }
       }
     }
@@ -1562,7 +1628,8 @@
         "Info": {
           "Distance": 0.009999999767330852,
           "ControlPointPoseX": 71.50000000110035,
-          "ControlPointPoseY": 345.10999999976735
+          "ControlPointPoseY": 345.10999999976735,
+          "Behavior": "STOP"
         }
       }
     }
@@ -1585,7 +1652,8 @@
         "Info": {
           "Distance": 0.009999999767387696,
           "ControlPointPoseX": 71.50000000110035,
-          "ControlPointPoseY": 345.1099999997674
+          "ControlPointPoseY": 345.1099999997674,
+          "Behavior": "STOP"
         }
       }
     }
@@ -1608,7 +1676,8 @@
         "Info": {
           "Distance": 0.009999999767330852,
           "ControlPointPoseX": 71.50000000110035,
-          "ControlPointPoseY": 345.10999999976735
+          "ControlPointPoseY": 345.10999999976735,
+          "Behavior": "STOP"
         }
       }
     }
@@ -1631,7 +1700,8 @@
         "Info": {
           "Distance": 0.009999999767330852,
           "ControlPointPoseX": 71.50000000110035,
-          "ControlPointPoseY": 345.10999999976735
+          "ControlPointPoseY": 345.10999999976735,
+          "Behavior": "STOP"
         }
       }
     }
@@ -1654,7 +1724,8 @@
         "Info": {
           "Distance": 0.009999999767387696,
           "ControlPointPoseX": 71.50000000110033,
-          "ControlPointPoseY": 345.1099999997674
+          "ControlPointPoseY": 345.1099999997674,
+          "Behavior": "STOP"
         }
       }
     }
@@ -1677,7 +1748,8 @@
         "Info": {
           "Distance": 0.009999999767387696,
           "ControlPointPoseX": 71.50000000110035,
-          "ControlPointPoseY": 345.1099999997674
+          "ControlPointPoseY": 345.1099999997674,
+          "Behavior": "STOP"
         }
       }
     }
@@ -1700,7 +1772,8 @@
         "Info": {
           "Distance": 0.009999999767387696,
           "ControlPointPoseX": 71.50000000110033,
-          "ControlPointPoseY": 345.1099999997674
+          "ControlPointPoseY": 345.1099999997674,
+          "Behavior": "STOP"
         }
       }
     }
@@ -1723,7 +1796,8 @@
         "Info": {
           "Distance": 0.009999999767387696,
           "ControlPointPoseX": 71.50000000110035,
-          "ControlPointPoseY": 345.1099999997674
+          "ControlPointPoseY": 345.1099999997674,
+          "Behavior": "STOP"
         }
       }
     }
@@ -1746,7 +1820,8 @@
         "Info": {
           "Distance": 0.009999999767330852,
           "ControlPointPoseX": 71.50000000110035,
-          "ControlPointPoseY": 345.10999999976735
+          "ControlPointPoseY": 345.10999999976735,
+          "Behavior": "STOP"
         }
       }
     }
@@ -1769,7 +1844,8 @@
         "Info": {
           "Distance": 0.009999999767387696,
           "ControlPointPoseX": 71.50000000110035,
-          "ControlPointPoseY": 345.1099999997674
+          "ControlPointPoseY": 345.1099999997674,
+          "Behavior": "STOP"
         }
       }
     }
@@ -1792,7 +1868,8 @@
         "Info": {
           "Distance": 0.009999999767387696,
           "ControlPointPoseX": 71.50000000110035,
-          "ControlPointPoseY": 345.1099999997674
+          "ControlPointPoseY": 345.1099999997674,
+          "Behavior": "STOP"
         }
       }
     }
@@ -1815,7 +1892,8 @@
         "Info": {
           "Distance": 0.009999999767330852,
           "ControlPointPoseX": 71.50000000110036,
-          "ControlPointPoseY": 345.10999999976735
+          "ControlPointPoseY": 345.10999999976735,
+          "Behavior": "STOP"
         }
       }
     }
@@ -1838,7 +1916,8 @@
         "Info": {
           "Distance": 0.009999999767330852,
           "ControlPointPoseX": 71.50000000110035,
-          "ControlPointPoseY": 345.10999999976735
+          "ControlPointPoseY": 345.10999999976735,
+          "Behavior": "STOP"
         }
       }
     }
@@ -1861,7 +1940,8 @@
         "Info": {
           "Distance": 0.009999999767330852,
           "ControlPointPoseX": 71.50000000110033,
-          "ControlPointPoseY": 345.10999999976735
+          "ControlPointPoseY": 345.10999999976735,
+          "Behavior": "STOP"
         }
       }
     }
@@ -1884,7 +1964,8 @@
         "Info": {
           "Distance": 0.009999999767387696,
           "ControlPointPoseX": 71.50000000110033,
-          "ControlPointPoseY": 345.1099999997674
+          "ControlPointPoseY": 345.1099999997674,
+          "Behavior": "STOP"
         }
       }
     }
@@ -1907,7 +1988,8 @@
         "Info": {
           "Distance": 0.009999999767330852,
           "ControlPointPoseX": 71.50000000110035,
-          "ControlPointPoseY": 345.10999999976735
+          "ControlPointPoseY": 345.10999999976735,
+          "Behavior": "STOP"
         }
       }
     }
@@ -1930,7 +2012,8 @@
         "Info": {
           "Distance": 0.009999999767330852,
           "ControlPointPoseX": 71.50000000110035,
-          "ControlPointPoseY": 345.10999999976735
+          "ControlPointPoseY": 345.10999999976735,
+          "Behavior": "STOP"
         }
       }
     }
@@ -1953,7 +2036,8 @@
         "Info": {
           "Distance": 0.009999999767330852,
           "ControlPointPoseX": 71.50000000110035,
-          "ControlPointPoseY": 345.10999999976735
+          "ControlPointPoseY": 345.10999999976735,
+          "Behavior": "STOP"
         }
       }
     }
@@ -1976,7 +2060,8 @@
         "Info": {
           "Distance": 0.009999999767330852,
           "ControlPointPoseX": 71.50000000110035,
-          "ControlPointPoseY": 345.10999999976735
+          "ControlPointPoseY": 345.10999999976735,
+          "Behavior": "STOP"
         }
       }
     }
@@ -1999,7 +2084,8 @@
         "Info": {
           "Distance": 0.009999999767330852,
           "ControlPointPoseX": 71.50000000110035,
-          "ControlPointPoseY": 345.10999999976735
+          "ControlPointPoseY": 345.10999999976735,
+          "Behavior": "STOP"
         }
       }
     }
@@ -2022,7 +2108,8 @@
         "Info": {
           "Distance": 0.009999999767330852,
           "ControlPointPoseX": 71.50000000110035,
-          "ControlPointPoseY": 345.10999999976735
+          "ControlPointPoseY": 345.10999999976735,
+          "Behavior": "STOP"
         }
       }
     }
@@ -2045,7 +2132,8 @@
         "Info": {
           "Distance": 0.009999999767330852,
           "ControlPointPoseX": 71.50000000110035,
-          "ControlPointPoseY": 345.10999999976735
+          "ControlPointPoseY": 345.10999999976735,
+          "Behavior": "STOP"
         }
       }
     }
@@ -2068,7 +2156,8 @@
         "Info": {
           "Distance": 0.009999999767387696,
           "ControlPointPoseX": 71.50000000110035,
-          "ControlPointPoseY": 345.1099999997674
+          "ControlPointPoseY": 345.1099999997674,
+          "Behavior": "STOP"
         }
       }
     }
@@ -2091,7 +2180,8 @@
         "Info": {
           "Distance": 0.009999999767330852,
           "ControlPointPoseX": 71.50000000110035,
-          "ControlPointPoseY": 345.10999999976735
+          "ControlPointPoseY": 345.10999999976735,
+          "Behavior": "STOP"
         }
       }
     }
@@ -2114,7 +2204,8 @@
         "Info": {
           "Distance": 0.009999999767330852,
           "ControlPointPoseX": 71.50000000110036,
-          "ControlPointPoseY": 345.10999999976735
+          "ControlPointPoseY": 345.10999999976735,
+          "Behavior": "STOP"
         }
       }
     }
@@ -2137,7 +2228,8 @@
         "Info": {
           "Distance": 0.009999999767387696,
           "ControlPointPoseX": 71.50000000110035,
-          "ControlPointPoseY": 345.1099999997674
+          "ControlPointPoseY": 345.1099999997674,
+          "Behavior": "STOP"
         }
       }
     }
@@ -2160,7 +2252,8 @@
         "Info": {
           "Distance": 0.009999999767387696,
           "ControlPointPoseX": 71.50000000110035,
-          "ControlPointPoseY": 345.1099999997674
+          "ControlPointPoseY": 345.1099999997674,
+          "Behavior": "STOP"
         }
       }
     }
@@ -2183,7 +2276,8 @@
         "Info": {
           "Distance": 0.009999999767387696,
           "ControlPointPoseX": 71.50000000110035,
-          "ControlPointPoseY": 345.1099999997674
+          "ControlPointPoseY": 345.1099999997674,
+          "Behavior": "STOP"
         }
       }
     }
@@ -2206,7 +2300,8 @@
         "Info": {
           "Distance": 0.009999999767330852,
           "ControlPointPoseX": 71.50000000110036,
-          "ControlPointPoseY": 345.10999999976735
+          "ControlPointPoseY": 345.10999999976735,
+          "Behavior": "STOP"
         }
       }
     }
@@ -2229,7 +2324,8 @@
         "Info": {
           "Distance": 0.009999999767330852,
           "ControlPointPoseX": 71.50000000110035,
-          "ControlPointPoseY": 345.10999999976735
+          "ControlPointPoseY": 345.10999999976735,
+          "Behavior": "STOP"
         }
       }
     }
@@ -2252,7 +2348,8 @@
         "Info": {
           "Distance": 0.009999999767387696,
           "ControlPointPoseX": 71.50000000110035,
-          "ControlPointPoseY": 345.1099999997674
+          "ControlPointPoseY": 345.1099999997674,
+          "Behavior": "STOP"
         }
       }
     }
@@ -2275,7 +2372,8 @@
         "Info": {
           "Distance": 0.009999999767330852,
           "ControlPointPoseX": 71.50000000110035,
-          "ControlPointPoseY": 345.10999999976735
+          "ControlPointPoseY": 345.10999999976735,
+          "Behavior": "STOP"
         }
       }
     }
@@ -2298,7 +2396,8 @@
         "Info": {
           "Distance": 0.009999999767330852,
           "ControlPointPoseX": 71.50000000110035,
-          "ControlPointPoseY": 345.10999999976735
+          "ControlPointPoseY": 345.10999999976735,
+          "Behavior": "STOP"
         }
       }
     }
@@ -2321,7 +2420,8 @@
         "Info": {
           "Distance": 0.009999999767330852,
           "ControlPointPoseX": 71.50000000110035,
-          "ControlPointPoseY": 345.10999999976735
+          "ControlPointPoseY": 345.10999999976735,
+          "Behavior": "STOP"
         }
       }
     }
@@ -2344,7 +2444,8 @@
         "Info": {
           "Distance": 0.009999999767387696,
           "ControlPointPoseX": 71.50000000110035,
-          "ControlPointPoseY": 345.1099999997674
+          "ControlPointPoseY": 345.1099999997674,
+          "Behavior": "STOP"
         }
       }
     }
@@ -2367,7 +2468,8 @@
         "Info": {
           "Distance": 0.009999999767387696,
           "ControlPointPoseX": 71.50000000110035,
-          "ControlPointPoseY": 345.1099999997674
+          "ControlPointPoseY": 345.1099999997674,
+          "Behavior": "STOP"
         }
       }
     }
@@ -2390,7 +2492,8 @@
         "Info": {
           "Distance": 0.009999999767387696,
           "ControlPointPoseX": 71.50000000110035,
-          "ControlPointPoseY": 345.1099999997674
+          "ControlPointPoseY": 345.1099999997674,
+          "Behavior": "STOP"
         }
       }
     }
@@ -2413,7 +2516,8 @@
         "Info": {
           "Distance": 0.009999999767387696,
           "ControlPointPoseX": 71.50000000110035,
-          "ControlPointPoseY": 345.1099999997674
+          "ControlPointPoseY": 345.1099999997674,
+          "Behavior": "STOP"
         }
       }
     }
@@ -2436,7 +2540,8 @@
         "Info": {
           "Distance": 0.009999999767387696,
           "ControlPointPoseX": 71.50000000110035,
-          "ControlPointPoseY": 345.1099999997674
+          "ControlPointPoseY": 345.1099999997674,
+          "Behavior": "STOP"
         }
       }
     }
@@ -2459,7 +2564,8 @@
         "Info": {
           "Distance": 0.009999999767330852,
           "ControlPointPoseX": 71.50000000110035,
-          "ControlPointPoseY": 345.10999999976735
+          "ControlPointPoseY": 345.10999999976735,
+          "Behavior": "STOP"
         }
       }
     }
@@ -2482,7 +2588,8 @@
         "Info": {
           "Distance": 0.009999999767387696,
           "ControlPointPoseX": 71.50000000110035,
-          "ControlPointPoseY": 345.1099999997674
+          "ControlPointPoseY": 345.1099999997674,
+          "Behavior": "STOP"
         }
       }
     }
@@ -2505,7 +2612,8 @@
         "Info": {
           "Distance": 0.009999999767387696,
           "ControlPointPoseX": 71.50000000110035,
-          "ControlPointPoseY": 345.1099999997674
+          "ControlPointPoseY": 345.1099999997674,
+          "Behavior": "STOP"
         }
       }
     }
@@ -2528,7 +2636,8 @@
         "Info": {
           "Distance": 0.009999999767330852,
           "ControlPointPoseX": 71.50000000110035,
-          "ControlPointPoseY": 345.10999999976735
+          "ControlPointPoseY": 345.10999999976735,
+          "Behavior": "STOP"
         }
       }
     }
@@ -2551,7 +2660,8 @@
         "Info": {
           "Distance": 0.009999999767387696,
           "ControlPointPoseX": 71.50000000110035,
-          "ControlPointPoseY": 345.1099999997674
+          "ControlPointPoseY": 345.1099999997674,
+          "Behavior": "STOP"
         }
       }
     }
@@ -2574,7 +2684,8 @@
         "Info": {
           "Distance": 0.009999999767387696,
           "ControlPointPoseX": 71.50000000110035,
-          "ControlPointPoseY": 345.1099999997674
+          "ControlPointPoseY": 345.1099999997674,
+          "Behavior": "STOP"
         }
       }
     }
@@ -2597,7 +2708,8 @@
         "Info": {
           "Distance": 0.009999999767330852,
           "ControlPointPoseX": 71.50000000110035,
-          "ControlPointPoseY": 345.10999999976735
+          "ControlPointPoseY": 345.10999999976735,
+          "Behavior": "STOP"
         }
       }
     }
@@ -2620,7 +2732,8 @@
         "Info": {
           "Distance": 0.009999999767387696,
           "ControlPointPoseX": 71.50000000110035,
-          "ControlPointPoseY": 345.1099999997674
+          "ControlPointPoseY": 345.1099999997674,
+          "Behavior": "STOP"
         }
       }
     }
@@ -2643,7 +2756,8 @@
         "Info": {
           "Distance": 0.009999999767387696,
           "ControlPointPoseX": 71.50000000110035,
-          "ControlPointPoseY": 345.1099999997674
+          "ControlPointPoseY": 345.1099999997674,
+          "Behavior": "STOP"
         }
       }
     }
@@ -2666,7 +2780,8 @@
         "Info": {
           "Distance": 0.009999999767387696,
           "ControlPointPoseX": 71.50000000110035,
-          "ControlPointPoseY": 345.1099999997674
+          "ControlPointPoseY": 345.1099999997674,
+          "Behavior": "STOP"
         }
       }
     }
@@ -2689,7 +2804,8 @@
         "Info": {
           "Distance": 0.009999999767387696,
           "ControlPointPoseX": 71.50000000110033,
-          "ControlPointPoseY": 345.1099999997674
+          "ControlPointPoseY": 345.1099999997674,
+          "Behavior": "STOP"
         }
       }
     }
@@ -2712,7 +2828,8 @@
         "Info": {
           "Distance": 0.009999999767330852,
           "ControlPointPoseX": 71.50000000110035,
-          "ControlPointPoseY": 345.10999999976735
+          "ControlPointPoseY": 345.10999999976735,
+          "Behavior": "STOP"
         }
       }
     }
@@ -2735,7 +2852,8 @@
         "Info": {
           "Distance": 0.009999999767330852,
           "ControlPointPoseX": 71.50000000110035,
-          "ControlPointPoseY": 345.10999999976735
+          "ControlPointPoseY": 345.10999999976735,
+          "Behavior": "STOP"
         }
       }
     }
@@ -2758,7 +2876,8 @@
         "Info": {
           "Distance": 0.009999999767330852,
           "ControlPointPoseX": 71.50000000110035,
-          "ControlPointPoseY": 345.10999999976735
+          "ControlPointPoseY": 345.10999999976735,
+          "Behavior": "STOP"
         }
       }
     }
@@ -2781,7 +2900,8 @@
         "Info": {
           "Distance": 0.009999999767330852,
           "ControlPointPoseX": 71.50000000110035,
-          "ControlPointPoseY": 345.10999999976735
+          "ControlPointPoseY": 345.10999999976735,
+          "Behavior": "STOP"
         }
       }
     }
@@ -2804,7 +2924,8 @@
         "Info": {
           "Distance": 0.009999999767330852,
           "ControlPointPoseX": 71.50000000110035,
-          "ControlPointPoseY": 345.10999999976735
+          "ControlPointPoseY": 345.10999999976735,
+          "Behavior": "STOP"
         }
       }
     }
@@ -2827,7 +2948,8 @@
         "Info": {
           "Distance": 0.009999999767330852,
           "ControlPointPoseX": 71.50000000110035,
-          "ControlPointPoseY": 345.10999999976735
+          "ControlPointPoseY": 345.10999999976735,
+          "Behavior": "STOP"
         }
       }
     }
@@ -2850,7 +2972,8 @@
         "Info": {
           "Distance": 0.009999999767330852,
           "ControlPointPoseX": 71.50000000110035,
-          "ControlPointPoseY": 345.10999999976735
+          "ControlPointPoseY": 345.10999999976735,
+          "Behavior": "STOP"
         }
       }
     }
@@ -2873,7 +2996,8 @@
         "Info": {
           "Distance": 0.009999999767330852,
           "ControlPointPoseX": 71.50000000110035,
-          "ControlPointPoseY": 345.10999999976735
+          "ControlPointPoseY": 345.10999999976735,
+          "Behavior": "STOP"
         }
       }
     }
@@ -2896,7 +3020,8 @@
         "Info": {
           "Distance": 0.009999999767330852,
           "ControlPointPoseX": 71.50000000110036,
-          "ControlPointPoseY": 345.10999999976735
+          "ControlPointPoseY": 345.10999999976735,
+          "Behavior": "STOP"
         }
       }
     }
@@ -2919,7 +3044,8 @@
         "Info": {
           "Distance": 0.009999999767387696,
           "ControlPointPoseX": 71.50000000110035,
-          "ControlPointPoseY": 345.1099999997674
+          "ControlPointPoseY": 345.1099999997674,
+          "Behavior": "STOP"
         }
       }
     }
@@ -2942,7 +3068,8 @@
         "Info": {
           "Distance": 0.009999999767330852,
           "ControlPointPoseX": 71.50000000110036,
-          "ControlPointPoseY": 345.10999999976735
+          "ControlPointPoseY": 345.10999999976735,
+          "Behavior": "STOP"
         }
       }
     }
@@ -2965,7 +3092,8 @@
         "Info": {
           "Distance": 0.009999999767330852,
           "ControlPointPoseX": 71.50000000110035,
-          "ControlPointPoseY": 345.10999999976735
+          "ControlPointPoseY": 345.10999999976735,
+          "Behavior": "STOP"
         }
       }
     }
@@ -2988,7 +3116,8 @@
         "Info": {
           "Distance": 0.009999999767330852,
           "ControlPointPoseX": 71.50000000110035,
-          "ControlPointPoseY": 345.10999999976735
+          "ControlPointPoseY": 345.10999999976735,
+          "Behavior": "STOP"
         }
       }
     }
@@ -3011,7 +3140,8 @@
         "Info": {
           "Distance": 0.009999999767330852,
           "ControlPointPoseX": 71.50000000110035,
-          "ControlPointPoseY": 345.10999999976735
+          "ControlPointPoseY": 345.10999999976735,
+          "Behavior": "STOP"
         }
       }
     }
@@ -3034,7 +3164,8 @@
         "Info": {
           "Distance": 0.009999999767387696,
           "ControlPointPoseX": 71.50000000110035,
-          "ControlPointPoseY": 345.1099999997674
+          "ControlPointPoseY": 345.1099999997674,
+          "Behavior": "STOP"
         }
       }
     }
@@ -3057,7 +3188,8 @@
         "Info": {
           "Distance": 0.009999999767330852,
           "ControlPointPoseX": 71.50000000110035,
-          "ControlPointPoseY": 345.10999999976735
+          "ControlPointPoseY": 345.10999999976735,
+          "Behavior": "STOP"
         }
       }
     }
@@ -3080,7 +3212,8 @@
         "Info": {
           "Distance": 0.009999999767387696,
           "ControlPointPoseX": 71.50000000110035,
-          "ControlPointPoseY": 345.1099999997674
+          "ControlPointPoseY": 345.1099999997674,
+          "Behavior": "STOP"
         }
       }
     }
@@ -3103,7 +3236,8 @@
         "Info": {
           "Distance": 0.009999999767330852,
           "ControlPointPoseX": 71.50000000110035,
-          "ControlPointPoseY": 345.10999999976735
+          "ControlPointPoseY": 345.10999999976735,
+          "Behavior": "STOP"
         }
       }
     }
@@ -3126,7 +3260,8 @@
         "Info": {
           "Distance": 0.009999999767330852,
           "ControlPointPoseX": 71.50000000110035,
-          "ControlPointPoseY": 345.10999999976735
+          "ControlPointPoseY": 345.10999999976735,
+          "Behavior": "STOP"
         }
       }
     }
@@ -3149,7 +3284,8 @@
         "Info": {
           "Distance": 0.009999999767330852,
           "ControlPointPoseX": 71.50000000110035,
-          "ControlPointPoseY": 345.10999999976735
+          "ControlPointPoseY": 345.10999999976735,
+          "Behavior": "STOP"
         }
       }
     }
@@ -3172,7 +3308,8 @@
         "Info": {
           "Distance": 0.009999999767330852,
           "ControlPointPoseX": 71.50000000110035,
-          "ControlPointPoseY": 345.10999999976735
+          "ControlPointPoseY": 345.10999999976735,
+          "Behavior": "STOP"
         }
       }
     }
@@ -3195,7 +3332,8 @@
         "Info": {
           "Distance": 0.009999999767330852,
           "ControlPointPoseX": 71.50000000110036,
-          "ControlPointPoseY": 345.10999999976735
+          "ControlPointPoseY": 345.10999999976735,
+          "Behavior": "STOP"
         }
       }
     }
@@ -3218,7 +3356,8 @@
         "Info": {
           "Distance": 0.009999999767330852,
           "ControlPointPoseX": 71.50000000110035,
-          "ControlPointPoseY": 345.10999999976735
+          "ControlPointPoseY": 345.10999999976735,
+          "Behavior": "STOP"
         }
       }
     }
@@ -3241,7 +3380,8 @@
         "Info": {
           "Distance": 0.009999999767387696,
           "ControlPointPoseX": 71.50000000110033,
-          "ControlPointPoseY": 345.1099999997674
+          "ControlPointPoseY": 345.1099999997674,
+          "Behavior": "STOP"
         }
       }
     }
@@ -3264,7 +3404,8 @@
         "Info": {
           "Distance": 0.009999999767330852,
           "ControlPointPoseX": 71.50000000110066,
-          "ControlPointPoseY": 345.10999999976735
+          "ControlPointPoseY": 345.10999999976735,
+          "Behavior": "STOP"
         }
       }
     }
@@ -3287,7 +3428,8 @@
         "Info": {
           "Distance": 0.009999999767330852,
           "ControlPointPoseX": 71.50000000110015,
-          "ControlPointPoseY": 345.10999999976735
+          "ControlPointPoseY": 345.10999999976735,
+          "Behavior": "STOP"
         }
       }
     }
@@ -3310,7 +3452,8 @@
         "Info": {
           "Distance": 0.009999999767330852,
           "ControlPointPoseX": 71.50000000110066,
-          "ControlPointPoseY": 345.10999999976735
+          "ControlPointPoseY": 345.10999999976735,
+          "Behavior": "STOP"
         }
       }
     }
@@ -3333,7 +3476,8 @@
         "Info": {
           "Distance": 0.009999999767387696,
           "ControlPointPoseX": 71.50000000109937,
-          "ControlPointPoseY": 345.1099999997674
+          "ControlPointPoseY": 345.1099999997674,
+          "Behavior": "STOP"
         }
       }
     }
@@ -3356,7 +3500,8 @@
         "Info": {
           "Distance": 0.009999999767330852,
           "ControlPointPoseX": 71.50000000109704,
-          "ControlPointPoseY": 345.10999999976735
+          "ControlPointPoseY": 345.10999999976735,
+          "Behavior": "STOP"
         }
       }
     }
@@ -3379,7 +3524,8 @@
         "Info": {
           "Distance": 0.009999999767330852,
           "ControlPointPoseX": 71.50000000109782,
-          "ControlPointPoseY": 345.10999999976735
+          "ControlPointPoseY": 345.10999999976735,
+          "Behavior": "STOP"
         }
       }
     }
@@ -3402,7 +3548,8 @@
         "Info": {
           "Distance": 0.009999999767330852,
           "ControlPointPoseX": 71.50000000110309,
-          "ControlPointPoseY": 345.10999999976735
+          "ControlPointPoseY": 345.10999999976735,
+          "Behavior": "STOP"
         }
       }
     }
@@ -3425,7 +3572,8 @@
         "Info": {
           "Distance": 0.009999999767330852,
           "ControlPointPoseX": 71.5000000011,
-          "ControlPointPoseY": 345.10999999976735
+          "ControlPointPoseY": 345.10999999976735,
+          "Behavior": "STOP"
         }
       }
     }
@@ -3448,7 +3596,8 @@
         "Info": {
           "Distance": 0.009999999767217166,
           "ControlPointPoseX": 71.50000000110374,
-          "ControlPointPoseY": 345.10999999976724
+          "ControlPointPoseY": 345.10999999976724,
+          "Behavior": "STOP"
         }
       }
     }
@@ -3471,7 +3620,8 @@
         "Info": {
           "Distance": 0.009999999767217166,
           "ControlPointPoseX": 71.50000000110371,
-          "ControlPointPoseY": 345.10999999976724
+          "ControlPointPoseY": 345.10999999976724,
+          "Behavior": "STOP"
         }
       }
     }
@@ -3494,7 +3644,8 @@
         "Info": {
           "Distance": 0.009999999767330852,
           "ControlPointPoseX": 71.5000000010985,
-          "ControlPointPoseY": 345.10999999976735
+          "ControlPointPoseY": 345.10999999976735,
+          "Behavior": "STOP"
         }
       }
     }
@@ -3517,7 +3668,8 @@
         "Info": {
           "Distance": 0.009999999767046637,
           "ControlPointPoseX": 71.50000000110884,
-          "ControlPointPoseY": 345.10999999976707
+          "ControlPointPoseY": 345.10999999976707,
+          "Behavior": "STOP"
         }
       }
     }
@@ -3540,7 +3692,8 @@
         "Info": {
           "Distance": 0.009999999767274009,
           "ControlPointPoseX": 71.50000000110326,
-          "ControlPointPoseY": 345.1099999997673
+          "ControlPointPoseY": 345.1099999997673,
+          "Behavior": "STOP"
         }
       }
     }
@@ -3563,7 +3716,8 @@
         "Info": {
           "Distance": 0.009999999767274009,
           "ControlPointPoseX": 71.50000000110329,
-          "ControlPointPoseY": 345.1099999997673
+          "ControlPointPoseY": 345.1099999997673,
+          "Behavior": "STOP"
         }
       }
     }
@@ -3586,7 +3740,8 @@
         "Info": {
           "Distance": 0.00999999976716032,
           "ControlPointPoseX": 71.50000000109418,
-          "ControlPointPoseY": 345.1099999997672
+          "ControlPointPoseY": 345.1099999997672,
+          "Behavior": "STOP"
         }
       }
     }
@@ -3609,7 +3764,8 @@
         "Info": {
           "Distance": 0.009999999767387696,
           "ControlPointPoseX": 71.50000000109988,
-          "ControlPointPoseY": 345.1099999997674
+          "ControlPointPoseY": 345.1099999997674,
+          "Behavior": "STOP"
         }
       }
     }
@@ -3632,7 +3788,8 @@
         "Info": {
           "Distance": 0.009999999767330852,
           "ControlPointPoseX": 71.50000000109785,
-          "ControlPointPoseY": 345.10999999976735
+          "ControlPointPoseY": 345.10999999976735,
+          "Behavior": "STOP"
         }
       }
     }
@@ -3655,7 +3812,8 @@
         "Info": {
           "Distance": 0.009999999767330852,
           "ControlPointPoseX": 71.50000000110079,
-          "ControlPointPoseY": 345.10999999976735
+          "ControlPointPoseY": 345.10999999976735,
+          "Behavior": "STOP"
         }
       }
     }
@@ -3678,7 +3836,8 @@
         "Info": {
           "Distance": 0.009999999767330852,
           "ControlPointPoseX": 71.50000000110268,
-          "ControlPointPoseY": 345.10999999976735
+          "ControlPointPoseY": 345.10999999976735,
+          "Behavior": "STOP"
         }
       }
     }
@@ -3701,7 +3860,8 @@
         "Info": {
           "Distance": 0.00999999976733085,
           "ControlPointPoseX": 71.5000000010945,
-          "ControlPointPoseY": 345.10999999976735
+          "ControlPointPoseY": 345.10999999976735,
+          "Behavior": "STOP"
         }
       }
     }
@@ -3724,7 +3884,8 @@
         "Info": {
           "Distance": 0.009999999767274009,
           "ControlPointPoseX": 71.50000000110025,
-          "ControlPointPoseY": 345.1099999997673
+          "ControlPointPoseY": 345.1099999997673,
+          "Behavior": "STOP"
         }
       }
     }
@@ -3747,7 +3908,8 @@
         "Info": {
           "Distance": 0.009999999767046635,
           "ControlPointPoseX": 71.50000000109826,
-          "ControlPointPoseY": 345.10999999976707
+          "ControlPointPoseY": 345.10999999976707,
+          "Behavior": "STOP"
         }
       }
     }
@@ -3770,7 +3932,8 @@
         "Info": {
           "Distance": 0.009999999766932948,
           "ControlPointPoseX": 71.50000000110137,
-          "ControlPointPoseY": 345.10999999976696
+          "ControlPointPoseY": 345.10999999976696,
+          "Behavior": "STOP"
         }
       }
     }
@@ -3793,7 +3956,8 @@
         "Info": {
           "Distance": 0.009999999766932948,
           "ControlPointPoseX": 71.50000000109807,
-          "ControlPointPoseY": 345.10999999976696
+          "ControlPointPoseY": 345.10999999976696,
+          "Behavior": "STOP"
         }
       }
     }
@@ -3816,7 +3980,8 @@
         "Info": {
           "Distance": 0.009999999767274007,
           "ControlPointPoseX": 71.50000000109354,
-          "ControlPointPoseY": 345.1099999997673
+          "ControlPointPoseY": 345.1099999997673,
+          "Behavior": "STOP"
         }
       }
     }
@@ -3839,7 +4004,8 @@
         "Info": {
           "Distance": 0.009999999767274009,
           "ControlPointPoseX": 71.50000000110238,
-          "ControlPointPoseY": 345.1099999997673
+          "ControlPointPoseY": 345.1099999997673,
+          "Behavior": "STOP"
         }
       }
     }
@@ -3862,7 +4028,8 @@
         "Info": {
           "Distance": 0.009999999767160322,
           "ControlPointPoseX": 71.50000000110097,
-          "ControlPointPoseY": 345.1099999997672
+          "ControlPointPoseY": 345.1099999997672,
+          "Behavior": "STOP"
         }
       }
     }
@@ -3885,7 +4052,8 @@
         "Info": {
           "Distance": 0.009999999767217166,
           "ControlPointPoseX": 71.50000000110117,
-          "ControlPointPoseY": 345.10999999976724
+          "ControlPointPoseY": 345.10999999976724,
+          "Behavior": "STOP"
         }
       }
     }
@@ -3908,7 +4076,8 @@
         "Info": {
           "Distance": 0.009999999767330852,
           "ControlPointPoseX": 71.50000000109834,
-          "ControlPointPoseY": 345.10999999976735
+          "ControlPointPoseY": 345.10999999976735,
+          "Behavior": "STOP"
         }
       }
     }
@@ -3931,7 +4100,8 @@
         "Info": {
           "Distance": 0.009999999767274009,
           "ControlPointPoseX": 71.50000000109627,
-          "ControlPointPoseY": 345.1099999997673
+          "ControlPointPoseY": 345.1099999997673,
+          "Behavior": "STOP"
         }
       }
     }
@@ -3954,7 +4124,8 @@
         "Info": {
           "Distance": 0.009999999767217166,
           "ControlPointPoseX": 71.50000000110121,
-          "ControlPointPoseY": 345.10999999976724
+          "ControlPointPoseY": 345.10999999976724,
+          "Behavior": "STOP"
         }
       }
     }
@@ -3977,7 +4148,8 @@
         "Info": {
           "Distance": 0.009999999767160322,
           "ControlPointPoseX": 71.5000000011025,
-          "ControlPointPoseY": 345.1099999997672
+          "ControlPointPoseY": 345.1099999997672,
+          "Behavior": "STOP"
         }
       }
     }
@@ -4000,7 +4172,8 @@
         "Info": {
           "Distance": 0.009999999767330852,
           "ControlPointPoseX": 71.50000000109894,
-          "ControlPointPoseY": 345.10999999976735
+          "ControlPointPoseY": 345.10999999976735,
+          "Behavior": "STOP"
         }
       }
     }
@@ -4023,7 +4196,8 @@
         "Info": {
           "Distance": 0.009999999767330852,
           "ControlPointPoseX": 71.50000000109824,
-          "ControlPointPoseY": 345.10999999976735
+          "ControlPointPoseY": 345.10999999976735,
+          "Behavior": "STOP"
         }
       }
     }
@@ -4046,7 +4220,8 @@
         "Info": {
           "Distance": 0.009999999767387696,
           "ControlPointPoseX": 71.50000000110136,
-          "ControlPointPoseY": 345.1099999997674
+          "ControlPointPoseY": 345.1099999997674,
+          "Behavior": "STOP"
         }
       }
     }
@@ -4069,7 +4244,8 @@
         "Info": {
           "Distance": 0.009999999767330852,
           "ControlPointPoseX": 71.50000000110084,
-          "ControlPointPoseY": 345.10999999976735
+          "ControlPointPoseY": 345.10999999976735,
+          "Behavior": "STOP"
         }
       }
     }
@@ -4092,7 +4268,8 @@
         "Info": {
           "Distance": 0.009999999767330852,
           "ControlPointPoseX": 71.50000000110057,
-          "ControlPointPoseY": 345.10999999976735
+          "ControlPointPoseY": 345.10999999976735,
+          "Behavior": "STOP"
         }
       }
     }
@@ -4115,7 +4292,8 @@
         "Info": {
           "Distance": 0.009999999767217166,
           "ControlPointPoseX": 71.50000000110428,
-          "ControlPointPoseY": 345.10999999976724
+          "ControlPointPoseY": 345.10999999976724,
+          "Behavior": "STOP"
         }
       }
     }
@@ -4138,7 +4316,8 @@
         "Info": {
           "Distance": 0.009999999767330852,
           "ControlPointPoseX": 71.50000000110069,
-          "ControlPointPoseY": 345.10999999976735
+          "ControlPointPoseY": 345.10999999976735,
+          "Behavior": "STOP"
         }
       }
     }
@@ -4161,7 +4340,8 @@
         "Info": {
           "Distance": 0.009999999767330852,
           "ControlPointPoseX": 71.50000000110015,
-          "ControlPointPoseY": 345.10999999976735
+          "ControlPointPoseY": 345.10999999976735,
+          "Behavior": "STOP"
         }
       }
     }
@@ -4184,7 +4364,8 @@
         "Info": {
           "Distance": 0.009999999767387696,
           "ControlPointPoseX": 71.50000000109819,
-          "ControlPointPoseY": 345.1099999997674
+          "ControlPointPoseY": 345.1099999997674,
+          "Behavior": "STOP"
         }
       }
     }
@@ -4207,7 +4388,8 @@
         "Info": {
           "Distance": 0.009999999767330852,
           "ControlPointPoseX": 71.50000000110083,
-          "ControlPointPoseY": 345.10999999976735
+          "ControlPointPoseY": 345.10999999976735,
+          "Behavior": "STOP"
         }
       }
     }
@@ -4230,7 +4412,8 @@
         "Info": {
           "Distance": 0.009999999767274009,
           "ControlPointPoseX": 71.5000000011014,
-          "ControlPointPoseY": 345.1099999997673
+          "ControlPointPoseY": 345.1099999997673,
+          "Behavior": "STOP"
         }
       }
     }
@@ -4253,7 +4436,8 @@
         "Info": {
           "Distance": 0.009999999767330852,
           "ControlPointPoseX": 71.500000001102,
-          "ControlPointPoseY": 345.10999999976735
+          "ControlPointPoseY": 345.10999999976735,
+          "Behavior": "STOP"
         }
       }
     }
@@ -4276,7 +4460,8 @@
         "Info": {
           "Distance": 0.009999999767330852,
           "ControlPointPoseX": 71.50000000109954,
-          "ControlPointPoseY": 345.10999999976735
+          "ControlPointPoseY": 345.10999999976735,
+          "Behavior": "STOP"
         }
       }
     }
@@ -4299,7 +4484,8 @@
         "Info": {
           "Distance": 0.009999999767274009,
           "ControlPointPoseX": 71.50000000110059,
-          "ControlPointPoseY": 345.1099999997673
+          "ControlPointPoseY": 345.1099999997673,
+          "Behavior": "STOP"
         }
       }
     }
@@ -4322,7 +4508,8 @@
         "Info": {
           "Distance": 0.009999999767330852,
           "ControlPointPoseX": 71.50000000109902,
-          "ControlPointPoseY": 345.10999999976735
+          "ControlPointPoseY": 345.10999999976735,
+          "Behavior": "STOP"
         }
       }
     }
@@ -4345,7 +4532,8 @@
         "Info": {
           "Distance": 0.009999999767160322,
           "ControlPointPoseX": 71.500000001106,
-          "ControlPointPoseY": 345.1099999997672
+          "ControlPointPoseY": 345.1099999997672,
+          "Behavior": "STOP"
         }
       }
     }
@@ -4368,7 +4556,8 @@
         "Info": {
           "Distance": 0.009999999767330852,
           "ControlPointPoseX": 71.50000000109918,
-          "ControlPointPoseY": 345.10999999976735
+          "ControlPointPoseY": 345.10999999976735,
+          "Behavior": "STOP"
         }
       }
     }
@@ -4391,7 +4580,8 @@
         "Info": {
           "Distance": 0.009999999767330852,
           "ControlPointPoseX": 71.50000000109851,
-          "ControlPointPoseY": 345.10999999976735
+          "ControlPointPoseY": 345.10999999976735,
+          "Behavior": "STOP"
         }
       }
     }
@@ -4414,7 +4604,8 @@
         "Info": {
           "Distance": 0.009999999767330852,
           "ControlPointPoseX": 71.50000000110154,
-          "ControlPointPoseY": 345.10999999976735
+          "ControlPointPoseY": 345.10999999976735,
+          "Behavior": "STOP"
         }
       }
     }
@@ -4437,7 +4628,8 @@
         "Info": {
           "Distance": 0.009999999767217166,
           "ControlPointPoseX": 71.50000000110415,
-          "ControlPointPoseY": 345.10999999976724
+          "ControlPointPoseY": 345.10999999976724,
+          "Behavior": "STOP"
         }
       }
     }
@@ -4460,7 +4652,8 @@
         "Info": {
           "Distance": 0.009999999767274009,
           "ControlPointPoseX": 71.50000000110181,
-          "ControlPointPoseY": 345.1099999997673
+          "ControlPointPoseY": 345.1099999997673,
+          "Behavior": "STOP"
         }
       }
     }
@@ -4483,7 +4676,8 @@
         "Info": {
           "Distance": 0.009999999767274009,
           "ControlPointPoseX": 71.50000000110403,
-          "ControlPointPoseY": 345.1099999997673
+          "ControlPointPoseY": 345.1099999997673,
+          "Behavior": "STOP"
         }
       }
     }
@@ -4506,7 +4700,8 @@
         "Info": {
           "Distance": 0.009999999767330852,
           "ControlPointPoseX": 71.50000000110288,
-          "ControlPointPoseY": 345.10999999976735
+          "ControlPointPoseY": 345.10999999976735,
+          "Behavior": "STOP"
         }
       }
     }
@@ -4529,7 +4724,8 @@
         "Info": {
           "Distance": 0.009999999767330852,
           "ControlPointPoseX": 71.50000000110177,
-          "ControlPointPoseY": 345.10999999976735
+          "ControlPointPoseY": 345.10999999976735,
+          "Behavior": "STOP"
         }
       }
     }
@@ -4552,7 +4748,8 @@
         "Info": {
           "Distance": 0.009999999767274009,
           "ControlPointPoseX": 71.500000001099,
-          "ControlPointPoseY": 345.1099999997673
+          "ControlPointPoseY": 345.1099999997673,
+          "Behavior": "STOP"
         }
       }
     }
@@ -4575,7 +4772,8 @@
         "Info": {
           "Distance": 0.009999999767330852,
           "ControlPointPoseX": 71.50000000110013,
-          "ControlPointPoseY": 345.10999999976735
+          "ControlPointPoseY": 345.10999999976735,
+          "Behavior": "STOP"
         }
       }
     }
@@ -4598,7 +4796,8 @@
         "Info": {
           "Distance": 0.009999999767387696,
           "ControlPointPoseX": 71.50000000109789,
-          "ControlPointPoseY": 345.1099999997674
+          "ControlPointPoseY": 345.1099999997674,
+          "Behavior": "STOP"
         }
       }
     }
@@ -4621,7 +4820,8 @@
         "Info": {
           "Distance": 0.009999999767330852,
           "ControlPointPoseX": 71.50000000109893,
-          "ControlPointPoseY": 345.10999999976735
+          "ControlPointPoseY": 345.10999999976735,
+          "Behavior": "STOP"
         }
       }
     }
@@ -4644,7 +4844,8 @@
         "Info": {
           "Distance": 0.009999999767160322,
           "ControlPointPoseX": 71.50000000109794,
-          "ControlPointPoseY": 345.1099999997672
+          "ControlPointPoseY": 345.1099999997672,
+          "Behavior": "STOP"
         }
       }
     }
@@ -4667,7 +4868,8 @@
         "Info": {
           "Distance": 0.009999999767330852,
           "ControlPointPoseX": 71.50000000109833,
-          "ControlPointPoseY": 345.10999999976735
+          "ControlPointPoseY": 345.10999999976735,
+          "Behavior": "STOP"
         }
       }
     }
@@ -4690,7 +4892,8 @@
         "Info": {
           "Distance": 0.009999999767387696,
           "ControlPointPoseX": 71.50000000109645,
-          "ControlPointPoseY": 345.1099999997674
+          "ControlPointPoseY": 345.1099999997674,
+          "Behavior": "STOP"
         }
       }
     }
@@ -4713,7 +4916,8 @@
         "Info": {
           "Distance": 0.009999999767160322,
           "ControlPointPoseX": 71.50000000110231,
-          "ControlPointPoseY": 345.1099999997672
+          "ControlPointPoseY": 345.1099999997672,
+          "Behavior": "STOP"
         }
       }
     }
@@ -4736,7 +4940,8 @@
         "Info": {
           "Distance": 0.009999999767274009,
           "ControlPointPoseX": 71.50000000109956,
-          "ControlPointPoseY": 345.1099999997673
+          "ControlPointPoseY": 345.1099999997673,
+          "Behavior": "STOP"
         }
       }
     }
@@ -4759,7 +4964,8 @@
         "Info": {
           "Distance": 0.009999999767330852,
           "ControlPointPoseX": 71.50000000110103,
-          "ControlPointPoseY": 345.10999999976735
+          "ControlPointPoseY": 345.10999999976735,
+          "Behavior": "STOP"
         }
       }
     }
@@ -4782,7 +4988,8 @@
         "Info": {
           "Distance": 0.009999999767330852,
           "ControlPointPoseX": 71.50000000109873,
-          "ControlPointPoseY": 345.10999999976735
+          "ControlPointPoseY": 345.10999999976735,
+          "Behavior": "STOP"
         }
       }
     }
@@ -4805,7 +5012,8 @@
         "Info": {
           "Distance": 0.009999999767330852,
           "ControlPointPoseX": 71.50000000109877,
-          "ControlPointPoseY": 345.10999999976735
+          "ControlPointPoseY": 345.10999999976735,
+          "Behavior": "STOP"
         }
       }
     }
@@ -4828,7 +5036,8 @@
         "Info": {
           "Distance": 0.009999999767387696,
           "ControlPointPoseX": 71.50000000109922,
-          "ControlPointPoseY": 345.1099999997674
+          "ControlPointPoseY": 345.1099999997674,
+          "Behavior": "STOP"
         }
       }
     }
@@ -4851,7 +5060,8 @@
         "Info": {
           "Distance": 0.009999999767274009,
           "ControlPointPoseX": 71.50000000109912,
-          "ControlPointPoseY": 345.1099999997673
+          "ControlPointPoseY": 345.1099999997673,
+          "Behavior": "STOP"
         }
       }
     }
@@ -4874,7 +5084,8 @@
         "Info": {
           "Distance": 0.009999999767217166,
           "ControlPointPoseX": 71.5000000011032,
-          "ControlPointPoseY": 345.10999999976724
+          "ControlPointPoseY": 345.10999999976724,
+          "Behavior": "STOP"
         }
       }
     }
@@ -4897,7 +5108,8 @@
         "Info": {
           "Distance": 0.009999999767274009,
           "ControlPointPoseX": 71.50000000109883,
-          "ControlPointPoseY": 345.1099999997673
+          "ControlPointPoseY": 345.1099999997673,
+          "Behavior": "STOP"
         }
       }
     }
@@ -4920,7 +5132,8 @@
         "Info": {
           "Distance": 0.009999999767274009,
           "ControlPointPoseX": 71.5000000011001,
-          "ControlPointPoseY": 345.1099999997673
+          "ControlPointPoseY": 345.1099999997673,
+          "Behavior": "STOP"
         }
       }
     }
@@ -4943,7 +5156,8 @@
         "Info": {
           "Distance": 0.009999999767330852,
           "ControlPointPoseX": 71.5000000011014,
-          "ControlPointPoseY": 345.10999999976735
+          "ControlPointPoseY": 345.10999999976735,
+          "Behavior": "STOP"
         }
       }
     }
@@ -4966,7 +5180,8 @@
         "Info": {
           "Distance": 0.009999999767330852,
           "ControlPointPoseX": 71.50000000110138,
-          "ControlPointPoseY": 345.10999999976735
+          "ControlPointPoseY": 345.10999999976735,
+          "Behavior": "STOP"
         }
       }
     }
@@ -4989,7 +5204,8 @@
         "Info": {
           "Distance": 0.009999999767103479,
           "ControlPointPoseX": 71.50000000110497,
-          "ControlPointPoseY": 345.1099999997671
+          "ControlPointPoseY": 345.1099999997671,
+          "Behavior": "STOP"
         }
       }
     }
@@ -5012,7 +5228,8 @@
         "Info": {
           "Distance": 0.009999999767217166,
           "ControlPointPoseX": 71.50000000110226,
-          "ControlPointPoseY": 345.10999999976724
+          "ControlPointPoseY": 345.10999999976724,
+          "Behavior": "STOP"
         }
       }
     }
@@ -5035,7 +5252,8 @@
         "Info": {
           "Distance": 0.009999999767274009,
           "ControlPointPoseX": 71.50000000110113,
-          "ControlPointPoseY": 345.1099999997673
+          "ControlPointPoseY": 345.1099999997673,
+          "Behavior": "STOP"
         }
       }
     }
@@ -5058,7 +5276,8 @@
         "Info": {
           "Distance": 0.009999999767160322,
           "ControlPointPoseX": 71.50000000110232,
-          "ControlPointPoseY": 345.1099999997672
+          "ControlPointPoseY": 345.1099999997672,
+          "Behavior": "STOP"
         }
       }
     }
@@ -5081,7 +5300,8 @@
         "Info": {
           "Distance": 0.009999999767330852,
           "ControlPointPoseX": 71.50000000110201,
-          "ControlPointPoseY": 345.10999999976735
+          "ControlPointPoseY": 345.10999999976735,
+          "Behavior": "STOP"
         }
       }
     }
@@ -5104,7 +5324,8 @@
         "Info": {
           "Distance": 0.009999999767330852,
           "ControlPointPoseX": 71.50000000109627,
-          "ControlPointPoseY": 345.10999999976735
+          "ControlPointPoseY": 345.10999999976735,
+          "Behavior": "STOP"
         }
       }
     }
@@ -5127,7 +5348,8 @@
         "Info": {
           "Distance": 0.009999999767387696,
           "ControlPointPoseX": 71.50000000109922,
-          "ControlPointPoseY": 345.1099999997674
+          "ControlPointPoseY": 345.1099999997674,
+          "Behavior": "STOP"
         }
       }
     }
@@ -5150,7 +5372,8 @@
         "Info": {
           "Distance": 0.009999999767217166,
           "ControlPointPoseX": 71.50000000110276,
-          "ControlPointPoseY": 345.10999999976724
+          "ControlPointPoseY": 345.10999999976724,
+          "Behavior": "STOP"
         }
       }
     }
@@ -5173,7 +5396,8 @@
         "Info": {
           "Distance": 0.009999999767274009,
           "ControlPointPoseX": 71.50000000110083,
-          "ControlPointPoseY": 345.1099999997673
+          "ControlPointPoseY": 345.1099999997673,
+          "Behavior": "STOP"
         }
       }
     }
@@ -5196,7 +5420,8 @@
         "Info": {
           "Distance": 0.009999999767217166,
           "ControlPointPoseX": 71.50000000110208,
-          "ControlPointPoseY": 345.10999999976724
+          "ControlPointPoseY": 345.10999999976724,
+          "Behavior": "STOP"
         }
       }
     }
@@ -5219,7 +5444,8 @@
         "Info": {
           "Distance": 0.009999999767217166,
           "ControlPointPoseX": 71.50000000110165,
-          "ControlPointPoseY": 345.10999999976724
+          "ControlPointPoseY": 345.10999999976724,
+          "Behavior": "STOP"
         }
       }
     }
@@ -5242,7 +5468,8 @@
         "Info": {
           "Distance": 0.009999999767330852,
           "ControlPointPoseX": 71.50000000109952,
-          "ControlPointPoseY": 345.10999999976735
+          "ControlPointPoseY": 345.10999999976735,
+          "Behavior": "STOP"
         }
       }
     }
@@ -5265,7 +5492,8 @@
         "Info": {
           "Distance": 0.009999999767330852,
           "ControlPointPoseX": 71.50000000110039,
-          "ControlPointPoseY": 345.10999999976735
+          "ControlPointPoseY": 345.10999999976735,
+          "Behavior": "STOP"
         }
       }
     }
@@ -5288,7 +5516,8 @@
         "Info": {
           "Distance": 0.009999999767330852,
           "ControlPointPoseX": 71.50000000109695,
-          "ControlPointPoseY": 345.10999999976735
+          "ControlPointPoseY": 345.10999999976735,
+          "Behavior": "STOP"
         }
       }
     }
@@ -5311,7 +5540,8 @@
         "Info": {
           "Distance": 0.009999999767217166,
           "ControlPointPoseX": 71.50000000109775,
-          "ControlPointPoseY": 345.10999999976724
+          "ControlPointPoseY": 345.10999999976724,
+          "Behavior": "STOP"
         }
       }
     }
@@ -5334,7 +5564,8 @@
         "Info": {
           "Distance": 0.009999999767330852,
           "ControlPointPoseX": 71.50000000109637,
-          "ControlPointPoseY": 345.10999999976735
+          "ControlPointPoseY": 345.10999999976735,
+          "Behavior": "STOP"
         }
       }
     }
@@ -5357,7 +5588,8 @@
         "Info": {
           "Distance": 0.009999999767330852,
           "ControlPointPoseX": 71.50000000110084,
-          "ControlPointPoseY": 345.10999999976735
+          "ControlPointPoseY": 345.10999999976735,
+          "Behavior": "STOP"
         }
       }
     }
@@ -5380,7 +5612,8 @@
         "Info": {
           "Distance": 0.009999999767274009,
           "ControlPointPoseX": 71.50000000110309,
-          "ControlPointPoseY": 345.1099999997673
+          "ControlPointPoseY": 345.1099999997673,
+          "Behavior": "STOP"
         }
       }
     }
@@ -5403,7 +5636,8 @@
         "Info": {
           "Distance": 0.009999999767274009,
           "ControlPointPoseX": 71.50000000109661,
-          "ControlPointPoseY": 345.1099999997673
+          "ControlPointPoseY": 345.1099999997673,
+          "Behavior": "STOP"
         }
       }
     }
@@ -5426,7 +5660,8 @@
         "Info": {
           "Distance": 0.009999999767274009,
           "ControlPointPoseX": 71.50000000109858,
-          "ControlPointPoseY": 345.1099999997673
+          "ControlPointPoseY": 345.1099999997673,
+          "Behavior": "STOP"
         }
       }
     }
@@ -5449,7 +5684,8 @@
         "Info": {
           "Distance": 0.009999999767330852,
           "ControlPointPoseX": 71.50000000109888,
-          "ControlPointPoseY": 345.10999999976735
+          "ControlPointPoseY": 345.10999999976735,
+          "Behavior": "STOP"
         }
       }
     }
@@ -5472,7 +5708,8 @@
         "Info": {
           "Distance": 0.009999999767274009,
           "ControlPointPoseX": 71.50000000110462,
-          "ControlPointPoseY": 345.1099999997673
+          "ControlPointPoseY": 345.1099999997673,
+          "Behavior": "STOP"
         }
       }
     }
@@ -5495,7 +5732,8 @@
         "Info": {
           "Distance": 0.009999999767330852,
           "ControlPointPoseX": 71.50000000110184,
-          "ControlPointPoseY": 345.10999999976735
+          "ControlPointPoseY": 345.10999999976735,
+          "Behavior": "STOP"
         }
       }
     }
@@ -5518,7 +5756,8 @@
         "Info": {
           "Distance": 0.009999999767274009,
           "ControlPointPoseX": 71.50000000109915,
-          "ControlPointPoseY": 345.1099999997673
+          "ControlPointPoseY": 345.1099999997673,
+          "Behavior": "STOP"
         }
       }
     }
@@ -5541,7 +5780,8 @@
         "Info": {
           "Distance": 0.009999999767274009,
           "ControlPointPoseX": 71.50000000109763,
-          "ControlPointPoseY": 345.1099999997673
+          "ControlPointPoseY": 345.1099999997673,
+          "Behavior": "STOP"
         }
       }
     }
@@ -5564,7 +5804,8 @@
         "Info": {
           "Distance": 0.009999999767217166,
           "ControlPointPoseX": 71.50000000110124,
-          "ControlPointPoseY": 345.10999999976724
+          "ControlPointPoseY": 345.10999999976724,
+          "Behavior": "STOP"
         }
       }
     }
@@ -5587,7 +5828,8 @@
         "Info": {
           "Distance": 0.009999999767217166,
           "ControlPointPoseX": 71.50000000109998,
-          "ControlPointPoseY": 345.10999999976724
+          "ControlPointPoseY": 345.10999999976724,
+          "Behavior": "STOP"
         }
       }
     }
@@ -5610,7 +5852,8 @@
         "Info": {
           "Distance": 0.009999999767160322,
           "ControlPointPoseX": 71.5000000011035,
-          "ControlPointPoseY": 345.1099999997672
+          "ControlPointPoseY": 345.1099999997672,
+          "Behavior": "STOP"
         }
       }
     }
@@ -5633,7 +5876,8 @@
         "Info": {
           "Distance": 0.009999999767387696,
           "ControlPointPoseX": 71.50000000109993,
-          "ControlPointPoseY": 345.1099999997674
+          "ControlPointPoseY": 345.1099999997674,
+          "Behavior": "STOP"
         }
       }
     }
@@ -5656,7 +5900,8 @@
         "Info": {
           "Distance": 0.009999999767274009,
           "ControlPointPoseX": 71.50000000109873,
-          "ControlPointPoseY": 345.1099999997673
+          "ControlPointPoseY": 345.1099999997673,
+          "Behavior": "STOP"
         }
       }
     }
@@ -5679,7 +5924,8 @@
         "Info": {
           "Distance": 0.009999999767330852,
           "ControlPointPoseX": 71.50000000110198,
-          "ControlPointPoseY": 345.10999999976735
+          "ControlPointPoseY": 345.10999999976735,
+          "Behavior": "STOP"
         }
       }
     }
@@ -5702,7 +5948,8 @@
         "Info": {
           "Distance": 0.009999999767330852,
           "ControlPointPoseX": 71.5000000011001,
-          "ControlPointPoseY": 345.10999999976735
+          "ControlPointPoseY": 345.10999999976735,
+          "Behavior": "STOP"
         }
       }
     }
@@ -5725,7 +5972,8 @@
         "Info": {
           "Distance": 0.009999999767330852,
           "ControlPointPoseX": 71.50000000109848,
-          "ControlPointPoseY": 345.10999999976735
+          "ControlPointPoseY": 345.10999999976735,
+          "Behavior": "STOP"
         }
       }
     }
@@ -5748,7 +5996,8 @@
         "Info": {
           "Distance": 0.009999999767330852,
           "ControlPointPoseX": 71.50000000109952,
-          "ControlPointPoseY": 345.10999999976735
+          "ControlPointPoseY": 345.10999999976735,
+          "Behavior": "STOP"
         }
       }
     }
@@ -5771,7 +6020,8 @@
         "Info": {
           "Distance": 0.009999999767160322,
           "ControlPointPoseX": 71.5000000010957,
-          "ControlPointPoseY": 345.1099999997672
+          "ControlPointPoseY": 345.1099999997672,
+          "Behavior": "STOP"
         }
       }
     }
@@ -5794,7 +6044,8 @@
         "Info": {
           "Distance": 0.009999999767217166,
           "ControlPointPoseX": 71.50000000110164,
-          "ControlPointPoseY": 345.10999999976724
+          "ControlPointPoseY": 345.10999999976724,
+          "Behavior": "STOP"
         }
       }
     }
@@ -5817,7 +6068,8 @@
         "Info": {
           "Distance": 0.009999999767160322,
           "ControlPointPoseX": 71.50000000110221,
-          "ControlPointPoseY": 345.1099999997672
+          "ControlPointPoseY": 345.1099999997672,
+          "Behavior": "STOP"
         }
       }
     }
@@ -5840,7 +6092,8 @@
         "Info": {
           "Distance": 0.009999999767274009,
           "ControlPointPoseX": 71.50000000110141,
-          "ControlPointPoseY": 345.1099999997673
+          "ControlPointPoseY": 345.1099999997673,
+          "Behavior": "STOP"
         }
       }
     }
@@ -5863,7 +6116,8 @@
         "Info": {
           "Distance": 0.009999999767330852,
           "ControlPointPoseX": 71.50000000109917,
-          "ControlPointPoseY": 345.10999999976735
+          "ControlPointPoseY": 345.10999999976735,
+          "Behavior": "STOP"
         }
       }
     }
@@ -5886,7 +6140,8 @@
         "Info": {
           "Distance": 0.009999999767274009,
           "ControlPointPoseX": 71.5000000011008,
-          "ControlPointPoseY": 345.1099999997673
+          "ControlPointPoseY": 345.1099999997673,
+          "Behavior": "STOP"
         }
       }
     }
@@ -5909,7 +6164,8 @@
         "Info": {
           "Distance": 0.009999999767217166,
           "ControlPointPoseX": 71.50000000110282,
-          "ControlPointPoseY": 345.10999999976724
+          "ControlPointPoseY": 345.10999999976724,
+          "Behavior": "STOP"
         }
       }
     }
@@ -5932,7 +6188,8 @@
         "Info": {
           "Distance": 0.009999999767330852,
           "ControlPointPoseX": 71.50000000109924,
-          "ControlPointPoseY": 345.10999999976735
+          "ControlPointPoseY": 345.10999999976735,
+          "Behavior": "STOP"
         }
       }
     }
@@ -5955,7 +6212,8 @@
         "Info": {
           "Distance": 0.009999999767330852,
           "ControlPointPoseX": 71.50000000109806,
-          "ControlPointPoseY": 345.10999999976735
+          "ControlPointPoseY": 345.10999999976735,
+          "Behavior": "STOP"
         }
       }
     }
@@ -5978,7 +6236,8 @@
         "Info": {
           "Distance": 0.009999999767274007,
           "ControlPointPoseX": 71.50000000109438,
-          "ControlPointPoseY": 345.1099999997673
+          "ControlPointPoseY": 345.1099999997673,
+          "Behavior": "STOP"
         }
       }
     }
@@ -6001,7 +6260,8 @@
         "Info": {
           "Distance": 0.009999999767330852,
           "ControlPointPoseX": 71.50000000109887,
-          "ControlPointPoseY": 345.10999999976735
+          "ControlPointPoseY": 345.10999999976735,
+          "Behavior": "STOP"
         }
       }
     }
@@ -6024,7 +6284,8 @@
         "Info": {
           "Distance": 0.009999999767274009,
           "ControlPointPoseX": 71.5000000011015,
-          "ControlPointPoseY": 345.1099999997673
+          "ControlPointPoseY": 345.1099999997673,
+          "Behavior": "STOP"
         }
       }
     }
@@ -6047,7 +6308,8 @@
         "Info": {
           "Distance": 0.009999999767274009,
           "ControlPointPoseX": 71.5000000010973,
-          "ControlPointPoseY": 345.1099999997673
+          "ControlPointPoseY": 345.1099999997673,
+          "Behavior": "STOP"
         }
       }
     }
@@ -6070,7 +6332,8 @@
         "Info": {
           "Distance": 0.009999999767387696,
           "ControlPointPoseX": 71.50000000110083,
-          "ControlPointPoseY": 345.1099999997674
+          "ControlPointPoseY": 345.1099999997674,
+          "Behavior": "STOP"
         }
       }
     }
@@ -6093,7 +6356,8 @@
         "Info": {
           "Distance": 0.009999999767330852,
           "ControlPointPoseX": 71.5000000010998,
-          "ControlPointPoseY": 345.10999999976735
+          "ControlPointPoseY": 345.10999999976735,
+          "Behavior": "STOP"
         }
       }
     }
@@ -6116,7 +6380,8 @@
         "Info": {
           "Distance": 0.009999999767330852,
           "ControlPointPoseX": 71.50000000110144,
-          "ControlPointPoseY": 345.10999999976735
+          "ControlPointPoseY": 345.10999999976735,
+          "Behavior": "STOP"
         }
       }
     }
@@ -6139,7 +6404,8 @@
         "Info": {
           "Distance": 0.009999999767330852,
           "ControlPointPoseX": 71.50000000110028,
-          "ControlPointPoseY": 345.10999999976735
+          "ControlPointPoseY": 345.10999999976735,
+          "Behavior": "STOP"
         }
       }
     }
@@ -6162,7 +6428,8 @@
         "Info": {
           "Distance": 0.009999999767330852,
           "ControlPointPoseX": 71.50000000110002,
-          "ControlPointPoseY": 345.10999999976735
+          "ControlPointPoseY": 345.10999999976735,
+          "Behavior": "STOP"
         }
       }
     }
@@ -6185,7 +6452,8 @@
         "Info": {
           "Distance": 0.009999999767274009,
           "ControlPointPoseX": 71.50000000110325,
-          "ControlPointPoseY": 345.1099999997673
+          "ControlPointPoseY": 345.1099999997673,
+          "Behavior": "STOP"
         }
       }
     }
@@ -6208,7 +6476,8 @@
         "Info": {
           "Distance": 0.009999999767330852,
           "ControlPointPoseX": 71.50000000109983,
-          "ControlPointPoseY": 345.10999999976735
+          "ControlPointPoseY": 345.10999999976735,
+          "Behavior": "STOP"
         }
       }
     }
@@ -6231,7 +6500,8 @@
         "Info": {
           "Distance": 0.009999999767330852,
           "ControlPointPoseX": 71.50000000110151,
-          "ControlPointPoseY": 345.10999999976735
+          "ControlPointPoseY": 345.10999999976735,
+          "Behavior": "STOP"
         }
       }
     }
@@ -6254,7 +6524,8 @@
         "Info": {
           "Distance": 0.009999999767217166,
           "ControlPointPoseX": 71.50000000110377,
-          "ControlPointPoseY": 345.10999999976724
+          "ControlPointPoseY": 345.10999999976724,
+          "Behavior": "STOP"
         }
       }
     }
@@ -6277,7 +6548,8 @@
         "Info": {
           "Distance": 0.009999999767330852,
           "ControlPointPoseX": 71.5000000010954,
-          "ControlPointPoseY": 345.10999999976735
+          "ControlPointPoseY": 345.10999999976735,
+          "Behavior": "STOP"
         }
       }
     }
@@ -6300,7 +6572,8 @@
         "Info": {
           "Distance": 0.009999999767217166,
           "ControlPointPoseX": 71.50000000110114,
-          "ControlPointPoseY": 345.10999999976724
+          "ControlPointPoseY": 345.10999999976724,
+          "Behavior": "STOP"
         }
       }
     }
@@ -6323,7 +6596,8 @@
         "Info": {
           "Distance": 0.009999999767274009,
           "ControlPointPoseX": 71.50000000109823,
-          "ControlPointPoseY": 345.1099999997673
+          "ControlPointPoseY": 345.1099999997673,
+          "Behavior": "STOP"
         }
       }
     }
@@ -6346,7 +6620,8 @@
         "Info": {
           "Distance": 0.009999999767274009,
           "ControlPointPoseX": 71.5000000011007,
-          "ControlPointPoseY": 345.1099999997673
+          "ControlPointPoseY": 345.1099999997673,
+          "Behavior": "STOP"
         }
       }
     }
@@ -6369,7 +6644,8 @@
         "Info": {
           "Distance": 0.009999999767217166,
           "ControlPointPoseX": 71.50000000109748,
-          "ControlPointPoseY": 345.10999999976724
+          "ControlPointPoseY": 345.10999999976724,
+          "Behavior": "STOP"
         }
       }
     }
@@ -6392,7 +6668,8 @@
         "Info": {
           "Distance": 0.009999999767330852,
           "ControlPointPoseX": 71.50000000109995,
-          "ControlPointPoseY": 345.10999999976735
+          "ControlPointPoseY": 345.10999999976735,
+          "Behavior": "STOP"
         }
       }
     }
@@ -6415,7 +6692,8 @@
         "Info": {
           "Distance": 0.009999999767330852,
           "ControlPointPoseX": 71.50000000110059,
-          "ControlPointPoseY": 345.10999999976735
+          "ControlPointPoseY": 345.10999999976735,
+          "Behavior": "STOP"
         }
       }
     }
@@ -6438,7 +6716,8 @@
         "Info": {
           "Distance": 0.009999999767330852,
           "ControlPointPoseX": 71.50000000110276,
-          "ControlPointPoseY": 345.10999999976735
+          "ControlPointPoseY": 345.10999999976735,
+          "Behavior": "STOP"
         }
       }
     }
@@ -6461,7 +6740,8 @@
         "Info": {
           "Distance": 0.009999999767330852,
           "ControlPointPoseX": 71.50000000110211,
-          "ControlPointPoseY": 345.10999999976735
+          "ControlPointPoseY": 345.10999999976735,
+          "Behavior": "STOP"
         }
       }
     }
@@ -6484,7 +6764,8 @@
         "Info": {
           "Distance": 0.009999999767330852,
           "ControlPointPoseX": 71.50000000110047,
-          "ControlPointPoseY": 345.10999999976735
+          "ControlPointPoseY": 345.10999999976735,
+          "Behavior": "STOP"
         }
       }
     }
@@ -6507,7 +6788,8 @@
         "Info": {
           "Distance": 0.009999999767330852,
           "ControlPointPoseX": 71.50000000109915,
-          "ControlPointPoseY": 345.10999999976735
+          "ControlPointPoseY": 345.10999999976735,
+          "Behavior": "STOP"
         }
       }
     }
@@ -6530,7 +6812,8 @@
         "Info": {
           "Distance": 0.009999999767330852,
           "ControlPointPoseX": 71.50000000110087,
-          "ControlPointPoseY": 345.10999999976735
+          "ControlPointPoseY": 345.10999999976735,
+          "Behavior": "STOP"
         }
       }
     }
@@ -6553,7 +6836,8 @@
         "Info": {
           "Distance": 0.009999999767387696,
           "ControlPointPoseX": 71.50000000109647,
-          "ControlPointPoseY": 345.1099999997674
+          "ControlPointPoseY": 345.1099999997674,
+          "Behavior": "STOP"
         }
       }
     }
@@ -6576,7 +6860,8 @@
         "Info": {
           "Distance": 0.009999999767330852,
           "ControlPointPoseX": 71.50000000109743,
-          "ControlPointPoseY": 345.10999999976735
+          "ControlPointPoseY": 345.10999999976735,
+          "Behavior": "STOP"
         }
       }
     }
@@ -6599,7 +6884,8 @@
         "Info": {
           "Distance": 0.009999999767330852,
           "ControlPointPoseX": 71.50000000109819,
-          "ControlPointPoseY": 345.10999999976735
+          "ControlPointPoseY": 345.10999999976735,
+          "Behavior": "STOP"
         }
       }
     }
@@ -6622,7 +6908,8 @@
         "Info": {
           "Distance": 0.009999999767387696,
           "ControlPointPoseX": 71.50000000109995,
-          "ControlPointPoseY": 345.1099999997674
+          "ControlPointPoseY": 345.1099999997674,
+          "Behavior": "STOP"
         }
       }
     }
@@ -6645,7 +6932,8 @@
         "Info": {
           "Distance": 0.009999999767330852,
           "ControlPointPoseX": 71.50000000109763,
-          "ControlPointPoseY": 345.10999999976735
+          "ControlPointPoseY": 345.10999999976735,
+          "Behavior": "STOP"
         }
       }
     }
@@ -6668,7 +6956,8 @@
         "Info": {
           "Distance": 0.009999999767217166,
           "ControlPointPoseX": 71.50000000110055,
-          "ControlPointPoseY": 345.10999999976724
+          "ControlPointPoseY": 345.10999999976724,
+          "Behavior": "STOP"
         }
       }
     }
@@ -6691,7 +6980,8 @@
         "Info": {
           "Distance": 0.009999999767330852,
           "ControlPointPoseX": 71.50000000110005,
-          "ControlPointPoseY": 345.10999999976735
+          "ControlPointPoseY": 345.10999999976735,
+          "Behavior": "STOP"
         }
       }
     }
@@ -6714,7 +7004,8 @@
         "Info": {
           "Distance": 0.009999999767330852,
           "ControlPointPoseX": 71.50000000110165,
-          "ControlPointPoseY": 345.10999999976735
+          "ControlPointPoseY": 345.10999999976735,
+          "Behavior": "STOP"
         }
       }
     }
@@ -6737,7 +7028,8 @@
         "Info": {
           "Distance": 0.009999999767330852,
           "ControlPointPoseX": 71.50000000110006,
-          "ControlPointPoseY": 345.10999999976735
+          "ControlPointPoseY": 345.10999999976735,
+          "Behavior": "STOP"
         }
       }
     }
@@ -6760,7 +7052,8 @@
         "Info": {
           "Distance": 0.009999999767274009,
           "ControlPointPoseX": 71.50000000109955,
-          "ControlPointPoseY": 345.1099999997673
+          "ControlPointPoseY": 345.1099999997673,
+          "Behavior": "STOP"
         }
       }
     }
@@ -6783,7 +7076,8 @@
         "Info": {
           "Distance": 0.009999999767330852,
           "ControlPointPoseX": 71.50000000109858,
-          "ControlPointPoseY": 345.10999999976735
+          "ControlPointPoseY": 345.10999999976735,
+          "Behavior": "STOP"
         }
       }
     }
@@ -6806,7 +7100,8 @@
         "Info": {
           "Distance": 0.009999999767160322,
           "ControlPointPoseX": 71.50000000109918,
-          "ControlPointPoseY": 345.1099999997672
+          "ControlPointPoseY": 345.1099999997672,
+          "Behavior": "STOP"
         }
       }
     }
@@ -6829,7 +7124,8 @@
         "Info": {
           "Distance": 0.009999999767274009,
           "ControlPointPoseX": 71.50000000109989,
-          "ControlPointPoseY": 345.1099999997673
+          "ControlPointPoseY": 345.1099999997673,
+          "Behavior": "STOP"
         }
       }
     }
@@ -6852,7 +7148,8 @@
         "Info": {
           "Distance": 0.009999999767330852,
           "ControlPointPoseX": 71.50000000110028,
-          "ControlPointPoseY": 345.10999999976735
+          "ControlPointPoseY": 345.10999999976735,
+          "Behavior": "STOP"
         }
       }
     }
@@ -6875,7 +7172,8 @@
         "Info": {
           "Distance": 0.009999999767274009,
           "ControlPointPoseX": 71.50000000110049,
-          "ControlPointPoseY": 345.1099999997673
+          "ControlPointPoseY": 345.1099999997673,
+          "Behavior": "STOP"
         }
       }
     }
@@ -6898,7 +7196,8 @@
         "Info": {
           "Distance": 0.009999999767274009,
           "ControlPointPoseX": 71.5000000010995,
-          "ControlPointPoseY": 345.1099999997673
+          "ControlPointPoseY": 345.1099999997673,
+          "Behavior": "STOP"
         }
       }
     }
@@ -6921,7 +7220,8 @@
         "Info": {
           "Distance": 0.009999999767330852,
           "ControlPointPoseX": 71.50000000110224,
-          "ControlPointPoseY": 345.10999999976735
+          "ControlPointPoseY": 345.10999999976735,
+          "Behavior": "STOP"
         }
       }
     }
@@ -6944,7 +7244,8 @@
         "Info": {
           "Distance": 0.009999999767330852,
           "ControlPointPoseX": 71.50000000110224,
-          "ControlPointPoseY": 345.10999999976735
+          "ControlPointPoseY": 345.10999999976735,
+          "Behavior": "STOP"
         }
       }
     }
@@ -6967,7 +7268,8 @@
         "Info": {
           "Distance": 0.009999999767274009,
           "ControlPointPoseX": 71.50000000109864,
-          "ControlPointPoseY": 345.1099999997673
+          "ControlPointPoseY": 345.1099999997673,
+          "Behavior": "STOP"
         }
       }
     }
@@ -6990,7 +7292,8 @@
         "Info": {
           "Distance": 0.009999999767330852,
           "ControlPointPoseX": 71.50000000110026,
-          "ControlPointPoseY": 345.10999999976735
+          "ControlPointPoseY": 345.10999999976735,
+          "Behavior": "STOP"
         }
       }
     }
@@ -7013,7 +7316,8 @@
         "Info": {
           "Distance": 0.009999999767217166,
           "ControlPointPoseX": 71.50000000110238,
-          "ControlPointPoseY": 345.10999999976724
+          "ControlPointPoseY": 345.10999999976724,
+          "Behavior": "STOP"
         }
       }
     }

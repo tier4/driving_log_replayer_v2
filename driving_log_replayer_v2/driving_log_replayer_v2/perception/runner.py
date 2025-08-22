@@ -266,6 +266,7 @@ def evaluate(
 
     # calculation of the overall evaluation like mAP, TP Rate, etc and save evaluated data.
     final_metrics: dict[str, dict] = evaluator.get_evaluation_results()
+
     result.set_final_metrics(final_metrics[degradation_topic])
     result_writer.write_result_with_time(result, rosbag_manager.get_last_ros_timestamp())
     result_writer.close()

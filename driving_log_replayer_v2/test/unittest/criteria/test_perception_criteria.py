@@ -17,6 +17,13 @@ import pytest
 from driving_log_replayer_v2.criteria.perception import CriteriaLevel
 
 
+@pytest.fixture(autouse=True)
+def reset_custom() -> None:
+    CriteriaLevel.CUSTOM._value_ = None
+    yield
+    CriteriaLevel.CUSTOM._value_ = None
+
+
 def test_criteria_level_from_str_ok() -> None:
     criteria_level = CriteriaLevel.from_str("perfect")
     assert criteria_level == CriteriaLevel.PERFECT
