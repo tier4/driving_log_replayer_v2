@@ -17,6 +17,7 @@ import math
 from sys import float_info
 from typing import Literal
 
+from autoware_internal_planning_msgs.msg import PlanningFactor as PlanningFactorMsg
 from autoware_internal_planning_msgs.msg import PlanningFactorArray
 from builtin_interfaces.msg import Time
 from geometry_msgs.msg import Pose
@@ -34,6 +35,23 @@ from driving_log_replayer_v2.scenario import Scenario
 
 def stamp_to_float(stamp: Time) -> float:
     return stamp.sec + (stamp.nanosec / 1e9)
+
+
+def get_planning_factor_behavior_string(planning_factor: PlanningFactorMsg) -> str:
+    behavior = planning_factor.behavior
+
+    behavior_map = {
+        PlanningFactorMsg.UNKNOWN: "UNKNOWN",
+        PlanningFactorMsg.NONE: "NONE",
+        PlanningFactorMsg.SLOW_DOWN: "SLOW_DOWN",
+        PlanningFactorMsg.STOP: "STOP",
+        PlanningFactorMsg.SHIFT_LEFT: "SHIFT_LEFT",
+        PlanningFactorMsg.SHIFT_RIGHT: "SHIFT_RIGHT",
+        PlanningFactorMsg.TURN_LEFT: "TURN_LEFT",
+        PlanningFactorMsg.TURN_RIGHT: "TURN_RIGHT",
+    }
+
+    return behavior_map.get(behavior, f"UNKNOWN({behavior})")
 
 
 class MinMax(BaseModel):
@@ -141,6 +159,7 @@ class KinematicCondition(BaseModel):
 
 
 class MetricCondition(BaseModel):
+    condition_name: str | None = None
     topic: str
     name: str
     value: str
@@ -169,13 +188,30 @@ class Area(BaseModel):
     x: float
     y: float
     range: float = Field(gt=0.0)
+    area_condition: Literal["inside", "outside"] = "inside"
 
 
 class PlanningFactorCondition(BaseModel):
+    condition_name: str | None = None
     topic: str
     time: StartEnd
     condition_type: Literal["any_of", "all_of"]
-    area: Area
+    area: Area | None = None
+    behavior: (
+        list[
+            Literal[
+                "UNKNOWN",
+                "NONE",
+                "SLOW_DOWN",
+                "STOP",
+                "SHIFT_LEFT",
+                "SHIFT_RIGHT",
+                "TURN_LEFT",
+                "TURN_RIGHT",
+            ]
+        ]
+        | None
+    ) = None
     judgement: Literal["positive", "negative"]  # positive or negative
 
 
@@ -186,7 +222,7 @@ class Conditions(BaseModel):
 
 class Evaluation(BaseModel):
     UseCaseName: Literal["planning_control"]
-    UseCaseFormatVersion: Literal["2.0.0"]
+    UseCaseFormatVersion: Literal["2.0.0", "2.1.0", "2.2.0"]
     Conditions: Conditions
     Datasets: list[dict]
 
@@ -263,7 +299,10 @@ class MetricsClassContainer:
     def __init__(self, conditions: list[MetricCondition]) -> None:
         self.__container: list[Metrics] = []
         for i, cond in enumerate(conditions):
-            self.__container.append(Metrics(f"Condition_{i}", cond))
+            condition_name = (
+                cond.condition_name if cond.condition_name is not None else f"Condition_{i}"
+            )
+            self.__container.append(Metrics(condition_name, cond))
 
     def set_frame(self, msg: MetricArray, control_metrics: MetricArray) -> dict:
         frame_result: dict[int, dict] = {}
@@ -314,10 +353,25 @@ class PlanningFactor(EvaluationItem):
         frame_success = "Fail"
 
         # get factors[0] # factorsはarrayになっているが、実際には1個しか入ってない。
-        in_range, info_dict = self.judge_in_range(msg.factors[0].control_points[0].pose)
+        info_dict = {}
+        condition_met = True
+
+        if self.condition.area is not None:
+            in_range, info_dict_area = self.judge_in_range(msg.factors[0].control_points[0].pose)
+            info_dict.update(info_dict_area)
+            condition_met &= (
+                in_range if self.condition.area.area_condition == "inside" else not in_range
+            )
+
+        if self.condition.behavior is not None:
+            behavior_met, info_dict_behavior = self.judge_behavior(msg.factors[0])
+            info_dict.update(info_dict_behavior)
+            condition_met &= behavior_met
 
         # Check if the condition is met based on judgement type
-        condition_met = in_range if self.condition.judgement == "positive" else not in_range
+        condition_met = (
+            condition_met if self.condition.judgement == "positive" else not condition_met
+        )
         if condition_met:
             frame_success = "Success"
             self.passed += 1
@@ -348,12 +402,22 @@ class PlanningFactor(EvaluationItem):
             return True, info_dict
         return False, info_dict
 
+    def judge_behavior(self, msg: PlanningFactorMsg) -> tuple[bool, dict]:
+        behavior = get_planning_factor_behavior_string(msg)
+        info_dict = {
+            "Behavior": behavior,
+        }
+        return behavior in self.condition.behavior, info_dict
+
 
 class FactorsClassContainer:
     def __init__(self, conditions: list[PlanningFactorCondition]) -> None:
         self.__container: dict[PlanningFactor] = {}
         for i, cond in enumerate(conditions):
-            self.__container[cond.topic] = PlanningFactor(f"Condition_{i}", cond)
+            condition_name = (
+                cond.condition_name if cond.condition_name is not None else f"Condition_{i}"
+            )
+            self.__container[cond.topic] = PlanningFactor(condition_name, cond)
 
     def set_frame(self, msg: PlanningFactorArray, topic: str) -> dict:
         frame_result: dict[str, dict] = {}

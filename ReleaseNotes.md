@@ -1,5 +1,43 @@
 # Release Notes
 
+## Version 3.12.0
+
+Major changes
+
+| Module             | Feature  | Brief summary                                              | Pull request                                                        | Contributor                                             |
+| ------------------ | -------- | ---------------------------------------------------------- | ------------------------------------------------------------------- | ------------------------------------------------------- |
+| `planning_control` | scenario | add the behavior condition                                 | [#193](https://github.com/tier4/driving_log_replayer_v2/issues/193) | [xtk8532704](https://github.com/xtk8532704)             |
+| `perception`       | criteria | add validation for CUSTOM of CriteriaLevel                 | [#188](https://github.com/tier4/driving_log_replayer_v2/issues/188) | [MasatoSaeki](https://github.com/MasatoSaeki)           |
+| `common`           | criteria | add naming of condition and criteria                       | [#194](https://github.com/tier4/driving_log_replayer_v2/issues/194) | [xtk8532704](https://github.com/xtk8532704)             |
+| `common`           | pre-task | publish the topic in rosbag as pre-task before play rosbag | [#192](https://github.com/tier4/driving_log_replayer_v2/issues/192) | [MasatoSaeki](https://github.com/MasatoSaeki)           |
+| `lanelet`          | map      | support multiple map loading                               | [#189](https://github.com/tier4/driving_log_replayer_v2/issues/189) | [ManabuSasaki0811](https://github.com/ManabuSasaki0811) |
+
+## Version 3.11.1
+
+Minor Tweak
+
+| Module             | Feature       | Brief summary                                                                | Pull request                                                        | Contributor                                   |
+| ------------------ | ------------- | ---------------------------------------------------------------------------- | ------------------------------------------------------------------- | --------------------------------------------- |
+| `perception`       | test          | update test caused by adding the `nuscene_object_results` in perception_eval | [#198](https://github.com/tier4/driving_log_replayer_v2/issues/198) | [MasatoSaeki](https://github.com/MasatoSaeki) |
+| `planning_control` | remap         | fix the invalid remapping                                                    | [#196](https://github.com/tier4/driving_log_replayer_v2/issues/196) | [xtk8532704](https://github.com/xtk8532704)   |
+| `perception`       | evaluate      | fix variable name                                                            | [#183](https://github.com/tier4/driving_log_replayer_v2/issues/183) | [vividf](https://github.com/vividf)           |
+| `perception`       | fp_validation | add TN to jsonl for fp validation                                            | [#187](https://github.com/tier4/driving_log_replayer_v2/issues/187) | [MasatoSaeki](https://github.com/MasatoSaeki) |
+| `perception`       | fp_validation | handle TrackedObjects and PredictedObjects type in fp validation             | [#186](https://github.com/tier4/driving_log_replayer_v2/issues/186) | [MasatoSaeki](https://github.com/MasatoSaeki) |
+
+## Version 3.11.0
+
+Major changes
+
+| Module       | Feature       | Brief summary                                | Pull request                                                        | Contributor                                     |
+| ------------ | ------------- | -------------------------------------------- | ------------------------------------------------------------------- | ----------------------------------------------- |
+| `perception` | scenario      | fix scenario for perception                  | [#185](https://github.com/tier4/driving_log_replayer_v2/issues/185) | [MasatoSaeki](https://github.com/MasatoSaeki)   |
+| `perception` | scenario      | add key to specify degradation topic         | [#182](https://github.com/tier4/driving_log_replayer_v2/issues/182) | [MasatoSaeki](https://github.com/MasatoSaeki)   |
+| `perception` | remap         | add x2_perception remap profile              | [#178](https://github.com/tier4/driving_log_replayer_v2/issues/178) | [badai-nguyen](https://github.com/badai-nguyen) |
+| `common`     | ci            | update ruff version                          | [#176](https://github.com/tier4/driving_log_replayer_v2/issues/176) | [hayato-m126](https://github.com/hayato-m126)   |
+| `perception` | calculation   | use function get_num_gt() of perception_eval | [#177](https://github.com/tier4/driving_log_replayer_v2/issues/177) | [MasatoSaeki](https://github.com/MasatoSaeki)   |
+| `perception` | fp_validation | enable to use fp_validation                  | [#175](https://github.com/tier4/driving_log_replayer_v2/issues/175) | [MasatoSaeki](https://github.com/MasatoSaeki)   |
+| `perception` | common        | import from absolute source                  | [#172](https://github.com/tier4/driving_log_replayer_v2/issues/172) | [vividf](https://github.com/vividf)             |
+
 ## Version 3.10.2
 
 Minor Tweak

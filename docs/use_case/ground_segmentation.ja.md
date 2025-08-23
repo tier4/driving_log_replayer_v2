@@ -4,21 +4,14 @@
 
 ## Ground Truthデータ
 
-評価のために必要となるGround Truthデータは以下の2種類の方法で与えることが可能であり、それぞれシナリオの`Evaluation.Conditions.Method`を変更することにより使用できる。
-
-### annotated_rosbag
-
-bagデータに含まれる点群データに、セマンティックラベルを表すフィールドを持たせる方法。
-
-地面点群除去前後の topic を同期 subscribe し、地面ラベルを持つ点数の比較により精度評価を行う。
-
-本評価基盤では、セマンティックラベルは`INT32`型の`entity_id`フィールドに記述されていることが前提となっている。
+評価のために必要となるGround Truthデータは以下の方法で与えられる．
 
 ### annotated_pcd
 
-データセットとして与える点群データ(`dataset/data/LIDAR_CONCAT/*.pcd.bin`)に、セマンティックラベルを表すフィールドを持たせる方法。
+3D Semantic Segmentationのアノテーションが含まれる t4_datasetを用いる方法。([format](https://github.com/tier4/tier4_perception_dataset/blob/main/docs/t4_format_3d_detailed.md#3d-lidarseg-annotation-format-in-t4-format))
 
-地面点群除去処理後の点群と、pcd.binファイルに含まれる点群同士を比較し、処理後点群が持つラベルを見ることで精度評価を行う。
+1. 地面除去された点群と t4_dataset内の`/sensing/lidar/concatenated/pointcloud`に相当する点群(`dataset/data/LIDAR_CONCAT/*.pcd.bin`)を最近傍探索でマッチングさせる
+2. その点群が地面であるのか障害物であるのかチェックする
 
 ## 評価方法
 
@@ -30,22 +23,6 @@ launch を立ち上げると以下のことが実行され、評価される。
 4. bag の再生が終了すると自動で launch が終了して評価が終了する
 
 ### 評価時の注意点
-
-- **annotated_rosbagモード**  
-   [autoware.universeのsensingモジュール](https://github.com/autowarefoundation/autoware.universe/blob/main/sensing/autoware_pointcloud_preprocessor/src/filter.cpp#L386-L394)を以下のように書き換える必要がある。
-
-  ```diff
-    if (utils::is_data_layout_compatible_with_point_xyzi(*cloud)) {
-      RCLCPP_ERROR(
-        get_logger(),
-        "The pointcloud layout is compatible with PointXYZI. You may be using legacy "
-        "code/data");
-    }
-
-  - return;
-  + //return;
-  }
-  ```
 
 - **annotated_pcdモード**  
    評価処理に時間がかかるため、rosbagの再生レートを下げる必要がある。
@@ -67,12 +44,12 @@ topic の subscribe 1 回につき、以下に記述する判定結果が出力�
 
 Subscribed topics:
 
-| topic 名                                                  | データ型                    |
-| --------------------------------------------------------- | --------------------------- |
-| /sensing/lidar/concatenated/pointcloud 　　               | sensor_msgs/msg/PointCloud2 |
-| /perception/obstacle_segmentation/single_frame/pointcloud | sensor_msgs/msg/PointCloud2 |
+| topic 名                                     | データ型                    |
+| -------------------------------------------- | --------------------------- |
+| /sensing/lidar/concatenated/pointcloud 　　  | sensor_msgs/msg/PointCloud2 |
+| /perception/obstacle_segmentation/pointcloud | sensor_msgs/msg/PointCloud2 |
 
-**注:`/perception/obstacle_segmentation/single_frame/pointcloud`topicは、launch引数`evaluation_target_topic`で変更可能である。**
+**注:`/perception/obstacle_segmentation/pointcloud`topicは、launch引数`evaluation_target_topic`で変更可能である。**
 
 Published topics:
 

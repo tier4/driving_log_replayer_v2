@@ -23,6 +23,7 @@
     "MOTA",
     "MOTP",
     "nums",
+    "nuscene",
     "nuscenes",
     "objdata",
     "pydantic",
@@ -45,6 +46,7 @@
     "youtalk",
     "zeroline",
     "zerolinecolor",
-    "zerolinewidth"
+    "zerolinewidth",
+    "lidarseg"
   ]
 }

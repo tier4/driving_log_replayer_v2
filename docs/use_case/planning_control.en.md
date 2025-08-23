@@ -20,7 +20,10 @@ If a lane condition is described in the scenario, it is evaluated when a lane th
 If the conditions for evaluation are not met, no log is output.
 
 `/planning/planning_factors/**` topics are used. The target topic for evaluation is specified in the scenario file.
-Evaluate if the position of the PlanningFactor's control_point satisfies the conditions specified in the scenario.
+The following conditions can be evaluated:
+
+- Whether the position of the PlanningFactor's control_point satisfies the conditions specified in the scenario
+- Whether the PlanningFactor's behavior matches the specified behavior
 
 ### Metric Normal
 
@@ -34,11 +37,17 @@ When the Metric Normal condition is not met
 
 ### PlanningFactor Normal(judgement: positive)
 
-Normal if the x,y position of control_points[0].pose in `/planning/planning_factors/**` is within the range specified in the scenario from the x,y coordinates.
+Normal if `/planning/planning_factors/**` meets all of the following conditions:
+
+- If there is an area condition in the scenario, the x,y position of control_points[0].pose is within the range from the x,y coordinates specified in the scenario.
+- If there is a behavior condition in the scenario, the planning_factor's behavior matches the behavior specified in the scenario.
 
 ### PlanningFactor Normal(judgement: negative)
 
-Normal if the x,y position of control_points[0].pose in `/planning/planning_factors/**` is without the range specified in the scenario from the x,y coordinates.
+Normal if `/planning/planning_factors/**` does not meet any of the following conditions:
+
+- If there is an area condition in the scenario, the x,y position of control_points[0].pose is within the range from the x,y coordinates specified in the scenario.
+- If there is a behavior condition in the scenario, the planning_factor's behavior matches the behavior specified in the scenario.
 
 ### PlanningFactor Error
 
@@ -184,7 +193,8 @@ Success is determined when all PlanningFactor evaluation conditions are met.
       "Info": {
         "Distance": "Distance between control_point coordinates and coordinates specified in scenario",
         "ControlPointPoseX": "x coordinate of control_point's pose",
-        "ControlPointPoseY": "y coordinate of control_point's pose"
+        "ControlPointPoseY": "y coordinate of control_point's pose",
+        "Behavior": "behavior of the planning_factor"
       }
     }
   }

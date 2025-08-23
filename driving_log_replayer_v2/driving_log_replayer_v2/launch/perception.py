@@ -83,4 +83,9 @@ USE_CASE_ARGS: list[DeclareLaunchArgument] = [
         default_value="150",
         description="Distance interval for analysis.",
     ),
+    DeclareLaunchArgument(
+        "publish_topic_from_rosbag",
+        default_value="",
+        description="The topic to publish in rosbag before play rosbag. Using comma separated string.",
+    ),
 ]
