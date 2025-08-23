@@ -16,22 +16,22 @@ sample の scenario.yaml は以下のようなっており、
 
 ```yaml
 stop_reason_criterion:
-	- time_range: 1649143500-1649143505  # [second] lower_limit-(upper_limit) [Upper limit can be omitted. If omitted value is int(1.7976931348623157e+308)]
-		criteria_name: check_obstacle_stop  # criteria name
-		pass_rate: 80.0  # How much (%) of the evaluation attempts are considered successful.
-		minimum_interval: 1.0  # Minimum interval in the evaluation frame
-		evaluation_type: stop  # "stop" or "non_stop"
-		condition:
-			- reason: ObstacleStop  # Specify the reason you want to meet if "stop"
-				base_stop_line_dist: 0.0-10.0 # [m] lower_limit-(upper_limit) [Upper limit can be omitted. If omitted value is 1.7976931348623157e+308]
-	- time_range: 1649143506-1649143510 # [second] lower_limit-(upper_limit) [Upper limit can be omitted. If omitted value is int(1.7976931348623157e+308)]
-		criteria_name: check_non_stop  # criteria name
-		pass_rate: 90.0  # How much (%) of the evaluation attempts are considered successful.
-		minimum_interval: 1.0  # Minimum interval in the evaluation frame
-		evaluation_type: non_stop  # "stop" or "non_stop"
-		condition:
-			- reason: Intersection  # Specify the reason you do not want to meet if "non_stop"
-			# Cannot specify "base_stop_line_dist" if "non_stop"
+ - time_range: 1649143500-1649143505  # [second] lower_limit-(upper_limit) [Upper limit can be omitted. If omitted value is int(1.7976931348623157e+308)]
+  criteria_name: check_obstacle_stop  # criteria name
+  pass_rate: 80.0  # How much (%) of the evaluation attempts are considered successful.
+  minimum_interval: 1.0  # Minimum interval in the evaluation frame
+  evaluation_type: stop  # "stop" or "non_stop"
+  condition:
+   - reason: ObstacleStop  # Specify the reason you want to meet if "stop"
+    base_stop_line_dist: 0.0-10.0 # [m] lower_limit-(upper_limit) [Upper limit can be omitted. If omitted value is 1.7976931348623157e+308]
+ - time_range: 1649143506-1649143510 # [second] lower_limit-(upper_limit) [Upper limit can be omitted. If omitted value is int(1.7976931348623157e+308)]
+  criteria_name: check_non_stop  # criteria name
+  pass_rate: 90.0  # How much (%) of the evaluation attempts are considered successful.
+  minimum_interval: 1.0  # Minimum interval in the evaluation frame
+  evaluation_type: non_stop  # "stop" or "non_stop"
+  condition:
+   - reason: Intersection  # Specify the reason you do not want to meet if "non_stop"
+   # Cannot specify "base_stop_line_dist" if "non_stop"
 ```
 
 - pass/fail を判定する topic の subscribe 1回に対して、1649143500-1649143505[second]のタイムスタンプを持っているステータスの中で、 ObstacleStop の reason を持っていれば、 Frame としては Success になる。
@@ -71,32 +71,32 @@ stop_reason を使用した認識機能の評価では、output_dir/result_archi
 
 ```json
 {
-	"Frame": {
-		"criteria0": {
-			"PassFail": {
-				"Result": { "Total": "Success or Fail", "Frame": "Success or Fail" },
+ "Frame": {
+  "criteria0": {
+   "PassFail": {
+    "Result": { "Total": "Success or Fail", "Frame": "Success or Fail" },
         "Info": {
           "Reason": "指定したreasonと一致したreason or non_stop_reason",
-					"Distance": "の距離 or 0.0",
-					"Timestamp": "topicのheaderのタイムスタンプ",
+     "Distance": "の距離 or 0.0",
+     "Timestamp": "topicのheaderのタイムスタンプ",
         },
-				"StopReason": {
-					[
-						"index": "reasonのindex",
-						"reason": "停止理由",
-						"dist_to_stop_pose": "停止位置との距離",
-						"x": "停止位置のx座標",
-						"y": "停止位置のy座標",
-						"z": "停止位置のz座標",
-						"qx": "停止位置の回転姿勢x",
-						"qy": "停止位置の回転姿勢y",
-						"qz": "停止位置の回転姿勢z",
-						"qw": "停止位置の回転姿勢w",
-					]
-				}
-			}
-		}
-	}
+    "StopReason": {
+     [
+      "index": "reasonのindex",
+      "reason": "停止理由",
+      "dist_to_stop_pose": "停止位置との距離",
+      "x": "停止位置のx座標",
+      "y": "停止位置のy座標",
+      "z": "停止位置のz座標",
+      "qx": "停止位置の回転姿勢x",
+      "qy": "停止位置の回転姿勢y",
+      "qz": "停止位置の回転姿勢z",
+      "qw": "停止位置の回転姿勢w",
+     ]
+    }
+   }
+  }
+ }
 }
 ```
 
@@ -104,10 +104,10 @@ Timeout のフォーマット
 
 ```json
 {
-	"Frame": {
-		"criteria0": {
-			"Timeout": "Timeoutした回数"
-		}
-	}
+  "Frame": {
+    "criteria0": {
+      "Timeout": "Timeoutした回数"
+    }
+  }
 }
 ```
