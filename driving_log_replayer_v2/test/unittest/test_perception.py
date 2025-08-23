@@ -30,11 +30,16 @@ from perception_eval.evaluation.result.perception_frame_config import Perception
 from perception_eval.evaluation.result.perception_frame_result import PerceptionFrameResult
 from pyquaternion import Quaternion
 import pytest
+from tier4_api_msgs.msg import AwapiAutowareStatus
+from tier4_planning_msgs.msg import StopFactor
+from tier4_planning_msgs.msg import StopReason as msgStopReason
 
 from driving_log_replayer_v2.perception.models import Criteria
 from driving_log_replayer_v2.perception.models import Filter
 from driving_log_replayer_v2.perception.models import Perception
 from driving_log_replayer_v2.perception.models import PerceptionScenario
+from driving_log_replayer_v2.perception.models import StopReason
+from driving_log_replayer_v2.perception.models import StopReasonCriteria
 from driving_log_replayer_v2.scenario import load_sample_scenario
 
 
@@ -42,6 +47,8 @@ def test_scenario() -> None:
     scenario: PerceptionScenario = load_sample_scenario("perception", PerceptionScenario)
     assert scenario.Evaluation.Conditions.Criterion[0].CriteriaMethod == "num_gt_tp"
     assert scenario.Evaluation.Conditions.Criterion[1].CriteriaLevel == "easy"
+    assert scenario.Evaluation.Conditions.stop_reason_criterion[0].minimum_interval == 1.0
+    assert scenario.Evaluation.Conditions.stop_reason_criterion[1].evaluation_type == "non_stop"
 
 
 def test_scenario_criteria_custom_level() -> None:
@@ -77,6 +84,20 @@ def test_filter_distance_element_is_not_two() -> None:
 def test_filter_distance_min_max_reversed() -> None:
     with pytest.raises(ValueError):  # noqa
         Filter(Distance="2.0-1.0")
+
+
+def test_stop_reason_time_range() -> None:
+    stop_reason_criteria = StopReasonCriteria(
+        time_range="100-",
+        pass_rate=80.0,
+        minimum_interval=1.0,
+        evaluation_type="stop",
+        condition=[
+            {"reason": "ObstacleStop", "base_stop_line_dist": "0.0-10.0"},
+        ],
+    )
+    assert stop_reason_criteria.time_range[0] == 0
+    assert stop_reason_criteria.time_range[1] == "AAAAA"
 
 
 @pytest.fixture
@@ -166,6 +187,45 @@ def create_dynamic_object() -> DynamicObjectWithPerceptionResult:
         Label(AutowareLabel.CAR, "car"),
     )
     return DynamicObjectWithPerceptionResult(dynamic_obj, None, True)  # noqa
+
+
+@pytest.fixture
+def create_awapi_autoware_status_msg() -> AwapiAutowareStatus:
+    stop_factor = StopFactor()
+    stop_factor.stop_pose.position.x = 1.0
+    stop_factor.stop_pose.position.y = 2.0
+    stop_factor.stop_pose.position.z = 3.0
+    stop_factor.stop_pose.orientation.x = 0.0
+    stop_factor.stop_pose.orientation.y = 0.0
+    stop_factor.stop_pose.orientation.z = 0.0
+    stop_factor.stop_pose.orientation.w = 1.0
+    stop_factor.dist_to_stop_pose = 4.0
+
+    stop_reason = msgStopReason()
+    stop_reason.reason = "ObstacleStop"
+    stop_reason.stop_factors.append(stop_factor)
+
+    msg = AwapiAutowareStatus()
+    msg.stop_reason.header.stamp.sec = 123456789
+    msg.stop_reason.header.stamp.nanosec = 987654321
+    msg.stop_reason.stop_reasons.append(stop_reason)
+    return msg
+
+
+@pytest.fixture
+def create_stop_reason() -> StopReason:
+    return StopReason(
+        name="criteria0",
+        condition=StopReasonCriteria(
+            time_range="0-100",
+            pass_rate=95.0,
+            minimum_interval=1.0,
+            evaluation_type="stop",
+            condition=[{"reason": "ObstacleStop", "base_stop_line_dist": "0.0-10.0"}],
+        ),
+        total=99,
+        passed=94,
+    )
 
 
 def test_perception_fail_has_no_object(
@@ -267,3 +327,46 @@ def test_perception_fail_tp_hard(
             "FN": "0 []",
         },
     }
+
+
+def test_stop_reason_obstacle_stop(
+    create_awapi_autoware_status_msg: AwapiAutowareStatus,
+    create_stop_reason: StopReason,
+) -> None:
+    evaluation_item = create_stop_reason
+    frame_dict = evaluation_item.set_frame(create_awapi_autoware_status_msg)
+    assert evaluation_item.success is True
+    assert evaluation_item.summary == "criteria0 (Success): 94 / 100 -> 94.00%"
+    assert frame_dict["PassFail"] == {
+        "Result": {"Total": "Success", "Frame": "Success"},
+        "Info": {
+            "Reason": "ObstacleStop",
+            "Distance": 4.0,
+            "Timestamp": 1234567890,
+        },
+    }
+    assert frame_dict["StopReason"] == {
+        "index": 0,
+        "reason": "ObstacleStop",
+        "dist_to_stop_pose": 4.0,
+        "x": 1.0,
+        "y": 2.0,
+        "z": 3.0,
+        "qx": 0.0,
+        "qy": 0.0,
+        "qz": 0.0,
+        "qw": 1.0,
+    }
+
+
+def test_stop_reason_timeout(
+    create_awapi_autoware_status_msg: AwapiAutowareStatus,
+    create_stop_reason: StopReason,
+) -> None:
+    evaluation_item = create_stop_reason
+    # change time to out of range
+    create_awapi_autoware_status_msg.stop_reason.header.stamp.sec = 50
+    frame_dict = evaluation_item.set_frame(create_awapi_autoware_status_msg)
+    assert evaluation_item.success is True
+    assert evaluation_item.summary == "criteria0 (Success): 94 / 100 -> 94.00%"
+    assert frame_dict == {"TimeOut": 1}

@@ -17,6 +17,7 @@ from launch.actions import DeclareLaunchArgument
 RECORD_TOPIC = """^/tf$\
 |^/tf_static$\
 |^/diagnostics$\
+|^/awapi/autoware/get/status$\
 |^/sensing/camera/.*\
 |^/sensing/lidar/concatenated/pointcloud$\
 |^/perception/object_recognition/detection/.*/debug/pipeline_latency_ms$\

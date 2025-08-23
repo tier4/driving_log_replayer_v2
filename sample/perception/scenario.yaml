@@ -27,6 +27,21 @@ Evaluation:
           Region:
             x_position: null # [m] null [Do not filter by x_position] or lower_limit,upper_limit
             y_position: null # [m] null [Do not filter by y_position] or lower_limit,upper_limit
+    stop_reason_criterion: # Optional. If not specified, stop_reason is not evaluated.
+      - time_range: 1649143500-1649143505 # [second] lower_limit-(upper_limit) [Upper limit can be omitted. If omitted value is int(1.7976931348623157e+308)]
+        pass_rate: 80.0 # How much (%) of the evaluation attempts are considered successful.
+        minimum_interval: 1.0 # Minimum interval in the evaluation frame
+        evaluation_type: stop # "stop" or "non_stop"
+        condition:
+          - reason: ObstacleStop # Specify the reason you want to meet if "stop"
+            base_stop_line_dist: 0.0-10.0 # [m] lower_limit-(upper_limit) [Upper limit can be omitted. If omitted value is 1.7976931348623157e+308]
+      - time_range: 1649143506-1649143510 # [second] lower_limit-(upper_limit) [Upper limit can be omitted. If omitted value is int(1.7976931348623157e+308)]
+        pass_rate: 90.0 # How much (%) of the evaluation attempts are considered successful.
+        minimum_interval: 1.0 # Minimum interval in the evaluation frame
+        evaluation_type: non_stop # "stop" or "non_stop"
+        condition:
+          - reason: Intersection # Specify the reason you do not want to meet if "non_stop"
+          # Cannot specify "base_stop_line_dist" if "non_stop"
   PerceptionEvaluationConfig:
     evaluation_config_dict:
       evaluation_task: detection # detection, tracking or prediction. Evaluate the objects specified here

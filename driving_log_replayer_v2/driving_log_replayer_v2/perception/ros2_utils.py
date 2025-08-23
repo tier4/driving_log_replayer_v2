@@ -40,8 +40,9 @@ if TYPE_CHECKING:
     from collections.abc import Generator
 
     from builtin_interfaces.msg import Time as Stamp
+    from tier4_api_msgs.msg import AwapiAutowareStatus
 
-MsgType = TypeVar("MsgType", DetectedObjects, TrackedObjects, PredictedObjects)
+PerceptionMsgType = TypeVar("PerceptionMsgType", DetectedObjects, TrackedObjects, PredictedObjects)
 
 
 class RosBagManager:
@@ -50,13 +51,13 @@ class RosBagManager:
         bag_dir: str,
         output_bag_dir: str,
         storage_type: str,
-        evaluation_topic: list[str],
+        evaluation_topics: list[str],
         additional_record_topic: list[TopicMetadata],
     ) -> None:
         self._reader: SequentialReader
         self._writer: SequentialWriter
         self._writer_storage_options: StorageOptions
-        self._evaluate_topic: list[str]
+        self._evaluation_topics: list[str]
         self._topic_name2type: dict[str, str] = {}
         self._last_ros_timestamp: int
         self._tf_buffer: Buffer
@@ -80,7 +81,7 @@ class RosBagManager:
         for topic_type in additional_record_topic:
             self._writer.create_topic(topic_type)
 
-        self._evaluate_topic = evaluation_topic
+        self._evaluation_topics = evaluation_topics
         self._tf_buffer = Buffer()
 
     def _get_default_converter_options(self) -> ConverterOptions:
@@ -110,14 +111,14 @@ class RosBagManager:
         err_msg = "Last ros timestamp is not set."
         raise AttributeError(err_msg)
 
-    def read_messages(self) -> Generator[str, MsgType, int]:
+    def read_messages(self) -> Generator[str, PerceptionMsgType | AwapiAutowareStatus, int]:
         """
         Describe time representations used in subscribed ROS 2 messages.
 
         msg.header.stamp     | builtin_interfaces.msg.Time     | base     | base
         subscribed timestamp | int                             | nanosec  | sec * 1e9 + nanosec
         clock                | rclpy.clock.Clock (nanoseconds) | nanosec  | sec * 1e9 + nanosec
-        unix time            | int                             | microsec | sec * 1e6 + nanosec / 1e3
+        nuscenes unix time   | int                             | microsec | sec * 1e6 + nanosec / 1e3
         """
         while self._reader.has_next():
             topic_name, msg_bytes, ros_timestamp = self._reader.read_next()
@@ -130,7 +131,7 @@ class RosBagManager:
             elif topic_name == "/tf":
                 for transform in msg.transforms:
                     self._tf_buffer.set_transform(transform, "rosbag_import")
-            elif topic_name in self._evaluate_topic:
+            elif topic_name in self._evaluation_topics:
                 yield topic_name, msg, ros_timestamp
         self._last_ros_timestamp = ros_timestamp
         del self._reader
