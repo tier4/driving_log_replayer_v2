@@ -58,8 +58,8 @@ class ReliabilityCondition(BaseModel):
 
 
 class Conditions(BaseModel):
-    Convergence: ConvergenceCondition
-    Reliability: ReliabilityCondition
+    Convergence: ConvergenceCondition | None = None
+    Reliability: ReliabilityCondition | None = None
 
 
 class Evaluation(BaseModel):
@@ -198,17 +198,33 @@ class Availability(EvaluationItem):
 class LocalizationResult(ResultBase):
     def __init__(self, condition: Conditions) -> None:
         super().__init__()
-        self.__convergence = Convergence(condition=condition.Convergence)
-        self.__reliability = Reliability(condition=condition.Reliability)
+        self.__convergence = (
+            Convergence(condition=condition.Convergence) if condition.Convergence else None
+        )
+        self.__reliability = (
+            Reliability(condition=condition.Reliability) if condition.Reliability else None
+        )
         self.__availability = Availability()
 
     def update(self) -> None:
-        summary_str = f"{self.__convergence.summary}, {self.__reliability.summary}, {self.__availability.summary}"
-        if (
-            self.__convergence.success
-            and self.__reliability.success
-            and self.__availability.success
-        ):
+        parts = []
+        success_flags = []
+
+        if self.__convergence is not None:
+            parts.append(self.__convergence.summary)
+            success_flags.append(self.__convergence.success)
+
+        if self.__reliability is not None:
+            parts.append(self.__reliability.summary)
+            success_flags.append(self.__reliability.success)
+
+        if self.__availability is not None:
+            parts.append(self.__availability.summary)
+            success_flags.append(self.__availability.success)
+
+        summary_str = ", ".join(parts)
+
+        if all(success_flags):
             self._success = True
             self._summary = f"Passed: {summary_str}"
         else:
@@ -226,6 +242,8 @@ class LocalizationResult(ResultBase):
         map_to_baselink: dict,
         reference: Float32Stamped,
     ) -> None:
+        if not self.__reliability:
+            return
         self._frame = self.__reliability.set_frame(msg, map_to_baselink, reference)
         self.update()
 
@@ -238,6 +256,10 @@ class LocalizationResult(ResultBase):
         exe_time: Float32Stamped,
         iteration_num: Int32Stamped,
     ) -> Float64:
+        if not self.__convergence:
+            zero_msg = Float64()
+            zero_msg.data = 0.0
+            return zero_msg
         self._frame, msg_lateral_dist = self.__convergence.set_frame(
             lateral_dist,
             horizontal_dist,
