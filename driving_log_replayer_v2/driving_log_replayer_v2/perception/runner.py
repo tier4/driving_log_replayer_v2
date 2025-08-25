@@ -317,7 +317,7 @@ def evaluate(  # noqa: PLR0915
         ]
         multi_result_editor = MultiResultEditor(result_paths)
         multi_result_editor.write_back_result()
-        stop_reason_analyzer.save_as_csv(Path(result_archive_path).joinpath("stop_reason.csv"))
+        stop_reason_analyzer.save_as_csv(Path(stop_reason_result_path).joinpath("stop_reason.csv"))
 
     # analysis of the evaluation result and save it as csv
     if evaluator.get_degradation_evaluation_task() != "fp_validation":
