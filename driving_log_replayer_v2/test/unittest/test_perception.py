@@ -222,7 +222,7 @@ def create_stop_reason() -> StopReason:
         name="criteria0",
         condition=StopReasonCriteria(
             time_range="900-1100",
-            pass_rate=90.0,
+            pass_rate=95.0,
             tolerance_interval=1.0,
             evaluation_type="stop",
             condition=[{"reason": "ObstacleStop", "base_stop_line_dist": "0.0-10.0"}],
@@ -374,6 +374,5 @@ def test_stop_reason_timeout(
     # change time to out of range
     create_awapi_autoware_status_msg.stop_reason.header.stamp.sec = 50
     frame_dict = evaluation_item.set_frame(create_awapi_autoware_status_msg)
-    assert evaluation_item.success is True
-    assert evaluation_item.summary == "criteria0 (Success): 94 / 100 -> 94.00%"
+    assert evaluation_item.success is False
     assert frame_dict == {"TimeOut": 1}

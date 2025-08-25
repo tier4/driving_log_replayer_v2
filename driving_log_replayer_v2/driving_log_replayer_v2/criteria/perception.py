@@ -685,7 +685,7 @@ class StopReasonEvaluator:
         self.latest_check_time = 0.0
 
     def get_result(self, msg: AwapiAutowareStatus) -> tuple[SuccessFail | None, dict[str]]:
-        header_sec = msg.header.stamp.sec  # TODO: make the function to convert it
+        header_sec = msg.stop_reason.header.stamp.sec  # TODO: make the function to convert it
         if not self.is_valid_time(header_sec):
             return None, self.get_timeout_msg(header_sec)
 
