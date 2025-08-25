@@ -12,7 +12,14 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from pathlib import Path
+
 from launch.actions import DeclareLaunchArgument
+from pydantic import ValidationError
+import yaml
+
+from driving_log_replayer_v2.perception.models import PerceptionScenario
+from driving_log_replayer_v2.scenario import load_scenario
 
 RECORD_TOPIC = """^/tf$\
 |^/tf_static$\
@@ -30,11 +37,28 @@ RECORD_TOPIC = """^/tf$\
 |^/sensing/.*tracked_objects$\
 """
 
-AUTOWARE_DISABLE = {
-    "localization": "false",
-    "planning": "false",
-    "control": "false",
-}
+
+def autoware_disable(conf: dict) -> dict[str, str]:
+    default = {
+        "localization": "false",
+        "planning": "false",
+        "control": "false",
+    }
+
+    try:
+        scenario = load_scenario(Path(conf["scenario_path"]), PerceptionScenario)
+    except (FileNotFoundError, PermissionError, yaml.YAMLError, ValidationError):
+        return default
+    if scenario.Evaluation.Conditions.stop_reason_criterion is not None:
+        return {
+            "localization": "false",
+            "planning": "true",
+            "control": "true",
+        }
+    return default
+
+
+AUTOWARE_DISABLE = autoware_disable
 
 AUTOWARE_ARGS = {}
 
