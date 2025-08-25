@@ -30,10 +30,10 @@ from perception_eval.tool.utils import filter_frame_by_region
 
 if TYPE_CHECKING:
     from perception_eval.evaluation.result.perception_frame_result import PerceptionFrameResult
-    from tier4_api_msgs.msg import AwapiAutowareStatus
 
     from driving_log_replayer_v2.perception import Filter
     from driving_log_replayer_v2.perception import StopReasonCondition
+    from driving_log_replayer_v2.perception.stop_reason import StopReasonData
 
 
 class SuccessFail(Enum):
@@ -675,87 +675,69 @@ class StopReasonEvaluator:
         evaluation_type: str,
         condition: list[StopReasonCondition],
     ) -> None:
-        self.start_time = start_time
-        self.end_time = end_time
-        self.tolerance_interval = tolerance_interval
-        self.evaluation_type = evaluation_type
-        self.condition = condition
+        self._start_time = start_time
+        self._end_time = end_time
+        self._tolerance_interval = tolerance_interval
+        self._evaluation_type = evaluation_type
+        self._condition = condition
 
-        # checking timeout
-        self.latest_check_time = 0.0
+        # check timeout
+        self._latest_check_time = 0.0
 
-    def get_result(self, msg: AwapiAutowareStatus) -> tuple[SuccessFail | None, dict[str]]:
-        header_sec = msg.stop_reason.header.stamp.sec  # TODO: make the function to convert it
-        if not self.is_valid_time(header_sec):
-            return None, self.get_timeout_msg(header_sec)
+    def get_result(self, stop_reason: StopReasonData) -> tuple[SuccessFail | None, dict[str]]:
+        if not self._is_valid_time(stop_reason.seconds):
+            return None, self._get_timeout_msg(stop_reason.seconds)
 
-        # create map and detail to create result
-        reason_stop_pose_map = {
-            stop_reason.reason: stop_reason.stop_factors[0].dist_to_stop_pose
-            for stop_reason in msg.stop_reason.stop_reasons
+        # create map for easy access
+        reason_dist_map = {
+            reasons.reason: reasons.dist_to_stop_pose for reasons in stop_reason.reasons
         }
-        stop_reason_detail = [
-            {
-                "index": index,
-                "reason": stop_reason.reason,
-                "dist_to_stop_pose": stop_reason.stop_factors[0].dist_to_stop_pose,
-                "x": stop_reason.stop_factors[0].stop_pose.position.x,
-                "y": stop_reason.stop_factors[0].stop_pose.position.y,
-                "z": stop_reason.stop_factors[0].stop_pose.position.z,
-                "qx": stop_reason.stop_factors[0].stop_pose.orientation.x,
-                "qy": stop_reason.stop_factors[0].stop_pose.orientation.y,
-                "qz": stop_reason.stop_factors[0].stop_pose.orientation.z,
-                "qw": stop_reason.stop_factors[0].stop_pose.orientation.w,
-            }
-            for index, stop_reason in enumerate(msg.stop_reason.stop_reasons)
-        ]
 
         # check stop reason for "stop"
-        if (
-            self.evaluation_type == "stop"
-            and all(condition.reason in reason_stop_pose_map for condition in self.condition)
-            and all(
-                condition.base_stop_line_dist[0]
-                <= reason_stop_pose_map[condition.reason]
-                <= condition.base_stop_line_dist[1]
-                for condition in self.condition
-            )
-        ):
+        is_reason_all_found = all(
+            condition.reason in reason_dist_map for condition in self._condition
+        )
+        is_distance_all_found = all(
+            condition.base_stop_line_dist[0]
+            <= reason_dist_map[condition.reason]
+            <= condition.base_stop_line_dist[1]
+            if condition.reason in reason_dist_map
+            else False
+            for condition in self._condition
+        )
+        if self._evaluation_type == "stop" and is_reason_all_found and is_distance_all_found:
             return SuccessFail.SUCCESS, {
                 "Info": {
-                    "Reason": ",".join(reason_stop_pose_map.keys()),
-                    "Distance": ",".join(
-                        f"{reason}: {stop_pose}"
-                        for reason, stop_pose in reason_stop_pose_map.items()
-                    ),
-                    "Timestamp": header_sec,
+                    "Reason": [reasons.reason for reasons in stop_reason.reasons],
+                    "Distance": [reasons.dist_to_stop_pose for reasons in stop_reason.reasons],
+                    "Timestamp": stop_reason.seconds,
                 },
-                "StopReason": stop_reason_detail,
             }
 
         # check stop reason for "non_stop"
-        if self.evaluation_type == "non_stop" and not any(
-            condition.reason in reason_stop_pose_map for condition in self.condition
-        ):
+        is_reason_any_found = (
+            any(condition.reason in reason_dist_map for condition in self._condition)
+            if "All" not in self._condition
+            else len(reason_dist_map) > 0
+        )
+        if self._evaluation_type == "non_stop" and not is_reason_any_found:
             return SuccessFail.SUCCESS, {
                 "Info": {
-                    "Reason": "no_stop_reason",
-                    "Distance": 0.0,
-                    "Timestamp": header_sec,
+                    "Reason": ["no_stop_reason"],
+                    "Distance": [None],
+                    "Timestamp": stop_reason.seconds,
                 },
-                "StopReason": stop_reason_detail,
             }
 
         return SuccessFail.FAIL, {
             "Info": {
-                "Reason": ",".join(reason_stop_pose_map.keys()),
-                "Distance": 0.0,
-                "Timestamp": header_sec,
+                "Reason": [reasons.reason for reasons in stop_reason.reasons],
+                "Distance": [reasons.dist_to_stop_pose for reasons in stop_reason.reasons],
+                "Timestamp": stop_reason.seconds,
             },
-            "StopReason": stop_reason_detail,
         }
 
-    def get_timeout_msg(self, current_time: int) -> dict[str]:
+    def _get_timeout_msg(self, current_time: int) -> dict[str]:
         # not use yet
         return {
             "Info": {
@@ -765,12 +747,12 @@ class StopReasonEvaluator:
             },
         }
 
-    def is_valid_time(self, current_time: int) -> bool:
+    def _is_valid_time(self, current_time: int) -> bool:
         # invalid if out of time range
-        if not (self.start_time <= current_time <= self.end_time):
+        if not (self._start_time <= current_time <= self._end_time):
             return False
         # invalid if it has not been long since the last evaluation
-        if not (current_time - self.latest_check_time > self.tolerance_interval):
+        if not (current_time - self._latest_check_time > self._tolerance_interval):
             return False
-        self.latest_check_time = current_time
+        self._latest_check_time = current_time
         return True

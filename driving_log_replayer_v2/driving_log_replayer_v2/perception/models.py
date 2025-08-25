@@ -34,7 +34,8 @@ from driving_log_replayer_v2.scenario import Scenario
 
 if TYPE_CHECKING:
     from perception_eval.evaluation.result.perception_frame_result import PerceptionFrameResult
-    from tier4_api_msgs.msg import AwapiAutowareStatus
+
+    from driving_log_replayer_v2.perception.stop_reason import StopReasonData
 
 UNIX_TIME_MAX_64: int = (1 << 63) - 1
 
@@ -117,7 +118,7 @@ class Filter(BaseModel):
 
 
 class StopReasonCondition(BaseModel):
-    reason: Literal["Intersection", "TrafficLight", "ObstacleStop", "Crosswalk", "Walkway", "all"]
+    reason: Literal["Intersection", "TrafficLight", "ObstacleStop", "Crosswalk", "Walkway", "All"]
     base_stop_line_dist: tuple[float, float] | None = None
 
     @field_validator("base_stop_line_dist", mode="before")
@@ -270,9 +271,9 @@ class StopReason(EvaluationItem):
             condition=self.condition.condition,
         )
 
-    def set_frame(self, msg: AwapiAutowareStatus) -> dict:
+    def set_frame(self, stop_reason: StopReasonData) -> dict:
         frame_success = "Fail"
-        result, result_msg = self.criteria.get_result(msg)
+        result, result_msg = self.criteria.get_result(stop_reason)
 
         if result is None:
             self.time_out += 1
@@ -373,8 +374,8 @@ class StopReasonResult(ResultBase):
 
     def set_frame(
         self,
-        msg: AwapiAutowareStatus,
+        stop_reason: StopReasonData,
     ) -> None:
         for criterion in self.__stop_reason_criterion:
-            self._frame[criterion.name] = criterion.set_frame(msg)
+            self._frame[criterion.name] = criterion.set_frame(stop_reason)
         self.update()

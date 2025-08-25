@@ -71,32 +71,18 @@ stop_reason を使用した認識機能の評価では、output_dir/result_archi
 
 ```json
 {
- "Frame": {
-  "criteria0": {
-   "PassFail": {
-    "Result": { "Total": "Success or Fail", "Frame": "Success or Fail" },
+  "Frame": {
+    "criteria0": {
+      "PassFail": {
+        "Result": { "Total": "Success or Fail", "Frame": "Success or Fail" },
         "Info": {
           "Reason": "指定したreasonと一致したreason or non_stop_reason",
-     "Distance": "の距離 or 0.0",
-     "Timestamp": "topicのheaderのタイムスタンプ",
-        },
-    "StopReason": {
-     [
-      "index": "reasonのindex",
-      "reason": "停止理由",
-      "dist_to_stop_pose": "停止位置との距離",
-      "x": "停止位置のx座標",
-      "y": "停止位置のy座標",
-      "z": "停止位置のz座標",
-      "qx": "停止位置の回転姿勢x",
-      "qy": "停止位置の回転姿勢y",
-      "qz": "停止位置の回転姿勢z",
-      "qw": "停止位置の回転姿勢w",
-     ]
+          "Distance": "の距離 or 0.0",
+          "Timestamp": "topicのheaderのタイムスタンプ"
+        }
+      }
     }
-   }
   }
- }
 }
 ```
 

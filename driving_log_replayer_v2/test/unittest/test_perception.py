@@ -352,20 +352,6 @@ def test_stop_reason_obstacle_stop(
             "Timestamp": 1000,
         },
     }
-    assert frame_dict["StopReason"] == [
-        {
-            "index": 0,
-            "reason": "ObstacleStop",
-            "dist_to_stop_pose": 4.0,
-            "x": 1.0,
-            "y": 2.0,
-            "z": 3.0,
-            "qx": 0.0,
-            "qy": 0.0,
-            "qz": 0.0,
-            "qw": 1.0,
-        },
-    ]
 
 
 def test_stop_reason_timeout(
