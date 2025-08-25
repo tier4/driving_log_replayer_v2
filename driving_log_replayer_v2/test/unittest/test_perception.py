@@ -40,9 +40,8 @@ from driving_log_replayer_v2.perception.models import Perception
 from driving_log_replayer_v2.perception.models import PerceptionScenario
 from driving_log_replayer_v2.perception.models import StopReason
 from driving_log_replayer_v2.perception.models import StopReasonCriteria
-from driving_log_replayer_v2.scenario import load_sample_scenario
-from driving_log_replayer_v2.perception.stop_reason import StopReasonData
 from driving_log_replayer_v2.perception.stop_reason import convert_to_stop_reason
+from driving_log_replayer_v2.scenario import load_sample_scenario
 
 
 def test_scenario() -> None:
