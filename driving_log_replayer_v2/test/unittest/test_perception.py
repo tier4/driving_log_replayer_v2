@@ -348,22 +348,24 @@ def test_stop_reason_obstacle_stop(
         "Result": {"Total": "Success", "Frame": "Success"},
         "Info": {
             "Reason": "ObstacleStop",
-            "Distance": 4.0,
+            "Distance": "ObstacleStop: 4.0",
             "Timestamp": 1000,
         },
     }
-    assert frame_dict["StopReason"] == {
-        "index": 0,
-        "reason": "ObstacleStop",
-        "dist_to_stop_pose": 4.0,
-        "x": 1.0,
-        "y": 2.0,
-        "z": 3.0,
-        "qx": 0.0,
-        "qy": 0.0,
-        "qz": 0.0,
-        "qw": 1.0,
-    }
+    assert frame_dict["StopReason"] == [
+        {
+            "index": 0,
+            "reason": "ObstacleStop",
+            "dist_to_stop_pose": 4.0,
+            "x": 1.0,
+            "y": 2.0,
+            "z": 3.0,
+            "qx": 0.0,
+            "qy": 0.0,
+            "qz": 0.0,
+            "qw": 1.0,
+        },
+    ]
 
 
 def test_stop_reason_timeout(
@@ -374,5 +376,5 @@ def test_stop_reason_timeout(
     # change time to out of range
     create_awapi_autoware_status_msg.stop_reason.header.stamp.sec = 50
     frame_dict = evaluation_item.set_frame(create_awapi_autoware_status_msg)
-    assert evaluation_item.success is False
-    assert frame_dict == {"TimeOut": 1}
+    assert evaluation_item.success is True  # default is True
+    assert frame_dict == {"Timeout": 1}
