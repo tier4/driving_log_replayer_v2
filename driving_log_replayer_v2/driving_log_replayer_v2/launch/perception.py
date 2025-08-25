@@ -47,7 +47,7 @@ def autoware_disable(conf: dict) -> dict[str, str]:
 
     try:
         scenario = load_scenario(Path(conf["scenario_path"]), PerceptionScenario)
-    except (FileNotFoundError, PermissionError, yaml.YAMLError, ValidationError):
+    except (FileNotFoundError, PermissionError, yaml.YAMLError, ValidationError, KeyError):
         return default
     if scenario.Evaluation.Conditions.stop_reason_criterion is not None:
         return {
