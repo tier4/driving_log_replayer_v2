@@ -41,6 +41,8 @@ from driving_log_replayer_v2.perception.models import PerceptionScenario
 from driving_log_replayer_v2.perception.models import StopReason
 from driving_log_replayer_v2.perception.models import StopReasonCriteria
 from driving_log_replayer_v2.scenario import load_sample_scenario
+from driving_log_replayer_v2.perception.stop_reason import StopReasonData
+from driving_log_replayer_v2.perception.stop_reason import convert_to_stop_reason
 
 
 def test_scenario() -> None:
@@ -340,8 +342,9 @@ def test_stop_reason_obstacle_stop(
     create_awapi_autoware_status_msg: AwapiAutowareStatus,
     create_stop_reason: StopReason,
 ) -> None:
+    stop_reason = convert_to_stop_reason(create_awapi_autoware_status_msg)
     evaluation_item = create_stop_reason
-    frame_dict = evaluation_item.set_frame(create_awapi_autoware_status_msg)
+    frame_dict = evaluation_item.set_frame(stop_reason)
     assert evaluation_item.success is True
     assert evaluation_item.summary == "criteria0 (Success): 95 / 100 -> 95.00%"
     assert frame_dict["PassFail"] == {
@@ -358,9 +361,10 @@ def test_stop_reason_timeout(
     create_awapi_autoware_status_msg: AwapiAutowareStatus,
     create_stop_reason: StopReason,
 ) -> None:
-    evaluation_item = create_stop_reason
     # change time to out of range
     create_awapi_autoware_status_msg.stop_reason.header.stamp.sec = 50
-    frame_dict = evaluation_item.set_frame(create_awapi_autoware_status_msg)
+    stop_reason = convert_to_stop_reason(create_awapi_autoware_status_msg)
+    evaluation_item = create_stop_reason
+    frame_dict = evaluation_item.set_frame(stop_reason)
     assert evaluation_item.success is True  # default is True
     assert frame_dict == {"Timeout": 1}
