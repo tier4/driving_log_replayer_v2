@@ -105,7 +105,7 @@ class LocalizationEvaluator(DLREvaluatorV2):
         self._result.set_frame(
             msg,
             DLREvaluatorV2.transform_stamped_with_euler_angle(map_to_baselink),
-            self.__latest_nvtl,
+            self.__latest_tp,
         )
         self._result_writer.write_result(self._result)
 
@@ -118,7 +118,7 @@ class LocalizationEvaluator(DLREvaluatorV2):
         self._result.set_frame(
             msg,
             DLREvaluatorV2.transform_stamped_with_euler_angle(map_to_baselink),
-            self.__latest_tp,
+            self.__latest_nvtl,
         )
         self._result_writer.write_result(self._result)
 
