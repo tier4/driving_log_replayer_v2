@@ -36,6 +36,8 @@ if TYPE_CHECKING:
     from perception_eval.evaluation.result.perception_frame_result import PerceptionFrameResult
     from tier4_api_msgs.msg import AwapiAutowareStatus
 
+UNIX_TIME_MAX_64: int = (1 << 63) - 1
+
 
 class Region(BaseModel):
     x_position: tuple[float, float] | None = None
@@ -142,7 +144,7 @@ class StopReasonCriteria(BaseModel):
     criteria_name: str | None = None
     time_range: tuple[int, int]
     pass_rate: number
-    minimum_interval: number
+    tolerance_interval: number
     evaluation_type: Literal["stop", "non_stop"]
     condition: list[StopReasonCondition]
 
@@ -153,7 +155,7 @@ class StopReasonCriteria(BaseModel):
 
         s_lower, s_upper = v.split("-")
         if s_upper == "":
-            s_upper = int(sys.float_info.max)  # TODO: define the maximum unix time in seconds
+            s_upper = UNIX_TIME_MAX_64
 
         lower = int(s_lower)
         upper = int(s_upper)
@@ -263,7 +265,7 @@ class StopReason(EvaluationItem):
         self.criteria = StopReasonEvaluator(
             start_time=self.condition.time_range[0],
             end_time=self.condition.time_range[1],
-            minimum_interval=self.condition.minimum_interval,
+            tolerance_interval=self.condition.tolerance_interval,
             evaluation_type=self.condition.evaluation_type,
             condition=self.condition.condition,
         )

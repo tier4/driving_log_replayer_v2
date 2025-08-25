@@ -671,13 +671,13 @@ class StopReasonEvaluator:
         self,
         start_time: int,
         end_time: int,
-        minimum_interval: float,
+        tolerance_interval: float,
         evaluation_type: str,
         condition: list[StopReasonCondition],
     ) -> None:
         self.start_time = start_time
         self.end_time = end_time
-        self.minimum_interval = minimum_interval
+        self.tolerance_interval = tolerance_interval
         self.evaluation_type = evaluation_type
         self.condition = condition
 
@@ -770,7 +770,7 @@ class StopReasonEvaluator:
         if not (self.start_time <= current_time <= self.end_time):
             return False
         # invalid if it has not been long since the last evaluation
-        if not (current_time - self.latest_check_time > self.minimum_interval):
+        if not (current_time - self.latest_check_time > self.tolerance_interval):
             return False
         self.latest_check_time = current_time
         return True

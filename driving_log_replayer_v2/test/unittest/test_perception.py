@@ -47,7 +47,7 @@ def test_scenario() -> None:
     scenario: PerceptionScenario = load_sample_scenario("perception", PerceptionScenario)
     assert scenario.Evaluation.Conditions.Criterion[0].CriteriaMethod == "num_gt_tp"
     assert scenario.Evaluation.Conditions.Criterion[1].CriteriaLevel == "easy"
-    assert scenario.Evaluation.Conditions.stop_reason_criterion[0].minimum_interval == 1.0
+    assert scenario.Evaluation.Conditions.stop_reason_criterion[0].tolerance_interval == 1.0
     assert scenario.Evaluation.Conditions.stop_reason_criterion[1].evaluation_type == "non_stop"
 
 
@@ -88,16 +88,16 @@ def test_filter_distance_min_max_reversed() -> None:
 
 def test_stop_reason_time_range() -> None:
     stop_reason_criteria = StopReasonCriteria(
-        time_range="100-",
+        time_range="0-",
         pass_rate=80.0,
-        minimum_interval=1.0,
+        tolerance_interval=1.0,
         evaluation_type="stop",
         condition=[
             {"reason": "ObstacleStop", "base_stop_line_dist": "0.0-10.0"},
         ],
     )
     assert stop_reason_criteria.time_range[0] == 0
-    assert stop_reason_criteria.time_range[1] == "AAAAA"
+    assert stop_reason_criteria.time_range[1] == (1 << 63) - 1
 
 
 @pytest.fixture
@@ -210,8 +210,8 @@ def create_awapi_autoware_status_msg() -> AwapiAutowareStatus:
     stop_reason.stop_factors.append(stop_factor)
 
     msg = AwapiAutowareStatus()
-    msg.stop_reason.header.stamp.sec = 123456789
-    msg.stop_reason.header.stamp.nanosec = 987654321
+    msg.stop_reason.header.stamp.sec = 1000
+    msg.stop_reason.header.stamp.nanosec = 0
     msg.stop_reason.stop_reasons.append(stop_reason)
     return msg
 
@@ -221,9 +221,9 @@ def create_stop_reason() -> StopReason:
     return StopReason(
         name="criteria0",
         condition=StopReasonCriteria(
-            time_range="0-100",
-            pass_rate=95.0,
-            minimum_interval=1.0,
+            time_range="900-1100",
+            pass_rate=90.0,
+            tolerance_interval=1.0,
             evaluation_type="stop",
             condition=[{"reason": "ObstacleStop", "base_stop_line_dist": "0.0-10.0"}],
         ),
@@ -343,13 +343,13 @@ def test_stop_reason_obstacle_stop(
     evaluation_item = create_stop_reason
     frame_dict = evaluation_item.set_frame(create_awapi_autoware_status_msg)
     assert evaluation_item.success is True
-    assert evaluation_item.summary == "criteria0 (Success): 94 / 100 -> 94.00%"
+    assert evaluation_item.summary == "criteria0 (Success): 95 / 100 -> 95.00%"
     assert frame_dict["PassFail"] == {
         "Result": {"Total": "Success", "Frame": "Success"},
         "Info": {
             "Reason": "ObstacleStop",
             "Distance": 4.0,
-            "Timestamp": 1234567890,
+            "Timestamp": 1000,
         },
     }
     assert frame_dict["StopReason"] == {

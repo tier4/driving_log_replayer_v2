@@ -16,18 +16,18 @@ sample の scenario.yaml は以下のようなっており、
 
 ```yaml
 stop_reason_criterion:
-  - time_range: 1649143500-1649143505 # [second] lower_limit-(upper_limit) [Upper limit can be omitted. If omitted value is int(1.7976931348623157e+308)]
+  - time_range: 1649143500-1649143505 # [second] lower_limit-(upper_limit) [Upper limit can be omitted. If omitted value is (2 ** 63 - 1)]
     criteria_name: check_obstacle_stop # criteria name
     pass_rate: 80.0 # How much (%) of the evaluation attempts are considered successful.
-    minimum_interval: 1.0 # Minimum interval in the evaluation frame
+    tolerance_interval: 1.0 # Tolerance interval in the evaluation frame
     evaluation_type: stop # "stop" or "non_stop"
     condition:
       - reason: ObstacleStop # Specify the reason you want to meet if "stop"
         base_stop_line_dist: 0.0-10.0 # [m] lower_limit-(upper_limit) [Upper limit can be omitted. If omitted value is 1.7976931348623157e+308]
-  - time_range: 1649143506-1649143510 # [second] lower_limit-(upper_limit) [Upper limit can be omitted. If omitted value is int(1.7976931348623157e+308)]
+  - time_range: 1649143506-1649143510 # [second] lower_limit-(upper_limit) [Upper limit can be omitted. If omitted value is (2 ** 63 - 1)]
     criteria_name: check_non_stop # criteria name
     pass_rate: 90.0 # How much (%) of the evaluation attempts are considered successful.
-    minimum_interval: 1.0 # Minimum interval in the evaluation frame
+    tolerance_interval: 1.0 # Tolerance interval in the evaluation frame
     evaluation_type: non_stop # "stop" or "non_stop"
     condition:
       - reason: Intersection # Specify the reason you do not want to meet if "non_stop"
