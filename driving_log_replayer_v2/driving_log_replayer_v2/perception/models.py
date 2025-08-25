@@ -291,7 +291,6 @@ class StopReason(EvaluationItem):
                 "Result": {"Total": self.success_str(), "Frame": frame_success},
                 "Info": result_msg["Info"],
             },
-            "StopReason": result_msg["StopReason"],
         }
 
 
