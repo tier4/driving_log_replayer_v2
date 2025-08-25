@@ -12,12 +12,12 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from dataclasses import asdict
+from dataclasses import dataclass
 from pathlib import Path
 
 import pandas as pd
 from tier4_api_msgs.msg import AwapiAutowareStatus
-from dataclasses import dataclass
-from dataclasses import asdict
 
 
 @dataclass
@@ -72,9 +72,11 @@ def convert_to_stop_reason(msg: AwapiAutowareStatus) -> StopReasonData:
                     z=reason.stop_factors[0].stop_pose.orientation.z,
                     w=reason.stop_factors[0].stop_pose.orientation.w,
                 ),
-            ) for i, reason in enumerate(stop_reason.stop_reasons)
+            )
+            for i, reason in enumerate(stop_reason.stop_reasons)
         ],
     )
+
 
 class StopReasonAnalyzer:
     def __init__(self) -> None:
