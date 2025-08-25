@@ -349,8 +349,8 @@ def test_stop_reason_obstacle_stop(
     assert frame_dict["PassFail"] == {
         "Result": {"Total": "Success", "Frame": "Success"},
         "Info": {
-            "Reason": "ObstacleStop",
-            "Distance": "ObstacleStop: 4.0",
+            "Reason": ["ObstacleStop"],
+            "Distance": [4.0],
             "Timestamp": 1000,
         },
     }
