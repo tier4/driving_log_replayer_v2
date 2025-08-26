@@ -68,6 +68,7 @@ EVALUATION_DETECTION_TOPIC_REGEX = """\
 ^/perception/object_recognition/detection/objects$\
 |^/perception/object_recognition/detection/centerpoint/objects$\
 |^/perception/object_recognition/detection/centerpoint_short_range/objects$\
+|^/perception/object_recognition/detection/bevfusion/objects$\
 |^/perception/object_recognition/detection/clustering/objects$\
 |^/perception/object_recognition/detection/detection_by_tracker/objects$\
 |^/perception/object_recognition/detection/clustering/camera_lidar_fusion/objects$\
