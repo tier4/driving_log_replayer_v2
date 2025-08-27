@@ -226,7 +226,7 @@ def create_stop_reason() -> StopReason:
             pass_rate=95.0,
             tolerance_interval=1.0,
             evaluation_type="stop",
-            condition=[{"reason": "ObstacleStop", "base_stop_line_dist": "0.0-10.0"}],
+            condition=[{"reason": "ObstacleStop", "base_stop_line_dist": "0.0,10.0"}],
         ),
         total=99,
         passed=94,
