@@ -20,7 +20,7 @@ stop_reason_criterion:
     criteria_name: check_obstacle_stop # criteria name
     pass_rate: 80.0 # How much (%) of the evaluation attempts are considered successful.
     tolerance_interval: 1.0 # Tolerance interval in the evaluation frame
-    evaluation_type: stop # "stop" or "non_stop"
+    judgement: positive # "positive" or "negative"
     condition:
       - reason: ObstacleStop # Specify the reason you want to meet if "stop"
         base_stop_line_dist: 0.0,10.0 # [m] lower_limit,upper_limit
@@ -28,10 +28,16 @@ stop_reason_criterion:
     criteria_name: check_non_stop # criteria name
     pass_rate: 90.0 # How much (%) of the evaluation attempts are considered successful.
     tolerance_interval: 1.0 # Tolerance interval in the evaluation frame
-    evaluation_type: non_stop # "stop" or "non_stop"
+    judgement: negative # "positive" or "negative"
     condition:
       - reason: Intersection # Specify the reason you do not want to meet if "non_stop"
-        # Cannot specify "base_stop_line_dist" if "non_stop"
+        base_stop_line_dist: 0.0,10.0 # [m] lower_limit,upper_limit
+  - time_range: 1649143511-1649143514 # [second] lower_limit-(upper_limit) [Upper limit can be omitted. If omitted value is (2 ** 63 - 1)]
+    criteria_name: check_no_reason # criteria name
+    pass_rate: 90.0 # How much (%) of the evaluation attempts are considered successful.
+    tolerance_interval: 1.0 # Tolerance interval in the evaluation frame
+    judgement: negative # "positive" or "negative"
+    condition: []
 ```
 
 - pass/fail を判定する topic の subscribe 1回に対して、1649143500-1649143505[second]のタイムスタンプを持っているステータスの中で、 ObstacleStop の reason を持っていれば、 Frame としては Success になる。

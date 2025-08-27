@@ -92,7 +92,7 @@ def test_stop_reason_time_range() -> None:
         time_range="0-",
         pass_rate=80.0,
         tolerance_interval=1.0,
-        evaluation_type="stop",
+        judgement="positive",
         condition=[
             {"reason": "ObstacleStop", "base_stop_line_dist": "0.0,10.0"},
         ],
@@ -225,7 +225,7 @@ def create_stop_reason() -> StopReason:
             time_range="900-1100",
             pass_rate=95.0,
             tolerance_interval=1.0,
-            evaluation_type="stop",
+            judgement="positive",
             condition=[{"reason": "ObstacleStop", "base_stop_line_dist": "0.0,10.0"}],
         ),
         total=99,

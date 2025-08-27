@@ -672,13 +672,14 @@ class StopReasonEvaluator:
         start_time: int,
         end_time: int,
         tolerance_interval: float,
-        evaluation_type: str,
+        judgement: str,
         condition: list[StopReasonCondition],
     ) -> None:
         self._start_time = start_time
         self._end_time = end_time
         self._tolerance_interval = tolerance_interval
-        self._evaluation_type = evaluation_type
+        assert judgement in ("positive", "negative"), f"Invalid judgement: {judgement}"
+        self._judgement = judgement
         self._condition = condition
 
         # check timeout
@@ -693,19 +694,26 @@ class StopReasonEvaluator:
             reasons.reason: reasons.dist_to_stop_pose for reasons in stop_reason.reasons
         }
 
-        # check stop reason for "stop"
-        is_reason_all_found = all(
-            condition.reason in reason_dist_map for condition in self._condition
+        reason_condition = (
+            [condition.reason in reason_dist_map for condition in self._condition]
+            if len(self._condition) > 0
+            else []
         )
-        is_distance_all_found = all(
-            condition.base_stop_line_dist[0]
-            <= reason_dist_map[condition.reason]
-            <= condition.base_stop_line_dist[1]
-            if condition.reason in reason_dist_map
-            else False
-            for condition in self._condition
+        distance_condition = (
+            [
+                condition.base_stop_line_dist[0]
+                <= reason_dist_map[condition.reason]
+                <= condition.base_stop_line_dist[1]
+                if condition.reason in reason_dist_map
+                else False
+                for condition in self._condition
+            ]
+            if len(self._condition) > 0
+            else []
         )
-        if self._evaluation_type == "stop" and is_reason_all_found and is_distance_all_found:
+
+        # check stop reason for "positive"
+        if self._judgement == "positive" and all(reason_condition) and all(distance_condition):
             return SuccessFail.SUCCESS, {
                 "Info": {
                     "Reason": [reasons.reason for reasons in stop_reason.reasons],
@@ -714,13 +722,12 @@ class StopReasonEvaluator:
                 },
             }
 
-        # check stop reason for "non_stop"
-        is_reason_any_found = (
-            any(condition.reason in reason_dist_map for condition in self._condition)
-            if "All" not in self._condition
-            else len(reason_dist_map) > 0
-        )
-        if self._evaluation_type == "non_stop" and not is_reason_any_found:
+        # check stop reason for "negative"
+        if (
+            self._judgement == "negative"
+            and not any(reason_condition)
+            and not any(distance_condition)
+        ):
             return SuccessFail.SUCCESS, {
                 "Info": {
                     "Reason": ["no_stop_reason"],

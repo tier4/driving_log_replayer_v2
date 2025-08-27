@@ -116,7 +116,7 @@ class Filter(BaseModel):
 
 
 class StopReasonCondition(BaseModel):
-    reason: Literal["Intersection", "TrafficLight", "ObstacleStop", "Crosswalk", "Walkway", "All"]
+    reason: Literal["Intersection", "TrafficLight", "ObstacleStop", "Crosswalk", "Walkway"]
     base_stop_line_dist: tuple[float, float] | None = None
 
     @field_validator("base_stop_line_dist", mode="before")
@@ -149,7 +149,7 @@ class StopReasonCriteria(BaseModel):
     time_range: tuple[int, int]
     pass_rate: number
     tolerance_interval: number
-    evaluation_type: Literal["stop", "non_stop"]
+    judgement: Literal["positive", "negative"]
     condition: list[StopReasonCondition]
 
     @field_validator("time_range", mode="before")
@@ -167,16 +167,6 @@ class StopReasonCriteria(BaseModel):
         if lower >= upper:
             raise ValueError(err_msg)
         return (lower, upper)
-
-    @model_validator(mode="after")
-    def validate_condition(self) -> StopReasonCriteria:
-        is_set_base_stop_line_dist = any(
-            condition.base_stop_line_dist is not None for condition in self.condition
-        )
-        err_msg = "base_stop_line_dist cannot be set for non_stop evaluation type."
-        if self.evaluation_type == "non_stop" and is_set_base_stop_line_dist:
-            raise ValueError(err_msg)
-        return self
 
 
 class Criteria(BaseModel):
@@ -270,7 +260,7 @@ class StopReason(EvaluationItem):
             start_time=self.condition.time_range[0],
             end_time=self.condition.time_range[1],
             tolerance_interval=self.condition.tolerance_interval,
-            evaluation_type=self.condition.evaluation_type,
+            judgement=self.condition.judgement,
             condition=self.condition.condition,
         )
 
