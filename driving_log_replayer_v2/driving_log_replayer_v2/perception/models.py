@@ -116,7 +116,7 @@ class Filter(BaseModel):
 
 
 class StopReasonCondition(BaseModel):
-    reason: Literal["Intersection", "TrafficLight", "ObstacleStop", "Crosswalk", "Walkway"]
+    reason: str
     base_stop_line_dist: tuple[float, float] | None = None
 
     @field_validator("base_stop_line_dist", mode="before")
