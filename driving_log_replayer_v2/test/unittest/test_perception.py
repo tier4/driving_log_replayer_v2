@@ -49,7 +49,7 @@ def test_scenario() -> None:
     assert scenario.Evaluation.Conditions.Criterion[0].CriteriaMethod == "num_gt_tp"
     assert scenario.Evaluation.Conditions.Criterion[1].CriteriaLevel == "easy"
     assert scenario.Evaluation.Conditions.stop_reason_criterion[0].tolerance_interval == 1.0
-    assert scenario.Evaluation.Conditions.stop_reason_criterion[1].judgement == "positive"
+    assert scenario.Evaluation.Conditions.stop_reason_criterion[1].judgement == "negative"
 
 
 def test_scenario_criteria_custom_level() -> None:
