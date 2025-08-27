@@ -94,7 +94,7 @@ def test_stop_reason_time_range() -> None:
         tolerance_interval=1.0,
         evaluation_type="stop",
         condition=[
-            {"reason": "ObstacleStop", "base_stop_line_dist": "0.0-10.0"},
+            {"reason": "ObstacleStop", "base_stop_line_dist": "0.0,10.0"},
         ],
     )
     assert stop_reason_criteria.time_range[0] == 0

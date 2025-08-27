@@ -51,9 +51,7 @@ class Region(BaseModel):
             return None
 
         err_non_specify_msg = "both min and max values must be specified."
-        err_range_msg = (
-            f"{v} is not valid distance range, expected ordering min-max with min < max."
-        )
+        err_range_msg = f"{v} is not valid region range, expected ordering min,max with min < max."
 
         s_lower, s_upper = v.split(",")
 
@@ -123,21 +121,26 @@ class StopReasonCondition(BaseModel):
 
     @field_validator("base_stop_line_dist", mode="before")
     @classmethod
-    def validate_distance_range(cls, v: str) -> tuple[number, number]:
+    def validate_distance_range(cls, v: str) -> tuple[float, float]:
         if v is None:
             return None
 
-        err_msg = f"{v} is not valid distance range, expected ordering min-max with min < max."
+        err_non_specify_msg = "both min and max values must be specified."
+        err_range_msg = (
+            f"{v} is not valid distance range, expected ordering min,max with min < max."
+        )
 
-        s_lower, s_upper = v.split("-")
-        if s_upper == "":
-            s_upper = sys.float_info.max
+        s_lower, s_upper = v.split(",")
+
+        if s_upper == "" or s_lower == "":
+            raise ValueError(err_non_specify_msg)
 
         lower = float(s_lower)
         upper = float(s_upper)
 
         if lower >= upper:
-            raise ValueError(err_msg)
+            raise ValueError(err_range_msg)
+
         return (lower, upper)
 
 

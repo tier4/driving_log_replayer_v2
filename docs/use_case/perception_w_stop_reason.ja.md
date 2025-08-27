@@ -23,7 +23,7 @@ stop_reason_criterion:
     evaluation_type: stop # "stop" or "non_stop"
     condition:
       - reason: ObstacleStop # Specify the reason you want to meet if "stop"
-        base_stop_line_dist: 0.0-10.0 # [m] lower_limit-(upper_limit) [Upper limit can be omitted. If omitted value is 1.7976931348623157e+308]
+        base_stop_line_dist: 0.0,10.0 # [m] lower_limit,upper_limit
   - time_range: 1649143506-1649143510 # [second] lower_limit-(upper_limit) [Upper limit can be omitted. If omitted value is (2 ** 63 - 1)]
     criteria_name: check_non_stop # criteria name
     pass_rate: 90.0 # How much (%) of the evaluation attempts are considered successful.
