@@ -98,6 +98,27 @@ def post_process(context: LaunchContext) -> list:
             localization_update_event_handler,
         ]
 
+    if conf["use_case"] == "localization_position_validator":
+        # compare the inference result with the annotation in the scenario file,
+        # and update the result.jsonl with final result
+
+        check_prediction_result_cmd = [
+            "ros2",
+            "run",
+            "driving_log_replayer_v2",
+            "localization_position_validator_check_prediction_result.py",
+            f"{conf['output_dir']}",
+            f"{conf['scenario_path']}",
+        ]
+        check_prediction_result = ExecuteProcess(
+            cmd=check_prediction_result_cmd, output="screen", name="localized_position_analyze"
+        )
+
+        return [
+            LogInfo(msg="run localized position validator analysis."),
+            check_prediction_result,
+        ]
+
     if conf["use_case"] == "perception":
         absolute_result_json_path = Path(
             expandvars(context.launch_configurations["result_json_path"])

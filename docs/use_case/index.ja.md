@@ -5,6 +5,7 @@ driving_log_replayer_v2 を用いてどのような評価を行えるか述べ�
 ## driving_log_replayer_v2 ユースケース一覧
 
 - [Localization](localization.ja.md)
+- [localized_position_validator](localized_position_validator.ja.md)
 - [YabLoc](yabloc.ja.md)
 - [Eagleye](eagleye.ja.md)
 - [AR-Tag Based Localizer](ar_tag_based_localizer.ja.md)

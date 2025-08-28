@@ -5,6 +5,7 @@ This section describes how driving_log_replayer_v2 can be used for evaluation.
 ## List of driving_log_replayer_v2 use cases
 
 - [Localization](localization.md)
+- [localized_position_validator](localized_position_validator.md)
 - [YabLoc](yabloc.md)
 - [Eagleye](eagleye.md)
 - [AR-Tag Based Localizer](ar_tag_based_localizer.md)
