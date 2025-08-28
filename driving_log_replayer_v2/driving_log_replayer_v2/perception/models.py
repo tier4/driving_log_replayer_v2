@@ -146,7 +146,7 @@ class StopReasonCondition(BaseModel):
 
 class StopReasonCriteria(BaseModel):
     criteria_name: str | None = None
-    time_range: tuple[int, int]
+    time_range: tuple[float, float]
     pass_rate: number
     tolerance_interval: number
     judgement: Literal["positive", "negative"]
@@ -154,15 +154,15 @@ class StopReasonCriteria(BaseModel):
 
     @field_validator("time_range", mode="before")
     @classmethod
-    def validate_time_range(cls, v: str) -> tuple[int, int]:
+    def validate_time_range(cls, v: str) -> tuple[float, float]:
         err_msg = f"{v} is not valid time range, expected ordering min-max with min < max."
 
         s_lower, s_upper = v.split("-")
         if s_upper == "":
             s_upper = UNIX_TIME_MAX_64
 
-        lower = int(s_lower)
-        upper = int(s_upper)
+        lower = float(s_lower)
+        upper = float(s_upper)
 
         if lower >= upper:
             raise ValueError(err_msg)

@@ -89,7 +89,7 @@ def test_filter_distance_min_max_reversed() -> None:
 
 def test_stop_reason_time_range() -> None:
     stop_reason_criteria = StopReasonCriteria(
-        time_range="0-",
+        time_range="0.0-",
         pass_rate=80.0,
         tolerance_interval=1.0,
         judgement="positive",
@@ -222,7 +222,7 @@ def create_stop_reason() -> StopReason:
     return StopReason(
         name="criteria0",
         condition=StopReasonCriteria(
-            time_range="900-1100",
+            time_range="900.0-1100.0",
             pass_rate=95.0,
             tolerance_interval=1.0,
             judgement="positive",
@@ -351,7 +351,7 @@ def test_stop_reason_obstacle_stop(
         "Info": {
             "Reason": ["ObstacleStop"],
             "Distance": [4.0],
-            "Timestamp": 1000,
+            "Timestamp": 1000.0,
         },
     }
 

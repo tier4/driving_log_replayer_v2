@@ -686,8 +686,9 @@ class StopReasonEvaluator:
         self._latest_check_time = 0.0
 
     def get_result(self, stop_reason: StopReasonData) -> tuple[SuccessFail | None, dict[str]]:
-        if not self._is_valid_time(stop_reason.seconds):
-            return None, self._get_timeout_msg(stop_reason.seconds)
+        stop_reason_time = stop_reason.seconds + stop_reason.nanoseconds / pow(10, 9)
+        if not self._is_valid_time(stop_reason_time):
+            return None, self._get_timeout_msg(stop_reason_time)
 
         # create map for easy access
         reason_dist_map = {
@@ -744,7 +745,7 @@ class StopReasonEvaluator:
             },
         }
 
-    def _get_timeout_msg(self, current_time: int) -> dict[str]:
+    def _get_timeout_msg(self, current_time: float) -> dict[str]:
         # not use yet
         return {
             "Info": {
@@ -754,7 +755,7 @@ class StopReasonEvaluator:
             },
         }
 
-    def _is_valid_time(self, current_time: int) -> bool:
+    def _is_valid_time(self, current_time: float) -> bool:
         # invalid if out of time range
         if not (self._start_time <= current_time <= self._end_time):
             return False
