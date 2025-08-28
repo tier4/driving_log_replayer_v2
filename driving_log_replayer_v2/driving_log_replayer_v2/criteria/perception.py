@@ -749,8 +749,8 @@ class StopReasonEvaluator:
         # not use yet
         return {
             "Info": {
-                "Reason": "Timeout",
-                "Distance": 0.0,
+                "Reason": ["timeout"],
+                "Distance": [None],
                 "Timestamp": current_time,
             },
         }
