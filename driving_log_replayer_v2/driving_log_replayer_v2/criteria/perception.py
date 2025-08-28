@@ -719,7 +719,7 @@ class StopReasonEvaluator:
                 "Info": {
                     "Reason": [reasons.reason for reasons in stop_reason.reasons],
                     "Distance": [reasons.dist_to_stop_pose for reasons in stop_reason.reasons],
-                    "Timestamp": stop_reason.seconds,
+                    "Timestamp": stop_reason_time,
                 },
             }
 
@@ -733,7 +733,7 @@ class StopReasonEvaluator:
                 "Info": {
                     "Reason": ["no_stop_reason"],
                     "Distance": [None],
-                    "Timestamp": stop_reason.seconds,
+                    "Timestamp": stop_reason_time,
                 },
             }
 
@@ -741,7 +741,7 @@ class StopReasonEvaluator:
             "Info": {
                 "Reason": [reasons.reason for reasons in stop_reason.reasons],
                 "Distance": [reasons.dist_to_stop_pose for reasons in stop_reason.reasons],
-                "Timestamp": stop_reason.seconds,
+                "Timestamp": stop_reason_time,
             },
         }
 
