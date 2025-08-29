@@ -1,6 +1,6 @@
 # Evaluate NDT estimation
 
-Use case `localization` will evaluate the perfomance of NDT localization in Autoware.
+Use case `localization` will evaluate the performance of NDT localization in Autoware.
 Driving Log Replayer runs the `logging_simulator` of Autoware to replay the scenario, and evaluation will run during and after the simulation.
 This pages explains how the simulation and the evaluation works for this use case.
 
