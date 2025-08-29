@@ -146,11 +146,11 @@ Evaluation:
 
 以下 3 つの topic を `logging_simulator` 中に評価する。
 
-| Topic name | Success condition |
-| --- | --- |
+| Topic name                                                   | Success condition                            |
+| ------------------------------------------------------------ | -------------------------------------------- |
 | /localization/pose_estimator/initial_to_result_relative_pose | value of lateral factor <= AllowableDistance |
-| /localization/pose_estimator/exe_time_ms | value <= AllowableExeTimeMs |
-| /localization/pose_estimator/iteration_num | value <= AllowableIterationNum |
+| /localization/pose_estimator/exe_time_ms                     | value <= AllowableExeTimeMs                  |
+| /localization/pose_estimator/iteration_num                   | value <= AllowableIterationNum               |
 
 あるフレームにおいて、上記の 3 条件が全て満たされた場合に NDT が収束したとして判定される。シミュレーションを通じてこの収束率が `PassRate` 以上であれば本評価は Success、`PassRate` 未満であれば Fail と判定される。
 
@@ -169,10 +169,10 @@ Evaluation:
 
 以下の 2 つの topic のうち、シナリオで指定した方を `logging_simulator` 中に評価する。
 
-| Method | Topic Name | Success Condition |
-| --- | --- | --- |
-| TP | /localization/pose_estimator/transform_probability | value >= AllowableLikelihood |
-| NVTL | /localization/pose_estimator/nearest_voxel_transformation_likelihood | value >= AllowableLikelihood |
+| Method | Topic Name                                                           | Success Condition            |
+| ------ | -------------------------------------------------------------------- | ---------------------------- |
+| TP     | /localization/pose_estimator/transform_probability                   | value >= AllowableLikelihood |
+| NVTL   | /localization/pose_estimator/nearest_voxel_transformation_likelihood | value >= AllowableLikelihood |
 
 上記トピックが示す数値が `AllowableLikelihood` 以上であれば NDT の結果は信頼できるものとして評価し、下回っていれば異常とみなして評価する。シミュレーションを通じて TP もしくは NVTL が `NGCount` 回連続で閾値を下回って場合は Fail、そうでない場合は Success と判定される。
 
