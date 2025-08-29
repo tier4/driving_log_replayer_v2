@@ -60,7 +60,7 @@ clock は、ros2 bag play の--clock オプションによって出力してい�
 
 ### localization_evaluator_node
 
-Driving Log Replater は `logging_simulator` と共に `localization_evaluator_node` を launch し、評価に必要なデータを収集している。
+Driving Log Replayer は `logging_simulator` と共に `localization_evaluator_node` を launch し、評価に必要なデータを収集している。
 
 `localization_evaluator_node` は以下のトピックをサブスクライブする。
 
@@ -128,7 +128,7 @@ NDTの可用性を評価するために、下記のようなケースを `loggin
 
 なお、NDTの出力トピックの中で `/localization/pose_estimator/exe_time_ms` が選ばれたのは、「トピックが定期的に出力されている」ことを確認しやすいからである。例えば `/localization/pose_estimator/pose` は NVTL や TP などのスコアが低い場合も出力されないので、出力を監視するだけでは `ndt_scan_matcher` の可用性を判定することが難しく本目的には適さない。
 
-`logging_simualator` の最後まで `/localization/pose_estimator/exe_time_ms` トピックが確認できれば本評価は Success、確認できなかれば Fail と判定される。
+`logging_simulator` の最後まで `/localization/pose_estimator/exe_time_ms` トピックが確認できれば本評価は Success、確認できなかれば Fail と判定される。
 
 ### NDT の収束性
 

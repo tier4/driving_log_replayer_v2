@@ -1,6 +1,6 @@
 # Evaluate NDT estimation
 
-Use case `localization` will evaluate the perfomation of NDT localization in Autoware.
+Use case `localization` will evaluate the perfomance of NDT localization in Autoware.
 Driving Log Replayer runs the `logging_simulator` of Autoware to replay the scenario, and evaluation will run during and after the simulation.
 This pages explains how the simulation and the evaluation works for this use case.
 
@@ -56,7 +56,7 @@ Or, you can use vehicle topics instead of CAN data.
 | ---------- | ----------------------- |
 | /clock     | rosgraph_msgs/msg/Clock |
 
-The clock is output by the --clock option of ros2 bag play, so if it is recorded in the bag itself, it outpus twice so it should not be included in the bag.
+The clock is output by the --clock option of ros2 bag play, so if it is recorded in the bag itself, it outputs twice so it should not be included in the bag.
 
 ### localization_evaluator_node
 
@@ -105,7 +105,7 @@ When you launch Driving Log Replayer, the evaluation will start with the procedu
 
 1. Launch the `localization_evaluator_node`, `logging_simulator.launch` and `ros2 bag play` command
 2. Autoware performs localization by the sensor data from the rosbag
-3. The `localization_evaluator_node` evaluates the NDT Availabity, Convergence and Reliability meanwhile and record the results into a file.
+3. The `localization_evaluator_node` evaluates the NDT Availability, Convergence and Reliability meanwhile and record the results into a file.
 4. After the logging simulation is done, [`autoware_localization_evaluation_scripts`](https://github.com/autowarefoundation/autoware_tools/tree/main/localization/autoware_localization_evaluation_scripts) will start and evaluate the difference from the reference trajectory, error rate of diagnostics and the rise/fall timing of the diagnostics.
 5. Summarize all results and then the program finishes automatically.
 
@@ -115,14 +115,14 @@ The following sections explain the details of each evaluation item.
 
 ### NDT Availability
 
-This evalution starts for any kind of scenario.
+This evaluation starts for any kind of scenario.
 
-Driving Log Replayer will evaluate the NDT Availbility through `logging_simulator` by detecting these two cases.
+Driving Log Replayer will evaluate the NDT Availability through `logging_simulator` by detecting these two cases.
 
 - The `pointcloud_preprocessor` is failing due to such like runtime error. (Then the `ndt_scan_matcher` cannot subscribe LiDAR scan points.)
 - The `ndt_scan_matcher` itself is failing due to such like runtime error.
 
-This can be done by monitoring the following topic using an Autoware package Componenet State Monitor.
+This can be done by monitoring the following topic using an Autoware package Component State Monitor.
 
 - /localization/pose_estimator/exe_time_ms
 
@@ -144,7 +144,7 @@ Evaluation:
       PassRate: 95.0 # How much (%) of the evaluation attempts are considered successful.
 ```
 
-This evaluation monitors these three topics through the `logging_simualtor`.
+This evaluation monitors these three topics through the `logging_simulator`.
 
 | Topic name                                                   | Success condition                            |
 | ------------------------------------------------------------ | -------------------------------------------- |
@@ -152,7 +152,7 @@ This evaluation monitors these three topics through the `logging_simualtor`.
 | /localization/pose_estimator/exe_time_ms                     | value <= AllowableExeTimeMs                  |
 | /localization/pose_estimator/iteration_num                   | value <= AllowableIterationNum               |
 
-If all theee conditions have been passed, the NDT will be marked as converged for that time frame. If the rate of convergence is equal or larger than the `PassRate`, this evaluation is judged as Success.
+If all three conditions have been passed, the NDT will be marked as converged for that time frame. If the rate of convergence is equal or larger than the `PassRate`, this evaluation is judged as Success.
 
 ### NDT Reliability
 
@@ -178,7 +178,7 @@ If the value of the topic is equal or larger than the `AllowableLikelihood`, the
 
 ### Difference from the reference trajectory
 
-This evalution basically starts for any kind of scenario.
+This evaluation basically starts for any kind of scenario.
 
 After `logging_simulator` is done, the position, twist, and acceleration difference from the reference trajectory will be evaluated. See the actual implementation of [`autoware_localization_evaluation_scripts`](https://github.com/autowarefoundation/autoware_tools/tree/main/localization/autoware_localization_evaluation_scripts) for details of such like the definition of the difference.
 
@@ -206,7 +206,7 @@ Evaluation:
 
 ### Error rate of diagnostics
 
-This evalution basically starts for any kind of scenario.
+This evaluation basically starts for any kind of scenario.
 
 After the `logging_simulator` is done `autoware_localization_evaluation_scripts` evaluates whether localization related diagnostics (listed below) are not publishing errors with a high rate.
 
