@@ -8,9 +8,9 @@ Evaluation:
   UseCaseFormatVersion: 2.0.0
   Conditions:
     CheckInputAndOutputCount:
-      PassRate: 95.0 # How much (%) of the output topic is pusblished based on input topic. Mainly for the model infer speed sanity check.
+      PassRate: 95.0 # How much (%) of the output topic is published based on input topic. Mainly for the model infer speed sanity check.
     CheckPrediction:
-      PassRate: 95.0 # How much (%) of the predicted label is same as the annotation
+      PassRate: 95.0 # How much (%) of the predicted label is same as the annotation.
   Datasets:
     - sample_dataset:
         VehicleId: default
@@ -25,6 +25,6 @@ Evaluation:
             z: -0.9689404241590215
             w: 0.2472942668776119
   Annotation: # Annotation for CheckPrediction.
-    - Timestamp: 1649138854.971764 # Timestamp in ROS sim time. From this timestamp until the next one, ExpectedValidity is used as the label.
-      ExpectedValidity: true # Label for the prediction
+    - Timestamp: 1649138854.971764 # Timestamp in ROS sim time. From this timestamp and until the next one, ExpectedValidity is used as the label.
+      ExpectedValidity: true # Label for the prediction.
     # If there is no next annotation, the last one will be used until the end.

@@ -121,7 +121,7 @@ class LocalizationPositionValidatorResult(ResultBase):
     def set_prediction_frame(self, msg: LocalizedPositionValidatorPrediction) -> None:
         if self.__prediction_started:
             self.__latest_input_timestamp = msg.header.stamp
-            self.__lateset_prediction = msg
+            self.__latest_prediction = msg
             self.__output_topic_count += 1
 
             self._frame = self.__check_pred_count.set_frame(
