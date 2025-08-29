@@ -2,7 +2,13 @@
 
 NDTによるAutowareの自己位置推定が安定して動作しているかを評価する。
 
-NDT自己位置推定の評価では NDT の信頼度、収束性、可用性を評価する。
+具体的には以下を評価する。
+
+- NDT の信頼度
+- NDT の収束性
+- NDT の可用性
+- 想定軌跡（位置姿勢・速度・加速度）との乖離
+- 想定外の diagnostics の検知
 
 ## 評価方法
 
@@ -11,7 +17,8 @@ launch を立ち上げると以下のことが実行され、評価される。
 1. launch で評価ノード(`localization_evaluator_node`)と `logging_simulator.launch`、`ros2 bag play`コマンドを立ち上げる
 2. bag から出力されたセンサーデータを autoware が受け取って、自己位置推定を行う
 3. 評価ノードが topic を subscribe して、NDT の信頼度、収束性、可用性が基準を満たしているかを判定して結果をファイルに記録する
-4. bag の再生が終了すると自動で launch が終了して評価が終了する
+4. bag の再生が終了すると、集計された結果 rosbag において軌跡や diagnostics が想定通りであるかを評価する
+5. 評価結果の出力後、自動的に launch が終了する。
 
 ### NDT の信頼度
 

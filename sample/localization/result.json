@@ -39549,7 +39549,7 @@
   {
     "Result": {
       "Success": false,
-      "Summary": "Failed: Convergence (Fail): 570 / 632 -> 90.19%, Reliability (Fail): NVTL Sequential NG Count: 10 (Total Test: 632, Average: 2.46835, StdDev: 0.16043), NDT Availability (Success): NDT available, mean_position_norm=0.166 [m]|mean_angle_norm=0.032 [deg]|mean_linear_velocity_norm=0.003 [m/s]|mean_angular_velocity_norm=0.001 [rad/s]|localization__ekf_localizer 13.447 [%] is too large.|localization__pose_instability_detector 0.000 [%]|localization_error_monitor__ellipse_error_status 13.447 [%] is too large.|ndt_scan_matcher__scan_matching_status 57.177 [%] is too large."
+      "Summary": "Failed: Convergence (Fail): 570 / 632 -> 90.19%, Reliability (Fail): NVTL Sequential NG Count: 10 (Total Test: 632, Average: 2.46835, StdDev: 0.16043), NDT Availability (Success): NDT available, mean_position_norm=0.166 [m]|mean_angle_norm=0.032 [deg]|mean_linear_velocity_norm=0.003 [m/s]|mean_angular_velocity_norm=0.001 [rad/s]|localization__ekf_localizer 13.447 [%] is too large.|localization__pose_instability_detector 0.000 [%]|localization_error_monitor__ellipse_error_status 13.447 [%] is too large.|ndt_scan_matcher__scan_matching_status 57.177 [%] is too large.|Diagnostics flag 'pose_is_passed_delay_gate' OK.|Diagnostics flag 'pose_no_update_count' OK."
     }
   }
 ]

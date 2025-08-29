@@ -16,6 +16,22 @@ Evaluation:
       Method: NVTL # NVTL or TP which method to use for evaluation
       AllowableLikelihood: 2.3 # If above this value, the localization reliability value is considered normal.
       NGCount: 10 # If the reliability value is lower than the threshold value for more than this number in the sequence. the evaluation is considered to have failed.
+    OverallCriteriaMask: # Toggle the mask below to perform or not to perform evaluation of the according criteria. The evaluator will automatically set all to `true` if this block is not defined.
+      mean_relative_position: true
+      mean_relative_angle: true
+      mean_relative_linear_velocity: true
+      mean_relative_angular_velocity: true
+      mean_relative_acceleration: true
+      diagnostics_not_ok_rate: true
+    DiagnosticsFlagCheck:
+      pose_is_passed_delay_gate: # name of the diagnostics to check
+        flag: rise # which flag to detect (`rise` or `fall`)
+        at_sec: 113 # The `sec` part of the expected time to rise/fall
+        at_nanosec: 750000000 # The `nanosec` part of the expected time to rise/fall
+      pose_no_update_count:
+        flag: rise
+        at_sec: 117
+        at_nanosec: 900000000
   Datasets:
     - sample_dataset:
         VehicleId: default
