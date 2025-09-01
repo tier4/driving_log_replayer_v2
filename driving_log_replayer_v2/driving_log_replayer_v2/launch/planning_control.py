@@ -21,6 +21,7 @@ RECORD_TOPIC = """^/tf$\
 |^/map/vector_map$\
 |^/map/vector_map_marker$\
 |^/planning/diffusion_planner/trajectory$\
+|^/perception/object_recognition/objects$\
 """
 
 AUTOWARE_DISABLE = {
