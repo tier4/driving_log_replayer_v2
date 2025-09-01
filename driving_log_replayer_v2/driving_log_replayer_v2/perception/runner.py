@@ -320,18 +320,18 @@ def evaluate(  # noqa: PLR0915
         stop_reason_analyzer.save_as_csv(Path(stop_reason_result_path).joinpath("stop_reason.csv"))
 
     # analysis of the evaluation result and save it as csv
-    if evaluator.get_degradation_evaluation_task() != "fp_validation":
-        analyzers: dict[str, PerceptionAnalyzer3D] = evaluator.get_analyzers()
-        # TODO: analysis other topic
-        analyzer = analyzers[degradation_topic]
-        save_path = evaluator.get_archive_path(degradation_topic)
-        analyze(
-            analyzer,
-            save_path,
-            analysis_max_distance,
-            analysis_distance_interval,
-            degradation_topic,
-        )
+    # if evaluator.get_degradation_evaluation_task() != "fp_validation":
+    #     analyzers: dict[str, PerceptionAnalyzer3D] = evaluator.get_analyzers()
+    #     # TODO: analysis other topic
+    #     analyzer = analyzers[degradation_topic]
+    #     save_path = evaluator.get_archive_path(degradation_topic)
+    #     analyze(
+    #         analyzer,
+    #         save_path,
+    #         analysis_max_distance,
+    #         analysis_distance_interval,
+    #         degradation_topic,
+    #     )
 
 
 def parse_args() -> argparse.Namespace:
