@@ -1,5 +1,15 @@
 # Release Notes
 
+## Version 3.13.0
+
+Major changes
+
+| Module                | Feature   | Brief summary                                                                | Pull request                                                        | Contributor                                         |
+| --------------------- | --------- | ---------------------------------------------------------------------------- | ------------------------------------------------------------------- | --------------------------------------------------- |
+| `perception`          | criteria  | add the new criteria stop_reason                                             | [#202](https://github.com/tier4/driving_log_replayer_v2/issues/202) | [MasatoSaeki](https://github.com/MasatoSaeki)       |
+| `localization`        | scenario  | make conditions detachable                                                   | [#203](https://github.com/tier4/driving_log_replayer_v2/issues/203) | [TaikiYamada4](https://github.com/TaikiYamada4)     |
+| `ground_segmentation` | algorithm | update ground segmentation evaluator to be compatible with lidar-seg dataset | [#201](https://github.com/tier4/driving_log_replayer_v2/issues/201) | [nanoshimarobot](https://github.com/nanoshimarobot) |
+
 ## Version 3.12.0
 
 Major changes
