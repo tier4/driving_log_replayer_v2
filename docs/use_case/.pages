@@ -3,6 +3,8 @@ nav:
   - index.ja.md
   - localization.en.md
   - localization.ja.md
+  - localized_position_validator.en.md
+  - localized_position_validator.ja.md
   - yabloc.en.md
   - yabloc.ja.md
   - eagleye.en.md
