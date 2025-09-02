@@ -16,7 +16,7 @@ sample の scenario.yaml は以下のようなっており、
 
 ```yaml
 stop_reason_criterion:
-  - time_range: 1649143500.0-1649143505.0 # [second] lower_limit-(upper_limit) [Upper limit can be omitted. If omitted value is (2 ** 63 - 1)]
+  - time_range: 1649143500.0-1649143505.0 # [second] lower_limit-(upper_limit) [Upper limit can be omitted. If omitted value is float(2 ** 63 - 1)]
     criteria_name: check_obstacle_stop # criteria name
     pass_rate: 80.0 # How much (%) of the evaluation attempts are considered successful.
     tolerance_interval: 1.0 # Tolerance interval in the evaluation frame
@@ -24,7 +24,7 @@ stop_reason_criterion:
     condition:
       - reason: ObstacleStop # Specify the reason you want to meet if "stop"
         base_stop_line_dist: 0.0,10.0 # [m] lower_limit,upper_limit
-  - time_range: 1649143506.0-1649143510.0 # [second] lower_limit-(upper_limit) [Upper limit can be omitted. If omitted value is (2 ** 63 - 1)]
+  - time_range: 1649143506.0-1649143510.0 # [second] lower_limit-(upper_limit) [Upper limit can be omitted. If omitted value is float(2 ** 63 - 1)]
     criteria_name: check_non_stop # criteria name
     pass_rate: 90.0 # How much (%) of the evaluation attempts are considered successful.
     tolerance_interval: 1.0 # Tolerance interval in the evaluation frame
@@ -32,7 +32,7 @@ stop_reason_criterion:
     condition:
       - reason: Intersection # Specify the reason you do not want to meet if "non_stop"
         base_stop_line_dist: 0.0,10.0 # [m] lower_limit,upper_limit
-  - time_range: 1649143511.0-1649143514.0 # [second] lower_limit-(upper_limit) [Upper limit can be omitted. If omitted value is (2 ** 63 - 1)]
+  - time_range: 1649143511.0-1649143514.0 # [second] lower_limit-(upper_limit) [Upper limit can be omitted. If omitted value is float(2 ** 63 - 1)]
     criteria_name: check_no_reason # criteria name
     pass_rate: 90.0 # How much (%) of the evaluation attempts are considered successful.
     tolerance_interval: 1.0 # Tolerance interval in the evaluation frame
