@@ -2,8 +2,8 @@
 Changelog for package driving_log_replayer
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-Forthcoming
------------
+3.13.0 (2025-09-02)
+-------------------
 * feat(perception): add the new criteria stop_reason (`#202 <https://github.com/tier4/driving_log_replayer_v2/issues/202>`_)
   * init commit
   * pre-commit
