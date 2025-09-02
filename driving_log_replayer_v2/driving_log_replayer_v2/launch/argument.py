@@ -68,6 +68,8 @@ def check_launch_component(conf: dict) -> dict:
         return {"autoware": "false"}
     launch_config = import_module(f"driving_log_replayer_v2.launch.{conf['use_case']}")
     arg_disable = launch_config.AUTOWARE_DISABLE
+    if callable(arg_disable):
+        arg_disable = arg_disable(conf)
     # update autoware component launch or not
     autoware_components = ["sensing", "localization", "perception", "planning", "control"]
     launch_component = {}

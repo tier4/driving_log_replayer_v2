@@ -20,9 +20,12 @@ def test_load_perception_config() -> None:
     launch_config = import_module(module_name)
     assert (
         launch_config.RECORD_TOPIC
-        == "^/tf$|^/tf_static$|^/diagnostics$|^/sensing/camera/.*|^/sensing/lidar/concatenated/pointcloud$|^/perception/object_recognition/detection/.*/debug/pipeline_latency_ms$|^/perception/object_recognition/tracking/multi_object_tracker/debug/.*|^/perception/object_recognition/prediction/map_based_prediction/debug/pipeline_latency_ms$|^/perception/object_recognition/.*/objects$|^/perception/object_recognition/objects$|^/perception/object_recognition/detection/objects_before_filter$|^/sensing/.*detected_objects$|^/sensing/.*tracked_objects$"
+        == "^/tf$|^/tf_static$|^/diagnostics$|^/awapi/autoware/get/status$|^/sensing/camera/.*|^/sensing/lidar/concatenated/pointcloud$|^/perception/object_recognition/detection/.*/debug/pipeline_latency_ms$|^/perception/object_recognition/tracking/multi_object_tracker/debug/.*|^/perception/object_recognition/prediction/map_based_prediction/debug/pipeline_latency_ms$|^/perception/object_recognition/.*/objects$|^/perception/object_recognition/objects$|^/perception/object_recognition/detection/objects_before_filter$|^/sensing/.*detected_objects$|^/sensing/.*tracked_objects$"
     )
-    assert launch_config.AUTOWARE_DISABLE == {
+    arg_disable = launch_config.AUTOWARE_DISABLE
+    assert callable(arg_disable)
+    arg_disable = arg_disable({})
+    assert arg_disable == {
         "localization": "false",
         "planning": "false",
         "control": "false",

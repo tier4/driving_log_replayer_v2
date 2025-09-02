@@ -33,10 +33,14 @@ from driving_log_replayer_v2.evaluator import DLREvaluatorV2
 from driving_log_replayer_v2.perception.analyze import analyze
 from driving_log_replayer_v2.perception.manager import EvaluationManager
 from driving_log_replayer_v2.perception.models import PerceptionResult
+from driving_log_replayer_v2.perception.models import StopReasonResult
 from driving_log_replayer_v2.perception.ros2_utils import lookup_transform
 from driving_log_replayer_v2.perception.ros2_utils import RosBagManager
+from driving_log_replayer_v2.perception.stop_reason import convert_to_stop_reason
+from driving_log_replayer_v2.perception.stop_reason import StopReasonAnalyzer
 from driving_log_replayer_v2.perception.topics import load_evaluation_topics
 import driving_log_replayer_v2.perception_eval_conversions as eval_conversions
+from driving_log_replayer_v2.result import MultiResultEditor
 from driving_log_replayer_v2.result import ResultWriter
 
 if TYPE_CHECKING:
@@ -45,11 +49,11 @@ if TYPE_CHECKING:
     from perception_eval.config import PerceptionEvaluationConfig
     from perception_eval.tool import PerceptionAnalyzer3D
 
-    from driving_log_replayer_v2.perception.ros2_utils import MsgType
+    from driving_log_replayer_v2.perception.ros2_utils import PerceptionMsgType
 
 
 def convert_to_perception_eval(
-    msg: MsgType,
+    msg: PerceptionMsgType,
     subscribed_ros_timestamp: int,
     evaluation_config: PerceptionEvaluationConfig,
 ) -> tuple[int, int, list[DynamicObject] | str]:
@@ -98,7 +102,7 @@ def write_result(
     result: PerceptionResult,
     result_writer: ResultWriter,
     rosbag_manager: RosBagManager,
-    msg: MsgType,
+    msg: PerceptionMsgType,
     subscribed_ros_timestamp: int,
     frame_result: PerceptionFrameResult | str,
     skip_counter: int,
@@ -146,7 +150,7 @@ def write_result(
     result_writer.write_result_with_time(result, subscribed_ros_timestamp)
 
 
-def evaluate(
+def evaluate(  # noqa: PLR0915
     scenario_path: str,
     rosbag_dir_path: str,
     t4dataset_path: str,
@@ -189,13 +193,30 @@ def evaluate(
         raise error
     degradation_topic = evaluator.get_degradation_topic()
 
-    # initialize ResultWriter to write result.jsonl which Evaluator will use
+    # initialize ResultWriter and PerceptionResult to write result.jsonl which Evaluator will use
     result_writer = ResultWriter(
         result_json_path,
         Clock(),
         evaluator.get_evaluation_condition(),
     )
     result = PerceptionResult(evaluator.get_evaluation_condition())
+
+    # initialize ResultWriter and StopReasonResult if stop reason criterion is defined
+    stop_reason_criterion = evaluator.get_evaluation_condition().stop_reason_criterion
+    if stop_reason_criterion is not None:
+        # create directory to save stop_reason.jsonl and stop_reason.csv
+        stop_reason_result_path = Path(result_archive_path).joinpath("stop_reason")
+        stop_reason_result_path.mkdir()
+        stop_reason_result = StopReasonResult(evaluator.get_evaluation_condition())
+        stop_reason_result_writer = ResultWriter(
+            stop_reason_result_path.joinpath("stop_reason.jsonl"),
+            Clock(),
+            evaluator.get_evaluation_condition(),
+        )
+        stop_reason_analyzer = StopReasonAnalyzer()
+    else:
+        stop_reason_result = None
+        stop_reason_result_writer = None
 
     # initialize RosBagManager to read and save rosbag and write into it
     additional_record_topic_name = {
@@ -211,11 +232,16 @@ def evaluate(
         )
         for topic_name in additional_record_topic_name.values()
     ]
+    evaluation_topics_list = (
+        [*evaluator.get_evaluation_topics(), "/awapi/autoware/get/status"]
+        if stop_reason_result is not None
+        else evaluator.get_evaluation_topics()
+    )
     rosbag_manager = RosBagManager(
         rosbag_dir_path,
         Path(result_archive_path).joinpath("result_bag").as_posix(),
         storage,
-        evaluator.get_evaluation_topics(),
+        evaluation_topics_list,
         additional_record_topic,
     )
 
@@ -225,6 +251,16 @@ def evaluate(
     # main evaluation process
     for topic_name, msg, subscribed_ros_timestamp in rosbag_manager.read_messages():
         # See RosBagManager for `time relationships`.
+
+        # evaluate stop reason criterion if defined
+        if stop_reason_result is not None and topic_name == "/awapi/autoware/get/status":
+            stop_reason = convert_to_stop_reason(msg)
+            stop_reason_analyzer.append(stop_reason)
+            stop_reason_result.set_frame(stop_reason)
+            stop_reason_result_writer.write_result_with_time(
+                stop_reason_result, subscribed_ros_timestamp
+            )
+            continue
 
         if isinstance(msg, DetectedObjects):
             interpolation: bool = False
@@ -270,6 +306,18 @@ def evaluate(
     result.set_final_metrics(final_metrics[degradation_topic])
     result_writer.write_result_with_time(result, rosbag_manager.get_last_ros_timestamp())
     result_writer.close()
+
+    # merge result.jsonl and stop_reason.jsonl if stop reason criterion is defined
+    # and close stop reason result writer if defined
+    if stop_reason_result is not None:
+        stop_reason_result_writer.close()
+        result_paths = [
+            result_writer.result_path,
+            stop_reason_result_writer.result_path,
+        ]
+        multi_result_editor = MultiResultEditor(result_paths)
+        multi_result_editor.write_back_result()
+        stop_reason_analyzer.save_as_csv(Path(stop_reason_result_path).joinpath("stop_reason.csv"))
 
     # analysis of the evaluation result and save it as csv
     if evaluator.get_degradation_evaluation_task() != "fp_validation":

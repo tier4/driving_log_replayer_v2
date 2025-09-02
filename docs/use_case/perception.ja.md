@@ -6,6 +6,8 @@ Autoware の実行時には perception topic を保存する。その後、後�
 
 pass/fail を判定する topic は scenario.yaml に記述される evaluation_task に基づく。解析したい topic はターミナル引数から指定する。指定しない場合はデフォルトの値が使用される。
 
+また、通常のpass/fail の判定に加えて、Autoware のステータスを示す一部である stop_reason を考慮した判定も行える。詳細は[こちら](/docs/use_case/perception_w_stop_reason.ja.md)を参照。
+
 ## 事前準備
 
 perception では、機械学習の学習済みモデルを使用する。

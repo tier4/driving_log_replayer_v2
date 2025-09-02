@@ -24,6 +24,7 @@ from pydantic import field_validator
 from pydantic import model_validator
 
 from driving_log_replayer_v2.criteria import PerceptionCriteria
+from driving_log_replayer_v2.criteria import StopReasonEvaluator
 from driving_log_replayer_v2.perception_eval_conversions import FrameDescriptionWriter
 from driving_log_replayer_v2.perception_eval_conversions import summarize_pass_fail_result
 from driving_log_replayer_v2.result import EvaluationItem
@@ -33,6 +34,10 @@ from driving_log_replayer_v2.scenario import Scenario
 
 if TYPE_CHECKING:
     from perception_eval.evaluation.result.perception_frame_result import PerceptionFrameResult
+
+    from driving_log_replayer_v2.perception.stop_reason import StopReasonData
+
+UNIX_TIME_MAX_64: int = (1 << 63) - 1
 
 
 class Region(BaseModel):
@@ -46,9 +51,7 @@ class Region(BaseModel):
             return None
 
         err_non_specify_msg = "both min and max values must be specified."
-        err_range_msg = (
-            f"{v} is not valid distance range, expected ordering min-max with min < max."
-        )
+        err_range_msg = f"{v} is not valid region range, expected ordering min,max with min < max."
 
         s_lower, s_upper = v.split(",")
 
@@ -112,6 +115,60 @@ class Filter(BaseModel):
         return self
 
 
+class StopReasonCondition(BaseModel):
+    reason: str
+    base_stop_line_dist: tuple[float, float] | None = None
+
+    @field_validator("base_stop_line_dist", mode="before")
+    @classmethod
+    def validate_distance_range(cls, v: str) -> tuple[float, float]:
+        if v is None:
+            return None
+
+        err_non_specify_msg = "both min and max values must be specified."
+        err_range_msg = (
+            f"{v} is not valid distance range, expected ordering min,max with min < max."
+        )
+
+        s_lower, s_upper = v.split(",")
+
+        if s_upper == "" or s_lower == "":
+            raise ValueError(err_non_specify_msg)
+
+        lower = float(s_lower)
+        upper = float(s_upper)
+
+        if lower >= upper:
+            raise ValueError(err_range_msg)
+
+        return (lower, upper)
+
+
+class StopReasonCriteria(BaseModel):
+    criteria_name: str | None = None
+    time_range: tuple[float, float]
+    pass_rate: number
+    tolerance_interval: number
+    judgement: Literal["positive", "negative"]
+    condition: list[StopReasonCondition]
+
+    @field_validator("time_range", mode="before")
+    @classmethod
+    def validate_time_range(cls, v: str) -> tuple[float, float]:
+        err_msg = f"{v} is not valid time range, expected ordering min-max with min < max."
+
+        s_lower, s_upper = v.split("-")
+        if s_upper == "":
+            s_upper = UNIX_TIME_MAX_64
+
+        lower = float(s_lower)
+        upper = float(s_upper)
+
+        if lower >= upper:
+            raise ValueError(err_msg)
+        return (lower, upper)
+
+
 class Criteria(BaseModel):
     criteria_name: str | None = None
     PassRate: number
@@ -138,11 +195,12 @@ class Criteria(BaseModel):
 
 class Conditions(BaseModel):
     Criterion: list[Criteria]
+    stop_reason_criterion: list[StopReasonCriteria] | None = None
 
 
 class Evaluation(BaseModel):
     UseCaseName: Literal["perception"]
-    UseCaseFormatVersion: Literal["1.0.0", "1.1.0", "1.2.0", "1.3.0"]
+    UseCaseFormatVersion: Literal["1.0.0", "1.1.0", "1.2.0", "1.3.0", "1.4.0"]
     Datasets: list[dict]
     Conditions: Conditions
     PerceptionEvaluationConfig: dict
@@ -190,6 +248,42 @@ class Perception(EvaluationItem):
             "Objects": FrameDescriptionWriter.extract_pass_fail_objects_description(
                 ret_frame.pass_fail_result,
             ),
+        }
+
+
+@dataclass
+class StopReason(EvaluationItem):
+    success: bool = True
+
+    def __post_init__(self) -> None:
+        self.criteria = StopReasonEvaluator(
+            start_time=self.condition.time_range[0],
+            end_time=self.condition.time_range[1],
+            tolerance_interval=self.condition.tolerance_interval,
+            judgement=self.condition.judgement,
+            condition=self.condition.condition,
+        )
+
+    def set_frame(self, stop_reason: StopReasonData) -> dict:
+        frame_success = "Fail"
+        result, result_msg = self.criteria.get_result(stop_reason)
+
+        if result is None:
+            self.time_out += 1
+            return {"Timeout": self.time_out}
+        if result.is_success():
+            self.passed += 1
+            frame_success = "Success"
+
+        self.total += 1
+        self.success: bool = self.rate() >= self.condition.pass_rate
+        self.summary = f"{self.name} ({self.success_str()}): {self.passed} / {self.total} -> {self.rate():.2f}%"
+
+        return {
+            "PassFail": {
+                "Result": {"Total": self.success_str(), "Frame": frame_success},
+                "Info": result_msg["Info"],
+            },
         }
 
 
@@ -245,3 +339,35 @@ class PerceptionResult(ResultBase):
 
     def set_final_metrics(self, final_metrics: dict) -> None:
         self._frame = {"FinalScore": final_metrics}
+
+
+class StopReasonResult(ResultBase):
+    def __init__(self, condition: Conditions) -> None:
+        super().__init__()
+        self.__stop_reason_criterion: list[StopReason] = []
+        for i, criteria in enumerate(condition.stop_reason_criterion):
+            criterion_name = (
+                criteria.criteria_name if criteria.criteria_name is not None else f"criteria{i}"
+            )
+            self.__stop_reason_criterion.append(
+                StopReason(name=criterion_name, condition=criteria),
+            )
+
+    def update(self) -> None:
+        all_summary: list[str] = []
+        all_success: list[bool] = []
+        for criterion in self.__stop_reason_criterion:
+            tmp_success = criterion.success
+            prefix_str = "Passed: " if tmp_success else "Failed: "
+            all_summary.append(prefix_str + criterion.summary)
+            all_success.append(tmp_success)
+        self._summary = ", ".join(all_summary)
+        self._success = all(all_success)
+
+    def set_frame(
+        self,
+        stop_reason: StopReasonData,
+    ) -> None:
+        for criterion in self.__stop_reason_criterion:
+            self._frame[criterion.name] = criterion.set_frame(stop_reason)
+        self.update()
