@@ -2,6 +2,71 @@
 Changelog for package driving_log_replayer
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
+Forthcoming
+-----------
+* feat(perception): add the new criteria stop_reason (`#202 <https://github.com/tier4/driving_log_replayer_v2/issues/202>`_)
+  * init commit
+  * pre-commit
+  * fix typo
+  * change variable name, import package in package.xml and test
+  * fix for header
+  * fix test
+  * create csv for analysis
+  * pre-commit
+  * use convert function
+  * remove unused key
+  * pre-commit
+  * fix path
+  * fix test
+  * change autoware args
+  * fix test
+  * add try error
+  * update scenario format
+  * update scenario format
+  * fix evaluation type
+  * fix test
+  * fix test
+  * convert to str from literal
+  * use nanosecond
+  * update time
+  * fix timeout format
+  * use float
+  * update docs
+  ---------
+* feat(localization): make conditions detachable (`#203 <https://github.com/tier4/driving_log_replayer_v2/issues/203>`_)
+  * make localization conditions detachable
+  * fix mistake between tp and nvtl
+  ---------
+* feat: update ground segmentation evaluator to be compatible with lidarseg dataset(resubmission of `#156 <https://github.com/tier4/driving_log_replayer_v2/issues/156>`_) (`#201 <https://github.com/tier4/driving_log_replayer_v2/issues/201>`_)
+  * wip
+  * [fix]
+  * update
+  * remove annotated_rosbag mode
+  * fix
+  * Remove references to annotated_rosbag from documentation and sample scenario
+  * fix document
+  * update default value for evaluation_target_topic in ground_segmentation launch file
+  * fix spell
+  * refactor
+  * fix document
+  * fix redundant writing
+  * fix ground_truth structure
+  * update docs
+  * update cspell
+  * update sample scenario
+  * add Datasets
+  * fix docs
+  * [update] allow multiple label selection
+  * [update] add multiple label evaluation process
+  * [update] modify sample scenario
+  * [update] remove vehicle_model
+  * [update] FormatVersion
+  * [modify] docs
+  * use raise instead of assert
+  ---------
+  Co-authored-by: MasatoSaeki <masato.saeki@tier4.jp>
+* Contributors: Masato Saeki, Taiki Yamada, Toyozo Shimada
+
 3.12.0 (2025-08-19)
 -------------------
 * feat(planning_control): add checking the behavior of planning_factor  (`#193 <https://github.com/tier4/driving_log_replayer_v2/issues/193>`_)
