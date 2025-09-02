@@ -98,7 +98,7 @@ def test_stop_reason_time_range() -> None:
         ],
     )
     assert stop_reason_criteria.time_range[0] == 0
-    assert stop_reason_criteria.time_range[1] == (1 << 63) - 1
+    assert stop_reason_criteria.time_range[1] == float((1 << 63) - 1)
 
 
 @pytest.fixture
