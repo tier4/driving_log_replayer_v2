@@ -70,6 +70,8 @@ def post_process(context: LaunchContext) -> list:
             "result_archive",
             "--topic_reference",
             "/localization/reference_kinematic_state",
+            "--scenario_file",
+            f"{conf['scenario_path']}",
         ]
         localization_analysis = ExecuteProcess(
             cmd=localization_analysis_cmd, output="screen", name="localization_analyze"

@@ -16,10 +16,26 @@ Evaluation:
       Method: NVTL # NVTL or TPのどちらで評価を行うか
       AllowableLikelihood: 2.3 # この値以上なら信頼度は正常とみなす
       NGCount: 10 # 信頼度異常が連続でこの回数続いたら信頼度評価失敗とみなす
+    OverallCriteriaMask: # 下記のマスクを設定することで評価するか否かを決定できる。このブロックが定義されていない場合は自動的に全てが `true` に設定される。
+      mean_relative_position: true
+      mean_relative_angle: true
+      mean_relative_linear_velocity: true
+      mean_relative_angular_velocity: true
+      mean_relative_acceleration: true
+      diagnostics_not_ok_rate: true
+    DiagnosticsFlagCheck:
+      pose_is_passed_delay_gate: # チェックしたい diagnostics の項目名
+        flag: rise # 検知したいフラグの種類 (`rise`（立ち上がり） か `fall`（立ち下がり）)
+        at_sec: 113 # 想定される立ち上がり/立ち下がり時間の `sec` 部分
+        at_nanosec: 750000000 # 想定される立ち上がり/立ち下がり時間の `nanosec` 部分
+      pose_no_update_count:
+        flag: rise
+        at_sec: 117
+        at_nanosec: 900000000
   Datasets:
     - sample_dataset:
         VehicleId: default
-        InitialPose: # Specifies the initial position. If null is specified, initial position estimation by GNSS is performed.
+        InitialPose: # 初期位置の定義。もし設定されていない場合は GNSS による初期位置推定が実行される
           position:
             x: 3836.5478515625
             y: 73729.96875
