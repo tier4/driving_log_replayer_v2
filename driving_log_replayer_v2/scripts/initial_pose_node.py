@@ -16,10 +16,10 @@
 
 from typing import TYPE_CHECKING
 
-from autoware_internal_localization_msgs.srv import InitializeLocalization
 from autoware_internal_localization_msgs.srv import (
     PoseWithCovarianceStamped as PoseWithCovarianceStampedSrv,
 )
+from autoware_localization_msgs.srv import InitializeLocalization
 import rclpy
 from rclpy.callback_groups import MutuallyExclusiveCallbackGroup
 from rclpy.clock import Clock
