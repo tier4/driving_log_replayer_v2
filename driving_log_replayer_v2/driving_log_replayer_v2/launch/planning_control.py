@@ -16,8 +16,18 @@ from launch.actions import DeclareLaunchArgument
 
 RECORD_TOPIC = """^/tf$\
 |^/diagnostics$\
-|^/control/control_evaluator/metrics$\
-|^/planning/planning_evaluator/metrics$\
+|^/map/vector_map_marker$\
+|^/perception/object_recognition/objects$\
+|^/perception/object_recognition/detection/objects$\
+|^/perception/object_recognition/tracking/objects$\
+|^/perception/traffic_light_recognition/traffic_signals$\
+|^/perception/occupancy_grid_map/map$\
+|^/perception/obstacle_segmentation/pointcloud$\
+|^/localization/kinematic_state$\
+|^/localization/acceleration$\
+|^/planning/.*$\
+|^/control/.*$\
+|^/driving_log_replayer/.*\
 """
 
 AUTOWARE_DISABLE = {
