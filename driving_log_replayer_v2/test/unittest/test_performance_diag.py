@@ -59,7 +59,7 @@ def test_visibility_tp_success() -> None:
     status = DiagnosticStatus(
         name="polar_voxel_outlier_filter: /sensing/lidar/front_lower: visibility_validation",
         level=DiagnosticStatus.ERROR,
-        values=[KeyValue(key="value", value="0.15")],
+        values=[KeyValue(key="Visibility", value="0.15")],
     )
     evaluation_item = Visibility(
         condition=VisibilityCondition(ScenarioType="TP", PassRate=90.0),
@@ -87,7 +87,7 @@ def test_visibility_tp_fail() -> None:
     status = DiagnosticStatus(
         name="polar_voxel_outlier_filter: /sensing/lidar/front_lower: visibility_validation",
         level=DiagnosticStatus.OK,
-        values=[KeyValue(key="value", value="1.00")],
+        values=[KeyValue(key="Visibility", value="1.00")],
     )
     evaluation_item = Visibility(
         condition=VisibilityCondition(ScenarioType="TP", PassRate=90.0),
@@ -115,7 +115,7 @@ def test_visibility_fp_success() -> None:
     status = DiagnosticStatus(
         name="polar_voxel_outlier_filter: /sensing/lidar/front_lower: visibility_validation",
         level=DiagnosticStatus.OK,
-        values=[KeyValue(key="value", value="1.00")],
+        values=[KeyValue(key="Visibility", value="1.00")],
     )
     evaluation_item = Visibility(
         condition=VisibilityCondition(ScenarioType="FP", PassRate=90.0),
@@ -143,7 +143,7 @@ def test_visibility_fp_fail() -> None:
     status = DiagnosticStatus(
         name="polar_voxel_outlier_filter: /sensing/lidar/front_lower: visibility_validation",
         level=DiagnosticStatus.ERROR,
-        values=[KeyValue(key="value", value="0.00")],
+        values=[KeyValue(key="Visibility", value="0.00")],
     )
     evaluation_item = Visibility(
         condition=VisibilityCondition(ScenarioType="FP", PassRate=90.0),
