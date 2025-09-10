@@ -23,13 +23,6 @@ from driving_log_replayer_v2.performance_diag import PerformanceDiagScenario
 from driving_log_replayer_v2.performance_diag import Visibility
 from driving_log_replayer_v2.performance_diag import VisibilityCondition
 from driving_log_replayer_v2.scenario import load_sample_scenario
-from driving_log_replayer_v2.scripts.performance_diag_evaluator_node import (
-    BLOCKAGE_DIAG_KEY_NAME_GROUND,
-)
-from driving_log_replayer_v2.scripts.performance_diag_evaluator_node import (
-    BLOCKAGE_DIAG_KEY_NAME_SKY,
-)
-from driving_log_replayer_v2.scripts.performance_diag_evaluator_node import VISIBILITY_DIAG_KEY_NAME
 
 
 def test_scenario() -> None:
@@ -50,7 +43,7 @@ def test_visibility_invalid() -> None:
         condition=VisibilityCondition(ScenarioType=None, PassRate=99.0),
     )
     frame_dict, msg_visibility_value, msg_visibility_level = evaluation_item.set_frame(
-        status, VISIBILITY_DIAG_KEY_NAME
+        status, "Visibility"
     )
     assert evaluation_item.success is True
     assert evaluation_item.summary == "Invalid"
@@ -75,7 +68,7 @@ def test_visibility_tp_success() -> None:
         success=False,
     )
     frame_dict, msg_visibility_value, msg_visibility_level = evaluation_item.set_frame(
-        status, VISIBILITY_DIAG_KEY_NAME
+        status, "Visibility"
     )
     assert evaluation_item.success is True
     assert evaluation_item.summary == "Visibility (Success): 90 / 100"
@@ -103,7 +96,7 @@ def test_visibility_tp_fail() -> None:
         success=False,
     )
     frame_dict, msg_visibility_value, msg_visibility_level = evaluation_item.set_frame(
-        status, VISIBILITY_DIAG_KEY_NAME
+        status, "Visibility"
     )
     assert evaluation_item.success is False
     assert evaluation_item.summary == "Visibility (Fail): 89 / 100"
@@ -131,7 +124,7 @@ def test_visibility_fp_success() -> None:
         success=True,
     )
     frame_dict, msg_visibility_value, msg_visibility_level = evaluation_item.set_frame(
-        status, VISIBILITY_DIAG_KEY_NAME
+        status, "Visibility"
     )
     assert evaluation_item.success is True
     assert evaluation_item.summary == "Visibility (Success): 50 / 50"
@@ -159,7 +152,7 @@ def test_visibility_fp_fail() -> None:
         success=True,
     )
     frame_dict, msg_visibility_value, msg_visibility_level = evaluation_item.set_frame(
-        status, VISIBILITY_DIAG_KEY_NAME
+        status, "Visibility"
     )
     assert evaluation_item.success is False
     assert evaluation_item.summary == "Visibility (Fail): 49 / 50"
@@ -188,7 +181,7 @@ def test_blockage_invalid() -> None:
         msg_blockage_sky_ratio,
         msg_blockage_ground_ratio,
         msg_blockage_level,
-    ) = evaluation_item.set_frame(status, BLOCKAGE_DIAG_KEY_NAME_GROUND, BLOCKAGE_DIAG_KEY_NAME_SKY)
+    ) = evaluation_item.set_frame(status, "ground_blockage_ratio", "sky_blockage_ratio")
     assert evaluation_item.success is True
     assert evaluation_item.summary == "Invalid"
     assert frame_dict == {
@@ -226,7 +219,7 @@ def test_blockage_tp_success() -> None:
         msg_blockage_sky_ratio,
         msg_blockage_ground_ratio,
         msg_blockage_level,
-    ) = evaluation_item.set_frame(status, BLOCKAGE_DIAG_KEY_NAME_GROUND, BLOCKAGE_DIAG_KEY_NAME_SKY)
+    ) = evaluation_item.set_frame(status, "ground_blockage_ratio", "sky_blockage_ratio")
     assert evaluation_item.success is True
     assert evaluation_item.summary == "front_lower (Success): 90 / 100"
     assert frame_dict == {
@@ -270,7 +263,7 @@ def test_blockage_tp_fail() -> None:
         msg_blockage_sky_ratio,
         msg_blockage_ground_ratio,
         msg_blockage_level,
-    ) = evaluation_item.set_frame(status, BLOCKAGE_DIAG_KEY_NAME_GROUND, BLOCKAGE_DIAG_KEY_NAME_SKY)
+    ) = evaluation_item.set_frame(status, "ground_blockage_ratio", "sky_blockage_ratio")
     assert evaluation_item.success is False
     assert evaluation_item.summary == "front_lower (Fail): 89 / 100"
     assert frame_dict == {
@@ -314,7 +307,7 @@ def test_blockage_fp_success() -> None:
         msg_blockage_sky_ratio,
         msg_blockage_ground_ratio,
         msg_blockage_level,
-    ) = evaluation_item.set_frame(status, BLOCKAGE_DIAG_KEY_NAME_GROUND, BLOCKAGE_DIAG_KEY_NAME_SKY)
+    ) = evaluation_item.set_frame(status, "ground_blockage_ratio", "sky_blockage_ratio")
     assert evaluation_item.success is True
     assert evaluation_item.summary == "front_lower (Success): 50 / 50"
     assert frame_dict == {
@@ -358,7 +351,7 @@ def test_blockage_fp_fail() -> None:
         msg_blockage_sky_ratio,
         msg_blockage_ground_ratio,
         msg_blockage_level,
-    ) = evaluation_item.set_frame(status, BLOCKAGE_DIAG_KEY_NAME_GROUND, BLOCKAGE_DIAG_KEY_NAME_SKY)
+    ) = evaluation_item.set_frame(status, "ground_blockage_ratio", "sky_blockage_ratio")
     assert evaluation_item.success is False
     assert evaluation_item.summary == "front_lower (Fail): 49 / 50"
     assert frame_dict == {
