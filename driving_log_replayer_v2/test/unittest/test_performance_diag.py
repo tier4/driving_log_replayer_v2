@@ -36,7 +36,7 @@ def test_scenario() -> None:
 
 def test_visibility_invalid() -> None:
     status = DiagnosticStatus(
-        name="dual_return_filter: /sensing/lidar/front_lower: visibility_validation",
+        name="polar_voxel_outlier_filter: /sensing/lidar/front_lower: visibility_validation",
         level=DiagnosticStatus.OK,
     )
     evaluation_item = Visibility(
@@ -57,7 +57,7 @@ def test_visibility_invalid() -> None:
 
 def test_visibility_tp_success() -> None:
     status = DiagnosticStatus(
-        name="dual_return_filter: /sensing/lidar/front_lower: visibility_validation",
+        name="polar_voxel_outlier_filter: /sensing/lidar/front_lower: visibility_validation",
         level=DiagnosticStatus.ERROR,
         values=[KeyValue(key="value", value="0.15")],
     )
@@ -85,7 +85,7 @@ def test_visibility_tp_success() -> None:
 
 def test_visibility_tp_fail() -> None:
     status = DiagnosticStatus(
-        name="dual_return_filter: /sensing/lidar/front_lower: visibility_validation",
+        name="polar_voxel_outlier_filter: /sensing/lidar/front_lower: visibility_validation",
         level=DiagnosticStatus.OK,
         values=[KeyValue(key="value", value="1.00")],
     )
@@ -113,7 +113,7 @@ def test_visibility_tp_fail() -> None:
 
 def test_visibility_fp_success() -> None:
     status = DiagnosticStatus(
-        name="dual_return_filter: /sensing/lidar/front_lower: visibility_validation",
+        name="polar_voxel_outlier_filter: /sensing/lidar/front_lower: visibility_validation",
         level=DiagnosticStatus.OK,
         values=[KeyValue(key="value", value="1.00")],
     )
@@ -141,7 +141,7 @@ def test_visibility_fp_success() -> None:
 
 def test_visibility_fp_fail() -> None:
     status = DiagnosticStatus(
-        name="dual_return_filter: /sensing/lidar/front_lower: visibility_validation",
+        name="polar_voxel_outlier_filter: /sensing/lidar/front_lower: visibility_validation",
         level=DiagnosticStatus.ERROR,
         values=[KeyValue(key="value", value="0.00")],
     )
