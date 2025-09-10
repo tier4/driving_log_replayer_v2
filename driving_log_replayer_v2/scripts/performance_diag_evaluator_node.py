@@ -27,8 +27,11 @@ from driving_log_replayer_v2.evaluator import evaluator_main
 from driving_log_replayer_v2.performance_diag import PerformanceDiagResult
 from driving_log_replayer_v2.performance_diag import PerformanceDiagScenario
 
-REGEX_VISIBILITY_DIAG_NAME = "dual_return_filter: /sensing/lidar/.*: visibility_validation"
+REGEX_VISIBILITY_DIAG_NAME = "polar_voxel_outlier_filter: /sensing/lidar/.*: visibility_validation"
+VISIBILITY_DIAG_KEY_NAME = "Visibility"
 BLOCKAGE_DIAG_NAME = "blockage_return_diag: /sensing/lidar/.*: blockage_validation"
+BLOCKAGE_DIAG_KEY_NAME_GROUND = "ground_blockage_ratio"
+BLOCKAGE_DIAG_KEY_NAME_SKY = "sky_blockage_ratio"
 
 
 def extract_lidar_name(diag_name: str) -> str:
@@ -88,6 +91,7 @@ class PerformanceDiagEvaluator(DLREvaluatorV2):
         if is_visibility:
             msg_visibility_value, msg_visibility_level = self._result.set_visibility_frame(
                 diag_status,
+                VISIBILITY_DIAG_KEY_NAME,
                 DLREvaluatorV2.transform_stamped_with_euler_angle(map_to_baselink),
             )
             if msg_visibility_value is not None:
@@ -99,6 +103,8 @@ class PerformanceDiagEvaluator(DLREvaluatorV2):
             msg_blockage_sky_ratio, msg_blockage_ground_ratio, msg_blockage_level = (
                 self._result.set_blockage_frame(
                     diag_status,
+                    BLOCKAGE_DIAG_KEY_NAME_GROUND,
+                    BLOCKAGE_DIAG_KEY_NAME_SKY,
                     DLREvaluatorV2.transform_stamped_with_euler_angle(map_to_baselink),
                     lidar_name,
                 )

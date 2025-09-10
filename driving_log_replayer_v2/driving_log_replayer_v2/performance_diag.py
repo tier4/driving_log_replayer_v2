@@ -93,7 +93,9 @@ class Visibility(EvaluationItem):
         self.scenario_type: str | None = self.condition.ScenarioType
         self.valid: bool = self.scenario_type is not None
 
-    def set_frame(self, diag_status: DiagnosticStatus) -> tuple[dict, Float64 | None, Byte | None]:
+    def set_frame(
+        self, diag_status: DiagnosticStatus, diag_key_name: str
+    ) -> tuple[dict, Float64 | None, Byte | None]:
         if not self.valid:
             self.success = True
             self.summary = "Invalid"
@@ -104,7 +106,7 @@ class Visibility(EvaluationItem):
             )
 
         frame_success = "Fail"
-        visibility_value = get_diag_value(diag_status, "value")
+        visibility_value = get_diag_value(diag_status, diag_key_name)
         diag_level = diag_status.level
         float_value = convert_str_to_float(visibility_value)
         valid_value = float_value >= Visibility.VALID_VALUE_THRESHOLD
@@ -155,6 +157,8 @@ class Blockage(EvaluationItem):
     def set_frame(
         self,
         diag_status: DiagnosticStatus,
+        diag_key_name_ground: str,
+        diag_key_name_sky: str,
     ) -> tuple[dict, Float64 | None, Float64 | None, Byte | None]:
         if not self.valid:
             self.success = True
@@ -171,8 +175,8 @@ class Blockage(EvaluationItem):
                 None,
             )
         frame_success = "Fail"
-        ground_ratio = get_diag_value(diag_status, "ground_blockage_ratio")
-        sky_ratio = get_diag_value(diag_status, "sky_blockage_ratio")
+        ground_ratio = get_diag_value(diag_status, diag_key_name_ground)
+        sky_ratio = get_diag_value(diag_status, diag_key_name_sky)
         diag_level = diag_status.level
         float_sky_ratio = convert_str_to_float(sky_ratio)
         float_ground_ratio = convert_str_to_float(ground_ratio)
@@ -265,11 +269,12 @@ class PerformanceDiagResult(ResultBase):
     def set_visibility_frame(
         self,
         msg: DiagnosticStatus,
+        diag_key_name: str,
         map_to_baselink: dict,
     ) -> None:
         out_frame = {"Ego": {"TransformStamped": map_to_baselink}}
         out_frame["Visibility"], msg_visibility_value, msg_visibility_level = (
-            self.__visibility.set_frame(msg)
+            self.__visibility.set_frame(msg, diag_key_name)
         )
         self._frame = out_frame
         self.update()
@@ -278,6 +283,8 @@ class PerformanceDiagResult(ResultBase):
     def set_blockage_frame(
         self,
         msg: DiagnosticStatus,
+        diag_key_name_ground: str,
+        diag_key_name_sky: str,
         map_to_baselink: dict,
         lidar_name: str,
     ) -> None:
@@ -287,7 +294,7 @@ class PerformanceDiagResult(ResultBase):
             msg_blockage_sky_ratio,
             msg_blockage_ground_ratio,
             msg_blockage_level,
-        ) = self.__blockages[lidar_name].set_frame(msg)
+        ) = self.__blockages[lidar_name].set_frame(msg, diag_key_name_ground, diag_key_name_sky)
         self._frame = out_frame
         self.update()
         return msg_blockage_sky_ratio, msg_blockage_ground_ratio, msg_blockage_level
