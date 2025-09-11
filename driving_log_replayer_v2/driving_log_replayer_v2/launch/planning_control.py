@@ -19,6 +19,7 @@ RECORD_TOPIC = """^/tf$\
 |^/parameter_events$\
 |^/diagnostics$\
 |^/map/vector_map_marker$\
+|^/map/pointcloud_map$\
 |^/perception/object_recognition/objects$\
 |^/perception/object_recognition/detection/objects$\
 |^/perception/object_recognition/tracking/objects$\
