@@ -92,7 +92,7 @@ class DLREvaluatorV2(Node):
                 and self._scenario.Evaluation.Conditions is not None
             ):
                 evaluation_condition = self._scenario.Evaluation.Conditions
-                if result_topic is not None:
+                if condition_topic is not None:
                     self._pub_condition = self.create_publisher(
                         String,
                         condition_topic,
