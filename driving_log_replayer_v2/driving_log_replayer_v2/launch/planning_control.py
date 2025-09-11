@@ -15,6 +15,8 @@
 from launch.actions import DeclareLaunchArgument
 
 RECORD_TOPIC = """^/tf$\
+|^/tf_static$\
+|^/parameter_events$\
 |^/diagnostics$\
 |^/map/vector_map_marker$\
 |^/perception/object_recognition/objects$\
@@ -23,10 +25,14 @@ RECORD_TOPIC = """^/tf$\
 |^/perception/traffic_light_recognition/traffic_signals$\
 |^/perception/occupancy_grid_map/map$\
 |^/perception/obstacle_segmentation/pointcloud$\
+|^/system/v2x/virtual_traffic_light_states$\
 |^/localization/kinematic_state$\
+|^/localization/initialization_state$\
+|^/localization/pose_with_covariance$\
 |^/localization/acceleration$\
 |^/planning/.*$\
 |^/control/.*$\
+|^/system/processing_time_checker/metrics$\
 |^/driving_log_replayer/.*\
 """
 
