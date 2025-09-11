@@ -98,6 +98,9 @@ def get_launch_arguments() -> list:
     storage
     remap_arg
     remap_profile
+    pre_process
+    simulation
+    post_process
     """
     launch_arguments = []
 
@@ -167,6 +170,21 @@ def get_launch_arguments() -> list:
         "remap_profile",
         default_value="",
         description="Specify the name of the profile. config/remap/{profile_name}.yaml. Ex: remap_profile:=x2",
+    )
+    add_launch_arg(
+        "pre_process",
+        default_value="true",
+        description="Whether to launch pre_process or not.",
+    )
+    add_launch_arg(
+        "simulation",
+        default_value="true",
+        description="Whether to launch simulation or not.",
+    )
+    add_launch_arg(
+        "post_process",
+        default_value="true",
+        description="Whether to launch post_process or not.",
     )
     return launch_arguments
 
