@@ -27,6 +27,7 @@ Evaluation:
           Region:
             x_position: null # [m] null [Do not filter by x_position] or lower_limit,upper_limit [Lower and upper limit can be omitted. If omitted value is +-1.7976931348623157e+308]
             y_position: null # [m] null [Do not filter by y_position] or lower_limit,upper_limit [Lower and upper limit can be omitted. If omitted value is +-1.7976931348623157e+308]
+  degradation_topic: /perception/traffic_light_recognition/traffic_signals # サブスクライブするtopicを指定する。何も指定しないなら/perception/traffic_light_recognition/traffic_signalsが使用される。
   PerceptionEvaluationConfig:
     camera_type: cam_traffic_light_near # 信号認識のカメラタイプを指定する
     evaluation_config_dict:
@@ -34,7 +35,7 @@ Evaluation:
       target_labels: [green, red, yellow, unknown] # 評価ラベル 指定可能なラベルは以下を参照。https://github.com/tier4/autoware_perception_evaluation/blob/develop/docs/ja/perception/label.md#trafficlightlabel
       max_distance: 202.0 # 評価対象の信号機の最大距離
       min_distance: 0.0 # 評価対象の信号機の最小距離
-      allow_matching_unknown: true # ラベルがunknownのオブジェクトとマッチングさせるか
+      allow_matching_unknown: false # ラベルがunknownのオブジェクトとマッチングさせるか
       merge_similar_labels: false # 類似のラベルをマージするか https://github.com/tier4/autoware_perception_evaluation/blob/develop/docs/ja/perception/label.md#%E9%A1%9E%E4%BC%BC%E3%83%A9%E3%83%99%E3%83%AB%E3%81%AE%E3%83%9E%E3%83%BC%E3%82%B8
       uuid_matching_first: false # 最初にUUIDでマッチングさせるか
   CriticalObjectFilterConfig:

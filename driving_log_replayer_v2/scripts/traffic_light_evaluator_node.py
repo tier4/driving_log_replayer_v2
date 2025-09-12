@@ -69,9 +69,6 @@ class TrafficLightEvaluator(DLREvaluatorV2):
         self.__lanelet_map = load_map(map_path)
         self.fail_result_holder = FailResultHolder(self._perception_eval_log_path)
 
-        self._scenario: TrafficLightScenario
-        self._result: TrafficLightResult
-
         self.__p_cfg = self._scenario.Evaluation.PerceptionEvaluationConfig
         self.__c_cfg = self._scenario.Evaluation.CriticalObjectFilterConfig
         self.__f_cfg = self._scenario.Evaluation.PerceptionPassFailConfig
@@ -115,7 +112,9 @@ class TrafficLightEvaluator(DLREvaluatorV2):
         )
         self.__sub_traffic_signals = self.create_subscription(
             TrafficLightGroupArray,
-            "/perception/traffic_light_recognition/traffic_signals",
+            self._scenario.Evaluation.degradation_topic
+            if self._scenario.Evaluation.degradation_topic is not None
+            else "/perception/traffic_light_recognition/traffic_signals",
             self.traffic_signals_cb,
             1,
         )
