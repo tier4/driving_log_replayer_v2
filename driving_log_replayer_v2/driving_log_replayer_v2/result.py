@@ -24,9 +24,7 @@ from ament_index_python.packages import get_package_share_directory
 from pydantic import BaseModel
 from rclpy.clock import Clock
 from rclpy.clock import ClockType
-from rclpy.publisher import Publisher
 import simplejson as json
-from std_msgs.msg import String
 
 
 def get_sample_result_path(
@@ -97,11 +95,7 @@ class ResultWriter:
         result_json_path: str,
         ros_clock: Clock,
         condition: BaseModel | dict,
-        result_publisher: Publisher | None = None,
-        condition_publisher: Publisher | None = None,
     ) -> None:
-        self.result_publisher = result_publisher
-        self.condition_publisher = condition_publisher
         self._result_path = self.create_jsonl_path(result_json_path)
         self._result_file = self._result_path.open("w")
         self._ros_clock = ros_clock
@@ -126,19 +120,18 @@ class ResultWriter:
     def delete_result_file(self) -> None:
         self._result_path.unlink()
 
-    def write_line(self, write_obj: Any, str_publisher: Publisher | None = None) -> None:
+    def write_line(self, write_obj: Any) -> str:
         str_record = json.dumps(write_obj, ignore_nan=True)
         self._result_file.write(str_record + "\n")
-        if str_publisher is not None:
-            str_publisher.publish(String(data=str_record))
+        return str_record
 
-    def write_result(self, result: ResultBase) -> None:
-        self.write_line(self.get_result(result, None), self.result_publisher)
+    def write_result(self, result: ResultBase) -> str:
+        return self.write_line(self.get_result(result, None))
 
-    def write_result_with_time(self, result: ResultBase, ros_timestamp: int) -> None:
-        self.write_line(self.get_result(result, ros_timestamp), self.result_publisher)
+    def write_result_with_time(self, result: ResultBase, ros_timestamp: int) -> str:
+        return self.write_line(self.get_result(result, ros_timestamp))
 
-    def write_condition(self, condition: BaseModel | dict | list, *, updated: bool = False) -> None:
+    def write_condition(self, condition: BaseModel | dict | list, *, updated: bool = False) -> str:
         if isinstance(condition, list):
             # Convert list of BaseModel objects to list of dictionaries
             condition_dict = [
@@ -152,7 +145,7 @@ class ResultWriter:
         if updated:
             key = "UpdatedCondition"
         write_obj = {key: condition_dict}
-        self.write_line(write_obj, self.condition_publisher)
+        return self.write_line(write_obj)
 
     def get_header(self) -> dict:
         system_time = self._system_clock.now()

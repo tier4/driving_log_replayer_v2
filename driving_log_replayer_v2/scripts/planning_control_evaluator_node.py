@@ -19,10 +19,6 @@ from collections.abc import Callable
 from autoware_internal_planning_msgs.msg import PlanningFactorArray
 from diagnostic_msgs.msg import DiagnosticArray
 from diagnostic_msgs.msg import DiagnosticStatus
-from rclpy.qos import QoSDurabilityPolicy
-from rclpy.qos import QoSHistoryPolicy
-from rclpy.qos import QoSProfile
-from rclpy.qos import QoSReliabilityPolicy
 from std_msgs.msg import String
 from tier4_metric_msgs.msg import MetricArray
 
@@ -42,13 +38,10 @@ class PlanningControlEvaluator(DLREvaluatorV2):
         scenario_class: Callable = PlanningControlScenario,
         result_class: Callable = MetricResult,
         result_topic: str = "/driving_log_replayer/metrics_results",
-        condition_topic: str = "/driving_log_replayer/metrics_conditions",
         planning_factor_result_topic: str = "/driving_log_replayer/planning_factor_results",
-        planning_factor_condition_topic: str = "/driving_log_replayer/planning_factor_conditions",
         diagnostics_result_topic: str = "/driving_log_replayer/diagnostics_results",
-        diagnostics_condition_topic: str = "/driving_log_replayer/diagnostics_conditions",
     ) -> None:
-        super().__init__(name, scenario_class, result_class, result_topic, condition_topic)
+        super().__init__(name, scenario_class, result_class, result_topic)
         self._scenario: PlanningControlScenario
         self._result: MetricResult
 
@@ -61,7 +54,10 @@ class PlanningControlEvaluator(DLREvaluatorV2):
                 "Stamp": {"System": 0.0},
                 "Frame": {},
             }
-            self._result_writer.write_line(skip_test)
+            result_str = self._result_writer.write_line(skip_test)
+            if self._pub_result is not None:
+                self._pub_result.publish(String(data=result_str))
+
         else:
             self.__sub_control_metrics = self.create_subscription(
                 MetricArray,
@@ -78,16 +74,6 @@ class PlanningControlEvaluator(DLREvaluatorV2):
 
         pf_conditions = self._scenario.Evaluation.Conditions.PlanningFactorConditions
         if pf_conditions != []:
-            self._pub_pf_condition = self.create_publisher(
-                String,
-                planning_factor_condition_topic,
-                QoSProfile(
-                    history=QoSHistoryPolicy.KEEP_LAST,
-                    depth=1,
-                    reliability=QoSReliabilityPolicy.RELIABLE,
-                    durability=QoSDurabilityPolicy.TRANSIENT_LOCAL,
-                ),
-            )
             self._pub_pf_result = self.create_publisher(String, planning_factor_result_topic, 1)
 
             self._planning_factor_result = PlanningFactorResult(pf_conditions)
@@ -95,8 +81,6 @@ class PlanningControlEvaluator(DLREvaluatorV2):
                 self._result_archive_path.joinpath("planning_factor_result.jsonl"),
                 self.get_clock(),
                 pf_conditions,
-                self._pub_pf_result,
-                self._pub_pf_condition,
             )
 
             self.__sub_factors = []
@@ -112,16 +96,6 @@ class PlanningControlEvaluator(DLREvaluatorV2):
 
         if self._scenario.include_use_case is not None:
             self._pub_diag_result = self.create_publisher(String, diagnostics_result_topic, 1)
-            self._pub_diag_condition = self.create_publisher(
-                String,
-                diagnostics_condition_topic,
-                QoSProfile(
-                    history=QoSHistoryPolicy.KEEP_LAST,
-                    depth=1,
-                    reliability=QoSReliabilityPolicy.RELIABLE,
-                    durability=QoSDurabilityPolicy.TRANSIENT_LOCAL,
-                ),
-            )
 
             diag_conditions = self._scenario.include_use_case.Conditions
             self._diag_result: DiagnosticsResult = DiagnosticsResult(diag_conditions)
@@ -130,8 +104,6 @@ class PlanningControlEvaluator(DLREvaluatorV2):
                 self._result_archive_path.joinpath("diag_result.jsonl"),
                 self.get_clock(),
                 diag_conditions,
-                self._pub_diag_result,
-                self._pub_diag_condition,
             )
 
             self.__sub_diag = self.create_subscription(
@@ -144,7 +116,9 @@ class PlanningControlEvaluator(DLREvaluatorV2):
     def aeb_cb(self, msg: MetricArray) -> None:
         self._result.set_frame(msg, self._latest_control_metrics)
         if self._result.frame != {}:
-            self._result_writer.write_result(self._result)
+            res_str = self._result_writer.write_result(self._result)
+            if self._pub_result is not None:
+                self._pub_result.publish(String(data=res_str))
 
     def control_cb(self, msg: MetricArray) -> None:
         self._latest_control_metrics = msg
@@ -160,12 +134,16 @@ class PlanningControlEvaluator(DLREvaluatorV2):
             return
         self._diag_result.set_frame(msg)
         if self._diag_result.frame != {}:
-            self._diag_result_writer.write_result(self._diag_result)
+            res_str = self._diag_result_writer.write_result(self._diag_result)
+            if self._pub_diag_result is not None:
+                self._pub_diag_result.publish(String(data=res_str))
 
     def factor_cb(self, msg: PlanningFactorArray, topic: str) -> None:
         self._planning_factor_result.set_frame(msg, topic)
         if self._planning_factor_result.frame != {}:
-            self._planning_factor_result_writer.write_result(self._planning_factor_result)
+            res_str = self._planning_factor_result_writer.write_result(self._planning_factor_result)
+            if self._pub_pf_result is not None:
+                self._pub_pf_result.publish(String(data=res_str))
 
 
 @evaluator_main

@@ -27,10 +27,6 @@ from rclpy.clock import Clock
 from rclpy.clock import ClockType
 from rclpy.executors import MultiThreadedExecutor
 from rclpy.node import Node
-from rclpy.qos import QoSDurabilityPolicy
-from rclpy.qos import QoSHistoryPolicy
-from rclpy.qos import QoSProfile
-from rclpy.qos import QoSReliabilityPolicy
 from rclpy.time import Duration
 from rclpy.time import Time
 from rosidl_runtime_py import message_to_ordereddict
@@ -54,7 +50,6 @@ class DLREvaluatorV2(Node):
         scenario_class: Callable,
         result_class: Callable,
         result_topic: None | str = "/driving_log_replayer/results",
-        condition_topic: None | str = "/driving_log_replayer/conditions",
     ) -> None:
         super().__init__(name)
         self.declare_parameter("scenario_path", "")
@@ -85,24 +80,12 @@ class DLREvaluatorV2(Node):
         try:
             self._scenario = load_scenario(Path(self._scenario_path), scenario_class)
             evaluation_condition = {}
-            self._pub_condition = None
             self._pub_result = None
             if (
                 hasattr(self._scenario.Evaluation, "Conditions")
                 and self._scenario.Evaluation.Conditions is not None
             ):
                 evaluation_condition = self._scenario.Evaluation.Conditions
-                if condition_topic is not None:
-                    self._pub_condition = self.create_publisher(
-                        String,
-                        condition_topic,
-                        QoSProfile(
-                            history=QoSHistoryPolicy.KEEP_LAST,
-                            depth=1,
-                            reliability=QoSReliabilityPolicy.RELIABLE,
-                            durability=QoSDurabilityPolicy.TRANSIENT_LOCAL,
-                        ),
-                    )
                 if result_topic is not None:
                     self._pub_result = self.create_publisher(String, result_topic, 1)
 
@@ -110,8 +93,6 @@ class DLREvaluatorV2(Node):
                 self._result_json_path,
                 self.get_clock(),
                 evaluation_condition,
-                self._pub_result,
-                self._pub_condition,
             )
             self._result = result_class(evaluation_condition)
         except (FileNotFoundError, PermissionError, yaml.YAMLError, ValidationError) as e:
