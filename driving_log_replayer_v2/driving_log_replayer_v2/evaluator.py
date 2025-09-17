@@ -49,7 +49,7 @@ class DLREvaluatorV2(Node):
         name: str,
         scenario_class: Callable,
         result_class: Callable,
-        result_topic: None | str = "/driving_log_replayer/results",
+        result_topic: None | str = None,
     ) -> None:
         super().__init__(name)
         self.declare_parameter("scenario_path", "")
@@ -95,7 +95,12 @@ class DLREvaluatorV2(Node):
                 evaluation_condition,
             )
             self._result = result_class(evaluation_condition)
-        except (FileNotFoundError, PermissionError, yaml.YAMLError, ValidationError) as e:
+        except (
+            FileNotFoundError,
+            PermissionError,
+            yaml.YAMLError,
+            ValidationError,
+        ) as e:
             self.get_logger().error(f"An error occurred while loading the scenario. {e}")
             self._result_writer = ResultWriter(
                 self._result_json_path,
@@ -166,7 +171,10 @@ class DLREvaluatorV2(Node):
             return TransformStamped()
 
     def save_pkl(self, save_object: Any) -> None:
-        PickleWriter(self._result_archive_path.joinpath("scene_result.pkl").as_posix(), save_object)
+        PickleWriter(
+            self._result_archive_path.joinpath("scene_result.pkl").as_posix(),
+            save_object,
+        )
 
     @classmethod
     def transform_stamped_with_euler_angle(cls, transform_stamped: TransformStamped) -> dict:

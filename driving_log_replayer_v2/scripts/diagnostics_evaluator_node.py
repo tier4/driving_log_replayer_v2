@@ -19,6 +19,7 @@ from collections.abc import Callable
 
 from diagnostic_msgs.msg import DiagnosticArray
 from diagnostic_msgs.msg import DiagnosticStatus
+from std_msgs.msg import String
 
 from driving_log_replayer_v2.diagnostics import DiagnosticsResult
 from driving_log_replayer_v2.diagnostics import DiagnosticsScenario
@@ -33,7 +34,9 @@ class DiagnosticsEvaluator(DLREvaluatorV2):
         scenario_class: Callable = DiagnosticsScenario,
         result_class: Callable = DiagnosticsResult,
     ) -> None:
-        super().__init__(name, scenario_class, result_class)
+        super().__init__(
+            name, scenario_class, result_class, "/driving_log_replayer/diagnostics_results"
+        )
         self._scenario: DiagnosticsScenario
         self._result: DiagnosticsResult
 
@@ -52,7 +55,8 @@ class DiagnosticsEvaluator(DLREvaluatorV2):
             return
         self._result.set_frame(msg)
         if self._result.frame != {}:
-            self._result_writer.write_result(self._result)
+            res_str = self._result_writer.write_result(self._result)
+            self._pub_result.publish(String(data=res_str))
 
 
 @evaluator_main
