@@ -49,7 +49,7 @@ class DLREvaluatorV2(Node):
         name: str,
         scenario_class: Callable,
         result_class: Callable,
-        result_topic: None | str = None,
+        result_topic: str,
     ) -> None:
         super().__init__(name)
         self.declare_parameter("scenario_path", "")
@@ -80,14 +80,11 @@ class DLREvaluatorV2(Node):
         try:
             self._scenario = load_scenario(Path(self._scenario_path), scenario_class)
             evaluation_condition = {}
-            self._pub_result = None
             if (
                 hasattr(self._scenario.Evaluation, "Conditions")
                 and self._scenario.Evaluation.Conditions is not None
             ):
                 evaluation_condition = self._scenario.Evaluation.Conditions
-                if result_topic is not None:
-                    self._pub_result = self.create_publisher(String, result_topic, 1)
 
             self._result_writer = ResultWriter(
                 self._result_json_path,
@@ -95,6 +92,7 @@ class DLREvaluatorV2(Node):
                 evaluation_condition,
             )
             self._result = result_class(evaluation_condition)
+            self._pub_result = self.create_publisher(String, result_topic, 1)
         except (
             FileNotFoundError,
             PermissionError,
