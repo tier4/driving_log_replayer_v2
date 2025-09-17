@@ -37,6 +37,7 @@ from rosidl_runtime_py import message_to_ordereddict
 from sensor_msgs.msg import PointCloud2
 import simplejson as json
 from std_msgs.msg import Header
+from std_msgs.msg import String
 from tier4_api_msgs.msg import AwapiAutowareStatus
 from visualization_msgs.msg import MarkerArray
 
@@ -69,7 +70,12 @@ class ObstacleSegmentationEvaluator(DLREvaluatorV2):
     COUNT_FINISH_PUB_GOAL_POSE = 5
 
     def __init__(self, name: str) -> None:
-        super().__init__(name, ObstacleSegmentationScenario, ObstacleSegmentationResult)
+        super().__init__(
+            name,
+            ObstacleSegmentationScenario,
+            ObstacleSegmentationResult,
+            "/driving_log_replayer/obstacle_segmentation/results",
+        )
         self._result: ObstacleSegmentationResult
 
         # pub_goal_pose must be created before timer_cb is called
@@ -275,7 +281,8 @@ class ObstacleSegmentationEvaluator(DLREvaluatorV2):
             pcd_header,
             topic_rate=self.__topic_rate,
         )
-        self._result_writer.write_result(self._result)
+        res_str = self._result_writer.write_result(self._result)
+        self._pub_result.publish(String(data=res_str))
 
         topic_rate_data = ObstacleSegmentationMarker()
         topic_rate_data.header = msg.header

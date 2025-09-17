@@ -22,6 +22,7 @@ from rclpy.qos import qos_profile_sensor_data
 import ros2_numpy
 from scipy.spatial import cKDTree
 from sensor_msgs.msg import PointCloud2
+from std_msgs.msg import String
 
 from driving_log_replayer_v2.evaluator import DLREvaluatorV2
 from driving_log_replayer_v2.evaluator import evaluator_main
@@ -37,7 +38,12 @@ class GroundSegmentationEvaluator(DLREvaluatorV2):
     TS_DIFF_THRESH = 75000
 
     def __init__(self, name: str) -> None:
-        super().__init__(name, GroundSegmentationScenario, GroundSegmentationResult)
+        super().__init__(
+            name,
+            GroundSegmentationScenario,
+            GroundSegmentationResult,
+            "/driving_log_replayer/ground_segmentation/results",
+        )
 
         eval_condition: Condition = self._scenario.Evaluation.Conditions
         self.ground_label = eval_condition.ground_label
@@ -155,7 +161,8 @@ class GroundSegmentationEvaluator(DLREvaluatorV2):
         frame_result.f1_score = metrics_list[4]
 
         self._result.set_frame(frame_result)
-        self._result_writer.write_result(self._result)
+        res_str = self._result_writer.write_result(self._result)
+        self._pub_result.publish(String(data=res_str))
 
     def __get_gt_frame_ts(self, unix_time: int) -> int:
         ts_itr = iter(self.ground_truth.keys())

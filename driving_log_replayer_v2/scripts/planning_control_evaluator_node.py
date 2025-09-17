@@ -39,7 +39,7 @@ class PlanningControlEvaluator(DLREvaluatorV2):
         result_class: Callable = MetricResult,
     ) -> None:
         super().__init__(
-            name, scenario_class, result_class, "/driving_log_replayer/metrics_results"
+            name, scenario_class, result_class, "/driving_log_replayer/planning_control/results"
         )
         self._scenario: PlanningControlScenario
         self._result: MetricResult
@@ -73,7 +73,7 @@ class PlanningControlEvaluator(DLREvaluatorV2):
         pf_conditions = self._scenario.Evaluation.Conditions.PlanningFactorConditions
         if pf_conditions != []:
             self._pub_pf_result = self.create_publisher(
-                String, "/driving_log_replayer/planning_factor_results", 1
+                String, "/driving_log_replayer/planning_factor/results", 1
             )
 
             self._planning_factor_result = PlanningFactorResult(pf_conditions)
@@ -96,7 +96,7 @@ class PlanningControlEvaluator(DLREvaluatorV2):
 
         if self._scenario.include_use_case is not None:
             self._pub_diag_result = self.create_publisher(
-                String, "/driving_log_replayer/diagnostics_results", 1
+                String, "/driving_log_replayer/diagnostics/results", 1
             )
 
             diag_conditions = self._scenario.include_use_case.Conditions

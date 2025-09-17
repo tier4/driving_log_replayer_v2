@@ -35,7 +35,7 @@ class DiagnosticsEvaluator(DLREvaluatorV2):
         result_class: Callable = DiagnosticsResult,
     ) -> None:
         super().__init__(
-            name, scenario_class, result_class, "/driving_log_replayer/diagnostics_results"
+            name, scenario_class, result_class, "/driving_log_replayer/diagnostics/results"
         )
         self._scenario: DiagnosticsScenario
         self._result: DiagnosticsResult

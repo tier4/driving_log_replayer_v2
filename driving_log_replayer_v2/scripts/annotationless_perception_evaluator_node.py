@@ -16,6 +16,7 @@
 
 
 from diagnostic_msgs.msg import DiagnosticArray
+from std_msgs.msg import String
 
 from driving_log_replayer_v2.annotationless_perception import AnnotationlessPerceptionResult
 from driving_log_replayer_v2.annotationless_perception import AnnotationlessPerceptionScenario
@@ -25,7 +26,12 @@ from driving_log_replayer_v2.evaluator import evaluator_main
 
 class AnnotationlessPerceptionEvaluator(DLREvaluatorV2):
     def __init__(self, name: str) -> None:
-        super().__init__(name, AnnotationlessPerceptionScenario, AnnotationlessPerceptionResult)
+        super().__init__(
+            name,
+            AnnotationlessPerceptionScenario,
+            AnnotationlessPerceptionResult,
+            "/driving_log_replayer/annotationless_perception/results",
+        )
         self._scenario: AnnotationlessPerceptionScenario
         self._result: AnnotationlessPerceptionResult
 
@@ -38,14 +44,16 @@ class AnnotationlessPerceptionEvaluator(DLREvaluatorV2):
 
     def diagnostics_cb(self, msg: DiagnosticArray) -> None:
         self._result.set_frame(msg)
-        self._result_writer.write_result(self._result)
+        res_str = self._result_writer.write_result(self._result)
+        self._pub_result.publish(String(data=res_str))
 
     def timer_cb(self) -> None:
         super().timer_cb(register_shutdown_func=self.write_metrics)
 
     def write_metrics(self) -> None:
         self._result.set_final_metrics()
-        self._result_writer.write_result(self._result)
+        res_str = self._result_writer.write_result(self._result)
+        self._pub_result.publish(String(data=res_str))
 
 
 @evaluator_main

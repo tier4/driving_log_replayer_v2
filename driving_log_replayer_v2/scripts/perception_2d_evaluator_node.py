@@ -27,6 +27,7 @@ from perception_eval.manager import PerceptionEvaluationManager
 from perception_eval.tool import PerceptionAnalyzer2D
 from perception_eval.util.logger_config import configure_logger
 import rclpy
+from std_msgs.msg import String
 from tier4_perception_msgs.msg import DetectedObjectsWithFeature
 from tier4_perception_msgs.msg import DetectedObjectWithFeature
 
@@ -42,7 +43,12 @@ if TYPE_CHECKING:
 
 class Perception2DEvaluator(DLREvaluatorV2):
     def __init__(self, name: str) -> None:
-        super().__init__(name, Perception2DScenario, Perception2DResult)
+        super().__init__(
+            name,
+            Perception2DScenario,
+            Perception2DResult,
+            "/driving_log_replayer/perception_2d/results",
+        )
         self._scenario: Perception2DScenario
         self._result: Perception2DResult
 
@@ -183,7 +189,8 @@ class Perception2DEvaluator(DLREvaluatorV2):
                 DLREvaluatorV2.transform_stamped_with_euler_angle(map_to_baselink),
                 camera_type,
             )
-            self._result_writer.write_result(self._result)
+            res_str = self._result_writer.write_result(self._result)
+            self._pub_result.publish(String(data=res_str))
 
     def get_final_result(self) -> MetricsScore:
         final_metric_score = self.__evaluator.get_scene_result()
