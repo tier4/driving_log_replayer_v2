@@ -82,6 +82,10 @@ class PlanningControlEvaluator(DLREvaluatorV2):
                 self.get_clock(),
                 pf_conditions,
             )
+            # refresh initial result state
+            self._planning_factor_result.update()
+            res_str = self._planning_factor_result_writer.write_result(self._planning_factor_result)
+            self._pub_pf_result.publish(String(data=res_str))
 
             self.__sub_factors = []
             for pfc in pf_conditions:
