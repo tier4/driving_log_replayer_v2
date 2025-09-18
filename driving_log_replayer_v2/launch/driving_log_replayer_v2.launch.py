@@ -17,8 +17,6 @@ from launch import LaunchDescription
 from launch.actions import ExecuteProcess
 from launch.actions import LogInfo
 from launch.actions import OpaqueFunction
-from launch.actions import RegisterEventHandler
-from launch.event_handlers import OnProcessExit
 
 from driving_log_replayer_v2.launch.argument import ensure_arg_compatibility
 from driving_log_replayer_v2.launch.argument import get_launch_arguments
@@ -39,28 +37,80 @@ def launch_setup(context: LaunchContext) -> list:
     # Specify the output dir from the parent because it will be created in the child process if the output dir is not specified.
     output_dir = context.launch_configurations.get("output_dir")
     launch_post_fix = [f"output_dir:={output_dir}", *arguments]
+    enable_pre_process = context.launch_configurations.get("pre_process")
+    enable_simulation = context.launch_configurations.get("simulation")
+    enable_post_process = context.launch_configurations.get("post_process")
 
-    pre_process_cmd = [*launch_base_cmd, "pre_process.launch.py", *launch_post_fix]
-    pre_process = ExecuteProcess(cmd=pre_process_cmd, output="screen", name="pre_process")
-    simulation_cmd = [*launch_base_cmd, "simulation.launch.py", *launch_post_fix]
-    simulation = ExecuteProcess(cmd=simulation_cmd, output="screen", name="simulation")
-    start_simulation = RegisterEventHandler(
-        OnProcessExit(
-            target_action=pre_process,
-            on_exit=[LogInfo(msg="Pre-process done. start Simulation"), simulation],
-        )
-    )
-    post_process_cmd = [*launch_base_cmd, "post_process.launch.py", *launch_post_fix]
-    post_process = ExecuteProcess(cmd=post_process_cmd, output="screen", name="post_process")
-    start_post_process = RegisterEventHandler(
-        OnProcessExit(
-            target_action=simulation,
-            on_exit=[LogInfo(msg="Simulation done. start Post-process"), post_process],
-        )
-    )
-    log_args = LogInfo(msg=f"{arguments=}")
+    actions = [LogInfo(msg=f"{arguments=}")]
 
-    return [log_args, pre_process, start_simulation, start_post_process]
+    # prepare the process chains
+    post_process = (
+        ExecuteProcess(
+            cmd=[*launch_base_cmd, "post_process.launch.py", *launch_post_fix],
+            output="screen",
+            name="post_process",
+        )
+        if enable_post_process == "true"
+        else None
+    )
+
+    simulation = (
+        ExecuteProcess(
+            cmd=[*launch_base_cmd, "simulation.launch.py", *launch_post_fix],
+            output="screen",
+            name="simulation",
+            on_exit=(
+                [LogInfo(msg="Simulation done. start Post-process"), post_process]
+                if post_process
+                else [LogInfo(msg="Simulation done.")]
+            ),
+        )
+        if enable_simulation == "true"
+        else None
+    )
+
+    pre_process = (
+        ExecuteProcess(
+            cmd=[*launch_base_cmd, "pre_process.launch.py", *launch_post_fix],
+            output="screen",
+            name="pre_process",
+            on_exit=(
+                [LogInfo(msg="Pre-process done. start Simulation"), simulation]
+                if simulation
+                else (
+                    [LogInfo(msg="Pre-process done. start Post-process"), post_process]
+                    if post_process
+                    else [LogInfo(msg="Pre-process done.")]
+                )
+            ),
+        )
+        if enable_pre_process == "true"
+        else None
+    )
+
+    # define the process chains
+    if enable_pre_process == "true":
+        actions += [LogInfo(msg="Pre-process: enabled"), pre_process]
+    else:
+        actions.append(LogInfo(msg="Pre-process: disabled"))
+
+    if enable_simulation == "true":
+        # launch from simulation if pre_process is not defined else do nothing
+        actions += [LogInfo(msg="Simulation: enabled"), simulation] if not pre_process else []
+    else:
+        actions.append(LogInfo(msg="Simulation: disabled"))
+
+    if enable_post_process == "true":
+        # launch from post_process if pre_process and simulation are not defined else do nothing
+        actions += (
+            [LogInfo(msg="Post-process: enabled"), post_process]
+            if not pre_process and not simulation
+            else []
+        )
+    else:
+        actions.append(LogInfo(msg="Post-process: disabled"))
+
+    return actions
 
 
 def generate_launch_description() -> LaunchDescription:
