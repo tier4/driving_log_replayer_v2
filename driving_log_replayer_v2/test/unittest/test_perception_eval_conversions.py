@@ -24,12 +24,14 @@ from std_msgs.msg import Header
 from driving_log_replayer_v2.perception_eval_conversions import footprint_from_ros_msg
 from driving_log_replayer_v2.perception_eval_conversions import orientation_from_ros_msg
 from driving_log_replayer_v2.perception_eval_conversions import position_from_ros_msg
-from driving_log_replayer_v2.perception_eval_conversions import unix_time_from_ros_msg
+from driving_log_replayer_v2.perception_eval_conversions import unix_time_microsec_from_ros_msg
 
 
 def test_unix_time_from_ros_msg() -> None:
-    unix_time = unix_time_from_ros_msg(Header(stamp=Time(sec=1234567890, nanosec=123456789)))
-    assert unix_time == 1234567890123456  # noqa
+    unix_time_microsec = unix_time_microsec_from_ros_msg(
+        Header(stamp=Time(sec=1234567890, nanosec=123456789))
+    )
+    assert unix_time_microsec == 1234567890123456  # noqa
 
 
 def test_position_from_ros_msg() -> None:
