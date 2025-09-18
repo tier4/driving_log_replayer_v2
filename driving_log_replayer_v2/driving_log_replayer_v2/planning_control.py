@@ -341,8 +341,11 @@ class MetricResult(ResultBase):
 
 @dataclass
 class PlanningFactor(EvaluationItem):
-    def set_frame(self, msg: PlanningFactorArray) -> dict | None:
+    def __post_init__(self) -> None:
         self.condition: PlanningFactorCondition
+        self.success = self.condition.judgement == "negative"
+
+    def set_frame(self, msg: PlanningFactorArray) -> dict | None:
         # check time condition
         if not self.condition.time.match_condition(stamp_to_float(msg.header.stamp)):
             return None
