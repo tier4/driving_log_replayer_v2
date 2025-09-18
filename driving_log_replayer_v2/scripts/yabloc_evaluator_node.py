@@ -16,6 +16,7 @@
 
 
 from diagnostic_msgs.msg import DiagnosticArray
+from std_msgs.msg import String
 
 from driving_log_replayer_v2.evaluator import DLREvaluatorV2
 from driving_log_replayer_v2.evaluator import evaluator_main
@@ -27,7 +28,7 @@ TARGET_DIAG_NAME = "yabloc_monitor: yabloc_status"
 
 class YabLocEvaluator(DLREvaluatorV2):
     def __init__(self, name: str) -> None:
-        super().__init__(name, YablocScenario, YabLocResult)
+        super().__init__(name, YablocScenario, YabLocResult, "/driving_log_replayer/yabloc/results")
         self._result: YabLocResult
 
         self.__sub_diagnostics = self.create_subscription(
@@ -44,7 +45,8 @@ class YabLocEvaluator(DLREvaluatorV2):
         if diag_status.name != TARGET_DIAG_NAME:
             return
         self._result.set_frame(diag_status)
-        self._result_writer.write_result(self._result)
+        res_str = self._result_writer.write_result(self._result)
+        self._pub_result.publish(String(data=res_str))
 
 
 @evaluator_main

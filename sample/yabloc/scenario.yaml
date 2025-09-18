@@ -9,4 +9,4 @@ Evaluation:
   Datasets:
     - yabloc:
         VehicleId: default
-        InitialPose: null
+        InitialPose: {} # Specifies the initial position. If nothing is specified, initial position estimation by GNSS is performed.

@@ -120,17 +120,18 @@ class ResultWriter:
     def delete_result_file(self) -> None:
         self._result_path.unlink()
 
-    def write_line(self, write_obj: Any) -> None:
-        str_record = json.dumps(write_obj, ignore_nan=True) + "\n"
-        self._result_file.write(str_record)
+    def write_line(self, write_obj: Any) -> str:
+        str_record = json.dumps(write_obj, ignore_nan=True)
+        self._result_file.write(str_record + "\n")
+        return str_record
 
-    def write_result(self, result: ResultBase) -> None:
-        self.write_line(self.get_result(result, None))
+    def write_result(self, result: ResultBase) -> str:
+        return self.write_line(self.get_result(result, None))
 
-    def write_result_with_time(self, result: ResultBase, ros_timestamp: int) -> None:
-        self.write_line(self.get_result(result, ros_timestamp))
+    def write_result_with_time(self, result: ResultBase, ros_timestamp: int) -> str:
+        return self.write_line(self.get_result(result, ros_timestamp))
 
-    def write_condition(self, condition: BaseModel | dict | list, *, updated: bool = False) -> None:
+    def write_condition(self, condition: BaseModel | dict | list, *, updated: bool = False) -> str:
         if isinstance(condition, list):
             # Convert list of BaseModel objects to list of dictionaries
             condition_dict = [
@@ -144,7 +145,7 @@ class ResultWriter:
         if updated:
             key = "UpdatedCondition"
         write_obj = {key: condition_dict}
-        self.write_line(write_obj)
+        return self.write_line(write_obj)
 
     def get_header(self) -> dict:
         system_time = self._system_clock.now()

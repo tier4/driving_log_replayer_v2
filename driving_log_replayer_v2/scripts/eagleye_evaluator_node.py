@@ -16,6 +16,7 @@
 
 from diagnostic_msgs.msg import DiagnosticArray
 from diagnostic_msgs.msg import DiagnosticStatus
+from std_msgs.msg import String
 
 from driving_log_replayer_v2.eagleye import EagleyeResult
 from driving_log_replayer_v2.eagleye import EagleyeScenario
@@ -27,7 +28,9 @@ TARGET_DIAG_NAME = "monitor: eagleye_enu_absolute_pos_interpolate"
 
 class EagleyeEvaluator(DLREvaluatorV2):
     def __init__(self, name: str) -> None:
-        super().__init__(name, EagleyeScenario, EagleyeResult)
+        super().__init__(
+            name, EagleyeScenario, EagleyeResult, "/driving_log_replayer/eagleye/results"
+        )
         self._result: EagleyeResult
 
         self.__sub_diagnostics = self.create_subscription(
@@ -43,7 +46,8 @@ class EagleyeEvaluator(DLREvaluatorV2):
             diag_status: DiagnosticStatus
             if diag_status.name == TARGET_DIAG_NAME:
                 self._result.set_frame(diag_status)
-                self._result_writer.write_result(self._result)
+                res_str = self._result_writer.write_result(self._result)
+                self._pub_result.publish(String(data=res_str))
 
 
 @evaluator_main

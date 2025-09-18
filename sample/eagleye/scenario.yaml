@@ -9,4 +9,4 @@ Evaluation:
   Datasets:
     - eagleye:
         VehicleId: default
-        InitialPose: null # Specifies the initial position. If null is specified, initial position estimation by GNSS is performed.
+        InitialPose: {} # Specifies the initial position. If nothing is specified, initial position estimation by GNSS is performed.

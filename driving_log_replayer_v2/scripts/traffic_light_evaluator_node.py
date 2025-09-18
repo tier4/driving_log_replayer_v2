@@ -39,6 +39,7 @@ from perception_eval.manager import PerceptionEvaluationManager
 from perception_eval.tool import PerceptionAnalyzer2D
 from perception_eval.util.logger_config import configure_logger
 import rclpy
+from std_msgs.msg import String
 
 from driving_log_replayer_v2.evaluator import DLREvaluatorV2
 from driving_log_replayer_v2.evaluator import evaluator_main
@@ -55,7 +56,12 @@ if TYPE_CHECKING:
 
 class TrafficLightEvaluator(DLREvaluatorV2):
     def __init__(self, name: str) -> None:
-        super().__init__(name, TrafficLightScenario, TrafficLightResult)
+        super().__init__(
+            name,
+            TrafficLightScenario,
+            TrafficLightResult,
+            "/driving_log_replayer/traffic_light/results",
+        )
         self._scenario: TrafficLightScenario
         self._result: TrafficLightResult
 
@@ -261,7 +267,8 @@ class TrafficLightEvaluator(DLREvaluatorV2):
             DLREvaluatorV2.transform_stamped_with_euler_angle(map_to_baselink),
         )
         self.fail_result_holder.add_frame(frame_result)
-        self._result_writer.write_result(self._result)
+        res_str = self._result_writer.write_result(self._result)
+        self._pub_result.publish(String(data=res_str))
 
     def get_final_result(self) -> MetricsScore:
         final_metric_score = self.__evaluator.get_scene_result()
