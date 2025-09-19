@@ -415,29 +415,31 @@ class PlanningFactor(EvaluationItem):
 
 class FactorsClassContainer:
     def __init__(self, conditions: list[PlanningFactorCondition]) -> None:
-        self.__container: dict[PlanningFactor] = {}
+        self.__container: dict[str, list[PlanningFactor]] = {}
         for i, cond in enumerate(conditions):
             condition_name = (
                 cond.condition_name if cond.condition_name is not None else f"Condition_{i}"
             )
-            self.__container[cond.topic] = PlanningFactor(condition_name, cond)
+            self.__container.setdefault(cond.topic, []).append(PlanningFactor(condition_name, cond))
 
     def set_frame(self, msg: PlanningFactorArray, topic: str) -> dict:
         frame_result: dict[str, dict] = {}
-        topic_result = self.__container[topic].set_frame(msg)
-        if topic_result is not None:
-            frame_result[topic] = topic_result
+        for factor in self.__container.get(topic, []):
+            topic_result = factor.set_frame(msg)
+            if topic_result is not None:
+                frame_result[f"{factor.name}"] = topic_result
         return frame_result
 
     def update(self) -> tuple[bool, str]:
         rtn_success = True
         rtn_summary = [] if len(self.__container) != 0 else ["NotTestTarget"]
-        for _, evaluation_item in self.__container.items():
-            if not evaluation_item.success:
-                rtn_success = False
-                rtn_summary.append(f"{evaluation_item.name} (Fail)")
-            else:
-                rtn_summary.append(f"{evaluation_item.name} (Success)")
+        for _, pf_topic_items in self.__container.items():
+            for evaluation_item in pf_topic_items:
+                if not evaluation_item.success:
+                    rtn_success = False
+                    rtn_summary.append(f"{evaluation_item.name} (Fail)")
+                else:
+                    rtn_summary.append(f"{evaluation_item.name} (Success)")
         prefix_str = "Passed" if rtn_success else "Failed"
         rtn_summary_str = prefix_str + ":" + ", ".join(rtn_summary)
         return (rtn_success, rtn_summary_str)
