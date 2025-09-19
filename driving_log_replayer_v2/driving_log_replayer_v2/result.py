@@ -19,12 +19,16 @@ from os.path import expandvars
 from pathlib import Path
 import pickle
 from typing import Any
+from typing import TYPE_CHECKING
 
 from ament_index_python.packages import get_package_share_directory
 from pydantic import BaseModel
 from rclpy.clock import Clock
 from rclpy.clock import ClockType
 import simplejson as json
+
+if TYPE_CHECKING:
+    from rclpy.time import Time
 
 
 def get_sample_result_path(
@@ -128,8 +132,8 @@ class ResultWriter:
     def write_result(self, result: ResultBase) -> str:
         return self.write_line(self.get_result(result, None))
 
-    def write_result_with_time(self, result: ResultBase, ros_timestamp: int) -> str:
-        return self.write_line(self.get_result(result, ros_timestamp))
+    def write_result_with_time(self, result: ResultBase, timestamp_nanosec: int) -> str:
+        return self.write_line(self.get_result(result, timestamp_nanosec))
 
     def write_condition(self, condition: BaseModel | dict | list, *, updated: bool = False) -> str:
         if isinstance(condition, list):
@@ -155,11 +159,11 @@ class ResultWriter:
             "Frame": {},
         }
 
-    def get_result(self, result: ResultBase, ros_timestamp: int | None = None) -> dict:
-        system_time = self._system_clock.now()
+    def get_result(self, result: ResultBase, timestamp_nanosec: int | None = None) -> dict:
+        system_time: Time = self._system_clock.now()
         time_dict = {"System": system_time.nanoseconds / pow(10, 9)}
-        if ros_timestamp is not None:
-            time_dict["ROS"] = ros_timestamp / pow(10, 9)
+        if timestamp_nanosec is not None:
+            time_dict["ROS"] = timestamp_nanosec / pow(10, 9)
         elif self._ros_clock.ros_time_is_active:
             ros_time = self._ros_clock.now()
             time_dict["ROS"] = ros_time.nanoseconds / pow(10, 9)

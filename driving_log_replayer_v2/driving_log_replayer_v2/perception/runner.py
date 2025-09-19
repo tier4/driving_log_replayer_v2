@@ -55,21 +55,21 @@ if TYPE_CHECKING:
 
 def convert_to_perception_eval(
     msg: PerceptionMsgType,
-    subscribed_ros_timestamp: int,
+    subscribed_timestamp_nanosec: int,
     evaluation_config: PerceptionEvaluationConfig,
 ) -> tuple[int, int, list[DynamicObject] | str]:
-    header_unix_time: int = eval_conversions.unix_time_from_ros_msg(msg.header)
-    subscribed_unix_time: int = eval_conversions.unix_time_from_ros_clock_int(
-        subscribed_ros_timestamp
+    header_timestamp_microsec: int = eval_conversions.unix_time_microsec_from_ros_msg(msg.header)
+    subscribed_timestamp_microsec: int = eval_conversions.unix_time_microsec_from_ros_clock_time(
+        subscribed_timestamp_nanosec
     )
     estimated_objects: list[DynamicObject] | str = (
         eval_conversions.list_dynamic_object_from_ros_msg(
-            header_unix_time,
+            header_timestamp_microsec,
             msg.objects,
             evaluation_config,
         )
     )
-    return header_unix_time, subscribed_unix_time, estimated_objects
+    return header_timestamp_microsec, subscribed_timestamp_microsec, estimated_objects
 
 
 def convert_to_ros_msg(
@@ -104,7 +104,7 @@ def write_result(
     result_writer: ResultWriter,
     rosbag_manager: RosBagManager,
     msg: PerceptionMsgType,
-    subscribed_ros_timestamp: int,
+    subscribed_timestamp_nanosec: int,
     frame_result: PerceptionFrameResult | str,
     skip_counter: int,
 ) -> None:
@@ -150,7 +150,7 @@ def write_result(
     else:
         err_msg = f"Unknown frame result: {frame_result}"
         raise TypeError(err_msg)
-    res_str = result_writer.write_result_with_time(result, subscribed_ros_timestamp)
+    res_str = result_writer.write_result_with_time(result, subscribed_timestamp_nanosec)
     rosbag_manager.write_results(
         additional_record_topic_name["string/results"],
         String(data=res_str),
@@ -259,7 +259,7 @@ def evaluate(  # noqa: PLR0915
     shutil.copy(scenario_path, Path(result_archive_path).joinpath("scenario.yaml"))
 
     # main evaluation process
-    for topic_name, msg, subscribed_ros_timestamp in rosbag_manager.read_messages():
+    for topic_name, msg, subscribed_timestamp_nanosec in rosbag_manager.read_messages():
         # See RosBagManager for `time relationships`.
 
         # evaluate stop reason criterion if defined
@@ -268,7 +268,7 @@ def evaluate(  # noqa: PLR0915
             stop_reason_analyzer.append(stop_reason)
             stop_reason_result.set_frame(stop_reason)
             stop_reason_result_writer.write_result_with_time(
-                stop_reason_result, subscribed_ros_timestamp
+                stop_reason_result, subscribed_timestamp_nanosec
             )
             continue
 
@@ -281,18 +281,20 @@ def evaluate(  # noqa: PLR0915
             raise TypeError(err_msg)
 
         # convert ros to perception_eval
-        header_unix_time, subscribed_unix_time, estimated_objects = convert_to_perception_eval(
-            msg,
-            subscribed_ros_timestamp,
-            evaluator.get_evaluation_config(topic_name),
+        header_timestamp_microsec, subscribed_timestamp_microsec, estimated_objects = (
+            convert_to_perception_eval(
+                msg,
+                subscribed_timestamp_nanosec,
+                evaluator.get_evaluation_config(topic_name),
+            )
         )
 
         # matching process between estimated_objects and ground truth for evaluation
         frame_result, skip_counter = evaluator.add_frame(
             topic_name,
             estimated_objects,
-            header_unix_time,
-            subscribed_unix_time,
+            header_timestamp_microsec,
+            subscribed_timestamp_microsec,
             interpolation=interpolation,
         )
 
@@ -304,7 +306,7 @@ def evaluate(  # noqa: PLR0915
                 result_writer,
                 rosbag_manager,
                 msg,
-                subscribed_ros_timestamp,
+                subscribed_timestamp_nanosec,
                 frame_result,
                 skip_counter,
             )
@@ -313,11 +315,13 @@ def evaluate(  # noqa: PLR0915
     final_metrics: dict[str, dict] = evaluator.get_evaluation_results()
 
     result.set_final_metrics(final_metrics[degradation_topic])
-    res_str = result_writer.write_result_with_time(result, rosbag_manager.get_last_ros_timestamp())
+    res_str = result_writer.write_result_with_time(
+        result, rosbag_manager.get_last_subscribed_timestamp()
+    )
     rosbag_manager.write_results(
         additional_record_topic_name["string/results"],
         String(data=res_str),
-        rosbag_manager.get_last_ros_timestamp(),
+        rosbag_manager.get_last_subscribed_timestamp(),
     )
     result_writer.close()
     rosbag_manager.close_writer()

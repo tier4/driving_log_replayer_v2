@@ -236,9 +236,11 @@ class ObstacleSegmentationEvaluator(DLREvaluatorV2):
         )
         self.__pub_marker_non_detection.publish(non_detection_area_markers)
         pcd_header = msg.header
-        unix_time: int = eval_conversions.unix_time_from_ros_msg(pcd_header)
+        header_timestamp_microsec: int = eval_conversions.unix_time_microsec_from_ros_msg(
+            pcd_header
+        )
         ground_truth_now_frame: FrameGroundTruth = self.__evaluator.get_ground_truth_now_frame(
-            unix_time=unix_time,
+            unix_time=header_timestamp_microsec,
         )
         # Ground truthがない場合はスキップされたことを記録する
         if ground_truth_now_frame is None:
@@ -259,7 +261,7 @@ class ObstacleSegmentationEvaluator(DLREvaluatorV2):
         pointcloud[:, 2] = numpy_pcd["z"]
 
         frame_result: SensingFrameResult = self.__evaluator.add_frame_result(
-            unix_time=unix_time,
+            unix_time=header_timestamp_microsec,
             ground_truth_now_frame=ground_truth_now_frame,
             pointcloud=pointcloud,
             non_detection_areas=non_detection_areas,

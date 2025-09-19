@@ -163,20 +163,24 @@ class Perception2DEvaluator(DLREvaluatorV2):
 
     def detected_objs_cb(self, msg: DetectedObjectsWithFeature, camera_type: str) -> None:
         map_to_baselink = self.lookup_transform(msg.header.stamp)
-        unix_time: int = eval_conversions.unix_time_from_ros_msg(msg.header)
+        header_timestamp_microsec: int = eval_conversions.unix_time_microsec_from_ros_msg(
+            msg.header
+        )
         # 現frameに対応するGround truthを取得
-        ground_truth_now_frame = self.__evaluator.get_ground_truth_now_frame(unix_time)
+        ground_truth_now_frame = self.__evaluator.get_ground_truth_now_frame(
+            header_timestamp_microsec
+        )
         if ground_truth_now_frame is None:
             self.__skip_counter[camera_type] += 1
         else:
             estimated_objects: list[DynamicObject2D] = self.list_dynamic_object_2d_from_ros_msg(
-                unix_time,
+                header_timestamp_microsec,
                 msg.feature_objects,
                 camera_type,
             )
 
             frame_result: PerceptionFrameResult = self.__evaluator.add_frame_result(
-                unix_time=unix_time,
+                unix_time=header_timestamp_microsec,
                 ground_truth_now_frame=ground_truth_now_frame,
                 estimated_objects=estimated_objects,
                 critical_object_filter_config=self.__critical_object_filter_config,

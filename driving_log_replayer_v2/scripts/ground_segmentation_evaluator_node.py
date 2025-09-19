@@ -99,8 +99,10 @@ class GroundSegmentationEvaluator(DLREvaluatorV2):
         )
 
     def annotated_pcd_eval_cb(self, msg: PointCloud2) -> None:
-        unix_time: int = eval_conversions.unix_time_from_ros_msg(msg.header)
-        gt_frame_ts = self.__get_gt_frame_ts(unix_time=unix_time)
+        header_timestamp_microsec: int = eval_conversions.unix_time_microsec_from_ros_msg(
+            msg.header
+        )
+        gt_frame_ts = self.__get_gt_frame_ts(unix_time=header_timestamp_microsec)
 
         if gt_frame_ts < 0:
             return
