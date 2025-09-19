@@ -2,8 +2,8 @@
 Changelog for package driving_log_replayer
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-Forthcoming
------------
+3.13.1 (2025-09-19)
+-------------------
 * chore: refactor time unit comment (`#218 <https://github.com/tier4/driving_log_replayer_v2/issues/218>`_)
 * feat(localization): add args to switch to enable to use localization analysis in post-process (`#217 <https://github.com/tier4/driving_log_replayer_v2/issues/217>`_)
 * feat(perception): add args to enable analysis (`#214 <https://github.com/tier4/driving_log_replayer_v2/issues/214>`_)
