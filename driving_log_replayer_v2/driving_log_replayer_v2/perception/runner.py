@@ -168,6 +168,7 @@ def evaluate(  # noqa: PLR0915
     evaluation_detection_topic_regex: str,
     evaluation_tracking_topic_regex: str,
     evaluation_prediction_topic_regex: str,
+    enable_analysis: str,
     analysis_max_distance: str,
     analysis_distance_interval: str,
 ) -> None:
@@ -334,7 +335,7 @@ def evaluate(  # noqa: PLR0915
         stop_reason_analyzer.save_as_csv(Path(stop_reason_result_path).joinpath("stop_reason.csv"))
 
     # analysis of the evaluation result and save it as csv
-    if evaluator.get_degradation_evaluation_task() != "fp_validation":
+    if enable_analysis == "true" and evaluator.get_degradation_evaluation_task() != "fp_validation":
         analyzers: dict[str, PerceptionAnalyzer3D] = evaluator.get_analyzers()
         # TODO: analysis other topic
         analyzer = analyzers[degradation_topic]
@@ -382,6 +383,11 @@ def parse_args() -> argparse.Namespace:
         "--evaluation-prediction-topic-regex",
         default="",
         help="Regex pattern for evaluation prediction topic name. Must start with '^' and end with '$'. Wildcards (e.g. '.*', '+', '?', '[...]') are not allowed. If you do not want to use this feature, set it to '' or 'None'.",
+    )
+    parser.add_argument(
+        "--enable-analysis",
+        default="true",
+        help="Enable analysis.",
     )
     parser.add_argument(
         "--analysis-max-distance",

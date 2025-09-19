@@ -98,6 +98,11 @@ USE_CASE_ARGS: list[DeclareLaunchArgument] = [
         description="Regex pattern for evaluation prediction topic name. Must start with '^' and end with '$'. Wildcards (e.g. '.*', '+', '?', '[...]') are not allowed. If you do not want to use this feature, set it to '' or 'None'.",
     ),
     DeclareLaunchArgument(
+        "enable_analysis",
+        default_value="true",
+        description="Enable analysis.",
+    ),
+    DeclareLaunchArgument(
         "analysis_max_distance",
         default_value="150",
         description="Maximum distance for analysis.",
