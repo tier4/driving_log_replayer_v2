@@ -27,6 +27,7 @@ from launch_ros.actions import Node
 
 from driving_log_replayer_v2.launch.argument import add_use_case_arguments
 from driving_log_replayer_v2.launch.rosbag import launch_bag_player
+from driving_log_replayer_v2.launch.camera_2d_detector import launch_camera_2d_detector
 from driving_log_replayer_v2.launch.rosbag import launch_bag_recorder
 from driving_log_replayer_v2.launch.util import output_dummy_result_jsonl
 from driving_log_replayer_v2.shutdown_once import ShutdownOnce
@@ -197,6 +198,7 @@ def launch_use_case() -> list:
         OpaqueFunction(function=launch_map_height_fitter),
         OpaqueFunction(function=launch_evaluator_node),
         OpaqueFunction(function=launch_bag_player),
+        OpaqueFunction(function=launch_camera_2d_detector),  # for launching tensorrt_yolox
         OpaqueFunction(function=launch_bag_recorder),
         OpaqueFunction(function=launch_topic_state_monitor),
         OpaqueFunction(function=launch_initial_pose_node),
