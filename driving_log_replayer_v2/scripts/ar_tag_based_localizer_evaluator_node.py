@@ -16,6 +16,7 @@
 
 from diagnostic_msgs.msg import DiagnosticArray
 from diagnostic_msgs.msg import DiagnosticStatus
+from std_msgs.msg import String
 
 from driving_log_replayer_v2.ar_tag_based_localizer import ArTagBasedLocalizerResult
 from driving_log_replayer_v2.ar_tag_based_localizer import ArtagBasedLocalizerScenario
@@ -27,7 +28,12 @@ TARGET_DIAG_NAME = "localization: ar_tag_based_localizer"
 
 class ArTagBasedLocalizerEvaluator(DLREvaluatorV2):
     def __init__(self, name: str) -> None:
-        super().__init__(name, ArtagBasedLocalizerScenario, ArTagBasedLocalizerResult)
+        super().__init__(
+            name,
+            ArtagBasedLocalizerScenario,
+            ArTagBasedLocalizerResult,
+            "/driving_log_replayer/ar_tag_based_localizer/results",
+        )
         self._result: ArTagBasedLocalizerResult
 
         self.__sub_diagnostics = self.create_subscription(
@@ -44,7 +50,8 @@ class ArTagBasedLocalizerEvaluator(DLREvaluatorV2):
         if diag_status.name != TARGET_DIAG_NAME:
             return
         self._result.set_frame(diag_status)
-        self._result_writer.write_result(self._result)
+        res_str = self._result_writer.write_result(self._result)
+        self._pub_result.publish(String(data=res_str))
 
 
 @evaluator_main

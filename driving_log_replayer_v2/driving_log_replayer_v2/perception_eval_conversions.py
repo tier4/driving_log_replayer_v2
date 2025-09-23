@@ -48,16 +48,20 @@ from std_msgs.msg import Header
 from visualization_msgs.msg import Marker
 from visualization_msgs.msg import MarkerArray
 
+"""
+In autoware_perception_evaluation, unix_time is defined as microseconds.
+"""
 
-def unix_time_from_ros_msg(ros_header: Header) -> int:
+
+def unix_time_microsec_from_ros_msg(ros_header: Header) -> int:
     return ros_header.stamp.sec * pow(10, 6) + ros_header.stamp.nanosec // 1000
 
 
-def unix_time_from_ros_timestamp(ros_timestamp: Time | DurationMsg) -> int:
+def unix_time_microsec_from_ros_timestamp(ros_timestamp: Time | DurationMsg) -> int:
     return ros_timestamp.sec * pow(10, 6) + ros_timestamp.nanosec // 1000
 
 
-def unix_time_from_ros_clock_int(ros_clock_time: int) -> int:
+def unix_time_microsec_from_ros_clock_time(ros_clock_time: int) -> int:
     return ros_clock_time // 1000
 
 
@@ -71,7 +75,7 @@ def orientation_from_ros_msg(ros_orientation: RosQuaternion) -> Quaternion:
 
 def path_timestamps_from_ros_msg(ros_path: PredictedPath) -> list[int]:
     # NOTE: predicted path starts from the current object pose
-    duration = unix_time_from_ros_timestamp(ros_path.time_step)
+    duration = unix_time_microsec_from_ros_timestamp(ros_path.time_step)
     return [duration * i for i in range(1, len(ros_path.path))]
 
 

@@ -2,6 +2,43 @@
 Changelog for package driving_log_replayer
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
+3.13.1 (2025-09-19)
+-------------------
+* chore: refactor time unit comment (`#218 <https://github.com/tier4/driving_log_replayer_v2/issues/218>`_)
+* feat(localization): add args to switch to enable to use localization analysis in post-process (`#217 <https://github.com/tier4/driving_log_replayer_v2/issues/217>`_)
+* feat(perception): add args to enable analysis (`#214 <https://github.com/tier4/driving_log_replayer_v2/issues/214>`_)
+* feat(traffic_light): enable to specify the traffic light topic (`#213 <https://github.com/tier4/driving_log_replayer_v2/issues/213>`_)
+* rebase develop (`#216 <https://github.com/tier4/driving_log_replayer_v2/issues/216>`_)
+  Co-authored-by: t4-adc <grp-rd-1-adc-admin@tier4.jp>
+* fix(planning_control): a init bug of planning-factor result `#215 <https://github.com/tier4/driving_log_replayer_v2/issues/215>`_
+  Co-authored-by: t4-adc <grp-rd-1-adc-admin@tier4.jp>
+* feat: publish conditions and results to topics (`#211 <https://github.com/tier4/driving_log_replayer_v2/issues/211>`_)
+  * update record_topics
+  * add result and condition publisher
+  * save pointcloud map
+  * Update driving_log_replayer_v2/driving_log_replayer_v2/evaluator.py
+  Co-authored-by: Copilot <175728472+Copilot@users.noreply.github.com>
+  * move publisher out of result_writer, remove condition publisher
+  * refactor code.
+  * remove None
+  * modify other simulation type to publish the results
+  ---------
+  Co-authored-by: t4-adc <grp-rd-1-adc-admin@tier4.jp>
+  Co-authored-by: Copilot <175728472+Copilot@users.noreply.github.com>
+  Co-authored-by: MasatoSaeki <masato.saeki@tier4.jp>
+* feat(remap): add all perception remap (`#212 <https://github.com/tier4/driving_log_replayer_v2/issues/212>`_)
+* fix srv type for InitializeLocalization (`#208 <https://github.com/tier4/driving_log_replayer_v2/issues/208>`_)
+* feat(localization): add check diagnostics flag condition (`#205 <https://github.com/tier4/driving_log_replayer_v2/issues/205>`_)
+  * add scenario_path argument to autoware_localization_evaluation_scripts
+  * rewrite document to match the current status
+  * change my_localization to localization
+  * fix spelling mistakes
+  * fix typo
+  * update mirrors-prettier
+  * fix md style
+  ---------
+* Contributors: Kem (TiankuiXian), Masato Saeki, Taiki Yamada, badai nguyen
+
 3.13.0 (2025-09-02)
 -------------------
 * feat(perception): add the new criteria stop_reason (`#202 <https://github.com/tier4/driving_log_replayer_v2/issues/202>`_)
