@@ -124,8 +124,8 @@ class PerceptionEvaluator:
     def add_frame(
         self,
         estimated_objects: list[DynamicObject] | str,
-        header_unix_time: int,
-        subscribed_unix_time: int,
+        header_timestamp_microsec: int,
+        subscribed_timestamp_microsec: int,
         *,
         interpolation: bool,
     ) -> tuple[PerceptionFrameResult | str, int]:
@@ -136,22 +136,24 @@ class PerceptionEvaluator:
         ):
             self.__skip_counter += 1
             self.__logger.warning(
-                "Estimated objects is invalid for timestamp: %s", header_unix_time
+                "Estimated objects is invalid for timestamp: %s", header_timestamp_microsec
             )
             return "Invalid Estimated Objects", self.__skip_counter
 
         ground_truth_now_frame = self.__evaluator.get_ground_truth_now_frame(
-            header_unix_time,
+            header_timestamp_microsec,
             interpolate_ground_truth=interpolation,
         )
 
         if ground_truth_now_frame is None:
             self.__skip_counter += 1
-            self.__logger.warning("Ground truth not found for timestamp %s", header_unix_time)
+            self.__logger.warning(
+                "Ground truth not found for timestamp %s", header_timestamp_microsec
+            )
             return "No Ground Truth", self.__skip_counter
 
         frame_result: PerceptionFrameResult = self.__evaluator.add_frame_result(
-            unix_time=header_unix_time,
+            unix_time=header_timestamp_microsec,
             ground_truth_now_frame=ground_truth_now_frame,
             estimated_objects=estimated_objects,
             critical_object_filter_config=self.__critical_object_filter_config,
@@ -162,11 +164,11 @@ class PerceptionEvaluator:
         self.__logger.info(
             "Estimation header: %d, Ground truth header: %d (frame_name: %s), Difference: %d, "
             "Subscribe delay [micro sec]: %d",
-            header_unix_time,
+            header_timestamp_microsec,
             ground_truth_now_frame.unix_time,
             ground_truth_now_frame.frame_name,
-            header_unix_time - ground_truth_now_frame.unix_time,
-            subscribed_unix_time - header_unix_time,
+            header_timestamp_microsec - ground_truth_now_frame.unix_time,
+            subscribed_timestamp_microsec - header_timestamp_microsec,
         )
         # TODO: decide whether to add skip counter or not
 

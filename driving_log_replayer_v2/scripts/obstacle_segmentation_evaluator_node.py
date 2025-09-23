@@ -37,6 +37,7 @@ from rosidl_runtime_py import message_to_ordereddict
 from sensor_msgs.msg import PointCloud2
 import simplejson as json
 from std_msgs.msg import Header
+from std_msgs.msg import String
 from tier4_api_msgs.msg import AwapiAutowareStatus
 from visualization_msgs.msg import MarkerArray
 
@@ -69,7 +70,12 @@ class ObstacleSegmentationEvaluator(DLREvaluatorV2):
     COUNT_FINISH_PUB_GOAL_POSE = 5
 
     def __init__(self, name: str) -> None:
-        super().__init__(name, ObstacleSegmentationScenario, ObstacleSegmentationResult)
+        super().__init__(
+            name,
+            ObstacleSegmentationScenario,
+            ObstacleSegmentationResult,
+            "/driving_log_replayer/obstacle_segmentation/results",
+        )
         self._result: ObstacleSegmentationResult
 
         # pub_goal_pose must be created before timer_cb is called
@@ -230,9 +236,11 @@ class ObstacleSegmentationEvaluator(DLREvaluatorV2):
         )
         self.__pub_marker_non_detection.publish(non_detection_area_markers)
         pcd_header = msg.header
-        unix_time: int = eval_conversions.unix_time_from_ros_msg(pcd_header)
+        header_timestamp_microsec: int = eval_conversions.unix_time_microsec_from_ros_msg(
+            pcd_header
+        )
         ground_truth_now_frame: FrameGroundTruth = self.__evaluator.get_ground_truth_now_frame(
-            unix_time=unix_time,
+            unix_time=header_timestamp_microsec,
         )
         # Ground truthがない場合はスキップされたことを記録する
         if ground_truth_now_frame is None:
@@ -253,7 +261,7 @@ class ObstacleSegmentationEvaluator(DLREvaluatorV2):
         pointcloud[:, 2] = numpy_pcd["z"]
 
         frame_result: SensingFrameResult = self.__evaluator.add_frame_result(
-            unix_time=unix_time,
+            unix_time=header_timestamp_microsec,
             ground_truth_now_frame=ground_truth_now_frame,
             pointcloud=pointcloud,
             non_detection_areas=non_detection_areas,
@@ -275,7 +283,8 @@ class ObstacleSegmentationEvaluator(DLREvaluatorV2):
             pcd_header,
             topic_rate=self.__topic_rate,
         )
-        self._result_writer.write_result(self._result)
+        res_str = self._result_writer.write_result(self._result)
+        self._pub_result.publish(String(data=res_str))
 
         topic_rate_data = ObstacleSegmentationMarker()
         topic_rate_data.header = msg.header

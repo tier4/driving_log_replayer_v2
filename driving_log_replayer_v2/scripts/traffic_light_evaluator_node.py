@@ -39,6 +39,7 @@ from perception_eval.manager import PerceptionEvaluationManager
 from perception_eval.tool import PerceptionAnalyzer2D
 from perception_eval.util.logger_config import configure_logger
 import rclpy
+from std_msgs.msg import String
 
 from driving_log_replayer_v2.evaluator import DLREvaluatorV2
 from driving_log_replayer_v2.evaluator import evaluator_main
@@ -55,7 +56,12 @@ if TYPE_CHECKING:
 
 class TrafficLightEvaluator(DLREvaluatorV2):
     def __init__(self, name: str) -> None:
-        super().__init__(name, TrafficLightScenario, TrafficLightResult)
+        super().__init__(
+            name,
+            TrafficLightScenario,
+            TrafficLightResult,
+            "/driving_log_replayer/traffic_light/results",
+        )
         self._scenario: TrafficLightScenario
         self._result: TrafficLightResult
 
@@ -68,9 +74,6 @@ class TrafficLightEvaluator(DLREvaluatorV2):
         ).as_posix()
         self.__lanelet_map = load_map(map_path)
         self.fail_result_holder = FailResultHolder(self._perception_eval_log_path)
-
-        self._scenario: TrafficLightScenario
-        self._result: TrafficLightResult
 
         self.__p_cfg = self._scenario.Evaluation.PerceptionEvaluationConfig
         self.__c_cfg = self._scenario.Evaluation.CriticalObjectFilterConfig
@@ -115,7 +118,9 @@ class TrafficLightEvaluator(DLREvaluatorV2):
         )
         self.__sub_traffic_signals = self.create_subscription(
             TrafficLightGroupArray,
-            "/perception/traffic_light_recognition/traffic_signals",
+            self._scenario.Evaluation.degradation_topic
+            if self._scenario.Evaluation.degradation_topic is not None
+            else "/perception/traffic_light_recognition/traffic_signals",
             self.traffic_signals_cb,
             1,
         )
@@ -226,8 +231,12 @@ class TrafficLightEvaluator(DLREvaluatorV2):
 
     def traffic_signals_cb(self, msg: TrafficLightGroupArray) -> None:
         map_to_baselink = self.lookup_transform(msg.stamp)
-        unix_time: int = eval_conversions.unix_time_from_ros_timestamp(msg.stamp)
-        ground_truth_now_frame = self.__evaluator.get_ground_truth_now_frame(unix_time)
+        header_timestamp_microsec: int = eval_conversions.unix_time_microsec_from_ros_timestamp(
+            msg.stamp
+        )
+        ground_truth_now_frame = self.__evaluator.get_ground_truth_now_frame(
+            header_timestamp_microsec
+        )
 
         if ground_truth_now_frame is None:
             self.__skip_counter += 1
@@ -243,13 +252,13 @@ class TrafficLightEvaluator(DLREvaluatorV2):
             obj.set_position(position)
 
         estimated_objects = self.list_dynamic_object_2d_from_ros_msg(
-            unix_time,
+            header_timestamp_microsec,
             msg.traffic_light_groups,
             cam2map,
             map_to_baselink,
         )
         frame_result: PerceptionFrameResult = self.__evaluator.add_frame_result(
-            unix_time=unix_time,
+            unix_time=header_timestamp_microsec,
             ground_truth_now_frame=ground_truth_now_frame,
             estimated_objects=estimated_objects,
             critical_object_filter_config=self.__critical_object_filter_config,
@@ -261,7 +270,8 @@ class TrafficLightEvaluator(DLREvaluatorV2):
             DLREvaluatorV2.transform_stamped_with_euler_angle(map_to_baselink),
         )
         self.fail_result_holder.add_frame(frame_result)
-        self._result_writer.write_result(self._result)
+        res_str = self._result_writer.write_result(self._result)
+        self._pub_result.publish(String(data=res_str))
 
     def get_final_result(self) -> MetricsScore:
         final_metric_score = self.__evaluator.get_scene_result()

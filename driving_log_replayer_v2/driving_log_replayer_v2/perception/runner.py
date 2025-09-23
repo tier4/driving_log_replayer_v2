@@ -27,6 +27,7 @@ from rclpy.clock import Clock
 from rosbag2_py import TopicMetadata
 from std_msgs.msg import ColorRGBA
 from std_msgs.msg import Header
+from std_msgs.msg import String
 from visualization_msgs.msg import MarkerArray
 
 from driving_log_replayer_v2.evaluator import DLREvaluatorV2
@@ -54,21 +55,21 @@ if TYPE_CHECKING:
 
 def convert_to_perception_eval(
     msg: PerceptionMsgType,
-    subscribed_ros_timestamp: int,
+    subscribed_timestamp_nanosec: int,
     evaluation_config: PerceptionEvaluationConfig,
 ) -> tuple[int, int, list[DynamicObject] | str]:
-    header_unix_time: int = eval_conversions.unix_time_from_ros_msg(msg.header)
-    subscribed_unix_time: int = eval_conversions.unix_time_from_ros_clock_int(
-        subscribed_ros_timestamp
+    header_timestamp_microsec: int = eval_conversions.unix_time_microsec_from_ros_msg(msg.header)
+    subscribed_timestamp_microsec: int = eval_conversions.unix_time_microsec_from_ros_clock_time(
+        subscribed_timestamp_nanosec
     )
     estimated_objects: list[DynamicObject] | str = (
         eval_conversions.list_dynamic_object_from_ros_msg(
-            header_unix_time,
+            header_timestamp_microsec,
             msg.objects,
             evaluation_config,
         )
     )
-    return header_unix_time, subscribed_unix_time, estimated_objects
+    return header_timestamp_microsec, subscribed_timestamp_microsec, estimated_objects
 
 
 def convert_to_ros_msg(
@@ -103,7 +104,7 @@ def write_result(
     result_writer: ResultWriter,
     rosbag_manager: RosBagManager,
     msg: PerceptionMsgType,
-    subscribed_ros_timestamp: int,
+    subscribed_timestamp_nanosec: int,
     frame_result: PerceptionFrameResult | str,
     skip_counter: int,
 ) -> None:
@@ -130,10 +131,12 @@ def write_result(
 
         # write ground truth as ROS message
         rosbag_manager.write_results(
-            additional_record_topic_name["ground_truth"], marker_ground_truth, msg.header.stamp
+            additional_record_topic_name["marker/ground_truth"],
+            marker_ground_truth,
+            msg.header.stamp,
         )  # ground truth
         rosbag_manager.write_results(
-            additional_record_topic_name["results"], marker_results, msg.header.stamp
+            additional_record_topic_name["marker/results"], marker_results, msg.header.stamp
         )  # results including evaluation topic and ground truth
     elif isinstance(frame_result, str):
         # handle when add_frame is fail caused by failed object conversion or no ground truth
@@ -147,7 +150,12 @@ def write_result(
     else:
         err_msg = f"Unknown frame result: {frame_result}"
         raise TypeError(err_msg)
-    result_writer.write_result_with_time(result, subscribed_ros_timestamp)
+    res_str = result_writer.write_result_with_time(result, subscribed_timestamp_nanosec)
+    rosbag_manager.write_results(
+        additional_record_topic_name["string/results"],
+        String(data=res_str),
+        msg.header.stamp,
+    )
 
 
 def evaluate(  # noqa: PLR0915
@@ -160,6 +168,7 @@ def evaluate(  # noqa: PLR0915
     evaluation_detection_topic_regex: str,
     evaluation_tracking_topic_regex: str,
     evaluation_prediction_topic_regex: str,
+    enable_analysis: str,
     analysis_max_distance: str,
     analysis_distance_interval: str,
 ) -> None:
@@ -220,13 +229,14 @@ def evaluate(  # noqa: PLR0915
 
     # initialize RosBagManager to read and save rosbag and write into it
     additional_record_topic_name = {
-        "ground_truth": "/driving_log_replayer_v2/marker/ground_truth",
-        "results": "/driving_log_replayer_v2/marker/results",
+        "marker/ground_truth": "/driving_log_replayer_v2/marker/ground_truth",
+        "marker/results": "/driving_log_replayer_v2/marker/results",
+        "string/results": "/driving_log_replayer_v2/perception/results",
     }
     additional_record_topic = [
         TopicMetadata(
             name=topic_name,
-            type="visualization_msgs/MarkerArray",
+            type="visualization_msgs/MarkerArray" if "marker" in topic_name else "std_msgs/String",
             serialization_format="cdr",
             offered_qos_profiles="",
         )
@@ -249,7 +259,7 @@ def evaluate(  # noqa: PLR0915
     shutil.copy(scenario_path, Path(result_archive_path).joinpath("scenario.yaml"))
 
     # main evaluation process
-    for topic_name, msg, subscribed_ros_timestamp in rosbag_manager.read_messages():
+    for topic_name, msg, subscribed_timestamp_nanosec in rosbag_manager.read_messages():
         # See RosBagManager for `time relationships`.
 
         # evaluate stop reason criterion if defined
@@ -258,7 +268,7 @@ def evaluate(  # noqa: PLR0915
             stop_reason_analyzer.append(stop_reason)
             stop_reason_result.set_frame(stop_reason)
             stop_reason_result_writer.write_result_with_time(
-                stop_reason_result, subscribed_ros_timestamp
+                stop_reason_result, subscribed_timestamp_nanosec
             )
             continue
 
@@ -271,18 +281,20 @@ def evaluate(  # noqa: PLR0915
             raise TypeError(err_msg)
 
         # convert ros to perception_eval
-        header_unix_time, subscribed_unix_time, estimated_objects = convert_to_perception_eval(
-            msg,
-            subscribed_ros_timestamp,
-            evaluator.get_evaluation_config(topic_name),
+        header_timestamp_microsec, subscribed_timestamp_microsec, estimated_objects = (
+            convert_to_perception_eval(
+                msg,
+                subscribed_timestamp_nanosec,
+                evaluator.get_evaluation_config(topic_name),
+            )
         )
 
         # matching process between estimated_objects and ground truth for evaluation
         frame_result, skip_counter = evaluator.add_frame(
             topic_name,
             estimated_objects,
-            header_unix_time,
-            subscribed_unix_time,
+            header_timestamp_microsec,
+            subscribed_timestamp_microsec,
             interpolation=interpolation,
         )
 
@@ -294,18 +306,25 @@ def evaluate(  # noqa: PLR0915
                 result_writer,
                 rosbag_manager,
                 msg,
-                subscribed_ros_timestamp,
+                subscribed_timestamp_nanosec,
                 frame_result,
                 skip_counter,
             )
-    rosbag_manager.close_writer()
 
     # calculation of the overall evaluation like mAP, TP Rate, etc and save evaluated data.
     final_metrics: dict[str, dict] = evaluator.get_evaluation_results()
 
     result.set_final_metrics(final_metrics[degradation_topic])
-    result_writer.write_result_with_time(result, rosbag_manager.get_last_ros_timestamp())
+    res_str = result_writer.write_result_with_time(
+        result, rosbag_manager.get_last_subscribed_timestamp()
+    )
+    rosbag_manager.write_results(
+        additional_record_topic_name["string/results"],
+        String(data=res_str),
+        rosbag_manager.get_last_subscribed_timestamp(),
+    )
     result_writer.close()
+    rosbag_manager.close_writer()
 
     # merge result.jsonl and stop_reason.jsonl if stop reason criterion is defined
     # and close stop reason result writer if defined
@@ -320,7 +339,7 @@ def evaluate(  # noqa: PLR0915
         stop_reason_analyzer.save_as_csv(Path(stop_reason_result_path).joinpath("stop_reason.csv"))
 
     # analysis of the evaluation result and save it as csv
-    if evaluator.get_degradation_evaluation_task() != "fp_validation":
+    if enable_analysis == "true" and evaluator.get_degradation_evaluation_task() != "fp_validation":
         analyzers: dict[str, PerceptionAnalyzer3D] = evaluator.get_analyzers()
         # TODO: analysis other topic
         analyzer = analyzers[degradation_topic]
@@ -368,6 +387,11 @@ def parse_args() -> argparse.Namespace:
         "--evaluation-prediction-topic-regex",
         default="",
         help="Regex pattern for evaluation prediction topic name. Must start with '^' and end with '$'. Wildcards (e.g. '.*', '+', '?', '[...]') are not allowed. If you do not want to use this feature, set it to '' or 'None'.",
+    )
+    parser.add_argument(
+        "--enable-analysis",
+        default="true",
+        help="Enable analysis.",
     )
     parser.add_argument(
         "--analysis-max-distance",
