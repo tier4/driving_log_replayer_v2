@@ -60,6 +60,8 @@ def post_process(context: LaunchContext) -> list:
     check_and_create_metadata_yaml(conf)
 
     if conf["use_case"] == "localization":
+        if conf["enable_analysis"] != "true":
+            return [LogInfo(msg="skip localization analysis.")]
         localization_analysis_cmd = [
             "ros2",
             "run",
@@ -119,6 +121,7 @@ def post_process(context: LaunchContext) -> list:
                 context.launch_configurations["evaluation_detection_topic_regex"],
                 context.launch_configurations["evaluation_tracking_topic_regex"],
                 context.launch_configurations["evaluation_prediction_topic_regex"],
+                context.launch_configurations["enable_analysis"],
                 context.launch_configurations["analysis_max_distance"],
                 context.launch_configurations["analysis_distance_interval"],
             )

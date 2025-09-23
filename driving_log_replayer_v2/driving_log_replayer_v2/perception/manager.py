@@ -149,8 +149,8 @@ class EvaluationManager:
         self,
         topic_name: str,
         estimated_objects: list[DynamicObject] | str,
-        header_unix_time: int,
-        subscribed_unix_time: int,
+        header_timestamp_microsec: int,
+        subscribed_timestamp_microsec: int,
         *,
         interpolation: bool,
     ) -> tuple[PerceptionFrameResult | str, int]:
@@ -158,8 +158,8 @@ class EvaluationManager:
 
         frame_result, skip_counter = evaluator.add_frame(
             estimated_objects,
-            header_unix_time,
-            subscribed_unix_time,
+            header_timestamp_microsec,
+            subscribed_timestamp_microsec,
             interpolation=interpolation,
         )
 

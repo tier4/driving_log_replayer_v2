@@ -59,7 +59,7 @@ class RosBagManager:
         self._writer_storage_options: StorageOptions
         self._evaluation_topics: list[str]
         self._topic_name2type: dict[str, str] = {}
-        self._last_ros_timestamp: int
+        self._last_subscribed_timestamp_nanosec: int
         self._tf_buffer: Buffer
 
         converter_options = self._get_default_converter_options()
@@ -105,24 +105,26 @@ class RosBagManager:
     def get_tf_buffer(self) -> Buffer:
         return self._tf_buffer
 
-    def get_last_ros_timestamp(self) -> int:
-        if hasattr(self, "_last_ros_timestamp"):
-            return self._last_ros_timestamp
-        err_msg = "Last ros timestamp is not set."
+    def get_last_subscribed_timestamp(self) -> int:
+        if hasattr(self, "_last_subscribed_timestamp_nanosec"):
+            return self._last_subscribed_timestamp_nanosec
+        err_msg = "_last_subscribed_timestamp_nanosec is not set."
         raise AttributeError(err_msg)
 
     def read_messages(self) -> Generator[str, PerceptionMsgType | AwapiAutowareStatus, int]:
         """
-        Describe time representations used in subscribed ROS 2 messages.
+        Describe time representations.
 
-        msg.header.stamp     | builtin_interfaces.msg.Time     | base     | base
-        subscribed timestamp | int                             | nanosec  | sec * 1e9 + nanosec
-        clock                | rclpy.clock.Clock (nanoseconds) | nanosec  | sec * 1e9 + nanosec
-        nuscenes unix time   | int                             | microsec | sec * 1e6 + nanosec / 1e3
+        | Field                   | Type                             | Unit     | Representation            |
+        |-------------------------|----------------------------------|----------|---------------------------|
+        | msg.header.stamp        | builtin_interfaces.msg.Time      | none     | sec, nanosec (standard)   |
+        | subscribed timestamp    | int                              | nanosec  | sec * 1e9 + nanosec       |
+        | Clock.now().nanoseconds | int                              | nanosec  | sec * 1e9 + nanosec       |
+        | nuscenes unix time      | int                              | microsec | sec * 1e6 + nanosec / 1e3 |
         """
         while self._reader.has_next():
-            topic_name, msg_bytes, ros_timestamp = self._reader.read_next()
-            self._writer.write(topic_name, msg_bytes, ros_timestamp)
+            topic_name, msg_bytes, subscribed_timestamp_nanosec = self._reader.read_next()
+            self._writer.write(topic_name, msg_bytes, subscribed_timestamp_nanosec)
             msg = deserialize_message(msg_bytes, get_message(self._topic_name2type[topic_name]))
 
             if topic_name == "/tf_static":
@@ -132,20 +134,22 @@ class RosBagManager:
                 for transform in msg.transforms:
                     self._tf_buffer.set_transform(transform, "rosbag_import")
             elif topic_name in self._evaluation_topics:
-                yield topic_name, msg, ros_timestamp
-        self._last_ros_timestamp = ros_timestamp
+                yield topic_name, msg, subscribed_timestamp_nanosec
+        self._last_subscribed_timestamp_nanosec = subscribed_timestamp_nanosec
         del self._reader
 
-    def write_results(self, topic_name: str, msg: Any, timestamp: Time | int) -> None:
-        if isinstance(timestamp, Time):
-            ros_timestamp = timestamp.sec * pow(10, 9) + timestamp.nanosec
-        elif isinstance(timestamp, int):
-            ros_timestamp = timestamp
+    def write_results(self, topic_name: str, msg: Any, subscribed_timestamp: Time | int) -> None:
+        if isinstance(subscribed_timestamp, Time):
+            subscribed_timestamp_nanosec = (
+                subscribed_timestamp.sec * pow(10, 9) + subscribed_timestamp.nanosec
+            )
+        elif isinstance(subscribed_timestamp, int):
+            subscribed_timestamp_nanosec = subscribed_timestamp
         else:
-            err_msg = f"Invalid type: {type(timestamp)}"
+            err_msg = f"Invalid type: {type(subscribed_timestamp)}"
             raise TypeError(err_msg)
         msg_bytes = serialize_message(msg)
-        self._writer.write(topic_name, msg_bytes, ros_timestamp)
+        self._writer.write(topic_name, msg_bytes, subscribed_timestamp_nanosec)
 
     def close_writer(self) -> None:
         del self._writer

@@ -45,4 +45,10 @@ AUTOWARE_ARGS = {
 
 NODE_PARAMS = {}
 
-USE_CASE_ARGS: list[DeclareLaunchArgument] = []
+USE_CASE_ARGS: list[DeclareLaunchArgument] = [
+    DeclareLaunchArgument(
+        "enable_analysis",
+        default_value="true",
+        description="Enable analysis.",
+    ),
+]

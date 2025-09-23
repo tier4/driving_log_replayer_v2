@@ -20,6 +20,7 @@ from diagnostic_msgs.msg import DiagnosticArray
 from diagnostic_msgs.msg import DiagnosticStatus
 from example_interfaces.msg import Float64
 from geometry_msgs.msg import PoseStamped
+from std_msgs.msg import String
 
 from driving_log_replayer_v2.evaluator import DLREvaluatorV2
 from driving_log_replayer_v2.evaluator import evaluator_main
@@ -33,7 +34,12 @@ TARGET_DIAG_NAME = "topic_state_monitor_ndt_scan_matcher_exe_time: localization_
 
 class LocalizationEvaluator(DLREvaluatorV2):
     def __init__(self, name: str) -> None:
-        super().__init__(name, LocalizationScenario, LocalizationResult)
+        super().__init__(
+            name,
+            LocalizationScenario,
+            LocalizationResult,
+            "/driving_log_replayer/localization/results",
+        )
         self._scenario: LocalizationScenario
         self._result: LocalizationResult
 
@@ -107,7 +113,8 @@ class LocalizationEvaluator(DLREvaluatorV2):
             DLREvaluatorV2.transform_stamped_with_euler_angle(map_to_baselink),
             self.__latest_tp,
         )
-        self._result_writer.write_result(self._result)
+        res_str = self._result_writer.write_result(self._result)
+        self._pub_result.publish(String(data=res_str))
 
     def nvtl_cb(self, msg: Float32Stamped) -> None:
         self.__latest_nvtl = msg
@@ -120,7 +127,8 @@ class LocalizationEvaluator(DLREvaluatorV2):
             DLREvaluatorV2.transform_stamped_with_euler_angle(map_to_baselink),
             self.__latest_nvtl,
         )
-        self._result_writer.write_result(self._result)
+        res_str = self._result_writer.write_result(self._result)
+        self._pub_result.publish(String(data=res_str))
 
     def relative_pose_cb(self, msg: PoseStamped) -> None:
         map_to_baselink = self.lookup_transform(msg.header.stamp)
@@ -132,7 +140,8 @@ class LocalizationEvaluator(DLREvaluatorV2):
             self.__latest_iteration_num,
         )
         self.__pub_lateral_distance.publish(msg_lateral_distance)  # TODO: add integration test
-        self._result_writer.write_result(self._result)
+        res_str = self._result_writer.write_result(self._result)
+        self._pub_result.publish(String(data=res_str))
 
     def diagnostics_cb(self, msg: DiagnosticArray) -> None:
         if len(msg.status) == 0:
@@ -141,7 +150,8 @@ class LocalizationEvaluator(DLREvaluatorV2):
         if diag_status.name != TARGET_DIAG_NAME:
             return
         self._result.set_frame(diag_status)
-        self._result_writer.write_result(self._result)
+        res_str = self._result_writer.write_result(self._result)
+        self._pub_result.publish(String(data=res_str))
 
 
 @evaluator_main

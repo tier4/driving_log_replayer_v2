@@ -30,6 +30,7 @@ from rclpy.node import Node
 from rclpy.time import Duration
 from rclpy.time import Time
 from rosidl_runtime_py import message_to_ordereddict
+from std_msgs.msg import String
 from tf2_ros import Buffer
 from tf2_ros import TransformException
 from tf2_ros import TransformListener
@@ -43,7 +44,13 @@ from driving_log_replayer_v2.scenario import load_scenario
 class DLREvaluatorV2(Node):
     COUNT_SHUTDOWN_NODE = 5
 
-    def __init__(self, name: str, scenario_class: Callable, result_class: Callable) -> None:
+    def __init__(
+        self,
+        name: str,
+        scenario_class: Callable,
+        result_class: Callable,
+        result_topic: str,
+    ) -> None:
         super().__init__(name)
         self.declare_parameter("scenario_path", "")
         self.declare_parameter("t4_dataset_path", "")
@@ -78,13 +85,20 @@ class DLREvaluatorV2(Node):
                 and self._scenario.Evaluation.Conditions is not None
             ):
                 evaluation_condition = self._scenario.Evaluation.Conditions
+
             self._result_writer = ResultWriter(
                 self._result_json_path,
                 self.get_clock(),
                 evaluation_condition,
             )
             self._result = result_class(evaluation_condition)
-        except (FileNotFoundError, PermissionError, yaml.YAMLError, ValidationError) as e:
+            self._pub_result = self.create_publisher(String, result_topic, 1)
+        except (
+            FileNotFoundError,
+            PermissionError,
+            yaml.YAMLError,
+            ValidationError,
+        ) as e:
             self.get_logger().error(f"An error occurred while loading the scenario. {e}")
             self._result_writer = ResultWriter(
                 self._result_json_path,
@@ -155,7 +169,10 @@ class DLREvaluatorV2(Node):
             return TransformStamped()
 
     def save_pkl(self, save_object: Any) -> None:
-        PickleWriter(self._result_archive_path.joinpath("scene_result.pkl").as_posix(), save_object)
+        PickleWriter(
+            self._result_archive_path.joinpath("scene_result.pkl").as_posix(),
+            save_object,
+        )
 
     @classmethod
     def transform_stamped_with_euler_angle(cls, transform_stamped: TransformStamped) -> dict:

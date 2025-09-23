@@ -1,5 +1,22 @@
 # Release Notes
 
+## Version 3.13.1
+
+Minor Tweak
+
+| Module             | Feature          | Brief summary                                                             | Pull request                                                        | Contributor                                     |
+| ------------------ | ---------------- | ------------------------------------------------------------------------- | ------------------------------------------------------------------- | ----------------------------------------------- |
+| `common`           | chore            | refactor time unit comment and implementation                             | [#218](https://github.com/tier4/driving_log_replayer_v2/issues/218) | [MasatoSaeki](https://github.com/MasatoSaeki)   |
+| `localization`     | arguments        | add args to switch to enable to use localization analysis in post-process | [#217](https://github.com/tier4/driving_log_replayer_v2/issues/217) | [MasatoSaeki](https://github.com/MasatoSaeki)   |
+| `perception`       | arguments        | add args to switch to enable to use perception analysis in post-process   | [#214](https://github.com/tier4/driving_log_replayer_v2/issues/214) | [MasatoSaeki](https://github.com/MasatoSaeki)   |
+| `traffic_light`    | arguments        | enable to specify the traffic light topic                                 | [#213](https://github.com/tier4/driving_log_replayer_v2/issues/213) | [MasatoSaeki](https://github.com/MasatoSaeki)   |
+| `planning_control` | result           | additional fix for planning-factor result                                 | [#216](https://github.com/tier4/driving_log_replayer_v2/issues/216) | [xtk8532704](https://github.com/xtk8532704)     |
+| `planning_control` | result           | a init bug of planning-factor result                                      | [#215](https://github.com/tier4/driving_log_replayer_v2/issues/215) | [xtk8532704](https://github.com/xtk8532704)     |
+| `common`           | result and topic | publish conditions and results to topics                                  | [#211](https://github.com/tier4/driving_log_replayer_v2/issues/211) | [xtk8532704](https://github.com/xtk8532704)     |
+| `perception`       | remap            | add all perception remap                                                  | [#212](https://github.com/tier4/driving_log_replayer_v2/issues/212) | [badai-nguyen](https://github.com/badai-nguyen) |
+| `localization`     | msg_type         | update srv type for InitializeLocalization                                | [#208](https://github.com/tier4/driving_log_replayer_v2/issues/208) | [TaikiYamada4](https://github.com/TaikiYamada4) |
+| `localization`     | condition        | add check diagnostics flag condition                                      | [#205](https://github.com/tier4/driving_log_replayer_v2/issues/205) | [TaikiYamada4](https://github.com/TaikiYamada4) |
+
 ## Version 3.13.0
 
 Major changes

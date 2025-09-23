@@ -21,6 +21,7 @@ from diagnostic_msgs.msg import DiagnosticArray
 from diagnostic_msgs.msg import DiagnosticStatus
 from example_interfaces.msg import Byte
 from example_interfaces.msg import Float64
+from std_msgs.msg import String
 
 from driving_log_replayer_v2.evaluator import DLREvaluatorV2
 from driving_log_replayer_v2.evaluator import evaluator_main
@@ -41,7 +42,12 @@ def extract_lidar_name(diag_name: str) -> str:
 
 class PerformanceDiagEvaluator(DLREvaluatorV2):
     def __init__(self, name: str) -> None:
-        super().__init__(name, PerformanceDiagScenario, PerformanceDiagResult)
+        super().__init__(
+            name,
+            PerformanceDiagScenario,
+            PerformanceDiagResult,
+            "/driving_log_replayer/performance_diag/results",
+        )
         self._scenario: PerformanceDiagScenario
         self._result: PerformanceDiagResult
 
@@ -115,7 +121,8 @@ class PerformanceDiagEvaluator(DLREvaluatorV2):
                 self.__pub_blockage_ground_ratios[lidar_name].publish(msg_blockage_ground_ratio)
             if msg_blockage_level is not None:
                 self.__pub_blockage_levels[lidar_name].publish(msg_blockage_level)
-        self._result_writer.write_result(self._result)
+        res_str = self._result_writer.write_result(self._result)
+        self._pub_result.publish(String(data=res_str))
 
 
 @evaluator_main
