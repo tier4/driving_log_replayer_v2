@@ -26,8 +26,8 @@ from launch.launch_description_sources import AnyLaunchDescriptionSource
 from launch_ros.actions import Node
 
 from driving_log_replayer_v2.launch.argument import add_use_case_arguments
-from driving_log_replayer_v2.launch.rosbag import launch_bag_player
 from driving_log_replayer_v2.launch.camera_2d_detector import launch_camera_2d_detector
+from driving_log_replayer_v2.launch.rosbag import launch_bag_player
 from driving_log_replayer_v2.launch.rosbag import launch_bag_recorder
 from driving_log_replayer_v2.launch.util import output_dummy_result_jsonl
 from driving_log_replayer_v2.shutdown_once import ShutdownOnce

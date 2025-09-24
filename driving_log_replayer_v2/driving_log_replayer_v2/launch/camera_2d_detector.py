@@ -13,23 +13,30 @@
 # limitations under the License.
 
 from pathlib import Path
+
 from ament_index_python.packages import get_package_share_directory
-from launch.actions import LogInfo, GroupAction
-from launch_ros.actions import PushRosNamespace, ComposableNodeContainer
-from launch_ros.descriptions import ComposableNode
 from launch import LaunchContext
+from launch.actions import GroupAction
+from launch.actions import LogInfo
+from launch_ros.actions import ComposableNodeContainer
+from launch_ros.actions import PushRosNamespace
+from launch_ros.descriptions import ComposableNode
 
 
-
-def create_2d_detector_container(context, camera_id: str, image_type: str = "image_raw"):
+def create_2d_detector_container(
+    context: LaunchContext, camera_id: str, image_type: str = "image_raw"
+) -> GroupAction:
     """
     Create a container with composable nodes for 2D object detection from camera images.
+
     Args:
         context: LaunchContext containing launch configurations.
         camera_id: Camera identifier (e.g., '0', '1').
         image_type: Type of image topic (e.g., 'image_raw', 'image_rect_color').
+
     Returns:
         GroupAction containing the detector container.
+
     """
     conf = context.launch_configurations
     use_bytetrack = conf["use_bytetrack"]
@@ -81,7 +88,9 @@ def create_2d_detector_container(context, camera_id: str, image_type: str = "ima
     # Optional ByteTrack node
     if use_bytetrack == "true":
         bytetrack_package_dir = Path(get_package_share_directory("autoware_bytetrack"))
-        bytetrack_param_path = Path(bytetrack_package_dir, "config", "bytetrack.param.yaml").as_posix()
+        bytetrack_param_path = Path(
+            bytetrack_package_dir, "config", "bytetrack.param.yaml"
+        ).as_posix()
         bytetrack_node = ComposableNode(
             package="autoware_bytetrack",
             plugin="autoware::bytetrack::ByteTrackNode",
@@ -110,10 +119,13 @@ def create_2d_detector_container(context, camera_id: str, image_type: str = "ima
 def launch_camera_2d_detector(context: LaunchContext) -> list:  # for launching tensorrt_yolox
     """
     Launch 2D detector containers for all specified cameras if enabled in configuration.
+
     Args:
         context: LaunchContext containing launch configurations.
+
     Returns:
         List of GroupAction objects for each camera detector container.
+
     """
     conf = context.launch_configurations
     if conf.get("with_2d_detector") != "true":
