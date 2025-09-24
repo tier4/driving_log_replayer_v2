@@ -47,7 +47,8 @@ def create_2d_detector_container(
 
     # YOLOX node
     yolox_package_dir = Path(get_package_share_directory("autoware_tensorrt_yolox"))
-    yolox_param_path = Path(yolox_package_dir, "config", "yolox_s_plus_opt.param.yaml").as_posix()
+    yolox_param_file = conf.get("yolox_param_file", "yolox_s_plus_opt.param.yaml")
+    yolox_param_path = Path(yolox_package_dir, "config", yolox_param_file).as_posix()
     yolox_params = {
         "model_path": conf["yolox_model_path"],
         "label_path": conf["yolox_label_path"],
