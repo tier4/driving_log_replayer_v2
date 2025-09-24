@@ -130,7 +130,10 @@ def launch_camera_2d_detector(context: LaunchContext) -> list:  # for launching 
     conf = context.launch_configurations
     if conf.get("with_2d_detector") != "true":
         return [LogInfo(msg="2D detector is not launched.")]
-    camera_ids = conf["camera_ids"].split(",")
+    camera_ids_str = conf.get("camera_ids", "")
+    if not camera_ids_str.strip():
+        return [LogInfo(msg="No camera IDs specified for 2D detector.")]
+    camera_ids = camera_ids_str.split(",")
     image_type = conf.get("image_type", "image_raw")
     return [
         create_2d_detector_container(context, camera_id=camera_id, image_type=image_type)
