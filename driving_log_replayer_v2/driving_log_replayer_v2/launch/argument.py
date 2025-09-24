@@ -213,8 +213,10 @@ def update_conf_with_dataset_info(
     conf["direct_initial_pose"] = json.dumps(dataset_info.get("DirectInitialPose", {}))
     conf["goal_pose"] = json.dumps(dataset_info.get("GoalPose", {}))
     conf["t4_dataset_path"] = t4_dataset_path.as_posix()
-    conf["vehicle_model"] = yaml_obj["VehicleModel"]
-    conf["sensor_model"] = yaml_obj["SensorModel"]
+    if "vehicle_model" not in conf:
+        conf["vehicle_model"] = yaml_obj["VehicleModel"]
+    if "sensor_model" not in conf:
+        conf["sensor_model"] = yaml_obj["SensorModel"]
     conf["map_path"] = t4_dataset_path.joinpath("map").as_posix()
     conf["input_bag"] = t4_dataset_path.joinpath("input_bag").as_posix()
     conf["result_json_path"] = output_dir.joinpath("result.json").as_posix()
