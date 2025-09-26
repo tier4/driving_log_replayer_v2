@@ -16,6 +16,8 @@ from launch.actions import DeclareLaunchArgument
 
 RECORD_TOPIC = """^/tf$\
 |^/diagnostics$\
+|^/map/vector_map_marker$\
+|^/map/pointcloud_map$\
 |^/localization/pose_estimator/exe_time_ms$\
 |^/localization/pose_estimator/iteration_num$\
 |^/localization/pose_estimator/transform_probability$\
@@ -29,6 +31,7 @@ RECORD_TOPIC = """^/tf$\
 |^/localization/reference_kinematic_state$\
 |^/localization/util/downsample/pointcloud$\
 |^/localization/pose_estimator/points_aligned$\
+|^/system/processing_time_checker/metrics$\
 |^/driving_log_replayer/.*\
 """
 
