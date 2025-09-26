@@ -52,8 +52,6 @@ def autoware_disable(conf: dict) -> dict[str, str]:
     if scenario.Evaluation.Conditions.stop_reason_criterion is not None:
         return {
             "localization": "false",
-            "planning": "true",
-            "control": "true",
         }
     return default
 
