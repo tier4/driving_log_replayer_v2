@@ -25,6 +25,7 @@ from launch.actions import OpaqueFunction
 from launch.launch_description_sources import AnyLaunchDescriptionSource
 from launch_ros.actions import Node
 
+from driving_log_replayer_v2.launch.argument import add_optional_nodes_arguments
 from driving_log_replayer_v2.launch.argument import add_use_case_arguments
 from driving_log_replayer_v2.launch.camera_2d_detector import launch_camera_2d_detector
 from driving_log_replayer_v2.launch.rosbag import launch_bag_player
@@ -66,6 +67,13 @@ def launch_autoware(context: LaunchContext) -> list:
             forwarding=True,
         ),
     ]
+
+
+def launch_optional_node(context: LaunchContext) -> list:
+    conf = context.launch_configurations
+    if conf.get("with_2d_detector") == "true":  # FIXME: should change explicit declaration
+        return [LogInfo(msg="launching 2D detector......"), *launch_camera_2d_detector(context)]
+    return [LogInfo(msg="no optional nodes to launch.")]
 
 
 def launch_map_height_fitter(context: LaunchContext) -> list:
@@ -194,11 +202,12 @@ def launch_goal_pose_node(context: LaunchContext) -> list:
 def launch_use_case() -> list:
     return [
         OpaqueFunction(function=add_use_case_arguments),  # after ensure_arg_compatibility
+        OpaqueFunction(function=add_optional_nodes_arguments),
         OpaqueFunction(function=launch_autoware),
+        OpaqueFunction(function=launch_optional_node),
         OpaqueFunction(function=launch_map_height_fitter),
         OpaqueFunction(function=launch_evaluator_node),
         OpaqueFunction(function=launch_bag_player),
-        OpaqueFunction(function=launch_camera_2d_detector),  # for launching tensorrt_yolox
         OpaqueFunction(function=launch_bag_recorder),
         OpaqueFunction(function=launch_topic_state_monitor),
         OpaqueFunction(function=launch_initial_pose_node),

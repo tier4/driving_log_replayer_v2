@@ -32,9 +32,11 @@ AUTOWARE_ARGS = {
     "scenario_simulation": "true",
 }
 
-NODE_PARAMS = {
+NODE_PARAMS: dict[str, LaunchConfiguration] = {
     "vehicle_model": LaunchConfiguration("vehicle_model"),
     "map_path": LaunchConfiguration("map_path"),
 }
 
 USE_CASE_ARGS: list[DeclareLaunchArgument] = []
+
+OPTIONAL_NODE_ARGS: list[DeclareLaunchArgument] = []

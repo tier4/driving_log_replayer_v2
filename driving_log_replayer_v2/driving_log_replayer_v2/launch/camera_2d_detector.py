@@ -24,13 +24,23 @@ from launch_ros.descriptions import ComposableNode
 
 
 def create_2d_detector_container(
-    context: LaunchContext, camera_id: str, image_type: str = "image_raw"
+    yolox_param_file: str,
+    yolox_model_path: str,
+    yolox_label_path: str,
+    yolox_color_map_path: str,
+    use_bytetrack: str,
+    camera_id: str,
+    image_type: str,
 ) -> GroupAction:
     """
     Create a container with composable nodes for 2D object detection from camera images.
 
     Args:
-        context: LaunchContext containing launch configurations.
+        yolox_param_file: Path to the YOLOX parameter file.
+        yolox_model_path: Path to the YOLOX model file.
+        yolox_label_path: Path to the YOLOX label file.
+        yolox_color_map_path: Path to the YOLOX color map file.
+        use_bytetrack: Whether to include the ByteTrack node ('true' or 'false').
         camera_id: Camera identifier (e.g., '0', '1').
         image_type: Type of image topic (e.g., 'image_raw', 'image_rect_color').
 
@@ -38,8 +48,6 @@ def create_2d_detector_container(
         GroupAction containing the detector container.
 
     """
-    conf = context.launch_configurations
-    use_bytetrack = conf["use_bytetrack"]
     base_ns = "/perception/object_recognition/detection"
     yolox_ns = base_ns if use_bytetrack != "true" else f"{base_ns}/yolox"
     input_image_topic = f"/sensing/camera/camera{camera_id}/{image_type}"
@@ -47,12 +55,11 @@ def create_2d_detector_container(
 
     # YOLOX node
     yolox_package_dir = Path(get_package_share_directory("autoware_tensorrt_yolox"))
-    yolox_param_file = conf.get("yolox_param_file", "yolox_s_plus_opt.param.yaml")
     yolox_param_path = Path(yolox_package_dir, "config", yolox_param_file).as_posix()
     yolox_params = {
-        "model_path": conf["yolox_model_path"],
-        "label_path": conf["yolox_label_path"],
-        "color_map_path": conf["yolox_color_map_path"],
+        "model_path": yolox_model_path,
+        "label_path": yolox_label_path,
+        "color_map_path": yolox_color_map_path,
     }
     yolox_node = ComposableNode(
         package="autoware_tensorrt_yolox",
@@ -117,7 +124,7 @@ def create_2d_detector_container(
     return GroupAction([PushRosNamespace(base_ns), container])
 
 
-def launch_camera_2d_detector(context: LaunchContext) -> list:  # for launching tensorrt_yolox
+def launch_camera_2d_detector(context: LaunchContext) -> list:
     """
     Launch 2D detector containers for all specified cameras if enabled in configuration.
 
@@ -129,14 +136,29 @@ def launch_camera_2d_detector(context: LaunchContext) -> list:  # for launching 
 
     """
     conf = context.launch_configurations
-    if conf.get("with_2d_detector") != "true":
-        return [LogInfo(msg="2D detector is not launched.")]
+    yolox_param_file = conf.get("yolox_param_file", "")
+    yolox_model_path = conf.get("yolox_model_path", "")
+    yolox_label_path = conf.get("yolox_label_path", "")
+    yolox_color_map_path = conf.get("yolox_color_map_path", "")
+    use_bytetrack = conf.get("use_bytetrack", "false")
     camera_ids_str = conf.get("camera_ids", "")
     if not camera_ids_str.strip():
-        return [LogInfo(msg="No camera IDs specified for 2D detector.")]
+        return [
+            LogInfo(
+                msg="2D detector cannot be launched because no camera IDs specified for 2D detector."
+            )
+        ]
     camera_ids = camera_ids_str.split(",")
     image_type = conf.get("image_type", "image_raw")
     return [
-        create_2d_detector_container(context, camera_id=camera_id, image_type=image_type)
+        create_2d_detector_container(
+            yolox_param_file,
+            yolox_model_path,
+            yolox_label_path,
+            yolox_color_map_path,
+            use_bytetrack,
+            camera_id,
+            image_type,
+        )
         for camera_id in camera_ids
     ]

@@ -13,6 +13,7 @@
 # limitations under the License.
 
 from launch.actions import DeclareLaunchArgument
+from launch.substitutions import LaunchConfiguration
 
 RECORD_TOPIC = """^/tf$\
 |^/diagnostics$\
@@ -43,7 +44,7 @@ AUTOWARE_ARGS = {
     "twist_source": "gyro_odom",
 }
 
-NODE_PARAMS = {}
+NODE_PARAMS: dict[str, LaunchConfiguration] = {}
 
 USE_CASE_ARGS: list[DeclareLaunchArgument] = [
     DeclareLaunchArgument(
@@ -52,3 +53,5 @@ USE_CASE_ARGS: list[DeclareLaunchArgument] = [
         description="Enable analysis.",
     ),
 ]
+
+OPTIONAL_NODE_ARGS: list[DeclareLaunchArgument] = []
