@@ -1,0 +1,7 @@
+topics:
+  - /api/operation_mode/state
+  - /control/command/control_cmd
+  - /control/trajectory_follower/lateral/predicted_trajectory
+  - /localization/acceleration
+  - /localization/kinematic_state
+  - /planning/trajectory

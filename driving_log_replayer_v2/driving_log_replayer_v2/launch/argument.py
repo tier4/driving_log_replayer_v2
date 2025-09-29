@@ -233,6 +233,11 @@ def update_conf_with_dataset_info(
     if conf["use_case"] in ["all_components", "perception"]:
         conf["record_only"] = "true"
 
+    if not ("topics_profile" in conf and conf["topics_profile"] != "") and (
+        "topics_profile" in yaml_obj and yaml_obj["topics_profile"] != ""
+    ):
+        conf["topics_profile"] = yaml_obj["topics_profile"]
+
 
 def prepare_paths(conf: dict) -> tuple[Path, Path, Path]:
     scenario_path = Path(conf["scenario_path"])

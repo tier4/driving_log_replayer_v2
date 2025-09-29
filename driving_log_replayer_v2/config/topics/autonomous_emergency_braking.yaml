@@ -1,0 +1,7 @@
+topics:
+  - /autoware/state
+  - /control/trajectory_follower/lateral/predicted_trajectory
+  - /perception/object_recognition/objects
+  - /perception/obstacle_segmentation/pointcloud
+  - /sensing/imu/imu_data
+  - /vehicle/status/velocity_status

@@ -1,0 +1,15 @@
+topics:
+  - /localization/acceleration
+  - /localization/kinematic_state
+  - /tf
+  - /perception/obstacle_segmentation/pointcloud
+  - /perception/occupancy_grid_map/map
+  - /perception/object_recognition/objects
+  - /perception/traffic_light_recognition/traffic_signals
+  # - /planning/scenario_planning/lane_driving/motion_planning/path_optimizer/trajectory # not saved in the rosbag
+  - /planning/scenario_planning/lane_driving/motion_planning/path_smoother/path
+  - /control/command/control_cmd
+  - /api/operation_mode/state
+  - /control/trajectory_follower/lateral/predicted_trajectory
+  - /vehicle/status/steering_status
+  - /planning/mission_planning/route

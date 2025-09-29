@@ -154,7 +154,6 @@ def launch_bag_player(
         QOS_PROFILE_PATH_STR,
     ]
     # topics
-    print("---conf:", conf)  # TODO here
     topics_list = ["--topics"]
     topics_list.extend(user_defined_topics(conf))
     if len(topics_list) != 1:
@@ -181,7 +180,10 @@ def launch_bag_player(
     delay_player_for_autoware = ExecuteProcess(
         cmd=["sleep", conf["play_delay"]], on_exit=[pre_task_player]
     )
-    return [delay_player_for_autoware, LogInfo(msg=f"remap_command is {remap_list}")]
+    return [
+        delay_player_for_autoware,
+        LogInfo(msg=f"remap_command is {remap_list}, topics_command is {topics_list}"),
+    ]
 
 
 def launch_bag_recorder(context: LaunchContext) -> list:
