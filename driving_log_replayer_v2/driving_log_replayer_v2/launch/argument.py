@@ -98,6 +98,7 @@ def get_launch_arguments() -> list:
     storage
     remap_arg
     remap_profile
+    topics_profile
     """
     launch_arguments = []
 
@@ -166,7 +167,12 @@ def get_launch_arguments() -> list:
     add_launch_arg(
         "remap_profile",
         default_value="",
-        description="Specify the name of the profile. config/remap/{profile_name}.yaml. Ex: remap_profile:=x2",
+        description="Specify the name of the remap profile to remap topics. config/remap/{profile_name}.yaml. Ex: remap_profile:=x2",
+    )
+    add_launch_arg(
+        "topics_profile",
+        default_value="",
+        description="Specify the name of the topics profile to publish topics. config/topics/{profile_name}.yaml. Ex: topics_profile:=planning_control",
     )
     return launch_arguments
 

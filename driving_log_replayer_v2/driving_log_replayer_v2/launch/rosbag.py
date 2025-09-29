@@ -29,6 +29,23 @@ PACKAGE_SHARE = get_package_share_directory("driving_log_replayer_v2")
 QOS_PROFILE_PATH_STR = Path(PACKAGE_SHARE, "config", "qos.yaml").as_posix()
 
 
+def extract_topics_topics(profile_name: str) -> list[str]:
+    profile_file = Path(
+        get_package_share_directory("driving_log_replayer_v2"),
+        "config",
+        "topics",
+        f"{profile_name}.yaml",
+    )
+    # Make it work with symlink install as well.
+    if profile_file.is_symlink():
+        profile_file = profile_file.resolve()
+    if not profile_file.exists():
+        return []
+    with profile_file.open("r") as f:
+        topics_dict = yaml.safe_load(f)
+        return topics_dict.get("topics")
+
+
 def extract_remap_topics(profile_name: str) -> list[str]:
     profile_file = Path(
         get_package_share_directory("driving_log_replayer_v2"),
@@ -65,6 +82,13 @@ def system_defined_remap(conf: dict) -> list[str]:
     if conf.get("goal_pose", "{}") != "{}":
         add_remap("/planning/mission_planning/route", remap_list)
     return remap_list
+
+
+def user_defined_topics(conf: dict) -> list[str]:
+    topics_list = []
+    if conf["topics_profile"] != "":
+        topics_list.extend(extract_topics_topics(conf["topics_profile"]))
+    return topics_list
 
 
 def user_defined_remap(conf: dict) -> list[str]:
@@ -129,6 +153,13 @@ def launch_bag_player(
         "--qos-profile-overrides-path",
         QOS_PROFILE_PATH_STR,
     ]
+    # topics
+    print("---conf:", conf)  # TODO here
+    topics_list = ["--topics"]
+    topics_list.extend(user_defined_topics(conf))
+    if len(topics_list) != 1:
+        play_cmd.extend(topics_list)
+    # remap
     remap_list = ["--remap"]
     remap_list.extend(system_defined_remap(conf))
     remap_list.extend(user_defined_remap(conf))
