@@ -2,6 +2,37 @@
 Changelog for package driving_log_replayer
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
+Forthcoming
+-----------
+* feat(perception): add tensorrt_yolox detector execution (`#221 <https://github.com/tier4/driving_log_replayer_v2/issues/221>`_)
+  * feat(remap): add all perception remap
+  * add yolox execute
+  add byte_tracker
+  fix: add container
+  fix: add decompressor
+  * refactor
+  * pre-commit
+  * Update driving_log_replayer_v2/driving_log_replayer_v2/launch/camera_2d_detector.py
+  Co-authored-by: Copilot <175728472+Copilot@users.noreply.github.com>
+  * Update driving_log_replayer_v2/driving_log_replayer_v2/launch/camera_2d_detector.py
+  Co-authored-by: Copilot <175728472+Copilot@users.noreply.github.com>
+  * refactor
+  ---------
+  Co-authored-by: Copilot <175728472+Copilot@users.noreply.github.com>
+  Co-authored-by: MasatoSaeki <masato.saeki@tier4.jp>
+* chore(perception): remove unnecessary args (`#224 <https://github.com/tier4/driving_log_replayer_v2/issues/224>`_)
+* chore(localization): update topic saving list for visualization of localization tests (`#223 <https://github.com/tier4/driving_log_replayer_v2/issues/223>`_)
+  Co-authored-by: t4-adc <grp-rd-1-adc-admin@tier4.jp>
+* feat(launch): support override of vehicle_model and sensor_model (`#222 <https://github.com/tier4/driving_log_replayer_v2/issues/222>`_)
+  Co-authored-by: t4-adc <grp-rd-1-adc-admin@tier4.jp>
+* fix(planning_control): repair the planning factor condition logic (`#220 <https://github.com/tier4/driving_log_replayer_v2/issues/220>`_)
+  * refactor code and json format
+  * update sample
+  * pre-commit
+  ---------
+  Co-authored-by: t4-adc <grp-rd-1-adc-admin@tier4.jp>
+* Contributors: Kem (TiankuiXian), Masato Saeki, badai nguyen
+
 3.13.1 (2025-09-19)
 -------------------
 * chore: refactor time unit comment (`#218 <https://github.com/tier4/driving_log_replayer_v2/issues/218>`_)
