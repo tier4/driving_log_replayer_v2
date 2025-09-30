@@ -278,3 +278,12 @@ def add_use_case_arguments(context: LaunchContext) -> list:
     if len(use_case_launch_arg) == 0:
         return [LogInfo(msg="no use case launch argument")]
     return use_case_launch_arg
+
+
+def add_optional_nodes_arguments(context: LaunchContext) -> list:
+    conf = context.launch_configurations
+    launch_config = import_module(f"driving_log_replayer_v2.launch.{conf['use_case']}")
+    optional_launch_arg: list = launch_config.OPTIONAL_NODE_ARGS
+    if len(optional_launch_arg) == 0:
+        return [LogInfo(msg="no optional node launch argument")]
+    return optional_launch_arg

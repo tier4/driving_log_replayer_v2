@@ -15,6 +15,7 @@
 from pathlib import Path
 
 from launch.actions import DeclareLaunchArgument
+from launch.substitutions import LaunchConfiguration
 from pydantic import ValidationError
 import yaml
 
@@ -60,7 +61,7 @@ AUTOWARE_DISABLE = autoware_disable
 
 AUTOWARE_ARGS = {}
 
-NODE_PARAMS = {}
+NODE_PARAMS: dict[str, LaunchConfiguration] = {}
 
 EVALUATION_DETECTION_TOPIC_REGEX = """\
 ^/perception/object_recognition/detection/objects$\
@@ -114,5 +115,43 @@ USE_CASE_ARGS: list[DeclareLaunchArgument] = [
         "publish_topic_from_rosbag",
         default_value="",
         description="The topic to publish in rosbag before play rosbag. Using comma separated string.",
+    ),
+]
+
+OPTIONAL_NODE_ARGS: list[DeclareLaunchArgument] = [
+    DeclareLaunchArgument(
+        "with_2d_detector",
+        default_value="false",
+        description="Enable 2D detector.",
+    ),
+    DeclareLaunchArgument(
+        "camera_ids",
+        default_value="",
+        description="Comma-separated list of camera IDs to use.",
+    ),
+    DeclareLaunchArgument(
+        "image_type",
+        default_value="image_raw",
+        description="Type of image topic (e.g., 'image_raw', 'image_rect_color').",
+    ),
+    DeclareLaunchArgument(
+        "use_bytetrack",
+        default_value="false",
+        description="Use ByteTrack for tracking.",
+    ),
+    DeclareLaunchArgument(
+        "yolox_model_path",
+        default_value="",
+        description="Path to the YOLOX model file.",
+    ),
+    DeclareLaunchArgument(
+        "yolox_label_path",
+        default_value="",
+        description="Path to the YOLOX label file.",
+    ),
+    DeclareLaunchArgument(
+        "yolox_color_map_path",
+        default_value="",
+        description="Path to the YOLOX color map file.",
     ),
 ]

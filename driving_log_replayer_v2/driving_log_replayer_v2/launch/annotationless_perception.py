@@ -13,6 +13,7 @@
 # limitations under the License.
 
 from launch.actions import DeclareLaunchArgument
+from launch.substitutions import LaunchConfiguration
 
 RECORD_TOPIC = """^/tf$\
 |^/diagnostics$\
@@ -36,6 +37,8 @@ AUTOWARE_ARGS = {
     "use_perception_online_evaluator": "true",
 }
 
-NODE_PARAMS = {}
+NODE_PARAMS: dict[str, LaunchConfiguration] = {}
 
 USE_CASE_ARGS: list[DeclareLaunchArgument] = []
+
+OPTIONAL_NODE_ARGS: list[DeclareLaunchArgument] = []

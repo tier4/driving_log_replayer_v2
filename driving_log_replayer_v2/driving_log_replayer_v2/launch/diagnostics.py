@@ -13,6 +13,7 @@
 # limitations under the License.
 
 from launch.actions import DeclareLaunchArgument
+from launch.substitutions import LaunchConfiguration
 
 RECORD_TOPIC = """^/tf$\
 |^/diagnostics$\
@@ -22,6 +23,8 @@ AUTOWARE_DISABLE = {}
 
 AUTOWARE_ARGS = {}
 
-NODE_PARAMS = {}
+NODE_PARAMS: dict[str, LaunchConfiguration] = {}
 
 USE_CASE_ARGS: list[DeclareLaunchArgument] = []
+
+OPTIONAL_NODE_ARGS: list[DeclareLaunchArgument] = []
