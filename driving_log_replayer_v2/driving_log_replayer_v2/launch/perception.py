@@ -38,6 +38,7 @@ RECORD_TOPIC = """^/tf$\
 |^/sensing/.*tracked_objects$\
 |^/map/vector_map_marker$\
 |^/localization/kinematic_state$\
+|^/driving_log_replayer/.*\
 """
 
 

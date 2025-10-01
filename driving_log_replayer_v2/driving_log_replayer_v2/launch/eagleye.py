@@ -21,6 +21,7 @@ RECORD_TOPIC = """^/tf$\
 |^/localization/pose_estimator/pose$\
 |^/localization/util/downsample/pointcloud$\
 |^/localization/pose_estimator/points_aligned$\
+|^/driving_log_replayer/.*\
 """
 
 AUTOWARE_DISABLE = {"perception": "false", "planning": "false", "control": "false"}
