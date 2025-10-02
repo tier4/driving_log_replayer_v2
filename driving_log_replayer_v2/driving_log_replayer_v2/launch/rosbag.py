@@ -182,7 +182,7 @@ def launch_bag_player(
     )
     return [
         delay_player_for_autoware,
-        LogInfo(msg=f"remap_command is {remap_list}, topics_command is {topics_list}"),
+        LogInfo(msg=f"remap_command is {remap_list}, topics_command is {publish_list}"),
     ]
 
 
