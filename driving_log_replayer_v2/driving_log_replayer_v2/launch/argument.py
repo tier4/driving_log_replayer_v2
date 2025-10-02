@@ -98,7 +98,7 @@ def get_launch_arguments() -> list:
     storage
     remap_arg
     remap_profile
-    topics_profile
+    publish_profile
     """
     launch_arguments = []
 
@@ -170,9 +170,9 @@ def get_launch_arguments() -> list:
         description="Specify the name of the remap profile to remap topics. config/remap/{profile_name}.yaml. Ex: remap_profile:=x2",
     )
     add_launch_arg(
-        "topics_profile",
+        "publish_profile",
         default_value="",
-        description="Specify the name of the topics profile to publish topics. config/topics/{profile_name}.yaml. Ex: topics_profile:=planning_control",
+        description="Specify the name of the topics profile to publish topics. config/publish/{profile_name}.yaml. Ex: publish_profile:=planning_control",
     )
     return launch_arguments
 
@@ -233,8 +233,8 @@ def update_conf_with_dataset_info(
     if conf["use_case"] in ["all_components", "perception"]:
         conf["record_only"] = "true"
 
-    if not conf.get("topics_profile") and yaml_obj.get("topics_profile"):
-        conf["topics_profile"] = yaml_obj["topics_profile"]
+    if not conf.get("publish_profile") and yaml_obj.get("publish_profile"):
+        conf["publish_profile"] = yaml_obj["publish_profile"]
 
 
 def prepare_paths(conf: dict) -> tuple[Path, Path, Path]:

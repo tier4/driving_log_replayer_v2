@@ -69,9 +69,9 @@ autoware_launch/launch/logging_simulator.launch.xml の引数の sensor_model �
 
 autoware_launch/launch/logging_simulator.launch.xml の引数の vehicle_model を指定する
 
-### topics_profile
+### publish_profile
 
-(オプション) Publishするトピックを制御するためのトピックプロファイル名を指定する。プロファイルファイルは `config/topics/{profile_name}.yaml` に配置する必要がある、例: `planning_control`。指定しない場合は、Rosbag中すべてのトピックがPublishされる。
+(オプション) Publishするトピックを制御するためのトピックプロファイル名を指定する。プロファイルファイルは `config/publish/{profile_name}.yaml` に配置する必要がある、例: `planning_control`。指定しない場合は、Rosbag中すべてのトピックがPublishされる。
 
 ### Evaluation
 

@@ -33,7 +33,7 @@ class Scenario(BaseModel):
     VehicleId: str | None = None
     Evaluation: dict
     include_use_case: dict | None = None
-    topics_profile: str | None = None
+    publish_profile: str | None = None
 
 
 def load_scenario(scenario_path: Path, scenario_class: Callable) -> Any:

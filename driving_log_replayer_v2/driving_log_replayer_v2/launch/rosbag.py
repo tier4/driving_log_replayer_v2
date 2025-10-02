@@ -29,11 +29,11 @@ PACKAGE_SHARE = get_package_share_directory("driving_log_replayer_v2")
 QOS_PROFILE_PATH_STR = Path(PACKAGE_SHARE, "config", "qos.yaml").as_posix()
 
 
-def extract_topics_topics(profile_name: str) -> list[str]:
+def extract_publish_topics(profile_name: str) -> list[str]:
     profile_file = Path(
         get_package_share_directory("driving_log_replayer_v2"),
         "config",
-        "topics",
+        "publish",
         f"{profile_name}.yaml",
     )
     # Make it work with symlink install as well.
@@ -84,11 +84,11 @@ def system_defined_remap(conf: dict) -> list[str]:
     return remap_list
 
 
-def user_defined_topics(conf: dict) -> list[str]:
-    topics_list = []
-    if conf["topics_profile"] != "":
-        topics_list.extend(extract_topics_topics(conf["topics_profile"]))
-    return topics_list
+def user_defined_publish(conf: dict) -> list[str]:
+    publish_list = []
+    if conf["publish_profile"] != "":
+        publish_list.extend(extract_publish_topics(conf["publish_profile"]))
+    return publish_list
 
 
 def user_defined_remap(conf: dict) -> list[str]:
@@ -154,10 +154,10 @@ def launch_bag_player(
         QOS_PROFILE_PATH_STR,
     ]
     # topics
-    topics_list = ["--topics"]
-    topics_list.extend(user_defined_topics(conf))
-    if len(topics_list) != 1:
-        play_cmd.extend(topics_list)
+    publish_list = ["--topics"]
+    publish_list.extend(user_defined_publish(conf))
+    if len(publish_list) != 1:
+        play_cmd.extend(publish_list)
     # remap
     remap_list = ["--remap"]
     remap_list.extend(system_defined_remap(conf))

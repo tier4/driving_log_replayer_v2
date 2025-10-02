@@ -3,7 +3,7 @@ ScenarioName: sample_planning_control
 ScenarioDescription: sample_planning_control
 SensorModel: aip_xx1
 VehicleModel: lexus
-topics_profile: planning_control
+publish_profile: planning_control
 Evaluation:
   UseCaseName: planning_control
   UseCaseFormatVersion: 2.2.0
