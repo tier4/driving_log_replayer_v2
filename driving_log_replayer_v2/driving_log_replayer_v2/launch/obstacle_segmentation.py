@@ -21,6 +21,8 @@ RECORD_TOPIC = """^/tf$\
 |^/planning/scenario_planning/trajectory$\
 |^/planning/scenario_planning/status/stop_reasons$\
 |^/driving_log_replayer_v2/.*\
+|^/map/vector_map_marker$\
+|^/localization/kinematic_state$\
 """
 
 AUTOWARE_DISABLE = {
