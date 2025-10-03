@@ -20,13 +20,14 @@ from launch.actions import DeclareLaunchArgument
 from launch.actions import GroupAction
 from launch.actions import IncludeLaunchDescription
 from launch.actions import LogInfo
+from launch.actions import OpaqueFunction
 from launch.launch_description_sources import AnyLaunchDescriptionSource
 from launch.substitutions import LaunchConfiguration
 
-from driving_log_replayer_v2.launch.util import output_dummy_result_bag
+from driving_log_replayer_v2.launch.rosbag import launch_bag_recorder
 from driving_log_replayer_v2.launch.util import output_dummy_result_jsonl
 
-RECORD_TOPIC = ""
+RECORD_TOPIC = "/.*"
 
 AUTOWARE_DISABLE = {}
 
@@ -49,7 +50,6 @@ def launch_ndt_convergence(context: LaunchContext) -> list:
 
     # Output dummies to comply with Evaluator specifications
     output_dummy_result_jsonl(conf["result_json_path"], summary="NDT Convergence always success")
-    output_dummy_result_bag(conf["result_bag_path"])
 
     launch_args = {
         "map_path": conf["map_path"] + "/pointcloud_map.pcd",
@@ -57,6 +57,9 @@ def launch_ndt_convergence(context: LaunchContext) -> list:
         "save_dir": conf["result_archive_path"],
     }
     return [
+        OpaqueFunction(
+            function=launch_bag_recorder
+        ),  # record nothing, just for Evaluator specifications
         GroupAction(
             [
                 IncludeLaunchDescription(
@@ -66,7 +69,7 @@ def launch_ndt_convergence(context: LaunchContext) -> list:
                     launch_arguments=launch_args.items(),
                 ),
             ]
-        )
+        ),
     ]
 
 

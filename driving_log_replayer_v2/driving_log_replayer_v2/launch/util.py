@@ -25,11 +25,3 @@ def output_dummy_result_jsonl(result_json_path_str: str, summary: str = "RecordO
     }
     with Path(jsonl_path_str).open("w") as f:
         json.dump(dummy_result, f)
-
-
-def output_dummy_result_bag(result_bag_path_str: str) -> None:
-    result_bag_path = Path(result_bag_path_str)
-    result_bag_path.mkdir(parents=True, exist_ok=True)
-    # create dummy bag file
-    dummy_bag_path = result_bag_path / "dummy_0.mcap"
-    dummy_bag_path.touch()
