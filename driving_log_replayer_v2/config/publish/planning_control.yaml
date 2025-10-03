@@ -1,4 +1,4 @@
-topics:
+publish:
   # vehicle
   - /vehicle/status/steering_status
   - /vehicle/status/velocity_status

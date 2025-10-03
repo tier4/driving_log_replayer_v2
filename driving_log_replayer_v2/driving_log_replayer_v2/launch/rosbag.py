@@ -29,38 +29,30 @@ PACKAGE_SHARE = get_package_share_directory("driving_log_replayer_v2")
 QOS_PROFILE_PATH_STR = Path(PACKAGE_SHARE, "config", "qos.yaml").as_posix()
 
 
-def extract_publish_topics(profile_name: str) -> list[str]:
+def extract_topics_from_profile(profile_name: str, profile_type: str) -> list[str]:
+    if not profile_name:
+        return []
+
+    assert profile_type in ["publish", "remap"]
     profile_file = Path(
         get_package_share_directory("driving_log_replayer_v2"),
         "config",
-        "publish",
+        profile_type,
         f"{profile_name}.yaml",
     )
     # Make it work with symlink install as well.
     if profile_file.is_symlink():
         profile_file = profile_file.resolve()
     if not profile_file.exists():
-        return []
+        error_msg = f"{profile_file} does not exist"
+        raise FileNotFoundError(error_msg)
     with profile_file.open("r") as f:
         topics_dict = yaml.safe_load(f)
-        return topics_dict.get("topics")
-
-
-def extract_remap_topics(profile_name: str) -> list[str]:
-    profile_file = Path(
-        get_package_share_directory("driving_log_replayer_v2"),
-        "config",
-        "remap",
-        f"{profile_name}.yaml",
-    )
-    # Make it work with symlink install as well.
-    if profile_file.is_symlink():
-        profile_file = profile_file.resolve()
-    if not profile_file.exists():
-        return []
-    with profile_file.open("r") as f:
-        remap_dict = yaml.safe_load(f)
-        return remap_dict.get("remap")
+        topics = topics_dict.get(profile_type, [])
+        if not topics:
+            error_msg = f"no topics found for {profile_type} in {profile_file}"
+            raise KeyError(error_msg)
+        return topics
 
 
 def remap_str(topic: str) -> str:
@@ -87,7 +79,7 @@ def system_defined_remap(conf: dict) -> list[str]:
 def user_defined_publish(conf: dict) -> list[str]:
     publish_list = []
     if conf["publish_profile"] != "":
-        publish_list.extend(extract_publish_topics(conf["publish_profile"]))
+        publish_list.extend(extract_topics_from_profile(conf["publish_profile"], "publish"))
     return publish_list
 
 
@@ -97,7 +89,7 @@ def user_defined_remap(conf: dict) -> list[str]:
     user_remap_topics: list[str] = (
         conf["remap_arg"].split(",")
         if conf["remap_arg"] != ""
-        else extract_remap_topics(conf["remap_profile"])
+        else extract_topics_from_profile(conf["remap_profile"], "remap")
     )
     for topic in user_remap_topics:
         if topic.startswith("/"):

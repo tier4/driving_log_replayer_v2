@@ -1,4 +1,4 @@
-topics:
+publish:
   - /localization/acceleration
   - /localization/kinematic_state
   - /tf

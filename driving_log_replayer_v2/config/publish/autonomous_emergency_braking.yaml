@@ -1,4 +1,4 @@
-topics:
+publish:
   - /autoware/state
   - /control/trajectory_follower/lateral/predicted_trajectory
   - /perception/object_recognition/objects
