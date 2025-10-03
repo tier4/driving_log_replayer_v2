@@ -382,7 +382,7 @@ def get_non_detection_area_in_base_link(
         action=Marker.ADD,
         ns="intersection",
         id=marker_id,
-        color=ColorRGBA(r=1.0, g=0.0, b=0.0, a=0.1),
+        color=ColorRGBA(r=1.0, g=0.0, b=0.0, a=0.2),
         scale=Vector3(x=1.0, y=1.0, z=1.0),
         lifetime=Duration(nanosec=200_000_000),
     )

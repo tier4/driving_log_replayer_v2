@@ -35,6 +35,8 @@ from rclpy.qos import QoSReliabilityPolicy
 import ros2_numpy
 from rosidl_runtime_py import message_to_ordereddict
 from sensor_msgs.msg import PointCloud2
+import shapely
+from shapely.validation import make_valid
 import simplejson as json
 from std_msgs.msg import Header
 from std_msgs.msg import String
@@ -58,10 +60,6 @@ import driving_log_replayer_v2.perception_eval_conversions as eval_conversions
 from driving_log_replayer_v2_analyzer.data import convert_str_to_dist_type
 from driving_log_replayer_v2_msgs.msg import ObstacleSegmentationMarker
 from driving_log_replayer_v2_msgs.msg import ObstacleSegmentationMarkerArray
-import shapely
-from shapely.errors import TopologicalError
-from shapely.geometry import Polygon
-from shapely.validation import make_valid
 
 if TYPE_CHECKING:
     from perception_eval.common.dataset import FrameGroundTruth
@@ -382,6 +380,8 @@ class ObstacleSegmentationEvaluator(DLREvaluatorV2):
                 continue
         # create marker and polygon for perception_eval
         return non_detection_area_markers, non_detection_areas
+
+
 @evaluator_main
 def main() -> DLREvaluatorV2:
     return ObstacleSegmentationEvaluator("obstacle_segmentation_evaluator")
