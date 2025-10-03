@@ -26,7 +26,8 @@ RECORD_TOPIC = """^/tf$\
 |^/tf_static$\
 |^/diagnostics$\
 |^/awapi/autoware/get/status$\
-|^/sensing/camera/.*\
+|^/sensing/camera/.*/compressed$\
+|^/sensing/camera/.*/camera_info$\
 |^/sensing/lidar/concatenated/pointcloud$\
 |^/perception/object_recognition/detection/.*/debug/pipeline_latency_ms$\
 |^/perception/object_recognition/tracking/multi_object_tracker/debug/.*\
@@ -36,6 +37,8 @@ RECORD_TOPIC = """^/tf$\
 |^/perception/object_recognition/detection/objects_before_filter$\
 |^/sensing/.*detected_objects$\
 |^/sensing/.*tracked_objects$\
+|^/map/vector_map_marker$\
+|^/localization/kinematic_state$\
 """
 
 
