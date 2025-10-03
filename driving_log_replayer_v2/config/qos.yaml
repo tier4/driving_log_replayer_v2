@@ -1,3 +1,8 @@
+/diagnostics:
+  reliability: best_effort
+  history: keep_last
+  depth: 100
+  durability: volatile
 /tf_static:
   reliability: reliable
   history: keep_last
