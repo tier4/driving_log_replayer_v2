@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from copy import deepcopy
+
 from dataclasses import dataclass
 from pathlib import Path
 import sys
@@ -38,7 +38,8 @@ from pydantic import field_validator
 import ros2_numpy
 from rosidl_runtime_py import message_to_ordereddict
 from sensor_msgs.msg import PointCloud2
-from shapely.geometry import Polygon, MultiPolygon
+from shapely.geometry import MultiPolygon
+from shapely.geometry import Polygon
 import simplejson as json
 from std_msgs.msg import ColorRGBA
 from std_msgs.msg import Header
@@ -366,7 +367,7 @@ def transform_proposed_area(
 
 
 def get_non_detection_area_in_base_link(
-    intersection_polygon: Polygon,
+    intersection_polygon: Polygon | MultiPolygon,
     header: Header,
     z_min: float,
     z_max: float,
@@ -374,50 +375,67 @@ def get_non_detection_area_in_base_link(
     base_link_to_map: TransformStamped,
     marker_id: int,
 ) -> tuple[Marker, list]:
-    line_strip = Marker(
+    """Create 3D mesh visualization for non-detection area."""
+    mesh_marker = Marker(
         header=header,
-        type=Marker.LINE_STRIP,
+        type=Marker.TRIANGLE_LIST,
         action=Marker.ADD,
         ns="intersection",
         id=marker_id,
-        color=ColorRGBA(r=1.0, g=0.0, b=0.0, a=0.3),
-        scale=Vector3(x=0.2, y=0.2, z=0.2),
+        color=ColorRGBA(r=1.0, g=0.0, b=0.0, a=0.2),
+        scale=Vector3(x=1.0, y=1.0, z=1.0),
         lifetime=Duration(nanosec=200_000_000),
     )
     list_intersection_area = []
-    list_p_stamped_base_link: list[PointStamped] = []
-    if isinstance(intersection_polygon, Polygon):
-        for i, shapely_point in enumerate(intersection_polygon.exterior.coords):
-            if i != len(intersection_polygon.exterior.coords) - 1:
-                p_stamped_map = PointStamped(
-                    header=header,
-                    point=Point(x=shapely_point[0], y=shapely_point[1], z=average_z),
+
+    # Extract polygons from input
+    polygons = (
+        [intersection_polygon]
+        if isinstance(intersection_polygon, Polygon)
+        else list(intersection_polygon.geoms)
+    )
+    min_vertices = 3
+
+    for poly in polygons:
+        # Transform polygon points to base_link frame
+        base_points = []
+        for coord in poly.exterior.coords[:-1]:  # Skip last duplicate point
+            map_point = PointStamped(
+                header=header, point=Point(x=coord[0], y=coord[1], z=average_z)
+            )
+            base_points.append(do_transform_point(map_point, base_link_to_map))
+
+        if len(base_points) < min_vertices:  # Need at least 3 points for a polygon
+            continue
+
+        # Create floor and ceiling polygons
+        for z_level in [z_min, z_max]:
+            polygon_points = [Point(x=p.point.x, y=p.point.y, z=z_level) for p in base_points]
+
+            # Add points to intersection area list
+            for point in polygon_points:
+                list_intersection_area.append([point.x, point.y, point.z])
+
+            # Triangulate polygon (fan triangulation from first vertex)
+            for i in range(1, len(polygon_points) - 1):
+                mesh_marker.points.extend(
+                    [polygon_points[0], polygon_points[i], polygon_points[i + 1]]
                 )
-                list_p_stamped_base_link.append(do_transform_point(p_stamped_map, base_link_to_map))
-    elif isinstance(intersection_polygon, MultiPolygon):
-        for poly in intersection_polygon.geoms:
-            for i, shapely_point in enumerate(poly.exterior.coords):
-                 if i != len(poly.exterior.coords) - 1:
-                    p_stamped_map = PointStamped(
-                        header=header,
-                        point=Point(x=shapely_point[0], y=shapely_point[1], z=average_z),
-                    )
-                    list_p_stamped_base_link.append(do_transform_point(p_stamped_map, base_link_to_map))
-    # create floor polygon
-    for p_base_link in list_p_stamped_base_link:
-        p_base_link.point.z = z_min
-        line_strip.points.append(deepcopy(p_base_link.point))
-        list_intersection_area.append(
-            [p_base_link.point.x, p_base_link.point.y, p_base_link.point.z],
-        )
-    # create roof polygon
-    for p_base_link in list_p_stamped_base_link:
-        p_base_link.point.z = z_max
-        line_strip.points.append(p_base_link.point)
-        list_intersection_area.append(
-            [p_base_link.point.x, p_base_link.point.y, p_base_link.point.z],
-        )
-    return line_strip, list_intersection_area
+
+        # Create side walls
+        for i in range(len(base_points)):
+            next_i = (i + 1) % len(base_points)
+
+            # Two triangles per wall segment
+            p1_floor = Point(x=base_points[i].point.x, y=base_points[i].point.y, z=z_min)
+            p2_floor = Point(x=base_points[next_i].point.x, y=base_points[next_i].point.y, z=z_min)
+            p1_ceil = Point(x=base_points[i].point.x, y=base_points[i].point.y, z=z_max)
+            p2_ceil = Point(x=base_points[next_i].point.x, y=base_points[next_i].point.y, z=z_max)
+
+            mesh_marker.points.extend([p1_floor, p2_floor, p1_ceil])  # Triangle 1
+            mesh_marker.points.extend([p2_floor, p2_ceil, p1_ceil])  # Triangle 2
+
+    return mesh_marker, list_intersection_area
 
 
 def set_ego_point(map_to_baselink: TransformStamped) -> Point:
