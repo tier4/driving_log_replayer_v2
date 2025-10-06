@@ -1,0 +1,11 @@
+publish:
+  - /localization/acceleration
+  - /localization/kinematic_state
+  - /tf
+  - /perception/obstacle_segmentation/pointcloud
+  - /perception/occupancy_grid_map/map
+  - /perception/object_recognition/objects
+  - /perception/traffic_light_recognition/traffic_signals
+  - /planning/scenario_planning/lane_driving/behavior_planning/path_with_lane_id
+  - /planning/scenario_planning/max_velocity_default
+  - /awapi/tmp/virtual_traffic_light_states

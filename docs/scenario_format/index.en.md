@@ -32,6 +32,7 @@ ScenarioName: String
 ScenarioDescription: String
 SensorModel: String
 VehicleModel: String
+publish_profile: String
 Evaluation:
   UseCaseName: String
   UseCaseFormatVersion: String
@@ -68,6 +69,10 @@ Specify `sensor_model` as argument in `autoware_launch/launch/logging_simulator.
 ### VehicleModel
 
 Specify `vehicle_model` as an argument in `autoware_launch/launch/logging_simulator.launch.xml`
+
+### publish_profile
+
+(Optional) Specify the name of the topics profile to control which topics are published during simulation. The profile file should be located at `config/publish/{profile_name}.yaml`, such as `planning_control`. If not specified, all available topics will be published.
 
 ### Evaluation
 

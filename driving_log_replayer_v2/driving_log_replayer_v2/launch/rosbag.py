@@ -29,11 +29,15 @@ PACKAGE_SHARE = get_package_share_directory("driving_log_replayer_v2")
 QOS_PROFILE_PATH_STR = Path(PACKAGE_SHARE, "config", "qos.yaml").as_posix()
 
 
-def extract_remap_topics(profile_name: str) -> list[str]:
+def extract_topics_from_profile(profile_name: str, profile_type: str) -> list[str]:
+    if not profile_name:
+        return []
+
+    assert profile_type in ["publish", "remap"]
     profile_file = Path(
         get_package_share_directory("driving_log_replayer_v2"),
         "config",
-        "remap",
+        profile_type,
         f"{profile_name}.yaml",
     )
     # Make it work with symlink install as well.
@@ -43,7 +47,7 @@ def extract_remap_topics(profile_name: str) -> list[str]:
         return []
     with profile_file.open("r") as f:
         remap_dict = yaml.safe_load(f)
-        return remap_dict.get("remap")
+        return remap_dict.get("profile_type", [])
 
 
 def remap_str(topic: str) -> str:
@@ -67,13 +71,20 @@ def system_defined_remap(conf: dict) -> list[str]:
     return remap_list
 
 
+def user_defined_publish(conf: dict) -> list[str]:
+    publish_list = []
+    if conf["publish_profile"] != "":
+        publish_list.extend(extract_topics_from_profile(conf["publish_profile"], "publish"))
+    return publish_list
+
+
 def user_defined_remap(conf: dict) -> list[str]:
     remap_list = []
     # user defined remap
     user_remap_topics: list[str] = (
         conf["remap_arg"].split(",")
         if conf["remap_arg"] != ""
-        else extract_remap_topics(conf["remap_profile"])
+        else extract_topics_from_profile(conf["remap_profile"], "remap")
     )
     for topic in user_remap_topics:
         if topic.startswith("/"):
@@ -129,6 +140,12 @@ def launch_bag_player(
         "--qos-profile-overrides-path",
         QOS_PROFILE_PATH_STR,
     ]
+    # topics
+    publish_list = ["--topics"]
+    publish_list.extend(user_defined_publish(conf))
+    if len(publish_list) != 1:
+        play_cmd.extend(publish_list)
+    # remap
     remap_list = ["--remap"]
     remap_list.extend(system_defined_remap(conf))
     remap_list.extend(user_defined_remap(conf))
@@ -150,7 +167,10 @@ def launch_bag_player(
     delay_player_for_autoware = ExecuteProcess(
         cmd=["sleep", conf["play_delay"]], on_exit=[pre_task_player]
     )
-    return [delay_player_for_autoware, LogInfo(msg=f"remap_command is {remap_list}")]
+    return [
+        delay_player_for_autoware,
+        LogInfo(msg=f"remap_command is {remap_list}, topics_command is {publish_list}"),
+    ]
 
 
 def launch_bag_recorder(context: LaunchContext) -> list:
