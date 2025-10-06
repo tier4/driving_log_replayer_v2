@@ -20,7 +20,7 @@ def test_load_perception_config() -> None:
     launch_config = import_module(module_name)
     assert (
         launch_config.RECORD_TOPIC
-        == "^/tf$|^/tf_static$|^/diagnostics$|^/awapi/autoware/get/status$|^/sensing/camera/.*|^/sensing/lidar/concatenated/pointcloud$|^/perception/object_recognition/detection/.*/debug/pipeline_latency_ms$|^/perception/object_recognition/tracking/multi_object_tracker/debug/.*|^/perception/object_recognition/prediction/map_based_prediction/debug/pipeline_latency_ms$|^/perception/object_recognition/.*/objects$|^/perception/object_recognition/objects$|^/perception/object_recognition/detection/objects_before_filter$|^/sensing/.*detected_objects$|^/sensing/.*tracked_objects$|^/map/vector_map_marker$|^/localization/kinematic_state$"
+        == "^/tf$|^/tf_static$|^/diagnostics$|^/awapi/autoware/get/status$|^/sensing/camera/.*/compressed$|^/sensing/camera/.*/camera_info$|^/sensing/lidar/concatenated/pointcloud$|^/perception/object_recognition/detection/.*/debug/pipeline_latency_ms$|^/perception/object_recognition/tracking/multi_object_tracker/debug/.*|^/perception/object_recognition/prediction/map_based_prediction/debug/pipeline_latency_ms$|^/perception/object_recognition/.*/objects$|^/perception/object_recognition/objects$|^/perception/object_recognition/detection/rois[0-9]+$|^/perception/object_recognition/detection/objects_before_filter$|^/sensing/.*detected_objects$|^/sensing/.*tracked_objects$|^/map/vector_map_marker$|^/localization/kinematic_state$"
     )
     arg_disable = launch_config.AUTOWARE_DISABLE
     assert callable(arg_disable)
