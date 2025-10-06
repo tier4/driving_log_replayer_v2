@@ -35,6 +35,8 @@ from rclpy.qos import QoSReliabilityPolicy
 import ros2_numpy
 from rosidl_runtime_py import message_to_ordereddict
 from sensor_msgs.msg import PointCloud2
+import shapely
+from shapely.validation import make_valid
 import simplejson as json
 from std_msgs.msg import Header
 from std_msgs.msg import String
@@ -341,6 +343,10 @@ class ObstacleSegmentationEvaluator(DLREvaluatorV2):
             header,
             map_to_baselink,
         )
+        # Ensure the proposed area geometry is valid
+        if not proposed_area_in_map.is_valid:
+            proposed_area_in_map = make_valid(proposed_area_in_map)
+
         # get intersection
         marker_id = 0
         ego_point = set_ego_point(map_to_baselink)
@@ -351,20 +357,27 @@ class ObstacleSegmentationEvaluator(DLREvaluatorV2):
         )
         for road in near_road_lanelets:
             poly_lanelet = to_shapely_polygon(road)
-            i_area = poly_lanelet.intersection(proposed_area_in_map)
-            if not i_area.is_empty:
-                marker_id += 1
-                marker, area = get_non_detection_area_in_base_link(
-                    i_area,
-                    header,
-                    s_proposed_area.z_min,
-                    s_proposed_area.z_max,
-                    average_z,
-                    base_link_to_map,
-                    marker_id,
-                )
-                non_detection_area_markers.markers.append(marker)  # base_link
-                non_detection_areas.append(area)  # base_link
+            # Ensure the lanelet geometry is valid
+            if not poly_lanelet.is_valid:
+                poly_lanelet = make_valid(poly_lanelet)
+            try:
+                i_area = poly_lanelet.intersection(proposed_area_in_map)
+                if not i_area.is_empty:
+                    marker_id += 1
+                    marker, area = get_non_detection_area_in_base_link(
+                        i_area,
+                        header,
+                        s_proposed_area.z_min,
+                        s_proposed_area.z_max,
+                        average_z,
+                        base_link_to_map,
+                        marker_id,
+                    )
+                    non_detection_area_markers.markers.append(marker)  # base_link
+                    non_detection_areas.append(area)  # base_link
+            except shapely.errors.TopologicalError as e:
+                self.get_logger().error(f"TopologicalError during intersection: {e}")
+                continue
         # create marker and polygon for perception_eval
         return non_detection_area_markers, non_detection_areas
 

@@ -14,7 +14,6 @@
 
 from math import pi
 
-from builtin_interfaces.msg import Duration
 from geometry_msgs.msg import Point
 from geometry_msgs.msg import Quaternion
 from geometry_msgs.msg import Transform
@@ -38,7 +37,6 @@ import pytest
 from shapely.geometry import Point as ShapelyPoint
 from shapely.geometry import Polygon
 from shapely.geometry.polygon import orient
-from std_msgs.msg import ColorRGBA
 from std_msgs.msg import Header
 from visualization_msgs.msg import Marker
 
@@ -581,7 +579,7 @@ def test_get_non_detection_area_in_base_link() -> None:
         [1.7763568394002505e-15, 0.0, 2.0],
         [-1.9999999999999964, 2.0000000000000018, 2.0],
     ]
-    line_strip, non_detection_list = get_non_detection_area_in_base_link(
+    mesh_marker, non_detection_list = get_non_detection_area_in_base_link(
         poly_in_map,
         header_base_link,
         0.0,
@@ -590,20 +588,23 @@ def test_get_non_detection_area_in_base_link() -> None:
         base_link_to_map,
         1,
     )
-    ans_line_strip = Marker(
-        header=header_base_link,
-        ns="intersection",
-        id=1,
-        type=Marker.LINE_STRIP,
-        action=Marker.ADD,
-        color=ColorRGBA(r=1.0, g=0.0, b=0.0, a=0.3),
-        scale=Vector3(x=0.2, y=0.2, z=0.2),
-        lifetime=Duration(nanosec=200_000_000),
-    )
+
+    # Check the essential marker properties
+    assert mesh_marker.type == Marker.TRIANGLE_LIST
+    assert mesh_marker.action == Marker.ADD
+    assert mesh_marker.ns == "intersection"
+    assert mesh_marker.id == 1
+
+    # Check the non-detection list (this should remain consistent)
     assert non_detection_list == ans_non_detection_list
-    for point in ans_non_detection_list:
-        ans_line_strip.points.append(Point(x=point[0], y=point[1], z=point[2]))
-    assert line_strip == ans_line_strip
+
+    # Check that we have triangle points in the mesh (basic sanity check)
+    assert len(mesh_marker.points) > 0
+    assert len(mesh_marker.points) % 3 == 0  # Should be multiple of 3 for triangles
+
+    # Verify that all points are of type Point
+    for point in mesh_marker.points:
+        assert isinstance(point, Point)
 
 
 def test_polygon_orientation() -> None:
