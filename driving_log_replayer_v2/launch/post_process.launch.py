@@ -45,6 +45,9 @@ def check_and_create_metadata_yaml(conf: dict) -> None:
     metadata_path = Path(conf["result_bag_path"]).joinpath("metadata.yaml")
     if metadata_path.exists():
         return
+    dummy_bag_path = Path(conf["result_bag_path"]).joinpath("dummy_0.mcap")
+    if dummy_bag_path.exists():
+        return
     storage_type = "mcap"
     db3_bag_path = Path(conf["result_bag_path"]).joinpath("result_bag_0.db3")
     if db3_bag_path.exists():
