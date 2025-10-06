@@ -21,6 +21,7 @@ RECORD_TOPIC = """^/tf$\
 |^/perception/traffic_light_recognition/traffic_signals/markers$\
 |^/perception/traffic_light_recognition/.*/debug/rois/compressed$\
 |^/driving_log_replayer_v2/.*\
+|^/driving_log_replayer/.*\
 """
 
 AUTOWARE_DISABLE = {

@@ -18,6 +18,7 @@ from launch.substitutions import LaunchConfiguration
 RECORD_TOPIC = """^/tf$\
 |^/diagnostics$"\
 |^/localization/kinematic_state$\
+|^/driving_log_replayer/.*\
 """
 
 AUTOWARE_DISABLE = {

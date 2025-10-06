@@ -23,6 +23,7 @@ RECORD_TOPIC = """^/tf$\
 |^/perception/object_recognition/objects$\
 |^/sensing/camera/.*\
 |^/driving_log_replayer_v2/.*\
+|^/driving_log_replayer/.*\
 """
 
 AUTOWARE_DISABLE = {

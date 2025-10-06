@@ -24,6 +24,7 @@ RECORD_TOPIC = """^/tf$\
 |^/perception/object_recognition/tracking/multi_object_tracker/debug/.*\
 |^/perception/object_recognition/detection/.*/debug/pipeline_latency_ms$\
 |^/perception/perception_online_evaluator/.*\
+|^/driving_log_replayer/.*\
 """
 
 

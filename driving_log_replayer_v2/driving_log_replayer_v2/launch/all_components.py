@@ -30,6 +30,7 @@ RECORD_TOPIC = """^/diagnostics$\
 |^/planning/scenario_planning/trajectory$\
 |^/.*/virtual_wall/.*$\
 |^/.*/path_candidate/.*\
+|^/driving_log_replayer/.*\
 """
 
 AUTOWARE_DISABLE = {}

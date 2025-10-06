@@ -1,0 +1,9 @@
+publish:
+  - /localization/acceleration
+  - /localization/kinematic_state
+  - /tf
+  - /perception/obstacle_segmentation/pointcloud
+  - /perception/traffic_light_recognition/traffic_signals
+  - /planning/scenario_planning/velocity_smoother/trajectory
+  - /planning/mission_planning/route
+  - /system/operation_mode/state
