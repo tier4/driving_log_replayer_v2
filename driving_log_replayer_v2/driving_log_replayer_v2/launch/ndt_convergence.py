@@ -27,7 +27,7 @@ from launch.substitutions import LaunchConfiguration
 from driving_log_replayer_v2.launch.rosbag import launch_bag_recorder
 from driving_log_replayer_v2.launch.util import output_dummy_result_jsonl
 
-RECORD_TOPIC = "/.*"
+RECORD_TOPIC = "^$"  # matches no topics, so nothing will be recorded
 
 AUTOWARE_DISABLE = {}
 
