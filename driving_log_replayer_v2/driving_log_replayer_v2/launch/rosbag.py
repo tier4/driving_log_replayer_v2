@@ -44,15 +44,10 @@ def extract_topics_from_profile(profile_name: str, profile_type: str) -> list[st
     if profile_file.is_symlink():
         profile_file = profile_file.resolve()
     if not profile_file.exists():
-        error_msg = f"{profile_file} does not exist"
-        raise FileNotFoundError(error_msg)
+        return []
     with profile_file.open("r") as f:
-        topics_dict = yaml.safe_load(f)
-        topics = topics_dict.get(profile_type, [])
-        if not topics:
-            error_msg = f"no topics found for {profile_type} in {profile_file}"
-            raise KeyError(error_msg)
-        return topics
+        remap_dict = yaml.safe_load(f)
+        return remap_dict.get("profile_type", [])
 
 
 def remap_str(topic: str) -> str:
