@@ -2,8 +2,8 @@
 Changelog for package driving_log_replayer
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-Forthcoming
------------
+3.13.3 (2025-10-08)
+-------------------
 * refactor: refactor arguments and get method in context (`#231 <https://github.com/tier4/driving_log_replayer_v2/issues/231>`_)
   * refactor
   * Update driving_log_replayer_v2/driving_log_replayer_v2/launch/argument.py
