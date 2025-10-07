@@ -49,7 +49,7 @@ def launch_ndt_convergence(context: LaunchContext) -> list:
 
     # Output dummies to comply with Evaluator specifications
     output_dummy_result_jsonl(conf["result_json_path"], summary="NDT Convergence always success")
-    output_dummy_result_bag(conf["result_bag_path"])
+    output_dummy_result_bag(conf["result_bag_path"], storage_type=conf["storage"])
 
     launch_args = {
         "map_path": conf["map_path"] + "/pointcloud_map.pcd",
