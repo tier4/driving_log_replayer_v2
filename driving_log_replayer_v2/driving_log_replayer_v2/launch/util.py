@@ -14,6 +14,7 @@
 
 import json
 from pathlib import Path
+import rosbag2_py
 
 
 def output_dummy_result_jsonl(result_json_path_str: str, summary: str = "RecordOnlyMode") -> None:
@@ -27,9 +28,18 @@ def output_dummy_result_jsonl(result_json_path_str: str, summary: str = "RecordO
         json.dump(dummy_result, f)
 
 
-def output_dummy_result_bag(result_bag_path_str: str) -> None:
+def output_dummy_result_bag(result_bag_path_str: str, storage_type: str) -> None:
     result_bag_path = Path(result_bag_path_str)
     result_bag_path.mkdir(parents=True, exist_ok=True)
-    # create dummy bag file
-    dummy_bag_path = result_bag_path / "dummy_0.mcap"
-    dummy_bag_path.touch()
+
+    storage_options = rosbag2_py.StorageOptions(
+        uri=str(result_bag_path),
+        storage_id=storage_type
+    )
+    converter_options = rosbag2_py.ConverterOptions(
+        input_serialization_format="cdr",
+        output_serialization_format="cdr",
+    )
+
+    writer = rosbag2_py.SequentialWriter()
+    writer.open(storage_options, converter_options)
