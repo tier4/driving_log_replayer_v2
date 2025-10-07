@@ -68,6 +68,3 @@ def launch_ndt_convergence(context: LaunchContext) -> list:
             ]
         )
     ]
-
-
-OPTIONAL_NODE_ARGS: list[DeclareLaunchArgument] = []

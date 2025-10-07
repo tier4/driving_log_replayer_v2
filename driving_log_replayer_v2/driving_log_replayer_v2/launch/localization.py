@@ -56,5 +56,3 @@ USE_CASE_ARGS: list[DeclareLaunchArgument] = [
         description="Enable analysis.",
     ),
 ]
-
-OPTIONAL_NODE_ARGS: list[DeclareLaunchArgument] = []
