@@ -27,7 +27,7 @@ RECORD_TOPIC = """^/diagnostics$\
 |^/tf$\
 |^/tf_static$\
 |^/planning/scenario_planning/lane_driving/behavior_planning/path$\
-|^/planning/scenario_planning/trajectory$\
+|^/planning/trajectory$\
 |^/.*/virtual_wall/.*$\
 |^/.*/path_candidate/.*\
 |^/driving_log_replayer/.*\
