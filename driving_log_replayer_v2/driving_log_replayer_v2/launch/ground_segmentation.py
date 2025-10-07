@@ -39,5 +39,3 @@ USE_CASE_ARGS: list[DeclareLaunchArgument] = [
         default_value="/perception/obstacle_segmentation/pointcloud",
     )
 ]
-
-OPTIONAL_NODE_ARGS: list[DeclareLaunchArgument] = []

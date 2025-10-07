@@ -20,6 +20,7 @@ from launch import LaunchContext
 from launch.actions import ExecuteProcess
 from launch.actions import IncludeLaunchDescription
 from launch.actions import LogInfo
+from launch.actions import TimerAction
 from launch_ros.actions import Node
 import yaml
 
@@ -66,7 +67,7 @@ def system_defined_remap(conf: dict) -> list[str]:
         add_remap("/tf", remap_list)
         add_remap("/localization/kinematic_state", remap_list)
         add_remap("/localization/acceleration", remap_list)
-    if conf.get("goal_pose", "{}") != "{}":
+    if conf["goal_pose"] != "{}":
         add_remap("/planning/mission_planning/route", remap_list)
     return remap_list
 
@@ -98,10 +99,7 @@ def get_pre_task_before_play_rosbag(
     context: LaunchContext, on_exit: ExecuteProcess
 ) -> Node | ExecuteProcess:
     conf = context.launch_configurations
-    if conf.get("publish_topic_from_rosbag", "None") not in [
-        "",
-        "None",
-    ]:  # FIXME: should change explicit declaration
+    if conf["publish_topic_from_rosbag"] != "":
         return Node(
             package="driving_log_replayer_v2",
             namespace="/driving_log_replayer_v2",
@@ -112,15 +110,18 @@ def get_pre_task_before_play_rosbag(
                 {
                     "use_sim_time": False,  # In order to trigger the timer without play rosbag
                     "input_bag": conf["input_bag"],
-                    "storage_type": "sqlite3",
+                    "storage_type": conf["storage"],
                     "publish_topic_from_rosbag": conf["publish_topic_from_rosbag"],
                 }
             ],
             on_exit=[on_exit],
         )
-    return ExecuteProcess(
-        cmd=["echo", "pre-task before play rosbag is not activated"],
-        on_exit=[on_exit],
+    return TimerAction(  # dummy timer for logging
+        period=0.0,
+        actions=[
+            LogInfo(msg="pre-task before play rosbag is not activated"),
+            on_exit,
+        ],
     )
 
 
@@ -160,10 +161,8 @@ def launch_bag_player(
         if conf["record_only"] == "true"
         else ExecuteProcess(cmd=play_cmd, output="screen")
     )
-    delay_player_for_pre_task = ExecuteProcess(
-        cmd=["sleep", conf["play_delay"]], on_exit=[bag_player]
-    )
-    pre_task_player = get_pre_task_before_play_rosbag(context, delay_player_for_pre_task)
+    delay_player_for_pre_task = ExecuteProcess(cmd=["sleep", "10"], on_exit=[bag_player])
+    pre_task_player = get_pre_task_before_play_rosbag(context, on_exit=delay_player_for_pre_task)
     delay_player_for_autoware = ExecuteProcess(
         cmd=["sleep", conf["play_delay"]], on_exit=[pre_task_player]
     )

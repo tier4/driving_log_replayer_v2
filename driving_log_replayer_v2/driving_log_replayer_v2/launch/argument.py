@@ -77,7 +77,7 @@ def check_launch_component(conf: dict) -> dict:
         # argument has higher priority than the launch_config.py setting.
         if conf.get(component) is None and arg_disable.get(component) is not None:
             conf[component] = arg_disable[component]
-        launch_component[component] = conf.get(component, "true")
+        launch_component[component] = conf.get(component, "true")  # only for logging
     return launch_component
 
 
@@ -174,6 +174,16 @@ def get_launch_arguments() -> list:
         default_value="",
         description="Specify the name of the topics profile to publish topics. config/publish/{profile_name}.yaml. Ex: publish_profile:=planning_control",
     )
+    add_launch_arg(
+        "publish_topic_from_rosbag",
+        default_value="",
+        description="The topic to publish in rosbag before play rosbag. Using comma separated string.",
+    )
+    add_launch_arg(
+        "with_optional_nodes",
+        default_value="",
+        description="Launch other optional nodes. Using comma separated string. Currently available is 2d_detector. Ex: with_optional_nodes:=2d_detector",
+    )
     return launch_arguments
 
 
@@ -233,7 +243,7 @@ def update_conf_with_dataset_info(
     if conf["use_case"] in ["all_components", "perception"]:
         conf["record_only"] = "true"
 
-    if not conf.get("publish_profile") and yaml_obj.get("publish_profile"):
+    if conf["publish_profile"] != "" and yaml_obj.get("publish_profile"):
         conf["publish_profile"] = yaml_obj["publish_profile"]
 
 
@@ -272,10 +282,10 @@ def ensure_arg_compatibility(context: LaunchContext) -> list:
             msg=f"{check_launch_component(conf)=}",
         ),
         LogInfo(
-            msg=f"{conf.get('initial_pose')=}, {conf.get('direct_initial_pose')=}",
+            msg=f"{conf['initial_pose']=}, {conf['direct_initial_pose']=}",
         ),
         LogInfo(
-            msg=f"{conf.get('goal_pose')=}",
+            msg=f"{conf['goal_pose']=}",
         ),
     ]
 
@@ -287,12 +297,3 @@ def add_use_case_arguments(context: LaunchContext) -> list:
     if len(use_case_launch_arg) == 0:
         return [LogInfo(msg="no use case launch argument")]
     return use_case_launch_arg
-
-
-def add_optional_nodes_arguments(context: LaunchContext) -> list:
-    conf = context.launch_configurations
-    launch_config = import_module(f"driving_log_replayer_v2.launch.{conf['use_case']}")
-    optional_launch_arg: list = launch_config.OPTIONAL_NODE_ARGS
-    if len(optional_launch_arg) == 0:
-        return [LogInfo(msg="no optional node launch argument")]
-    return optional_launch_arg
