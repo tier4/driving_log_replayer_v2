@@ -70,9 +70,13 @@ def launch_autoware(context: LaunchContext) -> list:
 
 def launch_optional_nodes(context: LaunchContext) -> list:
     nodes_list = context.launch_configurations["with_optional_nodes"].split(",")
+    optional_nodes = []
     if "2d_detector" in nodes_list:
-        return [LogInfo(msg="launching 2D detector......"), *launch_camera_2d_detector(context)]
-    return [LogInfo(msg="no optional nodes to launch.")]
+        optional_nodes.append(LogInfo(msg="launching 2D detector......"))
+        optional_nodes.extend(launch_camera_2d_detector(context))
+    if len(optional_nodes) == 0:
+        optional_nodes.append(LogInfo(msg="no optional nodes to launch."))
+    return optional_nodes
 
 
 def launch_map_height_fitter(context: LaunchContext) -> list:
