@@ -243,7 +243,7 @@ def update_conf_with_dataset_info(
     if conf["use_case"] in ["all_components", "perception"]:
         conf["record_only"] = "true"
 
-    if conf["publish_profile"] != "" and yaml_obj.get("publish_profile"):
+    if conf["publish_profile"] == "" and yaml_obj.get("publish_profile"):
         conf["publish_profile"] = yaml_obj["publish_profile"]
 
 
