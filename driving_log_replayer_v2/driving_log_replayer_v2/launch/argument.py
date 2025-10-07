@@ -99,6 +99,8 @@ def get_launch_arguments() -> list:
     remap_arg
     remap_profile
     publish_profile
+    publish_topic_from_rosbag
+    with_optional_nodes
     """
     launch_arguments = []
 
