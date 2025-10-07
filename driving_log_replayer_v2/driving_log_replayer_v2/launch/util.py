@@ -31,7 +31,6 @@ def output_dummy_result_jsonl(result_json_path_str: str, summary: str = "RecordO
 
 def output_dummy_result_bag(result_bag_path_str: str, storage_type: str) -> None:
     result_bag_path = Path(result_bag_path_str)
-    result_bag_path.mkdir(parents=True, exist_ok=True)
 
     storage_options = rosbag2_py.StorageOptions(uri=str(result_bag_path), storage_id=storage_type)
     converter_options = rosbag2_py.ConverterOptions(
