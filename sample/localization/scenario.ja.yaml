@@ -16,6 +16,8 @@ Evaluation:
       Method: NVTL # NVTL or TPのどちらで評価を行うか
       AllowableLikelihood: 2.3 # この値以上なら信頼度は正常とみなす
       NGCount: 10 # 信頼度異常が連続でこの回数続いたら信頼度評価失敗とみなす
+    Avalilability: # Availability 条件が設定されていなくても、デフォルトでは NDT Avaliability 評価は実行される。このブロックは Availability 評価が不要なときのみ設定が必要である。
+      Enable: false
     OverallCriteriaMask: # 下記のマスクを設定することで評価するか否かを決定できる。このブロックが定義されていない場合は自動的に全てが `true` に設定される。
       mean_relative_position: true
       mean_relative_angle: true

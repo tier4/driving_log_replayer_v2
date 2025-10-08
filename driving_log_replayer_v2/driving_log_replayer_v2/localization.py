@@ -44,6 +44,10 @@ def calc_pose_horizontal_distance(relative_pose: PoseStamped) -> float:
     return np.sqrt(np.power(x, 2) + np.power(y, 2))
 
 
+class AvailabilityCondition(BaseModel):
+    Enable: bool
+
+
 class ConvergenceCondition(BaseModel):
     AllowableDistance: number
     AllowableExeTimeMs: number
@@ -58,6 +62,7 @@ class ReliabilityCondition(BaseModel):
 
 
 class Conditions(BaseModel):
+    Availability: AvailabilityCondition = AvailabilityCondition(Enable=True)
     Convergence: ConvergenceCondition | None = None
     Reliability: ReliabilityCondition | None = None
 
@@ -167,6 +172,7 @@ class Availability(EvaluationItem):
     ERROR_STATUS_LIST: ClassVar[list[str]] = ["Timeout", "NotReceived"]
 
     def set_frame(self, diag_status: DiagnosticStatus) -> dict:
+        self.condition: AvailabilityCondition
         # Check if the NDT is available. Note that it does NOT check topic rate itself, but just the availability of the topic
         values = {value.key: value.value for value in diag_status.values}
         # Here we assume that, once a node (e.g. ndt_scan_matcher) fails, it will not be relaunched automatically.
@@ -204,7 +210,11 @@ class LocalizationResult(ResultBase):
         self.__reliability = (
             Reliability(condition=condition.Reliability) if condition.Reliability else None
         )
-        self.__availability = Availability()
+        self.__availability = (
+            Availability(condition=condition.Availability)
+            if condition.Availability
+            else Availability()
+        )
 
     def update(self) -> None:
         parts = []
@@ -218,7 +228,7 @@ class LocalizationResult(ResultBase):
             parts.append(self.__reliability.summary)
             success_flags.append(self.__reliability.success)
 
-        if self.__availability is not None:
+        if self.__availability.condition.Enable:
             parts.append(self.__availability.summary)
             success_flags.append(self.__availability.success)
 
