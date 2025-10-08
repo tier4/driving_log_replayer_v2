@@ -2,6 +2,75 @@
 Changelog for package driving_log_replayer
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
+3.13.3 (2025-10-08)
+-------------------
+* refactor: refactor arguments and get method in context (`#231 <https://github.com/tier4/driving_log_replayer_v2/issues/231>`_)
+  * refactor
+  * Update driving_log_replayer_v2/driving_log_replayer_v2/launch/argument.py
+  Co-authored-by: Copilot <175728472+Copilot@users.noreply.github.com>
+  * add comment
+  * add commented arguments
+  * adopt multi optional nodes
+  * change storage type
+  ---------
+  Co-authored-by: Copilot <175728472+Copilot@users.noreply.github.com>
+* fix(ndt_convergence): create valid rosbag (`#230 <https://github.com/tier4/driving_log_replayer_v2/issues/230>`_)
+  * update
+  * make valid rosbag
+  * pre-commit
+  * remove unnecessary code
+  ---------
+* feat(performance_diag): adopt new diag msg (`#209 <https://github.com/tier4/driving_log_replayer_v2/issues/209>`_)
+  * adopt new diag msg
+  * fix import
+  * fix test
+  * fix test
+  ---------
+* feat(perception): add perception recording topic (`#227 <https://github.com/tier4/driving_log_replayer_v2/issues/227>`_)
+  * add map and localization topic and reduce raw image topic
+  * add detection roi topic
+  * fix test
+  ---------
+  Co-authored-by: MasatoSaeki <masato.saeki@tier4.jp>
+* feat: better visualization for obstacle segmentation and support multipolygon (`#228 <https://github.com/tier4/driving_log_replayer_v2/issues/228>`_)
+  * intersection_polygon (MultiPolygon)を追加
+  * To iterate geoms property, add single_polygon_multipolygon.geoms
+  * TypeError: 'type' object is not subscriptable出ないようにpoly: Union[Polygon, MultiPolygon]を追加した。
+  * Use .geoms to get a list of individual polygons from the MultiPolygon
+  * Use poly: Union[Polygon, MultiPolygon] only
+  * Adjust the tab space for loop
+  * change to isintance seperately with poly.exteriror.coords for multipolygon
+  * delete unnecessary line (from typing import Union)
+  * Add source code for shapely.errors.TopologicalError
+  * save map topics
+  * update marker of no detection area
+  * add result topics
+  * change a valure
+  * pre-commit
+  * change back to 0.1
+  ---------
+  Co-authored-by: MyatmonThiri <myatmon.thiri@tier4.jp>
+  Co-authored-by: t4-adc <grp-rd-1-adc-admin@tier4.jp>
+* feat: pubish spicific topics via publish_profile (`#226 <https://github.com/tier4/driving_log_replayer_v2/issues/226>`_)
+  * debugging
+  * implement topics_profile
+  * simplify code
+  * add topics to save for perception
+  * add topics to save for perception
+  * update topics list of all use_cases
+  * update unit test
+  * rename argment
+  * fix typo
+  * refactor code
+  * update scenario format version
+  * remove unnecessary topic cause in perception not launch evaluator node
+  * chore
+  * update tests
+  ---------
+  Co-authored-by: t4-adc <grp-rd-1-adc-admin@tier4.jp>
+  Co-authored-by: MasatoSaeki <masato.saeki@tier4.jp>
+* Contributors: Kem (TiankuiXian), Masato Saeki, Yoshi Ri
+
 3.13.2 (2025-09-30)
 -------------------
 * feat(perception): add tensorrt_yolox detector execution (`#221 <https://github.com/tier4/driving_log_replayer_v2/issues/221>`_)

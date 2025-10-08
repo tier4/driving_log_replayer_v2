@@ -27,7 +27,7 @@ RECORD_TOPIC = """^/diagnostics$\
 |^/tf$\
 |^/tf_static$\
 |^/planning/scenario_planning/lane_driving/behavior_planning/path$\
-|^/planning/scenario_planning/trajectory$\
+|^/planning/trajectory$\
 |^/.*/virtual_wall/.*$\
 |^/.*/path_candidate/.*\
 |^/driving_log_replayer/.*\
@@ -43,5 +43,3 @@ AUTOWARE_ARGS = {
 NODE_PARAMS: dict[str, LaunchConfiguration] = {}
 
 USE_CASE_ARGS: list[DeclareLaunchArgument] = []
-
-OPTIONAL_NODE_ARGS: list[DeclareLaunchArgument] = []

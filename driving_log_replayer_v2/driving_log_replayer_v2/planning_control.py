@@ -349,35 +349,39 @@ class PlanningFactor(EvaluationItem):
         # check time condition
         if not self.condition.time.match_condition(stamp_to_float(msg.header.stamp)):
             return None
-        if len(msg.factors) == 0:
-            return None
 
         self.total += 1
-        frame_success = "Fail"
+        if len(msg.factors) == 0:
+            condition_met = False
+            info_dict = {
+                "Behavior": "NO_FACTOR",
+            }
+        else:
+            # get factors[0] # factorsはarrayになっているが、実際には1個しか入ってない。
+            info_dict = {}
+            condition_met = True
 
-        # get factors[0] # factorsはarrayになっているが、実際には1個しか入ってない。
-        info_dict = {}
-        condition_met = True
+            if self.condition.area is not None:
+                in_range, info_dict_area = self.judge_in_range(
+                    msg.factors[0].control_points[0].pose
+                )
+                info_dict.update(info_dict_area)
+                condition_met &= (
+                    in_range if self.condition.area.area_condition == "inside" else not in_range
+                )
 
-        if self.condition.area is not None:
-            in_range, info_dict_area = self.judge_in_range(msg.factors[0].control_points[0].pose)
-            info_dict.update(info_dict_area)
-            condition_met &= (
-                in_range if self.condition.area.area_condition == "inside" else not in_range
-            )
-
-        if self.condition.behavior is not None:
-            behavior_met, info_dict_behavior = self.judge_behavior(msg.factors[0])
-            info_dict.update(info_dict_behavior)
-            condition_met &= behavior_met
+            if self.condition.behavior is not None:
+                behavior_met, info_dict_behavior = self.judge_behavior(msg.factors[0])
+                info_dict.update(info_dict_behavior)
+                condition_met &= behavior_met
 
         # Check if the condition is met based on judgement type
         condition_met = (
             condition_met if self.condition.judgement == "positive" else not condition_met
         )
         if condition_met:
-            frame_success = "Success"
             self.passed += 1
+        frame_success = "Success" if condition_met else "Fail"
 
         self.success = (
             self.passed > 0

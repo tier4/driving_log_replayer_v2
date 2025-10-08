@@ -35,5 +35,3 @@ AUTOWARE_ARGS = {}
 NODE_PARAMS: dict[str, LaunchConfiguration] = {"map_path": LaunchConfiguration("map_path")}
 
 USE_CASE_ARGS: list[DeclareLaunchArgument] = []
-
-OPTIONAL_NODE_ARGS: list[DeclareLaunchArgument] = []

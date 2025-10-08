@@ -47,5 +47,3 @@ AUTOWARE_ARGS = {"use_aeb_autoware_state_check": "false"}
 NODE_PARAMS: dict[str, LaunchConfiguration] = {}
 
 USE_CASE_ARGS: list[DeclareLaunchArgument] = []
-
-OPTIONAL_NODE_ARGS: list[DeclareLaunchArgument] = []
