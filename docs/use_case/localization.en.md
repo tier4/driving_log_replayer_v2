@@ -211,9 +211,14 @@ This evaluation basically starts for any kind of scenario.
 After the `logging_simulator` is done `autoware_localization_evaluation_scripts` evaluates whether localization related diagnostics (listed below) are not publishing errors with a high rate.
 
 - ndt_scan_matcher: scan_matching_status
-- localization: ekf_localizer
+- localization: ekf_localizer: pose_no_update_count[^*]
+- localization: ekf_localizer: twist_no_update_count[^*]
+- localization: ekf_localizer: cov_ellipse_long_axis_size[^*]
+- localization: ekf_localizer: cov_ellipse_lateral_direction_size[^*]
 - localization_error_monitor: ellipse_error_status
 - localization: pose_instability_detector
+
+[^*]: These four were consolidated into "localization: ekf_localizer" in the previous version.
 
 See the actual implementation of [`autoware_localization_evaluation_scripts`](https://github.com/autowarefoundation/autoware_tools/tree/main/localization/autoware_localization_evaluation_scripts) for details.
 
