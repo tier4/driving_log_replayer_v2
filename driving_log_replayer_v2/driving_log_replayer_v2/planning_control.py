@@ -357,8 +357,6 @@ class PlanningFactor(EvaluationItem):
                 "Behavior": "NO_FACTOR",
             }
         else:
-            frame_success = "Fail"
-
             # get factors[0] # factorsはarrayになっているが、実際には1個しか入ってない。
             info_dict = {}
             condition_met = True
@@ -382,8 +380,8 @@ class PlanningFactor(EvaluationItem):
             condition_met if self.condition.judgement == "positive" else not condition_met
         )
         if condition_met:
-            frame_success = "Success"
             self.passed += 1
+        frame_success = "Success" if condition_met else "Fail"
 
         self.success = (
             self.passed > 0
