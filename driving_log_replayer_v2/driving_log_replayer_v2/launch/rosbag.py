@@ -48,7 +48,7 @@ def extract_topics_from_profile(profile_name: str, profile_type: str) -> list[st
         return []
     with profile_file.open("r") as f:
         remap_dict = yaml.safe_load(f)
-        return remap_dict.get("profile_type", [])
+        return remap_dict.get(profile_type, [])
 
 
 def remap_str(topic: str) -> str:
