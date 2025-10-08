@@ -211,7 +211,7 @@ Evaluation:
 `logging_simulator` 終了後 `autoware_localization_evaluation_scripts` を通じて、localization に関連する diagnostics が想定以上の ERROR を出していないかを評価する。具体的には以下の名前の diagnostics について評価する。
 
 - ndt_scan_matcher: scan_matching_status
-- localization: ekf_localizer
+- localization: ekf_localizer (localization: ekf_localizer: is_activated のように複数に細分化されている場合がある)
 - localization_error_monitor: ellipse_error_status
 - localization: pose_instability_detector
 
