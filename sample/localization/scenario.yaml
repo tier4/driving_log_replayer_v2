@@ -16,7 +16,7 @@ Evaluation:
       Method: NVTL # NVTL or TP which method to use for evaluation
       AllowableLikelihood: 2.3 # If above this value, the localization reliability value is considered normal.
       NGCount: 10 # If the reliability value is lower than the threshold value for more than this number in the sequence. the evaluation is considered to have failed.
-    avalilability: # NDT Avaliability evaluation will be run by default even if you don't have this block. You need this block only when you want to disable it.
+    availability: # NDT Availability evaluation will be run by default even if you don't have this block. You need this block only when you want to disable it.
       enable: false
     OverallCriteriaMask: # Toggle the mask below to perform or not to perform evaluation of the according criteria. The evaluator will automatically set all to `true` if this block is not defined.
       mean_relative_position: true
