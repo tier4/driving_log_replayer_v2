@@ -39,12 +39,17 @@ from driving_log_replayer_v2.scenario import load_scenario
 from driving_log_replayer_v2.ground_segmentation import GroundSegmentationScenario
 import pdb
 
+# Import required modules for message deserialization
+from rclpy.serialization import deserialize_message
+from rosidl_runtime_py.utilities import get_message
+
+
 if TYPE_CHECKING:
     pass
 
 class GroundSegmentationEvaluator:
     CLOUD_DIM = 5
-    TS_DIFF_THRESH = 75000
+    TS_DIFF_THRESH = 75000000
 
     def __init__(
         self,
@@ -291,27 +296,43 @@ def evaluate(
         topic_name, data, timestamp = reader.read_next()
         if topic_name != target_topic:
             continue
-        
-        print(f"Processing frame at {timestamp} ({timestamp/1e9:.6f} seconds)")
-        
-        # Find closest ground truth timestamp
-        closest_gt_timestamp = None
-        min_diff = float('inf')
-        
-        for gt_timestamp in evaluator.ground_truth_timestamps:
-            diff_seconds = abs(timestamp - gt_timestamp) / 1e9
-            if diff_seconds < min_diff:
-                min_diff = diff_seconds
-                closest_gt_timestamp = gt_timestamp
-        
-        if min_diff < 0.075:  # 75ms threshold
-            print(f"Found matching GT frame: bag={timestamp/1e9:.6f}s, gt={closest_gt_timestamp/1e9:.6f}s, diff={min_diff:.3f}s")
-            # Process this frame for evaluation
-            # ... add your evaluation logic here
-        else:
-            print(f"No matching GT frame found. Closest diff: {min_diff:.3f}s")
-    # result_writer.close()
-    reader.close()
+        gt_timestamp = evaluator._get_gt_frame_ts(unix_time=timestamp)
+        if gt_timestamp < 0:
+            continue
+        print(f"Processing frame at {gt_timestamp}")
+        gt_frame_cloud: np.ndarray = evaluator.ground_truth[gt_timestamp]["points"]
+        gt_frame_label: np.ndarray = evaluator.ground_truth[gt_timestamp]["labels"]
+        kdtree = cKDTree(gt_frame_cloud[:, 0:3])
+
+        msg_type = get_message(target_topic_type)
+        msg = deserialize_message(data, msg_type)
+        numpy_pcd = ros2_numpy.numpify(msg)
+
+        pointcloud = np.zeros((numpy_pcd.shape[0], 3))
+        pointcloud[:, 0] = numpy_pcd["x"]
+        pointcloud[:, 1] = numpy_pcd["y"]
+        pointcloud[:, 2] = numpy_pcd["z"]
+        tp_fn = 0
+        for ground_label in evaluator.ground_label:
+            tp_fn += np.count_nonzero(gt_frame_label == ground_label)
+
+        fp_tn = 0
+        for obstacle_label in evaluator.obstacle_label:
+            fp_tn += np.count_nonzero(gt_frame_label == obstacle_label)
+
+        tn: int = 0
+        fn: int = 0
+        for p in pointcloud:
+            _, idx = kdtree.query(p, k=1)
+            if gt_frame_label[idx] in evaluator.ground_label:
+                fn += 1
+            elif gt_frame_label[idx] in evaluator.obstacle_label:
+                tn += 1
+        tp = tp_fn - fn
+        fp = fp_tn - tn
+
+        print(f"TP {tp}, FP {fp}, TN {tn}, FN {fn}")
+        metrics_list = evaluator.__compute_metrics(tp, fp, tn, fn)
 
 
 def parse_args() -> argparse.Namespace:
