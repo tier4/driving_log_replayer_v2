@@ -45,7 +45,7 @@ def calc_pose_horizontal_distance(relative_pose: PoseStamped) -> float:
 
 
 class AvailabilityCondition(BaseModel):
-    Enable: bool
+    enable: bool
 
 
 class ConvergenceCondition(BaseModel):
@@ -62,7 +62,7 @@ class ReliabilityCondition(BaseModel):
 
 
 class Conditions(BaseModel):
-    Availability: AvailabilityCondition = AvailabilityCondition(Enable=True)
+    availability: AvailabilityCondition | None = AvailabilityCondition(enable=True)
     Convergence: ConvergenceCondition | None = None
     Reliability: ReliabilityCondition | None = None
 
@@ -211,8 +211,8 @@ class LocalizationResult(ResultBase):
             Reliability(condition=condition.Reliability) if condition.Reliability else None
         )
         self.__availability = (
-            Availability(condition=condition.Availability)
-            if condition.Availability
+            Availability(condition=condition.availability)
+            if condition.availability
             else Availability()
         )
 
@@ -228,7 +228,7 @@ class LocalizationResult(ResultBase):
             parts.append(self.__reliability.summary)
             success_flags.append(self.__reliability.success)
 
-        if self.__availability.condition.Enable:
+        if self.__availability.condition.enable:
             parts.append(self.__availability.summary)
             success_flags.append(self.__availability.success)
 
