@@ -8,6 +8,11 @@
   history: keep_last
   depth: 10
   durability: volatile
+/perception/obstacle_segmentation/single_frame/pointcloud:
+  reliability: best_effort
+  history: keep_last
+  depth: 10
+  durability: volatile
 /localization/util/downsample/pointcloud:
   reliability: best_effort
   history: keep_last
