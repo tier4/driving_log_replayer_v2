@@ -69,7 +69,7 @@ class Conditions(BaseModel):
 
 class Evaluation(BaseModel):
     UseCaseName: Literal["localization"]
-    UseCaseFormatVersion: Literal["2.0.0"]
+    UseCaseFormatVersion: Literal["2.0.0", "2.1.0"]
     Conditions: Conditions
     Datasets: list[dict]
 
