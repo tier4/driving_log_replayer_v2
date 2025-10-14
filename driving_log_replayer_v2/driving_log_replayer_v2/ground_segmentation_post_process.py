@@ -57,7 +57,8 @@ class GroundSegmentationEvaluator:
         
         self.result_archive_path = Path(result_archive_path)
         self.ground_truth = self._load_ground_truth(t4_dataset_paths)
-        
+        self.ground_truth_timestamps = list(self.ground_truth.keys())
+
         # Get evaluation conditions
         self.evaluation_topic = evaluation_topic
         # extract ground_label from scenario_path yaml
@@ -96,7 +97,9 @@ class GroundSegmentationEvaluator:
 
             points: np.ndarray = raw_points.reshape((-1, self.CLOUD_DIM))
 
-            ground_truth[int(sample_data[i]["timestamp"])] = {
+            # Convert microseconds to nanoseconds for consistency with ROS bag timestamps
+            timestamp_nanosec = int(sample_data[i]["timestamp"]) * 1000
+            ground_truth[timestamp_nanosec] = {
                 "points": points,
                 "labels": labels,
             }
@@ -242,11 +245,11 @@ def evaluate(
     )
 
     # Initialize result writer
-    result_writer = ResultWriter(
-        result_json_path,
-        Clock(),
-        {},
-    )
+    # result_writer = ResultWriter(
+    #     result_json_path,
+    #     Clock(),
+    #     {},
+    # )
 
     # Save scenario.yaml for reference
     shutil.copy(scenario_path, Path(result_archive_path).joinpath("scenario.yaml"))
@@ -283,97 +286,31 @@ def evaluate(
     frame_results = []
     processed_frames = 0
     successful_frames = 0
-
+    print("gt_timestamps:", evaluator.ground_truth_timestamps)
     while reader.has_next():
         topic_name, data, timestamp = reader.read_next()
-        
         if topic_name != target_topic:
             continue
-
-        # Deserialize message
-        from rclpy.serialization import deserialize_message
-        from rosidl_runtime_py.utilities import get_message
         
-        msg_type = get_message(target_topic_type)
-        msg = deserialize_message(data, msg_type)
-        pdb.set_trace()
-        try:
-            # Evaluate this frame
-            result_dict = evaluator.evaluate_pointcloud(msg)
-            
-            # Create result object
-            result = GroundSegmentationResult(
-                tp=result_dict["tp"],
-                fp=result_dict["fp"],
-                tn=result_dict["tn"],
-                fn=result_dict["fn"],
-                accuracy=result_dict["accuracy"],
-                precision=result_dict["precision"],
-                recall=result_dict["recall"],
-                specificity=result_dict["specificity"],
-                f1_score=result_dict["f1_score"],
-                success=result_dict["success"],
-                stamp=msg.header.stamp,
-                frame="",
-            )
-            pdb.set_trace()
-            frame_results.append(result)
-            processed_frames += 1
-            if result.success:
-                successful_frames += 1
-            
-            # Write result
-            res_str = result_writer.write_result_with_time(result, timestamp)
-            
-            # Log progress
-            if processed_frames % 10 == 0:
-                print(f"Processed {processed_frames} frames, "
-                      f"Success rate: {successful_frames/processed_frames:.3f}")
-                
-        except Exception as e:
-            print(f"Error processing frame at timestamp {timestamp}: {e}")
-            continue
-
-    # Calculate final statistics
-    if frame_results:
-        final_success_rate = successful_frames / len(frame_results)
-        avg_metrics = {
-            "tp": np.mean([r.tp for r in frame_results]),
-            "fp": np.mean([r.fp for r in frame_results]),
-            "tn": np.mean([r.tn for r in frame_results]),
-            "fn": np.mean([r.fn for r in frame_results]),
-            "accuracy": np.mean([r.accuracy for r in frame_results]),
-            "precision": np.mean([r.precision for r in frame_results]),
-            "recall": np.mean([r.recall for r in frame_results]),
-            "specificity": np.mean([r.specificity for r in frame_results]),
-            "f1_score": np.mean([r.f1_score for r in frame_results]),
-            "success_rate": final_success_rate,
-        }
+        print(f"Processing frame at {timestamp} ({timestamp/1e9:.6f} seconds)")
         
-        # Write final summary
-        final_result = {
-            "Result": {
-                "Success": final_success_rate >= evaluator.threshold,
-                "Summary": f"Ground segmentation evaluation completed",
-            },
-            "Stamp": {"System": Clock().now().nanoseconds / 1e9},
-            "Frame": {
-                "TotalFrames": len(frame_results),
-                "SuccessfulFrames": successful_frames,
-                "SuccessRate": final_success_rate,
-                "Metrics": avg_metrics,
-            },
-        }
-        result_writer.write_line(final_result)
+        # Find closest ground truth timestamp
+        closest_gt_timestamp = None
+        min_diff = float('inf')
         
-        print(f"\nEvaluation completed:")
-        print(f"Total frames: {len(frame_results)}")
-        print(f"Successful frames: {successful_frames}")
-        print(f"Success rate: {final_success_rate:.3f}")
-        print(f"Average F1-score: {avg_metrics['f1_score']:.3f}")
-        print(f"Overall success: {final_result['Result']['Success']}")
+        for gt_timestamp in evaluator.ground_truth_timestamps:
+            diff_seconds = abs(timestamp - gt_timestamp) / 1e9
+            if diff_seconds < min_diff:
+                min_diff = diff_seconds
+                closest_gt_timestamp = gt_timestamp
         
-    result_writer.close()
+        if min_diff < 0.075:  # 75ms threshold
+            print(f"Found matching GT frame: bag={timestamp/1e9:.6f}s, gt={closest_gt_timestamp/1e9:.6f}s, diff={min_diff:.3f}s")
+            # Process this frame for evaluation
+            # ... add your evaluation logic here
+        else:
+            print(f"No matching GT frame found. Closest diff: {min_diff:.3f}s")
+    # result_writer.close()
     reader.close()
 
 
