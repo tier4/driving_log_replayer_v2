@@ -13,6 +13,7 @@
 # limitations under the License.
 
 from launch.actions import DeclareLaunchArgument
+from launch.substitutions import LaunchConfiguration
 
 RECORD_TOPIC = """^/diagnostics$\
 |^/sensing/lidar/concatenated/pointcloud$\
@@ -26,9 +27,10 @@ RECORD_TOPIC = """^/diagnostics$\
 |^/tf$\
 |^/tf_static$\
 |^/planning/scenario_planning/lane_driving/behavior_planning/path$\
-|^/planning/scenario_planning/trajectory$\
+|^/planning/trajectory$\
 |^/.*/virtual_wall/.*$\
 |^/.*/path_candidate/.*\
+|^/driving_log_replayer/.*\
 """
 
 AUTOWARE_DISABLE = {}
@@ -38,6 +40,6 @@ AUTOWARE_ARGS = {
     "twist_source": "gyro_odom",
 }
 
-NODE_PARAMS = {}
+NODE_PARAMS: dict[str, LaunchConfiguration] = {}
 
 USE_CASE_ARGS: list[DeclareLaunchArgument] = []

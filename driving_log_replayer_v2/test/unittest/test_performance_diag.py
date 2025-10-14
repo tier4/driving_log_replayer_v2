@@ -36,13 +36,15 @@ def test_scenario() -> None:
 
 def test_visibility_invalid() -> None:
     status = DiagnosticStatus(
-        name="dual_return_filter: /sensing/lidar/front_lower: visibility_validation",
+        name="polar_voxel_outlier_filter: /sensing/lidar/front_lower: visibility_validation",
         level=DiagnosticStatus.OK,
     )
     evaluation_item = Visibility(
         condition=VisibilityCondition(ScenarioType=None, PassRate=99.0),
     )
-    frame_dict, msg_visibility_value, msg_visibility_level = evaluation_item.set_frame(status)
+    frame_dict, msg_visibility_value, msg_visibility_level = evaluation_item.set_frame(
+        status, "Visibility"
+    )
     assert evaluation_item.success is True
     assert evaluation_item.summary == "Invalid"
     assert frame_dict == {
@@ -55,9 +57,9 @@ def test_visibility_invalid() -> None:
 
 def test_visibility_tp_success() -> None:
     status = DiagnosticStatus(
-        name="dual_return_filter: /sensing/lidar/front_lower: visibility_validation",
+        name="polar_voxel_outlier_filter: /sensing/lidar/front_lower: visibility_validation",
         level=DiagnosticStatus.ERROR,
-        values=[KeyValue(key="value", value="0.15")],
+        values=[KeyValue(key="Visibility", value="0.15")],
     )
     evaluation_item = Visibility(
         condition=VisibilityCondition(ScenarioType="TP", PassRate=90.0),
@@ -65,7 +67,9 @@ def test_visibility_tp_success() -> None:
         passed=89,
         success=False,
     )
-    frame_dict, msg_visibility_value, msg_visibility_level = evaluation_item.set_frame(status)
+    frame_dict, msg_visibility_value, msg_visibility_level = evaluation_item.set_frame(
+        status, "Visibility"
+    )
     assert evaluation_item.success is True
     assert evaluation_item.summary == "Visibility (Success): 90 / 100"
     assert frame_dict == {
@@ -81,9 +85,9 @@ def test_visibility_tp_success() -> None:
 
 def test_visibility_tp_fail() -> None:
     status = DiagnosticStatus(
-        name="dual_return_filter: /sensing/lidar/front_lower: visibility_validation",
+        name="polar_voxel_outlier_filter: /sensing/lidar/front_lower: visibility_validation",
         level=DiagnosticStatus.OK,
-        values=[KeyValue(key="value", value="1.00")],
+        values=[KeyValue(key="Visibility", value="1.00")],
     )
     evaluation_item = Visibility(
         condition=VisibilityCondition(ScenarioType="TP", PassRate=90.0),
@@ -91,7 +95,9 @@ def test_visibility_tp_fail() -> None:
         passed=89,
         success=False,
     )
-    frame_dict, msg_visibility_value, msg_visibility_level = evaluation_item.set_frame(status)
+    frame_dict, msg_visibility_value, msg_visibility_level = evaluation_item.set_frame(
+        status, "Visibility"
+    )
     assert evaluation_item.success is False
     assert evaluation_item.summary == "Visibility (Fail): 89 / 100"
     assert frame_dict == {
@@ -107,9 +113,9 @@ def test_visibility_tp_fail() -> None:
 
 def test_visibility_fp_success() -> None:
     status = DiagnosticStatus(
-        name="dual_return_filter: /sensing/lidar/front_lower: visibility_validation",
+        name="polar_voxel_outlier_filter: /sensing/lidar/front_lower: visibility_validation",
         level=DiagnosticStatus.OK,
-        values=[KeyValue(key="value", value="1.00")],
+        values=[KeyValue(key="Visibility", value="1.00")],
     )
     evaluation_item = Visibility(
         condition=VisibilityCondition(ScenarioType="FP", PassRate=90.0),
@@ -117,7 +123,9 @@ def test_visibility_fp_success() -> None:
         passed=49,
         success=True,
     )
-    frame_dict, msg_visibility_value, msg_visibility_level = evaluation_item.set_frame(status)
+    frame_dict, msg_visibility_value, msg_visibility_level = evaluation_item.set_frame(
+        status, "Visibility"
+    )
     assert evaluation_item.success is True
     assert evaluation_item.summary == "Visibility (Success): 50 / 50"
     assert frame_dict == {
@@ -133,9 +141,9 @@ def test_visibility_fp_success() -> None:
 
 def test_visibility_fp_fail() -> None:
     status = DiagnosticStatus(
-        name="dual_return_filter: /sensing/lidar/front_lower: visibility_validation",
+        name="polar_voxel_outlier_filter: /sensing/lidar/front_lower: visibility_validation",
         level=DiagnosticStatus.ERROR,
-        values=[KeyValue(key="value", value="0.00")],
+        values=[KeyValue(key="Visibility", value="0.00")],
     )
     evaluation_item = Visibility(
         condition=VisibilityCondition(ScenarioType="FP", PassRate=90.0),
@@ -143,7 +151,9 @@ def test_visibility_fp_fail() -> None:
         passed=49,
         success=True,
     )
-    frame_dict, msg_visibility_value, msg_visibility_level = evaluation_item.set_frame(status)
+    frame_dict, msg_visibility_value, msg_visibility_level = evaluation_item.set_frame(
+        status, "Visibility"
+    )
     assert evaluation_item.success is False
     assert evaluation_item.summary == "Visibility (Fail): 49 / 50"
     assert frame_dict == {
@@ -171,7 +181,7 @@ def test_blockage_invalid() -> None:
         msg_blockage_sky_ratio,
         msg_blockage_ground_ratio,
         msg_blockage_level,
-    ) = evaluation_item.set_frame(status)
+    ) = evaluation_item.set_frame(status, "ground_blockage_ratio", "sky_blockage_ratio")
     assert evaluation_item.success is True
     assert evaluation_item.summary == "Invalid"
     assert frame_dict == {
@@ -209,7 +219,7 @@ def test_blockage_tp_success() -> None:
         msg_blockage_sky_ratio,
         msg_blockage_ground_ratio,
         msg_blockage_level,
-    ) = evaluation_item.set_frame(status)
+    ) = evaluation_item.set_frame(status, "ground_blockage_ratio", "sky_blockage_ratio")
     assert evaluation_item.success is True
     assert evaluation_item.summary == "front_lower (Success): 90 / 100"
     assert frame_dict == {
@@ -253,7 +263,7 @@ def test_blockage_tp_fail() -> None:
         msg_blockage_sky_ratio,
         msg_blockage_ground_ratio,
         msg_blockage_level,
-    ) = evaluation_item.set_frame(status)
+    ) = evaluation_item.set_frame(status, "ground_blockage_ratio", "sky_blockage_ratio")
     assert evaluation_item.success is False
     assert evaluation_item.summary == "front_lower (Fail): 89 / 100"
     assert frame_dict == {
@@ -297,7 +307,7 @@ def test_blockage_fp_success() -> None:
         msg_blockage_sky_ratio,
         msg_blockage_ground_ratio,
         msg_blockage_level,
-    ) = evaluation_item.set_frame(status)
+    ) = evaluation_item.set_frame(status, "ground_blockage_ratio", "sky_blockage_ratio")
     assert evaluation_item.success is True
     assert evaluation_item.summary == "front_lower (Success): 50 / 50"
     assert frame_dict == {
@@ -341,7 +351,7 @@ def test_blockage_fp_fail() -> None:
         msg_blockage_sky_ratio,
         msg_blockage_ground_ratio,
         msg_blockage_level,
-    ) = evaluation_item.set_frame(status)
+    ) = evaluation_item.set_frame(status, "ground_blockage_ratio", "sky_blockage_ratio")
     assert evaluation_item.success is False
     assert evaluation_item.summary == "front_lower (Fail): 49 / 50"
     assert frame_dict == {

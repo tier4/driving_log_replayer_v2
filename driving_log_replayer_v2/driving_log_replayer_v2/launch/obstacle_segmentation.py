@@ -18,9 +18,12 @@ from launch.substitutions import LaunchConfiguration
 RECORD_TOPIC = """^/tf$\
 |^/diagnostics$\
 |^/perception/obstacle_segmentation/pointcloud$\
-|^/planning/scenario_planning/trajectory$\
+|^/planning/trajectory$\
 |^/planning/scenario_planning/status/stop_reasons$\
 |^/driving_log_replayer_v2/.*\
+|^/driving_log_replayer/.*\
+|^/map/vector_map_marker$\
+|^/localization/kinematic_state$\
 """
 
 AUTOWARE_DISABLE = {
@@ -32,7 +35,7 @@ AUTOWARE_ARGS = {
     "scenario_simulation": "true",
 }
 
-NODE_PARAMS = {
+NODE_PARAMS: dict[str, LaunchConfiguration] = {
     "vehicle_model": LaunchConfiguration("vehicle_model"),
     "map_path": LaunchConfiguration("map_path"),
 }

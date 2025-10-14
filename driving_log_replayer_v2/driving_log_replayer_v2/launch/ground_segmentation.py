@@ -17,6 +17,7 @@ from launch.substitutions import LaunchConfiguration
 
 RECORD_TOPIC = """^/tf$\
 |^/diagnostics$"\
+|^/driving_log_replayer/.*\
 """
 
 AUTOWARE_DISABLE = {
@@ -28,7 +29,7 @@ AUTOWARE_DISABLE = {
 
 AUTOWARE_ARGS = {"perception_mode": "lidar"}
 
-NODE_PARAMS = {
+NODE_PARAMS: dict[str, LaunchConfiguration] = {
     "evaluation_target_topic": LaunchConfiguration("evaluation_target_topic"),
 }
 

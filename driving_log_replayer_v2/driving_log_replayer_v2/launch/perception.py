@@ -15,6 +15,7 @@
 from pathlib import Path
 
 from launch.actions import DeclareLaunchArgument
+from launch.substitutions import LaunchConfiguration
 from pydantic import ValidationError
 import yaml
 
@@ -25,16 +26,20 @@ RECORD_TOPIC = """^/tf$\
 |^/tf_static$\
 |^/diagnostics$\
 |^/awapi/autoware/get/status$\
-|^/sensing/camera/.*\
+|^/sensing/camera/.*/compressed$\
+|^/sensing/camera/.*/camera_info$\
 |^/sensing/lidar/concatenated/pointcloud$\
 |^/perception/object_recognition/detection/.*/debug/pipeline_latency_ms$\
 |^/perception/object_recognition/tracking/multi_object_tracker/debug/.*\
 |^/perception/object_recognition/prediction/map_based_prediction/debug/pipeline_latency_ms$\
 |^/perception/object_recognition/.*/objects$\
 |^/perception/object_recognition/objects$\
+|^/perception/object_recognition/detection/rois[0-9]+$\
 |^/perception/object_recognition/detection/objects_before_filter$\
 |^/sensing/.*detected_objects$\
 |^/sensing/.*tracked_objects$\
+|^/map/vector_map_marker$\
+|^/localization/kinematic_state$\
 """
 
 
@@ -52,8 +57,6 @@ def autoware_disable(conf: dict) -> dict[str, str]:
     if scenario.Evaluation.Conditions.stop_reason_criterion is not None:
         return {
             "localization": "false",
-            "planning": "true",
-            "control": "true",
         }
     return default
 
@@ -62,7 +65,7 @@ AUTOWARE_DISABLE = autoware_disable
 
 AUTOWARE_ARGS = {}
 
-NODE_PARAMS = {}
+NODE_PARAMS: dict[str, LaunchConfiguration] = {}
 
 EVALUATION_DETECTION_TOPIC_REGEX = """\
 ^/perception/object_recognition/detection/objects$\
@@ -111,10 +114,5 @@ USE_CASE_ARGS: list[DeclareLaunchArgument] = [
         "analysis_distance_interval",
         default_value="150",
         description="Distance interval for analysis.",
-    ),
-    DeclareLaunchArgument(
-        "publish_topic_from_rosbag",
-        default_value="",
-        description="The topic to publish in rosbag before play rosbag. Using comma separated string.",
     ),
 ]

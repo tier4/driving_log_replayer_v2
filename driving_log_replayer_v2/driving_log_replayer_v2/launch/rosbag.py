@@ -20,6 +20,7 @@ from launch import LaunchContext
 from launch.actions import ExecuteProcess
 from launch.actions import IncludeLaunchDescription
 from launch.actions import LogInfo
+from launch.actions import TimerAction
 from launch_ros.actions import Node
 import yaml
 
@@ -29,11 +30,15 @@ PACKAGE_SHARE = get_package_share_directory("driving_log_replayer_v2")
 QOS_PROFILE_PATH_STR = Path(PACKAGE_SHARE, "config", "qos.yaml").as_posix()
 
 
-def extract_remap_topics(profile_name: str) -> list[str]:
+def extract_topics_from_profile(profile_name: str, profile_type: str) -> list[str]:
+    if not profile_name:
+        return []
+
+    assert profile_type in ["publish", "remap"]
     profile_file = Path(
         get_package_share_directory("driving_log_replayer_v2"),
         "config",
-        "remap",
+        profile_type,
         f"{profile_name}.yaml",
     )
     # Make it work with symlink install as well.
@@ -43,7 +48,7 @@ def extract_remap_topics(profile_name: str) -> list[str]:
         return []
     with profile_file.open("r") as f:
         remap_dict = yaml.safe_load(f)
-        return remap_dict.get("remap")
+        return remap_dict.get(profile_type, [])
 
 
 def remap_str(topic: str) -> str:
@@ -62,9 +67,16 @@ def system_defined_remap(conf: dict) -> list[str]:
         add_remap("/tf", remap_list)
         add_remap("/localization/kinematic_state", remap_list)
         add_remap("/localization/acceleration", remap_list)
-    if conf.get("goal_pose", "{}") != "{}":
+    if conf["goal_pose"] != "{}":
         add_remap("/planning/mission_planning/route", remap_list)
     return remap_list
+
+
+def user_defined_publish(conf: dict) -> list[str]:
+    publish_list = []
+    if conf["publish_profile"] != "":
+        publish_list.extend(extract_topics_from_profile(conf["publish_profile"], "publish"))
+    return publish_list
 
 
 def user_defined_remap(conf: dict) -> list[str]:
@@ -73,7 +85,7 @@ def user_defined_remap(conf: dict) -> list[str]:
     user_remap_topics: list[str] = (
         conf["remap_arg"].split(",")
         if conf["remap_arg"] != ""
-        else extract_remap_topics(conf["remap_profile"])
+        else extract_topics_from_profile(conf["remap_profile"], "remap")
     )
     for topic in user_remap_topics:
         if topic.startswith("/"):
@@ -87,7 +99,7 @@ def get_pre_task_before_play_rosbag(
     context: LaunchContext, on_exit: ExecuteProcess
 ) -> Node | ExecuteProcess:
     conf = context.launch_configurations
-    if conf.get("publish_topic_from_rosbag", "None") not in ["", "None"]:
+    if conf["publish_topic_from_rosbag"] != "":
         return Node(
             package="driving_log_replayer_v2",
             namespace="/driving_log_replayer_v2",
@@ -98,15 +110,18 @@ def get_pre_task_before_play_rosbag(
                 {
                     "use_sim_time": False,  # In order to trigger the timer without play rosbag
                     "input_bag": conf["input_bag"],
-                    "storage_type": "sqlite3",
+                    "storage_type": "sqlite3",  # only sqlite3 is supported in publish_topic_from_rosbag_node
                     "publish_topic_from_rosbag": conf["publish_topic_from_rosbag"],
                 }
             ],
             on_exit=[on_exit],
         )
-    return ExecuteProcess(
-        cmd=["echo", "pre-task before play rosbag is not activated"],
-        on_exit=[on_exit],
+    return TimerAction(  # dummy timer for logging
+        period=0.0,
+        actions=[
+            LogInfo(msg="pre-task before play rosbag is not activated"),
+            on_exit,
+        ],
     )
 
 
@@ -126,6 +141,12 @@ def launch_bag_player(
         "--qos-profile-overrides-path",
         QOS_PROFILE_PATH_STR,
     ]
+    # topics
+    publish_list = ["--topics"]
+    publish_list.extend(user_defined_publish(conf))
+    if len(publish_list) != 1:
+        play_cmd.extend(publish_list)
+    # remap
     remap_list = ["--remap"]
     remap_list.extend(system_defined_remap(conf))
     remap_list.extend(user_defined_remap(conf))
@@ -140,14 +161,15 @@ def launch_bag_player(
         if conf["record_only"] == "true"
         else ExecuteProcess(cmd=play_cmd, output="screen")
     )
-    delay_player_for_pre_task = ExecuteProcess(
-        cmd=["sleep", conf["play_delay"]], on_exit=[bag_player]
-    )
-    pre_task_player = get_pre_task_before_play_rosbag(context, delay_player_for_pre_task)
+    delay_player_for_pre_task = ExecuteProcess(cmd=["sleep", "10"], on_exit=[bag_player])
+    pre_task_player = get_pre_task_before_play_rosbag(context, on_exit=delay_player_for_pre_task)
     delay_player_for_autoware = ExecuteProcess(
         cmd=["sleep", conf["play_delay"]], on_exit=[pre_task_player]
     )
-    return [delay_player_for_autoware, LogInfo(msg=f"remap_command is {remap_list}")]
+    return [
+        delay_player_for_autoware,
+        LogInfo(msg=f"remap_command is {remap_list}, topics_command is {publish_list}"),
+    ]
 
 
 def launch_bag_recorder(context: LaunchContext) -> list:

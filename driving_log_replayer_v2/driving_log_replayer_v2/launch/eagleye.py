@@ -13,6 +13,7 @@
 # limitations under the License.
 
 from launch.actions import DeclareLaunchArgument
+from launch.substitutions import LaunchConfiguration
 
 RECORD_TOPIC = """^/tf$\
 |^/diagnostics$"\
@@ -20,6 +21,7 @@ RECORD_TOPIC = """^/tf$\
 |^/localization/pose_estimator/pose$\
 |^/localization/util/downsample/pointcloud$\
 |^/localization/pose_estimator/points_aligned$\
+|^/driving_log_replayer/.*\
 """
 
 AUTOWARE_DISABLE = {"perception": "false", "planning": "false", "control": "false"}
@@ -29,6 +31,6 @@ AUTOWARE_ARGS = {
     "twist_source": "eagleye",
 }
 
-NODE_PARAMS = {}
+NODE_PARAMS: dict[str, LaunchConfiguration] = {}
 
 USE_CASE_ARGS: list[DeclareLaunchArgument] = []

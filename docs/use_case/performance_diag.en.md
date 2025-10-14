@@ -21,7 +21,7 @@ Launching the file executes the following steps:
 The evaluation process confirms that more than a specified rate of ERRORs for limited visibility are generated for rosbag input data obtained under rainy conditions (naturally or artificially generated).
 Also, using data obtained during sunny weather, it is confirmed that ERRORs are never generated.
 
-The `status.name` in `/diagnostics` corresponding to `dual_return_filter: /sensing/lidar/.*: visibility_validation` is used for judgment.
+The `status.name` in `/diagnostics` corresponding to `polar_voxel_outlier_filter: /sensing/lidar/.*: visibility_validation` is used for judgment.
 
 ### blockage evaluation
 

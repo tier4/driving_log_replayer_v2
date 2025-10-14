@@ -21,6 +21,7 @@ from launch.actions import GroupAction
 from launch.actions import IncludeLaunchDescription
 from launch.actions import LogInfo
 from launch.launch_description_sources import AnyLaunchDescriptionSource
+from launch.substitutions import LaunchConfiguration
 
 from driving_log_replayer_v2.launch.util import output_dummy_result_bag
 from driving_log_replayer_v2.launch.util import output_dummy_result_jsonl
@@ -31,7 +32,7 @@ AUTOWARE_DISABLE = {}
 
 AUTOWARE_ARGS = {}
 
-NODE_PARAMS = {}
+NODE_PARAMS: dict[str, LaunchConfiguration] = {}
 
 USE_CASE_ARGS: list[DeclareLaunchArgument] = []
 
@@ -48,7 +49,7 @@ def launch_ndt_convergence(context: LaunchContext) -> list:
 
     # Output dummies to comply with Evaluator specifications
     output_dummy_result_jsonl(conf["result_json_path"], summary="NDT Convergence always success")
-    output_dummy_result_bag(conf["result_bag_path"])
+    output_dummy_result_bag(conf["result_bag_path"], storage_type=conf["storage"])
 
     launch_args = {
         "map_path": conf["map_path"] + "/pointcloud_map.pcd",

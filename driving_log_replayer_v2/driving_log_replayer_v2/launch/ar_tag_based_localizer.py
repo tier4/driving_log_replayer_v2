@@ -13,10 +13,12 @@
 # limitations under the License.
 
 from launch.actions import DeclareLaunchArgument
+from launch.substitutions import LaunchConfiguration
 
 RECORD_TOPIC = """^/tf$\
 |^/diagnostics$"\
 |^/localization/kinematic_state$\
+|^/driving_log_replayer/.*\
 """
 
 AUTOWARE_DISABLE = {
@@ -30,6 +32,6 @@ AUTOWARE_ARGS = {
     "twist_source": "gyro_odom",
 }
 
-NODE_PARAMS = {}
+NODE_PARAMS: dict[str, LaunchConfiguration] = {}
 
 USE_CASE_ARGS: list[DeclareLaunchArgument] = []

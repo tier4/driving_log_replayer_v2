@@ -1,5 +1,30 @@
 # Release Notes
 
+## Version 3.13.3
+
+Minor Tweak
+
+| Module                  | Feature       | Brief summary                                                            | Pull request                                                        | Contributor                                   |
+| ----------------------- | ------------- | ------------------------------------------------------------------------ | ------------------------------------------------------------------- | --------------------------------------------- |
+| `common`                | launch        | refactor arguments and get method in context                             | [#231](https://github.com/tier4/driving_log_replayer_v2/issues/231) | [MasatoSaeki](https://github.com/MasatoSaeki) |
+| `ndt_convergence`       | rosbag        | create valid rosbag                                                      | [#230](https://github.com/tier4/driving_log_replayer_v2/issues/230) | [MasatoSaeki](https://github.com/MasatoSaeki) |
+| `performance_diag`      | msg           | adopt new diag msg                                                       | [#209](https://github.com/tier4/driving_log_replayer_v2/issues/209) | [MasatoSaeki](https://github.com/MasatoSaeki) |
+| `perception`            | topic         | add perception recording topic                                           | [#227](https://github.com/tier4/driving_log_replayer_v2/issues/227) | [YoshiRi](https://github.com/YoshiRi)         |
+| `obstacle_segmentation` | visualization | better visualization for obstacle segmentation and support multi-polygon | [#228](https://github.com/tier4/driving_log_replayer_v2/issues/228) | [xtk8532704](https://github.com/xtk8532704)   |
+| `common`                | rosbag        | publish specific topics via publish_profile                              | [#226](https://github.com/tier4/driving_log_replayer_v2/issues/226) | [xtk8532704](https://github.com/xtk8532704)   |
+
+## Version 3.13.2
+
+Minor Tweak
+
+| Module             | Feature   | Brief summary                                                     | Pull request                                                        | Contributor                                      |
+| ------------------ | --------- | ----------------------------------------------------------------- | ------------------------------------------------------------------- | ------------------------------------------------ |
+| `common`           | launch    | add launcher to launch other ros2 node                            | [#221](https://github.com/tier4/driving_log_replayer_v2/issues/221) | [badai-nguyen](https://github.com//badai-nguyen) |
+| `perception`       | chore     | remove unnecessary autoware disable args                          | [#224](https://github.com/tier4/driving_log_replayer_v2/issues/224) | [MasatoSaeki](https://github.com//MasatoSaeki)   |
+| `localization`     | topic     | update topic saving list for visualization of localization tests  | [#223](https://github.com/tier4/driving_log_replayer_v2/issues/223) | [xtk8532704](https://github.com//xtk8532704)     |
+| `common`           | arguments | support override of vehicle_model and sensor_model using ROS args | [#222](https://github.com/tier4/driving_log_replayer_v2/issues/222) | [xtk8532704](https://github.com//xtk8532704)     |
+| `planning_control` | scenario  | repair the planning factor condition logic                        | [#220](https://github.com/tier4/driving_log_replayer_v2/issues/220) | [xtk8532704](https://github.com//xtk8532704)     |
+
 ## Version 3.13.1
 
 Minor Tweak

@@ -13,6 +13,7 @@
 # limitations under the License.
 
 from launch.actions import DeclareLaunchArgument
+from launch.substitutions import LaunchConfiguration
 
 RECORD_TOPIC = """^/tf$\
 |^/diagnostics$\
@@ -22,6 +23,7 @@ RECORD_TOPIC = """^/tf$\
 |^/perception/object_recognition/objects$\
 |^/sensing/camera/.*\
 |^/driving_log_replayer_v2/.*\
+|^/driving_log_replayer/.*\
 """
 
 AUTOWARE_DISABLE = {
@@ -34,6 +36,6 @@ AUTOWARE_ARGS = {
     "perception_mode": "camera_lidar_fusion",
 }
 
-NODE_PARAMS = {}
+NODE_PARAMS: dict[str, LaunchConfiguration] = {}
 
 USE_CASE_ARGS: list[DeclareLaunchArgument] = []
