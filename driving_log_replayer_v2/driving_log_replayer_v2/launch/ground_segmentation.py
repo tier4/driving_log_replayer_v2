@@ -17,7 +17,7 @@ from launch.substitutions import LaunchConfiguration
 
 RECORD_TOPIC = """^/tf$\
 |^/diagnostics$"\
-|^/perception/ground_segmentation/single_frame/pointcloud$\
+|^/perception/obstacle_segmentation/single_frame/pointcloud$\
 |^/perception/obstacle_segmentation/pointcloud$\
 """
 
