@@ -321,6 +321,8 @@ def evaluate(
     )
 
     # Save scenario.yaml for reference
+    if not Path(result_archive_path).exists():
+        Path(result_archive_path).mkdir(parents=True, exist_ok=True)
     shutil.copy(scenario_path, Path(result_archive_path).joinpath("scenario.yaml"))
 
     # Setup ROS bag reader
