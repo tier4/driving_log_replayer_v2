@@ -21,6 +21,7 @@ import shutil
 from typing import TYPE_CHECKING
 
 import numpy as np
+from sympy import true
 from rclpy.clock import Clock
 from rosbag2_py import SequentialReader
 from rosbag2_py import StorageOptions
@@ -31,12 +32,16 @@ from scipy.spatial import cKDTree
 from sensor_msgs.msg import PointCloud2
 from std_msgs.msg import String
 
+from pydantic import BaseModel
 # from driving_log_replayer_v2.ground_segmentation.manager import EvaluationManager
+from driving_log_replayer_v2.evaluator import DLREvaluatorV2
 from driving_log_replayer_v2.ground_segmentation import GroundSegmentationResult
 import driving_log_replayer_v2.perception_eval_conversions as eval_conversions
 from driving_log_replayer_v2.result import ResultWriter
+from driving_log_replayer_v2.scenario import number
 from driving_log_replayer_v2.scenario import load_scenario
 from driving_log_replayer_v2.ground_segmentation import GroundSegmentationScenario
+from driving_log_replayer_v2_msgs.msg import GroundSegmentationEvalResult
 import pdb
 
 # Import required modules for message deserialization
@@ -47,6 +52,12 @@ from rosidl_runtime_py.utilities import get_message
 if TYPE_CHECKING:
     pass
 
+class Condition(BaseModel):
+    ground_label: list[int]
+    obstacle_label: list[int]
+    accuracy_min: number
+    accuracy_max: number
+    PassRate: number
 class GroundSegmentationEvaluator:
     CLOUD_DIM = 5
     TS_DIFF_THRESH = 75000000
@@ -70,6 +81,15 @@ class GroundSegmentationEvaluator:
         self.scenario = load_scenario(Path(scenario_path), GroundSegmentationScenario)
         self.ground_label = self.scenario.Evaluation.Conditions.ground_label
         self.obstacle_label = self.scenario.Evaluation.Conditions.obstacle_label
+
+        self.total = 0
+        self.passed = 0
+        self.success = False
+        self.summary = ""
+        self.name = "GroundSegmentation"
+        self.condition: Condition = self.scenario.Evaluation.Conditions
+        print(f"Evaluation conditions: {self.condition}")
+
 
     def _load_ground_truth(self, t4_dataset_paths: list[str]) -> dict[int, dict[str, np.ndarray]]:
         """Load ground truth point cloud and annotation data."""
@@ -225,6 +245,50 @@ class GroundSegmentationEvaluator:
             "f1_score": 0.0,
             "success": False,
         }
+    def success_str(self) -> str:
+        return "Success" if self.success else "Fail"
+    
+    def rate(self) -> float:
+        return 0.0 if self.total == 0 else self.passed / self.total * 100.0
+
+    def set_frame(self, msg: GroundSegmentationEvalResult, ROS_timestamp: float) -> dict:
+        self.condition: Condition
+        self.total += 1
+        frame_success = self.condition.accuracy_min <= msg.accuracy <= self.condition.accuracy_max
+        self.success = frame_success
+        if frame_success:
+            self.passed += 1
+        current_rate = self.rate()
+        self.success = current_rate >= self.condition.PassRate
+        self.summary = f"{self.name} ({self.success_str()}): {self.passed} / {self.total} -> {current_rate:.2f}"
+        return {
+            "Result": {
+                "Success": frame_success,
+                "Summary": f"Passed: Ground Segmentation ({'Success' if frame_success else 'Fail'}): {self.passed} / {self.total} -> {current_rate:.2f}"
+            },
+            "Stamp": {
+                "ROS": ROS_timestamp
+            },
+            "Frame": {
+                "GroundSegmentation": {
+                    "Result": {
+                        "Total": self.success_str(),
+                        "Frame": "Success" if frame_success else "Fail",
+                    },
+                    "Info": {
+                        "TP": msg.tp,
+                        "FP": msg.fp,
+                        "TN": msg.tn,
+                        "FN": msg.fn,
+                    "Accuracy": msg.accuracy,
+                    "Precision": msg.precision,
+                    "Recall": msg.recall,
+                    "Specificity": msg.specificity,
+                    "F1-score": msg.f1_score,
+                    },
+                },
+            }
+        }
 
 
 def evaluate(
@@ -250,11 +314,11 @@ def evaluate(
     )
 
     # Initialize result writer
-    # result_writer = ResultWriter(
-    #     result_json_path,
-    #     Clock(),
-    #     {},
-    # )
+    result_writer = ResultWriter(
+        result_json_path,
+        Clock(),
+        evaluator.condition,
+    )
 
     # Save scenario.yaml for reference
     shutil.copy(scenario_path, Path(result_archive_path).joinpath("scenario.yaml"))
@@ -332,7 +396,23 @@ def evaluate(
         fp = fp_tn - tn
 
         print(f"TP {tp}, FP {fp}, TN {tn}, FN {fn}")
-        metrics_list = evaluator.__compute_metrics(tp, fp, tn, fn)
+        metrics_list = evaluator._compute_metrics(tp, fp, tn, fn)
+
+        frame_result = GroundSegmentationEvalResult()
+        frame_result.tp = tp
+        frame_result.fp = fp
+        frame_result.tn = tn
+        frame_result.fn = fn
+        frame_result.accuracy = metrics_list['accuracy']
+        frame_result.precision = metrics_list['precision']
+        frame_result.recall = metrics_list['recall']
+        frame_result.specificity = metrics_list['specificity']
+        frame_result.f1_score = metrics_list['f1_score']
+        res_str = evaluator.set_frame(frame_result, ROS_timestamp=gt_timestamp / 1e9)
+        res_str = result_writer.write_line(res_str)
+        print(f"Result string: {res_str}")
+
+    result_writer.close()
 
 
 def parse_args() -> argparse.Namespace:
