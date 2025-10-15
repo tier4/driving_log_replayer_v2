@@ -60,6 +60,9 @@ def post_process(context: LaunchContext) -> list:
     check_and_create_metadata_yaml(conf)
 
     if conf["use_case"] == "localization":
+        pass
+    
+        """
         localization_analysis_cmd = [
             "ros2",
             "run",
@@ -99,6 +102,7 @@ def post_process(context: LaunchContext) -> list:
             localization_analysis,
             localization_update_event_handler,
         ]
+        """
 
     if conf["use_case"] == "perception":
         absolute_result_json_path = Path(
