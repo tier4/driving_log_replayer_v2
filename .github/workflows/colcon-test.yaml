@@ -43,7 +43,7 @@ jobs:
           required-ros-distributions: ${{ matrix.ros_distribution }}
 
       - name: build and test
-        uses: ros-tooling/action-ros-ci@v0.4.5
+        uses: ros-tooling/action-ros-ci@v0.4
         id: actions_ros_ci_step
         with:
           package-name: ${{ steps.list_packages.outputs.package_list }}
