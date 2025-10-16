@@ -44,7 +44,7 @@ def convert_scenario(scenario_path: Path) -> None:
         {"bag_only_dataset": migration_dict},
     )
     use_case_version: str = yaml_obj["Evaluation"]["UseCaseFormatVersion"]
-    major, minor, patch = use_case_version.split(".")
+    major, _, _ = use_case_version.split(".")
     major_int = int(major)
     yaml_obj["Evaluation"]["UseCaseFormatVersion"] = f"{major_int + 1}.0.0"
 

@@ -2,7 +2,6 @@
 name = "driving-log-replayer-v2"
 version = "3.13.3"
 authors = [
-  { name = "Hayato Mizushima", email = "hayato.mizushima@tier4.jp" },
   { name = "Masato Saeki", email = "masato.saeki@tier4.jp" },
   { name = "Kotaro Uetake", email = "kotaro.uetake@tier4.jp" },
   { name = "Shintaro Sakoda", email = "shintaro.sakoda@tier4.jp" },
@@ -46,7 +45,7 @@ build-backend = "hatchling.build"
 # https://github.com/astral-sh/uv/issues/7703
 constraint-dependencies = ["kaleido!=0.2.1.post1"]
 dev-dependencies = [
-    "ruff==0.12.0",
+    "ruff==0.14.0",
     "pytest>=8.1.1",
 ]
 
@@ -74,3 +73,4 @@ force-single-line = true
 # https://beta.ruff.rs/docs/settings/#isort-relative-imports-order
 relative-imports-order = "closest-to-furthest"
 order-by-type = false
+known-first-party = ["driving_log_replayer_v2", "driving_log_replayer_v2_cli", "driving_log_replayer_v2_analyzer", "driving_log_replayer_v2_msgs"]
