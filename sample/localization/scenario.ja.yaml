@@ -5,7 +5,7 @@ SensorModel: sample_sensor_kit
 VehicleModel: sample_vehicle
 Evaluation:
   UseCaseName: localization
-  UseCaseFormatVersion: 2.0.0
+  UseCaseFormatVersion: 2.1.0
   Conditions:
     Convergence: # 収束性評価
       AllowableDistance: 0.2 # 直線距離でこの距離以内だったら収束とみなす
@@ -16,6 +16,8 @@ Evaluation:
       Method: NVTL # NVTL or TPのどちらで評価を行うか
       AllowableLikelihood: 2.3 # この値以上なら信頼度は正常とみなす
       NGCount: 10 # 信頼度異常が連続でこの回数続いたら信頼度評価失敗とみなす
+    availability: # Availability 条件が設定されていなくても、デフォルトでは NDT Availability 評価は実行される。このブロックは Availability 評価が不要なときのみ設定が必要である。
+      enable: false
     OverallCriteriaMask: # 下記のマスクを設定することで評価するか否かを決定できる。このブロックが定義されていない場合は自動的に全てが `true` に設定される。
       mean_relative_position: true
       mean_relative_angle: true
