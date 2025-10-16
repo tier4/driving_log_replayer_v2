@@ -2,7 +2,6 @@
 name = "driving-log-replayer-v2"
 version = "3.13.3"
 authors = [
-  { name = "Hayato Mizushima", email = "hayato.mizushima@tier4.jp" },
   { name = "Masato Saeki", email = "masato.saeki@tier4.jp" },
   { name = "Kotaro Uetake", email = "kotaro.uetake@tier4.jp" },
   { name = "Shintaro Sakoda", email = "shintaro.sakoda@tier4.jp" },
