@@ -73,3 +73,4 @@ force-single-line = true
 # https://beta.ruff.rs/docs/settings/#isort-relative-imports-order
 relative-imports-order = "closest-to-furthest"
 order-by-type = false
+known-first-party = ["driving_log_replayer_v2", "driving_log_replayer_v2_cli", "driving_log_replayer_v2_analyzer", "driving_log_replayer_v2_msgs"]
