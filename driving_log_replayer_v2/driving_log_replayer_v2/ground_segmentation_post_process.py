@@ -272,6 +272,11 @@ def parse_args() -> argparse.Namespace:
         default="sqlite3",
         help="Storage type for rosbag2",
     )
+    parser.add_argument(
+        "--evaluation-topic",
+        default="",
+        help="ROS topic to evaluate",
+    )
     return parser.parse_args()
 
 
