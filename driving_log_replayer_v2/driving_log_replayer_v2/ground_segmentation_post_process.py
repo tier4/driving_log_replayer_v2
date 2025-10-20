@@ -32,7 +32,6 @@ from pydantic import BaseModel
 from rclpy.serialization import deserialize_message
 from rosidl_runtime_py.utilities import get_message
 
-from driving_log_replayer_v2.evaluator import DLREvaluatorV2
 from driving_log_replayer_v2.ground_segmentation import GroundSegmentationResult, GroundSegmentationScenario
 import driving_log_replayer_v2.perception_eval_conversions as eval_conversions
 from driving_log_replayer_v2.result import ResultWriter
