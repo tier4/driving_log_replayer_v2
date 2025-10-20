@@ -21,6 +21,7 @@ RECORD_TOPIC = """^/tf$\
 |^/perception/traffic_light_recognition/traffic_signals/markers$\
 |^/perception/traffic_light_recognition/.*/debug/rois/compressed$\
 |^/driving_log_replayer_v2/.*\
+|^/driving_log_replayer/.*\
 """
 
 AUTOWARE_DISABLE = {
@@ -34,5 +35,3 @@ AUTOWARE_ARGS = {}
 NODE_PARAMS: dict[str, LaunchConfiguration] = {"map_path": LaunchConfiguration("map_path")}
 
 USE_CASE_ARGS: list[DeclareLaunchArgument] = []
-
-OPTIONAL_NODE_ARGS: list[DeclareLaunchArgument] = []

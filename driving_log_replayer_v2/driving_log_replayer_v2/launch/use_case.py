@@ -25,7 +25,6 @@ from launch.actions import OpaqueFunction
 from launch.launch_description_sources import AnyLaunchDescriptionSource
 from launch_ros.actions import Node
 
-from driving_log_replayer_v2.launch.argument import add_optional_nodes_arguments
 from driving_log_replayer_v2.launch.argument import add_use_case_arguments
 from driving_log_replayer_v2.launch.camera_2d_detector import launch_camera_2d_detector
 from driving_log_replayer_v2.launch.rosbag import launch_bag_player
@@ -69,14 +68,19 @@ def launch_autoware(context: LaunchContext) -> list:
     ]
 
 
-def launch_optional_node(context: LaunchContext) -> list:
-    conf = context.launch_configurations
-    if conf.get("with_2d_detector") == "true":  # FIXME: should change explicit declaration
-        return [LogInfo(msg="launching 2D detector......"), *launch_camera_2d_detector(context)]
-    return [LogInfo(msg="no optional nodes to launch.")]
+def launch_optional_nodes(context: LaunchContext) -> list:
+    nodes_list = context.launch_configurations["with_optional_nodes"].split(",")
+    optional_nodes = []
+    if "2d_detector" in nodes_list:
+        optional_nodes.append(LogInfo(msg="launching 2D detector......"))
+        optional_nodes.extend(launch_camera_2d_detector(context))
+    if len(optional_nodes) == 0:
+        optional_nodes.append(LogInfo(msg="no optional nodes to launch."))
+    return optional_nodes
 
 
 def launch_map_height_fitter(context: LaunchContext) -> list:
+    # Autoware specifications
     if context.launch_configurations.get("localization", "true") != "true":
         return [LogInfo(msg="map_height_fitter is not launched because localization is false")]
 
@@ -202,9 +206,8 @@ def launch_goal_pose_node(context: LaunchContext) -> list:
 def launch_use_case() -> list:
     return [
         OpaqueFunction(function=add_use_case_arguments),  # after ensure_arg_compatibility
-        OpaqueFunction(function=add_optional_nodes_arguments),
         OpaqueFunction(function=launch_autoware),
-        OpaqueFunction(function=launch_optional_node),
+        OpaqueFunction(function=launch_optional_nodes),
         OpaqueFunction(function=launch_map_height_fitter),
         OpaqueFunction(function=launch_evaluator_node),
         OpaqueFunction(function=launch_bag_player),

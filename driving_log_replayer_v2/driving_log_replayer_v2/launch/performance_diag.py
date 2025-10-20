@@ -21,6 +21,7 @@ RECORD_TOPIC = """^/tf$\
 |^/sensing/lidar/.*/blockage_diag/debug/blockage_mask_image$\
 |^/sensing/lidar/.*/pointcloud_raw_ex$\
 |^/driving_log_replayer_v2/.*\
+|^/driving_log_replayer/.*\
 """
 
 AUTOWARE_DISABLE = {
@@ -35,5 +36,3 @@ AUTOWARE_ARGS = {}
 NODE_PARAMS: dict[str, LaunchConfiguration] = {}
 
 USE_CASE_ARGS: list[DeclareLaunchArgument] = []
-
-OPTIONAL_NODE_ARGS: list[DeclareLaunchArgument] = []

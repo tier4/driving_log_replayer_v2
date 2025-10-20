@@ -115,7 +115,7 @@ The following sections explain the details of each evaluation item.
 
 ### NDT Availability
 
-This evaluation starts for any kind of scenario.
+This evaluation basically starts for any kind of scenario, but it doesn't only if you defined a `availability` condition in the `Conditions` of the scenario and set its `enable` parameter as `false`.
 
 Driving Log Replayer will evaluate the NDT Availability through `logging_simulator` by detecting these two cases.
 

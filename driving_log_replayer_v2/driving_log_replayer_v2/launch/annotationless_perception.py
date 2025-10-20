@@ -24,6 +24,7 @@ RECORD_TOPIC = """^/tf$\
 |^/perception/object_recognition/tracking/multi_object_tracker/debug/.*\
 |^/perception/object_recognition/detection/.*/debug/pipeline_latency_ms$\
 |^/perception/perception_online_evaluator/.*\
+|^/driving_log_replayer/.*\
 """
 
 
@@ -40,5 +41,3 @@ AUTOWARE_ARGS = {
 NODE_PARAMS: dict[str, LaunchConfiguration] = {}
 
 USE_CASE_ARGS: list[DeclareLaunchArgument] = []
-
-OPTIONAL_NODE_ARGS: list[DeclareLaunchArgument] = []

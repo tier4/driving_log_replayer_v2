@@ -26,16 +26,20 @@ RECORD_TOPIC = """^/tf$\
 |^/tf_static$\
 |^/diagnostics$\
 |^/awapi/autoware/get/status$\
-|^/sensing/camera/.*\
+|^/sensing/camera/.*/compressed$\
+|^/sensing/camera/.*/camera_info$\
 |^/sensing/lidar/concatenated/pointcloud$\
 |^/perception/object_recognition/detection/.*/debug/pipeline_latency_ms$\
 |^/perception/object_recognition/tracking/multi_object_tracker/debug/.*\
 |^/perception/object_recognition/prediction/map_based_prediction/debug/pipeline_latency_ms$\
 |^/perception/object_recognition/.*/objects$\
 |^/perception/object_recognition/objects$\
+|^/perception/object_recognition/detection/rois[0-9]+$\
 |^/perception/object_recognition/detection/objects_before_filter$\
 |^/sensing/.*detected_objects$\
 |^/sensing/.*tracked_objects$\
+|^/map/vector_map_marker$\
+|^/localization/kinematic_state$\
 """
 
 
@@ -110,48 +114,5 @@ USE_CASE_ARGS: list[DeclareLaunchArgument] = [
         "analysis_distance_interval",
         default_value="150",
         description="Distance interval for analysis.",
-    ),
-    DeclareLaunchArgument(
-        "publish_topic_from_rosbag",
-        default_value="",
-        description="The topic to publish in rosbag before play rosbag. Using comma separated string.",
-    ),
-]
-
-OPTIONAL_NODE_ARGS: list[DeclareLaunchArgument] = [
-    DeclareLaunchArgument(
-        "with_2d_detector",
-        default_value="false",
-        description="Enable 2D detector.",
-    ),
-    DeclareLaunchArgument(
-        "camera_ids",
-        default_value="",
-        description="Comma-separated list of camera IDs to use.",
-    ),
-    DeclareLaunchArgument(
-        "image_type",
-        default_value="image_raw",
-        description="Type of image topic (e.g., 'image_raw', 'image_rect_color').",
-    ),
-    DeclareLaunchArgument(
-        "use_bytetrack",
-        default_value="false",
-        description="Use ByteTrack for tracking.",
-    ),
-    DeclareLaunchArgument(
-        "yolox_model_path",
-        default_value="",
-        description="Path to the YOLOX model file.",
-    ),
-    DeclareLaunchArgument(
-        "yolox_label_path",
-        default_value="",
-        description="Path to the YOLOX label file.",
-    ),
-    DeclareLaunchArgument(
-        "yolox_color_map_path",
-        default_value="",
-        description="Path to the YOLOX color map file.",
     ),
 ]

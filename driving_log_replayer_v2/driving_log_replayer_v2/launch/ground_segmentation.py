@@ -19,6 +19,7 @@ RECORD_TOPIC = """^/tf$\
 |^/diagnostics$"\
 |^/perception/obstacle_segmentation/single_frame/pointcloud$\
 |^/perception/obstacle_segmentation/pointcloud$\
+|^/driving_log_replayer/.*\
 """
 
 AUTOWARE_DISABLE = {
@@ -40,5 +41,3 @@ USE_CASE_ARGS: list[DeclareLaunchArgument] = [
         default_value="/perception/obstacle_segmentation/pointcloud",
     )
 ]
-
-OPTIONAL_NODE_ARGS: list[DeclareLaunchArgument] = []

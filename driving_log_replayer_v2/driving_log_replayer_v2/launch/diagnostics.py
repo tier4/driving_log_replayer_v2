@@ -17,6 +17,7 @@ from launch.substitutions import LaunchConfiguration
 
 RECORD_TOPIC = """^/tf$\
 |^/diagnostics$\
+|^/driving_log_replayer/.*\
 """
 
 AUTOWARE_DISABLE = {}
@@ -26,5 +27,3 @@ AUTOWARE_ARGS = {}
 NODE_PARAMS: dict[str, LaunchConfiguration] = {}
 
 USE_CASE_ARGS: list[DeclareLaunchArgument] = []
-
-OPTIONAL_NODE_ARGS: list[DeclareLaunchArgument] = []

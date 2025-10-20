@@ -21,6 +21,7 @@ RECORD_TOPIC = """^/tf$\
 |^/localization/pose_estimator/pose$\
 |^/localization/util/downsample/pointcloud$\
 |^/localization/pose_estimator/points_aligned$\
+|^/driving_log_replayer/.*\
 """
 
 AUTOWARE_DISABLE = {"perception": "false", "planning": "false", "control": "false"}
@@ -33,5 +34,3 @@ AUTOWARE_ARGS = {
 NODE_PARAMS: dict[str, LaunchConfiguration] = {}
 
 USE_CASE_ARGS: list[DeclareLaunchArgument] = []
-
-OPTIONAL_NODE_ARGS: list[DeclareLaunchArgument] = []

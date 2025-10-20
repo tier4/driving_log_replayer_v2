@@ -23,6 +23,7 @@ RECORD_TOPIC = """^/tf$\
 |^/perception/object_recognition/objects$\
 |^/sensing/camera/.*\
 |^/driving_log_replayer_v2/.*\
+|^/driving_log_replayer/.*\
 """
 
 AUTOWARE_DISABLE = {
@@ -38,5 +39,3 @@ AUTOWARE_ARGS = {
 NODE_PARAMS: dict[str, LaunchConfiguration] = {}
 
 USE_CASE_ARGS: list[DeclareLaunchArgument] = []
-
-OPTIONAL_NODE_ARGS: list[DeclareLaunchArgument] = []

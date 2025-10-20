@@ -21,7 +21,7 @@ launch を立ち上げると以下のことが実行され、評価される。
 visibility の評価では、雨天時や人工的に雨を降らせられる施設で取得したデータを用いて visibility の ERROR が一定レート以上出力されることを確認する。
 また、晴天時のデータを利用して、ERROR が一度も出ないことを確認する。
 
-`/diagnostics`の`status.name`が`dual_return_filter: /sensing/lidar/.*: visibility_validation`に該当するものを判定に利用する。
+`/diagnostics`の`status.name`が`polar_voxel_outlier_filter: /sensing/lidar/.*: visibility_validation`に該当するものを判定に利用する。
 
 ### blockage 評価
 
