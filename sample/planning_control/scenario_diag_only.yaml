@@ -14,11 +14,11 @@ Evaluation:
     PlanningFactorConditions: []
 include_use_case:
   UseCaseName: diagnostics
-  UseCaseFormatVersion: 0.1.0
+  UseCaseFormatVersion: 0.3.0
   Conditions:
     DiagConditions:
       - hardware_id: control_validator
         name: "control_validator: control_validation_rolling_back"
         level: [OK] # Specify the status to be judged among OK, WARN, ERROR, and STALE. More than one is allowed.
         time: { start: 1748195183.4, end: 1748195213.8 } # Success if the level is specified between start and end in ROS time
-        condition_type: all_of # [any_of, all_of] any_of only needs to be satisfied once in time. all_of requires all topics in time to satisfy the condition
+        condition_type: all_of

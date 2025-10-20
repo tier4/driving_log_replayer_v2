@@ -67,7 +67,16 @@ class DiagCondition(BaseModel):
     name: str
     level: list[Literal["OK", "WARN", "ERROR", "STALE"]]
     time: StartEnd
-    condition_type: Literal["any_of", "all_of"]
+    condition_type: Literal[
+        "any_of",
+        "all_of",
+        "duration_larger_than",
+        "duration_less_than",
+        "percentage_larger_than",
+        "percentage_less_than",
+    ] = "any_of"
+    duration_threshold: float = Field(0.0, ge=0.0)
+    percentage_threshold: float = Field(0.0, ge=0.0, le=1.0)
 
 
 class Conditions(BaseModel):
@@ -88,7 +97,7 @@ class Conditions(BaseModel):
 
 class Evaluation(BaseModel):
     UseCaseName: Literal["diagnostics"]
-    UseCaseFormatVersion: Literal["0.1.0", "0.2.0"]
+    UseCaseFormatVersion: Literal["0.1.0", "0.2.0", "0.3.0"]
     Conditions: Conditions
     Datasets: list[dict]
 
@@ -99,34 +108,81 @@ class DiagnosticsScenario(Scenario):
 
 @dataclass
 class Diag(EvaluationItem):
-    def set_frame(self, msg: DiagnosticArray) -> dict | None:
+    def __post_init__(self) -> None:
         self.condition: DiagCondition
-        # check time condition
-        if not self.condition.time.match_condition(stamp_to_float(msg.header.stamp)):
+        self.last_start_time: float | None = None
+        self.max_consecutive_duration: float = 0.0
+        self.current_consecutive_duration: float = 0.0
+
+    def set_frame(self, msg: DiagnosticArray) -> dict | None:
+        current_time = stamp_to_float(msg.header.stamp)
+
+        if not self.condition.time.match_condition(current_time):
             return None
+
         for status in msg.status:
             status: DiagnosticStatus
-            if status.name == self.condition.name:
-                self.total += 1
-                frame_success = "Fail"
-                level_str = get_diagnostic_level_string(status)
-                if level_str in self.condition.level:
-                    frame_success = "Success"
-                    self.passed += 1
-                self.success = (
-                    self.passed > 0
-                    if self.condition.condition_type == "any_of"
-                    else self.passed == self.total
+            if status.name != self.condition.name:
+                continue
+
+            self.total += 1
+            level_str = get_diagnostic_level_string(status)
+
+            status_match = level_str in self.condition.level
+
+            if status_match:
+                frame_success = "Success"
+                self.passed += 1
+
+                # update max duration
+                if self.last_start_time is None:
+                    self.last_start_time = current_time
+                self.current_consecutive_duration = current_time - self.last_start_time
+                self.max_consecutive_duration = max(
+                    self.max_consecutive_duration, self.current_consecutive_duration
                 )
-                return {
-                    "Result": {"Total": self.success_str(), "Frame": frame_success},
-                    "Info": {
-                        "TotalPassed": self.passed,
-                        "Level": level_str,
-                    },
-                }
+            else:
+                frame_success = "Fail"
+                self.last_start_time = None
+                self.current_consecutive_duration = 0.0
+
+            self.success = self._check_success()
+            return {
+                "Result": {"Total": self.success_str(), "Frame": frame_success},
+                "Info": {
+                    "TotalPassed": self.passed,
+                    "Level": level_str,
+                    "ConsecutiveDuration": self.current_consecutive_duration,
+                    "Percentage": (self.passed / self.total * 100) if self.total > 0 else 0.0,
+                },
+            }
         # not match status.name
         return None
+
+    def _check_success(self) -> bool:
+        result = False
+        if self.condition.condition_type == "any_of":
+            result = self.passed > 0
+        elif self.condition.condition_type == "all_of":
+            result = self.passed == self.total
+        elif self.condition.condition_type == "duration_larger_than":
+            result = self.max_consecutive_duration >= self.condition.duration_threshold
+        elif self.condition.condition_type == "duration_less_than":
+            result = self.max_consecutive_duration < self.condition.duration_threshold
+
+        elif self.condition.condition_type == "percentage_larger_than":
+            result = (
+                (self.passed / self.total) >= self.condition.percentage_threshold
+                if self.total > 0
+                else False
+            )
+        elif self.condition.condition_type == "percentage_less_than":
+            result = (
+                (self.passed / self.total) < self.condition.percentage_threshold
+                if self.total > 0
+                else True
+            )
+        return result
 
 
 class DiagClassContainer:

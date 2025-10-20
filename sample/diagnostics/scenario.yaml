@@ -5,14 +5,32 @@ SensorModel: aip_xx1
 VehicleModel: lexus
 Evaluation:
   UseCaseName: diagnostics
-  UseCaseFormatVersion: 0.1.0
+  UseCaseFormatVersion: 0.3.0
   Datasets:
     - odaiba:
         VehicleId: default
   Conditions:
     DiagConditions:
+      # Success if all status are OK-level
       - hardware_id: control_validator
         name: "control_validator: control_validation_rolling_back"
-        level: [OK] # Specify the status to be judged among OK, WARN, ERROR, and STALE. More than one is allowed.
-        time: { start: 1730266438.2, end: 1730266482.42 } # Success if the level is specified between start and end in ROS time
-        condition_type: all_of # [any_of, all_of] any_of only needs to be satisfied once in time. all_of requires all topics in time to satisfy the condition
+        level: [OK] # Specify the status to be judged among OK, WARN, ERROR, and STALE. Multiple are allowed.
+        time: { start: 1730266438.2, end: 1730266482.42 } # Judge only within this ROS time range
+        condition_type: all_of # [any_of, all_of]: any_of satisfied once; all_of requires all frames within time
+
+      # Success if consecutive duration of ERROR-level is less/larger than threshold (seconds)
+      - hardware_id: control_validator
+        name: "control_validator: control_validation_rolling_back"
+        level: [ERROR]
+        time: { start: 1730266438.2, end: 1730266482.42 }
+        condition_type: duration_less_than # [duration_larger_than, duration_less_than]: compare max consecutive duration to threshold (seconds)
+        duration_threshold: 1.0
+
+      # Success if OK-level percentage is less/larger than threshold (ratio 0-1)
+      - hardware_id: control_validator
+        name: "control_validator: control_validation_rolling_back"
+        level: [OK]
+        time: { start: 1730266438.2, end: 1730266482.42 }
+        condition_type: percentage_larger_than # [percentage_larger_than, percentage_less_than]: compare pass ratio (0-1) to threshold
+        percentage_threshold: 0.99
+#TODO: 跑个scenario看bug，改sample的result.json
