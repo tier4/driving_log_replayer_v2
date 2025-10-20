@@ -145,7 +145,6 @@ def post_process(context: LaunchContext) -> list:
         absolute_result_json_path = Path(
             expandvars(context.launch_configurations["result_json_path"])
         )
-        # pdb.set_trace()  # --- IGNORE ---
         def _run_ground_segmentation_and_replace_rosbag(context: LaunchContext) -> list:
             absolute_result_json_path.parent.joinpath(
                 absolute_result_json_path.stem + ".jsonl"
