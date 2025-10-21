@@ -17,26 +17,29 @@ from __future__ import annotations
 import argparse
 from pathlib import Path
 import shutil
+from typing import TYPE_CHECKING
 
 import numpy as np
-from driving_log_replayer_v2.ros2_utils import RosBagManager
-from driving_log_replayer_v2.ground_segmentation.models import GroundSegmentationResult
 from rclpy.clock import Clock
-from rosbag2_py import TopicMetadata
 import ros2_numpy
-from sensor_msgs.msg import PointCloud2
+from rosbag2_py import TopicMetadata
 from std_msgs.msg import String
+
+from driving_log_replayer_v2.ground_segmentation.manager import GroundSegmentationEvaluationManager
+from driving_log_replayer_v2.ground_segmentation.models import GroundSegmentationResult
 import driving_log_replayer_v2.perception_eval_conversions as eval_conversions
 from driving_log_replayer_v2.result import ResultWriter
+from driving_log_replayer_v2.ros2_utils import RosBagManager
 from driving_log_replayer_v2_msgs.msg import GroundSegmentationEvalResult
-from driving_log_replayer_v2.ground_segmentation.manager import GroundSegmentationEvaluationManager
+
+if TYPE_CHECKING:
+    from sensor_msgs.msg import PointCloud2
 
 
 def convert_to_numpy_pointcloud(msg: PointCloud2) -> np.ndarray:
     """Convert PointCloud2 message to numpy array."""
     numpy_pcd = ros2_numpy.numpify(msg)
-    pointcloud = np.stack((numpy_pcd["x"], numpy_pcd["y"], numpy_pcd["z"]), axis=-1)
-    return pointcloud
+    return np.stack((numpy_pcd["x"], numpy_pcd["y"], numpy_pcd["z"]), axis=-1)
 
 
 def write_result(
@@ -47,7 +50,7 @@ def write_result(
     frame_result: GroundSegmentationEvalResult,
     rosbag_manager: RosBagManager,
     subscribed_timestamp_nanosec: int,
-):
+) -> None:
     if isinstance(frame_result, GroundSegmentationEvalResult):
         result.set_frame(frame_result)
     elif isinstance(frame_result, str):
@@ -74,7 +77,7 @@ def evaluate(
     result_json_path: str,
     result_archive_path: str,
     storage: str,
-    evaluation_topic_regex: str
+    evaluation_topic_regex: str,
 ) -> None:
     evaluation_topics = [evaluation_topic_regex]
 

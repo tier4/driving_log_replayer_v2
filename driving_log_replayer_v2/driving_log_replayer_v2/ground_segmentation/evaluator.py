@@ -12,8 +12,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from pathlib import Path
 import json
+from pathlib import Path
 
 import numpy as np
 from scipy.spatial import cKDTree
@@ -76,7 +76,9 @@ class GroundSegmentationEvaluator:
                 "labels": labels,
             }
 
-    def evaluate(self, header_timestamp_microsec: int, pointcloud: np.ndarray) -> GroundSegmentationEvalResult | str:
+    def evaluate(
+        self, header_timestamp_microsec: int, pointcloud: np.ndarray
+    ) -> GroundSegmentationEvalResult | str:
         gt_frame_ts = self.__get_gt_frame_ts(header_timestamp_microsec)
 
         if gt_frame_ts < 0:
@@ -115,7 +117,6 @@ class GroundSegmentationEvaluator:
         tp = tp_fn - fn
         fp = fp_tn - tn
 
-        print(f"TP: {tp}, FP: {fp}, TN: {tn}, FN: {fn}")
         metrics_list = self.__compute_metrics(tp, fp, tn, fn)
 
         frame_result = GroundSegmentationEvalResult()

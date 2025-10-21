@@ -98,7 +98,7 @@ class GroundSegmentationResult(ResultBase):
     def set_frame(self, msg: GroundSegmentationEvalResult) -> None:
         self._frame = self.__ground_segmentation.set_frame(msg)
         self.update()
-    
+
     def set_info_frame(self, msg: str) -> None:
         self._frame = {
             "Info": msg,

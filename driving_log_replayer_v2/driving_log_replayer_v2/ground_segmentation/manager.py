@@ -14,10 +14,10 @@
 
 import numpy as np
 
-from driving_log_replayer_v2.ground_segmentation.models import Conditions
-from driving_log_replayer_v2.ground_segmentation.evaluator import GroundSegmentationEvaluator
-from driving_log_replayer_v2.ground_segmentation.models import GroundSegmentationScenario
 from driving_log_replayer_v2.evaluation_manager import EvaluationManager
+from driving_log_replayer_v2.ground_segmentation.evaluator import GroundSegmentationEvaluator
+from driving_log_replayer_v2.ground_segmentation.models import Conditions
+from driving_log_replayer_v2.ground_segmentation.models import GroundSegmentationScenario
 from driving_log_replayer_v2_msgs.msg import GroundSegmentationEvalResult
 
 
@@ -48,9 +48,10 @@ class GroundSegmentationEvaluationManager(EvaluationManager):
         self.set_degradation_topic()
 
     def set_degradation_topic(self) -> None:
-        self._degradation_topic = list(self._evaluators.keys())[0]
+        self._degradation_topic = next(iter(self._evaluators.keys()))
 
-    def evaluate(self, topic_name: str, header_timestamp_microsec: int, pointcloud: np.ndarray) -> GroundSegmentationEvalResult | str:
+    def evaluate(
+        self, topic_name: str, header_timestamp_microsec: int, pointcloud: np.ndarray
+    ) -> GroundSegmentationEvalResult | str:
         evaluator = self._evaluators[topic_name]
-        eval_result = evaluator.evaluate(header_timestamp_microsec, pointcloud)
-        return eval_result
+        return evaluator.evaluate(header_timestamp_microsec, pointcloud)

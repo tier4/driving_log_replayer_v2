@@ -14,16 +14,17 @@
 
 from __future__ import annotations
 
-from abc import ABC, abstractmethod
+from abc import ABC
+from abc import abstractmethod
 from pathlib import Path
-from typing import TypeVar
 from typing import Any
+from typing import TypeVar
 
 from pydantic import ValidationError
 import yaml
 
-from driving_log_replayer_v2.scenario import Scenario
 from driving_log_replayer_v2.scenario import load_scenario
+from driving_log_replayer_v2.scenario import Scenario
 
 ScenarioType = TypeVar("ScenarioType", bound=Scenario)
 
