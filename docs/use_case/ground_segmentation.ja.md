@@ -17,7 +17,7 @@
 
 launch を立ち上げると以下のことが実行され、評価される。
 
-1. launchコマンド `logging_simulator.launch`、`ros2 bag play`コマンドを立ち上げる
+1. launchコマンド `logging_simulator.launch`、`ros2 bag play`を立ち上げる
 2. bag から出力されたセンサーデータを autoware が受け取って、perceptionモジュール内で地面点群除去を行う
 3. 出力トピックを保存用rosbagに保存する
 4. rosbagの再生が終わった後、メッセージ一つ一つをパースしてターゲットとなるトピックを評価する
