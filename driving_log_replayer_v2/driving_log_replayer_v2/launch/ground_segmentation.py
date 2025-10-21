@@ -31,13 +31,11 @@ AUTOWARE_DISABLE = {
 
 AUTOWARE_ARGS = {"perception_mode": "lidar"}
 
-NODE_PARAMS: dict[str, LaunchConfiguration] = {
-    "evaluation_target_topic": LaunchConfiguration("evaluation_target_topic"),
-}
+NODE_PARAMS: dict[str, LaunchConfiguration] = {}
 
 USE_CASE_ARGS: list[DeclareLaunchArgument] = [
     DeclareLaunchArgument(
-        "evaluation_target_topic",
+        "evaluation_topic",
         default_value="/perception/obstacle_segmentation/pointcloud",
     )
 ]

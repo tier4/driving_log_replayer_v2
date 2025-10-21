@@ -17,10 +17,10 @@ This method uses the t4_dataset, which contains 3D semantic-segmentation annotat
 
 Launching the file executes the following steps:
 
-1. Launch the commands `ros2 launch driving_log_replayer_v2 driving_log_replayer_v2.launch.py` with necessary arguments. 
-1. Autoware receives sensor data input from previously prepared rosbag and performs ground point cloud removal within the perception module.
-2. Record the output topics in the bag file
-3. After rosbag playback if finished, parse the recorded rosbag one message at a time and evaluate the target topic.
+1. Launch the commands `ros2 launch driving_log_replayer_v2 driving_log_replayer_v2.launch.py` with necessary arguments.
+2. Autoware receives sensor data input from previously prepared rosbag and performs ground point cloud removal within the perception module.
+3. Record the output topics in the bag file
+4. After rosbag playback if finished, parse the recorded rosbag one message at a time and evaluate the target topic.
 
 ### Points to note during evaluation
 

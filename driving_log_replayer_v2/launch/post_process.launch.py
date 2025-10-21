@@ -26,11 +26,13 @@ from launch.event_handlers import OnProcessExit
 from rosbag2_py import Reindexer
 from rosbag2_py import StorageOptions
 
+from driving_log_replayer_v2.ground_segmentation.runner import (
+    evaluate as evaluate_ground_segmentation,
+)
 from driving_log_replayer_v2.launch.argument import add_use_case_arguments
 from driving_log_replayer_v2.launch.argument import ensure_arg_compatibility
 from driving_log_replayer_v2.launch.argument import get_launch_arguments
-from driving_log_replayer_v2.perception.runner import evaluate
-from driving_log_replayer_v2.ground_segmentation_post_process import evaluate as ground_segmentation_evaluate 
+from driving_log_replayer_v2.perception.runner import evaluate as evaluate_perception
 from driving_log_replayer_v2.result import MultiResultEditor
 
 
@@ -56,7 +58,7 @@ def check_and_create_metadata_yaml(conf: dict) -> None:
     Reindexer().reindex(storage_options)
 
 
-def post_process(context: LaunchContext) -> list:
+def post_process(context: LaunchContext) -> list:  # noqa: C901, PLR0911
     conf = context.launch_configurations
     check_and_create_metadata_yaml(conf)
 
@@ -112,7 +114,7 @@ def post_process(context: LaunchContext) -> list:
             absolute_result_json_path.parent.joinpath(
                 absolute_result_json_path.stem + ".jsonl"
             ).unlink()
-            evaluate(
+            evaluate_perception(
                 context.launch_configurations["scenario_path"],
                 context.launch_configurations["result_bag_path"],
                 context.launch_configurations["t4_dataset_path"],
@@ -141,29 +143,32 @@ def post_process(context: LaunchContext) -> list:
             LogInfo(msg="run perception analysis."),
             OpaqueFunction(function=_run_perception_and_replace_rosbag),
         ]
+
     if conf["use_case"] == "ground_segmentation":
         absolute_result_json_path = Path(
             expandvars(context.launch_configurations["result_json_path"])
         )
-        def _run_ground_segmentation_and_replace_rosbag(context: LaunchContext) -> list:
+
+        def _run_ground_segmentation(context: LaunchContext) -> list:
             absolute_result_json_path.parent.joinpath(
                 absolute_result_json_path.stem + ".jsonl"
             ).unlink()
 
-            ground_segmentation_evaluate(
+            evaluate_ground_segmentation(
                 context.launch_configurations["scenario_path"],
                 context.launch_configurations["result_bag_path"],
                 context.launch_configurations["t4_dataset_path"],
                 context.launch_configurations["result_json_path"],
                 context.launch_configurations["result_archive_path"],
                 context.launch_configurations["storage"],
-                context.launch_configurations["evaluation_target_topic"],
+                context.launch_configurations["evaluation_topic"],
             )
 
         return [
             LogInfo(msg="run ground_segmentation analysis."),
-            OpaqueFunction(function=_run_ground_segmentation_and_replace_rosbag),
+            OpaqueFunction(function=_run_ground_segmentation),
         ]
+
     if conf["use_case"] == "planning_control":
         # merge diagnostic result.jsonl
         diag_result_path = Path(conf["result_archive_path"]).joinpath("diag_result.jsonl")

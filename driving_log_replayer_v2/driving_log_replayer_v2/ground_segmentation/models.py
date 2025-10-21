@@ -24,7 +24,7 @@ from driving_log_replayer_v2.scenario import Scenario
 from driving_log_replayer_v2_msgs.msg import GroundSegmentationEvalResult
 
 
-class Condition(BaseModel):
+class Conditions(BaseModel):
     ground_label: list[int]
     obstacle_label: list[int]
     accuracy_min: number
@@ -35,7 +35,7 @@ class Condition(BaseModel):
 class Evaluation(BaseModel):
     UseCaseName: Literal["ground_segmentation"]
     UseCaseFormatVersion: Literal["0.4.0"]
-    Conditions: Condition
+    Conditions: Conditions
     Datasets: list[dict]
 
 
@@ -48,7 +48,7 @@ class GroundSegmentation(EvaluationItem):
     name: str = "Ground Segmentation"
 
     def set_frame(self, msg: GroundSegmentationEvalResult) -> dict:
-        self.condition: Condition
+        self.condition: Conditions
         self.total += 1
 
         frame_success = self.condition.accuracy_min <= msg.accuracy <= self.condition.accuracy_max
@@ -82,7 +82,7 @@ class GroundSegmentation(EvaluationItem):
 
 
 class GroundSegmentationResult(ResultBase):
-    def __init__(self, condition: Condition) -> None:
+    def __init__(self, condition: Conditions) -> None:
         super().__init__()
         self.__ground_segmentation = GroundSegmentation(condition=condition)
 
@@ -98,3 +98,8 @@ class GroundSegmentationResult(ResultBase):
     def set_frame(self, msg: GroundSegmentationEvalResult) -> None:
         self._frame = self.__ground_segmentation.set_frame(msg)
         self.update()
+    
+    def set_info_frame(self, msg: str) -> None:
+        self._frame = {
+            "Info": msg,
+        }

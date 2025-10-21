@@ -16,11 +16,7 @@ from __future__ import annotations
 
 from typing import Any
 from typing import TYPE_CHECKING
-from typing import TypeVar
 
-from autoware_perception_msgs.msg import DetectedObjects
-from autoware_perception_msgs.msg import PredictedObjects
-from autoware_perception_msgs.msg import TrackedObjects
 from builtin_interfaces.msg import Time
 from geometry_msgs.msg import TransformStamped
 from rclpy.serialization import deserialize_message
@@ -40,9 +36,6 @@ if TYPE_CHECKING:
     from collections.abc import Generator
 
     from builtin_interfaces.msg import Time as Stamp
-    from tier4_api_msgs.msg import AwapiAutowareStatus
-
-PerceptionMsgType = TypeVar("PerceptionMsgType", DetectedObjects, TrackedObjects, PredictedObjects)
 
 
 class RosBagManager:
@@ -52,7 +45,7 @@ class RosBagManager:
         output_bag_dir: str,
         storage_type: str,
         evaluation_topics: list[str],
-        additional_record_topic: list[TopicMetadata],
+        additional_record_topics: list[TopicMetadata] | None = None,
     ) -> None:
         self._reader: SequentialReader
         self._writer: SequentialWriter
@@ -78,8 +71,9 @@ class RosBagManager:
         for topic_type in self._reader.get_all_topics_and_types():
             self._writer.create_topic(topic_type)
             self._topic_name2type[topic_type.name] = topic_type.type
-        for topic_type in additional_record_topic:
-            self._writer.create_topic(topic_type)
+        if additional_record_topics is not None:
+            for topic_type in additional_record_topics:
+                self._writer.create_topic(topic_type)
 
         self._evaluation_topics = evaluation_topics
         self._tf_buffer = Buffer()
@@ -111,7 +105,7 @@ class RosBagManager:
         err_msg = "_last_subscribed_timestamp_nanosec is not set."
         raise AttributeError(err_msg)
 
-    def read_messages(self) -> Generator[str, PerceptionMsgType | AwapiAutowareStatus, int]:
+    def read_messages(self) -> Generator[str, Any, int]:
         """
         Describe time representations.
 
