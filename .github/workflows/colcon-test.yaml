@@ -78,8 +78,13 @@ jobs:
           name: colcon-logs
           path: /__w/driving_log_replayer_v2/driving_log_replayer_v2/ros_ws/build/driving_log_replayer_v2/pytest_cov/driving_log_replayer_v2/
 
-      - name: SonarCloud Scan
-        uses: sonarsource/sonarcloud-github-action@v5
+      - name: Install unzip for SonarQube
+        run: |
+          apt-get update
+          DEBIAN_FRONTEND=noninteractive apt-get install -y unzip
+
+      - name: SonarQube Scan
+        uses: SonarSource/sonarqube-scan-action@v6
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
