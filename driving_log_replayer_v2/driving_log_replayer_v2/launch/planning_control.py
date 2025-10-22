@@ -21,6 +21,9 @@ RECORD_TOPIC = """^/tf$\
 |^/diagnostics$\
 |^/map/vector_map_marker$\
 |^/map/pointcloud_map$\
+|^/sensing/camera/.*/compressed$\
+|^/sensing/camera/.*/camera_info$\
+|^/sensing/lidar/concatenated/pointcloud$\
 |^/perception/object_recognition/objects$\
 |^/perception/object_recognition/detection/objects$\
 |^/perception/object_recognition/tracking/objects$\
