@@ -75,8 +75,21 @@ class DiagCondition(BaseModel):
         "percentage_larger_than",
         "percentage_less_than",
     ] = "any_of"
-    duration_threshold: float = Field(0.0, ge=0.0)
-    percentage_threshold: float = Field(0.0, ge=0.0, le=1.0)
+    duration_threshold: float | None = Field(None, ge=0.0)
+    percentage_threshold: float | None = Field(None, ge=0.0, le=1.0)
+
+    @model_validator(mode="after")
+    def validate_condition_type(self) -> "DiagCondition":
+        err_msg = "Threshold value duration_*_than and percentage_*_than is required for the selected condition_type"
+        if self.condition_type == "duration_larger_than" and self.duration_threshold is None:
+            raise ValueError(err_msg)
+        if self.condition_type == "duration_less_than" and self.duration_threshold is None:
+            raise ValueError(err_msg)
+        if self.condition_type == "percentage_larger_than" and self.percentage_threshold is None:
+            raise ValueError(err_msg)
+        if self.condition_type == "percentage_less_than" and self.percentage_threshold is None:
+            raise ValueError(err_msg)
+        return self
 
 
 class Conditions(BaseModel):
@@ -166,13 +179,13 @@ class Diag(EvaluationItem):
         elif self.condition.condition_type == "all_of":
             result = self.passed == self.total
         elif self.condition.condition_type == "duration_larger_than":
-            result = self.max_consecutive_duration >= self.condition.duration_threshold
+            result = self.max_consecutive_duration > self.condition.duration_threshold
         elif self.condition.condition_type == "duration_less_than":
             result = self.max_consecutive_duration < self.condition.duration_threshold
 
         elif self.condition.condition_type == "percentage_larger_than":
             result = (
-                (self.passed / self.total) >= self.condition.percentage_threshold
+                (self.passed / self.total) > self.condition.percentage_threshold
                 if self.total > 0
                 else False
             )
