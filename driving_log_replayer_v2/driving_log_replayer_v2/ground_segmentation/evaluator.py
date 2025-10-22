@@ -1,6 +1,4 @@
-#!/usr/bin/env python3
-
-# Copyright (c) 2024 TIER IV.inc
+# Copyright (c) 2025 TIER IV.inc
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -18,60 +16,47 @@ import json
 from pathlib import Path
 
 import numpy as np
-from rclpy.qos import qos_profile_sensor_data
-import ros2_numpy
 from scipy.spatial import cKDTree
-from sensor_msgs.msg import PointCloud2
-from std_msgs.msg import String
 
-from driving_log_replayer_v2.evaluator import DLREvaluatorV2
-from driving_log_replayer_v2.evaluator import evaluator_main
-from driving_log_replayer_v2.ground_segmentation import Condition
-from driving_log_replayer_v2.ground_segmentation import GroundSegmentationResult
-from driving_log_replayer_v2.ground_segmentation import GroundSegmentationScenario
-import driving_log_replayer_v2.perception_eval_conversions as eval_conversions
+from driving_log_replayer_v2.ground_segmentation.models import Conditions
 from driving_log_replayer_v2_msgs.msg import GroundSegmentationEvalResult
 
 
-class GroundSegmentationEvaluator(DLREvaluatorV2):
+class GroundSegmentationEvaluator:
     CLOUD_DIM = 5
     TS_DIFF_THRESH = 75000
 
-    def __init__(self, name: str) -> None:
-        super().__init__(
-            name,
-            GroundSegmentationScenario,
-            GroundSegmentationResult,
-            "/driving_log_replayer/ground_segmentation/results",
-        )
+    def __init__(
+        self,
+        t4_dataset_path: str,
+        result_archive_path: str,
+        evaluation_topic: str,
+        conditions: Conditions,
+    ) -> None:
+        self._t4_dataset_path = t4_dataset_path
+        self._result_archive_path = result_archive_path
+        self._evaluation_topic = evaluation_topic
+        self._conditions = conditions
 
-        eval_condition: Condition = self._scenario.Evaluation.Conditions
-        self.ground_label = eval_condition.ground_label
-        self.obstacle_label = eval_condition.obstacle_label
-        self.eval_target_topic = (
-            self.declare_parameter(
-                "evaluation_target_topic", "/perception/obstacle_segmentation/pointcloud"
-            )
-            .get_parameter_value()
-            .string_value
-        )
+        self._ground_label = self._conditions.ground_label
+        self._obstacle_label = self._conditions.obstacle_label
 
         # load point cloud data
-        sample_data_path = Path(self._t4_dataset_paths[0], "annotation", "sample_data.json")
+        sample_data_path = Path(self._t4_dataset_path, "annotation", "sample_data.json")
         sample_data = json.load(sample_data_path.open())
         sample_data = list(filter(lambda d: d["filename"].split(".")[-2] == "pcd", sample_data))
 
         # load gt annotation data
-        lidar_seg_json_path = Path(self._t4_dataset_paths[0], "annotation", "lidarseg.json")
+        lidar_seg_json_path = Path(self._t4_dataset_path, "annotation", "lidarseg.json")
         lidar_seg_data = json.load(lidar_seg_json_path.open())
         token_to_seg_data = {}
         for annotation_data in lidar_seg_data:
             token_to_seg_data[annotation_data["sample_data_token"]] = annotation_data
 
-        self.ground_truth: dict[int, dict[str, np.ndarray]] = {}
+        self._ground_truth: dict[int, dict[str, np.ndarray]] = {}
         for i in range(len(sample_data)):
             raw_points_file_path = Path(
-                self._t4_dataset_paths[0],
+                self._t4_dataset_path,
                 sample_data[i]["filename"],
             ).as_posix()
             raw_points = np.fromfile(raw_points_file_path, dtype=np.float32)
@@ -80,45 +65,30 @@ class GroundSegmentationEvaluator(DLREvaluatorV2):
             if token not in token_to_seg_data:
                 continue
             annotation_file_path = Path(
-                self._t4_dataset_paths[0], token_to_seg_data[token]["filename"]
+                self._t4_dataset_path, token_to_seg_data[token]["filename"]
             ).as_posix()
             labels = np.fromfile(annotation_file_path, dtype=np.uint8)
 
             points: np.ndarray = raw_points.reshape((-1, self.CLOUD_DIM))
 
-            self.ground_truth[int(sample_data[i]["timestamp"])] = {
+            self._ground_truth[int(sample_data[i]["timestamp"])] = {
                 "points": points,
                 "labels": labels,
             }
 
-        self.__sub_pointcloud = self.create_subscription(
-            PointCloud2,
-            self.eval_target_topic,
-            self.annotated_pcd_eval_cb,
-            qos_profile_sensor_data,
-        )
-
-    def annotated_pcd_eval_cb(self, msg: PointCloud2) -> None:
-        header_timestamp_microsec: int = eval_conversions.unix_time_microsec_from_ros_msg(
-            msg.header
-        )
-        gt_frame_ts = self.__get_gt_frame_ts(unix_time=header_timestamp_microsec)
+    def evaluate(
+        self, header_timestamp_microsec: int, pointcloud: np.ndarray
+    ) -> GroundSegmentationEvalResult | str:
+        gt_frame_ts = self.__get_gt_frame_ts(header_timestamp_microsec)
 
         if gt_frame_ts < 0:
-            return
+            return "No Ground Truth"
 
         # get ground truth pointcloud in this frame
         # construct kd-tree from gt cloud
-        gt_frame_cloud: np.ndarray = self.ground_truth[gt_frame_ts]["points"]
-        gt_frame_label: np.ndarray = self.ground_truth[gt_frame_ts]["labels"]
+        gt_frame_cloud: np.ndarray = self._ground_truth[gt_frame_ts]["points"]
+        gt_frame_label: np.ndarray = self._ground_truth[gt_frame_ts]["labels"]
         kdtree = cKDTree(gt_frame_cloud[:, 0:3])
-
-        # convert ros2 pointcloud to numpy
-        numpy_pcd = ros2_numpy.numpify(msg)
-        pointcloud = np.zeros((numpy_pcd.shape[0], 3))
-        pointcloud[:, 0] = numpy_pcd["x"]
-        pointcloud[:, 1] = numpy_pcd["y"]
-        pointcloud[:, 2] = numpy_pcd["z"]
 
         if gt_frame_cloud.shape[0] != gt_frame_label.shape[0]:
             err_msg = (
@@ -129,25 +99,23 @@ class GroundSegmentationEvaluator(DLREvaluatorV2):
 
         # count TP+FN, TN+FP
         tp_fn = 0
-        for ground_label in self.ground_label:
+        for ground_label in self._ground_label:
             tp_fn += np.count_nonzero(gt_frame_label == ground_label)
 
         fp_tn = 0
-        for obstacle_label in self.obstacle_label:
+        for obstacle_label in self._obstacle_label:
             fp_tn += np.count_nonzero(gt_frame_label == obstacle_label)
 
         tn: int = 0
         fn: int = 0
         for p in pointcloud:
             _, idx = kdtree.query(p, k=1)
-            if gt_frame_label[idx] in self.ground_label:
+            if gt_frame_label[idx] in self._ground_label:
                 fn += 1
-            elif gt_frame_label[idx] in self.obstacle_label:
+            elif gt_frame_label[idx] in self._obstacle_label:
                 tn += 1
         tp = tp_fn - fn
         fp = fp_tn - tn
-
-        self.get_logger().info(f"TP {tp}, FP {fp}, TN {tn}, FN {fn}")
 
         metrics_list = self.__compute_metrics(tp, fp, tn, fn)
 
@@ -162,16 +130,14 @@ class GroundSegmentationEvaluator(DLREvaluatorV2):
         frame_result.specificity = metrics_list[3]
         frame_result.f1_score = metrics_list[4]
 
-        self._result.set_frame(frame_result)
-        res_str = self._result_writer.write_result(self._result)
-        self._pub_result.publish(String(data=res_str))
+        return frame_result
 
     def __get_gt_frame_ts(self, unix_time: int) -> int:
-        ts_itr = iter(self.ground_truth.keys())
+        ts_itr = iter(self._ground_truth.keys())
         ret_ts: int = int(next(ts_itr))
         min_diff: int = abs(unix_time - ret_ts)
 
-        for _ in range(1, len(self.ground_truth)):
+        for _ in range(1, len(self._ground_truth)):
             sample_ts = next(ts_itr)
             diff_time = abs(unix_time - sample_ts)
             if diff_time < min_diff:
@@ -179,7 +145,6 @@ class GroundSegmentationEvaluator(DLREvaluatorV2):
                 ret_ts = sample_ts
 
         if min_diff > self.TS_DIFF_THRESH:
-            self.get_logger().warn("time diff is too big")
             return -1
 
         return ret_ts
@@ -192,12 +157,3 @@ class GroundSegmentationEvaluator(DLREvaluatorV2):
         specificity = float(tn) / float(tn + fp + eps)
         f1_score = 2 * (precision * recall) / (precision + recall + eps)
         return [accuracy, precision, recall, specificity, f1_score]
-
-
-@evaluator_main
-def main() -> DLREvaluatorV2:
-    return GroundSegmentationEvaluator("ground_segmentation_evaluator")
-
-
-if __name__ == "__main__":
-    main()
