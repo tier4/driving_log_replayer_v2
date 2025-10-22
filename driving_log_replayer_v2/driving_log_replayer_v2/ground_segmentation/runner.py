@@ -20,6 +20,7 @@ import shutil
 from typing import TYPE_CHECKING
 
 import numpy as np
+import pandas as pd  # Ensure this is imported
 from rclpy.clock import Clock
 import ros2_numpy
 from rosbag2_py import TopicMetadata
@@ -137,9 +138,13 @@ def evaluate(
     # save scenario.yaml to check later
     shutil.copy(scenario_path, Path(result_archive_path).joinpath("scenario.yaml"))
 
+    # Prepare to collect frame results for CSV
+    frame_results_list = []
+
+    # Extract dataset info (customize as needed)
+    t4dataset_id = getattr(evaluator, "t4dataset_id", Path(t4_dataset_path).stem)
     # main evaluation process
     for topic_name, msg, subscribed_timestamp_nanosec in rosbag_manager.read_messages():
-        # convert ros message to numpy array
         header_timestamp_microsec = eval_conversions.unix_time_microsec_from_ros_msg(msg.header)
         pointcloud = convert_to_numpy_pointcloud(msg)
 
@@ -148,6 +153,22 @@ def evaluate(
             header_timestamp_microsec,
             pointcloud,
         )
+
+        # Only collect valid GroundSegmentationEvalResult frames
+        if isinstance(frame_result, GroundSegmentationEvalResult):
+            frame_results_list.append({
+                "topic_name": topic_name,
+                "t4dataset_id": t4dataset_id,
+                "tp": frame_result.tp,
+                "fp": frame_result.fp,
+                "tn": frame_result.tn,
+                "fn": frame_result.fn,
+                "accuracy": frame_result.accuracy,
+                "precision": frame_result.precision,
+                "recall": frame_result.recall,
+                "specificity": frame_result.specificity,
+                "f1_score": frame_result.f1_score,
+            })
 
         if topic_name == degradation_topic:
             write_result(
@@ -159,6 +180,12 @@ def evaluate(
                 rosbag_manager,
                 subscribed_timestamp_nanosec,
             )
+
+    # Save all frame results to CSV
+    if frame_results_list:
+        df = pd.DataFrame(frame_results_list)
+        csv_path = Path(result_archive_path).joinpath("analysis_result.csv")
+        df.fillna("nan").to_csv(csv_path, index=False)
 
     result_writer.close()
     rosbag_manager.close_writer()
