@@ -212,6 +212,7 @@ class PlanningFactorCondition(BaseModel):
         ]
         | None
     ) = None
+    distance: StartEnd | None = None
     judgement: Literal["positive", "negative"]  # positive or negative
 
 
@@ -375,6 +376,13 @@ class PlanningFactor(EvaluationItem):
                 info_dict.update(info_dict_behavior)
                 condition_met &= behavior_met
 
+            if self.condition.distance is not None:
+                distance_met, info_dict_distance = self.judge_distance(
+                    msg.factors[0].control_points[0].distance_to_obstacle
+                )
+                info_dict.update(info_dict_distance)
+                condition_met &= distance_met
+
         # Check if the condition is met based on judgement type
         condition_met = (
             condition_met if self.condition.judgement == "positive" else not condition_met
@@ -415,6 +423,12 @@ class PlanningFactor(EvaluationItem):
             "Behavior": behavior,
         }
         return behavior in self.condition.behavior, info_dict
+
+    def judge_distance(self, distance: float) -> tuple[bool, dict]:
+        info_dict = {
+            "Distance": distance,
+        }
+        return self.condition.distance.match_condition(distance), info_dict
 
 
 class FactorsClassContainer:
