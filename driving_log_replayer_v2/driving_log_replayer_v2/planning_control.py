@@ -229,7 +229,7 @@ class Evaluation(BaseModel):
 
 class IncludeUseCase(BaseModel):
     UseCaseName: Literal["diagnostics"]
-    UseCaseFormatVersion: Literal["0.1.0"]
+    UseCaseFormatVersion: Literal["0.1.0", "0.2.0", "0.3.0"]
     Conditions: DiagnosticsConditions
 
 
