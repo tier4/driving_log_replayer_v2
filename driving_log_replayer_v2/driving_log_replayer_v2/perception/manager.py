@@ -17,9 +17,9 @@ from __future__ import annotations
 import copy
 from typing import TYPE_CHECKING
 
+from driving_log_replayer_v2.post_process_evaluator import FrameResult
 from driving_log_replayer_v2.evaluation_manager import EvaluationManager
 from driving_log_replayer_v2.perception.evaluator import PerceptionEvaluator
-from driving_log_replayer_v2.perception.models import Conditions
 from driving_log_replayer_v2.perception.models import PerceptionScenario
 
 if TYPE_CHECKING:
@@ -27,7 +27,6 @@ if TYPE_CHECKING:
 
     from perception_eval.common.object import DynamicObject
     from perception_eval.config import PerceptionEvaluationConfig
-    from perception_eval.evaluation.result.perception_frame_result import PerceptionFrameResult
     from perception_eval.tool import PerceptionAnalyzer3D
 
 
@@ -40,11 +39,7 @@ class PerceptionEvaluationManager(EvaluationManager):
         evaluation_topics: dict[str, list[str]],
     ) -> None:
         super().__init__(scenario_path, PerceptionScenario)
-        self._scenario: PerceptionScenario
-        self._evaluation_condition: Conditions
         self._degradation_evaluation_task: str
-        self._degradation_topic: str
-        self._evaluators: dict[str, PerceptionEvaluator]
 
         self._degradation_evaluation_task = self._scenario.Evaluation.PerceptionEvaluationConfig[
             "evaluation_config_dict"
@@ -81,11 +76,26 @@ class PerceptionEvaluationManager(EvaluationManager):
             err_msg = f"Invalid evaluation task: {self._degradation_evaluation_task}"
             raise ValueError(err_msg)
 
+    def evaluate_frame(
+        self,
+        topic_name: str,
+        header_timestamp_microsec: int,
+        subscribed_timestamp_microsec: int,
+        data: list[DynamicObject] | str,
+        *,
+        interpolation: bool,
+    ) -> FrameResult:
+        evaluator = self._evaluators[topic_name]
+
+        return evaluator.evaluate_frame(
+            header_timestamp_microsec,
+            subscribed_timestamp_microsec,
+            data,
+            interpolation=interpolation,
+        )
+
     def get_degradation_evaluation_task(self) -> str:
         return self._degradation_evaluation_task
-
-    def get_degradation_topic(self) -> str:
-        return self._degradation_topic
 
     def get_evaluation_config(
         self, topic_name: str | None = None
@@ -123,22 +133,3 @@ class PerceptionEvaluationManager(EvaluationManager):
             return evaluator.get_analyzer()
         return {topic: evaluator.get_analyzer() for topic, evaluator in self._evaluators.items()}
 
-    def add_frame(
-        self,
-        topic_name: str,
-        estimated_objects: list[DynamicObject] | str,
-        header_timestamp_microsec: int,
-        subscribed_timestamp_microsec: int,
-        *,
-        interpolation: bool,
-    ) -> tuple[PerceptionFrameResult | str, int]:
-        evaluator = self._evaluators[topic_name]
-
-        frame_result, skip_counter = evaluator.add_frame(
-            estimated_objects,
-            header_timestamp_microsec,
-            subscribed_timestamp_microsec,
-            interpolation=interpolation,
-        )
-
-        return frame_result, skip_counter

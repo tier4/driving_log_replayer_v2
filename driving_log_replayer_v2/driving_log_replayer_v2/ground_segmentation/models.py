@@ -95,11 +95,13 @@ class GroundSegmentationResult(ResultBase):
             self._success = False
             self._summary = f"Failed: {summary_str}"
 
-    def set_frame(self, msg: GroundSegmentationEvalResult) -> None:
-        self._frame = self.__ground_segmentation.set_frame(msg)
+    def set_frame(self, msg: GroundSegmentationEvalResult, skip: int) -> None:
+        self._frame = {"FrameSkip": skip}
+        self._frame[self.__ground_segmentation.name] = self.__ground_segmentation.set_frame(msg)
         self.update()
 
-    def set_info_frame(self, msg: str) -> None:
+    def set_info_frame(self, msg: str, skip: int) -> None:
         self._frame = {
             "Info": msg,
+            "FrameSkip": skip
         }

@@ -30,7 +30,9 @@ from driving_log_replayer_v2.ground_segmentation.models import GroundSegmentatio
 import driving_log_replayer_v2.perception_eval_conversions as eval_conversions
 from driving_log_replayer_v2.result import ResultWriter
 from driving_log_replayer_v2.ros2_utils import RosBagManager
-from driving_log_replayer_v2_msgs.msg import GroundSegmentationEvalResult
+import driving_log_replayer_v2.perception_eval_conversions as eval_conversions
+from driving_log_replayer_v2.post_process_evaluator import FrameResult
+
 
 if TYPE_CHECKING:
     from sensor_msgs.msg import PointCloud2
@@ -47,21 +49,14 @@ def write_result(
     msg: PointCloud2,
     result: GroundSegmentationResult,
     result_writer: ResultWriter,
-    frame_result: GroundSegmentationEvalResult,
+    frame_result: FrameResult,
     rosbag_manager: RosBagManager,
     subscribed_timestamp_nanosec: int,
 ) -> None:
-    if isinstance(frame_result, GroundSegmentationEvalResult):
-        result.set_frame(frame_result)
-    elif isinstance(frame_result, str):
-        if frame_result == "No Ground Truth":
-            result.set_info_frame(frame_result)
-        else:
-            err_msg = f"Unknown evaluate failure: {frame_result}"
-            raise ValueError(err_msg)
+    if frame_result.is_valid:
+        result.set_frame(frame_result.data, frame_result.skip_counter)
     else:
-        err_msg = f"Unknown frame result: {frame_result}"
-        raise TypeError(err_msg)
+        result.set_info_frame(frame_result.invalid_reason, frame_result.skip_counter)
     res_str = result_writer.write_result_with_time(result, subscribed_timestamp_nanosec)
     rosbag_manager.write_results(
         additional_record_topic_name["string/results"],
@@ -142,10 +137,14 @@ def evaluate(
         # convert ros message to numpy array
         header_timestamp_microsec = eval_conversions.unix_time_microsec_from_ros_msg(msg.header)
         pointcloud = convert_to_numpy_pointcloud(msg)
+        subscribed_timestamp_microsec = eval_conversions.unix_time_microsec_from_ros_clock_time(
+            subscribed_timestamp_nanosec
+        )
 
-        frame_result = evaluator.evaluate(
+        frame_result = evaluator.evaluate_frame(
             topic_name,
             header_timestamp_microsec,
+            subscribed_timestamp_microsec,
             pointcloud,
         )
 

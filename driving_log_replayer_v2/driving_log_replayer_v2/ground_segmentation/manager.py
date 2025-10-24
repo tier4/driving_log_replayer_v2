@@ -16,9 +16,8 @@ import numpy as np
 
 from driving_log_replayer_v2.evaluation_manager import EvaluationManager
 from driving_log_replayer_v2.ground_segmentation.evaluator import GroundSegmentationEvaluator
-from driving_log_replayer_v2.ground_segmentation.models import Conditions
 from driving_log_replayer_v2.ground_segmentation.models import GroundSegmentationScenario
-from driving_log_replayer_v2_msgs.msg import GroundSegmentationEvalResult
+from driving_log_replayer_v2.post_process_evaluator import FrameResult
 
 
 class GroundSegmentationEvaluationManager(EvaluationManager):
@@ -30,11 +29,6 @@ class GroundSegmentationEvaluationManager(EvaluationManager):
         evaluation_topics: list[str],
     ) -> None:
         super().__init__(scenario_path, GroundSegmentationScenario)
-        self._scenario: GroundSegmentationScenario
-        self._evaluation_condition: Conditions
-        self._evaluators: dict[str, GroundSegmentationEvaluator]
-        self._degradation_topic: str
-
         self._evaluators = {
             topic: GroundSegmentationEvaluator(
                 t4_dataset_path,
@@ -50,8 +44,9 @@ class GroundSegmentationEvaluationManager(EvaluationManager):
     def set_degradation_topic(self) -> None:
         self._degradation_topic = next(iter(self._evaluators.keys()))
 
-    def evaluate(
-        self, topic_name: str, header_timestamp_microsec: int, pointcloud: np.ndarray
-    ) -> GroundSegmentationEvalResult | str:
+    def evaluate_frame(
+        self, topic_name: str, header_timestamp_microsec: int, 
+        subscribed_timestamp_microsec: int, data: np.ndarray
+    ) -> FrameResult:
         evaluator = self._evaluators[topic_name]
-        return evaluator.evaluate(header_timestamp_microsec, pointcloud)
+        return evaluator.evaluate_frame(header_timestamp_microsec, subscribed_timestamp_microsec, data)

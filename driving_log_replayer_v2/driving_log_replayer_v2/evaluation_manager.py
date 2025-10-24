@@ -20,13 +20,18 @@ from pathlib import Path
 from typing import Any
 from typing import TypeVar
 
+from pydantic import BaseModel
 from pydantic import ValidationError
 import yaml
 
 from driving_log_replayer_v2.scenario import load_scenario
 from driving_log_replayer_v2.scenario import Scenario
+from driving_log_replayer_v2.post_process_evaluator import Evaluator
+from driving_log_replayer_v2.post_process_evaluator import FrameResult
 
 ScenarioType = TypeVar("ScenarioType", bound=Scenario)
+EvaluatorType = TypeVar("EvaluatorType", bound=Evaluator)
+BaseModelType = TypeVar("BaseModelType", bound=BaseModel)
 
 
 class EvaluationManager(ABC):
@@ -35,9 +40,14 @@ class EvaluationManager(ABC):
         scenario_path: str,
         scenario_class: ScenarioType,
     ) -> None:
+        """
+        Manager for evaluation process.
+        - load scenario
+        - manage multiple evaluators
+        """
         self._scenario: ScenarioType
-        self._evaluation_condition: dict[str, str]
-        self._evaluators: dict[str, Any]
+        self._evaluation_condition: BaseModelType
+        self._evaluators: dict[str, EvaluatorType]
         self._degradation_topic: str
 
         try:
@@ -55,6 +65,18 @@ class EvaluationManager(ABC):
 
     @abstractmethod
     def set_degradation_topic(self) -> None:
+        raise NotImplementedError
+    
+    @abstractmethod
+    def evaluate_frame(
+        self,
+        topic_name: str,
+        header_timestamp_microsec: int,
+        subscribed_timestamp_microsec: int,
+        data: Any,
+        *args: Any,
+        **kwargs: Any,
+    ) -> FrameResult:
         raise NotImplementedError
 
     def get_degradation_topic(self) -> str:

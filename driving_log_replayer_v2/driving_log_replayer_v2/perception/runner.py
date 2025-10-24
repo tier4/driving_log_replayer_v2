@@ -44,6 +44,7 @@ from driving_log_replayer_v2.result import MultiResultEditor
 from driving_log_replayer_v2.result import ResultWriter
 from driving_log_replayer_v2.ros2_utils import lookup_transform
 from driving_log_replayer_v2.ros2_utils import RosBagManager
+from driving_log_replayer_v2.post_process_evaluator import FrameResult
 
 if TYPE_CHECKING:
     from geometry_msgs.msg import TransformStamped
@@ -106,27 +107,26 @@ def write_result(
     rosbag_manager: RosBagManager,
     msg: PerceptionMsgType,
     subscribed_timestamp_nanosec: int,
-    frame_result: PerceptionFrameResult | str,
-    skip_counter: int,
+    frame_result: FrameResult,
 ) -> None:
     """Write result.jsonl and rosbag."""
-    # NOTE: In offline evaluation using rosbag with SequentialReader(), messages are processed one-by-one.
-    #       So it is impossible to get transform of future unless explicitly set the tf of future in the buffer.
-    map_to_baselink: TransformStamped = lookup_transform(
-        rosbag_manager.get_tf_buffer(),
-        msg.header.stamp,
-    )
+    if frame_result.is_valid:
+        # NOTE: In offline evaluation using rosbag with SequentialReader(), messages are processed one-by-one.
+        #       So it is impossible to get transform of future unless explicitly set the tf of future in the buffer.
+        map_to_baselink: TransformStamped = lookup_transform(
+            rosbag_manager.get_tf_buffer(),
+            msg.header.stamp,
+        )
 
-    if isinstance(frame_result, PerceptionFrameResult):
-        # handle when add_frame is success
+        # handle evaluate_frame is success
         result.set_frame(
-            frame_result,
-            skip_counter,
+            frame_result.data,
+            frame_result.skip_counter,
             map_to_baselink=DLREvaluatorV2.transform_stamped_with_euler_angle(map_to_baselink),
         )
 
         marker_ground_truth, marker_results = convert_to_ros_msg(
-            frame_result,
+            frame_result.data,
             msg.header,
         )
 
@@ -139,18 +139,16 @@ def write_result(
         rosbag_manager.write_results(
             additional_record_topic_name["marker/results"], marker_results, msg.header.stamp
         )  # results including evaluation topic and ground truth
-    elif isinstance(frame_result, str):
-        # handle when add_frame is fail caused by failed object conversion or no ground truth
-        if frame_result == "No Ground Truth":
-            result.set_info_frame(frame_result, skip_counter)
-        elif frame_result == "Invalid Estimated Objects":
-            result.set_warn_frame(frame_result, skip_counter)
-        else:
-            err_msg = f"Unknown add_frame failure: {frame_result}"
-            raise TypeError(err_msg)
     else:
-        err_msg = f"Unknown frame result: {frame_result}"
-        raise TypeError(err_msg)
+        # handle when add_frame is fail caused by failed object conversion or no ground truth
+        if frame_result.invalid_reason == "No Ground Truth":
+            result.set_info_frame(frame_result.data, frame_result.skip_counter)
+        elif frame_result.invalid_reason == "Invalid Estimated Objects":
+            result.set_warn_frame(frame_result.data, frame_result.skip_counter)
+        else:
+            err_msg = f"Unknown invalid_reason: {frame_result.invalid_reason}"
+            raise TypeError(err_msg)
+
     res_str = result_writer.write_result_with_time(result, subscribed_timestamp_nanosec)
     rosbag_manager.write_results(
         additional_record_topic_name["string/results"],
@@ -291,11 +289,11 @@ def evaluate(  # noqa: PLR0915
         )
 
         # matching process between estimated_objects and ground truth for evaluation
-        frame_result, skip_counter = evaluator.add_frame(
+        frame_result = evaluator.evaluate_frame(
             topic_name,
-            estimated_objects,
             header_timestamp_microsec,
             subscribed_timestamp_microsec,
+            estimated_objects,
             interpolation=interpolation,
         )
 
@@ -309,7 +307,6 @@ def evaluate(  # noqa: PLR0915
                 msg,
                 subscribed_timestamp_nanosec,
                 frame_result,
-                skip_counter,
             )
 
     # calculation of the overall evaluation like mAP, TP Rate, etc and save evaluated data.
