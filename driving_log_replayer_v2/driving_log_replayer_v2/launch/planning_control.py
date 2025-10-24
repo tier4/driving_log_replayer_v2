@@ -19,6 +19,7 @@ RECORD_TOPIC = """^/tf$\
 |^/tf_static$\
 |^/parameter_events$\
 |^/diagnostics$\
+|^/awapi/autoware/get/status$\
 |^/map/vector_map_marker$\
 |^/map/pointcloud_map$\
 |^/sensing/camera/.*/compressed$\
