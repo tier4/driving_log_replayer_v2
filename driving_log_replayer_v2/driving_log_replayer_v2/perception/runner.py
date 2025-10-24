@@ -16,16 +16,15 @@ from __future__ import annotations
 
 import argparse
 from pathlib import Path
-import shutil
 from typing import TYPE_CHECKING
 from typing import TypeVar
+from typing import Any
 
 from autoware_perception_msgs.msg import DetectedObjects
 from autoware_perception_msgs.msg import PredictedObjects
 from autoware_perception_msgs.msg import TrackedObjects
 from perception_eval.evaluation.result.perception_frame_result import PerceptionFrameResult
 from rclpy.clock import Clock
-from rosbag2_py import TopicMetadata
 from std_msgs.msg import ColorRGBA
 from std_msgs.msg import Header
 from std_msgs.msg import String
@@ -40,11 +39,12 @@ from driving_log_replayer_v2.perception.stop_reason import convert_to_stop_reaso
 from driving_log_replayer_v2.perception.stop_reason import StopReasonAnalyzer
 from driving_log_replayer_v2.perception.topics import load_evaluation_topics
 import driving_log_replayer_v2.perception_eval_conversions as eval_conversions
-from driving_log_replayer_v2.result import MultiResultEditor
 from driving_log_replayer_v2.result import ResultWriter
 from driving_log_replayer_v2.ros2_utils import lookup_transform
-from driving_log_replayer_v2.ros2_utils import RosBagManager
 from driving_log_replayer_v2.post_process_evaluator import FrameResult
+from driving_log_replayer_v2.post_process_runner import Runner
+from driving_log_replayer_v2.post_process_runner import TopicInfo
+
 
 if TYPE_CHECKING:
     from geometry_msgs.msg import TransformStamped
@@ -100,64 +100,175 @@ def convert_to_ros_msg(
     return marker_ground_truth, marker_results
 
 
-def write_result(
-    additional_record_topic_name: dict[str],
-    result: PerceptionResult,
-    result_writer: ResultWriter,
-    rosbag_manager: RosBagManager,
-    msg: PerceptionMsgType,
-    subscribed_timestamp_nanosec: int,
-    frame_result: FrameResult,
-) -> None:
-    """Write result.jsonl and rosbag."""
-    if frame_result.is_valid:
-        # NOTE: In offline evaluation using rosbag with SequentialReader(), messages are processed one-by-one.
-        #       So it is impossible to get transform of future unless explicitly set the tf of future in the buffer.
-        map_to_baselink: TransformStamped = lookup_transform(
-            rosbag_manager.get_tf_buffer(),
-            msg.header.stamp,
+class PerceptionRunner(Runner):
+    def __init__(
+        self,
+        scenario_path: str,
+        rosbag_dir_path: str,
+        t4_dataset_path: str,
+        result_json_path: str,
+        result_archive_path: str,
+        enable_analysis: str,
+        storage: str,
+        evaluation_topics: dict[str, list[str]],
+        additional_record_topics: list[TopicInfo],
+        analysis_max_distance: str,
+        analysis_distance_interval: str,
+    ):
+        self._analysis_max_distance = analysis_max_distance
+        self._analysis_distance_interval = analysis_distance_interval
+        self._stop_reason_result: StopReasonResult | None
+        self._stop_reason_result_writer: ResultWriter | None
+        self._stop_reason_analyzer: StopReasonAnalyzer | None
+
+        super().__init__(
+            PerceptionEvaluationManager,
+            PerceptionResult,
+            scenario_path,
+            rosbag_dir_path,
+            t4_dataset_path,
+            result_json_path,
+            result_archive_path,
+            enable_analysis,
+            storage,
+            evaluation_topics,
+            additional_record_topics,
         )
 
-        # handle evaluate_frame is success
-        result.set_frame(
-            frame_result.data,
-            frame_result.skip_counter,
-            map_to_baselink=DLREvaluatorV2.transform_stamped_with_euler_angle(map_to_baselink),
-        )
-
-        marker_ground_truth, marker_results = convert_to_ros_msg(
-            frame_result.data,
-            msg.header,
-        )
-
-        # write ground truth as ROS message
-        rosbag_manager.write_results(
-            additional_record_topic_name["marker/ground_truth"],
-            marker_ground_truth,
-            msg.header.stamp,
-        )  # ground truth
-        rosbag_manager.write_results(
-            additional_record_topic_name["marker/results"], marker_results, msg.header.stamp
-        )  # results including evaluation topic and ground truth
-    else:
-        # handle when add_frame is fail caused by failed object conversion or no ground truth
-        if frame_result.invalid_reason == "No Ground Truth":
-            result.set_info_frame(frame_result.data, frame_result.skip_counter)
-        elif frame_result.invalid_reason == "Invalid Estimated Objects":
-            result.set_warn_frame(frame_result.data, frame_result.skip_counter)
+        # TODO: add stop reason topic /awapi/autoware/get/status
+        # initialize StopReasonResult if stop_reason_criterion is defined
+        stop_reason_criterion = self._manager.get_evaluation_condition().stop_reason_criterion
+        if stop_reason_criterion is not None:
+            # create directory to save stop_reason.jsonl and stop_reason.csv
+            stop_reason_result_path = Path(result_archive_path).joinpath("stop_reason")
+            stop_reason_result_path.mkdir()
+            self._stop_reason_result = StopReasonResult(self._manager.get_evaluation_condition())
+            self._stop_reason_result_writer = ResultWriter(
+                stop_reason_result_path.joinpath("stop_reason.jsonl"),
+                Clock(),
+                self._manager.get_evaluation_condition(),
+            )
+            self._stop_reason_analyzer = StopReasonAnalyzer()
         else:
-            err_msg = f"Unknown invalid_reason: {frame_result.invalid_reason}"
+            self._stop_reason_result = None
+            self._stop_reason_result_writer = None
+            self._stop_reason_analyzer = None
+
+    def _evaluate_frame(
+        self, topic_name: str, msg: Any, subscribed_timestamp_nanosec: int
+    ) -> FrameResult:
+        # evaluate stop reason criterion if defined
+        if self._stop_reason_result is not None and topic_name == "/awapi/autoware/get/status":
+            stop_reason = convert_to_stop_reason(msg)
+            self._stop_reason_analyzer.append(stop_reason)
+            self._stop_reason_result.set_frame(stop_reason)
+            self._stop_reason_result_writer.write_result_with_time(
+                self._stop_reason_result, subscribed_timestamp_nanosec
+            )
+            return # TODO: return empty FrameResult?
+
+        if isinstance(msg, DetectedObjects):
+            interpolation: bool = False
+        elif isinstance(msg, TrackedObjects | PredictedObjects):
+            interpolation: bool = True
+        else:
+            err_msg = f"Unknown message type: {type(msg)}"
             raise TypeError(err_msg)
 
-    res_str = result_writer.write_result_with_time(result, subscribed_timestamp_nanosec)
-    rosbag_manager.write_results(
-        additional_record_topic_name["string/results"],
-        String(data=res_str),
-        msg.header.stamp,
-    )
+        # convert ros to perception_eval
+        header_timestamp_microsec, subscribed_timestamp_microsec, estimated_objects = (
+            convert_to_perception_eval(
+                msg,
+                subscribed_timestamp_nanosec,
+                self._manager.get_evaluation_config(topic_name),
+            )
+        )
+
+        # matching process between estimated_objects and ground truth for evaluation
+        return self._manager.evaluate_frame(
+            topic_name,
+            header_timestamp_microsec,
+            subscribed_timestamp_microsec,
+            estimated_objects,
+            interpolation=interpolation,
+        )
+
+    def _write_result(self, frame_result: FrameResult, header: Header, subscribed_timestamp_nanosec: int) -> None:
+        if frame_result.is_valid:
+            # NOTE: In offline evaluation using rosbag with SequentialReader(), messages are processed one-by-one.
+            #       So it is impossible to get transform of future unless explicitly set the tf of future in the buffer.
+            map_to_baselink: TransformStamped = lookup_transform(
+                self._rosbag_manager.get_tf_buffer(),
+                header.stamp,
+            )
+
+            # handle evaluate_frame is success
+            self._result.set_frame(
+                frame_result.data,
+                frame_result.skip_counter,
+                map_to_baselink=DLREvaluatorV2.transform_stamped_with_euler_angle(map_to_baselink),
+            )
+
+            marker_ground_truth, marker_results = convert_to_ros_msg(
+                frame_result.data,
+                header,
+            )
+
+            # write ground truth as ROS message
+            self._rosbag_manager.write_results(
+                "/driving_log_replayer_v2/marker/ground_truth",
+                marker_ground_truth,
+                header.stamp,
+            )  # ground truth
+            self._rosbag_manager.write_results(
+                "/driving_log_replayer_v2/marker/results", marker_results, header.stamp
+            )  # results including evaluation topic and ground truth
+        else:
+            # handle when add_frame is fail caused by failed object conversion or no ground truth
+            if frame_result.invalid_reason == "No Ground Truth":
+                self._result.set_info_frame(frame_result.data, frame_result.skip_counter)
+            elif frame_result.invalid_reason == "Invalid Estimated Objects":
+                self._result.set_warn_frame(frame_result.data, frame_result.skip_counter)
+            else:
+                err_msg = f"Unknown invalid_reason: {frame_result.invalid_reason}"
+                raise TypeError(err_msg)
+
+        res_str = self._result_writer.write_result_with_time(self._result, subscribed_timestamp_nanosec)
+        self._rosbag_manager.write_results(
+            "/driving_log_replayer_v2/perception/results",
+            String(data=res_str),
+            header.stamp,
+        )
+
+    def _evaluate_on_post_process(self) -> None:
+        final_metrics: dict[str, dict] = self._manager.get_evaluation_results()
+
+        self._result.set_final_metrics(final_metrics[self._degradation_topic])
+        res_str = self._result_writer.write_result_with_time(
+            self._result, self._rosbag_manager.get_last_subscribed_timestamp()
+        )
+        self._rosbag_manager.write_results(
+            "/driving_log_replayer_v2/perception/results",
+            String(data=res_str),
+            self._rosbag_manager.get_last_subscribed_timestamp(),
+        )
+
+    def _analysis(self) -> None:
+        if self._manager.get_degradation_evaluation_task() != "fp_validation":
+            analyzers: dict[str, PerceptionAnalyzer3D] = self._manager.get_analyzers()
+            # TODO: analysis other topic
+            analyzer = analyzers[self._degradation_topic]
+            save_path = self._manager.get_archive_path(self._degradation_topic)
+            analyze(
+                analyzer,
+                save_path,
+                self._analysis_max_distance,
+                self._analysis_distance_interval,
+                self._degradation_topic,
+            )
 
 
-def evaluate(  # noqa: PLR0915
+def evaluate(
     scenario_path: str,
     rosbag_dir_path: str,
     t4_dataset_path: str,
@@ -177,178 +288,36 @@ def evaluate(  # noqa: PLR0915
         evaluation_prediction_topic_regex,
     )
 
-    # initialize PerceptionEvaluationManager to evaluate multiple topics
-    evaluator = PerceptionEvaluationManager(
-        scenario_path,
-        t4_dataset_path,
-        result_archive_path,
-        evaluation_topics,
-    )
-    if evaluator.check_scenario_error() is not None:
-        error = evaluator.check_scenario_error()
-        result_writer = ResultWriter(
-            result_json_path,
-            Clock(),
-            {},
-        )
-        error_dict = {
-            "Result": {"Success": False, "Summary": "ScenarioFormatError"},
-            "Stamp": {"System": 0.0},
-            "Frame": {"ErrorMsg": error.__str__()},
-        }
-        result_writer.write_line(error_dict)
-        result_writer.close()
-        raise error
-    degradation_topic = evaluator.get_degradation_topic()
-
-    # initialize ResultWriter and PerceptionResult to write result.jsonl which Evaluator will use
-    result_writer = ResultWriter(
-        result_json_path,
-        Clock(),
-        evaluator.get_evaluation_condition(),
-    )
-    result = PerceptionResult(evaluator.get_evaluation_condition())
-
-    # initialize ResultWriter and StopReasonResult if stop reason criterion is defined
-    stop_reason_criterion = evaluator.get_evaluation_condition().stop_reason_criterion
-    if stop_reason_criterion is not None:
-        # create directory to save stop_reason.jsonl and stop_reason.csv
-        stop_reason_result_path = Path(result_archive_path).joinpath("stop_reason")
-        stop_reason_result_path.mkdir()
-        stop_reason_result = StopReasonResult(evaluator.get_evaluation_condition())
-        stop_reason_result_writer = ResultWriter(
-            stop_reason_result_path.joinpath("stop_reason.jsonl"),
-            Clock(),
-            evaluator.get_evaluation_condition(),
-        )
-        stop_reason_analyzer = StopReasonAnalyzer()
-    else:
-        stop_reason_result = None
-        stop_reason_result_writer = None
-
-    # initialize RosBagManager to read and save rosbag and write into it
-    additional_record_topics_name = {
-        "marker/ground_truth": "/driving_log_replayer_v2/marker/ground_truth",
-        "marker/results": "/driving_log_replayer_v2/marker/results",
-        "string/results": "/driving_log_replayer_v2/perception/results",
-    }
     additional_record_topics = [
-        TopicMetadata(
-            name=topic_name,
-            type="visualization_msgs/MarkerArray" if "marker" in topic_name else "std_msgs/String",
-            serialization_format="cdr",
-            offered_qos_profiles="",
+        TopicInfo(
+            name="/driving_log_replayer_v2/marker/ground_truth",
+            msg_type="visualization_msgs/MarkerArray",
+        ),
+        TopicInfo(
+            name="/driving_log_replayer_v2/marker/results",
+            msg_type="visualization_msgs/MarkerArray",
+        ),
+        TopicInfo(
+            name="/driving_log_replayer_v2/perception/results",
+            msg_type="std_msgs/String",
         )
-        for topic_name in additional_record_topics_name.values()
     ]
-    evaluation_topics_list = (
-        [*evaluator.get_evaluation_topics(), "/awapi/autoware/get/status"]
-        if stop_reason_result is not None
-        else evaluator.get_evaluation_topics()
-    )
-    rosbag_manager = RosBagManager(
+
+    runner = PerceptionRunner(
+        scenario_path,
         rosbag_dir_path,
-        Path(result_archive_path).joinpath("result_bag").as_posix(),
+        t4_dataset_path,
+        result_json_path,
+        result_archive_path,
+        enable_analysis,
         storage,
-        evaluation_topics_list,
+        evaluation_topics,
         additional_record_topics,
+        analysis_max_distance,
+        analysis_distance_interval,
     )
 
-    # save scenario.yaml to check later
-    shutil.copy(scenario_path, Path(result_archive_path).joinpath("scenario.yaml"))
-
-    # main evaluation process
-    for topic_name, msg, subscribed_timestamp_nanosec in rosbag_manager.read_messages():
-        # See RosBagManager for `time relationships`.
-
-        # evaluate stop reason criterion if defined
-        if stop_reason_result is not None and topic_name == "/awapi/autoware/get/status":
-            stop_reason = convert_to_stop_reason(msg)
-            stop_reason_analyzer.append(stop_reason)
-            stop_reason_result.set_frame(stop_reason)
-            stop_reason_result_writer.write_result_with_time(
-                stop_reason_result, subscribed_timestamp_nanosec
-            )
-            continue
-
-        if isinstance(msg, DetectedObjects):
-            interpolation: bool = False
-        elif isinstance(msg, TrackedObjects | PredictedObjects):
-            interpolation: bool = True
-        else:
-            err_msg = f"Unknown message type: {type(msg)}"
-            raise TypeError(err_msg)
-
-        # convert ros to perception_eval
-        header_timestamp_microsec, subscribed_timestamp_microsec, estimated_objects = (
-            convert_to_perception_eval(
-                msg,
-                subscribed_timestamp_nanosec,
-                evaluator.get_evaluation_config(topic_name),
-            )
-        )
-
-        # matching process between estimated_objects and ground truth for evaluation
-        frame_result = evaluator.evaluate_frame(
-            topic_name,
-            header_timestamp_microsec,
-            subscribed_timestamp_microsec,
-            estimated_objects,
-            interpolation=interpolation,
-        )
-
-        # write rosbag result only degradation topic
-        if topic_name == degradation_topic:
-            write_result(
-                additional_record_topics_name,
-                result,
-                result_writer,
-                rosbag_manager,
-                msg,
-                subscribed_timestamp_nanosec,
-                frame_result,
-            )
-
-    # calculation of the overall evaluation like mAP, TP Rate, etc and save evaluated data.
-    final_metrics: dict[str, dict] = evaluator.get_evaluation_results()
-
-    result.set_final_metrics(final_metrics[degradation_topic])
-    res_str = result_writer.write_result_with_time(
-        result, rosbag_manager.get_last_subscribed_timestamp()
-    )
-    rosbag_manager.write_results(
-        additional_record_topics_name["string/results"],
-        String(data=res_str),
-        rosbag_manager.get_last_subscribed_timestamp(),
-    )
-    result_writer.close()
-    rosbag_manager.close_writer()
-
-    # merge result.jsonl and stop_reason.jsonl if stop reason criterion is defined
-    # and close stop reason result writer if defined
-    if stop_reason_result is not None:
-        stop_reason_result_writer.close()
-        result_paths = [
-            result_writer.result_path,
-            stop_reason_result_writer.result_path,
-        ]
-        multi_result_editor = MultiResultEditor(result_paths)
-        multi_result_editor.write_back_result()
-        stop_reason_analyzer.save_as_csv(Path(stop_reason_result_path).joinpath("stop_reason.csv"))
-
-    # analysis of the evaluation result and save it as csv
-    if enable_analysis == "true" and evaluator.get_degradation_evaluation_task() != "fp_validation":
-        analyzers: dict[str, PerceptionAnalyzer3D] = evaluator.get_analyzers()
-        # TODO: analysis other topic
-        analyzer = analyzers[degradation_topic]
-        save_path = evaluator.get_archive_path(degradation_topic)
-        analyze(
-            analyzer,
-            save_path,
-            analysis_max_distance,
-            analysis_distance_interval,
-            degradation_topic,
-        )
+    runner.evaluate()
 
 
 def parse_args() -> argparse.Namespace:
