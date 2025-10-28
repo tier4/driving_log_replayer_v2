@@ -162,6 +162,7 @@ def post_process(context: LaunchContext) -> list:  # noqa: C901, PLR0911
                 context.launch_configurations["result_archive_path"],
                 context.launch_configurations["storage"],
                 context.launch_configurations["evaluation_topic"],
+                context.launch_configurations["enable_analysis"],
             )
 
         return [

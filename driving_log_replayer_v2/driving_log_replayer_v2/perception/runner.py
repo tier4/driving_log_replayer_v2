@@ -108,10 +108,10 @@ class PerceptionRunner(Runner):
         t4_dataset_path: str,
         result_json_path: str,
         result_archive_path: str,
-        enable_analysis: str,
         storage: str,
         evaluation_topics: dict[str, list[str]],
         additional_record_topics: list[TopicInfo],
+        enable_analysis: str,
         analysis_max_distance: str,
         analysis_distance_interval: str,
     ):
@@ -129,9 +129,9 @@ class PerceptionRunner(Runner):
             t4_dataset_path,
             result_json_path,
             result_archive_path,
-            enable_analysis,
             storage,
             evaluation_topics,
+            enable_analysis,
             additional_record_topics,
         )
 
@@ -309,10 +309,10 @@ def evaluate(
         t4_dataset_path,
         result_json_path,
         result_archive_path,
-        enable_analysis,
         storage,
         evaluation_topics,
         additional_record_topics,
+        enable_analysis,
         analysis_max_distance,
         analysis_distance_interval,
     )
@@ -385,6 +385,7 @@ def main() -> None:
         args.evaluation_detection_topic_regex,
         args.evaluation_tracking_topic_regex,
         args.evaluation_prediction_topic_regex,
+        args.enable_analysis,
         args.analysis_max_distance,
         args.analysis_distance_interval,
     )

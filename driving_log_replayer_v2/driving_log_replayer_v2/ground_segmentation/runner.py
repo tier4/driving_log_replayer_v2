@@ -15,24 +15,18 @@
 from __future__ import annotations
 
 import argparse
-from pathlib import Path
-import shutil
-from typing import TYPE_CHECKING
+from email.header import Header
+from typing import TYPE_CHECKING, Any
 
 import numpy as np
-from rclpy.clock import Clock
 import ros2_numpy
-from rosbag2_py import TopicMetadata
 from std_msgs.msg import String
 
 from driving_log_replayer_v2.ground_segmentation.manager import GroundSegmentationEvaluationManager
 from driving_log_replayer_v2.ground_segmentation.models import GroundSegmentationResult
 import driving_log_replayer_v2.perception_eval_conversions as eval_conversions
-from driving_log_replayer_v2.result import ResultWriter
-from driving_log_replayer_v2.ros2_utils import RosBagManager
-import driving_log_replayer_v2.perception_eval_conversions as eval_conversions
 from driving_log_replayer_v2.post_process_evaluator import FrameResult
-
+from driving_log_replayer_v2.post_process_runner import Runner, TopicInfo
 
 if TYPE_CHECKING:
     from sensor_msgs.msg import PointCloud2
@@ -44,25 +38,64 @@ def convert_to_numpy_pointcloud(msg: PointCloud2) -> np.ndarray:
     return np.stack((numpy_pcd["x"], numpy_pcd["y"], numpy_pcd["z"]), axis=-1)
 
 
-def write_result(
-    additional_record_topic_name: dict[str],
-    msg: PointCloud2,
-    result: GroundSegmentationResult,
-    result_writer: ResultWriter,
-    frame_result: FrameResult,
-    rosbag_manager: RosBagManager,
-    subscribed_timestamp_nanosec: int,
-) -> None:
-    if frame_result.is_valid:
-        result.set_frame(frame_result.data, frame_result.skip_counter)
-    else:
-        result.set_info_frame(frame_result.invalid_reason, frame_result.skip_counter)
-    res_str = result_writer.write_result_with_time(result, subscribed_timestamp_nanosec)
-    rosbag_manager.write_results(
-        additional_record_topic_name["string/results"],
-        String(data=res_str),
-        msg.header.stamp,
-    )
+class GroundSegmentationRunner(Runner):
+    def __init__(
+        self,
+        scenario_path: str,
+        rosbag_dir_path: str,
+        t4_dataset_path: str,
+        result_json_path: str,
+        result_archive_path: str,
+        storage: str,
+        evaluation_topics: list[str],
+        enable_analysis: str,
+        additional_record_topics: list[TopicInfo],
+    ) -> None:
+        super().__init__(
+            GroundSegmentationEvaluationManager,
+            GroundSegmentationResult,
+            scenario_path,
+            rosbag_dir_path,
+            t4_dataset_path,
+            result_json_path,
+            result_archive_path,
+            storage,
+            evaluation_topics,
+            enable_analysis,
+            additional_record_topics,
+        )
+
+    def _evaluate_frame(self, topic_name: str, msg: Any, subscribed_timestamp_nanosec: int) -> FrameResult:
+        # convert ros message to numpy array
+        header_timestamp_microsec = eval_conversions.unix_time_microsec_from_ros_msg(msg.header)
+        pointcloud = convert_to_numpy_pointcloud(msg)
+        subscribed_timestamp_microsec = eval_conversions.unix_time_microsec_from_ros_clock_time(
+            subscribed_timestamp_nanosec
+        )
+        return self._manager.evaluate_frame(
+            topic_name,
+            header_timestamp_microsec,
+            subscribed_timestamp_microsec,
+            pointcloud,
+        )
+
+    def _write_result(self, frame_result: FrameResult, header: Header, subscribed_timestamp_nanosec: int) -> None:
+        if frame_result.is_valid:
+            self._result.set_frame(frame_result.data, frame_result.skip_counter)
+        else:
+            self._result.set_info_frame(frame_result.invalid_reason, frame_result.skip_counter)
+        res_str = self._result_writer.write_result_with_time(self._result, subscribed_timestamp_nanosec)
+        self._rosbag_manager.write_results(
+            "/driving_log_replayer_v2/ground_segmentation/results",
+            String(data=res_str),
+            header.stamp,
+        )
+
+    def _evaluate_on_post_process(self) -> None:
+        pass
+
+    def _analysis(self) -> None:
+        pass
 
 
 def evaluate(
@@ -72,95 +105,31 @@ def evaluate(
     result_json_path: str,
     result_archive_path: str,
     storage: str,
-    evaluation_topic_regex: str,
+    evaluation_topic: str,
+    enable_analysis: str,
 ) -> None:
-    evaluation_topics = [evaluation_topic_regex]
+    evaluation_topics = [evaluation_topic]
 
-    # initialize GroundSegmentationEvaluationManager
-    evaluator = GroundSegmentationEvaluationManager(
-        scenario_path,
-        t4_dataset_path,
-        result_archive_path,
-        evaluation_topics,
-    )
-    if evaluator.check_scenario_error() is not None:
-        error = evaluator.check_scenario_error()
-        result_writer = ResultWriter(
-            result_json_path,
-            Clock(),
-            {},
-        )
-        error_dict = {
-            "Result": {"Success": False, "Summary": "ScenarioFormatError"},
-            "Stamp": {"System": 0.0},
-            "Frame": {"ErrorMsg": error.__str__()},
-        }
-        result_writer.write_line(error_dict)
-        result_writer.close()
-        raise error
-    degradation_topic = evaluator.get_degradation_topic()
-
-    # initialize ResultWriter
-    result_writer = ResultWriter(
-        result_json_path,
-        Clock(),
-        evaluator.get_evaluation_condition(),
-    )
-    result = GroundSegmentationResult(evaluator.get_evaluation_condition())
-
-    # initialize RosBagManager
-    additional_record_topics_name = {
-        "string/results": "/driving_log_replayer_v2/ground_segmentation/results",
-    }
     additional_record_topics = [
-        TopicMetadata(
-            name=topic_name,
-            type="std_msgs/String",
-            serialization_format="cdr",
-            offered_qos_profiles="",
-        )
-        for topic_name in additional_record_topics_name.values()
+        TopicInfo(
+            name="/driving_log_replayer_v2/ground_segmentation/results",
+            msg_type="std_msgs/msg/String",
+        ),
     ]
-    rosbag_manager = RosBagManager(
+
+    runner = GroundSegmentationRunner(
+        scenario_path,
         rosbag_dir_path,
-        Path(result_archive_path).joinpath("result_bag").as_posix(),
+        t4_dataset_path,
+        result_json_path,
+        result_archive_path,
         storage,
-        evaluator.get_evaluation_topics(),
+        evaluation_topics,
+        enable_analysis,
         additional_record_topics,
     )
 
-    # save scenario.yaml to check later
-    shutil.copy(scenario_path, Path(result_archive_path).joinpath("scenario.yaml"))
-
-    # main evaluation process
-    for topic_name, msg, subscribed_timestamp_nanosec in rosbag_manager.read_messages():
-        # convert ros message to numpy array
-        header_timestamp_microsec = eval_conversions.unix_time_microsec_from_ros_msg(msg.header)
-        pointcloud = convert_to_numpy_pointcloud(msg)
-        subscribed_timestamp_microsec = eval_conversions.unix_time_microsec_from_ros_clock_time(
-            subscribed_timestamp_nanosec
-        )
-
-        frame_result = evaluator.evaluate_frame(
-            topic_name,
-            header_timestamp_microsec,
-            subscribed_timestamp_microsec,
-            pointcloud,
-        )
-
-        if topic_name == degradation_topic:
-            write_result(
-                additional_record_topics_name,
-                msg,
-                result,
-                result_writer,
-                frame_result,
-                rosbag_manager,
-                subscribed_timestamp_nanosec,
-            )
-
-    result_writer.close()
-    rosbag_manager.close_writer()
+    runner.evaluate()
 
 
 def parse_args() -> argparse.Namespace:
@@ -188,6 +157,11 @@ def parse_args() -> argparse.Namespace:
         default="",
         help="ROS topic name to evaluate",
     )
+    parser.add_argument(
+        "--enable-analysis",
+        default="false",
+        help="If set, enable detailed analysis and output the analysis result",
+    )
     return parser.parse_args()
 
 
@@ -201,6 +175,7 @@ def main() -> None:
         args.result_archive_path,
         args.storage,
         args.evaluation_topic,
+        args.enable_analysis,
     )
 
 

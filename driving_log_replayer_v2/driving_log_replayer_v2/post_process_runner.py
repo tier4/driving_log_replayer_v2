@@ -54,9 +54,9 @@ class Runner(ABC):
         t4_dataset_path: str,
         result_json_path: str,
         result_archive_path: str,
-        enable_analysis: str,
         storage: str,
         evaluation_topics: dict[str, list[str]],
+        enable_analysis: str,
         additional_record_topics: list[TopicInfo],
     ) -> None:
         self._enable_analysis = enable_analysis
@@ -131,7 +131,7 @@ class Runner(ABC):
                 self._write_result(frame_result, msg.header, subscribed_timestamp_nanosec)
         self._evaluate_on_post_process()
         self._close()
-        if self._enable_analysis:
+        if self._enable_analysis == "true":
             self._analysis()
 
     @abstractmethod
