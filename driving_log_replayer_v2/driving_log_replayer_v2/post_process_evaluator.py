@@ -14,10 +14,13 @@
 
 from __future__ import annotations
 
-from typing import Any
 from abc import ABC
+from abc import abstractmethod
+from typing import Any
+
 from pydantic import BaseModel
 from pydantic import model_validator
+
 
 class FrameResult(BaseModel):
     is_valid: bool
@@ -37,6 +40,7 @@ class FrameResult(BaseModel):
 
 
 class Evaluator(ABC):
+    @abstractmethod
     def frame_evaluate(
         self,
         header_timestamp_microsec: int,

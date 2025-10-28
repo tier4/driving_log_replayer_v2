@@ -14,24 +14,24 @@
 
 from abc import ABC
 from abc import abstractmethod
-
+from dataclasses import dataclass
 from pathlib import Path
 import shutil
-from typing import TypeVar
 from typing import Any
-from dataclasses import dataclass
+from typing import TypeVar
 
-from std_msgs.msg import Header
 from autoware_perception_msgs.msg import DetectedObjects
 from autoware_perception_msgs.msg import PredictedObjects
 from autoware_perception_msgs.msg import TrackedObjects
 from rclpy.clock import Clock
 from rosbag2_py import TopicMetadata
+from std_msgs.msg import Header
+
+from driving_log_replayer_v2.evaluation_manager import EvaluationManager
+from driving_log_replayer_v2.post_process_evaluator import FrameResult
+from driving_log_replayer_v2.result import ResultBase
 from driving_log_replayer_v2.result import ResultWriter
 from driving_log_replayer_v2.ros2_utils import RosBagManager
-from driving_log_replayer_v2.evaluation_manager import EvaluationManager
-from driving_log_replayer_v2.result import ResultBase
-from driving_log_replayer_v2.post_process_evaluator import FrameResult
 
 PerceptionMsgType = TypeVar("PerceptionMsgType", DetectedObjects, TrackedObjects, PredictedObjects)
 ManagerType = TypeVar("ManagerType", bound=EvaluationManager)
@@ -92,9 +92,7 @@ class Runner(ABC):
 
         # initialize ResultWriter and PerceptionResult to write result.jsonl which Manager will use
         self._result_writer = ResultWriter(
-            result_json_path,
-            Clock(),
-            self._manager.get_evaluation_condition()
+            result_json_path, Clock(), self._manager.get_evaluation_condition()
         )
         self._result = result_class(self._manager.get_evaluation_condition())
 
@@ -122,11 +120,7 @@ class Runner(ABC):
     def evaluate(self) -> None:
         for topic_name, msg, subscribed_timestamp_nanosec in self._rosbag_manager.read_messages():
             # See RosBagManager for `time relationships`.
-            frame_result = self._evaluate_frame(
-                topic_name,
-                msg,
-                subscribed_timestamp_nanosec
-            )
+            frame_result = self._evaluate_frame(topic_name, msg, subscribed_timestamp_nanosec)
             if topic_name == self._degradation_topic:
                 self._write_result(frame_result, msg.header, subscribed_timestamp_nanosec)
         self._evaluate_on_post_process()
@@ -135,11 +129,15 @@ class Runner(ABC):
             self._analysis()
 
     @abstractmethod
-    def _evaluate_frame(self, topic_name: str, msg: Any, subscribed_timestamp_nanosec: int) -> FrameResult:
+    def _evaluate_frame(
+        self, topic_name: str, msg: Any, subscribed_timestamp_nanosec: int
+    ) -> FrameResult:
         raise NotImplementedError
 
     @abstractmethod
-    def _write_result(self, frame_result: FrameResult, header: Header, subscribed_timestamp_nanosec: int) -> None:
+    def _write_result(
+        self, frame_result: FrameResult, header: Header, subscribed_timestamp_nanosec: int
+    ) -> None:
         raise NotImplementedError
 
     @abstractmethod

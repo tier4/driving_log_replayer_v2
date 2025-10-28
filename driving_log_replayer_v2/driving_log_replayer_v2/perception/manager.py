@@ -17,7 +17,6 @@ from __future__ import annotations
 import copy
 from typing import TYPE_CHECKING
 
-from driving_log_replayer_v2.post_process_evaluator import FrameResult
 from driving_log_replayer_v2.evaluation_manager import EvaluationManager
 from driving_log_replayer_v2.perception.evaluator import PerceptionEvaluator
 from driving_log_replayer_v2.perception.models import PerceptionScenario
@@ -28,6 +27,8 @@ if TYPE_CHECKING:
     from perception_eval.common.object import DynamicObject
     from perception_eval.config import PerceptionEvaluationConfig
     from perception_eval.tool import PerceptionAnalyzer3D
+
+    from driving_log_replayer_v2.post_process_evaluator import FrameResult
 
 
 class PerceptionEvaluationManager(EvaluationManager):
@@ -132,4 +133,3 @@ class PerceptionEvaluationManager(EvaluationManager):
             evaluator = self._evaluators[topic_name]
             return evaluator.get_analyzer()
         return {topic: evaluator.get_analyzer() for topic, evaluator in self._evaluators.items()}
-

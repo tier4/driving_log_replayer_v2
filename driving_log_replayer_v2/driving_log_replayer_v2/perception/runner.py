@@ -16,14 +16,13 @@ from __future__ import annotations
 
 import argparse
 from pathlib import Path
+from typing import Any
 from typing import TYPE_CHECKING
 from typing import TypeVar
-from typing import Any
 
 from autoware_perception_msgs.msg import DetectedObjects
 from autoware_perception_msgs.msg import PredictedObjects
 from autoware_perception_msgs.msg import TrackedObjects
-from perception_eval.evaluation.result.perception_frame_result import PerceptionFrameResult
 from rclpy.clock import Clock
 from std_msgs.msg import ColorRGBA
 from std_msgs.msg import Header
@@ -39,18 +38,19 @@ from driving_log_replayer_v2.perception.stop_reason import convert_to_stop_reaso
 from driving_log_replayer_v2.perception.stop_reason import StopReasonAnalyzer
 from driving_log_replayer_v2.perception.topics import load_evaluation_topics
 import driving_log_replayer_v2.perception_eval_conversions as eval_conversions
-from driving_log_replayer_v2.result import ResultWriter
-from driving_log_replayer_v2.ros2_utils import lookup_transform
 from driving_log_replayer_v2.post_process_evaluator import FrameResult
 from driving_log_replayer_v2.post_process_runner import Runner
 from driving_log_replayer_v2.post_process_runner import TopicInfo
-
+from driving_log_replayer_v2.result import ResultWriter
+from driving_log_replayer_v2.ros2_utils import lookup_transform
 
 if TYPE_CHECKING:
     from geometry_msgs.msg import TransformStamped
     from perception_eval.common.object import DynamicObject
     from perception_eval.config import PerceptionEvaluationConfig
+    from perception_eval.evaluation.result.perception_frame_result import PerceptionFrameResult
     from perception_eval.tool import PerceptionAnalyzer3D
+
 
 PerceptionMsgType = TypeVar("PerceptionMsgType", DetectedObjects, TrackedObjects, PredictedObjects)
 
@@ -114,7 +114,7 @@ class PerceptionRunner(Runner):
         enable_analysis: str,
         analysis_max_distance: str,
         analysis_distance_interval: str,
-    ):
+    ) -> None:
         self._analysis_max_distance = analysis_max_distance
         self._analysis_distance_interval = analysis_distance_interval
         self._stop_reason_result: StopReasonResult | None
@@ -165,7 +165,11 @@ class PerceptionRunner(Runner):
             self._stop_reason_result_writer.write_result_with_time(
                 self._stop_reason_result, subscribed_timestamp_nanosec
             )
-            return # TODO: return empty FrameResult?
+            return FrameResult(
+                is_valid=False,
+                invalid_reason="Stop Reason already write result into the jsonl",
+                skip_counter=0,
+            )
 
         if isinstance(msg, DetectedObjects):
             interpolation: bool = False
@@ -193,7 +197,9 @@ class PerceptionRunner(Runner):
             interpolation=interpolation,
         )
 
-    def _write_result(self, frame_result: FrameResult, header: Header, subscribed_timestamp_nanosec: int) -> None:
+    def _write_result(
+        self, frame_result: FrameResult, header: Header, subscribed_timestamp_nanosec: int
+    ) -> None:
         if frame_result.is_valid:
             # NOTE: In offline evaluation using rosbag with SequentialReader(), messages are processed one-by-one.
             #       So it is impossible to get transform of future unless explicitly set the tf of future in the buffer.
@@ -233,7 +239,9 @@ class PerceptionRunner(Runner):
                 err_msg = f"Unknown invalid_reason: {frame_result.invalid_reason}"
                 raise TypeError(err_msg)
 
-        res_str = self._result_writer.write_result_with_time(self._result, subscribed_timestamp_nanosec)
+        res_str = self._result_writer.write_result_with_time(
+            self._result, subscribed_timestamp_nanosec
+        )
         self._rosbag_manager.write_results(
             "/driving_log_replayer_v2/perception/results",
             String(data=res_str),
@@ -300,7 +308,7 @@ def evaluate(
         TopicInfo(
             name="/driving_log_replayer_v2/perception/results",
             msg_type="std_msgs/String",
-        )
+        ),
     ]
 
     runner = PerceptionRunner(

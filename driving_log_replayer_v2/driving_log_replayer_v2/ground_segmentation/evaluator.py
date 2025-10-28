@@ -19,9 +19,9 @@ import numpy as np
 from scipy.spatial import cKDTree
 
 from driving_log_replayer_v2.ground_segmentation.models import Conditions
-from driving_log_replayer_v2_msgs.msg import GroundSegmentationEvalResult
-from driving_log_replayer_v2.post_process_evaluator import FrameResult
 from driving_log_replayer_v2.post_process_evaluator import Evaluator
+from driving_log_replayer_v2.post_process_evaluator import FrameResult
+from driving_log_replayer_v2_msgs.msg import GroundSegmentationEvalResult
 
 
 class GroundSegmentationEvaluator(Evaluator):
@@ -80,14 +80,18 @@ class GroundSegmentationEvaluator(Evaluator):
             }
 
     def evaluate_frame(
-        self, header_timestamp_microsec: int, 
-        subscribed_timestamp_microsec: int, pointcloud: np.ndarray
+        self,
+        header_timestamp_microsec: int,
+        subscribed_timestamp_microsec: int,
+        pointcloud: np.ndarray,
     ) -> FrameResult:
         gt_frame_ts = self.__get_gt_frame_ts(header_timestamp_microsec)
 
         if gt_frame_ts < 0:
             self._skip_counter += 1
-            return FrameResult(is_valid=False, invalid_reason="No Ground Truth", skip_counter=self._skip_counter)
+            return FrameResult(
+                is_valid=False, invalid_reason="No Ground Truth", skip_counter=self._skip_counter
+            )
 
         # get ground truth pointcloud in this frame
         # construct kd-tree from gt cloud

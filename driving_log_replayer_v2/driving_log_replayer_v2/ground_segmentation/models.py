@@ -101,7 +101,4 @@ class GroundSegmentationResult(ResultBase):
         self.update()
 
     def set_info_frame(self, msg: str, skip: int) -> None:
-        self._frame = {
-            "Info": msg,
-            "FrameSkip": skip
-        }
+        self._frame = {"Info": msg, "FrameSkip": skip}

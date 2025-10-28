@@ -45,8 +45,13 @@ class GroundSegmentationEvaluationManager(EvaluationManager):
         self._degradation_topic = next(iter(self._evaluators.keys()))
 
     def evaluate_frame(
-        self, topic_name: str, header_timestamp_microsec: int, 
-        subscribed_timestamp_microsec: int, data: np.ndarray
+        self,
+        topic_name: str,
+        header_timestamp_microsec: int,
+        subscribed_timestamp_microsec: int,
+        data: np.ndarray,
     ) -> FrameResult:
         evaluator = self._evaluators[topic_name]
-        return evaluator.evaluate_frame(header_timestamp_microsec, subscribed_timestamp_microsec, data)
+        return evaluator.evaluate_frame(
+            header_timestamp_microsec, subscribed_timestamp_microsec, data
+        )

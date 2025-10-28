@@ -15,8 +15,8 @@
 from __future__ import annotations
 
 import argparse
-from email.header import Header
-from typing import TYPE_CHECKING, Any
+from typing import Any
+from typing import TYPE_CHECKING
 
 import numpy as np
 import ros2_numpy
@@ -25,11 +25,14 @@ from std_msgs.msg import String
 from driving_log_replayer_v2.ground_segmentation.manager import GroundSegmentationEvaluationManager
 from driving_log_replayer_v2.ground_segmentation.models import GroundSegmentationResult
 import driving_log_replayer_v2.perception_eval_conversions as eval_conversions
-from driving_log_replayer_v2.post_process_evaluator import FrameResult
-from driving_log_replayer_v2.post_process_runner import Runner, TopicInfo
+from driving_log_replayer_v2.post_process_runner import Runner
+from driving_log_replayer_v2.post_process_runner import TopicInfo
 
 if TYPE_CHECKING:
     from sensor_msgs.msg import PointCloud2
+    from std_msgs.msg import Header
+
+    from driving_log_replayer_v2.post_process_evaluator import FrameResult
 
 
 def convert_to_numpy_pointcloud(msg: PointCloud2) -> np.ndarray:
@@ -65,7 +68,9 @@ class GroundSegmentationRunner(Runner):
             additional_record_topics,
         )
 
-    def _evaluate_frame(self, topic_name: str, msg: Any, subscribed_timestamp_nanosec: int) -> FrameResult:
+    def _evaluate_frame(
+        self, topic_name: str, msg: Any, subscribed_timestamp_nanosec: int
+    ) -> FrameResult:
         # convert ros message to numpy array
         header_timestamp_microsec = eval_conversions.unix_time_microsec_from_ros_msg(msg.header)
         pointcloud = convert_to_numpy_pointcloud(msg)
@@ -79,12 +84,16 @@ class GroundSegmentationRunner(Runner):
             pointcloud,
         )
 
-    def _write_result(self, frame_result: FrameResult, header: Header, subscribed_timestamp_nanosec: int) -> None:
+    def _write_result(
+        self, frame_result: FrameResult, header: Header, subscribed_timestamp_nanosec: int
+    ) -> None:
         if frame_result.is_valid:
             self._result.set_frame(frame_result.data, frame_result.skip_counter)
         else:
             self._result.set_info_frame(frame_result.invalid_reason, frame_result.skip_counter)
-        res_str = self._result_writer.write_result_with_time(self._result, subscribed_timestamp_nanosec)
+        res_str = self._result_writer.write_result_with_time(
+            self._result, subscribed_timestamp_nanosec
+        )
         self._rosbag_manager.write_results(
             "/driving_log_replayer_v2/ground_segmentation/results",
             String(data=res_str),

@@ -30,9 +30,9 @@ from perception_eval.evaluation.result.perception_frame_result import Perception
 from perception_eval.manager import PerceptionEvaluationManager
 from perception_eval.tool import PerceptionAnalyzer3D
 from perception_eval.util.logger_config import configure_logger
-from driving_log_replayer_v2.post_process_evaluator import FrameResult
-from driving_log_replayer_v2.post_process_evaluator import Evaluator
 
+from driving_log_replayer_v2.post_process_evaluator import Evaluator
+from driving_log_replayer_v2.post_process_evaluator import FrameResult
 
 if TYPE_CHECKING:
     from perception_eval.evaluation.metrics import MetricsScore
@@ -133,15 +133,16 @@ class PerceptionEvaluator(Evaluator):
         interpolation: bool,
     ) -> FrameResult:
         # skip evaluation if data conversion fails
-        if not (
-            isinstance(data, list)
-            and all(isinstance(obj, DynamicObject) for obj in data)
-        ):
+        if not (isinstance(data, list) and all(isinstance(obj, DynamicObject) for obj in data)):
             self.__skip_counter += 1
             self.__logger.warning(
                 "Estimated objects is invalid for timestamp: %s", header_timestamp_microsec
             )
-            return FrameResult(is_valid=False, invalid_reason="Invalid Estimated Objects", skip_counter=self.__skip_counter)
+            return FrameResult(
+                is_valid=False,
+                invalid_reason="Invalid Estimated Objects",
+                skip_counter=self.__skip_counter,
+            )
 
         ground_truth_now_frame = self.__evaluator.get_ground_truth_now_frame(
             header_timestamp_microsec,
@@ -153,7 +154,9 @@ class PerceptionEvaluator(Evaluator):
             self.__logger.warning(
                 "Ground truth not found for timestamp %s", header_timestamp_microsec
             )
-            return FrameResult(is_valid=False, invalid_reason="No Ground Truth", skip_counter=self.__skip_counter)
+            return FrameResult(
+                is_valid=False, invalid_reason="No Ground Truth", skip_counter=self.__skip_counter
+            )
 
         frame_result: PerceptionFrameResult = self.__evaluator.add_frame_result(
             unix_time=header_timestamp_microsec,
