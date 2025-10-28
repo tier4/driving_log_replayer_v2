@@ -160,13 +160,14 @@ class Diag(EvaluationItem):
                 self.current_consecutive_duration = 0.0
 
             self.success = self._check_success()
+            self.summary = f"{self.name} ({self.success_str()}): {self.passed} / {self.total} -> {self.rate():.2f}%"
+
             return {
                 "Result": {"Total": self.success_str(), "Frame": frame_success},
                 "Info": {
                     "TotalPassed": self.passed,
                     "Level": level_str,
                     "ConsecutiveDuration": self.current_consecutive_duration,
-                    "Percentage": (self.passed / self.total * 100) if self.total > 0 else 0.0,
                 },
             }
         # not match status.name
@@ -221,11 +222,11 @@ class DiagClassContainer:
         for evaluation_item in self.__container:
             if not evaluation_item.success:
                 rtn_success = False
-                rtn_summary.append(f"{evaluation_item.name} (Fail)")
+                prefix_str = "Failed: "
             else:
-                rtn_summary.append(f"{evaluation_item.name} (Success)")
-        prefix_str = "Passed" if rtn_success else "Failed"
-        rtn_summary_str = prefix_str + ":" + ", ".join(rtn_summary)
+                prefix_str = "Passed: "
+            rtn_summary.append(prefix_str + evaluation_item.summary)
+        rtn_summary_str = ",".join(rtn_summary)
         return (rtn_success, rtn_summary_str)
 
 
