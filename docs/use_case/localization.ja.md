@@ -115,7 +115,7 @@ Driving Log Replayer を launch すると以下が実行され、評価される
 
 ### NDT の可用性
 
-全ての localization シナリオおいて、本評価項目は評価される。
+全ての localization シナリオおいて本評価項目は基本的に評価されるが、シナリオファイルの `Conditions` に `availability` が定義されておりかつ `enable` が `false` と設定されたときのみ実行されない。
 
 NDTの可用性を評価するために、下記のようなケースを `logging_simulator` 中に検知する。
 

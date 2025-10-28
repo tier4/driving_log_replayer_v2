@@ -18,6 +18,7 @@ import argparse
 from pathlib import Path
 import shutil
 from typing import TYPE_CHECKING
+from typing import TypeVar
 
 from autoware_perception_msgs.msg import DetectedObjects
 from autoware_perception_msgs.msg import PredictedObjects
@@ -32,17 +33,17 @@ from visualization_msgs.msg import MarkerArray
 
 from driving_log_replayer_v2.evaluator import DLREvaluatorV2
 from driving_log_replayer_v2.perception.analyze import analyze
-from driving_log_replayer_v2.perception.manager import EvaluationManager
+from driving_log_replayer_v2.perception.manager import PerceptionEvaluationManager
 from driving_log_replayer_v2.perception.models import PerceptionResult
 from driving_log_replayer_v2.perception.models import StopReasonResult
-from driving_log_replayer_v2.perception.ros2_utils import lookup_transform
-from driving_log_replayer_v2.perception.ros2_utils import RosBagManager
 from driving_log_replayer_v2.perception.stop_reason import convert_to_stop_reason
 from driving_log_replayer_v2.perception.stop_reason import StopReasonAnalyzer
 from driving_log_replayer_v2.perception.topics import load_evaluation_topics
 import driving_log_replayer_v2.perception_eval_conversions as eval_conversions
 from driving_log_replayer_v2.result import MultiResultEditor
 from driving_log_replayer_v2.result import ResultWriter
+from driving_log_replayer_v2.ros2_utils import lookup_transform
+from driving_log_replayer_v2.ros2_utils import RosBagManager
 
 if TYPE_CHECKING:
     from geometry_msgs.msg import TransformStamped
@@ -50,7 +51,7 @@ if TYPE_CHECKING:
     from perception_eval.config import PerceptionEvaluationConfig
     from perception_eval.tool import PerceptionAnalyzer3D
 
-    from driving_log_replayer_v2.perception.ros2_utils import PerceptionMsgType
+PerceptionMsgType = TypeVar("PerceptionMsgType", DetectedObjects, TrackedObjects, PredictedObjects)
 
 
 def convert_to_perception_eval(
@@ -161,7 +162,7 @@ def write_result(
 def evaluate(  # noqa: PLR0915
     scenario_path: str,
     rosbag_dir_path: str,
-    t4dataset_path: str,
+    t4_dataset_path: str,
     result_json_path: str,
     result_archive_path: str,
     storage: str,
@@ -178,10 +179,10 @@ def evaluate(  # noqa: PLR0915
         evaluation_prediction_topic_regex,
     )
 
-    # initialize EvaluationManager to evaluate multiple topics
-    evaluator = EvaluationManager(
+    # initialize PerceptionEvaluationManager to evaluate multiple topics
+    evaluator = PerceptionEvaluationManager(
         scenario_path,
-        t4dataset_path,
+        t4_dataset_path,
         result_archive_path,
         evaluation_topics,
     )
@@ -228,19 +229,19 @@ def evaluate(  # noqa: PLR0915
         stop_reason_result_writer = None
 
     # initialize RosBagManager to read and save rosbag and write into it
-    additional_record_topic_name = {
+    additional_record_topics_name = {
         "marker/ground_truth": "/driving_log_replayer_v2/marker/ground_truth",
         "marker/results": "/driving_log_replayer_v2/marker/results",
         "string/results": "/driving_log_replayer_v2/perception/results",
     }
-    additional_record_topic = [
+    additional_record_topics = [
         TopicMetadata(
             name=topic_name,
             type="visualization_msgs/MarkerArray" if "marker" in topic_name else "std_msgs/String",
             serialization_format="cdr",
             offered_qos_profiles="",
         )
-        for topic_name in additional_record_topic_name.values()
+        for topic_name in additional_record_topics_name.values()
     ]
     evaluation_topics_list = (
         [*evaluator.get_evaluation_topics(), "/awapi/autoware/get/status"]
@@ -252,7 +253,7 @@ def evaluate(  # noqa: PLR0915
         Path(result_archive_path).joinpath("result_bag").as_posix(),
         storage,
         evaluation_topics_list,
-        additional_record_topic,
+        additional_record_topics,
     )
 
     # save scenario.yaml to check later
@@ -301,7 +302,7 @@ def evaluate(  # noqa: PLR0915
         # write rosbag result only degradation topic
         if topic_name == degradation_topic:
             write_result(
-                additional_record_topic_name,
+                additional_record_topics_name,
                 result,
                 result_writer,
                 rosbag_manager,
@@ -319,7 +320,7 @@ def evaluate(  # noqa: PLR0915
         result, rosbag_manager.get_last_subscribed_timestamp()
     )
     rosbag_manager.write_results(
-        additional_record_topic_name["string/results"],
+        additional_record_topics_name["string/results"],
         String(data=res_str),
         rosbag_manager.get_last_subscribed_timestamp(),
     )
@@ -371,7 +372,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--storage",
         required=True,
-        help="Storage type for rosbag2",
+        help="Storage type for rosbag2 to read and write",
     )
     parser.add_argument(
         "--evaluation-detection-topic-regex",
@@ -395,12 +396,12 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--analysis-max-distance",
-        required=True,
+        default="150",
         help="Maximum distance for analysis.",
     )
     parser.add_argument(
         "--analysis-distance-interval",
-        required=True,
+        default="150",
         help="Distance interval for analysis.",
     )
     return parser.parse_args()

@@ -17,10 +17,10 @@
 
 launch を立ち上げると以下のことが実行され、評価される。
 
-1. launch で評価ノード(`ground_segmentation_evaluator_node`)と `logging_simulator.launch`、`ros2 bag play`コマンドを立ち上げる
+1. launchコマンド `logging_simulator.launch`、`ros2 bag play`を立ち上げる
 2. bag から出力されたセンサーデータを autoware が受け取って、perceptionモジュール内で地面点群除去を行う
-3. 評価ノードが topic を subscribe して、地面点群の除去精度などについて評価し結果をファイルに記録する
-4. bag の再生が終了すると自動で launch が終了して評価が終了する
+3. 地面点群除去後の点群データを含む出力トピックを保存用rosbagに保存する
+4. rosbagの再生が終わった後、保存用rosbag中のメッセージをパースし，ターゲットとなるトピックを評価する
 
 ### 評価時の注意点
 

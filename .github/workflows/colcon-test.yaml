@@ -30,7 +30,7 @@ jobs:
           access_token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Search packages in this repository
         id: list_packages
@@ -38,7 +38,7 @@ jobs:
           echo package_list=$(colcon list --names-only | sed -e ':loop; N; $!b loop; s/\n/ /g') >> $GITHUB_OUTPUT
 
       - name: Setup ROS environment
-        uses: ros-tooling/setup-ros@0.7.10
+        uses: ros-tooling/setup-ros@0.7.15
         with:
           required-ros-distributions: ${{ matrix.ros_distribution }}
 
@@ -63,23 +63,31 @@ jobs:
 
       - name: Upload Unit Test Output
         uses: actions/upload-artifact@v4
-        if: ${{ !cancelled() }}
+        if: ${{ !cancelled() && !github.event.pull_request.head.repo.fork }}
         with:
           name: colcon-logs
           path: ${{ steps.action_ros_ci_step.outputs.ros-workspace-directory-name }}/log
 
       - name: fix paths for coverage file
+        if: ${{ !github.event.pull_request.head.repo.fork }}
         run: sed -E -i 's/^([[:space:]]*<source>[[:space:]]*)(.*\/)(driving_log_replayer_v2\/driving_log_replayer_v2)/\1.\/driving_log_replayer_v2/' /__w/driving_log_replayer_v2/driving_log_replayer_v2/ros_ws/build/driving_log_replayer_v2/pytest_cov/driving_log_replayer_v2/coverage.xml
 
       - name: Upload Coverage File
         uses: actions/upload-artifact@v4
-        if: ${{ !cancelled() }}
+        if: ${{ !cancelled() && !github.event.pull_request.head.repo.fork }}
         with:
           name: colcon-logs
           path: /__w/driving_log_replayer_v2/driving_log_replayer_v2/ros_ws/build/driving_log_replayer_v2/pytest_cov/driving_log_replayer_v2/
 
-      - name: SonarCloud Scan
-        uses: sonarsource/sonarcloud-github-action@v3
+      - name: Install unzip for SonarQube
+        if: ${{ !github.event.pull_request.head.repo.fork }}
+        run: |
+          apt-get update
+          DEBIAN_FRONTEND=noninteractive apt-get install -y unzip
+
+      - name: SonarQube Scan
+        uses: SonarSource/sonarqube-scan-action@v6
+        if: ${{ !github.event.pull_request.head.repo.fork }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
