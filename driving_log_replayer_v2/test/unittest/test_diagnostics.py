@@ -12,6 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import time
 from typing import Literal
 
 from builtin_interfaces.msg import Time
@@ -63,14 +64,36 @@ def test_start_end_match_condition() -> None:
 
 
 def create_condition(
-    condition_type: Literal["any_of", "all_of"], *, hardware_id: str = TARGET_HARDWARE_ID
+    condition_type: Literal[
+        "any_of",
+        "all_of",
+        "duration_larger_than",
+        "duration_less_than",
+        "percentage_larger_than",
+        "percentage_less_than",
+    ],
+    *,
+    hardware_id: str = TARGET_HARDWARE_ID,
+    duration_threshold: float | None = None,
+    percentage_threshold: float | None = None,
+    use_current_time: bool = False,
+    duration: float = 1.0,
 ) -> DiagCondition:
+    if use_current_time:
+        current_time = time.time()
+        sec = int(current_time)
+        nanosec = int((current_time - sec) * 1e9)
+        start_end = StartEnd(start=sec + nanosec * 1e-9, end=sec + nanosec * 1e-9 + duration)
+    else:
+        start_end = StartEnd(start=0.0, end=duration)
     return DiagCondition(
         hardware_id=hardware_id,
         name=TARGET_NAME,
         level=["OK"],
-        time=StartEnd(start=0.0, end=1.0),
+        time=start_end,
         condition_type=condition_type,
+        duration_threshold=duration_threshold,
+        percentage_threshold=percentage_threshold,
     )
 
 
@@ -82,13 +105,23 @@ def test_target_hardware_ids() -> None:
 
 
 def create_diag_msg(
-    *, match_level: bool = True, match_name: bool = True, match_time: bool = True
+    *,
+    match_level: bool = True,
+    match_name: bool = True,
+    match_time: bool = True,
+    use_current_time: bool = False,
 ) -> DiagnosticArray:
     status = DiagnosticStatus(
         level=DiagnosticStatus.OK if match_level else DiagnosticStatus.WARN,
         name=TARGET_NAME if match_name else "module_not_matched",
     )
-    header = Header(stamp=Time(sec=0, nanosec=5)) if match_time else Header(stamp=Time(sec=2))
+    if use_current_time:
+        current_time = time.time()
+        sec = int(current_time)
+        nanosec = int((current_time - sec) * 1e9)
+        header = Header(stamp=Time(sec=sec, nanosec=nanosec))
+    else:
+        header = Header(stamp=Time(sec=0, nanosec=5)) if match_time else Header(stamp=Time(sec=2))
     return DiagnosticArray(header=header, status=[status])
 
 
@@ -114,6 +147,7 @@ def test_diag_success_any_of() -> None:
         "Info": {
             "TotalPassed": 1,
             "Level": "OK",
+            "ConsecutiveDuration": 0.0,
         },
     }
     diag_msg = create_diag_msg(match_level=False)
@@ -124,6 +158,7 @@ def test_diag_success_any_of() -> None:
         "Info": {
             "TotalPassed": 1,
             "Level": "WARN",
+            "ConsecutiveDuration": 0.0,
         },
     }
 
@@ -138,6 +173,7 @@ def test_diag_fail_any_of() -> None:
         "Info": {
             "TotalPassed": 0,
             "Level": "WARN",
+            "ConsecutiveDuration": 0.0,
         },
     }
 
@@ -152,6 +188,7 @@ def test_diag_fail_all_of() -> None:
         "Info": {
             "TotalPassed": 1,
             "Level": "OK",
+            "ConsecutiveDuration": 0.0,
         },
     }
     diag_msg = create_diag_msg(match_level=False)
@@ -162,5 +199,88 @@ def test_diag_fail_all_of() -> None:
         "Info": {
             "TotalPassed": 1,
             "Level": "WARN",
+            "ConsecutiveDuration": 0.0,
+        },
+    }
+
+
+def test_diag_duration_larger_than() -> None:
+    wait_duration = 1.0
+    evaluation_item = Diag(
+        "Condition_0",
+        create_condition(
+            "duration_larger_than",
+            duration_threshold=wait_duration,
+            use_current_time=True,
+            duration=2.0,
+        ),
+    )
+    # First frame: false
+    diag_msg = create_diag_msg(use_current_time=True)
+    frame_dict = evaluation_item.set_frame(diag_msg)
+    assert evaluation_item.success is False
+    assert frame_dict == {
+        "Result": {"Total": "Fail", "Frame": "Success"},
+        "Info": {
+            "TotalPassed": 1,
+            "Level": "OK",
+            "ConsecutiveDuration": 0.0,
+        },
+    }
+    # wait for a while
+    time.sleep(wait_duration + 1e-3)
+
+    # Second frame: true
+    diag_msg = create_diag_msg(use_current_time=True)
+    frame_dict = evaluation_item.set_frame(diag_msg)
+    assert evaluation_item.success is True
+    assert frame_dict == {
+        "Result": {"Total": "Success", "Frame": "Success"},
+        "Info": {
+            "TotalPassed": 2,
+            "Level": "OK",
+            "ConsecutiveDuration": pytest.approx(wait_duration, abs=0.1),
+        },
+    }
+
+
+def test_diag_percentage_larger_than() -> None:
+    evaluation_item = Diag(
+        "Condition_0", create_condition("percentage_larger_than", percentage_threshold=0.6)
+    )
+    # First frame: pass
+    diag_msg = create_diag_msg()
+    frame_dict = evaluation_item.set_frame(diag_msg)
+    assert evaluation_item.success is True
+    assert frame_dict == {
+        "Result": {"Total": "Success", "Frame": "Success"},
+        "Info": {
+            "TotalPassed": 1,
+            "Level": "OK",
+            "ConsecutiveDuration": 0.0,
+        },
+    }
+    # Second frame: fail
+    diag_msg = create_diag_msg(match_level=False)
+    frame_dict = evaluation_item.set_frame(diag_msg)
+    assert evaluation_item.success is False
+    assert frame_dict == {
+        "Result": {"Total": "Fail", "Frame": "Fail"},
+        "Info": {
+            "TotalPassed": 1,
+            "Level": "WARN",
+            "ConsecutiveDuration": 0.0,
+        },
+    }
+    # Third frame: pass
+    diag_msg = create_diag_msg()
+    frame_dict = evaluation_item.set_frame(diag_msg)
+    assert evaluation_item.success is True
+    assert frame_dict == {
+        "Result": {"Total": "Success", "Frame": "Success"},
+        "Info": {
+            "TotalPassed": 2,
+            "Level": "OK",
+            "ConsecutiveDuration": 0.0,
         },
     }
