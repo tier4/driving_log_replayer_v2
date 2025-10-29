@@ -16,7 +16,7 @@ Evaluation:
         name: "planning_validator: intersection_validation_collision_check"
         level: [ERROR] # Specify the status to be judged among OK, WARN, ERROR, and STALE. Multiple are allowed.
         time: { start: 1743490210.2, end: 1743490225.42 } # Judge only within this ROS time range
-        condition_type: any_of # ["any_of", "all_of", "duration_larger_than", "duration_less_than", "percentage_larger_than", "percentage_less_than",]: any_of: Pass if satisfied at least once; all_of: Pass only if all are satisfied; duration_larger_than: Pass if consecutive duration exceeds threshold; duration_less_than: Pass if consecutive duration is less than threshold; percentage_larger_than: Pass if percentage exceeds threshold; percentage_less_than: Pass if percentage is less than threshold
+        condition_type: all_of # ["any_of", "all_of", "duration_larger_than", "duration_less_than", "percentage_larger_than", "percentage_less_than",]: any_of: Pass if satisfied at least once; all_of: Pass only if all are satisfied; duration_larger_than: Pass if consecutive duration exceeds threshold; duration_less_than: Pass if consecutive duration is less than threshold; percentage_larger_than: Pass if percentage exceeds threshold; percentage_less_than: Pass if percentage is less than threshold
       # Success if OK-level percentage is less/larger than threshold (ratio 0-1)
       - hardware_id: planning_validator
         name: "planning_validator: intersection_validation_collision_check"

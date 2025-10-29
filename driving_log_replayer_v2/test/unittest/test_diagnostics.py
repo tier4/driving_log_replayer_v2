@@ -63,7 +63,7 @@ def test_start_end_match_condition() -> None:
 
 
 def create_condition(
-    condition_type: Literal["any_of", "all_of"], *, hardware_id: str = TARGET_HARDWARE_ID
+    condition_type: Literal["any_of", "all_of", "duration_larger_than", "duration_less_than", "percentage_larger_than", "percentage_less_than"], *, hardware_id: str = TARGET_HARDWARE_ID
 ) -> DiagCondition:
     return DiagCondition(
         hardware_id=hardware_id,
