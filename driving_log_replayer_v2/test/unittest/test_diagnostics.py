@@ -63,7 +63,16 @@ def test_start_end_match_condition() -> None:
 
 
 def create_condition(
-    condition_type: Literal["any_of", "all_of", "duration_larger_than", "duration_less_than", "percentage_larger_than", "percentage_less_than"], *, hardware_id: str = TARGET_HARDWARE_ID
+    condition_type: Literal[
+        "any_of",
+        "all_of",
+        "duration_larger_than",
+        "duration_less_than",
+        "percentage_larger_than",
+        "percentage_less_than",
+    ],
+    *,
+    hardware_id: str = TARGET_HARDWARE_ID,
 ) -> DiagCondition:
     return DiagCondition(
         hardware_id=hardware_id,
@@ -114,6 +123,7 @@ def test_diag_success_any_of() -> None:
         "Info": {
             "TotalPassed": 1,
             "Level": "OK",
+            "ConsecutiveDuration": 0.0,
         },
     }
     diag_msg = create_diag_msg(match_level=False)
@@ -124,6 +134,7 @@ def test_diag_success_any_of() -> None:
         "Info": {
             "TotalPassed": 1,
             "Level": "WARN",
+            "ConsecutiveDuration": 0.0,
         },
     }
 
@@ -138,6 +149,7 @@ def test_diag_fail_any_of() -> None:
         "Info": {
             "TotalPassed": 0,
             "Level": "WARN",
+            "ConsecutiveDuration": 0.0,
         },
     }
 
@@ -152,6 +164,7 @@ def test_diag_fail_all_of() -> None:
         "Info": {
             "TotalPassed": 1,
             "Level": "OK",
+            "ConsecutiveDuration": 0.0,
         },
     }
     diag_msg = create_diag_msg(match_level=False)
@@ -162,5 +175,6 @@ def test_diag_fail_all_of() -> None:
         "Info": {
             "TotalPassed": 1,
             "Level": "WARN",
+            "ConsecutiveDuration": 0.0,
         },
     }
