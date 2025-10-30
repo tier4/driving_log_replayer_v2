@@ -18,30 +18,34 @@ from driving_log_replayer_v2.evaluation_manager import EvaluationManager
 from driving_log_replayer_v2.ground_segmentation.evaluator import GroundSegmentationEvaluator
 from driving_log_replayer_v2.ground_segmentation.models import GroundSegmentationScenario
 from driving_log_replayer_v2.post_process_evaluator import FrameResult
+from driving_log_replayer_v2.scenario import load_condition
 
 
 class GroundSegmentationEvaluationManager(EvaluationManager):
     def __init__(
         self,
-        scenario_path: str,
+        scenario: GroundSegmentationScenario,
         t4_dataset_path: str,
         result_archive_path: str,
         evaluation_topics: list[str],
     ) -> None:
-        super().__init__(scenario_path, GroundSegmentationScenario)
+        super().__init__(scenario, t4_dataset_path, result_archive_path, evaluation_topics)
+
+    def _set_evaluators(
+        self, t4_dataset_path: str, result_archive_path: str, evaluation_topics: list[str]
+    ) -> None:
+        evaluation_condition = load_condition(self._scenario)
         self._evaluators = {
             topic: GroundSegmentationEvaluator(
                 t4_dataset_path,
                 result_archive_path,
                 topic,
-                self._evaluation_condition,
+                evaluation_condition,
             )
             for topic in evaluation_topics
         }
 
-        self.set_degradation_topic()
-
-    def set_degradation_topic(self) -> None:
+    def _set_degradation_topic(self) -> None:
         self._degradation_topic = next(iter(self._evaluators.keys()))
 
     def evaluate_frame(

@@ -83,7 +83,7 @@ class GroundSegmentationEvaluator(Evaluator):
         self,
         header_timestamp_microsec: int,
         subscribed_timestamp_microsec: int,
-        pointcloud: np.ndarray,
+        data: np.ndarray,
     ) -> FrameResult:
         gt_frame_ts = self.__get_gt_frame_ts(header_timestamp_microsec)
 
@@ -117,7 +117,7 @@ class GroundSegmentationEvaluator(Evaluator):
 
         tn: int = 0
         fn: int = 0
-        for p in pointcloud:
+        for p in data:
             _, idx = kdtree.query(p, k=1)
             if gt_frame_label[idx] in self._ground_label:
                 fn += 1

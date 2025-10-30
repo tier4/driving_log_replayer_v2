@@ -24,8 +24,10 @@ from std_msgs.msg import String
 
 from driving_log_replayer_v2.ground_segmentation.manager import GroundSegmentationEvaluationManager
 from driving_log_replayer_v2.ground_segmentation.models import GroundSegmentationResult
+from driving_log_replayer_v2.ground_segmentation.models import GroundSegmentationScenario
 import driving_log_replayer_v2.perception_eval_conversions as eval_conversions
 from driving_log_replayer_v2.post_process_runner import Runner
+from driving_log_replayer_v2.post_process_runner import SimulationInfo
 from driving_log_replayer_v2.post_process_runner import TopicInfo
 
 if TYPE_CHECKING:
@@ -51,21 +53,29 @@ class GroundSegmentationRunner(Runner):
         result_archive_path: str,
         storage: str,
         evaluation_topics: list[str],
-        enable_analysis: str,
         additional_record_topics: list[TopicInfo],
+        enable_analysis: str,
     ) -> None:
+        simulation_info_list = [
+            SimulationInfo(
+                evaluation_manager_class=GroundSegmentationEvaluationManager,
+                result_class=GroundSegmentationResult,
+                key="ground_segmentation",
+                evaluation_topics=evaluation_topics,
+                result_json_path=result_json_path,
+            ),
+        ]
         super().__init__(
-            GroundSegmentationEvaluationManager,
-            GroundSegmentationResult,
+            GroundSegmentationScenario,
+            simulation_info_list,
             scenario_path,
             rosbag_dir_path,
             t4_dataset_path,
             result_json_path,
             result_archive_path,
             storage,
-            evaluation_topics,
-            enable_analysis,
             additional_record_topics,
+            enable_analysis,
         )
 
     def _evaluate_frame(
@@ -74,10 +84,10 @@ class GroundSegmentationRunner(Runner):
         # convert ros message to numpy array
         header_timestamp_microsec = eval_conversions.unix_time_microsec_from_ros_msg(msg.header)
         pointcloud = convert_to_numpy_pointcloud(msg)
-        subscribed_timestamp_microsec = eval_conversions.unix_time_microsec_from_ros_clock_time(
+        subscribed_timestamp_microsec = eval_conversions.unix_time_microsec_from_ros_time_nanosec(
             subscribed_timestamp_nanosec
         )
-        return self._manager.evaluate_frame(
+        return self._simulation["ground_segmentation"].evaluation_manager.evaluate_frame(
             topic_name,
             header_timestamp_microsec,
             subscribed_timestamp_microsec,
@@ -88,11 +98,15 @@ class GroundSegmentationRunner(Runner):
         self, frame_result: FrameResult, header: Header, subscribed_timestamp_nanosec: int
     ) -> None:
         if frame_result.is_valid:
-            self._result.set_frame(frame_result.data, frame_result.skip_counter)
+            self._simulation["ground_segmentation"].result.set_frame(
+                frame_result.data, frame_result.skip_counter
+            )
         else:
-            self._result.set_info_frame(frame_result.invalid_reason, frame_result.skip_counter)
-        res_str = self._result_writer.write_result_with_time(
-            self._result, subscribed_timestamp_nanosec
+            self._simulation["ground_segmentation"].result.set_info_frame(
+                frame_result.invalid_reason, frame_result.skip_counter
+            )
+        res_str = self._simulation["ground_segmentation"].result_writer.write_result_with_time(
+            self._simulation["ground_segmentation"].result, subscribed_timestamp_nanosec
         )
         self._rosbag_manager.write_results(
             "/driving_log_replayer_v2/ground_segmentation/results",
@@ -134,8 +148,8 @@ def evaluate(
         result_archive_path,
         storage,
         evaluation_topics,
-        enable_analysis,
         additional_record_topics,
+        enable_analysis,
     )
 
     runner.evaluate()
