@@ -46,9 +46,7 @@ class Evaluator(ABC):
         self,
         header_timestamp: int,  # do not care time unit
         subscribed_timestamp: int,  # do not care time unit
-        data: object,
-        *args: Any,
-        **kwargs: Any,
+        data: Any,
     ) -> FrameResult:
         raise NotImplementedError
 

@@ -37,6 +37,8 @@ from driving_log_replayer_v2.post_process_evaluator import FrameResult
 if TYPE_CHECKING:
     from perception_eval.evaluation.metrics import MetricsScore
 
+    from driving_log_replayer_v2.perception.runner import PerceptionEvalData
+
 
 class PerceptionEvaluator(Evaluator):
     def __init__(
@@ -128,12 +130,13 @@ class PerceptionEvaluator(Evaluator):
         self,
         header_timestamp: int,  # should be in microseconds
         subscribed_timestamp: int,  # should be in microseconds
-        data: list[DynamicObject] | str,
-        *,
-        interpolation: bool,
+        data: PerceptionEvalData,
     ) -> FrameResult:
         # skip evaluation if data conversion fails
-        if not (isinstance(data, list) and all(isinstance(obj, DynamicObject) for obj in data)):
+        if not (
+            isinstance(data.estimated_objects, list)
+            and all(isinstance(obj, DynamicObject) for obj in data.estimated_objects)
+        ):
             self.__skip_counter += 1
             self.__logger.warning(
                 "Estimated objects is invalid for timestamp: %s", header_timestamp
@@ -146,7 +149,7 @@ class PerceptionEvaluator(Evaluator):
 
         ground_truth_now_frame = self.__evaluator.get_ground_truth_now_frame(
             header_timestamp,
-            interpolate_ground_truth=interpolation,
+            interpolate_ground_truth=data.interpolation,
         )
 
         if ground_truth_now_frame is None:
@@ -159,7 +162,7 @@ class PerceptionEvaluator(Evaluator):
         frame_result: PerceptionFrameResult = self.__evaluator.add_frame_result(
             unix_time=header_timestamp,
             ground_truth_now_frame=ground_truth_now_frame,
-            estimated_objects=data,
+            estimated_objects=data.estimated_objects,
             critical_object_filter_config=self.__critical_object_filter_config,
             frame_pass_fail_config=self.__frame_pass_fail_config,
         )

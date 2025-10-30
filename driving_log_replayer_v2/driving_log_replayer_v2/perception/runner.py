@@ -15,6 +15,7 @@
 from __future__ import annotations
 
 import argparse
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 from typing import TYPE_CHECKING
@@ -59,11 +60,17 @@ if TYPE_CHECKING:
 PerceptionMsgType = TypeVar("PerceptionMsgType", DetectedObjects, TrackedObjects, PredictedObjects)
 
 
+@dataclass
+class PerceptionEvalData:
+    interpolation: bool
+    estimated_objects: list[DynamicObject] | str  # str for error message
+
+
 def convert_to_perception_eval(
     msg: PerceptionMsgType,
     subscribed_timestamp_nanosec: int,
     evaluation_config: PerceptionEvaluationConfig,
-) -> tuple[int, int, list[DynamicObject] | str]:
+) -> tuple[int, int, PerceptionEvalData]:
     header_timestamp_microsec: int = eval_conversions.unix_time_microsec_from_ros_msg(msg.header)
     subscribed_timestamp_microsec: int = eval_conversions.unix_time_microsec_from_ros_time_nanosec(
         subscribed_timestamp_nanosec
@@ -75,7 +82,19 @@ def convert_to_perception_eval(
             evaluation_config,
         )
     )
-    return header_timestamp_microsec, subscribed_timestamp_microsec, estimated_objects
+    if isinstance(msg, DetectedObjects):
+        interpolation: bool = False
+    elif isinstance(msg, TrackedObjects | PredictedObjects):
+        interpolation: bool = True
+    else:
+        err_msg = f"Unknown message type: {type(msg)}"
+        raise TypeError(err_msg)
+
+    return (
+        header_timestamp_microsec,
+        subscribed_timestamp_microsec,
+        PerceptionEvalData(interpolation, estimated_objects),
+    )
 
 
 def convert_to_ros_msg(
@@ -179,16 +198,8 @@ class PerceptionRunner(Runner):
                 skip_counter=0,
             )
 
-        if isinstance(msg, DetectedObjects):
-            interpolation: bool = False
-        elif isinstance(msg, TrackedObjects | PredictedObjects):
-            interpolation: bool = True
-        else:
-            err_msg = f"Unknown message type: {type(msg)}"
-            raise TypeError(err_msg)
-
         # convert ros to perception_eval
-        header_timestamp_microsec, subscribed_timestamp_microsec, estimated_objects = (
+        header_timestamp_microsec, subscribed_timestamp_microsec, perception_eval_data = (
             convert_to_perception_eval(
                 msg,
                 subscribed_timestamp_nanosec,
@@ -201,8 +212,7 @@ class PerceptionRunner(Runner):
             topic_name,
             header_timestamp_microsec,
             subscribed_timestamp_microsec,
-            estimated_objects,
-            interpolation=interpolation,
+            perception_eval_data,
         )
 
     def _write_result(

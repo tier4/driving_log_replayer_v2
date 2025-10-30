@@ -23,10 +23,10 @@ from driving_log_replayer_v2.perception.evaluator import PerceptionEvaluator
 if TYPE_CHECKING:
     from pathlib import Path
 
-    from perception_eval.common.object import DynamicObject
     from perception_eval.config import PerceptionEvaluationConfig
     from perception_eval.tool import PerceptionAnalyzer3D
 
+    from driving_log_replayer_v2.perception.runner import PerceptionEvalData
     from driving_log_replayer_v2.post_process_evaluator import FrameResult
     from driving_log_replayer_v2.scenario import ScenarioType
 
@@ -85,9 +85,7 @@ class PerceptionEvaluationManager(EvaluationManager):
         topic_name: str,
         header_timestamp: int,
         subscribed_timestamp: int,
-        data: list[DynamicObject] | str,
-        *,
-        interpolation: bool,
+        data: PerceptionEvalData,
     ) -> FrameResult:
         evaluator = self._evaluators[topic_name]
 
@@ -95,7 +93,6 @@ class PerceptionEvaluationManager(EvaluationManager):
             header_timestamp,
             subscribed_timestamp,
             data,
-            interpolation=interpolation,
         )
 
     def get_degradation_evaluation_task(self) -> str:
