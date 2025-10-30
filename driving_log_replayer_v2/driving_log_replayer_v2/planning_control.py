@@ -60,9 +60,9 @@ class MinMax(BaseModel):
 
     @model_validator(mode="after")
     def validate_min_max(self) -> "MinMax":
-        err_msg = "max must be a greater number than min"
+        err_msg = "max must be greater or equal to min"
 
-        if self.max <= self.min:
+        if self.max < self.min:
             raise ValueError(err_msg)
         return self
 
