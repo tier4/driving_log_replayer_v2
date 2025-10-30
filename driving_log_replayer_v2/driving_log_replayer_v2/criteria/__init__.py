@@ -15,6 +15,5 @@
 from .perception import CriteriaLevel
 from .perception import CriteriaMethod
 from .perception import PerceptionCriteria
-from .perception import StopReasonEvaluator
 
-__all__ = ("CriteriaLevel", "CriteriaMethod", "PerceptionCriteria", "StopReasonEvaluator")
+__all__ = ("CriteriaLevel", "CriteriaMethod", "PerceptionCriteria")

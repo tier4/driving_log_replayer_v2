@@ -79,12 +79,20 @@ def convert_to_stop_reason(msg: AwapiAutowareStatus) -> StopReasonData:
 
 
 class StopReasonAnalyzer:
-    def __init__(self) -> None:
+    def __init__(self, result_archive_path: str, dir_name: str) -> None:
         self._data: list[StopReasonData] = []
+        self._result_archive_path_w_dir_name = Path(result_archive_path).joinpath(dir_name)
+        self._result_archive_path_w_dir_name.mkdir(parents=True, exist_ok=True)
 
     def append(self, stop_reason: StopReasonData) -> None:
         self._data.append(stop_reason)
 
-    def save_as_csv(self, save_path: Path) -> None:
+    def save_as_csv(self, file_name: str) -> None:
+        if not file_name.endswith(".csv"):
+            err_msg = f"Invalid file extension: {file_name}. '.csv' is required."
+            raise ValueError(err_msg)
+
         data_dict = [asdict(data) for data in self._data]
-        pd.DataFrame(data_dict).to_csv(save_path, index=False)
+        pd.DataFrame(data_dict).to_csv(
+            self._result_archive_path_w_dir_name.joinpath(file_name), index=False
+        )

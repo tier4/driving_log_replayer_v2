@@ -126,8 +126,8 @@ class PerceptionEvaluator(Evaluator):
 
     def evaluate_frame(
         self,
-        header_timestamp_microsec: int,
-        subscribed_timestamp_microsec: int,
+        header_timestamp: int,  # should be in microseconds
+        subscribed_timestamp: int,  # should be in microseconds
         data: list[DynamicObject] | str,
         *,
         interpolation: bool,
@@ -136,7 +136,7 @@ class PerceptionEvaluator(Evaluator):
         if not (isinstance(data, list) and all(isinstance(obj, DynamicObject) for obj in data)):
             self.__skip_counter += 1
             self.__logger.warning(
-                "Estimated objects is invalid for timestamp: %s", header_timestamp_microsec
+                "Estimated objects is invalid for timestamp: %s", header_timestamp
             )
             return FrameResult(
                 is_valid=False,
@@ -145,21 +145,19 @@ class PerceptionEvaluator(Evaluator):
             )
 
         ground_truth_now_frame = self.__evaluator.get_ground_truth_now_frame(
-            header_timestamp_microsec,
+            header_timestamp,
             interpolate_ground_truth=interpolation,
         )
 
         if ground_truth_now_frame is None:
             self.__skip_counter += 1
-            self.__logger.warning(
-                "Ground truth not found for timestamp %s", header_timestamp_microsec
-            )
+            self.__logger.warning("Ground truth not found for timestamp %s", header_timestamp)
             return FrameResult(
                 is_valid=False, invalid_reason="No Ground Truth", skip_counter=self.__skip_counter
             )
 
         frame_result: PerceptionFrameResult = self.__evaluator.add_frame_result(
-            unix_time=header_timestamp_microsec,
+            unix_time=header_timestamp,
             ground_truth_now_frame=ground_truth_now_frame,
             estimated_objects=data,
             critical_object_filter_config=self.__critical_object_filter_config,
@@ -170,11 +168,11 @@ class PerceptionEvaluator(Evaluator):
         self.__logger.info(
             "Estimation header: %d, Ground truth header: %d (frame_name: %s), Difference: %d, "
             "Subscribe delay [micro sec]: %d",
-            header_timestamp_microsec,
+            header_timestamp,
             ground_truth_now_frame.unix_time,
             ground_truth_now_frame.frame_name,
-            header_timestamp_microsec - ground_truth_now_frame.unix_time,
-            subscribed_timestamp_microsec - header_timestamp_microsec,
+            header_timestamp - ground_truth_now_frame.unix_time,
+            subscribed_timestamp - header_timestamp,
         )
         # TODO: decide whether to add skip counter or not
 

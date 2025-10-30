@@ -15,27 +15,23 @@
 from abc import ABC
 from abc import abstractmethod
 from dataclasses import dataclass
+import itertools
 from pathlib import Path
 import shutil
 from typing import Any
-from typing import TypeVar
 
-from autoware_perception_msgs.msg import DetectedObjects
-from autoware_perception_msgs.msg import PredictedObjects
-from autoware_perception_msgs.msg import TrackedObjects
 from rclpy.clock import Clock
 from rosbag2_py import TopicMetadata
 from std_msgs.msg import Header
 
-from driving_log_replayer_v2.evaluation_manager import EvaluationManager
+from driving_log_replayer_v2.evaluation_manager import ManagerType
 from driving_log_replayer_v2.post_process_evaluator import FrameResult
-from driving_log_replayer_v2.result import ResultBase
+from driving_log_replayer_v2.result import ResultBaseType
 from driving_log_replayer_v2.result import ResultWriter
 from driving_log_replayer_v2.ros2_utils import RosBagManager
-
-PerceptionMsgType = TypeVar("PerceptionMsgType", DetectedObjects, TrackedObjects, PredictedObjects)
-ManagerType = TypeVar("ManagerType", bound=EvaluationManager)
-ResultBaseType = TypeVar("ResultBaseType", bound=ResultBase)
+from driving_log_replayer_v2.scenario import load_condition
+from driving_log_replayer_v2.scenario import load_scenario_with_exception
+from driving_log_replayer_v2.scenario import ScenarioType
 
 
 @dataclass
@@ -44,57 +40,69 @@ class TopicInfo:
     msg_type: str
 
 
+@dataclass
+class SimulationInfo:
+    evaluation_manager_class: (
+        ManagerType | None
+    )  # optional for only using EvaluationItem and ResultBase
+    result_class: ResultBaseType
+    key: str
+    evaluation_topics: dict[str, list[str]]
+    result_json_path: str
+
+
+@dataclass
+class Simulation:
+    evaluation_manager: ManagerType | None  # optional for only using EvaluationItem and ResultBase
+    result: ResultBaseType
+    result_writer: ResultWriter
+
+
 class Runner(ABC):
     def __init__(
         self,
-        manager_class: ManagerType,
-        result_class: ResultBaseType,
+        scenario_class: ScenarioType,
+        simulation_info_list: list[SimulationInfo],
         scenario_path: str,
         rosbag_dir_path: str,
         t4_dataset_path: str,
         result_json_path: str,
         result_archive_path: str,
         storage: str,
-        evaluation_topics: dict[str, list[str]],
-        enable_analysis: str,
         additional_record_topics: list[TopicInfo],
+        enable_analysis: str,
     ) -> None:
+        # instance variables
         self._enable_analysis = enable_analysis
-        self._manager: ManagerType
-        self._degradation_topic: str
-        self._result_writer: ResultWriter
-        self._result: ResultBaseType
+        self._simulation: dict[str, Simulation]
+        self._degradation_topics: list[str]
         self._rosbag_manager: RosBagManager
 
-        # initialize manager
-        self._manager = manager_class(
+        # load scenario and condition
+        scenario = load_scenario_with_exception(
             scenario_path,
-            t4_dataset_path,
-            result_archive_path,
-            evaluation_topics,
+            scenario_class,
+            result_json_path,
         )
-        if self._manager.check_scenario_error() is not None:
-            error = self._manager.check_scenario_error()
-            result_writer = ResultWriter(
-                result_json_path,
-                Clock(),
-                {},
-            )
-            error_dict = {
-                "Result": {"Success": False, "Summary": "ScenarioFormatError"},
-                "Stamp": {"System": 0.0},
-                "Frame": {"ErrorMsg": error.__str__()},
-            }
-            result_writer.write_line(error_dict)
-            result_writer.close()
-            raise error
-        self._degradation_topic = self._manager.get_degradation_topic()
+        evaluation_condition = load_condition(scenario)
 
-        # initialize ResultWriter and PerceptionResult to write result.jsonl which Manager will use
-        self._result_writer = ResultWriter(
-            result_json_path, Clock(), self._manager.get_evaluation_condition()
-        )
-        self._result = result_class(self._manager.get_evaluation_condition())
+        # initialize evaluation manager, result, and result writer for each simulation
+        self._simulation = {}
+        for simulation_info in simulation_info_list:
+            self._simulation[simulation_info.key] = Simulation(
+                evaluation_manager=simulation_info.evaluation_manager_class(
+                    scenario,
+                    t4_dataset_path,
+                    result_archive_path,
+                    simulation_info.evaluation_topics,
+                )
+                if simulation_info.evaluation_manager_class is not None
+                else None,
+                result=simulation_info.result_class(evaluation_condition),
+                result_writer=ResultWriter(
+                    simulation_info.result_json_path, Clock(), evaluation_condition
+                ),
+            )
 
         # initialize RosBagManager to read and save rosbag and write into it
         additional_record_topics_metadata = [
@@ -106,13 +114,26 @@ class Runner(ABC):
             )
             for topic_info in additional_record_topics
         ]
+        evaluation_topics = [
+            simulation.evaluation_manager.get_evaluation_topics()
+            for simulation in self._simulation.values()
+            if simulation.evaluation_manager is not None
+        ]
+        evaluation_topics = list(itertools.chain.from_iterable(evaluation_topics))  # flatten list
         self._rosbag_manager = RosBagManager(
             rosbag_dir_path,
             Path(result_archive_path).joinpath("result_bag").as_posix(),
             storage,
-            self._manager.get_evaluation_topics(),
+            evaluation_topics,
             additional_record_topics_metadata,
         )
+
+        # set degradation topics
+        self._degradation_topics = [
+            simulation.evaluation_manager.get_degradation_topic()
+            for simulation in self._simulation.values()
+            if simulation.evaluation_manager is not None
+        ]
 
         # save scenario.yaml to check later
         shutil.copy(scenario_path, Path(result_archive_path).joinpath("scenario.yaml"))
@@ -121,7 +142,7 @@ class Runner(ABC):
         for topic_name, msg, subscribed_timestamp_nanosec in self._rosbag_manager.read_messages():
             # See RosBagManager for `time relationships`.
             frame_result = self._evaluate_frame(topic_name, msg, subscribed_timestamp_nanosec)
-            if topic_name == self._degradation_topic:
+            if topic_name in self._degradation_topics:
                 self._write_result(frame_result, msg.header, subscribed_timestamp_nanosec)
         self._evaluate_on_post_process()
         self._close()
@@ -136,7 +157,10 @@ class Runner(ABC):
 
     @abstractmethod
     def _write_result(
-        self, frame_result: FrameResult, header: Header, subscribed_timestamp_nanosec: int
+        self,
+        frame_result: FrameResult,
+        header: Header,
+        subscribed_timestamp_nanosec: int,
     ) -> None:
         raise NotImplementedError
 
@@ -149,5 +173,6 @@ class Runner(ABC):
         raise NotImplementedError
 
     def _close(self) -> None:
-        self._result_writer.close()
+        for simulation in self._simulation.values():
+            simulation.result_writer.close()
         self._rosbag_manager.close_writer()

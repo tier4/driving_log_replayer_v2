@@ -16,10 +16,15 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 from typing import Literal
+from typing import TypeVar
 
 from ament_index_python.packages import get_package_share_directory
 from pydantic import BaseModel
+from pydantic import ValidationError
+from rclpy.clock import Clock
 import yaml
+
+from driving_log_replayer_v2.result import ResultWriter
 
 number = int | float
 
@@ -55,3 +60,33 @@ def load_sample_scenario(
         scenario_name,
     )
     return load_scenario(sample_scenario_path, scenario_class)
+
+
+ScenarioType = TypeVar("ScenarioType", bound=Scenario)
+
+
+def load_scenario_with_exception(
+    scenario_path: str, scenario_class: ScenarioType, result_json_path: str
+) -> ScenarioType:
+    try:
+        return load_scenario(Path(scenario_path), scenario_class)
+    except (FileNotFoundError, PermissionError, yaml.YAMLError, ValidationError) as e:
+        result_writer = ResultWriter(
+            result_json_path,
+            Clock(),
+            {},
+        )
+        error_dict = {
+            "Result": {"Success": False, "Summary": "ScenarioFormatError"},
+            "Stamp": {"System": 0.0},
+            "Frame": {"ErrorMsg": e.__str__()},
+        }
+        result_writer.write_line(error_dict)
+        result_writer.close()
+        raise
+
+
+def load_condition(scenario: ScenarioType) -> dict:
+    if hasattr(scenario.Evaluation, "Conditions") and scenario.Evaluation.Conditions is not None:
+        return scenario.Evaluation.Conditions
+    return {}

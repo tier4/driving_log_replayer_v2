@@ -24,7 +24,6 @@ from pydantic import field_validator
 from pydantic import model_validator
 
 from driving_log_replayer_v2.criteria import PerceptionCriteria
-from driving_log_replayer_v2.criteria import StopReasonEvaluator
 from driving_log_replayer_v2.perception_eval_conversions import FrameDescriptionWriter
 from driving_log_replayer_v2.perception_eval_conversions import summarize_pass_fail_result
 from driving_log_replayer_v2.result import EvaluationItem
@@ -256,22 +255,17 @@ class StopReason(EvaluationItem):
     success: bool = True
 
     def __post_init__(self) -> None:
-        self.criteria = StopReasonEvaluator(
-            start_time=self.condition.time_range[0],
-            end_time=self.condition.time_range[1],
-            tolerance_interval=self.condition.tolerance_interval,
-            judgement=self.condition.judgement,
-            condition=self.condition.condition,
-        )
+        # check timeout
+        self.latest_check_time = 0.0
 
     def set_frame(self, stop_reason: StopReasonData) -> dict:
         frame_success = "Fail"
-        result, result_msg = self.criteria.get_result(stop_reason)
+        result, result_msg = self._evaluate_frame(stop_reason)
 
         if result is None:
             self.time_out += 1
             return {"Timeout": self.time_out}
-        if result.is_success():
+        if result:
             self.passed += 1
             frame_success = "Success"
 
@@ -285,6 +279,80 @@ class StopReason(EvaluationItem):
                 "Info": result_msg["Info"],
             },
         }
+
+    def _evaluate_frame(self, stop_reason: StopReasonData) -> tuple[bool | None, dict]:
+        stop_reason_time = stop_reason.seconds + stop_reason.nanoseconds / pow(10, 9)
+        if not self._is_valid_time(stop_reason_time):
+            return None, self._get_timeout_msg(stop_reason_time)
+
+        # create map for easy access
+        reason_dist_map = {
+            reasons.reason: reasons.dist_to_stop_pose for reasons in stop_reason.reasons
+        }
+
+        reason_condition = (
+            [condition.reason in reason_dist_map for condition in self.condition.condition]
+            if len(self.condition.condition) > 0
+            else []
+        )
+        distance_condition = (
+            [
+                condition.base_stop_line_dist[0]
+                <= reason_dist_map[condition.reason]
+                <= condition.base_stop_line_dist[1]
+                if condition.reason in reason_dist_map
+                else False
+                for condition in self.condition.condition
+            ]
+            if len(self.condition.condition) > 0
+            else []
+        )
+
+        # check stop reason for "positive"
+        if (
+            self.condition.judgement == "positive"
+            and all(reason_condition)
+            and all(distance_condition)
+        ):
+            return True, {
+                "Info": {
+                    "Reason": [reasons.reason for reasons in stop_reason.reasons],
+                    "Distance": [reasons.dist_to_stop_pose for reasons in stop_reason.reasons],
+                    "Timestamp": stop_reason_time,
+                },
+            }
+
+        # check stop reason for "negative"
+        if (
+            self.condition.judgement == "negative"
+            and not any(reason_condition)
+            and not any(distance_condition)
+        ):
+            return True, {
+                "Info": {
+                    "Reason": ["no_stop_reason"],
+                    "Distance": [None],
+                    "Timestamp": stop_reason_time,
+                },
+            }
+
+        return False, {
+            "Info": {
+                "Reason": [reasons.reason for reasons in stop_reason.reasons],
+                "Distance": [reasons.dist_to_stop_pose for reasons in stop_reason.reasons],
+                "Timestamp": stop_reason_time,
+            },
+        }
+
+    def _is_valid_time(self, current_time: float) -> bool:
+        # invalid if out of time range
+        if not (self.condition.time_range[0] <= current_time <= self.condition.time_range[1]):
+            return False
+        # invalid if it has not been long since the last evaluation
+        if not (current_time - self.latest_check_time > self.condition.tolerance_interval):
+            return False
+        self.latest_check_time = current_time
+        return True
 
 
 class PerceptionResult(ResultBase):

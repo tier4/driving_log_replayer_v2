@@ -17,6 +17,7 @@ from __future__ import annotations
 from abc import ABC
 from abc import abstractmethod
 from typing import Any
+from typing import TypeVar
 
 from pydantic import BaseModel
 from pydantic import model_validator
@@ -41,12 +42,15 @@ class FrameResult(BaseModel):
 
 class Evaluator(ABC):
     @abstractmethod
-    def frame_evaluate(
+    def evaluate_frame(
         self,
-        header_timestamp_microsec: int,
-        subscribed_timestamp_microsec: int,
+        header_timestamp: int,  # do not care time unit
+        subscribed_timestamp: int,  # do not care time unit
         data: object,
         *args: Any,
         **kwargs: Any,
     ) -> FrameResult:
         raise NotImplementedError
+
+
+EvaluatorType = TypeVar("EvaluatorType", bound=Evaluator)

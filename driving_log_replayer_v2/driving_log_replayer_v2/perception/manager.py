@@ -19,7 +19,6 @@ from typing import TYPE_CHECKING
 
 from driving_log_replayer_v2.evaluation_manager import EvaluationManager
 from driving_log_replayer_v2.perception.evaluator import PerceptionEvaluator
-from driving_log_replayer_v2.perception.models import PerceptionScenario
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -29,23 +28,29 @@ if TYPE_CHECKING:
     from perception_eval.tool import PerceptionAnalyzer3D
 
     from driving_log_replayer_v2.post_process_evaluator import FrameResult
+    from driving_log_replayer_v2.scenario import ScenarioType
 
 
 class PerceptionEvaluationManager(EvaluationManager):
     def __init__(
         self,
-        scenario_path: str,
+        scenario: ScenarioType,
         t4_dataset_path: str,
         result_archive_path: str,
         evaluation_topics: dict[str, list[str]],
     ) -> None:
-        super().__init__(scenario_path, PerceptionScenario)
-        self._degradation_evaluation_task: str
-
-        self._degradation_evaluation_task = self._scenario.Evaluation.PerceptionEvaluationConfig[
+        # additional instance variables
+        self._degradation_evaluation_task: str = scenario.Evaluation.PerceptionEvaluationConfig[
             "evaluation_config_dict"
         ]["evaluation_task"]
+        super().__init__(scenario, t4_dataset_path, result_archive_path, evaluation_topics)
 
+    def _set_evaluators(
+        self,
+        t4_dataset_path: str,
+        result_archive_path: str,
+        evaluation_topics: dict[str, list[str]],
+    ) -> None:
         self._evaluators = {
             topic: PerceptionEvaluator(
                 copy.deepcopy(self._scenario.Evaluation.PerceptionEvaluationConfig),
@@ -61,9 +66,7 @@ class PerceptionEvaluationManager(EvaluationManager):
             for topic in topics
         }
 
-        self.set_degradation_topic()
-
-    def set_degradation_topic(self) -> None:
+    def _set_degradation_topic(self) -> None:
         if self._scenario.Evaluation.degradation_topic is not None:
             self._degradation_topic = self._scenario.Evaluation.degradation_topic
         # If degradation topic is not set, set it based on the evaluation task.
@@ -80,8 +83,8 @@ class PerceptionEvaluationManager(EvaluationManager):
     def evaluate_frame(
         self,
         topic_name: str,
-        header_timestamp_microsec: int,
-        subscribed_timestamp_microsec: int,
+        header_timestamp: int,
+        subscribed_timestamp: int,
         data: list[DynamicObject] | str,
         *,
         interpolation: bool,
@@ -89,8 +92,8 @@ class PerceptionEvaluationManager(EvaluationManager):
         evaluator = self._evaluators[topic_name]
 
         return evaluator.evaluate_frame(
-            header_timestamp_microsec,
-            subscribed_timestamp_microsec,
+            header_timestamp,
+            subscribed_timestamp,
             data,
             interpolation=interpolation,
         )
@@ -126,7 +129,7 @@ class PerceptionEvaluationManager(EvaluationManager):
             for topic, evaluator in self._evaluators.items()
         }
 
-    def get_analyzers(
+    def get_analyzer(
         self, topic_name: str | None = None
     ) -> PerceptionAnalyzer3D | dict[str, PerceptionAnalyzer3D]:
         if topic_name is not None:
