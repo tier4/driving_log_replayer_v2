@@ -5,14 +5,29 @@ SensorModel: aip_xx1
 VehicleModel: lexus
 Evaluation:
   UseCaseName: diagnostics
-  UseCaseFormatVersion: 0.1.0
+  UseCaseFormatVersion: 0.3.0
   Datasets:
     - odaiba:
         VehicleId: default
   Conditions:
     DiagConditions:
-      - hardware_id: control_validator
-        name: "control_validator: control_validation_rolling_back"
-        level: [OK] # Specify the status to be judged among OK, WARN, ERROR, and STALE. More than one is allowed.
-        time: { start: 1730266438.2, end: 1730266482.42 } # Success if the level is specified between start and end in ROS time
-        condition_type: all_of # [any_of, all_of] any_of only needs to be satisfied once in time. all_of requires all topics in time to satisfy the condition
+      # Success if the ERROR-level is detected even once within the time range
+      - hardware_id: planning_validator
+        name: "planning_validator: intersection_validation_collision_check"
+        level: [ERROR] # Specify the status to be judged among OK, WARN, ERROR, and STALE. Multiple are allowed.
+        time: { start: 1743490210.2, end: 1743490225.42 } # Judge only within this ROS time range
+        condition_type: all_of # ["any_of", "all_of", "duration_larger_than", "duration_less_than", "percentage_larger_than", "percentage_less_than",]: any_of: Pass if satisfied at least once; all_of: Pass only if all are satisfied; duration_larger_than: Pass if consecutive duration exceeds threshold; duration_less_than: Pass if consecutive duration is less than threshold; percentage_larger_than: Pass if percentage exceeds threshold; percentage_less_than: Pass if percentage is less than threshold
+      # Success if OK-level percentage is less/larger than threshold (ratio 0-1)
+      - hardware_id: planning_validator
+        name: "planning_validator: intersection_validation_collision_check"
+        level: [OK]
+        time: { start: 1743490210.2, end: 1743490225.42 }
+        condition_type: percentage_larger_than # ["any_of", "all_of", "duration_larger_than", "duration_less_than", "percentage_larger_than", "percentage_less_than",]: any_of: Pass if satisfied at least once; all_of: Pass only if all are satisfied; duration_larger_than: Pass if consecutive duration exceeds threshold; duration_less_than: Pass if consecutive duration is less than threshold; percentage_larger_than: Pass if percentage exceeds threshold; percentage_less_than: Pass if percentage is less than threshold
+        percentage_threshold: 0.95
+      # Success if consecutive duration of WARN-level is less/larger than the threshold (seconds)
+      - hardware_id: planning_validator
+        name: "planning_validator: intersection_validation_collision_check"
+        level: [WARN]
+        time: { start: 1743490210.2, end: 1743490225.42 }
+        condition_type: duration_larger_than # ["any_of", "all_of", "duration_larger_than", "duration_less_than", "percentage_larger_than", "percentage_less_than",]: any_of: Pass if satisfied at least once; all_of: Pass only if all are satisfied; duration_larger_than: Pass if consecutive duration exceeds threshold; duration_less_than: Pass if consecutive duration is less than threshold; percentage_larger_than: Pass if percentage exceeds threshold; percentage_less_than: Pass if percentage is less than threshold
+        duration_threshold: 0.5

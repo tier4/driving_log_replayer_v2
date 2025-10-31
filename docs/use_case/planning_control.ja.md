@@ -41,6 +41,7 @@ Metric正常の条件を満たさないとき
 
 - シナリオにarea条件がある場合、control_points[0].poseのx,yの位置がシナリオで指定したx,y座標からrangeの範囲に入っている。
 - シナリオにbehavior条件がある場合、planning_factorのbehaviorがシナリオで指定したbehaviorにある。
+- シナリオにdistance条件がある場合、planning_factorのdistance(Egoからcontrol_pointまでの距離)がシナリオで指定した範囲に入っている。
 
 ### PlanningFactor正常(judgement: negative)
 
@@ -48,6 +49,7 @@ Metric正常の条件を満たさないとき
 
 - シナリオにarea条件がある場合、control_points[0].poseのx,yの位置がシナリオで指定したx,y座標からrangeの範囲に入っている。
 - シナリオにbehavior条件がある場合、planning_factorのbehaviorがシナリオで指定したbehaviorにある。
+- シナリオにdistance条件がある場合、planning_factorのdistance(Egoからcontrol_pointまでの距離)がシナリオで指定した範囲に入っている。
 
 ### PlanningFactor異常
 
