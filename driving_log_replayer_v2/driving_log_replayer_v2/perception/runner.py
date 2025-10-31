@@ -168,7 +168,7 @@ class PerceptionRunner(Runner):
                 SimulationInfo(
                     evaluation_manager_class=None,
                     result_class=StopReasonResult,
-                    key="stop_reason",
+                    name="stop_reason",
                     evaluation_topics=["/awapi/autoware/get/status"],
                     result_json_path=stop_reason_result_json_path,
                 )

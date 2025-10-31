@@ -57,12 +57,9 @@ class Evaluator(ABC):
         self._logger: logging.Logger
         result_archive_w_topic_path = Path(result_archive_path)
         dir_name = evaluation_topic.lstrip("/").replace("/", ".")
-        result_archive_w_topic_path = result_archive_w_topic_path.joinpath(dir_name).joinpath(
-            "log.txt"
-        )
-        result_archive_w_topic_path.parent.mkdir(parents=True, exist_ok=True)
+        result_archive_w_topic_path.mkdir(parents=True, exist_ok=True)
         self._logger = configure_logger(
-            log_file_directory=result_archive_w_topic_path.parent,
+            log_file_directory=result_archive_w_topic_path,
             console_log_level=logging.INFO,
             file_log_level=logging.INFO,
             logger_name=dir_name,
