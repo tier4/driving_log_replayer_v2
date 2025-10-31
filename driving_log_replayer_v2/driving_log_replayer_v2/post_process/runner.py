@@ -24,7 +24,7 @@ from rclpy.clock import Clock
 from rosbag2_py import TopicMetadata
 from std_msgs.msg import Header
 
-from driving_log_replayer_v2.driving_log_replayer_v2.post_process.evaluator import FrameResult
+from driving_log_replayer_v2.post_process.evaluator import FrameResult
 from driving_log_replayer_v2.post_process.evaluation_manager import ManagerType
 from driving_log_replayer_v2.post_process.ros2_utils import RosBagManager
 from driving_log_replayer_v2.result import ResultBaseType

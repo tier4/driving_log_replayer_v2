@@ -58,6 +58,7 @@ class PerceptionEvaluator(Evaluator):
         evaluation_task: str,
         frame_id_str: str,
     ) -> None:
+        # additional instance variables
         self.__skip_counter = 0
         self.__frame_id_str = frame_id_str
         self.__critical_object_filter_config: CriticalObjectFilterConfig
