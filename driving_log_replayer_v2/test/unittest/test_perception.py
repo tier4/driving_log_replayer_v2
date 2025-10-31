@@ -341,7 +341,7 @@ def test_stop_reason_obstacle_stop(
     create_awapi_autoware_status_msg: AwapiAutowareStatus,
     create_stop_reason: StopReason,
 ) -> None:
-    stop_reason = convert_to_stop_reason(create_awapi_autoware_status_msg, 1000 ** 9 + 5)
+    stop_reason = convert_to_stop_reason(create_awapi_autoware_status_msg, 1000**9 + 5)
     evaluation_item = create_stop_reason
     frame_dict = evaluation_item.set_frame(stop_reason)
     assert evaluation_item.success is True
@@ -362,7 +362,7 @@ def test_stop_reason_timeout(
 ) -> None:
     # change time to out of range
     create_awapi_autoware_status_msg.stop_reason.header.stamp.sec = 50
-    stop_reason = convert_to_stop_reason(create_awapi_autoware_status_msg, 1000 ** 9 + 5)
+    stop_reason = convert_to_stop_reason(create_awapi_autoware_status_msg, 1000**9 + 5)
     evaluation_item = create_stop_reason
     frame_dict = evaluation_item.set_frame(stop_reason)
     assert evaluation_item.success is True  # default is True
