@@ -283,7 +283,7 @@ class StopReason(EvaluationItem):
     def _evaluate_frame(self, stop_reason: StopReasonData) -> tuple[bool | None, dict]:
         stop_reason_time = stop_reason.seconds + stop_reason.nanoseconds / pow(10, 9)
         if not self._is_valid_time(stop_reason_time):
-            return None, self._get_timeout_msg(stop_reason_time)
+            return None, {"Info": {}}
 
         # create map for easy access
         reason_dist_map = {
