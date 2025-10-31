@@ -17,8 +17,8 @@ from __future__ import annotations
 import copy
 from typing import TYPE_CHECKING
 
-from driving_log_replayer_v2.post_process.evaluation_manager import EvaluationManager
 from driving_log_replayer_v2.perception.evaluator import PerceptionEvaluator
+from driving_log_replayer_v2.post_process.evaluation_manager import EvaluationManager
 
 if TYPE_CHECKING:
     from pathlib import Path

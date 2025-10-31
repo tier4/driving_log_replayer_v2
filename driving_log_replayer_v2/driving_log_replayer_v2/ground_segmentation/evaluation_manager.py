@@ -14,9 +14,9 @@
 
 import numpy as np
 
-from driving_log_replayer_v2.post_process.evaluation_manager import EvaluationManager
 from driving_log_replayer_v2.ground_segmentation.evaluator import GroundSegmentationEvaluator
 from driving_log_replayer_v2.ground_segmentation.models import GroundSegmentationScenario
+from driving_log_replayer_v2.post_process.evaluation_manager import EvaluationManager
 from driving_log_replayer_v2.post_process.evaluator import FrameResult
 from driving_log_replayer_v2.scenario import load_condition
 
@@ -56,6 +56,4 @@ class GroundSegmentationEvaluationManager(EvaluationManager):
         data: np.ndarray,
     ) -> FrameResult:
         evaluator = self._evaluators[topic_name]
-        return evaluator.evaluate_frame(
-            header_timestamp, subscribed_timestamp, data
-        )
+        return evaluator.evaluate_frame(header_timestamp, subscribed_timestamp, data)

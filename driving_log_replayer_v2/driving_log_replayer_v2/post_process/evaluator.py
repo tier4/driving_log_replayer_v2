@@ -14,11 +14,11 @@
 
 from __future__ import annotations
 
-import logging
-from pathlib import Path
 from abc import ABC
 from abc import abstractmethod
 from enum import Enum
+import logging
+from pathlib import Path
 from typing import Any
 from typing import TypeVar
 
@@ -57,7 +57,9 @@ class Evaluator(ABC):
         self._logger: logging.Logger
         result_archive_w_topic_path = Path(result_archive_path)
         dir_name = evaluation_topic.lstrip("/").replace("/", ".")
-        result_archive_w_topic_path = result_archive_w_topic_path.joinpath(dir_name).joinpath("log.txt")
+        result_archive_w_topic_path = result_archive_w_topic_path.joinpath(dir_name).joinpath(
+            "log.txt"
+        )
         result_archive_w_topic_path.parent.mkdir(parents=True, exist_ok=True)
         self._logger = configure_logger(
             log_file_directory=result_archive_w_topic_path.parent,
