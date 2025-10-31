@@ -21,8 +21,8 @@ from typing import TYPE_CHECKING
 from typing import TypeVar
 
 if TYPE_CHECKING:
-    from driving_log_replayer_v2.post_process_evaluator import EvaluatorType
-    from driving_log_replayer_v2.post_process_evaluator import FrameResult
+    from driving_log_replayer_v2.post_process.evaluator import EvaluatorType
+    from driving_log_replayer_v2.post_process.evaluator import FrameResult
     from driving_log_replayer_v2.scenario import ScenarioType
 
 

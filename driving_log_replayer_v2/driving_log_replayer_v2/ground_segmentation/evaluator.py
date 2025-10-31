@@ -19,9 +19,14 @@ import numpy as np
 from scipy.spatial import cKDTree
 
 from driving_log_replayer_v2.ground_segmentation.models import Conditions
-from driving_log_replayer_v2.post_process_evaluator import Evaluator
-from driving_log_replayer_v2.post_process_evaluator import FrameResult
+from driving_log_replayer_v2.post_process.evaluator import Evaluator
+from driving_log_replayer_v2.post_process.evaluator import FrameResult
+from driving_log_replayer_v2.post_process.evaluator import InvalidReason
 from driving_log_replayer_v2_msgs.msg import GroundSegmentationEvalResult
+
+
+class GroundSegmentationInvalidReason(InvalidReason):
+    NO_GROUND_TRUTH = "No Ground Truth"
 
 
 class GroundSegmentationEvaluator(Evaluator):
@@ -35,22 +40,22 @@ class GroundSegmentationEvaluator(Evaluator):
         evaluation_topic: str,
         conditions: Conditions,
     ) -> None:
+        # additional instance variables
         self._skip_counter = 0
-        self._t4_dataset_path = t4_dataset_path
-        self._result_archive_path = result_archive_path
-        self._evaluation_topic = evaluation_topic
-        self._conditions = conditions
+        self._conditions: Conditions = conditions
+
+        super().__init__(result_archive_path, evaluation_topic)
 
         self._ground_label = self._conditions.ground_label
         self._obstacle_label = self._conditions.obstacle_label
 
         # load point cloud data
-        sample_data_path = Path(self._t4_dataset_path, "annotation", "sample_data.json")
+        sample_data_path = Path(t4_dataset_path, "annotation", "sample_data.json")
         sample_data = json.load(sample_data_path.open())
         sample_data = list(filter(lambda d: d["filename"].split(".")[-2] == "pcd", sample_data))
 
         # load gt annotation data
-        lidar_seg_json_path = Path(self._t4_dataset_path, "annotation", "lidarseg.json")
+        lidar_seg_json_path = Path(t4_dataset_path, "annotation", "lidarseg.json")
         lidar_seg_data = json.load(lidar_seg_json_path.open())
         token_to_seg_data = {}
         for annotation_data in lidar_seg_data:
@@ -59,7 +64,7 @@ class GroundSegmentationEvaluator(Evaluator):
         self._ground_truth: dict[int, dict[str, np.ndarray]] = {}
         for i in range(len(sample_data)):
             raw_points_file_path = Path(
-                self._t4_dataset_path,
+                t4_dataset_path,
                 sample_data[i]["filename"],
             ).as_posix()
             raw_points = np.fromfile(raw_points_file_path, dtype=np.float32)
@@ -68,7 +73,7 @@ class GroundSegmentationEvaluator(Evaluator):
             if token not in token_to_seg_data:
                 continue
             annotation_file_path = Path(
-                self._t4_dataset_path, token_to_seg_data[token]["filename"]
+                t4_dataset_path, token_to_seg_data[token]["filename"]
             ).as_posix()
             labels = np.fromfile(annotation_file_path, dtype=np.uint8)
 
@@ -81,16 +86,19 @@ class GroundSegmentationEvaluator(Evaluator):
 
     def evaluate_frame(
         self,
-        header_timestamp_microsec: int,
-        subscribed_timestamp_microsec: int,
+        header_timestamp: int,
+        subscribed_timestamp: int,
         data: np.ndarray,
     ) -> FrameResult:
-        gt_frame_ts = self.__get_gt_frame_ts(header_timestamp_microsec)
+        gt_frame_ts = self.__get_gt_frame_ts(header_timestamp)
 
         if gt_frame_ts < 0:
             self._skip_counter += 1
+            self._logger.warning("No ground truth for timestamp %d microsec", header_timestamp)
             return FrameResult(
-                is_valid=False, invalid_reason="No Ground Truth", skip_counter=self._skip_counter
+                is_valid=False,
+                invalid_reason=GroundSegmentationInvalidReason.NO_GROUND_TRUTH,
+                skip_counter=self._skip_counter,
             )
 
         # get ground truth pointcloud in this frame
@@ -138,6 +146,17 @@ class GroundSegmentationEvaluator(Evaluator):
         frame_result.recall = metrics_list[2]
         frame_result.specificity = metrics_list[3]
         frame_result.f1_score = metrics_list[4]
+
+        # TODO: add topic delay
+        self._logger.info(
+            "Estimation header: %d, Ground truth header: %d (frame_name: %s), Difference: %d, "
+            "Subscribe delay [micro sec]: %d",
+            header_timestamp,
+            gt_frame_ts,
+            "None",
+            header_timestamp - gt_frame_ts,
+            subscribed_timestamp - header_timestamp,
+        )
 
         return FrameResult(is_valid=True, data=frame_result, skip_counter=self._skip_counter)
 

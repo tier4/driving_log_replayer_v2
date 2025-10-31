@@ -22,19 +22,22 @@ import numpy as np
 import ros2_numpy
 from std_msgs.msg import String
 
-from driving_log_replayer_v2.ground_segmentation.manager import GroundSegmentationEvaluationManager
+from driving_log_replayer_v2.ground_segmentation.evaluation_manager import (
+    GroundSegmentationEvaluationManager,
+)
 from driving_log_replayer_v2.ground_segmentation.models import GroundSegmentationResult
 from driving_log_replayer_v2.ground_segmentation.models import GroundSegmentationScenario
 import driving_log_replayer_v2.perception_eval_conversions as eval_conversions
-from driving_log_replayer_v2.post_process_runner import Runner
-from driving_log_replayer_v2.post_process_runner import SimulationInfo
-from driving_log_replayer_v2.post_process_runner import TopicInfo
+from driving_log_replayer_v2.post_process.runner import Runner
+from driving_log_replayer_v2.post_process.runner import SimulationInfo
+from driving_log_replayer_v2.post_process.runner import TopicInfo
 
 if TYPE_CHECKING:
     from sensor_msgs.msg import PointCloud2
     from std_msgs.msg import Header
 
-    from driving_log_replayer_v2.post_process_evaluator import FrameResult
+    from driving_log_replayer_v2.post_process.evaluator import FrameResult
+    from driving_log_replayer_v2.result import ResultWriter
 
 
 def convert_to_numpy_pointcloud(msg: PointCloud2) -> np.ndarray:
@@ -53,14 +56,14 @@ class GroundSegmentationRunner(Runner):
         result_archive_path: str,
         storage: str,
         evaluation_topics: list[str],
-        additional_record_topics: list[TopicInfo],
+        external_record_topics: list[TopicInfo],
         enable_analysis: str,
     ) -> None:
         simulation_info_list = [
             SimulationInfo(
                 evaluation_manager_class=GroundSegmentationEvaluationManager,
                 result_class=GroundSegmentationResult,
-                key="ground_segmentation",
+                name="ground_segmentation",
                 evaluation_topics=evaluation_topics,
                 result_json_path=result_json_path,
             ),
@@ -74,9 +77,21 @@ class GroundSegmentationRunner(Runner):
             result_json_path,
             result_archive_path,
             storage,
-            additional_record_topics,
+            external_record_topics,
             enable_analysis,
         )
+
+    @property
+    def ground_seg_eval_manager(self) -> GroundSegmentationEvaluationManager:
+        return self._simulation["ground_segmentation"].evaluation_manager
+
+    @property
+    def ground_seg_result(self) -> GroundSegmentationResult:
+        return self._simulation["ground_segmentation"].result
+
+    @property
+    def ground_seg_result_writer(self) -> ResultWriter:
+        return self._simulation["ground_segmentation"].result_writer
 
     def _evaluate_frame(
         self, topic_name: str, msg: Any, subscribed_timestamp_nanosec: int
@@ -87,7 +102,7 @@ class GroundSegmentationRunner(Runner):
         subscribed_timestamp_microsec = eval_conversions.unix_time_microsec_from_ros_time_nanosec(
             subscribed_timestamp_nanosec
         )
-        return self._simulation["ground_segmentation"].evaluation_manager.evaluate_frame(
+        return self.ground_seg_eval_manager.evaluate_frame(
             topic_name,
             header_timestamp_microsec,
             subscribed_timestamp_microsec,
@@ -98,15 +113,13 @@ class GroundSegmentationRunner(Runner):
         self, frame_result: FrameResult, header: Header, subscribed_timestamp_nanosec: int
     ) -> None:
         if frame_result.is_valid:
-            self._simulation["ground_segmentation"].result.set_frame(
-                frame_result.data, frame_result.skip_counter
-            )
+            self.ground_seg_result.set_frame(frame_result.data, frame_result.skip_counter)
         else:
-            self._simulation["ground_segmentation"].result.set_info_frame(
+            self.ground_seg_result.set_info_frame(
                 frame_result.invalid_reason, frame_result.skip_counter
             )
-        res_str = self._simulation["ground_segmentation"].result_writer.write_result_with_time(
-            self._simulation["ground_segmentation"].result, subscribed_timestamp_nanosec
+        res_str = self.ground_seg_result_writer.write_result_with_time(
+            self.ground_seg_result, subscribed_timestamp_nanosec
         )
         self._rosbag_manager.write_results(
             "/driving_log_replayer_v2/ground_segmentation/results",
@@ -133,7 +146,7 @@ def evaluate(
 ) -> None:
     evaluation_topics = [evaluation_topic]
 
-    additional_record_topics = [
+    external_record_topics = [
         TopicInfo(
             name="/driving_log_replayer_v2/ground_segmentation/results",
             msg_type="std_msgs/msg/String",
@@ -148,7 +161,7 @@ def evaluate(
         result_archive_path,
         storage,
         evaluation_topics,
-        additional_record_topics,
+        external_record_topics,
         enable_analysis,
     )
 

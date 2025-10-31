@@ -31,13 +31,19 @@ from perception_eval.manager import PerceptionEvaluationManager
 from perception_eval.tool import PerceptionAnalyzer3D
 from perception_eval.util.logger_config import configure_logger
 
-from driving_log_replayer_v2.post_process_evaluator import Evaluator
-from driving_log_replayer_v2.post_process_evaluator import FrameResult
+from driving_log_replayer_v2.post_process.evaluator import Evaluator
+from driving_log_replayer_v2.post_process.evaluator import FrameResult
+from driving_log_replayer_v2.post_process.evaluator import InvalidReason
 
 if TYPE_CHECKING:
     from perception_eval.evaluation.metrics import MetricsScore
 
     from driving_log_replayer_v2.perception.runner import PerceptionEvalData
+
+
+class PerceptionInvalidReason(InvalidReason):
+    INVALID_ESTIMATED_OBJECTS = "Invalid Estimated Objects"
+    NO_GROUND_TRUTH = "No Ground Truth"
 
 
 class PerceptionEvaluator(Evaluator):
@@ -61,6 +67,8 @@ class PerceptionEvaluator(Evaluator):
         self.__analyzer: PerceptionAnalyzer3D
         self.__logger: logging.Logger
         self.__evaluation_topic = evaluation_topic
+
+        # NOTE: this class uses the perception_eval package, so not use parent logger, which means not call super().__init__
 
         perception_evaluation_config["evaluation_config_dict"]["label_prefix"] = "autoware"
 
@@ -143,7 +151,7 @@ class PerceptionEvaluator(Evaluator):
             )
             return FrameResult(
                 is_valid=False,
-                invalid_reason="Invalid Estimated Objects",
+                invalid_reason=PerceptionInvalidReason.INVALID_ESTIMATED_OBJECTS,
                 skip_counter=self.__skip_counter,
             )
 
@@ -156,7 +164,9 @@ class PerceptionEvaluator(Evaluator):
             self.__skip_counter += 1
             self.__logger.warning("Ground truth not found for timestamp %s", header_timestamp)
             return FrameResult(
-                is_valid=False, invalid_reason="No Ground Truth", skip_counter=self.__skip_counter
+                is_valid=False,
+                invalid_reason=PerceptionInvalidReason.NO_GROUND_TRUTH,
+                skip_counter=self.__skip_counter,
             )
 
         frame_result: PerceptionFrameResult = self.__evaluator.add_frame_result(

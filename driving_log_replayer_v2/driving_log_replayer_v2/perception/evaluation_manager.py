@@ -17,7 +17,7 @@ from __future__ import annotations
 import copy
 from typing import TYPE_CHECKING
 
-from driving_log_replayer_v2.evaluation_manager import EvaluationManager
+from driving_log_replayer_v2.post_process.evaluation_manager import EvaluationManager
 from driving_log_replayer_v2.perception.evaluator import PerceptionEvaluator
 
 if TYPE_CHECKING:
@@ -27,7 +27,7 @@ if TYPE_CHECKING:
     from perception_eval.tool import PerceptionAnalyzer3D
 
     from driving_log_replayer_v2.perception.runner import PerceptionEvalData
-    from driving_log_replayer_v2.post_process_evaluator import FrameResult
+    from driving_log_replayer_v2.post_process.evaluator import FrameResult
     from driving_log_replayer_v2.scenario import ScenarioType
 
 

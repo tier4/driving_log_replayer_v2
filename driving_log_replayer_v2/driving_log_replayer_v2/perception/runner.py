@@ -31,7 +31,8 @@ from visualization_msgs.msg import MarkerArray
 
 from driving_log_replayer_v2.evaluator import DLREvaluatorV2
 from driving_log_replayer_v2.perception.analyze import analyze
-from driving_log_replayer_v2.perception.manager import PerceptionEvaluationManager
+from driving_log_replayer_v2.perception.evaluation_manager import PerceptionEvaluationManager
+from driving_log_replayer_v2.perception.evaluator import PerceptionInvalidReason
 from driving_log_replayer_v2.perception.models import PerceptionResult
 from driving_log_replayer_v2.perception.models import PerceptionScenario
 from driving_log_replayer_v2.perception.models import StopReasonResult
@@ -40,12 +41,13 @@ from driving_log_replayer_v2.perception.stop_reason import StopReasonAnalyzer
 from driving_log_replayer_v2.perception.stop_reason import StopReasonData
 from driving_log_replayer_v2.perception.topics import load_evaluation_topics
 import driving_log_replayer_v2.perception_eval_conversions as eval_conversions
-from driving_log_replayer_v2.post_process_evaluator import FrameResult
-from driving_log_replayer_v2.post_process_runner import Runner
-from driving_log_replayer_v2.post_process_runner import SimulationInfo
-from driving_log_replayer_v2.post_process_runner import TopicInfo
+from driving_log_replayer_v2.post_process.evaluator import FrameResult
+from driving_log_replayer_v2.post_process.ros2_utils import lookup_transform
+from driving_log_replayer_v2.post_process.runner import Runner
+from driving_log_replayer_v2.post_process.runner import SimulationInfo
+from driving_log_replayer_v2.post_process.runner import TopicInfo
 from driving_log_replayer_v2.result import MultiResultEditor
-from driving_log_replayer_v2.ros2_utils import lookup_transform
+from driving_log_replayer_v2.result import ResultWriter
 from driving_log_replayer_v2.scenario import load_condition
 from driving_log_replayer_v2.scenario import load_scenario_with_exception
 
@@ -60,7 +62,7 @@ if TYPE_CHECKING:
 PerceptionMsgType = TypeVar("PerceptionMsgType", DetectedObjects, TrackedObjects, PredictedObjects)
 
 
-@dataclass
+@dataclass(frozen=True, slots=True)
 class PerceptionEvalData:
     interpolation: bool
     estimated_objects: list[DynamicObject] | str  # str for error message
@@ -133,7 +135,7 @@ class PerceptionRunner(Runner):
         result_archive_path: str,
         storage: str,
         evaluation_topics: dict[str, list[str]],
-        additional_record_topics: list[TopicInfo],
+        external_record_topics: list[TopicInfo],
         enable_analysis: str,
         analysis_max_distance: str,
         analysis_distance_interval: str,
@@ -147,7 +149,7 @@ class PerceptionRunner(Runner):
             SimulationInfo(
                 evaluation_manager_class=PerceptionEvaluationManager,
                 result_class=PerceptionResult,
-                key="perception",
+                name="perception",
                 evaluation_topics=evaluation_topics,
                 result_json_path=result_json_path,
             )
@@ -182,15 +184,42 @@ class PerceptionRunner(Runner):
             result_json_path,
             result_archive_path,
             storage,
-            additional_record_topics,
+            external_record_topics,
             enable_analysis,
         )
+
+    @property
+    def perc_eval_manager(self) -> PerceptionEvaluationManager:
+        return self._simulation["perception"].evaluation_manager
+
+    @property
+    def perc_result(self) -> PerceptionResult:
+        return self._simulation["perception"].result
+
+    @property
+    def perc_result_writer(self) -> ResultWriter:
+        return self._simulation["perception"].result_writer
+
+    @property
+    def stop_reason_result(self) -> StopReasonResult | None:
+        return self._simulation["stop_reason"].result if "stop_reason" in self._simulation else None
+
+    @property
+    def stop_reason_result_writer(self) -> ResultWriter | None:
+        return (
+            self._simulation["stop_reason"].result_writer
+            if "stop_reason" in self._simulation
+            else None
+        )
+
+    def is_stop_reason(self) -> bool:
+        return "stop_reason" in self._simulation
 
     def _evaluate_frame(
         self, topic_name: str, msg: Any, subscribed_timestamp_nanosec: int
     ) -> FrameResult:
         # evaluate stop reason criterion if defined
-        if "stop_reason" in self._simulation and topic_name == "/awapi/autoware/get/status":
+        if self.is_stop_reason() and topic_name == "/awapi/autoware/get/status":
             stop_reason = convert_to_stop_reason(msg)
             return FrameResult(
                 is_valid=True,
@@ -203,12 +232,12 @@ class PerceptionRunner(Runner):
             convert_to_perception_eval(
                 msg,
                 subscribed_timestamp_nanosec,
-                self._simulation["perception"].evaluation_manager.get_evaluation_config(topic_name),
+                self.perc_eval_manager.get_evaluation_config(topic_name),
             )
         )
 
         # matching process between estimated_objects and ground truth for evaluation
-        return self._simulation["perception"].evaluation_manager.evaluate_frame(
+        return self.perc_eval_manager.evaluate_frame(
             topic_name,
             header_timestamp_microsec,
             subscribed_timestamp_microsec,
@@ -220,9 +249,9 @@ class PerceptionRunner(Runner):
     ) -> None:
         if isinstance(frame_result.data, StopReasonData):
             # write stop reason result
-            self._simulation["stop_reason"].result.set_frame(frame_result.data)
-            self._simulation["stop_reason"].result_writer.write_result_with_time(
-                self._simulation["stop_reason"].result, subscribed_timestamp_nanosec
+            self.stop_reason_result.set_frame(frame_result.data)
+            self.stop_reason_result_writer.write_result_with_time(
+                self.stop_reason_result, subscribed_timestamp_nanosec
             )
             return
 
@@ -235,7 +264,7 @@ class PerceptionRunner(Runner):
             )
 
             # handle evaluate_frame is success
-            self._simulation["perception"].result.set_frame(
+            self.perc_result.set_frame(
                 frame_result.data,
                 frame_result.skip_counter,
                 map_to_baselink=DLREvaluatorV2.transform_stamped_with_euler_angle(map_to_baselink),
@@ -255,22 +284,17 @@ class PerceptionRunner(Runner):
             self._rosbag_manager.write_results(
                 "/driving_log_replayer_v2/marker/results", marker_results, header.stamp
             )  # results including evaluation topic and ground truth
+        # handle when add_frame is fail caused by failed object conversion or no ground truth
+        elif frame_result.invalid_reason == PerceptionInvalidReason.NO_GROUND_TRUTH:
+            self.perc_result.set_info_frame(frame_result.data, frame_result.skip_counter)
+        elif frame_result.invalid_reason == PerceptionInvalidReason.INVALID_ESTIMATED_OBJECTS:
+            self.perc_result.set_warn_frame(frame_result.data, frame_result.skip_counter)
         else:
-            # handle when add_frame is fail caused by failed object conversion or no ground truth
-            if frame_result.invalid_reason == "No Ground Truth":
-                self._simulation["perception"].result.set_info_frame(
-                    frame_result.data, frame_result.skip_counter
-                )
-            elif frame_result.invalid_reason == "Invalid Estimated Objects":
-                self._simulation["perception"].result.set_warn_frame(
-                    frame_result.data, frame_result.skip_counter
-                )
-            else:
-                err_msg = f"Unknown invalid_reason: {frame_result.invalid_reason}"
-                raise TypeError(err_msg)
+            err_msg = f"Unknown invalid_reason: {frame_result.invalid_reason}"
+            raise TypeError(err_msg)
 
-        res_str = self._simulation["perception"].result_writer.write_result_with_time(
-            self._simulation["perception"].result, subscribed_timestamp_nanosec
+        res_str = self.perc_result_writer.write_result_with_time(
+            self.perc_result, subscribed_timestamp_nanosec
         )
         self._rosbag_manager.write_results(
             "/driving_log_replayer_v2/perception/results",
@@ -279,18 +303,14 @@ class PerceptionRunner(Runner):
         )
 
     def _evaluate_on_post_process(self) -> None:
-        final_metrics: dict[str, dict] = self._simulation[
-            "perception"
-        ].evaluation_manager.get_evaluation_results()
+        final_metrics: dict[str, dict] = self.perc_eval_manager.get_evaluation_results()
 
         perception_degradation_topic = self._degradation_topics[
             0
         ]  # head topic is perception degradation topic
-        self._simulation["perception"].result.set_final_metrics(
-            final_metrics[perception_degradation_topic]
-        )
-        res_str = self._simulation["perception"].result_writer.write_result_with_time(
-            self._simulation["perception"].result,
+        self.perc_result.set_final_metrics(final_metrics[perception_degradation_topic])
+        res_str = self.perc_result_writer.write_result_with_time(
+            self.perc_result,
             self._rosbag_manager.get_last_subscribed_timestamp(),
         )
         self._rosbag_manager.write_results(
@@ -299,31 +319,24 @@ class PerceptionRunner(Runner):
             self._rosbag_manager.get_last_subscribed_timestamp(),
         )
 
-        if "stop_reason" in self._simulation is not None:
+        if self.is_stop_reason():
             result_paths = [
-                self._simulation["perception"].result_writer.result_path,
-                self._simulation["stop_reason"].result_writer.result_path,
+                self.perc_result_writer.result_path,
+                self.stop_reason_result_writer.result_path,
             ]
             multi_result_editor = MultiResultEditor(result_paths)
             multi_result_editor.write_back_result()
 
     def _analysis(self) -> None:
-        if (
-            self._simulation["perception"].evaluation_manager.get_degradation_evaluation_task()
-            != "fp_validation"
-        ):
-            analyzers: dict[str, PerceptionAnalyzer3D] = self._simulation[
-                "perception"
-            ].evaluation_manager.get_analyzer()
+        if self.perc_eval_manager.get_degradation_evaluation_task() != "fp_validation":
+            analyzers: dict[str, PerceptionAnalyzer3D] = self.perc_eval_manager.get_analyzer()
 
             # TODO: analysis other topic
             perception_degradation_topic = self._degradation_topics[
                 0
             ]  # head topic is perception degradation topic
             analyzer = analyzers[perception_degradation_topic]
-            save_path = self._simulation["perception"].evaluation_manager.get_archive_path(
-                perception_degradation_topic
-            )
+            save_path = self.perc_eval_manager.get_archive_path(perception_degradation_topic)
             analyze(
                 analyzer,
                 save_path,
@@ -331,7 +344,7 @@ class PerceptionRunner(Runner):
                 self._analysis_distance_interval,
                 perception_degradation_topic,
             )
-        if "stop_reason" in self._simulation:
+        if self.is_stop_reason():
             self._stop_reason_analyzer.save_as_csv("stop_reason.csv")
 
 
@@ -355,7 +368,7 @@ def evaluate(
         evaluation_prediction_topic_regex,
     )
 
-    additional_record_topics = [
+    external_record_topics = [
         TopicInfo(
             name="/driving_log_replayer_v2/marker/ground_truth",
             msg_type="visualization_msgs/MarkerArray",
@@ -378,7 +391,7 @@ def evaluate(
         result_archive_path,
         storage,
         evaluation_topics,
-        additional_record_topics,
+        external_record_topics,
         enable_analysis,
         analysis_max_distance,
         analysis_distance_interval,

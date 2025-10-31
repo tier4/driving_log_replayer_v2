@@ -24,34 +24,34 @@ from rclpy.clock import Clock
 from rosbag2_py import TopicMetadata
 from std_msgs.msg import Header
 
-from driving_log_replayer_v2.evaluation_manager import ManagerType
-from driving_log_replayer_v2.post_process_evaluator import FrameResult
+from driving_log_replayer_v2.post_process.evaluation_manager import ManagerType
+from driving_log_replayer_v2.driving_log_replayer_v2.post_process.evaluator import FrameResult
 from driving_log_replayer_v2.result import ResultBaseType
 from driving_log_replayer_v2.result import ResultWriter
-from driving_log_replayer_v2.ros2_utils import RosBagManager
+from driving_log_replayer_v2.post_process.ros2_utils import RosBagManager
 from driving_log_replayer_v2.scenario import load_condition
 from driving_log_replayer_v2.scenario import load_scenario_with_exception
 from driving_log_replayer_v2.scenario import ScenarioType
 
 
-@dataclass
+@dataclass(frozen=True, slots=True)
 class TopicInfo:
     name: str
     msg_type: str
 
 
-@dataclass
+@dataclass(frozen=True, slots=True)
 class SimulationInfo:
     evaluation_manager_class: (
         ManagerType | None
     )  # optional for only using EvaluationItem and ResultBase
     result_class: ResultBaseType
-    key: str
+    name: str
     evaluation_topics: dict[str, list[str]]
     result_json_path: str
 
 
-@dataclass
+@dataclass(frozen=True, slots=True)
 class Simulation:
     evaluation_manager: ManagerType | None  # optional for only using EvaluationItem and ResultBase
     result: ResultBaseType
@@ -69,7 +69,7 @@ class Runner(ABC):
         result_json_path: str,
         result_archive_path: str,
         storage: str,
-        additional_record_topics: list[TopicInfo],
+        external_record_topics: list[TopicInfo],
         enable_analysis: str,
     ) -> None:
         # instance variables
@@ -89,7 +89,7 @@ class Runner(ABC):
         # initialize evaluation manager, result, and result writer for each simulation
         self._simulation = {}
         for simulation_info in simulation_info_list:
-            self._simulation[simulation_info.key] = Simulation(
+            self._simulation[simulation_info.name] = Simulation(
                 evaluation_manager=simulation_info.evaluation_manager_class(
                     scenario,
                     t4_dataset_path,
@@ -105,14 +105,14 @@ class Runner(ABC):
             )
 
         # initialize RosBagManager to read and save rosbag and write into it
-        additional_record_topics_metadata = [
+        external_record_topics_metadata = [
             TopicMetadata(
                 name=topic_info.name,
                 type=topic_info.msg_type,
                 serialization_format="cdr",
                 offered_qos_profiles="",
             )
-            for topic_info in additional_record_topics
+            for topic_info in external_record_topics
         ]
         evaluation_topics = [
             simulation.evaluation_manager.get_evaluation_topics()
@@ -125,7 +125,7 @@ class Runner(ABC):
             Path(result_archive_path).joinpath("result_bag").as_posix(),
             storage,
             evaluation_topics,
-            additional_record_topics_metadata,
+            external_record_topics_metadata,
         )
 
         # set degradation topics

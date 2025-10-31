@@ -14,19 +14,31 @@
 
 from __future__ import annotations
 
+import logging
+from pathlib import Path
 from abc import ABC
 from abc import abstractmethod
+from enum import Enum
 from typing import Any
 from typing import TypeVar
 
 from pydantic import BaseModel
 from pydantic import model_validator
 
+from driving_log_replayer_v2.post_process.logger import configure_logger
+
+
+class InvalidReason(str, Enum):
+    pass
+
+
+InvalidReasonType = TypeVar("InvalidReasonType", bound=InvalidReason)
+
 
 class FrameResult(BaseModel):
     is_valid: bool
     data: Any | None = None
-    invalid_reason: str | None = None
+    invalid_reason: InvalidReasonType | None = None
     skip_counter: int
 
     @model_validator(mode="after")
@@ -41,6 +53,19 @@ class FrameResult(BaseModel):
 
 
 class Evaluator(ABC):
+    def __init__(self, result_archive_path: str, evaluation_topic: str) -> None:
+        self._logger: logging.Logger
+        result_archive_w_topic_path = Path(result_archive_path)
+        dir_name = evaluation_topic.lstrip("/").replace("/", ".")
+        result_archive_w_topic_path = result_archive_w_topic_path.joinpath(dir_name).joinpath("log.txt")
+        result_archive_w_topic_path.parent.mkdir(parents=True, exist_ok=True)
+        self._logger = configure_logger(
+            log_file_directory=result_archive_w_topic_path.parent,
+            console_log_level=logging.INFO,
+            file_log_level=logging.INFO,
+            logger_name=dir_name,
+        )
+
     @abstractmethod
     def evaluate_frame(
         self,
