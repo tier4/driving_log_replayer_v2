@@ -26,8 +26,6 @@ if TYPE_CHECKING:
     from perception_eval.config import PerceptionEvaluationConfig
     from perception_eval.tool import PerceptionAnalyzer3D
 
-    from driving_log_replayer_v2.perception.runner import PerceptionEvalData
-    from driving_log_replayer_v2.post_process.evaluator import FrameResult
     from driving_log_replayer_v2.scenario import ScenarioType
 
 
@@ -37,19 +35,21 @@ class PerceptionEvaluationManager(EvaluationManager):
         scenario: ScenarioType,
         t4_dataset_path: str,
         result_archive_path: str,
-        evaluation_topics: dict[str, list[str]],
+        evaluation_topics_with_task: dict[str, list[str]],
     ) -> None:
         # additional instance variables
         self._degradation_evaluation_task: str = scenario.Evaluation.PerceptionEvaluationConfig[
             "evaluation_config_dict"
         ]["evaluation_task"]
-        super().__init__(scenario, t4_dataset_path, result_archive_path, evaluation_topics)
+        super().__init__(
+            scenario, t4_dataset_path, result_archive_path, evaluation_topics_with_task
+        )
 
     def _set_evaluators(
         self,
         t4_dataset_path: str,
         result_archive_path: str,
-        evaluation_topics: dict[str, list[str]],
+        evaluation_topics_with_task: dict[str, list[str]],
     ) -> None:
         self._evaluators = {
             topic: PerceptionEvaluator(
@@ -59,10 +59,12 @@ class PerceptionEvaluationManager(EvaluationManager):
                 t4_dataset_path,
                 result_archive_path,
                 topic,
-                task if self._degradation_evaluation_task != "fp_validation" else "fp_validation",
+                task
+                if self._degradation_evaluation_task != "fp_validation"
+                else "fp_validation",  # NOTE: The t4dataset used in fp_validation is specialized, so it cannot be performed concurrently with other evaluation tasks.
                 "base_link" if task == "detection" else "map",
             )
-            for task, topics in evaluation_topics.items()
+            for task, topics in evaluation_topics_with_task.items()
             for topic in topics
         }
 
@@ -80,27 +82,23 @@ class PerceptionEvaluationManager(EvaluationManager):
             err_msg = f"Invalid evaluation task: {self._degradation_evaluation_task}"
             raise ValueError(err_msg)
 
-    def evaluate_frame(
-        self,
-        topic_name: str,
-        header_timestamp: int,
-        subscribed_timestamp: int,
-        data: PerceptionEvalData,
-    ) -> FrameResult:
-        evaluator = self._evaluators[topic_name]
-
-        return evaluator.evaluate_frame(
-            header_timestamp,
-            subscribed_timestamp,
-            data,
-        )
-
     def get_degradation_evaluation_task(self) -> str:
+        """Get the degradation evaluation task."""
         return self._degradation_evaluation_task
 
     def get_evaluation_config(
         self, topic_name: str | None = None
     ) -> PerceptionEvaluationConfig | dict[str, PerceptionEvaluationConfig]:
+        """
+        Get the PerceptionEvaluationConfig for each/specific topic.
+
+        Args:
+            topic_name (str | None): Name of the topic to get the evaluation config. If None, get all evaluation configs.
+
+        Returns:
+            PerceptionEvaluationConfig | dict[str, PerceptionEvaluationConfig]: The evaluation config(s).
+
+        """
         if topic_name is not None:
             evaluator = self._evaluators[topic_name]
             return evaluator.get_evaluation_config()
@@ -110,6 +108,16 @@ class PerceptionEvaluationManager(EvaluationManager):
         }
 
     def get_archive_path(self, topic_name: str | None = None) -> Path | dict[str, Path]:
+        """
+        Get the archive path for each/specific evaluation topic.
+
+        Args:
+            topic_name (str | None): Name of the topic to get the archive path. If None, get all archive paths.
+
+        Returns:
+            Path | dict[str, Path]: The archive path(s).
+
+        """
         if topic_name is not None:
             evaluator = self._evaluators[topic_name]
             return evaluator.get_archive_path()
@@ -118,6 +126,16 @@ class PerceptionEvaluationManager(EvaluationManager):
         }
 
     def get_evaluation_results(self, topic_name: str | None = None) -> dict | dict[str, dict]:
+        """
+        Get the evaluation results for each/specific evaluation topic. If called, frame results are also saved.
+
+        Args:
+            topic_name (str | None): Name of the topic to get the evaluation results. If None, get all evaluation results.
+
+        Returns:
+            dict | dict[str, dict]: The evaluation results.
+
+        """
         if topic_name is not None:
             evaluator = self._evaluators[topic_name]
             return evaluator.get_evaluation_results(save_frame_results=True)
@@ -129,6 +147,16 @@ class PerceptionEvaluationManager(EvaluationManager):
     def get_analyzer(
         self, topic_name: str | None = None
     ) -> PerceptionAnalyzer3D | dict[str, PerceptionAnalyzer3D]:
+        """
+        Get the PerceptionAnalyzer3D for each/specific evaluation topic.
+
+        Args:
+            topic_name (str | None): Name of the topic to get the analyzer. If None, get all analyzers.
+
+        Returns:
+            PerceptionAnalyzer3D | dict[str, PerceptionAnalyzer3D]: The analyzer(s).
+
+        """
         if topic_name is not None:
             evaluator = self._evaluators[topic_name]
             return evaluator.get_analyzer()

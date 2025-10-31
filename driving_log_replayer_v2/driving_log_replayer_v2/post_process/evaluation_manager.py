@@ -28,9 +28,11 @@ if TYPE_CHECKING:
 
 class EvaluationManager(ABC):
     """
-    Manager for evaluation process.
+    Base class for evaluation manager.
 
-    - manage multiple evaluators
+    Responsible for following items:
+        - initializing subclass of Evaluator for each evaluation topic
+        - managing evaluation process for each frame
     """
 
     def __init__(
@@ -38,26 +40,38 @@ class EvaluationManager(ABC):
         scenario: ScenarioType,
         t4_dataset_path: str,
         result_archive_path: str,
-        evaluation_topics: list[str],
+        evaluation_topics_with_task: dict[str, list[str]],
     ) -> None:
         self._scenario: ScenarioType = scenario
         self._evaluators: dict[str, EvaluatorType]
         self._degradation_topic: str
 
-        self._set_evaluators(t4_dataset_path, result_archive_path, evaluation_topics)
+        self._set_evaluators(t4_dataset_path, result_archive_path, evaluation_topics_with_task)
         self._set_degradation_topic()
 
     @abstractmethod
     def _set_evaluators(
-        self, t4_dataset_path: str, result_archive_path: str, evaluation_topics: list[str]
+        self,
+        t4_dataset_path: str,
+        result_archive_path: str,
+        evaluation_topics_with_task: dict[str, list[str]],
     ) -> None:
+        """
+        Set evaluators for each evaluation topic.
+
+        Args:
+            t4_dataset_path (str): Path to T4 dataset.
+            result_archive_path (str): Path to result archive.
+            evaluation_topics_with_task (dict[str, list[str]]): Dictionary mapping evaluation topics to their tasks.
+
+        """
         raise NotImplementedError
 
     @abstractmethod
     def _set_degradation_topic(self) -> None:
+        """Set the degradation topic for the evaluation manager."""
         raise NotImplementedError
 
-    @abstractmethod
     def evaluate_frame(
         self,
         topic_name: str,
@@ -65,13 +79,29 @@ class EvaluationManager(ABC):
         subscribed_timestamp: int,  # do not care time unit
         data: Any,
     ) -> FrameResult:
-        raise NotImplementedError
+        """
+        Evaluate a frame for a given topic.
+
+        Args:
+            topic_name (str): Name of the topic to evaluate.
+            header_timestamp (int): Timestamp from the message header. Time unit is not specified.
+            subscribed_timestamp (int): Timestamp when the message was subscribed. Time unit is not specified.
+            data (Any): Data to be evaluated.
+
+        Returns:
+            FrameResult: The result of the frame evaluation.
+
+        """
+        evaluator = self._evaluators[topic_name]
+        return evaluator.evaluate_frame(header_timestamp, subscribed_timestamp, data)
 
     def get_degradation_topic(self) -> str:
+        """Get the degradation topic for the evaluation manager."""
         return self._degradation_topic
 
     def get_evaluation_topics(self) -> list[str]:
-        return self._evaluators.keys()
+        """Get the evaluation topics for the evaluation manager."""
+        return list(self._evaluators.keys())
 
 
 ManagerType = TypeVar("ManagerType", bound=EvaluationManager)

@@ -29,8 +29,8 @@ from driving_log_replayer_v2.ground_segmentation.models import GroundSegmentatio
 from driving_log_replayer_v2.ground_segmentation.models import GroundSegmentationScenario
 import driving_log_replayer_v2.perception_eval_conversions as eval_conversions
 from driving_log_replayer_v2.post_process.runner import Runner
-from driving_log_replayer_v2.post_process.runner import SimulationInfo
 from driving_log_replayer_v2.post_process.runner import TopicInfo
+from driving_log_replayer_v2.post_process.runner import UseCaseInfo
 
 if TYPE_CHECKING:
     from sensor_msgs.msg import PointCloud2
@@ -55,22 +55,22 @@ class GroundSegmentationRunner(Runner):
         result_json_path: str,
         result_archive_path: str,
         storage: str,
-        evaluation_topics: list[str],
+        evaluation_topics_with_task: dict[str, list[str]],
         external_record_topics: list[TopicInfo],
         enable_analysis: str,
     ) -> None:
-        simulation_info_list = [
-            SimulationInfo(
+        use_case_info_list = [
+            UseCaseInfo(
                 evaluation_manager_class=GroundSegmentationEvaluationManager,
                 result_class=GroundSegmentationResult,
                 name="ground_segmentation",
-                evaluation_topics=evaluation_topics,
+                evaluation_topics_with_task=evaluation_topics_with_task,
                 result_json_path=result_json_path,
             ),
         ]
         super().__init__(
             GroundSegmentationScenario,
-            simulation_info_list,
+            use_case_info_list,
             scenario_path,
             rosbag_dir_path,
             t4_dataset_path,
@@ -83,31 +83,29 @@ class GroundSegmentationRunner(Runner):
 
     @property
     def ground_seg_eval_manager(self) -> GroundSegmentationEvaluationManager:
-        return self._simulation["ground_segmentation"].evaluation_manager
+        return self._use_cases["ground_segmentation"].evaluation_manager
 
     @property
     def ground_seg_result(self) -> GroundSegmentationResult:
-        return self._simulation["ground_segmentation"].result
+        return self._use_cases["ground_segmentation"].result
 
     @property
     def ground_seg_result_writer(self) -> ResultWriter:
-        return self._simulation["ground_segmentation"].result_writer
+        return self._use_cases["ground_segmentation"].result_writer
 
-    def _evaluate_frame(
-        self, topic_name: str, msg: Any, subscribed_timestamp_nanosec: int
-    ) -> FrameResult:
+    def _convert_ros_msg_to_data(
+        self,
+        topic_name: str,  # noqa: ARG002
+        msg: Any,
+        subscribed_timestamp_nanosec: int,
+    ) -> tuple[int, int, Any]:
         # convert ros message to numpy array
         header_timestamp_microsec = eval_conversions.unix_time_microsec_from_ros_msg(msg.header)
         pointcloud = convert_to_numpy_pointcloud(msg)
         subscribed_timestamp_microsec = eval_conversions.unix_time_microsec_from_ros_time_nanosec(
             subscribed_timestamp_nanosec
         )
-        return self.ground_seg_eval_manager.evaluate_frame(
-            topic_name,
-            header_timestamp_microsec,
-            subscribed_timestamp_microsec,
-            pointcloud,
-        )
+        return header_timestamp_microsec, subscribed_timestamp_microsec, pointcloud
 
     def _write_result(
         self, frame_result: FrameResult, header: Header, subscribed_timestamp_nanosec: int
@@ -144,7 +142,7 @@ def evaluate(
     evaluation_topic: str,
     enable_analysis: str,
 ) -> None:
-    evaluation_topics = [evaluation_topic]
+    evaluation_topics_with_task = {"dummy_task": [evaluation_topic]}
 
     external_record_topics = [
         TopicInfo(
@@ -160,7 +158,7 @@ def evaluate(
         result_json_path,
         result_archive_path,
         storage,
-        evaluation_topics,
+        evaluation_topics_with_task,
         external_record_topics,
         enable_analysis,
     )

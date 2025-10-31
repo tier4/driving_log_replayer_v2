@@ -12,12 +12,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import numpy as np
-
 from driving_log_replayer_v2.ground_segmentation.evaluator import GroundSegmentationEvaluator
 from driving_log_replayer_v2.ground_segmentation.models import GroundSegmentationScenario
 from driving_log_replayer_v2.post_process.evaluation_manager import EvaluationManager
-from driving_log_replayer_v2.post_process.evaluator import FrameResult
 from driving_log_replayer_v2.scenario import load_condition
 
 
@@ -27,14 +24,22 @@ class GroundSegmentationEvaluationManager(EvaluationManager):
         scenario: GroundSegmentationScenario,
         t4_dataset_path: str,
         result_archive_path: str,
-        evaluation_topics: list[str],
+        evaluation_topics_with_task: dict[str, list[str]],
     ) -> None:
-        super().__init__(scenario, t4_dataset_path, result_archive_path, evaluation_topics)
+        super().__init__(
+            scenario, t4_dataset_path, result_archive_path, evaluation_topics_with_task
+        )
 
     def _set_evaluators(
-        self, t4_dataset_path: str, result_archive_path: str, evaluation_topics: list[str]
+        self,
+        t4_dataset_path: str,
+        result_archive_path: str,
+        evaluation_topics_with_task: dict[str, list[str]],
     ) -> None:
         evaluation_condition = load_condition(self._scenario)
+        evaluation_topics = [
+            topic for topics in evaluation_topics_with_task.values() for topic in topics
+        ]
         self._evaluators = {
             topic: GroundSegmentationEvaluator(
                 t4_dataset_path,
@@ -47,13 +52,3 @@ class GroundSegmentationEvaluationManager(EvaluationManager):
 
     def _set_degradation_topic(self) -> None:
         self._degradation_topic = next(iter(self._evaluators.keys()))
-
-    def evaluate_frame(
-        self,
-        topic_name: str,
-        header_timestamp: int,
-        subscribed_timestamp: int,
-        data: np.ndarray,
-    ) -> FrameResult:
-        evaluator = self._evaluators[topic_name]
-        return evaluator.evaluate_frame(header_timestamp, subscribed_timestamp, data)

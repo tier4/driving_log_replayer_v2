@@ -29,13 +29,15 @@ from driving_log_replayer_v2.post_process.logger import configure_logger
 
 
 class InvalidReason(str, Enum):
-    pass
+    """Invalid reason for common format."""
 
 
 InvalidReasonType = TypeVar("InvalidReasonType", bound=InvalidReason)
 
 
 class FrameResult(BaseModel):
+    """Frame result for common format."""
+
     is_valid: bool
     data: Any | None = None
     invalid_reason: InvalidReasonType | None = None
@@ -53,8 +55,17 @@ class FrameResult(BaseModel):
 
 
 class Evaluator(ABC):
+    """
+    Base class for evaluator.
+
+    Responsible for following items:
+        - evaluating each frame
+    """
+
     def __init__(self, result_archive_path: str, evaluation_topic: str) -> None:
+        # instance variables
         self._logger: logging.Logger
+
         result_archive_w_topic_path = Path(result_archive_path)
         dir_name = evaluation_topic.lstrip("/").replace("/", ".")
         result_archive_w_topic_path = result_archive_w_topic_path.joinpath(dir_name)
@@ -73,6 +84,18 @@ class Evaluator(ABC):
         subscribed_timestamp: int,  # do not care time unit
         data: Any,
     ) -> FrameResult:
+        """
+        Evaluate a single frame.
+
+        Args:
+            header_timestamp (int): Timestamp from the message header. Time unit is not specified.
+            subscribed_timestamp (int): Timestamp when the message was subscribed. Time unit is not specified.
+            data (Any): Data to be evaluated.
+
+        Returns:
+            FrameResult: The result of the evaluation.
+
+        """
         raise NotImplementedError
 
 

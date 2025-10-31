@@ -51,30 +51,39 @@ class StopReasonData:
     reasons: list[Reason]
 
 
-def convert_to_stop_reason(msg: AwapiAutowareStatus) -> StopReasonData:
+def convert_to_stop_reason(
+    msg: AwapiAutowareStatus, subscribed_timestamp_nanosec: int
+) -> tuple[int, int, StopReasonData]:
     stop_reason = msg.stop_reason
-    return StopReasonData(
-        seconds=stop_reason.header.stamp.sec,
-        nanoseconds=stop_reason.header.stamp.nanosec,
-        reasons=[
-            Reason(
-                index=i,
-                reason=reason.reason,
-                dist_to_stop_pose=reason.stop_factors[0].dist_to_stop_pose,
-                position=Position(
-                    x=reason.stop_factors[0].stop_pose.position.x,
-                    y=reason.stop_factors[0].stop_pose.position.y,
-                    z=reason.stop_factors[0].stop_pose.position.z,
-                ),
-                orientation=Orientation(
-                    x=reason.stop_factors[0].stop_pose.orientation.x,
-                    y=reason.stop_factors[0].stop_pose.orientation.y,
-                    z=reason.stop_factors[0].stop_pose.orientation.z,
-                    w=reason.stop_factors[0].stop_pose.orientation.w,
-                ),
-            )
-            for i, reason in enumerate(stop_reason.stop_reasons)
-        ],
+    header_timestamp_nanosec = (
+        stop_reason.header.stamp.sec * 10**9 + stop_reason.header.stamp.nanosec
+    )
+    return (
+        header_timestamp_nanosec,
+        subscribed_timestamp_nanosec,
+        StopReasonData(
+            seconds=stop_reason.header.stamp.sec,
+            nanoseconds=stop_reason.header.stamp.nanosec,
+            reasons=[
+                Reason(
+                    index=i,
+                    reason=reason.reason,
+                    dist_to_stop_pose=reason.stop_factors[0].dist_to_stop_pose,
+                    position=Position(
+                        x=reason.stop_factors[0].stop_pose.position.x,
+                        y=reason.stop_factors[0].stop_pose.position.y,
+                        z=reason.stop_factors[0].stop_pose.position.z,
+                    ),
+                    orientation=Orientation(
+                        x=reason.stop_factors[0].stop_pose.orientation.x,
+                        y=reason.stop_factors[0].stop_pose.orientation.y,
+                        z=reason.stop_factors[0].stop_pose.orientation.z,
+                        w=reason.stop_factors[0].stop_pose.orientation.w,
+                    ),
+                )
+                for i, reason in enumerate(stop_reason.stop_reasons)
+            ],
+        ),
     )
 
 
