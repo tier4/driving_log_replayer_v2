@@ -55,16 +55,19 @@ def get_planning_factor_behavior_string(planning_factor: PlanningFactorMsg) -> s
 
 
 class MinMax(BaseModel):
-    min: float = float_info.min
+    min: float = -float_info.max
     max: float = float_info.max
 
     @model_validator(mode="after")
     def validate_min_max(self) -> "MinMax":
-        err_msg = "max must be a greater number than min"
+        err_msg = "max must be greater or equal to min"
 
         if self.max < self.min:
             raise ValueError(err_msg)
         return self
+
+    def match_condition(self, value: float) -> bool:
+        return self.min <= value <= self.max
 
 
 class LeftRight(BaseModel):
@@ -149,11 +152,11 @@ class KinematicCondition(BaseModel):
 
     def match_condition(self, kinematic_state_tuple: tuple[float, float, float]) -> bool:
         vel, acc, jerk = kinematic_state_tuple
-        if self.vel is not None and not self.vel.min <= vel <= self.vel.max:
+        if self.vel is not None and not self.vel.match_condition(vel):
             return False
-        if self.acc is not None and not self.acc.min <= acc <= self.acc.max:
+        if self.acc is not None and not self.acc.match_condition(acc):
             return False
-        if self.jerk is not None and not self.jerk.min <= jerk <= self.jerk.max:  # noqa
+        if self.jerk is not None and not self.jerk.match_condition(jerk):  # noqa
             return False
         return True
 
@@ -212,6 +215,7 @@ class PlanningFactorCondition(BaseModel):
         ]
         | None
     ) = None
+    distance: MinMax | None = None
     judgement: Literal["positive", "negative"]  # positive or negative
 
 
@@ -375,6 +379,13 @@ class PlanningFactor(EvaluationItem):
                 info_dict.update(info_dict_behavior)
                 condition_met &= behavior_met
 
+            if self.condition.distance is not None:
+                distance_met, info_dict_distance = self.judge_distance(
+                    msg.factors[0].control_points[0].distance
+                )
+                info_dict.update(info_dict_distance)
+                condition_met &= distance_met
+
         # Check if the condition is met based on judgement type
         condition_met = (
             condition_met if self.condition.judgement == "positive" else not condition_met
@@ -415,6 +426,12 @@ class PlanningFactor(EvaluationItem):
             "Behavior": behavior,
         }
         return behavior in self.condition.behavior, info_dict
+
+    def judge_distance(self, distance: float) -> tuple[bool, dict]:
+        info_dict = {
+            "Distance": distance,
+        }
+        return self.condition.distance.match_condition(distance), info_dict
 
 
 class FactorsClassContainer:

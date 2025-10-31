@@ -2,321 +2,674 @@
   {
     "Condition": [
       {
-        "condition_name": "check run_out: STOP or SLOW_DOWN no active",
+        "condition_name": "check run_out",
         "topic": "/planning/planning_factors/run_out",
-        "time": { "start": 1754282365.7512946, "end": 1754282545.6404824 },
+        "time": { "start": 1757314070.643305, "end": 1757314137.5267725 },
         "condition_type": "all_of",
         "area": null,
         "behavior": ["STOP", "SLOW_DOWN"],
+        "distance": { "min": -10.0, "max": 50.0 },
         "judgement": "negative"
-      },
-      {
-        "condition_name": "check obstacle_stop: STOP active",
-        "topic": "/planning/planning_factors/obstacle_stop",
-        "time": { "start": 1754282365.7512946, "end": 1754282545.6404824 },
-        "condition_type": "any_of",
-        "area": null,
-        "behavior": ["STOP"],
-        "judgement": "positive"
       }
     ]
   },
   {
     "Result": { "Success": false, "Summary": "NoData" },
-    "Stamp": { "System": 1758201045.7446718 },
+    "Stamp": { "System": 1761727374.7955966 },
     "Frame": {}
   },
   {
-    "Result": {
-      "Success": false,
-      "Summary": "Failed:check run_out: STOP or SLOW_DOWN no active (Success), check obstacle_stop: STOP active (Fail)"
-    },
-    "Stamp": { "System": 1758201045.7446973, "ROS": 0.0 },
+    "Result": { "Success": true, "Summary": "Passed:check run_out (Success)" },
+    "Stamp": { "System": 1761727374.7956367, "ROS": 0.0 },
     "Frame": {}
   },
   {
-    "Result": {
-      "Success": true,
-      "Summary": "Passed:check run_out: STOP or SLOW_DOWN no active (Success), check obstacle_stop: STOP active (Success)"
-    },
-    "Stamp": { "System": 1758201066.9474132, "ROS": 1754282367.3590665 },
+    "Result": { "Success": true, "Summary": "Passed:check run_out (Success)" },
+    "Stamp": { "System": 1761727432.7917178, "ROS": 1757314108.9785492 },
     "Frame": {
-      "check obstacle_stop: STOP active": {
+      "check run_out": {
         "Result": { "Total": "Success", "Frame": "Success" },
-        "Info": { "Behavior": "STOP" }
+        "Info": { "Behavior": "NO_FACTOR" }
       }
     }
   },
   {
-    "Result": {
-      "Success": true,
-      "Summary": "Passed:check run_out: STOP or SLOW_DOWN no active (Success), check obstacle_stop: STOP active (Success)"
-    },
-    "Stamp": { "System": 1758201066.9604146, "ROS": 1754282367.369094 },
+    "Result": { "Success": true, "Summary": "Passed:check run_out (Success)" },
+    "Stamp": { "System": 1761727432.892122, "ROS": 1757314109.078551 },
     "Frame": {
-      "check obstacle_stop: STOP active": {
+      "check run_out": {
         "Result": { "Total": "Success", "Frame": "Success" },
-        "Info": { "Behavior": "STOP" }
+        "Info": { "Behavior": "NO_FACTOR" }
       }
     }
   },
   {
-    "Result": {
-      "Success": true,
-      "Summary": "Passed:check run_out: STOP or SLOW_DOWN no active (Success), check obstacle_stop: STOP active (Success)"
-    },
-    "Stamp": { "System": 1758201066.9723215, "ROS": 1754282367.384059 },
+    "Result": { "Success": true, "Summary": "Passed:check run_out (Success)" },
+    "Stamp": { "System": 1761727432.9940104, "ROS": 1757314109.1785898 },
     "Frame": {
-      "check obstacle_stop: STOP active": {
+      "check run_out": {
         "Result": { "Total": "Success", "Frame": "Success" },
-        "Info": { "Behavior": "STOP" }
+        "Info": { "Behavior": "NO_FACTOR" }
       }
     }
   },
   {
-    "Result": {
-      "Success": true,
-      "Summary": "Passed:check run_out: STOP or SLOW_DOWN no active (Success), check obstacle_stop: STOP active (Success)"
-    },
-    "Stamp": { "System": 1758201067.0651917, "ROS": 1754282367.474063 },
+    "Result": { "Success": true, "Summary": "Passed:check run_out (Success)" },
+    "Stamp": { "System": 1761727433.0922265, "ROS": 1757314109.2785494 },
     "Frame": {
-      "check obstacle_stop: STOP active": {
+      "check run_out": {
         "Result": { "Total": "Success", "Frame": "Success" },
-        "Info": { "Behavior": "STOP" }
+        "Info": { "Behavior": "NO_FACTOR" }
       }
     }
   },
   {
-    "Result": {
-      "Success": true,
-      "Summary": "Passed:check run_out: STOP or SLOW_DOWN no active (Success), check obstacle_stop: STOP active (Success)"
-    },
-    "Stamp": { "System": 1758201067.1890576, "ROS": 1754282367.5990129 },
+    "Result": { "Success": true, "Summary": "Passed:check run_out (Success)" },
+    "Stamp": { "System": 1761727433.19159, "ROS": 1757314109.3785903 },
     "Frame": {
-      "check obstacle_stop: STOP active": {
+      "check run_out": {
         "Result": { "Total": "Success", "Frame": "Success" },
-        "Info": { "Behavior": "STOP" }
+        "Info": { "Behavior": "NO_FACTOR" }
       }
     }
   },
   {
-    "Result": {
-      "Success": true,
-      "Summary": "Passed:check run_out: STOP or SLOW_DOWN no active (Success), check obstacle_stop: STOP active (Success)"
-    },
-    "Stamp": { "System": 1758201067.2994518, "ROS": 1754282367.709058 },
+    "Result": { "Success": true, "Summary": "Passed:check run_out (Success)" },
+    "Stamp": { "System": 1761727433.2904835, "ROS": 1757314109.4785502 },
     "Frame": {
-      "check obstacle_stop: STOP active": {
+      "check run_out": {
         "Result": { "Total": "Success", "Frame": "Success" },
-        "Info": { "Behavior": "STOP" }
+        "Info": { "Behavior": "NO_FACTOR" }
       }
     }
   },
   {
-    "Result": {
-      "Success": true,
-      "Summary": "Passed:check run_out: STOP or SLOW_DOWN no active (Success), check obstacle_stop: STOP active (Success)"
-    },
-    "Stamp": { "System": 1758201067.3843424, "ROS": 1754282367.7940667 },
+    "Result": { "Success": true, "Summary": "Passed:check run_out (Success)" },
+    "Stamp": { "System": 1761727433.390668, "ROS": 1757314109.578556 },
     "Frame": {
-      "check obstacle_stop: STOP active": {
+      "check run_out": {
         "Result": { "Total": "Success", "Frame": "Success" },
-        "Info": { "Behavior": "STOP" }
+        "Info": { "Behavior": "NO_FACTOR" }
       }
     }
   },
   {
-    "Result": {
-      "Success": true,
-      "Summary": "Passed:check run_out: STOP or SLOW_DOWN no active (Success), check obstacle_stop: STOP active (Success)"
-    },
-    "Stamp": { "System": 1758201067.4815023, "ROS": 1754282367.894096 },
+    "Result": { "Success": true, "Summary": "Passed:check run_out (Success)" },
+    "Stamp": { "System": 1761727433.4940114, "ROS": 1757314109.6785934 },
     "Frame": {
-      "check obstacle_stop: STOP active": {
+      "check run_out": {
         "Result": { "Total": "Success", "Frame": "Success" },
-        "Info": { "Behavior": "STOP" }
+        "Info": { "Behavior": "NO_FACTOR" }
       }
     }
   },
   {
-    "Result": {
-      "Success": true,
-      "Summary": "Passed:check run_out: STOP or SLOW_DOWN no active (Success), check obstacle_stop: STOP active (Success)"
-    },
-    "Stamp": { "System": 1758201067.5694668, "ROS": 1754282367.9790123 },
+    "Result": { "Success": true, "Summary": "Passed:check run_out (Success)" },
+    "Stamp": { "System": 1761727433.5892391, "ROS": 1757314109.7735507 },
     "Frame": {
-      "check obstacle_stop: STOP active": {
+      "check run_out": {
         "Result": { "Total": "Success", "Frame": "Success" },
-        "Info": { "Behavior": "STOP" }
+        "Info": { "Behavior": "NO_FACTOR" }
       }
     }
   },
   {
-    "Result": {
-      "Success": true,
-      "Summary": "Passed:check run_out: STOP or SLOW_DOWN no active (Success), check obstacle_stop: STOP active (Success)"
-    },
-    "Stamp": { "System": 1758201067.6790206, "ROS": 1754282368.0890903 },
+    "Result": { "Success": true, "Summary": "Passed:check run_out (Success)" },
+    "Stamp": { "System": 1761727433.687483, "ROS": 1757314109.8735507 },
     "Frame": {
-      "check obstacle_stop: STOP active": {
+      "check run_out": {
         "Result": { "Total": "Success", "Frame": "Success" },
-        "Info": { "Behavior": "STOP" }
+        "Info": { "Behavior": "NO_FACTOR" }
       }
     }
   },
   {
-    "Result": {
-      "Success": true,
-      "Summary": "Passed:check run_out: STOP or SLOW_DOWN no active (Success), check obstacle_stop: STOP active (Success)"
-    },
-    "Stamp": { "System": 1758201067.7810493, "ROS": 1754282368.1940548 },
+    "Result": { "Success": true, "Summary": "Passed:check run_out (Success)" },
+    "Stamp": { "System": 1761727433.7899296, "ROS": 1757314109.9735544 },
     "Frame": {
-      "check obstacle_stop: STOP active": {
+      "check run_out": {
         "Result": { "Total": "Success", "Frame": "Success" },
-        "Info": { "Behavior": "STOP" }
+        "Info": { "Behavior": "NO_FACTOR" }
       }
     }
   },
   {
-    "Result": {
-      "Success": true,
-      "Summary": "Passed:check run_out: STOP or SLOW_DOWN no active (Success), check obstacle_stop: STOP active (Success)"
-    },
-    "Stamp": { "System": 1758201067.8568444, "ROS": 1754282368.2690597 },
+    "Result": { "Success": true, "Summary": "Passed:check run_out (Success)" },
+    "Stamp": { "System": 1761727433.886582, "ROS": 1757314110.0735507 },
     "Frame": {
-      "check obstacle_stop: STOP active": {
+      "check run_out": {
         "Result": { "Total": "Success", "Frame": "Success" },
-        "Info": { "Behavior": "STOP" }
+        "Info": { "Behavior": "NO_FACTOR" }
       }
     }
   },
   {
-    "Result": {
-      "Success": true,
-      "Summary": "Passed:check run_out: STOP or SLOW_DOWN no active (Success), check obstacle_stop: STOP active (Success)"
-    },
-    "Stamp": { "System": 1758201067.9396157, "ROS": 1754282368.3493104 },
+    "Result": { "Success": true, "Summary": "Passed:check run_out (Success)" },
+    "Stamp": { "System": 1761727433.9881861, "ROS": 1757314110.1735516 },
     "Frame": {
-      "check obstacle_stop: STOP active": {
+      "check run_out": {
         "Result": { "Total": "Success", "Frame": "Success" },
-        "Info": { "Behavior": "STOP" }
+        "Info": { "Behavior": "NO_FACTOR" }
       }
     }
   },
   {
-    "Result": {
-      "Success": true,
-      "Summary": "Passed:check run_out: STOP or SLOW_DOWN no active (Success), check obstacle_stop: STOP active (Success)"
-    },
-    "Stamp": { "System": 1758201068.0269513, "ROS": 1754282368.4390595 },
+    "Result": { "Success": true, "Summary": "Passed:check run_out (Success)" },
+    "Stamp": { "System": 1761727434.0913732, "ROS": 1757314110.278553 },
     "Frame": {
-      "check obstacle_stop: STOP active": {
+      "check run_out": {
         "Result": { "Total": "Success", "Frame": "Success" },
-        "Info": { "Behavior": "STOP" }
+        "Info": { "Behavior": "NO_FACTOR" }
       }
     }
   },
   {
-    "Result": {
-      "Success": true,
-      "Summary": "Passed:check run_out: STOP or SLOW_DOWN no active (Success), check obstacle_stop: STOP active (Success)"
-    },
-    "Stamp": { "System": 1758201068.1209118, "ROS": 1754282368.5340602 },
+    "Result": { "Success": true, "Summary": "Passed:check run_out (Success)" },
+    "Stamp": { "System": 1761727434.190859, "ROS": 1757314110.3785543 },
     "Frame": {
-      "check obstacle_stop: STOP active": {
+      "check run_out": {
         "Result": { "Total": "Success", "Frame": "Success" },
-        "Info": { "Behavior": "STOP" }
+        "Info": { "Behavior": "NO_FACTOR" }
       }
     }
   },
   {
-    "Result": {
-      "Success": true,
-      "Summary": "Passed:check run_out: STOP or SLOW_DOWN no active (Success), check obstacle_stop: STOP active (Success)"
-    },
-    "Stamp": { "System": 1758201068.2245557, "ROS": 1754282368.6340544 },
+    "Result": { "Success": true, "Summary": "Passed:check run_out (Success)" },
+    "Stamp": { "System": 1761727434.2954946, "ROS": 1757314110.4835277 },
     "Frame": {
-      "check obstacle_stop: STOP active": {
+      "check run_out": {
         "Result": { "Total": "Success", "Frame": "Success" },
-        "Info": { "Behavior": "STOP" }
+        "Info": { "Behavior": "SLOW_DOWN", "Distance": 230.09934997558594 }
       }
     }
   },
   {
-    "Result": {
-      "Success": true,
-      "Summary": "Passed:check run_out: STOP or SLOW_DOWN no active (Success), check obstacle_stop: STOP active (Success)"
-    },
-    "Stamp": { "System": 1758201068.328975, "ROS": 1754282368.739012 },
+    "Result": { "Success": true, "Summary": "Passed:check run_out (Success)" },
+    "Stamp": { "System": 1761727434.3917246, "ROS": 1757314110.5785568 },
     "Frame": {
-      "check obstacle_stop: STOP active": {
+      "check run_out": {
         "Result": { "Total": "Success", "Frame": "Success" },
-        "Info": { "Behavior": "STOP" }
+        "Info": { "Behavior": "SLOW_DOWN", "Distance": 228.3993682861328 }
       }
     }
   },
   {
-    "Result": {
-      "Success": true,
-      "Summary": "Passed:check run_out: STOP or SLOW_DOWN no active (Success), check obstacle_stop: STOP active (Success)"
-    },
-    "Stamp": { "System": 1758201068.421539, "ROS": 1754282368.8340943 },
+    "Result": { "Success": true, "Summary": "Passed:check run_out (Success)" },
+    "Stamp": { "System": 1761727434.4904604, "ROS": 1757314110.67855 },
     "Frame": {
-      "check obstacle_stop: STOP active": {
+      "check run_out": {
         "Result": { "Total": "Success", "Frame": "Success" },
-        "Info": { "Behavior": "STOP" }
+        "Info": { "Behavior": "SLOW_DOWN", "Distance": 228.19940185546875 }
       }
     }
   },
   {
-    "Result": {
-      "Success": true,
-      "Summary": "Passed:check run_out: STOP or SLOW_DOWN no active (Success), check obstacle_stop: STOP active (Success)"
-    },
-    "Stamp": { "System": 1758201068.5147438, "ROS": 1754282368.9240549 },
+    "Result": { "Success": true, "Summary": "Passed:check run_out (Success)" },
+    "Stamp": { "System": 1761727434.5904713, "ROS": 1757314110.7785597 },
     "Frame": {
-      "check obstacle_stop: STOP active": {
+      "check run_out": {
         "Result": { "Total": "Success", "Frame": "Success" },
-        "Info": { "Behavior": "STOP" }
+        "Info": { "Behavior": "STOP", "Distance": 226.6993865966797 }
       }
     }
   },
   {
-    "Result": {
-      "Success": true,
-      "Summary": "Passed:check run_out: STOP or SLOW_DOWN no active (Success), check obstacle_stop: STOP active (Success)"
-    },
-    "Stamp": { "System": 1758201068.617137, "ROS": 1754282369.0290587 },
+    "Result": { "Success": true, "Summary": "Passed:check run_out (Success)" },
+    "Stamp": { "System": 1761727434.6932123, "ROS": 1757314110.8785517 },
     "Frame": {
-      "check obstacle_stop: STOP active": {
+      "check run_out": {
         "Result": { "Total": "Success", "Frame": "Success" },
-        "Info": { "Behavior": "STOP" }
+        "Info": { "Behavior": "STOP", "Distance": 225.4993896484375 }
       }
     }
   },
   {
-    "Result": {
-      "Success": true,
-      "Summary": "Passed:check run_out: STOP or SLOW_DOWN no active (Success), check obstacle_stop: STOP active (Success)"
-    },
-    "Stamp": { "System": 1758201068.7212741, "ROS": 1754282369.134097 },
+    "Result": { "Success": true, "Summary": "Passed:check run_out (Success)" },
+    "Stamp": { "System": 1761727434.7920198, "ROS": 1757314110.9785488 },
     "Frame": {
-      "check obstacle_stop: STOP active": {
+      "check run_out": {
         "Result": { "Total": "Success", "Frame": "Success" },
-        "Info": { "Behavior": "STOP" }
+        "Info": { "Behavior": "STOP", "Distance": 224.99940490722656 }
       }
     }
   },
   {
-    "Result": {
-      "Success": true,
-      "Summary": "Passed:check run_out: STOP or SLOW_DOWN no active (Success), check obstacle_stop: STOP active (Success)"
-    },
-    "Stamp": { "System": 1758201068.8461444, "ROS": 1754282369.2590792 },
+    "Result": { "Success": true, "Summary": "Passed:check run_out (Success)" },
+    "Stamp": { "System": 1761727434.8910875, "ROS": 1757314111.0785594 },
     "Frame": {
-      "check obstacle_stop: STOP active": {
+      "check run_out": {
         "Result": { "Total": "Success", "Frame": "Success" },
-        "Info": { "Behavior": "STOP" }
+        "Info": { "Behavior": "STOP", "Distance": 223.7993927001953 }
+      }
+    }
+  },
+  {
+    "Result": { "Success": true, "Summary": "Passed:check run_out (Success)" },
+    "Stamp": { "System": 1761727434.988184, "ROS": 1757314111.1735528 },
+    "Frame": {
+      "check run_out": {
+        "Result": { "Total": "Success", "Frame": "Success" },
+        "Info": { "Behavior": "STOP", "Distance": 223.0990753173828 }
+      }
+    }
+  },
+  {
+    "Result": { "Success": true, "Summary": "Passed:check run_out (Success)" },
+    "Stamp": { "System": 1761727435.0901656, "ROS": 1757314111.2735536 },
+    "Frame": {
+      "check run_out": {
+        "Result": { "Total": "Success", "Frame": "Success" },
+        "Info": { "Behavior": "STOP", "Distance": 222.39878845214844 }
+      }
+    }
+  },
+  {
+    "Result": { "Success": true, "Summary": "Passed:check run_out (Success)" },
+    "Stamp": { "System": 1761727435.1915696, "ROS": 1757314111.3785572 },
+    "Frame": {
+      "check run_out": {
+        "Result": { "Total": "Success", "Frame": "Success" },
+        "Info": { "Behavior": "STOP", "Distance": 221.698486328125 }
+      }
+    }
+  },
+  {
+    "Result": { "Success": true, "Summary": "Passed:check run_out (Success)" },
+    "Stamp": { "System": 1761727435.2905092, "ROS": 1757314111.4785614 },
+    "Frame": {
+      "check run_out": {
+        "Result": { "Total": "Success", "Frame": "Success" },
+        "Info": { "Behavior": "STOP", "Distance": 220.99815368652344 }
+      }
+    }
+  },
+  {
+    "Result": { "Success": true, "Summary": "Passed:check run_out (Success)" },
+    "Stamp": { "System": 1761727435.3917816, "ROS": 1757314111.5785604 },
+    "Frame": {
+      "check run_out": {
+        "Result": { "Total": "Success", "Frame": "Success" },
+        "Info": { "Behavior": "STOP", "Distance": 220.29786682128906 }
+      }
+    }
+  },
+  {
+    "Result": { "Success": true, "Summary": "Passed:check run_out (Success)" },
+    "Stamp": { "System": 1761727435.4941533, "ROS": 1757314111.6785872 },
+    "Frame": {
+      "check run_out": {
+        "Result": { "Total": "Success", "Frame": "Success" },
+        "Info": { "Behavior": "STOP", "Distance": 219.59756469726562 }
+      }
+    }
+  },
+  {
+    "Result": { "Success": true, "Summary": "Passed:check run_out (Success)" },
+    "Stamp": { "System": 1761727435.589382, "ROS": 1757314111.7735505 },
+    "Frame": {
+      "check run_out": {
+        "Result": { "Total": "Success", "Frame": "Success" },
+        "Info": { "Behavior": "STOP", "Distance": 218.89723205566406 }
+      }
+    }
+  },
+  {
+    "Result": { "Success": true, "Summary": "Passed:check run_out (Success)" },
+    "Stamp": { "System": 1761727435.69253, "ROS": 1757314111.8785553 },
+    "Frame": {
+      "check run_out": {
+        "Result": { "Total": "Success", "Frame": "Success" },
+        "Info": { "Behavior": "STOP", "Distance": 218.1969451904297 }
+      }
+    }
+  },
+  {
+    "Result": { "Success": true, "Summary": "Passed:check run_out (Success)" },
+    "Stamp": { "System": 1761727435.79145, "ROS": 1757314111.9785953 },
+    "Frame": {
+      "check run_out": {
+        "Result": { "Total": "Success", "Frame": "Success" },
+        "Info": { "Behavior": "STOP", "Distance": 217.49664306640625 }
+      }
+    }
+  },
+  {
+    "Result": { "Success": true, "Summary": "Passed:check run_out (Success)" },
+    "Stamp": { "System": 1761727435.895659, "ROS": 1757314112.0835128 },
+    "Frame": {
+      "check run_out": {
+        "Result": { "Total": "Success", "Frame": "Success" },
+        "Info": { "Behavior": "STOP", "Distance": 219.09939575195312 }
+      }
+    }
+  },
+  {
+    "Result": { "Success": true, "Summary": "Passed:check run_out (Success)" },
+    "Stamp": { "System": 1761727435.9923117, "ROS": 1757314112.1785553 },
+    "Frame": {
+      "check run_out": {
+        "Result": { "Total": "Success", "Frame": "Success" },
+        "Info": { "Behavior": "STOP", "Distance": 217.9993896484375 }
+      }
+    }
+  },
+  {
+    "Result": { "Success": true, "Summary": "Passed:check run_out (Success)" },
+    "Stamp": { "System": 1761727436.0930727, "ROS": 1757314112.2785554 },
+    "Frame": {
+      "check run_out": {
+        "Result": { "Total": "Success", "Frame": "Success" },
+        "Info": { "Behavior": "STOP", "Distance": 217.29908752441406 }
+      }
+    }
+  },
+  {
+    "Result": { "Success": true, "Summary": "Passed:check run_out (Success)" },
+    "Stamp": { "System": 1761727436.1913462, "ROS": 1757314112.3785563 },
+    "Frame": {
+      "check run_out": {
+        "Result": { "Total": "Success", "Frame": "Success" },
+        "Info": { "Behavior": "STOP", "Distance": 216.5988006591797 }
+      }
+    }
+  },
+  {
+    "Result": { "Success": true, "Summary": "Passed:check run_out (Success)" },
+    "Stamp": { "System": 1761727436.2905524, "ROS": 1757314112.4785528 },
+    "Frame": {
+      "check run_out": {
+        "Result": { "Total": "Success", "Frame": "Success" },
+        "Info": { "Behavior": "STOP", "Distance": 215.8984832763672 }
+      }
+    }
+  },
+  {
+    "Result": { "Success": true, "Summary": "Passed:check run_out (Success)" },
+    "Stamp": { "System": 1761727436.3958278, "ROS": 1757314112.5835674 },
+    "Frame": {
+      "check run_out": {
+        "Result": { "Total": "Success", "Frame": "Success" },
+        "Info": { "Behavior": "STOP", "Distance": 215.19818115234375 }
+      }
+    }
+  },
+  {
+    "Result": { "Success": true, "Summary": "Passed:check run_out (Success)" },
+    "Stamp": { "System": 1761727436.4956317, "ROS": 1757314112.6836362 },
+    "Frame": {
+      "check run_out": {
+        "Result": { "Total": "Success", "Frame": "Success" },
+        "Info": { "Behavior": "STOP", "Distance": 214.49789428710938 }
+      }
+    }
+  },
+  {
+    "Result": { "Success": true, "Summary": "Passed:check run_out (Success)" },
+    "Stamp": { "System": 1761727436.5943313, "ROS": 1757314112.7785923 },
+    "Frame": {
+      "check run_out": {
+        "Result": { "Total": "Success", "Frame": "Success" },
+        "Info": { "Behavior": "STOP", "Distance": 213.7975616455078 }
+      }
+    }
+  },
+  {
+    "Result": { "Success": true, "Summary": "Passed:check run_out (Success)" },
+    "Stamp": { "System": 1761727436.6941779, "ROS": 1757314112.878556 },
+    "Frame": {
+      "check run_out": {
+        "Result": { "Total": "Success", "Frame": "Success" },
+        "Info": { "Behavior": "STOP", "Distance": 213.09725952148438 }
+      }
+    }
+  },
+  {
+    "Result": { "Success": true, "Summary": "Passed:check run_out (Success)" },
+    "Stamp": { "System": 1761727436.7969449, "ROS": 1757314112.9836016 },
+    "Frame": {
+      "check run_out": {
+        "Result": { "Total": "Success", "Frame": "Success" },
+        "Info": { "Behavior": "STOP", "Distance": 212.49696350097656 }
+      }
+    }
+  },
+  {
+    "Result": { "Success": true, "Summary": "Passed:check run_out (Success)" },
+    "Stamp": { "System": 1761727436.8935251, "ROS": 1757314113.0785544 },
+    "Frame": {
+      "check run_out": {
+        "Result": { "Total": "Success", "Frame": "Success" },
+        "Info": { "Behavior": "STOP", "Distance": 211.796630859375 }
+      }
+    }
+  },
+  {
+    "Result": { "Success": true, "Summary": "Passed:check run_out (Success)" },
+    "Stamp": { "System": 1761727436.9928122, "ROS": 1757314113.178556 },
+    "Frame": {
+      "check run_out": {
+        "Result": { "Total": "Success", "Frame": "Success" },
+        "Info": { "Behavior": "NO_FACTOR" }
+      }
+    }
+  },
+  {
+    "Result": { "Success": true, "Summary": "Passed:check run_out (Success)" },
+    "Stamp": { "System": 1761727437.091853, "ROS": 1757314113.2785594 },
+    "Frame": {
+      "check run_out": {
+        "Result": { "Total": "Success", "Frame": "Success" },
+        "Info": { "Behavior": "NO_FACTOR" }
+      }
+    }
+  },
+  {
+    "Result": { "Success": true, "Summary": "Passed:check run_out (Success)" },
+    "Stamp": { "System": 1761727437.1921256, "ROS": 1757314113.3785567 },
+    "Frame": {
+      "check run_out": {
+        "Result": { "Total": "Success", "Frame": "Success" },
+        "Info": { "Behavior": "NO_FACTOR" }
+      }
+    }
+  },
+  {
+    "Result": { "Success": true, "Summary": "Passed:check run_out (Success)" },
+    "Stamp": { "System": 1761727437.2946892, "ROS": 1757314113.4786024 },
+    "Frame": {
+      "check run_out": {
+        "Result": { "Total": "Success", "Frame": "Success" },
+        "Info": { "Behavior": "NO_FACTOR" }
+      }
+    }
+  },
+  {
+    "Result": { "Success": true, "Summary": "Passed:check run_out (Success)" },
+    "Stamp": { "System": 1761727437.3946052, "ROS": 1757314113.5785978 },
+    "Frame": {
+      "check run_out": {
+        "Result": { "Total": "Success", "Frame": "Success" },
+        "Info": { "Behavior": "NO_FACTOR" }
+      }
+    }
+  },
+  {
+    "Result": { "Success": true, "Summary": "Passed:check run_out (Success)" },
+    "Stamp": { "System": 1761727437.4946313, "ROS": 1757314113.678597 },
+    "Frame": {
+      "check run_out": {
+        "Result": { "Total": "Success", "Frame": "Success" },
+        "Info": { "Behavior": "NO_FACTOR" }
+      }
+    }
+  },
+  {
+    "Result": { "Success": true, "Summary": "Passed:check run_out (Success)" },
+    "Stamp": { "System": 1761727437.592976, "ROS": 1757314113.7785625 },
+    "Frame": {
+      "check run_out": {
+        "Result": { "Total": "Success", "Frame": "Success" },
+        "Info": { "Behavior": "NO_FACTOR" }
+      }
+    }
+  },
+  {
+    "Result": { "Success": true, "Summary": "Passed:check run_out (Success)" },
+    "Stamp": { "System": 1761727437.6954386, "ROS": 1757314113.8835642 },
+    "Frame": {
+      "check run_out": {
+        "Result": { "Total": "Success", "Frame": "Success" },
+        "Info": { "Behavior": "NO_FACTOR" }
+      }
+    }
+  },
+  {
+    "Result": { "Success": true, "Summary": "Passed:check run_out (Success)" },
+    "Stamp": { "System": 1761727437.791752, "ROS": 1757314113.9785714 },
+    "Frame": {
+      "check run_out": {
+        "Result": { "Total": "Success", "Frame": "Success" },
+        "Info": { "Behavior": "NO_FACTOR" }
+      }
+    }
+  },
+  {
+    "Result": { "Success": true, "Summary": "Passed:check run_out (Success)" },
+    "Stamp": { "System": 1761727437.8935533, "ROS": 1757314114.0785704 },
+    "Frame": {
+      "check run_out": {
+        "Result": { "Total": "Success", "Frame": "Success" },
+        "Info": { "Behavior": "NO_FACTOR" }
+      }
+    }
+  },
+  {
+    "Result": { "Success": true, "Summary": "Passed:check run_out (Success)" },
+    "Stamp": { "System": 1761727437.9945257, "ROS": 1757314114.1786327 },
+    "Frame": {
+      "check run_out": {
+        "Result": { "Total": "Success", "Frame": "Success" },
+        "Info": { "Behavior": "NO_FACTOR" }
+      }
+    }
+  },
+  {
+    "Result": { "Success": true, "Summary": "Passed:check run_out (Success)" },
+    "Stamp": { "System": 1761727438.0928745, "ROS": 1757314114.2786033 },
+    "Frame": {
+      "check run_out": {
+        "Result": { "Total": "Success", "Frame": "Success" },
+        "Info": { "Behavior": "NO_FACTOR" }
+      }
+    }
+  },
+  {
+    "Result": { "Success": true, "Summary": "Passed:check run_out (Success)" },
+    "Stamp": { "System": 1761727438.19419, "ROS": 1757314114.3785672 },
+    "Frame": {
+      "check run_out": {
+        "Result": { "Total": "Success", "Frame": "Success" },
+        "Info": { "Behavior": "NO_FACTOR" }
+      }
+    }
+  },
+  {
+    "Result": { "Success": true, "Summary": "Passed:check run_out (Success)" },
+    "Stamp": { "System": 1761727438.2954082, "ROS": 1757314114.4835603 },
+    "Frame": {
+      "check run_out": {
+        "Result": { "Total": "Success", "Frame": "Success" },
+        "Info": { "Behavior": "NO_FACTOR" }
+      }
+    }
+  },
+  {
+    "Result": { "Success": true, "Summary": "Passed:check run_out (Success)" },
+    "Stamp": { "System": 1761727438.3970182, "ROS": 1757314114.5835624 },
+    "Frame": {
+      "check run_out": {
+        "Result": { "Total": "Success", "Frame": "Success" },
+        "Info": { "Behavior": "NO_FACTOR" }
+      }
+    }
+  },
+  {
+    "Result": { "Success": true, "Summary": "Passed:check run_out (Success)" },
+    "Stamp": { "System": 1761727438.5018532, "ROS": 1757314114.6886044 },
+    "Frame": {
+      "check run_out": {
+        "Result": { "Total": "Success", "Frame": "Success" },
+        "Info": { "Behavior": "NO_FACTOR" }
+      }
+    }
+  },
+  {
+    "Result": { "Success": true, "Summary": "Passed:check run_out (Success)" },
+    "Stamp": { "System": 1761727438.5954428, "ROS": 1757314114.783658 },
+    "Frame": {
+      "check run_out": {
+        "Result": { "Total": "Success", "Frame": "Success" },
+        "Info": { "Behavior": "NO_FACTOR" }
+      }
+    }
+  },
+  {
+    "Result": { "Success": true, "Summary": "Passed:check run_out (Success)" },
+    "Stamp": { "System": 1761727438.69535, "ROS": 1757314114.883564 },
+    "Frame": {
+      "check run_out": {
+        "Result": { "Total": "Success", "Frame": "Success" },
+        "Info": { "Behavior": "NO_FACTOR" }
+      }
+    }
+  },
+  {
+    "Result": { "Success": true, "Summary": "Passed:check run_out (Success)" },
+    "Stamp": { "System": 1761727438.7962115, "ROS": 1757314114.9835508 },
+    "Frame": {
+      "check run_out": {
+        "Result": { "Total": "Success", "Frame": "Success" },
+        "Info": { "Behavior": "NO_FACTOR" }
+      }
+    }
+  },
+  {
+    "Result": { "Success": true, "Summary": "Passed:check run_out (Success)" },
+    "Stamp": { "System": 1761727438.894538, "ROS": 1757314115.0785758 },
+    "Frame": {
+      "check run_out": {
+        "Result": { "Total": "Success", "Frame": "Success" },
+        "Info": { "Behavior": "NO_FACTOR" }
+      }
+    }
+  },
+  {
+    "Result": { "Success": true, "Summary": "Passed:check run_out (Success)" },
+    "Stamp": { "System": 1761727438.995545, "ROS": 1757314115.1835663 },
+    "Frame": {
+      "check run_out": {
+        "Result": { "Total": "Success", "Frame": "Success" },
+        "Info": { "Behavior": "NO_FACTOR" }
+      }
+    }
+  },
+  {
+    "Result": { "Success": true, "Summary": "Passed:check run_out (Success)" },
+    "Stamp": { "System": 1761727439.093681, "ROS": 1757314115.2785628 },
+    "Frame": {
+      "check run_out": {
+        "Result": { "Total": "Success", "Frame": "Success" },
+        "Info": { "Behavior": "NO_FACTOR" }
+      }
+    }
+  },
+  {
+    "Result": { "Success": true, "Summary": "Passed:check run_out (Success)" },
+    "Stamp": { "System": 1761727439.1972363, "ROS": 1757314115.3835633 },
+    "Frame": {
+      "check run_out": {
+        "Result": { "Total": "Success", "Frame": "Success" },
+        "Info": { "Behavior": "NO_FACTOR" }
       }
     }
   }
