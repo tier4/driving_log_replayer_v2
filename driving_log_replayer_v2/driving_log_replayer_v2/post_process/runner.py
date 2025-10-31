@@ -52,7 +52,9 @@ class UseCaseInfo:
     )  # optional for only using EvaluationItem and ResultBase
     result_class: ResultBaseType
     name: str
-    evaluation_topics_with_task: dict[str, list[str]]  # If task is unnecessary, use dummy task name like {"dummy_task": [topic, ...]}
+    evaluation_topics_with_task: dict[
+        str, list[str]
+    ]  # If task is unnecessary, use dummy task name like {"dummy_task": [topic, ...]}
     result_json_path: str
 
 
