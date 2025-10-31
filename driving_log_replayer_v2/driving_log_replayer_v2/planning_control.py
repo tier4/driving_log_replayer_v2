@@ -215,7 +215,7 @@ class PlanningFactorCondition(BaseModel):
         ]
         | None
     ) = None
-    distance: MinMax | None = None
+    distance: MinMax | None = None  # s of frenet coordinate
     judgement: Literal["positive", "negative"]  # positive or negative
 
 
@@ -226,7 +226,7 @@ class Conditions(BaseModel):
 
 class Evaluation(BaseModel):
     UseCaseName: Literal["planning_control"]
-    UseCaseFormatVersion: Literal["2.0.0", "2.1.0", "2.2.0"]
+    UseCaseFormatVersion: Literal["2.0.0", "2.1.0", "2.2.0", "2.3.0"]
     Conditions: Conditions
     Datasets: list[dict]
 
