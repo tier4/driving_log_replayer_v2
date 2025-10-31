@@ -50,7 +50,7 @@ def configure_logger(
         log_file_directory (str): The directory path to save log.
         console_log_level (int): Log level for console. Defaults to logging.INFO.
         file_log_level (int): Log level for log file. Defaults to logging.INFO.
-        logger_name (str): Modname for logger. Defaults to "".
+        logger_name (str): Name for logger. Defaults to "".
 
     """
     # make directory
