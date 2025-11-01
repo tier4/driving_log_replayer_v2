@@ -20,6 +20,7 @@ from pathlib import Path
 import pickle
 from typing import Any
 from typing import TYPE_CHECKING
+from typing import TypeVar
 
 from ament_index_python.packages import get_package_share_directory
 from pydantic import BaseModel
@@ -160,6 +161,7 @@ class ResultWriter:
         }
 
     def get_result(self, result: ResultBase, timestamp_nanosec: int | None = None) -> dict:
+        # timestamp_nanosec includes both sec and nanosec parts
         system_time: Time = self._system_clock.now()
         time_dict = {"System": system_time.nanoseconds / pow(10, 9)}
         if timestamp_nanosec is not None:
@@ -235,3 +237,6 @@ class MultiResultEditor:
                 "Frame": {},
             }
             main_result_file.add_result(final_result)
+
+
+ResultBaseType = TypeVar("ResultBaseType", bound=ResultBase)

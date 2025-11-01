@@ -37,5 +37,9 @@ USE_CASE_ARGS: list[DeclareLaunchArgument] = [
     DeclareLaunchArgument(
         "evaluation_topic",
         default_value="/perception/obstacle_segmentation/pointcloud",
-    )
+    ),
+    DeclareLaunchArgument(
+        "enable_analysis",
+        default_value="false",
+    ),
 ]

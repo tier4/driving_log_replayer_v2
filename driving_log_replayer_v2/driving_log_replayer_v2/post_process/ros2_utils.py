@@ -45,7 +45,7 @@ class RosBagManager:
         output_bag_dir: str,
         storage_type: str,
         evaluation_topics: list[str],
-        additional_record_topics: list[TopicMetadata] | None = None,
+        external_record_topics: list[TopicMetadata] | None = None,
     ) -> None:
         self._reader: SequentialReader
         self._writer: SequentialWriter
@@ -71,8 +71,8 @@ class RosBagManager:
         for topic_type in self._reader.get_all_topics_and_types():
             self._writer.create_topic(topic_type)
             self._topic_name2type[topic_type.name] = topic_type.type
-        if additional_record_topics is not None:
-            for topic_type in additional_record_topics:
+        if external_record_topics is not None:
+            for topic_type in external_record_topics:
                 self._writer.create_topic(topic_type)
 
         self._evaluation_topics = evaluation_topics
