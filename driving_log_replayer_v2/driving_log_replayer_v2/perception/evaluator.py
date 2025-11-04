@@ -58,7 +58,8 @@ class PerceptionEvaluator(Evaluator):
         evaluation_task: str,
         frame_id_str: str,
     ) -> None:
-        # additional instance variables
+        # NOTE: this class uses the perception_eval package, so not use parent logger, which means not call super().__init__
+        # instance variables
         self.__skip_counter = 0
         self.__frame_id_str = frame_id_str
         self.__critical_object_filter_config: CriticalObjectFilterConfig
@@ -68,8 +69,6 @@ class PerceptionEvaluator(Evaluator):
         self.__analyzer: PerceptionAnalyzer3D
         self.__logger: logging.Logger
         self.__evaluation_topic = evaluation_topic
-
-        # NOTE: this class uses the perception_eval package, so not use parent logger, which means not call super().__init__
 
         perception_evaluation_config["evaluation_config_dict"]["label_prefix"] = "autoware"
 

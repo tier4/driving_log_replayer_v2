@@ -19,6 +19,8 @@ from pathlib import Path
 import pandas as pd
 from tier4_api_msgs.msg import AwapiAutowareStatus
 
+from driving_log_replayer_v2.post_process.evaluator import FrameResultData
+
 
 @dataclass
 class Position:
@@ -45,7 +47,7 @@ class Reason:
 
 
 @dataclass
-class StopReasonData:
+class StopReasonData(FrameResultData):
     seconds: int
     nanoseconds: int
     reasons: list[Reason]

@@ -16,13 +16,13 @@ from __future__ import annotations
 
 from abc import ABC
 from abc import abstractmethod
-from typing import Any
 from typing import TYPE_CHECKING
 from typing import TypeVar
 
 if TYPE_CHECKING:
     from driving_log_replayer_v2.post_process.evaluator import EvaluatorType
     from driving_log_replayer_v2.post_process.evaluator import FrameResult
+    from driving_log_replayer_v2.post_process.evaluator import FrameResultDataType
     from driving_log_replayer_v2.scenario import ScenarioType
 
 
@@ -31,8 +31,8 @@ class EvaluationManager(ABC):
     Base class for evaluation manager.
 
     Responsible for following items:
-        - initializing subclass of Evaluator for each evaluation topic
-        - managing evaluation process for each frame
+        initializing subclass of Evaluator for each evaluation topic
+        managing evaluation process for each frame
     """
 
     def __init__(
@@ -42,6 +42,7 @@ class EvaluationManager(ABC):
         result_archive_path: str,
         evaluation_topics_with_task: dict[str, list[str]],
     ) -> None:
+        # instance variables
         self._scenario: ScenarioType = scenario
         self._evaluators: dict[str, EvaluatorType]
         self._degradation_topic: str
@@ -77,7 +78,7 @@ class EvaluationManager(ABC):
         topic_name: str,
         header_timestamp: int,  # do not care time unit
         subscribed_timestamp: int,  # do not care time unit
-        data: Any,
+        data: FrameResultDataType,
     ) -> FrameResult:
         """
         Evaluate a frame for a given topic.
@@ -86,7 +87,7 @@ class EvaluationManager(ABC):
             topic_name (str): Name of the topic to evaluate.
             header_timestamp (int): Timestamp from the message header. Time unit is not specified.
             subscribed_timestamp (int): Timestamp when the message was subscribed. Time unit is not specified.
-            data (Any): Data to be evaluated.
+            data (FrameResultDataType): Data to be evaluated.
 
         Returns:
             FrameResult: The result of the frame evaluation.

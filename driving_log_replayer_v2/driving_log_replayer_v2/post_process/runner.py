@@ -127,16 +127,16 @@ class UseCaseDict(dict[str, UseCase]):
 
 class Runner(ABC):
     """
-    Base class for driving log replayer post-process runner.
+    Base class for post-process runner.
 
     Responsible for following items:
-        - loading scenario and condition
-        - initializing subclass of EvaluationManager, ResultBase, and ResultWriter for each use case
-        - reading rosbag frame by frame
-        - evaluating by calling subclass of EvaluationManager
-        - writing evaluation result as jsonl
-        - performing analysis on the evaluation results
-        - closing all resources
+        loading scenario and condition
+        initializing subclass of EvaluationManager, ResultBase, and ResultWriter for each use case
+        reading rosbag frame by frame
+        evaluating by calling subclass of EvaluationManager
+        writing evaluation result as jsonl
+        performing analysis on the evaluation results
+        closing all resources
     """
 
     def __init__(
@@ -203,17 +203,19 @@ class Runner(ABC):
             )
             for topic_info in external_record_topics
         ]
-        evaluation_topics = [
+        evaluation_all_topics = [
             use_case.evaluation_manager.get_evaluation_topics()
             for use_case in self._use_cases.values()
             if use_case.evaluation_manager is not None
         ]
-        evaluation_topics = list(itertools.chain.from_iterable(evaluation_topics))  # flatten list
+        evaluation_all_topics = list(
+            itertools.chain.from_iterable(evaluation_all_topics)
+        )  # flatten list
         self._rosbag_manager = RosBagManager(
             rosbag_dir_path,
             Path(result_archive_path).joinpath("result_bag").as_posix(),
             storage,
-            evaluation_topics,
+            evaluation_all_topics,
             external_record_topics_metadata,
         )
 
@@ -230,8 +232,9 @@ class Runner(ABC):
     def evaluate(self) -> None:
         """Evaluate rosbag frame by frame."""
         for topic_name, msg, subscribed_timestamp_nanosec in self._rosbag_manager.read_messages():
-            # See RosBagManager for `time relationships`.
-            frame_result = self._evaluate_frame(topic_name, msg, subscribed_timestamp_nanosec)
+            frame_result: FrameResult = self._evaluate_frame(
+                topic_name, msg, subscribed_timestamp_nanosec
+            )
             if topic_name in self._degradation_topics:
                 self._write_result(frame_result, msg.header, subscribed_timestamp_nanosec)
         self._evaluate_on_post_process()

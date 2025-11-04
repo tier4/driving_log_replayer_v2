@@ -41,6 +41,7 @@ from driving_log_replayer_v2.perception.stop_reason import StopReasonAnalyzer
 from driving_log_replayer_v2.perception.stop_reason import StopReasonData
 from driving_log_replayer_v2.perception.topics import load_evaluation_topics
 import driving_log_replayer_v2.perception_eval_conversions as eval_conversions
+from driving_log_replayer_v2.post_process.evaluator import FrameResultData
 from driving_log_replayer_v2.post_process.ros2_utils import lookup_transform
 from driving_log_replayer_v2.post_process.runner import Runner
 from driving_log_replayer_v2.post_process.runner import TopicInfo
@@ -64,7 +65,7 @@ PerceptionMsgType = TypeVar("PerceptionMsgType", DetectedObjects, TrackedObjects
 
 
 @dataclass(frozen=True, slots=True)
-class PerceptionEvalData:
+class PerceptionEvalData(FrameResultData):
     interpolation: bool
     estimated_objects: list[DynamicObject] | str  # str for error message
 
@@ -191,6 +192,9 @@ class PerceptionRunner(Runner):
             enable_analysis,
         )
 
+    def is_stop_reason(self) -> bool:
+        return "stop_reason" in self._use_cases
+
     @property
     def perc_eval_manager(self) -> PerceptionEvaluationManager:
         return self._use_cases["perception"].evaluation_manager
@@ -205,18 +209,11 @@ class PerceptionRunner(Runner):
 
     @property
     def stop_reason_result(self) -> StopReasonResult | None:
-        return self._use_cases["stop_reason"].result if "stop_reason" in self._use_cases else None
+        return self._use_cases["stop_reason"].result if self.is_stop_reason() else None
 
     @property
     def stop_reason_result_writer(self) -> ResultWriter | None:
-        return (
-            self._use_cases["stop_reason"].result_writer
-            if "stop_reason" in self._use_cases
-            else None
-        )
-
-    def is_stop_reason(self) -> bool:
-        return "stop_reason" in self._use_cases
+        return self._use_cases["stop_reason"].result_writer if self.is_stop_reason() else None
 
     def _convert_ros_msg_to_data(
         self, topic_name: str, msg: Any, subscribed_timestamp_nanosec: int
