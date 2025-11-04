@@ -46,6 +46,7 @@ class Reason:
     orientation: Orientation
 
 
+@dataclass(frozen=True, slots=True)
 class StopReasonData(ConvertedData):
     seconds: int
     nanoseconds: int
