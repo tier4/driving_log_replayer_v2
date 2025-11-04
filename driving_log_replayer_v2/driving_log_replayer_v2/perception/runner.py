@@ -41,8 +41,8 @@ from driving_log_replayer_v2.perception.stop_reason import StopReasonAnalyzer
 from driving_log_replayer_v2.perception.stop_reason import StopReasonData
 from driving_log_replayer_v2.perception.topics import load_evaluation_topics
 import driving_log_replayer_v2.perception_eval_conversions as eval_conversions
-from driving_log_replayer_v2.post_process.evaluator import FrameResultData
 from driving_log_replayer_v2.post_process.ros2_utils import lookup_transform
+from driving_log_replayer_v2.post_process.runner import ConvertedData
 from driving_log_replayer_v2.post_process.runner import Runner
 from driving_log_replayer_v2.post_process.runner import TopicInfo
 from driving_log_replayer_v2.post_process.runner import UseCaseInfo
@@ -65,7 +65,7 @@ PerceptionMsgType = TypeVar("PerceptionMsgType", DetectedObjects, TrackedObjects
 
 
 @dataclass(frozen=True, slots=True)
-class PerceptionEvalData(FrameResultData):
+class PerceptionEvalData(ConvertedData):
     interpolation: bool
     estimated_objects: list[DynamicObject] | str  # str for error message
 
@@ -217,7 +217,7 @@ class PerceptionRunner(Runner):
 
     def _convert_ros_msg_to_data(
         self, topic_name: str, msg: Any, subscribed_timestamp_nanosec: int
-    ) -> tuple[int, int, Any]:
+    ) -> tuple[int, int, PerceptionEvalData | StopReasonData]:
         # evaluate stop reason criterion if defined
         if self.is_stop_reason() and topic_name == "/awapi/autoware/get/status":
             return convert_to_stop_reason(msg, subscribed_timestamp_nanosec)

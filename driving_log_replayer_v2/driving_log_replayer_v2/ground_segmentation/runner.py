@@ -15,6 +15,7 @@
 from __future__ import annotations
 
 import argparse
+from dataclasses import dataclass
 from typing import Any
 from typing import TYPE_CHECKING
 
@@ -28,6 +29,7 @@ from driving_log_replayer_v2.ground_segmentation.evaluation_manager import (
 from driving_log_replayer_v2.ground_segmentation.models import GroundSegmentationResult
 from driving_log_replayer_v2.ground_segmentation.models import GroundSegmentationScenario
 import driving_log_replayer_v2.perception_eval_conversions as eval_conversions
+from driving_log_replayer_v2.post_process.runner import ConvertedData
 from driving_log_replayer_v2.post_process.runner import Runner
 from driving_log_replayer_v2.post_process.runner import TopicInfo
 from driving_log_replayer_v2.post_process.runner import UseCaseInfo
@@ -40,10 +42,16 @@ if TYPE_CHECKING:
     from driving_log_replayer_v2.result import ResultWriter
 
 
-def convert_to_numpy_pointcloud(msg: PointCloud2) -> np.ndarray:
+@dataclass(frozen=True, slots=True)
+class GroundSegmentationData(ConvertedData):
+    pointcloud: np.ndarray
+
+
+def convert_to_numpy_pointcloud(msg: PointCloud2) -> GroundSegmentationData:
     """Convert PointCloud2 message to numpy array."""
     numpy_pcd = ros2_numpy.numpify(msg)
-    return np.stack((numpy_pcd["x"], numpy_pcd["y"], numpy_pcd["z"]), axis=-1)
+    pointcloud = np.stack((numpy_pcd["x"], numpy_pcd["y"], numpy_pcd["z"]), axis=-1)
+    return GroundSegmentationData(pointcloud=pointcloud)
 
 
 class GroundSegmentationRunner(Runner):
@@ -98,14 +106,14 @@ class GroundSegmentationRunner(Runner):
         topic_name: str,  # noqa: ARG002
         msg: Any,
         subscribed_timestamp_nanosec: int,
-    ) -> tuple[int, int, Any]:
+    ) -> tuple[int, int, GroundSegmentationData]:
         # convert ros message to numpy array
         header_timestamp_microsec = eval_conversions.unix_time_microsec_from_ros_msg(msg.header)
-        pointcloud = convert_to_numpy_pointcloud(msg)
+        data = convert_to_numpy_pointcloud(msg)
         subscribed_timestamp_microsec = eval_conversions.unix_time_microsec_from_ros_time_nanosec(
             subscribed_timestamp_nanosec
         )
-        return header_timestamp_microsec, subscribed_timestamp_microsec, pointcloud
+        return header_timestamp_microsec, subscribed_timestamp_microsec, data
 
     def _write_result(
         self, frame_result: FrameResult, header: Header, subscribed_timestamp_nanosec: int

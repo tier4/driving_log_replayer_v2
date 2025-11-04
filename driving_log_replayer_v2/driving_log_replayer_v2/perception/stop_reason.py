@@ -19,17 +19,17 @@ from pathlib import Path
 import pandas as pd
 from tier4_api_msgs.msg import AwapiAutowareStatus
 
-from driving_log_replayer_v2.post_process.evaluator import FrameResultData
+from driving_log_replayer_v2.post_process.runner import ConvertedData
 
 
-@dataclass
+@dataclass(frozen=True, slots=True)
 class Position:
     x: float
     y: float
     z: float
 
 
-@dataclass
+@dataclass(frozen=True, slots=True)
 class Orientation:
     x: float
     y: float
@@ -37,7 +37,7 @@ class Orientation:
     w: float
 
 
-@dataclass
+@dataclass(frozen=True, slots=True)
 class Reason:
     index: int
     reason: str
@@ -46,8 +46,7 @@ class Reason:
     orientation: Orientation
 
 
-@dataclass
-class StopReasonData(FrameResultData):
+class StopReasonData(ConvertedData):
     seconds: int
     nanoseconds: int
     reasons: list[Reason]

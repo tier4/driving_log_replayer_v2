@@ -19,6 +19,7 @@ import itertools
 from pathlib import Path
 import shutil
 from typing import Any
+from typing import TypeVar
 
 from rclpy.clock import Clock
 from rosbag2_py import TopicMetadata
@@ -66,6 +67,14 @@ class UseCase:
     result: ResultBaseType
     result_writer: ResultWriter
     evaluation_topics: list[str]  # only using for easy access
+
+
+@dataclass(frozen=True, slots=True)
+class ConvertedData:
+    """Converted data for common format."""
+
+
+ConvertedDataType = TypeVar("ConvertedDataType", bound=ConvertedData)
 
 
 class UseCaseDict(dict[str, UseCase]):
@@ -271,7 +280,7 @@ class Runner(ABC):
     @abstractmethod
     def _convert_ros_msg_to_data(
         self, topic_name: str, msg: Any, subscribed_timestamp_nanosec: int
-    ) -> tuple[int, int, Any]:
+    ) -> tuple[int, int, ConvertedDataType]:
         """
         Convert a ROS message to PerceptionEvalData.
 
@@ -281,7 +290,7 @@ class Runner(ABC):
             subscribed_timestamp_nanosec (int): The timestamp when the message was subscribed, in nanoseconds.
 
         Returns:
-            tuple[int, int, Any]: A tuple containing the header timestamp, subscribed timestamp, and converted data. Time unit is not specified.
+            tuple[int, int, ConvertedDataType]: A tuple containing the header timestamp, subscribed timestamp, and converted data. Time unit is not specified.
 
         """
         raise NotImplementedError

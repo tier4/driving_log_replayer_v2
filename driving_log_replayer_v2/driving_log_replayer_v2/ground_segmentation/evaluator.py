@@ -12,17 +12,23 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from __future__ import annotations
+
 import json
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 import numpy as np
 from scipy.spatial import cKDTree
 
-from driving_log_replayer_v2.ground_segmentation.models import Conditions
 from driving_log_replayer_v2.post_process.evaluator import Evaluator
 from driving_log_replayer_v2.post_process.evaluator import FrameResult
 from driving_log_replayer_v2.post_process.evaluator import InvalidReason
 from driving_log_replayer_v2_msgs.msg import GroundSegmentationEvalResult
+
+if TYPE_CHECKING:
+    from driving_log_replayer_v2.ground_segmentation.models import Conditions
+    from driving_log_replayer_v2.ground_segmentation.runner import GroundSegmentationData
 
 
 class GroundSegmentationInvalidReason(InvalidReason):
@@ -88,7 +94,7 @@ class GroundSegmentationEvaluator(Evaluator):
         self,
         header_timestamp: int,
         subscribed_timestamp: int,
-        data: np.ndarray,
+        data: GroundSegmentationData,
     ) -> FrameResult:
         gt_frame_ts = self.__get_gt_frame_ts(header_timestamp)
 
@@ -125,7 +131,7 @@ class GroundSegmentationEvaluator(Evaluator):
 
         tn: int = 0
         fn: int = 0
-        for p in data:
+        for p in data.pointcloud:
             _, idx = kdtree.query(p, k=1)
             if gt_frame_label[idx] in self._ground_label:
                 fn += 1

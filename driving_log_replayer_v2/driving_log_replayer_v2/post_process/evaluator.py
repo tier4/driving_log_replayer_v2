@@ -19,12 +19,17 @@ from abc import abstractmethod
 from enum import Enum
 import logging
 from pathlib import Path
+from typing import Any
+from typing import TYPE_CHECKING
 from typing import TypeVar
 
 from pydantic import BaseModel
 from pydantic import model_validator
 
 from driving_log_replayer_v2.post_process.logger import configure_logger
+
+if TYPE_CHECKING:
+    from driving_log_replayer_v2.post_process.runner import ConvertedDataType
 
 
 class InvalidReason(str, Enum):
@@ -34,18 +39,11 @@ class InvalidReason(str, Enum):
 InvalidReasonType = TypeVar("InvalidReasonType", bound=InvalidReason)
 
 
-class FrameResultData:
-    """Data for common format."""
-
-
-FrameResultDataType = TypeVar("FrameResultDataType", bound=FrameResultData)
-
-
 class FrameResult(BaseModel):
     """Frame result for common format."""
 
     is_valid: bool
-    data: FrameResultDataType | None = None
+    data: Any | None = None
     invalid_reason: InvalidReasonType | None = None
     skip_counter: int
 
@@ -88,7 +86,7 @@ class Evaluator(ABC):
         self,
         header_timestamp: int,  # do not care time unit
         subscribed_timestamp: int,  # do not care time unit
-        data: FrameResultDataType,
+        data: ConvertedDataType,
     ) -> FrameResult:
         """
         Evaluate a single frame.
@@ -96,7 +94,7 @@ class Evaluator(ABC):
         Args:
             header_timestamp (int): Timestamp from the message header. Time unit is not specified.
             subscribed_timestamp (int): Timestamp when the message was subscribed. Time unit is not specified.
-            data (FrameResultDataType): Data to be evaluated.
+            data (ConvertedDataType): Data to be evaluated.
 
         Returns:
             FrameResult: The result of the evaluation.

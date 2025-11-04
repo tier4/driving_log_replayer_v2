@@ -22,7 +22,7 @@ from typing import TypeVar
 if TYPE_CHECKING:
     from driving_log_replayer_v2.post_process.evaluator import EvaluatorType
     from driving_log_replayer_v2.post_process.evaluator import FrameResult
-    from driving_log_replayer_v2.post_process.evaluator import FrameResultDataType
+    from driving_log_replayer_v2.post_process.runner import ConvertedDataType
     from driving_log_replayer_v2.scenario import ScenarioType
 
 
@@ -78,7 +78,7 @@ class EvaluationManager(ABC):
         topic_name: str,
         header_timestamp: int,  # do not care time unit
         subscribed_timestamp: int,  # do not care time unit
-        data: FrameResultDataType,
+        data: ConvertedDataType,
     ) -> FrameResult:
         """
         Evaluate a frame for a given topic.
@@ -87,7 +87,7 @@ class EvaluationManager(ABC):
             topic_name (str): Name of the topic to evaluate.
             header_timestamp (int): Timestamp from the message header. Time unit is not specified.
             subscribed_timestamp (int): Timestamp when the message was subscribed. Time unit is not specified.
-            data (FrameResultDataType): Data to be evaluated.
+            data (ConvertedDataType): Data to be evaluated.
 
         Returns:
             FrameResult: The result of the frame evaluation.
