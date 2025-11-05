@@ -37,8 +37,8 @@ from driving_log_replayer_v2.perception.models import PerceptionResult
 from driving_log_replayer_v2.perception.models import PerceptionScenario
 from driving_log_replayer_v2.perception.models import StopReasonResult
 from driving_log_replayer_v2.perception.stop_reason import convert_to_stop_reason
-from driving_log_replayer_v2.perception.stop_reason import StopReasonAnalyzer
 from driving_log_replayer_v2.perception.stop_reason import StopReasonData
+from driving_log_replayer_v2.perception.stop_reason import StopReasonEvaluationManager
 from driving_log_replayer_v2.perception.topics import load_evaluation_topics
 import driving_log_replayer_v2.perception_eval_conversions as eval_conversions
 from driving_log_replayer_v2.post_process.ros2_utils import lookup_transform
@@ -65,7 +65,7 @@ PerceptionMsgType = TypeVar("PerceptionMsgType", DetectedObjects, TrackedObjects
 
 
 @dataclass(frozen=True, slots=True)
-class PerceptionEvalData(ConvertedData):
+class PerceptionEvalData:
     interpolation: bool
     estimated_objects: list[DynamicObject] | str  # str for error message
 
@@ -74,7 +74,7 @@ def convert_to_perception_eval(
     msg: PerceptionMsgType,
     subscribed_timestamp_nanosec: int,
     evaluation_config: PerceptionEvaluationConfig,
-) -> tuple[int, int, PerceptionEvalData]:
+) -> ConvertedData:
     """Convert ROS message to PerceptionEvalData."""
     header_timestamp_microsec: int = eval_conversions.unix_time_microsec_from_ros_msg(msg.header)
     subscribed_timestamp_microsec: int = eval_conversions.unix_time_microsec_from_ros_time_nanosec(
@@ -95,10 +95,10 @@ def convert_to_perception_eval(
         err_msg = f"Unknown message type: {type(msg)}"
         raise TypeError(err_msg)
 
-    return (
-        header_timestamp_microsec,
-        subscribed_timestamp_microsec,
-        PerceptionEvalData(interpolation, estimated_objects),
+    return ConvertedData(
+        header_timestamp=header_timestamp_microsec,
+        subscribed_timestamp=subscribed_timestamp_microsec,
+        data=PerceptionEvalData(interpolation, estimated_objects),
     )
 
 
@@ -147,7 +147,6 @@ class PerceptionRunner(Runner):
         # additional instance variables
         self._analysis_max_distance = analysis_max_distance
         self._analysis_distance_interval = analysis_distance_interval
-        self._stop_reason_analyzer: StopReasonAnalyzer | None = None
 
         use_case_info_list = [
             UseCaseInfo(
@@ -170,14 +169,13 @@ class PerceptionRunner(Runner):
             stop_reason_result_json_path = Path(result_json_path).with_name("stop_reason.jsonl")
             use_case_info_list.append(
                 UseCaseInfo(
-                    evaluation_manager_class=None,
+                    evaluation_manager_class=StopReasonEvaluationManager,
                     result_class=StopReasonResult,
                     name="stop_reason",
                     evaluation_topics_with_task={"dummy_task": ["/awapi/autoware/get/status"]},
                     result_json_path=stop_reason_result_json_path,
                 )
             )
-            self._stop_reason_analyzer = StopReasonAnalyzer(result_archive_path, "stop_reason")
 
         super().__init__(
             PerceptionScenario,
@@ -208,6 +206,10 @@ class PerceptionRunner(Runner):
         return self._use_cases["perception"].result_writer
 
     @property
+    def stop_reason_eval_manager(self) -> StopReasonEvaluationManager:
+        return self._use_cases["stop_reason"].evaluation_manager if self.is_stop_reason() else None
+
+    @property
     def stop_reason_result(self) -> StopReasonResult | None:
         return self._use_cases["stop_reason"].result if self.is_stop_reason() else None
 
@@ -217,7 +219,7 @@ class PerceptionRunner(Runner):
 
     def _convert_ros_msg_to_data(
         self, topic_name: str, msg: Any, subscribed_timestamp_nanosec: int
-    ) -> tuple[int, int, PerceptionEvalData | StopReasonData]:
+    ) -> ConvertedData:
         # evaluate stop reason criterion if defined
         if self.is_stop_reason() and topic_name == "/awapi/autoware/get/status":
             return convert_to_stop_reason(msg, subscribed_timestamp_nanosec)
@@ -330,7 +332,7 @@ class PerceptionRunner(Runner):
                 perception_degradation_topic,
             )
         if self.is_stop_reason():
-            self._stop_reason_analyzer.save_as_csv("stop_reason.csv")
+            self.stop_reason_eval_manager.analyze()
 
 
 def evaluate(

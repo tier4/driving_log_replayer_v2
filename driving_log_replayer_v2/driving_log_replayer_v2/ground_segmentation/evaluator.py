@@ -28,7 +28,7 @@ from driving_log_replayer_v2_msgs.msg import GroundSegmentationEvalResult
 
 if TYPE_CHECKING:
     from driving_log_replayer_v2.ground_segmentation.models import Conditions
-    from driving_log_replayer_v2.ground_segmentation.runner import GroundSegmentationData
+    from driving_log_replayer_v2.post_process.runner import ConvertedData
 
 
 class GroundSegmentationInvalidReason(InvalidReason):
@@ -92,15 +92,15 @@ class GroundSegmentationEvaluator(Evaluator):
 
     def evaluate_frame(
         self,
-        header_timestamp: int,
-        subscribed_timestamp: int,
-        data: GroundSegmentationData,
+        converted_data: ConvertedData,
     ) -> FrameResult:
-        gt_frame_ts = self.__get_gt_frame_ts(header_timestamp)
+        gt_frame_ts = self.__get_gt_frame_ts(converted_data.header_timestamp)
 
         if gt_frame_ts < 0:
             self._skip_counter += 1
-            self._logger.warning("No ground truth for timestamp %d microsec", header_timestamp)
+            self._logger.warning(
+                "No ground truth for timestamp %d microsec", converted_data.header_timestamp
+            )
             return FrameResult(
                 is_valid=False,
                 invalid_reason=GroundSegmentationInvalidReason.NO_GROUND_TRUTH,
@@ -131,7 +131,7 @@ class GroundSegmentationEvaluator(Evaluator):
 
         tn: int = 0
         fn: int = 0
-        for p in data.pointcloud:
+        for p in converted_data.data:
             _, idx = kdtree.query(p, k=1)
             if gt_frame_label[idx] in self._ground_label:
                 fn += 1
@@ -157,11 +157,11 @@ class GroundSegmentationEvaluator(Evaluator):
         self._logger.info(
             "Estimation header: %d, Ground truth header: %d (frame_name: %s), Difference: %d, "
             "Subscribe delay [micro sec]: %d",
-            header_timestamp,
+            converted_data.header_timestamp,
             gt_frame_ts,
             "None",
-            header_timestamp - gt_frame_ts,
-            subscribed_timestamp - header_timestamp,
+            converted_data.header_timestamp - gt_frame_ts,
+            converted_data.subscribed_timestamp - converted_data.header_timestamp,
         )
 
         return FrameResult(is_valid=True, data=frame_result, skip_counter=self._skip_counter)

@@ -19,7 +19,6 @@ import itertools
 from pathlib import Path
 import shutil
 from typing import Any
-from typing import TypeVar
 
 from rclpy.clock import Clock
 from rosbag2_py import TopicMetadata
@@ -48,9 +47,7 @@ class TopicInfo:
 class UseCaseInfo:
     """Information of use case for evaluation."""
 
-    evaluation_manager_class: (
-        ManagerType | None
-    )  # optional for only using EvaluationItem and ResultBase
+    evaluation_manager_class: ManagerType
     result_class: ResultBaseType
     name: str
     evaluation_topics_with_task: dict[
@@ -63,18 +60,18 @@ class UseCaseInfo:
 class UseCase:
     """Container of evaluation manager, result, and result writer for each use case."""
 
-    evaluation_manager: ManagerType | None  # optional for only using EvaluationItem and ResultBase
+    evaluation_manager: ManagerType
     result: ResultBaseType
     result_writer: ResultWriter
-    evaluation_topics: list[str]  # only using for easy access
 
 
 @dataclass(frozen=True, slots=True)
 class ConvertedData:
     """Converted data for common format."""
 
-
-ConvertedDataType = TypeVar("ConvertedDataType", bound=ConvertedData)
+    header_timestamp: int  # do not care time unit
+    subscribed_timestamp: int  # do not care time unit
+    data: Any
 
 
 class UseCaseDict(dict[str, UseCase]):
@@ -84,7 +81,8 @@ class UseCaseDict(dict[str, UseCase]):
         super().__init__(*args, **kwargs)
         self._topic_to_key: dict[str, str] = {}
         for key, use_case in self.items():
-            for topic in use_case.evaluation_topics:
+            topics = use_case.evaluation_manager.get_evaluation_topics()
+            for topic in topics:
                 if topic in self._topic_to_key:
                     err_msg = f"Duplicate topic '{topic}' found in use cases."
                     raise KeyError(err_msg)
@@ -176,33 +174,32 @@ class Runner(ABC):
         evaluation_condition = load_condition(scenario)
 
         # initialize evaluation manager, result, and result writer for each use case
-        temp_use_cases = {}  # temporary mutable dict
+        temp_use_cases = {}  # temporary dict
         for use_case_info in use_case_info_list:
-            evaluation_topics = [
-                topic
-                for topics in use_case_info.evaluation_topics_with_task.values()
-                for topic in topics
-            ]
             temp_use_cases[use_case_info.name] = UseCase(
                 evaluation_manager=use_case_info.evaluation_manager_class(
                     scenario,
                     t4_dataset_path,
                     result_archive_path,
                     use_case_info.evaluation_topics_with_task,
-                )
-                if use_case_info.evaluation_manager_class is not None
-                else None,
+                ),
                 result=use_case_info.result_class(evaluation_condition),
                 result_writer=ResultWriter(
                     use_case_info.result_json_path, Clock(), evaluation_condition
                 ),
-                evaluation_topics=evaluation_topics,
             )
         self._use_cases = UseCaseDict(
             temp_use_cases
         )  # make it read-only and possible to access by topic name
 
         # initialize RosBagManager to read and save rosbag and write into it
+        evaluation_all_topics = [
+            use_case.evaluation_manager.get_evaluation_topics()
+            for use_case in self._use_cases.values()
+        ]
+        evaluation_all_topics = list(
+            itertools.chain.from_iterable(evaluation_all_topics)
+        )  # flatten list
         external_record_topics_metadata = [
             TopicMetadata(
                 name=topic_info.name,
@@ -212,14 +209,6 @@ class Runner(ABC):
             )
             for topic_info in external_record_topics
         ]
-        evaluation_all_topics = [
-            use_case.evaluation_manager.get_evaluation_topics()
-            for use_case in self._use_cases.values()
-            if use_case.evaluation_manager is not None
-        ]
-        evaluation_all_topics = list(
-            itertools.chain.from_iterable(evaluation_all_topics)
-        )  # flatten list
         self._rosbag_manager = RosBagManager(
             rosbag_dir_path,
             Path(result_archive_path).joinpath("result_bag").as_posix(),
@@ -232,7 +221,6 @@ class Runner(ABC):
         self._degradation_topics = [
             use_case.evaluation_manager.get_degradation_topic()
             for use_case in self._use_cases.values()
-            if use_case.evaluation_manager is not None
         ]
 
         # save scenario.yaml to check later
@@ -266,21 +254,16 @@ class Runner(ABC):
             FrameResult: The result of the evaluation for the frame.
 
         """
-        header_timestamp, subscribed_timestamp, data = self._convert_ros_msg_to_data(
+        converted_data: ConvertedData = self._convert_ros_msg_to_data(
             topic_name, msg, subscribed_timestamp_nanosec
         )
-
         evaluation_manager = self._use_cases[topic_name].evaluation_manager
-        if evaluation_manager is not None:
-            return evaluation_manager.evaluate_frame(
-                topic_name, header_timestamp, subscribed_timestamp, data
-            )
-        return FrameResult(is_valid=True, data=data, skip_counter=0)
+        return evaluation_manager.evaluate_frame(topic_name, converted_data)
 
     @abstractmethod
     def _convert_ros_msg_to_data(
         self, topic_name: str, msg: Any, subscribed_timestamp_nanosec: int
-    ) -> tuple[int, int, ConvertedDataType]:
+    ) -> ConvertedData:
         """
         Convert a ROS message to PerceptionEvalData.
 
@@ -290,7 +273,7 @@ class Runner(ABC):
             subscribed_timestamp_nanosec (int): The timestamp when the message was subscribed, in nanoseconds.
 
         Returns:
-            tuple[int, int, ConvertedDataType]: A tuple containing the header timestamp, subscribed timestamp, and converted data. Time unit is not specified.
+            ConvertedData: The converted data.
 
         """
         raise NotImplementedError

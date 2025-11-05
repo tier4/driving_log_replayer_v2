@@ -39,6 +39,7 @@ if TYPE_CHECKING:
     from perception_eval.evaluation.metrics import MetricsScore
 
     from driving_log_replayer_v2.perception.runner import PerceptionEvalData
+    from driving_log_replayer_v2.post_process.runner import ConvertedData
 
 
 class PerceptionInvalidReason(InvalidReason):
@@ -58,7 +59,7 @@ class PerceptionEvaluator(Evaluator):
         evaluation_task: str,
         frame_id_str: str,
     ) -> None:
-        # NOTE: this class uses the perception_eval package, so not use parent logger, which means not call super().__init__
+        # NOTE: this class uses the perception_eval package, so not use parent logger, which means not call super().__init__()
         # instance variables
         self.__skip_counter = 0
         self.__frame_id_str = frame_id_str
@@ -136,18 +137,17 @@ class PerceptionEvaluator(Evaluator):
 
     def evaluate_frame(
         self,
-        header_timestamp: int,  # should be in microseconds
-        subscribed_timestamp: int,  # should be in microseconds
-        data: PerceptionEvalData,
+        converted_data: ConvertedData,
     ) -> FrameResult:
         # skip evaluation if data conversion fails
+        data: PerceptionEvalData = converted_data.data
         if not (
             isinstance(data.estimated_objects, list)
             and all(isinstance(obj, DynamicObject) for obj in data.estimated_objects)
         ):
             self.__skip_counter += 1
             self.__logger.warning(
-                "Estimated objects is invalid for timestamp: %s", header_timestamp
+                "Estimated objects is invalid for timestamp: %s", converted_data.header_timestamp
             )
             return FrameResult(
                 is_valid=False,
@@ -156,13 +156,15 @@ class PerceptionEvaluator(Evaluator):
             )
 
         ground_truth_now_frame = self.__evaluator.get_ground_truth_now_frame(
-            header_timestamp,
+            converted_data.header_timestamp,
             interpolate_ground_truth=data.interpolation,
         )
 
         if ground_truth_now_frame is None:
             self.__skip_counter += 1
-            self.__logger.warning("Ground truth not found for timestamp %s", header_timestamp)
+            self.__logger.warning(
+                "Ground truth not found for timestamp %s", converted_data.header_timestamp
+            )
             return FrameResult(
                 is_valid=False,
                 invalid_reason=PerceptionInvalidReason.NO_GROUND_TRUTH,
@@ -170,7 +172,7 @@ class PerceptionEvaluator(Evaluator):
             )
 
         frame_result: PerceptionFrameResult = self.__evaluator.add_frame_result(
-            unix_time=header_timestamp,
+            unix_time=converted_data.header_timestamp,
             ground_truth_now_frame=ground_truth_now_frame,
             estimated_objects=data.estimated_objects,
             critical_object_filter_config=self.__critical_object_filter_config,
@@ -181,11 +183,11 @@ class PerceptionEvaluator(Evaluator):
         self.__logger.info(
             "Estimation header: %d, Ground truth header: %d (frame_name: %s), Difference: %d, "
             "Subscribe delay [micro sec]: %d",
-            header_timestamp,
+            converted_data.header_timestamp,
             ground_truth_now_frame.unix_time,
             ground_truth_now_frame.frame_name,
-            header_timestamp - ground_truth_now_frame.unix_time,
-            subscribed_timestamp - header_timestamp,
+            converted_data.header_timestamp - ground_truth_now_frame.unix_time,
+            converted_data.subscribed_timestamp - converted_data.header_timestamp,
         )
         # TODO: decide whether to add skip counter or not
 

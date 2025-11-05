@@ -22,7 +22,7 @@ from typing import TypeVar
 if TYPE_CHECKING:
     from driving_log_replayer_v2.post_process.evaluator import EvaluatorType
     from driving_log_replayer_v2.post_process.evaluator import FrameResult
-    from driving_log_replayer_v2.post_process.runner import ConvertedDataType
+    from driving_log_replayer_v2.post_process.runner import ConvertedData
     from driving_log_replayer_v2.scenario import ScenarioType
 
 
@@ -76,25 +76,21 @@ class EvaluationManager(ABC):
     def evaluate_frame(
         self,
         topic_name: str,
-        header_timestamp: int,  # do not care time unit
-        subscribed_timestamp: int,  # do not care time unit
-        data: ConvertedDataType,
+        converted_data: ConvertedData,
     ) -> FrameResult:
         """
         Evaluate a frame for a given topic.
 
         Args:
             topic_name (str): Name of the topic to evaluate.
-            header_timestamp (int): Timestamp from the message header. Time unit is not specified.
-            subscribed_timestamp (int): Timestamp when the message was subscribed. Time unit is not specified.
-            data (ConvertedDataType): Data to be evaluated.
+            data (ConvertedData): Data to be evaluated.
 
         Returns:
             FrameResult: The result of the frame evaluation.
 
         """
         evaluator = self._evaluators[topic_name]
-        return evaluator.evaluate_frame(header_timestamp, subscribed_timestamp, data)
+        return evaluator.evaluate_frame(converted_data)
 
     def get_degradation_topic(self) -> str:
         """Get the degradation topic for the evaluation manager."""

@@ -29,7 +29,7 @@ from pydantic import model_validator
 from driving_log_replayer_v2.post_process.logger import configure_logger
 
 if TYPE_CHECKING:
-    from driving_log_replayer_v2.post_process.runner import ConvertedDataType
+    from driving_log_replayer_v2.post_process.runner import ConvertedData
 
 
 class InvalidReason(str, Enum):
@@ -64,12 +64,14 @@ class Evaluator(ABC):
 
     Responsible for following items:
         evaluating each frame
+        analyzing evaluation results
     """
 
     def __init__(self, result_archive_path: str, evaluation_topic: str) -> None:
         # instance variables
         self._logger: logging.Logger
 
+        # set logger
         result_archive_w_topic_path = Path(result_archive_path)
         dir_name = evaluation_topic.lstrip("/").replace("/", ".")
         result_archive_w_topic_path = result_archive_w_topic_path.joinpath(dir_name)
@@ -84,17 +86,13 @@ class Evaluator(ABC):
     @abstractmethod
     def evaluate_frame(
         self,
-        header_timestamp: int,  # do not care time unit
-        subscribed_timestamp: int,  # do not care time unit
-        data: ConvertedDataType,
+        converted_data: ConvertedData,
     ) -> FrameResult:
         """
         Evaluate a single frame.
 
         Args:
-            header_timestamp (int): Timestamp from the message header. Time unit is not specified.
-            subscribed_timestamp (int): Timestamp when the message was subscribed. Time unit is not specified.
-            data (ConvertedDataType): Data to be evaluated.
+            data (ConvertedData): Data to be evaluated.
 
         Returns:
             FrameResult: The result of the evaluation.
