@@ -207,15 +207,15 @@ class PerceptionRunner(Runner):
 
     @property
     def stop_reason_eval_manager(self) -> StopReasonEvaluationManager:
-        return self._use_cases["stop_reason"].evaluation_manager if self.is_stop_reason() else None
+        return self._use_cases["stop_reason"].evaluation_manager
 
     @property
-    def stop_reason_result(self) -> StopReasonResult | None:
-        return self._use_cases["stop_reason"].result if self.is_stop_reason() else None
+    def stop_reason_result(self) -> StopReasonResult:
+        return self._use_cases["stop_reason"].result
 
     @property
-    def stop_reason_result_writer(self) -> ResultWriter | None:
-        return self._use_cases["stop_reason"].result_writer if self.is_stop_reason() else None
+    def stop_reason_result_writer(self) -> ResultWriter:
+        return self._use_cases["stop_reason"].result_writer
 
     def _convert_ros_msg_to_data(
         self, topic_name: str, msg: Any, subscribed_timestamp_nanosec: int

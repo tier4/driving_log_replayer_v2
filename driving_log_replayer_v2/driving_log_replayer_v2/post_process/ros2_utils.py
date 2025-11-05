@@ -116,6 +116,7 @@ class RosBagManager:
         | Clock.now().nanoseconds | int                              | nanosec  | sec * 1e9 + nanosec       |
         | nuscenes unix time      | int                              | microsec | sec * 1e6 + nanosec / 1e3 |
         """
+        subscribed_timestamp_nanosec = 0
         while self._reader.has_next():
             topic_name, msg_bytes, subscribed_timestamp_nanosec = self._reader.read_next()
             self._writer.write(topic_name, msg_bytes, subscribed_timestamp_nanosec)
@@ -155,7 +156,7 @@ def lookup_transform(
     stamp: Stamp,
     from_: str = "map",
     to: str = "base_link",
-) -> TransformStamped | str:
+) -> TransformStamped:
     try:
         return tf_buffer.lookup_transform(
             from_,

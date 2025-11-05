@@ -265,7 +265,7 @@ class Runner(ABC):
         self, topic_name: str, msg: Any, subscribed_timestamp_nanosec: int
     ) -> ConvertedData:
         """
-        Convert a ROS message to PerceptionEvalData.
+        Convert a ROS message to ConvertedData.
 
         Args:
             topic_name (str): Topic name of the message.
