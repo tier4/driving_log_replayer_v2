@@ -2,6 +2,19 @@
 Changelog for package driving_log_replayer_v2_msgs
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
+Forthcoming
+-----------
+* ci: update tool version (`#239 <https://github.com/tier4/driving_log_replayer_v2/issues/239>`_)
+  * chore: delete maintainer
+  * feat: update ruff
+  * feat: update pre-commit tool version
+  * feat: update github actions' tool version
+  * fix: tool version
+  * fix: add isort known-first-party
+  * fix: ruff PD901
+  ---------
+* Contributors: Hayato Mizushima
+
 3.13.3 (2025-10-08)
 -------------------
 

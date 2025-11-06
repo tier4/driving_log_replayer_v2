@@ -1,5 +1,24 @@
 # Release Notes
 
+## Version 3.13.4
+
+Minor Tweak
+
+| Module                | Feature         | Brief summary                                         | Pull request                                                        | Contributor                                     |
+| --------------------- | --------------- | ----------------------------------------------------- | ------------------------------------------------------------------- | ----------------------------------------------- |
+| `common`              | post-process    | create base class for post process                    | [#243](https://github.com/tier4/driving_log_replayer_v2/issues/243) | [MasatoSaeki](https://github.com/MasatoSaeki)   |
+| `planning_control`    | chore           | add comment and update UseCaseFormatVersion           | [#246](https://github.com/tier4/driving_log_replayer_v2/issues/246) | [MasatoSaeki](https://github.com/MasatoSaeki)   |
+| `planning_control`    | evaluation item | support judge distance                                | [#245](https://github.com/tier4/driving_log_replayer_v2/issues/245) | [xtk8532704](https://github.com/xtk8532704)     |
+| `planning_control`    | topic           | reduce record topics                                  | [#244](https://github.com/tier4/driving_log_replayer_v2/issues/244) | [kosuke55](https://github.com/kosuke55)         |
+| `diagnostics`         | evaluation item | new diag judgement type                               | [#241](https://github.com/tier4/driving_log_replayer_v2/issues/241) | [xtk8532704](https://github.com/xtk8532704)     |
+| `ground_segmentation` | post-process    | change to analyze evaluation to post-process          | [#238](https://github.com/tier4/driving_log_replayer_v2/issues/238) | [badai-nguyen](https://github.com/badai-nguyen) |
+| `common`              | CI              | update tool version                                   | [#239](https://github.com/tier4/driving_log_replayer_v2/issues/239) | [hayato-m126](https://github.com/hayato-m126)   |
+| `localization`        | scenario        | enable to turn off availability evaluation            | [#236](https://github.com/tier4/driving_log_replayer_v2/issues/236) | [TaikiYamada4](https://github.com/TaikiYamada4) |
+| `localization`        | qos             | increase qos depth of diagnostics on recording        | [#235](https://github.com/tier4/driving_log_replayer_v2/issues/235) | [TaikiYamada4](https://github.com/TaikiYamada4) |
+| `planning_control`    | bug             | output results when planning_factors is empty as well | [#234](https://github.com/tier4/driving_log_replayer_v2/issues/234) | [xtk8532704](https://github.com/xtk8532704)     |
+| `planning_control`    | bug             | fix profile func bug                                  | [#233](https://github.com/tier4/driving_log_replayer_v2/issues/233) | [xtk8532704](https://github.com/xtk8532704)     |
+| `planning_control`    | topic           | change topic name                                     | [#179](https://github.com/tier4/driving_log_replayer_v2/issues/179) | [MasatoSaeki](https://github.com/MasatoSaeki)   |
+
 ## Version 3.13.3
 
 Minor Tweak
