@@ -12,46 +12,45 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import numpy as np
-
-from driving_log_replayer_v2.evaluation_manager import EvaluationManager
 from driving_log_replayer_v2.ground_segmentation.evaluator import GroundSegmentationEvaluator
-from driving_log_replayer_v2.ground_segmentation.models import Conditions
 from driving_log_replayer_v2.ground_segmentation.models import GroundSegmentationScenario
-from driving_log_replayer_v2_msgs.msg import GroundSegmentationEvalResult
+from driving_log_replayer_v2.post_process.evaluation_manager import EvaluationManager
+from driving_log_replayer_v2.scenario import load_condition
 
 
 class GroundSegmentationEvaluationManager(EvaluationManager):
     def __init__(
         self,
-        scenario_path: str,
+        scenario: GroundSegmentationScenario,
         t4_dataset_path: str,
         result_archive_path: str,
-        evaluation_topics: list[str],
+        evaluation_topics_with_task: dict[str, list[str]],
     ) -> None:
-        super().__init__(scenario_path, GroundSegmentationScenario)
-        self._scenario: GroundSegmentationScenario
-        self._evaluation_condition: Conditions
-        self._evaluators: dict[str, GroundSegmentationEvaluator]
-        self._degradation_topic: str
+        super().__init__(
+            scenario, t4_dataset_path, result_archive_path, evaluation_topics_with_task
+        )
 
+    def _set_evaluators(
+        self,
+        t4_dataset_path: str,
+        result_archive_path: str,
+        evaluation_topics_with_task: dict[str, list[str]],
+    ) -> None:
+        evaluation_condition = load_condition(self._scenario)
+        evaluation_topics = [
+            topic for topics in evaluation_topics_with_task.values() for topic in topics
+        ]
         self._evaluators = {
             topic: GroundSegmentationEvaluator(
                 t4_dataset_path,
                 result_archive_path,
                 topic,
-                self._evaluation_condition,
+                evaluation_condition,
             )
             for topic in evaluation_topics
         }
 
-        self.set_degradation_topic()
-
-    def set_degradation_topic(self) -> None:
-        self._degradation_topic = next(iter(self._evaluators.keys()))
-
-    def evaluate(
-        self, topic_name: str, header_timestamp_microsec: int, pointcloud: np.ndarray
-    ) -> GroundSegmentationEvalResult | str:
-        evaluator = self._evaluators[topic_name]
-        return evaluator.evaluate(header_timestamp_microsec, pointcloud)
+    def _set_degradation_topic(self) -> None:
+        self._degradation_topic = next(
+            iter(self._evaluators.keys())
+        )  # set first topic as degradation topic

@@ -61,8 +61,8 @@ def unix_time_microsec_from_ros_timestamp(ros_timestamp: Time | DurationMsg) -> 
     return ros_timestamp.sec * pow(10, 6) + ros_timestamp.nanosec // 1000
 
 
-def unix_time_microsec_from_ros_clock_time(ros_clock_time: int) -> int:
-    return ros_clock_time // 1000
+def unix_time_microsec_from_ros_time_nanosec(ros_time_nanosec: int) -> int:
+    return ros_time_nanosec // 1000
 
 
 def position_from_ros_msg(ros_position: Point) -> tuple[int, int, int]:
@@ -355,7 +355,7 @@ def get_perception_label_str(classification: ObjectClassification) -> str:
 
 
 def list_dynamic_object_from_ros_msg(
-    unix_time: int,
+    unix_time_microsec: int,
     objects: list[DetectedObject] | list[TrackedObject] | list[PredictedObject],
     evaluator_config: PerceptionEvaluationConfig,
 ) -> list[DynamicObject] | str:
@@ -392,7 +392,7 @@ def list_dynamic_object_from_ros_msg(
 
         assert len(evaluator_config.frame_ids) == 1, "Only one frame id is supported"
         estimated_object = DynamicObject(
-            unix_time=unix_time,
+            unix_time=unix_time_microsec,
             frame_id=evaluator_config.frame_ids[0],
             position=position_from_ros_msg(
                 perception_object.kinematics.pose_with_covariance.pose.position

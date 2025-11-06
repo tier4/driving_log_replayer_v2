@@ -341,9 +341,9 @@ def test_stop_reason_obstacle_stop(
     create_awapi_autoware_status_msg: AwapiAutowareStatus,
     create_stop_reason: StopReason,
 ) -> None:
-    stop_reason = convert_to_stop_reason(create_awapi_autoware_status_msg)
+    converted_data = convert_to_stop_reason(create_awapi_autoware_status_msg, 1000**9 + 5)
     evaluation_item = create_stop_reason
-    frame_dict = evaluation_item.set_frame(stop_reason)
+    frame_dict = evaluation_item.set_frame(converted_data.data)
     assert evaluation_item.success is True
     assert evaluation_item.summary == "criteria0 (Success): 95 / 100 -> 95.00%"
     assert frame_dict["PassFail"] == {
@@ -362,8 +362,8 @@ def test_stop_reason_timeout(
 ) -> None:
     # change time to out of range
     create_awapi_autoware_status_msg.stop_reason.header.stamp.sec = 50
-    stop_reason = convert_to_stop_reason(create_awapi_autoware_status_msg)
+    converted_data = convert_to_stop_reason(create_awapi_autoware_status_msg, 1000**9 + 5)
     evaluation_item = create_stop_reason
-    frame_dict = evaluation_item.set_frame(stop_reason)
+    frame_dict = evaluation_item.set_frame(converted_data.data)
     assert evaluation_item.success is True  # default is True
     assert frame_dict == {"Timeout": 1}

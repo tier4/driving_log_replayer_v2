@@ -162,7 +162,18 @@ def post_process(context: LaunchContext) -> list:  # noqa: C901, PLR0911
                 context.launch_configurations["result_archive_path"],
                 context.launch_configurations["storage"],
                 context.launch_configurations["evaluation_topic"],
+                context.launch_configurations["enable_analysis"],
             )
+            shutil.rmtree(
+                Path(context.launch_configurations["result_bag_path"]).as_posix(),
+            )
+            shutil.move(
+                Path(context.launch_configurations["result_archive_path"])
+                .joinpath("result_bag")
+                .as_posix(),
+                Path(context.launch_configurations["result_bag_path"]).as_posix(),
+            )
+            return [LogInfo(msg="ground_segmentation post process finished.")]
 
         return [
             LogInfo(msg="run ground_segmentation analysis."),

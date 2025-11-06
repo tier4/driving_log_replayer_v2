@@ -12,17 +12,30 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from __future__ import annotations
+
 import json
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 import numpy as np
 from scipy.spatial import cKDTree
 
-from driving_log_replayer_v2.ground_segmentation.models import Conditions
+from driving_log_replayer_v2.post_process.evaluator import Evaluator
+from driving_log_replayer_v2.post_process.evaluator import FrameResult
+from driving_log_replayer_v2.post_process.evaluator import InvalidReason
 from driving_log_replayer_v2_msgs.msg import GroundSegmentationEvalResult
 
+if TYPE_CHECKING:
+    from driving_log_replayer_v2.ground_segmentation.models import Conditions
+    from driving_log_replayer_v2.post_process.runner import ConvertedData
 
-class GroundSegmentationEvaluator:
+
+class GroundSegmentationInvalidReason(InvalidReason):
+    NO_GROUND_TRUTH = "No Ground Truth"
+
+
+class GroundSegmentationEvaluator(Evaluator):
     CLOUD_DIM = 5
     TS_DIFF_THRESH = 75000
 
@@ -33,21 +46,22 @@ class GroundSegmentationEvaluator:
         evaluation_topic: str,
         conditions: Conditions,
     ) -> None:
-        self._t4_dataset_path = t4_dataset_path
-        self._result_archive_path = result_archive_path
-        self._evaluation_topic = evaluation_topic
-        self._conditions = conditions
+        # additional instance variables
+        self._skip_counter = 0
+        self._conditions: Conditions = conditions
+
+        super().__init__(result_archive_path, evaluation_topic)
 
         self._ground_label = self._conditions.ground_label
         self._obstacle_label = self._conditions.obstacle_label
 
         # load point cloud data
-        sample_data_path = Path(self._t4_dataset_path, "annotation", "sample_data.json")
+        sample_data_path = Path(t4_dataset_path, "annotation", "sample_data.json")
         sample_data = json.load(sample_data_path.open())
         sample_data = list(filter(lambda d: d["filename"].split(".")[-2] == "pcd", sample_data))
 
         # load gt annotation data
-        lidar_seg_json_path = Path(self._t4_dataset_path, "annotation", "lidarseg.json")
+        lidar_seg_json_path = Path(t4_dataset_path, "annotation", "lidarseg.json")
         lidar_seg_data = json.load(lidar_seg_json_path.open())
         token_to_seg_data = {}
         for annotation_data in lidar_seg_data:
@@ -56,7 +70,7 @@ class GroundSegmentationEvaluator:
         self._ground_truth: dict[int, dict[str, np.ndarray]] = {}
         for i in range(len(sample_data)):
             raw_points_file_path = Path(
-                self._t4_dataset_path,
+                t4_dataset_path,
                 sample_data[i]["filename"],
             ).as_posix()
             raw_points = np.fromfile(raw_points_file_path, dtype=np.float32)
@@ -65,7 +79,7 @@ class GroundSegmentationEvaluator:
             if token not in token_to_seg_data:
                 continue
             annotation_file_path = Path(
-                self._t4_dataset_path, token_to_seg_data[token]["filename"]
+                t4_dataset_path, token_to_seg_data[token]["filename"]
             ).as_posix()
             labels = np.fromfile(annotation_file_path, dtype=np.uint8)
 
@@ -76,13 +90,22 @@ class GroundSegmentationEvaluator:
                 "labels": labels,
             }
 
-    def evaluate(
-        self, header_timestamp_microsec: int, pointcloud: np.ndarray
-    ) -> GroundSegmentationEvalResult | str:
-        gt_frame_ts = self.__get_gt_frame_ts(header_timestamp_microsec)
+    def evaluate_frame(
+        self,
+        converted_data: ConvertedData,
+    ) -> FrameResult:
+        gt_frame_ts = self.__get_gt_frame_ts(converted_data.header_timestamp)
 
         if gt_frame_ts < 0:
-            return "No Ground Truth"
+            self._skip_counter += 1
+            self._logger.warning(
+                "No ground truth for timestamp %d microsec", converted_data.header_timestamp
+            )
+            return FrameResult(
+                is_valid=False,
+                invalid_reason=GroundSegmentationInvalidReason.NO_GROUND_TRUTH,
+                skip_counter=self._skip_counter,
+            )
 
         # get ground truth pointcloud in this frame
         # construct kd-tree from gt cloud
@@ -108,7 +131,7 @@ class GroundSegmentationEvaluator:
 
         tn: int = 0
         fn: int = 0
-        for p in pointcloud:
+        for p in converted_data.data:
             _, idx = kdtree.query(p, k=1)
             if gt_frame_label[idx] in self._ground_label:
                 fn += 1
@@ -130,7 +153,18 @@ class GroundSegmentationEvaluator:
         frame_result.specificity = metrics_list[3]
         frame_result.f1_score = metrics_list[4]
 
-        return frame_result
+        # TODO: add topic delay
+        self._logger.info(
+            "Estimation header: %d, Ground truth header: %d (frame_name: %s), Difference: %d, "
+            "Subscribe delay [micro sec]: %d",
+            converted_data.header_timestamp,
+            gt_frame_ts,
+            "None",
+            converted_data.header_timestamp - gt_frame_ts,
+            converted_data.subscribed_timestamp - converted_data.header_timestamp,
+        )
+
+        return FrameResult(is_valid=True, data=frame_result, skip_counter=self._skip_counter)
 
     def __get_gt_frame_ts(self, unix_time: int) -> int:
         ts_itr = iter(self._ground_truth.keys())

@@ -26,6 +26,7 @@
     "nuscene",
     "nuscenes",
     "objdata",
+    "perc",
     "pydantic",
     "pyproject",
     "rightdiagonal",
