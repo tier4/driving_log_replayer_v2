@@ -2,8 +2,8 @@
 Changelog for package driving_log_replayer
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-Forthcoming
------------
+3.13.4 (2025-11-06)
+-------------------
 * refactor(perception, ground_segmentation): create base class for post process (`#243 <https://github.com/tier4/driving_log_replayer_v2/issues/243>`_)
   * introduce the base evaluator class
   * create base runner only perception, next step is to create it for ground segmentation
