@@ -2,6 +2,110 @@
 Changelog for package driving_log_replayer
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
+Forthcoming
+-----------
+* refactor(perception, ground_segmentation): create base class for post process (`#243 <https://github.com/tier4/driving_log_replayer_v2/issues/243>`_)
+  * introduce the base evaluator class
+  * create base runner only perception, next step is to create it for ground segmentation
+  * adapt ground_segmentation
+  * pre-commit
+  * create base model
+  * refactor
+  * adopt ground_segmentation
+  * refactor!
+  * pre-commit
+  * adapt keyword
+  * fix
+  * chore
+  * chore
+  * fix path
+  * refactor
+  * pre-commit
+  * fix test
+  * pre-commit
+  * fix test
+  * update
+  * update
+  * add dataclass decolator
+  * update
+  * update
+  * fix scenario
+  ---------
+* chore(planning_control): add comment and update UseCaseFormatVersion (`#246 <https://github.com/tier4/driving_log_replayer_v2/issues/246>`_)
+* feat(planning_control): support judge distance (`#245 <https://github.com/tier4/driving_log_replayer_v2/issues/245>`_)
+  * tmp save
+  * update sample scenario
+  * update docs
+  * update error msgs
+* feat(planning_control): reduce record topics (`#244 <https://github.com/tier4/driving_log_replayer_v2/issues/244>`_)
+* feat(diagnostics): new diag judgement type (`#241 <https://github.com/tier4/driving_log_replayer_v2/issues/241>`_)
+  * tmp save
+  * update sample
+  * fix typo
+  * pre-commit
+  * update code for comments
+  * show percentage in Summary
+  * for test
+  * fix unit test
+  * add unit tests
+  ---------
+  Co-authored-by: MasatoSaeki <masato.saeki@tier4.jp>
+* feat(ground_segmentation): change to analyze evaluation to post-process  (`#238 <https://github.com/tier4/driving_log_replayer_v2/issues/238>`_)
+  * fix(ground_segmentation): add record topic
+  * feat: add ground segmentation post process
+  * fix: timestamp
+  * fix: matching timestamp
+  * fix ground_segmentation post proc
+  * enable ground segmentation post process
+  * fix: post process
+  * fix: record topic
+  * refactor
+  * delete unnecessary node
+  * Update driving_log_replayer_v2/launch/post_process.launch.py
+  Co-authored-by: Copilot <175728472+Copilot@users.noreply.github.com>
+  * Update driving_log_replayer_v2/driving_log_replayer_v2/ground_segmentation_post_process.py
+  Co-authored-by: Copilot <175728472+Copilot@users.noreply.github.com>
+  * Update driving_log_replayer_v2/driving_log_replayer_v2/ground_segmentation_post_process.py
+  Co-authored-by: Copilot <175728472+Copilot@users.noreply.github.com>
+  * chore: add missing argument
+  * refactor
+  * pre-commit
+  * Update docs/use_case/ground_segmentation.ja.md
+  Co-authored-by: Toyozo Shimada <shimada.toyozo.lf@tut.jp>
+  * Update docs/use_case/ground_segmentation.ja.md
+  Co-authored-by: Toyozo Shimada <shimada.toyozo.lf@tut.jp>
+  * Update docs/use_case/ground_segmentation.ja.md
+  Co-authored-by: Toyozo Shimada <shimada.toyozo.lf@tut.jp>
+  ---------
+  Co-authored-by: Copilot <175728472+Copilot@users.noreply.github.com>
+  Co-authored-by: MasatoSaeki <masato.saeki@tier4.jp>
+  Co-authored-by: Toyozo Shimada <shimada.toyozo.lf@tut.jp>
+* ci: update tool version (`#239 <https://github.com/tier4/driving_log_replayer_v2/issues/239>`_)
+  * chore: delete maintainer
+  * feat: update ruff
+  * feat: update pre-commit tool version
+  * feat: update github actions' tool version
+  * fix: tool version
+  * fix: add isort known-first-party
+  * fix: ruff PD901
+  ---------
+* feat(localization): enable to turn off availability evaluation (`#236 <https://github.com/tier4/driving_log_replayer_v2/issues/236>`_)
+  * make possible to disable Availability evaluation
+  * update sample and documents
+  * make availability condition lower snake case, and also make it optional
+  * update UsecaseScenarioVersion
+  * fix typo
+  ---------
+* chore: increase qos depth of diagnotics on recording (`#235 <https://github.com/tier4/driving_log_replayer_v2/issues/235>`_)
+  Co-authored-by: MasatoSaeki <masato.saeki@tier4.jp>
+* chore(planning_control): output results when planning_factors is empt as well (`#234 <https://github.com/tier4/driving_log_replayer_v2/issues/234>`_)
+  * output results when planning_factors is empty.
+  * refactor code
+* fix profile func bug (`#233 <https://github.com/tier4/driving_log_replayer_v2/issues/233>`_)
+  Co-authored-by: t4-adc <grp-rd-1-adc-admin@tier4.jp>
+* change topic name (`#179 <https://github.com/tier4/driving_log_replayer_v2/issues/179>`_)
+* Contributors: Hayato Mizushima, Kem (TiankuiXian), Kosuke Takeuchi, Masato Saeki, Taiki Yamada, badai nguyen
+
 3.13.3 (2025-10-08)
 -------------------
 * refactor: refactor arguments and get method in context (`#231 <https://github.com/tier4/driving_log_replayer_v2/issues/231>`_)
