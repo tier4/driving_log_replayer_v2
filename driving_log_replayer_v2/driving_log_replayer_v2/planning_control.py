@@ -355,13 +355,13 @@ class PlanningFactor(EvaluationItem):
             return None
 
         self.total += 1
+
+        condition_met = False
         if len(msg.factors) == 0:
-            condition_met = False
             info_dict = {
                 "Factor_0": "NO_FACTOR",
             }
         else:
-            condition_met = False
             info_dict = {}
 
             for i, factor in enumerate(msg.factors):
