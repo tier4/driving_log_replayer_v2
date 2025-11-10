@@ -91,7 +91,7 @@ class DLREvaluatorV2(Node):
                 self.get_clock(),
                 evaluation_condition,
             )
-            self._result = result_class(evaluation_condition)
+            self._result = result_class(evaluation_condition.MetricConditions)
             self._pub_result = self.create_publisher(String, result_topic, 1)
         except (
             FileNotFoundError,
