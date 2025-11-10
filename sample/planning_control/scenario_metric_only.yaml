@@ -31,5 +31,5 @@ Evaluation:
         topic: /planning/planning_evaluator/metrics
         metric_name: velocity/max
         value_type: string
-        value_target: '0'
+        value_target: "0"
         condition_type: any_of

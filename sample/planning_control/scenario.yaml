@@ -1,8 +1,8 @@
 ScenarioFormatVersion: 3.1.0
 ScenarioName: sample_planning_control
 ScenarioDescription: sample_planning_control
-SensorModel: aip_x2_gen2 # todo: 変更予定(aip_xx1)
-VehicleModel: j6_gen2 # todo: 変更予定(lexus)
+SensorModel: aip_xx1
+VehicleModel: lexus
 publish_profile: planning_control
 Evaluation:
   UseCaseName: planning_control
@@ -11,7 +11,7 @@ Evaluation:
     - obstacle_stop:
         VehicleId: default
   Conditions:
-    MetricConditions: 
+    MetricConditions:
       - condition_name: processing_time/static_obstacle_avoidance
         topic: /system/processing_time_checker/metrics
         metric_name: processing_time/static_obstacle_avoidance

@@ -14,10 +14,26 @@ launch を立ち上げると以下のことが実行され、評価される。
 
 ## 評価結果
 
-`/control/autonomous_emergency_braking/metrics`と`/control/control_evaluator/metrics`を利用する。
-`/control/autonomous_emergency_braking/metrics`がシナリオで指定されたvalueになっているかを評価する。
-シナリオでレーン条件を記述した場合は、`/control/control_evaluator/metrics`から取得できるレーンが条件を満たした場合に評価される。
-評価の条件を満たさない場合は、ログも出力されない。
+### Metric
+
+[Metric.msg](https://github.com/autowarefoundation/autoware_internal_msgs/blob/main/autoware_internal_metric_msgs/msg/Metric.msg)が利用されているtopicを利用する。
+主に、`/control/control_evaluator/metrics`, `/planning/planning_evaluator/metrics`, `/system/processing_time/metrics`を想定している。
+評価対象となるtopic内の`name`は`module_name`にて指定する。
+以下条件を評価できる。
+
+- 指定msg.valueがシナリオ指定の範囲から外れないか
+- 指定msg.valueがシナリオ指定の値となるか
+
+#### Metric正常
+
+指定topicのmsg.valueがシナリオ指定の範囲に収まっていた、または値と一致した場合に正常となる。
+`all_of`はシナリオ中常にPASSすることが求められ、`any_of`はシナリオ中一度以上PASSすることが求められる。
+
+#### Metric正常異常
+
+Metric正常の条件を満たさないとき
+
+### PlanningFactor
 
 `/planning/planning_factors/**`のtopicを利用する。評価対象のtopicはシナリオファイルでtopic名を指定する。
 以下の条件を評価できる。
@@ -25,17 +41,7 @@ launch を立ち上げると以下のことが実行され、評価される。
 - PlanningFactorのcontrol_pointの位置がシナリオに指定された条件を満たすか
 - PlanningFactorのbehaviorが指定のbehaviorになってるか
 
-### Metric正常
-
-`/control/control_evaluator/metrics`のvalueがシナリオ指定の値と一致した場合に正常となる。
-ただし、`none`が指定された場合は、topicのmetric_arrayが空配列の場合にnoneと判断する。
-kinematic_conditionを指定した場合は追加で、kinematic_stateが条件を満たしている必要がある。
-
-### Metric正常異常
-
-Metric正常の条件を満たさないとき
-
-### PlanningFactor正常(judgement: positive)
+#### PlanningFactor正常(judgement: positive)
 
 `/planning/planning_factors/**`が以下の条件を全部満たす場合に正常となる。
 
@@ -43,7 +49,7 @@ Metric正常の条件を満たさないとき
 - シナリオにbehavior条件がある場合、planning_factorのbehaviorがシナリオで指定したbehaviorにある。
 - シナリオにdistance条件がある場合、planning_factorのdistance(Egoからcontrol_pointまでの距離)がシナリオで指定した範囲に入っている。
 
-### PlanningFactor正常(judgement: negative)
+#### PlanningFactor正常(judgement: negative)
 
 `/planning/planning_factors/**`が以下の任意条件を満たさない場合に正常となる。
 
@@ -51,14 +57,14 @@ Metric正常の条件を満たさないとき
 - シナリオにbehavior条件がある場合、planning_factorのbehaviorがシナリオで指定したbehaviorにある。
 - シナリオにdistance条件がある場合、planning_factorのdistance(Egoからcontrol_pointまでの距離)がシナリオで指定した範囲に入っている。
 
-### PlanningFactor異常
+#### PlanningFactor異常
 
 PlanningFactor正常の条件を満たさないとき
 
 ## 評価結果の出力先ファイル
 
 planning_controlにおいては、以下の3つのファイルにそれぞれresult.jsonlが作成される。
-result.jsonlは必ず出力されるが、planning_factor_result.jsonlとdiag_result.jsonlはシナリオで指定した場合にのみ出力される
+result.jsonlは必ず出力されるが、planning_factor_result.jsonlとmetric_result.jsonlとdiag_result.jsonlはシナリオで指定した場合にのみ出力される
 
 ### result.jsonl
 
@@ -66,12 +72,17 @@ output_dir/result.jsonlに出力される。
 metricの評価結果が記述される。
 
 Evaluatorで実行する場合は、このファイルの最終行が参照されて成否が決定される。
-このため、planning_factor_result.jsonlとdiag_result.jsonlの結果をマージした最終的な成否の情報がpost_processで書き込まれる。
+このため、planning_factor_result.jsonlとmetric_result.jsonlとdiag_result.jsonlの結果をマージした最終的な成否の情報がpost_processで書き込まれる。
 
 ## planning_factor_result.jsonl
 
 output_dir/result_archive/planning_factor_result.jsonlに出力される。
 planning_factorの評価結果が記述される。
+
+## metric_result.jsonl
+
+output_dir/result_archive/metric_result.jsonlに出力される。
+metricsの評価結果が記述される。
 
 ## diag_result.jsonl
 
@@ -85,6 +96,8 @@ Subscribed topics:
 | Topic name                                    | Data type                                               |
 | --------------------------------------------- | ------------------------------------------------------- |
 | /control/control_evaluator/metrics            | tier4_metric_msg/msg/MetricArray                        |
+| /planning/planning_evaluator/metrics          | tier4_metric_msg/msg/MetricArray                        |
+| /system/processing_time/metrics               | tier4_metric_msg/msg/MetricArray                        |
 | /control/autonomous_emergency_braking/metrics | tier4_metric_msg/msg/DiagnosticArray                    |
 | /planning/planning_factors/\*\*               | autoware_internal_planning_msgs/msg/PlanningFactorArray |
 
@@ -167,12 +180,7 @@ planning と controlで設定した全ての評価条件で成功している場
   "Frame": {
     "[Planning|Control]_CONDITION_INDEX": {
       "Result": { "Total": "Success or Fail", "Frame": "Success or Fail" },
-      "Info": {
-        "TotalPassed": "評価条件をパスしたtopicの総数",
-        "Decision": "取得したtopicのdecision",
-        "LaneInfo": "[lane_id, s, t]",
-        "KinematicState": "[vel, acc, jerk]"
-      }
+      "Info": { "Value": "取得したtopicの値" }
     }
   }
 }

@@ -14,28 +14,26 @@ Launching the file executes the following steps:
 
 ## Evaluation Result
 
-This node uses `/control/autonomous_emergency_braking/metrics` and `/control/control_evaluator/metrics`.
-Evaluate if `/control/autonomous_emergency_braking/metrics` is the value specified in the scenario.
-If a lane condition is described in the scenario, it is evaluated when a lane that can be obtained from `/control/control_evaluator/metrics` satisfies the condition.
-If the conditions for evaluation are not met, no log is output.
+### Metric
 
-`/planning/planning_factors/**` topics are used. The target topic for evaluation is specified in the scenario file.
+Use topics that utilize [Metric.msg](https://github.com/autowarefoundation/autoware_internal_msgs/blob/main/autoware_internal_metric_msgs/msg/Metric.msg).
+Primarily intended for `/control/control_evaluator/metrics`, `/planning/planning_evaluator/metrics`, and `/system/processing_time/metrics`.
+The `name` within the topic being evaluated is specified by `module_name`.
 The following conditions can be evaluated:
 
-- Whether the position of the PlanningFactor's control_point satisfies the conditions specified in the scenario
-- Whether the PlanningFactor's behavior matches the specified behavior
+- Whether the specified `msg.value` falls outside the range specified by the scenario
+- Whether the specified `msg.value` matches the value specified by the scenario
 
 ### Metric Normal
 
-Normal if the value in `/control/control_evaluator/metrics` matches the value specified in the scenario.
-Though, if `none` is specified, it is judged as `none` if the metric_array of topic is an empty array.
-If kinematic_condition is specified, additionally, kinematic_state must meet the condition.
+The condition passes successfully when the `msg.value` of the specified topic falls within the scenario's specified range or matches the value.
+`all_of` requires the condition to pass at all times during the scenario, while `any_of` requires the condition to pass at least once during the scenario.
 
-### Metric Error
+#### Metric Error
 
 When the Metric Normal condition is not met
 
-### PlanningFactor Normal(judgement: positive)
+#### PlanningFactor Normal(judgement: positive)
 
 Normal if `/planning/planning_factors/**` meets all of the following conditions:
 
@@ -43,7 +41,7 @@ Normal if `/planning/planning_factors/**` meets all of the following conditions:
 - If there is a behavior condition in the scenario, the planning_factor's behavior matches the behavior specified in the scenario.
 - If there is a distance condition in the scenario, the planning_factor's distance (distance from Ego to control_point) is within the range specified in the scenario.
 
-### PlanningFactor Normal(judgement: negative)
+#### PlanningFactor Normal(judgement: negative)
 
 Normal if `/planning/planning_factors/**` does not meet any of the following conditions:
 
@@ -51,14 +49,14 @@ Normal if `/planning/planning_factors/**` does not meet any of the following con
 - If there is a behavior condition in the scenario, the planning_factor's behavior matches the behavior specified in the scenario.
 - If there is a distance condition in the scenario, the planning_factor's distance (distance from Ego to control_point) is within the range specified in the scenario.
 
-### PlanningFactor Error
+#### PlanningFactor Error
 
 When the PlanningFactor Normal condition is not met
 
 ## Output File for Evaluation Results
 
 In planning_control, result.jsonl is created in the following three files.
-result.jsonl is always output, but planning_factor_result.jsonl and diag_result.jsonl are only output when specified in the scenario.
+result.jsonl is always output, but planning_factor_result.jsonl, metric_result.jsonl and diag_result.jsonl are only output when specified in the scenario.
 
 ### result.jsonl
 
@@ -66,12 +64,17 @@ Output to output_dir/result.jsonl.
 Contains metric evaluation results.
 
 When running with Evaluator, the success/failure is determined by referencing the last line of this file.
-Therefore, the final success/failure information that merges the results of planning_factor_result.jsonl and diag_result.jsonl is written in post_process.
+Therefore, the final success/failure information that merges the results of planning_factor_result.jsonl, metric_result.jsonl and diag_result.jsonl is written in post_process.
 
 ### planning_factor_result.jsonl
 
 Output to output_dir/result_archive/planning_factor_result.jsonl.
 Contains planning_factor evaluation results.
+
+## metric_result.jsonl
+
+Output to output_dir/result_archive/metric_result.jsonl.
+Contains the evaluation results for metrics.
 
 ### diag_result.jsonl
 
@@ -85,6 +88,8 @@ Subscribed topics:
 | Topic name                                    | Data type                                               |
 | --------------------------------------------- | ------------------------------------------------------- |
 | /control/control_evaluator/metrics            | tier4_metric_msg/msg/MetricArray                        |
+| /planning/planning_evaluator/metrics          | tier4_metric_msg/msg/MetricArray                        |
+| /system/processing_time/metrics               | tier4_metric_msg/msg/MetricArray                        |
 | /control/autonomous_emergency_braking/metrics | tier4_metric_msg/msg/DiagnosticArray                    |
 | /planning/planning_factors/\*\*               | autoware_internal_planning_msgs/msg/PlanningFactorArray |
 

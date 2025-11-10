@@ -55,25 +55,6 @@ class PlanningControlEvaluator(DLREvaluatorV2):
             self._pub_result.publish(String(data=result_str))
 
         else:
-            self.__sub_control_metrics = self.create_subscription(
-                MetricArray,
-                "/control/control_evaluator/metrics",
-                self.control_cb,
-                1,
-            )
-            self.__sub_planning_metrics = self.create_subscription(
-                MetricArray,
-                "/control/planning_evaluator/metrics",
-                self.planning_cb,
-                1,
-            )
-            self.__sub_processing_time_metrics = self.create_subscription(
-                MetricArray,
-                "/system/processing_time/metrics",
-                self.processing_time_cb,
-                1,
-            )
-
             self._pub_metric_result = self.create_publisher(
                 String, "/driving_log_replayer/metric/results", 1
             )
@@ -153,36 +134,6 @@ class PlanningControlEvaluator(DLREvaluatorV2):
         if self._metric_result.frame != {}:
             res_str = self._metric_result_writer.write_result(self._metric_result)
             self._pub_metric_result.publish(String(data=res_str))
-
-    def control_cb(self, msg: MetricArray) -> None:
-        if msg.metric_array != []:
-            control_topics = {
-                cond.condition_name for cond in self._scenario.Evaluation.Conditions.MetricConditions if cond.topic == "/control/control_evaluator/metrics"
-            }
-            for metric in msg.metric_array:
-                if metric.name not in control_topics:
-                    del metric
-        self._latest_control_metrics = msg
-
-    def planning_cb(self, msg: MetricArray) -> None:
-        if msg.metric_array != []:
-            planning_topics = {
-                cond.condition_name for cond in self._scenario.Evaluation.Conditions.MetricConditions if cond.topic == "/planning/planning_evaluator/metrics"
-            }
-            for metric in msg.metric_array:
-                if metric.name not in planning_topics:
-                    del metric
-        self._latest_planning_metrics = msg
-
-    def processing_time_cb(self, msg: MetricArray) -> None:
-        if msg.metric_array != []:
-            processing_time_topics = {
-                cond.condition_name for cond in self._scenario.Evaluation.Conditions.MetricConditions if cond.topic == "/system/processing_time_checker/metrics"
-            }
-            for metric in msg.metric_array:
-                if metric.name not in processing_time_topics:
-                    del metric
-        self._latest_processing_time_metrics = msg
 
     def diag_cb(self, msg: DiagnosticArray) -> None:
         if len(msg.status) == 0:

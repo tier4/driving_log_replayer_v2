@@ -40,9 +40,8 @@ def test_min_max_validation() -> None:
 
 
 def create_condition(
-        value_type: Literal["number", "string"],
-        condition_type: Literal["any_of", "all_of"]
-    ) -> MetricCondition:
+    value_type: Literal["number", "string"], condition_type: Literal["any_of", "all_of"]
+) -> MetricCondition:
     return MetricCondition(
         condition_name="acceleration_check",
         topic="/control/control_evaluator/metrics",
@@ -62,7 +61,7 @@ def create_metric_msg(
 ) -> Metric:
     if is_out_of_range or is_not_target:
         value = "2.0"
-    return  Metric(name="acceleration", unit="", value=value)
+    return Metric(name="acceleration", unit="", value=value)
 
 
 def test_metrics_number() -> None:
@@ -70,8 +69,8 @@ def test_metrics_number() -> None:
     evaluation_item: Metrics = Metrics(name="control_0", condition=condition)
     acc_metric = create_metric_msg()
     assert evaluation_item.set_frame(acc_metric.value) == {
-        'Info': {'Value': '0.0'},
-        'Result': {'Frame': 'Success', 'Total': 'Success'}
+        "Info": {"Value": "0.0"},
+        "Result": {"Frame": "Success", "Total": "Success"},
     }
     assert evaluation_item.success is True
 
@@ -81,8 +80,8 @@ def test_metrics_number_out_range() -> None:
     evaluation_item: Metrics = Metrics(name="control_0", condition=condition)
     acc_metric = create_metric_msg(is_out_of_range=True)
     assert evaluation_item.set_frame(acc_metric.value) == {
-        'Info': {'Value': '2.0'},
-        'Result': {'Frame': 'Fail', 'Total': 'Fail'}
+        "Info": {"Value": "2.0"},
+        "Result": {"Frame": "Fail", "Total": "Fail"},
     }
     assert evaluation_item.success is False
 
@@ -92,8 +91,8 @@ def test_metrics_string() -> None:
     evaluation_item: Metrics = Metrics(name="control_0", condition=condition)
     acc_metric = create_metric_msg()
     assert evaluation_item.set_frame(acc_metric.value) == {
-        'Info': {'Value': '0.0'},
-        'Result': {'Frame': 'Success', 'Total': 'Success'}
+        "Info": {"Value": "0.0"},
+        "Result": {"Frame": "Success", "Total": "Success"},
     }
     assert evaluation_item.success is True
 
@@ -103,8 +102,8 @@ def test_metrics_string_not_target() -> None:
     evaluation_item: Metrics = Metrics(name="control_0", condition=condition)
     acc_metric = create_metric_msg(is_not_target=True)
     assert evaluation_item.set_frame(acc_metric.value) == {
-        'Info': {'Value': '2.0'},
-        'Result': {'Frame': 'Fail', 'Total': 'Fail'}
+        "Info": {"Value": "2.0"},
+        "Result": {"Frame": "Fail", "Total": "Fail"},
     }
     assert evaluation_item.success is False
 
@@ -116,19 +115,16 @@ def test_metrics_success_any_of() -> None:
     frame_dict = evaluation_item.set_frame(acc_metric.value)
     assert evaluation_item.success is True
     assert frame_dict == {
-            "Result": {"Total": "Success", "Frame": "Success"},
-            "Info": {"Value": "0.0"}
-        }
+        "Result": {"Total": "Success", "Frame": "Success"},
+        "Info": {"Value": "0.0"},
+    }
 
     acc_metric = create_metric_msg(is_out_of_range=True)
     frame_dict = evaluation_item.set_frame(
         acc_metric.value
     )  # any_of is OK if one of them succeeds.
     assert evaluation_item.success is True
-    assert frame_dict == {
-            "Result": {"Total": "Success", "Frame": "Fail"},
-            "Info": {"Value": "2.0"}
-        }
+    assert frame_dict == {"Result": {"Total": "Success", "Frame": "Fail"}, "Info": {"Value": "2.0"}}
 
 
 def test_metrics_fail_all_of() -> None:
@@ -138,16 +134,13 @@ def test_metrics_fail_all_of() -> None:
     frame_dict = evaluation_item.set_frame(acc_metric.value)
     assert evaluation_item.success is True
     assert frame_dict == {
-            "Result": {"Total": "Success", "Frame": "Success"},
-            "Info": {"Value": "0.0"}
-        }
+        "Result": {"Total": "Success", "Frame": "Success"},
+        "Info": {"Value": "0.0"},
+    }
 
     acc_metric = create_metric_msg(is_out_of_range=True)
     frame_dict = evaluation_item.set_frame(
         acc_metric.value
     )  # # all_of is not allowed if even one fails.
     assert evaluation_item.success is False
-    assert frame_dict == {
-            "Result": {"Total": "Fail", "Frame": "Fail"},
-            "Info": {"Value": "2.0"}
-        }
+    assert frame_dict == {"Result": {"Total": "Fail", "Frame": "Fail"}, "Info": {"Value": "2.0"}}

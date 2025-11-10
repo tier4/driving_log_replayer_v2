@@ -69,6 +69,7 @@ class MinMax(BaseModel):
     def match_condition(self, value: float) -> bool:
         return self.min <= value <= self.max
 
+
 class StartEnd(BaseModel):
     start: float = Field(0.0, ge=0.0)
     end: float = Field(float_info.max, ge=0.0)
@@ -160,7 +161,7 @@ class Metrics(EvaluationItem):
         info_dict = {}
         condition_met = True
 
-        if  self.condition.value_type == "number":
+        if self.condition.value_type == "number":
             float_pattern = r"^-?\d+(\.\d+)?$"
             int_pattern = r"^-?\d+$"
             if re.compile(int_pattern).match(str(value)):
@@ -168,19 +169,16 @@ class Metrics(EvaluationItem):
             elif re.compile(float_pattern).match(str(value)):
                 value = float(value)
             else:
-                raise ValueError("Unexpected metric value type")
-            info_dict = {
-                "Value": str(value)
-            }   
+                err = f"Unexpected metric value type: {value}"
+                raise ValueError(err)
+            info_dict = {"Value": str(value)}
             info_dict.update(info_dict)
             condition_met &= self.condition.value_range.match_condition(value)
         elif self.condition.value_type == "string":
             target = str(self.condition.value_target)
-            info_dict = {
-                "Value": value
-            }
+            info_dict = {"Value": value}
             info_dict.update(info_dict)
-            condition_met &= (value == target)
+            condition_met &= value == target
 
         if condition_met:
             self.passed += 1
@@ -210,7 +208,7 @@ class MetricsClassContainer:
         frame_result: dict[int, dict] = {}
         for metric in self.__container.get(topic, []):
             for value in msg.metric_array:
-                if value.name == metric.name:
+                if value.name == metric.condition.metric_name:
                     topic_result = metric.set_frame(value.value)
                     if topic_result is not None:
                         frame_result[f"{metric.name}"] = topic_result
