@@ -394,7 +394,7 @@ class PlanningFactor(EvaluationItem):
                 info_dict[f"Factor_{i}"] = info_dict_per_factor
 
                 # Check if any factor in the current message meets the condition.
-                # Note: 'any_of'/'all_of' applies across timesteps, not within a single message.
+                # Note: 'any_of'/'all_of' applies across timestamps, not within a single message.
                 condition_met |= condition_met_per_factor
 
         if condition_met:
