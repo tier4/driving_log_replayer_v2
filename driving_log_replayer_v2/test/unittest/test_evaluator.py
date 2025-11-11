@@ -47,6 +47,15 @@ def create_sample_evaluator() -> DLREvaluatorV2:
     return SampleEvaluator("sample_evaluator")
 
 
+def almost_equal(test: str | dict, ref: str | dict, tol: float = 1e-15) -> bool:
+    if isinstance(test, dict) and isinstance(ref, dict):
+        return all(almost_equal(test[k], ref[k], tol) for k in test)
+
+    if isinstance(test, float) and isinstance(ref, float):
+        return math.isclose(test, ref, abs_tol=tol)
+    return test == ref
+
+
 def test_transform_stamped_with_euler_angle() -> None:
     tf = TransformStamped(
         header=Header(stamp=Time(sec=123, nanosec=456), frame_id="map"),
