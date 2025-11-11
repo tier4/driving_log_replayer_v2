@@ -356,17 +356,19 @@ class PlanningFactor(EvaluationItem):
 
         self.total += 1
 
-        condition_met = False
         if len(msg.factors) == 0:
+            condition_met = self.condition.judgement == "negative"
             info_dict = {
                 "Factor_0": "NO_FACTOR",
             }
         else:
+            condition_met = False
             info_dict = {}
 
             for i, factor in enumerate(msg.factors):
                 info_dict_per_factor = {}
                 condition_met_per_factor = True
+
                 if self.condition.area is not None:
                     in_range, info_dict_area = self.judge_in_range(factor.control_points[0].pose)
                     info_dict_per_factor.update(info_dict_area)
@@ -386,11 +388,8 @@ class PlanningFactor(EvaluationItem):
                     info_dict_per_factor.update(info_dict_distance)
                     condition_met_per_factor &= distance_met
 
-                condition_met_per_factor = (
-                    condition_met_per_factor
-                    if self.condition.judgement == "positive"
-                    else not condition_met_per_factor
-                )
+                condition_met_per_factor ^= self.condition.judgement == "negative"
+
                 info_dict[f"Factor_{i}"] = info_dict_per_factor
 
                 # Check if any factor in the current message meets the condition.
