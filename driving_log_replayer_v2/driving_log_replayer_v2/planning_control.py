@@ -172,12 +172,10 @@ class Metrics(EvaluationItem):
                 err = f"Unexpected metric value type: {value}"
                 raise ValueError(err)
             info_dict = {"Value": str(value)}
-            info_dict.update(info_dict)
             condition_met &= self.condition.value_range.match_condition(value)
         elif self.condition.value_type == "string":
             target = str(self.condition.value_target)
             info_dict = {"Value": value}
-            info_dict.update(info_dict)
             condition_met &= value == target
 
         if condition_met:
