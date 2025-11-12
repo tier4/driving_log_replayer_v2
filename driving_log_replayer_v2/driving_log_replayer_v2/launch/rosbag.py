@@ -67,6 +67,8 @@ def system_defined_remap(conf: dict) -> list[str]:
         add_remap("/tf", remap_list)
         add_remap("/localization/kinematic_state", remap_list)
         add_remap("/localization/acceleration", remap_list)
+    if conf["use_case"] == "planning_control" or conf["use_case"] == "diagnostics":
+        add_remap("/diagnostics", remap_list)
     if conf["goal_pose"] != "{}":
         add_remap("/planning/mission_planning/route", remap_list)
     return remap_list
