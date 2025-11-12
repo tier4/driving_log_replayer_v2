@@ -1,5 +1,6 @@
 remap:
   - /sensing/lidar/concatenated/pointcloud
+  - /perception/traffic_light_recognition/traffic_signals
   - /perception/obstacle_segmentation/pointcloud
   - /sensing/radar/tracked_objects
   - /sensing/radar/detected_objects
