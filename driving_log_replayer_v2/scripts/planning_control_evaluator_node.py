@@ -28,6 +28,7 @@ from driving_log_replayer_v2.evaluator import evaluator_main
 from driving_log_replayer_v2.planning_control import MetricResult
 from driving_log_replayer_v2.planning_control import PlanningControlScenario
 from driving_log_replayer_v2.planning_control import PlanningFactorResult
+from driving_log_replayer_v2.result import DummyResult
 from driving_log_replayer_v2.result import ResultWriter
 
 
@@ -36,25 +37,30 @@ class PlanningControlEvaluator(DLREvaluatorV2):
         self,
         name: str,
         scenario_class: Callable = PlanningControlScenario,
-        result_class: Callable = MetricResult,
+        result_class: Callable = DummyResult,
     ) -> None:
         super().__init__(
             name, scenario_class, result_class, "/driving_log_replayer/planning_control/results"
         )
         self._scenario: PlanningControlScenario
-        self._result: MetricResult
+        self._result: DummyResult  # We use _metric_result, _diag_result, _planning_factor_result instead of this, so here is just a dummy class.
 
         metric_conditions = self._scenario.Evaluation.Conditions.MetricConditions
-        if metric_conditions == []:
+        pf_conditions = self._scenario.Evaluation.Conditions.PlanningFactorConditions
+
+        if metric_conditions == [] and pf_conditions == []:
             skip_test = {
-                "Result": {"Success": True, "Summary": "Metric Test is Skipped"},
+                "Result": {
+                    "Success": True,
+                    "Summary": "Metric and Planning Factor conditions are skipped.",
+                },
                 "Stamp": {"System": 0.0},
                 "Frame": {},
             }
             result_str = self._result_writer.write_line(skip_test)
             self._pub_result.publish(String(data=result_str))
 
-        else:
+        if metric_conditions != []:
             self._pub_metric_result = self.create_publisher(
                 String, "/driving_log_replayer/metric/results", 1
             )
@@ -69,18 +75,18 @@ class PlanningControlEvaluator(DLREvaluatorV2):
             res_str = self._metric_result_writer.write_result(self._metric_result)
             self._pub_metric_result.publish(String(data=res_str))
 
-            self.__sub_metrics = []
+            # subscribe for each topic instead of each condition
+            self.__sub_metrics = {}
             for mc in metric_conditions:
-                self.__sub_metrics.append(
-                    self.create_subscription(
-                        MetricArray,
-                        mc.topic,
-                        lambda msg, topic=mc.topic: self.metric_cb(msg, topic),
-                        1,
-                    )
+                if mc.topic in self.__sub_metrics:
+                    continue
+                self.__sub_metrics[mc.topic] = self.create_subscription(
+                    MetricArray,
+                    mc.topic,
+                    lambda msg, topic=mc.topic: self.metric_cb(msg, topic),
+                    3,
                 )
 
-        pf_conditions = self._scenario.Evaluation.Conditions.PlanningFactorConditions
         if pf_conditions != []:
             self._pub_pf_result = self.create_publisher(
                 String, "/driving_log_replayer/planning_factor/results", 1
@@ -97,15 +103,16 @@ class PlanningControlEvaluator(DLREvaluatorV2):
             res_str = self._planning_factor_result_writer.write_result(self._planning_factor_result)
             self._pub_pf_result.publish(String(data=res_str))
 
-            self.__sub_factors = []
+            # subscribe for each topic instead of each condition
+            self.__sub_factors = {}
             for pfc in pf_conditions:
-                self.__sub_factors.append(
-                    self.create_subscription(
-                        PlanningFactorArray,
-                        pfc.topic,
-                        lambda msg, topic=pfc.topic: self.factor_cb(msg, topic),
-                        1,
-                    )
+                if pfc.topic in self.__sub_factors:
+                    continue
+                self.__sub_factors[pfc.topic] = self.create_subscription(
+                    PlanningFactorArray,
+                    pfc.topic,
+                    lambda msg, topic=pfc.topic: self.factor_cb(msg, topic),
+                    3,
                 )
 
         if self._scenario.include_use_case is not None:
@@ -126,7 +133,7 @@ class PlanningControlEvaluator(DLREvaluatorV2):
                 DiagnosticArray,
                 "/diagnostics",
                 self.diag_cb,
-                100,
+                300,
             )
 
     def metric_cb(self, msg: MetricArray, topic: str) -> None:

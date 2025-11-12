@@ -14,7 +14,6 @@
 
 from dataclasses import dataclass
 import math
-import re
 from sys import float_info
 from typing import Literal
 
@@ -97,10 +96,22 @@ class MetricCondition(BaseModel):
     condition_name: str | None = None
     topic: str
     metric_name: str
+    time: StartEnd
+    condition_type: Literal["any_of", "all_of"]
     value_type: Literal["string", "number"]
     value_range: MinMax | None = None
     value_target: str | None = None
-    condition_type: Literal["any_of", "all_of"]
+    judgement: Literal["positive", "negative"]  # positive or negative
+
+    @model_validator(mode="after")
+    def validate_metric_condition(self) -> "MetricCondition":
+        if self.value_type == "number" and self.value_range is None:
+            msg = "value_range must be set for value_type 'number'"
+            raise ValueError(msg)
+        if self.value_type == "string" and self.value_target is None:
+            msg = "value_target must be set for value_type 'string'"
+            raise ValueError(msg)
+        return self
 
 
 class PlanningFactorCondition(BaseModel):
@@ -135,7 +146,7 @@ class Conditions(BaseModel):
 
 class Evaluation(BaseModel):
     UseCaseName: Literal["planning_control"]
-    UseCaseFormatVersion: Literal["2.0.0", "2.1.0", "2.2.0", "2.3.0"]
+    UseCaseFormatVersion: Literal["2.0.0", "2.1.0", "2.2.0", "2.3.0", "2.4.0"]
     Conditions: Conditions
     Datasets: list[dict]
 
@@ -152,31 +163,34 @@ class PlanningControlScenario(Scenario):
 
 
 @dataclass
-class Metrics(EvaluationItem):
+class Metric(EvaluationItem):
     def __post_init__(self) -> None:
         self.condition: MetricCondition
 
-    def set_frame(self, value: str) -> dict | None:
+    def set_frame(self, msg: MetricArray) -> dict | None:
+        # check time condition
+        if not self.condition.time.match_condition(stamp_to_float(msg.stamp)):
+            return None
+
+        # find the metric_name
+        value = None
+        for metric in msg.metric_array:
+            if metric.name == self.condition.metric_name:
+                value = metric.value
+                break
+        if value is None:
+            return None
+
         self.total += 1
-        info_dict = {}
-        condition_met = True
 
         if self.condition.value_type == "number":
-            float_pattern = r"^-?\d+(\.\d+)?$"
-            int_pattern = r"^-?\d+$"
-            if re.compile(int_pattern).match(str(value)):
-                value = int(value)
-            elif re.compile(float_pattern).match(str(value)):
-                value = float(value)
-            else:
-                err = f"Unexpected metric value type: {value}"
-                raise ValueError(err)
-            info_dict = {"Value": str(value)}
-            condition_met &= self.condition.value_range.match_condition(value)
-        elif self.condition.value_type == "string":
-            target = str(self.condition.value_target)
-            info_dict = {"Value": value}
-            condition_met &= value == target
+            value = float(value)
+            condition_met = self.condition.value_range.match_condition(value)
+        else:
+            value = str(value)
+            condition_met = value == str(self.condition.value_target)
+
+        condition_met ^= self.condition.judgement == "negative"
 
         if condition_met:
             self.passed += 1
@@ -189,27 +203,25 @@ class Metrics(EvaluationItem):
         )
         return {
             "Result": {"Total": self.success_str(), "Frame": frame_success},
-            "Info": info_dict,
+            "Info": {"MetricName": self.condition.metric_name, "MetricValue": value},
         }
 
 
-class MetricsClassContainer:
+class MetricClassContainer:
     def __init__(self, conditions: list[MetricCondition]) -> None:
-        self.__container: dict[str, list[Metrics]] = {}
+        self.__container: dict[str, list[Metric]] = {}
         for i, cond in enumerate(conditions):
             condition_name = (
                 cond.condition_name if cond.condition_name is not None else f"Condition_{i}"
             )
-            self.__container.setdefault(cond.topic, []).append(Metrics(condition_name, cond))
+            self.__container.setdefault(cond.topic, []).append(Metric(condition_name, cond))
 
     def set_frame(self, msg: MetricArray, topic: str) -> dict:
         frame_result: dict[int, dict] = {}
         for metric in self.__container.get(topic, []):
-            for value in msg.metric_array:
-                if value.name == metric.condition.metric_name:
-                    topic_result = metric.set_frame(value.value)
-                    if topic_result is not None:
-                        frame_result[f"{metric.name}"] = topic_result
+            topic_result = metric.set_frame(msg)
+            if topic_result is not None:
+                frame_result[f"{metric.name}"] = topic_result
         return frame_result
 
     def update(self) -> tuple[bool, str]:
@@ -230,7 +242,7 @@ class MetricsClassContainer:
 class MetricResult(ResultBase):
     def __init__(self, conditions: list[MetricCondition]) -> None:
         super().__init__()
-        self.__metrics_container = MetricsClassContainer(conditions)
+        self.__metrics_container = MetricClassContainer(conditions)
 
     def update(self) -> None:
         self._success, self._summary = self.__metrics_container.update()

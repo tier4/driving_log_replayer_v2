@@ -25,15 +25,6 @@ from std_msgs.msg import Header
 from driving_log_replayer_v2.evaluator import DLREvaluatorV2
 
 
-def almost_equal(test: str | dict, ref: str | dict, tol: float = 1e-15) -> bool:
-    if isinstance(test, dict) and isinstance(ref, dict):
-        return all(almost_equal(test[k], ref[k], tol) for k in test)
-
-    if isinstance(test, float) and isinstance(ref, float):
-        return math.isclose(test, ref, abs_tol=tol)
-    return test == ref
-
-
 class SampleEvaluator(DLREvaluatorV2):
     def __init__(self, name: str) -> None:
         super().__init__(name)

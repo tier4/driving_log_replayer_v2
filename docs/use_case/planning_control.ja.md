@@ -18,16 +18,21 @@ launch を立ち上げると以下のことが実行され、評価される。
 
 [Metric.msg](https://github.com/autowarefoundation/autoware_internal_msgs/blob/main/autoware_internal_metric_msgs/msg/Metric.msg)が利用されているtopicを利用する。
 主に、`/control/control_evaluator/metrics`, `/planning/planning_evaluator/metrics`, `/system/processing_time/metrics`を想定している。
-評価対象となるtopic内の`name`は`module_name`にて指定する。
+評価対象となるtopic内の`name`は`metric_name`にて指定する。
 以下条件を評価できる。
 
-- 指定msg.valueがシナリオ指定の範囲から外れないか
-- 指定msg.valueがシナリオ指定の値となるか
+- 指定メトリクスがシナリオ指定の範囲内か
+- 指定メトリクスがシナリオ指定の値となるか
 
-#### Metric正常
+#### Metric正常(judgement: positive)
 
-指定topicのmsg.valueがシナリオ指定の範囲に収まっていた、または値と一致した場合に正常となる。
-`all_of`はシナリオ中常にPASSすることが求められ、`any_of`はシナリオ中一度以上PASSすることが求められる。
+`value_type=number`の場合に、メトリクスTopic中の指定metricが`value_range`の範囲に入ってると正常となる。
+`value_type=string`の場合に、メトリクスTopic中の指定metricが`value_target`と一致すると正常となる。
+
+#### Metric正常(judgement: negative)
+
+`value_type=number`の場合に、メトリクスTopic中の指定metricが`value_range`の範囲外と正常となる。
+`value_type=string`の場合に、メトリクスTopic中の指定metricが`value_target`と一致しないと正常となる。
 
 #### Metric正常異常
 
@@ -69,7 +74,7 @@ result.jsonlは必ず出力されるが、planning_factor_result.jsonlとmetric_
 ### result.jsonl
 
 output_dir/result.jsonlに出力される。
-metricの評価結果が記述される。
+planning_factorとmetricとdiag評価からまとめされた評価結果が記述される。
 
 Evaluatorで実行する場合は、このファイルの最終行が参照されて成否が決定される。
 このため、planning_factor_result.jsonlとmetric_result.jsonlとdiag_result.jsonlの結果をマージした最終的な成否の情報がpost_processで書き込まれる。
@@ -93,12 +98,12 @@ diagnosticsの評価結果が記述される。
 
 Subscribed topics:
 
-| Topic name                                    | Data type                                               |
-| --------------------------------------------- | ------------------------------------------------------- |
-| /control/control_evaluator/metrics            | tier4_metric_msg/msg/MetricArray                        |
-| /planning/planning_evaluator/metrics          | tier4_metric_msg/msg/MetricArray                        |
-| /system/processing_time/metrics               | tier4_metric_msg/msg/MetricArray                        |
-| /planning/planning_factors/\*\*               | autoware_internal_planning_msgs/msg/PlanningFactorArray |
+| Topic name                           | Data type                                               |
+| ------------------------------------ | ------------------------------------------------------- |
+| /control/control_evaluator/metrics   | tier4_metric_msg/msg/MetricArray                        |
+| /planning/planning_evaluator/metrics | tier4_metric_msg/msg/MetricArray                        |
+| /system/processing_time/metrics      | tier4_metric_msg/msg/MetricArray                        |
+| /planning/planning_factors/\*\*      | autoware_internal_planning_msgs/msg/PlanningFactorArray |
 
 Published topics:
 
@@ -124,17 +129,17 @@ clock は、ros2 bag play の--clock オプションによって出力してい�
 
 ### シナリオフォーマット
 
-[サンプル](https://github.com/tier4/driving_log_replayer_v2/blob/develop/sample/planning_control/scenario.yaml)参照
+[サンプル](https://github.com/tier4/driving_log_replayer_v2/blob/develop/sample/planning_control/scenario.yaml)参照　#TODO
 
 ### 評価結果フォーマット
 
 #### metric
 
-[サンプル](https://github.com/tier4/driving_log_replayer_v2/blob/develop/sample/planning_control/result.json)参照
+[サンプル](https://github.com/tier4/driving_log_replayer_v2/blob/develop/sample/planning_control/result.json)参照　#TODO
 
 #### planning_factor
 
-[サンプル](https://github.com/tier4/driving_log_replayer_v2/blob/develop/sample/planning_control/planning_factor_result.json)参照
+[サンプル](https://github.com/tier4/driving_log_replayer_v2/blob/develop/sample/planning_control/planning_factor_result.json)参照 #TODO
 
 #### diagnostics
 

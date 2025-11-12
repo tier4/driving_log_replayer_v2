@@ -18,16 +18,21 @@ Launching the file executes the following steps:
 
 Use topics that utilize [Metric.msg](https://github.com/autowarefoundation/autoware_internal_msgs/blob/main/autoware_internal_metric_msgs/msg/Metric.msg).
 Primarily intended for `/control/control_evaluator/metrics`, `/planning/planning_evaluator/metrics`, and `/system/processing_time/metrics`.
-The `name` within the topic being evaluated is specified by `module_name`.
+The `name` within the topic being evaluated is specified by `metric_name`.
 The following conditions can be evaluated:
 
-- Whether the specified `msg.value` falls outside the range specified by the scenario
-- Whether the specified `msg.value` matches the value specified by the scenario
+- Whether the specified metric is within the range specified in the scenario
+- Whether the specified metric matches the value specified in the scenario
 
-#### Metric Normal
+#### Metric Normal(judgement: positive)
 
-The condition passes successfully when the `msg.value` of the specified topic falls within the scenario's specified range or matches the value.
-`all_of` requires the condition to pass at all times during the scenario, while `any_of` requires the condition to pass at least once during the scenario.
+When `value_type=number`, it is normal if the specified metric in the metric topic falls within the `value_range`.
+When `value_type=string`, it is normal if the specified metric in the metric topic matches the `value_target`.
+
+#### Metric Normal(judgement: negative)
+
+When `value_type=number`, it is normal if the specified metric in the metric topic falls outside the `value_range`.
+When `value_type=string`, it is normal if the specified metric in the metric topic does not match the `value_target`.
 
 #### Metric Error
 
@@ -63,7 +68,7 @@ result.jsonl is always output, but planning_factor_result.jsonl, metric_result.j
 ### result.jsonl
 
 Output to output_dir/result.jsonl.
-Contains metric evaluation results.
+Contains summarized results of planning_factor, metric and diag evaluations.
 
 When running with Evaluator, the success/failure is determined by referencing the last line of this file.
 Therefore, the final success/failure information that merges the results of planning_factor_result.jsonl, metric_result.jsonl and diag_result.jsonl is written in post_process.
