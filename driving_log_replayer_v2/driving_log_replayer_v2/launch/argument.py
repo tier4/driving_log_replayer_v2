@@ -186,6 +186,21 @@ def get_launch_arguments() -> list:
         default_value="",
         description="Launch other optional nodes. Using comma separated string. Currently available is 2d_detector. Ex: with_optional_nodes:=2d_detector",
     )
+    add_launch_arg(
+        "live_topic_prefix",
+        default_value="",
+        description="Prefix for LIVE trajectory output (e.g., 'model_v1.0_epoch50'). If specified, renames the trajectory topic after recording. Ex: live_topic_prefix:=model_v1.0_epoch50",
+    )
+    add_launch_arg(
+        "base_trajectory_topic",
+        default_value="/planning/trajectory_generator/diffusion_planner_node/output/trajectory",
+        description="Base trajectory topic to rename (default: diffusion_planner output). Ex: base_trajectory_topic:=/planning/trajectory_generator/trajectory_optimizer_node/output/trajectory",
+    )
+    add_launch_arg(
+        "previous_live_prefixes",
+        default_value="",
+        description="Comma-separated list of previous LIVE run prefixes to replay (e.g., 'model_v1.0,model_v2.0'). Used for multi-run accumulation. Ex: previous_live_prefixes:=model_v1.0,model_v2.0",
+    )
     return launch_arguments
 
 
@@ -236,7 +251,9 @@ def update_conf_with_dataset_info(
     if "sensor_model" not in conf:
         conf["sensor_model"] = yaml_obj["SensorModel"]
     conf["map_path"] = t4_dataset_path.joinpath("map").as_posix()
-    conf["input_bag"] = t4_dataset_path.joinpath("input_bag").as_posix()
+    # Only override input_bag if not explicitly provided (for multi-run support)
+    if conf.get("input_bag", "") == "":
+        conf["input_bag"] = t4_dataset_path.joinpath("input_bag").as_posix()
     conf["result_json_path"] = output_dir.joinpath("result.json").as_posix()
     conf["result_bag_path"] = output_dir.joinpath("result_bag").as_posix()
     conf["result_archive_path"] = output_dir.joinpath("result_archive").as_posix()

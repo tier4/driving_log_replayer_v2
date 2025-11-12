@@ -21,13 +21,23 @@ from driving_log_replayer_v2.launch.argument import ensure_arg_compatibility
 from driving_log_replayer_v2.launch.argument import get_launch_arguments
 from driving_log_replayer_v2.launch.ndt_convergence import launch_ndt_convergence
 from driving_log_replayer_v2.launch.use_case import launch_use_case
+from driving_log_replayer_v2.launch.topic_relay import launch_live_topic_relay
 
 
 def select_launch(context: LaunchContext) -> list:
     conf = context.launch_configurations
+    actions = []
+
+    # Add topic relay for multi-run LIVE topic renaming
+    actions.extend(launch_live_topic_relay(context))
+
+    # Add main use case launch
     if conf["use_case"] == "ndt_convergence":
-        return launch_ndt_convergence(context)
-    return launch_use_case()
+        actions.extend(launch_ndt_convergence(context))
+    else:
+        actions.extend(launch_use_case())
+
+    return actions
 
 
 def generate_launch_description() -> LaunchDescription:

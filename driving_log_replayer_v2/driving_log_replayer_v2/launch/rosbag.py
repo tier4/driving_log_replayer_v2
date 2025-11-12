@@ -76,6 +76,20 @@ def user_defined_publish(conf: dict) -> list[str]:
     publish_list = []
     if conf["publish_profile"] != "":
         publish_list.extend(extract_topics_from_profile(conf["publish_profile"], "publish"))
+
+    # Add previous LIVE topics for multi-run mode
+    previous_prefixes = conf.get("previous_live_prefixes", "")
+    if previous_prefixes:
+        base_topic = conf.get("base_trajectory_topic",
+                             "/planning/trajectory_generator/diffusion_planner_node/output/trajectory")
+        for prefix in previous_prefixes.split(","):
+            prefix = prefix.strip()
+            if prefix:
+                # Add the specific renamed topic
+                live_topic = f"/{prefix}{base_topic}"
+                publish_list.append(live_topic)
+                print(f"Adding previous LIVE topic to replay: {live_topic}")
+
     return publish_list
 
 
