@@ -355,41 +355,47 @@ class PlanningFactor(EvaluationItem):
             return None
 
         self.total += 1
+
         if len(msg.factors) == 0:
-            condition_met = False
+            condition_met = self.condition.judgement == "negative"
             info_dict = {
-                "Behavior": "NO_FACTOR",
+                "Factor_0": "NO_FACTOR",
             }
         else:
-            # get factors[0] # factorsはarrayになっているが、実際には1個しか入ってない。
+            condition_met = False
             info_dict = {}
-            condition_met = True
 
-            if self.condition.area is not None:
-                in_range, info_dict_area = self.judge_in_range(
-                    msg.factors[0].control_points[0].pose
-                )
-                info_dict.update(info_dict_area)
-                condition_met &= (
-                    in_range if self.condition.area.area_condition == "inside" else not in_range
-                )
+            for i, factor in enumerate(msg.factors):
+                info_dict_per_factor = {}
+                condition_met_per_factor = True
 
-            if self.condition.behavior is not None:
-                behavior_met, info_dict_behavior = self.judge_behavior(msg.factors[0])
-                info_dict.update(info_dict_behavior)
-                condition_met &= behavior_met
+                if self.condition.area is not None:
+                    in_range, info_dict_area = self.judge_in_range(factor.control_points[0].pose)
+                    info_dict_per_factor.update(info_dict_area)
+                    condition_met_per_factor &= (
+                        in_range if self.condition.area.area_condition == "inside" else not in_range
+                    )
 
-            if self.condition.distance is not None:
-                distance_met, info_dict_distance = self.judge_distance(
-                    msg.factors[0].control_points[0].distance
-                )
-                info_dict.update(info_dict_distance)
-                condition_met &= distance_met
+                if self.condition.behavior is not None:
+                    behavior_met, info_dict_behavior = self.judge_behavior(factor)
+                    info_dict_per_factor.update(info_dict_behavior)
+                    condition_met_per_factor &= behavior_met
 
-        # Check if the condition is met based on judgement type
-        condition_met = (
-            condition_met if self.condition.judgement == "positive" else not condition_met
-        )
+                if self.condition.distance is not None:
+                    distance_met, info_dict_distance = self.judge_distance(
+                        factor.control_points[0].distance
+                    )
+                    info_dict_per_factor.update(info_dict_distance)
+                    condition_met_per_factor &= distance_met
+
+                condition_met_per_factor ^= self.condition.judgement == "negative"
+
+                info_dict[f"Factor_{i}"] = info_dict_per_factor
+
+                # Check if any factor in the current message meets the condition.
+                # Note: 'any_of'/'all_of' applies across timestamps, not within a single message.
+                condition_met |= condition_met_per_factor
+
         if condition_met:
             self.passed += 1
         frame_success = "Success" if condition_met else "Fail"

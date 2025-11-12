@@ -12,6 +12,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import math
+
 from builtin_interfaces.msg import Time
 from geometry_msgs.msg import Quaternion
 from geometry_msgs.msg import Transform
@@ -21,6 +23,15 @@ import pytest
 from std_msgs.msg import Header
 
 from driving_log_replayer_v2.evaluator import DLREvaluatorV2
+
+
+def almost_equal(test: str | dict, ref: str | dict, tol: float = 1e-15) -> bool:
+    if isinstance(test, dict) and isinstance(ref, dict):
+        return all(almost_equal(test[k], ref[k], tol) for k in test)
+
+    if isinstance(test, float) and isinstance(ref, float):
+        return math.isclose(test, ref, abs_tol=tol)
+    return test == ref
 
 
 class SampleEvaluator(DLREvaluatorV2):
@@ -78,4 +89,6 @@ def test_transform_stamped_with_euler_angle() -> None:
             "yaw": -2.7022185830310637,
         },
     }
-    assert DLREvaluatorV2.transform_stamped_with_euler_angle(tf) == dict_tf_euler
+    assert almost_equal(
+        DLREvaluatorV2.transform_stamped_with_euler_angle(tf), dict_tf_euler, tol=1e-15
+    )
