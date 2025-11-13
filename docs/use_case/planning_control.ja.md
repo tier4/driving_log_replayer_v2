@@ -18,16 +18,21 @@ launch を立ち上げると以下のことが実行され、評価される。
 
 [Metric.msg](https://github.com/autowarefoundation/autoware_internal_msgs/blob/main/autoware_internal_metric_msgs/msg/Metric.msg)が利用されているtopicを利用する。
 主に、`/control/control_evaluator/metrics`, `/planning/planning_evaluator/metrics`, `/system/processing_time/metrics`を想定している。
-評価対象となるtopic内の`name`は`module_name`にて指定する。
+評価対象となるtopic内の`name`は`metric_name`にて指定する。
 以下条件を評価できる。
 
-- 指定msg.valueがシナリオ指定の範囲から外れないか
-- 指定msg.valueがシナリオ指定の値となるか
+- 指定メトリクスがシナリオ指定の範囲内か
+- 指定メトリクスがシナリオ指定の値となるか
 
-#### Metric正常
+#### Metric正常(judgement: positive)
 
-指定topicのmsg.valueがシナリオ指定の範囲に収まっていた、または値と一致した場合に正常となる。
-`all_of`はシナリオ中常にPASSすることが求められ、`any_of`はシナリオ中一度以上PASSすることが求められる。
+`value_type=number`の場合に、メトリクスTopic中の指定metricが`value_range`の範囲に入ってると正常となる。
+`value_type=string`の場合に、メトリクスTopic中の指定metricが`value_target`と一致すると正常となる。
+
+#### Metric正常(judgement: negative)
+
+`value_type=number`の場合に、メトリクスTopic中の指定metricが`value_range`の範囲外と正常となる。
+`value_type=string`の場合に、メトリクスTopic中の指定metricが`value_target`と一致しないと正常となる。
 
 #### Metric正常異常
 
@@ -69,7 +74,7 @@ result.jsonlは必ず出力されるが、planning_factor_result.jsonlとmetric_
 ### result.jsonl
 
 output_dir/result.jsonlに出力される。
-metricの評価結果が記述される。
+planning_factorとmetricとdiag評価からまとめされた評価結果が記述される。
 
 Evaluatorで実行する場合は、このファイルの最終行が参照されて成否が決定される。
 このため、planning_factor_result.jsonlとmetric_result.jsonlとdiag_result.jsonlの結果をマージした最終的な成否の情報がpost_processで書き込まれる。
@@ -93,13 +98,12 @@ diagnosticsの評価結果が記述される。
 
 Subscribed topics:
 
-| Topic name                                    | Data type                                               |
-| --------------------------------------------- | ------------------------------------------------------- |
-| /control/control_evaluator/metrics            | tier4_metric_msg/msg/MetricArray                        |
-| /planning/planning_evaluator/metrics          | tier4_metric_msg/msg/MetricArray                        |
-| /system/processing_time/metrics               | tier4_metric_msg/msg/MetricArray                        |
-| /control/autonomous_emergency_braking/metrics | tier4_metric_msg/msg/DiagnosticArray                    |
-| /planning/planning_factors/\*\*               | autoware_internal_planning_msgs/msg/PlanningFactorArray |
+| Topic name                           | Data type                                               |
+| ------------------------------------ | ------------------------------------------------------- |
+| /control/control_evaluator/metrics   | tier4_metric_msg/msg/MetricArray                        |
+| /planning/planning_evaluator/metrics | tier4_metric_msg/msg/MetricArray                        |
+| /system/processing_time/metrics      | tier4_metric_msg/msg/MetricArray                        |
+| /planning/planning_factors/\*\*      | autoware_internal_planning_msgs/msg/PlanningFactorArray |
 
 Published topics:
 
@@ -107,46 +111,9 @@ Published topics:
 | ---------- | --------- |
 | N/A        | N/A       |
 
-## logging_simulator.launch に渡す引数
-
-- localization: false
-
-bagの中に入っている、/sensing/lidar/concatenated/pointcloudを利用する場合は、launchの引数にsensing:=falseを追加する
-perception、planningも同様にbagから出力する場合は、launchの引数にperception:=false planning:=falseを追加する
-
-```shell
-ros2 launch driving_log_replayer_v2 driving_log_replayer_v2.launch.py scenario_path:=${planning_control_scenario_path} sensing:=false perception:=false planning:=false
-```
-
 ## simulation
 
 シミュレーション実行に必要な情報を述べる。
-
-### 入力 rosbag に含まれるべき topic
-
-| topic 名                               | データ型                                     |
-| -------------------------------------- | -------------------------------------------- |
-| /pacmod/from_can_bus                   | can_msgs/msg/Frame                           |
-| /localization/kinematic_state          | nav_msgs/msg/Odometry                        |
-| /localization/acceleration             | geometry_msgs/msg/AccelWithCovarianceStamped |
-| /sensing/lidar/concatenated/pointcloud | sensor_msgs/msg/PointCloud2                  |
-| /tf                                    | tf2_msgs/msg/TFMessage                       |
-| /planning/mission_planning/route       | autoware_planning_msgs/msg/LaneletRoute      |
-
-CAN の代わりに vehicle の topic を含めても良い。
-
-| topic 名                               | データ型                                            |
-| -------------------------------------- | --------------------------------------------------- |
-| /localization/kinematic_state          | nav_msgs/msg/Odometry                               |
-| /localization/acceleration             | geometry_msgs/msg/AccelWithCovarianceStamped        |
-| /sensing/lidar/concatenated/pointcloud | sensor_msgs/msg/PointCloud2                         |
-| /tf                                    | tf2_msgs/msg/TFMessage                              |
-| /planning/mission_planning/route       | autoware_planning_msgs/msg/LaneletRoute             |
-| /vehicle/status/control_mode           | autoware_auto_vehicle_msgs/msg/ControlModeReport    |
-| /vehicle/status/gear_status            | autoware_auto_vehicle_msgs/msg/GearReport           |
-| /vehicle/status/steering_status        | autoware_auto_vehicle_msgs/SteeringReport           |
-| /vehicle/status/turn_indicators_status | autoware_auto_vehicle_msgs/msg/TurnIndicatorsReport |
-| /vehicle/status/velocity_status        | autoware_auto_vehicle_msgs/msg/VelocityReport       |
 
 ### 入力 rosbag に含まれてはいけない topic
 
@@ -162,54 +129,17 @@ clock は、ros2 bag play の--clock オプションによって出力してい�
 
 ### シナリオフォーマット
 
-[サンプル](https://github.com/tier4/driving_log_replayer_v2/blob/develop/sample/planning_control/scenario.yaml)参照
+[サンプル](https://github.com/tier4/driving_log_replayer_v2/blob/develop/sample/planning_control/scenario.yaml)参照　#TODO
 
 ### 評価結果フォーマット
 
 #### metric
 
-[サンプル](https://github.com/tier4/driving_log_replayer_v2/blob/develop/sample/planning_control/result.json)参照
-
-以下に、それぞれの評価の例を記述する。
-**注:結果ファイルフォーマットで解説済みの共通部分については省略する。**
-
-planning と controlで設定した全ての評価条件で成功している場合に成功と判定される。
-
-```json
-{
-  "Frame": {
-    "[Planning|Control]_CONDITION_INDEX": {
-      "Result": { "Total": "Success or Fail", "Frame": "Success or Fail" },
-      "Info": { "Value": "取得したtopicの値" }
-    }
-  }
-}
-```
+[サンプル](https://github.com/tier4/driving_log_replayer_v2/blob/develop/sample/planning_control/result.json)参照　#TODO
 
 #### planning_factor
 
-[サンプル](https://github.com/tier4/driving_log_replayer_v2/blob/develop/sample/planning_control/planning_factor_result.json)参照
-
-以下に、それぞれの評価の例を記述する。
-**注:結果ファイルフォーマットで解説済みの共通部分については省略する。**
-
-PlanningFactorのすべての評価条件で成功している場合に成功と判定される。
-
-```json
-{
-  "Frame": {
-    "TopicName": {
-      "Result": { "Total": "Success or Fail", "Frame": "Success or Fail" },
-      "Info": {
-        "Distance": "control_pointの座標とシナリオに指定された座標の距離",
-        "ControlPointPoseX": "control_pointのposeのx座標",
-        "ControlPointPoseY": "control_pointのposeのy座標",
-        "Behavior": "planning_factorのbehavior"
-      }
-    }
-  }
-}
-```
+[サンプル](https://github.com/tier4/driving_log_replayer_v2/blob/develop/sample/planning_control/planning_factor_result.json)参照 #TODO
 
 #### diagnostics
 

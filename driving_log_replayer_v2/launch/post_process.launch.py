@@ -186,12 +186,15 @@ def post_process(context: LaunchContext) -> list:  # noqa: C901, PLR0911
         planning_factor_result_path = Path(conf["result_archive_path"]).joinpath(
             "planning_factor_result.jsonl"
         )
+        metric_result_path = Path(conf["result_archive_path"]).joinpath("metric_result.jsonl")
         result_paths = [Path(conf["result_json_path"]).as_posix() + "l"]  # "json + l"
 
         if diag_result_path.exists():
             result_paths.append(diag_result_path.as_posix())
         if planning_factor_result_path.exists():
             result_paths.append(planning_factor_result_path.as_posix())
+        if metric_result_path.exists():
+            result_paths.append(metric_result_path.as_posix())
 
         if len(result_paths) == 1:
             return [LogInfo(msg="No additional result.jsonl found. Abort merging result.jsonl")]

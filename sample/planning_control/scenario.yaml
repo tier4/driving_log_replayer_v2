@@ -6,7 +6,7 @@ VehicleModel: lexus
 publish_profile: planning_control
 Evaluation:
   UseCaseName: planning_control
-  UseCaseFormatVersion: 2.2.0
+  UseCaseFormatVersion: 2.4.0
   Datasets:
     - obstacle_stop:
         VehicleId: default
@@ -15,14 +15,16 @@ Evaluation:
       - condition_name: processing_time/static_obstacle_avoidance
         topic: /system/processing_time_checker/metrics
         metric_name: processing_time/static_obstacle_avoidance
+        time: { start: 1748195183.4, end: 1748195213.8 } # validate the condition if the message is between start and end in ROS time
         value_type: number
         value_range:
           min: 0.0
           max: 100.0
         condition_type: all_of
+        judgement: positive
     PlanningFactorConditions:
       - topic: /planning/planning_factors/obstacle_stop # /planning/planning_factors/** のトピック
-        time: { start: 1748195183.4, end: 1748195213.8 } # Success if the level is specified between start and end in ROS time
+        time: { start: 1748195183.4, end: 1748195213.8 } # validate the condition if the message is between start and end in ROS time
         condition_type: all_of
         area: { x: 71.5, y: 345.1, range: 1.0, area_condition: inside } # You can set area to null to ignore area condition.
         behavior: [STOP] # Specify the behavior to be judged. You can set behavior to null to ignore behavior condition.
