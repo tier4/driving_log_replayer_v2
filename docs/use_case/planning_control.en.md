@@ -92,13 +92,12 @@ Contains diagnostics evaluation results.
 
 Subscribed topics:
 
-| Topic name                                    | Data type                                               |
-| --------------------------------------------- | ------------------------------------------------------- |
-| /control/control_evaluator/metrics            | tier4_metric_msg/msg/MetricArray                        |
-| /planning/planning_evaluator/metrics          | tier4_metric_msg/msg/MetricArray                        |
-| /system/processing_time/metrics               | tier4_metric_msg/msg/MetricArray                        |
-| /control/autonomous_emergency_braking/metrics | tier4_metric_msg/msg/DiagnosticArray                    |
-| /planning/planning_factors/\*\*               | autoware_internal_planning_msgs/msg/PlanningFactorArray |
+| Topic name                           | Data type                                               |
+| ------------------------------------ | ------------------------------------------------------- |
+| /control/control_evaluator/metrics   | tier4_metric_msg/msg/MetricArray                        |
+| /planning/planning_evaluator/metrics | tier4_metric_msg/msg/MetricArray                        |
+| /system/processing_time/metrics      | tier4_metric_msg/msg/MetricArray                        |
+| /planning/planning_factors/\*\*      | autoware_internal_planning_msgs/msg/PlanningFactorArray |
 
 Published topics:
 
