@@ -133,7 +133,7 @@ class PlanningControlEvaluator(DLREvaluatorV2):
                 DiagnosticArray,
                 "/diagnostics",
                 self.diag_cb,
-                300,
+                1000,
             )
 
     def metric_cb(self, msg: MetricArray, topic: str) -> None:
