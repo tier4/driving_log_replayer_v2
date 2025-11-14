@@ -94,6 +94,17 @@ class ResultBase(ABC):
         """Set the result of one frame from the subscribe ros message."""
 
 
+class DummyResult(ResultBase):
+    def __init__(self, condition: any) -> None:  # noqa
+        super().__init__()
+
+    def update(self) -> None:
+        pass
+
+    def set_frame(self) -> None:
+        pass
+
+
 class ResultWriter:
     def __init__(
         self,

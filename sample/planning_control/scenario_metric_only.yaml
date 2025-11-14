@@ -1,0 +1,59 @@
+ScenarioFormatVersion: 3.1.0
+ScenarioName: sample_planning_control
+ScenarioDescription: sample_planning_control
+SensorModel: aip_xx1
+VehicleModel: lexus
+Evaluation:
+  UseCaseName: planning_control
+  UseCaseFormatVersion: 2.4.0
+  Datasets:
+    - obstacle_stop:
+        VehicleId: default
+  Conditions:
+    MetricConditions:
+      - condition_name: processing_time/static_obstacle_avoidance
+        topic: /system/processing_time_checker/metrics
+        metric_name: processing_time/static_obstacle_avoidance
+        time:
+          start: 1743490200
+          end: 1743490250
+        value_type: number
+        value_range:
+          min: 0.0
+          max: 100.0
+        judgement: positive
+        condition_type: all_of
+      - condition_name: acceleration_out_of_range
+        topic: /control/control_evaluator/metrics
+        metric_name: acceleration
+        time:
+          start: 1743490200
+          end: 1743490250
+        value_type: number
+        value_range:
+          min: -0.2
+          max: 0.2
+        judgement: negative
+        condition_type: any_of
+      - condition_name: stop_check
+        topic: /control/control_evaluator/metrics
+        metric_name: velocity
+        time:
+          start: 1743490200
+          end: 1743490250
+        value_type: number
+        value_range:
+          min: 0.0
+          max: 0.0
+        condition_type: any_of
+        judgement: positive
+      - condition_name: stop_check_by_string
+        topic: /control/control_evaluator/metrics
+        metric_name: velocity
+        time:
+          start: 1743490200
+          end: 1743490250
+        value_type: string
+        value_target: "0.000000"
+        judgement: positive
+        condition_type: any_of

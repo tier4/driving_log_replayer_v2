@@ -14,28 +14,33 @@ Launching the file executes the following steps:
 
 ## Evaluation Result
 
-This node uses `/control/autonomous_emergency_braking/metrics` and `/control/control_evaluator/metrics`.
-Evaluate if `/control/autonomous_emergency_braking/metrics` is the value specified in the scenario.
-If a lane condition is described in the scenario, it is evaluated when a lane that can be obtained from `/control/control_evaluator/metrics` satisfies the condition.
-If the conditions for evaluation are not met, no log is output.
+### Metric
 
-`/planning/planning_factors/**` topics are used. The target topic for evaluation is specified in the scenario file.
+Use topics that utilize [Metric.msg](https://github.com/autowarefoundation/autoware_internal_msgs/blob/main/autoware_internal_metric_msgs/msg/Metric.msg).
+Primarily intended for `/control/control_evaluator/metrics`, `/planning/planning_evaluator/metrics`, and `/system/processing_time/metrics`.
+The `name` within the topic being evaluated is specified by `metric_name`.
 The following conditions can be evaluated:
 
-- Whether the position of the PlanningFactor's control_point satisfies the conditions specified in the scenario
-- Whether the PlanningFactor's behavior matches the specified behavior
+- Whether the specified metric is within the range specified in the scenario
+- Whether the specified metric matches the value specified in the scenario
 
-### Metric Normal
+#### Metric Normal(judgement: positive)
 
-Normal if the value in `/control/control_evaluator/metrics` matches the value specified in the scenario.
-Though, if `none` is specified, it is judged as `none` if the metric_array of topic is an empty array.
-If kinematic_condition is specified, additionally, kinematic_state must meet the condition.
+When `value_type=number`, it is normal if the specified metric in the metric topic falls within the `value_range`.
+When `value_type=string`, it is normal if the specified metric in the metric topic matches the `value_target`.
 
-### Metric Error
+#### Metric Normal(judgement: negative)
+
+When `value_type=number`, it is normal if the specified metric in the metric topic falls outside the `value_range`.
+When `value_type=string`, it is normal if the specified metric in the metric topic does not match the `value_target`.
+
+#### Metric Error
 
 When the Metric Normal condition is not met
 
-### PlanningFactor Normal(judgement: positive)
+### PlanningFactor
+
+#### PlanningFactor Normal(judgement: positive)
 
 Normal if `/planning/planning_factors/**` meets all of the following conditions:
 
@@ -43,7 +48,7 @@ Normal if `/planning/planning_factors/**` meets all of the following conditions:
 - If there is a behavior condition in the scenario, the planning_factor's behavior matches the behavior specified in the scenario.
 - If there is a distance condition in the scenario, the planning_factor's distance (distance from Ego to control_point) is within the range specified in the scenario.
 
-### PlanningFactor Normal(judgement: negative)
+#### PlanningFactor Normal(judgement: negative)
 
 Normal if `/planning/planning_factors/**` does not meet any of the following conditions:
 
@@ -51,27 +56,32 @@ Normal if `/planning/planning_factors/**` does not meet any of the following con
 - If there is a behavior condition in the scenario, the planning_factor's behavior matches the behavior specified in the scenario.
 - If there is a distance condition in the scenario, the planning_factor's distance (distance from Ego to control_point) is within the range specified in the scenario.
 
-### PlanningFactor Error
+#### PlanningFactor Error
 
 When the PlanningFactor Normal condition is not met
 
 ## Output File for Evaluation Results
 
 In planning_control, result.jsonl is created in the following three files.
-result.jsonl is always output, but planning_factor_result.jsonl and diag_result.jsonl are only output when specified in the scenario.
+result.jsonl is always output, but planning_factor_result.jsonl, metric_result.jsonl and diag_result.jsonl are only output when specified in the scenario.
 
 ### result.jsonl
 
 Output to output_dir/result.jsonl.
-Contains metric evaluation results.
+Contains summarized results of planning_factor, metric and diag evaluations.
 
 When running with Evaluator, the success/failure is determined by referencing the last line of this file.
-Therefore, the final success/failure information that merges the results of planning_factor_result.jsonl and diag_result.jsonl is written in post_process.
+Therefore, the final success/failure information that merges the results of planning_factor_result.jsonl, metric_result.jsonl and diag_result.jsonl is written in post_process.
 
 ### planning_factor_result.jsonl
 
 Output to output_dir/result_archive/planning_factor_result.jsonl.
 Contains planning_factor evaluation results.
+
+## metric_result.jsonl
+
+Output to output_dir/result_archive/metric_result.jsonl.
+Contains the evaluation results for metrics.
 
 ### diag_result.jsonl
 
@@ -82,11 +92,12 @@ Contains diagnostics evaluation results.
 
 Subscribed topics:
 
-| Topic name                                    | Data type                                               |
-| --------------------------------------------- | ------------------------------------------------------- |
-| /control/control_evaluator/metrics            | tier4_metric_msg/msg/MetricArray                        |
-| /control/autonomous_emergency_braking/metrics | tier4_metric_msg/msg/DiagnosticArray                    |
-| /planning/planning_factors/\*\*               | autoware_internal_planning_msgs/msg/PlanningFactorArray |
+| Topic name                           | Data type                                               |
+| ------------------------------------ | ------------------------------------------------------- |
+| /control/control_evaluator/metrics   | tier4_metric_msg/msg/MetricArray                        |
+| /planning/planning_evaluator/metrics | tier4_metric_msg/msg/MetricArray                        |
+| /system/processing_time/metrics      | tier4_metric_msg/msg/MetricArray                        |
+| /planning/planning_factors/\*\*      | autoware_internal_planning_msgs/msg/PlanningFactorArray |
 
 Published topics:
 
@@ -94,46 +105,9 @@ Published topics:
 | ---------- | --------- |
 | N/A        | N/A       |
 
-## Arguments passed to logging_simulator.launch
-
-- localization: false
-
-To use /sensing/lidar/concatenated/pointcloud in the bag, add sensing:=false to the launch argument.
-If you want to use perception and planning from the bag as well, add "perception:=false planning:=false" to the "launch" argument.
-
-```shell
-ros2 launch driving_log_replayer_v2 driving_log_replayer_v2.launch.py scenario_path:=${planning_control_scenario_path} sensing:=false perception:=false planning:=false
-```
-
 ## About simulation
 
 State the information required to run the simulation.
-
-### Topic to be included in the input rosbag
-
-| Topic name                             | Data type                                    |
-| -------------------------------------- | -------------------------------------------- |
-| /pacmod/from_can_bus                   | can_msgs/msg/Frame                           |
-| /localization/kinematic_state          | nav_msgs/msg/Odometry                        |
-| /localization/acceleration             | geometry_msgs/msg/AccelWithCovarianceStamped |
-| /sensing/lidar/concatenated/pointcloud | sensor_msgs/msg/PointCloud2                  |
-| /tf                                    | tf2_msgs/msg/TFMessage                       |
-| /planning/mission_planning/route       | autoware_planning_msgs/msg/LaneletRoute      |
-
-The vehicle topics can be included instead of CAN.
-
-| Topic name                             | Data type                                           |
-| -------------------------------------- | --------------------------------------------------- |
-| /localization/kinematic_state          | nav_msgs/msg/Odometry                               |
-| /localization/acceleration             | geometry_msgs/msg/AccelWithCovarianceStamped        |
-| /sensing/lidar/concatenated/pointcloud | sensor_msgs/msg/PointCloud2                         |
-| /tf                                    | tf2_msgs/msg/TFMessage                              |
-| /planning/mission_planning/route       | autoware_planning_msgs/msg/LaneletRoute             |
-| /vehicle/status/control_mode           | autoware_auto_vehicle_msgs/msg/ControlModeReport    |
-| /vehicle/status/gear_status            | autoware_auto_vehicle_msgs/msg/GearReport           |
-| /vehicle/status/steering_status        | autoware_auto_vehicle_msgs/SteeringReport           |
-| /vehicle/status/turn_indicators_status | autoware_auto_vehicle_msgs/msg/TurnIndicatorsReport |
-| /vehicle/status/velocity_status        | autoware_auto_vehicle_msgs/msg/VelocityReport       |
 
 ### Topics that must not be included in the input rosbag
 
@@ -157,51 +131,9 @@ See [sample](https://github.com/tier4/driving_log_replayer_v2/blob/develop/sampl
 
 See [sample](https://github.com/tier4/driving_log_replayer_v2/blob/develop/sample/planning_control/result.json).
 
-The result format is shown below.
-**NOTE: common part of the result file format, which has already been explained, is omitted.**
-
-Success is determined when all evaluation conditions set in planning and control are met.
-
-```json
-{
-  "Frame": {
-    "[Planning|Control]_CONDITION_INDEX": {
-      "Result": { "Total": "Success or Fail", "Frame": "Success or Fail" },
-      "Info": {
-        "TotalPassed": "Total number of topics that passed the evaluation criteria",
-        "Decision": "Decision of the acquired topic",
-        "LaneInfo": "[lane_id, s, t]",
-        "KinematicState": "[vel, acc, jerk]"
-      }
-    }
-  }
-}
-```
-
 #### planning_factor
 
 See [sample](https://github.com/tier4/driving_log_replayer_v2/blob/develop/sample/planning_control/planning_factor_result.json).
-
-The result format is shown below.
-**NOTE: common part of the result file format, which has already been explained, is omitted.**
-
-Success is determined when all PlanningFactor evaluation conditions are met.
-
-```json
-{
-  "Frame": {
-    "TopicName": {
-      "Result": { "Total": "Success or Fail", "Frame": "Success or Fail" },
-      "Info": {
-        "Distance": "Distance between control_point coordinates and coordinates specified in scenario",
-        "ControlPointPoseX": "x coordinate of control_point's pose",
-        "ControlPointPoseY": "y coordinate of control_point's pose",
-        "Behavior": "behavior of the planning_factor"
-      }
-    }
-  }
-}
-```
 
 #### diagnostics
 

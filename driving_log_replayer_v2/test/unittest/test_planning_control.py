@@ -14,17 +14,14 @@
 
 from typing import Literal
 
+from builtin_interfaces.msg import Time
 from pydantic import ValidationError
 import pytest
-from tier4_metric_msgs.msg import Metric
+from tier4_metric_msgs.msg import Metric as MetricMsg
 from tier4_metric_msgs.msg import MetricArray
 
-from driving_log_replayer_v2.planning_control import KinematicCondition
-from driving_log_replayer_v2.planning_control import LaneCondition
-from driving_log_replayer_v2.planning_control import LaneInfo
-from driving_log_replayer_v2.planning_control import LeftRight
+from driving_log_replayer_v2.planning_control import Metric
 from driving_log_replayer_v2.planning_control import MetricCondition
-from driving_log_replayer_v2.planning_control import Metrics
 from driving_log_replayer_v2.planning_control import MinMax
 from driving_log_replayer_v2.planning_control import PlanningControlScenario
 from driving_log_replayer_v2.scenario import load_sample_scenario
@@ -44,182 +41,121 @@ def test_min_max_validation() -> None:
         MinMax(min=3.0, max=1.0)
 
 
-def test_left_right_validation() -> None:
-    with pytest.raises(ValidationError):
-        LeftRight(left=-3.0, right=1.0)
-
-
-def test_left_right_match_condition() -> None:
-    left_right = LeftRight(left=1.0, right=1.0)
-    assert left_right.match_condition(0.5)
-    assert left_right.match_condition(2.0) is False
-    assert left_right.match_condition(-2.0) is False
-
-
-def test_lane_info_match_condition() -> None:
-    lane_info = LaneInfo(id=1, s=1.0, t=LeftRight(left=1.0, right=1.0))
-    assert lane_info.match_condition((1, 2.0, 0.5), start_condition=True)
-    assert lane_info.match_condition((2, 2.0, 0.5), start_condition=True) is False
-    assert lane_info.match_condition((1, 0.5, 0.5), start_condition=True) is False
-    assert lane_info.match_condition((1, 2.0, 3.0), start_condition=True) is False
-    assert lane_info.match_condition((1, 2.0, 3.0))  # if goal t is not used
-
-
-def test_lane_condition_started_ended() -> None:
-    lane_condition = LaneCondition(
-        start=LaneInfo(id=1, s=1.0, t=LeftRight(left=1.0, right=1.0)),
-        end=LaneInfo(id=2, s=2.0),
-    )
-    assert lane_condition.started is False
-    assert lane_condition.ended is False
-    assert lane_condition.is_started((1, 0.5, 0.5)) is False
-    assert lane_condition.is_started((1, 2.0, 0.5))
-    assert lane_condition.is_started((2, 2.0))  # Once True, do not change.
-    assert lane_condition.is_ended((2, 1.0, 1.0)) is False
-    assert lane_condition.is_ended((2, 3.0, 1.0))
-
-
-def test_kinematic_state_match_condition() -> None:
-    kinematic_condition = KinematicCondition(
-        vel=MinMax(min=0.0, max=1.0),
-        acc=MinMax(min=0.0, max=2.0),
-        jerk=MinMax(min=0.0, max=3.0),
-    )
-    assert kinematic_condition.match_condition((0.5, 1.0, 2.0))
-    assert kinematic_condition.match_condition((2.0, 1.0, 2.0)) is False
-    assert kinematic_condition.match_condition((0.5, -1.0, 2.0)) is False
-    assert kinematic_condition.match_condition((0.5, 1.0, -1.0)) is False
-
-
-def create_condition(condition_type: Literal["any_of", "all_of"]) -> MetricCondition:
+def create_condition(
+    value_type: Literal["number", "string"],
+    condition_type: Literal["any_of", "all_of"],
+    judgement: Literal["positive", "negative"] = "positive",
+) -> MetricCondition:
     return MetricCondition(
-        topic="/control/autonomous_emergency_braking/metrics",
-        name="decision",
-        value="brake",
+        condition_name="acceleration_check",
+        topic="/control/control_evaluator/metrics",
+        metric_name="acceleration",
+        time={"start": 0.0, "end": 10.0},
+        value_type=value_type,
+        value_range=MinMax(min=0.0, max=1.0),
+        value_target="0.0",
         condition_type=condition_type,
-        lane_condition=LaneCondition(
-            start=LaneInfo(id=1, s=1.0, t=LeftRight(left=1.0, right=1.0)),
-            end=LaneInfo(id=2, s=2.0),
-        ),
-        kinematic_condition=KinematicCondition(
-            vel=MinMax(min=0.0, max=1.0),
-            acc=MinMax(min=0.0, max=2.0),
-            jerk=MinMax(min=0.0, max=3.0),
-        ),
+        judgement=judgement,
     )
 
 
-def create_metric_msg(
+def create_metric_array_msg(
     *,
-    is_started: bool = True,
-    is_ended: bool = False,
-    match_kinematic_state: bool = True,
-) -> tuple[MetricArray, MetricArray]:
-    aeb_metric = Metric(name="decision", unit="", value="brake")
-
-    lane_id = Metric(name="ego_lane_info/lane_id", value="1" if is_ended is False else "2")
-    lane_s = Metric(name="ego_lane_info/s", value="2.0" if is_started else "1.0")
-    lane_t = Metric(name="ego_lane_info/t", value="0.5")
-
-    ks_vel = Metric(name="kinematic_state/vel", value="0.5" if match_kinematic_state else "2.0")
-    ks_acc = Metric(name="kinematic_state/acc", value="1.0")
-    ks_jerk = Metric(name="kinematic_state/jerk", value="2.0")
-
-    aeb_metric = MetricArray(metric_array=[aeb_metric])
-    control_evaluator_metric = MetricArray(
-        metric_array=[lane_id, lane_s, lane_t, ks_vel, ks_acc, ks_jerk]
+    value: str = "0.0",
+    is_out_of_range: bool = False,
+    is_not_target: bool = False,
+) -> MetricArray:
+    if is_out_of_range or is_not_target:
+        value = "2.0"
+    return MetricArray(
+        stamp=Time(sec=1, nanosec=0),
+        metric_array=[MetricMsg(name="acceleration", unit="", value=value)],
     )
-    return aeb_metric, control_evaluator_metric
 
 
-def test_metrics_not_started() -> None:
-    condition = create_condition("any_of")
-    evaluation_item: Metrics = Metrics(name="control_0", condition=condition)
-    aeb_metric, control_metric = create_metric_msg(is_started=False)
-    assert evaluation_item.set_frame(aeb_metric, control_metric) is None
+def test_metrics_number() -> None:
+    condition = create_condition(value_type="number", condition_type="any_of")
+    evaluation_item: Metric = Metric(name="control_0", condition=condition)
+    metric_array_msg = create_metric_array_msg()
+    assert evaluation_item.set_frame(metric_array_msg) == {
+        "Info": {"MetricName": "acceleration", "MetricValue": 0.0},
+        "Result": {"Frame": "Success", "Total": "Success"},
+    }
+    assert evaluation_item.success is True
 
 
-def test_metrics_finished() -> None:
-    condition = create_condition("any_of")
-    evaluation_item: Metrics = Metrics(name="control_0", condition=condition)
-    aeb_metric, control_metric = create_metric_msg(is_started=False)
-    assert evaluation_item.set_frame(aeb_metric, control_metric) is None
+def test_metrics_number_out_range() -> None:
+    condition = create_condition(value_type="number", condition_type="any_of")
+    evaluation_item: Metric = Metric(name="control_0", condition=condition)
+    metric_array_msg = create_metric_array_msg(is_out_of_range=True)
+    assert evaluation_item.set_frame(metric_array_msg) == {
+        "Info": {"MetricName": "acceleration", "MetricValue": 2.0},
+        "Result": {"Frame": "Fail", "Total": "Fail"},
+    }
+    assert evaluation_item.success is False
+
+
+def test_metrics_string() -> None:
+    condition = create_condition(value_type="string", condition_type="any_of")
+    evaluation_item: Metric = Metric(name="control_0", condition=condition)
+    metric_array_msg = create_metric_array_msg()
+    assert evaluation_item.set_frame(metric_array_msg) == {
+        "Info": {"MetricName": "acceleration", "MetricValue": "0.0"},
+        "Result": {"Frame": "Success", "Total": "Success"},
+    }
+    assert evaluation_item.success is True
+
+
+def test_metrics_string_not_target() -> None:
+    condition = create_condition(value_type="string", condition_type="any_of")
+    evaluation_item: Metric = Metric(name="control_0", condition=condition)
+    metric_array_msg = create_metric_array_msg(is_not_target=True)
+    assert evaluation_item.set_frame(metric_array_msg) == {
+        "Info": {"MetricName": "acceleration", "MetricValue": "2.0"},
+        "Result": {"Frame": "Fail", "Total": "Fail"},
+    }
+    assert evaluation_item.success is False
 
 
 def test_metrics_success_any_of() -> None:
-    condition = create_condition("any_of")
-    evaluation_item: Metrics = Metrics(name="control_0", condition=condition)
-    aeb_metric, control_metric = create_metric_msg()
-    frame_dict = evaluation_item.set_frame(aeb_metric, control_metric)
+    condition = create_condition(value_type="number", condition_type="any_of")
+    evaluation_item: Metric = Metric(name="control_0", condition=condition)
+    metric_array_msg = create_metric_array_msg()
+    frame_dict = evaluation_item.set_frame(metric_array_msg)
     assert evaluation_item.success is True
     assert frame_dict == {
         "Result": {"Total": "Success", "Frame": "Success"},
-        "Info": {
-            "TotalPassed": 1,
-            "Decision": "brake",
-            "LaneInfo": (1, 2.0, 0.5),
-            "KinematicState": (0.5, 1.0, 2.0),
-        },
+        "Info": {"MetricName": "acceleration", "MetricValue": 0.0},
     }
-    aeb_metric, control_metric = create_metric_msg(match_kinematic_state=False)
+
+    metric_array_msg = create_metric_array_msg(is_out_of_range=True)
     frame_dict = evaluation_item.set_frame(
-        aeb_metric, control_metric
+        metric_array_msg
     )  # any_of is OK if one of them succeeds.
     assert evaluation_item.success is True
     assert frame_dict == {
         "Result": {"Total": "Success", "Frame": "Fail"},
-        "Info": {
-            "TotalPassed": 1,
-            "Decision": "brake",
-            "LaneInfo": (1, 2.0, 0.5),
-            "KinematicState": (2.0, 1.0, 2.0),
-        },
-    }
-
-
-def test_metrics_fail_any_of() -> None:
-    condition = create_condition("any_of")
-    evaluation_item: Metrics = Metrics(name="control_0", condition=condition)
-    aeb_metric, control_metric = create_metric_msg(match_kinematic_state=False)
-    frame_dict = evaluation_item.set_frame(aeb_metric, control_metric)
-    assert evaluation_item.success is False
-    assert frame_dict == {
-        "Result": {"Total": "Fail", "Frame": "Fail"},
-        "Info": {
-            "TotalPassed": 0,
-            "Decision": "brake",
-            "LaneInfo": (1, 2.0, 0.5),
-            "KinematicState": (2.0, 1.0, 2.0),
-        },
+        "Info": {"MetricName": "acceleration", "MetricValue": 2.0},
     }
 
 
 def test_metrics_fail_all_of() -> None:
-    condition = create_condition("all_of")
-    evaluation_item: Metrics = Metrics(name="control_0", condition=condition)
-    aeb_metric, control_metric = create_metric_msg()
-    frame_dict = evaluation_item.set_frame(aeb_metric, control_metric)
+    condition = create_condition(value_type="number", condition_type="all_of")
+    evaluation_item: Metric = Metric(name="control_0", condition=condition)
+    metric_array_msg = create_metric_array_msg()
+    frame_dict = evaluation_item.set_frame(metric_array_msg)
     assert evaluation_item.success is True
     assert frame_dict == {
         "Result": {"Total": "Success", "Frame": "Success"},
-        "Info": {
-            "TotalPassed": 1,
-            "Decision": "brake",
-            "LaneInfo": (1, 2.0, 0.5),
-            "KinematicState": (0.5, 1.0, 2.0),
-        },
+        "Info": {"MetricName": "acceleration", "MetricValue": 0.0},
     }
-    aeb_metric, control_metric = create_metric_msg(match_kinematic_state=False)
+
+    metric_array_msg = create_metric_array_msg(is_out_of_range=True)
     frame_dict = evaluation_item.set_frame(
-        aeb_metric, control_metric
-    )  # ALL_OF is not allowed if even one fails.
+        metric_array_msg
+    )  # # all_of is not allowed if even one fails.
     assert evaluation_item.success is False
     assert frame_dict == {
         "Result": {"Total": "Fail", "Frame": "Fail"},
-        "Info": {
-            "TotalPassed": 1,
-            "Decision": "brake",
-            "LaneInfo": (1, 2.0, 0.5),
-            "KinematicState": (2.0, 1.0, 2.0),
-        },
+        "Info": {"MetricName": "acceleration", "MetricValue": 2.0},
     }
