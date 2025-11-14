@@ -31,7 +31,7 @@ launch を立ち上げると以下のことが実行され、評価される。
 
 #### Metric正常(judgement: negative)
 
-`value_type=number`の場合に、メトリクスTopic中の指定metricが`value_range`の範囲外と正常となる。
+`value_type=number`の場合に、メトリクスTopic中の指定metricが`value_range`の範囲外であると正常となる。
 `value_type=string`の場合に、メトリクスTopic中の指定metricが`value_target`と一致しないと正常となる。
 
 #### Metric正常異常
