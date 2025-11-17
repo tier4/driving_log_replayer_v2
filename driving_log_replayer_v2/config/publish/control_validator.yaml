@@ -1,3 +1,4 @@
+# This publishing topics is to launch control_validator only
 publish:
   - /api/operation_mode/state
   - /control/command/control_cmd
