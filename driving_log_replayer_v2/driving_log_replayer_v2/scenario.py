@@ -84,9 +84,3 @@ def load_scenario_with_exception(
         result_writer.write_line(error_dict)
         result_writer.close()
         raise
-
-
-def load_condition(scenario: ScenarioType) -> dict:
-    if hasattr(scenario.Evaluation, "Conditions") and scenario.Evaluation.Conditions is not None:
-        return scenario.Evaluation.Conditions
-    return {}

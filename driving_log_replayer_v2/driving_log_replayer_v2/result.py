@@ -232,6 +232,7 @@ class ResultEditor:
 class MultiResultEditor:
     def __init__(self, result_jsonl_paths: list[str]) -> None:
         self._result_jsonl_paths = result_jsonl_paths
+        print(f"Merge results from: {result_jsonl_paths}")
         self.success = True
         self.summary = "MergedSummary"
         for result_jsonl_path in result_jsonl_paths:

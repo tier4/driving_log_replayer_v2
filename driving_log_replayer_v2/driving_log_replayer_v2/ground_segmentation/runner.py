@@ -60,7 +60,27 @@ class GroundSegmentationRunner(Runner):
         external_record_topics: list[TopicInfo],
         enable_analysis: str,
     ) -> None:
-        use_case_info_list = [
+        super().__init__(
+            GroundSegmentationScenario,
+            scenario_path,
+            rosbag_dir_path,
+            t4_dataset_path,
+            result_json_path,
+            result_archive_path,
+            storage,
+            evaluation_topics_with_task,
+            external_record_topics,
+            enable_analysis,
+        )
+
+    def _get_use_case_info_list(
+        self,
+        scenario: GroundSegmentationScenario,
+        evaluation_topics_with_task: dict[str, list[str]],
+        result_json_path: str,
+    ) -> list[UseCaseInfo]:
+        _ = scenario  # unused
+        return [
             UseCaseInfo(
                 evaluation_manager_class=GroundSegmentationEvaluationManager,
                 result_class=GroundSegmentationResult,
@@ -69,18 +89,6 @@ class GroundSegmentationRunner(Runner):
                 result_json_path=result_json_path,
             ),
         ]
-        super().__init__(
-            GroundSegmentationScenario,
-            use_case_info_list,
-            scenario_path,
-            rosbag_dir_path,
-            t4_dataset_path,
-            result_json_path,
-            result_archive_path,
-            storage,
-            external_record_topics,
-            enable_analysis,
-        )
 
     @property
     def ground_seg_eval_manager(self) -> GroundSegmentationEvaluationManager:

@@ -15,7 +15,6 @@
 from abc import ABC
 from abc import abstractmethod
 from dataclasses import dataclass
-import itertools
 from pathlib import Path
 import shutil
 from typing import Any
@@ -30,7 +29,6 @@ from driving_log_replayer_v2.post_process.evaluator import FrameResult
 from driving_log_replayer_v2.post_process.ros2_utils import RosBagManager
 from driving_log_replayer_v2.result import ResultBaseType
 from driving_log_replayer_v2.result import ResultWriter
-from driving_log_replayer_v2.scenario import load_condition
 from driving_log_replayer_v2.scenario import load_scenario_with_exception
 from driving_log_replayer_v2.scenario import ScenarioType
 
@@ -49,6 +47,7 @@ class UseCaseInfo:
 
     evaluation_manager_class: ManagerType
     result_class: ResultBaseType
+    conditions: dict
     name: str
     evaluation_topics_with_task: dict[
         str, list[str]
@@ -137,7 +136,7 @@ class Runner(ABC):
     Base class for post-process runner.
 
     Responsible for following items:
-        loading scenario and condition
+        loading scenario
         initializing subclass of EvaluationManager, ResultBase, and ResultWriter for each use case
         reading rosbag frame by frame
         evaluating by calling subclass of EvaluationManager
@@ -149,13 +148,13 @@ class Runner(ABC):
     def __init__(
         self,
         scenario_class: ScenarioType,
-        use_case_info_list: list[UseCaseInfo],
         scenario_path: str,
         rosbag_dir_path: str,
         t4_dataset_path: str,
         result_json_path: str,
         result_archive_path: str,
         storage: str,
+        evaluation_topics_with_task: dict[str, list[str]],
         external_record_topics: list[TopicInfo],
         enable_analysis: str,
     ) -> None:
@@ -165,13 +164,16 @@ class Runner(ABC):
         self._degradation_topics: list[str]
         self._rosbag_manager: RosBagManager
 
-        # load scenario and condition
+        # load scenario
         scenario = load_scenario_with_exception(
             scenario_path,
             scenario_class,
             result_json_path,
         )
-        evaluation_condition = load_condition(scenario)
+
+        use_case_info_list: list[UseCaseInfo] = self._get_use_case_info_list(
+            scenario, evaluation_topics_with_task, result_json_path
+        )
 
         # initialize evaluation manager, result, and result writer for each use case
         temp_use_cases = {}  # temporary dict
@@ -183,9 +185,9 @@ class Runner(ABC):
                     result_archive_path,
                     use_case_info.evaluation_topics_with_task,
                 ),
-                result=use_case_info.result_class(evaluation_condition),
+                result=use_case_info.result_class(use_case_info.conditions),
                 result_writer=ResultWriter(
-                    use_case_info.result_json_path, Clock(), evaluation_condition
+                    use_case_info.result_json_path, Clock(), use_case_info.conditions
                 ),
             )
         self._use_cases = UseCaseDict(
@@ -194,12 +196,10 @@ class Runner(ABC):
 
         # initialize RosBagManager to read and save rosbag and write into it
         evaluation_all_topics = [
-            use_case.evaluation_manager.get_evaluation_topics()
+            topic
             for use_case in self._use_cases.values()
+            for topic in use_case.evaluation_manager.get_evaluation_topics()
         ]
-        evaluation_all_topics = list(
-            itertools.chain.from_iterable(evaluation_all_topics)
-        )  # flatten list
         external_record_topics_metadata = [
             TopicMetadata(
                 name=topic_info.name,
@@ -219,12 +219,34 @@ class Runner(ABC):
 
         # set degradation topics
         self._degradation_topics = [
-            use_case.evaluation_manager.get_degradation_topic()
+            topic
             for use_case in self._use_cases.values()
+            for topic in use_case.evaluation_manager.get_degradation_topics()
         ]
 
         # save scenario.yaml to check later
         shutil.copy(scenario_path, Path(result_archive_path).joinpath("scenario.yaml"))
+
+    @abstractmethod
+    def _get_use_case_info_list(
+        self,
+        scenario: ScenarioType,
+        evaluation_topics_with_task: dict[str, list[str]],
+        result_json_path: str,
+    ) -> list[UseCaseInfo]:
+        """
+        Get use case info list for each use case.
+
+        Args:
+            scenario (ScenarioType): The scenario object.
+            evaluation_topics_with_task (dict[str, list[str]]): Dictionary mapping evaluation topics to their tasks.
+            result_json_path (str): Path to the result json file.
+
+        Returns:
+            list[UseCaseInfo]: The list of use case info.
+
+        """
+        raise NotImplementedError
 
     def evaluate(self) -> None:
         """Evaluate rosbag frame by frame."""

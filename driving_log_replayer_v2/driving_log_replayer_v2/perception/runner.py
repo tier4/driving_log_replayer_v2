@@ -35,12 +35,12 @@ from driving_log_replayer_v2.perception.evaluation_manager import PerceptionEval
 from driving_log_replayer_v2.perception.evaluator import PerceptionInvalidReason
 from driving_log_replayer_v2.perception.models import PerceptionResult
 from driving_log_replayer_v2.perception.models import PerceptionScenario
-from driving_log_replayer_v2.perception.models import StopReasonResult
-from driving_log_replayer_v2.perception.stop_reason import convert_to_stop_reason
-from driving_log_replayer_v2.perception.stop_reason import StopReasonData
-from driving_log_replayer_v2.perception.stop_reason import StopReasonEvaluationManager
+from driving_log_replayer_v2.perception.planning_factor import convert_to_planning_factor
+from driving_log_replayer_v2.perception.planning_factor import PlanningFactorEvalData
+from driving_log_replayer_v2.perception.planning_factor import PlanningFactorEvaluationManager
 from driving_log_replayer_v2.perception.topics import load_evaluation_topics
 import driving_log_replayer_v2.perception_eval_conversions as eval_conversions
+from driving_log_replayer_v2.planning_control import PlanningFactorResult
 from driving_log_replayer_v2.post_process.ros2_utils import lookup_transform
 from driving_log_replayer_v2.post_process.runner import ConvertedData
 from driving_log_replayer_v2.post_process.runner import Runner
@@ -48,8 +48,6 @@ from driving_log_replayer_v2.post_process.runner import TopicInfo
 from driving_log_replayer_v2.post_process.runner import UseCaseInfo
 from driving_log_replayer_v2.result import MultiResultEditor
 from driving_log_replayer_v2.result import ResultWriter
-from driving_log_replayer_v2.scenario import load_condition
-from driving_log_replayer_v2.scenario import load_scenario_with_exception
 
 if TYPE_CHECKING:
     from geometry_msgs.msg import TransformStamped
@@ -148,50 +146,58 @@ class PerceptionRunner(Runner):
         self._analysis_max_distance = analysis_max_distance
         self._analysis_distance_interval = analysis_distance_interval
 
-        use_case_info_list = [
-            UseCaseInfo(
-                evaluation_manager_class=PerceptionEvaluationManager,
-                result_class=PerceptionResult,
-                name="perception",
-                evaluation_topics_with_task=evaluation_topics_with_task,
-                result_json_path=result_json_path,
-            )
-        ]
-
-        # add stop_reason to UseCaseInfo if stop reason criterion is defined
-        scenario = load_scenario_with_exception(
-            scenario_path,
-            PerceptionScenario,
-            result_json_path,
-        )
-        evaluation_condition = load_condition(scenario)
-        if evaluation_condition.stop_reason_criterion is not None:
-            stop_reason_result_json_path = Path(result_json_path).with_name("stop_reason.jsonl")
-            use_case_info_list.append(
-                UseCaseInfo(
-                    evaluation_manager_class=StopReasonEvaluationManager,
-                    result_class=StopReasonResult,
-                    name="stop_reason",
-                    evaluation_topics_with_task={"dummy_task": ["/awapi/autoware/get/status"]},
-                    result_json_path=stop_reason_result_json_path,
-                )
-            )
-
         super().__init__(
             PerceptionScenario,
-            use_case_info_list,
             scenario_path,
             rosbag_dir_path,
             t4_dataset_path,
             result_json_path,
             result_archive_path,
             storage,
+            evaluation_topics_with_task,
             external_record_topics,
             enable_analysis,
         )
 
-    def is_stop_reason(self) -> bool:
-        return "stop_reason" in self._use_cases
+    def _get_use_case_info_list(
+        self,
+        scenario: PerceptionScenario,
+        evaluation_topics_with_task: dict[str, list[str]],
+        result_json_path: str,
+    ) -> list[UseCaseInfo]:
+        use_case_info_list = [
+            UseCaseInfo(
+                evaluation_manager_class=PerceptionEvaluationManager,
+                result_class=PerceptionResult,
+                conditions=scenario.Evaluation.Conditions,
+                name="perception",
+                evaluation_topics_with_task=evaluation_topics_with_task,
+                result_json_path=result_json_path,
+            )
+        ]
+
+        # add planning_factor to UseCaseInfo if include_use_case is defined
+        if scenario.include_use_case is not None:
+            pf_conditions = scenario.include_use_case.Conditions.PlanningFactorConditions
+            evaluation_topics = [pf_condition.topic for pf_condition in pf_conditions]
+            planning_factor_result_json_path = Path(result_json_path).with_name(
+                "planning_factor.jsonl"
+            )
+            use_case_info_list.append(
+                UseCaseInfo(
+                    evaluation_manager_class=PlanningFactorEvaluationManager,
+                    result_class=PlanningFactorResult,
+                    conditions=pf_conditions,
+                    name="planning_factor",
+                    evaluation_topics_with_task={"dummy_task": evaluation_topics},
+                    result_json_path=planning_factor_result_json_path,
+                )
+            )
+
+        return use_case_info_list
+
+    def is_planning_factor(self) -> bool:
+        return "planning_factor" in self._use_cases
 
     @property
     def perc_eval_manager(self) -> PerceptionEvaluationManager:
@@ -206,23 +212,23 @@ class PerceptionRunner(Runner):
         return self._use_cases["perception"].result_writer
 
     @property
-    def stop_reason_eval_manager(self) -> StopReasonEvaluationManager:
-        return self._use_cases["stop_reason"].evaluation_manager
+    def planning_factor_eval_manager(self) -> PlanningFactorEvaluationManager:
+        return self._use_cases["planning_factor"].evaluation_manager
 
     @property
-    def stop_reason_result(self) -> StopReasonResult:
-        return self._use_cases["stop_reason"].result
+    def planning_factor_result(self) -> PlanningFactorResult:
+        return self._use_cases["planning_factor"].result
 
     @property
-    def stop_reason_result_writer(self) -> ResultWriter:
-        return self._use_cases["stop_reason"].result_writer
+    def planning_factor_result_writer(self) -> ResultWriter:
+        return self._use_cases["planning_factor"].result_writer
 
     def _convert_ros_msg_to_data(
         self, topic_name: str, msg: Any, subscribed_timestamp_nanosec: int
     ) -> ConvertedData:
-        # evaluate stop reason criterion if defined
-        if self.is_stop_reason() and topic_name == "/awapi/autoware/get/status":
-            return convert_to_stop_reason(msg, subscribed_timestamp_nanosec)
+        # evaluate planning_factor if defined
+        if self.is_planning_factor() and topic_name.startswith("/planning/planning_factors/"):
+            return convert_to_planning_factor(msg, subscribed_timestamp_nanosec, topic_name)
 
         # convert ros to perception_eval
         return convert_to_perception_eval(
@@ -234,12 +240,20 @@ class PerceptionRunner(Runner):
     def _write_result(
         self, frame_result: FrameResult, header: Header, subscribed_timestamp_nanosec: int
     ) -> None:
-        if isinstance(frame_result.data, StopReasonData):
-            # write stop reason result
-            self.stop_reason_result.set_frame(frame_result.data)
-            self.stop_reason_result_writer.write_result_with_time(
-                self.stop_reason_result, subscribed_timestamp_nanosec
+        if isinstance(frame_result.data, PlanningFactorEvalData):
+            # write planning factor result
+            self.planning_factor_result.set_frame(
+                frame_result.data.msg, frame_result.data.topic_name
             )
+            if self.planning_factor_result.frame != {}:
+                res_str = self.planning_factor_result_writer.write_result_with_time(
+                    self.planning_factor_result, subscribed_timestamp_nanosec
+                )
+                self._rosbag_manager.write_results(
+                    "/driving_log_replayer_v2/planning_factor/results",
+                    String(data=res_str),
+                    header.stamp,
+                )
             return
 
         if frame_result.is_valid:
@@ -306,10 +320,10 @@ class PerceptionRunner(Runner):
             self._rosbag_manager.get_last_subscribed_timestamp(),
         )
 
-        if self.is_stop_reason():
+        if self.is_planning_factor():
             result_paths = [
                 self.perc_result_writer.result_path,
-                self.stop_reason_result_writer.result_path,
+                self.planning_factor_result_writer.result_path,
             ]
             multi_result_editor = MultiResultEditor(result_paths)
             multi_result_editor.write_back_result()
@@ -331,8 +345,6 @@ class PerceptionRunner(Runner):
                 self._analysis_distance_interval,
                 perception_degradation_topic,
             )
-        if self.is_stop_reason():
-            self.stop_reason_eval_manager.analyze()
 
 
 def evaluate(
@@ -366,6 +378,10 @@ def evaluate(
         ),
         TopicInfo(
             name="/driving_log_replayer_v2/perception/results",
+            msg_type="std_msgs/String",
+        ),
+        TopicInfo(
+            name="/driving_log_replayer_v2/planning_factor/results",
             msg_type="std_msgs/String",
         ),
     ]
