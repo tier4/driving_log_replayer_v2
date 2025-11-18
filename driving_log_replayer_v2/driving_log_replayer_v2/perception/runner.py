@@ -46,8 +46,6 @@ from driving_log_replayer_v2.post_process.ros2_utils import lookup_transform
 from driving_log_replayer_v2.post_process.runner import ConvertedData
 from driving_log_replayer_v2.post_process.runner import Runner
 from driving_log_replayer_v2.post_process.runner import UseCaseInfo
-from driving_log_replayer_v2.result import MultiResultEditor
-from driving_log_replayer_v2.result import ResultWriter
 
 if TYPE_CHECKING:
     from geometry_msgs.msg import TransformStamped
@@ -57,6 +55,7 @@ if TYPE_CHECKING:
     from perception_eval.tool import PerceptionAnalyzer3D
 
     from driving_log_replayer_v2.post_process.evaluator import FrameResult
+    from driving_log_replayer_v2.result import ResultWriter
 
 
 PerceptionMsgType = TypeVar("PerceptionMsgType", DetectedObjects, TrackedObjects, PredictedObjects)
@@ -345,14 +344,6 @@ class PerceptionRunner(Runner):
             String(data=res_str),
             self._rosbag_manager.get_last_subscribed_timestamp(),
         )
-
-        if self.is_planning_factor():
-            result_paths = [
-                self.perc_result_writer.result_path,
-                self.planning_factor_result_writer.result_path,
-            ]
-            multi_result_editor = MultiResultEditor(result_paths)
-            multi_result_editor.write_back_result()
 
     def _analysis(self) -> None:
         if self.perc_eval_manager.get_degradation_evaluation_task() != "fp_validation":

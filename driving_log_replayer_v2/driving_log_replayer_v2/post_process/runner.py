@@ -27,6 +27,7 @@ from typing_extensions import Self
 from driving_log_replayer_v2.post_process.evaluation_manager import ManagerType
 from driving_log_replayer_v2.post_process.evaluator import FrameResult
 from driving_log_replayer_v2.post_process.ros2_utils import RosBagManager
+from driving_log_replayer_v2.result import MultiResultEditor
 from driving_log_replayer_v2.result import ResultBaseType
 from driving_log_replayer_v2.result import ResultWriter
 from driving_log_replayer_v2.scenario import load_scenario_with_exception
@@ -252,6 +253,7 @@ class Runner(ABC):
                 self._write_result(frame_result, msg.header, subscribed_timestamp_nanosec)
         self._evaluate_on_post_process()
         self._close()
+        self._merge_results()
         if self._enable_analysis == "true":
             self._analysis()
 
@@ -317,13 +319,21 @@ class Runner(ABC):
         """Evaluate after processing all frames."""
         raise NotImplementedError
 
-    @abstractmethod
-    def _analysis(self) -> None:
-        """Perform analysis on the evaluation results."""
-        raise NotImplementedError
-
     def _close(self) -> None:
         """Close all resources."""
         for use_case in self._use_cases.values():
             use_case.result_writer.close()
         self._rosbag_manager.close_writer()
+
+    def _merge_results(self) -> None:
+        """Merge results from all use cases into a single result. The head use case's result is used as the base."""
+        if len(self._use_cases) <= 1:
+            return
+        result_paths = [use_case.result_writer.result_path for use_case in self._use_cases.values()]
+        multi_result_editor = MultiResultEditor(result_paths)
+        multi_result_editor.write_back_result()
+
+    @abstractmethod
+    def _analysis(self) -> None:
+        """Perform analysis on the evaluation results."""
+        raise NotImplementedError
