@@ -5,9 +5,9 @@ SensorModel: sample_sensor_kit
 VehicleModel: sample_vehicle
 Evaluation:
   UseCaseName: ground_segmentation
-  UseCaseFormatVersion: 0.3.0
+  UseCaseFormatVersion: 0.4.0
   Datasets:
-    - sample_dataset:
+    - sample_dataset_2:
         VehicleId: default
   Conditions:
     ground_label: [20, 21] # Annotation label list for ground pointcloud.

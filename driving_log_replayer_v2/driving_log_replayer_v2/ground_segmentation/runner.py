@@ -82,6 +82,7 @@ class GroundSegmentationRunner(Runner):
             UseCaseInfo(
                 evaluation_manager_class=GroundSegmentationEvaluationManager,
                 result_class=GroundSegmentationResult,
+                conditions=scenario.Evaluation.Conditions,
                 name="ground_segmentation",
                 evaluation_topics_with_task=evaluation_topics_with_task,
                 result_json_path=result_json_path,

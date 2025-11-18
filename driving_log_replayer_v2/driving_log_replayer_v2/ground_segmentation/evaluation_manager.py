@@ -49,7 +49,7 @@ class GroundSegmentationEvaluationManager(EvaluationManager):
             for topic in evaluation_topics
         }
 
-    def _set_degradation_topic(self) -> None:
-        self._degradation_topic = next(
-            iter(self._evaluators.keys())
-        )  # set first topic as degradation topic
+    def _set_degradation_topics(self) -> None:
+        self._degradation_topics = [
+            next(iter(self._evaluators.keys()))
+        ]  # set first topic as degradation topic
