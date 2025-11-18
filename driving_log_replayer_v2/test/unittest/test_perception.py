@@ -42,8 +42,13 @@ def test_scenario() -> None:
     scenario: PerceptionScenario = load_sample_scenario("perception", PerceptionScenario)
     assert scenario.Evaluation.Conditions.Criterion[0].CriteriaMethod == "num_gt_tp"
     assert scenario.Evaluation.Conditions.Criterion[1].CriteriaLevel == "easy"
-    assert scenario.include_use_case.Conditions.PlanningFactorConditions[0].topic == "/planning/planning_factors/obstacle_stop"
-    assert scenario.include_use_case.Conditions.PlanningFactorConditions[0].time.start == 1649138860.0
+    assert (
+        scenario.include_use_case.Conditions.PlanningFactorConditions[0].topic
+        == "/planning/planning_factors/obstacle_stop"
+    )
+    assert (
+        scenario.include_use_case.Conditions.PlanningFactorConditions[0].time.start == 1649138860.0
+    )
 
 
 def test_scenario_criteria_custom_level() -> None:
