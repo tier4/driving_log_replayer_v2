@@ -46,9 +46,7 @@ def test_scenario() -> None:
         scenario.include_use_case.Conditions.PlanningFactorConditions[0].topic
         == "/planning/planning_factors/obstacle_stop"
     )
-    assert (
-        scenario.include_use_case.Conditions.PlanningFactorConditions[0].time.start == 1649138860.0
-    )
+    assert scenario.include_use_case.Conditions.PlanningFactorConditions[0].behavior == ["STOP"]
 
 
 def test_scenario_criteria_custom_level() -> None:
