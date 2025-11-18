@@ -34,20 +34,12 @@ from driving_log_replayer_v2.scenario import ScenarioType
 
 
 @dataclass(frozen=True, slots=True)
-class TopicInfo:
-    """Information of topic to be recorded from external source."""
-
-    name: str
-    msg_type: str
-
-
-@dataclass(frozen=True, slots=True)
 class UseCaseInfo:
     """Information of use case for evaluation."""
 
     evaluation_manager_class: ManagerType
     result_class: ResultBaseType
-    conditions: dict
+    conditions: dict  # from scenario
     name: str
     evaluation_topics_with_task: dict[
         str, list[str]
@@ -155,7 +147,6 @@ class Runner(ABC):
         result_archive_path: str,
         storage: str,
         evaluation_topics_with_task: dict[str, list[str]],
-        external_record_topics: list[TopicInfo],
         enable_analysis: str,
     ) -> None:
         # instance variables
@@ -171,6 +162,7 @@ class Runner(ABC):
             result_json_path,
         )
 
+        # get use case info list
         use_case_info_list: list[UseCaseInfo] = self._get_use_case_info_list(
             scenario, evaluation_topics_with_task, result_json_path
         )
@@ -200,21 +192,12 @@ class Runner(ABC):
             for use_case in self._use_cases.values()
             for topic in use_case.evaluation_manager.get_evaluation_topics()
         ]
-        external_record_topics_metadata = [
-            TopicMetadata(
-                name=topic_info.name,
-                type=topic_info.msg_type,
-                serialization_format="cdr",
-                offered_qos_profiles="",
-            )
-            for topic_info in external_record_topics
-        ]
         self._rosbag_manager = RosBagManager(
             rosbag_dir_path,
             Path(result_archive_path).joinpath("result_bag").as_posix(),
             storage,
             evaluation_all_topics,
-            external_record_topics_metadata,
+            self._get_external_record_topics(),
         )
 
         # set degradation topics
@@ -244,6 +227,17 @@ class Runner(ABC):
 
         Returns:
             list[UseCaseInfo]: The list of use case info.
+
+        """
+        raise NotImplementedError
+
+    @abstractmethod
+    def _get_external_record_topics(self) -> list[TopicMetadata]:
+        """
+        Get the list of topics to be recorded from external source.
+
+        Returns:
+            list[TopicMetadata]: The list of TopicMetadata for external recording.
 
         """
         raise NotImplementedError

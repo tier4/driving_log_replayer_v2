@@ -24,6 +24,7 @@ from typing import TypeVar
 from autoware_perception_msgs.msg import DetectedObjects
 from autoware_perception_msgs.msg import PredictedObjects
 from autoware_perception_msgs.msg import TrackedObjects
+from rosbag2_py import TopicMetadata
 from std_msgs.msg import ColorRGBA
 from std_msgs.msg import Header
 from std_msgs.msg import String
@@ -44,7 +45,6 @@ from driving_log_replayer_v2.planning_control import PlanningFactorResult
 from driving_log_replayer_v2.post_process.ros2_utils import lookup_transform
 from driving_log_replayer_v2.post_process.runner import ConvertedData
 from driving_log_replayer_v2.post_process.runner import Runner
-from driving_log_replayer_v2.post_process.runner import TopicInfo
 from driving_log_replayer_v2.post_process.runner import UseCaseInfo
 from driving_log_replayer_v2.result import MultiResultEditor
 from driving_log_replayer_v2.result import ResultWriter
@@ -137,7 +137,6 @@ class PerceptionRunner(Runner):
         result_archive_path: str,
         storage: str,
         evaluation_topics_with_task: dict[str, list[str]],
-        external_record_topics: list[TopicInfo],
         enable_analysis: str,
         analysis_max_distance: str,
         analysis_distance_interval: str,
@@ -155,7 +154,6 @@ class PerceptionRunner(Runner):
             result_archive_path,
             storage,
             evaluation_topics_with_task,
-            external_record_topics,
             enable_analysis,
         )
 
@@ -195,6 +193,34 @@ class PerceptionRunner(Runner):
             )
 
         return use_case_info_list
+
+    def _get_external_record_topics(self) -> list[TopicMetadata]:
+        return [
+            TopicMetadata(
+                name="/driving_log_replayer_v2/marker/ground_truth",
+                type="visualization_msgs/MarkerArray",
+                serialization_format="cdr",
+                offered_qos_profiles="",
+            ),
+            TopicMetadata(
+                name="/driving_log_replayer_v2/marker/results",
+                type="visualization_msgs/MarkerArray",
+                serialization_format="cdr",
+                offered_qos_profiles="",
+            ),
+            TopicMetadata(
+                name="/driving_log_replayer_v2/perception/results",
+                type="std_msgs/String",
+                serialization_format="cdr",
+                offered_qos_profiles="",
+            ),
+            TopicMetadata(
+                name="/driving_log_replayer_v2/planning_factor/results",
+                type="std_msgs/String",
+                serialization_format="cdr",
+                offered_qos_profiles="",
+            ),
+        ]
 
     def is_planning_factor(self) -> bool:
         return "planning_factor" in self._use_cases
@@ -367,25 +393,6 @@ def evaluate(
         evaluation_prediction_topic_regex,
     )
 
-    external_record_topics = [
-        TopicInfo(
-            name="/driving_log_replayer_v2/marker/ground_truth",
-            msg_type="visualization_msgs/MarkerArray",
-        ),
-        TopicInfo(
-            name="/driving_log_replayer_v2/marker/results",
-            msg_type="visualization_msgs/MarkerArray",
-        ),
-        TopicInfo(
-            name="/driving_log_replayer_v2/perception/results",
-            msg_type="std_msgs/String",
-        ),
-        TopicInfo(
-            name="/driving_log_replayer_v2/planning_factor/results",
-            msg_type="std_msgs/String",
-        ),
-    ]
-
     runner = PerceptionRunner(
         scenario_path,
         rosbag_dir_path,
@@ -394,7 +401,6 @@ def evaluate(
         result_archive_path,
         storage,
         evaluation_topics_with_task,
-        external_record_topics,
         enable_analysis,
         analysis_max_distance,
         analysis_distance_interval,

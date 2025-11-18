@@ -12,8 +12,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from typing import Any
 from dataclasses import dataclass
+from typing import Any
 
 from driving_log_replayer_v2.post_process.evaluation_manager import EvaluationManager
 from driving_log_replayer_v2.post_process.evaluator import Evaluator
@@ -29,11 +29,11 @@ class PlanningFactorEvalData:
 
 
 def convert_to_planning_factor(
-    msg: Any, subscribed_timestamp_nanosec: int, topic_name: str,
+    msg: Any,
+    subscribed_timestamp_nanosec: int,
+    topic_name: str,
 ) -> ConvertedData:
-    header_timestamp_nanosec = (
-        msg.header.stamp.sec * 10**9 + msg.header.stamp.nanosec
-    )
+    header_timestamp_nanosec = msg.header.stamp.sec * 10**9 + msg.header.stamp.nanosec
     return ConvertedData(
         header_timestamp=header_timestamp_nanosec,
         subscribed_timestamp=subscribed_timestamp_nanosec,
@@ -62,7 +62,8 @@ class PlanningFactorEvaluationManager(EvaluationManager):
             topic for topics in evaluation_topics_with_task.values() for topic in topics
         ]
         self._evaluators = {
-            topic: PlanningFactorEvaluator(result_archive_path, topic) for topic in evaluation_topics
+            topic: PlanningFactorEvaluator(result_archive_path, topic)
+            for topic in evaluation_topics
         }
 
     def _set_degradation_topics(self) -> None:
