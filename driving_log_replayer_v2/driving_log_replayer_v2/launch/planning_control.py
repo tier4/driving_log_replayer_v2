@@ -32,6 +32,7 @@ RECORD_TOPIC = """^/tf$\
 |^/localization/initialization_state$\
 |^/localization/pose_with_covariance$\
 |^/localization/acceleration$\
+|^/vehicle/status/control_mode$\
 |^/planning/.*$\
 |^/control/.*$\
 |^/map/vector_map$\
