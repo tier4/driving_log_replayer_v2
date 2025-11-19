@@ -19,6 +19,8 @@ RECORD_TOPIC = """^/tf$\
 |^/tf_static$\
 |^/parameter_events$\
 |^/diagnostics$\
+|^/api/operation_mode/state$\
+|^/autoware/state$\
 |^/map/vector_map_marker$\
 |^/perception/object_recognition/objects$\
 |^/perception/object_recognition/detection/objects$\
