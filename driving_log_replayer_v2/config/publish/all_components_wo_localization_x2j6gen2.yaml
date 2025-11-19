@@ -15,6 +15,7 @@ publish:
   - /vehicle/status/turn_indicators_status
   - /vehicle/status/control_mode
   - /vehicle/status/gear_status
+  - /vehicle/status/wheel_speed_status
   # LIDAR
   - /sensing/lidar/front_upper/pandar_packets
   - /sensing/lidar/front_lower/pandar_packets
@@ -32,17 +33,17 @@ publish:
 
   # FOR PERCEPTION
   # camera
-  - /sensing/camera/camera0/image_raw/compressed
-  - /sensing/camera/camera1/image_raw/compressed
-  - /sensing/camera/camera2/image_raw/compressed
-  - /sensing/camera/camera3/image_raw/compressed
-  - /sensing/camera/camera4/image_raw/compressed
-  - /sensing/camera/camera5/image_raw/compressed
-  - /sensing/camera/camera6/image_raw/compressed
-  - /sensing/camera/camera7/image_raw/compressed
-  - /sensing/camera/camera8/image_raw/compressed
-  - /sensing/camera/camera9/image_raw/compressed
-  - /sensing/camera/camera10/image_raw/compressed
+  # - /sensing/camera/camera0/image_raw/compressed
+  # - /sensing/camera/camera1/image_raw/compressed
+  # - /sensing/camera/camera2/image_raw/compressed
+  # - /sensing/camera/camera3/image_raw/compressed
+  # - /sensing/camera/camera4/image_raw/compressed
+  # - /sensing/camera/camera5/image_raw/compressed
+  # - /sensing/camera/camera6/image_raw/compressed
+  # - /sensing/camera/camera7/image_raw/compressed
+  # - /sensing/camera/camera8/image_raw/compressed
+  # - /sensing/camera/camera9/image_raw/compressed
+  # - /sensing/camera/camera10/image_raw/compressed
   - /sensing/camera/camera0/camera_info
   - /sensing/camera/camera1/camera_info
   - /sensing/camera/camera2/camera_info
@@ -54,6 +55,14 @@ publish:
   - /sensing/camera/camera8/camera_info
   - /sensing/camera/camera9/camera_info
   - /sensing/camera/camera10/camera_info
+  # camera outputs (NOTE: publishing YOLOX and TLR outputs directly because we currently off them in DLR tests)
+  - /perception/object_recognition/detection/rois0
+  - /perception/object_recognition/detection/rois1
+  - /perception/object_recognition/detection/rois2
+  - /perception/object_recognition/detection/rois3
+  - /perception/object_recognition/detection/rois4
+  - /perception/object_recognition/detection/rois5
+  - /perception/traffic_light_recognition/traffic_signals
   # radar
   - /sensing/radar/front_center/nebula_packets
   - /sensing/radar/front_left/nebula_packets
