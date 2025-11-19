@@ -11,6 +11,8 @@ publish:
   - /localization/acceleration
   - /localization/kinematic_state
   - /tf
+  # ground truth (for multi-run collection)
+  - /ground_truth/trajectory
   # perception
   - /perception/obstacle_segmentation/pointcloud
   - /perception/traffic_light_recognition/traffic_signals
