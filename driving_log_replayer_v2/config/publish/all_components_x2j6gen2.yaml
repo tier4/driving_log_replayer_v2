@@ -15,6 +15,7 @@ publish:
   - /vehicle/status/turn_indicators_status
   - /vehicle/status/control_mode
   - /vehicle/status/gear_status
+  - /vehicle/status/wheel_speed_status
   # LIDAR
   - /sensing/lidar/front_upper/pandar_packets
   - /sensing/lidar/front_lower/pandar_packets
@@ -57,6 +58,12 @@ publish:
   - /sensing/camera/camera8/camera_info
   - /sensing/camera/camera9/camera_info
   - /sensing/camera/camera10/camera_info
+  - /perception/object_recognition/detection/rois0
+  - /perception/object_recognition/detection/rois1
+  - /perception/object_recognition/detection/rois2
+  - /perception/object_recognition/detection/rois3
+  - /perception/object_recognition/detection/rois4
+  - /perception/object_recognition/detection/rois5
   # radar
   - /sensing/radar/front_center/nebula_packets
   - /sensing/radar/front_left/nebula_packets
@@ -64,6 +71,8 @@ publish:
   - /sensing/radar/rear_center/nebula_packets
   - /sensing/radar/rear_left/nebula_packets
   - /sensing/radar/rear_right/nebula_packets
+  # TLR
+  - /perception/traffic_light_recognition/traffic_signals
 
   # FOR PLANNING
   # planning inputs
