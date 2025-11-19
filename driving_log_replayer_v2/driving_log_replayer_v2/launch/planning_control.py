@@ -32,7 +32,8 @@ RECORD_TOPIC = """^/tf$\
 |^/planning/.*$\
 |^/control/.*$\
 |^/system/processing_time_checker/metrics$\
-|^/driving_log_replayer/.*\
+|^/driving_log_replayer/.*$\
+|^/perception/object_recognition/detection/rois.*\
 """
 
 AUTOWARE_DISABLE = {
