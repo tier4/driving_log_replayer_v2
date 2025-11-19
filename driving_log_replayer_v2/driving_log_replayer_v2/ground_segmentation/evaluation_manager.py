@@ -15,7 +15,6 @@
 from driving_log_replayer_v2.ground_segmentation.evaluator import GroundSegmentationEvaluator
 from driving_log_replayer_v2.ground_segmentation.models import GroundSegmentationScenario
 from driving_log_replayer_v2.post_process.evaluation_manager import EvaluationManager
-from driving_log_replayer_v2.scenario import load_condition
 
 
 class GroundSegmentationEvaluationManager(EvaluationManager):
@@ -36,7 +35,7 @@ class GroundSegmentationEvaluationManager(EvaluationManager):
         result_archive_path: str,
         evaluation_topics_with_task: dict[str, list[str]],
     ) -> None:
-        evaluation_condition = load_condition(self._scenario)
+        evaluation_condition = self._scenario.Evaluation.Conditions
         evaluation_topics = [
             topic for topics in evaluation_topics_with_task.values() for topic in topics
         ]
@@ -50,7 +49,7 @@ class GroundSegmentationEvaluationManager(EvaluationManager):
             for topic in evaluation_topics
         }
 
-    def _set_degradation_topic(self) -> None:
-        self._degradation_topic = next(
-            iter(self._evaluators.keys())
-        )  # set first topic as degradation topic
+    def _set_degradation_topics(self) -> None:
+        self._degradation_topics = [
+            next(iter(self._evaluators.keys()))
+        ]  # set first topic as degradation topic

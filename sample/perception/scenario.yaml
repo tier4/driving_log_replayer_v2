@@ -27,29 +27,6 @@ Evaluation:
           Region:
             x_position: null # [m] null [Do not filter by x_position] or lower_limit,upper_limit
             y_position: null # [m] null [Do not filter by y_position] or lower_limit,upper_limit
-    stop_reason_criterion:
-      - time_range: 1649138860-1649138865 # [second] lower_limit-(upper_limit) [Upper limit can be omitted. If omitted value is float(2 ** 63 - 1)]
-        criteria_name: check_obstacle_stop # criteria name
-        pass_rate: 80.0 # How much (%) of the evaluation attempts are considered successful.
-        tolerance_interval: 1.0 # Tolerance interval in the evaluation frame
-        judgement: positive # "positive" or "negative"
-        condition:
-          - reason: ObstacleStop # Specify the reason you want to meet if "stop"
-            base_stop_line_dist: 0.0,10.0 # [m] lower_limit,upper_limit
-      - time_range: 1649138870-1649138875 # [second] lower_limit-(upper_limit) [Upper limit can be omitted. If omitted value is float(2 ** 63 - 1)]
-        criteria_name: check_non_stop # criteria name
-        pass_rate: 90.0 # How much (%) of the evaluation attempts are considered successful.
-        tolerance_interval: 1.0 # Tolerance interval in the evaluation frame
-        judgement: negative # "positive" or "negative"
-        condition:
-          - reason: Intersection # Specify the reason you do not want to meet if "non_stop"
-            base_stop_line_dist: 0.0,10.0 # [m] lower_limit,upper_limit
-      - time_range: 1649138880-1649138885 # [second] lower_limit-(upper_limit) [Upper limit can be omitted. If omitted value is float(2 ** 63 - 1)]
-        criteria_name: check_no_reason # criteria name
-        pass_rate: 90.0 # How much (%) of the evaluation attempts are considered successful.
-        tolerance_interval: 1.0 # Tolerance interval in the evaluation frame
-        judgement: negative # "positive" or "negative"
-        condition: []
   degradation_topic: /perception/object_recognition/detection/objects # Topic for degradation evaluation. If not specified, decide the topic based on the evaluation task.
   PerceptionEvaluationConfig:
     evaluation_config_dict:
@@ -84,3 +61,15 @@ Evaluation:
     target_labels: [car, bicycle, pedestrian, motorbike, unknown]
     matching_threshold_list: [2.0, 2.0, 2.0, 2.0, 2.0] # Threshold for planar distance matching
     # confidence_threshold_list: null
+include_use_case:
+  UseCaseName: planning_control
+  UseCaseFormatVersion: 2.4.0
+  Conditions:
+    PlanningFactorConditions:
+      - topic: /planning/planning_factors/obstacle_stop
+        time: { start: 1649138860.0, end: 1649138865.0 } # validate the condition if the message is between start and end in ROS time
+        condition_type: all_of
+        area: null # You can set area to null to ignore area condition.
+        behavior: [STOP] # Specify the behavior to be judged. You can set behavior to null to ignore behavior condition.
+        distance: { start: 0.0, end: 10.0 } # Specify the distance range to be judged. You can set distance to null to ignore distance condition.
+        judgement: positive # positive or negative

@@ -20,6 +20,7 @@ from typing import TYPE_CHECKING
 
 import numpy as np
 import ros2_numpy
+from rosbag2_py import TopicMetadata
 from std_msgs.msg import String
 
 from driving_log_replayer_v2.ground_segmentation.evaluation_manager import (
@@ -30,7 +31,6 @@ from driving_log_replayer_v2.ground_segmentation.models import GroundSegmentatio
 import driving_log_replayer_v2.perception_eval_conversions as eval_conversions
 from driving_log_replayer_v2.post_process.runner import ConvertedData
 from driving_log_replayer_v2.post_process.runner import Runner
-from driving_log_replayer_v2.post_process.runner import TopicInfo
 from driving_log_replayer_v2.post_process.runner import UseCaseInfo
 
 if TYPE_CHECKING:
@@ -57,30 +57,46 @@ class GroundSegmentationRunner(Runner):
         result_archive_path: str,
         storage: str,
         evaluation_topics_with_task: dict[str, list[str]],
-        external_record_topics: list[TopicInfo],
         enable_analysis: str,
     ) -> None:
-        use_case_info_list = [
-            UseCaseInfo(
-                evaluation_manager_class=GroundSegmentationEvaluationManager,
-                result_class=GroundSegmentationResult,
-                name="ground_segmentation",
-                evaluation_topics_with_task=evaluation_topics_with_task,
-                result_json_path=result_json_path,
-            ),
-        ]
         super().__init__(
             GroundSegmentationScenario,
-            use_case_info_list,
             scenario_path,
             rosbag_dir_path,
             t4_dataset_path,
             result_json_path,
             result_archive_path,
             storage,
-            external_record_topics,
+            evaluation_topics_with_task,
             enable_analysis,
         )
+
+    def _get_use_case_info_list(
+        self,
+        scenario: GroundSegmentationScenario,
+        evaluation_topics_with_task: dict[str, list[str]],
+        result_json_path: str,
+    ) -> list[UseCaseInfo]:
+        return [
+            UseCaseInfo(
+                evaluation_manager_class=GroundSegmentationEvaluationManager,
+                result_class=GroundSegmentationResult,
+                conditions=scenario.Evaluation.Conditions,
+                name="ground_segmentation",
+                evaluation_topics_with_task=evaluation_topics_with_task,
+                result_json_path=result_json_path,
+            ),
+        ]
+
+    def _get_external_record_topics(self) -> list[TopicMetadata]:
+        return [
+            TopicMetadata(
+                name="/driving_log_replayer_v2/ground_segmentation/results",
+                type="std_msgs/msg/String",
+                serialization_format="cdr",
+                offered_qos_profiles="",
+            ),
+        ]
 
     @property
     def ground_seg_eval_manager(self) -> GroundSegmentationEvaluationManager:
@@ -150,13 +166,6 @@ def evaluate(
 ) -> None:
     evaluation_topics_with_task = {"dummy_task": [evaluation_topic]}
 
-    external_record_topics = [
-        TopicInfo(
-            name="/driving_log_replayer_v2/ground_segmentation/results",
-            msg_type="std_msgs/msg/String",
-        ),
-    ]
-
     runner = GroundSegmentationRunner(
         scenario_path,
         rosbag_dir_path,
@@ -165,7 +174,6 @@ def evaluate(
         result_archive_path,
         storage,
         evaluation_topics_with_task,
-        external_record_topics,
         enable_analysis,
     )
 

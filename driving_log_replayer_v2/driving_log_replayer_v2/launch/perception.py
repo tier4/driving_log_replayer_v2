@@ -40,6 +40,7 @@ RECORD_TOPIC = """^/tf$\
 |^/sensing/.*tracked_objects$\
 |^/map/vector_map_marker$\
 |^/localization/kinematic_state$\
+|^/planning/planning_factors/.*\
 """
 
 
@@ -54,7 +55,7 @@ def autoware_disable(conf: dict) -> dict[str, str]:
         scenario = load_scenario(Path(conf["scenario_path"]), PerceptionScenario)
     except (FileNotFoundError, PermissionError, yaml.YAMLError, ValidationError, KeyError):
         return default
-    if scenario.Evaluation.Conditions.stop_reason_criterion is not None:
+    if scenario.include_use_case is not None:
         return {
             "localization": "false",
         }

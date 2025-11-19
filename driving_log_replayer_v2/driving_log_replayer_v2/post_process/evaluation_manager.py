@@ -45,10 +45,10 @@ class EvaluationManager(ABC):
         # instance variables
         self._scenario: ScenarioType = scenario
         self._evaluators: dict[str, EvaluatorType]
-        self._degradation_topic: str
+        self._degradation_topics: list[str]
 
         self._set_evaluators(t4_dataset_path, result_archive_path, evaluation_topics_with_task)
-        self._set_degradation_topic()
+        self._set_degradation_topics()
 
     @abstractmethod
     def _set_evaluators(
@@ -69,7 +69,7 @@ class EvaluationManager(ABC):
         raise NotImplementedError
 
     @abstractmethod
-    def _set_degradation_topic(self) -> None:
+    def _set_degradation_topics(self) -> None:
         """Set the degradation topic for the evaluation manager."""
         raise NotImplementedError
 
@@ -92,9 +92,9 @@ class EvaluationManager(ABC):
         evaluator = self._evaluators[topic_name]
         return evaluator.evaluate_frame(converted_data)
 
-    def get_degradation_topic(self) -> str:
-        """Get the degradation topic for the evaluation manager."""
-        return self._degradation_topic
+    def get_degradation_topics(self) -> list[str]:
+        """Get the degradation topics for the evaluation manager."""
+        return self._degradation_topics
 
     def get_evaluation_topics(self) -> list[str]:
         """Get the evaluation topics for the evaluation manager."""
