@@ -1,3 +1,4 @@
+# This publishing topics is to launch planning and control components
 publish:
   # vehicle
   - /vehicle/status/steering_status

@@ -1,3 +1,4 @@
+# This publishing topics is to launch autonomous_emergency_braking only
 publish:
   - /autoware/state
   - /control/trajectory_follower/lateral/predicted_trajectory

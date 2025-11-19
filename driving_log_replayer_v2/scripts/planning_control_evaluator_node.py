@@ -48,17 +48,17 @@ class PlanningControlEvaluator(DLREvaluatorV2):
         metric_conditions = self._scenario.Evaluation.Conditions.MetricConditions
         pf_conditions = self._scenario.Evaluation.Conditions.PlanningFactorConditions
 
-        if metric_conditions == [] and pf_conditions == []:
-            skip_test = {
-                "Result": {
-                    "Success": True,
-                    "Summary": "Metric and Planning Factor conditions are skipped.",
-                },
-                "Stamp": {"System": 0.0},
-                "Frame": {},
-            }
-            result_str = self._result_writer.write_line(skip_test)
-            self._pub_result.publish(String(data=result_str))
+        # Set success dummy result for initial state
+        dummy_result = {
+            "Result": {
+                "Success": True,
+                "Summary": "Planning Control Evaluation is initialized as successful, and final result will be updated based on metrics and planning factors.",
+            },
+            "Stamp": {"System": 0.0},
+            "Frame": {},
+        }
+        dummy_result_str = self._result_writer.write_line(dummy_result)
+        self._pub_result.publish(String(data=dummy_result_str))
 
         if metric_conditions != []:
             self._pub_metric_result = self.create_publisher(

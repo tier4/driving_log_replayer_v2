@@ -1,3 +1,4 @@
+# This publishing topics is to launch motion_velocity_planner only
 publish:
   - /localization/acceleration
   - /localization/kinematic_state
