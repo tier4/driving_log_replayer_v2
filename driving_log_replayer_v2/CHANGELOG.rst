@@ -2,6 +2,57 @@
 Changelog for package driving_log_replayer
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
+Forthcoming
+-----------
+* feat: Add topics to pub in pc all comp option (`#254 <https://github.com/tier4/driving_log_replayer_v2/issues/254>`_)
+  * Add topics to pub in pc all comp option
+  * update record topic and publish config
+  * remove additional changes
+  ---------
+  Co-authored-by: xtk8532704 <1041084556@qq.com>
+* feat(perception): replace stop_reason to planning factor (`#253 <https://github.com/tier4/driving_log_replayer_v2/issues/253>`_)
+  * update
+  * add planning facor
+  * update
+  * update
+  * fix scenario of ground_segmentation
+  * remove unnecessary test
+  * pre-commit
+  * pre-commit
+  * fix test
+  * remove unnecessary row
+  ---------
+* chore(config): add new topic publish config for all_components tests (`#252 <https://github.com/tier4/driving_log_replayer_v2/issues/252>`_)
+  * add new topic list for all_components test
+  * add all_components_wo_loc config
+  * fix bug
+  * add words
+  * add peakcon
+* feat(planning_control): modify the metric condition to allow setting conditions for the metric.msg topic (`#249 <https://github.com/tier4/driving_log_replayer_v2/issues/249>`_)
+  * feat(metric): modify the metric condition to allow setting conditions for the metric.msg topic
+  * fix
+  * fix floating-point error
+  * Update driving_log_replayer_v2/driving_log_replayer_v2/planning_control.py
+  Co-authored-by: Copilot <175728472+Copilot@users.noreply.github.com>
+  * feat(planning_control): refactor code for `#249 <https://github.com/tier4/driving_log_replayer_v2/issues/249>`_ (`#251 <https://github.com/tier4/driving_log_replayer_v2/issues/251>`_)
+  * update docs.
+  * fix some bug and refactor codes
+  * fix(docs): delete extra text
+  * Update docs/use_case/planning_control.ja.md
+  Co-authored-by: Masato Saeki  <78376491+MasatoSaeki@users.noreply.github.com>
+  ---------
+  Co-authored-by: t4-adc <grp-rd-1-adc-admin@tier4.jp>
+  Co-authored-by: Copilot <175728472+Copilot@users.noreply.github.com>
+  Co-authored-by: Kem (TiankuiXian) <1041084556@qq.com>
+  Co-authored-by: Masato Saeki <78376491+MasatoSaeki@users.noreply.github.com>
+* feat(planning_control): support testing multiple planning factors in a msg (`#250 <https://github.com/tier4/driving_log_replayer_v2/issues/250>`_)
+  * support testing multiple planning factors in a msg
+  * refactor code
+  * fix typo
+  * fix no factor bug
+  * fix ci test failures
+* Contributors: Kazunori-Nakajima, Kem (TiankuiXian), Masato Saeki, TadaKazuto
+
 3.13.4 (2025-11-06)
 -------------------
 * refactor(perception, ground_segmentation): create base class for post process (`#243 <https://github.com/tier4/driving_log_replayer_v2/issues/243>`_)
