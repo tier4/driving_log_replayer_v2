@@ -5,7 +5,7 @@ SensorModel: sample_sensor_kit
 VehicleModel: sample_vehicle
 Evaluation:
   UseCaseName: perception
-  UseCaseFormatVersion: 1.2.0
+  UseCaseFormatVersion: 1.5.0
   Datasets:
     - sample_dataset:
         VehicleId: default # データセット毎にVehicleIdを指定する
@@ -61,3 +61,15 @@ Evaluation:
     target_labels: [car, bicycle, pedestrian, motorbike, unknown]
     matching_threshold_list: [2.0, 2.0, 2.0, 2.0, 2.0] # 平面距離マッチング時の閾値
     # confidence_threshold_list: null
+include_use_case:
+  UseCaseName: planning_control
+  UseCaseFormatVersion: 2.4.0
+  Conditions:
+    PlanningFactorConditions:
+      - topic: /planning/planning_factors/obstacle_stop
+        time: { start: 1649138860.0, end: 1649138865.0 } # ROS 時間で start から end の間のメッセージに対して条件を検証する
+        condition_type: all_of
+        area: null # エリア条件を無視する場合は null に設定できます。
+        behavior: [STOP] # 判断する動作を指定します。動作条件を無視する場合は null に設定できます。
+        distance: { start: 0.0, end: 10.0 } # 判断する距離範囲を指定します。距離条件を無視する場合は null に設定できます。
+        judgement: positive # positive または negative

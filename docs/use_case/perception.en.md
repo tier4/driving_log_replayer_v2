@@ -6,6 +6,8 @@ The perception topic is saved when Autoware is executed. The evaluation is then 
 
 The topic for pass/fail is based on the evaluation_task described in scenario.yaml. The topic to be analyzed can be specified from terminal arguments. If not specified, the default value is used.
 
+In addition, you can use planning_factor on planning_control. Please see [this documents](/docs/use_case/planning_control.en.md).
+
 ## Preparation
 
 In perception evaluation, machine learning pre-trained models are used.
