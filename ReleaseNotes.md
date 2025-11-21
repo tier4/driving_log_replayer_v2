@@ -1,5 +1,17 @@
 # Release Notes
 
+## Version 3.14.0
+
+Major changes
+
+| Module             | Feature          | Brief summary                                                                    | Pull request                                                        | Contributor                                               |
+| ------------------ | ---------------- | -------------------------------------------------------------------------------- | ------------------------------------------------------------------- | --------------------------------------------------------- |
+| `common`           | topic            | fix the topics to publish in pc all components option                            | [#254](https://github.com/tier4/driving_log_replayer_v2/issues/254) | [TadaKazuto](https://github.com/TadaKazuto)               |
+| `perception`       | new criteria     | replace stop_reason to planning factor                                           | [#253](https://github.com/tier4/driving_log_replayer_v2/issues/253) | [MasatoSaeki](https://github.com/MasatoSaeki)             |
+| `common`           | topic            | add new topic publish config for all_components tests                            | [#252](https://github.com/tier4/driving_log_replayer_v2/issues/252) | [xtk8532704](https://github.com/xtk8532704)               |
+| `planning_control` | evaluation logic | modify the metric condition to allow setting conditions for the metric.msg topic | [#249](https://github.com/tier4/driving_log_replayer_v2/issues/249) | [Kazunori-Nakajima](https://github.com/Kazunori-Nakajima) |
+| `planning_control` | evaluation logic | support testing multiple planning factors in a msg                               | [#250](https://github.com/tier4/driving_log_replayer_v2/issues/250) | [xtk8532704](https://github.com/xtk8532704)               |
+
 ## Version 3.13.4
 
 Minor Tweak

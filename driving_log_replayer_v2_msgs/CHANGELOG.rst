@@ -2,6 +2,9 @@
 Changelog for package driving_log_replayer_v2_msgs
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
+Forthcoming
+-----------
+
 3.13.4 (2025-11-06)
 -------------------
 * ci: update tool version (`#239 <https://github.com/tier4/driving_log_replayer_v2/issues/239>`_)
