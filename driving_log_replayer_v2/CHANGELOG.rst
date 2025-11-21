@@ -2,8 +2,8 @@
 Changelog for package driving_log_replayer
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-Forthcoming
------------
+3.14.0 (2025-11-21)
+-------------------
 * feat: Add topics to pub in pc all comp option (`#254 <https://github.com/tier4/driving_log_replayer_v2/issues/254>`_)
   * Add topics to pub in pc all comp option
   * update record topic and publish config
