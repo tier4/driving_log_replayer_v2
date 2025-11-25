@@ -76,7 +76,9 @@ class GroundSegmentationRunner(Runner):
         scenario: GroundSegmentationScenario,
         evaluation_topics_with_task: dict[str, list[str]],
         result_json_path: str,
+        result_archive_path: str,
     ) -> list[UseCaseInfo]:
+        _ = result_archive_path  # unused
         return [
             UseCaseInfo(
                 evaluation_manager_class=GroundSegmentationEvaluationManager,

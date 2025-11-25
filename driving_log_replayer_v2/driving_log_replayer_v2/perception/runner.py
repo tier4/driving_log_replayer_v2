@@ -161,6 +161,7 @@ class PerceptionRunner(Runner):
         scenario: PerceptionScenario,
         evaluation_topics_with_task: dict[str, list[str]],
         result_json_path: str,
+        result_archive_path: str,
     ) -> list[UseCaseInfo]:
         use_case_info_list = [
             UseCaseInfo(
@@ -177,9 +178,7 @@ class PerceptionRunner(Runner):
         if scenario.include_use_case is not None:
             pf_conditions = scenario.include_use_case.Conditions.PlanningFactorConditions
             evaluation_topics = [pf_condition.topic for pf_condition in pf_conditions]
-            planning_factor_result_json_path = Path(result_json_path).with_name(
-                "planning_factor.jsonl"
-            )
+            planning_factor_result_json_path = Path(result_archive_path) / "planning_factor.jsonl"
             use_case_info_list.append(
                 UseCaseInfo(
                     evaluation_manager_class=PlanningFactorEvaluationManager,

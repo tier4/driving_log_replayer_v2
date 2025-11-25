@@ -165,7 +165,7 @@ class Runner(ABC):
 
         # get use case info list
         use_case_info_list: list[UseCaseInfo] = self._get_use_case_info_list(
-            scenario, evaluation_topics_with_task, result_json_path
+            scenario, evaluation_topics_with_task, result_json_path, result_archive_path
         )
 
         # initialize evaluation manager, result, and result writer for each use case
@@ -217,6 +217,7 @@ class Runner(ABC):
         scenario: ScenarioType,
         evaluation_topics_with_task: dict[str, list[str]],
         result_json_path: str,
+        result_archive_path: str,
     ) -> list[UseCaseInfo]:
         """
         Get use case info list for each use case.
@@ -225,6 +226,7 @@ class Runner(ABC):
             scenario (ScenarioType): The scenario object.
             evaluation_topics_with_task (dict[str, list[str]]): Dictionary mapping evaluation topics to their tasks.
             result_json_path (str): Path to the result json file.
+            result_archive_path (str): Path to the result archive directory. If necessary, use this to create result json path for each use case.
 
         Returns:
             list[UseCaseInfo]: The list of use case info.
