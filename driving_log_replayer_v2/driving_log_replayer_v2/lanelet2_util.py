@@ -15,6 +15,7 @@
 from typing import Any
 
 import lanelet2  # isort:skip
+import autoware_lanelet2_extension_python.regulatory_elements  # noqa: F401 # isort:skip # needed to register regulatory elements
 from pathlib import Path
 import warnings
 
