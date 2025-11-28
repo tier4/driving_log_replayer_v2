@@ -36,13 +36,18 @@ class PerceptionEvaluationManager(EvaluationManager):
         t4_dataset_path: str,
         result_archive_path: str,
         evaluation_topics_with_task: dict[str, list[str]],
+        degradation_topic: str,
     ) -> None:
         # additional instance variables
         self._degradation_evaluation_task: str = scenario.Evaluation.PerceptionEvaluationConfig[
             "evaluation_config_dict"
         ]["evaluation_task"]
         super().__init__(
-            scenario, t4_dataset_path, result_archive_path, evaluation_topics_with_task
+            scenario,
+            t4_dataset_path,
+            result_archive_path,
+            evaluation_topics_with_task,
+            degradation_topic,
         )
 
     def _set_evaluators(
@@ -68,7 +73,11 @@ class PerceptionEvaluationManager(EvaluationManager):
             for topic in topics
         }
 
-    def _set_degradation_topics(self) -> None:
+    def _set_degradation_topics(self, degradation_topic: str) -> None:
+        # NOTE: argument has higher priority than scenario setting
+        if degradation_topic not in ("", "None"):
+            self._degradation_topics = [degradation_topic]
+            return
         if self._scenario.Evaluation.degradation_topic is not None:
             self._degradation_topics = [self._scenario.Evaluation.degradation_topic]
         # If degradation topic is not set, set it based on the evaluation task.

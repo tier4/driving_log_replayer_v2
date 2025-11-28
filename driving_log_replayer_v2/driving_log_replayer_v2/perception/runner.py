@@ -136,6 +136,7 @@ class PerceptionRunner(Runner):
         result_archive_path: str,
         storage: str,
         evaluation_topics_with_task: dict[str, list[str]],
+        degradation_topic: str,
         enable_analysis: str,
         analysis_max_distance: str,
         analysis_distance_interval: str,
@@ -153,6 +154,7 @@ class PerceptionRunner(Runner):
             result_archive_path,
             storage,
             evaluation_topics_with_task,
+            degradation_topic,
             enable_analysis,
         )
 
@@ -160,6 +162,7 @@ class PerceptionRunner(Runner):
         self,
         scenario: PerceptionScenario,
         evaluation_topics_with_task: dict[str, list[str]],
+        degradation_topic: str,
         result_json_path: str,
         result_archive_path: str,
     ) -> list[UseCaseInfo]:
@@ -170,6 +173,7 @@ class PerceptionRunner(Runner):
                 conditions=scenario.Evaluation.Conditions,
                 name="perception",
                 evaluation_topics_with_task=evaluation_topics_with_task,
+                degradation_topic=degradation_topic,
                 result_json_path=result_json_path,
             )
         ]
@@ -186,6 +190,7 @@ class PerceptionRunner(Runner):
                     conditions=pf_conditions,
                     name="planning_factor",
                     evaluation_topics_with_task={"dummy_task": evaluation_topics},
+                    degradation_topic="",
                     result_json_path=planning_factor_result_json_path,
                 )
             )
@@ -373,6 +378,7 @@ def evaluate(
     evaluation_detection_topic_regex: str,
     evaluation_tracking_topic_regex: str,
     evaluation_prediction_topic_regex: str,
+    degradation_topic: str,
     enable_analysis: str,
     analysis_max_distance: str,
     analysis_distance_interval: str,
@@ -391,6 +397,7 @@ def evaluate(
         result_archive_path,
         storage,
         evaluation_topics_with_task,
+        degradation_topic,
         enable_analysis,
         analysis_max_distance,
         analysis_distance_interval,
@@ -433,6 +440,11 @@ def parse_args() -> argparse.Namespace:
         "--evaluation-prediction-topic-regex",
         default="",
         help="Regex pattern for evaluation prediction topic name. Must start with '^' and end with '$'. Wildcards (e.g. '.*', '+', '?', '[...]') are not allowed. If you do not want to use this feature, set it to '' or 'None'.",
+    )
+    parser.add_argument(
+        "--degradation-topic",
+        default="",
+        help="Topic name for degradation information. If you do not want to override the scenario setting, set it to '' or 'None'.",
     )
     parser.add_argument(
         "--enable-analysis",
