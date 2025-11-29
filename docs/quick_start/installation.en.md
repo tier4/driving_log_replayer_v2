@@ -44,6 +44,10 @@ This document contains step-by-step instruction on how to build [AWF Autoware Co
        type: git
        url: https://github.com/tier4/ros2bag_extensions.git
        version: main
+     simulator/tool/autoware_tools:
+       type: git
+       url: https://github.com/autowarefoundation/autoware_tools.git
+       version: main
    ```
 
 3. Import Simulator dependencies:
