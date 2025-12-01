@@ -114,7 +114,7 @@ def convert_to_ros_msg(
             "ground_truth",
             cnt,
             color_success,
-            obj.uuid,
+            str(obj.semantic_label.label) + ": " + obj.uuid,
         )
         marker_ground_truth.markers.append(bbox)
         marker_ground_truth.markers.append(uuid)

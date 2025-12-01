@@ -174,98 +174,194 @@ def object_state_to_ros_box_and_uuid(
 
 
 def dynamic_objects_to_ros_points(
-    container: list[DynamicObjectWithPerceptionResult] | list[DynamicObject],
+    obj: DynamicObjectWithPerceptionResult | DynamicObject,
     header: Header,
     scale: Vector3,
     color: ColorRGBA,
     namespace: str,
-    marker_id: int,
+    cnt: int,
     *,
     tp_gt: bool,
-) -> Marker:
-    points: list[Point] = []
-    for obj in container:
-        point = Point()
-        if isinstance(obj, DynamicObjectWithPerceptionResult):
-            if tp_gt:
-                if obj.ground_truth_object is not None:
-                    # tpのgtを出したい場合、tpならば必ずground_truthのペアがいる
-                    point.x = obj.ground_truth_object.state.position[0]
-                    point.y = obj.ground_truth_object.state.position[1]
-                    point.z = obj.ground_truth_object.state.position[2]
-            else:
-                point.x = obj.estimated_object.state.position[0]
-                point.y = obj.estimated_object.state.position[1]
-                point.z = obj.estimated_object.state.position[2]
-        if isinstance(obj, DynamicObject):
-            point.x = obj.state.position[0]
-            point.y = obj.state.position[1]
-            point.z = obj.state.position[2]
-        points.append(point)
-    return Marker(
+) -> tuple[Marker, Marker]:
+    if isinstance(obj, DynamicObjectWithPerceptionResult):
+        if tp_gt:
+            if obj.ground_truth_object is not None:
+                # tpのgtを出したい場合、tpならば必ずground_truthのペアがいる
+                pose = Pose(
+                    position=Point(
+                        x=obj.ground_truth_object.state.position[0],
+                        y=obj.ground_truth_object.state.position[1],
+                        z=obj.ground_truth_object.state.position[2],
+                    ),
+                    orientation=RosQuaternion(
+                        w=obj.ground_truth_object.state.orientation[0],
+                        x=obj.ground_truth_object.state.orientation[1],
+                        y=obj.ground_truth_object.state.orientation[2],
+                        z=obj.ground_truth_object.state.orientation[3],
+                    ),
+                )
+            center_distance_str = None
+            center_distance_bev_str = None
+            plane_distance_str = None
+            iou_3d_str = None
+            iou_2d_str = None
+        else:
+            pose = Pose(
+                position=Point(
+                    x=obj.estimated_object.state.position[0],
+                    y=obj.estimated_object.state.position[1],
+                    z=obj.estimated_object.state.position[2],
+                ),
+                orientation=RosQuaternion(
+                    w=obj.estimated_object.state.orientation[0],
+                    x=obj.estimated_object.state.orientation[1],
+                    y=obj.estimated_object.state.orientation[2],
+                    z=obj.estimated_object.state.orientation[3],
+                ),
+            )
+
+            # show the matching scores only tp objects by estimated object and fp objects
+            center_distance = (
+                obj.center_distance.value if obj.center_distance is not None else "N/A"
+            )
+            center_distance_str = "CD: "
+            center_distance_str += (
+                f"{center_distance:.2f}m" if isinstance(center_distance, float) else center_distance
+            )
+            center_distance_bev = (
+                obj.center_distance_bev.value if obj.center_distance_bev is not None else "N/A"
+            )
+            center_distance_bev_str = "CD_BEV: "
+            center_distance_bev_str += (
+                f"{center_distance_bev:.2f}m"
+                if isinstance(center_distance_bev, float)
+                else center_distance_bev
+            )
+            plane_distance = obj.plane_distance.value if obj.plane_distance is not None else "N/A"
+            plane_distance_str = "PD: "
+            plane_distance_str += (
+                f"{plane_distance:.2f}m" if isinstance(plane_distance, float) else plane_distance
+            )
+            iou_3d = obj.iou_3d.value if obj.iou_3d is not None else "N/A"
+            iou_3d_str = "IoU3D: "
+            iou_3d_str += f"{iou_3d:.2f}" if isinstance(iou_3d, float) else iou_3d
+            iou_2d = obj.iou_2d.value if obj.iou_2d is not None else "N/A"
+            iou_2d_str = "IoU2D: "
+            iou_2d_str += f"{iou_2d:.2f}" if isinstance(iou_2d, float) else iou_2d
+
+    if isinstance(obj, DynamicObject):
+        pose = Pose(
+            position=Point(
+                x=obj.state.position[0],
+                y=obj.state.position[1],
+                z=obj.state.position[2],
+            ),
+            orientation=RosQuaternion(
+                w=obj.state.orientation[0],
+                x=obj.state.orientation[1],
+                y=obj.state.orientation[2],
+                z=obj.state.orientation[3],
+            ),
+        )
+        center_distance_str = None
+        center_distance_bev_str = None
+        plane_distance_str = None
+        iou_3d_str = None
+        iou_2d_str = None
+
+    result = Marker(
         header=header,
         ns=namespace,
-        id=marker_id,
-        type=Marker.POINTS,
+        id=cnt,
+        type=Marker.CUBE,
         action=Marker.ADD,
         lifetime=Duration(seconds=0.2).to_msg(),
+        pose=pose,
         scale=scale,
         color=color,
-        points=points,
     )
+
+    text = center_distance_str if center_distance_str is not None else ""
+    text += (", " + center_distance_bev_str) if center_distance_bev_str is not None else ""
+    text += (", " + plane_distance_str) if plane_distance_str is not None else ""
+    text += (", " + iou_3d_str) if iou_3d_str is not None else ""
+    text += (", " + iou_2d_str) if iou_2d_str is not None else ""
+    score_text = Marker(
+        header=header,
+        ns=namespace + "_score",
+        id=cnt,
+        type=Marker.TEXT_VIEW_FACING,
+        action=Marker.ADD,
+        lifetime=Duration(seconds=0.2).to_msg(),
+        pose=pose,
+        scale=scale,
+        color=color,
+        text=text,
+    )
+
+    return result, score_text
 
 
 def pass_fail_result_to_ros_points_array(pass_fail: PassFailResult, header: Header) -> MarkerArray:
     marker_results = MarkerArray()
-
-    scale = Vector3(x=1.0, y=1.0, z=0.0)
+    scale = Vector3(x=0.4, y=0.4, z=0.8)
 
     if objs := pass_fail.tp_object_results:
         # estimated obj
-        marker = dynamic_objects_to_ros_points(
-            objs,
-            header,
-            scale,
-            ColorRGBA(r=0.0, g=0.0, b=1.0, a=1.0),
-            "tp_est",
-            0,
-            tp_gt=False,
-        )
-        marker_results.markers.append(marker)
+        for cnt, obj in enumerate(objs):
+            result, score_text = dynamic_objects_to_ros_points(
+                obj,
+                header,
+                scale,
+                ColorRGBA(r=0.0, g=0.0, b=1.0, a=0.7),
+                "tp_est",
+                cnt,
+                tp_gt=False,
+            )
+            marker_results.markers.append(result)
+            marker_results.markers.append(score_text)
     if objs := pass_fail.tp_object_results:
         # ground truth obj
-        marker = dynamic_objects_to_ros_points(
-            objs,
-            header,
-            scale,
-            ColorRGBA(r=1.0, g=0.0, b=0.0, a=1.0),
-            "tp_gt",
-            0,
-            tp_gt=True,
-        )
-        marker_results.markers.append(marker)
+        for cnt, obj in enumerate(objs):
+            result, score_text = dynamic_objects_to_ros_points(
+                obj,
+                header,
+                scale,
+                ColorRGBA(r=1.0, g=0.0, b=0.0, a=0.7),
+                "tp_gt",
+                cnt,
+                tp_gt=True,
+            )
+            marker_results.markers.append(result)
+            marker_results.markers.append(score_text)
     if objs := pass_fail.fp_object_results:
-        marker = dynamic_objects_to_ros_points(
-            objs,
-            header,
-            scale,
-            ColorRGBA(r=0.0, g=1.0, b=1.0, a=1.0),
-            "fp",
-            0,
-            tp_gt=False,
-        )
-        marker_results.markers.append(marker)
+        # estimated obj
+        for cnt, obj in enumerate(objs):
+            result, score_text = dynamic_objects_to_ros_points(
+                obj,
+                header,
+                scale,
+                ColorRGBA(r=0.0, g=1.0, b=1.0, a=0.7),
+                "fp",
+                cnt,
+                tp_gt=False,
+            )
+            marker_results.markers.append(result)
+            marker_results.markers.append(score_text)
     if objs := pass_fail.fn_objects:
-        marker = dynamic_objects_to_ros_points(
-            objs,
-            header,
-            scale,
-            ColorRGBA(r=1.0, g=0.5, b=0.0, a=1.0),
-            "fn",
-            0,
-            tp_gt=False,
-        )
-        marker_results.markers.append(marker)
+        # ground truth obj
+        for cnt, obj in enumerate(objs):
+            result, score_text = dynamic_objects_to_ros_points(
+                obj,
+                header,
+                scale,
+                ColorRGBA(r=1.0, g=0.5, b=0.0, a=0.7),
+                "fn",
+                cnt,
+                tp_gt=False,
+            )
+            marker_results.markers.append(result)
+            marker_results.markers.append(score_text)
     return marker_results
 
 

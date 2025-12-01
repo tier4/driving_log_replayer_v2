@@ -180,7 +180,7 @@ class Perception(EvaluationItem):
     def set_frame(self, frame: PerceptionFrameResult) -> dict:
         frame_success = "Fail"
         # ret_frame might be filtered frame result or original frame result.
-        result, ret_frame = self.criteria.get_result(frame)
+        result, score, ret_frame = self.criteria.get_result(frame)
 
         if result is None:
             self.no_gt_no_obj += 1
@@ -198,6 +198,7 @@ class Perception(EvaluationItem):
                 "Result": {"Total": self.success_str(), "Frame": frame_success},
                 "Info": summarize_pass_fail_result(ret_frame.pass_fail_result),
             },
+            "Score": score,
             "Objects": FrameDescriptionWriter.extract_pass_fail_objects_description(
                 ret_frame.pass_fail_result,
             ),
