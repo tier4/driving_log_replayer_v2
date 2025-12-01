@@ -32,7 +32,9 @@ RECORD_TOPIC = """^/tf$\
 |^/planning/.*$\
 |^/control/.*$\
 |^/system/processing_time_checker/metrics$\
-|^/driving_log_replayer/.*\
+|^/driving_log_replayer/.*$\
+|^/api/.*/get/.*$\
+|^/awapi/.*/get/.*\
 """
 
 AUTOWARE_DISABLE = {
