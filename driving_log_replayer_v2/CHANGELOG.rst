@@ -2,6 +2,12 @@
 Changelog for package driving_log_replayer
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
+Forthcoming
+-----------
+* feat(lanelet): import autoware regulatory elements explicitly (`#258 <https://github.com/tier4/driving_log_replayer_v2/issues/258>`_)
+* fix(perception): create planning_factor.jsonl in result_archive for perception use case (`#257 <https://github.com/tier4/driving_log_replayer_v2/issues/257>`_)
+* Contributors: Masato Saeki
+
 3.14.0 (2025-11-21)
 -------------------
 * feat: Add topics to pub in pc all comp option (`#254 <https://github.com/tier4/driving_log_replayer_v2/issues/254>`_)

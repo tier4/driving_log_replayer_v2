@@ -1,5 +1,14 @@
 # Release Notes
 
+## Version 3.14.1
+
+Minor Tweak
+
+| Module       | Feature | Brief summary                                  | Pull request                                                        | Contributor                                   |
+| ------------ | ------- | ---------------------------------------------- | ------------------------------------------------------------------- | --------------------------------------------- |
+| `common`     | lanelet | import autoware regulatory elements explicitly | [#258](https://github.com/tier4/driving_log_replayer_v2/issues/258) | [MasatoSaeki](https://github.com/MasatoSaeki) |
+| `perception` | jsonl   | create planning_factor.jsonl in result_archive | [#257](https://github.com/tier4/driving_log_replayer_v2/issues/257) | [MasatoSaeki](https://github.com/MasatoSaeki) |
+
 ## Version 3.14.0
 
 Major changes
