@@ -640,7 +640,8 @@ class PerceptionCriteria:
         self,
         frame: PerceptionFrameResult,
     ) -> (
-        tuple[SuccessFail, float, PerceptionFrameResult] | tuple[None, None, PerceptionFrameResult]
+        tuple[SuccessFail, dict[str, float], PerceptionFrameResult]
+        | tuple[None, None, PerceptionFrameResult]
     ):
         """
         Return Success/Fail result from `PerceptionFrameResult`.
@@ -651,17 +652,22 @@ class PerceptionCriteria:
 
         Returns:
         -------
-            tuple[SuccessFail, PerceptionFrameResult]: Success/Fail result and frame result.
+            tuple[SuccessFail, dict[str, float], PerceptionFrameResult] | tuple[None, None, PerceptionFrameResult]:
+                - SuccessFail: Overall success/fail result.
+                - dict[str, float]: Calculated scores for each method.
+                - PerceptionFrameResult: Filtered frame result.
 
         """
         ret_frame = self.criteria_filter.filter_frame_result(frame)
 
         result: SuccessFail = SuccessFail.SUCCESS
 
+        scores: dict[str, float] = {}
         for method in self.methods:
             method_result = method.get_result(ret_frame)
             if method_result is None:
                 return None, None, ret_frame
             success_fail, score = method_result
+            scores[method.name.value] = score
             result &= success_fail
-        return result, score, ret_frame
+        return result, scores, ret_frame
