@@ -44,6 +44,10 @@
        type: git
        url: https://github.com/tier4/ros2bag_extensions.git
        version: main
+     simulator/tool/autoware_tools:
+       type: git
+       url: https://github.com/autowarefoundation/autoware_tools.git
+       version: main
    ```
 
 3. simulator の依存パッケージをインポートする:
