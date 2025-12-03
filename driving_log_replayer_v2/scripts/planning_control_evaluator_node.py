@@ -19,6 +19,7 @@ from collections.abc import Callable
 from autoware_internal_planning_msgs.msg import PlanningFactorArray
 from diagnostic_msgs.msg import DiagnosticArray
 from diagnostic_msgs.msg import DiagnosticStatus
+from nav_msgs.msg import Odometry
 from std_msgs.msg import String
 from tier4_metric_msgs.msg import MetricArray
 
@@ -136,6 +137,15 @@ class PlanningControlEvaluator(DLREvaluatorV2):
                 300,
             )
 
+        # subscribe /localization/kinematic_state
+        self.latest_kinematic_state: Odometry | None = None
+        self.__sub_kinematic_state = self.create_subscription(
+            Odometry,
+            "/localization/kinematic_state",
+            lambda msg: setattr(self, "latest_kinematic_state", msg),
+            10,
+        )
+
     def metric_cb(self, msg: MetricArray, topic: str) -> None:
         self._metric_result.set_frame(msg, topic)
         if self._metric_result.frame != {}:
@@ -157,7 +167,7 @@ class PlanningControlEvaluator(DLREvaluatorV2):
             self._pub_diag_result.publish(String(data=res_str))
 
     def factor_cb(self, msg: PlanningFactorArray, topic: str) -> None:
-        self._planning_factor_result.set_frame(msg, topic)
+        self._planning_factor_result.set_frame(msg, topic, self.latest_kinematic_state)
         if self._planning_factor_result.frame != {}:
             res_str = self._planning_factor_result_writer.write_result(self._planning_factor_result)
             self._pub_pf_result.publish(String(data=res_str))
