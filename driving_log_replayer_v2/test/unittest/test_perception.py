@@ -219,6 +219,7 @@ def test_perception_success_tp_normal(
             "TN": "null",
         },
     }
+    assert frame_dict["Scores"] == {"num_tp": 50.0}
 
 
 def test_perception_fail_tp_normal(
@@ -249,6 +250,7 @@ def test_perception_fail_tp_normal(
             "TN": "null",
         },
     }
+    # only check PassFail part because Scores will be 3.3333...
 
 
 def test_perception_fail_tp_hard(
@@ -279,3 +281,4 @@ def test_perception_fail_tp_hard(
             "TN": "null",
         },
     }
+    assert frame_dict["Scores"] == {"num_tp": 50.0}

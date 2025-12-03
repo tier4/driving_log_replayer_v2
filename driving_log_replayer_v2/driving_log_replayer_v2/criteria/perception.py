@@ -202,7 +202,7 @@ class CriteriaMethodImpl(ABC):
         super().__init__()
         self.level: CriteriaLevel = level
 
-    def get_result(self, frame: PerceptionFrameResult) -> SuccessFail | None:
+    def get_result(self, frame: PerceptionFrameResult) -> tuple[SuccessFail, float] | None:
         """
         Return `SuccessFail` instance from the frame result.
 
@@ -220,9 +220,9 @@ class CriteriaMethodImpl(ABC):
             return None
         score: float = self.calculate_score(frame)
         return (
-            SuccessFail.SUCCESS
+            (SuccessFail.SUCCESS, score)
             if self.level.is_valid(score, is_error=self.is_error)
-            else SuccessFail.FAIL
+            else (SuccessFail.FAIL, score)
         )
 
     @staticmethod
@@ -639,7 +639,10 @@ class PerceptionCriteria:
     def get_result(
         self,
         frame: PerceptionFrameResult,
-    ) -> tuple[SuccessFail | None, PerceptionFrameResult]:
+    ) -> (
+        tuple[SuccessFail, dict[str, float], PerceptionFrameResult]
+        | tuple[None, None, PerceptionFrameResult]
+    ):
         """
         Return Success/Fail result from `PerceptionFrameResult`.
 
@@ -649,16 +652,22 @@ class PerceptionCriteria:
 
         Returns:
         -------
-            tuple[SuccessFail, PerceptionFrameResult]: Success/Fail result and frame result.
+            tuple[SuccessFail, dict[str, float], PerceptionFrameResult] | tuple[None, None, PerceptionFrameResult]:
+                - SuccessFail: Overall success/fail result.
+                - dict[str, float]: Calculated scores for each method.
+                - PerceptionFrameResult: Filtered frame result.
 
         """
         ret_frame = self.criteria_filter.filter_frame_result(frame)
 
         result: SuccessFail = SuccessFail.SUCCESS
 
+        scores: dict[str, float] = {}
         for method in self.methods:
             method_result = method.get_result(ret_frame)
             if method_result is None:
-                return None, ret_frame
-            result &= method_result
-        return result, ret_frame
+                return None, None, ret_frame
+            success_fail, score = method_result
+            scores[method.name.value] = score
+            result &= success_fail
+        return result, scores, ret_frame
