@@ -476,6 +476,7 @@ def main() -> None:
         args.evaluation_detection_topic_regex,
         args.evaluation_tracking_topic_regex,
         args.evaluation_prediction_topic_regex,
+        args.degradation_topic,
         args.enable_analysis,
         args.analysis_max_distance,
         args.analysis_distance_interval,
