@@ -24,9 +24,14 @@ class GroundSegmentationEvaluationManager(EvaluationManager):
         t4_dataset_path: str,
         result_archive_path: str,
         evaluation_topics_with_task: dict[str, list[str]],
+        degradation_topic: str,
     ) -> None:
         super().__init__(
-            scenario, t4_dataset_path, result_archive_path, evaluation_topics_with_task
+            scenario,
+            t4_dataset_path,
+            result_archive_path,
+            evaluation_topics_with_task,
+            degradation_topic,
         )
 
     def _set_evaluators(
@@ -49,7 +54,10 @@ class GroundSegmentationEvaluationManager(EvaluationManager):
             for topic in evaluation_topics
         }
 
-    def _set_degradation_topics(self) -> None:
+    def _set_degradation_topics(self, degradation_topic: str) -> None:
+        if degradation_topic not in ("", "None"):
+            self._degradation_topics = [degradation_topic]
+            return
         self._degradation_topics = [
             next(iter(self._evaluators.keys()))
         ]  # set first topic as degradation topic

@@ -57,6 +57,7 @@ class GroundSegmentationRunner(Runner):
         result_archive_path: str,
         storage: str,
         evaluation_topics_with_task: dict[str, list[str]],
+        degradation_topic: str,
         enable_analysis: str,
     ) -> None:
         super().__init__(
@@ -68,6 +69,7 @@ class GroundSegmentationRunner(Runner):
             result_archive_path,
             storage,
             evaluation_topics_with_task,
+            degradation_topic,
             enable_analysis,
         )
 
@@ -75,6 +77,7 @@ class GroundSegmentationRunner(Runner):
         self,
         scenario: GroundSegmentationScenario,
         evaluation_topics_with_task: dict[str, list[str]],
+        degradation_topic: str,
         result_json_path: str,
         result_archive_path: str,
     ) -> list[UseCaseInfo]:
@@ -86,6 +89,7 @@ class GroundSegmentationRunner(Runner):
                 conditions=scenario.Evaluation.Conditions,
                 name="ground_segmentation",
                 evaluation_topics_with_task=evaluation_topics_with_task,
+                degradation_topic=degradation_topic,
                 result_json_path=result_json_path,
             ),
         ]
@@ -176,6 +180,7 @@ def evaluate(
         result_archive_path,
         storage,
         evaluation_topics_with_task,
+        "",
         enable_analysis,
     )
 

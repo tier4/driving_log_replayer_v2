@@ -45,6 +45,7 @@ class UseCaseInfo:
     evaluation_topics_with_task: dict[
         str, list[str]
     ]  # If task is unnecessary, use dummy task name like {"dummy_task": [topic, ...]}
+    degradation_topic: str
     result_json_path: str
 
 
@@ -148,6 +149,7 @@ class Runner(ABC):
         result_archive_path: str,
         storage: str,
         evaluation_topics_with_task: dict[str, list[str]],
+        degradation_topic: str,
         enable_analysis: str,
     ) -> None:
         # instance variables
@@ -165,7 +167,11 @@ class Runner(ABC):
 
         # get use case info list
         use_case_info_list: list[UseCaseInfo] = self._get_use_case_info_list(
-            scenario, evaluation_topics_with_task, result_json_path, result_archive_path
+            scenario,
+            evaluation_topics_with_task,
+            degradation_topic,
+            result_json_path,
+            result_archive_path,
         )
 
         # initialize evaluation manager, result, and result writer for each use case
@@ -177,6 +183,7 @@ class Runner(ABC):
                     t4_dataset_path,
                     result_archive_path,
                     use_case_info.evaluation_topics_with_task,
+                    use_case_info.degradation_topic,
                 ),
                 result=use_case_info.result_class(use_case_info.conditions),
                 result_writer=ResultWriter(
@@ -216,6 +223,7 @@ class Runner(ABC):
         self,
         scenario: ScenarioType,
         evaluation_topics_with_task: dict[str, list[str]],
+        degradation_topic: str,
         result_json_path: str,
         result_archive_path: str,
     ) -> list[UseCaseInfo]:
@@ -225,6 +233,7 @@ class Runner(ABC):
         Args:
             scenario (ScenarioType): The scenario object.
             evaluation_topics_with_task (dict[str, list[str]]): Dictionary mapping evaluation topics to their tasks.
+            degradation_topic (str): Topic name for degradation information.
             result_json_path (str): Path to the result json file.
             result_archive_path (str): Path to the result archive directory. If necessary, use this to create result json path for each use case.
 

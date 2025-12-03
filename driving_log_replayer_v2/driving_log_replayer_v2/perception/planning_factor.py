@@ -48,8 +48,11 @@ class PlanningFactorEvaluationManager(EvaluationManager):
         t4_dataset_path: str,
         result_archive_path: str,
         evaluation_topic: dict[str, list[str]],
+        degradation_topic: str,
     ) -> None:
-        super().__init__(scenario, t4_dataset_path, result_archive_path, evaluation_topic)
+        super().__init__(
+            scenario, t4_dataset_path, result_archive_path, evaluation_topic, degradation_topic
+        )
 
     def _set_evaluators(
         self,
@@ -66,8 +69,9 @@ class PlanningFactorEvaluationManager(EvaluationManager):
             for topic in evaluation_topics
         }
 
-    def _set_degradation_topics(self) -> None:
+    def _set_degradation_topics(self, degradation_topic: str) -> None:
         # For planning factor evaluation, all topics are considered degradation topics.
+        _ = degradation_topic  # unused
         self._degradation_topics = list(self._evaluators.keys())
 
 
