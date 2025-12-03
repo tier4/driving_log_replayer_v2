@@ -210,14 +210,17 @@ def test_perception_success_tp_normal(
     frame_dict = evaluation_item.set_frame(result)
     assert evaluation_item.success is True
     assert evaluation_item.summary == "criteria0 (Success): 95 / 100 -> 95.00%"
-    assert frame_dict["PassFail"] == {
-        "Result": {"Total": "Success", "Frame": "Success"},
-        "Info": {
-            "TP": "5 [car, car, car, car, car]",
-            "FP": "5 [car, car, car, car, car]",
-            "FN": "0 []",
-            "TN": "null",
+    assert frame_dict == {
+        "PassFail": {
+            "Result": {"Total": "Success", "Frame": "Success"},
+            "Info": {
+                "TP": "5 [car, car, car, car, car]",
+                "FP": "5 [car, car, car, car, car]",
+                "FN": "0 []",
+                "TN": "null",
+            },
         },
+        "Scores": {"num_tp": 50.0},
     }
 
 
@@ -240,6 +243,7 @@ def test_perception_fail_tp_normal(
     frame_dict = evaluation_item.set_frame(result)
     assert evaluation_item.success is False
     assert evaluation_item.summary == "criteria0 (Fail): 94 / 100 -> 94.00%"
+    # only check PassFail part because Scores will be 3.3333...
     assert frame_dict["PassFail"] == {
         "Result": {"Total": "Fail", "Frame": "Fail"},
         "Info": {
@@ -270,12 +274,15 @@ def test_perception_fail_tp_hard(
     frame_dict = evaluation_item.set_frame(result)
     assert evaluation_item.success is False
     assert evaluation_item.summary == "criteria0 (Fail): 94 / 100 -> 94.00%"
-    assert frame_dict["PassFail"] == {
-        "Result": {"Total": "Fail", "Frame": "Fail"},
-        "Info": {
-            "TP": "5 [car, car, car, car, car]",
-            "FP": "5 [car, car, car, car, car]",
-            "FN": "0 []",
-            "TN": "null",
+    assert frame_dict == {
+        "PassFail": {
+            "Result": {"Total": "Fail", "Frame": "Fail"},
+            "Info": {
+                "TP": "5 [car, car, car, car, car]",
+                "FP": "5 [car, car, car, car, car]",
+                "FN": "0 []",
+                "TN": "null",
+            },
         },
+        "Scores": {"num_tp": 50.0},
     }

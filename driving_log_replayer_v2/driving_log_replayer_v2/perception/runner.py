@@ -25,10 +25,8 @@ from autoware_perception_msgs.msg import DetectedObjects
 from autoware_perception_msgs.msg import PredictedObjects
 from autoware_perception_msgs.msg import TrackedObjects
 from rosbag2_py import TopicMetadata
-from std_msgs.msg import ColorRGBA
 from std_msgs.msg import Header
 from std_msgs.msg import String
-from visualization_msgs.msg import MarkerArray
 
 from driving_log_replayer_v2.evaluator import DLREvaluatorV2
 from driving_log_replayer_v2.perception.analyze import analyze
@@ -53,6 +51,7 @@ if TYPE_CHECKING:
     from perception_eval.config import PerceptionEvaluationConfig
     from perception_eval.evaluation.result.perception_frame_result import PerceptionFrameResult
     from perception_eval.tool import PerceptionAnalyzer3D
+    from visualization_msgs.msg import MarkerArray
 
     from driving_log_replayer_v2.post_process.evaluator import FrameResult
     from driving_log_replayer_v2.result import ResultWriter
@@ -104,20 +103,9 @@ def convert_to_ros_msg(
     header: Header,
 ) -> tuple[MarkerArray, MarkerArray]:
     """Convert PerceptionFrameResult to ROS MarkerArray messages."""
-    marker_ground_truth = MarkerArray()
-    color_success = ColorRGBA(r=0.0, g=1.0, b=0.0, a=0.3)
-
-    for cnt, obj in enumerate(frame.frame_ground_truth.objects, start=1):
-        bbox, uuid = eval_conversions.object_state_to_ros_box_and_uuid(
-            obj.state,
-            header,
-            "ground_truth",
-            cnt,
-            color_success,
-            str(obj.semantic_label.label) + ": " + obj.uuid,
-        )
-        marker_ground_truth.markers.append(bbox)
-        marker_ground_truth.markers.append(uuid)
+    marker_ground_truth = eval_conversions.frame_ground_truth_to_ros_box_and_uuid(
+        frame.frame_ground_truth, header
+    )
 
     marker_results = eval_conversions.pass_fail_result_to_ros_points_array(
         frame.pass_fail_result,

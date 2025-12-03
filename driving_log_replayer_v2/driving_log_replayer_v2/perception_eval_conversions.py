@@ -12,6 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from dataclasses import dataclass
 import json
 from pathlib import Path
 
@@ -32,6 +33,7 @@ from geometry_msgs.msg import Quaternion as RosQuaternion
 from geometry_msgs.msg import Vector3
 import numpy as np
 from perception_eval.common import ObjectType
+from perception_eval.common.dataset import FrameGroundTruth
 from perception_eval.common.object import DynamicObject
 from perception_eval.common.object import ObjectState
 from perception_eval.common.schema import FrameID
@@ -173,6 +175,36 @@ def object_state_to_ros_box_and_uuid(
     return bbox, uuid
 
 
+def frame_ground_truth_to_ros_box_and_uuid(
+    frame_ground_truth: FrameGroundTruth, header: Header
+) -> MarkerArray:
+    marker_ground_truth = MarkerArray()
+    color_success = ColorRGBA(r=0.0, g=1.0, b=0.0, a=0.3)
+
+    for cnt, obj in enumerate(frame_ground_truth.objects, start=1):
+        bbox, uuid = object_state_to_ros_box_and_uuid(
+            obj.state,
+            header,
+            "ground_truth",
+            cnt,
+            color_success,
+            str(obj.semantic_label.label) + ": " + obj.uuid,
+        )
+        marker_ground_truth.markers.append(bbox)
+        marker_ground_truth.markers.append(uuid)
+
+    return marker_ground_truth
+
+
+@dataclass
+class ScoresData:
+    center_distance: float | None
+    center_distance_bev: float | None
+    plane_distance: float | None
+    iou_3d: float | None
+    iou_2d: float | None
+
+
 def dynamic_objects_to_ros_points(
     obj: DynamicObjectWithPerceptionResult | DynamicObject,
     header: Header,
@@ -200,11 +232,14 @@ def dynamic_objects_to_ros_points(
                         z=obj.ground_truth_object.state.orientation[3],
                     ),
                 )
-            center_distance_str = None
-            center_distance_bev_str = None
-            plane_distance_str = None
-            iou_3d_str = None
-            iou_2d_str = None
+            # skip showing scores for gt objects
+            scores = ScoresData(
+                center_distance=None,
+                center_distance_bev=None,
+                plane_distance=None,
+                iou_3d=None,
+                iou_2d=None,
+            )
         else:
             pose = Pose(
                 position=Point(
@@ -221,33 +256,17 @@ def dynamic_objects_to_ros_points(
             )
 
             # show the matching scores only tp objects by estimated object and fp objects
-            center_distance = (
-                obj.center_distance.value if obj.center_distance is not None else "N/A"
+            scores = ScoresData(
+                center_distance=obj.center_distance.value
+                if obj.center_distance is not None
+                else -1.0,
+                center_distance_bev=obj.center_distance_bev.value
+                if obj.center_distance_bev is not None
+                else -1.0,
+                plane_distance=obj.plane_distance.value if obj.plane_distance is not None else -1.0,
+                iou_3d=obj.iou_3d.value if obj.iou_3d is not None else -1.0,
+                iou_2d=obj.iou_2d.value if obj.iou_2d is not None else -1.0,
             )
-            center_distance_str = "CD: "
-            center_distance_str += (
-                f"{center_distance:.2f}m" if isinstance(center_distance, float) else center_distance
-            )
-            center_distance_bev = (
-                obj.center_distance_bev.value if obj.center_distance_bev is not None else "N/A"
-            )
-            center_distance_bev_str = "CD_BEV: "
-            center_distance_bev_str += (
-                f"{center_distance_bev:.2f}m"
-                if isinstance(center_distance_bev, float)
-                else center_distance_bev
-            )
-            plane_distance = obj.plane_distance.value if obj.plane_distance is not None else "N/A"
-            plane_distance_str = "PD: "
-            plane_distance_str += (
-                f"{plane_distance:.2f}m" if isinstance(plane_distance, float) else plane_distance
-            )
-            iou_3d = obj.iou_3d.value if obj.iou_3d is not None else "N/A"
-            iou_3d_str = "IoU3D: "
-            iou_3d_str += f"{iou_3d:.2f}" if isinstance(iou_3d, float) else iou_3d
-            iou_2d = obj.iou_2d.value if obj.iou_2d is not None else "N/A"
-            iou_2d_str = "IoU2D: "
-            iou_2d_str += f"{iou_2d:.2f}" if isinstance(iou_2d, float) else iou_2d
 
     if isinstance(obj, DynamicObject):
         pose = Pose(
@@ -263,11 +282,14 @@ def dynamic_objects_to_ros_points(
                 z=obj.state.orientation[3],
             ),
         )
-        center_distance_str = None
-        center_distance_bev_str = None
-        plane_distance_str = None
-        iou_3d_str = None
-        iou_2d_str = None
+        # skip showing scores for DynamicObject because they do not have scores
+        scores = ScoresData(
+            center_distance=None,
+            center_distance_bev=None,
+            plane_distance=None,
+            iou_3d=None,
+            iou_2d=None,
+        )
 
     result = Marker(
         header=header,
@@ -281,11 +303,16 @@ def dynamic_objects_to_ros_points(
         color=color,
     )
 
-    text = center_distance_str if center_distance_str is not None else ""
-    text += (", " + center_distance_bev_str) if center_distance_bev_str is not None else ""
-    text += (", " + plane_distance_str) if plane_distance_str is not None else ""
-    text += (", " + iou_3d_str) if iou_3d_str is not None else ""
-    text += (", " + iou_2d_str) if iou_2d_str is not None else ""
+    text = f"CD: {scores.center_distance:.2f}" if scores.center_distance is not None else ""
+    text += (
+        f"CD_BEV: {scores.center_distance_bev:.2f}"
+        if scores.center_distance_bev is not None
+        else ""
+    )
+    text += f"PD: {scores.plane_distance:.2f}" if scores.plane_distance is not None else ""
+    text += f"IoU3D: {scores.iou_3d:.2f}" if scores.iou_3d is not None else ""
+    text += f"IoU2D: {scores.iou_2d:.2f}" if scores.iou_2d is not None else ""
+
     score_text = Marker(
         header=header,
         ns=namespace + "_score",
