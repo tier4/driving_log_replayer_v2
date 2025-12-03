@@ -2,8 +2,8 @@
 Changelog for package driving_log_replayer
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-Forthcoming
------------
+3.14.2 (2025-12-03)
+-------------------
 * feat(perception): update publish msg to understand easily (`#263 <https://github.com/tier4/driving_log_replayer_v2/issues/263>`_)
   * update for debug
   * update get_result
