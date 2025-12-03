@@ -136,7 +136,7 @@ class PlanningFactorCondition(BaseModel):
         ]
         | None
     ) = None
-    distance: MinMax | None = None  # the s of frenet coordinate
+    distance: MinMax | None = None  # s of frenet coordinate
     time_to_wall: MinMax | None = None  # time to the next control point with the current speed
     judgement: Literal["positive", "negative"]  # positive or negative
 
@@ -307,10 +307,10 @@ class PlanningFactor(EvaluationItem):
                     info_dict_per_factor.update(info_dict_distance)
                     condition_met_per_factor &= distance_met
 
-                if self.condition.time_to_wall is not None and current_speed is not None:
+                if self.condition.time_to_wall is not None:
                     time_to_wall_met, info_dict_time_to_wall = self.judge_time_to_wall(
                         factor.control_points[0].distance / current_speed
-                        if current_speed != 0.0
+                        if current_speed is not None and current_speed != 0.0
                         else None
                     )
                     info_dict_per_factor.update(info_dict_time_to_wall)
