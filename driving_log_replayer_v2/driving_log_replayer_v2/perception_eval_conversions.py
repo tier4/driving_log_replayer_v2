@@ -204,6 +204,18 @@ class ScoresData:
     iou_3d: float | None
     iou_2d: float | None
 
+    def __str__(self) -> str:
+        text = f"CD: {self.center_distance:.2f}, " if self.center_distance is not None else ""
+        text += (
+            f"CD_BEV: {self.center_distance_bev:.2f}, "
+            if self.center_distance_bev is not None
+            else ""
+        )
+        text += f"PD: {self.plane_distance:.2f}, " if self.plane_distance is not None else ""
+        text += f"IoU3D: {self.iou_3d:.2f}, " if self.iou_3d is not None else ""
+        text += f"IoU2D: {self.iou_2d:.2f}" if self.iou_2d is not None else ""
+        return text
+
 
 def dynamic_objects_to_ros_points(
     obj: DynamicObjectWithPerceptionResult | DynamicObject,
@@ -303,16 +315,6 @@ def dynamic_objects_to_ros_points(
         color=color,
     )
 
-    text = f"CD: {scores.center_distance:.2f}" if scores.center_distance is not None else ""
-    text += (
-        f"CD_BEV: {scores.center_distance_bev:.2f}"
-        if scores.center_distance_bev is not None
-        else ""
-    )
-    text += f"PD: {scores.plane_distance:.2f}" if scores.plane_distance is not None else ""
-    text += f"IoU3D: {scores.iou_3d:.2f}" if scores.iou_3d is not None else ""
-    text += f"IoU2D: {scores.iou_2d:.2f}" if scores.iou_2d is not None else ""
-
     score_text = Marker(
         header=header,
         ns=namespace + "_score",
@@ -323,7 +325,7 @@ def dynamic_objects_to_ros_points(
         pose=pose,
         scale=scale,
         color=color,
-        text=text,
+        text=str(scores),
     )
 
     return result, score_text

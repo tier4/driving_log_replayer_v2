@@ -168,8 +168,8 @@ def test_perception_success_tp_normal(
                 "FN": 0,
                 "TN": "null",
             },
-            "Scores": {"num_tp": 50.0},
         },
+        "Scores": {"num_tp": 50.0},
     }
 
 

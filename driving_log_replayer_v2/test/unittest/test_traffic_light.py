@@ -171,6 +171,7 @@ def test_perception_success_tp_normal(
                 "TN": "null",
             },
         },
+        "Scores": {"num_tp": 50.0},
     }
 
 
@@ -235,4 +236,5 @@ def test_perception_fail_tp_hard(
                 "TN": "null",
             },
         },
+        "Scores": {"num_tp": 50.0},
     }
