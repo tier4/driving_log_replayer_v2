@@ -1,5 +1,15 @@
 # Release Notes
 
+## Version 3.14.2
+
+Minor Tweak
+
+| Module       | Feature       | Brief summary                                  | Pull request                                                        | Contributor                                   |
+| ------------ | ------------- | ---------------------------------------------- | ------------------------------------------------------------------- | --------------------------------------------- |
+| `perception` | visualization | update publish msg to understand easily        | [#263](https://github.com/tier4/driving_log_replayer_v2/issues/263) | [MasatoSaeki](https://github.com/MasatoSaeki) |
+| `perception` | arguments     | enable to specify the degradation topic in CLI | [#259](https://github.com/tier4/driving_log_replayer_v2/issues/259) | [MasatoSaeki](https://github.com/MasatoSaeki) |
+| `planning`   | topic         | save api topic                                 | [#262](https://github.com/tier4/driving_log_replayer_v2/issues/262) | [xtk8532704](https://github.com/xtk8532704)   |
+
 ## Version 3.14.1
 
 Minor Tweak

@@ -2,6 +2,23 @@
 Changelog for package driving_log_replayer
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
+Forthcoming
+-----------
+* feat(perception): update publish msg to understand easily (`#263 <https://github.com/tier4/driving_log_replayer_v2/issues/263>`_)
+  * update for debug
+  * update get_result
+  * adopt the perception_2d
+  * fix the test
+  * fix the test
+  * fix the test
+  ---------
+* feat(perception): enable to specify the degradation topic in CLI (`#259 <https://github.com/tier4/driving_log_replayer_v2/issues/259>`_)
+  * base commit
+  * add args degradation_topic
+  ---------
+* save api topics (`#262 <https://github.com/tier4/driving_log_replayer_v2/issues/262>`_)
+* Contributors: Kem (TiankuiXian), Masato Saeki
+
 3.14.1 (2025-12-01)
 -------------------
 * feat(lanelet): import autoware regulatory elements explicitly (`#258 <https://github.com/tier4/driving_log_replayer_v2/issues/258>`_)
