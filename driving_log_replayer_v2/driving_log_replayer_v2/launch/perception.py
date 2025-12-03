@@ -25,6 +25,7 @@ from driving_log_replayer_v2.scenario import load_scenario
 RECORD_TOPIC = """^/tf$\
 |^/tf_static$\
 |^/diagnostics$\
+|^/system/processing_time_checker/metrics$\
 |^/awapi/autoware/get/status$\
 |^/sensing/camera/.*/compressed$\
 |^/sensing/camera/.*/camera_info$\
