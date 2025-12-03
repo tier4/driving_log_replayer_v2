@@ -346,7 +346,7 @@ class PlanningFactor(EvaluationItem):
             + (control_point_pose_pos_y - self.condition.area.y) ** 2
         )
         info_dict = {
-            "Distance": distance,
+            "ControlPointDistance": distance,
             "ControlPointPoseX": control_point_pose_pos_x,
             "ControlPointPoseY": control_point_pose_pos_y,
         }
