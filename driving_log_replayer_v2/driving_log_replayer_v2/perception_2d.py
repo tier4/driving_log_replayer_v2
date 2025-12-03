@@ -62,7 +62,7 @@ class Perception(EvaluationItem):
         frame: PerceptionFrameResult,
     ) -> dict:
         frame_success = "Fail"
-        result, _ = self.criteria.get_result(frame)
+        result, scores, _ = self.criteria.get_result(frame)
 
         if result is None:
             self.no_gt_no_obj += 1
@@ -91,6 +91,7 @@ class Perception(EvaluationItem):
                     else "null",
                 },
             },
+            "Scores": scores,
         }
 
 
