@@ -136,7 +136,7 @@ class PlanningFactorCondition(BaseModel):
         ]
         | None
     ) = None
-    distance: MinMax | None = None  # m of frenet coordinate
+    distance: MinMax | None = None  # the s of frenet coordinate
     time_to_wall: MinMax | None = None  # time to the next control point with the current speed
     judgement: Literal["positive", "negative"]  # positive or negative
 
