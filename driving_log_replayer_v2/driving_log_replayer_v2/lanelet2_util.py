@@ -62,13 +62,11 @@ def load_map(map_path: str) -> lanelet2.core.LaneletMap:
         elif projector_type == "TransverseMercator":
             lat = map_projector_info.map_origin.latitude
             lon = map_projector_info.map_origin.longitude
-            scale_factor = map_projector_info.scale_factor
+            _ = map_projector_info.scale_factor  # scale_factor is currently unused
             origin = lanelet2.io.Origin(lat, lon)
-            projection = (
-                TransverseMercatorProjector(origin, scale_factor)
-                if scale_factor is not None
-                else TransverseMercatorProjector(origin)
-            )
+            # NOTE: Currently, autoware_lanelet2_extension_python does not support scale_factor parameter.
+            # https://github.com/autowarefoundation/autoware_lanelet2_extension/blob/main/autoware_lanelet2_extension_python/src/projection.cpp#L48
+            projection = TransverseMercatorProjector(origin)
         else:
             err_msg = f"Unsupported projector type or projector_type is not set: {projector_type}"
             raise ValueError(err_msg)
