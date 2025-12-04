@@ -40,4 +40,4 @@ def test_no_decimal_point() -> None:
 
 def test_unknown_unit_to_sec() -> None:
     with pytest.raises(ValueError):
-        convert_to_sec("1500.123", "picosecond")
+        convert_to_sec("1500.123", "picosecond")  # noqa
