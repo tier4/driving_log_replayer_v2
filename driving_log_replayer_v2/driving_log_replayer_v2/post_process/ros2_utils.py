@@ -14,12 +14,13 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from pathlib import Path
 from typing import Any
 from typing import TYPE_CHECKING
 
 from builtin_interfaces.msg import Time
 from geometry_msgs.msg import TransformStamped
+import pandas as pd
 from rclpy.serialization import deserialize_message
 from rclpy.serialization import serialize_message
 from rosbag2_py import ConverterOptions
@@ -37,12 +38,52 @@ if TYPE_CHECKING:
     from collections.abc import Generator
 
     from builtin_interfaces.msg import Time as Stamp
+    from tier4_metric_msgs.msg import MetricArray
+
+UNIT_MAP = {
+    "nanosecond": 9,
+    "microsecond": 6,
+    "millisecond": 3,
+    "second": 0,
+}
 
 
-@dataclass
-class ProcessingTimeData:
-    node_name: str
-    processing_time_ms: str
+def convert_to_sec(value: str, unit: str) -> str:
+    """Convert the given value to seconds using string-based decimal shifting."""
+    if unit not in UNIT_MAP:
+        err_msg = f"Unsupported unit: {unit}"
+        raise ValueError(err_msg)
+
+    shift = UNIT_MAP[unit]
+
+    # split into integer and fractional parts
+    if "." in value:
+        integer, fractional = value.split(".")
+    else:
+        integer, fractional = value, ""
+
+    # join digits
+    digits = integer + fractional
+
+    # position of decimal point after shifting
+    pos = len(integer) - shift
+
+    if pos <= 0:
+        result = "0." + "0" * (-pos) + digits
+    elif pos >= len(digits):
+        result = digits + "0" * (pos - len(digits))
+    else:
+        result = digits[:pos] + "." + digits[pos:]
+
+    # remove leading zeros but keep at least one
+    result = result.lstrip("0")
+    if result.startswith("."):
+        result = "0" + result
+    if result == "":
+        result = "0"
+
+    # remove trailing zeros and decimal point
+    return result.rstrip("0").rstrip(".")
 
 
 class RosBagManager:
@@ -73,7 +114,9 @@ class RosBagManager:
         self._topic_name2type: dict[str, str] = {}
         self._last_subscribed_timestamp_nanosec: int
         self._tf_buffer: Buffer
-        self._processing_time_map: dict[str, ProcessingTimeData] = {}
+        self._node_processing_time: dict[
+            str, dict[str, str]
+        ] = {}  # node_name -> {node_name, header_timestamp}
 
         converter_options = self._get_default_converter_options()
 
@@ -188,10 +231,27 @@ class RosBagManager:
             elif topic_name in self._evaluation_topics:
                 yield topic_name, msg, subscribed_timestamp_nanosec
         self._last_subscribed_timestamp_nanosec = subscribed_timestamp_nanosec
+        self._save_node_processing_time()
         del self._reader
 
-    def _append_processing_time_data(self, msg: Any) -> None:
-        pass
+    def _append_processing_time_data(self, msg: MetricArray) -> None:
+        """
+        Append processing time data from the message.
+
+        Args:
+            msg (MetricArray): The MetricArray message containing processing time data.
+
+        """
+        header_timestamp = f"{msg.stamp.sec}.{msg.stamp.nanosec}"
+        for metric in msg.metric_array:
+            data = self._node_processing_time.setdefault(metric.name, {})
+            data["node_name"] = metric.name
+            data[header_timestamp] = convert_to_sec(metric.value, metric.unit)
+
+    def _save_node_processing_time(self) -> None:
+        """Save node processing time data to a CSV file."""
+        path = Path(self._writer_storage_options.uri).parent / "node_processing_time.csv"
+        pd.DataFrame(list(self._node_processing_time.values())).to_csv(path, index=False)
 
     def write_results(self, topic_name: str, msg: Any, subscribed_timestamp: Time | int) -> None:
         """
