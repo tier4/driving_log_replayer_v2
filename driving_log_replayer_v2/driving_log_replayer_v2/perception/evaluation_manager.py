@@ -88,10 +88,12 @@ class PerceptionEvaluationManager(EvaluationManager):
             self._degradation_topics = [
                 topic
                 for topic in self.get_evaluation_topics()
-                if any(model in topic for model in self.ML_MODELS)
+                if any(model in topic.split("/") for model in self.ML_MODELS)
             ]
+            if len(self._degradation_topics) > 1:
+                self._degradation_topics = [self._degradation_topics[0]]
             if not self._degradation_topics:
-                err_msg = f"Not found the topic by ML model for degradation topic. evaluation topics: {self.get_evaluation_topics()}"
+                err_msg = f"Could not found the topic by ML model for degradation topic. Evaluation topics: {self.get_evaluation_topics()}"
                 raise ValueError(err_msg)
         elif self._degradation_evaluation_task == "tracking":
             self._degradation_topics = ["/perception/object_recognition/tracking/objects"]
