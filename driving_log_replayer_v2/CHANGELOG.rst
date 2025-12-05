@@ -2,6 +2,31 @@
 Changelog for package driving_log_replayer
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
+Forthcoming
+-----------
+* feat(post_process): analyze the processing time (`#267 <https://github.com/tier4/driving_log_replayer_v2/issues/267>`_)
+  * init commit (todo is to implement add data and convert to like csv)
+  * update
+  * fix test
+  * fix the test
+  ---------
+* feat(perception): change method to select the degradation topic when not specify (`#268 <https://github.com/tier4/driving_log_replayer_v2/issues/268>`_)
+  * update
+  * fix
+  ---------
+* feat(planning_control): add new evaluation item time_to_wall for planning_factor (`#265 <https://github.com/tier4/driving_log_replayer_v2/issues/265>`_)
+  * tmp save
+  * factor codes
+  * remove chanages
+  * polish code
+  * update useCaseFormatVersion
+  * add unit
+  * pre-commit
+  ---------
+  Co-authored-by: MasatoSaeki <masato.saeki@tier4.jp>
+* fix(lanelet2): fix the loading `TransverseMercatorProjector` (`#266 <https://github.com/tier4/driving_log_replayer_v2/issues/266>`_)
+* Contributors: Kem (TiankuiXian), Masato Saeki
+
 3.14.2 (2025-12-03)
 -------------------
 * feat(perception): update publish msg to understand easily (`#263 <https://github.com/tier4/driving_log_replayer_v2/issues/263>`_)
