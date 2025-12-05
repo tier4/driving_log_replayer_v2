@@ -12,6 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from collections import deque
 from dataclasses import dataclass
 import math
 from sys import float_info
@@ -260,7 +261,12 @@ class PlanningFactor(EvaluationItem):
         self.condition: PlanningFactorCondition
         self.success = self.condition.judgement == "negative"
 
-    def set_frame(
+        self.ego_last_stats = deque(maxlen=3)
+        self.is_ego_stat_stable = False
+        self.last_stable_state = "STOP"
+        self.speed_eps = 1e-2
+
+    def set_frame(  # noqa: C901
         self, msg: PlanningFactorArray, latest_kinematic_state: Odometry | None
     ) -> dict | None:
         # check time condition
@@ -283,6 +289,18 @@ class PlanningFactor(EvaluationItem):
                 if latest_kinematic_state is not None
                 else None
             )
+            if current_speed is not None:
+                state = (
+                    "FORWARD"
+                    if current_speed > self.speed_eps
+                    else "BACKWARD"
+                    if current_speed < -self.speed_eps
+                    else "STOP"
+                )
+                self.ego_last_stats.append(state)
+                self.is_ego_stat_stable = len(set(self.ego_last_stats)) == 1
+                if self.is_ego_stat_stable:
+                    self.last_stable_state = state
 
             for i, factor in enumerate(msg.factors):
                 info_dict_per_factor = {}
@@ -308,8 +326,12 @@ class PlanningFactor(EvaluationItem):
                     condition_met_per_factor &= distance_met
 
                 if self.condition.time_to_wall is not None and current_speed is not None:
+                    eps = (
+                        -self.speed_eps if self.last_stable_state == "BACKWARD" else self.speed_eps
+                    )
+                    current_speed = current_speed if self.is_ego_stat_stable else 0.0
                     time_to_wall_met, info_dict_time_to_wall = self.judge_time_to_wall(
-                        factor.control_points[0].distance / (current_speed + 1e-9)
+                        factor.control_points[0].distance / (current_speed + eps)
                     )
                     info_dict_per_factor.update(info_dict_time_to_wall)
                     condition_met_per_factor &= time_to_wall_met
