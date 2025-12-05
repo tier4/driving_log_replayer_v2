@@ -307,11 +307,9 @@ class PlanningFactor(EvaluationItem):
                     info_dict_per_factor.update(info_dict_distance)
                     condition_met_per_factor &= distance_met
 
-                if self.condition.time_to_wall is not None:
+                if self.condition.time_to_wall is not None and current_speed is not None:
                     time_to_wall_met, info_dict_time_to_wall = self.judge_time_to_wall(
-                        factor.control_points[0].distance / current_speed
-                        if current_speed is not None and current_speed != 0.0
-                        else None
+                        factor.control_points[0].distance / (current_speed + 1e-9)
                     )
                     info_dict_per_factor.update(info_dict_time_to_wall)
                     condition_met_per_factor &= time_to_wall_met
@@ -367,13 +365,11 @@ class PlanningFactor(EvaluationItem):
         }
         return self.condition.distance.match_condition(distance), info_dict
 
-    def judge_time_to_wall(self, time_to_wall: float | None) -> tuple[bool, dict]:
-        if time_to_wall is not None:
-            info_dict = {
-                "TimeToWall": time_to_wall,
-            }
-            return self.condition.time_to_wall.match_condition(time_to_wall), info_dict
-        return True, {"TimeToWall": "N/A"}
+    def judge_time_to_wall(self, time_to_wall: float) -> tuple[bool, dict]:
+        info_dict = {
+            "TimeToWall": time_to_wall,
+        }
+        return self.condition.time_to_wall.match_condition(time_to_wall), info_dict
 
 
 class FactorsClassContainer:
