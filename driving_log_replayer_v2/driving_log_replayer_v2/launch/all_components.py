@@ -16,6 +16,7 @@ from launch.actions import DeclareLaunchArgument
 from launch.substitutions import LaunchConfiguration
 
 RECORD_TOPIC = """^/diagnostics$\
+|^/system/processing_time_checker/metrics$\
 |^/sensing/lidar/concatenated/pointcloud$\
 |^/perception/object_recognition/objects$\
 |^/perception/obstacle_segmentation/pointcloud$\

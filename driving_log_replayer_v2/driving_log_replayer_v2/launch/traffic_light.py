@@ -17,6 +17,7 @@ from launch.substitutions import LaunchConfiguration
 
 RECORD_TOPIC = """^/tf$\
 |^/diagnostics$\
+|^/system/processing_time_checker/metrics$\
 |^/perception/.*/traffic_signals$\
 |^/perception/traffic_light_recognition/traffic_signals/markers$\
 |^/perception/traffic_light_recognition/.*/debug/rois/compressed$\

@@ -14,11 +14,13 @@
 
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Any
 from typing import TYPE_CHECKING
 
 from builtin_interfaces.msg import Time
 from geometry_msgs.msg import TransformStamped
+import pandas as pd
 from rclpy.serialization import deserialize_message
 from rclpy.serialization import serialize_message
 from rosbag2_py import ConverterOptions
@@ -36,9 +38,67 @@ if TYPE_CHECKING:
     from collections.abc import Generator
 
     from builtin_interfaces.msg import Time as Stamp
+    from tier4_metric_msgs.msg import MetricArray
+
+UNIT_MAP = {
+    "nanosecond": 9,
+    "microsecond": 6,
+    "millisecond": 3,
+    "second": 0,
+}
+
+
+def convert_to_sec(value: str, unit: str) -> str:
+    """Convert the given value to seconds using string-based decimal shifting."""
+    if unit not in UNIT_MAP:
+        err_msg = f"Unsupported unit: {unit}"
+        raise ValueError(err_msg)
+
+    shift = UNIT_MAP[unit]
+
+    # split into integer and fractional parts
+    if "." in value:
+        integer, fractional = value.split(".")
+    else:
+        integer, fractional = value, ""
+
+    # join digits
+    digits = integer + fractional
+
+    # position of decimal point after shifting
+    pos = len(integer) - shift
+
+    if pos <= 0:
+        result = "0." + "0" * (-pos) + digits
+    elif pos >= len(digits):
+        result = digits + "0" * (pos - len(digits))
+    else:
+        result = digits[:pos] + "." + digits[pos:]
+
+    # remove leading zeros but keep at least one
+    result = result.lstrip("0")
+    if result.startswith("."):
+        result = "0" + result
+    if result == "":
+        result = "0"
+
+    # remove trailing zeros and decimal point
+    return result.rstrip("0").rstrip(".")
 
 
 class RosBagManager:
+    """
+    A class to manage rosbag reading and writing.
+
+    Responsible for following items:
+        Reading messages from an input rosbag.
+        Writing messages to an output rosbag.
+        Managing a tf2 Buffer for transform lookups.
+        Analyzing and processing time via Processing Time Checker.
+    """
+
+    PROCESSING_TIME_CHECKER_TOPIC = "/system/processing_time_checker/metrics"
+
     def __init__(
         self,
         bag_dir: str,
@@ -54,6 +114,9 @@ class RosBagManager:
         self._topic_name2type: dict[str, str] = {}
         self._last_subscribed_timestamp_nanosec: int
         self._tf_buffer: Buffer
+        self._node_processing_time: dict[
+            str, dict[str, str]
+        ] = {}  # node_name -> {node_name, header_timestamp}
 
         converter_options = self._get_default_converter_options()
 
@@ -79,27 +142,54 @@ class RosBagManager:
         self._tf_buffer = Buffer()
 
     def _get_default_converter_options(self) -> ConverterOptions:
+        """
+        Get default converter options for rosbag reading and writing.
+
+        Returns:
+            ConverterOptions: The default converter options.
+
+        """
         return ConverterOptions(
             input_serialization_format="cdr",
             output_serialization_format="cdr",
         )
 
     def _get_storage_options(self, uri: str, storage_type: str) -> StorageOptions:
+        """
+        Get storage options for rosbag reading and writing.
+
+        Args:
+            uri (str): The URI of the storage.
+            storage_type (str): The type of the storage.
+
+        Returns:
+            StorageOptions: The storage options.
+
+        """
         return StorageOptions(
             uri=uri,
             storage_id=storage_type,
         )
 
     def __del__(self) -> None:
+        """Destructor to clean up resources."""
         if hasattr(self, "_reader"):
             del self._reader
         if hasattr(self, "_writer"):
             del self._writer
 
     def get_tf_buffer(self) -> Buffer:
+        """Get the TF buffer."""
         return self._tf_buffer
 
     def get_last_subscribed_timestamp(self) -> int:
+        """
+        Get the last subscribed timestamp in nanoseconds.
+
+        Returns:
+            int: The last subscribed timestamp in nanoseconds.
+
+        """
         if hasattr(self, "_last_subscribed_timestamp_nanosec"):
             return self._last_subscribed_timestamp_nanosec
         err_msg = "_last_subscribed_timestamp_nanosec is not set."
@@ -107,6 +197,13 @@ class RosBagManager:
 
     def read_messages(self) -> Generator[str, Any, int]:
         """
+        Read messages from the rosbag.
+
+        Yields:
+            topic_name (str): The name of the topic.
+            msg (Any): The deserialized message.
+            subscribed_timestamp_nanosec (int): The subscribed timestamp in nanoseconds.
+
         Describe time representations.
 
         | Field                   | Type                             | Unit     | Representation            |
@@ -115,6 +212,7 @@ class RosBagManager:
         | subscribed timestamp    | int                              | nanosec  | sec * 1e9 + nanosec       |
         | Clock.now().nanoseconds | int                              | nanosec  | sec * 1e9 + nanosec       |
         | nuscenes unix time      | int                              | microsec | sec * 1e6 + nanosec / 1e3 |
+
         """
         subscribed_timestamp_nanosec = 0
         while self._reader.has_next():
@@ -128,12 +226,43 @@ class RosBagManager:
             elif topic_name == "/tf":
                 for transform in msg.transforms:
                     self._tf_buffer.set_transform(transform, "rosbag_import")
+            elif topic_name == self.PROCESSING_TIME_CHECKER_TOPIC:
+                self._append_processing_time_data(msg)
             elif topic_name in self._evaluation_topics:
                 yield topic_name, msg, subscribed_timestamp_nanosec
         self._last_subscribed_timestamp_nanosec = subscribed_timestamp_nanosec
+        self._save_node_processing_time()
         del self._reader
 
+    def _append_processing_time_data(self, msg: MetricArray) -> None:
+        """
+        Append processing time data from the message.
+
+        Args:
+            msg (MetricArray): The MetricArray message containing processing time data.
+
+        """
+        header_timestamp = f"{msg.stamp.sec}.{msg.stamp.nanosec}"
+        for metric in msg.metric_array:
+            data = self._node_processing_time.setdefault(metric.name, {})
+            data["node_name"] = metric.name
+            data[header_timestamp] = convert_to_sec(metric.value, metric.unit)
+
+    def _save_node_processing_time(self) -> None:
+        """Save node processing time data to a CSV file."""
+        path = Path(self._writer_storage_options.uri).parent / "node_processing_time.csv"
+        pd.DataFrame(list(self._node_processing_time.values())).to_csv(path, index=False)
+
     def write_results(self, topic_name: str, msg: Any, subscribed_timestamp: Time | int) -> None:
+        """
+        Write results to the rosbag.
+
+        Args:
+            topic_name (str): The name of the topic.
+            msg (Any): The message to write.
+            subscribed_timestamp (Time | int): The subscribed timestamp, either as a Time object or an integer nanosecond timestamp.
+
+        """
         if isinstance(subscribed_timestamp, Time):
             subscribed_timestamp_nanosec = (
                 subscribed_timestamp.sec * pow(10, 9) + subscribed_timestamp.nanosec
@@ -147,6 +276,7 @@ class RosBagManager:
         self._writer.write(topic_name, msg_bytes, subscribed_timestamp_nanosec)
 
     def close_writer(self) -> None:
+        """Close the rosbag writer."""
         del self._writer
         Reindexer().reindex(self._writer_storage_options)
 
