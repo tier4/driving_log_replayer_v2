@@ -16,6 +16,6 @@ Evaluation:
         condition_type: all_of
         area: { x: 71.5, y: 345.1, range: 1.0, area_condition: inside } # You can set area to null to ignore area condition.
         behavior: [STOP] # Specify the behavior to be judged. You can set behavior to null to ignore behavior condition.
-        distance: { min: -10.0, max: 50.0 } #[m] Specify the distance range to be judged. You can set distance to null to ignore distance condition.
-        time_to_wall: { min: 0.0 } #[s] Specify the time to the next control point of this planning factor to be judged. You can set time_to_wall to null to ignore time_to_wall condition.
+        distance: { min: -10.0, max: 50.0 } # [m] Specify the distance range to be judged. You can set distance to null to ignore distance condition.
+        time_to_wall: { min: 0.0 } # [s] Specify the time to the next control point of this planning factor to be judged. You can set time_to_wall to null to ignore time_to_wall condition.
         judgement: positive # positive or negative
