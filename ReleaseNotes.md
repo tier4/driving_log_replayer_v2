@@ -1,5 +1,16 @@
 # Release Notes
 
+## Version 3.14.3
+
+Minor Tweak
+
+| Module             | Feature      | Brief summary                                                  | Pull request                                                        | Contributor                                   |
+| ------------------ | ------------ | -------------------------------------------------------------- | ------------------------------------------------------------------- | --------------------------------------------- |
+| `common`           | post_process | analyze the processing time                                    | [#267](https://github.com/tier4/driving_log_replayer_v2/issues/267) | [MasatoSaeki](https://github.com/MasatoSaeki) |
+| `perception`       | logic        | change method to select the degradation topic when not specify | [#268](https://github.com/tier4/driving_log_replayer_v2/issues/268) | [MasatoSaeki](https://github.com/MasatoSaeki) |
+| `planning_control` | condition    | add new evaluation item time_to_wall for planning_factor       | [#265](https://github.com/tier4/driving_log_replayer_v2/issues/265) | [xtk8532704](https://github.com/xtk8532704)   |
+| `common`           | lanelet2     | fix the loading `TransverseMercatorProjector`                  | [#266](https://github.com/tier4/driving_log_replayer_v2/issues/266) | [MasatoSaeki](https://github.com/MasatoSaeki) |
+
 ## Version 3.14.2
 
 Minor Tweak
