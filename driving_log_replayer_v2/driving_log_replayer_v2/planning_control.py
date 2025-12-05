@@ -138,7 +138,7 @@ class PlanningFactorCondition(BaseModel):
         | None
     ) = None
     distance: MinMax | None = None  # s of frenet coordinate
-    time_to_wall: MinMax | None = None  # time to the next control point with the current speed
+    time_to_wall: MinMax | None = None  # time to the next control point with the current velocity
     judgement: Literal["positive", "negative"]  # positive or negative
 
 
@@ -264,7 +264,7 @@ class PlanningFactor(EvaluationItem):
         self.ego_last_stats = deque(maxlen=3)
         self.is_ego_stat_stable = False
         self.last_stable_state = "STOP"
-        self.speed_eps = 1e-2
+        self.velocity_eps = 1e-2
 
     def set_frame(  # noqa: C901
         self, msg: PlanningFactorArray, latest_kinematic_state: Odometry | None
@@ -284,17 +284,17 @@ class PlanningFactor(EvaluationItem):
             condition_met = False
             info_dict = {}
 
-            current_speed = (
+            current_velocity = (
                 latest_kinematic_state.twist.twist.linear.x
                 if latest_kinematic_state is not None
                 else None
             )
-            if current_speed is not None:
+            if current_velocity is not None:
                 state = (
                     "FORWARD"
-                    if current_speed > self.speed_eps
+                    if current_velocity > self.velocity_eps
                     else "BACKWARD"
-                    if current_speed < -self.speed_eps
+                    if current_velocity < -self.velocity_eps
                     else "STOP"
                 )
                 self.ego_last_stats.append(state)
@@ -325,13 +325,15 @@ class PlanningFactor(EvaluationItem):
                     info_dict_per_factor.update(info_dict_distance)
                     condition_met_per_factor &= distance_met
 
-                if self.condition.time_to_wall is not None and current_speed is not None:
+                if self.condition.time_to_wall is not None and current_velocity is not None:
                     eps = (
-                        -self.speed_eps if self.last_stable_state == "BACKWARD" else self.speed_eps
+                        -self.velocity_eps
+                        if self.last_stable_state == "BACKWARD"
+                        else self.velocity_eps
                     )
-                    current_speed = current_speed if self.is_ego_stat_stable else 0.0
+                    current_velocity = current_velocity if self.is_ego_stat_stable else 0.0
                     time_to_wall_met, info_dict_time_to_wall = self.judge_time_to_wall(
-                        factor.control_points[0].distance / (current_speed + eps)
+                        factor.control_points[0].distance / (current_velocity + eps)
                     )
                     info_dict_per_factor.update(info_dict_time_to_wall)
                     condition_met_per_factor &= time_to_wall_met
