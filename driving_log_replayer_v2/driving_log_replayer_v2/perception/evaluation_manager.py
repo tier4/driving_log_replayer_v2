@@ -30,6 +30,8 @@ if TYPE_CHECKING:
 
 
 class PerceptionEvaluationManager(EvaluationManager):
+    ML_MODELS = ("centerpoint", "pointpainting", "transfusion", "apollo")
+
     def __init__(
         self,
         scenario: ScenarioType,
@@ -82,7 +84,17 @@ class PerceptionEvaluationManager(EvaluationManager):
             self._degradation_topics = [self._scenario.Evaluation.degradation_topic]
         # If degradation topic is not set, set it based on the evaluation task.
         elif self._degradation_evaluation_task in ["detection", "fp_validation"]:
-            self._degradation_topics = ["/perception/object_recognition/detection/objects"]
+            # Set degradation topic by ML model
+            self._degradation_topics = [
+                topic
+                for topic in self.get_evaluation_topics()
+                if any(model in topic.split("/") for model in self.ML_MODELS)
+            ]
+            if len(self._degradation_topics) > 1:
+                self._degradation_topics = [self._degradation_topics[0]]
+            if not self._degradation_topics:
+                err_msg = f"Could not found the topic by ML model for degradation topic. Evaluation topics: {self.get_evaluation_topics()}"
+                raise ValueError(err_msg)
         elif self._degradation_evaluation_task == "tracking":
             self._degradation_topics = ["/perception/object_recognition/tracking/objects"]
         elif self._degradation_evaluation_task == "prediction":
