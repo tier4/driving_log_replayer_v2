@@ -2,8 +2,8 @@
 Changelog for package driving_log_replayer
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-Forthcoming
------------
+3.14.3 (2025-12-05)
+-------------------
 * feat(post_process): analyze the processing time (`#267 <https://github.com/tier4/driving_log_replayer_v2/issues/267>`_)
   * init commit (todo is to implement add data and convert to like csv)
   * update
