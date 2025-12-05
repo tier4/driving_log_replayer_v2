@@ -21,6 +21,7 @@ from autoware_internal_planning_msgs.msg import PlanningFactor as PlanningFactor
 from autoware_internal_planning_msgs.msg import PlanningFactorArray
 from builtin_interfaces.msg import Time
 from geometry_msgs.msg import Pose
+from nav_msgs.msg import Odometry
 from pydantic import BaseModel
 from pydantic import Field
 from pydantic import model_validator
@@ -136,6 +137,7 @@ class PlanningFactorCondition(BaseModel):
         | None
     ) = None
     distance: MinMax | None = None  # s of frenet coordinate
+    time_to_wall: MinMax | None = None  # time to the next control point with the current speed
     judgement: Literal["positive", "negative"]  # positive or negative
 
 
@@ -146,7 +148,7 @@ class Conditions(BaseModel):
 
 class Evaluation(BaseModel):
     UseCaseName: Literal["planning_control"]
-    UseCaseFormatVersion: Literal["2.0.0", "2.1.0", "2.2.0", "2.3.0", "2.4.0"]
+    UseCaseFormatVersion: Literal["2.0.0", "2.1.0", "2.2.0", "2.3.0", "2.4.0", "2.5.0"]
     Conditions: Conditions
     Datasets: list[dict]
 
@@ -258,7 +260,9 @@ class PlanningFactor(EvaluationItem):
         self.condition: PlanningFactorCondition
         self.success = self.condition.judgement == "negative"
 
-    def set_frame(self, msg: PlanningFactorArray) -> dict | None:
+    def set_frame(
+        self, msg: PlanningFactorArray, latest_kinematic_state: Odometry | None
+    ) -> dict | None:
         # check time condition
         if not self.condition.time.match_condition(stamp_to_float(msg.header.stamp)):
             return None
@@ -273,6 +277,12 @@ class PlanningFactor(EvaluationItem):
         else:
             condition_met = False
             info_dict = {}
+
+            current_speed = (
+                latest_kinematic_state.twist.twist.linear.x
+                if latest_kinematic_state is not None
+                else None
+            )
 
             for i, factor in enumerate(msg.factors):
                 info_dict_per_factor = {}
@@ -296,6 +306,15 @@ class PlanningFactor(EvaluationItem):
                     )
                     info_dict_per_factor.update(info_dict_distance)
                     condition_met_per_factor &= distance_met
+
+                if self.condition.time_to_wall is not None:
+                    time_to_wall_met, info_dict_time_to_wall = self.judge_time_to_wall(
+                        factor.control_points[0].distance / current_speed
+                        if current_speed is not None and current_speed != 0.0
+                        else None
+                    )
+                    info_dict_per_factor.update(info_dict_time_to_wall)
+                    condition_met_per_factor &= time_to_wall_met
 
                 condition_met_per_factor ^= self.condition.judgement == "negative"
 
@@ -327,7 +346,7 @@ class PlanningFactor(EvaluationItem):
             + (control_point_pose_pos_y - self.condition.area.y) ** 2
         )
         info_dict = {
-            "Distance": distance,
+            "ControlPointDistance": distance,
             "ControlPointPoseX": control_point_pose_pos_x,
             "ControlPointPoseY": control_point_pose_pos_y,
         }
@@ -348,6 +367,14 @@ class PlanningFactor(EvaluationItem):
         }
         return self.condition.distance.match_condition(distance), info_dict
 
+    def judge_time_to_wall(self, time_to_wall: float | None) -> tuple[bool, dict]:
+        if time_to_wall is not None:
+            info_dict = {
+                "TimeToWall": time_to_wall,
+            }
+            return self.condition.time_to_wall.match_condition(time_to_wall), info_dict
+        return True, {"TimeToWall": "N/A"}
+
 
 class FactorsClassContainer:
     def __init__(self, conditions: list[PlanningFactorCondition]) -> None:
@@ -358,10 +385,12 @@ class FactorsClassContainer:
             )
             self.__container.setdefault(cond.topic, []).append(PlanningFactor(condition_name, cond))
 
-    def set_frame(self, msg: PlanningFactorArray, topic: str) -> dict:
+    def set_frame(
+        self, msg: PlanningFactorArray, topic: str, latest_kinematic_state: Odometry | None
+    ) -> dict:
         frame_result: dict[str, dict] = {}
         for factor in self.__container.get(topic, []):
-            topic_result = factor.set_frame(msg)
+            topic_result = factor.set_frame(msg, latest_kinematic_state)
             if topic_result is not None:
                 frame_result[f"{factor.name}"] = topic_result
         return frame_result
@@ -389,6 +418,8 @@ class PlanningFactorResult(ResultBase):
     def update(self) -> None:
         self._success, self._summary = self.__factors_container.update()
 
-    def set_frame(self, msg: PlanningFactorArray, topic: str) -> None:
-        self._frame = self.__factors_container.set_frame(msg, topic)
+    def set_frame(
+        self, msg: PlanningFactorArray, topic: str, latest_kinematic_state: Odometry | None
+    ) -> None:
+        self._frame = self.__factors_container.set_frame(msg, topic, latest_kinematic_state)
         self.update()
