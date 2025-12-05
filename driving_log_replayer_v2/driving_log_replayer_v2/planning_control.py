@@ -12,6 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from collections import deque
 from dataclasses import dataclass
 import math
 from sys import float_info
@@ -137,7 +138,7 @@ class PlanningFactorCondition(BaseModel):
         | None
     ) = None
     distance: MinMax | None = None  # s of frenet coordinate
-    time_to_wall: MinMax | None = None  # time to the next control point with the current speed
+    time_to_wall: MinMax | None = None  # time to the next control point with the current velocity
     judgement: Literal["positive", "negative"]  # positive or negative
 
 
@@ -260,7 +261,12 @@ class PlanningFactor(EvaluationItem):
         self.condition: PlanningFactorCondition
         self.success = self.condition.judgement == "negative"
 
-    def set_frame(
+        self.ego_last_stats = deque(maxlen=3)
+        self.is_ego_stat_stable = False
+        self.last_stable_state = "STOP"
+        self.velocity_eps = 1e-2
+
+    def set_frame(  # noqa: C901
         self, msg: PlanningFactorArray, latest_kinematic_state: Odometry | None
     ) -> dict | None:
         # check time condition
@@ -278,11 +284,23 @@ class PlanningFactor(EvaluationItem):
             condition_met = False
             info_dict = {}
 
-            current_speed = (
+            current_velocity = (
                 latest_kinematic_state.twist.twist.linear.x
                 if latest_kinematic_state is not None
                 else None
             )
+            if current_velocity is not None:
+                state = (
+                    "FORWARD"
+                    if current_velocity > self.velocity_eps
+                    else "BACKWARD"
+                    if current_velocity < -self.velocity_eps
+                    else "STOP"
+                )
+                self.ego_last_stats.append(state)
+                self.is_ego_stat_stable = len(set(self.ego_last_stats)) == 1
+                if self.is_ego_stat_stable:
+                    self.last_stable_state = state
 
             for i, factor in enumerate(msg.factors):
                 info_dict_per_factor = {}
@@ -307,11 +325,15 @@ class PlanningFactor(EvaluationItem):
                     info_dict_per_factor.update(info_dict_distance)
                     condition_met_per_factor &= distance_met
 
-                if self.condition.time_to_wall is not None:
+                if self.condition.time_to_wall is not None and current_velocity is not None:
+                    eps = (
+                        -self.velocity_eps
+                        if self.last_stable_state == "BACKWARD"
+                        else self.velocity_eps
+                    )
+                    current_velocity = current_velocity if self.is_ego_stat_stable else 0.0
                     time_to_wall_met, info_dict_time_to_wall = self.judge_time_to_wall(
-                        factor.control_points[0].distance / current_speed
-                        if current_speed is not None and current_speed != 0.0
-                        else None
+                        factor.control_points[0].distance / (current_velocity + eps)
                     )
                     info_dict_per_factor.update(info_dict_time_to_wall)
                     condition_met_per_factor &= time_to_wall_met
@@ -367,13 +389,11 @@ class PlanningFactor(EvaluationItem):
         }
         return self.condition.distance.match_condition(distance), info_dict
 
-    def judge_time_to_wall(self, time_to_wall: float | None) -> tuple[bool, dict]:
-        if time_to_wall is not None:
-            info_dict = {
-                "TimeToWall": time_to_wall,
-            }
-            return self.condition.time_to_wall.match_condition(time_to_wall), info_dict
-        return True, {"TimeToWall": "N/A"}
+    def judge_time_to_wall(self, time_to_wall: float) -> tuple[bool, dict]:
+        info_dict = {
+            "TimeToWall": time_to_wall,
+        }
+        return self.condition.time_to_wall.match_condition(time_to_wall), info_dict
 
 
 class FactorsClassContainer:
