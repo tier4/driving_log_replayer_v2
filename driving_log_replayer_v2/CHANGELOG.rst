@@ -2,6 +2,18 @@
 Changelog for package driving_log_replayer
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
+Forthcoming
+-----------
+* feat(post-process): add statistic metric in processing time (`#271 <https://github.com/tier4/driving_log_replayer_v2/issues/271>`_)
+  * feat(post-process): add statistic_metrics_in_processing_time
+  * add validation
+  ---------
+* fix(planning_control): fix localization-related bug of time-to-wall (`#270 <https://github.com/tier4/driving_log_replayer_v2/issues/270>`_)
+  * fix N/A bug
+  * fix bug
+  * rename speed to velocity
+* Contributors: Kem (TiankuiXian), Masato Saeki
+
 3.14.3 (2025-12-05)
 -------------------
 * feat(post_process): analyze the processing time (`#267 <https://github.com/tier4/driving_log_replayer_v2/issues/267>`_)
