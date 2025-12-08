@@ -208,6 +208,9 @@ class RosBagManager:
         for metric in msg.metric_array:
             data = self._node_processing_time.setdefault(metric.name, {})
             data["node_name"] = metric.name
+            if metric.unit not in UNIT_MAP:
+                err_msg = f"Unsupported unit: {metric.unit}"
+                raise ValueError(err_msg)
             data[header_timestamp] = float(metric.value) * UNIT_MAP[metric.unit]
 
     def _save_node_processing_time(self) -> None:
