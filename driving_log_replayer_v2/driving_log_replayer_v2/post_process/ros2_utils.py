@@ -41,49 +41,11 @@ if TYPE_CHECKING:
     from tier4_metric_msgs.msg import MetricArray
 
 UNIT_MAP = {
-    "nanosecond": 9,
-    "microsecond": 6,
-    "millisecond": 3,
-    "second": 0,
+    "nanosecond": 1e-9,
+    "microsecond": 1e-6,
+    "millisecond": 1e-3,
+    "second": 1.0,
 }
-
-
-def convert_to_sec(value: str, unit: str) -> str:
-    """Convert the given value to seconds using string-based decimal shifting."""
-    if unit not in UNIT_MAP:
-        err_msg = f"Unsupported unit: {unit}"
-        raise ValueError(err_msg)
-
-    shift = UNIT_MAP[unit]
-
-    # split into integer and fractional parts
-    if "." in value:
-        integer, fractional = value.split(".")
-    else:
-        integer, fractional = value, ""
-
-    # join digits
-    digits = integer + fractional
-
-    # position of decimal point after shifting
-    pos = len(integer) - shift
-
-    if pos <= 0:
-        result = "0." + "0" * (-pos) + digits
-    elif pos >= len(digits):
-        result = digits + "0" * (pos - len(digits))
-    else:
-        result = digits[:pos] + "." + digits[pos:]
-
-    # remove leading zeros but keep at least one
-    result = result.lstrip("0")
-    if result.startswith("."):
-        result = "0" + result
-    if result == "":
-        result = "0"
-
-    # remove trailing zeros and decimal point
-    return result.rstrip("0").rstrip(".")
 
 
 class RosBagManager:
@@ -246,12 +208,23 @@ class RosBagManager:
         for metric in msg.metric_array:
             data = self._node_processing_time.setdefault(metric.name, {})
             data["node_name"] = metric.name
-            data[header_timestamp] = convert_to_sec(metric.value, metric.unit)
+            if metric.unit not in UNIT_MAP:
+                err_msg = f"Unsupported unit: {metric.unit}"
+                raise ValueError(err_msg)
+            data[header_timestamp] = float(metric.value) * UNIT_MAP[metric.unit]
 
     def _save_node_processing_time(self) -> None:
-        """Save node processing time data to a CSV file."""
-        path = Path(self._writer_storage_options.uri).parent / "node_processing_time.csv"
-        pd.DataFrame(list(self._node_processing_time.values())).to_csv(path, index=False)
+        """Save the processing time data to a CSV file."""
+        data_frame = pd.DataFrame(list(self._node_processing_time.values()))
+        timestamp_columns = [col for col in data_frame.columns if col != "node_name"]
+        data_frame["average"] = data_frame[timestamp_columns].mean(axis=1)
+        data_frame["std"] = data_frame[timestamp_columns].std(axis=1)
+        data_frame["max"] = data_frame[timestamp_columns].max(axis=1)
+        data_frame["min"] = data_frame[timestamp_columns].min(axis=1)
+        data_frame["percentile_99"] = data_frame[timestamp_columns].quantile(0.99, axis=1)
+        data_frame.to_csv(
+            Path(self._writer_storage_options.uri).parent / "processing_time.csv", index=False
+        )
 
     def write_results(self, topic_name: str, msg: Any, subscribed_timestamp: Time | int) -> None:
         """
