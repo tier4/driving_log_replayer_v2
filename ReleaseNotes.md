@@ -1,5 +1,14 @@
 # Release Notes
 
+## Version 3.14.4
+
+Minor Tweak
+
+| Module             | Feature      | Brief summary                                | Pull request                                                        | Contributor                                   |
+| ------------------ | ------------ | -------------------------------------------- | ------------------------------------------------------------------- | --------------------------------------------- |
+| `common`           | post_process | add statistic metric in processing time      | [#271](https://github.com/tier4/driving_log_replayer_v2/issues/271) | [MasatoSaeki](https://github.com/MasatoSaeki) |
+| `planning_control` | logic        | fix localization-related bug of time-to-wall | [#270](https://github.com/tier4/driving_log_replayer_v2/issues/270) | [xtk8532704](https://github.com/xtk8532704)   |
+
 ## Version 3.14.3
 
 Minor Tweak
