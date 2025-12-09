@@ -2,8 +2,8 @@
 Changelog for package driving_log_replayer
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-Forthcoming
------------
+3.14.5 (2025-12-09)
+-------------------
 * feat(perception): create empty csv in analysis phase when not exist result (`#273 <https://github.com/tier4/driving_log_replayer_v2/issues/273>`_)
 * Contributors: Masato Saeki
 
