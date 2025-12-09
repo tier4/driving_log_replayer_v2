@@ -43,13 +43,7 @@ def analyze(
         error_metrics = sample.error.index.get_level_values(1).unique().tolist()
         error_statistics = sample.error.columns.to_list()
     else:
-        all_row = [
-            {
-                "evaluation_task": evaluation_task,
-                "topic_name": topic_name,
-            }
-        ]
-        pd.DataFrame(all_row).to_csv(save_path.joinpath("analysis_result.csv"), index=False)
+        pd.DataFrame([]).to_csv(save_path.joinpath("analysis_result.csv"), index=False)
         return
 
     all_row = []
