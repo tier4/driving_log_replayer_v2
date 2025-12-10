@@ -216,12 +216,13 @@ class RosBagManager:
     def _save_node_processing_time(self) -> None:
         """Save the processing time data to a CSV file."""
         data_frame = pd.DataFrame(list(self._node_processing_time.values()))
-        timestamp_columns = [col for col in data_frame.columns if col != "node_name"]
-        data_frame["average"] = data_frame[timestamp_columns].mean(axis=1)
-        data_frame["std"] = data_frame[timestamp_columns].std(axis=1)
-        data_frame["max"] = data_frame[timestamp_columns].max(axis=1)
-        data_frame["min"] = data_frame[timestamp_columns].min(axis=1)
-        data_frame["percentile_99"] = data_frame[timestamp_columns].quantile(0.99, axis=1)
+        if not data_frame.empty:
+            timestamp_columns = [col for col in data_frame.columns if col != "node_name"]
+            data_frame["average"] = data_frame[timestamp_columns].mean(axis=1)
+            data_frame["std"] = data_frame[timestamp_columns].std(axis=1)
+            data_frame["max"] = data_frame[timestamp_columns].max(axis=1)
+            data_frame["min"] = data_frame[timestamp_columns].min(axis=1)
+            data_frame["percentile_99"] = data_frame[timestamp_columns].quantile(0.99, axis=1)
         data_frame.to_csv(
             Path(self._writer_storage_options.uri).parent / "processing_time.csv", index=False
         )
