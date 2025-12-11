@@ -261,10 +261,10 @@ class PlanningFactor(EvaluationItem):
         self.condition: PlanningFactorCondition
         self.success = self.condition.judgement == "negative"
 
-        self.ego_last_stats = deque(maxlen=3)
+        self.ego_last_stats = deque(maxlen=4)
         self.is_ego_stat_stable = False
         self.last_stable_state = "STOP"
-        self.velocity_eps = 1e-2
+        self.stop_vel_thr = 0.13889  # 0.5 km/h margin to consider as stop
 
     def set_frame(  # noqa: C901
         self, msg: PlanningFactorArray, latest_kinematic_state: Odometry | None
@@ -292,9 +292,9 @@ class PlanningFactor(EvaluationItem):
             if current_velocity is not None:
                 state = (
                     "FORWARD"
-                    if current_velocity > self.velocity_eps
+                    if current_velocity > self.stop_vel_thr
                     else "BACKWARD"
-                    if current_velocity < -self.velocity_eps
+                    if current_velocity < -self.stop_vel_thr
                     else "STOP"
                 )
                 self.ego_last_stats.append(state)
@@ -326,14 +326,13 @@ class PlanningFactor(EvaluationItem):
                     condition_met_per_factor &= distance_met
 
                 if self.condition.time_to_wall is not None and current_velocity is not None:
-                    eps = (
-                        -self.velocity_eps
-                        if self.last_stable_state == "BACKWARD"
-                        else self.velocity_eps
-                    )
-                    current_velocity = current_velocity if self.is_ego_stat_stable else 0.0
                     time_to_wall_met, info_dict_time_to_wall = self.judge_time_to_wall(
-                        factor.control_points[0].distance / (current_velocity + eps)
+                        factor.control_points[0].distance
+                        / (
+                            min(current_velocity, -self.stop_vel_thr)
+                            if self.last_stable_state == "BACKWARD"
+                            else max(current_velocity, self.stop_vel_thr)
+                        )
                     )
                     info_dict_per_factor.update(info_dict_time_to_wall)
                     condition_met_per_factor &= time_to_wall_met
