@@ -328,9 +328,9 @@ class PlanningFactor(EvaluationItem):
                 if self.condition.time_to_wall is not None and current_velocity is not None:
                     time_to_wall_met, info_dict_time_to_wall = self.judge_time_to_wall(
                         factor.control_points[0].distance
-                        / min(current_velocity, -self.stop_vel_thr)
+                        / (min(current_velocity, -self.stop_vel_thr)
                         if self.last_stable_state == "BACKWARD"
-                        else max(current_velocity, self.stop_vel_thr)
+                        else max(current_velocity, self.stop_vel_thr))
                     )
                     info_dict_per_factor.update(info_dict_time_to_wall)
                     condition_met_per_factor &= time_to_wall_met
