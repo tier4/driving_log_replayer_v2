@@ -2,8 +2,8 @@
 Changelog for package driving_log_replayer
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-Forthcoming
------------
+3.14.6 (2025-12-12)
+-------------------
 * fix(planning_factor): more robust time-to-wall against emergency stops (`#276 <https://github.com/tier4/driving_log_replayer_v2/issues/276>`_)
   * more robust against emergency stops
   * fix bug
