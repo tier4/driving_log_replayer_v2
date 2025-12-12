@@ -1,5 +1,14 @@
 # Release Notes
 
+## Version 3.14.6
+
+Minor Tweak
+
+| Module            | Feature      | Brief summary                                    | Pull request                                                        | Contributor                                   |
+| ----------------- | ------------ | ------------------------------------------------ | ------------------------------------------------------------------- | --------------------------------------------- |
+| `planning_factor` | logic        | more robust time-to-wall against emergency stops | [#276](https://github.com/tier4/driving_log_replayer_v2/issues/276) | [xtk8532704](https://github.com/xtk8532704)   |
+| `perception`      | post_process | create the empty csv when data is empty          | [#275](https://github.com/tier4/driving_log_replayer_v2/issues/275) | [MasatoSaeki](https://github.com/MasatoSaeki) |
+
 ## Version 3.14.5
 
 Minor Tweak
