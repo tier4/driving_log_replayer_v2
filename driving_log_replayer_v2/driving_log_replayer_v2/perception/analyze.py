@@ -20,6 +20,8 @@ import pickle
 import numpy as np
 import pandas as pd
 from perception_eval.tool import PerceptionAnalyzer3D
+from perception_eval.tool.utils import PlotAxes
+from perception_eval.common.status import MatchingStatus
 
 
 def analyze(
@@ -167,6 +169,31 @@ def get_df(
     return analyzer.filter_by_distance(df=df, distance=distance) if distance is not None else df
 
 
+def plot(
+    analyzer: PerceptionAnalyzer3D,
+) -> None:
+    for column in ["x", "y", "yaw", "width", "length", "bev_area", "vx", "vy", "v_yaw", "speed", "nn_plane", "distance"]:
+        analyzer.plot_error(
+            mode=PlotAxes.FRAME,
+            columns=column,
+        )
+    analyzer.plot_num_object(
+        mode=PlotAxes.FRAME,
+    )
+    analyzer.plot_ratio(
+        mode=PlotAxes.FRAME,
+        status=MatchingStatus.TP,
+    )
+    analyzer.plot_ratio(
+        mode=PlotAxes.FRAME,
+        status=MatchingStatus.FP,
+    )
+    analyzer.plot_ratio(
+        mode=PlotAxes.FRAME,
+        status=MatchingStatus.FN,
+    )
+
+
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Analyze perception result")
     parser.add_argument(
@@ -221,6 +248,8 @@ def main() -> None:
         args.distance_interval,
         args.topic_name,
     )
+
+    plot(analyzer)
 
 
 if __name__ == "__main__":
