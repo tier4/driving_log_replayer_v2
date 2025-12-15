@@ -358,7 +358,6 @@ class PerceptionRunner(Runner):
             plot(analyzer)
 
 
-
 def evaluate(
     scenario_path: str,
     rosbag_dir_path: str,

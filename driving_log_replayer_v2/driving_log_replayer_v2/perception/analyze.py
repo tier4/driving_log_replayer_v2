@@ -19,9 +19,9 @@ import pickle
 
 import numpy as np
 import pandas as pd
+from perception_eval.common.status import MatchingStatus
 from perception_eval.tool import PerceptionAnalyzer3D
 from perception_eval.tool.utils import PlotAxes
-from perception_eval.common.status import MatchingStatus
 
 
 def analyze(
@@ -172,7 +172,20 @@ def get_df(
 def plot(
     analyzer: PerceptionAnalyzer3D,
 ) -> None:
-    for column in ["x", "y", "yaw", "width", "length", "bev_area", "vx", "vy", "v_yaw", "speed", "nn_plane", "distance"]:
+    for column in [
+        "x",
+        "y",
+        "yaw",
+        "width",
+        "length",
+        "bev_area",
+        "vx",
+        "vy",
+        "v_yaw",
+        "speed",
+        "nn_plane",
+        "distance",
+    ]:
         analyzer.plot_error(
             mode=PlotAxes.FRAME,
             columns=column,
