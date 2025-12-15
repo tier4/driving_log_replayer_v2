@@ -172,6 +172,7 @@ def get_df(
 def plot(
     analyzer: PerceptionAnalyzer3D,
 ) -> None:
+    """Plot evaluation results."""
     for column in [
         "x",
         "y",
