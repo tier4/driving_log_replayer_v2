@@ -30,3 +30,26 @@ def test_load_perception_config() -> None:
         "planning": "false",
         "control": "false",
     }
+
+
+def test_load_open_loop_trajectory_config() -> None:
+    module_name = "driving_log_replayer_v2.launch.open_loop_trajectory"
+    launch_config = import_module(module_name)
+    # Check RECORD_TOPIC contains expected topics
+    assert "^/tf$" in launch_config.RECORD_TOPIC
+    assert "^/tf_static$" in launch_config.RECORD_TOPIC
+    assert "^/diagnostics$" in launch_config.RECORD_TOPIC
+    assert "^/localization/kinematic_state$" in launch_config.RECORD_TOPIC
+    assert "^/planning/trajectory_generator/.*" in launch_config.RECORD_TOPIC
+    # Check AUTOWARE_DISABLE
+    assert launch_config.AUTOWARE_DISABLE == {
+        "localization": "false",
+        "perception": "false",
+        "control": "false",
+    }
+    # Check AUTOWARE_ARGS
+    assert launch_config.AUTOWARE_ARGS == {"use_aeb_autoware_state_check": "false"}
+    # Check NODE_PARAMS is empty dict
+    assert launch_config.NODE_PARAMS == {}
+    # Check USE_CASE_ARGS is empty list
+    assert launch_config.USE_CASE_ARGS == []

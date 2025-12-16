@@ -1,0 +1,13 @@
+ScenarioFormatVersion: 3.0.0
+ScenarioName: sample_open_loop_trajectory
+ScenarioDescription: sample open loop trajectory evaluation
+SensorModel: aip_xx1
+VehicleModel: lexus
+Evaluation:
+  UseCaseName: open_loop_trajectory
+  UseCaseFormatVersion: 2.0.0
+  Datasets:
+    - sample_dataset:
+        VehicleId: default
+  Conditions:
+    ControlConditions: null
