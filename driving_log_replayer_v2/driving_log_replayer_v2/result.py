@@ -15,6 +15,8 @@
 from abc import ABC
 from abc import abstractmethod
 from dataclasses import dataclass
+from dataclasses import field
+from dataclasses import fields
 from os.path import expandvars
 from pathlib import Path
 import pickle
@@ -23,6 +25,8 @@ from typing import TYPE_CHECKING
 from typing import TypeVar
 
 from ament_index_python.packages import get_package_share_directory
+import matplotlib.pyplot as plt
+import matplotlib.ticker as mticker
 from pydantic import BaseModel
 from rclpy.clock import Clock
 from rclpy.clock import ClockType
@@ -251,3 +255,87 @@ class MultiResultEditor:
 
 
 ResultBaseType = TypeVar("ResultBaseType", bound=ResultBase)
+
+
+@dataclass
+class AnalysisData:
+    success: list[int] = field(default_factory=list)
+
+    def append(self, data: dict) -> None:
+        self.success.append(int(data["Result"]["Success"]))
+
+    def get_num_analyses(self) -> int:
+        return len(fields(self))
+
+    def get_analysis_names(self) -> list[str]:
+        return [field.name for field in fields(self)]
+
+    def get_success_config(self) -> dict[str, str]:
+        return {
+            "show": "step",
+            "axes": {
+                "title": "Success over Timestamp",
+                "xlabel": "Timestamp [s]",
+                "ylabel": "Success",
+                "ylim": (0.0, 1.0),
+                "yticks": [0, 1],
+            },
+            "plot": {
+                "where": "post",
+                "linewidth": 3,
+            },
+        }
+
+
+class ResultParser:
+    def __init__(self, result_jsonl_path: str | Path, output_path: str | Path) -> None:
+        self._result_jsonl_path = Path(expandvars(result_jsonl_path))
+        self._output_path = Path(expandvars(output_path))
+        self._timestamp: list[float] = []
+        self._data: AnalysisData = AnalysisData()
+
+    def parse_results(self) -> None:
+        with self._result_jsonl_path.open("r") as result_file:
+            for line in result_file:
+                result_data = json.loads(line)
+                self._run_by_line(result_data)
+        self._run_on_post_process()
+
+    def _run_by_line(self, result_data: dict) -> None:
+        if set(result_data.keys()) != {"Result", "Stamp", "Frame"}:
+            return
+        if "ROS" not in result_data["Stamp"]:
+            return
+        self._timestamp.append(result_data["Stamp"]["ROS"])
+        self._data.append(result_data)
+
+    def _run_on_post_process(self) -> None:
+        num_analyses = self._data.get_num_analyses()
+        analyses = self._data.get_analysis_names()
+        fig = plt.figure(figsize=(8 * num_analyses, 8))
+
+        for index, analysis in enumerate(analyses):
+            config = getattr(self._data, f"get_{analysis}_config")()
+            # create axes
+            axes = fig.add_subplot(
+                1,  # nrows
+                num_analyses,  # ncols
+                index + 1,  # index
+                **config["axes"],
+            )
+            # plot data
+            getattr(axes, config["show"])(
+                self._timestamp,
+                getattr(self._data, analysis),
+                label=analysis,
+                **config["plot"],
+            )
+            # set x axis format
+            axes.ticklabel_format(style="plain", axis="x", useOffset=False)
+            axes.xaxis.set_major_locator(mticker.MaxNLocator(6, integer=True))
+
+        fig.suptitle("Driving Log Replayer V2 Result Analysis")
+        fig.legend()
+        fig.tight_layout()
+        fig.savefig(self._output_path.joinpath("result_jsonl.png"))
+        plt.close()

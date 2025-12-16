@@ -29,6 +29,7 @@ from driving_log_replayer_v2.post_process.evaluator import FrameResult
 from driving_log_replayer_v2.post_process.ros2_utils import RosBagManager
 from driving_log_replayer_v2.result import MultiResultEditor
 from driving_log_replayer_v2.result import ResultBaseType
+from driving_log_replayer_v2.result import ResultParser
 from driving_log_replayer_v2.result import ResultWriter
 from driving_log_replayer_v2.scenario import load_scenario_with_exception
 from driving_log_replayer_v2.scenario import ScenarioType
@@ -157,6 +158,8 @@ class Runner(ABC):
         self._use_cases: UseCaseDict[str, UseCase]
         self._degradation_topics: list[str]
         self._rosbag_manager: RosBagManager
+        self._result_json_path = result_json_path
+        self._result_archive_path = result_archive_path
 
         # load scenario
         scenario = load_scenario_with_exception(
@@ -266,6 +269,11 @@ class Runner(ABC):
         self._close()
         self._merge_results()
         if self._enable_analysis == "true":
+            result_parser = ResultParser(
+                Path(self._result_json_path + "l"),
+                Path(self._result_archive_path),
+            )
+            result_parser.parse_results()
             self._analysis()
 
     def _evaluate_frame(
