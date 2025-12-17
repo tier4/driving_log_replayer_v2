@@ -223,6 +223,7 @@ class RosBagManager:
             data_frame["max"] = data_frame[timestamp_columns].max(axis=1)
             data_frame["min"] = data_frame[timestamp_columns].min(axis=1)
             data_frame["percentile_99"] = data_frame[timestamp_columns].quantile(0.99, axis=1)
+            data_frame["percentile_95"] = data_frame[timestamp_columns].quantile(0.95, axis=1)
         data_frame.to_csv(
             Path(self._writer_storage_options.uri).parent / "processing_time.csv", index=False
         )
