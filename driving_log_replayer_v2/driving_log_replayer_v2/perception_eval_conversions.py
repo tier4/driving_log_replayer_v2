@@ -220,7 +220,7 @@ class ScoresData:
 def dynamic_objects_to_ros_points(
     obj: DynamicObjectWithPerceptionResult | DynamicObject,
     header: Header,
-    scale: Vector3,
+    score_scale: Vector3,
     color: ColorRGBA,
     namespace: str,
     cnt: int,
@@ -244,6 +244,11 @@ def dynamic_objects_to_ros_points(
                         z=obj.ground_truth_object.state.orientation[3],
                     ),
                 )
+                obj_scale = Vector3(
+                    x=obj.ground_truth_object.state.size[1],
+                    y=obj.ground_truth_object.state.size[0],
+                    z=obj.ground_truth_object.state.size[2],
+                )
             # skip showing scores for gt objects
             scores = ScoresData(
                 center_distance=None,
@@ -265,6 +270,11 @@ def dynamic_objects_to_ros_points(
                     y=obj.estimated_object.state.orientation[2],
                     z=obj.estimated_object.state.orientation[3],
                 ),
+            )
+            obj_scale = Vector3(
+                x=obj.estimated_object.state.size[1],
+                y=obj.estimated_object.state.size[0],
+                z=obj.estimated_object.state.size[2],
             )
 
             # show the matching scores only tp objects by estimated object and fp objects
@@ -294,6 +304,11 @@ def dynamic_objects_to_ros_points(
                 z=obj.state.orientation[3],
             ),
         )
+        obj_scale = Vector3(
+            x=obj.state.size[1],
+            y=obj.state.size[0],
+            z=obj.state.size[2],
+        )
         # skip showing scores for DynamicObject because they do not have scores
         scores = ScoresData(
             center_distance=None,
@@ -311,7 +326,7 @@ def dynamic_objects_to_ros_points(
         action=Marker.ADD,
         lifetime=Duration(seconds=0.2).to_msg(),
         pose=pose,
-        scale=scale,
+        scale=obj_scale,
         color=color,
     )
 
@@ -323,7 +338,7 @@ def dynamic_objects_to_ros_points(
         action=Marker.ADD,
         lifetime=Duration(seconds=0.2).to_msg(),
         pose=pose,
-        scale=scale,
+        scale=score_scale,
         color=color,
         text=str(scores),
     )
@@ -333,7 +348,7 @@ def dynamic_objects_to_ros_points(
 
 def pass_fail_result_to_ros_points_array(pass_fail: PassFailResult, header: Header) -> MarkerArray:
     marker_results = MarkerArray()
-    scale = Vector3(x=0.4, y=0.4, z=0.8)
+    score_scale = Vector3(x=0.4, y=0.4, z=0.8)
 
     if objs := pass_fail.tp_object_results:
         # estimated obj
@@ -341,7 +356,7 @@ def pass_fail_result_to_ros_points_array(pass_fail: PassFailResult, header: Head
             result, score_text = dynamic_objects_to_ros_points(
                 obj,
                 header,
-                scale,
+                score_scale,
                 ColorRGBA(r=0.0, g=0.0, b=1.0, a=0.7),
                 "tp_est",
                 cnt,
@@ -355,7 +370,7 @@ def pass_fail_result_to_ros_points_array(pass_fail: PassFailResult, header: Head
             result, score_text = dynamic_objects_to_ros_points(
                 obj,
                 header,
-                scale,
+                score_scale,
                 ColorRGBA(r=1.0, g=0.0, b=0.0, a=0.7),
                 "tp_gt",
                 cnt,
@@ -369,7 +384,7 @@ def pass_fail_result_to_ros_points_array(pass_fail: PassFailResult, header: Head
             result, score_text = dynamic_objects_to_ros_points(
                 obj,
                 header,
-                scale,
+                score_scale,
                 ColorRGBA(r=0.0, g=1.0, b=1.0, a=0.7),
                 "fp",
                 cnt,
@@ -383,7 +398,7 @@ def pass_fail_result_to_ros_points_array(pass_fail: PassFailResult, header: Head
             result, score_text = dynamic_objects_to_ros_points(
                 obj,
                 header,
-                scale,
+                score_scale,
                 ColorRGBA(r=1.0, g=0.5, b=0.0, a=0.7),
                 "fn",
                 cnt,
