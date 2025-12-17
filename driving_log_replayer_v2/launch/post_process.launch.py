@@ -211,6 +211,7 @@ def post_process(context: LaunchContext) -> list:  # noqa: C901, PLR0911
             "autoware_planning_data_analyzer",
             "planning_data_analyzer.launch.xml",
             f"bag_path:={conf['result_bag_path']}/result_bag_0.mcap",
+            f"output_dir:=/{conf['result_archive_path']}",
         ]
 
         time_step_analysis = ExecuteProcess(
