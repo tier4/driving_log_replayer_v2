@@ -33,7 +33,7 @@ RECORD_TOPIC = """^/tf$\
 |^/driving_log_replayer/.*$\
 |^/api/.*/get/.*$\
 |^/awapi/.*/get/.*$\
-|^/planning/trajectory_generator/.*$\
+|^/planning/generator/.*$\
 |^/planning/trajectory$\
 |^/planning/mission_planning/route\
 """
