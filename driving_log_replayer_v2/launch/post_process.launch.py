@@ -15,9 +15,11 @@
 from os.path import expandvars
 from pathlib import Path
 import shutil
+from typing import TYPE_CHECKING
 
 from launch import LaunchContext
 from launch import LaunchDescription
+from launch.actions import ExecuteLocal
 from launch.actions import ExecuteProcess
 from launch.actions import LogInfo
 from launch.actions import OpaqueFunction
@@ -34,6 +36,10 @@ from driving_log_replayer_v2.launch.argument import ensure_arg_compatibility
 from driving_log_replayer_v2.launch.argument import get_launch_arguments
 from driving_log_replayer_v2.perception.runner import evaluate as evaluate_perception
 from driving_log_replayer_v2.result import MultiResultEditor
+from driving_log_replayer_v2.result import ResultAnalyzer
+
+if TYPE_CHECKING:
+    from launch.action import Action
 
 
 def check_and_create_metadata_yaml(conf: dict) -> None:
@@ -58,9 +64,11 @@ def check_and_create_metadata_yaml(conf: dict) -> None:
     Reindexer().reindex(storage_options)
 
 
-def post_process(context: LaunchContext) -> list:  # noqa: C901, PLR0911
+def post_process(context: LaunchContext) -> list:  # noqa: C901, PLR0915, PLR0912
     conf = context.launch_configurations
     check_and_create_metadata_yaml(conf)
+    process_list = []
+    last_action: Action | None = None
 
     if conf["use_case"] == "localization":
         if conf["enable_analysis"] != "true":
@@ -99,13 +107,15 @@ def post_process(context: LaunchContext) -> list:  # noqa: C901, PLR0911
                 on_exit=[localization_update_jsonl],
             )
         )
-        return [
-            LogInfo(msg="run localization analysis."),
-            localization_analysis,
-            localization_update_event_handler,
-        ]
-
-    if conf["use_case"] == "perception":
+        process_list.extend(
+            [
+                LogInfo(msg="run localization analysis."),
+                localization_analysis,
+                localization_update_event_handler,
+            ]
+        )
+        last_action = localization_update_jsonl
+    elif conf["use_case"] == "perception":
         absolute_result_json_path = Path(
             expandvars(context.launch_configurations["result_json_path"])
         )
@@ -140,12 +150,16 @@ def post_process(context: LaunchContext) -> list:  # noqa: C901, PLR0911
             )
             return [LogInfo(msg="perception post process finished.")]
 
-        return [
-            LogInfo(msg="run perception analysis."),
-            OpaqueFunction(function=_run_perception_and_replace_rosbag),
-        ]
+        perception_action = OpaqueFunction(function=_run_perception_and_replace_rosbag)
+        process_list.extend(
+            [
+                LogInfo(msg="run perception analysis."),
+                perception_action,
+            ]
+        )
+        last_action = perception_action
 
-    if conf["use_case"] == "ground_segmentation":
+    elif conf["use_case"] == "ground_segmentation":
         absolute_result_json_path = Path(
             expandvars(context.launch_configurations["result_json_path"])
         )
@@ -176,12 +190,16 @@ def post_process(context: LaunchContext) -> list:  # noqa: C901, PLR0911
             )
             return [LogInfo(msg="ground_segmentation post process finished.")]
 
-        return [
-            LogInfo(msg="run ground_segmentation analysis."),
-            OpaqueFunction(function=_run_ground_segmentation),
-        ]
+        ground_segmentation_action = OpaqueFunction(function=_run_ground_segmentation)
+        process_list.extend(
+            [
+                LogInfo(msg="run ground_segmentation analysis."),
+                ground_segmentation_action,
+            ]
+        )
+        last_action = ground_segmentation_action
 
-    if conf["use_case"] == "planning_control":
+    elif conf["use_case"] == "planning_control":
         # merge diagnostic result.jsonl
         diag_result_path = Path(conf["result_archive_path"]).joinpath("diag_result.jsonl")
         planning_factor_result_path = Path(conf["result_archive_path"]).joinpath(
@@ -198,12 +216,45 @@ def post_process(context: LaunchContext) -> list:  # noqa: C901, PLR0911
             result_paths.append(metric_result_path.as_posix())
 
         if len(result_paths) == 1:
-            return [LogInfo(msg="No additional result.jsonl found. Abort merging result.jsonl")]
+            process_list.append(
+                LogInfo(msg="No additional result.jsonl found. Abort merging result.jsonl")
+            )
+        else:
+            multi_result_editor = MultiResultEditor(result_paths)
+            multi_result_editor.write_back_result()
+            process_list.append(LogInfo(msg="Merge results"))
 
-        multi_result_editor = MultiResultEditor(result_paths)
-        multi_result_editor.write_back_result()
-        return [LogInfo(msg="Merge results")]
-    return [LogInfo(msg="No post-processing is performed.")]
+    def _run_analyze_results(context: LaunchContext) -> list:
+        result_analyzer = ResultAnalyzer(
+            Path(context.launch_configurations["result_json_path"] + "l"),
+            Path(context.launch_configurations["result_archive_path"]),
+        )
+        result_analyzer.analyze_results()
+        return [LogInfo(msg="analyze results finished.")]
+
+    if isinstance(last_action, ExecuteLocal):
+        process_list.append(
+            RegisterEventHandler(
+                OnProcessExit(
+                    target_action=last_action,
+                    on_exit=[
+                        LogInfo(msg="start analyzing results."),
+                        OpaqueFunction(function=_run_analyze_results),
+                    ],
+                )
+            )
+        )
+    elif isinstance(last_action, OpaqueFunction):
+        # NOTE: OpaqueFunction blocks the launch thread so seems to guarantee the execution order.
+        process_list.extend(
+            [LogInfo(msg="start analyzing results."), OpaqueFunction(function=_run_analyze_results)]
+        )
+    else:
+        process_list.extend(
+            [LogInfo(msg="start analyzing results."), OpaqueFunction(function=_run_analyze_results)]
+        )
+
+    return process_list
 
 
 def generate_launch_description() -> LaunchDescription:
