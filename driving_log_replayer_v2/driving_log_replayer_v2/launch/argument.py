@@ -246,7 +246,7 @@ def update_conf_with_dataset_info(
         "all_components",
         "perception",
         "ground_segmentation",
-        "open_loop_trajectory",
+        "timestep_based_trajectory",
     ]:
         conf["record_only"] = "true"
 

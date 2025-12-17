@@ -44,7 +44,7 @@ AUTOWARE_DISABLE = {
     "control": "false",
 }
 
-AUTOWARE_ARGS = {"use_aeb_autoware_state_check": "false"}
+AUTOWARE_ARGS = {}
 
 NODE_PARAMS: dict[str, LaunchConfiguration] = {}
 

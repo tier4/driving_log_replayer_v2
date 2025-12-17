@@ -20,15 +20,15 @@ from driving_log_replayer_v2.scenario import Scenario
 
 
 class Conditions(BaseModel):
-    ControlConditions: list | None = None
+    control_conditions: list | None = None
 
 
 class Evaluation(BaseModel):
-    UseCaseName: Literal["open_loop_trajectory"]
-    UseCaseFormatVersion: Literal["2.0.0"]
+    UseCaseName: Literal["timestep_based_trajectory"]
+    UseCaseFormatVersion: Literal["0.1.0"]
     Conditions: Conditions
     Datasets: list[dict]
 
 
-class OpenLoopTrajectoryScenario(Scenario):
+class TimestepBasedTrajectoryScenario(Scenario):
     Evaluation: Evaluation
