@@ -334,6 +334,7 @@ class ResultAnalyzer:
     def __init__(self, result_jsonl_path: str | Path, output_path: str | Path) -> None:
         self._result_jsonl_path = Path(expandvars(result_jsonl_path))
         self._output_path = Path(expandvars(output_path))
+        self._output_path.mkdir(parents=True, exist_ok=True)
         self._timestamp: list[float] = []
         self._data: AnalysisDataCollection = AnalysisDataCollection()
 

@@ -224,6 +224,30 @@ def post_process(context: LaunchContext) -> list:  # noqa: C901, PLR0915, PLR091
             multi_result_editor.write_back_result()
             process_list.append(LogInfo(msg="Merge results"))
 
+    elif conf["use_case"] == "time_step_based_trajectory":
+        # This use_case is record_only so not create result_archive directory.
+        Path(conf["result_archive_path"]).mkdir(parents=True, exist_ok=True)
+        time_step_analysis_cmd = [
+            "ros2",
+            "launch",
+            "autoware_planning_data_analyzer",
+            "planning_data_analyzer.launch.xml",
+            f"bag_path:={conf['result_bag_path']}/result_bag_0.mcap",
+            f"output_dir:={conf['result_archive_path']}",
+        ]
+
+        time_step_analysis = ExecuteProcess(
+            cmd=time_step_analysis_cmd, output="screen", name="time_step_analysis"
+        )
+
+        process_list.extend(
+            [
+                LogInfo(msg="run time_step_based_trajectory analysis."),
+                time_step_analysis,
+            ]
+        )
+        last_action = time_step_analysis
+
     def _run_analyze_results(context: LaunchContext) -> list:
         result_analyzer = ResultAnalyzer(
             Path(context.launch_configurations["result_json_path"] + "l"),
