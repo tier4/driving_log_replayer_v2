@@ -12,26 +12,26 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from driving_log_replayer_v2.timestep_based_trajectory import TimestepBasedTrajectoryScenario
 from driving_log_replayer_v2.scenario import load_sample_scenario
+from driving_log_replayer_v2.time_step_based_trajectory import TimeStepBasedTrajectoryScenario
 
 
 def test_scenario() -> None:
-    scenario: TimestepBasedTrajectoryScenario = load_sample_scenario(
-        "timestep_based_trajectory",
-        TimestepBasedTrajectoryScenario,
+    scenario: TimeStepBasedTrajectoryScenario = load_sample_scenario(
+        "time_step_based_trajectory",
+        TimeStepBasedTrajectoryScenario,
     )
-    assert scenario.ScenarioName == "sample_timestep_based_trajectory"
-    assert scenario.Evaluation.UseCaseName == "timestep_based_trajectory"
+    assert scenario.ScenarioName == "sample_time_step_based_trajectory"
+    assert scenario.Evaluation.UseCaseName == "time_step_based_trajectory"
     assert scenario.Evaluation.UseCaseFormatVersion == "0.1.0"
-    assert scenario.Evaluation.Conditions.ControlConditions is None
+    assert scenario.Evaluation.Conditions.control_conditions is None
 
 
 def test_scenario_with_empty_conditions() -> None:
-    """Test that ControlConditions can be None or empty list."""
-    scenario: TimestepBasedTrajectoryScenario = load_sample_scenario(
-        "timestep_based_trajectory",
-        TimestepBasedTrajectoryScenario,
+    """Test that control_conditions can be None or empty list."""
+    scenario: TimeStepBasedTrajectoryScenario = load_sample_scenario(
+        "time_step_based_trajectory",
+        TimeStepBasedTrajectoryScenario,
     )
-    # Verify that None is acceptable for ControlConditions
-    assert scenario.Evaluation.Conditions.ControlConditions is None
+    # Verify that None is acceptable for control_conditions
+    assert scenario.Evaluation.Conditions.control_conditions is None

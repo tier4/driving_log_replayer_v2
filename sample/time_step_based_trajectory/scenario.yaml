@@ -1,10 +1,10 @@
 ScenarioFormatVersion: 3.1.0
-ScenarioName: sample_timestep_based_trajectory
-ScenarioDescription: sample open loop timestep based trajectory evaluation
+ScenarioName: sample_time_step_based_trajectory
+ScenarioDescription: sample open loop time step based trajectory evaluation
 SensorModel: aip_xx1
 VehicleModel: lexus
 Evaluation:
-  UseCaseName: timestep_based_trajectory
+  UseCaseName: time_step_based_trajectory
   UseCaseFormatVersion: 0.1.0
   Datasets:
     - sample_dataset:

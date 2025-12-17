@@ -24,11 +24,11 @@ class Conditions(BaseModel):
 
 
 class Evaluation(BaseModel):
-    UseCaseName: Literal["timestep_based_trajectory"]
+    UseCaseName: Literal["time_step_based_trajectory"]
     UseCaseFormatVersion: Literal["0.1.0"]
     Conditions: Conditions
     Datasets: list[dict]
 
 
-class TimestepBasedTrajectoryScenario(Scenario):
+class TimeStepBasedTrajectoryScenario(Scenario):
     Evaluation: Evaluation
