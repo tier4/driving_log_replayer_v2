@@ -14,6 +14,7 @@
 
 from abc import ABC
 from abc import abstractmethod
+from collections.abc import Iterator
 from dataclasses import dataclass
 from dataclasses import field
 from dataclasses import fields
@@ -258,21 +259,36 @@ ResultBaseType = TypeVar("ResultBaseType", bound=ResultBase)
 
 
 @dataclass
-class AnalysisData:
-    success: list[int] = field(default_factory=list)
+class AnalysisData(ABC):
+    data: list[Any] = field(default_factory=list)
+
+    # TODO: Define the type of data(=line in result.jsonl) more specifically.
+    @abstractmethod
+    def append(self, data: dict) -> None:
+        raise NotImplementedError
+
+    @abstractmethod
+    def get_plot_config(self) -> dict[str, str]:
+        raise NotImplementedError
+
+    @property
+    def name(self) -> str:
+        return self.__class__.__name__
+
+
+AnalysisDataType = TypeVar("AnalysisDataType", bound=AnalysisData)
+
+
+@dataclass
+class Success(AnalysisData):
+    data: list[int] = field(default_factory=list)
 
     def append(self, data: dict) -> None:
-        self.success.append(int(data["Result"]["Success"]))
+        self.data.append(int(data["Result"]["Success"]))
 
-    def get_num_analyses(self) -> int:
-        return len(fields(self))
-
-    def get_analysis_names(self) -> list[str]:
-        return [field.name for field in fields(self)]
-
-    def get_success_config(self) -> dict[str, str]:
+    def get_plot_config(self) -> dict[str, str]:
         return {
-            "show": "step",
+            "method": "step",
             "axes": {
                 "title": "Success over Timestamp",
                 "xlabel": "Timestamp [s]",
@@ -287,14 +303,30 @@ class AnalysisData:
         }
 
 
-class ResultParser:
+@dataclass
+class AnalysisDataCollection:
+    success: Success = field(default_factory=Success)
+
+    def append(self, data: dict) -> None:
+        for analysis in fields(self):
+            getattr(self, analysis.name).append(data)
+
+    def get_num_analyses(self) -> int:
+        return len(fields(self))
+
+    def __iter__(self) -> Iterator[AnalysisDataType]:
+        for analysis in fields(self):
+            yield getattr(self, analysis.name)
+
+
+class ResultAnalyzer:
     def __init__(self, result_jsonl_path: str | Path, output_path: str | Path) -> None:
         self._result_jsonl_path = Path(expandvars(result_jsonl_path))
         self._output_path = Path(expandvars(output_path))
         self._timestamp: list[float] = []
-        self._data: AnalysisData = AnalysisData()
+        self._data: AnalysisDataCollection = AnalysisDataCollection()
 
-    def parse_results(self) -> None:
+    def analyze_results(self) -> None:
         with self._result_jsonl_path.open("r") as result_file:
             for line in result_file:
                 result_data = json.loads(line)
@@ -311,11 +343,10 @@ class ResultParser:
 
     def _run_on_post_process(self) -> None:
         num_analyses = self._data.get_num_analyses()
-        analyses = self._data.get_analysis_names()
         fig = plt.figure(figsize=(8 * num_analyses, 8))
 
-        for index, analysis in enumerate(analyses):
-            config = getattr(self._data, f"get_{analysis}_config")()
+        for index, analysis in enumerate(self._data):
+            config = analysis.get_plot_config()
             # create axes
             axes = fig.add_subplot(
                 1,  # nrows
@@ -324,10 +355,10 @@ class ResultParser:
                 **config["axes"],
             )
             # plot data
-            getattr(axes, config["show"])(
+            getattr(axes, config["method"])(
                 self._timestamp,
-                getattr(self._data, analysis),
-                label=analysis,
+                analysis.data,
+                label=analysis.name,
                 **config["plot"],
             )
             # set x axis format

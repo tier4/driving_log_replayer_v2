@@ -28,8 +28,8 @@ from driving_log_replayer_v2.post_process.evaluation_manager import ManagerType
 from driving_log_replayer_v2.post_process.evaluator import FrameResult
 from driving_log_replayer_v2.post_process.ros2_utils import RosBagManager
 from driving_log_replayer_v2.result import MultiResultEditor
+from driving_log_replayer_v2.result import ResultAnalyzer
 from driving_log_replayer_v2.result import ResultBaseType
-from driving_log_replayer_v2.result import ResultParser
 from driving_log_replayer_v2.result import ResultWriter
 from driving_log_replayer_v2.scenario import load_scenario_with_exception
 from driving_log_replayer_v2.scenario import ScenarioType
@@ -269,11 +269,7 @@ class Runner(ABC):
         self._close()
         self._merge_results()
         if self._enable_analysis == "true":
-            result_parser = ResultParser(
-                Path(self._result_json_path + "l"),
-                Path(self._result_archive_path),
-            )
-            result_parser.parse_results()
+            self._analyze_result_jsonl()
             self._analysis()
 
     def _evaluate_frame(
@@ -351,6 +347,14 @@ class Runner(ABC):
         result_paths = [use_case.result_writer.result_path for use_case in self._use_cases.values()]
         multi_result_editor = MultiResultEditor(result_paths)
         multi_result_editor.write_back_result()
+
+    def _analyze_result_jsonl(self) -> None:
+        """Analyze the result jsonl file."""
+        result_analyzer = ResultAnalyzer(
+            Path(self._result_json_path + "l"),
+            Path(self._result_archive_path),
+        )
+        result_analyzer.analyze_results()
 
     @abstractmethod
     def _analysis(self) -> None:
