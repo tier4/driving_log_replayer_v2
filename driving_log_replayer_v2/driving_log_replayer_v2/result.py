@@ -16,8 +16,6 @@ from abc import ABC
 from abc import abstractmethod
 from collections.abc import Iterator
 from dataclasses import dataclass
-from dataclasses import field
-from dataclasses import fields
 from os.path import expandvars
 from pathlib import Path
 import pickle
@@ -26,6 +24,8 @@ from typing import TYPE_CHECKING
 from typing import TypeVar
 
 from ament_index_python.packages import get_package_share_directory
+from matplotlib.axes import Axes
+from matplotlib.figure import Figure
 import matplotlib.pyplot as plt
 import matplotlib.ticker as mticker
 from pydantic import BaseModel
@@ -259,8 +259,15 @@ ResultBaseType = TypeVar("ResultBaseType", bound=ResultBase)
 
 
 @dataclass
+class PlotConfig:
+    method: str
+    axes: dict[str, Any]
+    plot: dict[str, Any]
+
+
 class AnalysisData(ABC):
-    data: list[Any] = field(default_factory=list)
+    def __init__(self) -> None:
+        self._data: list[Any] = []
 
     # TODO: Define the type of data(=line in result.jsonl) more specifically.
     @abstractmethod
@@ -268,58 +275,62 @@ class AnalysisData(ABC):
         raise NotImplementedError
 
     @abstractmethod
-    def get_plot_config(self) -> dict[str, str]:
+    def get_plot_config(self) -> PlotConfig:
         raise NotImplementedError
 
     @property
     def name(self) -> str:
         return self.__class__.__name__
 
+    @property
+    def data(self) -> list[Any]:
+        return self._data
+
 
 AnalysisDataType = TypeVar("AnalysisDataType", bound=AnalysisData)
 
 
-@dataclass
 class Success(AnalysisData):
-    data: list[int] = field(default_factory=list)
-
     def append(self, data: dict) -> None:
-        self.data.append(int(data["Result"]["Success"]))
+        self._data.append(int(data["Result"]["Success"]))
 
-    def get_plot_config(self) -> dict[str, str]:
-        return {
-            "method": "step",
-            "axes": {
+    def get_plot_config(self) -> PlotConfig:
+        return PlotConfig(
+            method="step",
+            axes={
                 "title": "Success over Timestamp",
                 "xlabel": "Timestamp [s]",
                 "ylabel": "Success",
                 "ylim": (0.0, 1.0),
                 "yticks": [0, 1],
             },
-            "plot": {
+            plot={
                 "where": "post",
                 "linewidth": 3,
             },
-        }
+        )
 
 
-@dataclass
 class AnalysisDataCollection:
-    success: Success = field(default_factory=Success)
+    def __init__(self) -> None:
+        self.data: list[AnalysisDataType] = [
+            Success(),
+        ]
 
     def append(self, data: dict) -> None:
-        for analysis in fields(self):
-            getattr(self, analysis.name).append(data)
+        for analysis in self.data:
+            analysis.append(data)
 
-    def get_num_analyses(self) -> int:
-        return len(fields(self))
+    def __len__(self) -> int:
+        return len(self.data)
 
     def __iter__(self) -> Iterator[AnalysisDataType]:
-        for analysis in fields(self):
-            yield getattr(self, analysis.name)
+        return iter(self.data)
 
 
 class ResultAnalyzer:
+    FIG_SIZE = (8, 8)
+
     def __init__(self, result_jsonl_path: str | Path, output_path: str | Path) -> None:
         self._result_jsonl_path = Path(expandvars(result_jsonl_path))
         self._output_path = Path(expandvars(output_path))
@@ -342,8 +353,8 @@ class ResultAnalyzer:
         self._data.append(result_data)
 
     def _run_on_post_process(self) -> None:
-        num_analyses = self._data.get_num_analyses()
-        fig = plt.figure(figsize=(8 * num_analyses, 8))
+        num_analyses = len(self._data)
+        fig = plt.figure(figsize=(self.FIG_SIZE[0] * num_analyses, self.FIG_SIZE[1]))
 
         for index, analysis in enumerate(self._data):
             config = analysis.get_plot_config()
@@ -352,19 +363,23 @@ class ResultAnalyzer:
                 1,  # nrows
                 num_analyses,  # ncols
                 index + 1,  # index
-                **config["axes"],
+                **config.axes,
             )
             # plot data
-            getattr(axes, config["method"])(
+            getattr(axes, config.method)(
                 self._timestamp,
                 analysis.data,
                 label=analysis.name,
-                **config["plot"],
+                **config.plot,
             )
-            # set x axis format
-            axes.ticklabel_format(style="plain", axis="x", useOffset=False)
-            axes.xaxis.set_major_locator(mticker.MaxNLocator(6, integer=True))
+            self._set_x_axis_format(axes)
+        self._set_fig_format(fig)
 
+    def _set_x_axis_format(self, axes: Axes) -> None:
+        axes.ticklabel_format(style="plain", axis="x", useOffset=False)
+        axes.xaxis.set_major_locator(mticker.MaxNLocator(6, integer=True))
+
+    def _set_fig_format(self, fig: Figure) -> None:
         fig.suptitle("Driving Log Replayer V2 Result Analysis")
         fig.legend()
         fig.tight_layout()
