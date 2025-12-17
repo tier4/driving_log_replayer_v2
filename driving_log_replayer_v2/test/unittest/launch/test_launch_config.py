@@ -32,7 +32,7 @@ def test_load_perception_config() -> None:
     }
 
 
-def test_load_timestep_based_trajectory_config() -> None:
+def test_load_time_step_based_trajectory_config() -> None:
     module_name = "driving_log_replayer_v2.launch.time_step_based_trajectory"
     launch_config = import_module(module_name)
     # Check RECORD_TOPIC contains expected topics
