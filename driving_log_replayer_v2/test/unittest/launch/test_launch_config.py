@@ -40,7 +40,7 @@ def test_load_time_step_based_trajectory_config() -> None:
     assert "^/tf_static$" in launch_config.RECORD_TOPIC
     assert "^/diagnostics$" in launch_config.RECORD_TOPIC
     assert "^/localization/kinematic_state$" in launch_config.RECORD_TOPIC
-    assert "^/planning/trajectory_generator/.*" in launch_config.RECORD_TOPIC
+    assert "^/planning/generator/.*" in launch_config.RECORD_TOPIC
     # Check AUTOWARE_DISABLE
     assert launch_config.AUTOWARE_DISABLE == {
         "localization": "false",
