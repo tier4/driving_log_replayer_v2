@@ -44,7 +44,9 @@ AUTOWARE_DISABLE = {
     "control": "false",
 }
 
-AUTOWARE_ARGS = {}
+AUTOWARE_ARGS = {
+    "launch_vehicle_interface": "false",
+}
 
 NODE_PARAMS: dict[str, LaunchConfiguration] = {}
 
