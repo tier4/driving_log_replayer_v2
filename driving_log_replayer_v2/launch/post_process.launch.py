@@ -204,8 +204,8 @@ def post_process(context: LaunchContext) -> list:  # noqa: C901, PLR0911
         multi_result_editor.write_back_result()
         return [LogInfo(msg="Merge results")]
 
-    if conf["use_case"] == "open_loop_trajectory":
-        open_loop_analysis_cmd = [
+    if conf["use_case"] == "time_step_based_trajectory":
+        time_step_analysis_cmd = [
             "ros2",
             "launch",
             "autoware_planning_data_analyzer",
@@ -213,13 +213,13 @@ def post_process(context: LaunchContext) -> list:  # noqa: C901, PLR0911
             f"bag_path:={conf['result_bag_path']}/result_bag_0.mcap",
         ]
 
-        open_loop_analysis = ExecuteProcess(
-            cmd=open_loop_analysis_cmd, output="screen", name="open_loop_analysis"
+        time_step_analysis = ExecuteProcess(
+            cmd=time_step_analysis_cmd, output="screen", name="time_step_analysis"
         )
 
         return [
-            LogInfo(msg="run open_loop_trajectory analysis."),
-            open_loop_analysis,
+            LogInfo(msg="run time_step_based_trajectory analysis."),
+            time_step_analysis,
         ]
 
     return [LogInfo(msg="No post-processing is performed.")]
