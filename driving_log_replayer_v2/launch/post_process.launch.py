@@ -12,13 +12,14 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from dataclasses import dataclass
 from os.path import expandvars
 from pathlib import Path
 import shutil
-from typing import TYPE_CHECKING
 
 from launch import LaunchContext
 from launch import LaunchDescription
+from launch.action import Action
 from launch.actions import ExecuteLocal
 from launch.actions import ExecuteProcess
 from launch.actions import LogInfo
@@ -37,9 +38,6 @@ from driving_log_replayer_v2.launch.argument import get_launch_arguments
 from driving_log_replayer_v2.perception.runner import evaluate as evaluate_perception
 from driving_log_replayer_v2.result import MultiResultEditor
 from driving_log_replayer_v2.result import ResultAnalyzer
-
-if TYPE_CHECKING:
-    from launch.action import Action
 
 
 def check_and_create_metadata_yaml(conf: dict) -> None:
@@ -64,221 +62,235 @@ def check_and_create_metadata_yaml(conf: dict) -> None:
     Reindexer().reindex(storage_options)
 
 
-def post_process(context: LaunchContext) -> list:  # noqa: C901, PLR0915, PLR0912
+@dataclass(frozen=True, slots=True)
+class ProcessInfo:
+    process_list: list[Action]
+    last_action: Action | None
+
+
+def localization(conf: dict[str, str]) -> ProcessInfo:
+    if conf["enable_analysis"] != "true":
+        return ProcessInfo(
+            process_list=[LogInfo(msg="skip localization analysis.")], last_action=None
+        )
+    localization_analysis_cmd = [
+        "ros2",
+        "run",
+        "autoware_localization_evaluation_scripts",
+        "analyze_rosbags_parallel.py",
+        f"{conf['output_dir']}",
+        "--save_dir_relative",
+        "result_archive",
+        "--topic_reference",
+        "/localization/reference_kinematic_state",
+        "--scenario_file",
+        f"{conf['scenario_path']}",
+    ]
+    localization_analysis = ExecuteProcess(
+        cmd=localization_analysis_cmd, output="screen", name="localization_analyze"
+    )
+    localization_update_jsonl_cmd = [
+        "ros2",
+        "run",
+        "driving_log_replayer_v2",
+        "localization_update_result_json.py",
+        f"{conf['output_dir']}/result.jsonl",
+        f"{conf['output_dir']}/result_archive",
+    ]
+    localization_update_jsonl = ExecuteProcess(
+        cmd=localization_update_jsonl_cmd, output="screen", name="localization_update"
+    )
+    localization_update_event_handler = RegisterEventHandler(
+        OnProcessExit(
+            target_action=localization_analysis,
+            on_exit=[localization_update_jsonl],
+        )
+    )
+    return ProcessInfo(
+        process_list=[
+            LogInfo(msg="run localization analysis."),
+            localization_analysis,
+            localization_update_event_handler,
+        ],
+        last_action=localization_update_jsonl,
+    )
+
+
+def perception() -> ProcessInfo:
+    def _run_perception_and_replace_rosbag(context: LaunchContext) -> list:
+        conf = context.launch_configurations
+
+        absolute_result_json_path = Path(expandvars(conf["result_json_path"]))
+        absolute_result_json_path.parent.joinpath(
+            absolute_result_json_path.stem + ".jsonl"
+        ).unlink()
+        evaluate_perception(
+            conf["scenario_path"],
+            conf["result_bag_path"],
+            conf["t4_dataset_path"],
+            conf["result_json_path"],
+            conf["result_archive_path"],
+            conf["storage"],
+            conf["evaluation_detection_topic_regex"],
+            conf["evaluation_tracking_topic_regex"],
+            conf["evaluation_prediction_topic_regex"],
+            conf["degradation_topic"],
+            conf["enable_analysis"],
+            conf["analysis_max_distance"],
+            conf["analysis_distance_interval"],
+        )
+        shutil.rmtree(
+            Path(conf["result_bag_path"]).as_posix(),
+        )
+        shutil.move(
+            Path(conf["result_archive_path"]).joinpath("result_bag").as_posix(),
+            Path(conf["result_bag_path"]).as_posix(),
+        )
+        return [LogInfo(msg="perception post process finished.")]
+
+    perception_action = OpaqueFunction(function=_run_perception_and_replace_rosbag)
+    return ProcessInfo(
+        process_list=[LogInfo(msg="run perception analysis."), perception_action],
+        last_action=perception_action,
+    )
+
+
+def ground_segmentation() -> ProcessInfo:
+    def _run_ground_segmentation(context: LaunchContext) -> list:
+        conf = context.launch_configurations
+
+        absolute_result_json_path = Path(expandvars(conf["result_json_path"]))
+        absolute_result_json_path.parent.joinpath(
+            absolute_result_json_path.stem + ".jsonl"
+        ).unlink()
+        evaluate_ground_segmentation(
+            conf["scenario_path"],
+            conf["result_bag_path"],
+            conf["t4_dataset_path"],
+            conf["result_json_path"],
+            conf["result_archive_path"],
+            conf["storage"],
+            conf["evaluation_topic"],
+            conf["enable_analysis"],
+        )
+        shutil.rmtree(
+            Path(conf["result_bag_path"]).as_posix(),
+        )
+        shutil.move(
+            Path(conf["result_archive_path"]).joinpath("result_bag").as_posix(),
+            Path(conf["result_bag_path"]).as_posix(),
+        )
+        return [LogInfo(msg="ground_segmentation post process finished.")]
+
+    ground_segmentation_action = OpaqueFunction(function=_run_ground_segmentation)
+    return ProcessInfo(
+        process_list=[LogInfo(msg="run ground_segmentation analysis."), ground_segmentation_action],
+        last_action=ground_segmentation_action,
+    )
+
+
+def planning_control(conf: dict[str, str]) -> ProcessInfo:
+    # merge diagnostic result.jsonl
+    diag_result_path = Path(conf["result_archive_path"]).joinpath("diag_result.jsonl")
+    planning_factor_result_path = Path(conf["result_archive_path"]).joinpath(
+        "planning_factor_result.jsonl"
+    )
+    metric_result_path = Path(conf["result_archive_path"]).joinpath("metric_result.jsonl")
+    result_paths = [Path(conf["result_json_path"]).as_posix() + "l"]  # "json + l"
+
+    if diag_result_path.exists():
+        result_paths.append(diag_result_path.as_posix())
+    if planning_factor_result_path.exists():
+        result_paths.append(planning_factor_result_path.as_posix())
+    if metric_result_path.exists():
+        result_paths.append(metric_result_path.as_posix())
+
+    if len(result_paths) == 1:
+        process_list = [LogInfo(msg="No additional result.jsonl found. Abort merging result.jsonl")]
+    else:
+        multi_result_editor = MultiResultEditor(result_paths)
+        multi_result_editor.write_back_result()
+        process_list = [LogInfo(msg="Merge results")]
+
+    return ProcessInfo(process_list=process_list, last_action=None)
+
+
+def time_step_based_trajectory(conf: dict[str, str]) -> ProcessInfo:
+    # This use_case is record_only so not create result_archive directory.
+    Path(conf["result_archive_path"]).mkdir(parents=True, exist_ok=True)
+    time_step_analysis_cmd = [
+        "ros2",
+        "launch",
+        "autoware_planning_data_analyzer",
+        "planning_data_analyzer.launch.xml",
+        f"bag_path:={conf['result_bag_path']}/result_bag_0.mcap",
+        f"output_dir:={conf['result_archive_path']}",
+    ]
+
+    time_step_analysis = ExecuteProcess(
+        cmd=time_step_analysis_cmd, output="screen", name="time_step_analysis"
+    )
+
+    return ProcessInfo(
+        process_list=[LogInfo(msg="run time_step_based_trajectory analysis."), time_step_analysis],
+        last_action=time_step_analysis,
+    )
+
+
+def post_process(context: LaunchContext) -> list:
     conf = context.launch_configurations
     check_and_create_metadata_yaml(conf)
-    process_list = []
-    last_action: Action | None = None
 
     if conf["use_case"] == "localization":
-        if conf["enable_analysis"] != "true":
-            return [LogInfo(msg="skip localization analysis.")]
-        localization_analysis_cmd = [
-            "ros2",
-            "run",
-            "autoware_localization_evaluation_scripts",
-            "analyze_rosbags_parallel.py",
-            f"{conf['output_dir']}",
-            "--save_dir_relative",
-            "result_archive",
-            "--topic_reference",
-            "/localization/reference_kinematic_state",
-            "--scenario_file",
-            f"{conf['scenario_path']}",
-        ]
-        localization_analysis = ExecuteProcess(
-            cmd=localization_analysis_cmd, output="screen", name="localization_analyze"
-        )
-        localization_update_jsonl_cmd = [
-            "ros2",
-            "run",
-            "driving_log_replayer_v2",
-            "localization_update_result_json.py",
-            f"{conf['output_dir']}/result.jsonl",
-            f"{conf['output_dir']}/result_archive",
-        ]
-        localization_update_jsonl = ExecuteProcess(
-            cmd=localization_update_jsonl_cmd, output="screen", name="localization_update"
-        )
-
-        localization_update_event_handler = RegisterEventHandler(
-            OnProcessExit(
-                target_action=localization_analysis,
-                on_exit=[localization_update_jsonl],
-            )
-        )
-        process_list.extend(
-            [
-                LogInfo(msg="run localization analysis."),
-                localization_analysis,
-                localization_update_event_handler,
-            ]
-        )
-        last_action = localization_update_jsonl
+        process_info = localization(conf)
     elif conf["use_case"] == "perception":
-        absolute_result_json_path = Path(
-            expandvars(context.launch_configurations["result_json_path"])
-        )
-
-        def _run_perception_and_replace_rosbag(context: LaunchContext) -> list:
-            absolute_result_json_path.parent.joinpath(
-                absolute_result_json_path.stem + ".jsonl"
-            ).unlink()
-            evaluate_perception(
-                context.launch_configurations["scenario_path"],
-                context.launch_configurations["result_bag_path"],
-                context.launch_configurations["t4_dataset_path"],
-                context.launch_configurations["result_json_path"],
-                context.launch_configurations["result_archive_path"],
-                context.launch_configurations["storage"],
-                context.launch_configurations["evaluation_detection_topic_regex"],
-                context.launch_configurations["evaluation_tracking_topic_regex"],
-                context.launch_configurations["evaluation_prediction_topic_regex"],
-                context.launch_configurations["degradation_topic"],
-                context.launch_configurations["enable_analysis"],
-                context.launch_configurations["analysis_max_distance"],
-                context.launch_configurations["analysis_distance_interval"],
-            )
-            shutil.rmtree(
-                Path(context.launch_configurations["result_bag_path"]).as_posix(),
-            )
-            shutil.move(
-                Path(context.launch_configurations["result_archive_path"])
-                .joinpath("result_bag")
-                .as_posix(),
-                Path(context.launch_configurations["result_bag_path"]).as_posix(),
-            )
-            return [LogInfo(msg="perception post process finished.")]
-
-        perception_action = OpaqueFunction(function=_run_perception_and_replace_rosbag)
-        process_list.extend(
-            [
-                LogInfo(msg="run perception analysis."),
-                perception_action,
-            ]
-        )
-        last_action = perception_action
-
+        process_info = perception()
     elif conf["use_case"] == "ground_segmentation":
-        absolute_result_json_path = Path(
-            expandvars(context.launch_configurations["result_json_path"])
-        )
-
-        def _run_ground_segmentation(context: LaunchContext) -> list:
-            absolute_result_json_path.parent.joinpath(
-                absolute_result_json_path.stem + ".jsonl"
-            ).unlink()
-
-            evaluate_ground_segmentation(
-                context.launch_configurations["scenario_path"],
-                context.launch_configurations["result_bag_path"],
-                context.launch_configurations["t4_dataset_path"],
-                context.launch_configurations["result_json_path"],
-                context.launch_configurations["result_archive_path"],
-                context.launch_configurations["storage"],
-                context.launch_configurations["evaluation_topic"],
-                context.launch_configurations["enable_analysis"],
-            )
-            shutil.rmtree(
-                Path(context.launch_configurations["result_bag_path"]).as_posix(),
-            )
-            shutil.move(
-                Path(context.launch_configurations["result_archive_path"])
-                .joinpath("result_bag")
-                .as_posix(),
-                Path(context.launch_configurations["result_bag_path"]).as_posix(),
-            )
-            return [LogInfo(msg="ground_segmentation post process finished.")]
-
-        ground_segmentation_action = OpaqueFunction(function=_run_ground_segmentation)
-        process_list.extend(
-            [
-                LogInfo(msg="run ground_segmentation analysis."),
-                ground_segmentation_action,
-            ]
-        )
-        last_action = ground_segmentation_action
-
+        process_info = ground_segmentation()
     elif conf["use_case"] == "planning_control":
-        # merge diagnostic result.jsonl
-        diag_result_path = Path(conf["result_archive_path"]).joinpath("diag_result.jsonl")
-        planning_factor_result_path = Path(conf["result_archive_path"]).joinpath(
-            "planning_factor_result.jsonl"
-        )
-        metric_result_path = Path(conf["result_archive_path"]).joinpath("metric_result.jsonl")
-        result_paths = [Path(conf["result_json_path"]).as_posix() + "l"]  # "json + l"
-
-        if diag_result_path.exists():
-            result_paths.append(diag_result_path.as_posix())
-        if planning_factor_result_path.exists():
-            result_paths.append(planning_factor_result_path.as_posix())
-        if metric_result_path.exists():
-            result_paths.append(metric_result_path.as_posix())
-
-        if len(result_paths) == 1:
-            process_list.append(
-                LogInfo(msg="No additional result.jsonl found. Abort merging result.jsonl")
-            )
-        else:
-            multi_result_editor = MultiResultEditor(result_paths)
-            multi_result_editor.write_back_result()
-            process_list.append(LogInfo(msg="Merge results"))
-
+        process_info = planning_control(conf)
     elif conf["use_case"] == "time_step_based_trajectory":
-        # This use_case is record_only so not create result_archive directory.
-        Path(conf["result_archive_path"]).mkdir(parents=True, exist_ok=True)
-        time_step_analysis_cmd = [
-            "ros2",
-            "launch",
-            "autoware_planning_data_analyzer",
-            "planning_data_analyzer.launch.xml",
-            f"bag_path:={conf['result_bag_path']}/result_bag_0.mcap",
-            f"output_dir:={conf['result_archive_path']}",
-        ]
-
-        time_step_analysis = ExecuteProcess(
-            cmd=time_step_analysis_cmd, output="screen", name="time_step_analysis"
-        )
-
-        process_list.extend(
-            [
-                LogInfo(msg="run time_step_based_trajectory analysis."),
-                time_step_analysis,
-            ]
-        )
-        last_action = time_step_analysis
+        process_info = time_step_based_trajectory(conf)
+    else:
+        err_msg = f"Unsupported use_case for post_process: {conf['use_case']}"
+        raise ValueError(err_msg)
 
     def _run_analyze_results(context: LaunchContext) -> list:
+        conf = context.launch_configurations
+
         result_analyzer = ResultAnalyzer(
-            Path(context.launch_configurations["result_json_path"] + "l"),
-            Path(context.launch_configurations["result_archive_path"]),
+            Path(conf["result_json_path"] + "l"),
+            Path(conf["result_archive_path"]),
         )
         result_analyzer.analyze_results()
         return [LogInfo(msg="analyze results finished.")]
 
-    if isinstance(last_action, ExecuteLocal):
-        process_list.append(
+    if isinstance(process_info.last_action, ExecuteLocal):
+        return [
+            *process_info.process_list,
             RegisterEventHandler(
                 OnProcessExit(
-                    target_action=last_action,
+                    target_action=process_info.last_action,
                     on_exit=[
                         LogInfo(msg="start analyzing results."),
                         OpaqueFunction(function=_run_analyze_results),
                     ],
                 )
-            )
-        )
-    elif isinstance(last_action, OpaqueFunction):
+            ),
+        ]
+    if isinstance(process_info.last_action, OpaqueFunction):
         # NOTE: OpaqueFunction blocks the launch thread so seems to guarantee the execution order.
-        process_list.extend(
-            [LogInfo(msg="start analyzing results."), OpaqueFunction(function=_run_analyze_results)]
-        )
-    else:
-        process_list.extend(
-            [LogInfo(msg="start analyzing results."), OpaqueFunction(function=_run_analyze_results)]
-        )
+        return [
+            *process_info.process_list,
+            LogInfo(msg="start analyzing results."),
+            OpaqueFunction(function=_run_analyze_results),
+        ]
 
-    return process_list
+    return [
+        *process_info.process_list,
+        LogInfo(msg="start analyzing results."),
+        OpaqueFunction(function=_run_analyze_results),
+    ]
 
 
 def generate_launch_description() -> LaunchDescription:
