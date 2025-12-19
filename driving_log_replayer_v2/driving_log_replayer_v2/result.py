@@ -258,7 +258,7 @@ class MultiResultEditor:
 ResultBaseType = TypeVar("ResultBaseType", bound=ResultBase)
 
 
-@dataclass
+@dataclass(frozen=True, slots=True)
 class PlotConfig:
     method: str
     axes: dict[str, Any]
