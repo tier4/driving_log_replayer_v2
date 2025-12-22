@@ -2,7 +2,7 @@
 
 Evaluates the self-vehicle trajectories output by Autoware. Currently, no evaluation against specific criteria is performed (TBD). Analysis is conducted solely via `autoware_planning_data_analyzer` in `autoware_tools` during post-processing.
 
-## Arguments Passed to `logging_simulator.launch`
+## Arguments passed to logging_simulator.launch
 
 - perception: false
 - control: false
