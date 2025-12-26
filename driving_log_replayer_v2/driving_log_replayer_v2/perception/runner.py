@@ -120,7 +120,7 @@ class PerceptionRunner(Runner):
         scenario_path: str,
         rosbag_dir_path: str,
         t4_dataset_path: str,
-        result_json_path: str,
+        result_jsonl_path: str,
         result_archive_path: str,
         storage: str,
         evaluation_topics_with_task: dict[str, list[str]],
@@ -138,7 +138,7 @@ class PerceptionRunner(Runner):
             scenario_path,
             rosbag_dir_path,
             t4_dataset_path,
-            result_json_path,
+            result_jsonl_path,
             result_archive_path,
             storage,
             evaluation_topics_with_task,
@@ -151,7 +151,7 @@ class PerceptionRunner(Runner):
         scenario: PerceptionScenario,
         evaluation_topics_with_task: dict[str, list[str]],
         degradation_topic: str,
-        result_json_path: str,
+        result_jsonl_path: str,
         result_archive_path: str,
     ) -> list[UseCaseInfo]:
         use_case_info_list = [
@@ -162,7 +162,7 @@ class PerceptionRunner(Runner):
                 name="perception",
                 evaluation_topics_with_task=evaluation_topics_with_task,
                 degradation_topic=degradation_topic,
-                result_json_path=result_json_path,
+                result_jsonl_path=result_jsonl_path,
             )
         ]
 
@@ -170,7 +170,7 @@ class PerceptionRunner(Runner):
         if scenario.include_use_case is not None:
             pf_conditions = scenario.include_use_case.Conditions.PlanningFactorConditions
             evaluation_topics = [pf_condition.topic for pf_condition in pf_conditions]
-            planning_factor_result_json_path = Path(result_archive_path) / "planning_factor.jsonl"
+            planning_factor_result_jsonl_path = Path(result_archive_path) / "planning_factor.jsonl"
             use_case_info_list.append(
                 UseCaseInfo(
                     evaluation_manager_class=PlanningFactorEvaluationManager,
@@ -179,7 +179,7 @@ class PerceptionRunner(Runner):
                     name="planning_factor",
                     evaluation_topics_with_task={"dummy_task": evaluation_topics},
                     degradation_topic="",
-                    result_json_path=planning_factor_result_json_path,
+                    result_jsonl_path=planning_factor_result_jsonl_path,
                 )
             )
 
@@ -360,7 +360,7 @@ def evaluate(
     scenario_path: str,
     rosbag_dir_path: str,
     t4_dataset_path: str,
-    result_json_path: str,
+    result_jsonl_path: str,
     result_archive_path: str,
     storage: str,
     evaluation_detection_topic_regex: str,
@@ -381,7 +381,7 @@ def evaluate(
         scenario_path,
         rosbag_dir_path,
         t4_dataset_path,
-        result_json_path,
+        result_jsonl_path,
         result_archive_path,
         storage,
         evaluation_topics_with_task,
@@ -404,7 +404,7 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument("--t4-dataset-path", required=True, help="Directory path to t4dataset")
     parser.add_argument(
-        "--result-json-path", required=True, help="Output file path for the result in JSONL format"
+        "--result-jsonl-path", required=True, help="Output file path for the result in JSONL format"
     )
     parser.add_argument(
         "--result-archive-path", required=True, help="Output directory path for the result"
@@ -458,7 +458,7 @@ def main() -> None:
         args.scenario_path,
         args.rosbag_dir_path,
         args.t4_dataset_path,
-        args.result_json_path,
+        args.result_jsonl_path,
         args.result_archive_path,
         args.storage,
         args.evaluation_detection_topic_regex,

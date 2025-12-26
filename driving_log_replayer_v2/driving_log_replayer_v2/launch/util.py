@@ -18,14 +18,13 @@ from pathlib import Path
 import rosbag2_py
 
 
-def output_dummy_result_jsonl(result_json_path_str: str, summary: str = "RecordOnlyMode") -> None:
-    jsonl_path_str = result_json_path_str + "l"
+def output_dummy_result_jsonl(result_jsonl_path_str: str, summary: str = "RecordOnlyMode") -> None:
     dummy_result = {
         "Result": {"Success": True, "Summary": summary},
         "Stamp": {"System": 0.0},
         "Frame": {},
     }
-    with Path(jsonl_path_str).open("w") as f:
+    with Path(result_jsonl_path_str).open("w") as f:
         json.dump(dummy_result, f)
 
 

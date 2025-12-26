@@ -113,11 +113,11 @@ class DummyResult(ResultBase):
 class ResultWriter:
     def __init__(
         self,
-        result_json_path: str,
+        result_jsonl_path: str,
         ros_clock: Clock,
         condition: BaseModel | dict,
     ) -> None:
-        self._result_path = self.create_jsonl_path(result_json_path)
+        self._result_path = self.create_jsonl_path(result_jsonl_path)
         self._result_file = self._result_path.open("w")
         self._ros_clock = ros_clock
         self._system_clock = Clock(clock_type=ClockType.SYSTEM_TIME)
@@ -128,10 +128,10 @@ class ResultWriter:
     def result_path(self) -> Path:
         return self._result_path
 
-    def create_jsonl_path(self, result_json_path: str) -> Path:
+    def create_jsonl_path(self, result_jsonl_path: str) -> Path:
         # For compatibility with previous versions.
         # If a json file name is passed, replace it with the filename + jsonl
-        original_path = Path(expandvars(result_json_path))
+        original_path = Path(expandvars(result_jsonl_path))
         return original_path.parent.joinpath(original_path.stem + ".jsonl")
 
     def close(self) -> None:
