@@ -54,7 +54,7 @@ class DLREvaluatorV2(Node):
         super().__init__(name)
         self.declare_parameter("scenario_path", "")
         self.declare_parameter("t4_dataset_path", "")
-        self.declare_parameter("result_json_path", "")
+        self.declare_parameter("result_jsonl_path", "")
         self.declare_parameter("result_archive_path", "")
         self.declare_parameter("dataset_index", "")
 
@@ -62,8 +62,8 @@ class DLREvaluatorV2(Node):
         self._t4_dataset_paths = [
             self.get_parameter("t4_dataset_path").get_parameter_value().string_value,
         ]
-        self._result_json_path = (
-            self.get_parameter("result_json_path").get_parameter_value().string_value
+        self._result_jsonl_path = (
+            self.get_parameter("result_jsonl_path").get_parameter_value().string_value
         )
         self._result_archive_path = Path(
             self.get_parameter("result_archive_path").get_parameter_value().string_value,
@@ -87,7 +87,7 @@ class DLREvaluatorV2(Node):
                 evaluation_condition = self._scenario.Evaluation.Conditions
 
             self._result_writer = ResultWriter(
-                self._result_json_path,
+                self._result_jsonl_path,
                 self.get_clock(),
                 evaluation_condition,
             )
@@ -101,7 +101,7 @@ class DLREvaluatorV2(Node):
         ) as e:
             self.get_logger().error(f"An error occurred while loading the scenario. {e}")
             self._result_writer = ResultWriter(
-                self._result_json_path,
+                self._result_jsonl_path,
                 self.get_clock(),
                 {},
             )

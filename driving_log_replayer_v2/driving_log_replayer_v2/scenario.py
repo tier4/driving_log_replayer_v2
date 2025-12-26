@@ -66,13 +66,13 @@ ScenarioType = TypeVar("ScenarioType", bound=Scenario)
 
 
 def load_scenario_with_exception(
-    scenario_path: str, scenario_class: ScenarioType, result_json_path: str
+    scenario_path: str, scenario_class: ScenarioType, result_jsonl_path: str
 ) -> ScenarioType:
     try:
         return load_scenario(Path(scenario_path), scenario_class)
     except (FileNotFoundError, PermissionError, yaml.YAMLError, ValidationError) as e:
         result_writer = ResultWriter(
-            result_json_path,
+            result_jsonl_path,
             Clock(),
             {},
         )

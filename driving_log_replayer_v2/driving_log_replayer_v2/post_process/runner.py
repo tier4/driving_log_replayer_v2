@@ -46,7 +46,7 @@ class UseCaseInfo:
         str, list[str]
     ]  # If task is unnecessary, use dummy task name like {"dummy_task": [topic, ...]}
     degradation_topic: str
-    result_json_path: str
+    result_jsonl_path: str
 
 
 @dataclass(frozen=True, slots=True)
@@ -145,7 +145,7 @@ class Runner(ABC):
         scenario_path: str,
         rosbag_dir_path: str,
         t4_dataset_path: str,
-        result_json_path: str,
+        result_jsonl_path: str,
         result_archive_path: str,
         storage: str,
         evaluation_topics_with_task: dict[str, list[str]],
@@ -162,7 +162,7 @@ class Runner(ABC):
         scenario = load_scenario_with_exception(
             scenario_path,
             scenario_class,
-            result_json_path,
+            result_jsonl_path,
         )
 
         # get use case info list
@@ -170,7 +170,7 @@ class Runner(ABC):
             scenario,
             evaluation_topics_with_task,
             degradation_topic,
-            result_json_path,
+            result_jsonl_path,
             result_archive_path,
         )
 
@@ -187,7 +187,7 @@ class Runner(ABC):
                 ),
                 result=use_case_info.result_class(use_case_info.conditions),
                 result_writer=ResultWriter(
-                    use_case_info.result_json_path, Clock(), use_case_info.conditions
+                    use_case_info.result_jsonl_path, Clock(), use_case_info.conditions
                 ),
             )
         self._use_cases = UseCaseDict(
@@ -224,7 +224,7 @@ class Runner(ABC):
         scenario: ScenarioType,
         evaluation_topics_with_task: dict[str, list[str]],
         degradation_topic: str,
-        result_json_path: str,
+        result_jsonl_path: str,
         result_archive_path: str,
     ) -> list[UseCaseInfo]:
         """
@@ -234,8 +234,8 @@ class Runner(ABC):
             scenario (ScenarioType): The scenario object.
             evaluation_topics_with_task (dict[str, list[str]]): Dictionary mapping evaluation topics to their tasks.
             degradation_topic (str): Topic name for degradation information.
-            result_json_path (str): Path to the result json file.
-            result_archive_path (str): Path to the result archive directory. If necessary, use this to create result json path for each use case.
+            result_jsonl_path (str): Path to the result jsonl file.
+            result_archive_path (str): Path to the result archive directory. If necessary, use this to create result jsonl path for each use case.
 
         Returns:
             list[UseCaseInfo]: The list of use case info.
