@@ -2,6 +2,39 @@
 Changelog for package driving_log_replayer
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
+Forthcoming
+-----------
+* feat: remap /initialpose when use pose node (`#286 <https://github.com/tier4/driving_log_replayer_v2/issues/286>`_)
+* refactor: devide the function in post process launch (`#284 <https://github.com/tier4/driving_log_replayer_v2/issues/284>`_)
+* feat: add new feature to evaluate learning based planner (`#280 <https://github.com/tier4/driving_log_replayer_v2/issues/280>`_)
+  * add new feature to evaluate learning based planner
+  * feat: use `record_only` on open_loop_trajectory (`#281 <https://github.com/tier4/driving_log_replayer_v2/issues/281>`_)
+  * feat: use  on open_loop_trajectory
+  * pre-commit
+  ---------
+  * change name to timestep based trajectory
+  * change name to time step based trajectory
+  * missing file
+  * change the name open_loop_trajectory to time_step_based_trajectory
+  * add argument to specify output to result_archive
+  * disable to use launch_vehicle_interface
+  * fix about output directory
+  * fix test
+  * change record topic
+  * fix test
+  ---------
+  Co-authored-by: Masato Saeki <78376491+MasatoSaeki@users.noreply.github.com>
+  Co-authored-by: MasatoSaeki <masato.saeki@tier4.jp>
+* feat: add 95 percentile for processing time (`#283 <https://github.com/tier4/driving_log_replayer_v2/issues/283>`_)
+* feat(result): show the visualization of `result.jsonl` (`#282 <https://github.com/tier4/driving_log_replayer_v2/issues/282>`_)
+  * update
+  * add cspell
+  * refactor
+  * refactor
+  ---------
+* feat(perception): visualize the whole bbox (`#278 <https://github.com/tier4/driving_log_replayer_v2/issues/278>`_)
+* Contributors: Go Sakayori, Masato Saeki
+
 3.14.6 (2025-12-12)
 -------------------
 * fix(planning_factor): more robust time-to-wall against emergency stops (`#276 <https://github.com/tier4/driving_log_replayer_v2/issues/276>`_)

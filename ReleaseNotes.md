@@ -1,5 +1,18 @@
 # Release Notes
 
+## Version 3.15.0
+
+Major changes
+
+| Module                       | Feature       | Brief summary                                      | Pull request                                                        | Contributor                                   |
+| ---------------------------- | ------------- | -------------------------------------------------- | ------------------------------------------------------------------- | --------------------------------------------- |
+| `common`                     | remap         | remap /initialpose when use pose node              | [#286](https://github.com/tier4/driving_log_replayer_v2/issues/286) | [MasatoSaeki](https://github.com/MasatoSaeki) |
+| `post-process`               | refactor      | divide the function in post process launch         | [#284](https://github.com/tier4/driving_log_replayer_v2/issues/284) | [MasatoSaeki](https://github.com/MasatoSaeki) |
+| `time_step_based_trajectory` | algorithm     | add new feature to evaluate learning based planner | [#280](https://github.com/tier4/driving_log_replayer_v2/issues/280) | [go-sakayori](https://github.com/go-sakayori) |
+| `post-process`               | rosbag        | add 95 percentile for processing time              | [#283](https://github.com/tier4/driving_log_replayer_v2/issues/283) | [MasatoSaeki](https://github.com/MasatoSaeki) |
+| `common`                     | result        | show the visualization of `result.jsonl`           | [#282](https://github.com/tier4/driving_log_replayer_v2/issues/282) | [MasatoSaeki](https://github.com/MasatoSaeki) |
+| `perception`                 | visualization | visualize the whole bbox                           | [#278](https://github.com/tier4/driving_log_replayer_v2/issues/278) | [MasatoSaeki](https://github.com/MasatoSaeki) |
+
 ## Version 3.14.6
 
 Minor Tweak
