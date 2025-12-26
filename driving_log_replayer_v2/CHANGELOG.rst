@@ -2,8 +2,8 @@
 Changelog for package driving_log_replayer
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-Forthcoming
------------
+3.15.0 (2025-12-26)
+-------------------
 * feat: remap /initialpose when use pose node (`#286 <https://github.com/tier4/driving_log_replayer_v2/issues/286>`_)
 * refactor: devide the function in post process launch (`#284 <https://github.com/tier4/driving_log_replayer_v2/issues/284>`_)
 * feat: add new feature to evaluate learning based planner (`#280 <https://github.com/tier4/driving_log_replayer_v2/issues/280>`_)
