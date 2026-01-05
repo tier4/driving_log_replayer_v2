@@ -26,8 +26,6 @@ from launch.actions import LogInfo
 from launch.actions import OpaqueFunction
 from launch.actions import RegisterEventHandler
 from launch.event_handlers import OnProcessExit
-from rosbag2_py import Reindexer
-from rosbag2_py import StorageOptions
 
 from driving_log_replayer_v2.ground_segmentation.runner import (
     evaluate as evaluate_ground_segmentation,
@@ -38,28 +36,7 @@ from driving_log_replayer_v2.launch.argument import get_launch_arguments
 from driving_log_replayer_v2.perception.runner import evaluate as evaluate_perception
 from driving_log_replayer_v2.result import MultiResultEditor
 from driving_log_replayer_v2.result import ResultAnalyzer
-
-
-def check_and_create_metadata_yaml(conf: dict) -> None:
-    """
-    For debug.
-
-    Import time
-
-    print("please delete the metadata.yaml file manually to confirm the reindexer is working")  # noqa
-    time.sleep(10)
-    """
-    metadata_path = Path(conf["result_bag_path"]).joinpath("metadata.yaml")
-    if metadata_path.exists():
-        return
-    storage_type = "mcap"
-    db3_bag_path = Path(conf["result_bag_path"]).joinpath("result_bag_0.db3")
-    if db3_bag_path.exists():
-        storage_type = "sqlite3"
-    storage_options = StorageOptions(
-        storage_id=storage_type, uri=Path(conf["result_bag_path"]).as_posix()
-    )
-    Reindexer().reindex(storage_options)
+from driving_log_replayer_v2.rosbag import create_metadata_yaml
 
 
 @dataclass(frozen=True, slots=True)
@@ -239,7 +216,7 @@ def time_step_based_trajectory(conf: dict[str, str]) -> ProcessInfo:
 
 def post_process(context: LaunchContext) -> list:
     conf = context.launch_configurations
-    check_and_create_metadata_yaml(conf)
+    create_metadata_yaml(conf["result_bag_path"])
 
     if conf["use_case"] == "localization":
         process_info = localization(conf)

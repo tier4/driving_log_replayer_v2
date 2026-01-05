@@ -112,7 +112,6 @@ def get_pre_task_before_play_rosbag(
                 {
                     "use_sim_time": False,  # In order to trigger the timer without play rosbag
                     "input_bag": conf["input_bag"],
-                    "storage_type": "sqlite3",  # only sqlite3 is supported in publish_topic_from_rosbag_node
                     "publish_topic_from_rosbag": conf["publish_topic_from_rosbag"],
                 }
             ],

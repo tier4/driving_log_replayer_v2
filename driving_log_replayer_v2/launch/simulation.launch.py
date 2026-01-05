@@ -21,10 +21,12 @@ from driving_log_replayer_v2.launch.argument import ensure_arg_compatibility
 from driving_log_replayer_v2.launch.argument import get_launch_arguments
 from driving_log_replayer_v2.launch.ndt_convergence import launch_ndt_convergence
 from driving_log_replayer_v2.launch.use_case import launch_use_case
+from driving_log_replayer_v2.rosbag import create_metadata_yaml
 
 
 def select_launch(context: LaunchContext) -> list:
     conf = context.launch_configurations
+    create_metadata_yaml(conf["input_bag"])
     if conf["use_case"] == "ndt_convergence":
         return launch_ndt_convergence(context)
     return launch_use_case()
