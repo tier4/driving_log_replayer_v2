@@ -28,15 +28,15 @@ def create_metadata_yaml(bag_path: str) -> None:
     metadata_path = Path(bag_path).joinpath("metadata.yaml")
     if metadata_path.exists():
         return
-    is_mcap = list(Path(bag_path).glob("*.mcap"))
-    is_db3 = list(Path(bag_path).glob("*.db3"))
-    if is_mcap and is_db3:
+    mcap_files = list(Path(bag_path).glob("*.mcap"))
+    db3_files = list(Path(bag_path).glob("*.db3"))
+    if mcap_files and db3_files:
         err_msg = f"Both mcap and sqlite3 files exist in the rosbag directory: {bag_path}"
         raise RuntimeError(err_msg)
     storage_type: str
-    if is_mcap:
+    if mcap_files:
         storage_type = "mcap"
-    elif is_db3:
+    elif db3_files:
         storage_type = "sqlite3"
     else:
         err_msg = f"No rosbag files found in the directory: {bag_path}"
