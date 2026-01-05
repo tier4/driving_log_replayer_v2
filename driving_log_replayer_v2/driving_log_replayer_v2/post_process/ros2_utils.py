@@ -83,7 +83,7 @@ class RosBagManager:
         converter_options = self._get_default_converter_options()
 
         # rosbag reader
-        storage_options = self._get_storage_options(bag_dir, storage_type)
+        storage_options = self._get_storage_options(bag_dir, "")  # Automatically detect storage id
         self._reader = SequentialReader()
         self._reader.open(storage_options, converter_options)
 

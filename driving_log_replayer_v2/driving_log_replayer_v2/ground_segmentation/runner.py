@@ -205,8 +205,9 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--storage",
         required=True,
-        help="Storage type for rosbag2 to read and write",
+        help="Output rosbag storage type mcap or sqlite3",
     )
+
     parser.add_argument(
         "--evaluation-topic",
         default="",

@@ -30,11 +30,9 @@ class PublishTopicFromRosbagNode(Node):
         super().__init__("publish_topic_from_rosbag_node")
 
         self.declare_parameter("input_bag", "")
-        self.declare_parameter("storage_type", "")
         self.declare_parameter("publish_topic_from_rosbag", "")
 
         bag_dir = self.get_parameter("input_bag").get_parameter_value().string_value
-        storage_type = self.get_parameter("storage_type").get_parameter_value().string_value
         topics_with_comma = (
             self.get_parameter("publish_topic_from_rosbag").get_parameter_value().string_value
         )
@@ -45,7 +43,7 @@ class PublishTopicFromRosbagNode(Node):
             rclpy.shutdown()
 
         # load the rosbag
-        self._rosbag_reader = RosbagReader(bag_dir, storage_type, topic_list)
+        self._rosbag_reader = RosbagReader(bag_dir, topic_list)
         topic_name2type = self._rosbag_reader.get_topic_name2type()
 
         # create the publisher

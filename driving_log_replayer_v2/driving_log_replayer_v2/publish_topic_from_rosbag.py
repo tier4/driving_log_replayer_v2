@@ -28,11 +28,11 @@ if TYPE_CHECKING:
 
 
 class RosbagReader:
-    def __init__(self, bag_dir: str, storage_type: str, topic_list: list[str]) -> None:
+    def __init__(self, bag_dir: str, topic_list: list[str]) -> None:
         converter_options = self._get_default_converter_options()
         storage_options = StorageOptions(
             uri=bag_dir,
-            storage_id=storage_type,
+            storage_id="",  # Automatically detect storage id
         )
         self._reader = SequentialReader()
         self._reader.open(storage_options, converter_options)
