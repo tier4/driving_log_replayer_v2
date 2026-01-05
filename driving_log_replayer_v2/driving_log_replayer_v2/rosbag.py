@@ -13,6 +13,7 @@
 # limitations under the License.
 
 from pathlib import Path
+
 from rosbag2_py import Reindexer
 from rosbag2_py import StorageOptions
 
@@ -41,7 +42,5 @@ def create_metadata_yaml(bag_path: str) -> None:
     else:
         err_msg = f"No rosbag files found in the directory: {bag_path}"
         raise RuntimeError(err_msg)
-    storage_options = StorageOptions(
-        storage_id=storage_type, uri=Path(bag_path).as_posix()
-    )
+    storage_options = StorageOptions(storage_id=storage_type, uri=Path(bag_path).as_posix())
     Reindexer().reindex(storage_options)
