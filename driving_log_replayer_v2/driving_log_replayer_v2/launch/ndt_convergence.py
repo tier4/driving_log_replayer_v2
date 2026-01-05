@@ -48,7 +48,7 @@ def launch_ndt_convergence(context: LaunchContext) -> list:
         return [LogInfo(msg="ndt_convergence_evaluation is not launched. The file does not exist.")]
 
     # Output dummies to comply with Evaluator specifications
-    output_dummy_result_jsonl(conf["result_json_path"], summary="NDT Convergence always success")
+    output_dummy_result_jsonl(conf["result_jsonl_path"], summary="NDT Convergence always success")
     output_dummy_result_bag(conf["result_bag_path"], storage_type=conf["storage"])
 
     launch_args = {

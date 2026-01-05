@@ -96,13 +96,13 @@ def launch_evaluator_node(context: LaunchContext) -> list:
     conf = context.launch_configurations
     if conf["record_only"] != "false":
         # output dummy result for Evaluator
-        output_dummy_result_jsonl(conf["result_json_path"])
+        output_dummy_result_jsonl(conf["result_jsonl_path"])
         return [LogInfo(msg="evaluator_node is not launched due to record only mode")]
     params = {
         "use_sim_time": True,
         "scenario_path": conf["scenario_path"],
         "t4_dataset_path": conf["t4_dataset_path"],
-        "result_json_path": conf["result_json_path"],
+        "result_jsonl_path": conf["result_jsonl_path"],
         "result_archive_path": conf["result_archive_path"],
         "dataset_index": conf["dataset_index"],
     }

@@ -237,7 +237,7 @@ def update_conf_with_dataset_info(
         conf["sensor_model"] = yaml_obj["SensorModel"]
     conf["map_path"] = t4_dataset_path.joinpath("map").as_posix()
     conf["input_bag"] = t4_dataset_path.joinpath("input_bag").as_posix()
-    conf["result_json_path"] = output_dir.joinpath("result.json").as_posix()
+    conf["result_jsonl_path"] = output_dir.joinpath("result.jsonl").as_posix()
     conf["result_bag_path"] = output_dir.joinpath("result_bag").as_posix()
     conf["result_archive_path"] = output_dir.joinpath("result_archive").as_posix()
     conf["use_case"] = yaml_obj["Evaluation"]["UseCaseName"]

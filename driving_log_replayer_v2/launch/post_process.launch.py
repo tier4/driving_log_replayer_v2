@@ -70,7 +70,7 @@ def localization(conf: dict[str, str]) -> ProcessInfo:
         "ros2",
         "run",
         "driving_log_replayer_v2",
-        "localization_update_result_json.py",
+        "localization_update_result_jsonl.py",
         f"{conf['output_dir']}/result.jsonl",
         f"{conf['output_dir']}/result_archive",
     ]
@@ -97,15 +97,13 @@ def perception() -> ProcessInfo:
     def _run_perception_and_replace_rosbag(context: LaunchContext) -> list:
         conf = context.launch_configurations
 
-        absolute_result_json_path = Path(expandvars(conf["result_json_path"]))
-        absolute_result_json_path.parent.joinpath(
-            absolute_result_json_path.stem + ".jsonl"
-        ).unlink()
+        absolute_result_jsonl_path = Path(expandvars(conf["result_jsonl_path"]))
+        absolute_result_jsonl_path.unlink()
         evaluate_perception(
             conf["scenario_path"],
             conf["result_bag_path"],
             conf["t4_dataset_path"],
-            conf["result_json_path"],
+            conf["result_jsonl_path"],
             conf["result_archive_path"],
             conf["storage"],
             conf["evaluation_detection_topic_regex"],
@@ -136,15 +134,13 @@ def ground_segmentation() -> ProcessInfo:
     def _run_ground_segmentation(context: LaunchContext) -> list:
         conf = context.launch_configurations
 
-        absolute_result_json_path = Path(expandvars(conf["result_json_path"]))
-        absolute_result_json_path.parent.joinpath(
-            absolute_result_json_path.stem + ".jsonl"
-        ).unlink()
+        absolute_result_jsonl_path = Path(expandvars(conf["result_jsonl_path"]))
+        absolute_result_jsonl_path.unlink()
         evaluate_ground_segmentation(
             conf["scenario_path"],
             conf["result_bag_path"],
             conf["t4_dataset_path"],
-            conf["result_json_path"],
+            conf["result_jsonl_path"],
             conf["result_archive_path"],
             conf["storage"],
             conf["evaluation_topic"],
@@ -173,7 +169,7 @@ def planning_control(conf: dict[str, str]) -> ProcessInfo:
         "planning_factor_result.jsonl"
     )
     metric_result_path = Path(conf["result_archive_path"]).joinpath("metric_result.jsonl")
-    result_paths = [Path(conf["result_json_path"]).as_posix() + "l"]  # "json + l"
+    result_paths = [Path(conf["result_jsonl_path"]).as_posix()]
 
     if diag_result_path.exists():
         result_paths.append(diag_result_path.as_posix())
@@ -236,7 +232,7 @@ def post_process(context: LaunchContext) -> list:
         conf = context.launch_configurations
 
         result_analyzer = ResultAnalyzer(
-            Path(conf["result_json_path"] + "l"),
+            Path(conf["result_jsonl_path"]),
             Path(conf["result_archive_path"]),
         )
         result_analyzer.analyze_results()
