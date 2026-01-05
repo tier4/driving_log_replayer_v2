@@ -1,4 +1,5 @@
 remap:
+  - /tf_static
   - /sensing/lidar/concatenated/pointcloud
   - /perception/obstacle_segmentation/pointcloud
   - /sensing/radar/tracked_objects
