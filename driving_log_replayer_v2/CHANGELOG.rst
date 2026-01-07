@@ -2,6 +2,18 @@
 Changelog for package driving_log_replayer
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
+Forthcoming
+-----------
+* feat!: change the result_json_path to result_jsonl_path (`#288 <https://github.com/tier4/driving_log_replayer_v2/issues/288>`_)
+* feat: support mcap automatically in input (`#289 <https://github.com/tier4/driving_log_replayer_v2/issues/289>`_)
+  * feat: support mcap automatically in input
+  * Update driving_log_replayer_v2/driving_log_replayer_v2/rosbag.py
+  Co-authored-by: Copilot <175728472+Copilot@users.noreply.github.com>
+  * pre-commit
+  ---------
+  Co-authored-by: Copilot <175728472+Copilot@users.noreply.github.com>
+* Contributors: Masato Saeki
+
 3.15.0 (2025-12-26)
 -------------------
 * feat: remap /initialpose when use pose node (`#286 <https://github.com/tier4/driving_log_replayer_v2/issues/286>`_)

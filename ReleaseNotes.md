@@ -1,5 +1,14 @@
 # Release Notes
 
+## Version 3.15.1
+
+Minor Tweak
+
+| Module   | Feature | Brief summary                                    | Pull request                                                        | Contributor                                   |
+| -------- | ------- | ------------------------------------------------ | ------------------------------------------------------------------- | --------------------------------------------- |
+| `common` | result  | change the result_json_path to result_jsonl_path | [#288](https://github.com/tier4/driving_log_replayer_v2/issues/288) | [MasatoSaeki](https://github.com/MasatoSaeki) |
+| `common` | rosbag  | support mcap automatically in input              | [#289](https://github.com/tier4/driving_log_replayer_v2/issues/289) | [MasatoSaeki](https://github.com/MasatoSaeki) |
+
 ## Version 3.15.0
 
 Major changes
