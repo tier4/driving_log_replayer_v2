@@ -37,6 +37,10 @@ RECORD_TOPIC = """^/tf$\
 |^/api/.*/get/.*$\
 |^/api/operation_mode/state$\
 |^/awapi/.*/get/.*\
+|^/sensing/camera/camera.*/image_raw/compressed$\
+|^/sensing/camera/camera.*/camera_info$\
+|^/perception/obstacle_segmentation/pointcloud$\
+|^/perception/object_recognition/detection/rois.*$\
 """
 
 AUTOWARE_DISABLE = {
