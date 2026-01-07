@@ -2,8 +2,8 @@
 Changelog for package driving_log_replayer
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-Forthcoming
------------
+3.15.1 (2026-01-07)
+-------------------
 * feat!: change the result_json_path to result_jsonl_path (`#288 <https://github.com/tier4/driving_log_replayer_v2/issues/288>`_)
 * feat: support mcap automatically in input (`#289 <https://github.com/tier4/driving_log_replayer_v2/issues/289>`_)
   * feat: support mcap automatically in input
