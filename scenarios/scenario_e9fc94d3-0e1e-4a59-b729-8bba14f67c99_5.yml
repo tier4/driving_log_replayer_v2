@@ -1,0 +1,35 @@
+ScenarioFormatVersion: 3.0.0
+ScenarioName: ground_segmentation-sample-test-2
+ScenarioDescription: ground_segmentation-sample_2
+SensorModel: aip_x2_gen2
+VehicleModel: j6_gen2
+Evaluation:
+  UseCaseName: ground_segmentation
+  UseCaseFormatVersion: 0.4.0
+  Datasets:
+    - 2ad1ca45-ec8d-43ee-bcff-491e8434f443:
+        VehicleId: j6_gen2_03
+  Conditions:
+    ground_label:
+      - 1
+    obstacle_label:
+      - 4
+      - 6
+      - 7
+      - 8
+      - 9
+      - 10
+      - 11
+      - 12
+      - 13
+      - 14
+      - 15
+      - 16
+      - 17
+      - 18
+      - 19
+      - 22
+      - 23
+    accuracy_min: 0.4
+    accuracy_max: 1
+    PassRate: 99

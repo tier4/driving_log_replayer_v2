@@ -3,3 +3,5 @@ log/
 *.pyc
 # MkDocs's dir
 site/
+# Scenarios output directory
+scenarios/out/

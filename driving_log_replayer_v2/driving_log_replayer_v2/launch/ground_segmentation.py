@@ -19,6 +19,8 @@ RECORD_TOPIC = """^/tf$\
 |^/diagnostics$"\
 |^/perception/obstacle_segmentation/single_frame/pointcloud$\
 |^/perception/obstacle_segmentation/pointcloud$\
+|^/perception/obstacle_segmentation/frnet/pointcloud$\
+|^/perception/obstacle_segmentation/ptv3/pointcloud$\
 |^/driving_log_replayer/.*\
 """
 
@@ -36,7 +38,7 @@ NODE_PARAMS: dict[str, LaunchConfiguration] = {}
 USE_CASE_ARGS: list[DeclareLaunchArgument] = [
     DeclareLaunchArgument(
         "evaluation_topic",
-        default_value="/perception/obstacle_segmentation/pointcloud",
+        default_value="/perception/obstacle_segmentation/ptv3/pointcloud",
     ),
     DeclareLaunchArgument(
         "enable_analysis",
