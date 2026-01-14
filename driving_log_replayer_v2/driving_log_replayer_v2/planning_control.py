@@ -431,7 +431,7 @@ class PlanningFactor(EvaluationItem):
         if abs(factor_distance) < self.reach_wall_distance_margin:  # already reached the wall
             if abs(factor_velocity - current_velocity) < self.reach_wall_vel_margin:
                 acceleration_to_wall = 0.0
-            else:  # (abnormal) can not meet the target velocity at the wall
+            else:  # (abnormal) cannot meet the target velocity at the wall
                 acceleration_to_wall = (
                     float_info.max if factor_velocity > current_velocity else -float_info.max
                 )
