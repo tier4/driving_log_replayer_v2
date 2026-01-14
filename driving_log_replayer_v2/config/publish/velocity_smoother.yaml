@@ -9,3 +9,4 @@ publish:
   - /planning/scenario_planning/max_velocity
   - /planning/mission_planning/route
   - /system/operation_mode/state
+  - /api/operation_mode/state

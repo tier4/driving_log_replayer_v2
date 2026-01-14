@@ -8,3 +8,4 @@ publish:
   - /planning/scenario_planning/velocity_smoother/trajectory
   - /planning/mission_planning/route
   - /system/operation_mode/state
+  - /api/operation_mode/state

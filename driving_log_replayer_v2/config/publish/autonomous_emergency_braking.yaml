@@ -7,3 +7,4 @@ publish:
   - /sensing/imu/imu_data
   - /vehicle/status/velocity_status
   - /tf
+  - /api/operation_mode/state
