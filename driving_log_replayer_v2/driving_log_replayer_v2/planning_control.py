@@ -311,9 +311,19 @@ class PlanningFactor(EvaluationItem):
                 info_dict_per_factor = {}
                 condition_met_per_factor = True
 
-                factor_distance = factor.control_points[0].distance
-                factor_velocity = factor.control_points[0].velocity
-                factor_pose = factor.control_points[0].pose
+                # find the next control point
+                control_point = next(
+                    (
+                        cp
+                        for cp in factor.control_points
+                        if (cp.distance >= 0 and self.last_stable_state != "BACKWARD")
+                        or (cp.distance <= 0 and self.last_stable_state == "BACKWARD")
+                    ),
+                    factor.control_points[-1],
+                )
+                factor_distance = control_point.distance
+                factor_velocity = control_point.velocity
+                factor_pose = control_point.pose
 
                 if self.condition.area is not None:
                     in_range, info_dict_area = self.judge_in_range(factor_pose)
