@@ -34,6 +34,7 @@ RECORD_TOPIC = """^/tf$\
 |^/system/processing_time_checker/metrics$\
 |^/driving_log_replayer/.*$\
 |^/api/.*/get/.*$\
+|^/api/operation_mode/state$\
 |^/awapi/.*/get/.*\
 """
 

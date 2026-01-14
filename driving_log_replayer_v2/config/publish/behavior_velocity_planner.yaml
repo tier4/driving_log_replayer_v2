@@ -10,3 +10,4 @@ publish:
   - /planning/scenario_planning/lane_driving/behavior_planning/path_with_lane_id
   - /planning/scenario_planning/max_velocity_default
   - /awapi/tmp/virtual_traffic_light_states
+  - /api/operation_mode/state
