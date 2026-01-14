@@ -6,3 +6,4 @@ publish:
   - /perception/obstacle_segmentation/pointcloud
   - /sensing/imu/imu_data
   - /vehicle/status/velocity_status
+  - /tf

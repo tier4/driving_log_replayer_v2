@@ -6,3 +6,4 @@ publish:
   - /localization/acceleration
   - /localization/kinematic_state
   - /planning/trajectory
+  - /tf
