@@ -139,6 +139,9 @@ class PlanningFactorCondition(BaseModel):
     ) = None
     distance: MinMax | None = None  # s of frenet coordinate
     time_to_wall: MinMax | None = None  # time to the next control point with the current velocity
+    acceleration_to_wall: MinMax | None = (
+        None  # needed acceleration to the next control point with the current velocity
+    )
     judgement: Literal["positive", "negative"]  # positive or negative
 
 
@@ -264,7 +267,9 @@ class PlanningFactor(EvaluationItem):
         self.ego_last_stats = deque(maxlen=4)
         self.is_ego_stat_stable = False
         self.last_stable_state = "STOP"
-        self.stop_vel_thr = 0.13889  # 0.5 km/h margin to consider as stop
+        self.stop_vel_thr = 0.13889  # 0.5 [km/h] margin to consider as stop
+        self.reach_wall_vel_margin = 0.55556  # 2[km/h] margin to consider as reaching the wall
+        self.reach_wall_distance_margin = 0.2  # [m] margin to consider as reaching the wall
 
     def set_frame(  # noqa: C901
         self, msg: PlanningFactorArray, latest_kinematic_state: Odometry | None
@@ -306,8 +311,22 @@ class PlanningFactor(EvaluationItem):
                 info_dict_per_factor = {}
                 condition_met_per_factor = True
 
+                # find the next control point
+                control_point = next(
+                    (
+                        cp
+                        for cp in factor.control_points
+                        if (cp.distance >= 0 and self.last_stable_state != "BACKWARD")
+                        or (cp.distance <= 0 and self.last_stable_state == "BACKWARD")
+                    ),
+                    factor.control_points[-1],
+                )
+                factor_distance = control_point.distance
+                factor_velocity = control_point.velocity
+                factor_pose = control_point.pose
+
                 if self.condition.area is not None:
-                    in_range, info_dict_area = self.judge_in_range(factor.control_points[0].pose)
+                    in_range, info_dict_area = self.judge_in_range(factor_pose)
                     info_dict_per_factor.update(info_dict_area)
                     condition_met_per_factor &= (
                         in_range if self.condition.area.area_condition == "inside" else not in_range
@@ -319,23 +338,25 @@ class PlanningFactor(EvaluationItem):
                     condition_met_per_factor &= behavior_met
 
                 if self.condition.distance is not None:
-                    distance_met, info_dict_distance = self.judge_distance(
-                        factor.control_points[0].distance
-                    )
+                    distance_met, info_dict_distance = self.judge_distance(factor_distance)
                     info_dict_per_factor.update(info_dict_distance)
                     condition_met_per_factor &= distance_met
 
                 if self.condition.time_to_wall is not None and current_velocity is not None:
                     time_to_wall_met, info_dict_time_to_wall = self.judge_time_to_wall(
-                        factor.control_points[0].distance
-                        / (
-                            min(current_velocity, -self.stop_vel_thr)
-                            if self.last_stable_state == "BACKWARD"
-                            else max(current_velocity, self.stop_vel_thr)
-                        )
+                        factor_distance, current_velocity
                     )
                     info_dict_per_factor.update(info_dict_time_to_wall)
                     condition_met_per_factor &= time_to_wall_met
+
+                if self.condition.acceleration_to_wall is not None and current_velocity is not None:
+                    acceleration_to_wall_met, info_dict_acceleration_to_wall = (
+                        self.judge_acceleration_to_wall(
+                            factor_distance, current_velocity, factor_velocity
+                        )
+                    )
+                    info_dict_per_factor.update(info_dict_acceleration_to_wall)
+                    condition_met_per_factor &= acceleration_to_wall_met
 
                 condition_met_per_factor ^= self.condition.judgement == "negative"
 
@@ -388,11 +409,47 @@ class PlanningFactor(EvaluationItem):
         }
         return self.condition.distance.match_condition(distance), info_dict
 
-    def judge_time_to_wall(self, time_to_wall: float) -> tuple[bool, dict]:
+    def judge_time_to_wall(
+        self, factor_distance: float, current_velocity: float
+    ) -> tuple[bool, dict]:
+        # Calculate safe velocity to avoid division by near-zero values
+        safe_current_velocity = (
+            min(current_velocity, -self.stop_vel_thr)
+            if self.last_stable_state == "BACKWARD"
+            else max(current_velocity, self.stop_vel_thr)
+        )
+        time_to_wall = factor_distance / safe_current_velocity
+
         info_dict = {
             "TimeToWall": time_to_wall,
         }
         return self.condition.time_to_wall.match_condition(time_to_wall), info_dict
+
+    def judge_acceleration_to_wall(
+        self, factor_distance: float, current_velocity: float, factor_velocity: float
+    ) -> tuple[bool, dict]:
+        if abs(factor_distance) < self.reach_wall_distance_margin:  # already reached the wall
+            if abs(factor_velocity - current_velocity) < self.reach_wall_vel_margin:
+                acceleration_to_wall = 0.0
+            else:  # (abnormal) cannot meet the target velocity at the wall
+                acceleration_to_wall = (
+                    float_info.max if factor_velocity > current_velocity else -float_info.max
+                )
+        elif factor_distance * current_velocity < 0:  # (abnormal) moving away from the wall
+            acceleration_to_wall = -float_info.max if current_velocity > 0 else float_info.max
+        elif (
+            current_velocity * factor_velocity >= 0
+        ):  # moving toward the wall which is the same direction as the ego
+            acceleration_to_wall = (factor_velocity**2 - current_velocity**2) / (
+                2 * factor_distance
+            )
+        else:  # (abnormal) moving toward the wall which is the opposite direction to the ego
+            acceleration_to_wall = -float_info.max if current_velocity > 0 else float_info.max
+
+        info_dict = {
+            "AccelerationToWall": acceleration_to_wall,
+        }
+        return self.condition.acceleration_to_wall.match_condition(acceleration_to_wall), info_dict
 
 
 class FactorsClassContainer:
