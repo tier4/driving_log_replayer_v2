@@ -272,7 +272,7 @@ class PlanningFactor(EvaluationItem):
         self.reach_wall_vel_margin = 0.55556  # 2[km/h] margin to consider as reaching the wall
         self.reach_wall_distance_margin = 0.2  # [m] margin to consider as reaching the wall
 
-    def set_frame(  # noqa: C901
+    def set_frame(  # noqa: C901, PLR0915, PLR0912
         self, msg: PlanningFactorArray, latest_kinematic_state: Odometry | None
     ) -> dict | None:
         # check time condition

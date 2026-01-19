@@ -47,6 +47,9 @@ Normal if `/planning/planning_factors/**` meets all of the following conditions:
 - If there is an area condition in the scenario, the x,y position of control_points[0].pose is within the range from the x,y coordinates specified in the scenario.
 - If there is a behavior condition in the scenario, the planning_factor's behavior matches the behavior specified in the scenario.
 - If there is a distance condition in the scenario, the planning_factor's distance (distance from Ego to control_point) is within the range specified in the scenario.
+- If there is a velocity condition in the scenario, the planning_factor's velocity (velocity at the control_point) is within the range specified in the scenario.
+- If there is a time_to_wall condition in the scenario, the planning_factor's time_to_wall (time to reach the control_point at current velocity) is within the range specified in the scenario.
+- If there is an acceleration_to_wall condition in the scenario, the planning_factor's acceleration_to_wall (acceleration needed to reach the control_point at current velocity) is within the range specified in the scenario.
 
 #### PlanningFactor Normal(judgement: negative)
 
@@ -55,6 +58,9 @@ Normal if `/planning/planning_factors/**` does not meet any of the following con
 - If there is an area condition in the scenario, the x,y position of control_points[0].pose is within the range from the x,y coordinates specified in the scenario.
 - If there is a behavior condition in the scenario, the planning_factor's behavior matches the behavior specified in the scenario.
 - If there is a distance condition in the scenario, the planning_factor's distance (distance from Ego to control_point) is within the range specified in the scenario.
+- If there is a velocity condition in the scenario, the planning_factor's velocity (velocity at the control_point) is within the range specified in the scenario.
+- If there is a time_to_wall condition in the scenario, the planning_factor's time_to_wall (time to reach the control_point at current velocity) is within the range specified in the scenario.
+- If there is an acceleration_to_wall condition in the scenario, the planning_factor's acceleration_to_wall (acceleration needed to reach the control_point at current velocity) is within the range specified in the scenario.
 
 #### PlanningFactor Error
 
