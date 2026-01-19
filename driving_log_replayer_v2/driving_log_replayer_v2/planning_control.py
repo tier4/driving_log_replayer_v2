@@ -138,6 +138,7 @@ class PlanningFactorCondition(BaseModel):
         | None
     ) = None
     distance: MinMax | None = None  # s of frenet coordinate
+    velocity: MinMax | None = None  # velocity at the control point [m/s]
     time_to_wall: MinMax | None = None  # time to the next control point with the current velocity
     acceleration_to_wall: MinMax | None = (
         None  # needed acceleration to the next control point with the current velocity
@@ -342,6 +343,11 @@ class PlanningFactor(EvaluationItem):
                     info_dict_per_factor.update(info_dict_distance)
                     condition_met_per_factor &= distance_met
 
+                if self.condition.velocity is not None:
+                    velocity_met, info_dict_velocity = self.judge_velocity(factor_velocity)
+                    info_dict_per_factor.update(info_dict_velocity)
+                    condition_met_per_factor &= velocity_met
+
                 if self.condition.time_to_wall is not None and current_velocity is not None:
                     time_to_wall_met, info_dict_time_to_wall = self.judge_time_to_wall(
                         factor_distance, current_velocity
@@ -408,6 +414,12 @@ class PlanningFactor(EvaluationItem):
             "Distance": distance,
         }
         return self.condition.distance.match_condition(distance), info_dict
+
+    def judge_velocity(self, velocity: float) -> tuple[bool, dict]:
+        info_dict = {
+            "Velocity": velocity,
+        }
+        return self.condition.velocity.match_condition(velocity), info_dict
 
     def judge_time_to_wall(
         self, factor_distance: float, current_velocity: float
