@@ -195,3 +195,46 @@ def launch_bag_recorder(context: LaunchContext) -> list:
     else:
         record_cmd += ["-e", conf["override_topics_regex"]]
     return [ExecuteProcess(cmd=record_cmd)]
+
+
+def launch_perception_reproducer(context: LaunchContext) -> list:
+    """Launch perception_reproducer node from planning_debug_tools."""
+    conf = context.launch_configurations
+
+    # Read scenario YAML to get PerceptionReproducerConfig
+    scenario_path = Path(conf["scenario_path"])
+    with scenario_path.open("r") as f:
+        scenario_data = yaml.safe_load(f)
+
+    evaluation = scenario_data.get("Evaluation", {})
+    reproducer_config = evaluation.get("PerceptionReproducerConfig", {})
+
+    # Build perception_reproducer command
+    rosbag_path = Path(conf["input_bag"])
+    mcap_files = list(rosbag_path.glob("*.mcap"))
+    rosbag_format = "mcap" if mcap_files else "sqlite3"
+
+    cmd = [
+        "ros2",
+        "run",
+        "planning_debug_tools",
+        "perception_reproducer",
+        "-b",
+        conf["input_bag"],
+        "-f",
+        rosbag_format,
+    ]
+
+    # Add optional flags based on config
+    if reproducer_config.get("noise", False):
+        cmd.append("--noise")
+    if reproducer_config.get("tracked_object", False):
+        cmd.append("--tracked-object")
+    if reproducer_config.get("search_radius") is not None:
+        cmd.extend(["--search-radius", str(reproducer_config["search_radius"])])
+    if reproducer_config.get("reproduce_cool_down") is not None:
+        cmd.extend(["--reproduce-cool-down", str(reproducer_config["reproduce_cool_down"])])
+    if reproducer_config.get("pub_route", False):
+        cmd.append("--pub-route")
+
+    return [ExecuteProcess(cmd=cmd, output="screen", on_exit=ShutdownOnce())]

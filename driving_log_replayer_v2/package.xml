@@ -22,6 +22,7 @@
   <depend>autoware_localization_msgs</depend>
   <depend>autoware_map_msgs</depend>
   <depend>autoware_perception_msgs</depend>
+  <depend>autoware_system_msgs</depend>
   <depend>diagnostic_msgs</depend>
   <depend>driving_log_replayer_v2_msgs</depend>
   <depend>example_interfaces</depend>

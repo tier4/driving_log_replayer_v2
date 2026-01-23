@@ -210,6 +210,24 @@ def time_step_based_trajectory(conf: dict[str, str]) -> ProcessInfo:
     )
 
 
+def perception_reproducer(conf: dict[str, str]) -> ProcessInfo:
+    # Merge pass_result.jsonl if it exists
+    pass_result_path = Path(conf["result_archive_path"]).joinpath("pass_result.jsonl")
+    result_paths = [Path(conf["result_jsonl_path"]).as_posix()]
+
+    if pass_result_path.exists():
+        result_paths.append(pass_result_path.as_posix())
+
+    if len(result_paths) == 1:
+        process_list = [LogInfo(msg="No additional result.jsonl found. Abort merging result.jsonl")]
+    else:
+        multi_result_editor = MultiResultEditor(result_paths)
+        multi_result_editor.write_back_result()
+        process_list = [LogInfo(msg="Merge perception_reproducer results")]
+
+    return ProcessInfo(process_list=process_list, last_action=None)
+
+
 def post_process(context: LaunchContext) -> list:
     conf = context.launch_configurations
     create_metadata_yaml(conf["result_bag_path"])
@@ -224,6 +242,8 @@ def post_process(context: LaunchContext) -> list:
         process_info = planning_control(conf)
     elif conf["use_case"] == "time_step_based_trajectory":
         process_info = time_step_based_trajectory(conf)
+    elif conf["use_case"] == "perception_reproducer":
+        process_info = perception_reproducer(conf)
     else:
         err_msg = f"Unsupported use_case for post_process: {conf['use_case']}"
         raise ValueError(err_msg)

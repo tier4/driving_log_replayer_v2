@@ -37,11 +37,21 @@ def launch_autoware(context: LaunchContext) -> list:
     conf = context.launch_configurations
     if conf["with_autoware"] != "true":
         return [LogInfo(msg="Autoware is not launched. Only the evaluation node is launched.")]
-    autoware_launch_file = Path(
-        get_package_share_directory("autoware_launch"),
-        "launch",
-        "logging_simulator.launch.xml",
-    )
+
+    # For perception_reproducer, use planning_simulator instead of logging_simulator
+    if conf["use_case"] == "perception_reproducer":
+        autoware_launch_file = Path(
+            get_package_share_directory("autoware_launch"),
+            "launch",
+            "planning_simulator.launch.xml",
+        )
+    else:
+        autoware_launch_file = Path(
+            get_package_share_directory("autoware_launch"),
+            "launch",
+            "logging_simulator.launch.xml",
+        )
+
     launch_args = {
         "map_path": conf["map_path"],
         "vehicle_model": conf["vehicle_model"],
