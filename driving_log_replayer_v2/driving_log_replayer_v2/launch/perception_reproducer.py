@@ -1,4 +1,4 @@
-# Copyright (c) 2025 TIER IV.inc
+# Copyright (c) 2026 TIER IV.inc
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -12,11 +12,14 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from pathlib import Path
+
 from launch import LaunchContext
 from launch.actions import DeclareLaunchArgument
-from launch.actions import LogInfo
+from launch.actions import Node
 from launch.actions import OpaqueFunction
 from launch.substitutions import LaunchConfiguration
+import yaml
 
 from driving_log_replayer_v2.launch.argument import add_use_case_arguments
 from driving_log_replayer_v2.launch.rosbag import launch_bag_recorder
@@ -59,15 +62,24 @@ NODE_PARAMS: dict[str, LaunchConfiguration] = {}
 USE_CASE_ARGS: list[DeclareLaunchArgument] = []
 
 
-def launch_engage_node(context: LaunchContext) -> list:  # noqa: ARG001
-    """
-    Launch engage node (placeholder for now).
+def launch_engage_node(context: LaunchContext) -> list:
+    conf = context.launch_configurations
 
-    TODO: Implement engage node logic
-    If goal pose exists, reuse goal_pose logic and then engage
-    If no goal pose, perception_reproducer should use its route
-    """
-    return [LogInfo(msg="engage_node is not implemented yet (placeholder)")]
+    params = {
+        "use_sim_time": True,
+        "timeout_s": conf["timeout_s"],
+    }
+
+    return [
+        Node(
+            package="driving_log_replayer_v2",
+            namespace="/driving_log_replayer_v2",
+            executable="engage_node.py",
+            output="screen",
+            name="engage_node",
+            parameters=[params],
+        ),
+    ]
 
 
 def launch_perception_reproducer_use_case() -> list:

@@ -40,7 +40,7 @@ Evaluation:
     pub_route: false  # -p, --pub-route: publish route created from rosbag (use when GoalPose is not specified)
 
   Conditions:
-    timeout_s: 80.0 # [s] scenario timeout duration, start from the autoware is ENGAGED
+    timeout_s: 80.0 # [s] scenario timeout duration, used for both engage_node and perception_reproducer_evaluator_node
     terminated_after_fail_s: 10 # [s] scenario terminated after a fail condition trigger 
 
     # Pass Conditions - when all condition groups meet ONCE, the test passes and terminates.
