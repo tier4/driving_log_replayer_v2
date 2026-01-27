@@ -1,0 +1,21 @@
+remap:
+  - /sensing/lidar/concatenated/pointcloud
+  - /perception/obstacle_segmentation/pointcloud
+  - /sensing/radar/tracked_objects
+  - /sensing/radar/detected_objects
+  - /perception/object_recognition/detection/centerpoint/objects
+  - /perception/object_recognition/detection/centerpoint/roi_fusion/objects
+  - /perception/object_recognition/detection/centerpoint/validation/objects
+  - /perception/object_recognition/detection/clustering/objects_with_feature
+  - /perception/object_recognition/detection/clustering/objects
+  - /perception/object_recognition/detection/clustering/camera_lidar_fusion/objects_with_feature
+  - /perception/object_recognition/detection/clustering/camera_lidar_fusion/objects
+  - /perception/object_recognition/detection/irregular_object/objects
+  - /perception/object_recognition/detection/irregular_object/objects_with_feature
+  - /perception/object_recognition/detection/centerpoint_irregular_object_merger/objects
+  - /perception/object_recognition/detection/centerpoint_roi_cluster_fusion/objects
+  - /perception/object_recognition/detection/detection_by_tracker/objects
+  - /perception/object_recognition/detection/objects_before_filter
+  - /perception/object_recognition/detection/objects
+  - /perception/object_recognition/tracking/objects
+  - /perception/object_recognition/objects
