@@ -37,13 +37,31 @@ RECORD_TOPIC = """^/tf$\
 |^/perception/object_recognition/objects$\
 |^/perception/object_recognition/detection/rois[0-9]+$\
 |^/perception/object_recognition/detection/objects_before_filter$\
+|^/perception/obstacle_segmentation/pointcloud$\
+|^/perception/obstacle_segmentation/single_frame/pointcloud$\
+|^/perception/obstacle_segmentation/pointcloud_map_filtered/downsampled/pointcloud$\
+|^/perception/occupancy_grid_map/map$\
+|^/perception/object_recognition/detection/pointcloud_map_filtered/pointcloud$\
+|^/perception/object_recognition/detection/clustering/objects_with_feature$\
+|^/perception/object_recognition/detection/clustering/objects$\
+|^/perception/object_recognition/detection/clustering/camera_lidar_fusion/objects$\
+|^/perception/object_recognition/detection/clustering/camera_lidar_fusion/unfiltered/objects$\
+|^/perception/object_recognition/detection/clustering/camera_lidar_fusion/filtered/objects$\
+|^/perception/object_recognition/detection/irregular_object/objects$\
+|^/perception/object_recognition/detection/irregular_object/clusters$\
+|^/perception/object_recognition/detection/irregular_object/objects_with_feature$\
+|^/perception/object_recognition/detection/centerpoint_irregular_object_merger/objects$\
+|^/perception/object_recognition/detection/voxel_grid_downsample_filter/pointcloud$\
+|^/perception/object_recognition/detection/irregular_object/crop_box_filter/pointcloud$\
+|^/perception/object_recognition/detection/centerpoint/validation/objects$\
+|^/perception/object_recognition/detection/irregular_object/objects$\
+|^/perception/object_recognition/detection/detection_by_tracker/objects\
 |^/sensing/.*detected_objects$\
 |^/sensing/.*tracked_objects$\
 |^/map/vector_map_marker$\
 |^/localization/kinematic_state$\
 |^/planning/planning_factors/.*\
 """
-
 
 def autoware_disable(conf: dict) -> dict[str, str]:
     default = {
