@@ -162,13 +162,14 @@ def launch_bag_player(
         if conf["record_only"] == "true"
         else ExecuteProcess(cmd=play_cmd, output="screen")
     )
-    delay_player_for_pre_task = ExecuteProcess(cmd=["sleep", "10"], on_exit=[bag_player])
-    pre_task_player = get_pre_task_before_play_rosbag(context, on_exit=delay_player_for_pre_task)
-    delay_player_for_autoware = ExecuteProcess(
-        cmd=["sleep", conf["play_delay"]], on_exit=[pre_task_player]
+    # Run pre-task first, then wait play_delay seconds, then fixed 10 seconds before starting rosbag play.
+    delay_player_for_bag = ExecuteProcess(cmd=["sleep", "10"], on_exit=[bag_player])
+    delay_player_for_pre_task = ExecuteProcess(
+        cmd=["sleep", conf["play_delay"]], on_exit=[delay_player_for_bag]
     )
+    pre_task_player = get_pre_task_before_play_rosbag(context, on_exit=delay_player_for_pre_task)
     return [
-        delay_player_for_autoware,
+        pre_task_player,
         LogInfo(msg=f"remap_command is {remap_list}, topics_command is {publish_list}"),
     ]
 
