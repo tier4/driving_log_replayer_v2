@@ -250,6 +250,9 @@ def update_conf_with_dataset_info(
     ]:
         conf["record_only"] = "true"
 
+    if conf["use_case"] in ["perception_reproducer"]:
+        conf["timeout_s"] = yaml_obj["Evaluation"]["Conditions"]["timeout_s"]
+
     # higher priority to argument than scenario
     if conf["publish_profile"] == "" and yaml_obj.get("publish_profile"):
         conf["publish_profile"] = yaml_obj["publish_profile"]

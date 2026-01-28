@@ -44,7 +44,7 @@ Evaluation:
     terminated_after_fail_s: 10 # [s] scenario terminated after a fail condition trigger 
 
     # Pass Conditions - when all condition groups meet ONCE, the test passes and terminates.
-    pass_condition_groups:
+    pass_conditions:
       - group_name: check_arrive_obstacle_area
         start_at: null # other condition_group name to trigger this group, if not specified, the condition starts after the autoware is ENGAGED.
         end_at: null # other condition_group name to stop this group, if not specified, the condition stops after the timeout_s.
@@ -78,9 +78,9 @@ Evaluation:
             # judgement: "positive" # only positive available for PassConditionGroups
 
     # Fail Conditions - when any condition group NOT meet ONCE, the test fails and terminate after `terminated_after_fail_s` seconds
-    fail_condition_groups:
+    fail_conditions:
       - group_name: check_obstacle_stop_inactive
-        start_at: check_arrive_obstacle_area # NOTE: only group name in `pass_condition_groups` is supported
+        start_at: check_arrive_obstacle_area # NOTE: only group name in `pass_conditions` is supported
         end_at: check_arrive_goal
         group_type: all_of
         condition_type: planning_factor # planning_factor conditions
