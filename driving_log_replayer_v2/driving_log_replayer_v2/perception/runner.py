@@ -260,7 +260,7 @@ class PerceptionRunner(Runner):
         if isinstance(frame_result.data, PlanningFactorEvalData):
             # write planning factor result
             self.planning_factor_result.set_frame(
-                frame_result.data.msg, frame_result.data.topic_name
+                frame_result.data.msg, frame_result.data.topic_name, None
             )
             if self.planning_factor_result.frame != {}:
                 res_str = self.planning_factor_result_writer.write_result_with_time(
