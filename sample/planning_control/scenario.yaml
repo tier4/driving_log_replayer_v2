@@ -6,7 +6,7 @@ VehicleModel: lexus
 publish_profile: planning_control
 Evaluation:
   UseCaseName: planning_control
-  UseCaseFormatVersion: 2.4.0
+  UseCaseFormatVersion: 2.6.0
   Datasets:
     - obstacle_stop:
         VehicleId: default
