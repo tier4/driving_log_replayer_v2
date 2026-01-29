@@ -5,7 +5,7 @@ SensorModel: aip_xx1
 VehicleModel: lexus
 Evaluation:
   UseCaseName: planning_control
-  UseCaseFormatVersion: 2.2.0
+  UseCaseFormatVersion: 2.6.0
   Datasets:
     - obstacle_stop:
         VehicleId: default

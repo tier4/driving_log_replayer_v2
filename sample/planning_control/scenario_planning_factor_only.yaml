@@ -5,7 +5,7 @@ SensorModel: aip_xx1
 VehicleModel: lexus
 Evaluation:
   UseCaseName: planning_control
-  UseCaseFormatVersion: 2.2.0
+  UseCaseFormatVersion: 2.6.0
   Datasets:
     - obstacle_stop:
         VehicleId: default
@@ -17,6 +17,7 @@ Evaluation:
         area: { x: 71.5, y: 345.1, range: 1.0, area_condition: inside } # You can set area to null to ignore area condition.
         behavior: [STOP] # Specify the behavior to be judged. You can set behavior to null to ignore behavior condition.
         distance: { min: -10.0, max: 50.0 } # [m] Specify the distance range to be judged. You can set distance to null to ignore distance condition.
+        velocity: { min: 10.0, max: 40.0 } # [m/s] Specify the velocity to be judged. You can set velocity to null to ignore velocity condition.
         time_to_wall: { min: 0.0 } # [s] Specify the time to the next control point of this planning factor to be judged. You can set time_to_wall to null to ignore time_to_wall condition.
         acceleration_to_wall: { min: -3.0 } # [m/s^2] Specify the acceleration to the next control point of this planning factor to be judged. You can set acceleration_to_wall to null to ignore acceleration_to_wall condition.
         judgement: positive # positive or negative
