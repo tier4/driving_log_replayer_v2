@@ -38,6 +38,7 @@ if TYPE_CHECKING:
     from collections.abc import Generator
 
     from builtin_interfaces.msg import Time as Stamp
+    from nav_msgs.msg import Odometry
     from tier4_metric_msgs.msg import MetricArray
 
 UNIT_MAP = {
@@ -56,9 +57,13 @@ class RosBagManager:
         Reading messages from an input rosbag.
         Writing messages to an output rosbag.
         Managing a tf2 Buffer for transform lookups.
+        Storing the latest localization kinematic state.
         Analyzing and processing time via Processing Time Checker.
     """
 
+    TF = "/tf"
+    TF_STATIC = "/tf_static"
+    LOCALIZATION_KINEMATIC_STATE = "/localization/kinematic_state"
     PROCESSING_TIME_CHECKER_TOPIC = "/system/processing_time_checker/metrics"
 
     def __init__(
@@ -76,6 +81,7 @@ class RosBagManager:
         self._topic_name2type: dict[str, str] = {}
         self._last_subscribed_timestamp_nanosec: int
         self._tf_buffer: Buffer
+        self._localization_kinematic_state: Odometry | None
         self._node_processing_time: dict[
             str, dict[str, str]
         ] = {}  # node_name -> {node_name, header_timestamp}
@@ -102,6 +108,7 @@ class RosBagManager:
 
         self._evaluation_topics = evaluation_topics
         self._tf_buffer = Buffer()
+        self._localization_kinematic_state = None
 
     def _get_default_converter_options(self) -> ConverterOptions:
         """
@@ -144,6 +151,10 @@ class RosBagManager:
         """Get the TF buffer."""
         return self._tf_buffer
 
+    def get_localization_kinematic_state(self) -> Odometry | None:
+        """Get the latest localization kinematic state."""
+        return self._localization_kinematic_state
+
     def get_last_subscribed_timestamp(self) -> int:
         """
         Get the last subscribed timestamp in nanoseconds.
@@ -182,12 +193,14 @@ class RosBagManager:
             self._writer.write(topic_name, msg_bytes, subscribed_timestamp_nanosec)
             msg = deserialize_message(msg_bytes, get_message(self._topic_name2type[topic_name]))
 
-            if topic_name == "/tf_static":
+            if topic_name == self.TF_STATIC:
                 for transform in msg.transforms:
                     self._tf_buffer.set_transform_static(transform, "rosbag_import")
-            elif topic_name == "/tf":
+            elif topic_name == self.TF:
                 for transform in msg.transforms:
                     self._tf_buffer.set_transform(transform, "rosbag_import")
+            elif topic_name == self.LOCALIZATION_KINEMATIC_STATE:
+                self._localization_kinematic_state = msg
             elif topic_name == self.PROCESSING_TIME_CHECKER_TOPIC:
                 self._append_processing_time_data(msg)
             elif topic_name in self._evaluation_topics:
