@@ -2,8 +2,8 @@
 Changelog for package driving_log_replayer
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-Forthcoming
------------
+3.15.2 (2026-01-30)
+-------------------
 * fix(perception): use localization kinematic in perception for planning (`#297 <https://github.com/tier4/driving_log_replayer_v2/issues/297>`_)
   * fix(perception): use localization kinematics in perception for planning_control
   * Update driving_log_replayer_v2/driving_log_replayer_v2/post_process/ros2_utils.py
