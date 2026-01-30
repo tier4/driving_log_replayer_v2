@@ -1,5 +1,18 @@
 # Release Notes
 
+## Version 3.15.2
+
+Minor Tweak
+
+| Module             | Feature       | Brief summary                                           | Pull request                                                        | Contributor                                   |
+| ------------------ | ------------- | ------------------------------------------------------- | ------------------------------------------------------------------- | --------------------------------------------- |
+| `post_process`     | ros2_utils    | use localization kinematic in post-process for planning | [#297](https://github.com/tier4/driving_log_replayer_v2/issues/297) | [MasatoSaeki](https://github.com/MasatoSaeki) |
+| `launch`           | rosbag play   | expand wait time for pre-task                           | [#296](https://github.com/tier4/driving_log_replayer_v2/issues/296) | [MasatoSaeki](https://github.com/MasatoSaeki) |
+| `planning_control` | new criteria  | judge planning_factors' velocity                        | [#295](https://github.com/tier4/driving_log_replayer_v2/issues/295) | [xtk8532704](https://github.com/xtk8532704)   |
+| `planning_control` | new criteria  | judge planning_factors' acceleration_to_wall            | [#292](https://github.com/tier4/driving_log_replayer_v2/issues/292) | [xtk8532704](https://github.com/xtk8532704)   |
+| `planning_control` | rosbag record | add recording /api/operation_mode/state                 | [#294](https://github.com/tier4/driving_log_replayer_v2/issues/294) | [xtk8532704](https://github.com/xtk8532704)   |
+| `planning_control` | rosbag play   | add publish /tf for visualization                       | [#293](https://github.com/tier4/driving_log_replayer_v2/issues/293) | [xtk8532704](https://github.com/xtk8532704)   |
+
 ## Version 3.15.1
 
 Minor Tweak

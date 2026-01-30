@@ -2,6 +2,35 @@
 Changelog for package driving_log_replayer
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
+Forthcoming
+-----------
+* fix(perception): use localization kinematic in perception for planning (`#297 <https://github.com/tier4/driving_log_replayer_v2/issues/297>`_)
+  * fix(perception): use localization kinematics in perception for planning_control
+  * Update driving_log_replayer_v2/driving_log_replayer_v2/post_process/ros2_utils.py
+  Co-authored-by: Copilot <175728472+Copilot@users.noreply.github.com>
+  ---------
+  Co-authored-by: Copilot <175728472+Copilot@users.noreply.github.com>
+* fix: expand wait time for pre-task (`#296 <https://github.com/tier4/driving_log_replayer_v2/issues/296>`_)
+* feat(planning_control): judge planning_factors' velocity (`#295 <https://github.com/tier4/driving_log_replayer_v2/issues/295>`_)
+  * add velocity judgement
+  * update readme and fix pre-commit
+  * update UseCaseFormatVersion
+  ---------
+  Co-authored-by: MasatoSaeki <masato.saeki@tier4.jp>
+* feat(planning_control): judge acceleration_to_wall (`#292 <https://github.com/tier4/driving_log_replayer_v2/issues/292>`_)
+  * tmp save
+  * fix logic bug
+  * update samples
+  * Update driving_log_replayer_v2/driving_log_replayer_v2/planning_control.py
+  Co-authored-by: Copilot <175728472+Copilot@users.noreply.github.com>
+  ---------
+  Co-authored-by: Copilot <175728472+Copilot@users.noreply.github.com>
+* add /api/operation_mode/state (`#294 <https://github.com/tier4/driving_log_replayer_v2/issues/294>`_)
+* chore(config): add publish /tf for visualization (`#293 <https://github.com/tier4/driving_log_replayer_v2/issues/293>`_)
+  * add publish tf for visualization
+  * pre-commit
+* Contributors: Kem (TiankuiXian), Masato Saeki
+
 3.15.1 (2026-01-07)
 -------------------
 * feat!: change the result_json_path to result_jsonl_path (`#288 <https://github.com/tier4/driving_log_replayer_v2/issues/288>`_)
