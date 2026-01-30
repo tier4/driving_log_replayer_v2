@@ -245,6 +245,7 @@ def update_conf_with_dataset_info(
     if conf["use_case"] in [
         "all_components",
         "perception",
+        "perception_fp",
         "ground_segmentation",
         "time_step_based_trajectory",
     ]:

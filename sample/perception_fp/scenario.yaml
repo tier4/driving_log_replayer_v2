@@ -1,0 +1,52 @@
+ScenarioFormatVersion: 3.2.0
+ScenarioName: perception_fp_sample
+ScenarioDescription: perception_fp_sample
+SensorModel: sample_sensor_kit
+VehicleModel: sample_vehicle
+Evaluation:
+  UseCaseName: perception_fp
+  UseCaseFormatVersion: 0.1.0
+  Datasets:
+    - sample_dataset:
+        VehicleId: default
+  Conditions:
+    Criterion:
+      - PassRate: 99.0
+        criteria_name: drivable_area
+        non_detection_area: # Non-detection area specification in map coordinates
+          polygon_2d: # List of vertices of the polygon in map coordinates (x, y), clockwise order
+            - [3813.1939, 73715.3626, 19.5814]
+            - [3809.9543, 73721.4626, 19.5787]
+            - [3833.07, 73733.5886, 19.5787]
+            - [3836.364, 73727.5179, 19.5455]
+          z_min: null # [m] null [Do not filter by z_min] or value
+          z_max: null # [m] null [Do not filter by z_max] or value
+        timestamp: null # null [Do not filter by timestamp] or ros timestamp value in seconds
+        topic_type: [bbox, pointcloud] # List of topic types to evaluate
+      - PassRate: 99.0
+        criteria_name: drivable_area_timestamp
+        non_detection_area: # Non-detection area specification in map coordinates
+          polygon_2d: # List of vertices of the polygon in map coordinates (x, y), clockwise order
+            - [3794.9336, 73705.9071, 19.5291]
+            - [3791.8534, 73712.0541, 19.5219]
+            - [3806.696, 73719.817, 19.5687]
+            - [3809.9294, 73713.7141, 19.5676]
+          z_min: null # [m] null [Do not filter by z_min] or value
+          z_max: null # [m] null [Do not filter by z_max] or value
+        timestamp:
+          - start: 1649138852.0 # null [Do not filter by timestamp] or ros timestamp value in seconds
+            end: 1649138864.0 # null [Do not filter by timestamp] or ros timestamp value in seconds
+        topic_type: [bbox] # List of topic types to evaluate
+      - PassRate: 99.0
+        criteria_name: vegetation
+        non_detection_area: # Non-detection area specification in map coordinates
+          polygon_2d: # List of vertices of the polygon in map coordinates (x, y), clockwise order
+            - [3804.1703, 73732.1213, 21.1945]
+            - [3802.7602, 73742.4244, 21.048]
+            - [3812.6931, 73751.1751, 20.61]
+            - [3820.0242, 73744.68, 20.531]
+            - [3817.8632, 73735.7285, 20.633]
+          z_min: null # [m] null [Do not filter by z_min] or value
+          z_max: null # [m] null [Do not filter by z_max] or value
+        timestamp: null # null [Do not filter by timestamp] or ros timestamp value in seconds
+        topic_type: [pointcloud] # List of topic types to evaluate

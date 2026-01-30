@@ -34,6 +34,7 @@ from driving_log_replayer_v2.launch.argument import add_use_case_arguments
 from driving_log_replayer_v2.launch.argument import ensure_arg_compatibility
 from driving_log_replayer_v2.launch.argument import get_launch_arguments
 from driving_log_replayer_v2.perception.runner import evaluate as evaluate_perception
+from driving_log_replayer_v2.perception_fp.runner import evaluate as evaluate_perception_fp
 from driving_log_replayer_v2.result import MultiResultEditor
 from driving_log_replayer_v2.result import ResultAnalyzer
 from driving_log_replayer_v2.rosbag import create_metadata_yaml
@@ -127,6 +128,39 @@ def perception() -> ProcessInfo:
     return ProcessInfo(
         process_list=[LogInfo(msg="run perception analysis."), perception_action],
         last_action=perception_action,
+    )
+
+
+def perception_fp() -> ProcessInfo:
+    def _run_perception_fp(context: LaunchContext) -> list:
+        conf = context.launch_configurations
+
+        absolute_result_jsonl_path = Path(expandvars(conf["result_jsonl_path"]))
+        absolute_result_jsonl_path.unlink()
+        evaluate_perception_fp(
+            conf["scenario_path"],
+            conf["result_bag_path"],
+            conf["t4_dataset_path"],
+            conf["result_jsonl_path"],
+            conf["result_archive_path"],
+            conf["storage"],
+            conf["evaluation_pointcloud_topic"],
+            conf["evaluation_object_topic"],
+            conf["enable_analysis"],
+        )
+        shutil.rmtree(
+            Path(conf["result_bag_path"]).as_posix(),
+        )
+        shutil.move(
+            Path(conf["result_archive_path"]).joinpath("result_bag").as_posix(),
+            Path(conf["result_bag_path"]).as_posix(),
+        )
+        return [LogInfo(msg="perception_fp post process finished.")]
+
+    perception_fp_action = OpaqueFunction(function=_run_perception_fp)
+    return ProcessInfo(
+        process_list=[LogInfo(msg="run perception_fp analysis."), perception_fp_action],
+        last_action=perception_fp_action,
     )
 
 
@@ -236,6 +270,8 @@ def post_process(context: LaunchContext) -> list:
         process_info = localization(conf)
     elif conf["use_case"] == "perception":
         process_info = perception()
+    elif conf["use_case"] == "perception_fp":
+        process_info = perception_fp()
     elif conf["use_case"] == "ground_segmentation":
         process_info = ground_segmentation()
     elif conf["use_case"] == "planning_control":
