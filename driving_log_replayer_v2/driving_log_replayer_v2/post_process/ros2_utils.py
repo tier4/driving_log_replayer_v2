@@ -151,7 +151,7 @@ class RosBagManager:
         """Get the TF buffer."""
         return self._tf_buffer
 
-    def get_localization_kinematic_state(self) -> Odometry:
+    def get_localization_kinematic_state(self) -> Odometry | None:
         """Get the latest localization kinematic state."""
         return self._localization_kinematic_state
 
