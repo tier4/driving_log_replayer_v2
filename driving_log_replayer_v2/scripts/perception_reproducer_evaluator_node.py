@@ -16,14 +16,16 @@
 
 from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Any
+from typing import Literal
 
 from autoware_internal_planning_msgs.msg import PlanningFactorArray
 from autoware_system_msgs.msg import AutowareState
 from diagnostic_msgs.msg import DiagnosticArray
+from diagnostic_msgs.msg import DiagnosticStatus
 from geometry_msgs.msg import AccelWithCovarianceStamped
 from nav_msgs.msg import Odometry
 import rclpy
+from rclpy.publisher import Publisher
 from std_msgs.msg import String
 from tier4_metric_msgs.msg import MetricArray
 
@@ -41,7 +43,6 @@ from driving_log_replayer_v2.planning_control import MetricCondition
 from driving_log_replayer_v2.planning_control import MetricResult
 from driving_log_replayer_v2.planning_control import PlanningFactorCondition
 from driving_log_replayer_v2.planning_control import PlanningFactorResult
-from driving_log_replayer_v2.planning_control import stamp_to_float
 from driving_log_replayer_v2.result import DummyResult
 from driving_log_replayer_v2.result import ResultWriter
 
@@ -50,20 +51,19 @@ from driving_log_replayer_v2.result import ResultWriter
 class EvaluatorState:
     """Shared state for all evaluators in the perception_reproducer use case."""
 
-    # Time-related state
-    engaged_time: float = 0.0  # Time when Autoware is engaged (0.0 means not engaged)
     timeout_s: float  # Test timeout in seconds
-
-    # Evaluator registry
-    all_evaluators: dict[str, "ConditionGroupEvaluator"]  # All evaluators by group_name
-
-    # Test state flags
     test_ended: bool = False  # Whether test has ended
-    fail_triggered: bool = False  # Whether any fail condition has been triggered
+
+    engaged_time: float | None = None  # Time when Autoware is engaged (None means not engaged)
+    fail_trigger_time: float | None = (
+        None  # Time when fail condition was triggered (None means not triggered)
+    )
+
+    all_evaluators: dict[str, "ConditionGroupEvaluator"]  # All evaluators by group_name
 
 
 class ConditionGroupEvaluator:
-    """Evaluate a condition group with time window management."""
+    """Evaluate a condition group."""
 
     def __init__(
         self,
@@ -75,12 +75,14 @@ class ConditionGroupEvaluator:
         self.state = state
         self.parent_evaluator = parent_evaluator
 
-        self.passed = False
-        self.pass_time: float | None = None
+        self.triggered = False  # for trigger conditions
         self.is_active = False
+        self.summary: str = f"{self.group.group_name} (NotStarted)"
+        self.success: bool | None = None  # None means the evaluator is not evaluated even once.
 
         # Dependents: evaluators that depend on this one (via start_at/end_at)
-        self._dependents: list[ConditionGroupEvaluator] = []
+        self.start_at_dependents: list[ConditionGroupEvaluator] = []
+        self.end_at_dependents: list[ConditionGroupEvaluator] = []
 
         # Result containers
         self.ego_kinematic_result: EgoKinematicResult | None = None
@@ -88,10 +90,11 @@ class ConditionGroupEvaluator:
         self.diag_result: DiagnosticsResult | None = None
         self.planning_factor_result: PlanningFactorResult | None = None
         self.nested_evaluators: list[ConditionGroupEvaluator] = []
+        self.diag_target_hardware_ids: list[str] = []
 
         self._initialize_results()
 
-    def _initialize_results(self) -> None:
+    def _initialize_results(self) -> None:  # noqa: C901
         """Initialize result containers based on condition_class in each condition."""
         # Handle nested condition groups first
         for nested_group in self.group.condition_list:
@@ -123,118 +126,199 @@ class ConditionGroupEvaluator:
             self.metric_result = MetricResult(metric_conditions)
         if diag_conditions:
             diag_conditions_obj = DiagnosticsConditions(DiagConditions=diag_conditions)
+            self.diag_target_hardware_ids = diag_conditions_obj.target_hardware_ids
             self.diag_result = DiagnosticsResult(diag_conditions_obj)
         if pf_conditions:
             self.planning_factor_result = PlanningFactorResult(pf_conditions)
 
-    def activate(self) -> None:
-        """Activate this evaluator and notify dependents."""
-        if self.is_active:
-            return
-        self.is_active = True
-        self._notify_children(activate=True)
-        self._notify_dependents(activate=True)
-
-    def deactivate(self) -> None:
-        """Deactivate this evaluator and notify dependents."""
-        if not self.is_active:
-            return
-        self.is_active = False
-        self._notify_children(activate=False)
-        self._notify_dependents(activate=False)
-
-    def on_parent_activated(self) -> None:
-        """Handle parent evaluator activation. Check if we should activate."""
-        if self.group.start_at is not None:
-            # Wait for start_at dependency to pass
-            ref_evaluator = self.state.all_evaluators.get(self.group.start_at)
-            if ref_evaluator is not None and ref_evaluator.passed:
-                self.activate()
-        elif self.state.engaged_time > 0:
-            # No start_at, activate immediately when engaged
-            self.activate()
-
-    def on_parent_deactivated(self) -> None:
-        """Handle parent evaluator deactivation. Deactivate this evaluator."""
-        self.deactivate()
-
-    def on_dependency_passed(self, dependency_name: str) -> None:
-        """Handle dependency (start_at) passing. Activate if parent is active."""
-        if self.group.start_at == dependency_name and (
-            self.parent_evaluator is None or self.parent_evaluator.is_active
-        ):
-            self.activate()
-
-    def on_dependency_ended(self, dependency_name: str) -> None:
-        """Handle dependency (end_at) passing. Deactivate this evaluator."""
-        if self.group.end_at == dependency_name:
-            self.deactivate()
-
-    def _notify_children(self, *, activate: bool) -> None:
-        """Notify all child evaluators to activate or deactivate."""
+    def _notify_children_activation(self, *, activate: bool) -> None:
         for child in self.nested_evaluators:
             if activate:
                 child.on_parent_activated()
             else:
                 child.on_parent_deactivated()
 
-    def _notify_dependents(self, *, activate: bool) -> None:
-        """Notify all dependents (via start_at/end_at) that this evaluator state changed."""
-        for dependent in self._dependents:
-            if activate and dependent.group.start_at == self.group.group_name:
-                dependent.on_dependency_passed(self.group.group_name)
-            elif not activate and dependent.group.end_at == self.group.group_name:
-                dependent.on_dependency_ended(self.group.group_name)
+    def activate(self) -> None:
+        """Activate this evaluator and notify children."""
+        if self.is_active:
+            return
+        self.is_active = True
+        self._notify_children_activation(activate=True)
 
-    def evaluate(self) -> tuple[bool, str]:
-        """Evaluate this condition group. Returns (success, summary)."""
+    def deactivate(self) -> None:
+        """Deactivate this evaluator and notify children."""
         if not self.is_active:
-            return (False, f"{self.group.group_name} (NotActive)")
+            return
+        self.is_active = False
+        self._notify_children_activation(activate=False)
 
-        results, summaries = self._collect_all_results()
+    def on_parent_activated(self) -> None:
+        """Handle parent evaluator activation. Check if we should activate."""
+        if self.group.start_at is not None:
+            # Wait for start_at dependency to pass
+            ref_evaluator = self.state.all_evaluators.get(self.group.start_at)
+            if ref_evaluator is not None and ref_evaluator.triggered:
+                self.activate()
+        else:
+            self.activate()
 
-        # Combine results based on group_type
-        if self.group.group_type == "all_of":
-            success = all(results) if results else True
-        else:  # any_of
-            success = any(results) if results else True
+    def on_parent_deactivated(self) -> None:
+        """Handle parent evaluator deactivation. Deactivate this evaluator."""
+        self.deactivate()
 
-        summary = f"{self.group.group_name} ({'Passed' if success else 'Failed'}): " + "; ".join(
-            summaries
-        )
-        return success, summary
+    def on_dependency_passed(self) -> None:
+        """Handle dependency (start_at) passing. Activate if parent is active."""
+        if self.parent_evaluator is None or self.parent_evaluator.is_active:
+            self.activate()
 
-    def _collect_all_results(self) -> tuple[list[bool], list[str]]:
-        """Collect results from all condition types and nested groups."""
+    def on_dependency_ended(self) -> None:
+        """Handle dependency (end_at) passing. Deactivate this evaluator."""
+        self.deactivate()
+
+    def _notify_dependents_first_pass(self) -> None:
+        """Notify dependents when this evaluator first passes."""
+        # Notify start_at dependents to activate
+        for dependent in self.start_at_dependents:
+            dependent.on_dependency_passed()
+        # Notify end_at dependents to deactivate
+        for dependent in self.end_at_dependents:
+            dependent.on_dependency_ended()
+
+    def evaluate(self) -> None:  # noqa: C901
+        """Evaluate this condition group recursively and update internal state."""
+        if not self.is_active:  # keep the internal state as is
+            return
+
         results: list[bool] = []
         summaries: list[str] = []
 
+        # Collect results from result containers
         if self.ego_kinematic_result is not None:
-            self.ego_kinematic_result.update()
-            results.append(self.ego_kinematic_result._success)
-            summaries.append(f"EgoKinematic: {self.ego_kinematic_result._summary}")
+            results.append(self.ego_kinematic_result.success)
+            summaries.append(f"EgoKinematic: {self.ego_kinematic_result.summary}")
 
         if self.metric_result is not None:
-            self.metric_result.update()
-            results.append(self.metric_result._success)
-            summaries.append(f"Metrics: {self.metric_result._summary}")
+            results.append(self.metric_result.success)
+            summaries.append(f"Metrics: {self.metric_result.summary}")
 
         if self.diag_result is not None:
-            self.diag_result.update()
-            results.append(self.diag_result._success)
-            summaries.append(f"Diagnostics: {self.diag_result._summary}")
+            results.append(self.diag_result.success)
+            summaries.append(f"Diagnostics: {self.diag_result.summary}")
 
         if self.planning_factor_result is not None:
-            self.planning_factor_result.update()
-            results.append(self.planning_factor_result._success)
-            summaries.append(f"PlanningFactors: {self.planning_factor_result._summary}")
+            results.append(self.planning_factor_result.success)
+            summaries.append(f"PlanningFactors: {self.planning_factor_result.summary}")
+
+        # Recursively evaluate nested evaluators (skip inactive ones)
+        for nested_evaluator in self.nested_evaluators:
+            if not nested_evaluator.is_active:
+                continue
+            nested_evaluator.evaluate()  # Update nested evaluator's state
+            results.append(nested_evaluator.success)
+            summaries.append(f"{nested_evaluator.group.group_name}: {nested_evaluator.summary}")
+
+        # Combine results based on group_type
+        if self.group.group_type == "all_of":
+            success = all(g for g in results if g is not None) if results else True
+        else:  # any_of
+            success = any(g for g in results if g is not None) if results else True
+
+        # Update internal state
+        self.success = success
+        self.summary = (
+            f"{self.group.group_name} ({'Passed' if success else 'Failed'}): "
+            + "; ".join(summaries)
+        )
+
+        # Notify dependents when first passing (for both top-level and nested evaluators)
+        if success and not self.triggered:
+            self.triggered = True
+            self._notify_dependents_first_pass()
+
+    def set_ego_kinematic_frame(
+        self, msg: Odometry, acceleration_msg: AccelWithCovarianceStamped | None = None
+    ) -> bool:
+        updated = False
+        if self.is_active and self.ego_kinematic_result is not None:
+            self.ego_kinematic_result.set_frame(msg, acceleration_msg)
+            updated = True
 
         for nested_evaluator in self.nested_evaluators:
-            nested_success, nested_summary = nested_evaluator.evaluate()
-            results.append(nested_success)
-            summaries.append(f"{nested_evaluator.group.group_name}: {nested_summary}")
+            updated |= nested_evaluator.set_ego_kinematic_frame(msg, acceleration_msg)
+        return updated
 
-        return results, summaries
+    def set_metric_frame(self, msg: MetricArray, topic: str) -> bool:
+        updated = False
+        if self.is_active and self.metric_result is not None:
+            self.metric_result.set_frame(msg, topic)
+            updated = True
+
+        for nested_evaluator in self.nested_evaluators:
+            updated |= nested_evaluator.set_metric_frame(msg, topic)
+        return updated
+
+    def set_diag_frame(self, msg: DiagnosticArray) -> bool:
+        if len(msg.status) == 0:
+            return False
+
+        updated = False
+        diag_status: DiagnosticStatus = msg.status[0]
+        if (
+            diag_status.hardware_id in self.diag_target_hardware_ids
+            and self.is_active
+            and self.diag_result is not None
+        ):
+            self.diag_result.set_frame(msg)
+            updated = True
+
+        for nested_evaluator in self.nested_evaluators:
+            updated |= nested_evaluator.set_diag_frame(msg)
+        return updated
+
+    def set_planning_factor_frame(
+        self, msg: PlanningFactorArray, topic: str, latest_kinematic_state: Odometry | None
+    ) -> bool:
+        updated = False
+        if self.is_active and self.planning_factor_result is not None:
+            self.planning_factor_result.set_frame(msg, topic, latest_kinematic_state)
+            updated = True
+
+        for nested_evaluator in self.nested_evaluators:
+            updated |= nested_evaluator.set_planning_factor_frame(
+                msg, topic, latest_kinematic_state
+            )
+        return updated
+
+    def collect_frame_data(self, group_name_prefix: str = "") -> dict[str, dict]:
+        """
+        Recursively collect frame data from all condition types and nested groups.
+
+        Returns a dictionary mapping condition keys to their frame data.
+        """
+        conditions: dict[str, dict] = {}
+        current_group_name = self.group.group_name
+        full_group_name = (
+            f"{group_name_prefix}.{current_group_name}" if group_name_prefix else current_group_name
+        )
+
+        # Collect frame data from result containers
+        result_containers = [
+            self.ego_kinematic_result,
+            self.metric_result,
+            self.diag_result,
+            self.planning_factor_result,
+        ]
+        for result in result_containers:
+            if result is not None and result.frame:
+                for cond_name, cond_result in result.frame.items():
+                    conditions[f"{full_group_name}.{cond_name}"] = cond_result
+
+        # Recursively collect from nested evaluators
+        for nested_evaluator in self.nested_evaluators:
+            nested_conditions = nested_evaluator.collect_frame_data(full_group_name)
+            conditions.update(nested_conditions)
+
+        return conditions
 
 
 class PerceptionReproducerEvaluator(DLREvaluatorV2):
@@ -256,36 +340,36 @@ class PerceptionReproducerEvaluator(DLREvaluatorV2):
         # Get conditions
         self._conditions = self._scenario.Evaluation.Conditions
 
-        self._test_start_time = stamp_to_float(self.get_clock().now().to_msg())
-        self._fail_trigger_time: float | None = None
+        self._test_start_time = self.get_clock().now().nanoseconds / 1e9
+
+        # Evaluators and state variables
+        self._pass_evaluators: list[ConditionGroupEvaluator] = []
+        self._fail_evaluators: list[ConditionGroupEvaluator] = []
+        self.latest_kinematic_state: Odometry | None = None
+        self.latest_acceleration: AccelWithCovarianceStamped | None = None
 
         # Initialize components
         self._initialize_evaluators()
         self._setup_result_writers()
         self._setup_subscriptions()
-        self._setup_kinematic_subscriptions()
         self._write_initial_dummy_result()
 
     def _initialize_evaluators(self) -> None:
         """Initialize evaluators for pass and fail condition groups."""
-        # Create shared state first (with empty dict, will be populated)
         all_evaluators: dict[str, ConditionGroupEvaluator] = {}
 
         self._evaluator_state = EvaluatorState(
-            engaged_time=0.0,
             timeout_s=self._conditions.timeout_s,
             all_evaluators=all_evaluators,
         )
 
-        # Create pass evaluators
-        self._pass_evaluators: list[ConditionGroupEvaluator] = []
+        # Create pass evaluators(ConditionGroupEvaluator constructor will create sub-evaluators recursively).
         for group in self._conditions.pass_conditions:
             evaluator = ConditionGroupEvaluator(group, self._evaluator_state)
             self._pass_evaluators.append(evaluator)
             all_evaluators[group.group_name] = evaluator
 
-        # Create fail evaluators
-        self._fail_evaluators: list[ConditionGroupEvaluator] = []
+        # Create fail evaluators (ConditionGroupEvaluator constructor will create sub-evaluators recursively).
         for group in self._conditions.fail_conditions:
             evaluator = ConditionGroupEvaluator(group, self._evaluator_state)
             self._fail_evaluators.append(evaluator)
@@ -296,17 +380,17 @@ class PerceptionReproducerEvaluator(DLREvaluatorV2):
             self._build_dependents(evaluator)
 
     def _build_dependents(self, evaluator: ConditionGroupEvaluator) -> None:
-        """Recursively build dependency relationships (dependents list)."""
-        # Add this evaluator to its dependencies' dependents list
+        """Recursively build dependency relationships (dependents lists)."""
+        # Add this evaluator to its dependencies' dependents lists
         if evaluator.group.start_at is not None:
             ref_evaluator = self._evaluator_state.all_evaluators.get(evaluator.group.start_at)
             if ref_evaluator is not None:
-                ref_evaluator._dependents.append(evaluator)
+                ref_evaluator.start_at_dependents.append(evaluator)
 
         if evaluator.group.end_at is not None:
             ref_evaluator = self._evaluator_state.all_evaluators.get(evaluator.group.end_at)
             if ref_evaluator is not None:
-                ref_evaluator._dependents.append(evaluator)
+                ref_evaluator.end_at_dependents.append(evaluator)
 
         # Recursively process nested evaluators
         for nested_evaluator in evaluator.nested_evaluators:
@@ -331,16 +415,17 @@ class PerceptionReproducerEvaluator(DLREvaluatorV2):
             {"fail_conditions": [g.model_dump() for g in self._conditions.fail_conditions]},
         )
 
-    def _setup_kinematic_subscriptions(self) -> None:
-        """Set up subscriptions for kinematic state and acceleration."""
-        self.latest_kinematic_state: Odometry | None = None
-        self.latest_acceleration: AccelWithCovarianceStamped | None = None
+    def _setup_subscriptions(self) -> None:  # noqa: C901
+        """Set up all subscriptions."""
+        # Subscribe to kinematic state
         self.__sub_kinematic_state = self.create_subscription(
             Odometry,
             "/localization/kinematic_state",
             self.kinematic_state_cb,
             10,
         )
+
+        # Subscribe to acceleration
         self.__sub_acceleration = self.create_subscription(
             AccelWithCovarianceStamped,
             "/localization/acceleration",
@@ -348,21 +433,6 @@ class PerceptionReproducerEvaluator(DLREvaluatorV2):
             10,
         )
 
-    def _write_initial_dummy_result(self) -> None:
-        """Write initial dummy result to main result.jsonl."""
-        dummy_result = {
-            "Result": {
-                "Success": True,
-                "Summary": "Perception Reproducer Evaluation initialized. Waiting for ENGAGE...",
-            },
-            "Stamp": {"System": 0.0},
-            "Frame": {},
-        }
-        dummy_result_str = self._result_writer.write_line(dummy_result)
-        self._pub_result.publish(String(data=dummy_result_str))
-
-    def _setup_subscriptions(self) -> None:
-        """Set up subscriptions for all conditions."""
         # Collect all unique topics
         metric_topics = set()
         pf_topics = set()
@@ -379,9 +449,7 @@ class PerceptionReproducerEvaluator(DLREvaluatorV2):
                 elif isinstance(item, ConditionGroup):
                     collect_topics(item)
 
-        for group in self._conditions.pass_conditions:
-            collect_topics(group)
-        for group in self._conditions.fail_conditions:
+        for group in self._conditions.pass_conditions + self._conditions.fail_conditions:
             collect_topics(group)
 
         # Subscribe to metric topics
@@ -421,286 +489,230 @@ class PerceptionReproducerEvaluator(DLREvaluatorV2):
             10,
         )
 
-    def acceleration_cb(self, msg: AccelWithCovarianceStamped) -> None:
-        """Update latest acceleration."""
-        self.latest_acceleration = msg
+    def _write_and_publish_result(
+        self, result: dict, writer: ResultWriter, publisher: Publisher
+    ) -> None:
+        """Write result to file and publish to ROS topic."""
+        ros_time = self.get_clock().now().nanoseconds / 1e9
+        system_time = writer._system_clock.now().nanoseconds / 1e9  # noqa: SLF001
+        result["Stamp"] = {"System": system_time, "ROS": ros_time}
+        result_str = writer.write_line(result)
+        publisher.publish(String(data=result_str))
 
-    def autoware_state_cb(self, msg: AutowareState) -> None:
-        """Detect Autoware entering DRIVING state and set engaged_time."""
-        if msg.state == AutowareState.DRIVING and self._evaluator_state.engaged_time == 0.0:
-            self._evaluator_state.engaged_time = stamp_to_float(self.get_clock().now().to_msg())
-            # Activate root evaluators (no parent, no start_at)
-            for evaluator in self._pass_evaluators + self._fail_evaluators:
-                if evaluator.parent_evaluator is None and evaluator.group.start_at is None:
-                    evaluator.activate()
-            self.get_logger().info(
-                f"Autoware engaged at time {self._evaluator_state.engaged_time}s"
-            )
-            self.destroy_subscription(self.__sub_autoware_state)
-            self.__sub_autoware_state = None
+    def _write_initial_dummy_result(self) -> None:
+        """Write initial dummy result to main result.jsonl."""
+        dummy_result = {
+            "Result": {
+                "Success": True,
+                "Summary": "Perception Reproducer Evaluation initialized. Waiting for ENGAGE...",
+            },
+            "Frame": {},
+        }
+        self._write_and_publish_result(dummy_result, self._result_writer, self._pub_result)
 
-    def _collect_result(self, evaluators: list[ConditionGroupEvaluator]) -> dict:
-        """Collect groups and their conditions results in unified structure."""
+    def _aggregate_results(self, groups_type: Literal["pass", "fail"]) -> dict:
+        """Collect groups and their conditions results in unified structure for top-level Pass / Fail groups."""
+        evaluators = self._pass_evaluators if groups_type == "pass" else self._fail_evaluators
+
         groups: dict[str, dict] = {}
         conditions: dict[str, dict] = {}
-        summaries: list[str] = []
 
         for evaluator in evaluators:
-            if not evaluator.is_active:
-                continue
-
-            success, summary = evaluator.evaluate()
             group_name = evaluator.group.group_name
-            groups[group_name] = {"Success": success, "Summary": summary}
-            summaries.append(summary)
+            groups[group_name] = {
+                "Success": evaluator.success,  # it may be None/True/False
+                "Summary": evaluator.summary,  # it may be "NotStarted"/"Passed"/"Failed"
+            }
 
-            result_containers = [
-                evaluator.ego_kinematic_result,
-                evaluator.metric_result,
-                evaluator.diag_result,
-                evaluator.planning_factor_result,
-            ]
-            for result in result_containers:
-                if result is not None:
-                    result.update()
-                    if result.frame:
-                        for cond_name, cond_result in result.frame.items():
-                            conditions[f"{group_name}.{cond_name}"] = cond_result
+            # Recursively collect frame data from this evaluator and its nested evaluators
+            evaluator_conditions = evaluator.collect_frame_data()
+            conditions.update(evaluator_conditions)
+
+        # Determine overall success based on groups_type
+        if groups_type == "fail":
+            # For fail conditions: success if no group has failed
+            overall_success = not any(g["Success"] is False for g in groups.values())
+        else:
+            # For pass conditions: success only if all groups have passed
+            overall_success = all(g["Success"] is True for g in groups.values())
 
         return {
             "Result": {
-                "Success": all(g["Success"] for g in groups.values()) if groups else True,
-                "Summary": "; ".join(summaries) if summaries else "No active groups",
+                "Success": overall_success,
             },
             "Frame": {"Groups": groups, "Conditions": conditions},
         }
 
-    def _collect_pass_result(self) -> dict:
-        """Collect pass groups and their conditions results in unified structure."""
-        return self._collect_result(self._pass_evaluators)
-
-    def _collect_fail_result(self) -> dict:
-        """Collect fail groups and their conditions results in unified structure."""
-        return self._collect_result(self._fail_evaluators)
-
-    def _write_results(self) -> None:
+    def _write_results(
+        self,
+    ) -> None:
         """Write pass and fail results to their respective writers."""
-        current_time = stamp_to_float(self.get_clock().now().to_msg())
+        # _aggregate_results reads current state (evaluate() should have been called before)
+        pass_result = self._aggregate_results("pass")
+        self._write_and_publish_result(pass_result, self._pass_result_writer, self._pub_pass_result)
 
-        pass_result = self._collect_pass_result()
-        pass_result["Stamp"] = {"System": current_time, "ROS": current_time}
-        pass_result_str = self._pass_result_writer.write_line(pass_result)
-        self._pub_pass_result.publish(String(data=pass_result_str))
+        fail_result = self._aggregate_results("fail")
+        self._write_and_publish_result(fail_result, self._fail_result_writer, self._pub_fail_result)
 
-        fail_result = self._collect_fail_result()
-        fail_result["Stamp"] = {"System": current_time, "ROS": current_time}
-        fail_result_str = self._fail_result_writer.write_line(fail_result)
-        self._pub_fail_result.publish(String(data=fail_result_str))
-
-    def _propagate_group_update(self, evaluator: ConditionGroupEvaluator, *, is_pass: bool) -> None:
-        """Propagate condition update upward to parent groups and check termination conditions."""
-        if not evaluator.is_active:
+    def _check_termination_conditions(self) -> None:
+        """Check termination conditions after evaluating all top-level evaluators."""
+        if self._evaluator_state.fail_trigger_time is not None:
             return
 
-        success, _ = evaluator.evaluate()
-        group_name = evaluator.group.group_name
-        state_changed = False
-        current_time = stamp_to_float(self.get_clock().now().to_msg())
+        ros_time = self.get_clock().now().nanoseconds / 1e9
 
-        if is_pass:
-            if not evaluator.passed and success:
-                evaluator.passed = True
-                evaluator.pass_time = current_time
-                state_changed = True
-                self.get_logger().info(f"Pass group '{group_name}' passed at time {current_time}s")
-                # Notify dependents that this evaluator passed (for start_at dependencies)
-                evaluator._notify_dependents(activate=True)
-                if all(e.passed for e in self._pass_evaluators):
-                    self._handle_test_termination("All pass conditions met")
-                    return
-        elif not success and not self._evaluator_state.fail_triggered:
-            self._evaluator_state.fail_triggered = True
-            self._fail_trigger_time = current_time
-            self.get_logger().error(
-                f"Fail condition '{group_name}' triggered at time {current_time}s"
-            )
+        # Check if all pass conditions are met
+        if all(e.triggered for e in self._pass_evaluators):
+            self._handle_test_termination("All pass conditions met", is_pass=True)
+            return
 
-        if state_changed and evaluator.parent_evaluator is not None:
-            self._propagate_group_update(
-                evaluator.parent_evaluator,
-                is_pass=evaluator.parent_evaluator in self._pass_evaluators,
-            )
+        if any(e.success is False for e in self._fail_evaluators):
+            self._evaluator_state.fail_trigger_time = ros_time
+            self.get_logger().error(f"Fail condition triggered at time {ros_time}s")
+            return
+
+    def acceleration_cb(self, msg: AccelWithCovarianceStamped) -> None:
+        self.latest_acceleration = msg
+
+    def autoware_state_cb(self, msg: AutowareState) -> None:
+        """Detect Autoware entering DRIVING state and set engaged_time."""
+        if msg.state == AutowareState.DRIVING and self._evaluator_state.engaged_time is None:
+            self._evaluator_state.engaged_time = self.get_clock().now().nanoseconds / 1e9
+            # Activate root evaluators (no parent, no start_at)
+            for evaluator in self._pass_evaluators + self._fail_evaluators:
+                if evaluator.group.start_at is None:
+                    evaluator.activate()
+            self.get_logger().info(f"Autoware engaged at: {self._evaluator_state.engaged_time}")
+
+            # write and publish engaged info
+            engaged_result = {
+                "Result": {
+                    "Success": True,
+                    "Summary": "Autoware engaged, evaluation started.",
+                },
+                "Frame": {},
+            }
+            self._write_and_publish_result(engaged_result, self._result_writer, self._pub_result)
+
+            self.destroy_subscription(self.__sub_autoware_state)
+            self.__sub_autoware_state = None
+
+    def _update_and_evaluate(
+        self, set_frame_func: Callable[[ConditionGroupEvaluator], bool]
+    ) -> None:
+        any_updated = False
+        for evaluator in self._pass_evaluators + self._fail_evaluators:
+            updated = set_frame_func(evaluator)
+            if updated:
+                evaluator.evaluate()
+                any_updated = True
+
+        if any_updated:
+            self._write_results()
+            self._check_termination_conditions()
 
     def kinematic_state_cb(self, msg: Odometry) -> None:
         """Update latest kinematic state and propagate ego kinematic updates."""
         self.latest_kinematic_state = msg
-        if self._evaluator_state.test_ended:
+        if self._evaluator_state.test_ended or self._evaluator_state.engaged_time is None:
             return
 
-        # Fallback: if AutowareState subscription hasn't set engaged_time yet,
-        # use first kinematic state as backup (should not happen in normal operation)
-        if self._evaluator_state.engaged_time == 0.0:
-            self._evaluator_state.engaged_time = stamp_to_float(msg.header.stamp)
-            for evaluator in self._pass_evaluators + self._fail_evaluators:
-                if evaluator.parent_evaluator is None and evaluator.group.start_at is None:
-                    evaluator.activate()
-            self.get_logger().warning(
-                "engaged_time set from kinematic_state (fallback). AutowareState subscription should handle this."
+        self._update_and_evaluate(
+            lambda e: e.set_ego_kinematic_frame(
+                self.latest_kinematic_state, self.latest_acceleration
             )
-            return
-
-        # Update ego kinematic for all active evaluators
-        updated_evaluators: set[ConditionGroupEvaluator] = set()
-        for evaluator in self._pass_evaluators + self._fail_evaluators:
-            if evaluator.is_active and evaluator.ego_kinematic_result is not None:
-                evaluator.ego_kinematic_result.set_frame(
-                    self.latest_kinematic_state, self.latest_acceleration
-                )
-                updated_evaluators.add(evaluator)
-
-        for evaluator in updated_evaluators:
-            self._propagate_group_update(evaluator, is_pass=evaluator in self._pass_evaluators)
-        if updated_evaluators:
-            self._write_results()
-
-    def _update_condition_result(
-        self,
-        condition_type: type,
-        match_func: Callable[[Any, ConditionGroupEvaluator], bool],
-        update_func: Callable[[ConditionGroupEvaluator], None],
-    ) -> None:
-        """Update condition results and propagate changes."""
-        updated_evaluators: set[ConditionGroupEvaluator] = set()
-        for evaluator in self._pass_evaluators + self._fail_evaluators:
-            if not evaluator.is_active:
-                continue
-            for item in evaluator.group.condition_list:
-                if isinstance(item, condition_type) and match_func(item, evaluator):
-                    update_func(evaluator)
-                    updated_evaluators.add(evaluator)
-                    break
-
-        for evaluator in updated_evaluators:
-            self._propagate_group_update(evaluator, is_pass=evaluator in self._pass_evaluators)
-        if updated_evaluators:
-            self._write_results()
+        )
 
     def metric_cb(self, msg: MetricArray, topic: str) -> None:
         """Handle metric messages."""
-        if self._evaluator_state.test_ended or self._evaluator_state.engaged_time == 0.0:
+        if self._evaluator_state.test_ended or self._evaluator_state.engaged_time is None:
             return
-        self._update_condition_result(
-            MetricCondition,
-            lambda cond, _: cond.topic == topic,
-            lambda evaluator: evaluator.metric_result.set_frame(msg, topic),
-        )
+
+        self._update_and_evaluate(lambda e: e.set_metric_frame(msg, topic))
 
     def factor_cb(self, msg: PlanningFactorArray, topic: str) -> None:
         """Handle planning factor messages."""
-        if self._evaluator_state.test_ended or self._evaluator_state.engaged_time == 0.0:
+        if self._evaluator_state.test_ended or self._evaluator_state.engaged_time is None:
             return
-        self._update_condition_result(
-            PlanningFactorCondition,
-            lambda cond, _: cond.topic == topic,
-            lambda evaluator: evaluator.planning_factor_result.set_frame(
-                msg, topic, self.latest_kinematic_state
-            ),
+
+        self._update_and_evaluate(
+            lambda e: e.set_planning_factor_frame(msg, topic, self.latest_kinematic_state)
         )
 
     def diag_cb(self, msg: DiagnosticArray) -> None:
         """Handle diagnostic messages."""
-        if (
-            self._evaluator_state.test_ended
-            or self._evaluator_state.engaged_time == 0.0
-            or not msg.status
-        ):
+        if self._evaluator_state.test_ended or self._evaluator_state.engaged_time is None:
             return
-        hardware_ids = {status.hardware_id for status in msg.status}
-        self._update_condition_result(
-            DiagCondition,
-            lambda cond, _: cond.hardware_id in hardware_ids,
-            lambda evaluator: evaluator.diag_result.set_frame(msg),
-        )
 
-    def timer_cb(
-        self,
-        *,
-        register_loop_func: Callable | None = None,
-        register_shutdown_func: Callable | None = None,  # noqa: ARG002
-    ) -> None:
-        """Override timer_cb to only check timeout conditions."""
+        self._update_and_evaluate(lambda e: e.set_diag_frame(msg))
+
+    def _check_timeout_conditions(self) -> None:
+        """Check timeout conditions and terminate test if needed."""
         if self._evaluator_state.test_ended:
             return
 
-        current_time = stamp_to_float(self.get_clock().now().to_msg())
+        ros_time = self.get_clock().now().nanoseconds / 1e9
 
         # Check engage timeout (if not engaged yet)
-        if self._evaluator_state.engaged_time == 0.0:
-            if current_time - self._test_start_time >= self._evaluator_state.timeout_s:
-                self._handle_test_termination("Engage timeout reached")
+        if self._evaluator_state.engaged_time is None:
+            if ros_time - self._test_start_time >= self._evaluator_state.timeout_s:
+                self._handle_test_termination("Engage timeout reached", is_pass=False)
                 return
             return
 
         # Check test timeout (after engaged) - deactivate all evaluators
-        if current_time >= self._evaluator_state.engaged_time + self._evaluator_state.timeout_s:
+        if ros_time >= self._evaluator_state.engaged_time + self._evaluator_state.timeout_s:
             for evaluator in self._pass_evaluators + self._fail_evaluators:
                 evaluator.deactivate()
-            self._handle_test_termination("Timeout reached")
+            self._handle_test_termination("Driving Timeout reached", is_pass=False)
             return
 
         # Check if we should terminate after fail
         if (
-            self._evaluator_state.fail_triggered
-            and self._fail_trigger_time is not None
-            and current_time - self._fail_trigger_time >= self._conditions.terminated_after_fail_s
+            self._evaluator_state.fail_trigger_time is not None
+            and ros_time - self._evaluator_state.fail_trigger_time
+            >= self._conditions.terminated_after_fail_s
         ):
-            self._handle_test_termination("Fail condition triggered")
+            self._handle_test_termination("Fail condition triggered", is_pass=False)
             return
 
-        if register_loop_func is not None:
-            register_loop_func()
+    def _handle_ros_clock_stopped(self) -> None:
+        """Handle clock stop detection: terminate test when simulation time stops."""
+        self._handle_test_termination("ROS Clock Stopped", is_pass=False)
 
-    def _handle_test_termination(self, reason: str) -> None:
+    def timer_cb(
+        self,
+        *,
+        register_loop_func: Callable | None = None,  # noqa: ARG002
+        register_shutdown_func: Callable | None = None,  # noqa: ARG002
+    ) -> None:
+        """Override timer_cb to register timeout check and clock stop handler."""
+        super().timer_cb(
+            register_loop_func=self._check_timeout_conditions,
+            register_shutdown_func=self._handle_test_termination,
+        )
+
+    def _handle_test_termination(self, reason: str, *, is_pass: bool = True) -> None:
         """Handle test termination: evaluate final results and shutdown."""
         if self._evaluator_state.test_ended:
             return
         self._evaluator_state.test_ended = True
 
-        self.get_logger().info(f"Test terminated: {reason}")
+        self.get_logger().info(f"Test terminated({'Pass' if is_pass else 'Fail'}: {reason}")
 
-        current_time = stamp_to_float(self.get_clock().now().to_msg())
+        pass_result = self._aggregate_results("pass")
+        fail_result = self._aggregate_results("fail")
 
-        pass_result = self._collect_pass_result()
-        fail_result = self._collect_fail_result()
-
-        overall_success = pass_result["Result"]["Success"] and fail_result["Result"]["Success"]
-
-        # Write final sub-condition results (pass_result.jsonl, fail_result.jsonl)
-        pass_result["Stamp"] = {"System": current_time, "ROS": current_time}
-        pass_result["Frame"]["TerminationReason"] = reason
-        pass_result_str = self._pass_result_writer.write_line(pass_result)
-        self._pub_pass_result.publish(String(data=pass_result_str))
-
-        fail_result["Stamp"] = {"System": current_time, "ROS": current_time}
-        fail_result["Frame"]["TerminationReason"] = reason
-        fail_result_str = self._fail_result_writer.write_line(fail_result)
-        self._pub_fail_result.publish(String(data=fail_result_str))
-
-        # Write main result.jsonl (summary, similar to planning_control)
         main_result = {
             "Result": {
-                "Success": overall_success,
-                "Summary": f"Pass: {pass_result['Result']['Summary']}; Fail: {fail_result['Result']['Summary']}",
+                "Success": is_pass,
+                "Summary": f"Pass Conditions: {pass_result['Result']['Summary']}; Fail Conditions: {fail_result['Result']['Summary']}",
             },
-            "Stamp": {"System": current_time, "ROS": current_time},
             "Frame": {
                 "TerminationReason": reason,
-                "PassConditions": pass_result["Frame"]["Groups"],
-                "FailConditions": fail_result["Frame"]["Groups"],
             },
         }
-        main_result_str = self._result_writer.write_line(main_result)
-        self._pub_result.publish(String(data=main_result_str))
+        self._write_and_publish_result(main_result, self._result_writer, self._pub_result)
 
         # Close writers
         self._pass_result_writer.close()
