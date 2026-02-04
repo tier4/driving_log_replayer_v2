@@ -149,22 +149,21 @@ class Conditions(BaseModel):
     pass_conditions: list[ConditionGroup] = []
     fail_conditions: list[ConditionGroup] = []
 
-    # Available condition classes for validation
-    PASS_CONDITION_CLASSES: tuple[type, ...] = (EgoKinematicTriggerCondition, ConditionGroup)
-    FAIL_CONDITION_CLASSES: tuple[type, ...] = (
-        EgoKinematicCondition,
-        MetricCondition,
-        DiagCondition,
-        PlanningFactorCondition,
-        ConditionGroup,
-    )
-
     @model_validator(mode="after")
     def validate_condition_types(self) -> Conditions:
+        # Available condition classes for validation
+        pass_condition_classes: tuple[type, ...] = (EgoKinematicTriggerCondition, ConditionGroup)
+        fail_condition_classes: tuple[type, ...] = (
+            EgoKinematicCondition,
+            MetricCondition,
+            DiagCondition,
+            PlanningFactorCondition,
+            ConditionGroup,
+        )
         for group in self.pass_conditions:
-            self._validate_condition_group(group, group.group_name, self.PASS_CONDITION_CLASSES)
+            self._validate_condition_group(group, group.group_name, pass_condition_classes)
         for group in self.fail_conditions:
-            self._validate_condition_group(group, group.group_name, self.FAIL_CONDITION_CLASSES)
+            self._validate_condition_group(group, group.group_name, fail_condition_classes)
         return self
 
     @model_validator(mode="after")
