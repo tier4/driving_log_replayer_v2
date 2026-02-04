@@ -16,10 +16,9 @@ from pathlib import Path
 
 from launch import LaunchContext
 from launch.actions import DeclareLaunchArgument
-from launch.actions import Node
 from launch.actions import OpaqueFunction
 from launch.substitutions import LaunchConfiguration
-import yaml
+from launch_ros.actions import Node
 
 from driving_log_replayer_v2.launch.argument import add_use_case_arguments
 from driving_log_replayer_v2.launch.rosbag import launch_bag_recorder
@@ -67,7 +66,7 @@ def launch_engage_node(context: LaunchContext) -> list:
 
     params = {
         "use_sim_time": True,
-        "timeout_s": conf["timeout_s"],
+        "timeout_s": float(conf["timeout_s"]),
     }
 
     return [

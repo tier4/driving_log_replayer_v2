@@ -19,7 +19,7 @@ Evaluation:
             y: 0.005891999600528019
             z: -0.9709848597542231
             w: 0.237863568369043
-        # Optional: GoalPose - if not specified, will use rosbag route via use_rosbag_route
+        # Optional: GoalPose - if not specified, should use rosbag route via use_rosbag_route
         # GoalPose:
         #   position:
         #     x: 4000.0

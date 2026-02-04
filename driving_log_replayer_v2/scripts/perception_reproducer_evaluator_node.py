@@ -51,6 +51,8 @@ from driving_log_replayer_v2.result import ResultWriter
 class EvaluatorState:
     """Shared state for all evaluators in the perception_reproducer use case."""
 
+    all_evaluators: dict[str, "ConditionGroupEvaluator"]  # All evaluators by group_name
+
     timeout_s: float  # Test timeout in seconds
     test_ended: bool = False  # Whether test has ended
 
@@ -58,8 +60,6 @@ class EvaluatorState:
     fail_trigger_time: float | None = (
         None  # Time when fail condition was triggered (None means not triggered)
     )
-
-    all_evaluators: dict[str, "ConditionGroupEvaluator"]  # All evaluators by group_name
 
 
 class ConditionGroupEvaluator:
@@ -359,8 +359,8 @@ class PerceptionReproducerEvaluator(DLREvaluatorV2):
         all_evaluators: dict[str, ConditionGroupEvaluator] = {}
 
         self._evaluator_state = EvaluatorState(
-            timeout_s=self._conditions.timeout_s,
             all_evaluators=all_evaluators,
+            timeout_s=self._conditions.timeout_s,
         )
 
         # Create pass evaluators(ConditionGroupEvaluator constructor will create sub-evaluators recursively).
@@ -407,12 +407,12 @@ class PerceptionReproducerEvaluator(DLREvaluatorV2):
         self._pass_result_writer: ResultWriter = ResultWriter(
             self._result_archive_path.joinpath("pass_result.jsonl"),
             self.get_clock(),
-            {"pass_conditions": [g.model_dump() for g in self._conditions.pass_conditions]},
+            self._conditions.pass_conditions,
         )
         self._fail_result_writer: ResultWriter = ResultWriter(
             self._result_archive_path.joinpath("fail_result.jsonl"),
             self.get_clock(),
-            {"fail_conditions": [g.model_dump() for g in self._conditions.fail_conditions]},
+            self._conditions.fail_conditions,
         )
 
     def _setup_subscriptions(self) -> None:  # noqa: C901

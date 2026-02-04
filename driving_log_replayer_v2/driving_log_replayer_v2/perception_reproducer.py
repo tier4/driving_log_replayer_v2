@@ -17,12 +17,16 @@ from __future__ import annotations
 from dataclasses import dataclass
 import logging
 import math
+import pprint
 from sys import float_info
+from typing import Annotated
 from typing import Literal
+from typing import Union
 
 from geometry_msgs.msg import AccelWithCovarianceStamped
 from nav_msgs.msg import Odometry
 from pydantic import BaseModel
+from pydantic import Discriminator
 from pydantic import Field
 from pydantic import model_validator
 
@@ -62,7 +66,9 @@ class _DeprecatedTimeField:
     def set_default_time(cls, data: dict) -> dict:
         if isinstance(data, dict):
             if "time" in data:
-                warn_msg = f"Time field is not available for {cls.__name__}"
+                warn_msg = (
+                    f"Removed available time field for {cls.__name__}: {pprint.pformat(data)}"
+                )
                 logging.warning(warn_msg)
             data["time"] = {"start": 0.0, "end": float_info.max}
         return data
@@ -91,7 +97,6 @@ class EgoKinematicConditionBase(BaseModel):
 
 class EgoKinematicCondition(EgoKinematicConditionBase):
     condition_class: Literal["ego_kinematic"] = "ego_kinematic"
-    condition_type: Literal["any_of", "all_of"] = "any_of"
 
 
 class EgoKinematicTriggerCondition(EgoKinematicConditionBase):
@@ -111,50 +116,24 @@ class ConditionGroup(BaseModel):
           constrained by the parent group's time window.
     """
 
+    condition_class: Literal["condition_group"] = "condition_group"
     group_name: str
     start_at: str | None = None  # Reference to another group_name or null (starts at ENGAGED)
     end_at: str | None = None  # Reference to another group_name or null (ends at timeout_s)
     group_type: Literal["any_of", "all_of"]
     condition_list: list[
-        dict
-        | ConditionGroup
-        | EgoKinematicCondition
-        | EgoKinematicTriggerCondition
-        | MetricCondition
-        | DiagCondition
-        | PlanningFactorCondition
+        Annotated[
+            Union[  # noqa: UP007
+                ConditionGroup,
+                EgoKinematicCondition,
+                EgoKinematicTriggerCondition,
+                MetricCondition,
+                DiagCondition,
+                PlanningFactorCondition,
+            ],
+            Discriminator("condition_class"),
+        ]
     ] = []
-
-    @model_validator(mode="after")
-    def parse_condition_list(self) -> ConditionGroup:
-        """Parse condition_list items based on condition_class field."""
-        # Mapping from condition_class to condition class
-        condition_class_map: dict[str, type] = {
-            "ego_kinematic": EgoKinematicCondition,
-            "ego_kinematic_trigger": EgoKinematicTriggerCondition,
-            "metric": MetricCondition,
-            "diagnostic": DiagCondition,
-            "planning_factor": PlanningFactorCondition,
-            "condition_group": ConditionGroup,
-        }
-
-        parsed_list = []
-        for item in self.condition_list:
-            if not isinstance(item, dict):
-                err_msg = f"Unexpected type in condition_list: {type(item)}, expected dict"
-                raise TypeError(err_msg)
-
-            item_dict = item.copy()
-            condition_class = item_dict.get("condition_class", "not_specified")
-            if condition_class in condition_class_map:
-                condition_cls = condition_class_map[condition_class]
-                parsed_list.append(condition_cls(**item_dict))
-            else:
-                err_msg = f"Unknown condition_class: {condition_class}, expected one of: {condition_class_map.keys()}"
-                raise ValueError(err_msg)
-
-        object.__setattr__(self, "condition_list", parsed_list)
-        return self
 
     @model_validator(mode="after")
     def validate_nested_group_names(self) -> ConditionGroup:
