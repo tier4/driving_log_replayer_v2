@@ -185,8 +185,10 @@ def launch_bag_recorder(context: LaunchContext) -> list:
         conf["result_bag_path"],
         "--qos-profile-overrides-path",
         QOS_PROFILE_PATH_STR,
-        "--use-sim-time",
     ]
+    # For perception_reproducer, use real time instead of sim time
+    if conf["use_case"] != "perception_reproducer":
+        record_cmd += ["--use-sim-time"]
     if conf["storage"] == "mcap":
         record_cmd += ["--storage-preset-profile", "zstd_fast"]
     if conf["override_topics_regex"] == "":
