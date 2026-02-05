@@ -207,7 +207,7 @@ def launch_perception_reproducer(context: LaunchContext) -> list:
         scenario_data = yaml.safe_load(f)
 
     evaluation = scenario_data.get("Evaluation", {})
-    reproducer_config = evaluation.get("PerceptionReproducerConfig", {})
+    reproducer_config = evaluation.get("perception_reproducer_config", {})
 
     # Build perception_reproducer command
     rosbag_path = Path(conf["input_bag"])
