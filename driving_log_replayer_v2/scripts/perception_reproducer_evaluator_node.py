@@ -39,6 +39,8 @@ from driving_log_replayer_v2.perception_reproducer import EgoKinematicCondition
 from driving_log_replayer_v2.perception_reproducer import EgoKinematicResult
 from driving_log_replayer_v2.perception_reproducer import EgoKinematicTriggerCondition
 from driving_log_replayer_v2.perception_reproducer import PerceptionReproducerScenario
+from driving_log_replayer_v2.perception_reproducer import TimeWaitResult
+from driving_log_replayer_v2.perception_reproducer import TimeWaitTriggerCondition
 from driving_log_replayer_v2.planning_control import MetricCondition
 from driving_log_replayer_v2.planning_control import MetricResult
 from driving_log_replayer_v2.planning_control import PlanningFactorCondition
@@ -77,7 +79,7 @@ class ConditionGroupEvaluator:
 
         self.triggered = False  # for trigger conditions
         self.is_active = False
-        self.summary: str = f"{self.group.group_name} (NotStarted)"
+        self.summary: dict = {"Status": "NotStarted"}
         self.success: bool | None = None  # None means the evaluator is not evaluated even once.
 
         # Dependents: evaluators that depend on this one (via start_at/end_at)
@@ -89,12 +91,13 @@ class ConditionGroupEvaluator:
         self.metric_result: MetricResult | None = None
         self.diag_result: DiagnosticsResult | None = None
         self.planning_factor_result: PlanningFactorResult | None = None
+        self.time_wait_result: TimeWaitResult | None = None
         self.nested_evaluators: list[ConditionGroupEvaluator] = []
         self.diag_target_hardware_ids: list[str] = []
 
         self._initialize_results()
 
-    def _initialize_results(self) -> None:  # noqa: C901
+    def _initialize_results(self) -> None:  # noqa: C901, PLR0912
         """Initialize result containers based on condition_class in each condition."""
         # Handle nested condition groups first
         for nested_group in self.group.condition_list:
@@ -108,10 +111,13 @@ class ConditionGroupEvaluator:
         metric_conditions: list[MetricCondition] = []
         diag_conditions: list[DiagCondition] = []
         pf_conditions: list[PlanningFactorCondition] = []
+        time_wait_conditions: list[TimeWaitTriggerCondition] = []
 
         for item in self.group.condition_list:
             if isinstance(item, (EgoKinematicCondition, EgoKinematicTriggerCondition)):
                 ego_conditions.append(item)
+            elif isinstance(item, TimeWaitTriggerCondition):
+                time_wait_conditions.append(item)
             elif isinstance(item, MetricCondition):
                 metric_conditions.append(item)
             elif isinstance(item, DiagCondition):
@@ -130,6 +136,8 @@ class ConditionGroupEvaluator:
             self.diag_result = DiagnosticsResult(diag_conditions_obj)
         if pf_conditions:
             self.planning_factor_result = PlanningFactorResult(pf_conditions)
+        if time_wait_conditions:
+            self.time_wait_result = TimeWaitResult(time_wait_conditions)
 
     def _notify_children_activation(self, *, activate: bool) -> None:
         for child in self.nested_evaluators:
@@ -190,24 +198,28 @@ class ConditionGroupEvaluator:
             return
 
         results: list[bool] = []
-        summaries: list[str] = []
+        summary_dict: dict = {}
 
-        # Collect results from result containers
+        # Collect results from result containers and build summary
         if self.ego_kinematic_result is not None:
             results.append(self.ego_kinematic_result.success)
-            summaries.append(f"EgoKinematic: {self.ego_kinematic_result.summary}")
+            summary_dict["EgoKinematic"] = self.ego_kinematic_result.summary
 
         if self.metric_result is not None:
             results.append(self.metric_result.success)
-            summaries.append(f"Metrics: {self.metric_result.summary}")
+            summary_dict["Metrics"] = self.metric_result.summary
 
         if self.diag_result is not None:
             results.append(self.diag_result.success)
-            summaries.append(f"Diagnostics: {self.diag_result.summary}")
+            summary_dict["Diagnostics"] = self.diag_result.summary
 
         if self.planning_factor_result is not None:
             results.append(self.planning_factor_result.success)
-            summaries.append(f"PlanningFactors: {self.planning_factor_result.summary}")
+            summary_dict["PlanningFactors"] = self.planning_factor_result.summary
+
+        if self.time_wait_result is not None:
+            results.append(self.time_wait_result.success)
+            summary_dict["TimeWait"] = self.time_wait_result.summary
 
         # Recursively evaluate nested evaluators (skip inactive ones)
         for nested_evaluator in self.nested_evaluators:
@@ -215,20 +227,16 @@ class ConditionGroupEvaluator:
                 continue
             nested_evaluator.evaluate()  # Update nested evaluator's state
             results.append(nested_evaluator.success)
-            summaries.append(f"{nested_evaluator.group.group_name}: {nested_evaluator.summary}")
+            summary_dict[nested_evaluator.group.group_name] = nested_evaluator.summary
 
-        # Combine results based on group_type
         if self.group.group_type == "all_of":
             success = all(g for g in results if g is not None) if results else True
-        else:  # any_of
+        else:
             success = any(g for g in results if g is not None) if results else True
 
         # Update internal state
         self.success = success
-        self.summary = (
-            f"{self.group.group_name} ({'Passed' if success else 'Failed'}): "
-            + "; ".join(summaries)
-        )
+        self.summary = {"Status": "Passed" if success else "Failed", **summary_dict}
 
         # Notify dependents when first passing (for both top-level and nested evaluators)
         if success and not self.triggered:
@@ -289,6 +297,16 @@ class ConditionGroupEvaluator:
             )
         return updated
 
+    def set_time_wait_frame(self, current_time: float) -> bool:
+        updated = False
+        if self.is_active and self.time_wait_result is not None:
+            self.time_wait_result.set_frame(current_time)
+            updated = True
+
+        for nested_evaluator in self.nested_evaluators:
+            updated |= nested_evaluator.set_time_wait_frame(current_time)
+        return updated
+
     def collect_frame_data(self, group_name_prefix: str = "") -> dict[str, dict]:
         """
         Recursively collect frame data from all condition types and nested groups.
@@ -307,6 +325,7 @@ class ConditionGroupEvaluator:
             self.metric_result,
             self.diag_result,
             self.planning_factor_result,
+            self.time_wait_result,
         ]
         for result in result_containers:
             if result is not None and result.frame:
@@ -489,6 +508,9 @@ class PerceptionReproducerEvaluator(DLREvaluatorV2):
             10,
         )
 
+        # Create timer for time wait conditions (0.05s interval)
+        self._time_wait_timer = self.create_timer(0.05, self._time_wait_timer_cb)
+
     def _write_and_publish_result(
         self, result: dict, writer: ResultWriter, publisher: Publisher
     ) -> None:
@@ -514,33 +536,30 @@ class PerceptionReproducerEvaluator(DLREvaluatorV2):
         """Collect groups and their conditions results in unified structure for top-level Pass / Fail groups."""
         evaluators = self._pass_evaluators if groups_type == "pass" else self._fail_evaluators
 
-        groups: dict[str, dict] = {}
-        conditions: dict[str, dict] = {}
+        groups_summaries: dict[str, dict] = {}
+        conditions_frame_data: dict[str, dict] = {}
 
         for evaluator in evaluators:
-            group_name = evaluator.group.group_name
-            groups[group_name] = {
-                "Success": evaluator.success,  # it may be None/True/False
-                "Summary": evaluator.summary,  # it may be "NotStarted"/"Passed"/"Failed"
-            }
+            groups_summaries[evaluator.group.group_name] = evaluator.summary
 
             # Recursively collect frame data from this evaluator and its nested evaluators
-            evaluator_conditions = evaluator.collect_frame_data()
-            conditions.update(evaluator_conditions)
+            conditions_frame_data.update(evaluator.collect_frame_data())
 
         # Determine overall success based on groups_type
         if groups_type == "fail":
             # For fail conditions: success if no group has failed
-            overall_success = not any(g["Success"] is False for g in groups.values())
+            overall_success = not any(e.success is False for e in evaluators)
         else:
             # For pass conditions: success only if all groups have passed
-            overall_success = all(g["Success"] is True for g in groups.values())
+            overall_success = all(e.success is True for e in evaluators)
 
+        # Generate summary from groups
         return {
             "Result": {
                 "Success": overall_success,
+                "Summary": groups_summaries,
             },
-            "Frame": {"Groups": groups, "Conditions": conditions},
+            "Frame": conditions_frame_data,
         }
 
     def _write_results(
@@ -645,6 +664,14 @@ class PerceptionReproducerEvaluator(DLREvaluatorV2):
             return
 
         self._update_and_evaluate(lambda e: e.set_diag_frame(msg))
+
+    def _time_wait_timer_cb(self) -> None:
+        """Timer callback for time wait conditions (0.05s interval)."""
+        if self._evaluator_state.test_ended or self._evaluator_state.engaged_time is None:
+            return
+
+        current_time = self.get_clock().now().nanoseconds / 1e9
+        self._update_and_evaluate(lambda e: e.set_time_wait_frame(current_time))
 
     def _check_timeout_conditions(self) -> None:
         """Check timeout conditions and terminate test if needed."""

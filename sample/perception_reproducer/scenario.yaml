@@ -33,19 +33,27 @@ Evaluation:
 
   # Configuration for perception_reproducer node
   perception_reproducer_config:
-    noise: false  # -n, --noise: apply perception noise to the objects
-    reproduce_cool_down: 999.0  # -c, --reproduce-cool-down: cool down time for republishing (default: 80.0)
-    tracked_object: false  # -t, --tracked-object: publish tracked object
-    search_radius: 1.5  # -r, --search-radius: search radius for searching rosbag's ego odom messages (default: 1.5)
-    pub_route: false  # -p, --pub-route: publish route created from rosbag (use when GoalPose is not specified)
+    noise: false # -n, --noise: apply perception noise to the objects
+    reproduce_cool_down: 999.0 # -c, --reproduce-cool-down: cool down time for republishing (default: 80.0)
+    tracked_object: false # -t, --tracked-object: publish tracked object
+    search_radius: 1.5 # -r, --search-radius: search radius for searching rosbag's ego odom messages (default: 1.5)
+    pub_route: false # -p, --pub-route: publish route created from rosbag (use when GoalPose is not specified)
 
   Conditions:
     timeout_s: 80.0 # [s] scenario timeout duration, used for both engage_node and perception_reproducer_evaluator_node
-    terminated_after_fail_s: 10 # [s] scenario terminated after a fail condition trigger 
+    terminated_after_fail_s: 10 # [s] scenario terminated after a fail condition trigger
 
-    # Pass Conditions 
+    # Pass Conditions
     #   - when all condition groups meet ONCE, the test passes and terminates.
     pass_conditions: # supports only `ego_kinematic_trigger` and `condition_group`(nested) class as condition list
+      - group_name: time_wait_triggers
+        group_type: all_of
+        start_at: null
+        end_at: null
+        condition_list:
+          - condition_class: time_wait_trigger
+            condition_name: wait_10s_after_engaged
+            wait_seconds: 10.0
       - group_name: check_arrive_obstacle_area
         group_type: all_of
         start_at: null # other condition_group name to trigger this group, if not specified, the condition starts after the autoware is ENGAGED.
@@ -53,7 +61,7 @@ Evaluation:
         condition_list:
           - condition_class: ego_kinematic_trigger
             condition_name: check_arrive_obstacle_area
-            area: 
+            area:
               x: 3900.0 # [m] Target position x
               y: 72000.0 # [m] Target position y
               range: 5.0 # [m] Tolerance range
@@ -69,11 +77,11 @@ Evaluation:
             area:
               x: 4000.0 # [m] Target position x
               y: 74000.0 # [m] Target position y
-              range: 1.0  # [m] Tolerance range
-              area_condition: inside  # inside or outside
-            velocity:  { min: 0.0, max: 0.0 } # [m/s] Optional: speed range when ego is in the area
-            acceleration:  { min: 0.0, max: 0.0 } # [m/s^2] Optional: acceleration range when ego is in the area
-            area_check_type: baselink  # baselink, footprint_overlap, footprint_inside, currently only baselink is supported
+              range: 1.0 # [m] Tolerance range
+              area_condition: inside # inside or outside
+            velocity: { min: 0.0, max: 0.0 } # [m/s] Optional: speed range when ego is in the area
+            acceleration: { min: 0.0, max: 0.0 } # [m/s^2] Optional: acceleration range when ego is in the area
+            area_check_type: baselink # baselink, footprint_overlap, footprint_inside, currently only baselink is supported
             judgement: positive # positive or negative
 
     # Fail Conditions
@@ -94,27 +102,36 @@ Evaluation:
           - condition_class: ego_kinematic
             condition_name: check_avoid_success # check AVOIDANCE
             area:
-              x: 3900.0  
+              x: 3900.0
               y: 72000.0
               range: 2.0
               area_condition: inside
             area_check_type: footprint_overlap
             judgement: negative
             condition_type: all_of
-      # Check boundary distance and control validator all the time
+      # Check boundary distance and control validator from 10 seconds after engaged
       - group_name: check_safety_conditions
-        start_at: null
+        start_at: time_wait_triggers
         group_type: all_of
         condition_list:
           - condition_class: metric
             condition_name: check_boundary_distance_ok # check BOUNDARY DISTANCE
             topic: /planning/planning_evaluator/metrics
             metric_name: boundary_distance
+            condition_type: all_of
             value_type: number
             value_range:
-              min: 0.5
+              max: 0.1
+            judgement: negative
+          - condition_class: metric
+            condition_name: check_closest_object_distance
+            topic: /control/control_evaluator/metrics
+            metric_name: closest_object_distance
             condition_type: all_of
             judgement: positive
+            value_type: number
+            value_range:
+              min: 0.1
           - condition_class: diagnostic
             condition_name: check_control_validator_ok # check CONTROL VALIDATOR
             hardware_id: control_validator

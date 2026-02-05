@@ -12,8 +12,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from pathlib import Path
-
 from launch import LaunchContext
 from launch.actions import DeclareLaunchArgument
 from launch.actions import OpaqueFunction
@@ -50,11 +48,13 @@ RECORD_TOPIC = """^/tf$\
 ||^/awapi/.*/get/.*\
 """
 
-AUTOWARE_DISABLE = {
-    "localization": "false",
-}
+AUTOWARE_DISABLE = {}
 
-AUTOWARE_ARGS = {"use_aeb_autoware_state_check": "false"}
+AUTOWARE_ARGS = {
+    "use_aeb_autoware_state_check": "false",
+    "use_sim_time": "false",
+    "enable_all_modules_auto_mode": "true",
+}
 
 NODE_PARAMS: dict[str, LaunchConfiguration] = {}
 
@@ -65,7 +65,7 @@ def launch_engage_node(context: LaunchContext) -> list:
     conf = context.launch_configurations
 
     params = {
-        "use_sim_time": True,
+        "use_sim_time": False,
         "timeout_s": float(conf["timeout_s"]),
     }
 

@@ -172,6 +172,7 @@ class PlanningControlScenario(Scenario):
 class Metric(EvaluationItem):
     def __post_init__(self) -> None:
         self.condition: MetricCondition
+        self.success = self.condition.judgement == "negative"
 
     def set_frame(self, msg: MetricArray) -> dict | None:
         # check time condition

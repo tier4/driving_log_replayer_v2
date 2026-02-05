@@ -109,7 +109,7 @@ def launch_evaluator_node(context: LaunchContext) -> list:
         output_dummy_result_jsonl(conf["result_jsonl_path"])
         return [LogInfo(msg="evaluator_node is not launched due to record only mode")]
     params = {
-        "use_sim_time": True,
+        "use_sim_time": conf["use_case"] != "perception_reproducer",
         "scenario_path": conf["scenario_path"],
         "t4_dataset_path": conf["t4_dataset_path"],
         "result_jsonl_path": conf["result_jsonl_path"],
@@ -172,7 +172,7 @@ def launch_initial_pose_node(context: LaunchContext) -> list:
         return [LogInfo(msg="initial_pose_node is not activated")]
 
     params = {
-        "use_sim_time": True,
+        "use_sim_time": conf["use_case"] != "perception_reproducer",
         "initial_pose": initial_pose,
         "direct_initial_pose": direct_initial_pose,
     }
@@ -197,7 +197,7 @@ def launch_goal_pose_node(context: LaunchContext) -> list:
         return [LogInfo(msg="goal_pose_node is not activated")]
 
     params = {
-        "use_sim_time": True,
+        "use_sim_time": conf["use_case"] != "perception_reproducer",
         "goal_pose": goal_pose,
     }
 

@@ -21,14 +21,17 @@ import pprint
 from sys import float_info
 from typing import Annotated
 from typing import Literal
+from typing import TYPE_CHECKING
 from typing import Union
 
-from geometry_msgs.msg import AccelWithCovarianceStamped
-from nav_msgs.msg import Odometry
 from pydantic import BaseModel
 from pydantic import Discriminator
 from pydantic import Field
 from pydantic import model_validator
+
+if TYPE_CHECKING:
+    from geometry_msgs.msg import AccelWithCovarianceStamped
+    from nav_msgs.msg import Odometry
 
 from driving_log_replayer_v2.diagnostics import DiagCondition as DiagConditionBase
 from driving_log_replayer_v2.planning_control import Area
@@ -87,6 +90,7 @@ class PlanningFactorCondition(_DeprecatedTimeField, PlanningFactorConditionBase)
 
 
 class EgoKinematicConditionBase(BaseModel):
+    condition_class: Literal["ego_kinematic", "ego_kinematic_trigger"]
     condition_name: str | None = None
     area: Area | None = None
     velocity: MinMax | None = None
@@ -102,6 +106,12 @@ class EgoKinematicCondition(EgoKinematicConditionBase):
 class EgoKinematicTriggerCondition(EgoKinematicConditionBase):
     condition_class: Literal["ego_kinematic_trigger"] = "ego_kinematic_trigger"
     condition_type: Literal["any_of"] = "any_of"
+
+
+class TimeWaitTriggerCondition(BaseModel):
+    condition_class: Literal["time_wait_trigger"] = "time_wait_trigger"
+    condition_name: str | None = None
+    wait_seconds: float = Field(ge=0.0)  # Number of seconds to wait
 
 
 class ConditionGroup(BaseModel):
@@ -127,6 +137,7 @@ class ConditionGroup(BaseModel):
                 ConditionGroup,
                 EgoKinematicCondition,
                 EgoKinematicTriggerCondition,
+                TimeWaitTriggerCondition,
                 MetricCondition,
                 DiagCondition,
                 PlanningFactorCondition,
@@ -152,7 +163,11 @@ class Conditions(BaseModel):
     @model_validator(mode="after")
     def validate_condition_types(self) -> Conditions:
         # Available condition classes for validation
-        pass_condition_classes: tuple[type, ...] = (EgoKinematicTriggerCondition, ConditionGroup)
+        pass_condition_classes: tuple[type, ...] = (
+            EgoKinematicTriggerCondition,
+            TimeWaitTriggerCondition,
+            ConditionGroup,
+        )
         fail_condition_classes: tuple[type, ...] = (
             EgoKinematicCondition,
             MetricCondition,
@@ -220,7 +235,10 @@ class EgoKinematic(EvaluationItem):
 
     def set_frame(
         self, msg: Odometry, acceleration_msg: AccelWithCovarianceStamped | None = None
-    ) -> dict:
+    ) -> dict | None:
+        if self.success and self.condition.condition_class == "ego_kinematic_trigger":
+            return None
+
         self.total += 1
 
         # Get the kinematic state
@@ -330,4 +348,88 @@ class EgoKinematicResult(ResultBase):
         self, msg: Odometry, acceleration_msg: AccelWithCovarianceStamped | None = None
     ) -> None:
         self._frame = self.__kinematic_container.set_frame(msg, acceleration_msg)
+        self.update()
+
+
+@dataclass
+class TimeWait(EvaluationItem):
+    """Evaluate time wait trigger conditions."""
+
+    def __post_init__(self) -> None:
+        self.condition: TimeWaitTriggerCondition
+        self.activation_time: float | None = None
+
+    def set_frame(self, current_time: float) -> dict | None:
+        """Set frame with current time and check if wait condition is met."""
+        # For trigger conditions, stop updating once successful
+        if self.success and self.condition.condition_class == "time_wait_trigger":
+            return None
+
+        # Record activation time on first call
+        if self.activation_time is None:
+            self.activation_time = current_time
+        self.total += 1
+
+        elapsed_time = (
+            current_time - self.activation_time if self.activation_time is not None else 0.0
+        )
+        condition_met = elapsed_time >= self.condition.wait_seconds
+
+        if condition_met:
+            self.passed += 1
+        frame_success = "Success" if condition_met else "Fail"
+
+        self.success = condition_met
+
+        return {
+            "Result": {"Total": self.success_str(), "Frame": frame_success},
+            "Info": {
+                "ElapsedTime": elapsed_time,
+                "WaitSeconds": self.condition.wait_seconds,
+                "ActivationTime": self.activation_time,
+            },
+        }
+
+
+class TimeWaitClassContainer:
+    def __init__(self, conditions: list[TimeWaitTriggerCondition]) -> None:
+        self.__container: list[TimeWait] = []
+        for i, cond in enumerate(conditions):
+            condition_name = (
+                cond.condition_name if cond.condition_name is not None else f"Condition_{i}"
+            )
+            self.__container.append(TimeWait(condition_name, cond))
+
+    def set_frame(self, current_time: float) -> dict:
+        frame_result: dict[str, dict] = {}
+        for evaluation_item in self.__container:
+            topic_result = evaluation_item.set_frame(current_time)
+            if topic_result is not None:
+                frame_result[f"{evaluation_item.name}"] = topic_result
+        return frame_result
+
+    def update(self) -> tuple[bool, str]:
+        rtn_success = True
+        rtn_summary = [] if len(self.__container) != 0 else ["NotTestTarget"]
+        for time_wait_item in self.__container:
+            if not time_wait_item.success:
+                rtn_success = False
+                rtn_summary.append(f"{time_wait_item.name} (Fail)")
+            else:
+                rtn_summary.append(f"{time_wait_item.name} (Success)")
+        prefix_str = "Passed" if rtn_success else "Failed"
+        rtn_summary_str = prefix_str + ":" + ", ".join(rtn_summary)
+        return (rtn_success, rtn_summary_str)
+
+
+class TimeWaitResult(ResultBase):
+    def __init__(self, conditions: list[TimeWaitTriggerCondition]) -> None:
+        super().__init__()
+        self.__time_wait_container = TimeWaitClassContainer(conditions)
+
+    def update(self) -> None:
+        self._success, self._summary = self.__time_wait_container.update()
+
+    def set_frame(self, current_time: float) -> None:
+        self._frame = self.__time_wait_container.set_frame(current_time)
         self.update()
