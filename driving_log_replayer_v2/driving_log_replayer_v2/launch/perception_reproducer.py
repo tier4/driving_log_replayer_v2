@@ -46,6 +46,7 @@ RECORD_TOPIC = """^/tf$\
 ||^/api/.*/get/.*$\
 ||^/api/operation_mode/state$\
 ||^/awapi/.*/get/.*\
+||^/perception_reproducer/rosbag_ego_odom$\
 """
 
 AUTOWARE_DISABLE = {}

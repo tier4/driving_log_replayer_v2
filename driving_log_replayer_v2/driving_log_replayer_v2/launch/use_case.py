@@ -38,6 +38,13 @@ def launch_autoware(context: LaunchContext) -> list:
     if conf["with_autoware"] != "true":
         return [LogInfo(msg="Autoware is not launched. Only the evaluation node is launched.")]
 
+    launch_args = {
+        "map_path": conf["map_path"],
+        "vehicle_model": conf["vehicle_model"],
+        "sensor_model": conf["sensor_model"],
+        "vehicle_id": conf["vehicle_id"],
+    }
+
     # For perception_reproducer, use planning_simulator instead of logging_simulator
     if conf["use_case"] == "perception_reproducer":
         autoware_launch_file = Path(
@@ -51,15 +58,9 @@ def launch_autoware(context: LaunchContext) -> list:
             "launch",
             "logging_simulator.launch.xml",
         )
+        launch_args["launch_vehicle_interface"] = "true"
+        launch_args["launch_system_monitor"] = "true"
 
-    launch_args = {
-        "map_path": conf["map_path"],
-        "vehicle_model": conf["vehicle_model"],
-        "sensor_model": conf["sensor_model"],
-        "vehicle_id": conf["vehicle_id"],
-        "launch_vehicle_interface": "true",
-        "launch_system_monitor": "true",
-    }
     launch_config = import_module(f"driving_log_replayer_v2.launch.{conf['use_case']}")
     launch_args |= launch_config.AUTOWARE_ARGS
     return [
