@@ -130,8 +130,6 @@ autoware_launch/launch/logging_simulator.launch.xml の引数の vehicle_id を�
 | `set_goal_from_rosbag`   | rosbagの最後の `/localization/kinematic_state` を読み取り、その位置をゴールとして使用する。           |
 | `play_route_from_rosbag` | ゴール設定をスキップ。rosbagのルートトピックを直接再生する。                                          |
 
-現在は `perception_reproducer` ユースケースでのみ使用される。
-
 ### include_use_case
 
 Evaluationで指定したユースケースとは別のユースケースの評価を同時に行う場合に使用する。

@@ -70,6 +70,9 @@ def system_defined_remap(conf: dict) -> list[str]:
         if conf["initial_pose"] != "{}" or conf["direct_initial_pose"] != "{}":
             add_remap("/initialpose", remap_list)
     if conf.get("route_method") != "play_route_from_rosbag" and conf["goal_pose"] != "{}":
+        # The normal logic is ` if conf.get("route_method") != "play_route_from_rosbag"`,
+        # But for backward compatibility, we use a additional condition `conf["goal_pose"] != "{}"`.
+        # It's because some old planning_control scenarios use the default `set_goal_from_scenario` without `GoalPose` specified, which want to use route topic from rosbag.
         add_remap("/planning/mission_planning/route", remap_list)
     return remap_list
 

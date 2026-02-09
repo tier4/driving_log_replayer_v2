@@ -40,7 +40,7 @@ Evaluation:
   Datasets:
     - DatasetName:
         VehicleId: String
-        route_method: String # optional
+        route_method: String # optional, default: set_goal_from_scenario
 include_use_case:
   UseCaseName: String
   UseCaseFormatVersion: String
@@ -131,8 +131,6 @@ If you don't know `vehicle_id`, set `default`.
 | `set_goal_from_scenario` | (Default) Use `GoalPose` from scenario to set goal. Skip setting goal if `GoalPose` is not specified. |
 | `set_goal_from_rosbag`   | Read the last `/localization/kinematic_state` from rosbag and use its position as the goal.           |
 | `play_route_from_rosbag` | Skip goal setting. Play the route topic directly from rosbag.                                         |
-
-Currently only used in the `perception_reproducer` use case.
 
 ### include_use_case
 
