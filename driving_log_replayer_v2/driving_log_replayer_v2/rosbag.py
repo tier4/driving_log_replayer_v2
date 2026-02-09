@@ -44,9 +44,6 @@ class RosbagReader:
     def get_topic_name2type(self) -> dict[str, Any]:
         return self._topic_name2type
 
-    def has_topic(self, topic_name: str) -> bool:
-        return topic_name in self._topic_name2type
-
     def read_first_messages(self) -> list[tuple[str, Any, int]]:
         """Return the first message per topic in topic_list."""
         if not self._topic_list:
