@@ -134,7 +134,13 @@ Published topics:
 - `reproduce_cool_down`: 再パブリッシュのクールダウン時間（デフォルト: 80.0）
 - `tracked_object`: 追跡オブジェクトをパブリッシュする
 - `search_radius`: rosbagの自車オドメトリメッセージを検索する検索半径（デフォルト: 1.5）
-- `pub_route`: rosbagから作成されたルートをパブリッシュする（GoalPoseが指定されていない場合に使用）
+
+### ルート設定方法
+
+走行ルートはシナリオYAMLのデータセットレベルにある `route_method` フィールドで設定できる。
+`route_method` が `play_route_from_rosbag` に設定されている場合、`--pub-route` フラグが `perception_reproducer` ノードに渡される。
+
+`route_method` の詳細については[シナリオフォーマット](../scenario_format/index.ja.md#route_method)を参照。
 
 ## evaluation
 

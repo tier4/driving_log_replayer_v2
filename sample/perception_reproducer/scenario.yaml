@@ -19,6 +19,7 @@ Evaluation:
             y: 0.005891999600528019
             z: -0.9709848597542231
             w: 0.237863568369043
+        route_method: play_route_from_rosbag # turn on the `--pub-route` option of perception_reproducer: publish route created from rosbag (use it when GoalPose is not specified)
         # Optional: GoalPose - if not specified, should use rosbag route via use_rosbag_route
         # GoalPose:
         #   position:
@@ -37,7 +38,6 @@ Evaluation:
     reproduce_cool_down: 999.0 # -c, --reproduce-cool-down: cool down time for republishing (default: 80.0)
     tracked_object: false # -t, --tracked-object: publish tracked object
     search_radius: 1.5 # -r, --search-radius: search radius for searching rosbag's ego odom messages (default: 1.5)
-    pub_route: false # -p, --pub-route: publish route created from rosbag (use when GoalPose is not specified)
 
   Conditions:
     timeout_s: 80.0 # [s] scenario timeout duration, used for both engage_node and perception_reproducer_evaluator_node

@@ -14,6 +14,7 @@
 
 
 from importlib import import_module
+import json
 from pathlib import Path
 
 from ament_index_python.packages import get_package_share_directory
@@ -24,12 +25,14 @@ from launch.actions import LogInfo
 from launch.actions import OpaqueFunction
 from launch.launch_description_sources import AnyLaunchDescriptionSource
 from launch_ros.actions import Node
+from rosidl_runtime_py import message_to_ordereddict
 
 from driving_log_replayer_v2.launch.argument import add_use_case_arguments
 from driving_log_replayer_v2.launch.camera_2d_detector import launch_camera_2d_detector
 from driving_log_replayer_v2.launch.rosbag import launch_bag_player
 from driving_log_replayer_v2.launch.rosbag import launch_bag_recorder
 from driving_log_replayer_v2.launch.util import output_dummy_result_jsonl
+from driving_log_replayer_v2.rosbag import RosbagReader
 from driving_log_replayer_v2.shutdown_once import ShutdownOnce
 
 
@@ -192,10 +195,32 @@ def launch_initial_pose_node(context: LaunchContext) -> list:
 
 def launch_goal_pose_node(context: LaunchContext) -> list:
     conf = context.launch_configurations
+    route_method = conf.get("route_method")
     goal_pose = conf["goal_pose"]
 
+    if route_method == "play_route_from_rosbag":
+        return [
+            LogInfo(msg="goal_pose_node is not activated (route_method: play_route_from_rosbag)")
+        ]
+
+    if route_method == "set_goal_from_rosbag":
+        topic = "/localization/kinematic_state"
+        reader = RosbagReader(conf["input_bag"], [topic])
+        odom_msgs = reader.read_last_messages()
+        if len(odom_msgs) == 0:
+            return [
+                LogInfo(
+                    msg=f"goal_pose_node is not activated: {topic} message not found in rosbag: {conf['input_bag']}"
+                ),
+            ]
+        goal_pose = json.dumps(message_to_ordereddict(odom_msgs[0][1].pose.pose))
+
     if goal_pose == "{}":
-        return [LogInfo(msg="goal_pose_node is not activated")]
+        return [
+            LogInfo(
+                msg="goal_pose_node is not activated (route_method: set_goal_from_scenario but GoalPose is not specified)"
+            )
+        ]
 
     params = {
         "use_sim_time": conf["use_case"] != "perception_reproducer",

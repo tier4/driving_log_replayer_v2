@@ -69,7 +69,7 @@ def system_defined_remap(conf: dict) -> list[str]:
         add_remap("/localization/acceleration", remap_list)
         if conf["initial_pose"] != "{}" or conf["direct_initial_pose"] != "{}":
             add_remap("/initialpose", remap_list)
-    if conf["goal_pose"] != "{}":
+    if conf.get("route_method") != "play_route_from_rosbag" and conf["goal_pose"] != "{}":
         add_remap("/planning/mission_planning/route", remap_list)
     return remap_list
 
@@ -238,7 +238,8 @@ def launch_perception_reproducer(context: LaunchContext) -> list:
         cmd.extend(["--search-radius", str(reproducer_config["search_radius"])])
     if reproducer_config.get("reproduce_cool_down") is not None:
         cmd.extend(["--reproduce-cool-down", str(reproducer_config["reproduce_cool_down"])])
-    if reproducer_config.get("pub_route", False):
+    route_method = conf.get("route_method")
+    if route_method == "play_route_from_rosbag":
         cmd.append("--pub-route")
 
     return [ExecuteProcess(cmd=cmd, output="screen", on_exit=ShutdownOnce())]
