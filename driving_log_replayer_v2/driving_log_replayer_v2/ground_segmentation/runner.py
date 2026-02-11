@@ -41,10 +41,19 @@ if TYPE_CHECKING:
     from driving_log_replayer_v2.result import ResultWriter
 
 
-def convert_to_numpy_pointcloud(msg: PointCloud2) -> np.ndarray:
-    """Convert PointCloud2 message to numpy array."""
+def convert_to_ground_seg(msg: PointCloud2, subscribed_timestamp_nanosec: int) -> ConvertedData:
+    """Convert PointCloud2 message to ground segmentation data."""
+    header_timestamp_microsec = eval_conversions.unix_time_microsec_from_ros_msg(msg.header)
+    subscribed_timestamp_microsec = eval_conversions.unix_time_microsec_from_ros_time_nanosec(
+        subscribed_timestamp_nanosec
+    )
     numpy_pcd = ros2_numpy.numpify(msg)
-    return np.stack((numpy_pcd["x"], numpy_pcd["y"], numpy_pcd["z"]), axis=-1)
+    data = np.stack((numpy_pcd["x"], numpy_pcd["y"], numpy_pcd["z"]), axis=-1)
+    return ConvertedData(
+        header_timestamp=header_timestamp_microsec,
+        subscribed_timestamp=subscribed_timestamp_microsec,
+        data=data,
+    )
 
 
 class GroundSegmentationRunner(Runner):
@@ -124,16 +133,7 @@ class GroundSegmentationRunner(Runner):
     ) -> ConvertedData:
         _ = topic_name  # unused
         # convert ros message to numpy array
-        header_timestamp_microsec = eval_conversions.unix_time_microsec_from_ros_msg(msg.header)
-        data = convert_to_numpy_pointcloud(msg)
-        subscribed_timestamp_microsec = eval_conversions.unix_time_microsec_from_ros_time_nanosec(
-            subscribed_timestamp_nanosec
-        )
-        return ConvertedData(
-            header_timestamp=header_timestamp_microsec,
-            subscribed_timestamp=subscribed_timestamp_microsec,
-            data=data,
-        )
+        return convert_to_ground_seg(msg, subscribed_timestamp_nanosec)
 
     def _write_result(
         self, frame_result: FrameResult, header: Header, subscribed_timestamp_nanosec: int
