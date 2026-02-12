@@ -36,17 +36,17 @@ publish:
 
   # FOR PERCEPTION
   # camera
-  # - /sensing/camera/camera0/image_raw/compressed
-  # - /sensing/camera/camera1/image_raw/compressed
-  # - /sensing/camera/camera2/image_raw/compressed
-  # - /sensing/camera/camera3/image_raw/compressed
-  # - /sensing/camera/camera4/image_raw/compressed
-  # - /sensing/camera/camera5/image_raw/compressed
-  # - /sensing/camera/camera6/image_raw/compressed
-  # - /sensing/camera/camera7/image_raw/compressed
-  # - /sensing/camera/camera8/image_raw/compressed
-  # - /sensing/camera/camera9/image_raw/compressed
-  # - /sensing/camera/camera10/image_raw/compressed
+  - /sensing/camera/camera0/image_raw/compressed
+  - /sensing/camera/camera1/image_raw/compressed
+  - /sensing/camera/camera2/image_raw/compressed
+  - /sensing/camera/camera3/image_raw/compressed
+  - /sensing/camera/camera4/image_raw/compressed
+  - /sensing/camera/camera5/image_raw/compressed
+  - /sensing/camera/camera6/image_raw/compressed
+  - /sensing/camera/camera7/image_raw/compressed
+  - /sensing/camera/camera8/image_raw/compressed
+  - /sensing/camera/camera9/image_raw/compressed
+  - /sensing/camera/camera10/image_raw/compressed
   - /sensing/camera/camera0/camera_info
   - /sensing/camera/camera1/camera_info
   - /sensing/camera/camera2/camera_info
@@ -58,14 +58,15 @@ publish:
   - /sensing/camera/camera8/camera_info
   - /sensing/camera/camera9/camera_info
   - /sensing/camera/camera10/camera_info
-  # camera outputs (NOTE: publishing YOLOX and TLR outputs instead of using image_raw because we currently off those ML models in DLR tests)
-  - /perception/object_recognition/detection/rois0
-  - /perception/object_recognition/detection/rois1
-  - /perception/object_recognition/detection/rois2
-  - /perception/object_recognition/detection/rois3
-  - /perception/object_recognition/detection/rois4
-  - /perception/object_recognition/detection/rois5
-  - /perception/traffic_light_recognition/traffic_signals
+  - /v2x/traffic_signals
+  # camera outputs (NOTE: publishing YOLOX and TLR outputs instead of using image_raw topics for your needs)
+  # - /perception/object_recognition/detection/rois0
+  # - /perception/object_recognition/detection/rois1
+  # - /perception/object_recognition/detection/rois2
+  # - /perception/object_recognition/detection/rois3
+  # - /perception/object_recognition/detection/rois4
+  # - /perception/object_recognition/detection/rois5
+  # - /perception/traffic_light_recognition/traffic_signals
   # radar
   - /sensing/radar/front_center/nebula_packets
   - /sensing/radar/front_left/nebula_packets
