@@ -58,6 +58,7 @@ publish:
   - /sensing/camera/camera8/camera_info
   - /sensing/camera/camera9/camera_info
   - /sensing/camera/camera10/camera_info
+  - /v2x/traffic_signals
   # # camera outputs (NOTE: publishing YOLOX and TLR outputs instead of using image_raw topics for your needs)
   # - /perception/object_recognition/detection/rois0
   # - /perception/object_recognition/detection/rois1
