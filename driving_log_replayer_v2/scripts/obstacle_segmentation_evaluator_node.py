@@ -83,6 +83,11 @@ class ObstacleSegmentationEvaluator(DLREvaluatorV2):
         # pub_goal_pose must be created before timer_cb is called
         self.__goal_pose_counter = 0
         self.__goal_pose = get_goal_pose_from_t4_dataset(self._t4_dataset_paths[0])
+        if self.__goal_pose is None:
+            self.get_logger().warn(
+                f"ego_pose.json not found in {self._t4_dataset_paths[0]}/annotation/. "
+                "Goal pose will not be published."
+            )
         self.__pub_goal_pose = self.create_publisher(
             PoseStamped,
             "/planning/mission_planning/goal",
@@ -192,6 +197,8 @@ class ObstacleSegmentationEvaluator(DLREvaluatorV2):
         )
 
     def publish_goal_pose(self) -> None:
+        if self.__goal_pose is None:
+            return
         if self.__goal_pose_counter < ObstacleSegmentationEvaluator.COUNT_FINISH_PUB_GOAL_POSE:
             self.__goal_pose_counter += 1
             self.__goal_pose.header.stamp = self._current_time

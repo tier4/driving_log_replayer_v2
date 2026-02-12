@@ -35,6 +35,7 @@ install(PROGRAMS
   scripts/goal_pose_node.py
   scripts/diagnostics_evaluator_node.py
   scripts/publish_topic_from_rosbag_node.py
+  scripts/ground_truth_publisher_node.py
   DESTINATION lib/${PROJECT_NAME}
 )
 

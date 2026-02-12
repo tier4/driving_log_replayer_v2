@@ -63,8 +63,10 @@ from driving_log_replayer_v2_msgs.msg import ObstacleSegmentationMarker
 from driving_log_replayer_v2_msgs.msg import ObstacleSegmentationMarkerArray
 
 
-def get_goal_pose_from_t4_dataset(dataset_path: str) -> PoseStamped:
+def get_goal_pose_from_t4_dataset(dataset_path: str) -> PoseStamped | None:
     ego_pose_json_path = Path(dataset_path, "annotation", "ego_pose.json")
+    if not ego_pose_json_path.exists():
+        return None
     with ego_pose_json_path.open() as ego_pose_file:
         ego_pose_json = json.load(ego_pose_file)
         last_ego_pose = ego_pose_json[-1]

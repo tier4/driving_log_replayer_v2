@@ -5,3 +5,4 @@ log/
 site/
 # Scenarios output directory
 scenarios/out/
+comparison_results/

@@ -17,10 +17,16 @@ from launch.substitutions import LaunchConfiguration
 
 RECORD_TOPIC = """^/tf$\
 |^/diagnostics$"\
+|^/system/processing_time_checker/metrics$\
 |^/perception/obstacle_segmentation/single_frame/pointcloud$\
 |^/perception/obstacle_segmentation/pointcloud$\
-|^/perception/obstacle_segmentation/frnet/pointcloud$\
 |^/perception/obstacle_segmentation/ptv3/pointcloud$\
+|^/perception/obstacle_segmentation/ptv3/debug/cyclic_time_ms$\
+|^/perception/obstacle_segmentation/ptv3/debug/pipeline_latency_ms$\
+|^/perception/obstacle_segmentation/ptv3/debug/processing_time/inference_ms$\
+|^/perception/obstacle_segmentation/ptv3/debug/processing_time/postprocess_ms$\
+|^/perception/obstacle_segmentation/ptv3/debug/processing_time/preprocess_ms$\
+|^/perception/obstacle_segmentation/ptv3/debug/processing_time/total_ms$\
 |^/driving_log_replayer/.*\
 """
 
