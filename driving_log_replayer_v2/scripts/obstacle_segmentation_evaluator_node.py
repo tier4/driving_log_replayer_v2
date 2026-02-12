@@ -82,12 +82,15 @@ class ObstacleSegmentationEvaluator(DLREvaluatorV2):
 
         # pub_goal_pose must be created before timer_cb is called
         self.__goal_pose_counter = 0
-        self.__goal_pose = get_goal_pose_from_t4_dataset(self._t4_dataset_paths[0])
-        if self.__goal_pose is None:
-            self.get_logger().warn(
-                f"ego_pose.json not found in {self._t4_dataset_paths[0]}/annotation/. "
-                "Goal pose will not be published."
-            )
+        # obstacle_segmentation evaluation does not require t4_dataset, so goal_pose is optional
+        self.__goal_pose = None
+        if len(self._t4_dataset_paths) > 0 and self._t4_dataset_paths[0]:
+            self.__goal_pose = get_goal_pose_from_t4_dataset(self._t4_dataset_paths[0])
+            if self.__goal_pose is None:
+                self.get_logger().warn(
+                    f"ego_pose.json not found in {self._t4_dataset_paths[0]}/annotation/. "
+                    "Goal pose will not be published."
+                )
         self.__pub_goal_pose = self.create_publisher(
             PoseStamped,
             "/planning/mission_planning/goal",
@@ -118,8 +121,10 @@ class ObstacleSegmentationEvaluator(DLREvaluatorV2):
             self.get_parameter("vehicle_model").get_parameter_value().string_value
         )
 
+        # obstacle_segmentation evaluation does not require t4_dataset (annotation data)
+        # Set empty dataset_paths to avoid NuScenes initialization
         evaluation_config: SensingEvaluationConfig = SensingEvaluationConfig(
-            dataset_paths=self._t4_dataset_paths,
+            dataset_paths=[],  # Empty list since t4_dataset is not required for obstacle_segmentation
             frame_id="base_link",
             result_root_directory=Path(
                 self._perception_eval_log_path,

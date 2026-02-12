@@ -186,6 +186,11 @@ def get_launch_arguments() -> list:
         default_value="",
         description="Launch other optional nodes. Using comma separated string. Currently available is 2d_detector. Ex: with_optional_nodes:=2d_detector",
     )
+    add_launch_arg(
+        "pointcloud_map_file",
+        default_value="",
+        description="Point cloud map file format. Set to 'pcd' to use split PCD files in pcd/ directory. If empty, uses default behavior.",
+    )
     return launch_arguments
 
 
