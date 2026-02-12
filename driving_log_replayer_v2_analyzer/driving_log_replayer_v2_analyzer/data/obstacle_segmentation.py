@@ -72,8 +72,17 @@ class Frame:
     frame_name: int = -1
 
     def __init__(self, json_dict: dict) -> None:
-        with contextlib.suppress(KeyError, IndexError):
-            self.frame_name = int(json_dict["Frame"]["FrameName"])
+        with contextlib.suppress(KeyError, IndexError, ValueError):
+            frame_name = json_dict["Frame"]["FrameName"]
+            # FrameName may be a string (e.g., "obstacle_segmentation") when dataset_paths is empty
+            if isinstance(frame_name, str):
+                # Try to convert to int, but if it fails, use -1 as default
+                try:
+                    self.frame_name = int(frame_name)
+                except ValueError:
+                    self.frame_name = -1
+            else:
+                self.frame_name = int(frame_name)
 
 
 @dataclass
@@ -92,7 +101,15 @@ class NonDetection:
         self.ego_position = Position()
         try:
             self.result = json_dict["Frame"]["NonDetection"]["Result"]
-            self.frame = int(json_dict["Frame"]["FrameName"])
+            frame_name = json_dict["Frame"]["FrameName"]
+            # FrameName may be a string (e.g., "obstacle_segmentation") when dataset_paths is empty
+            if isinstance(frame_name, str):
+                try:
+                    self.frame = int(frame_name)
+                except ValueError:
+                    self.frame = -1
+            else:
+                self.frame = int(frame_name)
             self.ego_position = Position(
                 json_dict["Frame"]["Ego"]["TransformStamped"]["transform"]["translation"],
             )
@@ -186,7 +203,7 @@ class Summary:
 
     def save(self, path: Path) -> None:
         with path.with_suffix(".json").open("w") as f:
-            json.dump(dataclasses.asdict(self), f, indent=2)
+            json.dump(dataclasses.asdict(self), f, indent=2, ignore_nan=True)
             f.write("\n")
 
 

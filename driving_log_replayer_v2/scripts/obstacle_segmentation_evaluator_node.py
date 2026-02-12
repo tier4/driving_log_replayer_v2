@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# isort: skip_file
+# ruff: noqa: I
 
 # Copyright (c) 2022 TIER IV.inc
 #
@@ -214,27 +216,35 @@ class ObstacleSegmentationEvaluator(DLREvaluatorV2):
         # jsonlを一旦閉じて開きなおす。
         jsonl_file_path = self._result_writer.result_path
         self._result_writer.close()
-        detection_dist, pointcloud_numpoints = get_graph_data(
-            jsonl_file_path,
-            self.__vehicle_model,
-            jsonl_file_path.parent,
-            default_config_path(),
-            convert_str_to_dist_type("euclidean"),
-        )
-        with jsonl_file_path.open("r+") as jsonl_file:
-            last_line = jsonl_file.readlines()[-1]
-            try:
-                last_line_dict = json.loads(last_line)
-                last_line_dict["Frame"] = {
-                    "GraphData": {
-                        "DetectionDist": detection_dist,
-                        "PointcloudCount": pointcloud_numpoints,
-                    },
-                }
-                str_last_line = json.dumps(last_line_dict, ignore_nan=True) + "\n"
-                jsonl_file.write(str_last_line)
-            except json.JSONDecodeError:
-                pass
+        try:
+            detection_dist, pointcloud_numpoints = get_graph_data(
+                jsonl_file_path,
+                self.__vehicle_model,
+                jsonl_file_path.parent,
+                default_config_path(),
+                convert_str_to_dist_type("euclidean"),
+            )
+            with jsonl_file_path.open("r+") as jsonl_file:
+                last_line = jsonl_file.readlines()[-1]
+                try:
+                    last_line_dict = json.loads(last_line)
+                    last_line_dict["Frame"] = {
+                        "GraphData": {
+                            "DetectionDist": detection_dist,
+                            "PointcloudCount": pointcloud_numpoints,
+                        },
+                    }
+                    str_last_line = json.dumps(last_line_dict, ignore_nan=True) + "\n"
+                    jsonl_file.write(str_last_line)
+                except json.JSONDecodeError:
+                    pass
+        except (ValueError, KeyError) as e:
+            # FrameName may be a string (e.g., "obstacle_segmentation") instead of an integer
+            # when dataset_paths is empty, which causes get_graph_data to fail
+            self.get_logger().warn(
+                f"Failed to write graph data: {e}. "
+                "This may occur when FrameName is not an integer (e.g., when dataset_paths is empty)."
+            )
 
     def obstacle_segmentation_cb(self, msg: PointCloud2) -> None:
         map_to_baselink = self.lookup_transform(msg.header.stamp)
@@ -253,13 +263,17 @@ class ObstacleSegmentationEvaluator(DLREvaluatorV2):
         header_timestamp_microsec: int = eval_conversions.unix_time_microsec_from_ros_msg(
             pcd_header
         )
-        ground_truth_now_frame: FrameGroundTruth = self.__evaluator.get_ground_truth_now_frame(
-            unix_time=header_timestamp_microsec,
-        )
-        # Ground truthがない場合はスキップされたことを記録する
-        if ground_truth_now_frame is None:
-            self.__skip_counter += 1
-            return
+        # obstacle_segmentation evaluation does not require ground truth
+        # Continue evaluation even if ground_truth_now_frame is None
+        # get_ground_truth_now_frame may raise IndexError when dataset_paths is empty
+        ground_truth_now_frame: FrameGroundTruth | None = None
+        try:
+            ground_truth_now_frame = self.__evaluator.get_ground_truth_now_frame(
+                unix_time=header_timestamp_microsec,
+            )
+        except (IndexError, ValueError):
+            # dataset_paths is empty or no ground truth available
+            pass
         # create sensing_frame_config
         frame_ok, sensing_frame_config = get_sensing_frame_config(
             pcd_header,
