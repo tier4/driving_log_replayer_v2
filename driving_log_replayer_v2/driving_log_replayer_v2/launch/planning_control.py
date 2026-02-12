@@ -22,9 +22,8 @@ RECORD_TOPIC = """^/tf$\
 |^/map/vector_map_marker$\
 |^/perception/object_recognition/objects$\
 |^/perception/object_recognition/.*/objects$\
-|^/perception/traffic_light_recognition/traffic_signals/markers$\
-|^/perception/traffic_light_recognition/.*/debug/rois/compressed$\
 |^/perception/object_recognition/detection/rois[0-9]+$\
+|^/perception/traffic_light_recognition/traffic_signals/markers$\
 |^/perception/traffic_light_recognition/traffic_signals$\
 |^/system/v2x/virtual_traffic_light_states$\
 |^/localization/kinematic_state$\
