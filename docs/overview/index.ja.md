@@ -1,6 +1,6 @@
 # 概要
 
-driving_log_replayer_v2 は、log(rosbag2)を用いて Autoware の open loop simulation を実行し、Autoware が出力するトピックを評価するパッケージです。
+driving_log_replayer_v2 は、log(rosbag2)を用いて Autoware の `logging_simulator.launch.xml` または `planning_simulator.launch.xml` を実行し、Autoware が出力するトピックを評価するパッケージです。
 Autoware の各コンポーネントの性能確認と、ソフトウェアのリグレッションテストに使用します。
 
 ## 関連ドキュメント
