@@ -50,6 +50,9 @@ def launch_autoware(context: LaunchContext) -> list:
         "launch_vehicle_interface": "true",
         "launch_system_monitor": "true",
     }
+    # Add pointcloud_map_file if specified
+    if conf.get("pointcloud_map_file", "") != "":
+        launch_args["pointcloud_map_file"] = conf["pointcloud_map_file"]
     launch_config = import_module(f"driving_log_replayer_v2.launch.{conf['use_case']}")
     launch_args |= launch_config.AUTOWARE_ARGS
     return [

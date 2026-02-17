@@ -113,8 +113,10 @@ class ObstacleSegmentationEvaluator(DLREvaluatorV2):
             self.get_parameter("vehicle_model").get_parameter_value().string_value
         )
 
+        # obstacle_segmentation evaluation does not require t4_dataset (annotation data)
+        # Set empty dataset_paths to avoid NuScenes initialization
         evaluation_config: SensingEvaluationConfig = SensingEvaluationConfig(
-            dataset_paths=self._t4_dataset_paths,
+            dataset_paths=[],  # Empty list since t4_dataset is not required for obstacle_segmentation
             frame_id="base_link",
             result_root_directory=Path(
                 self._perception_eval_log_path,
@@ -192,6 +194,8 @@ class ObstacleSegmentationEvaluator(DLREvaluatorV2):
         )
 
     def publish_goal_pose(self) -> None:
+        if self.__goal_pose is None:
+            return
         if self.__goal_pose_counter < ObstacleSegmentationEvaluator.COUNT_FINISH_PUB_GOAL_POSE:
             self.__goal_pose_counter += 1
             self.__goal_pose.header.stamp = self._current_time
@@ -241,13 +245,22 @@ class ObstacleSegmentationEvaluator(DLREvaluatorV2):
         header_timestamp_microsec: int = eval_conversions.unix_time_microsec_from_ros_msg(
             pcd_header
         )
-        ground_truth_now_frame: FrameGroundTruth = self.__evaluator.get_ground_truth_now_frame(
-            unix_time=header_timestamp_microsec,
-        )
-        # Ground truthがない場合はスキップされたことを記録する
-        if ground_truth_now_frame is None:
-            self.__skip_counter += 1
-            return
+        # obstacle_segmentation evaluation does not require ground truth
+        # Continue evaluation even if ground_truth_now_frame is None
+        # get_ground_truth_now_frame may raise IndexError when dataset_paths is empty
+        ground_truth_now_frame: FrameGroundTruth | None = None
+        try:
+            ground_truth_now_frame = self.__evaluator.get_ground_truth_now_frame(
+                unix_time=header_timestamp_microsec,
+            )
+            # Ground truthがない場合はスキップされたことを記録する
+            if ground_truth_now_frame is None:
+                self.__skip_counter += 1
+                return
+        except (IndexError, ValueError):
+            # dataset_paths is empty or no ground truth available
+            # t4_datasetが存在しない場合は処理を続行
+            pass
         # create sensing_frame_config
         frame_ok, sensing_frame_config = get_sensing_frame_config(
             pcd_header,
