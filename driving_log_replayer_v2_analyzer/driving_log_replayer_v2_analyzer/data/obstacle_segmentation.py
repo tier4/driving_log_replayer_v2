@@ -12,6 +12,10 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+
+# isort: skip_file
+# ruff: noqa: I
+
 import contextlib
 import csv
 import dataclasses
@@ -445,10 +449,12 @@ class JsonlParser:
 
         """
         ret = []
-        for frame in self.non_detection:
+        for idx, frame in enumerate(self.non_detection):
+            # If frame.frame is -1 (when FrameName is a string), use index as frame number
+            frame_number = frame.frame if frame.frame >= 0 else idx
             ret.append(
                 {
-                    "x": frame.frame,
+                    "x": frame_number,
                     "y": frame.pointcloud_points,
                     "color": frame.result,
                     "超近傍": frame.get_points_within_dist(fp_dist.very_near),
