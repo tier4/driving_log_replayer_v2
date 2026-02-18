@@ -27,26 +27,26 @@ from driving_log_replayer_v2.launch.use_case import launch_goal_pose_node
 from driving_log_replayer_v2.launch.use_case import launch_initial_pose_node
 
 RECORD_TOPIC = """^/tf$\
-||^/tf_static$\
-||^/parameter_events$\
-||^/diagnostics$\
-||^/map/vector_map_marker$\
-||^/perception/object_recognition/objects$\
-||^/perception/object_recognition/tracking/objects$\
-||^/perception/traffic_light_recognition/traffic_signals$\
-||^/system/v2x/virtual_traffic_light_states$\
-||^/localization/kinematic_state$\
-||^/localization/initialization_state$\
-||^/localization/pose_with_covariance$\
-||^/localization/acceleration$\
-||^/planning/.*$\
-||^/control/.*$\
-||^/system/processing_time_checker/metrics$\
-||^/driving_log_replayer/.*$\
-||^/api/.*/get/.*$\
-||^/api/operation_mode/state$\
-||^/awapi/.*/get/.*\
-||^/perception_reproducer/rosbag_ego_odom$\
+|^/tf_static$\
+|^/parameter_events$\
+|^/diagnostics$\
+|^/map/vector_map_marker$\
+|^/perception/object_recognition/objects$\
+|^/perception/object_recognition/tracking/objects$\
+|^/perception/traffic_light_recognition/traffic_signals$\
+|^/system/v2x/virtual_traffic_light_states$\
+|^/localization/kinematic_state$\
+|^/localization/initialization_state$\
+|^/localization/pose_with_covariance$\
+|^/localization/acceleration$\
+|^/planning/.*$\
+|^/control/.*$\
+|^/system/processing_time_checker/metrics$\
+|^/driving_log_replayer/.*$\
+|^/api/.*/get/.*$\
+|^/api/operation_mode/state$\
+|^/awapi/.*/get/.*\
+|^/perception_reproducer/rosbag_ego_odom$\
 """
 
 AUTOWARE_DISABLE = {}

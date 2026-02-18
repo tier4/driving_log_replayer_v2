@@ -216,7 +216,7 @@ class Conditions(BaseModel):
 
 class Evaluation(BaseModel):
     UseCaseName: Literal["perception_reproducer"]
-    UseCaseFormatVersion: Literal["1.0.0"]
+    UseCaseFormatVersion: Literal["0.1.0"]
     perception_reproducer_config: PerceptionReproducerConfig
     Conditions: Conditions
     Datasets: list[dict]

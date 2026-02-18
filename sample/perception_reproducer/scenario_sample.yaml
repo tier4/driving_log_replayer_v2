@@ -1,5 +1,44 @@
+ScenarioDescription: scenario
+ScenarioFormatVersion: 3.1.0
+ScenarioName: scenario
+SensorModel: aip_xx1
+VehicleModel: medium_bus
 Evaluation:
+  UseCaseFormatVersion: 1.0.0
+  UseCaseName: perception_reproducer
+  Datasets:
+    - dataset_02:
+        DirectInitialPose:
+          orientation:
+            w: 0.8641572009605316
+            x: 0.0027409617114211
+            y: 0.0025885347477904
+            z: -0.5032078284812502
+          position:
+            x: 30128.77869327004
+            y: 29930.993521216213
+            z: 40.13147521601125
+        GoalPose:
+          orientation:
+            w: 0.7341928808334613
+            x: -0.0072731734830893
+            y: 0.0088849792829804
+            z: -0.6788438493675029
+          position:
+            x: 30185.257641076165
+            y: 29565.58068906208
+            z: 39.6863587398867
+        VehicleId: default
+
+  perception_reproducer_config:
+    noise: false
+    pub_route: false
+    reproduce_cool_down: 999.0
+    search_radius: 1.5
+    tracked_object: false
   Conditions:
+    terminated_after_fail_s: 10
+    timeout_s: 119.797183508
     fail_conditions:
       - group_name: check_safety_conditions
         start_at: wait_after_engage_5s
@@ -63,41 +102,3 @@ Evaluation:
           - condition_class: time_wait_trigger
             condition_name: wait_5s
             wait_seconds: 5.0
-    terminated_after_fail_s: 10
-    timeout_s: 119.797183508
-  Datasets:
-    - dataset_02:
-        DirectInitialPose:
-          orientation:
-            w: 0.8641572009605316
-            x: 0.0027409617114211
-            y: 0.0025885347477904
-            z: -0.5032078284812502
-          position:
-            x: 30128.77869327004
-            y: 29930.993521216213
-            z: 40.13147521601125
-        GoalPose:
-          orientation:
-            w: 0.7341928808334613
-            x: -0.0072731734830893
-            y: 0.0088849792829804
-            z: -0.6788438493675029
-          position:
-            x: 30185.257641076165
-            y: 29565.58068906208
-            z: 39.6863587398867
-        VehicleId: default
-  UseCaseFormatVersion: 1.0.0
-  UseCaseName: perception_reproducer
-  perception_reproducer_config:
-    noise: false
-    pub_route: false
-    reproduce_cool_down: 999.0
-    search_radius: 1.5
-    tracked_object: false
-ScenarioDescription: scenario
-ScenarioFormatVersion: 3.1.0
-ScenarioName: scenario
-SensorModel: aip_xx1
-VehicleModel: medium_bus
