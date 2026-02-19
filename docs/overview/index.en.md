@@ -1,6 +1,6 @@
 # Overview
 
-driving_log_replayer_v2 is a package that runs Autoware in an open loop by supplying previously recorded input data using log(rosbag2) API.
+driving_log_replayer_v2 is a package that runs `logging_simulator.launch.xml` or `planning_simulator.launch.xml` on Autoware by supplying previously recorded input data using log(rosbag2) API.
 The package gathers information and evaluates topics output produced by Autoware.
 This software is used to verify the performance of each Autoware component and for software regression testing.
 

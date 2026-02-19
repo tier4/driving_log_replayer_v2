@@ -1,0 +1,104 @@
+ScenarioDescription: scenario
+ScenarioFormatVersion: 3.1.0
+ScenarioName: scenario
+SensorModel: aip_xx1
+VehicleModel: medium_bus
+Evaluation:
+  UseCaseFormatVersion: 1.0.0
+  UseCaseName: perception_reproducer
+  Datasets:
+    - dataset_02:
+        DirectInitialPose:
+          orientation:
+            w: 0.8641572009605316
+            x: 0.0027409617114211
+            y: 0.0025885347477904
+            z: -0.5032078284812502
+          position:
+            x: 30128.77869327004
+            y: 29930.993521216213
+            z: 40.13147521601125
+        GoalPose:
+          orientation:
+            w: 0.7341928808334613
+            x: -0.0072731734830893
+            y: 0.0088849792829804
+            z: -0.6788438493675029
+          position:
+            x: 30185.257641076165
+            y: 29565.58068906208
+            z: 39.6863587398867
+        VehicleId: default
+
+  perception_reproducer_config:
+    noise: false
+    pub_route: false
+    reproduce_cool_down: 999.0
+    search_radius: 1.5
+    tracked_object: false
+  Conditions:
+    terminated_after_fail_s: 10
+    timeout_s: 119.797183508
+    fail_conditions:
+      - group_name: check_safety_conditions
+        start_at: wait_after_engage_5s
+        group_type: all_of
+        condition_list:
+          - condition_class: metric
+            condition_name: check_left_uncrossable_boundary_distance
+            topic: /control/control_evaluator/metrics
+            metric_name: left_uncrossable_boundary_distance
+            condition_type: all_of
+            judgement: negative
+            value_type: number
+            value_range:
+              max: 0.1
+          - condition_class: metric
+            condition_name: check_right_uncrossable_boundary_distance
+            topic: /control/control_evaluator/metrics
+            metric_name: right_uncrossable_boundary_distance
+            condition_type: all_of
+            judgement: negative
+            value_type: number
+            value_range:
+              max: 0.1
+          - condition_class: metric
+            condition_name: check_acceleration
+            topic: /control/control_evaluator/metrics
+            metric_name: acceleration
+            value_type: number
+            value_range:
+              min: -3.0
+              max: 3.0
+            condition_type: all_of
+            judgement: positive
+          - condition_class: metric
+            condition_name: check_closest_object_distance
+            topic: /control/control_evaluator/metrics
+            metric_name: closest_object_distance
+            condition_type: all_of
+            judgement: negative
+            value_type: number
+            value_range:
+              max: 0.1
+    pass_conditions:
+      - group_name: pass_condition_group
+        group_type: all_of
+        start_at: null
+        condition_list:
+          - condition_class: ego_kinematic_trigger
+            condition_name: check_arrive_goal
+            area:
+              x: 30185.257641076165
+              y: 29565.58068906208
+              range: 2.0
+              area_condition: inside
+            area_check_type: baselink
+            judgement: positive
+      - group_name: wait_after_engage_5s
+        group_type: all_of
+        start_at: null
+        condition_list:
+          - condition_class: time_wait_trigger
+            condition_name: wait_5s
+            wait_seconds: 5.0

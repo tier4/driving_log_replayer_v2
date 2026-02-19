@@ -1,0 +1,166 @@
+ScenarioFormatVersion: 3.1.0
+ScenarioName: sample_perception_reproducer
+ScenarioDescription: Sample scenario for perception_reproducer use case
+SensorModel: aip_xx1
+VehicleModel: lexus
+Evaluation:
+  UseCaseName: perception_reproducer
+  UseCaseFormatVersion: 1.0.0
+  Datasets:
+    - sample_dataset:
+        VehicleId: default
+        DirectInitialPose:
+          position:
+            x: 3839.340576171875
+            y: 73731.3359375
+            z: 19.639482498168945
+          orientation:
+            x: -0.023971009814459248
+            y: 0.005891999600528019
+            z: -0.9709848597542231
+            w: 0.237863568369043
+        # Optional: GoalPose - if not specified, should use rosbag route via use_rosbag_route
+        # GoalPose:
+        #   position:
+        #     x: 4000.0
+        #     y: 74000.0
+        #     z: 20.0
+        #   orientation:
+        #     x: 0.0
+        #     y: 0.0
+        #     z: 0.0
+        #     w: 1.0
+
+  # Configuration for perception_reproducer node
+  perception_reproducer_config:
+    noise: false # -n, --noise: apply perception noise to the objects
+    reproduce_cool_down: 999.0 # -c, --reproduce-cool-down: cool down time for republishing (default: 80.0)
+    tracked_object: false # -t, --tracked-object: publish tracked object
+    search_radius: 1.5 # -r, --search-radius: search radius for searching rosbag's ego odom messages (default: 1.5)
+    pub_route: false # -p, --pub-route: publish route created from rosbag (use when GoalPose is not specified)
+
+  Conditions:
+    timeout_s: 80.0 # [s] scenario timeout duration, used for both engage_node and perception_reproducer_evaluator_node
+    terminated_after_fail_s: 10 # [s] scenario terminated after a fail condition trigger
+
+    # Pass Conditions
+    #   - when all condition groups meet ONCE, the test passes and terminates.
+    pass_conditions: # supports only `ego_kinematic_trigger` and `condition_group`(nested) class as condition list
+      - group_name: time_wait_triggers
+        group_type: all_of
+        start_at: null
+        end_at: null
+        condition_list:
+          - condition_class: time_wait_trigger
+            condition_name: wait_10s_after_engaged
+            wait_seconds: 10.0
+      - group_name: check_arrive_obstacle_area
+        group_type: all_of
+        start_at: null # other condition_group name to trigger this group, if not specified, the condition starts after the autoware is ENGAGED.
+        end_at: null # other condition_group name to stop this group, if not specified, the condition stops after the timeout_s.
+        condition_list:
+          - condition_class: ego_kinematic_trigger
+            condition_name: check_arrive_obstacle_area
+            area:
+              x: 3900.0 # [m] Target position x
+              y: 72000.0 # [m] Target position y
+              range: 5.0 # [m] Tolerance range
+              area_condition: inside # inside or outside
+            area_check_type: baselink # baselink, footprint_overlap, footprint_inside, currently only baselink is supported
+            judgement: positive # positive or negative
+      - group_name: check_arrive_goal
+        group_type: any_of
+        start_at: check_arrive_obstacle_area # other condition_group name to trigger this group, if not specified, the condition starts after the autoware is ENGAGED.
+        condition_list:
+          - condition_class: ego_kinematic_trigger
+            condition_name: check_arrive_goal
+            area:
+              x: 4000.0 # [m] Target position x
+              y: 74000.0 # [m] Target position y
+              range: 1.0 # [m] Tolerance range
+              area_condition: inside # inside or outside
+            velocity: { min: 0.0, max: 0.0 } # [m/s] Optional: speed range when ego is in the area
+            acceleration: { min: 0.0, max: 0.0 } # [m/s^2] Optional: acceleration range when ego is in the area
+            area_check_type: baselink # baselink, footprint_overlap, footprint_inside, currently only baselink is supported
+            judgement: positive # positive or negative
+
+    # Fail Conditions
+    #   - when any condition group NOT meet ONCE, the test fails and terminate after `terminated_after_fail_s` seconds
+    #   - supports `metric`, `diagnostic`, `planning_factor`, `ego_kinematic` and `condition_group`(nested) class as condition list
+    fail_conditions:
+      # Check avoid success without obstacle stop during obstacle area to goal
+      - group_name: check_obstacle_handling
+        group_type: all_of
+        start_at: check_arrive_obstacle_area # NOTE: only group path in `pass_conditions` is supported, if the reference group is nested, use the group path like `groupA.subgroupB`
+        end_at: check_arrive_goal
+        condition_list:
+          - condition_class: planning_factor
+            condition_name: check_obstacle_stop_inactive # check NO OBSTACLE STOP
+            topic: /planning/planning_factors/obstacle_stop
+            condition_type: all_of
+            judgement: negative
+          - condition_class: ego_kinematic
+            condition_name: check_avoid_success # check AVOIDANCE
+            area:
+              x: 3900.0
+              y: 72000.0
+              range: 2.0
+              area_condition: inside
+            area_check_type: footprint_overlap
+            judgement: negative
+            condition_type: all_of
+      # Check boundary distance and control validator from 10 seconds after engaged
+      - group_name: check_safety_conditions
+        start_at: time_wait_triggers
+        group_type: all_of
+        condition_list:
+          - condition_class: metric
+            condition_name: check_boundary_distance_ok # check BOUNDARY DISTANCE
+            topic: /planning/planning_evaluator/metrics
+            metric_name: boundary_distance
+            condition_type: all_of
+            value_type: number
+            value_range:
+              max: 0.1
+            judgement: negative
+          - condition_class: metric
+            condition_name: check_closest_object_distance
+            topic: /control/control_evaluator/metrics
+            metric_name: closest_object_distance
+            condition_type: all_of
+            judgement: positive
+            value_type: number
+            value_range:
+              min: 0.1
+          - condition_class: diagnostic
+            condition_name: check_control_validator_ok # check CONTROL VALIDATOR
+            hardware_id: control_validator
+            name: "control_validator: control_validation_rolling_back"
+            level: [OK]
+            condition_type: all_of
+            judgement: positive
+      # A nested condition group example (no actual practical use, just for demonstration)
+      - group_name: check_processing_time_or_planning_factor
+        start_at: null
+        end_at: null
+        group_type: any_of
+        condition_list:
+          - condition_class: condition_group
+            group_name: check_processing_time
+            group_type: all_of
+            condition_list:
+              - condition_class: metric
+                condition_name: check_static_obstacle_avoidance_processing_time
+                topic: /system/processing_time_checker/metrics
+                metric_name: processing_time/static_obstacle_avoidance
+                value_type: number
+                value_range:
+                  min: 0.0
+                  max: 100.0
+                condition_type: all_of
+                judgement: positive
+          - condition_class: planning_factor
+            condition_name: check_dynamic_obstacle_avoidance_planning_factor
+            topic: /planning/planning_factors/dynamic_obstacle_avoidance
+            condition_type: all_of
+            judgement: positive

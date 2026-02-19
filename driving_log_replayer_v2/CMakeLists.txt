@@ -33,8 +33,10 @@ install(PROGRAMS
   scripts/planning_control_evaluator_node.py
   scripts/initial_pose_node.py
   scripts/goal_pose_node.py
+  scripts/engage_node.py
   scripts/diagnostics_evaluator_node.py
   scripts/publish_topic_from_rosbag_node.py
+  scripts/perception_reproducer_evaluator_node.py
   DESTINATION lib/${PROJECT_NAME}
 )
 

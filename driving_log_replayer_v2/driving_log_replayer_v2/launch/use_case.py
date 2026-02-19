@@ -37,19 +37,30 @@ def launch_autoware(context: LaunchContext) -> list:
     conf = context.launch_configurations
     if conf["with_autoware"] != "true":
         return [LogInfo(msg="Autoware is not launched. Only the evaluation node is launched.")]
-    autoware_launch_file = Path(
-        get_package_share_directory("autoware_launch"),
-        "launch",
-        "logging_simulator.launch.xml",
-    )
+
     launch_args = {
         "map_path": conf["map_path"],
         "vehicle_model": conf["vehicle_model"],
         "sensor_model": conf["sensor_model"],
         "vehicle_id": conf["vehicle_id"],
-        "launch_vehicle_interface": "true",
-        "launch_system_monitor": "true",
     }
+
+    # For perception_reproducer, use planning_simulator instead of logging_simulator
+    if conf["use_case"] == "perception_reproducer":
+        autoware_launch_file = Path(
+            get_package_share_directory("autoware_launch"),
+            "launch",
+            "planning_simulator.launch.xml",
+        )
+    else:
+        autoware_launch_file = Path(
+            get_package_share_directory("autoware_launch"),
+            "launch",
+            "logging_simulator.launch.xml",
+        )
+        launch_args["launch_vehicle_interface"] = "true"
+        launch_args["launch_system_monitor"] = "true"
+
     launch_config = import_module(f"driving_log_replayer_v2.launch.{conf['use_case']}")
     launch_args |= launch_config.AUTOWARE_ARGS
     return [
@@ -99,7 +110,7 @@ def launch_evaluator_node(context: LaunchContext) -> list:
         output_dummy_result_jsonl(conf["result_jsonl_path"])
         return [LogInfo(msg="evaluator_node is not launched due to record only mode")]
     params = {
-        "use_sim_time": True,
+        "use_sim_time": conf["use_case"] != "perception_reproducer",
         "scenario_path": conf["scenario_path"],
         "t4_dataset_path": conf["t4_dataset_path"],
         "result_jsonl_path": conf["result_jsonl_path"],
@@ -162,7 +173,7 @@ def launch_initial_pose_node(context: LaunchContext) -> list:
         return [LogInfo(msg="initial_pose_node is not activated")]
 
     params = {
-        "use_sim_time": True,
+        "use_sim_time": conf["use_case"] != "perception_reproducer",
         "initial_pose": initial_pose,
         "direct_initial_pose": direct_initial_pose,
     }
@@ -187,7 +198,7 @@ def launch_goal_pose_node(context: LaunchContext) -> list:
         return [LogInfo(msg="goal_pose_node is not activated")]
 
     params = {
-        "use_sim_time": True,
+        "use_sim_time": conf["use_case"] != "perception_reproducer",
         "goal_pose": goal_pose,
     }
 
