@@ -17,20 +17,19 @@ from importlib import import_module
 from pathlib import Path
 
 from ament_index_python.packages import get_package_share_directory
+from driving_log_replayer_v2.shutdown_once import ShutdownOnce
 from launch import LaunchContext
-from launch.actions import GroupAction
-from launch.actions import IncludeLaunchDescription
-from launch.actions import LogInfo
-from launch.actions import OpaqueFunction
+from launch.actions import (GroupAction, IncludeLaunchDescription, LogInfo,
+                            OpaqueFunction)
 from launch.launch_description_sources import AnyLaunchDescriptionSource
 from launch_ros.actions import Node
 
 from driving_log_replayer_v2.launch.argument import add_use_case_arguments
-from driving_log_replayer_v2.launch.camera_2d_detector import launch_camera_2d_detector
-from driving_log_replayer_v2.launch.rosbag import launch_bag_player
-from driving_log_replayer_v2.launch.rosbag import launch_bag_recorder
+from driving_log_replayer_v2.launch.camera_2d_detector import \
+    launch_camera_2d_detector
+from driving_log_replayer_v2.launch.rosbag import (launch_bag_player,
+                                                   launch_bag_recorder)
 from driving_log_replayer_v2.launch.util import output_dummy_result_jsonl
-from driving_log_replayer_v2.shutdown_once import ShutdownOnce
 
 
 def launch_autoware(context: LaunchContext) -> list:
@@ -50,9 +49,6 @@ def launch_autoware(context: LaunchContext) -> list:
         "launch_vehicle_interface": "true",
         "launch_system_monitor": "true",
     }
-    # Add pointcloud_map_file if specified
-    if conf.get("pointcloud_map_file", "") != "":
-        launch_args["pointcloud_map_file"] = conf["pointcloud_map_file"]
     launch_config = import_module(f"driving_log_replayer_v2.launch.{conf['use_case']}")
     launch_args |= launch_config.AUTOWARE_ARGS
     return [

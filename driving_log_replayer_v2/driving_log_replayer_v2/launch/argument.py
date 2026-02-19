@@ -13,15 +13,14 @@
 # limitations under the License.
 
 import datetime
-from importlib import import_module
 import json
-from pathlib import Path
 import subprocess
+from importlib import import_module
+from pathlib import Path
 
-from launch import LaunchContext
-from launch.actions import DeclareLaunchArgument
-from launch.actions import LogInfo
 import yaml
+from launch import LaunchContext
+from launch.actions import DeclareLaunchArgument, LogInfo
 
 
 def create_output_dir(output_dir_str: str, scenario_path: Path) -> Path:
@@ -185,11 +184,6 @@ def get_launch_arguments() -> list:
         "with_optional_nodes",
         default_value="",
         description="Launch other optional nodes. Using comma separated string. Currently available is 2d_detector. Ex: with_optional_nodes:=2d_detector",
-    )
-    add_launch_arg(
-        "pointcloud_map_file",
-        default_value="",
-        description="Point cloud map file format. Set to 'pcd' to use split PCD files in pcd/ directory. If empty, uses default behavior.",
     )
     return launch_arguments
 
