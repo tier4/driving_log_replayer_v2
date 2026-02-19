@@ -262,7 +262,7 @@ def perception_reproducer(conf: dict[str, str]) -> ProcessInfo:
     return ProcessInfo(process_list=process_list, last_action=None)
 
 
-def post_process(context: LaunchContext) -> list:
+def post_process(context: LaunchContext) -> list:  # noqa: C901
     conf = context.launch_configurations
     create_metadata_yaml(conf["result_bag_path"])
 
