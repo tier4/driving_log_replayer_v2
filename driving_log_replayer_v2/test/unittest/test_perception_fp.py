@@ -126,6 +126,7 @@ def create_criteria() -> Criteria:
             polygon_2d=[[10.0, 1.5, 0.0], [10.0, -1.5, 0.0], [0.0, -1.5, 0.0], [0.0, 1.5, 0.0]],
         ),
         timestamp=[TimeStamp(start=0.0, end=200.0)],
+        topic_type=["bbox", "pointcloud"],
     )
 
 
