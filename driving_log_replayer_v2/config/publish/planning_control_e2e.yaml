@@ -1,0 +1,43 @@
+# This publishing topics is to launch planning and control components
+publish:
+  # vehicle
+  - /vehicle/status/steering_status
+  - /vehicle/status/velocity_status
+  - /vehicle/status/turn_indicators_status
+  - /vehicle/status/control_mode
+  - /vehicle/status/gear_status
+  # sensing
+  - /sensing/imu/imu_data
+  # localization
+  - /localization/acceleration
+  - /localization/kinematic_state
+  - /tf
+  # perception
+  - /perception/traffic_light_recognition/traffic_signals
+  - /perception/object_recognition/tracking/objects
+  # planning inputs
+  - /planning/mission_planning/route
+  - /planning/mission_planning/state
+  - /planning/scenario_planning/max_velocity_default
+  # system / mrm
+  - /system/hazard_lights_cmd
+  - /system/emergency/control_cmd
+  - /system/emergency/gear_cmd
+  - /system/emergency/hazard_lights_cmd
+  - /system/emergency/turn_indicators_cmd
+  - /system/fail_safe/mrm_state
+  # `/control/external_cmd_selector` outputs
+  - /control/external_cmd_selector/current_selector_mode
+  - /external/selected/gear_cmd
+  - /external/selected/hazard_lights_cmd
+  - /external/selected/heartbeat
+  - /external/selected/pedals_cmd
+  - /external/selected/steering_cmd
+  - /external/selected/turn_indicators_cmd
+  # other
+  - /autoware/state
+  - /awapi/tmp/virtual_traffic_light_states
+  - /api/operation_mode/state
+  # - /system/operation_mode/state # from `/control/autoware_operation_mode_transition_manager`
+  # - /autoware/engage # from `/control/autoware_operation_mode_transition_manager`
+  # - /api/autoware/get/engage # from `/control/vehicle_cmd_gate`
