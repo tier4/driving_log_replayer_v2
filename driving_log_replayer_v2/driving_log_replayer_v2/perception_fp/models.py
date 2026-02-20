@@ -167,8 +167,7 @@ class Criteria(BaseModel):
         elif isinstance(data, np.ndarray):
             data_type = np.ndarray
         else:
-            err_msg = "data must be either list of DynamicObject or numpy array"
-            raise ValueError(err_msg)
+            return False
         return data_type in self.get_type()
 
 
