@@ -653,7 +653,6 @@ class ObstacleSegmentationResult(ResultBase):
         super().__init__()
         self.__detection = Detection(condition=condition.Detection)
         self.__non_detection = NonDetection(condition=condition.NonDetection)
-        self.__frame_counter = 0  # Counter for frames when frame_name is a string
 
     def update(self) -> None:
         summary_str = f"{self.__detection.summary}, {self.__non_detection.summary}"
