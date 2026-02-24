@@ -76,6 +76,7 @@ def create_polygon3d() -> Polygon3D:
     return Polygon3D.from_args(
         [[10.0, 1.5, 0.0], [10.0, -1.5, 0.0], [0.0, -1.5, 0.0], [0.0, 1.5, 0.0]],
         frame_id="map",
+        is_valid_timestamp=True,
         z_min=-10.0,
         z_max=10.0,
     )
