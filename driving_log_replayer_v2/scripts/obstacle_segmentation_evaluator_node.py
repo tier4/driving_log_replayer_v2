@@ -80,9 +80,16 @@ class ObstacleSegmentationEvaluator(DLREvaluatorV2):
         )
         self._result: ObstacleSegmentationResult
 
+        # obstacle_segmentation evaluation does not require t4_dataset (annotation data) because it is unnecessary when using only non_detection.
+        self._t4_dataset_paths = [path for path in self._t4_dataset_paths if Path(path).exists()]
+
         # pub_goal_pose must be created before timer_cb is called
         self.__goal_pose_counter = 0
-        self.__goal_pose = get_goal_pose_from_t4_dataset(self._t4_dataset_paths[0])
+        self.__goal_pose = (
+            get_goal_pose_from_t4_dataset(self._t4_dataset_paths[0])
+            if self._t4_dataset_paths
+            else None
+        )
         self.__pub_goal_pose = self.create_publisher(
             PoseStamped,
             "/planning/mission_planning/goal",
@@ -113,10 +120,8 @@ class ObstacleSegmentationEvaluator(DLREvaluatorV2):
             self.get_parameter("vehicle_model").get_parameter_value().string_value
         )
 
-        # obstacle_segmentation evaluation does not require t4_dataset (annotation data)
-        # Set empty dataset_paths to avoid NuScenes initialization
         evaluation_config: SensingEvaluationConfig = SensingEvaluationConfig(
-            dataset_paths=[],  # Empty list since t4_dataset is not required for obstacle_segmentation
+            dataset_paths=self._t4_dataset_paths,
             frame_id="base_link",
             result_root_directory=Path(
                 self._perception_eval_log_path,
@@ -249,7 +254,7 @@ class ObstacleSegmentationEvaluator(DLREvaluatorV2):
         # Continue evaluation even if ground_truth_now_frame is None
         # get_ground_truth_now_frame may raise IndexError when dataset_paths is empty
         ground_truth_now_frame: FrameGroundTruth | None = None
-        try:
+        if self._t4_dataset_paths:
             ground_truth_now_frame = self.__evaluator.get_ground_truth_now_frame(
                 unix_time=header_timestamp_microsec,
             )
@@ -257,7 +262,7 @@ class ObstacleSegmentationEvaluator(DLREvaluatorV2):
             if ground_truth_now_frame is None:
                 self.__skip_counter += 1
                 return
-        except (IndexError, ValueError):
+        else:
             # dataset_paths is empty or no ground truth available
             # t4_datasetが存在しない場合は処理を続行
             pass
