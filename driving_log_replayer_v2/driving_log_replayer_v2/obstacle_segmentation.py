@@ -63,10 +63,8 @@ from driving_log_replayer_v2_msgs.msg import ObstacleSegmentationMarker
 from driving_log_replayer_v2_msgs.msg import ObstacleSegmentationMarkerArray
 
 
-def get_goal_pose_from_t4_dataset(dataset_path: str) -> PoseStamped | None:
+def get_goal_pose_from_t4_dataset(dataset_path: str) -> PoseStamped:
     ego_pose_json_path = Path(dataset_path, "annotation", "ego_pose.json")
-    if not ego_pose_json_path.exists():
-        return None
     with ego_pose_json_path.open() as ego_pose_file:
         ego_pose_json = json.load(ego_pose_file)
         last_ego_pose = ego_pose_json[-1]
@@ -682,17 +680,9 @@ class ObstacleSegmentationResult(ResultBase):
         PointCloud2 | None,
         ObstacleSegmentationMarker | None,
     ]:
-        # Convert frame_name to integer if it's a string (e.g., when dataset_paths is empty)
-        frame_name: int
-        if isinstance(frame.frame_name, str):
-            # Use frame counter when frame_name is a string
-            frame_name = self.__frame_counter
-            self.__frame_counter += 1
-        else:
-            frame_name = int(frame.frame_name)
         out_frame = {
             "Ego": {"TransformStamped": map_to_baselink},
-            "FrameName": frame_name,
+            "FrameName": frame.frame_name,
             "FrameSkip": skip,
             "StopReasons": stop_reasons,
             "TopicRate": str(topic_rate),
