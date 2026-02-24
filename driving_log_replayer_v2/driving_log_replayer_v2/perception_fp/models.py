@@ -44,7 +44,7 @@ class Polygon3D:
 
     geom: Polygon
     frame_id: Literal["map", "base_link"]
-    is_valid: bool
+    is_valid_timestamp: bool
     map_to_base_link: np.ndarray | None = None
     base_link_to_map: np.ndarray | None = None
     z_min: float | None = None
@@ -55,7 +55,7 @@ class Polygon3D:
         cls,
         *args: Any,
         frame_id: Literal["map", "base_link"],
-        is_valid: bool,
+        is_valid_timestamp: bool,
         z_min: float | None = None,
         z_max: float | None = None,
         map_to_base_link: np.ndarray | None = None,
@@ -65,7 +65,7 @@ class Polygon3D:
         return cls(
             geom=Polygon(*args, **kwargs),
             frame_id=frame_id,
-            is_valid=is_valid,
+            is_valid_timestamp=is_valid_timestamp,
             z_min=z_min,
             z_max=z_max,
             map_to_base_link=map_to_base_link,
@@ -205,14 +205,14 @@ class PerceptionFP(EvaluationItem):
             for condition_timestamp in self.condition.timestamp
         ):
             self._non_detection_area = self.get_non_detection_area_with_transform(
-                map_to_base_link, frame_id, is_valid=False
+                map_to_base_link, frame_id, is_valid_timestamp=False
             )
             self._fp_objects = []
             return {"Info": "Not in evaluation timestamp range"}
 
         if not self.condition.is_valid_topic_type(data):
             self._non_detection_area = self.get_non_detection_area_with_transform(
-                map_to_base_link, frame_id, is_valid=False
+                map_to_base_link, frame_id, is_valid_timestamp=True
             )
             self._fp_objects = []
             return {"Info": "Not in evaluation topic type"}
@@ -220,7 +220,7 @@ class PerceptionFP(EvaluationItem):
         self.total += 1
 
         is_in_non_detection_area = self.is_in_non_detection_area(
-            frame_id, data, map_to_base_link, is_valid=True
+            frame_id, data, map_to_base_link, is_valid_timestamp=True
         )
 
         if not is_in_non_detection_area:
@@ -241,12 +241,17 @@ class PerceptionFP(EvaluationItem):
         }
 
     def is_in_non_detection_area(
-        self, frame_id: str, data: PerceptionFPData, map_to_base_link: np.ndarray, *, is_valid: bool
+        self,
+        frame_id: str,
+        data: PerceptionFPData,
+        map_to_base_link: np.ndarray,
+        *,
+        is_valid_timestamp: bool,
     ) -> bool:
         # boundary is not included
         exist = False
         non_detection_area: Polygon3D = self.get_non_detection_area_with_transform(
-            map_to_base_link, frame_id, is_valid=is_valid
+            map_to_base_link, frame_id, is_valid_timestamp=is_valid_timestamp
         )
         if isinstance(data, list):
             # TODO: use prepare function of shapely for performance improvement
@@ -299,12 +304,12 @@ class PerceptionFP(EvaluationItem):
         return exist
 
     def get_non_detection_area_with_transform(
-        self, map_to_base_link: np.ndarray, frame_id: str, *, is_valid: bool
+        self, map_to_base_link: np.ndarray, frame_id: str, *, is_valid_timestamp: bool
     ) -> Polygon3D:
         non_detection_area: Polygon3D = Polygon3D.from_args(
             self.condition.non_detection_area.polygon_2d,
             frame_id="map",
-            is_valid=is_valid,
+            is_valid_timestamp=is_valid_timestamp,
             map_to_base_link=map_to_base_link,
             z_min=self.condition.non_detection_area.z_min,
             z_max=self.condition.non_detection_area.z_max,

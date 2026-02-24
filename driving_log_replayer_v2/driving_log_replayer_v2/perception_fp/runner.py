@@ -124,7 +124,7 @@ def convert_non_detection_area_to_ros_msg(
     for idx, (criterion_name, polygon_3d) in enumerate(data.items()):
         color = (
             ColorRGBA(r=1.0, g=0.0, b=0.0, a=0.3)
-            if polygon_3d.is_valid
+            if polygon_3d.is_valid_timestamp
             else ColorRGBA(r=1.0, g=0.6, b=0.2, a=0.3)
         )
 
