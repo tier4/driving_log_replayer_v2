@@ -119,10 +119,15 @@ def convert_non_detection_area_to_ros_msg(
     min_z = -10.0
     namespace = "non_detection_area"
     header.frame_id = "base_link"
-    color = ColorRGBA(r=1.0, g=0.0, b=0.0, a=0.3)
 
     non_detection_area_marker = MarkerArray()
     for idx, (criterion_name, polygon_3d) in enumerate(data.items()):
+        color = (
+            ColorRGBA(r=1.0, g=0.0, b=0.0, a=0.3)
+            if polygon_3d.is_valid
+            else ColorRGBA(r=1.0, g=0.6, b=0.2, a=0.3)
+        )
+
         # add polygon marker
         if polygon_3d.frame_id != "base_link":
             polygon_3d.convert_map_to_base_link()
