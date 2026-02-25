@@ -45,8 +45,9 @@ RECORD_TOPIC = """^/tf$\
 |^/driving_log_replayer/.*$\
 |^/api/.*/get/.*$\
 |^/api/operation_mode/state$\
-|^/awapi/.*/get/.*\
+|^/awapi/.*/get/.*$\
 |^/perception_reproducer/rosbag_ego_odom$\
+|^/sensing/gnss/septentrio/nav_sat_fix\
 """
 
 AUTOWARE_DISABLE = {}
