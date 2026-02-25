@@ -95,3 +95,4 @@ publish:
   - /autoware/state
   - /awapi/tmp/virtual_traffic_light_states
   - /api/operation_mode/state
+  - /sensing/gnss/septentrio/nav_sat_fix

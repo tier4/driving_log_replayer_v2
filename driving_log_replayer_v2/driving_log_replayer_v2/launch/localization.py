@@ -34,7 +34,8 @@ RECORD_TOPIC = """^/tf$\
 |^/localization/util/downsample/pointcloud$\
 |^/localization/pose_estimator/points_aligned$\
 |^/system/processing_time_checker/metrics$\
-|^/driving_log_replayer/.*\
+|^/driving_log_replayer/.*$\
+|^/sensing/gnss/septentrio/nav_sat_fix\
 """
 
 AUTOWARE_DISABLE = {
