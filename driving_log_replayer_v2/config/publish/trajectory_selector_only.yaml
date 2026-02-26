@@ -1,5 +1,12 @@
-# This publishing topics is to launch planning and control components for E2E planner (diffusion planner)
+# This publishing topics is to test E2E planner's trajectory selector and its following modules
+# Note this config should be used with `disable_diffusion_planner:=true` and `enable_minimum_rule_based_planner:=false`
 publish:
+  # trajectory generator outputs
+  - /planning/generator/candidate_trajectories
+  - /planning/turn_indicators_cmd
+  - /planning/scenario_planning/current_max_velocity
+  - /planning/trajectory_generator/neural_network_based_planner/diffusion_planner_node/output/predicted_objects
+
   # vehicle
   - /vehicle/status/steering_status
   - /vehicle/status/velocity_status
