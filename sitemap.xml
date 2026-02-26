@@ -1,0 +1,381 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9" xmlns:xhtml="http://www.w3.org/1999/xhtml">
+    <url>
+        <loc>https://tier4.github.io/driving_log_replayer_v2/</loc>
+        <lastmod>2026-02-26</lastmod>
+        <changefreq>daily</changefreq>
+        <xhtml:link rel="alternate" hreflang="en" href="https://tier4.github.io/driving_log_replayer_v2/"/>
+        <xhtml:link rel="alternate" hreflang="ja" href="https://tier4.github.io/driving_log_replayer_v2/ja/"/>
+    </url>
+    <url>
+        <loc>https://tier4.github.io/driving_log_replayer_v2/analyzer/</loc>
+        <lastmod>2026-02-26</lastmod>
+        <changefreq>daily</changefreq>
+        <xhtml:link rel="alternate" hreflang="en" href="https://tier4.github.io/driving_log_replayer_v2/analyzer/"/>
+        <xhtml:link rel="alternate" hreflang="ja" href="https://tier4.github.io/driving_log_replayer_v2/ja/analyzer/"/>
+    </url>
+    <url>
+        <loc>https://tier4.github.io/driving_log_replayer_v2/overview/command/</loc>
+        <lastmod>2026-02-26</lastmod>
+        <changefreq>daily</changefreq>
+        <xhtml:link rel="alternate" hreflang="en" href="https://tier4.github.io/driving_log_replayer_v2/overview/command/"/>
+        <xhtml:link rel="alternate" hreflang="ja" href="https://tier4.github.io/driving_log_replayer_v2/ja/overview/command/"/>
+    </url>
+    <url>
+        <loc>https://tier4.github.io/driving_log_replayer_v2/overview/</loc>
+        <lastmod>2026-02-26</lastmod>
+        <changefreq>daily</changefreq>
+        <xhtml:link rel="alternate" hreflang="en" href="https://tier4.github.io/driving_log_replayer_v2/overview/"/>
+        <xhtml:link rel="alternate" hreflang="ja" href="https://tier4.github.io/driving_log_replayer_v2/ja/overview/"/>
+    </url>
+    <url>
+        <loc>https://tier4.github.io/driving_log_replayer_v2/quick_start/installation/</loc>
+        <lastmod>2026-02-26</lastmod>
+        <changefreq>daily</changefreq>
+        <xhtml:link rel="alternate" hreflang="en" href="https://tier4.github.io/driving_log_replayer_v2/quick_start/installation/"/>
+        <xhtml:link rel="alternate" hreflang="ja" href="https://tier4.github.io/driving_log_replayer_v2/ja/quick_start/installation/"/>
+    </url>
+    <url>
+        <loc>https://tier4.github.io/driving_log_replayer_v2/quick_start/run/</loc>
+        <lastmod>2026-02-26</lastmod>
+        <changefreq>daily</changefreq>
+        <xhtml:link rel="alternate" hreflang="en" href="https://tier4.github.io/driving_log_replayer_v2/quick_start/run/"/>
+        <xhtml:link rel="alternate" hreflang="ja" href="https://tier4.github.io/driving_log_replayer_v2/ja/quick_start/run/"/>
+    </url>
+    <url>
+        <loc>https://tier4.github.io/driving_log_replayer_v2/quick_start/setup/</loc>
+        <lastmod>2026-02-26</lastmod>
+        <changefreq>daily</changefreq>
+        <xhtml:link rel="alternate" hreflang="en" href="https://tier4.github.io/driving_log_replayer_v2/quick_start/setup/"/>
+        <xhtml:link rel="alternate" hreflang="ja" href="https://tier4.github.io/driving_log_replayer_v2/ja/quick_start/setup/"/>
+    </url>
+    <url>
+        <loc>https://tier4.github.io/driving_log_replayer_v2/result_format/</loc>
+        <lastmod>2026-02-26</lastmod>
+        <changefreq>daily</changefreq>
+        <xhtml:link rel="alternate" hreflang="en" href="https://tier4.github.io/driving_log_replayer_v2/result_format/"/>
+        <xhtml:link rel="alternate" hreflang="ja" href="https://tier4.github.io/driving_log_replayer_v2/ja/result_format/"/>
+    </url>
+    <url>
+        <loc>https://tier4.github.io/driving_log_replayer_v2/scenario_format/</loc>
+        <lastmod>2026-02-26</lastmod>
+        <changefreq>daily</changefreq>
+        <xhtml:link rel="alternate" hreflang="en" href="https://tier4.github.io/driving_log_replayer_v2/scenario_format/"/>
+        <xhtml:link rel="alternate" hreflang="ja" href="https://tier4.github.io/driving_log_replayer_v2/ja/scenario_format/"/>
+    </url>
+    <url>
+        <loc>https://tier4.github.io/driving_log_replayer_v2/trouble_shooting/</loc>
+        <lastmod>2026-02-26</lastmod>
+        <changefreq>daily</changefreq>
+        <xhtml:link rel="alternate" hreflang="en" href="https://tier4.github.io/driving_log_replayer_v2/trouble_shooting/"/>
+        <xhtml:link rel="alternate" hreflang="ja" href="https://tier4.github.io/driving_log_replayer_v2/ja/trouble_shooting/"/>
+    </url>
+    <url>
+        <loc>https://tier4.github.io/driving_log_replayer_v2/use_case/all_components/</loc>
+        <lastmod>2026-02-26</lastmod>
+        <changefreq>daily</changefreq>
+        <xhtml:link rel="alternate" hreflang="en" href="https://tier4.github.io/driving_log_replayer_v2/use_case/all_components/"/>
+        <xhtml:link rel="alternate" hreflang="ja" href="https://tier4.github.io/driving_log_replayer_v2/ja/use_case/all_components/"/>
+    </url>
+    <url>
+        <loc>https://tier4.github.io/driving_log_replayer_v2/use_case/annotationless_perception/</loc>
+        <lastmod>2026-02-26</lastmod>
+        <changefreq>daily</changefreq>
+        <xhtml:link rel="alternate" hreflang="en" href="https://tier4.github.io/driving_log_replayer_v2/use_case/annotationless_perception/"/>
+        <xhtml:link rel="alternate" hreflang="ja" href="https://tier4.github.io/driving_log_replayer_v2/ja/use_case/annotationless_perception/"/>
+    </url>
+    <url>
+        <loc>https://tier4.github.io/driving_log_replayer_v2/use_case/ar_tag_based_localizer/</loc>
+        <lastmod>2026-02-26</lastmod>
+        <changefreq>daily</changefreq>
+        <xhtml:link rel="alternate" hreflang="en" href="https://tier4.github.io/driving_log_replayer_v2/use_case/ar_tag_based_localizer/"/>
+        <xhtml:link rel="alternate" hreflang="ja" href="https://tier4.github.io/driving_log_replayer_v2/ja/use_case/ar_tag_based_localizer/"/>
+    </url>
+    <url>
+        <loc>https://tier4.github.io/driving_log_replayer_v2/use_case/diagnostics/</loc>
+        <lastmod>2026-02-26</lastmod>
+        <changefreq>daily</changefreq>
+        <xhtml:link rel="alternate" hreflang="en" href="https://tier4.github.io/driving_log_replayer_v2/use_case/diagnostics/"/>
+        <xhtml:link rel="alternate" hreflang="ja" href="https://tier4.github.io/driving_log_replayer_v2/ja/use_case/diagnostics/"/>
+    </url>
+    <url>
+        <loc>https://tier4.github.io/driving_log_replayer_v2/use_case/eagleye/</loc>
+        <lastmod>2026-02-26</lastmod>
+        <changefreq>daily</changefreq>
+        <xhtml:link rel="alternate" hreflang="en" href="https://tier4.github.io/driving_log_replayer_v2/use_case/eagleye/"/>
+        <xhtml:link rel="alternate" hreflang="ja" href="https://tier4.github.io/driving_log_replayer_v2/ja/use_case/eagleye/"/>
+    </url>
+    <url>
+        <loc>https://tier4.github.io/driving_log_replayer_v2/use_case/ground_segmentation/</loc>
+        <lastmod>2026-02-26</lastmod>
+        <changefreq>daily</changefreq>
+        <xhtml:link rel="alternate" hreflang="en" href="https://tier4.github.io/driving_log_replayer_v2/use_case/ground_segmentation/"/>
+        <xhtml:link rel="alternate" hreflang="ja" href="https://tier4.github.io/driving_log_replayer_v2/ja/use_case/ground_segmentation/"/>
+    </url>
+    <url>
+        <loc>https://tier4.github.io/driving_log_replayer_v2/use_case/</loc>
+        <lastmod>2026-02-26</lastmod>
+        <changefreq>daily</changefreq>
+        <xhtml:link rel="alternate" hreflang="en" href="https://tier4.github.io/driving_log_replayer_v2/use_case/"/>
+        <xhtml:link rel="alternate" hreflang="ja" href="https://tier4.github.io/driving_log_replayer_v2/ja/use_case/"/>
+    </url>
+    <url>
+        <loc>https://tier4.github.io/driving_log_replayer_v2/use_case/localization/</loc>
+        <lastmod>2026-02-26</lastmod>
+        <changefreq>daily</changefreq>
+        <xhtml:link rel="alternate" hreflang="en" href="https://tier4.github.io/driving_log_replayer_v2/use_case/localization/"/>
+        <xhtml:link rel="alternate" hreflang="ja" href="https://tier4.github.io/driving_log_replayer_v2/ja/use_case/localization/"/>
+    </url>
+    <url>
+        <loc>https://tier4.github.io/driving_log_replayer_v2/use_case/obstacle_segmentation/</loc>
+        <lastmod>2026-02-26</lastmod>
+        <changefreq>daily</changefreq>
+        <xhtml:link rel="alternate" hreflang="en" href="https://tier4.github.io/driving_log_replayer_v2/use_case/obstacle_segmentation/"/>
+        <xhtml:link rel="alternate" hreflang="ja" href="https://tier4.github.io/driving_log_replayer_v2/ja/use_case/obstacle_segmentation/"/>
+    </url>
+    <url>
+        <loc>https://tier4.github.io/driving_log_replayer_v2/use_case/perception/</loc>
+        <lastmod>2026-02-26</lastmod>
+        <changefreq>daily</changefreq>
+        <xhtml:link rel="alternate" hreflang="en" href="https://tier4.github.io/driving_log_replayer_v2/use_case/perception/"/>
+        <xhtml:link rel="alternate" hreflang="ja" href="https://tier4.github.io/driving_log_replayer_v2/ja/use_case/perception/"/>
+    </url>
+    <url>
+        <loc>https://tier4.github.io/driving_log_replayer_v2/use_case/perception_2d/</loc>
+        <lastmod>2026-02-26</lastmod>
+        <changefreq>daily</changefreq>
+        <xhtml:link rel="alternate" hreflang="en" href="https://tier4.github.io/driving_log_replayer_v2/use_case/perception_2d/"/>
+        <xhtml:link rel="alternate" hreflang="ja" href="https://tier4.github.io/driving_log_replayer_v2/ja/use_case/perception_2d/"/>
+    </url>
+    <url>
+        <loc>https://tier4.github.io/driving_log_replayer_v2/use_case/perception_reproducer/</loc>
+        <lastmod>2026-02-26</lastmod>
+        <changefreq>daily</changefreq>
+        <xhtml:link rel="alternate" hreflang="en" href="https://tier4.github.io/driving_log_replayer_v2/use_case/perception_reproducer/"/>
+        <xhtml:link rel="alternate" hreflang="ja" href="https://tier4.github.io/driving_log_replayer_v2/ja/use_case/perception_reproducer/"/>
+    </url>
+    <url>
+        <loc>https://tier4.github.io/driving_log_replayer_v2/use_case/performance_diag/</loc>
+        <lastmod>2026-02-26</lastmod>
+        <changefreq>daily</changefreq>
+        <xhtml:link rel="alternate" hreflang="en" href="https://tier4.github.io/driving_log_replayer_v2/use_case/performance_diag/"/>
+        <xhtml:link rel="alternate" hreflang="ja" href="https://tier4.github.io/driving_log_replayer_v2/ja/use_case/performance_diag/"/>
+    </url>
+    <url>
+        <loc>https://tier4.github.io/driving_log_replayer_v2/use_case/planning_control/</loc>
+        <lastmod>2026-02-26</lastmod>
+        <changefreq>daily</changefreq>
+        <xhtml:link rel="alternate" hreflang="en" href="https://tier4.github.io/driving_log_replayer_v2/use_case/planning_control/"/>
+        <xhtml:link rel="alternate" hreflang="ja" href="https://tier4.github.io/driving_log_replayer_v2/ja/use_case/planning_control/"/>
+    </url>
+    <url>
+        <loc>https://tier4.github.io/driving_log_replayer_v2/use_case/time_step_based_trajectory/</loc>
+        <lastmod>2026-02-26</lastmod>
+        <changefreq>daily</changefreq>
+        <xhtml:link rel="alternate" hreflang="en" href="https://tier4.github.io/driving_log_replayer_v2/use_case/time_step_based_trajectory/"/>
+        <xhtml:link rel="alternate" hreflang="ja" href="https://tier4.github.io/driving_log_replayer_v2/ja/use_case/time_step_based_trajectory/"/>
+    </url>
+    <url>
+        <loc>https://tier4.github.io/driving_log_replayer_v2/use_case/traffic_light/</loc>
+        <lastmod>2026-02-26</lastmod>
+        <changefreq>daily</changefreq>
+        <xhtml:link rel="alternate" hreflang="en" href="https://tier4.github.io/driving_log_replayer_v2/use_case/traffic_light/"/>
+        <xhtml:link rel="alternate" hreflang="ja" href="https://tier4.github.io/driving_log_replayer_v2/ja/use_case/traffic_light/"/>
+    </url>
+    <url>
+        <loc>https://tier4.github.io/driving_log_replayer_v2/use_case/yabloc/</loc>
+        <lastmod>2026-02-26</lastmod>
+        <changefreq>daily</changefreq>
+        <xhtml:link rel="alternate" hreflang="en" href="https://tier4.github.io/driving_log_replayer_v2/use_case/yabloc/"/>
+        <xhtml:link rel="alternate" hreflang="ja" href="https://tier4.github.io/driving_log_replayer_v2/ja/use_case/yabloc/"/>
+    </url>
+    <url>
+        <loc>https://tier4.github.io/driving_log_replayer_v2/ja/</loc>
+        <lastmod>2026-02-26</lastmod>
+        <changefreq>daily</changefreq>
+        <xhtml:link rel="alternate" hreflang="ja" href="https://tier4.github.io/driving_log_replayer_v2/ja/"/>
+        <xhtml:link rel="alternate" hreflang="en" href="https://tier4.github.io/driving_log_replayer_v2/"/>
+    </url>
+    <url>
+        <loc>https://tier4.github.io/driving_log_replayer_v2/ja/analyzer/</loc>
+        <lastmod>2026-02-26</lastmod>
+        <changefreq>daily</changefreq>
+        <xhtml:link rel="alternate" hreflang="ja" href="https://tier4.github.io/driving_log_replayer_v2/ja/analyzer/"/>
+        <xhtml:link rel="alternate" hreflang="en" href="https://tier4.github.io/driving_log_replayer_v2/analyzer/"/>
+    </url>
+    <url>
+        <loc>https://tier4.github.io/driving_log_replayer_v2/ja/overview/command/</loc>
+        <lastmod>2026-02-26</lastmod>
+        <changefreq>daily</changefreq>
+        <xhtml:link rel="alternate" hreflang="ja" href="https://tier4.github.io/driving_log_replayer_v2/ja/overview/command/"/>
+        <xhtml:link rel="alternate" hreflang="en" href="https://tier4.github.io/driving_log_replayer_v2/overview/command/"/>
+    </url>
+    <url>
+        <loc>https://tier4.github.io/driving_log_replayer_v2/ja/overview/</loc>
+        <lastmod>2026-02-26</lastmod>
+        <changefreq>daily</changefreq>
+        <xhtml:link rel="alternate" hreflang="ja" href="https://tier4.github.io/driving_log_replayer_v2/ja/overview/"/>
+        <xhtml:link rel="alternate" hreflang="en" href="https://tier4.github.io/driving_log_replayer_v2/overview/"/>
+    </url>
+    <url>
+        <loc>https://tier4.github.io/driving_log_replayer_v2/ja/quick_start/installation/</loc>
+        <lastmod>2026-02-26</lastmod>
+        <changefreq>daily</changefreq>
+        <xhtml:link rel="alternate" hreflang="ja" href="https://tier4.github.io/driving_log_replayer_v2/ja/quick_start/installation/"/>
+        <xhtml:link rel="alternate" hreflang="en" href="https://tier4.github.io/driving_log_replayer_v2/quick_start/installation/"/>
+    </url>
+    <url>
+        <loc>https://tier4.github.io/driving_log_replayer_v2/ja/quick_start/run/</loc>
+        <lastmod>2026-02-26</lastmod>
+        <changefreq>daily</changefreq>
+        <xhtml:link rel="alternate" hreflang="ja" href="https://tier4.github.io/driving_log_replayer_v2/ja/quick_start/run/"/>
+        <xhtml:link rel="alternate" hreflang="en" href="https://tier4.github.io/driving_log_replayer_v2/quick_start/run/"/>
+    </url>
+    <url>
+        <loc>https://tier4.github.io/driving_log_replayer_v2/ja/quick_start/setup/</loc>
+        <lastmod>2026-02-26</lastmod>
+        <changefreq>daily</changefreq>
+        <xhtml:link rel="alternate" hreflang="ja" href="https://tier4.github.io/driving_log_replayer_v2/ja/quick_start/setup/"/>
+        <xhtml:link rel="alternate" hreflang="en" href="https://tier4.github.io/driving_log_replayer_v2/quick_start/setup/"/>
+    </url>
+    <url>
+        <loc>https://tier4.github.io/driving_log_replayer_v2/ja/result_format/</loc>
+        <lastmod>2026-02-26</lastmod>
+        <changefreq>daily</changefreq>
+        <xhtml:link rel="alternate" hreflang="ja" href="https://tier4.github.io/driving_log_replayer_v2/ja/result_format/"/>
+        <xhtml:link rel="alternate" hreflang="en" href="https://tier4.github.io/driving_log_replayer_v2/result_format/"/>
+    </url>
+    <url>
+        <loc>https://tier4.github.io/driving_log_replayer_v2/ja/scenario_format/</loc>
+        <lastmod>2026-02-26</lastmod>
+        <changefreq>daily</changefreq>
+        <xhtml:link rel="alternate" hreflang="ja" href="https://tier4.github.io/driving_log_replayer_v2/ja/scenario_format/"/>
+        <xhtml:link rel="alternate" hreflang="en" href="https://tier4.github.io/driving_log_replayer_v2/scenario_format/"/>
+    </url>
+    <url>
+        <loc>https://tier4.github.io/driving_log_replayer_v2/ja/trouble_shooting/</loc>
+        <lastmod>2026-02-26</lastmod>
+        <changefreq>daily</changefreq>
+        <xhtml:link rel="alternate" hreflang="ja" href="https://tier4.github.io/driving_log_replayer_v2/ja/trouble_shooting/"/>
+        <xhtml:link rel="alternate" hreflang="en" href="https://tier4.github.io/driving_log_replayer_v2/trouble_shooting/"/>
+    </url>
+    <url>
+        <loc>https://tier4.github.io/driving_log_replayer_v2/ja/use_case/all_components/</loc>
+        <lastmod>2026-02-26</lastmod>
+        <changefreq>daily</changefreq>
+        <xhtml:link rel="alternate" hreflang="ja" href="https://tier4.github.io/driving_log_replayer_v2/ja/use_case/all_components/"/>
+        <xhtml:link rel="alternate" hreflang="en" href="https://tier4.github.io/driving_log_replayer_v2/use_case/all_components/"/>
+    </url>
+    <url>
+        <loc>https://tier4.github.io/driving_log_replayer_v2/ja/use_case/annotationless_perception/</loc>
+        <lastmod>2026-02-26</lastmod>
+        <changefreq>daily</changefreq>
+        <xhtml:link rel="alternate" hreflang="ja" href="https://tier4.github.io/driving_log_replayer_v2/ja/use_case/annotationless_perception/"/>
+        <xhtml:link rel="alternate" hreflang="en" href="https://tier4.github.io/driving_log_replayer_v2/use_case/annotationless_perception/"/>
+    </url>
+    <url>
+        <loc>https://tier4.github.io/driving_log_replayer_v2/ja/use_case/ar_tag_based_localizer/</loc>
+        <lastmod>2026-02-26</lastmod>
+        <changefreq>daily</changefreq>
+        <xhtml:link rel="alternate" hreflang="ja" href="https://tier4.github.io/driving_log_replayer_v2/ja/use_case/ar_tag_based_localizer/"/>
+        <xhtml:link rel="alternate" hreflang="en" href="https://tier4.github.io/driving_log_replayer_v2/use_case/ar_tag_based_localizer/"/>
+    </url>
+    <url>
+        <loc>https://tier4.github.io/driving_log_replayer_v2/ja/use_case/diagnostics/</loc>
+        <lastmod>2026-02-26</lastmod>
+        <changefreq>daily</changefreq>
+        <xhtml:link rel="alternate" hreflang="ja" href="https://tier4.github.io/driving_log_replayer_v2/ja/use_case/diagnostics/"/>
+        <xhtml:link rel="alternate" hreflang="en" href="https://tier4.github.io/driving_log_replayer_v2/use_case/diagnostics/"/>
+    </url>
+    <url>
+        <loc>https://tier4.github.io/driving_log_replayer_v2/ja/use_case/eagleye/</loc>
+        <lastmod>2026-02-26</lastmod>
+        <changefreq>daily</changefreq>
+        <xhtml:link rel="alternate" hreflang="ja" href="https://tier4.github.io/driving_log_replayer_v2/ja/use_case/eagleye/"/>
+        <xhtml:link rel="alternate" hreflang="en" href="https://tier4.github.io/driving_log_replayer_v2/use_case/eagleye/"/>
+    </url>
+    <url>
+        <loc>https://tier4.github.io/driving_log_replayer_v2/ja/use_case/ground_segmentation/</loc>
+        <lastmod>2026-02-26</lastmod>
+        <changefreq>daily</changefreq>
+        <xhtml:link rel="alternate" hreflang="ja" href="https://tier4.github.io/driving_log_replayer_v2/ja/use_case/ground_segmentation/"/>
+        <xhtml:link rel="alternate" hreflang="en" href="https://tier4.github.io/driving_log_replayer_v2/use_case/ground_segmentation/"/>
+    </url>
+    <url>
+        <loc>https://tier4.github.io/driving_log_replayer_v2/ja/use_case/</loc>
+        <lastmod>2026-02-26</lastmod>
+        <changefreq>daily</changefreq>
+        <xhtml:link rel="alternate" hreflang="ja" href="https://tier4.github.io/driving_log_replayer_v2/ja/use_case/"/>
+        <xhtml:link rel="alternate" hreflang="en" href="https://tier4.github.io/driving_log_replayer_v2/use_case/"/>
+    </url>
+    <url>
+        <loc>https://tier4.github.io/driving_log_replayer_v2/ja/use_case/localization/</loc>
+        <lastmod>2026-02-26</lastmod>
+        <changefreq>daily</changefreq>
+        <xhtml:link rel="alternate" hreflang="ja" href="https://tier4.github.io/driving_log_replayer_v2/ja/use_case/localization/"/>
+        <xhtml:link rel="alternate" hreflang="en" href="https://tier4.github.io/driving_log_replayer_v2/use_case/localization/"/>
+    </url>
+    <url>
+        <loc>https://tier4.github.io/driving_log_replayer_v2/ja/use_case/obstacle_segmentation/</loc>
+        <lastmod>2026-02-26</lastmod>
+        <changefreq>daily</changefreq>
+        <xhtml:link rel="alternate" hreflang="ja" href="https://tier4.github.io/driving_log_replayer_v2/ja/use_case/obstacle_segmentation/"/>
+        <xhtml:link rel="alternate" hreflang="en" href="https://tier4.github.io/driving_log_replayer_v2/use_case/obstacle_segmentation/"/>
+    </url>
+    <url>
+        <loc>https://tier4.github.io/driving_log_replayer_v2/ja/use_case/perception/</loc>
+        <lastmod>2026-02-26</lastmod>
+        <changefreq>daily</changefreq>
+        <xhtml:link rel="alternate" hreflang="ja" href="https://tier4.github.io/driving_log_replayer_v2/ja/use_case/perception/"/>
+        <xhtml:link rel="alternate" hreflang="en" href="https://tier4.github.io/driving_log_replayer_v2/use_case/perception/"/>
+    </url>
+    <url>
+        <loc>https://tier4.github.io/driving_log_replayer_v2/ja/use_case/perception_2d/</loc>
+        <lastmod>2026-02-26</lastmod>
+        <changefreq>daily</changefreq>
+        <xhtml:link rel="alternate" hreflang="ja" href="https://tier4.github.io/driving_log_replayer_v2/ja/use_case/perception_2d/"/>
+        <xhtml:link rel="alternate" hreflang="en" href="https://tier4.github.io/driving_log_replayer_v2/use_case/perception_2d/"/>
+    </url>
+    <url>
+        <loc>https://tier4.github.io/driving_log_replayer_v2/ja/use_case/perception_reproducer/</loc>
+        <lastmod>2026-02-26</lastmod>
+        <changefreq>daily</changefreq>
+        <xhtml:link rel="alternate" hreflang="ja" href="https://tier4.github.io/driving_log_replayer_v2/ja/use_case/perception_reproducer/"/>
+        <xhtml:link rel="alternate" hreflang="en" href="https://tier4.github.io/driving_log_replayer_v2/use_case/perception_reproducer/"/>
+    </url>
+    <url>
+        <loc>https://tier4.github.io/driving_log_replayer_v2/ja/use_case/performance_diag/</loc>
+        <lastmod>2026-02-26</lastmod>
+        <changefreq>daily</changefreq>
+        <xhtml:link rel="alternate" hreflang="ja" href="https://tier4.github.io/driving_log_replayer_v2/ja/use_case/performance_diag/"/>
+        <xhtml:link rel="alternate" hreflang="en" href="https://tier4.github.io/driving_log_replayer_v2/use_case/performance_diag/"/>
+    </url>
+    <url>
+        <loc>https://tier4.github.io/driving_log_replayer_v2/ja/use_case/planning_control/</loc>
+        <lastmod>2026-02-26</lastmod>
+        <changefreq>daily</changefreq>
+        <xhtml:link rel="alternate" hreflang="ja" href="https://tier4.github.io/driving_log_replayer_v2/ja/use_case/planning_control/"/>
+        <xhtml:link rel="alternate" hreflang="en" href="https://tier4.github.io/driving_log_replayer_v2/use_case/planning_control/"/>
+    </url>
+    <url>
+        <loc>https://tier4.github.io/driving_log_replayer_v2/ja/use_case/time_step_based_trajectory/</loc>
+        <lastmod>2026-02-26</lastmod>
+        <changefreq>daily</changefreq>
+        <xhtml:link rel="alternate" hreflang="ja" href="https://tier4.github.io/driving_log_replayer_v2/ja/use_case/time_step_based_trajectory/"/>
+        <xhtml:link rel="alternate" hreflang="en" href="https://tier4.github.io/driving_log_replayer_v2/use_case/time_step_based_trajectory/"/>
+    </url>
+    <url>
+        <loc>https://tier4.github.io/driving_log_replayer_v2/ja/use_case/traffic_light/</loc>
+        <lastmod>2026-02-26</lastmod>
+        <changefreq>daily</changefreq>
+        <xhtml:link rel="alternate" hreflang="ja" href="https://tier4.github.io/driving_log_replayer_v2/ja/use_case/traffic_light/"/>
+        <xhtml:link rel="alternate" hreflang="en" href="https://tier4.github.io/driving_log_replayer_v2/use_case/traffic_light/"/>
+    </url>
+    <url>
+        <loc>https://tier4.github.io/driving_log_replayer_v2/ja/use_case/yabloc/</loc>
+        <lastmod>2026-02-26</lastmod>
+        <changefreq>daily</changefreq>
+        <xhtml:link rel="alternate" hreflang="ja" href="https://tier4.github.io/driving_log_replayer_v2/ja/use_case/yabloc/"/>
+        <xhtml:link rel="alternate" hreflang="en" href="https://tier4.github.io/driving_log_replayer_v2/use_case/yabloc/"/>
+    </url>
+</urlset>
