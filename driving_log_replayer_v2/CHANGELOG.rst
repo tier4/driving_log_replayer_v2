@@ -2,8 +2,8 @@
 Changelog for package driving_log_replayer
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-Forthcoming
------------
+3.16.0 (2026-02-27)
+-------------------
 * feat(remap): add a remap file for xx1 perception (`#312 <https://github.com/tier4/driving_log_replayer_v2/issues/312>`_)
   * Add a remap file for xx1 perception
   * pre-commit
