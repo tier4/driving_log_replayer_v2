@@ -1,5 +1,18 @@
 # Release Notes
 
+## Version 3.16.0
+
+Major changes
+
+| Module                  | Feature        | Brief summary                                             | Pull request                                                        | Contributor                                         |
+| ----------------------- | -------------- | --------------------------------------------------------- | ------------------------------------------------------------------- | --------------------------------------------------- |
+| `common`                | remap          | add a remap file for xx1 perception                       | [#312](https://github.com/tier4/driving_log_replayer_v2/issues/312) | [MasatoSaeki](https://github.com/MasatoSaeki)       |
+| `common`                | record topic   | add topics for google map visualization on the lichtblick | [#311](https://github.com/tier4/driving_log_replayer_v2/issues/311) | [xtk8532704](https://github.com/xtk8532704)         |
+| `common`                | publish scheme | add publish scheme for diffusion planner simulation       | [#309](https://github.com/tier4/driving_log_replayer_v2/issues/309) | [Owen-Liuyuxuan](https://github.com/Owen-Liuyuxuan) |
+| `perception_reproducer` | all            | add publish scheme for diffusion planner simulation       | [#303](https://github.com/tier4/driving_log_replayer_v2/issues/303) | [xtk8532704](https://github.com/xtk8532704)         |
+| `common`                | publish topic  | set 2d perception on for all_components tests             | [#304](https://github.com/tier4/driving_log_replayer_v2/issues/304) | [xtk8532704](https://github.com/xtk8532704)         |
+| `ground_segmentation`   | refactor       | refactor the function                                     | [#306](https://github.com/tier4/driving_log_replayer_v2/issues/306) | [MasatoSaeki](https://github.com/MasatoSaeki)       |
+
 ## Version 3.15.2
 
 Minor Tweak
