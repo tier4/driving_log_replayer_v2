@@ -2,6 +2,48 @@
 Changelog for package driving_log_replayer
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
+Forthcoming
+-----------
+* feat(remap): add a remap file for xx1 perception (`#312 <https://github.com/tier4/driving_log_replayer_v2/issues/312>`_)
+  * Add a remap file for xx1 perception
+  * pre-commit
+  ---------
+  Co-authored-by: TadaKazuto <kazuto.tada@tier4.jp>
+* add topics for google map visualization on the lichtblick (`#311 <https://github.com/tier4/driving_log_replayer_v2/issues/311>`_)
+* feat: add publish  scheme  for diffusion planner simulation (`#309 <https://github.com/tier4/driving_log_replayer_v2/issues/309>`_)
+* feat(!perception_reproducer): add new usecase for reproduer test (`#303 <https://github.com/tier4/driving_log_replayer_v2/issues/303>`_)
+  * tmp save reviewed code
+  * save checked code.
+  * temp save finished code.
+  * tmp save, the node py is to be updated
+  * tmp save, to be debug
+  * some bugfixs
+  * fix bug
+  * fix bugs and pre-commit
+  * add docs
+  * typo
+  * small bug
+  * small bug
+  * modify the overview docs
+  * fix for comments
+  ---------
+  Co-authored-by: MasatoSaeki <masato.saeki@tier4.jp>
+* chore(publishing): set 2d perception on for all_compoents tests (`#304 <https://github.com/tier4/driving_log_replayer_v2/issues/304>`_)
+  * on 2d perception
+  * publish v2x topic
+  * add 2d perception topics to record
+  * update config for traffic light recognition
+  * Apply suggestion from @Copilot
+  Co-authored-by: Copilot <175728472+Copilot@users.noreply.github.com>
+  ---------
+  Co-authored-by: Masato Saeki <78376491+MasatoSaeki@users.noreply.github.com>
+  Co-authored-by: Copilot <175728472+Copilot@users.noreply.github.com>
+* chore(ground_segmentation): refactor the function (`#306 <https://github.com/tier4/driving_log_replayer_v2/issues/306>`_)
+  * chore(ground_segmentation): refactor the function
+  * add row break
+  ---------
+* Contributors: Kem (TiankuiXian), Masato Saeki, Yuxuan Liu
+
 3.15.2 (2026-01-30)
 -------------------
 * fix(perception): use localization kinematic in perception for planning (`#297 <https://github.com/tier4/driving_log_replayer_v2/issues/297>`_)
