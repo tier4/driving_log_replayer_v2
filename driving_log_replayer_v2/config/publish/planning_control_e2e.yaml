@@ -13,7 +13,10 @@ publish:
   - /localization/kinematic_state
   - /tf
   # perception
+  - /perception/obstacle_segmentation/pointcloud
   - /perception/traffic_light_recognition/traffic_signals
+  - /perception/occupancy_grid_map/map
+  - /perception/object_recognition/objects
   - /perception/object_recognition/tracking/objects
   # planning inputs
   - /planning/mission_planning/route
