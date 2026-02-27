@@ -20,7 +20,9 @@ from typing import TYPE_CHECKING
 
 from builtin_interfaces.msg import Time
 from geometry_msgs.msg import TransformStamped
+import numpy as np
 import pandas as pd
+from pyquaternion import Quaternion
 from rclpy.serialization import deserialize_message
 from rclpy.serialization import serialize_message
 from rosbag2_py import ConverterOptions
@@ -284,3 +286,19 @@ def lookup_transform(
         )
     except TransformException:
         return TransformStamped()
+
+
+def convert_to_homogeneous_matrix(transform: TransformStamped) -> np.ndarray:
+    translation = transform.transform.translation
+    rotation = transform.transform.rotation
+    quaternion = Quaternion(
+        rotation.w,
+        rotation.x,
+        rotation.y,
+        rotation.z,
+    )
+
+    matrix = np.eye(4)
+    matrix[0:3, 3] = [translation.x, translation.y, translation.z]
+    matrix[0:3, 0:3] = quaternion.rotation_matrix
+    return matrix
