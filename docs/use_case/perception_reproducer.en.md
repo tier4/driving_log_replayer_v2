@@ -134,7 +134,13 @@ Configuration options:
 - `reproduce_cool_down`: Cool down time for republishing (default: 80.0)
 - `tracked_object`: Publish tracked object
 - `search_radius`: Search radius for searching rosbag's ego odom messages (default: 1.5)
-- `pub_route`: Publish route created from rosbag (use when GoalPose is not specified)
+
+### Route Method
+
+The driving route can be configured via the `route_method` field at the dataset level in the scenario YAML.
+When `route_method` is set to `play_route_from_rosbag`, the `--pub-route` flag is passed to the `perception_reproducer` node.
+
+See [scenario format](../scenario_format/index.en.md#route_method) for details on `route_method`.
 
 ## About Evaluation
 

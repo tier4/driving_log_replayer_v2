@@ -40,6 +40,7 @@ Evaluation:
   Datasets:
     - DatasetName:
         VehicleId: String
+        route_method: String # optional, default: set_goal_from_scenario
 include_use_case:
   UseCaseName: String
   UseCaseFormatVersion: String
@@ -120,6 +121,16 @@ dataset name of t4_dataset
 Specify `vehicle_id` as an argument in `autoware_launch/launch/logging_simulator.launch.xml`
 
 If you don't know `vehicle_id`, set `default`.
+
+#### route_method
+
+(Optional) Specifies how the driving route is set.
+
+| Value                    | Description                                                                                           |
+| ------------------------ | ----------------------------------------------------------------------------------------------------- |
+| `set_goal_from_scenario` | (Default) Use `GoalPose` from scenario to set goal. Skip setting goal if `GoalPose` is not specified. |
+| `set_goal_from_rosbag`   | Read the last `/localization/kinematic_state` from rosbag and use its position as the goal.           |
+| `play_route_from_rosbag` | Skip goal setting. Play the route topic directly from rosbag.                                         |
 
 ### include_use_case
 

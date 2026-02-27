@@ -39,6 +39,7 @@ Evaluation:
   Datasets:
     - DatasetName:
         VehicleId: String
+        route_method: String # optional, default: set_goal_from_scenario
 include_use_case:
   UseCaseName: String
   UseCaseFormatVersion: String
@@ -118,6 +119,16 @@ t4_datasetのデータセット名
 autoware_launch/launch/logging_simulator.launch.xml の引数の vehicle_id を指定する。
 
 車両 ID が不明な場合は、`default` を設定する。
+
+#### route_method
+
+（オプション）走行ルートの設定方法を指定する。シナリオYAMLのデータセットセクションで `GoalPose` と同じ階層に配置する。
+
+| 値                       | 説明                                                                                                  |
+| ------------------------ | ----------------------------------------------------------------------------------------------------- |
+| `set_goal_from_scenario` | （デフォルト）シナリオの `GoalPose` を使用してゴールを設定する。`GoalPose` が未指定の場合はスキップ。 |
+| `set_goal_from_rosbag`   | rosbagの最後の `/localization/kinematic_state` を読み取り、その位置をゴールとして使用する。           |
+| `play_route_from_rosbag` | ゴール設定をスキップ。rosbagのルートトピックを直接再生する。                                          |
 
 ### include_use_case
 

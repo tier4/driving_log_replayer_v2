@@ -19,7 +19,7 @@ from rclpy.duration import Duration
 from rclpy.executors import MultiThreadedExecutor
 from rclpy.node import Node
 
-from driving_log_replayer_v2.publish_topic_from_rosbag import RosbagReader
+from driving_log_replayer_v2.rosbag import RosbagReader
 
 
 class PublishTopicFromRosbagNode(Node):
@@ -59,7 +59,7 @@ class PublishTopicFromRosbagNode(Node):
         self.create_timer(self.TIMER_PERIOD, self.publish)
 
     def publish(self) -> None:
-        for topic_name, msg, _ in self._rosbag_reader.read_messages():
+        for topic_name, msg, _ in self._rosbag_reader.read_first_messages():
             self._publisher_map[topic_name].publish(msg)
             self._clock.sleep_for(
                 self.SLEEP_DURATION_BETWEEN_PUBLISH
