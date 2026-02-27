@@ -13,15 +13,14 @@
 # limitations under the License.
 
 import datetime
-from importlib import import_module
 import json
-from pathlib import Path
 import subprocess
+from importlib import import_module
+from pathlib import Path
 
-from launch import LaunchContext
-from launch.actions import DeclareLaunchArgument
-from launch.actions import LogInfo
 import yaml
+from launch import LaunchContext
+from launch.actions import DeclareLaunchArgument, LogInfo
 
 
 def create_output_dir(output_dir_str: str, scenario_path: Path) -> Path:
