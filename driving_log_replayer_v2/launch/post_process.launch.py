@@ -228,6 +228,11 @@ def perception_reproducer(conf: dict[str, str]) -> ProcessInfo:
     return ProcessInfo(process_list=process_list, last_action=None)
 
 
+def performance_diag(conf: dict[str, str]) -> ProcessInfo:
+    # performance_diag evaluation happens during runtime, no special post-processing needed
+    return ProcessInfo(process_list=[], last_action=None)
+
+
 def post_process(context: LaunchContext) -> list:
     conf = context.launch_configurations
     create_metadata_yaml(conf["result_bag_path"])
@@ -244,6 +249,8 @@ def post_process(context: LaunchContext) -> list:
         process_info = time_step_based_trajectory(conf)
     elif conf["use_case"] == "perception_reproducer":
         process_info = perception_reproducer(conf)
+    elif conf["use_case"] == "performance_diag":
+        process_info = performance_diag(conf)
     else:
         err_msg = f"Unsupported use_case for post_process: {conf['use_case']}"
         raise ValueError(err_msg)
