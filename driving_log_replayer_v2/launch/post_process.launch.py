@@ -245,7 +245,10 @@ def post_process(context: LaunchContext) -> list:
     elif conf["use_case"] == "perception_reproducer":
         process_info = perception_reproducer(conf)
     else:
-        return [LogInfo(msg=f"{conf['use_case']} does not have post process. skip post process.")]
+        process_info = ProcessInfo(
+            process_list=[LogInfo(msg=f"{conf['use_case']} does not have specific post process.")],
+            last_action=None,
+        )
 
     def _run_analyze_results(context: LaunchContext) -> list:
         conf = context.launch_configurations
