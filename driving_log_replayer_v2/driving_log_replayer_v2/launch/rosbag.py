@@ -30,6 +30,12 @@ PACKAGE_SHARE = get_package_share_directory("driving_log_replayer_v2")
 QOS_PROFILE_PATH_STR = Path(PACKAGE_SHARE, "config", "qos.yaml").as_posix()
 
 
+def is_use_route_from_rosbag(goal_method: str, goal_pose: str | dict) -> bool:
+    is_set_goal_from_scenario = goal_method == "set_goal_from_scenario" and goal_pose != "{}"
+    is_set_goal_from_rosbag = goal_method == "set_goal_from_rosbag"
+    return not (is_set_goal_from_scenario or is_set_goal_from_rosbag)
+
+
 def extract_topics_from_profile(profile_name: str, profile_type: str) -> list[str]:
     if not profile_name:
         return []
@@ -69,7 +75,7 @@ def system_defined_remap(conf: dict) -> list[str]:
         add_remap("/localization/acceleration", remap_list)
         if conf["initial_pose"] != "{}" or conf["direct_initial_pose"] != "{}":
             add_remap("/initialpose", remap_list)
-    if conf["goal_pose"] != "{}":
+    if is_use_route_from_rosbag(conf["goal_method"], conf["goal_pose"]):
         add_remap("/planning/mission_planning/route", remap_list)
     return remap_list
 
@@ -238,7 +244,7 @@ def launch_perception_reproducer(context: LaunchContext) -> list:
         cmd.extend(["--search-radius", str(reproducer_config["search_radius"])])
     if reproducer_config.get("reproduce_cool_down") is not None:
         cmd.extend(["--reproduce-cool-down", str(reproducer_config["reproduce_cool_down"])])
-    if reproducer_config.get("pub_route", False):
+    if is_use_route_from_rosbag(conf["goal_method"], conf["goal_pose"]):
         cmd.append("--pub-route")
 
     return [ExecuteProcess(cmd=cmd, output="screen", on_exit=ShutdownOnce())]

@@ -40,6 +40,7 @@ Evaluation:
   Datasets:
     - DatasetName:
         VehicleId: String
+        goal_method: String # optional, default: set_goal_from_scenario
 include_use_case:
   UseCaseName: String
   UseCaseFormatVersion: String
@@ -120,6 +121,15 @@ dataset name of t4_dataset
 Specify `vehicle_id` as an argument in `autoware_launch/launch/logging_simulator.launch.xml`
 
 If you don't know `vehicle_id`, set `default`.
+
+#### goal_method
+
+(Optional) Specifies how the goad pose is set.
+
+| Value                    | Description                                                                                                                            |
+| ------------------------ | -------------------------------------------------------------------------------------------------------------------------------------- |
+| `set_goal_from_scenario` | (Default) Use `GoalPose` from scenario to set goal. Skip setting goal if `GoalPose` is not specified.                                  |
+| `set_goal_from_rosbag`   | Read the last `/localization/kinematic_state` from rosbag and use its position as the goal. Even if `GoalPose` is specified ignore it. |
 
 ### include_use_case
 

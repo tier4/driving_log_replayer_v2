@@ -35,7 +35,7 @@ class Scenario(BaseModel):
     ScenarioDescription: str
     SensorModel: str
     VehicleModel: str
-    VehicleId: str | None = None
+    VehicleId: str | None = None  # optional for backward compatibility
     Evaluation: dict
     include_use_case: dict | None = None
     publish_profile: str | None = None

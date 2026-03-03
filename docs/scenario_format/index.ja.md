@@ -32,6 +32,7 @@ ScenarioName: String
 ScenarioDescription: String
 SensorModel: String
 VehicleModel: String
+publish_profile: String
 Evaluation:
   UseCaseName: String
   UseCaseFormatVersion: String
@@ -39,6 +40,7 @@ Evaluation:
   Datasets:
     - DatasetName:
         VehicleId: String
+        goal_method: String # optional, default: set_goal_from_scenario
 include_use_case:
   UseCaseName: String
   UseCaseFormatVersion: String
@@ -118,6 +120,15 @@ t4_datasetのデータセット名
 autoware_launch/launch/logging_simulator.launch.xml の引数の vehicle_id を指定する。
 
 車両 ID が不明な場合は、`default` を設定する。
+
+#### goal_method
+
+（オプション）ゴールポーズの設定方法を指定する。シナリオYAMLのデータセットセクションで `GoalPose` と同じ階層に配置する。
+
+| 値                       | 説明                                                                                                                                |
+| ------------------------ | ----------------------------------------------------------------------------------------------------------------------------------- |
+| `set_goal_from_scenario` | （デフォルト）シナリオの `GoalPose` を使用してゴールを設定する。`GoalPose` が未指定の場合は何もしない。                             |
+| `set_goal_from_rosbag`   | rosbagの最後の `/localization/kinematic_state` を読み取り、その位置をゴールとして使用する。 `GoalPose` が指定されていても無視する。 |
 
 ### include_use_case
 

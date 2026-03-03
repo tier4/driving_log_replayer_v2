@@ -60,7 +60,6 @@ class PerceptionReproducerConfig(BaseModel):
     reproduce_cool_down: float = Field(999.0, ge=0.0)
     tracked_object: bool = False
     search_radius: float = Field(1.5, ge=0.0)
-    pub_route: bool = False
 
 
 class _DeprecatedTimeField:
