@@ -227,10 +227,11 @@ def update_conf_with_dataset_info(
     output_dir: Path,
 ) -> None:
     conf["vehicle_id"] = dataset_info["VehicleId"]
+    # TODO: validate the content of InitialPose, DirectInitialPose, GoalPose, and GoalMethod
     conf["initial_pose"] = json.dumps(dataset_info.get("InitialPose", {}))
     conf["direct_initial_pose"] = json.dumps(dataset_info.get("DirectInitialPose", {}))
     conf["goal_pose"] = json.dumps(dataset_info.get("GoalPose", {}))
-    conf["route_method"] = dataset_info.get("route_method", "set_goal_from_scenario")
+    conf["goal_method"] = dataset_info.get("goal_method", "set_goal_from_scenario")
     conf["t4_dataset_path"] = t4_dataset_path.as_posix()
     if "vehicle_model" not in conf:
         conf["vehicle_model"] = yaml_obj["VehicleModel"]
@@ -300,7 +301,7 @@ def ensure_arg_compatibility(context: LaunchContext) -> list:
             msg=f"{conf['goal_pose']=}",
         ),
         LogInfo(
-            msg=f"route_method={conf.get('route_method')}",
+            msg=f"goal_method={conf.get('goal_method')}",
         ),
     ]
 

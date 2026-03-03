@@ -29,6 +29,7 @@ from rosidl_runtime_py import message_to_ordereddict
 
 from driving_log_replayer_v2.launch.argument import add_use_case_arguments
 from driving_log_replayer_v2.launch.camera_2d_detector import launch_camera_2d_detector
+from driving_log_replayer_v2.launch.rosbag import is_use_route_from_rosbag
 from driving_log_replayer_v2.launch.rosbag import launch_bag_player
 from driving_log_replayer_v2.launch.rosbag import launch_bag_recorder
 from driving_log_replayer_v2.launch.util import output_dummy_result_jsonl
@@ -195,15 +196,15 @@ def launch_initial_pose_node(context: LaunchContext) -> list:
 
 def launch_goal_pose_node(context: LaunchContext) -> list:
     conf = context.launch_configurations
-    route_method = conf.get("route_method")
+    goal_method = conf.get("goal_method")
     goal_pose = conf["goal_pose"]
 
-    if route_method == "play_route_from_rosbag":
+    if is_use_route_from_rosbag(goal_method, goal_pose):
         return [
-            LogInfo(msg="goal_pose_node is not activated (route_method: play_route_from_rosbag)")
+            LogInfo(msg="goal_pose_node is not activated (goal_method: play_route_from_rosbag)")
         ]
 
-    if route_method == "set_goal_from_rosbag":
+    if goal_method == "set_goal_from_rosbag":
         topic = "/localization/kinematic_state"
         reader = RosbagReader(conf["input_bag"], [topic])
         odom_msgs = reader.read_last_messages()
@@ -218,7 +219,7 @@ def launch_goal_pose_node(context: LaunchContext) -> list:
     if goal_pose == "{}":
         return [
             LogInfo(
-                msg="goal_pose_node is not activated (route_method: set_goal_from_scenario but GoalPose is not specified)"
+                msg="goal_pose_node is not activated (goal_method: set_goal_from_scenario but GoalPose is not specified)"
             )
         ]
 
