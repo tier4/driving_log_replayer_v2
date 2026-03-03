@@ -137,10 +137,10 @@ Published topics:
 
 ### ルート設定方法
 
-走行ルートはシナリオYAMLのデータセットレベルにある `route_method` フィールドで設定できる。
-`route_method` が `play_route_from_rosbag` に設定されている場合、`--pub-route` フラグが `perception_reproducer` ノードに渡される。
+走行ルートはシナリオYAMLのデータセットレベルにある `goal_method` フィールドで設定できる。
+`goal_method` が `set_goal_from_scenario` かつ`GoalPose`を設定しない場合、`--pub-route` フラグが `perception_reproducer` ノードに渡される。
 
-`route_method` の詳細については[シナリオフォーマット](../scenario_format/index.ja.md#route_method)を参照。
+`goal_method` の詳細については[シナリオフォーマット](../scenario_format/index.ja.md#goal_method)を参照。
 
 ## evaluation
 

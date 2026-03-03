@@ -122,7 +122,7 @@ Specify `vehicle_id` as an argument in `autoware_launch/launch/logging_simulator
 
 If you don't know `vehicle_id`, set `default`.
 
-#### route_method
+#### goal_method
 
 (Optional) Specifies how the goad pose is set.
 
