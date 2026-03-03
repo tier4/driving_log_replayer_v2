@@ -25,7 +25,7 @@ from rosidl_runtime_py.utilities import get_message
 
 
 class RosbagReader:
-    def __init__(self, bag_dir: str, topic_list: list[str] | None = None) -> None:
+    def __init__(self, bag_dir: str, topic_list: list[str]) -> None:
         converter_options = ConverterOptions(
             input_serialization_format="cdr",
             output_serialization_format="cdr",
@@ -36,7 +36,7 @@ class RosbagReader:
         )
         self._reader = SequentialReader()
         self._reader.open(storage_options, converter_options)
-        self._topic_list = topic_list if topic_list is not None else []
+        self._topic_list = topic_list
         self._topic_name2type: dict[str, Any] = {
             topic.name: get_message(topic.type) for topic in self._reader.get_all_topics_and_types()
         }
@@ -46,8 +46,6 @@ class RosbagReader:
 
     def read_first_messages(self) -> list[tuple[str, Any, int]]:
         """Return the first message per topic in topic_list."""
-        if not self._topic_list:
-            return []
         self._reader.set_filter(StorageFilter(topics=list(self._topic_list)))
         result: list[tuple[str, Any, int]] = []
         while self._reader.has_next():
@@ -62,8 +60,6 @@ class RosbagReader:
 
     def read_last_messages(self) -> list[tuple[str, Any, int]]:
         """Return the last message per topic in topic_list."""
-        if not self._topic_list:
-            return []
         self._reader.set_filter(StorageFilter(topics=list(self._topic_list)))
         last_msgs: dict[str, tuple[bytes, int]] = {}
         while self._reader.has_next():
