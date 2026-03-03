@@ -48,7 +48,7 @@ from driving_log_replayer_v2.evaluator import evaluator_main
 from driving_log_replayer_v2.lanelet2_util import road_lanelets_from_file
 from driving_log_replayer_v2.lanelet2_util import to_shapely_polygon
 from driving_log_replayer_v2.obstacle_segmentation import default_config_path
-from driving_log_replayer_v2.obstacle_segmentation import get_goal_pose_from_t4_dataset
+from driving_log_replayer_v2.obstacle_segmentation import get_goal_pose_from_rosbag
 from driving_log_replayer_v2.obstacle_segmentation import get_graph_data
 from driving_log_replayer_v2.obstacle_segmentation import get_non_detection_area_in_base_link
 from driving_log_replayer_v2.obstacle_segmentation import get_sensing_frame_config
@@ -82,7 +82,9 @@ class ObstacleSegmentationEvaluator(DLREvaluatorV2):
 
         # pub_goal_pose must be created before timer_cb is called
         self.__goal_pose_counter = 0
-        self.__goal_pose = get_goal_pose_from_t4_dataset(self._t4_dataset_paths[0])
+        self.__goal_pose = get_goal_pose_from_rosbag(
+            str(Path(self._t4_dataset_paths[0], "input_bag"))
+        )
         self.__pub_goal_pose = self.create_publisher(
             PoseStamped,
             "/planning/mission_planning/goal",

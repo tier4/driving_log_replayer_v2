@@ -22,9 +22,7 @@ from ament_index_python.packages import get_package_share_directory
 from builtin_interfaces.msg import Duration
 from geometry_msgs.msg import Point
 from geometry_msgs.msg import PointStamped
-from geometry_msgs.msg import Pose
 from geometry_msgs.msg import PoseStamped
-from geometry_msgs.msg import Quaternion
 from geometry_msgs.msg import TransformStamped
 from geometry_msgs.msg import Vector3
 import numpy as np
@@ -40,7 +38,6 @@ from rosidl_runtime_py import message_to_ordereddict
 from sensor_msgs.msg import PointCloud2
 from shapely.geometry import MultiPolygon
 from shapely.geometry import Polygon
-import simplejson as json
 from std_msgs.msg import ColorRGBA
 from std_msgs.msg import Header
 from tf2_geometry_msgs import do_transform_point
@@ -51,6 +48,7 @@ import yaml
 import driving_log_replayer_v2.perception_eval_conversions as eval_conversions
 from driving_log_replayer_v2.result import EvaluationItem
 from driving_log_replayer_v2.result import ResultBase
+from driving_log_replayer_v2.rosbag import RosbagReader
 from driving_log_replayer_v2.scenario import number
 from driving_log_replayer_v2.scenario import Scenario
 from driving_log_replayer_v2_analyzer.config.obstacle_segmentation import Config
@@ -63,25 +61,14 @@ from driving_log_replayer_v2_msgs.msg import ObstacleSegmentationMarker
 from driving_log_replayer_v2_msgs.msg import ObstacleSegmentationMarkerArray
 
 
-def get_goal_pose_from_t4_dataset(dataset_path: str) -> PoseStamped:
-    ego_pose_json_path = Path(dataset_path, "annotation", "ego_pose.json")
-    with ego_pose_json_path.open() as ego_pose_file:
-        ego_pose_json = json.load(ego_pose_file)
-        last_ego_pose = ego_pose_json[-1]
-        pose = Pose(
-            position=Point(
-                x=last_ego_pose["translation"][0],
-                y=last_ego_pose["translation"][1],
-                z=last_ego_pose["translation"][2],
-            ),
-            orientation=Quaternion(
-                x=last_ego_pose["rotation"][1],
-                y=last_ego_pose["rotation"][2],
-                z=last_ego_pose["rotation"][3],
-                w=last_ego_pose["rotation"][0],
-            ),
-        )
-        return PoseStamped(header=Header(frame_id="map"), pose=pose)
+def get_goal_pose_from_rosbag(path: str) -> PoseStamped:
+    topic = "/localization/kinematic_state"
+    reader = RosbagReader(path, [topic])
+    odom_msgs = reader.read_last_messages()
+    if len(odom_msgs) == 0:
+        err_msg = f"No messages found in rosbag for topic {topic}"
+        raise ValueError(err_msg)
+    return PoseStamped(header=Header(frame_id="map"), pose=odom_msgs[0][1].pose.pose)
 
 
 class ProposedAreaCondition(BaseModel):
