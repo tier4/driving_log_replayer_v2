@@ -40,7 +40,6 @@ from rosidl_runtime_py import message_to_ordereddict
 from sensor_msgs.msg import PointCloud2
 from shapely.geometry import MultiPolygon
 from shapely.geometry import Polygon
-import simplejson as json
 from std_msgs.msg import ColorRGBA
 from std_msgs.msg import Header
 from tf2_geometry_msgs import do_transform_point
