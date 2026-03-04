@@ -340,14 +340,22 @@ class PerceptionFPRunner(Runner):
                 "base_link",
                 "map",
             )
-            homogeneous_matrix = convert_to_homogeneous_matrix(map_to_base_link)
+            base_link_to_map: TransformStamped = lookup_transform(
+                self._rosbag_manager.get_tf_buffer(),
+                header.stamp,
+                "base_link",
+                "map",
+            )
+            hom_map_to_base_link = convert_to_homogeneous_matrix(map_to_base_link)
+            hom_base_link_to_map = convert_to_homogeneous_matrix(base_link_to_map)
             timestamp_sec = header.stamp.sec + header.stamp.nanosec * 1e-9
             self.perception_fp_result.set_frame(
                 timestamp_sec,
                 header.frame_id,
                 frame_result.data,
                 frame_result.skip_counter,
-                homogeneous_matrix,
+                hom_map_to_base_link,
+                hom_base_link_to_map,
             )
         elif frame_result.invalid_reason == PerceptionInvalidReason.INVALID_ESTIMATED_OBJECTS:
             self.perception_fp_result.set_warn_frame(frame_result.data, frame_result.skip_counter)

@@ -1,0 +1,273 @@
+ScenarioFormatVersion: 3.2.0
+ScenarioName: perception_fp_sample
+ScenarioDescription: perception_fp_sample
+SensorModel: sample_sensor_kit
+VehicleModel: sample_vehicle
+Evaluation:
+  UseCaseName: perception_fp
+  UseCaseFormatVersion: 0.1.0
+  Datasets:
+    - sample_dataset:
+        VehicleId: default
+  Conditions:
+    Criterion:
+      - PassRate: 99.0
+        criteria_name: a4_-2
+        non_detection_area: # Non-detection area specification in base_link coordinates
+          frame_id: base_link
+          polygon: # List of vertices of the polygon in base_link coordinates (x, y, z), clockwise order
+            - [20.5, -3.0, 0.0]
+            - [20.5, -6.0, 0.0]
+            - [17.5, -6.0, 0.0]
+            - [17.5, -3.0, 0.0]
+          z_min: null # [m] null [Do not filter by z_min] or value
+          z_max: null # [m] null [Do not filter by z_max] or value
+        timestamp: null # null [Do not filter by timestamp] or ros timestamp value in seconds
+        topic_type: [bbox, pointcloud] # List of topic types to evaluate
+      - PassRate: 99.0
+        criteria_name: a4_-1
+        non_detection_area: # Non-detection area specification in base_link coordinates
+          frame_id: base_link
+          polygon: # List of vertices of the polygon in base_link coordinates (x, y, z), clockwise order
+            - [20.5, 0.0, 0.0]
+            - [20.5, -3.0, 0.0]
+            - [17.5, -3.0, 0.0]
+            - [17.5, 0.0, 0.0]
+          z_min: null # [m] null [Do not filter by z_min] or value
+          z_max: null # [m] null [Do not filter by z_max] or value
+        timestamp: null # null [Do not filter by timestamp] or ros timestamp value in seconds
+        topic_type: [bbox, pointcloud] # List of topic types to evaluate
+      - PassRate: 99.0
+        criteria_name: a4_0
+        non_detection_area: # Non-detection area specification in base_link coordinates
+          frame_id: base_link
+          polygon: # List of vertices of the polygon in base_link coordinates (x, y, z), clockwise order
+            - [20.5, 3.0, 0.0]
+            - [20.5, 0.0, 0.0]
+            - [17.5, 0.0, 0.0]
+            - [17.5, 3.0, 0.0]
+          z_min: null # [m] null [Do not filter by z_min] or value
+          z_max: null # [m] null [Do not filter by z_max] or value
+        timestamp: null # null [Do not filter by timestamp] or ros timestamp value in seconds
+        topic_type: [bbox, pointcloud] # List of topic types to evaluate
+      - PassRate: 99.0
+        criteria_name: a4_1
+        non_detection_area: # Non-detection area specification in base_link coordinates
+          frame_id: base_link
+          polygon: # List of vertices of the polygon in base_link coordinates (x, y, z), clockwise order
+            - [20.5, 6.0, 0.0]
+            - [20.5, 3.0, 0.0]
+            - [17.5, 3.0, 0.0]
+            - [17.5, 6.0, 0.0]
+          z_min: null # [m] null [Do not filter by z_min] or value
+          z_max: null # [m] null [Do not filter by z_max] or value
+        timestamp: null # null [Do not filter by timestamp] or ros timestamp value in seconds
+        topic_type: [bbox, pointcloud] # List of topic types to evaluate
+      - PassRate: 99.0
+        criteria_name: a3_-2
+        non_detection_area: # Non-detection area specification in base_link coordinates
+          frame_id: base_link
+          polygon: # List of vertices of the polygon in base_link coordinates (x, y, z), clockwise order
+            - [17.5, -3.0, 0.0]
+            - [17.5, -6.0, 0.0]
+            - [14.5, -6.0, 0.0]
+            - [14.5, -3.0, 0.0]
+          z_min: null # [m] null [Do not filter by z_min] or value
+          z_max: null # [m] null [Do not filter by z_max] or value
+        timestamp: null # null [Do not filter by timestamp] or ros timestamp value in seconds
+        topic_type: [bbox, pointcloud] # List of topic types to evaluate
+      - PassRate: 99.0
+        criteria_name: a3_-1
+        non_detection_area: # Non-detection area specification in base_link coordinates
+          frame_id: base_link
+          polygon: # List of vertices of the polygon in base_link coordinates (x, y, z), clockwise order
+            - [17.5, 0.0, 0.0]
+            - [17.5, -3.0, 0.0]
+            - [14.5, -3.0, 0.0]
+            - [14.5, 0.0, 0.0]
+          z_min: null # [m] null [Do not filter by z_min] or value
+          z_max: null # [m] null [Do not filter by z_max] or value
+        timestamp: null # null [Do not filter by timestamp] or ros timestamp value in seconds
+        topic_type: [bbox, pointcloud] # List of topic types to evaluate
+      - PassRate: 99.0
+        criteria_name: a3_0
+        non_detection_area: # Non-detection area specification in base_link coordinates
+          frame_id: base_link
+          polygon: # List of vertices of the polygon in base_link coordinates (x, y, z), clockwise order
+            - [17.5, 3.0, 0.0]
+            - [17.5, 0.0, 0.0]
+            - [14.5, 0.0, 0.0]
+            - [14.5, 3.0, 0.0]
+          z_min: null # [m] null [Do not filter by z_min] or value
+          z_max: null # [m] null [Do not filter by z_max] or value
+        timestamp: null # null [Do not filter by timestamp] or ros timestamp value in seconds
+        topic_type: [bbox, pointcloud] # List of topic types to evaluate
+      - PassRate: 99.0
+        criteria_name: a3_1
+        non_detection_area: # Non-detection area specification in base_link coordinates
+          frame_id: base_link
+          polygon: # List of vertices of the polygon in base_link coordinates (x, y, z), clockwise order
+            - [17.5, 6.0, 0.0]
+            - [17.5, 3.0, 0.0]
+            - [14.5, 3.0, 0.0]
+            - [14.5, 6.0, 0.0]
+          z_min: null # [m] null [Do not filter by z_min] or value
+          z_max: null # [m] null [Do not filter by z_max] or value
+        timestamp: null # null [Do not filter by timestamp] or ros timestamp value in seconds
+        topic_type: [bbox, pointcloud] # List of topic types to evaluate
+      - PassRate: 99.0
+        criteria_name: a2_-2
+        non_detection_area: # Non-detection area specification in base_link coordinates
+          frame_id: base_link
+          polygon: # List of vertices of the polygon in base_link coordinates (x, y, z), clockwise order
+            - [14.5, -3.0, 0.0]
+            - [14.5, -6.0, 0.0]
+            - [11.5, -6.0, 0.0]
+            - [11.5, -3.0, 0.0]
+          z_min: null # [m] null [Do not filter by z_min] or value
+          z_max: null # [m] null [Do not filter by z_max] or value
+        timestamp: null # null [Do not filter by timestamp] or ros timestamp value in seconds
+        topic_type: [bbox, pointcloud] # List of topic types to evaluate
+      - PassRate: 99.0
+        criteria_name: a2_-1
+        non_detection_area: # Non-detection area specification in base_link coordinates
+          frame_id: base_link
+          polygon: # List of vertices of the polygon in base_link coordinates (x, y, z), clockwise order
+            - [14.5, 0.0, 0.0]
+            - [14.5, -3.0, 0.0]
+            - [11.5, -3.0, 0.0]
+            - [11.5, 0.0, 0.0]
+          z_min: null # [m] null [Do not filter by z_min] or value
+          z_max: null # [m] null [Do not filter by z_max] or value
+        timestamp: null # null [Do not filter by timestamp] or ros timestamp value in seconds
+        topic_type: [bbox, pointcloud] # List of topic types to evaluate
+      - PassRate: 99.0
+        criteria_name: a2_0
+        non_detection_area: # Non-detection area specification in base_link coordinates
+          frame_id: base_link
+          polygon: # List of vertices of the polygon in base_link coordinates (x, y, z), clockwise order
+            - [14.5, 3.0, 0.0]
+            - [14.5, 0.0, 0.0]
+            - [11.5, 0.0, 0.0]
+            - [11.5, 3.0, 0.0]
+          z_min: null # [m] null [Do not filter by z_min] or value
+          z_max: null # [m] null [Do not filter by z_max] or value
+        timestamp: null # null [Do not filter by timestamp] or ros timestamp value in seconds
+        topic_type: [bbox, pointcloud] # List of topic types to evaluate
+      - PassRate: 99.0
+        criteria_name: a2_1
+        non_detection_area: # Non-detection area specification in base_link coordinates
+          frame_id: base_link
+          polygon: # List of vertices of the polygon in base_link coordinates (x, y, z), clockwise order
+            - [14.5, 6.0, 0.0]
+            - [14.5, 3.0, 0.0]
+            - [11.5, 3.0, 0.0]
+            - [11.5, 6.0, 0.0]
+          z_min: null # [m] null [Do not filter by z_min] or value
+          z_max: null # [m] null [Do not filter by z_max] or value
+        timestamp: null # null [Do not filter by timestamp] or ros timestamp value in seconds
+        topic_type: [bbox, pointcloud] # List of topic types to evaluate
+      - PassRate: 99.0
+        criteria_name: a1_-2
+        non_detection_area: # Non-detection area specification in base_link coordinates
+          frame_id: base_link
+          polygon: # List of vertices of the polygon in base_link coordinates (x, y, z), clockwise order
+            - [11.5, -3.0, 0.0]
+            - [11.5, -6.0, 0.0]
+            - [8.5, -6.0, 0.0]
+            - [8.5, -3.0, 0.0]
+          z_min: null # [m] null [Do not filter by z_min] or value
+          z_max: null # [m] null [Do not filter by z_max] or value
+        timestamp: null # null [Do not filter by timestamp] or ros timestamp value in seconds
+        topic_type: [bbox, pointcloud] # List of topic types to evaluate
+      - PassRate: 99.0
+        criteria_name: a1_-1
+        non_detection_area: # Non-detection area specification in base_link coordinates
+          frame_id: base_link
+          polygon: # List of vertices of the polygon in base_link coordinates (x, y, z), clockwise order
+            - [11.5, 0.0, 0.0]
+            - [11.5, -3.0, 0.0]
+            - [8.5, -3.0, 0.0]
+            - [8.5, 0.0, 0.0]
+          z_min: null # [m] null [Do not filter by z_min] or value
+          z_max: null # [m] null [Do not filter by z_max] or value
+        timestamp: null # null [Do not filter by timestamp] or ros timestamp value in seconds
+        topic_type: [bbox, pointcloud] # List of topic types to evaluate
+      - PassRate: 99.0
+        criteria_name: a1_0
+        non_detection_area: # Non-detection area specification in base_link coordinates
+          frame_id: base_link
+          polygon: # List of vertices of the polygon in base_link coordinates (x, y, z), clockwise order
+            - [11.5, 3.0, 0.0]
+            - [11.5, 0.0, 0.0]
+            - [8.5, 0.0, 0.0]
+            - [8.5, 3.0, 0.0]
+          z_min: null # [m] null [Do not filter by z_min] or value
+          z_max: null # [m] null [Do not filter by z_max] or value
+        timestamp: null # null [Do not filter by timestamp] or ros timestamp value in seconds
+        topic_type: [bbox, pointcloud] # List of topic types to evaluate
+      - PassRate: 99.0
+        criteria_name: a1_1
+        non_detection_area: # Non-detection area specification in base_link coordinates
+          frame_id: base_link
+          polygon: # List of vertices of the polygon in base_link coordinates (x, y, z), clockwise order
+            - [11.5, 6.0, 0.0]
+            - [11.5, 3.0, 0.0]
+            - [8.5, 3.0, 0.0]
+            - [8.5, 6.0, 0.0]
+          z_min: null # [m] null [Do not filter by z_min] or value
+          z_max: null # [m] null [Do not filter by z_max] or value
+        timestamp: null # null [Do not filter by timestamp] or ros timestamp value in seconds
+        topic_type: [bbox, pointcloud] # List of topic types to evaluate
+      - PassRate: 99.0
+        criteria_name: a0_-2
+        non_detection_area: # Non-detection area specification in base_link coordinates
+          frame_id: base_link
+          polygon: # List of vertices of the polygon in base_link coordinates (x, y, z), clockwise order
+            - [8.5, -3.0, 0.0]
+            - [8.5, -6.0, 0.0]
+            - [5.5, -6.0, 0.0]
+            - [5.5, -3.0, 0.0]
+          z_min: null # [m] null [Do not filter by z_min] or value
+          z_max: null # [m] null [Do not filter by z_max] or value
+        timestamp: null # null [Do not filter by timestamp] or ros timestamp value in seconds
+        topic_type: [bbox, pointcloud] # List of topic types to evaluate
+      - PassRate: 99.0
+        criteria_name: a0_-1
+        non_detection_area: # Non-detection area specification in base_link coordinates
+          frame_id: base_link
+          polygon: # List of vertices of the polygon in base_link coordinates (x, y, z), clockwise order
+            - [8.5, 0.0, 0.0]
+            - [8.5, -3.0, 0.0]
+            - [5.5, -3.0, 0.0]
+            - [5.5, 0.0, 0.0]
+          z_min: null # [m] null [Do not filter by z_min] or value
+          z_max: null # [m] null [Do not filter by z_max] or value
+        timestamp: null # null [Do not filter by timestamp] or ros timestamp value in seconds
+        topic_type: [bbox, pointcloud] # List of topic types to evaluate
+      - PassRate: 99.0
+        criteria_name: a0_0
+        non_detection_area: # Non-detection area specification in base_link coordinates
+          frame_id: base_link
+          polygon: # List of vertices of the polygon in base_link coordinates (x, y, z), clockwise order
+            - [8.5, 3.0, 0.0]
+            - [8.5, 0.0, 0.0]
+            - [5.5, 0.0, 0.0]
+            - [5.5, 3.0, 0.0]
+          z_min: null # [m] null [Do not filter by z_min] or value
+          z_max: null # [m] null [Do not filter by z_max] or value
+        timestamp: null # null [Do not filter by timestamp] or ros timestamp value in seconds
+        topic_type: [bbox, pointcloud] # List of topic types to evaluate
+      - PassRate: 99.0
+        criteria_name: a0_1
+        non_detection_area: # Non-detection area specification in base_link coordinates
+          frame_id: base_link
+          polygon: # List of vertices of the polygon in base_link coordinates (x, y, z), clockwise order
+            - [8.5, 6.0, 0.0]
+            - [8.5, 3.0, 0.0]
+            - [5.5, 3.0, 0.0]
+            - [5.5, 6.0, 0.0]
+          z_min: null # [m] null [Do not filter by z_min] or value
+          z_max: null # [m] null [Do not filter by z_max] or value
+        timestamp: null # null [Do not filter by timestamp] or ros timestamp value in seconds
+        topic_type: [bbox, pointcloud] # List of topic types to evaluate

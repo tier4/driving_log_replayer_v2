@@ -14,7 +14,8 @@ Evaluation:
       - PassRate: 99.0
         criteria_name: drivable_area
         non_detection_area: # Non-detection area specification in map coordinates
-          polygon_2d: # List of vertices of the polygon in map coordinates (x, y), clockwise order
+          frame_id: map
+          polygon: # List of vertices of the polygon in map coordinates (x, y, z), clockwise order
             - [3813.1939, 73715.3626, 19.5814]
             - [3809.9543, 73721.4626, 19.5787]
             - [3833.07, 73733.5886, 19.5787]
@@ -26,7 +27,8 @@ Evaluation:
       - PassRate: 99.0
         criteria_name: drivable_area_timestamp
         non_detection_area: # Non-detection area specification in map coordinates
-          polygon_2d: # List of vertices of the polygon in map coordinates (x, y), clockwise order
+          frame_id: map
+          polygon: # List of vertices of the polygon in map coordinates (x, y, z), clockwise order
             - [3794.9336, 73705.9071, 19.5291]
             - [3791.8534, 73712.0541, 19.5219]
             - [3806.696, 73719.817, 19.5687]
@@ -40,7 +42,8 @@ Evaluation:
       - PassRate: 99.0
         criteria_name: vegetation
         non_detection_area: # Non-detection area specification in map coordinates
-          polygon_2d: # List of vertices of the polygon in map coordinates (x, y), clockwise order
+          frame_id: map
+          polygon: # List of vertices of the polygon in map coordinates (x, y, z), clockwise order
             - [3804.1703, 73732.1213, 21.1945]
             - [3802.7602, 73742.4244, 21.048]
             - [3812.6931, 73751.1751, 20.61]

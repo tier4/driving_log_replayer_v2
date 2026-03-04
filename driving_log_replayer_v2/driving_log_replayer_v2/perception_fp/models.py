@@ -28,6 +28,7 @@ from pydantic import Field
 from pydantic import field_validator
 from pydantic import model_validator
 from shapely.geometry import Polygon
+from shapely.prepared import prep
 from shapely.vectorized import contains
 
 from driving_log_replayer_v2.result import EvaluationItem
@@ -104,15 +105,43 @@ class Polygon3D:
         if self.z_max is not None:
             self.z_max = self.z_max - center_z_in_map + center_z_in_base_link
 
+    def convert_base_link_to_map(self) -> None:
+        center_z_in_map: float
+        center_z_in_base_link: float
+
+        if self.frame_id != "base_link":
+            err_msg = "convert_base_link_to_map can be called only when frame_id is 'base_link'"
+            raise ValueError(err_msg)
+        if self.base_link_to_map is None:
+            err_msg = "base_link_to_map is required for convert_base_link_to_map"
+            raise ValueError(err_msg)
+
+        geom = np.array(self.geom.exterior.coords)
+        if geom.shape[1] != Polygon3D.XYZ_DIM:
+            err_msg = f"polygon requires {self.XYZ_DIM} elements"
+            raise ValueError(err_msg)
+        center_z_in_base_link = np.mean(geom[:, 2])
+
+        geom_homogeneous = np.hstack([geom, np.ones((geom.shape[0], 1))])
+        geom_in_map_homogeneous = (self.base_link_to_map @ geom_homogeneous.T).T
+        geom_in_map = geom_in_map_homogeneous[:, :3]
+        center_z_in_map = np.mean(geom_in_map[:, 2])
+
+        self.geom = Polygon(geom_in_map)
+        self.frame_id = "map"
+        if self.z_min is not None:
+            self.z_min = self.z_min - center_z_in_base_link + center_z_in_map
+        if self.z_max is not None:
+            self.z_max = self.z_max - center_z_in_base_link + center_z_in_map
+
 
 class NonDetectionArea(BaseModel):
-    # map frame
-    # z value represents height from map origin to the ground
-    polygon_2d: list[conlist(number, min_length=3, max_length=3)]
+    frame_id: Literal["map", "base_link"]
+    polygon: list[conlist(number, min_length=3, max_length=3)]
     z_min: number | None = None
     z_max: number | None = None
 
-    @field_validator("polygon_2d")
+    @field_validator("polygon")
     @classmethod
     def is_clockwise(cls, v: list[list[number]]) -> list | None:
         v_float = []
@@ -128,7 +157,7 @@ class NonDetectionArea(BaseModel):
             p2 = v_float[(i + 1) % len(v_float)]
             check_clock_wise += (p2[0] - p1[0]) * (p2[1] + p1[1])
         if check_clock_wise <= 0.0:
-            err_msg = "polygon_2d is not clockwise"
+            err_msg = "polygon is not clockwise"
             raise ValueError(err_msg)
         return v_float
 
@@ -199,20 +228,21 @@ class PerceptionFP(EvaluationItem):
         frame_id: str,
         data: PerceptionFPData,
         map_to_base_link: np.ndarray,
+        base_link_to_map: np.ndarray,
     ) -> dict | None:
         if self.condition.timestamp is not None and not any(
             condition_timestamp.is_valid(timestamp)
             for condition_timestamp in self.condition.timestamp
         ):
             self._non_detection_area = self.get_non_detection_area_with_transform(
-                map_to_base_link, frame_id, is_valid_timestamp=False
+                map_to_base_link, base_link_to_map, frame_id, is_valid_timestamp=False
             )
             self._fp_objects = []
             return {"Info": "Not in evaluation timestamp range"}
 
         if not self.condition.is_valid_topic_type(data):
             self._non_detection_area = self.get_non_detection_area_with_transform(
-                map_to_base_link, frame_id, is_valid_timestamp=True
+                map_to_base_link, base_link_to_map, frame_id, is_valid_timestamp=True
             )
             self._fp_objects = []
             return {"Info": "Not in evaluation topic type"}
@@ -220,7 +250,7 @@ class PerceptionFP(EvaluationItem):
         self.total += 1
 
         is_in_non_detection_area = self.is_in_non_detection_area(
-            frame_id, data, map_to_base_link, is_valid_timestamp=True
+            frame_id, data, map_to_base_link, base_link_to_map, is_valid_timestamp=True
         )
 
         if not is_in_non_detection_area:
@@ -245,17 +275,18 @@ class PerceptionFP(EvaluationItem):
         frame_id: str,
         data: PerceptionFPData,
         map_to_base_link: np.ndarray,
+        base_link_to_map: np.ndarray,
         *,
         is_valid_timestamp: bool,
     ) -> bool:
         # boundary is not included
         exist = False
         non_detection_area: Polygon3D = self.get_non_detection_area_with_transform(
-            map_to_base_link, frame_id, is_valid_timestamp=is_valid_timestamp
+            map_to_base_link, base_link_to_map, frame_id, is_valid_timestamp=is_valid_timestamp
         )
         if isinstance(data, list):
-            # TODO: use prepare function of shapely for performance improvement
             fp: list[DynamicObject] = []
+            prep_geom = prep(non_detection_area.geom)
             for bbox in data:
                 corners: np.ndarray = bbox.get_corners()  # shape: (N, 3)
                 is_in_z = np.any(
@@ -272,7 +303,7 @@ class PerceptionFP(EvaluationItem):
                 )
                 is_in_xy = np.any(
                     contains(
-                        non_detection_area.geom, corners[:, 0], corners[:, 1]
+                        prep_geom, corners[:, 0], corners[:, 1]
                     )  # or contains(non_detection_area, Polygon(corners[:, 0:2]))
                 )
                 if is_in_z and is_in_xy:
@@ -304,20 +335,28 @@ class PerceptionFP(EvaluationItem):
         return exist
 
     def get_non_detection_area_with_transform(
-        self, map_to_base_link: np.ndarray, frame_id: str, *, is_valid_timestamp: bool
+        self,
+        map_to_base_link: np.ndarray,
+        base_link_to_map: np.ndarray,
+        frame_id: str,
+        *,
+        is_valid_timestamp: bool,
     ) -> Polygon3D:
         non_detection_area: Polygon3D = Polygon3D.from_args(
-            self.condition.non_detection_area.polygon_2d,
-            frame_id="map",
+            self.condition.non_detection_area.polygon,
+            frame_id=self.condition.non_detection_area.frame_id,
             is_valid_timestamp=is_valid_timestamp,
             map_to_base_link=map_to_base_link,
+            base_link_to_map=base_link_to_map,
             z_min=self.condition.non_detection_area.z_min,
             z_max=self.condition.non_detection_area.z_max,
         )
-        if frame_id == "base_link":
-            non_detection_area.convert_map_to_base_link()
-        elif frame_id == "map":
+        if frame_id == non_detection_area.frame_id:
             pass
+        elif frame_id == "base_link" and non_detection_area.frame_id == "map":
+            non_detection_area.convert_map_to_base_link()
+        elif frame_id == "map" and non_detection_area.frame_id == "base_link":
+            non_detection_area.convert_base_link_to_map()
         else:
             err_msg = f"Unsupported frame_id: {frame_id}"
             raise ValueError(err_msg)
@@ -360,11 +399,12 @@ class PerceptionFPResult(ResultBase):
         data: PerceptionFPData,
         skip: int,
         map_to_base_link: np.ndarray,
+        base_link_to_map: np.ndarray,
     ) -> None:
         self._frame = {"FrameSkip": skip}
         for criterion in self.__perception_fp_criterion:
             self._frame[criterion.name] = criterion.set_frame(
-                timestamp, frame_id, data, map_to_base_link
+                timestamp, frame_id, data, map_to_base_link, base_link_to_map
             )
         self.update()
 

@@ -40,7 +40,8 @@ def test_scenario() -> None:
 
 def test_polygon_clockwise_ok() -> None:
     NonDetectionArea(
-        polygon_2d=[[10.0, 1.5, 0.0], [10.0, -1.5, 0.0], [0.0, -1.5, 0.0], [0.0, 1.5, 0.0]],
+        frame_id="map",
+        polygon=[[10.0, 1.5, 0.0], [10.0, -1.5, 0.0], [0.0, -1.5, 0.0], [0.0, 1.5, 0.0]],
         z_min=0.0,
         z_max=1.5,
     )
@@ -49,7 +50,8 @@ def test_polygon_clockwise_ok() -> None:
 def test_polygon_clockwise_ng() -> None:
     with pytest.raises(ValidationError):
         NonDetectionArea(
-            polygon_2d=[[10.0, 1.5, 0.0], [0.0, 1.5, 0.0], [0.0, -1.5, 0.0], [10.0, -1.5, 0.0]],
+            frame_id="map",
+            polygon=[[10.0, 1.5, 0.0], [0.0, 1.5, 0.0], [0.0, -1.5, 0.0], [10.0, -1.5, 0.0]],
             z_min=0.0,
             z_max=1.5,
         )
@@ -124,7 +126,8 @@ def create_criteria() -> Criteria:
         criteria_name="test",
         PassRate=95.0,
         non_detection_area=NonDetectionArea(
-            polygon_2d=[[10.0, 1.5, 0.0], [10.0, -1.5, 0.0], [0.0, -1.5, 0.0], [0.0, 1.5, 0.0]],
+            frame_id="map",
+            polygon=[[10.0, 1.5, 0.0], [10.0, -1.5, 0.0], [0.0, -1.5, 0.0], [0.0, 1.5, 0.0]],
         ),
         timestamp=[TimeStamp(start=0.0, end=200000.0)],
         topic_type=["bbox", "pointcloud"],
@@ -142,6 +145,7 @@ def test_in_non_detection_area(
         frame_id="map",
         data=[create_dynamic_object],
         map_to_base_link=np.eye(4),
+        base_link_to_map=np.eye(4),
     )
 
     assert result == {
