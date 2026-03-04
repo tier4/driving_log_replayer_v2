@@ -58,29 +58,26 @@ if TYPE_CHECKING:
     from driving_log_replayer_v2.result import ResultWriter
 
 
-def convert_polygon3d_to_ros_msg_in_base_link(
+def convert_polygon3d_to_ros_msgs_in_base_link(
     header: Header,
     namespace: str,
     polygon: Polygon3D,
     marker_id: int,
-    color: ColorRGBA,
+    face_color: ColorRGBA,
+    border_color: ColorRGBA,
+    border_width: float,
     max_z: float,
     min_z: float,
-) -> Marker:
-    """Convert Polygon3D to ROS message."""
-    mesh_marker = Marker(
-        header=header,
-        type=Marker.TRIANGLE_LIST,
-        action=Marker.ADD,
-        ns=namespace,
-        id=marker_id,
-        color=color,
-        scale=Vector3(x=1.0, y=1.0, z=1.0),
-        lifetime=Duration(seconds=0.2).to_msg(),
-    )
+) -> list[Marker]:
+    """Convert Polygon3D to ROS markers (face + border)."""
+    # NOTE: this function assumes polygon is already in base_link frame
+    if polygon.frame_id != "base_link":
+        err_msg = f"Polygon frame_id must be 'base_link' for ROS marker conversion, but got '{polygon.frame_id}'"
+        raise ValueError(err_msg)
+
+    lifetime = Duration(seconds=0.2).to_msg()
 
     boundary_coords = list(polygon.exterior.coords)
-
     xyz: list[tuple[float, float, float]] = [
         (float(x), float(y), float(z)) for x, y, z in boundary_coords
     ]
@@ -91,22 +88,51 @@ def convert_polygon3d_to_ros_msg_in_base_link(
     bottom = [Point(x=x, y=y, z=z + z_off_min) for x, y, z in xyz]
     top = [Point(x=x, y=y, z=z + z_off_max) for x, y, z in xyz]
 
+    # Face marker (TRIANGLE_LIST)
+    face_marker = Marker(
+        header=header,
+        type=Marker.TRIANGLE_LIST,
+        action=Marker.ADD,
+        ns=namespace,
+        id=marker_id,
+        color=face_color,
+        scale=Vector3(x=1.0, y=1.0, z=1.0),
+        lifetime=lifetime,
+    )
+
     # bottom face
     for i in range(1, len(bottom) - 1):
-        mesh_marker.points.extend([bottom[0], bottom[i], bottom[i + 1]])
+        face_marker.points.extend([bottom[0], bottom[i], bottom[i + 1]])
 
     # top face
     for i in range(1, len(top) - 1):
-        mesh_marker.points.extend([top[0], top[i], top[i + 1]])
+        face_marker.points.extend([top[0], top[i], top[i + 1]])
 
     # side faces
     n = len(xyz)
     for i in range(n):
         j = (i + 1) % n
-        mesh_marker.points.extend([bottom[i], top[i], top[j]])
-        mesh_marker.points.extend([bottom[i], top[j], bottom[j]])
+        face_marker.points.extend([bottom[i], top[i], top[j]])
+        face_marker.points.extend([bottom[i], top[j], bottom[j]])
 
-    return mesh_marker
+    # Border marker (LINE_STRIP) on the top ring
+    border_marker = Marker(
+        header=header,
+        type=Marker.LINE_STRIP,
+        action=Marker.ADD,
+        ns=namespace + "_border",
+        id=marker_id,
+        color=border_color,
+        scale=Vector3(x=float(border_width), y=0.0, z=0.0),
+        lifetime=lifetime,
+    )
+
+    # Use the top ring for the border so it looks like an outline
+    border_marker.points.extend(top)
+    if len(top) > 0:
+        border_marker.points.append(top[0])  # close the loop
+
+    return [face_marker, border_marker]
 
 
 def convert_non_detection_area_to_ros_msg(
@@ -114,7 +140,6 @@ def convert_non_detection_area_to_ros_msg(
     data: dict[str, Polygon3D],
 ) -> MarkerArray:
     """Convert non-detection area data to ROS message."""
-    # The value if z_min and z_max are not set in the Polygon3D
     max_z = 10.0
     min_z = -10.0
     namespace = "non_detection_area"
@@ -122,29 +147,43 @@ def convert_non_detection_area_to_ros_msg(
 
     non_detection_area_marker = MarkerArray()
     for idx, (criterion_name, polygon_3d) in enumerate(data.items()):
-        color = (
+        face_color = (
             ColorRGBA(r=1.0, g=0.0, b=0.0, a=0.3)
             if polygon_3d.is_valid_timestamp
             else ColorRGBA(r=1.0, g=0.6, b=0.2, a=0.3)
         )
 
-        # add polygon marker
-        if polygon_3d.frame_id != "base_link":
-            polygon_3d.convert_map_to_base_link()
-        non_detection_area_marker.markers.append(
-            convert_polygon3d_to_ros_msg_in_base_link(
-                header, namespace, polygon_3d, idx * 2, color, max_z, min_z
-            )
+        # border color is darker than face color
+        border_color = (
+            ColorRGBA(r=0.9, g=0.0, b=0.0, a=1.0)
+            if polygon_3d.is_valid_timestamp
+            else ColorRGBA(r=0.9, g=0.5, b=0.1, a=1.0)
         )
 
-        # text z aligned to polygon's z definition
+        if polygon_3d.frame_id != "base_link":
+            polygon_3d.convert_map_to_base_link()
+
+        # add polygon markers (face + border)
+        markers = convert_polygon3d_to_ros_msgs_in_base_link(
+            header=header,
+            namespace=namespace,
+            polygon=polygon_3d,
+            marker_id=idx * 2,
+            face_color=face_color,
+            border_color=border_color,
+            border_width=0.1,
+            max_z=max_z,
+            min_z=min_z,
+        )
+        non_detection_area_marker.markers.extend(markers)
+
+        # add text marker for criterion name
         coords = np.asarray(polygon_3d.exterior.coords, dtype=float)
         center_z = float(np.mean(coords[:, 2]))
         z_off_min = float(polygon_3d.z_min) if polygon_3d.z_min is not None else float(min_z)
         z_off_max = float(polygon_3d.z_max) if polygon_3d.z_max is not None else float(max_z)
         text_z = center_z + 0.5 * (z_off_min + z_off_max)
 
-        # add text marker
         non_detection_area_marker.markers.append(
             Marker(
                 header=header,
@@ -160,7 +199,7 @@ def convert_non_detection_area_to_ros_msg(
                     orientation=Quaternion(w=1.0),  # no rotation because text faces viewer
                 ),
                 scale=Vector3(z=0.8),
-                color=color,
+                color=face_color,
                 text=criterion_name,
             )
         )
