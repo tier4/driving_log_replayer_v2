@@ -37,7 +37,8 @@ RECORD_TOPIC = """^/tf$\
 |^/planning/trajectory$\
 |^/planning/mission_planning/route$\
 |^/sensing/gnss/septentrio/nav_sat_fix$\
-|^/planning/reference_trajectory$\
+|^/planning/ground_truth_trajectory$\
+|^/planning/reference_trajectory\
 """
 
 AUTOWARE_DISABLE = {

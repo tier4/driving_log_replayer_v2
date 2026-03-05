@@ -99,6 +99,7 @@ publish:
   - /autoware/state
   - /awapi/tmp/virtual_traffic_light_states
   - /api/operation_mode/state
+  - /planning/ground_truth_trajectory
   - /planning/trajectory
 
 remap:
