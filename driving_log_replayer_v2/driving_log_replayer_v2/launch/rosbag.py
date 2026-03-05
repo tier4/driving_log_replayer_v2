@@ -60,6 +60,8 @@ def extract_topics_from_profile(profile_name: str, profile_type: str) -> list[st
 def remap_str(topic: str) -> str:
     if topic == "/localization/kinematic_state":
         return "/localization/kinematic_state:=/localization/reference_kinematic_state"
+    if topic == "/planning/trajectory":
+        return "/planning/trajectory:=/planning/reference_trajectory"
     return f"{topic}:=/unused{topic}"
 
 
@@ -77,6 +79,9 @@ def system_defined_remap(conf: dict) -> list[str]:
             add_remap("/initialpose", remap_list)
     if is_use_route_from_rosbag(conf["goal_method"], conf["goal_pose"]):
         add_remap("/planning/mission_planning/route", remap_list)
+
+    if conf["use_case"] in ["time_step_based_trajectory", "planning_control"]:
+        add_remap("/planning/trajectory", remap_list)
     return remap_list
 
 
