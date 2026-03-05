@@ -14,13 +14,17 @@
 
 from __future__ import annotations
 
+from collections import deque
+import logging
 from pathlib import Path
 from typing import Any
 from typing import TYPE_CHECKING
 
 from builtin_interfaces.msg import Time
 from geometry_msgs.msg import TransformStamped
+import numpy as np
 import pandas as pd
+from pyquaternion import Quaternion
 from rclpy.serialization import deserialize_message
 from rclpy.serialization import serialize_message
 from rosbag2_py import ConverterOptions
@@ -65,6 +69,7 @@ class RosBagManager:
     TF_STATIC = "/tf_static"
     LOCALIZATION_KINEMATIC_STATE = "/localization/kinematic_state"
     PROCESSING_TIME_CHECKER_TOPIC = "/system/processing_time_checker/metrics"
+    MAX_PENDING_MESSAGES = 100
 
     def __init__(
         self,
@@ -85,6 +90,7 @@ class RosBagManager:
         self._node_processing_time: dict[
             str, dict[str, str]
         ] = {}  # node_name -> {node_name, header_timestamp}
+        self._logger = logging.getLogger(__name__)
 
         converter_options = self._get_default_converter_options()
 
@@ -168,9 +174,12 @@ class RosBagManager:
         err_msg = "_last_subscribed_timestamp_nanosec is not set."
         raise AttributeError(err_msg)
 
-    def read_messages(self) -> Generator[str, Any, int]:
+    def read_messages(self, *, allow_future_tf: bool = True) -> Generator[str, Any, int]:  # noqa: C901, PLR0912
         """
         Read messages from the rosbag.
+
+        Args:
+            allow_future_tf (bool): Whether to allow future TF messages for evaluation topics. If True, messages for evaluation topics will be yielded only when the transform can be looked up, otherwise they will be stored in a pending queue and yielded when the transform can be looked up. If False, messages
 
         Yields:
             topic_name (str): The name of the topic.
@@ -187,27 +196,75 @@ class RosBagManager:
         | nuscenes unix time      | int                              | microsec | sec * 1e6 + nanosec / 1e3 |
 
         """
+        pending = deque()
         subscribed_timestamp_nanosec = 0
         while self._reader.has_next():
             topic_name, msg_bytes, subscribed_timestamp_nanosec = self._reader.read_next()
             self._writer.write(topic_name, msg_bytes, subscribed_timestamp_nanosec)
             msg = deserialize_message(msg_bytes, get_message(self._topic_name2type[topic_name]))
 
+            # store for transform lookup
             if topic_name == self.TF_STATIC:
                 for transform in msg.transforms:
                     self._tf_buffer.set_transform_static(transform, "rosbag_import")
             elif topic_name == self.TF:
                 for transform in msg.transforms:
                     self._tf_buffer.set_transform(transform, "rosbag_import")
+
+            # store for using topic and analysis
             elif topic_name == self.LOCALIZATION_KINEMATIC_STATE:
                 self._localization_kinematic_state = msg
             elif topic_name == self.PROCESSING_TIME_CHECKER_TOPIC:
                 self._append_processing_time_data(msg)
+
+            # store for evaluation
             elif topic_name in self._evaluation_topics:
-                yield topic_name, msg, subscribed_timestamp_nanosec
+                if allow_future_tf:
+                    pending.append((topic_name, msg, subscribed_timestamp_nanosec))
+                    if len(pending) > self.MAX_PENDING_MESSAGES:
+                        self._logger.warning(
+                            "Pending queue exceeded maximum size. Oldest message will be dropped."
+                        )
+                        pending.popleft()
+                else:
+                    yield topic_name, msg, subscribed_timestamp_nanosec
+
+            # yield messages for evaluation if transform can be looked up, otherwise keep in pending
+            if allow_future_tf:
+                while pending:
+                    p_topic_name, p_msg, p_subscribed_timestamp_nanosec = pending[0]
+                    if self._is_can_lookup_transform(p_msg.header.stamp):
+                        pending.popleft()
+                        yield p_topic_name, p_msg, p_subscribed_timestamp_nanosec
+                    else:
+                        break
+
+        if pending:
+            self._logger.warning(
+                "Pending messages remain after reading all messages. These messages will be dropped."
+            )
+
         self._last_subscribed_timestamp_nanosec = subscribed_timestamp_nanosec
         self._save_node_processing_time()
         del self._reader
+
+    def _is_can_lookup_transform(self, stamp: Stamp) -> bool:
+        """
+        Check if the transform can be looked up for the given timestamp.
+
+        Args:
+            stamp (Stamp): The timestamp to check.
+
+        Returns:
+            bool: True if the transform can be looked up, False otherwise.
+
+        """
+        try:
+            self._tf_buffer.lookup_transform("map", "base_link", stamp, Duration(seconds=0.0))
+            self._tf_buffer.lookup_transform("base_link", "map", stamp, Duration(seconds=0.0))
+        except TransformException:
+            return False
+        return True
 
     def _append_processing_time_data(self, msg: MetricArray) -> None:
         """
@@ -284,3 +341,19 @@ def lookup_transform(
         )
     except TransformException:
         return TransformStamped()
+
+
+def convert_to_homogeneous_matrix(transform: TransformStamped) -> np.ndarray:
+    translation = transform.transform.translation
+    rotation = transform.transform.rotation
+    quaternion = Quaternion(
+        rotation.w,
+        rotation.x,
+        rotation.y,
+        rotation.z,
+    )
+
+    matrix = np.eye(4)
+    matrix[0:3, 3] = [translation.x, translation.y, translation.z]
+    matrix[0:3, 0:3] = quaternion.rotation_matrix
+    return matrix
