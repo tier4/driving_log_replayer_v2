@@ -29,7 +29,7 @@ from rosidl_runtime_py import message_to_ordereddict
 
 from driving_log_replayer_v2.launch.argument import add_use_case_arguments
 from driving_log_replayer_v2.launch.camera_2d_detector import launch_camera_2d_detector
-from driving_log_replayer_v2.launch.rosbag import is_use_route_from_rosbag
+from driving_log_replayer_v2.launch.rosbag import is_set_goal
 from driving_log_replayer_v2.launch.rosbag import launch_bag_player
 from driving_log_replayer_v2.launch.rosbag import launch_bag_recorder
 from driving_log_replayer_v2.launch.util import output_dummy_result_jsonl
@@ -199,7 +199,7 @@ def launch_goal_pose_node(context: LaunchContext) -> list:
     goal_method = conf.get("goal_method")
     goal_pose = conf["goal_pose"]
 
-    if is_use_route_from_rosbag(goal_method, goal_pose):
+    if not is_set_goal(goal_method, goal_pose):
         return [
             LogInfo(msg="goal_pose_node is not activated (goal_method: play_route_from_rosbag)")
         ]

@@ -169,12 +169,12 @@ def get_launch_arguments() -> list:
     add_launch_arg(
         "remap_profile",
         default_value="",
-        description="Specify the name of the remap profile to remap topics. config/remap/{profile_name}.yaml. Ex: remap_profile:=x2",
+        description="Specify the name of the remap profile to remap topics. config/publish_and_remap/{profile_name}.yaml. Ex: remap_profile:=x2",
     )
     add_launch_arg(
         "publish_profile",
         default_value="",
-        description="Specify the name of the topics profile to publish topics. config/publish/{profile_name}.yaml. Ex: publish_profile:=planning_control",
+        description="Specify the name of the topics profile to publish topics. config/publish_and_remap/{profile_name}.yaml. Ex: publish_profile:=planning_control",
     )
     add_launch_arg(
         "publish_topic_from_rosbag",

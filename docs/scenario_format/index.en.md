@@ -73,7 +73,7 @@ Specify `vehicle_model` as an argument in `autoware_launch/launch/logging_simula
 
 ### publish_profile
 
-(Optional) Specify the name of the topics profile to control which topics are published during simulation. The profile file should be located at `config/publish/{profile_name}.yaml`, such as `planning_control`. If not specified, all available topics will be published.
+(Optional) Specify the name of the topics profile to control which topics are published during simulation. The profile file should be located at `config/publish_and_remap/{profile_name}.yaml`, such as `planning_control`. If not specified, all available topics will be published.
 
 ### Evaluation
 

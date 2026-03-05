@@ -37,7 +37,8 @@ RECORD_TOPIC = """^/tf$\
 |^/api/.*/get/.*$\
 |^/api/operation_mode/state$\
 |^/awapi/.*/get/.*$\
-|^/sensing/gnss/septentrio/nav_sat_fix\
+|^/sensing/gnss/septentrio/nav_sat_fix$\
+|^/planning/reference_trajectory$\
 """
 
 AUTOWARE_DISABLE = {
