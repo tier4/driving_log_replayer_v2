@@ -30,10 +30,10 @@ PACKAGE_SHARE = get_package_share_directory("driving_log_replayer_v2")
 QOS_PROFILE_PATH_STR = Path(PACKAGE_SHARE, "config", "qos.yaml").as_posix()
 
 
-def is_use_route_from_rosbag(goal_method: str, goal_pose: str | dict) -> bool:
+def is_set_goal(goal_method: str, goal_pose: str | dict) -> bool:
     is_set_goal_from_scenario = goal_method == "set_goal_from_scenario" and goal_pose != "{}"
     is_set_goal_from_rosbag = goal_method == "set_goal_from_rosbag"
-    return not (is_set_goal_from_scenario or is_set_goal_from_rosbag)
+    return is_set_goal_from_scenario or is_set_goal_from_rosbag
 
 
 def extract_topics_from_profile(profile_name: str, profile_type: str) -> list[str]:
@@ -44,7 +44,7 @@ def extract_topics_from_profile(profile_name: str, profile_type: str) -> list[st
     profile_file = Path(
         get_package_share_directory("driving_log_replayer_v2"),
         "config",
-        profile_type,
+        "publish_and_remap",
         f"{profile_name}.yaml",
     )
     # Make it work with symlink install as well.
@@ -53,8 +53,8 @@ def extract_topics_from_profile(profile_name: str, profile_type: str) -> list[st
     if not profile_file.exists():
         return []
     with profile_file.open("r") as f:
-        remap_dict = yaml.safe_load(f)
-        return remap_dict.get(profile_type, [])
+        profile_dict = yaml.safe_load(f)
+        return profile_dict.get(profile_type, [])
 
 
 def remap_str(topic: str) -> str:
@@ -77,11 +77,9 @@ def system_defined_remap(conf: dict) -> list[str]:
         add_remap("/localization/acceleration", remap_list)
         if conf["initial_pose"] != "{}" or conf["direct_initial_pose"] != "{}":
             add_remap("/initialpose", remap_list)
-    if is_use_route_from_rosbag(conf["goal_method"], conf["goal_pose"]):
-        add_remap("/planning/mission_planning/route", remap_list)
 
-    if conf["use_case"] in ["time_step_based_trajectory", "planning_control"]:
-        add_remap("/planning/trajectory", remap_list)
+    if is_set_goal(conf["goal_method"], conf["goal_pose"]):
+        add_remap("/planning/mission_planning/route", remap_list)
     return remap_list
 
 
@@ -100,6 +98,10 @@ def user_defined_remap(conf: dict) -> list[str]:
         if conf["remap_arg"] != ""
         else extract_topics_from_profile(conf["remap_profile"], "remap")
     )
+
+    if conf["publish_profile"] != "":  # we support to remap topics in publish profile
+        user_remap_topics.extend(extract_topics_from_profile(conf["publish_profile"], "remap"))
+
     for topic in user_remap_topics:
         if topic.startswith("/"):
             user_remap_str = remap_str(topic)
@@ -249,7 +251,5 @@ def launch_perception_reproducer(context: LaunchContext) -> list:
         cmd.extend(["--search-radius", str(reproducer_config["search_radius"])])
     if reproducer_config.get("reproduce_cool_down") is not None:
         cmd.extend(["--reproduce-cool-down", str(reproducer_config["reproduce_cool_down"])])
-    if is_use_route_from_rosbag(conf["goal_method"], conf["goal_pose"]):
-        cmd.append("--pub-route")
 
     return [ExecuteProcess(cmd=cmd, output="screen", on_exit=ShutdownOnce())]

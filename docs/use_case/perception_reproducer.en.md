@@ -137,8 +137,7 @@ Configuration options:
 
 ### Route Method
 
-The driving route can be configured via the `goal_method` field at the dataset level in the scenario YAML.
-When `goal_method` is set to `set_goal_from_scenario` and not set `GoalPose`, the `--pub-route` flag is passed to the `perception_reproducer` node.
+When `goal_method` is set to `set_goal_from_scenario` and not set `GoalPose`, you should use `--pub-route` flag of `perception_reproducer`　(under development).
 
 See [scenario format](../scenario_format/index.en.md#goal_method) for details on `goal_method`.
 

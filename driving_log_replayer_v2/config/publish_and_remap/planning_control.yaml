@@ -44,3 +44,7 @@ publish:
   # - /system/operation_mode/state # from `/control/autoware_operation_mode_transition_manager`
   # - /autoware/engage # from `/control/autoware_operation_mode_transition_manager`
   # - /api/autoware/get/engage # from `/control/vehicle_cmd_gate`
+  - /planning/trajectory
+
+remap:
+  - /planning/trajectory # it will be remapped to /planning/reference_trajectory
