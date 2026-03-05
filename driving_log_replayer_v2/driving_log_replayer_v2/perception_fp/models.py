@@ -240,6 +240,13 @@ class PerceptionFP(EvaluationItem):
             self._fp_objects = []
             return {"Info": "Not in evaluation timestamp range"}
 
+        if len(data) == 0:
+            self._non_detection_area = self.get_non_detection_area_with_transform(
+                map_to_base_link, base_link_to_map, frame_id, is_valid_timestamp=True
+            )
+            self._fp_objects = []
+            return {"Info": "No data to evaluate"}
+
         if not self.condition.is_valid_topic_type(data):
             self._non_detection_area = self.get_non_detection_area_with_transform(
                 map_to_base_link, base_link_to_map, frame_id, is_valid_timestamp=True

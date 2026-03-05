@@ -23,7 +23,7 @@ Evaluation:
           z_min: null # [m] null [Do not filter by z_min] or value
           z_max: null # [m] null [Do not filter by z_max] or value
         timestamp: null # null [Do not filter by timestamp] or ros timestamp value in seconds
-        topic_type: [bbox, pointcloud] # List of topic types to evaluate
+        topic_type: [bbox] # List of topic types to evaluate
       - PassRate: 99.0
         criteria_name: a4_-1
         non_detection_area: # Non-detection area specification in base_link coordinates
@@ -36,7 +36,7 @@ Evaluation:
           z_min: null # [m] null [Do not filter by z_min] or value
           z_max: null # [m] null [Do not filter by z_max] or value
         timestamp: null # null [Do not filter by timestamp] or ros timestamp value in seconds
-        topic_type: [bbox, pointcloud] # List of topic types to evaluate
+        topic_type: [bbox] # List of topic types to evaluate
       - PassRate: 99.0
         criteria_name: a4_0
         non_detection_area: # Non-detection area specification in base_link coordinates
@@ -49,7 +49,7 @@ Evaluation:
           z_min: null # [m] null [Do not filter by z_min] or value
           z_max: null # [m] null [Do not filter by z_max] or value
         timestamp: null # null [Do not filter by timestamp] or ros timestamp value in seconds
-        topic_type: [bbox, pointcloud] # List of topic types to evaluate
+        topic_type: [bbox] # List of topic types to evaluate
       - PassRate: 99.0
         criteria_name: a4_1
         non_detection_area: # Non-detection area specification in base_link coordinates
@@ -62,7 +62,7 @@ Evaluation:
           z_min: null # [m] null [Do not filter by z_min] or value
           z_max: null # [m] null [Do not filter by z_max] or value
         timestamp: null # null [Do not filter by timestamp] or ros timestamp value in seconds
-        topic_type: [bbox, pointcloud] # List of topic types to evaluate
+        topic_type: [bbox] # List of topic types to evaluate
       - PassRate: 99.0
         criteria_name: a3_-2
         non_detection_area: # Non-detection area specification in base_link coordinates
@@ -75,7 +75,7 @@ Evaluation:
           z_min: null # [m] null [Do not filter by z_min] or value
           z_max: null # [m] null [Do not filter by z_max] or value
         timestamp: null # null [Do not filter by timestamp] or ros timestamp value in seconds
-        topic_type: [bbox, pointcloud] # List of topic types to evaluate
+        topic_type: [bbox] # List of topic types to evaluate
       - PassRate: 99.0
         criteria_name: a3_-1
         non_detection_area: # Non-detection area specification in base_link coordinates
@@ -88,7 +88,7 @@ Evaluation:
           z_min: null # [m] null [Do not filter by z_min] or value
           z_max: null # [m] null [Do not filter by z_max] or value
         timestamp: null # null [Do not filter by timestamp] or ros timestamp value in seconds
-        topic_type: [bbox, pointcloud] # List of topic types to evaluate
+        topic_type: [bbox] # List of topic types to evaluate
       - PassRate: 99.0
         criteria_name: a3_0
         non_detection_area: # Non-detection area specification in base_link coordinates
@@ -101,7 +101,7 @@ Evaluation:
           z_min: null # [m] null [Do not filter by z_min] or value
           z_max: null # [m] null [Do not filter by z_max] or value
         timestamp: null # null [Do not filter by timestamp] or ros timestamp value in seconds
-        topic_type: [bbox, pointcloud] # List of topic types to evaluate
+        topic_type: [bbox] # List of topic types to evaluate
       - PassRate: 99.0
         criteria_name: a3_1
         non_detection_area: # Non-detection area specification in base_link coordinates
@@ -114,7 +114,7 @@ Evaluation:
           z_min: null # [m] null [Do not filter by z_min] or value
           z_max: null # [m] null [Do not filter by z_max] or value
         timestamp: null # null [Do not filter by timestamp] or ros timestamp value in seconds
-        topic_type: [bbox, pointcloud] # List of topic types to evaluate
+        topic_type: [bbox] # List of topic types to evaluate
       - PassRate: 99.0
         criteria_name: a2_-2
         non_detection_area: # Non-detection area specification in base_link coordinates
@@ -127,7 +127,7 @@ Evaluation:
           z_min: null # [m] null [Do not filter by z_min] or value
           z_max: null # [m] null [Do not filter by z_max] or value
         timestamp: null # null [Do not filter by timestamp] or ros timestamp value in seconds
-        topic_type: [bbox, pointcloud] # List of topic types to evaluate
+        topic_type: [bbox] # List of topic types to evaluate
       - PassRate: 99.0
         criteria_name: a2_-1
         non_detection_area: # Non-detection area specification in base_link coordinates
@@ -140,7 +140,7 @@ Evaluation:
           z_min: null # [m] null [Do not filter by z_min] or value
           z_max: null # [m] null [Do not filter by z_max] or value
         timestamp: null # null [Do not filter by timestamp] or ros timestamp value in seconds
-        topic_type: [bbox, pointcloud] # List of topic types to evaluate
+        topic_type: [bbox] # List of topic types to evaluate
       - PassRate: 99.0
         criteria_name: a2_0
         non_detection_area: # Non-detection area specification in base_link coordinates
@@ -153,7 +153,7 @@ Evaluation:
           z_min: null # [m] null [Do not filter by z_min] or value
           z_max: null # [m] null [Do not filter by z_max] or value
         timestamp: null # null [Do not filter by timestamp] or ros timestamp value in seconds
-        topic_type: [bbox, pointcloud] # List of topic types to evaluate
+        topic_type: [bbox] # List of topic types to evaluate
       - PassRate: 99.0
         criteria_name: a2_1
         non_detection_area: # Non-detection area specification in base_link coordinates
@@ -166,7 +166,7 @@ Evaluation:
           z_min: null # [m] null [Do not filter by z_min] or value
           z_max: null # [m] null [Do not filter by z_max] or value
         timestamp: null # null [Do not filter by timestamp] or ros timestamp value in seconds
-        topic_type: [bbox, pointcloud] # List of topic types to evaluate
+        topic_type: [bbox] # List of topic types to evaluate
       - PassRate: 99.0
         criteria_name: a1_-2
         non_detection_area: # Non-detection area specification in base_link coordinates
@@ -179,7 +179,7 @@ Evaluation:
           z_min: null # [m] null [Do not filter by z_min] or value
           z_max: null # [m] null [Do not filter by z_max] or value
         timestamp: null # null [Do not filter by timestamp] or ros timestamp value in seconds
-        topic_type: [bbox, pointcloud] # List of topic types to evaluate
+        topic_type: [bbox] # List of topic types to evaluate
       - PassRate: 99.0
         criteria_name: a1_-1
         non_detection_area: # Non-detection area specification in base_link coordinates
@@ -192,7 +192,7 @@ Evaluation:
           z_min: null # [m] null [Do not filter by z_min] or value
           z_max: null # [m] null [Do not filter by z_max] or value
         timestamp: null # null [Do not filter by timestamp] or ros timestamp value in seconds
-        topic_type: [bbox, pointcloud] # List of topic types to evaluate
+        topic_type: [bbox] # List of topic types to evaluate
       - PassRate: 99.0
         criteria_name: a1_0
         non_detection_area: # Non-detection area specification in base_link coordinates
@@ -205,7 +205,7 @@ Evaluation:
           z_min: null # [m] null [Do not filter by z_min] or value
           z_max: null # [m] null [Do not filter by z_max] or value
         timestamp: null # null [Do not filter by timestamp] or ros timestamp value in seconds
-        topic_type: [bbox, pointcloud] # List of topic types to evaluate
+        topic_type: [bbox] # List of topic types to evaluate
       - PassRate: 99.0
         criteria_name: a1_1
         non_detection_area: # Non-detection area specification in base_link coordinates
@@ -218,7 +218,7 @@ Evaluation:
           z_min: null # [m] null [Do not filter by z_min] or value
           z_max: null # [m] null [Do not filter by z_max] or value
         timestamp: null # null [Do not filter by timestamp] or ros timestamp value in seconds
-        topic_type: [bbox, pointcloud] # List of topic types to evaluate
+        topic_type: [bbox] # List of topic types to evaluate
       - PassRate: 99.0
         criteria_name: a0_-2
         non_detection_area: # Non-detection area specification in base_link coordinates
@@ -231,7 +231,7 @@ Evaluation:
           z_min: null # [m] null [Do not filter by z_min] or value
           z_max: null # [m] null [Do not filter by z_max] or value
         timestamp: null # null [Do not filter by timestamp] or ros timestamp value in seconds
-        topic_type: [bbox, pointcloud] # List of topic types to evaluate
+        topic_type: [bbox] # List of topic types to evaluate
       - PassRate: 99.0
         criteria_name: a0_-1
         non_detection_area: # Non-detection area specification in base_link coordinates
@@ -244,7 +244,7 @@ Evaluation:
           z_min: null # [m] null [Do not filter by z_min] or value
           z_max: null # [m] null [Do not filter by z_max] or value
         timestamp: null # null [Do not filter by timestamp] or ros timestamp value in seconds
-        topic_type: [bbox, pointcloud] # List of topic types to evaluate
+        topic_type: [bbox] # List of topic types to evaluate
       - PassRate: 99.0
         criteria_name: a0_0
         non_detection_area: # Non-detection area specification in base_link coordinates
@@ -257,7 +257,7 @@ Evaluation:
           z_min: null # [m] null [Do not filter by z_min] or value
           z_max: null # [m] null [Do not filter by z_max] or value
         timestamp: null # null [Do not filter by timestamp] or ros timestamp value in seconds
-        topic_type: [bbox, pointcloud] # List of topic types to evaluate
+        topic_type: [bbox] # List of topic types to evaluate
       - PassRate: 99.0
         criteria_name: a0_1
         non_detection_area: # Non-detection area specification in base_link coordinates
@@ -270,4 +270,4 @@ Evaluation:
           z_min: null # [m] null [Do not filter by z_min] or value
           z_max: null # [m] null [Do not filter by z_max] or value
         timestamp: null # null [Do not filter by timestamp] or ros timestamp value in seconds
-        topic_type: [bbox, pointcloud] # List of topic types to evaluate
+        topic_type: [bbox] # List of topic types to evaluate
