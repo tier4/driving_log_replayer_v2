@@ -382,8 +382,8 @@ class PerceptionFPRunner(Runner):
             base_link_to_map: TransformStamped = lookup_transform(
                 self._rosbag_manager.get_tf_buffer(),
                 header.stamp,
-                "base_link",
                 "map",
+                "base_link",
             )
             hom_map_to_base_link = convert_to_homogeneous_matrix(map_to_base_link)
             hom_base_link_to_map = convert_to_homogeneous_matrix(base_link_to_map)
