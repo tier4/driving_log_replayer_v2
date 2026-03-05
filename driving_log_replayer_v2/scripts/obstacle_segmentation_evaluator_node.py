@@ -91,6 +91,11 @@ class ObstacleSegmentationEvaluator(DLREvaluatorV2):
             path for path in all_dataset_paths if path not in self._t4_dataset_paths_with_annotation
         ]
 
+        if not self._t4_dataset_paths_with_annotation:
+            self.get_logger().info(
+                "No t4dataset with annotation found. Only non detection area evaluation will be performed."
+            )
+
         # perception_eval loads ground truth at manager initialization, so pass only annotated datasets.
         self._t4_dataset_paths = self._t4_dataset_paths_with_annotation
 
