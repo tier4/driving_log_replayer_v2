@@ -26,6 +26,7 @@ from diagnostic_msgs.msg import DiagnosticStatus
 from geometry_msgs.msg import PoseStamped
 from geometry_msgs.msg import TransformStamped
 import numpy as np
+from perception_eval.common.dataset import FrameGroundTruth
 from perception_eval.config import SensingEvaluationConfig
 from perception_eval.manager import SensingEvaluationManager
 from perception_eval.util.logger_config import configure_logger
@@ -62,7 +63,6 @@ from driving_log_replayer_v2_msgs.msg import ObstacleSegmentationMarker
 from driving_log_replayer_v2_msgs.msg import ObstacleSegmentationMarkerArray
 
 if TYPE_CHECKING:
-    from perception_eval.common.dataset import FrameGroundTruth
     from perception_eval.evaluation.sensing.sensing_frame_result import SensingFrameResult
 
 TARGET_DIAG_NAME = "topic_state_monitor_obstacle_segmentation_pointcloud: perception_topic_status"
@@ -80,10 +80,26 @@ class ObstacleSegmentationEvaluator(DLREvaluatorV2):
         )
         self._result: ObstacleSegmentationResult
 
+        # Split dataset paths by whether annotation data is available.
+        all_dataset_paths = list(self._t4_dataset_paths)
+        self._t4_dataset_paths_with_annotation = [
+            path
+            for path in all_dataset_paths
+            if Path(path, "annotation").is_dir() and any(Path(path, "annotation").glob("*.json"))
+        ]
+        self._t4_dataset_paths_without_annotation = [
+            path for path in all_dataset_paths if path not in self._t4_dataset_paths_with_annotation
+        ]
+
+        # perception_eval loads ground truth at manager initialization, so pass only annotated datasets.
+        self._t4_dataset_paths = self._t4_dataset_paths_with_annotation
+
         # pub_goal_pose must be created before timer_cb is called
         self.__goal_pose_counter = 0
-        self.__goal_pose = get_goal_pose_from_rosbag(
-            str(Path(self._t4_dataset_paths[0], "input_bag"))
+        self.__goal_pose = (
+            get_goal_pose_from_rosbag(str(Path(all_dataset_paths[0], "input_bag")))
+            if all_dataset_paths
+            else None
         )
         self.__pub_goal_pose = self.create_publisher(
             PoseStamped,
@@ -194,6 +210,8 @@ class ObstacleSegmentationEvaluator(DLREvaluatorV2):
         )
 
     def publish_goal_pose(self) -> None:
+        if self.__goal_pose is None:
+            return
         if self.__goal_pose_counter < ObstacleSegmentationEvaluator.COUNT_FINISH_PUB_GOAL_POSE:
             self.__goal_pose_counter += 1
             self.__goal_pose.header.stamp = self._current_time
@@ -243,13 +261,25 @@ class ObstacleSegmentationEvaluator(DLREvaluatorV2):
         header_timestamp_microsec: int = eval_conversions.unix_time_microsec_from_ros_msg(
             pcd_header
         )
-        ground_truth_now_frame: FrameGroundTruth = self.__evaluator.get_ground_truth_now_frame(
-            unix_time=header_timestamp_microsec,
-        )
-        # Ground truthがない場合はスキップされたことを記録する
-        if ground_truth_now_frame is None:
-            self.__skip_counter += 1
-            return
+        # obstacle_segmentation evaluation does not require ground truth
+        # Continue evaluation even if ground_truth_now_frame is None
+        # get_ground_truth_now_frame may raise IndexError when dataset_paths is empty
+        ground_truth_now_frame: FrameGroundTruth
+        if self._t4_dataset_paths:
+            maybe_ground_truth_now_frame = self.__evaluator.get_ground_truth_now_frame(
+                unix_time=header_timestamp_microsec,
+            )
+            # Ground truthがない場合はスキップされたことを記録する
+            if maybe_ground_truth_now_frame is None:
+                self.__skip_counter += 1
+                return
+            ground_truth_now_frame = maybe_ground_truth_now_frame
+        else:
+            ground_truth_now_frame = FrameGroundTruth(
+                header_timestamp_microsec,
+                str(header_timestamp_microsec),
+                [],
+            )
         # create sensing_frame_config
         frame_ok, sensing_frame_config = get_sensing_frame_config(
             pcd_header,
