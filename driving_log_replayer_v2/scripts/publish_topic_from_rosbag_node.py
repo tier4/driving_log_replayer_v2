@@ -40,7 +40,8 @@ class PublishTopicFromRosbagNode(Node):
         # load the topic to publish
         topic_list = topics_with_comma.split(",") if topics_with_comma != "" else []
         if len(topic_list) == 0:
-            rclpy.shutdown()
+            self._safe_shutdown()
+            return
 
         # load the rosbag
         self._rosbag_reader = RosbagReader(bag_dir, topic_list)
@@ -64,17 +65,29 @@ class PublishTopicFromRosbagNode(Node):
             self._clock.sleep_for(
                 self.SLEEP_DURATION_BETWEEN_PUBLISH
             )  # sleep to wait for Autoware to process the message
-        rclpy.shutdown()
+        self._safe_shutdown()
+
+    @staticmethod
+    def _safe_shutdown() -> None:
+        try:
+            if rclpy.ok():
+                rclpy.shutdown()
+        except RuntimeError:
+            # It is already shutdown.
+            pass
 
 
 def main() -> None:
     rclpy.init()
     executor = MultiThreadedExecutor()
     publish_topic_from_rosbag_node = PublishTopicFromRosbagNode()
-    executor.add_node(publish_topic_from_rosbag_node)
-    executor.spin()
-    publish_topic_from_rosbag_node.destroy_node()
-    rclpy.shutdown()
+    try:
+        if rclpy.ok():
+            executor.add_node(publish_topic_from_rosbag_node)
+            executor.spin()
+    finally:
+        publish_topic_from_rosbag_node.destroy_node()
+        PublishTopicFromRosbagNode._safe_shutdown()
 
 
 if __name__ == "__main__":

@@ -198,6 +198,9 @@ def time_step_based_trajectory(conf: dict[str, str]) -> ProcessInfo:
         "planning_data_analyzer.launch.xml",
         f"bag_path:={conf['result_bag_path']}/result_bag_0.mcap",
         f"output_dir:={conf['result_archive_path']}",
+        f"gt_source_mode:={conf['gt_source_mode']}",
+        f"gt_trajectory_topic:={conf['gt_trajectory_topic']}",
+        f"gt_sync_tolerance_ms:={conf['gt_sync_tolerance_ms']}",
     ]
 
     time_step_analysis = ExecuteProcess(
