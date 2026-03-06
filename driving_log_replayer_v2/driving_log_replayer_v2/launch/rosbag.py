@@ -77,6 +77,17 @@ def system_defined_remap(conf: dict) -> list[str]:
         add_remap("/localization/acceleration", remap_list)
         if conf["initial_pose"] != "{}" or conf["direct_initial_pose"] != "{}":
             add_remap("/initialpose", remap_list)
+    # In time_step_based_trajectory with Autoware enabled, avoid mixing replayed planning outputs
+    # from input bag with runtime planning outputs generated during DLR execution.
+    if conf["use_case"] == "time_step_based_trajectory" and conf.get("with_autoware") == "true":
+        planning_topics_to_mask = [
+            "/planning/trajectory",
+            "/planning/trajectory/debug/published_time",
+            "/planning/scenario_planning/lane_driving/trajectory",
+            "/planning/scenario_planning/velocity_smoother/trajectory",
+        ]
+        for topic in planning_topics_to_mask:
+            add_remap(topic, remap_list)
 
     if is_set_goal(conf["goal_method"], conf["goal_pose"]):
         add_remap("/planning/mission_planning/route", remap_list)
@@ -114,7 +125,13 @@ def get_pre_task_before_play_rosbag(
     context: LaunchContext, on_exit: ExecuteProcess
 ) -> Node | ExecuteProcess:
     conf = context.launch_configurations
-    if conf["publish_topic_from_rosbag"] != "":
+    publish_topics = [
+        topic.strip()
+        for topic in conf.get("publish_topic_from_rosbag", "").split(",")
+        if topic.strip() != ""
+    ]
+
+    if len(publish_topics) > 0:
         return Node(
             package="driving_log_replayer_v2",
             namespace="/driving_log_replayer_v2",
@@ -125,7 +142,7 @@ def get_pre_task_before_play_rosbag(
                 {
                     "use_sim_time": False,  # In order to trigger the timer without play rosbag
                     "input_bag": conf["input_bag"],
-                    "publish_topic_from_rosbag": conf["publish_topic_from_rosbag"],
+                    "publish_topic_from_rosbag": ",".join(publish_topics),
                 }
             ],
             on_exit=[on_exit],
@@ -201,8 +218,17 @@ def launch_bag_recorder(context: LaunchContext) -> list:
         "--qos-profile-overrides-path",
         QOS_PROFILE_PATH_STR,
     ]
-    # For perception_reproducer, use real time instead of sim time
-    if conf["use_case"] != "perception_reproducer":
+    # For perception_reproducer, use real time instead of sim time.
+    # For time_step_based_trajectory in explicit gt_trajectory mode, also use real time so
+    # pre-published one-shot GT topic is not dropped before /clock starts.
+    use_sim_time_record = conf["use_case"] != "perception_reproducer"
+    if (
+        conf.get("use_case") == "time_step_based_trajectory"
+        and conf.get("gt_source_mode") == "gt_trajectory"
+    ):
+        use_sim_time_record = False
+
+    if use_sim_time_record:
         record_cmd += ["--use-sim-time"]
     if conf["storage"] == "mcap":
         record_cmd += ["--storage-preset-profile", "zstd_fast"]
