@@ -35,7 +35,6 @@ RECORD_TOPIC = """^/tf$\
 |^/awapi/.*/get/.*$\
 |^/planning/generator/.*$\
 |^/planning/trajectory$\
-|^/planning/ground_truth_trajectory$\
 |^/planning/mission_planning/route$\
 |^/sensing/gnss/septentrio/nav_sat_fix$\
 |^/planning/ground_truth_trajectory$\
