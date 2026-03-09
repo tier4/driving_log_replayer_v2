@@ -2,6 +2,9 @@
 Changelog for package driving_log_replayer
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
+Forthcoming
+-----------
+
 3.17.0 (2026-03-09)
 -------------------
 * feat: add dlr-gt-trajectory source mode configuration and proper topi… (`#322 <https://github.com/tier4/driving_log_replayer_v2/issues/322>`_)
