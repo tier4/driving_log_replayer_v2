@@ -1,5 +1,13 @@
 # Release Notes
 
+## Version 3.17.1
+
+Minor Tweak
+
+| Module   | Feature | Brief summary                                                           | Pull request                                                        | Contributor                                 |
+| -------- | ------- | ----------------------------------------------------------------------- | ------------------------------------------------------------------- | ------------------------------------------- |
+| `common` | docs    | add docs to index and pages for perception_reproducer and perception_fp | [#326](https://github.com/tier4/driving_log_replayer_v2/issues/326) | [xtk8532704](https://github.com/xtk8532704) |
+
 ## Version 3.17.0
 
 Major changes
