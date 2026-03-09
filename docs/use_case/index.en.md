@@ -17,5 +17,7 @@ This section describes how driving_log_replayer_v2 can be used for evaluation.
 - [Planning Control](planning_control.md)
 - [Perception Reproducer](perception_reproducer.md)
 - [Diagnostics](diagnostics.md)
-- [GroundSegmentation](ground_semgnetation.md)
+- [GroundSegmentation](ground_segmentation.md)
 - [AllComponents](all_components.md)
+- [Time Step Based Trajectory](time_step_based_trajectory.md)
+- [Perception FP](perception_fp.md)

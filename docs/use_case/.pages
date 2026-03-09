@@ -29,3 +29,9 @@ nav:
   - ground_segmentation.ja.md
   - all_components.en.md
   - all_components.ja.md
+  - time_step_based_trajectory.en.md
+  - time_step_based_trajectory.ja.md
+  - perception_fp.en.md
+  - perception_fp.ja.md
+  - perception_reproducer.en.md
+  - perception_reproducer.ja.md
