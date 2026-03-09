@@ -22,15 +22,6 @@ from rclpy.node import Node
 from driving_log_replayer_v2.rosbag import RosbagReader
 
 
-def _safe_shutdown() -> None:
-    try:
-        if rclpy.ok():
-            rclpy.shutdown()
-    except RuntimeError:
-        # It is already shutdown.
-        pass
-
-
 class PublishTopicFromRosbagNode(Node):
     SLEEP_DURATION_BETWEEN_PUBLISH = Duration(seconds=0.1)
     TIMER_PERIOD = 0.1
@@ -49,8 +40,7 @@ class PublishTopicFromRosbagNode(Node):
         # load the topic to publish
         topic_list = topics_with_comma.split(",") if topics_with_comma != "" else []
         if len(topic_list) == 0:
-            _safe_shutdown()
-            return
+            rclpy.shutdown()
 
         # load the rosbag
         self._rosbag_reader = RosbagReader(bag_dir, topic_list)
@@ -74,20 +64,17 @@ class PublishTopicFromRosbagNode(Node):
             self._clock.sleep_for(
                 self.SLEEP_DURATION_BETWEEN_PUBLISH
             )  # sleep to wait for Autoware to process the message
-        _safe_shutdown()
+        rclpy.shutdown()
 
 
 def main() -> None:
     rclpy.init()
     executor = MultiThreadedExecutor()
     publish_topic_from_rosbag_node = PublishTopicFromRosbagNode()
-    try:
-        if rclpy.ok():
-            executor.add_node(publish_topic_from_rosbag_node)
-            executor.spin()
-    finally:
-        publish_topic_from_rosbag_node.destroy_node()
-        _safe_shutdown()
+    executor.add_node(publish_topic_from_rosbag_node)
+    executor.spin()
+    publish_topic_from_rosbag_node.destroy_node()
+    rclpy.shutdown()
 
 
 if __name__ == "__main__":
