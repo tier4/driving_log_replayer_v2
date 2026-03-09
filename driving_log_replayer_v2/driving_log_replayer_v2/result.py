@@ -207,7 +207,8 @@ class ResultEditor:
         self._result_file = self._result_path.open("r+")
         self._last_result = self.load_last_result()
         self.success: bool = self._last_result["Result"]["Success"]
-        self.summary: str = self._last_result["Result"]["Summary"]
+        summary = self._last_result["Result"]["Summary"]
+        self.summary: str = summary if isinstance(summary, str) else json.dumps(summary)
 
     def __enter__(self) -> "ResultEditor":
         return self
