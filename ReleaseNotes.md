@@ -1,5 +1,21 @@
 # Release Notes
 
+## Version 3.17.0
+
+Major changes
+
+| Module                       | Feature             | Brief summary                                                                                                | Pull request                                                        | Contributor                                             |
+| ---------------------------- | ------------------- | ------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------- | ------------------------------------------------------- |
+| `time_step_based_trajectory` | post-process        | add dlr-gt-trajectory source mode configuration and proper topic saving logic of gt and predicted trajectory | [#322](https://github.com/tier4/driving_log_replayer_v2/issues/322) | [beomseok-kimm](https://github.com/beomseok-kimm)       |
+| `perception_fp`              | new simulation type | add new simulation_type `perception_fp`                                                                      | [#307](https://github.com/tier4/driving_log_replayer_v2/issues/307) | [MasatoSaeki](https://github.com/MasatoSaeki)           |
+| `common`                     | topic               | topic publish and record about ground_truth_trajectory                                                       | [#321](https://github.com/tier4/driving_log_replayer_v2/issues/321) | [xtk8532704](https://github.com/xtk8532704)             |
+| `common`                     | topic               | support loading remap list from the publish config and fix a minor bug                                       | [#320](https://github.com/tier4/driving_log_replayer_v2/issues/320) | [xtk8532704](https://github.com/xtk8532704)             |
+| `obstacle_segmentation`      | t4dataset           | enhance dataset handling                                                                                     | [#319](https://github.com/tier4/driving_log_replayer_v2/issues/319) | [kyoichi-sugahara](https://github.com/kyoichi-sugahara) |
+| `obstacle_segmentation`      | goal pose           | set goal pose using rosbag instead of t4dataset information                                                  | [#318](https://github.com/tier4/driving_log_replayer_v2/issues/318) | [MasatoSaeki](https://github.com/MasatoSaeki)           |
+| `common`                     | post-process        | pass use_case which does not have post-process                                                               | [#317](https://github.com/tier4/driving_log_replayer_v2/issues/317) | [MasatoSaeki](https://github.com/MasatoSaeki)           |
+| `common`                     | goal pose           | new route logic                                                                                              | [#305](https://github.com/tier4/driving_log_replayer_v2/issues/305) | [MasatoSaeki](https://github.com/MasatoSaeki)           |
+| `common`                     | topic config        | add needed topics to e2e configs                                                                             | [#315](https://github.com/tier4/driving_log_replayer_v2/issues/315) | [xtk8532704](https://github.com/xtk8532704)             |
+
 ## Version 3.16.0
 
 Major changes
