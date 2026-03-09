@@ -219,7 +219,9 @@ def planning_control(conf: dict[str, str]) -> ProcessInfo:
         multi_result_editor.write_back_result()
         process_list = [LogInfo(msg="Merge results")]
 
-    return ProcessInfo(process_list=process_list, last_action=None)
+    ts_info = time_step_based_trajectory(conf)
+    process_list.extend(ts_info.process_list)
+    return ProcessInfo(process_list=process_list, last_action=ts_info.last_action)
 
 
 def time_step_based_trajectory(conf: dict[str, str]) -> ProcessInfo:
@@ -232,6 +234,9 @@ def time_step_based_trajectory(conf: dict[str, str]) -> ProcessInfo:
         "planning_data_analyzer.launch.xml",
         f"bag_path:={conf['result_bag_path']}/result_bag_0.mcap",
         f"output_dir:={conf['result_archive_path']}",
+        f"gt_source_mode:={conf['gt_source_mode']}",
+        f"gt_trajectory_topic:={conf['gt_trajectory_topic']}",
+        f"gt_sync_tolerance_ms:={conf['gt_sync_tolerance_ms']}",
     ]
 
     time_step_analysis = ExecuteProcess(

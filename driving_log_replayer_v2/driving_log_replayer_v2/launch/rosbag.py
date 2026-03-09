@@ -77,7 +77,6 @@ def system_defined_remap(conf: dict) -> list[str]:
         add_remap("/localization/acceleration", remap_list)
         if conf["initial_pose"] != "{}" or conf["direct_initial_pose"] != "{}":
             add_remap("/initialpose", remap_list)
-
     if is_set_goal(conf["goal_method"], conf["goal_pose"]):
         add_remap("/planning/mission_planning/route", remap_list)
     return remap_list
@@ -201,7 +200,7 @@ def launch_bag_recorder(context: LaunchContext) -> list:
         "--qos-profile-overrides-path",
         QOS_PROFILE_PATH_STR,
     ]
-    # For perception_reproducer, use real time instead of sim time
+    # For perception_reproducer, use real time instead of sim time.
     if conf["use_case"] != "perception_reproducer":
         record_cmd += ["--use-sim-time"]
     if conf["storage"] == "mcap":
