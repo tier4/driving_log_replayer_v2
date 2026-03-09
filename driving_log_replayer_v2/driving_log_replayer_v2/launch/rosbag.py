@@ -15,6 +15,7 @@
 from importlib import import_module
 from pathlib import Path
 
+from ament_index_python.packages import get_package_prefix
 from ament_index_python.packages import get_package_share_directory
 from launch import LaunchContext
 from launch.actions import ExecuteProcess
@@ -225,23 +226,19 @@ def launch_perception_reproducer(context: LaunchContext) -> list:
     evaluation = scenario_data.get("Evaluation", {})
     reproducer_config = evaluation.get("perception_reproducer_config", {})
 
-    # Build perception_reproducer command
     rosbag_path = Path(conf["input_bag"])
     mcap_files = list(rosbag_path.glob("*.mcap"))
     rosbag_format = "mcap" if mcap_files else "sqlite3"
 
-    cmd = [
-        "ros2",
-        "run",
+    executable = Path(
+        get_package_prefix("planning_debug_tools"),
+        "lib",
         "planning_debug_tools",
         "perception_reproducer",
-        "-b",
-        conf["input_bag"],
-        "-f",
-        rosbag_format,
-    ]
+    ).as_posix()
 
-    # Add optional flags based on config
+    cmd = [executable, "-b", conf["input_bag"], "-f", rosbag_format]
+
     if reproducer_config.get("noise", False):
         cmd.append("--noise")
     if reproducer_config.get("tracked_object", False):
