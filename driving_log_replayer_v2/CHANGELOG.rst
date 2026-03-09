@@ -2,6 +2,60 @@
 Changelog for package driving_log_replayer
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
+Forthcoming
+-----------
+* feat: add dlr-gt-trajectory source mode configuration and proper topi… (`#322 <https://github.com/tier4/driving_log_replayer_v2/issues/322>`_)
+  * feat: add gt_trajectory source mode and trajectory topic handling for DLR
+  * refactor: delete redundant materials
+  * fix: satisfy ruff private member access rule
+  * refactor: restore publish_topic_from_rosbag_node.py
+  * fix unit test
+  * add time_step_based_trajectory test into planning_control.
+  ---------
+  Co-authored-by: xtk8532704 <1041084556@qq.com>
+* feat(perception_fp): add new simulation_type `perception_fp` (`#307 <https://github.com/tier4/driving_log_replayer_v2/issues/307>`_)
+  * init
+  * solve conflict
+  * fix text
+  * fix if condition
+  * show valid area or not using difference color
+  * fix timestamp
+  * fix test
+  * add base_link
+  * show boundary
+  * fix: base_link_to_map
+  * add condition
+  * feat: use futuer tf in post process
+  ---------
+* add topic publish and record about ground_truth_trajectory (`#321 <https://github.com/tier4/driving_log_replayer_v2/issues/321>`_)
+* feat(rosbag): support loading remap list from the publish config and fix a minor bug  (`#320 <https://github.com/tier4/driving_log_replayer_v2/issues/320>`_)
+  * remap /planning/trajectory to /planning/reference_trajectory
+  * refactor conde and support read remap from publish config
+* feat(obstacle_segmentation): enhance dataset handling (`#319 <https://github.com/tier4/driving_log_replayer_v2/issues/319>`_)
+  * feat(obstacle_segmentation): enhance dataset handling
+  * feat(obstacle_segmentation): add logging for non-detection area evaluation when no annotated t4 dataset is found
+  ---------
+* feat(obstacle_segmentation): set goal pose using rosbag instead of t4dataset infomation (`#318 <https://github.com/tier4/driving_log_replayer_v2/issues/318>`_)
+  * feat(obstacle_segmentation): set goal pose using rosbag instead of t4dataset infomation
+  * chore
+  * chore
+  ---------
+* fix(post-process): pass use_case which does not have post-process (`#317 <https://github.com/tier4/driving_log_replayer_v2/issues/317>`_)
+  * fix(post-process): pass use_case which does not have post-process
+  * chore
+  ---------
+* feat: new route logic (`#305 <https://github.com/tier4/driving_log_replayer_v2/issues/305>`_)
+  * add route logic
+  * fix typo
+  * remove unused func
+  * feat: some fix on new-route-logic(`#316 <https://github.com/tier4/driving_log_replayer_v2/issues/316>`_)
+  * fix some docs
+  ---------
+  Co-authored-by: Masato Saeki <78376491+MasatoSaeki@users.noreply.github.com>
+  Co-authored-by: MasatoSaeki <masato.saeki@tier4.jp>
+* add needed topics to e2e configs (`#315 <https://github.com/tier4/driving_log_replayer_v2/issues/315>`_)
+* Contributors: Kem (TiankuiXian), Kyoichi Sugahara, Masato Saeki, beomseok-kimm
+
 3.16.0 (2026-02-27)
 -------------------
 * feat(remap): add a remap file for xx1 perception (`#312 <https://github.com/tier4/driving_log_replayer_v2/issues/312>`_)
