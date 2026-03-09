@@ -1,5 +1,13 @@
 # Release Notes
 
+## Version 3.17.2
+
+Minor Tweak
+
+| Module   | Feature | Brief summary                                   | Pull request                                                        | Contributor                                   |
+| -------- | ------- | ----------------------------------------------- | ------------------------------------------------------------------- | --------------------------------------------- |
+| `common` | docs    | add perception_reproducer in pages and fix link | [#328](https://github.com/tier4/driving_log_replayer_v2/issues/328) | [MasatoSaeki](https://github.com/MasatoSaeki) |
+
 ## Version 3.17.1
 
 Minor Tweak
