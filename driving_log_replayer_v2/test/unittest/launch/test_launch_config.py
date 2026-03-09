@@ -51,5 +51,6 @@ def test_load_time_step_based_trajectory_config() -> None:
     assert launch_config.AUTOWARE_ARGS == {"launch_vehicle_interface": "false"}
     # Check NODE_PARAMS is empty dict
     assert launch_config.NODE_PARAMS == {}
-    # Check USE_CASE_ARGS is empty list
-    assert launch_config.USE_CASE_ARGS == []
+    # Check USE_CASE_ARGS has 3 DeclareLaunchArgument entries
+    arg_names = [arg.name for arg in launch_config.USE_CASE_ARGS]
+    assert arg_names == ["gt_source_mode", "gt_trajectory_topic", "gt_sync_tolerance_ms"]
