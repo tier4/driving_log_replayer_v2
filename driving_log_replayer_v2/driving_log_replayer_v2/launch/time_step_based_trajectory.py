@@ -38,7 +38,8 @@ RECORD_TOPIC = """^/tf$\
 |^/planning/mission_planning/route$\
 |^/sensing/gnss/septentrio/nav_sat_fix$\
 |^/planning/ground_truth_trajectory$\
-|^/planning/reference_trajectory\
+|^/planning/reference_trajectory$\
+|^/planning/trajectory_generator/neural_network_based_planner/diffusion_planner_node/output/trajectory$\
 """
 
 AUTOWARE_DISABLE = {
