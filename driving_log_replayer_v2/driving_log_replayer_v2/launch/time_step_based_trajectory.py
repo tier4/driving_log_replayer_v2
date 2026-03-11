@@ -33,12 +33,8 @@ RECORD_TOPIC = """^/tf$\
 |^/driving_log_replayer/.*$\
 |^/api/.*/get/.*$\
 |^/awapi/.*/get/.*$\
-|^/planning/generator/.*$\
-|^/planning/trajectory$\
-|^/planning/mission_planning/route$\
 |^/sensing/gnss/septentrio/nav_sat_fix$\
-|^/planning/ground_truth_trajectory$\
-|^/planning/reference_trajectory\
+|^/planning/.*$\
 """
 
 AUTOWARE_DISABLE = {
