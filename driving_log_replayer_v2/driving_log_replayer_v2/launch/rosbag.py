@@ -247,5 +247,7 @@ def launch_perception_reproducer(context: LaunchContext) -> list:
         cmd.extend(["--search-radius", str(reproducer_config["search_radius"])])
     if reproducer_config.get("reproduce_cool_down") is not None:
         cmd.extend(["--reproduce-cool-down", str(reproducer_config["reproduce_cool_down"])])
+    if reproducer_config.get("pub_route", False):
+        cmd.append("--pub-route")
 
     return [ExecuteProcess(cmd=cmd, output="screen", on_exit=ShutdownOnce())]
