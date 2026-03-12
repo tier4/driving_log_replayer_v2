@@ -269,7 +269,9 @@ def time_step_based_trajectory(conf: dict[str, str]) -> ProcessInfo:
         OnProcessExit(
             target_action=optimized_analysis,
             on_exit=[
-                LogInfo(msg="run time_step_based_trajectory analysis for raw diffusion trajectory."),
+                LogInfo(
+                    msg="run time_step_based_trajectory analysis for raw diffusion trajectory."
+                ),
                 raw_analysis,
             ],
         )
