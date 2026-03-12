@@ -227,25 +227,63 @@ def planning_control(conf: dict[str, str]) -> ProcessInfo:
 def time_step_based_trajectory(conf: dict[str, str]) -> ProcessInfo:
     # This use_case is record_only so not create result_archive directory.
     Path(conf["result_archive_path"]).mkdir(parents=True, exist_ok=True)
-    time_step_analysis_cmd = [
+    optimized_result_archive_path = Path(conf["result_archive_path"]).joinpath("optimized")
+    raw_result_archive_path = Path(conf["result_archive_path"]).joinpath("raw")
+    optimized_result_archive_path.mkdir(parents=True, exist_ok=True)
+    raw_result_archive_path.mkdir(parents=True, exist_ok=True)
+
+    optimized_analysis_cmd = [
         "ros2",
         "launch",
         "autoware_planning_data_analyzer",
         "planning_data_analyzer.launch.xml",
         f"bag_path:={conf['result_bag_path']}/result_bag_0.mcap",
-        f"output_dir:={conf['result_archive_path']}",
+        f"output_dir:={optimized_result_archive_path}",
+        "trajectory_topic:=/planning/trajectory",
+        "open_loop_metric_variant:=optimized",
+        f"gt_source_mode:={conf['gt_source_mode']}",
+        f"gt_trajectory_topic:={conf['gt_trajectory_topic']}",
+        f"gt_sync_tolerance_ms:={conf['gt_sync_tolerance_ms']}",
+    ]
+    raw_analysis_cmd = [
+        "ros2",
+        "launch",
+        "autoware_planning_data_analyzer",
+        "planning_data_analyzer.launch.xml",
+        f"bag_path:={conf['result_bag_path']}/result_bag_0.mcap",
+        f"output_dir:={raw_result_archive_path}",
+        "trajectory_topic:=/planning/trajectory_generator/neural_network_based_planner/diffusion_planner_node/output/trajectory",
+        "open_loop_metric_variant:=raw",
         f"gt_source_mode:={conf['gt_source_mode']}",
         f"gt_trajectory_topic:={conf['gt_trajectory_topic']}",
         f"gt_sync_tolerance_ms:={conf['gt_sync_tolerance_ms']}",
     ]
 
-    time_step_analysis = ExecuteProcess(
-        cmd=time_step_analysis_cmd, output="screen", name="time_step_analysis"
+    optimized_analysis = ExecuteProcess(
+        cmd=optimized_analysis_cmd, output="screen", name="time_step_analysis_optimized"
+    )
+    raw_analysis = ExecuteProcess(
+        cmd=raw_analysis_cmd, output="screen", name="time_step_analysis_raw"
+    )
+    start_raw_analysis_on_optimized_exit = RegisterEventHandler(
+        OnProcessExit(
+            target_action=optimized_analysis,
+            on_exit=[
+                LogInfo(
+                    msg="run time_step_based_trajectory analysis for raw diffusion trajectory."
+                ),
+                raw_analysis,
+            ],
+        )
     )
 
     return ProcessInfo(
-        process_list=[LogInfo(msg="run time_step_based_trajectory analysis."), time_step_analysis],
-        last_action=time_step_analysis,
+        process_list=[
+            LogInfo(msg="run time_step_based_trajectory analysis for optimized trajectory."),
+            optimized_analysis,
+            start_raw_analysis_on_optimized_exit,
+        ],
+        last_action=raw_analysis,
     )
 
 
