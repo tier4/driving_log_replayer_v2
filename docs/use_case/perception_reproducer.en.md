@@ -137,7 +137,7 @@ Configuration options:
 
 ### Route Method
 
-When `goal_method` is set to `set_goal_from_scenario` and not set `GoalPose`, you should use `--pub-route` flag of `perception_reproducer`　(under development).
+When `goal_method` is set to `set_goal_from_scenario` and not set `GoalPose`, you should use `--replay-route` flag of `perception_reproducer`.
 
 See [scenario format](../scenario_format/index.en.md#goal_method) for details on `goal_method`.
 

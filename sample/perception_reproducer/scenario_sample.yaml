@@ -32,7 +32,7 @@ Evaluation:
 
   perception_reproducer_config:
     noise: false
-    pub_route: false
+    replay_route: false
     reproduce_cool_down: 999.0
     search_radius: 1.5
     tracked_object: false
