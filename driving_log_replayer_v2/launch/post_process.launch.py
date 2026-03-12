@@ -265,7 +265,7 @@ def time_step_based_trajectory(conf: dict[str, str]) -> ProcessInfo:
     raw_analysis = ExecuteProcess(
         cmd=raw_analysis_cmd, output="screen", name="time_step_analysis_raw"
     )
-    raw_analysis_event_handler = RegisterEventHandler(
+    start_raw_analysis_on_optimized_exit = RegisterEventHandler(
         OnProcessExit(
             target_action=optimized_analysis,
             on_exit=[
@@ -281,7 +281,7 @@ def time_step_based_trajectory(conf: dict[str, str]) -> ProcessInfo:
         process_list=[
             LogInfo(msg="run time_step_based_trajectory analysis for optimized trajectory."),
             optimized_analysis,
-            raw_analysis_event_handler,
+            start_raw_analysis_on_optimized_exit,
         ],
         last_action=raw_analysis,
     )
