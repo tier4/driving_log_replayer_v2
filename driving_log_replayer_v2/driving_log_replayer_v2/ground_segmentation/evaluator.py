@@ -52,8 +52,22 @@ class GroundSegmentationEvaluator(Evaluator):
 
         super().__init__(result_archive_path, evaluation_topic)
 
-        self._ground_label = self._conditions.ground_label
-        self._obstacle_label = self._conditions.obstacle_label
+        # load category names from dataset annotation (index -> name from category.json)
+        category_path = Path(t4_dataset_path, "annotation", "category.json")
+        category_data = json.load(category_path.open())
+        name_to_index: dict[str, int] = {
+            cat["name"]: cat["index"] for cat in category_data
+        }
+
+        def resolve_labels(labels: list[int] | list[str]) -> list[int]:
+            if not labels:
+                return []
+            if isinstance(labels[0], int):
+                return list(labels)
+            return [name_to_index[name] for name in labels]
+
+        self._ground_label = resolve_labels(self._conditions.ground_label)
+        self._obstacle_label = resolve_labels(self._conditions.obstacle_label)
 
         # load point cloud data
         sample_data_path = Path(t4_dataset_path, "annotation", "sample_data.json")
