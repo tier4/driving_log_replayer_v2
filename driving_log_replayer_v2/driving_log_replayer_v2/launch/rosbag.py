@@ -164,6 +164,14 @@ def launch_bag_player(
     remap_list = ["--remap"]
     remap_list.extend(system_defined_remap(conf))
     remap_list.extend(user_defined_remap(conf))
+    # If an evaluation_topic is provided, add remapping from default evaluation topic
+    # to the provided one so that played topics are remapped for evaluation.
+    eval_topic = conf.get("evaluation_topic", "")
+    if eval_topic:
+        default_eval_topic = "/perception/obstacle_segmentation/pointcloud"
+        remap_str_custom = f"{default_eval_topic}:={eval_topic}"
+        if remap_str_custom not in remap_list:
+            remap_list.append(remap_str_custom)
     if len(remap_list) != 1:
         play_cmd.extend(remap_list)
     bag_player = (
@@ -208,7 +216,16 @@ def launch_bag_recorder(context: LaunchContext) -> list:
         record_cmd += ["--storage-preset-profile", "zstd_fast"]
     if conf["override_topics_regex"] == "":
         launch_config = import_module(f"driving_log_replayer_v2.launch.{conf['use_case']}")
-        record_cmd += ["-e", launch_config.RECORD_TOPIC]
+        # If evaluation_topic specified, append it to the RECORD_TOPIC regex so
+        # the evaluation topic is also recorded.
+        record_regex = launch_config.RECORD_TOPIC
+        eval_topic = conf.get("evaluation_topic", "")
+        if eval_topic:
+            # append pattern for exact topic match if not already present
+            pattern = f"|^{eval_topic}$"
+            if pattern not in record_regex:
+                record_regex = record_regex + pattern
+        record_cmd += ["-e", record_regex]
     else:
         record_cmd += ["-e", conf["override_topics_regex"]]
     return [ExecuteProcess(cmd=record_cmd)]

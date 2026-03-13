@@ -125,6 +125,12 @@ class ObstacleSegmentationEvaluator(DLREvaluatorV2):
         ).as_posix()
         self.__road_lanelets = road_lanelets_from_file(map_path)
 
+        # evaluation topic can be overridden via launch / node parameter
+        self.declare_parameter(
+            "evaluation_topic",
+            "/perception/obstacle_segmentation/pointcloud",
+        )
+
         if self._scenario.Evaluation.Conditions.NonDetection is not None:
             self.__search_range = (
                 self._scenario.Evaluation.Conditions.NonDetection.ProposedArea.search_range()
@@ -164,9 +170,10 @@ class ObstacleSegmentationEvaluator(DLREvaluatorV2):
             1,
         )
 
+        evaluation_topic = self.get_parameter("evaluation_topic").get_parameter_value().string_value
         self.__sub_obstacle_segmentation = self.create_subscription(
             PointCloud2,
-            "/perception/obstacle_segmentation/pointcloud",
+            evaluation_topic,
             self.obstacle_segmentation_cb,
             QoSProfile(
                 reliability=QoSReliabilityPolicy.BEST_EFFORT,
