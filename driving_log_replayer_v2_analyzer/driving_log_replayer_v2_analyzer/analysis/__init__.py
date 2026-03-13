@@ -18,6 +18,7 @@ from pathlib import Path
 import click
 
 from driving_log_replayer_v2_analyzer.analysis.obstacle_segmentation import visualize as os_vis
+from driving_log_replayer_v2_analyzer.analysis.ground_segmentation import visualize as gs_vis
 from driving_log_replayer_v2_analyzer.data import convert_str_to_dist_type
 
 CONTEXT_SETTINGS = {"help_option_names": ["-h", "--help"]}
@@ -26,6 +27,22 @@ CONTEXT_SETTINGS = {"help_option_names": ["-h", "--help"]}
 @click.group(context_settings=CONTEXT_SETTINGS)
 def analysis() -> None:
     """Run analysis of the use case."""
+
+
+@analysis.command(context_settings=CONTEXT_SETTINGS)
+@click.argument("input_jsonl", type=str)
+@click.option("--output_dir", "-o", type=str)
+def ground_segmentation(
+    input_jsonl: str,
+    output_dir: str | None,
+) -> None:
+    """Run ground_segmentation analysis."""
+    p_input_jsonl = Path(os.path.expandvars(input_jsonl))
+    if output_dir is None:
+        p_output_dir = p_input_jsonl.parent
+    else:
+        p_output_dir = Path(os.path.expandvars(output_dir))
+    gs_vis(p_input_jsonl, p_output_dir)
 
 
 @analysis.command(context_settings=CONTEXT_SETTINGS)

@@ -18,12 +18,13 @@ from . import PlotBase
 
 
 class LinePlot(PlotBase):
-    def plot(self, title="", xlabel="", ylabel="", use_boolean_tick=False):  # noqa
+    def plot(self, title="", xlabel="", ylabel="", use_boolean_tick=False, markers=False):  # noqa
         self._fig = px.line(
             self._df,
             x="x",
             y="y",
             color="legend",
+            markers=markers,
         )
         self._fig.update_layout(
             title=title,
