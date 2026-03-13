@@ -52,17 +52,34 @@ class GroundSegmentationEvaluator(Evaluator):
 
         super().__init__(result_archive_path, evaluation_topic)
 
-        self._ground_label = self._conditions.ground_label
-        self._obstacle_label = self._conditions.obstacle_label
+        # load category names from dataset annotation (name -> index from category.json)
+        category_path = Path(t4_dataset_path, "annotation", "category.json")
+        with category_path.open(encoding="utf-8") as f:
+            category_data = json.load(f)
+        name_to_index: dict[str, int] = {cat["name"]: cat["index"] for cat in category_data}
+        for name, index in name_to_index.items():
+            self._logger.info("Category name: %s, index: %d", name, index)
+
+        def resolve_labels(labels: list[int] | list[str]) -> list[int]:
+            if not labels:
+                return []
+            if isinstance(labels[0], int):
+                return list(labels)
+            return [name_to_index[name] for name in labels]
+
+        self._ground_label = resolve_labels(self._conditions.ground_label)
+        self._obstacle_label = resolve_labels(self._conditions.obstacle_label)
 
         # load point cloud data
         sample_data_path = Path(t4_dataset_path, "annotation", "sample_data.json")
-        sample_data = json.load(sample_data_path.open())
+        with sample_data_path.open(encoding="utf-8") as f:
+            sample_data = json.load(f)
         sample_data = list(filter(lambda d: d["filename"].split(".")[-2] == "pcd", sample_data))
 
         # load gt annotation data
         lidar_seg_json_path = Path(t4_dataset_path, "annotation", "lidarseg.json")
-        lidar_seg_data = json.load(lidar_seg_json_path.open())
+        with lidar_seg_json_path.open(encoding="utf-8") as f:
+            lidar_seg_data = json.load(f)
         token_to_seg_data = {}
         for annotation_data in lidar_seg_data:
             token_to_seg_data[annotation_data["sample_data_token"]] = annotation_data

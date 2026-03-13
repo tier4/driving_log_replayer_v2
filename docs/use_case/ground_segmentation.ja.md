@@ -24,10 +24,6 @@ launch を立ち上げると以下のことが実行され、評価される。
 
 ### 評価時の注意点
 
-- **annotated_pcdモード**  
-   評価処理に時間がかかるため、rosbagの再生レートを下げる必要がある。
-  `ros2 launch driving_log_replayer_v2 driving_log_replayer_v2.launch.py scenario_path:=${scenario_file} play_rate:=0.1`
-
 ## 評価結果
 
 topic の subscribe 1 回につき、以下に記述する判定結果が出力される。

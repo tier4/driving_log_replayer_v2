@@ -25,8 +25,8 @@ from driving_log_replayer_v2_msgs.msg import GroundSegmentationEvalResult
 
 
 class Conditions(BaseModel):
-    ground_label: list[int]
-    obstacle_label: list[int]
+    ground_label: list[int] | list[str]  # indices or class names from category.json
+    obstacle_label: list[int] | list[str]
     accuracy_min: number
     accuracy_max: number
     PassRate: number
