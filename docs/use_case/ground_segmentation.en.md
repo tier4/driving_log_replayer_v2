@@ -24,11 +24,6 @@ Launching the file executes the following steps:
 
 ### Points to note during evaluation
 
-- **annotated_pcd mode**
-  Since the evaluation process takes time, the playback rate of the rosbag needs to be reduced.
-  Example:
-  `ros2 launch driving_log_replayer_v2 driving_log_replayer_v2.launch.py scenario_path:=${scenario_file} play_rate:=0.1`
-
 ## Evaluation result
 
 The results are calculated for each subscription. The format and available states are described below.

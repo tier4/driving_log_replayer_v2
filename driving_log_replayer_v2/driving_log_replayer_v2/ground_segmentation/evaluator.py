@@ -56,9 +56,7 @@ class GroundSegmentationEvaluator(Evaluator):
         category_path = Path(t4_dataset_path, "annotation", "category.json")
         with category_path.open(encoding="utf-8") as f:
             category_data = json.load(f)
-        name_to_index: dict[str, int] = {
-            cat["name"]: cat["index"] for cat in category_data
-        }
+        name_to_index: dict[str, int] = {cat["name"]: cat["index"] for cat in category_data}
         for name, index in name_to_index.items():
             self._logger.info("Category name: %s, index: %d", name, index)
 

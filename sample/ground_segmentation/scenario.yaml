@@ -5,7 +5,7 @@ SensorModel: sample_sensor_kit
 VehicleModel: sample_vehicle
 Evaluation:
   UseCaseName: ground_segmentation
-  UseCaseFormatVersion: 0.3.0
+  UseCaseFormatVersion: 0.4.0
   Datasets:
     - sample_dataset:
         VehicleId: default
@@ -14,7 +14,7 @@ Evaluation:
       - drivable_surface # name of class that is considered as ground, which can be drivable_surface, manmade, other_flat_surface, vegetation, sidewalk
       - sidewalk
     obstacle_label:
-      - car  # name of class that is considered as obstacle, which can be car, pedestrian, emergency_vehicle, truck, tractor_unit, semi_trailer, bus, bicycle, motorcycle, construction_vehicle
+      - car # name of class that is considered as obstacle, which can be car, pedestrian, emergency_vehicle, truck, tractor_unit, semi_trailer, bus, bicycle, motorcycle, construction_vehicle
       - bus
       - bicycle
       - motorcycle

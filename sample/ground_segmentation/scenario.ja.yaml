@@ -5,17 +5,16 @@ SensorModel: sample_sensor_kit
 VehicleModel: sample_vehicle
 Evaluation:
   UseCaseName: ground_segmentation
-  UseCaseFormatVersion: 0.3.0
+  UseCaseFormatVersion: 0.4.0
   Datasets:
     - sample_dataset:
         VehicleId: default
   Conditions:
-    Method: annotated_pcd
     ground_label:
       - drivable_surface # 地面として考慮されるクラスの名前。drivable_surface、manmade、other_flat_surface、vegetation、sidewalkのいずれかを指定できます。
       - sidewalk
     obstacle_label:
-      - car  # 障害物として考慮されるクラスの名前。car、pedestrian、emergency_vehicle、truck、tractor_unit、semi_trailer、bus、bicycle、motorcycle、construction_vehicleのいずれかを指定できます。
+      - car # 障害物として考慮されるクラスの名前。car、pedestrian、emergency_vehicle、truck、tractor_unit、semi_trailer、bus、bicycle、motorcycle、construction_vehicleのいずれかを指定できます。
       - bus
       - bicycle
       - motorcycle
