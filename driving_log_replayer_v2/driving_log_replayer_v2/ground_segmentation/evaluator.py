@@ -52,7 +52,7 @@ class GroundSegmentationEvaluator(Evaluator):
 
         super().__init__(result_archive_path, evaluation_topic)
 
-        # load category names from dataset annotation (index -> name from category.json)
+        # load category names from dataset annotation (name -> index from category.json)
         category_path = Path(t4_dataset_path, "annotation", "category.json")
         category_data = json.load(category_path.open())
         name_to_index: dict[str, int] = {
