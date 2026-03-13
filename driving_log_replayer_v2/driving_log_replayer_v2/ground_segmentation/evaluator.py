@@ -58,6 +58,8 @@ class GroundSegmentationEvaluator(Evaluator):
         name_to_index: dict[str, int] = {
             cat["name"]: cat["index"] for cat in category_data
         }
+        for name, index in name_to_index.items():
+            self._logger.info("Category name: %s, index: %d", name, index)
 
         def resolve_labels(labels: list[int] | list[str]) -> list[int]:
             if not labels:

@@ -10,8 +10,46 @@ Evaluation:
     - sample_dataset:
         VehicleId: default
   Conditions:
-    ground_label: [20, 21] # Annotation label list for ground pointcloud.
-    obstacle_label: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 22, 23] # Annotation label list for obstacle pointcloud.
-    accuracy_min: 0.7 # If the accuracy is lower than the threshold value, the evaluation is considered to have failed.
-    accuracy_max: 1.0
-    PassRate: 99.0 # How much (%) of the evaluation attempts are considered successful.
+    Method: annotated_pcd
+    ground_label:
+      - drivable_surface # name of class that is considered as ground, which can be drivable_surface, manmade, other_flat_surface, vegetation, sidewalk
+      - sidewalk
+    obstacle_label:
+      - car  # name of class that is considered as obstacle, which can be car, pedestrian, emergency_vehicle, truck, tractor_unit, semi_trailer, bus, bicycle, motorcycle, construction_vehicle
+      - bus
+      - bicycle
+      - motorcycle
+    accuracy_min: 0.8
+    accuracy_max: 1
+    PassRate: 99
+
+# Example of category names and indices loaded from category.json:
+# Category name: drivable_surface, index: 1
+# Category name: manmade, index: 2
+# Category name: other_flat_surface, index: 3
+# Category name: vegetation, index: 4
+# Category name: sidewalk, index: 5
+# Category name: car, index: 6
+# Category name: pedestrian, index: 7
+# Category name: emergency_vehicle, index: 8
+# Category name: truck, index: 9
+# Category name: tractor_unit, index: 10
+# Category name: semi_trailer, index: 11
+# Category name: bus, index: 12
+# Category name: bicycle, index: 13
+# Category name: motorcycle, index: 14
+# Category name: construction_vehicle, index: 15
+# Category name: other_stuff, index: 16
+# Category name: noise, index: 17
+# Category name: traffic_cone, index: 18
+# Category name: debris, index: 19
+# Category name: forklift, index: 20
+# Category name: kart, index: 21
+# Category name: stroller, index: 22
+# Category name: personal_mobility, index: 23
+# Category name: pushable_pullable, index: 24
+# Category name: animal, index: 25
+# Category name: train, index: 26
+# Category name: ghost_point, index: 27
+# Category name: out_of_sync, index: 28
+# Category name: unpainted, index: 0
