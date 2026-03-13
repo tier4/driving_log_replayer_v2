@@ -54,7 +54,8 @@ class GroundSegmentationEvaluator(Evaluator):
 
         # load category names from dataset annotation (name -> index from category.json)
         category_path = Path(t4_dataset_path, "annotation", "category.json")
-        category_data = json.load(category_path.open())
+        with category_path.open(encoding="utf-8") as f:
+            category_data = json.load(f)
         name_to_index: dict[str, int] = {
             cat["name"]: cat["index"] for cat in category_data
         }
@@ -73,12 +74,14 @@ class GroundSegmentationEvaluator(Evaluator):
 
         # load point cloud data
         sample_data_path = Path(t4_dataset_path, "annotation", "sample_data.json")
-        sample_data = json.load(sample_data_path.open())
+        with sample_data_path.open(encoding="utf-8") as f:
+            sample_data = json.load(f)
         sample_data = list(filter(lambda d: d["filename"].split(".")[-2] == "pcd", sample_data))
 
         # load gt annotation data
         lidar_seg_json_path = Path(t4_dataset_path, "annotation", "lidarseg.json")
-        lidar_seg_data = json.load(lidar_seg_json_path.open())
+        with lidar_seg_json_path.open(encoding="utf-8") as f:
+            lidar_seg_data = json.load(f)
         token_to_seg_data = {}
         for annotation_data in lidar_seg_data:
             token_to_seg_data[annotation_data["sample_data_token"]] = annotation_data
