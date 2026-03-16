@@ -37,9 +37,10 @@ class RosbagReader:
         self._reader = SequentialReader()
         self._reader.open(storage_options, converter_options)
         self._topic_list = topic_list
-        self._topic_name2type: dict[str, Any] = {
-            topic.name: get_message(topic.type) for topic in self._reader.get_all_topics_and_types()
-        }
+        self._topic_name2type = {}
+        for topic in self._reader.get_all_topics_and_types():
+            if topic.name in topic_list:
+                self._topic_name2type[topic.name] = get_message(topic.type)
 
     def get_topic_name2type(self) -> dict[str, Any]:
         return self._topic_name2type
