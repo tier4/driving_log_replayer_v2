@@ -2,8 +2,8 @@
 Changelog for package driving_log_replayer
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-Forthcoming
------------
+3.17.3 (2026-03-16)
+-------------------
 * fix(rosbag): not read unnecessary topic to avoid error no module (`#331 <https://github.com/tier4/driving_log_replayer_v2/issues/331>`_)
 * use concatenated trajectories (`#337 <https://github.com/tier4/driving_log_replayer_v2/issues/337>`_)
 * fix(ground segmentation): add ground_label and obstacle_label definition by class name (`#336 <https://github.com/tier4/driving_log_replayer_v2/issues/336>`_)
