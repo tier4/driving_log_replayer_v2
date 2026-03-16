@@ -2,6 +2,37 @@
 Changelog for package driving_log_replayer
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
+Forthcoming
+-----------
+* fix(rosbag): not read unnecessary topic to avoid error no module (`#331 <https://github.com/tier4/driving_log_replayer_v2/issues/331>`_)
+* use concatenated trajectories (`#337 <https://github.com/tier4/driving_log_replayer_v2/issues/337>`_)
+* fix(ground segmentation): add ground_label and obstacle_label definition by class name (`#336 <https://github.com/tier4/driving_log_replayer_v2/issues/336>`_)
+  * fix(ground_segmentation): replace index class by name
+  * docs
+  * fix: spelling
+  * Potential fix for pull request finding
+  Co-authored-by: Copilot Autofix powered by AI <175728472+Copilot@users.noreply.github.com>
+  * Potential fix for pull request finding
+  Co-authored-by: Copilot Autofix powered by AI <175728472+Copilot@users.noreply.github.com>
+  * Potential fix for pull request finding
+  Co-authored-by: Copilot Autofix powered by AI <175728472+Copilot@users.noreply.github.com>
+  * pre-commit and refactor
+  ---------
+  Co-authored-by: Copilot Autofix powered by AI <175728472+Copilot@users.noreply.github.com>
+  Co-authored-by: MasatoSaeki <masato.saeki@tier4.jp>
+* feat: add dual trajectory open loop evalautioin metrics (`#335 <https://github.com/tier4/driving_log_replayer_v2/issues/335>`_)
+  * feat: add dual trajectory open loop evalautioin metrics
+  * fix: pre-commit
+  * chore: naming change
+* feat(perception_reproducer): add pub-route option (`#332 <https://github.com/tier4/driving_log_replayer_v2/issues/332>`_)
+  * add pub-route logic
+  * rename pub-route to replay route
+* chore: add output trajectory to output rosbag (`#334 <https://github.com/tier4/driving_log_replayer_v2/issues/334>`_)
+  * chore:add output trajectory to output rosbag
+  * feat: include all planning topics
+  * test: align launch config expectation with planning topic recording
+* Contributors: Kem (TiankuiXian), Masato Saeki, badai nguyen, beomseok-kimm
+
 3.17.2 (2026-03-09)
 -------------------
 

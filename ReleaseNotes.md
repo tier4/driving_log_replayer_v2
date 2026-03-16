@@ -1,5 +1,18 @@
 # Release Notes
 
+## Version 3.17.3
+
+Minor Tweak
+
+| Module                       | Feature          | Brief summary                                                | Pull request                                                        | Contributor                                       |
+| ---------------------------- | ---------------- | ------------------------------------------------------------ | ------------------------------------------------------------------- | ------------------------------------------------- |
+| `rosbag`                     | pre-task         | not read unnecessary topic to avoid error no module          | [#331](https://github.com/tier4/driving_log_replayer_v2/issues/331) | [MasatoSaeki](https://github.com/MasatoSaeki)     |
+| `rosbag`                     | topic to publish | use concatenated trajectories                                | [#337](https://github.com/tier4/driving_log_replayer_v2/issues/337) | [xtk8532704](https://github.com/xtk8532704)       |
+| `ground_segmentation`        | scenario         | add ground_label and obstacle_label definition by class name | [#336](https://github.com/tier4/driving_log_replayer_v2/issues/336) | [badai-nguyen](https://github.com/badai-nguyen)   |
+| `time_step_based_trajectory` | post-process     | add dual trajectory open loop evaluation metrics             | [#335](https://github.com/tier4/driving_log_replayer_v2/issues/335) | [beomseok-kimm](https://github.com/beomseok-kimm) |
+| `common`                     | route            | add pub-route option                                         | [#332](https://github.com/tier4/driving_log_replayer_v2/issues/332) | [xtk8532704](https://github.com/xtk8532704)       |
+| `time_step_based_trajectory` | topic            | add output trajectory to output rosbag                       | [#334](https://github.com/tier4/driving_log_replayer_v2/issues/334) | [beomseok-kimm](https://github.com/beomseok-kimm) |
+
 ## Version 3.17.2
 
 Minor Tweak
