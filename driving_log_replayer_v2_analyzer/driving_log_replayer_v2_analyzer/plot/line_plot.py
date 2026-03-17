@@ -30,6 +30,14 @@ class LinePlot(PlotBase):
             title=title,
             xaxis_title=xlabel,
             yaxis_title=ylabel,
+            margin=dict(b=80),  # noqa: C408
+            legend=dict(  # noqa: C408
+                orientation="h",
+                yanchor="top",
+                y=-0.1,
+                xanchor="center",
+                x=0.5,
+            ),
         )
 
         if use_boolean_tick:

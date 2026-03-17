@@ -16,9 +16,12 @@ import json
 from pathlib import Path
 from typing import Iterator
 
+import yaml
+
 
 class JsonlParser:
     def __init__(self, input_jsonl: Path) -> None:
+        self._input_jsonl = input_jsonl
         self._data = []
         with input_jsonl.open("r") as f:
             for line in f:
@@ -28,6 +31,25 @@ class JsonlParser:
                         self._data.append(record)
                 except json.JSONDecodeError:
                     continue
+
+    def get_evaluation_topic(self) -> str:
+        metadata_path = self._input_jsonl.parent / "result_bag" / "metadata.yaml"
+        if not metadata_path.exists():
+            return self._input_jsonl.parent.name
+
+        with metadata_path.open("r") as f:
+            metadata = yaml.safe_load(f)
+            topics = (
+                metadata.get("rosbag2_bagfile_information", {})
+                .get("topics_with_message_count", [])
+            )
+            for t in topics:
+                meta = t.get("topic_metadata", {})
+                if meta.get("type") == "sensor_msgs/msg/PointCloud2":
+                    name = meta.get("name")
+                    if "pointcloud" in name:
+                        return name
+        return self._input_jsonl.parent.name
 
     def _get_info_and_time(self) -> Iterator[tuple[dict, float]]:
         for i, record in enumerate(self._data):

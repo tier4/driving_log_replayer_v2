@@ -19,6 +19,7 @@ import click
 
 from driving_log_replayer_v2_analyzer.analysis.obstacle_segmentation import visualize as os_vis
 from driving_log_replayer_v2_analyzer.analysis.ground_segmentation import visualize as gs_vis
+from driving_log_replayer_v2_analyzer.analysis.ground_segmentation_comparison import visualize_comparison as gsc_vis
 from driving_log_replayer_v2_analyzer.data import convert_str_to_dist_type
 
 CONTEXT_SETTINGS = {"help_option_names": ["-h", "--help"]}
@@ -27,6 +28,29 @@ CONTEXT_SETTINGS = {"help_option_names": ["-h", "--help"]}
 @click.group(context_settings=CONTEXT_SETTINGS)
 def analysis() -> None:
     """Run analysis of the use case."""
+
+
+@analysis.command(context_settings=CONTEXT_SETTINGS)
+@click.argument("input_jsonls", type=str, nargs=-1)
+@click.option("--legends", "-l", type=str, multiple=True)
+@click.option("--output_dir", "-o", type=str)
+def ground_segmentation_comparison(
+    input_jsonls: list[str],
+    legends: list[str],
+    output_dir: str | None,
+) -> None:
+    """Run ground_segmentation comparison analysis."""
+    p_input_jsonls = [Path(os.path.expandvars(j)) for j in input_jsonls]
+    if output_dir is None:
+        p_output_dir = p_input_jsonls[0].parent
+    else:
+        p_output_dir = Path(os.path.expandvars(output_dir))
+    
+    # Use folder names as legends if legends are not provided or don't match input_jsonls
+    if not legends or len(legends) != len(input_jsonls):
+        legends = [p.parent.name for p in p_input_jsonls]
+    
+    gsc_vis(p_input_jsonls, list(legends), p_output_dir)
 
 
 @analysis.command(context_settings=CONTEXT_SETTINGS)
