@@ -37,6 +37,7 @@ Evaluation:
     reproduce_cool_down: 999.0 # -c, --reproduce-cool-down: cool down time for republishing (default: 80.0)
     tracked_object: false # -t, --tracked-object: publish tracked object
     search_radius: 1.5 # -r, --search-radius: search radius for searching rosbag's ego odom messages (default: 1.5)
+    move_ego_forward_after_engage_m: 0.1 # [m] after engage, perturb ego along its forward axis to let the planner start generating a moving trajectory; set 0 to disable, negative values move in the opposite direction
 
   Conditions:
     timeout_s: 80.0 # [s] scenario timeout duration, used for both engage_node and perception_reproducer_evaluator_node

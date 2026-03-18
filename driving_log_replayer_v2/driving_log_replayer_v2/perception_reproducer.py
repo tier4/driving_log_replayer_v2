@@ -61,6 +61,7 @@ class PerceptionReproducerConfig(BaseModel):
     tracked_object: bool = False
     search_radius: float = Field(1.5, ge=0.0)
     replay_route: bool = False
+    move_ego_forward_after_engage_m: float = 0.1
 
 
 class _DeprecatedTimeField:

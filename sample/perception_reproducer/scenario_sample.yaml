@@ -36,6 +36,7 @@ Evaluation:
     reproduce_cool_down: 999.0
     search_radius: 1.5
     tracked_object: false
+    move_ego_forward_after_engage_m: 0.1
   Conditions:
     terminated_after_fail_s: 10
     timeout_s: 119.797183508

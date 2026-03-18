@@ -13,6 +13,7 @@
 # limitations under the License.
 
 import json
+import math
 from typing import Any
 
 from geometry_msgs.msg import Point
@@ -39,8 +40,44 @@ def pose_str_to_dict(pose_str: str) -> dict:
     return convert_to_float(pose_dict_number)
 
 
-def arg_to_initial_pose(pose_str: str) -> PoseWithCovarianceStamped:
-    pose_dict = pose_str_to_dict(pose_str)
+def offset_pose_dict_forward(pose_dict: dict, offset_m: float) -> dict:
+    orientation = pose_dict["orientation"]
+    qx = orientation["x"]
+    qy = orientation["y"]
+    qz = orientation["z"]
+    qw = orientation["w"]
+
+    norm = math.sqrt(qx * qx + qy * qy + qz * qz + qw * qw)
+    if norm == 0.0:
+        msg = "orientation quaternion norm is zero"
+        raise ValueError(msg)
+
+    qx /= norm
+    qy /= norm
+    qz /= norm
+    qw /= norm
+
+    forward_x = 1.0 - 2.0 * (qy * qy + qz * qz)
+    forward_y = 2.0 * (qx * qy + qz * qw)
+    forward_z = 2.0 * (qx * qz - qy * qw)
+
+    position = pose_dict["position"]
+    return {
+        "position": {
+            "x": position["x"] + offset_m * forward_x,
+            "y": position["y"] + offset_m * forward_y,
+            "z": position["z"] + offset_m * forward_z,
+        },
+        "orientation": {
+            "x": orientation["x"],
+            "y": orientation["y"],
+            "z": orientation["z"],
+            "w": orientation["w"],
+        },
+    }
+
+
+def pose_dict_to_initial_pose(pose_dict: dict) -> PoseWithCovarianceStamped:
     covariance = np.array(
         [
             0.25,
@@ -89,6 +126,11 @@ def arg_to_initial_pose(pose_str: str) -> PoseWithCovarianceStamped:
         covariance=covariance,
     )
     return PoseWithCovarianceStamped(header=Header(frame_id="map"), pose=pose)
+
+
+def arg_to_initial_pose(pose_str: str) -> PoseWithCovarianceStamped:
+    pose_dict = pose_str_to_dict(pose_str)
+    return pose_dict_to_initial_pose(pose_dict)
 
 
 def arg_to_goal_pose(pose_str: str) -> Pose:
