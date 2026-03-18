@@ -71,12 +71,19 @@ USE_CASE_ARGS: list[DeclareLaunchArgument] = []
 
 
 def _get_post_engage_direct_initial_pose(conf: dict) -> str | None:
+    move_ego_forward_after_engage_m = float(conf["move_ego_forward_after_engage_m"])
+    if move_ego_forward_after_engage_m == 0.0:
+        return None
     base_pose = conf["direct_initial_pose"]
     if base_pose == "{}":
         base_pose = conf["initial_pose"]
     if base_pose == "{}":
         return None
-    shifted_pose_dict = offset_pose_dict_forward(pose_str_to_dict(base_pose), 0.1)
+    # Perturb ego after engage so the planner stops publishing a stopping trajectory.
+    shifted_pose_dict = offset_pose_dict_forward(
+        pose_str_to_dict(base_pose),
+        move_ego_forward_after_engage_m,
+    )
     return json.dumps(shifted_pose_dict)
 
 

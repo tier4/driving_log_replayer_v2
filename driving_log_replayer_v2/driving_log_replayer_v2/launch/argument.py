@@ -255,6 +255,10 @@ def update_conf_with_dataset_info(
 
     if conf["use_case"] in ["perception_reproducer"]:
         conf["timeout_s"] = yaml_obj["Evaluation"]["Conditions"]["timeout_s"]
+        reproducer_config = yaml_obj["Evaluation"].get("perception_reproducer_config", {})
+        conf["move_ego_forward_after_engage_m"] = str(
+            reproducer_config.get("move_ego_forward_after_engage_m", 0.1)
+        )
 
     # higher priority to argument than scenario
     if conf["publish_profile"] == "" and yaml_obj.get("publish_profile"):
