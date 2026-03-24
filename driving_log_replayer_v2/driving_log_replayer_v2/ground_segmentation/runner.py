@@ -15,10 +15,13 @@
 from __future__ import annotations
 
 import argparse
+from pathlib import Path
 from typing import Any
 from typing import TYPE_CHECKING
 
 import numpy as np
+import pandas as pd
+from rclpy.clock import Clock
 import ros2_numpy
 from rosbag2_py import TopicMetadata
 from std_msgs.msg import String
@@ -32,12 +35,13 @@ import driving_log_replayer_v2.perception_eval_conversions as eval_conversions
 from driving_log_replayer_v2.post_process.runner import ConvertedData
 from driving_log_replayer_v2.post_process.runner import Runner
 from driving_log_replayer_v2.post_process.runner import UseCaseInfo
+from driving_log_replayer_v2.post_process.evaluator import FrameResult
+from driving_log_replayer_v2_msgs.msg import GroundSegmentationEvalResult
 
 if TYPE_CHECKING:
     from sensor_msgs.msg import PointCloud2
     from std_msgs.msg import Header
 
-    from driving_log_replayer_v2.post_process.evaluator import FrameResult
     from driving_log_replayer_v2.result import ResultWriter
 
 
@@ -81,6 +85,49 @@ class GroundSegmentationRunner(Runner):
             degradation_topic,
             enable_analysis,
         )
+        self._result_archive_path = result_archive_path
+        self._t4_dataset_path = t4_dataset_path
+
+    def evaluate(self) -> None:
+        """Evaluate rosbag frame by frame and optionally write per-frame metrics to CSV."""
+        frame_results_list: list[dict[str, Any]] = []
+        t4dataset_id = Path(self._t4_dataset_path).stem
+        for topic_name, msg, subscribed_timestamp_nanosec in self._rosbag_manager.read_messages():
+            frame_result: FrameResult = self._evaluate_frame(
+                topic_name, msg, subscribed_timestamp_nanosec
+            )
+            if (
+                frame_result.is_valid
+                and frame_result.data is not None
+                and isinstance(frame_result.data, GroundSegmentationEvalResult)
+            ):
+                r = frame_result.data
+                frame_results_list.append(
+                    {
+                        "topic_name": topic_name,
+                        "t4dataset_id": t4dataset_id,
+                        "tp": r.tp,
+                        "fp": r.fp,
+                        "tn": r.tn,
+                        "fn": r.fn,
+                        "accuracy": r.accuracy,
+                        "precision": r.precision,
+                        "recall": r.recall,
+                        "specificity": r.specificity,
+                        "f1_score": r.f1_score,
+                    }
+                )
+            if topic_name in self._degradation_topics:
+                self._write_result(frame_result, msg.header, subscribed_timestamp_nanosec)
+        self._evaluate_on_post_process()
+        self._close()
+        self._merge_results()
+        if frame_results_list:
+            df = pd.DataFrame(frame_results_list)
+            csv_path = Path(self._result_archive_path).joinpath("analysis_result.csv")
+            df.fillna("nan").to_csv(csv_path, index=False)
+        if self._enable_analysis == "true":
+            self._analysis()
 
     def _get_use_case_info_list(
         self,
