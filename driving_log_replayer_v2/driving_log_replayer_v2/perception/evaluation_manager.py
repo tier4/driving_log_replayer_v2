@@ -30,7 +30,7 @@ if TYPE_CHECKING:
 
 
 class PerceptionEvaluationManager(EvaluationManager):
-    ML_MODELS = ("centerpoint", "pointpainting", "transfusion", "apollo")
+    ML_MODELS = ("centerpoint", "pointpainting", "transfusion", "apollo", "bevfusion")
 
     def __init__(
         self,
