@@ -71,6 +71,7 @@ def launch_autoware(context: LaunchContext) -> list:
         autoware_args = autoware_args(conf)
     launch_args |= autoware_args
     return [
+        LogInfo(msg=f"launch_autoware: launch_args={dict(launch_args)}"),
         GroupAction(
             [
                 IncludeLaunchDescription(
