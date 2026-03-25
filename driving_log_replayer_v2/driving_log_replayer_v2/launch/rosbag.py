@@ -225,6 +225,13 @@ def launch_bag_recorder(context: LaunchContext) -> list:
             pattern = f"|^{eval_topic}$"
             if pattern not in record_regex:
                 record_regex = record_regex + pattern
+        # If perception_obstacle_segmentation_pointcloud is set to a non-default topic,
+        # also record it so the custom pointcloud is captured in the rosbag.
+        seg_topic = conf.get("perception_obstacle_segmentation_pointcloud", "")
+        if seg_topic and seg_topic != "/perception/obstacle_segmentation/pointcloud":
+            pattern = f"|^{seg_topic}$"
+            if pattern not in record_regex:
+                record_regex = record_regex + pattern
         record_cmd += ["-e", record_regex]
     else:
         record_cmd += ["-e", conf["override_topics_regex"]]

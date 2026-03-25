@@ -66,12 +66,13 @@ def launch_autoware(context: LaunchContext) -> list:
         launch_args["launch_system_monitor"] = "true"
 
     launch_config = import_module(f"driving_log_replayer_v2.launch.{conf['use_case']}")
-    autoware_args = launch_config.AUTOWARE_ARGS
-    if callable(autoware_args):
-        autoware_args = autoware_args(conf)
-    launch_args |= autoware_args
+    launch_args |= launch_config.AUTOWARE_ARGS
+    # autoware_args = launch_config.AUTOWARE_ARGS
+    # if callable(autoware_args):
+    #     autoware_args = autoware_args(conf)
+    # launch_args |= autoware_args
     return [
-        LogInfo(msg=f"launch_autoware: launch_args={dict(launch_args)}"),
+    #     LogInfo(msg=f"launch_autoware: launch_args={dict(launch_args)}"),
         GroupAction(
             [
                 IncludeLaunchDescription(

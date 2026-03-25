@@ -65,15 +65,16 @@ def autoware_disable(conf: dict) -> dict[str, str]:
 
 AUTOWARE_DISABLE = autoware_disable
 
-def autoware_args(conf: dict) -> dict[str, str]:
-    args = {}
-    for key in ("perception_obstacle_segmentation_pointcloud", "data_path"):
-        if conf.get(key):
-            args[key] = conf[key]
-    return args
+# def autoware_args(conf: dict) -> dict[str, str]:
+#     args = {}
+#     for key in ("perception_obstacle_segmentation_pointcloud", "data_path"):
+#         if conf.get(key):
+#             args[key] = conf[key]
+#     return args
 
 
-AUTOWARE_ARGS = autoware_args
+# AUTOWARE_ARGS = autoware_args
+AUTOWARE_ARGS = {}
 
 NODE_PARAMS: dict[str, LaunchConfiguration] = {}
 
