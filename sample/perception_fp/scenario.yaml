@@ -53,3 +53,16 @@ Evaluation:
           z_max: null # [m] null [Do not filter by z_max] or value
         timestamp: null # null [Do not filter by timestamp] or ros timestamp value in seconds
         topic_type: [pointcloud] # List of topic types to evaluate
+      - PassRate: 99.0
+        criteria_name: test_function
+        non_detection_area: # Non-detection area specification in map coordinates
+          frame_id: map
+          polygon: # List of vertices of the polygon in map coordinates (x, y, z), clockwise order
+            - [3806.4705, 73721.0869, 19.6891]
+            - [3804.568, 73709.4626, 19.7295]
+            - [3799.1703, 73706.7849, 19.6921]
+            - [3804.503, 73720.9015, 19.6713]
+          z_min: null # [m] null [Do not filter by z_min] or value
+          z_max: null # [m] null [Do not filter by z_max] or value
+        timestamp: null # null [Do not filter by timestamp] or ros timestamp value in seconds
+        topic_type: [bbox] # List of topic types to evaluate

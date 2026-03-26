@@ -308,11 +308,7 @@ class PerceptionFP(EvaluationItem):
                         else True
                     )
                 )
-                is_in_xy = np.any(
-                    contains(
-                        prep_geom, corners[:, 0], corners[:, 1]
-                    )  # or contains(non_detection_area, Polygon(corners[:, 0:2]))
-                )
+                is_in_xy = np.any(prep_geom.intersects(Polygon(corners[:, 0:2])))
                 if is_in_z and is_in_xy:
                     fp.append(bbox)
             exist = len(fp) != 0
