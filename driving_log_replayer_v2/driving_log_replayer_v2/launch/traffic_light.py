@@ -20,6 +20,7 @@ RECORD_TOPIC = """^/tf$\
 |^/perception/.*/traffic_signals$\
 |^/perception/traffic_light_recognition/traffic_signals/markers$\
 |^/perception/traffic_light_recognition/.*/debug/rois/compressed$\
+|^/perception/traffic_light_recognition/.*/classification/.*/output/debug/image/compressed$\
 |^/driving_log_replayer_v2/.*\
 |^/driving_log_replayer/.*\
 """
