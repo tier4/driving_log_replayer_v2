@@ -26,7 +26,14 @@ from nav_msgs.msg import Odometry
 from pydantic import BaseModel
 from pydantic import Field
 from pydantic import model_validator
-from tier4_metric_msgs.msg import MetricArray
+try:
+    from tier4_metric_msgs.msg import MetricArray
+except ImportError:
+    # Define a dummy MetricArray for type hinting if the actual message is not available.
+    @dataclass
+    class MetricArray:
+        stamp: Time
+        metric_array: list
 
 from driving_log_replayer_v2.diagnostics import Conditions as DiagnosticsConditions
 from driving_log_replayer_v2.result import EvaluationItem

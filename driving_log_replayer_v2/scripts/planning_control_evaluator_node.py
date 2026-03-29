@@ -21,7 +21,15 @@ from diagnostic_msgs.msg import DiagnosticArray
 from diagnostic_msgs.msg import DiagnosticStatus
 from nav_msgs.msg import Odometry
 from std_msgs.msg import String
-from tier4_metric_msgs.msg import MetricArray
+try:
+    from tier4_metric_msgs.msg import MetricArray
+except ImportError:
+    from dataclasses import dataclass
+    # Define a dummy MetricArray for type hinting if the actual message is not available.
+    @dataclass
+    class MetricArray:
+        stamp: int
+        metric_array: list
 
 from driving_log_replayer_v2.diagnostics import DiagnosticsResult
 from driving_log_replayer_v2.evaluator import DLREvaluatorV2

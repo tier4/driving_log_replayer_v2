@@ -27,7 +27,14 @@ from nav_msgs.msg import Odometry
 import rclpy
 from rclpy.publisher import Publisher
 from std_msgs.msg import String
-from tier4_metric_msgs.msg import MetricArray
+try:
+    from tier4_metric_msgs.msg import MetricArray
+except ImportError:
+    # Define a dummy MetricArray for type hinting if the actual message is not available.
+    @dataclass
+    class MetricArray:
+        stamp: rclpy.time.Time
+        metric_array: list
 
 from driving_log_replayer_v2.diagnostics import Conditions as DiagnosticsConditions
 from driving_log_replayer_v2.diagnostics import DiagCondition

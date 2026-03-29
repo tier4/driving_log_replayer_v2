@@ -17,8 +17,22 @@ from typing import Literal
 from builtin_interfaces.msg import Time
 from pydantic import ValidationError
 import pytest
-from tier4_metric_msgs.msg import Metric as MetricMsg
-from tier4_metric_msgs.msg import MetricArray
+try:
+    from tier4_metric_msgs.msg import Metric as MetricMsg
+    from tier4_metric_msgs.msg import MetricArray
+except ImportError:
+    from dataclasses import dataclass
+    # Define dummy Metric and MetricArray for type hinting if the actual messages are not available.
+    @dataclass
+    class MetricMsg:
+        name: str
+        unit: str
+        value: str
+
+    @dataclass
+    class MetricArray:
+        stamp: Time
+        metric_array: list[MetricMsg]
 
 from driving_log_replayer_v2.planning_control import Metric
 from driving_log_replayer_v2.planning_control import MetricCondition

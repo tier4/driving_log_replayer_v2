@@ -43,7 +43,15 @@ if TYPE_CHECKING:
 
     from builtin_interfaces.msg import Time as Stamp
     from nav_msgs.msg import Odometry
-    from tier4_metric_msgs.msg import MetricArray
+    try:
+        from tier4_metric_msgs.msg import MetricArray
+    except ImportError:
+        from dataclasses import dataclass
+        # Define a dummy MetricArray for type hinting if the actual message is not available.
+        @dataclass
+        class MetricArray:
+            stamp: Time
+            metric_array: list
 
 UNIT_MAP = {
     "nanosecond": 1e-9,
