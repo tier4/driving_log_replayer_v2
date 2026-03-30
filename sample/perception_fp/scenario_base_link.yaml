@@ -5,7 +5,7 @@ SensorModel: sample_sensor_kit
 VehicleModel: sample_vehicle
 Evaluation:
   UseCaseName: perception_fp
-  UseCaseFormatVersion: 0.1.0
+  UseCaseFormatVersion: 0.2.0
   Datasets:
     - sample_dataset:
         VehicleId: default
@@ -24,6 +24,7 @@ Evaluation:
           z_max: null # [m] null [Do not filter by z_max] or value
         timestamp: null # null [Do not filter by timestamp] or ros timestamp value in seconds
         topic_type: [bbox] # List of topic types to evaluate
+        label: [unknown] # List of labels to evaluate, null [Do not filter by label] or list of label strings
       - PassRate: 99.0
         criteria_name: a4_-1
         non_detection_area: # Non-detection area specification in base_link coordinates
@@ -37,6 +38,7 @@ Evaluation:
           z_max: null # [m] null [Do not filter by z_max] or value
         timestamp: null # null [Do not filter by timestamp] or ros timestamp value in seconds
         topic_type: [bbox] # List of topic types to evaluate
+        label: [unknown] # List of labels to evaluate, null [Do not filter by label] or list of label strings
       - PassRate: 99.0
         criteria_name: a4_0
         non_detection_area: # Non-detection area specification in base_link coordinates
@@ -50,6 +52,7 @@ Evaluation:
           z_max: null # [m] null [Do not filter by z_max] or value
         timestamp: null # null [Do not filter by timestamp] or ros timestamp value in seconds
         topic_type: [bbox] # List of topic types to evaluate
+        label: [unknown] # List of labels to evaluate, null [Do not filter by label] or list of label strings
       - PassRate: 99.0
         criteria_name: a4_1
         non_detection_area: # Non-detection area specification in base_link coordinates
@@ -63,6 +66,7 @@ Evaluation:
           z_max: null # [m] null [Do not filter by z_max] or value
         timestamp: null # null [Do not filter by timestamp] or ros timestamp value in seconds
         topic_type: [bbox] # List of topic types to evaluate
+        label: [unknown] # List of labels to evaluate, null [Do not filter by label] or list of label strings
       - PassRate: 99.0
         criteria_name: a3_-2
         non_detection_area: # Non-detection area specification in base_link coordinates
@@ -76,6 +80,7 @@ Evaluation:
           z_max: null # [m] null [Do not filter by z_max] or value
         timestamp: null # null [Do not filter by timestamp] or ros timestamp value in seconds
         topic_type: [bbox] # List of topic types to evaluate
+        label: [unknown] # List of labels to evaluate, null [Do not filter by label] or list of label strings
       - PassRate: 99.0
         criteria_name: a3_-1
         non_detection_area: # Non-detection area specification in base_link coordinates
@@ -89,6 +94,7 @@ Evaluation:
           z_max: null # [m] null [Do not filter by z_max] or value
         timestamp: null # null [Do not filter by timestamp] or ros timestamp value in seconds
         topic_type: [bbox] # List of topic types to evaluate
+        label: [unknown] # List of labels to evaluate, null [Do not filter by label] or list of label strings
       - PassRate: 99.0
         criteria_name: a3_0
         non_detection_area: # Non-detection area specification in base_link coordinates
@@ -102,6 +108,7 @@ Evaluation:
           z_max: null # [m] null [Do not filter by z_max] or value
         timestamp: null # null [Do not filter by timestamp] or ros timestamp value in seconds
         topic_type: [bbox] # List of topic types to evaluate
+        label: [unknown] # List of labels to evaluate, null [Do not filter by label] or list of label strings
       - PassRate: 99.0
         criteria_name: a3_1
         non_detection_area: # Non-detection area specification in base_link coordinates
@@ -115,6 +122,7 @@ Evaluation:
           z_max: null # [m] null [Do not filter by z_max] or value
         timestamp: null # null [Do not filter by timestamp] or ros timestamp value in seconds
         topic_type: [bbox] # List of topic types to evaluate
+        label: [unknown] # List of labels to evaluate, null [Do not filter by label] or list of label strings
       - PassRate: 99.0
         criteria_name: a2_-2
         non_detection_area: # Non-detection area specification in base_link coordinates
@@ -128,6 +136,7 @@ Evaluation:
           z_max: null # [m] null [Do not filter by z_max] or value
         timestamp: null # null [Do not filter by timestamp] or ros timestamp value in seconds
         topic_type: [bbox] # List of topic types to evaluate
+        label: [unknown] # List of labels to evaluate, null [Do not filter by label] or list of label strings
       - PassRate: 99.0
         criteria_name: a2_-1
         non_detection_area: # Non-detection area specification in base_link coordinates
@@ -141,6 +150,7 @@ Evaluation:
           z_max: null # [m] null [Do not filter by z_max] or value
         timestamp: null # null [Do not filter by timestamp] or ros timestamp value in seconds
         topic_type: [bbox] # List of topic types to evaluate
+        label: [unknown] # List of labels to evaluate, null [Do not filter by label] or list of label strings
       - PassRate: 99.0
         criteria_name: a2_0
         non_detection_area: # Non-detection area specification in base_link coordinates
@@ -154,6 +164,7 @@ Evaluation:
           z_max: null # [m] null [Do not filter by z_max] or value
         timestamp: null # null [Do not filter by timestamp] or ros timestamp value in seconds
         topic_type: [bbox] # List of topic types to evaluate
+        label: [unknown] # List of labels to evaluate, null [Do not filter by label] or list of label strings
       - PassRate: 99.0
         criteria_name: a2_1
         non_detection_area: # Non-detection area specification in base_link coordinates
@@ -167,6 +178,7 @@ Evaluation:
           z_max: null # [m] null [Do not filter by z_max] or value
         timestamp: null # null [Do not filter by timestamp] or ros timestamp value in seconds
         topic_type: [bbox] # List of topic types to evaluate
+        label: [unknown] # List of labels to evaluate, null [Do not filter by label] or list of label strings
       - PassRate: 99.0
         criteria_name: a1_-2
         non_detection_area: # Non-detection area specification in base_link coordinates
@@ -180,6 +192,7 @@ Evaluation:
           z_max: null # [m] null [Do not filter by z_max] or value
         timestamp: null # null [Do not filter by timestamp] or ros timestamp value in seconds
         topic_type: [bbox] # List of topic types to evaluate
+        label: [unknown] # List of labels to evaluate, null [Do not filter by label] or list of label strings
       - PassRate: 99.0
         criteria_name: a1_-1
         non_detection_area: # Non-detection area specification in base_link coordinates
@@ -193,6 +206,7 @@ Evaluation:
           z_max: null # [m] null [Do not filter by z_max] or value
         timestamp: null # null [Do not filter by timestamp] or ros timestamp value in seconds
         topic_type: [bbox] # List of topic types to evaluate
+        label: [unknown] # List of labels to evaluate, null [Do not filter by label] or list of label strings
       - PassRate: 99.0
         criteria_name: a1_0
         non_detection_area: # Non-detection area specification in base_link coordinates
@@ -206,6 +220,7 @@ Evaluation:
           z_max: null # [m] null [Do not filter by z_max] or value
         timestamp: null # null [Do not filter by timestamp] or ros timestamp value in seconds
         topic_type: [bbox] # List of topic types to evaluate
+        label: [unknown] # List of labels to evaluate, null [Do not filter by label] or list of label strings
       - PassRate: 99.0
         criteria_name: a1_1
         non_detection_area: # Non-detection area specification in base_link coordinates
@@ -219,6 +234,7 @@ Evaluation:
           z_max: null # [m] null [Do not filter by z_max] or value
         timestamp: null # null [Do not filter by timestamp] or ros timestamp value in seconds
         topic_type: [bbox] # List of topic types to evaluate
+        label: [unknown] # List of labels to evaluate, null [Do not filter by label] or list of label strings
       - PassRate: 99.0
         criteria_name: a0_-2
         non_detection_area: # Non-detection area specification in base_link coordinates
@@ -232,6 +248,7 @@ Evaluation:
           z_max: null # [m] null [Do not filter by z_max] or value
         timestamp: null # null [Do not filter by timestamp] or ros timestamp value in seconds
         topic_type: [bbox] # List of topic types to evaluate
+        label: [unknown] # List of labels to evaluate, null [Do not filter by label] or list of label strings
       - PassRate: 99.0
         criteria_name: a0_-1
         non_detection_area: # Non-detection area specification in base_link coordinates
@@ -245,6 +262,7 @@ Evaluation:
           z_max: null # [m] null [Do not filter by z_max] or value
         timestamp: null # null [Do not filter by timestamp] or ros timestamp value in seconds
         topic_type: [bbox] # List of topic types to evaluate
+        label: [unknown] # List of labels to evaluate, null [Do not filter by label] or list of label strings
       - PassRate: 99.0
         criteria_name: a0_0
         non_detection_area: # Non-detection area specification in base_link coordinates
@@ -258,6 +276,7 @@ Evaluation:
           z_max: null # [m] null [Do not filter by z_max] or value
         timestamp: null # null [Do not filter by timestamp] or ros timestamp value in seconds
         topic_type: [bbox] # List of topic types to evaluate
+        label: [unknown] # List of labels to evaluate, null [Do not filter by label] or list of label strings
       - PassRate: 99.0
         criteria_name: a0_1
         non_detection_area: # Non-detection area specification in base_link coordinates
@@ -271,3 +290,4 @@ Evaluation:
           z_max: null # [m] null [Do not filter by z_max] or value
         timestamp: null # null [Do not filter by timestamp] or ros timestamp value in seconds
         topic_type: [bbox] # List of topic types to evaluate
+        label: [unknown] # List of labels to evaluate, null [Do not filter by label] or list of label strings

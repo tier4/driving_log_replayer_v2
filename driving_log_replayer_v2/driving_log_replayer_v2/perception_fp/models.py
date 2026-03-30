@@ -189,6 +189,14 @@ class Criteria(BaseModel):
     non_detection_area: NonDetectionArea
     timestamp: list[TimeStamp] | None
     topic_type: list[Literal["bbox", "pointcloud"]]
+    label: (
+        list[
+            Literal[
+                "unknown", "car", "truck", "bus", "trailer", "motorcycle", "bicycle", "pedestrian"
+            ]
+        ]
+        | None
+    ) = None  # None means all labels are included
 
     def get_type(self) -> tuple[type, ...]:
         return tuple(DynamicObject if topic == "bbox" else np.ndarray for topic in self.topic_type)
@@ -209,7 +217,7 @@ class Conditions(BaseModel):
 
 class Evaluation(BaseModel):
     UseCaseName: Literal["perception_fp"]
-    UseCaseFormatVersion: Literal["0.1.0"]
+    UseCaseFormatVersion: Literal["0.1.0", "0.2.0"]
     Conditions: Conditions
     Datasets: list[dict]
 
@@ -295,6 +303,11 @@ class PerceptionFP(EvaluationItem):
             fp: list[DynamicObject] = []
             prep_geom = prep(non_detection_area.geom)
             for bbox in data:
+                if (
+                    self.condition.label is not None
+                    and bbox.semantic_label.name not in self.condition.label
+                ):
+                    continue
                 corners: np.ndarray = bbox.get_corners()  # shape: (N, 3)
                 is_in_z = np.any(
                     (
