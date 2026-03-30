@@ -143,7 +143,7 @@ InitialPose:
 
 #### DirectInitialPose
 
-（オプション）`/localization/initialize` の service を call するための初期ポーズを指定する。InitialPoseとの違いは[autoware_pose_initializer](https://github.com/autowarefoundation/autoware_core/tree/main/localization/autoware_pose_initializer)を参照。
+（オプション）`/localization/initialize` の service を call するための初期ポーズを指定する。InitialPoseとの違いは[autoware_pose_initializer](https://github.com/autowarefoundation/autoware_core/tree/main/localization/autoware_pose_initializer)を参照。InitialPose と DirectInitialPose の両方が指定された場合は、DirectInitialPose が優先され、InitialPose は無視される。
 
 ```yaml
 DirectInitialPose:
