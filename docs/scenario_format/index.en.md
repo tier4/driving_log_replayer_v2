@@ -41,6 +41,7 @@ Evaluation:
     - DatasetName:
         VehicleId: String
         goal_method: String # optional, default: set_goal_from_scenario
+        time_offset: Dictionary # optional, default: null
 include_use_case:
   UseCaseName: String
   UseCaseFormatVersion: String
@@ -130,6 +131,16 @@ If you don't know `vehicle_id`, set `default`.
 | ------------------------ | -------------------------------------------------------------------------------------------------------------------------------------- |
 | `set_goal_from_scenario` | (Default) Use `GoalPose` from scenario to set goal. Skip setting goal if `GoalPose` is not specified.                                  |
 | `set_goal_from_rosbag`   | Read the last `/localization/kinematic_state` from rosbag and use its position as the goal. Even if `GoalPose` is specified ignore it. |
+
+#### time_offset
+
+(Optional) Specify the start time and duration of rosbag playback. The start time is specified as a relative time from the start of the rosbag, not based on timestamp. Place it at the same level as `GoalPose` in the dataset section of the scenario YAML.
+
+```yaml
+time_offset:
+  start: float # the start time [s]
+  duration: float # the duration [s]
+```
 
 ### include_use_case
 

@@ -232,6 +232,7 @@ def update_conf_with_dataset_info(
     conf["direct_initial_pose"] = json.dumps(dataset_info.get("DirectInitialPose", {}))
     conf["goal_pose"] = json.dumps(dataset_info.get("GoalPose", {}))
     conf["goal_method"] = dataset_info.get("goal_method", "set_goal_from_scenario")
+    conf["time_offset"] = json.dumps(dataset_info.get("time_offset", {}))
     conf["t4_dataset_path"] = t4_dataset_path.as_posix()
     if "vehicle_model" not in conf:
         conf["vehicle_model"] = yaml_obj["VehicleModel"]
@@ -298,6 +299,9 @@ def ensure_arg_compatibility(context: LaunchContext) -> list:
         ),
         LogInfo(
             msg=f"{check_launch_component(conf)=}",
+        ),
+        LogInfo(
+            msg=f"{conf['time_offset']=}",
         ),
         LogInfo(
             msg=f"{conf['initial_pose']=}, {conf['direct_initial_pose']=}",
