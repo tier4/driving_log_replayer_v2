@@ -40,6 +40,9 @@ Evaluation:
   Datasets:
     - DatasetName:
         VehicleId: String
+        InitialPose: Dictionary # optional, 省略時は {} として扱われる (無効化する場合はキーを省略するか {} を指定すること)
+        DirectInitialPose: Dictionary # optional, 省略時は {} として扱われる (無効化する場合はキーを省略するか {} を指定すること)
+        GoalPose: Dictionary # optional, 省略時は {} として扱われる (無効化する場合はキーを省略するか {} を指定すること)
         goal_method: String # optional, default: set_goal_from_scenario
 include_use_case:
   UseCaseName: String
@@ -120,6 +123,57 @@ t4_datasetのデータセット名
 autoware_launch/launch/logging_simulator.launch.xml の引数の vehicle_id を指定する。
 
 車両 ID が不明な場合は、`default` を設定する。
+
+#### InitialPose
+
+（オプション）`/localization/initialize` の service を call するための初期ポーズを指定する。
+
+```yaml
+InitialPose:
+  position:
+    x: float
+    y: float
+    z: float
+  orientation:
+    x: float
+    y: float
+    z: float
+    w: float
+```
+
+#### DirectInitialPose
+
+（オプション）`/localization/initialize` の service を call するための初期ポーズを指定する。InitialPoseとの違いは[autoware_pose_initializer](https://github.com/autowarefoundation/autoware_core/tree/main/localization/autoware_pose_initializer)を参照。InitialPose と DirectInitialPose の両方が指定された場合は、DirectInitialPose が優先され、InitialPose は無視される。
+
+```yaml
+DirectInitialPose:
+  position:
+    x: float
+    y: float
+    z: float
+  orientation:
+    x: float
+    y: float
+    z: float
+    w: float
+```
+
+#### GoalPose
+
+（オプション）`/api/routing/set_route_points` の service を call するためのゴールポーズを指定する。
+
+```yaml
+GoalPose:
+  position:
+    x: float
+    y: float
+    z: float
+  orientation:
+    x: float
+    y: float
+    z: float
+    w: float
+```
 
 #### goal_method
 

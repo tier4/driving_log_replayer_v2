@@ -40,6 +40,9 @@ Evaluation:
   Datasets:
     - DatasetName:
         VehicleId: String
+        InitialPose: Dictionary # optional; omit this key or use {} to disable the pose
+        DirectInitialPose: Dictionary # optional; omit this key or use {} to disable the pose
+        GoalPose: Dictionary # optional; omit this key or use {} to disable the pose
         goal_method: String # optional, default: set_goal_from_scenario
 include_use_case:
   UseCaseName: String
@@ -122,9 +125,60 @@ Specify `vehicle_id` as an argument in `autoware_launch/launch/logging_simulator
 
 If you don't know `vehicle_id`, set `default`.
 
+#### InitialPose
+
+(Optional) Specify the initial pose for calling the `/localization/initialize` service.
+
+```yaml
+InitialPose:
+  position:
+    x: float
+    y: float
+    z: float
+  orientation:
+    x: float
+    y: float
+    z: float
+    w: float
+```
+
+#### DirectInitialPose
+
+(Optional) Specify the initial pose for calling the `/localization/initialize` service. For the difference with InitialPose, refer to [autoware_pose_initializer](https://github.com/autowarefoundation/autoware_core/tree/main/localization/autoware_pose_initializer). If both `InitialPose` and `DirectInitialPose` are specified, `DirectInitialPose` takes precedence and `InitialPose` is ignored; it is recommended to specify at most one of them.
+
+```yaml
+DirectInitialPose:
+  position:
+    x: float
+    y: float
+    z: float
+  orientation:
+    x: float
+    y: float
+    z: float
+    w: float
+```
+
+#### GoalPose
+
+(Optional) Specify the goal pose for calling the `/api/routing/set_route_points` service.
+
+```yaml
+GoalPose:
+  position:
+    x: float
+    y: float
+    z: float
+  orientation:
+    x: float
+    y: float
+    z: float
+    w: float
+```
+
 #### goal_method
 
-(Optional) Specifies how the goad pose is set.
+(Optional) Specifies how the goal pose is set.
 
 | Value                    | Description                                                                                                                            |
 | ------------------------ | -------------------------------------------------------------------------------------------------------------------------------------- |
