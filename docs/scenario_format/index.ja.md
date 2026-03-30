@@ -41,7 +41,7 @@ Evaluation:
     - DatasetName:
         VehicleId: String
         goal_method: String # optional, default: set_goal_from_scenario
-        time_offset: Dictionary # optional, default: null
+        time_offset: Dictionary # optional, default: {}
 include_use_case:
   UseCaseName: String
   UseCaseFormatVersion: String

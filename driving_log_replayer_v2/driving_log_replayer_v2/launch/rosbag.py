@@ -140,7 +140,7 @@ def get_pre_task_before_play_rosbag(
     )
 
 
-def get_rosbag_timestamp_offset(play_cmd: list[str], context: LaunchContext) -> list[str, float]:
+def get_rosbag_timestamp_offset(play_cmd: list[str], context: LaunchContext) -> list[str]:
     conf = context.launch_configurations
     if conf["time_offset"] == "{}":
         return play_cmd
