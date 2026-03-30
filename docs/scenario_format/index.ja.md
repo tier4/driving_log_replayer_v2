@@ -40,9 +40,9 @@ Evaluation:
   Datasets:
     - DatasetName:
         VehicleId: String
-        InitialPose: Dictionary # optional, default: null
-        DirectInitialPose: Dictionary # optional, default: null
-        GoalPose: Dictionary # optional, default: null
+        InitialPose: Dictionary # optional, 省略時は {} として扱われる (無効化する場合はキーを省略するか {} を指定すること)
+        DirectInitialPose: Dictionary # optional, 省略時は {} として扱われる (無効化する場合はキーを省略するか {} を指定すること)
+        GoalPose: Dictionary # optional, 省略時は {} として扱われる (無効化する場合はキーを省略するか {} を指定すること)
         goal_method: String # optional, default: set_goal_from_scenario
 include_use_case:
   UseCaseName: String
