@@ -13,6 +13,7 @@
 # limitations under the License.
 
 from importlib import import_module
+import json
 from pathlib import Path
 
 from ament_index_python.packages import get_package_prefix
@@ -139,6 +140,20 @@ def get_pre_task_before_play_rosbag(
     )
 
 
+def get_rosbag_timestamp_offset(play_cmd: list[str], context: LaunchContext) -> list[str]:
+    conf = context.launch_configurations
+    if conf["time_offset"] == "{}":
+        return play_cmd
+    time_offset = json.loads(conf["time_offset"])
+    start = time_offset.get("start", None)
+    if start is not None:
+        play_cmd.extend(["--start-offset", str(start)])
+    duration = time_offset.get("duration", None)
+    if duration is not None:
+        play_cmd = ["timeout", "--preserve-status", str(duration), *play_cmd]
+    return play_cmd
+
+
 def launch_bag_player(
     context: LaunchContext,
 ) -> IncludeLaunchDescription:
@@ -155,6 +170,8 @@ def launch_bag_player(
         "--qos-profile-overrides-path",
         QOS_PROFILE_PATH_STR,
     ]
+    # timestamp offset
+    play_cmd = get_rosbag_timestamp_offset(play_cmd, context)
     # topics
     publish_list = ["--topics"]
     publish_list.extend(user_defined_publish(conf))

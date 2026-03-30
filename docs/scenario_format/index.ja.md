@@ -44,6 +44,7 @@ Evaluation:
         DirectInitialPose: Dictionary # optional, 省略時は {} として扱われる (無効化する場合はキーを省略するか {} を指定すること)
         GoalPose: Dictionary # optional, 省略時は {} として扱われる (無効化する場合はキーを省略するか {} を指定すること)
         goal_method: String # optional, default: set_goal_from_scenario
+        time_offset: Dictionary # optional, default: {}
 include_use_case:
   UseCaseName: String
   UseCaseFormatVersion: String
@@ -183,6 +184,16 @@ GoalPose:
 | ------------------------ | ----------------------------------------------------------------------------------------------------------------------------------- |
 | `set_goal_from_scenario` | （デフォルト）シナリオの `GoalPose` を使用してゴールを設定する。`GoalPose` が未指定の場合は何もしない。                             |
 | `set_goal_from_rosbag`   | rosbagの最後の `/localization/kinematic_state` を読み取り、その位置をゴールとして使用する。 `GoalPose` が指定されていても無視する。 |
+
+#### time_offset
+
+（オプション）rosbagの再生開始時刻と再生時間を指定する。前者はtimestamp基準ではなく、rosbagの開始からの相対時間で指定する。シナリオYAMLのデータセットセクションで `GoalPose` と同じ階層に配置する。
+
+```yaml
+time_offset:
+  start: float # rosbag再生開始時刻 [s]
+  duration: float # rosbag再生時間 [s]
+```
 
 ### include_use_case
 
