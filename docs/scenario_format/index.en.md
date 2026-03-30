@@ -144,7 +144,7 @@ InitialPose:
 
 #### DirectInitialPose
 
-(Optional) Specify the initial pose for calling the `/localization/initialize` service. For the difference with InitialPose, refer to [autoware_pose_initializer](https://github.com/autowarefoundation/autoware_core/tree/main/localization/autoware_pose_initializer).
+(Optional) Specify the initial pose for calling the `/localization/initialize` service. For the difference with InitialPose, refer to [autoware_pose_initializer](https://github.com/autowarefoundation/autoware_core/tree/main/localization/autoware_pose_initializer). If both `InitialPose` and `DirectInitialPose` are specified, `DirectInitialPose` takes precedence and `InitialPose` is ignored; it is recommended to specify at most one of them.
 
 ```yaml
 DirectInitialPose:
