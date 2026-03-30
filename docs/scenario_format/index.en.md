@@ -40,6 +40,9 @@ Evaluation:
   Datasets:
     - DatasetName:
         VehicleId: String
+        InitialPose: Dictionary # optional, default: null
+        DirectInitialPose: Dictionary # optional, default: null
+        GoalPose: Dictionary # optional, default: null
         goal_method: String # optional, default: set_goal_from_scenario
 include_use_case:
   UseCaseName: String
@@ -121,6 +124,57 @@ dataset name of t4_dataset
 Specify `vehicle_id` as an argument in `autoware_launch/launch/logging_simulator.launch.xml`
 
 If you don't know `vehicle_id`, set `default`.
+
+#### InitialPose
+
+(Optional) Specify the initial pose for calling the `/localization/initialize` service.
+
+```yaml
+InitialPose:
+  position:
+    x: float
+    y: float
+    z: float
+  orientation:
+    x: float
+    y: float
+    z: float
+    w: float
+```
+
+#### DirectInitialPose
+
+(Optional) Specify the initial pose for calling the `/localization/initialize` service. For the difference with InitialPose, refer to [autoware_pose_initializer](https://github.com/autowarefoundation/autoware_core/tree/main/localization/autoware_pose_initializer).
+
+```yaml
+DirectInitialPose:
+  position:
+    x: float
+    y: float
+    z: float
+  orientation:
+    x: float
+    y: float
+    z: float
+    w: float
+```
+
+#### GoalPose
+
+(Optional) Specify the goal pose for calling the `/api/routing/set_route_points` service.
+
+```yaml
+GoalPose:
+  position:
+    x: float
+    y: float
+    z: float
+  orientation:
+    x: float
+    y: float
+    z: float
+    w: float
+```
 
 #### goal_method
 
