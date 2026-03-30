@@ -187,7 +187,7 @@ def launch_bag_player(
         ExecuteProcess(
             cmd=play_cmd,
             output="screen",
-            on_exit=[ExecuteProcess(cmd=["sleep", "10"], on_exit=[ShutdownOnce()])],
+            on_exit=[ExecuteProcess(cmd=["sleep", "3"], on_exit=[ShutdownOnce()])],
         )  # If compression is enabled, it takes a long time to write the record, and if the play finishes immediately, the record will not be finished in time.
         if conf["record_only"] == "true"
         else ExecuteProcess(cmd=play_cmd, output="screen")
