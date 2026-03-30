@@ -178,7 +178,7 @@ GoalPose:
 
 #### goal_method
 
-(Optional) Specifies how the goad pose is set.
+(Optional) Specifies how the goal pose is set.
 
 | Value                    | Description                                                                                                                            |
 | ------------------------ | -------------------------------------------------------------------------------------------------------------------------------------- |
