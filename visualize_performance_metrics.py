@@ -667,7 +667,7 @@ def export_metrics_to_csv(metrics_list: List[PerformanceMetrics], output_dir: Pa
                     ])
     print(f"Exported unified statistics: {stats_csv_path}")
 
-def plot_metrics(metrics_list: List[PerformanceMetrics], output_dir: Path, cp_prefix: str):
+def plot_metrics(metrics_list: List[PerformanceMetrics], output_dir: Path, cp_prefix: str, y_limit: Optional[float] = None):
     """Output time-series and statistics graphs."""
     cp_topics = {k: v.replace(_CP_DEFAULT_PREFIX, cp_prefix) for k, v in CP_TOPICS.items()}
 
@@ -736,7 +736,12 @@ def plot_metrics(metrics_list: List[PerformanceMetrics], output_dir: Path, cp_pr
             all_values.extend(vs)
             plt.plot(ts, vs, label=label, alpha=0.8, linewidth=1.5, color=color)
 
-        if all_values:
+        if y_limit is not None:
+            plt.ylim(0, y_limit)
+            plt.text(0.01, 0.98, f"Note: Y-axis limited at {y_limit:.1f}ms (User specified)", 
+                     transform=plt.gca().transAxes, fontsize=9, verticalalignment='top',
+                     bbox=dict(boxstyle='round', facecolor='white', alpha=0.5))
+        elif all_values:
             # Set Y-limit to 98th percentile * 1.2 to cut off initial spikes
             y_upper = np.percentile(all_values, 98) * 1.2
             plt.ylim(0, y_upper)
@@ -812,6 +817,8 @@ def main():
                         help="Start offset for Gantt chart [s] (default: near center)")
     parser.add_argument("--contention-bin", type=float, default=1.0,
                         help="Bin width for contention rate aggregation [s] (default: 1.0)")
+    parser.add_argument("--y-limit", type=float, default=None,
+                        help="Upper limit for Y-axis in overlay plots [ms]")
     args = parser.parse_args()
 
     input_paths = [Path(d) for d in args.input_dirs]
@@ -856,7 +863,7 @@ def main():
     print("\nRunning visualization...")
 
     # existing time-series and statistics graphs
-    plot_metrics(metrics_list, output_dir, args.cp_prefix)
+    plot_metrics(metrics_list, output_dir, args.cp_prefix, args.y_limit)
 
     # export metrics to CSV
     export_metrics_to_csv(metrics_list, output_dir, args.cp_prefix)
