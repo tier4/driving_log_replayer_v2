@@ -724,15 +724,30 @@ def plot_metrics(metrics_list: List[PerformanceMetrics], output_dir: Path, cp_pr
 
         colors = plt.cm.tab10(np.linspace(0, 1, len(available)))
         plt.figure(figsize=(14, 8))
+        
+        # Collect all values to calculate a robust Y-limit
+        all_values = []
         for (topic, label), color in zip(available, colors):
             ts, vs = metrics.get_values(topic)
+            if len(vs) == 0: continue
             ts = ts - ts[0]
+            
+            # Use only values within 98th percentile for Y-limit calculation
+            all_values.extend(vs)
             plt.plot(ts, vs, label=label, alpha=0.8, linewidth=1.5, color=color)
+
+        if all_values:
+            # Set Y-limit to 98th percentile * 1.2 to cut off initial spikes
+            y_upper = np.percentile(all_values, 98) * 1.2
+            plt.ylim(0, y_upper)
+            plt.text(0.01, 0.98, f"Note: Y-axis clipped at 98th percentile ({y_upper:.1f}ms)", 
+                     transform=plt.gca().transAxes, fontsize=9, verticalalignment='top',
+                     bbox=dict(boxstyle='round', facecolor='white', alpha=0.5))
 
         plt.xlabel("Time [s]", fontsize=13)
         plt.ylabel("Value [ms]", fontsize=13)
-        plt.title(f"All Performance Metrics - {metrics.name}", fontsize=15, fontweight="bold")
-        plt.legend(loc="best", fontsize=10, framealpha=0.9)
+        plt.title(f"All Performance Metrics (Outliers Clipped) - {metrics.name}", fontsize=15, fontweight="bold")
+        plt.legend(loc="upper right", fontsize=10, framealpha=0.9)
         plt.grid(True, alpha=0.3)
         plt.tight_layout()
         safe_name = metrics.name.replace("/", "_").replace(" ", "_")
