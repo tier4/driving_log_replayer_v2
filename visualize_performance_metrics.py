@@ -155,6 +155,88 @@ class PerformanceMetrics:
             ))
         return windows
 
+    def get_input_latency(self, model_name: str, topics: Dict[str, str]) -> Tuple[np.ndarray, np.ndarray]:
+        """Calculate input_latency = pipeline_latency - total_processing_time."""
+        p_ts, p_vs = self.get_values(topics["pipeline_latency_ms"])
+        t_key = "total_ms" if model_name == "PTv3" else "processing_time_ms"
+        t_ts, t_vs = self.get_values(topics[t_key])
+
+        # Align by timestamp (approximate)
+        if len(p_vs) == 0 or len(t_vs) == 0:
+            return np.array([]), np.array([])
+        
+        # Simple index-based alignment assuming 1:1 message ratio
+        n = min(len(p_vs), len(t_vs))
+        input_latencies = p_vs[:n] - t_vs[:n]
+        return p_ts[:n], input_latencies
+
+# --------------------------------------------------------------------------- #
+# GPU contention analysis
+# --------------------------------------------------------------------------- #
+
+def plot_contention_impact(
+    metrics: PerformanceMetrics,
+    cp_windows: List[ExecutionWindow],
+    ptv3_windows: List[ExecutionWindow],
+    output_dir: Path,
+):
+    """Compare inference_ms and pipeline_latency for contended vs non-contended frames."""
+    if not cp_windows or not ptv3_windows:
+        return
+
+    overlaps = detect_inference_overlaps(cp_windows, ptv3_windows)
+    
+    def is_contended(window: ExecutionWindow):
+        for s, e in overlaps:
+            if max(window.inference_start, s) < min(window.inference_end, e):
+                return True
+        return False
+
+    results = {}
+    for name, windows, topics in [
+        ("PTv3", ptv3_windows, PTV3_TOPICS),
+        ("CenterPoint", cp_windows, CP_TOPICS)
+    ]:
+        if not windows: continue
+        
+        contended_inf = [w.inference_ms for w in windows if is_contended(w)]
+        normal_inf    = [w.inference_ms for w in windows if not is_contended(w)]
+        
+        # Get pipeline latency
+        _, p_vs = metrics.get_values(topics["pipeline_latency_ms"])
+        # Align pipeline latency with windows (assuming 1:1)
+        p_vs = p_vs[:len(windows)]
+        contended_pipe = [p_vs[i] for i, w in enumerate(windows) if is_contended(w)]
+        normal_pipe    = [p_vs[i] for i, w in enumerate(windows) if not is_contended(w)]
+
+        results[name] = {
+            "inf": (normal_inf, contended_inf),
+            "pipe": (normal_pipe, contended_pipe)
+        }
+
+    # Plotting
+    fig, axes = plt.subplots(len(results), 2, figsize=(14, 5 * len(results)))
+    if len(results) == 1: axes = [axes]
+
+    for i, (model, data) in enumerate(results.items()):
+        # Inference comparison
+        ax_inf = axes[i][0]
+        ax_inf.boxplot(data["inf"], labels=["Normal", "Contended"])
+        ax_inf.set_title(f"{model} - Inference Time Impact")
+        ax_inf.set_ylabel("ms")
+        ax_inf.grid(True, alpha=0.3)
+
+        # Pipeline latency comparison
+        ax_pipe = axes[i][1]
+        ax_pipe.boxplot(data["pipe"], labels=["Normal", "Contended"])
+        ax_pipe.set_title(f"{model} - Pipeline Latency Impact")
+        ax_pipe.set_ylabel("ms")
+        ax_pipe.grid(True, alpha=0.3)
+
+    plt.tight_layout()
+    plt.savefig(output_dir / f"contention_impact_{metrics.name}.png", dpi=150)
+    plt.close()
+
 
 # --------------------------------------------------------------------------- #
 # ROS bag reading
@@ -716,11 +798,27 @@ def main():
                 dataset_name=metrics.name,
                 bin_sec=args.contention_bin,
             )
+            # Add contention impact analysis
+            plot_contention_impact(metrics, cp_windows, ptv3_windows, output_dir)
         else:
             if not cp_windows:
                 print(f"  Warning: no CenterPoint stage timing data available")
             if not ptv3_windows:
                 print(f"  Warning: no PTv3 stage timing data available")
+
+        # Plot Input Latency Breakdown
+        plt.figure(figsize=(14, 6))
+        for model_name, topics in [("PTv3", PTV3_TOPICS), ("CenterPoint", cp_topics)]:
+            ts, input_lat = metrics.get_input_latency(model_name, topics)
+            if len(ts) > 0:
+                plt.plot(ts - ts[0], input_lat, label=f"{model_name} Input Latency")
+        plt.title(f"Input Latency Breakdown - {metrics.name}")
+        plt.xlabel("Time [s]")
+        plt.ylabel("ms")
+        plt.legend()
+        plt.grid(True, alpha=0.3)
+        plt.savefig(output_dir / f"input_latency_{metrics.name.replace('/', '_')}.png", dpi=150)
+        plt.close()
 
     print(f"\nDone! Output directory: {output_dir}")
 
