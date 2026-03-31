@@ -7,6 +7,7 @@ time-series plots, a Gantt chart, and a GPU contention timeline.
 """
 
 import argparse
+import csv
 import sys
 from dataclasses import dataclass
 from datetime import datetime
@@ -596,8 +597,75 @@ def plot_gpu_contention_timeline(
 
 
 # --------------------------------------------------------------------------- #
-# Time-series and statistics plots
+# CSV Export
 # --------------------------------------------------------------------------- #
+
+def export_metrics_to_csv(metrics_list: List[PerformanceMetrics], output_dir: Path, cp_prefix: str):
+    """Export all time-series and statistics to unified master CSV files."""
+    cp_topics = {k: v.replace(_CP_DEFAULT_PREFIX, cp_prefix) for k, v in CP_TOPICS.items()}
+    
+    # 1. Export Unified Raw Metrics
+    raw_csv_path = output_dir / "all_raw_metrics.csv"
+    raw_header = [
+        "dataset", "model", "timestamp_sec", "relative_time_sec", 
+        "pipeline_latency_ms", "node_processing_time_ms", 
+        "preprocess_ms", "inference_ms", "postprocess_ms", "input_latency_ms"
+    ]
+    
+    with open(raw_csv_path, "w", newline="") as f_raw:
+        writer_raw = csv.writer(f_raw)
+        writer_raw.writerow(raw_header)
+        
+        for metrics in metrics_list:
+            for model_name, topics in [("PTv3", PTV3_TOPICS), ("CenterPoint", cp_topics)]:
+                t_key = "total_ms" if model_name == "PTv3" else "processing_time_ms"
+                columns = ["pipeline_latency_ms", t_key, "preprocess_ms", "inference_ms", "postprocess_ms"]
+                
+                data_map = {}
+                all_timestamps = set()
+                for col in columns:
+                    ts, vs = metrics.get_values(topics[col])
+                    data_map[col] = {t: v for t, v in zip(ts, vs)}
+                    all_timestamps.update(ts)
+                
+                ts_lat, vs_lat = metrics.get_input_latency(model_name, topics)
+                data_map["input_latency_ms"] = {t: v for t, v in zip(ts_lat, vs_lat)}
+                all_timestamps.update(ts_lat)
+
+                sorted_ts = sorted(list(all_timestamps))
+                t0 = sorted_ts[0] if sorted_ts else 0
+                
+                for t in sorted_ts:
+                    row = [metrics.name, model_name, t, t - t0]
+                    # Fill standard columns
+                    for col in columns:
+                        row.append(data_map.get(col, {}).get(t, ""))
+                    # Fill input_latency
+                    row.append(data_map.get("input_latency_ms", {}).get(t, ""))
+                    writer_raw.writerow(row)
+
+    print(f"Exported unified raw metrics: {raw_csv_path}")
+
+    # 2. Export Unified Statistics Summary
+    stats_csv_path = output_dir / "all_statistics.csv"
+    with open(stats_csv_path, "w", newline="") as f_stats:
+        writer_stats = csv.writer(f_stats)
+        writer_stats.writerow(["dataset", "model", "metric", "count", "mean", "std", "min", "max", "median"])
+        
+        for metrics in metrics_list:
+            for model_name, topics in [("PTv3", PTV3_TOPICS), ("CenterPoint", cp_topics)]:
+                for key, topic in topics.items():
+                    s = metrics.get_statistics(topic)
+                    writer_stats.writerow([metrics.name, model_name, key, s["count"], s["mean"], s["std"], s["min"], s["max"], s["median"]])
+                
+                # Add input_latency stats
+                _, vs_lat = metrics.get_input_latency(model_name, topics)
+                if len(vs_lat) > 0:
+                    writer_stats.writerow([
+                        metrics.name, model_name, "input_latency_ms", len(vs_lat),
+                        np.mean(vs_lat), np.std(vs_lat), np.min(vs_lat), np.max(vs_lat), np.median(vs_lat)
+                    ])
+    print(f"Exported unified statistics: {stats_csv_path}")
 
 def plot_metrics(metrics_list: List[PerformanceMetrics], output_dir: Path, cp_prefix: str):
     """Output time-series and statistics graphs."""
@@ -774,6 +842,9 @@ def main():
 
     # existing time-series and statistics graphs
     plot_metrics(metrics_list, output_dir, args.cp_prefix)
+
+    # export metrics to CSV
+    export_metrics_to_csv(metrics_list, output_dir, args.cp_prefix)
 
     # generate Gantt + contention timeline per dataset
     for metrics in metrics_list:
