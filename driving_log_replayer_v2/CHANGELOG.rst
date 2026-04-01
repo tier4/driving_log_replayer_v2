@@ -2,6 +2,28 @@
 Changelog for package driving_log_replayer
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
+Forthcoming
+-----------
+* feat(perception): show label in result bag (`#345 <https://github.com/tier4/driving_log_replayer_v2/issues/345>`_)
+* fix(post_process): pass vehicle_model to planning analyzer (`#344 <https://github.com/tier4/driving_log_replayer_v2/issues/344>`_)
+* feat: add time filter (`#342 <https://github.com/tier4/driving_log_replayer_v2/issues/342>`_)
+  * feat: add time filter
+  * reset original params
+  * chore
+  ---------
+* feat(perception_fp): add scenario key to ignore label (`#341 <https://github.com/tier4/driving_log_replayer_v2/issues/341>`_)
+  * feat(perception_fp): add scenario key to ignore label
+  * remove double courtation
+  ---------
+* feat(perception): add bevfusion topic (`#340 <https://github.com/tier4/driving_log_replayer_v2/issues/340>`_)
+  * feat(perception): add bevfusion topic
+  * update spell
+  ---------
+* feat: add launch_post_engage_initial_pose_node for reproducer test (`#339 <https://github.com/tier4/driving_log_replayer_v2/issues/339>`_)
+  * add launch_post_engage_initial_pose_node for reproducer test
+  * create move_ego_forward_after_engage_m param
+* Contributors: Kem (TiankuiXian), Masato Saeki, beomseok-kimm
+
 3.17.3 (2026-03-16)
 -------------------
 * fix(rosbag): not read unnecessary topic to avoid error no module (`#331 <https://github.com/tier4/driving_log_replayer_v2/issues/331>`_)
