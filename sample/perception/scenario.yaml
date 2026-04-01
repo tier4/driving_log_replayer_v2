@@ -41,7 +41,7 @@ Evaluation:
       # target_uuids: null # Specify UUIDs to evaluate only specific ground truths. If null, all are targeted.
       # --- Object Matching Conditions ---
       max_matchable_radii: [5.0, 3.0, 3.0, 3.0, 3.0] # Maximum radius for matching. No matching occurs beyond these distances.
-      merge_similar_labels: false # Whether to merge similar labels: https://github.com/tier4/autoware_perception_evaluation/blob/develop/docs/ja/perception/label.md#%E9%A1%9E%E4%BC%BC%E3%83%A9%E3%83%99%E3%83%AB%E3%81%AE%E3%83%9E%E3%83%BC%E3%82%B8
+      merge_similar_labels: false # Whether to merge similar labels: https://github.com/tier4/autoware_perception_evaluation/blob/develop/docs/en/perception/label.md
       matching_label_policy: allow_unknown # default/allow_unknown/allow_any (Match only same labels / Unknown matches all labels / All labels match each other)
       # allow_matching_unknown: true # Whether to match with 'unknown' labels. Same as matching_label_policy: allow_unknown. Priority given to matching_label_policy.
       # matching_class_agnostic_fps: true # Allow all labels to match (Detection task only; subject to development changes). Used only when matching_label_policy is 'default'.

@@ -41,7 +41,7 @@ Evaluation:
       # target_uuids: null # 特定の ground truth のみに対して評価を行いたい場合，対象とする ground truth の UUID を指定する。nullなら全てが対象
       # --- 物体のマッチング条件 ---
       max_matchable_radii: [5.0, 3.0, 3.0, 3.0, 3.0] # マッチング時の最大マッチング距離。これを超えてマッチングすることはない。
-      merge_similar_labels: false # 類似のラベルをマージするか https://github.com/tier4/autoware_perception_evaluation/blob/develop/docs/ja/perception/label.md#%E9%A1%9E%E4%BC%BC%E3%83%A9%E3%83%99%E3%83%AB%E3%81%AE%E3%83%9E%E3%83%BC%E3%82%B8
+      merge_similar_labels: false # 類似のラベルをマージするか https://github.com/tier4/autoware_perception_evaluation/blob/develop/docs/ja/perception/label.md
       matching_label_policy: allow_unknown # default/allow_unknown/allow_any 先頭から順に、同じラベルのみマッチングを許可、unknownは他全てのラベルとマッチングを許可、全てのラベル同士のマッチングを許可
       # allow_matching_unknown: true # ラベルがunknownのオブジェクトとマッチングさせるか。つまりmatching_label_policy: allow_unknown と同じ意味。matching_label_policyを指定した場合はそちらが優先される。
       # matching_class_agnostic_fps: true # 全てのラベル同士のマッチングを許可 (evaluation_taskがdetectionの場合のみ。また開発進捗で変化する) matching_label_policyがdefaultの時のみ値が使用される デフォルトはfalse
