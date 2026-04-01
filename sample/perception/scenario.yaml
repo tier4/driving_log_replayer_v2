@@ -1,4 +1,4 @@
-ScenarioFormatVersion: 3.0.0
+ScenarioFormatVersion: 3.2.0
 ScenarioName: perception_use_bag_concat_data
 ScenarioDescription: sensing_module_off_and_use_pointcloud_in_the_rosbag
 SensorModel: sample_sensor_kit
@@ -8,58 +8,66 @@ Evaluation:
   UseCaseFormatVersion: 1.5.0
   Datasets:
     - sample_dataset:
-        VehicleId: default # Specify VehicleId for each data set.
+        VehicleId: default # Specify VehicleId for each dataset
   Conditions:
     Criterion:
-      - PassRate: 95.0 # How much (%) of the evaluation attempts are considered successful.
-        CriteriaMethod: num_gt_tp # Method name of criteria (num_tp/metrics_score/metrics_score_mph/label/velocity_x_error/velocity_y_error/speed_error/yaw_error)
-        CriteriaLevel: hard # Level of criteria (perfect/hard/normal/easy, or custom value 0.0-100.0. For error criteria, set custom value.)
+      - PassRate: 95.0 # Success threshold (%): Percentage of successful frames out of all evaluation attempts
+        CriteriaMethod: num_gt_tp # refer https://github.com/tier4/driving_log_replayer_v2/blob/develop/driving_log_replayer_v2/driving_log_replayer_v2/criteria/perception.py#L142
+        CriteriaLevel: hard # Criteria level (perfect/hard/normal/easy, or custom value 0.0–100.0. For errors, sets the allowable tolerance.)
         Filter:
-          Distance: 0.0-50.0 # [m] null [Do not filter by distance] or lower_limit-(upper_limit) [Upper limit can be omitted. If omitted value is 1.7976931348623157e+308]
+          Distance: 0.0-50.0 # [m] null [no radial filter from base_link on xy-plane] or lower-upper [Upper limit is optional; defaults to 1.7976931348623157e+308]
           Region:
-            x_position: null # [m] null [Do not filter by x_position] or lower_limit,upper_limit
-            y_position: null # [m] null [Do not filter by y_position] or lower_limit,upper_limit
-      - PassRate: 95.0 # How much (%) of the evaluation attempts are considered successful.
-        CriteriaMethod: num_gt_tp # Method name of criteria (num_tp/metrics_score/metrics_score_mph/label/velocity_x_error/velocity_y_error/speed_error/yaw_error)
-        CriteriaLevel: easy # Level of criteria (perfect/hard/normal/easy, or custom value 0.0-100.0. For error criteria, set custom value.)
+            x_position: null # [m] null [no x-coordinate filter from base_link on xy-plane] or lower,upper [If lower is not set, absolute value is used. If set, values between lower and upper are evaluated.]
+            y_position: null # [m] null [no y-coordinate filter from base_link on xy-plane] or lower,upper [Same logic as x_position]
+      - PassRate: 95.0
+        CriteriaMethod: num_gt_tp
+        CriteriaLevel: easy
         Filter:
-          Distance: 50.0- # [m] null [Do not filter by distance] or lower_limit-(upper_limit) [Upper limit can be omitted. If omitted value is 1.7976931348623157e+308]
+          Distance: 50.0-
           Region:
-            x_position: null # [m] null [Do not filter by x_position] or lower_limit,upper_limit
-            y_position: null # [m] null [Do not filter by y_position] or lower_limit,upper_limit
-  degradation_topic: /perception/object_recognition/detection/objects # Topic for degradation evaluation. If not specified, decide the topic based on the evaluation task.
+            x_position: null
+            y_position: null
+  degradation_topic: /perception/object_recognition/detection/objects # Topic for degradation evaluation. If not specified, topic is determined by evaluation task.
   PerceptionEvaluationConfig:
     evaluation_config_dict:
-      evaluation_task: detection # detection, tracking or prediction. Evaluate the objects specified here
-      target_labels: [car, bicycle, pedestrian, motorbike, unknown] # evaluation label
-      max_x_position: 102.4 # Maximum x position of object to be evaluated
-      max_y_position: 102.4 # Maximum y position of object to be evaluated
-      # max_distance: null # Maximum distance from the base_link of the object to be evaluated. Exclusive use with max_x_potion, max_y_position.
-      # min_distance: null # Minimum distance from the base_link of the object to be evaluated. Exclusive use with max_x_potion, max_y_position.
-      # confidence_threshold: null # Threshold of confidence for the estimated object to be evaluated
-      # target_uuids: null # If you want to evaluate only specific ground truths, specify the UUIDs of the ground truths to be evaluated. If null, use all
-      max_matchable_radii: [5.0, 3.0, 3.0, 3.0, 3.0]
-      merge_similar_labels: false # Whether or not to merge similar labels https://github.com/tier4/autoware_perception_evaluation/blob/develop/docs/en/perception/label.md#merge-similar-labels-option
-      allow_matching_unknown: true # Whether or not to match objects whose labels are unknown
-      ignore_attributes: [cycle_state.without_rider] # ignore labels with the specified attribute, name in attribute.json of t4_dataset
-      center_distance_thresholds: [[1.0, 1.0, 1.0, 1.0, 1.0], [2.0, 2.0, 2.0, 2.0, 2.0]] # Threshold for center-to-center distance [m] matching
-      plane_distance_thresholds: [2.0, 30.0] # Threshold for planar distance matching
-      iou_2d_thresholds: [0.5] # Threshold for 2D IoU
-      iou_3d_thresholds: [0.5] # Threshold for 3D IoU
-      min_point_numbers: [0, 0, 0, 0, 0] # Minimum number of point clouds in bounding box for ground truth object. If min_point_numbers=0, all ground truth objects are evaluated
-  CriticalObjectFilterConfig:
+      evaluation_task: detection # detection/tracking/prediction. Evaluates objects for the specified task.
+      # --- Object Filter Conditions ---
+      target_labels: [car, bicycle, pedestrian, motorbike, unknown] # Labels to be evaluated
+      max_x_position: 200 # Maximum x-position for evaluation. Objects with absolute x-coordinates > this value are excluded. Lower limit cannot be set.
+      max_y_position: 200 # Maximum y-position for evaluation. Objects with absolute y-coordinates > this value are excluded. Lower limit cannot be set.
+      # max_distance: null # Max distance from base_link (mutually exclusive with max_x/y_position). Lower limit cannot be set.
+      # min_distance: null # Min distance from base_link (mutually exclusive with max_x/y_position).
+      # confidence_threshold: null # Confidence threshold for estimated objects to be evaluated
+      # target_uuids: null # Specify UUIDs to evaluate only specific ground truths. If null, all are targeted.
+      # --- Object Matching Conditions ---
+      max_matchable_radii: [5.0, 3.0, 3.0, 3.0, 3.0] # Maximum radius for matching. No matching occurs beyond these distances.
+      merge_similar_labels: false # Whether to merge similar labels: https://github.com/tier4/autoware_perception_evaluation/blob/develop/docs/en/perception/label.md
+      matching_label_policy: allow_unknown # default/allow_unknown/allow_any (Match only same labels / Unknown matches all labels / All labels match each other)
+      # allow_matching_unknown: true # Whether to match with 'unknown' labels. Same as matching_label_policy: allow_unknown. Priority given to matching_label_policy.
+      # matching_class_agnostic_fps: true # Allow all labels to match (Detection task only; subject to development changes). Used only when matching_label_policy is 'default'.
+      # --- Ground Truth Loading Conditions ---
+      ignore_attributes: [cycle_state.without_rider] # Ignore labels with specific attributes defined in t4_dataset's attribute.json
+      # count_label_number: false # Count objects per label during t4_dataset load. Default is true.
+      # --- Score Types and Thresholds ---
+      # Also used if CriteriaMethod is set to metrics_score.
+      center_distance_thresholds: [[1.0, 1.0, 1.0, 1.0, 1.0], [2.0, 2.0, 2.0, 2.0, 2.0]] # Thresholds for center-distance matching (Inner list length = labels, outer list = number of thresholds)
+      plane_distance_thresholds: [2.0, 30.0] # Thresholds for planar distance matching
+      iou_2d_thresholds: [0.5] # Thresholds for 2D IoU matching
+      iou_3d_thresholds: [0.5] # Thresholds for 3D IoU matching
+      min_point_numbers: [0, 0, 0, 0, 0] # Min point count in ground truth bbox. If 0, all ground truth objects are evaluated.
+  CriticalObjectFilterConfig: # Config for dynamic (per-frame) object filtering
     target_labels: [car, bicycle, pedestrian, motorbike, unknown]
-    ignore_attributes: [cycle_state.without_rider]
-    max_x_position_list: [30.0, 30.0, 30.0, 30.0, 30.0]
-    max_y_position_list: [30.0, 30.0, 30.0, 30.0, 30.0]
+    max_x_position_list: [200.0, 200.0, 200.0, 200.0, 200.0] # If no special filtering is needed, set same as max_x_position. Must be a list matching number of target labels.
+    max_y_position_list: [200.0, 200.0, 200.0, 200.0, 200.0] # If no special filtering is needed, set same as max_y_position. Must be a list matching number of target labels.
     # max_distance_list: null
     # min_distance_list: null
     # min_point_numbers: [0, 0, 0, 0, 0]
     # confidence_threshold_list: null
     # target_uuids: null
-  PerceptionPassFailConfig:
+    # ignore_attributes: [cycle_state.without_rider]
+  PerceptionPassFailConfig: # Config for dynamic (per-frame) object filtering to determine pass/fail
     target_labels: [car, bicycle, pedestrian, motorbike, unknown]
-    matching_threshold_list: [2.0, 2.0, 2.0, 2.0, 2.0] # Threshold for planar distance matching
+    matching_threshold_list: [2.0, 2.0, 2.0, 2.0, 2.0] # Used only for num_gt_tp/num_gt. Same as plane_distance_thresholds.
     # confidence_threshold_list: null
 include_use_case:
   UseCaseName: planning_control
@@ -67,9 +75,9 @@ include_use_case:
   Conditions:
     PlanningFactorConditions:
       - topic: /planning/planning_factors/obstacle_stop
-        time: { start: 1649138860.0, end: 1649138865.0 } # validate the condition if the message is between start and end in ROS time
+        time: { start: 1649138860.0, end: 1649138865.0 } # Validate condition for messages between start and end (ROS time)
         condition_type: all_of
-        area: null # You can set area to null to ignore area condition.
-        behavior: [STOP] # Specify the behavior to be judged. You can set behavior to null to ignore behavior condition.
-        distance: { start: 0.0, end: 10.0 } # Specify the distance range to be judged. You can set distance to null to ignore distance condition.
-        judgement: positive # positive or negative
+        area: null # Set to null to ignore area conditions.
+        behavior: [STOP] # Specify behavior to judge. Set to null to ignore behavior conditions.
+        distance: { start: 0.0, end: 10.0 } # Specify distance range to judge. Set to null to ignore distance conditions.
+        judgement: positive # 'positive' or 'negative'
