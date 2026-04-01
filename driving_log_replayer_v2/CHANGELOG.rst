@@ -2,8 +2,8 @@
 Changelog for package driving_log_replayer
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-Forthcoming
------------
+3.17.4 (2026-04-01)
+-------------------
 * feat(perception): show label in result bag (`#345 <https://github.com/tier4/driving_log_replayer_v2/issues/345>`_)
 * fix(post_process): pass vehicle_model to planning analyzer (`#344 <https://github.com/tier4/driving_log_replayer_v2/issues/344>`_)
 * feat: add time filter (`#342 <https://github.com/tier4/driving_log_replayer_v2/issues/342>`_)
