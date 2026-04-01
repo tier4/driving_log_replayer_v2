@@ -1,5 +1,18 @@
 # Release Notes
 
+## Version 3.17.4
+
+Minor Tweak
+
+| Module                       | Feature       | Brief summary                                                | Pull request                                                        | Contributor                                       |
+| ---------------------------- | ------------- | ------------------------------------------------------------ | ------------------------------------------------------------------- | ------------------------------------------------- |
+| `perception`                 | visualization | show label in result bag                                     | [#345](https://github.com/tier4/driving_log_replayer_v2/issues/345) | [MasatoSaeki](https://github.com/MasatoSaeki)     |
+| `time_step_based_trajectory` | post_process  | pass vehicle_model to planning analyzer                      | [#344](https://github.com/tier4/driving_log_replayer_v2/issues/344) | [beomseok-kimm](https://github.com/beomseok-kimm) |
+| `common`                     | rosbag        | add time filter                                              | [#342](https://github.com/tier4/driving_log_replayer_v2/issues/342) | [MasatoSaeki](https://github.com/MasatoSaeki)     |
+| `perception_fp`              | scenario      | add scenario key to ignore label                             | [#341](https://github.com/tier4/driving_log_replayer_v2/issues/341) | [MasatoSaeki](https://github.com/MasatoSaeki)     |
+| `perception`                 | topic         | add bevfusion topic                                          | [#340](https://github.com/tier4/driving_log_replayer_v2/issues/340) | [MasatoSaeki](https://github.com/MasatoSaeki)     |
+| `perception_reproducer`      | topic         | add launch_post_engage_initial_pose_node for reproducer test | [#339](https://github.com/tier4/driving_log_replayer_v2/issues/339) | [xtk8532704](https://github.com/xtk8532704)       |
+
 ## Version 3.17.3
 
 Minor Tweak
