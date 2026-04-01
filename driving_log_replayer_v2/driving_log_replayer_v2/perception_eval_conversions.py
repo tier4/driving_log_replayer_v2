@@ -188,7 +188,7 @@ def frame_ground_truth_to_ros_box_and_uuid(
             "ground_truth",
             cnt,
             color_success,
-            str(obj.semantic_label.label) + ": " + obj.uuid,
+            f"{obj.semantic_label.name}\n{obj.uuid}",
         )
         marker_ground_truth.markers.append(bbox)
         marker_ground_truth.markers.append(uuid)
@@ -198,6 +198,7 @@ def frame_ground_truth_to_ros_box_and_uuid(
 
 @dataclass
 class ScoresData:
+    label: str
     center_distance: float | None
     center_distance_bev: float | None
     plane_distance: float | None
@@ -205,7 +206,8 @@ class ScoresData:
     iou_2d: float | None
 
     def __str__(self) -> str:
-        text = f"CD: {self.center_distance:.2f}, " if self.center_distance is not None else ""
+        text = f"{self.label}\n"
+        text += f"CD: {self.center_distance:.2f}, " if self.center_distance is not None else ""
         text += (
             f"CD_BEV: {self.center_distance_bev:.2f}, "
             if self.center_distance_bev is not None
@@ -251,6 +253,7 @@ def dynamic_objects_to_ros_points(
                 )
             # skip showing scores for gt objects
             scores = ScoresData(
+                label=obj.ground_truth_object.semantic_label.name,
                 center_distance=None,
                 center_distance_bev=None,
                 plane_distance=None,
@@ -279,6 +282,7 @@ def dynamic_objects_to_ros_points(
 
             # show the matching scores only tp objects by estimated object and fp objects
             scores = ScoresData(
+                label=obj.estimated_object.semantic_label.name,
                 center_distance=obj.center_distance.value
                 if obj.center_distance is not None
                 else -1.0,
@@ -311,6 +315,7 @@ def dynamic_objects_to_ros_points(
         )
         # skip showing scores for DynamicObject because they do not have scores
         scores = ScoresData(
+            label=obj.semantic_label.name,
             center_distance=None,
             center_distance_bev=None,
             plane_distance=None,
