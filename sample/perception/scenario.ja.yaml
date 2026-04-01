@@ -12,7 +12,7 @@ Evaluation:
   Conditions:
     Criterion:
       - PassRate: 95.0 # 評価試行回数(全評価フレーム)の内、どの程度(%)評価成功だったら成功とするか
-        CriteriaMethod: num_gt_tp # refer https://github.com/tier4/driving_log_replayer_v2/blob/develop/driving_log_replayer_v2/driving_log_replayer_v2/criteria/perception.py#L136-L152
+        CriteriaMethod: num_gt_tp # refer https://github.com/tier4/driving_log_replayer_v2/blob/develop/driving_log_replayer_v2/driving_log_replayer_v2/criteria/perception.py#L142
         CriteriaLevel: hard # クライテリアレベル(perfect/hard/normal/easy、もしくはカスタム値0.0〜100.0の数値でエラーの場合は許容誤差を指定。)
         Filter:
           Distance: 0.0-50.0 # [m] null [xy平面におけるbase_linkからの半径距離でフィルタしない] or 下限-(上限) [上限は省略可。省略した場合1.7976931348623157e+308]
@@ -31,38 +31,43 @@ Evaluation:
   PerceptionEvaluationConfig:
     evaluation_config_dict:
       evaluation_task: detection # detection/tracking/prediction ここで指定したobjectsを評価する
+      # --- 物体のフィルタ条件 ---
       target_labels: [car, bicycle, pedestrian, motorbike, unknown] # 評価ラベル
-      max_x_position: 102.4 # 評価対象 object の最大 x 位置。物体のx座標の絶対値がこの値より大きいものは評価対象外となる。下限は設定できない。
-      max_y_position: 102.4 # 評価対象 object の最大 y 位置。物体のy座標の絶対値がこの値より大きいものは評価対象外となる。下限は設定できない。
+      max_x_position: 200 # 評価対象 object の最大 x 位置。物体のx座標の絶対値がこの値より大きいものは評価対象外となる。下限は設定できない。
+      max_y_position: 200 # 評価対象 object の最大 y 位置。物体のy座標の絶対値がこの値より大きいものは評価対象外となる。下限は設定できない。
       # max_distance: null # 評価対象 object の base_link からの最大距離、max_x_potion, max_y_positionと排他利用、この例ではこちらはnull。下限は設定できない。
       # min_distance: null # 評価対象 object の base_link からの最小距離、max_x_potion, max_y_positionと排他利用、この例ではこちらはnull。下限は設定できない。
       # confidence_threshold: null # 評価対象の estimated object の confidence の閾値
       # target_uuids: null # 特定の ground truth のみに対して評価を行いたい場合，対象とする ground truth の UUID を指定する。nullなら全てが対象
+      # --- 物体のマッチング条件 ---
       max_matchable_radii: [5.0, 3.0, 3.0, 3.0, 3.0] # マッチング時の最大マッチング距離。これを超えてマッチングすることはない。
       merge_similar_labels: false # 類似のラベルをマージするか https://github.com/tier4/autoware_perception_evaluation/blob/develop/docs/ja/perception/label.md#%E9%A1%9E%E4%BC%BC%E3%83%A9%E3%83%99%E3%83%AB%E3%81%AE%E3%83%9E%E3%83%BC%E3%82%B8
-      # matching_label_policy: default # default/allow_unknown/allow_any 先頭から順に、同じラベルのみマッチングを許可、unknownは他全てのラベルとマッチングを許可、全てのラベル同士のマッチングを許可
-      allow_matching_unknown: true # ラベルがunknownのオブジェクトとマッチングさせるか。つまりmatching_label_policy: allow_unknown と同じ意味。matching_label_policyを指定した場合はそちらが優先される。
+      matching_label_policy: allow_unknown # default/allow_unknown/allow_any 先頭から順に、同じラベルのみマッチングを許可、unknownは他全てのラベルとマッチングを許可、全てのラベル同士のマッチングを許可
+      # allow_matching_unknown: true # ラベルがunknownのオブジェクトとマッチングさせるか。つまりmatching_label_policy: allow_unknown と同じ意味。matching_label_policyを指定した場合はそちらが優先される。
+      # matching_class_agnostic_fps: true # 全てのラベル同士のマッチングを許可 (evaluation_taskがdetectionの場合のみ。また開発進捗で変化する) matching_label_policyがdefaultの時のみ値が使用される デフォルトはfalse
+      # ground truthの読み込み条件
       ignore_attributes: [cycle_state.without_rider] # 指定した属性を持つラベルを無視する。t4_datasetのattribute.jsonのnameを指定する
       # count_label_number: false # t4datasetロード時に、ラベルごとのオブジェクト数をカウントする。デフォルトはtrue
-      # matching_class_agnostic_fps: true # 全てのラベル同士のマッチングを許可 (evaluation_taskがdetectionの場合のみ。また開発進捗で変化する) matching_label_policyがdefaultの時のみ値が使用される デフォルトはfalse
-      center_distance_thresholds: [[1.0, 1.0, 1.0, 1.0, 1.0], [2.0, 2.0, 2.0, 2.0, 2.0]] # 中心間距離マッチング時の閾値
-      plane_distance_thresholds: [2.0, 30.0] # 平面距離マッチング時の閾値
+      # --- スコアの種類と閾値 ---
+      # CriteriaMethodがmetrics_scoreの場合も利用される。
+      center_distance_thresholds: [[1.0, 1.0, 1.0, 1.0, 1.0], [2.0, 2.0, 2.0, 2.0, 2.0]] # 中心間距離マッチング時の閾値 (最も内側のリストの長さはラベルの数、その次のリストの長さは閾値の数)
+      plane_distance_thresholds: [2.0, 30.0] # プレーン距離マッチング時の閾値
       iou_2d_thresholds: [0.5] # 2D IoU マッチング時の閾値
       iou_3d_thresholds: [0.5] # 3D IoU マッチング時の閾値
       min_point_numbers: [0, 0, 0, 0, 0] # ground truth object における，bbox 内の最小点群数．min_point_numbers=0 の場合は，全 ground truth object を評価
-  CriticalObjectFilterConfig: # 動的(フレームごとに)に物体をフィルタするための config
+  CriticalObjectFilterConfig: # 動的(フレームごと)に物体をフィルタするための config
     target_labels: [car, bicycle, pedestrian, motorbike, unknown]
-    # ignore_attributes: [cycle_state.without_rider]
-    # max_x_position_list: [30.0, 30.0, 30.0, 30.0, 30.0]
-    # max_y_position_list: [30.0, 30.0, 30.0, 30.0, 30.0]
+    max_x_position_list: [200.0, 200.0, 200.0, 200.0, 200.0] # 特に必要ない場合、max_x_positionと同じ値を指定すれば良い。但しlistで物体数分指定する必要がある。
+    max_y_position_list: [200.0, 200.0, 200.0, 200.0, 200.0] # 特に必要ない場合、max_y_positionと同じ値を指定すれば良い。但しlistで物体数分指定する必要がある。
     # max_distance_list: null
     # min_distance_list: null
     # min_point_numbers: [0, 0, 0, 0, 0]
     # confidence_threshold_list: null
     # target_uuids: null
-  PerceptionPassFailConfig: # 動的(フレームごとに)に物体をフィルタするための config
+    # ignore_attributes: [cycle_state.without_rider]
+  PerceptionPassFailConfig: # 動的(フレームごと)に物体をフィルタするための config
     target_labels: [car, bicycle, pedestrian, motorbike, unknown]
-    # matching_threshold_list: [2.0, 2.0, 2.0, 2.0, 2.0] # 平面距離マッチング時の閾値
+    matching_threshold_list: [2.0, 2.0, 2.0, 2.0, 2.0] # num_gt_tp/num_gtの場合のみ利用される。plane_distance_thresholdsと同じ意味。
     # confidence_threshold_list: null
 include_use_case:
   UseCaseName: planning_control
