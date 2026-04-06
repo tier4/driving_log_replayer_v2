@@ -872,9 +872,9 @@ def plot_metrics(metrics_list: List[PerformanceMetrics], output_dir: Path, cp_pr
                     continue
                 rel_ts = ts - ts[0]
 
-                # --- Scatter (time-series) ---
-                ax_scatter.scatter(rel_ts, vs, label=model_name, color=color,
-                                   s=6, alpha=0.5)
+                # --- Line (time-series) ---
+                ax_scatter.plot(rel_ts, vs, label=model_name, color=color,
+                                alpha=0.8, linewidth=1.2)
 
                 # --- CDF ---
                 sorted_vs = np.sort(vs)
