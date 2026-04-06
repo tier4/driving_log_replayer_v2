@@ -285,19 +285,12 @@ def read_rosbag_metrics(bag_path: Path, name: str, cp_prefix: str) -> Optional[P
                 print(f"Warning: no target topics found in: {bag_path}")
                 return None
 
-            subscribe_latency_topics = {
-                PTV3_TOPICS["subscribe_latency_ms"],
-                cp_topics["subscribe_latency_ms"],
-            }
             for conn, timestamp, rawdata in reader.messages(connections=connections):
                 try:
                     msg = typestore.deserialize_cdr(rawdata, conn.msgtype)
-                    # For subscribe_latency_ms, use header.stamp (= pointcloud acquisition
-                    # time) so both models share a common time base.
-                    if conn.topic in subscribe_latency_topics:
-                        t = msg.stamp.sec + msg.stamp.nanosec * 1e-9
-                    else:
-                        t = timestamp / 1e9
+                    # Use header.stamp (= input pointcloud acquisition time) as the
+                    # time base so metrics from different models can be aligned.
+                    t = msg.stamp.sec + msg.stamp.nanosec * 1e-9
                     metrics.add_data(conn.topic, t, msg.data)
                 except Exception as e:
                     print(f"Deserialization failed: {e}")
@@ -907,11 +900,15 @@ def plot_metrics(metrics_list: List[PerformanceMetrics], output_dir: Path, cp_pr
 
             # --- Difference panel: PTv3 - CenterPoint ---
             if "PTv3" in series and "CenterPoint" in series:
-                ptv3_ts, ptv3_vs   = series["PTv3"]
-                _,       cp_vs     = series["CenterPoint"]
-                n = min(len(ptv3_vs), len(cp_vs))
-                diff = ptv3_vs[:n] - cp_vs[:n]
-                ref_ts = ptv3_ts[:n]
+                ptv3_ts, ptv3_vs = series["PTv3"]
+                cp_ts,   cp_vs   = series["CenterPoint"]
+                # Align CenterPoint to PTv3 timestamps by nearest neighbor on
+                # header.stamp (both models share the same input pointcloud time base).
+                cp_indices = np.clip(
+                    np.searchsorted(cp_ts, ptv3_ts), 0, len(cp_ts) - 1
+                )
+                diff   = ptv3_vs - cp_vs[cp_indices]
+                ref_ts = ptv3_ts
 
                 ax_diff.plot(ref_ts, diff, color="#6A1B9A", alpha=0.8, linewidth=1.2)
                 ax_diff.axhline(0, color="gray", linewidth=0.8, linestyle="--")
