@@ -856,8 +856,8 @@ def plot_metrics(metrics_list: List[PerformanceMetrics], output_dir: Path, cp_pr
         for i, metrics in enumerate(metrics_list):
             ax = axes_sub[i][0]
             for model_name, topic, color in [
-                ("PTv3",        ptv3_sub_topic, MODEL_COLORS["ptv3"]["inference"]),
-                ("CenterPoint", cp_sub_topic,   MODEL_COLORS["centerpoint"]["inference"]),
+                ("PTv3",        ptv3_sub_topic, "#1565C0"),   # dark blue
+                ("CenterPoint", cp_sub_topic,   "#E65100"),   # dark orange
             ]:
                 ts, vs = metrics.get_values(topic)
                 if len(ts) == 0:
