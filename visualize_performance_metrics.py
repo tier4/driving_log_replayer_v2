@@ -34,6 +34,7 @@ except ImportError:
 PTV3_TOPICS = {
     "pipeline_latency_ms":  "/perception/obstacle_segmentation/ptv3/debug/pipeline_latency_ms",
     "subscribe_latency_ms": "/perception/obstacle_segmentation/ptv3/debug/subscribe_latency_ms",
+    "cyclic_time_ms":       "/perception/obstacle_segmentation/ptv3/debug/cyclic_time_ros_ms",
     "total_ms":             "/perception/obstacle_segmentation/ptv3/debug/processing_time/total_ms",
     "preprocess_ms":        "/perception/obstacle_segmentation/ptv3/debug/processing_time/preprocess_ms",
     "inference_ms":         "/perception/obstacle_segmentation/ptv3/debug/processing_time/inference_ms",
@@ -46,6 +47,7 @@ _CP_DEFAULT_PREFIX = "/perception/object_recognition/detection/centerpoint/lidar
 CP_TOPICS = {
     "pipeline_latency_ms": f"{_CP_DEFAULT_PREFIX}/debug/pipeline_latency_ms",
     "subscribe_latency_ms": f"{_CP_DEFAULT_PREFIX}/debug/subscribe_latency_ms",
+    "cyclic_time_ms":      f"{_CP_DEFAULT_PREFIX}/debug/cyclic_time_ros_ms",
     "processing_time_ms":  f"{_CP_DEFAULT_PREFIX}/debug/processing_time_ms",
     "preprocess_ms":       f"{_CP_DEFAULT_PREFIX}/debug/processing_time/preprocess_ms",
     "inference_ms":        f"{_CP_DEFAULT_PREFIX}/debug/processing_time/inference_ms",
@@ -610,8 +612,9 @@ def export_metrics_to_csv(metrics_list: List[PerformanceMetrics], output_dir: Pa
     raw_csv_path = output_dir / "all_raw_metrics.csv"
     raw_header = [
         "dataset", "model", "timestamp_sec", "relative_time_sec", 
-        "pipeline_latency_ms", "subscribe_latency_ms", "node_processing_time_ms", 
-        "preprocess_ms", "inference_ms", "postprocess_ms", "input_latency_ms"
+        "pipeline_latency_ms", "subscribe_latency_ms", "cyclic_time_ms", 
+        "node_processing_time_ms", "preprocess_ms", "inference_ms", 
+        "postprocess_ms", "input_latency_ms"
     ]
     
     with open(raw_csv_path, "w", newline="") as f_raw:
@@ -624,6 +627,7 @@ def export_metrics_to_csv(metrics_list: List[PerformanceMetrics], output_dir: Pa
                 columns = [
                     "pipeline_latency_ms",
                     "subscribe_latency_ms",
+                    "cyclic_time_ms",
                     t_key,
                     "preprocess_ms",
                     "inference_ms",
@@ -689,7 +693,7 @@ def plot_metrics(metrics_list: List[PerformanceMetrics], output_dir: Path, cp_pr
 
     # --- Stage time-series per model ---
     for model_name, topics in stage_topic_groups.items():
-        stage_keys = ["preprocess_ms", "inference_ms", "postprocess_ms"]
+        stage_keys = ["cyclic_time_ms", "preprocess_ms", "inference_ms", "postprocess_ms"]
 
         # Skip if no data for this model
         has_any = any(
@@ -716,7 +720,7 @@ def plot_metrics(metrics_list: List[PerformanceMetrics], output_dir: Path, cp_pr
                 ax.legend(fontsize=8)
             ax.grid(True, alpha=0.3)
 
-        axes[0].set_title(f"{model_name} - Stage Processing Times", fontsize=13, fontweight="bold")
+        axes[0].set_title(f"{model_name} - Processing Times", fontsize=13, fontweight="bold")
         axes[-1].set_xlabel("Time [s]", fontsize=11)
         plt.tight_layout()
         safe = model_name.lower().replace(" ", "_")

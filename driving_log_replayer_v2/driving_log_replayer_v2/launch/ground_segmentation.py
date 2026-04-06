@@ -24,6 +24,7 @@ RECORD_TOPIC = """^/tf$\
 |^/perception/obstacle_segmentation/ptv3/debug/cyclic_time_ms$\
 |^/perception/obstacle_segmentation/ptv3/debug/pipeline_latency_ms$\
 |^/perception/obstacle_segmentation/ptv3/debug/subscribe_latency_ms$\
+|^/perception/obstacle_segmentation/ptv3/debug/cyclic_time_ros_ms$\
 |^/perception/obstacle_segmentation/ptv3/debug/processing_time/inference_ms$\
 |^/perception/obstacle_segmentation/ptv3/debug/processing_time/postprocess_ms$\
 |^/perception/obstacle_segmentation/ptv3/debug/processing_time/preprocess_ms$\
@@ -31,6 +32,7 @@ RECORD_TOPIC = """^/tf$\
 |^/perception/object_recognition/detection/centerpoint/lidar_centerpoint/debug/cyclic_time_ms$\
 |^/perception/object_recognition/detection/centerpoint/lidar_centerpoint/debug/pipeline_latency_ms$\
 |^/perception/object_recognition/detection/centerpoint/lidar_centerpoint/debug/subscribe_latency_ms$\
+|^/perception/object_recognition/detection/centerpoint/lidar_centerpoint/debug/cyclic_time_ros_ms$\
 |^/perception/object_recognition/detection/centerpoint/lidar_centerpoint/debug/processing_time/inference_ms$\
 |^/perception/object_recognition/detection/centerpoint/lidar_centerpoint/debug/processing_time/postprocess_ms$\
 |^/perception/object_recognition/detection/centerpoint/lidar_centerpoint/debug/processing_time/preprocess_ms$\
