@@ -78,6 +78,8 @@ def system_defined_remap(conf: dict) -> list[str]:
         add_remap("/localization/acceleration", remap_list)
         if conf["initial_pose"] != "{}" or conf["direct_initial_pose"] != "{}":
             add_remap("/initialpose", remap_list)
+    if conf["use_case"] == "obstacle_segmentation":
+        add_remap("/sensing/lidar/concatenated/pointcloud", remap_list)
     if is_set_goal(conf["goal_method"], conf["goal_pose"]):
         add_remap("/planning/mission_planning/route", remap_list)
     return remap_list
