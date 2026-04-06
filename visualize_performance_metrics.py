@@ -841,6 +841,44 @@ def plot_metrics(metrics_list: List[PerformanceMetrics], output_dir: Path, cp_pr
         plt.close()
         print(f"Saved: {output_dir}/ptv3_subscribe_latency_breakdown.png")
 
+    # --- subscribe_latency_ms overlay (PTv3 vs CenterPoint) ---
+    ptv3_sub_topic = PTV3_TOPICS["subscribe_latency_ms"]
+    cp_sub_topic   = cp_topics["subscribe_latency_ms"]
+
+    has_sub_overlay = any(
+        len(m.get_values(ptv3_sub_topic)[0]) > 0 or len(m.get_values(cp_sub_topic)[0]) > 0
+        for m in metrics_list
+    )
+    if has_sub_overlay:
+        _, axes_sub = plt.subplots(len(metrics_list), 1,
+                                   figsize=(14, 5 * len(metrics_list)),
+                                   sharex=False, squeeze=False)
+        for i, metrics in enumerate(metrics_list):
+            ax = axes_sub[i][0]
+            for model_name, topic, color in [
+                ("PTv3",        ptv3_sub_topic, MODEL_COLORS["ptv3"]["inference"]),
+                ("CenterPoint", cp_sub_topic,   MODEL_COLORS["centerpoint"]["inference"]),
+            ]:
+                ts, vs = metrics.get_values(topic)
+                if len(ts) == 0:
+                    continue
+                ax.plot(ts - ts[0], vs, label=model_name, alpha=0.8,
+                        linewidth=1.2, color=color)
+            ax.set_ylabel("subscribe_latency_ms [ms]", fontsize=10)
+            ax.set_xlabel("Time [s]", fontsize=10)
+            ax.set_title(
+                f"subscribe_latency_ms — PTv3 vs CenterPoint ({metrics.name})\n"
+                "subscribe_latency = header.stamp → callback start (DDS + executor scheduling)",
+                fontsize=11, fontweight="bold",
+            )
+            ax.legend(fontsize=9)
+            ax.grid(True, alpha=0.3)
+
+        plt.tight_layout()
+        plt.savefig(output_dir / "subscribe_latency_overlay.png", dpi=150)
+        plt.close()
+        print(f"Saved: {output_dir}/subscribe_latency_overlay.png")
+
     # --- Statistics summary (text) ---
     output_file = output_dir / "statistics_summary.txt"
     with open(output_file, "w") as f:
