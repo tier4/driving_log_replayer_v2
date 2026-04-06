@@ -852,7 +852,7 @@ def plot_metrics(metrics_list: List[PerformanceMetrics], output_dir: Path, cp_pr
         print(f"Saved: {output_dir}/ptv3_subscribe_latency_breakdown.png")
 
     # --- subscribe_latency_ms overlay (PTv3 vs CenterPoint) ---
-    # Layout per dataset: top = scatter (time-series), bottom = CDF
+    # Layout per dataset: top = overlay time-series, bottom = PTv3 - CenterPoint diff
     ptv3_sub_topic = PTV3_TOPICS["subscribe_latency_ms"]
     cp_sub_topic   = cp_topics["subscribe_latency_ms"]
 
@@ -873,8 +873,8 @@ def plot_metrics(metrics_list: List[PerformanceMetrics], output_dir: Path, cp_pr
         )
 
         for i, metrics in enumerate(metrics_list):
-            ax_scatter = all_axes[i * 2][0]
-            ax_cdf     = all_axes[i * 2 + 1][0]
+            ax_overlay = all_axes[i * 2][0]
+            ax_diff    = all_axes[i * 2 + 1][0]
 
             # Common time base: minimum header.stamp across both models
             t0_common = min(
@@ -884,48 +884,53 @@ def plot_metrics(metrics_list: List[PerformanceMetrics], output_dir: Path, cp_pr
                 default=0.0,
             )
 
+            series = {}
             for model_name, topic, color in MODEL_SUB_STYLES:
                 ts, vs = metrics.get_values(topic)
                 if len(ts) == 0:
                     continue
                 rel_ts = ts - t0_common
+                series[model_name] = (rel_ts, vs)
 
-                # --- Line (time-series) ---
-                ax_scatter.plot(rel_ts, vs, label=model_name, color=color,
+                ax_overlay.plot(rel_ts, vs, label=model_name, color=color,
                                 alpha=0.8, linewidth=1.2)
 
-                # --- CDF ---
-                sorted_vs = np.sort(vs)
-                cdf = np.arange(1, len(sorted_vs) + 1) / len(sorted_vs)
-                ax_cdf.plot(sorted_vs, cdf * 100, label=model_name,
-                            color=color, linewidth=1.8)
-                # Percentile markers: P50, P90, P99
-                for pct in (50, 90, 99):
-                    val = np.percentile(vs, pct)
-                    ax_cdf.axvline(val, color=color, linestyle="--",
-                                   linewidth=0.8, alpha=0.7)
-                    ax_cdf.text(val, pct - 3, f"P{pct}\n{val:.1f}ms",
-                                color=color, fontsize=7, ha="center", va="top")
-
-            ax_scatter.set_title(
+            ax_overlay.set_title(
                 f"subscribe_latency_ms — PTv3 vs CenterPoint ({metrics.name})\n"
                 "subscribe_latency = header.stamp → callback start (DDS + executor scheduling)",
                 fontsize=11, fontweight="bold",
             )
-            ax_scatter.set_ylabel("subscribe_latency_ms [ms]", fontsize=10)
-            ax_scatter.set_xlabel("Time [s]", fontsize=10)
-            ax_scatter.legend(fontsize=9)
-            ax_scatter.grid(True, alpha=0.3)
+            ax_overlay.set_ylabel("subscribe_latency_ms [ms]", fontsize=10)
+            ax_overlay.set_xlabel("Time [s]", fontsize=10)
+            ax_overlay.legend(fontsize=9)
+            ax_overlay.grid(True, alpha=0.3)
 
-            ax_cdf.set_title(
-                f"CDF — subscribe_latency_ms ({metrics.name})",
-                fontsize=11, fontweight="bold",
-            )
-            ax_cdf.set_xlabel("subscribe_latency_ms [ms]", fontsize=10)
-            ax_cdf.set_ylabel("Cumulative [%]", fontsize=10)
-            ax_cdf.set_ylim(0, 105)
-            ax_cdf.legend(fontsize=9)
-            ax_cdf.grid(True, alpha=0.3)
+            # --- Difference panel: PTv3 - CenterPoint ---
+            if "PTv3" in series and "CenterPoint" in series:
+                ptv3_ts, ptv3_vs   = series["PTv3"]
+                _,       cp_vs     = series["CenterPoint"]
+                n = min(len(ptv3_vs), len(cp_vs))
+                diff = ptv3_vs[:n] - cp_vs[:n]
+                ref_ts = ptv3_ts[:n]
+
+                ax_diff.plot(ref_ts, diff, color="#6A1B9A", alpha=0.8, linewidth=1.2)
+                ax_diff.axhline(0, color="gray", linewidth=0.8, linestyle="--")
+                ax_diff.fill_between(ref_ts, diff, 0,
+                                     where=(diff > 0), color="#1565C0", alpha=0.25,
+                                     label="PTv3 larger")
+                ax_diff.fill_between(ref_ts, diff, 0,
+                                     where=(diff < 0), color="#E65100", alpha=0.25,
+                                     label="CenterPoint larger")
+                ax_diff.set_title(
+                    f"Difference (PTv3 − CenterPoint) subscribe_latency_ms ({metrics.name})",
+                    fontsize=11, fontweight="bold",
+                )
+                ax_diff.set_ylabel("Δ subscribe_latency_ms [ms]", fontsize=10)
+                ax_diff.set_xlabel("Time [s]", fontsize=10)
+                ax_diff.legend(fontsize=9)
+                ax_diff.grid(True, alpha=0.3)
+            else:
+                ax_diff.set_visible(False)
 
         plt.tight_layout()
         plt.savefig(output_dir / "subscribe_latency_overlay.png", dpi=150)
