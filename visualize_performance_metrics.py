@@ -285,10 +285,20 @@ def read_rosbag_metrics(bag_path: Path, name: str, cp_prefix: str) -> Optional[P
                 print(f"Warning: no target topics found in: {bag_path}")
                 return None
 
+            subscribe_latency_topics = {
+                PTV3_TOPICS["subscribe_latency_ms"],
+                cp_topics["subscribe_latency_ms"],
+            }
             for conn, timestamp, rawdata in reader.messages(connections=connections):
                 try:
                     msg = typestore.deserialize_cdr(rawdata, conn.msgtype)
-                    metrics.add_data(conn.topic, timestamp / 1e9, msg.data)
+                    # For subscribe_latency_ms, use header.stamp (= pointcloud acquisition
+                    # time) so both models share a common time base.
+                    if conn.topic in subscribe_latency_topics:
+                        t = msg.stamp.sec + msg.stamp.nanosec * 1e-9
+                    else:
+                        t = timestamp / 1e9
+                    metrics.add_data(conn.topic, t, msg.data)
                 except Exception as e:
                     print(f"Deserialization failed: {e}")
 
@@ -866,11 +876,19 @@ def plot_metrics(metrics_list: List[PerformanceMetrics], output_dir: Path, cp_pr
             ax_scatter = all_axes[i * 2][0]
             ax_cdf     = all_axes[i * 2 + 1][0]
 
+            # Common time base: minimum header.stamp across both models
+            t0_common = min(
+                (metrics.get_values(topic)[0][0]
+                 for _, topic, _ in MODEL_SUB_STYLES
+                 if len(metrics.get_values(topic)[0]) > 0),
+                default=0.0,
+            )
+
             for model_name, topic, color in MODEL_SUB_STYLES:
                 ts, vs = metrics.get_values(topic)
                 if len(ts) == 0:
                     continue
-                rel_ts = ts - ts[0]
+                rel_ts = ts - t0_common
 
                 # --- Line (time-series) ---
                 ax_scatter.plot(rel_ts, vs, label=model_name, color=color,
