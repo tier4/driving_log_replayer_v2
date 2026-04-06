@@ -32,11 +32,12 @@ except ImportError:
 # --------------------------------------------------------------------------- #
 
 PTV3_TOPICS = {
-    "pipeline_latency_ms": "/perception/obstacle_segmentation/ptv3/debug/pipeline_latency_ms",
-    "total_ms":            "/perception/obstacle_segmentation/ptv3/debug/processing_time/total_ms",
-    "preprocess_ms":       "/perception/obstacle_segmentation/ptv3/debug/processing_time/preprocess_ms",
-    "inference_ms":        "/perception/obstacle_segmentation/ptv3/debug/processing_time/inference_ms",
-    "postprocess_ms":      "/perception/obstacle_segmentation/ptv3/debug/processing_time/postprocess_ms",
+    "pipeline_latency_ms":  "/perception/obstacle_segmentation/ptv3/debug/pipeline_latency_ms",
+    "subscribe_latency_ms": "/perception/obstacle_segmentation/ptv3/debug/subscribe_latency_ms",
+    "total_ms":             "/perception/obstacle_segmentation/ptv3/debug/processing_time/total_ms",
+    "preprocess_ms":        "/perception/obstacle_segmentation/ptv3/debug/processing_time/preprocess_ms",
+    "inference_ms":         "/perception/obstacle_segmentation/ptv3/debug/processing_time/inference_ms",
+    "postprocess_ms":       "/perception/obstacle_segmentation/ptv3/debug/processing_time/postprocess_ms",
 }
 
 # CenterPoint topic prefix; overridable with --cp-prefix
@@ -44,6 +45,7 @@ _CP_DEFAULT_PREFIX = "/perception/object_recognition/detection/centerpoint/lidar
 
 CP_TOPICS = {
     "pipeline_latency_ms": f"{_CP_DEFAULT_PREFIX}/debug/pipeline_latency_ms",
+    "subscribe_latency_ms": f"{_CP_DEFAULT_PREFIX}/debug/subscribe_latency_ms",
     "processing_time_ms":  f"{_CP_DEFAULT_PREFIX}/debug/processing_time_ms",
     "preprocess_ms":       f"{_CP_DEFAULT_PREFIX}/debug/processing_time/preprocess_ms",
     "inference_ms":        f"{_CP_DEFAULT_PREFIX}/debug/processing_time/inference_ms",
@@ -608,7 +610,7 @@ def export_metrics_to_csv(metrics_list: List[PerformanceMetrics], output_dir: Pa
     raw_csv_path = output_dir / "all_raw_metrics.csv"
     raw_header = [
         "dataset", "model", "timestamp_sec", "relative_time_sec", 
-        "pipeline_latency_ms", "node_processing_time_ms", 
+        "pipeline_latency_ms", "subscribe_latency_ms", "node_processing_time_ms", 
         "preprocess_ms", "inference_ms", "postprocess_ms", "input_latency_ms"
     ]
     
@@ -619,7 +621,14 @@ def export_metrics_to_csv(metrics_list: List[PerformanceMetrics], output_dir: Pa
         for metrics in metrics_list:
             for model_name, topics in [("PTv3", PTV3_TOPICS), ("CenterPoint", cp_topics)]:
                 t_key = "total_ms" if model_name == "PTv3" else "processing_time_ms"
-                columns = ["pipeline_latency_ms", t_key, "preprocess_ms", "inference_ms", "postprocess_ms"]
+                columns = [
+                    "pipeline_latency_ms",
+                    "subscribe_latency_ms",
+                    t_key,
+                    "preprocess_ms",
+                    "inference_ms",
+                    "postprocess_ms",
+                ]
                 
                 data_map = {}
                 all_timestamps = set()
@@ -715,51 +724,118 @@ def plot_metrics(metrics_list: List[PerformanceMetrics], output_dir: Path, cp_pr
         plt.close()
         print(f"Saved: {output_dir}/stage_timings_{safe}.png")
 
-    # --- All-metrics overlay time-series (per dataset) ---
-    for metrics in metrics_list:
-        all_plot_topics = list(PTV3_TOPICS.values())
+    # --- All-metrics overlay time-series (per dataset, per model) ---
+    def _plot_all_metrics_overlay(
+        metrics: PerformanceMetrics,
+        model_name: str,
+        topics: Dict[str, str],
+        output_path: Path,
+        y_limit: Optional[float],
+    ):
+        all_plot_topics = list(topics.values())
         available = [(t, t.split("/")[-1]) for t in all_plot_topics if len(metrics.get_values(t)[0]) > 0]
         if not available:
-            continue
+            return
 
         colors = plt.cm.tab10(np.linspace(0, 1, len(available)))
         plt.figure(figsize=(14, 8))
-        
-        # Collect all values to calculate a robust Y-limit
+
         all_values = []
         for (topic, label), color in zip(available, colors):
             ts, vs = metrics.get_values(topic)
-            if len(vs) == 0: continue
+            if len(vs) == 0:
+                continue
             ts = ts - ts[0]
-            
-            # Use only values within 98th percentile for Y-limit calculation
             all_values.extend(vs)
             plt.plot(ts, vs, label=label, alpha=0.8, linewidth=1.5, color=color)
 
         if y_limit is not None:
             plt.ylim(0, y_limit)
-            plt.text(0.01, 0.98, f"Note: Y-axis limited at {y_limit:.1f}ms (User specified)", 
+            plt.gca().set_autoscaley_on(False)
+            plt.text(0.01, 0.98, f"Note: Y-axis limited at {y_limit:.1f}ms (User specified)",
                      transform=plt.gca().transAxes, fontsize=9, verticalalignment='top',
                      bbox=dict(boxstyle='round', facecolor='white', alpha=0.5))
         elif all_values:
-            # Set Y-limit to 98th percentile * 1.2 to cut off initial spikes
             y_upper = np.percentile(all_values, 98) * 1.2
             plt.ylim(0, y_upper)
-            plt.text(0.01, 0.98, f"Note: Y-axis clipped at 98th percentile ({y_upper:.1f}ms)", 
+            plt.text(0.01, 0.98, f"Note: Y-axis clipped at 98th percentile ({y_upper:.1f}ms)",
                      transform=plt.gca().transAxes, fontsize=9, verticalalignment='top',
                      bbox=dict(boxstyle='round', facecolor='white', alpha=0.5))
 
         plt.xlabel("Time [s]", fontsize=13)
         plt.ylabel("Value [ms]", fontsize=13)
-        plt.title(f"All Performance Metrics (Outliers Clipped) - {metrics.name}", fontsize=15, fontweight="bold")
+        plt.title(
+            f"{model_name} All Performance Metrics (Outliers Clipped) - {metrics.name}",
+            fontsize=15, fontweight="bold",
+        )
         plt.legend(loc="upper right", fontsize=10, framealpha=0.9)
         plt.grid(True, alpha=0.3)
         plt.tight_layout()
-        safe_name = metrics.name.replace("/", "_").replace(" ", "_")
-        output_file = output_dir / f"all_metrics_overlay_{safe_name}.png"
-        plt.savefig(output_file, dpi=150)
+        if y_limit is not None:
+            plt.ylim(0, y_limit)
+        plt.savefig(output_path, dpi=150, bbox_inches=None)
         plt.close()
-        print(f"Saved: {output_file}")
+        print(f"Saved: {output_path}")
+
+    for metrics in metrics_list:
+        safe_name = metrics.name.replace("/", "_").replace(" ", "_")
+        _plot_all_metrics_overlay(
+            metrics, "PTv3", PTV3_TOPICS,
+            output_dir / f"all_metrics_overlay_ptv3_{safe_name}.png",
+            y_limit,
+        )
+        _plot_all_metrics_overlay(
+            metrics, "CenterPoint", cp_topics,
+            output_dir / f"all_metrics_overlay_centerpoint_{safe_name}.png",
+            y_limit,
+        )
+
+    # --- PTv3 subscribe latency breakdown ---
+    sub_lat_topic  = PTV3_TOPICS["subscribe_latency_ms"]
+    pipe_lat_topic = PTV3_TOPICS["pipeline_latency_ms"]
+    total_ms_topic = PTV3_TOPICS["total_ms"]
+
+    has_sub_lat = any(
+        len(m.get_values(sub_lat_topic)[0]) > 0 for m in metrics_list
+    )
+    if has_sub_lat:
+        _, (ax_sub, ax_proc, ax_pipe) = plt.subplots(3, 1, figsize=(14, 10), sharex=False)
+        for metrics in metrics_list:
+            sub_ts, sub_vs   = metrics.get_values(sub_lat_topic)
+            proc_ts, proc_vs = metrics.get_values(total_ms_topic)
+            pipe_ts, pipe_vs = metrics.get_values(pipe_lat_topic)
+
+            if len(sub_ts) > 0:
+                ax_sub.plot(sub_ts - sub_ts[0], sub_vs, label=metrics.name, alpha=0.8, linewidth=1.2)
+            if len(proc_ts) > 0:
+                ax_proc.plot(proc_ts - proc_ts[0], proc_vs, label=metrics.name, alpha=0.8, linewidth=1.2)
+            if len(pipe_ts) > 0:
+                ax_pipe.plot(pipe_ts - pipe_ts[0], pipe_vs, label=metrics.name, alpha=0.8, linewidth=1.2)
+
+        ax_sub.set_ylabel("subscribe_latency_ms [ms]", fontsize=10)
+        ax_sub.set_title(
+            "PTv3 Latency Breakdown\n"
+            "subscribe_latency = header.stamp → callback start (DDS + executor scheduling)\n"
+            "processing_time   = GPU inference duration\n"
+            "pipeline_latency  = header.stamp → processing complete",
+            fontsize=11, fontweight="bold",
+        )
+        ax_sub.legend(fontsize=8)
+        ax_sub.grid(True, alpha=0.3)
+
+        ax_proc.set_ylabel("processing_time/total_ms [ms]", fontsize=10)
+        ax_proc.legend(fontsize=8)
+        ax_proc.grid(True, alpha=0.3)
+
+        ax_pipe.set_ylabel("pipeline_latency_ms [ms]", fontsize=10)
+        ax_pipe.set_xlabel("Time [s]", fontsize=11)
+        ax_pipe.legend(fontsize=8)
+        ax_pipe.grid(True, alpha=0.3)
+
+        plt.tight_layout()
+        plt.savefig(output_dir / "ptv3_subscribe_latency_breakdown.png", dpi=150)
+        plt.close()
+        print(f"Saved: {output_dir}/ptv3_subscribe_latency_breakdown.png")
 
     # --- Statistics summary (text) ---
     output_file = output_dir / "statistics_summary.txt"
