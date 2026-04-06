@@ -842,6 +842,7 @@ def plot_metrics(metrics_list: List[PerformanceMetrics], output_dir: Path, cp_pr
         print(f"Saved: {output_dir}/ptv3_subscribe_latency_breakdown.png")
 
     # --- subscribe_latency_ms overlay (PTv3 vs CenterPoint) ---
+    # Layout per dataset: top = scatter (time-series), bottom = CDF
     ptv3_sub_topic = PTV3_TOPICS["subscribe_latency_ms"]
     cp_sub_topic   = cp_topics["subscribe_latency_ms"]
 
@@ -850,29 +851,63 @@ def plot_metrics(metrics_list: List[PerformanceMetrics], output_dir: Path, cp_pr
         for m in metrics_list
     )
     if has_sub_overlay:
-        _, axes_sub = plt.subplots(len(metrics_list), 1,
-                                   figsize=(14, 5 * len(metrics_list)),
-                                   sharex=False, squeeze=False)
+        MODEL_SUB_STYLES = [
+            ("PTv3",        ptv3_sub_topic, "#1565C0"),   # dark blue
+            ("CenterPoint", cp_sub_topic,   "#E65100"),   # dark orange
+        ]
+        n_datasets = len(metrics_list)
+        _, all_axes = plt.subplots(
+            n_datasets * 2, 1,
+            figsize=(14, 7 * n_datasets),
+            squeeze=False,
+        )
+
         for i, metrics in enumerate(metrics_list):
-            ax = axes_sub[i][0]
-            for model_name, topic, color in [
-                ("PTv3",        ptv3_sub_topic, "#1565C0"),   # dark blue
-                ("CenterPoint", cp_sub_topic,   "#E65100"),   # dark orange
-            ]:
+            ax_scatter = all_axes[i * 2][0]
+            ax_cdf     = all_axes[i * 2 + 1][0]
+
+            for model_name, topic, color in MODEL_SUB_STYLES:
                 ts, vs = metrics.get_values(topic)
                 if len(ts) == 0:
                     continue
-                ax.plot(ts - ts[0], vs, label=model_name, alpha=0.8,
-                        linewidth=1.2, color=color)
-            ax.set_ylabel("subscribe_latency_ms [ms]", fontsize=10)
-            ax.set_xlabel("Time [s]", fontsize=10)
-            ax.set_title(
+                rel_ts = ts - ts[0]
+
+                # --- Scatter (time-series) ---
+                ax_scatter.scatter(rel_ts, vs, label=model_name, color=color,
+                                   s=6, alpha=0.5)
+
+                # --- CDF ---
+                sorted_vs = np.sort(vs)
+                cdf = np.arange(1, len(sorted_vs) + 1) / len(sorted_vs)
+                ax_cdf.plot(sorted_vs, cdf * 100, label=model_name,
+                            color=color, linewidth=1.8)
+                # Percentile markers: P50, P90, P99
+                for pct in (50, 90, 99):
+                    val = np.percentile(vs, pct)
+                    ax_cdf.axvline(val, color=color, linestyle="--",
+                                   linewidth=0.8, alpha=0.7)
+                    ax_cdf.text(val, pct - 3, f"P{pct}\n{val:.1f}ms",
+                                color=color, fontsize=7, ha="center", va="top")
+
+            ax_scatter.set_title(
                 f"subscribe_latency_ms — PTv3 vs CenterPoint ({metrics.name})\n"
                 "subscribe_latency = header.stamp → callback start (DDS + executor scheduling)",
                 fontsize=11, fontweight="bold",
             )
-            ax.legend(fontsize=9)
-            ax.grid(True, alpha=0.3)
+            ax_scatter.set_ylabel("subscribe_latency_ms [ms]", fontsize=10)
+            ax_scatter.set_xlabel("Time [s]", fontsize=10)
+            ax_scatter.legend(fontsize=9)
+            ax_scatter.grid(True, alpha=0.3)
+
+            ax_cdf.set_title(
+                f"CDF — subscribe_latency_ms ({metrics.name})",
+                fontsize=11, fontweight="bold",
+            )
+            ax_cdf.set_xlabel("subscribe_latency_ms [ms]", fontsize=10)
+            ax_cdf.set_ylabel("Cumulative [%]", fontsize=10)
+            ax_cdf.set_ylim(0, 105)
+            ax_cdf.legend(fontsize=9)
+            ax_cdf.grid(True, alpha=0.3)
 
         plt.tight_layout()
         plt.savefig(output_dir / "subscribe_latency_overlay.png", dpi=150)
