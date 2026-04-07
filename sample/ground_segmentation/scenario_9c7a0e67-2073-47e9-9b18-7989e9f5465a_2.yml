@@ -1,0 +1,46 @@
+ScenarioFormatVersion: 3.0.0
+ScenarioName: >-
+  ground-segmentation_db_j6gen2_semseg_v1_test_15cb5202-ffaa-42dc-9bf3-fe665419e386
+ScenarioDescription: 15cb5202-ffaa-42dc-9bf3-fe665419e386
+SensorModel: aip_x2_gen2
+VehicleModel: j6_gen2
+Evaluation:
+  UseCaseName: ground_segmentation
+  UseCaseFormatVersion: 0.4.0
+  Datasets:
+    - 15cb5202-ffaa-42dc-9bf3-fe665419e386:
+        VehicleId: j6_gen2_03
+  Conditions:
+    Method: annotated_pcd
+    ground_label:
+      - drivable_surface
+      - other_flat_surface
+      - sidewalk
+    obstacle_label:
+      - manmade
+      - vegetation
+      - car
+      - pedestrian
+      - emergency_vehicle
+      - truck
+      - tractor_unit
+      - semi_trailer
+      - bus
+      - bicycle
+      - motorcycle
+      - construction_vehicle
+      - other_stuff
+      - noise
+      - traffic_cone
+      - debris
+      - forklift
+      - kart
+      - stroller
+      - personal_mobility
+      - pushable_pullable
+      - animal
+      - train
+      - ghost_point
+    accuracy_min: 0.76072
+    accuracy_max: 1
+    PassRate: 94
