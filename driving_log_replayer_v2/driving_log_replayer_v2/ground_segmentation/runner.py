@@ -153,6 +153,9 @@ class GroundSegmentationRunner(Runner):
             header.stamp,
         )
 
+    def _use_future_tf(self) -> bool:
+        return False
+
     def _evaluate_on_post_process(self) -> None:
         pass
 

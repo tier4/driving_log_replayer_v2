@@ -254,9 +254,15 @@ class Runner(ABC):
         """
         raise NotImplementedError
 
+    def _use_future_tf(self) -> bool:
+        """Whether to wait for future TF before yielding evaluation messages. Override to disable."""
+        return True
+
     def evaluate(self) -> None:
         """Evaluate rosbag frame by frame."""
-        for topic_name, msg, subscribed_timestamp_nanosec in self._rosbag_manager.read_messages():
+        for topic_name, msg, subscribed_timestamp_nanosec in self._rosbag_manager.read_messages(
+            allow_future_tf=self._use_future_tf()
+        ):
             frame_result: FrameResult = self._evaluate_frame(
                 topic_name, msg, subscribed_timestamp_nanosec
             )
