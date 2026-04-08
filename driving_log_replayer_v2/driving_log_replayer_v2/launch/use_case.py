@@ -275,11 +275,24 @@ def launch_ground_truth_publisher_node(context: LaunchContext) -> list:
         scenario = load_scenario(scenario_path, GroundSegmentationScenario)
         conditions = scenario.Evaluation.Conditions
 
+        # Resolve string labels to integer indices using category.json
+        category_path = Path(t4_dataset_path) / "annotation" / "category.json"
+        with category_path.open(encoding="utf-8") as f:
+            category_data = json.load(f)
+        name_to_index: dict[str, int] = {cat["name"]: cat["index"] for cat in category_data}
+
+        def resolve_labels(labels: list) -> list[int]:
+            if not labels:
+                return []
+            if isinstance(labels[0], int):
+                return list(labels)
+            return [name_to_index[name] for name in labels]
+
         params = {
             "use_sim_time": True,
             "t4_dataset_path": t4_dataset_path,
-            "ground_label": conditions.ground_label,
-            "obstacle_label": conditions.obstacle_label,
+            "ground_label": resolve_labels(conditions.ground_label),
+            "obstacle_label": resolve_labels(conditions.obstacle_label),
             "publish_ground_only": False,
         }
 

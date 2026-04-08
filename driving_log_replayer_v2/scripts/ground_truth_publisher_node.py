@@ -17,7 +17,6 @@
 import json
 from pathlib import Path
 
-import driving_log_replayer_v2.perception_eval_conversions as eval_conversions
 import numpy as np
 import rclpy
 import ros2_numpy
@@ -274,8 +273,8 @@ class GroundTruthPublisherNode(Node):
                 self._pub_ground_truth.publish(ros_pcd)
                 return
 
-            header_timestamp_microsec: int = eval_conversions.unix_time_microsec_from_ros_msg(
-                msg.header
+            header_timestamp_microsec: int = (
+                msg.header.stamp.sec * 10**6 + msg.header.stamp.nanosec // 1000
             )
             gt_frame_ts = self._get_gt_frame_ts(header_timestamp_microsec)
 
