@@ -12,14 +12,54 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import csv
 from pathlib import Path
 
 from driving_log_replayer_v2_analyzer.data.ground_segmentation import JsonlParser
 from driving_log_replayer_v2_analyzer.plot.line_plot import LinePlot
 
 
+def export_csv(input_jsonl: Path, output_dir: Path) -> None:
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    parser = JsonlParser(input_jsonl)
+    metrics_data = parser.get_metrics_timeseries()
+    cm_data = parser.get_confusion_matrix_timeseries()
+
+    if not metrics_data:
+        print("No data found in the input file. CSV will not be generated.")
+        return
+
+    rows = []
+    for m, c in zip(metrics_data, cm_data):
+        rows.append(
+            {
+                "timestamp": m["x"],
+                "Accuracy": m["Accuracy"],
+                "Precision": m["Precision"],
+                "Recall": m["Recall"],
+                "F1-score": m["F1-score"],
+                "TP": c["TP"],
+                "FP": c["FP"],
+                "TN": c["TN"],
+                "FN": c["FN"],
+            }
+        )
+
+    output_path = output_dir / "ground_segmentation_results.csv"
+    fieldnames = ["timestamp", "Accuracy", "Precision", "Recall", "F1-score", "TP", "FP", "TN", "FN"]
+    with output_path.open("w", newline="") as f:
+        writer = csv.DictWriter(f, fieldnames=fieldnames)
+        writer.writeheader()
+        writer.writerows(rows)
+
+    print(f"CSV saved to {output_path}")
+
+
 def visualize(input_jsonl: Path, output_dir: Path) -> None:
     output_dir.mkdir(parents=True, exist_ok=True)
+
+    export_csv(input_jsonl, output_dir)
 
     # Load result.jsonl
     parser = JsonlParser(input_jsonl)
