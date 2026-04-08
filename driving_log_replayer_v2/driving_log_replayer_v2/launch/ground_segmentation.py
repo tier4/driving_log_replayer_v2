@@ -59,4 +59,9 @@ USE_CASE_ARGS: list[DeclareLaunchArgument] = [
         "enable_analysis",
         default_value="false",
     ),
+    DeclareLaunchArgument(
+        "save_ground_truth_pointcloud",
+        default_value="false",
+        description="If true, record the ground truth point cloud topic to the result rosbag.",
+    ),
 ]

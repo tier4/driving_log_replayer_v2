@@ -251,6 +251,62 @@ def launch_goal_pose_node(context: LaunchContext) -> list:
     ]
 
 
+def launch_ground_truth_publisher_node(context: LaunchContext) -> list:
+    """Launch ground truth publisher node for ground_segmentation use case."""
+    conf = context.launch_configurations
+    if conf["use_case"] != "ground_segmentation":
+        return []
+    if conf.get("save_ground_truth_pointcloud", "false") != "true":
+        return []
+
+    t4_dataset_path = conf.get("t4_dataset_path", "")
+    if not t4_dataset_path:
+        return [
+            LogInfo(
+                msg="WARNING: t4_dataset_path is not set. Ground truth publisher node will not be launched."
+            ),
+        ]
+
+    try:
+        from driving_log_replayer_v2.ground_segmentation.models import GroundSegmentationScenario
+        from driving_log_replayer_v2.scenario import load_scenario
+
+        scenario_path = Path(conf["scenario_path"])
+        scenario = load_scenario(scenario_path, GroundSegmentationScenario)
+        conditions = scenario.Evaluation.Conditions
+
+        params = {
+            "use_sim_time": True,
+            "t4_dataset_path": t4_dataset_path,
+            "ground_label": conditions.ground_label,
+            "obstacle_label": conditions.obstacle_label,
+            "publish_ground_only": False,
+        }
+
+        return [
+            LogInfo(
+                msg=f"Launching ground truth publisher node for ground_segmentation "
+                f"(t4_dataset_path={t4_dataset_path})"
+            ),
+            Node(
+                package="driving_log_replayer_v2",
+                namespace="/driving_log_replayer_v2",
+                executable="ground_truth_publisher_node.py",
+                output="screen",
+                name="ground_truth_publisher_node",
+                parameters=[params],
+            ),
+        ]
+    except Exception as e:
+        import traceback
+
+        return [
+            LogInfo(
+                msg=f"Failed to launch ground truth publisher node: {e}\n{traceback.format_exc()}"
+            )
+        ]
+
+
 def launch_use_case() -> list:
     return [
         OpaqueFunction(function=add_use_case_arguments),  # after ensure_arg_compatibility
@@ -258,6 +314,7 @@ def launch_use_case() -> list:
         OpaqueFunction(function=launch_optional_nodes),
         OpaqueFunction(function=launch_map_height_fitter),
         OpaqueFunction(function=launch_evaluator_node),
+        OpaqueFunction(function=launch_ground_truth_publisher_node),
         OpaqueFunction(function=launch_bag_player),
         OpaqueFunction(function=launch_bag_recorder),
         OpaqueFunction(function=launch_topic_state_monitor),

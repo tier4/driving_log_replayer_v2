@@ -234,6 +234,11 @@ def launch_bag_recorder(context: LaunchContext) -> list:
             pattern = f"|^{seg_topic}$"
             if pattern not in record_regex:
                 record_regex = record_regex + pattern
+        if conf.get("save_ground_truth_pointcloud", "false") == "true":
+            gt_topic = "/driving_log_replayer_v2/ground_truth/pointcloud"
+            pattern = f"|^{gt_topic}$"
+            if pattern not in record_regex:
+                record_regex = record_regex + pattern
         record_cmd += ["-e", record_regex]
     else:
         record_cmd += ["-e", conf["override_topics_regex"]]
