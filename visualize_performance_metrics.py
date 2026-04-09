@@ -169,11 +169,26 @@ class PerformanceMetrics:
         # Align by timestamp (approximate)
         if len(p_vs) == 0 or len(t_vs) == 0:
             return np.array([]), np.array([])
-        
+
         # Simple index-based alignment assuming 1:1 message ratio
         n = min(len(p_vs), len(t_vs))
         input_latencies = p_vs[:n] - t_vs[:n]
         return p_ts[:n], input_latencies
+
+    def get_callback_execution_time(self, topics: Dict[str, str]) -> Tuple[np.ndarray, np.ndarray]:
+        """Approximate callback execution time = pipeline_latency_ms - subscribe_latency_ms.
+
+        Note: this approximation excludes the time spent in debug publish calls
+        that occur after pipeline_latency_ms is captured.
+        """
+        p_ts, p_vs = self.get_values(topics["pipeline_latency_ms"])
+        s_ts, s_vs = self.get_values(topics["subscribe_latency_ms"])
+
+        if len(p_vs) == 0 or len(s_vs) == 0:
+            return np.array([]), np.array([])
+
+        n = min(len(p_vs), len(s_vs))
+        return p_ts[:n], p_vs[:n] - s_vs[:n]
 
 # --------------------------------------------------------------------------- #
 # GPU contention analysis
@@ -933,6 +948,53 @@ def plot_metrics(metrics_list: List[PerformanceMetrics], output_dir: Path, cp_pr
         plt.savefig(output_dir / "subscribe_latency_overlay.png", dpi=150)
         plt.close()
         print(f"Saved: {output_dir}/subscribe_latency_overlay.png")
+
+    # --- Callback execution time: pipeline_latency_ms - subscribe_latency_ms ---
+    # Approximation: excludes debug publish calls that happen after pipeline_latency_ms is captured.
+    has_cb_exec = any(
+        len(m.get_values(PTV3_TOPICS["pipeline_latency_ms"])[0]) > 0 or
+        len(m.get_values(cp_topics["pipeline_latency_ms"])[0]) > 0
+        for m in metrics_list
+    )
+    if has_cb_exec:
+        MODEL_CB_STYLES = [
+            ("PTv3",        PTV3_TOPICS, "#1565C0"),
+            ("CenterPoint", cp_topics,   "#E65100"),
+        ]
+        n_datasets = len(metrics_list)
+        _, cb_axes = plt.subplots(
+            n_datasets, 1,
+            figsize=(14, 5 * n_datasets),
+            squeeze=False,
+        )
+
+        for i, metrics in enumerate(metrics_list):
+            ax = cb_axes[i][0]
+            t0_common = None
+
+            for model_name, topics, color in MODEL_CB_STYLES:
+                ts, vs = metrics.get_callback_execution_time(topics)
+                if len(ts) == 0:
+                    continue
+                if t0_common is None:
+                    t0_common = ts[0]
+                ax.plot(ts - t0_common, vs, label=model_name, color=color,
+                        alpha=0.8, linewidth=1.2)
+
+            ax.set_title(
+                f"Callback Execution Time — {metrics.name}\n"
+                "= pipeline_latency_ms − subscribe_latency_ms",
+                fontsize=11, fontweight="bold",
+            )
+            ax.set_ylabel("callback_execution_time_ms [ms]", fontsize=10)
+            ax.set_xlabel("Time [s]", fontsize=10)
+            ax.legend(fontsize=9)
+            ax.grid(True, alpha=0.3)
+
+        plt.tight_layout()
+        plt.savefig(output_dir / "callback_execution_time.png", dpi=150)
+        plt.close()
+        print(f"Saved: {output_dir}/callback_execution_time.png")
 
     # --- Statistics summary (text) ---
     output_file = output_dir / "statistics_summary.txt"
