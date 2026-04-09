@@ -40,11 +40,16 @@ RECORD_TOPIC = """^/tf$\
 |^/driving_log_replayer/.*\
 """
 
-AUTOWARE_DISABLE = {
-    "localization": "false",
-    "planning": "false",
-    "control": "false",
-}
+def AUTOWARE_DISABLE(conf: dict) -> dict:
+    disable = {
+        "localization": "false",
+        "planning": "false",
+        "control": "false",
+    }
+    if conf.get("use_sensing", "false") != "true":
+        disable["sensing"] = "false"
+    return disable
+
 
 AUTOWARE_ARGS = {"perception_mode": "lidar"}
 
@@ -63,5 +68,10 @@ USE_CASE_ARGS: list[DeclareLaunchArgument] = [
         "save_ground_truth_pointcloud",
         default_value="false",
         description="If true, record the ground truth point cloud topic to the result rosbag.",
+    ),
+    DeclareLaunchArgument(
+        "use_sensing",
+        default_value="false",
+        description="If false, disable the sensing module and use concatenated pointcloud directly from rosbag.",
     ),
 ]
