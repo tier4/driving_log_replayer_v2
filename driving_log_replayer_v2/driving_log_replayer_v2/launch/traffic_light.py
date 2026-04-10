@@ -16,12 +16,15 @@ from launch.actions import DeclareLaunchArgument
 from launch.substitutions import LaunchConfiguration
 
 RECORD_TOPIC = """^/tf$\
+|^/tf_static$\
 |^/diagnostics$\
 |^/perception/.*/traffic_signals$\
 |^/perception/traffic_light_recognition/traffic_signals/markers$\
 |^/perception/traffic_light_recognition/.*/debug/rois/compressed$\
 |^/driving_log_replayer_v2/.*\
 |^/driving_log_replayer/.*\
+|^/perception/traffic_light_recognition/.*/rois$\
+|^/perception/traffic_light_recognition/.*/detection/traffic_light_whole_image_detector/debug/image/compressed$\
 """
 
 AUTOWARE_DISABLE = {
