@@ -42,7 +42,7 @@ Evaluation:
       # --- 物体のマッチング条件 ---
       max_matchable_radii: [5.0, 3.0, 3.0, 3.0, 3.0] # マッチング時の最大マッチング距離。これを超えてマッチングすることはない。
       merge_similar_labels: false # 類似のラベルをマージするか https://github.com/tier4/autoware_perception_evaluation/blob/develop/docs/ja/perception/label.md
-      matching_label_policy: allow_unknown # default/allow_unknown/allow_any 先頭から順に、同じラベルのみマッチングを許可、unknownは他全てのラベルとマッチングを許可、全てのラベル同士のマッチングを許可
+      matching_label_policy: allow_unknown # default/allow_unknown/allow_any/allow_same_group 先頭から順に、同じラベルのみマッチングを許可、unknownは他全てのラベルとマッチングを許可、全てのラベル同士のマッチングを許可、同じグループ内のみマッチングを許可(vehicleとvru)
       # allow_matching_unknown: true # ラベルがunknownのオブジェクトとマッチングさせるか。つまりmatching_label_policy: allow_unknown と同じ意味。matching_label_policyを指定した場合はそちらが優先される。
       # matching_class_agnostic_fps: true # 全てのラベル同士のマッチングを許可 (evaluation_taskがdetectionの場合のみ。また開発進捗で変化する) matching_label_policyがdefaultの時のみ値が使用される デフォルトはfalse
       # ground truthの読み込み条件
