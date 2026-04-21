@@ -30,6 +30,8 @@ from driving_log_replayer_v2.shutdown_once import ShutdownOnce
 
 PACKAGE_SHARE = get_package_share_directory("driving_log_replayer_v2")
 QOS_PROFILE_PATH_STR = Path(PACKAGE_SHARE, "config", "qos.yaml").as_posix()
+HUMBLE_ROSBAG2_METADATA_VERSION = 5
+JAZZY_ROSBAG2_METADATA_VERSION = 9
 
 
 def is_set_goal(goal_method: str, goal_pose: str | dict) -> bool:
@@ -154,10 +156,46 @@ def get_rosbag_timestamp_offset(play_cmd: list[str], context: LaunchContext) -> 
     return play_cmd
 
 
+def keep_compatibility_metadata(input_bag: str) -> None:
+    """Keep compatibility of metadata.yaml between rosbag2 version humble and jazzy."""
+    mapping = {
+        "reliable": 1,
+        "best_effort": 2,
+        "transient_local": 1,
+        "volatile": 2,
+        "keep_last": 1,
+        "automatic": 1,
+    }
+
+    metadata_file = Path(input_bag) / "metadata.yaml"
+    with metadata_file.open("r") as f:
+        metadata = yaml.safe_load(f)
+    rosbag2_bagfile_information = metadata["rosbag2_bagfile_information"]
+
+    if rosbag2_bagfile_information["version"] == HUMBLE_ROSBAG2_METADATA_VERSION:
+        return
+    if rosbag2_bagfile_information["version"] == JAZZY_ROSBAG2_METADATA_VERSION:
+        rosbag2_bagfile_information["version"] = HUMBLE_ROSBAG2_METADATA_VERSION
+        for topic_with_message_count in rosbag2_bagfile_information["topics_with_message_count"]:
+            topic_metadata = topic_with_message_count["topic_metadata"]
+            for offered_qos_profiles in topic_metadata["offered_qos_profiles"]:
+                offered_qos_profiles["reliability"] = mapping[offered_qos_profiles["reliability"]]
+                offered_qos_profiles["durability"] = mapping[offered_qos_profiles["durability"]]
+                offered_qos_profiles["history"] = mapping[offered_qos_profiles["history"]]
+                offered_qos_profiles["liveliness"] = mapping[offered_qos_profiles["liveliness"]]
+            topic_metadata["offered_qos_profiles"] = yaml.safe_dump(
+                topic_metadata["offered_qos_profiles"], default_flow_style=False
+            ).strip()
+        with metadata_file.open("w") as f:
+            yaml.safe_dump(metadata, f, sort_keys=False)
+
+
 def launch_bag_player(
     context: LaunchContext,
 ) -> IncludeLaunchDescription:
     conf = context.launch_configurations
+    # TODO: remove this when DLR update jazzy
+    keep_compatibility_metadata(conf["input_bag"])
     play_cmd = [
         "ros2",
         "bag",
