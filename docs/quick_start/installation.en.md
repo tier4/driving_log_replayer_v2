@@ -80,3 +80,5 @@ This document contains step-by-step instruction on how to build [AWF Autoware Co
    ```shell
    colcon build --symlink-install --cmake-args -DCMAKE_BUILD_TYPE=Release
    ```
+
+   When `driving_log_replayer_v2` configures, it installs the extra Python dependencies in `requirements.txt` (Pydantic v2, nuscenes stack, `driving_log_replayer_v2_analyzer` tools such as Plotly) into the same Python used by colcon. On Ubuntu 24.04 this uses `PIP_BREAK_SYSTEM_PACKAGES=1` (handled in `CMakeLists.txt`). To skip that step (e.g. you already installed the file in a venv or custom image), build with `-DDRIVING_LOG_REPLAYER_V2_INSTALL_PYTHON_DEPS=OFF` and install dependencies yourself. After install, the file is also under `share/driving_log_replayer_v2/requirements.txt` in the package prefix.

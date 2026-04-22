@@ -5,8 +5,31 @@ find_package(ament_cmake_python REQUIRED)
 find_package(autoware_cmake REQUIRED)
 autoware_package()
 
-set(ROS_REQUIREMENTS "${CMAKE_CURRENT_SOURCE_DIR}/../requirements.txt")
-execute_process(COMMAND bash -c "python3 -m pip install -r ${ROS_REQUIREMENTS}")
+# Extra Python packages (Pydantic v2, nuscenes, analyzer plotly, etc.): not fully covered by apt/rosdep.
+# Ubuntu 24.04+ (PEP 668): PIP_BREAK_SYSTEM_PACKAGES=1 allows pip into the same env as /usr/bin/python3
+# (typical for Autoware/colcon). Set OFF to skip if you pre-install (venv, custom image) or use rosdep+manual pip.
+option(
+  DRIVING_LOG_REPLAYER_V2_INSTALL_PYTHON_DEPS
+  "Run pip install -r ../requirements.txt during configure (recommended for colcon+ROS use)"
+  ON
+)
+
+set(_DRIVING_LOG_REPLAYER_V2_REQUIREMENTS "${CMAKE_CURRENT_SOURCE_DIR}/../requirements.txt")
+if(DRIVING_LOG_REPLAYER_V2_INSTALL_PYTHON_DEPS AND EXISTS "${_DRIVING_LOG_REPLAYER_V2_REQUIREMENTS}")
+  find_package(Python3 REQUIRED COMPONENTS Interpreter)
+  execute_process(
+    COMMAND ${CMAKE_COMMAND} -E env "PIP_BREAK_SYSTEM_PACKAGES=1"
+    ${Python3_EXECUTABLE} -m pip install -q -r "${_DRIVING_LOG_REPLAYER_V2_REQUIREMENTS}"
+    RESULT_VARIABLE _driving_log_replayer_v2_pip
+  )
+  if(NOT _driving_log_replayer_v2_pip EQUAL 0)
+    message(WARNING
+      "pip for driving_log_replayer_v2 failed (exit ${_driving_log_replayer_v2_pip}). "
+      "On Ubuntu 24.04+, you may need: PIP_BREAK_SYSTEM_PACKAGES=1 ${Python3_EXECUTABLE} -m pip install -r ${_DRIVING_LOG_REPLAYER_V2_REQUIREMENTS}. "
+      "Or: colcon build --cmake-args -DDRIVING_LOG_REPLAYER_V2_INSTALL_PYTHON_DEPS=OFF after installing that file manually."
+    )
+  endif()
+endif()
 
 if(BUILD_TESTING)
   find_package(ament_lint_auto REQUIRED)
@@ -39,6 +62,11 @@ install(PROGRAMS
   scripts/perception_reproducer_evaluator_node.py
   DESTINATION lib/${PROJECT_NAME}
 )
+
+if(EXISTS "${_DRIVING_LOG_REPLAYER_V2_REQUIREMENTS}")
+  install(FILES "${_DRIVING_LOG_REPLAYER_V2_REQUIREMENTS}"
+    DESTINATION share/${PROJECT_NAME})
+endif()
 
 ament_auto_package(INSTALL_TO_SHARE
   launch

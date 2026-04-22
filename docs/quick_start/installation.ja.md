@@ -80,3 +80,5 @@
    ```shell
    colcon build --symlink-install --cmake-args -DCMAKE_BUILD_TYPE=Release
    ```
+
+   `driving_log_replayer_v2` の CMake 設定時に、倉庫上の `requirements.txt` へ記載の追加の Python 依存（Pydantic v2、nuscenes 系、`driving_log_replayer_v2_analyzer` 用の Plotly 等）を、colcon が用いる Python 環境へ `pip` で導入します。Ubuntu 24.04 では PEP 668 のため、CMake 内で `PIP_BREAK_SYSTEM_PACKAGES=1` を付与しています。事前に仮想環境などで入れ済みの場合は、`-DDRIVING_LOG_REPLAYER_V2_INSTALL_PYTHON_DEPS=OFF` を付けて本処理を抑止し、同じ内容の依存を手動で入れてください。インストール後は、パッケージ prefix 内の `share/driving_log_replayer_v2/requirements.txt` にも同ファイルが置かれます。

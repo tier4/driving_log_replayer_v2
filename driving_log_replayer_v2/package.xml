@@ -57,7 +57,7 @@
   <!-- to avoid rosdep install error -->
   <!-- <exec_depend>autoware_launch</exec_depend> -->
   <!-- <exec_depend>perception_online_evaluator</exec_depend> -->
-  <!-- The version of python3-pydantic is old, so use pip to install it when building with CMake -->
+  <!-- Pydantic v2 and other pins: ../requirements.txt via CMake (DRIVING_LOG_REPLAYER_V2_INSTALL_PYTHON_DEPS), also under share/ -->
   <!-- <exec_depend>python3-pydantic</exec_depend> -->
 
   <test_depend>ament_cmake_gtest</test_depend>

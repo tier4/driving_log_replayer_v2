@@ -13,12 +13,32 @@
 # limitations under the License.
 
 
+import xml.etree.ElementTree as ET
 from importlib.metadata import version
+from pathlib import Path
 
-try:
-    __version__ = version("driving_log_replayer_v2_cli")
-except Exception:  # noqa
-    __version__ = "0.0.0"
+
+def _read_version() -> str:
+    try:
+        return version("driving-log-replayer-v2")
+    except Exception:  # noqa: S110
+        pass
+    try:
+        from ament_index_python.packages import get_package_prefix
+
+        prefix = get_package_prefix("driving_log_replayer_v2_analyzer")
+        pkg_xml = Path(prefix) / "share" / "driving_log_replayer_v2_analyzer" / "package.xml"
+        if pkg_xml.is_file():
+            root = ET.parse(pkg_xml).getroot()
+            v = root.find("version")
+            if v is not None and (t := (v.text or "").strip()):
+                return t
+    except Exception:  # noqa: S110
+        pass
+    return "0.0.0"
+
+
+__version__ = _read_version()
 
 
 def main() -> None:
