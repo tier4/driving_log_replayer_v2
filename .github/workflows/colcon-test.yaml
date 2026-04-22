@@ -15,6 +15,7 @@ jobs:
     # https://docs.ros.org/en/independent/api/rosdep/html/pip_and_pep_668.html
     env:
       PIP_BREAK_SYSTEM_PACKAGES: "1"
+      PIP_NO_CACHE_DIR: "1"
     strategy:
       fail-fast: false
       matrix:
@@ -51,6 +52,8 @@ jobs:
         run: |
           python3 -m pip install -q -U --ignore-installed -r "${GITHUB_WORKSPACE}/constraints-pip.txt"
           python3 -m pip install -q -c "${GITHUB_WORKSPACE}/constraints-pip.txt" -r "${GITHUB_WORKSPACE}/requirements.txt"
+          # rosinstall-generator (from ros tooling) expects rospkg; not always present as apt in minimal images
+          python3 -m pip install -q rospkg
 
       - name: build and test
         uses: ros-tooling/action-ros-ci@v0.4

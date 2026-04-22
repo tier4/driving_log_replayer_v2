@@ -1,7 +1,8 @@
-# Single source for pip/setuptools/wheel lower bounds (Python 3.12 / sdist build isolation).
+# Single source for pip/setuptools/wheel (Python 3.12 / sdist build isolation).
 # 1) Bootstrap:  pip install -U --ignore-installed -r constraints-pip.txt
-#    (--ignore-installed: apt-installed wheel/pip leave no RECORD; pip cannot uninstall them)
 # 2) Main deps: pip install -c constraints-pip.txt -r requirements.txt
+#
+# setuptools<80: colcon-core declares setuptools<80; >=70 avoids pkgutil.ImpImporter on 3.12 with old pins
 pip>=24.0.0
-setuptools>=70.0.0
+setuptools>=70.0.0,<80.0.0
 wheel>=0.42.0
