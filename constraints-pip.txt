@@ -1,5 +1,6 @@
 # Single source for pip/setuptools/wheel lower bounds (Python 3.12 / sdist build isolation).
-# 1) Bootstrap:  pip install -U -r constraints-pip.txt
+# 1) Bootstrap:  pip install -U --ignore-installed -r constraints-pip.txt
+#    (--ignore-installed: apt-installed wheel/pip leave no RECORD; pip cannot uninstall them)
 # 2) Main deps: pip install -c constraints-pip.txt -r requirements.txt
 pip>=24.0.0
 setuptools>=70.0.0

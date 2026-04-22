@@ -49,7 +49,7 @@ jobs:
       # Python 3.12: upgrade pip/setuptools before requirements (isolated sdist / ImpImporter).
       - name: Install Python dependencies
         run: |
-          python3 -m pip install -q -U -r "${GITHUB_WORKSPACE}/constraints-pip.txt"
+          python3 -m pip install -q -U --ignore-installed -r "${GITHUB_WORKSPACE}/constraints-pip.txt"
           python3 -m pip install -q -c "${GITHUB_WORKSPACE}/constraints-pip.txt" -r "${GITHUB_WORKSPACE}/requirements.txt"
 
       - name: build and test
