@@ -8,6 +8,8 @@ numpy<2 # If not specified, numpy 2 can be pulled by nuscenes-devkit
 # nuscenes / evaluators (PyPI has wheels for common Linux + CPython; sdist may need libgeos-dev, etc.)
 Shapely>=2.0.6
 nuscenes-devkit>=1.1.9,<1.2.0
+# matplotlib: full PyPI install avoids broken/partial apt layout (e.g. missing matplotlib.tri.*) for perception_eval
+matplotlib>=3.5.0,<3.6.0
 # driving_log_replayer_v2_analyzer (ROS) — same as pyproject.toml; not on rosdep
 click>=8.1.7
 plotly>=5.19.0
