@@ -24,11 +24,12 @@ set(_DRIVING_LOG_REPLAYER_V2_PIP_CONSTRAINTS "${_DRIVING_LOG_REPLAYER_V2_REPO_RO
 if(DRIVING_LOG_REPLAYER_V2_INSTALL_PYTHON_DEPS AND EXISTS "${_DRIVING_LOG_REPLAYER_V2_REQUIREMENTS}")
   find_package(Python3 REQUIRED COMPONENTS Interpreter)
   # PIP_NO_CACHE_DIR: some CI/home layouts use a non-writable pip cache dir
-  # PIP_CONSTRAINT: keep setuptools<80 in pip build isolation (PEP 517) for sdist builds
+  # PIP_CONSTRAINT / PIP_BUILD_CONSTRAINT: setuptools<80 in resolver and in build isolation (pip 26+)
   set(_dlr2_pip_env
     "PIP_BREAK_SYSTEM_PACKAGES=1"
     "PIP_NO_CACHE_DIR=1"
     "PIP_CONSTRAINT=${_DRIVING_LOG_REPLAYER_V2_PIP_CONSTRAINTS}"
+    "PIP_BUILD_CONSTRAINT=${_DRIVING_LOG_REPLAYER_V2_PIP_CONSTRAINTS}"
   )
   # Python 3.12: old setuptools in pip build env hits pkgutil.ImpImporter; versions in constraints-pip.txt
   execute_process(

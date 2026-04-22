@@ -17,6 +17,8 @@ jobs:
       PIP_BREAK_SYSTEM_PACKAGES: "1"
       PIP_NO_CACHE_DIR: "1"
       PIP_CONSTRAINT: ${{ github.workspace }}/constraints-pip.txt
+      # pip 26+: build isolation uses PIP_BUILD_CONSTRAINT (see pip deprecation for PIP_CONSTRAINT)
+      PIP_BUILD_CONSTRAINT: ${{ github.workspace }}/constraints-pip.txt
     strategy:
       fail-fast: false
       matrix:
@@ -51,7 +53,8 @@ jobs:
       # Python 3.12: upgrade pip/setuptools before requirements (isolated sdist / ImpImporter).
       - name: Install Python dependencies
         run: |
-          python3 -m pip install -q rospkg
+          # --ignore-installed: deb/apt may provide lark, wheel, etc. without a pip RECORD; pip cannot uninstall them
+          python3 -m pip install -q --ignore-installed lark rospkg
           python3 -m pip install -q -U --ignore-installed -r "${GITHUB_WORKSPACE}/constraints-pip.txt"
           python3 -m pip install -q -c "${GITHUB_WORKSPACE}/constraints-pip.txt" -r "${GITHUB_WORKSPACE}/requirements.txt" --only-binary shapely
 
