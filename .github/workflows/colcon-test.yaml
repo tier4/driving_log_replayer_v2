@@ -50,13 +50,8 @@ jobs:
         with:
           required-ros-distributions: ${{ matrix.ros_distribution }}
 
-      # Python 3.12: upgrade pip/setuptools before requirements (isolated sdist / ImpImporter).
-      - name: Install Python dependencies
-        run: |
-          # --ignore-installed: deb/apt may provide lark, wheel, etc. without a pip RECORD; pip cannot uninstall them
-          python3 -m pip install -q --ignore-installed lark rospkg
-          python3 -m pip install -q -U --ignore-installed -r "${GITHUB_WORKSPACE}/constraints-pip.txt"
-          python3 -m pip install -q -c "${GITHUB_WORKSPACE}/constraints-pip.txt" -r "${GITHUB_WORKSPACE}/requirements.txt"
+      # App Python deps: driving_log_replayer_v2/CMakeLists.txt (DRIVING_LOG_REPLAYER_V2_INSTALL_PYTHON_DEPS, default ON).
+      # Job env above sets PEP 668 for rosdep and for CMake configure-time pip.
 
       - name: build and test
         uses: ros-tooling/action-ros-ci@v0.4

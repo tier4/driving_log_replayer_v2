@@ -31,12 +31,21 @@ if(DRIVING_LOG_REPLAYER_V2_INSTALL_PYTHON_DEPS AND EXISTS "${_DRIVING_LOG_REPLAY
     "PIP_CONSTRAINT=${_DRIVING_LOG_REPLAYER_V2_PIP_CONSTRAINTS}"
     "PIP_BUILD_CONSTRAINT=${_DRIVING_LOG_REPLAYER_V2_PIP_CONSTRAINTS}"
   )
-  # Python 3.12: old setuptools in pip build env hits pkgutil.ImpImporter; versions in constraints-pip.txt
+  set(_driving_log_replayer_v2_pip 0)
+  # lark / rospkg: tooling; apt may install without a pip RECORD --ignore-installed matches former CI pre-step
   execute_process(
     COMMAND ${CMAKE_COMMAND} -E env ${_dlr2_pip_env}
-    ${Python3_EXECUTABLE} -m pip install -q -U --ignore-installed -r "${_DRIVING_LOG_REPLAYER_V2_PIP_CONSTRAINTS}"
+    ${Python3_EXECUTABLE} -m pip install -q --ignore-installed lark rospkg
     RESULT_VARIABLE _driving_log_replayer_v2_pip
   )
+  # Python 3.12: old setuptools in pip build env hits pkgutil.ImpImporter; versions in constraints-pip.txt
+  if(_driving_log_replayer_v2_pip EQUAL 0)
+    execute_process(
+      COMMAND ${CMAKE_COMMAND} -E env ${_dlr2_pip_env}
+      ${Python3_EXECUTABLE} -m pip install -q -U --ignore-installed -r "${_DRIVING_LOG_REPLAYER_V2_PIP_CONSTRAINTS}"
+      RESULT_VARIABLE _driving_log_replayer_v2_pip
+    )
+  endif()
   if(_driving_log_replayer_v2_pip EQUAL 0)
     if(EXISTS "${_DRIVING_LOG_REPLAYER_V2_PIP_CONSTRAINTS}")
       execute_process(
@@ -59,6 +68,7 @@ if(DRIVING_LOG_REPLAYER_V2_INSTALL_PYTHON_DEPS AND EXISTS "${_DRIVING_LOG_REPLAY
       WARNING
       "pip for driving_log_replayer_v2 failed (exit ${_driving_log_replayer_v2_pip}). On Python 3.12: "
       "export PIP_CONSTRAINT=${_DRIVING_LOG_REPLAYER_V2_PIP_CONSTRAINTS}; "
+      "${Python3_EXECUTABLE} -m pip install --ignore-installed lark rospkg; "
       "${Python3_EXECUTABLE} -m pip install -U --ignore-installed -r ${_DRIVING_LOG_REPLAYER_V2_PIP_CONSTRAINTS}; "
       "${Python3_EXECUTABLE} -m pip install -c ${_DRIVING_LOG_REPLAYER_V2_PIP_CONSTRAINTS} -r "
       "${_DRIVING_LOG_REPLAYER_V2_REQUIREMENTS}. Or "
