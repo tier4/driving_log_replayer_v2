@@ -14,19 +14,45 @@ option(
   ON
 )
 
-set(_DRIVING_LOG_REPLAYER_V2_REQUIREMENTS "${CMAKE_CURRENT_SOURCE_DIR}/../requirements.txt")
+# Repo: <...>/driving_log_replayer_v2/CMakeLists.txt -> <...>/driving_log_replayer_v2/../ = clone root
+get_filename_component(
+  _DRIVING_LOG_REPLAYER_V2_REPO_ROOT "${CMAKE_CURRENT_SOURCE_DIR}/.." ABSOLUTE
+)
+set(_DRIVING_LOG_REPLAYER_V2_REQUIREMENTS "${_DRIVING_LOG_REPLAYER_V2_REPO_ROOT}/requirements.txt")
+set(_DRIVING_LOG_REPLAYER_V2_PIP_CONSTRAINTS "${_DRIVING_LOG_REPLAYER_V2_REPO_ROOT}/constraints-pip.txt")
+
 if(DRIVING_LOG_REPLAYER_V2_INSTALL_PYTHON_DEPS AND EXISTS "${_DRIVING_LOG_REPLAYER_V2_REQUIREMENTS}")
   find_package(Python3 REQUIRED COMPONENTS Interpreter)
+  # PIP_NO_CACHE_DIR: GHA/containers may use a non-writable $HOME/.cache/pip
+  set(_dlr2_pip_env
+    "PIP_BREAK_SYSTEM_PACKAGES=1"
+    "PIP_NO_CACHE_DIR=1"
+  )
+  # Python 3.12: old setuptools in pip build env hits pkgutil.ImpImporter; upgrade first.
   execute_process(
-    COMMAND ${CMAKE_COMMAND} -E env "PIP_BREAK_SYSTEM_PACKAGES=1"
-    ${Python3_EXECUTABLE} -m pip install -q -r "${_DRIVING_LOG_REPLAYER_V2_REQUIREMENTS}"
+    COMMAND ${CMAKE_COMMAND} -E env ${_dlr2_pip_env}
+    ${Python3_EXECUTABLE} -m pip install -q -U "pip>=24" "setuptools>=70" wheel
     RESULT_VARIABLE _driving_log_replayer_v2_pip
   )
+  if(_driving_log_replayer_v2_pip EQUAL 0)
+    if(EXISTS "${_DRIVING_LOG_REPLAYER_V2_PIP_CONSTRAINTS}")
+      execute_process(
+        COMMAND ${CMAKE_COMMAND} -E env ${_dlr2_pip_env}
+        ${Python3_EXECUTABLE} -m pip install -q -c "${_DRIVING_LOG_REPLAYER_V2_PIP_CONSTRAINTS}" -r "${_DRIVING_LOG_REPLAYER_V2_REQUIREMENTS}"
+        RESULT_VARIABLE _driving_log_replayer_v2_pip
+      )
+    else()
+      execute_process(
+        COMMAND ${CMAKE_COMMAND} -E env ${_dlr2_pip_env}
+        ${Python3_EXECUTABLE} -m pip install -q -r "${_DRIVING_LOG_REPLAYER_V2_REQUIREMENTS}"
+        RESULT_VARIABLE _driving_log_replayer_v2_pip
+      )
+    endif()
+  endif()
   if(NOT _driving_log_replayer_v2_pip EQUAL 0)
-    message(WARNING
-      "pip for driving_log_replayer_v2 failed (exit ${_driving_log_replayer_v2_pip}). "
-      "On Ubuntu 24.04+, you may need: PIP_BREAK_SYSTEM_PACKAGES=1 ${Python3_EXECUTABLE} -m pip install -r ${_DRIVING_LOG_REPLAYER_V2_REQUIREMENTS}. "
-      "Or: colcon build --cmake-args -DDRIVING_LOG_REPLAYER_V2_INSTALL_PYTHON_DEPS=OFF after installing that file manually."
+    message(
+      WARNING
+      "pip for driving_log_replayer_v2 failed (exit ${_driving_log_replayer_v2_pip}). On Python 3.12: ${Python3_EXECUTABLE} -m pip install -U 'pip>=24' 'setuptools>=70' wheel; then -m pip install -c constraints-pip.txt -r ${_DRIVING_LOG_REPLAYER_V2_REQUIREMENTS}. Or colcon with -DDRIVING_LOG_REPLAYER_V2_INSTALL_PYTHON_DEPS=OFF."
     )
   endif()
 endif()
@@ -65,6 +91,10 @@ install(PROGRAMS
 
 if(EXISTS "${_DRIVING_LOG_REPLAYER_V2_REQUIREMENTS}")
   install(FILES "${_DRIVING_LOG_REPLAYER_V2_REQUIREMENTS}"
+    DESTINATION share/${PROJECT_NAME})
+endif()
+if(EXISTS "${_DRIVING_LOG_REPLAYER_V2_PIP_CONSTRAINTS}")
+  install(FILES "${_DRIVING_LOG_REPLAYER_V2_PIP_CONSTRAINTS}"
     DESTINATION share/${PROJECT_NAME})
 endif()
 
