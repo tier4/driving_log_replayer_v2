@@ -11,14 +11,11 @@ on:
 jobs:
   colcon-test:
     runs-on: ubuntu-latest
-    # Python 3.11+ (Jazzy / Noble): rosdep → pip 時に PEP 668 対策が必要
+    # PEP 668: rosdep の pip ルール用 (constraints は CMake が configure 時に設定)
     # https://docs.ros.org/en/independent/api/rosdep/html/pip_and_pep_668.html
     env:
       PIP_BREAK_SYSTEM_PACKAGES: "1"
       PIP_NO_CACHE_DIR: "1"
-      PIP_CONSTRAINT: ${{ github.workspace }}/constraints-pip.txt
-      # pip 26+: build isolation uses PIP_BUILD_CONSTRAINT (see pip deprecation for PIP_CONSTRAINT)
-      PIP_BUILD_CONSTRAINT: ${{ github.workspace }}/constraints-pip.txt
     strategy:
       fail-fast: false
       matrix:
@@ -49,9 +46,6 @@ jobs:
         uses: ros-tooling/setup-ros@0.7.15
         with:
           required-ros-distributions: ${{ matrix.ros_distribution }}
-
-      # App Python deps: driving_log_replayer_v2/CMakeLists.txt (DRIVING_LOG_REPLAYER_V2_INSTALL_PYTHON_DEPS, default ON).
-      # Job env above sets PEP 668 for rosdep and for CMake configure-time pip.
 
       - name: build and test
         uses: ros-tooling/action-ros-ci@v0.4

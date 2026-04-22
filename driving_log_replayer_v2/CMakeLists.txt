@@ -14,17 +14,13 @@ option(
   ON
 )
 
-# Repo: <...>/driving_log_replayer_v2/CMakeLists.txt -> <...>/driving_log_replayer_v2/../ = clone root
-get_filename_component(
-  _DRIVING_LOG_REPLAYER_V2_REPO_ROOT "${CMAKE_CURRENT_SOURCE_DIR}/.." ABSOLUTE
-)
-set(_DRIVING_LOG_REPLAYER_V2_REQUIREMENTS "${_DRIVING_LOG_REPLAYER_V2_REPO_ROOT}/requirements.txt")
-set(_DRIVING_LOG_REPLAYER_V2_PIP_CONSTRAINTS "${_DRIVING_LOG_REPLAYER_V2_REPO_ROOT}/constraints-pip.txt")
+# requirements.txt / constraints-pip.txt: repository root (parent of this package)
+set(_DRIVING_LOG_REPLAYER_V2_REQUIREMENTS "${CMAKE_CURRENT_SOURCE_DIR}/../requirements.txt")
+set(_DRIVING_LOG_REPLAYER_V2_PIP_CONSTRAINTS "${CMAKE_CURRENT_SOURCE_DIR}/../constraints-pip.txt")
 
 if(DRIVING_LOG_REPLAYER_V2_INSTALL_PYTHON_DEPS AND EXISTS "${_DRIVING_LOG_REPLAYER_V2_REQUIREMENTS}")
   find_package(Python3 REQUIRED COMPONENTS Interpreter)
-  # PIP_NO_CACHE_DIR: some CI/home layouts use a non-writable pip cache dir
-  # PIP_CONSTRAINT / PIP_BUILD_CONSTRAINT: setuptools<80 in resolver and in build isolation (pip 26+)
+  # PIP_NO_CACHE_DIR: some CI/home layouts have a non-writable pip cache
   set(_dlr2_pip_env
     "PIP_BREAK_SYSTEM_PACKAGES=1"
     "PIP_NO_CACHE_DIR=1"
@@ -67,7 +63,9 @@ if(DRIVING_LOG_REPLAYER_V2_INSTALL_PYTHON_DEPS AND EXISTS "${_DRIVING_LOG_REPLAY
     message(
       WARNING
       "pip for driving_log_replayer_v2 failed (exit ${_driving_log_replayer_v2_pip}). On Python 3.12: "
-      "export PIP_CONSTRAINT=${_DRIVING_LOG_REPLAYER_V2_PIP_CONSTRAINTS}; "
+      "export PIP_BREAK_SYSTEM_PACKAGES=1 PIP_NO_CACHE_DIR=1 "
+      "PIP_CONSTRAINT=${_DRIVING_LOG_REPLAYER_V2_PIP_CONSTRAINTS} "
+      "PIP_BUILD_CONSTRAINT=${_DRIVING_LOG_REPLAYER_V2_PIP_CONSTRAINTS}; "
       "${Python3_EXECUTABLE} -m pip install --ignore-installed lark rospkg; "
       "${Python3_EXECUTABLE} -m pip install -U --ignore-installed -r ${_DRIVING_LOG_REPLAYER_V2_PIP_CONSTRAINTS}; "
       "${Python3_EXECUTABLE} -m pip install -c ${_DRIVING_LOG_REPLAYER_V2_PIP_CONSTRAINTS} -r "
