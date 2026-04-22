@@ -15,10 +15,9 @@
 from __future__ import annotations
 
 from datetime import datetime
+from datetime import UTC
 import logging
 from pathlib import Path
-
-from datatime import UTC
 
 
 def custom_text_formatter() -> logging.Formatter:
