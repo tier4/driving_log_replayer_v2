@@ -39,19 +39,17 @@ if(DRIVING_LOG_REPLAYER_V2_INSTALL_PYTHON_DEPS AND EXISTS "${_DRIVING_LOG_REPLAY
   )
   if(_driving_log_replayer_v2_pip EQUAL 0)
     if(EXISTS "${_DRIVING_LOG_REPLAYER_V2_PIP_CONSTRAINTS}")
-      # --only-binary Shapely: avoid sdist+isolated build with broken setuptools in minimal envs
       execute_process(
         COMMAND ${CMAKE_COMMAND} -E env ${_dlr2_pip_env}
         ${Python3_EXECUTABLE} -m pip install -q
         -c "${_DRIVING_LOG_REPLAYER_V2_PIP_CONSTRAINTS}"
         -r "${_DRIVING_LOG_REPLAYER_V2_REQUIREMENTS}"
-        --only-binary shapely
         RESULT_VARIABLE _driving_log_replayer_v2_pip
       )
     else()
       execute_process(
         COMMAND ${CMAKE_COMMAND} -E env ${_dlr2_pip_env}
-        ${Python3_EXECUTABLE} -m pip install -q -r "${_DRIVING_LOG_REPLAYER_V2_REQUIREMENTS}" --only-binary shapely
+        ${Python3_EXECUTABLE} -m pip install -q -r "${_DRIVING_LOG_REPLAYER_V2_REQUIREMENTS}"
         RESULT_VARIABLE _driving_log_replayer_v2_pip
       )
     endif()
@@ -63,7 +61,7 @@ if(DRIVING_LOG_REPLAYER_V2_INSTALL_PYTHON_DEPS AND EXISTS "${_DRIVING_LOG_REPLAY
       "export PIP_CONSTRAINT=${_DRIVING_LOG_REPLAYER_V2_PIP_CONSTRAINTS}; "
       "${Python3_EXECUTABLE} -m pip install -U --ignore-installed -r ${_DRIVING_LOG_REPLAYER_V2_PIP_CONSTRAINTS}; "
       "${Python3_EXECUTABLE} -m pip install -c ${_DRIVING_LOG_REPLAYER_V2_PIP_CONSTRAINTS} -r "
-      "${_DRIVING_LOG_REPLAYER_V2_REQUIREMENTS} --only-binary shapely. Or "
+      "${_DRIVING_LOG_REPLAYER_V2_REQUIREMENTS}. Or "
       "-DDRIVING_LOG_REPLAYER_V2_INSTALL_PYTHON_DEPS=OFF."
     )
   endif()

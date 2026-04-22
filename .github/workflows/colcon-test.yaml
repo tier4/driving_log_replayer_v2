@@ -56,7 +56,7 @@ jobs:
           # --ignore-installed: deb/apt may provide lark, wheel, etc. without a pip RECORD; pip cannot uninstall them
           python3 -m pip install -q --ignore-installed lark rospkg
           python3 -m pip install -q -U --ignore-installed -r "${GITHUB_WORKSPACE}/constraints-pip.txt"
-          python3 -m pip install -q -c "${GITHUB_WORKSPACE}/constraints-pip.txt" -r "${GITHUB_WORKSPACE}/requirements.txt" --only-binary shapely
+          python3 -m pip install -q -c "${GITHUB_WORKSPACE}/constraints-pip.txt" -r "${GITHUB_WORKSPACE}/requirements.txt"
 
       - name: build and test
         uses: ros-tooling/action-ros-ci@v0.4
