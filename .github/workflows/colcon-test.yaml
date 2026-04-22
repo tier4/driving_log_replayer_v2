@@ -15,7 +15,6 @@ jobs:
     # https://docs.ros.org/en/independent/api/rosdep/html/pip_and_pep_668.html
     env:
       PIP_BREAK_SYSTEM_PACKAGES: "1"
-      PIP_NO_CACHE_DIR: "1"
     strategy:
       fail-fast: false
       matrix:
@@ -48,7 +47,6 @@ jobs:
           required-ros-distributions: ${{ matrix.ros_distribution }}
 
       # Python 3.12: upgrade pip/setuptools before requirements (isolated sdist / ImpImporter).
-      # PIP_NO_CACHE_DIR: avoid /github/home/.cache/pip permission warnings in GHA.
       - name: Install Python dependencies
         run: |
           python3 -m pip install -q -U "pip>=24" "setuptools>=70" wheel

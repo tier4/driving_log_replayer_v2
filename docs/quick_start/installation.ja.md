@@ -83,4 +83,4 @@
    colcon build --symlink-install --cmake-args -DCMAKE_BUILD_TYPE=Release
    ```
 
-   CMake では先に `pip` / `setuptools` / `wheel` を更新し、続けて `constraints-pip.txt` 付きで `requirements.txt`（Pydantic v2、nuscenes 系、Plotly 等）を導入します。Python 3.12 では、古い `setuptools` が `pkgutil.ImpImporter`（3.12 で削除）に依存しビルドが壊れるため、この手順にしています。PEP 668 対策の `PIP_BREAK_SYSTEM_PACKAGES=1` と、CI で問題になりやすい `PIP_NO_CACHE_DIR=1` を CMake から付与します。事前導入する場合は `-DDRIVING_LOG_REPLAYER_V2_INSTALL_PYTHON_DEPS=OFF` を付け、同内容を手動で。`share/driving_log_replayer_v2/` に `requirements.txt`・`constraints-pip.txt` をインストールします。
+   CMake では先に `pip` / `setuptools` / `wheel` を更新し、続けて `constraints-pip.txt` 付きで `requirements.txt`（Pydantic v2、nuscenes 系、Plotly 等）を導入します。Python 3.12 では、古い `setuptools` が `pkgutil.ImpImporter`（3.12 で削除）に依存しビルドが壊れるため、この手順にしています。PEP 668 対策の `PIP_BREAK_SYSTEM_PACKAGES=1` を CMake から付与します。事前導入する場合は `-DDRIVING_LOG_REPLAYER_V2_INSTALL_PYTHON_DEPS=OFF` を付け、同内容を手動で。`share/driving_log_replayer_v2/` に `requirements.txt`・`constraints-pip.txt` をインストールします。
