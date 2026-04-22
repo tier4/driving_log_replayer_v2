@@ -5,69 +5,23 @@ find_package(ament_cmake_python REQUIRED)
 find_package(autoware_cmake REQUIRED)
 autoware_package()
 
-# Extra Python packages (Pydantic v2, nuscenes, analyzer plotly, etc.): not fully covered by apt/rosdep.
-# Ubuntu 24.04+ (PEP 668): PIP_BREAK_SYSTEM_PACKAGES=1 allows pip into the same env as /usr/bin/python3
-# (typical for Autoware/colcon). Set OFF to skip if you pre-install (venv, custom image) or use rosdep+manual pip.
-option(
-  DRIVING_LOG_REPLAYER_V2_INSTALL_PYTHON_DEPS
-  "Run pip install -r ../requirements.txt during configure (recommended for colcon+ROS use)"
-  ON
+set(ROS_REQUIREMENTS "${CMAKE_CURRENT_SOURCE_DIR}/../requirements.txt")
+set(PIP_CONSTRAINTS "${CMAKE_CURRENT_SOURCE_DIR}/../constraints-pip.txt")
+set(PIP_ENV
+  "PIP_BREAK_SYSTEM_PACKAGES=1"
+  "PIP_CONSTRAINT=${PIP_CONSTRAINTS}"
+)
+find_package(Python3 REQUIRED COMPONENTS Interpreter)
+
+execute_process(
+  COMMAND ${CMAKE_COMMAND} -E env ${PIP_ENV}
+  ${Python3_EXECUTABLE} -m pip install -q -U --ignore-installed -r "${PIP_CONSTRAINTS}"
 )
 
-# requirements.txt / constraints-pip.txt: repository root (parent of this package)
-set(_DRIVING_LOG_REPLAYER_V2_REQUIREMENTS "${CMAKE_CURRENT_SOURCE_DIR}/../requirements.txt")
-set(_DRIVING_LOG_REPLAYER_V2_PIP_CONSTRAINTS "${CMAKE_CURRENT_SOURCE_DIR}/../constraints-pip.txt")
-
-if(DRIVING_LOG_REPLAYER_V2_INSTALL_PYTHON_DEPS AND EXISTS "${_DRIVING_LOG_REPLAYER_V2_REQUIREMENTS}")
-  find_package(Python3 REQUIRED COMPONENTS Interpreter)
-  # PIP_NO_CACHE_DIR: some CI/home layouts have a non-writable pip cache
-  set(_dlr2_pip_env
-    "PIP_BREAK_SYSTEM_PACKAGES=1"
-    "PIP_NO_CACHE_DIR=1"
-    "PIP_CONSTRAINT=${_DRIVING_LOG_REPLAYER_V2_PIP_CONSTRAINTS}"
-    "PIP_BUILD_CONSTRAINT=${_DRIVING_LOG_REPLAYER_V2_PIP_CONSTRAINTS}"
-  )
-  set(_driving_log_replayer_v2_pip 0)
-  # Python 3.12: old setuptools in pip build env hits pkgutil.ImpImporter; versions in constraints-pip.txt
-  if(_driving_log_replayer_v2_pip EQUAL 0)
-    execute_process(
-      COMMAND ${CMAKE_COMMAND} -E env ${_dlr2_pip_env}
-      ${Python3_EXECUTABLE} -m pip install -q -U --ignore-installed -r "${_DRIVING_LOG_REPLAYER_V2_PIP_CONSTRAINTS}"
-      RESULT_VARIABLE _driving_log_replayer_v2_pip
-    )
-  endif()
-  if(_driving_log_replayer_v2_pip EQUAL 0)
-    if(EXISTS "${_DRIVING_LOG_REPLAYER_V2_PIP_CONSTRAINTS}")
-      # --ignore-installed: debian/apt python packages often have no pip RECORD (e.g. lark) so uninstall fails
-      execute_process(
-        COMMAND ${CMAKE_COMMAND} -E env ${_dlr2_pip_env}
-        ${Python3_EXECUTABLE} -m pip install -q --ignore-installed
-        -c "${_DRIVING_LOG_REPLAYER_V2_PIP_CONSTRAINTS}"
-        -r "${_DRIVING_LOG_REPLAYER_V2_REQUIREMENTS}"
-        RESULT_VARIABLE _driving_log_replayer_v2_pip
-      )
-    else()
-      execute_process(
-        COMMAND ${CMAKE_COMMAND} -E env ${_dlr2_pip_env}
-        ${Python3_EXECUTABLE} -m pip install -q --ignore-installed -r "${_DRIVING_LOG_REPLAYER_V2_REQUIREMENTS}"
-        RESULT_VARIABLE _driving_log_replayer_v2_pip
-      )
-    endif()
-  endif()
-  if(NOT _driving_log_replayer_v2_pip EQUAL 0)
-    message(
-      WARNING
-      "pip for driving_log_replayer_v2 failed (exit ${_driving_log_replayer_v2_pip}). On Python 3.12: "
-      "export PIP_BREAK_SYSTEM_PACKAGES=1 PIP_NO_CACHE_DIR=1 "
-      "PIP_CONSTRAINT=${_DRIVING_LOG_REPLAYER_V2_PIP_CONSTRAINTS} "
-      "PIP_BUILD_CONSTRAINT=${_DRIVING_LOG_REPLAYER_V2_PIP_CONSTRAINTS}; "
-      "${Python3_EXECUTABLE} -m pip install -U --ignore-installed -r ${_DRIVING_LOG_REPLAYER_V2_PIP_CONSTRAINTS}; "
-      "${Python3_EXECUTABLE} -m pip install --ignore-installed -c ${_DRIVING_LOG_REPLAYER_V2_PIP_CONSTRAINTS} -r "
-      "${_DRIVING_LOG_REPLAYER_V2_REQUIREMENTS}. Or "
-      "-DDRIVING_LOG_REPLAYER_V2_INSTALL_PYTHON_DEPS=OFF."
-    )
-  endif()
-endif()
+execute_process(
+  COMMAND ${CMAKE_COMMAND} -E env ${PIP_ENV}
+  ${Python3_EXECUTABLE} -m pip install -q --ignore-installed -c "${PIP_CONSTRAINTS}" -r "${ROS_REQUIREMENTS}"
+)
 
 if(BUILD_TESTING)
   find_package(ament_lint_auto REQUIRED)
@@ -101,14 +55,11 @@ install(PROGRAMS
   DESTINATION lib/${PROJECT_NAME}
 )
 
-if(EXISTS "${_DRIVING_LOG_REPLAYER_V2_REQUIREMENTS}")
-  install(FILES "${_DRIVING_LOG_REPLAYER_V2_REQUIREMENTS}"
-    DESTINATION share/${PROJECT_NAME})
-endif()
-if(EXISTS "${_DRIVING_LOG_REPLAYER_V2_PIP_CONSTRAINTS}")
-  install(FILES "${_DRIVING_LOG_REPLAYER_V2_PIP_CONSTRAINTS}"
-    DESTINATION share/${PROJECT_NAME})
-endif()
+install(FILES "${ROS_REQUIREMENTS}"
+  DESTINATION share/${PROJECT_NAME})
+
+install(FILES "${PIP_CONSTRAINTS}"
+  DESTINATION share/${PROJECT_NAME})
 
 ament_auto_package(INSTALL_TO_SHARE
   launch
