@@ -71,8 +71,10 @@
 
 6. rosdep で依存のパッケージをインストールする:
 
+   Ubuntu 24.04 以降（Python 3.12）では、rosdep が **pip** ルールを使う際に [PEP 668](https://peps.python.org/pep-0668/) により `PIP_BREAK_SYSTEM_PACKAGES=1` が必要です（CI も同じ）。
+
    ```shell
-   rosdep install -y --from-paths src --ignore-src --rosdistro $ROS_DISTRO
+   PIP_BREAK_SYSTEM_PACKAGES=1 rosdep install -y --from-paths src --ignore-src --rosdistro $ROS_DISTRO
    ```
 
 7. ワークスペースをビルドする:

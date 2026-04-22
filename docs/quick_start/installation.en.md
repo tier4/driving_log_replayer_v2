@@ -71,8 +71,10 @@ This document contains step-by-step instruction on how to build [AWF Autoware Co
 
 6. Install dependent ROS packages:
 
+   On Ubuntu 24.04+ (Python 3.12), `rosdep` may install **pip** rules; set `PIP_BREAK_SYSTEM_PACKAGES=1` so it matches [PEP 668](https://peps.python.org/pep-0668/) (same as CI).
+
    ```shell
-   rosdep install -y --from-paths src --ignore-src --rosdistro $ROS_DISTRO
+   PIP_BREAK_SYSTEM_PACKAGES=1 rosdep install -y --from-paths src --ignore-src --rosdistro $ROS_DISTRO
    ```
 
 7. Build the workspace:
