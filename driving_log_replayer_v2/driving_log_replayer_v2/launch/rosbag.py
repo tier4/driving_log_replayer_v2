@@ -170,8 +170,11 @@ def keep_compatibility_metadata(input_bag: str) -> None:
     metadata_file = Path(input_bag) / "metadata.yaml"
     with metadata_file.open("r") as f:
         metadata = yaml.safe_load(f)
-    with Path(input_bag, "origin_metadata.yaml").open("w") as f:
-        yaml.safe_dump(metadata, f, sort_keys=False)  # backup original metadata
+    try:
+        with Path(input_bag, "origin_metadata.yaml").open("w") as f:
+            yaml.safe_dump(metadata, f, sort_keys=False)  # backup original metadata
+    except PermissionError:
+        pass
     rosbag2_bagfile_information = metadata["rosbag2_bagfile_information"]
 
     if rosbag2_bagfile_information["version"] == HUMBLE_ROSBAG2_METADATA_VERSION:
