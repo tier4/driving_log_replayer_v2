@@ -6,7 +6,7 @@ find_package(autoware_cmake REQUIRED)
 autoware_package()
 
 set(ROS_REQUIREMENTS "${CMAKE_CURRENT_SOURCE_DIR}/../requirements.txt")
-set(PIP_CONSTRAINTS "${CMAKE_CURRENT_SOURCE_DIR}/../constraints-pip.txt")
+set(PIP_BUILD_CONSTRAINTS "${CMAKE_CURRENT_SOURCE_DIR}/../constraints-pip.txt")
 set(PIP_ENV
   "PIP_BREAK_SYSTEM_PACKAGES=1"
   "PIP_CONSTRAINT=${PIP_CONSTRAINTS}"

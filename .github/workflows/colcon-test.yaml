@@ -11,7 +11,7 @@ on:
 jobs:
   colcon-test:
     runs-on: ubuntu-latest
-    # PEP 668: rosdep の pip ルール用 (constraints は CMake が configure 時に設定)
+    # PEP 668: for rosdep pip rules
     # https://docs.ros.org/en/independent/api/rosdep/html/pip_and_pep_668.html
     env:
       PIP_BREAK_SYSTEM_PACKAGES: "1"
