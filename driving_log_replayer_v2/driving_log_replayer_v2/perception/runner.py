@@ -66,7 +66,7 @@ class PerceptionEvalData:
     estimated_objects: list[DynamicObject] | str  # str for error message
 
 
-def convert_to_perception_eval(
+def convert_to_perception_eval[PerceptionMsg: DetectedObjects | TrackedObjects | PredictedObjects](
     msg: PerceptionMsgType,
     subscribed_timestamp_nanosec: int,
     evaluation_config: PerceptionEvaluationConfig,

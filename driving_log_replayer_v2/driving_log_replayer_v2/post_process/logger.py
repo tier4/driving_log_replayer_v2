@@ -15,9 +15,10 @@
 from __future__ import annotations
 
 from datetime import datetime
-from datetime import timezone
 import logging
 from pathlib import Path
+
+from datatime import UTC
 
 
 def custom_text_formatter() -> logging.Formatter:
@@ -71,7 +72,7 @@ def configure_logger(
     logger.addHandler(stream_handler)
 
     # handler for file
-    time_str = f"{datetime.now(timezone.utc):%Y%m%d_%H%M%S}.log"
+    time_str = f"{datetime.now(UTC):%Y%m%d_%H%M%S}.log"
     log_file_path = log_dir / time_str
     file_handler = logging.FileHandler(filename=str(log_file_path), encoding="utf-8")
     file_handler.setLevel(file_log_level)
