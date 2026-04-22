@@ -24,10 +24,10 @@ set(_DRIVING_LOG_REPLAYER_V2_PIP_CONSTRAINTS "${_DRIVING_LOG_REPLAYER_V2_REPO_RO
 if(DRIVING_LOG_REPLAYER_V2_INSTALL_PYTHON_DEPS AND EXISTS "${_DRIVING_LOG_REPLAYER_V2_REQUIREMENTS}")
   find_package(Python3 REQUIRED COMPONENTS Interpreter)
   set(_dlr2_pip_env "PIP_BREAK_SYSTEM_PACKAGES=1")
-  # Python 3.12: old setuptools in pip build env hits pkgutil.ImpImporter; upgrade first.
+  # Python 3.12: old setuptools in pip build env hits pkgutil.ImpImporter; versions in constraints-pip.txt
   execute_process(
     COMMAND ${CMAKE_COMMAND} -E env ${_dlr2_pip_env}
-    ${Python3_EXECUTABLE} -m pip install -q -U "pip>=24" "setuptools>=70" wheel
+    ${Python3_EXECUTABLE} -m pip install -q -U -r "${_DRIVING_LOG_REPLAYER_V2_PIP_CONSTRAINTS}"
     RESULT_VARIABLE _driving_log_replayer_v2_pip
   )
   if(_driving_log_replayer_v2_pip EQUAL 0)
@@ -48,7 +48,7 @@ if(DRIVING_LOG_REPLAYER_V2_INSTALL_PYTHON_DEPS AND EXISTS "${_DRIVING_LOG_REPLAY
   if(NOT _driving_log_replayer_v2_pip EQUAL 0)
     message(
       WARNING
-      "pip for driving_log_replayer_v2 failed (exit ${_driving_log_replayer_v2_pip}). On Python 3.12: ${Python3_EXECUTABLE} -m pip install -U 'pip>=24' 'setuptools>=70' wheel; then -m pip install -c constraints-pip.txt -r ${_DRIVING_LOG_REPLAYER_V2_REQUIREMENTS}. Or colcon with -DDRIVING_LOG_REPLAYER_V2_INSTALL_PYTHON_DEPS=OFF."
+      "pip for driving_log_replayer_v2 failed (exit ${_driving_log_replayer_v2_pip}). On Python 3.12: ${Python3_EXECUTABLE} -m pip install -U -r ${_DRIVING_LOG_REPLAYER_V2_PIP_CONSTRAINTS}; then -m pip install -c ${_DRIVING_LOG_REPLAYER_V2_PIP_CONSTRAINTS} -r ${_DRIVING_LOG_REPLAYER_V2_REQUIREMENTS}. Or colcon with -DDRIVING_LOG_REPLAYER_V2_INSTALL_PYTHON_DEPS=OFF."
     )
   endif()
 endif()
