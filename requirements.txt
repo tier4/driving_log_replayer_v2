@@ -1,6 +1,6 @@
 # Pinned for colcon/Autoware: pip install at configure time (see driving_log_replayer_v2/CMakeLists.txt)
 # and for environments where OS packages are too old for Pydantic v2 / perception_eval.
-# CMake (configure): -r constraints-pip.txt, then -c constraints-pip.txt -r requirements.txt
+# CMake: -r constraints-pip.txt, then pip install --ignore-installed -c … -r requirements.txt (apt/pip RECORD)
 # constraints-pip.txt: setuptools>=70,<80 (colcon-core) and Py3.12 / ImpImporter-safe range.
 pydantic>=2.5.1 # e.g. Ubuntu: python3-pydantic is still 1.x on 24.04; runtime needs v2
 transforms3d==0.4.2 # e.g. Ubuntu: python3-transforms3d can be older

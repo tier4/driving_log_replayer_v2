@@ -38,9 +38,10 @@ if(DRIVING_LOG_REPLAYER_V2_INSTALL_PYTHON_DEPS AND EXISTS "${_DRIVING_LOG_REPLAY
   endif()
   if(_driving_log_replayer_v2_pip EQUAL 0)
     if(EXISTS "${_DRIVING_LOG_REPLAYER_V2_PIP_CONSTRAINTS}")
+      # --ignore-installed: debian/apt python packages often have no pip RECORD (e.g. lark) so uninstall fails
       execute_process(
         COMMAND ${CMAKE_COMMAND} -E env ${_dlr2_pip_env}
-        ${Python3_EXECUTABLE} -m pip install -q
+        ${Python3_EXECUTABLE} -m pip install -q --ignore-installed
         -c "${_DRIVING_LOG_REPLAYER_V2_PIP_CONSTRAINTS}"
         -r "${_DRIVING_LOG_REPLAYER_V2_REQUIREMENTS}"
         RESULT_VARIABLE _driving_log_replayer_v2_pip
@@ -48,7 +49,7 @@ if(DRIVING_LOG_REPLAYER_V2_INSTALL_PYTHON_DEPS AND EXISTS "${_DRIVING_LOG_REPLAY
     else()
       execute_process(
         COMMAND ${CMAKE_COMMAND} -E env ${_dlr2_pip_env}
-        ${Python3_EXECUTABLE} -m pip install -q -r "${_DRIVING_LOG_REPLAYER_V2_REQUIREMENTS}"
+        ${Python3_EXECUTABLE} -m pip install -q --ignore-installed -r "${_DRIVING_LOG_REPLAYER_V2_REQUIREMENTS}"
         RESULT_VARIABLE _driving_log_replayer_v2_pip
       )
     endif()
@@ -61,7 +62,7 @@ if(DRIVING_LOG_REPLAYER_V2_INSTALL_PYTHON_DEPS AND EXISTS "${_DRIVING_LOG_REPLAY
       "PIP_CONSTRAINT=${_DRIVING_LOG_REPLAYER_V2_PIP_CONSTRAINTS} "
       "PIP_BUILD_CONSTRAINT=${_DRIVING_LOG_REPLAYER_V2_PIP_CONSTRAINTS}; "
       "${Python3_EXECUTABLE} -m pip install -U --ignore-installed -r ${_DRIVING_LOG_REPLAYER_V2_PIP_CONSTRAINTS}; "
-      "${Python3_EXECUTABLE} -m pip install -c ${_DRIVING_LOG_REPLAYER_V2_PIP_CONSTRAINTS} -r "
+      "${Python3_EXECUTABLE} -m pip install --ignore-installed -c ${_DRIVING_LOG_REPLAYER_V2_PIP_CONSTRAINTS} -r "
       "${_DRIVING_LOG_REPLAYER_V2_REQUIREMENTS}. Or "
       "-DDRIVING_LOG_REPLAYER_V2_INSTALL_PYTHON_DEPS=OFF."
     )
