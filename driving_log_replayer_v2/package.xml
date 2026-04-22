@@ -38,10 +38,10 @@
   <depend>tier4_planning_msgs</depend>
   <depend>visualization_msgs</depend>
 
-  <exec_depend>autoware_component_state_monitor</exec_depend>
+  <!-- <exec_depend>autoware_component_state_monitor</exec_depend> -->
   <exec_depend>autoware_lanelet2_extension_python</exec_depend>
-  <exec_depend>autoware_localization_evaluation_scripts</exec_depend>
-  <exec_depend>autoware_map_height_fitter</exec_depend>
+  <!-- <exec_depend>autoware_localization_evaluation_scripts</exec_depend> -->
+  <!-- <exec_depend>autoware_map_height_fitter</exec_depend> -->
   <exec_depend>driving_log_replayer_v2_analyzer</exec_depend>
   <exec_depend>perception_eval</exec_depend>
   <exec_depend>python3-fastjsonschema</exec_depend>
@@ -57,8 +57,8 @@
   <!-- to avoid rosdep install error -->
   <!-- <exec_depend>autoware_launch</exec_depend> -->
   <!-- <exec_depend>perception_online_evaluator</exec_depend> -->
-  <!-- Pydantic v2 and other pins: ../requirements.txt via CMakeLists.txt, also under share/ -->
   <!-- <exec_depend>python3-pydantic</exec_depend> -->
+  <exec_depend>python3-transforms3d</exec_depend>
 
   <test_depend>ament_cmake_gtest</test_depend>
   <test_depend>ament_cmake_pytest</test_depend>

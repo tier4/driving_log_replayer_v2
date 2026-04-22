@@ -6,22 +6,7 @@ find_package(autoware_cmake REQUIRED)
 autoware_package()
 
 set(ROS_REQUIREMENTS "${CMAKE_CURRENT_SOURCE_DIR}/../requirements.txt")
-set(PIP_BUILD_CONSTRAINTS "${CMAKE_CURRENT_SOURCE_DIR}/../constraints-pip.txt")
-set(PIP_ENV
-  "PIP_BREAK_SYSTEM_PACKAGES=1"
-  "PIP_BUILD_CONSTRAINT=${PIP_BUILD_CONSTRAINTS}"
-)
-find_package(Python3 REQUIRED COMPONENTS Interpreter)
-
-execute_process(
-  COMMAND ${CMAKE_COMMAND} -E env ${PIP_ENV}
-  ${Python3_EXECUTABLE} -m pip install -q -U --ignore-installed -r "${PIP_BUILD_CONSTRAINTS}"
-)
-
-execute_process(
-  COMMAND ${CMAKE_COMMAND} -E env ${PIP_ENV}
-  ${Python3_EXECUTABLE} -m pip install -q --ignore-installed -c "${PIP_BUILD_CONSTRAINTS}" -r "${ROS_REQUIREMENTS}"
-)
+execute_process(COMMAND bash -c "PIP_BREAK_SYSTEM_PACKAGES=1 python3 -m pip install --ignore-installed -r ${ROS_REQUIREMENTS}")
 
 if(BUILD_TESTING)
   find_package(ament_lint_auto REQUIRED)
@@ -56,9 +41,6 @@ install(PROGRAMS
 )
 
 install(FILES "${ROS_REQUIREMENTS}"
-  DESTINATION share/${PROJECT_NAME})
-
-install(FILES "${PIP_BUILD_CONSTRAINTS}"
   DESTINATION share/${PROJECT_NAME})
 
 ament_auto_package(INSTALL_TO_SHARE
