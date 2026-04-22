@@ -5,6 +5,8 @@
 pydantic>=2.5.1 # e.g. Ubuntu: python3-pydantic is still 1.x on 24.04; runtime needs v2
 transforms3d==0.4.2 # e.g. Ubuntu: python3-transforms3d can be older
 numpy<2 # If not specified, numpy 2 can be pulled by nuscenes-devkit
+# Wheel preferred (see pip --only-binary shapely); sdist build uses old setuptools in isolation on Py3.12
+Shapely>=2.0.6
 nuscenes-devkit>=1.1.9,<1.2.0
 # driving_log_replayer_v2_analyzer (ROS) — same as pyproject.toml; not on rosdep
 click>=8.1.7

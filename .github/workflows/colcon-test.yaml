@@ -16,6 +16,7 @@ jobs:
     env:
       PIP_BREAK_SYSTEM_PACKAGES: "1"
       PIP_NO_CACHE_DIR: "1"
+      PIP_CONSTRAINT: ${{ github.workspace }}/constraints-pip.txt
     strategy:
       fail-fast: false
       matrix:
@@ -50,10 +51,9 @@ jobs:
       # Python 3.12: upgrade pip/setuptools before requirements (isolated sdist / ImpImporter).
       - name: Install Python dependencies
         run: |
-          python3 -m pip install -q -U --ignore-installed -r "${GITHUB_WORKSPACE}/constraints-pip.txt"
-          python3 -m pip install -q -c "${GITHUB_WORKSPACE}/constraints-pip.txt" -r "${GITHUB_WORKSPACE}/requirements.txt"
-          # rosinstall-generator (from ros tooling) expects rospkg; not always present as apt in minimal images
           python3 -m pip install -q rospkg
+          python3 -m pip install -q -U --ignore-installed -r "${GITHUB_WORKSPACE}/constraints-pip.txt"
+          python3 -m pip install -q -c "${GITHUB_WORKSPACE}/constraints-pip.txt" -r "${GITHUB_WORKSPACE}/requirements.txt" --only-binary shapely
 
       - name: build and test
         uses: ros-tooling/action-ros-ci@v0.4
