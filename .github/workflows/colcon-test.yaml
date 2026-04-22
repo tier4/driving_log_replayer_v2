@@ -15,7 +15,6 @@ jobs:
     # https://docs.ros.org/en/independent/api/rosdep/html/pip_and_pep_668.html
     env:
       PIP_BREAK_SYSTEM_PACKAGES: "1"
-      PIP_NO_CACHE_DIR: "1"
     strategy:
       fail-fast: false
       matrix:
