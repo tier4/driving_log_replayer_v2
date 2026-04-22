@@ -5,9 +5,9 @@
 ## Requirements
 
 - CPU amd64
-- Ubuntu 22.04
-- ROS humble
-- Python 3.10
+- Ubuntu 24.04
+- ROS jazzy
+- Python 3.12
 - NVIDIA GPU (required if running perception)
 - [zstd](https://github.com/facebook/zstd)
   - sudo apt install zstd
@@ -39,7 +39,7 @@
      simulator/vendor/ros2_numpy:
        type: git
        url: https://github.com/Box-Robotics/ros2_numpy.git
-       version: humble
+       version: jazzy
      simulator/vendor/ros2bag_extensions:
        type: git
        url: https://github.com/tier4/ros2bag_extensions.git
