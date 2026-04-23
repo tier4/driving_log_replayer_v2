@@ -269,42 +269,7 @@ An exception occurs due to unintended input data, etc., and the node stops. or t
 The contents of the object in PERCEPTION were not as expected and an exception was output.
 
 ```shell
-[perception_evaluator_node.py-115] [ERROR] [1711460672.978143229] [driving_log_replayer_v2.perception_evaluator]: Unexpected footprint length: len(perception_object.shape.footprint.points)=2
-[perception_evaluator_node.py-115] Exception in thread Thread-2 (run_func):
-[perception_evaluator_node.py-115] Traceback (most recent call last):
-[perception_evaluator_node.py-115]   File "/usr/lib/python3.10/threading.py", line 1016, in _bootstrap_inner
-[perception_evaluator_node.py-115]     self.run()
-[perception_evaluator_node.py-115]   File "/usr/lib/python3.10/threading.py", line 953, in run
-[perception_evaluator_node.py-115]     self._target(*self._args, **self._kwargs)
-[perception_evaluator_node.py-115]   File "/opt/ros/humble/lib/python3.10/site-packages/tf2_ros/transform_listener.py", line 95, in run_func
-[perception_evaluator_node.py-115]     self.executor.spin()
-[perception_evaluator_node.py-115]   File "/opt/ros/humble/local/lib/python3.10/dist-packages/rclpy/executors.py", line 294, in spin
-[perception_evaluator_node.py-115]     self.spin_once()
-[perception_evaluator_node.py-115]   File "/opt/ros/humble/local/lib/python3.10/dist-packages/rclpy/executors.py", line 739, in spin_once
-[perception_evaluator_node.py-115]     self._spin_once_impl(timeout_sec)
-[perception_evaluator_node.py-115]   File "/opt/ros/humble/local/lib/python3.10/dist-packages/rclpy/executors.py", line 728, in _spin_once_impl
-[perception_evaluator_node.py-115]     handler, entity, node = self.wait_for_ready_callbacks(timeout_sec=timeout_sec)
-[perception_evaluator_node.py-115]   File "/opt/ros/humble/local/lib/python3.10/dist-packages/rclpy/executors.py", line 711, in wait_for_ready_callbacks
-[perception_evaluator_node.py-115]     return next(self._cb_iter)
-[perception_evaluator_node.py-115]   File "/opt/ros/humble/local/lib/python3.10/dist-packages/rclpy/executors.py", line 612, in _wait_for_ready_callbacks
-[perception_evaluator_node.py-115]     raise ExternalShutdownException()
-[perception_evaluator_node.py-115] rclpy.executors.ExternalShutdownException
-[ros2-117] [INFO] [1711460673.168213400] [rosbag2_recorder]: Subscribed to topic '/driving_log_replayer_v2/marker/results'
-[ros2-117] [INFO] [1711460673.174638594] [rosbag2_recorder]: Subscribed to topic '/driving_log_replayer_v2/marker/ground_truth'
-[simple_object_merger_node-69] [INFO] [1711460673.191825620] [sensing.radar.simple_object_merger]: waiting for object msg...
-[perception_evaluator_node.py-115] Traceback (most recent call last):
-[perception_evaluator_node.py-115]   File "/home/autoware/autoware.proj/install/driving_log_replayer_v2/lib/driving_log_replayer_v2/perception_evaluator_node.py", line 336, in <module>
-[perception_evaluator_node.py-115]     main()
-[perception_evaluator_node.py-115]   File "/home/autoware/autoware.proj/install/driving_log_replayer_v2/local/lib/python3.10/dist-packages/driving_log_replayer_v2/evaluator.py", line 448, in wrapper
-[perception_evaluator_node.py-115]     rclpy.shutdown()
-[perception_evaluator_node.py-115]   File "/opt/ros/humble/local/lib/python3.10/dist-packages/rclpy/__init__.py", line 126, in shutdown
-[perception_evaluator_node.py-115]     _shutdown(context=context)
-[perception_evaluator_node.py-115]   File "/opt/ros/humble/local/lib/python3.10/dist-packages/rclpy/utilities.py", line 58, in shutdown
-[perception_evaluator_node.py-115]     return context.shutdown()
-[perception_evaluator_node.py-115]   File "/opt/ros/humble/local/lib/python3.10/dist-packages/rclpy/context.py", line 100, in shutdown
-[perception_evaluator_node.py-115]     raise RuntimeError('Context must be initialized before it can be shutdown')
-[perception_evaluator_node.py-115] RuntimeError: Context must be initialized before it can be shutdown
-[perception_evaluator_node.py-115] The following exception was never retrieved: Expected BOUNDING_BOX, but got polygon, which should have footprint.
+TBD
 ```
 
 ### Correction method, Check area
