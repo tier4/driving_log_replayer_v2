@@ -188,28 +188,28 @@ class PerceptionRunner(Runner):
     def _get_external_record_topics(self) -> list[TopicMetadata]:
         return [
             TopicMetadata(
+                id=0,
                 name="/driving_log_replayer_v2/marker/ground_truth",
-                type="visualization_msgs/MarkerArray",
+                type="visualization_msgs/msg/MarkerArray",
                 serialization_format="cdr",
-                offered_qos_profiles="",
             ),
             TopicMetadata(
+                id=0,
                 name="/driving_log_replayer_v2/marker/results",
-                type="visualization_msgs/MarkerArray",
+                type="visualization_msgs/msg/MarkerArray",
                 serialization_format="cdr",
-                offered_qos_profiles="",
             ),
             TopicMetadata(
+                id=0,
                 name="/driving_log_replayer_v2/perception/results",
                 type="std_msgs/String",
                 serialization_format="cdr",
-                offered_qos_profiles="",
             ),
             TopicMetadata(
+                id=0,
                 name="/driving_log_replayer_v2/planning_factor/results",
                 type="std_msgs/String",
                 serialization_format="cdr",
-                offered_qos_profiles="",
             ),
         ]
 

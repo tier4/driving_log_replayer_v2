@@ -300,22 +300,22 @@ class PerceptionFPRunner(Runner):
     def _get_external_record_topics(self) -> list[TopicMetadata]:
         return [
             TopicMetadata(
+                id=0,
                 name="/driving_log_replayer_v2/perception_fp/results",
                 type="std_msgs/msg/String",
                 serialization_format="cdr",
-                offered_qos_profiles="",
             ),
             TopicMetadata(
+                id=0,
                 name="/driving_log_replayer_v2/perception_fp/non_detection_area",
                 type="visualization_msgs/msg/MarkerArray",
                 serialization_format="cdr",
-                offered_qos_profiles="",
             ),
             TopicMetadata(
+                id=0,
                 name="/driving_log_replayer_v2/perception_fp/fp_objects",
                 type="visualization_msgs/msg/MarkerArray",
                 serialization_format="cdr",
-                offered_qos_profiles="",
             ),
         ]
 
