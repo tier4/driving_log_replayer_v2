@@ -1,12 +1,9 @@
-name: colcon-test (Humble)
+name: colcon-test (humble)
 
 on:
   pull_request:
     types: [opened, synchronize]
-    paths:
-      - driving_log_replayer_v2/**
-      - .github/workflows/colcon-test-humble.yaml
-      - dependency/**
+    paths: [driving_log_replayer_v2/**, .github/workflows/colcon-test.yaml]
   schedule:
     - cron: 0 0 * * 0
   workflow_dispatch:
@@ -14,10 +11,22 @@ on:
 jobs:
   colcon-test:
     runs-on: ubuntu-latest
+    # PEP 668: for rosdep pip rules
+    # https://docs.ros.org/en/independent/api/rosdep/html/pip_and_pep_668.html
     env:
       PIP_BREAK_SYSTEM_PACKAGES: "1"
+    strategy:
+      fail-fast: false
+      matrix:
+        ros_distribution:
+          - humble
+        include:
+          # Humble Hawksbill (May 2022 - May 2027)
+          - docker_image: rostooling/setup-ros-docker:ubuntu-jammy-ros-humble-ros-base-latest
+            ros_distribution: hubmle
+            ros_version: 2
     container:
-      image: rostooling/setup-ros-docker:ubuntu-jammy-ros-humble-ros-base-latest
+      image: ${{ matrix.docker_image }}
     steps:
       - name: Cancel Previous Runs
         uses: styfle/cancel-workflow-action@0.12.1
@@ -35,15 +44,15 @@ jobs:
       - name: Setup ROS environment
         uses: ros-tooling/setup-ros@0.7.15
         with:
-          required-ros-distributions: humble
+          required-ros-distributions: ${{ matrix.ros_distribution }}
 
       - name: build and test
         uses: ros-tooling/action-ros-ci@v0.4
         id: actions_ros_ci_step
         with:
           package-name: ${{ steps.list_packages.outputs.package_list }}
-          target-ros2-distro: humble
-          vcs-repo-file-url: dependency/humble.repos
+          target-ros2-distro: ${{ matrix.ros_distribution }}
+          vcs-repo-file-url: dependency.repos
           import-token: ${{ secrets.GITHUB_TOKEN }}
           colcon-defaults: |
             {
@@ -60,7 +69,7 @@ jobs:
         uses: actions/upload-artifact@v4
         if: ${{ !cancelled() && !github.event.pull_request.head.repo.fork }}
         with:
-          name: colcon-build-logs-humble
+          name: colcon-logs
           path: ${{ steps.action_ros_ci_step.outputs.ros-workspace-directory-name }}/log
 
       - name: fix paths for coverage file
@@ -71,7 +80,7 @@ jobs:
         uses: actions/upload-artifact@v4
         if: ${{ !cancelled() && !github.event.pull_request.head.repo.fork }}
         with:
-          name: pytest-coverage-humble
+          name: colcon-logs
           path: /__w/driving_log_replayer_v2/driving_log_replayer_v2/ros_ws/build/driving_log_replayer_v2/pytest_cov/driving_log_replayer_v2/
 
       - name: Install unzip for SonarQube
