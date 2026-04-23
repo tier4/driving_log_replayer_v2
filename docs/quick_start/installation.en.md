@@ -5,12 +5,21 @@ This document contains step-by-step instruction on how to build [AWF Autoware Co
 ## Requirements
 
 - CPU amd64
-- Ubuntu 22.04
-- ROS humble
-- Python 3.10
 - NVIDIA GPU (required if running perception)
 - [zstd](https://github.com/facebook/zstd)
   - sudo apt install zstd
+
+Supported environment: either the Humble stack or the Jazzy stack below.
+
+- Ubuntu 22.04
+- ROS Humble
+- Python 3.10
+
+or
+
+- Ubuntu 24.04
+- ROS Jazzy
+- Python 3.12
 
 ## How to build
 
@@ -39,7 +48,7 @@ This document contains step-by-step instruction on how to build [AWF Autoware Co
      simulator/vendor/ros2_numpy:
        type: git
        url: https://github.com/Box-Robotics/ros2_numpy.git
-       version: humble
+       version: humble  # or jazzy
      simulator/vendor/ros2bag_extensions:
        type: git
        url: https://github.com/tier4/ros2bag_extensions.git
