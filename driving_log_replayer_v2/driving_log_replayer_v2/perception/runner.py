@@ -24,7 +24,6 @@ from typing import TypeVar
 from autoware_perception_msgs.msg import DetectedObjects
 from autoware_perception_msgs.msg import PredictedObjects
 from autoware_perception_msgs.msg import TrackedObjects
-from rosbag2_py import TopicMetadata
 from std_msgs.msg import Header
 from std_msgs.msg import String
 
@@ -40,6 +39,7 @@ from driving_log_replayer_v2.perception.planning_factor import PlanningFactorEva
 from driving_log_replayer_v2.perception.topics import load_evaluation_topics
 import driving_log_replayer_v2.perception_eval_conversions as eval_conversions
 from driving_log_replayer_v2.planning_control import PlanningFactorResult
+from driving_log_replayer_v2.post_process.ros2_utils import get_topic_metadata
 from driving_log_replayer_v2.post_process.ros2_utils import lookup_transform
 from driving_log_replayer_v2.post_process.runner import ConvertedData
 from driving_log_replayer_v2.post_process.runner import Runner
@@ -51,6 +51,7 @@ if TYPE_CHECKING:
     from perception_eval.config import PerceptionEvaluationConfig
     from perception_eval.evaluation.result.perception_frame_result import PerceptionFrameResult
     from perception_eval.tool import PerceptionAnalyzer3D
+    from rosbag2_py import TopicMetadata
     from visualization_msgs.msg import MarkerArray
 
     from driving_log_replayer_v2.post_process.evaluator import FrameResult
@@ -187,29 +188,21 @@ class PerceptionRunner(Runner):
 
     def _get_external_record_topics(self) -> list[TopicMetadata]:
         return [
-            TopicMetadata(
-                id=0,
+            get_topic_metadata(
                 name="/driving_log_replayer_v2/marker/ground_truth",
-                type="visualization_msgs/msg/MarkerArray",
-                serialization_format="cdr",
+                topic_type="visualization_msgs/msg/MarkerArray",
             ),
-            TopicMetadata(
-                id=0,
+            get_topic_metadata(
                 name="/driving_log_replayer_v2/marker/results",
-                type="visualization_msgs/msg/MarkerArray",
-                serialization_format="cdr",
+                topic_type="visualization_msgs/msg/MarkerArray",
             ),
-            TopicMetadata(
-                id=0,
+            get_topic_metadata(
                 name="/driving_log_replayer_v2/perception/results",
-                type="std_msgs/String",
-                serialization_format="cdr",
+                topic_type="std_msgs/String",
             ),
-            TopicMetadata(
-                id=0,
+            get_topic_metadata(
                 name="/driving_log_replayer_v2/planning_factor/results",
-                type="std_msgs/String",
-                serialization_format="cdr",
+                topic_type="std_msgs/String",
             ),
         ]
 

@@ -20,7 +20,6 @@ from typing import TYPE_CHECKING
 
 import numpy as np
 import ros2_numpy
-from rosbag2_py import TopicMetadata
 from std_msgs.msg import String
 
 from driving_log_replayer_v2.ground_segmentation.evaluation_manager import (
@@ -29,11 +28,13 @@ from driving_log_replayer_v2.ground_segmentation.evaluation_manager import (
 from driving_log_replayer_v2.ground_segmentation.models import GroundSegmentationResult
 from driving_log_replayer_v2.ground_segmentation.models import GroundSegmentationScenario
 import driving_log_replayer_v2.perception_eval_conversions as eval_conversions
+from driving_log_replayer_v2.post_process.ros2_utils import get_topic_metadata
 from driving_log_replayer_v2.post_process.runner import ConvertedData
 from driving_log_replayer_v2.post_process.runner import Runner
 from driving_log_replayer_v2.post_process.runner import UseCaseInfo
 
 if TYPE_CHECKING:
+    from rosbag2_py import TopicMetadata
     from sensor_msgs.msg import PointCloud2
     from std_msgs.msg import Header
 
@@ -105,11 +106,9 @@ class GroundSegmentationRunner(Runner):
 
     def _get_external_record_topics(self) -> list[TopicMetadata]:
         return [
-            TopicMetadata(
-                id=0,
+            get_topic_metadata(
                 name="/driving_log_replayer_v2/ground_segmentation/results",
-                type="std_msgs/msg/String",
-                serialization_format="cdr",
+                topic_type="std_msgs/msg/String",
             ),
         ]
 
