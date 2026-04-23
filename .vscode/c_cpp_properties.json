@@ -6,7 +6,7 @@
         "limitSymbolsToIncludedHeaders": true
       },
       "includePath": [
-        "/opt/ros/jazzy/include/**",
+        "/opt/ros/humble/include/**",
         "driving_log_replayer_v2/include/**",
         "${workspaceFolder}/../../../install/**",
         "/usr/include/**",

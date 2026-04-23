@@ -5,7 +5,7 @@ find_package(ament_cmake_python REQUIRED)
 find_package(autoware_cmake REQUIRED)
 autoware_package()
 
-find_package(Python3 REQUIRED COMPONENTS Interpreter) 
+find_package(Python3 REQUIRED COMPONENTS Interpreter)
 if(Python3_VERSION VERSION_GREATER_EQUAL "3.10" AND Python3_VERSION VERSION_LESS "3.12")
   set(ROS_REQUIREMENTS "${CMAKE_CURRENT_SOURCE_DIR}/../requirements/humble.txt")
   execute_process(COMMAND bash -c "python3 -m pip install -r ${ROS_REQUIREMENTS}")

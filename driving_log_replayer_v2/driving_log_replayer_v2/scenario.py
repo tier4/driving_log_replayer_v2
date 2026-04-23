@@ -65,9 +65,9 @@ def load_sample_scenario(
 ScenarioType = TypeVar("ScenarioType", bound=Scenario)
 
 
-def load_scenario_with_exception[ST: Scenario](
-    scenario_path: str, scenario_class: type[ST], result_jsonl_path: str
-) -> ST:
+def load_scenario_with_exception(
+    scenario_path: str, scenario_class: ScenarioType, result_jsonl_path: str
+) -> ScenarioType:
     try:
         return load_scenario(Path(scenario_path), scenario_class)
     except (FileNotFoundError, PermissionError, yaml.YAMLError, ValidationError) as e:
