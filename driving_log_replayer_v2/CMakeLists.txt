@@ -5,8 +5,19 @@ find_package(ament_cmake_python REQUIRED)
 find_package(autoware_cmake REQUIRED)
 autoware_package()
 
-set(ROS_REQUIREMENTS "${CMAKE_CURRENT_SOURCE_DIR}/../requirements.txt")
-execute_process(COMMAND bash -c "PIP_BREAK_SYSTEM_PACKAGES=1 python3 -m pip install --ignore-installed -r ${ROS_REQUIREMENTS}")
+find_paf(Python3_VERSION VERSION_GREATER_EQUAL "3.10" AND Python3_VERSION VERSION_LESS "3.12")
+  set(ROS_REQUIREMENTS "${CMAKE_CURRENT_SOURCE_DIR}/../requirements/humble.txt")
+  execute_process(COMMAND bash -c "python3 -m pip install -r ${ROS_REQUIREMENTS}")
+elseif(Python3_VERSION VERSION_GREATER_EQUAL "3.12")
+  set(ROS_REQUIREMENTS "${CMAKE_CURRENT_SOURCE_DIR}/../requirements/jazzy.txt")
+  execute_process(COMMAND bash -c "PIP_BREAK_SYSTEM_PACKAGES=1 python3 -m pip install --ignore-installed -r ${ROS_REQUIREMENTS}")
+else()
+  message(
+    FATAL_ERROR
+    "Python version ${Python3_VERSION} is not supported. "
+    "Use Python 3.10+ (3.10–3.11 or 3.12+ as configured for this build)."
+  )
+endif()
 
 if(BUILD_TESTING)
   find_package(ament_lint_auto REQUIRED)
