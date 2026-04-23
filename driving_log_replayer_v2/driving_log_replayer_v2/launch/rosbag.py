@@ -15,6 +15,7 @@
 from importlib import import_module
 import json
 from pathlib import Path
+import tempfile
 
 from ament_index_python.packages import get_package_prefix
 from ament_index_python.packages import get_package_share_directory
@@ -31,7 +32,6 @@ from driving_log_replayer_v2.shutdown_once import ShutdownOnce
 PACKAGE_SHARE = get_package_share_directory("driving_log_replayer_v2")
 QOS_PROFILE_PATH_STR = Path(PACKAGE_SHARE, "config", "qos.yaml").as_posix()
 HUMBLE_ROSBAG2_METADATA_VERSION = 5
-JAZZY_ROSBAG2_METADATA_VERSION = 9
 
 
 def is_set_goal(goal_method: str, goal_pose: str | dict) -> bool:
@@ -156,8 +156,29 @@ def get_rosbag_timestamp_offset(play_cmd: list[str], context: LaunchContext) -> 
     return play_cmd
 
 
-def keep_compatibility_metadata(input_bag: str) -> None:
+def keep_rosbag_compatibility(input_bag: str) -> str:
     """Keep compatibility of metadata.yaml between rosbag2 version humble and jazzy."""
+    # check rosbag format version by checking metadata.yaml
+    metadata_file = Path(input_bag) / "metadata.yaml"
+    with metadata_file.open("r") as f:
+        metadata = yaml.safe_load(f)
+    rosbag2_bagfile_information = metadata["rosbag2_bagfile_information"]
+    if rosbag2_bagfile_information["version"] == HUMBLE_ROSBAG2_METADATA_VERSION:
+        return input_bag
+
+    # create tmp directory
+    tmp_dir = Path(tempfile.mkdtemp(prefix="humble_bag_"))
+    tmp_metadata_file = tmp_dir / "metadata.yaml"
+    mcap_files = list(Path(input_bag).glob("*.mcap"))
+    db3_files = list(Path(input_bag).glob("*.db3"))
+    if mcap_files and db3_files:
+        err_msg = f"Both mcap and sqlite3 files exist in the rosbag directory: {input_bag}"
+        raise RuntimeError(err_msg)
+    for bag_path in mcap_files + db3_files:
+        tmp_bag_path = tmp_dir / bag_path.name
+        tmp_bag_path.symlink_to(bag_path.resolve())
+
+    # create metadata.yaml in tmp directory
     mapping = {
         "reliable": 1,
         "best_effort": 2,
@@ -167,40 +188,29 @@ def keep_compatibility_metadata(input_bag: str) -> None:
         "automatic": 1,
     }
 
-    metadata_file = Path(input_bag) / "metadata.yaml"
-    with metadata_file.open("r") as f:
-        metadata = yaml.safe_load(f)
-    try:
-        with Path(input_bag, "origin_metadata.yaml").open("w") as f:
-            yaml.safe_dump(metadata, f, sort_keys=False)  # backup original metadata
-    except PermissionError:
-        pass
-    rosbag2_bagfile_information = metadata["rosbag2_bagfile_information"]
+    rosbag2_bagfile_information["version"] = HUMBLE_ROSBAG2_METADATA_VERSION
+    for topic_with_message_count in rosbag2_bagfile_information["topics_with_message_count"]:
+        topic_metadata = topic_with_message_count["topic_metadata"]
 
-    if rosbag2_bagfile_information["version"] == HUMBLE_ROSBAG2_METADATA_VERSION:
-        return
-    if rosbag2_bagfile_information["version"] == JAZZY_ROSBAG2_METADATA_VERSION:
-        rosbag2_bagfile_information["version"] = HUMBLE_ROSBAG2_METADATA_VERSION
-        for topic_with_message_count in rosbag2_bagfile_information["topics_with_message_count"]:
-            topic_metadata = topic_with_message_count["topic_metadata"]
-            for offered_qos_profiles in topic_metadata["offered_qos_profiles"]:
-                offered_qos_profiles["reliability"] = mapping[offered_qos_profiles["reliability"]]
-                offered_qos_profiles["durability"] = mapping[offered_qos_profiles["durability"]]
-                offered_qos_profiles["history"] = mapping[offered_qos_profiles["history"]]
-                offered_qos_profiles["liveliness"] = mapping[offered_qos_profiles["liveliness"]]
-            topic_metadata["offered_qos_profiles"] = yaml.safe_dump(
-                topic_metadata["offered_qos_profiles"], default_flow_style=False
-            ).strip()
-        with metadata_file.open("w") as f:
-            yaml.safe_dump(metadata, f, sort_keys=False)
+        for offered_qos_profiles in topic_metadata["offered_qos_profiles"]:
+            offered_qos_profiles["reliability"] = mapping[offered_qos_profiles["reliability"]]
+            offered_qos_profiles["durability"] = mapping[offered_qos_profiles["durability"]]
+            offered_qos_profiles["history"] = mapping[offered_qos_profiles["history"]]
+            offered_qos_profiles["liveliness"] = mapping[offered_qos_profiles["liveliness"]]
+        topic_metadata["offered_qos_profiles"] = yaml.safe_dump(
+            topic_metadata["offered_qos_profiles"], default_flow_style=False
+        ).strip()
+    with tmp_metadata_file.open("w") as f:
+        yaml.safe_dump(metadata, f, sort_keys=False)
+    return tmp_dir.as_posix()
 
 
 def launch_bag_player(
     context: LaunchContext,
 ) -> IncludeLaunchDescription:
     conf = context.launch_configurations
-    # TODO: remove this when DLR update jazzy
-    keep_compatibility_metadata(conf["input_bag"])
+    # TODO: remove this when DLR update jazzy and all rosbags are in jazzy format.
+    conf["input_bag"] = keep_rosbag_compatibility(conf["input_bag"])
     play_cmd = [
         "ros2",
         "bag",
