@@ -154,7 +154,7 @@ def get_launch_arguments() -> list:
     add_launch_arg(
         "override_topics_regex",
         default_value="",
-        description="use allowlist. Ex: override_topics_regex:=\^/tf\$\|/sensing/lidar/concatenated/pointcloud\|\^/perception/.\*/objects\$",  # noqa
+        description=r"use allowlist. Ex: override_topics_regex:=\^/tf\$\|/sensing/lidar/concatenated/pointcloud\|\^/perception/.\*/objects\$",
     )
     add_launch_arg(
         "storage",
