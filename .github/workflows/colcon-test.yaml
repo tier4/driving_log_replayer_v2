@@ -11,15 +11,19 @@ on:
 jobs:
   colcon-test:
     runs-on: ubuntu-latest
+    # PEP 668: for rosdep pip rules
+    # https://docs.ros.org/en/independent/api/rosdep/html/pip_and_pep_668.html
+    env:
+      PIP_BREAK_SYSTEM_PACKAGES: "1"
     strategy:
       fail-fast: false
       matrix:
         ros_distribution:
-          - humble
+          - jazzy
         include:
-          # Humble Hawksbill (May 2022 - May 2027)
-          - docker_image: rostooling/setup-ros-docker:ubuntu-jammy-ros-humble-ros-base-latest
-            ros_distribution: humble
+          # Jazzy Jalisco (May 2024 - May 2029)
+          - docker_image: rostooling/setup-ros-docker:ubuntu-noble-ros-jazzy-ros-base-latest
+            ros_distribution: jazzy
             ros_version: 2
     container:
       image: ${{ matrix.docker_image }}

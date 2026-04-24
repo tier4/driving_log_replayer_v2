@@ -5,9 +5,9 @@ This document contains step-by-step instruction on how to build [AWF Autoware Co
 ## Requirements
 
 - CPU amd64
-- Ubuntu 22.04
-- ROS humble
-- Python 3.10
+- Ubuntu 24.04
+- ROS jazzy
+- Python 3.12
 - NVIDIA GPU (required if running perception)
 - [zstd](https://github.com/facebook/zstd)
   - sudo apt install zstd
@@ -39,7 +39,7 @@ This document contains step-by-step instruction on how to build [AWF Autoware Co
      simulator/vendor/ros2_numpy:
        type: git
        url: https://github.com/Box-Robotics/ros2_numpy.git
-       version: humble
+       version: jazzy
      simulator/vendor/ros2bag_extensions:
        type: git
        url: https://github.com/tier4/ros2bag_extensions.git
@@ -71,8 +71,10 @@ This document contains step-by-step instruction on how to build [AWF Autoware Co
 
 6. Install dependent ROS packages:
 
+   On Ubuntu 24.04+ (Python 3.12), `rosdep` may install **pip** rules; set `PIP_BREAK_SYSTEM_PACKAGES=1` so it matches [PEP 668](https://peps.python.org/pep-0668/) (same as CI).
+
    ```shell
-   rosdep install -y --from-paths src --ignore-src --rosdistro $ROS_DISTRO
+   PIP_BREAK_SYSTEM_PACKAGES=1 rosdep install -y --from-paths src --ignore-src --rosdistro $ROS_DISTRO
    ```
 
 7. Build the workspace:
