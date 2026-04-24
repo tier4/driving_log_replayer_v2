@@ -150,7 +150,8 @@ def get_rosbag_timestamp_offset(play_cmd: list[str], context: LaunchContext) -> 
         play_cmd.extend(["--start-offset", str(start)])
     duration = time_offset.get("duration", None)
     if duration is not None:
-        play_cmd = ["timeout", "--preserve-status", str(duration), *play_cmd]
+        # TODO: check this function works well
+        play_cmd.extend(["--playback-duration", str(duration)])
     return play_cmd
 
 
