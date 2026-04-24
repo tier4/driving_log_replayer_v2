@@ -30,6 +30,7 @@ from std_msgs.msg import String
 
 from driving_log_replayer_v2.evaluator import DLREvaluatorV2
 from driving_log_replayer_v2.perception.analyze import analyze
+from driving_log_replayer_v2.perception.analyze import plot
 from driving_log_replayer_v2.perception.evaluation_manager import PerceptionEvaluationManager
 from driving_log_replayer_v2.perception.evaluator import PerceptionInvalidReason
 from driving_log_replayer_v2.perception.models import PerceptionResult
@@ -356,6 +357,7 @@ class PerceptionRunner(Runner):
                 self._analysis_distance_interval,
                 perception_degradation_topic,
             )
+            plot(analyzer)
 
 
 def evaluate(
