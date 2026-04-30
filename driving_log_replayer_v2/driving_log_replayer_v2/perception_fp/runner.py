@@ -31,7 +31,6 @@ import numpy as np
 from perception_eval.common.object import DynamicObject
 from perception_eval.config import PerceptionEvaluationConfig
 from rclpy.time import Duration
-from rosbag2_py import TopicMetadata
 from sensor_msgs.msg import PointCloud2
 from std_msgs.msg import ColorRGBA
 from std_msgs.msg import Header
@@ -48,12 +47,15 @@ from driving_log_replayer_v2.perception_fp.models import PerceptionFPResult
 from driving_log_replayer_v2.perception_fp.models import PerceptionFPScenario
 from driving_log_replayer_v2.perception_fp.models import Polygon3D
 from driving_log_replayer_v2.post_process.ros2_utils import convert_to_homogeneous_matrix
+from driving_log_replayer_v2.post_process.ros2_utils import get_topic_metadata
 from driving_log_replayer_v2.post_process.ros2_utils import lookup_transform
 from driving_log_replayer_v2.post_process.runner import ConvertedData
 from driving_log_replayer_v2.post_process.runner import Runner
 from driving_log_replayer_v2.post_process.runner import UseCaseInfo
 
 if TYPE_CHECKING:
+    from rosbag2_py import TopicMetadata
+
     from driving_log_replayer_v2.post_process.evaluator import FrameResult
     from driving_log_replayer_v2.result import ResultWriter
 
@@ -299,23 +301,17 @@ class PerceptionFPRunner(Runner):
 
     def _get_external_record_topics(self) -> list[TopicMetadata]:
         return [
-            TopicMetadata(
+            get_topic_metadata(
                 name="/driving_log_replayer_v2/perception_fp/results",
-                type="std_msgs/msg/String",
-                serialization_format="cdr",
-                offered_qos_profiles="",
+                topic_type="std_msgs/msg/String",
             ),
-            TopicMetadata(
+            get_topic_metadata(
                 name="/driving_log_replayer_v2/perception_fp/non_detection_area",
-                type="visualization_msgs/msg/MarkerArray",
-                serialization_format="cdr",
-                offered_qos_profiles="",
+                topic_type="visualization_msgs/msg/MarkerArray",
             ),
-            TopicMetadata(
+            get_topic_metadata(
                 name="/driving_log_replayer_v2/perception_fp/fp_objects",
-                type="visualization_msgs/msg/MarkerArray",
-                serialization_format="cdr",
-                offered_qos_profiles="",
+                topic_type="visualization_msgs/msg/MarkerArray",
             ),
         ]
 

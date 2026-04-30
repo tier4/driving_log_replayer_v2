@@ -357,3 +357,22 @@ def convert_to_homogeneous_matrix(transform: TransformStamped) -> np.ndarray:
     matrix[0:3, 3] = [translation.x, translation.y, translation.z]
     matrix[0:3, 0:3] = quaternion.rotation_matrix
     return matrix
+
+
+# TODO: remove this function after ROS Jazzy is supported
+def get_topic_metadata(name: str, topic_type: str) -> TopicMetadata:
+    # for humble
+    try:
+        return TopicMetadata(
+            name=name,
+            type=topic_type,
+            serialization_format="cdr",
+        )
+    # for jazzy
+    except TypeError:
+        return TopicMetadata(
+            id=0,
+            name=name,
+            type=topic_type,
+            serialization_format="cdr",
+        )

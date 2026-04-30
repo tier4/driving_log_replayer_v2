@@ -4,8 +4,8 @@ driving_log_replayer_v2 is a ROS package that evaluates the functionality of Aut
 
 ## Requirements
 
-- ROS 2 humble
-- [Python 3.10](https://www.python.org/)
+- ROS 2 humble or Jazzy
+- Python 3.10 or 3.12
 
 ### Optional
 
