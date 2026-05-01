@@ -2,8 +2,8 @@
 Changelog for package driving_log_replayer
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-Forthcoming
------------
+3.18.0 (2026-05-01)
+-------------------
 * feat: support jazzy (`#354 <https://github.com/tier4/driving_log_replayer_v2/issues/354>`_)
   * feat: support jazzy
   * support for ros package
