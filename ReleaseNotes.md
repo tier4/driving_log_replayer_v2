@@ -1,5 +1,17 @@
 # Release Notes
 
+## Version 3.18.0
+
+Major changes
+
+| Module   | Feature                    | Brief summary                        | Pull request                                                        | Contributor                                   |
+| -------- | -------------------------- | ------------------------------------ | ------------------------------------------------------------------- | --------------------------------------------- |
+| `common` | support new version        | support jazzy                        | [#354](https://github.com/tier4/driving_log_replayer_v2/issues/354) | [MasatoSaeki](https://github.com/MasatoSaeki) |
+| `common` | support new version rosbag | support jazzy rosbag                 | [#353](https://github.com/tier4/driving_log_replayer_v2/issues/353) | [MasatoSaeki](https://github.com/MasatoSaeki) |
+| `launch` | refactor                   | treat raw string explicitly          | [#356](https://github.com/tier4/driving_log_replayer_v2/issues/356) | [MasatoSaeki](https://github.com/MasatoSaeki) |
+| `common` | config                     | trajectory selector config           | [#351](https://github.com/tier4/driving_log_replayer_v2/issues/351) | [xtk8532704](https://github.com/xtk8532704)   |
+| `common` | config                     | on the YOLOX for all components test | [#350](https://github.com/tier4/driving_log_replayer_v2/issues/350) | [xtk8532704](https://github.com/xtk8532704)   |
+
 ## Version 3.17.4
 
 Minor Tweak

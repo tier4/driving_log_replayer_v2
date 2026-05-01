@@ -2,6 +2,61 @@
 Changelog for package driving_log_replayer
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
+Forthcoming
+-----------
+* feat: support jazzy (`#354 <https://github.com/tier4/driving_log_replayer_v2/issues/354>`_)
+  * feat: support jazzy
+  * support for ros package
+  * avoid pip error
+  * pre-commit
+  * update pip and wheel version
+  * remove pip cache dir
+  * chore
+  * update build
+  * restrict setuptools version
+  * only use installed setuptools
+  * keep lark
+  * break line in CMake
+  * remove --only-binary shapely
+  * move ci to CMake
+  * refactor
+  * remove uninstall lark rospkg
+  * add --ingore-install
+  * restrict matplotlib
+  * remove pip_no_cashe_dir
+  * diet CMake
+  * refactor
+  * pre-commit
+  * fix typo
+  * tmp save
+  * pre-commit
+  * update
+  * remove file
+  * fix ci
+  * fix cmake
+  * remove unnecessary changes
+  * chore
+  * chore
+  * fix version
+  * remove unnecessary code
+  * remove unnecessary file
+  * update docs
+  * change args of TopicMetadata
+  * align TopicMetadata interface
+  * Update requirements for ROS 2 and Python versions
+  ---------
+* feat(rosbag): support jazzy rosbag (`#353 <https://github.com/tier4/driving_log_replayer_v2/issues/353>`_)
+  * feat(rosbag): support jazzy rosbag
+  * keep original file
+  * avoid permission error
+  * fix
+  ---------
+* chore: treat raw string explicitly (`#356 <https://github.com/tier4/driving_log_replayer_v2/issues/356>`_)
+* fix trajectory selector config (`#351 <https://github.com/tier4/driving_log_replayer_v2/issues/351>`_)
+* chore: on the YOLOX for all components test (`#350 <https://github.com/tier4/driving_log_replayer_v2/issues/350>`_)
+  enable YOLOX, but disable traffic_signals
+* Contributors: Kem (TiankuiXian), Masato Saeki
+
 3.17.4 (2026-04-01)
 -------------------
 * feat(perception): show label in result bag (`#345 <https://github.com/tier4/driving_log_replayer_v2/issues/345>`_)
