@@ -27,8 +27,7 @@ RECORD_TOPIC = """^/tf$\
 |^/diagnostics$\
 |^/system/processing_time_checker/metrics$\
 |^/awapi/autoware/get/status$\
-|^/sensing/camera/.*/compressed$\
-|^/sensing/camera/.*/camera_info$\
+|^/sensing/lidar/.*$\
 |^/sensing/lidar/concatenated/pointcloud$\
 |^/perception/object_recognition/detection/.*/debug/pipeline_latency_ms$\
 |^/perception/object_recognition/tracking/multi_object_tracker/debug/.*\
