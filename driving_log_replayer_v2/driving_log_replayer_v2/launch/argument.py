@@ -186,11 +186,6 @@ def get_launch_arguments() -> list:
         default_value="",
         description="Launch other optional nodes. Using comma separated string. Currently available is 2d_detector. Ex: with_optional_nodes:=2d_detector",
     )
-    add_launch_arg(
-        "override_scenario_path",
-        default_value="",
-        description="If set, replaces scenario_path before scenario loading. Used to run repo-bundled scenarios while Web.Auto schedules an unrelated scenario.",
-    )
     return launch_arguments
 
 
@@ -248,7 +243,7 @@ def update_conf_with_dataset_info(
     conf["result_jsonl_path"] = output_dir.joinpath("result.jsonl").as_posix()
     conf["result_bag_path"] = output_dir.joinpath("result_bag").as_posix()
     conf["result_archive_path"] = output_dir.joinpath("result_archive").as_posix()
-    conf["use_case"] = yaml_obj["Evaluation"]["UseCaseName"]
+    conf["use_case"] = yaml_obj["Evaluation"].get("SubUseCaseName") or yaml_obj["Evaluation"]["UseCaseName"]
 
     if conf["use_case"] in [
         "all_components",
@@ -272,8 +267,6 @@ def update_conf_with_dataset_info(
 
 
 def prepare_paths(conf: dict) -> tuple[Path, Path, Path]:
-    if conf.get("override_scenario_path", ""):
-        conf["scenario_path"] = conf["override_scenario_path"]
     scenario_path = Path(conf["scenario_path"])
     dataset_dir = scenario_path.parent if conf["dataset_dir"] == "" else Path(conf["dataset_dir"])
     output_dir = create_output_dir(conf["output_dir"], scenario_path)

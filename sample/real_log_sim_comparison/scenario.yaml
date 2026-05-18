@@ -6,7 +6,8 @@ ScenarioDescription: |
 SensorModel: aip_x2_gen2
 VehicleModel: j6_gen2
 Evaluation:
-  UseCaseName: real_log_sim_comparison
+  UseCaseName: planning_control
+  SubUseCaseName: real_log_sim_comparison
   UseCaseFormatVersion: 0.1.0
   # Using a fake (unrelated) T4 dataset for Web.Auto triggering.
   # The evaluator orchestrates its own simulator runs independently
