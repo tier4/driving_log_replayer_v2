@@ -1,0 +1,18 @@
+ScenarioFormatVersion: 3.0.0
+ScenarioName: best_model_comparison_miraikan
+ScenarioDescription: |
+  Real-log lite-fication + sim_normal + sim_godot + compare_logs analysis
+  for the x2_dev_teleport_to_miraikan route.
+SensorModel: aip_x2_gen2
+VehicleModel: j6_gen2
+Evaluation:
+  UseCaseName: best_model_comparison
+  UseCaseFormatVersion: 0.1.0
+  # Using a fake (unrelated) T4 dataset for Web.Auto triggering.
+  # The evaluator orchestrates its own simulator runs independently
+  # of the bound dataset path, so the dataset content is not consumed.
+  # Fake dataset: ReferenceDriving_E2E_PlanningControl_odaiba.Auto_04_route03_case02
+  Datasets:
+    - 67db293e-903e-4397-b603-be6b88d98be7:
+        VehicleId: default
+  Conditions: {}

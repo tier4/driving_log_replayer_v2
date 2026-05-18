@@ -49,6 +49,7 @@ install(PROGRAMS
   scripts/diagnostics_evaluator_node.py
   scripts/publish_topic_from_rosbag_node.py
   scripts/perception_reproducer_evaluator_node.py
+  scripts/best_model_comparison_evaluator_node.py
   DESTINATION lib/${PROJECT_NAME}
 )
 

@@ -19,6 +19,7 @@ from launch.actions import OpaqueFunction
 
 from driving_log_replayer_v2.launch.argument import ensure_arg_compatibility
 from driving_log_replayer_v2.launch.argument import get_launch_arguments
+from driving_log_replayer_v2.launch.best_model_comparison import launch_best_model_comparison
 from driving_log_replayer_v2.launch.ndt_convergence import launch_ndt_convergence
 from driving_log_replayer_v2.launch.perception_reproducer import (
     launch_perception_reproducer_use_case,
@@ -30,6 +31,8 @@ from driving_log_replayer_v2.rosbag import create_metadata_yaml
 def select_launch(context: LaunchContext) -> list:
     conf = context.launch_configurations
     create_metadata_yaml(conf["input_bag"])
+    if conf["use_case"] == "best_model_comparison":
+        return launch_best_model_comparison()
     if conf["use_case"] == "ndt_convergence":
         return launch_ndt_convergence(context)
     if conf["use_case"] == "perception_reproducer":

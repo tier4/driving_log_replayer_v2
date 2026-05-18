@@ -1,0 +1,5 @@
+# TODO(best_model_comparison): Fill in a valid scenario_test_runner scenario
+# matching the target route (e.g., odaiba.Auto_04_route03_case02).
+# This file is loaded by best_model_comparison_evaluator_node.py via the
+# scenario_test_runner_scenario parameter and passed to scenario_test_runner
+# for both sim_normal and sim_godot steps.
