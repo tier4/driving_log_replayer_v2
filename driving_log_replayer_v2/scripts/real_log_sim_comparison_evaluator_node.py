@@ -31,6 +31,7 @@ import subprocess
 import sys
 import traceback
 from pathlib import Path
+from typing import Any
 
 from ament_index_python.packages import get_package_share_directory
 import rclpy
@@ -48,11 +49,13 @@ class RealLogSimComparisonEvaluator(Node):
             "t4_dataset_path",
             "result_jsonl_path",
             "result_archive_path",
+            "scenario_path",
             "vehicle_model_normal",
             "vehicle_model_godot",
             "sensor_model_sim",
             "godot_executable",
             "scenario_test_runner_scenario",
+            "map_path",
         ]:
             self.declare_parameter(param, "")
 
@@ -70,10 +73,15 @@ class RealLogSimComparisonEvaluator(Node):
         sensor_model_sim = self.get_parameter("sensor_model_sim").value
         godot_executable = self.get_parameter("godot_executable").value
         scenario_test_runner_scenario = self.get_parameter("scenario_test_runner_scenario").value
+        map_path = self.get_parameter("map_path").value
 
         result_archive_path.mkdir(parents=True, exist_ok=True)
         lite_dir = result_archive_path / "lite"
         comparison_dir = result_archive_path / "comparison"
+
+        # scenario_path は use_case.py が共通で渡す。scenario.yaml から Conditions を読む。
+        scenario_path_str = self.get_parameter("scenario_path").value
+        compare_cfg = _load_compare_config(scenario_path_str)
 
         try:
             run_pipeline(
@@ -85,6 +93,8 @@ class RealLogSimComparisonEvaluator(Node):
                 sensor_model_sim,
                 Path(godot_executable),
                 Path(scenario_test_runner_scenario),
+                map_path,
+                compare_cfg,
                 self.get_logger(),
             )
             success = True
@@ -109,6 +119,8 @@ def run_pipeline(
     sensor_model_sim: str,
     godot_executable: Path,
     scenario_test_runner_scenario: Path,
+    map_path: str,
+    compare_cfg: dict[str, Any],
     logger,
 ) -> None:
     analysis_share = Path(get_package_share_directory("real_log_sim_comparison"))
@@ -159,7 +171,26 @@ def run_pipeline(
     # Step 4 – compare
     logger.info("Step 4: compare_logs")
     env = os.environ.copy()
-    env["REAL_LOG_SIM_BASE_DIR"] = str(comparison_dir.parent)  # lite/ and comparison/ live here
+    env["BEST_MODEL_BASE_DIR"] = str(comparison_dir.parent)  # lite/ and comparison/ live here
+
+    # 地図: t4_dataset_path/map/lanelet2_map.osm を自動解決
+    map_osm = Path(map_path) / "lanelet2_map.osm" if map_path else Path("")
+    if map_osm.exists():
+        env["MAP_OSM_PATH"] = str(map_osm)
+        logger.info(f"Map OSM: {map_osm}")
+    else:
+        # 空文字を明示することで compare_logs.py の後方互換フォールバック（x2_dev 地図の glob）を抑制する
+        env["MAP_OSM_PATH"] = ""
+        logger.warn(f"lanelet2_map.osm not found at {map_osm}; map background will be omitted")
+
+    # シナリオ名
+    if compare_cfg.get("scenario_name"):
+        env["SCENARIO_NAME"] = compare_cfg["scenario_name"]
+
+    # カーブ設定 YAML（scenario.yaml と同じディレクトリを基準に解決済み）
+    # キーがなければ "" を明示設定し、後方互換フォールバック（x2_dev CURVE_CENTERS）を抑制する
+    env["CURVE_CONFIG_YAML"] = compare_cfg.get("curve_config_yaml", "")
+
     _run(
         [sys.executable, str(compare_logs)],
         cwd=str(analysis_share),
@@ -211,6 +242,48 @@ def _run_sim(
             f.unlink()
         except OSError:
             pass
+
+
+def _load_compare_config(scenario_path_str: str) -> dict[str, Any]:
+    """scenario.yaml の Conditions から compare_logs 用設定を抽出する。
+
+    Conditions に以下のキーを認識する（すべて任意）:
+      - scenario_name (str): 図タイトル用シナリオ名
+      - curve_config_yaml (str): カーブ設定 YAML の scenario.yaml からの相対パス or 絶対パス
+                                 空文字を明示するとカーブ別解析スキップ
+    """
+    if not scenario_path_str:
+        return {}
+    scenario_path = Path(scenario_path_str)
+    if not scenario_path.exists():
+        return {}
+    try:
+        import yaml as _yaml
+        with scenario_path.open(encoding="utf-8") as f:
+            doc = _yaml.safe_load(f) or {}
+        conditions: dict = (doc.get("Evaluation") or {}).get("Conditions") or {}
+
+        cfg: dict[str, Any] = {}
+
+        if "scenario_name" in conditions:
+            cfg["scenario_name"] = str(conditions["scenario_name"])
+        elif "ScenarioName" in doc:
+            cfg["scenario_name"] = str(doc["ScenarioName"])
+
+        if "curve_config_yaml" in conditions:
+            raw = str(conditions["curve_config_yaml"])
+            if raw == "":
+                # 空文字はカーブ別解析スキップを明示
+                cfg["curve_config_yaml"] = ""
+            else:
+                p = Path(raw)
+                if not p.is_absolute():
+                    p = scenario_path.parent / p
+                cfg["curve_config_yaml"] = str(p) if p.exists() else ""
+
+        return cfg
+    except Exception:
+        return {}
 
 
 def _find_mcap(bag_dir: Path) -> Path:

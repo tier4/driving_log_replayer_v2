@@ -16,4 +16,10 @@ Evaluation:
   Datasets:
     - 67db293e-903e-4397-b603-be6b88d98be7:
         VehicleId: default
-  Conditions: {}
+  Conditions:
+    # 図タイトルに表示するシナリオ名 (任意。未指定なら ScenarioName を使用)
+    scenario_name: "x2_dev/2231 テレポート駅→日本科学未来館"
+    # カーブ別解析を有効化する設定 YAML への相対パス (scenario.yaml からの相対パス)。
+    # 省略するとカーブ別プロット (curves_closeup / curve2_*) をスキップ。
+    # 異なるシナリオでは curve_config_yaml キーを削除するか、空文字にしてください。
+    curve_config_yaml: ./curve_config_miraikan.yaml

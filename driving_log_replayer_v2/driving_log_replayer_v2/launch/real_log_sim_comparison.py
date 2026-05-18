@@ -36,6 +36,8 @@ NODE_PARAMS: dict[str, LaunchConfiguration] = {
     "sensor_model_sim": LaunchConfiguration("sensor_model_sim"),
     "godot_executable": LaunchConfiguration("godot_executable"),
     "scenario_test_runner_scenario": LaunchConfiguration("scenario_test_runner_scenario"),
+    # t4_dataset_path/map を compare_logs.py の地図解決に渡す（argument.py:241 が自動設定）
+    "map_path": LaunchConfiguration("map_path"),
 }
 
 USE_CASE_ARGS: list[DeclareLaunchArgument] = [
