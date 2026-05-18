@@ -13,7 +13,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""Orchestration node for best_model_comparison.
+"""Orchestration node for real_log_sim_comparison.
 
 Runs the full analysis pipeline inside a cloud DLR2 job:
   1. Filter real vehicle MCAP to lite/real.lite.mcap  (make_lite.py)
@@ -40,9 +40,9 @@ from rclpy.node import Node
 SIM_OUT_ROOT = Path("/tmp/scenario_test_runner")
 
 
-class BestModelComparisonEvaluator(Node):
+class RealLogSimComparisonEvaluator(Node):
     def __init__(self) -> None:
-        super().__init__("best_model_comparison_evaluator")
+        super().__init__("real_log_sim_comparison_evaluator")
 
         for param in [
             "t4_dataset_path",
@@ -111,7 +111,7 @@ def run_pipeline(
     scenario_test_runner_scenario: Path,
     logger,
 ) -> None:
-    analysis_share = Path(get_package_share_directory("best_model_comparison"))
+    analysis_share = Path(get_package_share_directory("real_log_sim_comparison"))
     make_lite = analysis_share / "make_lite.py"
     compare_logs = analysis_share / "compare_logs.py"
 
@@ -159,7 +159,7 @@ def run_pipeline(
     # Step 4 – compare
     logger.info("Step 4: compare_logs")
     env = os.environ.copy()
-    env["BEST_MODEL_BASE_DIR"] = str(comparison_dir.parent)  # lite/ and comparison/ live here
+    env["REAL_LOG_SIM_BASE_DIR"] = str(comparison_dir.parent)  # lite/ and comparison/ live here
     _run(
         [sys.executable, str(compare_logs)],
         cwd=str(analysis_share),
@@ -244,7 +244,7 @@ def _write_result_jsonl(path: Path, success: bool, summary: str) -> None:
 
 def main() -> None:
     rclpy.init()
-    node = BestModelComparisonEvaluator()
+    node = RealLogSimComparisonEvaluator()
     rclpy.spin(node)
 
 

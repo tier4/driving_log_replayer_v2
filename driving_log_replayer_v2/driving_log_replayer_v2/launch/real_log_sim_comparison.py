@@ -62,15 +62,15 @@ USE_CASE_ARGS: list[DeclareLaunchArgument] = [
     DeclareLaunchArgument(
         "scenario_test_runner_scenario",
         default_value="",
-        description="Absolute path to the scenario_test_runner scenario YAML used for sim_normal/sim_godot steps. Required when running best_model_comparison.",
+        description="Absolute path to the scenario_test_runner scenario YAML used for sim_normal/sim_godot steps. Required when running real_log_sim_comparison.",
     ),
 ]
 
 
 # ── Custom launcher (called from simulation.launch.py) ──────────────────────
 
-def launch_best_model_comparison() -> list:
-    """Return launch actions for the best_model_comparison use case.
+def launch_real_log_sim_comparison() -> list:
+    """Return launch actions for the real_log_sim_comparison use case.
 
     Skips Autoware, bag player, and bag recorder.  Only the evaluator node
     (which orchestrates the full analysis pipeline) is launched.
