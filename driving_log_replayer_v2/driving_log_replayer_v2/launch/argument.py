@@ -186,6 +186,11 @@ def get_launch_arguments() -> list:
         default_value="",
         description="Launch other optional nodes. Using comma separated string. Currently available is 2d_detector. Ex: with_optional_nodes:=2d_detector",
     )
+    add_launch_arg(
+        "override_scenario_path",
+        default_value="",
+        description="If set, replaces scenario_path before scenario loading. Used to run repo-bundled scenarios while Web.Auto schedules an unrelated scenario.",
+    )
     return launch_arguments
 
 
@@ -267,6 +272,8 @@ def update_conf_with_dataset_info(
 
 
 def prepare_paths(conf: dict) -> tuple[Path, Path, Path]:
+    if conf.get("override_scenario_path", ""):
+        conf["scenario_path"] = conf["override_scenario_path"]
     scenario_path = Path(conf["scenario_path"])
     dataset_dir = scenario_path.parent if conf["dataset_dir"] == "" else Path(conf["dataset_dir"])
     output_dir = create_output_dir(conf["output_dir"], scenario_path)
