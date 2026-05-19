@@ -119,7 +119,7 @@ def run_pipeline(
         "--kind", "real",
         "--input", str(real_mcap),
         "--output", str(lite_mcap),
-    ])
+    ], timeout=300)
     # Copy lite MCAP to result_bag_path so that post_process (create_metadata_yaml) finds it.
     shutil.copy2(str(lite_mcap), str(result_bag_path / "real.lite.mcap"))
 
@@ -149,6 +149,7 @@ def run_pipeline(
     _run(
         [sys.executable, "-m", "driving_log_replayer_v2.real_log_sim_comparison.compare_logs"],
         env=env,
+        timeout=1800,
     )
 
 
@@ -202,8 +203,11 @@ def _find_mcap(bag_dir: Path) -> Path:
     return mcap_files[0]
 
 
-def _run(cmd: list[str], cwd: str | None = None, env: dict | None = None) -> None:
-    result = subprocess.run(cmd, check=False, cwd=cwd, env=env)
+def _run(cmd: list[str], cwd: str | None = None, env: dict | None = None, timeout: int | None = None) -> None:
+    try:
+        result = subprocess.run(cmd, check=False, cwd=cwd, env=env, timeout=timeout)
+    except subprocess.TimeoutExpired:
+        raise RuntimeError(f"Command timed out after {timeout}s: {' '.join(str(c) for c in cmd)}")
     if result.returncode != 0:
         msg = f"Command failed (rc={result.returncode}): {' '.join(str(c) for c in cmd)}"
         raise RuntimeError(msg)
