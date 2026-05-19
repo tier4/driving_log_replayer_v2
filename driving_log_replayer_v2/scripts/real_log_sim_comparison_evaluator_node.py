@@ -15,11 +15,9 @@
 
 """Orchestration node for real_log_sim_comparison.
 
-Runs the full analysis pipeline inside a cloud DLR2 job:
+Runs the per-step analysis pipeline inside a cloud DLR2 job:
   1. Filter real vehicle MCAP to lite/real.lite.mcap  (make_lite.py)
-  2. Run scenario_test_runner (normal sim)  → lite/sim_normal.lite.mcap
-  3. Run scenario_test_runner (Godot sim)   → lite/sim_godot.lite.mcap  (skipped if binary missing)
-  4. Generate comparison figures and report  (compare_logs.py)
+  2. Generate per-step figures and report from real log  (compare_logs.py)
 
 Outputs are written to result_archive_path, which is collected by
 `logging.additional_log_archive` in .webauto-ci.yml.
@@ -38,9 +36,6 @@ import rclpy
 from rclpy.node import Node
 
 
-SIM_OUT_ROOT = Path("/tmp/scenario_test_runner")
-
-
 class RealLogSimComparisonEvaluator(Node):
     def __init__(self) -> None:
         super().__init__("real_log_sim_comparison_evaluator")
@@ -50,11 +45,6 @@ class RealLogSimComparisonEvaluator(Node):
             "result_jsonl_path",
             "result_archive_path",
             "scenario_path",
-            "vehicle_model_normal",
-            "vehicle_model_godot",
-            "sensor_model_sim",
-            "godot_executable",
-            "scenario_test_runner_scenario",
             "map_path",
         ]:
             self.declare_parameter(param, "")
@@ -68,11 +58,6 @@ class RealLogSimComparisonEvaluator(Node):
         t4_dataset_path = Path(self.get_parameter("t4_dataset_path").value)
         result_jsonl_path = Path(self.get_parameter("result_jsonl_path").value)
         result_archive_path = Path(self.get_parameter("result_archive_path").value)
-        vehicle_model_normal = self.get_parameter("vehicle_model_normal").value
-        vehicle_model_godot = self.get_parameter("vehicle_model_godot").value
-        sensor_model_sim = self.get_parameter("sensor_model_sim").value
-        godot_executable = self.get_parameter("godot_executable").value
-        scenario_test_runner_scenario = self.get_parameter("scenario_test_runner_scenario").value
         map_path = self.get_parameter("map_path").value
 
         result_archive_path.mkdir(parents=True, exist_ok=True)
@@ -88,11 +73,6 @@ class RealLogSimComparisonEvaluator(Node):
                 t4_dataset_path,
                 lite_dir,
                 comparison_dir,
-                vehicle_model_normal,
-                vehicle_model_godot,
-                sensor_model_sim,
-                Path(godot_executable),
-                Path(scenario_test_runner_scenario),
                 map_path,
                 compare_cfg,
                 self.get_logger(),
@@ -114,11 +94,6 @@ def run_pipeline(
     t4_dataset_path: Path,
     lite_dir: Path,
     comparison_dir: Path,
-    vehicle_model_normal: str,
-    vehicle_model_godot: str,
-    sensor_model_sim: str,
-    godot_executable: Path,
-    scenario_test_runner_scenario: Path,
     map_path: str,
     compare_cfg: dict[str, Any],
     logger,
@@ -141,35 +116,8 @@ def run_pipeline(
         "--output", str(lite_dir / "real.lite.mcap"),
     ])
 
-    # Step 2 – sim_normal
-    logger.info("Step 2: sim_normal")
-    _run_sim(
-        vehicle_model=vehicle_model_normal,
-        sensor_model=sensor_model_sim,
-        output_lite=lite_dir / "sim_normal.lite.mcap",
-        make_lite=make_lite,
-        scenario_path=scenario_test_runner_scenario,
-        extra_args=[],
-        logger=logger,
-    )
-
-    # Step 3 – sim_godot (skip when binary is absent)
-    if godot_executable.exists():
-        logger.info("Step 3: sim_godot")
-        _run_sim(
-            vehicle_model=vehicle_model_godot,
-            sensor_model=sensor_model_sim,
-            output_lite=lite_dir / "sim_godot.lite.mcap",
-            make_lite=make_lite,
-            scenario_path=scenario_test_runner_scenario,
-            extra_args=[f"godot_executable:={godot_executable}"],
-            logger=logger,
-        )
-    else:
-        logger.warn(f"Godot executable not found ({godot_executable}); skipping sim_godot step.")
-
-    # Step 4 – compare
-    logger.info("Step 4: compare_logs")
+    # Step 2 – compare (real log only; sim logs are skipped when absent)
+    logger.info("Step 2: compare_logs")
     env = os.environ.copy()
     env["BEST_MODEL_BASE_DIR"] = str(comparison_dir.parent)  # lite/ and comparison/ live here
 
@@ -196,52 +144,6 @@ def run_pipeline(
         cwd=str(analysis_share),
         env=env,
     )
-
-
-def _run_sim(
-    vehicle_model: str,
-    sensor_model: str,
-    output_lite: Path,
-    make_lite: Path,
-    scenario_path: Path,
-    extra_args: list[str],
-    logger,
-) -> None:
-    SIM_OUT_ROOT.mkdir(parents=True, exist_ok=True)
-    # Remove stale outputs from a previous run.
-    for f in SIM_OUT_ROOT.rglob("*.mcap"):
-        f.unlink()
-
-    launch_args = [
-        f"vehicle_model:={vehicle_model}",
-        f"sensor_model:={sensor_model}",
-        "record:=true",
-        "record_storage_id:=mcap",
-        "architecture_type:=awf/universe/20250130",
-        "initialize_duration:=100",
-        f"scenario:={scenario_path}",
-        *extra_args,
-    ]
-    _run(["ros2", "launch", "scenario_test_runner", "scenario_test_runner.launch.py", *launch_args])
-
-    mcap_files = list(SIM_OUT_ROOT.rglob("*.mcap"))
-    if not mcap_files:
-        msg = f"No .mcap found in {SIM_OUT_ROOT} after sim run"
-        raise RuntimeError(msg)
-
-    _run([
-        sys.executable, str(make_lite),
-        "--kind", "sim",
-        "--input", str(mcap_files[0]),
-        "--output", str(output_lite),
-    ])
-
-    # Remove full sim bag to save disk space.
-    for f in SIM_OUT_ROOT.rglob("*.mcap"):
-        try:
-            f.unlink()
-        except OSError:
-            pass
 
 
 def _load_compare_config(scenario_path_str: str) -> dict[str, Any]:
