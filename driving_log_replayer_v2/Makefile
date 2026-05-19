@@ -13,7 +13,7 @@ SHELL := /bin/bash
 
 MAKEFILE_DIR := $(abspath $(dir $(lastword $(MAKEFILE_LIST))))
 # WS_ROOT: colcon ワークスペースルート。環境変数で上書き可能。
-WS_ROOT ?= $(abspath $(MAKEFILE_DIR)/../../..)
+WS_ROOT ?= $(abspath $(MAKEFILE_DIR)/../../../..)
 SETUP_BASH := $(WS_ROOT)/install/setup.bash
 
 WORK_DIR        := $(MAKEFILE_DIR)/real_log_sim_comparison_work
