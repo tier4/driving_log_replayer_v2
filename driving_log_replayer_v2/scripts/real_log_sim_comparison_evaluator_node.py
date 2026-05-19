@@ -88,7 +88,7 @@ class RealLogSimComparisonEvaluator(Node):
             self.get_logger().error(f"Pipeline failed:\n{summary}")
 
         _write_result_jsonl(result_jsonl_path, success, summary)
-        rclpy.shutdown()
+        os._exit(0)
 
 
 # ── Pipeline steps ────────────────────────────────────────────────────────────
