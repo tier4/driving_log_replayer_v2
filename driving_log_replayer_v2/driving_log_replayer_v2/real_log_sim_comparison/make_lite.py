@@ -1,13 +1,14 @@
 #!/usr/bin/env python3
-"""rosbag (db3 または mcap) から三方比較に必要なトピックだけを抽出して lite/*.mcap を生成する.
+"""rosbag (db3 または mcap) から三方比較に必要なトピックだけを抽出して lite bag を生成する.
 
 Usage:
-    python3 make_lite.py --kind real --input <bag_dir>  --output lite/real.lite.mcap
-    python3 make_lite.py --kind sim  --input <bag_dir>  --output lite/sim_godot.lite.mcap
-    python3 make_lite.py --kind sim  --input <bag_dir>  --output lite/sim_normal.lite.mcap
+    python3 make_lite.py --kind real --input <bag_dir>  --output lite/real.lite
+    python3 make_lite.py --kind sim  --input <bag_dir>  --output lite/sim_godot.lite
+    python3 make_lite.py --kind sim  --input <bag_dir>  --output lite/sim_normal.lite
 
 --input にはロスバッグのディレクトリ（db3 / mcap どちらでも可）を渡す。
 単一の .mcap ファイルパスを渡した場合は後方互換のためそのまま処理する。
+--output は rosbag2 bag ディレクトリとして出力される。
 """
 
 import argparse
@@ -45,37 +46,50 @@ TOPICS: dict[str, set[str]] = {
 }
 
 
-def filter_bag(input_dir: Path, output_dir: Path, topics: set[str]) -> None:
-    """rosbag ディレクトリ（db3 / mcap）からトピックを絞り込んで rosbag2 bag ディレクトリに書き出す.
+def _open_reader(input_path: Path):
+    """入力パス（bag ディレクトリ or 単一 .mcap）から SequentialReader を返す。
 
-    rosbag2_py.SequentialReader で読み込み（storage_id="" で形式を自動検出）、
-    rosbag2_py.SequentialWriter で output_dir に rosbag2 bag を直接書き出す。
+    単一 .mcap の場合は一時ディレクトリにシンボリックリンクを張って Reindex してから開く。
+    呼び出し元は返り値の (reader, cleanup) を使い終わったら cleanup() を呼ぶこと。
     """
+    import tempfile
+
+    import rosbag2_py
+
+    if input_path.is_dir():
+        if not (input_path / "metadata.yaml").exists():
+            rosbag2_py.Reindexer().reindex(
+                rosbag2_py.StorageOptions(uri=str(input_path), storage_id="")
+            )
+        reader = rosbag2_py.SequentialReader()
+        reader.open(
+            rosbag2_py.StorageOptions(uri=str(input_path), storage_id=""),
+            rosbag2_py.ConverterOptions("cdr", "cdr"),
+        )
+        return reader, lambda: None
+    else:
+        # 単一 .mcap ファイル: 一時ディレクトリにシンボリックリンクを作成して Reindex
+        tmp = tempfile.mkdtemp()
+        link = Path(tmp) / input_path.name
+        link.symlink_to(input_path.resolve())
+        rosbag2_py.Reindexer().reindex(
+            rosbag2_py.StorageOptions(uri=tmp, storage_id="mcap")
+        )
+        reader = rosbag2_py.SequentialReader()
+        reader.open(
+            rosbag2_py.StorageOptions(uri=tmp, storage_id=""),
+            rosbag2_py.ConverterOptions("cdr", "cdr"),
+        )
+        import shutil
+        return reader, lambda: shutil.rmtree(tmp, ignore_errors=True)
+
+
+def _write_filtered_bag(reader, topic_type_map: dict, output_dir: Path) -> None:
+    """reader から topic_type_map のトピックを絞り込んで output_dir に bag を書き出す。"""
     import shutil
 
     import rosbag2_py
 
-    # metadata.yaml がない場合は Reindexer で生成する
-    if not (input_dir / "metadata.yaml").exists():
-        rosbag2_py.Reindexer().reindex(
-            rosbag2_py.StorageOptions(uri=str(input_dir), storage_id="")
-        )
-
-    reader = rosbag2_py.SequentialReader()
-    reader.open(
-        rosbag2_py.StorageOptions(uri=str(input_dir), storage_id=""),
-        rosbag2_py.ConverterOptions("cdr", "cdr"),
-    )
-
-    # 対象トピックの型名マップ（create_topic に使用）
-    topic_type_map: dict[str, str] = {
-        t.name: t.type
-        for t in reader.get_all_topics_and_types()
-        if t.name in topics
-    }
-    reader.set_filter(rosbag2_py.StorageFilter(topics=list(topics)))
-
-    # SequentialWriter は既存ディレクトリへの上書き不可のため、事前に削除する
     if output_dir.exists():
         shutil.rmtree(output_dir)
     output_dir.parent.mkdir(parents=True, exist_ok=True)
@@ -103,57 +117,48 @@ def filter_bag(input_dir: Path, output_dir: Path, topics: set[str]) -> None:
     del writer  # flush & close
 
 
-def filter_mcap(input_path: Path, output_path: Path, topics: set[str]) -> None:
-    """単一 MCAP ファイルからトピックを絞り込んで別の単一 MCAP ファイルに書き出す（後方互換）."""
-    from mcap.reader import make_reader
-    from mcap.writer import Writer
+def filter_bag(input_dir: Path, output_dir: Path, topics: set[str]) -> None:
+    """rosbag ディレクトリ（db3 / mcap）からトピックを絞り込んで rosbag2 bag ディレクトリに書き出す."""
+    import rosbag2_py
 
-    output_path.parent.mkdir(parents=True, exist_ok=True)
+    reader, cleanup = _open_reader(input_dir)
+    try:
+        topic_type_map: dict[str, str] = {
+            t.name: t.type
+            for t in reader.get_all_topics_and_types()
+            if t.name in topics
+        }
+        reader.set_filter(rosbag2_py.StorageFilter(topics=list(topics)))
+        _write_filtered_bag(reader, topic_type_map, output_dir)
+    finally:
+        cleanup()
 
-    with open(input_path, "rb") as fin, open(output_path, "wb") as fout:
-        reader = make_reader(fin)
-        writer = Writer(fout)
-        writer.start(profile="", library="make_lite")
 
-        schema_ids: dict[int, int] = {}   # 旧 schema_id → 新 schema_id
-        channel_ids: dict[int, int] = {}  # 旧 channel_id → 新 channel_id
+def filter_mcap(input_path: Path, output_dir: Path, topics: set[str]) -> None:
+    """単一 MCAP ファイルからトピックを絞り込んで rosbag2 bag ディレクトリに書き出す（後方互換）."""
+    import rosbag2_py
 
-        for schema, channel, message in reader.iter_messages(topics=list(topics)):
-            if schema is not None and schema.id not in schema_ids:
-                schema_ids[schema.id] = writer.register_schema(
-                    name=schema.name,
-                    encoding=schema.encoding,
-                    data=schema.data,
-                )
-
-            if channel.id not in channel_ids:
-                new_schema_id = schema_ids.get(schema.id, 0) if schema else 0
-                channel_ids[channel.id] = writer.register_channel(
-                    topic=channel.topic,
-                    message_encoding=channel.message_encoding,
-                    schema_id=new_schema_id,
-                    metadata=channel.metadata,
-                )
-
-            writer.add_message(
-                channel_id=channel_ids[channel.id],
-                log_time=message.log_time,
-                data=message.data,
-                publish_time=message.publish_time,
-                sequence=message.sequence,
-            )
-
-        writer.finish()
+    reader, cleanup = _open_reader(input_path)
+    try:
+        topic_type_map: dict[str, str] = {
+            t.name: t.type
+            for t in reader.get_all_topics_and_types()
+            if t.name in topics
+        }
+        reader.set_filter(rosbag2_py.StorageFilter(topics=list(topics)))
+        _write_filtered_bag(reader, topic_type_map, output_dir)
+    finally:
+        cleanup()
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="rosbag トピックフィルタ — lite mcap を生成")
+    parser = argparse.ArgumentParser(description="rosbag トピックフィルタ — lite bag を生成")
     parser.add_argument("--kind", choices=["real", "sim"], required=True,
                         help="ログの種別 (real=実機, sim=シミュレータ)")
     parser.add_argument("--input", required=True, type=Path,
                         help="入力ロスバッグのディレクトリ、または単一 .mcap ファイルパス")
     parser.add_argument("--output", required=True, type=Path,
-                        help="出力 lite mcap ファイルパス")
+                        help="出力 lite bag ディレクトリパス")
     parser.add_argument(
         "--topics-yaml",
         type=Path,
@@ -190,12 +195,10 @@ def main() -> None:
 
     if args.input.is_dir():
         filter_bag(args.input, args.output, topics)
-        total = sum(f.stat().st_size for f in args.output.rglob("*") if f.is_file())
     else:
-        # 後方互換: 単一 .mcap ファイルが渡された場合
         filter_mcap(args.input, args.output, topics)
-        total = args.output.stat().st_size
 
+    total = sum(f.stat().st_size for f in args.output.rglob("*") if f.is_file())
     print(f"  書き込み完了: {args.output} ({total / 1024 / 1024:.1f} MB)")
 
 
