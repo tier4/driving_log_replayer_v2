@@ -19,9 +19,9 @@ TOPICS: dict[str, set[str]] = {
         "/system/operation_mode/state",
         "/vehicle/status/velocity_status",
         "/vehicle/status/steering_status",
-        "/sub/localization/kinematic_state",
-        "/sub/localization/acceleration",
-        "/sub/control/command/control_cmd",
+        "/localization/kinematic_state",
+        "/localization/acceleration",
+        "/control/command/control_cmd",
         # DiffusionPlanner出力軌跡（シムとの直接比較用）
         "/planning/trajectory_generator/neural_network_based_planner/diffusion_planner_node/output/trajectory",
         # 追跡物体（社会的コンテキスト有無の確認用）
@@ -36,7 +36,7 @@ TOPICS: dict[str, set[str]] = {
         "/localization/kinematic_state",
         "/localization/acceleration",
         "/control/trajectory_follower/control_cmd",
-        # post-gate制御指令（実機 /sub/control/command/control_cmd と同一段での比較用）
+        # post-gate制御指令（実機 /control/command/control_cmd と同一段での比較用）
         "/control/command/control_cmd",
         # DiffusionPlanner出力軌跡（速度プロファイル分析用）
         "/planning/trajectory_generator/neural_network_based_planner/diffusion_planner_node/output/trajectory",
@@ -49,11 +49,8 @@ TOPICS: dict[str, set[str]] = {
 def _open_reader(input_path: Path):
     """入力パス（bag ディレクトリ or 単一 .mcap）から SequentialReader を返す。
 
-    単一 .mcap の場合は一時ディレクトリにシンボリックリンクを張って Reindex してから開く。
     呼び出し元は返り値の (reader, cleanup) を使い終わったら cleanup() を呼ぶこと。
     """
-    import tempfile
-
     import rosbag2_py
 
     if input_path.is_dir():
@@ -68,20 +65,13 @@ def _open_reader(input_path: Path):
         )
         return reader, lambda: None
     else:
-        # 単一 .mcap ファイル: 一時ディレクトリにシンボリックリンクを作成して Reindex
-        tmp = tempfile.mkdtemp()
-        link = Path(tmp) / input_path.name
-        link.symlink_to(input_path.resolve())
-        rosbag2_py.Reindexer().reindex(
-            rosbag2_py.StorageOptions(uri=tmp, storage_id="mcap")
-        )
+        # 単一 .mcap ファイル: storage_id="mcap" で直接開く
         reader = rosbag2_py.SequentialReader()
         reader.open(
-            rosbag2_py.StorageOptions(uri=tmp, storage_id=""),
+            rosbag2_py.StorageOptions(uri=str(input_path), storage_id="mcap"),
             rosbag2_py.ConverterOptions("cdr", "cdr"),
         )
-        import shutil
-        return reader, lambda: shutil.rmtree(tmp, ignore_errors=True)
+        return reader, lambda: None
 
 
 def _write_filtered_bag(reader, topic_type_map: dict, output_dir: Path) -> None:

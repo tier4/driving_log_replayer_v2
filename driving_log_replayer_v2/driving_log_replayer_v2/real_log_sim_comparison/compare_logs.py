@@ -9,6 +9,7 @@ Outputs: comparison/figures/*.{png,pdf}, comparison/report.md
 
 import math
 import os
+import sys
 import warnings
 from pathlib import Path
 
@@ -55,9 +56,9 @@ CURVE_CENTERS: list | None = [
 _DEFAULT_LOG_SPECS: dict = {
     "実機": {
         "bag_dir": "real.lite",
-        "kinematic": "/sub/localization/kinematic_state",
-        "accel": "/sub/localization/acceleration",
-        "cmd": "/sub/control/command/control_cmd",
+        "kinematic": "/localization/kinematic_state",
+        "accel": "/localization/acceleration",
+        "cmd": "/control/command/control_cmd",
         "color": "black",
         "lw": 2.5,
         "ls": "-",
@@ -133,6 +134,9 @@ def _iter_msgs(bag_dir: Path, topics: list[str]):
         for t in reader.get_all_topics_and_types()
         if t.name in topics
     }
+    missing = set(topics) - set(topic_type_map.keys())
+    if missing:
+        print(f"[WARN] _iter_msgs: bag にトピックなし: {sorted(missing)}", file=sys.stderr)
     reader.set_filter(rosbag2_py.StorageFilter(topics=list(topics)))
     while reader.has_next():
         topic_name, msg_bytes, timestamp = reader.read_next()
@@ -161,6 +165,8 @@ def load_velocity(mcap_path: Path) -> pd.DataFrame:
             "t_ns": message.log_time,
             "lon_vel": ros_msg.longitudinal_velocity,
         })
+    if not rows:
+        return pd.DataFrame(columns=["t_ns", "lon_vel"])
     return pd.DataFrame(rows)
 
 
@@ -173,6 +179,8 @@ def load_steering(mcap_path: Path) -> pd.DataFrame:
             "t_ns": message.log_time,
             "steer": ros_msg.steering_tire_angle,
         })
+    if not rows:
+        return pd.DataFrame(columns=["t_ns", "steer"])
     return pd.DataFrame(rows)
 
 
@@ -188,6 +196,8 @@ def load_kinematic(mcap_path: Path, topic: str) -> pd.DataFrame:
             "y": p.y,
             "yaw": yaw,
         })
+    if not rows:
+        return pd.DataFrame(columns=["t_ns", "x", "y", "yaw"])
     return pd.DataFrame(rows)
 
 
@@ -196,6 +206,8 @@ def load_accel(mcap_path: Path, topic: str) -> pd.DataFrame:
     for _, channel, message, ros_msg in _iter_msgs(mcap_path, [topic]):
         a = ros_msg.accel.accel.linear
         rows.append({"t_ns": message.log_time, "accel": a.x})
+    if not rows:
+        return pd.DataFrame(columns=["t_ns", "accel"])
     return pd.DataFrame(rows)
 
 
@@ -208,6 +220,8 @@ def load_cmd(mcap_path: Path, topic: str) -> pd.DataFrame:
             "cmd_accel": ros_msg.longitudinal.acceleration,
             "cmd_steer": ros_msg.lateral.steering_tire_angle,
         })
+    if not rows:
+        return pd.DataFrame(columns=["t_ns", "cmd_vel", "cmd_accel", "cmd_steer"])
     return pd.DataFrame(rows)
 
 
@@ -228,6 +242,8 @@ def find_autonomous_start(df_mode: pd.DataFrame, df_vel: pd.DataFrame) -> int:
 
 
 def align_time(df: pd.DataFrame, t0_ns: int) -> pd.DataFrame:
+    if df.empty:
+        return pd.DataFrame(columns=[*df.columns, "t"])
     df = df.copy()
     df["t"] = (df["t_ns"] - t0_ns) / 1e9
     return df[df["t"] >= 0].reset_index(drop=True)
@@ -333,9 +349,12 @@ def plot_trajectory(data: dict, map_ways: list | None):
     ax = axes[0, 0]
 
     # 3軌跡の bounding box を算出
-    all_xy = np.concatenate(
-        [d["kinematic"][["x", "y"]].values for d in data.values() if not d["kinematic"].empty]
-    )
+    all_xy_list = [d["kinematic"][["x", "y"]].values for d in data.values() if not d["kinematic"].empty]
+    if not all_xy_list:
+        warnings.warn("kinematic データなし。軌跡プロットをスキップ")
+        plt.close(fig)
+        return
+    all_xy = np.concatenate(all_xy_list)
     margin = 30  # m
     x_min, y_min = all_xy.min(axis=0) - margin
     x_max, y_max = all_xy.max(axis=0) + margin
@@ -733,6 +752,8 @@ def plot_curve2_steering_detail(data: dict, map_ways: list | None):
         seg = df_k[(df_k["t"] >= t_l + T_PRE) & (df_k["t"] <= t_l + t_post)]
         if not seg.empty:
             _traj_plot(ax_map, seg, d, label, markevery=8)
+        if df_k.empty:
+            continue
         lr = df_k.iloc[(df_k["t"] - t_l).abs().argsort().iloc[0]]
         ax_map.plot(lr["x"], lr["y"], "*", color=d["color"], ms=13,
                     zorder=6, markeredgecolor="white", markeredgewidth=0.5)
