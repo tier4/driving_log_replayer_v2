@@ -38,6 +38,8 @@
   <depend>tier4_planning_msgs</depend>
   <depend>visualization_msgs</depend>
 
+  <exec_depend>best_model_description</exec_depend>
+
   <exec_depend>autoware_component_state_monitor</exec_depend>
   <exec_depend>autoware_lanelet2_extension_python</exec_depend>
   <exec_depend>autoware_localization_evaluation_scripts</exec_depend>

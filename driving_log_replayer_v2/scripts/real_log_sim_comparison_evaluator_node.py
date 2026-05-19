@@ -31,7 +31,6 @@ import traceback
 from pathlib import Path
 from typing import Any
 
-from ament_index_python.packages import get_package_share_directory
 import rclpy
 from rclpy.node import Node
 
@@ -105,10 +104,6 @@ def run_pipeline(
 ) -> None:
     import shutil
 
-    analysis_share = Path(get_package_share_directory("best_model_comparison"))
-    make_lite = analysis_share / "make_lite.py"
-    compare_logs = analysis_share / "compare_logs.py"
-
     # Locate the real vehicle MCAP inside input_bag/
     input_bag_dir = t4_dataset_path / "input_bag"
     real_mcap = _find_mcap(input_bag_dir)
@@ -119,7 +114,8 @@ def run_pipeline(
     lite_dir.mkdir(parents=True, exist_ok=True)
     lite_mcap = lite_dir / "real.lite.mcap"
     _run([
-        sys.executable, str(make_lite),
+        sys.executable, "-m",
+        "driving_log_replayer_v2.real_log_sim_comparison.make_lite",
         "--kind", "real",
         "--input", str(real_mcap),
         "--output", str(lite_mcap),
@@ -151,8 +147,7 @@ def run_pipeline(
     env["CURVE_CONFIG_YAML"] = compare_cfg.get("curve_config_yaml", "")
 
     _run(
-        [sys.executable, str(compare_logs)],
-        cwd=str(analysis_share),
+        [sys.executable, "-m", "driving_log_replayer_v2.real_log_sim_comparison.compare_logs"],
         env=env,
     )
 
