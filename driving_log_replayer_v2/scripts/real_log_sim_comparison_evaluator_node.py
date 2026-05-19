@@ -44,6 +44,7 @@ class RealLogSimComparisonEvaluator(Node):
             "t4_dataset_path",
             "result_jsonl_path",
             "result_archive_path",
+            "result_bag_path",
             "scenario_path",
             "map_path",
         ]:
@@ -58,9 +59,11 @@ class RealLogSimComparisonEvaluator(Node):
         t4_dataset_path = Path(self.get_parameter("t4_dataset_path").value)
         result_jsonl_path = Path(self.get_parameter("result_jsonl_path").value)
         result_archive_path = Path(self.get_parameter("result_archive_path").value)
+        result_bag_path = Path(self.get_parameter("result_bag_path").value)
         map_path = self.get_parameter("map_path").value
 
         result_archive_path.mkdir(parents=True, exist_ok=True)
+        result_bag_path.mkdir(parents=True, exist_ok=True)
         lite_dir = result_archive_path / "lite"
         comparison_dir = result_archive_path / "comparison"
 
@@ -72,6 +75,7 @@ class RealLogSimComparisonEvaluator(Node):
             run_pipeline(
                 t4_dataset_path,
                 lite_dir,
+                result_bag_path,
                 comparison_dir,
                 map_path,
                 compare_cfg,
@@ -93,12 +97,15 @@ class RealLogSimComparisonEvaluator(Node):
 def run_pipeline(
     t4_dataset_path: Path,
     lite_dir: Path,
+    result_bag_path: Path,
     comparison_dir: Path,
     map_path: str,
     compare_cfg: dict[str, Any],
     logger,
 ) -> None:
-    analysis_share = Path(get_package_share_directory("real_log_sim_comparison"))
+    import shutil
+
+    analysis_share = Path(get_package_share_directory("best_model_comparison"))
     make_lite = analysis_share / "make_lite.py"
     compare_logs = analysis_share / "compare_logs.py"
 
@@ -109,12 +116,16 @@ def run_pipeline(
 
     # Step 1 – real lite
     logger.info("Step 1: generating real.lite.mcap")
+    lite_dir.mkdir(parents=True, exist_ok=True)
+    lite_mcap = lite_dir / "real.lite.mcap"
     _run([
         sys.executable, str(make_lite),
         "--kind", "real",
         "--input", str(real_mcap),
-        "--output", str(lite_dir / "real.lite.mcap"),
+        "--output", str(lite_mcap),
     ])
+    # Copy lite MCAP to result_bag_path so that post_process (create_metadata_yaml) finds it.
+    shutil.copy2(str(lite_mcap), str(result_bag_path / "real.lite.mcap"))
 
     # Step 2 – compare (real log only; sim logs are skipped when absent)
     logger.info("Step 2: compare_logs")

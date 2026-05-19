@@ -32,6 +32,8 @@ AUTOWARE_ARGS: dict = {}
 NODE_PARAMS: dict[str, LaunchConfiguration] = {
     # t4_dataset_path/map を compare_logs.py の地図解決に渡す（argument.py が自動設定）
     "map_path": LaunchConfiguration("map_path"),
+    # lite MCAP の出力先として result_bag_path を使用（post_process が必須とする）
+    "result_bag_path": LaunchConfiguration("result_bag_path"),
 }
 
 USE_CASE_ARGS: list[DeclareLaunchArgument] = []
