@@ -106,26 +106,22 @@ def run_pipeline(
     compare_cfg: dict[str, Any],
     logger,
 ) -> None:
-    import shutil
-
     # Locate the real vehicle bag inside input_bag/ (db3 or mcap, auto-detected by make_lite)
     input_bag_dir = t4_dataset_path / "input_bag"
     _validate_bag_dir(input_bag_dir)
     logger.info(f"Input bag: {input_bag_dir}")
 
-    # Step 1 – real lite
-    logger.info("Step 1: generating real.lite.mcap")
+    # Step 1 – real lite bag
+    logger.info("Step 1: generating real lite bag")
     lite_dir.mkdir(parents=True, exist_ok=True)
-    lite_mcap = lite_dir / "real.lite.mcap"
+    lite_bag = lite_dir / "real.lite"
     _run([
         sys.executable, "-m",
         "driving_log_replayer_v2.real_log_sim_comparison.make_lite",
         "--kind", "real",
         "--input", str(input_bag_dir),
-        "--output", str(lite_mcap),
+        "--output", str(lite_bag),
     ], timeout=300)
-    # Copy lite MCAP to result_bag_path so that post_process (create_metadata_yaml) finds it.
-    shutil.copy2(str(lite_mcap), str(result_bag_path / "real.lite.mcap"))
 
     # Step 2 – compare (real log only; sim logs are skipped when absent)
     logger.info("Step 2: compare_logs")

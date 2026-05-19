@@ -20,8 +20,6 @@ import matplotlib.patches as mpatches
 import numpy as np
 import pandas as pd
 from lxml import etree
-from mcap.reader import make_reader
-from mcap_ros2.decoder import DecoderFactory
 from ._params_utils import add_params_annotation
 
 # ---------------------------------------------------------------------------
@@ -56,7 +54,7 @@ CURVE_CENTERS: list | None = [
 # ログ定義（path は main() が LITE_DIR を確定した後に _rebuild_logs() で補完）
 _DEFAULT_LOG_SPECS: dict = {
     "実機": {
-        "mcap_name": "real.lite.mcap",
+        "bag_dir": "real.lite",
         "kinematic": "/sub/localization/kinematic_state",
         "accel": "/sub/localization/acceleration",
         "cmd": "/sub/control/command/control_cmd",
@@ -67,7 +65,7 @@ _DEFAULT_LOG_SPECS: dict = {
         "ms": 5,
     },
     "Godot シム": {
-        "mcap_name": "sim_godot.lite.mcap",
+        "bag_dir": "sim_godot.lite",
         "kinematic": "/localization/kinematic_state",
         "accel": "/localization/acceleration",
         "cmd": "/control/trajectory_follower/control_cmd",
@@ -78,7 +76,7 @@ _DEFAULT_LOG_SPECS: dict = {
         "ms": 5,
     },
     "通常シム": {
-        "mcap_name": "sim_normal.lite.mcap",
+        "bag_dir": "sim_normal.lite",
         "kinematic": "/localization/kinematic_state",
         "accel": "/localization/acceleration",
         "cmd": "/control/trajectory_follower/control_cmd",
@@ -95,7 +93,7 @@ def _rebuild_logs(lite_dir: Path, topic_overrides: dict | None = None) -> dict:
     """LITE_DIR とオプショナルなトピック上書き辞書から LOGS dict を生成する。"""
     result = {}
     for label, spec in _DEFAULT_LOG_SPECS.items():
-        entry = {**spec, "path": lite_dir / spec["mcap_name"]}
+        entry = {**spec, "path": lite_dir / spec["bag_dir"]}
         if topic_overrides and label in topic_overrides:
             entry.update(topic_overrides[label])
         result[label] = entry
@@ -109,10 +107,38 @@ LOGS = _rebuild_logs(LITE_DIR)
 # MCAPローダー
 # ---------------------------------------------------------------------------
 
-def _iter_msgs(mcap_path: Path, topics: list[str]):
-    with open(mcap_path, "rb") as f:
-        reader = make_reader(f, decoder_factories=[DecoderFactory()])
-        yield from reader.iter_decoded_messages(topics=topics)
+class _LogTime:
+    """timestamp ラッパー。mcap.reader の message.log_time と同じインタフェースを提供する。"""
+    __slots__ = ("log_time",)
+    def __init__(self, t: int) -> None: self.log_time = t
+
+
+def _iter_msgs(bag_dir: Path, topics: list[str]):
+    """rosbag2 bag ディレクトリからメッセージをデコードしてイテレートする。
+
+    mcap.reader.make_reader + mcap_ros2.decoder.DecoderFactory の代替実装。
+    戻り値は (None, None, _LogTime, ros_msg) のタプル（旧 schema / channel / message / ros_msg）。
+    """
+    import rosbag2_py
+    from rclpy.serialization import deserialize_message
+    from rosidl_runtime_py.utilities import get_message
+
+    reader = rosbag2_py.SequentialReader()
+    reader.open(
+        rosbag2_py.StorageOptions(uri=str(bag_dir), storage_id=""),
+        rosbag2_py.ConverterOptions("cdr", "cdr"),
+    )
+    topic_type_map = {
+        t.name: get_message(t.type)
+        for t in reader.get_all_topics_and_types()
+        if t.name in topics
+    }
+    reader.set_filter(rosbag2_py.StorageFilter(topics=list(topics)))
+    while reader.has_next():
+        topic_name, msg_bytes, timestamp = reader.read_next()
+        if topic_name in topic_type_map:
+            ros_msg = deserialize_message(msg_bytes, topic_type_map[topic_name])
+            yield None, None, _LogTime(timestamp), ros_msg
 
 
 def load_operation_mode(mcap_path: Path) -> pd.DataFrame:

@@ -13,8 +13,6 @@ Usage:
 import argparse
 from pathlib import Path
 
-from mcap.writer import Writer
-
 TOPICS: dict[str, set[str]] = {
     "real": {
         "/system/operation_mode/state",
@@ -47,12 +45,14 @@ TOPICS: dict[str, set[str]] = {
 }
 
 
-def filter_bag(input_dir: Path, output_path: Path, topics: set[str]) -> None:
-    """rosbag ディレクトリ（db3 / mcap）からトピックを絞り込んで単一 MCAP ファイルに書き出す.
+def filter_bag(input_dir: Path, output_dir: Path, topics: set[str]) -> None:
+    """rosbag ディレクトリ（db3 / mcap）からトピックを絞り込んで rosbag2 bag ディレクトリに書き出す.
 
     rosbag2_py.SequentialReader で読み込み（storage_id="" で形式を自動検出）、
-    mcap.writer.Writer で単一ファイル出力する。
+    rosbag2_py.SequentialWriter で output_dir に rosbag2 bag を直接書き出す。
     """
+    import shutil
+
     import rosbag2_py
 
     # metadata.yaml がない場合は Reindexer で生成する
@@ -61,14 +61,13 @@ def filter_bag(input_dir: Path, output_path: Path, topics: set[str]) -> None:
             rosbag2_py.StorageOptions(uri=str(input_dir), storage_id="")
         )
 
-    converter = rosbag2_py.ConverterOptions(
-        input_serialization_format="cdr",
-        output_serialization_format="cdr",
-    )
     reader = rosbag2_py.SequentialReader()
-    reader.open(rosbag2_py.StorageOptions(uri=str(input_dir), storage_id=""), converter)
+    reader.open(
+        rosbag2_py.StorageOptions(uri=str(input_dir), storage_id=""),
+        rosbag2_py.ConverterOptions("cdr", "cdr"),
+    )
 
-    # 対象トピックの型名マップ（schema 登録に使用）
+    # 対象トピックの型名マップ（create_topic に使用）
     topic_type_map: dict[str, str] = {
         t.name: t.type
         for t in reader.get_all_topics_and_types()
@@ -76,48 +75,38 @@ def filter_bag(input_dir: Path, output_path: Path, topics: set[str]) -> None:
     }
     reader.set_filter(rosbag2_py.StorageFilter(topics=list(topics)))
 
-    output_path.parent.mkdir(parents=True, exist_ok=True)
-    with open(output_path, "wb") as fout:
-        writer = Writer(fout)
-        writer.start(profile="ros2", library="make_lite")
+    # SequentialWriter は既存ディレクトリへの上書き不可のため、事前に削除する
+    if output_dir.exists():
+        shutil.rmtree(output_dir)
+    output_dir.parent.mkdir(parents=True, exist_ok=True)
 
-        schema_ids: dict[str, int] = {}   # type_name → schema_id
-        channel_ids: dict[str, int] = {}  # topic_name → channel_id
+    writer = rosbag2_py.SequentialWriter()
+    writer.open(
+        rosbag2_py.StorageOptions(uri=str(output_dir), storage_id="mcap"),
+        rosbag2_py.ConverterOptions("cdr", "cdr"),
+    )
 
-        while reader.has_next():
-            topic_name, msg_bytes, timestamp = reader.read_next()
-            if topic_name not in topic_type_map:
-                continue
+    registered: set[str] = set()
+    while reader.has_next():
+        topic_name, msg_bytes, timestamp = reader.read_next()
+        if topic_name not in topic_type_map:
+            continue
+        if topic_name not in registered:
+            writer.create_topic(rosbag2_py.TopicMetadata(
+                name=topic_name,
+                type=topic_type_map[topic_name],
+                serialization_format="cdr",
+            ))
+            registered.add(topic_name)
+        writer.write(topic_name, msg_bytes, timestamp)
 
-            type_name = topic_type_map[topic_name]
-            if type_name not in schema_ids:
-                # encoding="ros2msg" + name=型名 で mcap_ros2.DecoderFactory が
-                # ローカルの rosidl から型定義を解決してデコードできる
-                schema_ids[type_name] = writer.register_schema(
-                    name=type_name,
-                    encoding="ros2msg",
-                    data=b"",
-                )
-            if topic_name not in channel_ids:
-                channel_ids[topic_name] = writer.register_channel(
-                    topic=topic_name,
-                    message_encoding="cdr",
-                    schema_id=schema_ids[type_name],
-                    metadata={},
-                )
-            writer.add_message(
-                channel_id=channel_ids[topic_name],
-                log_time=timestamp,
-                data=msg_bytes,
-                publish_time=timestamp,
-                sequence=0,
-            )
-        writer.finish()
+    del writer  # flush & close
 
 
 def filter_mcap(input_path: Path, output_path: Path, topics: set[str]) -> None:
     """単一 MCAP ファイルからトピックを絞り込んで別の単一 MCAP ファイルに書き出す（後方互換）."""
     from mcap.reader import make_reader
+    from mcap.writer import Writer
 
     output_path.parent.mkdir(parents=True, exist_ok=True)
 
@@ -194,18 +183,20 @@ def main() -> None:
             import sys
             print(f"WARNING: topics-yaml 読み込み失敗: {e}", file=sys.stderr)
 
+    in_size = sum(f.stat().st_size for f in args.input.rglob("*") if f.is_file()) if args.input.is_dir() else args.input.stat().st_size
     print(f"種別  : {args.kind}")
-    print(f"入力  : {args.input} ({args.input.stat().st_size / 1024 / 1024:.0f} MB)")
+    print(f"入力  : {args.input} ({in_size / 1024 / 1024:.0f} MB)")
     print(f"トピック: {sorted(topics)}")
 
     if args.input.is_dir():
         filter_bag(args.input, args.output, topics)
+        total = sum(f.stat().st_size for f in args.output.rglob("*") if f.is_file())
     else:
         # 後方互換: 単一 .mcap ファイルが渡された場合
         filter_mcap(args.input, args.output, topics)
+        total = args.output.stat().st_size
 
-    size_mb = args.output.stat().st_size / 1024 / 1024
-    print(f"  書き込み完了: {args.output} ({size_mb:.1f} MB)")
+    print(f"  書き込み完了: {args.output} ({total / 1024 / 1024:.1f} MB)")
 
 
 if __name__ == "__main__":
