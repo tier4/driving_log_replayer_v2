@@ -36,7 +36,7 @@ NODE_PARAMS: dict[str, LaunchConfiguration] = {
     "result_bag_path": LaunchConfiguration("result_bag_path"),
 }
 
-USE_CASE_ARGS: list[DeclareLaunchArgument] = []
+USE_CASE_ARGS: list = []
 
 
 # ── Custom launcher (called from simulation.launch.py) ──────────────────────
