@@ -68,7 +68,7 @@ class RealLogSimComparisonEvaluator(Node):
 
         # post_process の create_metadata_yaml は result_bag_path に rosbag ファイルがないとエラーになる。
         # pipeline が途中で失敗しても post_process が通るよう、事前に空の MCAP を置く。
-        _write_placeholder_mcap(result_bag_path / "real.lite.mcap")
+        _write_placeholder_result_bag(result_bag_path)
 
         # scenario_path は use_case.py が共通で渡す。scenario.yaml から Conditions を読む。
         scenario_path_str = self.get_parameter("scenario_path").value
@@ -199,13 +199,30 @@ def _load_compare_config(scenario_path_str: str) -> dict[str, Any]:
         return {}
 
 
-def _write_placeholder_mcap(path: Path) -> None:
-    from mcap.writer import Writer
-    path.parent.mkdir(parents=True, exist_ok=True)
-    with open(path, "wb") as f:
-        w = Writer(f)
-        w.start(profile="", library="driving_log_replayer_v2")
-        w.finish()
+def _write_placeholder_result_bag(result_bag_path: Path) -> None:
+    """result_bag_path に空の mcap ファイルを置いて post_process を通す。
+
+    rosbag2_py.SequentialWriter は既存ディレクトリへの上書き不可のため、
+    一時ディレクトリに書いて .mcap ファイルだけ移動する。
+    """
+    import shutil
+    import tempfile
+
+    import rosbag2_py
+
+    with tempfile.TemporaryDirectory(dir=result_bag_path.parent) as tmp:
+        bag_uri = Path(tmp) / "placeholder"
+        writer = rosbag2_py.SequentialWriter()
+        writer.open(
+            rosbag2_py.StorageOptions(uri=str(bag_uri), storage_id="mcap"),
+            rosbag2_py.ConverterOptions(
+                input_serialization_format="cdr",
+                output_serialization_format="cdr",
+            ),
+        )
+        del writer
+        for mcap in bag_uri.glob("*.mcap"):
+            shutil.move(str(mcap), str(result_bag_path / mcap.name))
 
 
 def _validate_bag_dir(bag_dir: Path) -> None:
