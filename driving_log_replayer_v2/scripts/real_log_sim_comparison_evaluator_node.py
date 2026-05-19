@@ -66,6 +66,10 @@ class RealLogSimComparisonEvaluator(Node):
         lite_dir = result_archive_path / "lite"
         comparison_dir = result_archive_path / "comparison"
 
+        # post_process の create_metadata_yaml は result_bag_path に rosbag ファイルがないとエラーになる。
+        # pipeline が途中で失敗しても post_process が通るよう、事前に空の MCAP を置く。
+        _write_placeholder_mcap(result_bag_path / "real.lite.mcap")
+
         # scenario_path は use_case.py が共通で渡す。scenario.yaml から Conditions を読む。
         scenario_path_str = self.get_parameter("scenario_path").value
         compare_cfg = _load_compare_config(scenario_path_str)
@@ -104,10 +108,10 @@ def run_pipeline(
 ) -> None:
     import shutil
 
-    # Locate the real vehicle MCAP inside input_bag/
+    # Locate the real vehicle bag inside input_bag/ (db3 or mcap, auto-detected by make_lite)
     input_bag_dir = t4_dataset_path / "input_bag"
-    real_mcap = _find_mcap(input_bag_dir)
-    logger.info(f"Real MCAP: {real_mcap}")
+    _validate_bag_dir(input_bag_dir)
+    logger.info(f"Input bag: {input_bag_dir}")
 
     # Step 1 – real lite
     logger.info("Step 1: generating real.lite.mcap")
@@ -117,7 +121,7 @@ def run_pipeline(
         sys.executable, "-m",
         "driving_log_replayer_v2.real_log_sim_comparison.make_lite",
         "--kind", "real",
-        "--input", str(real_mcap),
+        "--input", str(input_bag_dir),
         "--output", str(lite_mcap),
     ], timeout=300)
     # Copy lite MCAP to result_bag_path so that post_process (create_metadata_yaml) finds it.
@@ -195,12 +199,19 @@ def _load_compare_config(scenario_path_str: str) -> dict[str, Any]:
         return {}
 
 
-def _find_mcap(bag_dir: Path) -> Path:
-    mcap_files = sorted(bag_dir.glob("*.mcap"))
-    if not mcap_files:
-        msg = f"No .mcap file found in {bag_dir}"
-        raise FileNotFoundError(msg)
-    return mcap_files[0]
+def _write_placeholder_mcap(path: Path) -> None:
+    from mcap.writer import Writer
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with open(path, "wb") as f:
+        w = Writer(f)
+        w.start(profile="", library="driving_log_replayer_v2")
+        w.finish()
+
+
+def _validate_bag_dir(bag_dir: Path) -> None:
+    """input_bag ディレクトリに db3 または mcap ファイルが存在するか確認する。"""
+    if not any(bag_dir.glob("*.mcap")) and not any(bag_dir.glob("*.db3")):
+        raise FileNotFoundError(f"No .mcap or .db3 file found in {bag_dir}")
 
 
 def _run(cmd: list[str], cwd: str | None = None, env: dict | None = None, timeout: int | None = None) -> None:
