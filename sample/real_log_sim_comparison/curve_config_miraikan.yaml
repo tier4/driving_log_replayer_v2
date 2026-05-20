@@ -1,4 +1,8 @@
 # x2_dev/2231 テレポート駅→日本科学未来館 のカーブ別解析設定
+#
+# 他地図に流用する際は本ファイルをコピーして書き換え、scenario.yaml の
+# Evaluation.Conditions.curve_config_yaml に相対パスを指定すること。
+
 # 地図座標系でのカーブ中心（右折・左折・右折の順）
 curve_centers:
   - {label: "カーブ①（右折）", cx: 89440, cy: 43200, margin: 20}
@@ -12,3 +16,20 @@ curve2_index: 1
 curve2_window:
   start: 20.0
   end: 120.0
+
+# --- 以下、任意の拡張キー（未設定で構わない） ---
+
+# 図タイトルに表示するシナリオ名。env: SCENARIO_NAME や --scenario-name で上書き可。
+# scenario_name: "x2_dev/2231 テレポート駅→日本科学未来館"
+
+# bicycle model 検証用ホイールベース [m] (実機 yaw_rate × steer から逆算した値)。
+# シミュレータ仕様値 (wheelbase_sim) とは別に保持される。
+# wheelbase_validation: 5.15
+
+# シム車両モデルの wheelbase [m] (vehicle_info.param.yaml::wheel_base と一致させる)。
+# 未指定なら best_model_description/config/vehicle_info.param.yaml から自動取得。
+# wheelbase_sim: 4.76012
+
+# lanelet2_map.osm のパス。env: MAP_OSM_PATH / --map-osm が未指定の場合のフォールバック。
+# 空文字を明示すると地図描画スキップ、絶対パスを指定すると当該地図を使用。
+# map_osm_path: ""
