@@ -114,7 +114,28 @@ report_curve2:
 	source $(SETUP_BASH) && BEST_MODEL_BASE_DIR=$(WORK_DIR) \
 	    $(PYTHON) -m driving_log_replayer_v2.real_log_sim_comparison.analyze_real_curve2 && \
 	    $(PYTHON) -m driving_log_replayer_v2.real_log_sim_comparison.compare_curve2 && \
-	    $(PYTHON) -m driving_log_replayer_v2.real_log_sim_comparison.analyze_curve2_per_step
+	    $(PYTHON) -m driving_log_replayer_v2.real_log_sim_comparison.analyze_curve2_per_step && \
+	    $(PYTHON) -m driving_log_replayer_v2.real_log_sim_comparison.compare_dp_trajectory
+
+# DP 軌跡比較 (analyze_trajectory + compare_dp_vs_final の統合後継)
+.PHONY: report_dp_trajectory
+report_dp_trajectory:
+	@test -f $(LITE_DIR)/real.lite.mcap || \
+	    { echo "[ERROR] lite/real.lite.mcap がありません。'make real REAL_MCAP=...' を実行してください"; exit 1; }
+	@test -f $(SETUP_BASH) || \
+	    { echo "[ERROR] $(SETUP_BASH) が見つかりません"; exit 1; }
+	source $(SETUP_BASH) && BEST_MODEL_BASE_DIR=$(WORK_DIR) \
+	    $(PYTHON) -m driving_log_replayer_v2.real_log_sim_comparison.compare_dp_trajectory --target both
+
+# 実機単独の発進診断 (sim 不要)
+.PHONY: report_departure
+report_departure:
+	@test -f $(LITE_DIR)/real.lite.mcap || \
+	    { echo "[ERROR] lite/real.lite.mcap がありません"; exit 1; }
+	@test -f $(SETUP_BASH) || \
+	    { echo "[ERROR] $(SETUP_BASH) が見つかりません"; exit 1; }
+	source $(SETUP_BASH) && BEST_MODEL_BASE_DIR=$(WORK_DIR) \
+	    $(PYTHON) -m driving_log_replayer_v2.real_log_sim_comparison.diagnose_departure
 
 clean:
 	rm -f $(LITE_DIR)/sim_godot.lite.mcap $(LITE_DIR)/sim_normal.lite.mcap
