@@ -20,6 +20,7 @@
 
 import ctypes
 import math
+import os
 from pathlib import Path
 import subprocess
 
@@ -37,11 +38,17 @@ from ._params_utils import setup_jp_font
 
 setup_jp_font()
 
-BASE = Path(__file__).parent
+# BEST_MODEL_BASE_DIR が設定されている場合はそこを作業ディレクトリにする (compare_logs.py と同型)。
+BASE = Path(os.environ.get("BEST_MODEL_BASE_DIR") or Path(__file__).parent)
 LITE_DIR = BASE / "lite"
 OUT_DIR = BASE / "comparison" / "curve2_per_step"
-REAL_MCAP = LITE_DIR / "real.lite.mcap"
-MAP_DIR = Path.home() / ".webauto/simulation/data/map/x2_dev/2231"
+
+# 実機 lite bag: make_lite が rosbag2 directory bag を出力するため、ディレクトリパスで保持する。
+# 実 .mcap ファイルは _resolve_real_mcap() で実行時に解決する。
+REAL_BAG_DIR = LITE_DIR / "real.lite"
+
+# 後方互換フォールバック (MAP_OSM_PATH env var 未設定時)
+_DEFAULT_MAP_DIR = Path.home() / ".webauto/simulation/data/map/x2_dev/2231"
 
 # カーブ②発進前後の解析窓
 T_PRE = 3.0  # [s]
@@ -72,7 +79,7 @@ SUB_DT = PARAMS["sub_dt"]  # 積分ステップ幅 [s]（FMU_DT 相当）
 
 
 def _build_lib(so: Path) -> None:
-    cpp = BASE / "vehicle_model_c_wrapper.cpp"
+    cpp = Path(__file__).parent / "vehicle_model_c_wrapper.cpp"
     if not cpp.exists():
         raise FileNotFoundError(f"{cpp} が見つかりません")
     print(f"  [build] {cpp.name} → {so.name} ...")
@@ -96,10 +103,34 @@ def _build_lib(so: Path) -> None:
     print(f"  [build] 完了")
 
 
+def _resolve_so_path() -> Path:
+    """libvehicle_model_wrapper.so の場所を解決する。
+
+    優先順:
+      1. VEHICLE_MODEL_SO_PATH 環境変数
+      2. ament_index_python で best_model_comparison パッケージ share を解決
+      3. ソース隣接 (ローカル開発用フォールバック)
+    """
+    env = os.environ.get("VEHICLE_MODEL_SO_PATH")
+    if env:
+        p = Path(env)
+        if p.exists():
+            return p
+    try:
+        from ament_index_python.packages import get_package_share_directory
+
+        share = Path(get_package_share_directory("simple_sensor_simulator"))
+        p = share / "libvehicle_model_wrapper.so"
+        if p.exists():
+            return p
+    except Exception:  # noqa: BLE001
+        pass
+    return Path(__file__).parent / "libvehicle_model_wrapper.so"
+
+
 def _load_lib() -> ctypes.CDLL:
-    so = BASE / "libvehicle_model_wrapper.so"
-    cpp = BASE / "vehicle_model_c_wrapper.cpp"
-    # .so が存在しない、または .cpp より古い場合は自動再コンパイル
+    so = _resolve_so_path()
+    cpp = Path(__file__).parent / "vehicle_model_c_wrapper.cpp"
     if not so.exists() or (cpp.exists() and cpp.stat().st_mtime > so.stat().st_mtime):
         _build_lib(so)
     lib = ctypes.CDLL(str(so))
@@ -929,18 +960,39 @@ def plot_steering_analysis(df: pd.DataFrame, params: dict) -> None:
     _save(fig, "steering_analysis")
 
 
-def _load_map_ways(map_dir: Path) -> list[np.ndarray] | None:
+def _resolve_real_mcap(bag_dir: Path) -> Path:
+    """rosbag2 directory bag から実 .mcap ファイルパスを取得する。"""
+    if bag_dir.is_file() and bag_dir.suffix == ".mcap":
+        return bag_dir
+    if bag_dir.is_dir():
+        mcaps = sorted(bag_dir.glob("*.mcap"))
+        if not mcaps:
+            raise FileNotFoundError(f"No .mcap inside {bag_dir}")
+        return mcaps[0]
+    raise FileNotFoundError(f"Real bag not found: {bag_dir}")
+
+
+def _resolve_map_osm() -> Path | None:
+    """lanelet2_map.osm のパスを解決する。
+
+    MAP_OSM_PATH env var を優先し、無ければ後方互換フォールバック。空文字明示なら None。
+    """
+    env = os.environ.get("MAP_OSM_PATH")
+    if env is not None:
+        if env == "":
+            return None
+        p = Path(env)
+        return p if p.exists() else None
+    candidates = sorted(_DEFAULT_MAP_DIR.glob("*/lanelet2_map.osm")) if _DEFAULT_MAP_DIR.exists() else []
+    return candidates[0] if candidates else None
+
+
+def _load_map_ways(osm_path: Path | None) -> list[np.ndarray] | None:
+    if osm_path is None or not osm_path.exists():
+        return None
     from lxml import etree
 
-    candidates = sorted(map_dir.glob("*/lanelet2_map.osm"))
-    if not candidates:
-        return None
-    tree = etree.parse(str(candidates[0]))
-    nodes = {}
-    for nd in tree.findall("node"):
-        nodes[nd.get("id")] = (float(nd.get("lon")), float(nd.get("lat")))
-    # local → just collect node positions in map frame
-    # use x/y from "local_x" / "local_y" tags if present
+    tree = etree.parse(str(osm_path))
     node_xy = {}
     for nd in tree.findall("node"):
         lx = nd.find("tag[@k='local_x']")
@@ -961,7 +1013,7 @@ def _load_map_ways(map_dir: Path) -> list[np.ndarray] | None:
 
 def plot_map_distribution(df: pd.DataFrame, params: dict) -> None:
     rad2deg = 180.0 / math.pi
-    map_ways = _load_map_ways(MAP_DIR)
+    map_ways = _load_map_ways(_resolve_map_osm())
 
     columns = [
         (
@@ -1348,8 +1400,9 @@ def save_summary(df: pd.DataFrame) -> None:
 def main() -> None:
     OUT_DIR.mkdir(parents=True, exist_ok=True)
 
-    print(f"Loading: {REAL_MCAP}")
-    data = load_real_bag(REAL_MCAP)
+    real_mcap = _resolve_real_mcap(REAL_BAG_DIR)
+    print(f"Loading: {real_mcap}")
+    data = load_real_bag(real_mcap)
 
     # AUTONOMOUS 開始時刻
     t0_ns = find_autonomous_start(data)

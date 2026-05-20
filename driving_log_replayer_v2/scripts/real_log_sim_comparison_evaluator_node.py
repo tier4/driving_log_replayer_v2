@@ -16,8 +16,9 @@
 """Orchestration node for real_log_sim_comparison.
 
 Runs the per-step analysis pipeline inside a cloud DLR2 job:
-  1. Filter real vehicle MCAP to lite/real.lite.mcap  (make_lite.py)
+  1. Filter real vehicle MCAP to lite/real.lite  (make_lite.py)
   2. Generate per-step figures and report from real log  (compare_logs.py)
+  3. Generate per-step delta analysis (analyze_curve2_per_step.py) [best-effort]
 
 Outputs are written to result_archive_path, which is collected by
 `logging.additional_log_archive` in .webauto-ci.yml.
@@ -136,7 +137,7 @@ def run_pipeline(
     else:
         # 空文字を明示することで compare_logs.py の後方互換フォールバック（x2_dev 地図の glob）を抑制する
         env["MAP_OSM_PATH"] = ""
-        logger.warn(f"lanelet2_map.osm not found at {map_osm}; map background will be omitted")
+        logger.warning(f"lanelet2_map.osm not found at {map_osm}; map background will be omitted")
 
     # シナリオ名
     if compare_cfg.get("scenario_name"):
@@ -151,6 +152,20 @@ def run_pipeline(
         env=env,
         timeout=1800,
     )
+
+    # Step 3 – per-step delta 分析 (best-effort: 失敗しても Step 1/2 の成果は維持)
+    logger.info("Step 3: analyze_curve2_per_step (best-effort)")
+    try:
+        _run(
+            [
+                sys.executable, "-m",
+                "driving_log_replayer_v2.real_log_sim_comparison.analyze_curve2_per_step",
+            ],
+            env=env,
+            timeout=1800,
+        )
+    except RuntimeError as exc:
+        logger.warning(f"Step 3 (analyze_curve2_per_step) failed but continuing: {exc}")
 
 
 def _load_compare_config(scenario_path_str: str) -> dict[str, Any]:
