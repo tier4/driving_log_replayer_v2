@@ -9,7 +9,7 @@
     3. 区間終端の予測状態を実機状態と比較（車両ローカル座標系）
 
 使用モデル: DELAY_STEER_ACC_GEARED_WO_FALL_GUARD (C++ ctypes 経由)
-  ライブラリ: libvehicle_model_wrapper.so (vehicle_model_c_wrapper.cpp)
+  ライブラリ: libvehicle_model_wrapper.so (simple_sensor_simulator パッケージが提供)
   パラメータ: analysis/best_model_description/config/simulator_model.param.yaml
 
 出力:
@@ -22,7 +22,6 @@ import ctypes
 import math
 import os
 from pathlib import Path
-import subprocess
 
 import matplotlib
 
@@ -78,31 +77,6 @@ SUB_DT = PARAMS["sub_dt"]  # 積分ステップ幅 [s]（FMU_DT 相当）
 # ---------------------------------------------------------------------------
 
 
-def _build_lib(so: Path) -> None:
-    cpp = Path(__file__).parent / "vehicle_model_c_wrapper.cpp"
-    if not cpp.exists():
-        raise FileNotFoundError(f"{cpp} が見つかりません")
-    print(f"  [build] {cpp.name} → {so.name} ...")
-    result = subprocess.run(
-        [
-            "g++",
-            "-shared",
-            "-fPIC",
-            "-O2",
-            "-std=c++17",
-            "-I/usr/include/eigen3",
-            "-o",
-            str(so),
-            str(cpp),
-        ],
-        capture_output=True,
-        text=True,
-    )
-    if result.returncode != 0:
-        raise RuntimeError(f"コンパイル失敗:\n{result.stderr}")
-    print(f"  [build] 完了")
-
-
 def _resolve_so_path() -> Path:
     """libvehicle_model_wrapper.so の場所を解決する。
 
@@ -130,9 +104,10 @@ def _resolve_so_path() -> Path:
 
 def _load_lib() -> ctypes.CDLL:
     so = _resolve_so_path()
-    cpp = Path(__file__).parent / "vehicle_model_c_wrapper.cpp"
-    if not so.exists() or (cpp.exists() and cpp.stat().st_mtime > so.stat().st_mtime):
-        _build_lib(so)
+    if not so.exists():
+        raise FileNotFoundError(
+            f"{so} が見つかりません。simple_sensor_simulator を colcon build してください。"
+        )
     lib = ctypes.CDLL(str(so))
 
     c_double = ctypes.c_double
