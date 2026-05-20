@@ -17,11 +17,9 @@ import warnings
 import matplotlib
 
 matplotlib.use("Agg")
-import matplotlib.pyplot as plt
-
-matplotlib.rcParams["font.family"] = "Noto Sans CJK JP"
 from lxml import etree
 import matplotlib.patches as mpatches
+import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 from rclpy.serialization import deserialize_message
@@ -29,6 +27,9 @@ import rosbag2_py
 from rosidl_runtime_py.utilities import get_message
 
 from ._params_utils import add_params_annotation
+from ._params_utils import setup_jp_font
+
+setup_jp_font()
 
 # ---------------------------------------------------------------------------
 # 設定

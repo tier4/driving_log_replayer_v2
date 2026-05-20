@@ -1,28 +1,34 @@
 #!/usr/bin/env python3
-"""発進時の車両モデル応答診断スクリプト.
+"""
+発進時の車両モデル応答診断スクリプト.
 
 実機 real.lite.mcap の /sub/control/command/control_cmd をオープンループ入力として
 DELAY_STEER_ACC_BRAKE_GEARED_WO_FALL_GUARD モデルを様々な brake_time_constant で
 シミュレーションし、実機 actual velocity との比較から適切なパラメータを診断する。
 """
 
+from collections import deque
 import math
 from pathlib import Path
-from collections import deque
 
 import matplotlib
+
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
-matplotlib.rcParams["font.family"] = "Noto Sans CJK JP"
-import numpy as np
-import pandas as pd
 from mcap.reader import make_reader
 from mcap_ros2.decoder import DecoderFactory
-from ._params_utils import add_params_annotation, load_sim_params
+import numpy as np
+import pandas as pd
+
+from ._params_utils import add_params_annotation
+from ._params_utils import load_sim_params
+from ._params_utils import setup_jp_font
+
+setup_jp_font()
 
 BASE = Path(__file__).parent
 LITE_DIR = BASE / "lite"
-OUT_DIR  = BASE / "comparison" / "figures"
+OUT_DIR = BASE / "comparison" / "figures"
 REAL_MCAP = LITE_DIR / "real.lite.mcap"
 
 
@@ -35,17 +41,20 @@ def _iter_msgs(mcap_path, topics):
 def load_control_cmd(p):
     rows = []
     for _, _, msg, ros in _iter_msgs(p, ["/sub/control/command/control_cmd"]):
-        rows.append({
-            "t_ns": msg.log_time,
-            "acc": ros.longitudinal.acceleration,
-        })
+        rows.append(
+            {
+                "t_ns": msg.log_time,
+                "acc": ros.longitudinal.acceleration,
+            }
+        )
     return pd.DataFrame(rows)
 
 
 def load_velocity(p):
     rows = []
-    for _, _, msg, ros in _iter_msgs(p, ["/vehicle/status/velocity_status",
-                                          "/sub/vehicle/status/velocity_status"]):
+    for _, _, msg, ros in _iter_msgs(
+        p, ["/vehicle/status/velocity_status", "/sub/vehicle/status/velocity_status"]
+    ):
         rows.append({"t_ns": msg.log_time, "lon_vel": ros.longitudinal_velocity})
     return pd.DataFrame(rows)
 
@@ -73,7 +82,7 @@ def find_t0_and_launch(p):
     if len(stopped) > 0:
         gaps = np.where(np.diff(stopped) > 2.0)[0]
         starts_idx = np.concatenate([[0], gaps + 1])
-        ends_idx   = np.concatenate([gaps, [len(stopped) - 1]])
+        ends_idx = np.concatenate([gaps, [len(stopped) - 1]])
         for s, e in zip(starts_idx, ends_idx):
             dur = stopped[e] - stopped[s]
             if dur >= 0.5 and 20.0 <= stopped[e] <= 120.0:
@@ -89,23 +98,31 @@ def find_t0_and_launch(p):
 class BrakeAccVehicleModel:
     """DELAY_STEER_ACC_BRAKE_GEARED_WO_FALL_GUARD の縦方向モデル簡易実装."""
 
-    def __init__(self, acc_time_delay, acc_time_constant, brake_delay, brake_time_constant,
-                 departure_vx_threshold, vel_rate_lim, dt):
-        self.acc_tc    = acc_time_constant
-        self.brake_tc  = brake_time_constant
+    def __init__(
+        self,
+        acc_time_delay,
+        acc_time_constant,
+        brake_delay,
+        brake_time_constant,
+        departure_vx_threshold,
+        vel_rate_lim,
+        dt,
+    ):
+        self.acc_tc = acc_time_constant
+        self.brake_tc = brake_time_constant
         self.departure_threshold = departure_vx_threshold
         self.vel_rate_lim = vel_rate_lim
         self.dt = dt
 
-        acc_queue_len   = max(1, round(acc_time_delay / dt))
+        acc_queue_len = max(1, round(acc_time_delay / dt))
         brake_queue_len = max(1, round(brake_delay / dt))
-        self.acc_queue   = deque([0.0] * acc_queue_len)
+        self.acc_queue = deque([0.0] * acc_queue_len)
         self.brake_queue = deque([0.0] * brake_queue_len)
 
-        self.vx            = 0.0
-        self.pedal_acc     = 0.0
-        self.pedal_brake   = 0.0
-        self.in_departure  = True
+        self.vx = 0.0
+        self.pedal_acc = 0.0
+        self.pedal_brake = 0.0
+        self.in_departure = True
         self.delayed_accel = 0.0
         self.delayed_brake = 0.0
 
@@ -127,17 +144,17 @@ class BrakeAccVehicleModel:
 
         net = self.pedal_acc + self.pedal_brake
         d_vx = net
-        d_pacc   = -(self.pedal_acc - min(self.delayed_accel, self.vel_rate_lim)) / self.acc_tc
+        d_pacc = -(self.pedal_acc - min(self.delayed_accel, self.vel_rate_lim)) / self.acc_tc
         d_pbrake = -(self.pedal_brake - max(self.delayed_brake, -self.vel_rate_lim)) / eff_brake_tc
 
         prev_vx = self.vx
-        self.vx          += d_vx    * self.dt
-        self.pedal_acc   += d_pacc  * self.dt
+        self.vx += d_vx * self.dt
+        self.pedal_acc += d_pacc * self.dt
         self.pedal_brake += d_pbrake * self.dt
 
-        self.pedal_acc   = max(0.0, self.pedal_acc)
+        self.pedal_acc = max(0.0, self.pedal_acc)
         self.pedal_brake = min(0.0, self.pedal_brake)
-        self.vx          = max(-50.0, min(self.vx, 50.0))
+        self.vx = max(-50.0, min(self.vx, 50.0))
 
         # stop condition
         if prev_vx * self.vx <= 0.0 and self.delayed_brake < 0.0:
@@ -153,7 +170,7 @@ class BrakeAccVehicleModel:
         return self.vx
 
 
-def simulate_departure(cmd_series, brake_tc_variants, params_base, dt=1.0/40):
+def simulate_departure(cmd_series, brake_tc_variants, params_base, dt=1.0 / 40):
     """同一 cmd_series に対して複数の brake_time_constant でシミュレーション."""
     results = {}
     for btc in brake_tc_variants:
@@ -201,11 +218,11 @@ def main():
     cmd_resampled = np.interp(t_sim, df_cmd["t"].values, df_cmd["acc"].values)
 
     params_base = {
-        "acc_time_delay":        0.101,
-        "acc_time_constant":     0.2589,
-        "brake_delay":           0.0685,
+        "acc_time_delay": 0.101,
+        "acc_time_constant": 0.2589,
+        "brake_delay": 0.0685,
         "departure_vx_threshold": 1.0,
-        "vel_rate_lim":          7.0,
+        "vel_rate_lim": 7.0,
     }
 
     brake_tc_variants = [0.0301, 0.10, 0.20, 0.40]
@@ -220,12 +237,18 @@ def main():
     df_vel_dep = df_vel[df_vel["t"] >= -0.5]
 
     # --- テーブル出力 ---
-    print(f"\n{'t[s]':>6} | {'実機actual':>10} | " +
-          " | ".join(f"btc={v:.4f}" for v in brake_tc_variants))
+    print(
+        f"\n{'t[s]':>6} | {'実機actual':>10} | "
+        + " | ".join(f"btc={v:.4f}" for v in brake_tc_variants)
+    )
     print("-" * (6 + 10 + 16 * len(brake_tc_variants) + 10))
     for t_chk in [-0.5, 0.0, 0.5, 1.0, 1.5, 2.0, 3.0, 5.0, 7.0, 10.0]:
         idx = np.argmin(np.abs(t_sim - t_chk))
-        real_v = float(np.interp(t_chk, df_vel["t"].values, df_vel["lon_vel"].values)) if not df_vel.empty else float("nan")
+        real_v = (
+            float(np.interp(t_chk, df_vel["t"].values, df_vel["lon_vel"].values))
+            if not df_vel.empty
+            else float("nan")
+        )
         row = f"{t_chk:>6.1f} | {real_v:>10.3f} | "
         row += " | ".join(f"{sim_results[v][idx]:>10.3f}   " for v in brake_tc_variants)
         print(row)
@@ -233,13 +256,17 @@ def main():
     # --- プロット ---
     OUT_DIR.mkdir(parents=True, exist_ok=True)
     fig, axes = plt.subplots(1, 2, figsize=(14, 6))
-    fig.suptitle("発進動作：brake_time_constant 感度分析\n"
-                 "(実機 post-gate cmd をオープンループ入力→シミュレーション速度 vs 実機 actual速度)", fontsize=11)
+    fig.suptitle(
+        "発進動作：brake_time_constant 感度分析\n"
+        "(実機 post-gate cmd をオープンループ入力→シミュレーション速度 vs 実機 actual速度)",
+        fontsize=11,
+    )
 
     # 左: 速度プロファイル比較
     ax1 = axes[0]
-    ax1.plot(df_vel["t"].values, df_vel["lon_vel"].values,
-             "k-", lw=3, label="実機 actual速度", zorder=10)
+    ax1.plot(
+        df_vel["t"].values, df_vel["lon_vel"].values, "k-", lw=3, label="実機 actual速度", zorder=10
+    )
     for btc, col, lbl in zip(brake_tc_variants, colors, labels):
         ax1.plot(t_sim, sim_results[btc], color=col, lw=1.8, ls="--", label=f"FMU {lbl}")
     ax1.axvline(0, color="gray", lw=0.8, ls="--", alpha=0.6, label="発進 t=0")
@@ -253,8 +280,9 @@ def main():
 
     # 右: 発進直後のズーム
     ax2 = axes[1]
-    ax2.plot(df_vel["t"].values, df_vel["lon_vel"].values,
-             "k-", lw=3, label="実機 actual速度", zorder=10)
+    ax2.plot(
+        df_vel["t"].values, df_vel["lon_vel"].values, "k-", lw=3, label="実機 actual速度", zorder=10
+    )
     for btc, col, lbl in zip(brake_tc_variants, colors, labels):
         ax2.plot(t_sim, sim_results[btc], color=col, lw=1.8, ls="--", label=f"FMU {lbl}")
     ax2.axvline(0, color="gray", lw=0.8, ls="--", alpha=0.6)
@@ -269,7 +297,9 @@ def main():
     # cmd_acc をサブプロットとして下段に追加
     fig2, axes2 = plt.subplots(1, 1, figsize=(10, 4))
     fig2.suptitle("実機 post-gate control_cmd (acc) — 発進前後", fontsize=11)
-    axes2.plot(df_cmd["t"].values, df_cmd["acc"].values, "b-", lw=1.5, label="実機 cmd_acc (post-gate)")
+    axes2.plot(
+        df_cmd["t"].values, df_cmd["acc"].values, "b-", lw=1.5, label="実機 cmd_acc (post-gate)"
+    )
     axes2.axvline(0, color="gray", lw=0.8, ls="--", alpha=0.6)
     axes2.set_xlim(-2, 10)
     axes2.set_xlabel("発進後 t [s]")
@@ -282,7 +312,7 @@ def main():
 
     # params_base に YAML の共通パラメータをマージしてアノテーションを付与する
     _anno_params = {**load_sim_params(), **params_base}
-    add_params_annotation(fig,  _anno_params)
+    add_params_annotation(fig, _anno_params)
     add_params_annotation(fig2, _anno_params)
 
     out1 = OUT_DIR / "departure_brake_tc_sensitivity.png"

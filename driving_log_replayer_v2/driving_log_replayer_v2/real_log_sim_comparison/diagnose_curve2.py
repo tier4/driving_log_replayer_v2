@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
-"""カーブ②乖離詳細診断スクリプト.
+"""
+カーブ②乖離詳細診断スクリプト.
 
 軌跡乖離の原因を特定するため、1秒分解能で位置・速度・ステア・yaw の比較を行う。
 乖離の縦横成分分解と、プランナー速度差の寄与を定量化する。
@@ -9,18 +10,22 @@ import math
 from pathlib import Path
 
 import matplotlib
+
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
-matplotlib.rcParams["font.family"] = "Noto Sans CJK JP"
-import numpy as np
-import pandas as pd
 from mcap.reader import make_reader
 from mcap_ros2.decoder import DecoderFactory
-from ._params_utils import add_params_annotation
+import numpy as np
+import pandas as pd
 
-BASE     = Path(__file__).parent
+from ._params_utils import add_params_annotation
+from ._params_utils import setup_jp_font
+
+setup_jp_font()
+
+BASE = Path(__file__).parent
 LITE_DIR = BASE / "lite"
-OUT_DIR  = BASE / "comparison" / "figures"
+OUT_DIR = BASE / "comparison" / "figures"
 
 LOGS = {
     "実機": {
@@ -48,17 +53,23 @@ def _iter_msgs(mcap_path, topics):
 
 def _load_velocity(p):
     rows = []
-    topic = "/sub/vehicle/status/velocity_status" if "real" in str(p) else "/vehicle/status/velocity_status"
-    for _, _, msg, ros in _iter_msgs(p, ["/vehicle/status/velocity_status",
-                                          "/sub/vehicle/status/velocity_status"]):
+    topic = (
+        "/sub/vehicle/status/velocity_status"
+        if "real" in str(p)
+        else "/vehicle/status/velocity_status"
+    )
+    for _, _, msg, ros in _iter_msgs(
+        p, ["/vehicle/status/velocity_status", "/sub/vehicle/status/velocity_status"]
+    ):
         rows.append({"t_ns": msg.log_time, "lon_vel": ros.longitudinal_velocity})
     return pd.DataFrame(rows)
 
 
 def _load_steering(p):
     rows = []
-    for _, _, msg, ros in _iter_msgs(p, ["/vehicle/status/steering_status",
-                                          "/sub/vehicle/status/steering_status"]):
+    for _, _, msg, ros in _iter_msgs(
+        p, ["/vehicle/status/steering_status", "/sub/vehicle/status/steering_status"]
+    ):
         rows.append({"t_ns": msg.log_time, "steer": ros.steering_tire_angle})
     return pd.DataFrame(rows)
 
@@ -67,7 +78,7 @@ def _load_kinematic(p, topic):
     rows = []
     for _, _, msg, ros in _iter_msgs(p, [topic]):
         o = ros.pose.pose.orientation
-        yaw = math.atan2(2*(o.w*o.z + o.x*o.y), 1 - 2*(o.y*o.y + o.z*o.z))
+        yaw = math.atan2(2 * (o.w * o.z + o.x * o.y), 1 - 2 * (o.y * o.y + o.z * o.z))
         pos = ros.pose.pose.position
         rows.append({"t_ns": msg.log_time, "x": pos.x, "y": pos.y, "yaw": yaw})
     return pd.DataFrame(rows)
@@ -76,12 +87,14 @@ def _load_kinematic(p, topic):
 def _load_cmd(p, topic):
     rows = []
     for _, _, msg, ros in _iter_msgs(p, [topic]):
-        rows.append({
-            "t_ns": msg.log_time,
-            "cmd_vel":   ros.longitudinal.velocity,
-            "cmd_accel": ros.longitudinal.acceleration,
-            "cmd_steer": ros.lateral.steering_tire_angle,
-        })
+        rows.append(
+            {
+                "t_ns": msg.log_time,
+                "cmd_vel": ros.longitudinal.velocity,
+                "cmd_accel": ros.longitudinal.acceleration,
+                "cmd_steer": ros.lateral.steering_tire_angle,
+            }
+        )
     return pd.DataFrame(rows)
 
 
@@ -97,7 +110,7 @@ def _find_curve2_launch(df_vel):
         return None
     gaps = np.where(np.diff(stopped) > 2.0)[0]
     starts_idx = np.concatenate([[0], gaps + 1])
-    ends_idx   = np.concatenate([gaps, [len(stopped) - 1]])
+    ends_idx = np.concatenate([gaps, [len(stopped) - 1]])
     candidates = []
     for s, e in zip(starts_idx, ends_idx):
         dur = stopped[e] - stopped[s]
@@ -142,8 +155,12 @@ def load_data():
             df["tr"] = df["t"] - t_launch
 
         loaded[label] = {
-            "cfg": cfg, "t_launch": t_launch,
-            "vel": df_vel, "kin": df_kin, "cmd": df_cmd, "steer": df_steer,
+            "cfg": cfg,
+            "t_launch": t_launch,
+            "vel": df_vel,
+            "kin": df_kin,
+            "cmd": df_cmd,
+            "steer": df_steer,
         }
     return loaded
 
@@ -170,63 +187,66 @@ def decompose_deviation(real_kin, sim_kin, tr_target):
     dist = math.sqrt(dx**2 + dy**2)
 
     # 実機進行方向を基準にした横方向・縦方向
-    lon =  dx * math.cos(ryaw) + dy * math.sin(ryaw)   # 前方が正
-    lat = -dx * math.sin(ryaw) + dy * math.cos(ryaw)   # 左が正
+    lon = dx * math.cos(ryaw) + dy * math.sin(ryaw)  # 前方が正
+    lat = -dx * math.sin(ryaw) + dy * math.cos(ryaw)  # 左が正
 
     return dist, lon, lat, rx, ry, ryaw, sx, sy
 
 
 def print_diagnosis(loaded):
     real = loaded["実機"]
-    sim  = loaded["シム (Curve2)"]
+    sim = loaded["シム (Curve2)"]
 
     real_kin = real["kin"]
-    sim_kin  = sim["kin"]
+    sim_kin = sim["kin"]
     real_vel = real["vel"]
-    sim_vel  = sim["vel"]
+    sim_vel = sim["vel"]
     real_cmd = real["cmd"]
-    sim_cmd  = sim["cmd"]
+    sim_cmd = sim["cmd"]
     real_steer = real["steer"]
-    sim_steer  = sim["steer"]
+    sim_steer = sim["steer"]
 
-    print("\n" + "="*80)
+    print("\n" + "=" * 80)
     print("カーブ②乖離詳細診断（1s分解能）")
-    print("="*80)
-    print(f"{'t[s]':>5} | {'実機速度':>8} {'シム速度':>8} {'速度差':>7} | "
-          f"{'実機cmd':>8} {'シムcmd':>8} {'cmd差':>7} | "
-          f"{'実機steer':>9} {'シムsteer':>9} | "
-          f"{'乖離[m]':>7} {'縦[m]':>7} {'横[m]':>7}")
-    print("-"*110)
+    print("=" * 80)
+    print(
+        f"{'t[s]':>5} | {'実機速度':>8} {'シム速度':>8} {'速度差':>7} | "
+        f"{'実機cmd':>8} {'シムcmd':>8} {'cmd差':>7} | "
+        f"{'実機steer':>9} {'シムsteer':>9} | "
+        f"{'乖離[m]':>7} {'縦[m]':>7} {'横[m]':>7}"
+    )
+    print("-" * 110)
 
     for tr in range(-2, 28):
-        r_v   = _at(real_vel,   tr, "lon_vel")
-        s_v   = _at(sim_vel,    tr, "lon_vel")
-        r_cmd = _at(real_cmd,   tr, "cmd_vel")
-        s_cmd = _at(sim_cmd,    tr, "cmd_vel")
+        r_v = _at(real_vel, tr, "lon_vel")
+        s_v = _at(sim_vel, tr, "lon_vel")
+        r_cmd = _at(real_cmd, tr, "cmd_vel")
+        s_cmd = _at(sim_cmd, tr, "cmd_vel")
         r_str = math.degrees(_at(real_steer, tr, "steer"))
-        s_str = math.degrees(_at(sim_steer,  tr, "steer"))
+        s_str = math.degrees(_at(sim_steer, tr, "steer"))
 
         dist, lon, lat, *_ = decompose_deviation(real_kin, sim_kin, tr)
 
-        dv  = s_v   - r_v
-        dc  = s_cmd - r_cmd
+        dv = s_v - r_v
+        dc = s_cmd - r_cmd
 
-        print(f"{tr:>5} | {r_v:>8.3f} {s_v:>8.3f} {dv:>+7.3f} | "
-              f"{r_cmd:>8.3f} {s_cmd:>8.3f} {dc:>+7.3f} | "
-              f"{r_str:>9.2f} {s_str:>9.2f} | "
-              f"{dist:>7.3f} {lon:>+7.3f} {lat:>+7.3f}")
+        print(
+            f"{tr:>5} | {r_v:>8.3f} {s_v:>8.3f} {dv:>+7.3f} | "
+            f"{r_cmd:>8.3f} {s_cmd:>8.3f} {dc:>+7.3f} | "
+            f"{r_str:>9.2f} {s_str:>9.2f} | "
+            f"{dist:>7.3f} {lon:>+7.3f} {lat:>+7.3f}"
+        )
 
 
 def plot_detailed(loaded):
     real = loaded["実機"]
-    sim  = loaded["シム (Curve2)"]
+    sim = loaded["シム (Curve2)"]
 
     t_vec = np.linspace(-2, 27, 300)
 
     def interp(d, col):
         df = d[col if col in d else "vel"]
-        return np.interp(t_vec, df["tr"].values, df["lon_vel"].values,
-                         left=np.nan, right=np.nan)
+        return np.interp(t_vec, df["tr"].values, df["lon_vel"].values, left=np.nan, right=np.nan)
 
     # 位置差の縦横分解
     dists, lons, lats = [], [], []
@@ -236,31 +256,57 @@ def plot_detailed(loaded):
         lons.append(lon)
         lats.append(lat)
     dists = np.array(dists)
-    lons  = np.array(lons)
-    lats  = np.array(lats)
+    lons = np.array(lons)
+    lats = np.array(lats)
 
     # yaw差
     real_kin = real["kin"]
-    sim_kin  = sim["kin"]
+    sim_kin = sim["kin"]
     yaw_diff = []
     for tr in t_vec:
         ry = _at(real_kin, tr, "yaw")
-        sy = _at(sim_kin,  tr, "yaw")
+        sy = _at(sim_kin, tr, "yaw")
         diff = math.degrees(sy - ry)
-        while diff >  180: diff -= 360
-        while diff < -180: diff += 360
+        while diff > 180:
+            diff -= 360
+        while diff < -180:
+            diff += 360
         yaw_diff.append(diff)
     yaw_diff = np.array(yaw_diff)
 
     # 速度・cmd_vel
-    rv = np.interp(t_vec, real["vel"]["tr"].values, real["vel"]["lon_vel"].values, left=np.nan, right=np.nan)
-    sv = np.interp(t_vec, sim["vel"]["tr"].values,  sim["vel"]["lon_vel"].values,  left=np.nan, right=np.nan)
-    rc = np.interp(t_vec, real["cmd"]["tr"].values, real["cmd"]["cmd_vel"].values, left=np.nan, right=np.nan)
-    sc = np.interp(t_vec, sim["cmd"]["tr"].values,  sim["cmd"]["cmd_vel"].values,  left=np.nan, right=np.nan)
+    rv = np.interp(
+        t_vec, real["vel"]["tr"].values, real["vel"]["lon_vel"].values, left=np.nan, right=np.nan
+    )
+    sv = np.interp(
+        t_vec, sim["vel"]["tr"].values, sim["vel"]["lon_vel"].values, left=np.nan, right=np.nan
+    )
+    rc = np.interp(
+        t_vec, real["cmd"]["tr"].values, real["cmd"]["cmd_vel"].values, left=np.nan, right=np.nan
+    )
+    sc = np.interp(
+        t_vec, sim["cmd"]["tr"].values, sim["cmd"]["cmd_vel"].values, left=np.nan, right=np.nan
+    )
 
     # ステア
-    rs = np.degrees(np.interp(t_vec, real["steer"]["tr"].values, real["steer"]["steer"].values, left=np.nan, right=np.nan))
-    ss = np.degrees(np.interp(t_vec, sim["steer"]["tr"].values,  sim["steer"]["steer"].values,  left=np.nan, right=np.nan))
+    rs = np.degrees(
+        np.interp(
+            t_vec,
+            real["steer"]["tr"].values,
+            real["steer"]["steer"].values,
+            left=np.nan,
+            right=np.nan,
+        )
+    )
+    ss = np.degrees(
+        np.interp(
+            t_vec,
+            sim["steer"]["tr"].values,
+            sim["steer"]["steer"].values,
+            left=np.nan,
+            right=np.nan,
+        )
+    )
 
     fig, axes = plt.subplots(5, 1, figsize=(14, 22), sharex=True)
     fig.suptitle("カーブ②乖離詳細診断", fontsize=13)

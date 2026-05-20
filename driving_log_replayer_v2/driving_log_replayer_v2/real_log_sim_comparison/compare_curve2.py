@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
-"""実機 vs カーブ②集中シム の比較プロット生成スクリプト.
+"""
+実機 vs カーブ②集中シム の比較プロット生成スクリプト.
 
 Usage:
     python3 compare_curve2.py
@@ -15,18 +16,22 @@ Outputs:
 """
 
 import math
-import warnings
 from pathlib import Path
+import warnings
 
 import matplotlib
+
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
-matplotlib.rcParams["font.family"] = "Noto Sans CJK JP"
-import numpy as np
-from ._params_utils import add_params_annotation
-import pandas as pd
 from mcap.reader import make_reader
 from mcap_ros2.decoder import DecoderFactory
+import numpy as np
+import pandas as pd
+
+from ._params_utils import add_params_annotation
+from ._params_utils import setup_jp_font
+
+setup_jp_font()
 
 BASE = Path(__file__).parent
 LITE_DIR = BASE / "lite"
@@ -71,6 +76,7 @@ T_PRE, T_POST = -2.0, 30.0
 # MCAP ローダー
 # ---------------------------------------------------------------------------
 
+
 def _iter_msgs(mcap_path, topics):
     with open(mcap_path, "rb") as f:
         reader = make_reader(f, decoder_factories=[DecoderFactory()])
@@ -95,7 +101,7 @@ def _load_kinematic(p, topic):
     rows = []
     for _, _, msg, ros in _iter_msgs(p, [topic]):
         o = ros.pose.pose.orientation
-        yaw = math.atan2(2*(o.w*o.z + o.x*o.y), 1 - 2*(o.y*o.y + o.z*o.z))
+        yaw = math.atan2(2 * (o.w * o.z + o.x * o.y), 1 - 2 * (o.y * o.y + o.z * o.z))
         pos = ros.pose.pose.position
         rows.append({"t_ns": msg.log_time, "x": pos.x, "y": pos.y, "yaw": yaw})
     return pd.DataFrame(rows)
@@ -111,12 +117,14 @@ def _load_accel(p, topic):
 def _load_cmd(p, topic):
     rows = []
     for _, _, msg, ros in _iter_msgs(p, [topic]):
-        rows.append({
-            "t_ns": msg.log_time,
-            "cmd_vel":   ros.longitudinal.velocity,
-            "cmd_accel": ros.longitudinal.acceleration,
-            "cmd_steer": ros.lateral.steering_tire_angle,
-        })
+        rows.append(
+            {
+                "t_ns": msg.log_time,
+                "cmd_vel": ros.longitudinal.velocity,
+                "cmd_accel": ros.longitudinal.acceleration,
+                "cmd_steer": ros.lateral.steering_tire_angle,
+            }
+        )
     return pd.DataFrame(rows)
 
 
@@ -142,7 +150,7 @@ def _find_curve2_launch(df_vel):
         return None
     gaps = np.where(np.diff(stopped) > 2.0)[0]
     starts_idx = np.concatenate([[0], gaps + 1])
-    ends_idx   = np.concatenate([gaps, [len(stopped) - 1]])
+    ends_idx = np.concatenate([gaps, [len(stopped) - 1]])
     candidates = []
     for s, e in zip(starts_idx, ends_idx):
         dur = stopped[e] - stopped[s]
@@ -153,7 +161,8 @@ def _find_curve2_launch(df_vel):
 
 
 def _find_sim_launch(df_vel, threshold=0.5, min_t=5.0):
-    """シムの発進時刻（velocity が初めて threshold m/s を超えた時刻）を返す。
+    """
+    シムの発進時刻（velocity が初めて threshold m/s を超えた時刻）を返す。
 
     min_t 以降を対象にし、Autoware 起動直後の瞬間スパイクを除外する。
     """
@@ -167,8 +176,10 @@ def _load_map_ways():
     if not MAP_DIR.exists():
         return []
     from lxml import etree
-    candidates = sorted(MAP_DIR.glob("2231-*/lanelet2_map.osm"),
-                        key=lambda p: p.parent.name, reverse=True)
+
+    candidates = sorted(
+        MAP_DIR.glob("2231-*/lanelet2_map.osm"), key=lambda p: p.parent.name, reverse=True
+    )
     if not candidates:
         return []
     tree = etree.parse(str(candidates[0]))
@@ -222,6 +233,7 @@ def _save(fig, name):
 # 累積距離計算ユーティリティ
 # ---------------------------------------------------------------------------
 
+
 def _add_cumulative_dist(df_kin):
     """clip済み kinematic データに累積距離 [m] 列を追加（tr=0 を原点に正規化）."""
     if df_kin.empty:
@@ -253,6 +265,7 @@ def _add_dist_from_kin(df, df_kin):
 # ---------------------------------------------------------------------------
 # データ読み込み
 # ---------------------------------------------------------------------------
+
 
 def load_data():
     loaded = {}
@@ -289,26 +302,26 @@ def load_data():
                 else:
                     print(f"    シム: 発進検出 t={t_launch:.1f}s")
 
-        df_steer   = _align(_load_steering(mcap_path),                   t0_ns)
-        df_kin     = _align(_load_kinematic(mcap_path, cfg["kinematic"]), t0_ns)
-        df_accel   = _align(_load_accel(mcap_path, cfg["accel"]),         t0_ns)
-        df_cmd     = _align(_load_cmd(mcap_path, cfg["cmd"]),             t0_ns)
+        df_steer = _align(_load_steering(mcap_path), t0_ns)
+        df_kin = _align(_load_kinematic(mcap_path, cfg["kinematic"]), t0_ns)
+        df_accel = _align(_load_accel(mcap_path, cfg["accel"]), t0_ns)
+        df_cmd = _align(_load_cmd(mcap_path, cfg["cmd"]), t0_ns)
 
         # kin に累積距離を追加し（tr=0 を原点）、他のDFへも補間で追加
-        kin_clipped   = _add_cumulative_dist(_clip(df_kin,   t_launch))
-        vel_clipped   = _add_dist_from_kin(_clip(df_vel,   t_launch), kin_clipped)
+        kin_clipped = _add_cumulative_dist(_clip(df_kin, t_launch))
+        vel_clipped = _add_dist_from_kin(_clip(df_vel, t_launch), kin_clipped)
         steer_clipped = _add_dist_from_kin(_clip(df_steer, t_launch), kin_clipped)
         accel_clipped = _add_dist_from_kin(_clip(df_accel, t_launch), kin_clipped)
-        cmd_clipped   = _add_dist_from_kin(_clip(df_cmd,   t_launch), kin_clipped)
+        cmd_clipped = _add_dist_from_kin(_clip(df_cmd, t_launch), kin_clipped)
 
         loaded[label] = {
-            "cfg":      cfg,
+            "cfg": cfg,
             "t_launch": t_launch,
-            "vel":      vel_clipped,
-            "steer":    steer_clipped,
-            "kin":      kin_clipped,
-            "accel":    accel_clipped,
-            "cmd":      cmd_clipped,
+            "vel": vel_clipped,
+            "steer": steer_clipped,
+            "kin": kin_clipped,
+            "accel": accel_clipped,
+            "cmd": cmd_clipped,
         }
     return loaded
 
@@ -317,30 +330,33 @@ def load_data():
 # 軌跡比較プロット（地図 + 発進点マーカー）
 # ---------------------------------------------------------------------------
 
+
 def _draw_map(ax):
     """地図wayをaxに描画する（共通処理）。"""
-    pass  # wayは呼び出し元から渡す
+    # wayは呼び出し元から渡す
 
 
 def plot_trajectory(loaded, map_ways):
+    import matplotlib.cm as cm
     from matplotlib.collections import LineCollection
     from matplotlib.colors import Normalize
-    import matplotlib.cm as cm
 
     # ---- メインプロット（左）とズームパネル（右）で構成 ----
     fig = plt.figure(figsize=(18, 10))
     fig.suptitle("カーブ②集中比較: 軌跡（★=発進点、発進後30s）", fontsize=12)
-    ax    = fig.add_axes([0.04, 0.06, 0.50, 0.88])   # 全体
-    ax_z  = fig.add_axes([0.56, 0.06, 0.42, 0.88])   # ズーム（カーブ本体）
+    ax = fig.add_axes([0.04, 0.06, 0.50, 0.88])  # 全体
+    ax_z = fig.add_axes([0.56, 0.06, 0.42, 0.88])  # ズーム（カーブ本体）
 
     # カーブ②中心周辺
     ZOOM_CX, ZOOM_CY, ZOOM_M = 89303, 43075, 50
 
     for ax_cur, xlim, ylim in [
-        (ax,   (CURVE2_CX - CURVE2_MARGIN, CURVE2_CX + CURVE2_MARGIN),
-                (CURVE2_CY - CURVE2_MARGIN, CURVE2_CY + CURVE2_MARGIN)),
-        (ax_z, (ZOOM_CX - ZOOM_M, ZOOM_CX + ZOOM_M),
-                (ZOOM_CY - ZOOM_M, ZOOM_CY + ZOOM_M)),
+        (
+            ax,
+            (CURVE2_CX - CURVE2_MARGIN, CURVE2_CX + CURVE2_MARGIN),
+            (CURVE2_CY - CURVE2_MARGIN, CURVE2_CY + CURVE2_MARGIN),
+        ),
+        (ax_z, (ZOOM_CX - ZOOM_M, ZOOM_CX + ZOOM_M), (ZOOM_CY - ZOOM_M, ZOOM_CY + ZOOM_M)),
     ]:
         if map_ways:
             for pts in map_ways:
@@ -357,21 +373,27 @@ def plot_trajectory(loaded, map_ways):
             if kin.empty:
                 continue
 
-            xs  = kin["x"].values
-            ys  = kin["y"].values
+            xs = kin["x"].values
+            ys = kin["y"].values
             trs = kin["tr"].values
 
             # 時間で色付けした折れ線（LineCollection）
-            pts_arr   = np.array([xs, ys]).T.reshape(-1, 1, 2)
-            segs      = np.concatenate([pts_arr[:-1], pts_arr[1:]], axis=1)
-            t_mid     = (trs[:-1] + trs[1:]) / 2.0
-            norm      = Normalize(vmin=-2, vmax=25)
+            pts_arr = np.array([xs, ys]).T.reshape(-1, 1, 2)
+            segs = np.concatenate([pts_arr[:-1], pts_arr[1:]], axis=1)
+            t_mid = (trs[:-1] + trs[1:]) / 2.0
+            norm = Normalize(vmin=-2, vmax=25)
             cmap_name = "Blues" if d["cfg"]["real"] else "Oranges"
-            cmap      = cm.get_cmap(cmap_name)
-            colors    = cmap(norm(t_mid))
+            cmap = cm.get_cmap(cmap_name)
+            colors = cmap(norm(t_mid))
             # real は濃い青系、sim はオレンジ系
-            lc = LineCollection(segs, colors=colors, lw=2.5 if d["cfg"]["real"] else 2.0,
-                                 linestyle=cfg["ls"], zorder=3, label=f"_{label}_lc")
+            lc = LineCollection(
+                segs,
+                colors=colors,
+                lw=2.5 if d["cfg"]["real"] else 2.0,
+                linestyle=cfg["ls"],
+                zorder=3,
+                label=f"_{label}_lc",
+            )
             ax_cur.add_collection(lc)
 
             # 単色の凡例用ライン（dummy）
@@ -379,9 +401,16 @@ def plot_trajectory(loaded, map_ways):
 
             # 発進点★
             row0 = kin.iloc[(kin["tr"]).abs().argsort().iloc[:1]]
-            ax_cur.plot(row0["x"].values[0], row0["y"].values[0], "*",
-                        color=cfg["color"], ms=14, zorder=6,
-                        markeredgecolor="white", markeredgewidth=0.5)
+            ax_cur.plot(
+                row0["x"].values[0],
+                row0["y"].values[0],
+                "*",
+                color=cfg["color"],
+                ms=14,
+                zorder=6,
+                markeredgecolor="white",
+                markeredgewidth=0.5,
+            )
 
             # 時刻ラベル（0, 5, 10, 15, 20s）
             for t_mark in [0, 5, 10, 15, 20]:
@@ -389,34 +418,54 @@ def plot_trajectory(loaded, map_ways):
                 if row.empty:
                     continue
                 rx, ry = row["x"].values[0], row["y"].values[0]
-                ax_cur.plot(rx, ry, "o", color=cfg["color"], ms=5, zorder=5,
-                            markeredgecolor="white", markeredgewidth=0.5)
-                ax_cur.annotate(f"{t_mark}s",
-                                (rx, ry),
-                                textcoords="offset points",
-                                xytext=(5, 3) if d["cfg"]["real"] else (-18, -12),
-                                fontsize=8, color=cfg["color"], fontweight="bold")
+                ax_cur.plot(
+                    rx,
+                    ry,
+                    "o",
+                    color=cfg["color"],
+                    ms=5,
+                    zorder=5,
+                    markeredgecolor="white",
+                    markeredgewidth=0.5,
+                )
+                ax_cur.annotate(
+                    f"{t_mark}s",
+                    (rx, ry),
+                    textcoords="offset points",
+                    xytext=(5, 3) if d["cfg"]["real"] else (-18, -12),
+                    fontsize=8,
+                    color=cfg["color"],
+                    fontweight="bold",
+                )
 
         # ---- 同時刻点間の乖離矢印（ズームパネルのみ）----
         if ax_cur is ax_z:
             real_kin = loaded.get("実機", {}).get("kin")
-            sim_kin  = loaded.get("シム (Curve2)", {}).get("kin")
+            sim_kin = loaded.get("シム (Curve2)", {}).get("kin")
             if real_kin is not None and sim_kin is not None:
                 for t_mark in [5, 8, 10, 12, 14, 16]:
                     idx_r = (real_kin["tr"] - t_mark).abs().idxmin()
-                    idx_s = (sim_kin["tr"]  - t_mark).abs().idxmin()
+                    idx_s = (sim_kin["tr"] - t_mark).abs().idxmin()
                     rx, ry = real_kin.loc[idx_r, ["x", "y"]]
-                    sx, sy = sim_kin.loc[idx_s,  ["x", "y"]]
-                    dist = math.sqrt((sx-rx)**2 + (sy-ry)**2)
-                    ax_z.annotate("",
-                                  xy=(sx, sy), xytext=(rx, ry),
-                                  arrowprops=dict(arrowstyle="->", color="red",
-                                                  lw=1.5, shrinkA=0, shrinkB=0),
-                                  zorder=8)
-                    mx, my = (rx+sx)/2, (ry+sy)/2
-                    ax_z.text(mx+1, my+1, f"{dist:.1f}m",
-                              fontsize=7, color="red", fontweight="bold",
-                              bbox=dict(boxstyle="round,pad=0.1", fc="white", alpha=0.7))
+                    sx, sy = sim_kin.loc[idx_s, ["x", "y"]]
+                    dist = math.sqrt((sx - rx) ** 2 + (sy - ry) ** 2)
+                    ax_z.annotate(
+                        "",
+                        xy=(sx, sy),
+                        xytext=(rx, ry),
+                        arrowprops=dict(arrowstyle="->", color="red", lw=1.5, shrinkA=0, shrinkB=0),
+                        zorder=8,
+                    )
+                    mx, my = (rx + sx) / 2, (ry + sy) / 2
+                    ax_z.text(
+                        mx + 1,
+                        my + 1,
+                        f"{dist:.1f}m",
+                        fontsize=7,
+                        color="red",
+                        fontweight="bold",
+                        bbox=dict(boxstyle="round,pad=0.1", fc="white", alpha=0.7),
+                    )
 
         ax_cur.set_xlim(xlim)
         ax_cur.set_ylim(ylim)
@@ -442,6 +491,7 @@ def plot_trajectory(loaded, map_ways):
 # 時系列比較（速度・加速度・ステアリング）— 時刻版・距離版共通実装
 # ---------------------------------------------------------------------------
 
+
 def _plot_timeseries_impl(loaded, x_col, xlabel, name):
     x_desc = "発進 t=0 に揃え" if x_col == "tr" else "発進点 dist=0 に揃え"
     fig, axes = plt.subplots(3, 2, figsize=(15, 12))
@@ -452,14 +502,14 @@ def _plot_timeseries_impl(loaded, x_col, xlabel, name):
     ax_str_r, ax_str_c = axes[2, 0], axes[2, 1]
 
     for label, d in loaded.items():
-        cfg    = d["cfg"]
-        kw     = dict(color=cfg["color"], lw=cfg["lw"], ls=cfg["ls"])
+        cfg = d["cfg"]
+        kw = dict(color=cfg["color"], lw=cfg["lw"], ls=cfg["ls"])
         kw_cmd = dict(color=cfg["color"], lw=1.2, ls=":", alpha=0.65)
 
-        vel   = d["vel"]
+        vel = d["vel"]
         accel = d["accel"]
         steer = d["steer"]
-        cmd   = d["cmd"]
+        cmd = d["cmd"]
 
         if x_col in vel.columns:
             ax_vel_r.plot(vel[x_col].values, vel["lon_vel"].values, label=label, **kw)
@@ -469,12 +519,16 @@ def _plot_timeseries_impl(loaded, x_col, xlabel, name):
             ax_str_r.plot(steer[x_col].values, np.degrees(steer["steer"].values), label=label, **kw)
 
         if not cmd.empty and x_col in cmd.columns:
-            ax_vel_c.plot(cmd[x_col].values, cmd["cmd_vel"].values,
-                          label=f"{label} 指令", **kw_cmd)
-            ax_acc_c.plot(cmd[x_col].values, cmd["cmd_accel"].values,
-                          label=f"{label} 指令", **kw_cmd)
-            ax_str_c.plot(cmd[x_col].values, np.degrees(cmd["cmd_steer"].values),
-                          label=f"{label} 指令", **kw_cmd)
+            ax_vel_c.plot(cmd[x_col].values, cmd["cmd_vel"].values, label=f"{label} 指令", **kw_cmd)
+            ax_acc_c.plot(
+                cmd[x_col].values, cmd["cmd_accel"].values, label=f"{label} 指令", **kw_cmd
+            )
+            ax_str_c.plot(
+                cmd[x_col].values,
+                np.degrees(cmd["cmd_steer"].values),
+                label=f"{label} 指令",
+                **kw_cmd,
+            )
 
     for ax in axes.flat:
         if x_col == "tr":
@@ -483,12 +537,18 @@ def _plot_timeseries_impl(loaded, x_col, xlabel, name):
         ax.legend(fontsize=8)
         ax.set_xlabel(xlabel)
 
-    ax_vel_r.set_title("速度 — 応答");                   ax_vel_r.set_ylabel("m/s")
-    ax_vel_c.set_title("速度 — 指令");                   ax_vel_c.set_ylabel("m/s")
-    ax_acc_r.set_title("加速度 — 応答 (IMU/オドメトリ)"); ax_acc_r.set_ylabel("m/s²")
-    ax_acc_c.set_title("加速度 — 指令");                 ax_acc_c.set_ylabel("m/s²")
-    ax_str_r.set_title("ステアリング角 — 応答");          ax_str_r.set_ylabel("deg")
-    ax_str_c.set_title("ステアリング角 — 指令");          ax_str_c.set_ylabel("deg")
+    ax_vel_r.set_title("速度 — 応答")
+    ax_vel_r.set_ylabel("m/s")
+    ax_vel_c.set_title("速度 — 指令")
+    ax_vel_c.set_ylabel("m/s")
+    ax_acc_r.set_title("加速度 — 応答 (IMU/オドメトリ)")
+    ax_acc_r.set_ylabel("m/s²")
+    ax_acc_c.set_title("加速度 — 指令")
+    ax_acc_c.set_ylabel("m/s²")
+    ax_str_r.set_title("ステアリング角 — 応答")
+    ax_str_r.set_ylabel("deg")
+    ax_str_c.set_title("ステアリング角 — 指令")
+    ax_str_c.set_ylabel("deg")
 
     fig.tight_layout()
     _save(fig, name)
@@ -506,36 +566,42 @@ def plot_timeseries_vs_dist(loaded):
 # ステア詳細比較（指令 vs 応答 + 追従誤差）
 # ---------------------------------------------------------------------------
 
+
 def plot_steering_detail(loaded):
     fig = plt.figure(figsize=(16, 12))
     fig.suptitle("カーブ②集中比較: ステアリング詳細", fontsize=12)
     gs = fig.add_gridspec(3, 2, hspace=0.45, wspace=0.30)
-    ax_ovl  = fig.add_subplot(gs[0, :])
-    ax_err  = fig.add_subplot(gs[1, 0])
+    ax_ovl = fig.add_subplot(gs[0, :])
+    ax_err = fig.add_subplot(gs[1, 0])
     ax_rate = fig.add_subplot(gs[1, 1])
-    ax_yaw  = fig.add_subplot(gs[2, 0])
-    ax_vel  = fig.add_subplot(gs[2, 1])
+    ax_yaw = fig.add_subplot(gs[2, 0])
+    ax_vel = fig.add_subplot(gs[2, 1])
 
     for label, d in loaded.items():
-        cfg   = d["cfg"]
+        cfg = d["cfg"]
         steer = d["steer"]
-        cmd   = d["cmd"]
-        kin   = d["kin"]
-        vel   = d["vel"]
-        kw    = dict(color=cfg["color"], lw=cfg["lw"], ls=cfg["ls"])
+        cmd = d["cmd"]
+        kin = d["kin"]
+        vel = d["vel"]
+        kw = dict(color=cfg["color"], lw=cfg["lw"], ls=cfg["ls"])
 
-        t_s     = steer["tr"].values
-        s_deg   = np.degrees(steer["steer"].values)
+        t_s = steer["tr"].values
+        s_deg = np.degrees(steer["steer"].values)
 
         ax_ovl.plot(t_s, s_deg, label=f"{label} 応答", **kw)
         if not cmd.empty:
-            ax_ovl.plot(cmd["tr"].values, np.degrees(cmd["cmd_steer"].values),
-                        color=cfg["color"], lw=1.2, ls=":", alpha=0.65,
-                        label=f"{label} 指令")
+            ax_ovl.plot(
+                cmd["tr"].values,
+                np.degrees(cmd["cmd_steer"].values),
+                color=cfg["color"],
+                lw=1.2,
+                ls=":",
+                alpha=0.65,
+                label=f"{label} 指令",
+            )
 
         if not cmd.empty and len(t_s) > 0:
-            cmd_interp = np.interp(t_s, cmd["tr"].values,
-                                   np.degrees(cmd["cmd_steer"].values))
+            cmd_interp = np.interp(t_s, cmd["tr"].values, np.degrees(cmd["cmd_steer"].values))
             err = s_deg - cmd_interp
             ax_err.plot(t_s, err, label=label, **kw)
 
@@ -546,17 +612,23 @@ def plot_steering_detail(loaded):
             ax_rate.plot(t_s[1:], rate, label=label, **kw)
 
         if len(kin) > 1:
-            t_k  = kin["tr"].values
+            t_k = kin["tr"].values
             yaw_u = np.unwrap(kin["yaw"].values)
-            t0_i  = int(np.argmin(np.abs(t_k)))
+            t0_i = int(np.argmin(np.abs(t_k)))
             yaw_cum = np.degrees(yaw_u - yaw_u[t0_i])
             ax_yaw.plot(t_k, yaw_cum, label=label, **kw)
 
         ax_vel.plot(vel["tr"].values, vel["lon_vel"].values, label=label, **kw)
         if not cmd.empty:
-            ax_vel.plot(cmd["tr"].values, cmd["cmd_vel"].values,
-                        color=cfg["color"], lw=1.2, ls=":", alpha=0.65,
-                        label=f"{label} 指令")
+            ax_vel.plot(
+                cmd["tr"].values,
+                cmd["cmd_vel"].values,
+                color=cfg["color"],
+                lw=1.2,
+                ls=":",
+                alpha=0.65,
+                label=f"{label} 指令",
+            )
 
     for ax in (ax_ovl, ax_err, ax_rate, ax_yaw, ax_vel):
         ax.axvline(0, color="gray", lw=0.8, ls="--", alpha=0.6)
@@ -589,6 +661,7 @@ def plot_steering_detail(loaded):
 # 速度応答（cmd vs actual）— 時刻版・距離版共通実装
 # ---------------------------------------------------------------------------
 
+
 def _plot_velocity_response_impl(loaded, x_col, xlabel, name):
     x_desc = "時刻基準" if x_col == "tr" else "距離基準"
     fig, axes = plt.subplots(2, 1, figsize=(12, 8), sharex=True)
@@ -601,22 +674,28 @@ def _plot_velocity_response_impl(loaded, x_col, xlabel, name):
         cfg = d["cfg"]
         vel = d["vel"]
         cmd = d["cmd"]
-        kw  = dict(color=cfg["color"], lw=cfg["lw"], ls=cfg["ls"])
+        kw = dict(color=cfg["color"], lw=cfg["lw"], ls=cfg["ls"])
 
         if vel.empty or cmd.empty:
             continue
         if x_col not in vel.columns or x_col not in cmd.columns:
             continue
 
-        x_v   = vel[x_col].values
+        x_v = vel[x_col].values
         v_act = vel["lon_vel"].values
         # cmd_vel は時刻軸で補間（tr を使うことで x_col 非依存）
         v_cmd = np.interp(vel["tr"].values, cmd["tr"].values, cmd["cmd_vel"].values)
 
         ax_vel.plot(x_v, v_act, label=f"{label} 応答", **kw)
-        ax_vel.plot(cmd[x_col].values, cmd["cmd_vel"].values,
-                    color=cfg["color"], lw=1.2, ls=":", alpha=0.65,
-                    label=f"{label} 指令")
+        ax_vel.plot(
+            cmd[x_col].values,
+            cmd["cmd_vel"].values,
+            color=cfg["color"],
+            lw=1.2,
+            ls=":",
+            alpha=0.65,
+            label=f"{label} 指令",
+        )
 
         lag = v_act - v_cmd
         ax_lag.plot(x_v, lag, label=label, **kw)
@@ -645,12 +724,15 @@ def plot_velocity_response(loaded):
 
 
 def plot_velocity_response_vs_dist(loaded):
-    _plot_velocity_response_impl(loaded, "dist", "発進からの累積距離 [m]", "c2_velocity_response_vs_dist")
+    _plot_velocity_response_impl(
+        loaded, "dist", "発進からの累積距離 [m]", "c2_velocity_response_vs_dist"
+    )
 
 
 # ---------------------------------------------------------------------------
 # 軌跡乖離（実機を基準にしたシムの最近傍距離）— 時刻版・距離版共通実装
 # ---------------------------------------------------------------------------
+
 
 def _plot_deviation_impl(loaded, x_col, xlabel, name):
     real_kin = loaded.get("実機", {}).get("kin")
@@ -659,8 +741,9 @@ def _plot_deviation_impl(loaded, x_col, xlabel, name):
         return
 
     from scipy.spatial import cKDTree
+
     ref_xy = real_kin[["x", "y"]].values
-    tree   = cKDTree(ref_xy)
+    tree = cKDTree(ref_xy)
 
     x_desc = "時刻基準" if x_col == "tr" else "距離基準"
     fig, axes = plt.subplots(1, 2, figsize=(14, 6))
@@ -678,14 +761,25 @@ def _plot_deviation_impl(loaded, x_col, xlabel, name):
         q_xy = kin[["x", "y"]].values
         dists, _ = tree.query(q_xy)
 
-        ax_map.plot(kin["x"].values, kin["y"].values,
-                    color=cfg["color"], lw=cfg["lw"], ls=cfg["ls"],
-                    label=label, zorder=3)
+        ax_map.plot(
+            kin["x"].values,
+            kin["y"].values,
+            color=cfg["color"],
+            lw=cfg["lw"],
+            ls=cfg["ls"],
+            label=label,
+            zorder=3,
+        )
 
         if x_col in kin.columns:
-            ax_dev.plot(kin[x_col].values, dists,
-                        color=cfg["color"], lw=cfg["lw"], ls=cfg["ls"],
-                        label=f"{label} (平均={dists.mean():.2f}m, 最大={dists.max():.2f}m)")
+            ax_dev.plot(
+                kin[x_col].values,
+                dists,
+                color=cfg["color"],
+                lw=cfg["lw"],
+                ls=cfg["ls"],
+                label=f"{label} (平均={dists.mean():.2f}m, 最大={dists.max():.2f}m)",
+            )
 
     ax_map.set_xlim(CURVE2_CX - CURVE2_MARGIN, CURVE2_CX + CURVE2_MARGIN)
     ax_map.set_ylim(CURVE2_CY - CURVE2_MARGIN, CURVE2_CY + CURVE2_MARGIN)
@@ -720,6 +814,7 @@ def plot_deviation_vs_dist(loaded):
 # 数値レポート
 # ---------------------------------------------------------------------------
 
+
 def build_report(loaded):
     lines = ["# カーブ②集中比較レポート\n"]
 
@@ -741,13 +836,12 @@ def build_report(loaded):
     lines.append("|---|---|---|")
     for label, d in loaded.items():
         steer = d["steer"]
-        cmd   = d["cmd"]
+        cmd = d["cmd"]
         if steer.empty or cmd.empty:
             lines.append(f"| {label} | N/A | N/A |")
             continue
-        cmd_i = np.interp(steer["tr"].values, cmd["tr"].values,
-                          np.degrees(cmd["cmd_steer"].values))
-        err  = np.degrees(steer["steer"].values) - cmd_i
+        cmd_i = np.interp(steer["tr"].values, cmd["tr"].values, np.degrees(cmd["cmd_steer"].values))
+        err = np.degrees(steer["steer"].values) - cmd_i
         rmse = float(np.sqrt(np.nanmean(err**2)))
         mean_err = float(np.nanmean(err))
         lines.append(f"| {label} | {rmse:.4f} | {mean_err:.4f} |")
@@ -760,6 +854,7 @@ def build_report(loaded):
     real_kin = loaded.get("実機", {}).get("kin")
     if real_kin is not None and not real_kin.empty:
         from scipy.spatial import cKDTree
+
         ref_xy = real_kin[["x", "y"]].values
         tree = cKDTree(ref_xy)
         for label, d in loaded.items():
@@ -785,11 +880,11 @@ def build_report(loaded):
         if vel.empty or cmd.empty:
             lines.append(f"| {label} | N/A | N/A | N/A |")
             continue
-        t_v   = vel["tr"].values
+        t_v = vel["tr"].values
         v_act = vel["lon_vel"].values
         v_cmd = np.interp(t_v, cmd["tr"].values, cmd["cmd_vel"].values)
-        lag   = v_act - v_cmd
-        rmse  = float(np.sqrt(np.nanmean(lag**2)))
+        lag = v_act - v_cmd
+        rmse = float(np.sqrt(np.nanmean(lag**2)))
         mean_l = float(np.nanmean(lag))
         lag_ratio = float(np.mean(lag < 0))
         lines.append(f"| {label} | {mean_l:.3f} | {rmse:.3f} | {lag_ratio:.2%} |")
@@ -830,6 +925,7 @@ def build_report(loaded):
 # ---------------------------------------------------------------------------
 # メイン
 # ---------------------------------------------------------------------------
+
 
 def main():
     OUT_DIR.mkdir(parents=True, exist_ok=True)

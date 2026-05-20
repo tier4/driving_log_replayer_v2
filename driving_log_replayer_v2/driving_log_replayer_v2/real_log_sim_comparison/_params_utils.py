@@ -2,27 +2,93 @@
 
 from __future__ import annotations
 
+import glob
+from itertools import chain
 from pathlib import Path
+import warnings
 
+import matplotlib
+import matplotlib.font_manager as fm
 import matplotlib.pyplot as plt
+
+_JP_FONT_CANDIDATES = (
+    "Noto Sans CJK JP",
+    "IPAexGothic",
+    "IPAGothic",
+    "TakaoPGothic",
+    "TakaoGothic",
+    "VL PGothic",
+    "Sazanami Gothic",
+    "Hiragino Sans",
+    "Yu Gothic",
+    "Meiryo",
+)
+# matplotlib のフォントキャッシュは apt install 前に作られていることがあり、後から入った
+# CJK フォントを見落とす。fonts-noto-cjk の典型的な配置パスを直接 addfont して救済する。
+_JP_FONT_FILE_GLOBS = (
+    "/usr/share/fonts/opentype/noto/NotoSansCJK*.ttc",
+    "/usr/share/fonts/opentype/noto/NotoSansCJK*.otf",
+    "/usr/share/fonts/truetype/fonts-japanese-*.ttf",
+    "/usr/share/fonts/truetype/ipaexfont*/ipaexg.ttf",
+)
+
+
+def setup_jp_font() -> str | None:
+    """
+    Matplotlib の日本語フォントを設定し、選ばれたフォント名を返す（無ければ None）。
+
+    matplotlib のキャッシュが apt install 前に作られていた場合に備え、見つからなければ
+    既知のフォントファイルを直接 addfont してから再探索する。
+    """
+    available = {f.name for f in fm.fontManager.ttflist}
+    selected = next((c for c in _JP_FONT_CANDIDATES if c in available), None)
+    if selected is None:
+        for ttf in chain.from_iterable(glob.glob(p) for p in _JP_FONT_FILE_GLOBS):
+            try:
+                fm.fontManager.addfont(ttf)
+            except Exception:  # noqa: BLE001, PERF203
+                pass
+        available = {f.name for f in fm.fontManager.ttflist}
+        selected = next((c for c in _JP_FONT_CANDIDATES if c in available), None)
+
+    if selected:
+        matplotlib.rcParams["font.family"] = selected
+    else:
+        warnings.warn(
+            "日本語フォントが見つかりません。グラフのラベルが豆腐 (□) になります。"
+            f" 候補: {list(_JP_FONT_CANDIDATES)}。"
+            " 例: sudo apt install -y fonts-noto-cjk",
+            stacklevel=2,
+        )
+    matplotlib.rcParams["axes.unicode_minus"] = False
+    return selected
+
 
 def _find_desc_dir() -> Path:
     try:
         from ament_index_python.packages import get_package_share_directory
+
         return Path(get_package_share_directory("best_model_description")) / "config"
     except Exception:
         pass
     # フォールバック: ソースツリー上の隣接パッケージ（ament 未起動時）
-    return Path(__file__).parent.parent.parent.parent.parent / "scenario_simulator" / "analysis" / "best_model_description" / "config"
+    return (
+        Path(__file__).parent.parent.parent.parent.parent
+        / "scenario_simulator"
+        / "analysis"
+        / "best_model_description"
+        / "config"
+    )
 
 
 _DESC_DIR = _find_desc_dir()
-_SIM_YAML  = _DESC_DIR / "simulator_model.param.yaml"
+_SIM_YAML = _DESC_DIR / "simulator_model.param.yaml"
 _INFO_YAML = _DESC_DIR / "vehicle_info.param.yaml"
 
 
 def load_sim_params(params_dir: Path | None = None) -> dict:
-    """simulator_model.param.yaml + vehicle_info.param.yaml から主要パラメータを返す。
+    """
+    simulator_model.param.yaml + vehicle_info.param.yaml から主要パラメータを返す。
 
     params_dir: vehicle_info.param.yaml と simulator_model.param.yaml が置かれたディレクトリ。
                 None の場合は既定の best_model_description/config/ を使用。
@@ -37,6 +103,7 @@ def load_sim_params(params_dir: Path | None = None) -> dict:
     for yaml_path in yaml_files:
         try:
             import yaml  # PyYAML or ruamel.yaml
+
             with open(yaml_path, encoding="utf-8") as f:
                 doc = yaml.safe_load(f)
             # ROS 2 YAML: /**:/ros__parameters/ 以下がフラット
@@ -51,21 +118,21 @@ def load_sim_params(params_dir: Path | None = None) -> dict:
 
     # フォールバック（YAML 読み取り失敗時）
     defaults = {
-        "vehicle_model_type":  "DELAY_STEER_ACC_GEARED_WO_FALL_GUARD",
-        "acc_time_delay":      0.101,
-        "acc_time_constant":   0.2589,
-        "brake_delay":         0.0685,
+        "vehicle_model_type": "DELAY_STEER_ACC_GEARED_WO_FALL_GUARD",
+        "acc_time_delay": 0.101,
+        "acc_time_constant": 0.2589,
+        "brake_delay": 0.0685,
         "brake_time_constant": 0.15,
-        "steer_time_delay":    0.0315,
+        "steer_time_delay": 0.0315,
         "steer_time_constant": 0.4983,
-        "steer_dead_band":     0.0,
-        "steer_bias":          0.0005,
-        "vel_lim":             50.0,
-        "vel_rate_lim":        7.0,
-        "steer_lim":           1.0,
-        "steer_rate_lim":      5.0,
-        "wheel_base":          4.76012,
-        "max_steer_angle":     0.640,
+        "steer_dead_band": 0.0,
+        "steer_bias": 0.0005,
+        "vel_lim": 50.0,
+        "vel_rate_lim": 7.0,
+        "steer_lim": 1.0,
+        "steer_rate_lim": 5.0,
+        "wheel_base": 4.76012,
+        "max_steer_angle": 0.640,
     }
     for k, v in defaults.items():
         params.setdefault(k, v)
@@ -75,9 +142,9 @@ def load_sim_params(params_dir: Path | None = None) -> dict:
 
 def make_annotation_text(params: dict) -> str:
     """パラメータ dict からアノテーション文字列を生成する。"""
-    wb  = params.get("wheel_base",          params.get("wheelbase", 4.76012))
-    msa = params.get("max_steer_angle",     0.640)
-    vmt = params.get("vehicle_model_type",  "DELAY_STEER_ACC_GEARED_WO_FALL_GUARD")
+    wb = params.get("wheel_base", params.get("wheelbase", 4.76012))
+    msa = params.get("max_steer_angle", 0.640)
+    vmt = params.get("vehicle_model_type", "DELAY_STEER_ACC_GEARED_WO_FALL_GUARD")
 
     lines = [
         f"Model: {vmt}",
@@ -110,7 +177,8 @@ def add_params_annotation(
     params: dict | None = None,
     params_dir: Path | None = None,
 ) -> None:
-    """図の右下にモデルパラメータのテキストボックスを追加する。
+    """
+    図の右下にモデルパラメータのテキストボックスを追加する。
 
     params が None の場合は YAML から自動読み込みする。
     params_dir: vehicle_info.param.yaml 等が置かれたディレクトリ（任意）。
@@ -119,9 +187,11 @@ def add_params_annotation(
         params = load_sim_params(params_dir)
     text = make_annotation_text(params)
     fig.text(
-        0.99, 0.01,
+        0.99,
+        0.01,
         text,
-        ha="right", va="bottom",
+        ha="right",
+        va="bottom",
         fontsize=6.5,
         fontfamily="monospace",
         color="#555555",
