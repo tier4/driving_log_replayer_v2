@@ -1,18 +1,25 @@
 #!/usr/bin/env python3
-"""rosbag (db3 または mcap) から三方比較に必要なトピックだけを抽出して lite bag を生成する.
+"""
+rosbag (db3 または mcap) から三方比較に必要なトピックだけを抽出して lite bag を生成する.
 
 Usage:
     python3 make_lite.py --kind real --input <bag_dir>  --output lite/real.lite
     python3 make_lite.py --kind sim  --input <bag_dir>  --output lite/sim_godot.lite
     python3 make_lite.py --kind sim  --input <bag_dir>  --output lite/sim_normal.lite
 
---input にはロスバッグのディレクトリ（db3 / mcap どちらでも可）を渡す。
-単一の .mcap ファイルパスを渡した場合は後方互換のためそのまま処理する。
+--input にはロスバッグのディレクトリ（db3 / mcap どちらでも可）または単一 .mcap ファイルを渡す。
 --output は rosbag2 bag ディレクトリとして出力される。
 """
 
 import argparse
 from pathlib import Path
+import shutil
+import sys
+
+import rosbag2_py
+import yaml
+
+from driving_log_replayer_v2.rosbag import create_metadata_yaml
 
 TOPICS: dict[str, set[str]] = {
     "real": {
@@ -46,39 +53,27 @@ TOPICS: dict[str, set[str]] = {
 }
 
 
-def _open_reader(input_path: Path):
-    """入力パス（bag ディレクトリ or 単一 .mcap）から SequentialReader を返す。
-
-    呼び出し元は返り値の (reader, cleanup) を使い終わったら cleanup() を呼ぶこと。
-    """
-    import rosbag2_py
-
+def _open_reader(input_path: Path) -> rosbag2_py.SequentialReader:
     if input_path.is_dir():
-        if not (input_path / "metadata.yaml").exists():
-            rosbag2_py.Reindexer().reindex(
-                rosbag2_py.StorageOptions(uri=str(input_path), storage_id="")
-            )
-        reader = rosbag2_py.SequentialReader()
-        reader.open(
-            rosbag2_py.StorageOptions(uri=str(input_path), storage_id=""),
-            rosbag2_py.ConverterOptions("cdr", "cdr"),
-        )
-        return reader, lambda: None
+        create_metadata_yaml(str(input_path))
+        storage_id = ""
     else:
-        # 単一 .mcap ファイル: storage_id="mcap" で直接開く
-        reader = rosbag2_py.SequentialReader()
-        reader.open(
-            rosbag2_py.StorageOptions(uri=str(input_path), storage_id="mcap"),
-            rosbag2_py.ConverterOptions("cdr", "cdr"),
-        )
-        return reader, lambda: None
+        storage_id = "mcap"
+    reader = rosbag2_py.SequentialReader()
+    reader.open(
+        rosbag2_py.StorageOptions(uri=str(input_path), storage_id=storage_id),
+        rosbag2_py.ConverterOptions("cdr", "cdr"),
+    )
+    return reader
 
 
-def _write_filtered_bag(reader, topic_type_map: dict, output_dir: Path) -> None:
-    """reader から topic_type_map のトピックを絞り込んで output_dir に bag を書き出す。"""
-    import shutil
-
-    import rosbag2_py
+def filter_bag(input_path: Path, output_dir: Path, topics: set[str]) -> None:
+    """rosbag（ディレクトリまたは単一 .mcap）からトピックを絞り込んで rosbag2 bag ディレクトリに書き出す."""
+    reader = _open_reader(input_path)
+    topic_type_map: dict[str, str] = {
+        t.name: t.type for t in reader.get_all_topics_and_types() if t.name in topics
+    }
+    reader.set_filter(rosbag2_py.StorageFilter(topics=list(topics)))
 
     if output_dir.exists():
         shutil.rmtree(output_dir)
@@ -96,59 +91,34 @@ def _write_filtered_bag(reader, topic_type_map: dict, output_dir: Path) -> None:
         if topic_name not in topic_type_map:
             continue
         if topic_name not in registered:
-            writer.create_topic(rosbag2_py.TopicMetadata(
-                name=topic_name,
-                type=topic_type_map[topic_name],
-                serialization_format="cdr",
-            ))
+            writer.create_topic(
+                rosbag2_py.TopicMetadata(
+                    name=topic_name,
+                    type=topic_type_map[topic_name],
+                    serialization_format="cdr",
+                )
+            )
             registered.add(topic_name)
         writer.write(topic_name, msg_bytes, timestamp)
 
-    del writer  # flush & close
-
-
-def filter_bag(input_dir: Path, output_dir: Path, topics: set[str]) -> None:
-    """rosbag ディレクトリ（db3 / mcap）からトピックを絞り込んで rosbag2 bag ディレクトリに書き出す."""
-    import rosbag2_py
-
-    reader, cleanup = _open_reader(input_dir)
-    try:
-        topic_type_map: dict[str, str] = {
-            t.name: t.type
-            for t in reader.get_all_topics_and_types()
-            if t.name in topics
-        }
-        reader.set_filter(rosbag2_py.StorageFilter(topics=list(topics)))
-        _write_filtered_bag(reader, topic_type_map, output_dir)
-    finally:
-        cleanup()
-
-
-def filter_mcap(input_path: Path, output_dir: Path, topics: set[str]) -> None:
-    """単一 MCAP ファイルからトピックを絞り込んで rosbag2 bag ディレクトリに書き出す（後方互換）."""
-    import rosbag2_py
-
-    reader, cleanup = _open_reader(input_path)
-    try:
-        topic_type_map: dict[str, str] = {
-            t.name: t.type
-            for t in reader.get_all_topics_and_types()
-            if t.name in topics
-        }
-        reader.set_filter(rosbag2_py.StorageFilter(topics=list(topics)))
-        _write_filtered_bag(reader, topic_type_map, output_dir)
-    finally:
-        cleanup()
+    del writer
 
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="rosbag トピックフィルタ — lite bag を生成")
-    parser.add_argument("--kind", choices=["real", "sim"], required=True,
-                        help="ログの種別 (real=実機, sim=シミュレータ)")
-    parser.add_argument("--input", required=True, type=Path,
-                        help="入力ロスバッグのディレクトリ、または単一 .mcap ファイルパス")
-    parser.add_argument("--output", required=True, type=Path,
-                        help="出力 lite bag ディレクトリパス")
+    parser.add_argument(
+        "--kind",
+        choices=["real", "sim"],
+        required=True,
+        help="ログの種別 (real=実機, sim=シミュレータ)",
+    )
+    parser.add_argument(
+        "--input",
+        required=True,
+        type=Path,
+        help="入力ロスバッグのディレクトリ、または単一 .mcap ファイルパス",
+    )
+    parser.add_argument("--output", required=True, type=Path, help="出力 lite bag ディレクトリパス")
     parser.add_argument(
         "--topics-yaml",
         type=Path,
@@ -167,26 +137,25 @@ def main() -> None:
 
     if args.topics_yaml is not None:
         try:
-            import yaml as _yaml
             with open(args.topics_yaml, encoding="utf-8") as f:
-                extra = _yaml.safe_load(f) or {}
+                extra = yaml.safe_load(f) or {}
             additional = extra.get(args.kind, [])
             if additional:
                 topics |= set(additional)
                 print(f"追加トピック ({args.kind}): {sorted(additional)}")
         except Exception as e:
-            import sys
             print(f"WARNING: topics-yaml 読み込み失敗: {e}", file=sys.stderr)
 
-    in_size = sum(f.stat().st_size for f in args.input.rglob("*") if f.is_file()) if args.input.is_dir() else args.input.stat().st_size
+    in_size = (
+        sum(f.stat().st_size for f in args.input.rglob("*") if f.is_file())
+        if args.input.is_dir()
+        else args.input.stat().st_size
+    )
     print(f"種別  : {args.kind}")
     print(f"入力  : {args.input} ({in_size / 1024 / 1024:.0f} MB)")
     print(f"トピック: {sorted(topics)}")
 
-    if args.input.is_dir():
-        filter_bag(args.input, args.output, topics)
-    else:
-        filter_mcap(args.input, args.output, topics)
+    filter_bag(args.input, args.output, topics)
 
     total = sum(f.stat().st_size for f in args.output.rglob("*") if f.is_file())
     print(f"  書き込み完了: {args.output} ({total / 1024 / 1024:.1f} MB)")

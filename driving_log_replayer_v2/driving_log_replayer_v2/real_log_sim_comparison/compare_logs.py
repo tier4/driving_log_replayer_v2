@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
-"""実機ログ vs Godotシム vs 通常シム の三方比較プロット生成スクリプト.
+"""
+実機ログ vs Godotシム vs 通常シム の三方比較プロット生成スクリプト.
 
 Usage:
     python3 compare_logs.py
@@ -9,18 +10,24 @@ Outputs: comparison/figures/*.{png,pdf}, comparison/report.md
 
 import math
 import os
+from pathlib import Path
 import sys
 import warnings
-from pathlib import Path
 
 import matplotlib
+
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
+
 matplotlib.rcParams["font.family"] = "Noto Sans CJK JP"
+from lxml import etree
 import matplotlib.patches as mpatches
 import numpy as np
 import pandas as pd
-from lxml import etree
+from rclpy.serialization import deserialize_message
+import rosbag2_py
+from rosidl_runtime_py.utilities import get_message
+
 from ._params_utils import add_params_annotation
 
 # ---------------------------------------------------------------------------
@@ -38,11 +45,11 @@ SCENARIO_NAME = "x2_dev/2231 テレポート駅→日本科学未来館"
 
 # main() が外部から上書きする runtime 変数
 MAP_OSM_PATH_OVERRIDE: str | None = None  # 具体的な osm パス (override 時)
-_CURVE2_INDEX = 1                          # CURVE_CENTERS 内のカーブ② 位置
+_CURVE2_INDEX = 1  # CURVE_CENTERS 内のカーブ② 位置
 _CURVE2_WINDOW = {"start": 20.0, "end": 120.0}  # カーブ② 発進検出窓 [s]
 
 AUTONOMOUS_MODE = 2  # autoware_adapi_v1_msgs OperationModeState.AUTONOMOUS
-WHEELBASE = 5.15     # m — kinematic_state × steering から実データで推定
+WHEELBASE = 5.15  # m — kinematic_state × steering から実データで推定
 
 # 地図座標系でのカーブ中心（後方互換デフォルト: x2_dev/2231）
 # None に設定するとカーブ別解析プロットをすべてスキップする。
@@ -105,34 +112,18 @@ LOGS = _rebuild_logs(LITE_DIR)
 
 
 # ---------------------------------------------------------------------------
-# MCAPローダー
+# bag ローダー
 # ---------------------------------------------------------------------------
-
-class _LogTime:
-    """timestamp ラッパー。mcap.reader の message.log_time と同じインタフェースを提供する。"""
-    __slots__ = ("log_time",)
-    def __init__(self, t: int) -> None: self.log_time = t
 
 
 def _iter_msgs(bag_dir: Path, topics: list[str]):
-    """rosbag2 bag ディレクトリからメッセージをデコードしてイテレートする。
-
-    mcap.reader.make_reader + mcap_ros2.decoder.DecoderFactory の代替実装。
-    戻り値は (None, None, _LogTime, ros_msg) のタプル（旧 schema / channel / message / ros_msg）。
-    """
-    import rosbag2_py
-    from rclpy.serialization import deserialize_message
-    from rosidl_runtime_py.utilities import get_message
-
     reader = rosbag2_py.SequentialReader()
     reader.open(
         rosbag2_py.StorageOptions(uri=str(bag_dir), storage_id=""),
         rosbag2_py.ConverterOptions("cdr", "cdr"),
     )
     topic_type_map = {
-        t.name: get_message(t.type)
-        for t in reader.get_all_topics_and_types()
-        if t.name in topics
+        t.name: get_message(t.type) for t in reader.get_all_topics_and_types() if t.name in topics
     }
     missing = set(topics) - set(topic_type_map.keys())
     if missing:
@@ -141,93 +132,80 @@ def _iter_msgs(bag_dir: Path, topics: list[str]):
     while reader.has_next():
         topic_name, msg_bytes, timestamp = reader.read_next()
         if topic_name in topic_type_map:
-            ros_msg = deserialize_message(msg_bytes, topic_type_map[topic_name])
-            yield None, None, _LogTime(timestamp), ros_msg
+            yield timestamp, deserialize_message(msg_bytes, topic_type_map[topic_name])
+
+
+def _iter_to_df(bag_dir: Path, topic: str, row_fn, columns: list[str]) -> pd.DataFrame:
+    rows = [row_fn(t_ns, ros_msg) for t_ns, ros_msg in _iter_msgs(bag_dir, [topic])]
+    if not rows:
+        return pd.DataFrame(columns=columns)
+    return pd.DataFrame(rows)
 
 
 def load_operation_mode(mcap_path: Path) -> pd.DataFrame:
-    rows = []
-    for _, channel, message, ros_msg in _iter_msgs(
-        mcap_path, ["/system/operation_mode/state"]
-    ):
-        rows.append({"t_ns": message.log_time, "mode": ros_msg.mode})
-    if not rows:
-        return pd.DataFrame(columns=["t_ns", "mode"])
-    return pd.DataFrame(rows)
+    return _iter_to_df(
+        mcap_path,
+        "/system/operation_mode/state",
+        lambda t_ns, m: {"t_ns": t_ns, "mode": m.mode},
+        ["t_ns", "mode"],
+    )
 
 
 def load_velocity(mcap_path: Path) -> pd.DataFrame:
-    rows = []
-    for _, channel, message, ros_msg in _iter_msgs(
-        mcap_path, ["/vehicle/status/velocity_status"]
-    ):
-        rows.append({
-            "t_ns": message.log_time,
-            "lon_vel": ros_msg.longitudinal_velocity,
-        })
-    if not rows:
-        return pd.DataFrame(columns=["t_ns", "lon_vel"])
-    return pd.DataFrame(rows)
+    return _iter_to_df(
+        mcap_path,
+        "/vehicle/status/velocity_status",
+        lambda t_ns, m: {"t_ns": t_ns, "lon_vel": m.longitudinal_velocity},
+        ["t_ns", "lon_vel"],
+    )
 
 
 def load_steering(mcap_path: Path) -> pd.DataFrame:
-    rows = []
-    for _, channel, message, ros_msg in _iter_msgs(
-        mcap_path, ["/vehicle/status/steering_status"]
-    ):
-        rows.append({
-            "t_ns": message.log_time,
-            "steer": ros_msg.steering_tire_angle,
-        })
-    if not rows:
-        return pd.DataFrame(columns=["t_ns", "steer"])
-    return pd.DataFrame(rows)
+    return _iter_to_df(
+        mcap_path,
+        "/vehicle/status/steering_status",
+        lambda t_ns, m: {"t_ns": t_ns, "steer": m.steering_tire_angle},
+        ["t_ns", "steer"],
+    )
 
 
 def load_kinematic(mcap_path: Path, topic: str) -> pd.DataFrame:
-    rows = []
-    for _, channel, message, ros_msg in _iter_msgs(mcap_path, [topic]):
-        p = ros_msg.pose.pose.position
-        o = ros_msg.pose.pose.orientation
-        yaw = math.atan2(2*(o.w*o.z + o.x*o.y), 1 - 2*(o.y*o.y + o.z*o.z))
-        rows.append({
-            "t_ns": message.log_time,
-            "x": p.x,
-            "y": p.y,
-            "yaw": yaw,
-        })
-    if not rows:
-        return pd.DataFrame(columns=["t_ns", "x", "y", "yaw"])
-    return pd.DataFrame(rows)
+    def row(t_ns, m):
+        p = m.pose.pose.position
+        o = m.pose.pose.orientation
+        yaw = math.atan2(2 * (o.w * o.z + o.x * o.y), 1 - 2 * (o.y * o.y + o.z * o.z))
+        return {"t_ns": t_ns, "x": p.x, "y": p.y, "yaw": yaw}
+
+    return _iter_to_df(mcap_path, topic, row, ["t_ns", "x", "y", "yaw"])
 
 
 def load_accel(mcap_path: Path, topic: str) -> pd.DataFrame:
-    rows = []
-    for _, channel, message, ros_msg in _iter_msgs(mcap_path, [topic]):
-        a = ros_msg.accel.accel.linear
-        rows.append({"t_ns": message.log_time, "accel": a.x})
-    if not rows:
-        return pd.DataFrame(columns=["t_ns", "accel"])
-    return pd.DataFrame(rows)
+    return _iter_to_df(
+        mcap_path,
+        topic,
+        lambda t_ns, m: {"t_ns": t_ns, "accel": m.accel.accel.linear.x},
+        ["t_ns", "accel"],
+    )
 
 
 def load_cmd(mcap_path: Path, topic: str) -> pd.DataFrame:
-    rows = []
-    for _, channel, message, ros_msg in _iter_msgs(mcap_path, [topic]):
-        rows.append({
-            "t_ns": message.log_time,
-            "cmd_vel": ros_msg.longitudinal.velocity,
-            "cmd_accel": ros_msg.longitudinal.acceleration,
-            "cmd_steer": ros_msg.lateral.steering_tire_angle,
-        })
-    if not rows:
-        return pd.DataFrame(columns=["t_ns", "cmd_vel", "cmd_accel", "cmd_steer"])
-    return pd.DataFrame(rows)
+    return _iter_to_df(
+        mcap_path,
+        topic,
+        lambda t_ns, m: {
+            "t_ns": t_ns,
+            "cmd_vel": m.longitudinal.velocity,
+            "cmd_accel": m.longitudinal.acceleration,
+            "cmd_steer": m.lateral.steering_tire_angle,
+        },
+        ["t_ns", "cmd_vel", "cmd_accel", "cmd_steer"],
+    )
 
 
 # ---------------------------------------------------------------------------
 # 時刻整列
 # ---------------------------------------------------------------------------
+
 
 def find_autonomous_start(df_mode: pd.DataFrame, df_vel: pd.DataFrame) -> int:
     """オートノマス開始時刻 (ns) を返す。取れない場合は速度ベースのフォールバック。"""
@@ -253,8 +231,10 @@ def align_time(df: pd.DataFrame, t0_ns: int) -> pd.DataFrame:
 # 地図パーサー（OSM local_x / local_y）
 # ---------------------------------------------------------------------------
 
+
 def _resolve_map_osm() -> Path | None:
-    """利用可能な lanelet2_map.osm のパスを返す。
+    """
+    利用可能な lanelet2_map.osm のパスを返す。
 
     優先順位:
       1. MAP_OSM_PATH_OVERRIDE (main() が外部引数から設定)
@@ -276,7 +256,8 @@ def _resolve_map_osm() -> Path | None:
 
 
 def load_map_ways(osm_path: Path) -> tuple[list[np.ndarray], list[np.ndarray]]:
-    """OSMをパースし、way の (x,y) 座標列リストを返す。
+    """
+    OSMをパースし、way の (x,y) 座標列リストを返す。
     戻り値: (road_ways, all_ways) — road_ways は lanelet boundary/centerline。
     """
     tree = etree.parse(str(osm_path))
@@ -316,6 +297,7 @@ def load_map_ways(osm_path: Path) -> tuple[list[np.ndarray], list[np.ndarray]]:
 # プロット
 # ---------------------------------------------------------------------------
 
+
 def _setup_fig(title: str, nrows=1, ncols=1, figsize=(12, 5)):
     fig, axes = plt.subplots(nrows, ncols, figsize=figsize, squeeze=False)
     fig.suptitle(f"{SCENARIO_NAME}\n{title}", fontsize=11)
@@ -336,11 +318,21 @@ def _traj_plot(ax, df_xy, d, label, markevery=20, zorder=3):
     """軌跡を線スタイル＋等間隔マーカーで描画するヘルパー。"""
     n = len(df_xy)
     me = max(1, n // markevery) if n > 0 else 1
-    ax.plot(np.asarray(df_xy["x"]), np.asarray(df_xy["y"]),
-            color=d["color"], lw=d["lw"], ls=d["ls"],
-            marker=d["marker"], markersize=d["ms"], markevery=me,
-            markerfacecolor=d["color"], markeredgecolor="white", markeredgewidth=0.5,
-            label=label, zorder=zorder)
+    ax.plot(
+        np.asarray(df_xy["x"]),
+        np.asarray(df_xy["y"]),
+        color=d["color"],
+        lw=d["lw"],
+        ls=d["ls"],
+        marker=d["marker"],
+        markersize=d["ms"],
+        markevery=me,
+        markerfacecolor=d["color"],
+        markeredgecolor="white",
+        markeredgewidth=0.5,
+        label=label,
+        zorder=zorder,
+    )
 
 
 def plot_trajectory(data: dict, map_ways: list | None):
@@ -349,7 +341,9 @@ def plot_trajectory(data: dict, map_ways: list | None):
     ax = axes[0, 0]
 
     # 3軌跡の bounding box を算出
-    all_xy_list = [d["kinematic"][["x", "y"]].values for d in data.values() if not d["kinematic"].empty]
+    all_xy_list = [
+        d["kinematic"][["x", "y"]].values for d in data.values() if not d["kinematic"].empty
+    ]
     if not all_xy_list:
         warnings.warn("kinematic データなし。軌跡プロットをスキップ")
         plt.close(fig)
@@ -402,7 +396,9 @@ def plot_velocity(data: dict):
         if not cmd.empty:
             _ts_plot(axes[1, 0], cmd["t"], cmd["cmd_vel"], d, label, cmd=True)
 
-    axes[0, 0].set_title("実応答 (VelocityReport.longitudinal_velocity)  ─ 実線/破線/点鎖線は各ログ")
+    axes[0, 0].set_title(
+        "実応答 (VelocityReport.longitudinal_velocity)  ─ 実線/破線/点鎖線は各ログ"
+    )
     axes[0, 0].set_ylabel("速度 [m/s]")
     axes[0, 0].legend(fontsize=9)
     axes[0, 0].grid(True, lw=0.5)
@@ -494,10 +490,7 @@ def plot_curves(data: dict, map_ways: list | None):
         # 各ログの軌跡（bbox内の点のみ）
         for log_label, d in data.items():
             df = d["kinematic"]
-            mask = (
-                (df["x"] >= x_min) & (df["x"] <= x_max) &
-                (df["y"] >= y_min) & (df["y"] <= y_max)
-            )
+            mask = (df["x"] >= x_min) & (df["x"] <= x_max) & (df["y"] >= y_min) & (df["y"] <= y_max)
             seg = df[mask]
             if seg.empty:
                 continue
@@ -524,8 +517,10 @@ def plot_curves(data: dict, map_ways: list | None):
 # カーブ②発進分析
 # ---------------------------------------------------------------------------
 
+
 def _find_curve2_launch(df_vel: pd.DataFrame) -> float | None:
-    """カーブ②直前の一時停止から発進する時刻 [s] を返す。
+    """
+    カーブ②直前の一時停止から発進する時刻 [s] を返す。
     停止区間を列挙し、カーブ②が含まれる t=20〜120s の範囲で
     最後に終わる停止の終端時刻を採用。
     """
@@ -534,7 +529,7 @@ def _find_curve2_launch(df_vel: pd.DataFrame) -> float | None:
         return None
     gaps = np.where(np.diff(stopped) > 2.0)[0]
     starts_idx = np.concatenate([[0], gaps + 1])
-    ends_idx   = np.concatenate([gaps, [len(stopped) - 1]])
+    ends_idx = np.concatenate([gaps, [len(stopped) - 1]])
     candidates = []
     for s, e in zip(starts_idx, ends_idx):
         dur = stopped[e] - stopped[s]
@@ -547,8 +542,11 @@ def _find_curve2_launch(df_vel: pd.DataFrame) -> float | None:
     return float(min(candidates))
 
 
-def _find_curve2_exit(df_kinematic: pd.DataFrame, t_launch: float, radius: float = 30.0) -> float | None:
-    """カーブ② 領域（CURVE_CENTERS[_CURVE2_INDEX] から radius m 以内）を抜け出す時刻 [s] を返す。
+def _find_curve2_exit(
+    df_kinematic: pd.DataFrame, t_launch: float, radius: float = 30.0
+) -> float | None:
+    """
+    カーブ② 領域（CURVE_CENTERS[_CURVE2_INDEX] から radius m 以内）を抜け出す時刻 [s] を返す。
     t_launch 以降の軌跡を走査し、領域に入った後で最初に外に出たタイミングを採用。
     """
     if not CURVE_CENTERS or _CURVE2_INDEX >= len(CURVE_CENTERS):
@@ -569,7 +567,8 @@ def _find_curve2_exit(df_kinematic: pd.DataFrame, t_launch: float, radius: float
 
 
 def plot_curve2_analysis(data: dict, map_ways: list | None):
-    """カーブ②（左折）の一時停止発進からの挙動を軌跡＋時系列で比較。
+    """
+    カーブ②（左折）の一時停止発進からの挙動を軌跡＋時系列で比較。
 
     レイアウト:
         上段(高め): カーブ②付近の軌跡図
@@ -593,10 +592,10 @@ def plot_curve2_analysis(data: dict, map_ways: list | None):
     fig = plt.figure(figsize=(16, 13))
     fig.suptitle(f"{SCENARIO_NAME}\nカーブ②（左折）一時停止発進からの挙動比較", fontsize=12)
     gs = fig.add_gridspec(2, 3, height_ratios=[1.6, 1.0], hspace=0.38, wspace=0.32)
-    ax_map  = fig.add_subplot(gs[0, :])   # 上段全幅: 軌跡
-    ax_vel  = fig.add_subplot(gs[1, 0])   # 下段左: 速度
-    ax_acc  = fig.add_subplot(gs[1, 1])   # 下段中: 加速度
-    ax_str  = fig.add_subplot(gs[1, 2])   # 下段右: ステアリング
+    ax_map = fig.add_subplot(gs[0, :])  # 上段全幅: 軌跡
+    ax_vel = fig.add_subplot(gs[1, 0])  # 下段左: 速度
+    ax_acc = fig.add_subplot(gs[1, 1])  # 下段中: 加速度
+    ax_str = fig.add_subplot(gs[1, 2])  # 下段右: ステアリング
 
     # 表示時間範囲（発進前2s ～ カーブ②退出後2s）
     T_PRE = -2.0
@@ -609,8 +608,10 @@ def plot_curve2_analysis(data: dict, map_ways: list | None):
     if map_ways:
         for pts in map_ways:
             wx, wy = pts[:, 0], pts[:, 1]
-            if wx.max() < cx - mg or wx.min() > cx + mg: continue
-            if wy.max() < cy - mg or wy.min() > cy + mg: continue
+            if wx.max() < cx - mg or wx.min() > cx + mg:
+                continue
+            if wy.max() < cy - mg or wy.min() > cy + mg:
+                continue
             ax_map.plot(wx, wy, color="#cccccc", lw=0.5, zorder=1)
 
     for label, d in data.items():
@@ -627,9 +628,16 @@ def plot_curve2_analysis(data: dict, map_ways: list | None):
         _traj_plot(ax_map, seg, d, label, markevery=8)
         # 発進点マーカー（★）
         launch_row = df_k.iloc[(df_k["t"] - t_l).abs().argsort().iloc[0]]
-        ax_map.plot(launch_row["x"], launch_row["y"], "*",
-                    color=d["color"], ms=14, zorder=6,
-                    markeredgecolor="white", markeredgewidth=0.5)
+        ax_map.plot(
+            launch_row["x"],
+            launch_row["y"],
+            "*",
+            color=d["color"],
+            ms=14,
+            zorder=6,
+            markeredgecolor="white",
+            markeredgewidth=0.5,
+        )
 
     ax_map.set_xlim(cx - mg, cx + mg)
     ax_map.set_ylim(cy - mg, cy + mg)
@@ -651,13 +659,13 @@ def plot_curve2_analysis(data: dict, map_ways: list | None):
         def clip(df, col, _t_l=t_l, _t_post=t_post):
             mask = (df["t"] >= _t_l + T_PRE) & (df["t"] <= _t_l + _t_post)
             sub = df[mask].copy()
-            sub["tr"] = sub["t"] - _t_l   # 相対時刻
+            sub["tr"] = sub["t"] - _t_l  # 相対時刻
             return sub
 
         vel = clip(d["velocity"], "lon_vel")
-        acc = clip(d["accel"],    "accel")
+        acc = clip(d["accel"], "accel")
         steer = clip(d["steering"], "steer")
-        cmd = clip(d["cmd"],      "cmd_vel")
+        cmd = clip(d["cmd"], "cmd_vel")
 
         # 速度
         _ts_plot(ax_vel, vel["tr"], vel["lon_vel"], d, label)
@@ -672,7 +680,9 @@ def plot_curve2_analysis(data: dict, map_ways: list | None):
         # ステアリング
         _ts_plot(ax_str, steer["tr"], np.degrees(steer["steer"]), d, label)
         if not cmd.empty:
-            _ts_plot(ax_str, cmd["tr"], np.degrees(cmd["cmd_steer"]), d, label + "（指令）", cmd=True)
+            _ts_plot(
+                ax_str, cmd["tr"], np.degrees(cmd["cmd_steer"]), d, label + "（指令）", cmd=True
+            )
 
     # t=0 縦線
     for ax in (ax_vel, ax_acc, ax_str):
@@ -700,7 +710,8 @@ def plot_curve2_analysis(data: dict, map_ways: list | None):
 
 
 def plot_curve2_steering_detail(data: dict, map_ways: list | None):
-    """カーブ②の一時停止発進からのステアリング詳細分析。
+    """
+    カーブ②の一時停止発進からのステアリング詳細分析。
 
     レイアウト（2列構成）:
         左列 上段: 軌跡（カーブ②付近）
@@ -723,14 +734,15 @@ def plot_curve2_steering_detail(data: dict, map_ways: list | None):
     T_PRE = -2.0
 
     fig = plt.figure(figsize=(16, 14))
-    fig.suptitle(f"{SCENARIO_NAME}\nカーブ②（左折）ステアリング詳細分析　─　一時停止発進 t=0", fontsize=12)
-    gs = fig.add_gridspec(3, 2, hspace=0.45, wspace=0.30,
-                          height_ratios=[1.4, 1.0, 1.0])
-    ax_map   = fig.add_subplot(gs[0, 0])   # 左列上: 軌跡
-    ax_ovl   = fig.add_subplot(gs[1:, 0])  # 左列下: 指令 vs 応答（大きく）
-    ax_rate  = fig.add_subplot(gs[0, 1])   # 右列上: 角速度
-    ax_err   = fig.add_subplot(gs[1, 1])   # 右列中: 追従誤差
-    ax_integ = fig.add_subplot(gs[2, 1])   # 右列下: 累積操舵量
+    fig.suptitle(
+        f"{SCENARIO_NAME}\nカーブ②（左折）ステアリング詳細分析　─　一時停止発進 t=0", fontsize=12
+    )
+    gs = fig.add_gridspec(3, 2, hspace=0.45, wspace=0.30, height_ratios=[1.4, 1.0, 1.0])
+    ax_map = fig.add_subplot(gs[0, 0])  # 左列上: 軌跡
+    ax_ovl = fig.add_subplot(gs[1:, 0])  # 左列下: 指令 vs 応答（大きく）
+    ax_rate = fig.add_subplot(gs[0, 1])  # 右列上: 角速度
+    ax_err = fig.add_subplot(gs[1, 1])  # 右列中: 追従誤差
+    ax_integ = fig.add_subplot(gs[2, 1])  # 右列下: 累積操舵量
 
     # カーブ②付近の軌跡
     c2 = CURVE_CENTERS[_CURVE2_INDEX]
@@ -738,8 +750,10 @@ def plot_curve2_steering_detail(data: dict, map_ways: list | None):
     if map_ways:
         for pts in map_ways:
             wx, wy = pts[:, 0], pts[:, 1]
-            if wx.max() < cx - mg or wx.min() > cx + mg: continue
-            if wy.max() < cy - mg or wy.min() > cy + mg: continue
+            if wx.max() < cx - mg or wx.min() > cx + mg:
+                continue
+            if wy.max() < cy - mg or wy.min() > cy + mg:
+                continue
             ax_map.plot(wx, wy, color="#cccccc", lw=0.5, zorder=1)
 
     for label, d in data.items():
@@ -755,13 +769,22 @@ def plot_curve2_steering_detail(data: dict, map_ways: list | None):
         if df_k.empty:
             continue
         lr = df_k.iloc[(df_k["t"] - t_l).abs().argsort().iloc[0]]
-        ax_map.plot(lr["x"], lr["y"], "*", color=d["color"], ms=13,
-                    zorder=6, markeredgecolor="white", markeredgewidth=0.5)
+        ax_map.plot(
+            lr["x"],
+            lr["y"],
+            "*",
+            color=d["color"],
+            ms=13,
+            zorder=6,
+            markeredgecolor="white",
+            markeredgewidth=0.5,
+        )
 
     ax_map.set_xlim(cx - mg, cx + mg)
     ax_map.set_ylim(cy - mg, cy + mg)
     ax_map.set_aspect("equal")
-    ax_map.set_xlabel("x [m]"); ax_map.set_ylabel("y [m]")
+    ax_map.set_xlabel("x [m]")
+    ax_map.set_ylabel("y [m]")
     ax_map.grid(True, lw=0.5, alpha=0.5)
     ax_map.legend(fontsize=9, loc="best")
     ax_map.set_title("軌跡（★=発進点）", fontsize=10)
@@ -774,23 +797,30 @@ def plot_curve2_steering_detail(data: dict, map_ways: list | None):
         t_exit = _find_curve2_exit(d["kinematic"], t_l)
         t_post = (t_exit - t_l + 2.0) if t_exit is not None else 25.0
         steer_df = d["steering"]
-        cmd_df   = d["cmd"]
+        cmd_df = d["cmd"]
 
         mask_s = (steer_df["t"] >= t_l + T_PRE) & (steer_df["t"] <= t_l + t_post)
-        mask_c = (cmd_df["t"]   >= t_l + T_PRE) & (cmd_df["t"]   <= t_l + t_post)
-        s = steer_df[mask_s].copy(); s["tr"] = s["t"] - t_l
-        c = cmd_df[mask_c].copy();   c["tr"] = c["t"] - t_l
+        mask_c = (cmd_df["t"] >= t_l + T_PRE) & (cmd_df["t"] <= t_l + t_post)
+        s = steer_df[mask_s].copy()
+        s["tr"] = s["t"] - t_l
+        c = cmd_df[mask_c].copy()
+        c["tr"] = c["t"] - t_l
 
         s_deg = np.degrees(s["steer"].values)
-        t_s   = s["tr"].values
+        t_s = s["tr"].values
 
         # --- 左列下: 指令 vs 応答の重ね描き ---
-        ax_ovl.plot(t_s, s_deg, color=d["color"], lw=d["lw"], ls=d["ls"],
-                    label=f"{label} 応答")
+        ax_ovl.plot(t_s, s_deg, color=d["color"], lw=d["lw"], ls=d["ls"], label=f"{label} 応答")
         if not c.empty:
-            ax_ovl.plot(np.asarray(c["tr"]), np.degrees(np.asarray(c["cmd_steer"])),
-                        color=d["color"], lw=1.2, ls=":", alpha=0.65,
-                        label=f"{label} 指令")
+            ax_ovl.plot(
+                np.asarray(c["tr"]),
+                np.degrees(np.asarray(c["cmd_steer"])),
+                color=d["color"],
+                lw=1.2,
+                ls=":",
+                alpha=0.65,
+                label=f"{label} 指令",
+            )
 
         # --- 右列上: 角速度 (deg/s) ---
         if len(t_s) > 1:
@@ -798,51 +828,57 @@ def plot_curve2_steering_detail(data: dict, map_ways: list | None):
             rate = np.diff(s_deg) / np.where(dt > 1e-6, dt, np.nan)
             # 外れ値を除去
             rate = np.where(np.abs(rate) < 200, rate, np.nan)
-            ax_rate.plot(t_s[1:], rate, color=d["color"], lw=d["lw"] * 0.9,
-                         ls=d["ls"], label=label)
+            ax_rate.plot(t_s[1:], rate, color=d["color"], lw=d["lw"] * 0.9, ls=d["ls"], label=label)
 
         # --- 右列中: 追従誤差（応答 − 指令）---
         if not c.empty and len(t_s) > 0:
             cmd_interp = np.interp(t_s, c["tr"].values, np.degrees(c["cmd_steer"].values))
             err = s_deg - cmd_interp
-            ax_err.plot(t_s, err, color=d["color"], lw=d["lw"] * 0.9,
-                        ls=d["ls"], label=label)
+            ax_err.plot(t_s, err, color=d["color"], lw=d["lw"] * 0.9, ls=d["ls"], label=label)
 
         # --- 右列下: 累積絶対操舵量 ---
         if len(t_s) > 1:
             dt_full = np.diff(t_s)
             incr = np.abs(np.diff(s_deg))
             cumsum = np.concatenate([[0], np.cumsum(incr * dt_full)])
-            ax_integ.plot(t_s, cumsum, color=d["color"], lw=d["lw"],
-                          ls=d["ls"], label=label)
+            ax_integ.plot(t_s, cumsum, color=d["color"], lw=d["lw"], ls=d["ls"], label=label)
 
     # t=0 縦線
     for ax in (ax_ovl, ax_rate, ax_err, ax_integ):
         ax.axvline(0, color="gray", lw=1.0, ls="--", alpha=0.7)
 
     ax_ovl.set_title("ステアリング角　指令（点線）vs 応答（実線/破線）", fontsize=10)
-    ax_ovl.set_ylabel("ステア角 [deg]"); ax_ovl.set_xlabel("発進からの時刻 [s]")
-    ax_ovl.grid(True, lw=0.5); ax_ovl.legend(fontsize=8, ncol=2)
+    ax_ovl.set_ylabel("ステア角 [deg]")
+    ax_ovl.set_xlabel("発進からの時刻 [s]")
+    ax_ovl.grid(True, lw=0.5)
+    ax_ovl.legend(fontsize=8, ncol=2)
 
     ax_rate.set_title("ステアリング角速度", fontsize=10)
-    ax_rate.set_ylabel("deg/s"); ax_rate.set_xlabel("発進からの時刻 [s]")
+    ax_rate.set_ylabel("deg/s")
+    ax_rate.set_xlabel("発進からの時刻 [s]")
     ax_rate.axhline(0, color="gray", lw=0.6, ls="-")
-    ax_rate.grid(True, lw=0.5); ax_rate.legend(fontsize=9)
+    ax_rate.grid(True, lw=0.5)
+    ax_rate.legend(fontsize=9)
 
     ax_err.set_title("指令追従誤差（応答 − 指令）", fontsize=10)
-    ax_err.set_ylabel("誤差 [deg]"); ax_err.set_xlabel("発進からの時刻 [s]")
+    ax_err.set_ylabel("誤差 [deg]")
+    ax_err.set_xlabel("発進からの時刻 [s]")
     ax_err.axhline(0, color="gray", lw=0.6, ls="-")
-    ax_err.grid(True, lw=0.5); ax_err.legend(fontsize=9)
+    ax_err.grid(True, lw=0.5)
+    ax_err.legend(fontsize=9)
 
     ax_integ.set_title("累積絶対操舵量（∫|dθ/dt|dt）", fontsize=10)
-    ax_integ.set_ylabel("deg"); ax_integ.set_xlabel("発進からの時刻 [s]")
-    ax_integ.grid(True, lw=0.5); ax_integ.legend(fontsize=9)
+    ax_integ.set_ylabel("deg")
+    ax_integ.set_xlabel("発進からの時刻 [s]")
+    ax_integ.grid(True, lw=0.5)
+    ax_integ.legend(fontsize=9)
 
     _save(fig, "curve2_steering_detail")
 
 
 def plot_curve2_yaw_steer(data: dict):
-    """ステア角と実際に進んだ方向（ヨーレート換算）の差分を可視化。
+    """
+    ステア角と実際に進んだ方向（ヨーレート換算）の差分を可視化。
 
     自転車モデル: yaw_rate_pred = v * tan(steer) / L
     等価ステア角:  steer_equiv  = atan(L * yaw_rate_actual / v)
@@ -866,8 +902,7 @@ def plot_curve2_yaw_steer(data: dict):
 
     fig, axes = plt.subplots(4, 1, figsize=(13, 16), sharex=True)
     fig.suptitle(
-        f"{SCENARIO_NAME}\n"
-        f"カーブ②　ステア角 vs 実際の進行方向（自転車モデル L={WHEELBASE:.2f}m）",
+        f"{SCENARIO_NAME}\nカーブ②　ステア角 vs 実際の進行方向（自転車モデル L={WHEELBASE:.2f}m）",
         fontsize=12,
     )
 
@@ -885,8 +920,8 @@ def plot_curve2_yaw_steer(data: dict):
             sub["tr"] = sub["t"] - _t_l
             return sub
 
-        kin   = clip(d["kinematic"])
-        vel   = clip(d["velocity"])
+        kin = clip(d["kinematic"])
+        vel = clip(d["velocity"])
         steer = clip(d["steering"])
 
         if kin.empty or vel.empty or steer.empty:
@@ -895,8 +930,8 @@ def plot_curve2_yaw_steer(data: dict):
         t_k = kin["tr"].values
 
         # yaw unwrap → yaw_rate (rad/s)
-        yaw_u    = np.unwrap(kin["yaw"].values)
-        yaw_rate = np.gradient(yaw_u, t_k)          # rad/s
+        yaw_u = np.unwrap(kin["yaw"].values)
+        yaw_rate = np.gradient(yaw_u, t_k)  # rad/s
 
         # 速度・ステアを kinematic の時刻に補間
         v_i = np.interp(t_k, vel["tr"].values, vel["lon_vel"].values)
@@ -924,19 +959,30 @@ def plot_curve2_yaw_steer(data: dict):
 
         # 段1: ステア角 vs 等価ステア角
         axes[0].plot(t_k, np.degrees(s_i), label=f"{label} ステア実測", **kw)
-        axes[0].plot(t_k, np.degrees(steer_equiv),
-                     color=d["color"], lw=1.2, ls=":", alpha=0.7,
-                     label=f"{label} 等価（実ヨーレートから逆算）")
+        axes[0].plot(
+            t_k,
+            np.degrees(steer_equiv),
+            color=d["color"],
+            lw=1.2,
+            ls=":",
+            alpha=0.7,
+            label=f"{label} 等価（実ヨーレートから逆算）",
+        )
 
         # 段2: 差分
         axes[1].plot(t_k, diff_deg, label=label, **kw)
 
         # 段3: 実ヨーレート vs 予測ヨーレート
-        axes[2].plot(t_k, np.degrees(yaw_rate),
-                     label=f"{label} 実測", **kw)
-        axes[2].plot(t_k, np.degrees(yaw_rate_pred),
-                     color=d["color"], lw=1.2, ls=":", alpha=0.7,
-                     label=f"{label} 予測（自転車モデル）")
+        axes[2].plot(t_k, np.degrees(yaw_rate), label=f"{label} 実測", **kw)
+        axes[2].plot(
+            t_k,
+            np.degrees(yaw_rate_pred),
+            color=d["color"],
+            lw=1.2,
+            ls=":",
+            alpha=0.7,
+            label=f"{label} 予測（自転車モデル）",
+        )
 
         # 段4: yaw累積変化
         axes[3].plot(t_k, yaw_cum, label=label, **kw)
@@ -948,10 +994,14 @@ def plot_curve2_yaw_steer(data: dict):
         ax.grid(True, lw=0.5)
         ax.legend(fontsize=8, ncol=2, loc="best")
 
-    axes[0].set_title("ステア角（実線）vs 等価ステア角（点線）── 一致するほど自転車モデルが成立", fontsize=10)
+    axes[0].set_title(
+        "ステア角（実線）vs 等価ステア角（点線）── 一致するほど自転車モデルが成立", fontsize=10
+    )
     axes[0].set_ylabel("deg")
 
-    axes[1].set_title(f"ステア角 − 等価ステア角（進行方向とのズレ）  ─  L={WHEELBASE:.2f}m", fontsize=10)
+    axes[1].set_title(
+        f"ステア角 − 等価ステア角（進行方向とのズレ）  ─  L={WHEELBASE:.2f}m", fontsize=10
+    )
     axes[1].set_ylabel("deg")
 
     axes[2].set_title("ヨーレート（実線=実測、点線=自転車モデル予測）", fontsize=10)
@@ -966,7 +1016,8 @@ def plot_curve2_yaw_steer(data: dict):
 
 
 def plot_steer_response(data: dict):
-    """ステアリング応答性能の比較図。
+    """
+    ステアリング応答性能の比較図。
 
     ステア指令が 1deg を超えた瞬間を各ログの t=0 に揃え、
     指令 vs 応答の「追従の遅れ・形の違い」を正規化して一目でわかるようにする。
@@ -981,53 +1032,51 @@ def plot_steer_response(data: dict):
     """
     from scipy.signal import correlate
 
-    T_ONSET_PRE  = -0.5   # onset 前の余白 [s]
-    T_ONSET_POST = 12.0   # onset 後の表示幅 [s]
+    T_ONSET_PRE = -0.5  # onset 前の余白 [s]
+    T_ONSET_POST = 12.0  # onset 後の表示幅 [s]
     ONSET_THRESH_DEG = 1.0
 
     fig = plt.figure(figsize=(15, 14))
     fig.suptitle(
-        f"{SCENARIO_NAME}\n"
-        "ステアリング応答性能比較　──　ステア入力開始 t=0 に揃えた比較",
+        f"{SCENARIO_NAME}\nステアリング応答性能比較　──　ステア入力開始 t=0 に揃えた比較",
         fontsize=12,
     )
-    gs = fig.add_gridspec(3, 2, height_ratios=[1.6, 1.0, 1.0],
-                          hspace=0.50, wspace=0.30)
+    gs = fig.add_gridspec(3, 2, height_ratios=[1.6, 1.0, 1.0], hspace=0.50, wspace=0.30)
     ax_main = fig.add_subplot(gs[0, :])
-    ax_err  = fig.add_subplot(gs[1, 0])
+    ax_err = fig.add_subplot(gs[1, 0])
     ax_rise = fig.add_subplot(gs[1, 1])
     ax_rmse = fig.add_subplot(gs[2, 0])
     ax_peak = fig.add_subplot(gs[2, 1])
 
     # 定量値を収集
-    labels_list   = []
-    onset_delays  = []   # 指令onset → 応答onset の遅延 [s]
-    delays        = []   # xcorr ラグ [s]
-    rmse_list     = []
-    rise_list     = []
-    peak_ratio    = []
+    labels_list = []
+    onset_delays = []  # 指令onset → 応答onset の遅延 [s]
+    delays = []  # xcorr ラグ [s]
+    rmse_list = []
+    rise_list = []
+    peak_ratio = []
 
     for label, d in data.items():
         t_l = _find_curve2_launch(d["velocity"])
         if t_l is None:
             continue
 
-        vel_df   = d["velocity"]
+        vel_df = d["velocity"]
         steer_df = d["steering"]
-        cmd_df   = d["cmd"]
+        cmd_df = d["cmd"]
 
         def clip_rel(df, t_l=t_l):
             m = (df["t"] >= t_l - 3) & (df["t"] <= t_l + 20)
             sub = df[m].copy()
-            sub["tr"] = sub["t"] - t_l   # 発進基準の相対時刻
+            sub["tr"] = sub["t"] - t_l  # 発進基準の相対時刻
             return sub
 
         steer_r = clip_rel(steer_df)
-        cmd_r   = clip_rel(cmd_df)
+        cmd_r = clip_rel(cmd_df)
         if steer_r.empty or cmd_r.empty:
             continue
 
-        cmd_deg   = np.degrees(cmd_r["cmd_steer"].values)
+        cmd_deg = np.degrees(cmd_r["cmd_steer"].values)
         steer_deg = np.degrees(steer_r["steer"].values)
 
         # ステア指令の onset（発進後で閾値を超えた最初の時刻）
@@ -1037,12 +1086,14 @@ def plot_steer_response(data: dict):
         t_onset_cmd = float(cmd_r["tr"].values[onset_mask][0])
 
         onset_mask_act = (steer_r["tr"] >= 0) & (np.abs(steer_deg) > ONSET_THRESH_DEG)
-        t_onset_act = float(steer_r["tr"].values[onset_mask_act][0]) if onset_mask_act.any() else t_onset_cmd
+        t_onset_act = (
+            float(steer_r["tr"].values[onset_mask_act][0]) if onset_mask_act.any() else t_onset_cmd
+        )
 
         onset_delay = t_onset_act - t_onset_cmd
 
         # onset t=0 で揃えた窓を切り出す
-        t_c = cmd_r["tr"].values   - t_onset_cmd
+        t_c = cmd_r["tr"].values - t_onset_cmd
         t_a = steer_r["tr"].values - t_onset_cmd
 
         win_mask_c = (t_c >= T_ONSET_PRE) & (t_c <= T_ONSET_POST)
@@ -1065,7 +1116,7 @@ def plot_steer_response(data: dict):
         c_i = np.interp(t_grid, t_c_w, c_w, left=np.nan, right=np.nan)
         a_i = np.interp(t_grid, t_a_w, a_w, left=np.nan, right=np.nan)
         valid = ~(np.isnan(c_i) | np.isnan(a_i))
-        rmse = float(np.sqrt(np.mean((a_i[valid] - c_i[valid])**2))) if valid.any() else np.nan
+        rmse = float(np.sqrt(np.mean((a_i[valid] - c_i[valid]) ** 2))) if valid.any() else np.nan
 
         # xcorr による遅延推定
         if valid.sum() > 10:
@@ -1082,12 +1133,21 @@ def plot_steer_response(data: dict):
 
         # ---- メインプロット（正規化）----
         kw = dict(color=d["color"], lw=d["lw"], ls=d["ls"])
-        ax_main.plot(t_c_w, c_norm, label=f"{label} 指令",
-                     **kw, alpha=0.55, marker=None)
-        ax_main.plot(t_a_w, a_norm, label=f"{label} 応答",
-                     color=d["color"], lw=d["lw"]+0.5, ls=d["ls"],
-                     marker=d["marker"], markersize=d["ms"], markevery=12,
-                     markerfacecolor=d["color"], markeredgecolor="white", markeredgewidth=0.5)
+        ax_main.plot(t_c_w, c_norm, label=f"{label} 指令", **kw, alpha=0.55, marker=None)
+        ax_main.plot(
+            t_a_w,
+            a_norm,
+            label=f"{label} 応答",
+            color=d["color"],
+            lw=d["lw"] + 0.5,
+            ls=d["ls"],
+            marker=d["marker"],
+            markersize=d["ms"],
+            markevery=12,
+            markerfacecolor=d["color"],
+            markeredgecolor="white",
+            markeredgewidth=0.5,
+        )
 
         # 応答ピークに達した時刻をマーカー（点線）
         if rise_mask.any():
@@ -1095,12 +1155,12 @@ def plot_steer_response(data: dict):
             ax_main.axvline(tr_rise, color=d["color"], lw=1.2, ls=":", alpha=0.6)
 
         # 応答 onset の縦線（指令 onset t=0 からの遅延を鎖線で表示）
-        ax_main.axvline(onset_delay, color=d["color"], lw=2.0, ls="-.",
-                        alpha=0.9)
+        ax_main.axvline(onset_delay, color=d["color"], lw=2.0, ls="-.", alpha=0.9)
 
         # ---- 追従誤差 ----
-        err_i = np.interp(t_grid, t_a_w, a_w, left=np.nan, right=np.nan) - \
-                np.interp(t_grid, t_c_w, c_w, left=np.nan, right=np.nan)
+        err_i = np.interp(t_grid, t_a_w, a_w, left=np.nan, right=np.nan) - np.interp(
+            t_grid, t_c_w, c_w, left=np.nan, right=np.nan
+        )
         ax_err.plot(t_grid, err_i, color=d["color"], lw=d["lw"], ls=d["ls"], label=label)
 
         # 収集
@@ -1116,22 +1176,27 @@ def plot_steer_response(data: dict):
     for i, (lbl, delay_s) in enumerate(zip(labels_list, onset_delays)):
         d_cfg = data[lbl]
         yp = y_base + i * 0.09
-        x_end = max(delay_s, 0.015)   # 非常に小さい場合も矢印が見えるよう最低幅を確保
+        x_end = max(delay_s, 0.015)  # 非常に小さい場合も矢印が見えるよう最低幅を確保
         ax_main.annotate(
             "",
             xy=(x_end, yp),
             xytext=(0.0, yp),
             xycoords="data",
             textcoords="data",
-            arrowprops=dict(arrowstyle="<->", color=d_cfg["color"],
-                            lw=1.8, mutation_scale=10),
+            arrowprops=dict(arrowstyle="<->", color=d_cfg["color"], lw=1.8, mutation_scale=10),
             annotation_clip=False,
         )
-        ax_main.text(x_end / 2, yp + 0.035,
-                     f"{lbl}: {delay_s * 1000:.0f} ms",
-                     ha="center", va="bottom", fontsize=8,
-                     color=d_cfg["color"], fontweight="bold",
-                     clip_on=False)
+        ax_main.text(
+            x_end / 2,
+            yp + 0.035,
+            f"{lbl}: {delay_s * 1000:.0f} ms",
+            ha="center",
+            va="bottom",
+            fontsize=8,
+            color=d_cfg["color"],
+            fontweight="bold",
+            clip_on=False,
+        )
 
     # 装飾
     ax_main.axvline(0, color="gray", lw=1.2, ls="--", alpha=0.7, label="入力onset t=0")
@@ -1152,8 +1217,10 @@ def plot_steer_response(data: dict):
     ax_err.axvline(0, color="gray", lw=1.0, ls="--", alpha=0.7)
     ax_err.axhline(0, color="gray", lw=0.5)
     ax_err.set_title("追従誤差（応答 − 指令）", fontsize=10)
-    ax_err.set_ylabel("deg"); ax_err.set_xlabel("入力開始からの時刻 [s]")
-    ax_err.grid(True, lw=0.5); ax_err.legend(fontsize=9)
+    ax_err.set_ylabel("deg")
+    ax_err.set_xlabel("入力開始からの時刻 [s]")
+    ax_err.grid(True, lw=0.5)
+    ax_err.legend(fontsize=9)
 
     # 棒グラフ
     colors_bar = [data[l]["color"] for l in labels_list if l in data]
@@ -1162,27 +1229,46 @@ def plot_steer_response(data: dict):
 
     delay_ms = [d * 1000 if d is not None and not np.isnan(d) else 0 for d in onset_delays]
     ax_rise.bar(x, delay_ms, width=bw, color=colors_bar, alpha=0.85, edgecolor="white")
-    ax_rise.set_xticks(x); ax_rise.set_xticklabels(labels_list, fontsize=9)
+    ax_rise.set_xticks(x)
+    ax_rise.set_xticklabels(labels_list, fontsize=9)
     ax_rise.set_title("応答遅延（指令onset → 応答onset）", fontsize=10)
-    ax_rise.set_ylabel("ms"); ax_rise.grid(True, axis="y", lw=0.5)
+    ax_rise.set_ylabel("ms")
+    ax_rise.grid(True, axis="y", lw=0.5)
     for xi, v_ms in zip(x, delay_ms):
         ax_rise.text(xi, v_ms + 1, f"{v_ms:.0f} ms", ha="center", fontsize=9, fontweight="bold")
 
-    ax_rmse.bar(x, [r if r is not None and not np.isnan(r) else 0 for r in rmse_list],
-                width=bw, color=colors_bar, alpha=0.85, edgecolor="white")
-    ax_rmse.set_xticks(x); ax_rmse.set_xticklabels(labels_list, fontsize=9)
+    ax_rmse.bar(
+        x,
+        [r if r is not None and not np.isnan(r) else 0 for r in rmse_list],
+        width=bw,
+        color=colors_bar,
+        alpha=0.85,
+        edgecolor="white",
+    )
+    ax_rmse.set_xticks(x)
+    ax_rmse.set_xticklabels(labels_list, fontsize=9)
     ax_rmse.set_title("RMSE（指令追従誤差）", fontsize=10)
-    ax_rmse.set_ylabel("deg"); ax_rmse.grid(True, axis="y", lw=0.5)
+    ax_rmse.set_ylabel("deg")
+    ax_rmse.grid(True, axis="y", lw=0.5)
     for xi, v in zip(x, rmse_list):
         if v is not None and not np.isnan(v):
             ax_rmse.text(xi, v + 0.02, f"{v:.3f}°", ha="center", fontsize=9)
 
-    ax_peak.bar(x, [r if r is not None and not np.isnan(r) else 0 for r in peak_ratio],
-                width=bw, color=colors_bar, alpha=0.85, edgecolor="white")
+    ax_peak.bar(
+        x,
+        [r if r is not None and not np.isnan(r) else 0 for r in peak_ratio],
+        width=bw,
+        color=colors_bar,
+        alpha=0.85,
+        edgecolor="white",
+    )
     ax_peak.axhline(1.0, color="gray", lw=1.0, ls="--", alpha=0.6)
-    ax_peak.set_xticks(x); ax_peak.set_xticklabels(labels_list, fontsize=9)
+    ax_peak.set_xticks(x)
+    ax_peak.set_xticklabels(labels_list, fontsize=9)
     ax_peak.set_title("ピーク追従率（応答ピーク / 指令ピーク）", fontsize=10)
-    ax_peak.set_ylabel("−"); ax_peak.set_ylim(0, 1.3); ax_peak.grid(True, axis="y", lw=0.5)
+    ax_peak.set_ylabel("−")
+    ax_peak.set_ylim(0, 1.3)
+    ax_peak.grid(True, axis="y", lw=0.5)
     for xi, v in zip(x, peak_ratio):
         if v is not None and not np.isnan(v):
             ax_peak.text(xi, v + 0.02, f"{v:.3f}", ha="center", fontsize=9)
@@ -1195,9 +1281,11 @@ def plot_steer_response(data: dict):
 # 数値レポート
 # ---------------------------------------------------------------------------
 
+
 def nearest_point_distance(ref_xy: np.ndarray, query_xy: np.ndarray) -> np.ndarray:
     """各query点に対するref_xyの最近傍距離を返す。"""
     from scipy.spatial import cKDTree
+
     tree = cKDTree(ref_xy)
     dists, _ = tree.query(query_xy)
     return dists
@@ -1272,11 +1360,14 @@ def build_report(data: dict) -> str:
             continue
         try:
             from scipy.spatial import cKDTree
+
             q_df = d["kinematic"]
             # 実機 bbox 内の点のみ
             mask = (
-                (q_df["x"] >= x_min - margin) & (q_df["x"] <= x_max + margin) &
-                (q_df["y"] >= y_min - margin) & (q_df["y"] <= y_max + margin)
+                (q_df["x"] >= x_min - margin)
+                & (q_df["x"] <= x_max + margin)
+                & (q_df["y"] >= y_min - margin)
+                & (q_df["y"] <= y_max + margin)
             )
             q_xy = q_df.loc[mask, ["x", "y"]].values
             if len(q_xy) == 0:
@@ -1295,8 +1386,10 @@ def build_report(data: dict) -> str:
 # メイン
 # ---------------------------------------------------------------------------
 
+
 def main():
     import argparse
+
     try:
         import yaml as _yaml
     except ImportError:
@@ -1372,7 +1465,9 @@ def main():
         CURVE_CENTERS = None
     else:
         if _yaml is None:
-            warnings.warn("PyYAML が利用できないため curve_config を読み込めません。カーブ別解析をスキップ")
+            warnings.warn(
+                "PyYAML が利用できないため curve_config を読み込めません。カーブ別解析をスキップ"
+            )
             CURVE_CENTERS = None
         else:
             try:
