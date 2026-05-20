@@ -1,98 +1,37 @@
 #!/usr/bin/env python3
-"""
-発進時の車両モデル応答診断スクリプト.
+"""発進時の車両モデル応答診断スクリプト.
 
-実機 real.lite.mcap の /sub/control/command/control_cmd をオープンループ入力として
+実機 lite mcap の control_cmd をオープンループ入力として
 DELAY_STEER_ACC_BRAKE_GEARED_WO_FALL_GUARD モデルを様々な brake_time_constant で
 シミュレーションし、実機 actual velocity との比較から適切なパラメータを診断する。
 """
 
+from __future__ import annotations
+
+import argparse
 from collections import deque
-import math
 from pathlib import Path
+import sys
 
 import matplotlib
 
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
-from mcap.reader import make_reader
-from mcap_ros2.decoder import DecoderFactory
 import numpy as np
 import pandas as pd
 
-from ._params_utils import add_params_annotation
-from ._params_utils import load_sim_params
-from ._params_utils import setup_jp_font
+from ._events import find_autonomous_start, find_curve2_launch, find_sim_launch
+from ._io import align_time, load_cmd, load_operation_mode, load_velocity
+from ._params_utils import add_params_annotation, load_sim_params, setup_jp_font
+from ._runtime_config import add_common_cli_arguments, build_runtime_config
 
 setup_jp_font()
 
-BASE = Path(__file__).parent
-LITE_DIR = BASE / "lite"
-OUT_DIR = BASE / "comparison" / "figures"
-REAL_MCAP = LITE_DIR / "real.lite.mcap"
 
-
-def _iter_msgs(mcap_path, topics):
-    with open(mcap_path, "rb") as f:
-        reader = make_reader(f, decoder_factories=[DecoderFactory()])
-        yield from reader.iter_decoded_messages(topics=topics)
-
-
-def load_control_cmd(p):
-    rows = []
-    for _, _, msg, ros in _iter_msgs(p, ["/sub/control/command/control_cmd"]):
-        rows.append(
-            {
-                "t_ns": msg.log_time,
-                "acc": ros.longitudinal.acceleration,
-            }
-        )
-    return pd.DataFrame(rows)
-
-
-def load_velocity(p):
-    rows = []
-    for _, _, msg, ros in _iter_msgs(
-        p, ["/vehicle/status/velocity_status", "/sub/vehicle/status/velocity_status"]
-    ):
-        rows.append({"t_ns": msg.log_time, "lon_vel": ros.longitudinal_velocity})
-    return pd.DataFrame(rows)
-
-
-def load_opmode(p):
-    rows = []
-    for _, _, msg, ros in _iter_msgs(p, ["/system/operation_mode/state"]):
-        rows.append({"t_ns": msg.log_time, "mode": ros.mode})
-    return pd.DataFrame(rows)
-
-
-def find_t0_and_launch(p):
-    df_vel = load_velocity(p)
-    df_op = load_opmode(p)
-    if not df_op.empty:
-        t0_ns = int(df_op[df_op["mode"] == 2]["t_ns"].iloc[0])
-    else:
-        t0_ns = int(df_vel[df_vel["lon_vel"] > 0.1]["t_ns"].iloc[0])
-
-    df_vel["t"] = (df_vel["t_ns"] - t0_ns) / 1e9
-    df_vel = df_vel[df_vel["t"] >= 0].reset_index(drop=True)
-
-    stopped = df_vel[df_vel["lon_vel"] < 0.05]["t"].values
-    t_launch = None
-    if len(stopped) > 0:
-        gaps = np.where(np.diff(stopped) > 2.0)[0]
-        starts_idx = np.concatenate([[0], gaps + 1])
-        ends_idx = np.concatenate([gaps, [len(stopped) - 1]])
-        for s, e in zip(starts_idx, ends_idx):
-            dur = stopped[e] - stopped[s]
-            if dur >= 0.5 and 20.0 <= stopped[e] <= 120.0:
-                t_launch = float(stopped[e])
-                break
-    if t_launch is None:
-        moving = df_vel[(df_vel["lon_vel"] > 0.5) & (df_vel["t"] >= 5.0)]
-        t_launch = float(moving["t"].iloc[0]) if not moving.empty else 0.0
-
-    return t0_ns, t_launch
+REAL_CMD_TOPIC_CANDIDATES = [
+    "/control/command/control_cmd",
+    "/sub/control/command/control_cmd",
+]
 
 
 class BrakeAccVehicleModel:
@@ -156,12 +95,10 @@ class BrakeAccVehicleModel:
         self.pedal_brake = min(0.0, self.pedal_brake)
         self.vx = max(-50.0, min(self.vx, 50.0))
 
-        # stop condition
         if prev_vx * self.vx <= 0.0 and self.delayed_brake < 0.0:
             if -(self.pedal_acc + self.pedal_brake) >= 0.0:
                 self.vx = 0.0
 
-        # backward guard
         if self.vx < 0.0 and self.delayed_brake >= 0.0:
             net_ss = self.delayed_accel
             if net_ss >= 0.0:
@@ -170,7 +107,12 @@ class BrakeAccVehicleModel:
         return self.vx
 
 
-def simulate_departure(cmd_series, brake_tc_variants, params_base, dt=1.0 / 40):
+def simulate_departure(
+    cmd_series: np.ndarray,
+    brake_tc_variants: list[float],
+    params_base: dict,
+    dt: float = 1.0 / 40,
+) -> dict[float, np.ndarray]:
     """同一 cmd_series に対して複数の brake_time_constant でシミュレーション."""
     results = {}
     for btc in brake_tc_variants:
@@ -183,39 +125,74 @@ def simulate_departure(cmd_series, brake_tc_variants, params_base, dt=1.0 / 40):
             vel_rate_lim=params_base["vel_rate_lim"],
             dt=dt,
         )
-        vx_list = []
-        for cmd in cmd_series:
-            vx_list.append(model.step(cmd))
-        results[btc] = np.array(vx_list)
+        results[btc] = np.array([model.step(c) for c in cmd_series])
     return results
 
 
-def main():
-    print("=== 発進時車両モデル応答診断 ===\n")
+def _resolve_real_bag(lite_dir: Path) -> Path:
+    """real lite bag のパスを単一ファイル / ディレクトリ両方の形式で解決する。"""
+    candidates = [
+        lite_dir / "real.lite.mcap",
+        lite_dir / "real.lite",
+    ]
+    for p in candidates:
+        if p.exists():
+            return p
+    msg = "real lite bag が見つかりません: " + " or ".join(str(c) for c in candidates)
+    raise FileNotFoundError(msg)
 
-    t0_ns, t_launch = find_t0_and_launch(REAL_MCAP)
+
+def _resolve_t_launch(df_vel_aligned: pd.DataFrame, window: tuple[float, float]) -> float:
+    """カーブ② 発進検出。見つからなければ速度ベースのフォールバック (t>=5s で v>0.5)."""
+    t = find_curve2_launch(df_vel_aligned, window=window)
+    if t is None:
+        t = find_sim_launch(df_vel_aligned, threshold=0.5, min_t=5.0)
+    return float(t) if t is not None else 0.0
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser(description="発進時車両モデル応答診断")
+    add_common_cli_arguments(parser)
+    args = parser.parse_args()
+
+    cfg = build_runtime_config(args, default_base_dir=Path(__file__).parent)
+    real_bag = _resolve_real_bag(cfg.lite_dir)
+
+    print("=== 発進時車両モデル応答診断 ===")
+    print(f"bag: {real_bag}\n")
+
+    df_mode = load_operation_mode(real_bag)
+    df_vel_raw = load_velocity(real_bag)
+    t0_ns = find_autonomous_start(df_mode, df_vel_raw)
+    df_vel = align_time(df_vel_raw, t0_ns)
+
+    t_launch = _resolve_t_launch(df_vel, cfg.curve2_window)
     print(f"実機 t_launch = {t_launch:.2f} s")
 
-    df_cmd = load_control_cmd(REAL_MCAP)
-    df_vel = load_velocity(REAL_MCAP)
+    cmd_topic = (
+        cfg.topic_overrides.get("real", {}).get("cmd")
+        if cfg.topic_overrides
+        else None
+    ) or REAL_CMD_TOPIC_CANDIDATES
+    df_cmd_raw = load_cmd(real_bag, cmd_topic)
+    if df_cmd_raw.empty:
+        print("ERROR: control_cmd が空です。lite mcap を確認してください。", file=sys.stderr)
+        sys.exit(1)
 
-    df_cmd["t"] = (df_cmd["t_ns"] - t0_ns) / 1e9 - t_launch
-    df_vel["t"] = (df_vel["t_ns"] - t0_ns) / 1e9 - t_launch
+    df_cmd = align_time(df_cmd_raw, t0_ns)
+    df_cmd["t"] = df_cmd["t"] - t_launch
+    df_vel = df_vel.copy()
+    df_vel["t"] = df_vel["t"] - t_launch
 
     window = (-2.0, 15.0)
     df_cmd = df_cmd[(df_cmd["t"] >= window[0]) & (df_cmd["t"] <= window[1])].reset_index(drop=True)
     df_vel = df_vel[(df_vel["t"] >= window[0]) & (df_vel["t"] <= window[1])].reset_index(drop=True)
-
     print(f"control_cmd サンプル数: {len(df_cmd)}")
     print(f"velocity サンプル数: {len(df_vel)}")
 
-    if df_cmd.empty:
-        print("ERROR: control_cmd が空です。real.lite.mcap を確認してください。")
-        return
-
     dt = 1.0 / 40.0
     t_sim = np.arange(window[0], window[1], dt)
-    cmd_resampled = np.interp(t_sim, df_cmd["t"].values, df_cmd["acc"].values)
+    cmd_resampled = np.interp(t_sim, df_cmd["t"].values, df_cmd["cmd_accel"].values)
 
     params_base = {
         "acc_time_delay": 0.101,
@@ -224,19 +201,14 @@ def main():
         "departure_vx_threshold": 1.0,
         "vel_rate_lim": 7.0,
     }
-
     brake_tc_variants = [0.0301, 0.10, 0.20, 0.40]
     colors = ["#d62728", "#ff7f0e", "#2ca02c", "#9467bd"]
     labels = [f"brake_tc={v:.4f}s" for v in brake_tc_variants]
     labels[0] += " (現在)"
 
-    print("\nbake_time_constant バリアントでシミュレーション中...")
+    print("\nbrake_time_constant バリアントでシミュレーション中...")
     sim_results = simulate_departure(cmd_resampled, brake_tc_variants, params_base, dt=dt)
 
-    # 実機 actual velocity の t=0以降を抽出
-    df_vel_dep = df_vel[df_vel["t"] >= -0.5]
-
-    # --- テーブル出力 ---
     print(
         f"\n{'t[s]':>6} | {'実機actual':>10} | "
         + " | ".join(f"btc={v:.4f}" for v in brake_tc_variants)
@@ -253,77 +225,71 @@ def main():
         row += " | ".join(f"{sim_results[v][idx]:>10.3f}   " for v in brake_tc_variants)
         print(row)
 
-    # --- プロット ---
-    OUT_DIR.mkdir(parents=True, exist_ok=True)
+    cfg.figs_dir.mkdir(parents=True, exist_ok=True)
     fig, axes = plt.subplots(1, 2, figsize=(14, 6))
     fig.suptitle(
-        "発進動作：brake_time_constant 感度分析\n"
+        f"{cfg.scenario_name}\n発進動作：brake_time_constant 感度分析\n"
         "(実機 post-gate cmd をオープンループ入力→シミュレーション速度 vs 実機 actual速度)",
         fontsize=11,
     )
 
-    # 左: 速度プロファイル比較
-    ax1 = axes[0]
-    ax1.plot(
-        df_vel["t"].values, df_vel["lon_vel"].values, "k-", lw=3, label="実機 actual速度", zorder=10
-    )
-    for btc, col, lbl in zip(brake_tc_variants, colors, labels):
-        ax1.plot(t_sim, sim_results[btc], color=col, lw=1.8, ls="--", label=f"FMU {lbl}")
-    ax1.axvline(0, color="gray", lw=0.8, ls="--", alpha=0.6, label="発進 t=0")
-    ax1.set_xlim(-1, 10)
-    ax1.set_ylim(-0.5, 8)
-    ax1.set_xlabel("発進後 t [s]")
-    ax1.set_ylabel("速度 [m/s]")
-    ax1.set_title("速度プロファイル比較（発進前後）")
-    ax1.legend(fontsize=8)
-    ax1.grid(True, lw=0.4)
+    for ax, xlim, ylim, title in [
+        (axes[0], (-1, 10), (-0.5, 8), "速度プロファイル比較（発進前後）"),
+        (axes[1], (-0.5, 3.0), (-0.2, 2.5), "発進直後ズーム (t=-0.5~3s)"),
+    ]:
+        ax.plot(
+            df_vel["t"].values,
+            df_vel["lon_vel"].values,
+            "k-",
+            lw=3,
+            label="実機 actual速度",
+            zorder=10,
+        )
+        for btc, col, lbl in zip(brake_tc_variants, colors, labels):
+            ax.plot(t_sim, sim_results[btc], color=col, lw=1.8, ls="--", label=f"FMU {lbl}")
+        ax.axvline(0, color="gray", lw=0.8, ls="--", alpha=0.6)
+        ax.set_xlim(xlim)
+        ax.set_ylim(ylim)
+        ax.set_xlabel("発進後 t [s]")
+        ax.set_ylabel("速度 [m/s]")
+        ax.set_title(title)
+        ax.legend(fontsize=8)
+        ax.grid(True, lw=0.4)
 
-    # 右: 発進直後のズーム
-    ax2 = axes[1]
+    fig2, ax2 = plt.subplots(1, 1, figsize=(10, 4))
+    fig2.suptitle(
+        f"{cfg.scenario_name}\n実機 post-gate control_cmd (acc) — 発進前後",
+        fontsize=11,
+    )
     ax2.plot(
-        df_vel["t"].values, df_vel["lon_vel"].values, "k-", lw=3, label="実機 actual速度", zorder=10
+        df_cmd["t"].values,
+        df_cmd["cmd_accel"].values,
+        "b-",
+        lw=1.5,
+        label="実機 cmd_acc (post-gate)",
     )
-    for btc, col, lbl in zip(brake_tc_variants, colors, labels):
-        ax2.plot(t_sim, sim_results[btc], color=col, lw=1.8, ls="--", label=f"FMU {lbl}")
     ax2.axvline(0, color="gray", lw=0.8, ls="--", alpha=0.6)
-    ax2.set_xlim(-0.5, 3.0)
-    ax2.set_ylim(-0.2, 2.5)
+    ax2.set_xlim(-2, 10)
     ax2.set_xlabel("発進後 t [s]")
-    ax2.set_ylabel("速度 [m/s]")
-    ax2.set_title("発進直後ズーム (t=-0.5~3s)")
-    ax2.legend(fontsize=8)
+    ax2.set_ylabel("加速度指令 [m/s²]")
+    ax2.legend(fontsize=9)
     ax2.grid(True, lw=0.4)
-
-    # cmd_acc をサブプロットとして下段に追加
-    fig2, axes2 = plt.subplots(1, 1, figsize=(10, 4))
-    fig2.suptitle("実機 post-gate control_cmd (acc) — 発進前後", fontsize=11)
-    axes2.plot(
-        df_cmd["t"].values, df_cmd["acc"].values, "b-", lw=1.5, label="実機 cmd_acc (post-gate)"
-    )
-    axes2.axvline(0, color="gray", lw=0.8, ls="--", alpha=0.6)
-    axes2.set_xlim(-2, 10)
-    axes2.set_xlabel("発進後 t [s]")
-    axes2.set_ylabel("加速度指令 [m/s²]")
-    axes2.legend(fontsize=9)
-    axes2.grid(True, lw=0.4)
 
     fig.tight_layout()
     fig2.tight_layout()
 
-    # params_base に YAML の共通パラメータをマージしてアノテーションを付与する
-    _anno_params = {**load_sim_params(), **params_base}
-    add_params_annotation(fig, _anno_params)
-    add_params_annotation(fig2, _anno_params)
+    anno_params = {**load_sim_params(), **params_base}
+    add_params_annotation(fig, anno_params)
+    add_params_annotation(fig2, anno_params)
 
-    out1 = OUT_DIR / "departure_brake_tc_sensitivity.png"
-    out2 = OUT_DIR / "real_cmd_acc_departure.png"
+    out1 = cfg.figs_dir / "departure_brake_tc_sensitivity.png"
+    out2 = cfg.figs_dir / "real_cmd_acc_departure.png"
     fig.savefig(str(out1), dpi=150, bbox_inches="tight")
     fig2.savefig(str(out2), dpi=150, bbox_inches="tight")
     plt.close("all")
     print(f"\n保存: {out1}")
     print(f"保存: {out2}")
 
-    # --- 発進誤差の定量評価 ---
     print("\n--- 実機 actual速度 vs FMU シム 発進誤差 RMSE (t=0~5s) ---")
     t_mask = (t_sim >= 0.0) & (t_sim <= 5.0)
     real_interp = np.interp(t_sim[t_mask], df_vel["t"].values, df_vel["lon_vel"].values)

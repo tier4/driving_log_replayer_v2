@@ -1,6 +1,5 @@
 #!/usr/bin/env python3
-"""
-カーブ② 区間の per-step delta 分析（C++ 車両モデル使用）.
+"""カーブ② 区間の per-step delta 分析（C++ 車両モデル使用）.
 
 手法:
   各制御コマンド区間 (t_k, t_{k+1}) について:
@@ -18,57 +17,81 @@
     map_distribution.png, summary.txt, per_step_delta.csv
 """
 
+from __future__ import annotations
+
+import argparse
 import ctypes
 import math
 import os
 from pathlib import Path
+import sys
 
 import matplotlib
 
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
-from mcap.reader import make_reader
-from mcap_ros2.decoder import DecoderFactory
 import numpy as np
 import pandas as pd
 
-from ._params_utils import add_params_annotation
-from ._params_utils import setup_jp_font
+from ._events import find_autonomous_start as _find_autonomous_start
+from ._events import find_curve2_launch as _find_curve2_launch_window
+from ._io import (
+    align_time,
+    iter_bag_messages,
+    load_operation_mode,
+    load_steering,
+    load_velocity,
+    resolve_topic,
+)
+from ._map import load_map_ways as _load_map_ways_impl
+from ._map import resolve_map_osm
+from ._params_utils import add_params_annotation, load_sim_params, setup_jp_font
+from ._runtime_config import RuntimeConfig, add_common_cli_arguments, build_runtime_config
 
 setup_jp_font()
 
-# BEST_MODEL_BASE_DIR が設定されている場合はそこを作業ディレクトリにする (compare_logs.py と同型)。
+# モジュールレベル設定 (main() で RuntimeConfig 経由で上書きされる)
 BASE = Path(os.environ.get("BEST_MODEL_BASE_DIR") or Path(__file__).parent)
 LITE_DIR = BASE / "lite"
 OUT_DIR = BASE / "comparison" / "curve2_per_step"
 
-# 実機 lite bag: make_lite が rosbag2 directory bag を出力するため、ディレクトリパスで保持する。
-# 実 .mcap ファイルは _resolve_real_mcap() で実行時に解決する。
-REAL_BAG_DIR = LITE_DIR / "real.lite"
-
-# 後方互換フォールバック (MAP_OSM_PATH env var 未設定時)
-_DEFAULT_MAP_DIR = Path.home() / ".webauto/simulation/data/map/x2_dev/2231"
+# 実機 lite bag は単一ファイルでも directory bag でも受け付ける。
+REAL_BAG_DIR = LITE_DIR / "real.lite.mcap"
 
 # カーブ②発進前後の解析窓
 T_PRE = 3.0  # [s]
 T_POST = 35.0  # [s]
 
-# 車両モデルパラメータ (simulator_model.param.yaml + vehicle_info.param.yaml)
-PARAMS = {
-    "wheelbase": 4.76012,  # wheel_base [m]
-    "vel_lim": 50.0,
-    "vel_rate_lim": 7.0,
-    "steer_lim": 1.0,
-    "steer_rate_lim": 5.0,
-    "acc_time_delay": 0.101,
-    "acc_time_constant": 0.2589,
-    "steer_time_delay": 0.0315,
-    "steer_time_constant": 0.4983,
-    "steer_dead_band": 0.0,
+# curve2 window モジュール変数 (main で上書き)
+_CURVE2_WINDOW: tuple[float, float] = (20.0, 120.0)
+
+# curve2 中心 (main で上書き)
+_CURVE2_CX: int = 89301
+_CURVE2_CY: int = 43085
+
+# per_step 専用の上書き値 (load_sim_params() のシム既定値に上塗りする)
+# 元コードは vehicle_info の wheel_base を 4.76012、PARAMS 内では明示で steer_bias=0.01
+# (load_sim_params() の既定 0.0005 を per_step では意図的に大きく取る) を採用していた。
+_PARAMS_OVERRIDES = {
     "steer_bias": 0.01,
     "sub_dt": 1.0 / 30.0,
 }
 
+
+def _build_params(cfg: RuntimeConfig | None = None) -> dict:
+    """`vehicle_info.param.yaml` + per_step 専用上書きで PARAMS を構築する。
+
+    `_PARAMS_OVERRIDES` は per_step 固有の意図的な差分なので維持する。
+    """
+    base = load_sim_params()
+    base.setdefault("wheelbase", base.get("wheel_base", 4.76012))
+    base.update(_PARAMS_OVERRIDES)
+    if cfg is not None and cfg.wheelbase_sim:
+        base["wheelbase"] = float(cfg.wheelbase_sim)
+    return base
+
+
+PARAMS = _build_params()
 SUB_DT = PARAMS["sub_dt"]  # 積分ステップ幅 [s]（FMU_DT 相当）
 
 
@@ -293,74 +316,65 @@ class VehicleModel:
 # ---------------------------------------------------------------------------
 
 
-def _iter_msgs(path: Path, topics: list[str]):
-    with open(path, "rb") as f:
-        reader = make_reader(f, decoder_factories=[DecoderFactory()])
-        yield from reader.iter_decoded_messages(topics=topics)
-
-
 def load_real_bag(path: Path) -> dict[str, pd.DataFrame]:
-    """real.lite.mcap から必要トピックを読み込む。"""
-    rows_mode, rows_vel, rows_steer, rows_kin, rows_acc, rows_cmd = [], [], [], [], [], []
+    """real lite bag から必要トピックを読み込む（sub-less / sub-prefixed 両対応）。"""
+    df_mode = load_operation_mode(path)
+    df_vel = load_velocity(path).rename(columns={"lon_vel": "vx"})
+    df_steer = load_steering(path)
 
-    topics = [
-        "/system/operation_mode/state",
-        "/vehicle/status/velocity_status",
-        "/vehicle/status/steering_status",
-        "/sub/localization/kinematic_state",
-        "/sub/localization/acceleration",
-        "/sub/control/command/control_cmd",
-    ]
-
-    for _, channel, msg, ros in _iter_msgs(path, topics):
-        t_ns = msg.log_time
-        topic = channel.topic
-        if topic == "/system/operation_mode/state":
-            rows_mode.append({"t_ns": t_ns, "mode": ros.mode})
-        elif topic == "/vehicle/status/velocity_status":
-            rows_vel.append({"t_ns": t_ns, "vx": ros.longitudinal_velocity})
-        elif topic == "/vehicle/status/steering_status":
-            rows_steer.append({"t_ns": t_ns, "steer": ros.steering_tire_angle})
-        elif topic == "/sub/localization/kinematic_state":
+    kin_topic = resolve_topic(
+        path,
+        ["/localization/kinematic_state", "/sub/localization/kinematic_state"],
+    )
+    rows_kin = []
+    if kin_topic is not None:
+        for t_ns, ros in iter_bag_messages(path, [kin_topic]):
             p = ros.pose.pose.position
             o = ros.pose.pose.orientation
-            # quaternion → yaw
             yaw = math.atan2(
                 2.0 * (o.w * o.z + o.x * o.y),
                 1.0 - 2.0 * (o.y * o.y + o.z * o.z),
             )
-            rows_kin.append(
-                {
-                    "t_ns": t_ns,
-                    "x": p.x,
-                    "y": p.y,
-                    "yaw": yaw,
-                    "vx": ros.twist.twist.linear.x,
-                    "vy": ros.twist.twist.linear.y,
-                    "wz": ros.twist.twist.angular.z,
-                }
-            )
-        elif topic == "/sub/localization/acceleration":
-            rows_acc.append(
-                {
-                    "t_ns": t_ns,
-                    "ax": ros.accel.accel.linear.x,
-                    "ay": ros.accel.accel.linear.y,
-                }
-            )
-        elif topic == "/sub/control/command/control_cmd":
-            rows_cmd.append(
-                {
-                    "t_ns": t_ns,
-                    "accel_des": ros.longitudinal.acceleration,
-                    "steer_des": ros.lateral.steering_tire_angle,
-                }
-            )
+            rows_kin.append({
+                "t_ns": t_ns,
+                "x": p.x,
+                "y": p.y,
+                "yaw": yaw,
+                "vx": ros.twist.twist.linear.x,
+                "vy": ros.twist.twist.linear.y,
+                "wz": ros.twist.twist.angular.z,
+            })
+
+    acc_topic = resolve_topic(
+        path,
+        ["/localization/acceleration", "/sub/localization/acceleration"],
+    )
+    rows_acc = []
+    if acc_topic is not None:
+        for t_ns, ros in iter_bag_messages(path, [acc_topic]):
+            rows_acc.append({
+                "t_ns": t_ns,
+                "ax": ros.accel.accel.linear.x,
+                "ay": ros.accel.accel.linear.y,
+            })
+
+    cmd_topic = resolve_topic(
+        path,
+        ["/control/command/control_cmd", "/sub/control/command/control_cmd"],
+    )
+    rows_cmd = []
+    if cmd_topic is not None:
+        for t_ns, ros in iter_bag_messages(path, [cmd_topic]):
+            rows_cmd.append({
+                "t_ns": t_ns,
+                "accel_des": ros.longitudinal.acceleration,
+                "steer_des": ros.lateral.steering_tire_angle,
+            })
 
     return {
-        "mode": pd.DataFrame(rows_mode),
-        "vel": pd.DataFrame(rows_vel),
-        "steer": pd.DataFrame(rows_steer),
+        "mode": df_mode,
+        "vel": df_vel,
+        "steer": df_steer,
         "kin": pd.DataFrame(rows_kin),
         "acc": pd.DataFrame(rows_acc),
         "cmd": pd.DataFrame(rows_cmd),
@@ -368,31 +382,20 @@ def load_real_bag(path: Path) -> dict[str, pd.DataFrame]:
 
 
 def find_autonomous_start(data: dict) -> int:
-    """AUTONOMOUS モード（mode==2）が最初に現れる t_ns を返す。"""
-    df = data["mode"]
-    if df.empty:
-        raise RuntimeError("operation_mode トピックが空です")
-    auto = df[df["mode"] == 2]
-    if auto.empty:
-        raise RuntimeError("AUTONOMOUS モードが見つかりません")
-    return int(auto["t_ns"].iloc[0])
+    """AUTONOMOUS モードが最初に現れる t_ns を返す (`_events.find_autonomous_start` 経由)。"""
+    # `_events.find_autonomous_start` は `lon_vel` 列を想定するが、ここでは `vx` 列なので
+    # 一時的にリネームしてフォールバック用 DF を作る。
+    df_vel = data["vel"].rename(columns={"vx": "lon_vel"}) if "vx" in data["vel"].columns else data["vel"]
+    return _find_autonomous_start(data["mode"], df_vel)
 
 
-def find_curve2_launch(df_vel: pd.DataFrame) -> float:
-    """カーブ②信号前の停止から発進する時刻 [s]（t0 起点）を検出する。"""
-    stopped = df_vel[df_vel["vx"] < 0.05]["t"].values
-    if len(stopped) == 0:
-        return None
-    gaps = np.where(np.diff(stopped) > 2.0)[0]
-    starts_idx = np.concatenate([[0], gaps + 1])
-    ends_idx = np.concatenate([gaps, [len(stopped) - 1]])
-    candidates = []
-    for s, e in zip(starts_idx, ends_idx):
-        dur = stopped[e] - stopped[s]
-        t_end = stopped[e]
-        if dur >= 0.5 and 20.0 <= t_end <= 120.0:
-            candidates.append(t_end)
-    return float(min(candidates)) if candidates else None
+def find_curve2_launch(df_vel: pd.DataFrame) -> float | None:
+    """カーブ② 直前停止からの発進時刻を返す (`_events.find_curve2_launch` 経由)。
+
+    df_vel は列 't', 'vx' を持つ前提（per_step 内部表記）。
+    """
+    df = df_vel.rename(columns={"vx": "lon_vel"})
+    return _find_curve2_launch_window(df, window=_CURVE2_WINDOW)
 
 
 # ---------------------------------------------------------------------------
@@ -936,7 +939,12 @@ def plot_steering_analysis(df: pd.DataFrame, params: dict) -> None:
 
 
 def _resolve_real_mcap(bag_dir: Path) -> Path:
-    """rosbag2 directory bag から実 .mcap ファイルパスを取得する。"""
+    """rosbag2 directory bag から実 .mcap ファイルパスを取得する。
+
+    - 単一の `.mcap` ファイルならそのまま返す。
+    - ディレクトリならその中の `.mcap` を返す。
+    - 入力が `<stem>.lite.mcap` で存在しない場合は `<stem>.lite` ディレクトリも試す。
+    """
     if bag_dir.is_file() and bag_dir.suffix == ".mcap":
         return bag_dir
     if bag_dir.is_dir():
@@ -944,45 +952,25 @@ def _resolve_real_mcap(bag_dir: Path) -> Path:
         if not mcaps:
             raise FileNotFoundError(f"No .mcap inside {bag_dir}")
         return mcaps[0]
+    # `.lite.mcap` 名のディレクトリ形式 fallback
+    if bag_dir.suffix == ".mcap":
+        alt = bag_dir.with_suffix("")  # `real.lite`
+        if alt.is_dir():
+            mcaps = sorted(alt.glob("*.mcap"))
+            if mcaps:
+                return mcaps[0]
     raise FileNotFoundError(f"Real bag not found: {bag_dir}")
 
 
 def _resolve_map_osm() -> Path | None:
-    """lanelet2_map.osm のパスを解決する。
-
-    MAP_OSM_PATH env var を優先し、無ければ後方互換フォールバック。空文字明示なら None。
-    """
-    env = os.environ.get("MAP_OSM_PATH")
-    if env is not None:
-        if env == "":
-            return None
-        p = Path(env)
-        return p if p.exists() else None
-    candidates = sorted(_DEFAULT_MAP_DIR.glob("*/lanelet2_map.osm")) if _DEFAULT_MAP_DIR.exists() else []
-    return candidates[0] if candidates else None
+    """lanelet2_map.osm を `_map.resolve_map_osm` の三状態モデルで解決する。"""
+    return resolve_map_osm(os.environ.get("MAP_OSM_PATH"))
 
 
 def _load_map_ways(osm_path: Path | None) -> list[np.ndarray] | None:
-    if osm_path is None or not osm_path.exists():
+    if osm_path is None:
         return None
-    from lxml import etree
-
-    tree = etree.parse(str(osm_path))
-    node_xy = {}
-    for nd in tree.findall("node"):
-        lx = nd.find("tag[@k='local_x']")
-        ly = nd.find("tag[@k='local_y']")
-        if lx is not None and ly is not None:
-            node_xy[nd.get("id")] = (float(lx.get("v")), float(ly.get("v")))
-    ways = []
-    for way in tree.findall("way"):
-        pts = []
-        for nd in way.findall("nd"):
-            ref = nd.get("ref")
-            if ref in node_xy:
-                pts.append(node_xy[ref])
-        if len(pts) >= 2:
-            ways.append(np.array(pts))
+    ways = _load_map_ways_impl(osm_path)
     return ways if ways else None
 
 
@@ -1020,7 +1008,7 @@ def plot_map_distribution(df: pd.DataFrame, params: dict) -> None:
     ]
 
     fig, axes = plt.subplots(1, 6, figsize=(36, 6))
-    cx, cy = 89301, 43085
+    cx, cy = _CURVE2_CX, _CURVE2_CY
 
     for ax, (vals, label, unit, source) in zip(axes, columns):
         if map_ways:
@@ -1372,47 +1360,81 @@ def save_summary(df: pd.DataFrame) -> None:
 # ---------------------------------------------------------------------------
 
 
+def _apply_runtime_config(cfg: RuntimeConfig) -> dict:
+    """RuntimeConfig をモジュールレベル変数に反映し、PARAMS を返す。"""
+    global BASE, LITE_DIR, OUT_DIR, REAL_BAG_DIR  # noqa: PLW0603
+    global _CURVE2_WINDOW, _CURVE2_CX, _CURVE2_CY, PARAMS, SUB_DT  # noqa: PLW0603
+
+    BASE = cfg.base_dir
+    LITE_DIR = cfg.lite_dir
+    OUT_DIR = cfg.out_dir / "curve2_per_step"
+    # 入力 bag のデフォルトパス (実体は _resolve_real_mcap が file/dir 両対応)
+    REAL_BAG_DIR = LITE_DIR / "real.lite.mcap"
+
+    _CURVE2_WINDOW = cfg.curve2_window
+    c2 = cfg.curve2
+    if c2 is not None:
+        _CURVE2_CX = int(c2["cx"])
+        _CURVE2_CY = int(c2["cy"])
+
+    PARAMS = _build_params(cfg)
+    SUB_DT = PARAMS["sub_dt"]
+    return PARAMS
+
+
 def main() -> None:
+    parser = argparse.ArgumentParser(description="カーブ② per-step delta 分析")
+    add_common_cli_arguments(parser)
+    args = parser.parse_args()
+
+    cfg = build_runtime_config(args, default_base_dir=Path(__file__).parent)
+    params = _apply_runtime_config(cfg)
+
     OUT_DIR.mkdir(parents=True, exist_ok=True)
 
-    real_mcap = _resolve_real_mcap(REAL_BAG_DIR)
+    # 入力 bag は単一 `.mcap` ファイル or `.lite` ディレクトリの両方を試す
+    try:
+        real_mcap = _resolve_real_mcap(REAL_BAG_DIR)
+    except FileNotFoundError as e:
+        print(f"ERROR: {e}", file=sys.stderr)
+        sys.exit(1)
     print(f"Loading: {real_mcap}")
     data = load_real_bag(real_mcap)
 
-    # AUTONOMOUS 開始時刻
     t0_ns = find_autonomous_start(data)
     print(f"AUTONOMOUS 開始: t0_ns={t0_ns}")
 
-    # velocity を秒に変換して発進時刻検出
     df_vel = data["vel"].copy()
     df_vel["t"] = (df_vel["t_ns"] - t0_ns) / 1e9
     df_vel = df_vel[df_vel["t"] >= 0].sort_values("t").reset_index(drop=True)
 
     t_launch = find_curve2_launch(df_vel)
     if t_launch is None:
-        raise RuntimeError("カーブ②発進時刻を検出できませんでした")
+        print("ERROR: カーブ② 発進時刻を検出できませんでした", file=sys.stderr)
+        sys.exit(1)
     print(f"カーブ②発進: t={t_launch:.1f}s")
 
     print("\n=== per-step delta 分析開始 ===")
-    df = run_per_step(data, t0_ns, t_launch, PARAMS)
+    df = run_per_step(data, t0_ns, t_launch, params)
     print(f"有効ステップ: {len(df)}")
 
     if df.empty:
-        raise RuntimeError("有効なステップが 0 件でした")
+        print("ERROR: 有効なステップが 0 件でした", file=sys.stderr)
+        sys.exit(1)
 
     print("\n=== 出力生成 ===")
     df.to_csv(OUT_DIR / "per_step_delta.csv", index=False)
     print(f"  Saved: {OUT_DIR / 'per_step_delta.csv'}")
 
     save_summary(df)
-    plot_overview(df, PARAMS)
-    plot_error_timeseries(df, PARAMS)
-    plot_error_vs_speed(df, PARAMS)
-    plot_steering_analysis(df, PARAMS)
-    plot_map_distribution(df, PARAMS)
-    plot_lateral_dynamics_timeseries(df, PARAMS)
-    plot_steer_vs_lateral_scatter(df, PARAMS)
-    plot_cascade_error(df, PARAMS)
+    plot_overview(df, params)
+    plot_error_timeseries(df, params)
+    plot_error_vs_speed(df, params)
+    plot_steering_analysis(df, params)
+    plot_map_distribution(df, params)
+    plot_lateral_dynamics_timeseries(df, params)
+    plot_steer_vs_lateral_scatter(df, params)
+    plot_cascade_error(df, params)
 
     print(f"\n完了。出力先: {OUT_DIR}")
 

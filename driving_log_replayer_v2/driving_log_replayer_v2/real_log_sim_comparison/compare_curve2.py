@@ -1,211 +1,125 @@
 #!/usr/bin/env python3
-"""
-実機 vs カーブ②集中シム の比較プロット生成スクリプト.
-
-Usage:
-    python3 compare_curve2.py
+"""実機 vs カーブ②集中シム の比較プロット生成スクリプト.
 
 Inputs:
-    lite/real.lite.mcap      — 実機ログ（カーブ②前の一時停止を自動検出して発進t=0に揃える）
-    lite/sim_curve2.lite.mcap — x2_dev_curve2_start.yaml のシム出力（t=0が発進点）
+    `lite/real.lite(.mcap)` — 実機ログ
+    `lite/sim_curve2.lite(.mcap)` — `x2_dev_curve2_start.yaml` のシム出力
 
 Outputs:
-    comparison/figures/c2_{trajectory,timeseries,steering_detail,velocity_response,deviation}.{png,pdf}
-    comparison/figures/c2_{timeseries,velocity_response,deviation}_vs_dist.{png,pdf}
+    comparison/figures/c2_*.{png,pdf}
     comparison/curve2_report.md
 """
 
-import math
+from __future__ import annotations
+
+import argparse
 from pathlib import Path
-import warnings
+import sys
 
 import matplotlib
 
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
-from mcap.reader import make_reader
-from mcap_ros2.decoder import DecoderFactory
 import numpy as np
 import pandas as pd
 
-from ._params_utils import add_params_annotation
-from ._params_utils import setup_jp_font
+from ._events import find_curve2_launch, find_sim_launch
+from ._io import (
+    align_time as _align,  # 既存呼び出しコード互換のためエイリアス維持
+    load_accel as _load_accel,
+    load_cmd as _load_cmd,
+    load_kinematic as _load_kinematic,
+    load_operation_mode as _load_opmode,
+    load_steering as _load_steering,
+    load_velocity as _load_velocity,
+)
+from ._map import load_map_ways, resolve_map_osm
+from ._params_utils import add_params_annotation, setup_jp_font
+from ._runtime_config import RuntimeConfig, add_common_cli_arguments, build_runtime_config
 
 setup_jp_font()
 
+
+# モジュールレベル設定（main() で RuntimeConfig 経由で上書きされる）
 BASE = Path(__file__).parent
 LITE_DIR = BASE / "lite"
 OUT_DIR = BASE / "comparison"
 FIGS_DIR = OUT_DIR / "figures"
-MAP_DIR = Path.home() / ".webauto/simulation/data/map/x2_dev/2231"
 
 CURVE2_CX, CURVE2_CY, CURVE2_MARGIN = 89301, 43085, 80
 WHEELBASE = 5.15
 
-LOGS = {
-    "実機": {
-        "path": LITE_DIR / "real.lite.mcap",
-        "kinematic": "/sub/localization/kinematic_state",
-        "accel": "/sub/localization/acceleration",
-        "cmd": "/sub/control/command/control_cmd",
-        "color": "black",
-        "lw": 2.5,
-        "ls": "-",
-        "marker": "o",
-        "ms": 4,
-        "real": True,
-    },
-    "シム (Curve2)": {
-        "path": LITE_DIR / "sim_curve2.lite.mcap",
-        "kinematic": "/localization/kinematic_state",
-        "accel": "/localization/acceleration",
-        "cmd": "/control/trajectory_follower/control_cmd",
-        "color": "#e05c00",
-        "lw": 2.0,
-        "ls": "--",
-        "marker": "s",
-        "ms": 4,
-        "real": False,
-    },
-}
+REAL_CMD_TOPIC_CANDIDATES = [
+    "/control/command/control_cmd",
+    "/sub/control/command/control_cmd",
+]
+SIM_CMD_TOPIC = "/control/trajectory_follower/control_cmd"
+
+
+def _build_logs(lite_dir: Path) -> dict:
+    """LOGS dict を再構築する。bag パスは `.lite.mcap` / `.lite` の両方を試す。"""
+
+    def resolve(stem: str) -> Path:
+        for cand in (lite_dir / f"{stem}.lite.mcap", lite_dir / f"{stem}.lite"):
+            if cand.exists():
+                return cand
+        # 存在しなくても path フィールドは返す (load_data が後で警告)
+        return lite_dir / f"{stem}.lite.mcap"
+
+    return {
+        "実機": {
+            "path": resolve("real"),
+            # None → DEFAULT_TOPICS の sub-less / sub-prefix 両対応で解決
+            "kinematic": None,
+            "accel": None,
+            "cmd": REAL_CMD_TOPIC_CANDIDATES,
+            "color": "black",
+            "lw": 2.5,
+            "ls": "-",
+            "marker": "o",
+            "ms": 4,
+            "real": True,
+        },
+        "シム (Curve2)": {
+            "path": resolve("sim_curve2"),
+            "kinematic": "/localization/kinematic_state",
+            "accel": "/localization/acceleration",
+            "cmd": SIM_CMD_TOPIC,
+            "color": "#e05c00",
+            "lw": 2.0,
+            "ls": "--",
+            "marker": "s",
+            "ms": 4,
+            "real": False,
+        },
+    }
+
+
+LOGS = _build_logs(LITE_DIR)
 
 T_PRE, T_POST = -2.0, 30.0
 
 
-# ---------------------------------------------------------------------------
-# MCAP ローダー
-# ---------------------------------------------------------------------------
+def _find_curve2_launch(df_vel: pd.DataFrame):  # noqa: D401 — 既存名を維持
+    """カーブ② 前の停止終端時刻 [s]（curve_config 由来の window を後で上書き）。"""
+    return find_curve2_launch(df_vel, window=_curve2_window_box[0])
 
 
-def _iter_msgs(mcap_path, topics):
-    with open(mcap_path, "rb") as f:
-        reader = make_reader(f, decoder_factories=[DecoderFactory()])
-        yield from reader.iter_decoded_messages(topics=topics)
+def _find_sim_launch(df_vel: pd.DataFrame, threshold: float = 0.5, min_t: float = 5.0):
+    """シムの発進検出（既存呼び出し互換）。"""
+    return find_sim_launch(df_vel, threshold=threshold, min_t=min_t)
 
 
-def _load_velocity(p):
-    rows = []
-    for _, _, msg, ros in _iter_msgs(p, ["/vehicle/status/velocity_status"]):
-        rows.append({"t_ns": msg.log_time, "lon_vel": ros.longitudinal_velocity})
-    return pd.DataFrame(rows)
+# `_find_curve2_launch` が参照する curve2_window をモジュールスコープで保持。
+# main() から書き換える。
+_curve2_window_box: list[tuple[float, float]] = [(20.0, 120.0)]
 
 
-def _load_steering(p):
-    rows = []
-    for _, _, msg, ros in _iter_msgs(p, ["/vehicle/status/steering_status"]):
-        rows.append({"t_ns": msg.log_time, "steer": ros.steering_tire_angle})
-    return pd.DataFrame(rows)
-
-
-def _load_kinematic(p, topic):
-    rows = []
-    for _, _, msg, ros in _iter_msgs(p, [topic]):
-        o = ros.pose.pose.orientation
-        yaw = math.atan2(2 * (o.w * o.z + o.x * o.y), 1 - 2 * (o.y * o.y + o.z * o.z))
-        pos = ros.pose.pose.position
-        rows.append({"t_ns": msg.log_time, "x": pos.x, "y": pos.y, "yaw": yaw})
-    return pd.DataFrame(rows)
-
-
-def _load_accel(p, topic):
-    rows = []
-    for _, _, msg, ros in _iter_msgs(p, [topic]):
-        rows.append({"t_ns": msg.log_time, "accel": ros.accel.accel.linear.x})
-    return pd.DataFrame(rows)
-
-
-def _load_cmd(p, topic):
-    rows = []
-    for _, _, msg, ros in _iter_msgs(p, [topic]):
-        rows.append(
-            {
-                "t_ns": msg.log_time,
-                "cmd_vel": ros.longitudinal.velocity,
-                "cmd_accel": ros.longitudinal.acceleration,
-                "cmd_steer": ros.lateral.steering_tire_angle,
-            }
-        )
-    return pd.DataFrame(rows)
-
-
-def _load_opmode(p):
-    rows = []
-    for _, _, msg, ros in _iter_msgs(p, ["/system/operation_mode/state"]):
-        rows.append({"t_ns": msg.log_time, "mode": ros.mode})
-    return pd.DataFrame(rows)
-
-
-def _align(df, t0_ns):
-    if df.empty:
-        return df
-    df = df.copy()
-    df["t"] = (df["t_ns"] - t0_ns) / 1e9
-    return df[df["t"] >= 0].reset_index(drop=True)
-
-
-def _find_curve2_launch(df_vel):
-    """カーブ②前の一時停止終了時刻 [s] を返す。"""
-    stopped = df_vel[df_vel["lon_vel"] < 0.05]["t"].values
-    if len(stopped) == 0:
-        return None
-    gaps = np.where(np.diff(stopped) > 2.0)[0]
-    starts_idx = np.concatenate([[0], gaps + 1])
-    ends_idx = np.concatenate([gaps, [len(stopped) - 1]])
-    candidates = []
-    for s, e in zip(starts_idx, ends_idx):
-        dur = stopped[e] - stopped[s]
-        t_end = stopped[e]
-        if dur >= 0.5 and 20.0 <= t_end <= 120.0:
-            candidates.append(t_end)
-    return float(min(candidates)) if candidates else None
-
-
-def _find_sim_launch(df_vel, threshold=0.5, min_t=5.0):
-    """
-    シムの発進時刻（velocity が初めて threshold m/s を超えた時刻）を返す。
-
-    min_t 以降を対象にし、Autoware 起動直後の瞬間スパイクを除外する。
-    """
-    moving = df_vel[(df_vel["lon_vel"] > threshold) & (df_vel["t"] >= min_t)]
-    if moving.empty:
-        return None
-    return float(moving["t"].iloc[0])
-
-
-def _load_map_ways():
-    if not MAP_DIR.exists():
+def _load_map_ways(osm_path: Path | None = None) -> list[np.ndarray]:
+    """`osm_path` または 後方互換フォールバックで地図 way を返す。"""
+    if osm_path is None:
         return []
-    from lxml import etree
-
-    candidates = sorted(
-        MAP_DIR.glob("2231-*/lanelet2_map.osm"), key=lambda p: p.parent.name, reverse=True
-    )
-    if not candidates:
-        return []
-    tree = etree.parse(str(candidates[0]))
-    root = tree.getroot()
-    node_xy = {}
-    for node in root.findall("node"):
-        tags = {t.get("k"): t.get("v") for t in node.findall("tag")}
-        if "local_x" in tags and "local_y" in tags:
-            node_xy[int(node.get("id"))] = (float(tags["local_x"]), float(tags["local_y"]))
-    used = set()
-    for rel in root.findall("relation"):
-        tags = {t.get("k"): t.get("v") for t in rel.findall("tag")}
-        if tags.get("type") == "lanelet":
-            for m in rel.findall("member"):
-                if m.get("type") == "way":
-                    used.add(int(m.get("ref")))
-    ways = []
-    for way in root.findall("way"):
-        wid = int(way.get("id"))
-        if wid not in used:
-            continue
-        refs = [int(nd.get("ref")) for nd in way.findall("nd")]
-        pts = [node_xy[r] for r in refs if r in node_xy]
-        if len(pts) >= 2:
-            ways.append(np.array(pts))
-    return ways
+    return load_map_ways(osm_path)
 
 
 def _clip(df, t_launch):
@@ -927,16 +841,54 @@ def build_report(loaded):
 # ---------------------------------------------------------------------------
 
 
-def main():
+def _apply_runtime_config(cfg: RuntimeConfig) -> None:
+    """RuntimeConfig をモジュールレベル定数に反映。"""
+    global BASE, LITE_DIR, OUT_DIR, FIGS_DIR, LOGS  # noqa: PLW0603
+    global CURVE2_CX, CURVE2_CY, CURVE2_MARGIN, WHEELBASE  # noqa: PLW0603
+
+    BASE = cfg.base_dir
+    LITE_DIR = cfg.lite_dir
+    OUT_DIR = cfg.out_dir
+    FIGS_DIR = cfg.figs_dir
+    LOGS = _build_logs(LITE_DIR)
+
+    c2 = cfg.curve2
+    if c2 is not None:
+        CURVE2_CX = int(c2["cx"])
+        CURVE2_CY = int(c2["cy"])
+        # margin は元の 80 を下回らないように調整 (旧コードの値を踏襲)
+        CURVE2_MARGIN = max(int(c2.get("margin", 20)), 80)
+
+    WHEELBASE = float(cfg.wheelbase_validation)
+    _curve2_window_box[0] = cfg.curve2_window
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser(description="実機 vs カーブ②集中シム 比較")
+    add_common_cli_arguments(parser)
+    args = parser.parse_args()
+
+    cfg = build_runtime_config(args, default_base_dir=Path(__file__).parent)
+    _apply_runtime_config(cfg)
+
     OUT_DIR.mkdir(parents=True, exist_ok=True)
     FIGS_DIR.mkdir(parents=True, exist_ok=True)
+
+    # 入力 bag の存在チェック
+    missing = [label for label, cfg_l in LOGS.items() if not cfg_l["path"].exists()]
+    if missing:
+        print(
+            f"ERROR: lite bag が見つかりません: {missing} (場所: {LITE_DIR})",
+            file=sys.stderr,
+        )
+        sys.exit(1)
 
     print("=== データ読み込み ===")
     loaded = load_data()
 
     print("\n=== 地図読み込み ===")
-    map_ways = _load_map_ways()
-    print(f"  {len(map_ways)} ways ロード完了")
+    map_ways = _load_map_ways(cfg.map_osm_path)
+    print(f"  {len(map_ways)} ways ロード完了 (osm={cfg.map_osm_path})")
 
     print("\n=== プロット生成 ===")
     plot_trajectory(loaded, map_ways)

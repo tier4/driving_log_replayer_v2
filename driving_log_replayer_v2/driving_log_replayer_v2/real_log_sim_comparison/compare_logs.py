@@ -1,14 +1,12 @@
 #!/usr/bin/env python3
-"""
-実機ログ vs Godotシム vs 通常シム の三方比較プロット生成スクリプト.
-
-Usage:
-    python3 compare_logs.py
+"""実機ログ vs Godotシム vs 通常シム の三方比較プロット生成スクリプト.
 
 Outputs: comparison/figures/*.{png,pdf}, comparison/report.md
 """
 
-import math
+from __future__ import annotations
+
+import argparse
 import os
 from pathlib import Path
 import sys
@@ -17,39 +15,50 @@ import warnings
 import matplotlib
 
 matplotlib.use("Agg")
-from lxml import etree
-import matplotlib.patches as mpatches
+import matplotlib.patches as mpatches  # noqa: F401 — 旧コード参照
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
-from rclpy.serialization import deserialize_message
-import rosbag2_py
-from rosidl_runtime_py.utilities import get_message
 
-from ._params_utils import add_params_annotation
-from ._params_utils import setup_jp_font
+from ._events import (
+    find_autonomous_start as _find_autonomous_start,
+    find_curve2_exit as _find_curve2_exit_pure,
+    find_curve2_launch as _find_curve2_launch_pure,
+)
+from ._io import (
+    align_time,
+    load_accel,
+    load_cmd,
+    load_kinematic,
+    load_operation_mode,
+    load_steering,
+    load_velocity,
+    nearest_point_distance,
+)
+from ._map import load_map_ways, resolve_map_osm
+from ._params_utils import add_params_annotation, setup_jp_font
+from ._runtime_config import (
+    RuntimeConfig,
+    add_common_cli_arguments,
+    build_runtime_config,
+)
 
 setup_jp_font()
 
 # ---------------------------------------------------------------------------
-# 設定
+# 設定 — main() で `_apply_runtime_config()` から上書きされる
 # ---------------------------------------------------------------------------
-# BEST_MODEL_BASE_DIR 環境変数が設定されている場合はそこを作業ディレクトリにする。
-# ローカル実行時（未設定）はスクリプトのあるディレクトリをそのまま使う。
-BASE = Path(os.environ.get("BEST_MODEL_BASE_DIR", Path(__file__).parent))
+
+BASE = Path(os.environ.get("BEST_MODEL_BASE_DIR") or Path(__file__).parent)
 LITE_DIR = BASE / "lite"
 OUT_DIR = BASE / "comparison"
 FIGS_DIR = OUT_DIR / "figures"
-# 後方互換デフォルト（x2_dev/2231）。main() が MAP_OSM_PATH override を持つ場合は使われない。
-_DEFAULT_MAP_DIR = Path.home() / ".webauto/simulation/data/map/x2_dev/2231"
-SCENARIO_NAME = "x2_dev/2231 テレポート駅→日本科学未来館"
+SCENARIO_NAME = "real_log_sim_comparison"
 
-# main() が外部から上書きする runtime 変数
-MAP_OSM_PATH_OVERRIDE: str | None = None  # 具体的な osm パス (override 時)
-_CURVE2_INDEX = 1  # CURVE_CENTERS 内のカーブ② 位置
-_CURVE2_WINDOW = {"start": 20.0, "end": 120.0}  # カーブ② 発進検出窓 [s]
+# `_apply_runtime_config()` で書き換えられる
+_CURVE2_INDEX = 1
+_CURVE2_WINDOW: tuple[float, float] = (20.0, 120.0)
 
-AUTONOMOUS_MODE = 2  # autoware_adapi_v1_msgs OperationModeState.AUTONOMOUS
 WHEELBASE = 5.15  # m — kinematic_state × steering から実データで推定
 
 # 地図座標系でのカーブ中心（後方互換デフォルト: x2_dev/2231）
@@ -60,13 +69,28 @@ CURVE_CENTERS: list | None = [
     {"label": "カーブ③（右折）", "cx": 89372, "cy": 42830, "margin": 40},
 ]
 
-# ログ定義（path は main() が LITE_DIR を確定した後に _rebuild_logs() で補完）
+# ログ定義（path は main() が LITE_DIR を確定した後に `_rebuild_logs()` で補完）
+# kinematic / accel は sub-less / sub-prefixed の両方を試す候補リスト形式。
+# `_io.iter_to_df` がリストを受け取って bag に存在する最初の候補を使う。
+_REAL_KIN_CANDIDATES = [
+    "/localization/kinematic_state",
+    "/sub/localization/kinematic_state",
+]
+_REAL_ACC_CANDIDATES = [
+    "/localization/acceleration",
+    "/sub/localization/acceleration",
+]
+_REAL_CMD_CANDIDATES = [
+    "/control/command/control_cmd",
+    "/sub/control/command/control_cmd",
+]
+
 _DEFAULT_LOG_SPECS: dict = {
     "実機": {
         "bag_dir": "real.lite",
-        "kinematic": "/localization/kinematic_state",
-        "accel": "/localization/acceleration",
-        "cmd": "/control/command/control_cmd",
+        "kinematic": _REAL_KIN_CANDIDATES,
+        "accel": _REAL_ACC_CANDIDATES,
+        "cmd": _REAL_CMD_CANDIDATES,
         "color": "black",
         "lw": 2.5,
         "ls": "-",
@@ -99,10 +123,19 @@ _DEFAULT_LOG_SPECS: dict = {
 
 
 def _rebuild_logs(lite_dir: Path, topic_overrides: dict | None = None) -> dict:
-    """LITE_DIR とオプショナルなトピック上書き辞書から LOGS dict を生成する。"""
+    """LITE_DIR とオプショナルなトピック上書き辞書から LOGS dict を生成する。
+
+    bag_dir 名は `<stem>.lite.mcap` (単一ファイル) を優先し、なければ
+    `<stem>.lite` (rosbag2 ディレクトリ) にフォールバック。`_io._iter_msgs`
+    がどちらの形式も読めるが、main() の `path.exists()` チェックがあるため
+    実体のあるパスを返す必要がある。
+    """
     result = {}
     for label, spec in _DEFAULT_LOG_SPECS.items():
-        entry = {**spec, "path": lite_dir / spec["bag_dir"]}
+        stem = spec["bag_dir"]
+        candidates = [lite_dir / f"{stem}.mcap", lite_dir / stem]
+        path = next((c for c in candidates if c.exists()), candidates[0])
+        entry = {**spec, "path": path}
         if topic_overrides and label in topic_overrides:
             entry.update(topic_overrides[label])
         result[label] = entry
@@ -117,181 +150,14 @@ LOGS = _rebuild_logs(LITE_DIR)
 # ---------------------------------------------------------------------------
 
 
-def _iter_msgs(bag_dir: Path, topics: list[str]):
-    reader = rosbag2_py.SequentialReader()
-    reader.open(
-        rosbag2_py.StorageOptions(uri=str(bag_dir), storage_id=""),
-        rosbag2_py.ConverterOptions("cdr", "cdr"),
-    )
-    topic_type_map = {
-        t.name: get_message(t.type) for t in reader.get_all_topics_and_types() if t.name in topics
-    }
-    missing = set(topics) - set(topic_type_map.keys())
-    if missing:
-        print(f"[WARN] _iter_msgs: bag にトピックなし: {sorted(missing)}", file=sys.stderr)
-    reader.set_filter(rosbag2_py.StorageFilter(topics=list(topics)))
-    while reader.has_next():
-        topic_name, msg_bytes, timestamp = reader.read_next()
-        if topic_name in topic_type_map:
-            yield timestamp, deserialize_message(msg_bytes, topic_type_map[topic_name])
-
-
-def _iter_to_df(bag_dir: Path, topic: str, row_fn, columns: list[str]) -> pd.DataFrame:
-    rows = [row_fn(t_ns, ros_msg) for t_ns, ros_msg in _iter_msgs(bag_dir, [topic])]
-    if not rows:
-        return pd.DataFrame(columns=columns)
-    return pd.DataFrame(rows)
-
-
-def load_operation_mode(mcap_path: Path) -> pd.DataFrame:
-    return _iter_to_df(
-        mcap_path,
-        "/system/operation_mode/state",
-        lambda t_ns, m: {"t_ns": t_ns, "mode": m.mode},
-        ["t_ns", "mode"],
-    )
-
-
-def load_velocity(mcap_path: Path) -> pd.DataFrame:
-    return _iter_to_df(
-        mcap_path,
-        "/vehicle/status/velocity_status",
-        lambda t_ns, m: {"t_ns": t_ns, "lon_vel": m.longitudinal_velocity},
-        ["t_ns", "lon_vel"],
-    )
-
-
-def load_steering(mcap_path: Path) -> pd.DataFrame:
-    return _iter_to_df(
-        mcap_path,
-        "/vehicle/status/steering_status",
-        lambda t_ns, m: {"t_ns": t_ns, "steer": m.steering_tire_angle},
-        ["t_ns", "steer"],
-    )
-
-
-def load_kinematic(mcap_path: Path, topic: str) -> pd.DataFrame:
-    def row(t_ns, m):
-        p = m.pose.pose.position
-        o = m.pose.pose.orientation
-        yaw = math.atan2(2 * (o.w * o.z + o.x * o.y), 1 - 2 * (o.y * o.y + o.z * o.z))
-        return {"t_ns": t_ns, "x": p.x, "y": p.y, "yaw": yaw}
-
-    return _iter_to_df(mcap_path, topic, row, ["t_ns", "x", "y", "yaw"])
-
-
-def load_accel(mcap_path: Path, topic: str) -> pd.DataFrame:
-    return _iter_to_df(
-        mcap_path,
-        topic,
-        lambda t_ns, m: {"t_ns": t_ns, "accel": m.accel.accel.linear.x},
-        ["t_ns", "accel"],
-    )
-
-
-def load_cmd(mcap_path: Path, topic: str) -> pd.DataFrame:
-    return _iter_to_df(
-        mcap_path,
-        topic,
-        lambda t_ns, m: {
-            "t_ns": t_ns,
-            "cmd_vel": m.longitudinal.velocity,
-            "cmd_accel": m.longitudinal.acceleration,
-            "cmd_steer": m.lateral.steering_tire_angle,
-        },
-        ["t_ns", "cmd_vel", "cmd_accel", "cmd_steer"],
-    )
-
-
-# ---------------------------------------------------------------------------
-# 時刻整列
-# ---------------------------------------------------------------------------
-
-
-def find_autonomous_start(df_mode: pd.DataFrame, df_vel: pd.DataFrame) -> int:
-    """オートノマス開始時刻 (ns) を返す。取れない場合は速度ベースのフォールバック。"""
-    auto_rows = df_mode[df_mode["mode"] == AUTONOMOUS_MODE]
-    if not auto_rows.empty:
-        return int(auto_rows["t_ns"].iloc[0])
-    warnings.warn("AUTONOMOUS モード遷移が見つからないため速度ベースにフォールバック", stacklevel=2)
-    moving = df_vel[df_vel["lon_vel"] > 0.1]
-    if not moving.empty:
-        return int(moving["t_ns"].iloc[0])
-    return int(df_vel["t_ns"].iloc[0])
-
-
-def align_time(df: pd.DataFrame, t0_ns: int) -> pd.DataFrame:
-    if df.empty:
-        return pd.DataFrame(columns=[*df.columns, "t"])
-    df = df.copy()
-    df["t"] = (df["t_ns"] - t0_ns) / 1e9
-    return df[df["t"] >= 0].reset_index(drop=True)
-
-
-# ---------------------------------------------------------------------------
-# 地図パーサー（OSM local_x / local_y）
-# ---------------------------------------------------------------------------
+# ローダー / 時刻整列 / 地図 OSM は `_io.py` と `_map.py` に移管済み。
+# 互換性のため、既存呼び出し名を使い続ける補助ラッパだけ残す。
 
 
 def _resolve_map_osm() -> Path | None:
-    """
-    利用可能な lanelet2_map.osm のパスを返す。
-
-    優先順位:
-      1. MAP_OSM_PATH_OVERRIDE (main() が外部引数から設定)
-      2. 後方互換フォールバック: _DEFAULT_MAP_DIR 下の最新バージョン glob
-    """
-    if MAP_OSM_PATH_OVERRIDE is not None:
-        if MAP_OSM_PATH_OVERRIDE == "":
-            return None  # 空文字は「地図なし」の明示指定
-        p = Path(MAP_OSM_PATH_OVERRIDE)
-        return p if p.exists() else None
-    if not _DEFAULT_MAP_DIR.exists():
-        return None
-    candidates = sorted(
-        _DEFAULT_MAP_DIR.glob("*/lanelet2_map.osm"),
-        key=lambda p: p.parent.name,
-        reverse=True,
-    )
-    return candidates[0] if candidates else None
-
-
-def load_map_ways(osm_path: Path) -> tuple[list[np.ndarray], list[np.ndarray]]:
-    """
-    OSMをパースし、way の (x,y) 座標列リストを返す。
-    戻り値: (road_ways, all_ways) — road_ways は lanelet boundary/centerline。
-    """
-    tree = etree.parse(str(osm_path))
-    root = tree.getroot()
-
-    # ノードマップ: node_id → (local_x, local_y)
-    node_xy = {}
-    for node in root.findall("node"):
-        nid = int(node.get("id"))
-        tags = {t.get("k"): t.get("v") for t in node.findall("tag")}
-        if "local_x" in tags and "local_y" in tags:
-            node_xy[nid] = (float(tags["local_x"]), float(tags["local_y"]))
-
-    # way_id → 座標列
-    way_coords = {}
-    for way in root.findall("way"):
-        wid = int(way.get("id"))
-        refs = [int(nd.get("ref")) for nd in way.findall("nd")]
-        pts = [node_xy[r] for r in refs if r in node_xy]
-        if len(pts) >= 2:
-            way_coords[wid] = np.array(pts)
-
-    # relation(lanelet) から使われている way を収集
-    used_way_ids = set()
-    for rel in root.findall("relation"):
-        tags = {t.get("k"): t.get("v") for t in rel.findall("tag")}
-        if tags.get("type") == "lanelet":
-            for member in rel.findall("member"):
-                if member.get("type") == "way":
-                    used_way_ids.add(int(member.get("ref")))
-
-    road_ways = [way_coords[wid] for wid in used_way_ids if wid in way_coords]
-    return road_ways
+    """main() で `_apply_runtime_config()` が cfg.map_osm_path を返すので不要だが、
+    既存テスト互換用に env から再解決する。"""
+    return resolve_map_osm(os.environ.get("MAP_OSM_PATH"))
 
 
 # ---------------------------------------------------------------------------
@@ -520,51 +386,18 @@ def plot_curves(data: dict, map_ways: list | None):
 
 
 def _find_curve2_launch(df_vel: pd.DataFrame) -> float | None:
-    """
-    カーブ②直前の一時停止から発進する時刻 [s] を返す。
-    停止区間を列挙し、カーブ②が含まれる t=20〜120s の範囲で
-    最後に終わる停止の終端時刻を採用。
-    """
-    stopped = df_vel[df_vel["lon_vel"] < 0.05]["t"].values
-    if len(stopped) == 0:
-        return None
-    gaps = np.where(np.diff(stopped) > 2.0)[0]
-    starts_idx = np.concatenate([[0], gaps + 1])
-    ends_idx = np.concatenate([gaps, [len(stopped) - 1]])
-    candidates = []
-    for s, e in zip(starts_idx, ends_idx):
-        dur = stopped[e] - stopped[s]
-        t_end = stopped[e]
-        if dur >= 0.5 and _CURVE2_WINDOW["start"] <= t_end <= _CURVE2_WINDOW["end"]:
-            candidates.append(t_end)
-    if not candidates:
-        return None
-    # カーブ②に最も近い（最初の）発進を採用
-    return float(min(candidates))
+    """`_events.find_curve2_launch` の互換ラッパー。window はモジュールスコープ参照。"""
+    return _find_curve2_launch_pure(df_vel, window=_CURVE2_WINDOW)
 
 
 def _find_curve2_exit(
     df_kinematic: pd.DataFrame, t_launch: float, radius: float = 30.0
 ) -> float | None:
-    """
-    カーブ② 領域（CURVE_CENTERS[_CURVE2_INDEX] から radius m 以内）を抜け出す時刻 [s] を返す。
-    t_launch 以降の軌跡を走査し、領域に入った後で最初に外に出たタイミングを採用。
-    """
+    """`_events.find_curve2_exit` の互換ラッパー。curve_centers[_CURVE2_INDEX] を中心に。"""
     if not CURVE_CENTERS or _CURVE2_INDEX >= len(CURVE_CENTERS):
         return None
-    cx, cy = CURVE_CENTERS[_CURVE2_INDEX]["cx"], CURVE_CENTERS[_CURVE2_INDEX]["cy"]
-    df_after = df_kinematic[df_kinematic["t"] >= t_launch]
-    if df_after.empty:
-        return None
-    dist = np.sqrt((df_after["x"].values - cx) ** 2 + (df_after["y"].values - cy) ** 2)
-    t_vals = df_after["t"].values
-    entered = False
-    for ins, t in zip(dist < radius, t_vals):
-        if ins:
-            entered = True
-        elif entered:
-            return float(t)
-    return None
+    c = CURVE_CENTERS[_CURVE2_INDEX]
+    return _find_curve2_exit_pure(df_kinematic, (float(c["cx"]), float(c["cy"])), t_launch, radius=radius)
 
 
 def plot_curve2_analysis(data: dict, map_ways: list | None):
@@ -1388,124 +1221,45 @@ def build_report(data: dict) -> str:
 # ---------------------------------------------------------------------------
 
 
-def main():
-    import argparse
+def _apply_runtime_config(cfg: RuntimeConfig) -> None:
+    """`RuntimeConfig` をモジュールレベルの module-level state に反映する。
 
-    try:
-        import yaml as _yaml
-    except ImportError:
-        _yaml = None
+    advisor 助言に従い `main()` 内の `global` 宣言を本関数に集約し、
+    `main()` は cfg を渡すだけにしている (本体の `plot_*` は module-level 参照で動くため)。
+    """
+    global BASE, LITE_DIR, OUT_DIR, FIGS_DIR  # noqa: PLW0603
+    global SCENARIO_NAME, WHEELBASE, CURVE_CENTERS, LOGS  # noqa: PLW0603
+    global _CURVE2_WINDOW, _CURVE2_INDEX  # noqa: PLW0603
 
+    BASE = cfg.base_dir
+    LITE_DIR = cfg.lite_dir
+    OUT_DIR = cfg.out_dir
+    FIGS_DIR = cfg.figs_dir
+
+    SCENARIO_NAME = cfg.scenario_name
+    WHEELBASE = float(cfg.wheelbase_validation)
+    CURVE_CENTERS = cfg.curve_centers
+    _CURVE2_INDEX = cfg.curve2_index
+    _CURVE2_WINDOW = cfg.curve2_window
+
+    LOGS = _rebuild_logs(LITE_DIR, cfg.topic_overrides or None)
+
+
+def main() -> None:
     parser = argparse.ArgumentParser(description="実機 vs シム 比較プロット生成")
-    parser.add_argument(
-        "--base-dir",
-        default=os.environ.get("BEST_MODEL_BASE_DIR", str(Path(__file__).parent)),
-        help="lite/ と comparison/ の親ディレクトリ (env: BEST_MODEL_BASE_DIR)",
-    )
-    parser.add_argument(
-        "--map-osm",
-        default=os.environ.get("MAP_OSM_PATH"),
-        help="lanelet2_map.osm の絶対パス。未指定なら ~/.webauto/... を試みる (env: MAP_OSM_PATH)",
-    )
-    parser.add_argument(
-        "--scenario-name",
-        default=os.environ.get("SCENARIO_NAME", ""),
-        help="図タイトルに表示するシナリオ名 (env: SCENARIO_NAME)",
-    )
-    parser.add_argument(
-        "--wheelbase",
-        type=float,
-        default=float(os.environ.get("WHEELBASE", "0") or "0"),
-        help="ホイールベース [m]。0 なら既定値を使用 (env: WHEELBASE)",
-    )
-    parser.add_argument(
-        "--curve-config",
-        # None=未指定（後方互換デフォルト）、""=スキップ、パス=YAML読み込み
-        default=os.environ.get("CURVE_CONFIG_YAML"),
-        help=(
-            "カーブ設定 YAML パス (env: CURVE_CONFIG_YAML)。"
-            "未指定=後方互換デフォルト、空文字=カーブ別解析スキップ"
-        ),
-    )
-    parser.add_argument(
-        "--topic-config",
-        default=os.environ.get("TOPIC_CONFIG_YAML", ""),
-        help="トピック設定 YAML パス。未指定なら規定トピックを使用 (env: TOPIC_CONFIG_YAML)",
-    )
+    add_common_cli_arguments(parser)
     args = parser.parse_args()
 
-    global BASE, LITE_DIR, OUT_DIR, FIGS_DIR
-    global SCENARIO_NAME, WHEELBASE, CURVE_CENTERS, LOGS
-    global MAP_OSM_PATH_OVERRIDE, _CURVE2_WINDOW, _CURVE2_INDEX
-
-    # --- ディレクトリ設定 ---
-    BASE = Path(args.base_dir)
-    LITE_DIR = BASE / "lite"
-    OUT_DIR = BASE / "comparison"
-    FIGS_DIR = OUT_DIR / "figures"
-
-    # --- シナリオ名 ---
-    if args.scenario_name:
-        SCENARIO_NAME = args.scenario_name
-
-    # --- WHEELBASE ---
-    if args.wheelbase and args.wheelbase > 0:
-        WHEELBASE = args.wheelbase
-
-    # --- 地図パス override ---
-    # None=未指定（後方互換フォールバック）、""=地図なし明示、パス文字列=その OSM を使用
-    if args.map_osm is not None:
-        MAP_OSM_PATH_OVERRIDE = args.map_osm
-
-    # --- カーブ設定 ---
-    if args.curve_config is None:
-        # 環境変数も引数も未設定 → デフォルト値を使う（後方互換）
-        pass
-    elif args.curve_config == "":
-        # 空文字を明示 → カーブ別解析スキップ
-        CURVE_CENTERS = None
-    else:
-        if _yaml is None:
-            warnings.warn(
-                "PyYAML が利用できないため curve_config を読み込めません。カーブ別解析をスキップ"
-            )
-            CURVE_CENTERS = None
-        else:
-            try:
-                with open(args.curve_config, encoding="utf-8") as f:
-                    cc = _yaml.safe_load(f)
-                CURVE_CENTERS = cc.get("curve_centers") or None
-                if "curve2_index" in cc:
-                    _CURVE2_INDEX = int(cc["curve2_index"])
-                if "curve2_window" in cc:
-                    w = cc["curve2_window"]
-                    _CURVE2_WINDOW = {
-                        "start": float(w.get("start", 0.0)),
-                        "end": float(w.get("end", 9999.0)),
-                    }
-            except Exception as e:
-                warnings.warn(f"curve_config YAML 読み込み失敗: {e}。カーブ別解析をスキップ")
-                CURVE_CENTERS = None
-
-    # --- トピック設定 ---
-    topic_overrides = None
-    if args.topic_config and _yaml is not None:
-        try:
-            with open(args.topic_config, encoding="utf-8") as f:
-                topic_overrides = _yaml.safe_load(f)
-        except Exception as e:
-            warnings.warn(f"topic_config YAML 読み込み失敗: {e}")
-
-    # --- LOGS 再構築（BASE が確定してから path を付与）---
-    LOGS = _rebuild_logs(LITE_DIR, topic_overrides)
+    cfg = build_runtime_config(args, default_base_dir=Path(__file__).parent)
+    _apply_runtime_config(cfg)
 
     OUT_DIR.mkdir(parents=True, exist_ok=True)
     FIGS_DIR.mkdir(parents=True, exist_ok=True)
 
     print("=== データ読み込み中 ===")
-    loaded = {}
-    for label, cfg in LOGS.items():
-        mcap_path: Path = cfg["path"]
+    loaded: dict = {}
+    for label, lcfg in LOGS.items():
+        mcap_path: Path = lcfg["path"]
         if not mcap_path.exists():
             warnings.warn(f"[{label}] {mcap_path} が見つからないためスキップ")
             continue
@@ -1513,35 +1267,34 @@ def main():
 
         df_mode = load_operation_mode(mcap_path)
         df_vel = load_velocity(mcap_path)
-        t0 = find_autonomous_start(df_mode, df_vel)
+        t0 = _find_autonomous_start(df_mode, df_vel)
         print(f"    → t0 = {t0} ns (AUTONOMOUS 開始)")
 
         loaded[label] = {
             "velocity": align_time(df_vel, t0),
             "steering": align_time(load_steering(mcap_path), t0),
-            "kinematic": align_time(load_kinematic(mcap_path, cfg["kinematic"]), t0),
-            "accel": align_time(load_accel(mcap_path, cfg["accel"]), t0),
-            "cmd": align_time(load_cmd(mcap_path, cfg["cmd"]), t0),
-            "color": cfg["color"],
-            "lw": cfg["lw"],
-            "ls": cfg["ls"],
-            "marker": cfg["marker"],
-            "ms": cfg["ms"],
+            "kinematic": align_time(load_kinematic(mcap_path, lcfg["kinematic"]), t0),
+            "accel": align_time(load_accel(mcap_path, lcfg["accel"]), t0),
+            "cmd": align_time(load_cmd(mcap_path, lcfg["cmd"]), t0),
+            "color": lcfg["color"],
+            "lw": lcfg["lw"],
+            "ls": lcfg["ls"],
+            "marker": lcfg["marker"],
+            "ms": lcfg["ms"],
         }
 
     if not loaded:
         warnings.warn("有効なログが1つも読み込めませんでした")
         return
 
-    # Lanelet2 地図読み込み
+    # Lanelet2 地図読み込み (RuntimeConfig が解決済みのパスを保持)
     print("\n=== 地図読み込み中 ===")
-    map_ways = None
-    map_osm = _resolve_map_osm()
-    if map_osm is not None:
+    map_ways: list | None = None
+    if cfg.map_osm_path is not None:
         try:
-            map_ways = load_map_ways(map_osm)
-            print(f"  {len(map_ways)} ways をロード ({map_osm})")
-        except Exception as e:
+            map_ways = load_map_ways(cfg.map_osm_path)
+            print(f"  {len(map_ways)} ways をロード ({cfg.map_osm_path})")
+        except Exception as e:  # noqa: BLE001
             warnings.warn(f"地図ロード失敗: {e}")
     else:
         warnings.warn("地図ファイルが見つかりません。軌跡プロットは地図背景なしで描画します")
@@ -1565,7 +1318,7 @@ def main():
         report_path = OUT_DIR / "report.md"
         report_path.write_text(report, encoding="utf-8")
         print(f"  保存: {report_path}")
-    except Exception as e:
+    except Exception as e:  # noqa: BLE001
         warnings.warn(f"レポート生成失敗: {e}")
 
     print("\n完了。出力先:", FIGS_DIR)
