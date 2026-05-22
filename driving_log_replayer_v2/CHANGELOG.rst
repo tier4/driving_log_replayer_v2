@@ -2,6 +2,16 @@
 Changelog for package driving_log_replayer
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
+Forthcoming
+-----------
+* feat(perception): disable to show metrics details (`#359 <https://github.com/tier4/driving_log_replayer_v2/issues/359>`_)
+  * feat(perception): disable to show metrics details
+  * fix unnecessary changes
+  * update
+  ---------
+* feat(planning_control): record /vehicle/status/control_mode topic (`#358 <https://github.com/tier4/driving_log_replayer_v2/issues/358>`_)
+* Contributors: Go Sakayori, Masato Saeki
+
 3.18.0 (2026-05-01)
 -------------------
 * feat: support jazzy (`#354 <https://github.com/tier4/driving_log_replayer_v2/issues/354>`_)
