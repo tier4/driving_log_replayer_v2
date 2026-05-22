@@ -1,5 +1,14 @@
 # Release Notes
 
+## Version 3.18.1
+
+Minor Tweak
+
+| Module             | Feature | Brief summary                             | Pull request                                                        | Contributor                                   |
+| ------------------ | ------- | ----------------------------------------- | ------------------------------------------------------------------- | --------------------------------------------- |
+| `perception`       | logging | disable to show metrics details           | [#359](https://github.com/tier4/driving_log_replayer_v2/issues/359) | [MasatoSaeki](https://github.com/MasatoSaeki) |
+| `planning_control` | topic   | record /vehicle/status/control_mode topic | [#358](https://github.com/tier4/driving_log_replayer_v2/issues/358) | [go-sakayori](https://github.com/go-sakayori) |
+
 ## Version 3.18.0
 
 Major changes
