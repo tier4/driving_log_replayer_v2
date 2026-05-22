@@ -111,6 +111,7 @@ def perception() -> ProcessInfo:
             conf["evaluation_tracking_topic_regex"],
             conf["evaluation_prediction_topic_regex"],
             conf["degradation_topic"],
+            conf["enable_metrics_details"],
             conf["enable_analysis"],
             conf["analysis_max_distance"],
             conf["analysis_distance_interval"],
