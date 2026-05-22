@@ -2,8 +2,8 @@
 Changelog for package driving_log_replayer
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-Forthcoming
------------
+3.18.1 (2026-05-22)
+-------------------
 * feat(perception): disable to show metrics details (`#359 <https://github.com/tier4/driving_log_replayer_v2/issues/359>`_)
   * feat(perception): disable to show metrics details
   * fix unnecessary changes
