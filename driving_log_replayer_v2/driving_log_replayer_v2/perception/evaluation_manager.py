@@ -174,13 +174,9 @@ class PerceptionEvaluationManager(EvaluationManager):
         """
         if topic_name is not None:
             evaluator = self._evaluators[topic_name]
-            return evaluator.get_evaluation_results(
-                save_frame_results=True, show_metrics_details=True
-            )
+            return evaluator.get_evaluation_results(save_frame_results=True)
         return {
-            topic: evaluator.get_evaluation_results(
-                save_frame_results=True, show_metrics_details=True
-            )
+            topic: evaluator.get_evaluation_results(save_frame_results=True)
             for topic, evaluator in self._evaluators.items()
         }
 
