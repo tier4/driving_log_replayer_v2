@@ -42,6 +42,12 @@ jobs:
         with:
           required-ros-distributions: ${{ matrix.ros_distribution }}
 
+      # Remove apt version of autoware_lanelet2_extension to avoid conflict with source build
+      - name: Remove apt version of autoware_lanelet2_extension
+        run: |
+          sudo apt-get update
+          sudo apt-get remove -y ros-humble-autoware-lanelet2-extension
+
       - name: build and test
         uses: ros-tooling/action-ros-ci@v0.4
         id: actions_ros_ci_step
