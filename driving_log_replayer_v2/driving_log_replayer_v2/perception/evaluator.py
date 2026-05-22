@@ -199,17 +199,21 @@ class PerceptionEvaluator(Evaluator):
     def get_archive_path(self) -> Path:
         return self.__result_archive_w_topic_path
 
+    def save_frame_results(self) -> None:
+        self.__logger.info("Saving frame results for topic: %s", self.__evaluation_topic)
+        with Path(expandvars(self.__result_archive_w_topic_path.joinpath("scene_result.pkl"))).open(
+            "wb"
+        ) as pkl_file:
+            pickle.dump(self.__evaluator.frame_results, pkl_file)
+        with Path(
+            expandvars(self.__result_archive_w_topic_path.joinpath("evaluation_config.pkl"))
+        ).open("wb") as pkl_file:
+            pickle.dump(self.__evaluator.evaluator_config, pkl_file)
+
     def get_evaluation_results(self, *, save_frame_results: bool) -> dict:
         self.__logger.info("Evaluating topic: %s", self.__evaluation_topic)
         if save_frame_results:
-            with Path(
-                expandvars(self.__result_archive_w_topic_path.joinpath("scene_result.pkl"))
-            ).open("wb") as pkl_file:
-                pickle.dump(self.__evaluator.frame_results, pkl_file)
-            with Path(
-                expandvars(self.__result_archive_w_topic_path.joinpath("evaluation_config.pkl"))
-            ).open("wb") as pkl_file:
-                pickle.dump(self.__evaluator.evaluator_config, pkl_file)
+            self.save_frame_results()
         if self.__evaluator.evaluator_config.evaluation_task == "fp_validation":
             final_metrics = self.__get_fp_results()
         else:

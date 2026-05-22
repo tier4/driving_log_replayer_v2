@@ -108,6 +108,11 @@ USE_CASE_ARGS: list[DeclareLaunchArgument] = [
         description="Topic name for degradation information. If you do not want to override the scenario setting, set it to '' or 'None'.",
     ),
     DeclareLaunchArgument(
+        "enable_metrics_details",
+        default_value="true",
+        description="Enable to include metrics details in the evaluation result.",
+    ),
+    DeclareLaunchArgument(
         "enable_analysis",
         default_value="true",
         description="Enable analysis.",

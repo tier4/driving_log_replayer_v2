@@ -146,6 +146,21 @@ class PerceptionEvaluationManager(EvaluationManager):
             topic: evaluator.get_archive_path() for topic, evaluator in self._evaluators.items()
         }
 
+    def save_frame_results(self, topic_name: str | None = None) -> None:
+        """
+        Save the frame results for each/specific evaluation topic. If called, frame results are also saved when getting evaluation results.
+
+        Args:
+            topic_name (str | None): Name of the topic to save the frame results. If None, save all frame results.
+
+        """
+        if topic_name is not None:
+            evaluator = self._evaluators[topic_name]
+            evaluator.save_frame_results()
+            return
+        for evaluator in self._evaluators.values():
+            evaluator.save_frame_results()
+
     def get_evaluation_results(self, topic_name: str | None = None) -> dict | dict[str, dict]:
         """
         Get the evaluation results for each/specific evaluation topic. If called, frame results are also saved.
@@ -159,9 +174,13 @@ class PerceptionEvaluationManager(EvaluationManager):
         """
         if topic_name is not None:
             evaluator = self._evaluators[topic_name]
-            return evaluator.get_evaluation_results(save_frame_results=True)
+            return evaluator.get_evaluation_results(
+                save_frame_results=True, show_metrics_details=True
+            )
         return {
-            topic: evaluator.get_evaluation_results(save_frame_results=True)
+            topic: evaluator.get_evaluation_results(
+                save_frame_results=True, show_metrics_details=True
+            )
             for topic, evaluator in self._evaluators.items()
         }
 

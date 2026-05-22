@@ -126,11 +126,13 @@ class PerceptionRunner(Runner):
         storage: str,
         evaluation_topics_with_task: dict[str, list[str]],
         degradation_topic: str,
+        enable_metrics_details: str,
         enable_analysis: str,
         analysis_max_distance: str,
         analysis_distance_interval: str,
     ) -> None:
         # additional instance variables
+        self._enable_metrics_details = enable_metrics_details
         self._analysis_max_distance = analysis_max_distance
         self._analysis_distance_interval = analysis_distance_interval
 
@@ -316,21 +318,24 @@ class PerceptionRunner(Runner):
         )
 
     def _evaluate_on_post_process(self) -> None:
-        final_metrics: dict[str, dict] = self.perc_eval_manager.get_evaluation_results()
+        if self._enable_metrics_details == "true":
+            final_metrics: dict[str, dict] = self.perc_eval_manager.get_evaluation_results()
 
-        perception_degradation_topic = self._degradation_topics[
-            0
-        ]  # head topic is perception degradation topic
-        self.perc_result.set_final_metrics(final_metrics[perception_degradation_topic])
-        res_str = self.perc_result_writer.write_result_with_time(
-            self.perc_result,
-            self._rosbag_manager.get_last_subscribed_timestamp(),
-        )
-        self._rosbag_manager.write_results(
-            "/driving_log_replayer_v2/perception/results",
-            String(data=res_str),
-            self._rosbag_manager.get_last_subscribed_timestamp(),
-        )
+            perception_degradation_topic = self._degradation_topics[
+                0
+            ]  # head topic is perception degradation topic
+            self.perc_result.set_final_metrics(final_metrics[perception_degradation_topic])
+            res_str = self.perc_result_writer.write_result_with_time(
+                self.perc_result,
+                self._rosbag_manager.get_last_subscribed_timestamp(),
+            )
+            self._rosbag_manager.write_results(
+                "/driving_log_replayer_v2/perception/results",
+                String(data=res_str),
+                self._rosbag_manager.get_last_subscribed_timestamp(),
+            )
+        else:
+            self.perc_eval_manager.save_frame_results()
 
     def _analysis(self) -> None:
         if self.perc_eval_manager.get_degradation_evaluation_task() != "fp_validation":
@@ -362,6 +367,7 @@ def evaluate(
     evaluation_tracking_topic_regex: str,
     evaluation_prediction_topic_regex: str,
     degradation_topic: str,
+    enable_metrics_details: str,
     enable_analysis: str,
     analysis_max_distance: str,
     analysis_distance_interval: str,
@@ -381,6 +387,7 @@ def evaluate(
         storage,
         evaluation_topics_with_task,
         degradation_topic,
+        enable_metrics_details,
         enable_analysis,
         analysis_max_distance,
         analysis_distance_interval,
@@ -430,6 +437,11 @@ def parse_args() -> argparse.Namespace:
         help="Topic name for degradation information. If you do not want to override the scenario setting, set it to '' or 'None'.",
     )
     parser.add_argument(
+        "--enable-metrics-details",
+        default="true",
+        help="Enable to include metrics details in the evaluation result.",
+    )
+    parser.add_argument(
         "--enable-analysis",
         default="true",
         help="Enable analysis.",
@@ -460,6 +472,7 @@ def main() -> None:
         args.evaluation_tracking_topic_regex,
         args.evaluation_prediction_topic_regex,
         args.degradation_topic,
+        args.enable_metrics_details,
         args.enable_analysis,
         args.analysis_max_distance,
         args.analysis_distance_interval,
