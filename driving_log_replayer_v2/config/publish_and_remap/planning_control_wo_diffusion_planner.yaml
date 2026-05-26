@@ -1,0 +1,62 @@
+# This publishing topics is to test E2E planner's trajectory selector and its following modules
+# Note this config should be used with `disable_diffusion_planner:=true` and `enable_minimum_rule_based_planner:=false`
+publish:
+  # diffusion planner outputs
+  - /planning/generator/diffusion_planner/candidate_trajectories
+  - /planning/planning_factors/diffusion_planner
+  - /planning/scenario_planning/lane_driving/behavior_planning/debug/traffic_signal
+  - /planning/trajectory_generator/neural_network_based_planner/diffusion_planner_node/debug/lane_marker
+  - /planning/trajectory_generator/neural_network_based_planner/diffusion_planner_node/debug/linestring_marker
+  - /planning/trajectory_generator/neural_network_based_planner/diffusion_planner_node/debug/route_marker
+  - /planning/trajectory_generator/neural_network_based_planner/diffusion_planner_node/debug/route_marker
+  - /planning/trajectory_generator/neural_network_based_planner/diffusion_planner_node/output/predicted_objects
+  - /planning/trajectory_generator/neural_network_based_planner/diffusion_planner_node/output/trajectory
+  - /planning/turn_indicators_cmd
+
+  # vehicle
+  - /vehicle/status/steering_status
+  - /vehicle/status/velocity_status
+  - /vehicle/status/turn_indicators_status
+  - /vehicle/status/control_mode
+  - /vehicle/status/gear_status
+  # sensing
+  - /sensing/imu/imu_data
+  # localization
+  - /localization/acceleration
+  - /localization/kinematic_state
+  - /tf
+  # perception
+  - /perception/traffic_light_recognition/traffic_signals
+  - /perception/object_recognition/objects
+  # planning inputs
+  - /planning/mission_planning/route
+  - /planning/mission_planning/state
+  - /planning/scenario_planning/max_velocity_default
+  # system / mrm
+  - /system/hazard_lights_cmd
+  - /system/emergency/control_cmd
+  - /system/emergency/gear_cmd
+  - /system/emergency/hazard_lights_cmd
+  - /system/emergency/turn_indicators_cmd
+  - /system/fail_safe/mrm_state
+  # `/control/external_cmd_selector` outputs
+  - /control/external_cmd_selector/current_selector_mode
+  - /external/selected/gear_cmd
+  - /external/selected/hazard_lights_cmd
+  - /external/selected/heartbeat
+  - /external/selected/pedals_cmd
+  - /external/selected/steering_cmd
+  - /external/selected/turn_indicators_cmd
+  # other
+  - /autoware/state
+  - /awapi/tmp/virtual_traffic_light_states
+  - /api/operation_mode/state
+  - /sensing/gnss/septentrio/nav_sat_fix
+  # - /system/operation_mode/state # from `/control/autoware_operation_mode_transition_manager`
+  # - /autoware/engage # from `/control/autoware_operation_mode_transition_manager`
+  # - /api/autoware/get/engage # from `/control/vehicle_cmd_gate`
+  - /planning/ground_truth_trajectory
+  - /planning/trajectory
+
+remap:
+  - /planning/trajectory # it will be remapped to /planning/reference_trajectory
