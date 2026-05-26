@@ -9,7 +9,7 @@
 
 使用モデル: DELAY_STEER_ACC_GEARED_WO_FALL_GUARD (C++ ctypes 経由)
   ライブラリ: libvehicle_model_wrapper.so (simple_sensor_simulator パッケージが提供)
-  パラメータ: analysis/best_model_description/config/simulator_model.param.yaml
+  パラメータ: best_model_description パッケージの config/simulator_model.param.yaml
 
 出力:
   comparison/curve2_per_step/
@@ -105,24 +105,17 @@ def _resolve_so_path() -> Path:
 
     優先順:
       1. VEHICLE_MODEL_SO_PATH 環境変数
-      2. ament_index_python で best_model_comparison パッケージ share を解決
-      3. ソース隣接 (ローカル開発用フォールバック)
+      2. ament_index_python で simple_sensor_simulator パッケージ share を解決
     """
     env = os.environ.get("VEHICLE_MODEL_SO_PATH")
     if env:
         p = Path(env)
         if p.exists():
             return p
-    try:
-        from ament_index_python.packages import get_package_share_directory
+    from ament_index_python.packages import get_package_share_directory
 
-        share = Path(get_package_share_directory("simple_sensor_simulator"))
-        p = share / "libvehicle_model_wrapper.so"
-        if p.exists():
-            return p
-    except Exception:  # noqa: BLE001
-        pass
-    return Path(__file__).parent / "libvehicle_model_wrapper.so"
+    share = Path(get_package_share_directory("simple_sensor_simulator"))
+    return share / "libvehicle_model_wrapper.so"
 
 
 def _load_lib() -> ctypes.CDLL:

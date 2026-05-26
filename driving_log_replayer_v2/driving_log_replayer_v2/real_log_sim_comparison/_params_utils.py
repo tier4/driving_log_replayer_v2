@@ -65,20 +65,9 @@ def setup_jp_font() -> str | None:
 
 
 def _find_desc_dir() -> Path:
-    try:
-        from ament_index_python.packages import get_package_share_directory
+    from ament_index_python.packages import get_package_share_directory
 
-        return Path(get_package_share_directory("best_model_description")) / "config"
-    except Exception:
-        pass
-    # フォールバック: ソースツリー上の隣接パッケージ（ament 未起動時）
-    return (
-        Path(__file__).parent.parent.parent.parent.parent
-        / "scenario_simulator"
-        / "analysis"
-        / "best_model_description"
-        / "config"
-    )
+    return Path(get_package_share_directory("best_model_description")) / "config"
 
 
 _DESC_DIR = _find_desc_dir()
