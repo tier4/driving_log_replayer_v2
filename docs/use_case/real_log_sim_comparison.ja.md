@@ -17,7 +17,7 @@
 
 1. **lite bag 生成** — `make_lite`（`--kind real`）で実機 mcap/db3 から比較対象トピックのみを抽出し、`lite/real.lite` を生成する。
 2. **比較プロット・レポート生成** — `compare_logs` で実機ログから速度・加速度・操舵・軌跡の比較プロット（PNG/PDF）と Markdown レポートを生成する。
-3. **per-step delta 解析（best-effort）** — `analyze_curve2_per_step` で指定カーブのステップ単位 delta 解析を生成する。失敗してもステップ 1/2 の成果は維持される。
+3. **per-step delta 解析（best-effort）** — `analyze_per_step` で AUTONOMOUS 区間全体のステップ単位 delta 解析（実機計測 vs C++ 車両モデルの 1 フレーム予測）を生成する。失敗してもステップ 1/2 の成果は維持される。
 
 成否判定はパイプラインの例外有無で決まる。
 全ステップ（best-effort のステップ 3 を除く）が完走すれば `result.jsonl` に `Success: true` が記録され、いずれかの subprocess が非ゼロ終了またはタイムアウトすると `Success: false` と Python traceback が記録される。
@@ -105,9 +105,9 @@ PNG / PDF の比較プロットが出力される。
 | `curve2_steering_detail.{png,pdf}` | カーブ② 操舵詳細                      |
 | `curve2_yaw_steer.{png,pdf}`       | カーブ② ヨーレート・操舵関係          |
 
-### `comparison/curve2_per_step/`
+### `comparison/per_step/`
 
-`analyze_curve2_per_step` による per-step delta 解析の成果物（CSV・図）。ステップ 3 が失敗した場合は出力されない。
+`analyze_per_step` による全走行 per-step delta 解析の成果物（CSV・図 8 枚・summary.txt）。ステップ 3 が失敗した場合は出力されない。
 
 ### `result_bag_path/`
 

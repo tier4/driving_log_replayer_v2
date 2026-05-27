@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""カーブ② 区間の per-step delta 分析（C++ 車両モデル使用）.
+"""全走行区間の per-step delta 分析（C++ 車両モデル使用）.
 
 手法:
   各制御コマンド区間 (t_k, t_{k+1}) について:
@@ -7,12 +7,15 @@
     2. 実機制御コマンドを ZOH で適用
     3. 区間終端の予測状態を実機状態と比較（車両ローカル座標系）
 
+解析窓: AUTONOMOUS 開始から制御コマンド系列末尾まで。
+時系列軸 tr は AUTONOMOUS 開始時刻からの経過時間 [s]。
+
 使用モデル: DELAY_STEER_ACC_GEARED_WO_FALL_GUARD (C++ ctypes 経由)
   ライブラリ: libvehicle_model_wrapper.so (simple_sensor_simulator パッケージが提供)
   パラメータ: best_model_description パッケージの config/simulator_model.param.yaml
 
 出力:
-  comparison/curve2_per_step/
+  comparison/per_step/
     overview.png, error_timeseries.png, error_vs_speed.png,
     map_distribution.png, summary.txt, per_step_delta.csv
 """
@@ -34,7 +37,6 @@ import numpy as np
 import pandas as pd
 
 from ._events import find_autonomous_start as _find_autonomous_start
-from ._events import find_curve2_launch as _find_curve2_launch_window
 from ._io import (
     align_time,
     iter_bag_messages,
@@ -53,21 +55,13 @@ setup_jp_font()
 # モジュールレベル設定 (main() で RuntimeConfig 経由で上書きされる)
 BASE = Path(os.environ.get("BEST_MODEL_BASE_DIR") or Path(__file__).parent)
 LITE_DIR = BASE / "lite"
-OUT_DIR = BASE / "comparison" / "curve2_per_step"
+OUT_DIR = BASE / "comparison" / "per_step"
 
 # 実機 lite bag は単一ファイルでも directory bag でも受け付ける。
 REAL_BAG_DIR = LITE_DIR / "real.lite.mcap"
 
-# カーブ②発進前後の解析窓
-T_PRE = 3.0  # [s]
-T_POST = 35.0  # [s]
-
-# curve2 window モジュール変数 (main で上書き)
-_CURVE2_WINDOW: tuple[float, float] = (20.0, 120.0)
-
-# curve2 中心 (main で上書き)
-_CURVE2_CX: int = 89301
-_CURVE2_CY: int = 43085
+# 地図プロットの bbox margin [m] (走行軌跡の min/max からの余白)
+MAP_BBOX_MARGIN = 10.0
 
 # per_step 専用の上書き値 (load_sim_params() のシム既定値に上塗りする)
 # 元コードは vehicle_info の wheel_base を 4.76012、PARAMS 内では明示で steer_bias=0.01
@@ -382,22 +376,17 @@ def find_autonomous_start(data: dict) -> int:
     return _find_autonomous_start(data["mode"], df_vel)
 
 
-def find_curve2_launch(df_vel: pd.DataFrame) -> float | None:
-    """カーブ② 直前停止からの発進時刻を返す (`_events.find_curve2_launch` 経由)。
-
-    df_vel は列 't', 'vx' を持つ前提（per_step 内部表記）。
-    """
-    df = df_vel.rename(columns={"vx": "lon_vel"})
-    return _find_curve2_launch_window(df, window=_CURVE2_WINDOW)
-
-
 # ---------------------------------------------------------------------------
 # per-step delta 分析
 # ---------------------------------------------------------------------------
 
 
-def run_per_step(data: dict, t0_ns: int, t_launch: float, params: dict) -> pd.DataFrame:
-    """per-step delta を実行し結果 DataFrame を返す。"""
+def run_per_step(data: dict, t0_ns: int, params: dict) -> pd.DataFrame:
+    """per-step delta を実行し結果 DataFrame を返す。
+
+    AUTONOMOUS 開始 (t0_ns) から制御コマンド系列末尾までを解析対象とする。
+    時系列軸 tr は AUTONOMOUS 開始からの経過時間 [s]。
+    """
 
     # -- タイムスタンプを秒に変換 --
     def to_sec(df: pd.DataFrame) -> pd.DataFrame:
@@ -410,8 +399,21 @@ def run_per_step(data: dict, t0_ns: int, t_launch: float, params: dict) -> pd.Da
     df_steer = to_sec(data["steer"]).sort_values("t").reset_index(drop=True)
     df_cmd = to_sec(data["cmd"]).sort_values("t").reset_index(drop=True)
 
-    t_lo = t_launch - T_PRE
-    t_hi = t_launch + T_POST
+    if df_cmd.empty:
+        raise RuntimeError("制御コマンドが空です")
+    if df_kin.empty:
+        raise RuntimeError("運動学状態が空です")
+
+    # AUTONOMOUS 開始 (tr=0) から各系列末尾の min まで解析対象とする。
+    # cmd だけ末尾まで取ると kin/acc/steer 側で np.interp が右端値に張り付き
+    # 末尾区間で誤差が不自然に 0 にクリップされるため、安全側で min を取る。
+    t_lo = 0.0
+    t_hi_candidates = [df_cmd["t"].max(), df_kin["t"].max()]
+    if not df_acc.empty:
+        t_hi_candidates.append(df_acc["t"].max())
+    if not df_steer.empty:
+        t_hi_candidates.append(df_steer["t"].max())
+    t_hi = float(min(t_hi_candidates))
 
     # delay queue 分だけ過去コマンドも取得できるよう cmd 窓を広げる
     max_delay_sec = max(params["acc_time_delay"], params["steer_time_delay"]) + SUB_DT
@@ -574,7 +576,7 @@ def run_per_step(data: dict, t0_ns: int, t_launch: float, params: dict) -> pd.Da
         records.append(
             {
                 "timestamp": t_cmd[k],
-                "tr": t_cmd[k] - t_launch,
+                "tr": t_cmd[k],  # AUTONOMOUS 開始からの経過時間 [s]
                 "accel_des": accel_des,
                 "steer_des": steer_des,
                 "interval_sec": interval,
@@ -658,8 +660,8 @@ def plot_overview(df: pd.DataFrame, params: dict) -> None:
     ax = axes[0, 0]
     ax.plot(tr, df["real_vx"].values, color="blue", lw=1.2, label="実機 vx")
     ax.plot(tr, df["sim_vx"].values, color="red", lw=1.0, ls="--", label="モデル vx")
-    ax.axvline(0, color="green", lw=1.0, ls=":", alpha=0.8, label="発進")
-    ax.set_xlabel("発進からの時刻 [s]")
+    ax.axvline(0, color="green", lw=1.0, ls=":", alpha=0.8, label="AUTONOMOUS 開始")
+    ax.set_xlabel("AUTONOMOUS 開始からの時刻 [s]")
     ax.set_ylabel("速度 [m/s]")
     _set_title(
         ax, "速度: 実機 vs モデル", "実機: kinematic_state/twist.linear.x  モデル: state_[3]"
@@ -672,7 +674,7 @@ def plot_overview(df: pd.DataFrame, params: dict) -> None:
     ax.plot(tr, df["accel_des"].values, color="gray", lw=0.8, label="指令 accel_des")
     ax.plot(tr, df["real_ax"].values, color="blue", lw=1.0, label="実機 ax")
     ax.axvline(0, color="green", lw=1.0, ls=":", alpha=0.8)
-    ax.set_xlabel("発進からの時刻 [s]")
+    ax.set_xlabel("AUTONOMOUS 開始からの時刻 [s]")
     ax.set_ylabel("加速度 [m/s²]")
     _set_title(
         ax,
@@ -690,7 +692,7 @@ def plot_overview(df: pd.DataFrame, params: dict) -> None:
     ax.plot(tr, ma, color="red", lw=1.5, label=f"移動平均(w={window})")
     ax.axhline(0, color="black", lw=0.8)
     ax.axvline(0, color="green", lw=1.0, ls=":", alpha=0.8)
-    ax.set_xlabel("発進からの時刻 [s]")
+    ax.set_xlabel("AUTONOMOUS 開始からの時刻 [s]")
     ax.set_ylabel("縦方向誤差 [cm]")
     _set_title(
         ax, "1ステップ縦方向誤差", "実機: kinematic_state/pose.position  モデル: state_[0,1]"
@@ -706,7 +708,7 @@ def plot_overview(df: pd.DataFrame, params: dict) -> None:
     ax.plot(tr, ma, color="red", lw=1.5, label=f"移動平均(w={window})")
     ax.axhline(0, color="black", lw=0.8)
     ax.axvline(0, color="green", lw=1.0, ls=":", alpha=0.8)
-    ax.set_xlabel("発進からの時刻 [s]")
+    ax.set_xlabel("AUTONOMOUS 開始からの時刻 [s]")
     ax.set_ylabel("横方向誤差 [cm]")
     _set_title(
         ax, "1ステップ横方向誤差", "実機: kinematic_state/pose.position  モデル: state_[0,1]"
@@ -715,7 +717,7 @@ def plot_overview(df: pd.DataFrame, params: dict) -> None:
     ax.grid(True, alpha=0.3)
 
     fig.suptitle(
-        "カーブ② per-step delta 分析\n(各ステップで実機状態にリセット — 計画挙動の差を除外)",
+        "全走行 per-step delta 分析\n(各ステップで実機状態にリセット — 計画挙動の差を除外)",
         fontsize=11,
     )
     fig.tight_layout()
@@ -759,14 +761,14 @@ def plot_error_timeseries(df: pd.DataFrame, params: dict) -> None:
         ax.plot(tr, vals, color="gray", lw=0.4, alpha=0.4, label="raw")
         ax.plot(tr, ma, color=color, lw=1.5, label=f"移動平均(w={window})")
         ax.axhline(0, color="black", lw=0.8)
-        ax.axvline(0, color="green", lw=1.0, ls=":", alpha=0.8, label="発進")
+        ax.axvline(0, color="green", lw=1.0, ls=":", alpha=0.8, label="AUTONOMOUS 開始")
         ax.set_ylabel(ylabel)
         _set_title(ax, title, source)
         ax.legend(fontsize=8)
         ax.grid(True, alpha=0.3)
 
-    axes[2].set_xlabel("発進からの時刻 [s]")
-    fig.suptitle("カーブ② per-step delta 誤差時系列", fontsize=11)
+    axes[2].set_xlabel("AUTONOMOUS 開始からの時刻 [s]")
+    fig.suptitle("全走行 per-step delta 誤差時系列", fontsize=11)
     fig.tight_layout()
     add_params_annotation(fig, params)
     _save(fig, "error_timeseries")
@@ -814,7 +816,7 @@ def plot_error_vs_speed(df: pd.DataFrame, params: dict) -> None:
         ax.legend(fontsize=8)
         ax.grid(True, alpha=0.3)
 
-    fig.suptitle("カーブ② per-step delta: 速度依存性", fontsize=11)
+    fig.suptitle("全走行 per-step delta: 速度依存性", fontsize=11)
     fig.tight_layout()
     add_params_annotation(fig, params)
     _save(fig, "error_vs_speed")
@@ -849,8 +851,8 @@ def plot_steering_analysis(df: pd.DataFrame, params: dict) -> None:
         ls=":",
         label="指令 steer_des[k]",
     )
-    ax.axvline(0, color="green", lw=1.0, ls=":", alpha=0.8, label="発進")
-    ax.set_xlabel("発進からの時刻 [s]")
+    ax.axvline(0, color="green", lw=1.0, ls=":", alpha=0.8, label="AUTONOMOUS 開始")
+    ax.set_xlabel("AUTONOMOUS 開始からの時刻 [s]")
     ax.set_ylabel("ステア角 [deg]")
     _set_title(
         ax,
@@ -868,7 +870,7 @@ def plot_steering_analysis(df: pd.DataFrame, params: dict) -> None:
     ax.plot(tr, ma_f, color="blue", lw=1.5, label=f"移動平均(w={window})")
     ax.axhline(0, color="black", lw=0.8)
     ax.axvline(0, color="green", lw=1.0, ls=":", alpha=0.8)
-    ax.set_xlabel("発進からの時刻 [s]")
+    ax.set_xlabel("AUTONOMOUS 開始からの時刻 [s]")
     ax.set_ylabel("追従誤差 [deg]")
     _set_title(
         ax,
@@ -885,9 +887,9 @@ def plot_steering_analysis(df: pd.DataFrame, params: dict) -> None:
     ax.plot(tr, err_deg, color="gray", lw=0.4, alpha=0.4, label="raw")
     ax.plot(tr, ma_e, color="red", lw=1.5, label=f"移動平均(w={window})")
     ax.axhline(0, color="black", lw=0.8)
-    ax.axvline(0, color="green", lw=1.0, ls=":", alpha=0.8, label="発進")
+    ax.axvline(0, color="green", lw=1.0, ls=":", alpha=0.8, label="AUTONOMOUS 開始")
     rmse_deg = float(np.sqrt(np.mean(err_deg**2)))
-    ax.set_xlabel("発進からの時刻 [s]")
+    ax.set_xlabel("AUTONOMOUS 開始からの時刻 [s]")
     ax.set_ylabel("予測誤差 [deg]")
     _set_title(
         ax,
@@ -923,7 +925,7 @@ def plot_steering_analysis(df: pd.DataFrame, params: dict) -> None:
     ax.grid(True, alpha=0.3)
 
     fig.suptitle(
-        "カーブ② per-step ステアリング分析\n(1ステップ予測誤差: actual[k+1] − model_pred[k+1])",
+        "全走行 per-step ステアリング分析\n(1ステップ予測誤差: actual[k+1] − model_pred[k+1])",
         fontsize=11,
     )
     fig.tight_layout()
@@ -1001,15 +1003,20 @@ def plot_map_distribution(df: pd.DataFrame, params: dict) -> None:
     ]
 
     fig, axes = plt.subplots(1, 6, figsize=(36, 6))
-    cx, cy = _CURVE2_CX, _CURVE2_CY
+
+    # 走行軌跡の bbox + margin で地図プロット範囲を自動算出
+    x_min = float(df["pos_x"].min()) - MAP_BBOX_MARGIN
+    x_max = float(df["pos_x"].max()) + MAP_BBOX_MARGIN
+    y_min = float(df["pos_y"].min()) - MAP_BBOX_MARGIN
+    y_max = float(df["pos_y"].max()) + MAP_BBOX_MARGIN
 
     for ax, (vals, label, unit, source) in zip(axes, columns):
         if map_ways:
             for pts in map_ways:
                 wx, wy = pts[:, 0], pts[:, 1]
-                if wx.max() < cx - 80 or wx.min() > cx + 80:
+                if wx.max() < x_min or wx.min() > x_max:
                     continue
-                if wy.max() < cy - 80 or wy.min() > cy + 80:
+                if wy.max() < y_min or wy.min() > y_max:
                     continue
                 ax.plot(wx, wy, color="#cccccc", lw=0.5, zorder=1)
 
@@ -1018,15 +1025,15 @@ def plot_map_distribution(df: pd.DataFrame, params: dict) -> None:
             df["pos_x"], df["pos_y"], c=vals, cmap="RdBu_r", vmin=-vmax, vmax=vmax, s=8, zorder=3
         )
         plt.colorbar(sc, ax=ax, label=unit)
-        ax.set_xlim(cx - 80, cx + 80)
-        ax.set_ylim(cy - 80, cy + 80)
+        ax.set_xlim(x_min, x_max)
+        ax.set_ylim(y_min, y_max)
         ax.set_aspect("equal")
         ax.set_xlabel("x [m]")
         ax.set_ylabel("y [m]")
         _set_title(ax, f"{label} [{unit}]", source)
         ax.grid(True, lw=0.5, alpha=0.5)
 
-    fig.suptitle("カーブ② per-step delta: 地図上の誤差分布 (実機 − モデル)", fontsize=11)
+    fig.suptitle("全走行 per-step delta: 地図上の誤差分布 (実機 − モデル)", fontsize=11)
     fig.tight_layout()
     add_params_annotation(fig, params)
     _save(fig, "map_distribution")
@@ -1080,15 +1087,15 @@ def plot_lateral_dynamics_timeseries(df: pd.DataFrame, params: dict) -> None:
             ax.plot(tr, sim_vals, color="#ffaaaa", lw=0.4, alpha=0.5)
             ax.plot(tr, ma_sim, color="red", lw=1.5, ls="--", label="モデル MA")
         ax.axhline(0, color="black", lw=0.6, ls=":")
-        ax.axvline(0, color="green", lw=1.0, ls=":", alpha=0.8, label="発進")
+        ax.axvline(0, color="green", lw=1.0, ls=":", alpha=0.8, label="AUTONOMOUS 開始")
         ax.set_ylabel(ylabel)
         _set_title(ax, title, source)
         ax.legend(fontsize=8)
         ax.grid(True, alpha=0.3)
 
-    axes[-1].set_xlabel("発進からの時刻 [s]")
+    axes[-1].set_xlabel("AUTONOMOUS 開始からの時刻 [s]")
     fig.suptitle(
-        "カーブ② per-step delta: 横方向諸量 時系列\n(各ステップで実機状態にリセット)", fontsize=11
+        "全走行 per-step delta: 横方向諸量 時系列\n(各ステップで実機状態にリセット)", fontsize=11
     )
     fig.tight_layout()
     add_params_annotation(fig, params)
@@ -1179,7 +1186,7 @@ def plot_steer_vs_lateral_scatter(df: pd.DataFrame, params: dict) -> None:
         ax.grid(True, alpha=0.3)
 
     fig.suptitle(
-        "カーブ② per-step delta: ステア角 vs 横方向諸量 散布図\n(スケール誤差・バイアス確認)",
+        "全走行 per-step delta: ステア角 vs 横方向諸量 散布図\n(スケール誤差・バイアス確認)",
         fontsize=11,
     )
     fig.tight_layout()
@@ -1270,10 +1277,10 @@ def plot_cascade_error(df: pd.DataFrame, params: dict) -> None:
         ax_err.grid(True, alpha=0.3)
 
     for col in range(2):
-        axes[-1, col].set_xlabel("発進からの時刻 [s]")
+        axes[-1, col].set_xlabel("AUTONOMOUS 開始からの時刻 [s]")
 
     fig.suptitle(
-        "カーブ② per-step delta: 段階的誤差プロット\nステア指示 → ステア応答 → ay → vy → 横位置",
+        "全走行 per-step delta: 段階的誤差プロット\nステア指示 → ステア応答 → ay → vy → 横位置",
         fontsize=12,
     )
     fig.tight_layout()
@@ -1298,7 +1305,7 @@ def save_summary(df: pd.DataFrame) -> None:
         return float(np.mean(v)) * rad2deg
 
     lines = [
-        "=== カーブ② per-step delta 分析 サマリ ===",
+        "=== 全走行 per-step delta 分析 サマリ ===",
         f"有効ステップ数: {len(df)}",
         f"解析窓: tr={tr[0]:.1f}〜{tr[-1]:.1f}s",
         "",
@@ -1310,26 +1317,29 @@ def save_summary(df: pd.DataFrame) -> None:
         f"ステア予測 RMSE: {rmse_deg('err_steer'):.4f} deg",
         f"ステア予測 平均誤差: {mean_deg('err_steer'):.4f} deg  (正=実機が指令より大/負=小)",
         "",
-        "--- 発進後時間帯別 (縦方向 RMSE) ---",
+        "--- 時間帯別 (4 等分 equal-time bins / 縦・横・ステア RMSE) ---",
     ]
-    for lbl, lo, hi in [
-        ("t=0〜5s  (発進直後)", 0.0, 5.0),
-        ("t=5〜15s (カーブ進入)", 5.0, 15.0),
-        ("t=15〜35s (カーブ奥)", 15.0, 35.0),
-    ]:
-        mask = (tr >= lo) & (tr < hi)
-        if mask.sum() > 0:
-            lines.append(f"  {lbl}: {rmse_cm('err_ds_long', mask):.3f} cm  (n={mask.sum()})")
+    # 時間軸を 4 等分した equal-time bins で RMSE を集計する
+    t_min, t_max = float(tr[0]), float(tr[-1])
+    T_span = t_max - t_min
+    bands: list[tuple[str, float, float]] = []
+    if T_span > 0:
+        for i in range(4):
+            lo = t_min + T_span * i / 4
+            hi = t_min + T_span * (i + 1) / 4
+            lbl = f"区間{i + 1} [{lo:.1f}〜{hi:.1f}s]"
+            bands.append((lbl, lo, hi))
 
-    lines += ["", "--- 発進後時間帯別 (ステア予測 RMSE) ---"]
-    for lbl, lo, hi in [
-        ("t=0〜5s  (発進直後)", 0.0, 5.0),
-        ("t=5〜15s (カーブ進入)", 5.0, 15.0),
-        ("t=15〜35s (カーブ奥)", 15.0, 35.0),
-    ]:
-        mask = (tr >= lo) & (tr < hi)
-        if mask.sum() > 0:
-            lines.append(f"  {lbl}: {rmse_deg('err_steer', mask):.4f} deg  (n={mask.sum()})")
+    for lbl, lo, hi in bands:
+        # 最終バンドは右端を含める (rightmost open interval を回避)
+        mask = (tr >= lo) & ((tr <= hi) if hi == t_max else (tr < hi))
+        if mask.sum() == 0:
+            continue
+        lines.append(
+            f"  {lbl}: 縦={rmse_cm('err_ds_long', mask):.3f} cm  "
+            f"横={rmse_cm('err_ds_lat', mask):.3f} cm  "
+            f"ステア={rmse_deg('err_steer', mask):.4f} deg  (n={mask.sum()})"
+        )
 
     lines += ["", "--- 速度域別 ---"]
     for lo, hi in [(0, 2), (2, 5), (5, 8), (8, 100)]:
@@ -1355,20 +1365,13 @@ def save_summary(df: pd.DataFrame) -> None:
 
 def _apply_runtime_config(cfg: RuntimeConfig) -> dict:
     """RuntimeConfig をモジュールレベル変数に反映し、PARAMS を返す。"""
-    global BASE, LITE_DIR, OUT_DIR, REAL_BAG_DIR  # noqa: PLW0603
-    global _CURVE2_WINDOW, _CURVE2_CX, _CURVE2_CY, PARAMS, SUB_DT  # noqa: PLW0603
+    global BASE, LITE_DIR, OUT_DIR, REAL_BAG_DIR, PARAMS, SUB_DT  # noqa: PLW0603
 
     BASE = cfg.base_dir
     LITE_DIR = cfg.lite_dir
-    OUT_DIR = cfg.out_dir / "curve2_per_step"
+    OUT_DIR = cfg.out_dir / "per_step"
     # 入力 bag のデフォルトパス (実体は _resolve_real_mcap が file/dir 両対応)
     REAL_BAG_DIR = LITE_DIR / "real.lite.mcap"
-
-    _CURVE2_WINDOW = cfg.curve2_window
-    c2 = cfg.curve2
-    if c2 is not None:
-        _CURVE2_CX = int(c2["cx"])
-        _CURVE2_CY = int(c2["cy"])
 
     PARAMS = _build_params(cfg)
     SUB_DT = PARAMS["sub_dt"]
@@ -1376,7 +1379,7 @@ def _apply_runtime_config(cfg: RuntimeConfig) -> dict:
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="カーブ② per-step delta 分析")
+    parser = argparse.ArgumentParser(description="全走行 per-step delta 分析")
     add_common_cli_arguments(parser)
     args = parser.parse_args()
 
@@ -1397,18 +1400,8 @@ def main() -> None:
     t0_ns = find_autonomous_start(data)
     print(f"AUTONOMOUS 開始: t0_ns={t0_ns}")
 
-    df_vel = data["vel"].copy()
-    df_vel["t"] = (df_vel["t_ns"] - t0_ns) / 1e9
-    df_vel = df_vel[df_vel["t"] >= 0].sort_values("t").reset_index(drop=True)
-
-    t_launch = find_curve2_launch(df_vel)
-    if t_launch is None:
-        print("ERROR: カーブ② 発進時刻を検出できませんでした", file=sys.stderr)
-        sys.exit(1)
-    print(f"カーブ②発進: t={t_launch:.1f}s")
-
     print("\n=== per-step delta 分析開始 ===")
-    df = run_per_step(data, t0_ns, t_launch, params)
+    df = run_per_step(data, t0_ns, params)
     print(f"有効ステップ: {len(df)}")
 
     if df.empty:

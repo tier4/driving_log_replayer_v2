@@ -47,7 +47,7 @@ define run_sim
 	    _rc=$$? ; rm -rf $(SIM_OUT_ROOT) ; exit $$_rc
 endef
 
-.PHONY: all _all sim sim_normal sim_godot sim_curve2 report report_curve2 clean help
+.PHONY: all _all sim sim_normal sim_godot sim_curve2 report report_curve2 report_per_step clean help
 
 help:
 	@echo "使い方: make <ターゲット>"
@@ -59,7 +59,8 @@ help:
 	@echo "  sim           sim_normal と sim_godot を順次実行"
 	@echo "  sim_curve2    カーブ② 集中シナリオを実行し lite/sim_curve2.lite.mcap を更新"
 	@echo "  report        compare_logs (三方比較) を実行"
-	@echo "  report_curve2 カーブ② 比較レポート (analyze_real_curve2 → compare_curve2 → analyze_curve2_per_step)"
+	@echo "  report_curve2 カーブ② 比較レポート (analyze_real_curve2 → compare_curve2)"
+	@echo "  report_per_step 全走行 per-step delta 分析 (analyze_per_step)"
 	@echo "  clean         lite/sim_*.lite.mcap と comparison/ を削除（real・logs は保持）"
 	@echo ""
 	@echo "環境変数:"
@@ -89,8 +90,12 @@ report_curve2:
 	@test -f $(LITE_DIR)/sim_curve2.lite.mcap || \
 	    { echo "[ERROR] $(LITE_DIR)/sim_curve2.lite.mcap がありません。'make sim_curve2' を実行してください"; exit 1; }
 	source $(SETUP_BASH) && $(PY_BASE).analyze_real_curve2 && \
-	    $(PY_BASE).compare_curve2 && \
-	    $(PY_BASE).analyze_curve2_per_step
+	    $(PY_BASE).compare_curve2
+
+report_per_step:
+	@test -f $(LITE_DIR)/real.lite.mcap || \
+	    { echo "[ERROR] $(LITE_DIR)/real.lite.mcap がありません。実機 lite を作成してください"; exit 1; }
+	source $(SETUP_BASH) && $(PY_BASE).analyze_per_step
 
 report:
 	@test -f $(LITE_DIR)/real.lite.mcap || \

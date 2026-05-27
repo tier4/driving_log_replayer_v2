@@ -49,7 +49,7 @@ define run_sim
 	    _rc=$$? ; rm -rf $(SIM_OUT_ROOT) ; exit $$_rc
 endef
 
-.PHONY: all _all real sim sim_normal sim_godot sim_curve2 report report_curve2 clean help
+.PHONY: all _all real sim sim_normal sim_godot sim_curve2 report report_curve2 report_per_step clean help
 
 help:
 	@echo "使い方: make -f Makefile <ターゲット>"
@@ -61,6 +61,8 @@ help:
 	@echo "  sim_godot   Godot シム (j6_gen2 + simulator:=godot) を実行し lite/sim_godot.lite.mcap を更新"
 	@echo "  sim         sim_normal と sim_godot を順次実行"
 	@echo "  report      compare_logs を実行してプロット・レポートを生成"
+	@echo "  report_curve2   カーブ② 比較レポート (analyze_real_curve2 → compare_curve2 → compare_dp_trajectory)"
+	@echo "  report_per_step 全走行 per-step delta 分析 (analyze_per_step)"
 	@echo "  clean       lite/sim_*.lite.mcap と comparison/ を削除（real・logs は保持）"
 	@echo ""
 	@echo "変数:"
@@ -114,8 +116,15 @@ report_curve2:
 	source $(SETUP_BASH) && BEST_MODEL_BASE_DIR=$(WORK_DIR) \
 	    $(PYTHON) -m driving_log_replayer_v2.real_log_sim_comparison.analyze_real_curve2 && \
 	    $(PYTHON) -m driving_log_replayer_v2.real_log_sim_comparison.compare_curve2 && \
-	    $(PYTHON) -m driving_log_replayer_v2.real_log_sim_comparison.analyze_curve2_per_step && \
 	    $(PYTHON) -m driving_log_replayer_v2.real_log_sim_comparison.compare_dp_trajectory
+
+report_per_step:
+	@test -f $(LITE_DIR)/real.lite.mcap || \
+	    { echo "[ERROR] lite/real.lite.mcap がありません。'make real REAL_MCAP=...' を実行してください"; exit 1; }
+	@test -f $(SETUP_BASH) || \
+	    { echo "[ERROR] $(SETUP_BASH) が見つかりません"; exit 1; }
+	source $(SETUP_BASH) && BEST_MODEL_BASE_DIR=$(WORK_DIR) \
+	    $(PYTHON) -m driving_log_replayer_v2.real_log_sim_comparison.analyze_per_step
 
 # DP 軌跡比較 (analyze_trajectory + compare_dp_vs_final の統合後継)
 .PHONY: report_dp_trajectory
