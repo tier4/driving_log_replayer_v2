@@ -17,6 +17,18 @@ curve2_window:
   start: 20.0
   end: 120.0
 
+# 個別カーブ解析（curve{N}_analysis / steering_detail / yaw_steer / steer_response）を
+# 生成する対象。各エントリ:
+#   index         : curve_centers のインデックス（0始まり）
+#   launch_window : 「停止 → 発進」を探索する時刻範囲 [s]
+# 未指定の場合は `[{index: curve2_index, launch_window: curve2_window}]` が
+# 暗黙に補完される（既存の curve2 のみ動作と等価）。
+plot_curves:
+  - {index: 1, launch_window: {start: 20.0, end: 120.0}}  # カーブ②（左折）
+  # 将来追加例（停止 → 発進が無いカーブは検出失敗で自動スキップ）:
+  # - {index: 0, launch_window: {start: 0.0,  end: 60.0}}   # カーブ①（右折）
+  # - {index: 2, launch_window: {start: 60.0, end: 200.0}}  # カーブ③（右折）
+
 # --- 以下、任意の拡張キー（未設定で構わない） ---
 
 # 図タイトルに表示するシナリオ名。env: SCENARIO_NAME や --scenario-name で上書き可。

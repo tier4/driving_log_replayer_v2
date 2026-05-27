@@ -98,12 +98,15 @@ PNG / PDF の比較プロットが出力される。
 | `velocity.{png,pdf}`               | 速度指令 vs 応答                      |
 | `acceleration.{png,pdf}`           | 加速度指令 vs 応答                    |
 | `steering.{png,pdf}`               | 操舵指令 vs 応答                      |
-| `steer_response.{png,pdf}`         | ステアリング応答特性                  |
 | `trajectory_with_map.{png,pdf}`    | 地図背景上での軌跡重ね合わせ          |
 | `curves_closeup.{png,pdf}`         | カーブ別の詳細拡大                    |
-| `curve2_analysis.{png,pdf}`        | カーブ② 全体解析                      |
-| `curve2_steering_detail.{png,pdf}` | カーブ② 操舵詳細                      |
-| `curve2_yaw_steer.{png,pdf}`       | カーブ② ヨーレート・操舵関係          |
+| `curve{N}_analysis.{png,pdf}`        | 指定カーブ 全体解析（{N}=`plot_curves[*].index + 1`）   |
+| `curve{N}_steering_detail.{png,pdf}` | 指定カーブ 操舵詳細                                     |
+| `curve{N}_yaw_steer.{png,pdf}`       | 指定カーブ ヨーレート・操舵関係                         |
+| `curve{N}_steer_response.{png,pdf}`  | 指定カーブ ステアリング応答特性                         |
+
+> `curve{N}_*` 系は `curve_config.yaml::plot_curves` で対象カーブを切り替え可能。<br>
+> 未指定なら `curve2_index` のカーブだけが生成される（既定は `curve2_*` の 4 枚）。
 
 ### `comparison/per_step/`
 

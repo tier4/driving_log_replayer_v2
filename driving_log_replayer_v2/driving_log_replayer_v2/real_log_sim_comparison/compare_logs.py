@@ -385,57 +385,76 @@ def plot_curves(data: dict, map_ways: list | None):
 # ---------------------------------------------------------------------------
 
 
-def _find_curve2_launch(df_vel: pd.DataFrame) -> float | None:
-    """`_events.find_curve2_launch` の互換ラッパー。window はモジュールスコープ参照。"""
-    return _find_curve2_launch_pure(df_vel, window=_CURVE2_WINDOW)
-
-
-def _find_curve2_exit(
-    df_kinematic: pd.DataFrame, t_launch: float, radius: float = 30.0
+def _find_curve_launch(
+    df_vel: pd.DataFrame, launch_window: tuple[float, float]
 ) -> float | None:
-    """`_events.find_curve2_exit` の互換ラッパー。curve_centers[_CURVE2_INDEX] を中心に。"""
-    if not CURVE_CENTERS or _CURVE2_INDEX >= len(CURVE_CENTERS):
+    """指定 window 内で「停止 → 発進」を検出する `_events.find_curve2_launch` ラッパー。"""
+    return _find_curve2_launch_pure(df_vel, window=launch_window)
+
+
+def _find_curve_exit(
+    df_kinematic: pd.DataFrame,
+    curve_idx: int,
+    t_launch: float,
+    radius: float = 30.0,
+) -> float | None:
+    """`curve_centers[curve_idx]` を中心とした退出時刻検出 (`_events.find_curve2_exit` ラッパー)."""
+    if not CURVE_CENTERS or not (0 <= curve_idx < len(CURVE_CENTERS)):
         return None
-    c = CURVE_CENTERS[_CURVE2_INDEX]
-    return _find_curve2_exit_pure(df_kinematic, (float(c["cx"]), float(c["cy"])), t_launch, radius=radius)
+    c = CURVE_CENTERS[curve_idx]
+    return _find_curve2_exit_pure(
+        df_kinematic, (float(c["cx"]), float(c["cy"])), t_launch, radius=radius
+    )
 
 
-def plot_curve2_analysis(data: dict, map_ways: list | None):
+def plot_curve_analysis(
+    data: dict,
+    map_ways: list | None,
+    curve_idx: int,
+    launch_window: tuple[float, float],
+):
     """
-    カーブ②（左折）の一時停止発進からの挙動を軌跡＋時系列で比較。
+    指定カーブの一時停止発進からの挙動を軌跡＋時系列で比較。
 
     レイアウト:
-        上段(高め): カーブ②付近の軌跡図
+        上段(高め): 対象カーブ付近の軌跡図
         下段3列: 速度 | 加速度 | ステアリング
     """
+    if not CURVE_CENTERS or not (0 <= curve_idx < len(CURVE_CENTERS)):
+        warnings.warn(f"plot_curve_analysis: curve_idx={curve_idx} が範囲外")
+        return
+    curve_label = CURVE_CENTERS[curve_idx].get("label", f"カーブ{curve_idx + 1}")
+
     # ---- 各ログの発進t=0を検出 ----
     launch_t: dict[str, float] = {}
     for label, d in data.items():
-        t_launch = _find_curve2_launch(d["velocity"])
+        t_launch = _find_curve_launch(d["velocity"], launch_window)
         if t_launch is None:
-            warnings.warn(f"{label}: カーブ②前の停止が見つからないためスキップ")
+            warnings.warn(f"{label}: {curve_label}前の停止が見つからないためスキップ")
             continue
         launch_t[label] = t_launch
-        print(f"  [{label}] カーブ②発進 t={t_launch:.1f}s")
+        print(f"  [{label}] {curve_label}発進 t={t_launch:.1f}s")
 
     if not launch_t:
-        warnings.warn("発進時刻を検出できるログがないため plot_curve2_analysis をスキップ")
+        warnings.warn(
+            f"発進時刻を検出できるログがないため plot_curve_analysis({curve_label}) をスキップ"
+        )
         return
 
     # ---- 図のセットアップ（2行: 上=軌跡, 下=時系列3列）----
     fig = plt.figure(figsize=(16, 13))
-    fig.suptitle(f"{SCENARIO_NAME}\nカーブ②（左折）一時停止発進からの挙動比較", fontsize=12)
+    fig.suptitle(f"{SCENARIO_NAME}\n{curve_label} 一時停止発進からの挙動比較", fontsize=12)
     gs = fig.add_gridspec(2, 3, height_ratios=[1.6, 1.0], hspace=0.38, wspace=0.32)
     ax_map = fig.add_subplot(gs[0, :])  # 上段全幅: 軌跡
     ax_vel = fig.add_subplot(gs[1, 0])  # 下段左: 速度
     ax_acc = fig.add_subplot(gs[1, 1])  # 下段中: 加速度
     ax_str = fig.add_subplot(gs[1, 2])  # 下段右: ステアリング
 
-    # 表示時間範囲（発進前2s ～ カーブ②退出後2s）
+    # 表示時間範囲（発進前2s ～ カーブ退出後2s）
     T_PRE = -2.0
 
-    # カーブ②表示範囲
-    c2 = CURVE_CENTERS[_CURVE2_INDEX]
+    # 対象カーブ表示範囲
+    c2 = CURVE_CENTERS[curve_idx]
     cx, cy, mg = c2["cx"], c2["cy"], 80
 
     # ---- 軌跡図 ----
@@ -452,10 +471,10 @@ def plot_curve2_analysis(data: dict, map_ways: list | None):
         if label not in launch_t:
             continue
         t_l = launch_t[label]
-        t_exit = _find_curve2_exit(d["kinematic"], t_l)
+        t_exit = _find_curve_exit(d["kinematic"], curve_idx, t_l)
         t_post = (t_exit - t_l + 2.0) if t_exit is not None else 25.0
         df_k = d["kinematic"]
-        # 発進前2s〜カーブ②退出後2s の軌跡
+        # 発進前2s〜カーブ退出後2s の軌跡
         seg = df_k[(df_k["t"] >= t_l + T_PRE) & (df_k["t"] <= t_l + t_post)]
         if seg.empty:
             continue
@@ -479,7 +498,9 @@ def plot_curve2_analysis(data: dict, map_ways: list | None):
     ax_map.set_xlabel("x [m]")
     ax_map.set_ylabel("y [m]")
     ax_map.grid(True, lw=0.5, alpha=0.5)
-    ax_map.set_title("軌跡（★=発進点、表示範囲: 発進前2s〜カーブ②退出後2s）", fontsize=10)
+    ax_map.set_title(
+        f"軌跡（★=発進点、表示範囲: 発進前2s〜{curve_label}退出後2s）", fontsize=10
+    )
     ax_map.legend(fontsize=10, loc="best")
 
     # ---- 時系列プロット（発進をt=0に揃える）----
@@ -487,7 +508,7 @@ def plot_curve2_analysis(data: dict, map_ways: list | None):
         if label not in launch_t:
             continue
         t_l = launch_t[label]
-        t_exit = _find_curve2_exit(d["kinematic"], t_l)
+        t_exit = _find_curve_exit(d["kinematic"], curve_idx, t_l)
         t_post = (t_exit - t_l + 2.0) if t_exit is not None else 25.0
 
         def clip(df, col, _t_l=t_l, _t_post=t_post):
@@ -540,36 +561,48 @@ def plot_curve2_analysis(data: dict, map_ways: list | None):
     ax_str.grid(True, lw=0.5)
     ax_str.legend(fontsize=7, loc="best")
 
-    _save(fig, "curve2_analysis")
+    _save(fig, f"curve{curve_idx + 1}_analysis")
 
 
-def plot_curve2_steering_detail(data: dict, map_ways: list | None):
+def plot_curve_steering_detail(
+    data: dict,
+    map_ways: list | None,
+    curve_idx: int,
+    launch_window: tuple[float, float],
+):
     """
-    カーブ②の一時停止発進からのステアリング詳細分析。
+    指定カーブの一時停止発進からのステアリング詳細分析。
 
     レイアウト（2列構成）:
-        左列 上段: 軌跡（カーブ②付近）
+        左列 上段: 軌跡（対象カーブ付近）
         左列 下段: 指令 vs 応答 の重ね描き（同一軸）
         右列 上段: ステアリング角速度 [deg/s]
         右列 中段: 指令追従誤差（応答 − 指令）[deg]
         右列 下段: ステアリング角 累積絶対値（操舵量の積分）
     """
+    if not CURVE_CENTERS or not (0 <= curve_idx < len(CURVE_CENTERS)):
+        warnings.warn(f"plot_curve_steering_detail: curve_idx={curve_idx} が範囲外")
+        return
+    curve_label = CURVE_CENTERS[curve_idx].get("label", f"カーブ{curve_idx + 1}")
+
     # 発進時刻を検出
     launch_t: dict[str, float] = {}
     for label, d in data.items():
-        t_l = _find_curve2_launch(d["velocity"])
+        t_l = _find_curve_launch(d["velocity"], launch_window)
         if t_l is not None:
             launch_t[label] = t_l
 
     if not launch_t:
-        warnings.warn("発進時刻を検出できないため plot_curve2_steering_detail をスキップ")
+        warnings.warn(
+            f"発進時刻を検出できないため plot_curve_steering_detail({curve_label}) をスキップ"
+        )
         return
 
     T_PRE = -2.0
 
     fig = plt.figure(figsize=(16, 14))
     fig.suptitle(
-        f"{SCENARIO_NAME}\nカーブ②（左折）ステアリング詳細分析　─　一時停止発進 t=0", fontsize=12
+        f"{SCENARIO_NAME}\n{curve_label} ステアリング詳細分析　─　一時停止発進 t=0", fontsize=12
     )
     gs = fig.add_gridspec(3, 2, hspace=0.45, wspace=0.30, height_ratios=[1.4, 1.0, 1.0])
     ax_map = fig.add_subplot(gs[0, 0])  # 左列上: 軌跡
@@ -578,8 +611,8 @@ def plot_curve2_steering_detail(data: dict, map_ways: list | None):
     ax_err = fig.add_subplot(gs[1, 1])  # 右列中: 追従誤差
     ax_integ = fig.add_subplot(gs[2, 1])  # 右列下: 累積操舵量
 
-    # カーブ②付近の軌跡
-    c2 = CURVE_CENTERS[_CURVE2_INDEX]
+    # 対象カーブ付近の軌跡
+    c2 = CURVE_CENTERS[curve_idx]
     cx, cy, mg = c2["cx"], c2["cy"], 80
     if map_ways:
         for pts in map_ways:
@@ -594,7 +627,7 @@ def plot_curve2_steering_detail(data: dict, map_ways: list | None):
         if label not in launch_t:
             continue
         t_l = launch_t[label]
-        t_exit = _find_curve2_exit(d["kinematic"], t_l)
+        t_exit = _find_curve_exit(d["kinematic"], curve_idx, t_l)
         t_post = (t_exit - t_l + 2.0) if t_exit is not None else 25.0
         df_k = d["kinematic"]
         seg = df_k[(df_k["t"] >= t_l + T_PRE) & (df_k["t"] <= t_l + t_post)]
@@ -628,7 +661,7 @@ def plot_curve2_steering_detail(data: dict, map_ways: list | None):
         if label not in launch_t:
             continue
         t_l = launch_t[label]
-        t_exit = _find_curve2_exit(d["kinematic"], t_l)
+        t_exit = _find_curve_exit(d["kinematic"], curve_idx, t_l)
         t_post = (t_exit - t_l + 2.0) if t_exit is not None else 25.0
         steer_df = d["steering"]
         cmd_df = d["cmd"]
@@ -707,10 +740,14 @@ def plot_curve2_steering_detail(data: dict, map_ways: list | None):
     ax_integ.grid(True, lw=0.5)
     ax_integ.legend(fontsize=9)
 
-    _save(fig, "curve2_steering_detail")
+    _save(fig, f"curve{curve_idx + 1}_steering_detail")
 
 
-def plot_curve2_yaw_steer(data: dict):
+def plot_curve_yaw_steer(
+    data: dict,
+    curve_idx: int,
+    launch_window: tuple[float, float],
+):
     """
     ステア角と実際に進んだ方向（ヨーレート換算）の差分を可視化。
 
@@ -723,9 +760,14 @@ def plot_curve2_yaw_steer(data: dict):
         段3: 実ヨーレート vs 自転車モデル予測ヨーレート [deg/s]
         段4: yaw角の累積変化量（カーブの深さ比較）[deg]
     """
+    if not CURVE_CENTERS or not (0 <= curve_idx < len(CURVE_CENTERS)):
+        warnings.warn(f"plot_curve_yaw_steer: curve_idx={curve_idx} が範囲外")
+        return
+    curve_label = CURVE_CENTERS[curve_idx].get("label", f"カーブ{curve_idx + 1}")
+
     launch_t: dict[str, float] = {}
     for label, d in data.items():
-        t_l = _find_curve2_launch(d["velocity"])
+        t_l = _find_curve_launch(d["velocity"], launch_window)
         if t_l is not None:
             launch_t[label] = t_l
 
@@ -736,7 +778,8 @@ def plot_curve2_yaw_steer(data: dict):
 
     fig, axes = plt.subplots(4, 1, figsize=(13, 16), sharex=True)
     fig.suptitle(
-        f"{SCENARIO_NAME}\nカーブ②　ステア角 vs 実際の進行方向（自転車モデル L={WHEELBASE:.2f}m）",
+        f"{SCENARIO_NAME}\n{curve_label} ステア角 vs 実際の進行方向"
+        f"（自転車モデル L={WHEELBASE:.2f}m）",
         fontsize=12,
     )
 
@@ -744,7 +787,7 @@ def plot_curve2_yaw_steer(data: dict):
         if label not in launch_t:
             continue
         t_l = launch_t[label]
-        t_exit = _find_curve2_exit(d["kinematic"], t_l)
+        t_exit = _find_curve_exit(d["kinematic"], curve_idx, t_l)
         t_post = (t_exit - t_l + 2.0) if t_exit is not None else 25.0
 
         # ---- 時系列データを発進t=0で切り出し ----
@@ -846,10 +889,14 @@ def plot_curve2_yaw_steer(data: dict):
     axes[3].set_xlabel("発進からの時刻 [s]")
 
     fig.tight_layout()
-    _save(fig, "curve2_yaw_steer")
+    _save(fig, f"curve{curve_idx + 1}_yaw_steer")
 
 
-def plot_steer_response(data: dict):
+def plot_steer_response(
+    data: dict,
+    curve_idx: int,
+    launch_window: tuple[float, float],
+):
     """
     ステアリング応答性能の比較図。
 
@@ -891,7 +938,7 @@ def plot_steer_response(data: dict):
     peak_ratio = []
 
     for label, d in data.items():
-        t_l = _find_curve2_launch(d["velocity"])
+        t_l = _find_curve_launch(d["velocity"], launch_window)
         if t_l is None:
             continue
 
@@ -1108,7 +1155,7 @@ def plot_steer_response(data: dict):
             ax_peak.text(xi, v + 0.02, f"{v:.3f}", ha="center", fontsize=9)
 
     fig.tight_layout()
-    _save(fig, "steer_response")
+    _save(fig, f"curve{curve_idx + 1}_steer_response")
 
 
 # ---------------------------------------------------------------------------
@@ -1307,10 +1354,16 @@ def main() -> None:
 
     if CURVE_CENTERS:
         plot_curves(loaded, map_ways)
-        plot_curve2_analysis(loaded, map_ways)
-        plot_curve2_steering_detail(loaded, map_ways)
-        plot_curve2_yaw_steer(loaded)
-        plot_steer_response(loaded)
+        # plot_curves (curve_centers の全カーブ一覧) は1枚で全カーブを概観する図。
+        # 個別カーブの詳細プロット(analysis/steering_detail/yaw_steer/steer_response)は
+        # cfg.plot_curves で対象を切り替える。
+        for spec in cfg.plot_curves:
+            idx = spec["index"]
+            win = spec["launch_window"]
+            plot_curve_analysis(loaded, map_ways, idx, win)
+            plot_curve_steering_detail(loaded, map_ways, idx, win)
+            plot_curve_yaw_steer(loaded, idx, win)
+            plot_steer_response(loaded, idx, win)
 
     print("\n=== レポート生成中 ===")
     try:

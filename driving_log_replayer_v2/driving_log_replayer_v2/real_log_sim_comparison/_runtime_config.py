@@ -57,6 +57,11 @@ class RuntimeConfig:
     curve_centers: list[dict] | None = field(default_factory=lambda: list(_DEFAULT_CURVE_CENTERS))
     curve2_index: int = _DEFAULT_CURVE2_INDEX
     curve2_window: tuple[float, float] = _DEFAULT_CURVE2_WINDOW
+    # カーブ別プロット対象の指定。各要素 = {"index": int, "launch_window": (start, end)}
+    # build_runtime_config で curve_config YAML から読み込まれる。未指定なら
+    # curve2_index/curve2_window から `[{"index": curve2_index, "launch_window": curve2_window}]`
+    # を組み立てて埋める（既存 curve2 のみ動作と等価）。
+    plot_curves: list[dict] = field(default_factory=list)
     topic_overrides: dict[str, Any] = field(default_factory=dict)
 
     @property
@@ -195,6 +200,37 @@ def build_runtime_config(
                     float(w.get("start", _DEFAULT_CURVE2_WINDOW[0])),
                     float(w.get("end", _DEFAULT_CURVE2_WINDOW[1])),
                 )
+
+    # --- plot_curves（curve_centers が無ければ空のまま）---
+    if cfg.curve_centers:
+        raw_plot_curves = cc.get("plot_curves") if cc else None
+        if raw_plot_curves:
+            normalized: list[dict] = []
+            for entry in raw_plot_curves:
+                if "index" not in entry:
+                    warnings.warn(f"plot_curves エントリに index が無いためスキップ: {entry}")
+                    continue
+                idx = int(entry["index"])
+                if not (0 <= idx < len(cfg.curve_centers)):
+                    warnings.warn(
+                        f"plot_curves.index={idx} が curve_centers 範囲外のためスキップ"
+                    )
+                    continue
+                lw = entry.get("launch_window") or {}
+                normalized.append({
+                    "index": idx,
+                    "launch_window": (
+                        float(lw.get("start", _DEFAULT_CURVE2_WINDOW[0])),
+                        float(lw.get("end", _DEFAULT_CURVE2_WINDOW[1])),
+                    ),
+                })
+            cfg.plot_curves = normalized
+        else:
+            # 後方互換: 未指定なら curve2 のみを対象に
+            cfg.plot_curves = [{
+                "index": cfg.curve2_index,
+                "launch_window": cfg.curve2_window,
+            }]
 
     # --- scenario_name ---
     if ns.scenario_name:
