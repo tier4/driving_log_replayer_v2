@@ -153,6 +153,8 @@ def _load_lib() -> ctypes.CDLL:
     lib.vm_step.restype = None
     lib.vm_step.argtypes = [c_void_p]
 
+    # 横方向諸量 (wz/vy/ay) は libvehicle_model_wrapper.so に export されていないため
+    # ここでは扱わない。必要になれば scenario_simulator 側のラッパーに追加する。
     for fn in (
         "vm_get_x",
         "vm_get_y",
@@ -160,16 +162,11 @@ def _load_lib() -> ctypes.CDLL:
         "vm_get_vx",
         "vm_get_steer",
         "vm_get_ax",
-        "vm_get_wz",
-        "vm_get_vy",
-        "vm_get_ay",
     ):
         getattr(lib, fn).restype = c_double
         getattr(lib, fn).argtypes = [c_void_p]
 
-    lib.vm_step_dt.restype = None
-    lib.vm_step_dt.argtypes = [c_void_p, c_double]
-
+    # vm_step_dt はラッパーに未 export のため使わない。残ステップ (remainder) は無視。
     lib.vm_destroy.restype = None
     lib.vm_destroy.argtypes = [c_void_p]
 
@@ -257,14 +254,6 @@ class VehicleModel:
         self._lib.vm_set_input(self._ptr, accel_des, steer_des)
         self._lib.vm_step(self._ptr)
 
-    def step_dt(self, accel_des: float, steer_des: float, dt: float) -> None:
-        """
-        Euler 1 ステップ積分（任意 dt 秒）。delay queue は sub_dt 単位で設計されているため
-        端数補正にのみ使用し、dt は SUB_DT より十分小さい範囲で呼ぶこと。
-        """
-        self._lib.vm_set_input(self._ptr, accel_des, steer_des)
-        self._lib.vm_step_dt(self._ptr, ctypes.c_double(dt))
-
     @property
     def x(self) -> float:
         return self._lib.vm_get_x(self._ptr)
@@ -280,18 +269,6 @@ class VehicleModel:
     @property
     def vx(self) -> float:
         return self._lib.vm_get_vx(self._ptr)
-
-    @property
-    def wz(self) -> float:
-        return self._lib.vm_get_wz(self._ptr)
-
-    @property
-    def vy(self) -> float:
-        return self._lib.vm_get_vy(self._ptr)
-
-    @property
-    def ay(self) -> float:
-        return self._lib.vm_get_ay(self._ptr)
 
     @property
     def steer_state(self) -> float:
@@ -546,15 +523,12 @@ def run_per_step(data: dict, t0_ns: int, params: dict) -> pd.DataFrame:
             steer_history=steer_history,
         )
 
-        # -- interval 分だけ正確に積分 --
-        # n_full 回 SUB_DT ステップ + 余り時間を端数ステップで補正し、
-        # モデル積分時間が実際の elapsed time と一致するようにする。
+        # -- interval 分だけ SUB_DT ステップで積分 --
+        # 端数 (remainder < SUB_DT) はラッパーに vm_step_dt が未 export のため無視。
+        # SUB_DT が十分小さければ累積誤差は実用上無視できる。
         n_full = int(interval / SUB_DT)
         for i in range(n_full):
             model.step(accel_des, steer_des)
-        remainder = interval - n_full * SUB_DT
-        if remainder > 1e-6:
-            model.step_dt(accel_des, steer_des, remainder)
 
         # -- delta 計算 --
         real_dx = gt_x[k + 1] - gt_x[k]
@@ -570,9 +544,7 @@ def run_per_step(data: dict, t0_ns: int, params: dict) -> pd.DataFrame:
         sim_ds_lat = -sim_dx * sin_y + sim_dy * cos_y
 
         sim_steer_kp1 = model.steer_state + params["steer_bias"]
-        sim_wz = model.wz
-        sim_vy = model.vy
-        sim_ay = model.ay
+        # sim_wz/vy/ay は libvehicle_model_wrapper.so に export されていないためスキップ
         records.append(
             {
                 "timestamp": t_cmd[k],
@@ -596,12 +568,6 @@ def run_per_step(data: dict, t0_ns: int, params: dict) -> pd.DataFrame:
                 "real_ay_k": gt_ay[k],
                 "real_vy_k": gt_vy[k],
                 "sim_vx": model.vx,
-                "sim_ay": sim_ay,
-                "sim_vy": sim_vy,
-                "sim_wz": sim_wz,
-                "err_ay": gt_ay[k + 1] - sim_ay,
-                "err_vy": gt_vy[k + 1] - sim_vy,
-                "err_wz": gt_wz[k + 1] - sim_wz,
                 "real_ds_long": real_ds_long,
                 "real_ds_lat": real_ds_lat,
                 "sim_ds_long": sim_ds_long,
@@ -992,17 +958,13 @@ def plot_map_distribution(df: pd.DataFrame, params: dict) -> None:
             "deg",
             "steering_status/tire_angle vs state_[4]+bias",
         ),
-        (df["err_ay"].values, "横加速度誤差", "m/s²", "acceleration/accel.linear.y vs vx·wz"),
-        (df["err_vy"].values, "横速度誤差", "m/s", "kinematic_state/twist.linear.y vs 0.0"),
-        (
-            df["err_wz"].values,
-            "角速度誤差",
-            "rad/s",
-            "kinematic_state/twist.angular.z vs vx·tan(δ)/wb",
-        ),
+        # err_ay / err_vy / err_wz は sim_* がラッパー未 export のため一旦スキップ
     ]
 
-    fig, axes = plt.subplots(1, 6, figsize=(36, 6))
+    fig, axes = plt.subplots(1, len(columns), figsize=(6 * len(columns), 6))
+    # subplots(1, 1, ...) は Axes を返すので list 化して下流のループを共通化
+    if len(columns) == 1:
+        axes = [axes]
 
     # 走行軌跡の bbox + margin で地図プロット範囲を自動算出
     x_min = float(df["pos_x"].min()) - MAP_BBOX_MARGIN
@@ -1044,27 +1006,28 @@ def plot_lateral_dynamics_timeseries(df: pd.DataFrame, params: dict) -> None:
     tr = df["tr"].values
     window = max(1, len(df) // 30)
 
+    # sim_ay/vy/wz はラッパー未 export のため実機のみ表示
     rows = [
         (
             "real_ay",
-            "sim_ay",
+            None,
             "横加速度 ay [m/s²]",
-            "横加速度 ay: 実機 vs モデル",
-            "実機: 位置微分(2階)→移動平均スムージング  モデル: vx·wz (求心加速度)",
+            "横加速度 ay: 実機",
+            "実機: 位置微分(2階)→移動平均スムージング",
         ),
         (
             "real_vy",
-            "sim_vy",
+            None,
             "横速度 vy [m/s]",
-            "横速度 vy: 実機 vs モデル",
-            "実機: 位置微分→body frame変換→移動平均スムージング  モデル: vy状態変数",
+            "横速度 vy: 実機",
+            "実機: 位置微分→body frame変換→移動平均スムージング",
         ),
         (
             "real_wz",
-            "sim_wz",
+            None,
             "角速度 wz [rad/s]",
-            "角速度 wz: 実機 vs モデル",
-            "実機: kinematic_state/twist.angular.z  モデル: vx·tan(δ)/wb",
+            "角速度 wz: 実機",
+            "実機: kinematic_state/twist.angular.z",
         ),
         (
             "real_dwz",
@@ -1110,24 +1073,25 @@ def plot_steer_vs_lateral_scatter(df: pd.DataFrame, params: dict) -> None:
     speed_bins = [0.0, 2.0, 5.0, 8.0, 50.0]
     colors = ["#4472C4", "#ED7D31", "#A9D18E", "#FF0000"]
 
+    # sim_ay/vy/wz はラッパー未 export のため実機のみ散布
     cols = [
         (
             "real_ay",
-            "sim_ay",
+            None,
             "横加速度 ay [m/s²]",
-            "横軸: steering_status/tire_angle(t_k)  縦軸: 位置微分(2階) / vx·wz",
+            "横軸: steering_status/tire_angle(t_k)  縦軸: 位置微分(2階)",
         ),
         (
             "real_vy",
-            "sim_vy",
+            None,
             "横速度 vy [m/s]",
-            "横軸: steering_status/tire_angle(t_k)  縦軸: 位置微分body frame / vy状態変数",
+            "横軸: steering_status/tire_angle(t_k)  縦軸: 位置微分body frame",
         ),
         (
             "real_wz",
-            "sim_wz",
+            None,
             "角速度 wz [rad/s]",
-            "横軸: steering_status/tire_angle(t_k)  縦軸: kinematic_state/twist.angular.z / vx·tan(δ)/wb",
+            "横軸: steering_status/tire_angle(t_k)  縦軸: kinematic_state/twist.angular.z",
         ),
     ]
     fig, axes = plt.subplots(1, 3, figsize=(18, 6))
@@ -1213,41 +1177,18 @@ def plot_cascade_error(df: pd.DataFrame, params: dict) -> None:
             "① ステア応答 (cmd→actual): 実機 vs モデル",
             "実機: steering_status/tire_angle  モデル: state_[4]+steer_bias",
         ),
-        (
-            df["real_ay"].values,
-            df["sim_ay"].values,
-            df["err_ay"].values,
-            "横加速度 ay [m/s²]",
-            "② 横加速度 ay: 実機 vs モデル",
-            "実機: acceleration/accel.linear.y  モデル: vx·wz",
-        ),
-        (
-            df["real_vy"].values,
-            df["sim_vy"].values,
-            df["err_vy"].values,
-            "横速度 vy [m/s]",
-            "③ 横速度 vy: 実機 vs モデル",
-            "実機: kinematic_state/twist.linear.y  モデル: 0.0",
-        ),
-        (
-            df["real_wz"].values,
-            df["sim_wz"].values,
-            df["err_wz"].values,
-            "角速度 wz [rad/s]",
-            "④ 角速度 wz: 実機 vs モデル",
-            "実機: kinematic_state/twist.angular.z  モデル: vx·tan(δ)/wb",
-        ),
+        # ② ay / ③ vy / ④ wz は sim_* がラッパー未 export のため一旦スキップ
         (
             df["real_ds_lat"].values * 100,
             df["sim_ds_lat"].values * 100,
             df["err_ds_lat"].values * 100,
             "横方向 Δpos [cm]",
-            "⑤ 横方向 1ステップ変位: 実機 vs モデル",
+            "② 横方向 1ステップ変位: 実機 vs モデル",
             "実機: kinematic_state/pose.position  モデル: state_[0,1]",
         ),
     ]
 
-    fig, axes = plt.subplots(5, 2, figsize=(16, 20), gridspec_kw={"width_ratios": [3, 1]})
+    fig, axes = plt.subplots(len(rows), 2, figsize=(16, 4 * len(rows)), gridspec_kw={"width_ratios": [3, 1]})
 
     for row_idx, (real_v, sim_v, err_v, ylabel, title, source) in enumerate(rows):
         ax_ts = axes[row_idx, 0]
@@ -1280,7 +1221,7 @@ def plot_cascade_error(df: pd.DataFrame, params: dict) -> None:
         axes[-1, col].set_xlabel("AUTONOMOUS 開始からの時刻 [s]")
 
     fig.suptitle(
-        "全走行 per-step delta: 段階的誤差プロット\nステア指示 → ステア応答 → ay → vy → 横位置",
+        "全走行 per-step delta: 段階的誤差プロット\nステア指示 → ステア応答 → 横位置",
         fontsize=12,
     )
     fig.tight_layout()
