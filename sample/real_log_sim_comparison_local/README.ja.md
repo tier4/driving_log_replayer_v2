@@ -56,14 +56,13 @@ webauto data annotation-dataset pull \
 
 > **重要 — デフォルト UUID をそのまま使う前に確認すること**
 >
-> `scenario.yaml` のデフォルト UUID `67db293e-903e-4397-b603-be6b88d98be7` は、
-> クラウド版 scenario.yaml がそのまま継承した「Web.Auto trigger 用に選ばれた
-> 既定値」であり、実際に比較したい走行（例: テレポート駅→日本科学未来館）と
-> 一致する保証はない。比較レポート (`comparison/report.md`) の数値や図が想定と
-> 合わない場合、まずこの UUID が正しい走行を指しているかを疑うこと。
+> `scenario.yaml` の `Datasets[0]` UUID = SSOT (実機 rosbag) として全 stage で
+> 使われる。サンプルの UUID は動作確認用の選択値なので、評価対象が異なる場合は
+> **必ず自分の評価対象 annotation-dataset の UUID に書き換えること**。
 >
-> 自分の対象走行に切り替える場合は `scenario.yaml` の Datasets 先頭キーを
-> 書き換えてから上記コマンドを実行する。
+> 比較レポート (`comparison/report.md`) や `trajectory_with_map.png` で実機と
+> シム軌跡がまったく違う場所にプロットされている場合、この UUID が誤っている
+> 可能性が高い。
 
 `--include-intermediate-artifacts` を付けないと `input_bag/` に bag 本体
 (`*.mcap` / `*.db3`) が含まれず、`make_lite` の入力が足りずに失敗する。

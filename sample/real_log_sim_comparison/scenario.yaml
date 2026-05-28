@@ -1,28 +1,34 @@
 ScenarioFormatVersion: 3.0.0
-ScenarioName: real_log_sim_comparison_miraikan
+ScenarioName: real_log_sim_comparison
 ScenarioDescription: |
-  Real-log lite-fication + sim_normal + sim_godot + compare_logs analysis
-  for the x2_dev_teleport_to_miraikan route.
+  実機 rosbag (T4 dataset の input_bag) を SSOT として:
+    Stage 1-2: lite 化と実機ログ解析
+    Stage 3-4: 同走行を模擬する OpenSCENARIO を自動生成し sim_normal / sim_godot
+               等で closed-loop 再現、実機と N-way 比較
+    Stage 5-6: per-step VehicleModel 解析と ケース集約
 SensorModel: aip_x2_gen2
 VehicleModel: j6_gen2
 Evaluation:
   UseCaseName: planning_control
   SubUseCaseName: real_log_sim_comparison
   UseCaseFormatVersion: 0.1.0
-  # Using a fake (unrelated) T4 dataset for Web.Auto triggering.
-  # The evaluator orchestrates its own simulator runs independently
-  # of the bound dataset path, so the dataset content is not consumed.
-  # Fake dataset: ReferenceDriving_E2E_PlanningControl_odaiba.Auto_04_route03_case02
+  # Datasets[0] の UUID = SSOT となる実機走行データを含む annotation-dataset の UUID。
+  # webauto data annotation-dataset pull --include-intermediate-artifacts で事前取得しておくこと。
+  # input_bag/*.{mcap,db3} が AUTONOMOUS 走行を含む実機 rosbag として全 stage で使用される。
   Datasets:
-    - 67db293e-903e-4397-b603-be6b88d98be7:
+    # K-01-11200 case01 dp_01 cruise_following_lead_vehicle
+    # (j6_gen2 実機 Normal 走行、area_map 2231)
+    # 先行車追従、直線中心の安定走行。
+    - b126c24f-4891-40d3-87cb-d1be36dc6db6:
         VehicleId: default
   Conditions:
     # 図タイトルに表示するシナリオ名 (任意。未指定なら ScenarioName を使用)
-    scenario_name: "x2_dev/2231 テレポート駅→日本科学未来館"
+    scenario_name: "cruise_following_lead_vehicle (K-01-11200 case01 dp_01)"
     # カーブ別解析を有効化する設定 YAML への相対パス (scenario.yaml からの相対パス)。
     # 省略するとカーブ別プロット (curves_closeup / curve2_*) をスキップ。
-    # 異なるシナリオでは curve_config_yaml キーを削除するか、空文字にしてください。
-    curve_config_yaml: ./curve_config_miraikan.yaml
+    # 既存 curve 設定 YAML は特定 area_map に対する curve_centers をハードコード
+    # 前提のため、別 map を使う dataset で実行する際は空文字でスキップする。
+    curve_config_yaml: ""
     # VehicleModel per-step 解析 (Stage 5/6) のケース定義 YAML (必須)。
     # 未指定だとパイプラインが Stage 5 で失敗する (cases.yaml が見つかりません)。
     cases_config: ./cases.yaml

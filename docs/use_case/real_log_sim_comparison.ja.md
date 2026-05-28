@@ -8,7 +8,7 @@
 > 将来的に `sim_normal` / `sim_godot` を含む三方比較（実機 + シム2系統）に拡張される設計だが、`sim_scenario.yaml` は TODO 状態であり、シム側の lite bag 生成・比較は本ドキュメント執筆時点では未配線である。
 > 詳細は末尾の「[将来拡張：シム側パイプライン](#将来拡張シム側パイプライン)」を参照。
 
-サンプルシナリオ: [sample/real_log_sim_comparison/scenario.yaml](https://github.com/tier4/driving_log_replayer_v2/blob/develop/sample/real_log_sim_comparison/scenario.yaml)（x2_dev/2231 テレポート駅→日本科学未来館）。
+サンプルシナリオ: [sample/real_log_sim_comparison/scenario.yaml](https://github.com/tier4/driving_log_replayer_v2/blob/develop/sample/real_log_sim_comparison/scenario.yaml)。`Datasets[0]` の UUID が **SSOT (実機 rosbag を含む annotation-dataset)** となる。
 
 ## 評価方法
 

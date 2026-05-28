@@ -279,9 +279,9 @@ def _build_signal_story_acts(
 ) -> list[dict]:
     """各信号について「ego が関連 lanelet に到達したら bag 終端状態に切替」する Act 列.
 
-    既存 x2_dev_teleport_to_miraikan.yaml と同じパターン (ReachPositionCondition trigger)。
-    bag のタイムシリーズ各時刻ではなく、「ego が信号を見える距離に来た時点で
-    実機が最終的に観測した状態」に切り替える。これで sim の simulationTime と
+    scenario_test_runner サンプルの典型パターン (ReachPositionCondition trigger) と
+    同じ構造。bag のタイムシリーズ各時刻ではなく、「ego が信号を見える距離に来た
+    時点で実機が最終的に観測した状態」に切り替える。これで sim の simulationTime と
     実機 AUTONOMOUS 開始時刻の zero point ずれを回避する。
 
     Args:

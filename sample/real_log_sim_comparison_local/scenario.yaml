@@ -1,20 +1,19 @@
 ScenarioFormatVersion: 3.0.0
-ScenarioName: real_log_sim_comparison_miraikan_local
+ScenarioName: real_log_sim_comparison_local
 ScenarioDescription: |
-  Local execution of the real-log lite-fication + compare_logs pipeline.
-  Uses a T4 dataset that has been pulled to the local webauto cache with
-  `webauto data annotation-dataset pull --include-intermediate-artifacts`.
-  Cloud-equivalent of sample/real_log_sim_comparison/scenario.yaml.
+  実機 rosbag (T4 dataset の input_bag) を SSOT としたローカル実行版。
+  webauto data annotation-dataset pull --include-intermediate-artifacts で
+  事前取得したデータセットを使い、Stage 1-6 の 6 段階パイプラインを実行する。
+  cloud 用 sample/real_log_sim_comparison/scenario.yaml と等価。
 SensorModel: aip_x2_gen2
 VehicleModel: j6_gen2
 Evaluation:
   UseCaseName: planning_control
   SubUseCaseName: real_log_sim_comparison
   UseCaseFormatVersion: 0.1.0
-  # ローカル実行では Datasets[0] のキー UUID をローカルキャッシュから探索して使う。
-  # デフォルトの UUID は cloud scenario.yaml と同じ Web.Auto trigger 用既定値であり、
-  # 比較したい実走行と一致するとは限らない。`make local_cloud_run` を回す前に
-  # 自分の対象走行の annotation-dataset-id に必ず書き換えること。
+  # Datasets[0] = 評価対象の実機走行データを含む annotation-dataset UUID。
+  # `make local_cloud_run` を実行する前に、対象走行の UUID に必ず書き換えること。
+  # input_bag/*.{mcap,db3} が AUTONOMOUS 走行を含む実機 rosbag として全 stage で使用される。
   #
   # 取得方法:
   #   webauto data annotation-dataset pull \
@@ -22,14 +21,18 @@ Evaluation:
   #     --annotation-dataset-id <UUID> \
   #     --include-intermediate-artifacts
   Datasets:
-    - 67db293e-903e-4397-b603-be6b88d98be7:
+    # K-01-11200 case01 dp_01 cruise_following_lead_vehicle
+    # (j6_gen2 実機 Normal 走行、area_map 2231)
+    # 先行車追従、直線中心の安定走行。
+    - b126c24f-4891-40d3-87cb-d1be36dc6db6:
         VehicleId: default
   Conditions:
     # 図タイトルに表示するシナリオ名 (任意。未指定なら ScenarioName を使用)
-    scenario_name: "x2_dev/2231 テレポート駅→日本科学未来館"
+    scenario_name: "cruise_following_lead_vehicle (K-01-11200 case01 dp_01)"
     # カーブ別解析を有効化する設定 YAML への相対パス (scenario.yaml からの相対パス)。
-    # 既定はクラウド版と共有する curve_config_miraikan.yaml への相対シンボリックリンク。
-    curve_config_yaml: ./curve_config_miraikan.yaml
+    # 既存 curve 設定 YAML は特定 area_map に対する curve_centers をハードコード
+    # 前提のため、別 map を使う dataset で実行する際は空文字でスキップする。
+    curve_config_yaml: ""
     # VehicleModel per-step 解析 (Stage 5/6) のケース定義 YAML への相対パス (必須)。
     # 各ケースは (vehicle_model タイプ, params) のペアで、出力は per_step/<tag>/ に分かれる。
     # 最後に Stage 6 (analyze_cases) が cases/overlay/ と cases_summary.md を生成。
