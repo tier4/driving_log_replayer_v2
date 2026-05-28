@@ -30,7 +30,10 @@ Evaluation:
     # カーブ別解析を有効化する設定 YAML への相対パス (scenario.yaml からの相対パス)。
     # 既定はクラウド版と共有する curve_config_miraikan.yaml への相対シンボリックリンク。
     curve_config_yaml: ./curve_config_miraikan.yaml
-    # VehicleModel 解析 (Stage 3) のケース定義 YAML への相対パス (必須)。
+    # VehicleModel per-step 解析 (Stage 5/6) のケース定義 YAML への相対パス (必須)。
     # 各ケースは (vehicle_model タイプ, params) のペアで、出力は per_step/<tag>/ に分かれる。
-    # 最後に Stage 4 (analyze_cases) が cases/overlay/ と cases_summary.md を生成。
+    # 最後に Stage 6 (analyze_cases) が cases/overlay/ と cases_summary.md を生成。
     cases_config: ./cases.yaml
+    # closed-loop シム実行 (Stage 3/4) のラン定義 YAML への相対パス (必須)。
+    # 各 run は scenario_test_runner で sim を回し、Stage 4 で実機 + 全 sim を N-way 比較。
+    sim_runs_config: ./sim_runs.yaml

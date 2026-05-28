@@ -62,6 +62,8 @@ class RuntimeConfig:
     # curve2_index/curve2_window から `[{"index": curve2_index, "launch_window": curve2_window}]`
     # を組み立てて埋める（既存 curve2 のみ動作と等価）。
     plot_curves: list[dict] = field(default_factory=list)
+    # sim_runs.yaml のパス (Stage 3 で参照、compare_logs が sim 重ね描きに使う)
+    sim_runs_config: Path | None = None
     topic_overrides: dict[str, Any] = field(default_factory=dict)
 
     @property
@@ -115,6 +117,14 @@ def add_common_cli_arguments(parser: argparse.ArgumentParser) -> None:
         "--topic-config",
         default=os.environ.get("TOPIC_CONFIG_YAML", ""),
         help="トピック設定 YAML パス (env: TOPIC_CONFIG_YAML)",
+    )
+    parser.add_argument(
+        "--sim-runs-config",
+        default=os.environ.get("SIM_RUNS_CONFIG_YAML"),
+        help=(
+            "sim_runs.yaml パス (env: SIM_RUNS_CONFIG_YAML)。"
+            "compare_logs が sim 重ね描きに使う。未指定なら実機 single-log のみ"
+        ),
     )
 
 
@@ -274,5 +284,12 @@ def build_runtime_config(
         loaded = _load_yaml(ns.topic_config)
         if loaded:
             cfg.topic_overrides = loaded
+
+    # --- sim_runs_config (compare_logs が sim 重ね描きに使う) ---
+    if getattr(ns, "sim_runs_config", None):
+        sr = Path(ns.sim_runs_config)
+        cfg.sim_runs_config = sr if sr.exists() else None
+        if cfg.sim_runs_config is None:
+            warnings.warn(f"sim_runs.yaml が存在しません: {sr} (sim 重ね描きスキップ)")
 
     return cfg

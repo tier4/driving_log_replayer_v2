@@ -97,38 +97,38 @@ _DEFAULT_LOG_SPECS: dict = {
         "marker": "o",
         "ms": 5,
     },
-    "Godot シム": {
-        "bag_dir": "sim_godot.lite",
-        "kinematic": "/localization/kinematic_state",
-        "accel": "/localization/acceleration",
-        "cmd": "/control/trajectory_follower/control_cmd",
-        "color": "#1f77b4",
-        "lw": 2.0,
-        "ls": "--",
-        "marker": "^",
-        "ms": 5,
-    },
-    "通常シム": {
-        "bag_dir": "sim_normal.lite",
-        "kinematic": "/localization/kinematic_state",
-        "accel": "/localization/acceleration",
-        "cmd": "/control/trajectory_follower/control_cmd",
-        "color": "#ff7f0e",
-        "lw": 2.0,
-        "ls": (0, (4, 2)),
-        "marker": "s",
-        "ms": 5,
-    },
 }
 
+# sim run entry のテンプレ (color/ls/marker は _rebuild_logs で動的割当)
+_SIM_LOG_SPEC_TEMPLATE: dict = {
+    "kinematic": "/localization/kinematic_state",
+    "accel": "/localization/acceleration",
+    "cmd": "/control/trajectory_follower/control_cmd",
+    "lw": 2.0,
+    "ms": 5,
+}
 
-def _rebuild_logs(lite_dir: Path, topic_overrides: dict | None = None) -> dict:
-    """LITE_DIR とオプショナルなトピック上書き辞書から LOGS dict を生成する。
+# sim run に巡回的に割り当てる視覚スタイル
+_SIM_COLORS = ["#1f77b4", "#ff7f0e", "#2ca02c", "#d62728", "#9467bd",
+               "#8c564b", "#e377c2", "#7f7f7f", "#bcbd22", "#17becf"]
+_SIM_LINESTYLES = ["--", (0, (4, 2)), "-.", ":", (0, (3, 1, 1, 1))]
+_SIM_MARKERS = ["^", "s", "D", "v", "P", "*", "X"]
+
+
+def _rebuild_logs(
+    lite_dir: Path,
+    topic_overrides: dict | None = None,
+    sim_runs_cfg=None,
+) -> dict:
+    """LITE_DIR とオプショナルなトピック上書き辞書、sim_runs_cfg から LOGS dict を生成する。
 
     bag_dir 名は `<stem>.lite.mcap` (単一ファイル) を優先し、なければ
     `<stem>.lite` (rosbag2 ディレクトリ) にフォールバック。`_io._iter_msgs`
     がどちらの形式も読めるが、main() の `path.exists()` チェックがあるため
     実体のあるパスを返す必要がある。
+
+    sim_runs_cfg (SimRunsConfig) が渡された場合、各 run.tag を <tag>.lite として
+    LOGS dict に動的追加する (色 / 線スタイル / マーカーは順番に自動割当)。
     """
     result = {}
     for label, spec in _DEFAULT_LOG_SPECS.items():
@@ -139,6 +139,25 @@ def _rebuild_logs(lite_dir: Path, topic_overrides: dict | None = None) -> dict:
         if topic_overrides and label in topic_overrides:
             entry.update(topic_overrides[label])
         result[label] = entry
+
+    # sim_runs.yaml の各 tag を動的追加
+    if sim_runs_cfg is not None:
+        for i, run in enumerate(sim_runs_cfg.runs):
+            stem = f"{run.tag}.lite"
+            candidates = [lite_dir / f"{stem}.mcap", lite_dir / stem]
+            path = next((c for c in candidates if c.exists()), candidates[0])
+            entry = {
+                **_SIM_LOG_SPEC_TEMPLATE,
+                "bag_dir": stem,
+                "color": _SIM_COLORS[i % len(_SIM_COLORS)],
+                "ls": _SIM_LINESTYLES[i % len(_SIM_LINESTYLES)],
+                "marker": _SIM_MARKERS[i % len(_SIM_MARKERS)],
+                "path": path,
+            }
+            if topic_overrides and run.tag in topic_overrides:
+                entry.update(topic_overrides[run.tag])
+            result[run.tag] = entry
+
     return result
 
 
@@ -1289,7 +1308,16 @@ def _apply_runtime_config(cfg: RuntimeConfig) -> None:
     _CURVE2_INDEX = cfg.curve2_index
     _CURVE2_WINDOW = cfg.curve2_window
 
-    LOGS = _rebuild_logs(LITE_DIR, cfg.topic_overrides or None)
+    # sim_runs.yaml 連動: cfg.sim_runs_config が指定されていれば全 run を LOGS dict に追加
+    sim_runs_cfg = None
+    if cfg.sim_runs_config:
+        try:
+            from ._sim_runs_config import load_sim_runs_config  # noqa: PLC0415
+            sim_runs_cfg = load_sim_runs_config(cfg.sim_runs_config)
+        except Exception as exc:  # noqa: BLE001
+            warnings.warn(f"sim_runs.yaml 読み込み失敗: {exc} (sim 重ね描きスキップ)")
+
+    LOGS = _rebuild_logs(LITE_DIR, cfg.topic_overrides or None, sim_runs_cfg)
 
 
 def main() -> None:

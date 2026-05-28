@@ -112,8 +112,24 @@ def run_pipeline(
     _validate_bag_dir(input_bag_dir)
     logger.info(f"Input bag: {input_bag_dir}")
 
-    # Step 1 – real lite bag
-    logger.info("Step 1: generating real lite bag")
+    # ---- 共通 env ----
+    env = os.environ.copy()
+    env["BEST_MODEL_BASE_DIR"] = str(comparison_dir.parent)  # lite/ and comparison/ live here
+
+    map_osm = Path(map_path) / "lanelet2_map.osm" if map_path else Path("")
+    if map_osm.exists():
+        env["MAP_OSM_PATH"] = str(map_osm)
+        logger.info(f"Map OSM: {map_osm}")
+    else:
+        env["MAP_OSM_PATH"] = ""
+        logger.warning(f"lanelet2_map.osm not found at {map_osm}; map background will be omitted")
+
+    if compare_cfg.get("scenario_name"):
+        env["SCENARIO_NAME"] = compare_cfg["scenario_name"]
+    env["CURVE_CONFIG_YAML"] = compare_cfg.get("curve_config_yaml", "")
+
+    # ---- Stage 1: real lite bag ----
+    logger.info("Stage 1: generating real lite bag")
     lite_dir.mkdir(parents=True, exist_ok=True)
     lite_bag = lite_dir / "real.lite"
     _run([
@@ -124,36 +140,74 @@ def run_pipeline(
         "--output", str(lite_bag),
     ], timeout=300)
 
-    # Step 2 – compare (real log only; sim logs are skipped when absent)
-    logger.info("Step 2: compare_logs")
-    env = os.environ.copy()
-    env["BEST_MODEL_BASE_DIR"] = str(comparison_dir.parent)  # lite/ and comparison/ live here
-
-    # 地図: t4_dataset_path/map/lanelet2_map.osm を自動解決
-    map_osm = Path(map_path) / "lanelet2_map.osm" if map_path else Path("")
+    # ---- Stage 2: bag → scenario yaml 自動生成 ----
+    logger.info("Stage 2: bag_to_scenario (auto-generate OpenSCENARIO yaml)")
+    scenarios_dir = comparison_dir.parent / "scenarios"
+    scenarios_dir.mkdir(parents=True, exist_ok=True)
+    auto_scenario = scenarios_dir / "auto_scenario.yaml"
     if map_osm.exists():
-        env["MAP_OSM_PATH"] = str(map_osm)
-        logger.info(f"Map OSM: {map_osm}")
+        try:
+            _run([
+                sys.executable, "-m",
+                "driving_log_replayer_v2.real_log_sim_comparison.bag_to_scenario",
+                "--input-bag", str(input_bag_dir),
+                "--map", str(map_osm),
+                "--output", str(auto_scenario),
+            ], env=env, timeout=300)
+        except RuntimeError as exc:
+            logger.warning(f"Stage 2 (bag_to_scenario) failed: {exc}")
     else:
-        # 空文字を明示することで compare_logs.py の後方互換フォールバック（x2_dev 地図の glob）を抑制する
-        env["MAP_OSM_PATH"] = ""
-        logger.warning(f"lanelet2_map.osm not found at {map_osm}; map background will be omitted")
+        logger.warning("Stage 2: map OSM が無いため scenario 自動生成スキップ")
 
-    # シナリオ名
-    if compare_cfg.get("scenario_name"):
-        env["SCENARIO_NAME"] = compare_cfg["scenario_name"]
+    # ---- Stage 3: sim runs ループ (cases.yaml 同様、sim_runs.yaml 必須) ----
+    sim_runs_yaml = compare_cfg.get("sim_runs_config", "")
+    if not sim_runs_yaml or not Path(sim_runs_yaml).exists():
+        raise RuntimeError(
+            "sim_runs.yaml が見つかりません。scenario.yaml の Conditions.sim_runs_config に "
+            "sim run 定義 YAML への (絶対 or 相対) パスを指定してください。"
+            f" got: {sim_runs_yaml!r}"
+        )
 
-    # カーブ設定 YAML（scenario.yaml と同じディレクトリを基準に解決済み）
-    # キーがなければ "" を明示設定し、後方互換フォールバック（x2_dev CURVE_CENTERS）を抑制する
-    env["CURVE_CONFIG_YAML"] = compare_cfg.get("curve_config_yaml", "")
-
-    _run(
-        [sys.executable, "-m", "driving_log_replayer_v2.real_log_sim_comparison.compare_logs"],
-        env=env,
-        timeout=1800,
+    from driving_log_replayer_v2.real_log_sim_comparison._sim_runs_config import (  # noqa: PLC0415
+        load_sim_runs_config,
     )
 
-    # Step 3 – VehicleModel 解析 (ケースループ; cases.yaml が必須)
+    sim_cfg = load_sim_runs_config(sim_runs_yaml)
+    env["SIM_RUNS_CONFIG_YAML"] = sim_runs_yaml
+
+    logger.info(f"Stage 3: run_sims over {len(sim_cfg.runs)} run(s)")
+    if auto_scenario.exists():
+        base_domain_id = int(os.environ.get("ROS_DOMAIN_ID", "0"))
+        for i, run in enumerate(sim_cfg.runs):
+            sim_lite = lite_dir / f"{run.tag}.lite"
+            env_run = env.copy()
+            env_run["SIM_RUN_TAG"] = run.tag
+            # nested ros2 launch: DDS 衝突回避のため domain id を切替
+            env_run["ROS_DOMAIN_ID"] = str(base_domain_id + 10 + i)
+            logger.info(f"  run: tag={run.tag}, vehicle_model={run.vehicle_model}, "
+                        f"ROS_DOMAIN_ID={env_run['ROS_DOMAIN_ID']}")
+            try:
+                _run([
+                    sys.executable, "-m",
+                    "driving_log_replayer_v2.real_log_sim_comparison.run_sims",
+                    "--run-tag", run.tag,
+                    "--scenario", str(auto_scenario),
+                    "--sim-runs-config", sim_runs_yaml,
+                    "--output-lite", str(sim_lite),
+                ], env=env_run, timeout=run.timeout_s)
+            except RuntimeError as exc:
+                logger.warning(f"Stage 3 (run={run.tag}) failed but continuing: {exc}")
+    else:
+        logger.warning("Stage 3: auto_scenario.yaml が無いため sim 実行をスキップ")
+
+    # ---- Stage 4: compare_logs (real + 全 sim、sim_runs.yaml 連動で N-way) ----
+    logger.info("Stage 4: compare_logs (real + sim N-way)")
+    _run([
+        sys.executable, "-m",
+        "driving_log_replayer_v2.real_log_sim_comparison.compare_logs",
+    ], env=env, timeout=1800)
+
+    # ---- Stage 5: VehicleModel per-step 解析 (cases.yaml 必須) ----
     cases_yaml = compare_cfg.get("cases_config", "")
     if not cases_yaml or not Path(cases_yaml).exists():
         raise RuntimeError(
@@ -169,40 +223,31 @@ def run_pipeline(
     cases_cfg = load_cases_config(cases_yaml)
     env["CASES_CONFIG_YAML"] = cases_yaml
 
-    logger.info(f"Step 3: analyze_per_step over {len(cases_cfg.cases)} case(s)")
+    logger.info(f"Stage 5: analyze_per_step over {len(cases_cfg.cases)} case(s)")
     for case in cases_cfg.cases:
         logger.info(f"  case: tag={case.tag}, vehicle_model={case.vehicle_model}")
         env_case = env.copy()
         env_case["CASE_TAG"] = case.tag
         try:
-            _run(
-                [
-                    sys.executable, "-m",
-                    "driving_log_replayer_v2.real_log_sim_comparison.analyze_per_step",
-                    "--case-tag", case.tag,
-                    "--cases-config", cases_yaml,
-                ],
-                env=env_case,
-                timeout=1800,
-            )
-        except RuntimeError as exc:
-            # 1 ケース失敗で全体停止せず、他ケースの結果を残す (Stage 4 は欠損 case を除外して継続)
-            logger.warning(f"Step 3 (case={case.tag}) failed but continuing: {exc}")
-
-    # Step 4 – ケース集約解析 (overlay 図 + cases_summary.md)
-    logger.info("Step 4: analyze_cases (cross-case aggregation)")
-    try:
-        _run(
-            [
+            _run([
                 sys.executable, "-m",
-                "driving_log_replayer_v2.real_log_sim_comparison.analyze_cases",
+                "driving_log_replayer_v2.real_log_sim_comparison.analyze_per_step",
+                "--case-tag", case.tag,
                 "--cases-config", cases_yaml,
-            ],
-            env=env,
-            timeout=600,
-        )
+            ], env=env_case, timeout=1800)
+        except RuntimeError as exc:
+            logger.warning(f"Stage 5 (case={case.tag}) failed but continuing: {exc}")
+
+    # ---- Stage 6: ケース集約解析 (overlay 図 + cases_summary.md) ----
+    logger.info("Stage 6: analyze_cases (cross-case aggregation)")
+    try:
+        _run([
+            sys.executable, "-m",
+            "driving_log_replayer_v2.real_log_sim_comparison.analyze_cases",
+            "--cases-config", cases_yaml,
+        ], env=env, timeout=600)
     except RuntimeError as exc:
-        logger.warning(f"Step 4 (analyze_cases) failed but continuing: {exc}")
+        logger.warning(f"Stage 6 (analyze_cases) failed but continuing: {exc}")
 
 
 def _load_compare_config(scenario_path_str: str) -> dict[str, Any]:
@@ -242,13 +287,21 @@ def _load_compare_config(scenario_path_str: str) -> dict[str, Any]:
                     p = scenario_path.parent / p
                 cfg["curve_config_yaml"] = str(p) if p.exists() else ""
 
-        # cases_config (必須): Stage 3/4 のケース定義 YAML
+        # cases_config (必須): Stage 5/6 のケース定義 YAML
         if "cases_config" in conditions:
             raw = str(conditions["cases_config"])
             p = Path(raw)
             if not p.is_absolute():
                 p = scenario_path.parent / p
             cfg["cases_config"] = str(p)
+
+        # sim_runs_config (必須): Stage 3/4 の sim run 定義 YAML
+        if "sim_runs_config" in conditions:
+            raw = str(conditions["sim_runs_config"])
+            p = Path(raw)
+            if not p.is_absolute():
+                p = scenario_path.parent / p
+            cfg["sim_runs_config"] = str(p)
 
         return cfg
     except Exception:

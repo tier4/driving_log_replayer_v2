@@ -23,6 +23,9 @@ Evaluation:
     # 省略するとカーブ別プロット (curves_closeup / curve2_*) をスキップ。
     # 異なるシナリオでは curve_config_yaml キーを削除するか、空文字にしてください。
     curve_config_yaml: ./curve_config_miraikan.yaml
-    # VehicleModel 解析 (Stage 3) のケース定義 YAML (必須)。
-    # 未指定だとパイプラインが Stage 3 で失敗する (cases.yaml が見つかりません)。
+    # VehicleModel per-step 解析 (Stage 5/6) のケース定義 YAML (必須)。
+    # 未指定だとパイプラインが Stage 5 で失敗する (cases.yaml が見つかりません)。
     cases_config: ./cases.yaml
+    # closed-loop シム実行 (Stage 3/4) のラン定義 YAML (必須)。
+    # 未指定だと Stage 3 で失敗する (sim_runs.yaml が見つかりません)。
+    sim_runs_config: ./sim_runs.yaml

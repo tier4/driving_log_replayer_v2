@@ -1,0 +1,28 @@
+# Stage 3: closed-loop シム実行のラン定義 (cases.yaml と同型、必須)。
+# 各 run は scenario_test_runner.launch.py に渡す引数セットで、
+# 出力 mcap を lite/<tag>.lite/ にフィルタ済みで保存する。
+# Stage 4 (compare_logs) は実機 + 全 sim run の lite を N-way 比較する。
+#
+# vehicle_model:
+#   - best_model               : 通常シム (best_model_description, scenario_simulator 内蔵)
+#   - j6_gen2_godot            : Godot シム (godot_executable が必須)
+#
+# scenario_test_runner.launch.py の引数:
+#   sensor_model            : センサモデル (既定 aip_x2_gen2)
+#   initialize_duration     : 初期化時間 [s] (既定 100)
+#   architecture_type       : Autoware API バージョン (既定 awf/universe/20250130)
+#   godot_executable        : Godot バイナリパス (_godot サフィックスで必要)
+#   timeout_s               : run_sims subprocess timeout [s] (既定 600)
+
+sim_runs:
+  - tag: sim_normal
+    vehicle_model: best_model
+    # architecture_type は scenario_test_runner.launch.py の引数。
+    # awf/universe/20250130 は実機 bag (autoware_perception_msgs/TrafficLightGroupArray) と一致する最新。
+    # 20240605 が scenario_test_runner の default、20230906 は旧 TrafficSignalArray。
+    architecture_type: awf/universe/20250130
+
+  - tag: sim_godot
+    vehicle_model: j6_gen2_godot
+    architecture_type: awf/universe/20250130
+    godot_executable: ${HOME}/Downloads/godot_autoware_simulator.x86_64

@@ -1,0 +1,7 @@
+# Stage 3: closed-loop シム実行のラン定義 (cloud 既定)。
+# cloud では Godot バイナリの存在を保証できないため、sim_normal のみ。
+# 必要なら local 側 sim_runs.yaml を参考に sim_godot を追加してください。
+
+sim_runs:
+  - tag: sim_normal
+    vehicle_model: best_model
