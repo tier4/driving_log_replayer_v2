@@ -4,10 +4,11 @@
 ローカルに `webauto` で取得した T4 データセットを使ってワンコマンド実行するための
 サンプル。
 
-クラウド側の正本は `sample/real_log_sim_comparison/scenario.yaml` 。本ディレクトリ
-の `scenario.yaml` はそのコピーで、`Datasets:` の UUID と前置きコメントだけが
-ローカル実行向けに調整されている。`curve_config_miraikan.yaml` はクラウド版への
-相対シンボリックリンクで、二重メンテを避けている。
+クラウド側の正本は同階層 `../cloud/scenario.yaml`。本ディレクトリの `scenario.yaml`
+はそのコピーで、`Datasets:` の UUID と前置きコメントだけがローカル実行向けに調整
+されている。`curve_config_miraikan.yaml` は cloud / local 共通の参照として 1 つ上の
+`../curve_config_miraikan.yaml` に置いてあり、必要なときに `scenario.yaml` の
+`Conditions.curve_config_yaml` で参照する (現状サンプルは空文字で無効)。
 
 ---
 
@@ -107,8 +108,15 @@ overlay:
 ### 3. 実行
 
 ```bash
-cd src/simulator/driving_log_replayer_v2/driving_log_replayer_v2
+# use case ディレクトリに集約された Makefile を直接呼ぶ
+cd src/simulator/driving_log_replayer_v2/driving_log_replayer_v2/driving_log_replayer_v2/real_log_sim_comparison
 make local_cloud_run
+```
+
+リポジトリ root から走らせる場合は `make -C` を使う:
+
+```bash
+make -C src/simulator/driving_log_replayer_v2/driving_log_replayer_v2/driving_log_replayer_v2/real_log_sim_comparison local_cloud_run
 ```
 
 主要な動作：
@@ -125,8 +133,11 @@ make local_cloud_run
 
 ### 4. 結果確認
 
+出力は use case 集約ディレクトリ配下の `sample/local/out/` に書かれる
+(`driving_log_replayer_v2/driving_log_replayer_v2/real_log_sim_comparison/sample/local/out/`)。
+
 ```text
-sample/real_log_sim_comparison_local/out/latest/
+sample/local/out/latest/
 ├── result.jsonl                       # 末尾行に {"Result":{"Success":true,...}}
 └── result_archive/
     ├── lite/
@@ -151,8 +162,8 @@ sample/real_log_sim_comparison_local/out/latest/
 | 変数 | 既定値 | 用途 |
 |---|---|---|
 | `WEBAUTO_T4_ROOT` | `$HOME/.webauto/data/data/annotation_dataset` | webauto annotation-dataset pull の出力ルート |
-| `LOCAL_SCENARIO` | `sample/real_log_sim_comparison_local/scenario.yaml` | 別の scenario.yaml を使う場合 |
-| `WS_ROOT` | `Makefile` の 4 階層上 | colcon ワークスペースルート |
+| `LOCAL_SCENARIO` | `<Makefile dir>/sample/local/scenario.yaml` | 別の scenario.yaml を使う場合 |
+| `WS_ROOT` | `Makefile` の 6 階層上 | colcon ワークスペースルート |
 
 例：
 ```bash

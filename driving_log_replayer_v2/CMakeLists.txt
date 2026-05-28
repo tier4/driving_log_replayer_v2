@@ -49,12 +49,40 @@ install(PROGRAMS
   scripts/diagnostics_evaluator_node.py
   scripts/publish_topic_from_rosbag_node.py
   scripts/perception_reproducer_evaluator_node.py
-  scripts/real_log_sim_comparison_evaluator_node.py
   DESTINATION lib/${PROJECT_NAME}
+)
+
+# real_log_sim_comparison: ファイル散らばり解消のため evaluator_node は
+# driving_log_replayer_v2/real_log_sim_comparison/ 配下に集約。
+# launch から `<use_case>_evaluator_node.py` の固定命名で呼ばれるため RENAME で互換維持。
+install(PROGRAMS
+  driving_log_replayer_v2/real_log_sim_comparison/evaluator_node.py
+  DESTINATION lib/${PROJECT_NAME}
+  RENAME real_log_sim_comparison_evaluator_node.py
 )
 
 install(FILES "${ROS_REQUIREMENTS}"
   DESTINATION share/${PROJECT_NAME})
+
+# real_log_sim_comparison: sample も use case ディレクトリへ集約。
+# share install パス (sample/real_log_sim_comparison{,_local}) は cloud Web.Auto evaluator 互換のため維持。
+# `install(DIRECTORY)` だと `--symlink-install` モードで PATTERN EXCLUDE が効かず
+# sample/local/out/ 配下の実行結果 (untracked, 数GB) まで symlink install されてしまうため、
+# 必要ファイルを明示列挙する。
+install(FILES
+  driving_log_replayer_v2/real_log_sim_comparison/sample/cloud/cases.yaml
+  driving_log_replayer_v2/real_log_sim_comparison/sample/cloud/scenario.yaml
+  driving_log_replayer_v2/real_log_sim_comparison/sample/cloud/sim_runs.yaml
+  driving_log_replayer_v2/real_log_sim_comparison/sample/curve_config_miraikan.yaml
+  DESTINATION share/${PROJECT_NAME}/sample/real_log_sim_comparison
+)
+install(FILES
+  driving_log_replayer_v2/real_log_sim_comparison/sample/local/cases.yaml
+  driving_log_replayer_v2/real_log_sim_comparison/sample/local/scenario.yaml
+  driving_log_replayer_v2/real_log_sim_comparison/sample/local/sim_runs.yaml
+  driving_log_replayer_v2/real_log_sim_comparison/sample/local/README.ja.md
+  DESTINATION share/${PROJECT_NAME}/sample/real_log_sim_comparison_local
+)
 
 ament_auto_package(INSTALL_TO_SHARE
   launch

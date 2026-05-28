@@ -4,7 +4,7 @@ ScenarioDescription: |
   実機 rosbag (T4 dataset の input_bag) を SSOT としたローカル実行版。
   webauto data annotation-dataset pull --include-intermediate-artifacts で
   事前取得したデータセットを使い、Stage 1-6 の 6 段階パイプラインを実行する。
-  cloud 用 sample/real_log_sim_comparison/scenario.yaml と等価。
+  cloud 用 ../cloud/scenario.yaml と等価。
 SensorModel: aip_x2_gen2
 VehicleModel: j6_gen2
 Evaluation:
