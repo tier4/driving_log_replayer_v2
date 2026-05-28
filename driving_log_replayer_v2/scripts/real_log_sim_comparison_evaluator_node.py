@@ -153,19 +153,56 @@ def run_pipeline(
         timeout=1800,
     )
 
-    # Step 3 – 全走行 per-step delta 分析 (best-effort: 失敗しても Step 1/2 の成果は維持)
-    logger.info("Step 3: analyze_per_step (best-effort)")
+    # Step 3 – VehicleModel 解析 (ケースループ; cases.yaml が必須)
+    cases_yaml = compare_cfg.get("cases_config", "")
+    if not cases_yaml or not Path(cases_yaml).exists():
+        raise RuntimeError(
+            "cases.yaml が見つかりません。scenario.yaml の Conditions.cases_config に "
+            "VehicleModel ケース定義 YAML への (絶対 or 相対) パスを指定してください。"
+            f" got: {cases_yaml!r}"
+        )
+
+    from driving_log_replayer_v2.real_log_sim_comparison._cases_config import (  # noqa: PLC0415
+        load_cases_config,
+    )
+
+    cases_cfg = load_cases_config(cases_yaml)
+    env["CASES_CONFIG_YAML"] = cases_yaml
+
+    logger.info(f"Step 3: analyze_per_step over {len(cases_cfg.cases)} case(s)")
+    for case in cases_cfg.cases:
+        logger.info(f"  case: tag={case.tag}, vehicle_model={case.vehicle_model}")
+        env_case = env.copy()
+        env_case["CASE_TAG"] = case.tag
+        try:
+            _run(
+                [
+                    sys.executable, "-m",
+                    "driving_log_replayer_v2.real_log_sim_comparison.analyze_per_step",
+                    "--case-tag", case.tag,
+                    "--cases-config", cases_yaml,
+                ],
+                env=env_case,
+                timeout=1800,
+            )
+        except RuntimeError as exc:
+            # 1 ケース失敗で全体停止せず、他ケースの結果を残す (Stage 4 は欠損 case を除外して継続)
+            logger.warning(f"Step 3 (case={case.tag}) failed but continuing: {exc}")
+
+    # Step 4 – ケース集約解析 (overlay 図 + cases_summary.md)
+    logger.info("Step 4: analyze_cases (cross-case aggregation)")
     try:
         _run(
             [
                 sys.executable, "-m",
-                "driving_log_replayer_v2.real_log_sim_comparison.analyze_per_step",
+                "driving_log_replayer_v2.real_log_sim_comparison.analyze_cases",
+                "--cases-config", cases_yaml,
             ],
             env=env,
-            timeout=1800,
+            timeout=600,
         )
     except RuntimeError as exc:
-        logger.warning(f"Step 3 (analyze_per_step) failed but continuing: {exc}")
+        logger.warning(f"Step 4 (analyze_cases) failed but continuing: {exc}")
 
 
 def _load_compare_config(scenario_path_str: str) -> dict[str, Any]:
@@ -204,6 +241,14 @@ def _load_compare_config(scenario_path_str: str) -> dict[str, Any]:
                 if not p.is_absolute():
                     p = scenario_path.parent / p
                 cfg["curve_config_yaml"] = str(p) if p.exists() else ""
+
+        # cases_config (必須): Stage 3/4 のケース定義 YAML
+        if "cases_config" in conditions:
+            raw = str(conditions["cases_config"])
+            p = Path(raw)
+            if not p.is_absolute():
+                p = scenario_path.parent / p
+            cfg["cases_config"] = str(p)
 
         return cfg
     except Exception:

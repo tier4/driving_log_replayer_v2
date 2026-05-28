@@ -85,8 +85,11 @@ def _build_params(cfg: RuntimeConfig | None = None) -> dict:
     return base
 
 
-PARAMS = _build_params()
-SUB_DT = PARAMS["sub_dt"]  # 積分ステップ幅 [s]（FMU_DT 相当）
+# Placeholder; 実際の値は main() 内 _apply_runtime_config(cfg, case_tag, case_params) で
+# 上書きされる。module import 時に load_sim_params() (YAML 読込) を走らせない
+# ことで cases ループ起動時のオーバーヘッドを削減する。
+PARAMS: dict = {"sub_dt": 1.0 / 30.0}
+SUB_DT: float = PARAMS["sub_dt"]
 
 
 # ---------------------------------------------------------------------------
@@ -123,8 +126,12 @@ def _load_lib() -> ctypes.CDLL:
     c_double = ctypes.c_double
     c_void_p = ctypes.c_void_p
 
-    lib.vm_create.restype = c_void_p
-    lib.vm_create.argtypes = [c_double] * 12
+    # model-specific factories (returns VmModel * as c_void_p)
+    lib.vm_create_ideal_steer_acc.restype = c_void_p
+    lib.vm_create_ideal_steer_acc.argtypes = [c_double, c_double]  # wheelbase, sub_dt
+
+    lib.vm_create_delay_steer_acc_geared_wo_fall_guard.restype = c_void_p
+    lib.vm_create_delay_steer_acc_geared_wo_fall_guard.argtypes = [c_double] * 15
 
     lib.vm_reset_full.restype = None
     lib.vm_reset_full.argtypes = [c_void_p] + [c_double] * 6
@@ -153,6 +160,9 @@ def _load_lib() -> ctypes.CDLL:
     lib.vm_step.restype = None
     lib.vm_step.argtypes = [c_void_p]
 
+    lib.vm_step_dt.restype = None
+    lib.vm_step_dt.argtypes = [c_void_p, c_double]
+
     # 横方向諸量 (wz/vy/ay) は libvehicle_model_wrapper.so に export されていないため
     # ここでは扱わない。必要になれば scenario_simulator 側のラッパーに追加する。
     for fn in (
@@ -174,7 +184,7 @@ def _load_lib() -> ctypes.CDLL:
 
 
 class VehicleModel:
-    """DELAY_STEER_ACC_GEARED_WO_FALL_GUARD の C++ ctypes ラッパー."""
+    """SimModelInterface 派生の C ラッパーを model_type で dispatch."""
 
     _lib: ctypes.CDLL | None = None
 
@@ -184,26 +194,46 @@ class VehicleModel:
             cls._lib = _load_lib()
         return cls._lib
 
-    def __init__(self, params: dict, sub_dt: float):
+    def __init__(self, params: dict, sub_dt: float, model_type: str):
+        """
+        model_type:
+          - "delay_steer_acc_geared_wo_fall_guard": 旧既定。15 引数 (params の wheelbase,
+            steer_bias, time_constant 等 + debug_*_scaling_factor, k_us)
+          - "ideal_steer_acc": wheelbase のみ
+        params は load_sim_params() の base に cases.yaml の case.params が上書きされた dict。
+        """
         p = params
         lib = self._get_lib()
         self._lib = lib
-        self._ptr = lib.vm_create(
-            p["vel_lim"],
-            p["steer_lim"],
-            p["vel_rate_lim"],
-            p["steer_rate_lim"],
-            p["wheelbase"],
-            sub_dt,
-            p["acc_time_delay"],
-            p["acc_time_constant"],
-            p["steer_time_delay"],
-            p["steer_time_constant"],
-            p["steer_dead_band"],
-            p["steer_bias"],
-        )
+        self._model_type = model_type
+        if model_type == "ideal_steer_acc":
+            self._ptr = lib.vm_create_ideal_steer_acc(p["wheelbase"], sub_dt)
+            self._steer_bias = 0.0
+        elif model_type == "delay_steer_acc_geared_wo_fall_guard":
+            self._ptr = lib.vm_create_delay_steer_acc_geared_wo_fall_guard(
+                p["vel_lim"],
+                p["steer_lim"],
+                p["vel_rate_lim"],
+                p["steer_rate_lim"],
+                p["wheelbase"],
+                sub_dt,
+                p["acc_time_delay"],
+                p["acc_time_constant"],
+                p["steer_time_delay"],
+                p["steer_time_constant"],
+                p["steer_dead_band"],
+                p["steer_bias"],
+                p.get("debug_acc_scaling_factor", 1.0),
+                p.get("debug_steer_scaling_factor", 1.0),
+                p.get("k_us", 0.0),
+            )
+            self._steer_bias = p["steer_bias"]
+        else:
+            raise ValueError(
+                f"未対応の model_type: {model_type!r}. "
+                "対応: 'ideal_steer_acc', 'delay_steer_acc_geared_wo_fall_guard'"
+            )
         self._sub_dt = sub_dt
-        self._steer_bias = p["steer_bias"]
 
     def __del__(self):
         if hasattr(self, "_ptr") and self._ptr and hasattr(self, "_lib") and self._lib:
@@ -253,6 +283,12 @@ class VehicleModel:
         """Euler 1 ステップ積分（sub_dt 秒）。"""
         self._lib.vm_set_input(self._ptr, accel_des, steer_des)
         self._lib.vm_step(self._ptr)
+
+    def step_dt(self, accel_des: float, steer_des: float, dt: float) -> None:
+        """Euler 1 ステップ積分（任意 dt 秒）。
+        端数補正 (interval < SUB_DT) 用。dt は SUB_DT より十分小さい範囲で呼ぶこと。"""
+        self._lib.vm_set_input(self._ptr, accel_des, steer_des)
+        self._lib.vm_step_dt(self._ptr, ctypes.c_double(dt))
 
     @property
     def x(self) -> float:
@@ -358,7 +394,7 @@ def find_autonomous_start(data: dict) -> int:
 # ---------------------------------------------------------------------------
 
 
-def run_per_step(data: dict, t0_ns: int, params: dict) -> pd.DataFrame:
+def run_per_step(data: dict, t0_ns: int, params: dict, model_type: str) -> pd.DataFrame:
     """per-step delta を実行し結果 DataFrame を返す。
 
     AUTONOMOUS 開始 (t0_ns) から制御コマンド系列末尾までを解析対象とする。
@@ -467,7 +503,7 @@ def run_per_step(data: dict, t0_ns: int, params: dict) -> pd.DataFrame:
     accel_des_full = df_cmd_full["accel_des"].values
     steer_des_full = df_cmd_full["steer_des"].values
 
-    model = VehicleModel(params, SUB_DT)
+    model = VehicleModel(params, SUB_DT, model_type)
     acc_q_size = model.acc_q_size  # = round(acc_time_delay / SUB_DT)
     steer_q_size = model.steer_q_size  # = round(steer_time_delay / SUB_DT)
 
@@ -523,12 +559,17 @@ def run_per_step(data: dict, t0_ns: int, params: dict) -> pd.DataFrame:
             steer_history=steer_history,
         )
 
-        # -- interval 分だけ SUB_DT ステップで積分 --
-        # 端数 (remainder < SUB_DT) はラッパーに vm_step_dt が未 export のため無視。
-        # SUB_DT が十分小さければ累積誤差は実用上無視できる。
+        # -- interval 分だけ正確に積分 --
+        # n_full 回 SUB_DT ステップ + 余り時間を端数ステップで補正し、
+        # モデル積分時間が実際の elapsed time と一致するようにする。
+        # interval が SUB_DT より小さい場合 (cmd 30Hz ≒ SUB_DT) は n_full=0 で
+        # step_dt のみが効くため、端数ステップを必ず実行する。
         n_full = int(interval / SUB_DT)
         for i in range(n_full):
             model.step(accel_des, steer_des)
+        remainder = interval - n_full * SUB_DT
+        if remainder > 1e-6:
+            model.step_dt(accel_des, steer_des, remainder)
 
         # -- delta 計算 --
         real_dx = gt_x[k + 1] - gt_x[k]
@@ -961,10 +1002,8 @@ def plot_map_distribution(df: pd.DataFrame, params: dict) -> None:
         # err_ay / err_vy / err_wz は sim_* がラッパー未 export のため一旦スキップ
     ]
 
+    # columns は最低 3 要素 (err_ds_long / err_ds_lat / err_steer) ある前提
     fig, axes = plt.subplots(1, len(columns), figsize=(6 * len(columns), 6))
-    # subplots(1, 1, ...) は Axes を返すので list 化して下流のループを共通化
-    if len(columns) == 1:
-        axes = [axes]
 
     # 走行軌跡の bbox + margin で地図プロット範囲を自動算出
     x_min = float(df["pos_x"].min()) - MAP_BBOX_MARGIN
@@ -1304,28 +1343,66 @@ def save_summary(df: pd.DataFrame) -> None:
 # ---------------------------------------------------------------------------
 
 
-def _apply_runtime_config(cfg: RuntimeConfig) -> dict:
-    """RuntimeConfig をモジュールレベル変数に反映し、PARAMS を返す。"""
+def _apply_runtime_config(cfg: RuntimeConfig, case_tag: str, case_params: dict) -> dict:
+    """RuntimeConfig + cases.yaml の case エントリ をモジュールレベル変数に反映。
+
+    OUT_DIR は per_step/<case_tag>/ に固定。PARAMS は load_sim_params()
+    の base に case_params を上書きしたもの。
+    """
     global BASE, LITE_DIR, OUT_DIR, REAL_BAG_DIR, PARAMS, SUB_DT  # noqa: PLW0603
 
     BASE = cfg.base_dir
     LITE_DIR = cfg.lite_dir
-    OUT_DIR = cfg.out_dir / "per_step"
+    OUT_DIR = cfg.out_dir / "per_step" / case_tag
     # 入力 bag のデフォルトパス (実体は _resolve_real_mcap が file/dir 両対応)
     REAL_BAG_DIR = LITE_DIR / "real.lite.mcap"
 
     PARAMS = _build_params(cfg)
+    PARAMS.update(case_params)
     SUB_DT = PARAMS["sub_dt"]
     return PARAMS
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="全走行 per-step delta 分析")
+    parser = argparse.ArgumentParser(description="全走行 per-step delta 分析 (1 ケース 1 run)")
     add_common_cli_arguments(parser)
+    parser.add_argument(
+        "--case-tag",
+        default=os.environ.get("CASE_TAG", ""),
+        help="cases.yaml の対象ケース tag (必須; env: CASE_TAG)",
+    )
+    parser.add_argument(
+        "--cases-config",
+        default=os.environ.get("CASES_CONFIG_YAML", ""),
+        help="cases.yaml のパス (必須; env: CASES_CONFIG_YAML)",
+    )
     args = parser.parse_args()
 
+    if not args.case_tag:
+        print("ERROR: --case-tag (or CASE_TAG env) が未指定です", file=sys.stderr)
+        sys.exit(2)
+    if not args.cases_config:
+        print(
+            "ERROR: --cases-config (or CASES_CONFIG_YAML env) が未指定です。"
+            "cases.yaml を scenario.yaml の Conditions.cases_config で指定してください",
+            file=sys.stderr,
+        )
+        sys.exit(2)
+
+    from driving_log_replayer_v2.real_log_sim_comparison._cases_config import (  # noqa: PLC0415
+        load_cases_config,
+    )
+
+    try:
+        cases_cfg = load_cases_config(args.cases_config)
+        case = cases_cfg.find_case(args.case_tag)
+    except (FileNotFoundError, ValueError, KeyError) as e:
+        print(f"ERROR: cases.yaml: {e}", file=sys.stderr)
+        sys.exit(2)
+    print(f"[case] tag={case.tag}, vehicle_model={case.vehicle_model}, params={case.params}")
+
     cfg = build_runtime_config(args, default_base_dir=Path(__file__).parent)
-    params = _apply_runtime_config(cfg)
+    params = _apply_runtime_config(cfg, case.tag, case.params)
 
     OUT_DIR.mkdir(parents=True, exist_ok=True)
 
@@ -1341,8 +1418,8 @@ def main() -> None:
     t0_ns = find_autonomous_start(data)
     print(f"AUTONOMOUS 開始: t0_ns={t0_ns}")
 
-    print("\n=== per-step delta 分析開始 ===")
-    df = run_per_step(data, t0_ns, params)
+    print(f"\n=== per-step delta 分析開始 (case={case.tag}) ===")
+    df = run_per_step(data, t0_ns, params, case.vehicle_model)
     print(f"有効ステップ: {len(df)}")
 
     if df.empty:

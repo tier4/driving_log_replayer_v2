@@ -108,9 +108,35 @@ PNG / PDF の比較プロットが出力される。
 > `curve{N}_*` 系は `curve_config.yaml::plot_curves` で対象カーブを切り替え可能。<br>
 > 未指定なら `curve2_index` のカーブだけが生成される（既定は `curve2_*` の 4 枚）。
 
-### `comparison/per_step/`
+### `comparison/per_step/<case_tag>/`
 
-`analyze_per_step` による全走行 per-step delta 解析の成果物（CSV・図 8 枚・summary.txt）。ステップ 3 が失敗した場合は出力されない。
+`analyze_per_step` (Stage 3) によるケース別 per-step delta 解析の成果物。
+1 ケースあたり CSV (`per_step_delta.csv`) + 図 8 枚 + `summary.txt` を生成。
+ケースは `cases.yaml` で定義する (Stage 3/4 の入力)。
+
+### `comparison/cases/`
+
+`analyze_cases` (Stage 4) による全ケース集約解析の成果物。
+
+| ファイル | 内容 |
+|---|---|
+| `cases_summary.md` | tag × (RMSE err_steer / err_ds_long / err_ds_lat) の Markdown 表 |
+| `overlay/cascade_error_overlay.png` | 全ケースを 1 枚に重ね描き (段階的誤差) |
+| `overlay/error_timeseries_overlay.png` | 全ケースを 1 枚に重ね描き (誤差時系列) |
+
+---
+
+## パイプライン 4 段階
+
+| Stage | 名称 | 入力 | 出力 | model依存 | 実行回数 |
+|---|---|---|---|---|---|
+| 1 | 実機ログ抽出 | `input_bag/*.{mcap,db3}` | `lite/real.lite/` | なし | 1 |
+| 2 | 実機ログ解析 | `lite/real.lite/` | `comparison/{figures/,report.md}` | なし | 1 |
+| 3 | VehicleModel 解析 (ケース別) | `lite/real.lite/` + cases.yaml の 1 ケース | `comparison/per_step/<tag>/` | あり | N (cases) |
+| 4 | ケース集約解析 | `comparison/per_step/<tag>/per_step_delta.csv` 群 | `comparison/cases/` | 集約 | 1 |
+
+Stage 3/4 のケース定義は `cases.yaml` で行う。scenario.yaml の
+`Conditions.cases_config` で参照し、**未指定だとパイプラインは失敗**する。
 
 ### `result_bag_path/`
 

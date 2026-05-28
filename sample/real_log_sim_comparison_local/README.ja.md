@@ -11,6 +11,20 @@
 
 ---
 
+## パイプライン 4 段階
+
+| Stage | 名称 | 入力 | 出力 (`result_archive/` 配下) | model 依存 | 実行回数 |
+|---|---|---|---|---|---|
+| 1 | 実機ログ抽出 | `input_bag/*.{mcap,db3}` | `lite/real.lite/` | なし | 1 |
+| 2 | 実機ログ解析 | `lite/real.lite/` | `comparison/{figures/,report.md}` | なし | 1 |
+| 3 | VehicleModel 解析 (ケース別) | `lite/real.lite/` + cases.yaml の 1 ケース | `comparison/per_step/<tag>/` | あり | N (cases) |
+| 4 | ケース集約解析 | `comparison/per_step/<tag>/per_step_delta.csv` 群 | `comparison/cases/{overlay/, cases_summary.md}` | 集約 | 1 |
+
+Stage 3/4 のケース定義は `cases.yaml` (本ディレクトリ) で行う。`scenario.yaml` の
+`Conditions.cases_config` で参照されており、**未指定だとパイプラインは失敗する**。
+
+---
+
 ## 前提
 
 1. **このリポジトリを含む colcon ワークスペースをビルド済み**。
@@ -50,7 +64,29 @@ webauto data annotation-dataset pull \
 `annotation/`, `data/`, `input_bag/`, `map/` が展開される。
 ローカル実行スクリプトはここを自動探索する。
 
-### 2. 実行
+### 2. cases.yaml を確認/編集 (Stage 3/4 のケース定義)
+
+```yaml
+# cases.yaml
+cases:
+  - tag: baseline
+    vehicle_model: delay_steer_acc_geared_wo_fall_guard
+    params: {wheelbase: 4.76012, steer_bias: 0.01, steer_time_constant: 0.4983}
+  - tag: shorter_wb
+    vehicle_model: delay_steer_acc_geared_wo_fall_guard
+    params: {wheelbase: 4.50}
+  - tag: ideal_steer
+    vehicle_model: ideal_steer_acc
+    params: {wheelbase: 4.76012}
+overlay:
+  reference_tag: baseline
+  plots: [cascade_error, error_timeseries]
+```
+
+`vehicle_model` は `delay_steer_acc_geared_wo_fall_guard` or `ideal_steer_acc` の 2 種類。
+`params` で 未指定のキーは `load_sim_params()` (best_model_description の YAML) で補完される。
+
+### 3. 実行
 
 ```bash
 cd src/simulator/driving_log_replayer_v2/driving_log_replayer_v2
@@ -59,24 +95,31 @@ make local_cloud_run
 
 主要な動作：
 
-1. `scenario.yaml` から Datasets 先頭の UUID を取得
-2. `~/.webauto/data/data/annotation_dataset/` 配下から同名ディレクトリを探索
-3. その下の `<frame>/input_bag/` に bag 本体 (`*.mcap`/`*.db3`) があるか検証
-4. `out/<タイムスタンプ>/` を作成し、`out/latest` シンボリックリンクを更新
-5. `ros2 launch driving_log_replayer_v2 driving_log_replayer_v2.launch.py` を
-   `t4_dataset_path:=<frame_dir> t4_dataset_id:=<UUID> with_autoware:=false`
-   付きで起動
+1. `scenario.yaml` から Datasets UUID を取得 → `~/.webauto/.../` から実体パス解決
+2. `out/<タイムスタンプ>/` を作成し、`out/latest` シンボリックリンクを更新
+3. `ros2 launch` で 4 段階パイプライン起動
+   - Stage 1: 実機 bag → lite/real.lite
+   - Stage 2: compare_logs → comparison/figures/, report.md
+   - Stage 3: cases.yaml の各 tag で analyze_per_step → per_step/<tag>/
+   - Stage 4: analyze_cases → cases/overlay/, cases_summary.md
 
-### 3. 結果確認
+### 4. 結果確認
 
 ```text
 sample/real_log_sim_comparison_local/out/latest/
 ├── result.jsonl                       # 末尾行に {"Result":{"Success":true,...}}
 └── result_archive/
-    ├── lite/real.lite/*.mcap          # 抽出 lite bag
+    ├── lite/real.lite/*.mcap          # Stage 1: 抽出 lite bag
     └── comparison/
-        ├── report.md                  # 比較統計レポート
-        └── figures/*.png              # 速度・操舵・軌跡・カーブ別図
+        ├── report.md                  # Stage 2: 比較統計レポート
+        ├── figures/*.png              # Stage 2: 速度・操舵・軌跡・カーブ別図
+        ├── per_step/
+        │   ├── <tag1>/{*.png, per_step_delta.csv, summary.txt}   # Stage 3 (case)
+        │   ├── <tag2>/{...}
+        │   └── ...
+        └── cases/
+            ├── overlay/{cascade_error_overlay.png, error_timeseries_overlay.png}
+            └── cases_summary.md       # Stage 4: tag × RMSE 表
 ```
 
 ## 上書き可能な Makefile 変数
@@ -100,3 +143,16 @@ make local_cloud_run LOCAL_SCENARIO=/path/to/other_scenario.yaml
 | `input_bag/ に *.mcap/*.db3 が無い` | 同上。`--include-intermediate-artifacts` を付け忘れている可能性 |
 | `install/setup.bash が見つかりません` | colcon ワークスペースを先にビルド |
 | 図に地図背景が出ない | `<frame>/map/lanelet2_map.osm` が存在するか確認 |
+| `cases.yaml が見つかりません` | `scenario.yaml` の `Conditions.cases_config` の相対パスと cases.yaml の存在を確認 |
+| `未対応の model_type` | cases.yaml の `vehicle_model` は `delay_steer_acc_geared_wo_fall_guard` か `ideal_steer_acc` のみ。新規 model 追加は `vehicle_model_c_wrapper.cpp` への factory 追加が必要 |
+
+## 設計上の注意
+
+- **per_step 解析は「1 step 予測」**: 各ステップで実機状態にリセットして
+  `SUB_DT × cmd_count` 秒だけモデルを進めるため、ケース間の `err_ds_long` /
+  `err_ds_lat` 差は小さい (1 step ≒ 17cm 程度の移動内ではモデル差が位置に
+  大きく現れない)。ケース差は主に `err_steer` に表れる。
+  長期軌跡の累積差を見たい場合は別解析 (将来 Stage 5 として追加候補) が必要。
+- **`overlay.reference_tag` は現状 decorative**: `cases_summary.md` のヘッダに
+  表示されるだけで、reference との delta/relative 比較列は未実装。必要になれば
+  `analyze_cases.py` の `write_cases_summary` に追加できる。
