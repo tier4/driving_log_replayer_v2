@@ -191,9 +191,10 @@ def keep_rosbag_compatibility(input_bag: str) -> str:
         topic_metadata = topic_with_message_count["topic_metadata"]
 
         if isinstance(topic_metadata["offered_qos_profiles"], str):  # serialized as str in humble
-            topic_metadata["offered_qos_profiles"] = yaml.safe_load(
-                topic_metadata["offered_qos_profiles"]
-            )
+            offered_qos_profiles = yaml.safe_load(topic_metadata["offered_qos_profiles"])
+            if offered_qos_profiles is None:
+                continue
+            topic_metadata["offered_qos_profiles"] = offered_qos_profiles
         for offered_qos_profiles in topic_metadata["offered_qos_profiles"]:
             offered_qos_profiles["reliability"] = mapping.get(
                 offered_qos_profiles["reliability"], offered_qos_profiles["reliability"]
