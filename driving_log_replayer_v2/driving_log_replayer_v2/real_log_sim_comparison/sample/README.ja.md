@@ -15,25 +15,18 @@ Godot バイナリパスは cloud / local 共通で `/opt/godot_autoware_simulat
 
 ---
 
-## パイプライン 6 段階
+## パイプライン概要
 
-| Stage | 名称 | 入力 | 出力 (`result_archive/` 配下) | model 依存 | 実行回数 |
-|---|---|---|---|---|---|
-| 1 | 実機ログ抽出 | `input_bag/*.{mcap,db3}` | `lite/real.lite/` | なし | 1 |
-| 2 | scenario 自動生成 | `input_bag/` + map | `scenarios/auto_scenario.yaml` (OpenSCENARIO) | なし | 1 |
-| 3 | closed-loop シム実行 | `auto_scenario.yaml` + `sim_runs.yaml` の 1 run | `lite/<run_tag>.lite/` | あり | N (sim_runs) |
-| 4 | 実機 + sim 比較解析 | `lite/{real, <run_tag>}.lite/` 群 | `comparison/{figures/, report.md}` (N-way 重ね描き) | 集約 | 1 |
-| 5 | VehicleModel per-step 解析 | `lite/real.lite/` + cases.yaml の 1 ケース | `comparison/per_step/<tag>/` | あり | N (cases) |
-| 6 | ケース集約解析 | `per_step/<tag>/per_step_delta.csv` 群 | `comparison/cases/{overlay/, cases_summary.md}` | 集約 | 1 |
+6 段階パイプラインの各 stage の入出力は親ディレクトリの
+[`../README.ja.md`](../README.ja.md#パイプライン6-段階) を参照。ローカル実行で押さえる点:
 
-Stage 3 (sim 実行) と Stage 5 (per-step 解析) のケース定義はそれぞれ
-`sim_runs.yaml` / `cases.yaml` で行う。`scenario.yaml` の
-`Conditions.sim_runs_config` / `Conditions.cases_config` で参照されており、
-**両方未指定だとパイプラインは失敗する**。
+- Stage 3（sim 実行）と Stage 5（per-step 解析）はそれぞれ `sim_runs.yaml` / `cases.yaml`
+  の各エントリで N 回ループする。`scenario.yaml` の `Conditions.sim_runs_config` /
+  `Conditions.cases_config` で参照され、**両方未指定だとパイプラインは失敗する**。
 
 > **実行時間**: Stage 3 は scenario_test_runner で Autoware を起動して closed-loop
-> シムを回すため 1 run あたり ~5 分。既定 sim_runs.yaml は 4 run (sim_normal /
-> sim_kus0020 / sim_perfect / sim_godot) のため、end-to-end は ~25 分の見積もり。
+> シムを回すため 1 run あたり ~5 分。既定 `sim_runs.yaml` は 4 run（sim_normal /
+> sim_kus0020 / sim_perfect / sim_godot）のため、end-to-end は ~25 分の見積もり。
 
 ---
 
@@ -152,16 +145,14 @@ sample/out/latest/
 └── result_archive/
     ├── lite/
     │   ├── real.lite/*.mcap              # Stage 1
-    │   ├── sim_normal.lite/*.mcap        # Stage 3 run 1
-    │   └── sim_godot.lite/*.mcap         # Stage 3 run 2 (Godot バイナリある場合)
+    │   └── <run_tag>.lite/*.mcap         # Stage 3: sim_runs.yaml の各 run
+    │                                     #   (既定 sim_normal / sim_kus0020 / sim_perfect / sim_godot)
     ├── scenarios/auto_scenario.yaml      # Stage 2
     └── comparison/
         ├── report.md                     # Stage 4: 比較統計レポート
         ├── figures/*.png                 # Stage 4: 速度・操舵・軌跡 (real + sim 重ね描き)
         ├── per_step/
-        │   ├── baseline/{*.png, per_step_delta.csv, summary.txt}   # Stage 5
-        │   ├── shorter_wb/{...}
-        │   └── ideal_steer/{...}
+        │   └── <case_tag>/{*.png(8枚), per_step_delta.csv, summary.txt}   # Stage 5: cases.yaml の各 tag
         └── cases/
             ├── overlay/{cascade_error_overlay.png, error_timeseries_overlay.png}
             └── cases_summary.md          # Stage 6: tag × RMSE 表
