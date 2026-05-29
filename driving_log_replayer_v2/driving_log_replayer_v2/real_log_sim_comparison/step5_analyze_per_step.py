@@ -12,7 +12,7 @@
 
 使用モデル: DELAY_STEER_ACC_GEARED_WO_FALL_GUARD (C++ ctypes 経由)
   ライブラリ: libvehicle_model_wrapper.so (simple_sensor_simulator パッケージが提供)
-  パラメータ: best_model_description パッケージの config/simulator_model.param.yaml
+  パラメータ: j6_gen2_description パッケージの config/simulator_model.param.yaml
 
 出力:
   comparison/per_step/

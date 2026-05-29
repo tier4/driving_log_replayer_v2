@@ -78,20 +78,27 @@ webauto data annotation-dataset pull \
 ```yaml
 sim_runs:
   - tag: sim_normal
-    vehicle_model: best_model
+    vehicle_model: j6_gen2
+  - tag: sim_kus0020
+    vehicle_model: j6_gen2
+    params: {k_us: 0.020}   # simulator_model パラメータ上書き (description を増やさず変種を作る)
   - tag: sim_godot
     vehicle_model: j6_gen2_godot
     godot_executable: ${HOME}/Downloads/godot_autoware_simulator.x86_64
 ```
-`vehicle_model` は `best_model` (通常シム) または `j6_gen2_godot` (Godot シム)。
-Godot 実行時は `godot_executable` パスが必要。
+`vehicle_model` は `j6_gen2` (通常シム) / `j6_gen2_perfect_tracker` (理想軌跡追従) / `j6_gen2_godot` (Godot シム)。
+Godot 実行時は `godot_executable` パスが必要。`params` は `simple_sensor_simulator.<key>:=<value>` として
+launch に渡り、description の simulator_model.param.yaml を上書きする。
 
 **cases.yaml (Stage 5/6 用)**: VehicleModel per-step 解析のケース定義。
 ```yaml
 cases:
   - tag: baseline
     vehicle_model: delay_steer_acc_geared_wo_fall_guard
-    params: {wheelbase: 4.76012, steer_bias: 0.01, steer_time_constant: 0.4983}
+    params: {wheelbase: 4.76012}
+  - tag: kus0020
+    vehicle_model: delay_steer_acc_geared_wo_fall_guard
+    params: {wheelbase: 4.76012, k_us: 0.020}
   - tag: shorter_wb
     vehicle_model: delay_steer_acc_geared_wo_fall_guard
     params: {wheelbase: 4.50}
@@ -103,7 +110,7 @@ overlay:
   plots: [cascade_error, error_timeseries]
 ```
 `vehicle_model` は `delay_steer_acc_geared_wo_fall_guard` or `ideal_steer_acc` の 2 種類。
-`params` で未指定のキーは `load_sim_params()` (best_model_description の YAML) で補完。
+`params` で未指定のキーは `load_sim_params()` (j6_gen2_description の YAML) で補完。
 
 ### 3. 実行
 

@@ -52,6 +52,12 @@ def _build_launch_cmd(run, scenario: Path, output_directory: Path) -> list[str]:
     ]
     if run.godot_executable:
         cmd.append(f"godot_executable:={run.godot_executable}")
+    # params: simulator_model パラメータ上書き。
+    # scenario_test_runner.launch.py が simple_sensor_simulator. 接頭辞の launch 引数を
+    # 収集し、simulator_model.param.yaml の後ろに連結する (後勝ち) ため、
+    # description パッケージを増やさずに dynamics 変種 (例 k_us) を作れる。
+    for key, value in run.params.items():
+        cmd.append(f"simple_sensor_simulator.{key}:={value}")
     return cmd
 
 

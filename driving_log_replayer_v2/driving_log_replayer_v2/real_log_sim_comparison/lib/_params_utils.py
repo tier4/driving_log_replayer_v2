@@ -67,7 +67,7 @@ def setup_jp_font() -> str | None:
 def _find_desc_dir() -> Path:
     from ament_index_python.packages import get_package_share_directory
 
-    return Path(get_package_share_directory("best_model_description")) / "config"
+    return Path(get_package_share_directory("j6_gen2_description")) / "config"
 
 
 _DESC_DIR = _find_desc_dir()
@@ -80,7 +80,7 @@ def load_sim_params(params_dir: Path | None = None) -> dict:
     simulator_model.param.yaml + vehicle_info.param.yaml から主要パラメータを返す。
 
     params_dir: vehicle_info.param.yaml と simulator_model.param.yaml が置かれたディレクトリ。
-                None の場合は既定の best_model_description/config/ を使用。
+                None の場合は既定の j6_gen2_description/config/ を使用。
     YAML が読めない場合はフォールバック値を使用。
     """
     if params_dir is not None:

@@ -2,22 +2,35 @@
 # cloud 環境 (.webauto-ci.yml の real_log_sim_comparison: artifact=main / runtime=gpu1/amd64/large) は
 # .webauto-ci/main/autoware-setup/run.sh が Godot バイナリ (v0.6.2) を
 #   /opt/godot_autoware_simulator/godot_autoware_simulator.x86_64
-# に配置するため、3-way (sim_normal / sim_perfect / sim_godot) で比較できる。
+# に配置するため、4-way (sim_normal / sim_kus0020 / sim_perfect / sim_godot) で比較できる。
 #
 # vehicle_model のサフィックスで sim 種別を切り替える (scenario_test_runner.launch.py):
-#   best_model                 : DELAY_STEER_ACC_GEARED_WO_FALL_GUARD (現実 dynamics)
-#   best_model_perfect_tracker : PERFECT_TRAJECTORY_TRACKER (planner 軌跡を理想追従。Godot binary 不要)
-#   j6_gen2_godot              : EXTERNAL (Godot binary 必須。godot_executable で指定)
+#   j6_gen2                 : DELAY_STEER_ACC_GEARED_WO_FALL_GUARD (j6_gen2_description の dynamics 既定)
+#   j6_gen2_perfect_tracker : PERFECT_TRAJECTORY_TRACKER (planner 軌跡を理想追従。Godot binary 不要)
+#   j6_gen2_godot           : EXTERNAL (Godot binary 必須。godot_executable で指定)
+#
+# params: simulator_model パラメータ上書き (cases.yaml の params と同型)。
+#   step3_run_sims が simple_sensor_simulator.<key>:=<value> として launch に渡し、
+#   description の simulator_model.param.yaml を上書きする (後勝ち)。
+#   description パッケージを増やさずに dynamics 変種 (例 k_us) を作れる。
 
 sim_runs:
-  # 現実 dynamics (best_model_description の DELAY_STEER_ACC_GEARED_WO_FALL_GUARD)
+  # j6_gen2_description の DELAY_STEER_ACC_GEARED_WO_FALL_GUARD (dynamics 既定値)
   - tag: sim_normal
-    vehicle_model: best_model
+    vehicle_model: j6_gen2
     architecture_type: awf/universe/20250130
+
+  # j6_gen2 + アンダーステア係数 k_us=0.020 rad/(m/s^2)。
+  # ω = vx·tan(δ)/(L + k_us·vx^2)。k_us=0 で理想 bicycle に一致。
+  - tag: sim_kus0020
+    vehicle_model: j6_gen2
+    architecture_type: awf/universe/20250130
+    params:
+      k_us: 0.020
 
   # 理想軌跡追従 (planner 出力を完全追従)。dynamics 誤差ゼロの上限基準。
   - tag: sim_perfect
-    vehicle_model: best_model_perfect_tracker
+    vehicle_model: j6_gen2_perfect_tracker
     architecture_type: awf/universe/20250130
 
   # 外部 Godot シム。cloud イメージ同梱の Godot バイナリを使用。

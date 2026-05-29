@@ -14,6 +14,11 @@ schema:
         architecture_type: <str>     # 同 architecture_type:= (任意、既定 awf/universe/20250130)
         godot_executable: <str>      # vehicle_model が *_godot のとき必須
         timeout_s: <int>             # step3_run_sims subprocess timeout [s] (任意、既定 600)
+        params: {<key>: <scalar>}    # simulator_model パラメータ上書き (任意、cases.yaml と同型)
+                                     # 例 {k_us: 0.020}。step3_run_sims が
+                                     # simple_sensor_simulator.<key>:=<value> として launch に渡し、
+                                     # description の simulator_model.param.yaml を上書きする。
+                                     # description パッケージを増やさず dynamics 変種を作れる。
 """
 
 from __future__ import annotations
@@ -35,7 +40,7 @@ _TAG_PATTERN = re.compile(r"^[A-Za-z0-9_\-.]+$")
 _KNOWN_KEYS: frozenset[str] = frozenset({
     "tag", "vehicle_model", "sensor_model",
     "initialize_duration", "architecture_type",
-    "godot_executable", "timeout_s",
+    "godot_executable", "timeout_s", "params",
 })
 
 
@@ -50,6 +55,7 @@ class SimRunSpec:
     architecture_type: str = "awf/universe/20250130"
     godot_executable: str | None = None
     timeout_s: int = 600
+    params: dict[str, float | int | bool | str] = field(default_factory=dict)
 
 
 @dataclass
@@ -128,6 +134,20 @@ def load_sim_runs_config(path: str | Path) -> SimRunsConfig:
         if godot_exe:
             godot_exe = os.path.expandvars(os.path.expanduser(str(godot_exe)))
 
+        # params: simulator_model パラメータ上書き (スカラのみ)。
+        # launch に simple_sensor_simulator.<key>:=<value> として渡る。
+        raw_params = entry.get("params") or {}
+        if not isinstance(raw_params, dict):
+            raise ValueError(f"{p}: sim_runs[{i}].params が dict ではありません")
+        params: dict[str, float | int | bool | str] = {}
+        for k, v in raw_params.items():
+            if not isinstance(v, (int, float, bool, str)):
+                raise ValueError(
+                    f"{p}: sim_runs[{i}].params.{k} はスカラ (int/float/bool/str) のみ可 "
+                    f"(got {type(v).__name__})"
+                )
+            params[str(k)] = v
+
         runs.append(SimRunSpec(
             tag=tag,
             vehicle_model=vehicle_model,
@@ -136,6 +156,7 @@ def load_sim_runs_config(path: str | Path) -> SimRunsConfig:
             architecture_type=entry.get("architecture_type", "awf/universe/20250130"),
             godot_executable=godot_exe,
             timeout_s=int(entry.get("timeout_s", 600)),
+            params=params,
         ))
 
     return SimRunsConfig(runs=runs)

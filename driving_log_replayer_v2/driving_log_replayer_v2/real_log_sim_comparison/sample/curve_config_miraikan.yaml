@@ -39,7 +39,7 @@ plot_curves:
 # wheelbase_validation: 5.15
 
 # シム車両モデルの wheelbase [m] (vehicle_info.param.yaml::wheel_base と一致させる)。
-# 未指定なら best_model_description/config/vehicle_info.param.yaml から自動取得。
+# 未指定なら j6_gen2_description/config/vehicle_info.param.yaml から自動取得。
 # wheelbase_sim: 4.76012
 
 # lanelet2_map.osm のパス。env: MAP_OSM_PATH / --map-osm が未指定の場合のフォールバック。
