@@ -137,6 +137,95 @@ def _goal_pose_fallback_from_kinematic(input_bag: Path) -> dict:
 # ---------------------------------------------------------------------------
 
 
+def _lanelet_centerline_heading(map_osm_path: Path, lanelet_ids: set[int]) -> dict[int, tuple[float, float, float]]:
+    """指定 lanelet 群について (end_x, end_y, heading) を返す。
+
+    lanelet2 osm 形式: relation type=lanelet, member role=left/right の way から
+    両端 node の中点 (中央線 start/end) を抽出し、heading=atan2(dy, dx) を計算。
+    """
+    if not lanelet_ids:
+        return {}
+    tree = ET.parse(str(map_osm_path))
+    root = tree.getroot()
+    nodes: dict[int, tuple[float, float]] = {}
+    for n in root.iter("node"):
+        nx = ny = None
+        for tag in n.findall("tag"):
+            k, v = tag.get("k"), tag.get("v")
+            if k == "local_x":
+                nx = float(v)
+            elif k == "local_y":
+                ny = float(v)
+        if nx is not None and ny is not None:
+            nodes[int(n.get("id"))] = (nx, ny)
+    ways: dict[int, list[int]] = {}
+    for w in root.iter("way"):
+        ways[int(w.get("id"))] = [int(nd.get("ref")) for nd in w.findall("nd")]
+    result: dict[int, tuple[float, float, float]] = {}
+    for rel in root.iter("relation"):
+        rid = int(rel.get("id"))
+        if rid not in lanelet_ids:
+            continue
+        if not any(t.get("k") == "type" and t.get("v") == "lanelet" for t in rel.findall("tag")):
+            continue
+        left = right = None
+        for m in rel.findall("member"):
+            if m.get("type") == "way":
+                ref = int(m.get("ref"))
+                role = m.get("role")
+                if role == "left":
+                    left = ways.get(ref)
+                elif role == "right":
+                    right = ways.get(ref)
+        if not left or not right:
+            continue
+        try:
+            l0, l1 = nodes[left[0]], nodes[left[-1]]
+            r0, r1 = nodes[right[0]], nodes[right[-1]]
+            sx, sy = (l0[0] + r0[0]) / 2, (l0[1] + r0[1]) / 2
+            ex, ey = (l1[0] + r1[0]) / 2, (l1[1] + r1[1]) / 2
+            result[rid] = (ex, ey, math.atan2(ey - sy, ex - sx))
+        except KeyError:
+            continue
+    return result
+
+
+def _filter_unrealistic_lane_sequence(
+    lane_ids: list[int], map_osm_path: Path,
+    *, end_point_eps: float = 0.5, heading_diff_threshold: float = math.pi / 2,
+) -> list[int]:
+    """LaneletRoute の lane_ids から幾何的に不自然な lane を除外する。
+
+    bag_to_scenario が `LaneletRoute.segments[*].preferred_primitive.id` を全 dump すると、
+    map graph では valid だが幾何的に「同じ end 点を共有する逆方向 lane 双子」や
+    「heading が π/2 以上急変する lane」が混入し、Autoware DiffusionPlanner NN が
+    走行不能 route と解釈して low velocity target を出力する事象 (sim_normal で観測)。
+
+    シンプルな filter:
+    - 連続する 2 lane (i, i+1) の end 点が同一 (距離 < end_point_eps) → 後者を除外
+    - 連続する 2 lane の heading 差が heading_diff_threshold 超 → 後者を除外
+    """
+    if len(lane_ids) < 2:
+        return lane_ids
+    geom = _lanelet_centerline_heading(map_osm_path, set(lane_ids))
+    filtered: list[int] = [lane_ids[0]]
+    for lid in lane_ids[1:]:
+        prev = filtered[-1]
+        if prev not in geom or lid not in geom:
+            filtered.append(lid)
+            continue
+        pex, pey, ph = geom[prev]
+        nex, ney, nh = geom[lid]
+        end_close = math.hypot(nex - pex, ney - pey) < end_point_eps
+        diff = abs(((nh - ph) + math.pi) % (2 * math.pi) - math.pi)
+        if end_close or diff > heading_diff_threshold:
+            print(f"[bag_to_scenario] filter out lane {lid} (prev={prev}): "
+                  f"end_close={end_close}, heading_diff={diff:.2f} rad")
+            continue
+        filtered.append(lid)
+    return filtered
+
+
 def _signal_to_lanelet_map(map_osm_path: Path, target_sig_ids: set[int]) -> dict[int, int]:
     """各信号 regulatory_element ID について、それを参照する最初の lanelet ID を返す.
 
@@ -530,21 +619,36 @@ def build_scenario_dict(
     private_actions: list[dict] = [
         {"TeleportAction": {"Position": {"WorldPosition": start_world}}}
     ]
-    if lane_ids:
-        # 全 lane_ids を Waypoint として渡す (絶対要件: 実機の route を sim でも忠実に再現)。
-        # InitialPose を「route publish 瞬間の kinematic_state」と整合させているため、
-        # waypoint[0] lane と ego の現在 lane が一致し、planner が unresponsive にならない。
-        private_actions.append({
-            "RoutingAction": {
-                "AssignRouteAction": {
-                    "Route": {
-                        "name": "",
-                        "closed": False,
-                        "Waypoint": _build_waypoints(lane_ids),
-                    }
+    # RoutingAction: WorldPosition の start + goal の 2 Waypoint を渡し、 ego_entity の
+    # Pose ベース routing 経路 (else 分岐) で `SetRoutePoints` service を呼ぶ。
+    # これにより Autoware mission_planner が start → goal の route を計算する。
+    # (OpenSCENARIO schema が Route.Waypoint を minOccurs=2 で要求するため最低 2 個必要)
+    #
+    # 旧実装: LaneletRoute.segments[*].preferred_primitive.id を全 dump して LanePosition で
+    # 渡していたが、 map graph 上の lane 連結 (実走行の lane sequence ではない) を含むため、
+    # 7 箇所の急ヘディング変化を含む不自然 chain になり DiffusionPlanner NN が走行不能と判断、
+    # low velocity target で ego が永遠静止する事象があった (sim_normal で観測、 2026-05-29)。
+    def _world_waypoint(world: dict) -> dict:
+        return {
+            "Position": {
+                "WorldPosition": {
+                    "x": world["x"], "y": world["y"], "z": world["z"],
+                    "h": world["h"], "p": 0, "r": 0,
+                }
+            },
+            "routeStrategy": "shortest",
+        }
+    private_actions.append({
+        "RoutingAction": {
+            "AssignRouteAction": {
+                "Route": {
+                    "name": "",
+                    "closed": False,
+                    "Waypoint": [_world_waypoint(start_world), _world_waypoint(goal_world)],
                 }
             }
-        })
+        }
+    })
 
     init = {
         "Actions": {
@@ -573,9 +677,11 @@ def build_scenario_dict(
             },
             "ParameterDeclarations": {
                 "ParameterDeclaration": [{
+                    # WorldPosition goal を 1 個渡して Autoware mission_planner に route 計算を
+                    # 任せるため lane_ids ベース routing は無効化 (=ego_entity の Pose ベース分岐)。
                     "name": "RoutingAction__use_lane_ids_for_routing",
                     "parameterType": "boolean",
-                    "value": True,
+                    "value": False,
                 }]
             },
             "CatalogLocations": {
@@ -679,7 +785,12 @@ def main() -> None:
           f"h={start_world['h']:.3f}) ({start_source})")
     print(f"[bag_to_scenario] goal=({goal_world['x']:.1f}, {goal_world['y']:.1f}, "
           f"h={goal_world['h']:.3f}) ({goal_source})")
-    print(f"[bag_to_scenario] route lane_ids count={len(lane_ids)} (全 lanelet を Waypoint に)")
+    # LaneletRoute.segments は map graph 上の lane 連結 (実走行の lane sequence ではない)
+    # で不自然な chain を含むため、 sim では使わない。
+    # 代わりに WorldPosition goal 1 個を渡して Autoware mission_planner に route 計算を任せる。
+    print(f"[bag_to_scenario] route lane_ids extracted (informational)={len(lane_ids)}, "
+          f"using WorldPosition goal routing (lane_ids 破棄)")
+    lane_ids = []  # build_scenario_dict 内で Waypoint は WorldPosition goal 1 個に
     signals = _extract_signal_timeseries(input_bag, t0_ns)
     print(f"[bag_to_scenario] signals: {len(signals)} ids, "
           f"total state changes={sum(len(v) for v in signals.values())}")
