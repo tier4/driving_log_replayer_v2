@@ -163,8 +163,6 @@ def keep_rosbag_compatibility(input_bag: str) -> str:
     with metadata_file.open("r") as f:
         metadata = yaml.safe_load(f)
     rosbag2_bagfile_information = metadata["rosbag2_bagfile_information"]
-    if rosbag2_bagfile_information["version"] == HUMBLE_ROSBAG2_METADATA_VERSION:
-        return input_bag
 
     # create tmp directory
     tmp_dir = Path(tempfile.mkdtemp(prefix="humble_bag_"))
@@ -192,11 +190,23 @@ def keep_rosbag_compatibility(input_bag: str) -> str:
     for topic_with_message_count in rosbag2_bagfile_information["topics_with_message_count"]:
         topic_metadata = topic_with_message_count["topic_metadata"]
 
+        if isinstance(topic_metadata["offered_qos_profiles"], str):  # serialized as str in humble
+            topic_metadata["offered_qos_profiles"] = yaml.safe_load(
+                topic_metadata["offered_qos_profiles"]
+            )
         for offered_qos_profiles in topic_metadata["offered_qos_profiles"]:
-            offered_qos_profiles["reliability"] = mapping[offered_qos_profiles["reliability"]]
-            offered_qos_profiles["durability"] = mapping[offered_qos_profiles["durability"]]
-            offered_qos_profiles["history"] = mapping[offered_qos_profiles["history"]]
-            offered_qos_profiles["liveliness"] = mapping[offered_qos_profiles["liveliness"]]
+            offered_qos_profiles["reliability"] = mapping.get(
+                offered_qos_profiles["reliability"], offered_qos_profiles["reliability"]
+            )
+            offered_qos_profiles["durability"] = mapping.get(
+                offered_qos_profiles["durability"], offered_qos_profiles["durability"]
+            )
+            offered_qos_profiles["history"] = mapping.get(
+                offered_qos_profiles["history"], offered_qos_profiles["history"]
+            )
+            offered_qos_profiles["liveliness"] = mapping.get(
+                offered_qos_profiles["liveliness"], offered_qos_profiles["liveliness"]
+            )
         topic_metadata["offered_qos_profiles"] = yaml.safe_dump(
             topic_metadata["offered_qos_profiles"], default_flow_style=False
         ).strip()
