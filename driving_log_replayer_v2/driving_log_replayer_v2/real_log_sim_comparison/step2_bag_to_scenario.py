@@ -107,12 +107,16 @@ def _extract_route_info(input_bag: Path) -> tuple[dict | None, dict | None, list
     return None, None, []
 
 
-def _initial_pose_fallback_from_kinematic(input_bag: Path, t0_ns: int) -> dict:
-    """route 不在時のフォールバック: AUTONOMOUS 開始時刻の kinematic_state を InitialPose に。"""
+def _initial_pose_from_kinematic(input_bag: Path, t0_ns: int) -> dict:
+    """InitialPose: AUTONOMOUS 開始時刻 (t0_ns) に最も近い kinematic_state pose。
+
+    make_lite が抽出する real.lite (= AUTONOMOUS 区間) の先頭と一致するため、
+    sim と実機が同じ場所・同じ区間を走る。
+    """
     df_kin = load_kinematic(input_bag)
     if df_kin.empty:
         raise RuntimeError(
-            f"kinematic_state も無いため InitialPose を取得できません: {input_bag}"
+            f"kinematic_state が無いため InitialPose を取得できません: {input_bag}"
         )
     try:
         row = df_kin.iloc[(df_kin["t_ns"] - t0_ns).abs().argsort().iloc[0]]
@@ -122,12 +126,17 @@ def _initial_pose_fallback_from_kinematic(input_bag: Path, t0_ns: int) -> dict:
             "h": float(row.yaw), "p": 0.0, "r": 0.0}
 
 
-def _goal_pose_fallback_from_kinematic(input_bag: Path) -> dict:
-    """route トピック不在時のフォールバック: kinematic_state 末尾を GoalPose に。"""
+def _goal_pose_from_kinematic(input_bag: Path, t0_ns: int) -> dict:
+    """GoalPose: AUTONOMOUS 区間 (t_ns >= t0_ns) の末尾 kinematic_state pose。
+
+    real.lite の終端と一致させる。bag 末尾ではなく AUTONOMOUS 窓の末尾を使うことで、
+    AUTONOMOUS 解除後の post-roll が含まれていても goal が overshoot しない。
+    """
     df_kin = load_kinematic(input_bag)
     if df_kin.empty:
-        raise RuntimeError(f"kinematic_state も無いため GoalPose を取得不能: {input_bag}")
-    row = df_kin.iloc[-1]
+        raise RuntimeError(f"kinematic_state が無いため GoalPose を取得不能: {input_bag}")
+    df_auto = df_kin[df_kin["t_ns"] >= t0_ns]
+    row = (df_auto if not df_auto.empty else df_kin).iloc[-1]
     return {"x": float(row.x), "y": float(row.y), "z": 0.0,
             "h": float(row.yaw), "p": 0.0, "r": 0.0}
 
@@ -761,25 +770,17 @@ def main() -> None:
     except Exception:
         t0_ns = 0
 
-    # route 抽出: start_pose / goal_pose / 全 lane_ids
-    route_start, route_goal, lane_ids = _extract_route_info(input_bag)
+    # route 抽出は lane_ids の informational ログにのみ使う (start/goal には使わない)。
+    _, _, lane_ids = _extract_route_info(input_bag)
 
-    # InitialPose: LaneletRoute.start_pose (Waypoint[0] lane と幾何整合)。
-    # route トピック不在時のみ kinematic にフォールバック。
-    if route_start is not None:
-        start_world = route_start
-        start_source = "LaneletRoute.start_pose"
-    else:
-        start_world = _initial_pose_fallback_from_kinematic(input_bag, t0_ns)
-        start_source = "kinematic@t0 (route fallback)"
-
-    # GoalPose: LaneletRoute.goal_pose (運転手が指定した目的地、不変)
-    if route_goal is not None:
-        goal_world = route_goal
-        goal_source = "LaneletRoute.goal_pose"
-    else:
-        goal_world = _goal_pose_fallback_from_kinematic(input_bag)
-        goal_source = "kinematic@bag_end (route fallback)"
+    # InitialPose / GoalPose は実機が AUTONOMOUS 区間で実際にいた位置 (kinematic) から取る。
+    # LaneletRoute.start_pose はミッション計画上の起点で、記録された AUTONOMOUS 区間
+    # (make_lite が抽出する real.lite) の外を指すことがある (過去ミッションの stale な
+    # start_pose 等)。それを InitialPose にすると sim と実機が全く別の場所を走るため使わない。
+    start_world = _initial_pose_from_kinematic(input_bag, t0_ns)
+    start_source = "kinematic@AUTONOMOUS開始"
+    goal_world = _goal_pose_from_kinematic(input_bag, t0_ns)
+    goal_source = "kinematic@AUTONOMOUS終了"
 
     print(f"[step2_bag_to_scenario] start=({start_world['x']:.1f}, {start_world['y']:.1f}, "
           f"h={start_world['h']:.3f}) ({start_source})")
