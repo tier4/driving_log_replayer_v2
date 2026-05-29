@@ -207,7 +207,7 @@ def main() -> None:
         print("ERROR: --base-dir (or BEST_MODEL_BASE_DIR env) が未指定です", file=sys.stderr)
         sys.exit(2)
 
-    from driving_log_replayer_v2.real_log_sim_comparison._cases_config import (  # noqa: PLC0415
+    from driving_log_replayer_v2.real_log_sim_comparison.lib._cases_config import (  # noqa: PLC0415
         load_cases_config,
     )
 

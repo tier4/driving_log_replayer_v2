@@ -1,8 +1,8 @@
 """sim_runs.yaml の dataclass + loader (Stage 3 用、cases.yaml と同型).
 
 sim_runs.yaml は scenario_test_runner.launch.py を起動するための設定を
-複数 run 並べる。Stage 3 (run_sims) は --run-tag で対象 1 entry を指定。
-Stage 4 (compare_logs) は全 tag を lite/<tag>.lite/ から読んで N-way 比較。
+複数 run 並べる。Stage 3 (step3_run_sims) は --run-tag で対象 1 entry を指定。
+Stage 4 (step4_compare_logs) は全 tag を lite/<tag>.lite/ から読んで N-way 比較。
 
 schema:
 
@@ -13,7 +13,7 @@ schema:
         initialize_duration: <int>   # 同 initialize_duration:= [s] (任意、既定 100)
         architecture_type: <str>     # 同 architecture_type:= (任意、既定 awf/universe/20250130)
         godot_executable: <str>      # vehicle_model が *_godot のとき必須
-        timeout_s: <int>             # run_sims subprocess timeout [s] (任意、既定 600)
+        timeout_s: <int>             # step3_run_sims subprocess timeout [s] (任意、既定 600)
 """
 
 from __future__ import annotations

@@ -9,11 +9,11 @@
 WHEELBASE は意図的に二系統で保持する:
   - `wheelbase_validation` = 5.15 m
     実機ログから運動学（yaw_rate = v * tan(steer) / L）を逆算する検証グラフ用。
-    実データから推定された値で、`compare_logs.py` の bicycle model 検証や
-    `analyze_real_curve2.py` のステア追従誤差解析で使う。
+    実データから推定された値で、`step4_compare_logs.py` の bicycle model 検証や
+    `tools/analyze_real_curve2.py` のステア追従誤差解析で使う。
   - `wheelbase_sim` = 4.76012 m
     シミュレータの仕様値 (`vehicle_info.param.yaml::wheel_base`)。
-    `analyze_per_step.py` の C++ 車両モデル再計算で使う。
+    `step5_analyze_per_step.py` の C++ 車両モデル再計算で使う。
 """
 
 from __future__ import annotations
@@ -62,7 +62,7 @@ class RuntimeConfig:
     # curve2_index/curve2_window から `[{"index": curve2_index, "launch_window": curve2_window}]`
     # を組み立てて埋める（既存 curve2 のみ動作と等価）。
     plot_curves: list[dict] = field(default_factory=list)
-    # sim_runs.yaml のパス (Stage 3 で参照、compare_logs が sim 重ね描きに使う)
+    # sim_runs.yaml のパス (Stage 3 で参照、step4_compare_logs が sim 重ね描きに使う)
     sim_runs_config: Path | None = None
     topic_overrides: dict[str, Any] = field(default_factory=dict)
 
@@ -123,7 +123,7 @@ def add_common_cli_arguments(parser: argparse.ArgumentParser) -> None:
         default=os.environ.get("SIM_RUNS_CONFIG_YAML"),
         help=(
             "sim_runs.yaml パス (env: SIM_RUNS_CONFIG_YAML)。"
-            "compare_logs が sim 重ね描きに使う。未指定なら実機 single-log のみ"
+            "step4_compare_logs が sim 重ね描きに使う。未指定なら実機 single-log のみ"
         ),
     )
 
@@ -285,7 +285,7 @@ def build_runtime_config(
         if loaded:
             cfg.topic_overrides = loaded
 
-    # --- sim_runs_config (compare_logs が sim 重ね描きに使う) ---
+    # --- sim_runs_config (step4_compare_logs が sim 重ね描きに使う) ---
     if getattr(ns, "sim_runs_config", None):
         sr = Path(ns.sim_runs_config)
         cfg.sim_runs_config = sr if sr.exists() else None

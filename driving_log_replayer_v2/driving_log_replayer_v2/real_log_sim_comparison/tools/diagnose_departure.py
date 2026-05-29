@@ -20,10 +20,10 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 
-from ._events import find_autonomous_start, find_curve2_launch, find_sim_launch
-from ._io import align_time, load_cmd, load_operation_mode, load_velocity
-from ._params_utils import add_params_annotation, load_sim_params, setup_jp_font
-from ._runtime_config import add_common_cli_arguments, build_runtime_config
+from ..lib._events import find_autonomous_start, find_curve2_launch, find_sim_launch
+from ..lib._io import align_time, load_cmd, load_operation_mode, load_velocity
+from ..lib._params_utils import add_params_annotation, load_sim_params, setup_jp_font
+from ..lib._runtime_config import add_common_cli_arguments, build_runtime_config
 
 setup_jp_font()
 

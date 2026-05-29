@@ -11,13 +11,13 @@ route トピック不在時は kinematic_state ベースで InitialPose/GoalPose
 (RoutingAction の Waypoint 列は省略、Autoware planning に経路引きを任せる)。
 
 Usage:
-    python3 -m driving_log_replayer_v2.real_log_sim_comparison.bag_to_scenario \\
+    python3 -m driving_log_replayer_v2.real_log_sim_comparison.step2_bag_to_scenario \\
         --input-bag <input_bag_dir> \\
         --map <lanelet2_map.osm absolute path> \\
         --output <auto_scenario.yaml> \\
         [--scenario-name "auto"] [--sim-timeout 600] [--goal-tolerance 15]
 
-注意: make_lite の TOPICS には route / 信号が含まれないため、本ツールは
+注意: step1_make_lite の TOPICS には route / 信号が含まれないため、本ツールは
 lite ではなく **生の input_bag** を読む。evaluator_node からは
 `t4_dataset_path/input_bag` を渡す。
 """
@@ -34,8 +34,8 @@ import xml.etree.ElementTree as ET
 
 import yaml
 
-from ._io import iter_bag_messages, list_bag_topics, load_kinematic, load_operation_mode, load_velocity
-from ._events import find_autonomous_start
+from .lib._io import iter_bag_messages, list_bag_topics, load_kinematic, load_operation_mode, load_velocity
+from .lib._events import find_autonomous_start
 
 
 # ---------------------------------------------------------------------------
@@ -196,7 +196,7 @@ def _filter_unrealistic_lane_sequence(
 ) -> list[int]:
     """LaneletRoute の lane_ids から幾何的に不自然な lane を除外する。
 
-    bag_to_scenario が `LaneletRoute.segments[*].preferred_primitive.id` を全 dump すると、
+    step2_bag_to_scenario が `LaneletRoute.segments[*].preferred_primitive.id` を全 dump すると、
     map graph では valid だが幾何的に「同じ end 点を共有する逆方向 lane 双子」や
     「heading が π/2 以上急変する lane」が混入し、Autoware DiffusionPlanner NN が
     走行不能 route と解釈して low velocity target を出力する事象 (sim_normal で観測)。
@@ -219,7 +219,7 @@ def _filter_unrealistic_lane_sequence(
         end_close = math.hypot(nex - pex, ney - pey) < end_point_eps
         diff = abs(((nh - ph) + math.pi) % (2 * math.pi) - math.pi)
         if end_close or diff > heading_diff_threshold:
-            print(f"[bag_to_scenario] filter out lane {lid} (prev={prev}): "
+            print(f"[step2_bag_to_scenario] filter out lane {lid} (prev={prev}): "
                   f"end_close={end_close}, heading_diff={diff:.2f} rad")
             continue
         filtered.append(lid)
@@ -673,7 +673,7 @@ def build_scenario_dict(
                 "revMinor": 1,
                 "date": "2026-05-28T00:00:00.000Z",
                 "description": scenario_name,
-                "author": "bag_to_scenario.py (auto-generated)",
+                "author": "step2_bag_to_scenario.py (auto-generated)",
             },
             "ParameterDeclarations": {
                 "ParameterDeclaration": [{
@@ -781,24 +781,24 @@ def main() -> None:
         goal_world = _goal_pose_fallback_from_kinematic(input_bag)
         goal_source = "kinematic@bag_end (route fallback)"
 
-    print(f"[bag_to_scenario] start=({start_world['x']:.1f}, {start_world['y']:.1f}, "
+    print(f"[step2_bag_to_scenario] start=({start_world['x']:.1f}, {start_world['y']:.1f}, "
           f"h={start_world['h']:.3f}) ({start_source})")
-    print(f"[bag_to_scenario] goal=({goal_world['x']:.1f}, {goal_world['y']:.1f}, "
+    print(f"[step2_bag_to_scenario] goal=({goal_world['x']:.1f}, {goal_world['y']:.1f}, "
           f"h={goal_world['h']:.3f}) ({goal_source})")
     # LaneletRoute.segments は map graph 上の lane 連結 (実走行の lane sequence ではない)
     # で不自然な chain を含むため、 sim では使わない。
     # 代わりに WorldPosition goal 1 個を渡して Autoware mission_planner に route 計算を任せる。
-    print(f"[bag_to_scenario] route lane_ids extracted (informational)={len(lane_ids)}, "
+    print(f"[step2_bag_to_scenario] route lane_ids extracted (informational)={len(lane_ids)}, "
           f"using WorldPosition goal routing (lane_ids 破棄)")
     lane_ids = []  # build_scenario_dict 内で Waypoint は WorldPosition goal 1 個に
     signals = _extract_signal_timeseries(input_bag, t0_ns)
-    print(f"[bag_to_scenario] signals: {len(signals)} ids, "
+    print(f"[step2_bag_to_scenario] signals: {len(signals)} ids, "
           f"total state changes={sum(len(v) for v in signals.values())}")
 
     # 信号 ID → ego が到達したら trigger される lanelet ID (map.osm から逆引き)
     signal_to_lanelet = _signal_to_lanelet_map(map_osm, set(signals.keys()))
     unresolved = set(signals.keys()) - set(signal_to_lanelet.keys())
-    print(f"[bag_to_scenario] signal→lanelet: {len(signal_to_lanelet)}/{len(signals)} 解決, "
+    print(f"[step2_bag_to_scenario] signal→lanelet: {len(signal_to_lanelet)}/{len(signals)} 解決, "
           f"未解決 (Story trigger 出ない) = {sorted(unresolved)}")
 
     # yaml 構築
@@ -817,7 +817,7 @@ def main() -> None:
 
     with output_yaml.open("w", encoding="utf-8") as f:
         yaml.safe_dump(doc, f, sort_keys=False, allow_unicode=True)
-    print(f"[bag_to_scenario] Saved: {output_yaml}")
+    print(f"[step2_bag_to_scenario] Saved: {output_yaml}")
 
 
 if __name__ == "__main__":

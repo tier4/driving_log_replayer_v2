@@ -23,10 +23,10 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 
-from ._events import find_autonomous_start, find_curve2_launch, find_sim_launch
-from ._io import iter_bag_messages, load_velocity
-from ._params_utils import add_params_annotation, setup_jp_font
-from ._runtime_config import RuntimeConfig, add_common_cli_arguments, build_runtime_config
+from ..lib._events import find_autonomous_start, find_curve2_launch, find_sim_launch
+from ..lib._io import iter_bag_messages, load_velocity
+from ..lib._params_utils import add_params_annotation, setup_jp_font
+from ..lib._runtime_config import RuntimeConfig, add_common_cli_arguments, build_runtime_config
 
 setup_jp_font()
 
@@ -52,7 +52,7 @@ def _resolve_t0_and_launch(
     bag: Path, *, is_real: bool, curve2_window: tuple[float, float]
 ) -> tuple[int, float]:
     """bag から t0 (ns) と発進時刻 t_launch (s) を返す。"""
-    from ._io import load_operation_mode
+    from ..lib._io import load_operation_mode
 
     df_vel = load_velocity(bag)
     if is_real:

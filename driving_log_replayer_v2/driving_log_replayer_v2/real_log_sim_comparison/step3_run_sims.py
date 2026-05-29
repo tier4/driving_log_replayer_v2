@@ -1,10 +1,10 @@
-"""Stage 3: 1 sim run の実行 (scenario_test_runner.launch.py 起動 + make_lite --kind sim).
+"""Stage 3: 1 sim run の実行 (scenario_test_runner.launch.py 起動 + step1_make_lite --kind sim).
 
 sim_runs.yaml の tag に対応する設定を読み、ros2 launch を subprocess で起動し、
-出力 MCAP を make_lite で lite 化する。
+出力 MCAP を step1_make_lite で lite 化する。
 
 Usage:
-    python3 -m driving_log_replayer_v2.real_log_sim_comparison.run_sims \\
+    python3 -m driving_log_replayer_v2.real_log_sim_comparison.step3_run_sims \\
         --run-tag sim_normal \\
         --scenario <auto_scenario.yaml> \\
         --sim-runs-config <sim_runs.yaml> \\
@@ -68,7 +68,7 @@ def _find_output_mcap(search_dirs: list[Path]) -> Path | None:
 
 def _run_subprocess(cmd: list[str], timeout: int, env: dict | None = None) -> None:
     """subprocess.run の薄いラッパ. 非 0 終了で RuntimeError."""
-    print(f"[run_sims] $ {' '.join(cmd)}", flush=True)
+    print(f"[step3_run_sims] $ {' '.join(cmd)}", flush=True)
     try:
         result = subprocess.run(cmd, check=False, env=env, timeout=timeout)
     except subprocess.TimeoutExpired as e:
@@ -101,7 +101,7 @@ def main() -> None:
         print(f"ERROR: scenario yaml が見つかりません: {scenario}", file=sys.stderr)
         sys.exit(1)
 
-    from ._sim_runs_config import load_sim_runs_config  # noqa: PLC0415
+    from .lib._sim_runs_config import load_sim_runs_config  # noqa: PLC0415
     try:
         sim_cfg = load_sim_runs_config(args.sim_runs_config)
         run = sim_cfg.find_run(args.run_tag)
@@ -109,13 +109,13 @@ def main() -> None:
         print(f"ERROR: sim_runs.yaml: {e}", file=sys.stderr)
         sys.exit(2)
 
-    print(f"[run_sims] tag={run.tag}, vehicle_model={run.vehicle_model}, "
+    print(f"[step3_run_sims] tag={run.tag}, vehicle_model={run.vehicle_model}, "
           f"sensor_model={run.sensor_model}, timeout={run.timeout_s}s")
 
     # 一時 output_directory を作る (隔離 + 衝突回避)
     tmp_root = Path(tempfile.mkdtemp(
         prefix=f"sim_runner_{run.tag}_", dir="/tmp"))
-    print(f"[run_sims] tmp output_directory: {tmp_root}")
+    print(f"[step3_run_sims] tmp output_directory: {tmp_root}")
 
     try:
         cmd = _build_launch_cmd(run, scenario.resolve(), tmp_root)
@@ -127,19 +127,19 @@ def main() -> None:
             raise RuntimeError(
                 f"sim 出力 *.mcap が {tmp_root} / {_FALLBACK_SIM_OUT_ROOT} に見つかりません"
             )
-        print(f"[run_sims] sim output mcap: {mcap}")
+        print(f"[step3_run_sims] sim output mcap: {mcap}")
 
-        # make_lite --kind sim で lite 化
+        # step1_make_lite --kind sim で lite 化
         make_lite_cmd = [
             sys.executable, "-m",
-            "driving_log_replayer_v2.real_log_sim_comparison.make_lite",
+            "driving_log_replayer_v2.real_log_sim_comparison.step1_make_lite",
             "--kind", "sim",
             "--input", str(mcap),
             "--output", str(output_lite),
         ]
         _run_subprocess(make_lite_cmd, timeout=300)
 
-        print(f"[run_sims] Saved: {output_lite}")
+        print(f"[step3_run_sims] Saved: {output_lite}")
 
     finally:
         shutil.rmtree(tmp_root, ignore_errors=True)

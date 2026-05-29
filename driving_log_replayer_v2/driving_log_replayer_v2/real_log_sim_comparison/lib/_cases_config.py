@@ -2,7 +2,7 @@
 
 cases.yaml は VehicleModel 解析 (Stage 3) を複数ケースで回すための定義ファイル。
 各ケースは (vehicle_model タイプ, params dict) の組で識別され、tag で出力先を分ける。
-Stage 4 (analyze_cases) は overlay セクションを参照する。
+Stage 4 (step6_analyze_cases) は overlay セクションを参照する。
 
 schema:
 

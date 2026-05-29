@@ -36,8 +36,8 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 
-from ._events import find_autonomous_start as _find_autonomous_start
-from ._io import (
+from .lib._events import find_autonomous_start as _find_autonomous_start
+from .lib._io import (
     align_time,
     iter_bag_messages,
     load_operation_mode,
@@ -45,10 +45,10 @@ from ._io import (
     load_velocity,
     resolve_topic,
 )
-from ._map import load_map_ways as _load_map_ways_impl
-from ._map import resolve_map_osm
-from ._params_utils import add_params_annotation, load_sim_params, setup_jp_font
-from ._runtime_config import RuntimeConfig, add_common_cli_arguments, build_runtime_config
+from .lib._map import load_map_ways as _load_map_ways_impl
+from .lib._map import resolve_map_osm
+from .lib._params_utils import add_params_annotation, load_sim_params, setup_jp_font
+from .lib._runtime_config import RuntimeConfig, add_common_cli_arguments, build_runtime_config
 
 setup_jp_font()
 
@@ -1389,7 +1389,7 @@ def main() -> None:
         )
         sys.exit(2)
 
-    from driving_log_replayer_v2.real_log_sim_comparison._cases_config import (  # noqa: PLC0415
+    from driving_log_replayer_v2.real_log_sim_comparison.lib._cases_config import (  # noqa: PLC0415
         load_cases_config,
     )
 

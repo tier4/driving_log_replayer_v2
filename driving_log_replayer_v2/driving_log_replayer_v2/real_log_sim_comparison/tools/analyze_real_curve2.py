@@ -16,8 +16,8 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import numpy as np
 
-from ._events import find_autonomous_start, find_curve2_launch
-from ._io import (
+from ..lib._events import find_autonomous_start, find_curve2_launch
+from ..lib._io import (
     align_time,
     load_accel,
     load_cmd,
@@ -26,9 +26,9 @@ from ._io import (
     load_steering,
     load_velocity,
 )
-from ._map import load_map_ways, map_ways_in_bbox
-from ._params_utils import add_params_annotation, setup_jp_font
-from ._runtime_config import RuntimeConfig, add_common_cli_arguments, build_runtime_config
+from ..lib._map import load_map_ways, map_ways_in_bbox
+from ..lib._params_utils import add_params_annotation, setup_jp_font
+from ..lib._runtime_config import RuntimeConfig, add_common_cli_arguments, build_runtime_config
 
 setup_jp_font()
 

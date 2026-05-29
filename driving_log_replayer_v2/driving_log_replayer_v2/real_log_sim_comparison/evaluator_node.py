@@ -15,10 +15,13 @@
 
 """Orchestration node for real_log_sim_comparison.
 
-Runs the per-step analysis pipeline inside a cloud DLR2 job:
-  1. Filter real vehicle MCAP to lite/real.lite  (make_lite.py)
-  2. Generate per-step figures and report from real log  (compare_logs.py)
-  3. Generate full-run per-step delta analysis (analyze_per_step.py) [best-effort]
+Runs the 6-stage comparison pipeline inside a cloud DLR2 job:
+  1. step1_make_lite       実機 input_bag → lite/real.lite/
+  2. step2_bag_to_scenario lite/real.lite → scenarios/auto_scenario.yaml
+  3. step3_run_sims        sim_runs.yaml の各 run を closed-loop 実行 → lite/<tag>.lite/
+  4. step4_compare_logs    real + 全 sim を N-way 比較 (figures/, report.md)
+  5. step5_analyze_per_step cases.yaml の各 case で per-step delta 解析
+  6. step6_analyze_cases   per_step/*.csv を集約 (overlay/, cases_summary.md)
 
 Outputs are written to result_archive_path, which is collected by
 `logging.additional_log_archive` in .webauto-ci.yml.
@@ -107,7 +110,7 @@ def run_pipeline(
     compare_cfg: dict[str, Any],
     logger,
 ) -> None:
-    # Locate the real vehicle bag inside input_bag/ (db3 or mcap, auto-detected by make_lite)
+    # Locate the real vehicle bag inside input_bag/ (db3 or mcap, auto-detected by step1_make_lite)
     input_bag_dir = t4_dataset_path / "input_bag"
     _validate_bag_dir(input_bag_dir)
     logger.info(f"Input bag: {input_bag_dir}")
@@ -134,14 +137,14 @@ def run_pipeline(
     lite_bag = lite_dir / "real.lite"
     _run([
         sys.executable, "-m",
-        "driving_log_replayer_v2.real_log_sim_comparison.make_lite",
+        "driving_log_replayer_v2.real_log_sim_comparison.step1_make_lite",
         "--kind", "real",
         "--input", str(input_bag_dir),
         "--output", str(lite_bag),
     ], timeout=300)
 
     # ---- Stage 2: bag → scenario yaml 自動生成 ----
-    logger.info("Stage 2: bag_to_scenario (auto-generate OpenSCENARIO yaml)")
+    logger.info("Stage 2: step2_bag_to_scenario (auto-generate OpenSCENARIO yaml)")
     scenarios_dir = comparison_dir.parent / "scenarios"
     scenarios_dir.mkdir(parents=True, exist_ok=True)
     auto_scenario = scenarios_dir / "auto_scenario.yaml"
@@ -149,13 +152,13 @@ def run_pipeline(
         try:
             _run([
                 sys.executable, "-m",
-                "driving_log_replayer_v2.real_log_sim_comparison.bag_to_scenario",
+                "driving_log_replayer_v2.real_log_sim_comparison.step2_bag_to_scenario",
                 "--input-bag", str(input_bag_dir),
                 "--map", str(map_osm),
                 "--output", str(auto_scenario),
             ], env=env, timeout=300)
         except RuntimeError as exc:
-            logger.warning(f"Stage 2 (bag_to_scenario) failed: {exc}")
+            logger.warning(f"Stage 2 (step2_bag_to_scenario) failed: {exc}")
     else:
         logger.warning("Stage 2: map OSM が無いため scenario 自動生成スキップ")
 
@@ -168,14 +171,14 @@ def run_pipeline(
             f" got: {sim_runs_yaml!r}"
         )
 
-    from driving_log_replayer_v2.real_log_sim_comparison._sim_runs_config import (  # noqa: PLC0415
+    from driving_log_replayer_v2.real_log_sim_comparison.lib._sim_runs_config import (  # noqa: PLC0415
         load_sim_runs_config,
     )
 
     sim_cfg = load_sim_runs_config(sim_runs_yaml)
     env["SIM_RUNS_CONFIG_YAML"] = sim_runs_yaml
 
-    logger.info(f"Stage 3: run_sims over {len(sim_cfg.runs)} run(s)")
+    logger.info(f"Stage 3: step3_run_sims over {len(sim_cfg.runs)} run(s)")
     if auto_scenario.exists():
         base_domain_id = int(os.environ.get("ROS_DOMAIN_ID", "0"))
         for i, run in enumerate(sim_cfg.runs):
@@ -189,7 +192,7 @@ def run_pipeline(
             try:
                 _run([
                     sys.executable, "-m",
-                    "driving_log_replayer_v2.real_log_sim_comparison.run_sims",
+                    "driving_log_replayer_v2.real_log_sim_comparison.step3_run_sims",
                     "--run-tag", run.tag,
                     "--scenario", str(auto_scenario),
                     "--sim-runs-config", sim_runs_yaml,
@@ -200,11 +203,11 @@ def run_pipeline(
     else:
         logger.warning("Stage 3: auto_scenario.yaml が無いため sim 実行をスキップ")
 
-    # ---- Stage 4: compare_logs (real + 全 sim、sim_runs.yaml 連動で N-way) ----
-    logger.info("Stage 4: compare_logs (real + sim N-way)")
+    # ---- Stage 4: step4_compare_logs (real + 全 sim、sim_runs.yaml 連動で N-way) ----
+    logger.info("Stage 4: step4_compare_logs (real + sim N-way)")
     _run([
         sys.executable, "-m",
-        "driving_log_replayer_v2.real_log_sim_comparison.compare_logs",
+        "driving_log_replayer_v2.real_log_sim_comparison.step4_compare_logs",
     ], env=env, timeout=1800)
 
     # ---- Stage 5: VehicleModel per-step 解析 (cases.yaml 必須) ----
@@ -216,14 +219,14 @@ def run_pipeline(
             f" got: {cases_yaml!r}"
         )
 
-    from driving_log_replayer_v2.real_log_sim_comparison._cases_config import (  # noqa: PLC0415
+    from driving_log_replayer_v2.real_log_sim_comparison.lib._cases_config import (  # noqa: PLC0415
         load_cases_config,
     )
 
     cases_cfg = load_cases_config(cases_yaml)
     env["CASES_CONFIG_YAML"] = cases_yaml
 
-    logger.info(f"Stage 5: analyze_per_step over {len(cases_cfg.cases)} case(s)")
+    logger.info(f"Stage 5: step5_analyze_per_step over {len(cases_cfg.cases)} case(s)")
     for case in cases_cfg.cases:
         logger.info(f"  case: tag={case.tag}, vehicle_model={case.vehicle_model}")
         env_case = env.copy()
@@ -231,7 +234,7 @@ def run_pipeline(
         try:
             _run([
                 sys.executable, "-m",
-                "driving_log_replayer_v2.real_log_sim_comparison.analyze_per_step",
+                "driving_log_replayer_v2.real_log_sim_comparison.step5_analyze_per_step",
                 "--case-tag", case.tag,
                 "--cases-config", cases_yaml,
             ], env=env_case, timeout=1800)
@@ -239,19 +242,19 @@ def run_pipeline(
             logger.warning(f"Stage 5 (case={case.tag}) failed but continuing: {exc}")
 
     # ---- Stage 6: ケース集約解析 (overlay 図 + cases_summary.md) ----
-    logger.info("Stage 6: analyze_cases (cross-case aggregation)")
+    logger.info("Stage 6: step6_analyze_cases (cross-case aggregation)")
     try:
         _run([
             sys.executable, "-m",
-            "driving_log_replayer_v2.real_log_sim_comparison.analyze_cases",
+            "driving_log_replayer_v2.real_log_sim_comparison.step6_analyze_cases",
             "--cases-config", cases_yaml,
         ], env=env, timeout=600)
     except RuntimeError as exc:
-        logger.warning(f"Stage 6 (analyze_cases) failed but continuing: {exc}")
+        logger.warning(f"Stage 6 (step6_analyze_cases) failed but continuing: {exc}")
 
 
 def _load_compare_config(scenario_path_str: str) -> dict[str, Any]:
-    """scenario.yaml の Conditions から compare_logs 用設定を抽出する。
+    """scenario.yaml の Conditions から step4_compare_logs 用設定を抽出する。
 
     Conditions に以下のキーを認識する（すべて任意）:
       - scenario_name (str): 図タイトル用シナリオ名

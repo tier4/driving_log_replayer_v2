@@ -66,7 +66,7 @@ webauto data annotation-dataset pull \
 > 可能性が高い。
 
 `--include-intermediate-artifacts` を付けないと `input_bag/` に bag 本体
-(`*.mcap` / `*.db3`) が含まれず、`make_lite` の入力が足りずに失敗する。
+(`*.mcap` / `*.db3`) が含まれず、`step1_make_lite` の入力が足りずに失敗する。
 
 ダウンロード結果は `~/.webauto/data/data/annotation_dataset/<UUID>/<frame>/` 配下に
 `annotation/`, `data/`, `input_bag/`, `map/` が展開される。
@@ -125,11 +125,11 @@ make -C src/simulator/driving_log_replayer_v2/driving_log_replayer_v2/driving_lo
 2. `out/<タイムスタンプ>/` を作成し、`out/latest` シンボリックリンクを更新
 3. `ros2 launch` で 6 段階パイプライン起動
    - Stage 1: 実機 bag → lite/real.lite
-   - Stage 2: bag_to_scenario → scenarios/auto_scenario.yaml
+   - Stage 2: step2_bag_to_scenario → scenarios/auto_scenario.yaml
    - Stage 3: sim_runs.yaml の各 run で scenario_test_runner → lite/<tag>.lite
-   - Stage 4: compare_logs → comparison/figures/, report.md (real + sim 重ね描き)
-   - Stage 5: cases.yaml の各 tag で analyze_per_step → per_step/<tag>/
-   - Stage 6: analyze_cases → cases/overlay/, cases_summary.md
+   - Stage 4: step4_compare_logs → comparison/figures/, report.md (real + sim 重ね描き)
+   - Stage 5: cases.yaml の各 tag で step5_analyze_per_step → per_step/<tag>/
+   - Stage 6: step6_analyze_cases → cases/overlay/, cases_summary.md
 
 ### 4. 結果確認
 
@@ -193,4 +193,4 @@ make local_cloud_run LOCAL_SCENARIO=/path/to/other_scenario.yaml
   長期軌跡の累積差を見たい場合は別解析 (将来 Stage 5 として追加候補) が必要。
 - **`overlay.reference_tag` は現状 decorative**: `cases_summary.md` のヘッダに
   表示されるだけで、reference との delta/relative 比較列は未実装。必要になれば
-  `analyze_cases.py` の `write_cases_summary` に追加できる。
+  `step6_analyze_cases.py` の `write_cases_summary` に追加できる。

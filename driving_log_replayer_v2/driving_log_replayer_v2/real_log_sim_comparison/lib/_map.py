@@ -5,7 +5,7 @@
   - `override == ""`   → None を返す（明示「地図なし」）
   - `override == path` → そのパスを使用（存在しなければ警告して None）
 
-`compare_logs.py` 既存の挙動を全スクリプトに横展開するためのモジュール。
+`step4_compare_logs.py` 既存の挙動を全スクリプトに横展開するためのモジュール。
 """
 
 from __future__ import annotations

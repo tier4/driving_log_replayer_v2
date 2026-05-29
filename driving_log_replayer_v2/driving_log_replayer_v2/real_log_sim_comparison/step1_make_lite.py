@@ -3,9 +3,9 @@
 rosbag (db3 または mcap) から三方比較に必要なトピックだけを抽出して lite bag を生成する.
 
 Usage:
-    python3 make_lite.py --kind real --input <bag_dir>  --output lite/real.lite
-    python3 make_lite.py --kind sim  --input <bag_dir>  --output lite/sim_godot.lite
-    python3 make_lite.py --kind sim  --input <bag_dir>  --output lite/sim_normal.lite
+    python3 step1_make_lite.py --kind real --input <bag_dir>  --output lite/real.lite
+    python3 step1_make_lite.py --kind sim  --input <bag_dir>  --output lite/sim_godot.lite
+    python3 step1_make_lite.py --kind sim  --input <bag_dir>  --output lite/sim_normal.lite
 
 --input にはロスバッグのディレクトリ（db3 / mcap どちらでも可）または単一 .mcap ファイルを渡す。
 --output は rosbag2 bag ディレクトリとして出力される。

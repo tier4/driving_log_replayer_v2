@@ -20,12 +20,12 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 
-from ._events import (
+from .lib._events import (
     find_autonomous_start as _find_autonomous_start,
     find_curve2_exit as _find_curve2_exit_pure,
     find_curve2_launch as _find_curve2_launch_pure,
 )
-from ._io import (
+from .lib._io import (
     align_time,
     load_accel,
     load_cmd,
@@ -35,9 +35,9 @@ from ._io import (
     load_velocity,
     nearest_point_distance,
 )
-from ._map import load_map_ways, resolve_map_osm
-from ._params_utils import add_params_annotation, setup_jp_font
-from ._runtime_config import (
+from .lib._map import load_map_ways, resolve_map_osm
+from .lib._params_utils import add_params_annotation, setup_jp_font
+from .lib._runtime_config import (
     RuntimeConfig,
     add_common_cli_arguments,
     build_runtime_config,
@@ -1312,7 +1312,7 @@ def _apply_runtime_config(cfg: RuntimeConfig) -> None:
     sim_runs_cfg = None
     if cfg.sim_runs_config:
         try:
-            from ._sim_runs_config import load_sim_runs_config  # noqa: PLC0415
+            from .lib._sim_runs_config import load_sim_runs_config  # noqa: PLC0415
             sim_runs_cfg = load_sim_runs_config(cfg.sim_runs_config)
         except Exception as exc:  # noqa: BLE001
             warnings.warn(f"sim_runs.yaml 読み込み失敗: {exc} (sim 重ね描きスキップ)")
