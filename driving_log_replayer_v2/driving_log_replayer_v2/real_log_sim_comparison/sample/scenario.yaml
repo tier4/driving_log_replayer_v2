@@ -13,8 +13,11 @@ Evaluation:
   SubUseCaseName: real_log_sim_comparison
   UseCaseFormatVersion: 0.1.0
   # Datasets[0] の UUID = SSOT となる実機走行データを含む annotation-dataset の UUID。
-  # webauto data annotation-dataset pull --include-intermediate-artifacts で事前取得しておくこと。
   # input_bag/*.{mcap,db3} が AUTONOMOUS 走行を含む実機 rosbag として全 stage で使用される。
+  # cloud: Web.Auto に登録する scenario の Datasets で指定。
+  # local: `make local_cloud_run` 前にこの UUID を対象走行へ書き換え、事前取得しておくこと:
+  #   webauto data annotation-dataset pull --project-id x2_dev \
+  #     --annotation-dataset-id <UUID> --include-intermediate-artifacts
   Datasets:
     # K-01-11200 case01 dp_01 cruise_following_lead_vehicle
     # (j6_gen2 実機 Normal 走行、area_map 2231)

@@ -14,7 +14,7 @@ SETUP_BASH := $(WS_ROOT)/install/setup.bash
 # local_cloud_run: webauto キャッシュの T4 dataset を使ったクラウド相当ローカル実行
 # webauto data annotation-dataset pull の出力先は ~/.webauto/data/data/annotation_dataset/<UUID>/<frame>/。
 WEBAUTO_T4_ROOT  ?= $(HOME)/.webauto/data/data/annotation_dataset
-LOCAL_SAMPLE_DIR ?= $(MAKEFILE_DIR)/sample/local
+LOCAL_SAMPLE_DIR ?= $(MAKEFILE_DIR)/sample
 LOCAL_SCENARIO   ?= $(LOCAL_SAMPLE_DIR)/scenario.yaml
 
 PYTHON := python3

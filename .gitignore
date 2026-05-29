@@ -4,4 +4,4 @@ log/
 # MkDocs's dir
 site/
 # real_log_sim_comparison のローカル実行生成成果物 (make local_cloud_run の出力)
-driving_log_replayer_v2/driving_log_replayer_v2/real_log_sim_comparison/sample/local/out/
+driving_log_replayer_v2/driving_log_replayer_v2/real_log_sim_comparison/sample/out/

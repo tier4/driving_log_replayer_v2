@@ -64,24 +64,19 @@ install(PROGRAMS
 install(FILES "${ROS_REQUIREMENTS}"
   DESTINATION share/${PROJECT_NAME})
 
-# real_log_sim_comparison: sample も use case ディレクトリへ集約。
-# share install パス (sample/real_log_sim_comparison{,_local}) は cloud Web.Auto evaluator 互換のため維持。
+# real_log_sim_comparison: sample も use case ディレクトリへ集約 (cloud / local 統一)。
+# share install パス sample/real_log_sim_comparison は cloud Web.Auto evaluator 互換のため維持
+# (登録済み scenario の Conditions が install-share の絶対パスを参照する)。
 # `install(DIRECTORY)` だと `--symlink-install` モードで PATTERN EXCLUDE が効かず
-# sample/local/out/ 配下の実行結果 (untracked, 数GB) まで symlink install されてしまうため、
+# sample/out/ 配下の実行結果 (untracked, 数GB) まで symlink install されてしまうため、
 # 必要ファイルを明示列挙する。
 install(FILES
-  driving_log_replayer_v2/real_log_sim_comparison/sample/cloud/cases.yaml
-  driving_log_replayer_v2/real_log_sim_comparison/sample/cloud/scenario.yaml
-  driving_log_replayer_v2/real_log_sim_comparison/sample/cloud/sim_runs.yaml
+  driving_log_replayer_v2/real_log_sim_comparison/sample/cases.yaml
+  driving_log_replayer_v2/real_log_sim_comparison/sample/scenario.yaml
+  driving_log_replayer_v2/real_log_sim_comparison/sample/sim_runs.yaml
   driving_log_replayer_v2/real_log_sim_comparison/sample/curve_config_miraikan.yaml
+  driving_log_replayer_v2/real_log_sim_comparison/sample/README.ja.md
   DESTINATION share/${PROJECT_NAME}/sample/real_log_sim_comparison
-)
-install(FILES
-  driving_log_replayer_v2/real_log_sim_comparison/sample/local/cases.yaml
-  driving_log_replayer_v2/real_log_sim_comparison/sample/local/scenario.yaml
-  driving_log_replayer_v2/real_log_sim_comparison/sample/local/sim_runs.yaml
-  driving_log_replayer_v2/real_log_sim_comparison/sample/local/README.ja.md
-  DESTINATION share/${PROJECT_NAME}/sample/real_log_sim_comparison_local
 )
 
 ament_auto_package(INSTALL_TO_SHARE

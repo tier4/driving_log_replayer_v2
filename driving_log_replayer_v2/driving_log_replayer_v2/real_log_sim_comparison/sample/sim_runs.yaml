@@ -1,13 +1,14 @@
-# Stage 3: closed-loop シム実行のラン定義 (cloud 既定)。
-# cloud 環境 (.webauto-ci.yml の real_log_sim_comparison: artifact=main / runtime=gpu1/amd64/large) は
-# .webauto-ci/main/autoware-setup/run.sh が Godot バイナリ (v0.6.2) を
-#   /opt/godot_autoware_simulator/godot_autoware_simulator.x86_64
-# に配置するため、4-way (sim_normal / sim_kus0020 / sim_perfect / sim_godot) で比較できる。
+# Stage 3: closed-loop シム実行のラン定義 (cloud / local 共通)。
+# 既定は 4-way (sim_normal / sim_kus0020 / sim_perfect / sim_godot) 比較。
 #
 # vehicle_model のサフィックスで sim 種別を切り替える (scenario_test_runner.launch.py):
 #   j6_gen2                 : DELAY_STEER_ACC_GEARED_WO_FALL_GUARD (j6_gen2_description の dynamics 既定)
 #   j6_gen2_perfect_tracker : PERFECT_TRAJECTORY_TRACKER (planner 軌跡を理想追従。Godot binary 不要)
 #   j6_gen2_godot           : EXTERNAL (Godot binary 必須。godot_executable で指定)
+#
+# Godot バイナリパスは cloud / local 共通で /opt/godot_autoware_simulator/ に統一。
+#   cloud : .webauto-ci/main/autoware-setup/run.sh が v0.6.2 を /opt に配置 (自動)。
+#   local : 同じ /opt に配置 or symlink する (詳細は README.ja.md)。
 #
 # params: simulator_model パラメータ上書き (cases.yaml の params と同型)。
 #   step3_run_sims が simple_sensor_simulator.<key>:=<value> として launch に渡し、
@@ -33,7 +34,7 @@ sim_runs:
     vehicle_model: j6_gen2_perfect_tracker
     architecture_type: awf/universe/20250130
 
-  # 外部 Godot シム。cloud イメージ同梱の Godot バイナリを使用。
+  # 外部 Godot シム。cloud / local 共通で /opt 配下の Godot バイナリを使用。
   - tag: sim_godot
     vehicle_model: j6_gen2_godot
     architecture_type: awf/universe/20250130
