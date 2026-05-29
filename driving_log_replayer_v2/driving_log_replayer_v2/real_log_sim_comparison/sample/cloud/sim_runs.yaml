@@ -1,7 +1,27 @@
 # Stage 3: closed-loop シム実行のラン定義 (cloud 既定)。
-# cloud では Godot バイナリの存在を保証できないため、sim_normal のみ。
-# 必要なら local 側 sim_runs.yaml を参考に sim_godot を追加してください。
+# cloud 環境 (.webauto-ci.yml の real_log_sim_comparison: artifact=main / runtime=gpu1/amd64/large) は
+# .webauto-ci/main/autoware-setup/run.sh が Godot バイナリ (v0.6.2) を
+#   /opt/godot_autoware_simulator/godot_autoware_simulator.x86_64
+# に配置するため、3-way (sim_normal / sim_perfect / sim_godot) で比較できる。
+#
+# vehicle_model のサフィックスで sim 種別を切り替える (scenario_test_runner.launch.py):
+#   best_model                 : DELAY_STEER_ACC_GEARED_WO_FALL_GUARD (現実 dynamics)
+#   best_model_perfect_tracker : PERFECT_TRAJECTORY_TRACKER (planner 軌跡を理想追従。Godot binary 不要)
+#   j6_gen2_godot              : EXTERNAL (Godot binary 必須。godot_executable で指定)
 
 sim_runs:
+  # 現実 dynamics (best_model_description の DELAY_STEER_ACC_GEARED_WO_FALL_GUARD)
   - tag: sim_normal
     vehicle_model: best_model
+    architecture_type: awf/universe/20250130
+
+  # 理想軌跡追従 (planner 出力を完全追従)。dynamics 誤差ゼロの上限基準。
+  - tag: sim_perfect
+    vehicle_model: best_model_perfect_tracker
+    architecture_type: awf/universe/20250130
+
+  # 外部 Godot シム。cloud イメージ同梱の Godot バイナリを使用。
+  - tag: sim_godot
+    vehicle_model: j6_gen2_godot
+    architecture_type: awf/universe/20250130
+    godot_executable: /opt/godot_autoware_simulator/godot_autoware_simulator.x86_64
