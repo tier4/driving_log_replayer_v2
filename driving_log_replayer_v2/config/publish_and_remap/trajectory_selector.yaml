@@ -3,9 +3,16 @@
 publish:
   # trajectory generator outputs
   - /planning/generator/candidate_trajectories
-  - /planning/turn_indicators_cmd
   - /planning/scenario_planning/current_max_velocity
+  # diffusion planner outputs
+  - /planning/planning_factors/diffusion_planner
+  - /planning/scenario_planning/lane_driving/behavior_planning/debug/traffic_signal
+  - /planning/trajectory_generator/neural_network_based_planner/diffusion_planner_node/debug/lane_marker
+  - /planning/trajectory_generator/neural_network_based_planner/diffusion_planner_node/debug/linestring_marker
+  - /planning/trajectory_generator/neural_network_based_planner/diffusion_planner_node/debug/route_marker
   - /planning/trajectory_generator/neural_network_based_planner/diffusion_planner_node/output/predicted_objects
+  - /planning/trajectory_generator/neural_network_based_planner/diffusion_planner_node/output/trajectory
+  - /planning/turn_indicators_cmd
 
   # vehicle
   - /vehicle/status/steering_status
