@@ -8,7 +8,6 @@ publish:
   - /planning/trajectory_generator/neural_network_based_planner/diffusion_planner_node/debug/lane_marker
   - /planning/trajectory_generator/neural_network_based_planner/diffusion_planner_node/debug/linestring_marker
   - /planning/trajectory_generator/neural_network_based_planner/diffusion_planner_node/debug/route_marker
-  - /planning/trajectory_generator/neural_network_based_planner/diffusion_planner_node/debug/route_marker
   - /planning/trajectory_generator/neural_network_based_planner/diffusion_planner_node/output/predicted_objects
   - /planning/trajectory_generator/neural_network_based_planner/diffusion_planner_node/output/trajectory
   - /planning/turn_indicators_cmd
