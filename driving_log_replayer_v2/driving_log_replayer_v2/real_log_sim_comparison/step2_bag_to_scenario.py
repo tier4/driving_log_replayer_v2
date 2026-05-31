@@ -141,6 +141,40 @@ def _goal_pose_from_kinematic(input_bag: Path, t0_ns: int) -> dict:
             "h": float(row.yaw), "p": 0.0, "r": 0.0}
 
 
+def _intermediate_waypoints_from_kinematic(
+    input_bag: Path, t0_ns: int, start: dict, goal: dict, spacing_m: float = 25.0
+) -> list[dict]:
+    """AUTONOMOUS 区間の kinematic 軌跡を spacing_m ごとに間引いた中間 Waypoint 列を返す。
+
+    start→goal の 2 点だけを mission_planner に渡すと、 実走行がループ (goal が start の
+    後方など) の場合に最短経路が引けず route 不在 → DiffusionPlanner 無出力 → ego 静止に
+    なる。 実軌跡から中間点を挟むことで mission_planner が実走経路を辿れる。
+    start/goal 近傍 (spacing_m 未満) の点は重複回避のため除外する。
+    """
+    import math
+
+    df = load_kinematic(input_bag)
+    df = df[df["t_ns"] >= t0_ns]
+    if df.empty:
+        return []
+    pts: list[dict] = []
+    last_x, last_y = float(df.iloc[0].x), float(df.iloc[0].y)
+    acc = 0.0
+    for row in df.itertuples(index=False):
+        x, y = float(row.x), float(row.y)
+        acc += math.hypot(x - last_x, y - last_y)
+        last_x, last_y = x, y
+        if acc < spacing_m:
+            continue
+        acc = 0.0
+        if math.hypot(x - start["x"], y - start["y"]) < spacing_m:
+            continue
+        if math.hypot(x - goal["x"], y - goal["y"]) < spacing_m:
+            continue
+        pts.append({"x": x, "y": y, "z": 0.0, "h": float(row.yaw), "p": 0.0, "r": 0.0})
+    return pts
+
+
 # ---------------------------------------------------------------------------
 # Map parsing: 信号 regulatory_element ID → 関連 lanelet ID
 # ---------------------------------------------------------------------------
@@ -610,6 +644,7 @@ def build_scenario_dict(
     signals: dict[int, list[tuple[float, str]]],
     signal_to_lanelet: dict[int, int],
     *,
+    waypoints: list[dict] | None = None,
     scenario_name: str = "auto_generated",
     sim_timeout: float = 600.0,
     goal_tolerance: float = 15.0,
@@ -628,9 +663,14 @@ def build_scenario_dict(
     private_actions: list[dict] = [
         {"TeleportAction": {"Position": {"WorldPosition": start_world}}}
     ]
-    # RoutingAction: WorldPosition の start + goal の 2 Waypoint を渡し、 ego_entity の
-    # Pose ベース routing 経路 (else 分岐) で `SetRoutePoints` service を呼ぶ。
-    # これにより Autoware mission_planner が start → goal の route を計算する。
+    # RoutingAction: WorldPosition の Waypoint 列を渡し、 ego_entity の Pose ベース
+    # routing 経路 (else 分岐) で `SetRoutePoints` service を呼ぶ。
+    # Autoware mission_planner が Waypoint 列を順に通る route を計算する。
+    #
+    # start + goal の 2 点だけだと、 実走行がループ (goal が start の後方など) の場合に
+    # mission_planner が start→goal を引けず route が publish されない → DiffusionPlanner が
+    # route 入力を得られず無出力 → ego 静止する (sim_normal で観測、 2026-05-30)。
+    # そこで実機 kinematic 軌跡から間引いた中間 Waypoint を挟み、 実走経路を辿らせる。
     # (OpenSCENARIO schema が Route.Waypoint を minOccurs=2 で要求するため最低 2 個必要)
     #
     # 旧実装: LaneletRoute.segments[*].preferred_primitive.id を全 dump して LanePosition で
@@ -647,13 +687,14 @@ def build_scenario_dict(
             },
             "routeStrategy": "shortest",
         }
+    route_world_points = [start_world, *(waypoints or []), goal_world]
     private_actions.append({
         "RoutingAction": {
             "AssignRouteAction": {
                 "Route": {
                     "name": "",
                     "closed": False,
-                    "Waypoint": [_world_waypoint(start_world), _world_waypoint(goal_world)],
+                    "Waypoint": [_world_waypoint(w) for w in route_world_points],
                 }
             }
         }
@@ -786,6 +827,11 @@ def main() -> None:
           f"h={start_world['h']:.3f}) ({start_source})")
     print(f"[step2_bag_to_scenario] goal=({goal_world['x']:.1f}, {goal_world['y']:.1f}, "
           f"h={goal_world['h']:.3f}) ({goal_source})")
+
+    # 中間 Waypoint: 実機 kinematic 軌跡から間引き、 mission_planner に実走経路を辿らせる。
+    # start→goal の 2 点だけだと ループ経路で route が引けず ego 静止する事象への対策。
+    waypoints = _intermediate_waypoints_from_kinematic(input_bag, t0_ns, start_world, goal_world)
+    print(f"[step2_bag_to_scenario] intermediate waypoints (kinematic 軌跡を間引き)={len(waypoints)}")
     # LaneletRoute.segments は map graph 上の lane 連結 (実走行の lane sequence ではない)
     # で不自然な chain を含むため、 sim では使わない。
     # 代わりに WorldPosition goal 1 個を渡して Autoware mission_planner に route 計算を任せる。
@@ -810,6 +856,7 @@ def main() -> None:
         lane_ids=lane_ids,
         signals=signals,
         signal_to_lanelet=signal_to_lanelet,
+        waypoints=waypoints,
         scenario_name=args.scenario_name,
         sim_timeout=args.sim_timeout,
         goal_tolerance=args.goal_tolerance,
