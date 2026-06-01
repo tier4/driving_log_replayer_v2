@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Stage 7: k_us (アンダーステア係数) を複数値でスイープし、multi-step rollout 誤差で同定する.
 
-6 段階パイプラインの後段に位置する独立ステージ。Stage 1 が生成した実機 lite
+Stage 1〜6 の後段に位置する独立ステージ。Stage 1 が生成した実機 lite
 (`lite/real.lite/`) を SSOT とし、k_us グリッドについて Stage 5 の free-running rollout
 (`step5.run_free_rollout`) を回して、実車の実効アンダーステア係数を同定する。
 

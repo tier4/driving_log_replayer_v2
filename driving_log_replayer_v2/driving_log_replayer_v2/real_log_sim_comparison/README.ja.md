@@ -241,6 +241,6 @@ post_process の `create_metadata_yaml` を通すためのプレースホルダ 
 
 ### ローカル（`make local_cloud_run`）
 
-webauto で T4 dataset を pull 済みの環境で `make local_cloud_run` 一発で 6 段階すべて走る。
+webauto で T4 dataset を pull 済みの環境で `make local_cloud_run` 一発で 9 段階すべて走る。
 手順詳細・`sim_runs.yaml`/`cases.yaml` の書式・トラブルシュート・Makefile 変数の上書き例は
 [`sample/README.ja.md`](sample/README.ja.md) を参照。
