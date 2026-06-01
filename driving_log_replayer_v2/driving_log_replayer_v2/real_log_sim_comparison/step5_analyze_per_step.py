@@ -400,11 +400,11 @@ def find_autonomous_start(data: dict) -> int:
 # ---------------------------------------------------------------------------
 
 
-def run_per_step(data: dict, t0_ns: int, params: dict, model_type: str) -> pd.DataFrame:
-    """per-step delta を実行し結果 DataFrame を返す。
+def _prepare_gt(data: dict, t0_ns: int, params: dict) -> dict:
+    """run_per_step / run_free_rollout 共通の GT 準備。
 
-    AUTONOMOUS 開始 (t0_ns) から制御コマンド系列末尾までを解析対象とする。
-    時系列軸 tr は AUTONOMOUS 開始からの経過時間 [s]。
+    AUTONOMOUS 開始 (t0_ns) から制御コマンド系列末尾までを cmd タイムスタンプ上に
+    補間した GT 系列・過去コマンド系列を dict で返す。
     """
 
     # -- タイムスタンプを秒に変換 --
@@ -508,6 +508,69 @@ def run_per_step(data: dict, t0_ns: int, params: dict, model_type: str) -> pd.Da
     t_cmd_full = df_cmd_full["t"].values
     accel_des_full = df_cmd_full["accel_des"].values
     steer_des_full = df_cmd_full["steer_des"].values
+
+    return {
+        "t_cmd": t_cmd,
+        "df_cmd": df_cmd,
+        "t_cmd_full": t_cmd_full,
+        "accel_des_full": accel_des_full,
+        "steer_des_full": steer_des_full,
+        "gt_x": gt_x,
+        "gt_y": gt_y,
+        "gt_yaw": gt_yaw,
+        "gt_vx": gt_vx,
+        "gt_wz": gt_wz,
+        "gt_vy": gt_vy,
+        "gt_ax": gt_ax,
+        "gt_ay": gt_ay,
+        "gt_steer": gt_steer,
+        "gt_dwz": gt_dwz,
+        "gt_steer_kinematic": gt_steer_kinematic,
+    }
+
+
+def _delay_history(
+    t_k: float, q_size: int, t_full: np.ndarray, val_full: np.ndarray
+) -> list[float]:
+    """delay queue 用の過去コマンド履歴 (oldest→newest) を実コマンドから補間生成。"""
+    return [
+        float(
+            np.interp(
+                t_k - (q_size - i) * SUB_DT,
+                t_full,
+                val_full,
+                left=val_full[0],
+                right=val_full[-1],
+            )
+        )
+        for i in range(q_size)
+    ]
+
+
+def run_per_step(data: dict, t0_ns: int, params: dict, model_type: str) -> pd.DataFrame:
+    """per-step delta を実行し結果 DataFrame を返す。
+
+    AUTONOMOUS 開始 (t0_ns) から制御コマンド系列末尾までを解析対象とする。
+    時系列軸 tr は AUTONOMOUS 開始からの経過時間 [s]。各ステップで実機状態にリセットする
+    1-step 予測 (累積誤差を排除)。多段の累積誤差は run_free_rollout を参照。
+    """
+    g = _prepare_gt(data, t0_ns, params)
+    t_cmd = g["t_cmd"]
+    df_cmd = g["df_cmd"]
+    t_cmd_full = g["t_cmd_full"]
+    accel_des_full = g["accel_des_full"]
+    steer_des_full = g["steer_des_full"]
+    gt_x = g["gt_x"]
+    gt_y = g["gt_y"]
+    gt_yaw = g["gt_yaw"]
+    gt_vx = g["gt_vx"]
+    gt_wz = g["gt_wz"]
+    gt_vy = g["gt_vy"]
+    gt_ax = g["gt_ax"]
+    gt_ay = g["gt_ay"]
+    gt_steer = g["gt_steer"]
+    gt_dwz = g["gt_dwz"]
+    gt_steer_kinematic = g["gt_steer_kinematic"]
 
     model = VehicleModel(params, SUB_DT, model_type)
     acc_q_size = model.acc_q_size  # = round(acc_time_delay / SUB_DT)
@@ -628,6 +691,139 @@ def run_per_step(data: dict, t0_ns: int, params: dict, model_type: str) -> pd.Da
             print(f"  {k + 1}/{n - 1} ...")
 
     return pd.DataFrame(records)
+
+
+def run_free_rollout(
+    data: dict,
+    t0_ns: int,
+    params: dict,
+    model_type: str,
+    horizons: tuple[int, ...] = (1, 2, 5, 10, 20),
+    stride: int = 5,
+) -> pd.DataFrame:
+    """多段 (free-running) ロールアウト誤差を計算する。
+
+    per-step は各ステップで実機状態にリセットするため、yaw 積分に効く k_us / wheelbase の
+    累積差を検出できない (全 dynamics ケースで位置 RMSE がほぼ同一になる既知の限界)。
+    本関数は各開始点 k0 で実機状態にリセットした後、実コマンド系列を N ステップ連続適用
+    (途中リセット無し) し、N ステップ後の終端位置・yaw の対実機誤差を測る。horizon N を
+    増やすほど dynamics 差が累積し顕在化するため、k_us/wheelbase/時定数の同定に使える。
+    """
+    g = _prepare_gt(data, t0_ns, params)
+    t_cmd = g["t_cmd"]
+    t_cmd_full = g["t_cmd_full"]
+    accel_des_full = g["accel_des_full"]
+    steer_des_full = g["steer_des_full"]
+    gt_x = g["gt_x"]
+    gt_y = g["gt_y"]
+    gt_yaw = g["gt_yaw"]
+    gt_vx = g["gt_vx"]
+    gt_ax = g["gt_ax"]
+    gt_steer_kinematic = g["gt_steer_kinematic"]
+    accel_des = g["df_cmd"]["accel_des"].values
+    steer_des = g["df_cmd"]["steer_des"].values
+
+    model = VehicleModel(params, SUB_DT, model_type)
+    acc_q_size = model.acc_q_size
+    steer_q_size = model.steer_q_size
+    steer_bias = params["steer_bias"]
+
+    n = len(t_cmd)
+    recs: list[dict] = []
+    for horizon in horizons:
+        for k0 in range(0, n - 1 - horizon, stride):
+            ivs = [t_cmd[k0 + j + 1] - t_cmd[k0 + j] for j in range(horizon)]
+            if any(iv <= 0.001 or iv > 1.0 for iv in ivs):
+                continue
+            model.reset_with_history(
+                x=gt_x[k0],
+                y=gt_y[k0],
+                yaw=gt_yaw[k0],
+                vx=gt_vx[k0],
+                steer_actual=float(gt_steer_kinematic[k0]) + steer_bias,
+                ax=gt_ax[k0],
+                acc_history=_delay_history(t_cmd[k0], acc_q_size, t_cmd_full, accel_des_full),
+                steer_history=_delay_history(t_cmd[k0], steer_q_size, t_cmd_full, steer_des_full),
+            )
+            # 実コマンド系列を N 区間連続適用 (途中リセット無し)
+            for j in range(horizon):
+                k = k0 + j
+                iv = ivs[j]
+                ad = float(accel_des[k])
+                sd = float(steer_des[k])
+                n_full = int(iv / SUB_DT)
+                for _ in range(n_full):
+                    model.step(ad, sd)
+                rem = iv - n_full * SUB_DT
+                if rem > 1e-6:
+                    model.step_dt(ad, sd, rem)
+            k_end = k0 + horizon
+            dx = model.x - gt_x[k_end]
+            dy = model.y - gt_y[k_end]
+            yaw_err = (model.yaw - gt_yaw[k_end] + math.pi) % (2 * math.pi) - math.pi
+            cos_e = math.cos(gt_yaw[k_end])
+            sin_e = math.sin(gt_yaw[k_end])
+            recs.append({
+                "horizon": horizon,
+                "k0": k0,
+                "tr": float(t_cmd[k0]),
+                "elapsed": float(t_cmd[k_end] - t_cmd[k0]),
+                "pos_err": math.hypot(dx, dy),
+                "err_long": dx * cos_e + dy * sin_e,
+                "err_lat": -dx * sin_e + dy * cos_e,
+                "yaw_err_deg": math.degrees(yaw_err),
+            })
+    return pd.DataFrame(recs)
+
+
+def save_rollout_summary(df_roll: pd.DataFrame) -> None:
+    """multi-step rollout の horizon 別 RMSE を summary.txt に追記し rollout.csv を保存。"""
+    if df_roll.empty:
+        print("  (rollout: 有効サンプル無し、スキップ)")
+        return
+    lines = ["", "--- multi-step rollout (free-running, リセット無し N ステップ後の対実機誤差) ---"]
+    for horizon in sorted(df_roll["horizon"].unique()):
+        sub = df_roll[df_roll["horizon"] == horizon]
+        pos = float(np.sqrt(np.mean(sub["pos_err"].values ** 2))) * 100.0
+        lon = float(np.sqrt(np.mean(sub["err_long"].values ** 2))) * 100.0
+        lat = float(np.sqrt(np.mean(sub["err_lat"].values ** 2))) * 100.0
+        yaw = float(np.sqrt(np.mean(sub["yaw_err_deg"].values ** 2)))
+        el = float(sub["elapsed"].mean())
+        lines.append(
+            f"  N={int(horizon):2d} (≈{el:.2f}s): 位置 RMSE={pos:.2f} cm "
+            f"(縦={lon:.2f}, 横={lat:.2f} cm)  yaw RMSE={yaw:.3f} deg  (n={len(sub)})"
+        )
+    text = "\n".join(lines)
+    print(text)
+    with (OUT_DIR / "summary.txt").open("a", encoding="utf-8") as f:
+        f.write(text + "\n")
+    df_roll.to_csv(OUT_DIR / "rollout.csv", index=False)
+    print(f"  Saved: {OUT_DIR / 'rollout.csv'}")
+
+
+def plot_rollout_growth(df_roll: pd.DataFrame, params: dict) -> None:
+    """rollout 長 N に対する位置・yaw 誤差 RMSE の成長を描く (dynamics 差の顕在化)。"""
+    if df_roll.empty:
+        return
+    horizons = sorted(df_roll["horizon"].unique())
+    pos = [float(np.sqrt(np.mean(df_roll[df_roll["horizon"] == h]["pos_err"].values ** 2))) * 100.0
+           for h in horizons]
+    yaw = [float(np.sqrt(np.mean(df_roll[df_roll["horizon"] == h]["yaw_err_deg"].values ** 2)))
+           for h in horizons]
+    fig, ax1 = plt.subplots(figsize=(9, 5))
+    fig.suptitle("多段ロールアウト誤差成長 (free-running)", fontsize=11)
+    ax1.plot(horizons, pos, "o-", color="#1f77b4", label="位置 RMSE [cm]")
+    ax1.set_xlabel("rollout 長 N [step]  (N × SUB_DT 秒相当)")
+    ax1.set_ylabel("位置 RMSE [cm]", color="#1f77b4")
+    ax1.tick_params(axis="y", labelcolor="#1f77b4")
+    ax1.grid(True, lw=0.5, alpha=0.6)
+    ax2 = ax1.twinx()
+    ax2.plot(horizons, yaw, "s--", color="#d62728", label="yaw RMSE [deg]")
+    ax2.set_ylabel("yaw RMSE [deg]", color="#d62728")
+    ax2.tick_params(axis="y", labelcolor="#d62728")
+    add_params_annotation(fig, params)
+    fig.tight_layout()
+    _save(fig, "rollout_error_growth")
 
 
 # ---------------------------------------------------------------------------
@@ -1437,6 +1633,12 @@ def main() -> None:
     print(f"  Saved: {OUT_DIR / 'per_step_delta.csv'}")
 
     save_summary(df)
+
+    # 多段 rollout (D1): per-step では検出できない k_us/wheelbase/時定数の累積差を顕在化。
+    print(f"\n=== multi-step rollout 分析 (case={case.tag}) ===")
+    df_roll = run_free_rollout(data, t0_ns, params, case.vehicle_model)
+    save_rollout_summary(df_roll)
+    plot_rollout_growth(df_roll, params)
     plot_overview(df, params)
     plot_error_timeseries(df, params)
     plot_error_vs_speed(df, params)
