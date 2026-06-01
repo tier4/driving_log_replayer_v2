@@ -67,8 +67,13 @@ def _open_reader(input_path: Path) -> rosbag2_py.SequentialReader:
     return reader
 
 
-def filter_bag(input_path: Path, output_dir: Path, topics: set[str]) -> None:
-    """rosbag（ディレクトリまたは単一 .mcap）からトピックを絞り込んで rosbag2 bag ディレクトリに書き出す."""
+def filter_bag(input_path: Path, output_dir: Path, topics: set[str]) -> dict:
+    """rosbag（ディレクトリまたは単一 .mcap）からトピックを絞り込んで rosbag2 bag ディレクトリに書き出す.
+
+    戻り値: 診断用統計 {duration_s, n_written, per_topic: {topic: count}}。
+    本ツールは AUTONOMOUS による時間カットをしない (全区間コピー)。AUTONOMOUS 窓の
+    切り出しは後段 (step4/step5 の find_autonomous_start) が担う。
+    """
     reader = _open_reader(input_path)
     topic_type_map: dict[str, str] = {
         t.name: t.type for t in reader.get_all_topics_and_types() if t.name in topics
@@ -86,6 +91,9 @@ def filter_bag(input_path: Path, output_dir: Path, topics: set[str]) -> None:
     )
 
     registered: set[str] = set()
+    per_topic: dict[str, int] = {}
+    t_min: int | None = None
+    t_max: int | None = None
     while reader.has_next():
         topic_name, msg_bytes, timestamp = reader.read_next()
         if topic_name not in topic_type_map:
@@ -100,8 +108,20 @@ def filter_bag(input_path: Path, output_dir: Path, topics: set[str]) -> None:
             )
             registered.add(topic_name)
         writer.write(topic_name, msg_bytes, timestamp)
+        per_topic[topic_name] = per_topic.get(topic_name, 0) + 1
+        if t_min is None or timestamp < t_min:
+            t_min = timestamp
+        if t_max is None or timestamp > t_max:
+            t_max = timestamp
 
     del writer
+    duration_s = (t_max - t_min) / 1e9 if (t_min is not None and t_max is not None) else 0.0
+    return {
+        "duration_s": duration_s,
+        "n_written": sum(per_topic.values()),
+        "per_topic": per_topic,
+        "missing_topics": sorted(topics - set(per_topic.keys())),
+    }
 
 
 def main() -> None:
@@ -155,10 +175,18 @@ def main() -> None:
     print(f"入力  : {args.input} ({in_size / 1024 / 1024:.0f} MB)")
     print(f"トピック: {sorted(topics)}")
 
-    filter_bag(args.input, args.output, topics)
+    stats = filter_bag(args.input, args.output, topics)
 
     total = sum(f.stat().st_size for f in args.output.rglob("*") if f.is_file())
     print(f"  書き込み完了: {args.output} ({total / 1024 / 1024:.1f} MB)")
+    # 診断出力 (A4): lite bag の時間範囲・件数・欠落トピックを明示し、短すぎる/空の bag を可視化。
+    print(f"  lite bag 全長: {stats['duration_s']:.1f} s, 総メッセージ: {stats['n_written']}")
+    for topic in sorted(stats["per_topic"]):
+        print(f"    {topic}: {stats['per_topic'][topic]}")
+    if stats["missing_topics"]:
+        print(f"  WARNING: 入力 bag に存在しなかったトピック: {stats['missing_topics']}", file=sys.stderr)
+    if stats["n_written"] == 0:
+        print("  WARNING: 出力 lite bag が空です (トピック名不一致または入力 bag が空の可能性)", file=sys.stderr)
 
 
 if __name__ == "__main__":
