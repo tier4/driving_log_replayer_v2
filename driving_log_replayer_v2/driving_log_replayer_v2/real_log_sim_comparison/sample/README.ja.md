@@ -17,8 +17,8 @@ Godot バイナリパスは cloud / local 共通で `/opt/godot_autoware_simulat
 
 ## パイプライン概要
 
-9 段階パイプラインの各 stage の入出力は親ディレクトリの
-[`../README.ja.md`](../README.ja.md#パイプライン6-段階) を参照。ローカル実行で押さえる点:
+10 段階パイプラインの各 stage の入出力は親ディレクトリの
+[`../README.ja.md`](../README.ja.md#パイプライン10-段階) を参照。ローカル実行で押さえる点:
 
 - Stage 3（sim 実行）と Stage 5（per-step 解析）はそれぞれ `sim_runs.yaml` / `cases.yaml`
   の各エントリで N 回ループする。`scenario.yaml` の `Conditions.sim_runs_config` /
@@ -126,7 +126,7 @@ make -C src/simulator/driving_log_replayer_v2/driving_log_replayer_v2/driving_lo
 
 1. `scenario.yaml` から Datasets UUID を取得 → `~/.webauto/.../` から実体パス解決
 2. `out/<タイムスタンプ>/` を作成し、`out/latest` シンボリックリンクを更新
-3. `ros2 launch` で 9 段階パイプライン起動
+3. `ros2 launch` で 10 段階パイプライン起動
    - Stage 1: 実機 bag → lite/real.lite
    - Stage 2: step2_bag_to_scenario → scenarios/auto_scenario.yaml
    - Stage 3: sim_runs.yaml の各 run で scenario_test_runner → lite/<tag>.lite
@@ -136,6 +136,7 @@ make -C src/simulator/driving_log_replayer_v2/driving_log_replayer_v2/driving_lo
    - Stage 7: step7_identify_kus → comparison/kus_sweep/ (k_us 同定; 追加設定不要)
    - Stage 8: step8_compare_dp_trajectory → comparison/figures/dp_*.png (DP軌跡 real vs sim)
    - Stage 9: step9_identify_brake → comparison/brake_sweep/ (縦方向 brake_tc 同定)
+   - Stage 10: step10_diagnose_curve → comparison/curve_diag/ (カーブ乖離 縦横分解診断)
 
 ### 4. 結果確認
 
@@ -160,7 +161,8 @@ sample/out/latest/
         │   ├── overlay/{cascade_error_overlay.png, error_timeseries_overlay.png}
         │   └── cases_summary.md          # Stage 6: per-step RMSE + rollout 横断表
         ├── kus_sweep/{kus_sweep.csv, kus_sweep.png}      # Stage 7: k_us 同定
-        └── brake_sweep/{brake_sweep.csv, brake_sweep.png} # Stage 9: 縦方向 brake_tc 同定
+        ├── brake_sweep/{brake_sweep.csv, brake_sweep.png} # Stage 9: 縦方向 brake_tc 同定
+        └── curve_diag/{curve_divergence.md, curve_divergence.png} # Stage 10: カーブ乖離診断
 ```
 
 ## 上書き可能な Makefile 変数
