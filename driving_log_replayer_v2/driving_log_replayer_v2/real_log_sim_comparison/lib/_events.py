@@ -16,11 +16,19 @@ import pandas as pd
 AUTONOMOUS_MODE = 2
 
 
-def find_autonomous_start(df_mode: pd.DataFrame, df_vel: pd.DataFrame) -> int:
+def find_autonomous_start(
+    df_mode: pd.DataFrame,
+    df_vel: pd.DataFrame,
+    *,
+    vel_threshold: float = 0.1,
+    min_moving_duration: float = 0.3,
+) -> int:
     """オートノマス開始時刻 (ns) を返す。
 
     df_mode に AUTONOMOUS 遷移があればそれ、無ければ速度ベースでフォールバック。
-    df_vel は align_time 前 (`t_ns` 列を持つ) を想定。
+    速度フォールバックは単点ノイズに脆弱なため、`min_moving_duration` 秒だけ移動が
+    継続する最初の時刻を採用する（デバウンス）。df_vel は align_time 前
+    (`t_ns` 列を持つ) を想定。
     """
     if not df_mode.empty:
         auto_rows = df_mode[df_mode["mode"] == AUTONOMOUS_MODE]
@@ -32,10 +40,18 @@ def find_autonomous_start(df_mode: pd.DataFrame, df_vel: pd.DataFrame) -> int:
         )
     if df_vel.empty:
         raise ValueError("df_mode も df_vel も空のため t0 を決定できない")
-    moving = df_vel[df_vel["lon_vel"] > 0.1]
-    if not moving.empty:
-        return int(moving["t_ns"].iloc[0])
-    return int(df_vel["t_ns"].iloc[0])
+    t_ns = df_vel["t_ns"].to_numpy()
+    moving = (df_vel["lon_vel"].to_numpy() > vel_threshold)
+    win_ns = min_moving_duration * 1e9
+    for i in np.flatnonzero(moving):
+        t_start = t_ns[i]
+        in_win = (t_ns >= t_start) & (t_ns < t_start + win_ns)
+        # 窓内に複数サンプルがあり、すべて移動中なら「継続した発進」とみなす
+        if in_win.sum() >= 2 and moving[in_win].all():
+            return int(t_start)
+    if moving.any():
+        return int(t_ns[int(np.argmax(moving))])
+    return int(t_ns[0])
 
 
 def find_curve2_launch(
