@@ -1,10 +1,17 @@
 #!/usr/bin/env python3
-"""カーブ② 乖離詳細診断スクリプト.
+"""Stage 10: カーブ/発進区間の軌跡乖離 詳細診断.
 
-軌跡乖離の原因を特定するため、1秒分解能で位置・速度・ステア・yaw の比較を行う。
-乖離の縦横成分分解と、プランナー速度差の寄与を定量化する。
+実機 vs sim の軌跡乖離の「原因」を、1秒分解能で位置・速度・ステア・yaw を比較して特定する。
+固有価値は **乖離の縦横成分分解 (実機進行方向基準) + ヨー差 + プランナー速度差の寄与**で、
+これは step4 のカーブ別プロット (real+sim N-way の重ね描き) にはない診断次元。
 
-入力: real.lite(.mcap) + sim_curve2.lite(.mcap) (どちらかが無い場合は中断)
+時刻基準は「発進 (curve_config があればカーブ②停止→発進、無ければ最初の発進)」前後。比較対象 sim は
+lite/ 配下の sim_*.lite を自動検出する (sim_normal 優先)。real lite + sim lite を使い、evaluator_node は
+Stage 9 の後に env のみで実行する (追加設定不要)。sim/発進が無ければスキップ。
+
+旧 tools/diagnose_curve2.py を一般化 (sim_curve2 固定 → 現パイプラインの sim run) して昇格したもの。
+旧 tools/compare_curve2.py のプロット群は step4 のカーブ別図 + 本ステージ + step4 の *_vs_distance に
+subsume されたため撤去済み。
 """
 
 from __future__ import annotations
@@ -21,10 +28,11 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 
-from ..lib._events import find_autonomous_start, find_curve2_launch, find_sim_launch
-from ..lib._io import align_time, load_cmd, load_kinematic, load_operation_mode, load_steering, load_velocity
-from ..lib._params_utils import add_params_annotation, setup_jp_font
-from ..lib._runtime_config import RuntimeConfig, add_common_cli_arguments, build_runtime_config
+from .lib._events import find_autonomous_start, find_curve2_launch, find_sim_launch
+from .lib._io import align_time, load_cmd, load_kinematic, load_operation_mode, load_steering, load_velocity
+from .lib._params_utils import add_params_annotation, setup_jp_font
+from .lib._runtime_config import RuntimeConfig, add_common_cli_arguments, build_runtime_config
+from .step8_compare_dp_trajectory import _resolve_primary_sim_bag
 
 setup_jp_font()
 
@@ -234,11 +242,51 @@ def plot_detailed(real: dict, sim: dict, cfg: RuntimeConfig) -> None:
 
     fig.tight_layout()
     add_params_annotation(fig)
-    cfg.figs_dir.mkdir(parents=True, exist_ok=True)
-    out = cfg.figs_dir / "c2_diagnosis.png"
+    out_dir = cfg.out_dir / "curve_diag"
+    out_dir.mkdir(parents=True, exist_ok=True)
+    out = out_dir / "curve_divergence.png"
     fig.savefig(str(out), dpi=150, bbox_inches="tight")
     plt.close(fig)
     print(f"\n  保存: {out}")
+
+
+def write_curve_summary(real: dict, sim: dict, cfg: RuntimeConfig) -> None:
+    """乖離の縦横分解・yaw差・速度差の定量サマリを curve_diag/curve_divergence.md に出力。
+
+    旧 compare_curve2.py の curve2_report.md の定量サマリ相当 (発進窓の peak/RMS) を、
+    diagnose_curve2 の分解ロジックで再構成したもの。
+    """
+    t_vec = np.linspace(-2.0, 27.0, 300)
+    dist = np.array([decompose_deviation(real["kin"], sim["kin"], tr)[0] for tr in t_vec])
+    lon = np.array([decompose_deviation(real["kin"], sim["kin"], tr)[1] for tr in t_vec])
+    lat = np.array([decompose_deviation(real["kin"], sim["kin"], tr)[2] for tr in t_vec])
+    rv = np.interp(t_vec, real["vel"]["tr"].values, real["vel"]["lon_vel"].values, left=np.nan, right=np.nan)
+    sv = np.interp(t_vec, sim["vel"]["tr"].values, sim["vel"]["lon_vel"].values, left=np.nan, right=np.nan)
+    vdiff = sv - rv
+
+    def _rms(a: np.ndarray) -> float:
+        a = a[~np.isnan(a)]
+        return float(np.sqrt(np.mean(a**2))) if len(a) else float("nan")
+
+    lines = [
+        "# カーブ/発進区間 軌跡乖離サマリ (Stage 10)\n",
+        f"シナリオ: {cfg.scenario_name}",
+        f"発進基準: 実機 t_launch={real['t_launch']:.1f}s / sim t_launch={sim['t_launch']:.1f}s",
+        "解析窓: 発進前後 -2〜+27s\n",
+        "| 指標 | 値 |",
+        "|---|---:|",
+        f"| 総乖離距離 peak [m] | {np.nanmax(dist):.3f} |",
+        f"| 縦方向乖離 peak/RMS [m] | {np.nanmax(np.abs(lon)):.3f} / {_rms(lon):.3f} |",
+        f"| 横方向乖離 peak/RMS [m] | {np.nanmax(np.abs(lat)):.3f} / {_rms(lat):.3f} |",
+        f"| 速度差(sim−real) mean/RMS [m/s] | {np.nanmean(vdiff):+.3f} / {_rms(vdiff):.3f} |",
+        "",
+        "> 縦横は実機進行方向基準 (縦=前方正/横=左正)。乖離が縦方向支配なら pacing/速度差、"
+        "横方向支配なら操舵・understeer 由来を示唆する。",
+    ]
+    out_dir = cfg.out_dir / "curve_diag"
+    out_dir.mkdir(parents=True, exist_ok=True)
+    (out_dir / "curve_divergence.md").write_text("\n".join(lines) + "\n", encoding="utf-8")
+    print(f"  保存: {out_dir / 'curve_divergence.md'}")
 
 
 def main() -> None:
@@ -249,30 +297,28 @@ def main() -> None:
     cfg = build_runtime_config(args, default_base_dir=Path(__file__).parent)
 
     real_bag = _resolve_bag(cfg.lite_dir, "real")
-    sim_bag = _resolve_bag(cfg.lite_dir, "sim_curve2")
+    sim_bag = _resolve_primary_sim_bag(cfg.lite_dir)
     if real_bag is None:
         print(f"ERROR: real lite bag が見つかりません: {cfg.lite_dir}", file=sys.stderr)
         sys.exit(1)
     if sim_bag is None:
-        print(
-            f"ERROR: sim_curve2 lite bag が見つかりません: {cfg.lite_dir}\n"
-            "  `make sim_curve2` でシム出力を生成してください。",
-            file=sys.stderr,
-        )
-        sys.exit(1)
+        # sim run が無ければ比較できない。パイプライン best-effort のためエラーでなくスキップ。
+        print("INFO: sim lite bag (sim_*.lite) が無いため curve 乖離診断をスキップ", file=sys.stderr)
+        return
 
     print("=== データ読み込み ===")
     print(f"  実機: {real_bag}")
     real = _load_one(real_bag, is_real=True, cmd_topic=REAL_CMD_TOPIC_CANDIDATES,
                      curve2_window=cfg.curve2_window)
-    print(f"  [実機] カーブ② 発進 t={real['t_launch']:.1f}s")
+    print(f"  [実機] 発進 t={real['t_launch']:.1f}s")
 
-    print(f"  シム: {sim_bag}")
+    print(f"  シム: {sim_bag.name}")
     sim = _load_one(sim_bag, is_real=False, cmd_topic=SIM_CMD_TOPIC_CANDIDATES,
                     curve2_window=cfg.curve2_window)
-    print(f"  [シム (Curve2)] 発進 t={sim['t_launch']:.1f}s")
+    print(f"  [シム] 発進 t={sim['t_launch']:.1f}s")
 
     print_diagnosis(real, sim)
+    write_curve_summary(real, sim, cfg)
     plot_detailed(real, sim, cfg)
 
 

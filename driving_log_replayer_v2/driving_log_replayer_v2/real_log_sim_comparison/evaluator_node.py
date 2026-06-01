@@ -300,6 +300,16 @@ def run_pipeline(
     except RuntimeError as exc:
         logger.warning(f"Stage 9 (step9_identify_brake) failed but continuing: {exc}")
 
+    # ---- Stage 10: カーブ/発進区間の軌跡乖離 詳細診断 (縦横分解 + yaw 差) ----
+    logger.info("Stage 10: step10_diagnose_curve (curve/launch deviation decomposition)")
+    try:
+        _run([
+            sys.executable, "-m",
+            "driving_log_replayer_v2.real_log_sim_comparison.step10_diagnose_curve",
+        ], env=env, timeout=600)
+    except RuntimeError as exc:
+        logger.warning(f"Stage 10 (step10_diagnose_curve) failed but continuing: {exc}")
+
     # ---- 生成物カウント (E1: 沈黙の失敗対策) ----
     # Stage 3/5 は失敗継続するため、実際に出力が出た数を数えて成否判定の材料にする。
     def _lite_exists(tag: str) -> bool:
@@ -320,13 +330,14 @@ def run_pipeline(
         "kus_sweep_ok": int((comparison_dir / "kus_sweep" / "kus_sweep.csv").exists()),
         "dp_compare_ok": int((comparison_dir / "figures" / "dp_real_vs_sim.png").exists()),
         "brake_sweep_ok": int((comparison_dir / "brake_sweep" / "brake_sweep.csv").exists()),
+        "curve_diag_ok": int((comparison_dir / "curve_diag" / "curve_divergence.png").exists()),
     }
     logger.info(
         f"Pipeline outputs: sim_runs {sim_produced}/{len(sim_cfg.runs)}, "
         f"cases {cases_produced}/{len(cases_cfg.cases)}, "
         f"report={counts['report_ok']}, cases_summary={counts['cases_summary_ok']}, "
         f"kus_sweep={counts['kus_sweep_ok']}, dp_compare={counts['dp_compare_ok']}, "
-        f"brake_sweep={counts['brake_sweep_ok']}"
+        f"brake_sweep={counts['brake_sweep_ok']}, curve_diag={counts['curve_diag_ok']}"
     )
     return counts
 
