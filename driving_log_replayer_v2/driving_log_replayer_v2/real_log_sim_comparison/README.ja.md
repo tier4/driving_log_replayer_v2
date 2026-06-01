@@ -40,7 +40,6 @@ annotation-dataset）が全 stage の入口になる。
 | `step1_make_lite.py` … `step10_diagnose_curve.py` | 10 段階パイプラインの各 stage 実装（先頭 `stepN_` が実行順） |
 | `evaluator_node.py` | パイプラインを orchestrate する ROS2 ノード。`lib/driving_log_replayer_v2/real_log_sim_comparison_evaluator_node.py` に install される（CMakeLists で `RENAME` 互換） |
 | `lib/_*.py` | 共有ユーティリティ・内部設定（io / events / map / params / runtime_config / cases_config / sim_runs_config）。stage 実装から `from .lib._x import` で参照 |
-| `tools/*.py` | パイプライン外の手動診断・解析ツール。`python3 -m ...real_log_sim_comparison.tools.<name>` で単体実行 |
 | `Makefile` | `make local_cloud_run` でローカル実行（詳細は `sample/README.ja.md`） |
 | `sample/` | cloud / local 共通サンプル一式（`scenario.yaml`, `cases.yaml`, `sim_runs.yaml`, `curve_config_miraikan.yaml`）+ 手順 README。ローカル実行出力は `sample/out/`（gitignore） |
 
