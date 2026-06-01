@@ -10,12 +10,16 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+
 import numpy as np
 import pandas as pd
 
 from driving_log_replayer_v2.real_log_sim_comparison.lib._io import (
     cumulative_arc_length,
     filter_localization,
+    resolve_lite_bag,
+    resolve_primary_sim_bag,
 )
 
 
@@ -96,3 +100,40 @@ def test_filter_localization_single_point() -> None:
     clean, dropped = filter_localization(_kin([90000.0], [43000.0]))
     assert dropped == 0
     assert len(clean) == 1
+
+
+# --- resolve_lite_bag / resolve_primary_sim_bag ---
+
+
+def test_resolve_lite_bag_dir(tmp_path: Path) -> None:
+    (tmp_path / "real.lite").mkdir()
+    assert resolve_lite_bag(tmp_path, "real") == tmp_path / "real.lite"
+
+
+def test_resolve_lite_bag_prefers_mcap_file(tmp_path: Path) -> None:
+    (tmp_path / "real.lite").mkdir()
+    (tmp_path / "real.lite.mcap").write_bytes(b"")
+    assert resolve_lite_bag(tmp_path, "real") == tmp_path / "real.lite.mcap"
+
+
+def test_resolve_lite_bag_missing(tmp_path: Path) -> None:
+    assert resolve_lite_bag(tmp_path, "real") is None
+
+
+def test_resolve_primary_sim_bag_prefers_sim_normal(tmp_path: Path) -> None:
+    (tmp_path / "sim_godot.lite").mkdir()
+    (tmp_path / "sim_normal.lite").mkdir()
+    (tmp_path / "real.lite").mkdir()
+    assert resolve_primary_sim_bag(tmp_path) == tmp_path / "sim_normal.lite"
+
+
+def test_resolve_primary_sim_bag_first_when_no_normal(tmp_path: Path) -> None:
+    (tmp_path / "sim_godot.lite").mkdir()
+    (tmp_path / "sim_kus0020.lite").mkdir()
+    got = resolve_primary_sim_bag(tmp_path)
+    assert got in (tmp_path / "sim_godot.lite", tmp_path / "sim_kus0020.lite")
+
+
+def test_resolve_primary_sim_bag_none_when_no_sim(tmp_path: Path) -> None:
+    (tmp_path / "real.lite").mkdir()
+    assert resolve_primary_sim_bag(tmp_path) is None
