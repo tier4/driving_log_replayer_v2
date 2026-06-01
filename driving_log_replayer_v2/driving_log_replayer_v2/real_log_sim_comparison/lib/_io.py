@@ -223,3 +223,76 @@ def nearest_point_distance(ref_xy: np.ndarray, query_xy: np.ndarray) -> np.ndarr
     tree = cKDTree(ref_xy)
     dists, _ = tree.query(query_xy)
     return dists
+
+
+def cumulative_arc_length(x, y) -> np.ndarray:
+    """(x, y) 系列に沿った累積走行距離 [m] を返す（先頭は 0）。"""
+    x = np.asarray(x, dtype=float)
+    y = np.asarray(y, dtype=float)
+    if len(x) == 0:
+        return np.zeros(0)
+    seg = np.hypot(np.diff(x), np.diff(y))
+    return np.concatenate([[0.0], np.cumsum(seg)])
+
+
+def filter_localization(
+    df: pd.DataFrame,
+    *,
+    max_step_speed: float = 60.0,
+    max_step_jump: float = 50.0,
+    origin_eps: float = 1.0,
+) -> tuple[pd.DataFrame, int]:
+    """localization 軌跡から無効フレームを除外する。
+
+    sim 由来 bag は localization 初期化前に原点 (0,0) を出力したり、初期化時に
+    巨大ジャンプ (瞬間移動) を挟むことがあり、これが arc-length / bbox / 空間統計を
+    破壊する（実機 bag は通常 0 件）。次の 2 段で除外する:
+
+      1. 原点近傍 (|x|<origin_eps かつ |y|<origin_eps)
+      2. ロバスト中心 (median) に最も近い有効点を起点に前後へ走査し、直前の有効点から
+         `max_step_speed` [m/s] を超える瞬間移動となる点（実走行ではあり得ない）
+
+    戻り値: (除外後 df, 除外フレーム数)。`t_ns` 列があれば実時間で、無ければ等間隔で評価。
+    """
+    n0 = len(df)
+    if n0 == 0 or "x" not in df.columns or "y" not in df.columns:
+        return df, 0
+    work = df.reset_index(drop=True)
+    x = work["x"].to_numpy(dtype=float)
+    y = work["y"].to_numpy(dtype=float)
+    valid = ~((np.abs(x) < origin_eps) & (np.abs(y) < origin_eps))
+    if "t_ns" in work.columns:
+        t = work["t_ns"].to_numpy(dtype=float) / 1e9
+    else:
+        t = np.arange(n0, dtype=float)
+    idx_valid = np.where(valid)[0]
+    if len(idx_valid) >= 2:
+        mx = float(np.median(x[idx_valid]))
+        my = float(np.median(y[idx_valid]))
+        d2 = (x - mx) ** 2 + (y - my) ** 2
+        d2[~valid] = np.inf
+        seed = int(np.argmin(d2))
+
+        def _walk(order: range) -> None:
+            anchor = seed
+            for i in order:
+                if not valid[i]:
+                    continue
+                dt = abs(t[i] - t[anchor])
+                dist = math.hypot(x[i] - x[anchor], y[i] - y[anchor])
+                # dt>0 は速度ゲートで teleport を捕捉 (正当な計測ギャップも実速度内なら通過する
+                # ためカスケード除外しない)。dt==0 (同一タイムスタンプ) は速度ゲートが効かないので、
+                # その場合のみ絶対ジャンプ上限 max_step_jump で teleport を落とす。
+                if dt > 0:
+                    invalid = dist / dt > max_step_speed
+                else:
+                    invalid = dist > max_step_jump
+                if invalid:
+                    valid[i] = False
+                else:
+                    anchor = i
+
+        _walk(range(seed + 1, n0))
+        _walk(range(seed - 1, -1, -1))
+    clean = work[valid].reset_index(drop=True)
+    return clean, n0 - len(clean)
