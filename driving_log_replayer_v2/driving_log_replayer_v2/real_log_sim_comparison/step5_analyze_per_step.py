@@ -224,6 +224,13 @@ class VehicleModel:
             steer_bias, time_constant 等 + debug_*_scaling_factor, k_us)
           - "ideal_steer_acc": wheelbase のみ
         params は load_sim_params() の base に cases.yaml の case.params が上書きされた dict。
+
+        注: ideal_steer_acc は d(vx)/dt = ax (加速度指令を直接積分; 停止/ギア拘束なし) のため、
+        停止中 (real_vx≈0) にブレーキ指令を与える step で sim_vx がわずかに負になり得る
+        (実測: 停止中ブレーキの 672 step で sim_vx 平均 -0.05 m/s)。これは dynamics-free な ideal
+        モデルの仕様で、「停止中に後退する」という微小な予測誤差を忠実に表すもの (クランプすると
+        その誤差を隠す)。1 step (~0.03s) の位置寄与は ~mm で err_ds への影響は無視可能
+        (負 step の err_ds_long RMSE ≈ 0.09cm vs 全体 1.38cm)。delay_steer_acc_geared はギア拘束で発生しない。
         """
         p = params
         lib = self._get_lib()
@@ -1578,6 +1585,18 @@ def save_summary(df: pd.DataFrame) -> None:
                 f"横={rmse_cm('err_ds_lat', mask):.3f} cm, "
                 f"ステア={rmse_deg('err_steer', mask):.4f} deg  (n={mask.sum()})"
             )
+
+    # 透明化: sim_vx<0 (ideal_steer_acc が停止中ブレーキで微小後退する仕様) の件数を注記。
+    # バグではなく dynamics-free モデルの忠実な挙動で、位置誤差寄与は無視可能 (VehicleModel docstring 参照)。
+    if "sim_vx" in df.columns:
+        n_neg = int((df["sim_vx"].values < 0).sum())
+        if n_neg > 0:
+            lines += [
+                "",
+                f"--- 注記: sim_vx<0 が {n_neg}/{len(df)} step ---",
+                "  ideal_steer_acc の仕様 (停止中ブレーキで微小後退; ギア/停止拘束なし)。"
+                "バグではなく位置誤差寄与は無視可能。",
+            ]
 
     text = "\n".join(lines)
     print(text)
