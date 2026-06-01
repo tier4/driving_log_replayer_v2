@@ -149,6 +149,8 @@ def run_pipeline(
     env["CURVE_CONFIG_YAML"] = compare_cfg.get("curve_config_yaml", "")
     # 実機データ取得時の版・重み (外部記録)。step4 が provenance 掲載に使う。
     env["REAL_PROVENANCE"] = compare_cfg.get("real_provenance", "")
+    # opt-in: D0 緩和の周回 waypoint 数 (既定 0=start+goal のみ; step2 が読む)。要 live sim 検証。
+    env["LOOP_WAYPOINTS"] = str(compare_cfg.get("loop_waypoints", 0))
 
     # ---- Stage 1: real lite bag ----
     logger.info("Stage 1: generating real lite bag")
@@ -374,6 +376,13 @@ def _load_compare_config(scenario_path_str: str) -> dict[str, Any]:
         # (例 "autoware v0.48.x / DP exp neighbor320_xxx")。版・重み差の解釈用に provenance 掲載。
         if "real_provenance" in conditions:
             cfg["real_provenance"] = str(conditions["real_provenance"])
+
+        # loop_waypoints (任意, 既定 0): D0 緩和の周回 waypoint 数。opt-in・要 live sim 検証。
+        if "loop_waypoints" in conditions:
+            try:
+                cfg["loop_waypoints"] = int(conditions["loop_waypoints"])
+            except (TypeError, ValueError):
+                cfg["loop_waypoints"] = 0
 
         if "curve_config_yaml" in conditions:
             raw = str(conditions["curve_config_yaml"])

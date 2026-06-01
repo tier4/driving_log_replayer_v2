@@ -144,6 +144,58 @@ def _goal_pose_from_kinematic(input_bag: Path, t0_ns: int) -> dict:
             "h": float(row.yaw), "p": 0.0, "r": 0.0}
 
 
+def _select_apex_indices(
+    xs: list[float], ys: list[float], sx: float, sy: float, gx: float, gy: float, n: int
+) -> list[int]:
+    """start-goal 弦からの垂直距離が大きい点 (周回の膨らみ) を n 個、経路順に選ぶ純関数。
+
+    経路 (xs, ys) を n 区間に等分し、各区間で弦からの垂直距離が最大の index を採る。
+    n<=0 / 点数不足 / 弦長ゼロ なら []。shortest だけでは再現できない周回経路を強制するための
+    中間 waypoint 候補 index を返す (build_scenario_dict が LanePosition 解決して挿入)。
+    """
+    m = len(xs)
+    if n <= 0 or m < n + 2:
+        return []
+    cx, cy = gx - sx, gy - sy
+    clen = math.hypot(cx, cy)
+    if clen < 1e-6:
+        return []
+    perp = [abs(((xs[i] - sx) * cy - (ys[i] - sy) * cx) / clen) for i in range(m)]
+    out: list[int] = []
+    for k in range(n):
+        lo = m * k // n
+        hi = m * (k + 1) // n
+        if hi <= lo:
+            continue
+        out.append(max(range(lo, hi), key=lambda i: perp[i]))
+    return out
+
+
+def _select_loop_waypoints(
+    input_bag: Path, t0_ns: int, start_world: dict, goal_world: dict, n: int
+) -> list[dict]:
+    """実走 AUTONOMOUS 軌跡から周回の膨らみ位置を n 個選び、heading 付き world dict 群を返す。
+
+    n<=0 なら []。各 waypoint は _world_to_lane_position 用に heading (軌跡 yaw) を持つ。
+    """
+    if n <= 0:
+        return []
+    df = load_kinematic(input_bag)
+    if df.empty:
+        return []
+    df = df[df["t_ns"] >= t0_ns].reset_index(drop=True)
+    if len(df) < n + 2:
+        return []
+    xs = df["x"].tolist()
+    ys = df["y"].tolist()
+    yaws = df["yaw"].tolist()
+    z = float(start_world.get("z", 0.0))
+    idxs = _select_apex_indices(
+        xs, ys, start_world["x"], start_world["y"], goal_world["x"], goal_world["y"], n
+    )
+    return [{"x": xs[i], "y": ys[i], "z": z, "h": yaws[i], "p": 0.0, "r": 0.0} for i in idxs]
+
+
 # ---------------------------------------------------------------------------
 # Map parsing: WorldPosition → LanePosition 解決 (中央線ジオメトリ)
 # ---------------------------------------------------------------------------
@@ -617,6 +669,7 @@ def build_scenario_dict(
     goal_tolerance: float = 15.0,
     signal_reach_tolerance: float = 30.0,
     force_all_green: bool = False,
+    mid_waypoints: list[dict] | None = None,
 ) -> dict[str, Any]:
     """OpenSCENARIO 文書を Python dict として組み立てる。
 
@@ -649,25 +702,28 @@ def build_scenario_dict(
     # Route.Waypoint minOccurs=2)、 ego_entity の Pose ベース routing (else 分岐) で
     # `SetRoutePoints` service を呼んで Autoware mission_planner に経路計算を任せる。
     #
-    # 中間 Waypoint は入れない。 kinematic 軌跡を間引いた中間点を挟むと、
-    # mission_planner が連続 checkpoint をペアワイズ routing する際、 非連結 lanelet
-    # 区間で「Failed to find a proper route」となり route が publish されず ego 静止
-    # (2026-06-01 判別テスト: 中間 23 点→route 失敗 / start+goal のみ→ego 241m 走行)。
+    # 既定 (mid_waypoints 空) は start + goal の 2 点のみ。 kinematic 軌跡を密に間引いた中間点
+    # (23 点) を挟むと mission_planner の連続 checkpoint ペアワイズ routing が非連結 lanelet 区間で
+    # 「Failed to find a proper route」となり ego 静止した (2026-06-01 判別)。また segments の
+    # preferred_primitive.id 全 dump も 7 箇所の急ヘディングで DiffusionPlanner NN が走行不能と
+    # 判断し静止した (2026-05-29)。これらを避けるため既定は start+goal のみ (ego 241m 走行で停止)。
     #
-    # 旧実装: LaneletRoute.segments[*].preferred_primitive.id を全 dump して LanePosition で
-    # 渡していたが、 map graph 上の lane 連結 (実走行の lane sequence ではない) を含むため、
-    # 7 箇所の急ヘディング変化を含む不自然 chain になり DiffusionPlanner NN が走行不能と判断、
-    # low velocity target で ego が永遠静止する事象があった (sim_normal で観測、 2026-05-29)。
+    # ただし start+goal の shortest だけでは実機の「周回」経路 (弦より大きく膨らむ) を再現できず
+    # sim が最短直行で早期停止する (D0)。これを緩和する opt-in として、--loop-waypoints N で
+    # 実走軌跡の膨らみ位置に少数 (N) の中間 LanePosition waypoint を挿入し周回方向を強制できる。
+    # start/goal と同じ _world_to_lane_position (heading フィルタ+中央線最近接) で解決し連結性を担保。
+    # **要 live sim 検証** (上記の過去失敗があるため既定 N=0 で無効、有効化は sim 環境で確認のこと)。
+    mids = mid_waypoints or []
+    waypoints = [{"Position": _position(start_world), "routeStrategy": "shortest"}]
+    waypoints += [{"Position": _position(mw), "routeStrategy": "shortest"} for mw in mids]
+    waypoints.append({"Position": _position(goal_world), "routeStrategy": "shortest"})
     private_actions.append({
         "RoutingAction": {
             "AssignRouteAction": {
                 "Route": {
                     "name": "",
                     "closed": False,
-                    "Waypoint": [
-                        {"Position": _position(start_world), "routeStrategy": "shortest"},
-                        {"Position": _position(goal_world), "routeStrategy": "shortest"},
-                    ],
+                    "Waypoint": waypoints,
                 }
             }
         }
@@ -762,6 +818,10 @@ def main() -> None:
     parser.add_argument("--force-all-green-debug", action="store_true",
                         help="**デバッグ専用**: 全信号を強制 green 固定 (信号待ち停止を回避)。"
                              "実機タイムシリーズ再現を諦めるため正式採用禁止")
+    parser.add_argument("--loop-waypoints", type=int,
+                        default=int(os.environ.get("LOOP_WAYPOINTS", "0") or "0"),
+                        help="opt-in (既定 0=start+goal のみ): 実走軌跡の膨らみ位置に N 個の中間 "
+                             "LanePosition waypoint を挿入し周回経路を強制 (D0 緩和)。**要 live sim 検証**")
     args = parser.parse_args()
 
     input_bag = Path(args.input_bag)
@@ -811,6 +871,13 @@ def main() -> None:
     print(f"[step2_bag_to_scenario] signals: {len(signals)} ids, "
           f"total state changes={sum(len(v) for v in signals.values())}")
 
+    # opt-in: 周回経路を強制する中間 waypoint (D0 緩和; 既定 N=0 で無効・要 live sim 検証)
+    mid_waypoints = _select_loop_waypoints(input_bag, t0_ns, start_world, goal_world, args.loop_waypoints)
+    if mid_waypoints:
+        pts = ", ".join(f"({w['x']:.1f},{w['y']:.1f})" for w in mid_waypoints)
+        print(f"[step2_bag_to_scenario] loop_waypoints={len(mid_waypoints)} 挿入: {pts} "
+              "(**要 live sim 検証**)")
+
     # 信号 ID → ego が到達したら trigger される lanelet ID (map.osm から逆引き)
     signal_to_lanelet = _signal_to_lanelet_map(map_osm, set(signals.keys()))
     unresolved = set(signals.keys()) - set(signal_to_lanelet.keys())
@@ -829,6 +896,7 @@ def main() -> None:
         sim_timeout=args.sim_timeout,
         goal_tolerance=args.goal_tolerance,
         force_all_green=args.force_all_green_debug,
+        mid_waypoints=mid_waypoints,
     )
 
     with output_yaml.open("w", encoding="utf-8") as f:
