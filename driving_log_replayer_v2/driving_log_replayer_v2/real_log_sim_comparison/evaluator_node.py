@@ -147,6 +147,8 @@ def run_pipeline(
     if compare_cfg.get("scenario_name"):
         env["SCENARIO_NAME"] = compare_cfg["scenario_name"]
     env["CURVE_CONFIG_YAML"] = compare_cfg.get("curve_config_yaml", "")
+    # 実機データ取得時の版・重み (外部記録)。step4 が provenance 掲載に使う。
+    env["REAL_PROVENANCE"] = compare_cfg.get("real_provenance", "")
 
     # ---- Stage 1: real lite bag ----
     logger.info("Stage 1: generating real lite bag")
@@ -367,6 +369,11 @@ def _load_compare_config(scenario_path_str: str) -> dict[str, Any]:
             cfg["scenario_name"] = str(conditions["scenario_name"])
         elif "ScenarioName" in doc:
             cfg["scenario_name"] = str(doc["ScenarioName"])
+
+        # real_provenance (任意): 実機データ取得時の pilot-auto.x2 / DP 重みの自由記述
+        # (例 "autoware v0.48.x / DP exp neighbor320_xxx")。版・重み差の解釈用に provenance 掲載。
+        if "real_provenance" in conditions:
+            cfg["real_provenance"] = str(conditions["real_provenance"])
 
         if "curve_config_yaml" in conditions:
             raw = str(conditions["curve_config_yaml"])

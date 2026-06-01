@@ -40,6 +40,7 @@ from .lib._io import (
 )
 from .lib._map import load_map_ways, resolve_map_osm
 from .lib._params_utils import add_params_annotation, setup_jp_font
+from .lib._provenance import format_provenance_line, read_provenance
 from .lib._runtime_config import (
     RuntimeConfig,
     add_common_cli_arguments,
@@ -275,7 +276,11 @@ def plot_trajectory(data: dict, map_ways: list | None):
     ax.set_ylabel("y [m]")
     ax.grid(True, lw=0.5, alpha=0.5)
     ax.legend(fontsize=10)
-    fig.tight_layout()
+    # provenance フットノート: 各ログの DP 重み / autoware バージョン (版差での乖離解釈用)。
+    prov_lines = [f"{lbl}: {_prov_text(lbl, d)}" for lbl, d in data.items()]
+    fig.text(0.01, 0.005, "provenance —\n" + "\n".join(prov_lines),
+             fontsize=6, va="bottom", ha="left", color="#555555", family="monospace")
+    fig.tight_layout(rect=(0, 0.04, 1, 1))
     _save(fig, "trajectory_with_map" if map_ways else "trajectory_xy")
 
 
@@ -1299,8 +1304,29 @@ def _log_summary(d: dict) -> dict:
     }
 
 
+def _prov_text(label: str, d: dict) -> str:
+    """1 ログの provenance 表示文字列 (real は外部記録 / sim は記録済 onnx)。"""
+    prov = d.get("prov") or {}
+    if label == "実機":
+        return prov.get("real_note") or "取得時バージョン不明 (要記録: scenario.yaml Conditions.real_provenance)"
+    return format_provenance_line(prov)
+
+
 def build_report(data: dict) -> str:
     lines = [f"# 比較レポート\n\nシナリオ: {SCENARIO_NAME}\n"]
+
+    # モデル重み / バージョン provenance (版・重み差が乖離の原因になり得るため明示)。
+    lines.append("## モデル重み / バージョン provenance\n")
+    lines.append(
+        "> 実機データ取得時と sim 実行時で pilot-auto.x2 / DiffusionPlanner の重みが異なり得る。"
+        "観測された乖離は車両モデル忠実度ではなく版・重み差由来の可能性があるため、各ログの provenance を記載する。"
+    )
+    lines.append("")
+    lines.append("| ログ | DP モデル重み / autoware バージョン |")
+    lines.append("|---|---|")
+    for label, d in data.items():
+        lines.append(f"| {label} | {_prov_text(label, d)} |")
+    lines.append("")
 
     real = data.get("実機")
     real_kin = real["kinematic"] if real is not None else pd.DataFrame()
@@ -1536,6 +1562,13 @@ def main() -> None:
             "t0_method": t0_method,
             "kin_dropped": int(n_drop),
             "kin_total": int(len(df_kin_raw)),
+            # この run が使った DP 重み / autoware バージョン (step3 が sim lite に記録)。
+            # 実機は外部 (車両デプロイ) のため REAL_PROVENANCE env (scenario.yaml) を使う。
+            "prov": (
+                {"real_note": os.environ.get("REAL_PROVENANCE", "").strip() or None}
+                if label == "実機"
+                else read_provenance(LITE_DIR / lcfg["bag_dir"])
+            ),
         }
 
     if not loaded:

@@ -145,6 +145,18 @@ def main() -> None:
         ]
         _run_subprocess(make_lite_cmd, timeout=300)
 
+        # この sim run が使った DP モデル重み / autoware バージョンを記録 (版差の解釈用)。
+        # capture は sim 実行直後 (= 使用した onnx がまだ /opt にある状態) に行う。
+        from .lib._provenance import write_provenance  # noqa: PLC0415
+        prov = write_provenance(output_lite, extra={
+            "tag": run.tag,
+            "vehicle_model": run.vehicle_model,
+            "architecture_type": run.architecture_type,
+            "params": run.params,
+        })
+        print(f"[step3_run_sims] provenance: DP={prov.get('dp_exp_name')} "
+              f"(onnx {prov.get('dp_onnx_sha8')}) / autoware {prov.get('autoware_version')}")
+
         print(f"[step3_run_sims] Saved: {output_lite}")
 
     finally:

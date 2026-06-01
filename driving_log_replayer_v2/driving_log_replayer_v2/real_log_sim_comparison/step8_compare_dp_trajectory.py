@@ -21,6 +21,7 @@ from __future__ import annotations
 
 import argparse
 import math
+import os
 from pathlib import Path
 import sys
 
@@ -34,6 +35,7 @@ import pandas as pd
 from .lib._events import find_autonomous_start, find_curve2_launch, find_sim_launch
 from .lib._io import iter_bag_messages, load_velocity
 from .lib._params_utils import add_params_annotation, setup_jp_font
+from .lib._provenance import format_provenance_line, read_provenance
 from .lib._runtime_config import RuntimeConfig, add_common_cli_arguments, build_runtime_config
 
 setup_jp_font()
@@ -359,7 +361,15 @@ def _run_real_actual(  # noqa: PLR0915
     ax_obj.legend(fontsize=9)
     ax_obj.grid(True, lw=0.4)
 
-    fig.tight_layout()
+    # provenance: DP 比較は重み差が直接効くため、実機 (外部記録) と sim の DP 重み/版を掲載。
+    sim_prov = read_provenance(sim_bag if sim_bag.is_dir() else sim_bag.parent)
+    real_note = os.environ.get("REAL_PROVENANCE", "").strip() or "取得時バージョン不明 (要記録)"
+    fig.text(
+        0.01, 0.005,
+        f"provenance — 実機: {real_note}\nsim ({sim_bag.name}): {format_provenance_line(sim_prov)}",
+        fontsize=6, va="bottom", ha="left", color="#555555", family="monospace",
+    )
+    fig.tight_layout(rect=(0, 0.03, 1, 1))
     add_params_annotation(fig)
     out = cfg.figs_dir / "dp_real_vs_sim.png"
     fig.savefig(str(out), dpi=150, bbox_inches="tight")
