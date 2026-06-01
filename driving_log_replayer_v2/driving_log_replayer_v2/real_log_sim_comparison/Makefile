@@ -1,6 +1,6 @@
 # real_log_sim_comparison use case 専用 Makefile。
 # 同ディレクトリ配下に Python module / evaluator_node / README / sample をすべて集約しており、
-# `make local_cloud_run` で 7 段階パイプライン (実機ログ抽出 → scenario 自動生成 →
+# `make local_cloud_run` で 9 段階パイプライン (実機ログ抽出 → scenario 自動生成 →
 # sim 実行 (sim_runs.yaml) → 比較解析 → per-step → 集約) をワンコマンド実行する。
 
 SHELL := /bin/bash
@@ -25,7 +25,7 @@ help:
 	@echo "使い方: make -C $(MAKEFILE_DIR) <ターゲット>"
 	@echo ""
 	@echo "ターゲット:"
-	@echo "  local_cloud_run  webauto キャッシュの T4 dataset を使い 7 段階パイプラインをワンコマンド実行"
+	@echo "  local_cloud_run  webauto キャッシュの T4 dataset を使い 9 段階パイプラインをワンコマンド実行"
 	@echo ""
 	@echo "  パイプライン構成 (Stage 1〜6):"
 	@echo "    1. step1_make_lite        実機 input_bag → lite/real.lite/"
@@ -35,6 +35,8 @@ help:
 	@echo "    5. step5_analyze_per_step cases.yaml の各 case (VehicleModel パラメータ) で per-step delta 解析"
 	@echo "    6. step6_analyze_cases    per_step/*.csv を集約 (overlay/, cases_summary.md)"
 	@echo "    7. step7_identify_kus     real.lite で k_us を rollout sweep 同定 (kus_sweep/)"
+	@echo "    8. step8_compare_dp_trajectory  DiffusionPlanner 出力軌跡 real vs sim 比較 (figures/dp_*.png)"
+	@echo "    9. step9_identify_brake   real.lite で縦方向 brake_tc を発進フィット同定 (brake_sweep/)"
 	@echo ""
 	@echo "変数:"
 	@echo "  WS_ROOT          colcon ワークスペースルート (デフォルト: $(WS_ROOT))"
