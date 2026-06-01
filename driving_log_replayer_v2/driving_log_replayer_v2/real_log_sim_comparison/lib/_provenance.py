@@ -82,6 +82,10 @@ def capture_dp_provenance(onnx_path: str | Path | None = None) -> dict:
     取得不能な項目は None / "unknown" を入れる (実行環境差に頑健)。
     """
     onnx = Path(onnx_path) if onnx_path else _resolve_onnx()
+    # 明示パスが存在しない場合も stat()/open() でクラッシュせず None 扱いにする
+    # (_resolve_onnx() は存在チェック済みだが、明示 onnx_path は未チェックのため)。
+    if onnx is not None and not onnx.exists():
+        onnx = None
     prov: dict = {
         "autoware_version": _autoware_version(),
         "dp_onnx_path": str(onnx) if onnx else None,
