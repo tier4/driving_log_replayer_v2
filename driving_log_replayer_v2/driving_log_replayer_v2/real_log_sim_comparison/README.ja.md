@@ -25,6 +25,7 @@ annotation-dataset）が全 stage の入口になる。
 | 8 | DP軌跡比較 (`step8_compare_dp_trajectory`) | `lite/{real, <sim>}.lite/` | `comparison/figures/dp_*.png` | 1 |
 | 9 | 縦パラ同定 (`step9_identify_brake`) | `lite/real.lite/` | `comparison/brake_sweep/{brake_sweep.csv, .png}` | 1 |
 | 10 | カーブ乖離診断 (`step10_diagnose_curve`) | `lite/{real, <sim>}.lite/` | `comparison/curve_diag/{curve_divergence.md, .png}` | 1 |
+| 11 | HTML レポート生成 (`step11_build_html_report`) | `comparison/` 配下の全 PNG + 各 `.md` | `comparison/index.html` | 1 |
 
 成否はパイプラインの例外有無で決まる。全 stage が完走すれば `result.jsonl` に
 `Success: true`、いずれかの subprocess が非ゼロ終了またはタイムアウトすると
@@ -123,6 +124,15 @@ Stage 3 (`step3_run_sims`) が `scenario_test_runner` で sim を回した結果
 - `curve2_window`: カーブ② 直前の一時停止を検出する時刻窓 `[start, end]`（AUTONOMOUS 開始からの経過秒）。
 
 ## 出力（`result_archive/` 配下）
+
+### `comparison/index.html`（閲覧用エントリポイント）
+
+`step11_build_html_report`（Stage 11）が生成する、`comparison/` 配下の全プロットを 1 枚に集約した
+HTML。ブラウザで開くと、目次から各セクション（`figures/`, `per_step/<tag>/`, `cases/`, `kus_sweep/`,
+`brake_sweep/`, `curve_diag/`）の全 PNG をキャプション付きで一覧でき、3 種の Markdown レポート
+（`report.md`, `cases_summary.md`, `curve_divergence.md`）も埋め込まれる。画像は**相対パスリンク**なので、
+`comparison/` ディレクトリごとアーカイブ・共有してもそのまま表示できる。散在するプロットをディレクトリを
+辿らずに確認するための入口として使う。
 
 ### `lite/`
 

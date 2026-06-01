@@ -38,6 +38,7 @@ help:
 	@echo "    8. step8_compare_dp_trajectory  DiffusionPlanner 出力軌跡 real vs sim 比較 (figures/dp_*.png)"
 	@echo "    9. step9_identify_brake   real.lite で縦方向 brake_tc を発進フィット同定 (brake_sweep/)"
 	@echo "    10. step10_diagnose_curve カーブ/発進区間の乖離を縦横分解診断 (curve_diag/)"
+	@echo "    11. step11_build_html_report comparison/ 配下の全プロットを集約 (index.html)"
 	@echo ""
 	@echo "変数:"
 	@echo "  WS_ROOT          colcon ワークスペースルート (デフォルト: $(WS_ROOT))"

@@ -15,13 +15,18 @@
 
 """Orchestration node for real_log_sim_comparison.
 
-Runs the 10-stage comparison pipeline inside a cloud DLR2 job:
+Runs the 11-stage comparison pipeline inside a cloud DLR2 job:
   1. step1_make_lite       実機 input_bag → lite/real.lite/
   2. step2_bag_to_scenario lite/real.lite → scenarios/auto_scenario.yaml
   3. step3_run_sims        sim_runs.yaml の各 run を closed-loop 実行 → lite/<tag>.lite/
   4. step4_compare_logs    real + 全 sim を N-way 比較 (figures/, report.md)
   5. step5_analyze_per_step cases.yaml の各 case で per-step delta 解析
   6. step6_analyze_cases   per_step/*.csv を集約 (overlay/, cases_summary.md)
+  7. step7_identify_kus    real.lite で k_us を rollout sweep 同定 (kus_sweep/)
+  8. step8_compare_dp_trajectory DiffusionPlanner 出力軌跡 real vs sim 比較 (figures/dp_*.png)
+  9. step9_identify_brake  real.lite で縦方向 brake_tc を発進フィット同定 (brake_sweep/)
+  10. step10_diagnose_curve カーブ/発進区間の乖離を縦横分解診断 (curve_diag/)
+  11. step11_build_html_report comparison/ 配下の全プロットを集約 (index.html)
 
 Outputs are written to result_archive_path, which is collected by
 `logging.additional_log_archive` in .webauto-ci.yml.
@@ -314,6 +319,16 @@ def run_pipeline(
     except RuntimeError as exc:
         logger.warning(f"Stage 10 (step10_diagnose_curve) failed but continuing: {exc}")
 
+    # ---- Stage 11: comparison/ 配下の全プロットを集約した閲覧用 HTML 生成 ----
+    logger.info("Stage 11: step11_build_html_report (comparison/index.html)")
+    try:
+        _run([
+            sys.executable, "-m",
+            "driving_log_replayer_v2.real_log_sim_comparison.step11_build_html_report",
+        ], env=env, timeout=300)
+    except RuntimeError as exc:
+        logger.warning(f"Stage 11 (step11_build_html_report) failed but continuing: {exc}")
+
     # ---- 生成物カウント (E1: 沈黙の失敗対策) ----
     # Stage 3/5 は失敗継続するため、実際に出力が出た数を数えて成否判定の材料にする。
     def _lite_exists(tag: str) -> bool:
@@ -335,13 +350,15 @@ def run_pipeline(
         "dp_compare_ok": int((comparison_dir / "figures" / "dp_real_vs_sim.png").exists()),
         "brake_sweep_ok": int((comparison_dir / "brake_sweep" / "brake_sweep.csv").exists()),
         "curve_diag_ok": int((comparison_dir / "curve_diag" / "curve_divergence.png").exists()),
+        "index_html_ok": int((comparison_dir / "index.html").exists()),
     }
     logger.info(
         f"Pipeline outputs: sim_runs {sim_produced}/{len(sim_cfg.runs)}, "
         f"cases {cases_produced}/{len(cases_cfg.cases)}, "
         f"report={counts['report_ok']}, cases_summary={counts['cases_summary_ok']}, "
         f"kus_sweep={counts['kus_sweep_ok']}, dp_compare={counts['dp_compare_ok']}, "
-        f"brake_sweep={counts['brake_sweep_ok']}, curve_diag={counts['curve_diag_ok']}"
+        f"brake_sweep={counts['brake_sweep_ok']}, curve_diag={counts['curve_diag_ok']}, "
+        f"index_html={counts['index_html_ok']}"
     )
     return counts
 
