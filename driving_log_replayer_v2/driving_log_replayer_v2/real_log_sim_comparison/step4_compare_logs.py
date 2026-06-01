@@ -21,12 +21,15 @@ import numpy as np
 import pandas as pd
 
 from .lib._events import (
+    AUTONOMOUS_MODE as _AUTONOMOUS_MODE,
     find_autonomous_start as _find_autonomous_start,
     find_curve2_exit as _find_curve2_exit_pure,
     find_curve2_launch as _find_curve2_launch_pure,
 )
 from .lib._io import (
     align_time,
+    cumulative_arc_length,
+    filter_localization,
     load_accel,
     load_cmd,
     load_kinematic,
@@ -114,6 +117,14 @@ _SIM_COLORS = ["#1f77b4", "#ff7f0e", "#2ca02c", "#d62728", "#9467bd",
 _SIM_LINESTYLES = ["--", (0, (4, 2)), "-.", ":", (0, (3, 1, 1, 1))]
 _SIM_MARKERS = ["^", "s", "D", "v", "P", "*", "X"]
 
+# 時間軸重ね描きへの注記: t=0 の基準がログ間で異なり (real=AUTONOMOUS 遷移 / sim=速度
+# fallback)、pacing も違うため、同一 t が同一地点を意味しない。走行距離基準は
+# velocity_vs_distance.png / steering_vs_distance.png を参照。
+_TIME_AXIS_NOTE = (
+    "注: t=0 は各ログの AUTONOMOUS/発進基準。pacing 差により同一 t は同一地点を意味しない"
+    "（走行距離基準は *_vs_distance.png を参照）"
+)
+
 
 def _rebuild_logs(
     lite_dir: Path,
@@ -136,6 +147,8 @@ def _rebuild_logs(
         candidates = [lite_dir / f"{stem}.mcap", lite_dir / stem]
         path = next((c for c in candidates if c.exists()), candidates[0])
         entry = {**spec, "path": path}
+        entry.setdefault("perfect", False)
+        entry.setdefault("vehicle_model", "real")
         if topic_overrides and label in topic_overrides:
             entry.update(topic_overrides[label])
         result[label] = entry
@@ -153,6 +166,10 @@ def _rebuild_logs(
                 "ls": _SIM_LINESTYLES[i % len(_SIM_LINESTYLES)],
                 "marker": _SIM_MARKERS[i % len(_SIM_MARKERS)],
                 "path": path,
+                "vehicle_model": run.vehicle_model,
+                # PERFECT_TRAJECTORY_TRACKER は control_cmd を追従しないため
+                # 操舵の cmd-vs-response 比較が意味を持たない（build_report で注記）。
+                "perfect": run.vehicle_model.endswith("perfect_tracker"),
             }
             if topic_overrides and run.tag in topic_overrides:
                 entry.update(topic_overrides[run.tag])
@@ -295,7 +312,8 @@ def plot_velocity(data: dict):
     axes[1, 0].legend(fontsize=9)
     axes[1, 0].grid(True, lw=0.5)
 
-    fig.tight_layout()
+    fig.text(0.5, 0.005, _TIME_AXIS_NOTE, ha="center", fontsize=8, color="#555555")
+    fig.tight_layout(rect=(0, 0.02, 1, 1))
     _save(fig, "velocity")
 
 
@@ -320,7 +338,8 @@ def plot_acceleration(data: dict):
     axes[1, 0].legend(fontsize=9)
     axes[1, 0].grid(True, lw=0.5)
 
-    fig.tight_layout()
+    fig.text(0.5, 0.005, _TIME_AXIS_NOTE, ha="center", fontsize=8, color="#555555")
+    fig.tight_layout(rect=(0, 0.02, 1, 1))
     _save(fig, "acceleration")
 
 
@@ -345,8 +364,67 @@ def plot_steering(data: dict):
     axes[1, 0].legend(fontsize=9)
     axes[1, 0].grid(True, lw=0.5)
 
-    fig.tight_layout()
+    fig.text(0.5, 0.005, _TIME_AXIS_NOTE, ha="center", fontsize=8, color="#555555")
+    fig.tight_layout(rect=(0, 0.02, 1, 1))
     _save(fig, "steering")
+
+
+def _distance_of(t_query, df_kin: pd.DataFrame):
+    """align_time 済み kinematic から累積走行距離 s(t) を作り、t_query における距離を返す。
+
+    kinematic は filter_localization 済み (無効フレーム除去済み) を前提とする。
+    範囲外は端点にクランプ (np.interp 既定)。kinematic 空なら None。
+    """
+    if df_kin.empty:
+        return None
+    s = cumulative_arc_length(df_kin["x"].to_numpy(), df_kin["y"].to_numpy())
+    return np.interp(np.asarray(t_query, dtype=float), df_kin["t"].to_numpy(), s)
+
+
+def plot_velocity_vs_distance(data: dict):
+    """速度応答を走行距離 (arc-length) 基準で重ね描き。
+
+    時間軸では pacing 差・初期化オフセットが「時間ずれ」に見えるが、距離基準にすると
+    各ログが経路上のどこまで進んだか・どこで停止したかが露出する (例: sim の早期停止)。
+    """
+    fig, axes = _setup_fig("速度比較（走行距離基準）", figsize=(14, 5))
+    ax = axes[0, 0]
+    for label, d in data.items():
+        vel, kin = d["velocity"], d["kinematic"]
+        if vel.empty or kin.empty:
+            continue
+        s = _distance_of(vel["t"], kin)
+        if s is None:
+            continue
+        ax.plot(s, np.asarray(vel["lon_vel"]), color=d["color"], lw=d["lw"], ls=d["ls"], label=label)
+    ax.set_title("実応答速度 vs 走行距離（早期停止・初期化オフセットを露出）")
+    ax.set_xlabel("走行距離 [m]")
+    ax.set_ylabel("速度 [m/s]")
+    ax.legend(fontsize=9)
+    ax.grid(True, lw=0.5)
+    fig.tight_layout()
+    _save(fig, "velocity_vs_distance")
+
+
+def plot_steering_vs_distance(data: dict):
+    """操舵応答を走行距離 (arc-length) 基準で重ね描き（pacing 差を除いた形状比較）。"""
+    fig, axes = _setup_fig("ステアリング比較（走行距離基準）", figsize=(14, 5))
+    ax = axes[0, 0]
+    for label, d in data.items():
+        steer, kin = d["steering"], d["kinematic"]
+        if steer.empty or kin.empty:
+            continue
+        s = _distance_of(steer["t"], kin)
+        if s is None:
+            continue
+        ax.plot(s, np.degrees(np.asarray(steer["steer"])), color=d["color"], lw=d["lw"], ls=d["ls"], label=label)
+    ax.set_title("実応答ステア角 vs 走行距離")
+    ax.set_xlabel("走行距離 [m]")
+    ax.set_ylabel("ステア角 [deg]")
+    ax.legend(fontsize=9)
+    ax.grid(True, lw=0.5)
+    fig.tight_layout()
+    _save(fig, "steering_vs_distance")
 
 
 def plot_curves(data: dict, map_ways: list | None):
@@ -1191,24 +1269,87 @@ def nearest_point_distance(ref_xy: np.ndarray, query_xy: np.ndarray) -> np.ndarr
     return dists
 
 
+def _log_summary(d: dict) -> dict:
+    """1 ログの走行サマリ (kinematic odometry 基準 + velocity_status 参考)。"""
+    kin, vel = d["kinematic"], d["velocity"]
+    if not kin.empty:
+        dist = float(cumulative_arc_length(kin["x"].to_numpy(), kin["y"].to_numpy())[-1])
+    else:
+        dist = float("nan")
+    if not vel.empty:
+        t = vel["t"].to_numpy()
+        elapsed = float(t.max() - t.min())
+        v = vel["lon_vel"].to_numpy()
+        stopped = float(np.mean(v <= 0.3) * 100.0)
+        cruise = float(v[v > 0.3].mean()) if np.any(v > 0.3) else 0.0
+        vmean, vmax, vstd = float(v.mean()), float(v.max()), float(v.std())
+    else:
+        elapsed = stopped = cruise = vmean = vmax = vstd = float("nan")
+    mean_speed = dist / elapsed if (elapsed and elapsed > 0) else float("nan")
+    return {
+        "dist": dist, "elapsed": elapsed, "stopped": stopped, "cruise": cruise,
+        "mean_speed": mean_speed, "vmean": vmean, "vmax": vmax, "vstd": vstd,
+    }
+
+
 def build_report(data: dict) -> str:
     lines = [f"# 比較レポート\n\nシナリオ: {SCENARIO_NAME}\n"]
 
-    # 完走時間
-    lines.append("## 完走時間（AUTONOMOUS 開始〜停止）\n")
-    for label, d in data.items():
-        vel = d["velocity"]
-        duration = vel["t"].max() - vel["t"].min()
-        lines.append(f"- **{label}**: {duration:.1f} s")
-    lines.append("")
+    real = data.get("実機")
+    real_kin = real["kinematic"] if real is not None else pd.DataFrame()
+    real_dist = (
+        float(cumulative_arc_length(real_kin["x"].to_numpy(), real_kin["y"].to_numpy())[-1])
+        if not real_kin.empty
+        else float("nan")
+    )
+    stats = {label: _log_summary(d) for label, d in data.items()}
 
-    # 速度統計
-    lines.append("## 速度統計（VelocityReport.longitudinal_velocity）\n")
-    lines.append("| ログ | 平均 [m/s] | 最大 [m/s] | 標準偏差 |")
+    # 診断 (A4): AUTONOMOUS 窓・t0 基準・localization 除外数を明示。
+    lines.append("## 診断（AUTONOMOUS 区間・localization）\n")
+    lines.append("| ログ | AUTONOMOUS窓 [s] | t0基準 | localization除外/総数 |")
     lines.append("|---|---|---|---|")
     for label, d in data.items():
-        v = d["velocity"]["lon_vel"]
-        lines.append(f"| {label} | {v.mean():.3f} | {v.max():.3f} | {v.std():.3f} |")
+        vel = d["velocity"]
+        if not vel.empty:
+            t = vel["t"].to_numpy()
+            win = f"{t.min():.1f}〜{t.max():.1f}"
+        else:
+            win = "—"
+        lines.append(
+            f"| {label} | {win} | {d.get('t0_method', '?')} | "
+            f"{d.get('kin_dropped', 0)}/{d.get('kin_total', 0)} |"
+        )
+    lines.append("")
+
+    # 走行サマリ (A1): kinematic odometry 基準の信頼できる比較指標。
+    lines.append("## 走行サマリ（kinematic odometry 基準）\n")
+    lines.append(
+        "| ログ | 経過時間[s] | 走行距離[m] | 平均速度(距離/経過)[m/s] | "
+        "巡航平均(v>0.3)[m/s] | 停止割合(v≤0.3)[%] |"
+    )
+    lines.append("|---|---|---|---|---|---|")
+    for label in data:
+        s = stats[label]
+        lines.append(
+            f"| {label} | {s['elapsed']:.1f} | {s['dist']:.1f} | {s['mean_speed']:.3f} | "
+            f"{s['cruise']:.3f} | {s['stopped']:.1f} |"
+        )
+    lines.append("")
+    lines.append("> 走行距離・平均速度は /localization/kinematic_state (odometry) 由来 (無効フレーム除外後)。")
+    lines.append("")
+
+    # 速度統計 (参考: velocity_status — log 間で非可比なため参考扱い)。
+    lines.append("## 速度統計（参考: velocity_status）\n")
+    lines.append(
+        "> velocity_status はトピックの sampling 周波数・記録区間が log 間で異なり、"
+        "平均/最大は log 間で非可比。比較には上の「走行サマリ」を用いること。"
+    )
+    lines.append("")
+    lines.append("| ログ | 平均 [m/s] | 最大 [m/s] | 標準偏差 |")
+    lines.append("|---|---|---|---|")
+    for label in data:
+        s = stats[label]
+        lines.append(f"| {label} | {s['vmean']:.3f} | {s['vmax']:.3f} | {s['vstd']:.3f} |")
     lines.append("")
 
     # 速度指令 RMSE（指令 vs 応答）
@@ -1226,57 +1367,74 @@ def build_report(data: dict) -> str:
         lines.append(f"| {label} | {rmse:.4f} |")
     lines.append("")
 
-    # ステア RMSE（指令 vs 応答）
+    # ステア RMSE（指令 vs 応答） + perfect_tracker 注記 (B2)
     lines.append("## ステアリング RMSE（指令 vs 応答）\n")
-    lines.append("| ログ | RMSE [deg] |")
-    lines.append("|---|---|")
+    lines.append("| ログ | RMSE [deg] | 備考 |")
+    lines.append("|---|---|---|")
+    has_perfect = False
     for label, d in data.items():
         cmd = d["cmd"]
         steer = d["steering"]
         if cmd.empty or steer.empty:
-            lines.append(f"| {label} | N/A |")
+            lines.append(f"| {label} | N/A | |")
             continue
         cmd_i = np.interp(steer["t"], cmd["t"], cmd["cmd_steer"])
         rmse = np.degrees(np.sqrt(np.mean((steer["steer"].values - cmd_i) ** 2)))
-        lines.append(f"| {label} | {rmse:.4f} |")
+        if d.get("perfect"):
+            has_perfect = True
+            lines.append(f"| {label} | {rmse:.4f} | ※参考(無効) |")
+        else:
+            lines.append(f"| {label} | {rmse:.4f} | |")
     lines.append("")
+    if has_perfect:
+        lines.append(
+            "> ※ perfect_tracker (PERFECT_TRAJECTORY_TRACKER) は control_cmd を追従せず "
+            "planner 軌跡を直接追従するため、cmd-vs-response の操舵 RMSE は指令追従誤差として"
+            "意味を持たない (参考値)。挙動評価は下記「軌跡乖離・完走率」を用いること。"
+        )
+        lines.append("")
 
-    # 軌跡乖離（実機を基準、実機の空間的 bounding box 内のシム点のみで計算）
-    lines.append("## 軌跡乖離（実機との最近傍距離）\n")
-    lines.append("> 実機ログは経路の後半区間のみ記録されているため、  \n")
-    lines.append("> 実機の bounding box 内に含まれるシム軌跡点のみを対象に計算しています。\n")
+    # 軌跡乖離・完走率 (A3): 走行距離/完走率を主指標化し、双方向最近傍で未完走を露出。
+    lines.append("## 軌跡乖離・完走率\n")
+    lines.append("> A0 有効性ゲート後の kinematic で算出。完走率 = 走行距離 / 実機走行距離。")
+    lines.append(
+        "> sim→実機 = sim 各点の実機軌跡への最近傍 (経路追従精度)。"
+        "実機→sim = 実機各点の sim 軌跡への最近傍 (sim 未走行区間で増大し未完走を露出)。"
+    )
     lines.append("")
-    lines.append("| ログ | 平均 [m] | 最大 [m] | 対象点数 |")
-    lines.append("|---|---|---|---|")
-    ref_kin = data["実機"]["kinematic"]
-    ref_xy = ref_kin[["x", "y"]].values
-    x_min, x_max = ref_xy[:, 0].min(), ref_xy[:, 0].max()
-    y_min, y_max = ref_xy[:, 1].min(), ref_xy[:, 1].max()
-    # bbox に若干のマージンを追加
-    margin = 50
-    for label, d in data.items():
-        if label == "実機":
-            lines.append(f"| {label} | — (基準) | — | {len(ref_xy)} |")
-            continue
-        try:
-            from scipy.spatial import cKDTree
-
-            q_df = d["kinematic"]
-            # 実機 bbox 内の点のみ
-            mask = (
-                (q_df["x"] >= x_min - margin)
-                & (q_df["x"] <= x_max + margin)
-                & (q_df["y"] >= y_min - margin)
-                & (q_df["y"] <= y_max + margin)
-            )
-            q_xy = q_df.loc[mask, ["x", "y"]].values
-            if len(q_xy) == 0:
-                lines.append(f"| {label} | N/A (bbox 外) | — | 0 |")
+    lines.append(
+        "| ログ | 走行距離[m] | 完走率[%] | sim→実機 平均/最大[m] | "
+        "実機→sim 平均/最大[m] | 状態 |"
+    )
+    lines.append("|---|---|---|---|---|---|")
+    if real is None or real_kin.empty:
+        lines.append("| (実機 kinematic なし) | — | — | — | — | データ不足 |")
+    else:
+        ref_xy = real_kin[["x", "y"]].to_numpy()
+        for label, d in data.items():
+            if label == "実機":
+                lines.append(f"| {label} | {real_dist:.1f} | 100.0 (基準) | — | — | 基準 |")
                 continue
-            dists = nearest_point_distance(ref_xy, q_xy)
-            lines.append(f"| {label} | {dists.mean():.3f} | {dists.max():.3f} | {len(q_xy)} |")
-        except Exception as e:
-            lines.append(f"| {label} | ERR: {e} | — | — |")
+            dist = stats[label]["dist"]
+            comp = (dist / real_dist * 100.0) if (real_dist and real_dist > 0) else float("nan")
+            q_xy = (
+                d["kinematic"][["x", "y"]].to_numpy()
+                if not d["kinematic"].empty
+                else np.empty((0, 2))
+            )
+            if len(q_xy) < 10:
+                lines.append(f"| {label} | {dist:.1f} | {comp:.1f} | — | — | データ不足 |")
+                continue
+            try:
+                s2r = nearest_point_distance(ref_xy, q_xy)
+                r2s = nearest_point_distance(q_xy, ref_xy)
+                status = "OK" if comp >= 85.0 else "早期停止/未完走"
+                lines.append(
+                    f"| {label} | {dist:.1f} | {comp:.1f} | "
+                    f"{s2r.mean():.3f}/{s2r.max():.3f} | {r2s.mean():.3f}/{r2s.max():.3f} | {status} |"
+                )
+            except Exception as e:  # noqa: BLE001
+                lines.append(f"| {label} | {dist:.1f} | {comp:.1f} | ERR: {e} | — | — |")
     lines.append("")
 
     return "\n".join(lines)
@@ -1343,12 +1501,22 @@ def main() -> None:
         df_mode = load_operation_mode(mcap_path)
         df_vel = load_velocity(mcap_path)
         t0 = _find_autonomous_start(df_mode, df_vel)
-        print(f"    → t0 = {t0} ns (AUTONOMOUS 開始)")
+        # t0 の決定根拠を明示 (real は mode 遷移 / sim は operation_mode 僅少で速度 fallback に
+        # なりがちで、両者の基準差が時間軸重ね描きの「見かけの時間ずれ」を生む)。
+        has_auto = (not df_mode.empty) and bool((df_mode["mode"] == _AUTONOMOUS_MODE).any())
+        t0_method = "operation_mode(AUTONOMOUS)" if has_auto else "velocity_threshold(fallback)"
+        print(f"    → t0 = {t0} ns [{t0_method}]")
+
+        # localization 有効性ゲート: 原点(0,0)/瞬間移動の無効フレームを除外 (A0)。
+        df_kin_raw = load_kinematic(mcap_path, lcfg["kinematic"])
+        df_kin_clean, n_drop = filter_localization(df_kin_raw)
+        if n_drop:
+            print(f"    → localization 無効フレーム除外: {n_drop}/{len(df_kin_raw)}")
 
         loaded[label] = {
             "velocity": align_time(df_vel, t0),
             "steering": align_time(load_steering(mcap_path), t0),
-            "kinematic": align_time(load_kinematic(mcap_path, lcfg["kinematic"]), t0),
+            "kinematic": align_time(df_kin_clean, t0),
             "accel": align_time(load_accel(mcap_path, lcfg["accel"]), t0),
             "cmd": align_time(load_cmd(mcap_path, lcfg["cmd"]), t0),
             "color": lcfg["color"],
@@ -1356,6 +1524,11 @@ def main() -> None:
             "ls": lcfg["ls"],
             "marker": lcfg["marker"],
             "ms": lcfg["ms"],
+            "perfect": lcfg.get("perfect", False),
+            "vehicle_model": lcfg.get("vehicle_model", ""),
+            "t0_method": t0_method,
+            "kin_dropped": int(n_drop),
+            "kin_total": int(len(df_kin_raw)),
         }
 
     if not loaded:
@@ -1379,6 +1552,9 @@ def main() -> None:
     plot_velocity(loaded)
     plot_acceleration(loaded)
     plot_steering(loaded)
+    # 走行距離 (arc-length) 基準の重ね描き (B1): pacing 差を除き早期停止を露出。
+    plot_velocity_vs_distance(loaded)
+    plot_steering_vs_distance(loaded)
 
     if CURVE_CENTERS:
         plot_curves(loaded, map_ways)
