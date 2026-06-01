@@ -149,38 +149,117 @@ def plot_error_timeseries_overlay(
     print(f"  Saved: {out_path}")
 
 
+def _rollout_rmse_by_horizon(per_step_root: Path, tag: str) -> dict[int, dict[str, float]] | None:
+    """per_step/<tag>/rollout.csv (D1 出力) から horizon 別 pos[cm]/yaw[deg] RMSE を返す。
+
+    rollout.csv が無ければ None (古い per_step 出力との後方互換)。
+    """
+    csv = per_step_root / tag / "rollout.csv"
+    if not csv.exists():
+        return None
+    df = pd.read_csv(csv)
+    if df.empty:
+        return None
+    out: dict[int, dict[str, float]] = {}
+    for horizon in sorted(df["horizon"].unique()):
+        sub = df[df["horizon"] == horizon]
+        out[int(horizon)] = {
+            "pos": float(np.sqrt(np.nanmean(sub["pos_err"].values ** 2))) * 100.0,
+            "yaw": float(np.sqrt(np.nanmean(sub["yaw_err_deg"].values ** 2))),
+        }
+    return out
+
+
 def write_cases_summary(
     case_dfs: dict[str, pd.DataFrame],
     cases_cfg,
     out_path: Path,
+    per_step_root: Path,
 ) -> None:
-    """case × RMSE の Markdown 表を出力."""
+    """case × RMSE の Markdown 表を出力 (reference_tag との Δ + 多段 rollout 集約付き)."""
     rad2deg = 180.0 / math.pi
-    lines: list[str] = []
-    lines.append("# cases summary\n")
-    if cases_cfg.overlay.reference_tag:
-        lines.append(f"reference tag: `{cases_cfg.overlay.reference_tag}`\n")
+    ref_tag = cases_cfg.overlay.reference_tag
+
+    # per-step RMSE をケース別に集計
+    ps: dict[str, dict[str, float]] = {}
+    for tag, df in case_dfs.items():
+        ps[tag] = {
+            "steer": float(np.sqrt(np.nanmean(df["err_steer"].values ** 2))) * rad2deg,
+            "long": float(np.sqrt(np.nanmean(df["err_ds_long"].values ** 2))) * 100,
+            "lat": float(np.sqrt(np.nanmean(df["err_ds_lat"].values ** 2))) * 100,
+            "n": float(len(df)),
+        }
+    ref_steer = ps.get(ref_tag, {}).get("steer") if ref_tag else None
+
+    lines: list[str] = ["# cases summary\n"]
+    if ref_tag:
+        lines.append(f"reference tag: `{ref_tag}`\n")
     lines.append("")
+
+    # --- per-step RMSE 表 (reference との Δ 付き) ---
+    lines.append("## per-step (1-step prediction) RMSE\n")
     lines.append(
-        "| tag | vehicle_model | n_steps | RMSE err_steer [deg] | "
+        "| tag | vehicle_model | n_steps | RMSE err_steer [deg] | Δsteer vs ref [deg] | "
         "RMSE err_ds_long [cm] | RMSE err_ds_lat [cm] | note |"
     )
-    lines.append("|---|---|---:|---:|---:|---:|---|")
-
+    lines.append("|---|---|---:|---:|---:|---:|---:|---|")
     for case in cases_cfg.cases:
-        if case.tag not in case_dfs:
-            lines.append(
-                f"| {case.tag} | {case.vehicle_model} | — | — | — | — | 出力欠損 |"
-            )
+        if case.tag not in ps:
+            lines.append(f"| {case.tag} | {case.vehicle_model} | — | — | — | — | — | 出力欠損 |")
             continue
-        df = case_dfs[case.tag]
-        rmse_steer = float(np.sqrt(np.nanmean(df["err_steer"].values ** 2))) * rad2deg
-        rmse_long = float(np.sqrt(np.nanmean(df["err_ds_long"].values ** 2))) * 100
-        rmse_lat = float(np.sqrt(np.nanmean(df["err_ds_lat"].values ** 2))) * 100
+        d = ps[case.tag]
+        if case.tag == ref_tag:
+            delta = "基準"
+        elif ref_steer is not None:
+            delta = f"{d['steer'] - ref_steer:+.4f}"
+        else:
+            delta = "—"
         lines.append(
-            f"| {case.tag} | {case.vehicle_model} | {len(df)} | "
-            f"{rmse_steer:.4f} | {rmse_long:.3f} | {rmse_lat:.3f} |  |"
+            f"| {case.tag} | {case.vehicle_model} | {int(d['n'])} | "
+            f"{d['steer']:.4f} | {delta} | {d['long']:.3f} | {d['lat']:.3f} |  |"
         )
+    lines.append("")
+    lines.append(
+        "> per-step は各ステップで実機状態にリセットするため、k_us/wheelbase の累積差は "
+        "位置 RMSE にほぼ現れない。dynamics 差は下記 multi-step rollout を参照。"
+    )
+    lines.append("")
+
+    # --- multi-step rollout 集約 (D1 の rollout.csv をケース横断で比較) ---
+    roll = {tag: _rollout_rmse_by_horizon(per_step_root, tag) for tag in ps}
+    roll = {t: r for t, r in roll.items() if r}
+    if roll:
+        # 表示する horizon は全 case で共通に存在するものを採用
+        common = set.intersection(*[set(r.keys()) for r in roll.values()])
+        horizons = sorted(common)
+        ref_roll = roll.get(ref_tag)
+        lines.append("## multi-step rollout RMSE (free-running, ケース横断)\n")
+        head = "| tag |" + "".join(f" pos@N{h}[cm] |" for h in horizons) \
+            + "".join(f" yaw@N{h}[deg] |" for h in horizons)
+        if ref_roll:
+            head += f" Δyaw@N{horizons[-1]} vs ref [deg] |"
+        lines.append(head)
+        lines.append("|---|" + "---:|" * (len(horizons) * 2 + (1 if ref_roll else 0)))
+        for case in cases_cfg.cases:
+            r = roll.get(case.tag)
+            if not r:
+                continue
+            row = f"| {case.tag} |"
+            row += "".join(f" {r[h]['pos']:.2f} |" for h in horizons)
+            row += "".join(f" {r[h]['yaw']:.3f} |" for h in horizons)
+            if ref_roll:
+                hl = horizons[-1]
+                if case.tag == ref_tag:
+                    row += " 基準 |"
+                else:
+                    row += f" {r[hl]['yaw'] - ref_roll[hl]['yaw']:+.3f} |"
+            lines.append(row)
+        lines.append("")
+        lines.append(
+            "> N ステップ連続予測 (途中リセット無し) の終端誤差。N を増やすほど dynamics 差が "
+            "累積し、k_us/wheelbase の効果が分離する (パラメータ同定の指標)。"
+        )
+        lines.append("")
 
     out_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
     print(f"  Saved: {out_path}")
@@ -229,7 +308,7 @@ def main() -> None:
     if "error_timeseries" in plots_wanted:
         plot_error_timeseries_overlay(case_dfs, overlay_dir / "error_timeseries_overlay.png")
 
-    write_cases_summary(case_dfs, cases_cfg, out_root / "cases_summary.md")
+    write_cases_summary(case_dfs, cases_cfg, out_root / "cases_summary.md", per_step_root)
 
     print(f"\n完了。出力先: {out_root}")
 
