@@ -63,11 +63,17 @@ REAL_BAG_DIR = LITE_DIR / "real.lite.mcap"
 # 地図プロットの bbox margin [m] (走行軌跡の min/max からの余白)
 MAP_BBOX_MARGIN = 10.0
 
-# per_step 専用の上書き値 (load_sim_params() のシム既定値に上塗りする)
-# 元コードは vehicle_info の wheel_base を 4.76012、PARAMS 内では明示で steer_bias=0.01
-# (load_sim_params() の既定 0.0005 を per_step では意図的に大きく取る) を採用していた。
+# per_step 専用の上書き値 (load_sim_params() のシム既定値に上塗りする)。
+# sub_dt は per_step の積分刻み (30Hz) で per_step 固有の設定。
+#
+# 旧コードは steer_bias=0.01 をここで上塗りしていたが、これはシム仕様値
+# (simulator_model.param.yaml の steer_bias ≈ 0.0005 rad) と乖離した非物理的な
+# phantom bias で、ideal_steer 以外の全ケース (baseline/kus0020/shorter_wb) の
+# err_steer を一律に汚染し、図の注釈 (load_sim_params 由来 0.0005 を表示) とも
+# 自己矛盾していた。Stage3 closed-loop sim と整合させるため override から除外し、
+# load_sim_params() のシム仕様 steer_bias をそのまま使う。ケース固有値は cases.yaml の
+# params で明示上書きできる (ideal_steer は C++ 側が bias を持たないため 0.0 を明示)。
 _PARAMS_OVERRIDES = {
-    "steer_bias": 0.01,
     "sub_dt": 1.0 / 30.0,
 }
 

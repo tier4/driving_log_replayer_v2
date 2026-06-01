@@ -35,7 +35,8 @@ cases:
       wheelbase: 4.76012
       # ideal_steer_acc は内部 bias を持たないため、Python 側の予測値計算
       # (sim_steer_kp1 = state + params.steer_bias) が phantom bias を乗せないよう
-      # 0.0 を明示する (未指定だと _PARAMS_OVERRIDES の 0.01 が継承される)。
+      # 0.0 を明示する (未指定だと load_sim_params() のシム仕様 steer_bias ≈ 0.0005 が
+      # 継承され、bias を持たない ideal_steer に余計なオフセットが乗る)。
       steer_bias: 0.0
 
 overlay:
