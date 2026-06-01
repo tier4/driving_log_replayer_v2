@@ -232,7 +232,9 @@ def write_cases_summary(
         # 表示する horizon は全 case で共通に存在するものを採用
         common = set.intersection(*[set(r.keys()) for r in roll.values()])
         horizons = sorted(common)
-        ref_roll = roll.get(ref_tag)
+        # 全ケース共通の horizon が無い (rollout.csv の horizon 集合が不一致) 場合は
+        # Δ 列の horizons[-1] 参照を避けるため reference 比較を無効化する。
+        ref_roll = roll.get(ref_tag) if horizons else None
         lines.append("## multi-step rollout RMSE (free-running, ケース横断)\n")
         head = "| tag |" + "".join(f" pos@N{h}[cm] |" for h in horizons) \
             + "".join(f" yaw@N{h}[deg] |" for h in horizons)
