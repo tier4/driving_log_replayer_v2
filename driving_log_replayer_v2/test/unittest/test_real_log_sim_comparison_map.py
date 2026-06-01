@@ -14,7 +14,7 @@ from pathlib import Path
 
 import pytest
 
-from driving_log_replayer_v2.real_log_sim_comparison import _map
+from driving_log_replayer_v2.real_log_sim_comparison.lib import _map
 
 
 def test_resolve_map_osm_with_explicit_path(tmp_path: Path) -> None:

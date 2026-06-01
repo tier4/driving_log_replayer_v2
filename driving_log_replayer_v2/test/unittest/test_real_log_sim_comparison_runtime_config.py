@@ -15,8 +15,8 @@ from pathlib import Path
 
 import pytest
 
-from driving_log_replayer_v2.real_log_sim_comparison import _map
-from driving_log_replayer_v2.real_log_sim_comparison._runtime_config import (
+from driving_log_replayer_v2.real_log_sim_comparison.lib import _map
+from driving_log_replayer_v2.real_log_sim_comparison.lib._runtime_config import (
     _DEFAULT_CURVE_CENTERS,
     _DEFAULT_WHEELBASE_VALIDATION,
     add_common_cli_arguments,

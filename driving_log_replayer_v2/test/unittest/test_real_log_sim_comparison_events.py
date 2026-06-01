@@ -14,7 +14,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from driving_log_replayer_v2.real_log_sim_comparison._events import (
+from driving_log_replayer_v2.real_log_sim_comparison.lib._events import (
     AUTONOMOUS_MODE,
     find_autonomous_start,
     find_curve2_exit,
@@ -50,6 +50,19 @@ def test_find_autonomous_start_fallback_to_velocity() -> None:
 def test_find_autonomous_start_raises_on_empty() -> None:
     with pytest.raises(ValueError):
         find_autonomous_start(pd.DataFrame(), pd.DataFrame())
+
+
+def test_find_autonomous_start_velocity_fallback_debounce_ignores_spike() -> None:
+    # 単点ノイズスパイク (t=0.5s) を採らず、継続する発進 (t=2.0s) を採るデバウンス。
+    df_mode = pd.DataFrame(columns=["t_ns", "mode"])  # mode 無 → 速度 fallback
+    ts = [i * 0.1 for i in range(40)]
+    vs = [0.0] * 40
+    vs[5] = 5.0  # 単点スパイク (t=0.5s)
+    for i in range(20, 40):
+        vs[i] = 1.0  # t=2.0s 以降は継続
+    df_vel = pd.DataFrame({"t_ns": [int(t * 1e9) for t in ts], "lon_vel": vs})
+    t0 = find_autonomous_start(df_mode, df_vel, min_moving_duration=0.3)
+    assert abs(t0 / 1e9 - 2.0) < 0.05
 
 
 def test_find_curve2_launch_picks_stop_inside_window() -> None:
