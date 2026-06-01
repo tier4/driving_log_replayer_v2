@@ -680,6 +680,13 @@ def run_per_step(data: dict, t0_ns: int, params: dict, model_type: str) -> pd.Da
         sim_steer_kp1 = model.steer_state + params["steer_bias"]
         # sim_wz: モデルが予測した t_{k+1} の yaw rate (vm_get_wz, k_us 依存)。
         # ラッパーが未 export なら NaN (sim_vy/ay は getVy()=0 / 未実装のため引き続き省略)。
+        #
+        # 【重要・k_us が異なるケース間で err_wz を比較してはいけない】
+        # リセット時の steer は gt_steer_kinematic = atan(wz*wb/vx) (k_us=0 の bicycle 逆算) を
+        # 使う。よって baseline(k_us=0) は構造上 sim_wz≈wz_real となり err_wz が小さく、k_us>0 は
+        # understeer オフセットを負って err_wz が大きく出る (実車の understeer 有無とは無関係な
+        # seeding バイアス)。k_us/understeer の同定には err_wz ではなく run_free_rollout
+        # (seed は step0 のみで N ステップ後は真の dynamics が支配) を用いること。
         sim_wz = model.wz
         records.append(
             {
@@ -1534,6 +1541,8 @@ def save_summary(df: pd.DataFrame) -> None:
         lines += [
             "--- 全区間: yaw rate 予測 (vm_get_wz, k_us 感度あり) ---",
             f"yaw rate 予測 RMSE: {wz_rmse:.4f} deg/s",
+            "  (注: steer を k_us=0 の運動学逆算で seed するため、k_us が異なるケース間の "
+            "err_wz 比較は seeding バイアスを含む。k_us 同定は rollout を参照)",
             "",
         ]
     lines.append("--- 時間帯別 (4 等分 equal-time bins / 縦・横・ステア RMSE) ---")
