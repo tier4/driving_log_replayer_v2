@@ -17,7 +17,7 @@ Godot バイナリパスは cloud / local 共通で `/opt/godot_autoware_simulat
 
 ## パイプライン概要
 
-6 段階パイプラインの各 stage の入出力は親ディレクトリの
+7 段階パイプラインの各 stage の入出力は親ディレクトリの
 [`../README.ja.md`](../README.ja.md#パイプライン6-段階) を参照。ローカル実行で押さえる点:
 
 - Stage 3（sim 実行）と Stage 5（per-step 解析）はそれぞれ `sim_runs.yaml` / `cases.yaml`
@@ -126,13 +126,14 @@ make -C src/simulator/driving_log_replayer_v2/driving_log_replayer_v2/driving_lo
 
 1. `scenario.yaml` から Datasets UUID を取得 → `~/.webauto/.../` から実体パス解決
 2. `out/<タイムスタンプ>/` を作成し、`out/latest` シンボリックリンクを更新
-3. `ros2 launch` で 6 段階パイプライン起動
+3. `ros2 launch` で 7 段階パイプライン起動
    - Stage 1: 実機 bag → lite/real.lite
    - Stage 2: step2_bag_to_scenario → scenarios/auto_scenario.yaml
    - Stage 3: sim_runs.yaml の各 run で scenario_test_runner → lite/<tag>.lite
    - Stage 4: step4_compare_logs → comparison/figures/, report.md (real + sim 重ね描き)
    - Stage 5: cases.yaml の各 tag で step5_analyze_per_step → per_step/<tag>/
    - Stage 6: step6_analyze_cases → cases/overlay/, cases_summary.md
+   - Stage 7: step7_identify_kus → comparison/kus_sweep/ (k_us 同定; 追加設定不要)
 
 ### 4. 結果確認
 
@@ -152,10 +153,11 @@ sample/out/latest/
         ├── report.md                     # Stage 4: 比較統計レポート
         ├── figures/*.png                 # Stage 4: 速度・操舵・軌跡 (real + sim 重ね描き)
         ├── per_step/
-        │   └── <case_tag>/{*.png(8枚), per_step_delta.csv, summary.txt}   # Stage 5: cases.yaml の各 tag
-        └── cases/
-            ├── overlay/{cascade_error_overlay.png, error_timeseries_overlay.png}
-            └── cases_summary.md          # Stage 6: tag × RMSE 表
+        │   └── <case_tag>/{*.png(9枚), per_step_delta.csv, rollout.csv, summary.txt}  # Stage 5
+        ├── cases/
+        │   ├── overlay/{cascade_error_overlay.png, error_timeseries_overlay.png}
+        │   └── cases_summary.md          # Stage 6: per-step RMSE + rollout 横断表
+        └── kus_sweep/{kus_sweep.csv, kus_sweep.png}   # Stage 7: k_us 同定
 ```
 
 ## 上書き可能な Makefile 変数
@@ -191,7 +193,10 @@ make local_cloud_run LOCAL_SCENARIO=/path/to/other_scenario.yaml
   `SUB_DT × cmd_count` 秒だけモデルを進めるため、ケース間の `err_ds_long` /
   `err_ds_lat` 差は小さい (1 step ≒ 17cm 程度の移動内ではモデル差が位置に
   大きく現れない)。ケース差は主に `err_steer` に表れる。
-  長期軌跡の累積差を見たい場合は別解析 (将来 Stage 5 として追加候補) が必要。
-- **`overlay.reference_tag` は現状 decorative**: `cases_summary.md` のヘッダに
-  表示されるだけで、reference との delta/relative 比較列は未実装。必要になれば
-  `step6_analyze_cases.py` の `write_cases_summary` に追加できる。
+  長期軌跡の累積差は `step5.run_free_rollout` (multi-step rollout) が `rollout.csv` /
+  `rollout_error_growth.png` として出力し、Stage 6 が `cases_summary.md` に横断集約する。
+- **`overlay.reference_tag` は機能実装済み**: `cases_summary.md` の per-step 表に
+  `Δsteer vs ref` 列、rollout 横断表に `Δyaw vs ref` 列を出力する
+  (`step6_analyze_cases.py::write_cases_summary`)。
+- **k_us は per-step では同定不可**: per-step は k_us 非感度、`err_wz` は k_us=0 seeding
+  バイアスを含む。k_us 同定には Stage 7 (`step7_identify_kus`, rollout sweep) を使う。
