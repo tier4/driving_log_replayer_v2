@@ -1,17 +1,24 @@
 #!/usr/bin/env python3
-"""k_us (アンダーステア係数) を複数値でスイープし、multi-step rollout 誤差で同定する手動ツール.
+"""Stage 7: k_us (アンダーステア係数) を複数値でスイープし、multi-step rollout 誤差で同定する.
 
-per-step delta は各ステップで実機状態にリセットするため k_us に非感度。さらに per-step の
-err_wz は steer を k_us=0 の運動学逆算で seed するため k_us が異なるケース間で比較できない
-(seeding バイアス)。一方 free-running rollout は seed が step0 のみで、N ステップ後は真の
-dynamics が支配するため k_us 同定に使える (step5.run_free_rollout)。
+6 段階パイプラインの後段に位置する独立ステージ。Stage 1 が生成した実機 lite
+(`lite/real.lite/`) を SSOT とし、k_us グリッドについて Stage 5 の free-running rollout
+(`step5.run_free_rollout`) を回して、実車の実効アンダーステア係数を同定する。
 
-本ツールは real.lite を 1 回だけ読み込み、k_us グリッドについて rollout を回して
-horizon 別の yaw / 位置 RMSE を集計し、最大 horizon の yaw RMSE を最小化する k_us を
-identified value として報告する (近傍 3 点の放物線フィットでサブグリッド推定も行う)。
+なぜ rollout で同定するか:
+  - per-step delta は各ステップで実機状態にリセットするため k_us に非感度。
+  - per-step の err_wz は steer を k_us=0 の運動学逆算で seed するため、k_us が異なる
+    ケース間で比較できない (seeding バイアス)。
+  - free-running rollout は seed が step0 のみで、N ステップ後は真の dynamics が支配する
+    ため、最大 horizon の yaw RMSE を最小化する k_us が実効 understeer の推定になる。
 
-使い方:
-    python3 -m driving_log_replayer_v2.real_log_sim_comparison.tools.sweep_kus \
+real.lite を 1 回だけ読み込み、k_us グリッドの rollout を回して horizon 別 yaw / 位置 RMSE を
+集計し、最大 horizon の yaw RMSE を最小化する k_us を identified value として報告する
+(近傍 3 点の放物線フィットでサブグリッド推定も行う)。
+
+evaluator_node が Stage 6 の後に env (BEST_MODEL_BASE_DIR) のみで実行する (追加設定不要)。
+手動実行・グリッド変更も可能:
+    python3 -m driving_log_replayer_v2.real_log_sim_comparison.step7_identify_kus \
         --base-dir <out_dir> \
         [--kus-values 0,0.005,0.01,0.015,0.02,0.025,0.03,0.04,0.05] \
         [--horizons 2,5,10,20] [--stride 5]
@@ -33,9 +40,9 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 
-from .. import step5_analyze_per_step as s5
-from ..lib._params_utils import add_params_annotation, setup_jp_font
-from ..lib._runtime_config import add_common_cli_arguments, build_runtime_config
+from . import step5_analyze_per_step as s5
+from .lib._params_utils import add_params_annotation, setup_jp_font
+from .lib._runtime_config import add_common_cli_arguments, build_runtime_config
 
 setup_jp_font()
 

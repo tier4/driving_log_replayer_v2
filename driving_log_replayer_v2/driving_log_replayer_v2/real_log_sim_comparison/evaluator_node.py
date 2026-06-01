@@ -15,7 +15,7 @@
 
 """Orchestration node for real_log_sim_comparison.
 
-Runs the 6-stage comparison pipeline inside a cloud DLR2 job:
+Runs the 7-stage comparison pipeline inside a cloud DLR2 job:
   1. step1_make_lite       実機 input_bag → lite/real.lite/
   2. step2_bag_to_scenario lite/real.lite → scenarios/auto_scenario.yaml
   3. step3_run_sims        sim_runs.yaml の各 run を closed-loop 実行 → lite/<tag>.lite/
@@ -121,7 +121,7 @@ def run_pipeline(
     compare_cfg: dict[str, Any],
     logger,
 ) -> dict[str, int]:
-    """6 段階パイプラインを実行し、各段の生成物カウントを返す。
+    """7 段階パイプラインを実行し、各段の生成物カウントを返す。
 
     Stage 3/5/6 は個別 try/except で失敗継続する設計のため、例外が出ないことと
     「有意な出力が出たこと」は別物。呼び出し側 (_run_once) が本カウントを使って
@@ -269,6 +269,17 @@ def run_pipeline(
     except RuntimeError as exc:
         logger.warning(f"Stage 6 (step6_analyze_cases) failed but continuing: {exc}")
 
+    # ---- Stage 7: k_us 同定 (rollout sweep, 追加設定不要) ----
+    # 実機 lite (Stage 1 出力) のみを使い、free-running rollout で実効 k_us を同定する独立ステージ。
+    logger.info("Stage 7: step7_identify_kus (k_us identification via rollout sweep)")
+    try:
+        _run([
+            sys.executable, "-m",
+            "driving_log_replayer_v2.real_log_sim_comparison.step7_identify_kus",
+        ], env=env, timeout=900)
+    except RuntimeError as exc:
+        logger.warning(f"Stage 7 (step7_identify_kus) failed but continuing: {exc}")
+
     # ---- 生成物カウント (E1: 沈黙の失敗対策) ----
     # Stage 3/5 は失敗継続するため、実際に出力が出た数を数えて成否判定の材料にする。
     def _lite_exists(tag: str) -> bool:
@@ -286,11 +297,13 @@ def run_pipeline(
         "cases_produced": cases_produced,
         "report_ok": int((comparison_dir / "report.md").exists()),
         "cases_summary_ok": int((comparison_dir / "cases" / "cases_summary.md").exists()),
+        "kus_sweep_ok": int((comparison_dir / "kus_sweep" / "kus_sweep.csv").exists()),
     }
     logger.info(
         f"Pipeline outputs: sim_runs {sim_produced}/{len(sim_cfg.runs)}, "
         f"cases {cases_produced}/{len(cases_cfg.cases)}, "
-        f"report={counts['report_ok']}, cases_summary={counts['cases_summary_ok']}"
+        f"report={counts['report_ok']}, cases_summary={counts['cases_summary_ok']}, "
+        f"kus_sweep={counts['kus_sweep_ok']}"
     )
     return counts
 
