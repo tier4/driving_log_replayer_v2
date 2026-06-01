@@ -79,7 +79,7 @@ class RealLogSimComparisonEvaluator(Node):
         compare_cfg = _load_compare_config(scenario_path_str)
 
         try:
-            run_pipeline(
+            counts = run_pipeline(
                 t4_dataset_path,
                 lite_dir,
                 result_bag_path,
@@ -88,8 +88,19 @@ class RealLogSimComparisonEvaluator(Node):
                 compare_cfg,
                 self.get_logger(),
             )
-            success = True
-            summary = "Success"
+            sim_p, sim_e = counts["sim_runs_produced"], counts["sim_runs_expected"]
+            case_p, case_e = counts["cases_produced"], counts["cases_expected"]
+            # sim run / case が 1 件も出力されなければ比較は成立しない → INCOMPLETE (失敗扱い)。
+            # 例外が出なくても「有意な出力ゼロ」を Success と誤報しないための E1 ガード。
+            degenerate = (sim_p == 0) or (case_p == 0)
+            success = not degenerate
+            counts_str = (
+                f"sim_runs {sim_p}/{sim_e}, cases {case_p}/{case_e}, "
+                f"report={counts['report_ok']}, cases_summary={counts['cases_summary_ok']}"
+            )
+            summary = f"{'Success' if success else 'INCOMPLETE'} ({counts_str})"
+            if degenerate:
+                self.get_logger().error(f"Pipeline produced no comparison: {counts_str}")
         except Exception:
             success = False
             summary = traceback.format_exc()
@@ -109,7 +120,13 @@ def run_pipeline(
     map_path: str,
     compare_cfg: dict[str, Any],
     logger,
-) -> None:
+) -> dict[str, int]:
+    """6 段階パイプラインを実行し、各段の生成物カウントを返す。
+
+    Stage 3/5/6 は個別 try/except で失敗継続する設計のため、例外が出ないことと
+    「有意な出力が出たこと」は別物。呼び出し側 (_run_once) が本カウントを使って
+    成否 (sim run / case が 0 件なら INCOMPLETE) を判定し、result.jsonl に計上する。
+    """
     # Locate the real vehicle bag inside input_bag/ (db3 or mcap, auto-detected by step1_make_lite)
     input_bag_dir = t4_dataset_path / "input_bag"
     _validate_bag_dir(input_bag_dir)
@@ -251,6 +268,31 @@ def run_pipeline(
         ], env=env, timeout=600)
     except RuntimeError as exc:
         logger.warning(f"Stage 6 (step6_analyze_cases) failed but continuing: {exc}")
+
+    # ---- 生成物カウント (E1: 沈黙の失敗対策) ----
+    # Stage 3/5 は失敗継続するため、実際に出力が出た数を数えて成否判定の材料にする。
+    def _lite_exists(tag: str) -> bool:
+        return (lite_dir / f"{tag}.lite").exists() or (lite_dir / f"{tag}.lite.mcap").exists()
+
+    per_step_dir = comparison_dir / "per_step"
+    sim_produced = sum(1 for r in sim_cfg.runs if _lite_exists(r.tag))
+    cases_produced = sum(
+        1 for c in cases_cfg.cases if (per_step_dir / c.tag / "per_step_delta.csv").exists()
+    )
+    counts = {
+        "sim_runs_expected": len(sim_cfg.runs),
+        "sim_runs_produced": sim_produced,
+        "cases_expected": len(cases_cfg.cases),
+        "cases_produced": cases_produced,
+        "report_ok": int((comparison_dir / "report.md").exists()),
+        "cases_summary_ok": int((comparison_dir / "cases" / "cases_summary.md").exists()),
+    }
+    logger.info(
+        f"Pipeline outputs: sim_runs {sim_produced}/{len(sim_cfg.runs)}, "
+        f"cases {cases_produced}/{len(cases_cfg.cases)}, "
+        f"report={counts['report_ok']}, cases_summary={counts['cases_summary_ok']}"
+    )
+    return counts
 
 
 def _load_compare_config(scenario_path_str: str) -> dict[str, Any]:
