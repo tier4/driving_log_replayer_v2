@@ -1,0 +1,39 @@
+ScenarioFormatVersion: 3.0.0
+ScenarioName: real_log_sim_comparison_d0
+ScenarioDescription: |
+  D0 (sim 早期停止) 再現・解消の検証用シナリオ。
+  cloud 実行 (evaluation.tier4.jp / ~/Downloads/djfkfjdkl) が実際に使った周回走行 dataset
+  67db293e (162s / 実走 598.7m) を対象にする。sample/scenario.yaml が指す b126c24f は別物
+  (60s / 249m / 別 area_map) なので D0 を再現できない点に注意。
+
+  D0 の真因は赤信号 replay の到達時刻 desync (実機が green 通過した信号に sim ego が赤で当たり
+  永久停止)。traffic_signals: green で全信号を green に固定すると sim は周回を完走する
+  (live sim A/B: replay=241m 停止 / green=519m 完走 exitSuccess、実機 598.7m)。
+
+  使い方:
+    make -C <この dir> local_cloud_run LOCAL_SCENARIO=$(pwd)/sample/scenario_67_d0.yaml
+  事前に 67db293e を pull しておくこと:
+    webauto data annotation-dataset pull --project-id x2_dev \
+      --annotation-dataset-id 67db293e-903e-4397-b603-be6b88d98be7 --include-intermediate-artifacts
+SensorModel: aip_x2_gen2
+VehicleModel: j6_gen2
+Evaluation:
+  UseCaseName: planning_control
+  SubUseCaseName: real_log_sim_comparison
+  UseCaseFormatVersion: 0.1.0
+  Datasets:
+    # cloud djfkfjdkl が使用した周回走行 dataset (実走 598.7m, start lane233→goal lane1915097)。
+    # D0 (sim 早期停止) はこの dataset で観測・再現される。
+    - 67db293e-903e-4397-b603-be6b88d98be7:
+        VehicleId: default
+  Conditions:
+    scenario_name: "D0 verify (67db293e, 周回 598.7m)"
+    # 67db293e は b126c24f と別 area_map のため、area_map 固定の curve 設定はスキップ。
+    curve_config_yaml: ""
+    cases_config: ./cases.yaml
+    sim_runs_config: ./sim_runs.yaml
+    real_provenance: ""
+    # D0 解消の要: 全信号 green で赤信号 replay 由来の永久停止を回避し周回を完走させる。
+    # replay にすると 241m で停止し timeout する (D0 を再現する場合は replay に変更)。
+    traffic_signals: green
+    loop_waypoints: 0
