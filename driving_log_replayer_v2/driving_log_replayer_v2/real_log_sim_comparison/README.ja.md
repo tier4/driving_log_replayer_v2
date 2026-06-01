@@ -39,7 +39,7 @@ annotation-dataset）が全 stage の入口になる。
 |---|---|
 | `step1_make_lite.py` … `step10_diagnose_curve.py` | 10 段階パイプラインの各 stage 実装（先頭 `stepN_` が実行順） |
 | `evaluator_node.py` | パイプラインを orchestrate する ROS2 ノード。`lib/driving_log_replayer_v2/real_log_sim_comparison_evaluator_node.py` に install される（CMakeLists で `RENAME` 互換） |
-| `lib/_*.py` | 共有ユーティリティ・内部設定（io / events / map / params / runtime_config / cases_config / sim_runs_config）。stage 実装から `from .lib._x import` で参照 |
+| `lib/_*.py` | 共有ユーティリティ・内部設定（io / events / map / params / runtime_config / cases_config / sim_runs_config / provenance）。stage 実装から `from .lib._x import` で参照 |
 | `Makefile` | `make local_cloud_run` でローカル実行（詳細は `sample/README.ja.md`） |
 | `sample/` | cloud / local 共通サンプル一式（`scenario.yaml`, `cases.yaml`, `sim_runs.yaml`, `curve_config_miraikan.yaml`）+ 手順 README。ローカル実行出力は `sample/out/`（gitignore） |
 
@@ -106,6 +106,7 @@ Stage 3 (`step3_run_sims`) が `scenario_test_runner` で sim を回した結果
 | `curve_config_yaml` | 任意 | カーブ別解析設定 YAML への相対パス（`scenario.yaml` 基準）または絶対パス。空文字でカーブ別解析をスキップ。 |
 | `cases_config` | **必須** | Stage 5/6（VehicleModel per-step 解析 + 集約）の `cases.yaml` への相対パス。 |
 | `sim_runs_config` | **必須** | Stage 3/4（closed-loop sim + N-way 比較）の `sim_runs.yaml` への相対パス。 |
+| `real_provenance` | 任意 | 実機データ取得時の pilot-auto.x2 / DiffusionPlanner 重みの自由記述。比較プロット・report.md の provenance に掲載し、sim 実行時の版・重み（自動取得）との差を解釈する。 |
 
 - **`sim_runs.yaml`**（Stage 3/4）: closed-loop sim の run 定義。`vehicle_model` と任意の
   `params`（simulator_model 上書き）で run を増やす。
@@ -132,6 +133,7 @@ Stage 3 (`step3_run_sims`) が `scenario_test_runner` で sim を回した結果
 
 Markdown 形式の比較レポート。以下を含む。
 
+- モデル重み / バージョン provenance（実機 vs 各 sim の DP 重み・autoware バージョン；版差での乖離解釈用）
 - 完走時間（AUTONOMOUS 開始～停止）
 - 速度統計（`VelocityReport.longitudinal_velocity` の平均・最大・標準偏差）
 - 速度 RMSE（指令 vs 応答）

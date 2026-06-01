@@ -38,3 +38,8 @@ Evaluation:
     # closed-loop シム実行 (Stage 3/4) のラン定義 YAML (必須)。
     # 未指定だと Stage 3 で失敗する (sim_runs.yaml が見つかりません)。
     sim_runs_config: ./sim_runs.yaml
+    # 実機データ取得時の pilot-auto.x2 / DiffusionPlanner 重みの自由記述 (任意)。
+    # 実機の版・重みは外部 (車両デプロイ) のため自動取得できない。記録すると比較プロット・
+    # report.md の provenance に掲載され、sim 実行時の版・重み (自動取得) との差を解釈できる。
+    # 例: real_provenance: "autoware v0.46.x (取得 2026-02) / DP exp older_real_v1"
+    real_provenance: ""
