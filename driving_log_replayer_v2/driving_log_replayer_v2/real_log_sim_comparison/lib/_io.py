@@ -225,6 +225,40 @@ def nearest_point_distance(ref_xy: np.ndarray, query_xy: np.ndarray) -> np.ndarr
     return dists
 
 
+def resolve_lite_bag(lite_dir: Path, name_stem: str) -> Path | None:
+    """`<name_stem>.lite.mcap` (単一ファイル) → `<name_stem>.lite` (rosbag2 dir) の順で解決。
+
+    どちらも存在しなければ None。返り値は lib._io の loader 群がそのまま受け取れる
+    (file / dir 両対応)。step5/8/9/10 で重複していた bag 解決をここに集約。
+    """
+    lite_dir = Path(lite_dir)
+    for cand in (lite_dir / f"{name_stem}.lite.mcap", lite_dir / f"{name_stem}.lite"):
+        if cand.exists():
+            return cand
+    return None
+
+
+def resolve_primary_sim_bag(lite_dir: Path) -> Path | None:
+    """比較対象の sim lite を自動検出する (real を除く sim_*.lite、sim_normal を優先)。
+
+    旧実装は専用シナリオ由来の `sim_curve2.lite` 固定だったが、現パイプラインは sim_runs.yaml の
+    各 run (sim_normal/sim_kus0020/sim_perfect/sim_godot 等) を生成するため、それらから 1 つ
+    (sim_normal 優先) を選ぶ。
+    """
+    lite_dir = Path(lite_dir)
+    stems: list[str] = []
+    for pat in ("sim_*.lite", "sim_*.lite.mcap"):
+        for p in lite_dir.glob(pat):
+            stem = p.name[: -len(".mcap")] if p.name.endswith(".mcap") else p.name
+            stem = stem[: -len(".lite")] if stem.endswith(".lite") else stem
+            if stem and stem not in stems:
+                stems.append(stem)
+    if not stems:
+        return None
+    stems.sort(key=lambda s: (s != "sim_normal", s))  # sim_normal を先頭に
+    return resolve_lite_bag(lite_dir, stems[0])
+
+
 def cumulative_arc_length(x, y) -> np.ndarray:
     """(x, y) 系列に沿った累積走行距離 [m] を返す（先頭は 0）。"""
     x = np.asarray(x, dtype=float)

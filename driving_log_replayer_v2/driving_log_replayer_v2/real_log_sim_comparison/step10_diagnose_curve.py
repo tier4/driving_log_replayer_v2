@@ -29,10 +29,18 @@ import numpy as np
 import pandas as pd
 
 from .lib._events import find_autonomous_start, find_curve2_launch, find_sim_launch
-from .lib._io import align_time, load_cmd, load_kinematic, load_operation_mode, load_steering, load_velocity
+from .lib._io import (
+    align_time,
+    load_cmd,
+    load_kinematic,
+    load_operation_mode,
+    load_steering,
+    load_velocity,
+    resolve_lite_bag,
+    resolve_primary_sim_bag,
+)
 from .lib._params_utils import add_params_annotation, setup_jp_font
 from .lib._runtime_config import RuntimeConfig, add_common_cli_arguments, build_runtime_config
-from .step8_compare_dp_trajectory import _resolve_primary_sim_bag
 
 setup_jp_font()
 
@@ -45,14 +53,6 @@ SIM_CMD_TOPIC_CANDIDATES = [
     "/control/trajectory_follower/control_cmd",
     "/control/command/control_cmd",
 ]
-
-
-def _resolve_bag(lite_dir: Path, name_stem: str) -> Path | None:
-    """`<name_stem>.lite.mcap` または `<name_stem>.lite` をこの順で解決。"""
-    for cand in (lite_dir / f"{name_stem}.lite.mcap", lite_dir / f"{name_stem}.lite"):
-        if cand.exists():
-            return cand
-    return None
 
 
 def _load_one(
@@ -296,8 +296,8 @@ def main() -> None:
 
     cfg = build_runtime_config(args, default_base_dir=Path(__file__).parent)
 
-    real_bag = _resolve_bag(cfg.lite_dir, "real")
-    sim_bag = _resolve_primary_sim_bag(cfg.lite_dir)
+    real_bag = resolve_lite_bag(cfg.lite_dir, "real")
+    sim_bag = resolve_primary_sim_bag(cfg.lite_dir)
     if real_bag is None:
         print(f"ERROR: real lite bag が見つかりません: {cfg.lite_dir}", file=sys.stderr)
         sys.exit(1)

@@ -43,6 +43,7 @@ from .lib._io import (
     load_operation_mode,
     load_steering,
     load_velocity,
+    resolve_lite_bag,
     resolve_topic,
 )
 from .lib._map import load_map_ways as _load_map_ways_impl
@@ -1184,30 +1185,6 @@ def plot_steering_analysis(df: pd.DataFrame, params: dict) -> None:
     _save(fig, "steering_analysis")
 
 
-def _resolve_real_mcap(bag_dir: Path) -> Path:
-    """rosbag2 directory bag から実 .mcap ファイルパスを取得する。
-
-    - 単一の `.mcap` ファイルならそのまま返す。
-    - ディレクトリならその中の `.mcap` を返す。
-    - 入力が `<stem>.lite.mcap` で存在しない場合は `<stem>.lite` ディレクトリも試す。
-    """
-    if bag_dir.is_file() and bag_dir.suffix == ".mcap":
-        return bag_dir
-    if bag_dir.is_dir():
-        mcaps = sorted(bag_dir.glob("*.mcap"))
-        if not mcaps:
-            raise FileNotFoundError(f"No .mcap inside {bag_dir}")
-        return mcaps[0]
-    # `.lite.mcap` 名のディレクトリ形式 fallback
-    if bag_dir.suffix == ".mcap":
-        alt = bag_dir.with_suffix("")  # `real.lite`
-        if alt.is_dir():
-            mcaps = sorted(alt.glob("*.mcap"))
-            if mcaps:
-                return mcaps[0]
-    raise FileNotFoundError(f"Real bag not found: {bag_dir}")
-
-
 def _resolve_map_osm() -> Path | None:
     """lanelet2_map.osm を `_map.resolve_map_osm` の三状態モデルで解決する。"""
     return resolve_map_osm(os.environ.get("MAP_OSM_PATH"))
@@ -1672,14 +1649,13 @@ def main() -> None:
 
     OUT_DIR.mkdir(parents=True, exist_ok=True)
 
-    # 入力 bag は単一 `.mcap` ファイル or `.lite` ディレクトリの両方を試す
-    try:
-        real_mcap = _resolve_real_mcap(REAL_BAG_DIR)
-    except FileNotFoundError as e:
-        print(f"ERROR: {e}", file=sys.stderr)
+    # 入力 bag は単一 `.mcap` ファイル or `.lite` ディレクトリの両方を試す (lib._io 共通リゾルバ)
+    real_bag = resolve_lite_bag(LITE_DIR, "real")
+    if real_bag is None:
+        print(f"ERROR: real lite bag が見つかりません: {LITE_DIR}", file=sys.stderr)
         sys.exit(1)
-    print(f"Loading: {real_mcap}")
-    data = load_real_bag(real_mcap)
+    print(f"Loading: {real_bag}")
+    data = load_real_bag(real_bag)
 
     t0_ns = find_autonomous_start(data)
     print(f"AUTONOMOUS 開始: t0_ns={t0_ns}")

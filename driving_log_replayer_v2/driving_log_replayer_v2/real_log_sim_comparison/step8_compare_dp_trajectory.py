@@ -33,7 +33,7 @@ import numpy as np
 import pandas as pd
 
 from .lib._events import find_autonomous_start, find_curve2_launch, find_sim_launch
-from .lib._io import iter_bag_messages, load_velocity
+from .lib._io import iter_bag_messages, load_velocity, resolve_lite_bag, resolve_primary_sim_bag
 from .lib._params_utils import add_params_annotation, setup_jp_font
 from .lib._provenance import format_provenance_line, read_provenance
 from .lib._runtime_config import RuntimeConfig, add_common_cli_arguments, build_runtime_config
@@ -48,34 +48,6 @@ DP_TOPIC = (
 FINAL_TOPIC = "/planning/trajectory"
 SIG_TOPIC = "/perception/traffic_light_recognition/traffic_signals"
 TRACKED_OBJECTS_TOPIC = "/perception/object_recognition/tracking/objects"
-
-
-def _resolve_bag(lite_dir: Path, name_stem: str) -> Path | None:
-    """`<name_stem>.lite.mcap` または `<name_stem>.lite` をこの順で解決。"""
-    for cand in (lite_dir / f"{name_stem}.lite.mcap", lite_dir / f"{name_stem}.lite"):
-        if cand.exists():
-            return cand
-    return None
-
-
-def _resolve_primary_sim_bag(lite_dir: Path) -> Path | None:
-    """比較対象の sim lite を自動検出する (real を除く sim_*.lite、sim_normal を優先)。
-
-    旧実装は専用シナリオ由来の `sim_curve2.lite` 固定だったが、現パイプラインは
-    sim_runs.yaml の各 run (sim_normal/sim_kus0020/sim_perfect/sim_godot 等) を生成するため、
-    それらから 1 つ (sim_normal 優先) を選ぶ。
-    """
-    stems: list[str] = []
-    for pat in ("sim_*.lite", "sim_*.lite.mcap"):
-        for p in lite_dir.glob(pat):
-            stem = p.name[: -len(".mcap")] if p.name.endswith(".mcap") else p.name
-            stem = stem[: -len(".lite")] if stem.endswith(".lite") else stem
-            if stem and stem not in stems:
-                stems.append(stem)
-    if not stems:
-        return None
-    stems.sort(key=lambda s: (s != "sim_normal", s))  # sim_normal を先頭に
-    return _resolve_bag(lite_dir, stems[0])
 
 
 def _resolve_t0_and_launch(
@@ -581,8 +553,8 @@ def main() -> None:
     args = parser.parse_args()
 
     cfg = build_runtime_config(args, default_base_dir=Path(__file__).parent)
-    real_bag = _resolve_bag(cfg.lite_dir, "real")
-    sim_bag = _resolve_primary_sim_bag(cfg.lite_dir)
+    real_bag = resolve_lite_bag(cfg.lite_dir, "real")
+    sim_bag = resolve_primary_sim_bag(cfg.lite_dir)
     if real_bag is None:
         print(f"ERROR: real lite bag が見つかりません: {cfg.lite_dir}", file=sys.stderr)
         sys.exit(1)

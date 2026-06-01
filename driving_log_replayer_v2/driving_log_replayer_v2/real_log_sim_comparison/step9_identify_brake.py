@@ -36,7 +36,7 @@ import numpy as np
 import pandas as pd
 
 from .lib._events import find_autonomous_start, find_curve2_launch, find_sim_launch
-from .lib._io import align_time, load_cmd, load_operation_mode, load_velocity
+from .lib._io import align_time, load_cmd, load_operation_mode, load_velocity, resolve_lite_bag
 from .lib._params_utils import add_params_annotation, load_sim_params, setup_jp_font
 from .lib._runtime_config import add_common_cli_arguments, build_runtime_config
 from .step7_identify_kus import _parabolic_min
@@ -145,19 +145,6 @@ def simulate_departure(
     return results
 
 
-def _resolve_real_bag(lite_dir: Path) -> Path:
-    """real lite bag のパスを単一ファイル / ディレクトリ両方の形式で解決する。"""
-    candidates = [
-        lite_dir / "real.lite.mcap",
-        lite_dir / "real.lite",
-    ]
-    for p in candidates:
-        if p.exists():
-            return p
-    msg = "real lite bag が見つかりません: " + " or ".join(str(c) for c in candidates)
-    raise FileNotFoundError(msg)
-
-
 def _resolve_t_launch(df_vel_aligned: pd.DataFrame, window: tuple[float, float]) -> float:
     """カーブ② 発進検出。見つからなければ速度ベースのフォールバック (t>=5s で v>0.5)."""
     t = find_curve2_launch(df_vel_aligned, window=window)
@@ -177,7 +164,10 @@ def main() -> None:
     args = parser.parse_args()
 
     cfg = build_runtime_config(args, default_base_dir=Path(__file__).parent)
-    real_bag = _resolve_real_bag(cfg.lite_dir)
+    real_bag = resolve_lite_bag(cfg.lite_dir, "real")
+    if real_bag is None:
+        print(f"ERROR: real lite bag が見つかりません: {cfg.lite_dir}", file=sys.stderr)
+        sys.exit(1)
 
     print("=== 発進時車両モデル応答診断 ===")
     print(f"bag: {real_bag}\n")
