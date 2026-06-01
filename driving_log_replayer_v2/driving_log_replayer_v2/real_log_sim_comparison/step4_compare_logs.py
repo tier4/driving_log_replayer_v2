@@ -1140,6 +1140,13 @@ def plot_steer_response(
             t_grid, t_c_w, c_w, left=np.nan, right=np.nan
         )
         ax_err.plot(t_grid, err_i, color=d["color"], lw=d["lw"], ls=d["ls"], label=label)
+        # 実機のみ over/under-steer を塗り分け (旧 analyze_real_curve2 の understeer 検証ビューを統合)。
+        # 追従誤差 = 応答 − 指令。正=オーバーステア (指令より切れている) / 負=アンダーステア。
+        if label == "実機":
+            ax_err.fill_between(t_grid, err_i, 0, where=(err_i >= 0),
+                                color="tab:red", alpha=0.18, label="実機オーバーステア(+)")
+            ax_err.fill_between(t_grid, err_i, 0, where=(err_i < 0),
+                                color="tab:blue", alpha=0.18, label="実機アンダーステア(−)")
 
         # 収集
         labels_list.append(label)
