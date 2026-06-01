@@ -1,9 +1,24 @@
 #!/usr/bin/env python3
-"""発進時の車両モデル応答診断スクリプト.
+"""Stage 9: 縦方向パラメータ (brake_time_constant) を発進フィットで同定する.
 
-実機 lite mcap の control_cmd をオープンループ入力として
-DELAY_STEER_ACC_BRAKE_GEARED_WO_FALL_GUARD モデルを様々な brake_time_constant で
-シミュレーションし、実機 actual velocity との比較から適切なパラメータを診断する。
+Stage 7 (k_us, 横/yaw) の縦方向版。実機 lite の post-gate control_cmd をオープンループ入力
+として縦方向モデル (DELAY_STEER_ACC_BRAKE_GEARED_WO_FALL_GUARD の簡易実装) を
+brake_time_constant グリッドで回し、発進直後 (t=0〜5s) の実機 actual velocity への
+フィット RMSE を最小化する brake_time_constant を同定する (グリッド最小 + 放物線サブグリッド)。
+
+brake 応答は発進・停止時に最も表れるため、評価窓は「発進 (curve_config があればカーブ②、
+無ければ最初の発進)」前後に絞る。real lite のみを使う自己完結ステージで、evaluator_node が
+Stage 8 の後に env のみで実行する (追加設定不要)。
+
+注: 縦方向モデルは Python 簡易実装 (C++ 実モデルは brake 変種を wrapper 未 export)。実シムの
+brake_time_constant 既定は simulator_model.param.yaml (load_sim_params) 参照。
+
+**ill-posed 性に注意**: brake_time_constant は本来「減速・停止」時に支配的なパラメータで、
+発進 (加速) 窓では弱くしか拘束されない。実データでは launch 区間の RMSE が brake_tc に対し
+単調減少し、最小が非物理的な大値 (>1s) に張り付くことがある (= sim が発進速度を過大予測する
+分を brake_tc が誤って吸収しているだけで、真の brake_tc 同定ではない)。その場合は端最小として
+警告する。robust な brake_tc 同定には減速・停止イベントを含む窓での解析が必要 (将来拡張)。
+mean_err > 0 は sim が実機より発進が速い (過大予測) ことを示す診断値として併読すること。
 """
 
 from __future__ import annotations
@@ -20,10 +35,11 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 
-from ..lib._events import find_autonomous_start, find_curve2_launch, find_sim_launch
-from ..lib._io import align_time, load_cmd, load_operation_mode, load_velocity
-from ..lib._params_utils import add_params_annotation, load_sim_params, setup_jp_font
-from ..lib._runtime_config import add_common_cli_arguments, build_runtime_config
+from .lib._events import find_autonomous_start, find_curve2_launch, find_sim_launch
+from .lib._io import align_time, load_cmd, load_operation_mode, load_velocity
+from .lib._params_utils import add_params_annotation, load_sim_params, setup_jp_font
+from .lib._runtime_config import add_common_cli_arguments, build_runtime_config
+from .step7_identify_kus import _parabolic_min
 
 setup_jp_font()
 
@@ -151,7 +167,12 @@ def _resolve_t_launch(df_vel_aligned: pd.DataFrame, window: tuple[float, float])
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="発進時車両モデル応答診断")
+    parser = argparse.ArgumentParser(description="縦方向パラメータ (brake_time_constant) 同定")
+    parser.add_argument(
+        "--brake-tc-values",
+        default="0.03,0.05,0.08,0.10,0.15,0.20,0.30,0.40",
+        help="カンマ区切りの brake_time_constant グリッド [s]",
+    )
     add_common_cli_arguments(parser)
     args = parser.parse_args()
 
@@ -201,10 +222,10 @@ def main() -> None:
         "departure_vx_threshold": 1.0,
         "vel_rate_lim": 7.0,
     }
-    brake_tc_variants = [0.0301, 0.10, 0.20, 0.40]
-    colors = ["#d62728", "#ff7f0e", "#2ca02c", "#9467bd"]
+    brake_tc_variants = sorted(float(x) for x in args.brake_tc_values.split(",") if x.strip())
+    cmap = plt.get_cmap("viridis")
+    colors = [cmap(i / max(1, len(brake_tc_variants) - 1)) for i in range(len(brake_tc_variants))]
     labels = [f"brake_tc={v:.4f}s" for v in brake_tc_variants]
-    labels[0] += " (現在)"
 
     print("\nbrake_time_constant バリアントでシミュレーション中...")
     sim_results = simulate_departure(cmd_resampled, brake_tc_variants, params_base, dt=dt)
@@ -293,11 +314,59 @@ def main() -> None:
     print("\n--- 実機 actual速度 vs FMU シム 発進誤差 RMSE (t=0~5s) ---")
     t_mask = (t_sim >= 0.0) & (t_sim <= 5.0)
     real_interp = np.interp(t_sim[t_mask], df_vel["t"].values, df_vel["lon_vel"].values)
+    rmses: list[float] = []
+    mean_errs: list[float] = []
     for btc in brake_tc_variants:
         sim_v = sim_results[btc][t_mask]
-        rmse = np.sqrt(np.mean((sim_v - real_interp) ** 2))
-        mean_err = np.mean(sim_v - real_interp)
+        rmse = float(np.sqrt(np.mean((sim_v - real_interp) ** 2)))
+        mean_err = float(np.mean(sim_v - real_interp))
+        rmses.append(rmse)
+        mean_errs.append(mean_err)
         print(f"  brake_tc={btc:.4f}:  RMSE={rmse:.4f} m/s, mean_err={mean_err:+.4f} m/s")
+
+    # --- 同定 (発進フィット RMSE 最小化, グリッド + 放物線サブグリッド) ---
+    out_dir = cfg.out_dir / "brake_sweep"
+    out_dir.mkdir(parents=True, exist_ok=True)
+    pd.DataFrame({
+        "brake_time_constant": brake_tc_variants,
+        "rmse_mps": rmses,
+        "mean_err_mps": mean_errs,
+    }).to_csv(out_dir / "brake_sweep.csv", index=False)
+
+    best_i = int(np.argmin(rmses))
+    btc_grid = float(brake_tc_variants[best_i])
+    btc_parab = _parabolic_min(list(brake_tc_variants), rmses)
+
+    figb, axb = plt.subplots(figsize=(9, 5))
+    figb.suptitle("brake_time_constant スイープ同定 (発進フィット)", fontsize=12)
+    axb.plot(brake_tc_variants, rmses, "o-", color="#1f77b4", label="発進 RMSE (t=0〜5s)")
+    btc_id = btc_parab if btc_parab is not None else btc_grid
+    axb.axvline(btc_id, color="red", ls="--", lw=1.2, label=f"identified btc≈{btc_id:.4f}s")
+    axb.set_xlabel("brake_time_constant [s]")
+    axb.set_ylabel("発進フィット RMSE [m/s]")
+    axb.grid(True, lw=0.5, alpha=0.6)
+    axb.legend(fontsize=9)
+    add_params_annotation(figb, anno_params)
+    figb.tight_layout()
+    figb.savefig(str(out_dir / "brake_sweep.png"), dpi=150, bbox_inches="tight")
+    plt.close(figb)
+
+    print("\n=== 同定結果 (発進フィット RMSE 最小化, t=0〜5s) ===")
+    print(f"  グリッド最小: brake_time_constant = {btc_grid:.4f} s "
+          f"(RMSE = {rmses[best_i]:.4f} m/s)")
+    if btc_parab is not None:
+        print(f"  放物線サブグリッド推定: brake_time_constant ≈ {btc_parab:.4f} s")
+    else:
+        print("  放物線サブグリッド推定: 最小がグリッド端のため範囲外 (--brake-tc-values を広げて再試行)")
+    if best_i in (0, len(brake_tc_variants) - 1):
+        print(f"  [WARN] 最小がグリッド端 (brake_tc={btc_grid:.4f}s)。")
+        if best_i == len(brake_tc_variants) - 1 and btc_grid > 0.6:
+            print("         brake_tc が非物理的な大値に張り付いています。brake_tc は減速時に支配的で、"
+                  "発進窓では弱く拘束されるため、これは真の同定ではなく launch 過大予測の代理です "
+                  "(mean_err>0 を併読)。減速・停止窓での解析が必要。")
+        else:
+            print("         範囲を広げて再実行を推奨。")
+    print(f"  Saved: {out_dir / 'brake_sweep.csv'}, {out_dir / 'brake_sweep.png'}")
 
 
 if __name__ == "__main__":
