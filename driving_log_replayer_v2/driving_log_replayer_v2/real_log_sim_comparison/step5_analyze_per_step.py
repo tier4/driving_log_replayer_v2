@@ -102,6 +102,9 @@ SUB_DT: float = PARAMS["sub_dt"]
 # DELAY_STEER_ACC_GEARED_WO_FALL_GUARD の C++ ctypes ラッパー
 # ---------------------------------------------------------------------------
 
+# libvehicle_model_wrapper.so が vm_get_wz を export しているか (_load_lib で確定)。
+_HAS_WZ = False
+
 
 def _resolve_so_path() -> Path:
     """libvehicle_model_wrapper.so の場所を解決する。
@@ -169,8 +172,6 @@ def _load_lib() -> ctypes.CDLL:
     lib.vm_step_dt.restype = None
     lib.vm_step_dt.argtypes = [c_void_p, c_double]
 
-    # 横方向諸量 (wz/vy/ay) は libvehicle_model_wrapper.so に export されていないため
-    # ここでは扱わない。必要になれば scenario_simulator 側のラッパーに追加する。
     for fn in (
         "vm_get_x",
         "vm_get_y",
@@ -181,6 +182,22 @@ def _load_lib() -> ctypes.CDLL:
     ):
         getattr(lib, fn).restype = c_double
         getattr(lib, fn).argtypes = [c_void_p]
+
+    # wz (yaw rate) は新しめのラッパーのみ export (vehicle_model_c_wrapper.cpp の vm_get_wz)。
+    # k_us 依存の calc_yaw_rate を経由するため per-step でも understeer の寄与を観測できる。
+    # 古い .so との後方互換のため存在時のみ束縛し、_HAS_WZ フラグで制御する。
+    global _HAS_WZ  # noqa: PLW0603
+    if hasattr(lib, "vm_get_wz"):
+        lib.vm_get_wz.restype = c_double
+        lib.vm_get_wz.argtypes = [c_void_p]
+        _HAS_WZ = True
+    else:
+        _HAS_WZ = False
+        print(
+            "[WARN] libvehicle_model_wrapper.so に vm_get_wz が無いため sim_wz は NaN。"
+            "simple_sensor_simulator を再ビルドしてください。",
+            file=sys.stderr,
+        )
 
     # vm_step_dt はラッパーに未 export のため使わない。残ステップ (remainder) は無視。
     lib.vm_destroy.restype = None
@@ -311,6 +328,13 @@ class VehicleModel:
     @property
     def vx(self) -> float:
         return self._lib.vm_get_vx(self._ptr)
+
+    @property
+    def wz(self) -> float:
+        """yaw rate [rad/s]。ラッパーが vm_get_wz を export していなければ NaN。"""
+        if not _HAS_WZ:
+            return float("nan")
+        return self._lib.vm_get_wz(self._ptr)
 
     @property
     def steer_state(self) -> float:
@@ -654,7 +678,9 @@ def run_per_step(data: dict, t0_ns: int, params: dict, model_type: str) -> pd.Da
         sim_ds_lat = -sim_dx * sin_y + sim_dy * cos_y
 
         sim_steer_kp1 = model.steer_state + params["steer_bias"]
-        # sim_wz/vy/ay は libvehicle_model_wrapper.so に export されていないためスキップ
+        # sim_wz: モデルが予測した t_{k+1} の yaw rate (vm_get_wz, k_us 依存)。
+        # ラッパーが未 export なら NaN (sim_vy/ay は getVy()=0 / 未実装のため引き続き省略)。
+        sim_wz = model.wz
         records.append(
             {
                 "timestamp": t_cmd[k],
@@ -673,6 +699,8 @@ def run_per_step(data: dict, t0_ns: int, params: dict, model_type: str) -> pd.Da
                 "real_ay": gt_ay[k + 1],  # t_{k+1} — err_steer 規約に統一
                 "real_vy": gt_vy[k + 1],
                 "real_wz": gt_wz[k + 1],
+                "sim_wz": sim_wz,  # モデル予測 yaw rate (k_us 依存; per-step でも k_us 感度あり)
+                "err_wz": gt_wz[k + 1] - sim_wz,  # yaw rate 予測誤差 [rad/s]
                 "real_dwz": gt_dwz[k + 1],
                 "real_wz_k": gt_wz[k],  # t_k — 散布図の Y 軸（ステア角と同時刻）
                 "real_ay_k": gt_ay[k],
@@ -1499,8 +1527,16 @@ def save_summary(df: pd.DataFrame) -> None:
         f"ステア予測 RMSE: {rmse_deg('err_steer'):.4f} deg",
         f"ステア予測 平均誤差: {mean_deg('err_steer'):.4f} deg  (正=実機が指令より大/負=小)",
         "",
-        "--- 時間帯別 (4 等分 equal-time bins / 縦・横・ステア RMSE) ---",
     ]
+    # yaw rate 予測 RMSE (vm_get_wz export 時のみ)。steer/位置と異なり k_us 感度を持つ。
+    if "err_wz" in df.columns and np.isfinite(df["err_wz"].values).any():
+        wz_rmse = float(np.sqrt(np.nanmean(df["err_wz"].values ** 2))) * rad2deg
+        lines += [
+            "--- 全区間: yaw rate 予測 (vm_get_wz, k_us 感度あり) ---",
+            f"yaw rate 予測 RMSE: {wz_rmse:.4f} deg/s",
+            "",
+        ]
+    lines.append("--- 時間帯別 (4 等分 equal-time bins / 縦・横・ステア RMSE) ---")
     # 時間軸を 4 等分した equal-time bins で RMSE を集計する
     t_min, t_max = float(tr[0]), float(tr[-1])
     T_span = t_max - t_min
