@@ -154,8 +154,10 @@ def run_pipeline(
     env["CURVE_CONFIG_YAML"] = compare_cfg.get("curve_config_yaml", "")
     # 実機データ取得時の版・重み (外部記録)。step4 が provenance 掲載に使う。
     env["REAL_PROVENANCE"] = compare_cfg.get("real_provenance", "")
-    # opt-in: D0 緩和の周回 waypoint 数 (既定 0=start+goal のみ; step2 が読む)。要 live sim 検証。
+    # route-shaping 実験オプション (既定 0=start+goal のみ; step2 が読む)。D0 の修正ではない。
     env["LOOP_WAYPOINTS"] = str(compare_cfg.get("loop_waypoints", 0))
+    # 信号の扱い (既定 replay; step2 が読む)。green で赤信号 replay 由来の D0 早期停止を回避。
+    env["TRAFFIC_SIGNALS"] = str(compare_cfg.get("traffic_signals", "replay"))
 
     # ---- Stage 1: real lite bag ----
     logger.info("Stage 1: generating real lite bag")
@@ -394,12 +396,21 @@ def _load_compare_config(scenario_path_str: str) -> dict[str, Any]:
         if "real_provenance" in conditions:
             cfg["real_provenance"] = str(conditions["real_provenance"])
 
-        # loop_waypoints (任意, 既定 0): D0 緩和の周回 waypoint 数。opt-in・要 live sim 検証。
+        # loop_waypoints (任意, 既定 0): 実走軌跡形状を強制する route-shaping 実験オプション。
+        # 注: D0 (sim 早期停止) の真因は赤信号 replay であり routing ではない (live sim で確定)
+        # ため、loop_waypoints は D0 の修正ではない。route は start+goal でも周回全体を引く。
         if "loop_waypoints" in conditions:
             try:
                 cfg["loop_waypoints"] = int(conditions["loop_waypoints"])
             except (TypeError, ValueError):
                 cfg["loop_waypoints"] = 0
+
+        # traffic_signals (任意, 既定 replay): 信号の扱い。replay=実機 bag の信号を再現、
+        # green=全信号常時 green。replay は到達時刻 desync で実機が green 通過した信号に
+        # sim ego が赤で当たり永久停止する (D0 の真因) ことがあり、green で周回を完走できる。
+        if "traffic_signals" in conditions:
+            ts = str(conditions["traffic_signals"]).strip().lower()
+            cfg["traffic_signals"] = ts if ts in ("replay", "green") else "replay"
 
         if "curve_config_yaml" in conditions:
             raw = str(conditions["curve_config_yaml"])
