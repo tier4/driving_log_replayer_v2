@@ -107,6 +107,7 @@ Stage 3 (`step3_run_sims`) が `scenario_test_runner` で sim を回した結果
 | `cases_config` | **必須** | Stage 5/6（VehicleModel per-step 解析 + 集約）の `cases.yaml` への相対パス。 |
 | `sim_runs_config` | **必須** | Stage 3/4（closed-loop sim + N-way 比較）の `sim_runs.yaml` への相対パス。 |
 | `real_provenance` | 任意 | 実機データ取得時の pilot-auto.x2 / DiffusionPlanner 重みの自由記述。比較プロット・report.md の provenance に掲載し、sim 実行時の版・重み（自動取得）との差を解釈する。 |
+| `loop_waypoints` | 任意 (既定 0) | D0 緩和の opt-in。Stage 2 が start+goal に加え実走軌跡の膨らみ位置へ N 個の中間 LanePosition waypoint を挿入し周回経路を強制する。**要 live sim 検証**（既定 0 で無効）。 |
 
 - **`sim_runs.yaml`**（Stage 3/4）: closed-loop sim の run 定義。`vehicle_model` と任意の
   `params`（simulator_model 上書き）で run を増やす。

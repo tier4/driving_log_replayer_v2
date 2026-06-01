@@ -43,3 +43,7 @@ Evaluation:
     # report.md の provenance に掲載され、sim 実行時の版・重み (自動取得) との差を解釈できる。
     # 例: real_provenance: "autoware v0.46.x (取得 2026-02) / DP exp older_real_v1"
     real_provenance: ""
+    # opt-in (既定 0): D0 緩和。start+goal の shortest だけでは実機の周回経路を再現できず sim が
+    # 最短直行で早期停止する。N>0 で実走軌跡の膨らみ位置に N 個の中間 LanePosition waypoint を
+    # 挿入し周回を強制する。**要 live sim 検証** (過去に中間 waypoint で routing 失敗例あり)。
+    loop_waypoints: 0
