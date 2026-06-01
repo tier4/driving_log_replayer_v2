@@ -419,10 +419,13 @@ def _build_initial_signal_actions(
 ) -> list[dict]:
     """Init.GlobalAction として信号状態をセット.
 
-    force_all_green=False (既定): bag の AUTONOMOUS 開始時の信号状態をそのまま再現。
-        実機タイムシリーズに忠実な sim を作るための正規パス。
-    force_all_green=True: **デバッグ専用**。全信号を強制 green にして信号待ち停止を回避。
-        正式運用での採用は禁止 (--force-all-green-debug フラグ経由でのみ有効化)。
+    force_all_green=False (replay): bag の AUTONOMOUS 開始時の信号状態をそのまま再現。
+    force_all_green=True (green): 全信号を常時 green にする。`traffic_signals: green`
+        (Conditions / --traffic-signals green) で有効化される **サポート対象オプション**。
+        理由: 実機信号タイムシリーズの replay は sim ego の到達時刻が実機とずれる
+        (initialize_duration + planner pacing 差) ため、実機が green で通過した信号に
+        sim ego が赤で当たり永久停止することがある (D0 の真因)。実機が実際に通過した
+        ことを再現するには全 green が忠実 (実機が赤停止した信号は別途要検討)。
     """
     actions = []
     for sig_id, series in signals.items():
@@ -455,7 +458,7 @@ def _build_signal_story_acts(
         signals: 信号 ID → [(t_rel, state)] の dict (bag から抽出)
         signal_to_lanelet: 信号 ID → ego が到達したら trigger される lanelet ID の dict
         reach_tolerance: ReachPositionCondition の tolerance [m]
-        force_all_green: デバッグ専用 (True なら Story 空、Init で全 green 固定)
+        force_all_green: `traffic_signals: green` モード (True なら Story 空、Init で全 green 固定)
     """
     if force_all_green:
         return []
@@ -673,9 +676,10 @@ def build_scenario_dict(
 ) -> dict[str, Any]:
     """OpenSCENARIO 文書を Python dict として組み立てる。
 
-    force_all_green=False (既定): Init で bag の初期状態、Story で「ego が信号関連
+    force_all_green=False (replay): Init で bag の初期状態、Story で「ego が信号関連
     lanelet に到達したら bag 終端状態に切替」する (ReachPositionCondition trigger)。
-    force_all_green=True: デバッグ専用 (全信号 green 固定、変化なし)。正式採用禁止。
+    force_all_green=True (green): 全信号 green 固定。`traffic_signals: green` で有効化する
+    サポート対象オプション (replay の到達時刻 desync で ego が赤に当たり停止する D0 を回避)。
     """
     init_global_actions = _build_initial_signal_actions(signals, force_all_green=force_all_green)
     init_global = {"GlobalAction": init_global_actions} if init_global_actions else {}
@@ -815,9 +819,12 @@ def main() -> None:
                         help="exitFailure の SimulationTimeCondition [s] (既定 600)")
     parser.add_argument("--goal-tolerance", type=float, default=15.0,
                         help="goal ReachPositionCondition の tolerance [m] (既定 15)")
-    parser.add_argument("--force-all-green-debug", action="store_true",
-                        help="**デバッグ専用**: 全信号を強制 green 固定 (信号待ち停止を回避)。"
-                             "実機タイムシリーズ再現を諦めるため正式採用禁止")
+    parser.add_argument("--traffic-signals", choices=["replay", "green"],
+                        default=os.environ.get("TRAFFIC_SIGNALS", "replay") or "replay",
+                        help="信号の扱い (env: TRAFFIC_SIGNALS)。replay (既定)=実機 bag の信号"
+                             "タイムシリーズを再現。green=全信号常時 green。replay は sim ego の"
+                             "到達時刻 desync で実機が green 通過した信号に赤で当たり ego が永久停止"
+                             "する (D0) ことがあり、その場合 green を使うと周回を完走できる。")
     parser.add_argument("--loop-waypoints", type=int,
                         default=int(os.environ.get("LOOP_WAYPOINTS", "0") or "0"),
                         help="opt-in (既定 0=start+goal のみ): 実走軌跡の膨らみ位置に N 個の中間 "
@@ -869,7 +876,11 @@ def main() -> None:
     lane_ids = []  # goal 到達条件は WorldPosition tolerance ベース (build_scenario_dict)
     signals = _extract_signal_timeseries(input_bag, t0_ns)
     print(f"[step2_bag_to_scenario] signals: {len(signals)} ids, "
-          f"total state changes={sum(len(v) for v in signals.values())}")
+          f"total state changes={sum(len(v) for v in signals.values())} "
+          f"(traffic_signals={args.traffic_signals})")
+    if args.traffic_signals == "green":
+        print("[step2_bag_to_scenario] traffic_signals=green: 全信号を常時 green に固定 "
+              "(replay の到達時刻 desync で ego が赤停止する D0 を回避)")
 
     # opt-in: 周回経路を強制する中間 waypoint (D0 緩和; 既定 N=0 で無効・要 live sim 検証)
     mid_waypoints = _select_loop_waypoints(input_bag, t0_ns, start_world, goal_world, args.loop_waypoints)
@@ -895,7 +906,7 @@ def main() -> None:
         scenario_name=args.scenario_name,
         sim_timeout=args.sim_timeout,
         goal_tolerance=args.goal_tolerance,
-        force_all_green=args.force_all_green_debug,
+        force_all_green=(args.traffic_signals == "green"),
         mid_waypoints=mid_waypoints,
     )
 

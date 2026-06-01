@@ -11,6 +11,8 @@
 from __future__ import annotations
 
 from driving_log_replayer_v2.real_log_sim_comparison.step2_bag_to_scenario import (
+    _build_initial_signal_actions,
+    _build_signal_story_acts,
     _select_apex_indices,
 )
 
@@ -48,3 +50,39 @@ def test_apex_degenerate_chord_returns_empty() -> None:
     xs, ys = _triangle_loop()
     # start == goal (弦長ゼロ) → 解決不能で []
     assert _select_apex_indices(xs, ys, 0.0, 0.0, 0.0, 0.0, 1) == []
+
+
+# ---------------------------------------------------------------------------
+# traffic_signals: replay / green モード (D0 真因=赤信号 replay の修正)
+# ---------------------------------------------------------------------------
+
+_SIGNALS = {
+    100: [(0.0, "red solidOn circle"), (5.0, "green solidOn circle")],
+    200: [(0.0, "green solidOn circle")],
+}
+
+
+def test_initial_signal_actions_replay_uses_first_state() -> None:
+    # replay (force_all_green=False): bag の各信号の開始時刻状態をそのまま採用。
+    acts = _build_initial_signal_actions(_SIGNALS, force_all_green=False)
+    states = {
+        a["InfrastructureAction"]["TrafficSignalAction"]["TrafficSignalStateAction"]["name"]:
+        a["InfrastructureAction"]["TrafficSignalAction"]["TrafficSignalStateAction"]["state"]
+        for a in acts
+    }
+    assert states == {"100": "red solidOn circle", "200": "green solidOn circle"}
+
+
+def test_initial_signal_actions_green_forces_all_green() -> None:
+    # green (force_all_green=True): 全信号を常時 green に固定 (赤信号 replay 由来の D0 回避)。
+    acts = _build_initial_signal_actions(_SIGNALS, force_all_green=True)
+    states = [
+        a["InfrastructureAction"]["TrafficSignalAction"]["TrafficSignalStateAction"]["state"]
+        for a in acts
+    ]
+    assert states and all(s == "green solidOn circle" for s in states)
+
+
+def test_signal_story_empty_in_green_mode() -> None:
+    # green モードでは Story 側の信号切替 Act は空 (Init で全 green 固定するため)。
+    assert _build_signal_story_acts(_SIGNALS, {100: 1, 200: 2}, force_all_green=True) == []
