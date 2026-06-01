@@ -1,5 +1,9 @@
 #!/usr/bin/env python3
-"""DiffusionPlanner 計画軌跡の比較スクリプト.
+"""Stage 8: DiffusionPlanner 計画軌跡の比較.
+
+「計画」レベルの乖離 (sim の DiffusionPlanner が実機と同じ軌跡を出すか) を、車両応答
+(Stage 4)・dynamics (Stage 5/7) から分離して可視化する独立ステージ。Stage 1 が生成した
+実機 lite と Stage 3 が生成した sim lite の両方が持つ DP 出力軌跡を比較する。
 
 `--target` で出力を切り替える:
   - `real_actual`     : 実機 DP出力 vs シム DP出力 を直接比較
@@ -7,6 +11,10 @@
   - `final_planning`  : 実機 DP出力 vs 最終 planning/trajectory を比較
                         (trajectory_velocity_optimizer の影響を可視化)
   - `both` (既定)     : 両方
+
+比較の時刻基準は「発進 (curve_config があればカーブ②停止→発進、無ければ最初の発進)」。
+evaluator_node は Stage 7 の後に env のみで実行する (追加設定不要)。比較対象の sim run は
+lite/ 配下の sim_*.lite を自動検出する (sim_normal を優先)。
 """
 
 from __future__ import annotations
@@ -23,10 +31,10 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 
-from ..lib._events import find_autonomous_start, find_curve2_launch, find_sim_launch
-from ..lib._io import iter_bag_messages, load_velocity
-from ..lib._params_utils import add_params_annotation, setup_jp_font
-from ..lib._runtime_config import RuntimeConfig, add_common_cli_arguments, build_runtime_config
+from .lib._events import find_autonomous_start, find_curve2_launch, find_sim_launch
+from .lib._io import iter_bag_messages, load_velocity
+from .lib._params_utils import add_params_annotation, setup_jp_font
+from .lib._runtime_config import RuntimeConfig, add_common_cli_arguments, build_runtime_config
 
 setup_jp_font()
 
@@ -48,11 +56,31 @@ def _resolve_bag(lite_dir: Path, name_stem: str) -> Path | None:
     return None
 
 
+def _resolve_primary_sim_bag(lite_dir: Path) -> Path | None:
+    """比較対象の sim lite を自動検出する (real を除く sim_*.lite、sim_normal を優先)。
+
+    旧実装は専用シナリオ由来の `sim_curve2.lite` 固定だったが、現パイプラインは
+    sim_runs.yaml の各 run (sim_normal/sim_kus0020/sim_perfect/sim_godot 等) を生成するため、
+    それらから 1 つ (sim_normal 優先) を選ぶ。
+    """
+    stems: list[str] = []
+    for pat in ("sim_*.lite", "sim_*.lite.mcap"):
+        for p in lite_dir.glob(pat):
+            stem = p.name[: -len(".mcap")] if p.name.endswith(".mcap") else p.name
+            stem = stem[: -len(".lite")] if stem.endswith(".lite") else stem
+            if stem and stem not in stems:
+                stems.append(stem)
+    if not stems:
+        return None
+    stems.sort(key=lambda s: (s != "sim_normal", s))  # sim_normal を先頭に
+    return _resolve_bag(lite_dir, stems[0])
+
+
 def _resolve_t0_and_launch(
     bag: Path, *, is_real: bool, curve2_window: tuple[float, float]
 ) -> tuple[int, float]:
     """bag から t0 (ns) と発進時刻 t_launch (s) を返す。"""
-    from ..lib._io import load_operation_mode
+    from .lib._io import load_operation_mode
 
     df_vel = load_velocity(bag)
     if is_real:
@@ -333,7 +361,7 @@ def _run_real_actual(  # noqa: PLR0915
 
     fig.tight_layout()
     add_params_annotation(fig)
-    out = cfg.figs_dir / "c2_dp_trajectory_comparison.png"
+    out = cfg.figs_dir / "dp_real_vs_sim.png"
     fig.savefig(str(out), dpi=150, bbox_inches="tight")
     plt.close(fig)
     print(f"\n  保存: {out}")
@@ -367,7 +395,7 @@ def _run_real_actual(  # noqa: PLR0915
         ax.grid(True, lw=0.4)
     fig2.tight_layout()
     add_params_annotation(fig2)
-    out2 = cfg.figs_dir / "c2_dp_vs_actual.png"
+    out2 = cfg.figs_dir / "dp_vs_actual.png"
     fig2.savefig(str(out2), dpi=150, bbox_inches="tight")
     plt.close(fig2)
     print(f"  保存: {out2}")
@@ -506,7 +534,7 @@ def _run_final_planning(  # noqa: PLR0915
 
     fig.tight_layout()
     add_params_annotation(fig)
-    out = cfg.figs_dir / "c2_dp_vs_final_traj.png"
+    out = cfg.figs_dir / "dp_vs_final_traj.png"
     fig.savefig(str(out), dpi=150, bbox_inches="tight")
     plt.close(fig)
     print(f"\n  保存: {out}")
@@ -544,15 +572,17 @@ def main() -> None:
 
     cfg = build_runtime_config(args, default_base_dir=Path(__file__).parent)
     real_bag = _resolve_bag(cfg.lite_dir, "real")
-    sim_bag = _resolve_bag(cfg.lite_dir, "sim_curve2")
+    sim_bag = _resolve_primary_sim_bag(cfg.lite_dir)
     if real_bag is None:
         print(f"ERROR: real lite bag が見つかりません: {cfg.lite_dir}", file=sys.stderr)
         sys.exit(1)
+    if sim_bag is not None:
+        print(f"比較対象 sim lite: {sim_bag.name}")
 
     if args.target in ("real_actual", "both"):
         if sim_bag is None:
             print(
-                "WARN: sim_curve2 lite bag が無いため real_actual target をスキップ",
+                "WARN: sim lite bag (sim_*.lite) が無いため real_actual target をスキップ",
                 file=sys.stderr,
             )
         else:

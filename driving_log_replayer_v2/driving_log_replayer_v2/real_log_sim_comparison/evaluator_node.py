@@ -280,6 +280,16 @@ def run_pipeline(
     except RuntimeError as exc:
         logger.warning(f"Stage 7 (step7_identify_kus) failed but continuing: {exc}")
 
+    # ---- Stage 8: DiffusionPlanner 計画軌跡比較 (planner レベルの乖離分離) ----
+    logger.info("Stage 8: step8_compare_dp_trajectory (planner trajectory real vs sim)")
+    try:
+        _run([
+            sys.executable, "-m",
+            "driving_log_replayer_v2.real_log_sim_comparison.step8_compare_dp_trajectory",
+        ], env=env, timeout=900)
+    except RuntimeError as exc:
+        logger.warning(f"Stage 8 (step8_compare_dp_trajectory) failed but continuing: {exc}")
+
     # ---- 生成物カウント (E1: 沈黙の失敗対策) ----
     # Stage 3/5 は失敗継続するため、実際に出力が出た数を数えて成否判定の材料にする。
     def _lite_exists(tag: str) -> bool:
