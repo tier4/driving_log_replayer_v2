@@ -2,6 +2,19 @@
 Changelog for package driving_log_replayer
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
+Forthcoming
+-----------
+* feat: support jazzy rosbag reindex by humble env (`#364 <https://github.com/tier4/driving_log_replayer_v2/issues/364>`_)
+  * feat: support jazzy rosbag reindex by humble env
+  * continue is offered_qos_profiles is
+  ---------
+* reafactor-publish-configs (`#365 <https://github.com/tier4/driving_log_replayer_v2/issues/365>`_)
+* chore: add a new config planning_control_e2e_wo_diffusion_planner for trajectory_modifier tests (`#363 <https://github.com/tier4/driving_log_replayer_v2/issues/363>`_)
+  * add new config
+  * rename config name
+* fix trajectory selector bug (`#362 <https://github.com/tier4/driving_log_replayer_v2/issues/362>`_)
+* Contributors: Kem (TiankuiXian), Masato Saeki
+
 3.18.1 (2026-05-22)
 -------------------
 * feat(perception): disable to show metrics details (`#359 <https://github.com/tier4/driving_log_replayer_v2/issues/359>`_)

@@ -1,5 +1,16 @@
 # Release Notes
 
+## Version 3.18.2
+
+Minor Tweak
+
+| Module   | Feature | Brief summary                                                                            | Pull request                                                        | Contributor                                   |
+| -------- | ------- | ---------------------------------------------------------------------------------------- | ------------------------------------------------------------------- | --------------------------------------------- |
+| `common` | rosbag  | support jazzy rosbag reindex by humble env                                               | [#364](https://github.com/tier4/driving_log_replayer_v2/issues/364) | [MasatoSaeki](https://github.com/MasatoSaeki) |
+| `common` | topic   | refactor-publish-configs                                                                 | [#365](https://github.com/tier4/driving_log_replayer_v2/issues/365) | [xtk8532704](https://github.com/xtk8532704)   |
+| `common` | topic   | add a new config planning_control_e2e_wo_diffusion_planner for trajectory_modifier tests | [#363](https://github.com/tier4/driving_log_replayer_v2/issues/363) | [xtk8532704](https://github.com/xtk8532704)   |
+| `common` | topic   | fix trajectory selector bug                                                              | [#362](https://github.com/tier4/driving_log_replayer_v2/issues/362) | [xtk8532704](https://github.com/xtk8532704)   |
+
 ## Version 3.18.1
 
 Minor Tweak
