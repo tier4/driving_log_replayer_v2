@@ -19,14 +19,13 @@ Evaluation:
   #   webauto data annotation-dataset pull --project-id x2_dev \
   #     --annotation-dataset-id <UUID> --include-intermediate-artifacts
   Datasets:
-    # K-01-11200 case01 dp_01 cruise_following_lead_vehicle
-    # (j6_gen2 実機 Normal 走行、area_map 2231)
-    # 先行車追従、直線中心の安定走行。
-    - b126c24f-4891-40d3-87cb-d1be36dc6db6:
+    # Override_E2E_x2j6gen2_takanawa_2026-05-12-A09
+    # (j6_gen2 実機 E2E 走行、高輪エリア、2026-05-12 記録)
+    - f20a29ab-c42a-41b8-a446-f7e89d37a790:
         VehicleId: default
   Conditions:
     # 図タイトルに表示するシナリオ名 (任意。未指定なら ScenarioName を使用)
-    scenario_name: "cruise_following_lead_vehicle (K-01-11200 case01 dp_01)"
+    scenario_name: "Override_E2E_x2j6gen2_takanawa_2026-05-12-A09"
     # カーブ別解析を有効化する設定 YAML への相対パス (scenario.yaml からの相対パス)。
     # 省略するとカーブ別プロット (curves_closeup / curve2_*) をスキップ。
     # 既存 curve 設定 YAML は特定 area_map に対する curve_centers をハードコード

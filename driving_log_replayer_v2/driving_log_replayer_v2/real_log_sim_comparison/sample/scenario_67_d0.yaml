@@ -3,8 +3,8 @@ ScenarioName: real_log_sim_comparison_d0
 ScenarioDescription: |
   D0 (sim 早期停止) 再現・解消の検証用シナリオ。
   cloud 実行 (evaluation.tier4.jp / ~/Downloads/djfkfjdkl) が実際に使った周回走行 dataset
-  67db293e (162s / 実走 598.7m) を対象にする。sample/scenario.yaml が指す b126c24f は別物
-  (60s / 249m / 別 area_map) なので D0 を再現できない点に注意。
+  67db293e (162s / 実走 598.7m) を対象にする。sample/scenario.yaml のデフォルト dataset
+  (f20a29ab, 高輪) は別物なので D0 を再現できない点に注意。
 
   D0 の真因は赤信号 replay の到達時刻 desync (実機が green 通過した信号に sim ego が赤で当たり
   永久停止)。traffic_signals: green で全信号を green に固定すると sim は周回を完走する
@@ -28,7 +28,7 @@ Evaluation:
         VehicleId: default
   Conditions:
     scenario_name: "D0 verify (67db293e, 周回 598.7m)"
-    # 67db293e は b126c24f と別 area_map のため、area_map 固定の curve 設定はスキップ。
+    # 67db293e は area_map 固定の curve 設定が前提とする map と別のため、curve 設定はスキップ。
     curve_config_yaml: ""
     cases_config: ./cases.yaml
     sim_runs_config: ./sim_runs.yaml
