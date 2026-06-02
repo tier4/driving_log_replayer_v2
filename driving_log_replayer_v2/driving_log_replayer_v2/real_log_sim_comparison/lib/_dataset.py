@@ -37,6 +37,29 @@ def _has_valid_input_bag(dataset_dir: Path) -> bool:
     return any(next(iter(input_bag.glob(g)), None) is not None for g in _BAG_GLOBS)
 
 
+def _ensure_map_symlink(dataset_dir: Path) -> None:
+    """`dataset_dir/map` が無い場合、近傍 (祖先 directory) に `map/` があれば symlink を作る。
+
+    webauto CLI が `<UUID>/<frame>/<inner_UUID>/input_bag/` と `<UUID>/<frame>/map/` のように
+    input_bag と map を別階層に展開するケースがある。 evaluator (`argument.py`) は
+    `t4_dataset_path/map` 直下を期待するため、 不在なら自動で symlink を貼って構造を統一する。
+    """
+    target = dataset_dir / "map"
+    if target.exists() or target.is_symlink():
+        return
+    # 祖先 directory を root に向かって順に探索し、 最初に見つかった map dir を採用。
+    for parent in dataset_dir.parents:
+        cand = parent / "map"
+        if cand.is_dir():
+            try:
+                target.symlink_to(cand.resolve())
+            except OSError:
+                # 書き込み権限が無い等の理由で失敗してもエラーにせず、 後段の評価で
+                # 明示的にエラーが出るのを待つ (read-only mount 等)。
+                pass
+            return
+
+
 def _find_uuid_dir(root: Path, uuid: str) -> Path | None:
     """`root` 配下から名前が `uuid` のディレクトリを探す。
 
@@ -82,9 +105,15 @@ def resolve_t4_dataset_path(root: Path | str, uuid: str) -> Path:
             "    --include-intermediate-artifacts"
         )
 
+    def _accept(d: Path) -> Path:
+        """有効な dataset dir として確定する前に map symlink を補う。"""
+        resolved = d.resolve()
+        _ensure_map_symlink(resolved)
+        return resolved
+
     # 2. フラット (クラウド相当): input_bag/ が UUID dir 直下にある。
     if _has_valid_input_bag(uuid_dir):
-        return uuid_dir.resolve()
+        return _accept(uuid_dir)
 
     # 3. frame レイアウト (ローカル webauto CLI pull): 最新 frame を採用。
     frame_dirs = sorted(
@@ -93,9 +122,18 @@ def resolve_t4_dataset_path(root: Path | str, uuid: str) -> Path:
     )
     for frame_dir in reversed(frame_dirs):
         if _has_valid_input_bag(frame_dir):
-            return frame_dir.resolve()
+            return _accept(frame_dir)
+        # 4. ネスト frame レイアウト: frame_dir/<inner_UUID>/input_bag のパターン
+        #    (webauto CLI が intermediate artifacts を inner UUID dir に展開するケース)。
+        for inner in sorted(
+            (d for d in frame_dir.iterdir() if d.is_dir()),
+            key=lambda p: p.name,
+            reverse=True,
+        ):
+            if _has_valid_input_bag(inner):
+                return _accept(inner)
 
-    # 4. UUID dir はあるが有効な input_bag が無い → intermediate artifacts 不足。
+    # 5. UUID dir はあるが有効な input_bag が無い → intermediate artifacts 不足。
     raise DatasetResolutionError(
         f"{uuid_dir} 配下に input_bag/*.{{mcap,db3}} が見つかりません。\n"
         "--include-intermediate-artifacts を付けて再 pull してください:\n"
