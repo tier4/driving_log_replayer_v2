@@ -97,6 +97,11 @@ def main() -> None:
                         help="sim_runs.yaml パス (env: SIM_RUNS_CONFIG_YAML)")
     parser.add_argument("--output-lite", required=True,
                         help="出力先 lite/<tag>.lite/ ディレクトリ")
+    parser.add_argument("--reproduce-bag",
+                        default=os.environ.get("REPRODUCE_BAG", ""),
+                        help="指定すると実機 input_bag の先行車を ego-pose 同期で sim に注入する "
+                             "perception_reproducer ノードを sim と並走起動する (env: REPRODUCE_BAG)。"
+                             "空なら注入しない。")
     args = parser.parse_args()
 
     scenario = Path(args.scenario)
@@ -123,7 +128,23 @@ def main() -> None:
         prefix=f"sim_runner_{run.tag}_", dir="/tmp"))
     print(f"[step3_run_sims] tmp output_directory: {tmp_root}")
 
+    reproducer_proc: subprocess.Popen | None = None
     try:
+        # perception reproducer を sim と並走起動 (実機先行車を ego-pose 同期注入)。
+        # rclpy が late publisher を扱うため sim より先に起動して問題ない (起動時に bag を読み、
+        # sim ego topic が出たら購読開始)。同一 ROS_DOMAIN_ID は os.environ 継承で揃う。
+        if args.reproduce_bag and Path(args.reproduce_bag).exists():
+            repro_cmd = [
+                sys.executable, "-m",
+                "driving_log_replayer_v2.real_log_sim_comparison.perception_reproducer_node",
+                "--bag", str(args.reproduce_bag),
+            ]
+            print(f"[step3_run_sims] $ {' '.join(repro_cmd)} (並走)", flush=True)
+            reproducer_proc = subprocess.Popen(repro_cmd)  # noqa: S603
+        elif args.reproduce_bag:
+            print(f"[step3_run_sims] WARN: reproduce_bag が見つかりません: {args.reproduce_bag} "
+                  "(perception 注入をスキップ)", file=sys.stderr)
+
         cmd = _build_launch_cmd(run, scenario.resolve(), tmp_root)
         _run_subprocess(cmd, timeout=run.timeout_s)
 
@@ -160,6 +181,12 @@ def main() -> None:
         print(f"[step3_run_sims] Saved: {output_lite}")
 
     finally:
+        if reproducer_proc is not None and reproducer_proc.poll() is None:
+            reproducer_proc.terminate()
+            try:
+                reproducer_proc.wait(timeout=10)
+            except subprocess.TimeoutExpired:
+                reproducer_proc.kill()
         shutil.rmtree(tmp_root, ignore_errors=True)
         # フォールバック先もケース毎にクリア (次 run 干渉防止)
         shutil.rmtree(_FALLBACK_SIM_OUT_ROOT, ignore_errors=True)
