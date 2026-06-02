@@ -17,6 +17,7 @@ from typing import Any
 
 from rclpy.serialization import deserialize_message
 from rosbag2_py import ConverterOptions
+from rosbag2_py import Info
 from rosbag2_py import Reindexer
 from rosbag2_py import SequentialReader
 from rosbag2_py import StorageFilter
@@ -76,29 +77,53 @@ class RosbagReader:
         ]
 
 
+def _detect_storage_type(bag_path: str) -> str:
+    mcap_files = list(Path(bag_path).glob("*.mcap"))
+    db3_files = list(Path(bag_path).glob("*.db3"))
+    if mcap_files and db3_files:
+        err_msg = f"Both mcap and sqlite3 files exist in the rosbag directory: {bag_path}"
+        raise RuntimeError(err_msg)
+    if mcap_files:
+        return "mcap"
+    if db3_files:
+        return "sqlite3"
+    err_msg = f"No rosbag files found in the directory: {bag_path}"
+    raise RuntimeError(err_msg)
+
+
+def _metadata_parsable(bag_path: str, storage_type: str) -> bool:
+    """Return True if the existing metadata.yaml can be parsed by the local rosbag2."""
+    try:
+        Info().read_metadata(Path(bag_path).as_posix(), storage_type)
+    except RuntimeError:
+        return False
+    return True
+
+
 def create_metadata_yaml(bag_path: str) -> None:
     """
-    Create metadata.yaml for the rosbag in bag_path if it does not exist.
+    Create metadata.yaml for the rosbag in bag_path, regenerating it when incompatible.
+
+    metadata.yaml が無い場合は Reindexer で生成する。既に存在していても、ローカルの
+    rosbag2 (Humble) でパースできない場合は再生成する。
+
+    webauto pull で取得した bag は新しい rosbag2 (Jazzy 以降) が書いた metadata.yaml を
+    含むことがあり、QoS プロファイルがネスト YAML 形式で格納されている。Humble の
+    yaml-cpp はこれをパースできず `bad conversion` で失敗するため、Reindexer で
+    互換形式の metadata.yaml に作り直す。
 
     Args:
         bag_path (str): Path to the directory containing the rosbag files.
 
     """
     metadata_path = Path(bag_path).joinpath("metadata.yaml")
+    storage_type = _detect_storage_type(bag_path)
     if metadata_path.exists():
-        return
-    mcap_files = list(Path(bag_path).glob("*.mcap"))
-    db3_files = list(Path(bag_path).glob("*.db3"))
-    if mcap_files and db3_files:
-        err_msg = f"Both mcap and sqlite3 files exist in the rosbag directory: {bag_path}"
-        raise RuntimeError(err_msg)
-    storage_type: str
-    if mcap_files:
-        storage_type = "mcap"
-    elif db3_files:
-        storage_type = "sqlite3"
-    else:
-        err_msg = f"No rosbag files found in the directory: {bag_path}"
-        raise RuntimeError(err_msg)
+        if _metadata_parsable(bag_path, storage_type):
+            return
+        print(
+            f"[create_metadata_yaml] existing metadata.yaml is unparsable by local rosbag2 "
+            f"(likely written by a newer rosbag2); regenerating via reindex: {bag_path}",
+        )
     storage_options = StorageOptions(storage_id=storage_type, uri=Path(bag_path).as_posix())
     Reindexer().reindex(storage_options)
