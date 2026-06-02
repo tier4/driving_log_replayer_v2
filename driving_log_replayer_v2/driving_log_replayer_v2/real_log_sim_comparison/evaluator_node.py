@@ -26,7 +26,7 @@ Runs the 11-stage comparison pipeline inside a cloud DLR2 job:
   8. step8_compare_dp_trajectory DiffusionPlanner 出力軌跡 real vs sim 比較 (figures/dp_*.png)
   9. step9_identify_brake  real.lite で縦方向 brake_tc を発進フィット同定 (brake_sweep/)
   10. step10_diagnose_curve カーブ/発進区間の乖離を縦横分解診断 (curve_diag/)
-  11. step11_build_html_report comparison/ 配下の全プロットを集約 (index.html)
+  11. step11_build_html_report comparison/ 配下の全プロットを集約 (result_archive/index.html)
 
 Outputs are written to result_archive_path, which is collected by
 `logging.additional_log_archive` in .webauto-ci.yml.
@@ -327,7 +327,7 @@ def run_pipeline(
         logger.warning(f"Stage 10 (step10_diagnose_curve) failed but continuing: {exc}")
 
     # ---- Stage 11: comparison/ 配下の全プロットを集約した閲覧用 HTML 生成 ----
-    logger.info("Stage 11: step11_build_html_report (comparison/index.html)")
+    logger.info("Stage 11: step11_build_html_report (result_archive/index.html)")
     try:
         _run([
             sys.executable, "-m",
@@ -357,7 +357,8 @@ def run_pipeline(
         "dp_compare_ok": int((comparison_dir / "figures" / "dp_real_vs_sim.png").exists()),
         "brake_sweep_ok": int((comparison_dir / "brake_sweep" / "brake_sweep.csv").exists()),
         "curve_diag_ok": int((comparison_dir / "curve_diag" / "curve_divergence.png").exists()),
-        "index_html_ok": int((comparison_dir / "index.html").exists()),
+        # index.html は comparison/ の親 (result_archive/) 直下に生成される。
+        "index_html_ok": int((comparison_dir.parent / "index.html").exists()),
     }
     logger.info(
         f"Pipeline outputs: sim_runs {sim_produced}/{len(sim_cfg.runs)}, "

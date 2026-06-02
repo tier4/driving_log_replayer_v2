@@ -25,7 +25,7 @@ annotation-dataset）が全 stage の入口になる。
 | 8 | DP軌跡比較 (`step8_compare_dp_trajectory`) | `lite/{real, <sim>}.lite/` | `comparison/figures/dp_*.png` | 1 |
 | 9 | 縦パラ同定 (`step9_identify_brake`) | `lite/real.lite/` | `comparison/brake_sweep/{brake_sweep.csv, .png}` | 1 |
 | 10 | カーブ乖離診断 (`step10_diagnose_curve`) | `lite/{real, <sim>}.lite/` | `comparison/curve_diag/{curve_divergence.md, .png}` | 1 |
-| 11 | HTML レポート生成 (`step11_build_html_report`) | `comparison/` 配下の全 PNG + 各 `.md` | `comparison/index.html` | 1 |
+| 11 | HTML レポート生成 (`step11_build_html_report`) | `comparison/` 配下の全 PNG + 各 `.md` | `index.html` (result_archive 直下) | 1 |
 
 成否はパイプラインの例外有無で決まる。全 stage が完走すれば `result.jsonl` に
 `Success: true`、いずれかの subprocess が非ゼロ終了またはタイムアウトすると
@@ -127,14 +127,26 @@ Stage 3 (`step3_run_sims`) が `scenario_test_runner` で sim を回した結果
 
 ## 出力（`result_archive/` 配下）
 
-### `comparison/index.html`（閲覧用エントリポイント）
+### `index.html`（result_archive 直下・閲覧用エントリポイント）
 
-`step11_build_html_report`（Stage 11）が生成する、`comparison/` 配下の全プロットを 1 枚に集約した
-HTML。ブラウザで開くと、目次から各セクション（`figures/`, `per_step/<tag>/`, `cases/`, `kus_sweep/`,
-`brake_sweep/`, `curve_diag/`）の全 PNG をキャプション付きで一覧でき、3 種の Markdown レポート
-（`report.md`, `cases_summary.md`, `curve_divergence.md`）も埋め込まれる。画像は**相対パスリンク**なので、
-`comparison/` ディレクトリごとアーカイブ・共有してもそのまま表示できる。散在するプロットをディレクトリを
-辿らずに確認するための入口として使う。
+`step11_build_html_report`（Stage 11）が `result_archive/` 直下（`comparison/` の親）に生成する、
+`comparison/` 配下の全プロットを 1 枚に集約した HTML（画像 src は `comparison/` 始まりの相対パス）。
+出力ディレクトリ単位ではなく **比較の概念** で 5 セクションに分けて並べる（読み手が
+「何を何と比べた図か」で辿れるようにするため）。各図は出力先ではなく (ディレクトリ, ファイル名) の
+組で分類するので、`figures/` に混在する closed-loop 図・DP 図・brake 同定図も正しいセクションに振り分く。
+
+| セクション | 内容 | 主な図（出力元 step） |
+|---|---|---|
+| 1. 実機 rosbag 解析 | 実機ログ(SSOT)のみから抽出する特性・車両パラメータ同定（sim 非介在） | `kus_sweep`(7) / `brake_sweep`・`departure_brake_tc_sensitivity`・`real_cmd_acc_departure`(9) |
+| 2. プランナ出力比較 | DiffusionPlanner 出力軌跡を実走・最終 planning・sim 出力と比較 | `dp_real_vs_sim`・`dp_vs_actual`・`dp_vs_final_traj`(8) |
+| 3. 1-step オープンループ比較 | 各ステップで実機状態にリセットした車両モデル 1 ステップ予測の差 | per_step の `overview`/`error_*`/`steering_analysis`/`map_distribution`/`lateral_*`/`cascade_error`(5) + `cases/overlay`(6) |
+| 4. multi-step オープンループ比較 | 実機初期状態からの N ステップ連続 rollout 誤差成長 | per_step の `rollout_error_growth`(5) |
+| 5. シナリオ クローズループ比較 | auto-scenario を sim で closed-loop 実行した実機との乖離 | `velocity`/`acceleration`/`steering`/`*_vs_distance`/`trajectory_with_map`/`curves_closeup`/`curve{N}_*`(4) + `curve_divergence`(10) |
+
+各セクションには 1 行説明を付け、`per_step/<tag>/` の図はセクション内でケースタグごとにサブグループ化する。
+3 種の Markdown レポート（`report.md`→5、`cases_summary.md`→3、`curve_divergence.md`→5）は所属セクション
+末尾に埋め込む。既知のいずれにも分類されない PNG は捨てず「その他」セクションに回す（黙って誤分類しない）。
+画像は**相対パスリンク**なので、`result_archive/` ディレクトリごとアーカイブ・共有してもそのまま表示できる。
 
 ### `lite/`
 
