@@ -40,9 +40,11 @@ from rclpy.serialization import deserialize_message
 import rosbag2_py
 from nav_msgs.msg import Odometry
 from autoware_perception_msgs.msg import TrackedObjects
+from autoware_perception_msgs.msg import TrafficLightGroupArray
 
 EGO_TOPIC = "/localization/kinematic_state"
 OBJ_TOPIC = "/perception/object_recognition/tracking/objects"
+SIG_TOPIC = "/perception/traffic_light_recognition/traffic_signals"
 
 
 def _detect_storage_id(bag_dir: str) -> str:
@@ -55,16 +57,17 @@ def _detect_storage_id(bag_dir: str) -> str:
     return "sqlite3"
 
 
-def _load_bag(bag_dir: str) -> tuple[list, list]:
-    """input_bag から ego_odom (t_ns, x, y) と tracked objects (t_ns, msg) を読み込む。"""
+def _load_bag(bag_dir: str) -> tuple[list, list, list]:
+    """input_bag から ego_odom (t_ns,x,y) / tracked objects (t_ns,msg) / 信号 (t_ns,msg) を読む。"""
     storage_id = _detect_storage_id(bag_dir)
     so = rosbag2_py.StorageOptions(uri=bag_dir, storage_id=storage_id)
     co = rosbag2_py.ConverterOptions("", "")
     reader = rosbag2_py.SequentialReader()
     reader.open(so, co)
-    reader.set_filter(rosbag2_py.StorageFilter(topics=[EGO_TOPIC, OBJ_TOPIC]))
+    reader.set_filter(rosbag2_py.StorageFilter(topics=[EGO_TOPIC, OBJ_TOPIC, SIG_TOPIC]))
     ego: list = []
     objs: list = []
+    sigs: list = []
     while reader.has_next():
         topic, data, t_ns = reader.read_next()
         if topic == EGO_TOPIC:
@@ -73,11 +76,14 @@ def _load_bag(bag_dir: str) -> tuple[list, list]:
             ego.append((t_ns, p.x, p.y))
         elif topic == OBJ_TOPIC:
             objs.append((t_ns, deserialize_message(data, TrackedObjects)))
-    return ego, objs
+        elif topic == SIG_TOPIC:
+            sigs.append((t_ns, deserialize_message(data, TrafficLightGroupArray)))
+    return ego, objs, sigs
 
 
 class PerceptionReproducer(Node):
-    def __init__(self, ego: list, objs: list, stop_v: float, window_back: int, window_fwd: int):
+    def __init__(self, ego: list, objs: list, sigs: list, stop_v: float,
+                 window_back: int, window_fwd: int):
         super().__init__("perception_reproducer")
         self._ex = [e[1] for e in ego]
         self._ey = [e[2] for e in ego]
@@ -87,14 +93,21 @@ class PerceptionReproducer(Node):
         for i in range(1, self._n):
             self._arc.append(self._arc[-1] + math.hypot(self._ex[i] - self._ex[i - 1],
                                                          self._ey[i] - self._ey[i - 1]))
-        # ego_idx -> 最近傍時刻の objects index
-        obj_t = [t for t, _ in objs]
+
+        def _nearest_time_map(stamped: list) -> list:
+            ts = [t for t, _ in stamped]
+            out = []
+            for t, _, _ in ego:
+                j = bisect.bisect_left(ts, t)
+                cands = [k for k in (j - 1, j) if 0 <= k < len(ts)]
+                out.append(min(cands, key=lambda k: abs(ts[k] - t)) if cands else 0)
+            return out
+
+        # ego_idx -> 最近傍時刻の objects / signals index (pose-sync で同じ playhead を使う)
         self._objs = [m for _, m in objs]
-        self._obj_for = []
-        for t, _, _ in ego:
-            j = bisect.bisect_left(obj_t, t)
-            cands = [k for k in (j - 1, j) if 0 <= k < len(obj_t)]
-            self._obj_for.append(min(cands, key=lambda k: abs(obj_t[k] - t)) if cands else 0)
+        self._obj_for = _nearest_time_map(objs) if objs else []
+        self._sigs = [m for _, m in sigs]
+        self._sig_for = _nearest_time_map(sigs) if sigs else []
 
         self._stop_v = stop_v
         self._wb = window_back
@@ -105,13 +118,16 @@ class PerceptionReproducer(Node):
 
         avg = (ego[-1][0] - ego[0][0]) / 1e9 / max(1, self._n - 1) if self._n > 1 else 0.05
         self._pub = self.create_publisher(TrackedObjects, OBJ_TOPIC, 1)
+        self._sig_pub = (self.create_publisher(TrafficLightGroupArray, SIG_TOPIC, 1)
+                         if self._sigs else None)
         qos = QoSProfile(depth=1, reliability=QoSReliabilityPolicy.RELIABLE,
                          history=QoSHistoryPolicy.KEEP_LAST)
         self._sub = self.create_subscription(Odometry, EGO_TOPIC, self._on_ego, qos)
         self._timer = self.create_timer(max(avg, 0.01), self._on_timer)
         self.get_logger().info(
             f"perception_reproducer ready: ego={self._n} objs={len(self._objs)} "
-            f"arc={self._arc[-1]:.0f}m interval={avg * 1000:.1f}ms stop_v={stop_v}")
+            f"signals={len(self._sigs)} arc={self._arc[-1]:.0f}m "
+            f"interval={avg * 1000:.1f}ms stop_v={stop_v}")
 
     def _on_ego(self, msg: Odometry) -> None:
         p = msg.pose.pose.position
@@ -145,14 +161,23 @@ class PerceptionReproducer(Node):
         else:
             self._playhead = min(self._playhead + 1.0, self._n - 1)  # 停止中: 時間前進
         idx = int(self._playhead)
-        msg = self._objs[self._obj_for[idx]]
-        msg.header.stamp = stamp
-        self._pub.publish(msg)
+        if self._objs:
+            msg = self._objs[self._obj_for[idx]]
+            msg.header.stamp = stamp
+            self._pub.publish(msg)
+        n_obj = len(msg.objects) if self._objs else 0
+        # 信号も同じ playhead で pose-sync 再生 (実車が緑で通過した位置は緑、赤停止した位置は赤
+        # -> D0 偽停止回避と実車の赤信号停止再現を両立)。TrafficLightGroupArray は header でなく
+        # stamp フィールドを持つ。
+        if self._sig_pub is not None:
+            sig = self._sigs[self._sig_for[idx]]
+            sig.stamp = stamp
+            self._sig_pub.publish(sig)
         self._n_pub += 1
         if self._n_pub % 200 == 0:
             self.get_logger().info(
                 f"ego_arc={self._arc[ni]:.0f} v={ego_v:.1f} play_arc={self._arc[idx]:.0f} "
-                f"{len(msg.objects)}obj (#{self._n_pub})")
+                f"{n_obj}obj sig={len(self._sigs) > 0} (#{self._n_pub})")
 
 
 def main() -> None:
@@ -167,14 +192,15 @@ def main() -> None:
     args, _ = parser.parse_known_args()
 
     print(f"[perception_reproducer] loading bag: {args.bag}", flush=True)
-    ego, objs = _load_bag(args.bag)
-    print(f"[perception_reproducer] loaded ego={len(ego)} objs={len(objs)}", flush=True)
-    if not ego or not objs:
-        print("[perception_reproducer] ego/objects が空のため再生しない", flush=True)
+    ego, objs, sigs = _load_bag(args.bag)
+    print(f"[perception_reproducer] loaded ego={len(ego)} objs={len(objs)} signals={len(sigs)}",
+          flush=True)
+    if not ego or (not objs and not sigs):
+        print("[perception_reproducer] ego または objects/signals が空のため再生しない", flush=True)
         return
 
     rclpy.init()
-    node = PerceptionReproducer(ego, objs, args.stop_v, args.window_back, args.window_fwd)
+    node = PerceptionReproducer(ego, objs, sigs, args.stop_v, args.window_back, args.window_fwd)
     try:
         rclpy.spin(node)
     except KeyboardInterrupt:
