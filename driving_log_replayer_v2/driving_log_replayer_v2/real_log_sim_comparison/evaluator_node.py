@@ -158,6 +158,11 @@ def run_pipeline(
     env["LOOP_WAYPOINTS"] = str(compare_cfg.get("loop_waypoints", 0))
     # 信号の扱い (既定 replay; step2 が読む)。green で赤信号 replay 由来の D0 早期停止を回避。
     env["TRAFFIC_SIGNALS"] = str(compare_cfg.get("traffic_signals", "replay"))
+    # perception 再生 (既定 false; step3 が読む)。true で実機 input_bag の先行車を ego-pose 同期で
+    # 各 sim に注入し、実機の先行車追従 (停止・加減速) を再現する。
+    env["REPRODUCE_BAG"] = (
+        str(input_bag_dir) if compare_cfg.get("reproduce_perception", False) else ""
+    )
 
     # ---- Stage 1: real lite bag ----
     logger.info("Stage 1: generating real lite bag")
@@ -411,6 +416,12 @@ def _load_compare_config(scenario_path_str: str) -> dict[str, Any]:
         if "traffic_signals" in conditions:
             ts = str(conditions["traffic_signals"]).strip().lower()
             cfg["traffic_signals"] = ts if ts in ("replay", "green") else "replay"
+
+        # reproduce_perception (任意, 既定 false): true で実機 input_bag の先行車を ego-pose 同期で
+        # 各 sim に注入 (perception_reproducer_node)。NPC 無の auto-scenario に実機の先行車追従
+        # (停止・加減速) を再現させる。step3 が REPRODUCE_BAG 経由で起動。
+        if "reproduce_perception" in conditions:
+            cfg["reproduce_perception"] = bool(conditions["reproduce_perception"])
 
         if "curve_config_yaml" in conditions:
             raw = str(conditions["curve_config_yaml"])
