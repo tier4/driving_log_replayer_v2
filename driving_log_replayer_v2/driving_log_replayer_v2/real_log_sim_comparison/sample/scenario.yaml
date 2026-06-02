@@ -54,3 +54,9 @@ Evaluation:
     # あり routing ではない。lanelet graph に shortcut が無く start+goal でも route は周回全体を引く)。
     # N>0 で実走軌跡の膨らみ位置に中間 LanePosition waypoint を挿入し経路形状を強制する実験用。
     loop_waypoints: 0
+    # perception 再生 (既定 false)。true で実機 input_bag の先行車を ego-pose 同期で各 sim に注入
+    # (perception_reproducer_node を step3 が並走起動)。auto-scenario は NPC を持たないため、実機の
+    # 先行車追従 (発進前/カーブ等の停止・加減速) を再現するにはこれを有効化する。実機が先行車追従
+    # 主体の走行 (cruise_following 等) で、sim ego が先行車不在により自由加速して実機より速くなるのを
+    # 防ぎ、速度プロファイルを実機に近づける。注入先 topic は tracking/objects (DiffusionPlanner 入力)。
+    reproduce_perception: false

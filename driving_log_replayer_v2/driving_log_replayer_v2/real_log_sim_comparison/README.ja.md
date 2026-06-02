@@ -110,6 +110,7 @@ Stage 3 (`step3_run_sims`) が `scenario_test_runner` で sim を回した結果
 | `real_provenance` | 任意 | 実機データ取得時の pilot-auto.x2 / DiffusionPlanner 重みの自由記述。比較プロット・report.md の provenance に掲載し、sim 実行時の版・重み（自動取得）との差を解釈する。 |
 | `traffic_signals` | 任意 (既定 `replay`) | 信号の扱い。`replay`=実機 bag の信号タイムシリーズを再現。`green`=全信号常時 green。sim 早期停止（旧称 D0）の真因は赤信号 replay の到達時刻 desync（実機が green 通過した信号に sim ego が赤で当たり永久停止）であり、`green` で周回を完走できる（live sim A/B 実測: replay=241m 停止 / green=519m 完走、実機 598.7m）。 |
 | `loop_waypoints` | 任意 (既定 0) | route 形状を強制する **実験オプション**（**D0 の修正ではない**）。Stage 2 が start+goal に加え実走軌跡の膨らみ位置へ N 個の中間 LanePosition waypoint を挿入する。D0（sim 早期停止）の真因は赤信号 replay であり routing ではない（lanelet graph に shortcut が無く start+goal でも route は周回全体を引く）ことが live sim で確定したため、D0 解消には `traffic_signals: green` を使う。 |
+| `reproduce_perception` | 任意 (既定 false) | `true` で実機 input_bag の先行車を **ego-pose 同期**で各 sim に注入（`perception_reproducer_node` を Stage 3 が並走起動、`tracking/objects` = DiffusionPlanner 入力に publish）。auto-scenario は NPC を持たないため、実機が先行車追従主体（cruise_following 等）の走行で sim ego が先行車不在により自由加速して実機より速くなるのを防ぎ、**実機の停止・加減速を再現**する。アルゴリズム=走行中は pose-sync（lead を実相対位置に）/ego 停止中は記録を時間前進（dwell→departure を再生し ego を解放）。live 検証: 実機の先行車追従停止と速度エンベロープを再現し完走（実機 598m を ~586m/170s で追従）。完全一致は real/sim の DiffusionPlanner 重み差により頭打ち。 |
 
 - **`sim_runs.yaml`**（Stage 3/4）: closed-loop sim の run 定義。`vehicle_model` と任意の
   `params`（simulator_model 上書き）で run を増やす。

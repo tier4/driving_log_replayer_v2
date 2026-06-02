@@ -37,3 +37,7 @@ Evaluation:
     # replay にすると 241m で停止し timeout する (D0 を再現する場合は replay に変更)。
     traffic_signals: green
     loop_waypoints: 0
+    # 実機の先行車 (cruise_following_lead_vehicle) を ego-pose 同期で各 sim に注入し、
+    # 実機の先行車追従 (発進前/カーブ等の停止・加減速) を再現する。auto-scenario は NPC を
+    # 持たないため、これが無いと sim ego は先行車不在で自由加速し実機より速くなる。
+    reproduce_perception: true
