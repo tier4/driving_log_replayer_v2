@@ -33,11 +33,12 @@ Evaluation:
     cases_config: ./cases.yaml
     sim_runs_config: ./sim_runs.yaml
     real_provenance: ""
-    # D0 解消の要: 全信号 green で赤信号 replay 由来の永久停止を回避し周回を完走させる。
-    # replay にすると 241m で停止し timeout する (D0 を再現する場合は replay に変更)。
-    traffic_signals: green
+    # none: scenario 側で信号をセットせず、perception_reproducer が実機信号を ego-pose 同期で
+    # 再生して所有する。これで「実車が緑で通過した位置は緑 (D0 偽停止回避)・赤で停止した位置は赤
+    # (赤信号停止を忠実再現)」を両立する。green に変えると全信号緑で赤信号停止を再現しない。
+    traffic_signals: none
     loop_waypoints: 0
-    # 実機の先行車 (cruise_following_lead_vehicle) を ego-pose 同期で各 sim に注入し、
-    # 実機の先行車追従 (発進前/カーブ等の停止・加減速) を再現する。auto-scenario は NPC を
+    # 実機の先行車 (cruise_following_lead_vehicle) と信号を ego-pose 同期で各 sim に注入し、
+    # 実機の先行車追従 (発進前/カーブ等の停止・加減速) と信号挙動を再現する。auto-scenario は NPC を
     # 持たないため、これが無いと sim ego は先行車不在で自由加速し実機より速くなる。
     reproduce_perception: true
