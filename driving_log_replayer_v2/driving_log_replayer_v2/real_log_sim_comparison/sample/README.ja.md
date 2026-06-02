@@ -65,8 +65,12 @@ webauto data annotation-dataset pull \
 (`*.mcap` / `*.db3`) が含まれず、`step1_make_lite` の入力が足りずに失敗する。
 
 ダウンロード結果は `~/.webauto/data/data/annotation_dataset/<UUID>/<frame>/` 配下に
-`annotation/`, `data/`, `input_bag/`, `map/` が展開される。
-ローカル実行スクリプトはここを自動探索する。
+`annotation/`, `data/`, `input_bag/`, `map/` が展開される。`make local_cloud_run` は
+`lib/_dataset.py`（解決の SSOT）でこの `<UUID>/<frame>` を解決し、`input_bag/` と
+`map/` を直下に持つディレクトリを `t4_dataset_path` として launch に渡す。これは
+クラウド（Web.Auto が dataset を固定マウントに事前ステージして渡す path）と**同一の
+契約**で、`t4_dataset_path` 以降の扱いはローカル/クラウドで共通。複数 frame があれば
+最新（名前 sort の末尾）を採用する。
 
 ### 2. sim_runs.yaml と cases.yaml を確認/編集
 

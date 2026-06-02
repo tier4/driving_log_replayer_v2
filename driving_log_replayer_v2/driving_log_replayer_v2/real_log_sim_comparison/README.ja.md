@@ -268,8 +268,16 @@ post_process の `create_metadata_yaml` を通すためのプレースホルダ 
 - `map_path`: `lanelet2_map.osm` を含む地図ディレクトリ
 - `result_jsonl_path` / `result_archive_path` / `result_bag_path` / `scenario_path`: 共通の出力・入力パス
 
+クラウドでは Web.Auto が対象 dataset を固定マウント点に事前ステージし、上記
+`t4_dataset_path`（`input_bag/`・`map/` を直下に持つ dir）を**直接** launch に注入する。
+
 ### ローカル（`make local_cloud_run`）
 
 webauto で T4 dataset を pull 済みの環境で `make local_cloud_run` 一発で 10 段階すべて走る。
+ローカルでは `lib/_dataset.py`（解決の SSOT）が webauto キャッシュ
+`~/.webauto/data/data/annotation_dataset/<UUID>/<frame>` を解決し、クラウドと**同一の
+`t4_dataset_path` 契約**を渡す。すなわち `t4_dataset_path` 以降の扱いはローカル/クラウドで
+完全に共通で、両者の違いは「誰がパスを解決するか」（クラウド=Web.Auto ステージング /
+ローカル=`lib/_dataset.py`）だけ。
 手順詳細・`sim_runs.yaml`/`cases.yaml` の書式・トラブルシュート・Makefile 変数の上書き例は
 [`sample/README.ja.md`](sample/README.ja.md) を参照。

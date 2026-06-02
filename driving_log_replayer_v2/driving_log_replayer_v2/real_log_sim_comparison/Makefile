@@ -13,6 +13,9 @@ SETUP_BASH := $(WS_ROOT)/install/setup.bash
 
 # local_cloud_run: webauto キャッシュの T4 dataset を使ったクラウド相当ローカル実行
 # webauto data annotation-dataset pull の出力先は ~/.webauto/data/data/annotation_dataset/<UUID>/<frame>/。
+# UUID/frame から t4_dataset_path を解決するロジックは lib/_dataset.py (SSOT) に集約。
+# クラウド (Web.Auto) は dataset を固定マウントに事前ステージし同じ t4_dataset_path 契約
+# (input_bag/ と map/ を直下に持つ dir) を渡すため、解決方法のみがローカルと異なる。
 WEBAUTO_T4_ROOT  ?= $(HOME)/.webauto/data/data/annotation_dataset
 LOCAL_SAMPLE_DIR ?= $(MAKEFILE_DIR)/sample
 LOCAL_SCENARIO   ?= $(LOCAL_SAMPLE_DIR)/scenario.yaml
@@ -56,28 +59,8 @@ local_cloud_run:
 	@uuid=$$($(PYTHON) -c "import yaml; d=yaml.safe_load(open('$(LOCAL_SCENARIO)')); print(list(d['Evaluation']['Datasets'][0].keys())[0])") ; \
 	    test -n "$$uuid" || { echo "[ERROR] scenario.yaml から Datasets UUID を取得できませんでした"; exit 1; } ; \
 	    echo "[INFO] Dataset UUID: $$uuid" ; \
-	    dataset_root=$$(find $(WEBAUTO_T4_ROOT) -type d -name "$$uuid" -not -path '*/.lock/*' 2>/dev/null | head -1) ; \
-	    if [ -z "$$dataset_root" ]; then \
-	        echo "[ERROR] dataset $$uuid が $(WEBAUTO_T4_ROOT) に見つかりません。" ; \
-	        echo "        次のコマンドで取得してください:" ; \
-	        echo "          webauto data annotation-dataset pull \\" ; \
-	        echo "            --project-id x2_dev \\" ; \
-	        echo "            --annotation-dataset-id $$uuid \\" ; \
-	        echo "            --include-intermediate-artifacts" ; \
-	        exit 1 ; \
-	    fi ; \
-	    frame_dir=$$(find "$$dataset_root" -mindepth 1 -maxdepth 1 -type d 2>/dev/null | sort | tail -1) ; \
-	    test -n "$$frame_dir" || { echo "[ERROR] frame ディレクトリが $$dataset_root の下に見つかりません"; exit 1; } ; \
+	    frame_dir=$$($(PYTHON) $(MAKEFILE_DIR)/lib/_dataset.py --root "$(WEBAUTO_T4_ROOT)" --uuid "$$uuid") || exit 1 ; \
 	    echo "[INFO] T4 dataset path: $$frame_dir" ; \
-	    if ! find "$$frame_dir/input_bag" -maxdepth 1 \( -name '*.mcap' -o -name '*.db3' \) 2>/dev/null | grep -q . ; then \
-	        echo "[ERROR] $$frame_dir/input_bag/ に *.mcap / *.db3 が見つかりません。" ; \
-	        echo "        --include-intermediate-artifacts を付けて再 pull してください:" ; \
-	        echo "          webauto data annotation-dataset pull \\" ; \
-	        echo "            --project-id x2_dev \\" ; \
-	        echo "            --annotation-dataset-id $$uuid \\" ; \
-	        echo "            --include-intermediate-artifacts" ; \
-	        exit 1 ; \
-	    fi ; \
 	    out_dir=$(LOCAL_SAMPLE_DIR)/out/$$(date +%Y%m%d_%H%M%S) ; \
 	    mkdir -p "$$out_dir" ; \
 	    ln -snf "$$(basename $$out_dir)" $(LOCAL_SAMPLE_DIR)/out/latest ; \
