@@ -819,12 +819,13 @@ def main() -> None:
                         help="exitFailure の SimulationTimeCondition [s] (既定 600)")
     parser.add_argument("--goal-tolerance", type=float, default=15.0,
                         help="goal ReachPositionCondition の tolerance [m] (既定 15)")
-    parser.add_argument("--traffic-signals", choices=["replay", "green"],
+    parser.add_argument("--traffic-signals", choices=["replay", "green", "none"],
                         default=os.environ.get("TRAFFIC_SIGNALS", "replay") or "replay",
                         help="信号の扱い (env: TRAFFIC_SIGNALS)。replay (既定)=実機 bag の信号"
-                             "タイムシリーズを再現。green=全信号常時 green。replay は sim ego の"
-                             "到達時刻 desync で実機が green 通過した信号に赤で当たり ego が永久停止"
-                             "する (D0) ことがあり、その場合 green を使うと周回を完走できる。")
+                             "タイムシリーズを再現。green=全信号常時 green。none=scenario 側で信号を"
+                             "一切セットしない (perception_reproducer が信号を pose-sync 再生して所有する"
+                             "場合に使用)。replay は sim ego の到達時刻 desync で実機が green 通過した"
+                             "信号に赤で当たり ego が永久停止する (D0) ことがあり、green/none で回避できる。")
     parser.add_argument("--loop-waypoints", type=int,
                         default=int(os.environ.get("LOOP_WAYPOINTS", "0") or "0"),
                         help="opt-in (既定 0=start+goal のみ): 実走軌跡の膨らみ位置に N 個の中間 "
@@ -881,6 +882,11 @@ def main() -> None:
     if args.traffic_signals == "green":
         print("[step2_bag_to_scenario] traffic_signals=green: 全信号を常時 green に固定 "
               "(replay の到達時刻 desync で ego が赤停止する D0 を回避)")
+    elif args.traffic_signals == "none":
+        # scenario 側で信号を一切セットしない (perception_reproducer が pose-sync 再生して所有)。
+        signals = {}
+        print("[step2_bag_to_scenario] traffic_signals=none: scenario 側で信号を設定しない "
+              "(perception_reproducer が信号を pose-sync 再生して所有する前提)")
 
     # opt-in: 周回経路を強制する中間 waypoint (D0 緩和; 既定 N=0 で無効・要 live sim 検証)
     mid_waypoints = _select_loop_waypoints(input_bag, t0_ns, start_world, goal_world, args.loop_waypoints)

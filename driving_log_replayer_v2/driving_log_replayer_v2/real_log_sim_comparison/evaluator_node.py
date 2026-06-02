@@ -415,7 +415,7 @@ def _load_compare_config(scenario_path_str: str) -> dict[str, Any]:
         # sim ego が赤で当たり永久停止する (D0 の真因) ことがあり、green で周回を完走できる。
         if "traffic_signals" in conditions:
             ts = str(conditions["traffic_signals"]).strip().lower()
-            cfg["traffic_signals"] = ts if ts in ("replay", "green") else "replay"
+            cfg["traffic_signals"] = ts if ts in ("replay", "green", "none") else "replay"
 
         # reproduce_perception (任意, 既定 false): true で実機 input_bag の先行車を ego-pose 同期で
         # 各 sim に注入 (perception_reproducer_node)。NPC 無の auto-scenario に実機の先行車追従
