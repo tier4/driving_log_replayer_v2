@@ -2,8 +2,8 @@
 Changelog for package driving_log_replayer
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-Forthcoming
------------
+3.18.2 (2026-06-02)
+-------------------
 * feat: support jazzy rosbag reindex by humble env (`#364 <https://github.com/tier4/driving_log_replayer_v2/issues/364>`_)
   * feat: support jazzy rosbag reindex by humble env
   * continue is offered_qos_profiles is
