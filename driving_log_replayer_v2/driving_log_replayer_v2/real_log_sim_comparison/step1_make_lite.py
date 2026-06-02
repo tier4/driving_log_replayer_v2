@@ -33,6 +33,8 @@ TOPICS: dict[str, set[str]] = {
         "/planning/trajectory_generator/neural_network_based_planner/diffusion_planner_node/output/trajectory",
         # 追跡物体（社会的コンテキスト有無の確認用）
         "/perception/object_recognition/tracking/objects",
+        "/perception/object_recognition/detection/objects",
+        "/perception/traffic_light_recognition/traffic_signals",
         # 最終プランニング軌跡（optimizer後段の出力を確認）
         "/planning/trajectory",
     },
