@@ -57,6 +57,56 @@ def _detect_storage_id(bag_dir: str) -> str:
     return "sqlite3"
 
 
+def _ego_governing_group_ids(ego: list, map_osm: str) -> set[int] | None:
+    """ego が実際に走行した lanelet を govern する信号 group_id 集合を返す。
+
+    信号 pose-sync 再生時、ego レーンを govern しない交差信号まで replay すると sim の
+    behavior planner が ego の停止信号と誤解釈し偽停止する。そこで「実走 lanelet を
+    regulatory_element として参照する信号」だけに絞る。map が無ければ None (絞り込みしない)。
+    """
+    from pathlib import Path
+
+    p = Path(map_osm)
+    if not p.exists():
+        return None
+    from .step2_bag_to_scenario import _load_lanelet_centerlines, _signal_to_lanelet_map
+
+    centerlines = _load_lanelet_centerlines(p)
+    # ego 走行 lanelet 集合 (subsample, 中央線頂点まで 5m 以内)
+    driven: set[int] = set()
+    stepn = max(1, len(ego) // 500)
+    for i in range(0, len(ego), stepn):
+        _, x, y = ego[i]
+        best = (1e18, None)
+        for lid, center in centerlines.items():
+            for px, py in center:
+                d = (px - x) ** 2 + (py - y) ** 2
+                if d < best[0]:
+                    best = (d, lid)
+        if best[1] is not None and best[0] < 25.0:  # 5m^2
+            driven.add(best[1])
+    # 全信号 id を map から逆引きし、driven lanelet を govern するものだけ残す
+    # (信号 id は traffic_light_group_id)。target は map の全 regulatory_element だが、
+    # _signal_to_lanelet_map は target 集合が要るため、まず map 上の全信号関連 lanelet を走査。
+    sig2lane = _signal_to_lanelet_map(p, _all_signal_ids(p))
+    return {sid for sid, lid in sig2lane.items() if lid in driven}
+
+
+def _all_signal_ids(map_osm) -> set[int]:
+    """lanelet2 osm から traffic_light regulatory_element の id 集合を返す。"""
+    import xml.etree.ElementTree as ET
+
+    ids: set[int] = set()
+    root = ET.parse(str(map_osm)).getroot()
+    for rel in root.iter("relation"):
+        if any(t.get("k") == "type" and t.get("v") == "regulatory_element"
+               and True for t in rel.findall("tag")) and any(
+                   t.get("k") == "subtype" and t.get("v") == "traffic_light"
+                   for t in rel.findall("tag")):
+            ids.add(int(rel.get("id")))
+    return ids
+
+
 def _load_bag(bag_dir: str) -> tuple[list, list, list]:
     """input_bag から ego_odom (t_ns,x,y) / tracked objects (t_ns,msg) / 信号 (t_ns,msg) を読む。"""
     storage_id = _detect_storage_id(bag_dir)
@@ -189,6 +239,9 @@ def main() -> None:
                         help="nearest 探索の後方窓 [frame]")
     parser.add_argument("--window-fwd", type=int, default=600,
                         help="nearest 探索の前方窓 [frame]")
+    parser.add_argument("--map", default="",
+                        help="lanelet2_map.osm パス。指定すると ego 走行 lanelet を govern する信号"
+                             "だけに絞って再生する (非 govern 交差信号による偽停止を防ぐ)。")
     args, _ = parser.parse_known_args()
 
     print(f"[perception_reproducer] loading bag: {args.bag}", flush=True)
@@ -198,6 +251,20 @@ def main() -> None:
     if not ego or (not objs and not sigs):
         print("[perception_reproducer] ego または objects/signals が空のため再生しない", flush=True)
         return
+
+    # ego を govern する信号だけに絞る (map 指定時)。非 govern 交差信号の偽停止を防ぐ。
+    if args.map and sigs:
+        gov = _ego_governing_group_ids(ego, args.map)
+        if gov is not None:
+            n_before = sum(len(m.traffic_light_groups) for _, m in sigs)
+            for _, m in sigs:
+                m.traffic_light_groups = [
+                    g for g in m.traffic_light_groups
+                    if int(getattr(g, "traffic_light_group_id", -1)) in gov
+                ]
+            n_after = sum(len(m.traffic_light_groups) for _, m in sigs)
+            print(f"[perception_reproducer] ego-govern 信号フィルタ: govern group={sorted(gov)} "
+                  f"group出現 {n_before}->{n_after}", flush=True)
 
     rclpy.init()
     node = PerceptionReproducer(ego, objs, sigs, args.stop_v, args.window_back, args.window_fwd)

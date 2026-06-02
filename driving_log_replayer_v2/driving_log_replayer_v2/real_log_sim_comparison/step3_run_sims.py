@@ -139,6 +139,14 @@ def main() -> None:
                 "driving_log_replayer_v2.real_log_sim_comparison.perception_reproducer_node",
                 "--bag", str(args.reproduce_bag),
             ]
+            # 信号を ego-govern するものに絞るための map。env MAP_OSM_PATH 優先、無ければ
+            # input_bag の隣 (<dataset>/map/lanelet2_map.osm) から導出。
+            map_osm = os.environ.get("MAP_OSM_PATH", "")
+            if not map_osm:
+                cand = Path(args.reproduce_bag).parent / "map" / "lanelet2_map.osm"
+                map_osm = str(cand) if cand.exists() else ""
+            if map_osm:
+                repro_cmd += ["--map", map_osm]
             print(f"[step3_run_sims] $ {' '.join(repro_cmd)} (並走)", flush=True)
             reproducer_proc = subprocess.Popen(repro_cmd)  # noqa: S603
         elif args.reproduce_bag:
