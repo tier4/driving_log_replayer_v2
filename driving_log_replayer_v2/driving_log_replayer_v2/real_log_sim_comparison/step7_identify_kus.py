@@ -41,6 +41,7 @@ import numpy as np
 import pandas as pd
 
 from . import step5_analyze_per_step as s5
+from .lib._io import resolve_lite_bag
 from .lib._params_utils import add_params_annotation, setup_jp_font
 from .lib._runtime_config import add_common_cli_arguments, build_runtime_config
 
@@ -155,10 +156,10 @@ def main() -> None:
     cfg = build_runtime_config(args, default_base_dir=Path.cwd())
     s5.LITE_DIR = cfg.lite_dir
 
-    try:
-        real_mcap = s5._resolve_real_mcap(cfg.lite_dir / "real.lite.mcap")
-    except FileNotFoundError as e:
-        print(f"ERROR: {e}", file=sys.stderr)
+    # bag 解決は lib._io.resolve_lite_bag に集約済み（step5/8/9/10 と同方式）
+    real_mcap = resolve_lite_bag(cfg.lite_dir, "real")
+    if real_mcap is None:
+        print(f"ERROR: real lite bag が見つかりません: {cfg.lite_dir}", file=sys.stderr)
         sys.exit(1)
     print(f"Loading: {real_mcap}")
     data = s5.load_real_bag(real_mcap)
