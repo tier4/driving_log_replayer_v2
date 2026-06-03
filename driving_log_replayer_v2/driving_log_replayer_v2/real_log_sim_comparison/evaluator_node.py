@@ -22,7 +22,7 @@ Runs the 11-stage comparison pipeline inside a cloud DLR2 job:
   4. step4_compare_logs    real + 全 sim を N-way 比較 (figures/, report.md)
   5. step5_analyze_nstep   cases.yaml の各 case で N-step オープンループ解析
   6. step6_analyze_cases   nstep/*.csv を集約 (overlay/, cases_summary.md)
-  7. step7_identify_kus    real.lite で k_us を rollout sweep 同定 (kus_sweep/)
+  7. step7_sweep_params    real.lite で車両モデルパラメータを rollout sweep 同定 (param_sweep/)
   8. step8_compare_dp_trajectory DiffusionPlanner 出力軌跡 real vs sim 比較 (figures/dp_*.svg)
   9. step9_identify_brake  real.lite で縦方向 brake_tc を発進フィット同定 (brake_sweep/)
   10. step10_diagnose_curve カーブ/発進区間の乖離を縦横分解診断 (curve_diag/)
@@ -291,16 +291,17 @@ def run_pipeline(
     except RuntimeError as exc:
         logger.warning(f"Stage 6 (step6_analyze_cases) failed but continuing: {exc}")
 
-    # ---- Stage 7: k_us 同定 (rollout sweep, 追加設定不要) ----
-    # 実機 lite (Stage 1 出力) のみを使い、free-running rollout で実効 k_us を同定する独立ステージ。
-    logger.info("Stage 7: step7_identify_kus (k_us identification via rollout sweep)")
+    # ---- Stage 7: 車両モデルパラメータ sweep 同定 (rollout, 追加設定不要) ----
+    # 実機 lite (Stage 1 出力) のみを使い、k_us/ステア・加速度時定数等を
+    # free-running rollout sweep で同定する独立ステージ (2D ペア sweep 含む)。
+    logger.info("Stage 7: step7_sweep_params (vehicle model parameter sweep via rollout)")
     try:
         _run([
             sys.executable, "-m",
-            "driving_log_replayer_v2.real_log_sim_comparison.step7_identify_kus",
-        ], env=env, timeout=900)
+            "driving_log_replayer_v2.real_log_sim_comparison.step7_sweep_params",
+        ], env=env, timeout=1800)
     except RuntimeError as exc:
-        logger.warning(f"Stage 7 (step7_identify_kus) failed but continuing: {exc}")
+        logger.warning(f"Stage 7 (step7_sweep_params) failed but continuing: {exc}")
 
     # ---- Stage 8: DiffusionPlanner 計画軌跡比較 (planner レベルの乖離分離) ----
     logger.info("Stage 8: step8_compare_dp_trajectory (planner trajectory real vs sim)")
@@ -359,7 +360,7 @@ def run_pipeline(
         "cases_produced": cases_produced,
         "report_ok": int((comparison_dir / "report.md").exists()),
         "cases_summary_ok": int((comparison_dir / "cases" / "cases_summary.md").exists()),
-        "kus_sweep_ok": int((comparison_dir / "kus_sweep" / "kus_sweep.csv").exists()),
+        "param_sweep_ok": int((comparison_dir / "param_sweep" / "param_sweep_summary.md").exists()),
         "dp_compare_ok": int((comparison_dir / "figures" / "dp_real_vs_sim.svg").exists()),
         "brake_sweep_ok": int((comparison_dir / "brake_sweep" / "brake_sweep.csv").exists()),
         "curve_diag_ok": int((comparison_dir / "curve_diag" / "curve_divergence.svg").exists()),
@@ -370,7 +371,7 @@ def run_pipeline(
         f"Pipeline outputs: sim_runs {sim_produced}/{len(sim_cfg.runs)}, "
         f"cases {cases_produced}/{len(cases_cfg.cases)}, "
         f"report={counts['report_ok']}, cases_summary={counts['cases_summary_ok']}, "
-        f"kus_sweep={counts['kus_sweep_ok']}, dp_compare={counts['dp_compare_ok']}, "
+        f"param_sweep={counts['param_sweep_ok']}, dp_compare={counts['dp_compare_ok']}, "
         f"brake_sweep={counts['brake_sweep_ok']}, curve_diag={counts['curve_diag_ok']}, "
         f"index_html={counts['index_html_ok']}"
     )

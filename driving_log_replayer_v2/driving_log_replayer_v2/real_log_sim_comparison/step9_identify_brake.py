@@ -39,7 +39,7 @@ from .lib._events import find_autonomous_start, find_curve2_launch, find_sim_lau
 from .lib._io import align_time, load_cmd, load_operation_mode, load_velocity, resolve_lite_bag
 from .lib._params_utils import add_params_annotation, load_sim_params, setup_jp_font
 from .lib._runtime_config import add_common_cli_arguments, build_runtime_config
-from .step7_identify_kus import _parabolic_min
+from .lib._nstep_common import parabolic_min as _parabolic_min
 
 setup_jp_font()
 

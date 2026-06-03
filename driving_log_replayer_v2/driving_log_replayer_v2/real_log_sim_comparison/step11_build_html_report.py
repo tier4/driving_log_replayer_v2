@@ -2,7 +2,7 @@
 """Stage 11: comparison/ 配下の全プロットを 1 枚の HTML に集約する閲覧用レポート生成.
 
 10 段階パイプライン (step4〜step10) は `comparison/` 配下の複数サブディレクトリ
-(figures/, nstep/<tag>/, cases/overlay/, kus_sweep/, brake_sweep/, curve_diag/) に
+(figures/, nstep/<tag>/, cases/overlay/, param_sweep/, brake_sweep/, curve_diag/) に
 多数の SVG・plotly HTML と 3 種の Markdown レポート (report.md, cases/cases_summary.md,
 curve_diag/curve_divergence.md) を散らして出力する。本ステージはそれらを走査し、
 全図を**相対パス**でリンクした目次付き `index.html` を `result_archive/` 直下
@@ -80,8 +80,8 @@ CAPTIONS: dict[str, str] = {
     "error_growth_overlay": "全ケース 誤差成長 重ね描き",
     "rmse_heatmap": "RMSE ヒートマップ（case × horizon 俯瞰）",
     "growth_relative": "相対誤差成長（reference 比・dynamics 差の分離）",
-    # step7: kus_sweep/
-    "kus_sweep": "k_us（アンダーステア係数）グリッド sweep",
+    # step7: param_sweep/ (個別図のキャプションは _caption_for の正規表現で導出)
+    "_overview_sensitivity": "スイープ感度オーバービュー（改善率ランキング + 正規化 RMSE カーブ）",
     # step9: brake_sweep/ + figures/
     "departure_brake_tc_sensitivity": "発進時 brake_tc 感度分析",
     "real_cmd_acc_departure": "発進時 制御指令（実機）",
@@ -165,6 +165,7 @@ _CLOSED_LOOP_STEMS: set[str] = {
 # 取り込む Markdown レポート: (comparison/ からの相対パス, 見出し, 所属カテゴリ)。
 _MARKDOWN_REPORTS: list[tuple[str, str, str]] = [
     ("report.md", "比較レポート（step4: report.md）", "closed_loop"),
+    ("param_sweep/param_sweep_summary.md", "パラメータ同定サマリ（step7: param_sweep_summary.md）", "real_analysis"),
     ("cases/cases_summary.md", "ケース集約サマリ（step6: cases_summary.md）", "ol_nstep"),
     ("curve_diag/curve_divergence.md", "カーブ乖離サマリ（step10: curve_divergence.md）", "closed_loop"),
 ]
@@ -175,6 +176,14 @@ def _caption_for(filename: str) -> str:
     stem = Path(filename).stem
     if stem in CAPTIONS:
         return CAPTIONS[stem]
+    # param_sweep の個別図 (step7): <param>_sweep / pair_<a>_<b>
+    # (brake_sweep 等の既知 stem は上の CAPTIONS で先に解決済み)
+    m = re.match(r"(.+)_sweep$", stem)
+    if m:
+        return f"{m.group(1)} グリッド sweep 同定"
+    m = re.match(r"pair_(.+)$", stem)
+    if m:
+        return f"2D ペア sweep（{m.group(1)}）"
     # error_timeseries_overlay_n<N> パターン照合（step6、horizon 別の重ね描き）
     m = re.match(r"error_timeseries_overlay_n(\d+)$", stem)
     if m:
@@ -206,7 +215,7 @@ def _classify(rel: Path) -> str:
     if stem in {"departure_brake_tc_sensitivity", "real_cmd_acc_departure"}:
         return "real_analysis"
     # 車両パラメータ同定 sweep（step7 / step9、実機ログのみ）
-    if top in {"kus_sweep", "brake_sweep"}:
+    if top in {"param_sweep", "brake_sweep"}:
         return "real_analysis"
     # N-step オープンループ解析（step5）とケース集約の重ね描き（step6）
     if top in {"nstep", "cases"}:

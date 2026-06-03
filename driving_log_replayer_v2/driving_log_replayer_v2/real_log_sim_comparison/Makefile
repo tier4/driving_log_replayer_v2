@@ -37,7 +37,7 @@ help:
 	@echo "    4. step4_compare_logs     real + 全 sim run の lite を N-way 比較 (figures/, report.md)"
 	@echo "    5. step5_analyze_nstep    cases.yaml の各 case (VehicleModel パラメータ) で N-step オープンループ解析"
 	@echo "    6. step6_analyze_cases    nstep/*.csv を集約 (overlay/, cases_summary.md)"
-	@echo "    7. step7_identify_kus     real.lite で k_us を rollout sweep 同定 (kus_sweep/)"
+	@echo "    7. step7_sweep_params     real.lite で車両モデルパラメータを rollout sweep 同定 (param_sweep/)"
 	@echo "    8. step8_compare_dp_trajectory  DiffusionPlanner 出力軌跡 real vs sim 比較 (figures/dp_*.png)"
 	@echo "    9. step9_identify_brake   real.lite で縦方向 brake_tc を発進フィット同定 (brake_sweep/)"
 	@echo "    10. step10_diagnose_curve カーブ/発進区間の乖離を縦横分解診断 (curve_diag/)"

@@ -43,6 +43,26 @@ def common_horizons(horizon_sets: Iterable[Iterable[int]]) -> list[int]:
     return sorted(int(h) for h in set.intersection(*map(set, horizon_sets)))
 
 
+def parabolic_min(xs: list[float], ys: list[float]) -> float | None:
+    """argmin 近傍 3 点に二次フィットして頂点 (サブグリッド最小) を返す。端なら None。
+
+    パラメータ sweep 同定 (step7/step9) の共有ヘルパー。
+    """
+    i = int(np.argmin(ys))
+    if i == 0 or i == len(xs) - 1:
+        return None
+    x0, x1, x2 = xs[i - 1], xs[i], xs[i + 1]
+    y0, y1, y2 = ys[i - 1], ys[i], ys[i + 1]
+    denom = (x0 - x1) * (x0 - x2) * (x1 - x2)
+    if abs(denom) < 1e-18:
+        return None
+    a = (x2 * (y1 - y0) + x1 * (y0 - y2) + x0 * (y2 - y1)) / denom
+    b = (x2 * x2 * (y0 - y1) + x1 * x1 * (y2 - y0) + x0 * x0 * (y1 - y2)) / denom
+    if a <= 0:  # 下に凸でなければ頂点は最小でない
+        return None
+    return -b / (2 * a)
+
+
 def rmse_by_horizon(df: pd.DataFrame) -> dict[int, dict[str, float]]:
     """horizon 別の終端誤差 RMSE を返す: {N: {"pos","long","lat" [cm], "yaw" [deg]}}。"""
 

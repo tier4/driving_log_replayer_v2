@@ -137,7 +137,7 @@ make -C src/simulator/driving_log_replayer_v2/driving_log_replayer_v2/driving_lo
    - Stage 4: step4_compare_logs → comparison/figures/, report.md (real + sim 重ね描き)
    - Stage 5: cases.yaml の各 tag で step5_analyze_nstep → nstep/<tag>/
    - Stage 6: step6_analyze_cases → cases/overlay/, cases_summary.md
-   - Stage 7: step7_identify_kus → comparison/kus_sweep/ (k_us 同定; 追加設定不要)
+   - Stage 7: step7_sweep_params → comparison/param_sweep/ (パラメータ sweep 同定; 追加設定不要)
    - Stage 8: step8_compare_dp_trajectory → comparison/figures/dp_*.png (DP軌跡 real vs sim)
    - Stage 9: step9_identify_brake → comparison/brake_sweep/ (縦方向 brake_tc 同定)
    - Stage 10: step10_diagnose_curve → comparison/curve_diag/ (カーブ乖離 縦横分解診断)
@@ -164,7 +164,7 @@ sample/out/latest/
         ├── cases/
         │   ├── overlay/{cascade_error_overlay.png, error_timeseries_overlay.png}
         │   └── cases_summary.md          # Stage 6: N=1 RMSE + horizon 別 RMSE 横断表
-        ├── kus_sweep/{kus_sweep.csv, kus_sweep.png}      # Stage 7: k_us 同定
+        ├── param_sweep/{<param>_sweep.{csv,svg}, pair_*.{csv,svg}, param_sweep_summary.md}  # Stage 7
         ├── brake_sweep/{brake_sweep.csv, brake_sweep.png} # Stage 9: 縦方向 brake_tc 同定
         └── curve_diag/{curve_divergence.md, curve_divergence.png} # Stage 10: カーブ乖離診断
 ```
@@ -208,4 +208,4 @@ make local_cloud_run LOCAL_SCENARIO=/path/to/other_scenario.yaml
   `Δsteer vs ref` 列、horizon 別横断表に `Δyaw vs ref` 列を出力する
   (`step6_analyze_cases.py::write_cases_summary`)。
 - **k_us は N=1 では同定不可**: N=1 は k_us 非感度、`err_wz` は k_us=0 seeding
-  バイアスを含む。k_us 同定には Stage 7 (`step7_identify_kus`, 大 N rollout sweep) を使う。
+  バイアスを含む。k_us 等の同定には Stage 7 (`step7_sweep_params`, 大 N rollout sweep) を使う。
