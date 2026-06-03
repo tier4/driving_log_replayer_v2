@@ -336,21 +336,31 @@ def _set_evidence_title(ax, title: str, source: str) -> None:
             ha="center", va="bottom", color="#888888", clip_on=False)
 
 
-def _lag_corr_plot(ax, ev: dict, u: np.ndarray, y: np.ndarray, ident: dict,
-                   base_value: float | None, title: str, source: str,
-                   max_lag: float = 0.6) -> None:
-    """指令/実測の微分の相互相関 vs ラグ。ピーク位置 ≈ 実効むだ時間。"""
+def _lag_corr_plot(ax, ev: dict, u: np.ndarray, y: np.ndarray, title: str, source: str,
+                   marks: list[tuple[float, str, str, str]] = (),
+                   derivative: bool = True, max_lag: float = 0.6) -> float:
+    """指令/実測の相互相関 vs ラグを描き、ピーク位置 [s] を返す。
+
+    derivative=True: 微分同士の相関 — ピーク ≈ 純むだ時間 (波形の立ち上がり整合)。
+    derivative=False: 信号同士の相関 — 1 次遅れの平滑化も含むため
+                      ピーク ≈ むだ時間 + 時定数相当の実効遅れ (入力波形依存の目安)。
+    marks: 縦線 (value, color, linestyle, label) のリスト。
+    """
     t = ev["t"]
     dt = float(np.median(np.diff(t)))
     n_lag = max(1, int(max_lag / dt))
-    du = np.gradient(u, t)
-    dy = np.gradient(y, t)
-    du = du - np.nanmean(du)
-    dy = dy - np.nanmean(dy)
+    if derivative:
+        a0 = np.gradient(u, t)
+        b0 = np.gradient(y, t)
+    else:
+        a0 = np.asarray(u, dtype=float)
+        b0 = np.asarray(y, dtype=float)
+    a0 = a0 - np.nanmean(a0)
+    b0 = b0 - np.nanmean(b0)
     lags, corrs = [], []
     for k in range(n_lag + 1):
-        a = du[: len(du) - k] if k else du
-        b = dy[k:]
+        a = a0[: len(a0) - k] if k else a0
+        b = b0[k:]
         c = np.corrcoef(a, b)[0, 1] if len(a) > 10 else np.nan
         lags.append(k * dt)
         corrs.append(c)
@@ -359,15 +369,14 @@ def _lag_corr_plot(ax, ev: dict, u: np.ndarray, y: np.ndarray, ident: dict,
     ax.plot(lags, corrs, "o-", color="#4472C4", ms=3)
     peak = float(lags[int(np.nanargmax(corrs))])
     ax.axvline(peak, color="black", lw=1.5, label=f"相関ピーク τ={peak:.3f}s")
-    ax.axvline(_ident_value(ident), color="red", ls="--", lw=1.2,
-               label=f"sweep 同定≈{_ident_value(ident):.3f}s")
-    if base_value is not None:
-        ax.axvline(base_value, color="gray", ls=":", lw=1.2, label=f"仕様値 {base_value:.3f}s")
+    for value, color, ls, label in marks:
+        ax.axvline(value, color=color, ls=ls, lw=1.2, label=label)
     ax.set_xlabel("ラグ τ [s] (指令を τ 遅らせたときの相関)")
-    ax.set_ylabel("相互相関 (微分同士)")
+    ax.set_ylabel("相互相関 (微分同士)" if derivative else "相互相関 (信号同士)")
     _set_evidence_title(ax, title, source)
     ax.grid(True, lw=0.5, alpha=0.6)
     ax.legend(fontsize=8)
+    return peak
 
 
 def _ev_k_us(ax, ev, ident, base_value) -> None:
@@ -420,11 +429,70 @@ def _ev_steer_tc(ax, ev, ident, base_value) -> None:
         ax.legend(fontsize=8)
 
 
+def _first_order_filter(u: np.ndarray, t: np.ndarray, tc: float) -> np.ndarray:
+    """一様 dt 近似の離散 1 次遅れフィルタ y' = (u − y)/tc。"""
+    dt = float(np.median(np.diff(t)))
+    alpha = dt / (tc + dt)
+    out = np.empty_like(u, dtype=float)
+    out[0] = u[0]
+    for i in range(1, len(u)):
+        out[i] = out[i - 1] + alpha * (u[i - 1] - out[i - 1])
+    return out
+
+
+def _ev_steer_tc_corr(ax, ev, ident, base_value) -> None:
+    """steer_tc 第2根拠: 相関係数解析。
+
+    tc 候補ごとに「むだ時間(仕様)で遅延 + 1 次遅れフィルタした指令」を作り、実測ステアとの
+    相関係数を計算する (低周波の操舵波形は tc に非感度なため、移動平均 1.0s を除去した
+    ハイパス成分同士で相関を取る)。相関最大の tc が「指令→実測ステア」の直接追従としての
+    実効時定数。sweep 同定値との乖離は、sweep の tc が操舵応答以外の遅れ (ヨー応答等) を
+    代理吸収していることを示唆する。
+    """
+    t, u, y = ev["t"], ev["steer_des"], ev["steer"]
+    dt = float(np.median(np.diff(t)))
+    delay_spec = float(ev["params"].get("steer_time_delay", 0.0))
+    k = int(round(delay_spec / dt))
+    u_d = np.concatenate([np.full(k, u[0]), u[: len(u) - k]]) if k > 0 else u
+
+    def _highpass(x: np.ndarray, win_s: float = 1.0) -> np.ndarray:
+        w = max(3, int(win_s / dt))
+        return x - pd.Series(x).rolling(w, center=True, min_periods=1).mean().to_numpy()
+
+    y_hp = _highpass(y)
+    tcs = np.geomspace(0.02, 1.5, 30)
+    corrs = np.asarray([
+        float(np.corrcoef(_highpass(_first_order_filter(u_d, t, float(tc))), y_hp)[0, 1])
+        for tc in tcs
+    ])
+
+    ax.semilogx(tcs, corrs, "o-", color="#4472C4", ms=3)
+    tc_best = float(tcs[int(np.nanargmax(corrs))])
+    ax.axvline(tc_best, color="black", lw=1.5, label=f"相関最大 tc≈{tc_best:.3f}s")
+    ax.axvline(_ident_value(ident), color="red", ls="--", lw=1.2,
+               label=f"sweep 同定≈{_ident_value(ident):.3f}s")
+    if base_value is not None:
+        ax.axvline(base_value, color="gray", ls=":", lw=1.2, label=f"仕様値 {base_value:.3f}s")
+    ax.set_xlabel("tc 候補 [s] (log)")
+    ax.set_ylabel("corr( 1次遅れフィルタ済み指令, 実測 ) [HP 1.0s]")
+    _set_evidence_title(
+        ax, "実機ログ根拠: 相関係数解析 (1次遅れフィルタ tc を走査)\n"
+            "sweep 同定との乖離 = tc が操舵以外の遅れを代理吸収している示唆",
+        "実測: steering_status  指令: control_cmd (むだ時間=仕様値で遅延、移動平均1.0s除去済み)",
+    )
+    ax.grid(True, lw=0.5, alpha=0.6, which="both")
+    ax.legend(fontsize=8)
+
+
 def _ev_steer_delay(ax, ev, ident, base_value) -> None:
+    marks = [(_ident_value(ident), "red", "--", f"sweep 同定≈{_ident_value(ident):.3f}s")]
+    if base_value is not None:
+        marks.append((base_value, "gray", ":", f"仕様値 {base_value:.3f}s"))
     _lag_corr_plot(
-        ax, ev, ev["steer_des"], ev["steer"], ident, base_value,
+        ax, ev, ev["steer_des"], ev["steer"],
         "実機ログ根拠: 指令→実測ステアのラグ相関",
         "実測: steering_status  指令: control_cmd (微分同士の相互相関)",
+        marks=marks,
     )
 
 
@@ -488,10 +556,14 @@ def _ev_acc_tc(ax, ev, ident, base_value) -> None:
 
 
 def _ev_acc_delay(ax, ev, ident, base_value) -> None:
+    marks = [(_ident_value(ident), "red", "--", f"sweep 同定≈{_ident_value(ident):.3f}s")]
+    if base_value is not None:
+        marks.append((base_value, "gray", ":", f"仕様値 {base_value:.3f}s"))
     _lag_corr_plot(
-        ax, ev, ev["accel_des"], ev["ax"], ident, base_value,
+        ax, ev, ev["accel_des"], ev["ax"],
         "実機ログ根拠: 指令→実測加速度のラグ相関",
         "実測: localization/acceleration  指令: control_cmd (微分同士の相互相関)",
+        marks=marks,
     )
 
 
@@ -509,17 +581,17 @@ def _ev_acc_scaling(ax, ev, ident, base_value) -> None:
     )
 
 
-# パラメータ名 → 根拠プロット関数 (ax, ev, ident, base_value)
-_EVIDENCE_PLOTS = {
-    "k_us": _ev_k_us,
-    "debug_steer_scaling_factor": _ev_steer_scaling,
-    "steer_time_constant": _ev_steer_tc,
-    "steer_time_delay": _ev_steer_delay,
-    "steer_bias": _ev_steer_bias,
-    "steer_dead_band": _ev_steer_dead_band,
-    "acc_time_constant": _ev_acc_tc,
-    "acc_time_delay": _ev_acc_delay,
-    "debug_acc_scaling_factor": _ev_acc_scaling,
+# パラメータ名 → 根拠プロット関数 (ax, ev, ident, base_value) のリスト (パネル数分)
+_EVIDENCE_PLOTS: dict[str, list] = {
+    "k_us": [_ev_k_us],
+    "debug_steer_scaling_factor": [_ev_steer_scaling],
+    "steer_time_constant": [_ev_steer_tc, _ev_steer_tc_corr],
+    "steer_time_delay": [_ev_steer_delay],
+    "steer_bias": [_ev_steer_bias],
+    "steer_dead_band": [_ev_steer_dead_band],
+    "acc_time_constant": [_ev_acc_tc],
+    "acc_time_delay": [_ev_acc_delay],
+    "debug_acc_scaling_factor": [_ev_acc_scaling],
 }
 
 
@@ -534,6 +606,7 @@ def build_evidence_data(g: dict, base_params: dict) -> dict:
         "steer_des": g["df_cmd"]["steer_des"].to_numpy(dtype=float),
         "accel_des": g["df_cmd"]["accel_des"].to_numpy(dtype=float),
         "wb": float(base_params["wheelbase"]),
+        "params": dict(base_params),  # 根拠プロットが他パラメータの仕様値を参照する用
     }
 
 
@@ -549,17 +622,18 @@ def plot_sweep(
     base_value: float | None,
     params: dict,
     out_path: Path,
-    evidence=None,
+    evidence: list | None = None,
 ) -> None:
-    """sweep 2 パネル (同定メトリクス / 位置 RMSE) + 実機ログ根拠パネル。
+    """sweep 2 パネル (同定メトリクス / 位置 RMSE) + 実機ログ根拠パネル群。
 
-    evidence: 第 3 パネルを描く callable (ax を受け取る)。None なら 2 パネル。
+    evidence: 第 3 パネル以降を描く callable (ax を受け取る) のリスト。None/空なら 2 パネル。
     sweep はモデル経由の同定、根拠パネルは実機ログの直接観察 — 両者の一致が
     同定の信頼性のクロスチェックになる。
     """
     metric_label, metric_unit, metric_col = _METRIC_INFO[spec.metric]
     horizons = sorted(res["horizon"].unique())
-    n_panels = 3 if evidence is not None else 2
+    evidence = evidence or []
+    n_panels = 2 + len(evidence)
     fig, axes = plt.subplots(1, n_panels, figsize=(6.5 * n_panels, 5))
     ax1, ax2 = axes[0], axes[1]
     cmap = plt.get_cmap("viridis")
@@ -585,8 +659,8 @@ def plot_sweep(
         ax.set_title(title, fontsize=10)
         ax.grid(True, lw=0.5, alpha=0.6)
         ax.legend(fontsize=8)
-    if evidence is not None:
-        evidence(axes[2])
+    for i, ev_fn in enumerate(evidence):
+        ev_fn(axes[2 + i])
     fig.suptitle(
         f"{spec.label} ({spec.name}) スイープ同定 (free-running rollout, "
         f"同定 = N={identified['horizon']} の {metric_label} 最小化)",
@@ -884,11 +958,10 @@ def main() -> None:
         res = run_param_sweep(data, t0_ns, base_params, spec, grid, horizons, args.stride)
         ident = identify(res, spec, h_max)
         res.to_csv(out_dir / f"{spec.name}_sweep.csv", index=False)
-        ev_fn = _EVIDENCE_PLOTS.get(spec.name)
-        evidence = (
-            (lambda ax, _fn=ev_fn, _i=ident, _b=base_value: _fn(ax, ev, _i, _b))
-            if ev_fn is not None else None
-        )
+        evidence = [
+            (lambda ax, _fn=fn, _i=ident, _b=base_value: _fn(ax, ev, _i, _b))
+            for fn in _EVIDENCE_PLOTS.get(spec.name, [])
+        ]
         plot_sweep(res, spec, ident, base_value, base_params,
                    out_dir / f"{spec.name}_sweep.svg", evidence=evidence)
         records.append({
