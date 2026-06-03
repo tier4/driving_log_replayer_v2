@@ -41,6 +41,7 @@ from .lib._io import (
 )
 from .lib._map import load_map_ways, map_ways_in_bbox, resolve_map_osm
 from .lib._params_utils import add_params_annotation, setup_jp_font
+from .lib._playback_viewer import plot_trajectory_playback
 from .lib._plotly_utils import (
     FIG_HEIGHTS,
     add_params_annotation_plotly,
@@ -1652,6 +1653,8 @@ def main() -> None:
 
     print("\n=== プロット生成中 ===")
     plot_trajectory(loaded, map_ways)
+    # 軌跡再生ビューア (時刻同期/位置同期シークバー付き自己完結 HTML)
+    plot_trajectory_playback(loaded, map_ways, FIGS_DIR, title=SCENARIO_NAME)
     plot_velocity(loaded)
     plot_acceleration(loaded)
     plot_steering(loaded)

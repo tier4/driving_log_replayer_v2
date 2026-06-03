@@ -18,12 +18,14 @@ from ._params_utils import load_sim_params, make_annotation_text
 
 PLOTLYJS_NAME = "plotly.min.js"
 
-# plotly 図の layout 高さ [px] の単一ソース。生成側 (step4/step5 の update_layout) と
-# 埋め込み側 (step11 の iframe 高さ = layout 高さ + IFRAME_PAD) の両方がここを参照する。
-# 新しい plotly 図を追加する際はここに stem → 高さを追記すること。
+# インタラクティブ図 (*.html) の高さ [px] の単一ソース。生成側 (step4/step5 の
+# update_layout) と埋め込み側 (step11 の iframe 高さ = 高さ + IFRAME_PAD) の両方が
+# ここを参照する。新しい図を追加する際はここに stem → 高さを追記すること。
+# plotly 以外の自己完結 HTML 図 (trajectory_playback 等) も iframe 高さはここで決まる。
 FIG_HEIGHTS: dict[str, int] = {
     "trajectory_with_map": 800,
     "trajectory_xy": 800,
+    "trajectory_playback": 760,
     "map_distribution": 520,
 }
 # iframe に追加する余白 [px]（plotly モードバー等のはみ出し分）

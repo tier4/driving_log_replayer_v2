@@ -54,6 +54,7 @@ CAPTIONS: dict[str, str] = {
     # step4: figures/
     "trajectory_with_map": "軌跡比較（地図背景付き・インタラクティブ）",
     "trajectory_xy": "軌跡比較（地図なし・インタラクティブ）",
+    "trajectory_playback": "軌跡再生ビューア（時刻同期/位置同期シークバー・速度矢印・追従ズーム）",
     "velocity": "速度時系列",
     "acceleration": "加速度時系列",
     "steering": "ステア角時系列",
@@ -159,6 +160,7 @@ _CLOSED_LOOP_STEMS: set[str] = {
     "steering_vs_distance",
     "trajectory_with_map",
     "trajectory_xy",
+    "trajectory_playback",
     "curves_closeup",
 }
 
