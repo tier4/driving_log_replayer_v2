@@ -20,8 +20,8 @@ Runs the 11-stage comparison pipeline inside a cloud DLR2 job:
   2. step2_bag_to_scenario lite/real.lite → scenarios/auto_scenario.yaml
   3. step3_run_sims        sim_runs.yaml の各 run を closed-loop 実行 → lite/<tag>.lite/
   4. step4_compare_logs    real + 全 sim を N-way 比較 (figures/, report.md)
-  5. step5_analyze_per_step cases.yaml の各 case で per-step delta 解析
-  6. step6_analyze_cases   per_step/*.csv を集約 (overlay/, cases_summary.md)
+  5. step5_analyze_nstep   cases.yaml の各 case で N-step オープンループ解析
+  6. step6_analyze_cases   nstep/*.csv を集約 (overlay/, cases_summary.md)
   7. step7_identify_kus    real.lite で k_us を rollout sweep 同定 (kus_sweep/)
   8. step8_compare_dp_trajectory DiffusionPlanner 出力軌跡 real vs sim 比較 (figures/dp_*.svg)
   9. step9_identify_brake  real.lite で縦方向 brake_tc を発進フィット同定 (brake_sweep/)
@@ -249,7 +249,7 @@ def run_pipeline(
         "driving_log_replayer_v2.real_log_sim_comparison.step4_compare_logs",
     ], env=env, timeout=1800)
 
-    # ---- Stage 5: VehicleModel per-step 解析 (cases.yaml 必須) ----
+    # ---- Stage 5: VehicleModel N-step オープンループ解析 (cases.yaml 必須) ----
     cases_yaml = compare_cfg.get("cases_config", "")
     if not cases_yaml or not Path(cases_yaml).exists():
         raise RuntimeError(
@@ -265,7 +265,7 @@ def run_pipeline(
     cases_cfg = load_cases_config(cases_yaml)
     env["CASES_CONFIG_YAML"] = cases_yaml
 
-    logger.info(f"Stage 5: step5_analyze_per_step over {len(cases_cfg.cases)} case(s)")
+    logger.info(f"Stage 5: step5_analyze_nstep over {len(cases_cfg.cases)} case(s)")
     for case in cases_cfg.cases:
         logger.info(f"  case: tag={case.tag}, vehicle_model={case.vehicle_model}")
         env_case = env.copy()
@@ -273,7 +273,7 @@ def run_pipeline(
         try:
             _run([
                 sys.executable, "-m",
-                "driving_log_replayer_v2.real_log_sim_comparison.step5_analyze_per_step",
+                "driving_log_replayer_v2.real_log_sim_comparison.step5_analyze_nstep",
                 "--case-tag", case.tag,
                 "--cases-config", cases_yaml,
             ], env=env_case, timeout=1800)
@@ -347,10 +347,10 @@ def run_pipeline(
     def _lite_exists(tag: str) -> bool:
         return (lite_dir / f"{tag}.lite").exists() or (lite_dir / f"{tag}.lite.mcap").exists()
 
-    per_step_dir = comparison_dir / "per_step"
+    nstep_dir = comparison_dir / "nstep"
     sim_produced = sum(1 for r in sim_cfg.runs if _lite_exists(r.tag))
     cases_produced = sum(
-        1 for c in cases_cfg.cases if (per_step_dir / c.tag / "per_step_delta.csv").exists()
+        1 for c in cases_cfg.cases if (nstep_dir / c.tag / "nstep_delta.csv").exists()
     )
     counts = {
         "sim_runs_expected": len(sim_cfg.runs),

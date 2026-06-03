@@ -3,7 +3,7 @@
 
 Stage 1〜6 の後段に位置する独立ステージ。Stage 1 が生成した実機 lite
 (`lite/real.lite/`) を SSOT とし、k_us グリッドについて Stage 5 の free-running rollout
-(`step5.run_free_rollout`) を回して、実車の実効アンダーステア係数を同定する。
+(`step5.run_rollout`) を回して、実車の実効アンダーステア係数を同定する。
 
 なぜ rollout で同定するか:
   - per-step delta は各ステップで実機状態にリセットするため k_us に非感度。
@@ -40,19 +40,15 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 
-from . import step5_analyze_per_step as s5
+from . import step5_analyze_nstep as s5
 from .lib._io import resolve_lite_bag
+from .lib._nstep_common import rmse_by_horizon
 from .lib._params_utils import add_params_annotation, setup_jp_font
 from .lib._runtime_config import add_common_cli_arguments, build_runtime_config
 
 setup_jp_font()
 
 _MODEL_TYPE = "delay_steer_acc_geared_wo_fall_guard"  # k_us を持つ唯一の対応モデル
-
-
-def _rms(a: np.ndarray) -> float:
-    a = np.asarray(a, dtype=float)
-    return float(np.sqrt(np.nanmean(a**2))) if len(a) else float("nan")
 
 
 def _parabolic_min(xs: list[float], ys: list[float]) -> float | None:
@@ -81,24 +77,28 @@ def run_sweep(
     stride: int,
 ) -> pd.DataFrame:
     """各 k_us について rollout を回し horizon 別 RMSE を集計した DataFrame を返す。"""
+    # run_rollout / _prepare_gt はモジュール global SUB_DT を参照するため同期する。
+    # GT は k_us に依存しない (delay/wheelbase のみ参照) ため、グリッド全体で 1 回だけ計算する。
+    s5.SUB_DT = base_params["sub_dt"]
+    gt = s5._prepare_gt(data, t0_ns, base_params)
+
     rows: list[dict] = []
     for kus in kus_values:
         params = dict(base_params)
         params["k_us"] = kus
-        # run_free_rollout / _prepare_gt はモジュール global SUB_DT を参照するため同期する
-        s5.SUB_DT = params["sub_dt"]
-        df_roll = s5.run_free_rollout(
-            data, t0_ns, params, _MODEL_TYPE, horizons=horizons, stride=stride
+        df_roll = s5.run_rollout(
+            data, t0_ns, params, _MODEL_TYPE, horizons=horizons, stride=stride, gt=gt
         )
+        rmse = rmse_by_horizon(df_roll)
         for horizon in horizons:
-            sub = df_roll[df_roll["horizon"] == horizon]
+            n = int((df_roll["horizon"] == horizon).sum())
             rows.append({
                 "k_us": kus,
                 "horizon": int(horizon),
-                "yaw_rmse_deg": _rms(sub["yaw_err_deg"].values),
-                "pos_rmse_cm": _rms(sub["pos_err"].values) * 100.0,
-                "lat_rmse_cm": _rms(sub["err_lat"].values) * 100.0,
-                "n": len(sub),
+                "yaw_rmse_deg": rmse[horizon]["yaw"],
+                "pos_rmse_cm": rmse[horizon]["pos"],
+                "lat_rmse_cm": rmse[horizon]["lat"],
+                "n": n,
             })
         print(
             f"  k_us={kus:.4f}: "

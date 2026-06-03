@@ -1,5 +1,5 @@
 # VehicleModel 解析 (Stage 3) のケース定義。
-# 各ケースは出力ディレクトリ per_step/<tag>/ に独立して書かれる。
+# 各ケースは出力ディレクトリ nstep/<tag>/ に独立して書かれる。
 # Stage 4 (analyze_cases) はこの定義を読んで cases/overlay/ と cases_summary.md を生成。
 #
 # vehicle_model:

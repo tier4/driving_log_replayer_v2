@@ -26,7 +26,7 @@ FIG_HEIGHTS: dict[str, int] = {
     "trajectory_with_map": 800,
     "trajectory_xy": 800,
     "trajectory_playback": 760,
-    "map_distribution": 520,
+    "map_distribution": 1000,  # 2 行 (N=1 / N=max) × 3 列
 }
 # iframe に追加する余白 [px]（plotly モードバー等のはみ出し分）
 IFRAME_PAD = 30

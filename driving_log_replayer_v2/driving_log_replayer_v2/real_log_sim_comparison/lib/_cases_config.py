@@ -7,7 +7,7 @@ Stage 4 (step6_analyze_cases) は overlay セクションを参照する。
 schema:
 
     cases:
-      - tag: <str>                       # 出力ディレクトリ名 per_step/<tag>/
+      - tag: <str>                       # 出力ディレクトリ名 nstep/<tag>/
         vehicle_model: <str>             # "delay_steer_acc_geared_wo_fall_guard" | "ideal_steer_acc"
         params:                          # load_sim_params() の base に上書きする dict
           wheelbase: 4.76012
@@ -15,7 +15,7 @@ schema:
           ...
     overlay:
       reference_tag: <str>               # 基準ケース (任意)
-      plots:                             # 重ね描き対象の per_step plot 名リスト
+      plots:                             # 重ね描き対象の nstep plot 名リスト
         - cascade_error
         - error_timeseries
 """
@@ -45,7 +45,7 @@ _KNOWN_PARAM_KEYS: frozenset[str] = frozenset({
     "k_us", "sub_dt",
 })
 
-# tag は OUT_DIR = .../per_step/<tag>/ に直接連結されるため安全文字のみ許可。
+# tag は OUT_DIR = .../nstep/<tag>/ に直接連結されるため安全文字のみ許可。
 _TAG_PATTERN = re.compile(r"^[A-Za-z0-9_\-.]+$")
 
 

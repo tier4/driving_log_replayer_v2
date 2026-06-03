@@ -13,7 +13,7 @@ WHEELBASE は意図的に二系統で保持する:
     `tools/analyze_real_curve2.py` のステア追従誤差解析で使う。
   - `wheelbase_sim` = 4.76012 m
     シミュレータの仕様値 (`vehicle_info.param.yaml::wheel_base`)。
-    `step5_analyze_per_step.py` の C++ 車両モデル再計算で使う。
+    `step5_analyze_nstep.py` の C++ 車両モデル再計算で使う。
 """
 
 from __future__ import annotations

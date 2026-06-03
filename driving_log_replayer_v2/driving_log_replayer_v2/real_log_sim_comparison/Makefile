@@ -1,7 +1,7 @@
 # real_log_sim_comparison use case 専用 Makefile。
 # 同ディレクトリ配下に Python module / evaluator_node / README / sample をすべて集約しており、
 # `make local_cloud_run` で 10 段階パイプライン (実機ログ抽出 → scenario 自動生成 →
-# sim 実行 (sim_runs.yaml) → 比較解析 → per-step → 集約) をワンコマンド実行する。
+# sim 実行 (sim_runs.yaml) → 比較解析 → N-step オープンループ → 集約) をワンコマンド実行する。
 
 SHELL := /bin/bash
 
@@ -35,8 +35,8 @@ help:
 	@echo "    2. step2_bag_to_scenario  lite/real.lite → scenarios/auto_scenario.yaml"
 	@echo "    3. step3_run_sims         scenario_test_runner で sim_runs.yaml の各 run を実行 → lite/<tag>.lite/"
 	@echo "    4. step4_compare_logs     real + 全 sim run の lite を N-way 比較 (figures/, report.md)"
-	@echo "    5. step5_analyze_per_step cases.yaml の各 case (VehicleModel パラメータ) で per-step delta 解析"
-	@echo "    6. step6_analyze_cases    per_step/*.csv を集約 (overlay/, cases_summary.md)"
+	@echo "    5. step5_analyze_nstep    cases.yaml の各 case (VehicleModel パラメータ) で N-step オープンループ解析"
+	@echo "    6. step6_analyze_cases    nstep/*.csv を集約 (overlay/, cases_summary.md)"
 	@echo "    7. step7_identify_kus     real.lite で k_us を rollout sweep 同定 (kus_sweep/)"
 	@echo "    8. step8_compare_dp_trajectory  DiffusionPlanner 出力軌跡 real vs sim 比較 (figures/dp_*.png)"
 	@echo "    9. step9_identify_brake   real.lite で縦方向 brake_tc を発進フィット同定 (brake_sweep/)"

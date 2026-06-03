@@ -5,7 +5,7 @@ ScenarioDescription: |
     Stage 1-2: lite 化と実機ログ解析
     Stage 3-4: 同走行を模擬する OpenSCENARIO を自動生成し sim_normal / sim_godot
                等で closed-loop 再現、実機と N-way 比較
-    Stage 5-6: per-step VehicleModel 解析と ケース集約
+    Stage 5-6: N-step VehicleModel 解析と ケース集約
 SensorModel: aip_x2_gen2
 VehicleModel: j6_gen2
 Evaluation:
@@ -31,7 +31,7 @@ Evaluation:
     # 既存 curve 設定 YAML は特定 area_map に対する curve_centers をハードコード
     # 前提のため、別 map を使う dataset で実行する際は空文字でスキップする。
     curve_config_yaml: ""
-    # VehicleModel per-step 解析 (Stage 5/6) のケース定義 YAML (必須)。
+    # VehicleModel N-step 解析 (Stage 5/6) のケース定義 YAML (必須)。
     # 未指定だとパイプラインが Stage 5 で失敗する (cases.yaml が見つかりません)。
     cases_config: ./cases.yaml
     # closed-loop シム実行 (Stage 3/4) のラン定義 YAML (必須)。

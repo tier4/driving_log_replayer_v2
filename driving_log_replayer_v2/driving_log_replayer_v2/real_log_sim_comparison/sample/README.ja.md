@@ -20,7 +20,7 @@ Godot バイナリパスは cloud / local 共通で `/opt/godot_autoware_simulat
 10 段階パイプラインの各 stage の入出力は親ディレクトリの
 [`../README.ja.md`](../README.ja.md#パイプライン10-段階) を参照。ローカル実行で押さえる点:
 
-- Stage 3（sim 実行）と Stage 5（per-step 解析）はそれぞれ `sim_runs.yaml` / `cases.yaml`
+- Stage 3（sim 実行）と Stage 5（N-step 解析）はそれぞれ `sim_runs.yaml` / `cases.yaml`
   の各エントリで N 回ループする。`scenario.yaml` の `Conditions.sim_runs_config` /
   `Conditions.cases_config` で参照され、**両方未指定だとパイプラインは失敗する**。
 
@@ -90,7 +90,7 @@ sim_runs:
 Godot 実行時は `godot_executable` パスが必要。`params` は `simple_sensor_simulator.<key>:=<value>` として
 launch に渡り、description の simulator_model.param.yaml を上書きする。
 
-**cases.yaml (Stage 5/6 用)**: VehicleModel per-step 解析のケース定義。
+**cases.yaml (Stage 5/6 用)**: VehicleModel N-step オープンループ解析のケース定義。
 ```yaml
 cases:
   - tag: baseline
@@ -135,7 +135,7 @@ make -C src/simulator/driving_log_replayer_v2/driving_log_replayer_v2/driving_lo
    - Stage 2: step2_bag_to_scenario → scenarios/auto_scenario.yaml
    - Stage 3: sim_runs.yaml の各 run で scenario_test_runner → lite/<tag>.lite
    - Stage 4: step4_compare_logs → comparison/figures/, report.md (real + sim 重ね描き)
-   - Stage 5: cases.yaml の各 tag で step5_analyze_per_step → per_step/<tag>/
+   - Stage 5: cases.yaml の各 tag で step5_analyze_nstep → nstep/<tag>/
    - Stage 6: step6_analyze_cases → cases/overlay/, cases_summary.md
    - Stage 7: step7_identify_kus → comparison/kus_sweep/ (k_us 同定; 追加設定不要)
    - Stage 8: step8_compare_dp_trajectory → comparison/figures/dp_*.png (DP軌跡 real vs sim)
@@ -159,11 +159,11 @@ sample/out/latest/
     └── comparison/
         ├── report.md                     # Stage 4: 比較統計レポート
         ├── figures/*.png                 # Stage 4: 速度・操舵・軌跡, Stage 8: dp_*.png
-        ├── per_step/
-        │   └── <case_tag>/{*.png(9枚), per_step_delta.csv, rollout.csv, summary.txt}  # Stage 5
+        ├── nstep/
+        │   └── <case_tag>/{*.svg + map_distribution.html, nstep_delta.csv, summary.txt}  # Stage 5
         ├── cases/
         │   ├── overlay/{cascade_error_overlay.png, error_timeseries_overlay.png}
-        │   └── cases_summary.md          # Stage 6: per-step RMSE + rollout 横断表
+        │   └── cases_summary.md          # Stage 6: N=1 RMSE + horizon 別 RMSE 横断表
         ├── kus_sweep/{kus_sweep.csv, kus_sweep.png}      # Stage 7: k_us 同定
         ├── brake_sweep/{brake_sweep.csv, brake_sweep.png} # Stage 9: 縦方向 brake_tc 同定
         └── curve_diag/{curve_divergence.md, curve_divergence.png} # Stage 10: カーブ乖離診断
@@ -198,14 +198,14 @@ make local_cloud_run LOCAL_SCENARIO=/path/to/other_scenario.yaml
 
 ## 設計上の注意
 
-- **per_step 解析は「1 step 予測」**: 各ステップで実機状態にリセットして
+- **N=1 解析は「1 step 予測」**: 各ステップで実機状態にリセットして
   `SUB_DT × cmd_count` 秒だけモデルを進めるため、ケース間の `err_ds_long` /
   `err_ds_lat` 差は小さい (1 step ≒ 17cm 程度の移動内ではモデル差が位置に
   大きく現れない)。ケース差は主に `err_steer` に表れる。
-  長期軌跡の累積差は `step5.run_free_rollout` (multi-step rollout) が `rollout.csv` /
-  `rollout_error_growth.png` として出力し、Stage 6 が `cases_summary.md` に横断集約する。
-- **`overlay.reference_tag` は機能実装済み**: `cases_summary.md` の per-step 表に
-  `Δsteer vs ref` 列、rollout 横断表に `Δyaw vs ref` 列を出力する
+  長期軌跡の累積差は同じ `step5.run_rollout` の N>1 が `nstep_delta.csv` /
+  `error_growth.svg` として出力し、Stage 6 が `cases_summary.md` に横断集約する。
+- **`overlay.reference_tag` は機能実装済み**: `cases_summary.md` の N=1 表に
+  `Δsteer vs ref` 列、horizon 別横断表に `Δyaw vs ref` 列を出力する
   (`step6_analyze_cases.py::write_cases_summary`)。
-- **k_us は per-step では同定不可**: per-step は k_us 非感度、`err_wz` は k_us=0 seeding
-  バイアスを含む。k_us 同定には Stage 7 (`step7_identify_kus`, rollout sweep) を使う。
+- **k_us は N=1 では同定不可**: N=1 は k_us 非感度、`err_wz` は k_us=0 seeding
+  バイアスを含む。k_us 同定には Stage 7 (`step7_identify_kus`, 大 N rollout sweep) を使う。

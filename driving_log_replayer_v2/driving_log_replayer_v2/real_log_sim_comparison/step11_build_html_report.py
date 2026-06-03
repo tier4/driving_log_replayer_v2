@@ -2,7 +2,7 @@
 """Stage 11: comparison/ 配下の全プロットを 1 枚の HTML に集約する閲覧用レポート生成.
 
 10 段階パイプライン (step4〜step10) は `comparison/` 配下の複数サブディレクトリ
-(figures/, per_step/<tag>/, cases/overlay/, kus_sweep/, brake_sweep/, curve_diag/) に
+(figures/, nstep/<tag>/, cases/overlay/, kus_sweep/, brake_sweep/, curve_diag/) に
 多数の SVG・plotly HTML と 3 種の Markdown レポート (report.md, cases/cases_summary.md,
 curve_diag/curve_divergence.md) を散らして出力する。本ステージはそれらを走査し、
 全図を**相対パス**でリンクした目次付き `index.html` を `result_archive/` 直下
@@ -14,9 +14,9 @@ curve_diag/curve_divergence.md) を散らして出力する。本ステージは
 
 1. 実機 rosbag 解析   — 実機ログ(SSOT)のみから抽出する特性・車両パラメータ同定 (sim 非介在)
 2. プランナ出力比較   — DiffusionPlanner 出力軌跡を実走・最終 planning・sim 出力と比較
-3. 1-step オープンループ比較 — 各ステップで実機状態にリセットした車両モデル 1 ステップ予測の差
-4. multi-step オープンループ比較 — 実機初期状態からの N ステップ連続 rollout 誤差成長
-5. シナリオ クローズループ比較 — auto-scenario を sim で closed-loop 実行した実機との乖離
+3. N-step オープンループ比較 — 実機状態リセットから N ステップ連続予測した車両モデルの差
+   (N=1 = 毎ステップリセットの 1 ステップ予測、N>1 = free-running の累積誤差)
+4. シナリオ クローズループ比較 — auto-scenario を sim で closed-loop 実行した実機との乖離
 
 各図は出力先ディレクトリではなく (ディレクトリ, ファイル名) の組で分類する。figures/ には
 クローズループ図・DP 図・brake 同定図が混在するため、ディレクトリ単位では分けられない。
@@ -65,19 +65,21 @@ CAPTIONS: dict[str, str] = {
     "dp_real_vs_sim": "DiffusionPlanner 出力軌跡 実機 vs sim",
     "dp_vs_actual": "DP 計画速度 vs 実際速度",
     "dp_vs_final_traj": "実機 DP 出力 vs 最終 planning（optimizer 補正）",
-    # step5: per_step/<tag>/
-    "overview": "誤差概観",
-    "error_timeseries": "誤差時系列",
-    "error_vs_speed": "速度別 誤差散布",
-    "steering_analysis": "ステア分析",
-    "map_distribution": "位置分布（地図上・インタラクティブ）",
+    # step5: nstep/<tag>/
+    "overview": "誤差概観（N=1）",
+    "error_timeseries": "誤差時系列（horizon 別）",
+    "error_vs_speed": "速度別 誤差散布（N=1 / N=max）",
+    "error_growth": "誤差成長（horizon 別 RMSE）",
+    "steering_analysis": "ステア分析（N=1）",
+    "map_distribution": "誤差の位置分布（地図上・N=1 / N=max・インタラクティブ）",
     "lateral_dynamics_timeseries": "横方向 dynamics 時系列",
     "steer_vs_lateral_scatter": "ステア vs 横変位 散布",
-    "cascade_error": "カスケード誤差（1 ステップ連鎖）",
-    "rollout_error_growth": "rollout 誤差成長（多段 free-running）",
+    "cascade_error": "カスケード誤差（N=1 連鎖）",
     # step6: cases/overlay/
-    "cascade_error_overlay": "全ケース カスケード誤差 重ね描き",
-    "error_timeseries_overlay": "全ケース 誤差時系列 重ね描き",
+    "cascade_error_overlay": "全ケース カスケード誤差 重ね描き（N=1）",
+    "error_growth_overlay": "全ケース 誤差成長 重ね描き",
+    "rmse_heatmap": "RMSE ヒートマップ（case × horizon 俯瞰）",
+    "growth_relative": "相対誤差成長（reference 比・dynamics 差の分離）",
     # step7: kus_sweep/
     "kus_sweep": "k_us（アンダーステア係数）グリッド sweep",
     # step9: brake_sweep/ + figures/
@@ -125,19 +127,15 @@ _CATEGORIES: list[tuple[str, str, str]] = [
         "DiffusionPlanner の出力軌跡を、実機の実走・最終 planning・sim 出力と比較する。",
     ),
     (
-        "ol_1step",
-        "3. 1-step オープンループ比較",
-        "各ステップで実機状態にリセットし、車両モデルの 1 ステップ予測と実機の差を評価（累積誤差を排除）。",
-    ),
-    (
-        "ol_multistep",
-        "4. multi-step オープンループ比較",
-        "実機初期状態から N ステップ連続予測（free-running rollout）し、dynamics 差の累積を顕在化する。"
-        "横断的な rollout RMSE 表は §3 末尾の cases_summary.md を参照。",
+        "ol_nstep",
+        "3. N-step オープンループ比較",
+        "各開始点で実機状態にリセットし、車両モデルを N ステップ連続予測（free-running rollout）して"
+        "実機との差を評価する。N=1 が毎ステップリセットの 1 ステップ予測（累積誤差を排除）、"
+        "N>1 で dynamics 差の累積が顕在化する。",
     ),
     (
         "closed_loop",
-        "5. シナリオ クローズループ比較",
+        "4. シナリオ クローズループ比較",
         "auto-scenario を Autoware+シミュレータで closed-loop 実行し、実機との軌跡・速度・操舵乖離を比較する。",
     ),
     (
@@ -167,7 +165,7 @@ _CLOSED_LOOP_STEMS: set[str] = {
 # 取り込む Markdown レポート: (comparison/ からの相対パス, 見出し, 所属カテゴリ)。
 _MARKDOWN_REPORTS: list[tuple[str, str, str]] = [
     ("report.md", "比較レポート（step4: report.md）", "closed_loop"),
-    ("cases/cases_summary.md", "ケース集約サマリ（step6: cases_summary.md）", "ol_1step"),
+    ("cases/cases_summary.md", "ケース集約サマリ（step6: cases_summary.md）", "ol_nstep"),
     ("curve_diag/curve_divergence.md", "カーブ乖離サマリ（step10: curve_divergence.md）", "closed_loop"),
 ]
 
@@ -177,6 +175,10 @@ def _caption_for(filename: str) -> str:
     stem = Path(filename).stem
     if stem in CAPTIONS:
         return CAPTIONS[stem]
+    # error_timeseries_overlay_n<N> パターン照合（step6、horizon 別の重ね描き）
+    m = re.match(r"error_timeseries_overlay_n(\d+)$", stem)
+    if m:
+        return f"全ケース 誤差時系列 重ね描き（N={m.group(1)}）"
     # curveN_<suffix> パターン照合
     m = re.match(r"curve(\d+)_(.+)$", stem)
     if m:
@@ -206,12 +208,9 @@ def _classify(rel: Path) -> str:
     # 車両パラメータ同定 sweep（step7 / step9、実機ログのみ）
     if top in {"kus_sweep", "brake_sweep"}:
         return "real_analysis"
-    # per-step delta 解析（step5）: rollout のみ multi-step、他は 1-step
-    if top == "per_step":
-        return "ol_multistep" if stem == "rollout_error_growth" else "ol_1step"
-    # ケース集約の重ね描き（step6、1-step 誤差の横断比較）
-    if top == "cases":
-        return "ol_1step"
+    # N-step オープンループ解析（step5）とケース集約の重ね描き（step6）
+    if top in {"nstep", "cases"}:
+        return "ol_nstep"
     # カーブ乖離詳細診断（step10、実機 vs sim closed-loop）
     if top == "curve_diag":
         return "closed_loop"
@@ -274,19 +273,19 @@ details.md-report > summary:hover { color: var(--accent); }
 .md-fallback { background: #f6f6f6; padding: 1rem; overflow-x: auto; font-size: 0.85rem; }
 .empty { color: var(--muted); font-style: italic; }
 
-/* 純 CSS ケースタブ（一括連動）。セクション先頭に 1 組のラジオを置き、選んだケースの図が
-   セクション内全ブロックで一斉に切り替わる。JS 不使用・オフライン可。CSS 無効環境では全パネルが
-   縦に並んで degrade。連動規則 (#group-case:checked ~ .tabblock .tabpanel.case-X) は build_html が
-   セクション×ケースごとに動的生成する。 */
-.casesync { margin-top: 0.3rem; }
+/* 純 CSS ケースタブ（プロット単位）。各プロットブロック先頭に独立したケースラジオを置き、
+   そのブロック内のパネルだけを切り替える（他プロットには影響しない）。JS 不使用・オフライン可。
+   CSS 無効環境では全パネルが縦に並んで degrade。表示規則
+   (.casesync > input.cr-<case>:checked ~ .tabpanel.case-<case>) はケース slug ごとに
+   build_html が動的生成する（ラジオの name はブロック単位なので排他はブロック内で閉じる）。 */
+.casesync { margin: 0.4rem 0 2.2rem; }
+.casesync > h3 { margin: 0 0 0.5rem; }
 .casesync > .casesync-label { font-size: 0.85rem; color: var(--muted); margin-right: 0.4rem; }
 .casesync > input { position: absolute; opacity: 0; pointer-events: none; }
 .casesync > label { display: inline-block; padding: 0.3rem 0.9rem; margin: 0 0.3rem 0.9rem 0;
                     border: 1px solid var(--border); border-radius: 4px; cursor: pointer;
                     font-size: 0.88rem; color: var(--accent); background: #fafafa; user-select: none; }
 .casesync > input:checked + label { background: var(--accent); color: #fff; border-color: var(--accent); }
-.casesync .tabblock { margin: 0.4rem 0 2.2rem; }
-.casesync .tabblock > h3 { margin: 0 0 0.5rem; }
 .tabpanel { display: none; }
 
 /* 純 CSS ライトボックス（画像拡大）。サムネクリックで #lb-* を :target にしオーバーレイ表示。
@@ -379,8 +378,8 @@ def _lightbox_overlays(images: list[Path], link_prefix: str) -> str:
 
 
 def _case_of(rel: Path) -> str | None:
-    """per_step/<case>/<file> のケースタグを返す（per_step 図でなければ None）。"""
-    if rel.parts[0] == "per_step" and len(rel.parts) > 2:
+    """nstep/<case>/<file> のケースタグを返す（nstep 図でなければ None）。"""
+    if rel.parts[0] == "nstep" and len(rel.parts) > 2:
         return rel.parts[1]
     return None
 
@@ -390,48 +389,45 @@ def _sorted_cases(tags: list[str]) -> list[str]:
     return sorted(tags, key=lambda t: (t != "baseline", t))
 
 
-def _casesync_group(cat: str) -> str:
-    """セクション (カテゴリ) のケース連動ラジオグループ名。"""
-    return _slug(f"casesync-{cat}")
-
-
-def _render_synced_case_tabs(
+def _render_case_tabs(
     per_case: dict[str, dict[str, Path]], link_prefix: str, cat: str
 ) -> list[str]:
-    """プロット種別ごとにブロックを作り、ケースをセクション全体で一括連動切り替えする。
+    """プロット種別ごとにブロックを作り、ブロックごとに独立したケースタブを付ける。
 
-    per_case: {case_tag: {filename: rel}}。セクション先頭に 1 組のケースラジオを置き、選んだ
-    ケースの図がセクション内の全ブロックで一斉に切り替わる（連動）。各パネルは `case-<slug>`
-    クラスを持ち、build_html が生成する `#group-case:checked ~ .tabblock .tabpanel.case-<slug>`
-    規則で表示制御する（パネルの順序・個数に依存しない）。
+    per_case: {case_tag: {filename: rel}}。各ブロック先頭に専用のケースラジオを置き、
+    選んだケースの図がそのブロック内だけで切り替わる（他プロットには影響しない）。
+    各パネルは `case-<slug>` クラスを持ち、build_html が生成する
+    `.casesync > input.cr-<slug>:checked ~ .tabpanel.case-<slug>` 規則で表示制御する
+    （ラジオの name はブロック単位なので排他はブロック内で閉じる）。
     """
     cases = _sorted_cases(list(per_case.keys()))
     plot_types = sorted({fn for files in per_case.values() for fn in files})
-    group = _casesync_group(cat)
 
-    out: list[str] = ["<div class='casesync'>"]
-    out.append("<span class='casesync-label'>ケース切替:</span>")
-    # セクション共通のケースラジオ + ラベル（最初のケースを既定選択）
-    for i, c in enumerate(cases):
-        rid = f"{group}-{_slug(c)}"
-        checked = " checked" if i == 0 else ""
-        out.append(f"<input type='radio' name='{group}' id='{rid}'{checked}>")
-        out.append(f"<label for='{rid}'>{html.escape(c)}</label>")
-    # プロット種別ごとのブロック（パネルは存在するケースのみ。class でケース対応）
+    out: list[str] = []
     for pt in plot_types:
         caption = _caption_for(pt)
-        out.append("<div class='tabblock'>")
+        group = _slug(f"casesync-{cat}-{pt}")
+        block_cases = [c for c in cases if pt in per_case[c]]
+        out.append("<div class='casesync'>")
         out.append(
             f"<h3>{html.escape(caption)} <span class='fname'>{html.escape(pt)}</span></h3>"
         )
-        for c in cases:
-            if pt in per_case[c]:
-                out.append(
-                    f"<div class='tabpanel case-{_slug(c)}'>"
-                    f"{_figure(per_case[c][pt], link_prefix, caption=c)}</div>"
-                )
+        out.append("<span class='casesync-label'>ケース切替:</span>")
+        # ブロック専用のケースラジオ + ラベル（最初のケースを既定選択）
+        for i, c in enumerate(block_cases):
+            rid = f"{group}-{_slug(c)}"
+            checked = " checked" if i == 0 else ""
+            out.append(
+                f"<input type='radio' name='{group}' id='{rid}' class='cr-{_slug(c)}'{checked}>"
+            )
+            out.append(f"<label for='{rid}'>{html.escape(c)}</label>")
+        # パネル（存在するケースのみ。class でケース対応）
+        for c in block_cases:
+            out.append(
+                f"<div class='tabpanel case-{_slug(c)}'>"
+                f"{_figure(per_case[c][pt], link_prefix, caption=c)}</div>"
+            )
         out.append("</div>")
-    out.append("</div>")
     return out
 
 
@@ -440,7 +436,7 @@ def _render_category_images(
 ) -> list[str]:
     """カテゴリ内の画像群を描画する。
 
-    per_step/<case>/ の図は「プロット種別ごとのブロック ＋ ケース一括連動タブ」で描画する。
+    nstep/<case>/ の図は「プロット種別ごとのブロック ＋ ブロック単位のケースタブ」で描画する。
     それ以外の図 (cases/overlay 等) は通常の figure として先に並べる。
     """
     flat = [r for r in rels if _case_of(r) is None]
@@ -452,30 +448,26 @@ def _render_category_images(
 
     out: list[str] = [_figure(r, link_prefix) for r in flat]
     if per_case:
-        out.extend(_render_synced_case_tabs(per_case, link_prefix, cat))
+        out.extend(_render_case_tabs(per_case, link_prefix, cat))
     return out
 
 
 def _casesync_css(by_cat: dict[str, list[Path]]) -> str:
-    """セクション×ケースごとのケース連動表示規則を生成する。
+    """ケースごとのタブ表示規則を生成する。
 
-    あるセクションのケースラジオが checked のとき、そのセクション内の全 .tabblock の対応
-    `.tabpanel.case-<slug>` を表示する。パネルの順序・個数に依存しないクラス対応方式。
+    ブロック内のラジオ `input.cr-<slug>` が checked のとき、同ブロック内の
+    `.tabpanel.case-<slug>` を表示する。規則はケース slug にのみ依存するため
+    全カテゴリのケース集合の和集合に対して 1 規則ずつ出せばよい
+    （ブロック間の排他はラジオの name で閉じる）。
     """
-    rules: list[str] = []
-    for cat, rels in by_cat.items():
-        cases = {_case_of(r) for r in rels}
-        cases.discard(None)
-        if not cases:
-            continue
-        group = _casesync_group(cat)
-        for c in _sorted_cases(list(cases)):
-            cslug = _slug(c)
-            rules.append(
-                f"#{group}-{cslug}:checked ~ .tabblock .tabpanel.case-{cslug}"
-                "{ display: block; }"
-            )
-    return "\n".join(rules)
+    cases: set[str] = set()
+    for rels in by_cat.values():
+        cases.update(c for r in rels if (c := _case_of(r)) is not None)
+    return "\n".join(
+        f".casesync > input.cr-{_slug(c)}:checked ~ .tabpanel.case-{_slug(c)}"
+        "{ display: block; }"
+        for c in _sorted_cases(list(cases))
+    )
 
 
 def _collect_figures(comparison_dir: Path) -> list[Path]:
@@ -568,7 +560,7 @@ def build_html(
         "先に step4〜step10 を実行してください。</p>"
     )
 
-    # ケース一括連動の表示規則（セクション×ケース）と、拡大用ライトボックス（main 末尾に一括配置）
+    # ケースタブの表示規則（ケース slug 単位）と、拡大用ライトボックス（main 末尾に一括配置）
     sync_css = _casesync_css(by_cat)
     lightboxes = _lightbox_overlays(rels_all, link_prefix) if rels_all else ""
 

@@ -1,11 +1,14 @@
 #!/usr/bin/env python3
-"""全走行区間の per-step delta 分析（C++ 車両モデル使用）.
+"""全走行区間の N-step オープンループ解析（C++ 車両モデル使用）.
 
-手法:
-  各制御コマンド区間 (t_k, t_{k+1}) について:
-    1. C++ 車両モデルを t_k の実機状態にリセット（累積誤差を排除）
-    2. 実機制御コマンドを ZOH で適用
-    3. 区間終端の予測状態を実機状態と比較（車両ローカル座標系）
+手法 (run_rollout で N=1 と N>1 を統一):
+  各開始点 k0 について:
+    1. C++ 車両モデルを t_{k0} の実機状態にリセット（過去コマンド履歴を delay queue にセット）
+    2. 実機制御コマンド系列を N 区間連続で ZOH 適用（途中リセット無し = free-running）
+    3. 終端 t_{k0+N} の予測状態を実機状態と比較（k0 ヨー基準の車両ローカル座標系・実機 − モデル）
+
+  N=1 (stride=1, 全ステップ) が従来の per-step delta（毎ステップリセット、累積誤差を排除した
+  1 ステップ予測精度）。N>1 (stride=5) は dynamics 差 (k_us/wheelbase/時定数) の累積を顕在化する。
 
 解析窓: AUTONOMOUS 開始から制御コマンド系列末尾まで。
 時系列軸 tr は AUTONOMOUS 開始時刻からの経過時間 [s]。
@@ -15,9 +18,11 @@
   パラメータ: j6_gen2_description パッケージの config/simulator_model.param.yaml
 
 出力:
-  comparison/per_step/
-    overview.svg, error_timeseries.svg, error_vs_speed.svg,
-    map_distribution.html (plotly), summary.txt, per_step_delta.csv
+  comparison/nstep/<tag>/
+    nstep_delta.csv (全 horizon 統一スキーマ), summary.txt,
+    overview.svg, error_timeseries.svg, error_vs_speed.svg, error_growth.svg,
+    steering_analysis.svg, lateral_dynamics_timeseries.svg, steer_vs_lateral_scatter.svg,
+    cascade_error.svg, map_distribution.html (plotly)
 """
 
 from __future__ import annotations
@@ -49,6 +54,7 @@ from .lib._io import (
 )
 from .lib._map import load_map_ways as _load_map_ways_impl
 from .lib._map import map_ways_in_bbox, resolve_map_osm
+from .lib._nstep_common import ERR_METRICS, YAW_SEED_NOTE, n1, rmse_by_horizon
 from .lib._params_utils import add_params_annotation, load_sim_params, setup_jp_font
 from .lib._plotly_utils import (
     FIG_HEIGHTS,
@@ -63,7 +69,7 @@ setup_jp_font()
 # モジュールレベル設定 (main() で RuntimeConfig 経由で上書きされる)
 BASE = Path(os.environ.get("BEST_MODEL_BASE_DIR") or Path(__file__).parent)
 LITE_DIR = BASE / "lite"
-OUT_DIR = BASE / "comparison" / "per_step"
+OUT_DIR = BASE / "comparison" / "nstep"
 
 # 実機 lite bag は単一ファイルでも directory bag でも受け付ける。
 REAL_BAG_DIR = LITE_DIR / "real.lite.mcap"
@@ -71,8 +77,8 @@ REAL_BAG_DIR = LITE_DIR / "real.lite.mcap"
 # 地図プロットの bbox margin [m] (走行軌跡の min/max からの余白)
 MAP_BBOX_MARGIN = 10.0
 
-# per_step 専用の上書き値 (load_sim_params() のシム既定値に上塗りする)。
-# sub_dt は per_step の積分刻み (30Hz) で per_step 固有の設定。
+# 本ステージ専用の上書き値 (load_sim_params() のシム既定値に上塗りする)。
+# sub_dt は N-step 解析の積分刻み (30Hz) で本ステージ固有の設定。
 #
 # 旧コードは steer_bias=0.01 をここで上塗りしていたが、これはシム仕様値
 # (simulator_model.param.yaml の steer_bias ≈ 0.0005 rad) と乖離した非物理的な
@@ -87,9 +93,9 @@ _PARAMS_OVERRIDES = {
 
 
 def _build_params(cfg: RuntimeConfig | None = None) -> dict:
-    """`vehicle_info.param.yaml` + per_step 専用上書きで PARAMS を構築する。
+    """`vehicle_info.param.yaml` + 本ステージ専用上書きで PARAMS を構築する。
 
-    `_PARAMS_OVERRIDES` は per_step 固有の意図的な差分なので維持する。
+    `_PARAMS_OVERRIDES` は N-step 解析固有の意図的な差分なので維持する。
     """
     base = load_sim_params()
     base.setdefault("wheelbase", base.get("wheel_base", 4.76012))
@@ -435,12 +441,12 @@ def find_autonomous_start(data: dict) -> int:
 
 
 # ---------------------------------------------------------------------------
-# per-step delta 分析
+# N-step オープンループ解析
 # ---------------------------------------------------------------------------
 
 
 def _prepare_gt(data: dict, t0_ns: int, params: dict) -> dict:
-    """run_per_step / run_free_rollout 共通の GT 準備。
+    """run_rollout の GT 準備。
 
     AUTONOMOUS 開始 (t0_ns) から制御コマンド系列末尾までを cmd タイムスタンプ上に
     補間した GT 系列・過去コマンド系列を dict で返す。
@@ -586,16 +592,41 @@ def _delay_history(
     ]
 
 
-def run_per_step(data: dict, t0_ns: int, params: dict, model_type: str) -> pd.DataFrame:
-    """per-step delta を実行し結果 DataFrame を返す。
+def run_rollout(
+    data: dict,
+    t0_ns: int,
+    params: dict,
+    model_type: str,
+    horizons: tuple[int, ...],
+    stride: int,
+    gt: dict | None = None,
+) -> pd.DataFrame:
+    """N-step オープンループ rollout を実行し統一スキーマの DataFrame を返す。
 
-    AUTONOMOUS 開始 (t0_ns) から制御コマンド系列末尾までを解析対象とする。
-    時系列軸 tr は AUTONOMOUS 開始からの経過時間 [s]。各ステップで実機状態にリセットする
-    1-step 予測 (累積誤差を排除)。多段の累積誤差は run_free_rollout を参照。
+    gt には _prepare_gt(data, t0_ns, params) の結果を渡せる (省略時は内部で計算)。
+    GT は params の delay/wheelbase にのみ依存するため、同一条件で複数回呼ぶ場合は
+    呼び出し側で 1 回計算して共有するとよい (main の 2 回呼び・step7 sweep)。
+
+    各開始点 k0 (stride 間隔) で実機状態にリセット（過去コマンド履歴を delay queue にセット）
+    した後、実コマンド系列を horizon (=N) 区間連続適用 (途中リセット無し = free-running) し、
+    終端 k_end = k0 + N の予測状態を実機と比較する。
+
+    - N=1 が従来の per-step delta（毎ステップリセットの 1 ステップ予測; 累積誤差を排除）。
+    - N>1 では yaw 積分に効く k_us / wheelbase / 時定数の累積差が顕在化する
+      (N=1 では全 dynamics ケースで位置 RMSE がほぼ同一になる既知の限界)。
+
+    誤差の符号規約は「実機 − モデル」。ds_* の縦横分解は k0 時点の実機ヨー基準の
+    車両ローカル座標系 (N=1 で旧 per-step delta と同一)。pos_err / yaw_err_deg は座標系不変。
+
+    【重要・k_us が異なるケース間で小 N の err_wz / yaw_err を比較してはいけない】
+    リセット時の steer は gt_steer_kinematic = atan(wz*wb/vx) (k_us=0 の bicycle 逆算) を
+    使う。よって k_us=0 のケースは構造上小 N で sim_wz≈wz_real となり誤差が小さく、k_us>0 は
+    understeer オフセットを負って誤差が大きく出る (実車の understeer 有無とは無関係な
+    seeding バイアス)。k_us/understeer の同定には大 N (seed は k0 のみで N ステップ後は
+    真の dynamics が支配) を用いること。
     """
-    g = _prepare_gt(data, t0_ns, params)
+    g = gt if gt is not None else _prepare_gt(data, t0_ns, params)
     t_cmd = g["t_cmd"]
-    df_cmd = g["df_cmd"]
     t_cmd_full = g["t_cmd_full"]
     accel_des_full = g["accel_des_full"]
     steer_des_full = g["steer_des_full"]
@@ -610,181 +641,27 @@ def run_per_step(data: dict, t0_ns: int, params: dict, model_type: str) -> pd.Da
     gt_steer = g["gt_steer"]
     gt_dwz = g["gt_dwz"]
     gt_steer_kinematic = g["gt_steer_kinematic"]
-
-    model = VehicleModel(params, SUB_DT, model_type)
-    acc_q_size = model.acc_q_size  # = round(acc_time_delay / SUB_DT)
-    steer_q_size = model.steer_q_size  # = round(steer_time_delay / SUB_DT)
-
-    records = []
-    n = len(t_cmd)
-    for k in range(n - 1):
-        interval = t_cmd[k + 1] - t_cmd[k]
-        if interval <= 0.001 or interval > 1.0:
-            continue
-
-        accel_des = float(df_cmd["accel_des"].iloc[k])
-        steer_des = float(df_cmd["steer_des"].iloc[k])
-
-        # -- delay queue に実際の過去コマンド履歴を設定 --
-        # acc_q[i] = accel_des at t_k - (acc_q_size - i) * SUB_DT  (oldest→newest)
-        # update() はこの oldest を delayed として消費する
-        acc_history = [
-            float(
-                np.interp(
-                    t_cmd[k] - (acc_q_size - i) * SUB_DT,
-                    t_cmd_full,
-                    accel_des_full,
-                    left=accel_des_full[0],
-                    right=accel_des_full[-1],
-                )
-            )
-            for i in range(acc_q_size)
-        ]
-        steer_history = [
-            float(
-                np.interp(
-                    t_cmd[k] - (steer_q_size - i) * SUB_DT,
-                    t_cmd_full,
-                    steer_des_full,
-                    left=steer_des_full[0],
-                    right=steer_des_full[-1],
-                )
-            )
-            for i in range(steer_q_size)
-        ]
-
-        # -- モデルを t_k の実機状態にリセット（過去履歴を delay queue にセット） --
-        # ego_entity_simulation.cpp と同じ: state(4) = atan(wz*wb/vx) をキネマティック初期値として使用。
-        # vm_reset_state 内: state(4) = steer_actual - steer_bias → steer_actual = steer_kinematic + steer_bias
-        model.reset_with_history(
-            x=gt_x[k],
-            y=gt_y[k],
-            yaw=gt_yaw[k],
-            vx=gt_vx[k],
-            steer_actual=float(gt_steer_kinematic[k]) + params["steer_bias"],
-            ax=gt_ax[k],
-            acc_history=acc_history,
-            steer_history=steer_history,
-        )
-
-        # -- interval 分だけ正確に積分 --
-        # n_full 回 SUB_DT ステップ + 余り時間を端数ステップで補正し、
-        # モデル積分時間が実際の elapsed time と一致するようにする。
-        # interval が SUB_DT より小さい場合 (cmd 30Hz ≒ SUB_DT) は n_full=0 で
-        # step_dt のみが効くため、端数ステップを必ず実行する。
-        n_full = int(interval / SUB_DT)
-        for i in range(n_full):
-            model.step(accel_des, steer_des)
-        remainder = interval - n_full * SUB_DT
-        if remainder > 1e-6:
-            model.step_dt(accel_des, steer_des, remainder)
-
-        # -- delta 計算 --
-        real_dx = gt_x[k + 1] - gt_x[k]
-        real_dy = gt_y[k + 1] - gt_y[k]
-        sim_dx = model.x - gt_x[k]
-        sim_dy = model.y - gt_y[k]
-
-        cos_y = math.cos(gt_yaw[k])
-        sin_y = math.sin(gt_yaw[k])
-        real_ds_long = real_dx * cos_y + real_dy * sin_y
-        real_ds_lat = -real_dx * sin_y + real_dy * cos_y
-        sim_ds_long = sim_dx * cos_y + sim_dy * sin_y
-        sim_ds_lat = -sim_dx * sin_y + sim_dy * cos_y
-
-        sim_steer_kp1 = model.steer_state + params["steer_bias"]
-        # sim_wz: モデルが予測した t_{k+1} の yaw rate (vm_get_wz, k_us 依存)。
-        # ラッパーが未 export なら NaN (sim_vy/ay は getVy()=0 / 未実装のため引き続き省略)。
-        #
-        # 【重要・k_us が異なるケース間で err_wz を比較してはいけない】
-        # リセット時の steer は gt_steer_kinematic = atan(wz*wb/vx) (k_us=0 の bicycle 逆算) を
-        # 使う。よって baseline(k_us=0) は構造上 sim_wz≈wz_real となり err_wz が小さく、k_us>0 は
-        # understeer オフセットを負って err_wz が大きく出る (実車の understeer 有無とは無関係な
-        # seeding バイアス)。k_us/understeer の同定には err_wz ではなく run_free_rollout
-        # (seed は step0 のみで N ステップ後は真の dynamics が支配) を用いること。
-        sim_wz = model.wz
-        records.append(
-            {
-                "timestamp": t_cmd[k],
-                "tr": t_cmd[k],  # AUTONOMOUS 開始からの経過時間 [s]
-                "accel_des": accel_des,
-                "steer_des": steer_des,
-                "interval_sec": interval,
-                "pos_x": gt_x[k],
-                "pos_y": gt_y[k],
-                "real_vx": gt_vx[k],
-                "real_steer_k": gt_steer[k],  # t_k の実機ステア（リセット時の初期値）
-                "real_steer_kp1": gt_steer[k + 1],  # t_{k+1} の実機ステア（予測の比較対象）
-                "sim_steer_kp1": sim_steer_kp1,  # モデルが予測した t_{k+1} のステア
-                "err_steer": gt_steer[k + 1] - sim_steer_kp1,  # 予測誤差 [rad]
-                "real_ax": gt_ax[k],
-                "real_ay": gt_ay[k + 1],  # t_{k+1} — err_steer 規約に統一
-                "real_vy": gt_vy[k + 1],
-                "real_wz": gt_wz[k + 1],
-                "sim_wz": sim_wz,  # モデル予測 yaw rate (k_us 依存; per-step でも k_us 感度あり)
-                "err_wz": gt_wz[k + 1] - sim_wz,  # yaw rate 予測誤差 [rad/s]
-                "real_dwz": gt_dwz[k + 1],
-                "real_wz_k": gt_wz[k],  # t_k — 散布図の Y 軸（ステア角と同時刻）
-                "real_ay_k": gt_ay[k],
-                "real_vy_k": gt_vy[k],
-                "sim_vx": model.vx,
-                "real_ds_long": real_ds_long,
-                "real_ds_lat": real_ds_lat,
-                "sim_ds_long": sim_ds_long,
-                "sim_ds_lat": sim_ds_lat,
-                "err_ds_long": real_ds_long - sim_ds_long,
-                "err_ds_lat": real_ds_lat - sim_ds_lat,
-            }
-        )
-
-        if (k + 1) % 200 == 0:
-            print(f"  {k + 1}/{n - 1} ...")
-
-    return pd.DataFrame(records)
-
-
-def run_free_rollout(
-    data: dict,
-    t0_ns: int,
-    params: dict,
-    model_type: str,
-    horizons: tuple[int, ...] = (1, 2, 5, 10, 20),
-    stride: int = 5,
-) -> pd.DataFrame:
-    """多段 (free-running) ロールアウト誤差を計算する。
-
-    per-step は各ステップで実機状態にリセットするため、yaw 積分に効く k_us / wheelbase の
-    累積差を検出できない (全 dynamics ケースで位置 RMSE がほぼ同一になる既知の限界)。
-    本関数は各開始点 k0 で実機状態にリセットした後、実コマンド系列を N ステップ連続適用
-    (途中リセット無し) し、N ステップ後の終端位置・yaw の対実機誤差を測る。horizon N を
-    増やすほど dynamics 差が累積し顕在化するため、k_us/wheelbase/時定数の同定に使える。
-    """
-    g = _prepare_gt(data, t0_ns, params)
-    t_cmd = g["t_cmd"]
-    t_cmd_full = g["t_cmd_full"]
-    accel_des_full = g["accel_des_full"]
-    steer_des_full = g["steer_des_full"]
-    gt_x = g["gt_x"]
-    gt_y = g["gt_y"]
-    gt_yaw = g["gt_yaw"]
-    gt_vx = g["gt_vx"]
-    gt_ax = g["gt_ax"]
-    gt_steer_kinematic = g["gt_steer_kinematic"]
     accel_des = g["df_cmd"]["accel_des"].values
     steer_des = g["df_cmd"]["steer_des"].values
 
     model = VehicleModel(params, SUB_DT, model_type)
-    acc_q_size = model.acc_q_size
-    steer_q_size = model.steer_q_size
+    acc_q_size = model.acc_q_size  # = round(acc_time_delay / SUB_DT)
+    steer_q_size = model.steer_q_size  # = round(steer_time_delay / SUB_DT)
     steer_bias = params["steer_bias"]
 
     n = len(t_cmd)
     recs: list[dict] = []
     for horizon in horizons:
-        for k0 in range(0, n - 1 - horizon, stride):
+        n_before = len(recs)
+        # k_end = k0 + horizon ≤ n-1 まで使う (最終コマンド区間を落とさない)
+        for k0 in range(0, n - horizon, stride):
             ivs = [t_cmd[k0 + j + 1] - t_cmd[k0 + j] for j in range(horizon)]
             if any(iv <= 0.001 or iv > 1.0 for iv in ivs):
                 continue
+
+            # -- モデルを t_{k0} の実機状態にリセット（過去履歴を delay queue にセット） --
+            # ego_entity_simulation.cpp と同じ: state(4) = atan(wz*wb/vx) をキネマティック初期値に。
+            # vm_reset_state 内: state(4) = steer_actual - steer_bias
             model.reset_with_history(
                 x=gt_x[k0],
                 y=gt_y[k0],
@@ -795,7 +672,10 @@ def run_free_rollout(
                 acc_history=_delay_history(t_cmd[k0], acc_q_size, t_cmd_full, accel_des_full),
                 steer_history=_delay_history(t_cmd[k0], steer_q_size, t_cmd_full, steer_des_full),
             )
-            # 実コマンド系列を N 区間連続適用 (途中リセット無し)
+
+            # -- 実コマンド系列を N 区間連続適用 (途中リセット無し) --
+            # 各区間は n_full 回の SUB_DT ステップ + 端数ステップで正確に積分する
+            # (区間が SUB_DT より短い場合は n_full=0 で端数ステップのみ)。
             for j in range(horizon):
                 k = k0 + j
                 iv = ivs[j]
@@ -808,60 +688,72 @@ def run_free_rollout(
                 if rem > 1e-6:
                     model.step_dt(ad, sd, rem)
             k_end = k0 + horizon
-            dx = model.x - gt_x[k_end]
-            dy = model.y - gt_y[k_end]
-            yaw_err = (model.yaw - gt_yaw[k_end] + math.pi) % (2 * math.pi) - math.pi
-            cos_e = math.cos(gt_yaw[k_end])
-            sin_e = math.sin(gt_yaw[k_end])
+
+            # -- 終端誤差 (実機 − モデル) --
+            dx = gt_x[k_end] - model.x
+            dy = gt_y[k_end] - model.y
+            yaw_err = (gt_yaw[k_end] - model.yaw + math.pi) % (2 * math.pi) - math.pi
+
+            # -- 変位の k0 ヨー基準ローカル分解 --
+            real_dx = gt_x[k_end] - gt_x[k0]
+            real_dy = gt_y[k_end] - gt_y[k0]
+            sim_dx = model.x - gt_x[k0]
+            sim_dy = model.y - gt_y[k0]
+            cos_y = math.cos(gt_yaw[k0])
+            sin_y = math.sin(gt_yaw[k0])
+            real_ds_long = real_dx * cos_y + real_dy * sin_y
+            real_ds_lat = -real_dx * sin_y + real_dy * cos_y
+            sim_ds_long = sim_dx * cos_y + sim_dy * sin_y
+            sim_ds_lat = -sim_dx * sin_y + sim_dy * cos_y
+
+            sim_steer_kend = model.steer_state + steer_bias
+            # sim_wz: モデルが予測した終端 yaw rate (vm_get_wz, k_us 依存)。未 export なら NaN
+            # (sim_vy/ay は getVy()=0 / 未実装のため引き続き省略)。
+            sim_wz = model.wz
             recs.append({
                 "horizon": horizon,
                 "k0": k0,
-                "tr": float(t_cmd[k0]),
-                "elapsed": float(t_cmd[k_end] - t_cmd[k0]),
+                "tr": t_cmd[k0],  # AUTONOMOUS 開始からの経過時間 [s]
+                "elapsed": t_cmd[k_end] - t_cmd[k0],
+                "accel_des": float(accel_des[k_end - 1]),  # 最終適用コマンド (N=1 で旧 per-step と同一)
+                "steer_des": float(steer_des[k_end - 1]),
+                "pos_x": gt_x[k0],
+                "pos_y": gt_y[k0],
+                "real_vx": gt_vx[k0],
+                "real_steer_k0": gt_steer[k0],  # リセット時の実機ステア
+                "real_steer_kend": gt_steer[k_end],  # 終端の実機ステア（予測の比較対象）
+                "sim_steer_kend": sim_steer_kend,  # モデルが予測した終端ステア
+                "err_steer": gt_steer[k_end] - sim_steer_kend,  # 予測誤差 [rad]
+                "real_ax": gt_ax[k0],
+                "real_ay": gt_ay[k_end],  # 終端 — err_steer 規約に統一
+                "real_vy": gt_vy[k_end],
+                "real_wz": gt_wz[k_end],
+                "err_wz": gt_wz[k_end] - sim_wz,  # yaw rate 予測誤差 [rad/s] (sim_wz は実機値と err から導出可)
+                "real_dwz": gt_dwz[k_end],
+                "sim_vx": model.vx,
+                "real_ds_long": real_ds_long,
+                "real_ds_lat": real_ds_lat,
+                "sim_ds_long": sim_ds_long,
+                "sim_ds_lat": sim_ds_lat,
+                "err_ds_long": real_ds_long - sim_ds_long,
+                "err_ds_lat": real_ds_lat - sim_ds_lat,
                 "pos_err": math.hypot(dx, dy),
-                "err_long": dx * cos_e + dy * sin_e,
-                "err_lat": -dx * sin_e + dy * cos_e,
                 "yaw_err_deg": math.degrees(yaw_err),
             })
+        print(f"  horizon N={horizon}: {len(recs) - n_before} starts (stride={stride})")
     return pd.DataFrame(recs)
 
 
-def save_rollout_summary(df_roll: pd.DataFrame) -> None:
-    """multi-step rollout の horizon 別 RMSE を summary.txt に追記し rollout.csv を保存。"""
-    if df_roll.empty:
-        print("  (rollout: 有効サンプル無し、スキップ)")
-        return
-    lines = ["", "--- multi-step rollout (free-running, リセット無し N ステップ後の対実機誤差) ---"]
-    for horizon in sorted(df_roll["horizon"].unique()):
-        sub = df_roll[df_roll["horizon"] == horizon]
-        pos = float(np.sqrt(np.mean(sub["pos_err"].values ** 2))) * 100.0
-        lon = float(np.sqrt(np.mean(sub["err_long"].values ** 2))) * 100.0
-        lat = float(np.sqrt(np.mean(sub["err_lat"].values ** 2))) * 100.0
-        yaw = float(np.sqrt(np.mean(sub["yaw_err_deg"].values ** 2)))
-        el = float(sub["elapsed"].mean())
-        lines.append(
-            f"  N={int(horizon):2d} (≈{el:.2f}s): 位置 RMSE={pos:.2f} cm "
-            f"(縦={lon:.2f}, 横={lat:.2f} cm)  yaw RMSE={yaw:.3f} deg  (n={len(sub)})"
-        )
-    text = "\n".join(lines)
-    print(text)
-    with (OUT_DIR / "summary.txt").open("a", encoding="utf-8") as f:
-        f.write(text + "\n")
-    df_roll.to_csv(OUT_DIR / "rollout.csv", index=False)
-    print(f"  Saved: {OUT_DIR / 'rollout.csv'}")
-
-
-def plot_rollout_growth(df_roll: pd.DataFrame, params: dict) -> None:
+def plot_error_growth(df: pd.DataFrame, params: dict) -> None:
     """rollout 長 N に対する位置・yaw 誤差 RMSE の成長を描く (dynamics 差の顕在化)。"""
-    if df_roll.empty:
+    if df.empty:
         return
-    horizons = sorted(df_roll["horizon"].unique())
-    pos = [float(np.sqrt(np.mean(df_roll[df_roll["horizon"] == h]["pos_err"].values ** 2))) * 100.0
-           for h in horizons]
-    yaw = [float(np.sqrt(np.mean(df_roll[df_roll["horizon"] == h]["yaw_err_deg"].values ** 2)))
-           for h in horizons]
+    rmse = rmse_by_horizon(df)
+    horizons = sorted(rmse)
+    pos = [rmse[h]["pos"] for h in horizons]
+    yaw = [rmse[h]["yaw"] for h in horizons]
     fig, ax1 = plt.subplots(figsize=(9, 5))
-    fig.suptitle("多段ロールアウト誤差成長 (free-running)", fontsize=11)
+    fig.suptitle("N-step rollout 誤差成長 (free-running)", fontsize=11)
     ax1.plot(horizons, pos, "o-", color="#1f77b4", label="位置 RMSE [cm]")
     ax1.set_xlabel("rollout 長 N [step]  (N × SUB_DT 秒相当)")
     ax1.set_ylabel("位置 RMSE [cm]", color="#1f77b4")
@@ -873,7 +765,7 @@ def plot_rollout_growth(df_roll: pd.DataFrame, params: dict) -> None:
     ax2.tick_params(axis="y", labelcolor="#d62728")
     add_params_annotation(fig, params)
     fig.tight_layout()
-    _save(fig, "rollout_error_growth")
+    _save(fig, "error_growth")
 
 
 # ---------------------------------------------------------------------------
@@ -976,7 +868,7 @@ def plot_overview(df: pd.DataFrame, params: dict) -> None:
     ax.grid(True, alpha=0.3)
 
     fig.suptitle(
-        "全走行 per-step delta 分析\n(各ステップで実機状態にリセット — 計画挙動の差を除外)",
+        "全走行 N=1 (per-step) 分析\n(各ステップで実機状態にリセット — 計画挙動の差を除外)",
         fontsize=11,
     )
     fig.tight_layout()
@@ -984,99 +876,85 @@ def plot_overview(df: pd.DataFrame, params: dict) -> None:
     _save(fig, "overview")
 
 
-def plot_error_timeseries(df: pd.DataFrame, params: dict) -> None:
-    rad2deg = 180.0 / math.pi
-    fig, axes = plt.subplots(3, 1, figsize=(12, 11), sharex=True)
-    tr = df["tr"].values
-    window = max(1, len(df) // 30)
+def _repr_horizons(df: pd.DataFrame) -> list[int]:
+    """行表示に使う代表 horizon: [N=min] または [N=min, N=max]。"""
+    h_min = int(df["horizon"].min())
+    h_max = int(df["horizon"].max())
+    return [h_min] if h_max == h_min else [h_min, h_max]
 
-    for ax, vals, ylabel, title, color, source in [
-        (
-            axes[0],
-            df["err_ds_long"].values * 100,
-            "縦方向誤差 [cm]",
-            "1ステップ縦方向位置誤差 (実機 − モデル)",
-            "red",
-            "実機: kinematic_state/pose.position  モデル: state_[0,1]",
-        ),
-        (
-            axes[1],
-            df["err_ds_lat"].values * 100,
-            "横方向誤差 [cm]",
-            "1ステップ横方向位置誤差 (実機 − モデル)",
-            "red",
-            "実機: kinematic_state/pose.position  モデル: state_[0,1]",
-        ),
-        (
-            axes[2],
-            df["err_steer"].values * rad2deg,
-            "ステア予測誤差 [deg]",
-            "1ステップステア予測誤差 (actual[k+1] − pred[k+1])",
-            "purple",
-            "実機: steering_status/tire_angle  モデル: state_[4]+steer_bias",
-        ),
-    ]:
-        ma = pd.Series(vals).rolling(window, center=True, min_periods=1).mean().values
-        ax.plot(tr, vals, color="gray", lw=0.4, alpha=0.4, label="raw")
-        ax.plot(tr, ma, color=color, lw=1.5, label=f"移動平均(w={window})")
+
+def _horizon_colors(horizons: list) -> dict:
+    cmap = plt.get_cmap("viridis")
+    return {h: cmap(i / max(len(horizons) - 1, 1)) for i, h in enumerate(horizons)}
+
+
+def plot_error_timeseries(df: pd.DataFrame, params: dict) -> None:
+    """N-step 終端誤差の時系列 (horizon 別色分け; N=1 が従来の per-step delta)。"""
+    horizons = sorted(df["horizon"].unique())
+    colors = _horizon_colors(horizons)
+    fig, axes = plt.subplots(len(ERR_METRICS), 1, figsize=(12, 3.6 * len(ERR_METRICS)),
+                             sharex=True)
+
+    for ax, (col, scale, label, unit, source) in zip(axes, ERR_METRICS):
+        for h in horizons:
+            sub = df[df["horizon"] == h].sort_values("tr")
+            vals = sub[col].values * scale
+            window = max(1, len(sub) // 30)
+            ma = pd.Series(vals).rolling(window, center=True, min_periods=1).mean().values
+            ax.plot(sub["tr"].values, vals, color=colors[h], lw=0.4, alpha=0.25)
+            ax.plot(sub["tr"].values, ma, color=colors[h], lw=1.4, label=f"N={int(h)} MA")
         ax.axhline(0, color="black", lw=0.8)
-        ax.axvline(0, color="green", lw=1.0, ls=":", alpha=0.8, label="AUTONOMOUS 開始")
-        ax.set_ylabel(ylabel)
+        ax.axvline(0, color="green", lw=1.0, ls=":", alpha=0.8)
+        ax.set_ylabel(f"{label} [{unit}]")
+        title = f"N-step 終端 {label} (実機 − モデル)"
+        if col == "yaw_err_deg":
+            title += f"\n{YAW_SEED_NOTE}"
         _set_title(ax, title, source)
-        ax.legend(fontsize=8)
+        ax.legend(fontsize=8, ncol=min(len(horizons), 5))
         ax.grid(True, alpha=0.3)
 
-    axes[2].set_xlabel("AUTONOMOUS 開始からの時刻 [s]")
-    fig.suptitle("全走行 per-step delta 誤差時系列", fontsize=11)
+    axes[-1].set_xlabel("rollout 開始時刻 (AUTONOMOUS 開始からの経過) [s]")
+    fig.suptitle("N-step オープンループ 誤差時系列 (N=1 = 毎ステップリセット)", fontsize=11)
     fig.tight_layout()
     add_params_annotation(fig, params)
     _save(fig, "error_timeseries")
 
 
 def plot_error_vs_speed(df: pd.DataFrame, params: dict) -> None:
-    rad2deg = 180.0 / math.pi
-    fig, axes = plt.subplots(1, 3, figsize=(17, 5))
-    vx = df["real_vx"].values
+    """誤差の速度依存性散布 (行 = N=1 / N=max、速度は rollout 開始時点の実機 vx)。"""
+    rows = _repr_horizons(df)
+    h_min = rows[0]
     speed_bins = [0.0, 2.0, 5.0, 8.0, 50.0]
     colors = ["#4472C4", "#ED7D31", "#A9D18E", "#FF0000"]
 
-    for ax, vals, ylabel, source in [
-        (
-            axes[0],
-            df["err_ds_long"].values * 100,
-            "縦方向誤差 [cm]",
-            "実機: kinematic_state/pose.position  モデル: state_[0,1]  速度: twist.linear.x",
-        ),
-        (
-            axes[1],
-            df["err_ds_lat"].values * 100,
-            "横方向誤差 [cm]",
-            "実機: kinematic_state/pose.position  モデル: state_[0,1]  速度: twist.linear.x",
-        ),
-        (
-            axes[2],
-            df["err_steer"].values * rad2deg,
-            "ステア予測誤差 [deg]",
-            "実機: steering_status/tire_angle  モデル: state_[4]+steer_bias  速度: twist.linear.x",
-        ),
-    ]:
-        for i, (lo, hi) in enumerate(zip(speed_bins[:-1], speed_bins[1:])):
-            mask = (vx >= lo) & (vx < hi)
-            if mask.sum() == 0:
-                continue
-            lbl = f"v={lo:.0f}–{hi:.0f} m/s" if hi < 50 else f"v≥{lo:.0f} m/s"
-            ax.scatter(
-                vx[mask], vals[mask], s=4, alpha=0.5, color=colors[i % len(colors)], label=lbl,
-                rasterized=True,  # SVG 巨大化防止（数千点はビットマップ化）
-            )
-        ax.axhline(0, color="black", lw=0.8)
-        ax.set_xlabel("速度 [m/s]")
-        ax.set_ylabel(ylabel)
-        _set_title(ax, f"{ylabel} vs 速度", source)
-        ax.legend(fontsize=8)
-        ax.grid(True, alpha=0.3)
+    fig, axes = plt.subplots(len(rows), len(ERR_METRICS),
+                             figsize=(4.5 * len(ERR_METRICS), 5 * len(rows)), squeeze=False)
+    for row_idx, h in enumerate(rows):
+        sub = df[df["horizon"] == h]
+        vx = sub["real_vx"].values
+        for ax, (col, scale, label, unit, source) in zip(axes[row_idx], ERR_METRICS):
+            vals = sub[col].values * scale
+            for i, (lo, hi) in enumerate(zip(speed_bins[:-1], speed_bins[1:])):
+                mask = (vx >= lo) & (vx < hi)
+                if mask.sum() == 0:
+                    continue
+                lbl = f"v={lo:.0f}–{hi:.0f} m/s" if hi < 50 else f"v≥{lo:.0f} m/s"
+                ax.scatter(
+                    vx[mask], vals[mask], s=4, alpha=0.5, color=colors[i % len(colors)],
+                    label=lbl,
+                    rasterized=True,  # SVG 巨大化防止（数千点はビットマップ化）
+                )
+            ax.axhline(0, color="black", lw=0.8)
+            ax.set_xlabel("rollout 開始時点の速度 [m/s]")
+            ax.set_ylabel(f"{label} [{unit}]")
+            title = f"{label} vs 速度 (N={h})"
+            if col == "yaw_err_deg" and h == h_min:
+                title += f"\n{YAW_SEED_NOTE}"
+            _set_title(ax, title, f"{source}  速度: twist.linear.x")
+            ax.legend(fontsize=7)
+            ax.grid(True, alpha=0.3)
 
-    fig.suptitle("全走行 per-step delta: 速度依存性", fontsize=11)
+    fig.suptitle("N-step オープンループ: 速度依存性 (上段 N=1, 下段 N=max)", fontsize=11)
     fig.tight_layout()
     add_params_annotation(fig, params)
     _save(fig, "error_vs_speed")
@@ -1093,11 +971,11 @@ def plot_steering_analysis(df: pd.DataFrame, params: dict) -> None:
     # --- (0,0) ステア角の時系列: 実機 t_{k+1} vs モデル予測 t_{k+1} vs 指令 ---
     ax = axes[0, 0]
     ax.plot(
-        tr, df["real_steer_kp1"].values * rad2deg, color="blue", lw=1.2, label="実機 steer[k+1]"
+        tr, df["real_steer_kend"].values * rad2deg, color="blue", lw=1.2, label="実機 steer[k+1]"
     )
     ax.plot(
         tr,
-        df["sim_steer_kp1"].values * rad2deg,
+        df["sim_steer_kend"].values * rad2deg,
         color="red",
         lw=1.0,
         ls="--",
@@ -1124,7 +1002,7 @@ def plot_steering_analysis(df: pd.DataFrame, params: dict) -> None:
 
     # --- (0,1) ステア追従誤差（指令 vs 実機）: 実機のステア制御性能 ---
     ax = axes[0, 1]
-    steer_follow_err = (df["real_steer_kp1"].values - df["steer_des"].values) * rad2deg
+    steer_follow_err = (df["real_steer_kend"].values - df["steer_des"].values) * rad2deg
     ma_f = pd.Series(steer_follow_err).rolling(window, center=True, min_periods=1).mean().values
     ax.plot(tr, steer_follow_err, color="gray", lw=0.4, alpha=0.4, label="raw")
     ax.plot(tr, ma_f, color="blue", lw=1.5, label=f"移動平均(w={window})")
@@ -1186,7 +1064,7 @@ def plot_steering_analysis(df: pd.DataFrame, params: dict) -> None:
     ax.grid(True, alpha=0.3)
 
     fig.suptitle(
-        "全走行 per-step ステアリング分析\n(1ステップ予測誤差: actual[k+1] − model_pred[k+1])",
+        "全走行 N=1 (per-step) ステアリング分析\n(1ステップ予測誤差: actual[kend] − model_pred[kend])",
         fontsize=11,
     )
     fig.tight_layout()
@@ -1207,30 +1085,31 @@ def _load_map_ways(osm_path: Path | None) -> list[np.ndarray] | None:
 
 
 def plot_map_distribution(df: pd.DataFrame, params: dict) -> None:
+    """地図上の誤差分布 (上段 N=1, 下段 N=max。マーカー位置は rollout 開始点 k0)。"""
     rad2deg = 180.0 / math.pi
     map_ways = _load_map_ways(_resolve_map_osm())
 
-    columns = [
-        (
-            df["err_ds_long"].values * 100,
-            "縦方向誤差",
-            "cm",
-            "kinematic_state/pose.position vs state_[0,1]",
-        ),
-        (
-            df["err_ds_lat"].values * 100,
-            "横方向誤差",
-            "cm",
-            "kinematic_state/pose.position vs state_[0,1]",
-        ),
-        (
-            df["err_steer"].values * rad2deg,
-            "ステア予測誤差",
-            "deg",
-            "steering_status/tire_angle vs state_[4]+bias",
-        ),
-        # err_ay / err_vy / err_wz は sim_* がラッパー未 export のため一旦スキップ
-    ]
+    row_horizons = _repr_horizons(df)
+    h_min = row_horizons[0]
+
+    # 各行 = horizon、各列 = (列名, ラベル, 単位, データソース注)。
+    # err_ay / err_vy / err_wz は sim_* がラッパー未 export のため一旦スキップ。
+    # 下段 (N=max) はステアより累積 yaw 誤差が本質なので 3 列目を yaw に差し替える。
+    def _cols(h: int) -> list[tuple[np.ndarray, str, str, str]]:
+        sub = df[df["horizon"] == h]
+        cols = [
+            (sub["err_ds_long"].values * 100, f"縦方向誤差 (N={h})", "cm",
+             "kinematic_state/pose.position vs rollout 終端 state_[0,1]"),
+            (sub["err_ds_lat"].values * 100, f"横方向誤差 (N={h})", "cm",
+             "kinematic_state/pose.position vs rollout 終端 state_[0,1]"),
+        ]
+        if h == h_min:
+            cols.append((sub["err_steer"].values * rad2deg, f"ステア予測誤差 (N={h})", "deg",
+                         "steering_status/tire_angle vs state_[4]+bias"))
+        else:
+            cols.append((sub["yaw_err_deg"].values, f"yaw 誤差 (N={h})", "deg",
+                         "kinematic_state/pose.orientation vs rollout 終端 state_[2]"))
+        return cols
 
     # 走行軌跡の bbox + margin で地図プロット範囲を自動算出
     x_min = float(df["pos_x"].min()) - MAP_BBOX_MARGIN
@@ -1238,77 +1117,90 @@ def plot_map_distribution(df: pd.DataFrame, params: dict) -> None:
     y_min = float(df["pos_y"].min()) - MAP_BBOX_MARGIN
     y_max = float(df["pos_y"].max()) + MAP_BBOX_MARGIN
 
-    # columns は最低 3 要素 (err_ds_long / err_ds_lat / err_steer) ある前提。
     # plotly インタラクティブ HTML（ズーム・パン・ホバー可）として出力する。
     from plotly.subplots import make_subplots  # noqa: PLC0415
 
-    n = len(columns)
+    n_rows = len(row_horizons)
+    n_cols = 3
+    titles = []
+    for h in row_horizons:
+        titles += [f"{label} [{unit}]<br><sub>{source}</sub>" for _, label, unit, source in _cols(h)]
     fig = make_subplots(
-        rows=1,
-        cols=n,
-        subplot_titles=[
-            f"{label} [{unit}]<br><sub>{source}</sub>" for _, label, unit, source in columns
-        ],
+        rows=n_rows,
+        cols=n_cols,
+        subplot_titles=titles,
         horizontal_spacing=0.10,
+        vertical_spacing=0.14,
     )
     lane_ways = map_ways_in_bbox(map_ways, (x_min, x_max), (y_min, y_max)) if map_ways else []
 
-    pos_x = df["pos_x"].to_numpy()
-    pos_y = df["pos_y"].to_numpy()
-    # レーン trace の NaN 区切り座標構築は全列共通なので 1 回だけ行い、
-    # 各列にはそのコピーを add_trace する（trace は 1 軸にしか紐づけられないため）。
+    # レーン trace の NaN 区切り座標構築は全セル共通なので 1 回だけ行い、
+    # 各セルにはそのコピーを add_trace する（trace は 1 軸にしか紐づけられないため）。
     lane_template = lanes_to_trace(lane_ways) if lane_ways else None
-    for i, (vals, label, unit, source) in enumerate(columns, start=1):
-        # plotly の軸名は 1 番目のみサフィックス無し（xaxis, x / xaxis2, x2 ...）
-        axis_suffix = str(i) if i > 1 else ""
-        if lane_template is not None:
-            fig.add_trace(go.Scatter(lane_template), row=1, col=i)
-        vmax = max(abs(vals).max(), 1e-6)
-        # 各列の colorbar をサブプロット右端に配置（xaxis domain の右端を使う）
-        domain_end = fig.layout[f"xaxis{axis_suffix}"].domain[1]
-        fig.add_trace(
-            go.Scatter(
-                x=pos_x,
-                y=pos_y,
-                mode="markers",
-                marker=dict(
-                    color=vals,
-                    colorscale="RdBu",
-                    reversescale=True,  # matplotlib RdBu_r 相当
-                    cmin=-vmax,
-                    cmax=vmax,
-                    size=5,
-                    colorbar=dict(title=unit, x=domain_end + 0.005, len=0.85, thickness=12),
+    for row_idx, h in enumerate(row_horizons, start=1):
+        sub = df[df["horizon"] == h]
+        pos_x = sub["pos_x"].to_numpy()
+        pos_y = sub["pos_y"].to_numpy()
+        for col_idx, (vals, label, unit, source) in enumerate(_cols(h), start=1):
+            # plotly の軸名は 1 番目のみサフィックス無し（xaxis, x / xaxis2, x2 ...）
+            axis_i = (row_idx - 1) * n_cols + col_idx
+            axis_suffix = str(axis_i) if axis_i > 1 else ""
+            if lane_template is not None:
+                fig.add_trace(go.Scatter(lane_template), row=row_idx, col=col_idx)
+            vmax = max(abs(vals).max(), 1e-6)
+            # 各セルの colorbar をサブプロット右端に配置（x/y axis domain を使う）
+            x_dom = fig.layout[f"xaxis{axis_suffix}"].domain
+            y_dom = fig.layout[f"yaxis{axis_suffix}"].domain
+            fig.add_trace(
+                go.Scatter(
+                    x=pos_x,
+                    y=pos_y,
+                    mode="markers",
+                    marker=dict(
+                        color=vals,
+                        colorscale="RdBu",
+                        reversescale=True,  # matplotlib RdBu_r 相当
+                        cmin=-vmax,
+                        cmax=vmax,
+                        size=5,
+                        colorbar=dict(
+                            title=unit,
+                            x=x_dom[1] + 0.005,
+                            y=(y_dom[0] + y_dom[1]) / 2,
+                            len=y_dom[1] - y_dom[0],
+                            thickness=12,
+                        ),
+                    ),
+                    showlegend=False,
+                    hovertemplate=(
+                        f"x=%{{x:.1f}}m y=%{{y:.1f}}m<br>{label}=%{{marker.color:.2f}}{unit}"
+                        "<extra></extra>"
+                    ),
                 ),
-                showlegend=False,
-                hovertemplate=(
-                    f"x=%{{x:.1f}}m y=%{{y:.1f}}m<br>{label}=%{{marker.color:.2f}}{unit}"
-                    "<extra></extra>"
-                ),
-            ),
-            row=1,
-            col=i,
-        )
-        fig.update_xaxes(title_text="x [m]", range=[x_min, x_max], row=1, col=i)
-        fig.update_yaxes(
-            title_text="y [m]",
-            range=[y_min, y_max],
-            scaleanchor=f"x{axis_suffix}",
-            scaleratio=1,
-            row=1,
-            col=i,
-        )
+                row=row_idx,
+                col=col_idx,
+            )
+            fig.update_xaxes(title_text="x [m]", range=[x_min, x_max], row=row_idx, col=col_idx)
+            fig.update_yaxes(
+                title_text="y [m]",
+                range=[y_min, y_max],
+                scaleanchor=f"x{axis_suffix}",
+                scaleratio=1,
+                row=row_idx,
+                col=col_idx,
+            )
 
     add_params_annotation_plotly(fig, params)
     fig.update_layout(
         title=dict(
-            text="全走行 per-step delta: 地図上の誤差分布 (実機 − モデル)", font=dict(size=14)
+            text="N-step オープンループ: 地図上の誤差分布 (実機 − モデル、点=rollout 開始位置)",
+            font=dict(size=14),
         ),
         # step11 の純 CSS ケースタブ（display:none パネル）内に iframe 配置されるため、
         # コンテナ可視状態に依存しない固定サイズで描画する（autosize だと幅 0 になる）。
         # 幅はレポート本文幅（max-width 1100px）に収まるようにする。
         autosize=False,
-        width=355 * n,
+        width=355 * n_cols,
         height=FIG_HEIGHTS["map_distribution"],
         template="plotly_white",
         margin=dict(l=60, r=40, t=110, b=40),
@@ -1373,7 +1265,7 @@ def plot_lateral_dynamics_timeseries(df: pd.DataFrame, params: dict) -> None:
 
     axes[-1].set_xlabel("AUTONOMOUS 開始からの時刻 [s]")
     fig.suptitle(
-        "全走行 per-step delta: 横方向諸量 時系列\n(各ステップで実機状態にリセット)", fontsize=11
+        "全走行 N=1 (per-step): 横方向諸量 時系列\n(各ステップで実機状態にリセット)", fontsize=11
     )
     fig.tight_layout()
     add_params_annotation(fig, params)
@@ -1383,7 +1275,7 @@ def plot_lateral_dynamics_timeseries(df: pd.DataFrame, params: dict) -> None:
 def plot_steer_vs_lateral_scatter(df: pd.DataFrame, params: dict) -> None:
     """横軸ステア角 × 縦軸横方向諸量の散布図（速度域別・1次フィッティング付き）."""
     rad2deg = 180.0 / math.pi
-    steer_deg = df["real_steer_k"].values * rad2deg
+    steer_deg = df["real_steer_k0"].values * rad2deg
     vx = df["real_vx"].values
     speed_bins = [0.0, 2.0, 5.0, 8.0, 50.0]
     colors = ["#4472C4", "#ED7D31", "#A9D18E", "#FF0000"]
@@ -1466,7 +1358,7 @@ def plot_steer_vs_lateral_scatter(df: pd.DataFrame, params: dict) -> None:
         ax.grid(True, alpha=0.3)
 
     fig.suptitle(
-        "全走行 per-step delta: ステア角 vs 横方向諸量 散布図\n(スケール誤差・バイアス確認)",
+        "全走行 N=1 (per-step): ステア角 vs 横方向諸量 散布図\n(スケール誤差・バイアス確認)",
         fontsize=11,
     )
     fig.tight_layout()
@@ -1486,8 +1378,8 @@ def plot_cascade_error(df: pd.DataFrame, params: dict) -> None:
     rows = [
         # (real_vals, sim_vals, err_vals, ylabel, title, source)
         (
-            df["real_steer_kp1"].values * rad2deg,
-            df["sim_steer_kp1"].values * rad2deg,
+            df["real_steer_kend"].values * rad2deg,
+            df["sim_steer_kend"].values * rad2deg,
             df["err_steer"].values * rad2deg,
             "ステア角 [deg]",
             "① ステア応答 (cmd→actual): 実機 vs モデル",
@@ -1537,7 +1429,7 @@ def plot_cascade_error(df: pd.DataFrame, params: dict) -> None:
         axes[-1, col].set_xlabel("AUTONOMOUS 開始からの時刻 [s]")
 
     fig.suptitle(
-        "全走行 per-step delta: 段階的誤差プロット\nステア指示 → ステア応答 → 横位置",
+        "全走行 N=1 (per-step): 段階的誤差プロット\nステア指示 → ステア応答 → 横位置",
         fontsize=12,
     )
     fig.tight_layout()
@@ -1547,42 +1439,45 @@ def plot_cascade_error(df: pd.DataFrame, params: dict) -> None:
 
 def save_summary(df: pd.DataFrame) -> None:
     rad2deg = 180.0 / math.pi
-    tr = df["tr"].values
+    df1 = n1(df)
+    tr = df1["tr"].values
 
     def rmse_cm(col, mask=None):
-        v = df[col].values if mask is None else df[col].values[mask]
+        v = df1[col].values if mask is None else df1[col].values[mask]
         return float(np.sqrt(np.mean(v**2))) * 100
 
     def rmse_deg(col, mask=None):
-        v = df[col].values if mask is None else df[col].values[mask]
+        v = df1[col].values if mask is None else df1[col].values[mask]
         return float(np.sqrt(np.mean(v**2))) * rad2deg
 
     def mean_deg(col, mask=None):
-        v = df[col].values if mask is None else df[col].values[mask]
+        v = df1[col].values if mask is None else df1[col].values[mask]
         return float(np.mean(v)) * rad2deg
 
     lines = [
-        "=== 全走行 per-step delta 分析 サマリ ===",
-        f"有効ステップ数: {len(df)}",
+        "=== 全走行 N-step オープンループ解析 サマリ ===",
+        f"horizons: {sorted(int(h) for h in df['horizon'].unique())}  (N=1 = 毎ステップリセット)",
         f"解析窓: tr={tr[0]:.1f}〜{tr[-1]:.1f}s",
+        "",
+        f"=== N=1 (per-step) 詳細  有効ステップ数: {len(df1)} ===",
         "",
         "--- 全区間: 位置 ---",
         f"縦方向 RMSE: {rmse_cm('err_ds_long'):.3f} cm",
         f"横方向 RMSE: {rmse_cm('err_ds_lat'):.3f} cm",
         "",
-        "--- 全区間: ステア予測 (actual[k+1] − pred[k+1]) ---",
+        "--- 全区間: ステア予測 (actual[kend] − pred[kend]) ---",
         f"ステア予測 RMSE: {rmse_deg('err_steer'):.4f} deg",
         f"ステア予測 平均誤差: {mean_deg('err_steer'):.4f} deg  (正=実機が指令より大/負=小)",
         "",
     ]
     # yaw rate 予測 RMSE (vm_get_wz export 時のみ)。steer/位置と異なり k_us 感度を持つ。
-    if "err_wz" in df.columns and np.isfinite(df["err_wz"].values).any():
-        wz_rmse = float(np.sqrt(np.nanmean(df["err_wz"].values ** 2))) * rad2deg
+    if "err_wz" in df1.columns and np.isfinite(df1["err_wz"].values).any():
+        wz_rmse = float(np.sqrt(np.nanmean(df1["err_wz"].values ** 2))) * rad2deg
         lines += [
             "--- 全区間: yaw rate 予測 (vm_get_wz, k_us 感度あり) ---",
             f"yaw rate 予測 RMSE: {wz_rmse:.4f} deg/s",
             "  (注: steer を k_us=0 の運動学逆算で seed するため、k_us が異なるケース間の "
-            "err_wz 比較は seeding バイアスを含む。k_us 同定は rollout を参照)",
+            "小 N の err_wz 比較は seeding バイアスを含む。k_us 同定は大 N を参照)",
             "",
         ]
     lines.append("--- 時間帯別 (4 等分 equal-time bins / 縦・横・ステア RMSE) ---")
@@ -1611,7 +1506,7 @@ def save_summary(df: pd.DataFrame) -> None:
     lines += ["", "--- 速度域別 ---"]
     for lo, hi in [(0, 2), (2, 5), (5, 8), (8, 100)]:
         lbl = f"v={lo}〜{hi} m/s" if hi < 100 else f"v≥{lo} m/s"
-        mask = (df["real_vx"].values >= lo) & (df["real_vx"].values < hi)
+        mask = (df1["real_vx"].values >= lo) & (df1["real_vx"].values < hi)
         if mask.sum() > 0:
             lines.append(
                 f"  {lbl:22s}: 縦={rmse_cm('err_ds_long', mask):.3f} cm, "
@@ -1619,14 +1514,25 @@ def save_summary(df: pd.DataFrame) -> None:
                 f"ステア={rmse_deg('err_steer', mask):.4f} deg  (n={mask.sum()})"
             )
 
+    # --- horizon 別 RMSE (free-running, リセット無し N ステップ後の対実機誤差) ---
+    lines += ["", "=== horizon 別 終端誤差 RMSE (free-running) ==="]
+    rmse = rmse_by_horizon(df)
+    for horizon, r in rmse.items():
+        sub = df[df["horizon"] == horizon]
+        el = float(sub["elapsed"].mean())
+        lines.append(
+            f"  N={horizon:2d} (≈{el:.2f}s): 位置 RMSE={r['pos']:.2f} cm "
+            f"(縦={r['long']:.2f}, 横={r['lat']:.2f} cm)  yaw RMSE={r['yaw']:.3f} deg  (n={len(sub)})"
+        )
+
     # 透明化: sim_vx<0 (ideal_steer_acc が停止中ブレーキで微小後退する仕様) の件数を注記。
     # バグではなく dynamics-free モデルの忠実な挙動で、位置誤差寄与は無視可能 (VehicleModel docstring 参照)。
-    if "sim_vx" in df.columns:
-        n_neg = int((df["sim_vx"].values < 0).sum())
+    if "sim_vx" in df1.columns:
+        n_neg = int((df1["sim_vx"].values < 0).sum())
         if n_neg > 0:
             lines += [
                 "",
-                f"--- 注記: sim_vx<0 が {n_neg}/{len(df)} step ---",
+                f"--- 注記: sim_vx<0 が {n_neg}/{len(df1)} step (N=1) ---",
                 "  ideal_steer_acc の仕様 (停止中ブレーキで微小後退; ギア/停止拘束なし)。"
                 "バグではなく位置誤差寄与は無視可能。",
             ]
@@ -1645,14 +1551,14 @@ def save_summary(df: pd.DataFrame) -> None:
 def _apply_runtime_config(cfg: RuntimeConfig, case_tag: str, case_params: dict) -> dict:
     """RuntimeConfig + cases.yaml の case エントリ をモジュールレベル変数に反映。
 
-    OUT_DIR は per_step/<case_tag>/ に固定。PARAMS は load_sim_params()
+    OUT_DIR は nstep/<case_tag>/ に固定。PARAMS は load_sim_params()
     の base に case_params を上書きしたもの。
     """
     global BASE, LITE_DIR, OUT_DIR, REAL_BAG_DIR, PARAMS, SUB_DT  # noqa: PLW0603
 
     BASE = cfg.base_dir
     LITE_DIR = cfg.lite_dir
-    OUT_DIR = cfg.out_dir / "per_step" / case_tag
+    OUT_DIR = cfg.out_dir / "nstep" / case_tag
     # 入力 bag のデフォルトパス (実体は _resolve_real_mcap が file/dir 両対応)
     REAL_BAG_DIR = LITE_DIR / "real.lite.mcap"
 
@@ -1663,7 +1569,7 @@ def _apply_runtime_config(cfg: RuntimeConfig, case_tag: str, case_params: dict) 
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="全走行 per-step delta 分析 (1 ケース 1 run)")
+    parser = argparse.ArgumentParser(description="全走行 N-step オープンループ解析 (1 ケース 1 run)")
     add_common_cli_arguments(parser)
     parser.add_argument(
         "--case-tag",
@@ -1716,33 +1622,38 @@ def main() -> None:
     t0_ns = find_autonomous_start(data)
     print(f"AUTONOMOUS 開始: t0_ns={t0_ns}")
 
-    print(f"\n=== per-step delta 分析開始 (case={case.tag}) ===")
-    df = run_per_step(data, t0_ns, params, case.vehicle_model)
-    print(f"有効ステップ: {len(df)}")
+    print(f"\n=== N-step オープンループ解析開始 (case={case.tag}) ===")
+    # N=1 は全ステップ (stride=1) で従来 per-step delta の解像度、
+    # N>1 は dynamics 累積差の検出用に stride=5 でサンプリングする。
+    # GT 準備は両呼び出しで同一なので 1 回だけ計算して共有する。
+    gt = _prepare_gt(data, t0_ns, params)
+    df1 = run_rollout(data, t0_ns, params, case.vehicle_model, horizons=(1,), stride=1, gt=gt)
+    dfn = run_rollout(
+        data, t0_ns, params, case.vehicle_model, horizons=(2, 5, 10, 20), stride=5, gt=gt
+    )
+    df = pd.concat([df1, dfn], ignore_index=True)
 
-    if df.empty:
+    if df1.empty:
         print("ERROR: 有効なステップが 0 件でした", file=sys.stderr)
         sys.exit(1)
 
     print("\n=== 出力生成 ===")
-    df.to_csv(OUT_DIR / "per_step_delta.csv", index=False)
-    print(f"  Saved: {OUT_DIR / 'per_step_delta.csv'}")
+    df.to_csv(OUT_DIR / "nstep_delta.csv", index=False)
+    print(f"  Saved: {OUT_DIR / 'nstep_delta.csv'}")
 
     save_summary(df)
 
-    # 多段 rollout (D1): per-step では検出できない k_us/wheelbase/時定数の累積差を顕在化。
-    print(f"\n=== multi-step rollout 分析 (case={case.tag}) ===")
-    df_roll = run_free_rollout(data, t0_ns, params, case.vehicle_model)
-    save_rollout_summary(df_roll)
-    plot_rollout_growth(df_roll, params)
-    plot_overview(df, params)
+    # 全 horizon を使う統合図
+    plot_error_growth(df, params)
     plot_error_timeseries(df, params)
     plot_error_vs_speed(df, params)
-    plot_steering_analysis(df, params)
     plot_map_distribution(df, params)
-    plot_lateral_dynamics_timeseries(df, params)
-    plot_steer_vs_lateral_scatter(df, params)
-    plot_cascade_error(df, params)
+    # N=1 (毎ステップリセット) に固有の詳細図 / 実機のみの図
+    plot_overview(df1, params)
+    plot_steering_analysis(df1, params)
+    plot_lateral_dynamics_timeseries(df1, params)
+    plot_steer_vs_lateral_scatter(df1, params)
+    plot_cascade_error(df1, params)
 
     print(f"\n完了。出力先: {OUT_DIR}")
 
