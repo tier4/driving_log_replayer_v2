@@ -13,7 +13,12 @@ subprocess で直接実行する。
 `sample/scenario.yaml` の `Datasets[0]` UUID = SSOT（実機 rosbag を含む
 annotation-dataset）が全 stage の入口になる。
 
-| Stage | 名称 | 入力 | 出力 (`result_archive/` 配下) | 実行回数 |
+> 全 stage の成果物は `result_archive/real_log_sim_comparison/` 配下の単一バンドルフォルダに
+> まとめて出力する（下表の出力パスはこのバンドルフォルダ基準）。Web.Auto は `result_archive/` の
+> 中身をそのまま zip 化するため、ラッパーフォルダが無いと展開時に散らばる。post_process が後段で
+> `result_archive/` 直下に書く `result_jsonl.png` のみバンドル外に残る。
+
+| Stage | 名称 | 入力 | 出力 (`result_archive/real_log_sim_comparison/` 配下) | 実行回数 |
 |---|---|---|---|---|
 | 1 | 実機ログ抽出 (`step1_make_lite --kind real`) | `input_bag/*.{mcap,db3}` | `lite/real.lite/` | 1 |
 | 2 | scenario 自動生成 (`step2_bag_to_scenario`) | `input_bag/` + map | `scenarios/auto_scenario.yaml` (OpenSCENARIO) | 1 |
@@ -25,7 +30,7 @@ annotation-dataset）が全 stage の入口になる。
 | 8 | DP軌跡比較 (`step8_compare_dp_trajectory`) | `lite/{real, <sim>}.lite/` | `comparison/figures/dp_*.png` | 1 |
 | 9 | 縦パラ同定 (`step9_identify_brake`) | `lite/real.lite/` | `comparison/brake_sweep/{brake_sweep.csv, .png}` | 1 |
 | 10 | カーブ乖離診断 (`step10_diagnose_curve`) | `lite/{real, <sim>}.lite/` | `comparison/curve_diag/{curve_divergence.md, .png}` | 1 |
-| 11 | HTML レポート生成 (`step11_build_html_report`) | `comparison/` 配下の全 PNG + 各 `.md` | `index.html` (result_archive 直下) | 1 |
+| 11 | HTML レポート生成 (`step11_build_html_report`) | `comparison/` 配下の全 PNG + 各 `.md` | `index.html` (バンドルフォルダ直下) | 1 |
 
 成否はパイプラインの例外有無で決まる。全 stage が完走すれば `result.jsonl` に
 `Success: true`、いずれかの subprocess が非ゼロ終了またはタイムアウトすると
@@ -125,11 +130,15 @@ Stage 3 (`step3_run_sims`) が `scenario_test_runner` で sim を回した結果
 - `curve2_index`: `curve_centers` 内で per-step delta 解析の対象とするカーブのインデックス（0 始まり）。
 - `curve2_window`: カーブ② 直前の一時停止を検出する時刻窓 `[start, end]`（AUTONOMOUS 開始からの経過秒）。
 
-## 出力（`result_archive/` 配下）
+## 出力（`result_archive/real_log_sim_comparison/` 配下）
 
-### `index.html`（result_archive 直下・閲覧用エントリポイント）
+全成果物は `result_archive/real_log_sim_comparison/` の単一バンドルフォルダにまとめて出力する
+（zip 展開で 1 フォルダにまとまるようにするため。理由は冒頭パイプライン表の注記参照）。以下のパスは
+すべてこのバンドルフォルダ基準。
 
-`step11_build_html_report`（Stage 11）が `result_archive/` 直下（`comparison/` の親）に生成する、
+### `index.html`（バンドルフォルダ直下・閲覧用エントリポイント）
+
+`step11_build_html_report`（Stage 11）がバンドルフォルダ直下（`comparison/` の親）に生成する、
 `comparison/` 配下の全プロットを 1 枚に集約した HTML（画像 src は `comparison/` 始まりの相対パス）。
 出力ディレクトリ単位ではなく **比較の概念** で 5 セクションに分けて並べる（読み手が
 「何を何と比べた図か」で辿れるようにするため）。各図は出力先ではなく (ディレクトリ, ファイル名) の
@@ -146,7 +155,8 @@ Stage 3 (`step3_run_sims`) が `scenario_test_runner` で sim を回した結果
 各セクションには 1 行説明を付け、`per_step/<tag>/` の図はセクション内でケースタグごとにサブグループ化する。
 3 種の Markdown レポート（`report.md`→5、`cases_summary.md`→3、`curve_divergence.md`→5）は所属セクション
 末尾に埋め込む。既知のいずれにも分類されない PNG は捨てず「その他」セクションに回す（黙って誤分類しない）。
-画像は**相対パスリンク**なので、`result_archive/` ディレクトリごとアーカイブ・共有してもそのまま表示できる。
+画像は**相対パスリンク**なので、バンドルフォルダ（`result_archive/real_log_sim_comparison/`）ごと
+アーカイブ・共有してもそのまま表示できる。
 
 ### `lite/`
 

@@ -26,7 +26,7 @@ Runs the 11-stage comparison pipeline inside a cloud DLR2 job:
   8. step8_compare_dp_trajectory DiffusionPlanner 出力軌跡 real vs sim 比較 (figures/dp_*.png)
   9. step9_identify_brake  real.lite で縦方向 brake_tc を発進フィット同定 (brake_sweep/)
   10. step10_diagnose_curve カーブ/発進区間の乖離を縦横分解診断 (curve_diag/)
-  11. step11_build_html_report comparison/ 配下の全プロットを集約 (result_archive/index.html)
+  11. step11_build_html_report comparison/ 配下の全プロットを集約 (result_archive/real_log_sim_comparison/index.html)
 
 Outputs are written to result_archive_path, which is collected by
 `logging.additional_log_archive` in .webauto-ci.yml.
@@ -72,8 +72,14 @@ class RealLogSimComparisonEvaluator(Node):
 
         result_archive_path.mkdir(parents=True, exist_ok=True)
         result_bag_path.mkdir(parents=True, exist_ok=True)
-        lite_dir = result_archive_path / "lite"
-        comparison_dir = result_archive_path / "comparison"
+        # Web.Auto は result_archive/ の中身をそのまま zip 化するため、ラッパーフォルダが無いと
+        # 展開時に comparison/lite/scenarios/index.html が散らばる。本ユースケースの成果物は
+        # 単一バンドルフォルダ配下にまとめ、zip 展開で 1 フォルダにまとまるようにする。
+        # post_process が後段で書く result_jsonl.png のみ result_archive/ 直下に残る
+        # (= 展開時は「バンドルフォルダ 1 つ + result_jsonl.png」)。
+        bundle_dir = result_archive_path / "real_log_sim_comparison"
+        lite_dir = bundle_dir / "lite"
+        comparison_dir = bundle_dir / "comparison"
 
         # post_process の create_metadata_yaml は result_bag_path に rosbag ファイルがないとエラーになる。
         # pipeline が途中で失敗しても post_process が通るよう、事前に空の MCAP を置く。
@@ -327,7 +333,7 @@ def run_pipeline(
         logger.warning(f"Stage 10 (step10_diagnose_curve) failed but continuing: {exc}")
 
     # ---- Stage 11: comparison/ 配下の全プロットを集約した閲覧用 HTML 生成 ----
-    logger.info("Stage 11: step11_build_html_report (result_archive/index.html)")
+    logger.info("Stage 11: step11_build_html_report (result_archive/real_log_sim_comparison/index.html)")
     try:
         _run([
             sys.executable, "-m",

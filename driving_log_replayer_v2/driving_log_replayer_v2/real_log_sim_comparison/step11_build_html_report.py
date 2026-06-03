@@ -23,7 +23,7 @@ curve_diag/curve_divergence.md) を散らして出力する。本ステージは
 未知の PNG は捨てずに「その他」セクションへ回す。
 
 index.html を開けば全プロットと Markdown レポートを 1 画面で閲覧でき、相対リンクなので
-`result_archive/` ごとアーカイブ・共有してもそのまま動く。
+バンドルフォルダ (`result_archive/real_log_sim_comparison/`) ごとアーカイブ・共有してもそのまま動く。
 
 本ステージは読み取り専用 (comparison/ に index.html を 1 枚足すだけ)。他ステージの出力は変更しない。
 `markdown` パッケージがあれば Markdown を整形 HTML 化し、無ければ生テキストを <pre> で埋め込む

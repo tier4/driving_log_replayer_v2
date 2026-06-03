@@ -88,7 +88,7 @@ echo "[repro] === 完了。結果サマリ ==="
 LATEST="${RLSC_DIR}/sample/out/latest"
 echo "  出力: ${LATEST}"
 [ -f "${LATEST}/result.jsonl" ] && { echo -n "  result.jsonl: "; cat "${LATEST}/result.jsonl"; echo; }
-REPORT="${LATEST}/result_archive/comparison/report.md"
+REPORT="${LATEST}/result_archive/real_log_sim_comparison/comparison/report.md"
 [ -f "${REPORT}" ] && { echo "  --- report.md (速度統計) ---"; sed -n '/速度統計/,/速度 RMSE/p' "${REPORT}"; }
 echo "  生成 scenario の start/goal:"
 grep -E "\[step2_bag_to_scenario\] (start|goal)=" "${REPRO_DIR}/run.log" | tail -2 || true
