@@ -144,26 +144,7 @@ def run_pipeline(
     logger.info(f"Input bag: {input_bag_dir}")
 
     # ---- 共通 env ----
-    env = os.environ.copy()
-    env["BEST_MODEL_BASE_DIR"] = str(comparison_dir.parent)  # lite/ and comparison/ live here
-
-    map_osm = Path(map_path) / "lanelet2_map.osm" if map_path else Path("")
-    if map_osm.exists():
-        env["MAP_OSM_PATH"] = str(map_osm)
-        logger.info(f"Map OSM: {map_osm}")
-    else:
-        env["MAP_OSM_PATH"] = ""
-        logger.warning(f"lanelet2_map.osm not found at {map_osm}; map background will be omitted")
-
-    if compare_cfg.get("scenario_name"):
-        env["SCENARIO_NAME"] = compare_cfg["scenario_name"]
-    env["CURVE_CONFIG_YAML"] = compare_cfg.get("curve_config_yaml", "")
-    # 実機データ取得時の版・重み (外部記録)。step4 が provenance 掲載に使う。
-    env["REAL_PROVENANCE"] = compare_cfg.get("real_provenance", "")
-    # route-shaping 実験オプション (既定 0=start+goal のみ; step2 が読む)。D0 の修正ではない。
-    env["LOOP_WAYPOINTS"] = str(compare_cfg.get("loop_waypoints", 0))
-    # 信号の扱い (既定 replay; step2 が読む)。green で赤信号 replay 由来の D0 早期停止を回避。
-    env["TRAFFIC_SIGNALS"] = str(compare_cfg.get("traffic_signals", "replay"))
+    env = build_common_env(comparison_dir, map_path, compare_cfg, logger)
     # perception 再生 (既定 false; step3 が読む)。true で実機 input_bag の先行車を ego-pose 同期で
     # 各 sim に注入し、実機の先行車追従 (停止・加減速) を再現する。
     env["REPRODUCE_BAG"] = (
@@ -241,6 +222,62 @@ def run_pipeline(
                 logger.warning(f"Stage 3 (run={run.tag}) failed but continuing: {exc}")
     else:
         logger.warning("Stage 3: auto_scenario.yaml が無いため sim 実行をスキップ")
+
+    return run_analysis(lite_dir, comparison_dir, env, compare_cfg, logger)
+
+
+def build_common_env(
+    comparison_dir: Path, map_path: str, compare_cfg: dict[str, Any], logger
+) -> dict[str, str]:
+    """Stage 2〜11 が共有する env を構築する。"""
+    env = os.environ.copy()
+    env["BEST_MODEL_BASE_DIR"] = str(comparison_dir.parent)  # lite/ and comparison/ live here
+
+    map_osm = Path(map_path) / "lanelet2_map.osm" if map_path else Path("")
+    if map_osm.exists():
+        env["MAP_OSM_PATH"] = str(map_osm)
+        logger.info(f"Map OSM: {map_osm}")
+    else:
+        env["MAP_OSM_PATH"] = ""
+        logger.warning(f"lanelet2_map.osm not found at {map_osm}; map background will be omitted")
+
+    if compare_cfg.get("scenario_name"):
+        env["SCENARIO_NAME"] = compare_cfg["scenario_name"]
+    env["CURVE_CONFIG_YAML"] = compare_cfg.get("curve_config_yaml", "")
+    # 実機データ取得時の版・重み (外部記録)。step4 が provenance 掲載に使う。
+    env["REAL_PROVENANCE"] = compare_cfg.get("real_provenance", "")
+    # route-shaping 実験オプション (既定 0=start+goal のみ; step2 が読む)。D0 の修正ではない。
+    env["LOOP_WAYPOINTS"] = str(compare_cfg.get("loop_waypoints", 0))
+    # 信号の扱い (既定 replay; step2 が読む)。green で赤信号 replay 由来の D0 早期停止を回避。
+    env["TRAFFIC_SIGNALS"] = str(compare_cfg.get("traffic_signals", "replay"))
+    return env
+
+
+def run_analysis(
+    lite_dir: Path,
+    comparison_dir: Path,
+    env: dict[str, str],
+    compare_cfg: dict[str, Any],
+    logger,
+) -> dict[str, int]:
+    """解析ステージ (Stage 4〜11) を実行し、生成物カウントを返す。
+
+    lite/ (real + sim run) が揃っている前提で動く純解析部。run_pipeline (フルパイプライン)
+    と run_analysis.py CLI (sim 実行済みバンドルの再解析) の両方から呼ばれる。
+    """
+    sim_runs_yaml = compare_cfg.get("sim_runs_config", "")
+    if not sim_runs_yaml or not Path(sim_runs_yaml).exists():
+        raise RuntimeError(
+            "sim_runs.yaml が見つかりません。scenario.yaml の Conditions.sim_runs_config を"
+            f"確認してください。 got: {sim_runs_yaml!r}"
+        )
+    from driving_log_replayer_v2.real_log_sim_comparison.lib._sim_runs_config import (  # noqa: PLC0415
+        load_sim_runs_config,
+    )
+
+    sim_cfg = load_sim_runs_config(sim_runs_yaml)
+    env = env.copy()
+    env["SIM_RUNS_CONFIG_YAML"] = sim_runs_yaml
 
     # ---- Stage 4: step4_compare_logs (real + 全 sim、sim_runs.yaml 連動で N-way) ----
     logger.info("Stage 4: step4_compare_logs (real + sim N-way)")

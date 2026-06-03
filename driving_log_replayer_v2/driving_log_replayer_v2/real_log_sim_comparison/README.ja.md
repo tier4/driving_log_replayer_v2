@@ -66,7 +66,7 @@ map-pose z との差で**永久に発火しなかった**（2026-06-03 判明）
 | `step1_make_lite.py` … `step10_diagnose_curve.py` | 10 段階パイプラインの各 stage 実装（先頭 `stepN_` が実行順） |
 | `evaluator_node.py` | パイプラインを orchestrate する ROS2 ノード。`lib/driving_log_replayer_v2/real_log_sim_comparison_evaluator_node.py` に install される（CMakeLists で `RENAME` 互換） |
 | `lib/_*.py` | 共有ユーティリティ・内部設定（io / events / map / params / runtime_config / cases_config / sim_runs_config / provenance）。stage 実装から `from .lib._x import` で参照 |
-| `Makefile` | `make local_cloud_run` でローカル実行（詳細は `sample/README.ja.md`） |
+| `Makefile` | `make local_cloud_run`（フル実行）/ `make local_analysis_run`（解析のみ再実行）。詳細は `sample/README.ja.md` |
 | `sample/` | cloud / local 共通サンプル一式（`scenario.yaml`, `cases.yaml`, `sim_runs.yaml`, `curve_config_miraikan.yaml`）+ 手順 README。ローカル実行出力は `sample/out/`（gitignore） |
 
 > **install パス**: CMakeLists が `sample/*` を
@@ -344,3 +344,17 @@ webauto で T4 dataset を pull 済みの環境で `make local_cloud_run` 一発
 ローカル=`lib/_dataset.py`）だけ。
 手順詳細・`sim_runs.yaml`/`cases.yaml` の書式・トラブルシュート・Makefile 変数の上書き例は
 [`sample/README.ja.md`](sample/README.ja.md) を参照。
+
+### ローカル解析のみ再実行（`make local_analysis_run`）
+
+sim 実行 (Stage 1〜3) は重いため、解析コード (step4〜step11) を変更して結果を作り直すときは
+既存の出力バンドルを再利用して **解析ステージだけ** を回せる:
+
+```bash
+make local_analysis_run                                  # sample/out/latest を再解析
+make local_analysis_run OUT_DIR=sample/out/20260603_211156   # 対象を指定
+```
+
+実体は `run_analysis.py` CLI（ROS launch 不要、オーケストレーションは
+`evaluator_node.run_analysis` をフル実行と共用）。`comparison/` 配下の解析成果物と
+`index.html` は上書き再生成される（`lite/`・`scenarios/` には触れない）。

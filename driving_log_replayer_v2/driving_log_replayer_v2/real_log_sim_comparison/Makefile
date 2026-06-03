@@ -22,13 +22,15 @@ LOCAL_SCENARIO   ?= $(LOCAL_SAMPLE_DIR)/scenario.yaml
 
 PYTHON := python3
 
-.PHONY: help local_cloud_run
+.PHONY: help local_cloud_run local_analysis_run
 
 help:
 	@echo "使い方: make -C $(MAKEFILE_DIR) <ターゲット>"
 	@echo ""
 	@echo "ターゲット:"
-	@echo "  local_cloud_run  webauto キャッシュの T4 dataset を使い 10 段階パイプラインをワンコマンド実行"
+	@echo "  local_cloud_run     webauto キャッシュの T4 dataset を使い 10 段階パイプラインをワンコマンド実行"
+	@echo "  local_analysis_run  既存出力 (OUT_DIR; 既定 sample/out/latest) の sim 実行結果を再利用し、"
+	@echo "                      解析ステージ (Stage 4〜11) だけを再実行 (解析コード変更後の作り直し用)"
 	@echo ""
 	@echo "  パイプライン構成 (Stage 1〜6):"
 	@echo "    1. step1_make_lite        実機 input_bag → lite/real.lite/"
@@ -47,6 +49,7 @@ help:
 	@echo "  WS_ROOT          colcon ワークスペースルート (デフォルト: $(WS_ROOT))"
 	@echo "  WEBAUTO_T4_ROOT  webauto キャッシュルート (デフォルト: $(WEBAUTO_T4_ROOT))"
 	@echo "  LOCAL_SCENARIO   ローカル実行する scenario.yaml (デフォルト: $(LOCAL_SCENARIO))"
+	@echo "  OUT_DIR          local_analysis_run の対象出力ディレクトリ (デフォルト: sample/out/latest)"
 
 # クラウド (Web.Auto evaluator) と同じ scenario.yaml ベースで、
 # webauto data annotation-dataset pull --include-intermediate-artifacts で
@@ -71,3 +74,31 @@ local_cloud_run:
 	        t4_dataset_id:="$$uuid" \
 	        output_dir:="$$out_dir" \
 	        with_autoware:=false
+
+# 既存の out/<timestamp> (lite/ に real + sim run が揃ったバンドル) を入力に、
+# 解析ステージ (Stage 4〜11) だけを再実行する。Stage 1〜3 (lite 抽出・scenario 生成・
+# sim 実行) をスキップするため、解析コードの変更を数分で結果に反映できる。
+# 地図は local_cloud_run と同じく scenario.yaml の Datasets UUID から webauto キャッシュを
+# 解決する (見つからなければ地図背景なしで続行)。
+OUT_DIR ?= $(LOCAL_SAMPLE_DIR)/out/latest
+
+local_analysis_run:
+	@test -f $(SETUP_BASH) || \
+	    { echo "[ERROR] $(SETUP_BASH) が見つかりません。先にワークスペースをビルドしてください"; exit 1; }
+	@test -f $(LOCAL_SCENARIO) || \
+	    { echo "[ERROR] $(LOCAL_SCENARIO) が見つかりません"; exit 1; }
+	@test -d "$(OUT_DIR)" || \
+	    { echo "[ERROR] OUT_DIR が見つかりません: $(OUT_DIR)"; exit 1; }
+	@map_osm="" ; \
+	    uuid=$$($(PYTHON) -c "import yaml; d=yaml.safe_load(open('$(LOCAL_SCENARIO)')); print(list(d['Evaluation']['Datasets'][0].keys())[0])" 2>/dev/null) ; \
+	    if [ -n "$$uuid" ] ; then \
+	        frame_dir=$$($(PYTHON) $(MAKEFILE_DIR)/lib/_dataset.py --root "$(WEBAUTO_T4_ROOT)" --uuid "$$uuid" 2>/dev/null) \
+	            && test -f "$$frame_dir/map/lanelet2_map.osm" \
+	            && map_osm="$$frame_dir/map/lanelet2_map.osm" ; \
+	    fi ; \
+	    if [ -z "$$map_osm" ] ; then echo "[WARN] 地図を解決できないため地図背景なしで実行します" ; fi ; \
+	    echo "[INFO] OUT_DIR: $(OUT_DIR)" ; \
+	    source $(SETUP_BASH) && $(PYTHON) -m driving_log_replayer_v2.real_log_sim_comparison.run_analysis \
+	        --bundle-dir "$(OUT_DIR)" \
+	        --scenario "$(LOCAL_SCENARIO)" \
+	        --map-osm "$$map_osm"

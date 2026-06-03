@@ -126,6 +126,14 @@ make local_cloud_run
 make -C src/simulator/driving_log_replayer_v2/driving_log_replayer_v2/driving_log_replayer_v2/real_log_sim_comparison local_cloud_run
 ```
 
+**解析だけ再実行する場合**（sim 実行済みの out/ を再利用し Stage 4〜11 のみ。
+解析コード変更後の作り直しが数分で済む）:
+
+```bash
+make local_analysis_run                                    # sample/out/latest を再解析
+make local_analysis_run OUT_DIR=sample/out/<timestamp>     # 対象を指定
+```
+
 主要な動作：
 
 1. `scenario.yaml` から Datasets UUID を取得 → `~/.webauto/.../` から実体パス解決
