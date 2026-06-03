@@ -152,11 +152,22 @@ Stage 3 (`step3_run_sims`) が `scenario_test_runner` で sim を回した結果
 | 4. multi-step オープンループ比較 | 実機初期状態からの N ステップ連続 rollout 誤差成長 | per_step の `rollout_error_growth`(5) |
 | 5. シナリオ クローズループ比較 | auto-scenario を sim で closed-loop 実行した実機との乖離 | `velocity`/`acceleration`/`steering`/`*_vs_distance`/`trajectory_with_map`/`curves_closeup`/`curve{N}_*`(4) + `curve_divergence`(10) |
 
-各セクションには 1 行説明を付け、`per_step/<tag>/` の図はセクション内でケースタグごとにサブグループ化する。
+各セクションには 1 行説明を付ける。見やすさのための機能（すべて**純 CSS/HTML 実装・JS/CDN 不使用・
+オフライン可**、CSS 無効環境でも degrade して全内容を閲覧できる）:
+
+- **ケース一括連動タブ**（セクション 3・4）: `per_step/<case>/` の図をプロット種別ごとにまとめ、
+  セクション先頭の「ケース切替: `baseline`/`ideal_steer`/`kus0020`/`shorter_wb` …」を選ぶと、その
+  セクション内**全ブロックの図が一斉に**そのケースへ切り替わる（ラジオ＋`case-<slug>` クラス対応）。
+- **セクション折りたたみ**: 各セクション・Markdown レポートは `<details open>` で開閉できる。
+- **画像の拡大表示**: 図のサムネをクリックすると `:target` ライトボックスで拡大（オーバーレイは
+  `:target` が効くよう `<main>` 末尾に一括配置）。「原寸を開く」で元 PNG も開ける。
+- **サイド目次**: sticky 追従。「↑ 先頭へ」と各セクションの「↑ 先頭」リンク付き。セクションは太字、
+  Markdown サブ項目はインデント表示。（スクロール位置の自動ハイライトは JS が必要なため未実装。）
+
 3 種の Markdown レポート（`report.md`→5、`cases_summary.md`→3、`curve_divergence.md`→5）は所属セクション
-末尾に埋め込む。既知のいずれにも分類されない PNG は捨てず「その他」セクションに回す（黙って誤分類しない）。
-画像は**相対パスリンク**なので、バンドルフォルダ（`result_archive/real_log_sim_comparison/`）ごと
-アーカイブ・共有してもそのまま表示できる。
+末尾に折りたたみで埋め込む。既知のいずれにも分類されない PNG は捨てず「その他」セクションに回す
+（黙って誤分類しない）。画像は**相対パスリンク**なので、バンドルフォルダ
+（`result_archive/real_log_sim_comparison/`）ごとアーカイブ・共有してもそのまま表示できる。
 
 ### `lite/`
 

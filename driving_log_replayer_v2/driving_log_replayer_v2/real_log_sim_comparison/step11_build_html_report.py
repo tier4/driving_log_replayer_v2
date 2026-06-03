@@ -194,13 +194,6 @@ def _classify(rel: Path) -> str:
     return "other"
 
 
-def _subgroup_for(rel: Path) -> str | None:
-    """per_step/<tag>/... をケースタグでサブグループ化するためのラベル（無ければ None）。"""
-    if rel.parts[0] == "per_step" and len(rel.parts) > 2:
-        return f"case: {rel.parts[1]}"
-    return None
-
-
 def _render_markdown(text: str) -> str:
     """Markdown を HTML 化する。markdown パッケージが無ければ <pre> でフォールバック。"""
     try:
@@ -228,55 +221,212 @@ main { flex: 1; padding: 2rem 2.5rem; max-width: 1100px; min-width: 0; }
 header.page { margin-bottom: 2rem; }
 header.page h1 { margin: 0 0 0.25rem; }
 header.page .meta { color: var(--muted); font-size: 0.9rem; }
-section { margin-bottom: 3rem; border-top: 2px solid var(--border); padding-top: 1rem; }
-section h2 { margin-top: 0; }
-section .sec-desc { color: var(--muted); font-size: 0.92rem; margin: 0 0 1.2rem; }
-.subgroup h3 { margin: 1.5rem 0 0.5rem; color: var(--muted); }
+nav.toc li.toc-sec { font-weight: 600; margin-top: 0.35rem; }
+nav.toc li.toc-md { font-size: 0.82rem; padding-left: 1rem; font-weight: 400; }
+nav.toc .toc-top { display: inline-block; margin-bottom: 0.6rem; font-size: 0.82rem; }
+
+/* セクションは <details> で折りたたみ可能（既定 open）。ネイティブ HTML・JS 不使用。 */
+details.section { margin-bottom: 2.2rem; border-top: 2px solid var(--border); padding-top: 0.4rem; }
+details.section > summary { cursor: pointer; font-size: 1.35rem; font-weight: 700; padding: 0.3rem 0; }
+details.section > summary:hover { color: var(--accent); }
+.sec-desc { color: var(--muted); font-size: 0.92rem; margin: 0.4rem 0 1.2rem; }
+.sec-desc .toplink { margin-left: 0.6rem; font-size: 0.82rem; white-space: nowrap; }
 figure { margin: 0 0 2rem; }
-figure img { width: 100%; height: auto; border: 1px solid var(--border); border-radius: 4px; }
+figure img { width: 100%; height: auto; border: 1px solid var(--border); border-radius: 4px; cursor: zoom-in; }
 figcaption { margin-top: 0.4rem; font-weight: 600; }
 figcaption .fname { font-weight: 400; color: var(--muted); font-size: 0.82rem; margin-left: 0.5rem; }
-.md-report { border-top: 1px dashed var(--border); margin-top: 2rem; padding-top: 1rem; }
-.md-report h3 { margin: 0 0 0.5rem; }
+details.md-report { border-top: 1px dashed var(--border); margin-top: 2rem; padding-top: 0.5rem; }
+details.md-report > summary { cursor: pointer; font-weight: 600; margin-bottom: 0.5rem; }
+details.md-report > summary:hover { color: var(--accent); }
 .md-report table { border-collapse: collapse; margin: 1rem 0; }
 .md-report th, .md-report td { border: 1px solid var(--border); padding: 0.3rem 0.6rem; }
 .md-report th { background: #f0f0f0; }
 .md-fallback { background: #f6f6f6; padding: 1rem; overflow-x: auto; font-size: 0.85rem; }
 .empty { color: var(--muted); font-style: italic; }
+
+/* 純 CSS ケースタブ（一括連動）。セクション先頭に 1 組のラジオを置き、選んだケースの図が
+   セクション内全ブロックで一斉に切り替わる。JS 不使用・オフライン可。CSS 無効環境では全パネルが
+   縦に並んで degrade。連動規則 (#group-case:checked ~ .tabblock .tabpanel.case-X) は build_html が
+   セクション×ケースごとに動的生成する。 */
+.casesync { margin-top: 0.3rem; }
+.casesync > .casesync-label { font-size: 0.85rem; color: var(--muted); margin-right: 0.4rem; }
+.casesync > input { position: absolute; opacity: 0; pointer-events: none; }
+.casesync > label { display: inline-block; padding: 0.3rem 0.9rem; margin: 0 0.3rem 0.9rem 0;
+                    border: 1px solid var(--border); border-radius: 4px; cursor: pointer;
+                    font-size: 0.88rem; color: var(--accent); background: #fafafa; user-select: none; }
+.casesync > input:checked + label { background: var(--accent); color: #fff; border-color: var(--accent); }
+.casesync .tabblock { margin: 0.4rem 0 2.2rem; }
+.casesync .tabblock > h3 { margin: 0 0 0.5rem; }
+.tabpanel { display: none; }
+
+/* 純 CSS ライトボックス（画像拡大）。サムネクリックで #lb-* を :target にしオーバーレイ表示。
+   オーバーレイは display:none/details の祖先内だと :target が効かないため <main> 末尾に一括配置する。 */
+.lightboxes:empty { display: none; }
+.lightbox { display: none; }
+.lightbox:target { display: flex; position: fixed; inset: 0; z-index: 1000;
+                   background: rgba(0,0,0,0.85); align-items: center; justify-content: center; padding: 2rem; }
+.lightbox .lb-close { position: absolute; inset: 0; cursor: zoom-out; }
+.lightbox .lb-fig { position: relative; z-index: 1; margin: 0; max-width: 96vw; max-height: 94vh;
+                    display: flex; flex-direction: column; align-items: center; }
+.lightbox .lb-fig img { max-width: 96vw; max-height: 88vh; width: auto; height: auto;
+                        border: 1px solid #444; border-radius: 4px; background: #fff; }
+.lightbox .lb-cap { color: #eee; font-size: 0.85rem; margin-top: 0.5rem; text-align: center; }
+.lightbox .lb-cap a { color: #9bf; }
 """
 
 
-def _figure(rel: Path, link_prefix: str) -> str:
-    """1 画像分の <figure> HTML を返す（src は HTML 出力位置からの相対パス）。
+def _slug(text: str) -> str:
+    """HTML id/name 用に安全な文字へ変換する。"""
+    return re.sub(r"[^A-Za-z0-9_-]+", "-", text).strip("-").lower()
+
+
+def _lb_id(rel: Path) -> str:
+    """画像のライトボックス用 id（rel パスから一意に生成）。"""
+    return "lb-" + _slug(rel.as_posix())
+
+
+def _figure(rel: Path, link_prefix: str, caption: str | None = None) -> str:
+    """1 画像分の <figure> HTML を返す（サムネ。クリックでライトボックス #lb-* を開く）。
 
     rel は comparison/ 基準の相対パス。link_prefix を前置して HTML 出力ディレクトリ
     (result_archive/) からの相対 src にする（例 link_prefix="comparison/"）。
+    caption 省略時はファイル名から日本語キャプションを導出する。拡大用オーバーレイ本体は
+    build_html が <main> 末尾に一括出力する（_lightbox_overlays）。
     """
     src = link_prefix + rel.as_posix()
-    caption = _caption_for(rel.name)
+    if caption is None:
+        caption = _caption_for(rel.name)
     return (
-        f"<figure><a href='{html.escape(src)}'>"
+        f"<figure><a class='thumb' href='#{_lb_id(rel)}'>"
         f"<img loading='lazy' src='{html.escape(src)}' alt='{html.escape(caption)}'></a>"
         f"<figcaption>{html.escape(caption)}"
         f"<span class='fname'>{html.escape(src)}</span></figcaption></figure>"
     )
 
 
-def _render_category_images(rels: list[Path], link_prefix: str) -> list[str]:
-    """カテゴリ内の画像群を、サブグループ無し → ケース別サブグループの順に描画する。"""
-    flat = [r for r in rels if _subgroup_for(r) is None]
-    grouped: dict[str, list[Path]] = {}
+def _lightbox_overlays(images: list[Path], link_prefix: str) -> str:
+    """全画像の拡大用オーバーレイを 1 まとめで返す（<main> 末尾に配置する想定）。
+
+    オーバーレイは display:none やタブパネル・<details> の中に置くと :target が効かないため、
+    祖先に隠し要素を持たない位置（main 直下末尾）へ一括出力する。
+    """
+    parts = ["<div class='lightboxes'>"]
+    for rel in images:
+        src = link_prefix + rel.as_posix()
+        caption = _caption_for(rel.name)
+        # 閉じると元セクションに戻す（href='#' だとページ先頭へ飛んでしまうため）
+        close_href = f"#sec-{_classify(rel)}"
+        parts.append(
+            f"<div class='lightbox' id='{_lb_id(rel)}'>"
+            f"<a class='lb-close' href='{close_href}' title='閉じる'></a>"
+            f"<figure class='lb-fig'>"
+            f"<img loading='lazy' src='{html.escape(src)}' alt='{html.escape(caption)}'>"
+            f"<figcaption class='lb-cap'>{html.escape(caption)} "
+            f"<a href='{html.escape(src)}'>原寸を開く ↗</a></figcaption>"
+            f"</figure></div>"
+        )
+    parts.append("</div>")
+    return "".join(parts)
+
+
+def _case_of(rel: Path) -> str | None:
+    """per_step/<case>/<file> のケースタグを返す（per_step 図でなければ None）。"""
+    if rel.parts[0] == "per_step" and len(rel.parts) > 2:
+        return rel.parts[1]
+    return None
+
+
+def _sorted_cases(tags: list[str]) -> list[str]:
+    """ケースタグ表示順: baseline（参照）を先頭、残りはアルファベット順。"""
+    return sorted(tags, key=lambda t: (t != "baseline", t))
+
+
+def _casesync_group(cat: str) -> str:
+    """セクション (カテゴリ) のケース連動ラジオグループ名。"""
+    return _slug(f"casesync-{cat}")
+
+
+def _render_synced_case_tabs(
+    per_case: dict[str, dict[str, Path]], link_prefix: str, cat: str
+) -> list[str]:
+    """プロット種別ごとにブロックを作り、ケースをセクション全体で一括連動切り替えする。
+
+    per_case: {case_tag: {filename: rel}}。セクション先頭に 1 組のケースラジオを置き、選んだ
+    ケースの図がセクション内の全ブロックで一斉に切り替わる（連動）。各パネルは `case-<slug>`
+    クラスを持ち、build_html が生成する `#group-case:checked ~ .tabblock .tabpanel.case-<slug>`
+    規則で表示制御する（パネルの順序・個数に依存しない）。
+    """
+    cases = _sorted_cases(list(per_case.keys()))
+    plot_types = sorted({fn for files in per_case.values() for fn in files})
+    group = _casesync_group(cat)
+
+    out: list[str] = ["<div class='casesync'>"]
+    out.append("<span class='casesync-label'>ケース切替:</span>")
+    # セクション共通のケースラジオ + ラベル（最初のケースを既定選択）
+    for i, c in enumerate(cases):
+        rid = f"{group}-{_slug(c)}"
+        checked = " checked" if i == 0 else ""
+        out.append(f"<input type='radio' name='{group}' id='{rid}'{checked}>")
+        out.append(f"<label for='{rid}'>{html.escape(c)}</label>")
+    # プロット種別ごとのブロック（パネルは存在するケースのみ。class でケース対応）
+    for pt in plot_types:
+        caption = _caption_for(pt)
+        out.append("<div class='tabblock'>")
+        out.append(
+            f"<h3>{html.escape(caption)} <span class='fname'>{html.escape(pt)}</span></h3>"
+        )
+        for c in cases:
+            if pt in per_case[c]:
+                out.append(
+                    f"<div class='tabpanel case-{_slug(c)}'>"
+                    f"{_figure(per_case[c][pt], link_prefix, caption=c)}</div>"
+                )
+        out.append("</div>")
+    out.append("</div>")
+    return out
+
+
+def _render_category_images(
+    rels: list[Path], link_prefix: str, cat: str = ""
+) -> list[str]:
+    """カテゴリ内の画像群を描画する。
+
+    per_step/<case>/ の図は「プロット種別ごとのブロック ＋ ケース一括連動タブ」で描画する。
+    それ以外の図 (cases/overlay 等) は通常の figure として先に並べる。
+    """
+    flat = [r for r in rels if _case_of(r) is None]
+    per_case: dict[str, dict[str, Path]] = {}
     for r in rels:
-        label = _subgroup_for(r)
-        if label is not None:
-            grouped.setdefault(label, []).append(r)
+        case = _case_of(r)
+        if case is not None:
+            per_case.setdefault(case, {})[r.name] = r
 
     out: list[str] = [_figure(r, link_prefix) for r in flat]
-    for label in sorted(grouped):
-        out.append(f"<div class='subgroup'><h3>{html.escape(label)}</h3>")
-        out.extend(_figure(r, link_prefix) for r in grouped[label])
-        out.append("</div>")
+    if per_case:
+        out.extend(_render_synced_case_tabs(per_case, link_prefix, cat))
     return out
+
+
+def _casesync_css(by_cat: dict[str, list[Path]]) -> str:
+    """セクション×ケースごとのケース連動表示規則を生成する。
+
+    あるセクションのケースラジオが checked のとき、そのセクション内の全 .tabblock の対応
+    `.tabpanel.case-<slug>` を表示する。パネルの順序・個数に依存しないクラス対応方式。
+    """
+    rules: list[str] = []
+    for cat, rels in by_cat.items():
+        cases = {_case_of(r) for r in rels}
+        cases.discard(None)
+        if not cases:
+            continue
+        group = _casesync_group(cat)
+        for c in _sorted_cases(list(cases)):
+            cslug = _slug(c)
+            rules.append(
+                f"#{group}-{cslug}:checked ~ .tabblock .tabpanel.case-{cslug}"
+                "{ display: block; }"
+            )
+    return "\n".join(rules)
 
 
 def build_html(comparison_dir: Path, scenario_name: str, link_prefix: str = "") -> str:
@@ -288,9 +438,9 @@ def build_html(comparison_dir: Path, scenario_name: str, link_prefix: str = "") 
     """
     # PNG を概念カテゴリへ分類（index.html 自身が参照する相対パスは comparison_dir 基準）
     images = sorted(comparison_dir.rglob("*.png"), key=lambda p: str(p))
+    rels_all = [img.relative_to(comparison_dir) for img in images]
     by_cat: dict[str, list[Path]] = {}
-    for img in images:
-        rel = img.relative_to(comparison_dir)
+    for rel in rels_all:
         by_cat.setdefault(_classify(rel), []).append(rel)
 
     # Markdown レポートをカテゴリ別に取り込み（存在するもののみ）
@@ -306,32 +456,36 @@ def build_html(comparison_dir: Path, scenario_name: str, link_prefix: str = "") 
     # 表示するカテゴリ: 画像か Markdown のいずれかを持つもののみ、_CATEGORY_ORDER 順
     active_cats = [c for c in _CATEGORY_ORDER if c in by_cat or c in md_by_cat]
 
-    # --- 目次 ---
-    toc: list[str] = ["<nav class='toc'><h2>目次</h2><ul>"]
+    # --- 目次 ---（sticky。スクロール追従ハイライトは JS が必要なため未実装。各セクション見出しに
+    #     「↑ 先頭」リンクを置いて目次/先頭へ戻れるようにする。）
+    toc: list[str] = ["<nav class='toc'><h2>目次</h2>"]
+    toc.append("<a class='toc-top' href='#top'>↑ 先頭へ</a><ul>")
     for cat in active_cats:
-        toc.append(f"<li><a href='#sec-{cat}'>{html.escape(_CATEGORY_TITLES[cat])}</a></li>")
+        toc.append(f"<li class='toc-sec'><a href='#sec-{cat}'>{html.escape(_CATEGORY_TITLES[cat])}</a></li>")
         for anchor, mtitle, _ in md_by_cat.get(cat, []):
-            toc.append(
-                f"<li style='padding-left:1rem;font-size:0.85rem'>"
-                f"<a href='#{anchor}'>{html.escape(mtitle)}</a></li>"
-            )
+            toc.append(f"<li class='toc-md'><a href='#{anchor}'>{html.escape(mtitle)}</a></li>")
     toc.append("</ul></nav>")
 
-    # --- 本文 ---
+    # --- 本文 ---（各セクションは折りたたみ可能な <details open>）
     body: list[str] = []
     for cat in active_cats:
-        body.append(f"<section id='sec-{cat}'><h2>{html.escape(_CATEGORY_TITLES[cat])}</h2>")
-        body.append(f"<p class='sec-desc'>{html.escape(_CATEGORY_DESCS[cat])}</p>")
+        body.append(f"<details class='section' open id='sec-{cat}'>")
+        body.append(f"<summary>{html.escape(_CATEGORY_TITLES[cat])}</summary>")
+        body.append(
+            f"<p class='sec-desc'>{html.escape(_CATEGORY_DESCS[cat])}"
+            f"<a class='toplink' href='#top'>↑ 先頭</a></p>"
+        )
         if cat in by_cat:
-            body.extend(_render_category_images(by_cat[cat], link_prefix))
+            body.extend(_render_category_images(by_cat[cat], link_prefix, cat=cat))
         else:
             body.append("<p class='empty'>（このセクションに該当する図はありませんでした）</p>")
-        # カテゴリ末尾に所属 Markdown レポートを埋め込む
+        # カテゴリ末尾に所属 Markdown レポートを折りたたみで埋め込む
         for anchor, mtitle, md_html in md_by_cat.get(cat, []):
             body.append(
-                f"<div id='{anchor}' class='md-report'><h3>{html.escape(mtitle)}</h3>{md_html}</div>"
+                f"<details class='md-report' open id='{anchor}'>"
+                f"<summary>{html.escape(mtitle)}</summary>{md_html}</details>"
             )
-        body.append("</section>")
+        body.append("</details>")
 
     meta_bits = [f"画像 {len(images)} 枚"]
     if scenario_name:
@@ -344,24 +498,30 @@ def build_html(comparison_dir: Path, scenario_name: str, link_prefix: str = "") 
         "先に step4〜step10 を実行してください。</p>"
     )
 
+    # ケース一括連動の表示規則（セクション×ケース）と、拡大用ライトボックス（main 末尾に一括配置）
+    sync_css = _casesync_css(by_cat)
+    lightboxes = _lightbox_overlays(rels_all, link_prefix) if rels_all else ""
+
     return f"""<!DOCTYPE html>
 <html lang="ja">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>real_log_sim_comparison レポート</title>
-<style>{_STYLE}</style>
+<style>{_STYLE}
+{sync_css}</style>
 </head>
 <body>
 <div class="layout">
 {''.join(toc)}
 <main>
-<header class="page">
+<header class="page" id="top">
   <h1>real_log_sim_comparison 比較レポート</h1>
   <div class="meta">{meta}</div>
 </header>
 {empty_note}
 {''.join(body)}
+{lightboxes}
 </main>
 </div>
 </body>
