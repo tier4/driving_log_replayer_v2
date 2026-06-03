@@ -7,8 +7,8 @@
 出力:
   comparison/cases/
     ├── overlay/
-    │   ├── cascade_error_overlay.png
-    │   └── error_timeseries_overlay.png
+    │   ├── cascade_error_overlay.svg
+    │   └── error_timeseries_overlay.svg
     └── cases_summary.md         # 各 tag の RMSE を 1 表に集約
 
 欠損ケース (CSV が無い) は警告ログを出してスキップ。集約処理は continue できる。
@@ -306,9 +306,9 @@ def main() -> None:
 
     plots_wanted = set(cases_cfg.overlay.plots)
     if "cascade_error" in plots_wanted:
-        plot_cascade_error_overlay(case_dfs, overlay_dir / "cascade_error_overlay.png")
+        plot_cascade_error_overlay(case_dfs, overlay_dir / "cascade_error_overlay.svg")
     if "error_timeseries" in plots_wanted:
-        plot_error_timeseries_overlay(case_dfs, overlay_dir / "error_timeseries_overlay.png")
+        plot_error_timeseries_overlay(case_dfs, overlay_dir / "error_timeseries_overlay.svg")
 
     write_cases_summary(case_dfs, cases_cfg, out_root / "cases_summary.md", per_step_root)
 

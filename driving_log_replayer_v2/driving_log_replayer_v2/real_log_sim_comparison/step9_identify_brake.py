@@ -293,8 +293,8 @@ def main() -> None:
     add_params_annotation(fig, anno_params)
     add_params_annotation(fig2, anno_params)
 
-    out1 = cfg.figs_dir / "departure_brake_tc_sensitivity.png"
-    out2 = cfg.figs_dir / "real_cmd_acc_departure.png"
+    out1 = cfg.figs_dir / "departure_brake_tc_sensitivity.svg"
+    out2 = cfg.figs_dir / "real_cmd_acc_departure.svg"
     fig.savefig(str(out1), dpi=150, bbox_inches="tight")
     fig2.savefig(str(out2), dpi=150, bbox_inches="tight")
     plt.close("all")
@@ -338,7 +338,7 @@ def main() -> None:
     axb.legend(fontsize=9)
     add_params_annotation(figb, anno_params)
     figb.tight_layout()
-    figb.savefig(str(out_dir / "brake_sweep.png"), dpi=150, bbox_inches="tight")
+    figb.savefig(str(out_dir / "brake_sweep.svg"), dpi=150, bbox_inches="tight")
     plt.close(figb)
 
     print("\n=== 同定結果 (発進フィット RMSE 最小化, t=0〜5s) ===")
@@ -356,7 +356,7 @@ def main() -> None:
                   "(mean_err>0 を併読)。減速・停止窓での解析が必要。")
         else:
             print("         範囲を広げて再実行を推奨。")
-    print(f"  Saved: {out_dir / 'brake_sweep.csv'}, {out_dir / 'brake_sweep.png'}")
+    print(f"  Saved: {out_dir / 'brake_sweep.csv'}, {out_dir / 'brake_sweep.svg'}")
 
 
 if __name__ == "__main__":

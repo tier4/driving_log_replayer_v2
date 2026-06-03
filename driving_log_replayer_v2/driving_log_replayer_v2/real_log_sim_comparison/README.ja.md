@@ -26,11 +26,11 @@ annotation-dataset）が全 stage の入口になる。
 | 4 | 実機 + sim 比較解析 (`step4_compare_logs`) | `lite/{real, <run_tag>}.lite/` 群 | `comparison/{figures/, report.md}` (N-way 重ね描き) | 1 |
 | 5 | VehicleModel per-step 解析 (`step5_analyze_per_step`) | `lite/real.lite/` + `cases.yaml` の 1 ケース | `comparison/per_step/<tag>/` | N (cases) |
 | 6 | ケース集約解析 (`step6_analyze_cases`) | `per_step/<tag>/per_step_delta.csv` 群 | `comparison/cases/{overlay/, cases_summary.md}` | 1 |
-| 7 | k_us 同定 (`step7_identify_kus`) | `lite/real.lite/` | `comparison/kus_sweep/{kus_sweep.csv, .png}` | 1 |
-| 8 | DP軌跡比較 (`step8_compare_dp_trajectory`) | `lite/{real, <sim>}.lite/` | `comparison/figures/dp_*.png` | 1 |
-| 9 | 縦パラ同定 (`step9_identify_brake`) | `lite/real.lite/` | `comparison/brake_sweep/{brake_sweep.csv, .png}` | 1 |
-| 10 | カーブ乖離診断 (`step10_diagnose_curve`) | `lite/{real, <sim>}.lite/` | `comparison/curve_diag/{curve_divergence.md, .png}` | 1 |
-| 11 | HTML レポート生成 (`step11_build_html_report`) | `comparison/` 配下の全 PNG + 各 `.md` | `index.html` (バンドルフォルダ直下) | 1 |
+| 7 | k_us 同定 (`step7_identify_kus`) | `lite/real.lite/` | `comparison/kus_sweep/{kus_sweep.csv, .svg}` | 1 |
+| 8 | DP軌跡比較 (`step8_compare_dp_trajectory`) | `lite/{real, <sim>}.lite/` | `comparison/figures/dp_*.svg` | 1 |
+| 9 | 縦パラ同定 (`step9_identify_brake`) | `lite/real.lite/` | `comparison/brake_sweep/{brake_sweep.csv, .svg}` | 1 |
+| 10 | カーブ乖離診断 (`step10_diagnose_curve`) | `lite/{real, <sim>}.lite/` | `comparison/curve_diag/{curve_divergence.md, .svg}` | 1 |
+| 11 | HTML レポート生成 (`step11_build_html_report`) | `comparison/` 配下の全 SVG/plotly HTML + 各 `.md` | `index.html` (バンドルフォルダ直下) | 1 |
 
 成否はパイプラインの例外有無で決まる。全 stage が完走すれば `result.jsonl` に
 `Success: true`、いずれかの subprocess が非ゼロ終了またはタイムアウトすると
@@ -172,20 +172,24 @@ Stage 3 (`step3_run_sims`) が `scenario_test_runner` で sim を回した結果
 | 4. multi-step オープンループ比較 | 実機初期状態からの N ステップ連続 rollout 誤差成長 | per_step の `rollout_error_growth`(5) |
 | 5. シナリオ クローズループ比較 | auto-scenario を sim で closed-loop 実行した実機との乖離 | `velocity`/`acceleration`/`steering`/`*_vs_distance`/`trajectory_with_map`/`curves_closeup`/`curve{N}_*`(4) + `curve_divergence`(10) |
 
-各セクションには 1 行説明を付ける。見やすさのための機能（すべて**純 CSS/HTML 実装・JS/CDN 不使用・
-オフライン可**、CSS 無効環境でも degrade して全内容を閲覧できる）:
+各セクションには 1 行説明を付ける。見やすさのための機能（レポート自体は**純 CSS/HTML 実装・CDN 不使用・
+オフライン可**、CSS 無効環境でも degrade して全内容を閲覧できる。plotly 図のみバンドル同梱の
+`plotly.min.js` を使う）:
 
 - **ケース一括連動タブ**（セクション 3・4）: `per_step/<case>/` の図をプロット種別ごとにまとめ、
   セクション先頭の「ケース切替: `baseline`/`ideal_steer`/`kus0020`/`shorter_wb` …」を選ぶと、その
   セクション内**全ブロックの図が一斉に**そのケースへ切り替わる（ラジオ＋`case-<slug>` クラス対応）。
 - **セクション折りたたみ**: 各セクション・Markdown レポートは `<details open>` で開閉できる。
-- **画像の拡大表示**: 図のサムネをクリックすると `:target` ライトボックスで拡大（オーバーレイは
-  `:target` が効くよう `<main>` 末尾に一括配置）。「原寸を開く」で元 PNG も開ける。
+- **画像の拡大表示**: SVG 図のサムネをクリックすると `:target` ライトボックスで拡大（オーバーレイは
+  `:target` が効くよう `<main>` 末尾に一括配置）。「原寸を開く」で元 SVG も開ける。
+- **インタラクティブ図**: マップ上プロット（`trajectory_with_map` / `map_distribution`）は plotly
+  製のスタンドアロン HTML を `<iframe>` で埋め込み、ズーム・パン・ホバー・凡例トグルができる
+  （ライトボックス対象外。バンドル直下に同梱する `plotly.min.js` を相対参照するためオフライン可）。
 - **サイド目次**: sticky 追従。「↑ 先頭へ」と各セクションの「↑ 先頭」リンク付き。セクションは太字、
   Markdown サブ項目はインデント表示。（スクロール位置の自動ハイライトは JS が必要なため未実装。）
 
 3 種の Markdown レポート（`report.md`→5、`cases_summary.md`→3、`curve_divergence.md`→5）は所属セクション
-末尾に折りたたみで埋め込む。既知のいずれにも分類されない PNG は捨てず「その他」セクションに回す
+末尾に折りたたみで埋め込む。既知のいずれにも分類されない図は捨てず「その他」セクションに回す
 （黙って誤分類しない）。画像は**相対パスリンク**なので、バンドルフォルダ
 （`result_archive/real_log_sim_comparison/`）ごとアーカイブ・共有してもそのまま表示できる。
 
@@ -208,24 +212,24 @@ Markdown 形式の比較レポート。以下を含む。
 
 ### `comparison/figures/`
 
-PNG / PDF の比較プロット。
+SVG の比較プロット（軌跡比較のみ plotly 製インタラクティブ HTML）。
 
 | ファイル | 内容 |
 | -------- | ---- |
-| `velocity.{png,pdf}` | 速度指令 vs 応答 |
-| `velocity_vs_distance.{png,pdf}` | 速度応答 vs 走行距離（arc-length 基準、早期停止を露出） |
-| `acceleration.{png,pdf}` | 加速度指令 vs 応答 |
-| `steering.{png,pdf}` | 操舵指令 vs 応答 |
-| `steering_vs_distance.{png,pdf}` | 操舵応答 vs 走行距離（arc-length 基準） |
-| `trajectory_with_map.{png,pdf}` | 地図背景上での軌跡重ね合わせ |
-| `dp_real_vs_sim.png` | Stage 8: DiffusionPlanner 出力軌跡 実機 vs sim |
-| `dp_vs_actual.png` | Stage 8: DP計画速度(d=0) vs actual速度 |
-| `dp_vs_final_traj.png` | Stage 8: 実機 DP出力 vs 最終 planning（optimizer 補正） |
-| `curves_closeup.{png,pdf}` | カーブ別の詳細拡大 |
-| `curve{N}_analysis.{png,pdf}` | 指定カーブ 全体解析（{N}=`plot_curves[*].index + 1`） |
-| `curve{N}_steering_detail.{png,pdf}` | 指定カーブ 操舵詳細 |
-| `curve{N}_yaw_steer.{png,pdf}` | 指定カーブ ヨーレート・操舵関係 |
-| `curve{N}_steer_response.{png,pdf}` | 指定カーブ ステアリング応答特性 |
+| `velocity.svg` | 速度指令 vs 応答 |
+| `velocity_vs_distance.svg` | 速度応答 vs 走行距離（arc-length 基準、早期停止を露出） |
+| `acceleration.svg` | 加速度指令 vs 応答 |
+| `steering.svg` | 操舵指令 vs 応答 |
+| `steering_vs_distance.svg` | 操舵応答 vs 走行距離（arc-length 基準） |
+| `trajectory_with_map.html` | 地図背景上での軌跡重ね合わせ（plotly・ズーム/パン/ホバー可） |
+| `dp_real_vs_sim.svg` | Stage 8: DiffusionPlanner 出力軌跡 実機 vs sim |
+| `dp_vs_actual.svg` | Stage 8: DP計画速度(d=0) vs actual速度 |
+| `dp_vs_final_traj.svg` | Stage 8: 実機 DP出力 vs 最終 planning（optimizer 補正） |
+| `curves_closeup.svg` | カーブ別の詳細拡大 |
+| `curve{N}_analysis.svg` | 指定カーブ 全体解析（{N}=`plot_curves[*].index + 1`） |
+| `curve{N}_steering_detail.svg` | 指定カーブ 操舵詳細 |
+| `curve{N}_yaw_steer.svg` | 指定カーブ ヨーレート・操舵関係 |
+| `curve{N}_steer_response.svg` | 指定カーブ ステアリング応答特性 |
 
 > `curve{N}_*` 系は `curve_config_yaml::plot_curves` で対象カーブを切り替え可能。
 > 未指定なら `curve2_index` のカーブだけ生成される（既定は `curve2_*` の 4 枚）。
@@ -234,7 +238,7 @@ PNG / PDF の比較プロット。
 ### `comparison/per_step/<case_tag>/`
 
 `step5_analyze_per_step`（Stage 5）によるケース別 per-step delta 解析の成果物。
-1 ケースあたり `per_step_delta.csv` + 図 9 枚（うち `rollout_error_growth.png`）+ `rollout.csv`
+1 ケースあたり `per_step_delta.csv` + 図 9 枚（うち `rollout_error_growth.svg`、`map_distribution.html` は plotly）+ `rollout.csv`
 （多段 free-running rollout の horizon 別誤差）+ `summary.txt`（per-step RMSE + rollout RMSE）。
 ケースは `cases.yaml` で定義する。
 
@@ -248,8 +252,8 @@ PNG / PDF の比較プロット。
 | ファイル | 内容 |
 |---|---|
 | `cases_summary.md` | per-step RMSE 表（reference との Δsteer 付き）+ multi-step rollout RMSE 横断表（horizon 別 pos/yaw + Δyaw vs ref） |
-| `overlay/cascade_error_overlay.png` | 全ケースを 1 枚に重ね描き（段階的誤差） |
-| `overlay/error_timeseries_overlay.png` | 全ケースを 1 枚に重ね描き（誤差時系列） |
+| `overlay/cascade_error_overlay.svg` | 全ケースを 1 枚に重ね描き（段階的誤差） |
+| `overlay/error_timeseries_overlay.svg` | 全ケースを 1 枚に重ね描き（誤差時系列） |
 
 ### `comparison/kus_sweep/`
 
@@ -260,7 +264,7 @@ k_us を同定する（per-step は k_us 非感度なため rollout を使用）
 | ファイル | 内容 |
 |---|---|
 | `kus_sweep.csv` | k_us × horizon → yaw / 位置 / 横 RMSE |
-| `kus_sweep.png` | yaw・位置 RMSE vs k_us 曲線（同定値を赤線表示） |
+| `kus_sweep.svg` | yaw・位置 RMSE vs k_us 曲線（同定値を赤線表示） |
 
 > 同定値はログ末尾に出力（グリッド最小 + 近傍 3 点の放物線サブグリッド推定）。最小がグリッド端の
 > 場合は範囲拡大を警告。`--kus-values` / `--horizons` / `--stride` で手動調整可能。
@@ -274,7 +278,7 @@ actual velocity へのフィット RMSE を最小化する brake_tc を同定す
 | ファイル | 内容 |
 |---|---|
 | `brake_sweep.csv` | brake_tc × (RMSE / mean_err) |
-| `brake_sweep.png` | 発進フィット RMSE vs brake_tc 曲線（同定値を赤線表示） |
+| `brake_sweep.svg` | 発進フィット RMSE vs brake_tc 曲線（同定値を赤線表示） |
 
 > 注: brake_tc は減速時に支配的で発進窓では弱くしか拘束されない（ill-posed）。RMSE が単調減少し最小が
 > 非物理的大値に張り付く場合は警告する（真の同定でなく launch 過大予測の代理；mean_err>0 を併読）。
@@ -289,7 +293,7 @@ actual velocity へのフィット RMSE を最小化する brake_tc を同定す
 | ファイル | 内容 |
 |---|---|
 | `curve_divergence.md` | 縦/横乖離 peak/RMS・速度差 mean/RMS の定量サマリ |
-| `curve_divergence.png` | 速度/速度差/ステア/ヨー差/乖離縦横分解の 5 段時系列 |
+| `curve_divergence.svg` | 速度/速度差/ステア/ヨー差/乖離縦横分解の 5 段時系列 |
 
 > 縦方向支配なら pacing/速度差、横方向支配なら操舵・understeer 由来を示唆。比較対象 sim は
 > sim_*.lite を自動検出（sim_normal 優先）。sim/発進が無ければスキップ。

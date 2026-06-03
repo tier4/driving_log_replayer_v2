@@ -16,8 +16,8 @@
 
 出力:
   comparison/per_step/
-    overview.png, error_timeseries.png, error_vs_speed.png,
-    map_distribution.png, summary.txt, per_step_delta.csv
+    overview.svg, error_timeseries.svg, error_vs_speed.svg,
+    map_distribution.html (plotly), summary.txt, per_step_delta.csv
 """
 
 from __future__ import annotations
@@ -35,6 +35,7 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
+import plotly.graph_objects as go
 
 from .lib._events import find_autonomous_start as _find_autonomous_start
 from .lib._io import (
@@ -47,8 +48,14 @@ from .lib._io import (
     resolve_topic,
 )
 from .lib._map import load_map_ways as _load_map_ways_impl
-from .lib._map import resolve_map_osm
+from .lib._map import map_ways_in_bbox, resolve_map_osm
 from .lib._params_utils import add_params_annotation, load_sim_params, setup_jp_font
+from .lib._plotly_utils import (
+    FIG_HEIGHTS,
+    add_params_annotation_plotly,
+    lanes_to_trace,
+    write_plotly_html,
+)
 from .lib._runtime_config import RuntimeConfig, add_common_cli_arguments, build_runtime_config
 
 setup_jp_font()
@@ -875,7 +882,7 @@ def plot_rollout_growth(df_roll: pd.DataFrame, params: dict) -> None:
 
 
 def _save(fig: plt.Figure, name: str) -> None:
-    path = OUT_DIR / f"{name}.png"
+    path = OUT_DIR / f"{name}.svg"
     fig.savefig(path, dpi=150, bbox_inches="tight")
     plt.close(fig)
     print(f"  Saved: {path}")
@@ -1059,7 +1066,8 @@ def plot_error_vs_speed(df: pd.DataFrame, params: dict) -> None:
                 continue
             lbl = f"v={lo:.0f}–{hi:.0f} m/s" if hi < 50 else f"v≥{lo:.0f} m/s"
             ax.scatter(
-                vx[mask], vals[mask], s=4, alpha=0.5, color=colors[i % len(colors)], label=lbl
+                vx[mask], vals[mask], s=4, alpha=0.5, color=colors[i % len(colors)], label=lbl,
+                rasterized=True,  # SVG 巨大化防止（数千点はビットマップ化）
             )
         ax.axhline(0, color="black", lw=0.8)
         ax.set_xlabel("速度 [m/s]")
@@ -1163,7 +1171,8 @@ def plot_steering_analysis(df: pd.DataFrame, params: dict) -> None:
             continue
         lbl = f"v={lo:.0f}–{hi:.0f} m/s" if hi < 50 else f"v≥{lo:.0f} m/s"
         ax.scatter(
-            cmd_deg[mask], err_deg[mask], s=4, alpha=0.5, color=colors[i % len(colors)], label=lbl
+            cmd_deg[mask], err_deg[mask], s=4, alpha=0.5, color=colors[i % len(colors)], label=lbl,
+            rasterized=True,  # SVG 巨大化防止
         )
     ax.axhline(0, color="black", lw=0.8)
     ax.set_xlabel("指令ステア角 [deg]")
@@ -1223,42 +1232,88 @@ def plot_map_distribution(df: pd.DataFrame, params: dict) -> None:
         # err_ay / err_vy / err_wz は sim_* がラッパー未 export のため一旦スキップ
     ]
 
-    # columns は最低 3 要素 (err_ds_long / err_ds_lat / err_steer) ある前提
-    fig, axes = plt.subplots(1, len(columns), figsize=(6 * len(columns), 6))
-
     # 走行軌跡の bbox + margin で地図プロット範囲を自動算出
     x_min = float(df["pos_x"].min()) - MAP_BBOX_MARGIN
     x_max = float(df["pos_x"].max()) + MAP_BBOX_MARGIN
     y_min = float(df["pos_y"].min()) - MAP_BBOX_MARGIN
     y_max = float(df["pos_y"].max()) + MAP_BBOX_MARGIN
 
-    for ax, (vals, label, unit, source) in zip(axes, columns):
-        if map_ways:
-            for pts in map_ways:
-                wx, wy = pts[:, 0], pts[:, 1]
-                if wx.max() < x_min or wx.min() > x_max:
-                    continue
-                if wy.max() < y_min or wy.min() > y_max:
-                    continue
-                ax.plot(wx, wy, color="#cccccc", lw=0.5, zorder=1)
+    # columns は最低 3 要素 (err_ds_long / err_ds_lat / err_steer) ある前提。
+    # plotly インタラクティブ HTML（ズーム・パン・ホバー可）として出力する。
+    from plotly.subplots import make_subplots  # noqa: PLC0415
 
+    n = len(columns)
+    fig = make_subplots(
+        rows=1,
+        cols=n,
+        subplot_titles=[
+            f"{label} [{unit}]<br><sub>{source}</sub>" for _, label, unit, source in columns
+        ],
+        horizontal_spacing=0.10,
+    )
+    lane_ways = map_ways_in_bbox(map_ways, (x_min, x_max), (y_min, y_max)) if map_ways else []
+
+    pos_x = df["pos_x"].to_numpy()
+    pos_y = df["pos_y"].to_numpy()
+    # レーン trace の NaN 区切り座標構築は全列共通なので 1 回だけ行い、
+    # 各列にはそのコピーを add_trace する（trace は 1 軸にしか紐づけられないため）。
+    lane_template = lanes_to_trace(lane_ways) if lane_ways else None
+    for i, (vals, label, unit, source) in enumerate(columns, start=1):
+        # plotly の軸名は 1 番目のみサフィックス無し（xaxis, x / xaxis2, x2 ...）
+        axis_suffix = str(i) if i > 1 else ""
+        if lane_template is not None:
+            fig.add_trace(go.Scatter(lane_template), row=1, col=i)
         vmax = max(abs(vals).max(), 1e-6)
-        sc = ax.scatter(
-            df["pos_x"], df["pos_y"], c=vals, cmap="RdBu_r", vmin=-vmax, vmax=vmax, s=8, zorder=3
+        # 各列の colorbar をサブプロット右端に配置（xaxis domain の右端を使う）
+        domain_end = fig.layout[f"xaxis{axis_suffix}"].domain[1]
+        fig.add_trace(
+            go.Scatter(
+                x=pos_x,
+                y=pos_y,
+                mode="markers",
+                marker=dict(
+                    color=vals,
+                    colorscale="RdBu",
+                    reversescale=True,  # matplotlib RdBu_r 相当
+                    cmin=-vmax,
+                    cmax=vmax,
+                    size=5,
+                    colorbar=dict(title=unit, x=domain_end + 0.005, len=0.85, thickness=12),
+                ),
+                showlegend=False,
+                hovertemplate=(
+                    f"x=%{{x:.1f}}m y=%{{y:.1f}}m<br>{label}=%{{marker.color:.2f}}{unit}"
+                    "<extra></extra>"
+                ),
+            ),
+            row=1,
+            col=i,
         )
-        plt.colorbar(sc, ax=ax, label=unit)
-        ax.set_xlim(x_min, x_max)
-        ax.set_ylim(y_min, y_max)
-        ax.set_aspect("equal")
-        ax.set_xlabel("x [m]")
-        ax.set_ylabel("y [m]")
-        _set_title(ax, f"{label} [{unit}]", source)
-        ax.grid(True, lw=0.5, alpha=0.5)
+        fig.update_xaxes(title_text="x [m]", range=[x_min, x_max], row=1, col=i)
+        fig.update_yaxes(
+            title_text="y [m]",
+            range=[y_min, y_max],
+            scaleanchor=f"x{axis_suffix}",
+            scaleratio=1,
+            row=1,
+            col=i,
+        )
 
-    fig.suptitle("全走行 per-step delta: 地図上の誤差分布 (実機 − モデル)", fontsize=11)
-    fig.tight_layout()
-    add_params_annotation(fig, params)
-    _save(fig, "map_distribution")
+    add_params_annotation_plotly(fig, params)
+    fig.update_layout(
+        title=dict(
+            text="全走行 per-step delta: 地図上の誤差分布 (実機 − モデル)", font=dict(size=14)
+        ),
+        # step11 の純 CSS ケースタブ（display:none パネル）内に iframe 配置されるため、
+        # コンテナ可視状態に依存しない固定サイズで描画する（autosize だと幅 0 になる）。
+        # 幅はレポート本文幅（max-width 1100px）に収まるようにする。
+        autosize=False,
+        width=355 * n,
+        height=FIG_HEIGHTS["map_distribution"],
+        template="plotly_white",
+        margin=dict(l=60, r=40, t=110, b=40),
+    )
+    write_plotly_html(fig, OUT_DIR / "map_distribution.html", BASE)
 
 
 def plot_lateral_dynamics_timeseries(df: pd.DataFrame, params: dict) -> None:
@@ -1372,6 +1427,7 @@ def plot_steer_vs_lateral_scatter(df: pd.DataFrame, params: dict) -> None:
                 alpha=0.5,
                 color=colors[i % len(colors)],
                 label=lbl,
+                rasterized=True,  # SVG 巨大化防止
             )
 
         # 1次フィッティング（実機全点）

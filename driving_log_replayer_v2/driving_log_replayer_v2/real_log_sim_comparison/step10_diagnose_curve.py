@@ -245,7 +245,7 @@ def plot_detailed(real: dict, sim: dict, cfg: RuntimeConfig, sim_name: str = "�
     add_params_annotation(fig)
     out_dir = cfg.out_dir / "curve_diag"
     out_dir.mkdir(parents=True, exist_ok=True)
-    out = out_dir / "curve_divergence.png"
+    out = out_dir / "curve_divergence.svg"
     fig.savefig(str(out), dpi=150, bbox_inches="tight")
     plt.close(fig)
     print(f"\n  保存: {out}")

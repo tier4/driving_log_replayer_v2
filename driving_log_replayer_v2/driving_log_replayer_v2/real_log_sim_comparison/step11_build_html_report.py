@@ -3,10 +3,10 @@
 
 10 段階パイプライン (step4〜step10) は `comparison/` 配下の複数サブディレクトリ
 (figures/, per_step/<tag>/, cases/overlay/, kus_sweep/, brake_sweep/, curve_diag/) に
-多数の PNG と 3 種の Markdown レポート (report.md, cases/cases_summary.md,
+多数の SVG・plotly HTML と 3 種の Markdown レポート (report.md, cases/cases_summary.md,
 curve_diag/curve_divergence.md) を散らして出力する。本ステージはそれらを走査し、
-全画像を**相対パス**でリンクした目次付き `index.html` を `result_archive/` 直下
-(comparison/ の親) に生成する。画像は comparison/ 配下にあるため src には `comparison/`
+全図を**相対パス**でリンクした目次付き `index.html` を `result_archive/` 直下
+(comparison/ の親) に生成する。図は comparison/ 配下にあるため src には `comparison/`
 プレフィックスを付ける。
 
 レポートは出力ディレクトリではなく **比較の概念** でセクション分けする（読み手が
@@ -20,14 +20,20 @@ curve_diag/curve_divergence.md) を散らして出力する。本ステージは
 
 各図は出力先ディレクトリではなく (ディレクトリ, ファイル名) の組で分類する。figures/ には
 クローズループ図・DP 図・brake 同定図が混在するため、ディレクトリ単位では分けられない。
-未知の PNG は捨てずに「その他」セクションへ回す。
+未知の図は捨てずに「その他」セクションへ回す。
+
+図は 2 形式を扱う:
+- `*.svg`  — matplotlib 製の静止画。<img> 表示＋純 CSS ライトボックスで拡大可能。
+- `*.html` — plotly 製のインタラクティブ図（マップ上プロット）。<iframe> で埋め込み、
+  図自体がズーム・パン・ホバー可能なためライトボックス対象外。plotly.js はバンドル直下の
+  `plotly.min.js` を各図が相対参照する（CDN 不使用・オフライン可）。
 
 index.html を開けば全プロットと Markdown レポートを 1 画面で閲覧でき、相対リンクなので
 バンドルフォルダ (`result_archive/real_log_sim_comparison/`) ごとアーカイブ・共有してもそのまま動く。
 
-本ステージは読み取り専用 (comparison/ に index.html を 1 枚足すだけ)。他ステージの出力は変更しない。
-`markdown` パッケージがあれば Markdown を整形 HTML 化し、無ければ生テキストを <pre> で埋め込む
-(ハード依存にしない)。
+本ステージは読み取り専用 (バンドル直下に index.html / plotly.min.js を足すだけ)。
+他ステージの出力は変更しない。`markdown` パッケージがあれば Markdown を整形 HTML 化し、
+無ければ生テキストを <pre> で埋め込む (ハード依存にしない)。
 """
 
 from __future__ import annotations
@@ -38,53 +44,71 @@ from pathlib import Path
 import re
 import warnings
 
+from .lib._plotly_utils import FIG_HEIGHTS, IFRAME_PAD, ensure_plotlyjs
 from .lib._runtime_config import add_common_cli_arguments, build_runtime_config
 
-# --- 画像キャプション (ファイル名 → 日本語説明) ---------------------------------
-# step4〜step10 が出力する既知の PNG。未登録ファイルはファイル名を人間可読化してフォールバック。
+# --- 画像キャプション (ファイル名 stem → 日本語説明) ----------------------------
+# step4〜step10 が出力する既知の図（拡張子非依存の stem で引く）。
+# 未登録ファイルはファイル名を人間可読化してフォールバック。
 CAPTIONS: dict[str, str] = {
     # step4: figures/
-    "trajectory_with_map.png": "軌跡比較（地図背景付き）",
-    "velocity.png": "速度時系列",
-    "acceleration.png": "加速度時系列",
-    "steering.png": "ステア角時系列",
-    "velocity_vs_distance.png": "走行距離基準 速度（pacing 差を除いた早期停止の露出）",
-    "steering_vs_distance.png": "走行距離基準 ステア角",
-    "curves_closeup.png": "カーブ一覧図（全カーブ概観）",
+    "trajectory_with_map": "軌跡比較（地図背景付き・インタラクティブ）",
+    "trajectory_xy": "軌跡比較（地図なし・インタラクティブ）",
+    "velocity": "速度時系列",
+    "acceleration": "加速度時系列",
+    "steering": "ステア角時系列",
+    "velocity_vs_distance": "走行距離基準 速度（pacing 差を除いた早期停止の露出）",
+    "steering_vs_distance": "走行距離基準 ステア角",
+    "curves_closeup": "カーブ一覧図（全カーブ概観）",
     # step8: figures/
-    "dp_real_vs_sim.png": "DiffusionPlanner 出力軌跡 実機 vs sim",
-    "dp_vs_actual.png": "DP 計画速度 vs 実際速度",
-    "dp_vs_final_traj.png": "実機 DP 出力 vs 最終 planning（optimizer 補正）",
+    "dp_real_vs_sim": "DiffusionPlanner 出力軌跡 実機 vs sim",
+    "dp_vs_actual": "DP 計画速度 vs 実際速度",
+    "dp_vs_final_traj": "実機 DP 出力 vs 最終 planning（optimizer 補正）",
     # step5: per_step/<tag>/
-    "overview.png": "誤差概観",
-    "error_timeseries.png": "誤差時系列",
-    "error_vs_speed.png": "速度別 誤差散布",
-    "steering_analysis.png": "ステア分析",
-    "map_distribution.png": "位置分布",
-    "lateral_dynamics_timeseries.png": "横方向 dynamics 時系列",
-    "steer_vs_lateral_scatter.png": "ステア vs 横変位 散布",
-    "cascade_error.png": "カスケード誤差（1 ステップ連鎖）",
-    "rollout_error_growth.png": "rollout 誤差成長（多段 free-running）",
+    "overview": "誤差概観",
+    "error_timeseries": "誤差時系列",
+    "error_vs_speed": "速度別 誤差散布",
+    "steering_analysis": "ステア分析",
+    "map_distribution": "位置分布（地図上・インタラクティブ）",
+    "lateral_dynamics_timeseries": "横方向 dynamics 時系列",
+    "steer_vs_lateral_scatter": "ステア vs 横変位 散布",
+    "cascade_error": "カスケード誤差（1 ステップ連鎖）",
+    "rollout_error_growth": "rollout 誤差成長（多段 free-running）",
     # step6: cases/overlay/
-    "cascade_error_overlay.png": "全ケース カスケード誤差 重ね描き",
-    "error_timeseries_overlay.png": "全ケース 誤差時系列 重ね描き",
+    "cascade_error_overlay": "全ケース カスケード誤差 重ね描き",
+    "error_timeseries_overlay": "全ケース 誤差時系列 重ね描き",
     # step7: kus_sweep/
-    "kus_sweep.png": "k_us（アンダーステア係数）グリッド sweep",
+    "kus_sweep": "k_us（アンダーステア係数）グリッド sweep",
     # step9: brake_sweep/ + figures/
-    "departure_brake_tc_sensitivity.png": "発進時 brake_tc 感度分析",
-    "real_cmd_acc_departure.png": "発進時 制御指令（実機）",
-    "brake_sweep.png": "brake_time_constant sweep",
+    "departure_brake_tc_sensitivity": "発進時 brake_tc 感度分析",
+    "real_cmd_acc_departure": "発進時 制御指令（実機）",
+    "brake_sweep": "brake_time_constant sweep",
     # step10: curve_diag/
-    "curve_divergence.png": "カーブ乖離 詳細診断（縦横分解 + yaw 差）",
+    "curve_divergence": "カーブ乖離 詳細診断（縦横分解 + yaw 差）",
 }
 
-# step4 のカーブ別連番図 (curve1_analysis.png 等)。接頭辞除去後のサフィックスで照合。
+# step4 のカーブ別連番図 (curve1_analysis.svg 等)。接頭辞除去後のサフィックスで照合。
 _CURVE_SUFFIX_CAPTIONS: dict[str, str] = {
     "analysis": "カーブ個別分析（3 段）",
     "steering_detail": "カーブ ステア詳細",
     "yaw_steer": "カーブ yaw-steer 関係",
     "steer_response": "カーブ ステア応答",
 }
+
+# plotly 図 (*.html) を <iframe> 埋め込みする際の高さ [px]（stem → px）。
+# 生成側 (step4/step5) と共有する lib._plotly_utils.FIG_HEIGHTS（layout 高さの単一
+# ソース）+ IFRAME_PAD（モードバー等の余白）から導出する。
+_IFRAME_HEIGHTS: dict[str, int] = {stem: h + IFRAME_PAD for stem, h in FIG_HEIGHTS.items()}
+_IFRAME_HEIGHT_DEFAULT = 650
+
+# 図として収集する拡張子と、インタラクティブ図（plotly HTML、iframe 埋め込み・
+# ライトボックス対象外）の判定。形式の追加・変更時はここだけ直せばよい。
+_FIGURE_SUFFIXES = {".svg", ".html"}
+
+
+def _is_interactive(rel: Path) -> bool:
+    """plotly 製インタラクティブ図（iframe 埋め込み対象）かどうか。"""
+    return rel.suffix == ".html"
 
 # --- 概念セクション定義 ---------------------------------------------------------
 # (key, タイトル, 1 行説明)。表示順はこのリスト順。"other" は未分類フォールバック。
@@ -125,16 +149,17 @@ _CATEGORY_TITLES: dict[str, str] = {key: title for key, title, _ in _CATEGORIES}
 _CATEGORY_DESCS: dict[str, str] = {key: desc for key, _, desc in _CATEGORIES}
 _CATEGORY_ORDER: list[str] = [key for key, _, _ in _CATEGORIES]
 
-# step4 が figures/ に出力する closed-loop 比較図（実機 vs sim）。dp_*・brake 同定図は
+# step4 が figures/ に出力する closed-loop 比較図（実機 vs sim）の stem。dp_*・brake 同定図は
 # 同じ figures/ に混在するため、ディレクトリではなくこの明示リスト + curveN_* パターンで判定する。
-_CLOSED_LOOP_FILES: set[str] = {
-    "velocity.png",
-    "velocity_vs_distance.png",
-    "acceleration.png",
-    "steering.png",
-    "steering_vs_distance.png",
-    "trajectory_with_map.png",
-    "curves_closeup.png",
+_CLOSED_LOOP_STEMS: set[str] = {
+    "velocity",
+    "velocity_vs_distance",
+    "acceleration",
+    "steering",
+    "steering_vs_distance",
+    "trajectory_with_map",
+    "trajectory_xy",
+    "curves_closeup",
 }
 
 # 取り込む Markdown レポート: (comparison/ からの相対パス, 見出し, 所属カテゴリ)。
@@ -146,18 +171,19 @@ _MARKDOWN_REPORTS: list[tuple[str, str, str]] = [
 
 
 def _caption_for(filename: str) -> str:
-    """画像ファイル名に対応する日本語キャプションを返す。"""
-    if filename in CAPTIONS:
-        return CAPTIONS[filename]
-    # curveN_<suffix>.png パターン照合
-    m = re.match(r"curve(\d+)_(.+)\.png$", filename)
+    """画像ファイル名に対応する日本語キャプションを返す（拡張子非依存の stem で照合）。"""
+    stem = Path(filename).stem
+    if stem in CAPTIONS:
+        return CAPTIONS[stem]
+    # curveN_<suffix> パターン照合
+    m = re.match(r"curve(\d+)_(.+)$", stem)
     if m:
         idx, suffix = m.group(1), m.group(2)
         cap = _CURVE_SUFFIX_CAPTIONS.get(suffix)
         if cap:
             return f"カーブ{idx}: {cap}"
     # フォールバック: 拡張子除去 + アンダースコアを空白に
-    return Path(filename).stem.replace("_", " ")
+    return stem.replace("_", " ")
 
 
 def _classify(rel: Path) -> str:
@@ -167,28 +193,28 @@ def _classify(rel: Path) -> str:
     ディレクトリだけでなくファイル名でも判定する。
     """
     top = rel.parts[0] if len(rel.parts) > 1 else "."
-    name = rel.name
+    stem = rel.stem
 
-    # DiffusionPlanner 出力比較（step8、figures/dp_*.png）
-    if name.startswith("dp_"):
+    # DiffusionPlanner 出力比較（step8、figures/dp_*.svg）
+    if stem.startswith("dp_"):
         return "dp"
     # brake_tc 同定の補助図（step9、figures/ に出力される）
-    if name in {"departure_brake_tc_sensitivity.png", "real_cmd_acc_departure.png"}:
+    if stem in {"departure_brake_tc_sensitivity", "real_cmd_acc_departure"}:
         return "real_analysis"
     # 車両パラメータ同定 sweep（step7 / step9、実機ログのみ）
     if top in {"kus_sweep", "brake_sweep"}:
         return "real_analysis"
     # per-step delta 解析（step5）: rollout のみ multi-step、他は 1-step
     if top == "per_step":
-        return "ol_multistep" if name == "rollout_error_growth.png" else "ol_1step"
+        return "ol_multistep" if stem == "rollout_error_growth" else "ol_1step"
     # ケース集約の重ね描き（step6、1-step 誤差の横断比較）
     if top == "cases":
         return "ol_1step"
     # カーブ乖離詳細診断（step10、実機 vs sim closed-loop）
     if top == "curve_diag":
         return "closed_loop"
-    # step4 の closed-loop 比較図（既知名 + カーブ別連番図 curveN_*）
-    if name in _CLOSED_LOOP_FILES or re.match(r"curve\d+_.+\.png$", name):
+    # step4 の closed-loop 比較図（既知 stem + カーブ別連番図 curveN_*）
+    if stem in _CLOSED_LOOP_STEMS or re.match(r"curve\d+_.+$", stem):
         return "closed_loop"
     # 既知のいずれにも当たらない図は捨てず「その他」へ（黙って誤分類しない）
     return "other"
@@ -233,6 +259,8 @@ details.section > summary:hover { color: var(--accent); }
 .sec-desc .toplink { margin-left: 0.6rem; font-size: 0.82rem; white-space: nowrap; }
 figure { margin: 0 0 2rem; }
 figure img { width: 100%; height: auto; border: 1px solid var(--border); border-radius: 4px; cursor: zoom-in; }
+/* plotly インタラクティブ図の iframe。高さは図種別ごとにインラインで指定する。 */
+figure iframe.plotly-fig { width: 100%; border: 1px solid var(--border); border-radius: 4px; background: #fff; }
 figcaption { margin-top: 0.4rem; font-weight: 600; }
 figcaption .fname { font-weight: 400; color: var(--muted); font-size: 0.82rem; margin-left: 0.5rem; }
 details.md-report { border-top: 1px dashed var(--border); margin-top: 2rem; padding-top: 0.5rem; }
@@ -286,16 +314,32 @@ def _lb_id(rel: Path) -> str:
 
 
 def _figure(rel: Path, link_prefix: str, caption: str | None = None) -> str:
-    """1 画像分の <figure> HTML を返す（サムネ。クリックでライトボックス #lb-* を開く）。
+    """1 図分の <figure> HTML を返す（形式で分岐）。
 
     rel は comparison/ 基準の相対パス。link_prefix を前置して HTML 出力ディレクトリ
     (result_archive/) からの相対 src にする（例 link_prefix="comparison/"）。
-    caption 省略時はファイル名から日本語キャプションを導出する。拡大用オーバーレイ本体は
-    build_html が <main> 末尾に一括出力する（_lightbox_overlays）。
+    caption 省略時はファイル名から日本語キャプションを導出する。
+
+    - `*.svg`  → <img> サムネ。クリックでライトボックス #lb-* を開く（拡大用オーバーレイ
+      本体は build_html が <main> 末尾に一括出力する _lightbox_overlays）。
+    - `*.html` → plotly インタラクティブ図。<iframe> 埋め込み（図自体がズーム可能なため
+      ライトボックス無し）。高さは _IFRAME_HEIGHTS（plotly layout 高さと整合）。
     """
     src = link_prefix + rel.as_posix()
     if caption is None:
         caption = _caption_for(rel.name)
+    if _is_interactive(rel):
+        height = _IFRAME_HEIGHTS.get(rel.stem, _IFRAME_HEIGHT_DEFAULT)
+        # loading='lazy' は付けない: display:none のタブパネル内 iframe の遅延ロードは
+        # ブラウザ挙動が非一貫（表示切替後に読み込まれない場合がある）。plotly iframe は
+        # ケース数+1 程度と少ないため eager ロードで問題ない。
+        return (
+            f"<figure><iframe class='plotly-fig' "
+            f"src='{html.escape(src)}' style='height:{height}px' "
+            f"title='{html.escape(caption)}'></iframe>"
+            f"<figcaption>{html.escape(caption)}"
+            f"<span class='fname'>{html.escape(src)}</span></figcaption></figure>"
+        )
     return (
         f"<figure><a class='thumb' href='#{_lb_id(rel)}'>"
         f"<img loading='lazy' src='{html.escape(src)}' alt='{html.escape(caption)}'></a>"
@@ -309,9 +353,12 @@ def _lightbox_overlays(images: list[Path], link_prefix: str) -> str:
 
     オーバーレイは display:none やタブパネル・<details> の中に置くと :target が効かないため、
     祖先に隠し要素を持たない位置（main 直下末尾）へ一括出力する。
+    plotly 図 (*.html) は図自体がズーム可能なためライトボックス対象外。
     """
     parts = ["<div class='lightboxes'>"]
     for rel in images:
+        if _is_interactive(rel):
+            continue
         src = link_prefix + rel.as_posix()
         caption = _caption_for(rel.name)
         # 閉じると元セクションに戻す（href='#' だとページ先頭へ飛んでしまうため）
@@ -429,15 +476,36 @@ def _casesync_css(by_cat: dict[str, list[Path]]) -> str:
     return "\n".join(rules)
 
 
-def build_html(comparison_dir: Path, scenario_name: str, link_prefix: str = "") -> str:
+def _collect_figures(comparison_dir: Path) -> list[Path]:
+    """comparison/ 配下の図（*.svg + plotly *.html）を集める。
+
+    自身の生成物（index.html / plotly.min.js はバンドル直下なので元々入らない）を
+    念のため除外する。
+    """
+    figures = [
+        p
+        for p in comparison_dir.rglob("*")
+        if p.suffix in _FIGURE_SUFFIXES and p.name not in {"index.html", "plotly.min.js"}
+    ]
+    return sorted(figures, key=lambda p: str(p))
+
+
+def build_html(
+    comparison_dir: Path,
+    scenario_name: str,
+    link_prefix: str = "",
+    images: list[Path] | None = None,
+) -> str:
     """comparison_dir を走査して index.html の文字列を組み立てる。
 
     link_prefix は HTML 出力位置から comparison_dir への相対プレフィックス。index.html を
     comparison/ の親 (result_archive/) に置く場合は "comparison/" を渡す。comparison/ 直下に
     置く従来挙動なら ""。
     """
-    # PNG を概念カテゴリへ分類（index.html 自身が参照する相対パスは comparison_dir 基準）
-    images = sorted(comparison_dir.rglob("*.png"), key=lambda p: str(p))
+    # SVG / plotly HTML を概念カテゴリへ分類（相対パスは comparison_dir 基準）。
+    # images は呼び出し側が _collect_figures 済みなら再走査を省くために渡せる。
+    if images is None:
+        images = _collect_figures(comparison_dir)
     rels_all = [img.relative_to(comparison_dir) for img in images]
     by_cat: dict[str, list[Path]] = {}
     for rel in rels_all:
@@ -487,14 +555,14 @@ def build_html(comparison_dir: Path, scenario_name: str, link_prefix: str = "") 
             )
         body.append("</details>")
 
-    meta_bits = [f"画像 {len(images)} 枚"]
+    meta_bits = [f"図 {len(images)} 枚"]
     if scenario_name:
         meta_bits.insert(0, f"シナリオ: {html.escape(scenario_name)}")
     meta = " ／ ".join(meta_bits)
     empty_note = (
         ""
         if images
-        else "<p class='empty'>comparison/ 配下に PNG が見つかりませんでした。"
+        else "<p class='empty'>comparison/ 配下に図 (SVG / plotly HTML) が見つかりませんでした。"
         "先に step4〜step10 を実行してください。</p>"
     )
 
@@ -541,22 +609,28 @@ def main() -> None:
     comparison_dir.mkdir(parents=True, exist_ok=True)
 
     # index.html は comparison/ の親 (result_archive/ = base_dir) 直下に置く。
-    # 画像は comparison/ 配下にあるため、src には base_dir からの相対プレフィックスを付ける。
+    # 図は comparison/ 配下にあるため、src には base_dir からの相対プレフィックスを付ける。
     html_dir = cfg.base_dir
     html_dir.mkdir(parents=True, exist_ok=True)
     link_prefix = comparison_dir.relative_to(html_dir).as_posix() + "/"
 
-    n_png = len(list(comparison_dir.rglob("*.png")))
-    if n_png == 0:
+    # plotly 図 (*.html) が参照する plotly.min.js をバンドル直下に同梱する
+    # （step4/5 実行時にも書かれるが、欠けていた場合の保険として冪等に呼ぶ）。
+    ensure_plotlyjs(html_dir)
+
+    images = _collect_figures(comparison_dir)
+    if not images:
         warnings.warn(
-            f"{comparison_dir} 配下に PNG が見つかりません。目次のみの index.html を生成します"
+            f"{comparison_dir} 配下に図 (SVG / plotly HTML) が見つかりません。"
+            "目次のみの index.html を生成します"
         )
 
     out_path = html_dir / "index.html"
     out_path.write_text(
-        build_html(comparison_dir, cfg.scenario_name, link_prefix), encoding="utf-8"
+        build_html(comparison_dir, cfg.scenario_name, link_prefix, images=images),
+        encoding="utf-8",
     )
-    print(f"  保存: {out_path} (画像 {n_png} 枚)")
+    print(f"  保存: {out_path} (図 {len(images)} 枚)")
 
 
 if __name__ == "__main__":

@@ -23,7 +23,7 @@ evaluator_node が Stage 6 の後に env (BEST_MODEL_BASE_DIR) のみで実行�
         [--kus-values 0,0.005,0.01,0.015,0.02,0.025,0.03,0.04,0.05] \
         [--horizons 2,5,10,20] [--stride 5]
 
-出力: <base-dir>/comparison/kus_sweep/{kus_sweep.csv, kus_sweep.png}
+出力: <base-dir>/comparison/kus_sweep/{kus_sweep.csv, kus_sweep.svg}
 """
 
 from __future__ import annotations
@@ -193,7 +193,7 @@ def main() -> None:
     out_dir.mkdir(parents=True, exist_ok=True)
     res.to_csv(out_dir / "kus_sweep.csv", index=False)
     print(f"  Saved: {out_dir / 'kus_sweep.csv'}")
-    plot_sweep(res, identified, base_params, out_dir / "kus_sweep.png")
+    plot_sweep(res, identified, base_params, out_dir / "kus_sweep.svg")
 
     print("\n=== 同定結果 (yaw RMSE 最小化 @ horizon N={}) ===".format(h_max))
     print(f"  グリッド最小: k_us = {identified['k_us_grid']:.4f}  "

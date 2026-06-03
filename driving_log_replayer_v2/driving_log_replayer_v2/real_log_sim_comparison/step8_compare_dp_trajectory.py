@@ -350,7 +350,7 @@ def _run_real_actual(  # noqa: PLR0915
     )
     fig.tight_layout(rect=(0, 0.03, 1, 1))
     add_params_annotation(fig)
-    out = cfg.figs_dir / "dp_real_vs_sim.png"
+    out = cfg.figs_dir / "dp_real_vs_sim.svg"
     fig.savefig(str(out), dpi=150, bbox_inches="tight")
     plt.close(fig)
     print(f"\n  保存: {out}")
@@ -384,7 +384,7 @@ def _run_real_actual(  # noqa: PLR0915
         ax.grid(True, lw=0.4)
     fig2.tight_layout()
     add_params_annotation(fig2)
-    out2 = cfg.figs_dir / "dp_vs_actual.png"
+    out2 = cfg.figs_dir / "dp_vs_actual.svg"
     fig2.savefig(str(out2), dpi=150, bbox_inches="tight")
     plt.close(fig2)
     print(f"  保存: {out2}")
@@ -524,7 +524,7 @@ def _run_final_planning(  # noqa: PLR0915
 
     fig.tight_layout()
     add_params_annotation(fig)
-    out = cfg.figs_dir / "dp_vs_final_traj.png"
+    out = cfg.figs_dir / "dp_vs_final_traj.svg"
     fig.savefig(str(out), dpi=150, bbox_inches="tight")
     plt.close(fig)
     print(f"\n  保存: {out}")

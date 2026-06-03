@@ -23,7 +23,7 @@ Runs the 11-stage comparison pipeline inside a cloud DLR2 job:
   5. step5_analyze_per_step cases.yaml の各 case で per-step delta 解析
   6. step6_analyze_cases   per_step/*.csv を集約 (overlay/, cases_summary.md)
   7. step7_identify_kus    real.lite で k_us を rollout sweep 同定 (kus_sweep/)
-  8. step8_compare_dp_trajectory DiffusionPlanner 出力軌跡 real vs sim 比較 (figures/dp_*.png)
+  8. step8_compare_dp_trajectory DiffusionPlanner 出力軌跡 real vs sim 比較 (figures/dp_*.svg)
   9. step9_identify_brake  real.lite で縦方向 brake_tc を発進フィット同定 (brake_sweep/)
   10. step10_diagnose_curve カーブ/発進区間の乖離を縦横分解診断 (curve_diag/)
   11. step11_build_html_report comparison/ 配下の全プロットを集約 (result_archive/real_log_sim_comparison/index.html)
@@ -360,9 +360,9 @@ def run_pipeline(
         "report_ok": int((comparison_dir / "report.md").exists()),
         "cases_summary_ok": int((comparison_dir / "cases" / "cases_summary.md").exists()),
         "kus_sweep_ok": int((comparison_dir / "kus_sweep" / "kus_sweep.csv").exists()),
-        "dp_compare_ok": int((comparison_dir / "figures" / "dp_real_vs_sim.png").exists()),
+        "dp_compare_ok": int((comparison_dir / "figures" / "dp_real_vs_sim.svg").exists()),
         "brake_sweep_ok": int((comparison_dir / "brake_sweep" / "brake_sweep.csv").exists()),
-        "curve_diag_ok": int((comparison_dir / "curve_diag" / "curve_divergence.png").exists()),
+        "curve_diag_ok": int((comparison_dir / "curve_diag" / "curve_divergence.svg").exists()),
         # index.html は comparison/ の親 (result_archive/) 直下に生成される。
         "index_html_ok": int((comparison_dir.parent / "index.html").exists()),
     }

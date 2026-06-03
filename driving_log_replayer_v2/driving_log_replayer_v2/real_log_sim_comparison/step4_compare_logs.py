@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """実機ログ vs Godotシム vs 通常シム の三方比較プロット生成スクリプト.
 
-Outputs: comparison/figures/*.{png,pdf}, comparison/report.md
+Outputs: comparison/figures/*.svg (軌跡比較のみ *.html), comparison/report.md
 """
 
 from __future__ import annotations
@@ -19,6 +19,7 @@ import matplotlib.patches as mpatches  # noqa: F401 — 旧コード参照
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
+import plotly.graph_objects as go
 
 from .lib._events import (
     AUTONOMOUS_MODE as _AUTONOMOUS_MODE,
@@ -38,8 +39,14 @@ from .lib._io import (
     load_velocity,
     nearest_point_distance,
 )
-from .lib._map import load_map_ways, resolve_map_osm
+from .lib._map import load_map_ways, map_ways_in_bbox, resolve_map_osm
 from .lib._params_utils import add_params_annotation, setup_jp_font
+from .lib._plotly_utils import (
+    FIG_HEIGHTS,
+    add_params_annotation_plotly,
+    lanes_to_trace,
+    write_plotly_html,
+)
 from .lib._provenance import format_provenance_line, read_provenance
 from .lib._runtime_config import (
     RuntimeConfig,
@@ -120,10 +127,10 @@ _SIM_MARKERS = ["^", "s", "D", "v", "P", "*", "X"]
 
 # 時間軸重ね描きへの注記: t=0 の基準がログ間で異なり (real=AUTONOMOUS 遷移 / sim=速度
 # fallback)、pacing も違うため、同一 t が同一地点を意味しない。走行距離基準は
-# velocity_vs_distance.png / steering_vs_distance.png を参照。
+# velocity_vs_distance.svg / steering_vs_distance.svg を参照。
 _TIME_AXIS_NOTE = (
     "注: t=0 は各ログの AUTONOMOUS/発進基準。pacing 差により同一 t は同一地点を意味しない"
-    "（走行距離基準は *_vs_distance.png を参照）"
+    "（走行距離基準は *_vs_distance.svg を参照）"
 )
 
 
@@ -211,11 +218,10 @@ def _setup_fig(title: str, nrows=1, ncols=1, figsize=(12, 5)):
 def _save(fig, name: str):
     FIGS_DIR.mkdir(parents=True, exist_ok=True)
     add_params_annotation(fig)
-    for ext in ("png", "pdf"):
-        path = FIGS_DIR / f"{name}.{ext}"
-        fig.savefig(path, dpi=150, bbox_inches="tight")
+    path = FIGS_DIR / f"{name}.svg"
+    fig.savefig(path, dpi=150, bbox_inches="tight")
     plt.close(fig)
-    print(f"  保存: {name}.{{png,pdf}}")
+    print(f"  保存: {name}.svg")
 
 
 def _traj_plot(ax, df_xy, d, label, markevery=20, zorder=3):
@@ -239,49 +245,106 @@ def _traj_plot(ax, df_xy, d, label, markevery=20, zorder=3):
     )
 
 
-def plot_trajectory(data: dict, map_ways: list | None):
-    """地図背景あり軌跡プロット。表示範囲は3軌跡の bbox + マージン に限定。"""
-    fig, axes = _setup_fig("軌跡比較", figsize=(10, 10))
-    ax = axes[0, 0]
+# matplotlib スタイル → plotly スタイルの対応表（軌跡プロットの plotly 化用）。
+# _SIM_LINESTYLES の on-off タプルは近い dash enum へ割り当てる。
+_PLOTLY_DASH = {"-": "solid", "--": "dash", "-.": "dashdot", ":": "dot"}
+_PLOTLY_DASH_TUPLES = {(4, 2): "longdash", (3, 1, 1, 1): "longdashdot"}
+_PLOTLY_MARKER = {
+    "o": "circle", "^": "triangle-up", "s": "square", "D": "diamond",
+    "v": "triangle-down", "P": "cross", "*": "star", "X": "x",
+}
 
+
+def _plotly_dash(ls) -> str:
+    """matplotlib linestyle（文字列 or (offset, on-off タプル)）を plotly dash enum へ。"""
+    if isinstance(ls, tuple):
+        return _PLOTLY_DASH_TUPLES.get(tuple(ls[1]), "dash")
+    return _PLOTLY_DASH.get(ls, "solid")
+
+
+def plot_trajectory(data: dict, map_ways: list | None):
+    """地図背景あり軌跡プロット（plotly インタラクティブ HTML）。
+
+    表示範囲は3軌跡の bbox + マージン に限定。ズーム・パン・ホバー・凡例トグル可能。
+    """
     # 3軌跡の bounding box を算出
     all_xy_list = [
         d["kinematic"][["x", "y"]].values for d in data.values() if not d["kinematic"].empty
     ]
     if not all_xy_list:
         warnings.warn("kinematic データなし。軌跡プロットをスキップ")
-        plt.close(fig)
         return
     all_xy = np.concatenate(all_xy_list)
     margin = 30  # m
     x_min, y_min = all_xy.min(axis=0) - margin
     x_max, y_max = all_xy.max(axis=0) + margin
 
+    fig = go.Figure()
     if map_ways:
-        for pts in map_ways:
-            wx, wy = pts[:, 0], pts[:, 1]
-            if wx.max() < x_min or wx.min() > x_max:
-                continue
-            if wy.max() < y_min or wy.min() > y_max:
-                continue
-            ax.plot(wx, wy, color="#cccccc", lw=0.5, zorder=1)
+        ways = map_ways_in_bbox(map_ways, (x_min, x_max), (y_min, y_max))
+        fig.add_trace(lanes_to_trace(ways))
 
     for label, d in data.items():
-        _traj_plot(ax, d["kinematic"], d, label, markevery=15)
+        df = d["kinematic"]
+        if df.empty:
+            continue
+        x = np.asarray(df["x"])
+        y = np.asarray(df["y"])
+        hover_extra = ""
+        customdata = None
+        if "t" in df.columns:
+            customdata = np.asarray(df["t"])
+            hover_extra = "<br>t=%{customdata:.1f}s"
+        # 線 trace（全点 hover 可能）
+        fig.add_trace(go.Scatter(
+            x=x, y=y,
+            mode="lines",
+            name=label,
+            legendgroup=label,
+            line=dict(color=d["color"], width=d["lw"], dash=_plotly_dash(d["ls"])),
+            customdata=customdata,
+            hovertemplate=f"{label}<br>x=%{{x:.1f}}m y=%{{y:.1f}}m{hover_extra}<extra></extra>",
+        ))
+        # 等間隔マーカー trace（matplotlib markevery 相当）
+        me = max(1, len(x) // 15)
+        fig.add_trace(go.Scatter(
+            x=x[::me], y=y[::me],
+            mode="markers",
+            legendgroup=label,
+            showlegend=False,
+            marker=dict(
+                symbol=_PLOTLY_MARKER.get(d["marker"], "circle"),
+                size=d["ms"] + 3,
+                color=d["color"],
+                line=dict(color="white", width=0.5),
+            ),
+            hoverinfo="skip",
+        ))
 
-    ax.set_xlim(x_min, x_max)
-    ax.set_ylim(y_min, y_max)
-    ax.set_aspect("equal")
-    ax.set_xlabel("x [m]")
-    ax.set_ylabel("y [m]")
-    ax.grid(True, lw=0.5, alpha=0.5)
-    ax.legend(fontsize=10)
     # provenance フットノート: 各ログの DP 重み / autoware バージョン (版差での乖離解釈用)。
     prov_lines = [f"{lbl}: {_prov_text(lbl, d)}" for lbl, d in data.items()]
-    fig.text(0.01, 0.005, "provenance —\n" + "\n".join(prov_lines),
-             fontsize=6, va="bottom", ha="left", color="#555555", family="monospace")
-    fig.tight_layout(rect=(0, 0.04, 1, 1))
-    _save(fig, "trajectory_with_map" if map_ways else "trajectory_xy")
+    fig.add_annotation(
+        xref="paper", yref="paper", x=0.0, y=0.0,
+        xanchor="left", yanchor="bottom", align="left", showarrow=False,
+        text="provenance —<br>" + "<br>".join(prov_lines),
+        font=dict(family="monospace", size=9, color="#555555"),
+        bgcolor="rgba(255,255,255,0.7)",
+    )
+    add_params_annotation_plotly(fig)
+
+    name = "trajectory_with_map" if map_ways else "trajectory_xy"
+    fig.update_layout(
+        title=dict(text=f"{SCENARIO_NAME}<br>軌跡比較", font=dict(size=14)),
+        xaxis=dict(title="x [m]", range=[x_min, x_max]),
+        yaxis=dict(title="y [m]", range=[y_min, y_max], scaleanchor="x", scaleratio=1),
+        height=FIG_HEIGHTS[name],
+        autosize=True,
+        template="plotly_white",
+        legend=dict(x=0.01, y=0.99, bgcolor="rgba(255,255,255,0.7)"),
+        margin=dict(l=60, r=20, t=60, b=40),
+    )
+    FIGS_DIR.mkdir(parents=True, exist_ok=True)
+    write_plotly_html(fig, FIGS_DIR / f"{name}.html", BASE)
 
 
 def _ts_plot(ax, t, y, d, label, cmd=False):
