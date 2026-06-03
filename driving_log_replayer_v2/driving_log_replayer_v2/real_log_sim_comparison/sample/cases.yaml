@@ -24,10 +24,16 @@ cases:
       wheelbase: 4.76012
       k_us: 0.020
 
-  - tag: shorter_wb
+  # 最善パラメータ調整版 (sim_runs.yaml の best_normal と同一パラメータ)。
+  # 実機 N-step rollout の結合グリッド探索で同定 (詳細は sim_runs.yaml のコメント参照)。
+  - tag: best_normal
     vehicle_model: delay_steer_acc_geared_wo_fall_guard
     params:
-      wheelbase: 4.50
+      wheelbase: 4.76012
+      k_us: 0.005
+      steer_time_constant: 0.30
+      debug_steer_scaling_factor: 0.90
+      acc_time_constant: 0.60
 
   - tag: ideal_steer
     vehicle_model: ideal_steer_acc

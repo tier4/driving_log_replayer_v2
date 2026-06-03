@@ -29,6 +29,21 @@ sim_runs:
     params:
       k_us: 0.020
 
+  # DELAY_STEER_ACC_GEARED_WO_FALL_GUARD の最善パラメータ調整版。
+  # 実機ログ (takanawa 2026-05-12-A09) の N-step rollout (N=20 終端誤差) を
+  # 結合グリッド探索で最小化した同定値 (1 パラメータずつの最適値は相関があるため
+  # 結合探索で決定。param_sweep/ の 1D/2D sweep 図も参照):
+  #   yaw RMSE 0.305→0.170 deg (-44%), 位置 7.68→5.42 cm (-29%) vs 仕様値。
+  # acc_time_constant は 0.6 超で飽和 (0.8 で +2% 改善のみ・yaw 微悪化) のため 0.6。
+  - tag: best_normal
+    vehicle_model: j6_gen2
+    architecture_type: awf/universe/20250130
+    params:
+      k_us: 0.005
+      steer_time_constant: 0.30
+      debug_steer_scaling_factor: 0.90
+      acc_time_constant: 0.60
+
   # 理想軌跡追従 (planner 出力を完全追従)。dynamics 誤差ゼロの上限基準。
   - tag: sim_perfect
     vehicle_model: j6_gen2_perfect_tracker
