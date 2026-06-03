@@ -33,7 +33,13 @@ import numpy as np
 import pandas as pd
 
 from .lib._events import find_autonomous_start, find_curve2_launch, find_sim_launch
-from .lib._io import iter_bag_messages, load_velocity, resolve_lite_bag, resolve_primary_sim_bag
+from .lib._io import (
+    iter_bag_messages,
+    load_velocity,
+    resolve_lite_bag,
+    resolve_primary_sim_bag,
+    sim_tag_from_bag,
+)
 from .lib._params_utils import add_params_annotation, setup_jp_font
 from .lib._provenance import format_provenance_line, read_provenance
 from .lib._runtime_config import RuntimeConfig, add_common_cli_arguments, build_runtime_config
@@ -197,6 +203,7 @@ def _load_traffic_signals(
 def _run_real_actual(  # noqa: PLR0915
     cfg: RuntimeConfig, real_bag: Path, sim_bag: Path
 ) -> None:
+    sim_name = sim_tag_from_bag(sim_bag)  # 凡例・タイトルに表示するシミュレータ名 (例: sim_normal)
     print("\n=== DiffusionPlanner 計画軌跡 実機 vs シム 直接比較 ===\n")
 
     t0_sim, tl_sim = _resolve_t0_and_launch(sim_bag, is_real=False, curve2_window=cfg.curve2_window)
@@ -258,7 +265,7 @@ def _run_real_actual(  # noqa: PLR0915
     cfg.figs_dir.mkdir(parents=True, exist_ok=True)
     fig, axes = plt.subplots(2, 3, figsize=(18, 10))
     fig.suptitle(
-        f"{cfg.scenario_name}\nDiffusionPlanner計画軌跡 直接比較（実機 vs シム）",
+        f"{cfg.scenario_name}\nDiffusionPlanner計画軌跡 直接比較（実機 vs {sim_name}）",
         fontsize=13,
     )
 
@@ -282,10 +289,10 @@ def _run_real_actual(  # noqa: PLR0915
         ax.grid(True, lw=0.4)
         ax.set_xlabel("発進後 t [s]")
         ax.legend(fontsize=8)
-    ax_sim.set_title("シム DP計画速度 [m/s]")
+    ax_sim.set_title(f"{sim_name} DP計画速度 [m/s]")
     ax_sim.set_ylabel("計画速度 [m/s]")
     ax_real.set_title("実機 DP計画速度 [m/s]")
-    ax_diff.set_title("速度差 (シム − 実機) [m/s]")
+    ax_diff.set_title(f"速度差 ({sim_name} − 実機) [m/s]")
 
     ax_prof_sim = axes[1, 0]
     ax_prof_real = axes[1, 1]
@@ -293,7 +300,7 @@ def _run_real_actual(  # noqa: PLR0915
 
     cmap = plt.cm.viridis
     for frames, ax, title in [
-        (frames_sim, ax_prof_sim, "シム"),
+        (frames_sim, ax_prof_sim, sim_name),
         (frames_real, ax_prof_real, "実機"),
     ]:
         for fr in sorted(frames, key=lambda x: x["t_rel"]):
@@ -322,10 +329,10 @@ def _run_real_actual(  # noqa: PLR0915
     if not df_obj_sim.empty:
         ax_obj.plot(
             df_obj_sim["t_rel"].values, df_obj_sim["n_objects"].values,
-            color="#e05c00", lw=1.5, ls="--", label="シム 追跡物体数", alpha=0.8,
+            color="#e05c00", lw=1.5, ls="--", label=f"{sim_name} 追跡物体数", alpha=0.8,
         )
     else:
-        ax_obj.axhline(0, color="#e05c00", lw=1.5, ls="--", label="シム (0物体)", alpha=0.8)
+        ax_obj.axhline(0, color="#e05c00", lw=1.5, ls="--", label=f"{sim_name} (0物体)", alpha=0.8)
     ax_obj.axvline(0, color="gray", lw=0.8, ls="--", alpha=0.6)
     ax_obj.set_xlabel("発進後 t [s]")
     ax_obj.set_ylabel("追跡物体数")
@@ -360,7 +367,7 @@ def _run_real_actual(  # noqa: PLR0915
     fig2, axes2 = plt.subplots(1, 2, figsize=(14, 5))
     fig2.suptitle(f"{cfg.scenario_name}\nDPが計画した速度(d=0) vs 実際の速度", fontsize=12)
     for frames, df_v, label, ax in [
-        (frames_sim, df_vel_sim, "シム", axes2[0]),
+        (frames_sim, df_vel_sim, sim_name, axes2[0]),
         (frames_real, df_vel_real, "実機", axes2[1]),
     ]:
         dp_v = frames_to_series(frames, t_vec, 0)
@@ -392,6 +399,7 @@ def _run_final_planning(  # noqa: PLR0915
     cfg: RuntimeConfig, real_bag: Path, sim_bag: Path | None
 ) -> None:
     print("\n=== DP出力 vs 最終trajectory 速度比較 ===\n")
+    sim_name = sim_tag_from_bag(sim_bag) if sim_bag is not None else "シム"
 
     t0_real, tl_real = _resolve_t0_and_launch(real_bag, is_real=True, curve2_window=cfg.curve2_window)
     print(f"実機 t_launch={tl_real:.1f}s")
@@ -455,7 +463,7 @@ def _run_final_planning(  # noqa: PLR0915
         v_sim = frames_to_series(frames_sim_dp, t_vec, d)
         ax.plot(t_vec, v_dp, "k-", lw=2, label="実機 DP出力")
         ax.plot(t_vec, v_final, "b--", lw=2, label="実機 最終traj")
-        ax.plot(t_vec, v_sim, "r:", lw=1.5, label="シム DP出力")
+        ax.plot(t_vec, v_sim, "r:", lw=1.5, label=f"{sim_name} DP出力")
         ax.fill_between(t_vec, v_dp, v_final, alpha=0.2, color="blue", label="optimizer補正")
         ax.axvline(0, color="gray", lw=0.8, ls="--", alpha=0.6)
         ax.set_title(f"d={d}m 地点の計画速度")
@@ -476,7 +484,7 @@ def _run_final_planning(  # noqa: PLR0915
 
     for ax, title in [
         (ax_diff_optimizer, "optimizer補正量\n(最終traj - DP出力) [実機]"),
-        (ax_diff_realvsim, "シム - 実機 DP計画速度差"),
+        (ax_diff_realvsim, f"{sim_name} - 実機 DP計画速度差"),
     ]:
         ax.axhline(0, color="gray", lw=0.5)
         ax.axvline(0, color="gray", lw=0.8, ls="--", alpha=0.6)
@@ -499,10 +507,10 @@ def _run_final_planning(  # noqa: PLR0915
         df_vel_sim = df_vel_sim[df_vel_sim["tr"] >= -1]
         ax_summary.plot(
             df_vel_sim["tr"].values, df_vel_sim["lon_vel"].values,
-            "r-", lw=2, ls="--", label="シム actual速度",
+            "r-", lw=2, ls="--", label=f"{sim_name} actual速度",
         )
         dp0_sim = frames_to_series(frames_sim_dp, t_vec, 0)
-        ax_summary.plot(t_vec, dp0_sim, "r:", lw=1.5, alpha=0.7, label="シム DP d=0")
+        ax_summary.plot(t_vec, dp0_sim, "r:", lw=1.5, alpha=0.7, label=f"{sim_name} DP d=0")
     dp0_real = frames_to_series(frames_dp, t_vec, 0)
     fin0_real = frames_to_series(frames_final, t_vec, 0)
     ax_summary.plot(t_vec, dp0_real, "k:", lw=1.5, label="実機 DP d=0")

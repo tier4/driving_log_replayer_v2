@@ -38,6 +38,7 @@ from .lib._io import (
     load_velocity,
     resolve_lite_bag,
     resolve_primary_sim_bag,
+    sim_tag_from_bag,
 )
 from .lib._params_utils import add_params_annotation, setup_jp_font
 from .lib._runtime_config import RuntimeConfig, add_common_cli_arguments, build_runtime_config
@@ -149,7 +150,7 @@ def print_diagnosis(real: dict, sim: dict) -> None:
         )
 
 
-def plot_detailed(real: dict, sim: dict, cfg: RuntimeConfig) -> None:
+def plot_detailed(real: dict, sim: dict, cfg: RuntimeConfig, sim_name: str = "シム") -> None:
     t_vec = np.linspace(-2, 27, 300)
 
     dists, lons, lats = [], [], []
@@ -190,9 +191,9 @@ def plot_detailed(real: dict, sim: dict, cfg: RuntimeConfig) -> None:
 
     ax = axes[0]
     ax.plot(t_vec, rv, "k-", lw=2, label="実機 actual")
-    ax.plot(t_vec, sv, color="#e05c00", lw=2, ls="--", label="シム actual")
+    ax.plot(t_vec, sv, color="#e05c00", lw=2, ls="--", label=f"{sim_name} actual")
     ax.plot(t_vec, rc, "k:", lw=1.2, alpha=0.6, label="実機 cmd")
-    ax.plot(t_vec, sc, color="#e05c00", lw=1.2, ls=":", alpha=0.6, label="シム cmd")
+    ax.plot(t_vec, sc, color="#e05c00", lw=1.2, ls=":", alpha=0.6, label=f"{sim_name} cmd")
     ax.fill_between(t_vec, rv, sv, alpha=0.15, color="red", label="速度差")
     ax.set_ylabel("速度 [m/s]")
     ax.set_title("速度（actual/cmd）")
@@ -201,18 +202,18 @@ def plot_detailed(real: dict, sim: dict, cfg: RuntimeConfig) -> None:
     ax.axvline(0, color="gray", lw=0.8, ls="--", alpha=0.6)
 
     ax = axes[1]
-    ax.plot(t_vec, sv - rv, color="#e05c00", lw=2, ls="--", label="actual差 (sim-real)")
-    ax.plot(t_vec, sc - rc, color="#e05c00", lw=1.5, ls=":", alpha=0.7, label="cmd差 (sim-real)")
+    ax.plot(t_vec, sv - rv, color="#e05c00", lw=2, ls="--", label=f"actual差 ({sim_name}−実機)")
+    ax.plot(t_vec, sc - rc, color="#e05c00", lw=1.5, ls=":", alpha=0.7, label=f"cmd差 ({sim_name}−実機)")
     ax.axhline(0, color="gray", lw=0.5)
     ax.set_ylabel("m/s")
-    ax.set_title("速度差（シム − 実機）")
+    ax.set_title(f"速度差（{sim_name} − 実機）")
     ax.legend(fontsize=8)
     ax.grid(True, lw=0.4)
     ax.axvline(0, color="gray", lw=0.8, ls="--", alpha=0.6)
 
     ax = axes[2]
     ax.plot(t_vec, rs, "k-", lw=2, label="実機 actual")
-    ax.plot(t_vec, ss, color="#e05c00", lw=2, ls="--", label="シム actual")
+    ax.plot(t_vec, ss, color="#e05c00", lw=2, ls="--", label=f"{sim_name} actual")
     ax.set_ylabel("deg")
     ax.set_title("ステアリング角応答")
     ax.legend(fontsize=8)
@@ -220,10 +221,10 @@ def plot_detailed(real: dict, sim: dict, cfg: RuntimeConfig) -> None:
     ax.axvline(0, color="gray", lw=0.8, ls="--", alpha=0.6)
 
     ax = axes[3]
-    ax.plot(t_vec, yaw_diff, color="purple", lw=2, label="yaw差 (sim-real) [deg]")
+    ax.plot(t_vec, yaw_diff, color="purple", lw=2, label=f"yaw差 ({sim_name}−実機) [deg]")
     ax.axhline(0, color="gray", lw=0.5)
     ax.set_ylabel("deg")
-    ax.set_title("ヨー角差（シム − 実機）")
+    ax.set_title(f"ヨー角差（{sim_name} − 実機）")
     ax.legend(fontsize=8)
     ax.grid(True, lw=0.4)
     ax.axvline(0, color="gray", lw=0.8, ls="--", alpha=0.6)
@@ -319,7 +320,7 @@ def main() -> None:
 
     print_diagnosis(real, sim)
     write_curve_summary(real, sim, cfg)
-    plot_detailed(real, sim, cfg)
+    plot_detailed(real, sim, cfg, sim_name=sim_tag_from_bag(sim_bag))
 
 
 if __name__ == "__main__":

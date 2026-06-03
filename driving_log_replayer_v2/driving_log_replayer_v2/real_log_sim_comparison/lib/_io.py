@@ -238,6 +238,19 @@ def resolve_lite_bag(lite_dir: Path, name_stem: str) -> Path | None:
     return None
 
 
+def sim_tag_from_bag(bag: Path) -> str:
+    """sim lite bag のパスから run tag を取り出す (例: sim_normal.lite.mcap → sim_normal)。
+
+    プロットの凡例・タイトルに「どのシミュレータか」を表示するための表示名として使う。
+    """
+    name = Path(bag).name
+    if name.endswith(".mcap"):
+        name = name[: -len(".mcap")]
+    if name.endswith(".lite"):
+        name = name[: -len(".lite")]
+    return name
+
+
 def resolve_primary_sim_bag(lite_dir: Path) -> Path | None:
     """比較対象の sim lite を自動検出する (real を除く sim_*.lite、sim_normal を優先)。
 
@@ -249,8 +262,7 @@ def resolve_primary_sim_bag(lite_dir: Path) -> Path | None:
     stems: list[str] = []
     for pat in ("sim_*.lite", "sim_*.lite.mcap"):
         for p in lite_dir.glob(pat):
-            stem = p.name[: -len(".mcap")] if p.name.endswith(".mcap") else p.name
-            stem = stem[: -len(".lite")] if stem.endswith(".lite") else stem
+            stem = sim_tag_from_bag(p)
             if stem and stem not in stems:
                 stems.append(stem)
     if not stems:
