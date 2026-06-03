@@ -64,7 +64,10 @@ def parabolic_min(xs: list[float], ys: list[float]) -> float | None:
 
 
 def rmse_by_horizon(df: pd.DataFrame) -> dict[int, dict[str, float]]:
-    """horizon 別の終端誤差 RMSE を返す: {N: {"pos","long","lat" [cm], "yaw" [deg]}}。"""
+    """horizon 別の終端誤差 RMSE を返す。
+
+    {N: {"pos","long","lat" [cm], "yaw" [deg], "steer" [deg]}}
+    """
 
     def _rms(v: np.ndarray) -> float:
         return float(np.sqrt(np.nanmean(np.asarray(v, dtype=float) ** 2)))
@@ -77,5 +80,6 @@ def rmse_by_horizon(df: pd.DataFrame) -> dict[int, dict[str, float]]:
             "long": _rms(sub["err_ds_long"].values) * 100.0,
             "lat": _rms(sub["err_ds_lat"].values) * 100.0,
             "yaw": _rms(sub["yaw_err_deg"].values),
+            "steer": _rms(sub["err_steer"].values) * 180.0 / math.pi,
         }
     return out

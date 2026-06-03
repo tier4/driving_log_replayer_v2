@@ -70,6 +70,7 @@ _METRIC_INFO = {
     "lat": ("横方向 RMSE", "cm", "lat_rmse_cm"),
     "long": ("縦方向 RMSE", "cm", "long_rmse_cm"),
     "pos": ("位置 RMSE", "cm", "pos_rmse_cm"),
+    "steer": ("ステア RMSE", "deg", "steer_rmse_deg"),
 }
 
 
@@ -91,6 +92,10 @@ class SweepSpec:
     affects_gt: bool = False
     # params 欠落時にモデルが使う実効既定値 (k_us=0, scaling=1 等)。仕様値表示にも使う。
     default: float | None = None
+    # 自動端拡張の物理的上下限 (これを超える拡張はしない)
+    bounds: tuple[float, float] = (-float("inf"), float("inf"))
+    # sweep 図に同定メトリクスと並べて表示する副メトリクス
+    secondary_metrics: tuple[str, ...] = ("pos",)
 
     def base_value(self, base_params: dict) -> float | None:
         v = base_params.get(self.name, self.default)
@@ -110,43 +115,57 @@ SWEEP_SPECS: list[SweepSpec] = [
         "k_us", "アンダーステア係数", "rad/(m/s²)", "yaw",
         grid_abs=(0.0, 0.005, 0.01, 0.015, 0.02, 0.025, 0.03, 0.04, 0.05),
         default=0.0,
+        bounds=(0.0, 0.1),
     ),
     SweepSpec(
         "steer_time_constant", "ステア時定数", "s", "yaw",
         grid_rel=(0.25, 0.5, 0.75, 1.0, 1.5, 2.0, 3.0),
+        bounds=(0.01, 2.0),
+        secondary_metrics=("steer", "pos"),
     ),
     SweepSpec(
         "steer_time_delay", "ステアむだ時間", "s", "yaw",
         grid_rel=(0.0, 0.5, 1.0, 1.5, 2.0, 3.0),
         affects_gt=True,  # delay queue 長 → 過去 cmd 窓の拡張幅が変わる
+        bounds=(0.0, 1.0),
+        secondary_metrics=("steer", "pos"),
     ),
     SweepSpec(
         "steer_bias", "ステアバイアス", "rad", "lat",
         grid_abs=(-0.01, -0.005, -0.002, -0.001, 0.0, 0.0005, 0.001, 0.002, 0.005, 0.01),
+        bounds=(-0.05, 0.05),
+        secondary_metrics=("steer", "pos"),
     ),
     SweepSpec(
         "steer_dead_band", "ステア不感帯", "rad", "lat",
         grid_abs=(0.0, 0.001, 0.002, 0.005, 0.01, 0.02),
+        bounds=(0.0, 0.05),
+        secondary_metrics=("steer", "pos"),
     ),
     SweepSpec(
         "debug_steer_scaling_factor", "ステアスケーリング", "-", "yaw",
         grid_abs=(0.80, 0.85, 0.90, 0.95, 1.0, 1.05, 1.10, 1.15, 1.20),
         default=1.0,
+        bounds=(0.5, 1.5),
+        secondary_metrics=("steer", "pos"),
     ),
     # --- 縦方向系 (rollout は加減速の全区間を含むため発進フィットより拘束が広い) ---
     SweepSpec(
         "acc_time_constant", "加速度時定数", "s", "long",
         grid_rel=(0.25, 0.5, 0.75, 1.0, 1.5, 2.0, 3.0),
+        bounds=(0.01, 2.0),
     ),
     SweepSpec(
         "acc_time_delay", "加速度むだ時間", "s", "long",
         grid_rel=(0.0, 0.5, 1.0, 1.5, 2.0, 3.0),
         affects_gt=True,
+        bounds=(0.0, 1.0),
     ),
     SweepSpec(
         "debug_acc_scaling_factor", "加速度スケーリング", "-", "long",
         grid_abs=(0.80, 0.85, 0.90, 0.95, 1.0, 1.05, 1.10, 1.15, 1.20),
         default=1.0,
+        bounds=(0.5, 1.5),
     ),
 ]
 
@@ -205,6 +224,7 @@ def _rmse_row(rmse_at_h: dict[str, float]) -> dict:
         "pos_rmse_cm": rmse_at_h["pos"],
         "lat_rmse_cm": rmse_at_h["lat"],
         "long_rmse_cm": rmse_at_h["long"],
+        "steer_rmse_deg": rmse_at_h["steer"],
     }
 
 
@@ -216,10 +236,12 @@ def run_param_sweep(
     grid: list[float],
     horizons: tuple[int, ...],
     stride: int,
+    gt: dict | None = None,
 ) -> pd.DataFrame:
     """spec のグリッドを sweep し horizon 別 RMSE を集計した DataFrame を返す。"""
     # GT がパラメータ非依存なら 1 回だけ計算して共有 (run_rollout docstring 参照)
-    gt = None if spec.affects_gt else s5._prepare_gt(data, t0_ns, base_params)
+    if gt is None and not spec.affects_gt:
+        gt = s5._prepare_gt(data, t0_ns, base_params)
     h_max = max(horizons)
 
     rows: list[dict] = []
@@ -251,6 +273,91 @@ def identify(res: pd.DataFrame, spec: SweepSpec, h_max: int) -> dict:
         "parabolic_value": parabolic_min(xs, ys),
         "at_edge": grid_best_i in (0, len(xs) - 1),
     }
+
+
+# 端拡張: 1 回あたりの追加点数と最大拡張回数
+_EXTEND_POINTS = 2
+_MAX_EXTENSIONS = 3
+
+
+def _extension_points(grid: list[float], low_edge: bool, bounds: tuple[float, float]) -> list[float]:
+    """グリッド端の外側に追加する点を生成する。
+
+    正値のみのグリッドは端の隣接比を保つ等比、それ以外 (0 や負を含む) は端の
+    間隔を保つ等差で外挿する。spec.bounds を超える点は捨てる。
+    """
+    lo_b, hi_b = bounds
+    pts: list[float] = []
+    if low_edge:
+        if all(v > 0 for v in grid) and grid[1] > 0:
+            ratio = grid[0] / grid[1]  # < 1
+            v = grid[0]
+            for _ in range(_EXTEND_POINTS):
+                v = round(v * ratio, 6)
+                pts.append(v)
+        else:
+            step = grid[1] - grid[0]
+            v = grid[0]
+            for _ in range(_EXTEND_POINTS):
+                v = round(v - step, 6)
+                pts.append(v)
+        pts = [v for v in pts if v >= lo_b]
+    else:
+        if all(v > 0 for v in grid) and grid[-2] > 0:
+            ratio = grid[-1] / grid[-2]  # > 1
+            v = grid[-1]
+            for _ in range(_EXTEND_POINTS):
+                v = round(v * ratio, 6)
+                pts.append(v)
+        else:
+            step = grid[-1] - grid[-2]
+            v = grid[-1]
+            for _ in range(_EXTEND_POINTS):
+                v = round(v + step, 6)
+                pts.append(v)
+        pts = [v for v in pts if v <= hi_b]
+    return pts
+
+
+def sweep_with_extension(
+    data: dict,
+    t0_ns: int,
+    base_params: dict,
+    spec: SweepSpec,
+    grid: list[float],
+    horizons: tuple[int, ...],
+    stride: int,
+) -> tuple[pd.DataFrame, dict, list[float]]:
+    """グリッド sweep を実行し、最小が端なら spec.bounds 内で自動拡張して再同定する。
+
+    「グリッド端 (範囲拡大推奨)」を人手で潰さなくて済むよう、端方向へ
+    _EXTEND_POINTS 点ずつ最大 _MAX_EXTENSIONS 回外挿する (等比 or 等差)。
+    bounds に到達してなお端の場合は at_edge のまま返す (物理的に意味のある
+    範囲の端であることが summary の注で分かる)。
+    """
+    gt = None if spec.affects_gt else s5._prepare_gt(data, t0_ns, base_params)
+    h_max = max(horizons)
+    res = run_param_sweep(data, t0_ns, base_params, spec, grid, horizons, stride, gt=gt)
+    ident = identify(res, spec, h_max)
+    grid = sorted(grid)
+
+    for _ in range(_MAX_EXTENSIONS):
+        if not ident["at_edge"]:
+            break
+        low_edge = ident["grid_value"] == grid[0]
+        new_pts = _extension_points(grid, low_edge, spec.bounds)
+        new_pts = [v for v in new_pts if v not in grid]
+        if not new_pts:
+            break  # bounds に到達
+        print(f"  [端拡張] {spec.name}: {'下' if low_edge else '上'}方向へ {new_pts} を追加")
+        res_ext = run_param_sweep(
+            data, t0_ns, base_params, spec, new_pts, horizons, stride, gt=gt
+        )
+        res = pd.concat([res, res_ext], ignore_index=True)
+        grid = sorted(grid + new_pts)
+        ident = identify(res, spec, h_max)
+
+    return res, ident, grid
 
 
 def run_pair_sweep(
@@ -310,8 +417,8 @@ def _scatter_fit(
     ident_label: str = "",
     ref_slope: float | None = None,
     ref_label: str = "",
-) -> None:
-    """散布 + 実機 1 次フィット + (任意) 同定値/参照の傾き線。"""
+) -> np.ndarray | None:
+    """散布 + 実機 1 次フィット + (任意) 同定値/参照の傾き線。fit 係数 (slope, intercept) を返す。"""
     ax.scatter(x, y, s=3, alpha=0.3, color="#4472C4", rasterized=True)
     xs = np.linspace(np.nanmin(x), np.nanmax(x), 50)
     coef = _fit_line(x, y)
@@ -328,6 +435,7 @@ def _scatter_fit(
     _set_evidence_title(ax, title, source)
     ax.grid(True, lw=0.5, alpha=0.6)
     ax.legend(fontsize=8)
+    return coef
 
 
 def _set_evidence_title(ax, title: str, source: str) -> None:
@@ -385,7 +493,7 @@ def _ev_k_us(ax, ev, ident, base_value) -> None:
     vx, wz, steer = ev["vx"][mask], ev["wz"][mask], ev["steer"][mask]
     x = wz * vx  # 横加速度 ay [m/s²]
     y = np.tan(steer) - ev["wb"] * wz / vx  # [rad]
-    _scatter_fit(
+    coef = _scatter_fit(
         ax, x, y,
         "横加速度 wz·vx [m/s²]", "tan(δ実測) − L·wz/vx [rad]",
         "実機ログ根拠: understeer 勾配 (傾き = k_us)",
@@ -393,6 +501,8 @@ def _ev_k_us(ax, ev, ident, base_value) -> None:
         ident_slope=_ident_value(ident), ident_label=f"sweep 同定 k_us={_ident_value(ident):.4g}",
         ref_slope=base_value, ref_label=f"仕様値 {base_value:.4g}" if base_value is not None else "",
     )
+    return {"value": float(coef[0]) if coef is not None else None,
+            "desc": "understeer 勾配 fit (横加速度 vs ステア残差)"}
 
 
 def _ev_steer_scaling(ax, ev, ident, base_value) -> None:
@@ -400,7 +510,7 @@ def _ev_steer_scaling(ax, ev, ident, base_value) -> None:
     mask = ev["vx"] > 1.0
     x = np.degrees(ev["steer_des"][mask])
     y = np.degrees(ev["steer"][mask])
-    _scatter_fit(
+    coef = _scatter_fit(
         ax, x, y,
         "指令ステア角 [deg]", "実測ステア角 [deg]",
         "実機ログ根拠: 指令 vs 実測ステア (傾き = scaling)",
@@ -409,6 +519,8 @@ def _ev_steer_scaling(ax, ev, ident, base_value) -> None:
         ident_label=f"sweep 同定 scaling={_ident_value(ident):.4g}",
         ref_slope=base_value, ref_label=f"仕様値 {base_value:.4g}",
     )
+    return {"value": float(coef[0]) if coef is not None else None,
+            "desc": "指令→実測ステア fit 傾き"}
 
 
 def _ev_steer_tc(ax, ev, ident, base_value) -> None:
@@ -423,10 +535,13 @@ def _ev_steer_tc(ax, ev, ident, base_value) -> None:
         "実測: steering_status  指令: control_cmd (むだ時間は未補正)",
     )
     coef = _fit_line(x, y)
+    tc_fit = None
     if coef is not None and coef[0] > 1e-6:
-        ax.plot([], [], " ", label=f"→ tc_fit ≈ {1.0 / coef[0]:.3f}s "
+        tc_fit = 1.0 / coef[0]
+        ax.plot([], [], " ", label=f"→ tc_fit ≈ {tc_fit:.3f}s "
                 f"(sweep 同定≈{_ident_value(ident):.3f}s / 仕様 {base_value:.3f}s)")
         ax.legend(fontsize=8)
+    return {"value": tc_fit, "desc": "1次遅れ勾配 fit (Δsteer vs dδ/dt)"}
 
 
 def _first_order_filter(u: np.ndarray, t: np.ndarray, tc: float) -> np.ndarray:
@@ -482,18 +597,20 @@ def _ev_steer_tc_corr(ax, ev, ident, base_value) -> None:
     )
     ax.grid(True, lw=0.5, alpha=0.6, which="both")
     ax.legend(fontsize=8)
+    return {"value": tc_best, "desc": "相関係数解析 (1次遅れフィルタ tc 走査の相関最大)"}
 
 
 def _ev_steer_delay(ax, ev, ident, base_value) -> None:
     marks = [(_ident_value(ident), "red", "--", f"sweep 同定≈{_ident_value(ident):.3f}s")]
     if base_value is not None:
         marks.append((base_value, "gray", ":", f"仕様値 {base_value:.3f}s"))
-    _lag_corr_plot(
+    peak = _lag_corr_plot(
         ax, ev, ev["steer_des"], ev["steer"],
         "実機ログ根拠: 指令→実測ステアのラグ相関",
         "実測: steering_status  指令: control_cmd (微分同士の相互相関)",
         marks=marks,
     )
+    return {"value": peak, "desc": "ラグ相関ピーク (≈むだ時間; tc 成分を一部含む)"}
 
 
 def _ev_steer_bias(ax, ev, ident, base_value) -> None:
@@ -515,6 +632,7 @@ def _ev_steer_bias(ax, ev, ident, base_value) -> None:
                         "実測: steering_status × kinematic_state")
     ax.grid(True, lw=0.5, alpha=0.6)
     ax.legend(fontsize=8)
+    return {"value": mean if np.isfinite(mean) else None, "desc": "直進域ステア残差の平均"}
 
 
 def _ev_steer_dead_band(ax, ev, ident, base_value) -> None:
@@ -536,6 +654,7 @@ def _ev_steer_dead_band(ax, ev, ident, base_value) -> None:
                         "実測: steering_status  指令: control_cmd (vx>1)")
     ax.grid(True, lw=0.5, alpha=0.6)
     ax.legend(fontsize=8)
+    return {"value": None, "desc": "小指令域の平坦域 (視覚確認; 数値推定なし)"}
 
 
 def _ev_acc_tc(ax, ev, ident, base_value) -> None:
@@ -549,28 +668,32 @@ def _ev_acc_tc(ax, ev, ident, base_value) -> None:
         "実測: localization/acceleration  指令: control_cmd (むだ時間は未補正)",
     )
     coef = _fit_line(x, y)
+    tc_fit = None
     if coef is not None and coef[0] > 1e-6:
-        ax.plot([], [], " ", label=f"→ tc_fit ≈ {1.0 / coef[0]:.3f}s "
+        tc_fit = 1.0 / coef[0]
+        ax.plot([], [], " ", label=f"→ tc_fit ≈ {tc_fit:.3f}s "
                 f"(sweep 同定≈{_ident_value(ident):.3f}s / 仕様 {base_value:.3f}s)")
         ax.legend(fontsize=8)
+    return {"value": tc_fit, "desc": "1次遅れ勾配 fit (Δacc vs da/dt; 散布大のため参考値)"}
 
 
 def _ev_acc_delay(ax, ev, ident, base_value) -> None:
     marks = [(_ident_value(ident), "red", "--", f"sweep 同定≈{_ident_value(ident):.3f}s")]
     if base_value is not None:
         marks.append((base_value, "gray", ":", f"仕様値 {base_value:.3f}s"))
-    _lag_corr_plot(
+    peak = _lag_corr_plot(
         ax, ev, ev["accel_des"], ev["ax"],
         "実機ログ根拠: 指令→実測加速度のラグ相関",
         "実測: localization/acceleration  指令: control_cmd (微分同士の相互相関)",
         marks=marks,
     )
+    return {"value": peak, "desc": "ラグ相関ピーク (≈むだ時間; tc 成分を一部含む)"}
 
 
 def _ev_acc_scaling(ax, ev, ident, base_value) -> None:
     x = ev["accel_des"]
     y = ev["ax"]
-    _scatter_fit(
+    coef = _scatter_fit(
         ax, x, y,
         "指令加速度 [m/s²]", "実測加速度 [m/s²]",
         "実機ログ根拠: 指令 vs 実測加速度 (傾き = scaling)",
@@ -579,6 +702,8 @@ def _ev_acc_scaling(ax, ev, ident, base_value) -> None:
         ident_label=f"sweep 同定 scaling={_ident_value(ident):.4g}",
         ref_slope=base_value, ref_label=f"仕様値 {base_value:.4g}",
     )
+    return {"value": float(coef[0]) if coef is not None else None,
+            "desc": "指令→実測加速度 fit 傾き (応答遅れの散布を含む参考値)"}
 
 
 # パラメータ名 → 根拠プロット関数 (ax, ev, ident, base_value) のリスト (パネル数分)
@@ -630,37 +755,41 @@ def plot_sweep(
     sweep はモデル経由の同定、根拠パネルは実機ログの直接観察 — 両者の一致が
     同定の信頼性のクロスチェックになる。
     """
-    metric_label, metric_unit, metric_col = _METRIC_INFO[spec.metric]
+    metric_label, metric_unit, _ = _METRIC_INFO[spec.metric]
     horizons = sorted(res["horizon"].unique())
     evidence = evidence or []
-    n_panels = 2 + len(evidence)
+    # パネル構成: [同定メトリクス] + 副メトリクス (spec.secondary_metrics) + 根拠パネル群
+    sweep_metrics = [spec.metric] + [m for m in spec.secondary_metrics if m != spec.metric]
+    n_panels = len(sweep_metrics) + len(evidence)
     fig, axes = plt.subplots(1, n_panels, figsize=(6.5 * n_panels, 5))
-    ax1, ax2 = axes[0], axes[1]
     cmap = plt.get_cmap("viridis")
-    for idx, horizon in enumerate(horizons):
-        sub = res[res["horizon"] == horizon].sort_values("value")
-        color = cmap(idx / max(1, len(horizons) - 1))
-        v = sub["value"].to_numpy()
-        ax1.plot(v, sub[metric_col].to_numpy(), "o-", color=color, label=f"N={horizon}")
-        ax2.plot(v, sub["pos_rmse_cm"].to_numpy(), "o-", color=color, label=f"N={horizon}")
     ident = identified["parabolic_value"]
     if ident is None:
         ident = identified["grid_value"]
-    for ax, ylab, title in (
-        (ax1, f"{metric_label} [{metric_unit}]", f"{metric_label} vs {spec.name}"),
-        (ax2, "位置 RMSE [cm]", f"位置 RMSE vs {spec.name}"),
-    ):
+    for ax, metric in zip(axes, sweep_metrics):
+        m_label, m_unit, m_col = _METRIC_INFO[metric]
+        for idx, horizon in enumerate(horizons):
+            sub = res[res["horizon"] == horizon].sort_values("value")
+            color = cmap(idx / max(1, len(horizons) - 1))
+            ax.plot(sub["value"].to_numpy(), sub[m_col].to_numpy(), "o-", color=color,
+                    label=f"N={horizon}")
         ax.axvline(ident, color="red", ls="--", lw=1.2, label=f"identified ≈{ident:.4g}")
         if base_value is not None:
             ax.axvline(base_value, color="gray", ls=":", lw=1.2,
                        label=f"仕様値 {base_value:.4g}")
         ax.set_xlabel(f"{spec.name} [{spec.unit}]")
-        ax.set_ylabel(ylab)
+        ax.set_ylabel(f"{m_label} [{m_unit}]")
+        title = f"{m_label} vs {spec.name}"
+        if metric == spec.metric:
+            title += " (同定メトリクス)"
         ax.set_title(title, fontsize=10)
         ax.grid(True, lw=0.5, alpha=0.6)
         ax.legend(fontsize=8)
+    ev_results: list[dict] = []
     for i, ev_fn in enumerate(evidence):
-        ev_fn(axes[2 + i])
+        ret = ev_fn(axes[len(sweep_metrics) + i])
+        if isinstance(ret, dict):
+            ev_results.append(ret)
     fig.suptitle(
         f"{spec.label} ({spec.name}) スイープ同定 (free-running rollout, "
         f"同定 = N={identified['horizon']} の {metric_label} 最小化)",
@@ -671,6 +800,7 @@ def plot_sweep(
     fig.savefig(out_path, dpi=150, bbox_inches="tight")
     plt.close(fig)
     print(f"  Saved: {out_path}")
+    return ev_results
 
 
 def plot_pair_sweep(
@@ -859,7 +989,7 @@ def write_summary(
         )
         pct = _improvement_pct(rec)
         pct_str = f"{pct:.1f}%" if pct is not None else "—"
-        note = "グリッド端 (範囲拡大推奨)" if ident["at_edge"] else ""
+        note = "グリッド端 (自動拡張後も端 = bounds 限界)" if ident["at_edge"] else ""
         lines.append(
             f"| {spec.name} ({spec.label}) | {base_str} | "
             f"{ident['grid_value']:.4g} / {parab_str} | {delta_str} | "
@@ -873,8 +1003,84 @@ def write_summary(
         "brake_time_constant は減速モデルが別実装のため Stage 9 (brake_sweep/) が担当。",
         "",
     ]
+    lines += _build_discussion(records)
     out_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
     print(f"  Saved: {out_path}")
+
+
+def _judge_evidence(sweep_v: float, ev_v: float | None, spec_v: float | None) -> str:
+    """sweep 同定値と実機ログ直接推定の整合判定 (仕様値からの偏差比 r = Δ直接/Δsweep)。"""
+    if ev_v is None:
+        return "—"
+    ref = spec_v if spec_v is not None else 0.0
+    d_s = sweep_v - ref
+    d_e = ev_v - ref
+    # sweep がほぼ仕様値なら偏差比 r が数値的に暴れるため先に判定する
+    eps = 0.10 * max(abs(ref), abs(sweep_v), 1e-9)
+    if abs(d_s) <= eps:
+        return "sweep は仕様値近傍 (調整不要の示唆)"
+    r = d_e / d_s
+    if 0.5 <= r <= 2.0:
+        return "**整合** — 物理パラメータの補正として妥当"
+    if 0.25 <= r < 0.5 or 2.0 < r <= 4.0:
+        return "弱い整合 — 方向は同じだが大きさが乖離"
+    return "**乖離** — sweep 値はモデル外誤差の代理吸収の疑い (物理値は直接推定側を参照)"
+
+
+def _build_discussion(records: list[dict]) -> list[str]:
+    """sweep 同定値 vs 実機ログ直接推定の比較表と注意点を自動生成する。
+
+    根拠パネル (evidence) が返す直接推定値はデータから計算した一次情報。
+    rollout sweep の同定値が直接推定と乖離する場合、その値はモデル外の誤差
+    (例: bicycle モデルに無いヨー応答遅れ) を代理吸収した「実効値」であり、
+    物理パラメータの修正としてそのまま採用すべきでないことを表で明示する。
+    """
+    lines = [
+        "## 考察: sweep 同定値 vs 実機ログ直接推定\n",
+        "rollout sweep (モデル経由の最適化) と、根拠パネルの実機ログ直接推定 (モデル非経由) の比較。"
+        "両者が整合するパラメータは物理的な補正として信頼でき、乖離するパラメータの sweep 値は"
+        "「rollout 誤差を最小化する実効値」(他の未モデル化誤差の代理吸収) として扱うこと。\n",
+        "",
+        "| param | sweep 同定値 | 実機直接推定 | 推定方法 | 判定 |",
+        "|---|---:|---:|---|---|",
+    ]
+    n_diverge = 0
+    for rec in records:
+        spec, ident = rec["spec"], rec["ident"]
+        sweep_v = ident["parabolic_value"]
+        if sweep_v is None:
+            sweep_v = ident["grid_value"]
+        for ev in rec.get("evidence") or []:
+            ev_v = ev.get("value")
+            judge = _judge_evidence(sweep_v, ev_v, rec["base_value"])
+            if "乖離" in judge and "弱い" not in judge:
+                n_diverge += 1
+            ev_str = f"{ev_v:.4g}" if ev_v is not None else "—"
+            lines.append(
+                f"| {spec.name} | {sweep_v:.4g} | {ev_str} | {ev['desc']} | {judge} |"
+            )
+    notes = [
+        "",
+        "### 注意点 (自動生成)",
+        "- 判定は仕様値からの偏差比 r = (直接推定 − 仕様値)/(sweep 同定値 − 仕様値) による"
+        "目安 (0.5≤r≤2 で整合、sweep 偏差が仕様値の 10% 以下なら仕様値近傍)。"
+        "最終判断は各 sweep 図の根拠パネルを参照。",
+        "- ステア系パラメータの sweep 図にはステア RMSE パネルを併記している。"
+        "同定メトリクス (yaw 等) が改善してもステア RMSE が悪化する場合、"
+        "その同定値はステア応答以外の遅れの代理吸収である。",
+    ]
+    edge_params = [r["spec"].name for r in records if r["ident"]["at_edge"]]
+    if edge_params:
+        notes.append(
+            f"- bounds 限界でも端のパラメータ: {', '.join(edge_params)} — "
+            "物理的に意味のある範囲では最小に到達せず。モデル構造側の検討を推奨。"
+        )
+    if n_diverge:
+        notes.append(
+            f"- 「乖離」判定が {n_diverge} 件。これらを sim パラメータとして採用する場合は"
+            "実効値である (物理値ではない) ことを認識した上で、結合探索 (相関考慮) で決めること。"
+        )
+    return lines + notes + [""]
 
 
 # ---------------------------------------------------------------------------
@@ -955,21 +1161,23 @@ def main() -> None:
         grid = grid_overrides.get(spec.name) or spec.grid(base_params)
         base_value = spec.base_value(base_params)
         print(f"\n=== sweep: {spec.name} ({spec.label})  grid={grid} ===")
-        res = run_param_sweep(data, t0_ns, base_params, spec, grid, horizons, args.stride)
-        ident = identify(res, spec, h_max)
+        res, ident, grid = sweep_with_extension(
+            data, t0_ns, base_params, spec, grid, horizons, args.stride
+        )
         res.to_csv(out_dir / f"{spec.name}_sweep.csv", index=False)
         evidence = [
             (lambda ax, _fn=fn, _i=ident, _b=base_value: _fn(ax, ev, _i, _b))
             for fn in _EVIDENCE_PLOTS.get(spec.name, [])
         ]
-        plot_sweep(res, spec, ident, base_value, base_params,
-                   out_dir / f"{spec.name}_sweep.svg", evidence=evidence)
+        ev_results = plot_sweep(res, spec, ident, base_value, base_params,
+                                out_dir / f"{spec.name}_sweep.svg", evidence=evidence)
         records.append({
             "spec": spec,
             "res": res,
             "ident": ident,
             "base_value": base_value,
             "rmse_at_spec": _rmse_at(res, ident, base_value),
+            "evidence": ev_results,
         })
 
         metric_label, _, _ = _METRIC_INFO[spec.metric]
@@ -978,8 +1186,8 @@ def main() -> None:
               f"グリッド={ident['grid_value']:.4g}"
               + (f", 放物線≈{parab:.4g}" if parab is not None else " (放物線: 端のため範囲外)"))
         if ident["at_edge"]:
-            print(f"  [WARN] 最小がグリッド端 ({spec.name}={ident['grid_value']:.4g})。"
-                  "真の最小はこの外側の可能性。--grid で範囲を広げて再実行を推奨。")
+            print(f"  [WARN] 自動拡張後も最小がグリッド端 ({spec.name}={ident['grid_value']:.4g})。"
+                  "bounds の端 (物理的に意味のある範囲の限界) に到達。")
 
     # --- 2D pair sweep ---
     for name_a, name_b, metric in PAIR_SPECS:

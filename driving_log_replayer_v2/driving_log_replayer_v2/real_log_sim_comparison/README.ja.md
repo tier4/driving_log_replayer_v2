@@ -263,6 +263,8 @@ steer_dead_band / debug_steer_scaling_factor / acc_time_constant / acc_time_dela
 debug_acc_scaling_factor。wheelbase は実測値が正しいため固定）をグリッドで sweep して
 free-running rollout を回し、最大 horizon の終端誤差 RMSE（横方向系=yaw/横、縦方向系=縦）を
 最小化する値を同定する（N=1 は dynamics パラメータに非感度なため大 N の rollout を使用）。
+最小がグリッド端の場合は端方向へ自動拡張して再スイープする（等比/等差外挿、各パラメータの
+物理的 bounds まで。bounds 到達後も端なら summary に注記）。
 k_us × steer_time_constant / k_us × debug_steer_scaling_factor の 2D ペア sweep ヒートマップも生成する。
 
 | ファイル | 内容 |
