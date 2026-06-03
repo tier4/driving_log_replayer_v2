@@ -16,6 +16,10 @@
     └── cases_summary.md   # N=1 詳細 RMSE 表 + horizon 別 RMSE 表
 
 欠損ケース (CSV が無い) は警告ログを出してスキップ。集約処理は continue できる。
+
+また、全ケースの CSV を持つ本ステージが nstep/<tag>/ のケース別図を
+「ケース横断で軸範囲を統一」して上書き再描画する (rerender_case_figures)。
+シミュレータ (ケース) ごとに図が分かれていてもレポートのタブ切替で軸が動かない。
 """
 
 from __future__ import annotations
@@ -69,6 +73,47 @@ def _load_case_csvs(nstep_root: Path, tags: list[str]) -> dict[str, pd.DataFrame
             continue
         out[tag] = df
     return out
+
+
+def rerender_case_figures(
+    case_dfs: dict[str, pd.DataFrame],
+    cases_cfg,
+    nstep_root: Path,
+    base_dir: Path,
+) -> None:
+    """ケース横断で軸範囲を統一して nstep/<tag>/ の図を再描画する。
+
+    step5 はケース単体実行のため各図の軸が自ケースの値域で自動スケールされ、
+    レポートのケース切替タブで軸が動いて比較しにくい。全ケースの CSV を持つ
+    step6 が、step5 のプロット関数 (LIMITS_DF 設定で統一軸モード) を呼び直して
+    同名ファイルを上書きする。実機データのみの図 (lateral_dynamics 等) は
+    ケース間で同一のため再描画しない。
+    """
+    from . import step5_analyze_nstep as s5  # noqa: PLC0415 (plotly 含む重 import のため遅延)
+
+    s5.LIMITS_DF = pd.concat(
+        [df.assign(case=tag) for tag, df in case_dfs.items()], ignore_index=True
+    )
+    try:
+        for case in cases_cfg.cases:
+            df = case_dfs.get(case.tag)
+            if df is None:
+                continue
+            params = s5._build_params()
+            params.update(case.params)
+            s5.BASE = base_dir
+            s5.OUT_DIR = nstep_root / case.tag
+            df1 = n1(df)
+            print(f"  [{case.tag}] ケース横断の統一軸で再描画")
+            s5.plot_error_growth(df, params)
+            s5.plot_error_timeseries(df, params)
+            s5.plot_error_vs_speed(df, params)
+            s5.plot_map_distribution(df, params)
+            s5.plot_overview(df1, params)
+            s5.plot_steering_analysis(df1, params)
+            s5.plot_cascade_error(df1, params)
+    finally:
+        s5.LIMITS_DF = None
 
 
 def plot_cascade_error_overlay(
@@ -423,6 +468,9 @@ def main() -> None:
         print("ERROR: 全 case の CSV が見つかりません。Stage 3 が成功したか確認してください",
               file=sys.stderr)
         sys.exit(1)
+
+    # ケース横断で軸範囲を統一して nstep/<tag>/ の図を上書き再描画
+    rerender_case_figures(case_dfs, cases_cfg, nstep_root, Path(args.base_dir))
 
     horizons = common_horizons(df["horizon"].unique() for df in case_dfs.values())
     plots_wanted = set(cases_cfg.overlay.plots)

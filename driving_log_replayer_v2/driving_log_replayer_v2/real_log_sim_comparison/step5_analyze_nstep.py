@@ -752,17 +752,26 @@ def plot_error_growth(df: pd.DataFrame, params: dict) -> None:
     horizons = sorted(rmse)
     pos = [rmse[h]["pos"] for h in horizons]
     yaw = [rmse[h]["yaw"] for h in horizons]
+    # ケース横断の統一上限 (LIMITS_DF に case 列があればケース別 RMSE の最大)
+    pos_max, yaw_max = max(pos), max(yaw)
+    if LIMITS_DF is not None and "case" in LIMITS_DF.columns:
+        for _, sub in LIMITS_DF.groupby("case"):
+            r = rmse_by_horizon(sub)
+            pos_max = max(pos_max, *(r[h]["pos"] for h in r))
+            yaw_max = max(yaw_max, *(r[h]["yaw"] for h in r))
     fig, ax1 = plt.subplots(figsize=(9, 5))
     fig.suptitle("N-step rollout 誤差成長 (free-running)", fontsize=11)
     ax1.plot(horizons, pos, "o-", color="#1f77b4", label="位置 RMSE [cm]")
     ax1.set_xlabel("rollout 長 N [step]  (N × SUB_DT 秒相当)")
     ax1.set_ylabel("位置 RMSE [cm]", color="#1f77b4")
     ax1.tick_params(axis="y", labelcolor="#1f77b4")
+    ax1.set_ylim(0, pos_max * 1.05)
     ax1.grid(True, lw=0.5, alpha=0.6)
     ax2 = ax1.twinx()
     ax2.plot(horizons, yaw, "s--", color="#d62728", label="yaw RMSE [deg]")
     ax2.set_ylabel("yaw RMSE [deg]", color="#d62728")
     ax2.tick_params(axis="y", labelcolor="#d62728")
+    ax2.set_ylim(0, yaw_max * 1.05)
     add_params_annotation(fig, params)
     fig.tight_layout()
     _save(fig, "error_growth")
@@ -814,6 +823,7 @@ def plot_overview(df: pd.DataFrame, params: dict) -> None:
     ax.axvline(0, color="green", lw=1.0, ls=":", alpha=0.8, label="AUTONOMOUS 開始")
     ax.set_xlabel("AUTONOMOUS 開始からの時刻 [s]")
     ax.set_ylabel("速度 [m/s]")
+    _unified_ylim(ax, ["real_vx", "sim_vx"], horizon=1)
     _set_title(
         ax, "速度: 実機 vs モデル", "実機: kinematic_state/twist.linear.x  モデル: state_[3]"
     )
@@ -845,6 +855,7 @@ def plot_overview(df: pd.DataFrame, params: dict) -> None:
     ax.axvline(0, color="green", lw=1.0, ls=":", alpha=0.8)
     ax.set_xlabel("AUTONOMOUS 開始からの時刻 [s]")
     ax.set_ylabel("縦方向誤差 [cm]")
+    _unified_ylim(ax, "err_ds_long", 100, horizon=1)
     _set_title(
         ax, "1ステップ縦方向誤差", "実機: kinematic_state/pose.position  モデル: state_[0,1]"
     )
@@ -861,6 +872,7 @@ def plot_overview(df: pd.DataFrame, params: dict) -> None:
     ax.axvline(0, color="green", lw=1.0, ls=":", alpha=0.8)
     ax.set_xlabel("AUTONOMOUS 開始からの時刻 [s]")
     ax.set_ylabel("横方向誤差 [cm]")
+    _unified_ylim(ax, "err_ds_lat", 100, horizon=1)
     _set_title(
         ax, "1ステップ横方向誤差", "実機: kinematic_state/pose.position  モデル: state_[0,1]"
     )
@@ -874,6 +886,55 @@ def plot_overview(df: pd.DataFrame, params: dict) -> None:
     fig.tight_layout()
     add_params_annotation(fig, params)
     _save(fig, "overview")
+
+
+# ケース横断の軸範囲統一用 (step6 が全ケース連結 DataFrame をセットして再描画する)。
+# None のとき各プロットは従来どおり自動スケール (step5 単体実行時)。
+LIMITS_DF: pd.DataFrame | None = None
+
+
+def _unified_ylim(
+    ax,
+    cols: list[str] | str,
+    scale: float = 1.0,
+    horizon: int | None = None,
+    symmetric: bool = False,
+    pad: float = 0.05,
+) -> None:
+    """LIMITS_DF (全ケース連結) から cols の値域を取り y 軸範囲を統一する。
+
+    LIMITS_DF 未設定なら何もしない (自動スケール)。シミュレータ (ケース) ごとに
+    プロットが分かれてもタブ切替で軸が動かないようにするための仕組み。
+    """
+    if LIMITS_DF is None:
+        return
+    df = LIMITS_DF if horizon is None else LIMITS_DF[LIMITS_DF["horizon"] == horizon]
+    cols = [cols] if isinstance(cols, str) else cols
+    arrs = [df[c].to_numpy(dtype=float) * scale for c in cols if c in df.columns]
+    if not arrs:
+        return
+    vals = np.concatenate(arrs)
+    vals = vals[np.isfinite(vals)]
+    if len(vals) == 0:
+        return
+    lo, hi = float(vals.min()), float(vals.max())
+    if symmetric:
+        m = max(abs(lo), abs(hi))
+        lo, hi = -m, m
+    span = (hi - lo) or 1.0
+    ax.set_ylim(lo - pad * span, hi + pad * span)
+
+
+def _unified_absmax(col: str, scale: float = 1.0, horizon: int | None = None) -> float | None:
+    """LIMITS_DF から col の |最大値| を返す (map_distribution の colorbar 統一用)。"""
+    if LIMITS_DF is None:
+        return None
+    df = LIMITS_DF if horizon is None else LIMITS_DF[LIMITS_DF["horizon"] == horizon]
+    if col not in df.columns:
+        return None
+    vals = df[col].to_numpy(dtype=float) * scale
+    vals = vals[np.isfinite(vals)]
+    return float(np.abs(vals).max()) if len(vals) else None
 
 
 def _repr_horizons(df: pd.DataFrame) -> list[int]:
@@ -906,6 +967,7 @@ def plot_error_timeseries(df: pd.DataFrame, params: dict) -> None:
         ax.axhline(0, color="black", lw=0.8)
         ax.axvline(0, color="green", lw=1.0, ls=":", alpha=0.8)
         ax.set_ylabel(f"{label} [{unit}]")
+        _unified_ylim(ax, col, scale)
         title = f"N-step 終端 {label} (実機 − モデル)"
         if col == "yaw_err_deg":
             title += f"\n{YAW_SEED_NOTE}"
@@ -947,6 +1009,7 @@ def plot_error_vs_speed(df: pd.DataFrame, params: dict) -> None:
             ax.axhline(0, color="black", lw=0.8)
             ax.set_xlabel("rollout 開始時点の速度 [m/s]")
             ax.set_ylabel(f"{label} [{unit}]")
+            _unified_ylim(ax, col, scale, horizon=h)
             title = f"{label} vs 速度 (N={h})"
             if col == "yaw_err_deg" and h == h_min:
                 title += f"\n{YAW_SEED_NOTE}"
@@ -992,6 +1055,7 @@ def plot_steering_analysis(df: pd.DataFrame, params: dict) -> None:
     ax.axvline(0, color="green", lw=1.0, ls=":", alpha=0.8, label="AUTONOMOUS 開始")
     ax.set_xlabel("AUTONOMOUS 開始からの時刻 [s]")
     ax.set_ylabel("ステア角 [deg]")
+    _unified_ylim(ax, ["real_steer_kend", "sim_steer_kend", "steer_des"], 180.0 / math.pi, horizon=1)
     _set_title(
         ax,
         "ステア角: 実機[k+1] vs モデル予測[k+1] vs 指令[k]",
@@ -1029,6 +1093,7 @@ def plot_steering_analysis(df: pd.DataFrame, params: dict) -> None:
     rmse_deg = float(np.sqrt(np.mean(err_deg**2)))
     ax.set_xlabel("AUTONOMOUS 開始からの時刻 [s]")
     ax.set_ylabel("予測誤差 [deg]")
+    _unified_ylim(ax, "err_steer", 180.0 / math.pi, horizon=1)
     _set_title(
         ax,
         f"1ステップ ステア予測誤差 (actual[k+1] − pred[k+1])  RMSE={rmse_deg:.4f}°",
@@ -1055,6 +1120,7 @@ def plot_steering_analysis(df: pd.DataFrame, params: dict) -> None:
     ax.axhline(0, color="black", lw=0.8)
     ax.set_xlabel("指令ステア角 [deg]")
     ax.set_ylabel("予測誤差 [deg]")
+    _unified_ylim(ax, "err_steer", 180.0 / math.pi, horizon=1)
     _set_title(
         ax,
         "ステア予測誤差 vs 指令ステア角（色=速度域）",
@@ -1095,19 +1161,19 @@ def plot_map_distribution(df: pd.DataFrame, params: dict) -> None:
     # 各行 = horizon、各列 = (列名, ラベル, 単位, データソース注)。
     # err_ay / err_vy / err_wz は sim_* がラッパー未 export のため一旦スキップ。
     # 下段 (N=max) はステアより累積 yaw 誤差が本質なので 3 列目を yaw に差し替える。
-    def _cols(h: int) -> list[tuple[np.ndarray, str, str, str]]:
-        sub = df[df["horizon"] == h]
+    def _cols(h: int) -> list[tuple[str, float, str, str, str]]:
+        # (列名, スケール, ラベル, 単位, データソース注)
         cols = [
-            (sub["err_ds_long"].values * 100, f"縦方向誤差 (N={h})", "cm",
+            ("err_ds_long", 100.0, f"縦方向誤差 (N={h})", "cm",
              "kinematic_state/pose.position vs rollout 終端 state_[0,1]"),
-            (sub["err_ds_lat"].values * 100, f"横方向誤差 (N={h})", "cm",
+            ("err_ds_lat", 100.0, f"横方向誤差 (N={h})", "cm",
              "kinematic_state/pose.position vs rollout 終端 state_[0,1]"),
         ]
         if h == h_min:
-            cols.append((sub["err_steer"].values * rad2deg, f"ステア予測誤差 (N={h})", "deg",
+            cols.append(("err_steer", rad2deg, f"ステア予測誤差 (N={h})", "deg",
                          "steering_status/tire_angle vs state_[4]+bias"))
         else:
-            cols.append((sub["yaw_err_deg"].values, f"yaw 誤差 (N={h})", "deg",
+            cols.append(("yaw_err_deg", 1.0, f"yaw 誤差 (N={h})", "deg",
                          "kinematic_state/pose.orientation vs rollout 終端 state_[2]"))
         return cols
 
@@ -1124,7 +1190,7 @@ def plot_map_distribution(df: pd.DataFrame, params: dict) -> None:
     n_cols = 3
     titles = []
     for h in row_horizons:
-        titles += [f"{label} [{unit}]<br><sub>{source}</sub>" for _, label, unit, source in _cols(h)]
+        titles += [f"{label} [{unit}]<br><sub>{source}</sub>" for _, _, label, unit, source in _cols(h)]
     fig = make_subplots(
         rows=n_rows,
         cols=n_cols,
@@ -1141,13 +1207,16 @@ def plot_map_distribution(df: pd.DataFrame, params: dict) -> None:
         sub = df[df["horizon"] == h]
         pos_x = sub["pos_x"].to_numpy()
         pos_y = sub["pos_y"].to_numpy()
-        for col_idx, (vals, label, unit, source) in enumerate(_cols(h), start=1):
+        for col_idx, (col_name, scale_, label, unit, source) in enumerate(_cols(h), start=1):
+            vals = sub[col_name].values * scale_
             # plotly の軸名は 1 番目のみサフィックス無し（xaxis, x / xaxis2, x2 ...）
             axis_i = (row_idx - 1) * n_cols + col_idx
             axis_suffix = str(axis_i) if axis_i > 1 else ""
             if lane_template is not None:
                 fig.add_trace(go.Scatter(lane_template), row=row_idx, col=col_idx)
-            vmax = max(abs(vals).max(), 1e-6)
+            # ケース横断の colorbar 統一 (LIMITS_DF 設定時)
+            unified = _unified_absmax(col_name, scale_, horizon=h)
+            vmax = unified if unified is not None else max(abs(vals).max(), 1e-6)
             # 各セルの colorbar をサブプロット右端に配置（x/y axis domain を使う）
             x_dom = fig.layout[f"xaxis{axis_suffix}"].domain
             y_dom = fig.layout[f"yaxis{axis_suffix}"].domain
@@ -1376,20 +1445,16 @@ def plot_cascade_error(df: pd.DataFrame, params: dict) -> None:
         return pd.Series(vals).rolling(window, center=True, min_periods=1).mean().values
 
     rows = [
-        # (real_vals, sim_vals, err_vals, ylabel, title, source)
+        # (real_col, sim_col, err_col, scale, ylabel, title, source)
         (
-            df["real_steer_kend"].values * rad2deg,
-            df["sim_steer_kend"].values * rad2deg,
-            df["err_steer"].values * rad2deg,
+            "real_steer_kend", "sim_steer_kend", "err_steer", rad2deg,
             "ステア角 [deg]",
             "① ステア応答 (cmd→actual): 実機 vs モデル",
             "実機: steering_status/tire_angle  モデル: state_[4]+steer_bias",
         ),
         # ② ay / ③ vy / ④ wz は sim_* がラッパー未 export のため一旦スキップ
         (
-            df["real_ds_lat"].values * 100,
-            df["sim_ds_lat"].values * 100,
-            df["err_ds_lat"].values * 100,
+            "real_ds_lat", "sim_ds_lat", "err_ds_lat", 100.0,
             "横方向 Δpos [cm]",
             "② 横方向 1ステップ変位: 実機 vs モデル",
             "実機: kinematic_state/pose.position  モデル: state_[0,1]",
@@ -1398,7 +1463,10 @@ def plot_cascade_error(df: pd.DataFrame, params: dict) -> None:
 
     fig, axes = plt.subplots(len(rows), 2, figsize=(16, 4 * len(rows)), gridspec_kw={"width_ratios": [3, 1]})
 
-    for row_idx, (real_v, sim_v, err_v, ylabel, title, source) in enumerate(rows):
+    for row_idx, (real_col, sim_col, err_col, scale, ylabel, title, source) in enumerate(rows):
+        real_v = df[real_col].values * scale
+        sim_v = df[sim_col].values * scale
+        err_v = df[err_col].values * scale
         ax_ts = axes[row_idx, 0]
         ax_err = axes[row_idx, 1]
 
@@ -1410,6 +1478,7 @@ def plot_cascade_error(df: pd.DataFrame, params: dict) -> None:
         ax_ts.axhline(0, color="black", lw=0.5, ls=":")
         ax_ts.axvline(0, color="green", lw=0.8, ls=":", alpha=0.8)
         ax_ts.set_ylabel(ylabel)
+        _unified_ylim(ax_ts, [real_col, sim_col], scale, horizon=1)
         _set_title(ax_ts, title, source)
         ax_ts.legend(fontsize=8)
         ax_ts.grid(True, alpha=0.3)
@@ -1421,6 +1490,7 @@ def plot_cascade_error(df: pd.DataFrame, params: dict) -> None:
         ax_err.axhline(0, color="black", lw=0.8)
         ax_err.axvline(0, color="green", lw=0.8, ls=":", alpha=0.8)
         ax_err.set_ylabel(f"誤差 [{ylabel.split('[')[1]}")
+        _unified_ylim(ax_err, err_col, scale, horizon=1)
         _set_title(ax_err, "誤差 (実機 − モデル)", source)
         ax_err.legend(fontsize=8)
         ax_err.grid(True, alpha=0.3)
