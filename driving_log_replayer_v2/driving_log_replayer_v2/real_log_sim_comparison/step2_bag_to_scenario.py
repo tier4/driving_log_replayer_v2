@@ -8,6 +8,13 @@
 - /perception/traffic_light_recognition/traffic_signals の信号タイムシリーズを抽出し、
   状態変化点ごとに TrafficSignalStateAction を SimulationTimeCondition でトリガー。
 
+終了条件は「厳密さより同じコースで確実に切り上げること」を優先する (_build_end_condition_act):
+ゴール厳密到達 (exitSuccess) に加え、一定時間経過後にゴール近傍 (寛容 tolerance) へ入れば
+停止/通過/周回いずれでも切り上げる。これでゴール付近で止まってもタイムアウトせず、通過しても
+周回し続けない。ループ経路 (start≈goal) での開始直後の誤発火は実走 course 時間に基づく時間
+ゲートで防ぐ。長時間静止での切り上げは opt-in (既定無効; reproduce_perception の dwell を壊す
+ため)。TraveledDistanceCondition は scenario_simulator_v2 未サポートのため使わない。
+
 位置を WorldPosition ではなく LanePosition で渡すのは、 並走レーンが重複する curve で
 WorldPosition が一意 lane に解決できず scenario_simulator が落ちるため
 (_world_to_lane_position 参照)。中間 Waypoint は入れない (mission_planner の
@@ -142,6 +149,16 @@ def _goal_pose_from_kinematic(input_bag: Path, t0_ns: int) -> dict:
     row = (df_auto if not df_auto.empty else df_kin).iloc[-1]
     return {"x": float(row.x), "y": float(row.y), "z": 0.0,
             "h": float(row.yaw), "p": 0.0, "r": 0.0}
+
+
+def _course_duration_s(input_bag: Path, t0_ns: int) -> float:
+    """実走 AUTONOMOUS 区間 (t_ns >= t0_ns) の継続時間 [s]。終了条件の時間ゲート算出に使う。"""
+    df_kin = load_kinematic(input_bag)
+    if df_kin.empty:
+        return 0.0
+    df_auto = df_kin[df_kin["t_ns"] >= t0_ns]
+    df = df_auto if not df_auto.empty else df_kin
+    return float((df["t_ns"].iloc[-1] - df["t_ns"].iloc[0]) / 1e9)
 
 
 def _select_apex_indices(
@@ -551,27 +568,128 @@ def _build_signal_story_acts(
     return acts
 
 
+def _ego_entity_condition(entity_cond: dict, name: str = "") -> dict:
+    """ego を対象とした ByEntityCondition の Condition dict を作る。"""
+    return {
+        "name": name,
+        "delay": 0,
+        "conditionEdge": "none",
+        "ByEntityCondition": {
+            "TriggeringEntities": {
+                "triggeringEntitiesRule": "any",
+                "EntityRef": [{"entityRef": "ego"}],
+            },
+            "EntityCondition": entity_cond,
+        },
+    }
+
+
+def _reach_goal_condition(success_pos: dict, tolerance: float, name: str = "") -> dict:
+    """ego がゴール位置に tolerance 以内へ到達する ReachPositionCondition。"""
+    return _ego_entity_condition(
+        {"ReachPositionCondition": {"Position": success_pos, "tolerance": float(tolerance)}},
+        name,
+    )
+
+
+def _standstill_condition(duration: float, name: str = "") -> dict:
+    """ego が duration 秒以上静止する StandStillCondition。"""
+    return _ego_entity_condition({"StandStillCondition": {"duration": float(duration)}}, name)
+
+
+def _sim_time_condition(value: float, name: str = "", rule: str = "greaterThan") -> dict:
+    """シミュレーション時刻の ByValueCondition。"""
+    return {
+        "name": name,
+        "delay": 0,
+        "conditionEdge": "none",
+        "ByValueCondition": {
+            "SimulationTimeCondition": {"value": float(value), "rule": rule}
+        },
+    }
+
+
+def _exit_event(name: str, condition_groups: list[dict], exit_type: str) -> dict:
+    """StartTrigger を満たすと CustomCommandAction(exit_type) を発火する Event。
+
+    condition_groups は ConditionGroup のリスト。1 グループ内に複数 Condition を入れると
+    AND、グループを分けると OR になる (OpenSCENARIO の論理)。
+    """
+    return {
+        "name": name,
+        "priority": "parallel",
+        "StartTrigger": {"ConditionGroup": condition_groups},
+        "Action": [{
+            "name": "",
+            "UserDefinedAction": {"CustomCommandAction": {"type": exit_type}},
+        }],
+    }
+
+
 def _build_end_condition_act(
-    goal_lane_id: int | None, goal_world: dict, tolerance: float, sim_timeout: float,
+    success_pos: dict,
+    tolerance: float,
+    sim_timeout: float,
+    *,
+    vicinity_tolerance: float,
+    settle_gate: float,
+    standstill_timeout: float,
 ) -> dict:
-    """exitSuccess (goal lane / position 到達) と exitFailure (タイムアウト) を持つ Act."""
-    if goal_lane_id is not None:
-        success_pos = {
-            "LanePosition": {
-                "roadId": "",
-                "laneId": str(goal_lane_id),
-                "s": 1,
-                "Orientation": {"type": "relative", "h": 0, "p": 0, "r": 0},
-            }
-        }
-    else:
-        # lane id 不明時は WorldPosition で目標到達判定
-        success_pos = {
-            "WorldPosition": {
-                "x": goal_world["x"], "y": goal_world["y"], "z": goal_world["z"],
-                "h": goal_world["h"], "p": 0, "r": 0,
-            }
-        }
+    """シナリオ終了判定の Act。
+
+    「終了条件の厳密さより、同じコースで確実に切り上げること」を優先した設計:
+
+    - ego_reached_goal      : ゴールに tolerance 以内で到達 (厳密・即時)。exitSuccess。
+    - ego_reached_goal_vicinity: 一定時間経過後にゴール近傍 (vicinity_tolerance、寛容) へ
+      到達。停止せず通過/周回するケースも、ゴール付近で止まるケースも捕捉する中核条件。
+      ループ経路 (start≈goal) で開始直後に誤発火しないよう SimulationTime > settle_gate で
+      ゲートする。exitSuccess。
+    - ego_settled           : settle_gate 後に standstill_timeout 秒以上静止 (近傍外で停止/
+      ハングした場合の保険)。**既定 standstill_timeout=0 で無効** (opt-in)。ゴール付近停止/通過
+      周回は vicinity 条件で捕捉済みのため通常不要。reproduce_perception の先行車 dwell を
+      途中で切り上げてしまうため有効化しないこと。exitSuccess。
+    - sim_timeout           : 上記いずれも起きないまま sim_timeout 経過。exitFailure。
+
+    success_pos は teleport/routing と同じ _world_to_lane_position で解決した
+    {"LanePosition": ...} を受け取る。**LanePosition にするのは ReachPositionCondition が
+    3D の hypot(x,y,z) で距離判定し、WorldPosition の z はシナリオ記載値を literal 使用する
+    ため** (simulator_core.hpp)。map が標高 ~40m を持つ dataset では goal の z=0 と ego の
+    map-pose z(~40) の差が常に tolerance を超え、ReachPosition が永久に発火しなかった
+    (2026-06-03 判明)。LanePosition なら target/entity とも z を map から得るので dz≈0 で発火する。
+    """
+    events: list[dict] = [
+        # 厳密到達 (ゲート無し・即時)
+        _exit_event(
+            "ego_reached_goal",
+            [{"Condition": [_reach_goal_condition(success_pos, tolerance)]}],
+            "exitSuccess",
+        ),
+        # 中核: 一定時間経過 AND ゴール近傍 (寛容)。停止/通過/周回いずれも切り上げる。
+        _exit_event(
+            "ego_reached_goal_vicinity",
+            [{"Condition": [
+                _sim_time_condition(settle_gate),
+                _reach_goal_condition(success_pos, vicinity_tolerance),
+            ]}],
+            "exitSuccess",
+        ),
+    ]
+    if standstill_timeout > 0:
+        # 保険: 一定時間経過 AND 長時間静止 (近傍外で停止/ハング時に切り上げる)。
+        events.append(_exit_event(
+            "ego_settled",
+            [{"Condition": [
+                _sim_time_condition(settle_gate),
+                _standstill_condition(standstill_timeout),
+            ]}],
+            "exitSuccess",
+        ))
+    # タイムアウト (どの終了条件にも掛からなかった = 本当に終わらなかった)。exitFailure。
+    events.append(_exit_event(
+        "sim_timeout",
+        [{"Condition": [_sim_time_condition(sim_timeout)]}],
+        "exitFailure",
+    ))
 
     return {
         "name": "_EndCondition",
@@ -582,78 +700,11 @@ def _build_end_condition_act(
                 "selectTriggeringEntities": False,
                 "EntityRef": [{"entityRef": "ego"}],
             },
-            "Maneuver": [{
-                "name": "",
-                "Event": [
-                    {  # exitSuccess
-                        "name": "ego_reached_goal",
-                        "priority": "parallel",
-                        "StartTrigger": {
-                            "ConditionGroup": [{
-                                "Condition": [{
-                                    "name": "",
-                                    "delay": 0,
-                                    "conditionEdge": "none",
-                                    "ByEntityCondition": {
-                                        "TriggeringEntities": {
-                                            "triggeringEntitiesRule": "any",
-                                            "EntityRef": [{"entityRef": "ego"}],
-                                        },
-                                        "EntityCondition": {
-                                            "ReachPositionCondition": {
-                                                "Position": success_pos,
-                                                "tolerance": float(tolerance),
-                                            }
-                                        },
-                                    },
-                                }]
-                            }]
-                        },
-                        "Action": [{
-                            "name": "",
-                            "UserDefinedAction": {
-                                "CustomCommandAction": {"type": "exitSuccess"}
-                            },
-                        }],
-                    },
-                    {  # exitFailure (timeout)
-                        "name": "sim_timeout",
-                        "priority": "parallel",
-                        "StartTrigger": {
-                            "ConditionGroup": [{
-                                "Condition": [{
-                                    "name": "",
-                                    "delay": 0,
-                                    "conditionEdge": "none",
-                                    "ByValueCondition": {
-                                        "SimulationTimeCondition": {
-                                            "value": float(sim_timeout),
-                                            "rule": "greaterThan",
-                                        }
-                                    },
-                                }]
-                            }]
-                        },
-                        "Action": [{
-                            "name": "",
-                            "UserDefinedAction": {
-                                "CustomCommandAction": {"type": "exitFailure"}
-                            },
-                        }],
-                    },
-                ],
-            }],
+            "Maneuver": [{"name": "", "Event": events}],
         }],
         "StartTrigger": {
             "ConditionGroup": [{
-                "Condition": [{
-                    "name": "",
-                    "delay": 0,
-                    "conditionEdge": "none",
-                    "ByValueCondition": {
-                        "SimulationTimeCondition": {"value": 0, "rule": "greaterThan"}
-                    },
-                }]
+                "Condition": [_sim_time_condition(0)]
             }]
         },
     }
@@ -670,6 +721,9 @@ def build_scenario_dict(
     scenario_name: str = "auto_generated",
     sim_timeout: float = 600.0,
     goal_tolerance: float = 15.0,
+    goal_vicinity_tolerance: float = 30.0,
+    settle_gate: float = 30.0,
+    standstill_timeout: float = 0.0,
     signal_reach_tolerance: float = 30.0,
     force_all_green: bool = False,
     mid_waypoints: list[dict] | None = None,
@@ -744,9 +798,15 @@ def build_scenario_dict(
         signals, signal_to_lanelet,
         reach_tolerance=signal_reach_tolerance, force_all_green=force_all_green,
     )
-    goal_lane_id = lane_ids[-1] if lane_ids else None
-    story_acts.append(_build_end_condition_act(goal_lane_id, goal_world,
-                                                goal_tolerance, sim_timeout))
+    # 終了判定のゴールは teleport/routing と同じ _position (LanePosition 優先) を使う。
+    # ReachPositionCondition は 3D 距離判定で WorldPosition の z を literal 使用するため、
+    # z=0 の WorldPosition では map 標高との差で永久に発火しない (上記 _build_end_condition_act)。
+    story_acts.append(_build_end_condition_act(
+        _position(goal_world), goal_tolerance, sim_timeout,
+        vicinity_tolerance=goal_vicinity_tolerance,
+        settle_gate=settle_gate,
+        standstill_timeout=standstill_timeout,
+    ))
 
     return {
         "ScenarioModifiers": {"ScenarioModifier": []},
@@ -818,7 +878,15 @@ def main() -> None:
     parser.add_argument("--sim-timeout", type=float, default=600.0,
                         help="exitFailure の SimulationTimeCondition [s] (既定 600)")
     parser.add_argument("--goal-tolerance", type=float, default=15.0,
-                        help="goal ReachPositionCondition の tolerance [m] (既定 15)")
+                        help="goal ReachPositionCondition の厳密到達 tolerance [m] (既定 15)")
+    parser.add_argument("--goal-vicinity-tolerance", type=float, default=30.0,
+                        help="ゴール近傍切り上げの寛容 tolerance [m] (既定 30)。一定時間経過後に"
+                             "この範囲へ入れば停止/通過/周回いずれでも exitSuccess で切り上げる。")
+    parser.add_argument("--standstill-timeout", type=float, default=0.0,
+                        help="一定時間経過後に ego がこの秒数以上静止したら切り上げる保険 [s] "
+                             "(既定 0=無効の opt-in)。ゴール付近停止/通過周回は vicinity 条件で"
+                             "捕捉済みのため通常不要。reproduce_perception では先行車 dwell の"
+                             "忠実再現を途中で切り上げてしまうため有効化しないこと。")
     parser.add_argument("--traffic-signals", choices=["replay", "green", "none"],
                         default=os.environ.get("TRAFFIC_SIGNALS", "replay") or "replay",
                         help="信号の扱い (env: TRAFFIC_SIGNALS)。replay (既定)=実機 bag の信号"
@@ -869,6 +937,15 @@ def main() -> None:
     print(f"[step2_bag_to_scenario] goal=({goal_world['x']:.1f}, {goal_world['y']:.1f}, "
           f"h={goal_world['h']:.3f}) ({goal_source})")
 
+    # 終了条件の時間ゲート: 実走 course 継続時間の半分 (ただし launch 遅延を超える 30s 以上)。
+    # ループ経路は start≈goal のため近傍/静止条件が開始直後に誤発火する。これを時間で防ぐ。
+    course_duration = _course_duration_s(input_bag, t0_ns)
+    settle_gate = max(30.0, 0.5 * course_duration)
+    print(f"[step2_bag_to_scenario] course_duration={course_duration:.1f}s, "
+          f"end-condition settle_gate={settle_gate:.1f}s, "
+          f"goal_tolerance={args.goal_tolerance}, vicinity={args.goal_vicinity_tolerance}, "
+          f"standstill_timeout={args.standstill_timeout}, sim_timeout={args.sim_timeout}")
+
     # RoutingAction は start + goal の 2 点のみを LanePosition で渡し、 mission_planner に
     # 経路計算を任せる (build_scenario_dict 参照)。 LaneletRoute.segments は map graph 上の
     # lane 連結 (実走行の lane sequence ではない) で不自然な chain を含むため sim では使わない。
@@ -912,6 +989,9 @@ def main() -> None:
         scenario_name=args.scenario_name,
         sim_timeout=args.sim_timeout,
         goal_tolerance=args.goal_tolerance,
+        goal_vicinity_tolerance=args.goal_vicinity_tolerance,
+        settle_gate=settle_gate,
+        standstill_timeout=args.standstill_timeout,
         force_all_green=(args.traffic_signals == "green"),
         mid_waypoints=mid_waypoints,
     )

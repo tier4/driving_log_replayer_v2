@@ -39,6 +39,13 @@ def _build_launch_cmd(run, scenario: Path, output_directory: Path) -> list[str]:
     scenario_test_runner.launch.py の launch_rviz 引数とは独立に制御される。
     ここでは追加引数を渡さず、Autoware の default 動作に任せる。
     """
+    # scenario_test_runner の global_timeout は scenario 実行の **壁時計** 上限 (既定 180s)。
+    # 本ユースケースの sim は実機の約 3 倍遅いため 180s ではゴール到達前に打ち切られる
+    # (2026-06-03 判明: 全 sim が 180s 壁で強制終了し、scenario 側の exitSuccess が効く前に
+    # 切られていた)。実終了は scenario の ReachPosition exitSuccess に任せ、global_timeout は
+    # 外側の壁セーフティとして余裕を持たせる: 起動 (initialize_duration) と subprocess kill
+    # (timeout_s) の間に収める。
+    global_timeout = max(180, run.timeout_s - run.initialize_duration - 60)
     cmd = [
         "ros2", "launch", "scenario_test_runner", "scenario_test_runner.launch.py",
         f"vehicle_model:={run.vehicle_model}",
@@ -47,6 +54,7 @@ def _build_launch_cmd(run, scenario: Path, output_directory: Path) -> list[str]:
         "record_storage_id:=mcap",
         f"architecture_type:={run.architecture_type}",
         f"initialize_duration:={run.initialize_duration}",
+        f"global_timeout:={global_timeout}",
         f"scenario:={scenario}",
         f"output_directory:={output_directory}",
     ]

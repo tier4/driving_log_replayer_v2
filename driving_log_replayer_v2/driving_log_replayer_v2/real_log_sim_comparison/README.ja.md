@@ -36,6 +36,26 @@ annotation-dataset）が全 stage の入口になる。
 `Success: true`、いずれかの subprocess が非ゼロ終了またはタイムアウトすると
 `Success: false` と Python traceback が記録される。
 
+**closed-loop sim の終了条件** は Stage 2 が auto-scenario に書き込む（「厳密さより同じコースで
+確実に切り上げる」優先）。ゴール厳密到達 (`--goal-tolerance` 既定 15m) に加え、一定時間経過後に
+ゴール近傍 (`--goal-vicinity-tolerance` 既定 30m) へ入れば停止・通過・周回いずれでも切り上げる
+（exitSuccess）。これで「ゴール付近で止まってもタイムアウトせず」「通過しても周回し続けない」を
+両立する。開始直後の誤発火（ループ経路は start≈goal）は実走 course 時間に基づく時間ゲート
+（`max(30s, 0.5×course)`）で防ぐ。どの条件にも掛からず `--sim-timeout`（既定 600s）に達した
+場合のみ exitFailure。長時間静止での切り上げ (`--standstill-timeout`) は **既定無効の opt-in**
+（近傍停止は vicinity で捕捉済み。有効化すると `reproduce_perception` の先行車 dwell 再現を途中で
+切り上げてしまうため非推奨）。（`TraveledDistanceCondition` は scenario_simulator_v2 未サポートの
+ため走行距離での切り上げは不可。）
+
+ゴール到達判定の Position は teleport/routing と同じ **LanePosition**（`_world_to_lane_position`）
+で書く。`ReachPositionCondition` は 3D の `hypot(x,y,z)` で距離判定し WorldPosition の z を
+literal 使用するため、map が標高（例 ~40m）を持つ dataset では `z=0` の WorldPosition だと ego の
+map-pose z との差で**永久に発火しなかった**（2026-06-03 判明）。LanePosition は z を map から得るので
+発火する。また Stage 3 は scenario_test_runner の `global_timeout`（scenario 実行の壁時計上限、
+既定 180s）を `max(180, timeout_s − initialize_duration − 60)` に引き上げる。本 sim は実機の約 3 倍
+遅く 180s 壁ではゴール到達前に打ち切られるため。実終了は scenario の exitSuccess、global_timeout は
+外側の壁セーフティ。
+
 ## ファイル構成（本ディレクトリに全集約）
 
 リポジトリの他ユースケースと異なり、ソース・evaluator_node・Makefile・sample・README を
