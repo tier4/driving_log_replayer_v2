@@ -18,6 +18,13 @@ from rclpy.serialization import deserialize_message
 import rosbag2_py
 from rosidl_runtime_py.utilities import get_message
 
+# DiffusionPlanner 出力軌跡トピック (step4 playback / step8 比較が共用)。
+# `/sub` プレフィックス付き旧ログは resolve_topic の候補リストで吸収する。
+DP_TRAJ_TOPIC = (
+    "/planning/trajectory_generator/neural_network_based_planner/"
+    "diffusion_planner_node/output/trajectory"
+)
+
 
 def _detect_storage_id(bag_path: Path) -> str:
     """rosbag2_py に渡す storage_id を bag パスから推定する。"""

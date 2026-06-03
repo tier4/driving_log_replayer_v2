@@ -28,9 +28,11 @@ from .lib._events import (
     find_curve2_launch as _find_curve2_launch_pure,
 )
 from .lib._io import (
+    DP_TRAJ_TOPIC,
     align_time,
     cumulative_arc_length,
     filter_localization,
+    iter_bag_messages,
     load_accel,
     load_cmd,
     load_kinematic,
@@ -38,6 +40,7 @@ from .lib._io import (
     load_steering,
     load_velocity,
     nearest_point_distance,
+    resolve_topic,
 )
 from .lib._map import load_map_ways, map_ways_in_bbox, resolve_map_osm
 from .lib._params_utils import add_params_annotation, setup_jp_font
@@ -1575,6 +1578,29 @@ def _apply_runtime_config(cfg: RuntimeConfig) -> None:
     LOGS = _rebuild_logs(LITE_DIR, cfg.topic_overrides or None, sim_runs_cfg)
 
 
+def _load_dp_trajectories(bag: Path, t0_ns: int) -> list[dict]:
+    """DiffusionPlanner 出力軌跡の全フレームを読み込む (playback ビューア用)。
+
+    各フレーム = {"t": t0 基準の発行時刻 [s], "x": [...], "y": [...]} (world 座標)。
+    間引き・丸めは _playback_viewer 側 (payload 構築時) で行う。
+    トピックが無い bag (旧ログ等) は空リストを返す。
+    """
+    topic = resolve_topic(bag, [DP_TRAJ_TOPIC, "/sub" + DP_TRAJ_TOPIC])
+    if topic is None:
+        return []
+    frames: list[dict] = []
+    for t_ns, ros in iter_bag_messages(bag, [topic]):
+        pts = ros.points
+        if not pts:
+            continue
+        frames.append({
+            "t": (t_ns - t0_ns) / 1e9,
+            "x": [p.pose.position.x for p in pts],
+            "y": [p.pose.position.y for p in pts],
+        })
+    return frames
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="実機 vs シム 比較プロット生成")
     add_common_cli_arguments(parser)
@@ -1614,6 +1640,8 @@ def main() -> None:
             "velocity": align_time(df_vel, t0),
             "steering": align_time(load_steering(mcap_path), t0),
             "kinematic": align_time(df_kin_clean, t0),
+            # DP 計画軌跡フレーム (playback ビューアで現在時刻の計画経路を薄く表示)
+            "dp_traj": _load_dp_trajectories(mcap_path, t0),
             "accel": align_time(load_accel(mcap_path, lcfg["accel"]), t0),
             "cmd": align_time(load_cmd(mcap_path, lcfg["cmd"]), t0),
             "color": lcfg["color"],

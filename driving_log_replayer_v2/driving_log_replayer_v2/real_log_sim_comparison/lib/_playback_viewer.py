@@ -15,6 +15,9 @@
 world 座標で定義しズームに追従) で示す。位置同期モードでは run ごとの経過時刻 t も
 凡例に出すため、どの run が時間的に先行/遅延しているかも読み取れる。
 
+DP 計画軌跡 (diffusion_planner_node/output/trajectory) があれば、各 run の
+現在時刻における最新フレームを薄い破線で重ね描きする (チェックボックスで切替可)。
+
 データは Python 側で共通 t グリッド (rate_hz) にリサンプリングして JSON 埋め込みし、
 JS 側は線形補間と二分探索のみを行う。
 """
@@ -35,6 +38,9 @@ PLAYBACK_RATE_HZ = 10.0
 MAP_MARGIN_M = 30.0
 # ベースライン (位置同期モードの基準) とする run ラベル。
 BASELINE_LABEL = "実機"
+# DP 計画軌跡の間引き設定 (HTML サイズ抑制)。フレームは最小間隔 [s]、点は stride 間引き。
+DP_FRAME_MIN_DT = 0.5
+DP_POINT_STRIDE = 3
 
 
 def _round_list(arr: np.ndarray, ndigits: int) -> list[float]:
@@ -76,6 +82,33 @@ def _resample_run(kin: pd.DataFrame, vel: pd.DataFrame, t_grid: np.ndarray) -> d
     }
 
 
+def _compact_dp_frames(frames: list[dict]) -> dict:
+    """DP 計画軌跡フレームを間引き・丸めして JSON 埋め込み用に圧縮する。
+
+    frames: step4 `_load_dp_trajectories` の出力 ({"t", "x", "y"} のリスト、t 昇順)。
+    戻り値: {"t": [...], "x": [[...]...], "y": [[...]...]} (保持フレームのみ)。
+    点列は DP_POINT_STRIDE 間引き + 終端点保持 (計画長が見た目で縮まないように)。
+    """
+    out_t: list[float] = []
+    out_x: list[list[float]] = []
+    out_y: list[list[float]] = []
+    last_t = -1e9
+    for f in frames:
+        t = float(f["t"])
+        if t < 0 or t - last_t < DP_FRAME_MIN_DT:
+            continue
+        last_t = t
+        xs = list(f["x"][::DP_POINT_STRIDE])
+        ys = list(f["y"][::DP_POINT_STRIDE])
+        if (len(f["x"]) - 1) % DP_POINT_STRIDE != 0:
+            xs.append(f["x"][-1])
+            ys.append(f["y"][-1])
+        out_t.append(round(t, 2))
+        out_x.append([round(float(v), 2) for v in xs])
+        out_y.append([round(float(v), 2) for v in ys])
+    return {"t": out_t, "x": out_x, "y": out_y}
+
+
 def build_playback_payload(
     data: dict,
     map_ways: list | None,
@@ -115,6 +148,7 @@ def build_playback_payload(
         run["label"] = label
         run["color"] = str(d["color"])
         run["is_baseline"] = label == BASELINE_LABEL
+        run["dp"] = _compact_dp_frames(d.get("dp_traj") or [])
         runs.append(run)
     if not any(r["is_baseline"] for r in runs):
         runs[0]["is_baseline"] = True
@@ -227,6 +261,9 @@ _HTML_TEMPLATE = r"""<!DOCTYPE html>
       視野幅 <input type="range" id="vieww" min="30" max="400" value="100" style="width:90px">
       <span id="viewwval" style="font-family:monospace">100m</span>
     </span>
+    <span class="grp" id="dpgrp">
+      <label><input type="checkbox" id="showdp" checked> DP計画軌跡（破線）</label>
+    </span>
   </div>
   <div id="seekrow">
     <input type="range" id="seek" min="0" max="10000" value="0">
@@ -251,11 +288,13 @@ const DATA = __PAYLOAD_JSON__;
   const PREVIEW_SEC = 1.5;   // 速度矢印 = PREVIEW_SEC 秒後の到達距離 [m]
   const CRAWL_V = 0.5;       // 位置同期再生でベースライン停止中も進める最低速度 [m/s]
   runs.forEach((r) => { r.visible = true; });
+  const hasDp = runs.some((r) => r.dp && r.dp.t.length > 0);
 
   // ------------------------------------------------------------------ state
   let mode = "time";   // "time" | "pos"
   let playing = false;
   let speedMul = 1;
+  let showDp = hasDp;  // DP 計画軌跡 (破線) の表示
   let curT = 0;        // 時刻同期モードの現在時刻 [s]
   let curS = 0;        // 位置同期モードのベースライン走行距離 [m]
   const cam = { cx: 0, cy: 0, viewW: 100, targetViewW: 100, follow: true, init: false };
@@ -357,20 +396,25 @@ const DATA = __PAYLOAD_JSON__;
     time: "時刻同期: 各ログの AUTONOMOUS/発進を t=0 とした同一経過時刻の位置を重ね表示（pacing 差で同一 t ≠ 同一地点）。矢印 = 速度 × " + PREVIEW_SEC + "s の到達距離。",
     pos: "位置同期: 実機の走行距離 s を基準に、各 run を自軌跡で同じ距離を走った地点に表示（同一走行距離比較・経路長差を含むため厳密な横偏差ではない）。矢印 = その地点の速度、凡例の t でどの run が時間的に先行/遅延かが分かる。",
   };
+  const DP_HINT = " 破線 = その時点で最後に発行された DP 計画軌跡。";
+  const setHint = () => { hintEl.textContent = HINTS[mode] + (hasDp ? DP_HINT : ""); };
   function setMode(m) {
     if (m === mode) return;
     // モード間でシーク位置の連続性を保つ（ベースライン基準で変換）
     if (m === "pos") curS = sampleAtT(baseline, curT).s;
     else curT = sampleAtS(baseline, curS).t;
     mode = m;
-    hintEl.textContent = HINTS[mode];
+    setHint();
     syncSeek();
     markDirty();
   }
   document.querySelectorAll("input[name=mode]").forEach((el) => {
     el.addEventListener("change", () => setMode(el.value));
   });
-  hintEl.textContent = HINTS[mode];
+  setHint();
+  // DP 計画軌跡トグル（データが無ければコントロールごと隠す）
+  if (!hasDp) $("dpgrp").style.display = "none";
+  $("showdp").addEventListener("change", (e) => { showDp = e.target.checked; markDirty(); });
 
   function setPlaying(p) {
     playing = p;
@@ -522,6 +566,31 @@ const DATA = __PAYLOAD_JSON__;
       ctx.moveTo(SX(run.x[0]), SY(run.y[0]));
       for (let k = 1; k < run.n_valid; k++) ctx.lineTo(SX(run.x[k]), SY(run.y[k]));
       ctx.stroke();
+      ctx.globalAlpha = 1;
+    }
+
+    // --- DP 計画軌跡（現在時刻における最新フレームを薄い破線で。run 色・走行終了後は非表示）
+    if (showDp) {
+      ctx.save();
+      ctx.setLineDash([6, 5]);
+      ctx.lineWidth = 2;
+      ctx.globalAlpha = 0.35;
+      runs.forEach((run, idx) => {
+        const st = states[idx];
+        const dp = run.dp;
+        if (!st || st.ended || !dp || dp.t.length === 0) return;
+        // 現在時刻 st.t 以前に発行された最後のフレーム
+        const k = upperBound(dp.t, st.t, dp.t.length) - 1;
+        if (k < 0) return;
+        const xs = dp.x[k];
+        const ys = dp.y[k];
+        ctx.strokeStyle = run.color;
+        ctx.beginPath();
+        ctx.moveTo(SX(xs[0]), SY(ys[0]));
+        for (let m = 1; m < xs.length; m++) ctx.lineTo(SX(xs[m]), SY(ys[m]));
+        ctx.stroke();
+      });
+      ctx.restore();
       ctx.globalAlpha = 1;
     }
 

@@ -34,6 +34,7 @@ import pandas as pd
 
 from .lib._events import find_autonomous_start, find_curve2_launch, find_sim_launch
 from .lib._io import (
+    DP_TRAJ_TOPIC as DP_TOPIC,
     iter_bag_messages,
     load_velocity,
     resolve_lite_bag,
@@ -47,10 +48,6 @@ from .lib._runtime_config import RuntimeConfig, add_common_cli_arguments, build_
 setup_jp_font()
 
 
-DP_TOPIC = (
-    "/planning/trajectory_generator/neural_network_based_planner/"
-    "diffusion_planner_node/output/trajectory"
-)
 FINAL_TOPIC = "/planning/trajectory"
 SIG_TOPIC = "/perception/traffic_light_recognition/traffic_signals"
 TRACKED_OBJECTS_TOPIC = "/perception/object_recognition/tracking/objects"
