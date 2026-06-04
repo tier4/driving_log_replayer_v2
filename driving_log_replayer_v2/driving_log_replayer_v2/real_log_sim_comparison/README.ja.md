@@ -1,6 +1,6 @@
 # Real Log / Sim Comparison の評価
 
-実機走行ログ（T4 dataset の `input_bag/` rosbag）を **SSOT** とし、同じ走行を
+実機走行ログ（T4 dataset の `input_bag/` rosbag）を **SSOT(Single Source of Truth)** とし、同じ走行を
 Autoware + シミュレータで closed-loop 再現して、実機との乖離を統計値と図で比較する
 ユースケース。速度応答・操舵応答・軌跡精度・N-step オープンループ誤差を可視化する。
 
