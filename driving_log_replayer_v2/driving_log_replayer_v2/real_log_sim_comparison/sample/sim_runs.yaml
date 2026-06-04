@@ -30,16 +30,16 @@ sim_runs:
       k_us: 0.020
 
   # DELAY_STEER_ACC_GEARED_WO_FALL_GUARD の最善パラメータ調整版 (cases.yaml の best_normal と同一)。
-  # **複数データセット横断**でロバスト同定: takanawa E2E 自律走行 6 データセット (全ルート横断:
-  # Override A09, 8edfbb02, Auto route01〜04) の open-loop N=20 rollout 終端誤差を各データセットの
-  # baseline 比に正規化し、dataset 横断平均を最小化 (worst 非悪化を制約) して決定
-  # (multi_dataset_tune.py + make local_multidataset_run)。
+  # **複数データセット・2 エリア横断**でロバスト同定: E2E 自律走行 9 データセット (takanawa:
+  # Override A09, 8edfbb02, Auto route01〜04 / odaiba: Override A09・A93・B38) の open-loop N=20 rollout
+  # 終端誤差を各データセットの baseline 比に正規化し、dataset 横断平均を最小化 (worst 非悪化を制約)
+  # して決定 (multi_dataset_tune.py + make local_multidataset_run)。
   #   旧 (単一データセット同定) 値 k_us=0.005 / steer_time_constant=0.30 / debug_steer_scaling_factor=0.90
-  #   は 1 データセットに過適合し他で kus0020 に劣っていた。6 データセット横断最適化で k_us=0.018
-  #   (物理 understeer, 実機直接推定 ~0.022 と整合) / steer_time_constant=0.12 /
-  #   debug_steer_scaling_factor=0.98 (≒仕様値) / acc_time_constant=0.45 に収束。
-  #   正規化 yaw@N20: mean 0.574 / worst 0.688 (baseline=1.0)、正規化 pos@N20: mean 0.864。
-  #   kus0020 (yaw mean 0.628 / pos mean 0.980) を全データセットの yaw・pos で上回る。
+  #   は 1 データセットに過適合し他で kus0020 に劣っていた。横断最適化で k_us=0.018 (物理 understeer,
+  #   実機直接推定 ~0.022 と整合) / steer_time_constant=0.12 / debug_steer_scaling_factor=0.98 (≒仕様値) /
+  #   acc_time_constant=0.45 に収束 (6→9 データセット・別エリア追加でも不変 = 汎化を確認)。
+  #   正規化 yaw@N20: mean 0.565 / worst 0.688 (baseline=1.0)、正規化 pos@N20: mean 0.858。
+  #   kus0020 (yaw mean 0.615 / pos mean 0.983) を全 9 データセットの yaw・pos で上回る。
   # spec 近傍の steer_time_constant / debug_steer_scaling_factor も明示する (横断同定の結論を
   # closed-loop 経路でも暗黙の description 既定に依存させない)。
   - tag: best_normal
