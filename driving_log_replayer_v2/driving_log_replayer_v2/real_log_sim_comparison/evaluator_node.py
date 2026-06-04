@@ -145,6 +145,9 @@ def run_pipeline(
 
     # ---- 共通 env ----
     env = build_common_env(comparison_dir, map_path, compare_cfg, logger)
+    # Stage 2 (scenario 自動生成) が使う地図パス。build_common_env が解決済みの
+    # MAP_OSM_PATH (存在しない場合は空文字) から復元する。
+    map_osm = Path(env["MAP_OSM_PATH"]) if env["MAP_OSM_PATH"] else Path("")
     # perception 再生 (既定 false; step3 が読む)。true で実機 input_bag の先行車を ego-pose 同期で
     # 各 sim に注入し、実機の先行車追従 (停止・加減速) を再現する。
     env["REPRODUCE_BAG"] = (
