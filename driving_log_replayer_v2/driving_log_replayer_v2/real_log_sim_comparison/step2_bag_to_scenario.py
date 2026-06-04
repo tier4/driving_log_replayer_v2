@@ -53,7 +53,6 @@ from .lib._events import find_autonomous_start
 # ---------------------------------------------------------------------------
 
 _ROUTE_TOPICS = [
-    "/api/routing/route",
     "/planning/mission_planning/route",
 ]
 _SIGNAL_TOPICS = [
@@ -92,13 +91,16 @@ def _pose_to_world(pose) -> dict:
 
 
 def _extract_route_info(input_bag: Path) -> tuple[dict | None, dict | None, list[int]]:
-    """LaneletRoute の最初のメッセージから (start_pose, goal_pose, lane_ids) を返す。
+    """Route トピックの最初のメッセージから (start_pose, goal_pose, lane_ids) を返す。
 
-    - start_pose: **route の geometry 上の起点**。Waypoint[0] lane の幾何中心と
-      整合する位置。InitialPose にこれを使うことで sim ego が route の起点から
-      Waypoint sequence を順に辿れる。実機の物理位置 (kinematic) とは異なる場合あり。
+    以下の 2 つのメッセージ型に対応:
+    - autoware_planning_msgs/msg/LaneletRoute: start_pose / goal_pose / seg.preferred_primitive.id
+    - autoware_adapi_v1_msgs/msg/Route:        data[0].start / data[0].goal / seg.preferred.id
+
+    - start_pose: route の geometry 上の起点。InitialPose にこれを使うことで sim ego が
+      route の起点から Waypoint sequence を順に辿れる。実機の物理位置 (kinematic) とは異なる場合あり。
     - goal_pose: ユーザが指定した目的地 (route 計算時も走行中も不変)。
-    - lane_ids: segments[*].preferred_primitive.id (経路全体、絶対要件: 全保持)。
+    - lane_ids: segments の preferred lane id (経路全体、絶対要件: 全保持)。
 
     route topic 不在時は (None, None, [])。
     """
@@ -107,12 +109,24 @@ def _extract_route_info(input_bag: Path) -> tuple[dict | None, dict | None, list
     if route_topic is None:
         return None, None, []
     for _t_ns, msg in iter_bag_messages(input_bag, [route_topic]):
-        start = _pose_to_world(msg.start_pose)
-        goal = _pose_to_world(msg.goal_pose)
-        lane_ids: list[int] = []
-        for seg in msg.segments:
-            if hasattr(seg, "preferred_primitive") and hasattr(seg.preferred_primitive, "id"):
-                lane_ids.append(int(seg.preferred_primitive.id))
+        # autoware_adapi_v1_msgs/msg/Route: data[0].start / data[0].goal / seg.preferred.id
+        # autoware_planning_msgs/msg/LaneletRoute: start_pose / goal_pose / seg.preferred_primitive.id
+        if hasattr(msg, "start_pose"):
+            start = _pose_to_world(msg.start_pose)
+            goal = _pose_to_world(msg.goal_pose)
+            lane_ids: list[int] = []
+            for seg in msg.segments:
+                if hasattr(seg, "preferred_primitive") and hasattr(seg.preferred_primitive, "id"):
+                    lane_ids.append(int(seg.preferred_primitive.id))
+        elif hasattr(msg, "data") and msg.data:
+            start = _pose_to_world(msg.data[0].start)
+            goal = _pose_to_world(msg.data[0].goal)
+            lane_ids = []
+            for seg in msg.data[0].segments:
+                if hasattr(seg, "preferred") and hasattr(seg.preferred, "id"):
+                    lane_ids.append(int(seg.preferred.id))
+        else:
+            return None, None, []
         return start, goal, lane_ids
     return None, None, []
 
