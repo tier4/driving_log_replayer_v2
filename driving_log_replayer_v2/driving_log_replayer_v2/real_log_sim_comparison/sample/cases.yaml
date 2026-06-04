@@ -24,26 +24,27 @@ cases:
       wheelbase: 4.76012
       k_us: 0.020
 
-  # 複数データセット横断でロバスト同定した最善パラメータ調整版 (sim_runs.yaml の best_normal と同一)。
-  # E2E 自律走行 9 データセット・2 エリア横断 (takanawa: Override A09, 8edfbb02, Auto route01〜04 /
-  # odaiba: Override A09・A93・B38) の open-loop N=20 rollout 終端誤差を、各データセットの baseline 比に
-  # 正規化した上で dataset 横断平均を最小化 (worst 非悪化を制約) して同定
-  # (multi_dataset_tune.py + make local_multidataset_run)。
+  # 複数データセット・多エリア横断でロバスト同定した最善パラメータ調整版 (sim_runs.yaml と同一)。
+  # E2E 自律走行 20 データセット・5 エリア横断 (takanawa / odaiba / kawasaki / omika / shiojiri) の
+  # open-loop N=20 rollout 終端誤差を、各データセットの baseline 比に正規化 (分母は低ダイナミクス走行の
+  # 暴発防止のためフロアクリップ: yaw 0.12deg / pos 3cm) し、dataset 横断の mean+worst を balance する
+  # 目的関数で最小化して同定 (multi_dataset_tune.py + make local_multidataset_run)。
   # 単一データセット同定の旧値 (k_us=0.005, steer_time_constant=0.30, debug_steer_scaling_factor=0.90)
-  # は 1 データセットに過適合し他で kus0020 に劣っていた。横断最適化で以下に収束 (6→9 データセット・
-  # 別エリア追加でも不変 = 汎化を確認):
-  #   k_us=0.018 (物理 understeer, 実機直接推定 ~0.022 と整合), steer_time_constant=0.12,
-  #   debug_steer_scaling_factor=0.98 (≒仕様値), acc_time_constant=0.45 (縦方向)。
-  #   正規化 yaw@N20: mean 0.565 / worst 0.688 (baseline=1.0)、正規化 pos@N20: mean 0.858。
-  #   kus0020 (yaw mean 0.615 / pos mean 0.983) を全 9 データセットの yaw・pos で上回る。
+  # は 1 データセットに過適合していた。多エリア化で steer 側 proxy (steer_time_constant /
+  # debug_steer_scaling_factor) は汎化せず仕様値が最善、縦方向 acc_time_constant も過大だと特定エリア
+  # (shiojiri) の pos を悪化させるため引き下げ、以下に収束:
+  #   k_us=0.018 (物理 understeer, 実機直接推定 ~0.022 と整合), acc_time_constant=0.30,
+  #   steer_time_constant=0.15 / debug_steer_scaling_factor=1.0 (=仕様値)。
+  #   正規化 yaw@N20: mean 0.636 / worst 0.898 (baseline=1.0)、正規化 pos@N20: mean 0.872 / worst 1.093。
+  #   kus0020 (yaw mean 0.656 / worst 1.111 / pos mean 0.954) を yaw mean・worst と pos mean で上回る。
   - tag: best_normal
     vehicle_model: delay_steer_acc_geared_wo_fall_guard
     params:
       wheelbase: 4.76012
       k_us: 0.018                       # 物理 understeer (実機推定 ~0.022 と整合)
-      steer_time_constant: 0.12         # 横断最適 (worst-case dataset の yaw を改善)
-      debug_steer_scaling_factor: 0.98  # ≒仕様値 (1.0)
-      acc_time_constant: 0.45           # 縦方向 (pos を改善)
+      steer_time_constant: 0.15         # = 仕様値 (steer 側 proxy は多エリアで汎化せず)
+      debug_steer_scaling_factor: 1.0   # = 仕様値 (同上)
+      acc_time_constant: 0.30           # 縦方向 (pos-mean 改善。0.45 超は shiojiri pos を悪化)
 
   - tag: ideal_steer
     vehicle_model: ideal_steer_acc
