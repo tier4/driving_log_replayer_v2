@@ -29,20 +29,25 @@ sim_runs:
     params:
       k_us: 0.020
 
-  # DELAY_STEER_ACC_GEARED_WO_FALL_GUARD の最善パラメータ調整版。
-  # 実機ログ (takanawa 2026-05-12-A09) の N-step rollout (N=20 終端誤差) を
-  # 結合グリッド探索で最小化した同定値 (1 パラメータずつの最適値は相関があるため
-  # 結合探索で決定。param_sweep/ の 1D/2D sweep 図も参照):
-  #   yaw RMSE 0.305→0.170 deg (-44%), 位置 7.68→5.42 cm (-29%) vs 仕様値。
-  # acc_time_constant は 0.6 超で飽和 (0.8 で +2% 改善のみ・yaw 微悪化) のため 0.6。
+  # DELAY_STEER_ACC_GEARED_WO_FALL_GUARD の最善パラメータ調整版 (cases.yaml の best_normal と同一)。
+  # **複数データセット横断**でロバスト同定: データセット A (f20a29ab) / B (8edfbb02) の open-loop
+  # N=20 rollout 終端誤差を各データセットの baseline 比に正規化し、dataset 横断平均を最小化
+  # (worst 非悪化を制約) して決定 (multi_dataset_tune.py)。
+  #   旧 (単一データセット同定) 値 k_us=0.005 / steer_time_constant=0.30 / debug_steer_scaling_factor=0.90
+  #   は A に過適合し B では kus0020 に劣っていた。横断最適化で steer_time_constant /
+  #   debug_steer_scaling_factor は仕様値 (0.15 / 1.0) が最善となり (過適合の矯正)、物理的 understeer
+  #   k_us=0.02 (実機直接推定 ~0.022 と整合) + 縦方向 acc_time_constant=0.60 に集約した。
+  #   正規化 yaw@N20: mean 0.728→0.506 (worst 0.901→0.526)、正規化 pos@N20: mean ~0.86 維持。
+  # spec 値の steer_time_constant / debug_steer_scaling_factor も明示する (横断同定の結論を closed-loop
+  # 経路でも暗黙の description 既定に依存させない)。
   - tag: best_normal
     vehicle_model: j6_gen2
     architecture_type: awf/universe/20250130
     params:
-      k_us: 0.005
-      steer_time_constant: 0.30
-      debug_steer_scaling_factor: 0.90
-      acc_time_constant: 0.60
+      k_us: 0.02                        # 物理 understeer (実機推定 ~0.022 と整合)
+      steer_time_constant: 0.15         # = 仕様値 (横断最適。旧 0.30 は A 過適合のため戻した)
+      debug_steer_scaling_factor: 1.0   # = 仕様値 (横断最適。旧 0.90 は A 過適合のため戻した)
+      acc_time_constant: 0.60           # 縦方向 (A の pos を大きく改善、B は微悪化)
 
   # 理想軌跡追従 (planner 出力を完全追従)。dynamics 誤差ゼロの上限基準。
   - tag: sim_perfect

@@ -22,7 +22,7 @@ LOCAL_SCENARIO   ?= $(LOCAL_SAMPLE_DIR)/scenario.yaml
 
 PYTHON := python3
 
-.PHONY: help local_cloud_run local_analysis_run
+.PHONY: help local_cloud_run local_analysis_run local_multidataset_run
 
 help:
 	@echo "使い方: make -C $(MAKEFILE_DIR) <ターゲット>"
@@ -31,6 +31,8 @@ help:
 	@echo "  local_cloud_run     webauto キャッシュの T4 dataset を使い 10 段階パイプラインをワンコマンド実行"
 	@echo "  local_analysis_run  既存出力 (OUT_DIR; 既定 sample/out/latest) の sim 実行結果を再利用し、"
 	@echo "                      解析ステージ (Stage 4〜11) だけを再実行 (解析コード変更後の作り直し用)"
+	@echo "  local_multidataset_run  収集済み複数 real.lite (COLLECTION_DIR; 既定 sample/multi) で"
+	@echo "                      open-loop N-step rollout を dataset 横断集約 (SEARCH=1 でロバスト同定も実行)"
 	@echo ""
 	@echo "  パイプライン構成 (Stage 1〜6):"
 	@echo "    1. step1_make_lite        実機 input_bag → lite/real.lite/"
@@ -102,3 +104,22 @@ local_analysis_run:
 	        --bundle-dir "$(OUT_DIR)" \
 	        --scenario "$(LOCAL_SCENARIO)" \
 	        --map-osm "$$map_osm"
+
+# 複数データセット横断の open-loop ロバスト評価・同定。
+# クラウドは 1 評価ジョブ = 1 データセットのため、各ジョブが出力する real.lite を
+# collect_real_lite.py で COLLECTION_DIR に収集してから本ターゲットで dataset 横断集約する。
+#   収集例: $(PYTHON) -m driving_log_replayer_v2.real_log_sim_comparison.collect_real_lite \
+#              --bundle sample/out/<tsA> --bundle sample/out/<tsB>
+# SEARCH=1 でロバスト best_normal の結合探索 (coordinate descent + 直積精密化) も実行する。
+COLLECTION_DIR ?= $(LOCAL_SAMPLE_DIR)/multi
+
+local_multidataset_run:
+	@test -f $(SETUP_BASH) || \
+	    { echo "[ERROR] $(SETUP_BASH) が見つかりません。先にワークスペースをビルドしてください"; exit 1; }
+	@test -d "$(COLLECTION_DIR)" || \
+	    { echo "[ERROR] COLLECTION_DIR が見つかりません: $(COLLECTION_DIR) (先に collect_real_lite.py で収集してください)"; exit 1; }
+	@echo "[INFO] COLLECTION_DIR: $(COLLECTION_DIR)" ; \
+	    source $(SETUP_BASH) && $(PYTHON) -m driving_log_replayer_v2.real_log_sim_comparison.multi_dataset_tune \
+	        --collection-dir "$(COLLECTION_DIR)" \
+	        --cases-config "$(LOCAL_SAMPLE_DIR)/cases.yaml" \
+	        $(if $(SEARCH),--search,)

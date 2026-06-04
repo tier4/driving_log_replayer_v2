@@ -6,3 +6,5 @@ site/
 # real_log_sim_comparison のローカル実行生成成果物 (make local_cloud_run の出力)
 driving_log_replayer_v2/driving_log_replayer_v2/real_log_sim_comparison/sample/out/
 driving_log_replayer_v2/driving_log_replayer_v2/real_log_sim_comparison/work
+# マルチデータセット評価の収集ディレクトリ (real.lite の symlink + 生成サマリ; ローカル固有)
+driving_log_replayer_v2/driving_log_replayer_v2/real_log_sim_comparison/sample/multi/
