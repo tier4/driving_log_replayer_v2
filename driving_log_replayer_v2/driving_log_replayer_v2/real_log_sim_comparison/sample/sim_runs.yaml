@@ -30,24 +30,26 @@ sim_runs:
       k_us: 0.020
 
   # DELAY_STEER_ACC_GEARED_WO_FALL_GUARD の最善パラメータ調整版 (cases.yaml の best_normal と同一)。
-  # **複数データセット横断**でロバスト同定: データセット A (f20a29ab) / B (8edfbb02) の open-loop
-  # N=20 rollout 終端誤差を各データセットの baseline 比に正規化し、dataset 横断平均を最小化
-  # (worst 非悪化を制約) して決定 (multi_dataset_tune.py)。
+  # **複数データセット横断**でロバスト同定: takanawa E2E 自律走行 6 データセット (全ルート横断:
+  # Override A09, 8edfbb02, Auto route01〜04) の open-loop N=20 rollout 終端誤差を各データセットの
+  # baseline 比に正規化し、dataset 横断平均を最小化 (worst 非悪化を制約) して決定
+  # (multi_dataset_tune.py + make local_multidataset_run)。
   #   旧 (単一データセット同定) 値 k_us=0.005 / steer_time_constant=0.30 / debug_steer_scaling_factor=0.90
-  #   は A に過適合し B では kus0020 に劣っていた。横断最適化で steer_time_constant /
-  #   debug_steer_scaling_factor は仕様値 (0.15 / 1.0) が最善となり (過適合の矯正)、物理的 understeer
-  #   k_us=0.02 (実機直接推定 ~0.022 と整合) + 縦方向 acc_time_constant=0.60 に集約した。
-  #   正規化 yaw@N20: mean 0.728→0.506 (worst 0.901→0.526)、正規化 pos@N20: mean ~0.86 維持。
-  # spec 値の steer_time_constant / debug_steer_scaling_factor も明示する (横断同定の結論を closed-loop
-  # 経路でも暗黙の description 既定に依存させない)。
+  #   は 1 データセットに過適合し他で kus0020 に劣っていた。6 データセット横断最適化で k_us=0.018
+  #   (物理 understeer, 実機直接推定 ~0.022 と整合) / steer_time_constant=0.12 /
+  #   debug_steer_scaling_factor=0.98 (≒仕様値) / acc_time_constant=0.45 に収束。
+  #   正規化 yaw@N20: mean 0.574 / worst 0.688 (baseline=1.0)、正規化 pos@N20: mean 0.864。
+  #   kus0020 (yaw mean 0.628 / pos mean 0.980) を全データセットの yaw・pos で上回る。
+  # spec 近傍の steer_time_constant / debug_steer_scaling_factor も明示する (横断同定の結論を
+  # closed-loop 経路でも暗黙の description 既定に依存させない)。
   - tag: best_normal
     vehicle_model: j6_gen2
     architecture_type: awf/universe/20250130
     params:
-      k_us: 0.02                        # 物理 understeer (実機推定 ~0.022 と整合)
-      steer_time_constant: 0.15         # = 仕様値 (横断最適。旧 0.30 は A 過適合のため戻した)
-      debug_steer_scaling_factor: 1.0   # = 仕様値 (横断最適。旧 0.90 は A 過適合のため戻した)
-      acc_time_constant: 0.60           # 縦方向 (A の pos を大きく改善、B は微悪化)
+      k_us: 0.018                       # 物理 understeer (実機推定 ~0.022 と整合)
+      steer_time_constant: 0.12         # 横断最適 (worst-case dataset の yaw を改善)
+      debug_steer_scaling_factor: 0.98  # ≒仕様値 (1.0)
+      acc_time_constant: 0.45           # 縦方向 (pos を改善)
 
   # 理想軌跡追従 (planner 出力を完全追従)。dynamics 誤差ゼロの上限基準。
   - tag: sim_perfect
