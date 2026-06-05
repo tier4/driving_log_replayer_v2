@@ -35,16 +35,23 @@ import sys
 from . import step5_analyze_nstep as s5
 from .lib._cases_config import load_cases_config
 from .lib._io import resolve_lite_bag
-from .lib._nstep_common import rmse_by_horizon
+from .lib._nstep_common import metrics_description_md, rmse_by_horizon
 
-H = 20  # 評価する最大 horizon (step7 sweep と同じ最大 horizon)
+# 評価する horizon 群。step7 sweep と同じ最大 horizon (N=20) に加え、より長い N=40 で
+# dynamics 累積差を観測する。同定スコア (_score) は両 horizon を等重みで集約する。
+HORIZONS = (20, 40)
 STRIDE = 5
 WHEELBASE = 4.76012
-# per-dataset 正規化の分母フロア。ほぼ直進・低ダイナミクス走行は baseline 誤差が極小で、
-# 相対誤差 (err/baseline) が暴発し worst-case を支配する (絶対値は微小なのに)。分母をフロアで
-# 下限クリップし、ステア/縦パラメータを弁別できる十分な信号を持つ走行のみを実質的に重み付けする。
-YAW_FLOOR = 0.12   # deg @N20 (これ未満の baseline yaw は弁別力が乏しい)
-POS_FLOOR = 3.0    # cm  @N20
+# per-dataset 正規化の分母フロア (horizon 別・成分別)。ほぼ直進・低ダイナミクス走行は baseline
+# 誤差が極小で、相対誤差 (err/baseline) が暴発し worst-case を支配する (絶対値は微小なのに)。
+# pos を縦/横に分けると縦・横でスケールが大きく異なる。20 dataset の baseline 分布
+# (load_datasets の print) では【縦の方が横より大きい】(縦 1.3〜7.4cm vs 横 0.1〜3.4cm @N20;
+# baseline モデルは縦方向の遅延/時定数が支配的)。フロアが大きすぎると baseline ですら正規化値が
+# 1 未満になりその成分の寄与が一律縮小される (= 信号を殺す) ため、各成分は分布下位の低ダイナ走行
+# のみをクリップする水準に校正する (横は小さいのでフロアも低め)。
+YAW_FLOOR = {20: 0.12, 40: 0.24}   # deg (分布下位 ~20% の低ダイナ yaw をクリップ)
+LONG_FLOOR = {20: 2.0, 40: 4.5}    # cm  (縦は誤差が大きい → フロアも大きめ)
+LAT_FLOOR = {20: 0.6, 40: 1.2}     # cm  (横は誤差が小さい → フロアも小さめ)
 _BASELINE_MODEL = "delay_steer_acc_geared_wo_fall_guard"
 # _prepare_gt は params の delay/wheelbase/sub_dt にのみ依存 (run_rollout docstring)
 _GT_KEYS = ("acc_time_delay", "steer_time_delay", "wheelbase", "sub_dt")
@@ -59,11 +66,11 @@ class DatasetCtx:
     t0_ns: int
     base: dict
     gt_cache: dict  # gt-key -> gt
-    base_metric: dict  # baseline (無補正) の {yaw, pos, long, lat} @N20
+    base_metric: dict  # baseline (無補正) の {h: {yaw, pos, long, lat, steer}} (h ∈ HORIZONS)
 
 
 def _eval(ctx: DatasetCtx, override: dict, model_type: str) -> dict:
-    """1 dataset・1 パラメータ組の N=20 終端誤差 RMSE {yaw, pos, long, lat, steer}。"""
+    """1 dataset・1 パラメータ組の horizon 別終端誤差 RMSE {h: {yaw,pos,long,lat,steer}}。"""
     params = dict(ctx.base)
     params.update(override)
     key = tuple(round(float(params[k]), 9) for k in _GT_KEYS)
@@ -72,9 +79,10 @@ def _eval(ctx: DatasetCtx, override: dict, model_type: str) -> dict:
         gt = s5._prepare_gt(ctx.data, ctx.t0_ns, params)
         ctx.gt_cache[key] = gt
     df = s5.run_rollout(
-        ctx.data, ctx.t0_ns, params, model_type, horizons=(H,), stride=STRIDE, gt=gt
+        ctx.data, ctx.t0_ns, params, model_type, horizons=HORIZONS, stride=STRIDE, gt=gt
     )
-    return rmse_by_horizon(df)[H]
+    rmse = rmse_by_horizon(df)
+    return {h: rmse[h] for h in HORIZONS}
 
 
 def load_datasets(lite_dirs: list[tuple[str, Path]]) -> list[DatasetCtx]:
@@ -95,105 +103,159 @@ def load_datasets(lite_dirs: list[tuple[str, Path]]) -> list[DatasetCtx]:
             base["wheelbase"] = WHEELBASE
             s5.SUB_DT = base["sub_dt"]
             ctx = DatasetCtx(ds_id, data, t0_ns, base, {}, {})
-            ctx.base_metric = _eval(ctx, {}, _BASELINE_MODEL)  # 正規化基準
-            if not (ctx.base_metric["yaw"] > 0 and ctx.base_metric["pos"] > 0):
-                print(f"[SKIP] {ds_id}: baseline 誤差が無効 (yaw/pos≤0 or NaN)", file=sys.stderr)
+            ctx.base_metric = _eval(ctx, {}, _BASELINE_MODEL)  # 正規化基準 (horizon 別)
+            # 全 horizon で yaw>0 かつ縦横いずれかが正でなければ正規化分母が立たない
+            if not all(
+                ctx.base_metric[h]["yaw"] > 0
+                and (ctx.base_metric[h]["long"] > 0 or ctx.base_metric[h]["lat"] > 0)
+                for h in HORIZONS
+            ):
+                print(f"[SKIP] {ds_id}: baseline 誤差が無効 (yaw/縦/横≤0 or NaN)", file=sys.stderr)
                 continue
         except Exception as e:  # noqa: BLE001
             print(f"[SKIP] {ds_id}: ロード失敗 ({type(e).__name__}: {e})", file=sys.stderr)
             continue
         ctxs.append(ctx)
         print(
-            f"[load] {ds_id}: baseline yaw@N{H}={ctx.base_metric['yaw']:.4f} "
-            f"pos@N{H}={ctx.base_metric['pos']:.3f}"
+            f"[load] {ds_id}: "
+            + "  ".join(
+                f"baseline@N{h} yaw={ctx.base_metric[h]['yaw']:.4f} "
+                f"縦={ctx.base_metric[h]['long']:.3f} 横={ctx.base_metric[h]['lat']:.3f}"
+                for h in HORIZONS
+            )
         )
     return ctxs
 
 
 def aggregate(ctxs: list[DatasetCtx], override: dict, model_type: str) -> dict:
     """
-    Dataset 横断で per-dataset 正規化した yaw/pos の mean と worst(max) を返す。
+    Dataset 横断で per-dataset 正規化した yaw/縦/横の mean と worst(max) を horizon 別に返す。
 
-    per_ds: [{dataset_id, yaw, pos, nyaw, npos}], nyaw/npos = baseline 比。
+    pos(2D) を縦(long)/横(lat) に分解し、各成分・各 horizon を baseline 比で正規化する。
+    返り値:
+      per_ds: [{dataset_id, by_h: {h: {yaw,long,lat, nyaw,nlong,nlat}}}]
+      by_h:   {h: {nyaw_mean,nyaw_worst, nlong_mean,nlong_worst, nlat_mean,nlat_worst}}
     """
     per_ds = []
     for ctx in ctxs:
         m = _eval(ctx, override, model_type)
-        # 分母をフロアで下限クリップ (低ダイナミクス走行の相対誤差暴発を防ぐ)
-        nyaw = m["yaw"] / max(ctx.base_metric["yaw"], YAW_FLOOR)
-        npos = m["pos"] / max(ctx.base_metric["pos"], POS_FLOOR)
-        per_ds.append(
-            {
-                "dataset_id": ctx.dataset_id,
-                "yaw": m["yaw"],
-                "pos": m["pos"],
-                "long": m["long"],
-                "lat": m["lat"],
-                "nyaw": nyaw,
-                "npos": npos,
+        by_h = {}
+        for h in HORIZONS:
+            b = ctx.base_metric[h]
+            # 分母を成分別・horizon 別フロアで下限クリップ (低ダイナミクス走行の相対誤差暴発を防ぐ)
+            by_h[h] = {
+                "yaw": m[h]["yaw"],
+                "long": m[h]["long"],
+                "lat": m[h]["lat"],
+                "nyaw": m[h]["yaw"] / max(b["yaw"], YAW_FLOOR[h]),
+                "nlong": m[h]["long"] / max(b["long"], LONG_FLOOR[h]),
+                "nlat": m[h]["lat"] / max(b["lat"], LAT_FLOOR[h]),
             }
-        )
-    nyaws = [d["nyaw"] for d in per_ds]
-    nposs = [d["npos"] for d in per_ds]
-    return {
-        "per_ds": per_ds,
-        "nyaw_mean": stats.mean(nyaws),
-        "nyaw_worst": max(nyaws),
-        "npos_mean": stats.mean(nposs),
-        "npos_worst": max(nposs),
-    }
+        per_ds.append({"dataset_id": ctx.dataset_id, "by_h": by_h})
+
+    by_h_agg = {}
+    for h in HORIZONS:
+        nyaws = [d["by_h"][h]["nyaw"] for d in per_ds]
+        nlongs = [d["by_h"][h]["nlong"] for d in per_ds]
+        nlats = [d["by_h"][h]["nlat"] for d in per_ds]
+        by_h_agg[h] = {
+            "nyaw_mean": stats.mean(nyaws),
+            "nyaw_worst": max(nyaws),
+            "nlong_mean": stats.mean(nlongs),
+            "nlong_worst": max(nlongs),
+            "nlat_mean": stats.mean(nlats),
+            "nlat_worst": max(nlats),
+        }
+    return {"per_ds": per_ds, "by_h": by_h_agg}
 
 
 _WORST_W = 0.5  # worst-case 項の重み (ユーザー方針: mean+worst 両方を balance)
 
 
-def _score(agg: dict) -> float:
-    """ロバスト目的関数: 正規化 mean + worst (yaw+pos)。小さいほど良い。
+_POS_W = 0.5  # 縦・横 各成分の重み。pos を縦横に分けても yaw:位置 = 1:1 を維持する
+#            (位置 = 0.5·縦 + 0.5·横)。旧 nyaw+npos のバランスと整合させるための補正。
 
-    mean だけだと pos-mean を稼ぐ acc_time_constant 等の proxy が特定エリアの worst を
-    悪化させても採用されてしまう。worst を重み付きで加えて mean と worst を両立させる。
+
+def _score(agg: dict) -> float:
+    """ロバスト目的関数: 全 horizon の正規化 mean + worst (yaw + 0.5·縦 + 0.5·横)。小さいほど良い。
+
+    N=20/N=40 を等重みで集約する。縦・横は各 0.5 倍で合算し yaw:位置 = 1:1 に保つ
+    (pos を縦横へ分割しても yaw の相対重みが半減しないようにする)。mean だけだと縦/横の mean を
+    稼ぐ proxy が特定エリアの worst を悪化させても採用されてしまうため、worst を重み付きで加えて
+    mean と worst を両立させる。
     """
-    return (agg["nyaw_mean"] + agg["npos_mean"]
-            + _WORST_W * (agg["nyaw_worst"] + agg["npos_worst"]))
+    s = 0.0
+    for h in HORIZONS:
+        b = agg["by_h"][h]
+        s += b["nyaw_mean"] + _POS_W * (b["nlong_mean"] + b["nlat_mean"])
+        s += _WORST_W * (b["nyaw_worst"] + _POS_W * (b["nlong_worst"] + b["nlat_worst"]))
+    return s
 
 
 def _fmt_agg(tag: str, agg: dict) -> str:
-    parts = " ".join(
-        f"{d['dataset_id'][:8]}(y{d['yaw']:.3f}/p{d['pos']:.2f})" for d in agg["per_ds"]
-    )
-    return (
-        f"{tag:14s} nyaw_mean={agg['nyaw_mean']:.3f} nyaw_worst={agg['nyaw_worst']:.3f} "
-        f"npos_mean={agg['npos_mean']:.3f} npos_worst={agg['npos_worst']:.3f} | {parts}"
-    )
+    seg = []
+    for h in HORIZONS:
+        b = agg["by_h"][h]
+        seg.append(
+            f"N{h}[ny_m={b['nyaw_mean']:.3f}/w={b['nyaw_worst']:.3f} "
+            f"nlo_m={b['nlong_mean']:.3f}/w={b['nlong_worst']:.3f} "
+            f"nla_m={b['nlat_mean']:.3f}/w={b['nlat_worst']:.3f}]"
+        )
+    return f"{tag:14s} " + " ".join(seg)
 
 
 _KUS0020 = {"k_us": 0.020}
 
 
 def evaluate_cases(ctxs: list[DatasetCtx], cfg) -> str:
-    """cases.yaml の全ケースを dataset 横断評価し Markdown 表を返す。"""
-    lines = ["# multi-dataset cases summary (open-loop N=%d 終端誤差)" % H, ""]
-    lines.append(
-        "各 dataset の baseline 誤差で正規化した値で集約 (n* = baseline 比、小さいほど良い)。"
-    )
-    lines.append("")
-    header = (
-        "| case | model | "
-        + " | ".join(f"{c.dataset_id[:8]} yaw/pos" for c in ctxs)
-        + " | nyaw_mean | nyaw_worst | npos_mean | npos_worst |"
-    )
-    sep = "|" + "---|" * (2 + len(ctxs) + 4)
-    lines += [header, sep]
-    for tag in cfg.tags:
-        case = cfg.find_case(tag)
-        agg = aggregate(ctxs, case.params, case.vehicle_model)
-        cells = " | ".join(f"{d['yaw']:.3f}/{d['pos']:.2f}" for d in agg["per_ds"])
-        lines.append(
-            f"| {tag} | {case.vehicle_model.replace('delay_steer_acc_geared_wo_fall_guard', 'delay')} "
-            f"| {cells} | {agg['nyaw_mean']:.3f} | {agg['nyaw_worst']:.3f} "
-            f"| {agg['npos_mean']:.3f} | {agg['npos_worst']:.3f} |"
+    """cases.yaml の全ケースを dataset 横断評価し Markdown 表を返す (horizon 別)。"""
+    lines = [
+        "# multi-dataset cases summary (open-loop N=%s 終端誤差)" % ",".join(map(str, HORIZONS)),
+        "",
+        metrics_description_md(),
+        "",
+        "各 dataset の baseline 誤差で成分別・horizon 別に正規化した値で集約 "
+        "(n* = baseline 比、小さいほど良い)。per-dataset セルは生値 `縦/横/yaw` [cm/cm/deg]。",
+        "",
+        "> **同定スコア** `_score = Σ_h (nyaw_mean + "
+        f"{_POS_W}·(nlong_mean + nlat_mean)) + {_WORST_W}·(nyaw_worst + "
+        f"{_POS_W}·(nlong_worst + nlat_worst))`  "
+        f"(h ∈ {list(HORIZONS)}、縦横各 {_POS_W} で yaw:位置=1:1、小さいほど良い)。",
+        "",
+    ]
+    # ケースごとに 1 回だけ集約し horizon 別表で再利用
+    case_aggs = {
+        tag: aggregate(ctxs, cfg.find_case(tag).params, cfg.find_case(tag).vehicle_model)
+        for tag in cfg.tags
+    }
+    for h in HORIZONS:
+        lines.append(f"## N={h} 終端誤差 (per-dataset 縦/横/yaw + 正規化集約)")
+        lines.append("")
+        header = (
+            "| case | model | "
+            + " | ".join(f"{c.dataset_id[:8]} 縦/横/yaw" for c in ctxs)
+            + " | nyaw_mean | nyaw_worst | nlong_mean | nlong_worst | nlat_mean | nlat_worst |"
         )
-    lines.append("")
+        sep = "|" + "---|" * (2 + len(ctxs) + 6)
+        lines += [header, sep]
+        for tag in cfg.tags:
+            case = cfg.find_case(tag)
+            agg = case_aggs[tag]
+            b = agg["by_h"][h]
+            cells = " | ".join(
+                f"{d['by_h'][h]['long']:.2f}/{d['by_h'][h]['lat']:.2f}/{d['by_h'][h]['yaw']:.3f}"
+                for d in agg["per_ds"]
+            )
+            model_short = case.vehicle_model.replace(
+                "delay_steer_acc_geared_wo_fall_guard", "delay"
+            )
+            lines.append(
+                f"| {tag} | {model_short} | {cells} "
+                f"| {b['nyaw_mean']:.3f} | {b['nyaw_worst']:.3f} "
+                f"| {b['nlong_mean']:.3f} | {b['nlong_worst']:.3f} "
+                f"| {b['nlat_mean']:.3f} | {b['nlat_worst']:.3f} |"
+            )
+        lines.append("")
     return "\n".join(lines)
 
 
@@ -201,7 +263,7 @@ def robust_search(ctxs: list[DatasetCtx], cfg) -> dict:
     """
     best_normal 集合 (代理含む) を coordinate descent で dataset 横断ロバスト最適化。
 
-    目的: 正規化 mean + worst (yaw+pos) を最小化 (_score; worst を重み付きで含む)。
+    目的: 全 horizon の正規化 mean + worst (yaw+縦+横) を最小化 (_score; worst を重み付きで含む)。
     参照点 (現 best_normal) は cases.yaml の best_normal ケースから取得する
     (ハードコードしない。yaml を更新後に再探索しても整合する)。
     """

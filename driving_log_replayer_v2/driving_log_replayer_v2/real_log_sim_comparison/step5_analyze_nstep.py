@@ -54,7 +54,13 @@ from .lib._io import (
 )
 from .lib._map import load_map_ways as _load_map_ways_impl
 from .lib._map import map_ways_in_bbox, resolve_map_osm
-from .lib._nstep_common import ERR_METRICS, YAW_SEED_NOTE, n1, rmse_by_horizon
+from .lib._nstep_common import (
+    ERR_METRICS,
+    YAW_SEED_NOTE,
+    metrics_description_md,
+    n1,
+    rmse_by_horizon,
+)
 from .lib._params_utils import add_params_annotation, load_sim_params, setup_jp_font
 from .lib._plotly_utils import (
     FIG_HEIGHTS,
@@ -1524,7 +1530,11 @@ def save_summary(df: pd.DataFrame) -> None:
         v = df1[col].values if mask is None else df1[col].values[mask]
         return float(np.mean(v)) * rad2deg
 
+    # メトリクス説明を先頭にコメント (# ) 行として埋め込む
+    desc_lines = ["# " + ln if ln else "#" for ln in metrics_description_md().splitlines()]
     lines = [
+        *desc_lines,
+        "",
         "=== 全走行 N-step オープンループ解析 サマリ ===",
         f"horizons: {sorted(int(h) for h in df['horizon'].unique())}  (N=1 = 毎ステップリセット)",
         f"解析窓: tr={tr[0]:.1f}〜{tr[-1]:.1f}s",
@@ -1699,7 +1709,7 @@ def main() -> None:
     gt = _prepare_gt(data, t0_ns, params)
     df1 = run_rollout(data, t0_ns, params, case.vehicle_model, horizons=(1,), stride=1, gt=gt)
     dfn = run_rollout(
-        data, t0_ns, params, case.vehicle_model, horizons=(2, 5, 10, 20), stride=5, gt=gt
+        data, t0_ns, params, case.vehicle_model, horizons=(2, 5, 10, 20, 40), stride=5, gt=gt
     )
     df = pd.concat([df1, dfn], ignore_index=True)
 

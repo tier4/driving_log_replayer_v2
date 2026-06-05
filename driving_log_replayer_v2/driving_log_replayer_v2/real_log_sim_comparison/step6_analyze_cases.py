@@ -35,7 +35,14 @@ from matplotlib import font_manager as _fm
 import numpy as np
 import pandas as pd
 
-from .lib._nstep_common import ERR_METRICS, YAW_SEED_NOTE, common_horizons, n1, rmse_by_horizon
+from .lib._nstep_common import (
+    ERR_METRICS,
+    YAW_SEED_NOTE,
+    common_horizons,
+    metrics_description_md,
+    n1,
+    rmse_by_horizon,
+)
 
 # Japanese font (best-effort; absent ならフォールバック)。
 # rcParams への代入は例外を投げないので、実在フォントを font_manager で確認する。
@@ -340,7 +347,7 @@ def write_cases_summary(
     """N-step オープンループのケース横断 Markdown 表を出力する。
 
     N=1 詳細 RMSE 表 (steer/縦/横, reference との Δ 付き) と
-    horizon 別 終端誤差 RMSE 表 (pos/yaw) を 1 ファイルに集約する。
+    horizon 別 終端誤差 RMSE 表 (縦/横/yaw) を 1 ファイルに集約する。
     """
     rad2deg = 180.0 / math.pi
     ref_tag = cases_cfg.overlay.reference_tag
@@ -360,6 +367,8 @@ def write_cases_summary(
     lines: list[str] = ["# cases summary (N-step オープンループ)\n"]
     if ref_tag:
         lines.append(f"reference tag: `{ref_tag}`\n")
+    lines.append("")
+    lines.append(metrics_description_md())
     lines.append("")
 
     # --- N=1 詳細 RMSE 表 (reference との Δ 付き) ---
@@ -400,18 +409,20 @@ def write_cases_summary(
         # Δ 列の horizons[-1] 参照を避けるため reference 比較を無効化する。
         ref_roll = roll.get(ref_tag) if horizons else None
         lines.append("## horizon 別 終端誤差 RMSE (free-running, ケース横断)\n")
-        head = "| tag |" + "".join(f" pos@N{h}[cm] |" for h in horizons) \
+        head = "| tag |" + "".join(f" 縦@N{h}[cm] |" for h in horizons) \
+            + "".join(f" 横@N{h}[cm] |" for h in horizons) \
             + "".join(f" yaw@N{h}[deg] |" for h in horizons)
         if ref_roll:
             head += f" Δyaw@N{horizons[-1]} vs ref [deg] |"
         lines.append(head)
-        lines.append("|---|" + "---:|" * (len(horizons) * 2 + (1 if ref_roll else 0)))
+        lines.append("|---|" + "---:|" * (len(horizons) * 3 + (1 if ref_roll else 0)))
         for case in cases_cfg.cases:
             r = roll.get(case.tag)
             if not r:
                 continue
             row = f"| {case.tag} |"
-            row += "".join(f" {r[h]['pos']:.2f} |" for h in horizons)
+            row += "".join(f" {r[h]['long']:.2f} |" for h in horizons)
+            row += "".join(f" {r[h]['lat']:.2f} |" for h in horizons)
             row += "".join(f" {r[h]['yaw']:.3f} |" for h in horizons)
             if ref_roll:
                 hl = horizons[-1]

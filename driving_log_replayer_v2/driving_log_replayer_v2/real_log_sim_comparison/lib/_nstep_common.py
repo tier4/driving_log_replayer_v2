@@ -33,6 +33,33 @@ YAW_SEED_NOTE = (
 )
 
 
+def metrics_description_md() -> str:
+    """各レポート冒頭に埋め込むメトリクス説明 (Markdown)。
+
+    ERR_METRICS / YAW_SEED_NOTE を一次情報として、N-step オープンループ評価で
+    使う縦/横/yaw/steer 誤差の定義・座標系・データソースと N-step の意味を一元的に記す。
+    step5(summary.txt) は `# ` プレフィックスを付けて行コメントとして埋め込む。
+    """
+    return (
+        "## メトリクス説明\n"
+        "\n"
+        "各開始点 k0 で実機状態 (過去コマンド履歴を含む) にリセットし、実コマンド系列を\n"
+        "N ステップ連続適用 (途中リセット無し = free-running) した終端 k_end=k0+N の予測状態と\n"
+        "実機状態を比較した終端誤差の RMSE を horizon (N) 別に集計する。\n"
+        "N を増やすほど dynamics 差 (k_us / wheelbase / 各時定数) の累積が顕在化する。\n"
+        "\n"
+        "- **縦方向誤差 (long)** [cm]: k0 時点の実機ヨーを基準とした車両ローカル座標系での\n"
+        "  前後方向の変位誤差。実機 kinematic_state/pose.position と rollout 終端 state_[0,1] の差。\n"
+        "- **横方向誤差 (lat)** [cm]: 同ローカル座標系での左右方向の変位誤差 (データソースは縦と同じ)。\n"
+        "- **yaw 誤差 (yaw)** [deg]: ヨー角の差 (−π〜π に正規化)。\n"
+        "  実機 kinematic_state/pose.orientation と rollout 終端 state_[2] の差。\n"
+        "- **ステア予測誤差 (steer)** [deg]: 実機 steering_status/tire_angle と"
+        " モデル state_[4]+steer_bias の差。\n"
+        "\n"
+        f"> {YAW_SEED_NOTE}。\n"
+    )
+
+
 def n1(df: pd.DataFrame) -> pd.DataFrame:
     """最小 horizon (通常 N=1, 毎ステップリセット相当) のサブセットを返す。"""
     return df[df["horizon"] == df["horizon"].min()]
