@@ -19,13 +19,16 @@ Evaluation:
   #   webauto data annotation-dataset pull --project-id x2_dev \
   #     --annotation-dataset-id <UUID> --include-intermediate-artifacts
   Datasets:
-    # Override_E2E_x2j6gen2_takanawa_2026-05-12-A09
-    # (j6_gen2 実機 E2E 走行、高輪エリア、2026-05-12 記録)
-    - f20a29ab-c42a-41b8-a446-f7e89d37a790:
+    # Override_E2E_x2j6gen2_odaiba_2026-05-12-A09
+    # (j6_gen2 実機 E2E 走行、お台場エリア、2026-05-12 記録)
+    # シナリオ比較適性: AUTONOMOUS 開始時に ego 停止 (v0≈0) し、停止→走行→停止の完全な
+    # start→goal (276m / 60s) を含む。旧 f20a29ab (takanawa) は AUTONOMOUS が走行中に始まり
+    # sim (停止初期化) と始点が不一致だったため、停止開始のこのデータセットに差し替え。
+    - 28443458-8d02-476d-b91c-528ea6027d18:
         VehicleId: default
   Conditions:
     # 図タイトルに表示するシナリオ名 (任意。未指定なら ScenarioName を使用)
-    scenario_name: "Override_E2E_x2j6gen2_takanawa_2026-05-12-A09"
+    scenario_name: "Override_E2E_x2j6gen2_odaiba_2026-05-12-A09"
     # カーブ別解析を有効化する設定 YAML への相対パス (scenario.yaml からの相対パス)。
     # 省略するとカーブ別プロット (curves_closeup / curve2_*) をスキップ。
     # 既存 curve 設定 YAML は特定 area_map に対する curve_centers をハードコード
