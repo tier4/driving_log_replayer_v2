@@ -30,7 +30,7 @@ annotation-dataset）が全 stage の入口になる。
 | 8 | DP軌跡比較 (`step8_compare_dp_trajectory`) | `lite/{real, <sim>}.lite/` | `comparison/figures/dp_*.svg` | 1 |
 | 9 | 縦パラ同定 (`step9_identify_brake`) | `lite/real.lite/` | `comparison/brake_sweep/{brake_sweep.csv, .svg}` | 1 |
 | 10 | カーブ乖離診断 (`step10_diagnose_curve`) | `lite/{real, <sim>}.lite/` | `comparison/curve_diag/{curve_divergence.md, .svg}` | 1 |
-| 11 | HTML レポート生成 (`step11_build_html_report`) | `comparison/` 配下の全 SVG/plotly HTML + 各 `.md` | `index.html` (バンドルフォルダ直下) | 1 |
+| 11 | HTML レポート生成 (`step11_build_html_report`) | `comparison/` 配下の全 SVG/plotly HTML + 各 `.md` + 設定 YAML | `report.html` (バンドルフォルダ直下・全アセット埋め込みの自己完結 1 ファイル) | 1 |
 
 成否はパイプラインの例外有無で決まる。全 stage が完走すれば `result.jsonl` に
 `Success: true`、いずれかの subprocess が非ゼロ終了またはタイムアウトすると
@@ -156,13 +156,14 @@ Stage 3 (`step3_run_sims`) が `scenario_test_runner` で sim を回した結果
 （zip 展開で 1 フォルダにまとまるようにするため。理由は冒頭パイプライン表の注記参照）。以下のパスは
 すべてこのバンドルフォルダ基準。
 
-### `index.html`（バンドルフォルダ直下・閲覧用エントリポイント）
+### `report.html`（バンドルフォルダ直下・自己完結 1 ファイルレポート）
 
 `step11_build_html_report`（Stage 11）がバンドルフォルダ直下（`comparison/` の親）に生成する、
-`comparison/` 配下の全プロットを 1 枚に集約した HTML（画像 src は `comparison/` 始まりの相対パス）。
-出力ディレクトリ単位ではなく **比較の概念** で 5 セクションに分けて並べる（読み手が
-「何を何と比べた図か」で辿れるようにするため）。各図は出力先ではなく (ディレクトリ, ファイル名) の
-組で分類するので、`figures/` に混在する closed-loop 図・DP 図・brake 同定図も正しいセクションに振り分く。
+`comparison/` 配下の全プロット・Markdown・設定 YAML を **1 枚に埋め込んだ外部参照なしの自己完結 HTML**。
+この 1 ファイルを渡すだけで Slack 等で共有・閲覧できる（バンドルフォルダごと配る必要がない。
+全図込みで概ね 30MB 前後）。出力ディレクトリ単位ではなく **比較の概念** で 5 セクションに分けて並べる
+（読み手が「何を何と比べた図か」で辿れるようにするため）。各図は出力先ではなく (ディレクトリ, ファイル名)
+の組で分類するので、`figures/` に混在する closed-loop 図・DP 図・brake 同定図も正しいセクションに振り分く。
 
 | セクション | 内容 | 主な図（出力元 step） |
 |---|---|---|
@@ -171,26 +172,31 @@ Stage 3 (`step3_run_sims`) が `scenario_test_runner` で sim を回した結果
 | 3. N-step オープンループ比較 | 実機状態リセットから N ステップ連続予測した車両モデルの差（N=1 = 毎ステップリセット） | nstep の `overview`/`error_*`/`steering_analysis`/`map_distribution`/`lateral_*`/`cascade_error`(5) + `cases/overlay`(6) |
 | 5. シナリオ クローズループ比較 | auto-scenario を sim で closed-loop 実行した実機との乖離 | `velocity`/`acceleration`/`steering`/`*_vs_distance`/`trajectory_with_map`/`trajectory_playback`/`curves_closeup`/`curve{N}_*`(4) + `curve_divergence`(10) |
 
-各セクションには 1 行説明を付ける。見やすさのための機能（レポート自体は**純 CSS/HTML 実装・CDN 不使用・
-オフライン可**、CSS 無効環境でも degrade して全内容を閲覧できる。plotly 図のみバンドル同梱の
-`plotly.min.js` を使う）:
+各セクションには 1 行説明を付ける。アセット種別ごとに埋め込み方が異なる（一律化すると id 衝突・
+容量破綻するため。詳細は `lib/_inline_assets.py`）。**CDN 不使用・オフライン可**:
 
+- **SVG 図**: matplotlib の SVG を `data:image/svg+xml;base64,…` data-URI 化し、`<head>` の CSS
+  クラスに **1 回だけ** 定義してサムネと拡大オーバーレイの両方から参照する（インライン展開すると
+  clip-path/glyph の id が図間で衝突する。二重埋め込みも避ける）。
+- **plotly 図**（`trajectory_with_map` / `map_distribution`）: 各スタンドアロン HTML の `<body>` 内部
+  フラグメントを本文に並置し、`plotly.min.js` は report 全体で **1 回だけ** `<head>` に埋め込んで共有する
+  （iframe 化すると plotly.js が図数分重複する）。ズーム・パン・ホバー・凡例トグル可。隠れタブ内の図は
+  CSS タブ切替で resize が発火しないため、末尾 glue JS が load 時・ケース切替時に `Plotly.Plots.resize()` を呼ぶ。
+- **playback ビューア**（`trajectory_playback`）: 独自 canvas JS の自己完結 HTML を `<iframe srcdoc>` で隔離埋め込み。
 - **プロット単位ケースタブ**（セクション 3）: `nstep/<case>/` の図をプロット種別ごとにまとめ、
   セクション先頭の「ケース切替: `baseline`/`ideal_steer`/`kus0020`/`shorter_wb` …」を選ぶと、その
-  セクション内**全ブロックの図が一斉に**そのケースへ切り替わる（ラジオ＋`case-<slug>` クラス対応）。
-- **セクション折りたたみ**: 各セクション・Markdown レポートは `<details open>` で開閉できる。
+  セクション内**全ブロックの図が一斉に**そのケースへ切り替わる（純 CSS ラジオ＋`case-<slug>` クラス対応）。
+- **セクション折りたたみ**: 各セクション・Markdown レポート・設定ファイルは `<details open>` で開閉できる。
 - **画像の拡大表示**: SVG 図のサムネをクリックすると `:target` ライトボックスで拡大（オーバーレイは
-  `:target` が効くよう `<main>` 末尾に一括配置）。「原寸を開く」で元 SVG も開ける。
-- **インタラクティブ図**: マップ上プロット（`trajectory_with_map` / `map_distribution`）は plotly
-  製のスタンドアロン HTML を `<iframe>` で埋め込み、ズーム・パン・ホバー・凡例トグルができる
-  （ライトボックス対象外。バンドル直下に同梱する `plotly.min.js` を相対参照するためオフライン可）。
+  `:target` が効くよう `<main>` 末尾に一括配置）。拡大画像も同じ data-URI 背景クラスを参照する。
 - **サイド目次**: sticky 追従。「↑ 先頭へ」と各セクションの「↑ 先頭」リンク付き。セクションは太字、
   Markdown サブ項目はインデント表示。（スクロール位置の自動ハイライトは JS が必要なため未実装。）
 
 3 種の Markdown レポート（`report.md`→5、`cases_summary.md`→3、`curve_divergence.md`→5）は所属セクション
-末尾に折りたたみで埋め込む。既知のいずれにも分類されない図は捨てず「その他」セクションに回す
-（黙って誤分類しない）。画像は**相対パスリンク**なので、バンドルフォルダ
-（`result_archive/real_log_sim_comparison/`）ごとアーカイブ・共有してもそのまま表示できる。
+末尾に折りたたみで埋め込む。さらに末尾の「実行構成」セクションにシナリオ・sim 実行設定・車両モデル
+パラメータの各 YAML を生テキストで埋め込み、どの設定で生成した報告か追跡できるようにする。既知のいずれにも
+分類されない図は捨てず「その他」セクションに回す（黙って誤分類しない）。全アセットを埋め込むため、
+`report.html` 1 ファイルだけ取り出して共有してもそのまま表示できる。
 
 ### `lite/`
 
@@ -359,4 +365,4 @@ make local_analysis_run OUT_DIR=sample/out/20260603_211156   # 対象を指定
 
 実体は `run_analysis.py` CLI（ROS launch 不要、オーケストレーションは
 `evaluator_node.run_analysis` をフル実行と共用）。`comparison/` 配下の解析成果物と
-`index.html` は上書き再生成される（`lite/`・`scenarios/` には触れない）。
+`report.html` は上書き再生成される（`lite/`・`scenarios/` には触れない）。

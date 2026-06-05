@@ -1,13 +1,13 @@
 #!/usr/bin/env python3
-"""Stage 11: comparison/ 配下の全プロットを 1 枚の HTML に集約する閲覧用レポート生成.
+"""Stage 11: comparison/ 配下の全プロットを 1 枚の自己完結 HTML に埋め込むレポート生成.
 
 10 段階パイプライン (step4〜step10) は `comparison/` 配下の複数サブディレクトリ
 (figures/, nstep/<tag>/, cases/overlay/, param_sweep/, brake_sweep/, curve_diag/) に
 多数の SVG・plotly HTML と 3 種の Markdown レポート (report.md, cases/cases_summary.md,
 curve_diag/curve_divergence.md) を散らして出力する。本ステージはそれらを走査し、
-全図を**相対パス**でリンクした目次付き `index.html` を `result_archive/` 直下
-(comparison/ の親) に生成する。図は comparison/ 配下にあるため src には `comparison/`
-プレフィックスを付ける。
+全アセットを**外部参照なしでファイル内に埋め込んだ**目次付き `report.html` を
+`result_archive/` 直下 (comparison/ の親) に生成する。report.html 1 枚を渡すだけで
+Slack 等で共有・閲覧できる（バンドルフォルダごと配る必要がない）。
 
 レポートは出力ディレクトリではなく **比較の概念** でセクション分けする（読み手が
 「何を何と比べた図か」で辿れるようにするため）:
@@ -20,20 +20,21 @@ curve_diag/curve_divergence.md) を散らして出力する。本ステージは
 
 各図は出力先ディレクトリではなく (ディレクトリ, ファイル名) の組で分類する。figures/ には
 クローズループ図・DP 図・brake 同定図が混在するため、ディレクトリ単位では分けられない。
-未知の図は捨てずに「その他」セクションへ回す。
+未知の図は捨てずに「その他」セクションへ回す。さらに末尾に実行構成 (シナリオ / sim_runs /
+車両パラメータ YAML) を折りたたみで埋め込み、どの設定で生成した報告か追跡できるようにする。
 
-図は 2 形式を扱う:
-- `*.svg`  — matplotlib 製の静止画。<img> 表示＋純 CSS ライトボックスで拡大可能。
-- `*.html` — plotly 製のインタラクティブ図（マップ上プロット）。<iframe> で埋め込み、
-  図自体がズーム・パン・ホバー可能なためライトボックス対象外。plotly.js はバンドル直下の
-  `plotly.min.js` を各図が相対参照する（CDN 不使用・オフライン可）。
+アセット埋め込みは種別ごとに異なる（一律化すると衝突・容量破綻する。詳細は lib/_inline_assets）:
+- `*.svg`  — matplotlib 製の静止画。data-URI base64 を <head> の CSS クラスに 1 回だけ定義し、
+  サムネと純 CSS ライトボックス（拡大）の両方から参照する（id 衝突回避・二重埋め込み回避）。
+- `*.html` (plotly) — plotly 製インタラクティブ図。<body> 内部フラグメントを本文に並置し、
+  plotly.min.js は report 全体で 1 回だけ <head> に埋め込んで共有する（iframe 化すると
+  plotly.min.js が図数分重複する）。隠れタブ内の図は CSS タブ切替で resize を発火しないため、
+  末尾の glue JS で load 時・ケース切替時に Plotly.Plots.resize() を呼ぶ。
+- `*.html` (playback 等) — 独自 canvas JS の自己完結 HTML。<iframe srcdoc> で隔離埋め込みする。
 
-index.html を開けば全プロットと Markdown レポートを 1 画面で閲覧でき、相対リンクなので
-バンドルフォルダ (`result_archive/real_log_sim_comparison/`) ごとアーカイブ・共有してもそのまま動く。
-
-本ステージは読み取り専用 (バンドル直下に index.html / plotly.min.js を足すだけ)。
-他ステージの出力は変更しない。`markdown` パッケージがあれば Markdown を整形 HTML 化し、
-無ければ生テキストを <pre> で埋め込む (ハード依存にしない)。
+本ステージは読み取り専用 (バンドル直下に report.html を 1 枚足すだけ)。他ステージの出力は
+変更しない。`markdown` パッケージがあれば Markdown を整形 HTML 化し、無ければ生テキストを
+<pre> で埋め込む (ハード依存にしない)。
 """
 
 from __future__ import annotations
@@ -44,7 +45,16 @@ from pathlib import Path
 import re
 import warnings
 
-from .lib._plotly_utils import FIG_HEIGHTS, IFRAME_PAD, ensure_plotlyjs
+from .lib._inline_assets import (
+    escape_srcdoc,
+    extract_plotly_body,
+    is_plotly_html,
+    plotly_js_script,
+    svg_aspect_ratio,
+    svg_to_data_uri,
+)
+from .lib._params_utils import _INFO_YAML, _SIM_YAML
+from .lib._plotly_utils import FIG_HEIGHTS, IFRAME_PAD
 from .lib._runtime_config import add_common_cli_arguments, build_runtime_config
 
 # --- 画像キャプション (ファイル名 stem → 日本語説明) ----------------------------
@@ -268,9 +278,13 @@ details.section > summary:hover { color: var(--accent); }
 .sec-desc { color: var(--muted); font-size: 0.92rem; margin: 0.4rem 0 1.2rem; }
 .sec-desc .toplink { margin-left: 0.6rem; font-size: 0.82rem; white-space: nowrap; }
 figure { margin: 0 0 2rem; }
-figure img { width: 100%; height: auto; border: 1px solid var(--border); border-radius: 4px; cursor: zoom-in; }
-/* plotly インタラクティブ図の iframe。高さは図種別ごとにインラインで指定する。 */
+/* SVG サムネ。data-URI は <head> の `.fig-*{background-image}` で 1 回だけ定義し、
+   ここではレイアウト・表示だけを担う（背景画像を contain で原寸比表示）。 */
+.thumb { display: block; width: 100%; background-size: contain; background-repeat: no-repeat;
+         background-position: center; border: 1px solid var(--border); border-radius: 4px; cursor: zoom-in; }
+/* plotly インライン図 / playback iframe。高さは図種別ごとにインラインで指定する。 */
 figure iframe.plotly-fig { width: 100%; border: 1px solid var(--border); border-radius: 4px; background: #fff; }
+figure .plotly-fig { width: 100%; }
 figcaption { margin-bottom: 0.4rem; font-weight: 600; }
 figcaption .fname { font-weight: 400; color: var(--muted); font-size: 0.82rem; margin-left: 0.5rem; }
 details.md-report { border-top: 1px dashed var(--border); margin-top: 2rem; padding-top: 0.5rem; }
@@ -306,10 +320,20 @@ details.md-report > summary:hover { color: var(--accent); }
 .lightbox .lb-close { position: absolute; inset: 0; cursor: zoom-out; }
 .lightbox .lb-fig { position: relative; z-index: 1; margin: 0; max-width: 96vw; max-height: 94vh;
                     display: flex; flex-direction: column; align-items: center; }
-.lightbox .lb-fig img { max-width: 96vw; max-height: 88vh; width: auto; height: auto;
-                        border: 1px solid #444; border-radius: 4px; background: #fff; }
+/* 拡大画像。サムネと同じ `.fig-*` 背景クラスを参照（data-URI は重複しない）。背景画像は
+   固有サイズを持たないため、ビューポート枠を指定して contain で全体表示する。 */
+.lightbox .lb-fig .lb-img { width: 96vw; height: 88vh; background-size: contain;
+                            background-repeat: no-repeat; background-position: center;
+                            border: 1px solid #444; border-radius: 4px; background-color: #fff; }
 .lightbox .lb-cap { color: #eee; font-size: 0.85rem; margin-top: 0.5rem; text-align: center; }
 .lightbox .lb-cap a { color: #9bf; }
+
+/* 実行構成（設定ファイル）の生テキスト表示 */
+.cfg-pre { background: #f6f6f6; padding: 1rem; overflow-x: auto; font-size: 0.82rem;
+           white-space: pre; max-height: 60vh; overflow-y: auto; }
+details.cfg-file { border-top: 1px dashed var(--border); margin-top: 1rem; padding-top: 0.5rem; }
+details.cfg-file > summary { cursor: pointer; font-weight: 600; }
+details.cfg-file > summary:hover { color: var(--accent); }
 """
 
 
@@ -323,55 +347,83 @@ def _lb_id(rel: Path) -> str:
     return "lb-" + _slug(rel.as_posix())
 
 
-def _figure(rel: Path, link_prefix: str, caption: str | None = None) -> str:
-    """1 図分の <figure> HTML を返す（形式で分岐）。
+def _fig_class(rel: Path) -> str:
+    """SVG の data-URI を <head> CSS に 1 回だけ定義する際のクラス名（rel から一意）。
 
-    rel は comparison/ 基準の相対パス。link_prefix を前置して HTML 出力ディレクトリ
-    (result_archive/) からの相対 src にする（例 link_prefix="comparison/"）。
+    サムネと拡大オーバーレイの両方がこのクラスを background-image で参照するため、
+    巨大な base64 文字列はファイル内に 1 回しか現れない（二重埋め込み回避）。
+    """
+    return "fig-" + _slug(rel.as_posix())
+
+
+def _figure(rel: Path, comparison_dir: Path, caption: str | None = None) -> str:
+    """1 図分の <figure> HTML を返す（形式で分岐し、外部参照なしで埋め込む）。
+
+    rel は comparison/ 基準の相対パス。comparison_dir からファイル内容を読んで埋め込む。
     caption 省略時はファイル名から日本語キャプションを導出する。
 
-    - `*.svg`  → <img> サムネ。クリックでライトボックス #lb-* を開く（拡大用オーバーレイ
-      本体は build_html が <main> 末尾に一括出力する _lightbox_overlays）。
-    - `*.html` → plotly インタラクティブ図。<iframe> 埋め込み（図自体がズーム可能なため
-      ライトボックス無し）。高さは _IFRAME_HEIGHTS（plotly layout 高さと整合）。
+    - `*.svg`         → サムネ <span>（背景画像は <head> の `.fig-*` クラス＝data-URI を参照）。
+      クリックでライトボックス #lb-* を開く（拡大オーバーレイは build_html が <main> 末尾に一括出力）。
+    - `*.html`(plotly)→ <body> 内部フラグメントを <div class='plotly-fig'> に並置（plotly.min.js
+      は report 全体で 1 回共有）。図自体がズーム可能なためライトボックス無し。
+    - `*.html`(その他)→ playback 等の自己完結 HTML。<iframe srcdoc> で隔離埋め込み。
     """
-    src = link_prefix + rel.as_posix()
+    fname = rel.as_posix()
     if caption is None:
         caption = _caption_for(rel.name)
-    if _is_interactive(rel):
-        height = _IFRAME_HEIGHTS.get(rel.stem, _IFRAME_HEIGHT_DEFAULT)
-        # loading='lazy' は付けない: display:none のタブパネル内 iframe の遅延ロードは
-        # ブラウザ挙動が非一貫（表示切替後に読み込まれない場合がある）。plotly iframe は
-        # ケース数+1 程度と少ないため eager ロードで問題ない。
-        return (
-            f"<figure>"
-            f"<figcaption>{html.escape(caption)}"
-            f"<span class='fname'>{html.escape(src)}</span></figcaption>"
-            f"<iframe class='plotly-fig' "
-            f"src='{html.escape(src)}' style='height:{height}px' "
-            f"title='{html.escape(caption)}'></iframe></figure>"
-        )
-    return (
-        f"<figure>"
+    cap_html = (
         f"<figcaption>{html.escape(caption)}"
-        f"<span class='fname'>{html.escape(src)}</span></figcaption>"
-        f"<a class='thumb' href='#{_lb_id(rel)}'>"
-        f"<img loading='lazy' src='{html.escape(src)}' alt='{html.escape(caption)}'></a></figure>"
+        f"<span class='fname'>{html.escape(fname)}</span></figcaption>"
+    )
+    if _is_interactive(rel):
+        text = (comparison_dir / rel).read_text(encoding="utf-8", errors="replace")
+        if is_plotly_html(text):
+            # plotly フラグメントを本文に直接並置（div の固有高さは plotly が style で持つ）。
+            return f"<figure>{cap_html}<div class='plotly-fig'>{extract_plotly_body(text)}</div></figure>"
+        # 自己完結 HTML（playback 等）は独自 JS 衝突回避のため iframe srcdoc で隔離。
+        height = _IFRAME_HEIGHTS.get(rel.stem, _IFRAME_HEIGHT_DEFAULT)
+        return (
+            f"<figure>{cap_html}"
+            f"<iframe class='plotly-fig' srcdoc='{escape_srcdoc(text)}' "
+            f"style='height:{height}px' title='{html.escape(caption)}'></iframe></figure>"
+        )
+    # SVG: 背景画像クラス参照のサムネ（アスペクト比は viewBox 由来、読込前のレイアウト確定用）
+    ar = svg_aspect_ratio(comparison_dir / rel)
+    style = f" style='aspect-ratio:{ar:.4f}'" if ar else ""
+    return (
+        f"<figure>{cap_html}"
+        f"<a class='thumb-link' href='#{_lb_id(rel)}'>"
+        f"<span class='thumb {_fig_class(rel)}'{style} role='img' "
+        f"aria-label='{html.escape(caption)}'></span></a></figure>"
     )
 
 
-def _lightbox_overlays(images: list[Path], link_prefix: str) -> str:
-    """全画像の拡大用オーバーレイを 1 まとめで返す（<main> 末尾に配置する想定）。
+def _svg_css(images: list[Path], comparison_dir: Path) -> str:
+    """全 SVG の data-URI 背景を `.fig-*{background-image:url(...)}` として 1 回ずつ定義する。
+
+    サムネ・拡大オーバーレイの双方がこのクラスを参照するため、巨大な base64 文字列が
+    ファイル内に重複しない（同じ SVG を 2 回 data-URI 化すると報告が倍に膨らむ）。
+    """
+    rules: list[str] = []
+    for rel in images:
+        if _is_interactive(rel):
+            continue
+        uri = svg_to_data_uri(comparison_dir / rel)
+        rules.append(f'.{_fig_class(rel)}{{background-image:url("{uri}")}}')
+    return "\n".join(rules)
+
+
+def _lightbox_overlays(images: list[Path]) -> str:
+    """全 SVG の拡大用オーバーレイを 1 まとめで返す（<main> 末尾に配置する想定）。
 
     オーバーレイは display:none やタブパネル・<details> の中に置くと :target が効かないため、
-    祖先に隠し要素を持たない位置（main 直下末尾）へ一括出力する。
-    plotly 図 (*.html) は図自体がズーム可能なためライトボックス対象外。
+    祖先に隠し要素を持たない位置（main 直下末尾）へ一括出力する。拡大画像も `.fig-*` 背景
+    クラスを参照するため data-URI は重複しない。plotly / playback 図 (*.html) は対象外。
     """
     parts = ["<div class='lightboxes'>"]
     for rel in images:
         if _is_interactive(rel):
             continue
-        src = link_prefix + rel.as_posix()
         caption = _caption_for(rel.name)
         # 閉じると元セクションに戻す（href='#' だとページ先頭へ飛んでしまうため）
         close_href = f"#sec-{_classify(rel)}"
@@ -379,9 +431,9 @@ def _lightbox_overlays(images: list[Path], link_prefix: str) -> str:
             f"<div class='lightbox' id='{_lb_id(rel)}'>"
             f"<a class='lb-close' href='{close_href}' title='閉じる'></a>"
             f"<figure class='lb-fig'>"
-            f"<img loading='lazy' src='{html.escape(src)}' alt='{html.escape(caption)}'>"
-            f"<figcaption class='lb-cap'>{html.escape(caption)} "
-            f"<a href='{html.escape(src)}'>原寸を開く ↗</a></figcaption>"
+            f"<span class='lb-img {_fig_class(rel)}' role='img' "
+            f"aria-label='{html.escape(caption)}'></span>"
+            f"<figcaption class='lb-cap'>{html.escape(caption)}</figcaption>"
             f"</figure></div>"
         )
     parts.append("</div>")
@@ -401,7 +453,7 @@ def _sorted_cases(tags: list[str]) -> list[str]:
 
 
 def _render_case_tabs(
-    per_case: dict[str, dict[str, Path]], link_prefix: str, cat: str
+    per_case: dict[str, dict[str, Path]], comparison_dir: Path, cat: str
 ) -> list[str]:
     """プロット種別ごとにブロックを作り、ブロックごとに独立したケースタブを付ける。
 
@@ -436,14 +488,14 @@ def _render_case_tabs(
         for c in block_cases:
             out.append(
                 f"<div class='tabpanel case-{_slug(c)}'>"
-                f"{_figure(per_case[c][pt], link_prefix, caption=c)}</div>"
+                f"{_figure(per_case[c][pt], comparison_dir, caption=c)}</div>"
             )
         out.append("</div>")
     return out
 
 
 def _render_category_images(
-    rels: list[Path], link_prefix: str, cat: str = ""
+    rels: list[Path], comparison_dir: Path, cat: str = ""
 ) -> list[str]:
     """カテゴリ内の画像群を描画する。
 
@@ -457,9 +509,9 @@ def _render_category_images(
         if case is not None:
             per_case.setdefault(case, {})[r.name] = r
 
-    out: list[str] = [_figure(r, link_prefix) for r in flat]
+    out: list[str] = [_figure(r, comparison_dir) for r in flat]
     if per_case:
-        out.extend(_render_case_tabs(per_case, link_prefix, cat))
+        out.extend(_render_case_tabs(per_case, comparison_dir, cat))
     return out
 
 
@@ -482,15 +534,15 @@ def _casesync_css(by_cat: dict[str, list[Path]]) -> str:
 
 
 def _collect_figures(comparison_dir: Path) -> list[Path]:
-    """comparison/ 配下の図（*.svg + plotly *.html）を集める。
+    """comparison/ 配下の図（*.svg + plotly/playback *.html）を集める。
 
-    自身の生成物（index.html / plotly.min.js はバンドル直下なので元々入らない）を
+    自身の生成物（report.html / plotly.min.js はバンドル直下なので元々入らない）を
     念のため除外する。
     """
     figures = [
         p
         for p in comparison_dir.rglob("*")
-        if p.suffix in _FIGURE_SUFFIXES and p.name not in {"index.html", "plotly.min.js"}
+        if p.suffix in _FIGURE_SUFFIXES and p.name not in {"report.html", "plotly.min.js"}
     ]
     return sorted(figures, key=lambda p: str(p))
 
@@ -517,29 +569,83 @@ _PIPELINE_INTRO = """
 <tr><td>8</td><td>DP 軌跡比較 (step8_compare_dp_trajectory)</td><td>DiffusionPlanner 出力軌跡を実機 vs sim で比較 (dp_*.svg)</td></tr>
 <tr><td>9</td><td>縦パラ同定 (step9_identify_brake)</td><td>発進フィットで brake_time_constant を同定 (brake_sweep)</td></tr>
 <tr><td>10</td><td>カーブ乖離診断 (step10_diagnose_curve)</td><td>カーブ/発進区間の乖離を縦横・速度・yaw で診断 (curve_divergence.md)</td></tr>
-<tr><td>11</td><td>HTML レポート生成 (step11_build_html_report)</td><td>comparison/ 配下の全図・Markdown を集約した本レポート (index.html)</td></tr>
+<tr><td>11</td><td>HTML レポート生成 (step11_build_html_report)</td><td>comparison/ 配下の全図・Markdown・設定 YAML を 1 枚に埋め込んだ自己完結レポート (report.html)</td></tr>
 </tbody>
 </table>
 </details>
 """
 
 
+# 隠れタブ（display:none のケースパネル）内に並置した plotly フラグメントは、パース時に幅 0 で
+# 描画され純 CSS タブ切替では resize が発火しない。load 時とケース切替（casesync ラジオ変更）時に
+# Plotly.Plots.resize() を呼んで全 plotly 図を再レイアウトする。plotly 図がある時だけ埋める。
+_RESIZE_GLUE = """
+<script>
+(function () {
+  function resizeAll() {
+    if (!window.Plotly) return;
+    document.querySelectorAll('.plotly-graph-div').forEach(function (d) {
+      try { window.Plotly.Plots.resize(d); } catch (e) {}
+    });
+  }
+  window.addEventListener('load', resizeAll);
+  document.querySelectorAll('.casesync > input').forEach(function (r) {
+    r.addEventListener('change', function () { setTimeout(resizeAll, 0); });
+  });
+})();
+</script>
+"""
+
+
+def _render_config_section(config_files: list[tuple[str, Path]]) -> str:
+    """実行構成 (設定 YAML) を折りたたみセクションとして埋め込む（存在するファイルのみ）。
+
+    どの設定で生成した報告かを report.html だけで追跡できるよう、各 YAML の生テキストを
+    エスケープして <pre> に入れる。1 つも存在しなければ空文字を返す（セクションごと省略）。
+    """
+    blocks: list[str] = []
+    for title, path in config_files:
+        if path is None or not Path(path).exists():
+            continue
+        try:
+            text = Path(path).read_text(encoding="utf-8", errors="replace")
+        except OSError:
+            continue
+        blocks.append(
+            f"<details class='cfg-file'><summary>{html.escape(title)}"
+            f"<span class='fname'>{html.escape(Path(path).name)}</span></summary>"
+            f"<pre class='cfg-pre'>{html.escape(text)}</pre></details>"
+        )
+    if not blocks:
+        return ""
+    return (
+        "<details class='section' open id='sec-config'>"
+        "<summary>実行構成（設定ファイル）</summary>"
+        "<p class='sec-desc'>この報告を生成した際のシナリオ・sim 実行設定・車両モデルパラメータ。"
+        "<a class='toplink' href='#top'>↑ 先頭</a></p>"
+        + "".join(blocks)
+        + "</details>"
+    )
+
+
 def build_html(
     comparison_dir: Path,
     scenario_name: str,
-    link_prefix: str = "",
     images: list[Path] | None = None,
+    config_files: list[tuple[str, Path]] | None = None,
 ) -> str:
-    """comparison_dir を走査して index.html の文字列を組み立てる。
+    """comparison_dir を走査して自己完結 report.html の文字列を組み立てる。
 
-    link_prefix は HTML 出力位置から comparison_dir への相対プレフィックス。index.html を
-    comparison/ の親 (result_archive/) に置く場合は "comparison/" を渡す。comparison/ 直下に
-    置く従来挙動なら ""。
+    全アセット（SVG=data-URI、plotly=body フラグメント+共有 plotly.js、playback=iframe srcdoc）
+    を外部参照なしでファイル内に埋め込む。config_files は (見出し, パス) のリストで、末尾の
+    「実行構成」セクションに生テキストで埋め込む（存在するファイルのみ）。
     """
     # SVG / plotly HTML を概念カテゴリへ分類（相対パスは comparison_dir 基準）。
     # images は呼び出し側が _collect_figures 済みなら再走査を省くために渡せる。
     if images is None:
         images = _collect_figures(comparison_dir)
+    if config_files is None:
+        config_files = []
     rels_all = [img.relative_to(comparison_dir) for img in images]
     by_cat: dict[str, list[Path]] = {}
     for rel in rels_all:
@@ -567,6 +673,9 @@ def build_html(
         toc.append(f"<li class='toc-sec'><a href='#sec-{cat}'>{html.escape(_CATEGORY_TITLES[cat])}</a></li>")
         for anchor, mtitle, _ in md_by_cat.get(cat, []):
             toc.append(f"<li class='toc-md'><a href='#{anchor}'>{html.escape(mtitle)}</a></li>")
+    config_html = _render_config_section(config_files)
+    if config_html:
+        toc.append("<li class='toc-sec'><a href='#sec-config'>実行構成（設定ファイル）</a></li>")
     toc.append("</ul></nav>")
 
     # --- 本文 ---（各セクションは折りたたみ可能な <details open>）
@@ -579,7 +688,7 @@ def build_html(
             f"<a class='toplink' href='#top'>↑ 先頭</a></p>"
         )
         if cat in by_cat:
-            body.extend(_render_category_images(by_cat[cat], link_prefix, cat=cat))
+            body.extend(_render_category_images(by_cat[cat], comparison_dir, cat=cat))
         else:
             body.append("<p class='empty'>（このセクションに該当する図はありませんでした）</p>")
         # カテゴリ末尾に所属 Markdown レポートを折りたたみで埋め込む
@@ -601,9 +710,21 @@ def build_html(
         "先に step4〜step10 を実行してください。</p>"
     )
 
-    # ケースタブの表示規則（ケース slug 単位）と、拡大用ライトボックス（main 末尾に一括配置）
+    # ケースタブの表示規則（ケース slug 単位）、SVG の data-URI 背景クラス（1 回ずつ定義）、
+    # 拡大用ライトボックス（main 末尾に一括配置）。
     sync_css = _casesync_css(by_cat)
-    lightboxes = _lightbox_overlays(rels_all, link_prefix) if rels_all else ""
+    svg_css = _svg_css(rels_all, comparison_dir)
+    lightboxes = _lightbox_overlays(rels_all) if rels_all else ""
+
+    # plotly フラグメントが 1 枚でもあれば plotly.min.js を 1 回だけ <head> に埋め、
+    # 隠れタブ resize の glue JS を本文末尾に置く。
+    has_plotly = any(
+        _is_interactive(rel)
+        and is_plotly_html((comparison_dir / rel).read_text(encoding="utf-8", errors="replace"))
+        for rel in rels_all
+    )
+    plotly_head = plotly_js_script() if has_plotly else ""
+    resize_glue = _RESIZE_GLUE if has_plotly else ""
 
     return f"""<!DOCTYPE html>
 <html lang="ja">
@@ -612,7 +733,9 @@ def build_html(
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>real_log_sim_comparison レポート</title>
 <style>{_STYLE}
-{sync_css}</style>
+{sync_css}
+{svg_css}</style>
+{plotly_head}
 </head>
 <body>
 <div class="layout">
@@ -625,7 +748,9 @@ def build_html(
 {_PIPELINE_INTRO}
 {empty_note}
 {''.join(body)}
+{config_html}
 {lightboxes}
+{resize_glue}
 </main>
 </div>
 </body>
@@ -633,9 +758,24 @@ def build_html(
 """
 
 
+def _resolve_config_files(cfg, comparison_dir: Path) -> list[tuple[str, Path]]:
+    """report.html 末尾「実行構成」に埋め込む設定ファイル群を (見出し, パス) で返す。
+
+    存在判定は埋め込み側 (_render_config_section) が行うため、ここでは候補を並べるだけ。
+    """
+    scenarios_dir = comparison_dir.parent / "scenarios"
+    return [
+        ("シナリオ (auto-scenario)", scenarios_dir / "auto_scenario.yaml"),
+        ("sim 実行設定 (sim_runs)", cfg.sim_runs_config) if cfg.sim_runs_config else None,
+        ("シミュレータモデル (simulator_model.param)", _SIM_YAML),
+        ("車両情報 (vehicle_info.param)", _INFO_YAML),
+    ]
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(
-        description="comparison/ 配下の全プロットを集約した閲覧用 index.html を生成"
+        description="comparison/ 配下の全プロット・Markdown・設定 YAML を埋め込んだ"
+        "自己完結 report.html を生成"
     )
     add_common_cli_arguments(parser)
     args = parser.parse_args()
@@ -644,29 +784,27 @@ def main() -> None:
     comparison_dir = cfg.out_dir
     comparison_dir.mkdir(parents=True, exist_ok=True)
 
-    # index.html は comparison/ の親 (result_archive/ = base_dir) 直下に置く。
-    # 図は comparison/ 配下にあるため、src には base_dir からの相対プレフィックスを付ける。
+    # report.html は comparison/ の親 (result_archive/ = base_dir) 直下に置く。
+    # 全アセットを埋め込むため外部参照（相対パス・plotly.min.js）は持たない。
     html_dir = cfg.base_dir
     html_dir.mkdir(parents=True, exist_ok=True)
-    link_prefix = comparison_dir.relative_to(html_dir).as_posix() + "/"
-
-    # plotly 図 (*.html) が参照する plotly.min.js をバンドル直下に同梱する
-    # （step4/5 実行時にも書かれるが、欠けていた場合の保険として冪等に呼ぶ）。
-    ensure_plotlyjs(html_dir)
 
     images = _collect_figures(comparison_dir)
     if not images:
         warnings.warn(
             f"{comparison_dir} 配下に図 (SVG / plotly HTML) が見つかりません。"
-            "目次のみの index.html を生成します"
+            "目次のみの report.html を生成します"
         )
 
-    out_path = html_dir / "index.html"
+    config_files = [c for c in _resolve_config_files(cfg, comparison_dir) if c is not None]
+
+    out_path = html_dir / "report.html"
     out_path.write_text(
-        build_html(comparison_dir, cfg.scenario_name, link_prefix, images=images),
+        build_html(comparison_dir, cfg.scenario_name, images=images, config_files=config_files),
         encoding="utf-8",
     )
-    print(f"  保存: {out_path} (図 {len(images)} 枚)")
+    size_mb = out_path.stat().st_size / 1024 / 1024
+    print(f"  保存: {out_path} (図 {len(images)} 枚 / {size_mb:.1f} MB)")
 
 
 if __name__ == "__main__":

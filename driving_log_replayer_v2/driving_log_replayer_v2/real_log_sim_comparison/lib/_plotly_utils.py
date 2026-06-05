@@ -1,9 +1,10 @@
 """plotly インタラクティブ図の共通ユーティリティ.
 
 マップ上プロット（trajectory_with_map / map_distribution）を plotly のスタンドアロン
-HTML として出力するためのヘルパー群。plotly.js はバンドルフォルダ
-（`RuntimeConfig.base_dir` = index.html と同じ階層）に `plotly.min.js` を 1 つ同梱し、
-各図 HTML から相対パスで参照する（CDN 不使用・オフライン動作維持）。
+HTML として出力するためのヘルパー群。これらは step11 が report.html に埋め込む際の中間生成物。
+plotly.js はバンドルフォルダ（`RuntimeConfig.base_dir` = report.html と同じ階層）に
+`plotly.min.js` を 1 つ同梱し、各中間 HTML から相対パスで参照する（CDN 不使用・オフライン動作維持。
+report.html では step11 がフラグメントを抽出し plotly.min.js の中身を 1 回だけ埋め込む）。
 """
 
 from __future__ import annotations
@@ -35,7 +36,7 @@ IFRAME_PAD = 30
 def ensure_plotlyjs(archive_root: Path) -> Path:
     """`archive_root` 直下に plotly.min.js を書き出す（既存なら何もしない）。
 
-    archive_root はバンドルフォルダ（index.html と同じ階層 = RuntimeConfig.base_dir）。
+    archive_root はバンドルフォルダ（report.html と同じ階層 = RuntimeConfig.base_dir）。
     """
     archive_root = Path(archive_root)
     archive_root.mkdir(parents=True, exist_ok=True)

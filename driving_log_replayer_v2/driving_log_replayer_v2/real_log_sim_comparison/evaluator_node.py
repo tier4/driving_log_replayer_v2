@@ -73,7 +73,7 @@ class RealLogSimComparisonEvaluator(Node):
         result_archive_path.mkdir(parents=True, exist_ok=True)
         result_bag_path.mkdir(parents=True, exist_ok=True)
         # Web.Auto は result_archive/ の中身をそのまま zip 化するため、ラッパーフォルダが無いと
-        # 展開時に comparison/lite/scenarios/index.html が散らばる。本ユースケースの成果物は
+        # 展開時に comparison/lite/scenarios/report.html が散らばる。本ユースケースの成果物は
         # 単一バンドルフォルダ配下にまとめ、zip 展開で 1 フォルダにまとまるようにする。
         # post_process が後段で書く result_jsonl.png のみ result_archive/ 直下に残る
         # (= 展開時は「バンドルフォルダ 1 つ + result_jsonl.png」)。
@@ -379,8 +379,8 @@ def run_analysis(
     except RuntimeError as exc:
         logger.warning(f"Stage 10 (step10_diagnose_curve) failed but continuing: {exc}")
 
-    # ---- Stage 11: comparison/ 配下の全プロットを集約した閲覧用 HTML 生成 ----
-    logger.info("Stage 11: step11_build_html_report (result_archive/real_log_sim_comparison/index.html)")
+    # ---- Stage 11: comparison/ 配下の全アセットを 1 枚に埋め込んだ自己完結 HTML 生成 ----
+    logger.info("Stage 11: step11_build_html_report (result_archive/real_log_sim_comparison/report.html)")
     try:
         _run([
             sys.executable, "-m",
@@ -410,8 +410,8 @@ def run_analysis(
         "dp_compare_ok": int((comparison_dir / "figures" / "dp_real_vs_sim.svg").exists()),
         "brake_sweep_ok": int((comparison_dir / "brake_sweep" / "brake_sweep.csv").exists()),
         "curve_diag_ok": int((comparison_dir / "curve_diag" / "curve_divergence.svg").exists()),
-        # index.html は comparison/ の親 (result_archive/) 直下に生成される。
-        "index_html_ok": int((comparison_dir.parent / "index.html").exists()),
+        # report.html は comparison/ の親 (result_archive/) 直下に生成される。
+        "report_html_ok": int((comparison_dir.parent / "report.html").exists()),
     }
     logger.info(
         f"Pipeline outputs: sim_runs {sim_produced}/{len(sim_cfg.runs)}, "
@@ -419,7 +419,7 @@ def run_analysis(
         f"report={counts['report_ok']}, cases_summary={counts['cases_summary_ok']}, "
         f"param_sweep={counts['param_sweep_ok']}, dp_compare={counts['dp_compare_ok']}, "
         f"brake_sweep={counts['brake_sweep_ok']}, curve_diag={counts['curve_diag_ok']}, "
-        f"index_html={counts['index_html_ok']}"
+        f"report_html={counts['report_html_ok']}"
     )
     return counts
 

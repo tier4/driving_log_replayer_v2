@@ -16,7 +16,7 @@ ROS launch 不要の純 Python CLI (オーケストレーションは evaluator_
         --scenario sample/scenario.yaml \
         [--map-osm /path/to/lanelet2_map.osm]
 
-注意: comparison/ 配下の解析成果物と index.html は上書き再生成される
+注意: comparison/ 配下の解析成果物と report.html は上書き再生成される
 (lite/ と scenarios/ には触れない)。
 """
 
@@ -96,9 +96,9 @@ def main() -> None:
     print(
         f"\n解析完了: sim_runs {sim_p}/{sim_e}, cases {case_p}/{case_e}, "
         f"report={counts['report_ok']}, cases_summary={counts['cases_summary_ok']}, "
-        f"param_sweep={counts['param_sweep_ok']}, index_html={counts['index_html_ok']}"
+        f"param_sweep={counts['param_sweep_ok']}, report_html={counts['report_html_ok']}"
     )
-    print(f"レポート: {bundle_dir / 'index.html'}")
+    print(f"レポート: {bundle_dir / 'report.html'}")
     if case_p == 0:
         print("WARNING: case 出力が 0 件です (lite/ に real.lite があるか確認してください)",
               file=sys.stderr)
