@@ -271,7 +271,7 @@ figure { margin: 0 0 2rem; }
 figure img { width: 100%; height: auto; border: 1px solid var(--border); border-radius: 4px; cursor: zoom-in; }
 /* plotly インタラクティブ図の iframe。高さは図種別ごとにインラインで指定する。 */
 figure iframe.plotly-fig { width: 100%; border: 1px solid var(--border); border-radius: 4px; background: #fff; }
-figcaption { margin-top: 0.4rem; font-weight: 600; }
+figcaption { margin-bottom: 0.4rem; font-weight: 600; }
 figcaption .fname { font-weight: 400; color: var(--muted); font-size: 0.82rem; margin-left: 0.5rem; }
 details.md-report { border-top: 1px dashed var(--border); margin-top: 2rem; padding-top: 0.5rem; }
 details.md-report > summary { cursor: pointer; font-weight: 600; margin-bottom: 0.5rem; }
@@ -344,17 +344,19 @@ def _figure(rel: Path, link_prefix: str, caption: str | None = None) -> str:
         # ブラウザ挙動が非一貫（表示切替後に読み込まれない場合がある）。plotly iframe は
         # ケース数+1 程度と少ないため eager ロードで問題ない。
         return (
-            f"<figure><iframe class='plotly-fig' "
-            f"src='{html.escape(src)}' style='height:{height}px' "
-            f"title='{html.escape(caption)}'></iframe>"
+            f"<figure>"
             f"<figcaption>{html.escape(caption)}"
-            f"<span class='fname'>{html.escape(src)}</span></figcaption></figure>"
+            f"<span class='fname'>{html.escape(src)}</span></figcaption>"
+            f"<iframe class='plotly-fig' "
+            f"src='{html.escape(src)}' style='height:{height}px' "
+            f"title='{html.escape(caption)}'></iframe></figure>"
         )
     return (
-        f"<figure><a class='thumb' href='#{_lb_id(rel)}'>"
-        f"<img loading='lazy' src='{html.escape(src)}' alt='{html.escape(caption)}'></a>"
+        f"<figure>"
         f"<figcaption>{html.escape(caption)}"
-        f"<span class='fname'>{html.escape(src)}</span></figcaption></figure>"
+        f"<span class='fname'>{html.escape(src)}</span></figcaption>"
+        f"<a class='thumb' href='#{_lb_id(rel)}'>"
+        f"<img loading='lazy' src='{html.escape(src)}' alt='{html.escape(caption)}'></a></figure>"
     )
 
 
