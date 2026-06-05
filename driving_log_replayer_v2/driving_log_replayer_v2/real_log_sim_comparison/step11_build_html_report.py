@@ -493,6 +493,35 @@ def _collect_figures(comparison_dir: Path) -> list[Path]:
     return sorted(figures, key=lambda p: str(p))
 
 
+# レポート冒頭に置く分析パイプライン解説。評価ノードが実機ログ抽出から HTML 集約まで順に実行する
+# 10 段階パイプラインの俯瞰 (README.ja.md の「パイプライン（10 段階）」表と同期)。本レポートは
+# 各 stage の成果物 (図・Markdown) をカテゴリ別に束ねたもの。
+_PIPELINE_INTRO = """
+<details class="section" open id="sec-pipeline">
+<summary>分析パイプライン（10 段階）</summary>
+<p class="sec-desc">評価ノードが実機ログ抽出から HTML 集約まで順に実行する 10 段階パイプライン。
+本レポートは各 stage の成果物（図・Markdown）をカテゴリ別に束ねたもの。
+<a class="toplink" href="#top">↑ 先頭</a></p>
+<table>
+<thead><tr><th>Stage</th><th>名称</th><th>役割 / 主な成果物</th></tr></thead>
+<tbody>
+<tr><td>1</td><td>実機ログ抽出 (step1_make_lite)</td><td>input_bag から必要トピックを抽出し real.lite を生成</td></tr>
+<tr><td>2</td><td>scenario 自動生成 (step2_bag_to_scenario)</td><td>実機 bag + 地図から OpenSCENARIO (auto_scenario.yaml) を生成</td></tr>
+<tr><td>3</td><td>closed-loop シム実行 (step3_run_sims)</td><td>auto_scenario + sim_runs.yaml で sim を回し sim lite を生成</td></tr>
+<tr><td>4</td><td>実機 + sim 比較解析 (step4_compare_logs)</td><td>速度・ステア・軌跡を N-way 重ね描き (report.md・図)</td></tr>
+<tr><td>5</td><td>VehicleModel N-step オープンループ解析 (step5_analyze_nstep)</td><td>real.lite + cases.yaml の各ケースで free-running rollout の終端誤差を評価 (nstep/&lt;tag&gt;/)</td></tr>
+<tr><td>6</td><td>ケース集約解析 (step6_analyze_cases)</td><td>全ケースの N-step 誤差を横断集約 (cases_summary.md・overlay)</td></tr>
+<tr><td>7</td><td>パラメータ sweep 同定 (step7_sweep_params)</td><td>車両モデル各パラメータを sweep し終端誤差最小値を同定 (param_sweep_summary.md)</td></tr>
+<tr><td>8</td><td>DP 軌跡比較 (step8_compare_dp_trajectory)</td><td>DiffusionPlanner 出力軌跡を実機 vs sim で比較 (dp_*.svg)</td></tr>
+<tr><td>9</td><td>縦パラ同定 (step9_identify_brake)</td><td>発進フィットで brake_time_constant を同定 (brake_sweep)</td></tr>
+<tr><td>10</td><td>カーブ乖離診断 (step10_diagnose_curve)</td><td>カーブ/発進区間の乖離を縦横・速度・yaw で診断 (curve_divergence.md)</td></tr>
+<tr><td>11</td><td>HTML レポート生成 (step11_build_html_report)</td><td>comparison/ 配下の全図・Markdown を集約した本レポート (index.html)</td></tr>
+</tbody>
+</table>
+</details>
+"""
+
+
 def build_html(
     comparison_dir: Path,
     scenario_name: str,
@@ -531,6 +560,7 @@ def build_html(
     #     「↑ 先頭」リンクを置いて目次/先頭へ戻れるようにする。）
     toc: list[str] = ["<nav class='toc'><h2>目次</h2>"]
     toc.append("<a class='toc-top' href='#top'>↑ 先頭へ</a><ul>")
+    toc.append("<li class='toc-sec'><a href='#sec-pipeline'>分析パイプライン（10 段階）</a></li>")
     for cat in active_cats:
         toc.append(f"<li class='toc-sec'><a href='#sec-{cat}'>{html.escape(_CATEGORY_TITLES[cat])}</a></li>")
         for anchor, mtitle, _ in md_by_cat.get(cat, []):
@@ -590,6 +620,7 @@ def build_html(
   <h1>real_log_sim_comparison 比較レポート</h1>
   <div class="meta">{meta}</div>
 </header>
+{_PIPELINE_INTRO}
 {empty_note}
 {''.join(body)}
 {lightboxes}
