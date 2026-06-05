@@ -48,9 +48,14 @@ def _round_list(arr: np.ndarray, ndigits: int) -> list[float]:
     return [round(float(v), ndigits) for v in arr]
 
 
-def _resample_run(kin: pd.DataFrame, vel: pd.DataFrame, t_grid: np.ndarray) -> dict:
+def _resample_run(
+    kin: pd.DataFrame, vel: pd.DataFrame, t_grid: np.ndarray, offset: float = 0.0
+) -> dict:
     """
     1 run の kinematic / velocity を共有 t グリッドへリサンプリングする。
+
+    `offset` (= その run の発進時刻 t_launch) を t から引いてから共有グリッドに載せる。
+    これにより全 run が発進時刻 (t=0) で揃い、実機の初期停止が長くても再生がズレない。
 
     - yaw は ±π wrap で補間が暴れるため `np.unwrap` 後に補間する。
     - run の最終時刻より後のグリッド点は `np.interp` が端値ホールドする。
@@ -59,12 +64,14 @@ def _resample_run(kin: pd.DataFrame, vel: pd.DataFrame, t_grid: np.ndarray) -> d
     - 弧長 s はグリッド化後の座標から累積。端値ホールド区間は ds=0 で plateau し、
       単調非減少が保たれる（JS の二分探索の前提）。
     """
-    t = kin["t"].to_numpy(dtype=float)
+    t = kin["t"].to_numpy(dtype=float) - offset
     x = np.interp(t_grid, t, kin["x"].to_numpy(dtype=float))
     y = np.interp(t_grid, t, kin["y"].to_numpy(dtype=float))
     yaw = np.interp(t_grid, t, np.unwrap(kin["yaw"].to_numpy(dtype=float)))
     if vel is not None and not vel.empty:
-        v = np.interp(t_grid, vel["t"].to_numpy(dtype=float), vel["lon_vel"].to_numpy(dtype=float))
+        v = np.interp(
+            t_grid, vel["t"].to_numpy(dtype=float) - offset, vel["lon_vel"].to_numpy(dtype=float)
+        )
     else:
         v = np.zeros_like(t_grid)
     n_valid = int(np.searchsorted(t_grid, t[-1], side="right"))
@@ -82,10 +89,11 @@ def _resample_run(kin: pd.DataFrame, vel: pd.DataFrame, t_grid: np.ndarray) -> d
     }
 
 
-def _compact_dp_frames(frames: list[dict]) -> dict:
+def _compact_dp_frames(frames: list[dict], offset: float = 0.0) -> dict:
     """DP 計画軌跡フレームを間引き・丸めして JSON 埋め込み用に圧縮する。
 
     frames: step4 `_load_dp_trajectories` の出力 ({"t", "x", "y"} のリスト、t 昇順)。
+    `offset` (= その run の発進時刻) を t から引き、発進前 (t<0) のフレームは落とす。
     戻り値: {"t": [...], "x": [[...]...], "y": [[...]...]} (保持フレームのみ)。
     点列は DP_POINT_STRIDE 間引き + 終端点保持 (計画長が見た目で縮まないように)。
     """
@@ -94,7 +102,7 @@ def _compact_dp_frames(frames: list[dict]) -> dict:
     out_y: list[list[float]] = []
     last_t = -1e9
     for f in frames:
-        t = float(f["t"])
+        t = float(f["t"]) - offset
         if t < 0 or t - last_t < DP_FRAME_MIN_DT:
             continue
         last_t = t
@@ -135,7 +143,12 @@ def build_playback_payload(
     if not kins:
         return None
 
-    t_max = max(float(k["t"].iloc[-1]) for k in kins.values())
+    # 各 run を発進時刻 (t_launch) で相対化して共有グリッドへ載せる。グリッドは発進 (t=0) から
+    # 最長の発進後継続時間まで。実機の初期停止が長くても全 run が発進で揃う (実機だけ遅れない)。
+    def _offset(lbl: str) -> float:
+        return float(data[lbl].get("t_launch", 0.0))
+
+    t_max = max(float(k["t"].iloc[-1]) - _offset(lbl) for lbl, k in kins.items())
     n = int(np.floor(t_max * rate_hz)) + 1
     t_grid = np.arange(n) / rate_hz
 
@@ -144,11 +157,12 @@ def build_playback_payload(
         kin = d["kinematic"]
         if kin.empty:
             continue
-        run = _resample_run(kin, d.get("velocity"), t_grid)
+        offset = _offset(label)
+        run = _resample_run(kin, d.get("velocity"), t_grid, offset)
         run["label"] = label
         run["color"] = str(d["color"])
         run["is_baseline"] = label == BASELINE_LABEL
-        run["dp"] = _compact_dp_frames(d.get("dp_traj") or [])
+        run["dp"] = _compact_dp_frames(d.get("dp_traj") or [], offset)
         runs.append(run)
     if not any(r["is_baseline"] for r in runs):
         runs[0]["is_baseline"] = True

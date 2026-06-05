@@ -26,6 +26,7 @@ from .lib._events import (
     find_autonomous_start as _find_autonomous_start,
     find_curve2_exit as _find_curve2_exit_pure,
     find_curve2_launch as _find_curve2_launch_pure,
+    find_initial_launch as _find_initial_launch,
 )
 from .lib._io import (
     DP_TRAJ_TOPIC,
@@ -133,8 +134,8 @@ _SIM_MARKERS = ["^", "s", "D", "v", "P", "*", "X"]
 # fallback)、pacing も違うため、同一 t が同一地点を意味しない。走行距離基準は
 # velocity_vs_distance.svg / steering_vs_distance.svg を参照。
 _TIME_AXIS_NOTE = (
-    "注: t=0 は各ログの AUTONOMOUS/発進基準。pacing 差により同一 t は同一地点を意味しない"
-    "（走行距離基準は *_vs_distance.svg を参照）"
+    "注: t=0 は各ログの初回発進 (initial launch)。実機の初期停止時間が長くても全ログが発進で揃う"
+    "（pacing 差により同一 t は同一地点を意味しない。走行距離基準は *_vs_distance.svg を参照）"
 )
 
 
@@ -351,6 +352,13 @@ def plot_trajectory(data: dict, map_ways: list | None):
     write_plotly_html(fig, FIGS_DIR / f"{name}.html", BASE)
 
 
+def _tr(d: dict, df: pd.DataFrame) -> np.ndarray:
+    """発進相対時刻 (t - t_launch)。全ログ同一検出 (find_initial_launch) で整列するため、
+    実機の初期停止が長くても比較時系列が発進時刻で揃う (実機だけ遅れる問題の一般対策)。
+    `t_launch` は main で全ログ共通に算出し loaded[label] に格納済み (未設定なら 0)。"""
+    return df["t"].to_numpy(dtype=float) - float(d.get("t_launch", 0.0))
+
+
 def _ts_plot(ax, t, y, d, label, cmd=False):
     """時系列プロット用ヘルパー。応答=各ログのスタイル、指令=薄い細線。"""
     t = np.asarray(t)
@@ -367,9 +375,9 @@ def plot_velocity(data: dict):
     for label, d in data.items():
         vel = d["velocity"]
         cmd = d["cmd"]
-        _ts_plot(axes[0, 0], vel["t"], vel["lon_vel"], d, label)
+        _ts_plot(axes[0, 0], _tr(d, vel), vel["lon_vel"], d, label)
         if not cmd.empty:
-            _ts_plot(axes[1, 0], cmd["t"], cmd["cmd_vel"], d, label, cmd=True)
+            _ts_plot(axes[1, 0], _tr(d, cmd), cmd["cmd_vel"], d, label, cmd=True)
 
     axes[0, 0].set_title(
         "実応答 (VelocityReport.longitudinal_velocity)  ─ 実線/破線/点鎖線は各ログ"
@@ -380,7 +388,7 @@ def plot_velocity(data: dict):
 
     axes[1, 0].set_title("指令 (control_cmd.longitudinal.velocity)  ─ 点線・薄色")
     axes[1, 0].set_ylabel("速度指令 [m/s]")
-    axes[1, 0].set_xlabel("経過時間 [s]")
+    axes[1, 0].set_xlabel("発進からの経過時間 [s]")
     axes[1, 0].legend(fontsize=9)
     axes[1, 0].grid(True, lw=0.5)
 
@@ -395,9 +403,9 @@ def plot_acceleration(data: dict):
     for label, d in data.items():
         acc = d["accel"]
         cmd = d["cmd"]
-        _ts_plot(axes[0, 0], acc["t"], acc["accel"], d, label)
+        _ts_plot(axes[0, 0], _tr(d, acc), acc["accel"], d, label)
         if not cmd.empty:
-            _ts_plot(axes[1, 0], cmd["t"], cmd["cmd_accel"], d, label, cmd=True)
+            _ts_plot(axes[1, 0], _tr(d, cmd), cmd["cmd_accel"], d, label, cmd=True)
 
     axes[0, 0].set_title("実応答 (localization/acceleration.accel.accel.linear.x)")
     axes[0, 0].set_ylabel("加速度 [m/s²]")
@@ -406,7 +414,7 @@ def plot_acceleration(data: dict):
 
     axes[1, 0].set_title("指令 (control_cmd.longitudinal.acceleration)  ─ 点線・薄色")
     axes[1, 0].set_ylabel("加速度指令 [m/s²]")
-    axes[1, 0].set_xlabel("経過時間 [s]")
+    axes[1, 0].set_xlabel("発進からの経過時間 [s]")
     axes[1, 0].legend(fontsize=9)
     axes[1, 0].grid(True, lw=0.5)
 
@@ -421,9 +429,9 @@ def plot_steering(data: dict):
     for label, d in data.items():
         steer = d["steering"]
         cmd = d["cmd"]
-        _ts_plot(axes[0, 0], steer["t"], np.degrees(steer["steer"]), d, label)
+        _ts_plot(axes[0, 0], _tr(d, steer), np.degrees(steer["steer"]), d, label)
         if not cmd.empty:
-            _ts_plot(axes[1, 0], cmd["t"], np.degrees(cmd["cmd_steer"]), d, label, cmd=True)
+            _ts_plot(axes[1, 0], _tr(d, cmd), np.degrees(cmd["cmd_steer"]), d, label, cmd=True)
 
     axes[0, 0].set_title("実応答 (SteeringReport.steering_tire_angle)")
     axes[0, 0].set_ylabel("ステア角 [deg]")
@@ -432,7 +440,7 @@ def plot_steering(data: dict):
 
     axes[1, 0].set_title("指令 (control_cmd.lateral.steering_tire_angle)  ─ 点線・薄色")
     axes[1, 0].set_ylabel("ステア指令 [deg]")
-    axes[1, 0].set_xlabel("経過時間 [s]")
+    axes[1, 0].set_xlabel("発進からの経過時間 [s]")
     axes[1, 0].legend(fontsize=9)
     axes[1, 0].grid(True, lw=0.5)
 
@@ -1666,6 +1674,15 @@ def main() -> None:
     if not loaded:
         warnings.warn("有効なログが1つも読み込めませんでした")
         return
+
+    # 各ログの初回発進時刻 (t_launch) を **全ログ共通の検出器** (find_initial_launch) で算出する。
+    # 比較時系列プロット (velocity/acceleration/steering) と再生ビューアはこれを基準に発進相対へ
+    # 整列する (_tr / build_playback_payload)。実機の初期停止が長くても発進で揃い「実機だけ遅れる」
+    # を防ぐ。real / sim を同一検出器で処理するのが要点 (整列の非対称性を作らない)。
+    # 即発進するログ (例 takanawa) は t_launch≈0 となり従来の t0 基準と実質同じ (無影響)。
+    for d in loaded.values():
+        tl = _find_initial_launch(d["velocity"]) if not d["velocity"].empty else None
+        d["t_launch"] = float(tl) if tl is not None else 0.0
 
     # Lanelet2 地図読み込み (RuntimeConfig が解決済みのパスを保持)
     print("\n=== 地図読み込み中 ===")
