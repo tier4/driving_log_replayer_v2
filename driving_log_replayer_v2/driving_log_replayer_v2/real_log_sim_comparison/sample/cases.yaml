@@ -46,14 +46,20 @@ cases:
       debug_steer_scaling_factor: 1.0   # = 仕様値 (同上)
       acc_time_constant: 0.30           # 縦方向 (pos-mean 改善。0.45 超は shiojiri pos を悪化)
 
-  - tag: ideal_steer
-    vehicle_model: ideal_steer_acc
+  # 遅延・時定数を全てゼロにした理想即応相当 (旧 ideal_steer / ideal_steer_acc ケースの置換)。
+  # delay_steer_acc_geared_wo_fall_guard で acc/steer の time_delay・time_constant を 0 に設定する。
+  # time_delay=0 は入力キュー長 round(delay/dt)=0 で遅延なし。time_constant=0 は C++ 側の
+  # MIN_TIME_CONSTANT=0.03s にクリップされる (ゼロ割防止) が、SUB_DT=1/30s 以下なので実質 1 ステップ
+  # で応答 = ほぼ即応。steer_bias=0.0 で phantom offset を排除し理想性を保つ (未指定だと
+  # load_sim_params() のシム仕様 steer_bias ≈ 0.0005 が継承され余計なオフセットが乗る)。
+  - tag: no_delay
+    vehicle_model: delay_steer_acc_geared_wo_fall_guard
     params:
       wheelbase: 4.76012
-      # ideal_steer_acc は内部 bias を持たないため、Python 側の予測値計算
-      # (sim_steer_kp1 = state + params.steer_bias) が phantom bias を乗せないよう
-      # 0.0 を明示する (未指定だと load_sim_params() のシム仕様 steer_bias ≈ 0.0005 が
-      # 継承され、bias を持たない ideal_steer に余計なオフセットが乗る)。
+      acc_time_delay: 0.0
+      acc_time_constant: 0.0
+      steer_time_delay: 0.0
+      steer_time_constant: 0.0
       steer_bias: 0.0
 
 overlay:
