@@ -204,14 +204,18 @@ def run_pipeline(
     logger.info(f"Stage 3: step3_run_sims over {len(sim_cfg.runs)} run(s)")
     if auto_scenario.exists():
         base_domain_id = int(os.environ.get("ROS_DOMAIN_ID", "0"))
+        # 各 sim run の実行ログ (ros2 launch / autoware / make_lite 等) は run ごとに分離保存する
+        # (集約ログを汚さず後から個別に追えるように)。result_archive 配下なのでアーカイブされる。
+        sim_logs_dir = comparison_dir / "sim_logs"
         for i, run in enumerate(sim_cfg.runs):
             sim_lite = lite_dir / f"{run.tag}.lite"
             env_run = env.copy()
             env_run["SIM_RUN_TAG"] = run.tag
             # nested ros2 launch: DDS 衝突回避のため domain id を切替
             env_run["ROS_DOMAIN_ID"] = str(base_domain_id + 10 + i)
+            run_log = sim_logs_dir / f"{run.tag}.log"
             logger.info(f"  run: tag={run.tag}, vehicle_model={run.vehicle_model}, "
-                        f"ROS_DOMAIN_ID={env_run['ROS_DOMAIN_ID']}")
+                        f"ROS_DOMAIN_ID={env_run['ROS_DOMAIN_ID']}, log={run_log}")
             try:
                 _run([
                     sys.executable, "-m",
@@ -220,9 +224,11 @@ def run_pipeline(
                     "--scenario", str(auto_scenario),
                     "--sim-runs-config", sim_runs_yaml,
                     "--output-lite", str(sim_lite),
-                ], env=env_run, timeout=run.timeout_s)
+                ], env=env_run, timeout=run.timeout_s, log_file=run_log)
             except RuntimeError as exc:
-                logger.warning(f"Stage 3 (run={run.tag}) failed but continuing: {exc}")
+                logger.warning(
+                    f"Stage 3 (run={run.tag}) failed but continuing: {exc} (log: {run_log})"
+                )
     else:
         logger.warning("Stage 3: auto_scenario.yaml が無いため sim 実行をスキップ")
 
@@ -535,9 +541,28 @@ def _validate_bag_dir(bag_dir: Path) -> None:
         raise FileNotFoundError(f"No .mcap or .db3 file found in {bag_dir}")
 
 
-def _run(cmd: list[str], cwd: str | None = None, env: dict | None = None, timeout: int | None = None) -> None:
+def _run(
+    cmd: list[str],
+    cwd: str | None = None,
+    env: dict | None = None,
+    timeout: int | None = None,
+    log_file: Path | None = None,
+) -> None:
+    """subprocess.run の薄いラッパ。非 0 終了で RuntimeError。
+
+    log_file 指定時はサブプロセスの stdout/stderr をそのファイルへリダイレクトし
+    (標準出力には出さず分離保存する)。sim run ごとのログ分離に使う。
+    """
     try:
-        result = subprocess.run(cmd, check=False, cwd=cwd, env=env, timeout=timeout)
+        if log_file is not None:
+            log_file.parent.mkdir(parents=True, exist_ok=True)
+            with log_file.open("w") as f:
+                result = subprocess.run(
+                    cmd, check=False, cwd=cwd, env=env, timeout=timeout,
+                    stdout=f, stderr=subprocess.STDOUT,
+                )
+        else:
+            result = subprocess.run(cmd, check=False, cwd=cwd, env=env, timeout=timeout)
     except subprocess.TimeoutExpired:
         raise RuntimeError(f"Command timed out after {timeout}s: {' '.join(str(c) for c in cmd)}")
     if result.returncode != 0:
