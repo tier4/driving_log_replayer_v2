@@ -127,3 +127,33 @@ def find_sim_launch(
         return None
     moving = df_vel[(df_vel["lon_vel"] > threshold) & (df_vel["t"] >= min_t)]
     return float(moving["t"].iloc[0]) if not moving.empty else None
+
+
+def find_initial_launch(
+    df_vel: pd.DataFrame,
+    threshold: float = 0.5,
+    min_moving_duration: float = 0.5,
+) -> float | None:
+    """初期停止からの「最初の継続的な発進」時刻 [s] を返す (curve② 非設定時の汎用 anchor)。
+
+    df_vel は align_time 済み (列 't') を想定。`threshold` m/s を超え、かつ
+    `min_moving_duration` 秒だけ移動が継続する最初の時刻を採用する (単点ノイズ除けの
+    デバウンス。`find_autonomous_start` の速度フォールバックと同方式)。
+
+    `find_sim_launch` の `min_t` (既定 5s) のような固定窓を持たないため、5s より早く発進する
+    走行や、長い初期停止のあと発進する走行 (例: stop→drive→stop の完全 start→goal) でも
+    正しく初回発進を捉える。real / sim 双方に同一適用して整列の非対称性をなくすのが目的。
+    """
+    if df_vel.empty or "t" not in df_vel.columns:
+        return None
+    t = df_vel["t"].to_numpy()
+    moving = df_vel["lon_vel"].to_numpy() > threshold
+    win = min_moving_duration  # 秒 (t は align_time 済みで秒単位)
+    for i in np.flatnonzero(moving):
+        t_start = t[i]
+        in_win = (t >= t_start) & (t < t_start + win)
+        if in_win.sum() >= 2 and moving[in_win].all():
+            return float(t_start)
+    if moving.any():
+        return float(t[int(np.argmax(moving))])
+    return None

@@ -28,7 +28,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 
-from .lib._events import find_autonomous_start, find_curve2_launch, find_sim_launch
+from .lib._events import find_autonomous_start, find_curve2_launch, find_initial_launch
 from .lib._io import (
     align_time,
     load_cmd,
@@ -62,6 +62,7 @@ def _load_one(
     is_real: bool,
     cmd_topic: list[str],
     curve2_window: tuple[float, float],
+    curve2_configured: bool,
 ) -> dict:
     """1つの bag から velocity/kinematic/cmd/steer を読み、tr 列を付与した dict を返す。"""
     df_mode = load_operation_mode(bag)
@@ -74,9 +75,14 @@ def _load_one(
         raise ValueError(f"{bag} の velocity が空")
     df_vel = align_time(df_vel_raw, t0_ns)
 
-    t_launch = find_curve2_launch(df_vel, window=curve2_window)
+    # curve② が設定されている時のみ curve② 発進窓を使う。非設定 (curve_config_yaml="") では
+    # real/sim とも初回発進で整列する (curve2_window 既定 (20,120) は走行実態と無関係で、停止開始の
+    # 完全 start→goal ではゴール停止終端を発進と誤検出するため。real だけズレる非対称性を排除)。
+    t_launch = None
+    if curve2_configured:
+        t_launch = find_curve2_launch(df_vel, window=curve2_window)
     if t_launch is None:
-        t_launch = find_sim_launch(df_vel, threshold=0.5, min_t=5.0)
+        t_launch = find_initial_launch(df_vel)
         if t_launch is None:
             t_launch = 0.0
 
@@ -309,13 +315,14 @@ def main() -> None:
 
     print("=== データ読み込み ===")
     print(f"  実機: {real_bag}")
+    curve2_configured = cfg.curve2 is not None
     real = _load_one(real_bag, is_real=True, cmd_topic=REAL_CMD_TOPIC_CANDIDATES,
-                     curve2_window=cfg.curve2_window)
+                     curve2_window=cfg.curve2_window, curve2_configured=curve2_configured)
     print(f"  [実機] 発進 t={real['t_launch']:.1f}s")
 
     print(f"  シム: {sim_bag.name}")
     sim = _load_one(sim_bag, is_real=False, cmd_topic=SIM_CMD_TOPIC_CANDIDATES,
-                    curve2_window=cfg.curve2_window)
+                    curve2_window=cfg.curve2_window, curve2_configured=curve2_configured)
     print(f"  [シム] 発進 t={sim['t_launch']:.1f}s")
 
     print_diagnosis(real, sim)

@@ -35,7 +35,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 
-from .lib._events import find_autonomous_start, find_curve2_launch, find_sim_launch
+from .lib._events import find_autonomous_start, find_curve2_launch, find_initial_launch
 from .lib._io import align_time, load_cmd, load_operation_mode, load_velocity, resolve_lite_bag
 from .lib._params_utils import add_params_annotation, load_sim_params, setup_jp_font
 from .lib._runtime_config import add_common_cli_arguments, build_runtime_config
@@ -145,11 +145,24 @@ def simulate_departure(
     return results
 
 
-def _resolve_t_launch(df_vel_aligned: pd.DataFrame, window: tuple[float, float]) -> float:
-    """カーブ② 発進検出。見つからなければ速度ベースのフォールバック (t>=5s で v>0.5)."""
-    t = find_curve2_launch(df_vel_aligned, window=window)
-    if t is None:
-        t = find_sim_launch(df_vel_aligned, threshold=0.5, min_t=5.0)
+def _resolve_t_launch(
+    df_vel_aligned: pd.DataFrame,
+    window: tuple[float, float],
+    *,
+    curve2_configured: bool,
+) -> float:
+    """発進検出。curve② が設定されている時のみ curve② 発進窓を使い、それ以外は初回発進で整列。
+
+    curve② 非設定 (curve_config_yaml="") では curve2_window 既定 (20,120) が走行の実態と無関係で、
+    初期停止が窓外・ゴール停止終端が窓内に入る走行 (停止開始の完全 start→goal) では goal 停止を
+    発進と誤検出してしまう。よって curve② 非設定時は real/sim とも `find_initial_launch` で
+    初回発進に整列する (整列の非対称性を排除)。
+    """
+    if curve2_configured:
+        t = find_curve2_launch(df_vel_aligned, window=window)
+        if t is not None:
+            return float(t)
+    t = find_initial_launch(df_vel_aligned)
     return float(t) if t is not None else 0.0
 
 
@@ -177,7 +190,9 @@ def main() -> None:
     t0_ns = find_autonomous_start(df_mode, df_vel_raw)
     df_vel = align_time(df_vel_raw, t0_ns)
 
-    t_launch = _resolve_t_launch(df_vel, cfg.curve2_window)
+    t_launch = _resolve_t_launch(
+        df_vel, cfg.curve2_window, curve2_configured=cfg.curve2 is not None
+    )
     print(f"実機 t_launch = {t_launch:.2f} s")
 
     cmd_topic = (
