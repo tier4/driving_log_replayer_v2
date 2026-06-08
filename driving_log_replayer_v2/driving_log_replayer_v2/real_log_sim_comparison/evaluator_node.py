@@ -389,6 +389,16 @@ def run_analysis(
     except RuntimeError as exc:
         logger.warning(f"Stage 11 (step11_build_html_report) failed but continuing: {exc}")
 
+    # ---- Stage 12: 開発者向け notebook (report.ipynb) 生成 ----
+    logger.info("Stage 12: step12_build_notebook (result_archive/real_log_sim_comparison/report.ipynb)")
+    try:
+        _run([
+            sys.executable, "-m",
+            "driving_log_replayer_v2.real_log_sim_comparison.step12_build_notebook",
+        ], env=env, timeout=120)
+    except RuntimeError as exc:
+        logger.warning(f"Stage 12 (step12_build_notebook) failed but continuing: {exc}")
+
     # ---- 生成物カウント (E1: 沈黙の失敗対策) ----
     # Stage 3/5 は失敗継続するため、実際に出力が出た数を数えて成否判定の材料にする。
     def _lite_exists(tag: str) -> bool:
@@ -407,11 +417,15 @@ def run_analysis(
         "report_ok": int((comparison_dir / "report.md").exists()),
         "cases_summary_ok": int((comparison_dir / "cases" / "cases_summary.md").exists()),
         "param_sweep_ok": int((comparison_dir / "param_sweep" / "param_sweep_summary.md").exists()),
-        "dp_compare_ok": int((comparison_dir / "figures" / "dp_real_vs_sim.svg").exists()),
+        "dp_compare_ok": int(
+            (comparison_dir / "figures" / "dp_real_vs_sim.svg").exists()
+            or (comparison_dir / "figures" / "dp_real_vs_sim.fig.json").exists()
+        ),
         "brake_sweep_ok": int((comparison_dir / "brake_sweep" / "brake_sweep.csv").exists()),
-        "curve_diag_ok": int((comparison_dir / "curve_diag" / "curve_divergence.svg").exists()),
-        # report.html は comparison/ の親 (result_archive/) 直下に生成される。
+        "curve_diag_ok": int((comparison_dir / "curve_diag" / "curve_divergence.fig.json").exists()),
+        # report.html / report.ipynb は comparison/ の親 (result_archive/) 直下に生成される。
         "report_html_ok": int((comparison_dir.parent / "report.html").exists()),
+        "report_ipynb_ok": int((comparison_dir.parent / "report.ipynb").exists()),
     }
     logger.info(
         f"Pipeline outputs: sim_runs {sim_produced}/{len(sim_cfg.runs)}, "
@@ -419,7 +433,7 @@ def run_analysis(
         f"report={counts['report_ok']}, cases_summary={counts['cases_summary_ok']}, "
         f"param_sweep={counts['param_sweep_ok']}, dp_compare={counts['dp_compare_ok']}, "
         f"brake_sweep={counts['brake_sweep_ok']}, curve_diag={counts['curve_diag_ok']}, "
-        f"report_html={counts['report_html_ok']}"
+        f"report_html={counts['report_html_ok']}, report_ipynb={counts['report_ipynb_ok']}"
     )
     return counts
 

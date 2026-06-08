@@ -96,9 +96,11 @@ def main() -> None:
     print(
         f"\n解析完了: sim_runs {sim_p}/{sim_e}, cases {case_p}/{case_e}, "
         f"report={counts['report_ok']}, cases_summary={counts['cases_summary_ok']}, "
-        f"param_sweep={counts['param_sweep_ok']}, report_html={counts['report_html_ok']}"
+        f"param_sweep={counts['param_sweep_ok']}, report_html={counts['report_html_ok']}, "
+        f"report_ipynb={counts['report_ipynb_ok']}"
     )
     print(f"レポート: {bundle_dir / 'report.html'}")
+    print(f"notebook: {bundle_dir / 'report.ipynb'}")
     if case_p == 0:
         print("WARNING: case 出力が 0 件です (lite/ に real.lite があるか確認してください)",
               file=sys.stderr)
