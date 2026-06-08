@@ -1,40 +1,31 @@
 #!/usr/bin/env python3
-"""Stage 11: comparison/ 配下の全プロットを 1 枚の自己完結 HTML に埋め込むレポート生成.
+"""Stage 11: comparison/ 配下の図スペック (*.fig.json) を 1 枚の単一 report.html に束ねる.
 
 10 段階パイプライン (step4〜step10) は `comparison/` 配下の複数サブディレクトリ
 (figures/, nstep/<tag>/, cases/overlay/, param_sweep/, brake_sweep/, curve_diag/) に
-多数の SVG・plotly HTML と 3 種の Markdown レポート (report.md, cases/cases_summary.md,
-curve_diag/curve_divergence.md) を散らして出力する。本ステージはそれらを走査し、
-全アセットを**外部参照なしでファイル内に埋め込んだ**目次付き `report.html` を
-`result_archive/` 直下 (comparison/ の親) に生成する。report.html 1 枚を渡すだけで
-Slack 等で共有・閲覧できる（バンドルフォルダごと配る必要がない）。
+多数の **plotly 図スペック (`*.fig.json` = データ + レイアウト)** と再生ビューア
+(`trajectory_playback.html`)、3 種の Markdown レポートを散らして出力する。本ステージは
+それらを走査し、全アセットを**外部参照なしで 1 枚に埋め込んだ**目次付き `report.html` を
+`result_archive/` 直下 (comparison/ の親) に生成する。
+
+旧方式（commit 59fef44）は matplotlib SVG を base64 data-URI で詰め込み ~38MB に肥大した。
+本方式は SVG を廃し、各図を **数値データ + plotly.js クライアント描画** に変える:
+- `plotly.min.js` を <head> に **1 回だけ**インライン（オフライン動作維持）。
+- 各図は `<div class='plotly-fig'>` プレースホルダ + 直後の
+  `<script type='application/json'>` に図スペックを並置。
+- `IntersectionObserver` で**ビューポート進入時に遅延 `Plotly.newPlot`**（数十図を一度に
+  描画しない）。折りたたみ `<details>` / 非選択ケースタブは display:none で IO が発火しない
+  ため、details の toggle・ケースタブ切替でも未描画図を reveal-render する。
 
 レポートは出力ディレクトリではなく **比較の概念** でセクション分けする（読み手が
-「何を何と比べた図か」で辿れるようにするため）:
-
-1. 実機 rosbag 解析   — 実機ログ(SSOT)のみから抽出する特性・車両パラメータ同定 (sim 非介在)
-2. プランナ出力比較   — DiffusionPlanner 出力軌跡を実走・最終 planning・sim 出力と比較
-3. N-step オープンループ比較 — 実機状態リセットから N ステップ連続予測した車両モデルの差
-   (N=1 = 毎ステップリセットの 1 ステップ予測、N>1 = free-running の累積誤差)
-4. シナリオ クローズループ比較 — auto-scenario を sim で closed-loop 実行した実機との乖離
-
-各図は出力先ディレクトリではなく (ディレクトリ, ファイル名) の組で分類する。figures/ には
-クローズループ図・DP 図・brake 同定図が混在するため、ディレクトリ単位では分けられない。
-未知の図は捨てずに「その他」セクションへ回す。さらに末尾に実行構成 (シナリオ / sim_runs /
+「何を何と比べた図か」で辿れるようにするため）。各図は (ディレクトリ, ファイル名 stem) の
+組で分類する。未知の図は捨てず「その他」へ回す。末尾に実行構成 (シナリオ / sim_runs /
 車両パラメータ YAML) を折りたたみで埋め込み、どの設定で生成した報告か追跡できるようにする。
 
-アセット埋め込みは種別ごとに異なる（一律化すると衝突・容量破綻する。詳細は lib/_inline_assets）:
-- `*.svg`  — matplotlib 製の静止画。data-URI base64 を <head> の CSS クラスに 1 回だけ定義し、
-  サムネと純 CSS ライトボックス（拡大）の両方から参照する（id 衝突回避・二重埋め込み回避）。
-- `*.html` (plotly) — plotly 製インタラクティブ図。<body> 内部フラグメントを本文に並置し、
-  plotly.min.js は report 全体で 1 回だけ <head> に埋め込んで共有する（iframe 化すると
-  plotly.min.js が図数分重複する）。隠れタブ内の図は CSS タブ切替で resize を発火しないため、
-  末尾の glue JS で load 時・ケース切替時に Plotly.Plots.resize() を呼ぶ。
-- `*.html` (playback 等) — 独自 canvas JS の自己完結 HTML。<iframe srcdoc> で隔離埋め込みする。
-
-本ステージは読み取り専用 (バンドル直下に report.html を 1 枚足すだけ)。他ステージの出力は
-変更しない。`markdown` パッケージがあれば Markdown を整形 HTML 化し、無ければ生テキストを
-<pre> で埋め込む (ハード依存にしない)。
+再生ビューア (`trajectory_playback.html`) は独自 canvas JS の自己完結 HTML のため
+`<iframe srcdoc>` で隔離埋め込みする（グローバル衝突回避）。`markdown` パッケージが
+あれば Markdown を整形 HTML 化し、無ければ生テキストを <pre> で埋め込む。本ステージは
+読み取り専用 (バンドル直下に report.html を 1 枚足すだけ)。
 """
 
 from __future__ import annotations
@@ -45,14 +36,8 @@ from pathlib import Path
 import re
 import warnings
 
-from .lib._inline_assets import (
-    escape_srcdoc,
-    extract_plotly_body,
-    is_plotly_html,
-    plotly_js_script,
-    svg_aspect_ratio,
-    svg_to_data_uri,
-)
+from .lib._fig_io import FIG_SUFFIX, collect_fig_jsons
+from .lib._inline_assets import escape_srcdoc, plotly_js_script
 from .lib._params_utils import _INFO_YAML, _SIM_YAML
 from .lib._plotly_utils import FIG_HEIGHTS, IFRAME_PAD
 from .lib._runtime_config import add_common_cli_arguments, build_runtime_config
@@ -100,7 +85,7 @@ CAPTIONS: dict[str, str] = {
     "curve_divergence": "カーブ乖離 詳細診断（縦横分解 + yaw 差）",
 }
 
-# step4 のカーブ別連番図 (curve1_analysis.svg 等)。接頭辞除去後のサフィックスで照合。
+# step4 のカーブ別連番図 (curve1_analysis 等)。接頭辞除去後のサフィックスで照合。
 _CURVE_SUFFIX_CAPTIONS: dict[str, str] = {
     "analysis": "カーブ個別分析（3 段）",
     "steering_detail": "カーブ ステア詳細",
@@ -108,20 +93,33 @@ _CURVE_SUFFIX_CAPTIONS: dict[str, str] = {
     "steer_response": "カーブ ステア応答",
 }
 
-# plotly 図 (*.html) を <iframe> 埋め込みする際の高さ [px]（stem → px）。
-# 生成側 (step4/step5) と共有する lib._plotly_utils.FIG_HEIGHTS（layout 高さの単一
-# ソース）+ IFRAME_PAD（モードバー等の余白）から導出する。
+# 再生ビューア等、plotly でない自己完結 HTML を <iframe> 埋め込みする際の高さ [px]。
+# 生成側 (step4) と共有する lib._plotly_utils.FIG_HEIGHTS + IFRAME_PAD から導出する。
 _IFRAME_HEIGHTS: dict[str, int] = {stem: h + IFRAME_PAD for stem, h in FIG_HEIGHTS.items()}
 _IFRAME_HEIGHT_DEFAULT = 650
 
-# 図として収集する拡張子と、インタラクティブ図（plotly HTML、iframe 埋め込み・
-# ライトボックス対象外）の判定。形式の追加・変更時はここだけ直せばよい。
-_FIGURE_SUFFIXES = {".svg", ".html"}
+# 収集対象。plotly 図スペック (*.fig.json) と、自己完結 HTML ビューア (*.html)。
+_PLAYBACK_SUFFIX = ".html"
+
+# iframe srcdoc で埋め込む「自己完結 HTML ビューア」の stem 集合。canvas 独自 JS で
+# 外部参照を持たないものに限定する（plotly standalone HTML は plotly.min.js を相対参照
+# するため srcdoc 内で壊れる。それらは *.fig.json へ変換し本文に直接描画する）。
+_SELFCONTAINED_HTML: set[str] = {"trajectory_playback"}
 
 
-def _is_interactive(rel: Path) -> bool:
-    """plotly 製インタラクティブ図（iframe 埋め込み対象）かどうか。"""
-    return rel.suffix == ".html"
+def _asset_stem(rel: Path) -> str:
+    """アセット相対パスから拡張子（.fig.json / .html）を除いた stem を返す。"""
+    name = rel.name
+    for suf in (FIG_SUFFIX, _PLAYBACK_SUFFIX):
+        if name.endswith(suf):
+            return name[: -len(suf)]
+    return rel.stem
+
+
+def _is_fig_json(rel: Path) -> bool:
+    """plotly 図スペック (*.fig.json) か（self-contained HTML ビューアと区別）。"""
+    return rel.name.endswith(FIG_SUFFIX)
+
 
 # --- 概念セクション定義 ---------------------------------------------------------
 # (key, タイトル, 1 行説明)。表示順はこのリスト順。"other" は未分類フォールバック。
@@ -181,13 +179,11 @@ _MARKDOWN_REPORTS: list[tuple[str, str, str]] = [
 ]
 
 
-def _caption_for(filename: str) -> str:
-    """画像ファイル名に対応する日本語キャプションを返す（拡張子非依存の stem で照合）。"""
-    stem = Path(filename).stem
+def _caption_for(stem: str) -> str:
+    """画像 stem（拡張子除去済み）に対応する日本語キャプションを返す。"""
     if stem in CAPTIONS:
         return CAPTIONS[stem]
     # param_sweep の個別図 (step7): <param>_sweep / pair_<a>_<b>
-    # (brake_sweep 等の既知 stem は上の CAPTIONS で先に解決済み)
     m = re.match(r"(.+)_sweep$", stem)
     if m:
         return f"{m.group(1)} グリッド sweep 同定"
@@ -205,38 +201,31 @@ def _caption_for(filename: str) -> str:
         cap = _CURVE_SUFFIX_CAPTIONS.get(suffix)
         if cap:
             return f"カーブ{idx}: {cap}"
-    # フォールバック: 拡張子除去 + アンダースコアを空白に
+    # フォールバック: アンダースコアを空白に
     return stem.replace("_", " ")
 
 
 def _classify(rel: Path) -> str:
-    """画像の相対パス (comparison/ 基準) を概念セクションキーへ分類する。
+    """図の相対パス (comparison/ 基準) を概念セクションキーへ分類する。
 
     figures/ 配下にはクローズループ図・DP 図・brake 同定図が混在するため、
-    ディレクトリだけでなくファイル名でも判定する。
+    ディレクトリだけでなく stem でも判定する。
     """
     top = rel.parts[0] if len(rel.parts) > 1 else "."
-    stem = rel.stem
+    stem = _asset_stem(rel)
 
-    # DiffusionPlanner 出力比較（step8、figures/dp_*.svg）
     if stem.startswith("dp_"):
         return "dp"
-    # brake_tc 同定の補助図（step9、figures/ に出力される）
     if stem in {"departure_brake_tc_sensitivity", "real_cmd_acc_departure"}:
         return "real_analysis"
-    # 車両パラメータ同定 sweep（step7 / step9、実機ログのみ）
     if top in {"param_sweep", "brake_sweep"}:
         return "real_analysis"
-    # N-step オープンループ解析（step5）とケース集約の重ね描き（step6）
     if top in {"nstep", "cases"}:
         return "ol_nstep"
-    # カーブ乖離詳細診断（step10、実機 vs sim closed-loop）
     if top == "curve_diag":
         return "closed_loop"
-    # step4 の closed-loop 比較図（既知 stem + カーブ別連番図 curveN_*）
     if stem in _CLOSED_LOOP_STEMS or re.match(r"curve\d+_.+$", stem):
         return "closed_loop"
-    # 既知のいずれにも当たらない図は捨てず「その他」へ（黙って誤分類しない）
     return "other"
 
 
@@ -271,20 +260,19 @@ nav.toc li.toc-sec { font-weight: 600; margin-top: 0.35rem; }
 nav.toc li.toc-md { font-size: 0.82rem; padding-left: 1rem; font-weight: 400; }
 nav.toc .toc-top { display: inline-block; margin-bottom: 0.6rem; font-size: 0.82rem; }
 
-/* セクションは <details> で折りたたみ可能（既定 open）。ネイティブ HTML・JS 不使用。 */
+/* セクションは <details> で折りたたみ可能（既定 open）。 */
 details.section { margin-bottom: 2.2rem; border-top: 2px solid var(--border); padding-top: 0.4rem; }
 details.section > summary { cursor: pointer; font-size: 1.35rem; font-weight: 700; padding: 0.3rem 0; }
 details.section > summary:hover { color: var(--accent); }
 .sec-desc { color: var(--muted); font-size: 0.92rem; margin: 0.4rem 0 1.2rem; }
 .sec-desc .toplink { margin-left: 0.6rem; font-size: 0.82rem; white-space: nowrap; }
 figure { margin: 0 0 2rem; }
-/* SVG サムネ。data-URI は <head> の `.fig-*{background-image}` で 1 回だけ定義し、
-   ここではレイアウト・表示だけを担う（背景画像を contain で原寸比表示）。 */
-.thumb { display: block; width: 100%; background-size: contain; background-repeat: no-repeat;
-         background-position: center; border: 1px solid var(--border); border-radius: 4px; cursor: zoom-in; }
-/* plotly インライン図 / playback iframe。高さは図種別ごとにインラインで指定する。 */
-figure iframe.plotly-fig { width: 100%; border: 1px solid var(--border); border-radius: 4px; background: #fff; }
-figure .plotly-fig { width: 100%; }
+/* plotly 図 div / playback iframe。高さは図種別ごとに指定する。 */
+figure .plotly-fig { width: 100%; min-height: 120px; border: 1px solid var(--border);
+                     border-radius: 4px; background: #fff; }
+figure iframe.playback-fig { width: 100%; border: 1px solid var(--border); border-radius: 4px; background: #fff; }
+.plotly-fig.pending::before { content: "図を描画中…"; display: block; padding: 2rem;
+                              color: var(--muted); font-size: 0.85rem; text-align: center; }
 figcaption { margin-bottom: 0.4rem; font-weight: 600; }
 figcaption .fname { font-weight: 400; color: var(--muted); font-size: 0.82rem; margin-left: 0.5rem; }
 details.md-report { border-top: 1px dashed var(--border); margin-top: 2rem; padding-top: 0.5rem; }
@@ -297,10 +285,7 @@ details.md-report > summary:hover { color: var(--accent); }
 .empty { color: var(--muted); font-style: italic; }
 
 /* 純 CSS ケースタブ（プロット単位）。各プロットブロック先頭に独立したケースラジオを置き、
-   そのブロック内のパネルだけを切り替える（他プロットには影響しない）。JS 不使用・オフライン可。
-   CSS 無効環境では全パネルが縦に並んで degrade。表示規則
-   (.casesync > input.cr-<case>:checked ~ .tabpanel.case-<case>) はケース slug ごとに
-   build_html が動的生成する（ラジオの name はブロック単位なので排他はブロック内で閉じる）。 */
+   そのブロック内のパネルだけを切り替える（他プロットには影響しない）。JS 不使用・オフライン可。 */
 .casesync { margin: 0.4rem 0 2.2rem; }
 .casesync > h3 { margin: 0 0 0.5rem; }
 .casesync > .casesync-label { font-size: 0.85rem; color: var(--muted); margin-right: 0.4rem; }
@@ -310,23 +295,6 @@ details.md-report > summary:hover { color: var(--accent); }
                     font-size: 0.88rem; color: var(--accent); background: #fafafa; user-select: none; }
 .casesync > input:checked + label { background: var(--accent); color: #fff; border-color: var(--accent); }
 .tabpanel { display: none; }
-
-/* 純 CSS ライトボックス（画像拡大）。サムネクリックで #lb-* を :target にしオーバーレイ表示。
-   オーバーレイは display:none/details の祖先内だと :target が効かないため <main> 末尾に一括配置する。 */
-.lightboxes:empty { display: none; }
-.lightbox { display: none; }
-.lightbox:target { display: flex; position: fixed; inset: 0; z-index: 1000;
-                   background: rgba(0,0,0,0.85); align-items: center; justify-content: center; padding: 2rem; }
-.lightbox .lb-close { position: absolute; inset: 0; cursor: zoom-out; }
-.lightbox .lb-fig { position: relative; z-index: 1; margin: 0; max-width: 96vw; max-height: 94vh;
-                    display: flex; flex-direction: column; align-items: center; }
-/* 拡大画像。サムネと同じ `.fig-*` 背景クラスを参照（data-URI は重複しない）。背景画像は
-   固有サイズを持たないため、ビューポート枠を指定して contain で全体表示する。 */
-.lightbox .lb-fig .lb-img { width: 96vw; height: 88vh; background-size: contain;
-                            background-repeat: no-repeat; background-position: center;
-                            border: 1px solid #444; border-radius: 4px; background-color: #fff; }
-.lightbox .lb-cap { color: #eee; font-size: 0.85rem; margin-top: 0.5rem; text-align: center; }
-.lightbox .lb-cap a { color: #9bf; }
 
 /* 実行構成（設定ファイル）の生テキスト表示 */
 .cfg-pre { background: #f6f6f6; padding: 1rem; overflow-x: auto; font-size: 0.82rem;
@@ -342,102 +310,43 @@ def _slug(text: str) -> str:
     return re.sub(r"[^A-Za-z0-9_-]+", "-", text).strip("-").lower()
 
 
-def _lb_id(rel: Path) -> str:
-    """画像のライトボックス用 id（rel パスから一意に生成）。"""
-    return "lb-" + _slug(rel.as_posix())
-
-
-def _fig_class(rel: Path) -> str:
-    """SVG の data-URI を <head> CSS に 1 回だけ定義する際のクラス名（rel から一意）。
-
-    サムネと拡大オーバーレイの両方がこのクラスを background-image で参照するため、
-    巨大な base64 文字列はファイル内に 1 回しか現れない（二重埋め込み回避）。
-    """
-    return "fig-" + _slug(rel.as_posix())
-
-
 def _figure(rel: Path, comparison_dir: Path, caption: str | None = None) -> str:
-    """1 図分の <figure> HTML を返す（形式で分岐し、外部参照なしで埋め込む）。
+    """1 図分の <figure> HTML を返す（形式で分岐、外部参照なしで埋め込む）。
 
-    rel は comparison/ 基準の相対パス。comparison_dir からファイル内容を読んで埋め込む。
-    caption 省略時はファイル名から日本語キャプションを導出する。
-
-    - `*.svg`         → サムネ <span>（背景画像は <head> の `.fig-*` クラス＝data-URI を参照）。
-      クリックでライトボックス #lb-* を開く（拡大オーバーレイは build_html が <main> 末尾に一括出力）。
-    - `*.html`(plotly)→ <body> 内部フラグメントを <div class='plotly-fig'> に並置（plotly.min.js
-      は report 全体で 1 回共有）。図自体がズーム可能なためライトボックス無し。
-    - `*.html`(その他)→ playback 等の自己完結 HTML。<iframe srcdoc> で隔離埋め込み。
+    - `*.fig.json` (plotly) → `<div class='plotly-fig pending'>` プレースホルダ + 直後の
+      `<script type='application/json'>` に図スペック。描画は glue JS が遅延実行する。
+    - `*.html` (playback 等) → 自己完結 canvas HTML。`<iframe srcdoc>` で隔離埋め込み。
     """
     fname = rel.as_posix()
+    stem = _asset_stem(rel)
     if caption is None:
-        caption = _caption_for(rel.name)
+        caption = _caption_for(stem)
     cap_html = (
         f"<figcaption>{html.escape(caption)}"
         f"<span class='fname'>{html.escape(fname)}</span></figcaption>"
     )
-    if _is_interactive(rel):
-        text = (comparison_dir / rel).read_text(encoding="utf-8", errors="replace")
-        if is_plotly_html(text):
-            # plotly フラグメントを本文に直接並置（div の固有高さは plotly が style で持つ）。
-            return f"<figure>{cap_html}<div class='plotly-fig'>{extract_plotly_body(text)}</div></figure>"
-        # 自己完結 HTML（playback 等）は独自 JS 衝突回避のため iframe srcdoc で隔離。
-        height = _IFRAME_HEIGHTS.get(rel.stem, _IFRAME_HEIGHT_DEFAULT)
+    if _is_fig_json(rel):
+        spec = (comparison_dir / rel).read_text(encoding="utf-8", errors="replace")
+        fig_id = "fig-" + _slug(fname)
+        height = FIG_HEIGHTS.get(stem)
+        style = f" style='height:{height}px'" if height else ""
+        # 図スペック JSON は <script type='application/json'> にそのまま入れる（実行されない）。
+        # </script> 直書きの早期終了だけ無害化する。
+        spec_safe = spec.replace("</", "<\\/")
         return (
             f"<figure>{cap_html}"
-            f"<iframe class='plotly-fig' srcdoc='{escape_srcdoc(text)}' "
-            f"style='height:{height}px' title='{html.escape(caption)}'></iframe></figure>"
+            f"<div class='plotly-fig pending' id='{fig_id}'{style}></div>"
+            f"<script type='application/json' class='figspec' data-target='{fig_id}'>{spec_safe}</script>"
+            f"</figure>"
         )
-    # SVG: 背景画像クラス参照のサムネ（アスペクト比は viewBox 由来、読込前のレイアウト確定用）
-    ar = svg_aspect_ratio(comparison_dir / rel)
-    style = f" style='aspect-ratio:{ar:.4f}'" if ar else ""
+    # 自己完結 HTML（playback 等）は独自 JS 衝突回避のため iframe srcdoc で隔離。
+    text = (comparison_dir / rel).read_text(encoding="utf-8", errors="replace")
+    height = _IFRAME_HEIGHTS.get(stem, _IFRAME_HEIGHT_DEFAULT)
     return (
         f"<figure>{cap_html}"
-        f"<a class='thumb-link' href='#{_lb_id(rel)}'>"
-        f"<span class='thumb {_fig_class(rel)}'{style} role='img' "
-        f"aria-label='{html.escape(caption)}'></span></a></figure>"
+        f"<iframe class='playback-fig' srcdoc='{escape_srcdoc(text)}' "
+        f"style='height:{height}px' title='{html.escape(caption)}'></iframe></figure>"
     )
-
-
-def _svg_css(images: list[Path], comparison_dir: Path) -> str:
-    """全 SVG の data-URI 背景を `.fig-*{background-image:url(...)}` として 1 回ずつ定義する。
-
-    サムネ・拡大オーバーレイの双方がこのクラスを参照するため、巨大な base64 文字列が
-    ファイル内に重複しない（同じ SVG を 2 回 data-URI 化すると報告が倍に膨らむ）。
-    """
-    rules: list[str] = []
-    for rel in images:
-        if _is_interactive(rel):
-            continue
-        uri = svg_to_data_uri(comparison_dir / rel)
-        rules.append(f'.{_fig_class(rel)}{{background-image:url("{uri}")}}')
-    return "\n".join(rules)
-
-
-def _lightbox_overlays(images: list[Path]) -> str:
-    """全 SVG の拡大用オーバーレイを 1 まとめで返す（<main> 末尾に配置する想定）。
-
-    オーバーレイは display:none やタブパネル・<details> の中に置くと :target が効かないため、
-    祖先に隠し要素を持たない位置（main 直下末尾）へ一括出力する。拡大画像も `.fig-*` 背景
-    クラスを参照するため data-URI は重複しない。plotly / playback 図 (*.html) は対象外。
-    """
-    parts = ["<div class='lightboxes'>"]
-    for rel in images:
-        if _is_interactive(rel):
-            continue
-        caption = _caption_for(rel.name)
-        # 閉じると元セクションに戻す（href='#' だとページ先頭へ飛んでしまうため）
-        close_href = f"#sec-{_classify(rel)}"
-        parts.append(
-            f"<div class='lightbox' id='{_lb_id(rel)}'>"
-            f"<a class='lb-close' href='{close_href}' title='閉じる'></a>"
-            f"<figure class='lb-fig'>"
-            f"<span class='lb-img {_fig_class(rel)}' role='img' "
-            f"aria-label='{html.escape(caption)}'></span>"
-            f"<figcaption class='lb-cap'>{html.escape(caption)}</figcaption>"
-            f"</figure></div>"
-        )
-    parts.append("</div>")
-    return "".join(parts)
 
 
 def _case_of(rel: Path) -> str | None:
@@ -457,14 +366,11 @@ def _render_case_tabs(
 ) -> list[str]:
     """プロット種別ごとにブロックを作り、ブロックごとに独立したケースタブを付ける。
 
-    per_case: {case_tag: {filename: rel}}。各ブロック先頭に専用のケースラジオを置き、
+    per_case: {case_tag: {stem: rel}}。各ブロック先頭に専用のケースラジオを置き、
     選んだケースの図がそのブロック内だけで切り替わる（他プロットには影響しない）。
-    各パネルは `case-<slug>` クラスを持ち、build_html が生成する
-    `.casesync > input.cr-<slug>:checked ~ .tabpanel.case-<slug>` 規則で表示制御する
-    （ラジオの name はブロック単位なので排他はブロック内で閉じる）。
     """
     cases = _sorted_cases(list(per_case.keys()))
-    plot_types = sorted({fn for files in per_case.values() for fn in files})
+    plot_types = sorted({stem for files in per_case.values() for stem in files})
 
     out: list[str] = []
     for pt in plot_types:
@@ -476,7 +382,6 @@ def _render_case_tabs(
             f"<h3>{html.escape(caption)} <span class='fname'>{html.escape(pt)}</span></h3>"
         )
         out.append("<span class='casesync-label'>ケース切替:</span>")
-        # ブロック専用のケースラジオ + ラベル（最初のケースを既定選択）
         for i, c in enumerate(block_cases):
             rid = f"{group}-{_slug(c)}"
             checked = " checked" if i == 0 else ""
@@ -484,7 +389,6 @@ def _render_case_tabs(
                 f"<input type='radio' name='{group}' id='{rid}' class='cr-{_slug(c)}'{checked}>"
             )
             out.append(f"<label for='{rid}'>{html.escape(c)}</label>")
-        # パネル（存在するケースのみ。class でケース対応）
         for c in block_cases:
             out.append(
                 f"<div class='tabpanel case-{_slug(c)}'>"
@@ -497,7 +401,7 @@ def _render_case_tabs(
 def _render_category_images(
     rels: list[Path], comparison_dir: Path, cat: str = ""
 ) -> list[str]:
-    """カテゴリ内の画像群を描画する。
+    """カテゴリ内の図群を描画する。
 
     nstep/<case>/ の図は「プロット種別ごとのブロック ＋ ブロック単位のケースタブ」で描画する。
     それ以外の図 (cases/overlay 等) は通常の figure として先に並べる。
@@ -507,7 +411,7 @@ def _render_category_images(
     for r in rels:
         case = _case_of(r)
         if case is not None:
-            per_case.setdefault(case, {})[r.name] = r
+            per_case.setdefault(case, {})[_asset_stem(r)] = r
 
     out: list[str] = [_figure(r, comparison_dir) for r in flat]
     if per_case:
@@ -516,13 +420,7 @@ def _render_category_images(
 
 
 def _casesync_css(by_cat: dict[str, list[Path]]) -> str:
-    """ケースごとのタブ表示規則を生成する。
-
-    ブロック内のラジオ `input.cr-<slug>` が checked のとき、同ブロック内の
-    `.tabpanel.case-<slug>` を表示する。規則はケース slug にのみ依存するため
-    全カテゴリのケース集合の和集合に対して 1 規則ずつ出せばよい
-    （ブロック間の排他はラジオの name で閉じる）。
-    """
+    """ケースごとのタブ表示規則を生成する（ケース slug 単位、ブロック間排他はラジオ name で閉じる）。"""
     cases: set[str] = set()
     for rels in by_cat.values():
         cases.update(c for r in rels if (c := _case_of(r)) is not None)
@@ -534,22 +432,21 @@ def _casesync_css(by_cat: dict[str, list[Path]]) -> str:
 
 
 def _collect_figures(comparison_dir: Path) -> list[Path]:
-    """comparison/ 配下の図（*.svg + plotly/playback *.html）を集める。
+    """comparison/ 配下の図（*.fig.json + 自己完結ビューア *.html）を集める。
 
-    自身の生成物（report.html / plotly.min.js はバンドル直下なので元々入らない）を
-    念のため除外する。
+    plotly 図スペックと、再生ビューア (trajectory_playback.html 等の自己完結 HTML) を
+    対象とする。report.html / plotly.min.js は元々 comparison/ の外なので入らない。
     """
-    figures = [
+    figs = collect_fig_jsons(comparison_dir)
+    playbacks = [
         p
-        for p in comparison_dir.rglob("*")
-        if p.suffix in _FIGURE_SUFFIXES and p.name not in {"report.html", "plotly.min.js"}
+        for p in comparison_dir.rglob("*" + _PLAYBACK_SUFFIX)
+        if _asset_stem(p) in _SELFCONTAINED_HTML
     ]
-    return sorted(figures, key=lambda p: str(p))
+    return sorted([*figs, *playbacks], key=lambda p: str(p))
 
 
-# レポート冒頭に置く分析パイプライン解説。評価ノードが実機ログ抽出から HTML 集約まで順に実行する
-# 10 段階パイプラインの俯瞰 (README.ja.md の「パイプライン（10 段階）」表と同期)。本レポートは
-# 各 stage の成果物 (図・Markdown) をカテゴリ別に束ねたもの。
+# レポート冒頭に置く分析パイプライン解説（README.ja.md の表と同期）。
 _PIPELINE_INTRO = """
 <details class="section" open id="sec-pipeline">
 <summary>分析パイプライン（10 段階）</summary>
@@ -562,35 +459,74 @@ _PIPELINE_INTRO = """
 <tr><td>1</td><td>実機ログ抽出 (step1_make_lite)</td><td>input_bag から必要トピックを抽出し real.lite を生成</td></tr>
 <tr><td>2</td><td>scenario 自動生成 (step2_bag_to_scenario)</td><td>実機 bag + 地図から OpenSCENARIO (auto_scenario.yaml) を生成</td></tr>
 <tr><td>3</td><td>closed-loop シム実行 (step3_run_sims)</td><td>auto_scenario + sim_runs.yaml で sim を回し sim lite を生成</td></tr>
-<tr><td>4</td><td>実機 + sim 比較解析 (step4_compare_logs)</td><td>速度・ステア・軌跡を N-way 重ね描き (report.md・図)</td></tr>
+<tr><td>4</td><td>実機 + sim 比較解析 (step4_compare_logs)</td><td>速度・ステア・軌跡を N-way 重ね描き (report.md・図スペック)</td></tr>
 <tr><td>5</td><td>VehicleModel N-step オープンループ解析 (step5_analyze_nstep)</td><td>real.lite + cases.yaml の各ケースで free-running rollout の終端誤差を評価 (nstep/&lt;tag&gt;/)</td></tr>
 <tr><td>6</td><td>ケース集約解析 (step6_analyze_cases)</td><td>全ケースの N-step 誤差を横断集約 (cases_summary.md・overlay)</td></tr>
 <tr><td>7</td><td>パラメータ sweep 同定 (step7_sweep_params)</td><td>車両モデル各パラメータを sweep し終端誤差最小値を同定 (param_sweep_summary.md)</td></tr>
-<tr><td>8</td><td>DP 軌跡比較 (step8_compare_dp_trajectory)</td><td>DiffusionPlanner 出力軌跡を実機 vs sim で比較 (dp_*.svg)</td></tr>
+<tr><td>8</td><td>DP 軌跡比較 (step8_compare_dp_trajectory)</td><td>DiffusionPlanner 出力軌跡を実機 vs sim で比較 (dp_*)</td></tr>
 <tr><td>9</td><td>縦パラ同定 (step9_identify_brake)</td><td>発進フィットで brake_time_constant を同定 (brake_sweep)</td></tr>
 <tr><td>10</td><td>カーブ乖離診断 (step10_diagnose_curve)</td><td>カーブ/発進区間の乖離を縦横・速度・yaw で診断 (curve_divergence.md)</td></tr>
-<tr><td>11</td><td>HTML レポート生成 (step11_build_html_report)</td><td>comparison/ 配下の全図・Markdown・設定 YAML を 1 枚に埋め込んだ自己完結レポート (report.html)</td></tr>
+<tr><td>11</td><td>HTML レポート生成 (step11_build_html_report)</td><td>comparison/ 配下の全図スペック・Markdown・設定 YAML を 1 枚に束ねた単一レポート (report.html)</td></tr>
 </tbody>
 </table>
 </details>
 """
 
 
-# 隠れタブ（display:none のケースパネル）内に並置した plotly フラグメントは、パース時に幅 0 で
-# 描画され純 CSS タブ切替では resize が発火しない。load 時とケース切替（casesync ラジオ変更）時に
-# Plotly.Plots.resize() を呼んで全 plotly 図を再レイアウトする。plotly 図がある時だけ埋める。
-_RESIZE_GLUE = """
+# 図スペック (*.fig.json) を遅延描画する glue JS。各 <div.plotly-fig> は直後の
+# <script type='application/json'> に図スペックを持つ。IntersectionObserver で可視化時に
+# Plotly.newPlot するが、折りたたみ <details> / 非選択ケースタブは display:none で IO が
+# 発火しないため、details の toggle・ケースタブ切替時にも配下の未描画図を reveal-render する。
+_RENDER_GLUE = """
 <script>
 (function () {
+  function specFor(div) {
+    var s = div.parentNode.querySelector("script.figspec[data-target='" + div.id + "']");
+    return s ? s.textContent : null;
+  }
+  function render(div) {
+    if (!div || div.dataset.rendered || !window.Plotly) return;
+    var raw = specFor(div);
+    if (!raw) return;
+    var spec;
+    try { spec = JSON.parse(raw); } catch (e) { return; }
+    div.dataset.rendered = "1";
+    div.classList.remove("pending");
+    window.Plotly.newPlot(div, spec.data || [], spec.layout || {}, {responsive: true});
+  }
+  function renderVisibleWithin(root) {
+    (root || document).querySelectorAll(".plotly-fig:not([data-rendered])").forEach(function (div) {
+      if (div.offsetParent !== null) render(div);  // display:none でない＝描画対象
+    });
+  }
+  var io = ("IntersectionObserver" in window)
+    ? new IntersectionObserver(function (entries) {
+        entries.forEach(function (e) { if (e.isIntersecting) { render(e.target); io.unobserve(e.target); } });
+      }, {rootMargin: "200px"})
+    : null;
+  function observeAll() {
+    document.querySelectorAll(".plotly-fig:not([data-rendered])").forEach(function (div) {
+      if (io) io.observe(div); else render(div);
+    });
+  }
   function resizeAll() {
     if (!window.Plotly) return;
-    document.querySelectorAll('.plotly-graph-div').forEach(function (d) {
+    document.querySelectorAll(".plotly-fig[data-rendered]").forEach(function (d) {
       try { window.Plotly.Plots.resize(d); } catch (e) {}
     });
   }
-  window.addEventListener('load', resizeAll);
-  document.querySelectorAll('.casesync > input').forEach(function (r) {
-    r.addEventListener('change', function () { setTimeout(resizeAll, 0); });
+  window.addEventListener("load", function () { observeAll(); renderVisibleWithin(document); });
+  // 折りたたみセクションを開いた / ケースタブを切替えた時に、display:none で IO 未発火だった
+  // 図を描画する（描画済みは resize）。
+  document.addEventListener("toggle", function (e) {
+    if (e.target.tagName === "DETAILS" && e.target.open) {
+      setTimeout(function () { renderVisibleWithin(e.target); resizeAll(); }, 0);
+    }
+  }, true);
+  document.querySelectorAll(".casesync > input").forEach(function (r) {
+    r.addEventListener("change", function () {
+      setTimeout(function () { renderVisibleWithin(r.closest(".casesync")); resizeAll(); }, 0);
+    });
   });
 })();
 </script>
@@ -598,11 +534,7 @@ _RESIZE_GLUE = """
 
 
 def _render_config_section(config_files: list[tuple[str, Path]]) -> str:
-    """実行構成 (設定 YAML) を折りたたみセクションとして埋め込む（存在するファイルのみ）。
-
-    どの設定で生成した報告かを report.html だけで追跡できるよう、各 YAML の生テキストを
-    エスケープして <pre> に入れる。1 つも存在しなければ空文字を返す（セクションごと省略）。
-    """
+    """実行構成 (設定 YAML) を折りたたみセクションとして埋め込む（存在するファイルのみ）。"""
     blocks: list[str] = []
     for title, path in config_files:
         if path is None or not Path(path).exists():
@@ -634,14 +566,12 @@ def build_html(
     images: list[Path] | None = None,
     config_files: list[tuple[str, Path]] | None = None,
 ) -> str:
-    """comparison_dir を走査して自己完結 report.html の文字列を組み立てる。
+    """comparison_dir を走査して単一 report.html の文字列を組み立てる。
 
-    全アセット（SVG=data-URI、plotly=body フラグメント+共有 plotly.js、playback=iframe srcdoc）
-    を外部参照なしでファイル内に埋め込む。config_files は (見出し, パス) のリストで、末尾の
-    「実行構成」セクションに生テキストで埋め込む（存在するファイルのみ）。
+    全図スペック (*.fig.json) を `<script type='application/json'>` で並置し、plotly.min.js を
+    1 回だけインライン、glue JS が遅延描画する。playback (*.html) は iframe srcdoc で隔離。
+    config_files は (見出し, パス) のリストで末尾の「実行構成」に生テキストで埋め込む。
     """
-    # SVG / plotly HTML を概念カテゴリへ分類（相対パスは comparison_dir 基準）。
-    # images は呼び出し側が _collect_figures 済みなら再走査を省くために渡せる。
     if images is None:
         images = _collect_figures(comparison_dir)
     if config_files is None:
@@ -652,7 +582,7 @@ def build_html(
         by_cat.setdefault(_classify(rel), []).append(rel)
 
     # Markdown レポートをカテゴリ別に取り込み（存在するもののみ）
-    md_by_cat: dict[str, list[tuple[str, str, str]]] = {}  # cat -> [(anchor, title, html)]
+    md_by_cat: dict[str, list[tuple[str, str, str]]] = {}
     for rel, title, cat in _MARKDOWN_REPORTS:
         path = comparison_dir / rel
         if path.exists():
@@ -661,11 +591,9 @@ def build_html(
                 (anchor, title, _render_markdown(path.read_text(encoding="utf-8")))
             )
 
-    # 表示するカテゴリ: 画像か Markdown のいずれかを持つもののみ、_CATEGORY_ORDER 順
     active_cats = [c for c in _CATEGORY_ORDER if c in by_cat or c in md_by_cat]
 
-    # --- 目次 ---（sticky。スクロール追従ハイライトは JS が必要なため未実装。各セクション見出しに
-    #     「↑ 先頭」リンクを置いて目次/先頭へ戻れるようにする。）
+    # --- 目次 ---（sticky）
     toc: list[str] = ["<nav class='toc'><h2>目次</h2>"]
     toc.append("<a class='toc-top' href='#top'>↑ 先頭へ</a><ul>")
     toc.append("<li class='toc-sec'><a href='#sec-pipeline'>分析パイプライン（10 段階）</a></li>")
@@ -691,7 +619,6 @@ def build_html(
             body.extend(_render_category_images(by_cat[cat], comparison_dir, cat=cat))
         else:
             body.append("<p class='empty'>（このセクションに該当する図はありませんでした）</p>")
-        # カテゴリ末尾に所属 Markdown レポートを折りたたみで埋め込む
         for anchor, mtitle, md_html in md_by_cat.get(cat, []):
             body.append(
                 f"<details class='md-report' open id='{anchor}'>"
@@ -706,25 +633,11 @@ def build_html(
     empty_note = (
         ""
         if images
-        else "<p class='empty'>comparison/ 配下に図 (SVG / plotly HTML) が見つかりませんでした。"
+        else "<p class='empty'>comparison/ 配下に図 (*.fig.json) が見つかりませんでした。"
         "先に step4〜step10 を実行してください。</p>"
     )
 
-    # ケースタブの表示規則（ケース slug 単位）、SVG の data-URI 背景クラス（1 回ずつ定義）、
-    # 拡大用ライトボックス（main 末尾に一括配置）。
     sync_css = _casesync_css(by_cat)
-    svg_css = _svg_css(rels_all, comparison_dir)
-    lightboxes = _lightbox_overlays(rels_all) if rels_all else ""
-
-    # plotly フラグメントが 1 枚でもあれば plotly.min.js を 1 回だけ <head> に埋め、
-    # 隠れタブ resize の glue JS を本文末尾に置く。
-    has_plotly = any(
-        _is_interactive(rel)
-        and is_plotly_html((comparison_dir / rel).read_text(encoding="utf-8", errors="replace"))
-        for rel in rels_all
-    )
-    plotly_head = plotly_js_script() if has_plotly else ""
-    resize_glue = _RESIZE_GLUE if has_plotly else ""
 
     return f"""<!DOCTYPE html>
 <html lang="ja">
@@ -733,9 +646,8 @@ def build_html(
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>real_log_sim_comparison レポート</title>
 <style>{_STYLE}
-{sync_css}
-{svg_css}</style>
-{plotly_head}
+{sync_css}</style>
+{plotly_js_script()}
 </head>
 <body>
 <div class="layout">
@@ -749,8 +661,7 @@ def build_html(
 {empty_note}
 {''.join(body)}
 {config_html}
-{lightboxes}
-{resize_glue}
+{_RENDER_GLUE}
 </main>
 </div>
 </body>
@@ -759,10 +670,7 @@ def build_html(
 
 
 def _resolve_config_files(cfg, comparison_dir: Path) -> list[tuple[str, Path]]:
-    """report.html 末尾「実行構成」に埋め込む設定ファイル群を (見出し, パス) で返す。
-
-    存在判定は埋め込み側 (_render_config_section) が行うため、ここでは候補を並べるだけ。
-    """
+    """report.html 末尾「実行構成」に埋め込む設定ファイル群を (見出し, パス) で返す。"""
     scenarios_dir = comparison_dir.parent / "scenarios"
     return [
         ("シナリオ (auto-scenario)", scenarios_dir / "auto_scenario.yaml"),
@@ -774,8 +682,8 @@ def _resolve_config_files(cfg, comparison_dir: Path) -> list[tuple[str, Path]]:
 
 def main() -> None:
     parser = argparse.ArgumentParser(
-        description="comparison/ 配下の全プロット・Markdown・設定 YAML を埋め込んだ"
-        "自己完結 report.html を生成"
+        description="comparison/ 配下の全図スペック (*.fig.json)・Markdown・設定 YAML を"
+        "束ねた単一 report.html を生成"
     )
     add_common_cli_arguments(parser)
     args = parser.parse_args()
@@ -785,14 +693,13 @@ def main() -> None:
     comparison_dir.mkdir(parents=True, exist_ok=True)
 
     # report.html は comparison/ の親 (result_archive/ = base_dir) 直下に置く。
-    # 全アセットを埋め込むため外部参照（相対パス・plotly.min.js）は持たない。
     html_dir = cfg.base_dir
     html_dir.mkdir(parents=True, exist_ok=True)
 
     images = _collect_figures(comparison_dir)
     if not images:
         warnings.warn(
-            f"{comparison_dir} 配下に図 (SVG / plotly HTML) が見つかりません。"
+            f"{comparison_dir} 配下に図 (*.fig.json) が見つかりません。"
             "目次のみの report.html を生成します"
         )
 
