@@ -54,6 +54,17 @@ from .lib._io import (
 )
 from .lib._map import load_map_ways as _load_map_ways_impl
 from .lib._map import map_ways_in_bbox, resolve_map_osm
+from .lib._fig_io import write_fig_json
+from .lib._figures import (
+    build_fig_cascade_error,
+    build_fig_error_growth,
+    build_fig_error_timeseries,
+    build_fig_error_vs_speed,
+    build_fig_lateral_dynamics_timeseries,
+    build_fig_overview,
+    build_fig_steer_vs_lateral_scatter,
+    build_fig_steering_analysis,
+)
 from .lib._nstep_common import (
     ERR_METRICS,
     YAW_SEED_NOTE,
@@ -754,33 +765,9 @@ def plot_error_growth(df: pd.DataFrame, params: dict) -> None:
     """rollout 長 N に対する位置・yaw 誤差 RMSE の成長を描く (dynamics 差の顕在化)。"""
     if df.empty:
         return
-    rmse = rmse_by_horizon(df)
-    horizons = sorted(rmse)
-    pos = [rmse[h]["pos"] for h in horizons]
-    yaw = [rmse[h]["yaw"] for h in horizons]
-    # ケース横断の統一上限 (LIMITS_DF に case 列があればケース別 RMSE の最大)
-    pos_max, yaw_max = max(pos), max(yaw)
-    if LIMITS_DF is not None and "case" in LIMITS_DF.columns:
-        for _, sub in LIMITS_DF.groupby("case"):
-            r = rmse_by_horizon(sub)
-            pos_max = max(pos_max, *(r[h]["pos"] for h in r))
-            yaw_max = max(yaw_max, *(r[h]["yaw"] for h in r))
-    fig, ax1 = plt.subplots(figsize=(9, 5))
-    fig.suptitle("N-step rollout 誤差成長 (free-running)", fontsize=11)
-    ax1.plot(horizons, pos, "o-", color="#1f77b4", label="位置 RMSE [cm]")
-    ax1.set_xlabel("rollout 長 N [step]  (N × SUB_DT 秒相当)")
-    ax1.set_ylabel("位置 RMSE [cm]", color="#1f77b4")
-    ax1.tick_params(axis="y", labelcolor="#1f77b4")
-    ax1.set_ylim(0, pos_max * 1.05)
-    ax1.grid(True, lw=0.5, alpha=0.6)
-    ax2 = ax1.twinx()
-    ax2.plot(horizons, yaw, "s--", color="#d62728", label="yaw RMSE [deg]")
-    ax2.set_ylabel("yaw RMSE [deg]", color="#d62728")
-    ax2.tick_params(axis="y", labelcolor="#d62728")
-    ax2.set_ylim(0, yaw_max * 1.05)
-    add_params_annotation(fig, params)
-    fig.tight_layout()
-    _save(fig, "error_growth")
+    fig = build_fig_error_growth(df, params=params, limits_df=LIMITS_DF)
+    OUT_DIR.mkdir(parents=True, exist_ok=True)
+    write_fig_json(fig, OUT_DIR / "error_growth")
 
 
 # ---------------------------------------------------------------------------
@@ -818,80 +805,9 @@ def _set_title(
 
 
 def plot_overview(df: pd.DataFrame, params: dict) -> None:
-    fig, axes = plt.subplots(2, 2, figsize=(14, 9))
-    tr = df["tr"].values
-    window = max(1, len(df) // 30)
-
-    # 速度
-    ax = axes[0, 0]
-    ax.plot(tr, df["real_vx"].values, color="blue", lw=1.2, label="実機 vx")
-    ax.plot(tr, df["sim_vx"].values, color="red", lw=1.0, ls="--", label="モデル vx")
-    ax.axvline(0, color="green", lw=1.0, ls=":", alpha=0.8, label="AUTONOMOUS 開始")
-    ax.set_xlabel("AUTONOMOUS 開始からの時刻 [s]")
-    ax.set_ylabel("速度 [m/s]")
-    _unified_ylim(ax, ["real_vx", "sim_vx"], horizon=1)
-    _set_title(
-        ax, "速度: 実機 vs モデル", "実機: kinematic_state/twist.linear.x  モデル: state_[3]"
-    )
-    ax.legend(fontsize=8)
-    ax.grid(True, alpha=0.3)
-
-    # 加速度指令 vs 実機 ax
-    ax = axes[0, 1]
-    ax.plot(tr, df["accel_des"].values, color="gray", lw=0.8, label="指令 accel_des")
-    ax.plot(tr, df["real_ax"].values, color="blue", lw=1.0, label="実機 ax")
-    ax.axvline(0, color="green", lw=1.0, ls=":", alpha=0.8)
-    ax.set_xlabel("AUTONOMOUS 開始からの時刻 [s]")
-    ax.set_ylabel("加速度 [m/s²]")
-    _set_title(
-        ax,
-        "加速度: 指令 vs 実機",
-        "指令: control_cmd/longitudinal.acceleration  実機: acceleration/accel.linear.x",
-    )
-    ax.legend(fontsize=8)
-    ax.grid(True, alpha=0.3)
-
-    # 縦方向誤差
-    ax = axes[1, 0]
-    err_s = df["err_ds_long"] * 100
-    ma = err_s.rolling(window, center=True, min_periods=1).mean().values
-    ax.plot(tr, err_s.values, color="gray", lw=0.4, alpha=0.4, label="raw")
-    ax.plot(tr, ma, color="red", lw=1.5, label=f"移動平均(w={window})")
-    ax.axhline(0, color="black", lw=0.8)
-    ax.axvline(0, color="green", lw=1.0, ls=":", alpha=0.8)
-    ax.set_xlabel("AUTONOMOUS 開始からの時刻 [s]")
-    ax.set_ylabel("縦方向誤差 [cm]")
-    _unified_ylim(ax, "err_ds_long", 100, horizon=1)
-    _set_title(
-        ax, "1ステップ縦方向誤差", "実機: kinematic_state/pose.position  モデル: state_[0,1]"
-    )
-    ax.legend(fontsize=8)
-    ax.grid(True, alpha=0.3)
-
-    # 横方向誤差
-    ax = axes[1, 1]
-    err_s = df["err_ds_lat"] * 100
-    ma = err_s.rolling(window, center=True, min_periods=1).mean().values
-    ax.plot(tr, err_s.values, color="gray", lw=0.4, alpha=0.4, label="raw")
-    ax.plot(tr, ma, color="red", lw=1.5, label=f"移動平均(w={window})")
-    ax.axhline(0, color="black", lw=0.8)
-    ax.axvline(0, color="green", lw=1.0, ls=":", alpha=0.8)
-    ax.set_xlabel("AUTONOMOUS 開始からの時刻 [s]")
-    ax.set_ylabel("横方向誤差 [cm]")
-    _unified_ylim(ax, "err_ds_lat", 100, horizon=1)
-    _set_title(
-        ax, "1ステップ横方向誤差", "実機: kinematic_state/pose.position  モデル: state_[0,1]"
-    )
-    ax.legend(fontsize=8)
-    ax.grid(True, alpha=0.3)
-
-    fig.suptitle(
-        "全走行 N=1 (per-step) 分析\n(各ステップで実機状態にリセット — 計画挙動の差を除外)",
-        fontsize=11,
-    )
-    fig.tight_layout()
-    add_params_annotation(fig, params)
-    _save(fig, "overview")
+    fig = build_fig_overview(df, params=params, limits_df=LIMITS_DF)
+    OUT_DIR.mkdir(parents=True, exist_ok=True)
+    write_fig_json(fig, OUT_DIR / "overview")
 
 
 # ケース横断の軸範囲統一用 (step6 が全ケース連結 DataFrame をセットして再描画する)。
@@ -957,191 +873,23 @@ def _horizon_colors(horizons: list) -> dict:
 
 def plot_error_timeseries(df: pd.DataFrame, params: dict) -> None:
     """N-step 終端誤差の時系列 (horizon 別色分け; N=1 が従来の per-step delta)。"""
-    horizons = sorted(df["horizon"].unique())
-    colors = _horizon_colors(horizons)
-    fig, axes = plt.subplots(len(ERR_METRICS), 1, figsize=(12, 3.6 * len(ERR_METRICS)),
-                             sharex=True)
-
-    for ax, (col, scale, label, unit, source) in zip(axes, ERR_METRICS):
-        for h in horizons:
-            sub = df[df["horizon"] == h].sort_values("tr")
-            vals = sub[col].values * scale
-            window = max(1, len(sub) // 30)
-            ma = pd.Series(vals).rolling(window, center=True, min_periods=1).mean().values
-            ax.plot(sub["tr"].values, vals, color=colors[h], lw=0.4, alpha=0.25)
-            ax.plot(sub["tr"].values, ma, color=colors[h], lw=1.4, label=f"N={int(h)} MA")
-        ax.axhline(0, color="black", lw=0.8)
-        ax.axvline(0, color="green", lw=1.0, ls=":", alpha=0.8)
-        ax.set_ylabel(f"{label} [{unit}]")
-        _unified_ylim(ax, col, scale)
-        title = f"N-step 終端 {label} (実機 − モデル)"
-        if col == "yaw_err_deg":
-            title += f"\n{YAW_SEED_NOTE}"
-        _set_title(ax, title, source)
-        ax.legend(fontsize=8, ncol=min(len(horizons), 5))
-        ax.grid(True, alpha=0.3)
-
-    axes[-1].set_xlabel("rollout 開始時刻 (AUTONOMOUS 開始からの経過) [s]")
-    fig.suptitle("N-step オープンループ 誤差時系列 (N=1 = 毎ステップリセット)", fontsize=11)
-    fig.tight_layout()
-    add_params_annotation(fig, params)
-    _save(fig, "error_timeseries")
+    fig = build_fig_error_timeseries(df, params=params, limits_df=LIMITS_DF)
+    OUT_DIR.mkdir(parents=True, exist_ok=True)
+    write_fig_json(fig, OUT_DIR / "error_timeseries")
 
 
 def plot_error_vs_speed(df: pd.DataFrame, params: dict) -> None:
     """誤差の速度依存性散布 (行 = N=1 / N=max、速度は rollout 開始時点の実機 vx)。"""
-    rows = _repr_horizons(df)
-    h_min = rows[0]
-    speed_bins = [0.0, 2.0, 5.0, 8.0, 50.0]
-    colors = ["#4472C4", "#ED7D31", "#A9D18E", "#FF0000"]
-
-    fig, axes = plt.subplots(len(rows), len(ERR_METRICS),
-                             figsize=(4.5 * len(ERR_METRICS), 5 * len(rows)), squeeze=False)
-    for row_idx, h in enumerate(rows):
-        sub = df[df["horizon"] == h]
-        vx = sub["real_vx"].values
-        for ax, (col, scale, label, unit, source) in zip(axes[row_idx], ERR_METRICS):
-            vals = sub[col].values * scale
-            for i, (lo, hi) in enumerate(zip(speed_bins[:-1], speed_bins[1:])):
-                mask = (vx >= lo) & (vx < hi)
-                if mask.sum() == 0:
-                    continue
-                lbl = f"v={lo:.0f}–{hi:.0f} m/s" if hi < 50 else f"v≥{lo:.0f} m/s"
-                ax.scatter(
-                    vx[mask], vals[mask], s=4, alpha=0.5, color=colors[i % len(colors)],
-                    label=lbl,
-                    rasterized=True,  # SVG 巨大化防止（数千点はビットマップ化）
-                )
-            ax.axhline(0, color="black", lw=0.8)
-            ax.set_xlabel("rollout 開始時点の速度 [m/s]")
-            ax.set_ylabel(f"{label} [{unit}]")
-            _unified_ylim(ax, col, scale, horizon=h)
-            title = f"{label} vs 速度 (N={h})"
-            if col == "yaw_err_deg" and h == h_min:
-                title += f"\n{YAW_SEED_NOTE}"
-            _set_title(ax, title, f"{source}  速度: twist.linear.x")
-            ax.legend(fontsize=7)
-            ax.grid(True, alpha=0.3)
-
-    fig.suptitle("N-step オープンループ: 速度依存性 (上段 N=1, 下段 N=max)", fontsize=11)
-    fig.tight_layout()
-    add_params_annotation(fig, params)
-    _save(fig, "error_vs_speed")
+    fig = build_fig_error_vs_speed(df, params=params, limits_df=LIMITS_DF)
+    OUT_DIR.mkdir(parents=True, exist_ok=True)
+    write_fig_json(fig, OUT_DIR / "error_vs_speed")
 
 
 def plot_steering_analysis(df: pd.DataFrame, params: dict) -> None:
     """ステア 1ステップ予測の詳細分析（4パネル）."""
-    rad2deg = 180.0 / math.pi
-    tr = df["tr"].values
-    window = max(1, len(df) // 30)
-
-    fig, axes = plt.subplots(2, 2, figsize=(14, 10))
-
-    # --- (0,0) ステア角の時系列: 実機 t_{k+1} vs モデル予測 t_{k+1} vs 指令 ---
-    ax = axes[0, 0]
-    ax.plot(
-        tr, df["real_steer_kend"].values * rad2deg, color="blue", lw=1.2, label="実機 steer[k+1]"
-    )
-    ax.plot(
-        tr,
-        df["sim_steer_kend"].values * rad2deg,
-        color="red",
-        lw=1.0,
-        ls="--",
-        label="予測 steer[k+1]",
-    )
-    ax.plot(
-        tr,
-        df["steer_des"].values * rad2deg,
-        color="gray",
-        lw=0.7,
-        ls=":",
-        label="指令 steer_des[k]",
-    )
-    ax.axvline(0, color="green", lw=1.0, ls=":", alpha=0.8, label="AUTONOMOUS 開始")
-    ax.set_xlabel("AUTONOMOUS 開始からの時刻 [s]")
-    ax.set_ylabel("ステア角 [deg]")
-    _unified_ylim(ax, ["real_steer_kend", "sim_steer_kend", "steer_des"], 180.0 / math.pi, horizon=1)
-    _set_title(
-        ax,
-        "ステア角: 実機[k+1] vs モデル予測[k+1] vs 指令[k]",
-        "実機: steering_status/tire_angle  モデル: state_[4]+bias  指令: control_cmd/lat.tire_angle",
-    )
-    ax.legend(fontsize=8)
-    ax.grid(True, alpha=0.3)
-
-    # --- (0,1) ステア追従誤差（指令 vs 実機）: 実機のステア制御性能 ---
-    ax = axes[0, 1]
-    steer_follow_err = (df["real_steer_kend"].values - df["steer_des"].values) * rad2deg
-    ma_f = pd.Series(steer_follow_err).rolling(window, center=True, min_periods=1).mean().values
-    ax.plot(tr, steer_follow_err, color="gray", lw=0.4, alpha=0.4, label="raw")
-    ax.plot(tr, ma_f, color="blue", lw=1.5, label=f"移動平均(w={window})")
-    ax.axhline(0, color="black", lw=0.8)
-    ax.axvline(0, color="green", lw=1.0, ls=":", alpha=0.8)
-    ax.set_xlabel("AUTONOMOUS 開始からの時刻 [s]")
-    ax.set_ylabel("追従誤差 [deg]")
-    _set_title(
-        ax,
-        "実機ステア追従誤差 (actual[k+1] − cmd[k])",
-        "実機: steering_status/tire_angle  指令: control_cmd/lat.tire_angle",
-    )
-    ax.legend(fontsize=8)
-    ax.grid(True, alpha=0.3)
-
-    # --- (1,0) ステア予測誤差の時系列 ---
-    ax = axes[1, 0]
-    err_deg = df["err_steer"].values * rad2deg
-    ma_e = pd.Series(err_deg).rolling(window, center=True, min_periods=1).mean().values
-    ax.plot(tr, err_deg, color="gray", lw=0.4, alpha=0.4, label="raw")
-    ax.plot(tr, ma_e, color="red", lw=1.5, label=f"移動平均(w={window})")
-    ax.axhline(0, color="black", lw=0.8)
-    ax.axvline(0, color="green", lw=1.0, ls=":", alpha=0.8, label="AUTONOMOUS 開始")
-    rmse_deg = float(np.sqrt(np.mean(err_deg**2)))
-    ax.set_xlabel("AUTONOMOUS 開始からの時刻 [s]")
-    ax.set_ylabel("予測誤差 [deg]")
-    _unified_ylim(ax, "err_steer", 180.0 / math.pi, horizon=1)
-    _set_title(
-        ax,
-        f"1ステップ ステア予測誤差 (actual[k+1] − pred[k+1])  RMSE={rmse_deg:.4f}°",
-        "実機: steering_status/tire_angle  モデル: state_[4]+steer_bias",
-    )
-    ax.legend(fontsize=8)
-    ax.grid(True, alpha=0.3)
-
-    # --- (1,1) ステア予測誤差 vs 指令ステア角（大入力時の精度確認）---
-    ax = axes[1, 1]
-    cmd_deg = df["steer_des"].values * rad2deg
-    speed_bins = [0.0, 2.0, 5.0, 8.0, 50.0]
-    colors = ["#4472C4", "#ED7D31", "#A9D18E", "#FF0000"]
-    vx = df["real_vx"].values
-    for i, (lo, hi) in enumerate(zip(speed_bins[:-1], speed_bins[1:])):
-        mask = (vx >= lo) & (vx < hi)
-        if mask.sum() == 0:
-            continue
-        lbl = f"v={lo:.0f}–{hi:.0f} m/s" if hi < 50 else f"v≥{lo:.0f} m/s"
-        ax.scatter(
-            cmd_deg[mask], err_deg[mask], s=4, alpha=0.5, color=colors[i % len(colors)], label=lbl,
-            rasterized=True,  # SVG 巨大化防止
-        )
-    ax.axhline(0, color="black", lw=0.8)
-    ax.set_xlabel("指令ステア角 [deg]")
-    ax.set_ylabel("予測誤差 [deg]")
-    _unified_ylim(ax, "err_steer", 180.0 / math.pi, horizon=1)
-    _set_title(
-        ax,
-        "ステア予測誤差 vs 指令ステア角（色=速度域）",
-        "誤差: steering_status/tire_angle − state_[4]+bias  指令: control_cmd/lat.tire_angle",
-    )
-    ax.legend(fontsize=8)
-    ax.grid(True, alpha=0.3)
-
-    fig.suptitle(
-        "全走行 N=1 (per-step) ステアリング分析\n(1ステップ予測誤差: actual[kend] − model_pred[kend])",
-        fontsize=11,
-    )
-    fig.tight_layout()
-    add_params_annotation(fig, params)
-    _save(fig, "steering_analysis")
+    fig = build_fig_steering_analysis(df, params=params, limits_df=LIMITS_DF)
+    OUT_DIR.mkdir(parents=True, exist_ok=True)
+    write_fig_json(fig, OUT_DIR / "steering_analysis")
 
 
 def _resolve_map_osm() -> Path | None:
@@ -1271,246 +1019,36 @@ def plot_map_distribution(df: pd.DataFrame, params: dict) -> None:
             text="N-step オープンループ: 地図上の誤差分布 (実機 − モデル、点=rollout 開始位置)",
             font=dict(size=14),
         ),
-        # step11 の純 CSS ケースタブ（display:none パネル）内に iframe 配置されるため、
-        # コンテナ可視状態に依存しない固定サイズで描画する（autosize だと幅 0 になる）。
-        # 幅はレポート本文幅（max-width 1100px）に収まるようにする。
+        # step11 はケースタブ（display:none）内で reveal-render する。responsive:true で
+        # 表示時にリサイズされるが、初期幅 0 を避けるため明示サイズを与えておく。
         autosize=False,
         width=355 * n_cols,
         height=FIG_HEIGHTS["map_distribution"],
-        template="plotly_white",
         margin=dict(l=60, r=40, t=110, b=40),
     )
-    write_plotly_html(fig, OUT_DIR / "map_distribution.html", BASE)
+    OUT_DIR.mkdir(parents=True, exist_ok=True)
+    write_fig_json(fig, OUT_DIR / "map_distribution")
 
 
 def plot_lateral_dynamics_timeseries(df: pd.DataFrame, params: dict) -> None:
-    """横方向諸量の時系列: ay / vy / wz / dwz の実機 vs モデル."""
-    tr = df["tr"].values
-    window = max(1, len(df) // 30)
-
-    # sim_ay/vy/wz はラッパー未 export のため実機のみ表示
-    rows = [
-        (
-            "real_ay",
-            None,
-            "横加速度 ay [m/s²]",
-            "横加速度 ay: 実機",
-            "実機: 位置微分(2階)→移動平均スムージング",
-        ),
-        (
-            "real_vy",
-            None,
-            "横速度 vy [m/s]",
-            "横速度 vy: 実機",
-            "実機: 位置微分→body frame変換→移動平均スムージング",
-        ),
-        (
-            "real_wz",
-            None,
-            "角速度 wz [rad/s]",
-            "角速度 wz: 実機",
-            "実機: kinematic_state/twist.angular.z",
-        ),
-        (
-            "real_dwz",
-            None,
-            "角加速度 dwz [rad/s²]",
-            "角加速度 dwz: 実機",
-            "実機: d/dt(kinematic_state/twist.angular.z)  np.gradient",
-        ),
-    ]
-    fig, axes = plt.subplots(4, 1, figsize=(13, 16), sharex=True)
-
-    for ax, (real_col, sim_col, ylabel, title, source) in zip(axes, rows):
-        real_vals = df[real_col].values
-        ma_real = pd.Series(real_vals).rolling(window, center=True, min_periods=1).mean().values
-        ax.plot(tr, real_vals, color="#aaaaaa", lw=0.4, alpha=0.5, label="実機 raw")
-        ax.plot(tr, ma_real, color="black", lw=1.5, label="実機 MA")
-        if sim_col:
-            sim_vals = df[sim_col].values
-            ma_sim = pd.Series(sim_vals).rolling(window, center=True, min_periods=1).mean().values
-            ax.plot(tr, sim_vals, color="#ffaaaa", lw=0.4, alpha=0.5)
-            ax.plot(tr, ma_sim, color="red", lw=1.5, ls="--", label="モデル MA")
-        ax.axhline(0, color="black", lw=0.6, ls=":")
-        ax.axvline(0, color="green", lw=1.0, ls=":", alpha=0.8, label="AUTONOMOUS 開始")
-        ax.set_ylabel(ylabel)
-        _set_title(ax, title, source)
-        ax.legend(fontsize=8)
-        ax.grid(True, alpha=0.3)
-
-    axes[-1].set_xlabel("AUTONOMOUS 開始からの時刻 [s]")
-    fig.suptitle(
-        "全走行 N=1 (per-step): 横方向諸量 時系列\n(各ステップで実機状態にリセット)", fontsize=11
-    )
-    fig.tight_layout()
-    add_params_annotation(fig, params)
-    _save(fig, "lateral_dynamics_timeseries")
+    """横方向諸量の時系列: ay / vy / wz / dwz の実機（sim_* はラッパー未 export）。"""
+    fig = build_fig_lateral_dynamics_timeseries(df, params=params)
+    OUT_DIR.mkdir(parents=True, exist_ok=True)
+    write_fig_json(fig, OUT_DIR / "lateral_dynamics_timeseries")
 
 
 def plot_steer_vs_lateral_scatter(df: pd.DataFrame, params: dict) -> None:
     """横軸ステア角 × 縦軸横方向諸量の散布図（速度域別・1次フィッティング付き）."""
-    rad2deg = 180.0 / math.pi
-    steer_deg = df["real_steer_k0"].values * rad2deg
-    vx = df["real_vx"].values
-    speed_bins = [0.0, 2.0, 5.0, 8.0, 50.0]
-    colors = ["#4472C4", "#ED7D31", "#A9D18E", "#FF0000"]
-
-    # sim_ay/vy/wz はラッパー未 export のため実機のみ散布
-    cols = [
-        (
-            "real_ay",
-            None,
-            "横加速度 ay [m/s²]",
-            "横軸: steering_status/tire_angle(t_k)  縦軸: 位置微分(2階)",
-        ),
-        (
-            "real_vy",
-            None,
-            "横速度 vy [m/s]",
-            "横軸: steering_status/tire_angle(t_k)  縦軸: 位置微分body frame",
-        ),
-        (
-            "real_wz",
-            None,
-            "角速度 wz [rad/s]",
-            "横軸: steering_status/tire_angle(t_k)  縦軸: kinematic_state/twist.angular.z",
-        ),
-    ]
-    fig, axes = plt.subplots(1, 3, figsize=(18, 6))
-
-    for ax, (real_col, sim_col, ylabel, source) in zip(axes, cols):
-        real_vals = df[real_col].values
-        sim_vals = df[sim_col].values if sim_col else None
-
-        for i, (lo, hi) in enumerate(zip(speed_bins[:-1], speed_bins[1:])):
-            mask = (vx >= lo) & (vx < hi)
-            if mask.sum() == 0:
-                continue
-            lbl = f"v={lo:.0f}–{hi:.0f} m/s" if hi < 50 else f"v≥{lo:.0f} m/s"
-            ax.scatter(
-                steer_deg[mask],
-                real_vals[mask],
-                s=4,
-                alpha=0.5,
-                color=colors[i % len(colors)],
-                label=lbl,
-                rasterized=True,  # SVG 巨大化防止
-            )
-
-        # 1次フィッティング（実機全点）
-        x_fit = np.linspace(steer_deg.min(), steer_deg.max(), 100)
-        valid = np.isfinite(steer_deg) & np.isfinite(real_vals)
-        if valid.sum() >= 2:
-            coeffs = np.polyfit(steer_deg[valid], real_vals[valid], 1)
-            ax.plot(
-                x_fit,
-                np.polyval(coeffs, x_fit),
-                color="black",
-                lw=2,
-                label=f"実機 fit: {coeffs[0]:.4f}·θ + {coeffs[1]:.4f}",
-            )
-
-        # シムの1次フィッティング
-        if sim_vals is not None:
-            valid_s = np.isfinite(steer_deg) & np.isfinite(sim_vals)
-            if valid_s.sum() >= 2:
-                coeffs_s = np.polyfit(steer_deg[valid_s], sim_vals[valid_s], 1)
-                ax.plot(
-                    x_fit,
-                    np.polyval(coeffs_s, x_fit),
-                    color="red",
-                    lw=1.5,
-                    ls="--",
-                    label=f"モデル fit: {coeffs_s[0]:.4f}·θ",
-                )
-
-        ax.axhline(0, color="black", lw=0.6)
-        ax.axvline(0, color="black", lw=0.6)
-        ax.set_xlabel("ステア角 [deg]")
-        ax.set_ylabel(ylabel)
-        _set_title(ax, f"ステア角 vs {ylabel}", source)
-        ax.legend(fontsize=7)
-        ax.grid(True, alpha=0.3)
-
-    fig.suptitle(
-        "全走行 N=1 (per-step): ステア角 vs 横方向諸量 散布図\n(スケール誤差・バイアス確認)",
-        fontsize=11,
-    )
-    fig.tight_layout()
-    add_params_annotation(fig, params)
-    _save(fig, "steer_vs_lateral_scatter")
+    fig = build_fig_steer_vs_lateral_scatter(df, params=params)
+    OUT_DIR.mkdir(parents=True, exist_ok=True)
+    write_fig_json(fig, OUT_DIR / "steer_vs_lateral_scatter")
 
 
 def plot_cascade_error(df: pd.DataFrame, params: dict) -> None:
-    """段階的誤差プロット: ステア指示→ステア応答→ay→vy→横位置の連鎖."""
-    rad2deg = 180.0 / math.pi
-    tr = df["tr"].values
-    window = max(1, len(df) // 30)
-
-    def _ma(vals):
-        return pd.Series(vals).rolling(window, center=True, min_periods=1).mean().values
-
-    rows = [
-        # (real_col, sim_col, err_col, scale, ylabel, title, source)
-        (
-            "real_steer_kend", "sim_steer_kend", "err_steer", rad2deg,
-            "ステア角 [deg]",
-            "① ステア応答 (cmd→actual): 実機 vs モデル",
-            "実機: steering_status/tire_angle  モデル: state_[4]+steer_bias",
-        ),
-        # ② ay / ③ vy / ④ wz は sim_* がラッパー未 export のため一旦スキップ
-        (
-            "real_ds_lat", "sim_ds_lat", "err_ds_lat", 100.0,
-            "横方向 Δpos [cm]",
-            "② 横方向 1ステップ変位: 実機 vs モデル",
-            "実機: kinematic_state/pose.position  モデル: state_[0,1]",
-        ),
-    ]
-
-    fig, axes = plt.subplots(len(rows), 2, figsize=(16, 4 * len(rows)), gridspec_kw={"width_ratios": [3, 1]})
-
-    for row_idx, (real_col, sim_col, err_col, scale, ylabel, title, source) in enumerate(rows):
-        real_v = df[real_col].values * scale
-        sim_v = df[sim_col].values * scale
-        err_v = df[err_col].values * scale
-        ax_ts = axes[row_idx, 0]
-        ax_err = axes[row_idx, 1]
-
-        # 時系列パネル
-        ax_ts.plot(tr, real_v, color="#aaaaaa", lw=0.4, alpha=0.4)
-        ax_ts.plot(tr, _ma(real_v), color="black", lw=1.5, label="実機 MA")
-        ax_ts.plot(tr, sim_v, color="#ffaaaa", lw=0.4, alpha=0.4)
-        ax_ts.plot(tr, _ma(sim_v), color="red", lw=1.5, ls="--", label="モデル MA")
-        ax_ts.axhline(0, color="black", lw=0.5, ls=":")
-        ax_ts.axvline(0, color="green", lw=0.8, ls=":", alpha=0.8)
-        ax_ts.set_ylabel(ylabel)
-        _unified_ylim(ax_ts, [real_col, sim_col], scale, horizon=1)
-        _set_title(ax_ts, title, source)
-        ax_ts.legend(fontsize=8)
-        ax_ts.grid(True, alpha=0.3)
-
-        # 誤差時系列パネル（右）
-        rmse = float(np.sqrt(np.nanmean(err_v**2)))
-        ax_err.plot(tr, err_v, color="#aaaaaa", lw=0.4, alpha=0.4)
-        ax_err.plot(tr, _ma(err_v), color="purple", lw=1.5, label=f"誤差 MA\nRMSE={rmse:.4g}")
-        ax_err.axhline(0, color="black", lw=0.8)
-        ax_err.axvline(0, color="green", lw=0.8, ls=":", alpha=0.8)
-        ax_err.set_ylabel(f"誤差 [{ylabel.split('[')[1]}")
-        _unified_ylim(ax_err, err_col, scale, horizon=1)
-        _set_title(ax_err, "誤差 (実機 − モデル)", source)
-        ax_err.legend(fontsize=8)
-        ax_err.grid(True, alpha=0.3)
-
-    for col in range(2):
-        axes[-1, col].set_xlabel("AUTONOMOUS 開始からの時刻 [s]")
-
-    fig.suptitle(
-        "全走行 N=1 (per-step): 段階的誤差プロット\nステア指示 → ステア応答 → 横位置",
-        fontsize=12,
-    )
-    fig.tight_layout()
-    add_params_annotation(fig, params)
-    _save(fig, "cascade_error")
+    """段階的誤差プロット: ステア指示→ステア応答→横位置の連鎖."""
+    fig = build_fig_cascade_error(df, params=params, limits_df=LIMITS_DF)
+    OUT_DIR.mkdir(parents=True, exist_ok=True)
+    write_fig_json(fig, OUT_DIR / "cascade_error")
 
 
 def save_summary(df: pd.DataFrame) -> None:
