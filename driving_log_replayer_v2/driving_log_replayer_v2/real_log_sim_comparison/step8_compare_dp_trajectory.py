@@ -41,6 +41,12 @@ from .lib._io import (
     resolve_primary_sim_bag,
     sim_tag_from_bag,
 )
+from .lib._fig_io import write_fig_json
+from .lib._figures import (
+    build_fig_dp_real_vs_sim,
+    build_fig_dp_vs_actual,
+    build_fig_dp_vs_final_traj,
+)
 from .lib._params_utils import add_params_annotation, setup_jp_font
 from .lib._provenance import format_provenance_line, read_provenance
 from .lib._runtime_config import RuntimeConfig, add_common_cli_arguments, build_runtime_config
@@ -260,97 +266,37 @@ def _run_real_actual(  # noqa: PLR0915
         print(f"{t_val:>4.1f} | {sim_str} | {real_str}")
 
     cfg.figs_dir.mkdir(parents=True, exist_ok=True)
-    fig, axes = plt.subplots(2, 3, figsize=(18, 10))
-    fig.suptitle(
-        f"{cfg.scenario_name}\nDiffusionPlanner計画軌跡 直接比較（実機 vs {sim_name}）",
-        fontsize=13,
-    )
-
     t_vec = np.linspace(-1, 12, 200)
     d_targets = [0, 5, 10, 20]
-    labels_d = [f"d={d}m" for d in d_targets]
     colors_d = ["#1f77b4", "#ff7f0e", "#2ca02c", "#d62728"]
+    plan_series = [
+        {
+            "d": d, "color": col,
+            "v_sim": frames_to_series(frames_sim, t_vec, d),
+            "v_real": frames_to_series(frames_real, t_vec, d),
+        }
+        for d, col in zip(d_targets, colors_d)
+    ]
 
-    ax_sim = axes[0, 0]
-    ax_real = axes[0, 1]
-    ax_diff = axes[0, 2]
-    for d, lbl, col in zip(d_targets, labels_d, colors_d):
-        v_sim = frames_to_series(frames_sim, t_vec, d)
-        v_real = frames_to_series(frames_real, t_vec, d)
-        ax_sim.plot(t_vec, v_sim, color=col, lw=1.5, label=lbl)
-        ax_real.plot(t_vec, v_real, color=col, lw=1.5, label=lbl)
-        ax_diff.plot(t_vec, v_sim - v_real, color=col, lw=1.5, ls="--", label=f"Δ {lbl}")
-    for ax in (ax_sim, ax_real, ax_diff):
-        ax.axvline(0, color="gray", lw=0.8, ls="--", alpha=0.6)
-        ax.axhline(0, color="gray", lw=0.5)
-        ax.grid(True, lw=0.4)
-        ax.set_xlabel("発進後 t [s]")
-        ax.legend(fontsize=8)
-    ax_sim.set_title(f"{sim_name} DP計画速度 [m/s]")
-    ax_sim.set_ylabel("計画速度 [m/s]")
-    ax_real.set_title("実機 DP計画速度 [m/s]")
-    ax_diff.set_title(f"速度差 ({sim_name} − 実機) [m/s]")
+    def _profile_frames(frames):
+        return [
+            {"t_rel": fr["t_rel"], "dists": fr["dists"], "vels": fr["vels"]}
+            for fr in sorted(frames, key=lambda x: x["t_rel"])
+            if -1.0 <= fr["t_rel"] <= 10.0
+        ]
 
-    ax_prof_sim = axes[1, 0]
-    ax_prof_real = axes[1, 1]
-    ax_obj = axes[1, 2]
-
-    cmap = plt.cm.viridis
-    for frames, ax, title in [
-        (frames_sim, ax_prof_sim, sim_name),
-        (frames_real, ax_prof_real, "実機"),
-    ]:
-        for fr in sorted(frames, key=lambda x: x["t_rel"]):
-            if not (-1.0 <= fr["t_rel"] <= 10.0):
-                continue
-            c = cmap((fr["t_rel"] + 1) / 11.0)
-            ax.plot(fr["dists"], fr["vels"], color=c, lw=1.2, alpha=0.6)
-        launch_f = [f for f in sorted(frames, key=lambda x: x["t_rel"]) if abs(f["t_rel"]) < 0.15]
-        if launch_f:
-            fr0 = launch_f[0]
-            ax.plot(fr0["dists"], fr0["vels"], "r-", lw=3, label="t≈0 (launch)", zorder=5)
-        sm = plt.cm.ScalarMappable(cmap=cmap, norm=matplotlib.colors.Normalize(vmin=-1, vmax=10))
-        sm.set_array([])
-        plt.colorbar(sm, ax=ax, label="t [s]")
-        ax.set_xlabel("経路点距離 [m]")
-        ax.set_ylabel("計画速度 [m/s]")
-        ax.set_title(f"{title} DP速度プロファイル（-1s〜+10s）")
-        ax.legend(fontsize=8)
-        ax.grid(True, lw=0.4)
-
-    if not df_obj_real.empty:
-        ax_obj.plot(
-            df_obj_real["t_rel"].values, df_obj_real["n_objects"].values,
-            "k-", lw=1.5, label="実機 追跡物体数", alpha=0.8,
-        )
-    if not df_obj_sim.empty:
-        ax_obj.plot(
-            df_obj_sim["t_rel"].values, df_obj_sim["n_objects"].values,
-            color="#e05c00", lw=1.5, ls="--", label=f"{sim_name} 追跡物体数", alpha=0.8,
-        )
-    else:
-        ax_obj.axhline(0, color="#e05c00", lw=1.5, ls="--", label=f"{sim_name} (0物体)", alpha=0.8)
-    ax_obj.axvline(0, color="gray", lw=0.8, ls="--", alpha=0.6)
-    ax_obj.set_xlabel("発進後 t [s]")
-    ax_obj.set_ylabel("追跡物体数")
-    ax_obj.set_title("追跡物体数（DiffusionPlannerへの社会的コンテキスト）")
-    ax_obj.legend(fontsize=9)
-    ax_obj.grid(True, lw=0.4)
-
-    # provenance: DP 比較は重み差が直接効くため、実機 (外部記録) と sim の DP 重み/版を掲載。
-    sim_prov = read_provenance(sim_bag if sim_bag.is_dir() else sim_bag.parent)
-    real_note = os.environ.get("REAL_PROVENANCE", "").strip() or "取得時バージョン不明 (要記録)"
-    fig.text(
-        0.01, 0.005,
-        f"provenance — 実機: {real_note}\nsim ({sim_bag.name}): {format_provenance_line(sim_prov)}",
-        fontsize=6, va="bottom", ha="left", color="#555555", family="monospace",
+    profiles = {"sim": _profile_frames(frames_sim), "real": _profile_frames(frames_real)}
+    objects = {
+        "real_t": df_obj_real["t_rel"].values if not df_obj_real.empty else None,
+        "real_n": df_obj_real["n_objects"].values if not df_obj_real.empty else None,
+        "sim_t": df_obj_sim["t_rel"].values if not df_obj_sim.empty else None,
+        "sim_n": df_obj_sim["n_objects"].values if not df_obj_sim.empty else None,
+    }
+    fig = build_fig_dp_real_vs_sim(
+        t_vec, plan_series, profiles, objects,
+        sim_name=sim_name, scenario_name=cfg.scenario_name,
     )
-    fig.tight_layout(rect=(0, 0.03, 1, 1))
-    add_params_annotation(fig)
-    out = cfg.figs_dir / "dp_real_vs_sim.svg"
-    fig.savefig(str(out), dpi=150, bbox_inches="tight")
-    plt.close(fig)
-    print(f"\n  保存: {out}")
+    write_fig_json(fig, cfg.figs_dir / "dp_real_vs_sim")
 
     # actual 速度との比較
     print("\n--- DP計画速度(d=0) vs actual速度 ---")
@@ -361,30 +307,21 @@ def _run_real_actual(  # noqa: PLR0915
     df_vel_sim = df_vel_sim[df_vel_sim["t_rel"] >= -1].reset_index(drop=True)
     df_vel_real = df_vel_real[df_vel_real["t_rel"] >= -1].reset_index(drop=True)
 
-    fig2, axes2 = plt.subplots(1, 2, figsize=(14, 5))
-    fig2.suptitle(f"{cfg.scenario_name}\nDPが計画した速度(d=0) vs 実際の速度", fontsize=12)
-    for frames, df_v, label, ax in [
-        (frames_sim, df_vel_sim, sim_name, axes2[0]),
-        (frames_real, df_vel_real, "実機", axes2[1]),
-    ]:
-        dp_v = frames_to_series(frames, t_vec, 0)
-        ax.plot(t_vec, dp_v, "b-", lw=2, label="DP計画速度 (d=0m)")
-        ax.plot(
-            df_v["t_rel"].values, df_v["lon_vel"].values,
-            "r-", lw=1.5, alpha=0.8, label="actual速度",
-        )
-        ax.axvline(0, color="gray", lw=0.8, ls="--", alpha=0.6)
-        ax.set_xlabel("発進後 t [s]")
-        ax.set_ylabel("速度 [m/s]")
-        ax.set_title(f"{label}: DP計画 vs actual")
-        ax.legend(fontsize=9)
-        ax.grid(True, lw=0.4)
-    fig2.tight_layout()
-    add_params_annotation(fig2)
-    out2 = cfg.figs_dir / "dp_vs_actual.svg"
-    fig2.savefig(str(out2), dpi=150, bbox_inches="tight")
-    plt.close(fig2)
-    print(f"  保存: {out2}")
+    panels = [
+        {
+            "label": label,
+            "dp_v": frames_to_series(frames, t_vec, 0),
+            "actual_t": df_v["t_rel"].values,
+            "actual_v": df_v["lon_vel"].values,
+        }
+        for frames, df_v, label in [
+            (frames_sim, df_vel_sim, sim_name),
+            (frames_real, df_vel_real, "実機"),
+        ]
+    ]
+    fig2 = build_fig_dp_vs_actual(t_vec, panels, scenario_name=cfg.scenario_name)
+    cfg.figs_dir.mkdir(parents=True, exist_ok=True)
+    write_fig_json(fig2, cfg.figs_dir / "dp_vs_actual")
 
 
 # ---------------------------------------------------------------------------
@@ -443,88 +380,41 @@ def _run_final_planning(  # noqa: PLR0915
 
     cfg.figs_dir.mkdir(parents=True, exist_ok=True)
     t_vec = np.linspace(-1, 13, 250)
-
-    fig, axes = plt.subplots(2, 3, figsize=(18, 10))
-    fig.suptitle(
-        f"{cfg.scenario_name}\nDP出力 vs 最終planning/trajectory — 実機（上段）/ 速度差（下段）",
-        fontsize=12,
-    )
-
     d_targets = [0, 5, 10, 20, 30]
-    colors = ["#1f77b4", "#ff7f0e", "#2ca02c", "#d62728", "#9467bd"]
 
-    for i, d in enumerate(d_targets[:3]):
-        ax = axes[0, i]
-        v_dp = frames_to_series(frames_dp, t_vec, d)
-        v_final = frames_to_series(frames_final, t_vec, d)
-        v_sim = frames_to_series(frames_sim_dp, t_vec, d)
-        ax.plot(t_vec, v_dp, "k-", lw=2, label="実機 DP出力")
-        ax.plot(t_vec, v_final, "b--", lw=2, label="実機 最終traj")
-        ax.plot(t_vec, v_sim, "r:", lw=1.5, label=f"{sim_name} DP出力")
-        ax.fill_between(t_vec, v_dp, v_final, alpha=0.2, color="blue", label="optimizer補正")
-        ax.axvline(0, color="gray", lw=0.8, ls="--", alpha=0.6)
-        ax.set_title(f"d={d}m 地点の計画速度")
-        ax.set_xlabel("発進後 t [s]")
-        ax.set_ylabel("計画速度 [m/s]")
-        ax.legend(fontsize=8)
-        ax.grid(True, lw=0.4)
+    def _series(d):
+        return {
+            "d": d,
+            "v_dp": frames_to_series(frames_dp, t_vec, d),
+            "v_final": frames_to_series(frames_final, t_vec, d),
+            "v_sim": frames_to_series(frames_sim_dp, t_vec, d),
+        }
 
-    ax_diff_optimizer = axes[1, 0]
-    ax_diff_realvsim = axes[1, 1]
-    ax_summary = axes[1, 2]
-    for d, col in zip(d_targets, colors):
-        v_dp = frames_to_series(frames_dp, t_vec, d)
-        v_final = frames_to_series(frames_final, t_vec, d)
-        v_sim = frames_to_series(frames_sim_dp, t_vec, d)
-        ax_diff_optimizer.plot(t_vec, v_final - v_dp, color=col, lw=1.5, label=f"d={d}m")
-        ax_diff_realvsim.plot(t_vec, v_sim - v_dp, color=col, lw=1.5, label=f"d={d}m")
-
-    for ax, title in [
-        (ax_diff_optimizer, "optimizer補正量\n(最終traj - DP出力) [実機]"),
-        (ax_diff_realvsim, f"{sim_name} - 実機 DP計画速度差"),
-    ]:
-        ax.axhline(0, color="gray", lw=0.5)
-        ax.axvline(0, color="gray", lw=0.8, ls="--", alpha=0.6)
-        ax.set_xlabel("発進後 t [s]")
-        ax.set_ylabel("Δv [m/s]")
-        ax.set_title(title)
-        ax.legend(fontsize=8)
-        ax.grid(True, lw=0.4)
+    top_panels = [_series(d) for d in d_targets[:3]]
+    diff_series = [_series(d) for d in d_targets]
 
     df_vel_real = load_velocity(real_bag)
     df_vel_real["tr"] = (df_vel_real["t_ns"] - t0_real) / 1e9 - tl_real
     df_vel_real = df_vel_real[df_vel_real["tr"] >= -1]
-    ax_summary.plot(
-        df_vel_real["tr"].values, df_vel_real["lon_vel"].values,
-        "k-", lw=2, label="実機 actual速度",
-    )
+    summary = {
+        "real_t": df_vel_real["tr"].values, "real_v": df_vel_real["lon_vel"].values,
+        "sim_t": None, "sim_v": None, "dp0_sim": None,
+        "dp0_real": frames_to_series(frames_dp, t_vec, 0),
+        "fin0_real": frames_to_series(frames_final, t_vec, 0),
+    }
     if sim_bag is not None and t0_sim is not None:
         df_vel_sim = load_velocity(sim_bag)
         df_vel_sim["tr"] = (df_vel_sim["t_ns"] - t0_sim) / 1e9 - tl_sim
         df_vel_sim = df_vel_sim[df_vel_sim["tr"] >= -1]
-        ax_summary.plot(
-            df_vel_sim["tr"].values, df_vel_sim["lon_vel"].values,
-            "r-", lw=2, ls="--", label=f"{sim_name} actual速度",
-        )
-        dp0_sim = frames_to_series(frames_sim_dp, t_vec, 0)
-        ax_summary.plot(t_vec, dp0_sim, "r:", lw=1.5, alpha=0.7, label=f"{sim_name} DP d=0")
-    dp0_real = frames_to_series(frames_dp, t_vec, 0)
-    fin0_real = frames_to_series(frames_final, t_vec, 0)
-    ax_summary.plot(t_vec, dp0_real, "k:", lw=1.5, label="実機 DP d=0")
-    ax_summary.plot(t_vec, fin0_real, "b--", lw=1.5, label="実機 最終traj d=0")
-    ax_summary.axvline(0, color="gray", lw=0.8, ls="--", alpha=0.6)
-    ax_summary.set_xlabel("発進後 t [s]")
-    ax_summary.set_ylabel("速度 [m/s]")
-    ax_summary.set_title("DP出力 d=0 / 最終traj / actual速度 比較")
-    ax_summary.legend(fontsize=8)
-    ax_summary.grid(True, lw=0.4)
+        summary["sim_t"] = df_vel_sim["tr"].values
+        summary["sim_v"] = df_vel_sim["lon_vel"].values
+        summary["dp0_sim"] = frames_to_series(frames_sim_dp, t_vec, 0)
 
-    fig.tight_layout()
-    add_params_annotation(fig)
-    out = cfg.figs_dir / "dp_vs_final_traj.svg"
-    fig.savefig(str(out), dpi=150, bbox_inches="tight")
-    plt.close(fig)
-    print(f"\n  保存: {out}")
+    fig = build_fig_dp_vs_final_traj(
+        t_vec, top_panels, diff_series, summary,
+        sim_name=sim_name, scenario_name=cfg.scenario_name,
+    )
+    write_fig_json(fig, cfg.figs_dir / "dp_vs_final_traj")
 
     print("\n--- optimizer補正量の要約（実機）---")
     print(f"{'t[s]':>5} | " + " ".join(f"{'d=' + str(d) + 'm':>7}" for d in d_list))
