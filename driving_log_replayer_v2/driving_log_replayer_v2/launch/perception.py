@@ -42,6 +42,7 @@ RECORD_TOPIC = """^/tf$\
 |^/map/vector_map_marker$\
 |^/localization/kinematic_state$\
 |^/planning/planning_factors/.*\
+|^/planning/trajectory_generator/neural_network_based_planner/diffusion_planner_node/output/predicted_objects$\
 """
 
 
