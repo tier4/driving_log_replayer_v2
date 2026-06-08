@@ -21,10 +21,6 @@ import math
 from pathlib import Path
 import sys
 
-import matplotlib
-
-matplotlib.use("Agg")
-import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 
@@ -42,10 +38,7 @@ from .lib._io import (
 )
 from .lib._fig_io import write_fig_json
 from .lib._figures import build_fig_curve_divergence
-from .lib._params_utils import add_params_annotation, setup_jp_font
 from .lib._runtime_config import RuntimeConfig, add_common_cli_arguments, build_runtime_config
-
-setup_jp_font()
 
 
 REAL_CMD_TOPIC_CANDIDATES = [

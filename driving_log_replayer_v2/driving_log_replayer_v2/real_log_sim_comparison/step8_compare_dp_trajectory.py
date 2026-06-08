@@ -25,10 +25,6 @@ import os
 from pathlib import Path
 import sys
 
-import matplotlib
-
-matplotlib.use("Agg")
-import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 
@@ -47,11 +43,8 @@ from .lib._figures import (
     build_fig_dp_vs_actual,
     build_fig_dp_vs_final_traj,
 )
-from .lib._params_utils import add_params_annotation, setup_jp_font
 from .lib._provenance import format_provenance_line, read_provenance
 from .lib._runtime_config import RuntimeConfig, add_common_cli_arguments, build_runtime_config
-
-setup_jp_font()
 
 
 FINAL_TOPIC = "/planning/trajectory"

@@ -28,10 +28,6 @@ from collections import deque
 from pathlib import Path
 import sys
 
-import matplotlib
-
-matplotlib.use("Agg")
-import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 
@@ -43,11 +39,9 @@ from .lib._figures import (
     build_fig_real_cmd_acc,
 )
 from .lib._io import align_time, load_cmd, load_operation_mode, load_velocity, resolve_lite_bag
-from .lib._params_utils import add_params_annotation, load_sim_params, setup_jp_font
+from .lib._params_utils import load_sim_params
 from .lib._runtime_config import add_common_cli_arguments, build_runtime_config
 from .lib._nstep_common import parabolic_min as _parabolic_min
-
-setup_jp_font()
 
 
 REAL_CMD_TOPIC_CANDIDATES = [
@@ -234,8 +228,6 @@ def main() -> None:
         "vel_rate_lim": 7.0,
     }
     brake_tc_variants = sorted(float(x) for x in args.brake_tc_values.split(",") if x.strip())
-    cmap = plt.get_cmap("viridis")
-    colors = [cmap(i / max(1, len(brake_tc_variants) - 1)) for i in range(len(brake_tc_variants))]
     labels = [f"brake_tc={v:.4f}s" for v in brake_tc_variants]
 
     print("\nbrake_time_constant バリアントでシミュレーション中...")

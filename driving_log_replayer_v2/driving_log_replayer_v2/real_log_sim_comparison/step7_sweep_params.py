@@ -47,10 +47,6 @@ from dataclasses import dataclass
 from pathlib import Path
 import sys
 
-import matplotlib
-
-matplotlib.use("Agg")
-import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 
@@ -62,10 +58,7 @@ from .lib._figures import build_fig_pair_sweep, build_fig_sweep, build_fig_sweep
 from .lib._figures._common import viridis_colors
 from .lib._io import resolve_lite_bag
 from .lib._nstep_common import metrics_description_md, parabolic_min, rmse_by_horizon
-from .lib._params_utils import add_params_annotation, setup_jp_font
 from .lib._runtime_config import add_common_cli_arguments, build_runtime_config
-
-setup_jp_font()
 
 _MODEL_TYPE = "delay_steer_acc_geared_wo_fall_guard"  # 全 dynamics パラメータを持つ対応モデル
 

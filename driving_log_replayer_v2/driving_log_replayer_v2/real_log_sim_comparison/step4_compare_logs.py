@@ -12,14 +12,8 @@ from pathlib import Path
 import sys
 import warnings
 
-import matplotlib
-
-matplotlib.use("Agg")
-import matplotlib.patches as mpatches  # noqa: F401 — 旧コード参照
-import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
-import plotly.graph_objects as go
 
 from .lib._events import (
     AUTONOMOUS_MODE as _AUTONOMOUS_MODE,
@@ -54,22 +48,15 @@ from .lib._figures import (
     build_fig_trajectory,
     build_fig_vs_distance,
 )
-from .lib._map import load_map_ways, map_ways_in_bbox, resolve_map_osm
-from .lib._params_utils import add_params_annotation, setup_jp_font
+from .lib._map import load_map_ways, resolve_map_osm
 from .lib._playback_viewer import plot_trajectory_playback
-from .lib._plotly_utils import (
-    FIG_HEIGHTS,
-    add_params_annotation_plotly,
-    lanes_to_trace,
-)
+from .lib._plotly_utils import FIG_HEIGHTS
 from .lib._provenance import format_provenance_line, read_provenance
 from .lib._runtime_config import (
     RuntimeConfig,
     add_common_cli_arguments,
     build_runtime_config,
 )
-
-setup_jp_font()
 
 # ---------------------------------------------------------------------------
 # 設定 — main() で `_apply_runtime_config()` から上書きされる
@@ -224,59 +211,6 @@ def _resolve_map_osm() -> Path | None:
 # ---------------------------------------------------------------------------
 
 
-def _setup_fig(title: str, nrows=1, ncols=1, figsize=(12, 5)):
-    fig, axes = plt.subplots(nrows, ncols, figsize=figsize, squeeze=False)
-    fig.suptitle(f"{SCENARIO_NAME}\n{title}", fontsize=11)
-    return fig, axes
-
-
-def _save(fig, name: str):
-    FIGS_DIR.mkdir(parents=True, exist_ok=True)
-    add_params_annotation(fig)
-    path = FIGS_DIR / f"{name}.svg"
-    fig.savefig(path, dpi=150, bbox_inches="tight")
-    plt.close(fig)
-    print(f"  保存: {name}.svg")
-
-
-def _traj_plot(ax, df_xy, d, label, markevery=20, zorder=3):
-    """軌跡を線スタイル＋等間隔マーカーで描画するヘルパー。"""
-    n = len(df_xy)
-    me = max(1, n // markevery) if n > 0 else 1
-    ax.plot(
-        np.asarray(df_xy["x"]),
-        np.asarray(df_xy["y"]),
-        color=d["color"],
-        lw=d["lw"],
-        ls=d["ls"],
-        marker=d["marker"],
-        markersize=d["ms"],
-        markevery=me,
-        markerfacecolor=d["color"],
-        markeredgecolor="white",
-        markeredgewidth=0.5,
-        label=label,
-        zorder=zorder,
-    )
-
-
-# matplotlib スタイル → plotly スタイルの対応表（軌跡プロットの plotly 化用）。
-# _SIM_LINESTYLES の on-off タプルは近い dash enum へ割り当てる。
-_PLOTLY_DASH = {"-": "solid", "--": "dash", "-.": "dashdot", ":": "dot"}
-_PLOTLY_DASH_TUPLES = {(4, 2): "longdash", (3, 1, 1, 1): "longdashdot"}
-_PLOTLY_MARKER = {
-    "o": "circle", "^": "triangle-up", "s": "square", "D": "diamond",
-    "v": "triangle-down", "P": "cross", "*": "star", "X": "x",
-}
-
-
-def _plotly_dash(ls) -> str:
-    """matplotlib linestyle（文字列 or (offset, on-off タプル)）を plotly dash enum へ。"""
-    if isinstance(ls, tuple):
-        return _PLOTLY_DASH_TUPLES.get(tuple(ls[1]), "dash")
-    return _PLOTLY_DASH.get(ls, "solid")
-
-
 def plot_trajectory(data: dict, map_ways: list | None):
     """地図背景あり軌跡比較図（図スペック JSON）。
 
@@ -314,16 +248,6 @@ def _tr(d: dict, df: pd.DataFrame) -> np.ndarray:
     実機の初期停止が長くても比較時系列が発進時刻で揃う (実機だけ遅れる問題の一般対策)。
     `t_launch` は main で全ログ共通に算出し loaded[label] に格納済み (未設定なら 0)。"""
     return df["t"].to_numpy(dtype=float) - float(d.get("t_launch", 0.0))
-
-
-def _ts_plot(ax, t, y, d, label, cmd=False):
-    """時系列プロット用ヘルパー。応答=各ログのスタイル、指令=薄い細線。"""
-    t = np.asarray(t)
-    y = np.asarray(y)
-    if cmd:
-        ax.plot(t, y, color=d["color"], lw=1.2, ls=":", alpha=0.65, label=label)
-    else:
-        ax.plot(t, y, color=d["color"], lw=d["lw"], ls=d["ls"], label=label)
 
 
 def _resp_cmd_runs(data: dict, resp_key: str, resp_col: str, cmd_col: str, *, deg=False):

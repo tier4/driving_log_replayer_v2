@@ -30,8 +30,6 @@ import os
 import sys
 from pathlib import Path
 
-import matplotlib.pyplot as plt
-from matplotlib import font_manager as _fm
 import numpy as np
 import pandas as pd
 
@@ -51,29 +49,6 @@ from .lib._nstep_common import (
     n1,
     rmse_by_horizon,
 )
-
-# Japanese font (best-effort; absent ならフォールバック)。
-# rcParams への代入は例外を投げないので、実在フォントを font_manager で確認する。
-_installed_fonts = {f.name for f in _fm.fontManager.ttflist}
-for _f in ("Noto Sans CJK JP", "TakaoGothic", "IPAGothic", "DejaVu Sans"):
-    if _f in _installed_fonts:
-        plt.rcParams["font.family"] = _f
-        break
-
-
-_CASCADE_ROWS = [
-    # (real_col, sim_col, err_col, scale, ylabel, title)
-    ("real_steer_kend", "sim_steer_kend", "err_steer", 180.0 / math.pi,
-     "ステア角 [deg]", "① ステア応答 (cmd→actual): err_steer"),
-    ("real_ds_lat", "sim_ds_lat", "err_ds_lat", 100.0,
-     "横方向 Δpos [cm]", "② 横方向 1ステップ変位: err_ds_lat"),
-]
-
-
-def _color_cycle(n: int) -> list[str]:
-    base = plt.rcParams["axes.prop_cycle"].by_key()["color"]
-    return [base[i % len(base)] for i in range(n)]
-
 
 def _load_case_csvs(nstep_root: Path, tags: list[str]) -> dict[str, pd.DataFrame]:
     """nstep/<tag>/nstep_delta.csv (Stage 3 出力) を全 tag 分読み込む。欠損 tag はスキップ。"""

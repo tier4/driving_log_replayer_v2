@@ -34,10 +34,6 @@ import os
 from pathlib import Path
 import sys
 
-import matplotlib
-
-matplotlib.use("Agg")
-import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 import plotly.graph_objects as go
@@ -72,11 +68,9 @@ from .lib._nstep_common import (
     n1,
     rmse_by_horizon,
 )
-from .lib._params_utils import add_params_annotation, load_sim_params, setup_jp_font
+from .lib._params_utils import load_sim_params
 from .lib._plotly_utils import FIG_HEIGHTS, add_params_annotation_plotly, lanes_to_trace
 from .lib._runtime_config import RuntimeConfig, add_common_cli_arguments, build_runtime_config
-
-setup_jp_font()
 
 # モジュールレベル設定 (main() で RuntimeConfig 経由で上書きされる)
 BASE = Path(os.environ.get("BEST_MODEL_BASE_DIR") or Path(__file__).parent)
@@ -770,35 +764,6 @@ def plot_error_growth(df: pd.DataFrame, params: dict) -> None:
 # ---------------------------------------------------------------------------
 
 
-def _save(fig: plt.Figure, name: str) -> None:
-    path = OUT_DIR / f"{name}.svg"
-    fig.savefig(path, dpi=150, bbox_inches="tight")
-    plt.close(fig)
-    print(f"  Saved: {path}")
-
-
-def _set_title(
-    ax: plt.Axes, title: str, source: str, title_fs: int = 9, source_fs: float = 6.5
-) -> None:
-    """
-    サブプロットタイトルとデータソース注を別フォントサイズで表示する。
-
-    source は小フォント・グレーでタイトル直下に配置する。
-    """
-    ax.set_title(title, fontsize=title_fs, pad=18)
-    ax.text(
-        0.5,
-        1.0,
-        source,
-        transform=ax.transAxes,
-        fontsize=source_fs,
-        ha="center",
-        va="bottom",
-        color="#888888",
-        clip_on=False,
-    )
-
-
 def plot_overview(df: pd.DataFrame, params: dict) -> None:
     fig = build_fig_overview(df, params=params, limits_df=LIMITS_DF)
     OUT_DIR.mkdir(parents=True, exist_ok=True)
@@ -808,38 +773,6 @@ def plot_overview(df: pd.DataFrame, params: dict) -> None:
 # ケース横断の軸範囲統一用 (step6 が全ケース連結 DataFrame をセットして再描画する)。
 # None のとき各プロットは従来どおり自動スケール (step5 単体実行時)。
 LIMITS_DF: pd.DataFrame | None = None
-
-
-def _unified_ylim(
-    ax,
-    cols: list[str] | str,
-    scale: float = 1.0,
-    horizon: int | None = None,
-    symmetric: bool = False,
-    pad: float = 0.05,
-) -> None:
-    """LIMITS_DF (全ケース連結) から cols の値域を取り y 軸範囲を統一する。
-
-    LIMITS_DF 未設定なら何もしない (自動スケール)。シミュレータ (ケース) ごとに
-    プロットが分かれてもタブ切替で軸が動かないようにするための仕組み。
-    """
-    if LIMITS_DF is None:
-        return
-    df = LIMITS_DF if horizon is None else LIMITS_DF[LIMITS_DF["horizon"] == horizon]
-    cols = [cols] if isinstance(cols, str) else cols
-    arrs = [df[c].to_numpy(dtype=float) * scale for c in cols if c in df.columns]
-    if not arrs:
-        return
-    vals = np.concatenate(arrs)
-    vals = vals[np.isfinite(vals)]
-    if len(vals) == 0:
-        return
-    lo, hi = float(vals.min()), float(vals.max())
-    if symmetric:
-        m = max(abs(lo), abs(hi))
-        lo, hi = -m, m
-    span = (hi - lo) or 1.0
-    ax.set_ylim(lo - pad * span, hi + pad * span)
 
 
 def _unified_absmax(col: str, scale: float = 1.0, horizon: int | None = None) -> float | None:
@@ -859,11 +792,6 @@ def _repr_horizons(df: pd.DataFrame) -> list[int]:
     h_min = int(df["horizon"].min())
     h_max = int(df["horizon"].max())
     return [h_min] if h_max == h_min else [h_min, h_max]
-
-
-def _horizon_colors(horizons: list) -> dict:
-    cmap = plt.get_cmap("viridis")
-    return {h: cmap(i / max(len(horizons) - 1, 1)) for i, h in enumerate(horizons)}
 
 
 def plot_error_timeseries(df: pd.DataFrame, params: dict) -> None:
