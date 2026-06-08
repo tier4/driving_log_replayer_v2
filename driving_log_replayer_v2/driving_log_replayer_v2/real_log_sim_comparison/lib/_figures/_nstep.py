@@ -120,6 +120,9 @@ def build_fig_overview(
     tr = df["tr"].to_numpy()
     fig = make_grid(
         2, 2,
+        # 行 1 にも x 軸タイトルを付けるため、行 2 の 2 行サブプロットタイトルと衝突しないよう
+        # 行間を広げる（既定 0.10 では重なる）。
+        vertical_spacing=0.16,
         subplot_titles=[
             "速度: 実機 vs モデル<br><sub>実機: kinematic_state/twist.linear.x  モデル: state_[3]</sub>",
             "加速度: 指令 vs 実機<br><sub>指令: control_cmd/longitudinal.acceleration  実機: acceleration/accel.linear.x</sub>",
@@ -297,7 +300,8 @@ def build_fig_steering_analysis(
     err_deg = df["err_steer"].to_numpy(dtype=float) * _RAD2DEG
     rmse_deg = float(np.sqrt(np.nanmean(err_deg**2)))
     fig = make_grid(
-        2, 2, vertical_spacing=0.12, horizontal_spacing=0.08,
+        # 2 行サブプロットタイトルが上段の x 軸タイトルと触れるため行間を広げる。
+        2, 2, vertical_spacing=0.16, horizontal_spacing=0.08,
         subplot_titles=[
             "ステア角: 実機[k+1] vs モデル予測[k+1] vs 指令[k]<br><sub>実機: steering_status/tire_angle  モデル: state_[4]+bias  指令: control_cmd/lat.tire_angle</sub>",
             "実機ステア追従誤差 (actual[k+1] − cmd[k])<br><sub>実機: steering_status/tire_angle  指令: control_cmd/lat.tire_angle</sub>",

@@ -39,8 +39,11 @@ def build_fig_sweep(
     ncols = max(1, min(ncols, n))
     rows = math.ceil(n / ncols)
     titles = [p.get("title", "") for p in panels] + [""] * (rows * ncols - n)
+    # 根拠パネルのサブプロットタイトルは 4〜5 行（"実機ログ根拠:…" + "実測:… 指令:…" の出典）
+    # と背が高く、上段パネルの x 軸タイトルと衝突する。行間を広めに取って逃がす
+    # （rows=2 の図がギャップ最小で衝突する。size より可読性優先の方針に従う）。
     fig = make_grid(rows, ncols, subplot_titles=titles,
-                    vertical_spacing=min(0.12, 0.5 / rows), horizontal_spacing=0.09)
+                    vertical_spacing=min(0.18, 0.5 / rows), horizontal_spacing=0.09)
     for idx, p in enumerate(panels):
         r, c = idx // ncols + 1, idx % ncols + 1
         for tr in p.get("traces", []):
