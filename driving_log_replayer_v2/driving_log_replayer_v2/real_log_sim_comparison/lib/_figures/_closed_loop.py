@@ -21,6 +21,7 @@ import numpy as np
 import plotly.graph_objects as go
 
 from ._common import (
+    add_bottom_note as _bottom_note,
     apply_base_layout,
     lanes_to_trace,
     make_grid,
@@ -28,17 +29,6 @@ from ._common import (
     plotly_dash,
     plotly_marker,
 )
-
-
-def _bottom_note(fig: go.Figure, note: str | None) -> None:
-    """図下部中央に注記（matplotlib の fig.text 相当）を足す。"""
-    if not note:
-        return
-    fig.add_annotation(
-        xref="paper", yref="paper", x=0.5, y=-0.08,
-        xanchor="center", yanchor="top", showarrow=False,
-        text=note, font=dict(size=10, color="#555555"),
-    )
 
 
 def build_fig_timeseries_resp_cmd(
@@ -74,7 +64,7 @@ def build_fig_timeseries_resp_cmd(
     fig.update_yaxes(title_text=resp_ylabel, row=1, col=1)
     fig.update_yaxes(title_text=cmd_ylabel, row=2, col=1)
     fig.update_xaxes(title_text=xlabel, row=2, col=1)
-    _bottom_note(fig, note)
+    _bottom_note(fig, note, height=height)
     return apply_base_layout(fig, title=title, height=height)
 
 

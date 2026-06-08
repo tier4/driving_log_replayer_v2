@@ -149,6 +149,8 @@ def build_fig_rmse_heatmap(
     return apply_base_layout(
         fig, title="cases × horizon: N-step RMSE ヒートマップ",
         height=200 + 60 * len(tags),
+        # y 軸の case ラベル（best_normal 等）が既定の左マージン (60) で切れるため広げる。
+        margin=dict(l=90, r=20, t=100, b=50),
     )
 
 

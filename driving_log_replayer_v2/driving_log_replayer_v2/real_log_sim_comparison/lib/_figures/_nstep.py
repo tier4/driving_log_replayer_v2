@@ -14,6 +14,7 @@ import plotly.graph_objects as go
 
 from .._nstep_common import ERR_METRICS, YAW_SEED_NOTE
 from ._common import (
+    add_bottom_note,
     apply_base_layout,
     axis_range_from_limits,
     ma_window,
@@ -263,14 +264,9 @@ def build_fig_error_vs_speed(
 ) -> go.Figure:
     """誤差の速度依存性散布（行 = N=1 / N=max、x=rollout 開始時 vx）。旧 plot_error_vs_speed。"""
     rows = _repr_horizons(df)
-    h_min = rows[0]
-    titles = []
-    for h in rows:
-        for col, _s, label, _u, source in ERR_METRICS:
-            t = f"{label} vs 速度 (N={h})"
-            if col == "yaw_err_deg" and h == h_min:
-                t += f"<br><sub>{YAW_SEED_NOTE}</sub>"
-            titles.append(t)
+    # YAW_SEED_NOTE は列幅の狭い 4 列レイアウトの右端サブプロットタイトルに収まらず右へ
+    # はみ出すため、サブプロットタイトルではなく図下部の注記（全幅）に回す。
+    titles = [f"{label} vs 速度 (N={h})" for h in rows for _c, _s, label, _u, _src in ERR_METRICS]
     fig = make_grid(len(rows), len(ERR_METRICS), subplot_titles=titles,
                     vertical_spacing=0.12, horizontal_spacing=0.06)
     for r, h in enumerate(rows, start=1):
@@ -285,9 +281,11 @@ def build_fig_error_vs_speed(
             rng = axis_range_from_limits(limits_df, col, scale, horizon=h)
             if rng is not None:
                 fig.update_yaxes(range=rng, row=r, col=c)
+    fig_h = 460 * len(rows)
+    add_bottom_note(fig, YAW_SEED_NOTE, height=fig_h)
     return apply_base_layout(
         fig, title="N-step オープンループ: 速度依存性 (上段 N=1, 下段 N=max)",
-        height=460 * len(rows),
+        height=fig_h,
     )
 
 

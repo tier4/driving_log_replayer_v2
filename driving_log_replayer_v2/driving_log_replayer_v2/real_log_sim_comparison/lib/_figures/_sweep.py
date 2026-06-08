@@ -163,4 +163,7 @@ def build_fig_sweep_overview(
         fig,
         title=f"パラメータ sweep 感度オーバービュー (N={h_max} 終端誤差, ○=仕様値, ▼=最小)",
         height=max(460, 55 * len(bars) + 180),
+        # 左 barh の y 軸ラベルは長いパラメータ名（debug_steer_scaling_factor 等）なので
+        # 左マージンを既定 (60) より広く取って切れを防ぐ。
+        margin=dict(l=180, r=20, t=100, b=50),
     )

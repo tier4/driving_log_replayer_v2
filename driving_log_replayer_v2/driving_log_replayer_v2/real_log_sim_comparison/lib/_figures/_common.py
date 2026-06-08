@@ -73,6 +73,29 @@ def apply_base_layout(
     return fig
 
 
+def add_bottom_note(
+    fig: go.Figure, note: str | None, *, height: int,
+    top_margin: int = 100, bottom_margin: int = 50, gap_px: int = 8,
+) -> None:
+    """図下部中央に注記を足す（下マージン内に収め、高さによらず切れないようにする）。
+
+    annotation は `yref="container"` 非対応（paper か軸参照のみ）。素朴な `yref="paper"
+    y=-0.08` は paper 単位がプロット領域高に正規化されるため、背の高い図ほど offset が
+    px で増えて下マージン (bottom_margin) を超えて切れる。ここでは図高 `height` から
+    「注記下端を図の最下端から gap_px だけ上」に置く paper y を逆算し、`yanchor="bottom"`
+    で上方向にテキストを伸ばすことで height 非依存に下マージン内へ収める。
+    """
+    if not note:
+        return
+    plot_h = max(1, height - top_margin - bottom_margin)
+    y = (gap_px - bottom_margin) / plot_h
+    fig.add_annotation(
+        xref="paper", yref="paper", x=0.5, y=y,
+        xanchor="center", yanchor="bottom", showarrow=False,
+        text=note, font=dict(size=10, color="#555555"),
+    )
+
+
 def make_grid(rows: int, cols: int, *, subplot_titles=None, **kwargs):
     """`make_subplots` の共通既定（余白・タイトル）付きラッパ。
 
