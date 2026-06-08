@@ -45,7 +45,11 @@ from .lib._io import (
 )
 from .lib._fig_io import write_fig_json
 from .lib._figures import (
+    build_fig_curve_analysis,
+    build_fig_curve_steering_detail,
+    build_fig_curve_yaw_steer,
     build_fig_curves_closeup,
+    build_fig_steer_response,
     build_fig_timeseries_resp_cmd,
     build_fig_trajectory,
     build_fig_vs_distance,
@@ -488,161 +492,105 @@ def _find_curve_exit(
     )
 
 
+_CURVE_PRE = -2.0  # 表示窓の発進前余白 [s]
+_CURVE_MG = 80  # カーブ軌跡表示の半幅 [m]
+
+
+def _curve_launch_map(data: dict, launch_window: tuple[float, float]) -> dict[str, float]:
+    """各ログのカーブ発進 t を検出した {label: t_launch}（検出不能はスキップ）。"""
+    out: dict[str, float] = {}
+    for label, d in data.items():
+        t = _find_curve_launch(d["velocity"], launch_window)
+        if t is not None:
+            out[label] = t
+    return out
+
+
+def _curve_window(d: dict, curve_idx: int, t_l: float) -> tuple[float, float]:
+    """発進前2s〜カーブ退出後2s の絶対時刻窓 (t_start, t_end) を返す。"""
+    t_exit = _find_curve_exit(d["kinematic"], curve_idx, t_l)
+    t_post = (t_exit - t_l + 2.0) if t_exit is not None else 25.0
+    return t_l + _CURVE_PRE, t_l + t_post
+
+
+def _clip_rel(df: pd.DataFrame, t0: float, t1: float, t_l: float) -> pd.DataFrame:
+    """[t0, t1] で切り出し、発進相対時刻 tr=t-t_l を付けたコピーを返す。"""
+    sub = df[(df["t"] >= t0) & (df["t"] <= t1)].copy()
+    sub["tr"] = sub["t"] - t_l
+    return sub
+
+
+def _style(d: dict, label: str) -> dict:
+    return {"label": label, "color": d["color"], "lw": d["lw"], "ls": d["ls"],
+            "marker": d["marker"], "ms": d["ms"]}
+
+
+def _curve_traj_runs(data: dict, launch_t: dict, curve_idx: int) -> list[dict]:
+    """カーブ周辺軌跡 run（bbox 窓の seg + ★発進点）を整形する。"""
+    runs: list[dict] = []
+    for label, d in data.items():
+        if label not in launch_t:
+            continue
+        t_l = launch_t[label]
+        t0, t1 = _curve_window(d, curve_idx, t_l)
+        df_k = d["kinematic"]
+        seg = df_k[(df_k["t"] >= t0) & (df_k["t"] <= t1)]
+        if seg.empty:
+            continue
+        lr = df_k.iloc[(df_k["t"] - t_l).abs().argsort().iloc[0]]
+        runs.append({**_style(d, label), "seg_x": np.asarray(seg["x"]), "seg_y": np.asarray(seg["y"]),
+                     "launch_x": float(lr["x"]), "launch_y": float(lr["y"])})
+    return runs
+
+
+def _curve_obj(curve_idx: int) -> dict:
+    c = CURVE_CENTERS[curve_idx]
+    return {"cx": c["cx"], "cy": c["cy"], "mg": _CURVE_MG,
+            "label": c.get("label", f"カーブ{curve_idx + 1}")}
+
+
 def plot_curve_analysis(
     data: dict,
     map_ways: list | None,
     curve_idx: int,
     launch_window: tuple[float, float],
 ):
-    """
-    指定カーブの一時停止発進からの挙動を軌跡＋時系列で比較。
-
-    レイアウト:
-        上段(高め): 対象カーブ付近の軌跡図
-        下段3列: 速度 | 加速度 | ステアリング
-    """
+    """指定カーブの一時停止発進からの挙動を軌跡＋時系列で比較（上段全幅=軌跡, 下段3列）。"""
     if not CURVE_CENTERS or not (0 <= curve_idx < len(CURVE_CENTERS)):
         warnings.warn(f"plot_curve_analysis: curve_idx={curve_idx} が範囲外")
         return
-    curve_label = CURVE_CENTERS[curve_idx].get("label", f"カーブ{curve_idx + 1}")
-
-    # ---- 各ログの発進t=0を検出 ----
-    launch_t: dict[str, float] = {}
-    for label, d in data.items():
-        t_launch = _find_curve_launch(d["velocity"], launch_window)
-        if t_launch is None:
-            warnings.warn(f"{label}: {curve_label}前の停止が見つからないためスキップ")
-            continue
-        launch_t[label] = t_launch
-        print(f"  [{label}] {curve_label}発進 t={t_launch:.1f}s")
-
+    launch_t = _curve_launch_map(data, launch_window)
     if not launch_t:
-        warnings.warn(
-            f"発進時刻を検出できるログがないため plot_curve_analysis({curve_label}) をスキップ"
-        )
+        warnings.warn(f"発進時刻を検出できないため plot_curve_analysis(curve{curve_idx + 1}) をスキップ")
         return
 
-    # ---- 図のセットアップ（2行: 上=軌跡, 下=時系列3列）----
-    fig = plt.figure(figsize=(16, 13))
-    fig.suptitle(f"{SCENARIO_NAME}\n{curve_label} 一時停止発進からの挙動比較", fontsize=12)
-    gs = fig.add_gridspec(2, 3, height_ratios=[1.6, 1.0], hspace=0.38, wspace=0.32)
-    ax_map = fig.add_subplot(gs[0, :])  # 上段全幅: 軌跡
-    ax_vel = fig.add_subplot(gs[1, 0])  # 下段左: 速度
-    ax_acc = fig.add_subplot(gs[1, 1])  # 下段中: 加速度
-    ax_str = fig.add_subplot(gs[1, 2])  # 下段右: ステアリング
-
-    # 表示時間範囲（発進前2s ～ カーブ退出後2s）
-    T_PRE = -2.0
-
-    # 対象カーブ表示範囲
-    c2 = CURVE_CENTERS[curve_idx]
-    cx, cy, mg = c2["cx"], c2["cy"], 80
-
-    # ---- 軌跡図 ----
-    if map_ways:
-        for pts in map_ways:
-            wx, wy = pts[:, 0], pts[:, 1]
-            if wx.max() < cx - mg or wx.min() > cx + mg:
-                continue
-            if wy.max() < cy - mg or wy.min() > cy + mg:
-                continue
-            ax_map.plot(wx, wy, color="#cccccc", lw=0.5, zorder=1)
-
+    ts_runs: list[dict] = []
     for label, d in data.items():
         if label not in launch_t:
             continue
         t_l = launch_t[label]
-        t_exit = _find_curve_exit(d["kinematic"], curve_idx, t_l)
-        t_post = (t_exit - t_l + 2.0) if t_exit is not None else 25.0
-        df_k = d["kinematic"]
-        # 発進前2s〜カーブ退出後2s の軌跡
-        seg = df_k[(df_k["t"] >= t_l + T_PRE) & (df_k["t"] <= t_l + t_post)]
-        if seg.empty:
-            continue
-        _traj_plot(ax_map, seg, d, label, markevery=8)
-        # 発進点マーカー（★）
-        launch_row = df_k.iloc[(df_k["t"] - t_l).abs().argsort().iloc[0]]
-        ax_map.plot(
-            launch_row["x"],
-            launch_row["y"],
-            "*",
-            color=d["color"],
-            ms=14,
-            zorder=6,
-            markeredgecolor="white",
-            markeredgewidth=0.5,
-        )
+        t0, t1 = _curve_window(d, curve_idx, t_l)
+        vel = _clip_rel(d["velocity"], t0, t1, t_l)
+        acc = _clip_rel(d["accel"], t0, t1, t_l)
+        steer = _clip_rel(d["steering"], t0, t1, t_l)
+        cmd = _clip_rel(d["cmd"], t0, t1, t_l)
+        r = {**_style(d, label),
+             "t_vel": np.asarray(vel["tr"]), "vel": np.asarray(vel["lon_vel"]),
+             "t_acc": np.asarray(acc["tr"]), "acc": np.asarray(acc["accel"]),
+             "t_steer": np.asarray(steer["tr"]), "steer_deg": np.degrees(steer["steer"]),
+             "t_cmd": None}
+        if not cmd.empty:
+            r.update({"t_cmd": np.asarray(cmd["tr"]), "cmd_vel": np.asarray(cmd["cmd_vel"]),
+                      "cmd_acc": np.asarray(cmd["cmd_accel"]),
+                      "cmd_steer_deg": np.degrees(cmd["cmd_steer"])})
+        ts_runs.append(r)
 
-    ax_map.set_xlim(cx - mg, cx + mg)
-    ax_map.set_ylim(cy - mg, cy + mg)
-    ax_map.set_aspect("equal")
-    ax_map.set_xlabel("x [m]")
-    ax_map.set_ylabel("y [m]")
-    ax_map.grid(True, lw=0.5, alpha=0.5)
-    ax_map.set_title(
-        f"軌跡（★=発進点、表示範囲: 発進前2s〜{curve_label}退出後2s）", fontsize=10
+    fig = build_fig_curve_analysis(
+        _curve_obj(curve_idx), map_ways, _curve_traj_runs(data, launch_t, curve_idx), ts_runs,
+        scenario_name=SCENARIO_NAME,
     )
-    ax_map.legend(fontsize=10, loc="best")
-
-    # ---- 時系列プロット（発進をt=0に揃える）----
-    for label, d in data.items():
-        if label not in launch_t:
-            continue
-        t_l = launch_t[label]
-        t_exit = _find_curve_exit(d["kinematic"], curve_idx, t_l)
-        t_post = (t_exit - t_l + 2.0) if t_exit is not None else 25.0
-
-        def clip(df, col, _t_l=t_l, _t_post=t_post):
-            mask = (df["t"] >= _t_l + T_PRE) & (df["t"] <= _t_l + _t_post)
-            sub = df[mask].copy()
-            sub["tr"] = sub["t"] - _t_l  # 相対時刻
-            return sub
-
-        vel = clip(d["velocity"], "lon_vel")
-        acc = clip(d["accel"], "accel")
-        steer = clip(d["steering"], "steer")
-        cmd = clip(d["cmd"], "cmd_vel")
-
-        # 速度
-        _ts_plot(ax_vel, vel["tr"], vel["lon_vel"], d, label)
-        if not cmd.empty:
-            _ts_plot(ax_vel, cmd["tr"], cmd["cmd_vel"], d, label + "（指令）", cmd=True)
-
-        # 加速度
-        _ts_plot(ax_acc, acc["tr"], acc["accel"], d, label)
-        if not cmd.empty:
-            _ts_plot(ax_acc, cmd["tr"], cmd["cmd_accel"], d, label + "（指令）", cmd=True)
-
-        # ステアリング
-        _ts_plot(ax_str, steer["tr"], np.degrees(steer["steer"]), d, label)
-        if not cmd.empty:
-            _ts_plot(
-                ax_str, cmd["tr"], np.degrees(cmd["cmd_steer"]), d, label + "（指令）", cmd=True
-            )
-
-    # t=0 縦線
-    for ax in (ax_vel, ax_acc, ax_str):
-        ax.axvline(0, color="gray", lw=1.0, ls="--", alpha=0.7)
-
-    ax_vel.set_title("速度", fontsize=10)
-    ax_vel.set_ylabel("m/s")
-    ax_vel.set_xlabel("発進からの時刻 [s]")
-    ax_vel.grid(True, lw=0.5)
-    ax_vel.legend(fontsize=7, loc="best")
-
-    ax_acc.set_title("加速度", fontsize=10)
-    ax_acc.set_ylabel("m/s²")
-    ax_acc.set_xlabel("発進からの時刻 [s]")
-    ax_acc.grid(True, lw=0.5)
-    ax_acc.legend(fontsize=7, loc="best")
-
-    ax_str.set_title("ステアリング角", fontsize=10)
-    ax_str.set_ylabel("deg")
-    ax_str.set_xlabel("発進からの時刻 [s]")
-    ax_str.grid(True, lw=0.5)
-    ax_str.legend(fontsize=7, loc="best")
-
-    _save(fig, f"curve{curve_idx + 1}_analysis")
+    FIGS_DIR.mkdir(parents=True, exist_ok=True)
+    write_fig_json(fig, FIGS_DIR / f"curve{curve_idx + 1}_analysis")
 
 
 def plot_curve_steering_detail(
@@ -664,164 +612,42 @@ def plot_curve_steering_detail(
     if not CURVE_CENTERS or not (0 <= curve_idx < len(CURVE_CENTERS)):
         warnings.warn(f"plot_curve_steering_detail: curve_idx={curve_idx} が範囲外")
         return
-    curve_label = CURVE_CENTERS[curve_idx].get("label", f"カーブ{curve_idx + 1}")
-
-    # 発進時刻を検出
-    launch_t: dict[str, float] = {}
-    for label, d in data.items():
-        t_l = _find_curve_launch(d["velocity"], launch_window)
-        if t_l is not None:
-            launch_t[label] = t_l
-
+    launch_t = _curve_launch_map(data, launch_window)
     if not launch_t:
-        warnings.warn(
-            f"発進時刻を検出できないため plot_curve_steering_detail({curve_label}) をスキップ"
-        )
+        warnings.warn(f"発進時刻を検出できないため plot_curve_steering_detail(curve{curve_idx + 1}) をスキップ")
         return
 
-    T_PRE = -2.0
-
-    fig = plt.figure(figsize=(16, 14))
-    fig.suptitle(
-        f"{SCENARIO_NAME}\n{curve_label} ステアリング詳細分析　─　一時停止発進 t=0", fontsize=12
-    )
-    gs = fig.add_gridspec(3, 2, hspace=0.45, wspace=0.30, height_ratios=[1.4, 1.0, 1.0])
-    ax_map = fig.add_subplot(gs[0, 0])  # 左列上: 軌跡
-    ax_ovl = fig.add_subplot(gs[1:, 0])  # 左列下: 指令 vs 応答（大きく）
-    ax_rate = fig.add_subplot(gs[0, 1])  # 右列上: 角速度
-    ax_err = fig.add_subplot(gs[1, 1])  # 右列中: 追従誤差
-    ax_integ = fig.add_subplot(gs[2, 1])  # 右列下: 累積操舵量
-
-    # 対象カーブ付近の軌跡
-    c2 = CURVE_CENTERS[curve_idx]
-    cx, cy, mg = c2["cx"], c2["cy"], 80
-    if map_ways:
-        for pts in map_ways:
-            wx, wy = pts[:, 0], pts[:, 1]
-            if wx.max() < cx - mg or wx.min() > cx + mg:
-                continue
-            if wy.max() < cy - mg or wy.min() > cy + mg:
-                continue
-            ax_map.plot(wx, wy, color="#cccccc", lw=0.5, zorder=1)
-
+    steer_runs: list[dict] = []
     for label, d in data.items():
         if label not in launch_t:
             continue
         t_l = launch_t[label]
-        t_exit = _find_curve_exit(d["kinematic"], curve_idx, t_l)
-        t_post = (t_exit - t_l + 2.0) if t_exit is not None else 25.0
-        df_k = d["kinematic"]
-        seg = df_k[(df_k["t"] >= t_l + T_PRE) & (df_k["t"] <= t_l + t_post)]
-        if not seg.empty:
-            _traj_plot(ax_map, seg, d, label, markevery=8)
-        if df_k.empty:
-            continue
-        lr = df_k.iloc[(df_k["t"] - t_l).abs().argsort().iloc[0]]
-        ax_map.plot(
-            lr["x"],
-            lr["y"],
-            "*",
-            color=d["color"],
-            ms=13,
-            zorder=6,
-            markeredgecolor="white",
-            markeredgewidth=0.5,
-        )
-
-    ax_map.set_xlim(cx - mg, cx + mg)
-    ax_map.set_ylim(cy - mg, cy + mg)
-    ax_map.set_aspect("equal")
-    ax_map.set_xlabel("x [m]")
-    ax_map.set_ylabel("y [m]")
-    ax_map.grid(True, lw=0.5, alpha=0.5)
-    ax_map.legend(fontsize=9, loc="best")
-    ax_map.set_title("軌跡（★=発進点）", fontsize=10)
-
-    # 各ログの時系列ステアリング処理
-    for label, d in data.items():
-        if label not in launch_t:
-            continue
-        t_l = launch_t[label]
-        t_exit = _find_curve_exit(d["kinematic"], curve_idx, t_l)
-        t_post = (t_exit - t_l + 2.0) if t_exit is not None else 25.0
-        steer_df = d["steering"]
-        cmd_df = d["cmd"]
-
-        mask_s = (steer_df["t"] >= t_l + T_PRE) & (steer_df["t"] <= t_l + t_post)
-        mask_c = (cmd_df["t"] >= t_l + T_PRE) & (cmd_df["t"] <= t_l + t_post)
-        s = steer_df[mask_s].copy()
-        s["tr"] = s["t"] - t_l
-        c = cmd_df[mask_c].copy()
-        c["tr"] = c["t"] - t_l
-
+        t0, t1 = _curve_window(d, curve_idx, t_l)
+        s = _clip_rel(d["steering"], t0, t1, t_l)
+        c = _clip_rel(d["cmd"], t0, t1, t_l)
+        t_s = np.asarray(s["tr"])
         s_deg = np.degrees(s["steer"].values)
-        t_s = s["tr"].values
-
-        # --- 左列下: 指令 vs 応答の重ね描き ---
-        ax_ovl.plot(t_s, s_deg, color=d["color"], lw=d["lw"], ls=d["ls"], label=f"{label} 応答")
+        r = {**_style(d, label), "t_s": t_s, "steer_deg": s_deg, "t_cmd": None,
+             "rate_t": None, "err_t": None, "integ": np.zeros_like(t_s)}
         if not c.empty:
-            ax_ovl.plot(
-                np.asarray(c["tr"]),
-                np.degrees(np.asarray(c["cmd_steer"])),
-                color=d["color"],
-                lw=1.2,
-                ls=":",
-                alpha=0.65,
-                label=f"{label} 指令",
-            )
-
-        # --- 右列上: 角速度 (deg/s) ---
+            r["t_cmd"] = np.asarray(c["tr"])
+            r["cmd_steer_deg"] = np.degrees(c["cmd_steer"].values)
         if len(t_s) > 1:
             dt = np.diff(t_s)
             rate = np.diff(s_deg) / np.where(dt > 1e-6, dt, np.nan)
-            # 外れ値を除去
-            rate = np.where(np.abs(rate) < 200, rate, np.nan)
-            ax_rate.plot(t_s[1:], rate, color=d["color"], lw=d["lw"] * 0.9, ls=d["ls"], label=label)
-
-        # --- 右列中: 追従誤差（応答 − 指令）---
+            r["rate_t"], r["rate"] = t_s[1:], np.where(np.abs(rate) < 200, rate, np.nan)
+            r["integ"] = np.concatenate([[0], np.cumsum(np.abs(np.diff(s_deg)) * dt)])
         if not c.empty and len(t_s) > 0:
             cmd_interp = np.interp(t_s, c["tr"].values, np.degrees(c["cmd_steer"].values))
-            err = s_deg - cmd_interp
-            ax_err.plot(t_s, err, color=d["color"], lw=d["lw"] * 0.9, ls=d["ls"], label=label)
+            r["err_t"], r["err"] = t_s, s_deg - cmd_interp
+        steer_runs.append(r)
 
-        # --- 右列下: 累積絶対操舵量 ---
-        if len(t_s) > 1:
-            dt_full = np.diff(t_s)
-            incr = np.abs(np.diff(s_deg))
-            cumsum = np.concatenate([[0], np.cumsum(incr * dt_full)])
-            ax_integ.plot(t_s, cumsum, color=d["color"], lw=d["lw"], ls=d["ls"], label=label)
-
-    # t=0 縦線
-    for ax in (ax_ovl, ax_rate, ax_err, ax_integ):
-        ax.axvline(0, color="gray", lw=1.0, ls="--", alpha=0.7)
-
-    ax_ovl.set_title("ステアリング角　指令（点線）vs 応答（実線/破線）", fontsize=10)
-    ax_ovl.set_ylabel("ステア角 [deg]")
-    ax_ovl.set_xlabel("発進からの時刻 [s]")
-    ax_ovl.grid(True, lw=0.5)
-    ax_ovl.legend(fontsize=8, ncol=2)
-
-    ax_rate.set_title("ステアリング角速度", fontsize=10)
-    ax_rate.set_ylabel("deg/s")
-    ax_rate.set_xlabel("発進からの時刻 [s]")
-    ax_rate.axhline(0, color="gray", lw=0.6, ls="-")
-    ax_rate.grid(True, lw=0.5)
-    ax_rate.legend(fontsize=9)
-
-    ax_err.set_title("指令追従誤差（応答 − 指令）", fontsize=10)
-    ax_err.set_ylabel("誤差 [deg]")
-    ax_err.set_xlabel("発進からの時刻 [s]")
-    ax_err.axhline(0, color="gray", lw=0.6, ls="-")
-    ax_err.grid(True, lw=0.5)
-    ax_err.legend(fontsize=9)
-
-    ax_integ.set_title("累積絶対操舵量（∫|dθ/dt|dt）", fontsize=10)
-    ax_integ.set_ylabel("deg")
-    ax_integ.set_xlabel("発進からの時刻 [s]")
-    ax_integ.grid(True, lw=0.5)
-    ax_integ.legend(fontsize=9)
-
-    _save(fig, f"curve{curve_idx + 1}_steering_detail")
+    fig = build_fig_curve_steering_detail(
+        _curve_obj(curve_idx), map_ways, _curve_traj_runs(data, launch_t, curve_idx), steer_runs,
+        scenario_name=SCENARIO_NAME,
+    )
+    FIGS_DIR.mkdir(parents=True, exist_ok=True)
+    write_fig_json(fig, FIGS_DIR / f"curve{curve_idx + 1}_steering_detail")
 
 
 def plot_curve_yaw_steer(
@@ -844,133 +670,44 @@ def plot_curve_yaw_steer(
     if not CURVE_CENTERS or not (0 <= curve_idx < len(CURVE_CENTERS)):
         warnings.warn(f"plot_curve_yaw_steer: curve_idx={curve_idx} が範囲外")
         return
-    curve_label = CURVE_CENTERS[curve_idx].get("label", f"カーブ{curve_idx + 1}")
-
-    launch_t: dict[str, float] = {}
-    for label, d in data.items():
-        t_l = _find_curve_launch(d["velocity"], launch_window)
-        if t_l is not None:
-            launch_t[label] = t_l
-
+    launch_t = _curve_launch_map(data, launch_window)
     if not launch_t:
         return
 
-    T_PRE = -2.0
-
-    fig, axes = plt.subplots(4, 1, figsize=(13, 16), sharex=True)
-    fig.suptitle(
-        f"{SCENARIO_NAME}\n{curve_label} ステア角 vs 実際の進行方向"
-        f"（自転車モデル L={WHEELBASE:.2f}m）",
-        fontsize=12,
-    )
-
+    yaw_runs: list[dict] = []
     for label, d in data.items():
         if label not in launch_t:
             continue
         t_l = launch_t[label]
-        t_exit = _find_curve_exit(d["kinematic"], curve_idx, t_l)
-        t_post = (t_exit - t_l + 2.0) if t_exit is not None else 25.0
-
-        # ---- 時系列データを発進t=0で切り出し ----
-        def clip(df, _t_l=t_l, _t_post=t_post):
-            m = (df["t"] >= _t_l + T_PRE) & (df["t"] <= _t_l + _t_post)
-            sub = df[m].copy()
-            sub["tr"] = sub["t"] - _t_l
-            return sub
-
-        kin = clip(d["kinematic"])
-        vel = clip(d["velocity"])
-        steer = clip(d["steering"])
-
+        t0, t1 = _curve_window(d, curve_idx, t_l)
+        kin = _clip_rel(d["kinematic"], t0, t1, t_l)
+        vel = _clip_rel(d["velocity"], t0, t1, t_l)
+        steer = _clip_rel(d["steering"], t0, t1, t_l)
         if kin.empty or vel.empty or steer.empty:
             continue
-
         t_k = kin["tr"].values
-
-        # yaw unwrap → yaw_rate (rad/s)
         yaw_u = np.unwrap(kin["yaw"].values)
         yaw_rate = np.gradient(yaw_u, t_k)  # rad/s
-
-        # 速度・ステアを kinematic の時刻に補間
         v_i = np.interp(t_k, vel["tr"].values, vel["lon_vel"].values)
         s_i = np.interp(t_k, steer["tr"].values, steer["steer"].values)  # rad
-
-        # 等価ステア角: atan(L * yaw_rate / v)  [rad]
-        # v が小さいと不安定 → 0.3m/s 以下はマスク
-        v_safe = np.where(v_i > 0.3, v_i, np.nan)
+        v_safe = np.where(v_i > 0.3, v_i, np.nan)  # 低速は等価ステア角が不安定
         steer_equiv = np.arctan2(WHEELBASE * yaw_rate, v_safe)  # rad
-
-        # 予測ヨーレート: v * tan(steer) / L  [rad/s]
-        yaw_rate_pred = v_i * np.tan(s_i) / WHEELBASE
-
-        # 差分: ステア角 − 等価ステア角  [deg]
-        diff_deg = np.degrees(s_i - steer_equiv)
-        # 外れ値（v≈0 由来）をクリップ
-        diff_deg = np.clip(diff_deg, -30, 30)
-
-        # yaw累積変化量（t=0の値を基準）
+        yaw_rate_pred = v_i * np.tan(s_i) / WHEELBASE  # rad/s
+        diff_deg = np.clip(np.degrees(s_i - steer_equiv), -30, 30)
         t0_idx = int(np.argmin(np.abs(t_k)))
-        yaw_cum = np.degrees(yaw_u - yaw_u[t0_idx])
+        yaw_runs.append({**_style(d, label), "t": t_k,
+                         "steer_deg": np.degrees(s_i), "equiv_deg": np.degrees(steer_equiv),
+                         "diff_deg": diff_deg, "yaw_rate_deg": np.degrees(yaw_rate),
+                         "yaw_rate_pred_deg": np.degrees(yaw_rate_pred),
+                         "yaw_cum_deg": np.degrees(yaw_u - yaw_u[t0_idx])})
 
-        # ---- 描画 ----
-        kw = dict(color=d["color"], lw=d["lw"], ls=d["ls"])
-
-        # 段1: ステア角 vs 等価ステア角
-        axes[0].plot(t_k, np.degrees(s_i), label=f"{label} ステア実測", **kw)
-        axes[0].plot(
-            t_k,
-            np.degrees(steer_equiv),
-            color=d["color"],
-            lw=1.2,
-            ls=":",
-            alpha=0.7,
-            label=f"{label} 等価（実ヨーレートから逆算）",
-        )
-
-        # 段2: 差分
-        axes[1].plot(t_k, diff_deg, label=label, **kw)
-
-        # 段3: 実ヨーレート vs 予測ヨーレート
-        axes[2].plot(t_k, np.degrees(yaw_rate), label=f"{label} 実測", **kw)
-        axes[2].plot(
-            t_k,
-            np.degrees(yaw_rate_pred),
-            color=d["color"],
-            lw=1.2,
-            ls=":",
-            alpha=0.7,
-            label=f"{label} 予測（自転車モデル）",
-        )
-
-        # 段4: yaw累積変化
-        axes[3].plot(t_k, yaw_cum, label=label, **kw)
-
-    # 共通装飾
-    for ax in axes:
-        ax.axvline(0, color="gray", lw=1.0, ls="--", alpha=0.7)
-        ax.axhline(0, color="gray", lw=0.5)
-        ax.grid(True, lw=0.5)
-        ax.legend(fontsize=8, ncol=2, loc="best")
-
-    axes[0].set_title(
-        "ステア角（実線）vs 等価ステア角（点線）── 一致するほど自転車モデルが成立", fontsize=10
+    fig = build_fig_curve_yaw_steer(
+        yaw_runs, scenario_name=SCENARIO_NAME,
+        curve_label=CURVE_CENTERS[curve_idx].get("label", f"カーブ{curve_idx + 1}"),
+        wheelbase=float(WHEELBASE),
     )
-    axes[0].set_ylabel("deg")
-
-    axes[1].set_title(
-        f"ステア角 − 等価ステア角（進行方向とのズレ）  ─  L={WHEELBASE:.2f}m", fontsize=10
-    )
-    axes[1].set_ylabel("deg")
-
-    axes[2].set_title("ヨーレート（実線=実測、点線=自転車モデル予測）", fontsize=10)
-    axes[2].set_ylabel("deg/s")
-
-    axes[3].set_title("yaw 累積変化量（t=0 基準）── カーブの総旋回量", fontsize=10)
-    axes[3].set_ylabel("deg")
-    axes[3].set_xlabel("発進からの時刻 [s]")
-
-    fig.tight_layout()
-    _save(fig, f"curve{curve_idx + 1}_yaw_steer")
+    FIGS_DIR.mkdir(parents=True, exist_ok=True)
+    write_fig_json(fig, FIGS_DIR / f"curve{curve_idx + 1}_yaw_steer")
 
 
 def plot_steer_response(
@@ -992,87 +729,53 @@ def plot_steer_response(
         下段左: RMSE [deg]の棒グラフ
         下段右: ピーク追従率（応答ピーク / 指令ピーク）の棒グラフ
     """
-    from scipy.signal import correlate
-
     T_ONSET_PRE = -0.5  # onset 前の余白 [s]
     T_ONSET_POST = 12.0  # onset 後の表示幅 [s]
     ONSET_THRESH_DEG = 1.0
 
-    fig = plt.figure(figsize=(15, 14))
-    fig.suptitle(
-        f"{SCENARIO_NAME}\nステアリング応答性能比較　──　ステア入力開始 t=0 に揃えた比較",
-        fontsize=12,
-    )
-    gs = fig.add_gridspec(3, 2, height_ratios=[1.6, 1.0, 1.0], hspace=0.50, wspace=0.30)
-    ax_main = fig.add_subplot(gs[0, :])
-    ax_err = fig.add_subplot(gs[1, 0])
-    ax_rise = fig.add_subplot(gs[1, 1])
-    ax_rmse = fig.add_subplot(gs[2, 0])
-    ax_peak = fig.add_subplot(gs[2, 1])
-
-    # 定量値を収集
-    labels_list = []
-    onset_delays = []  # 指令onset → 応答onset の遅延 [s]
-    delays = []  # xcorr ラグ [s]
-    rmse_list = []
-    rise_list = []
-    peak_ratio = []
+    runs: list[dict] = []
+    bar_labels: list[str] = []
+    bar_colors: list[str] = []
+    rise_ms: list[float] = []
+    rmse_vals: list[float] = []
+    peak_vals: list[float] = []
 
     for label, d in data.items():
         t_l = _find_curve_launch(d["velocity"], launch_window)
         if t_l is None:
             continue
-
-        vel_df = d["velocity"]
-        steer_df = d["steering"]
-        cmd_df = d["cmd"]
-
-        def clip_rel(df, t_l=t_l):
-            m = (df["t"] >= t_l - 3) & (df["t"] <= t_l + 20)
-            sub = df[m].copy()
-            sub["tr"] = sub["t"] - t_l  # 発進基準の相対時刻
-            return sub
-
-        steer_r = clip_rel(steer_df)
-        cmd_r = clip_rel(cmd_df)
+        steer_r = _clip_rel(d["steering"], t_l - 3, t_l + 20, t_l)
+        cmd_r = _clip_rel(d["cmd"], t_l - 3, t_l + 20, t_l)
         if steer_r.empty or cmd_r.empty:
             continue
-
         cmd_deg = np.degrees(cmd_r["cmd_steer"].values)
         steer_deg = np.degrees(steer_r["steer"].values)
 
-        # ステア指令の onset（発進後で閾値を超えた最初の時刻）
         onset_mask = (cmd_r["tr"] >= 0) & (np.abs(cmd_deg) > ONSET_THRESH_DEG)
         if not onset_mask.any():
             continue
         t_onset_cmd = float(cmd_r["tr"].values[onset_mask][0])
-
         onset_mask_act = (steer_r["tr"] >= 0) & (np.abs(steer_deg) > ONSET_THRESH_DEG)
         t_onset_act = (
             float(steer_r["tr"].values[onset_mask_act][0]) if onset_mask_act.any() else t_onset_cmd
         )
-
         onset_delay = t_onset_act - t_onset_cmd
 
-        # onset t=0 で揃えた窓を切り出す
+        # onset t=0 で揃えた窓
         t_c = cmd_r["tr"].values - t_onset_cmd
         t_a = steer_r["tr"].values - t_onset_cmd
-
-        win_mask_c = (t_c >= T_ONSET_PRE) & (t_c <= T_ONSET_POST)
-        win_mask_a = (t_a >= T_ONSET_PRE) & (t_a <= T_ONSET_POST)
-        t_c_w, c_w = t_c[win_mask_c], cmd_deg[win_mask_c]
-        t_a_w, a_w = t_a[win_mask_a], steer_deg[win_mask_a]
-
+        wc = (t_c >= T_ONSET_PRE) & (t_c <= T_ONSET_POST)
+        wa = (t_a >= T_ONSET_PRE) & (t_a <= T_ONSET_POST)
+        t_c_w, c_w = t_c[wc], cmd_deg[wc]
+        t_a_w, a_w = t_a[wa], steer_deg[wa]
         if len(c_w) == 0 or len(a_w) == 0:
             continue
 
-        # 正規化（ピーク指令値）
         peak_cmd = np.abs(c_w).max()
         peak_act = np.abs(a_w).max()
         c_norm = c_w / peak_cmd if peak_cmd > 0 else c_w
         a_norm = a_w / peak_cmd if peak_cmd > 0 else a_w
 
-        # RMSE（共通グリッドで計算）
         dt = 0.02
         t_grid = np.arange(T_ONSET_PRE, T_ONSET_POST, dt)
         c_i = np.interp(t_grid, t_c_w, c_w, left=np.nan, right=np.nan)
@@ -1080,170 +783,23 @@ def plot_steer_response(
         valid = ~(np.isnan(c_i) | np.isnan(a_i))
         rmse = float(np.sqrt(np.mean((a_i[valid] - c_i[valid]) ** 2))) if valid.any() else np.nan
 
-        # xcorr による遅延推定
-        if valid.sum() > 10:
-            c_v, a_v = c_i[valid] - np.nanmean(c_i), a_i[valid] - np.nanmean(a_i)
-            corr = correlate(a_v, c_v, mode="full")
-            lag = (corr.argmax() - (len(c_v) - 1)) * dt
-        else:
-            lag = onset_delay
+        runs.append({**_style(d, label), "t_c": t_c_w, "c_norm": c_norm,
+                     "t_a": t_a_w, "a_norm": a_norm, "onset_delay": onset_delay,
+                     "err_t": t_grid, "err": a_i - c_i, "is_real": label == "実機"})
+        bar_labels.append(label)
+        bar_colors.append(d["color"])
+        rise_ms.append(onset_delay * 1000)
+        rmse_vals.append(rmse if not np.isnan(rmse) else 0.0)
+        peak_vals.append(peak_act / peak_cmd if peak_cmd > 0 else 0.0)
 
-        # 立ち上がり時間（指令ピーク90% への到達）
-        thresh90 = 0.90 * peak_cmd
-        rise_mask = (t_a_w >= 0) & (np.abs(a_w) >= thresh90)
-        rise_time = float(t_a_w[rise_mask][0]) if rise_mask.any() else np.nan
-
-        # ---- メインプロット（正規化）----
-        kw = dict(color=d["color"], lw=d["lw"], ls=d["ls"])
-        ax_main.plot(t_c_w, c_norm, label=f"{label} 指令", **kw, alpha=0.55, marker=None)
-        ax_main.plot(
-            t_a_w,
-            a_norm,
-            label=f"{label} 応答",
-            color=d["color"],
-            lw=d["lw"] + 0.5,
-            ls=d["ls"],
-            marker=d["marker"],
-            markersize=d["ms"],
-            markevery=12,
-            markerfacecolor=d["color"],
-            markeredgecolor="white",
-            markeredgewidth=0.5,
-        )
-
-        # 応答ピークに達した時刻をマーカー（点線）
-        if rise_mask.any():
-            tr_rise = t_a_w[rise_mask][0]
-            ax_main.axvline(tr_rise, color=d["color"], lw=1.2, ls=":", alpha=0.6)
-
-        # 応答 onset の縦線（指令 onset t=0 からの遅延を鎖線で表示）
-        ax_main.axvline(onset_delay, color=d["color"], lw=2.0, ls="-.", alpha=0.9)
-
-        # ---- 追従誤差 ----
-        err_i = np.interp(t_grid, t_a_w, a_w, left=np.nan, right=np.nan) - np.interp(
-            t_grid, t_c_w, c_w, left=np.nan, right=np.nan
-        )
-        ax_err.plot(t_grid, err_i, color=d["color"], lw=d["lw"], ls=d["ls"], label=label)
-        # 実機のみ over/under-steer を塗り分け (旧 analyze_real_curve2 の understeer 検証ビューを統合)。
-        # 追従誤差 = 応答 − 指令。正=オーバーステア (指令より切れている) / 負=アンダーステア。
-        if label == "実機":
-            ax_err.fill_between(t_grid, err_i, 0, where=(err_i >= 0),
-                                color="tab:red", alpha=0.18, label="実機オーバーステア(+)")
-            ax_err.fill_between(t_grid, err_i, 0, where=(err_i < 0),
-                                color="tab:blue", alpha=0.18, label="実機アンダーステア(−)")
-
-        # 収集
-        labels_list.append(label)
-        onset_delays.append(onset_delay)
-        delays.append(lag)
-        rmse_list.append(rmse)
-        rise_list.append(rise_time)
-        peak_ratio.append(peak_act / peak_cmd if peak_cmd > 0 else np.nan)
-
-    # 遅延の ←→ アノテーション（ax_main の上端付近に配置）
-    y_base = 1.10
-    for i, (lbl, delay_s) in enumerate(zip(labels_list, onset_delays)):
-        d_cfg = data[lbl]
-        yp = y_base + i * 0.09
-        x_end = max(delay_s, 0.015)  # 非常に小さい場合も矢印が見えるよう最低幅を確保
-        ax_main.annotate(
-            "",
-            xy=(x_end, yp),
-            xytext=(0.0, yp),
-            xycoords="data",
-            textcoords="data",
-            arrowprops=dict(arrowstyle="<->", color=d_cfg["color"], lw=1.8, mutation_scale=10),
-            annotation_clip=False,
-        )
-        ax_main.text(
-            x_end / 2,
-            yp + 0.035,
-            f"{lbl}: {delay_s * 1000:.0f} ms",
-            ha="center",
-            va="bottom",
-            fontsize=8,
-            color=d_cfg["color"],
-            fontweight="bold",
-            clip_on=False,
-        )
-
-    # 装飾
-    ax_main.axvline(0, color="gray", lw=1.2, ls="--", alpha=0.7, label="入力onset t=0")
-    ax_main.axhline(0, color="gray", lw=0.5)
-    ax_main.axhline(1.0, color="gray", lw=0.5, ls=":")
-    ax_main.axhline(0.9, color="gray", lw=0.5, ls=":", alpha=0.5)
-    ax_main.set_ylim(-0.15, 1.45)  # 上部に矢印アノテーション用の余白を確保
-    ax_main.set_title(
-        "正規化ステア角（ピーク指令=1.0）　実線=応答、薄線=指令\n"
-        "縦点線=応答90%到達、縦鎖線=応答onset　↔矢印=応答遅延",
-        fontsize=10,
-    )
-    ax_main.set_ylabel("正規化ステア角 [−]")
-    ax_main.set_xlabel("入力開始からの時刻 [s]")
-    ax_main.grid(True, lw=0.5)
-    ax_main.legend(fontsize=8, ncol=3, loc="lower right")
-
-    ax_err.axvline(0, color="gray", lw=1.0, ls="--", alpha=0.7)
-    ax_err.axhline(0, color="gray", lw=0.5)
-    ax_err.set_title("追従誤差（応答 − 指令）", fontsize=10)
-    ax_err.set_ylabel("deg")
-    ax_err.set_xlabel("入力開始からの時刻 [s]")
-    ax_err.grid(True, lw=0.5)
-    ax_err.legend(fontsize=9)
-
-    # 棒グラフ
-    colors_bar = [data[l]["color"] for l in labels_list if l in data]
-    x = np.arange(len(labels_list))
-    bw = 0.5
-
-    delay_ms = [d * 1000 if d is not None and not np.isnan(d) else 0 for d in onset_delays]
-    ax_rise.bar(x, delay_ms, width=bw, color=colors_bar, alpha=0.85, edgecolor="white")
-    ax_rise.set_xticks(x)
-    ax_rise.set_xticklabels(labels_list, fontsize=9)
-    ax_rise.set_title("応答遅延（指令onset → 応答onset）", fontsize=10)
-    ax_rise.set_ylabel("ms")
-    ax_rise.grid(True, axis="y", lw=0.5)
-    for xi, v_ms in zip(x, delay_ms):
-        ax_rise.text(xi, v_ms + 1, f"{v_ms:.0f} ms", ha="center", fontsize=9, fontweight="bold")
-
-    ax_rmse.bar(
-        x,
-        [r if r is not None and not np.isnan(r) else 0 for r in rmse_list],
-        width=bw,
-        color=colors_bar,
-        alpha=0.85,
-        edgecolor="white",
-    )
-    ax_rmse.set_xticks(x)
-    ax_rmse.set_xticklabels(labels_list, fontsize=9)
-    ax_rmse.set_title("RMSE（指令追従誤差）", fontsize=10)
-    ax_rmse.set_ylabel("deg")
-    ax_rmse.grid(True, axis="y", lw=0.5)
-    for xi, v in zip(x, rmse_list):
-        if v is not None and not np.isnan(v):
-            ax_rmse.text(xi, v + 0.02, f"{v:.3f}°", ha="center", fontsize=9)
-
-    ax_peak.bar(
-        x,
-        [r if r is not None and not np.isnan(r) else 0 for r in peak_ratio],
-        width=bw,
-        color=colors_bar,
-        alpha=0.85,
-        edgecolor="white",
-    )
-    ax_peak.axhline(1.0, color="gray", lw=1.0, ls="--", alpha=0.6)
-    ax_peak.set_xticks(x)
-    ax_peak.set_xticklabels(labels_list, fontsize=9)
-    ax_peak.set_title("ピーク追従率（応答ピーク / 指令ピーク）", fontsize=10)
-    ax_peak.set_ylabel("−")
-    ax_peak.set_ylim(0, 1.3)
-    ax_peak.grid(True, axis="y", lw=0.5)
-    for xi, v in zip(x, peak_ratio):
-        if v is not None and not np.isnan(v):
-            ax_peak.text(xi, v + 0.02, f"{v:.3f}", ha="center", fontsize=9)
-
-    fig.tight_layout()
-    _save(fig, f"curve{curve_idx + 1}_steer_response")
+    if not runs:
+        warnings.warn(f"発進検出ログがないため plot_steer_response(curve{curve_idx + 1}) をスキップ")
+        return
+    bars = {"labels": bar_labels, "colors": bar_colors,
+            "rise": rise_ms, "rmse": rmse_vals, "peak": peak_vals}
+    fig = build_fig_steer_response(runs, bars, scenario_name=SCENARIO_NAME)
+    FIGS_DIR.mkdir(parents=True, exist_ok=True)
+    write_fig_json(fig, FIGS_DIR / f"curve{curve_idx + 1}_steer_response")
 
 
 # ---------------------------------------------------------------------------
