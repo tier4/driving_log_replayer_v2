@@ -35,6 +35,14 @@ from matplotlib import font_manager as _fm
 import numpy as np
 import pandas as pd
 
+from .lib._fig_io import write_fig_json
+from .lib._figures import (
+    build_fig_cascade_error_overlay,
+    build_fig_error_growth_overlay,
+    build_fig_error_timeseries_overlay,
+    build_fig_growth_relative,
+    build_fig_rmse_heatmap,
+)
 from .lib._nstep_common import (
     ERR_METRICS,
     YAW_SEED_NOTE,
@@ -127,55 +135,8 @@ def plot_cascade_error_overlay(
     case_dfs: dict[str, pd.DataFrame], out_path: Path
 ) -> None:
     """全 case の N=1 err_* を 1 枚に重ね描き (各段は real / sim / err の 3 系列)."""
-    dfs1 = {tag: n1(df) for tag, df in case_dfs.items()}
-    # _CASCADE_ROWS は 2 要素固定なので axes は常に 2D 配列
-    fig, axes = plt.subplots(
-        len(_CASCADE_ROWS), 2, figsize=(16, 4 * len(_CASCADE_ROWS)),
-        gridspec_kw={"width_ratios": [3, 1]},
-    )
-
-    colors = dict(zip(dfs1.keys(), _color_cycle(len(dfs1))))
-
-    for row_idx, (real_col, sim_col, err_col, scale, ylabel, title) in enumerate(_CASCADE_ROWS):
-        ax_ts = axes[row_idx, 0]
-        ax_err = axes[row_idx, 1]
-
-        for tag, df in dfs1.items():
-            tr = df["tr"].values
-            color = colors[tag]
-            # 時系列: sim を tag 別の色 (real は灰色で全 case 共通描画)
-            ax_ts.plot(tr, df[sim_col].values * scale, color=color, lw=1.2, label=f"{tag} sim")
-            # 誤差時系列
-            err = df[err_col].values * scale
-            rmse = float(np.sqrt(np.nanmean(err ** 2)))
-            ax_err.plot(tr, err, color=color, lw=1.0, alpha=0.8,
-                        label=f"{tag} RMSE={rmse:.3g}")
-
-        # real は最初の case のものを灰色基準として描画 (全 case で同じ実機ログ)
-        first_df = next(iter(dfs1.values()))
-        ax_ts.plot(first_df["tr"].values, first_df[real_col].values * scale,
-                   color="black", lw=1.5, ls="--", label="real", zorder=10)
-
-        ax_ts.axhline(0, color="black", lw=0.5, ls=":")
-        ax_ts.set_ylabel(ylabel)
-        ax_ts.set_title(title, fontsize=10)
-        ax_ts.legend(fontsize=8, ncol=2)
-        ax_ts.grid(True, alpha=0.3)
-
-        ax_err.axhline(0, color="black", lw=0.6)
-        ax_err.set_ylabel(f"誤差 [{ylabel.split('[')[1]}")
-        ax_err.set_title("誤差 (real − sim) — case 別 RMSE", fontsize=10)
-        ax_err.legend(fontsize=8)
-        ax_err.grid(True, alpha=0.3)
-
-    for col in range(2):
-        axes[-1, col].set_xlabel("AUTONOMOUS 開始からの時刻 [s]")
-
-    fig.suptitle("cases overlay: N=1 段階的誤差 (ステア応答 → 横位置)", fontsize=12)
-    fig.tight_layout()
-    fig.savefig(out_path, dpi=150, bbox_inches="tight")
-    plt.close(fig)
-    print(f"  Saved: {out_path}")
+    fig = build_fig_cascade_error_overlay({tag: n1(df) for tag, df in case_dfs.items()})
+    write_fig_json(fig, out_path)
 
 
 def plot_error_timeseries_overlay(
@@ -186,32 +147,8 @@ def plot_error_timeseries_overlay(
     N=1 では従来の per-step 誤差比較、N=max では RMSE 集約で消える
     「コースのどこ (どのカーブ) でどのモデルが乖離するか」の比較になる。
     """
-    fig, axes = plt.subplots(len(ERR_METRICS), 1,
-                             figsize=(14, 3.5 * len(ERR_METRICS)), sharex=True)
-    colors = dict(zip(case_dfs.keys(), _color_cycle(len(case_dfs))))
-
-    for ax, (col, scale, label, unit, _source) in zip(axes, ERR_METRICS):
-        for tag, df in case_dfs.items():
-            sub = df[df["horizon"] == horizon].sort_values("tr")
-            err = sub[col].values * scale
-            rmse = float(np.sqrt(np.nanmean(err ** 2)))
-            ax.plot(sub["tr"].values, err, color=colors[tag], lw=1.0, alpha=0.85,
-                    label=f"{tag}  RMSE={rmse:.3g} {unit}")
-        ax.axhline(0, color="black", lw=0.6)
-        ax.set_ylabel(f"誤差 [{unit}]")
-        full_title = f"{label} (N={horizon}, 実機 − モデル)"
-        if col == "yaw_err_deg":
-            full_title += f"\n{YAW_SEED_NOTE}"
-        ax.set_title(full_title, fontsize=11)
-        ax.legend(fontsize=9, ncol=2)
-        ax.grid(True, alpha=0.3)
-
-    axes[-1].set_xlabel("rollout 開始時刻 (AUTONOMOUS 開始からの経過) [s]")
-    fig.suptitle(f"cases overlay: N-step 誤差時系列 (N={horizon})", fontsize=12)
-    fig.tight_layout()
-    fig.savefig(out_path, dpi=150, bbox_inches="tight")
-    plt.close(fig)
-    print(f"  Saved: {out_path}")
+    fig = build_fig_error_timeseries_overlay(case_dfs, horizon)
+    write_fig_json(fig, out_path)
 
 
 def plot_error_growth_overlay(
@@ -221,31 +158,8 @@ def plot_error_growth_overlay(
 
     roll: tag → {horizon → {"pos","long","lat","yaw"}} (rmse_by_horizon の集約)。
     """
-    fig, (ax_pos, ax_yaw) = plt.subplots(1, 2, figsize=(14, 5))
-    colors = dict(zip(roll.keys(), _color_cycle(len(roll))))
-
-    for tag, r in roll.items():
-        horizons = sorted(r.keys())
-        ax_pos.plot(horizons, [r[h]["pos"] for h in horizons], "o-",
-                    color=colors[tag], lw=1.4, label=tag)
-        ax_yaw.plot(horizons, [r[h]["yaw"] for h in horizons], "s--",
-                    color=colors[tag], lw=1.4, label=tag)
-
-    for ax, ylabel, title in [
-        (ax_pos, "位置 RMSE [cm]", "位置誤差成長"),
-        (ax_yaw, "yaw RMSE [deg]", "yaw 誤差成長"),
-    ]:
-        ax.set_xlabel("rollout 長 N [step]")
-        ax.set_ylabel(ylabel)
-        ax.set_title(title, fontsize=11)
-        ax.legend(fontsize=9)
-        ax.grid(True, lw=0.5, alpha=0.6)
-
-    fig.suptitle("cases overlay: N-step 誤差成長 (free-running)", fontsize=12)
-    fig.tight_layout()
-    fig.savefig(out_path, dpi=150, bbox_inches="tight")
-    plt.close(fig)
-    print(f"  Saved: {out_path}")
+    fig = build_fig_error_growth_overlay(roll)
+    write_fig_json(fig, out_path)
 
 
 def plot_rmse_heatmap(
@@ -256,37 +170,11 @@ def plot_rmse_heatmap(
     cases_summary.md の表の図版化。2 変数 (シミュレータ構成 × rollout 長) の
     全組み合わせを 1 枚で俯瞰する。ケース数が増えても破綻しない。
     """
-    tags = list(roll.keys())
     horizons = common_horizons(r.keys() for r in roll.values())
-    if not horizons:
+    fig = build_fig_rmse_heatmap(roll, horizons)
+    if fig is None:
         return
-
-    fig, axes = plt.subplots(1, 2, figsize=(7 + 1.2 * len(horizons), 1.5 + 0.6 * len(tags)))
-    for ax, key, unit, title in [
-        (axes[0], "pos", "cm", "位置 RMSE [cm]"),
-        (axes[1], "yaw", "deg", "yaw RMSE [deg]"),
-    ]:
-        mat = np.array([[roll[tag][h][key] for h in horizons] for tag in tags])
-        im = ax.imshow(mat, cmap="YlOrRd", aspect="auto")
-        ax.set_xticks(range(len(horizons)), [f"N={h}" for h in horizons])
-        ax.set_yticks(range(len(tags)), tags)
-        ax.set_title(title, fontsize=11)
-        # セル注釈: 背景の濃淡で文字色を切り替える
-        thresh = mat.min() + (mat.max() - mat.min()) * 0.6
-        for i in range(len(tags)):
-            for j in range(len(horizons)):
-                ax.text(
-                    j, i, f"{mat[i, j]:.2f}",
-                    ha="center", va="center", fontsize=9,
-                    color="white" if mat[i, j] > thresh else "black",
-                )
-        fig.colorbar(im, ax=ax, label=unit, shrink=0.85)
-
-    fig.suptitle("cases × horizon: N-step RMSE ヒートマップ", fontsize=12)
-    fig.tight_layout()
-    fig.savefig(out_path, dpi=150, bbox_inches="tight")
-    plt.close(fig)
-    print(f"  Saved: {out_path}")
+    write_fig_json(fig, out_path)
 
 
 def plot_growth_relative(
@@ -298,44 +186,15 @@ def plot_growth_relative(
     reference との比を取って dynamics 差だけを浮き上がらせる。
     「N をどこまで伸ばすとモデル差が判別可能になるか」が読める。
     """
-    ref = roll.get(ref_tag)
-    if not ref:
+    if ref_tag not in roll:
         print(f"[WARN] reference_tag={ref_tag} の nstep 出力が無いため相対成長プロットをスキップ",
               file=sys.stderr)
         return
     horizons = common_horizons(r.keys() for r in roll.values())
-    if not horizons:
+    fig = build_fig_growth_relative(roll, ref_tag, horizons)
+    if fig is None:
         return
-
-    fig, axes = plt.subplots(1, 2, figsize=(14, 5))
-    colors = dict(zip(roll.keys(), _color_cycle(len(roll))))
-
-    for ax, key, title in [
-        (axes[0], "pos", "位置 RMSE 比"),
-        (axes[1], "yaw", "yaw RMSE 比"),
-    ]:
-        for tag, r in roll.items():
-            if tag == ref_tag:
-                continue
-            ratio = [r[h][key] / max(ref[h][key], 1e-12) for h in horizons]
-            ax.plot(horizons, ratio, "o-", color=colors[tag], lw=1.4, label=tag)
-        ax.axhline(1.0, color="black", lw=1.0, ls="--", label=f"{ref_tag} (基準)")
-        ax.set_xlabel("rollout 長 N [step]")
-        ax.set_ylabel(f"RMSE(case) / RMSE({ref_tag})")
-        ax.set_title(title, fontsize=11)
-        ax.legend(fontsize=9)
-        ax.grid(True, lw=0.5, alpha=0.6)
-
-    fig.suptitle(
-        f"cases overlay: N-step 相対誤差成長 (対 {ref_tag} 比)\n"
-        "1.0 より上=基準より悪化 / 下=改善。位置比は小 N で共通ノイズ床に埋もれて 1.0 近傍。"
-        "yaw 比は seed (k_us=0 の bicycle 逆算) 由来の差で小 N でも分離し、大 N ほど真の dynamics 差が支配",
-        fontsize=11,
-    )
-    fig.tight_layout()
-    fig.savefig(out_path, dpi=150, bbox_inches="tight")
-    plt.close(fig)
-    print(f"  Saved: {out_path}")
+    write_fig_json(fig, out_path)
 
 
 def write_cases_summary(
