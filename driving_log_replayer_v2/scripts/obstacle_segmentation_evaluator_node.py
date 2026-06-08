@@ -102,9 +102,7 @@ class ObstacleSegmentationEvaluator(DLREvaluatorV2):
         # pub_goal_pose must be created before timer_cb is called
         self.__goal_pose_counter = 0
         self.__goal_pose = (
-            get_goal_pose_from_rosbag(str(Path(all_dataset_paths[0], "input_bag")))
-            if all_dataset_paths
-            else None
+            get_goal_pose_from_rosbag(self._rosbag_path) if all_dataset_paths else None
         )
         self.__pub_goal_pose = self.create_publisher(
             PoseStamped,
