@@ -14,7 +14,6 @@ import plotly.graph_objects as go
 
 from .._nstep_common import ERR_METRICS, YAW_SEED_NOTE
 from ._common import (
-    add_params_annotation_plotly,
     apply_base_layout,
     axis_range_from_limits,
     ma_window,
@@ -92,7 +91,6 @@ def build_fig_error_timeseries(
         title_text="rollout 開始時刻（AUTONOMOUS 開始からの経過）[s]",
         row=len(ERR_METRICS), col=1,
     )
-    add_params_annotation_plotly(fig, params)
     return apply_base_layout(
         fig,
         title="N-step オープンループ 誤差時系列（N=1 = 毎ステップリセット）",
@@ -153,7 +151,6 @@ def build_fig_overview(
         for c in (1, 2):
             fig.add_vline(x=0, row=r, col=c, **_VLINE)
             fig.update_xaxes(title_text="AUTONOMOUS 開始からの時刻 [s]", row=r, col=c)
-    add_params_annotation_plotly(fig, params)
     return apply_base_layout(
         fig,
         title="全走行 N=1 (per-step) 分析<br><sub>(各ステップで実機状態にリセット — 計画挙動の差を除外)</sub>",
@@ -186,7 +183,6 @@ def build_fig_lateral_dynamics_timeseries(
         fig.add_vline(x=0, row=row, col=1, **_VLINE)
         fig.update_yaxes(title_text=ylabel, row=row, col=1)
     fig.update_xaxes(title_text="AUTONOMOUS 開始からの時刻 [s]", row=4, col=1)
-    add_params_annotation_plotly(fig, params)
     return apply_base_layout(
         fig,
         title="全走行 N=1 (per-step): 横方向諸量 時系列<br><sub>(各ステップで実機状態にリセット)</sub>",
@@ -243,7 +239,6 @@ def build_fig_cascade_error(
             fig.add_vline(x=0, row=row, col=col, **_VLINE)
     for col in (1, 2):
         fig.update_xaxes(title_text="AUTONOMOUS 開始からの時刻 [s]", row=rows, col=col)
-    add_params_annotation_plotly(fig, params)
     return apply_base_layout(
         fig,
         title="全走行 N=1 (per-step): 段階的誤差プロット<br><sub>ステア指示 → ステア応答 → 横位置</sub>",
@@ -290,7 +285,6 @@ def build_fig_error_vs_speed(
             rng = axis_range_from_limits(limits_df, col, scale, horizon=h)
             if rng is not None:
                 fig.update_yaxes(range=rng, row=r, col=c)
-    add_params_annotation_plotly(fig, params)
     return apply_base_layout(
         fig, title="N-step オープンループ: 速度依存性 (上段 N=1, 下段 N=max)",
         height=460 * len(rows),
@@ -349,7 +343,6 @@ def build_fig_steering_analysis(
     for r, c in [(1, 1), (1, 2), (2, 1)]:
         fig.add_vline(x=0, row=r, col=c, **_VLINE)
         fig.update_xaxes(title_text="AUTONOMOUS 開始からの時刻 [s]", row=r, col=c)
-    add_params_annotation_plotly(fig, params)
     return apply_base_layout(
         fig,
         title="全走行 N=1 (per-step) ステアリング分析<br><sub>(1ステップ予測誤差: actual[kend] − model_pred[kend])</sub>",
@@ -386,7 +379,6 @@ def build_fig_steer_vs_lateral_scatter(
         fig.add_vline(x=0, line=dict(color="black", width=0.6), row=1, col=c)
         fig.update_xaxes(title_text="ステア角 [deg]", row=1, col=c)
         fig.update_yaxes(title_text=ylabel, row=1, col=c)
-    add_params_annotation_plotly(fig, params)
     return apply_base_layout(
         fig,
         title="全走行 N=1 (per-step): ステア角 vs 横方向諸量 散布図<br><sub>(スケール誤差・バイアス確認)</sub>",

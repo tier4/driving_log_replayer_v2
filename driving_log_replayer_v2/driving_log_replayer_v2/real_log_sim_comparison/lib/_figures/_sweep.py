@@ -34,7 +34,6 @@ def build_fig_sweep(
     パネル順は [同定メトリクス, 副メトリクス..., 実機根拠パネル...]。横 1 列に並べると各パネルが
     狭すぎるため、`ncols` 列で折り返して各パネル幅を確保する。
     """
-    from ._common import add_params_annotation_plotly  # noqa: PLC0415
 
     n = len(panels)
     ncols = max(1, min(ncols, n))
@@ -63,7 +62,6 @@ def build_fig_sweep(
         r, c = idx // ncols + 1, idx % ncols + 1
         fig.update_xaxes(visible=False, row=r, col=c)
         fig.update_yaxes(visible=False, row=r, col=c)
-    add_params_annotation_plotly(fig, params)
     return apply_base_layout(fig, title=title, height=380 * rows + 80)
 
 

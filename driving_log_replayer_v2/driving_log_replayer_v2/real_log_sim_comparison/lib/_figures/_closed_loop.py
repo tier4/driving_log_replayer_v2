@@ -21,7 +21,6 @@ import numpy as np
 import plotly.graph_objects as go
 
 from ._common import (
-    add_params_annotation_plotly,
     apply_base_layout,
     lanes_to_trace,
     make_grid,
@@ -76,7 +75,6 @@ def build_fig_timeseries_resp_cmd(
     fig.update_yaxes(title_text=cmd_ylabel, row=2, col=1)
     fig.update_xaxes(title_text=xlabel, row=2, col=1)
     _bottom_note(fig, note)
-    add_params_annotation_plotly(fig)
     return apply_base_layout(fig, title=title, height=height)
 
 
@@ -154,83 +152,6 @@ def build_fig_vs_distance(
         ))
     fig.update_xaxes(title_text=xlabel)
     fig.update_yaxes(title_text=ylabel)
-    add_params_annotation_plotly(fig)
     return apply_base_layout(fig, title=title, height=height)
 
 
-def build_fig_trajectory(
-    runs: list[dict],
-    *,
-    map_ways: list[np.ndarray] | None = None,
-    scenario_name: str = "",
-    height: int = 800,
-    margin_m: float = 30.0,
-) -> go.Figure:
-    """地図背景あり軌跡比較図（旧 plot_trajectory の plotly 純関数版）。
-
-    表示範囲は全 run の bbox + マージンに限定。ズーム/パン/hover/凡例トグル可。
-    `map_ways` があれば bbox 内のレーンを薄灰で背景描画する。
-    """
-    all_xy = [
-        np.column_stack([r["x"], r["y"]])
-        for r in runs
-        if len(r.get("x", [])) > 0
-    ]
-    fig = go.Figure()
-    if not all_xy:
-        return apply_base_layout(fig, title=f"{scenario_name}<br>軌跡比較（データなし）", height=height)
-    pts = np.concatenate(all_xy)
-    x_min, y_min = pts.min(axis=0) - margin_m
-    x_max, y_max = pts.max(axis=0) + margin_m
-
-    if map_ways:
-        ways = map_ways_in_bbox(map_ways, (x_min, x_max), (y_min, y_max))
-        if ways:
-            fig.add_trace(lanes_to_trace(ways))
-
-    for r in runs:
-        x = np.asarray(r["x"])
-        y = np.asarray(r["y"])
-        if len(x) == 0:
-            continue
-        label = r["label"]
-        t = r.get("t")
-        customdata = np.asarray(t) if t is not None else None
-        hover_extra = "<br>t=%{customdata:.1f}s" if t is not None else ""
-        fig.add_trace(go.Scatter(
-            x=x, y=y, mode="lines", name=label, legendgroup=label,
-            line=dict(color=r["color"], width=r.get("lw", 1.5), dash=plotly_dash(r.get("ls", "-"))),
-            customdata=customdata,
-            hovertemplate=f"{label}<br>x=%{{x:.1f}}m y=%{{y:.1f}}m{hover_extra}<extra></extra>",
-        ))
-        me = max(1, len(x) // 15)
-        fig.add_trace(go.Scatter(
-            x=x[::me], y=y[::me], mode="markers", legendgroup=label, showlegend=False,
-            marker=dict(
-                symbol=plotly_marker(r.get("marker", "o")),
-                size=r.get("ms", 4) + 3, color=r["color"],
-                line=dict(color="white", width=0.5),
-            ),
-            hoverinfo="skip",
-        ))
-
-    prov_lines = [f"{r['label']}: {r['prov']}" for r in runs if r.get("prov")]
-    if prov_lines:
-        fig.add_annotation(
-            xref="paper", yref="paper", x=0.0, y=0.0,
-            xanchor="left", yanchor="bottom", align="left", showarrow=False,
-            text="provenance —<br>" + "<br>".join(prov_lines),
-            font=dict(family="monospace", size=9, color="#555555"),
-            bgcolor="rgba(255,255,255,0.7)",
-        )
-    add_params_annotation_plotly(fig)
-
-    apply_base_layout(
-        fig,
-        title=f"{scenario_name}<br>軌跡比較" if scenario_name else "軌跡比較",
-        height=height,
-        xaxis=dict(title="x [m]", range=[x_min, x_max]),
-        yaxis=dict(title="y [m]", range=[y_min, y_max], scaleanchor="x", scaleratio=1),
-        legend=dict(x=0.01, y=0.99, bgcolor="rgba(255,255,255,0.7)"),
-    )
-    return fig

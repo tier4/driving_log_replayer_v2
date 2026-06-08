@@ -12,7 +12,6 @@ from __future__ import annotations
 from ._closed_loop import (
     build_fig_curves_closeup,
     build_fig_timeseries_resp_cmd,
-    build_fig_trajectory,
     build_fig_vs_distance,
 )
 from ._brake import (
@@ -79,6 +78,5 @@ __all__ = [
     "build_fig_steer_vs_lateral_scatter",
     "build_fig_steering_analysis",
     "build_fig_timeseries_resp_cmd",
-    "build_fig_trajectory",
     "build_fig_vs_distance",
 ]

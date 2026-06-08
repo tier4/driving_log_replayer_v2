@@ -17,7 +17,6 @@ import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 
 from ._common import (
-    add_params_annotation_plotly,
     apply_base_layout,
     lanes_to_trace,
     map_ways_in_bbox,
@@ -97,7 +96,6 @@ def build_fig_curve_analysis(
         fig.update_yaxes(title_text=unit, row=2, col=c)
         fig.update_xaxes(title_text="発進からの時刻 [s]", row=2, col=c)
     fig.update_yaxes(title_text="y [m]", scaleanchor="x", scaleratio=1, row=1, col=1)
-    add_params_annotation_plotly(fig, params)
     return apply_base_layout(
         fig, title=f"{scenario_name}<br>{label} 一時停止発進からの挙動比較", height=860,
     )
@@ -141,7 +139,6 @@ def build_fig_curve_steering_detail(
         fig.add_vline(x=0, row=rc[0], col=rc[1], **_VLINE)
     for rc in [(1, 2), (2, 2)]:
         fig.add_hline(y=0, line=dict(color="gray", width=0.6), row=rc[0], col=rc[1])
-    add_params_annotation_plotly(fig, params)
     return apply_base_layout(
         fig, title=f"{scenario_name}<br>{label} ステアリング詳細分析（発進 t=0）", height=900,
     )
@@ -177,7 +174,6 @@ def build_fig_curve_yaw_steer(
         fig.add_hline(y=0, line=dict(color="gray", width=0.5), row=row, col=1)
         fig.update_yaxes(title_text=unit, row=row, col=1)
     fig.update_xaxes(title_text="発進からの時刻 [s]", row=4, col=1)
-    add_params_annotation_plotly(fig, params)
     return apply_base_layout(
         fig, title=f"{scenario_name}<br>{curve_label} ステア角 vs 実際の進行方向（自転車モデル L={wheelbase:.2f}m）",
         height=1280,
@@ -248,7 +244,6 @@ def build_fig_steer_response(
     fig.update_yaxes(title_text="deg", row=3, col=1)
     fig.update_yaxes(title_text="率", row=3, col=2)
     fig.update_xaxes(title_text="入力 onset からの時刻 [s]", row=1, col=1)
-    add_params_annotation_plotly(fig, params)
     return apply_base_layout(
         fig, title=f"{scenario_name}<br>ステアリング応答性能比較（ステア入力開始 t=0 に揃えた比較）",
         height=980,

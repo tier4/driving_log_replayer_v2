@@ -19,7 +19,7 @@ from plotly.subplots import make_subplots
 
 # ROS 非依存 lib のみ再利用（_io は import しない）
 from .._map import map_ways_in_bbox  # noqa: F401  (build_fig_* が地図 bbox 抽出に使う)
-from .._plotly_utils import add_params_annotation_plotly, lanes_to_trace  # noqa: F401
+from .._plotly_utils import lanes_to_trace  # noqa: F401
 
 # --- matplotlib スタイル → plotly 変換（軌跡・時系列の線/マーカー） -------------------
 _PLOTLY_DASH = {"-": "solid", "--": "dash", "-.": "dashdot", ":": "dot"}

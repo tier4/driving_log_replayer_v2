@@ -9,7 +9,7 @@ from __future__ import annotations
 import numpy as np
 import plotly.graph_objects as go
 
-from ._common import add_params_annotation_plotly, apply_base_layout, make_grid
+from ._common import apply_base_layout, make_grid
 
 # t=0（発進）を示す灰色破線の共通体裁。
 _VLINE = dict(line=dict(color="gray", width=0.8, dash="dash"))
@@ -67,7 +67,6 @@ def build_fig_curve_divergence(
         fig.add_vline(x=0, row=row, col=1, **_VLINE)
     fig.update_xaxes(title_text="発進からの時刻 [s]", row=5, col=1)
 
-    add_params_annotation_plotly(fig, params)
     return apply_base_layout(
         fig,
         title=f"{scenario_name}<br>カーブ② 乖離詳細診断" if scenario_name else "カーブ② 乖離詳細診断",

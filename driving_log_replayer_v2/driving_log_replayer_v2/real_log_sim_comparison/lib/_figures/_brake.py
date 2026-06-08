@@ -10,7 +10,6 @@ import numpy as np
 import plotly.graph_objects as go
 
 from ._common import (
-    add_params_annotation_plotly,
     apply_base_layout,
     make_grid,
     viridis_colors,
@@ -60,7 +59,6 @@ def build_fig_departure_brake_sensitivity(
     fig.update_yaxes(range=[-0.5, 8], row=1, col=1)
     fig.update_xaxes(range=[-0.5, 3.0], row=1, col=2)
     fig.update_yaxes(range=[-0.2, 2.5], row=1, col=2)
-    add_params_annotation_plotly(fig, params)
     return apply_base_layout(
         fig,
         title=f"{scenario_name}<br>発進動作：brake_time_constant 感度分析"
@@ -81,7 +79,6 @@ def build_fig_real_cmd_acc(
     fig.add_vline(x=0, **_VLINE)
     fig.update_xaxes(title_text="発進後 t [s]", range=[-2, 10])
     fig.update_yaxes(title_text="加速度指令 [m/s²]")
-    add_params_annotation_plotly(fig, params)
     return apply_base_layout(
         fig,
         title=f"{scenario_name}<br>実機 post-gate control_cmd (acc) — 発進前後",
@@ -102,7 +99,6 @@ def build_fig_brake_sweep(
                   annotation_text=f"identified btc≈{btc_id:.4f}s")
     fig.update_xaxes(title_text="brake_time_constant [s]")
     fig.update_yaxes(title_text="発進フィット RMSE [m/s]")
-    add_params_annotation_plotly(fig, params)
     return apply_base_layout(
         fig, title="brake_time_constant スイープ同定 (発進フィット)", height=460,
     )

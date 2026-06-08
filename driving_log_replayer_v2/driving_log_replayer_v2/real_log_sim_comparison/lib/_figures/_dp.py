@@ -10,7 +10,7 @@ from __future__ import annotations
 import numpy as np
 import plotly.graph_objects as go
 
-from ._common import add_params_annotation_plotly, apply_base_layout, make_grid, viridis_at
+from ._common import apply_base_layout, make_grid, viridis_at
 
 _VLINE = dict(line=dict(color="gray", width=0.8, dash="dash"))
 
@@ -38,7 +38,6 @@ def build_fig_dp_vs_actual(
         fig.add_vline(x=0, row=1, col=c, **_VLINE)
         fig.update_xaxes(title_text="発進後 t [s]", row=1, col=c)
         fig.update_yaxes(title_text="速度 [m/s]", row=1, col=c)
-    add_params_annotation_plotly(fig, params)
     return apply_base_layout(
         fig, title=f"{scenario_name}<br>DPが計画した速度(d=0) vs 実際の速度", height=460,
     )
@@ -122,7 +121,6 @@ def build_fig_dp_real_vs_sim(
     fig.add_vline(x=0, row=2, col=3, **_VLINE)
     fig.update_xaxes(title_text="発進後 t [s]", row=2, col=3)
     fig.update_yaxes(title_text="追跡物体数", row=2, col=3)
-    add_params_annotation_plotly(fig, params)
     return apply_base_layout(
         fig,
         title=f"{scenario_name}<br>DiffusionPlanner計画軌跡 直接比較（実機 vs {sim_name}）",
@@ -199,7 +197,6 @@ def build_fig_dp_vs_final_traj(
     fig.add_vline(x=0, row=2, col=3, **_VLINE)
     fig.update_xaxes(title_text="発進後 t [s]", row=2, col=3)
     fig.update_yaxes(title_text="速度 [m/s]", row=2, col=3)
-    add_params_annotation_plotly(fig, params)
     return apply_base_layout(
         fig,
         title=f"{scenario_name}<br>DP出力 vs 最終planning/trajectory — 実機（上段）/ 速度差（下段）",

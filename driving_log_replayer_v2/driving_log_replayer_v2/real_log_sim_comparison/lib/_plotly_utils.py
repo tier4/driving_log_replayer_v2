@@ -1,6 +1,6 @@
 """plotly インタラクティブ図の共通ユーティリティ.
 
-図スペック (*.fig.json) を組む際に共有する高さ定義・地図レーン trace・パラメータ注釈。
+図スペック (*.fig.json) を組む際に共有する高さ定義・地図レーン trace。
 plotly.js のインラインは step11 が lib/_inline_assets.plotly_js_script で 1 回だけ行う
 （CDN 不使用・オフライン動作維持）。
 """
@@ -9,8 +9,6 @@ from __future__ import annotations
 
 import numpy as np
 import plotly.graph_objects as go
-
-from ._params_utils import load_sim_params, make_annotation_text
 
 # 図 (*.fig.json) の高さ [px] の単一ソース。build_fig_* (生成側) と step11 の iframe 高さ
 # (= 高さ + IFRAME_PAD; 自己完結 HTML ビューア用) の両方が参照する。
@@ -22,32 +20,6 @@ FIG_HEIGHTS: dict[str, int] = {
 }
 # iframe に追加する余白 [px]（plotly モードバー等のはみ出し分）
 IFRAME_PAD = 30
-
-
-def add_params_annotation_plotly(
-    fig: go.Figure,
-    params: dict | None = None,
-    params_dir: Path | None = None,
-) -> None:
-    """図の右下にモデルパラメータの注釈ボックスを追加する（matplotlib 版と同等）。"""
-    if params is None:
-        params = load_sim_params(params_dir)
-    text = make_annotation_text(params).replace("\n", "<br>")
-    fig.add_annotation(
-        xref="paper",
-        yref="paper",
-        x=1.0,
-        y=0.0,
-        xanchor="right",
-        yanchor="bottom",
-        align="right",
-        showarrow=False,
-        text=text,
-        font=dict(family="monospace", size=9, color="#555555"),
-        bgcolor="rgba(255,255,255,0.7)",
-        bordercolor="#aaaaaa",
-        borderwidth=1,
-    )
 
 
 def lanes_to_trace(ways: list[np.ndarray], **trace_kwargs) -> go.Scatter:

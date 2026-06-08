@@ -45,12 +45,10 @@ from .lib._figures import (
     build_fig_curves_closeup,
     build_fig_steer_response,
     build_fig_timeseries_resp_cmd,
-    build_fig_trajectory,
     build_fig_vs_distance,
 )
 from .lib._map import load_map_ways, resolve_map_osm
 from .lib._playback_viewer import plot_trajectory_playback
-from .lib._plotly_utils import FIG_HEIGHTS
 from .lib._provenance import format_provenance_line, read_provenance
 from .lib._runtime_config import (
     RuntimeConfig,
@@ -209,38 +207,6 @@ def _resolve_map_osm() -> Path | None:
 # ---------------------------------------------------------------------------
 # プロット
 # ---------------------------------------------------------------------------
-
-
-def plot_trajectory(data: dict, map_ways: list | None):
-    """地図背景あり軌跡比較図（図スペック JSON）。
-
-    ROS から読んだ kinematic DataFrame を run dict へ整形し、ROS 非依存の
-    `build_fig_trajectory` で図を組んで `<stem>.fig.json` に吐く。描画は step11
-    （単一 HTML）/ step12（notebook）が plotly.js で行う。
-    """
-    runs: list[dict] = []
-    for label, d in data.items():
-        df = d["kinematic"]
-        if df.empty:
-            continue
-        runs.append({
-            "label": label,
-            "color": d["color"], "lw": d["lw"], "ls": d["ls"],
-            "marker": d["marker"], "ms": d["ms"],
-            "x": np.asarray(df["x"]), "y": np.asarray(df["y"]),
-            "t": np.asarray(df["t"]) if "t" in df.columns else None,
-            "prov": _prov_text(label, d),  # DP 重み / autoware 版（版差での乖離解釈用）
-        })
-    if not runs:
-        warnings.warn("kinematic データなし。軌跡プロットをスキップ")
-        return
-
-    name = "trajectory_with_map" if map_ways else "trajectory_xy"
-    fig = build_fig_trajectory(
-        runs, map_ways=map_ways, scenario_name=SCENARIO_NAME, height=FIG_HEIGHTS[name]
-    )
-    FIGS_DIR.mkdir(parents=True, exist_ok=True)
-    write_fig_json(fig, FIGS_DIR / name)
 
 
 def _tr(d: dict, df: pd.DataFrame) -> np.ndarray:
@@ -1081,7 +1047,6 @@ def main() -> None:
         warnings.warn("地図ファイルが見つかりません。軌跡プロットは地図背景なしで描画します")
 
     print("\n=== プロット生成中 ===")
-    plot_trajectory(loaded, map_ways)
     # 軌跡再生ビューア (時刻同期/位置同期シークバー付き自己完結 HTML)
     plot_trajectory_playback(loaded, map_ways, FIGS_DIR, title=SCENARIO_NAME)
     plot_velocity(loaded)

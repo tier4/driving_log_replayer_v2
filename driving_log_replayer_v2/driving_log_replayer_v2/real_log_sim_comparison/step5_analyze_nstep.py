@@ -68,7 +68,7 @@ from .lib._nstep_common import (
     rmse_by_horizon,
 )
 from .lib._params_utils import load_sim_params
-from .lib._plotly_utils import FIG_HEIGHTS, add_params_annotation_plotly, lanes_to_trace
+from .lib._plotly_utils import FIG_HEIGHTS, lanes_to_trace
 from .lib._runtime_config import RuntimeConfig, add_common_cli_arguments, build_runtime_config
 
 # モジュールレベル設定 (main() で RuntimeConfig 経由で上書きされる)
@@ -926,7 +926,6 @@ def plot_map_distribution(df: pd.DataFrame, params: dict) -> None:
                 col=col_idx,
             )
 
-    add_params_annotation_plotly(fig, params)
     fig.update_layout(
         title=dict(
             text="N-step オープンループ: 地図上の誤差分布 (実機 − モデル、点=rollout 開始位置)",
