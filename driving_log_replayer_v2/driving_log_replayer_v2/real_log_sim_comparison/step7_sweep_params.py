@@ -55,6 +55,11 @@ import numpy as np
 import pandas as pd
 
 from . import step5_analyze_nstep as s5
+import plotly.graph_objects as go
+
+from .lib._fig_io import write_fig_json
+from .lib._figures import build_fig_pair_sweep, build_fig_sweep, build_fig_sweep_overview
+from .lib._figures._common import viridis_colors
 from .lib._io import resolve_lite_bag
 from .lib._nstep_common import metrics_description_md, parabolic_min, rmse_by_horizon
 from .lib._params_utils import add_params_annotation, setup_jp_font
@@ -411,137 +416,121 @@ def _ident_value(ident: dict) -> float:
     return v if v is not None else ident["grid_value"]
 
 
-def _scatter_fit(
-    ax, x, y, xlabel, ylabel, title, source,
-    ident_slope: float | None = None,
-    ident_label: str = "",
-    ref_slope: float | None = None,
-    ref_label: str = "",
-) -> np.ndarray | None:
-    """散布 + 実機 1 次フィット + (任意) 同定値/参照の傾き線。fit 係数 (slope, intercept) を返す。"""
-    ax.scatter(x, y, s=3, alpha=0.3, color="#4472C4", rasterized=True)
+_LS_DASH = {"-": "solid", "--": "dash", "-.": "dashdot", ":": "dot"}
+
+
+def _etitle(title: str, source: str) -> str:
+    """根拠パネルのタイトル（本文 + グレー小字のデータソース注）を plotly 用に組む。"""
+    return f"{title.replace(chr(10), '<br>')}<br><sub>{source}</sub>"
+
+
+def _scatter_fit_spec(
+    x, y, xlabel, ylabel, title, source,
+    ident_slope: float | None = None, ident_label: str = "",
+    ref_slope: float | None = None, ref_label: str = "",
+) -> tuple[dict, np.ndarray | None]:
+    """散布 + 実機 1 次フィット + (任意) 同定/参照の傾き線の panel-spec を返す。fit 係数も返す。"""
     xs = np.linspace(np.nanmin(x), np.nanmax(x), 50)
     coef = _fit_line(x, y)
+    traces = [go.Scatter(x=x, y=y, mode="markers", showlegend=False, hoverinfo="skip",
+                         marker=dict(size=3, color="#4472C4", opacity=0.3))]
     if coef is not None:
-        ax.plot(xs, np.polyval(coef, xs), "k-", lw=2,
-                label=f"実機 fit: 傾き={coef[0]:.4g}")
+        traces.append(go.Scatter(x=xs, y=np.polyval(coef, xs), mode="lines",
+                                 name=f"実機 fit: 傾き={coef[0]:.4g}", line=dict(color="black", width=2)))
     if ident_slope is not None:
-        ax.plot(xs, ident_slope * xs, "r--", lw=1.5, label=ident_label)
+        traces.append(go.Scatter(x=xs, y=ident_slope * xs, mode="lines", name=ident_label,
+                                 line=dict(color="red", width=1.5, dash="dash")))
     if ref_slope is not None:
-        ax.plot(xs, ref_slope * xs, color="gray", ls=":", lw=1.5, label=ref_label)
-    ax.axhline(0, color="black", lw=0.6)
-    ax.set_xlabel(xlabel)
-    ax.set_ylabel(ylabel)
-    _set_evidence_title(ax, title, source)
-    ax.grid(True, lw=0.5, alpha=0.6)
-    ax.legend(fontsize=8)
-    return coef
+        traces.append(go.Scatter(x=xs, y=ref_slope * xs, mode="lines", name=ref_label,
+                                 line=dict(color="gray", width=1.5, dash="dot")))
+    spec = {"title": _etitle(title, source), "xlabel": xlabel, "ylabel": ylabel,
+            "traces": traces, "hlines": [(0, "black")]}
+    return spec, coef
 
 
-def _set_evidence_title(ax, title: str, source: str) -> None:
-    ax.set_title(title, fontsize=10, pad=16)
-    ax.text(0.5, 1.0, source, transform=ax.transAxes, fontsize=6.5,
-            ha="center", va="bottom", color="#888888", clip_on=False)
-
-
-def _lag_corr_plot(ax, ev: dict, u: np.ndarray, y: np.ndarray, title: str, source: str,
+def _lag_corr_spec(ev: dict, u: np.ndarray, y: np.ndarray, title: str, source: str,
                    marks: list[tuple[float, str, str, str]] = (),
-                   derivative: bool = True, max_lag: float = 0.6) -> float:
-    """指令/実測の相互相関 vs ラグを描き、ピーク位置 [s] を返す。
-
-    derivative=True: 微分同士の相関 — ピーク ≈ 純むだ時間 (波形の立ち上がり整合)。
-    derivative=False: 信号同士の相関 — 1 次遅れの平滑化も含むため
-                      ピーク ≈ むだ時間 + 時定数相当の実効遅れ (入力波形依存の目安)。
-    marks: 縦線 (value, color, linestyle, label) のリスト。
-    """
+                   derivative: bool = True, max_lag: float = 0.6) -> tuple[dict, float]:
+    """指令/実測の相互相関 vs ラグの panel-spec を返す。ピーク位置 [s] も返す。"""
     t = ev["t"]
     dt = float(np.median(np.diff(t)))
     n_lag = max(1, int(max_lag / dt))
-    if derivative:
-        a0 = np.gradient(u, t)
-        b0 = np.gradient(y, t)
-    else:
-        a0 = np.asarray(u, dtype=float)
-        b0 = np.asarray(y, dtype=float)
+    a0 = np.gradient(u, t) if derivative else np.asarray(u, dtype=float)
+    b0 = np.gradient(y, t) if derivative else np.asarray(y, dtype=float)
     a0 = a0 - np.nanmean(a0)
     b0 = b0 - np.nanmean(b0)
     lags, corrs = [], []
     for k in range(n_lag + 1):
         a = a0[: len(a0) - k] if k else a0
         b = b0[k:]
-        c = np.corrcoef(a, b)[0, 1] if len(a) > 10 else np.nan
+        corrs.append(np.corrcoef(a, b)[0, 1] if len(a) > 10 else np.nan)
         lags.append(k * dt)
-        corrs.append(c)
     lags = np.asarray(lags)
     corrs = np.asarray(corrs)
-    ax.plot(lags, corrs, "o-", color="#4472C4", ms=3)
     peak = float(lags[int(np.nanargmax(corrs))])
-    ax.axvline(peak, color="black", lw=1.5, label=f"相関ピーク τ={peak:.3f}s")
-    for value, color, ls, label in marks:
-        ax.axvline(value, color=color, ls=ls, lw=1.2, label=label)
-    ax.set_xlabel("ラグ τ [s] (指令を τ 遅らせたときの相関)")
-    ax.set_ylabel("相互相関 (微分同士)" if derivative else "相互相関 (信号同士)")
-    _set_evidence_title(ax, title, source)
-    ax.grid(True, lw=0.5, alpha=0.6)
-    ax.legend(fontsize=8)
-    return peak
+    spec = {
+        "title": _etitle(title, source),
+        "xlabel": "ラグ τ [s] (指令を τ 遅らせたときの相関)",
+        "ylabel": "相互相関 (微分同士)" if derivative else "相互相関 (信号同士)",
+        "traces": [go.Scatter(x=lags, y=corrs, mode="lines+markers", showlegend=False,
+                              line=dict(color="#4472C4"), marker=dict(size=4))],
+        "vlines": [(peak, "black", "solid", f"相関ピーク τ={peak:.3f}s")]
+        + [(v, c, _LS_DASH.get(ls, "dash"), lbl) for v, c, ls, lbl in marks],
+    }
+    return spec, peak
 
 
-def _ev_k_us(ax, ev, ident, base_value) -> None:
+def _ev_k_us(ev, ident, base_value) -> dict:
     """k_us: tanδ − L·wz/vx vs 横加速度 wz·vx。モデル定義の逆算で傾き = k_us。"""
     mask = ev["vx"] > 2.0
     vx, wz, steer = ev["vx"][mask], ev["wz"][mask], ev["steer"][mask]
-    x = wz * vx  # 横加速度 ay [m/s²]
-    y = np.tan(steer) - ev["wb"] * wz / vx  # [rad]
-    coef = _scatter_fit(
-        ax, x, y,
-        "横加速度 wz·vx [m/s²]", "tan(δ実測) − L·wz/vx [rad]",
+    x = wz * vx
+    y = np.tan(steer) - ev["wb"] * wz / vx
+    spec, coef = _scatter_fit_spec(
+        x, y, "横加速度 wz·vx [m/s²]", "tan(δ実測) − L·wz/vx [rad]",
         "実機ログ根拠: understeer 勾配 (傾き = k_us)",
         "実測: steering_status × kinematic_state (vx>2)  ω=vx·tanδ/(L+k_us·vx²) の逆算",
         ident_slope=_ident_value(ident), ident_label=f"sweep 同定 k_us={_ident_value(ident):.4g}",
         ref_slope=base_value, ref_label=f"仕様値 {base_value:.4g}" if base_value is not None else "",
     )
-    return {"value": float(coef[0]) if coef is not None else None,
+    return {**spec, "value": float(coef[0]) if coef is not None else None,
             "desc": "understeer 勾配 fit (横加速度 vs ステア残差)"}
 
 
-def _ev_steer_scaling(ax, ev, ident, base_value) -> None:
+def _ev_steer_scaling(ev, ident, base_value) -> dict:
     """scaling: 指令 vs 実測ステア。傾き = 実効スケーリング (遅れの影響は含む)。"""
     mask = ev["vx"] > 1.0
     x = np.degrees(ev["steer_des"][mask])
     y = np.degrees(ev["steer"][mask])
-    coef = _scatter_fit(
-        ax, x, y,
-        "指令ステア角 [deg]", "実測ステア角 [deg]",
+    spec, coef = _scatter_fit_spec(
+        x, y, "指令ステア角 [deg]", "実測ステア角 [deg]",
         "実機ログ根拠: 指令 vs 実測ステア (傾き = scaling)",
         "実測: steering_status  指令: control_cmd (vx>1; 応答遅れ分の散らばりを含む)",
-        ident_slope=_ident_value(ident),
-        ident_label=f"sweep 同定 scaling={_ident_value(ident):.4g}",
+        ident_slope=_ident_value(ident), ident_label=f"sweep 同定 scaling={_ident_value(ident):.4g}",
         ref_slope=base_value, ref_label=f"仕様値 {base_value:.4g}",
     )
-    return {"value": float(coef[0]) if coef is not None else None,
+    return {**spec, "value": float(coef[0]) if coef is not None else None,
             "desc": "指令→実測ステア fit 傾き"}
 
 
-def _ev_steer_tc(ax, ev, ident, base_value) -> None:
+def _ev_steer_tc(ev, ident, base_value) -> dict:
     """steer_tc: 1 次遅れ dδ/dt=(u−δ)/tc → (u−δ) vs dδ/dt の傾き = 1/tc。"""
     t = ev["t"]
     x = np.degrees(ev["steer_des"] - ev["steer"])
     y = np.degrees(np.gradient(ev["steer"], t))
-    _scatter_fit(
-        ax, x, y,
-        "指令 − 実測 ステア [deg]", "d(実測ステア)/dt [deg/s]",
+    spec, coef = _scatter_fit_spec(
+        x, y, "指令 − 実測 ステア [deg]", "d(実測ステア)/dt [deg/s]",
         "実機ログ根拠: 1次遅れ応答 (傾き = 1/tc)",
         "実測: steering_status  指令: control_cmd (むだ時間は未補正)",
     )
-    coef = _fit_line(x, y)
     tc_fit = None
     if coef is not None and coef[0] > 1e-6:
         tc_fit = 1.0 / coef[0]
-        ax.plot([], [], " ", label=f"→ tc_fit ≈ {tc_fit:.3f}s "
-                f"(sweep 同定≈{_ident_value(ident):.3f}s / 仕様 {base_value:.3f}s)")
-        ax.legend(fontsize=8)
-    return {"value": tc_fit, "desc": "1次遅れ勾配 fit (Δsteer vs dδ/dt)"}
+        spec["traces"].append(go.Scatter(
+            x=[None], y=[None], mode="lines",
+            name=f"→ tc_fit ≈ {tc_fit:.3f}s (sweep 同定≈{_ident_value(ident):.3f}s / 仕様 {base_value:.3f}s)",
+        ))
+    return {**spec, "value": tc_fit, "desc": "1次遅れ勾配 fit (Δsteer vs dδ/dt)"}
 
 
 def _first_order_filter(u: np.ndarray, t: np.ndarray, tc: float) -> np.ndarray:
@@ -555,15 +544,8 @@ def _first_order_filter(u: np.ndarray, t: np.ndarray, tc: float) -> np.ndarray:
     return out
 
 
-def _ev_steer_tc_corr(ax, ev, ident, base_value) -> None:
-    """steer_tc 第2根拠: 相関係数解析。
-
-    tc 候補ごとに「むだ時間(仕様)で遅延 + 1 次遅れフィルタした指令」を作り、実測ステアとの
-    相関係数を計算する (低周波の操舵波形は tc に非感度なため、移動平均 1.0s を除去した
-    ハイパス成分同士で相関を取る)。相関最大の tc が「指令→実測ステア」の直接追従としての
-    実効時定数。sweep 同定値との乖離は、sweep の tc が操舵応答以外の遅れ (ヨー応答等) を
-    代理吸収していることを示唆する。
-    """
+def _ev_steer_tc_corr(ev, ident, base_value) -> dict:
+    """steer_tc 第2根拠: 相関係数解析（1次遅れフィルタ tc を走査して相関最大の tc を探す）。"""
     t, u, y = ev["t"], ev["steer_des"], ev["steer"]
     dt = float(np.median(np.diff(t)))
     delay_spec = float(ev["params"].get("steer_time_delay", 0.0))
@@ -580,129 +562,126 @@ def _ev_steer_tc_corr(ax, ev, ident, base_value) -> None:
         float(np.corrcoef(_highpass(_first_order_filter(u_d, t, float(tc))), y_hp)[0, 1])
         for tc in tcs
     ])
-
-    ax.semilogx(tcs, corrs, "o-", color="#4472C4", ms=3)
     tc_best = float(tcs[int(np.nanargmax(corrs))])
-    ax.axvline(tc_best, color="black", lw=1.5, label=f"相関最大 tc≈{tc_best:.3f}s")
-    ax.axvline(_ident_value(ident), color="red", ls="--", lw=1.2,
-               label=f"sweep 同定≈{_ident_value(ident):.3f}s")
+    vlines = [(tc_best, "black", "solid", f"相関最大 tc≈{tc_best:.3f}s"),
+              (_ident_value(ident), "red", "dash", f"sweep 同定≈{_ident_value(ident):.3f}s")]
     if base_value is not None:
-        ax.axvline(base_value, color="gray", ls=":", lw=1.2, label=f"仕様値 {base_value:.3f}s")
-    ax.set_xlabel("tc 候補 [s] (log)")
-    ax.set_ylabel("corr( 1次遅れフィルタ済み指令, 実測 ) [HP 1.0s]")
-    _set_evidence_title(
-        ax, "実機ログ根拠: 相関係数解析 (1次遅れフィルタ tc を走査)\n"
+        vlines.append((base_value, "gray", "dot", f"仕様値 {base_value:.3f}s"))
+    spec = {
+        "title": _etitle(
+            "実機ログ根拠: 相関係数解析 (1次遅れフィルタ tc を走査)\n"
             "sweep 同定との乖離 = tc が操舵以外の遅れを代理吸収している示唆",
-        "実測: steering_status  指令: control_cmd (むだ時間=仕様値で遅延、移動平均1.0s除去済み)",
-    )
-    ax.grid(True, lw=0.5, alpha=0.6, which="both")
-    ax.legend(fontsize=8)
-    return {"value": tc_best, "desc": "相関係数解析 (1次遅れフィルタ tc 走査の相関最大)"}
+            "実測: steering_status  指令: control_cmd (むだ時間=仕様値で遅延、移動平均1.0s除去済み)"),
+        "xlabel": "tc 候補 [s] (log)", "ylabel": "corr( 1次遅れフィルタ済み指令, 実測 ) [HP 1.0s]",
+        "log_x": True,
+        "traces": [go.Scatter(x=tcs, y=corrs, mode="lines+markers", showlegend=False,
+                              line=dict(color="#4472C4"), marker=dict(size=4))],
+        "vlines": vlines,
+    }
+    return {**spec, "value": tc_best, "desc": "相関係数解析 (1次遅れフィルタ tc 走査の相関最大)"}
 
 
-def _ev_steer_delay(ax, ev, ident, base_value) -> None:
+def _ev_steer_delay(ev, ident, base_value) -> dict:
     marks = [(_ident_value(ident), "red", "--", f"sweep 同定≈{_ident_value(ident):.3f}s")]
     if base_value is not None:
         marks.append((base_value, "gray", ":", f"仕様値 {base_value:.3f}s"))
-    peak = _lag_corr_plot(
-        ax, ev, ev["steer_des"], ev["steer"],
+    spec, peak = _lag_corr_spec(
+        ev, ev["steer_des"], ev["steer"],
         "実機ログ根拠: 指令→実測ステアのラグ相関",
-        "実測: steering_status  指令: control_cmd (微分同士の相互相関)",
-        marks=marks,
+        "実測: steering_status  指令: control_cmd (微分同士の相互相関)", marks=marks,
     )
-    return {"value": peak, "desc": "ラグ相関ピーク (≈むだ時間; tc 成分を一部含む)"}
+    return {**spec, "value": peak, "desc": "ラグ相関ピーク (≈むだ時間; tc 成分を一部含む)"}
 
 
-def _ev_steer_bias(ax, ev, ident, base_value) -> None:
+def _ev_steer_bias(ev, ident, base_value) -> dict:
     """bias: 直進・低横加速度域の bicycle 残差ヒストグラム。平均 ≈ 実効バイアス。"""
     ay = ev["wz"] * ev["vx"]
     mask = (ev["vx"] > 2.0) & (np.abs(ay) < 0.3)
     resid = np.tan(ev["steer"][mask]) - ev["wb"] * ev["wz"][mask] / ev["vx"][mask]
     resid = resid[np.isfinite(resid)]
-    ax.hist(resid, bins=60, color="#4472C4", alpha=0.7)
     mean = float(np.mean(resid)) if len(resid) else float("nan")
-    ax.axvline(mean, color="black", lw=2, label=f"実機平均={mean:.4g} rad")
-    ax.axvline(_ident_value(ident), color="red", ls="--", lw=1.5,
-               label=f"sweep 同定≈{_ident_value(ident):.4g}")
+    vlines = [(mean, "black", "solid", f"実機平均={mean:.4g} rad"),
+              (_ident_value(ident), "red", "dash", f"sweep 同定≈{_ident_value(ident):.4g}")]
     if base_value is not None:
-        ax.axvline(base_value, color="gray", ls=":", lw=1.5, label=f"仕様値 {base_value:.4g}")
-    ax.set_xlabel("tan(δ実測) − L·wz/vx [rad] (直進域 |ay|<0.3, vx>2)")
-    ax.set_ylabel("頻度")
-    _set_evidence_title(ax, "実機ログ根拠: 直進域ステア残差 (平均 ≈ bias)",
-                        "実測: steering_status × kinematic_state")
-    ax.grid(True, lw=0.5, alpha=0.6)
-    ax.legend(fontsize=8)
-    return {"value": mean if np.isfinite(mean) else None, "desc": "直進域ステア残差の平均"}
+        vlines.append((base_value, "gray", "dot", f"仕様値 {base_value:.4g}"))
+    spec = {
+        "title": _etitle("実機ログ根拠: 直進域ステア残差 (平均 ≈ bias)",
+                         "実測: steering_status × kinematic_state"),
+        "xlabel": "tan(δ実測) − L·wz/vx [rad] (直進域 |ay|<0.3, vx>2)", "ylabel": "頻度",
+        "traces": [go.Histogram(x=resid, nbinsx=60, marker=dict(color="#4472C4"),
+                                opacity=0.7, showlegend=False)],
+        "vlines": vlines,
+    }
+    return {**spec, "value": mean if np.isfinite(mean) else None, "desc": "直進域ステア残差の平均"}
 
 
-def _ev_steer_dead_band(ax, ev, ident, base_value) -> None:
+def _ev_steer_dead_band(ev, ident, base_value) -> dict:
     """dead_band: 小指令域の指令 vs 実測 (不感帯 = 中央の平坦域)。"""
     lim = 1.5  # [deg]
     x_all = np.degrees(ev["steer_des"])
     mask = (np.abs(x_all) < lim) & (ev["vx"] > 1.0)
     x = x_all[mask]
     y = np.degrees(ev["steer"][mask])
-    ax.scatter(x, y, s=4, alpha=0.4, color="#4472C4", rasterized=True)
     xs = np.linspace(-lim, lim, 50)
-    ax.plot(xs, xs, color="gray", ls=":", lw=1.2, label="y = x (不感帯なし)")
-    db_deg = np.degrees(abs(_ident_value(ident)))  # 同定値 [rad] を度軸に変換
-    ax.axvspan(-db_deg, db_deg, color="red", alpha=0.10,
-               label=f"sweep 同定 ±{np.radians(db_deg):.4g} rad (±{db_deg:.2f}°)")
-    ax.set_xlabel("指令ステア角 [deg] (±1.5° 拡大)")
-    ax.set_ylabel("実測ステア角 [deg]")
-    _set_evidence_title(ax, "実機ログ根拠: 小指令域の応答 (平坦域 = 不感帯)",
-                        "実測: steering_status  指令: control_cmd (vx>1)")
-    ax.grid(True, lw=0.5, alpha=0.6)
-    ax.legend(fontsize=8)
-    return {"value": None, "desc": "小指令域の平坦域 (視覚確認; 数値推定なし)"}
+    db_deg = np.degrees(abs(_ident_value(ident)))
+    spec = {
+        "title": _etitle("実機ログ根拠: 小指令域の応答 (平坦域 = 不感帯)",
+                         "実測: steering_status  指令: control_cmd (vx>1)"),
+        "xlabel": "指令ステア角 [deg] (±1.5° 拡大)", "ylabel": "実測ステア角 [deg]",
+        "traces": [
+            go.Scatter(x=x, y=y, mode="markers", showlegend=False, hoverinfo="skip",
+                       marker=dict(size=4, color="#4472C4", opacity=0.4)),
+            go.Scatter(x=xs, y=xs, mode="lines", name="y = x (不感帯なし)",
+                       line=dict(color="gray", width=1.2, dash="dot")),
+            go.Scatter(x=[None], y=[None], mode="lines",
+                       name=f"sweep 同定 ±{abs(_ident_value(ident)):.4g} rad (±{db_deg:.2f}°)",
+                       line=dict(color="red")),
+        ],
+        "vrects": [(-db_deg, db_deg, "red")],
+    }
+    return {**spec, "value": None, "desc": "小指令域の平坦域 (視覚確認; 数値推定なし)"}
 
 
-def _ev_acc_tc(ax, ev, ident, base_value) -> None:
+def _ev_acc_tc(ev, ident, base_value) -> dict:
     t = ev["t"]
     x = ev["accel_des"] - ev["ax"]
     y = np.gradient(ev["ax"], t)
-    _scatter_fit(
-        ax, x, y,
-        "指令 − 実測 加速度 [m/s²]", "d(実測加速度)/dt [m/s³]",
+    spec, coef = _scatter_fit_spec(
+        x, y, "指令 − 実測 加速度 [m/s²]", "d(実測加速度)/dt [m/s³]",
         "実機ログ根拠: 1次遅れ応答 (傾き = 1/tc)",
         "実測: localization/acceleration  指令: control_cmd (むだ時間は未補正)",
     )
-    coef = _fit_line(x, y)
     tc_fit = None
     if coef is not None and coef[0] > 1e-6:
         tc_fit = 1.0 / coef[0]
-        ax.plot([], [], " ", label=f"→ tc_fit ≈ {tc_fit:.3f}s "
-                f"(sweep 同定≈{_ident_value(ident):.3f}s / 仕様 {base_value:.3f}s)")
-        ax.legend(fontsize=8)
-    return {"value": tc_fit, "desc": "1次遅れ勾配 fit (Δacc vs da/dt; 散布大のため参考値)"}
+        spec["traces"].append(go.Scatter(
+            x=[None], y=[None], mode="lines",
+            name=f"→ tc_fit ≈ {tc_fit:.3f}s (sweep 同定≈{_ident_value(ident):.3f}s / 仕様 {base_value:.3f}s)",
+        ))
+    return {**spec, "value": tc_fit, "desc": "1次遅れ勾配 fit (Δacc vs da/dt; 散布大のため参考値)"}
 
 
-def _ev_acc_delay(ax, ev, ident, base_value) -> None:
+def _ev_acc_delay(ev, ident, base_value) -> dict:
     marks = [(_ident_value(ident), "red", "--", f"sweep 同定≈{_ident_value(ident):.3f}s")]
     if base_value is not None:
         marks.append((base_value, "gray", ":", f"仕様値 {base_value:.3f}s"))
-    peak = _lag_corr_plot(
-        ax, ev, ev["accel_des"], ev["ax"],
+    spec, peak = _lag_corr_spec(
+        ev, ev["accel_des"], ev["ax"],
         "実機ログ根拠: 指令→実測加速度のラグ相関",
-        "実測: localization/acceleration  指令: control_cmd (微分同士の相互相関)",
-        marks=marks,
+        "実測: localization/acceleration  指令: control_cmd (微分同士の相互相関)", marks=marks,
     )
-    return {"value": peak, "desc": "ラグ相関ピーク (≈むだ時間; tc 成分を一部含む)"}
+    return {**spec, "value": peak, "desc": "ラグ相関ピーク (≈むだ時間; tc 成分を一部含む)"}
 
 
-def _ev_acc_scaling(ax, ev, ident, base_value) -> None:
-    x = ev["accel_des"]
-    y = ev["ax"]
-    coef = _scatter_fit(
-        ax, x, y,
-        "指令加速度 [m/s²]", "実測加速度 [m/s²]",
+def _ev_acc_scaling(ev, ident, base_value) -> dict:
+    spec, coef = _scatter_fit_spec(
+        ev["accel_des"], ev["ax"], "指令加速度 [m/s²]", "実測加速度 [m/s²]",
         "実機ログ根拠: 指令 vs 実測加速度 (傾き = scaling)",
         "実測: localization/acceleration  指令: control_cmd (応答遅れ分の散らばりを含む)",
-        ident_slope=_ident_value(ident),
-        ident_label=f"sweep 同定 scaling={_ident_value(ident):.4g}",
+        ident_slope=_ident_value(ident), ident_label=f"sweep 同定 scaling={_ident_value(ident):.4g}",
         ref_slope=base_value, ref_label=f"仕様値 {base_value:.4g}",
     )
-    return {"value": float(coef[0]) if coef is not None else None,
+    return {**spec, "value": float(coef[0]) if coef is not None else None,
             "desc": "指令→実測加速度 fit 傾き (応答遅れの散布を含む参考値)"}
 
 
@@ -748,59 +727,49 @@ def plot_sweep(
     params: dict,
     out_path: Path,
     evidence: list | None = None,
-) -> None:
-    """sweep 2 パネル (同定メトリクス / 位置 RMSE) + 実機ログ根拠パネル群。
+) -> list[dict]:
+    """sweep パネル (同定メトリクス / 副メトリクス) + 実機ログ根拠パネル群を 1 図に。
 
-    evidence: 第 3 パネル以降を描く callable (ax を受け取る) のリスト。None/空なら 2 パネル。
+    evidence: 各根拠パネルの panel-spec dict（_ev_* が返す。value/desc も含む）のリスト。
     sweep はモデル経由の同定、根拠パネルは実機ログの直接観察 — 両者の一致が
-    同定の信頼性のクロスチェックになる。
+    同定の信頼性のクロスチェックになる。ev_results（value/desc）を返す。
     """
-    metric_label, metric_unit, _ = _METRIC_INFO[spec.metric]
+    metric_label, _, _ = _METRIC_INFO[spec.metric]
     horizons = sorted(res["horizon"].unique())
     evidence = evidence or []
-    # パネル構成: [同定メトリクス] + 副メトリクス (spec.secondary_metrics) + 根拠パネル群
     sweep_metrics = [spec.metric] + [m for m in spec.secondary_metrics if m != spec.metric]
-    n_panels = len(sweep_metrics) + len(evidence)
-    fig, axes = plt.subplots(1, n_panels, figsize=(6.5 * n_panels, 5))
-    cmap = plt.get_cmap("viridis")
-    ident = identified["parabolic_value"]
-    if ident is None:
-        ident = identified["grid_value"]
-    for ax, metric in zip(axes, sweep_metrics):
+    ident = _ident_value(identified)
+    colors = viridis_colors(len(horizons))
+
+    panels: list[dict] = []
+    for mi, metric in enumerate(sweep_metrics):
         m_label, m_unit, m_col = _METRIC_INFO[metric]
-        for idx, horizon in enumerate(horizons):
-            sub = res[res["horizon"] == horizon].sort_values("value")
-            color = cmap(idx / max(1, len(horizons) - 1))
-            ax.plot(sub["value"].to_numpy(), sub[m_col].to_numpy(), "o-", color=color,
-                    label=f"N={horizon}")
-        ax.axvline(ident, color="red", ls="--", lw=1.2, label=f"identified ≈{ident:.4g}")
+        traces = [
+            go.Scatter(
+                x=res[res["horizon"] == h].sort_values("value")["value"].to_numpy(),
+                y=res[res["horizon"] == h].sort_values("value")[m_col].to_numpy(),
+                mode="lines+markers", name=f"N={h}", legendgroup=f"N{h}", showlegend=(mi == 0),
+                line=dict(color=colors[idx]), marker=dict(size=5),
+            )
+            for idx, h in enumerate(horizons)
+        ]
+        vlines = [(ident, "red", "dash", f"identified ≈{ident:.4g}")]
         if base_value is not None:
-            ax.axvline(base_value, color="gray", ls=":", lw=1.2,
-                       label=f"仕様値 {base_value:.4g}")
-        ax.set_xlabel(f"{spec.name} [{spec.unit}]")
-        ax.set_ylabel(f"{m_label} [{m_unit}]")
-        title = f"{m_label} vs {spec.name}"
-        if metric == spec.metric:
-            title += " (同定メトリクス)"
-        ax.set_title(title, fontsize=10)
-        ax.grid(True, lw=0.5, alpha=0.6)
-        ax.legend(fontsize=8)
-    ev_results: list[dict] = []
-    for i, ev_fn in enumerate(evidence):
-        ret = ev_fn(axes[len(sweep_metrics) + i])
-        if isinstance(ret, dict):
-            ev_results.append(ret)
-    fig.suptitle(
-        f"{spec.label} ({spec.name}) スイープ同定 (free-running rollout, "
+            vlines.append((base_value, "gray", "dot", f"仕様値 {base_value:.4g}"))
+        title = f"{m_label} vs {spec.name}" + (" (同定メトリクス)" if metric == spec.metric else "")
+        panels.append({
+            "title": title, "xlabel": f"{spec.name} [{spec.unit}]", "ylabel": f"{m_label} [{m_unit}]",
+            "traces": traces, "vlines": vlines,
+        })
+    panels.extend(evidence)  # 根拠パネル（panel-spec dict）をそのまま並置
+
+    fig = build_fig_sweep(
+        panels, params=params,
+        title=f"{spec.label} ({spec.name}) スイープ同定 (free-running rollout, "
         f"同定 = N={identified['horizon']} の {metric_label} 最小化)",
-        fontsize=12,
     )
-    add_params_annotation(fig, params)
-    fig.tight_layout()
-    fig.savefig(out_path, dpi=150, bbox_inches="tight")
-    plt.close(fig)
-    print(f"  Saved: {out_path}")
-    return ev_results
+    write_fig_json(fig, out_path)
+    return [{"value": e.get("value"), "desc": e.get("desc")} for e in evidence]
 
 
 def plot_pair_sweep(
@@ -819,39 +788,18 @@ def plot_pair_sweep(
     mat = np.full((len(grid_b), len(grid_a)), np.nan)
     for _, row in res.iterrows():
         mat[grid_b.index(row[name_b]), grid_a.index(row[name_a])] = row[metric_col]
+    min_ij = tuple(int(v) for v in np.unravel_index(np.nanargmin(mat), mat.shape))
 
-    fig, ax = plt.subplots(figsize=(8.5, 6))
-    im = ax.imshow(mat, cmap="YlOrRd", aspect="auto", origin="lower")
-    ax.set_xticks(range(len(grid_a)), [f"{v:g}" for v in grid_a])
-    ax.set_yticks(range(len(grid_b)), [f"{v:g}" for v in grid_b])
-    ax.set_xlabel(name_a)
-    ax.set_ylabel(name_b)
-    # セル注釈: 背景の濃淡で文字色を切り替える
-    thresh = np.nanmin(mat) + (np.nanmax(mat) - np.nanmin(mat)) * 0.6
-    for i in range(len(grid_b)):
-        for j in range(len(grid_a)):
-            if np.isfinite(mat[i, j]):
-                ax.text(j, i, f"{mat[i, j]:.3f}", ha="center", va="center", fontsize=8,
-                        color="white" if mat[i, j] > thresh else "black")
-    mi, mj = np.unravel_index(np.nanargmin(mat), mat.shape)
-    ax.plot(mj, mi, "o", ms=14, mfc="none", mec="blue", mew=2,
-            label=f"最小 ({name_a}={grid_a[mj]:g}, {name_b}={grid_b[mi]:g})")
-    ax.legend(fontsize=9, loc="upper right")
-    fig.colorbar(im, ax=ax, label=f"{metric_label} [{metric_unit}] @ N={h_max}")
     def _base_str(name: str) -> str:
         v = _spec_by_name(name).base_value(base_params)
         return f"{v:.4g}" if v is not None else "—"
 
-    fig.suptitle(
-        f"2D スイープ: {name_a} × {name_b} ({metric_label} @ N={h_max})\n"
-        f"仕様値: {name_a}={_base_str(name_a)}, {name_b}={_base_str(name_b)}",
-        fontsize=11,
+    fig = build_fig_pair_sweep(
+        mat, grid_a, grid_b, name_a, name_b, min_ij,
+        metric_label=metric_label, metric_unit=metric_unit, h_max=h_max,
+        base_str_a=_base_str(name_a), base_str_b=_base_str(name_b),
     )
-    add_params_annotation(fig, base_params)
-    fig.tight_layout()
-    fig.savefig(out_path, dpi=150, bbox_inches="tight")
-    plt.close(fig)
-    print(f"  Saved: {out_path}")
+    write_fig_json(fig, out_path)
 
 
 # ---------------------------------------------------------------------------
@@ -893,32 +841,25 @@ def plot_sweep_overview(records: list[dict], h_max: int, params: dict, out_path:
         return
     recs = sorted(recs, key=_improvement_pct)
 
-    fig, (ax_bar, ax_curve) = plt.subplots(1, 2, figsize=(15, max(5, 0.55 * len(recs) + 2)))
-
-    # --- 左: 改善率ランキング (barh, 改善率昇順 = 上が最大) ---
-    names = [r["spec"].name for r in recs]
-    pcts = [_improvement_pct(r) for r in recs]
-    colors = [_METRIC_COLORS[r["spec"].metric] for r in recs]
-    bars = ax_bar.barh(range(len(recs)), pcts, color=colors, alpha=0.85)
-    ax_bar.set_yticks(range(len(recs)), names)
-    for i, (r, b) in enumerate(zip(recs, bars)):
+    # 左: 改善率ランキング barh 用データ（改善率昇順 = 上が最大）
+    bars: list[dict] = []
+    for r in recs:
         ident = r["ident"]
         v = ident["parabolic_value"] if ident["parabolic_value"] is not None else ident["grid_value"]
         edge = " (端)" if ident["at_edge"] else ""
-        ax_bar.text(b.get_width() + 0.3, i, f"同定≈{v:.4g}{edge}", va="center", fontsize=8)
-    ax_bar.set_xlabel(f"RMSE 改善率 [%] (仕様値 → 同定値, N={h_max})")
-    ax_bar.set_title("感度ランキング: どのパラメータを直すと効くか", fontsize=11)
-    ax_bar.grid(True, axis="x", lw=0.5, alpha=0.6)
-    handles = [plt.Rectangle((0, 0), 1, 1, color=c, alpha=0.85)
-               for m, c in _METRIC_COLORS.items() if any(r["spec"].metric == m for r in recs)]
-    labels = [_METRIC_INFO[m][0] for m in _METRIC_COLORS
-              if any(r["spec"].metric == m for r in recs)]
-    ax_bar.legend(handles, labels, fontsize=8, loc="lower right")
+        bars.append({
+            "name": r["spec"].name,
+            "pct": _improvement_pct(r),
+            "color": _METRIC_COLORS[r["spec"].metric],
+            "text": f"同定≈{v:.4g}{edge}",
+        })
 
-    # --- 右: 正規化カーブ (param ごとに色分け) ---
-    cmap = plt.get_cmap("tab10")
+    # 右: 正規化カーブ用データ（param ごとに [0,1] 正規化、tab10 で色分け）
+    _TAB10 = ["#1f77b4", "#ff7f0e", "#2ca02c", "#d62728", "#9467bd",
+              "#8c564b", "#e377c2", "#7f7f7f", "#bcbd22", "#17becf"]
+    curves: list[dict] = []
     for i, r in enumerate(reversed(recs)):  # 改善率の大きい順に手前へ
-        spec, res, ident = r["spec"], r["res"], r["ident"]
+        res, ident = r["res"], r["ident"]
         at = res[res["horizon"] == h_max].sort_values("value")
         xs = at["value"].to_numpy()
         ys = at[ident["metric_col"]].to_numpy()
@@ -927,28 +868,15 @@ def plot_sweep_overview(records: list[dict], h_max: int, params: dict, out_path:
             continue
         xn = (xs - xs.min()) / span
         yn = ys / r["rmse_at_spec"]
-        color = cmap(i % 10)
-        ax_curve.plot(xn, yn, "-", color=color, lw=1.5, label=spec.name)
-        # 仕様値位置 (y=1) と グリッド最小
-        bx = (r["base_value"] - xs.min()) / span
-        ax_curve.plot([bx], [1.0], "o", color=color, ms=6, mec="white", mew=0.8)
         mi = int(np.argmin(yn))
-        ax_curve.plot([xn[mi]], [yn[mi]], "v", color=color, ms=7, mec="white", mew=0.8)
-    ax_curve.axhline(1.0, color="black", lw=0.8, ls=":")
-    ax_curve.set_xlabel("グリッド位置 (パラメータごとに [0,1] 正規化)")
-    ax_curve.set_ylabel("RMSE / RMSE@仕様値")
-    ax_curve.set_title("正規化 RMSE カーブ (平坦=非感度 / 谷=同定可能 / 単調=端)", fontsize=11)
-    ax_curve.grid(True, lw=0.5, alpha=0.6)
-    ax_curve.legend(fontsize=8, ncol=2)
+        curves.append({
+            "name": r["spec"].name, "color": _TAB10[i % 10],
+            "xn": xn, "yn": yn, "bx": float((r["base_value"] - xs.min()) / span),
+            "min_x": float(xn[mi]), "min_y": float(yn[mi]),
+        })
 
-    fig.suptitle(
-        f"パラメータ sweep 感度オーバービュー (N={h_max} 終端誤差, ○=仕様値, ▼=最小)",
-        fontsize=12,
-    )
-    add_params_annotation(fig, params)
-    fig.tight_layout()
-    fig.savefig(out_path, dpi=150, bbox_inches="tight")
-    plt.close(fig)
+    fig = build_fig_sweep_overview(bars, curves, h_max=h_max)
+    write_fig_json(fig, out_path)
     print(f"  Saved: {out_path}")
 
 
@@ -1167,12 +1095,10 @@ def main() -> None:
             data, t0_ns, base_params, spec, grid, horizons, args.stride
         )
         res.to_csv(out_dir / f"{spec.name}_sweep.csv", index=False)
-        evidence = [
-            (lambda ax, _fn=fn, _i=ident, _b=base_value: _fn(ax, ev, _i, _b))
-            for fn in _EVIDENCE_PLOTS.get(spec.name, [])
-        ]
+        # 各根拠 _ev_* は panel-spec dict（value/desc 同梱）を返す
+        evidence = [fn(ev, ident, base_value) for fn in _EVIDENCE_PLOTS.get(spec.name, [])]
         ev_results = plot_sweep(res, spec, ident, base_value, base_params,
-                                out_dir / f"{spec.name}_sweep.svg", evidence=evidence)
+                                out_dir / f"{spec.name}_sweep", evidence=evidence)
         records.append({
             "spec": spec,
             "res": res,
