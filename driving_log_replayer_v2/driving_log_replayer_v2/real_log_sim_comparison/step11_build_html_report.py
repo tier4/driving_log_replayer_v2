@@ -321,36 +321,66 @@ def _slug(text: str) -> str:
     return re.sub(r"[^A-Za-z0-9_-]+", "-", text).strip("-").lower()
 
 
-def _figure(rel: Path, comparison_dir: Path, caption: str | None = None) -> str:
+def _heading_html(caption: str | None, title_text: str | None, stem: str,
+                  scenario_name: str) -> str:
+    """figcaption 見出しの HTML を返す。
+
+    plot 内タイトルは凡例・サブプロットタイトルと重なって隠れやすいので出さず、その内容を
+    この HTML 見出しに統合する。case タブは渡された caption（ケース名）を優先。図タイトルが
+    あればそれを見出しにする（冗長な「シナリオ名<br>」接頭辞は除去、<br>/<sub> はそのまま活かす）。
+    無ければ CAPTIONS の定型キャプションにフォールバック。
+    """
+    if caption is not None:
+        return html.escape(caption)
+    if title_text:
+        t = title_text
+        prefix = f"{scenario_name}<br>"
+        if scenario_name and t.startswith(prefix):
+            t = t[len(prefix):]
+        return t  # build_fig_* が生成した内部 HTML（<br>/<sub>）。外部入力ではないので素通し。
+    return html.escape(_caption_for(stem))
+
+
+def _figure(rel: Path, comparison_dir: Path, caption: str | None = None,
+            scenario_name: str = "") -> str:
     """1 図分の <figure> HTML を返す（形式で分岐、外部参照なしで埋め込む）。
 
     - `*.fig.json` (plotly) → `<div class='plotly-fig pending'>` プレースホルダ + 直後の
       `<script type='application/json'>` に図スペック。描画は glue JS が遅延実行する。
+      plot 内 `layout.title` は除去し、内容を figcaption 見出しへ統合する（重なって隠れるため）。
     - `*.html` (playback 等) → 自己完結 canvas HTML。`<iframe srcdoc>` で隔離埋め込み。
     """
     fname = rel.as_posix()
     stem = _asset_stem(rel)
-    if caption is None:
-        caption = _caption_for(stem)
-    cap_html = (
-        f"<figcaption>{html.escape(caption)}"
-        f"<span class='fname'>{html.escape(fname)}</span></figcaption>"
-    )
     if _is_fig_json(rel):
-        spec = (comparison_dir / rel).read_text(encoding="utf-8", errors="replace")
+        spec_text = (comparison_dir / rel).read_text(encoding="utf-8", errors="replace")
         fig_id = "fig-" + _slug(fname)
-        # プレースホルダ div に図の高さを**事前に確保**する。各 fig.json は build_fig_* が
-        # layout.height を持つ（plotly は autosize=true でコンテナ高に縮むため、div に高さが
-        # 無いと描画前後で潰れる/領域不足になる）。layout.height → FIG_HEIGHTS → 既定の順。
+        # spec を 1 度だけパースし、(1) 高さ確保用の layout.height を取り、(2) plot 内タイトルを
+        # 抽出して layout から除去（HTML 見出しへ統合）する。
+        title_text = None
         try:
-            fig_h = json.loads(spec).get("layout", {}).get("height")
-        except (ValueError, AttributeError):
-            fig_h = None
+            spec_obj = json.loads(spec_text)
+        except ValueError:
+            spec_obj = None
+        fig_h = None
+        if isinstance(spec_obj, dict):
+            layout = spec_obj.get("layout") or {}
+            fig_h = layout.get("height")
+            t = layout.get("title")
+            if isinstance(t, dict):
+                title_text = t.get("text")
+            if "title" in layout:
+                layout.pop("title", None)
+                spec_text = json.dumps(spec_obj, separators=(",", ":"), ensure_ascii=False)
+        cap_html = (
+            f"<figcaption>{_heading_html(caption, title_text, stem, scenario_name)}"
+            f"<span class='fname'>{html.escape(fname)}</span></figcaption>"
+        )
+        # プレースホルダ div に図の高さを**事前に確保**する（autosize=true でコンテナ高に縮むため）。
         height = int(fig_h or FIG_HEIGHTS.get(stem) or _FIG_HEIGHT_DEFAULT)
         style = f" style='height:{height}px'"
         # 図スペック JSON は <script type='application/json'> にそのまま入れる（実行されない）。
-        # </script> 直書きの早期終了だけ無害化する。
-        spec_safe = spec.replace("</", "<\\/")
+        spec_safe = spec_text.replace("</", "<\\/")
         return (
             f"<figure>{cap_html}"
             f"<div class='plotly-fig pending' id='{fig_id}'{style}></div>"
@@ -358,12 +388,17 @@ def _figure(rel: Path, comparison_dir: Path, caption: str | None = None) -> str:
             f"</figure>"
         )
     # 自己完結 HTML（playback 等）は独自 JS 衝突回避のため iframe srcdoc で隔離。
+    caption_text = caption if caption is not None else _caption_for(stem)
+    cap_html = (
+        f"<figcaption>{html.escape(caption_text)}"
+        f"<span class='fname'>{html.escape(fname)}</span></figcaption>"
+    )
     text = (comparison_dir / rel).read_text(encoding="utf-8", errors="replace")
     height = _IFRAME_HEIGHTS.get(stem, _IFRAME_HEIGHT_DEFAULT)
     return (
         f"<figure>{cap_html}"
         f"<iframe class='playback-fig' srcdoc='{escape_srcdoc(text)}' "
-        f"style='height:{height}px' title='{html.escape(caption)}'></iframe></figure>"
+        f"style='height:{height}px' title='{html.escape(caption_text)}'></iframe></figure>"
     )
 
 
@@ -417,7 +452,7 @@ def _render_case_tabs(
 
 
 def _render_category_images(
-    rels: list[Path], comparison_dir: Path, cat: str = ""
+    rels: list[Path], comparison_dir: Path, cat: str = "", scenario_name: str = ""
 ) -> list[str]:
     """カテゴリ内の図群を描画する。
 
@@ -431,7 +466,7 @@ def _render_category_images(
         if case is not None:
             per_case.setdefault(case, {})[_asset_stem(r)] = r
 
-    out: list[str] = [_figure(r, comparison_dir) for r in flat]
+    out: list[str] = [_figure(r, comparison_dir, scenario_name=scenario_name) for r in flat]
     if per_case:
         out.extend(_render_case_tabs(per_case, comparison_dir, cat))
     return out
@@ -635,7 +670,8 @@ def build_html(
             f"<a class='toplink' href='#top'>↑ 先頭</a></p>"
         )
         if cat in by_cat:
-            body.extend(_render_category_images(by_cat[cat], comparison_dir, cat=cat))
+            body.extend(_render_category_images(by_cat[cat], comparison_dir, cat=cat,
+                                                scenario_name=scenario_name))
         else:
             body.append("<p class='empty'>（このセクションに該当する図はありませんでした）</p>")
         for anchor, mtitle, md_html in md_by_cat.get(cat, []):
