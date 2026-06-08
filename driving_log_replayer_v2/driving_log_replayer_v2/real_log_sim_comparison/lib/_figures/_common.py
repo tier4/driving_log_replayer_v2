@@ -49,14 +49,19 @@ def apply_base_layout(
     fig: go.Figure, *, title: str | None = None, height: int | None = None, **kwargs
 ) -> go.Figure:
     """全図共通のレイアウト既定を適用する（title/height は任意上書き）。"""
+    # 凡例は既定で **水平・プロット上部**（右側縦置きだと横幅を食ってプロットが潰れるため）。
+    # タイトルと重ならないよう上マージンを広めに取り、凡例は左寄せ・タイトル直下に置く。
+    # 凡例位置を自前指定する図（trajectory 等）は kwargs の legend= で上書きする。
     layout = dict(
         autosize=True,
-        margin=dict(l=60, r=20, t=60 if title else 30, b=50),
-        legend=dict(bgcolor="rgba(255,255,255,0.7)"),
+        margin=dict(l=60, r=20, t=(86 if title else 48), b=50),
+        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="left", x=0,
+                    bgcolor="rgba(255,255,255,0.7)"),
         font=dict(size=12),
     )
     if title is not None:
-        layout["title"] = dict(text=title, font=dict(size=14))
+        layout["title"] = dict(text=title, font=dict(size=14), x=0.5, xanchor="center",
+                               y=0.99, yanchor="top")
     if height is not None:
         layout["height"] = height
     layout.update(kwargs)
