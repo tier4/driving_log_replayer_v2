@@ -12,7 +12,7 @@ import numpy as np
 import pandas as pd
 import plotly.graph_objects as go
 
-from .._nstep_common import ERR_METRICS, YAW_SEED_NOTE, rmse_by_horizon
+from .._nstep_common import ERR_METRICS, YAW_SEED_NOTE
 from ._common import (
     add_params_annotation_plotly,
     apply_base_layout,
@@ -249,35 +249,6 @@ def build_fig_cascade_error(
         title="全走行 N=1 (per-step): 段階的誤差プロット<br><sub>ステア指示 → ステア応答 → 横位置</sub>",
         height=380 * rows,
     )
-
-
-def build_fig_error_growth(
-    df: pd.DataFrame, *, params: dict | None = None, limits_df=None
-) -> go.Figure:
-    """rollout 長 N に対する位置/yaw 誤差 RMSE 成長（左右 2 軸）。旧 plot_error_growth。"""
-    rmse = rmse_by_horizon(df)
-    horizons = sorted(rmse)
-    pos = [rmse[h]["pos"] for h in horizons]
-    yaw = [rmse[h]["yaw"] for h in horizons]
-    pos_max, yaw_max = max(pos), max(yaw)
-    # ケース横断の統一上限（limits_df に case 列があればケース別 RMSE の最大）
-    if limits_df is not None and "case" in getattr(limits_df, "columns", []):
-        for _, sub in limits_df.groupby("case"):
-            r = rmse_by_horizon(sub)
-            pos_max = max(pos_max, *(r[h]["pos"] for h in r))
-            yaw_max = max(yaw_max, *(r[h]["yaw"] for h in r))
-    fig = make_grid(1, 1, specs=[[{"secondary_y": True}]])
-    fig.add_trace(go.Scatter(x=horizons, y=pos, mode="lines+markers", name="位置 RMSE [cm]",
-                             line=dict(color="#1f77b4"), marker=dict(symbol="circle", size=7)),
-                  secondary_y=False)
-    fig.add_trace(go.Scatter(x=horizons, y=yaw, mode="lines+markers", name="yaw RMSE [deg]",
-                             line=dict(color="#d62728", dash="dash"), marker=dict(symbol="square", size=7)),
-                  secondary_y=True)
-    fig.update_xaxes(title_text="rollout 長 N [step]  (N × SUB_DT 秒相当)")
-    fig.update_yaxes(title_text="位置 RMSE [cm]", color="#1f77b4", range=[0, pos_max * 1.05], secondary_y=False)
-    fig.update_yaxes(title_text="yaw RMSE [deg]", color="#d62728", range=[0, yaw_max * 1.05], secondary_y=True)
-    add_params_annotation_plotly(fig, params)
-    return apply_base_layout(fig, title="N-step rollout 誤差成長 (free-running)", height=460)
 
 
 def _scatter_by_speed(fig, row, col, x, y, vx, *, showlegend):

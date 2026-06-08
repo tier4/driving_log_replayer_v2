@@ -42,7 +42,6 @@ from ._dp import (
 from ._sweep import build_fig_pair_sweep, build_fig_sweep, build_fig_sweep_overview
 from ._nstep import (
     build_fig_cascade_error,
-    build_fig_error_growth,
     build_fig_error_timeseries,
     build_fig_error_vs_speed,
     build_fig_lateral_dynamics_timeseries,
@@ -69,7 +68,6 @@ __all__ = [
     "build_fig_growth_relative",
     "build_fig_rmse_heatmap",
     "build_fig_departure_brake_sensitivity",
-    "build_fig_error_growth",
     "build_fig_error_timeseries",
     "build_fig_error_vs_speed",
     "build_fig_lateral_dynamics_timeseries",

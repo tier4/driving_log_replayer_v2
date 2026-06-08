@@ -95,7 +95,6 @@ def rerender_case_figures(
             s5.OUT_DIR = nstep_root / case.tag
             df1 = n1(df)
             print(f"  [{case.tag}] ケース横断の統一軸で再描画")
-            s5.plot_error_growth(df, params)
             s5.plot_error_timeseries(df, params)
             s5.plot_error_vs_speed(df, params)
             s5.plot_map_distribution(df, params)

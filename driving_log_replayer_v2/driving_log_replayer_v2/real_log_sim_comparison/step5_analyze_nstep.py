@@ -53,7 +53,6 @@ from .lib._map import map_ways_in_bbox, resolve_map_osm
 from .lib._fig_io import write_fig_json
 from .lib._figures import (
     build_fig_cascade_error,
-    build_fig_error_growth,
     build_fig_error_timeseries,
     build_fig_error_vs_speed,
     build_fig_lateral_dynamics_timeseries,
@@ -750,15 +749,6 @@ def run_rollout(
     return pd.DataFrame(recs)
 
 
-def plot_error_growth(df: pd.DataFrame, params: dict) -> None:
-    """rollout 長 N に対する位置・yaw 誤差 RMSE の成長を描く (dynamics 差の顕在化)。"""
-    if df.empty:
-        return
-    fig = build_fig_error_growth(df, params=params, limits_df=LIMITS_DF)
-    OUT_DIR.mkdir(parents=True, exist_ok=True)
-    write_fig_json(fig, OUT_DIR / "error_growth")
-
-
 # ---------------------------------------------------------------------------
 # プロット
 # ---------------------------------------------------------------------------
@@ -1185,7 +1175,6 @@ def main() -> None:
     save_summary(df)
 
     # 全 horizon を使う統合図
-    plot_error_growth(df, params)
     plot_error_timeseries(df, params)
     plot_error_vs_speed(df, params)
     plot_map_distribution(df, params)
