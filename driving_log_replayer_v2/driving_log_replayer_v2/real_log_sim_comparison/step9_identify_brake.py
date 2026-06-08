@@ -36,6 +36,12 @@ import numpy as np
 import pandas as pd
 
 from .lib._events import find_autonomous_start, find_curve2_launch, find_initial_launch
+from .lib._fig_io import write_fig_json
+from .lib._figures import (
+    build_fig_brake_sweep,
+    build_fig_departure_brake_sensitivity,
+    build_fig_real_cmd_acc,
+)
 from .lib._io import align_time, load_cmd, load_operation_mode, load_velocity, resolve_lite_bag
 from .lib._params_utils import add_params_annotation, load_sim_params, setup_jp_font
 from .lib._runtime_config import add_common_cli_arguments, build_runtime_config
@@ -252,69 +258,20 @@ def main() -> None:
         print(row)
 
     cfg.figs_dir.mkdir(parents=True, exist_ok=True)
-    fig, axes = plt.subplots(1, 2, figsize=(14, 6))
-    fig.suptitle(
-        f"{cfg.scenario_name}\n発進動作：brake_time_constant 感度分析\n"
-        "(実機 post-gate cmd をオープンループ入力→シミュレーション速度 vs 実機 actual速度)",
-        fontsize=11,
-    )
-
-    for ax, xlim, ylim, title in [
-        (axes[0], (-1, 10), (-0.5, 8), "速度プロファイル比較（発進前後）"),
-        (axes[1], (-0.5, 3.0), (-0.2, 2.5), "発進直後ズーム (t=-0.5~3s)"),
-    ]:
-        ax.plot(
-            df_vel["t"].values,
-            df_vel["lon_vel"].values,
-            "k-",
-            lw=3,
-            label="実機 actual速度",
-            zorder=10,
-        )
-        for btc, col, lbl in zip(brake_tc_variants, colors, labels):
-            ax.plot(t_sim, sim_results[btc], color=col, lw=1.8, ls="--", label=f"FMU {lbl}")
-        ax.axvline(0, color="gray", lw=0.8, ls="--", alpha=0.6)
-        ax.set_xlim(xlim)
-        ax.set_ylim(ylim)
-        ax.set_xlabel("発進後 t [s]")
-        ax.set_ylabel("速度 [m/s]")
-        ax.set_title(title)
-        ax.legend(fontsize=8)
-        ax.grid(True, lw=0.4)
-
-    fig2, ax2 = plt.subplots(1, 1, figsize=(10, 4))
-    fig2.suptitle(
-        f"{cfg.scenario_name}\n実機 post-gate control_cmd (acc) — 発進前後",
-        fontsize=11,
-    )
-    ax2.plot(
-        df_cmd["t"].values,
-        df_cmd["cmd_accel"].values,
-        "b-",
-        lw=1.5,
-        label="実機 cmd_acc (post-gate)",
-    )
-    ax2.axvline(0, color="gray", lw=0.8, ls="--", alpha=0.6)
-    ax2.set_xlim(-2, 10)
-    ax2.set_xlabel("発進後 t [s]")
-    ax2.set_ylabel("加速度指令 [m/s²]")
-    ax2.legend(fontsize=9)
-    ax2.grid(True, lw=0.4)
-
-    fig.tight_layout()
-    fig2.tight_layout()
-
     anno_params = {**load_sim_params(), **params_base}
-    add_params_annotation(fig, anno_params)
-    add_params_annotation(fig2, anno_params)
 
-    out1 = cfg.figs_dir / "departure_brake_tc_sensitivity.svg"
-    out2 = cfg.figs_dir / "real_cmd_acc_departure.svg"
-    fig.savefig(str(out1), dpi=150, bbox_inches="tight")
-    fig2.savefig(str(out2), dpi=150, bbox_inches="tight")
-    plt.close("all")
-    print(f"\n保存: {out1}")
-    print(f"保存: {out2}")
+    fig = build_fig_departure_brake_sensitivity(
+        df_vel["t"].values, df_vel["lon_vel"].values, t_sim, sim_results,
+        list(brake_tc_variants), labels,
+        scenario_name=cfg.scenario_name, params=anno_params,
+    )
+    write_fig_json(fig, cfg.figs_dir / "departure_brake_tc_sensitivity")
+
+    fig2 = build_fig_real_cmd_acc(
+        df_cmd["t"].values, df_cmd["cmd_accel"].values,
+        scenario_name=cfg.scenario_name, params=anno_params,
+    )
+    write_fig_json(fig2, cfg.figs_dir / "real_cmd_acc_departure")
 
     print("\n--- 実機 actual速度 vs FMU シム 発進誤差 RMSE (t=0~5s) ---")
     t_mask = (t_sim >= 0.0) & (t_sim <= 5.0)
@@ -342,19 +299,9 @@ def main() -> None:
     btc_grid = float(brake_tc_variants[best_i])
     btc_parab = _parabolic_min(list(brake_tc_variants), rmses)
 
-    figb, axb = plt.subplots(figsize=(9, 5))
-    figb.suptitle("brake_time_constant スイープ同定 (発進フィット)", fontsize=12)
-    axb.plot(brake_tc_variants, rmses, "o-", color="#1f77b4", label="発進 RMSE (t=0〜5s)")
     btc_id = btc_parab if btc_parab is not None else btc_grid
-    axb.axvline(btc_id, color="red", ls="--", lw=1.2, label=f"identified btc≈{btc_id:.4f}s")
-    axb.set_xlabel("brake_time_constant [s]")
-    axb.set_ylabel("発進フィット RMSE [m/s]")
-    axb.grid(True, lw=0.5, alpha=0.6)
-    axb.legend(fontsize=9)
-    add_params_annotation(figb, anno_params)
-    figb.tight_layout()
-    figb.savefig(str(out_dir / "brake_sweep.svg"), dpi=150, bbox_inches="tight")
-    plt.close(figb)
+    figb = build_fig_brake_sweep(list(brake_tc_variants), rmses, btc_id, params=anno_params)
+    write_fig_json(figb, out_dir / "brake_sweep")
 
     print("\n=== 同定結果 (発進フィット RMSE 最小化, t=0〜5s) ===")
     print(f"  グリッド最小: brake_time_constant = {btc_grid:.4f} s "
