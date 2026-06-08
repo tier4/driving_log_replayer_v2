@@ -45,11 +45,14 @@ def build_fig_sweep(
         r, c = idx // ncols + 1, idx % ncols + 1
         for tr in p.get("traces", []):
             fig.add_trace(tr, row=r, col=c)
-        for x, color, dash, label in p.get("vlines", []):
+        for k, (x, color, dash, label) in enumerate(p.get("vlines", [])):
             # 注釈はパネル下部に小さく置く（既定の上端だとサブプロットタイトルや凡例と重なる）。
+            # 同定値・仕様値・実機平均などの vline は x が近接するとラベルが重なるため、
+            # 各 vline のラベルを縦に段積み（yshift）して読めるようにする。
             fig.add_vline(x=x, line=dict(color=color, width=1.2, dash=dash),
                           annotation_text=label, annotation_font_size=8,
-                          annotation_position="bottom right", row=r, col=c)
+                          annotation_position="bottom right", annotation_yshift=14 * k,
+                          row=r, col=c)
         for y, color in p.get("hlines", []):
             fig.add_hline(y=y, line=dict(color=color, width=0.6), row=r, col=c)
         for x0, x1, color in p.get("vrects", []):
