@@ -38,8 +38,10 @@ def build_fig_sweep(panels: list[dict], *, title: str, params: dict | None = Non
         for tr in p.get("traces", []):
             fig.add_trace(tr, row=1, col=i)
         for x, color, dash, label in p.get("vlines", []):
+            # 注釈はパネル下部に小さく置く（既定の上端だとサブプロットタイトルや凡例と重なる）。
             fig.add_vline(x=x, line=dict(color=color, width=1.2, dash=dash),
-                          annotation_text=label, annotation_font_size=9, row=1, col=i)
+                          annotation_text=label, annotation_font_size=8,
+                          annotation_position="bottom right", row=1, col=i)
         for y, color in p.get("hlines", []):
             fig.add_hline(y=y, line=dict(color=color, width=0.6), row=1, col=i)
         for x0, x1, color in p.get("vrects", []):
