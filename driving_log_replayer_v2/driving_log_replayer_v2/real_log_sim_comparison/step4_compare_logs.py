@@ -43,6 +43,13 @@ from .lib._io import (
     nearest_point_distance,
     resolve_topic,
 )
+from .lib._fig_io import write_fig_json
+from .lib._figures import (
+    build_fig_curves_closeup,
+    build_fig_timeseries_resp_cmd,
+    build_fig_trajectory,
+    build_fig_vs_distance,
+)
 from .lib._map import load_map_ways, map_ways_in_bbox, resolve_map_osm
 from .lib._params_utils import add_params_annotation, setup_jp_font
 from .lib._playback_viewer import plot_trajectory_playback
@@ -50,7 +57,6 @@ from .lib._plotly_utils import (
     FIG_HEIGHTS,
     add_params_annotation_plotly,
     lanes_to_trace,
-    write_plotly_html,
 )
 from .lib._provenance import format_provenance_line, read_provenance
 from .lib._runtime_config import (
@@ -268,88 +274,35 @@ def _plotly_dash(ls) -> str:
 
 
 def plot_trajectory(data: dict, map_ways: list | None):
-    """地図背景あり軌跡プロット（plotly インタラクティブ HTML）。
+    """地図背景あり軌跡比較図（図スペック JSON）。
 
-    表示範囲は3軌跡の bbox + マージン に限定。ズーム・パン・ホバー・凡例トグル可能。
+    ROS から読んだ kinematic DataFrame を run dict へ整形し、ROS 非依存の
+    `build_fig_trajectory` で図を組んで `<stem>.fig.json` に吐く。描画は step11
+    （単一 HTML）/ step12（notebook）が plotly.js で行う。
     """
-    # 3軌跡の bounding box を算出
-    all_xy_list = [
-        d["kinematic"][["x", "y"]].values for d in data.values() if not d["kinematic"].empty
-    ]
-    if not all_xy_list:
-        warnings.warn("kinematic データなし。軌跡プロットをスキップ")
-        return
-    all_xy = np.concatenate(all_xy_list)
-    margin = 30  # m
-    x_min, y_min = all_xy.min(axis=0) - margin
-    x_max, y_max = all_xy.max(axis=0) + margin
-
-    fig = go.Figure()
-    if map_ways:
-        ways = map_ways_in_bbox(map_ways, (x_min, x_max), (y_min, y_max))
-        fig.add_trace(lanes_to_trace(ways))
-
+    runs: list[dict] = []
     for label, d in data.items():
         df = d["kinematic"]
         if df.empty:
             continue
-        x = np.asarray(df["x"])
-        y = np.asarray(df["y"])
-        hover_extra = ""
-        customdata = None
-        if "t" in df.columns:
-            customdata = np.asarray(df["t"])
-            hover_extra = "<br>t=%{customdata:.1f}s"
-        # 線 trace（全点 hover 可能）
-        fig.add_trace(go.Scatter(
-            x=x, y=y,
-            mode="lines",
-            name=label,
-            legendgroup=label,
-            line=dict(color=d["color"], width=d["lw"], dash=_plotly_dash(d["ls"])),
-            customdata=customdata,
-            hovertemplate=f"{label}<br>x=%{{x:.1f}}m y=%{{y:.1f}}m{hover_extra}<extra></extra>",
-        ))
-        # 等間隔マーカー trace（matplotlib markevery 相当）
-        me = max(1, len(x) // 15)
-        fig.add_trace(go.Scatter(
-            x=x[::me], y=y[::me],
-            mode="markers",
-            legendgroup=label,
-            showlegend=False,
-            marker=dict(
-                symbol=_PLOTLY_MARKER.get(d["marker"], "circle"),
-                size=d["ms"] + 3,
-                color=d["color"],
-                line=dict(color="white", width=0.5),
-            ),
-            hoverinfo="skip",
-        ))
-
-    # provenance フットノート: 各ログの DP 重み / autoware バージョン (版差での乖離解釈用)。
-    prov_lines = [f"{lbl}: {_prov_text(lbl, d)}" for lbl, d in data.items()]
-    fig.add_annotation(
-        xref="paper", yref="paper", x=0.0, y=0.0,
-        xanchor="left", yanchor="bottom", align="left", showarrow=False,
-        text="provenance —<br>" + "<br>".join(prov_lines),
-        font=dict(family="monospace", size=9, color="#555555"),
-        bgcolor="rgba(255,255,255,0.7)",
-    )
-    add_params_annotation_plotly(fig)
+        runs.append({
+            "label": label,
+            "color": d["color"], "lw": d["lw"], "ls": d["ls"],
+            "marker": d["marker"], "ms": d["ms"],
+            "x": np.asarray(df["x"]), "y": np.asarray(df["y"]),
+            "t": np.asarray(df["t"]) if "t" in df.columns else None,
+            "prov": _prov_text(label, d),  # DP 重み / autoware 版（版差での乖離解釈用）
+        })
+    if not runs:
+        warnings.warn("kinematic データなし。軌跡プロットをスキップ")
+        return
 
     name = "trajectory_with_map" if map_ways else "trajectory_xy"
-    fig.update_layout(
-        title=dict(text=f"{SCENARIO_NAME}<br>軌跡比較", font=dict(size=14)),
-        xaxis=dict(title="x [m]", range=[x_min, x_max]),
-        yaxis=dict(title="y [m]", range=[y_min, y_max], scaleanchor="x", scaleratio=1),
-        height=FIG_HEIGHTS[name],
-        autosize=True,
-        template="plotly_white",
-        legend=dict(x=0.01, y=0.99, bgcolor="rgba(255,255,255,0.7)"),
-        margin=dict(l=60, r=20, t=60, b=40),
+    fig = build_fig_trajectory(
+        runs, map_ways=map_ways, scenario_name=SCENARIO_NAME, height=FIG_HEIGHTS[name]
     )
     FIGS_DIR.mkdir(parents=True, exist_ok=True)
-    write_plotly_html(fig, FIGS_DIR / f"{name}.html", BASE)
+    write_fig_json(fig, FIGS_DIR / name)
 
 
 def _tr(d: dict, df: pd.DataFrame) -> np.ndarray:
@@ -369,84 +322,62 @@ def _ts_plot(ax, t, y, d, label, cmd=False):
         ax.plot(t, y, color=d["color"], lw=d["lw"], ls=d["ls"], label=label)
 
 
-def plot_velocity(data: dict):
-    fig, axes = _setup_fig("速度比較（指令 vs 応答）", nrows=2, figsize=(14, 8))
-
+def _resp_cmd_runs(data: dict, resp_key: str, resp_col: str, cmd_col: str, *, deg=False):
+    """応答/指令 2 段時系列の run dict 列を整形する（_tr で発進整列）。"""
+    runs: list[dict] = []
     for label, d in data.items():
-        vel = d["velocity"]
-        cmd = d["cmd"]
-        _ts_plot(axes[0, 0], _tr(d, vel), vel["lon_vel"], d, label)
+        resp, cmd = d[resp_key], d["cmd"]
+        if resp.empty:
+            continue
+        y_resp = np.degrees(resp[resp_col]) if deg else np.asarray(resp[resp_col])
+        r = {
+            "label": label, "color": d["color"], "lw": d["lw"], "ls": d["ls"],
+            "t_resp": _tr(d, resp), "y_resp": y_resp, "t_cmd": None, "y_cmd": None,
+        }
         if not cmd.empty:
-            _ts_plot(axes[1, 0], _tr(d, cmd), cmd["cmd_vel"], d, label, cmd=True)
+            r["t_cmd"] = _tr(d, cmd)
+            r["y_cmd"] = np.degrees(cmd[cmd_col]) if deg else np.asarray(cmd[cmd_col])
+        runs.append(r)
+    return runs
 
-    axes[0, 0].set_title(
-        "実応答 (VelocityReport.longitudinal_velocity)  ─ 実線/破線/点鎖線は各ログ"
+
+def plot_velocity(data: dict):
+    fig = build_fig_timeseries_resp_cmd(
+        _resp_cmd_runs(data, "velocity", "lon_vel", "cmd_vel"),
+        title=f"{SCENARIO_NAME}<br>速度比較（指令 vs 応答）",
+        resp_title="実応答 (VelocityReport.longitudinal_velocity)",
+        cmd_title="指令 (control_cmd.longitudinal.velocity) ─ 点線・薄色",
+        resp_ylabel="速度 [m/s]", cmd_ylabel="速度指令 [m/s]",
+        note=_TIME_AXIS_NOTE,
     )
-    axes[0, 0].set_ylabel("速度 [m/s]")
-    axes[0, 0].legend(fontsize=9)
-    axes[0, 0].grid(True, lw=0.5)
-
-    axes[1, 0].set_title("指令 (control_cmd.longitudinal.velocity)  ─ 点線・薄色")
-    axes[1, 0].set_ylabel("速度指令 [m/s]")
-    axes[1, 0].set_xlabel("発進からの経過時間 [s]")
-    axes[1, 0].legend(fontsize=9)
-    axes[1, 0].grid(True, lw=0.5)
-
-    fig.text(0.5, 0.005, _TIME_AXIS_NOTE, ha="center", fontsize=8, color="#555555")
-    fig.tight_layout(rect=(0, 0.02, 1, 1))
-    _save(fig, "velocity")
+    FIGS_DIR.mkdir(parents=True, exist_ok=True)
+    write_fig_json(fig, FIGS_DIR / "velocity")
 
 
 def plot_acceleration(data: dict):
-    fig, axes = _setup_fig("加速度比較（指令 vs 応答）", nrows=2, figsize=(14, 8))
-
-    for label, d in data.items():
-        acc = d["accel"]
-        cmd = d["cmd"]
-        _ts_plot(axes[0, 0], _tr(d, acc), acc["accel"], d, label)
-        if not cmd.empty:
-            _ts_plot(axes[1, 0], _tr(d, cmd), cmd["cmd_accel"], d, label, cmd=True)
-
-    axes[0, 0].set_title("実応答 (localization/acceleration.accel.accel.linear.x)")
-    axes[0, 0].set_ylabel("加速度 [m/s²]")
-    axes[0, 0].legend(fontsize=9)
-    axes[0, 0].grid(True, lw=0.5)
-
-    axes[1, 0].set_title("指令 (control_cmd.longitudinal.acceleration)  ─ 点線・薄色")
-    axes[1, 0].set_ylabel("加速度指令 [m/s²]")
-    axes[1, 0].set_xlabel("発進からの経過時間 [s]")
-    axes[1, 0].legend(fontsize=9)
-    axes[1, 0].grid(True, lw=0.5)
-
-    fig.text(0.5, 0.005, _TIME_AXIS_NOTE, ha="center", fontsize=8, color="#555555")
-    fig.tight_layout(rect=(0, 0.02, 1, 1))
-    _save(fig, "acceleration")
+    fig = build_fig_timeseries_resp_cmd(
+        _resp_cmd_runs(data, "accel", "accel", "cmd_accel"),
+        title=f"{SCENARIO_NAME}<br>加速度比較（指令 vs 応答）",
+        resp_title="実応答 (localization/acceleration.accel.accel.linear.x)",
+        cmd_title="指令 (control_cmd.longitudinal.acceleration) ─ 点線・薄色",
+        resp_ylabel="加速度 [m/s²]", cmd_ylabel="加速度指令 [m/s²]",
+        note=_TIME_AXIS_NOTE,
+    )
+    FIGS_DIR.mkdir(parents=True, exist_ok=True)
+    write_fig_json(fig, FIGS_DIR / "acceleration")
 
 
 def plot_steering(data: dict):
-    fig, axes = _setup_fig("ステアリング比較（指令 vs 応答）", nrows=2, figsize=(14, 8))
-
-    for label, d in data.items():
-        steer = d["steering"]
-        cmd = d["cmd"]
-        _ts_plot(axes[0, 0], _tr(d, steer), np.degrees(steer["steer"]), d, label)
-        if not cmd.empty:
-            _ts_plot(axes[1, 0], _tr(d, cmd), np.degrees(cmd["cmd_steer"]), d, label, cmd=True)
-
-    axes[0, 0].set_title("実応答 (SteeringReport.steering_tire_angle)")
-    axes[0, 0].set_ylabel("ステア角 [deg]")
-    axes[0, 0].legend(fontsize=9)
-    axes[0, 0].grid(True, lw=0.5)
-
-    axes[1, 0].set_title("指令 (control_cmd.lateral.steering_tire_angle)  ─ 点線・薄色")
-    axes[1, 0].set_ylabel("ステア指令 [deg]")
-    axes[1, 0].set_xlabel("発進からの経過時間 [s]")
-    axes[1, 0].legend(fontsize=9)
-    axes[1, 0].grid(True, lw=0.5)
-
-    fig.text(0.5, 0.005, _TIME_AXIS_NOTE, ha="center", fontsize=8, color="#555555")
-    fig.tight_layout(rect=(0, 0.02, 1, 1))
-    _save(fig, "steering")
+    fig = build_fig_timeseries_resp_cmd(
+        _resp_cmd_runs(data, "steering", "steer", "cmd_steer", deg=True),
+        title=f"{SCENARIO_NAME}<br>ステアリング比較（指令 vs 応答）",
+        resp_title="実応答 (SteeringReport.steering_tire_angle)",
+        cmd_title="指令 (control_cmd.lateral.steering_tire_angle) ─ 点線・薄色",
+        resp_ylabel="ステア角 [deg]", cmd_ylabel="ステア指令 [deg]",
+        note=_TIME_AXIS_NOTE,
+    )
+    FIGS_DIR.mkdir(parents=True, exist_ok=True)
+    write_fig_json(fig, FIGS_DIR / "steering")
 
 
 def _distance_of(t_query, df_kin: pd.DataFrame):
@@ -467,8 +398,7 @@ def plot_velocity_vs_distance(data: dict):
     時間軸では pacing 差・初期化オフセットが「時間ずれ」に見えるが、距離基準にすると
     各ログが経路上のどこまで進んだか・どこで停止したかが露出する (例: sim の早期停止)。
     """
-    fig, axes = _setup_fig("速度比較（走行距離基準）", figsize=(14, 5))
-    ax = axes[0, 0]
+    runs: list[dict] = []
     for label, d in data.items():
         vel, kin = d["velocity"], d["kinematic"]
         if vel.empty or kin.empty:
@@ -476,20 +406,23 @@ def plot_velocity_vs_distance(data: dict):
         s = _distance_of(vel["t"], kin)
         if s is None:
             continue
-        ax.plot(s, np.asarray(vel["lon_vel"]), color=d["color"], lw=d["lw"], ls=d["ls"], label=label)
-    ax.set_title("実応答速度 vs 走行距離（早期停止・初期化オフセットを露出）")
-    ax.set_xlabel("走行距離 [m]")
-    ax.set_ylabel("速度 [m/s]")
-    ax.legend(fontsize=9)
-    ax.grid(True, lw=0.5)
-    fig.tight_layout()
-    _save(fig, "velocity_vs_distance")
+        runs.append({
+            "label": label, "color": d["color"], "lw": d["lw"], "ls": d["ls"],
+            "s": s, "y": np.asarray(vel["lon_vel"]),
+        })
+    fig = build_fig_vs_distance(
+        runs,
+        title=f"{SCENARIO_NAME}<br>速度比較（走行距離基準）",
+        subplot_title="実応答速度 vs 走行距離（早期停止・初期化オフセットを露出）",
+        ylabel="速度 [m/s]",
+    )
+    FIGS_DIR.mkdir(parents=True, exist_ok=True)
+    write_fig_json(fig, FIGS_DIR / "velocity_vs_distance")
 
 
 def plot_steering_vs_distance(data: dict):
     """操舵応答を走行距離 (arc-length) 基準で重ね描き（pacing 差を除いた形状比較）。"""
-    fig, axes = _setup_fig("ステアリング比較（走行距離基準）", figsize=(14, 5))
-    ax = axes[0, 0]
+    runs: list[dict] = []
     for label, d in data.items():
         steer, kin = d["steering"], d["kinematic"]
         if steer.empty or kin.empty:
@@ -497,64 +430,35 @@ def plot_steering_vs_distance(data: dict):
         s = _distance_of(steer["t"], kin)
         if s is None:
             continue
-        ax.plot(s, np.degrees(np.asarray(steer["steer"])), color=d["color"], lw=d["lw"], ls=d["ls"], label=label)
-    ax.set_title("実応答ステア角 vs 走行距離")
-    ax.set_xlabel("走行距離 [m]")
-    ax.set_ylabel("ステア角 [deg]")
-    ax.legend(fontsize=9)
-    ax.grid(True, lw=0.5)
-    fig.tight_layout()
-    _save(fig, "steering_vs_distance")
+        runs.append({
+            "label": label, "color": d["color"], "lw": d["lw"], "ls": d["ls"],
+            "s": s, "y": np.degrees(np.asarray(steer["steer"])),
+        })
+    fig = build_fig_vs_distance(
+        runs,
+        title=f"{SCENARIO_NAME}<br>ステアリング比較（走行距離基準）",
+        subplot_title="実応答ステア角 vs 走行距離",
+        ylabel="ステア角 [deg]",
+    )
+    FIGS_DIR.mkdir(parents=True, exist_ok=True)
+    write_fig_json(fig, FIGS_DIR / "steering_vs_distance")
 
 
 def plot_curves(data: dict, map_ways: list | None):
-    """3つのカーブにフォーカスした軌跡比較（横3列サブプロット）。"""
+    """カーブ別の軌跡比較（横 N 列サブプロット）。"""
     if not CURVE_CENTERS:
         return
-    n = len(CURVE_CENTERS)
-    fig, axes = plt.subplots(1, n, figsize=(6 * n, 7))
-    fig.suptitle(f"{SCENARIO_NAME}\nカーブ別軌跡比較", fontsize=11)
-
-    for col, curve in enumerate(CURVE_CENTERS):
-        ax = axes[col]
-        cx, cy, mg = curve["cx"], curve["cy"], curve["margin"]
-        x_min, x_max = cx - mg, cx + mg
-        y_min, y_max = cy - mg, cy + mg
-
-        # 地図背景
-        if map_ways:
-            for pts in map_ways:
-                wx, wy = pts[:, 0], pts[:, 1]
-                if wx.max() < x_min or wx.min() > x_max:
-                    continue
-                if wy.max() < y_min or wy.min() > y_max:
-                    continue
-                ax.plot(wx, wy, color="#cccccc", lw=0.6, zorder=1)
-
-        # 各ログの軌跡（bbox内の点のみ）
-        for log_label, d in data.items():
-            df = d["kinematic"]
-            mask = (df["x"] >= x_min) & (df["x"] <= x_max) & (df["y"] >= y_min) & (df["y"] <= y_max)
-            seg = df[mask]
-            if seg.empty:
-                continue
-            _traj_plot(ax, seg, d, log_label, markevery=8)
-
-        ax.set_xlim(x_min, x_max)
-        ax.set_ylim(y_min, y_max)
-        ax.set_aspect("equal")
-        ax.set_title(curve["label"], fontsize=10)
-        ax.set_xlabel("x [m]")
-        if col == 0:
-            ax.set_ylabel("y [m]")
-        ax.grid(True, lw=0.5, alpha=0.5)
-
-        # 凡例は最初のサブプロットのみ
-        if col == 0:
-            ax.legend(fontsize=9, loc="best")
-
-    fig.tight_layout()
-    _save(fig, "curves_closeup")
+    runs = [
+        {
+            "label": label, "color": d["color"], "lw": d["lw"], "ls": d["ls"],
+            "marker": d["marker"], "ms": d["ms"],
+            "x": np.asarray(d["kinematic"]["x"]), "y": np.asarray(d["kinematic"]["y"]),
+        }
+        for label, d in data.items() if not d["kinematic"].empty
+    ]
+    fig = build_fig_curves_closeup(CURVE_CENTERS, runs, map_ways, scenario_name=SCENARIO_NAME)
+    FIGS_DIR.mkdir(parents=True, exist_ok=True)
+    write_fig_json(fig, FIGS_DIR / "curves_closeup")
 
 
 # ---------------------------------------------------------------------------
