@@ -49,14 +49,18 @@ def apply_base_layout(
     fig: go.Figure, *, title: str | None = None, height: int | None = None, **kwargs
 ) -> go.Figure:
     """全図共通のレイアウト既定を適用する（title/height は任意上書き）。"""
-    # 凡例は既定で **水平・プロット上部**（右側縦置きだと横幅を食ってプロットが潰れるため）。
-    # タイトルと重ならないよう上マージンを広めに取り、凡例は左寄せ・タイトル直下に置く。
-    # 凡例位置を自前指定する図（trajectory 等）は kwargs の legend= で上書きする。
+    # 凡例は既定で **水平・図の最上端**。右側縦置きは横幅を食ってプロットが潰れるため水平に
+    # するが、`y=1.02`（paper 基準）だと最上段サブプロットタイトルと重なって隠れる
+    # （paper 単位はプロット領域高=height-margin に正規化され、margin を増やしても凡例が
+    # 相対的に下がるため衝突が解けない循環に陥る）。`yref="container"` で図の絶対最上端に
+    # ピン留めし、上マージンに凡例帯を確保することで height 非依存にサブプロットタイトルの
+    # 上へ逃がす。上マージンは最悪ケース（2 行凡例 + 2 行サブプロットタイトル）に合わせる。
+    # 凡例位置を自前指定する図は kwargs の legend= で上書きする。
     layout = dict(
         autosize=True,
-        margin=dict(l=60, r=20, t=(86 if title else 48), b=50),
-        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="left", x=0,
-                    bgcolor="rgba(255,255,255,0.7)"),
+        margin=dict(l=60, r=20, t=100, b=50),
+        legend=dict(orientation="h", yref="container", yanchor="top", y=1.0,
+                    xref="paper", xanchor="left", x=0, bgcolor="rgba(255,255,255,0.7)"),
         font=dict(size=12),
     )
     if title is not None:
