@@ -248,14 +248,22 @@ _STYLE = """
 body { font-family: -apple-system, "Segoe UI", "Hiragino Sans", "Noto Sans CJK JP", sans-serif;
        color: var(--fg); background: var(--bg); margin: 0; line-height: 1.6; }
 .layout { display: flex; align-items: flex-start; }
-nav.toc { position: sticky; top: 0; align-self: flex-start; width: 260px; min-width: 260px;
-          height: 100vh; overflow-y: auto; padding: 1.5rem 1rem; border-right: 1px solid var(--border);
-          background: #fafafa; font-size: 0.9rem; }
+/* 目次は既定で隠した固定オーバーレイ（横方向を占有しない＝図を全幅で使う）。左上の
+   ☰ ボタン（純 CSS チェックボックス）でスライド表示する。表示中もフロー外なので main 幅は変わらない。 */
+.toc-toggle { display: none; }
+.toc-btn { position: fixed; top: 10px; left: 10px; z-index: 1001; background: var(--accent); color: #fff;
+           padding: 4px 11px; border-radius: 4px; cursor: pointer; font-size: 0.85rem; user-select: none;
+           box-shadow: 0 1px 3px rgba(0,0,0,0.3); }
+nav.toc { position: fixed; left: 0; top: 0; width: 260px; min-width: 260px; height: 100vh; overflow-y: auto;
+          padding: 3rem 1rem 1.5rem; border-right: 1px solid var(--border); background: #fafafa;
+          font-size: 0.9rem; z-index: 1000; transform: translateX(-100%); transition: transform 0.2s;
+          box-shadow: 2px 0 8px rgba(0,0,0,0.15); }
+.toc-toggle:checked ~ .layout nav.toc { transform: translateX(0); }
 nav.toc h2 { font-size: 1rem; margin: 0 0 0.5rem; }
 nav.toc ul { list-style: none; padding-left: 0.5rem; margin: 0.25rem 0; }
 nav.toc a { color: var(--accent); text-decoration: none; }
 nav.toc a:hover { text-decoration: underline; }
-main { flex: 1; padding: 2rem 2.5rem; max-width: 1100px; min-width: 0; }
+main { flex: 1; padding: 2rem 2.5rem 2rem 3.5rem; min-width: 0; }
 header.page { margin-bottom: 2rem; }
 header.page h1 { margin: 0 0 0.25rem; }
 header.page .meta { color: var(--muted); font-size: 0.9rem; }
@@ -459,8 +467,8 @@ def _collect_figures(comparison_dir: Path) -> list[Path]:
 # レポート冒頭に置く分析パイプライン解説（README.ja.md の表と同期）。
 _PIPELINE_INTRO = """
 <details class="section" open id="sec-pipeline">
-<summary>分析パイプライン（10 段階）</summary>
-<p class="sec-desc">評価ノードが実機ログ抽出から HTML 集約まで順に実行する 10 段階パイプライン。
+<summary>分析パイプライン（12 段階）</summary>
+<p class="sec-desc">評価ノードが実機ログ抽出から HTML/notebook 集約まで順に実行する 12 段階パイプライン。
 本レポートは各 stage の成果物（図・Markdown）をカテゴリ別に束ねたもの。
 <a class="toplink" href="#top">↑ 先頭</a></p>
 <table>
@@ -477,6 +485,7 @@ _PIPELINE_INTRO = """
 <tr><td>9</td><td>縦パラ同定 (step9_identify_brake)</td><td>発進フィットで brake_time_constant を同定 (brake_sweep)</td></tr>
 <tr><td>10</td><td>カーブ乖離診断 (step10_diagnose_curve)</td><td>カーブ/発進区間の乖離を縦横・速度・yaw で診断 (curve_divergence.md)</td></tr>
 <tr><td>11</td><td>HTML レポート生成 (step11_build_html_report)</td><td>comparison/ 配下の全図スペック・Markdown・設定 YAML を 1 枚に束ねた単一レポート (report.html)</td></tr>
+<tr><td>12</td><td>notebook 生成 (step12_build_notebook)</td><td>各図を plotly で再描画 + 生 CSV からの再解析セルを備えた開発者向け notebook (report.ipynb)</td></tr>
 </tbody>
 </table>
 </details>
@@ -606,7 +615,7 @@ def build_html(
     # --- 目次 ---（sticky）
     toc: list[str] = ["<nav class='toc'><h2>目次</h2>"]
     toc.append("<a class='toc-top' href='#top'>↑ 先頭へ</a><ul>")
-    toc.append("<li class='toc-sec'><a href='#sec-pipeline'>分析パイプライン（10 段階）</a></li>")
+    toc.append("<li class='toc-sec'><a href='#sec-pipeline'>分析パイプライン（12 段階）</a></li>")
     for cat in active_cats:
         toc.append(f"<li class='toc-sec'><a href='#sec-{cat}'>{html.escape(_CATEGORY_TITLES[cat])}</a></li>")
         for anchor, mtitle, _ in md_by_cat.get(cat, []):
@@ -660,6 +669,8 @@ def build_html(
 {plotly_js_script()}
 </head>
 <body>
+<input type="checkbox" id="toc-toggle" class="toc-toggle">
+<label for="toc-toggle" class="toc-btn" title="目次の表示/非表示">☰ 目次</label>
 <div class="layout">
 {''.join(toc)}
 <main>
