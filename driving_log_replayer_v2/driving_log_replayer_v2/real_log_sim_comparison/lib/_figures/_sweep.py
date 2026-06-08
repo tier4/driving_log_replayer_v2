@@ -76,15 +76,16 @@ def build_fig_pair_sweep(
         colorbar=dict(title=f"{metric_label} [{metric_unit}] @ N={h_max}"),
         hovertemplate=f"{name_a}=%{{x}}<br>{name_b}=%{{y}}<br>%{{z:.4f}}<extra></extra>",
     ))
-    # セル数値注釈（背景濃淡で文字色切替）。plain go.Figure では add_annotation の xref/yref が
-    # 既定 paper になりカテゴリ軸上で位置・サイズが崩れるため、明示的に軸参照 (x/y) を指定する。
+    # セル数値注釈（背景濃淡で文字色切替）。カテゴリ軸ラベルが数値風文字列（"0","0.85"等）だと
+    # annotation の x="0.85" が plotly に数値 0.85 と解釈され index に誤マップして全セルが
+    # 1 箇所に collapse する。そのため**カテゴリの整数 index (j, i)** で位置指定する（数値=index）。
     finite = mat[np.isfinite(mat)]
     thresh = (finite.min() + (finite.max() - finite.min()) * 0.6) if finite.size else 0.0
-    for i, yl in enumerate(ylabels):
-        for j, xl in enumerate(xlabels):
+    for i in range(len(ylabels)):
+        for j in range(len(xlabels)):
             if np.isfinite(mat[i, j]):
                 fig.add_annotation(
-                    x=xl, y=yl, text=f"{mat[i, j]:.3f}", showarrow=False,
+                    x=j, y=i, text=f"{mat[i, j]:.3f}", showarrow=False,
                     xref="x", yref="y", xanchor="center", yanchor="middle",
                     font=dict(size=10, color="white" if mat[i, j] > thresh else "black"),
                 )
