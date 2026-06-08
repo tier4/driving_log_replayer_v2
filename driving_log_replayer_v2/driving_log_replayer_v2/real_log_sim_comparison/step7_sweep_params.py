@@ -654,6 +654,43 @@ def _ev_acc_tc(ev, ident, base_value) -> dict:
     return {**spec, "value": tc_fit, "desc": "1次遅れ勾配 fit (Δacc vs da/dt; 散布大のため参考値)"}
 
 
+def _ev_acc_tc_corr(ev, ident, base_value) -> dict:
+    """acc_tc 第2根拠: 相関係数解析（_ev_steer_tc_corr の加速度版。1次遅れフィルタ tc を走査）。"""
+    t, u, y = ev["t"], ev["accel_des"], ev["ax"]
+    dt = float(np.median(np.diff(t)))
+    delay_spec = float(ev["params"].get("acc_time_delay", 0.0))
+    k = int(round(delay_spec / dt))
+    u_d = np.concatenate([np.full(k, u[0]), u[: len(u) - k]]) if k > 0 else u
+
+    def _highpass(x: np.ndarray, win_s: float = 1.0) -> np.ndarray:
+        w = max(3, int(win_s / dt))
+        return x - pd.Series(x).rolling(w, center=True, min_periods=1).mean().to_numpy()
+
+    y_hp = _highpass(y)
+    tcs = np.geomspace(0.02, 1.5, 30)
+    corrs = np.asarray([
+        float(np.corrcoef(_highpass(_first_order_filter(u_d, t, float(tc))), y_hp)[0, 1])
+        for tc in tcs
+    ])
+    tc_best = float(tcs[int(np.nanargmax(corrs))])
+    vlines = [(tc_best, "black", "solid", f"相関最大 tc≈{tc_best:.3f}s"),
+              (_ident_value(ident), "red", "dash", f"sweep 同定≈{_ident_value(ident):.3f}s")]
+    if base_value is not None:
+        vlines.append((base_value, "gray", "dot", f"仕様値 {base_value:.3f}s"))
+    spec = {
+        "title": _etitle(
+            "実機ログ根拠: 相関係数解析 (1次遅れフィルタ tc を走査)\n"
+            "sweep 同定との乖離 = tc が加速以外の遅れを代理吸収している示唆",
+            "実測: localization/acceleration  指令: control_cmd (むだ時間=仕様値で遅延、移動平均1.0s除去済み)"),
+        "xlabel": "tc 候補 [s] (log)", "ylabel": "corr( 1次遅れフィルタ済み指令, 実測 ) [HP 1.0s]",
+        "log_x": True,
+        "traces": [go.Scatter(x=tcs, y=corrs, mode="lines+markers", showlegend=False,
+                              line=dict(color="#4472C4"), marker=dict(size=4))],
+        "vlines": vlines,
+    }
+    return {**spec, "value": tc_best, "desc": "相関係数解析 (1次遅れフィルタ tc 走査の相関最大)"}
+
+
 def _ev_acc_delay(ev, ident, base_value) -> dict:
     marks = [(_ident_value(ident), "red", "--", f"sweep 同定≈{_ident_value(ident):.3f}s")]
     if base_value is not None:
@@ -686,7 +723,7 @@ _EVIDENCE_PLOTS: dict[str, list] = {
     "steer_time_delay": [_ev_steer_delay],
     "steer_bias": [_ev_steer_bias],
     "steer_dead_band": [_ev_steer_dead_band],
-    "acc_time_constant": [_ev_acc_tc],
+    "acc_time_constant": [_ev_acc_tc, _ev_acc_tc_corr],
     "acc_time_delay": [_ev_acc_delay],
     "debug_acc_scaling_factor": [_ev_acc_scaling],
 }
