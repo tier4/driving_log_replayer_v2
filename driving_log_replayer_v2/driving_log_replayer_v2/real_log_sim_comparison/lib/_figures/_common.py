@@ -197,16 +197,3 @@ def speed_bin_masks(vx: np.ndarray):
     ]
 
 
-def downsample(*arrays: np.ndarray, max_points: int = 1500):
-    """同じ長さの配列群を等間隔間引きする（散布点の図スペック肥大を防ぐ）。
-
-    matplotlib 側の `rasterized=True`（点数を保ったままビットマップ化）の代替。
-    plotly では点数自体が JSON サイズに直結するため、上限を超えたら等間隔抽出する。
-    """
-    arrays = [np.asarray(a) for a in arrays]
-    n = len(arrays[0]) if arrays else 0
-    if n <= max_points:
-        return arrays if len(arrays) > 1 else arrays[0]
-    stride = int(np.ceil(n / max_points))
-    sliced = [a[::stride] for a in arrays]
-    return sliced if len(sliced) > 1 else sliced[0]

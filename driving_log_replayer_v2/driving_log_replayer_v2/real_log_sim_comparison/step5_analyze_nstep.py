@@ -73,12 +73,7 @@ from .lib._nstep_common import (
     rmse_by_horizon,
 )
 from .lib._params_utils import add_params_annotation, load_sim_params, setup_jp_font
-from .lib._plotly_utils import (
-    FIG_HEIGHTS,
-    add_params_annotation_plotly,
-    lanes_to_trace,
-    write_plotly_html,
-)
+from .lib._plotly_utils import FIG_HEIGHTS, add_params_annotation_plotly, lanes_to_trace
 from .lib._runtime_config import RuntimeConfig, add_common_cli_arguments, build_runtime_config
 
 setup_jp_font()

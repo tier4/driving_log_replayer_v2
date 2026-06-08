@@ -1,28 +1,19 @@
 """plotly インタラクティブ図の共通ユーティリティ.
 
-マップ上プロット（trajectory_with_map / map_distribution）を plotly のスタンドアロン
-HTML として出力するためのヘルパー群。これらは step11 が report.html に埋め込む際の中間生成物。
-plotly.js はバンドルフォルダ（`RuntimeConfig.base_dir` = report.html と同じ階層）に
-`plotly.min.js` を 1 つ同梱し、各中間 HTML から相対パスで参照する（CDN 不使用・オフライン動作維持。
-report.html では step11 がフラグメントを抽出し plotly.min.js の中身を 1 回だけ埋め込む）。
+図スペック (*.fig.json) を組む際に共有する高さ定義・地図レーン trace・パラメータ注釈。
+plotly.js のインラインは step11 が lib/_inline_assets.plotly_js_script で 1 回だけ行う
+（CDN 不使用・オフライン動作維持）。
 """
 
 from __future__ import annotations
-
-import os
-from pathlib import Path
 
 import numpy as np
 import plotly.graph_objects as go
 
 from ._params_utils import load_sim_params, make_annotation_text
 
-PLOTLYJS_NAME = "plotly.min.js"
-
-# インタラクティブ図 (*.html) の高さ [px] の単一ソース。生成側 (step4/step5 の
-# update_layout) と埋め込み側 (step11 の iframe 高さ = 高さ + IFRAME_PAD) の両方が
-# ここを参照する。新しい図を追加する際はここに stem → 高さを追記すること。
-# plotly 以外の自己完結 HTML 図 (trajectory_playback 等) も iframe 高さはここで決まる。
+# 図 (*.fig.json) の高さ [px] の単一ソース。build_fig_* (生成側) と step11 の iframe 高さ
+# (= 高さ + IFRAME_PAD; 自己完結 HTML ビューア用) の両方が参照する。
 FIG_HEIGHTS: dict[str, int] = {
     "trajectory_with_map": 800,
     "trajectory_xy": 800,
@@ -31,42 +22,6 @@ FIG_HEIGHTS: dict[str, int] = {
 }
 # iframe に追加する余白 [px]（plotly モードバー等のはみ出し分）
 IFRAME_PAD = 30
-
-
-def ensure_plotlyjs(archive_root: Path) -> Path:
-    """`archive_root` 直下に plotly.min.js を書き出す（既存なら何もしない）。
-
-    archive_root はバンドルフォルダ（report.html と同じ階層 = RuntimeConfig.base_dir）。
-    """
-    archive_root = Path(archive_root)
-    archive_root.mkdir(parents=True, exist_ok=True)
-    js_path = archive_root / PLOTLYJS_NAME
-    if not js_path.exists():
-        from plotly.offline import get_plotlyjs  # noqa: PLC0415
-
-        js_path.write_text(get_plotlyjs(), encoding="utf-8")
-        print(f"  保存: {js_path}")
-    return js_path
-
-
-def write_plotly_html(fig: go.Figure, out_path: Path, archive_root: Path) -> None:
-    """plotly Figure をスタンドアロン HTML として書き出す。
-
-    plotly.js は `archive_root/plotly.min.js` への相対パス <script> で参照する
-    （include_plotlyjs にパス文字列を渡す挙動は plotly のバージョン依存のため、
-    手動で <head> に注入する）。
-    """
-    out_path = Path(out_path)
-    out_path.parent.mkdir(parents=True, exist_ok=True)
-    js_path = ensure_plotlyjs(archive_root)
-    rel_js = os.path.relpath(js_path, out_path.parent)
-
-    html = fig.to_html(full_html=True, include_plotlyjs=False)
-    script_tag = f'<script src="{rel_js.replace(os.sep, "/")}"></script>'
-    assert "<head>" in html, "plotly to_html の出力に <head> がありません"
-    html = html.replace("<head>", f"<head>{script_tag}", 1)
-    out_path.write_text(html, encoding="utf-8")
-    print(f"  保存: {out_path.name}")
 
 
 def add_params_annotation_plotly(
