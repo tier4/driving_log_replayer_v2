@@ -32,6 +32,7 @@ from __future__ import annotations
 
 import argparse
 import html
+import json
 from pathlib import Path
 import re
 import warnings
@@ -97,6 +98,8 @@ _CURVE_SUFFIX_CAPTIONS: dict[str, str] = {
 # 生成側 (step4) と共有する lib._plotly_utils.FIG_HEIGHTS + IFRAME_PAD から導出する。
 _IFRAME_HEIGHTS: dict[str, int] = {stem: h + IFRAME_PAD for stem, h in FIG_HEIGHTS.items()}
 _IFRAME_HEIGHT_DEFAULT = 650
+# plotly 図 div の高さを fig.json の layout.height から確保する際の最終フォールバック [px]。
+_FIG_HEIGHT_DEFAULT = 600
 
 # 収集対象。plotly 図スペック (*.fig.json) と、自己完結 HTML ビューア (*.html)。
 _PLAYBACK_SUFFIX = ".html"
@@ -328,8 +331,15 @@ def _figure(rel: Path, comparison_dir: Path, caption: str | None = None) -> str:
     if _is_fig_json(rel):
         spec = (comparison_dir / rel).read_text(encoding="utf-8", errors="replace")
         fig_id = "fig-" + _slug(fname)
-        height = FIG_HEIGHTS.get(stem)
-        style = f" style='height:{height}px'" if height else ""
+        # プレースホルダ div に図の高さを**事前に確保**する。各 fig.json は build_fig_* が
+        # layout.height を持つ（plotly は autosize=true でコンテナ高に縮むため、div に高さが
+        # 無いと描画前後で潰れる/領域不足になる）。layout.height → FIG_HEIGHTS → 既定の順。
+        try:
+            fig_h = json.loads(spec).get("layout", {}).get("height")
+        except (ValueError, AttributeError):
+            fig_h = None
+        height = int(fig_h or FIG_HEIGHTS.get(stem) or _FIG_HEIGHT_DEFAULT)
+        style = f" style='height:{height}px'"
         # 図スペック JSON は <script type='application/json'> にそのまま入れる（実行されない）。
         # </script> 直書きの早期終了だけ無害化する。
         spec_safe = spec.replace("</", "<\\/")
