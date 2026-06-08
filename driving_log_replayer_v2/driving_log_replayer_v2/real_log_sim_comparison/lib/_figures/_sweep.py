@@ -76,13 +76,18 @@ def build_fig_pair_sweep(
         colorbar=dict(title=f"{metric_label} [{metric_unit}] @ N={h_max}"),
         hovertemplate=f"{name_a}=%{{x}}<br>{name_b}=%{{y}}<br>%{{z:.4f}}<extra></extra>",
     ))
+    # セル数値注釈（背景濃淡で文字色切替）。plain go.Figure では add_annotation の xref/yref が
+    # 既定 paper になりカテゴリ軸上で位置・サイズが崩れるため、明示的に軸参照 (x/y) を指定する。
     finite = mat[np.isfinite(mat)]
     thresh = (finite.min() + (finite.max() - finite.min()) * 0.6) if finite.size else 0.0
     for i, yl in enumerate(ylabels):
         for j, xl in enumerate(xlabels):
             if np.isfinite(mat[i, j]):
-                fig.add_annotation(x=xl, y=yl, text=f"{mat[i, j]:.3f}", showarrow=False,
-                                   font=dict(size=8, color="white" if mat[i, j] > thresh else "black"))
+                fig.add_annotation(
+                    x=xl, y=yl, text=f"{mat[i, j]:.3f}", showarrow=False,
+                    xref="x", yref="y", xanchor="center", yanchor="middle",
+                    font=dict(size=10, color="white" if mat[i, j] > thresh else "black"),
+                )
     mi, mj = min_ij
     fig.add_trace(go.Scatter(
         x=[xlabels[mj]], y=[ylabels[mi]], mode="markers",

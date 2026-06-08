@@ -136,7 +136,8 @@ def build_fig_rmse_heatmap(
             colorbar=dict(title=unit, x=(0.46 if c == 1 else 1.02), len=0.9),
             hovertemplate="%{y} / %{x}<br>%{z:.3f} " + unit + "<extra></extra>",
         ), row=1, col=c)
-        # セル注釈（背景の濃淡で文字色を切替）
+        # セル注釈（背景の濃淡で文字色を切替）。make_subplots の row/col 指定で軸参照が
+        # 正しく解決される（plain go.Figure だと xref/yref が paper になり位置が崩れる）。
         thresh = mat.min() + (mat.max() - mat.min()) * 0.6
         for i, tag in enumerate(tags):
             for j, xl in enumerate(xlabels):
