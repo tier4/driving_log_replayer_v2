@@ -7,14 +7,18 @@
 
 from __future__ import annotations
 
+import math
+
 import numpy as np
 import plotly.graph_objects as go
 
 from ._common import apply_base_layout, make_grid
 
 
-def build_fig_sweep(panels: list[dict], *, title: str, params: dict | None = None) -> go.Figure:
-    """個別パラメータ sweep 図（横 N 列）。旧 plot_sweep。
+def build_fig_sweep(
+    panels: list[dict], *, title: str, params: dict | None = None, ncols: int = 2
+) -> go.Figure:
+    """個別パラメータ sweep 図（2 列グリッドに折り返し）。旧 plot_sweep。
 
     各パネルは panel-spec dict で記述する（描画ロジックと計算を分離）::
 
@@ -27,30 +31,40 @@ def build_fig_sweep(panels: list[dict], *, title: str, params: dict | None = Non
           "log_x": bool,
         }
 
-    左から [同定メトリクス, 副メトリクス..., 実機根拠パネル...] の順。
+    パネル順は [同定メトリクス, 副メトリクス..., 実機根拠パネル...]。横 1 列に並べると各パネルが
+    狭すぎるため、`ncols` 列で折り返して各パネル幅を確保する。
     """
     from ._common import add_params_annotation_plotly  # noqa: PLC0415
 
     n = len(panels)
-    fig = make_grid(1, n, subplot_titles=[p.get("title", "") for p in panels],
-                    horizontal_spacing=min(0.06, 0.9 / max(1, n)))
-    for i, p in enumerate(panels, start=1):
+    ncols = max(1, min(ncols, n))
+    rows = math.ceil(n / ncols)
+    titles = [p.get("title", "") for p in panels] + [""] * (rows * ncols - n)
+    fig = make_grid(rows, ncols, subplot_titles=titles,
+                    vertical_spacing=min(0.12, 0.5 / rows), horizontal_spacing=0.09)
+    for idx, p in enumerate(panels):
+        r, c = idx // ncols + 1, idx % ncols + 1
         for tr in p.get("traces", []):
-            fig.add_trace(tr, row=1, col=i)
+            fig.add_trace(tr, row=r, col=c)
         for x, color, dash, label in p.get("vlines", []):
             # 注釈はパネル下部に小さく置く（既定の上端だとサブプロットタイトルや凡例と重なる）。
             fig.add_vline(x=x, line=dict(color=color, width=1.2, dash=dash),
                           annotation_text=label, annotation_font_size=8,
-                          annotation_position="bottom right", row=1, col=i)
+                          annotation_position="bottom right", row=r, col=c)
         for y, color in p.get("hlines", []):
-            fig.add_hline(y=y, line=dict(color=color, width=0.6), row=1, col=i)
+            fig.add_hline(y=y, line=dict(color=color, width=0.6), row=r, col=c)
         for x0, x1, color in p.get("vrects", []):
-            fig.add_vrect(x0=x0, x1=x1, fillcolor=color, opacity=0.12, line_width=0, row=1, col=i)
+            fig.add_vrect(x0=x0, x1=x1, fillcolor=color, opacity=0.12, line_width=0, row=r, col=c)
         fig.update_xaxes(title_text=p.get("xlabel", ""),
-                         type="log" if p.get("log_x") else "linear", row=1, col=i)
-        fig.update_yaxes(title_text=p.get("ylabel", ""), row=1, col=i)
+                         type="log" if p.get("log_x") else "linear", row=r, col=c)
+        fig.update_yaxes(title_text=p.get("ylabel", ""), row=r, col=c)
+    # 余ったセル（n が ncols で割り切れない場合）は軸を隠す
+    for idx in range(n, rows * ncols):
+        r, c = idx // ncols + 1, idx % ncols + 1
+        fig.update_xaxes(visible=False, row=r, col=c)
+        fig.update_yaxes(visible=False, row=r, col=c)
     add_params_annotation_plotly(fig, params)
-    return apply_base_layout(fig, title=title, height=520)
+    return apply_base_layout(fig, title=title, height=380 * rows + 80)
 
 
 def build_fig_pair_sweep(
