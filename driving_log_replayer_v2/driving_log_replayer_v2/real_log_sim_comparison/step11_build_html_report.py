@@ -51,6 +51,7 @@ CAPTIONS: dict[str, str] = {
     "trajectory_with_map": "軌跡比較（地図背景付き・インタラクティブ）",
     "trajectory_xy": "軌跡比較（地図なし・インタラクティブ）",
     "trajectory_playback": "軌跡再生ビューア（時刻同期/位置同期シークバー・速度矢印・追従ズーム・DP計画軌跡）",
+    "lon_lat_model": "縦横独立モデル検証ビューア（実機：加速度/ステアの指令・観測と、1次遅れ+無駄時間モデルの前方積算を重ね描き。T/τ つまみ調整・地図進行併設）",
     "velocity": "速度時系列",
     "acceleration": "加速度時系列",
     "steering": "ステア角時系列",
@@ -107,7 +108,7 @@ _PLAYBACK_SUFFIX = ".html"
 # iframe srcdoc で埋め込む「自己完結 HTML ビューア」の stem 集合。canvas 独自 JS で
 # 外部参照を持たないものに限定する（plotly standalone HTML は plotly.min.js を相対参照
 # するため srcdoc 内で壊れる。それらは *.fig.json へ変換し本文に直接描画する）。
-_SELFCONTAINED_HTML: set[str] = {"trajectory_playback"}
+_SELFCONTAINED_HTML: set[str] = {"trajectory_playback", "lon_lat_model"}
 
 
 def _asset_stem(rel: Path) -> str:
@@ -219,7 +220,7 @@ def _classify(rel: Path) -> str:
 
     if stem.startswith("dp_"):
         return "dp"
-    if stem in {"departure_brake_tc_sensitivity", "real_cmd_acc_departure"}:
+    if stem in {"departure_brake_tc_sensitivity", "real_cmd_acc_departure", "lon_lat_model"}:
         return "real_analysis"
     if top in {"param_sweep", "brake_sweep"}:
         return "real_analysis"

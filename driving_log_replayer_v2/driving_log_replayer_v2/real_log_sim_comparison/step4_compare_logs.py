@@ -48,6 +48,8 @@ from .lib._figures import (
     build_fig_vs_distance,
 )
 from .lib._map import load_map_ways, resolve_map_osm
+from .lib._model_viewer import plot_model_viewer
+from .lib._params_utils import load_sim_params
 from .lib._playback_viewer import plot_trajectory_playback
 from .lib._provenance import format_provenance_line, read_provenance
 from .lib._runtime_config import (
@@ -1049,6 +1051,8 @@ def main() -> None:
     print("\n=== プロット生成中 ===")
     # 軌跡再生ビューア (時刻同期/位置同期シークバー付き自己完結 HTML)
     plot_trajectory_playback(loaded, map_ways, FIGS_DIR, title=SCENARIO_NAME)
+    # 縦横独立モデル検証ビューア (実機のみ・指令→モデル積算 vs 観測、T/τ つまみ調整)
+    plot_model_viewer(loaded, map_ways, FIGS_DIR, load_sim_params(), title=SCENARIO_NAME)
     plot_velocity(loaded)
     plot_acceleration(loaded)
     plot_steering(loaded)
