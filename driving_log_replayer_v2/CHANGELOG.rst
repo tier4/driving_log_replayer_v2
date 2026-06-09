@@ -2,8 +2,8 @@
 Changelog for package driving_log_replayer
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-Forthcoming
------------
+3.18.3 (2026-06-09)
+-------------------
 * feat(perception, perception_fp): add saved topic (`#369 <https://github.com/tier4/driving_log_replayer_v2/issues/369>`_)
   * feat(perception, perception_fp): add saved topic
   * fix test
