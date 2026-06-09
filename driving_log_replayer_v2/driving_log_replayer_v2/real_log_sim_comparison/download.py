@@ -18,6 +18,7 @@ import json
 import shutil
 import subprocess
 import sys
+import tempfile
 import uuid as uuid_module
 from pathlib import Path
 
@@ -33,8 +34,16 @@ def run(cmd: list[str]) -> str:
         sys.exit(1)
     return result.stdout
 
+def describe_log_file(log_file_id: str) -> dict:
+    out = run([
+        "webauto", "data", "log-file", "describe",
+        "--project-id", PROJECT_ID,
+        "--log-file-id", log_file_id,
+        "--output", "json"
+    ])
+    return json.loads(out)
 
-def describe(environment_id: str, rosbag_id: str) -> dict:
+def describe_rosbag(environment_id: str, rosbag_id: str) -> dict:
     """webauto data describe で rosbag のメタ情報を取得する。"""
     out = run([
         "webauto", "data", "rosbag", "describe",
@@ -46,32 +55,39 @@ def describe(environment_id: str, rosbag_id: str) -> dict:
     return json.loads(out)
 
 
-def pull_rosbag(environment_id: str, rosbag_id: str, target_dir: Path) -> None:
+def pull_rosbag(rosbag_id: list[str], topic: list[str], target_dir: Path, start: str, end: str) -> None:
     """rosbag を target_dir に落とす。"""
-    run([
-        "webauto", "data", "rosbag", "pull",
+    command = [
+        "webauto", "data", "log-file", "pull-filtered-rosbag",
         "--project-id", PROJECT_ID,
-        "--environment-id", environment_id,
-        "--rosbag-id", rosbag_id,
+        "--log-file-ids", ','.join(rosbag_id),
         "--target-dir", str(target_dir),
-    ])
+        "--topics", ','.join(topic),
+    ]
+    if start is not None:
+        command += ["--slicing-start-timestamp", start]
+    if end is not None:
+        command += ["--slicing-end-timestamp", end]
+    run(command)
 
 
 def pull_map(area_map_id: str, area_map_version_id: str, asset_dir: Path) -> None:
     """地図を asset_dir に落とす。"""
-    run([
+    command = [
         "webauto", "map", "area-map", "pull",
         "--project-id", PROJECT_ID,
         "--area-map-id", area_map_id,
         "--area-map-version-id", area_map_version_id,
         "--asset-dir", str(asset_dir),
-    ])
+    ]
+    run(command)
 
 
-def _collect_bag(work_dir: Path, rosbag_id: str, input_bag_dir: Path) -> None:
+def _collect_bag(rosbag_dir: Path, input_bag_dir: Path) -> None:
     """rosbag ディレクトリを input_bag/ にコピーする。"""
-    src = work_dir / "rosbag" / rosbag_id
-    shutil.copytree(src, input_bag_dir, dirs_exist_ok=True)
+    for path in rosbag_dir.rglob("*"):
+        if path.is_file():
+            shutil.copy(path, input_bag_dir)
 
 
 def _collect_map(work_dir: Path, area_map_id: str, area_map_version_id: str, map_dir: Path) -> None:
@@ -82,8 +98,10 @@ def _collect_map(work_dir: Path, area_map_id: str, area_map_version_id: str, map
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--environment-id", required=True)
-    parser.add_argument("--rosbag-id", required=True)
+    parser.add_argument("--rosbag-id", nargs='+', required=True)
+    parser.add_argument("--topic", nargs='+', required=True)
+    parser.add_argument("--start")
+    parser.add_argument("--end")
     parser.add_argument("--work-dir", default="work", help="作業ディレクトリ (default: work)")
     args = parser.parse_args()
 
@@ -91,19 +109,20 @@ def main() -> None:
 
     # Step 1: メタ情報を取得して地図 ID を抜き出す
     print("[INFO] Fetching metadata...")
-    meta = describe(args.environment_id, args.rosbag_id)
+    environment_id = describe_log_file(args.rosbag_id[0])["environment_id"]
+    meta = describe_rosbag(environment_id, args.rosbag_id[0])
 
     area_map_id = str(meta["area_map"]["area_map_id"])
     area_map_version_id = str(meta["area_map"]["area_map_version_id"])
 
-    print(f"  environment_id     : {args.environment_id}")
     print(f"  rosbag_id          : {args.rosbag_id}")
     print(f"  area_map_id        : {area_map_id}")
     print(f"  area_map_version_id: {area_map_version_id}")
 
     # Step 2: rosbag を作業ディレクトリに落とす
     print("[INFO] Pulling rosbag...")
-    pull_rosbag(args.environment_id, args.rosbag_id, work_dir / "rosbag")
+    rosbag_dir = Path(tempfile.mkdtemp(prefix="filtered_", dir=work_dir / "rosbag"))
+    pull_rosbag(args.rosbag_id, args.topic, rosbag_dir, args.start, args.end)
 
     # Step 3: 地図を作業ディレクトリに落とす
     print("[INFO] Pulling map...")
@@ -118,7 +137,7 @@ def main() -> None:
     map_dir.mkdir(parents=True, exist_ok=True)
 
     print("[INFO] Building dataset structure...")
-    _collect_bag(work_dir, args.rosbag_id, input_bag_dir)
+    _collect_bag(rosbag_dir, input_bag_dir)
     _collect_map(work_dir, area_map_id, area_map_version_id, map_dir)
 
     dataset_root = (work_dir / "dataset").resolve()
