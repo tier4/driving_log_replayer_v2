@@ -5,9 +5,11 @@
 十分かを対話的に検証する自己完結 HTML (canvas + インライン JS、plotly 非依存・オフライン動作)。
 
 検証する運動方程式（起点 t0 = シーク時刻から前方積算）:
-  縦  : a' = -(a - a_cmd(t-T)) / tau(v)  ,  v' = a
+  縦  : a' = -(a - a_target) / tau(v)  ,  a_target = a_cmd(t-T) + poly(v)  ,  v' = a
         加減速で特性が異なるため throttle(a_cmd>=0) と brake(a_cmd<0) で T・tau を分離。
         速度帯依存も tau(v) = tau0 + slope*v (v は観測 lon_vel) で表現。
+        定常オフセット (転がり抵抗・勾配・空気抵抗) を多項式 poly(v)=p0+p1*v+p2*v^2 で補正
+        (各次 ON/OFF 切替・有効項のみ最小二乗最適化対象)。
   横  : delta' = -(delta - delta_cmd(t-T_d)) / tau_d        (delta は rad で積分)
         omega = v*tan(delta + beta) / (L + k_us*v^2) ,  theta' = omega
         x' = v*cos(theta) , y' = v*sin(theta) ,  a_y = v*omega
@@ -86,6 +88,9 @@ def plot_model_viewer(
         "tau_acc_brk": float(sim_params.get("brake_time_constant", sim_params["acc_time_constant"])),
         "t_acc_brk": float(sim_params.get("brake_delay", sim_params["acc_time_delay"])),
         "tau_acc_slope": 0.0,
+        "poly0": 0.0,  # 縦 定常補正 多項式係数 (0/1/2 次, 既定 OFF・0)。a_target に加算。
+        "poly1": 0.0,
+        "poly2": 0.0,
         "tau_steer": float(sim_params["steer_time_constant"]),
         "t_steer": float(sim_params["steer_time_delay"]),
         "steer_bias": float(sim_params.get("steer_bias", 0.0)),
@@ -192,6 +197,10 @@ _HTML_TEMPLATE = r"""<!DOCTYPE html>
     <span class="kg">T <input type="range" id="k_t_acc_brk" min="0" max="0.5" step="0.005" value="0.07"><span class="kval" id="v_t_acc_brk"></span></span>
     <span class="kg">τ <input type="range" id="k_tau_acc_brk" min="0.02" max="1.5" step="0.005" value="0.15"><span class="kval" id="v_tau_acc_brk"></span></span>
     <span class="kg">τ速度傾き <input type="range" id="k_tau_slope" min="-0.05" max="0.05" step="0.001" value="0"><span class="kval" id="v_tau_slope"></span></span>
+    <span class="kg" style="margin-left:6px"><span class="ktitle">縦補正(多項式)</span></span>
+    <span class="kg"><label><input type="checkbox" id="on_poly0">p₀</label> <input type="range" id="k_poly0" min="-1" max="1" step="0.01" value="0" disabled><span class="kval" id="v_poly0"></span></span>
+    <span class="kg"><label><input type="checkbox" id="on_poly1">p₁·v</label> <input type="range" id="k_poly1" min="-0.1" max="0.1" step="0.001" value="0" disabled><span class="kval" id="v_poly1"></span></span>
+    <span class="kg"><label><input type="checkbox" id="on_poly2">p₂·v²</label> <input type="range" id="k_poly2" min="-0.01" max="0.01" step="0.0001" value="0" disabled><span class="kval" id="v_poly2"></span></span>
     <span class="kg" style="margin-left:6px"><span class="ktitle">横(ステア)</span></span>
     <span class="kg">T <input type="range" id="k_t_steer" min="0" max="0.5" step="0.005" value="0.03"><span class="kval" id="v_t_steer"></span></span>
     <span class="kg">τ <input type="range" id="k_tau_steer" min="0.02" max="1.5" step="0.005" value="0.50"><span class="kval" id="v_tau_steer"></span></span>
@@ -251,10 +260,20 @@ const DATA = __PAYLOAD_JSON__;
     tau_acc_thr: DATA.model_seed.tau_acc_thr, t_acc_thr: DATA.model_seed.t_acc_thr,
     tau_acc_brk: DATA.model_seed.tau_acc_brk, t_acc_brk: DATA.model_seed.t_acc_brk,
     tau_acc_slope: DATA.model_seed.tau_acc_slope,
+    poly0: DATA.model_seed.poly0, poly1: DATA.model_seed.poly1, poly2: DATA.model_seed.poly2,
+    polyOn0: false, polyOn1: false, polyOn2: false, // 多項式補正の各次 ON/OFF (既定 OFF)
     tau_steer: DATA.model_seed.tau_steer, t_steer: DATA.model_seed.t_steer,
     k_us: DATA.model_seed.k_us,
     steer_bias: DATA.model_seed.steer_bias * RAD2DEG, // rad→deg (β つまみは度表示)
   };
+  // 縦 定常補正 多項式 poly(v)=p0+p1·v+p2·v²（有効な次のみ加算）。a_target に足す。
+  function polyAccel(v) {
+    let p = 0;
+    if (model.polyOn0) p += model.poly0;
+    if (model.polyOn1) p += model.poly1 * v;
+    if (model.polyOn2) p += model.poly2 * v * v;
+    return p;
+  }
 
   // ------------------------------------------------------------------ DOM
   const $ = (id) => document.getElementById(id);
@@ -359,7 +378,7 @@ const DATA = __PAYLOAD_JSON__;
         lastDrive = u;
         const tau0 = throttle ? tauThr : tauBrk;
         const tauA = Math.max(tau0 + tauSlope * vv, 0.02); // tau(v), 下限 0.02s
-        a += h * (-(a - u) / tauA);
+        a += h * (-(a - (u + polyAccel(vv))) / tauA); // a_target = a_cmd + poly(v)
         v += h * a;
         // ステア(rad)
         const ud = chanAt("cmd_steer", tt - Td); if (ud != null) lastUd = ud;
@@ -451,14 +470,35 @@ const DATA = __PAYLOAD_JSON__;
   setupKnob("k_tau_steer", "v_tau_steer", "tau_steer", fmtS);
   setupKnob("k_kus", "v_kus", "k_us", fmtKus);
   setupKnob("k_bias", "v_bias", "steer_bias", fmtDeg);
+  setupKnob("k_poly0", "v_poly0", "poly0", (v) => v.toFixed(3));
+  setupKnob("k_poly1", "v_poly1", "poly1", (v) => v.toFixed(4));
+  setupKnob("k_poly2", "v_poly2", "poly2", (v) => v.toFixed(5));
+
+  // 多項式補正の各次 ON/OFF。OFF 時は係数を model から除外（=0扱い）し最適化対象からも外す。
+  function setupPolyToggle(cbId, sliderId, onKey) {
+    const cb = $(cbId), sl = $(sliderId);
+    cb.addEventListener("change", () => {
+      model[onKey] = cb.checked;
+      sl.disabled = !cb.checked;
+      updateEquations(); markDirty();
+    });
+  }
+  setupPolyToggle("on_poly0", "k_poly0", "polyOn0");
+  setupPolyToggle("on_poly1", "k_poly1", "polyOn1");
+  setupPolyToggle("on_poly2", "k_poly2", "polyOn2");
 
   // 運動方程式オーバーレイ（#1 deliverable）。つまみ/トグル変更でライブ更新。
   function updateEquations() {
     const m = model;
     const srcLabel = steerSource === "sim" ? "シミュレーション δ" : "観測 δ";
+    let poly = "";
+    if (m.polyOn0) poly += " + " + m.poly0.toFixed(3);
+    if (m.polyOn1) poly += " + " + m.poly1.toFixed(4) + "·v";
+    if (m.polyOn2) poly += " + " + m.poly2.toFixed(5) + "·v²";
     $("eqpanel").innerHTML =
       "<b>運動方程式</b>（起点=シーク時刻から前方積算）<br>" +
-      "縦&nbsp; ȧ = −(a − a_cmd(t−T))/τ(v) ,&nbsp; v̇ = a&nbsp; <span class='note'>[throttle/brake で T・τ 分離, τ(v)=τ₀+slope·v]</span><br>" +
+      "縦&nbsp; ȧ = −(a − a_target)/τ(v) ,&nbsp; a_target = a_cmd(t−T)" + poly + " ,&nbsp; v̇ = a<br>" +
+      "&nbsp;&nbsp;&nbsp; <span class='note'>[throttle/brake で T・τ 分離, τ(v)=τ₀+slope·v, 多項式補正は ON の次のみ]</span><br>" +
       "横&nbsp; δ̇ = −(δ − δ_cmd(t−T_δ))/τ_δ<br>" +
       "&nbsp;&nbsp;&nbsp; ω = v·tan(δ+β)/(L + k_us·v²) ,&nbsp; θ̇ = ω<br>" +
       "&nbsp;&nbsp;&nbsp; ẋ = v·cosθ , ẏ = v·sinθ ,&nbsp; a_y = v·ω<br>" +
@@ -514,7 +554,7 @@ const DATA = __PAYLOAD_JSON__;
         lastDrive = u;
         const tau0 = throttle ? tauThr : tauBrk;
         const tau = Math.max(tau0 + slope * vv, 0.02);
-        a += h * (-(a - u) / tau);
+        a += h * (-(a - (u + polyAccel(vv))) / tau); // a_target = a_cmd + poly(v)
       }
       out[i + 1] = a;
     }
@@ -589,17 +629,24 @@ const DATA = __PAYLOAD_JSON__;
     updateEquations(); markDirty();
     return { before, after };
   }
-  const LON_KEYS = ["t_acc_thr", "tau_acc_thr", "t_acc_brk", "tau_acc_brk", "tau_acc_slope"];
+  // 縦の最適化キー: 基本(T/τ/slope) + 有効な多項式補正の各次のみ。
+  function lonKeys() {
+    const k = ["t_acc_thr", "tau_acc_thr", "t_acc_brk", "tau_acc_brk", "tau_acc_slope"];
+    if (model.polyOn0) k.push("poly0");
+    if (model.polyOn1) k.push("poly1");
+    if (model.polyOn2) k.push("poly2");
+    return k;
+  }
   const STEER_KEYS = ["t_steer", "tau_steer"];
   const BIKE_KEYS = ["k_us", "steer_bias"];
   const showOpt = (name, r, unit) => {
     $("optstatus").textContent = " " + name + " RMSE " + r.before.toFixed(3) + "→" + r.after.toFixed(3) + " " + unit;
   };
-  $("opt_lon").addEventListener("click", () => showOpt("縦a", optimizeSubset(LON_KEYS, residAccel), "m/s²"));
+  $("opt_lon").addEventListener("click", () => showOpt("縦a", optimizeSubset(lonKeys(), residAccel), "m/s²"));
   $("opt_steer").addEventListener("click", () => showOpt("横δ", optimizeSubset(STEER_KEYS, residSteer), "deg"));
   $("opt_bike").addEventListener("click", () => showOpt("ω", optimizeSubset(BIKE_KEYS, residBicycle), "rad/s"));
   $("opt_all").addEventListener("click", () => {
-    const a = optimizeSubset(LON_KEYS, residAccel);
+    const a = optimizeSubset(lonKeys(), residAccel);
     const s = optimizeSubset(STEER_KEYS, residSteer);
     const b = optimizeSubset(BIKE_KEYS, residBicycle);
     $("optstatus").textContent = " 縦a " + a.before.toFixed(3) + "→" + a.after.toFixed(3) +
