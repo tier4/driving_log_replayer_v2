@@ -120,6 +120,7 @@ def launch_evaluator_node(context: LaunchContext) -> list:
         "result_jsonl_path": conf["result_jsonl_path"],
         "result_archive_path": conf["result_archive_path"],
         "dataset_index": conf["dataset_index"],
+        "rosbag_path": conf["input_bag"],
     }
     launch_config = import_module(f"driving_log_replayer_v2.launch.{conf['use_case']}")
     params |= launch_config.NODE_PARAMS

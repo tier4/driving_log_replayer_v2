@@ -17,11 +17,14 @@ from importlib import import_module
 import json
 from pathlib import Path
 import subprocess
+import tempfile
 
 from launch import LaunchContext
 from launch.actions import DeclareLaunchArgument
 from launch.actions import LogInfo
 import yaml
+
+HUMBLE_ROSBAG2_METADATA_VERSION = 5
 
 
 def create_output_dir(output_dir_str: str, scenario_path: Path) -> Path:
@@ -274,6 +277,66 @@ def prepare_paths(conf: dict) -> tuple[Path, Path, Path]:
     return scenario_path, dataset_dir, output_dir
 
 
+def keep_rosbag_compatibility(input_bag: str) -> str:
+    """Keep compatibility of metadata.yaml between rosbag2 version humble and jazzy."""
+    # check rosbag format version by checking metadata.yaml
+    metadata_file = Path(input_bag) / "metadata.yaml"
+    with metadata_file.open("r") as f:
+        metadata = yaml.safe_load(f)
+    rosbag2_bagfile_information = metadata["rosbag2_bagfile_information"]
+
+    # create tmp directory
+    tmp_dir = Path(tempfile.mkdtemp(prefix="humble_bag_"))
+    tmp_metadata_file = tmp_dir / "metadata.yaml"
+    mcap_files = list(Path(input_bag).glob("*.mcap"))
+    db3_files = list(Path(input_bag).glob("*.db3"))
+    if mcap_files and db3_files:
+        err_msg = f"Both mcap and sqlite3 files exist in the rosbag directory: {input_bag}"
+        raise RuntimeError(err_msg)
+    for bag_path in mcap_files + db3_files:
+        tmp_bag_path = tmp_dir / bag_path.name
+        tmp_bag_path.symlink_to(bag_path.resolve())
+
+    # create metadata.yaml in tmp directory
+    mapping = {
+        "reliable": 1,
+        "best_effort": 2,
+        "transient_local": 1,
+        "volatile": 2,
+        "keep_last": 1,
+        "automatic": 1,
+    }
+
+    rosbag2_bagfile_information["version"] = HUMBLE_ROSBAG2_METADATA_VERSION
+    for topic_with_message_count in rosbag2_bagfile_information["topics_with_message_count"]:
+        topic_metadata = topic_with_message_count["topic_metadata"]
+
+        if isinstance(topic_metadata["offered_qos_profiles"], str):  # serialized as str in humble
+            offered_qos_profiles = yaml.safe_load(topic_metadata["offered_qos_profiles"])
+            if offered_qos_profiles is None:
+                continue
+            topic_metadata["offered_qos_profiles"] = offered_qos_profiles
+        for offered_qos_profiles in topic_metadata["offered_qos_profiles"]:
+            offered_qos_profiles["reliability"] = mapping.get(
+                offered_qos_profiles["reliability"], offered_qos_profiles["reliability"]
+            )
+            offered_qos_profiles["durability"] = mapping.get(
+                offered_qos_profiles["durability"], offered_qos_profiles["durability"]
+            )
+            offered_qos_profiles["history"] = mapping.get(
+                offered_qos_profiles["history"], offered_qos_profiles["history"]
+            )
+            offered_qos_profiles["liveliness"] = mapping.get(
+                offered_qos_profiles["liveliness"], offered_qos_profiles["liveliness"]
+            )
+        topic_metadata["offered_qos_profiles"] = yaml.safe_dump(
+            topic_metadata["offered_qos_profiles"], default_flow_style=False
+        ).strip()
+    with tmp_metadata_file.open("w") as f:
+        yaml.safe_dump(metadata, f, sort_keys=False)
+    return tmp_dir.as_posix()
+
+
 def ensure_arg_compatibility(context: LaunchContext) -> list:
     conf = context.launch_configurations
     is_valid = is_arg_valid(conf)
@@ -292,6 +355,9 @@ def ensure_arg_compatibility(context: LaunchContext) -> list:
         Path(conf["t4_dataset_path"]) if conf["t4_dataset_path"] != "" else dataset_dir.joinpath(k)
     )  # Do not update if t4_dataset_path is set by argument. If not, create t4_dataset_path from data_dir
     update_conf_with_dataset_info(conf, t4_dataset_path, yaml_obj, v, output_dir)
+
+    # TODO: remove this when DLR update jazzy and all rosbags are in jazzy format.
+    conf["input_bag"] = keep_rosbag_compatibility(conf["input_bag"])
 
     return [
         LogInfo(

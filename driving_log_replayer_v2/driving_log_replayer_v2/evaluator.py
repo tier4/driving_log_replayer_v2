@@ -57,6 +57,7 @@ class DLREvaluatorV2(Node):
         self.declare_parameter("result_jsonl_path", "")
         self.declare_parameter("result_archive_path", "")
         self.declare_parameter("dataset_index", "")
+        self.declare_parameter("rosbag_path", "")
 
         self._scenario_path = self.get_parameter("scenario_path").get_parameter_value().string_value
         self._t4_dataset_paths = [
@@ -71,6 +72,7 @@ class DLREvaluatorV2(Node):
         self._dataset_index = (
             self.get_parameter("dataset_index").get_parameter_value().integer_value
         )
+        self._rosbag_path = self.get_parameter("rosbag_path").get_parameter_value().string_value
         self._result_archive_path.mkdir(exist_ok=True)
         self._perception_eval_log_path = self._result_archive_path.parent.joinpath(
             "perception_eval_log",
