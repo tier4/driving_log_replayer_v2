@@ -16,7 +16,7 @@ FIG_HEIGHTS: dict[str, int] = {
     "trajectory_with_map": 800,
     "trajectory_xy": 800,
     "trajectory_playback": 1020,  # 地図ビュー + 下部同期時系列プロット (6 パネル ~252px)
-    "lon_lat_model": 920,  # 地図ビュー + 縦横モデル検証パネル (2 段 ~480px・縦軸大きめ) + つまみ
+    "lon_lat_model": 1080,  # 地図ビュー + 運動方程式 + 検証パネル5枚(2列3行 ~540px) + つまみ6個
     "map_distribution": 1000,  # 2 行 (N=1 / N=max) × 3 列
 }
 # iframe に追加する余白 [px]（plotly モードバー等のはみ出し分）
