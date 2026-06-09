@@ -1,5 +1,15 @@
 # Release Notes
 
+## Version 3.18.3
+
+Minor Tweak
+
+| Module                  | Feature | Brief summary                                | Pull request                                                        | Contributor                                   |
+| ----------------------- | ------- | -------------------------------------------- | ------------------------------------------------------------------- | --------------------------------------------- |
+| `perception`            | topic   | add saved topic                              | [#369](https://github.com/tier4/driving_log_replayer_v2/issues/369) | [MasatoSaeki](https://github.com/MasatoSaeki) |
+| `obstacle_segmentation` | rosbag  | use modified rosbag on obstacle segmentation | [#368](https://github.com/tier4/driving_log_replayer_v2/issues/368) | [MasatoSaeki](https://github.com/MasatoSaeki) |
+| `planning_control`      | topic   | record /map/vector_map topic                 | [#367](https://github.com/tier4/driving_log_replayer_v2/issues/367) | [go-sakayori](https://github.com/go-sakayori) |
+
 ## Version 3.18.2
 
 Minor Tweak

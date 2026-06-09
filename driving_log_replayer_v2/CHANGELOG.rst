@@ -2,6 +2,16 @@
 Changelog for package driving_log_replayer
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
+Forthcoming
+-----------
+* feat(perception, perception_fp): add saved topic (`#369 <https://github.com/tier4/driving_log_replayer_v2/issues/369>`_)
+  * feat(perception, perception_fp): add saved topic
+  * fix test
+  ---------
+* fix(obstacle_segmentation): use modified rosbag on obstacle segmentation (`#368 <https://github.com/tier4/driving_log_replayer_v2/issues/368>`_)
+* feat(planning_control): record /map/vector_map topic (`#367 <https://github.com/tier4/driving_log_replayer_v2/issues/367>`_)
+* Contributors: Go Sakayori, Masato Saeki
+
 3.18.2 (2026-06-02)
 -------------------
 * feat: support jazzy rosbag reindex by humble env (`#364 <https://github.com/tier4/driving_log_replayer_v2/issues/364>`_)
