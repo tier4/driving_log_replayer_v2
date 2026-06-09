@@ -356,6 +356,14 @@ class VehicleModel:
         return self._lib.vm_get_vx(self._ptr)
 
     @property
+    def ax(self) -> float:
+        """縦方向加速度 state_[5] [m/s²]。vm_get_ax は常時バインド (_load_lib)。
+
+        ideal_steer_acc は加速度状態を持たず指令をそのまま返す (1 次遅れ無し)。
+        """
+        return self._lib.vm_get_ax(self._ptr)
+
+    @property
     def wz(self) -> float:
         """yaw rate [rad/s]。ラッパーが vm_get_wz を export していなければ NaN。"""
         if not _HAS_WZ:
@@ -736,6 +744,14 @@ def run_rollout(
                 "err_wz": gt_wz[k_end] - sim_wz,  # yaw rate 予測誤差 [rad/s] (sim_wz は実機値と err から導出可)
                 "real_dwz": gt_dwz[k_end],
                 "sim_vx": model.vx,
+                # 終端の縦方向 GT との比較 (sweep 目的メトリクス用)。real_vx/real_ax は k0 値の
+                # ままにし意味を変えない。err_ax は加速度トピックが無いログ (gt_ax=zeros) では
+                # 無意味になるが、縦方向 sweep 対象データには /localization/acceleration がある前提。
+                "real_vx_kend": gt_vx[k_end],
+                "err_vx": gt_vx[k_end] - model.vx,  # 速度予測誤差 [m/s]
+                "real_ax_kend": gt_ax[k_end],
+                "sim_ax": model.ax,
+                "err_ax": gt_ax[k_end] - model.ax,  # 加速度予測誤差 [m/s²]
                 "real_ds_long": real_ds_long,
                 "real_ds_lat": real_ds_lat,
                 "sim_ds_long": sim_ds_long,

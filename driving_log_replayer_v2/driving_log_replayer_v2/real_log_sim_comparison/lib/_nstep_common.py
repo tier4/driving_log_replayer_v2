@@ -24,6 +24,10 @@ ERR_METRICS: list[tuple[str, float, str, str, str]] = [
      "実機: steering_status/tire_angle  モデル: state_[4]+steer_bias"),
     ("yaw_err_deg", 1.0, "yaw 誤差", "deg",
      "実機: kinematic_state/pose.orientation  モデル: rollout 終端 state_[2]"),
+    ("err_vx", 1.0, "速度予測誤差", "m/s",
+     "実機: velocity_status vx[k_end]  モデル: rollout 終端 state_[3]"),
+    ("err_ax", 1.0, "加速度予測誤差", "m/s²",
+     "実機: localization/acceleration ax[k_end]  モデル: rollout 終端 state_[5]"),
 ]
 
 # yaw/wz 誤差パネルに必ず添える seed バイアス注意 (step5 run_rollout docstring 参照)
@@ -55,6 +59,10 @@ def metrics_description_md() -> str:
         "  実機 kinematic_state/pose.orientation と rollout 終端 state_[2] の差。\n"
         "- **ステア予測誤差 (steer)** [deg]: 実機 steering_status/tire_angle と"
         " モデル state_[4]+steer_bias の差。\n"
+        "- **速度予測誤差 (vx)** [m/s]: 実機 velocity_status と rollout 終端 state_[3] の差。\n"
+        "  縦方向ダイナミクス (acc 時定数/むだ時間/スケーリング) の累積効果を保持し、終端評価でも弁別力が高い。\n"
+        "- **加速度予測誤差 (ax)** [m/s²]: 実機 localization/acceleration と rollout 終端 state_[5] の差。\n"
+        "  瞬時応答を直接反映するが信号が雑なため、縦方向同定では vx を主・ax を副に用いる。\n"
         "\n"
         f"> {YAW_SEED_NOTE}。\n"
     )
@@ -93,7 +101,9 @@ def parabolic_min(xs: list[float], ys: list[float]) -> float | None:
 def rmse_by_horizon(df: pd.DataFrame) -> dict[int, dict[str, float]]:
     """horizon 別の終端誤差 RMSE を返す。
 
-    {N: {"pos","long","lat" [cm], "yaw" [deg], "steer" [deg]}}
+    {N: {"pos","long","lat" [cm], "yaw" [deg], "steer" [deg], "vx" [m/s], "ax" [m/s²]}}
+
+    vx/ax 列が無い古い nstep_delta.csv との後方互換のため、列欠落時はそのキーを省く。
     """
 
     def _rms(v: np.ndarray) -> float:
@@ -102,11 +112,16 @@ def rmse_by_horizon(df: pd.DataFrame) -> dict[int, dict[str, float]]:
     out: dict[int, dict[str, float]] = {}
     for horizon in sorted(df["horizon"].unique()):
         sub = df[df["horizon"] == horizon]
-        out[int(horizon)] = {
+        rec = {
             "pos": _rms(sub["pos_err"].values) * 100.0,
             "long": _rms(sub["err_ds_long"].values) * 100.0,
             "lat": _rms(sub["err_ds_lat"].values) * 100.0,
             "yaw": _rms(sub["yaw_err_deg"].values),
             "steer": _rms(sub["err_steer"].values) * 180.0 / math.pi,
         }
+        if "err_vx" in sub.columns:
+            rec["vx"] = _rms(sub["err_vx"].values)  # [m/s]
+        if "err_ax" in sub.columns:
+            rec["ax"] = _rms(sub["err_ax"].values)  # [m/s²]
+        out[int(horizon)] = rec
     return out
