@@ -15,7 +15,7 @@ import plotly.graph_objects as go
 FIG_HEIGHTS: dict[str, int] = {
     "trajectory_with_map": 800,
     "trajectory_xy": 800,
-    "trajectory_playback": 760,
+    "trajectory_playback": 1020,  # 地図ビュー + 下部同期時系列プロット (6 パネル ~252px)
     "map_distribution": 1000,  # 2 行 (N=1 / N=max) × 3 列
 }
 # iframe に追加する余白 [px]（plotly モードバー等のはみ出し分）

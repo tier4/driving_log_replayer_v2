@@ -41,11 +41,47 @@ BASELINE_LABEL = "実機"
 # DP 計画軌跡の間引き設定 (HTML サイズ抑制)。フレームは最小間隔 [s]、点は stride 間引き。
 DP_FRAME_MIN_DT = 0.5
 DP_POINT_STRIDE = 3
+# 角速度(yaw rate)指令を自転車モデル wz=v·tanδ/L で導出する際の wheelbase [m]
+# (multi_dataset_tune.WHEELBASE と整合)。slip/k_us を無視する近似のため要注記。
+PLAYBACK_WHEELBASE_M = 4.76012
 
 
 def _round_list(arr: np.ndarray, ndigits: int) -> list[float]:
     """JSON サイズ削減のための一括丸め。"""
     return [round(float(v), ndigits) for v in arr]
+
+
+def _resample_channel(
+    df: pd.DataFrame | None, col: str, t_grid: np.ndarray, offset: float
+) -> tuple[np.ndarray, np.ndarray]:
+    """1 信号 (df[col]) を共有 t グリッドへ線形補間し、(値, 有効マスク) を返す。
+
+    `offset` (= run の発進時刻) を t から引いてから載せる (_resample_run と同基準)。
+    ソース時刻範囲の外側 (左右) は補間が端値ホールドになり実測でない区間なので、
+    マスク False とする (呼び出し側で JSON null にしてプロット線・ドットを止める)。
+    df が無い/空/列なしなら全点無効。
+    """
+    if df is None or df.empty or col not in df.columns or "t" not in df.columns:
+        return np.zeros_like(t_grid), np.zeros(t_grid.shape, dtype=bool)
+    t = df["t"].to_numpy(dtype=float) - offset
+    y = df[col].to_numpy(dtype=float)
+    finite = np.isfinite(t) & np.isfinite(y)
+    if finite.sum() < 1:
+        return np.zeros_like(t_grid), np.zeros(t_grid.shape, dtype=bool)
+    t, y = t[finite], y[finite]
+    vals = np.interp(t_grid, t, y)
+    valid = (t_grid >= t[0] - 1e-9) & (t_grid <= t[-1] + 1e-9)
+    return vals, valid
+
+
+def _channel_jsonlist(
+    vals: np.ndarray, valid: np.ndarray, ndigits: int
+) -> list[float | None]:
+    """(値, 有効マスク) を JSON 用リストへ。無効点・非有限は None (= JS の null)。"""
+    return [
+        round(float(v), ndigits) if (ok and np.isfinite(v)) else None
+        for v, ok in zip(vals, valid, strict=True)
+    ]
 
 
 def _resample_run(
@@ -86,6 +122,50 @@ def _resample_run(
         "s": _round_list(s, 2),
         "n_valid": n_valid,
         "s_total": round(float(s[n_valid - 1]), 2),
+    }
+
+
+def _build_channels(d: dict, t_grid: np.ndarray, offset: float) -> dict:
+    """1 run の同期プロット用信号群を共有 t グリッドへ載せる。
+
+    返すキー (各 list は t_grid と同長、無効点は None):
+      lon_vel / cmd_vel   縦速度・指令速度 [m/s]
+      vy                  横速度 [m/s] (twist.linear.y, base_link 系・実測)
+      accel / cmd_accel   縦加速度・指令 [m/s²]
+      ay                  横加速度 [m/s²] (accel.linear.y・実測)
+      steer / cmd_steer   ステア角・指令 [deg]
+      wz                  角速度 yaw rate [rad/s] (twist.angular.z・実測)
+      cmd_wz              角速度指令 [rad/s] = cmd_vel·tan(cmd_steer)/L (自転車近似)
+    """
+    vel, accel, steer, cmd, kin = (
+        d.get("velocity"), d.get("accel"), d.get("steering"), d.get("cmd"), d.get("kinematic"),
+    )
+
+    lon_vel = _resample_channel(vel, "lon_vel", t_grid, offset)
+    cmd_vel = _resample_channel(cmd, "cmd_vel", t_grid, offset)
+    vy = _resample_channel(kin, "vy", t_grid, offset)
+    acc = _resample_channel(accel, "accel", t_grid, offset)
+    cmd_acc = _resample_channel(cmd, "cmd_accel", t_grid, offset)
+    ay = _resample_channel(accel, "accel_y", t_grid, offset)
+    steer_rad = _resample_channel(steer, "steer", t_grid, offset)
+    cmd_steer_rad = _resample_channel(cmd, "cmd_steer", t_grid, offset)
+    wz = _resample_channel(kin, "wz", t_grid, offset)
+
+    # 角速度指令 (自転車近似): cmd_vel·tan(cmd_steer)/L。両信号が有効な点のみ。
+    cmd_wz_vals = cmd_vel[0] * np.tan(cmd_steer_rad[0]) / PLAYBACK_WHEELBASE_M
+    cmd_wz_valid = cmd_vel[1] & cmd_steer_rad[1]
+
+    return {
+        "lon_vel": _channel_jsonlist(*lon_vel, 2),
+        "cmd_vel": _channel_jsonlist(*cmd_vel, 2),
+        "vy": _channel_jsonlist(*vy, 3),
+        "accel": _channel_jsonlist(*acc, 3),
+        "cmd_accel": _channel_jsonlist(*cmd_acc, 3),
+        "ay": _channel_jsonlist(*ay, 3),
+        "steer": _channel_jsonlist(np.degrees(steer_rad[0]), steer_rad[1], 2),
+        "cmd_steer": _channel_jsonlist(np.degrees(cmd_steer_rad[0]), cmd_steer_rad[1], 2),
+        "wz": _channel_jsonlist(*wz, 4),
+        "cmd_wz": _channel_jsonlist(cmd_wz_vals, cmd_wz_valid, 4),
     }
 
 
@@ -163,6 +243,8 @@ def build_playback_payload(
         run["color"] = str(d["color"])
         run["is_baseline"] = label == BASELINE_LABEL
         run["dp"] = _compact_dp_frames(d.get("dp_traj") or [], offset)
+        # 同期時系列プロット用の信号群 (実測 + 指令)。t_grid 上・無効点は null。
+        run["ch"] = _build_channels(d, t_grid, offset)
         runs.append(run)
     if not any(r["is_baseline"] for r in runs):
         runs[0]["is_baseline"] = True
@@ -250,6 +332,10 @@ _HTML_TEMPLATE = r"""<!DOCTYPE html>
   button, select { font-size: 12px; }
   label { user-select: none; cursor: pointer; }
   #playbtn { min-width: 64px; }
+  /* 下部の再生同期時系列プロット領域（2枚重ね canvas: 静的線描画 + カーソル/ドット） */
+  #plots { flex: none; height: 252px; position: relative; border-top: 1px solid #ddd; background: #fff; }
+  #plots.hidden { display: none; }
+  #plots canvas { position: absolute; inset: 0; width: 100%; height: 100%; }
 </style>
 </head>
 <body>
@@ -278,6 +364,11 @@ _HTML_TEMPLATE = r"""<!DOCTYPE html>
     <span class="grp" id="dpgrp">
       <label><input type="checkbox" id="showdp" checked> DP計画軌跡（破線）</label>
     </span>
+    <span class="grp" id="plotgrp">
+      <label><input type="checkbox" id="showplots" checked> 下部時系列プロット</label>
+      時間幅 <input type="range" id="plotwin" min="2" max="60" value="10" style="width:80px">
+      <span id="plotwinval" style="font-family:monospace">10s</span>
+    </span>
   </div>
   <div id="seekrow">
     <input type="range" id="seek" min="0" max="10000" value="0">
@@ -287,6 +378,9 @@ _HTML_TEMPLATE = r"""<!DOCTYPE html>
   <div id="main">
     <div id="canvaswrap"><canvas id="cv"></canvas></div>
     <div id="legend"></div>
+  </div>
+  <div id="plots">
+    <canvas id="plotcv"></canvas>
   </div>
 </div>
 <script>
@@ -304,11 +398,29 @@ const DATA = __PAYLOAD_JSON__;
   runs.forEach((r) => { r.visible = true; });
   const hasDp = runs.some((r) => r.dp && r.dp.t.length > 0);
 
+  // 下部同期プロットのチャンネル定義（2 行 × 3 列）。meas=実測(run.ch のキー), cmd=指令キー(無ければ null)。
+  // approx を持つパネルは近似である旨の注記タグを見出しに描く（ユーザー要求: 近似には注記）。
+  const CHANNELS = [
+    { label: "縦速度", unit: "m/s", meas: "lon_vel", cmd: "cmd_vel", approx: null },
+    { label: "縦加速度", unit: "m/s²", meas: "accel", cmd: "cmd_accel", approx: null },
+    { label: "ステア角", unit: "deg", meas: "steer", cmd: "cmd_steer", approx: null },
+    { label: "横速度", unit: "m/s", meas: "vy", cmd: null, approx: null },
+    { label: "横加速度", unit: "m/s²", meas: "ay", cmd: null, approx: null },
+    { label: "角速度(yaw rate)", unit: "rad/s", meas: "wz", cmd: "cmd_wz",
+      approx: "指令≈自転車近似 v·tanδ/L" },
+  ];
+  const PLOT_COLS = 3;
+  const PLOT_ROWS = 2;
+  // 1 run でも ch を持っていればプロット可能。t グリッドが無い (N<2) なら不可。
+  const hasPlots = N >= 2 && runs.some((r) => r.ch);
+
   // ------------------------------------------------------------------ state
   let mode = "time";   // "time" | "pos"
   let playing = false;
   let speedMul = 1;
   let showDp = hasDp;  // DP 計画軌跡 (破線) の表示
+  let showPlots = hasPlots; // 下部同期時系列プロットの表示
+  let plotWindowS = 10; // 下部プロットの横軸(時間)表示幅 [s]。現在時刻中心のスライディング窓。
   let curT = 0;        // 時刻同期モードの現在時刻 [s]
   let curS = 0;        // 位置同期モードのベースライン走行距離 [m]
   const cam = { cx: 0, cy: 0, viewW: 100, targetViewW: 100, follow: true, init: false };
@@ -321,6 +433,9 @@ const DATA = __PAYLOAD_JSON__;
   const readoutEl = $("readout");
   const playBtn = $("playbtn");
   const hintEl = $("hint");
+  const plotsEl = $("plots");
+  const plotCv = $("plotcv");
+  const plotCtx = plotCv.getContext("2d");
   if (DATA.title) $("titlebox").textContent = DATA.title;
 
   // ------------------------------------------------------------ 補間ヘルパー
@@ -367,6 +482,19 @@ const DATA = __PAYLOAD_JSON__;
 
   const sample = (run) => (mode === "time" ? sampleAtT(run, curT) : sampleAtS(run, curS));
 
+  // チャンネル値を時刻 t [s] で線形補間。端点が null（実測範囲外）なら null を返す
+  // → プロット線は break、ドットは非表示。
+  function sampleChannel(run, key, t) {
+    const arr = run.ch && run.ch[key];
+    if (!arr) return null;
+    const fi = Math.min(Math.max(t * RATE, 0), N - 1);
+    const i = Math.floor(fi);
+    const j = Math.min(i + 1, N - 1);
+    const a = arr[i], b = arr[j];
+    if (a == null || b == null) return null;
+    return a + (b - a) * (fi - i);
+  }
+
   // ------------------------------------------------------------------- 凡例
   const legendEl = $("legend");
   const statEls = [];
@@ -378,7 +506,7 @@ const DATA = __PAYLOAD_JSON__;
     const cb = document.createElement("input");
     cb.type = "checkbox";
     cb.checked = true;
-    cb.addEventListener("change", () => { run.visible = cb.checked; markDirty(); });
+    cb.addEventListener("change", () => { run.visible = cb.checked; markPlotStatic(); markDirty(); });
     const sw = document.createElement("span");
     sw.className = "sw";
     sw.style.background = run.color;
@@ -411,7 +539,12 @@ const DATA = __PAYLOAD_JSON__;
     pos: "位置同期: 実機の走行距離 s を基準に、各 run を自軌跡で同じ距離を走った地点に表示（同一走行距離比較・経路長差を含むため厳密な横偏差ではない）。矢印 = その地点の速度、凡例の t でどの run が時間的に先行/遅延かが分かる。",
   };
   const DP_HINT = " 破線 = その時点で最後に発行された DP 計画軌跡。";
-  const setHint = () => { hintEl.textContent = HINTS[mode] + (hasDp ? DP_HINT : ""); };
+  const PLOT_HINT = " 下部プロット = 横軸は現在時刻中心の時間窓（既定 10s・スライダで調整）が再生に追従、" +
+    "実線=実測・破線=指令、ドット=各 run の現在位置（時刻同期は縦線同期、位置同期は run ごとに時刻がずれる）。" +
+    "「⚠」付きパネルは近似値。";
+  const setHint = () => {
+    hintEl.textContent = HINTS[mode] + (hasDp ? DP_HINT : "") + (hasPlots ? PLOT_HINT : "");
+  };
   function setMode(m) {
     if (m === mode) return;
     // モード間でシーク位置の連続性を保つ（ベースライン基準で変換）
@@ -652,14 +785,188 @@ const DATA = __PAYLOAD_JSON__;
     );
   }
 
+  // ------------------------------------------------- 下部同期プロット（canvas）
+  // 横軸は「現在時刻中心の plotWindowS 秒スライディング窓」で、再生に追従してスクロールする
+  // （全区間を 1 画面に詰めると潰れるため）。窓内のサンプルだけ描くので毎フレーム描画でも軽い。
+  // y レンジ・パネル矩形はデータ/表示 run/サイズ依存で「構造変化時のみ」再計算しキャッシュする。
+  let plotGeom = []; // [{ox,oy,cellW,cellH,px0,py0,plotW,plotH,ch,ymin,ymax,Y}]
+
+  // 横軸スライディング窓 [t0,t1] を現在時刻基準で算出（端では幅を保ったままクランプ）。
+  function plotWindow() {
+    const refT = (mode === "time") ? curT : sampleAtS(baseline, curS).t;
+    const W = (T_MAX > 0) ? Math.min(plotWindowS, T_MAX) : plotWindowS;
+    let t0 = refT - W / 2, t1 = refT + W / 2;
+    if (t0 < 0) { t1 -= t0; t0 = 0; }
+    if (t1 > T_MAX) { t0 = Math.max(0, t0 - (t1 - T_MAX)); t1 = T_MAX; }
+    if (t1 - t0 < 1e-6) t1 = t0 + 1e-6;
+    return [t0, t1];
+  }
+
+  // パネル矩形 + y オートスケール（表示 run の 実測+指令 全域）をキャッシュ。構造変化時のみ。
+  function computePlotGeom() {
+    plotGeom = [];
+    if (!hasPlots || !showPlots) return;
+    const w = plotsEl.clientWidth, h = plotsEl.clientHeight;
+    if (w === 0 || h === 0) return;
+    const dpr = window.devicePixelRatio || 1;
+    const pw = Math.round(w * dpr), ph = Math.round(h * dpr);
+    if (plotCv.width !== pw || plotCv.height !== ph) { plotCv.width = pw; plotCv.height = ph; }
+    const outpad = 6, gapX = 8, gapY = 8;
+    const padL = 40, padR = 8, padT = 20, padB = 16; // パネル内マージン
+    const cellW = (w - outpad * 2 - gapX * (PLOT_COLS - 1)) / PLOT_COLS;
+    const cellH = (h - outpad * 2 - gapY * (PLOT_ROWS - 1)) / PLOT_ROWS;
+    CHANNELS.forEach((ch, ci) => {
+      const col = ci % PLOT_COLS, rowi = Math.floor(ci / PLOT_COLS);
+      const ox = outpad + col * (cellW + gapX);
+      const oy = outpad + rowi * (cellH + gapY);
+      const px0 = ox + padL, py0 = oy + padT;
+      const plotW = cellW - padL - padR, plotH = cellH - padT - padB;
+      let ymin = Infinity, ymax = -Infinity;
+      for (const run of runs) {
+        if (!run.visible || !run.ch) continue;
+        for (const key of [ch.meas, ch.cmd]) {
+          const arr = key && run.ch[key];
+          if (!arr) continue;
+          for (let i = 0; i < arr.length; i++) {
+            const v = arr[i];
+            if (v != null) { if (v < ymin) ymin = v; if (v > ymax) ymax = v; }
+          }
+        }
+      }
+      if (!isFinite(ymin) || !isFinite(ymax)) { ymin = -1; ymax = 1; }
+      if (ymax - ymin < 1e-6) { const c = (ymin + ymax) / 2; ymin = c - 1; ymax = c + 1; }
+      const m = (ymax - ymin) * 0.08; ymin -= m; ymax += m;
+      const Y = (v) => py0 + (1 - (v - ymin) / (ymax - ymin)) * plotH;
+      plotGeom.push({ ox, oy, cellW, cellH, px0, py0, plotW, plotH, ch, ymin, ymax, Y });
+    });
+  }
+
+  // 毎フレーム描画: 現在の窓 [t0,t1] に合わせて軸・線(窓内)・カーソル・ドットを描く。
+  function drawPlots() {
+    if (!hasPlots || !showPlots) return;
+    const w = plotsEl.clientWidth, h = plotsEl.clientHeight;
+    if (w === 0 || h === 0 || !plotGeom.length) return;
+    const dpr = window.devicePixelRatio || 1;
+    const ctx = plotCtx;
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.clearRect(0, 0, w, h);
+
+    const [t0, t1] = plotWindow();
+    const iLo = Math.max(0, Math.floor(t0 * RATE) - 1);
+    const iHi = Math.min(N - 1, Math.ceil(t1 * RATE) + 1);
+    const states = runs.map((r) => (r.visible ? sample(r) : null));
+
+    for (const g of plotGeom) {
+      const X = (t) => g.px0 + (t - t0) / (t1 - t0) * g.plotW;
+
+      // 枠・ゼロ線
+      ctx.strokeStyle = "#ddd"; ctx.lineWidth = 1;
+      ctx.strokeRect(g.px0, g.py0, g.plotW, g.plotH);
+      if (g.ymin < 0 && g.ymax > 0) {
+        ctx.strokeStyle = "#eee"; ctx.beginPath();
+        ctx.moveTo(g.px0, g.Y(0)); ctx.lineTo(g.px0 + g.plotW, g.Y(0)); ctx.stroke();
+      }
+      // y 目盛
+      ctx.fillStyle = "#999"; ctx.font = "9px monospace";
+      ctx.textAlign = "right"; ctx.textBaseline = "middle";
+      const yt = (g.ymin < 0 && g.ymax > 0) ? [g.ymin, 0, g.ymax]
+                                            : [g.ymin, (g.ymin + g.ymax) / 2, g.ymax];
+      for (const v of yt) ctx.fillText(v.toFixed(Math.abs(v) >= 10 ? 0 : 1), g.px0 - 3, g.Y(v));
+      // x 目盛（窓の実時刻 t0 / 中央 / t1）
+      ctx.textAlign = "center"; ctx.textBaseline = "top";
+      for (let k = 0; k <= 2; k++) {
+        const tt = t0 + (t1 - t0) * k / 2;
+        ctx.fillText(tt.toFixed(1) + (k === 2 ? "s" : ""), X(tt), g.py0 + g.plotH + 2);
+      }
+      // 見出し（左）と近似注記タグ（右・橙）
+      ctx.textAlign = "left"; ctx.textBaseline = "alphabetic";
+      ctx.fillStyle = "#333"; ctx.font = "11px sans-serif";
+      ctx.fillText(g.ch.label + " [" + g.ch.unit + "]", g.ox + 2, g.oy + 13);
+      if (g.ch.approx) {
+        ctx.textAlign = "right"; ctx.fillStyle = "#b06000"; ctx.font = "9px sans-serif";
+        ctx.fillText("⚠ " + g.ch.approx, g.ox + g.cellW - 2, g.oy + 13);
+      }
+
+      // プロット内容はパネル矩形でクリップ（窓外の点・ドットがはみ出さない）
+      ctx.save();
+      ctx.beginPath(); ctx.rect(g.px0, g.py0, g.plotW, g.plotH); ctx.clip();
+
+      // 折れ線: 実測=実線, 指令=破線・淡色。窓内 [iLo,iHi] のみ。null で break。
+      const specs = [
+        { key: g.ch.meas, dash: false, alpha: 1.0, lw: 1.6 },
+        { key: g.ch.cmd, dash: true, alpha: 0.5, lw: 1.2 },
+      ];
+      for (const sp of specs) {
+        if (!sp.key) continue;
+        ctx.setLineDash(sp.dash ? [4, 3] : []);
+        for (const run of runs) {
+          const arr = run.visible && run.ch && run.ch[sp.key];
+          if (!arr) continue;
+          ctx.strokeStyle = run.color; ctx.globalAlpha = sp.alpha; ctx.lineWidth = sp.lw;
+          ctx.beginPath();
+          let pen = false;
+          for (let i = iLo; i <= iHi; i++) {
+            const v = arr[i];
+            if (v == null) { pen = false; continue; }
+            const xx = X(i / RATE), yy = g.Y(v);
+            if (!pen) { ctx.moveTo(xx, yy); pen = true; } else ctx.lineTo(xx, yy);
+          }
+          ctx.stroke();
+        }
+      }
+      ctx.globalAlpha = 1; ctx.setLineDash([]);
+
+      // 縦カーソル（時刻同期のみ。位置同期は run ごとに t が異なるためドットで表す）
+      if (mode === "time") {
+        const cx = X(curT);
+        ctx.strokeStyle = "#999"; ctx.lineWidth = 1; ctx.setLineDash([3, 3]);
+        ctx.beginPath(); ctx.moveTo(cx, g.py0); ctx.lineTo(cx, g.py0 + g.plotH);
+        ctx.stroke(); ctx.setLineDash([]);
+      }
+      // 各 run の現在サンプル位置にドット（実測値）
+      runs.forEach((run, idx) => {
+        const st = states[idx];
+        if (!st || !run.ch) return;
+        const v = sampleChannel(run, g.ch.meas, st.t);
+        if (v == null) return;
+        ctx.globalAlpha = st.ended ? 0.4 : 1;
+        ctx.fillStyle = run.color;
+        ctx.beginPath(); ctx.arc(X(st.t), g.Y(v), run.is_baseline ? 4 : 3, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.strokeStyle = "#fff"; ctx.lineWidth = 1; ctx.stroke();
+        ctx.globalAlpha = 1;
+      });
+
+      ctx.restore();
+    }
+  }
+
+  // 下部プロット非対応 (チャンネル無し) ならコントロールごと隠す
+  if (!hasPlots) { $("plotgrp").style.display = "none"; plotsEl.classList.add("hidden"); }
+  $("showplots").addEventListener("change", (e) => {
+    showPlots = e.target.checked;
+    plotsEl.classList.toggle("hidden", !showPlots);
+    markPlotStatic(); markDirty();
+  });
+  $("plotwin").addEventListener("input", (e) => {
+    plotWindowS = e.target.valueAsNumber;
+    $("plotwinval").textContent = e.target.valueAsNumber + "s";
+    markDirty(); // 窓幅変更は y レンジ不変なので geom 再計算不要
+  });
+
   // --------------------------------------------------------------- 再生ループ
   // dirty フラグ: 再生中・UI 操作・リサイズ時のみ再描画し、アイドル時の
   // 60fps 常時再描画を避ける（レポートを開きっぱなしでも CPU を食わない）。
   let dirty = true;
+  let plotStaticDirty = true; // 下部プロット静的レイヤの再描画要否
   const markDirty = () => { dirty = true; };
+  // 構造変化（リサイズ・run 表示切替・モード・プロット表示）で静的レイヤも作り直す。
+  const markPlotStatic = () => { plotStaticDirty = true; dirty = true; };
   // iframe/タブ表示切替やウィンドウリサイズでサイズが変わったら再描画
   // （非表示 display:none → 表示 で 0×0 から復帰するケースもここで拾う）。
-  new ResizeObserver(markDirty).observe(cv.parentElement);
+  const _ro = new ResizeObserver(markPlotStatic);
+  _ro.observe(cv.parentElement);
+  _ro.observe(plotsEl);
 
   let lastTs = null;
   function tick(ts) {
@@ -677,7 +984,12 @@ const DATA = __PAYLOAD_JSON__;
       dirty = true;
     }
     lastTs = ts;
-    if (dirty) dirty = draw();
+    if (dirty) {
+      const cont = draw();
+      if (plotStaticDirty) { computePlotGeom(); plotStaticDirty = false; }
+      drawPlots(); // 横軸スライディング窓に追従して毎フレーム描画
+      dirty = cont; // カメラ lerp 継続中は次フレームも描画
+    }
     requestAnimationFrame(tick);
   }
 

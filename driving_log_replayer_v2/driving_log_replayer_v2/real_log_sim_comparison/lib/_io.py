@@ -170,22 +170,33 @@ def load_kinematic(bag_path: Path, topic: str | list[str] | None = None) -> pd.D
         p = m.pose.pose.position
         o = m.pose.pose.orientation
         yaw = math.atan2(2 * (o.w * o.z + o.x * o.y), 1 - 2 * (o.y * o.y + o.z * o.z))
-        return {"t_ns": t_ns, "x": p.x, "y": p.y, "yaw": yaw}
+        # twist は base_link 系の車体速度。vy(横速度)・wz(角速度=yaw rate) は再生ビューアの
+        # 同期プロットが直接計測値として使う (step5 と同形)。
+        tw = m.twist.twist
+        return {
+            "t_ns": t_ns, "x": p.x, "y": p.y, "yaw": yaw,
+            "vx": tw.linear.x, "vy": tw.linear.y, "wz": tw.angular.z,
+        }
 
     return iter_to_df(
         bag_path,
         topic if topic is not None else DEFAULT_TOPICS["kinematic"],
         row,
-        ["t_ns", "x", "y", "yaw"],
+        ["t_ns", "x", "y", "yaw", "vx", "vy", "wz"],
     )
 
 
 def load_accel(bag_path: Path, topic: str | list[str] | None = None) -> pd.DataFrame:
+    # accel_y(横加速度) は再生ビューアの同期プロットが直接計測値として使う。
     return iter_to_df(
         bag_path,
         topic if topic is not None else DEFAULT_TOPICS["accel"],
-        lambda t_ns, m: {"t_ns": t_ns, "accel": m.accel.accel.linear.x},
-        ["t_ns", "accel"],
+        lambda t_ns, m: {
+            "t_ns": t_ns,
+            "accel": m.accel.accel.linear.x,
+            "accel_y": m.accel.accel.linear.y,
+        },
+        ["t_ns", "accel", "accel_y"],
     )
 
 
