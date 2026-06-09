@@ -14,11 +14,6 @@ from ._closed_loop import (
     build_fig_timeseries_resp_cmd,
     build_fig_vs_distance,
 )
-from ._brake import (
-    build_fig_brake_sweep,
-    build_fig_departure_brake_sensitivity,
-    build_fig_real_cmd_acc,
-)
 from ._cases import (
     build_fig_cascade_error_overlay,
     build_fig_error_growth_overlay,
@@ -50,7 +45,6 @@ from ._nstep import (
 )
 
 __all__ = [
-    "build_fig_brake_sweep",
     "build_fig_cascade_error",
     "build_fig_cascade_error_overlay",
     "build_fig_curve_analysis",
@@ -66,13 +60,11 @@ __all__ = [
     "build_fig_error_timeseries_overlay",
     "build_fig_growth_relative",
     "build_fig_rmse_heatmap",
-    "build_fig_departure_brake_sensitivity",
     "build_fig_error_timeseries",
     "build_fig_error_vs_speed",
     "build_fig_lateral_dynamics_timeseries",
     "build_fig_overview",
     "build_fig_pair_sweep",
-    "build_fig_real_cmd_acc",
     "build_fig_sweep",
     "build_fig_sweep_overview",
     "build_fig_steer_vs_lateral_scatter",

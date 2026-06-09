@@ -24,9 +24,6 @@ Stage 1〜6 の後段に位置する独立ステージ。Stage 1 が生成した
       の yaw RMSE ヒートマップ
       (1 パラメータずつの sweep では見えないトレードオフ・谷の形状を可視化)
 
-縦方向の brake_time_constant は減速・ギア拘束を含む別モデルでの発進フィットが
-必要なため Stage 9 (step9_identify_brake) が担当する。
-
 evaluator_node が Stage 6 の後に env (BEST_MODEL_BASE_DIR) のみで実行する (追加設定不要)。
 手動実行・対象/グリッド変更も可能:
     python3 -m driving_log_replayer_v2.real_log_sim_comparison.step7_sweep_params \
@@ -973,8 +970,7 @@ def write_summary(
         "",
         "> 各パラメータは他を仕様値に固定した 1 次元 sweep (one-at-a-time)。改善率は同一メトリクス内"
         "での相対値であり、メトリクスが異なる行同士の直接比較には注意。パラメータ間の相関は "
-        "2D ペア sweep (pair_*.svg) を、全体俯瞰は感度オーバービュー (_overview_sensitivity.svg) を参照。"
-        "brake_time_constant は減速モデルが別実装のため Stage 9 (brake_sweep/) が担当。",
+        "2D ペア sweep (pair_*.svg) を、全体俯瞰は感度オーバービュー (_overview_sensitivity.svg) を参照。",
         "",
     ]
     lines += _build_discussion(records)

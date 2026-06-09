@@ -2,7 +2,7 @@
 """Stage 11: comparison/ 配下の図スペック (*.fig.json) を 1 枚の単一 report.html に束ねる.
 
 10 段階パイプライン (step4〜step10) は `comparison/` 配下の複数サブディレクトリ
-(figures/, nstep/<tag>/, cases/overlay/, param_sweep/, brake_sweep/, curve_diag/) に
+(figures/, nstep/<tag>/, cases/overlay/, param_sweep/, curve_diag/) に
 多数の **plotly 図スペック (`*.fig.json` = データ + レイアウト)** と再生ビューア
 (`trajectory_playback.html`)、3 種の Markdown レポートを散らして出力する。本ステージは
 それらを走査し、全アセットを**外部参照なしで 1 枚に埋め込んだ**目次付き `report.html` を
@@ -79,10 +79,6 @@ CAPTIONS: dict[str, str] = {
     "growth_relative": "相対誤差成長（reference 比・dynamics 差の分離）",
     # step7: param_sweep/ (個別図のキャプションは _caption_for の正規表現で導出)
     "_overview_sensitivity": "スイープ感度オーバービュー（改善率ランキング + 正規化 RMSE カーブ）",
-    # step9: brake_sweep/ + figures/
-    "departure_brake_tc_sensitivity": "発進時 brake_tc 感度分析",
-    "real_cmd_acc_departure": "発進時 制御指令（実機）",
-    "brake_sweep": "brake_time_constant sweep",
     # step10: curve_diag/
     "curve_divergence": "カーブ乖離 詳細診断（縦横分解 + yaw 差）",
 }
@@ -212,7 +208,7 @@ def _caption_for(stem: str) -> str:
 def _classify(rel: Path) -> str:
     """図の相対パス (comparison/ 基準) を概念セクションキーへ分類する。
 
-    figures/ 配下にはクローズループ図・DP 図・brake 同定図が混在するため、
+    figures/ 配下にはクローズループ図・DP 図が混在するため、
     ディレクトリだけでなく stem でも判定する。
     """
     top = rel.parts[0] if len(rel.parts) > 1 else "."
@@ -220,9 +216,9 @@ def _classify(rel: Path) -> str:
 
     if stem.startswith("dp_"):
         return "dp"
-    if stem in {"departure_brake_tc_sensitivity", "real_cmd_acc_departure", "lon_lat_model"}:
+    if stem == "lon_lat_model":
         return "real_analysis"
-    if top in {"param_sweep", "brake_sweep"}:
+    if top == "param_sweep":
         return "real_analysis"
     if top in {"nstep", "cases"}:
         return "ol_nstep"
@@ -518,7 +514,6 @@ _PIPELINE_INTRO = """
 <tr><td>6</td><td>ケース集約解析 (step6_analyze_cases)</td><td>全ケースの N-step 誤差を横断集約 (cases_summary.md・overlay)</td></tr>
 <tr><td>7</td><td>パラメータ sweep 同定 (step7_sweep_params)</td><td>車両モデル各パラメータを sweep し終端誤差最小値を同定 (param_sweep_summary.md)</td></tr>
 <tr><td>8</td><td>DP 軌跡比較 (step8_compare_dp_trajectory)</td><td>DiffusionPlanner 出力軌跡を実機 vs sim で比較 (dp_*)</td></tr>
-<tr><td>9</td><td>縦パラ同定 (step9_identify_brake)</td><td>発進フィットで brake_time_constant を同定 (brake_sweep)</td></tr>
 <tr><td>10</td><td>カーブ乖離診断 (step10_diagnose_curve)</td><td>カーブ/発進区間の乖離を縦横・速度・yaw で診断 (curve_divergence.md)</td></tr>
 <tr><td>11</td><td>HTML レポート生成 (step11_build_html_report)</td><td>comparison/ 配下の全図スペック・Markdown・設定 YAML を 1 枚に束ねた単一レポート (report.html)</td></tr>
 <tr><td>12</td><td>notebook 生成 (step12_build_notebook)</td><td>各図を plotly で再描画 + 生 CSV からの再解析セルを備えた開発者向け notebook (report.ipynb)</td></tr>

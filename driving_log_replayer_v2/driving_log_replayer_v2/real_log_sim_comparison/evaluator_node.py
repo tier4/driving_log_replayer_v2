@@ -24,7 +24,6 @@ Runs the 11-stage comparison pipeline inside a cloud DLR2 job:
   6. step6_analyze_cases   nstep/*.csv を集約 (overlay/, cases_summary.md)
   7. step7_sweep_params    real.lite で車両モデルパラメータを rollout sweep 同定 (param_sweep/)
   8. step8_compare_dp_trajectory DiffusionPlanner 出力軌跡 real vs sim 比較 (figures/dp_*.svg)
-  9. step9_identify_brake  real.lite で縦方向 brake_tc を発進フィット同定 (brake_sweep/)
   10. step10_diagnose_curve カーブ/発進区間の乖離を縦横分解診断 (curve_diag/)
   11. step11_build_html_report comparison/ 配下の全プロットを集約 (result_archive/real_log_sim_comparison/index.html)
 
@@ -359,16 +358,6 @@ def run_analysis(
     except RuntimeError as exc:
         logger.warning(f"Stage 8 (step8_compare_dp_trajectory) failed but continuing: {exc}")
 
-    # ---- Stage 9: 縦方向パラメータ (brake_time_constant) 同定 (rollout/発進フィット) ----
-    logger.info("Stage 9: step9_identify_brake (longitudinal brake_time_constant identification)")
-    try:
-        _run([
-            sys.executable, "-m",
-            "driving_log_replayer_v2.real_log_sim_comparison.step9_identify_brake",
-        ], env=env, timeout=600)
-    except RuntimeError as exc:
-        logger.warning(f"Stage 9 (step9_identify_brake) failed but continuing: {exc}")
-
     # ---- Stage 10: カーブ/発進区間の軌跡乖離 詳細診断 (縦横分解 + yaw 差) ----
     logger.info("Stage 10: step10_diagnose_curve (curve/launch deviation decomposition)")
     try:
@@ -421,7 +410,6 @@ def run_analysis(
             (comparison_dir / "figures" / "dp_real_vs_sim.svg").exists()
             or (comparison_dir / "figures" / "dp_real_vs_sim.fig.json").exists()
         ),
-        "brake_sweep_ok": int((comparison_dir / "brake_sweep" / "brake_sweep.csv").exists()),
         "curve_diag_ok": int((comparison_dir / "curve_diag" / "curve_divergence.fig.json").exists()),
         # report.html / report.ipynb は comparison/ の親 (result_archive/) 直下に生成される。
         "report_html_ok": int((comparison_dir.parent / "report.html").exists()),
@@ -432,7 +420,7 @@ def run_analysis(
         f"cases {cases_produced}/{len(cases_cfg.cases)}, "
         f"report={counts['report_ok']}, cases_summary={counts['cases_summary_ok']}, "
         f"param_sweep={counts['param_sweep_ok']}, dp_compare={counts['dp_compare_ok']}, "
-        f"brake_sweep={counts['brake_sweep_ok']}, curve_diag={counts['curve_diag_ok']}, "
+        f"curve_diag={counts['curve_diag_ok']}, "
         f"report_html={counts['report_html_ok']}, report_ipynb={counts['report_ipynb_ok']}"
     )
     return counts

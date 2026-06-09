@@ -81,7 +81,7 @@ def common_horizons(horizon_sets: Iterable[Iterable[int]]) -> list[int]:
 def parabolic_min(xs: list[float], ys: list[float]) -> float | None:
     """argmin 近傍 3 点に二次フィットして頂点 (サブグリッド最小) を返す。端なら None。
 
-    パラメータ sweep 同定 (step7/step9) の共有ヘルパー。
+    パラメータ sweep 同定 (step7) の共有ヘルパー。
     """
     i = int(np.argmin(ys))
     if i == 0 or i == len(xs) - 1:
