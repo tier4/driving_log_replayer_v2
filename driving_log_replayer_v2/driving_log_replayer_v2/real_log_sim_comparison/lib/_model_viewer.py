@@ -5,7 +5,9 @@
 十分かを対話的に検証する自己完結 HTML (canvas + インライン JS、plotly 非依存・オフライン動作)。
 
 検証する運動方程式（起点 t0 = シーク時刻から前方積算）:
-  縦  : a' = -(a - a_cmd(t-T_a)) / tau_a ,  v' = a
+  縦  : a' = -(a - a_cmd(t-T)) / tau(v)  ,  v' = a
+        加減速で特性が異なるため throttle(a_cmd>=0) と brake(a_cmd<0) で T・tau を分離。
+        速度帯依存も tau(v) = tau0 + slope*v (v は観測 lon_vel) で表現。
   横  : delta' = -(delta - delta_cmd(t-T_d)) / tau_d        (delta は rad で積分)
         omega = v*tan(delta + beta) / (L + k_us*v^2) ,  theta' = omega
         x' = v*cos(theta) , y' = v*sin(theta) ,  a_y = v*omega
@@ -73,12 +75,17 @@ def plot_model_viewer(
         warnings.warn("kinematic データなし。縦横モデルビューアをスキップ", stacklevel=2)
         return
 
-    # つまみ初期値。tau/T [s], steer_bias [rad], k_us [s^2/m]。
-    # load_sim_params はフォールバック付きで常に dict を返す。k_us は yaml 未定義のことが多く
+    # つまみ初期値。tau/T [s], slope [s/(m/s)], steer_bias [rad], k_us [s^2/m]。
+    # load_sim_params はフォールバック付きで常に dict を返す。縦は加減速で別特性のため
+    # throttle=acc_*, brake=brake_* をシード（実機モデルも acc/brake で別 time_constant・delay）。
+    # tau_acc_slope は速度依存の初期 0（つまみで調整）。k_us は yaml 未定義のことが多く
     # その場合 0.0 (純キネマティック) をシード（best_normal の 0.018 等へつまみで調整可能）。
     payload["model_seed"] = {
-        "tau_acc": float(sim_params["acc_time_constant"]),
-        "t_acc": float(sim_params["acc_time_delay"]),
+        "tau_acc_thr": float(sim_params["acc_time_constant"]),
+        "t_acc_thr": float(sim_params["acc_time_delay"]),
+        "tau_acc_brk": float(sim_params.get("brake_time_constant", sim_params["acc_time_constant"])),
+        "t_acc_brk": float(sim_params.get("brake_delay", sim_params["acc_time_delay"])),
+        "tau_acc_slope": 0.0,
         "tau_steer": float(sim_params["steer_time_constant"]),
         "t_steer": float(sim_params["steer_time_delay"]),
         "steer_bias": float(sim_params.get("steer_bias", 0.0)),
@@ -170,9 +177,13 @@ _HTML_TEMPLATE = r"""<!DOCTYPE html>
     </span>
   </div>
   <div id="knobs">
-    <span class="kg"><span class="ktitle">縦(加速度)</span></span>
-    <span class="kg">T <input type="range" id="k_t_acc" min="0" max="0.5" step="0.005" value="0.1"><span class="kval" id="v_t_acc"></span></span>
-    <span class="kg">τ <input type="range" id="k_tau_acc" min="0.02" max="1.5" step="0.005" value="0.26"><span class="kval" id="v_tau_acc"></span></span>
+    <span class="kg"><span class="ktitle">縦throttle</span></span>
+    <span class="kg">T <input type="range" id="k_t_acc_thr" min="0" max="0.5" step="0.005" value="0.1"><span class="kval" id="v_t_acc_thr"></span></span>
+    <span class="kg">τ <input type="range" id="k_tau_acc_thr" min="0.02" max="1.5" step="0.005" value="0.26"><span class="kval" id="v_tau_acc_thr"></span></span>
+    <span class="kg" style="margin-left:6px"><span class="ktitle">縦brake</span></span>
+    <span class="kg">T <input type="range" id="k_t_acc_brk" min="0" max="0.5" step="0.005" value="0.07"><span class="kval" id="v_t_acc_brk"></span></span>
+    <span class="kg">τ <input type="range" id="k_tau_acc_brk" min="0.02" max="1.5" step="0.005" value="0.15"><span class="kval" id="v_tau_acc_brk"></span></span>
+    <span class="kg">τ速度傾き <input type="range" id="k_tau_slope" min="-0.05" max="0.05" step="0.001" value="0"><span class="kval" id="v_tau_slope"></span></span>
     <span class="kg" style="margin-left:6px"><span class="ktitle">横(ステア)</span></span>
     <span class="kg">T <input type="range" id="k_t_steer" min="0" max="0.5" step="0.005" value="0.03"><span class="kval" id="v_t_steer"></span></span>
     <span class="kg">τ <input type="range" id="k_tau_steer" min="0.02" max="1.5" step="0.005" value="0.50"><span class="kval" id="v_tau_steer"></span></span>
@@ -226,9 +237,12 @@ const DATA = __PAYLOAD_JSON__;
   let curT = 0;          // 現在時刻 (= シミュレーション起点) [s]
   let steerSource = "sim"; // 自転車モデルへ渡す δ の源: "sim"(シミュレーション) | "obs"(観測)
   const cam = { cx: 0, cy: 0, viewW: 100, targetViewW: 100, follow: true, init: false };
-  // model: tau/T [s], steer_bias [deg](UI 単位; rollout で rad 変換), k_us [s^2/m]
+  // model: tau/T [s], tau_acc_slope [s/(m/s)], steer_bias [deg](UI 単位; rollout で rad 変換), k_us [s^2/m]
+  // 縦は throttle/brake で tau・T を分離。tau_eff = tau0 + slope*v (v は観測)。
   const model = {
-    tau_acc: DATA.model_seed.tau_acc, t_acc: DATA.model_seed.t_acc,
+    tau_acc_thr: DATA.model_seed.tau_acc_thr, t_acc_thr: DATA.model_seed.t_acc_thr,
+    tau_acc_brk: DATA.model_seed.tau_acc_brk, t_acc_brk: DATA.model_seed.t_acc_brk,
+    tau_acc_slope: DATA.model_seed.tau_acc_slope,
     tau_steer: DATA.model_seed.tau_steer, t_steer: DATA.model_seed.t_steer,
     k_us: DATA.model_seed.k_us,
     steer_bias: DATA.model_seed.steer_bias * RAD2DEG, // rad→deg (β つまみは度表示)
@@ -287,15 +301,17 @@ const DATA = __PAYLOAD_JSON__;
     if (a == null || v == null || dDeg0 == null) return null;
     let delta = dDeg0 * DEG;        // rad
     let yaw = st0.yaw, x = st0.x, y = st0.y;
-    const tauA = Math.max(model.tau_acc, 1e-3);
+    // 縦: throttle/brake で tau・T を分離。tau_eff = tau0 + slope*v (v は観測, 下限 0.02s)。
+    const tauThr = model.tau_acc_thr, tauBrk = model.tau_acc_brk, tauSlope = model.tau_acc_slope;
+    const TaThr = model.t_acc_thr, TaBrk = model.t_acc_brk;
     const tauD = Math.max(model.tau_steer, 1e-3);
-    const Ta = model.t_acc, Td = model.t_steer;
+    const Td = model.t_steer;
     const beta = model.steer_bias * DEG;   // deg→rad
     const kus = model.k_us;
     const simSteer = (steerSource === "sim");
     const outDt = 1 / RATE, h = outDt / SUBSTEP;
 
-    let lastUa = chanAt("cmd_accel", t0 - Ta);
+    let lastDrive = chanAt("cmd_accel", t0); if (lastDrive == null) lastDrive = a; // 指令ホールド用
     let lastUd = chanAt("cmd_steer", t0 - Td); // deg
     const out = { t: [], a: [], v: [], deltaDeg: [], omega: [], ay: [], x: [], y: [] };
 
@@ -320,19 +336,29 @@ const DATA = __PAYLOAD_JSON__;
     for (let t = t0; t < t1 - 1e-9; t += outDt) {
       for (let s = 0; s < SUBSTEP; s++) {
         const tt = t + s * h;
-        const ua = chanAt("cmd_accel", tt - Ta); if (ua != null) lastUa = ua;
-        const ud = chanAt("cmd_steer", tt - Td); if (ud != null) lastUd = ud;
-        const driveA = (lastUa != null) ? lastUa : a;
-        const driveD = (lastUd != null) ? lastUd * DEG : delta;
-        // 縦
-        a += h * (-(a - driveA) / tauA);
+        const vl = chanAt("lon_vel", tt);
+        const vv = (vl != null) ? vl : v;   // 観測速度 (tau(v)・横チェーンで共用)
+        // 縦: throttle(a_cmd>=0)/brake(a_cmd<0) を判定し、該当 delay の指令 u と tau0 を採用。
+        // throttle 側の遅延指令の符号で判定 (差は僅少、null は brake 側→ホールドで fallback)。
+        const uThr = chanAt("cmd_accel", tt - TaThr);
+        const uBrk = chanAt("cmd_accel", tt - TaBrk);
+        let throttle;
+        if (uThr != null) throttle = (uThr >= 0);
+        else if (uBrk != null) throttle = (uBrk >= 0);
+        else throttle = (lastDrive >= 0);
+        let u = throttle ? uThr : uBrk;
+        if (u == null) u = lastDrive;
+        lastDrive = u;
+        const tau0 = throttle ? tauThr : tauBrk;
+        const tauA = Math.max(tau0 + tauSlope * vv, 0.02); // tau(v), 下限 0.02s
+        a += h * (-(a - u) / tauA);
         v += h * a;
         // ステア(rad)
+        const ud = chanAt("cmd_steer", tt - Td); if (ud != null) lastUd = ud;
+        const driveD = (lastUd != null) ? lastUd * DEG : delta;
         delta += h * (-(delta - driveD) / tauD);
-        // 横運動学（v は観測, δ_src は sim/観測）
+        // 横運動学（v は観測 vv, δ_src は sim/観測）
         const om = omegaAt(tt, delta);
-        const vl = chanAt("lon_vel", tt);
-        const vv = (vl != null) ? vl : v;
         yaw += h * om;
         x += h * vv * Math.cos(yaw);
         y += h * vv * Math.sin(yaw);
@@ -404,8 +430,12 @@ const DATA = __PAYLOAD_JSON__;
   const fmtS = (v) => v.toFixed(3) + "s";
   const fmtKus = (v) => v.toFixed(3);
   const fmtDeg = (v) => v.toFixed(2) + "°";
-  setupKnob("k_t_acc", "v_t_acc", "t_acc", fmtS);
-  setupKnob("k_tau_acc", "v_tau_acc", "tau_acc", fmtS);
+  const fmtSlope = (v) => v.toFixed(3);
+  setupKnob("k_t_acc_thr", "v_t_acc_thr", "t_acc_thr", fmtS);
+  setupKnob("k_tau_acc_thr", "v_tau_acc_thr", "tau_acc_thr", fmtS);
+  setupKnob("k_t_acc_brk", "v_t_acc_brk", "t_acc_brk", fmtS);
+  setupKnob("k_tau_acc_brk", "v_tau_acc_brk", "tau_acc_brk", fmtS);
+  setupKnob("k_tau_slope", "v_tau_slope", "tau_acc_slope", fmtSlope);
   setupKnob("k_t_steer", "v_t_steer", "t_steer", fmtS);
   setupKnob("k_tau_steer", "v_tau_steer", "tau_steer", fmtS);
   setupKnob("k_kus", "v_kus", "k_us", fmtKus);
@@ -417,14 +447,15 @@ const DATA = __PAYLOAD_JSON__;
     const srcLabel = steerSource === "sim" ? "シミュレーション δ" : "観測 δ";
     $("eqpanel").innerHTML =
       "<b>運動方程式</b>（起点=シーク時刻から前方積算）<br>" +
-      "縦&nbsp; ȧ = −(a − a_cmd(t−Tₐ))/τₐ ,&nbsp; v̇ = a<br>" +
+      "縦&nbsp; ȧ = −(a − a_cmd(t−T))/τ(v) ,&nbsp; v̇ = a&nbsp; <span class='note'>[throttle/brake で T・τ 分離, τ(v)=τ₀+slope·v]</span><br>" +
       "横&nbsp; δ̇ = −(δ − δ_cmd(t−T_δ))/τ_δ<br>" +
       "&nbsp;&nbsp;&nbsp; ω = v·tan(δ+β)/(L + k_us·v²) ,&nbsp; θ̇ = ω<br>" +
       "&nbsp;&nbsp;&nbsp; ẋ = v·cosθ , ẏ = v·sinθ ,&nbsp; a_y = v·ω<br>" +
-      "<span class='vals'>Tₐ=" + m.t_acc.toFixed(3) + "s τₐ=" + m.tau_acc.toFixed(3) + "s&nbsp; " +
-      "T_δ=" + m.t_steer.toFixed(3) + "s τ_δ=" + m.tau_steer.toFixed(3) + "s<br>" +
+      "<span class='vals'>縦throttle T=" + m.t_acc_thr.toFixed(3) + "s τ₀=" + m.tau_acc_thr.toFixed(3) + "s&nbsp; " +
+      "brake T=" + m.t_acc_brk.toFixed(3) + "s τ₀=" + m.tau_acc_brk.toFixed(3) + "s&nbsp; slope=" + m.tau_acc_slope.toFixed(3) + "<br>" +
+      "横 T_δ=" + m.t_steer.toFixed(3) + "s τ_δ=" + m.tau_steer.toFixed(3) + "s&nbsp; " +
       "k_us=" + m.k_us.toFixed(3) + " β=" + m.steer_bias.toFixed(2) + "° L=" + L.toFixed(3) + "m</span><br>" +
-      "<span class='note'>※ ω・位置の v は観測値を使用（縦誤差を分離）／ステア源: " + srcLabel + "</span>";
+      "<span class='note'>※ ω・位置・τ(v) の v は観測値を使用（縦誤差を分離）／ステア源: " + srcLabel + "</span>";
   }
   updateEquations();
 
