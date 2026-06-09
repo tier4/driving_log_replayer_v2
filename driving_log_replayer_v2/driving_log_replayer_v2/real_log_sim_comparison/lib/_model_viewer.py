@@ -175,6 +175,14 @@ _HTML_TEMPLATE = r"""<!DOCTYPE html>
         <option value="obs">観測 δ</option>
       </select>
     </span>
+    <span class="grp">
+      最小二乗最適化:
+      <button id="opt_all">全体</button>
+      <button id="opt_lon">縦</button>
+      <button id="opt_steer">横</button>
+      <button id="opt_bike">自転車</button>
+      <span id="optstatus" style="font-family:monospace;font-size:11px;color:#2b4a8b"></span>
+    </span>
   </div>
   <div id="knobs">
     <span class="kg"><span class="ktitle">縦throttle</span></span>
@@ -413,12 +421,15 @@ const DATA = __PAYLOAD_JSON__;
   });
 
   // つまみセットアップ。初期値は model をスライダ範囲にクランプして反映。fmt は表示整形。
+  // knobReg: modelKey -> {sl,vEl,fmt}（最適化後に slider/表示を model 値へ同期するため）。
   function clamp(v, lo, hi) { return Math.min(Math.max(v, lo), hi); }
+  const knobReg = {};
   function setupKnob(sliderId, valId, modelKey, fmt) {
     const sl = $(sliderId), vEl = $(valId);
     const lo = parseFloat(sl.min), hi = parseFloat(sl.max);
     sl.value = clamp(model[modelKey], lo, hi);
     model[modelKey] = parseFloat(sl.value);
+    knobReg[modelKey] = { sl, vEl, fmt };
     const show = () => { vEl.textContent = fmt(parseFloat(sl.value)); };
     show();
     sl.addEventListener("input", () => {
@@ -458,6 +469,143 @@ const DATA = __PAYLOAD_JSON__;
       "<span class='note'>※ ω・位置・τ(v) の v は観測値を使用（縦誤差を分離）／ステア源: " + srcLabel + "</span>";
   }
   updateEquations();
+
+  // -------------------------------------------------- 最小二乗最適化（全区間・出力誤差）
+  // 各サブシステムを独立にフィット（運動方程式が階層的に分離できるため）:
+  //   縦a: 1次遅れ(throttle/brake分離・τ(v)) を観測 accel に, 横δ: 1次遅れを観測 steer に,
+  //   自転車ω: v·tan(δ+β)/(L+k_us·v²)(代数式・観測δ/v) を観測 wz に当て込む。
+  // a・δ は安定フィルタ, ω は代数式なので全区間積分してもドリフトせず, 出力誤差最小化が
+  // 表示中の赤線一致と一致する（速度・位置は積分でドリフトするため目的量にしない）。
+  // 最適化は coordinate descent + golden-section（つまみ範囲内・無駄時間 T も対象）。
+  function goldenMin(f, a, b, iters) {
+    const gr = (Math.sqrt(5) - 1) / 2;
+    let c = b - gr * (b - a), d = a + gr * (b - a);
+    let fc = f(c), fd = f(d);
+    for (let i = 0; i < iters; i++) {
+      if (fc < fd) { b = d; d = c; fd = fc; c = b - gr * (b - a); fc = f(c); }
+      else { a = c; c = d; fc = fd; d = a + gr * (b - a); fd = f(d); }
+    }
+    return (a + b) / 2;
+  }
+
+  // 縦 accel を全区間で前方積算（throttle/brake 分離・τ(v)）。戻り: Float64Array(N) (NaN=無効)。
+  function simAccelSeries() {
+    let i0 = 0; while (i0 < N && run.ch.accel[i0] == null) i0++;
+    const out = new Float64Array(N).fill(NaN);
+    if (i0 >= N) return out;
+    let a = run.ch.accel[i0];
+    const tauThr = model.tau_acc_thr, tauBrk = model.tau_acc_brk, slope = model.tau_acc_slope;
+    const Tthr = model.t_acc_thr, Tbrk = model.t_acc_brk;
+    const outDt = 1 / RATE, h = outDt / SUBSTEP;
+    let lastDrive = chanAt("cmd_accel", i0 / RATE); if (lastDrive == null) lastDrive = a;
+    out[i0] = a;
+    for (let i = i0; i < N - 1; i++) {
+      const t = i / RATE;
+      for (let s = 0; s < SUBSTEP; s++) {
+        const tt = t + s * h;
+        const vl = chanAt("lon_vel", tt); const vv = (vl != null) ? vl : 0;
+        const uThr = chanAt("cmd_accel", tt - Tthr), uBrk = chanAt("cmd_accel", tt - Tbrk);
+        let throttle;
+        if (uThr != null) throttle = (uThr >= 0);
+        else if (uBrk != null) throttle = (uBrk >= 0);
+        else throttle = (lastDrive >= 0);
+        let u = throttle ? uThr : uBrk;
+        if (u == null) u = lastDrive;
+        lastDrive = u;
+        const tau0 = throttle ? tauThr : tauBrk;
+        const tau = Math.max(tau0 + slope * vv, 0.02);
+        a += h * (-(a - u) / tau);
+      }
+      out[i + 1] = a;
+    }
+    return out;
+  }
+  // 横 δ を全区間で前方積算（deg）。戻り: Float64Array(N)。
+  function simSteerSeries() {
+    let i0 = 0; while (i0 < N && run.ch.steer[i0] == null) i0++;
+    const out = new Float64Array(N).fill(NaN);
+    if (i0 >= N) return out;
+    let dDeg = run.ch.steer[i0];
+    const tau = Math.max(model.tau_steer, 1e-3), Td = model.t_steer;
+    const outDt = 1 / RATE, h = outDt / SUBSTEP;
+    let lastU = chanAt("cmd_steer", i0 / RATE); if (lastU == null) lastU = dDeg;
+    out[i0] = dDeg;
+    for (let i = i0; i < N - 1; i++) {
+      const t = i / RATE;
+      for (let s = 0; s < SUBSTEP; s++) {
+        const tt = t + s * h;
+        const u = chanAt("cmd_steer", tt - Td); if (u != null) lastU = u;
+        const drive = (lastU != null) ? lastU : dDeg;
+        dDeg += h * (-(dDeg - drive) / tau);
+      }
+      out[i + 1] = dDeg;
+    }
+    return out;
+  }
+  // 平均二乗誤差（sim 系列 vs 観測チャンネル）。
+  function mseSeries(sim, obsKey) {
+    const arr = run.ch[obsKey]; let se = 0, n = 0;
+    for (let i = 0; i < N; i++) {
+      const o = arr[i], s = sim[i];
+      if (o != null && isFinite(s)) { se += (s - o) * (s - o); n++; }
+    }
+    return n ? se / n : 1e9;
+  }
+  const residAccel = () => mseSeries(simAccelSeries(), "accel");
+  const residSteer = () => mseSeries(simSteerSeries(), "steer");
+  // 自転車 ω=v·tan(δ_obs+β)/(L+k_us·v²) を観測 wz に当て込む（代数式・積分なし）。
+  function residBicycle() {
+    const beta = model.steer_bias * DEG, kus = model.k_us;
+    const wzA = run.ch.wz, dA = run.ch.steer, vA = run.ch.lon_vel;
+    let se = 0, n = 0;
+    for (let i = 0; i < N; i++) {
+      const wz = wzA[i], dd = dA[i], vv = vA[i];
+      if (wz == null || dd == null || vv == null) continue;
+      const om = vv * Math.tan(dd * DEG + beta) / (L + kus * vv * vv);
+      se += (om - wz) * (om - wz); n++;
+    }
+    return n ? se / n : 1e9;
+  }
+
+  function syncKnob(k) {
+    const r = knobReg[k]; if (!r) return;
+    const lo = parseFloat(r.sl.min), hi = parseFloat(r.sl.max);
+    r.sl.value = clamp(model[k], lo, hi);
+    model[k] = parseFloat(r.sl.value);
+    r.vEl.textContent = r.fmt(model[k]);
+  }
+  // coordinate descent + golden-section（各パラメータをつまみ範囲内で順に最小化、数 sweep）。
+  function optimizeSubset(keys, resid) {
+    const before = Math.sqrt(resid());
+    for (let sweep = 0; sweep < 4; sweep++) {
+      for (const k of keys) {
+        const r = knobReg[k]; if (!r) continue;
+        const lo = parseFloat(r.sl.min), hi = parseFloat(r.sl.max);
+        model[k] = goldenMin((val) => { model[k] = val; return resid(); }, lo, hi, 22);
+      }
+    }
+    const after = Math.sqrt(resid());
+    for (const k of keys) syncKnob(k);
+    updateEquations(); markDirty();
+    return { before, after };
+  }
+  const LON_KEYS = ["t_acc_thr", "tau_acc_thr", "t_acc_brk", "tau_acc_brk", "tau_acc_slope"];
+  const STEER_KEYS = ["t_steer", "tau_steer"];
+  const BIKE_KEYS = ["k_us", "steer_bias"];
+  const showOpt = (name, r, unit) => {
+    $("optstatus").textContent = " " + name + " RMSE " + r.before.toFixed(3) + "→" + r.after.toFixed(3) + " " + unit;
+  };
+  $("opt_lon").addEventListener("click", () => showOpt("縦a", optimizeSubset(LON_KEYS, residAccel), "m/s²"));
+  $("opt_steer").addEventListener("click", () => showOpt("横δ", optimizeSubset(STEER_KEYS, residSteer), "deg"));
+  $("opt_bike").addEventListener("click", () => showOpt("ω", optimizeSubset(BIKE_KEYS, residBicycle), "rad/s"));
+  $("opt_all").addEventListener("click", () => {
+    const a = optimizeSubset(LON_KEYS, residAccel);
+    const s = optimizeSubset(STEER_KEYS, residSteer);
+    const b = optimizeSubset(BIKE_KEYS, residBicycle);
+    $("optstatus").textContent = " 縦a " + a.before.toFixed(3) + "→" + a.after.toFixed(3) +
+      " / 横δ " + s.before.toFixed(2) + "→" + s.after.toFixed(2) +
+      " / ω " + b.before.toFixed(3) + "→" + b.after.toFixed(3);
+  });
 
   // ------------------------------------------------------------------ 地図描画
   function drawArrowhead(x, y, ang, size) {
