@@ -15,6 +15,7 @@ Usage:
 
 import argparse
 import json
+import os
 import shutil
 import subprocess
 import sys
@@ -22,7 +23,10 @@ import tempfile
 import uuid as uuid_module
 from pathlib import Path
 
+import yaml
+
 PROJECT_ID = "x2_dev"
+_SCRIPT_DIR = Path(__file__).parent
 
 
 def run(cmd: list[str]) -> str:
@@ -96,6 +100,30 @@ def _collect_map(work_dir: Path, area_map_id: str, area_map_version_id: str, map
     shutil.copytree(src, map_dir, dirs_exist_ok=True)
 
 
+def generate_scenario(template_path: Path, uuid: str, output_path: Path) -> None:
+    """テンプレート scenario.yaml の Datasets[0] UUID を uuid に書き換えて output_path に保存する。
+
+    Conditions 内の相対パス (sim_runs_config / cases_config / curve_config_yaml) は
+    テンプレートのディレクトリ基準で絶対パスに変換する。出力先が変わっても解決できるようにするため。
+    """
+    with template_path.open(encoding="utf-8") as f:
+        doc = yaml.safe_load(f)
+    old_entry = doc["Evaluation"]["Datasets"][0]
+    old_values = list(old_entry.values())[0]
+    doc["Evaluation"]["Datasets"][0] = {uuid: old_values}
+
+    # 相対パスを絶対パスに変換
+    conditions = doc.get("Evaluation", {}).get("Conditions", {}) or {}
+    for key in ("sim_runs_config", "cases_config", "curve_config_yaml"):
+        val = conditions.get(key)
+        if val and not Path(val).is_absolute():
+            conditions[key] = str((template_path.parent / val).resolve())
+
+    with output_path.open("w", encoding="utf-8") as f:
+        yaml.safe_dump(doc, f, allow_unicode=True, sort_keys=False)
+    print(f"[INFO] Scenario: {output_path}")
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--rosbag-id", nargs='+', required=True)
@@ -103,6 +131,11 @@ def main() -> None:
     parser.add_argument("--start")
     parser.add_argument("--end")
     parser.add_argument("--work-dir", default="work", help="作業ディレクトリ (default: work)")
+    parser.add_argument(
+        "--scenario-template",
+        default=str(_SCRIPT_DIR / "sample" / "scenario.yaml"),
+        help="コピー元 scenario.yaml テンプレート (default: sample/scenario.yaml)",
+    )
     args = parser.parse_args()
 
     work_dir = Path(args.work_dir)
@@ -121,7 +154,9 @@ def main() -> None:
 
     # Step 2: rosbag を作業ディレクトリに落とす
     print("[INFO] Pulling rosbag...")
-    rosbag_dir = Path(tempfile.mkdtemp(prefix="filtered_", dir=work_dir / "rosbag"))
+    rosbag_dir = work_dir / "rosbag"
+    rosbag_dir.mkdir(parents=True, exist_ok=True)
+    rosbag_dir = Path(tempfile.mkdtemp(prefix="filtered_", dir=rosbag_dir))
     pull_rosbag(args.rosbag_id, args.topic, rosbag_dir, args.start, args.end)
 
     # Step 3: 地図を作業ディレクトリに落とす
@@ -140,12 +175,24 @@ def main() -> None:
     _collect_bag(rosbag_dir, input_bag_dir)
     _collect_map(work_dir, area_map_id, area_map_version_id, map_dir)
 
+    # scenario.yaml を生成 (テンプレートの UUID を今回の uuid に書き換え)
+    template_path = Path(args.scenario_template)
+    scenario_out = (work_dir / f"scenario_{uuid}.yaml").resolve()
+    if template_path.exists():
+        generate_scenario(template_path, uuid, scenario_out)
+    else:
+        print(f"[WARN] scenario-template が見つかりません: {template_path}", file=sys.stderr)
+        scenario_out = None
+
     dataset_root = (work_dir / "dataset").resolve()
     print(f"[INFO] Done.")
     print(f"[INFO] UUID: {uuid}")
     print(f"[INFO] Run:")
-    print(f"  make local_cloud_run WEBAUTO_T4_ROOT={dataset_root}")
-    print(f"  (scenario.yaml の UUID を '{uuid}' に設定してください)")
+    if scenario_out:
+        print(f"  make local_cloud_run WEBAUTO_T4_ROOT={dataset_root} LOCAL_SCENARIO={scenario_out}")
+    else:
+        print(f"  make local_cloud_run WEBAUTO_T4_ROOT={dataset_root}")
+        print(f"  (scenario.yaml の UUID を '{uuid}' に設定してください)")
 
 
 if __name__ == "__main__":
