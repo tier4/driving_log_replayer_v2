@@ -28,6 +28,11 @@ from ._curve_detail import (
     build_fig_steer_response,
 )
 from ._curve_diag import build_fig_curve_divergence
+from ._model_eq import (
+    build_fig_first_order_step,
+    build_fig_lateral_accel_map,
+    build_fig_yaw_rate_vs_v,
+)
 from ._dp import (
     build_fig_dp_real_vs_sim,
     build_fig_dp_vs_actual,
@@ -56,6 +61,9 @@ __all__ = [
     "build_fig_dp_real_vs_sim",
     "build_fig_dp_vs_actual",
     "build_fig_dp_vs_final_traj",
+    "build_fig_first_order_step",
+    "build_fig_lateral_accel_map",
+    "build_fig_yaw_rate_vs_v",
     "build_fig_error_growth_overlay",
     "build_fig_error_timeseries_overlay",
     "build_fig_growth_relative",

@@ -96,6 +96,38 @@ def add_bottom_note(
     )
 
 
+# --- 座標系・定数の凡例文字列（図下部注記に流す共通語彙） -----------------------
+# レポート全図で同じ座標系定義（議事録: X=進行方向, Y=横方向）を示し、解析者が軸・角の
+# 向きを一意に解釈できるようにする。詳細な数式・定数は docs/vehicle_model.ja.md（report の
+# 「車両制御モデル」セクション）に集約し、ここは図中の最小限の手掛かりに留める。
+_COORD_NOTE = "座標系: X=進行方向, Y=横方向, θ=ヨー角(進行方向), δ=ステア角, ω=ヨーレート"
+
+
+def coord_note() -> str:
+    """全図共通の座標系凡例文字列を返す（`add_bottom_note` に渡す用）。"""
+    return _COORD_NOTE
+
+
+def model_const_note(params: dict | None = None, **overrides) -> str:
+    """車両モデル定数を 1 行に整形して返す（図下部注記用）。
+
+    `params`（`load_sim_params()` の戻り）から L / k_us / ステア・加速度時定数を拾い、
+    `overrides`（例: k_us=0.018）があれば優先する。値が無い項目は省く。
+    """
+    p = dict(params or {})
+    p.update(overrides)
+    bits: list[str] = []
+    if (L := p.get("wheel_base", p.get("wheelbase"))) is not None:
+        bits.append(f"L={float(L):.3g} m")
+    if (kus := p.get("k_us")) is not None:
+        bits.append(f"k_us={float(kus):.3g} s²/m")
+    if (ts := p.get("steer_time_constant")) is not None:
+        bits.append(f"τ_δ={float(ts):.3g} s")
+    if (ta := p.get("acc_time_constant")) is not None:
+        bits.append(f"τ_a={float(ta):.3g} s")
+    return "定数: " + ", ".join(bits) if bits else ""
+
+
 def make_grid(rows: int, cols: int, *, subplot_titles=None, **kwargs):
     """`make_subplots` の共通既定（余白・タイトル）付きラッパ。
 

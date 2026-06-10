@@ -214,7 +214,6 @@ _HTML_TEMPLATE = r"""<!DOCTYPE html>
       <div class="krow"><span class="rlbl">throttle τ</span><input type="range" id="k_tau_acc_thr" min="0.02" max="1.5" step="0.005" value="0.26"><span class="kval" id="v_tau_acc_thr"></span></div>
       <div class="krow"><span class="rlbl">brake T</span><input type="range" id="k_t_acc_brk" min="0" max="0.5" step="0.005" value="0.07"><span class="kval" id="v_t_acc_brk"></span></div>
       <div class="krow"><span class="rlbl">brake τ</span><input type="range" id="k_tau_acc_brk" min="0.02" max="1.5" step="0.005" value="0.15"><span class="kval" id="v_tau_acc_brk"></span></div>
-      <div class="krow"><span class="rlbl">τ速度傾き</span><input type="range" id="k_tau_slope" min="-0.05" max="0.05" step="0.001" value="0"><span class="kval" id="v_tau_slope"></span></div>
     </div>
     <div class="kcard">
       <div class="khead">縦・補正（定常・連成・停止）</div>
@@ -290,12 +289,11 @@ const DATA = __PAYLOAD_JSON__;
   let optWholeBag = true;  // 最適化を全区間で行うか (false なら [curT, curT+optWindowS])
   let optWindowS = 10;     // 最適化窓幅 [s]（シーク位置を起点）
   const cam = { cx: 0, cy: 0, viewW: 100, targetViewW: 100, follow: true, init: false };
-  // model: tau/T [s], tau_acc_slope [s/(m/s)], steer_bias [deg](UI 単位; rollout で rad 変換), k_us [s^2/m]
-  // 縦は throttle/brake で tau・T を分離。tau_eff = tau0 + slope*v (v は観測)。
+  // model: tau/T [s], steer_bias [deg](UI 単位; rollout で rad 変換), k_us [s^2/m]
+  // 縦は throttle/brake で tau・T を分離。tau は定数 (速度依存にしない。poly(v) と交絡するため)。
   const model = {
     tau_acc_thr: DATA.model_seed.tau_acc_thr, t_acc_thr: DATA.model_seed.t_acc_thr,
     tau_acc_brk: DATA.model_seed.tau_acc_brk, t_acc_brk: DATA.model_seed.t_acc_brk,
-    tau_acc_slope: DATA.model_seed.tau_acc_slope,
     poly0: DATA.model_seed.poly0, poly1: DATA.model_seed.poly1, poly2: DATA.model_seed.poly2,
     polyOn0: false, polyOn1: false, polyOn2: false, // 多項式補正の各次 ON/OFF (既定 OFF)
     v_stop: DATA.model_seed.v_stop, stopHandling: true, // 停止処理 (既定 ON)
@@ -374,8 +372,8 @@ const DATA = __PAYLOAD_JSON__;
     if (a == null || v == null || dDeg0 == null) return null;
     let delta = dDeg0 * DEG;        // rad
     let yaw = st0.yaw, x = st0.x, y = st0.y;
-    // 縦: throttle/brake で tau・T を分離。tau_eff = tau0 + slope*v (v は観測, 下限 0.02s)。
-    const tauThr = model.tau_acc_thr, tauBrk = model.tau_acc_brk, tauSlope = model.tau_acc_slope;
+    // 縦: throttle/brake で tau・T を分離。tau は定数 (速度依存にしない。poly(v) と交絡するため)。
+    const tauThr = Math.max(model.tau_acc_thr, 0.02), tauBrk = Math.max(model.tau_acc_brk, 0.02);
     const TaThr = model.t_acc_thr, TaBrk = model.t_acc_brk;
     const tauD = Math.max(model.tau_steer, 1e-3);
     const Td = model.t_steer;
@@ -410,7 +408,7 @@ const DATA = __PAYLOAD_JSON__;
       for (let s = 0; s < SUBSTEP; s++) {
         const tt = t + s * h;
         const vl = chanAt("lon_vel", tt);
-        const vv = (vl != null) ? vl : v;   // 観測速度 (tau(v)・横チェーンで共用)
+        const vv = (vl != null) ? vl : v;   // 観測速度 (poly(v)・横チェーンで共用)
         // 縦: throttle(a_cmd>=0)/brake(a_cmd<0) を判定し、該当 delay の指令 u と tau0 を採用。
         // throttle 側の遅延指令の符号で判定 (差は僅少、null は brake 側→ホールドで fallback)。
         const uThr = chanAt("cmd_accel", tt - TaThr);
@@ -422,16 +420,18 @@ const DATA = __PAYLOAD_JSON__;
         let u = throttle ? uThr : uBrk;
         if (u == null) u = lastDrive;
         lastDrive = u;
-        const tau0 = throttle ? tauThr : tauBrk;
-        const tauA = Math.max(tau0 + tauSlope * vv, 0.02); // tau(v), 下限 0.02s
+        const tauA = throttle ? tauThr : tauBrk; // 定数 (下限クランプ済み)
         const wzo = chanAt("wz", tt); // カーブ抵抗の回帰子 a_y=v·wz 用 (観測)
         a += h * (-(a - accelTarget(u, vv, wzo != null ? wzo : 0)) / tauA);
+        a = sat(a, accLim);                  // C++: pedal_acc を vx_rate_lim で飽和
         v += h * a;
         if (model.stopHandling && v < 0) v = 0; // 後退なし (geared)
-        // ステア(rad)
+        v = sat(v, velLim);                  // C++: vel を vx_lim で飽和
+        // ステア(rad)。C++: steer_des を steer_lim 飽和→不感帯→steer_rate を rate_lim 飽和。
         const ud = chanAt("cmd_steer", tt - Td); if (ud != null) lastUd = ud;
-        const driveD = (lastUd != null) ? lastUd * DEG : delta;
-        delta += h * (-(delta - driveD) / tauD);
+        let driveD = (lastUd != null) ? lastUd * DEG : delta;
+        driveD = sat(driveD, steerLim);
+        delta += h * sat(-deadBand(delta - driveD, db) / tauD, steerRateLim);
         // 横運動学（v は観測 vv, δ_src は sim/観測）
         const om = omegaAt(tt, delta);
         yaw += h * om;
@@ -448,6 +448,8 @@ const DATA = __PAYLOAD_JSON__;
     $("hint").textContent =
       "シーク時刻を起点に運動方程式で前方積算したシミュレーション(赤)を観測(実線)・指令(破線灰)と重ねる。" +
       "縦 a→v、横 δ→ω→θ→位置（横の v は観測値を使用）。地図の赤線=シミュレーション軌跡。" +
+      "座標系: X=進行方向, Y=横方向, θ=ヨー角(進行方向), δ=ステア角, ω=ヨーレート。" +
+      "凡例: 実線=観測(実機色), 破線灰=指令, 赤=シミュレーション。" +
       "つまみ(T・τ・k_us・β)で即追従。位置が乖離してもモデル不良と即断せず予測窓を縮めて各段を切り分ける。";
   }
   setHint();
@@ -590,7 +592,8 @@ const DATA = __PAYLOAD_JSON__;
       "brake T=" + m.t_acc_brk.toFixed(3) + "s τ₀=" + m.tau_acc_brk.toFixed(3) + "s&nbsp; slope=" + m.tau_acc_slope.toFixed(3) + "<br>" +
       "横 T_δ=" + m.t_steer.toFixed(3) + "s τ_δ=" + m.tau_steer.toFixed(3) + "s&nbsp; " +
       "k_us=" + m.k_us.toFixed(3) + " β=" + m.steer_bias.toFixed(2) + "° L=" + L.toFixed(3) + "m</span><br>" +
-      "<span class='note'>※ ω・位置・τ(v) の v は観測値を使用（縦誤差を分離）／ステア源: " + srcLabel + "</span>";
+      "<span class='note'>※ ω・位置・τ(v) の v は観測値を使用（縦誤差を分離）／ステア源: " + srcLabel +
+      "／注: 実シミュレータ(C++)の yaw 計算は ω=v·tan(δ)/(L+k_us·v²) で β を含まない（β はこのビューアの当てはめ用）</span>";
   }
   updateEquations();
 

@@ -17,8 +17,10 @@ from ._common import (
     add_bottom_note,
     apply_base_layout,
     axis_range_from_limits,
+    coord_note,
     ma_window,
     make_grid,
+    model_const_note,
     polyfit_line,
     speed_bin_masks,
     viridis_colors,
@@ -187,10 +189,14 @@ def build_fig_lateral_dynamics_timeseries(
         fig.add_vline(x=0, row=row, col=1, **_VLINE)
         fig.update_yaxes(title_text=ylabel, row=row, col=1)
     fig.update_xaxes(title_text="AUTONOMOUS 開始からの時刻 [s]", row=4, col=1)
+    height = 1300
+    # 横方向諸量 (ay/vy/wz) は座標系の取り方で符号が変わるため、座標系と定数を明示する。
+    const = model_const_note(params)
+    add_bottom_note(fig, coord_note() + ("<br>" + const if const else ""), height=height)
     return apply_base_layout(
         fig,
         title="全走行 N=1 (per-step): 横方向諸量 時系列<br><sub>(各ステップで実機状態にリセット)</sub>",
-        height=1300,
+        height=height,
     )
 
 
