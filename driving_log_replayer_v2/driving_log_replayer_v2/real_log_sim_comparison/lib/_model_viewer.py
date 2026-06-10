@@ -130,11 +130,16 @@ _HTML_TEMPLATE = r"""<!DOCTYPE html>
   #app { display: flex; flex-direction: column; height: 100%; }
   #controls { display: flex; flex-wrap: wrap; gap: 4px 16px; align-items: center; padding: 6px 10px; border-bottom: 1px solid #ddd; background: #fafafa; }
   #controls .grp { display: flex; gap: 6px; align-items: center; white-space: nowrap; }
-  #knobs { display: flex; flex-wrap: wrap; gap: 4px 16px; align-items: center; padding: 5px 10px; border-bottom: 1px solid #ddd; background: #f4f6fa; }
-  #knobs .kg { display: flex; gap: 5px; align-items: center; white-space: nowrap; }
-  #knobs .kg input[type=range] { width: 96px; }
-  #knobs .kval { font-family: monospace; font-size: 12px; min-width: 50px; text-align: right; }
-  #knobs .ktitle { font-weight: 600; color: #2b4a8b; }
+  #knobs { display: flex; flex-wrap: wrap; gap: 8px; align-items: flex-start; padding: 6px 10px; border-bottom: 1px solid #ddd; background: #f4f6fa; }
+  #knobs.hidden { display: none; }
+  .kcard { border: 1px solid #d5dae5; border-radius: 5px; background: #fff; padding: 3px 8px 5px; }
+  .kcard > .khead { font-weight: 600; color: #2b4a8b; font-size: 11px; margin-bottom: 2px; }
+  .krow { display: flex; gap: 5px; align-items: center; white-space: nowrap; font-size: 12px; padding: 1px 0; }
+  .krow > .rlbl { min-width: 64px; }
+  .krow label { display: inline-flex; gap: 3px; align-items: center; min-width: 64px; }
+  .krow input[type=range] { width: 90px; }
+  .krow .kval { font-family: monospace; font-size: 11px; min-width: 52px; text-align: right; }
+  #togglebtn { font-size: 12px; }
   #seekrow { display: flex; gap: 10px; align-items: center; padding: 4px 10px; border-bottom: 1px solid #ddd; background: #fafafa; }
   #seek { flex: 1; }
   #readout { min-width: 150px; font-family: monospace; font-size: 12px; text-align: right; }
@@ -194,27 +199,35 @@ _HTML_TEMPLATE = r"""<!DOCTYPE html>
       <button id="opt_bike">自転車</button>
       <span id="optstatus" style="font-family:monospace;font-size:11px;color:#2b4a8b"></span>
     </span>
+    <span class="grp"><button id="togglebtn">パラメータ ▼隠す</button></span>
   </div>
   <div id="knobs">
-    <span class="kg"><span class="ktitle">縦throttle</span></span>
-    <span class="kg">T <input type="range" id="k_t_acc_thr" min="0" max="0.5" step="0.005" value="0.1"><span class="kval" id="v_t_acc_thr"></span></span>
-    <span class="kg">τ <input type="range" id="k_tau_acc_thr" min="0.02" max="1.5" step="0.005" value="0.26"><span class="kval" id="v_tau_acc_thr"></span></span>
-    <span class="kg" style="margin-left:6px"><span class="ktitle">縦brake</span></span>
-    <span class="kg">T <input type="range" id="k_t_acc_brk" min="0" max="0.5" step="0.005" value="0.07"><span class="kval" id="v_t_acc_brk"></span></span>
-    <span class="kg">τ <input type="range" id="k_tau_acc_brk" min="0.02" max="1.5" step="0.005" value="0.15"><span class="kval" id="v_tau_acc_brk"></span></span>
-    <span class="kg">τ速度傾き <input type="range" id="k_tau_slope" min="-0.05" max="0.05" step="0.001" value="0"><span class="kval" id="v_tau_slope"></span></span>
-    <span class="kg" style="margin-left:6px"><span class="ktitle">縦補正(多項式)</span></span>
-    <span class="kg"><label><input type="checkbox" id="on_poly0">p₀</label> <input type="range" id="k_poly0" min="-1" max="1" step="0.01" value="0" disabled><span class="kval" id="v_poly0"></span></span>
-    <span class="kg"><label><input type="checkbox" id="on_poly1">p₁·v</label> <input type="range" id="k_poly1" min="-0.1" max="0.1" step="0.001" value="0" disabled><span class="kval" id="v_poly1"></span></span>
-    <span class="kg"><label><input type="checkbox" id="on_poly2">p₂·v²</label> <input type="range" id="k_poly2" min="-0.01" max="0.01" step="0.0001" value="0" disabled><span class="kval" id="v_poly2"></span></span>
-    <span class="kg"><label><input type="checkbox" id="on_corner">c·a_y²(カーブ)</label> <input type="range" id="k_corner" min="-0.5" max="0.1" step="0.005" value="0" disabled><span class="kval" id="v_corner"></span></span>
-    <span class="kg" style="margin-left:6px"><label><input type="checkbox" id="on_stop" checked>停止処理</label> v_stop <input type="range" id="k_vstop" min="0" max="1" step="0.05" value="0.2"><span class="kval" id="v_vstop"></span></span>
-    <span class="kg" style="margin-left:6px"><span class="ktitle">横(ステア)</span></span>
-    <span class="kg">T <input type="range" id="k_t_steer" min="0" max="0.5" step="0.005" value="0.03"><span class="kval" id="v_t_steer"></span></span>
-    <span class="kg">τ <input type="range" id="k_tau_steer" min="0.02" max="1.5" step="0.005" value="0.50"><span class="kval" id="v_tau_steer"></span></span>
-    <span class="kg" style="margin-left:6px"><span class="ktitle">自転車</span></span>
-    <span class="kg">k_us <input type="range" id="k_kus" min="0" max="0.05" step="0.001" value="0"><span class="kval" id="v_kus"></span></span>
-    <span class="kg">β <input type="range" id="k_bias" min="-2" max="2" step="0.01" value="0"><span class="kval" id="v_bias"></span></span>
+    <div class="kcard">
+      <div class="khead">縦・加速度</div>
+      <div class="krow"><span class="rlbl">throttle T</span><input type="range" id="k_t_acc_thr" min="0" max="0.5" step="0.005" value="0.1"><span class="kval" id="v_t_acc_thr"></span></div>
+      <div class="krow"><span class="rlbl">throttle τ</span><input type="range" id="k_tau_acc_thr" min="0.02" max="1.5" step="0.005" value="0.26"><span class="kval" id="v_tau_acc_thr"></span></div>
+      <div class="krow"><span class="rlbl">brake T</span><input type="range" id="k_t_acc_brk" min="0" max="0.5" step="0.005" value="0.07"><span class="kval" id="v_t_acc_brk"></span></div>
+      <div class="krow"><span class="rlbl">brake τ</span><input type="range" id="k_tau_acc_brk" min="0.02" max="1.5" step="0.005" value="0.15"><span class="kval" id="v_tau_acc_brk"></span></div>
+      <div class="krow"><span class="rlbl">τ速度傾き</span><input type="range" id="k_tau_slope" min="-0.05" max="0.05" step="0.001" value="0"><span class="kval" id="v_tau_slope"></span></div>
+    </div>
+    <div class="kcard">
+      <div class="khead">縦・補正（定常・連成・停止）</div>
+      <div class="krow"><label><input type="checkbox" id="on_poly0">p₀</label><input type="range" id="k_poly0" min="-1" max="1" step="0.01" value="0" disabled><span class="kval" id="v_poly0"></span></div>
+      <div class="krow"><label><input type="checkbox" id="on_poly1">p₁·v</label><input type="range" id="k_poly1" min="-0.1" max="0.1" step="0.001" value="0" disabled><span class="kval" id="v_poly1"></span></div>
+      <div class="krow"><label><input type="checkbox" id="on_poly2">p₂·v²</label><input type="range" id="k_poly2" min="-0.01" max="0.01" step="0.0001" value="0" disabled><span class="kval" id="v_poly2"></span></div>
+      <div class="krow"><label><input type="checkbox" id="on_corner">c·a_y²</label><input type="range" id="k_corner" min="-0.5" max="0.1" step="0.005" value="0" disabled><span class="kval" id="v_corner"></span></div>
+      <div class="krow"><label><input type="checkbox" id="on_stop" checked>停止 v_stop</label><input type="range" id="k_vstop" min="0" max="1" step="0.05" value="0.2"><span class="kval" id="v_vstop"></span></div>
+    </div>
+    <div class="kcard">
+      <div class="khead">横・ステア</div>
+      <div class="krow"><span class="rlbl">T</span><input type="range" id="k_t_steer" min="0" max="0.5" step="0.005" value="0.03"><span class="kval" id="v_t_steer"></span></div>
+      <div class="krow"><span class="rlbl">τ</span><input type="range" id="k_tau_steer" min="0.02" max="1.5" step="0.005" value="0.50"><span class="kval" id="v_tau_steer"></span></div>
+    </div>
+    <div class="kcard">
+      <div class="khead">自転車</div>
+      <div class="krow"><span class="rlbl">k_us</span><input type="range" id="k_kus" min="0" max="0.05" step="0.001" value="0"><span class="kval" id="v_kus"></span></div>
+      <div class="krow"><span class="rlbl">β</span><input type="range" id="k_bias" min="-2" max="2" step="0.01" value="0"><span class="kval" id="v_bias"></span></div>
+    </div>
   </div>
   <div id="seekrow">
     <input type="range" id="seek" min="0" max="10000" value="0">
@@ -434,6 +447,12 @@ const DATA = __PAYLOAD_JSON__;
   });
   $("speed").addEventListener("change", (e) => { speedMul = parseFloat(e.target.value); });
   $("steersrc").addEventListener("change", (e) => { steerSource = e.target.value; updateEquations(); markDirty(); });
+  // パラメータ群（#knobs）の表示/非表示トグル（地図・プロットを広く使いたいとき隠す）。
+  $("togglebtn").addEventListener("click", () => {
+    const hidden = $("knobs").classList.toggle("hidden");
+    $("togglebtn").textContent = hidden ? "パラメータ ▶表示" : "パラメータ ▼隠す";
+    markPlotStatic(); markDirty(); // レイアウト変化でプロット再計算
+  });
 
   const SEEK_MAX = 10000;
   function syncSeek() {
