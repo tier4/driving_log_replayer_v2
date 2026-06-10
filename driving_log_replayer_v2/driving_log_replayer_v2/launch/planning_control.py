@@ -41,6 +41,7 @@ RECORD_TOPIC = """^/tf$\
 |^/planning/ground_truth_trajectory$\
 |^/planning/reference_trajectory\
 |^/vehicle/status/control_mode$\
+|^/j6/.*$\
 """
 
 AUTOWARE_DISABLE = {
