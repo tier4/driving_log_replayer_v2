@@ -14,6 +14,30 @@
 #   step3_run_sims が simple_sensor_simulator.<key>:=<value> として launch に渡し、
 #   description の simulator_model.param.yaml を上書きする (後勝ち)。
 #   description パッケージを増やさずに dynamics 変種 (例 k_us) を作れる。
+#
+# dp_model_dir: DiffusionPlanner モデルディレクトリ (任意)。
+#   dir 直下に **必ず `diffusion_planner.onnx` と `args.json` の 2 ファイル名**で配置すること
+#   (step3 がこの固定名で env を組む。欠落時は既定モデルへ黙ってフォールバックせず loud に落とす)。
+#   step3_run_sims が env DIFFUSION_PLANNER_ONNX_PATH / DIFFUSION_PLANNER_ARGS_PATH に設定して
+#   launch に渡し、autoware_launch の diffusion_planner.param.yaml が $(env ...) 置換で参照する。
+#   正規パスへのファイルコピー不要で run ごとに DP モデルを差し替えられる。未指定なら Autoware 既定。
+#   重要: この env 切り替えは変更 A ($(env) 化した param yaml) が *インストール済* autoware_launch に
+#   反映済のときだけ効く。未反映だと step3 が起動前に RuntimeError を送出する (既定モデルでの黙った実行を防止)。
+#   同一 vehicle_model で dp_model_dir だけ変えた run を並べれば、モデル間の挙動差を比較できる。
+#
+# dp_model_release / dp_model_package: Web.Auto ML パッケージを **自動 pull** する (任意・推奨)。
+#   dp_model_release に release 名を書くと step3 が `webauto ml package-release search→pull` で取得し、
+#   その dir を dp_model_dir として使う (.webauto-ci.yml にモデルを書かず sim_runs.yaml だけで完結)。
+#   dp_model_package は package 名 (既定 diffusion_planner_for_x2_exp)。dp_model_dir とは排他。
+#   project は env WEBAUTO_PROJECT_ID (既定 x2_dev)、pull 先は env DP_MODEL_PULL_DIR (既定 ~/.webauto/...)。
+#   release-id でキャッシュし再 pull はスキップ。webauto 認証が必要 (cloud では runtime 認証を要確認)。
+#   例 (同 vehicle_model で DP モデル 2 種を自動 pull して比較):
+#     - tag: sim_dp_e40
+#       vehicle_model: j6_gen2
+#       dp_model_release: 20260410-145919_lambda1e-6_ridge1e-8__epoch0020__epoch0040
+#     - tag: sim_dp_e30
+#       vehicle_model: j6_gen2
+#       dp_model_release: 20260410-145919_lambda1e-6_ridge1e-8__epoch0020__epoch0030
 
 sim_runs:
   # j6_gen2_description の DELAY_STEER_ACC_GEARED_WO_FALL_GUARD (dynamics 既定値)

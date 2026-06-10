@@ -20,6 +20,7 @@ Usage:
 from __future__ import annotations
 
 import argparse
+import json
 import os
 import shutil
 import subprocess
@@ -67,6 +68,219 @@ def _build_launch_cmd(run, scenario: Path, output_directory: Path) -> list[str]:
     for key, value in run.params.items():
         cmd.append(f"simple_sensor_simulator.{key}:={value}")
     return cmd
+
+
+def _setup_dp_model_env(dp_model_dir: str | None) -> None:
+    """dp_model_dir があれば DiffusionPlanner モデルパスの env を os.environ に設定する.
+
+    autoware_launch の diffusion_planner.param.yaml は onnx_model_path / args_path を
+    `$(env DIFFUSION_PLANNER_ONNX_PATH ...)` 置換で参照する (allow_substs=true)。
+    ここで run ごとに env を上書きすることで、正規パスへのファイルコピーなしに DP モデルを
+    切り替える。DP_ONNX_PATH も同 onnx に揃え、provenance が使用モデルを記録できるようにする。
+
+    step3_run_sims は 1 run-tag = 1 プロセスのため os.environ を直接設定してよい。これにより
+    (1) launch subprocess が継承し、(2) 同プロセスの provenance capture も同じ onnx を解決する。
+
+    dp_model_dir は明示指定 (sim_runs.yaml の dp_model_dir) か自動 pull の解決結果。
+    """
+    if not dp_model_dir:
+        return
+    model_dir = Path(dp_model_dir)
+    onnx = model_dir / "diffusion_planner.onnx"
+    args_json = model_dir / "args.json"
+    # モデルファイル欠落時は既定モデルへ黙ってフォールバックさせず loud に落とす
+    # (欠落のまま進むと provenance が既定モデルを記録し「別モデルのつもりが既定」を取り逃す)。
+    if not onnx.exists():
+        raise RuntimeError(
+            f"DP モデルが見つかりません: {onnx} "
+            "(dir には diffusion_planner.onnx と args.json が必要)"
+        )
+    # 変更 A (param yaml の $(env) 化) が *インストール済* autoware_launch に反映済か検証。
+    # 未反映 (ローカル非 symlink / cloud で autoware.repos 未更新) だと Autoware は既定モデルを
+    # ロードし続けるのに env と provenance は dp_model_dir を指す → 「別モデルなのに同一挙動」という
+    # 黙った誤り。env を立てる前に loud に落とす。
+    _assert_installed_param_honors_env()
+    os.environ["DIFFUSION_PLANNER_ONNX_PATH"] = str(onnx)
+    os.environ["DIFFUSION_PLANNER_ARGS_PATH"] = str(args_json)
+    os.environ["DP_ONNX_PATH"] = str(onnx)  # provenance の解決元と揃える
+    print(f"[step3_run_sims] DP model dir: {model_dir}", flush=True)
+
+
+# 変更 A の検証に使う、param yaml が持つべき env 置換のマーカー。
+_DP_ENV_SUBST_MARKER = "$(env DIFFUSION_PLANNER_ONNX_PATH"
+
+
+def _assert_installed_param_honors_env() -> None:
+    """インストール済 autoware_launch の diffusion_planner.param.yaml が env 置換を持つか検証.
+
+    dp_model_dir による env 切り替えは、build_only と scenario の両方が読む *インストール済*
+    param yaml が onnx_model_path を `$(env DIFFUSION_PLANNER_ONNX_PATH ...)` で参照して初めて効く。
+    未反映なら dp_model_dir が黙って無視されるため、ここで RuntimeError を送出する。
+    """
+    param = _autoware_launch_dp_param_path()
+    if param is None:
+        raise RuntimeError(
+            "autoware_launch の diffusion_planner.param.yaml を解決できません "
+            "(dp_model_dir 指定には autoware_launch のインストールが必要)"
+        )
+    text = Path(param).read_text(encoding="utf-8", errors="replace")
+    if _DP_ENV_SUBST_MARKER not in text:
+        raise RuntimeError(
+            f"インストール済 {param} が onnx_model_path を "
+            "$(env DIFFUSION_PLANNER_ONNX_PATH ...) で参照していません。変更 A が *インストール済* "
+            "autoware_launch に未反映です (ローカル: autoware_launch を symlink-install/再ビルド、"
+            "cloud: launcher サブリポジトリに A をコミットし autoware.repos の version を更新)。"
+            "このままでは dp_model_dir が黙って無視され Autoware が既定モデルをロードします。"
+        )
+
+
+# TensorRT エンジンビルドは数分かかり得るため余裕を持たせる。
+_DP_ENGINE_BUILD_TIMEOUT = 1200
+
+
+def _autoware_launch_dp_param_path() -> str | None:
+    """autoware_launch の diffusion_planner.param.yaml の絶対パスを解決する.
+
+    build_only launch に diffusion_planner_param_path として渡す
+    (.webauto-ci.yml の real_log_sim_comparison pre_task と同じパス)。
+    """
+    try:
+        out = subprocess.run(
+            ["ros2", "pkg", "prefix", "autoware_launch", "--share"],
+            capture_output=True, text=True, timeout=30, check=False,
+        )
+    except Exception:  # noqa: BLE001
+        return None
+    if out.returncode != 0 or not out.stdout.strip():
+        return None
+    p = (Path(out.stdout.strip())
+         / "config/planning/neural_net_planner/diffusion_planner.param.yaml")
+    return str(p) if p.exists() else None
+
+
+def _prebuild_dp_engine(dp_model_dir: str | None) -> None:
+    """dp_model_dir の TensorRT エンジンを build_only で scenario 起動前に生成する.
+
+    env でモデルを切り替えると各モデル初回ロード時にエンジンが遅延ビルドされ、計時付きの
+    scenario 実行中だとゴール到達前にタイムアウトし得る。ここで scenario 起動前に build_only
+    launch を一度走らせ、エンジンを model dir に生成しておく (エンジンは onnx と同ディレクトリに
+    `<onnx名>_batch<N>_fp32.engine` でキャッシュされる: tensorrt_inference.cpp:141-145。dir-per-model
+    配置なら隔離される)。既にあれば build_only は高速ロードして終了する (冪等)。
+
+    sim_runs.yaml の dp_model_dir / dp_model_release が SSOT となり、.webauto-ci.yml にモデルごとの
+    pre_task を複製する必要がない。未指定なら何もしない (既定モデルは既存の deploy/pre_task に従う)。
+    呼び出し前に _setup_dp_model_env() が env を設定済みであること (subprocess が継承する)。
+    """
+    if not dp_model_dir:
+        return
+    param = _autoware_launch_dp_param_path()
+    if param is None:
+        print("[step3_run_sims] WARN: autoware_launch の diffusion_planner.param.yaml を解決できず "
+              "エンジン事前ビルドをスキップ (scenario 実行中に遅延ビルドされ得る)", file=sys.stderr)
+        return
+    cmd = [
+        "ros2", "launch", "autoware_diffusion_planner", "diffusion_planner.launch.xml",
+        "build_only:=true",
+        f"diffusion_planner_param_path:={param}",
+    ]
+    print(f"[step3_run_sims] DP engine 事前ビルド: {dp_model_dir}", flush=True)
+    _run_subprocess(cmd, timeout=_DP_ENGINE_BUILD_TIMEOUT)
+
+
+# 自動 pull の既定 Web.Auto プロジェクト (env WEBAUTO_PROJECT_ID で上書き可)。
+_DEFAULT_WEBAUTO_PROJECT = "x2_dev"
+# webauto CLI のタイムアウト [s] (pull は数百 MB を落とすため余裕を持たせる)。
+_WEBAUTO_CLI_TIMEOUT = 1800
+
+
+def _webauto_json(args: list[str]) -> dict:
+    """webauto CLI を --output json で実行し dict を返す (失敗時 RuntimeError)."""
+    cmd = ["webauto", *args, "--output", "json"]
+    print(f"[step3_run_sims] $ {' '.join(cmd)}", flush=True)
+    try:
+        out = subprocess.run(
+            cmd, capture_output=True, text=True,
+            timeout=_WEBAUTO_CLI_TIMEOUT, check=False,
+        )
+    except subprocess.TimeoutExpired as e:
+        raise RuntimeError(f"webauto timeout: {' '.join(cmd)}") from e
+    if out.returncode != 0:
+        raise RuntimeError(
+            f"webauto 失敗 (rc={out.returncode}): {' '.join(cmd)}\n{out.stderr.strip()}"
+        )
+    try:
+        return json.loads(out.stdout)
+    except json.JSONDecodeError as e:
+        raise RuntimeError(
+            f"webauto 出力の JSON 解析に失敗: {' '.join(cmd)}\n{out.stdout[:500]}"
+        ) from e
+
+
+def _dp_pull_root() -> Path:
+    """自動 pull したモデルのキャッシュ root (env DP_MODEL_PULL_DIR で上書き可)."""
+    root = os.environ.get("DP_MODEL_PULL_DIR")
+    if root:
+        return Path(os.path.expandvars(os.path.expanduser(root)))
+    return Path.home() / ".webauto" / "data" / "ml" / "package-release"
+
+
+def _resolve_dp_model_dir(run) -> str | None:
+    """run の DP モデル dir を解決する (dp_model_release 指定時は webauto から自動 pull).
+
+    - dp_model_release: webauto ml package-release search→pull し onnx を含む dir を返す (冪等)。
+    - dp_model_dir: そのまま返す。
+    - どちらも無し: None。
+    """
+    if not run.dp_model_release:
+        return run.dp_model_dir
+
+    project_id = os.environ.get("WEBAUTO_PROJECT_ID", _DEFAULT_WEBAUTO_PROJECT)
+    package = run.dp_model_package
+    release = run.dp_model_release
+
+    # 名前 → (package_id, release_id) 解決
+    data = _webauto_json([
+        "ml", "package-release", "search",
+        "--project-id", project_id,
+        "--package-name", package,
+        "--package-release-name", release,
+    ])
+    exact = [r for r in (data.get("releases") or []) if r.get("name") == release]
+    if not exact:
+        raise RuntimeError(
+            f"ML package-release が見つかりません: package={package!r} release={release!r} "
+            f"(project={project_id})。webauto 認証と名称を確認してください。"
+        )
+    package_id = exact[0]["package_id"]
+    release_id = exact[0]["id"]
+
+    root = _dp_pull_root()
+    # 既取得チェック (release-id でキャッシュ。再 pull 不要・エンジンキャッシュも再利用)。
+    release_dir = root / release_id
+    if release_dir.exists():
+        found = list(release_dir.glob("*/diffusion_planner.onnx")) \
+            + list(release_dir.glob("diffusion_planner.onnx"))
+        if found:
+            print(f"[step3_run_sims] DP model 既取得を再利用: {found[0].parent}", flush=True)
+            return str(found[0].parent)
+
+    root.mkdir(parents=True, exist_ok=True)
+    pulled = _webauto_json([
+        "ml", "package-release", "pull",
+        "--project-id", project_id,
+        "--package-id", package_id,
+        "--package-release-id", release_id,
+        "--target-dir", str(root),
+    ])
+    rel_path = Path(pulled.get("package_release_path") or release_dir)
+    found = list(rel_path.glob("*/diffusion_planner.onnx")) \
+        + list(rel_path.glob("diffusion_planner.onnx"))
+    if not found:
+        raise RuntimeError(
+            f"pull したが diffusion_planner.onnx が見つかりません: {rel_path}"
+        )
+    print(f"[step3_run_sims] DP model pull 完了: {found[0].parent}", flush=True)
+    return str(found[0].parent)
 
 
 def _find_output_mcap(search_dirs: list[Path]) -> Path | None:
@@ -161,6 +375,13 @@ def main() -> None:
             print(f"[step3_run_sims] WARN: reproduce_bag が見つかりません: {args.reproduce_bag} "
                   "(perception 注入をスキップ)", file=sys.stderr)
 
+        # DP モデルを解決 (dp_model_release 指定時は webauto から自動 pull)。
+        dp_model_dir = _resolve_dp_model_dir(run)
+        # 解決した DP モデルを os.environ に反映してから launch (subprocess が継承)。
+        _setup_dp_model_env(dp_model_dir)
+        # DP モデル指定時は scenario 起動前に TensorRT エンジンを事前ビルド
+        # (遅延ビルドによる scenario タイムアウト回避。sim_runs.yaml 駆動)。
+        _prebuild_dp_engine(dp_model_dir)
         cmd = _build_launch_cmd(run, scenario.resolve(), tmp_root)
         _run_subprocess(cmd, timeout=run.timeout_s)
 
@@ -189,6 +410,8 @@ def main() -> None:
             "tag": run.tag,
             "vehicle_model": run.vehicle_model,
             "architecture_type": run.architecture_type,
+            "dp_model_dir": dp_model_dir,
+            "dp_model_release": run.dp_model_release,
             "params": run.params,
         })
         print(f"[step3_run_sims] provenance: DP={prov.get('dp_exp_name')} "

@@ -20,17 +20,20 @@ import subprocess
 from pathlib import Path
 
 # DP onnx の既定探索パス (autoware_launch の diffusion_planner.param.yaml::onnx_model_path)。
-# env DP_ONNX_PATH で上書き可能。
+# env DIFFUSION_PLANNER_ONNX_PATH (step3 が dp_model_dir から設定) / DP_ONNX_PATH で上書き可能。
 _DP_ONNX_CANDIDATES = [
     "/opt/autoware/mlmodels/diffusion_planner_for_x2_exp/diffusion_planner.onnx",
     "/opt/autoware/mlmodels/diffusion_planner/model.onnx",
 ]
 
+# env からの解決優先順 (先勝ち)。DIFFUSION_PLANNER_ONNX_PATH は autoware_launch の
+# $(env ...) 置換に渡すのと同じ変数で、step3 が run.dp_model_dir から設定する。
+_DP_ONNX_ENV_VARS = ("DIFFUSION_PLANNER_ONNX_PATH", "DP_ONNX_PATH")
+
 
 def _resolve_onnx() -> Path | None:
-    env = os.environ.get("DP_ONNX_PATH")
-    cands = ([env] if env else []) + _DP_ONNX_CANDIDATES
-    for c in cands:
+    env_paths = [v for k in _DP_ONNX_ENV_VARS if (v := os.environ.get(k))]
+    for c in env_paths + _DP_ONNX_CANDIDATES:
         p = Path(c)
         if p.exists():
             return p

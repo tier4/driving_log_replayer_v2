@@ -14,6 +14,18 @@ schema:
         architecture_type: <str>     # 同 architecture_type:= (任意、既定 awf/universe/20250130)
         godot_executable: <str>      # vehicle_model が *_godot のとき必須
         timeout_s: <int>             # step3_run_sims subprocess timeout [s] (任意、既定 600)
+        dp_model_dir: <str>          # DiffusionPlanner モデルディレクトリ (任意・ローカル既存配置用)。
+                                     # diffusion_planner.onnx と args.json を含む。
+                                     # step3_run_sims が env DIFFUSION_PLANNER_ONNX_PATH /
+                                     # DIFFUSION_PLANNER_ARGS_PATH に設定して launch に渡す
+                                     # (autoware_launch の diffusion_planner.param.yaml が
+                                     # $(env ...) 置換で参照)。未指定なら Autoware 既定モデル。
+        dp_model_release: <str>      # Web.Auto ML パッケージの release 名 (任意・自動 pull 用)。
+                                     # 指定すると step3_run_sims が webauto ml package-release で
+                                     # search→pull し、取得した dir を dp_model_dir として使う。
+                                     # dp_model_dir と同時指定は不可 (どちらか一方)。
+        dp_model_package: <str>      # 上記 release の package 名 (任意、既定 diffusion_planner_for_x2_exp)。
+                                     # dp_model_release 指定時のみ有効。
         params: {<key>: <scalar>}    # simulator_model パラメータ上書き (任意、cases.yaml と同型)
                                      # 例 {k_us: 0.020}。step3_run_sims が
                                      # simple_sensor_simulator.<key>:=<value> として launch に渡し、
@@ -40,8 +52,12 @@ _TAG_PATTERN = re.compile(r"^[A-Za-z0-9_\-.]+$")
 _KNOWN_KEYS: frozenset[str] = frozenset({
     "tag", "vehicle_model", "sensor_model",
     "initialize_duration", "architecture_type",
-    "godot_executable", "timeout_s", "params",
+    "godot_executable", "timeout_s",
+    "dp_model_dir", "dp_model_release", "dp_model_package", "params",
 })
+
+# 自動 pull 時の既定 package 名 (Web.Auto の DiffusionPlanner 実験用パッケージ)
+_DEFAULT_DP_PACKAGE = "diffusion_planner_for_x2_exp"
 
 
 @dataclass
@@ -55,6 +71,9 @@ class SimRunSpec:
     architecture_type: str = "awf/universe/20250130"
     godot_executable: str | None = None
     timeout_s: int = 600
+    dp_model_dir: str | None = None
+    dp_model_release: str | None = None
+    dp_model_package: str | None = None
     params: dict[str, float | int | bool | str] = field(default_factory=dict)
 
 
@@ -134,6 +153,27 @@ def load_sim_runs_config(path: str | Path) -> SimRunsConfig:
         if godot_exe:
             godot_exe = os.path.expandvars(os.path.expanduser(str(godot_exe)))
 
+        # dp_model_dir も `${VAR}` / `~` を展開 (env 経由で DP モデルパスに渡すため)
+        dp_model_dir = entry.get("dp_model_dir")
+        if dp_model_dir:
+            dp_model_dir = os.path.expandvars(os.path.expanduser(str(dp_model_dir)))
+
+        # dp_model_release: 自動 pull 用。dp_model_dir と排他。package は既定あり。
+        dp_model_release = entry.get("dp_model_release")
+        dp_model_package = entry.get("dp_model_package")
+        if dp_model_release and dp_model_dir:
+            raise ValueError(
+                f"{p}: sim_runs[{i}] dp_model_dir と dp_model_release は同時指定できません "
+                "(どちらか一方)"
+            )
+        if dp_model_package and not dp_model_release:
+            raise ValueError(
+                f"{p}: sim_runs[{i}] dp_model_package は dp_model_release 指定時のみ有効です"
+            )
+        if dp_model_release:
+            dp_model_release = str(dp_model_release)
+            dp_model_package = str(dp_model_package) if dp_model_package else _DEFAULT_DP_PACKAGE
+
         # params: simulator_model パラメータ上書き (スカラのみ)。
         # launch に simple_sensor_simulator.<key>:=<value> として渡る。
         raw_params = entry.get("params") or {}
@@ -156,6 +196,9 @@ def load_sim_runs_config(path: str | Path) -> SimRunsConfig:
             architecture_type=entry.get("architecture_type", "awf/universe/20250130"),
             godot_executable=godot_exe,
             timeout_s=int(entry.get("timeout_s", 600)),
+            dp_model_dir=dp_model_dir,
+            dp_model_release=dp_model_release,
+            dp_model_package=dp_model_package,
             params=params,
         ))
 

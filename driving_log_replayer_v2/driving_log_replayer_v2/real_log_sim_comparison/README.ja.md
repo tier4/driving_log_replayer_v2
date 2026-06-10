@@ -139,7 +139,9 @@ Stage 3 (`step3_run_sims`) が `scenario_test_runner` で sim を回した結果
 | `reproduce_perception` | 任意 (既定 false) | `true` で実機 input_bag の**先行車（tracked objects）と信号（traffic_signals）を ego-pose 同期**で各 sim に注入（`perception_reproducer_node` を Stage 3 が並走起動、`tracking/objects` / `traffic_signals` = DiffusionPlanner 入力に publish）。auto-scenario は NPC を持たないため、実機が先行車追従主体（cruise_following 等）の走行で sim ego が先行車不在により自由加速して実機より速くなるのを防ぎ、**実機の停止・加減速を再現**する。信号も pose-sync 再生するので、実車が緑通過した位置は緑・赤停止した位置は赤となり、**赤信号停止の忠実再現と D0 偽停止回避を両立**（その場合 `traffic_signals: none` と併用し scenario 側の信号設定を無効化）。アルゴリズム=走行中は pose-sync（lead を実相対位置に）/ego 停止中は記録を時間前進（dwell→departure を再生し ego を解放）。live 検証: 実機の先行車追従停止と速度エンベロープを再現し完走（実機 598m を ~586m/170s で追従、arc0-40m 平均速度 0.89m/s ≒ 実機 0.85 / 先行車無 green 1.79）。完全一致は real/sim の DiffusionPlanner 重み差により頭打ち。 |
 
 - **`sim_runs.yaml`**（Stage 3/4）: closed-loop sim の run 定義。`vehicle_model` と任意の
-  `params`（simulator_model 上書き）で run を増やす。
+  `params`（simulator_model 上書き）で run を増やす。任意の `dp_model_release`（webauto から自動 pull）/
+  `dp_model_dir`（ローカル既存）で **同一車両モデルのまま DiffusionPlanner モデルだけを差し替えて比較**できる
+  → [`docs/multi_dp_model_eval.ja.md`](docs/multi_dp_model_eval.ja.md)。
 - **`cases.yaml`**（Stage 5/6）: N-step 解析のケース定義。`vehicle_model` タイプと `params`。
 
   両 YAML の書式・使える `vehicle_model` の種別は `sample/README.ja.md` を参照。

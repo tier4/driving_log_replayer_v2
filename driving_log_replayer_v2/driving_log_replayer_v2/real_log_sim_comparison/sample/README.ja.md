@@ -85,10 +85,26 @@ sim_runs:
   - tag: sim_godot
     vehicle_model: j6_gen2_godot
     godot_executable: /opt/godot_autoware_simulator/godot_autoware_simulator.x86_64
+  # DiffusionPlanner モデル比較: 同 vehicle_model で DP モデルだけ変える
+  - tag: sim_dp_e40
+    vehicle_model: j6_gen2
+    dp_model_release: 20260410-145919_lambda1e-6_ridge1e-8__epoch0020__epoch0040  # webauto から自動 pull
+  - tag: sim_dp_e30
+    vehicle_model: j6_gen2
+    dp_model_release: 20260410-145919_lambda1e-6_ridge1e-8__epoch0020__epoch0030
 ```
 `vehicle_model` は `j6_gen2` (通常シム) / `j6_gen2_perfect_tracker` (理想軌跡追従) / `j6_gen2_godot` (Godot シム)。
 Godot 実行時は `godot_executable` パスが必要。`params` は `simple_sensor_simulator.<key>:=<value>` として
 launch に渡り、description の simulator_model.param.yaml を上書きする。
+
+**DiffusionPlanner モデルの切り替え**（同一車両モデルで DP モデルだけ変えてモデル選定したい場合）:
+- `dp_model_release`: Web.Auto ML パッケージの release 名。指定すると Stage 3 が `webauto ml package-release`
+  で **search→pull して自動取得**し、そのモデルで走らせる（`.webauto-ci.yml` 編集不要）。
+  `dp_model_package` は package 名（既定 `diffusion_planner_for_x2_exp`）。
+- `dp_model_dir`: 既にローカルに置いた DP モデルディレクトリ（`diffusion_planner.onnx` + `args.json`）を直接指定。
+  `dp_model_release` とは排他。
+- いずれも未指定なら Autoware 既定モデル。詳細・前提（変更 A のクラウド反映、認証等）は
+  [`../docs/multi_dp_model_eval.ja.md`](../docs/multi_dp_model_eval.ja.md) を参照。
 
 **cases.yaml (Stage 5/6 用)**: VehicleModel N-step オープンループ解析のケース定義。
 ```yaml
