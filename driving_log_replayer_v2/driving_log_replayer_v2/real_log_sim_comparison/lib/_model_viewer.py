@@ -141,8 +141,14 @@ _HTML_TEMPLATE = r"""<!DOCTYPE html>
   .krow .kval { font-family: monospace; font-size: 11px; min-width: 52px; text-align: right; }
   #togglebtn { font-size: 12px; }
   #seekrow { display: flex; gap: 10px; align-items: center; padding: 4px 10px; border-bottom: 1px solid #ddd; background: #fafafa; }
-  #seek { flex: 1; }
+  #seekwrap { flex: 1; display: flex; flex-direction: column; gap: 2px; }
+  #seek { width: 100%; }
+  /* シーク直下の最適化窓インジケータ（一体型）: トラックに最適化対象区間を赤帯で表示 */
+  #opttrack { position: relative; height: 5px; background: #e3e6ee; border-radius: 3px; }
+  #optband { position: absolute; top: 0; height: 100%; background: rgba(214,39,40,0.5); border-radius: 3px; }
   #readout { min-width: 150px; font-family: monospace; font-size: 12px; text-align: right; }
+  #seekrow .owin { display: flex; gap: 5px; align-items: center; white-space: nowrap; font-size: 12px; }
+  #seekrow .owin input[type=range] { width: 90px; }
   #hint { font-size: 11px; color: #777; padding: 3px 10px 6px; background: #fafafa; border-bottom: 1px solid #ddd; }
   #main { flex: 1; display: flex; min-height: 0; }
   #canvaswrap { flex: 1; position: relative; min-width: 0; background: #fdfdfd; }
@@ -230,8 +236,15 @@ _HTML_TEMPLATE = r"""<!DOCTYPE html>
     </div>
   </div>
   <div id="seekrow">
-    <input type="range" id="seek" min="0" max="10000" value="0">
+    <div id="seekwrap">
+      <input type="range" id="seek" min="0" max="10000" value="0">
+      <div id="opttrack"><div id="optband"></div></div>
+    </div>
     <span id="readout"></span>
+    <span class="owin">最適化窓
+      <label><input type="checkbox" id="opt_whole" checked>全区間</label>
+      幅<input type="range" id="k_optwin" min="1" max="60" step="1" value="10" disabled><span id="v_optwin" style="font-family:monospace;font-size:11px;min-width:30px">10s</span>
+    </span>
   </div>
   <div id="hint"></div>
   <div id="main">
@@ -274,6 +287,8 @@ const DATA = __PAYLOAD_JSON__;
   let plotWindowS = 8;   // 予測窓幅 [s]。窓 = [curT, curT + plotWindowS] (左端=起点)。
   let curT = 0;          // 現在時刻 (= シミュレーション起点) [s]
   let steerSource = "sim"; // 自転車モデルへ渡す δ の源: "sim"(シミュレーション) | "obs"(観測)
+  let optWholeBag = true;  // 最適化を全区間で行うか (false なら [curT, curT+optWindowS])
+  let optWindowS = 10;     // 最適化窓幅 [s]（シーク位置を起点）
   const cam = { cx: 0, cy: 0, viewW: 100, targetViewW: 100, follow: true, init: false };
   // model: tau/T [s], tau_acc_slope [s/(m/s)], steer_bias [deg](UI 単位; rollout で rad 変換), k_us [s^2/m]
   // 縦は throttle/brake で tau・T を分離。tau_eff = tau0 + slope*v (v は観測)。
@@ -455,15 +470,34 @@ const DATA = __PAYLOAD_JSON__;
   });
 
   const SEEK_MAX = 10000;
+  // シーク直下の最適化窓インジケータ（赤帯）を現在の最適化窓に合わせて更新。
+  function updateOptBand() {
+    const [t0, t1] = optWindow();
+    const b = $("optband");
+    b.style.left = (T_MAX > 0 ? t0 / T_MAX * 100 : 0) + "%";
+    b.style.width = (T_MAX > 0 ? (t1 - t0) / T_MAX * 100 : 100) + "%";
+  }
   function syncSeek() {
     const frac = T_MAX > 0 ? curT / T_MAX : 0;
     seekEl.value = Math.round(frac * SEEK_MAX);
     readoutEl.textContent = "t = " + curT.toFixed(2) + " / " + T_MAX.toFixed(1) + " s";
+    updateOptBand(); // 窓がシーク起点なら追従
   }
   seekEl.addEventListener("input", () => {
     curT = (seekEl.valueAsNumber / SEEK_MAX) * T_MAX;
     syncSeek();
     markDirty();
+  });
+  // 最適化窓: 全区間トグル + 幅スライダー（シーク位置を起点に [curT, curT+幅]）。
+  $("opt_whole").addEventListener("change", (e) => {
+    optWholeBag = e.target.checked;
+    $("k_optwin").disabled = optWholeBag;
+    updateOptBand();
+  });
+  $("k_optwin").addEventListener("input", (e) => {
+    optWindowS = e.target.valueAsNumber;
+    $("v_optwin").textContent = optWindowS + "s";
+    updateOptBand();
   });
 
   $("follow").addEventListener("change", (e) => { cam.follow = e.target.checked; markDirty(); });
@@ -633,10 +667,21 @@ const DATA = __PAYLOAD_JSON__;
     }
     return out;
   }
-  // 平均二乗誤差（sim 系列 vs 観測チャンネル）。
+  // 最適化対象の時間窓 [t0,t1]。全区間 or シーク位置起点の幅 optWindowS。
+  // 1次遅れ sim は安定フィルタなので全区間積分のまま窓内だけ採点して正しい（状態は窓頭で収束済み）。
+  function optWindow() {
+    if (optWholeBag) return [0, T_MAX];
+    const t0 = curT, t1 = Math.min(curT + optWindowS, T_MAX);
+    return [t0, Math.max(t1, t0 + 1 / RATE)];
+  }
+  function optIndexRange() {
+    const [t0, t1] = optWindow();
+    return [Math.max(0, Math.ceil(t0 * RATE)), Math.min(N - 1, Math.floor(t1 * RATE))];
+  }
+  // 平均二乗誤差（sim 系列 vs 観測チャンネル、最適化窓内のみ採点）。
   function mseSeries(sim, obsKey) {
-    const arr = run.ch[obsKey]; let se = 0, n = 0;
-    for (let i = 0; i < N; i++) {
+    const arr = run.ch[obsKey]; const [iLo, iHi] = optIndexRange(); let se = 0, n = 0;
+    for (let i = iLo; i <= iHi; i++) {
       const o = arr[i], s = sim[i];
       if (o != null && isFinite(s)) { se += (s - o) * (s - o); n++; }
     }
@@ -648,8 +693,9 @@ const DATA = __PAYLOAD_JSON__;
   function residBicycle() {
     const beta = model.steer_bias * DEG, kus = model.k_us;
     const wzA = run.ch.wz, dA = run.ch.steer, vA = run.ch.lon_vel;
+    const [iLo, iHi] = optIndexRange();
     let se = 0, n = 0;
-    for (let i = 0; i < N; i++) {
+    for (let i = iLo; i <= iHi; i++) {
       const wz = wzA[i], dd = dA[i], vv = vA[i];
       if (wz == null || dd == null || vv == null) continue;
       const om = vv * Math.tan(dd * DEG + beta) / (L + kus * vv * vv);
