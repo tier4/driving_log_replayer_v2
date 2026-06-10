@@ -1,37 +1,45 @@
 #!/usr/bin/env python3
-"""
-per-dataset の real.lite を収集ディレクトリに集める (マルチデータセット評価の collect 段)。
+"""per-dataset バンドル成果物を collection ディレクトリに収集する (マルチデータセット評価の collect 段)。
 
-クラウドは 1 評価ジョブ = 1 データセットで、各ジョブが result_archive に lite/real.lite を出力する。
-本スクリプトは複数ジョブ (= 複数データセット) の real.lite を 1 つの収集ディレクトリに集約し、
-`multi_dataset_tune.py` が dataset 横断で open-loop N-step rollout 誤差を集計できるようにする。
+クラウドは 1 評価ジョブ = 1 データセットで、各ジョブが result_archive に
+lite/real.lite と comparison/ (解析成果物 + metrics JSON) を出力する。本スクリプトは
+複数ジョブ (= 複数データセット) の成果物を 1 つの collection に symlink で集約し、
 
-収集レイアウト (resolve_lite_bag がそのまま読める形):
-    <collection-dir>/<dataset_id>/real.lite        (rosbag2 dir 形式)
-    <collection-dir>/<dataset_id>/real.lite.mcap   (単一ファイル形式)
+- `multi_dataset_tune.py` が dataset 横断で open-loop rollout 誤差を集計 (real.lite)
+- `step13_cross_dataset.py` が rollout 再実行なしで横断分析 (comparison/ の metrics JSON)
+- `step11_build_html_report.py --collection-dir` がマルチ DS 単一レポートを生成
+
+できるようにする。収集レイアウト (lib._collection が SSOT):
+
+    <collection-dir>/collection.yaml             (manifest)
+    <collection-dir>/datasets/<dataset_id>/
+        ├── real.lite[.mcap]   -> bundle/lite/real.lite
+        ├── comparison         -> bundle/comparison
+        └── scenarios          -> bundle/scenarios
 
 使い方:
     # バンドル (out/<ts> または result_archive/...) から dataset_id を auto 推定して収集
-    python3 -m driving_log_replayer_v2.real_log_sim_comparison.collect_real_lite \
+    python3 -m driving_log_replayer_v2.real_log_sim_comparison.collect_datasets \
         --bundle sample/out/20260604_173001 \
-        --bundle sample/out/20260604_145811
+        --bundle sample/out/20260604_145811 \
+        --collection-dir sample/out/multi_eval
 
     # dataset_id を明示
-    python3 -m driving_log_replayer_v2.real_log_sim_comparison.collect_real_lite \
-        --add f20a29ab=sample/out/20260604_173001 \
-        --add 8edfbb02=sample/out/20260604_145811
+    python3 -m driving_log_replayer_v2.real_log_sim_comparison.collect_datasets \
+        --add f20a29ab=sample/out/20260604_173001
 
-クラウドモード (後続): webauto で評価ジョブの result_archive 中間生成物 (lite/real.lite) を
-DL してから --bundle で指す (DL 経路は別途整備)。
+クラウドモード: webauto で評価ジョブの result_archive 中間生成物を DL してから --bundle で指す。
 """
 
 from __future__ import annotations
 
 import argparse
+from datetime import datetime, timezone
 from pathlib import Path
 import re
 import sys
 
+from .lib._collection import load_manifest, write_manifest
 from .lib._io import resolve_lite_bag
 
 _DEFAULT_COLLECTION = Path(__file__).parent / "sample" / "multi"
@@ -60,22 +68,51 @@ def _infer_dataset_id(bundle: Path) -> str | None:
     return m.group(0) if m else None
 
 
-def _link_real_lite(dataset_id: str, bundle: Path, collection_dir: Path) -> Path:
-    """bundle/lite の real.lite を collection_dir/<dataset_id>/ に symlink する。"""
+def _relink(dst: Path, src: Path) -> None:
+    if dst.is_symlink() or dst.exists():
+        dst.unlink()
+    dst.symlink_to(src)
+
+
+def collect_bundle(bundle: Path, dataset_id: str, collection_dir: Path) -> dict:
+    """1 バンドルの成果物を <collection>/datasets/<dataset_id>/ に symlink し manifest レコードを返す。
+
+    real.lite が無ければ FileNotFoundError。comparison/scenarios は存在するものだけ張る
+    (sim だけ成功し解析未完了のバンドルも real.lite ベースの tune には使えるため)。
+    """
     real = resolve_lite_bag(bundle / "lite", "real")
     if real is None:
         raise FileNotFoundError(f"real.lite が見つかりません: {bundle / 'lite'}")
-    dst_dir = collection_dir / dataset_id
+    dst_dir = collection_dir / "datasets" / dataset_id
     dst_dir.mkdir(parents=True, exist_ok=True)
-    dst = dst_dir / real.name  # real.lite または real.lite.mcap
-    if dst.is_symlink() or dst.exists():
-        dst.unlink()
-    dst.symlink_to(real)
-    return dst
+    _relink(dst_dir / real.name, real)  # real.lite または real.lite.mcap
+    linked = [real.name]
+    for name in ("comparison", "scenarios"):
+        src = bundle / name
+        if src.is_dir():
+            _relink(dst_dir / name, src)
+            linked.append(name)
+    return {
+        "dataset_id": dataset_id,
+        "bundle": str(bundle),
+        "linked": linked,
+        "status": "success",
+        "collected_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+    }
+
+
+def update_manifest(collection_dir: Path, records: list[dict]) -> Path:
+    """既存 manifest に収集レコードを dataset_id でマージして書き戻す。"""
+    manifest = load_manifest(collection_dir) or {"schema_version": 1, "datasets": []}
+    by_id = {rec.get("dataset_id"): rec for rec in manifest.get("datasets", [])}
+    for rec in records:
+        by_id[rec["dataset_id"]] = rec
+    manifest["datasets"] = [by_id[k] for k in sorted(by_id)]
+    return write_manifest(collection_dir, manifest)
 
 
 def main() -> None:
-    ap = argparse.ArgumentParser(description="per-dataset real.lite をマルチ評価用に収集")
+    ap = argparse.ArgumentParser(description="per-dataset バンドル成果物をマルチ評価用に収集")
     ap.add_argument(
         "--bundle",
         action="append",
@@ -111,7 +148,7 @@ def main() -> None:
         print("ERROR: --bundle か --add を 1 つ以上指定してください", file=sys.stderr)
         sys.exit(2)
 
-    collected = 0
+    records: list[dict] = []
     for ds_id, raw in entries:
         try:
             bundle = _resolve_bundle(raw)
@@ -126,12 +163,20 @@ def main() -> None:
                     file=sys.stderr,
                 )
                 continue
-        dst = _link_real_lite(ds_id, bundle, collection_dir)
-        print(f"[OK] {ds_id}: {dst} -> {dst.resolve()}")
-        collected += 1
+        try:
+            rec = collect_bundle(bundle, ds_id, collection_dir)
+        except FileNotFoundError as e:
+            print(f"[WARN] {e}", file=sys.stderr)
+            continue
+        print(f"[OK] {ds_id}: {', '.join(rec['linked'])} <- {bundle}")
+        records.append(rec)
 
-    print(f"\n収集完了: {collected} データセット -> {collection_dir}")
-    if collected == 0:
+    if records:
+        manifest_path = update_manifest(collection_dir, records)
+        print(f"\n収集完了: {len(records)} データセット -> {collection_dir}")
+        print(f"manifest: {manifest_path}")
+    else:
+        print("収集 0 件", file=sys.stderr)
         sys.exit(1)
 
 
