@@ -21,8 +21,9 @@
 #   step3_run_sims が env DIFFUSION_PLANNER_ONNX_PATH / DIFFUSION_PLANNER_ARGS_PATH に設定して
 #   launch に渡し、autoware_launch の diffusion_planner.param.yaml が $(env ...) 置換で参照する。
 #   正規パスへのファイルコピー不要で run ごとに DP モデルを差し替えられる。未指定なら Autoware 既定。
-#   重要: この env 切り替えは変更 A ($(env) 化した param yaml) が *インストール済* autoware_launch に
-#   反映済のときだけ効く。未反映だと step3 が起動前に RuntimeError を送出する (既定モデルでの黙った実行を防止)。
+#   この env 切り替えは step3 が起動前に *インストール済* autoware_launch の param yaml へ
+#   `$(env ...)` を自動注入して有効化する (launcher/autoware.repos の変更不要・冪等・挙動不変)。
+#   install が read-only で注入できない場合のみ RuntimeError (既定モデルでの黙った実行を防止)。
 #   同一 vehicle_model で dp_model_dir だけ変えた run を並べれば、モデル間の挙動差を比較できる。
 #
 # dp_model_release / dp_model_package: Web.Auto ML パッケージを **自動 pull** する (任意・推奨)。

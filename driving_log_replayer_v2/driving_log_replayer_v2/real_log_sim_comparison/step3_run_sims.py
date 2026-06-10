@@ -22,6 +22,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -95,27 +96,53 @@ def _setup_dp_model_env(dp_model_dir: str | None) -> None:
             f"DP モデルが見つかりません: {onnx} "
             "(dir には diffusion_planner.onnx と args.json が必要)"
         )
-    # 変更 A (param yaml の $(env) 化) が *インストール済* autoware_launch に反映済か検証。
-    # 未反映 (ローカル非 symlink / cloud で autoware.repos 未更新) だと Autoware は既定モデルを
-    # ロードし続けるのに env と provenance は dp_model_dir を指す → 「別モデルなのに同一挙動」という
-    # 黙った誤り。env を立てる前に loud に落とす。
-    _assert_installed_param_honors_env()
+    # 変更 A (param yaml の $(env) 化) を *インストール済* autoware_launch に実行時適用する。
+    # 未適用 (cloud で autoware.repos 未更新等) だと Autoware は既定モデルをロードし続けるのに
+    # env と provenance は dp_model_dir を指す → 「別モデルなのに同一挙動」という黙った誤りになる。
+    # ここで DLR 側が param yaml に $(env ...) を注入することで launcher/autoware.repos を触らず
+    # env 切り替えを有効化する (冪等・挙動不変)。書き込み不可なら loud に落とす。
+    _ensure_installed_param_honors_env()
     os.environ["DIFFUSION_PLANNER_ONNX_PATH"] = str(onnx)
     os.environ["DIFFUSION_PLANNER_ARGS_PATH"] = str(args_json)
     os.environ["DP_ONNX_PATH"] = str(onnx)  # provenance の解決元と揃える
     print(f"[step3_run_sims] DP model dir: {model_dir}", flush=True)
 
 
-# 変更 A の検証に使う、param yaml が持つべき env 置換のマーカー。
+# 変更 A の判定/注入に使う、param yaml が持つべき env 置換のマーカー。
 _DP_ENV_SUBST_MARKER = "$(env DIFFUSION_PLANNER_ONNX_PATH"
+# 注入対象キーと対応する環境変数名。
+_DP_PARAM_ENV_KEYS = (
+    ("onnx_model_path", "DIFFUSION_PLANNER_ONNX_PATH"),
+    ("args_path", "DIFFUSION_PLANNER_ARGS_PATH"),
+)
 
 
-def _assert_installed_param_honors_env() -> None:
-    """インストール済 autoware_launch の diffusion_planner.param.yaml が env 置換を持つか検証.
+def _inject_env_subst(text: str) -> str:
+    """param yaml の onnx_model_path / args_path 行を `$(env <VAR> <既存値>)` 形に書き換える.
+
+    既に `$(env` を含む行は触らない。env 未設定時は <既存値> にフォールバックするため挙動不変。
+    """
+    for key, envvar in _DP_PARAM_ENV_KEYS:
+        pat = re.compile(rf"^(?P<indent>\s*){re.escape(key)}:[ \t]*(?P<val>\S.*?)[ \t]*$", re.M)
+
+        def _repl(m: re.Match, _envvar: str = envvar, _key: str = key) -> str:
+            val = m.group("val")
+            if val.startswith("$(env"):
+                return m.group(0)
+            return f"{m.group('indent')}{_key}: $(env {_envvar} {val})"
+
+        text = pat.sub(_repl, text)
+    return text
+
+
+def _ensure_installed_param_honors_env() -> None:
+    """インストール済 autoware_launch の diffusion_planner.param.yaml に変更 A を実行時適用する.
 
     dp_model_dir による env 切り替えは、build_only と scenario の両方が読む *インストール済*
     param yaml が onnx_model_path を `$(env DIFFUSION_PLANNER_ONNX_PATH ...)` で参照して初めて効く。
-    未反映なら dp_model_dir が黙って無視されるため、ここで RuntimeError を送出する。
+    本関数は未適用なら DLR 側で `$(env ...)` を注入する (launcher サブリポジトリ / autoware.repos を
+    触らずに有効化)。注入は冪等で env 未設定時は元の既定値にフォールバックするため挙動不変、restore
+    不要。書き込み不可 (install が read-only) の場合のみ loud に落とす (黙った既定モデル実行を防止)。
     """
     param = _autoware_launch_dp_param_path()
     if param is None:
@@ -123,15 +150,26 @@ def _assert_installed_param_honors_env() -> None:
             "autoware_launch の diffusion_planner.param.yaml を解決できません "
             "(dp_model_dir 指定には autoware_launch のインストールが必要)"
         )
-    text = Path(param).read_text(encoding="utf-8", errors="replace")
-    if _DP_ENV_SUBST_MARKER not in text:
+    p = Path(param)
+    text = p.read_text(encoding="utf-8", errors="replace")
+    if _DP_ENV_SUBST_MARKER in text:
+        return  # 既に適用済 (変更 A 反映済 or 前 run で注入済)
+    new_text = _inject_env_subst(text)
+    if _DP_ENV_SUBST_MARKER not in new_text:
         raise RuntimeError(
-            f"インストール済 {param} が onnx_model_path を "
-            "$(env DIFFUSION_PLANNER_ONNX_PATH ...) で参照していません。変更 A が *インストール済* "
-            "autoware_launch に未反映です (ローカル: autoware_launch を symlink-install/再ビルド、"
-            "cloud: launcher サブリポジトリに A をコミットし autoware.repos の version を更新)。"
-            "このままでは dp_model_dir が黙って無視され Autoware が既定モデルをロードします。"
+            f"{param} に onnx_model_path 行が見つからず $(env ...) を注入できません "
+            "(param yaml の書式を確認してください)"
         )
+    try:
+        p.write_text(new_text, encoding="utf-8")
+    except OSError as e:
+        raise RuntimeError(
+            f"インストール済 {param} に $(env ...) を書き込めません ({e})。install が read-only の "
+            "可能性。代替として launcher サブリポジトリに変更 A をコミットし autoware.repos の version を "
+            "更新してください。このままでは dp_model_dir が黙って無視され既定モデルがロードされます。"
+        ) from e
+    print(f"[step3_run_sims] 変更 A を実行時適用 (DLR→install param に $(env ...) 注入): {param}",
+          flush=True)
 
 
 # TensorRT エンジンビルドは数分かかり得るため余裕を持たせる。
