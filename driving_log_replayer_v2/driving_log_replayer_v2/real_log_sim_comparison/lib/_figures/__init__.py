@@ -27,6 +27,13 @@ from ._curve_detail import (
     build_fig_curve_yaw_steer,
     build_fig_steer_response,
 )
+from ._cross_dataset import (
+    build_fig_coverage_overview,
+    build_fig_cross_closed_loop_heatmap,
+    build_fig_cross_normalized_bars,
+    build_fig_cross_nstep_heatmap,
+    build_fig_loo_stability,
+)
 from ._curve_diag import build_fig_curve_divergence
 from ._dp import (
     build_fig_dp_real_vs_sim,
@@ -38,6 +45,11 @@ from ._nstep import build_fig_overview
 
 __all__ = [
     "build_fig_cascade_error_overlay",
+    "build_fig_coverage_overview",
+    "build_fig_cross_closed_loop_heatmap",
+    "build_fig_cross_normalized_bars",
+    "build_fig_cross_nstep_heatmap",
+    "build_fig_loo_stability",
     "build_fig_curve_analysis",
     "build_fig_curve_divergence",
     "build_fig_curve_steering_detail",
