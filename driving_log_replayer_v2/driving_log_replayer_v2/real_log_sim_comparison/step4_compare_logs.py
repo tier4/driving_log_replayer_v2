@@ -7,6 +7,8 @@ Outputs: comparison/figures/*.svg (軌跡比較のみ *.html), comparison/report
 from __future__ import annotations
 
 import argparse
+import json
+import math
 import os
 from pathlib import Path
 import sys
@@ -37,6 +39,7 @@ from .lib._io import (
     nearest_point_distance,
     resolve_topic,
 )
+from .lib._coverage import compute_coverage
 from .lib._fig_io import write_fig_json
 from .lib._figures import (
     build_fig_curve_analysis,
@@ -739,7 +742,112 @@ def _prov_text(label: str, d: dict) -> str:
     return format_provenance_line(prov)
 
 
-def build_report(data: dict) -> str:
+def _finite(x) -> float | None:
+    """有限値なら float、それ以外 (NaN/inf/None) は None (JSON 化で NaN を出さない)。"""
+    try:
+        xf = float(x)
+    except (TypeError, ValueError):
+        return None
+    return xf if math.isfinite(xf) else None
+
+
+def _fmt(x: float | None, prec: int = 1) -> str:
+    """Markdown 表セル用の数値整形 (None は em-dash)。"""
+    return f"{x:.{prec}f}" if x is not None else "—"
+
+
+def _cmd_tracking_rmse(d: dict) -> dict:
+    """指令 vs 応答の RMSE (速度 [m/s]・ステア [deg])。データ欠落は None。"""
+    out: dict = {"vel_rmse_mps": None, "steer_rmse_deg": None}
+    cmd, vel, steer = d["cmd"], d["velocity"], d["steering"]
+    if not cmd.empty and not vel.empty:
+        cmd_i = np.interp(vel["t"], cmd["t"], cmd["cmd_vel"])
+        out["vel_rmse_mps"] = _finite(np.sqrt(np.mean((vel["lon_vel"].values - cmd_i) ** 2)))
+    if not cmd.empty and not steer.empty:
+        cmd_i = np.interp(steer["t"], cmd["t"], cmd["cmd_steer"])
+        out["steer_rmse_deg"] = _finite(
+            np.degrees(np.sqrt(np.mean((steer["steer"].values - cmd_i) ** 2)))
+        )
+    return out
+
+
+def compute_closed_loop_metrics(data: dict) -> dict:
+    """closed-loop 比較メトリクスを機械可読 dict で計算する (report.md と JSON の共通ソース)。
+
+    走行サマリ (_log_summary)・指令追従 RMSE・軌跡乖離 (双方向最近傍)・完走率に加え、
+    実機ログの走行特性カバレッジ (lib._coverage) を real.coverage に格納する。
+    step13_cross_dataset がデータセット横断行列の入力に使うため、値はすべて
+    JSON 化可能 (NaN は None に正規化) にする。
+    """
+    real = data.get("実機")
+    real_kin = real["kinematic"] if real is not None else pd.DataFrame()
+    real_dist = (
+        _finite(cumulative_arc_length(real_kin["x"].to_numpy(), real_kin["y"].to_numpy())[-1])
+        if not real_kin.empty
+        else None
+    )
+    summaries = {
+        label: {k: _finite(v) for k, v in _log_summary(d).items()} for label, d in data.items()
+    }
+
+    real_rec = None
+    if real is not None:
+        real_rec = {
+            "summary": summaries["実機"],
+            **_cmd_tracking_rmse(real),
+            "coverage": compute_coverage(
+                real["kinematic"], real["velocity"], real["accel"], real["steering"],
+                wheelbase=float(WHEELBASE),
+            ),
+        }
+
+    ref_xy = real_kin[["x", "y"]].to_numpy() if not real_kin.empty else None
+    runs: dict = {}
+    for label, d in data.items():
+        if label == "実機":
+            continue
+        rec: dict = {
+            "vehicle_model": d.get("vehicle_model", ""),
+            "perfect": bool(d.get("perfect", False)),
+            "summary": summaries[label],
+            **_cmd_tracking_rmse(d),
+            "completion_pct": None,
+            "s2r_mean_m": None, "s2r_max_m": None,
+            "r2s_mean_m": None, "r2s_max_m": None,
+            "status": "データ不足",
+        }
+        dist = summaries[label]["dist"]
+        if real_dist and dist is not None:
+            rec["completion_pct"] = dist / real_dist * 100.0
+        q_xy = (
+            d["kinematic"][["x", "y"]].to_numpy() if not d["kinematic"].empty
+            else np.empty((0, 2))
+        )
+        if ref_xy is not None and len(q_xy) >= 10:
+            try:
+                s2r = nearest_point_distance(ref_xy, q_xy)
+                r2s = nearest_point_distance(q_xy, ref_xy)
+                comp = rec["completion_pct"]
+                rec.update(
+                    s2r_mean_m=float(s2r.mean()), s2r_max_m=float(s2r.max()),
+                    r2s_mean_m=float(r2s.mean()), r2s_max_m=float(r2s.max()),
+                    status="OK" if (comp is not None and comp >= 85.0) else "早期停止/未完走",
+                )
+            except Exception as e:  # noqa: BLE001
+                rec["status"] = f"ERR: {e}"
+        runs[label] = rec
+
+    return {
+        "schema_version": 1,
+        "scenario_name": SCENARIO_NAME,
+        "real": real_rec,
+        "real_dist_m": real_dist,
+        "runs": runs,
+    }
+
+
+def build_report(metrics: dict, data: dict) -> str:
+    """compute_closed_loop_metrics の結果と data (provenance/診断用) から report.md を整形する。"""
     lines = [f"# 比較レポート\n\nシナリオ: {SCENARIO_NAME}\n"]
 
     # モデル重み / バージョン provenance (版・重み差が乖離の原因になり得るため明示)。
@@ -755,14 +863,8 @@ def build_report(data: dict) -> str:
         lines.append(f"| {label} | {_prov_text(label, d)} |")
     lines.append("")
 
-    real = data.get("実機")
-    real_kin = real["kinematic"] if real is not None else pd.DataFrame()
-    real_dist = (
-        float(cumulative_arc_length(real_kin["x"].to_numpy(), real_kin["y"].to_numpy())[-1])
-        if not real_kin.empty
-        else float("nan")
-    )
-    stats = {label: _log_summary(d) for label, d in data.items()}
+    def _rec(label: str) -> dict | None:
+        return metrics["real"] if label == "実機" else metrics["runs"].get(label)
 
     # 診断 (A4): AUTONOMOUS 窓・t0 基準・localization 除外数を明示。
     lines.append("## 診断（AUTONOMOUS 区間・localization）\n")
@@ -789,10 +891,10 @@ def build_report(data: dict) -> str:
     )
     lines.append("|---|---|---|---|---|---|")
     for label in data:
-        s = stats[label]
+        s = _rec(label)["summary"]
         lines.append(
-            f"| {label} | {s['elapsed']:.1f} | {s['dist']:.1f} | {s['mean_speed']:.3f} | "
-            f"{s['cruise']:.3f} | {s['stopped']:.1f} |"
+            f"| {label} | {_fmt(s['elapsed'])} | {_fmt(s['dist'])} | "
+            f"{_fmt(s['mean_speed'], 3)} | {_fmt(s['cruise'], 3)} | {_fmt(s['stopped'])} |"
         )
     lines.append("")
     lines.append("> 走行距離・平均速度は /localization/kinematic_state (odometry) 由来 (無効フレーム除外後)。")
@@ -808,23 +910,19 @@ def build_report(data: dict) -> str:
     lines.append("| ログ | 平均 [m/s] | 最大 [m/s] | 標準偏差 |")
     lines.append("|---|---|---|---|")
     for label in data:
-        s = stats[label]
-        lines.append(f"| {label} | {s['vmean']:.3f} | {s['vmax']:.3f} | {s['vstd']:.3f} |")
+        s = _rec(label)["summary"]
+        lines.append(
+            f"| {label} | {_fmt(s['vmean'], 3)} | {_fmt(s['vmax'], 3)} | {_fmt(s['vstd'], 3)} |"
+        )
     lines.append("")
 
     # 速度指令 RMSE（指令 vs 応答）
     lines.append("## 速度 RMSE（指令 vs 応答）\n")
     lines.append("| ログ | RMSE [m/s] |")
     lines.append("|---|---|")
-    for label, d in data.items():
-        cmd = d["cmd"]
-        vel = d["velocity"]
-        if cmd.empty or vel.empty:
-            lines.append(f"| {label} | N/A |")
-            continue
-        cmd_i = np.interp(vel["t"], cmd["t"], cmd["cmd_vel"])
-        rmse = np.sqrt(np.mean((vel["lon_vel"].values - cmd_i) ** 2))
-        lines.append(f"| {label} | {rmse:.4f} |")
+    for label in data:
+        rmse = _rec(label)["vel_rmse_mps"]
+        lines.append(f"| {label} | {_fmt(rmse, 4) if rmse is not None else 'N/A'} |")
     lines.append("")
 
     # ステア RMSE（指令 vs 応答） + perfect_tracker 注記 (B2)
@@ -833,13 +931,10 @@ def build_report(data: dict) -> str:
     lines.append("|---|---|---|")
     has_perfect = False
     for label, d in data.items():
-        cmd = d["cmd"]
-        steer = d["steering"]
-        if cmd.empty or steer.empty:
+        rmse = _rec(label)["steer_rmse_deg"]
+        if rmse is None:
             lines.append(f"| {label} | N/A | |")
             continue
-        cmd_i = np.interp(steer["t"], cmd["t"], cmd["cmd_steer"])
-        rmse = np.degrees(np.sqrt(np.mean((steer["steer"].values - cmd_i) ** 2)))
         if d.get("perfect"):
             has_perfect = True
             lines.append(f"| {label} | {rmse:.4f} | ※参考(無効) |")
@@ -867,34 +962,22 @@ def build_report(data: dict) -> str:
         "実機→sim 平均/最大[m] | 状態 |"
     )
     lines.append("|---|---|---|---|---|---|")
-    if real is None or real_kin.empty:
+    real_dist = metrics["real_dist_m"]
+    if real_dist is None:
         lines.append("| (実機 kinematic なし) | — | — | — | — | データ不足 |")
     else:
-        ref_xy = real_kin[["x", "y"]].to_numpy()
-        for label, d in data.items():
-            if label == "実機":
-                lines.append(f"| {label} | {real_dist:.1f} | 100.0 (基準) | — | — | 基準 |")
-                continue
-            dist = stats[label]["dist"]
-            comp = (dist / real_dist * 100.0) if (real_dist and real_dist > 0) else float("nan")
-            q_xy = (
-                d["kinematic"][["x", "y"]].to_numpy()
-                if not d["kinematic"].empty
-                else np.empty((0, 2))
-            )
-            if len(q_xy) < 10:
-                lines.append(f"| {label} | {dist:.1f} | {comp:.1f} | — | — | データ不足 |")
-                continue
-            try:
-                s2r = nearest_point_distance(ref_xy, q_xy)
-                r2s = nearest_point_distance(q_xy, ref_xy)
-                status = "OK" if comp >= 85.0 else "早期停止/未完走"
-                lines.append(
-                    f"| {label} | {dist:.1f} | {comp:.1f} | "
-                    f"{s2r.mean():.3f}/{s2r.max():.3f} | {r2s.mean():.3f}/{r2s.max():.3f} | {status} |"
-                )
-            except Exception as e:  # noqa: BLE001
-                lines.append(f"| {label} | {dist:.1f} | {comp:.1f} | ERR: {e} | — | — |")
+        lines.append(f"| 実機 | {real_dist:.1f} | 100.0 (基準) | — | — | 基準 |")
+        for label, rec in metrics["runs"].items():
+            cells = [
+                _fmt(rec["summary"]["dist"]),
+                _fmt(rec["completion_pct"]),
+            ]
+            if rec["s2r_mean_m"] is not None:
+                cells.append(f"{rec['s2r_mean_m']:.3f}/{rec['s2r_max_m']:.3f}")
+                cells.append(f"{rec['r2s_mean_m']:.3f}/{rec['r2s_max_m']:.3f}")
+            else:
+                cells += ["—", "—"]
+            lines.append(f"| {label} | " + " | ".join(cells) + f" | {rec['status']} |")
     lines.append("")
 
     return "\n".join(lines)
@@ -1075,7 +1158,14 @@ def main() -> None:
 
     print("\n=== レポート生成中 ===")
     try:
-        report = build_report(loaded)
+        metrics = compute_closed_loop_metrics(loaded)
+        metrics_path = OUT_DIR / "metrics_closed_loop.json"
+        metrics_path.write_text(
+            json.dumps(metrics, ensure_ascii=False, allow_nan=False, indent=1),
+            encoding="utf-8",
+        )
+        print(f"  保存: {metrics_path}")
+        report = build_report(metrics, loaded)
         report_path = OUT_DIR / "report.md"
         report_path.write_text(report, encoding="utf-8")
         print(f"  保存: {report_path}")

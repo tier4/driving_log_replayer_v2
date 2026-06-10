@@ -25,6 +25,7 @@
 from __future__ import annotations
 
 import argparse
+import json
 import math
 import os
 import sys
@@ -271,6 +272,46 @@ def write_cases_summary(
     print(f"  Saved: {out_path}")
 
 
+def write_cases_metrics(
+    case_dfs: dict[str, pd.DataFrame],
+    roll: dict[str, dict[int, dict[str, float]]],
+    cases_cfg,
+    horizons: list[int],
+    out_path: Path,
+) -> None:
+    """ケース横断の horizon 別終端誤差 RMSE を機械可読 JSON で出力する。
+
+    step13_cross_dataset がデータセット横断行列・正規化集約の入力に使う
+    (per-dataset の open-loop 側メトリクスはこの 1 ファイルで完結する)。
+    reference_tag / horizons を含めることで step13 が DS 間の評価条件整合を検査できる。
+    """
+
+    def _finite(x) -> float | None:
+        xf = float(x)
+        return xf if math.isfinite(xf) else None
+
+    cases: dict[str, dict] = {}
+    for case in cases_cfg.cases:
+        r = roll.get(case.tag)
+        if not r:
+            continue
+        cases[case.tag] = {
+            "vehicle_model": case.vehicle_model,
+            "n_steps_n1": int(len(n1(case_dfs[case.tag]))),
+            "by_h": {str(h): {k: _finite(v) for k, v in m.items()} for h, m in r.items()},
+        }
+    payload = {
+        "schema_version": 1,
+        "reference_tag": cases_cfg.overlay.reference_tag,
+        "horizons": [int(h) for h in horizons],
+        "cases": cases,
+    }
+    out_path.write_text(
+        json.dumps(payload, ensure_ascii=False, allow_nan=False, indent=1), encoding="utf-8"
+    )
+    print(f"  Saved: {out_path}")
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="cases 集約解析 (Stage 4)")
     parser.add_argument(
@@ -330,6 +371,7 @@ def main() -> None:
         roll, cases_cfg.overlay.reference_tag, overlay_dir / "growth_relative.svg"
     )
     write_cases_summary(case_dfs, roll, cases_cfg, out_root / "cases_summary.md")
+    write_cases_metrics(case_dfs, roll, cases_cfg, horizons, out_root / "cases_metrics.json")
 
     print(f"\n完了。出力先: {out_root}")
 
