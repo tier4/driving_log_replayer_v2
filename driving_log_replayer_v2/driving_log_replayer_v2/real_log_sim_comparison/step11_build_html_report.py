@@ -81,6 +81,10 @@ CAPTIONS: dict[str, str] = {
     "_overview_sensitivity": "スイープ感度オーバービュー（改善率ランキング + 正規化 RMSE カーブ）",
     # step10: curve_diag/
     "curve_divergence": "カーブ乖離 詳細診断（縦横分解 + yaw 差）",
+    # step7: model_eq/ (運動方程式の概念図・実機データ非依存)
+    "yaw_rate_vs_v": "運動方程式: ヨーレート ω(v,δ) の速度2乗依存（k_us=0 理想 vs 0.018 best_normal）",
+    "first_order_step": "運動方程式: 1次遅れ+無駄時間 ステップ応答（仕様 τ vs best_normal τ）",
+    "lateral_accel_map": "運動方程式: 横加速度 a_y = v·ω の (v,δ) マップ",
 }
 
 # step4 のカーブ別連番図 (curve1_analysis 等)。接頭辞除去後のサフィックスで照合。
@@ -218,7 +222,7 @@ def _classify(rel: Path) -> str:
         return "dp"
     if stem == "lon_lat_model":
         return "real_analysis"
-    if top == "param_sweep":
+    if top in {"param_sweep", "model_eq"}:
         return "real_analysis"
     if top in {"nstep", "cases"}:
         return "ol_nstep"
@@ -230,13 +234,26 @@ def _classify(rel: Path) -> str:
 
 
 def _render_markdown(text: str) -> str:
-    """Markdown を HTML 化する。markdown パッケージが無ければ <pre> でフォールバック。"""
+    """Markdown を HTML 化する。markdown パッケージが無ければ <pre> でフォールバック。
+
+    `pymdownx.arithmatex`（generic）で LaTeX 数式を MathJax 用 span（`\\(…\\)` / `\\[…\\]`）に
+    退避する。これにより `$$a_target$$` の `_` が `<em>` 化する等の Markdown 破壊を避ける
+    （MathJax の delimiter 設定は build_html の <head> と一致させること）。拡張が無い環境では
+    数式拡張のみ外して描画する（既存3レポートは `$` 非含有のため影響なし）。
+    """
     try:
         import markdown as _md  # noqa: PLC0415
-
-        return _md.markdown(text, extensions=["tables", "fenced_code"])
     except ImportError:
         return f"<pre class='md-fallback'>{html.escape(text)}</pre>"
+    base = ["tables", "fenced_code"]
+    try:
+        return _md.markdown(
+            text,
+            extensions=[*base, "pymdownx.arithmatex"],
+            extension_configs={"pymdownx.arithmatex": {"generic": True}},
+        )
+    except (ImportError, ValueError):  # pymdownx 不在等
+        return _md.markdown(text, extensions=base)
 
 
 _STYLE = """
@@ -523,6 +540,46 @@ _PIPELINE_INTRO = """
 """
 
 
+# 車両制御モデルの数式・座標系・定数を解説する固定ドキュメント（リポジトリ同梱・YAML と同じ
+# 固定パス読み）。MathJax で数式を組版するため Markdown 中の LaTeX をそのまま流す。
+_MODEL_DOC = Path(__file__).parent / "docs" / "vehicle_model.ja.md"
+
+
+# MathJax (tex-svg) を CDN から読み込み、Markdown 中の LaTeX 数式を組版する。delimiter は
+# _render_markdown の pymdownx.arithmatex(generic) 出力（inline \(…\) / display \[…\]）に合わせる。
+# CDN 参照のため数式描画にはネット接続が要る（plotly.js はオフライン用にインライン済み）。
+_MATHJAX_HEAD = (
+    "<script>"
+    "window.MathJax={tex:{inlineMath:[['\\\\(','\\\\)']],displayMath:[['\\\\[','\\\\]']]},"
+    "svg:{fontCache:'global'}};"
+    "</script>"
+    "<script async src='https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-svg.js'></script>"
+)
+
+
+def _render_doc_section() -> str:
+    """車両モデル解説ドキュメント (docs/vehicle_model.ja.md) を固定セクションとして埋め込む。
+
+    ファイルが無ければ空文字（防御的）。_PIPELINE_INTRO と同じ「固定セクション」扱いで、
+    本文は _render_markdown（MathJax 対応）で HTML 化する。
+    """
+    if not _MODEL_DOC.exists():
+        return ""
+    try:
+        md_html = _render_markdown(_MODEL_DOC.read_text(encoding="utf-8"))
+    except OSError:
+        return ""
+    return (
+        "<details class='section' open id='sec-model-doc'>"
+        "<summary>車両制御モデル（数式・座標系・定数）</summary>"
+        "<p class='sec-desc'>シミュレータの車両モデル "
+        "(delay_steer_acc_geared_wo_fall_guard) の運動方程式・座標系・定数定義と、"
+        "現在値（仕様）vs モデル値（best_normal）の対比。"
+        "<a class='toplink' href='#top'>↑ 先頭</a></p>"
+        f"{md_html}</details>"
+    )
+
+
 # 図スペック (*.fig.json) を遅延描画する glue JS。各 <div.plotly-fig> は直後の
 # <script type='application/json'> に図スペックを持つ。IntersectionObserver で可視化時に
 # Plotly.newPlot するが、折りたたみ <details> / 非選択ケースタブは display:none で IO が
@@ -647,6 +704,9 @@ def build_html(
     toc: list[str] = ["<nav class='toc'><h2>目次</h2>"]
     toc.append("<a class='toc-top' href='#top'>↑ 先頭へ</a><ul>")
     toc.append("<li class='toc-sec'><a href='#sec-pipeline'>分析パイプライン（12 段階）</a></li>")
+    doc_html = _render_doc_section()
+    if doc_html:
+        toc.append("<li class='toc-sec'><a href='#sec-model-doc'>車両制御モデル（数式・座標系・定数）</a></li>")
     for cat in active_cats:
         toc.append(f"<li class='toc-sec'><a href='#sec-{cat}'>{html.escape(_CATEGORY_TITLES[cat])}</a></li>")
         for anchor, mtitle, _ in md_by_cat.get(cat, []):
@@ -699,6 +759,7 @@ def build_html(
 <style>{_STYLE}
 {sync_css}</style>
 {plotly_js_script()}
+{_MATHJAX_HEAD}
 </head>
 <body>
 <input type="checkbox" id="toc-toggle" class="toc-toggle">
@@ -711,6 +772,7 @@ def build_html(
   <div class="meta">{meta}</div>
 </header>
 {_PIPELINE_INTRO}
+{doc_html}
 {empty_note}
 {''.join(body)}
 {config_html}
