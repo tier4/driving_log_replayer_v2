@@ -52,7 +52,14 @@ from . import step5_analyze_nstep as s5
 import plotly.graph_objects as go
 
 from .lib._fig_io import write_fig_json
-from .lib._figures import build_fig_pair_sweep, build_fig_sweep, build_fig_sweep_overview
+from .lib._figures import (
+    build_fig_first_order_step,
+    build_fig_lateral_accel_map,
+    build_fig_pair_sweep,
+    build_fig_sweep,
+    build_fig_sweep_overview,
+    build_fig_yaw_rate_vs_v,
+)
 from .lib._figures._common import viridis_colors
 from .lib._io import resolve_lite_bag
 from .lib._nstep_common import metrics_description_md, parabolic_min, rmse_by_horizon
@@ -1201,6 +1208,14 @@ def main() -> None:
         # オーバービューがセクション内の先頭 (個別 sweep 図より前) に来る。
         plot_sweep_overview(records, h_max, base_params, out_dir / "_overview_sensitivity.svg")
         write_summary(records, horizons, args.stride, out_dir / "param_sweep_summary.md")
+
+    # 運動方程式そのものの可視化（実機データ非依存の概念図）。sweep 同定とは独立に、
+    # 仕様値 base_params と best_normal の対比で式の振る舞いを示す（comparison/model_eq/）。
+    eq_dir = cfg.out_dir / "model_eq"
+    eq_dir.mkdir(parents=True, exist_ok=True)
+    write_fig_json(build_fig_yaw_rate_vs_v(base_params), eq_dir / "yaw_rate_vs_v")
+    write_fig_json(build_fig_first_order_step(base_params), eq_dir / "first_order_step")
+    write_fig_json(build_fig_lateral_accel_map(base_params), eq_dir / "lateral_accel_map")
 
     print(f"\n完了。出力先: {out_dir}")
 
