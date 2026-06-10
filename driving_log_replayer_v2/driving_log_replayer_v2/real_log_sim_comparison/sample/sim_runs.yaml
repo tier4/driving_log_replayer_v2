@@ -77,6 +77,24 @@ sim_runs:
       debug_steer_scaling_factor: 1.0   # = 仕様値 (同上)
       acc_time_constant: 0.30           # 縦方向 (pos-mean 改善。0.45 超は shiojiri pos を悪化)
 
+  # 動的自転車モデル (taiga_dyn)。既存のキネマティック自転車と異なり前後コーナリング剛性 Cf/Cr と
+  # ヨー慣性 Iz による横タイヤダイナミクス (横速度 vy・ヨーレート wz を慣性付き state) を持つ。
+  # j6_gen2 の simulator_model パラメータを vehicle_model_type=TAIGA_DYN で上書きして走らせる。
+  - tag: sim_taiga_dyn
+    vehicle_model: j6_gen2
+    architecture_type: awf/universe/20250130
+    params:
+      vehicle_model_type: "TAIGA_DYN"
+
+  # 高忠実な剛体+タイヤ物理モデル (taiga_x)。physx_vendor 経由でビルドした NVIDIA PhysX を
+  # backend に使う (simple_sensor_simulator が find_package(physx_vendor) で常時ビルド)。
+  # closed-loop では PhysX 車両が planner 指令で走行する。
+  - tag: sim_taiga_x
+    vehicle_model: j6_gen2
+    architecture_type: awf/universe/20250130
+    params:
+      vehicle_model_type: "TAIGA_X"
+
   # 理想軌跡追従 (planner 出力を完全追従)。dynamics 誤差ゼロの上限基準。
   - tag: sim_perfect
     vehicle_model: j6_gen2_perfect_tracker
