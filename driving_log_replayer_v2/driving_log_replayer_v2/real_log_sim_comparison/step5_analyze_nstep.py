@@ -20,9 +20,8 @@
 出力:
   comparison/nstep/<tag>/
     nstep_delta.csv (全 horizon 統一スキーマ), summary.txt,
-    overview.svg, error_timeseries.svg, error_vs_speed.svg, error_growth.svg,
-    steering_analysis.svg, lateral_dynamics_timeseries.svg, steer_vs_lateral_scatter.svg,
-    cascade_error.svg, map_distribution.html (plotly)
+    overview.fig.json, map_distribution.fig.json
+  （ケース横断の比較図は step6 の cases/overlay/ が担う）
 """
 
 from __future__ import annotations
@@ -51,18 +50,8 @@ from .lib._io import (
 from .lib._map import load_map_ways as _load_map_ways_impl
 from .lib._map import map_ways_in_bbox, resolve_map_osm
 from .lib._fig_io import write_fig_json
-from .lib._figures import (
-    build_fig_cascade_error,
-    build_fig_error_timeseries,
-    build_fig_error_vs_speed,
-    build_fig_lateral_dynamics_timeseries,
-    build_fig_overview,
-    build_fig_steer_vs_lateral_scatter,
-    build_fig_steering_analysis,
-)
+from .lib._figures import build_fig_overview
 from .lib._nstep_common import (
-    ERR_METRICS,
-    YAW_SEED_NOTE,
     metrics_description_md,
     n1,
     rmse_by_horizon,
@@ -876,27 +865,6 @@ def _repr_horizons(df: pd.DataFrame) -> list[int]:
     return [h_min] if h_max == h_min else [h_min, h_max]
 
 
-def plot_error_timeseries(df: pd.DataFrame, params: dict) -> None:
-    """N-step 終端誤差の時系列 (horizon 別色分け; N=1 が従来の per-step delta)。"""
-    fig = build_fig_error_timeseries(df, params=params, limits_df=LIMITS_DF)
-    OUT_DIR.mkdir(parents=True, exist_ok=True)
-    write_fig_json(fig, OUT_DIR / "error_timeseries")
-
-
-def plot_error_vs_speed(df: pd.DataFrame, params: dict) -> None:
-    """誤差の速度依存性散布 (行 = N=1 / N=max、速度は rollout 開始時点の実機 vx)。"""
-    fig = build_fig_error_vs_speed(df, params=params, limits_df=LIMITS_DF)
-    OUT_DIR.mkdir(parents=True, exist_ok=True)
-    write_fig_json(fig, OUT_DIR / "error_vs_speed")
-
-
-def plot_steering_analysis(df: pd.DataFrame, params: dict) -> None:
-    """ステア 1ステップ予測の詳細分析（4パネル）."""
-    fig = build_fig_steering_analysis(df, params=params, limits_df=LIMITS_DF)
-    OUT_DIR.mkdir(parents=True, exist_ok=True)
-    write_fig_json(fig, OUT_DIR / "steering_analysis")
-
-
 def _resolve_map_osm() -> Path | None:
     """lanelet2_map.osm を `_map.resolve_map_osm` の三状態モデルで解決する。"""
     return resolve_map_osm(os.environ.get("MAP_OSM_PATH"))
@@ -1032,27 +1000,6 @@ def plot_map_distribution(df: pd.DataFrame, params: dict) -> None:
     )
     OUT_DIR.mkdir(parents=True, exist_ok=True)
     write_fig_json(fig, OUT_DIR / "map_distribution")
-
-
-def plot_lateral_dynamics_timeseries(df: pd.DataFrame, params: dict) -> None:
-    """横方向諸量の時系列: ay / vy / wz / dwz の実機（sim_* はラッパー未 export）。"""
-    fig = build_fig_lateral_dynamics_timeseries(df, params=params)
-    OUT_DIR.mkdir(parents=True, exist_ok=True)
-    write_fig_json(fig, OUT_DIR / "lateral_dynamics_timeseries")
-
-
-def plot_steer_vs_lateral_scatter(df: pd.DataFrame, params: dict) -> None:
-    """横軸ステア角 × 縦軸横方向諸量の散布図（速度域別・1次フィッティング付き）."""
-    fig = build_fig_steer_vs_lateral_scatter(df, params=params)
-    OUT_DIR.mkdir(parents=True, exist_ok=True)
-    write_fig_json(fig, OUT_DIR / "steer_vs_lateral_scatter")
-
-
-def plot_cascade_error(df: pd.DataFrame, params: dict) -> None:
-    """段階的誤差プロット: ステア指示→ステア応答→横位置の連鎖."""
-    fig = build_fig_cascade_error(df, params=params, limits_df=LIMITS_DF)
-    OUT_DIR.mkdir(parents=True, exist_ok=True)
-    write_fig_json(fig, OUT_DIR / "cascade_error")
 
 
 def save_summary(df: pd.DataFrame) -> None:
@@ -1265,16 +1212,9 @@ def main() -> None:
 
     save_summary(df)
 
-    # 全 horizon を使う統合図
-    plot_error_timeseries(df, params)
-    plot_error_vs_speed(df, params)
+    # ケース別に残す図は概観 + 地図分布の 2 つ（ケース横断比較は step6 の overlay が担う）
     plot_map_distribution(df, params)
-    # N=1 (毎ステップリセット) に固有の詳細図 / 実機のみの図
     plot_overview(df1, params)
-    plot_steering_analysis(df1, params)
-    plot_lateral_dynamics_timeseries(df1, params)
-    plot_steer_vs_lateral_scatter(df1, params)
-    plot_cascade_error(df1, params)
 
     print(f"\n完了。出力先: {OUT_DIR}")
 

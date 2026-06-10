@@ -53,12 +53,9 @@ import plotly.graph_objects as go
 
 from .lib._fig_io import write_fig_json
 from .lib._figures import (
-    build_fig_first_order_step,
-    build_fig_lateral_accel_map,
     build_fig_pair_sweep,
     build_fig_sweep,
     build_fig_sweep_overview,
-    build_fig_yaw_rate_vs_v,
 )
 from .lib._figures._common import viridis_colors
 from .lib._io import resolve_lite_bag
@@ -112,6 +109,11 @@ class SweepSpec:
         base = self.base_value(base_params)
         return sorted(round(m * base, 6) for m in self.grid_rel)
 
+
+# 個別 sweep 図 (<param>_sweep.fig.json) を出力する主要パラメータ。sweep 計算・CSV・
+# summary の同定表は全パラメータで行い、図はレポートで意味を持つ主要 3 つに絞る
+# (全体の感度比較は _overview_sensitivity が担う)。
+SWEEP_FIG_PARAMS: set[str] = {"k_us", "steer_time_constant", "acc_time_constant"}
 
 # スイープ対象の既定定義。グリッドは CLI --grid name=v1,v2,... で上書き可能。
 SWEEP_SPECS: list[SweepSpec] = [
@@ -772,12 +774,12 @@ def plot_sweep(
     params: dict,
     out_path: Path,
     evidence: list | None = None,
-) -> list[dict]:
+) -> None:
     """sweep パネル (同定メトリクス / 副メトリクス) + 実機ログ根拠パネル群を 1 図に。
 
     evidence: 各根拠パネルの panel-spec dict（_ev_* が返す。value/desc も含む）のリスト。
     sweep はモデル経由の同定、根拠パネルは実機ログの直接観察 — 両者の一致が
-    同定の信頼性のクロスチェックになる。ev_results（value/desc）を返す。
+    同定の信頼性のクロスチェックになる。
     """
     metric_label, _, _ = _METRIC_INFO[spec.metric]
     horizons = sorted(res["horizon"].unique())
@@ -814,7 +816,6 @@ def plot_sweep(
         f"同定 = N={identified['horizon']} の {metric_label} 最小化)",
     )
     write_fig_json(fig, out_path)
-    return [{"value": e.get("value"), "desc": e.get("desc")} for e in evidence]
 
 
 def plot_pair_sweep(
@@ -1041,7 +1042,8 @@ def _build_discussion(records: list[dict]) -> list[str]:
         "### 注意点 (自動生成)",
         "- 判定は仕様値からの偏差比 r = (直接推定 − 仕様値)/(sweep 同定値 − 仕様値) による"
         "目安 (0.5≤r≤2 で整合、sweep 偏差が仕様値の 10% 以下なら仕様値近傍)。"
-        "最終判断は各 sweep 図の根拠パネルを参照。",
+        "最終判断は主要パラメータ (k_us, steer_time_constant, acc_time_constant) の"
+        "sweep 図の根拠パネルを参照 (その他のパラメータは CSV と本表のみ)。",
         "- ステア系パラメータの sweep 図にはステア RMSE パネルを併記している。"
         "同定メトリクス (yaw 等) が改善してもステア RMSE が悪化する場合、"
         "その同定値はステア応答以外の遅れの代理吸収である。",
@@ -1171,10 +1173,14 @@ def main() -> None:
             data, t0_ns, base_params, spec, grid, horizons, args.stride
         )
         res.to_csv(out_dir / f"{spec.name}_sweep.csv", index=False)
-        # 各根拠 _ev_* は panel-spec dict（value/desc 同梱）を返す
+        # 各根拠 _ev_* は panel-spec dict（value/desc 同梱）を返す。考察表
+        # (_build_discussion) 用の value/desc 抽出は全パラメータで行い、
+        # 図の出力は主要パラメータ (SWEEP_FIG_PARAMS) に絞る。
         evidence = [fn(ev, ident, base_value) for fn in _EVIDENCE_PLOTS.get(spec.name, [])]
-        ev_results = plot_sweep(res, spec, ident, base_value, base_params,
-                                out_dir / f"{spec.name}_sweep", evidence=evidence)
+        ev_results = [{"value": e.get("value"), "desc": e.get("desc")} for e in evidence]
+        if spec.name in SWEEP_FIG_PARAMS:
+            plot_sweep(res, spec, ident, base_value, base_params,
+                       out_dir / f"{spec.name}_sweep", evidence=evidence)
         records.append({
             "spec": spec,
             "res": res,
@@ -1208,14 +1214,6 @@ def main() -> None:
         # オーバービューがセクション内の先頭 (個別 sweep 図より前) に来る。
         plot_sweep_overview(records, h_max, base_params, out_dir / "_overview_sensitivity.svg")
         write_summary(records, horizons, args.stride, out_dir / "param_sweep_summary.md")
-
-    # 運動方程式そのものの可視化（実機データ非依存の概念図）。sweep 同定とは独立に、
-    # 仕様値 base_params と best_normal の対比で式の振る舞いを示す（comparison/model_eq/）。
-    eq_dir = cfg.out_dir / "model_eq"
-    eq_dir.mkdir(parents=True, exist_ok=True)
-    write_fig_json(build_fig_yaw_rate_vs_v(base_params), eq_dir / "yaw_rate_vs_v")
-    write_fig_json(build_fig_first_order_step(base_params), eq_dir / "first_order_step")
-    write_fig_json(build_fig_lateral_accel_map(base_params), eq_dir / "lateral_accel_map")
 
     print(f"\n完了。出力先: {out_dir}")
 

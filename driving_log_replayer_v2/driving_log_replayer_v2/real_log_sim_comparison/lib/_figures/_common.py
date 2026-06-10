@@ -96,38 +96,6 @@ def add_bottom_note(
     )
 
 
-# --- 座標系・定数の凡例文字列（図下部注記に流す共通語彙） -----------------------
-# レポート全図で同じ座標系定義（議事録: X=進行方向, Y=横方向）を示し、解析者が軸・角の
-# 向きを一意に解釈できるようにする。詳細な数式・定数は docs/vehicle_model.ja.md（report の
-# 「車両制御モデル」セクション）に集約し、ここは図中の最小限の手掛かりに留める。
-_COORD_NOTE = "座標系: X=進行方向, Y=横方向, θ=ヨー角(進行方向), δ=ステア角, ω=ヨーレート"
-
-
-def coord_note() -> str:
-    """全図共通の座標系凡例文字列を返す（`add_bottom_note` に渡す用）。"""
-    return _COORD_NOTE
-
-
-def model_const_note(params: dict | None = None, **overrides) -> str:
-    """車両モデル定数を 1 行に整形して返す（図下部注記用）。
-
-    `params`（`load_sim_params()` の戻り）から L / k_us / ステア・加速度時定数を拾い、
-    `overrides`（例: k_us=0.018）があれば優先する。値が無い項目は省く。
-    """
-    p = dict(params or {})
-    p.update(overrides)
-    bits: list[str] = []
-    if (L := p.get("wheel_base", p.get("wheelbase"))) is not None:
-        bits.append(f"L={float(L):.3g} m")
-    if (kus := p.get("k_us")) is not None:
-        bits.append(f"k_us={float(kus):.3g} s²/m")
-    if (ts := p.get("steer_time_constant")) is not None:
-        bits.append(f"τ_δ={float(ts):.3g} s")
-    if (ta := p.get("acc_time_constant")) is not None:
-        bits.append(f"τ_a={float(ta):.3g} s")
-    return "定数: " + ", ".join(bits) if bits else ""
-
-
 def make_grid(rows: int, cols: int, *, subplot_titles=None, **kwargs):
     """`make_subplots` の共通既定（余白・タイトル）付きラッパ。
 
@@ -169,38 +137,6 @@ def moving_average(y: np.ndarray, window: int) -> np.ndarray:
 def ma_window(n: int, divisor: int = 30, minimum: int = 3) -> int:
     """系列長 `n` から既定の移動平均窓を決める（matplotlib 側の `len/30` 慣習に合わせる）。"""
     return max(minimum, n // divisor)
-
-
-def polyfit_line(x: np.ndarray, y: np.ndarray, deg: int = 1, n: int = 50):
-    """有限値のみで最小二乗フィットし、描画用の (xs, ys, coef) を返す。
-
-    matplotlib 側の `np.polyfit` による回帰直線重ね描き（steer_vs_lateral 等）を再現する。
-    フィット不能（点不足）なら (None, None, None)。
-    """
-    x = np.asarray(x, dtype=float)
-    y = np.asarray(y, dtype=float)
-    m = np.isfinite(x) & np.isfinite(y)
-    if m.sum() <= deg:
-        return None, None, None
-    coef = np.polyfit(x[m], y[m], deg)
-    xs = np.linspace(x[m].min(), x[m].max(), n)
-    ys = np.polyval(coef, xs)
-    return xs, ys, coef
-
-
-# --- 速度ビン色分け（散布図で共通） -------------------------------------------------
-# (下限, 上限, 色)。step5 の速度域別散布と同じ 4 ビン・同じ配色。
-SPEED_BINS: list[tuple[float, float, str]] = [
-    (0.0, 2.0, "#4472C4"),
-    (2.0, 5.0, "#ED7D31"),
-    (5.0, 8.0, "#A9D18E"),
-    (8.0, np.inf, "#FF0000"),
-]
-
-
-def speed_label(lo: float, hi: float) -> str:
-    """速度ビンの凡例ラベル（上限が無限なら「v≥lo」）。"""
-    return f"v={lo:.0f}–{hi:.0f} m/s" if np.isfinite(hi) else f"v≥{lo:.0f} m/s"
 
 
 def axis_range_from_limits(
@@ -250,14 +186,5 @@ def viridis_at(fracs) -> list[str]:
     """viridis を任意の位置 [0,1] でサンプルした色のリスト（連続値の色付け用）。"""
     fr = [min(1.0, max(0.0, float(f))) for f in fracs]
     return pc.sample_colorscale("Viridis", fr) if fr else []
-
-
-def speed_bin_masks(vx: np.ndarray):
-    """速度配列を `SPEED_BINS` のマスクへ分ける。`[(mask, label, color), ...]` を返す。"""
-    vx = np.asarray(vx, dtype=float)
-    return [
-        ((vx >= lo) & (vx < hi), speed_label(lo, hi), color)
-        for lo, hi, color in SPEED_BINS
-    ]
 
 

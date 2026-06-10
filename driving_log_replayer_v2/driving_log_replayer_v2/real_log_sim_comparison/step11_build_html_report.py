@@ -64,14 +64,7 @@ CAPTIONS: dict[str, str] = {
     "dp_vs_final_traj": "実機 DP 出力 vs 最終 planning（optimizer 補正）",
     # step5: nstep/<tag>/
     "overview": "誤差概観（N=1）",
-    "error_timeseries": "誤差時系列（horizon 別）",
-    "error_vs_speed": "速度別 誤差散布（N=1 / N=max）",
-    "error_growth": "誤差成長（horizon 別 RMSE）",
-    "steering_analysis": "ステア分析（N=1）",
     "map_distribution": "誤差の位置分布（地図上・N=1 / N=max・インタラクティブ）",
-    "lateral_dynamics_timeseries": "横方向 dynamics 時系列",
-    "steer_vs_lateral_scatter": "ステア vs 横変位 散布",
-    "cascade_error": "カスケード誤差（N=1 連鎖）",
     # step6: cases/overlay/
     "cascade_error_overlay": "全ケース カスケード誤差 重ね描き（N=1）",
     "error_growth_overlay": "全ケース 誤差成長 重ね描き",
@@ -81,10 +74,6 @@ CAPTIONS: dict[str, str] = {
     "_overview_sensitivity": "スイープ感度オーバービュー（改善率ランキング + 正規化 RMSE カーブ）",
     # step10: curve_diag/
     "curve_divergence": "カーブ乖離 詳細診断（縦横分解 + yaw 差）",
-    # step7: model_eq/ (運動方程式の概念図・実機データ非依存)
-    "yaw_rate_vs_v": "運動方程式: ヨーレート ω(v,δ) の速度2乗依存（k_us=0 理想 vs 0.018 best_normal）",
-    "first_order_step": "運動方程式: 1次遅れ+無駄時間 ステップ応答（仕様 τ vs best_normal τ）",
-    "lateral_accel_map": "運動方程式: 横加速度 a_y = v·ω の (v,δ) マップ",
 }
 
 # step4 のカーブ別連番図 (curve1_analysis 等)。接頭辞除去後のサフィックスで照合。
@@ -222,7 +211,7 @@ def _classify(rel: Path) -> str:
         return "dp"
     if stem == "lon_lat_model":
         return "real_analysis"
-    if top in {"param_sweep", "model_eq"}:
+    if top == "param_sweep":
         return "real_analysis"
     if top in {"nstep", "cases"}:
         return "ol_nstep"

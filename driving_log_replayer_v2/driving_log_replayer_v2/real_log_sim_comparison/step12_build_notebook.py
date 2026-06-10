@@ -57,11 +57,11 @@ _REANALYSIS_TEMPLATE = """\
 # import 可能) ならそのまま動く。build_fig_* の引数を変えて軸や系列を試せる。
 import pandas as pd
 from driving_log_replayer_v2.real_log_sim_comparison.lib._figures import (
-    build_fig_error_timeseries,
+    build_fig_overview,
 )
 
 df = pd.read_csv("{csv_rel}")
-fig = build_fig_error_timeseries(df, params=None)  # limits_df= で横断軸統一も可
+fig = build_fig_overview(df[df["horizon"] == 1], params=None)  # limits_df= で横断軸統一も可
 fig.show()
 """
 

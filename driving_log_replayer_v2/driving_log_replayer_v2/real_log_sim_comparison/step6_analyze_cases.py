@@ -76,8 +76,7 @@ def rerender_case_figures(
     step5 はケース単体実行のため各図の軸が自ケースの値域で自動スケールされ、
     レポートのケース切替タブで軸が動いて比較しにくい。全ケースの CSV を持つ
     step6 が、step5 のプロット関数 (LIMITS_DF 設定で統一軸モード) を呼び直して
-    同名ファイルを上書きする。実機データのみの図 (lateral_dynamics 等) は
-    ケース間で同一のため再描画しない。
+    同名ファイルを上書きする。
     """
     from . import step5_analyze_nstep as s5  # noqa: PLC0415 (plotly 含む重 import のため遅延)
 
@@ -95,12 +94,8 @@ def rerender_case_figures(
             s5.OUT_DIR = nstep_root / case.tag
             df1 = n1(df)
             print(f"  [{case.tag}] ケース横断の統一軸で再描画")
-            s5.plot_error_timeseries(df, params)
-            s5.plot_error_vs_speed(df, params)
             s5.plot_map_distribution(df, params)
             s5.plot_overview(df1, params)
-            s5.plot_steering_analysis(df1, params)
-            s5.plot_cascade_error(df1, params)
     finally:
         s5.LIMITS_DF = None
 

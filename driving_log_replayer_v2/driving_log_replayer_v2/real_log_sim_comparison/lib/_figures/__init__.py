@@ -28,29 +28,15 @@ from ._curve_detail import (
     build_fig_steer_response,
 )
 from ._curve_diag import build_fig_curve_divergence
-from ._model_eq import (
-    build_fig_first_order_step,
-    build_fig_lateral_accel_map,
-    build_fig_yaw_rate_vs_v,
-)
 from ._dp import (
     build_fig_dp_real_vs_sim,
     build_fig_dp_vs_actual,
     build_fig_dp_vs_final_traj,
 )
 from ._sweep import build_fig_pair_sweep, build_fig_sweep, build_fig_sweep_overview
-from ._nstep import (
-    build_fig_cascade_error,
-    build_fig_error_timeseries,
-    build_fig_error_vs_speed,
-    build_fig_lateral_dynamics_timeseries,
-    build_fig_overview,
-    build_fig_steer_vs_lateral_scatter,
-    build_fig_steering_analysis,
-)
+from ._nstep import build_fig_overview
 
 __all__ = [
-    "build_fig_cascade_error",
     "build_fig_cascade_error_overlay",
     "build_fig_curve_analysis",
     "build_fig_curve_divergence",
@@ -61,22 +47,14 @@ __all__ = [
     "build_fig_dp_real_vs_sim",
     "build_fig_dp_vs_actual",
     "build_fig_dp_vs_final_traj",
-    "build_fig_first_order_step",
-    "build_fig_lateral_accel_map",
-    "build_fig_yaw_rate_vs_v",
     "build_fig_error_growth_overlay",
     "build_fig_error_timeseries_overlay",
     "build_fig_growth_relative",
     "build_fig_rmse_heatmap",
-    "build_fig_error_timeseries",
-    "build_fig_error_vs_speed",
-    "build_fig_lateral_dynamics_timeseries",
     "build_fig_overview",
     "build_fig_pair_sweep",
     "build_fig_sweep",
     "build_fig_sweep_overview",
-    "build_fig_steer_vs_lateral_scatter",
-    "build_fig_steering_analysis",
     "build_fig_timeseries_resp_cmd",
     "build_fig_vs_distance",
 ]
