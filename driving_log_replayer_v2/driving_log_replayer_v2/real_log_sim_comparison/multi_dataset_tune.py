@@ -1,26 +1,24 @@
 #!/usr/bin/env python3
 """
-マルチデータセット横断での open-loop N-step rollout 集約とロバスト best_normal 同定。
+マルチデータセット横断でのロバスト best_normal 同定 (robust_search 専用ツール)。
 
 クラウドは 1 評価ジョブ = 1 データセットのため、各ジョブが出力する real.lite を
-`collect_real_lite.py` で収集ディレクトリ (<collection>/<dataset_id>/real.lite) に集約した上で、
+`collect_datasets.py` で収集ディレクトリ (<collection>/<dataset_id>/real.lite) に集約した上で、
 本モジュールが dataset 横断で誤差を集計しロバストなパラメータを同定する。
+ケース横断のレポート用集約 (旧 evaluate_cases / multi_cases_summary.md) は
+step13_cross_dataset.py に一本化した (per-dataset の cases_metrics.json を再集計するため
+rollout 再実行が不要)。本モジュールは rollout を伴うパラメータ探索のみを担う。
 
 設計の要点:
 - closed-loop はローカルで退化するため評価は open-loop N-step rollout (step5.run_rollout) のみ。
 - 最大 horizon (N=20) の終端誤差 RMSE で評価 (step7 sweep と同じ指標。小 N は seed バイアス)。
-- **per-dataset 正規化**: 各 dataset の baseline (パラメータ無補正) 誤差で割って正規化してから
-  dataset 横断の mean / worst(max) を取る。生の deg/cm は baseline 誤差の大きい dataset が
-  支配し「全 dataset で良い」を達成できないため (= ロバスト化の核心)。
+- **per-dataset 正規化** (lib._multi_agg): 各 dataset の baseline 誤差で割って正規化してから
+  dataset 横断の mean / worst(max) を取る。baseline は cases.yaml の overlay.reference_tag
+  ケース (無補正 delay モデル) と同定義 — step13 の正規化と一致する。
 
 使い方:
-    # cases.yaml の全ケースを dataset 横断評価 (multi_cases_summary.md 出力)
     python3 -m driving_log_replayer_v2.real_log_sim_comparison.multi_dataset_tune \
         --collection-dir sample/multi --cases-config sample/cases.yaml
-
-    # ロバスト best_normal の結合探索も実行
-    python3 -m driving_log_replayer_v2.real_log_sim_comparison.multi_dataset_tune \
-        --collection-dir sample/multi --cases-config sample/cases.yaml --search
 """
 
 from __future__ import annotations
@@ -29,29 +27,16 @@ import argparse
 from dataclasses import dataclass
 import itertools
 from pathlib import Path
-import statistics as stats
 import sys
 
 from . import step5_analyze_nstep as s5
 from .lib._cases_config import load_cases_config
 from .lib._io import resolve_lite_bag
-from .lib._nstep_common import metrics_description_md, rmse_by_horizon
+from .lib._multi_agg import HORIZONS, aggregate_normalized, format_agg, robust_score
+from .lib._nstep_common import rmse_by_horizon
 
-# 評価する horizon 群。step7 sweep と同じ最大 horizon (N=20) に加え、より長い N=40 で
-# dynamics 累積差を観測する。同定スコア (_score) は両 horizon を等重みで集約する。
-HORIZONS = (20, 40)
 STRIDE = 5
 WHEELBASE = 4.76012
-# per-dataset 正規化の分母フロア (horizon 別・成分別)。ほぼ直進・低ダイナミクス走行は baseline
-# 誤差が極小で、相対誤差 (err/baseline) が暴発し worst-case を支配する (絶対値は微小なのに)。
-# pos を縦/横に分けると縦・横でスケールが大きく異なる。20 dataset の baseline 分布
-# (load_datasets の print) では【縦の方が横より大きい】(縦 1.3〜7.4cm vs 横 0.1〜3.4cm @N20;
-# baseline モデルは縦方向の遅延/時定数が支配的)。フロアが大きすぎると baseline ですら正規化値が
-# 1 未満になりその成分の寄与が一律縮小される (= 信号を殺す) ため、各成分は分布下位の低ダイナ走行
-# のみをクリップする水準に校正する (横は小さいのでフロアも低め)。
-YAW_FLOOR = {20: 0.12, 40: 0.24}   # deg (分布下位 ~20% の低ダイナ yaw をクリップ)
-LONG_FLOOR = {20: 2.0, 40: 4.5}    # cm  (縦は誤差が大きい → フロアも大きめ)
-LAT_FLOOR = {20: 0.6, 40: 1.2}     # cm  (横は誤差が小さい → フロアも小さめ)
 _BASELINE_MODEL = "delay_steer_acc_geared_wo_fall_guard"
 # _prepare_gt は params の delay/wheelbase/sub_dt にのみ依存 (run_rollout docstring)
 _GT_KEYS = ("acc_time_delay", "steer_time_delay", "wheelbase", "sub_dt")
@@ -128,142 +113,27 @@ def load_datasets(lite_dirs: list[tuple[str, Path]]) -> list[DatasetCtx]:
 
 
 def aggregate(ctxs: list[DatasetCtx], override: dict, model_type: str) -> dict:
+    """各 ctx を rollout 評価し lib._multi_agg.aggregate_normalized で横断集約する薄ラッパ。
+
+    返り値スキーマは aggregate_normalized と同一
+    ({per_ds: [{dataset_id, by_h}], by_h: {h: {nyaw_mean,...,nlat_worst}}})。
     """
-    Dataset 横断で per-dataset 正規化した yaw/縦/横の mean と worst(max) を horizon 別に返す。
-
-    pos(2D) を縦(long)/横(lat) に分解し、各成分・各 horizon を baseline 比で正規化する。
-    返り値:
-      per_ds: [{dataset_id, by_h: {h: {yaw,long,lat, nyaw,nlong,nlat}}}]
-      by_h:   {h: {nyaw_mean,nyaw_worst, nlong_mean,nlong_worst, nlat_mean,nlat_worst}}
-    """
-    per_ds = []
-    for ctx in ctxs:
-        m = _eval(ctx, override, model_type)
-        by_h = {}
-        for h in HORIZONS:
-            b = ctx.base_metric[h]
-            # 分母を成分別・horizon 別フロアで下限クリップ (低ダイナミクス走行の相対誤差暴発を防ぐ)
-            by_h[h] = {
-                "yaw": m[h]["yaw"],
-                "long": m[h]["long"],
-                "lat": m[h]["lat"],
-                "nyaw": m[h]["yaw"] / max(b["yaw"], YAW_FLOOR[h]),
-                "nlong": m[h]["long"] / max(b["long"], LONG_FLOOR[h]),
-                "nlat": m[h]["lat"] / max(b["lat"], LAT_FLOOR[h]),
-            }
-        per_ds.append({"dataset_id": ctx.dataset_id, "by_h": by_h})
-
-    by_h_agg = {}
-    for h in HORIZONS:
-        nyaws = [d["by_h"][h]["nyaw"] for d in per_ds]
-        nlongs = [d["by_h"][h]["nlong"] for d in per_ds]
-        nlats = [d["by_h"][h]["nlat"] for d in per_ds]
-        by_h_agg[h] = {
-            "nyaw_mean": stats.mean(nyaws),
-            "nyaw_worst": max(nyaws),
-            "nlong_mean": stats.mean(nlongs),
-            "nlong_worst": max(nlongs),
-            "nlat_mean": stats.mean(nlats),
-            "nlat_worst": max(nlats),
-        }
-    return {"per_ds": per_ds, "by_h": by_h_agg}
-
-
-_WORST_W = 0.5  # worst-case 項の重み (ユーザー方針: mean+worst 両方を balance)
-
-
-_POS_W = 0.5  # 縦・横 各成分の重み。pos を縦横に分けても yaw:位置 = 1:1 を維持する
-#            (位置 = 0.5·縦 + 0.5·横)。旧 nyaw+npos のバランスと整合させるための補正。
-
-
-def _score(agg: dict) -> float:
-    """ロバスト目的関数: 全 horizon の正規化 mean + worst (yaw + 0.5·縦 + 0.5·横)。小さいほど良い。
-
-    N=20/N=40 を等重みで集約する。縦・横は各 0.5 倍で合算し yaw:位置 = 1:1 に保つ
-    (pos を縦横へ分割しても yaw の相対重みが半減しないようにする)。mean だけだと縦/横の mean を
-    稼ぐ proxy が特定エリアの worst を悪化させても採用されてしまうため、worst を重み付きで加えて
-    mean と worst を両立させる。
-    """
-    s = 0.0
-    for h in HORIZONS:
-        b = agg["by_h"][h]
-        s += b["nyaw_mean"] + _POS_W * (b["nlong_mean"] + b["nlat_mean"])
-        s += _WORST_W * (b["nyaw_worst"] + _POS_W * (b["nlong_worst"] + b["nlat_worst"]))
-    return s
-
-
-def _fmt_agg(tag: str, agg: dict) -> str:
-    seg = []
-    for h in HORIZONS:
-        b = agg["by_h"][h]
-        seg.append(
-            f"N{h}[ny_m={b['nyaw_mean']:.3f}/w={b['nyaw_worst']:.3f} "
-            f"nlo_m={b['nlong_mean']:.3f}/w={b['nlong_worst']:.3f} "
-            f"nla_m={b['nlat_mean']:.3f}/w={b['nlat_worst']:.3f}]"
-        )
-    return f"{tag:14s} " + " ".join(seg)
+    per_ds_metrics = [(ctx.dataset_id, _eval(ctx, override, model_type)) for ctx in ctxs]
+    baselines = {ctx.dataset_id: ctx.base_metric for ctx in ctxs}
+    return aggregate_normalized(per_ds_metrics, baselines)
 
 
 _KUS0020 = {"k_us": 0.020}
-
-
-def evaluate_cases(ctxs: list[DatasetCtx], cfg) -> str:
-    """cases.yaml の全ケースを dataset 横断評価し Markdown 表を返す (horizon 別)。"""
-    lines = [
-        "# multi-dataset cases summary (open-loop N=%s 終端誤差)" % ",".join(map(str, HORIZONS)),
-        "",
-        metrics_description_md(),
-        "",
-        "各 dataset の baseline 誤差で成分別・horizon 別に正規化した値で集約 "
-        "(n* = baseline 比、小さいほど良い)。per-dataset セルは生値 `縦/横/yaw` [cm/cm/deg]。",
-        "",
-        "> **同定スコア** `_score = Σ_h (nyaw_mean + "
-        f"{_POS_W}·(nlong_mean + nlat_mean)) + {_WORST_W}·(nyaw_worst + "
-        f"{_POS_W}·(nlong_worst + nlat_worst))`  "
-        f"(h ∈ {list(HORIZONS)}、縦横各 {_POS_W} で yaw:位置=1:1、小さいほど良い)。",
-        "",
-    ]
-    # ケースごとに 1 回だけ集約し horizon 別表で再利用
-    case_aggs = {
-        tag: aggregate(ctxs, cfg.find_case(tag).params, cfg.find_case(tag).vehicle_model)
-        for tag in cfg.tags
-    }
-    for h in HORIZONS:
-        lines.append(f"## N={h} 終端誤差 (per-dataset 縦/横/yaw + 正規化集約)")
-        lines.append("")
-        header = (
-            "| case | model | "
-            + " | ".join(f"{c.dataset_id[:8]} 縦/横/yaw" for c in ctxs)
-            + " | nyaw_mean | nyaw_worst | nlong_mean | nlong_worst | nlat_mean | nlat_worst |"
-        )
-        sep = "|" + "---|" * (2 + len(ctxs) + 6)
-        lines += [header, sep]
-        for tag in cfg.tags:
-            case = cfg.find_case(tag)
-            agg = case_aggs[tag]
-            b = agg["by_h"][h]
-            cells = " | ".join(
-                f"{d['by_h'][h]['long']:.2f}/{d['by_h'][h]['lat']:.2f}/{d['by_h'][h]['yaw']:.3f}"
-                for d in agg["per_ds"]
-            )
-            model_short = case.vehicle_model.replace(
-                "delay_steer_acc_geared_wo_fall_guard", "delay"
-            )
-            lines.append(
-                f"| {tag} | {model_short} | {cells} "
-                f"| {b['nyaw_mean']:.3f} | {b['nyaw_worst']:.3f} "
-                f"| {b['nlong_mean']:.3f} | {b['nlong_worst']:.3f} "
-                f"| {b['nlat_mean']:.3f} | {b['nlat_worst']:.3f} |"
-            )
-        lines.append("")
-    return "\n".join(lines)
 
 
 def robust_search(ctxs: list[DatasetCtx], cfg) -> dict:
     """
     best_normal 集合 (代理含む) を coordinate descent で dataset 横断ロバスト最適化。
 
-    目的: 全 horizon の正規化 mean + worst (yaw+縦+横) を最小化 (_score; worst を重み付きで含む)。
+    目的: 全 horizon の正規化 mean + worst (yaw+縦+横) を最小化
+    (lib._multi_agg.robust_score; worst を重み付きで含む)。
+    正規化 baseline は無補正 delay モデル (_BASELINE_MODEL) の rollout = cases.yaml の
+    overlay.reference_tag ケースと同定義で、step13_cross_dataset の正規化と一致する。
     参照点 (現 best_normal) は cases.yaml の best_normal ケースから取得する
     (ハードコードしない。yaml を更新後に再探索しても整合する)。
     """
@@ -279,13 +149,13 @@ def robust_search(ctxs: list[DatasetCtx], cfg) -> dict:
     }
     cur_agg = aggregate(ctxs, cur_best, cur_model)
     print("\n## robust coordinate descent (best_normal family, cross-dataset normalized)")
-    print(_fmt_agg("cur_best", cur_agg) + f"  score={_score(cur_agg):.4f}  {cur_best}")
-    print(_fmt_agg("kus0020", aggregate(ctxs, _KUS0020, cur_model)))
+    print(format_agg("cur_best", cur_agg) + f"  score={robust_score(cur_agg):.4f}  {cur_best}")
+    print(format_agg("kus0020", aggregate(ctxs, _KUS0020, cur_model)))
 
-    # worst は _score に組み込み済み (ハード guard なし) なので mean↔worst の trade を許容する。
+    # worst は robust_score に組み込み済み (ハード guard なし) なので mean↔worst の trade を許容する。
     state = dict(cur_best)
     best_agg = cur_agg
-    best_s = _score(cur_agg)
+    best_s = robust_score(cur_agg)
     for _pass in range(3):
         improved = False
         for pname, grid in sweeps.items():
@@ -293,10 +163,10 @@ def robust_search(ctxs: list[DatasetCtx], cfg) -> dict:
                 trial = dict(state)
                 trial[pname] = v
                 agg = aggregate(ctxs, trial, cur_model)
-                s = _score(agg)
+                s = robust_score(agg)
                 if s < best_s - 1e-6:
                     best_s, best_agg, state, improved = s, agg, trial, True
-        print(_fmt_agg(f"pass{_pass}", best_agg) + f"  score={best_s:.4f}  {state}")
+        print(format_agg(f"pass{_pass}", best_agg) + f"  score={best_s:.4f}  {state}")
         if not improved:
             break
     # --- 直積グリッド精密化 (coordinate descent の経路依存を排除) ---
@@ -314,25 +184,29 @@ def robust_search(ctxs: list[DatasetCtx], cfg) -> dict:
         trial = dict(cur_best)  # descent 外の spec パラメータを保持
         trial.update({k: v for k, v in zip(keys, combo)})
         agg = aggregate(ctxs, trial, cur_model)
-        s = _score(agg)
+        s = robust_score(agg)
         if s < best_s - 1e-6:
             best_s, best_agg, state = s, agg, trial
-    print(_fmt_agg("FINAL", best_agg) + f"  score={best_s:.4f}")
+    print(format_agg("FINAL", best_agg) + f"  score={best_s:.4f}")
     print(f"FINAL params: {state}")
     return {"params": state, "agg": best_agg, "score": best_s}
 
 
 def _discover(collection_dir: Path) -> list[tuple[str, Path]]:
-    """収集ディレクトリ配下の <dataset_id>/real.lite を列挙。"""
+    """収集ディレクトリ配下の <dataset_id>/real.lite を列挙 (datasets/ サブディレクトリ対応)。"""
+    from .lib._collection import datasets_root  # noqa: PLC0415
+
     out = []
-    for sub in sorted(collection_dir.iterdir()):
+    for sub in sorted(datasets_root(collection_dir).iterdir()):
         if sub.is_dir() and resolve_lite_bag(sub, "real") is not None:
             out.append((sub.name, sub))
     return out
 
 
 def main() -> None:
-    ap = argparse.ArgumentParser(description="マルチデータセット横断 open-loop 集約・ロバスト同定")
+    ap = argparse.ArgumentParser(
+        description="マルチデータセット横断のロバスト best_normal 同定 (robust_search)"
+    )
     ap.add_argument("--collection-dir", default=str(Path(__file__).parent / "sample" / "multi"))
     ap.add_argument("--cases-config", default=str(Path(__file__).parent / "sample" / "cases.yaml"))
     ap.add_argument(
@@ -341,10 +215,6 @@ def main() -> None:
         default=[],
         metavar="DATASET_ID=LITE_DIR",
         help="収集を使わず直接指定 (複数可)",
-    )
-    ap.add_argument("--search", action="store_true", help="ロバスト結合探索を実行")
-    ap.add_argument(
-        "--out", default="", help="multi_cases_summary.md 出力先 (既定: collection-dir 直下)"
     )
     args = ap.parse_args()
 
@@ -366,14 +236,7 @@ def main() -> None:
         sys.exit(1)
 
     cfg = load_cases_config(args.cases_config)
-    md = evaluate_cases(ctxs, cfg)
-    out_path = Path(args.out) if args.out else Path(args.collection_dir) / "multi_cases_summary.md"
-    out_path.write_text(md + "\n", encoding="utf-8")
-    print(f"\n書き出し: {out_path}\n")
-    print(md)
-
-    if args.search:
-        robust_search(ctxs, cfg)
+    robust_search(ctxs, cfg)
 
 
 if __name__ == "__main__":
