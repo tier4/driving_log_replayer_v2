@@ -87,12 +87,15 @@ def write_single_dataset_scenario(scenario: Path, uuid: str, out_path: Path) -> 
 
 
 def run_one_dataset(
-    uuid: str, scenario_single: Path, t4_dataset_path: Path, output_dir: Path
+    uuid: str, scenario_single: Path, t4_dataset_path: Path, output_dir: Path,
+    *, skip_sim: bool = False,
 ) -> bool:
     """1 dataset の per-dataset パイプラインを ros2 launch で実行する (成功で True)。
 
     Makefile local_cloud_run の launch 行と同一。ROS 環境 (install/setup.bash) は
     呼び出し元 shell で source 済みであることを前提とする。
+    skip_sim=True で SKIP_SIM=1 を evaluator_node へ伝搬し、Stage 3 (closed-loop sim) を
+    省略する (open-loop 解析のみ。詳細は evaluator_node.run_pipeline)。
     """
     output_dir.mkdir(parents=True, exist_ok=True)
     cmd = [
@@ -103,8 +106,11 @@ def run_one_dataset(
         f"output_dir:={output_dir}",
         "with_autoware:=false",
     ]
-    print(f"[RUN] {uuid}: {' '.join(cmd)}", flush=True)
-    proc = subprocess.run(cmd, check=False)  # noqa: S603
+    env = os.environ.copy()
+    if skip_sim:
+        env["SKIP_SIM"] = "1"
+    print(f"[RUN] {uuid}{' (skip-sim)' if skip_sim else ''}: {' '.join(cmd)}", flush=True)
+    proc = subprocess.run(cmd, check=False, env=env)  # noqa: S603
     return proc.returncode == 0
 
 
@@ -132,6 +138,9 @@ def main() -> None:
                     help=f"webauto キャッシュルート (既定: {_DEFAULT_WEBAUTO_ROOT})")
     ap.add_argument("--resume", action="store_true",
                     help="runs/<uuid> に real.lite が揃っている dataset の sim 実行をスキップ")
+    ap.add_argument("--skip-sim", action="store_true",
+                    help="全 dataset で Stage 3 (closed-loop sim 実行) を省略し、実機ログのみの"
+                    "解析 (open-loop N-step / sweep / カバレッジ) を実行する")
     args = ap.parse_args()
 
     scenario = Path(args.scenario).resolve()
@@ -162,7 +171,9 @@ def main() -> None:
                 continue
             scenario_single = batch_root / "scenarios" / f"{uuid}.scenario.yaml"
             write_single_dataset_scenario(scenario, uuid, scenario_single)
-            ok = run_one_dataset(uuid, scenario_single, t4_path, output_dir)
+            ok = run_one_dataset(
+                uuid, scenario_single, t4_path, output_dir, skip_sim=args.skip_sim
+            )
             if not ok and not _bundle_has_real_lite(output_dir):
                 print(f"[WARN] {uuid}: sim 実行失敗 (成果物なし) — スキップ", file=sys.stderr)
                 records.append({"dataset_id": uuid, "status": "sim_failed",

@@ -414,11 +414,22 @@ sample/out/batch_<ts>/                  # collection root (= COLLECTION_DIR)
 ```bash
 make local_batch_run                      # 全 UUID を順次実行 → 収集 → 横断分析 → report.html
 make local_batch_run RESUME=1 BATCH_ROOT=sample/out/batch_20260611_120000  # 中断再開
+make local_batch_run SKIP_SIM=1           # closed-loop sim を省略 (open-loop 解析のみ・高速)
 ```
 
 `run_batch.py` が UUID ごとに single-dataset scenario を生成して per-dataset パイプラインを
 実行する（クラウドの「1 評価ジョブ = 1 dataset」のローカル再現）。失敗 dataset は
 `collection.yaml` に status を記録してスキップし、残りで横断分析を続行する。
+
+**closed-loop sim のスキップ (`SKIP_SIM=1` / `Conditions.skip_sim`)**: Stage 3 は
+1 dataset あたり sim run 数 × 数分かかり、マルチ DS バッチでは支配的になる。closed-loop
+比較が不要なとき（open-loop N-step・パラメータ同定・カバレッジだけ欲しいとき）は
+`SKIP_SIM=1`（`local_cloud_run` / `local_batch_run` 共通、クラウドは scenario.yaml の
+`Conditions.skip_sim: true`）で Stage 3 だけを省略できる。Stage 2（scenario 生成）と
+Stage 4〜13 は実行され、sim 依存の図・行列（closed-loop 比較・DP 比較）は自動的に
+省略される。成否判定も「sim 0 件 = INCOMPLETE」を適用しない。後から closed-loop も
+欲しくなったら `SKIP_SIM`/`RESUME` 無しで同じ `BATCH_ROOT` を再実行する（real.lite
+抽出からやり直すが、支配的な sim 実行時間に対して誤差）。
 
 ### クラウド実行分の収集
 

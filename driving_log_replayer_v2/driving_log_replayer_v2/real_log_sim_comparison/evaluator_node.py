@@ -102,10 +102,13 @@ class RealLogSimComparisonEvaluator(Node):
             case_p, case_e = counts["cases_produced"], counts["cases_expected"]
             # sim run / case が 1 件も出力されなければ比較は成立しない → INCOMPLETE (失敗扱い)。
             # 例外が出なくても「有意な出力ゼロ」を Success と誤報しないための E1 ガード。
-            degenerate = (sim_p == 0) or (case_p == 0)
+            # skip_sim (closed-loop sim を意図的に省略) のときは sim 0 件を失敗にしない。
+            sim_skipped = bool(counts.get("sim_skipped"))
+            degenerate = (sim_p == 0 and not sim_skipped) or (case_p == 0)
             success = not degenerate
             counts_str = (
-                f"sim_runs {sim_p}/{sim_e}, cases {case_p}/{case_e}, "
+                f"sim_runs {'skipped' if sim_skipped else f'{sim_p}/{sim_e}'}, "
+                f"cases {case_p}/{case_e}, "
                 f"report={counts['report_ok']}, cases_summary={counts['cases_summary_ok']}"
             )
             summary = f"{'Success' if success else 'INCOMPLETE'} ({counts_str})"
@@ -200,8 +203,18 @@ def run_pipeline(
     sim_cfg = load_sim_runs_config(sim_runs_yaml)
     env["SIM_RUNS_CONFIG_YAML"] = sim_runs_yaml
 
-    logger.info(f"Stage 3: step3_run_sims over {len(sim_cfg.runs)} run(s)")
-    if auto_scenario.exists():
+    # closed-loop sim のスキップ (open-loop 解析だけ欲しいとき・マルチ DS バッチの時間短縮)。
+    # scenario.yaml の Conditions.skip_sim (クラウド) か env SKIP_SIM=1 (make 変数) で指定する。
+    # Stage 2 (scenario 生成) は軽量で、collect_datasets の dataset_id 推定が auto_scenario.yaml
+    # に依存するためスキップしない。Stage 4 以降は sim lite 欠損時に実機のみで動く。
+    skip_sim = bool(compare_cfg.get("skip_sim", False)) or env.get("SKIP_SIM") == "1"
+
+    if skip_sim:
+        logger.info(
+            f"Stage 3: skipped (skip_sim) — {len(sim_cfg.runs)} run(s) defined but not executed"
+        )
+    elif auto_scenario.exists():
+        logger.info(f"Stage 3: step3_run_sims over {len(sim_cfg.runs)} run(s)")
         base_domain_id = int(os.environ.get("ROS_DOMAIN_ID", "0"))
         # 各 sim run の実行ログ (ros2 launch / autoware / make_lite 等) は run ごとに分離保存する
         # (集約ログを汚さず後から個別に追えるように)。result_archive 配下なのでアーカイブされる。
@@ -231,7 +244,9 @@ def run_pipeline(
     else:
         logger.warning("Stage 3: auto_scenario.yaml が無いため sim 実行をスキップ")
 
-    return run_analysis(lite_dir, comparison_dir, env, compare_cfg, logger)
+    counts = run_analysis(lite_dir, comparison_dir, env, compare_cfg, logger)
+    counts["sim_skipped"] = int(skip_sim)
+    return counts
 
 
 def build_common_env(
@@ -478,6 +493,13 @@ def _load_compare_config(scenario_path_str: str) -> dict[str, Any]:
         # (停止・加減速) を再現させる。step3 が REPRODUCE_BAG 経由で起動。
         if "reproduce_perception" in conditions:
             cfg["reproduce_perception"] = bool(conditions["reproduce_perception"])
+
+        # skip_sim (任意, 既定 false): true で Stage 3 (closed-loop sim 実行) をスキップし、
+        # 実機ログのみの解析 (open-loop N-step / param sweep / カバレッジ等) を実行する。
+        # closed-loop 比較が不要なとき・マルチ DS バッチの時間短縮用。ローカルは env SKIP_SIM=1
+        # でも指定できる (run_pipeline 参照)。
+        if "skip_sim" in conditions:
+            cfg["skip_sim"] = bool(conditions["skip_sim"])
 
         if "curve_config_yaml" in conditions:
             raw = str(conditions["curve_config_yaml"])

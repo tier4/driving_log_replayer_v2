@@ -29,12 +29,14 @@ help:
 	@echo ""
 	@echo "ターゲット:"
 	@echo "  local_cloud_run     webauto キャッシュの T4 dataset を使いパイプラインをワンコマンド実行"
-	@echo "                      (scenario.yaml の Datasets[0] のみ。複数 dataset は local_batch_run)"
+	@echo "                      (scenario.yaml の Datasets[0] のみ。複数 dataset は local_batch_run。"
+	@echo "                       SKIP_SIM=1 で closed-loop sim を省略)"
 	@echo "  local_analysis_run  既存出力 (OUT_DIR; 既定 sample/out/latest) の sim 実行結果を再利用し、"
 	@echo "                      解析ステージ (Stage 4〜12) だけを再実行 (解析コード変更後の作り直し用)"
 	@echo "  local_batch_run     scenario.yaml の Datasets 全 UUID を順次ローカル実行し、収集 +"
 	@echo "                      横断分析 (Stage 13) + マルチ DS report.html まで実行"
-	@echo "                      (BATCH_ROOT 既定 sample/out/batch_<ts>; RESUME=1 で再開)"
+	@echo "                      (BATCH_ROOT 既定 sample/out/batch_<ts>; RESUME=1 で再開;"
+	@echo "                       SKIP_SIM=1 で closed-loop sim を省略し open-loop 解析のみ)"
 	@echo "  local_cross_analysis_run  既存 collection (COLLECTION_DIR; 既定 sample/out/batch_latest) の"
 	@echo "                      横断分析 (Stage 13) + マルチ DS report.html だけを再実行"
 	@echo "  local_multidataset_run  収集済み複数 real.lite (COLLECTION_DIR) で open-loop ロバスト同定"
@@ -79,7 +81,7 @@ local_cloud_run:
 	    mkdir -p "$$out_dir" ; \
 	    ln -snf "$$(basename $$out_dir)" $(LOCAL_SAMPLE_DIR)/out/latest ; \
 	    echo "[INFO] Output: $$out_dir" ; \
-	    source $(SETUP_BASH) && ros2 launch driving_log_replayer_v2 driving_log_replayer_v2.launch.py \
+	    source $(SETUP_BASH) && $(if $(SKIP_SIM),SKIP_SIM=1,) ros2 launch driving_log_replayer_v2 driving_log_replayer_v2.launch.py \
 	        scenario_path:=$(LOCAL_SCENARIO) \
 	        t4_dataset_path:="$$frame_dir" \
 	        t4_dataset_id:="$$uuid" \
@@ -118,6 +120,9 @@ local_analysis_run:
 # パイプライン (Stage 1〜12) → collect_datasets 収集 → Stage 13 横断分析 → マルチ DS
 # report.html まで一気通貫。失敗 dataset は WARN + collection.yaml に status 記録して継続。
 # RESUME=1 で real.lite が揃っている dataset の sim 実行をスキップ (中断再開用)。
+# SKIP_SIM=1 で Stage 3 (closed-loop sim 実行) を全 dataset で省略する。closed-loop 比較が
+# 不要なとき (open-loop N-step / sweep / カバレッジだけ欲しいとき) のバッチ時間短縮用。
+# 後から closed-loop も欲しくなったら SKIP_SIM/RESUME 無しで同じ BATCH_ROOT を再実行する。
 BATCH_ROOT ?= $(LOCAL_SAMPLE_DIR)/out/batch_$(shell date +%Y%m%d_%H%M%S)
 
 local_batch_run:
@@ -130,7 +135,8 @@ local_batch_run:
 	        --scenario "$(LOCAL_SCENARIO)" \
 	        --batch-root "$(BATCH_ROOT)" \
 	        --webauto-root "$(WEBAUTO_T4_ROOT)" \
-	        $(if $(RESUME),--resume,)
+	        $(if $(RESUME),--resume,) \
+	        $(if $(SKIP_SIM),--skip-sim,)
 
 # 既存 collection (local_batch_run の出力 or collect_datasets.py の手収集) の横断分析だけを
 # 再実行する (Stage 13 + マルチ DS report.html)。per-dataset の sim/解析はスキップするため、
