@@ -10,6 +10,8 @@
         速度帯依存も tau(v) = tau0 + slope*v (v は観測 lon_vel) で表現。
         定常オフセット (転がり抵抗・勾配・空気抵抗) を多項式 poly(v)=p0+p1*v+p2*v^2 で補正
         (各次 ON/OFF 切替・有効項のみ最小二乗最適化対象)。
+        停止処理 (geared): v<=v_stop かつブレーキ指令時は a_target=0 (停車保持で実加速度は ~0)、
+        速度は 0 下限クランプ (後退なし)。停止保持ブレーキ (cmd=-2 等) の誤差を解消。
   横  : delta' = -(delta - delta_cmd(t-T_d)) / tau_d        (delta は rad で積分)
         omega = v*tan(delta + beta) / (L + k_us*v^2) ,  theta' = omega
         x' = v*cos(theta) , y' = v*sin(theta) ,  a_y = v*omega
@@ -91,6 +93,7 @@ def plot_model_viewer(
         "poly0": 0.0,  # 縦 定常補正 多項式係数 (0/1/2 次, 既定 OFF・0)。a_target に加算。
         "poly1": 0.0,
         "poly2": 0.0,
+        "v_stop": 0.2,  # 停止処理の速度しきい値 [m/s]。v<=v_stop かつブレーキ指令で実加速度を 0 に。
         "tau_steer": float(sim_params["steer_time_constant"]),
         "t_steer": float(sim_params["steer_time_delay"]),
         "steer_bias": float(sim_params.get("steer_bias", 0.0)),
@@ -201,6 +204,7 @@ _HTML_TEMPLATE = r"""<!DOCTYPE html>
     <span class="kg"><label><input type="checkbox" id="on_poly0">p₀</label> <input type="range" id="k_poly0" min="-1" max="1" step="0.01" value="0" disabled><span class="kval" id="v_poly0"></span></span>
     <span class="kg"><label><input type="checkbox" id="on_poly1">p₁·v</label> <input type="range" id="k_poly1" min="-0.1" max="0.1" step="0.001" value="0" disabled><span class="kval" id="v_poly1"></span></span>
     <span class="kg"><label><input type="checkbox" id="on_poly2">p₂·v²</label> <input type="range" id="k_poly2" min="-0.01" max="0.01" step="0.0001" value="0" disabled><span class="kval" id="v_poly2"></span></span>
+    <span class="kg" style="margin-left:6px"><label><input type="checkbox" id="on_stop" checked>停止処理</label> v_stop <input type="range" id="k_vstop" min="0" max="1" step="0.05" value="0.2"><span class="kval" id="v_vstop"></span></span>
     <span class="kg" style="margin-left:6px"><span class="ktitle">横(ステア)</span></span>
     <span class="kg">T <input type="range" id="k_t_steer" min="0" max="0.5" step="0.005" value="0.03"><span class="kval" id="v_t_steer"></span></span>
     <span class="kg">τ <input type="range" id="k_tau_steer" min="0.02" max="1.5" step="0.005" value="0.50"><span class="kval" id="v_tau_steer"></span></span>
@@ -262,6 +266,7 @@ const DATA = __PAYLOAD_JSON__;
     tau_acc_slope: DATA.model_seed.tau_acc_slope,
     poly0: DATA.model_seed.poly0, poly1: DATA.model_seed.poly1, poly2: DATA.model_seed.poly2,
     polyOn0: false, polyOn1: false, polyOn2: false, // 多項式補正の各次 ON/OFF (既定 OFF)
+    v_stop: DATA.model_seed.v_stop, stopHandling: true, // 停止処理 (既定 ON)
     tau_steer: DATA.model_seed.tau_steer, t_steer: DATA.model_seed.t_steer,
     k_us: DATA.model_seed.k_us,
     steer_bias: DATA.model_seed.steer_bias * RAD2DEG, // rad→deg (β つまみは度表示)
@@ -273,6 +278,11 @@ const DATA = __PAYLOAD_JSON__;
     if (model.polyOn1) p += model.poly1 * v;
     if (model.polyOn2) p += model.poly2 * v * v;
     return p;
+  }
+  // 縦 加速度の目標値。停止処理 ON 時は v<=v_stop かつブレーキ指令(u<0)で 0（停車保持）。
+  function accelTarget(u, v) {
+    if (model.stopHandling && v <= model.v_stop && u < 0) return 0;
+    return u + polyAccel(v);
   }
 
   // ------------------------------------------------------------------ DOM
@@ -378,8 +388,9 @@ const DATA = __PAYLOAD_JSON__;
         lastDrive = u;
         const tau0 = throttle ? tauThr : tauBrk;
         const tauA = Math.max(tau0 + tauSlope * vv, 0.02); // tau(v), 下限 0.02s
-        a += h * (-(a - (u + polyAccel(vv))) / tauA); // a_target = a_cmd + poly(v)
+        a += h * (-(a - accelTarget(u, vv)) / tauA); // a_target = a_cmd + poly(v) (停止処理込み)
         v += h * a;
+        if (model.stopHandling && v < 0) v = 0; // 後退なし (geared)
         // ステア(rad)
         const ud = chanAt("cmd_steer", tt - Td); if (ud != null) lastUd = ud;
         const driveD = (lastUd != null) ? lastUd * DEG : delta;
@@ -473,6 +484,7 @@ const DATA = __PAYLOAD_JSON__;
   setupKnob("k_poly0", "v_poly0", "poly0", (v) => v.toFixed(3));
   setupKnob("k_poly1", "v_poly1", "poly1", (v) => v.toFixed(4));
   setupKnob("k_poly2", "v_poly2", "poly2", (v) => v.toFixed(5));
+  setupKnob("k_vstop", "v_vstop", "v_stop", (v) => v.toFixed(2) + "m/s");
 
   // 多項式補正の各次 ON/OFF。OFF 時は係数を model から除外（=0扱い）し最適化対象からも外す。
   function setupPolyToggle(cbId, sliderId, onKey) {
@@ -486,6 +498,12 @@ const DATA = __PAYLOAD_JSON__;
   setupPolyToggle("on_poly0", "k_poly0", "polyOn0");
   setupPolyToggle("on_poly1", "k_poly1", "polyOn1");
   setupPolyToggle("on_poly2", "k_poly2", "polyOn2");
+  // 停止処理トグル（既定 ON）。OFF で v_stop つまみを無効化。
+  $("on_stop").addEventListener("change", (e) => {
+    model.stopHandling = e.target.checked;
+    $("k_vstop").disabled = !e.target.checked;
+    updateEquations(); markDirty();
+  });
 
   // 運動方程式オーバーレイ（#1 deliverable）。つまみ/トグル変更でライブ更新。
   function updateEquations() {
@@ -498,7 +516,8 @@ const DATA = __PAYLOAD_JSON__;
     $("eqpanel").innerHTML =
       "<b>運動方程式</b>（起点=シーク時刻から前方積算）<br>" +
       "縦&nbsp; ȧ = −(a − a_target)/τ(v) ,&nbsp; a_target = a_cmd(t−T)" + poly + " ,&nbsp; v̇ = a<br>" +
-      "&nbsp;&nbsp;&nbsp; <span class='note'>[throttle/brake で T・τ 分離, τ(v)=τ₀+slope·v, 多項式補正は ON の次のみ]</span><br>" +
+      "&nbsp;&nbsp;&nbsp; <span class='note'>[throttle/brake で T・τ 分離, τ(v)=τ₀+slope·v, 多項式補正は ON の次のみ" +
+      (m.stopHandling ? " / 停止処理: v≤" + m.v_stop.toFixed(2) + "&ブレーキ指令で a_target=0・後退なし" : " / 停止処理OFF") + "]</span><br>" +
       "横&nbsp; δ̇ = −(δ − δ_cmd(t−T_δ))/τ_δ<br>" +
       "&nbsp;&nbsp;&nbsp; ω = v·tan(δ+β)/(L + k_us·v²) ,&nbsp; θ̇ = ω<br>" +
       "&nbsp;&nbsp;&nbsp; ẋ = v·cosθ , ẏ = v·sinθ ,&nbsp; a_y = v·ω<br>" +
@@ -554,7 +573,7 @@ const DATA = __PAYLOAD_JSON__;
         lastDrive = u;
         const tau0 = throttle ? tauThr : tauBrk;
         const tau = Math.max(tau0 + slope * vv, 0.02);
-        a += h * (-(a - (u + polyAccel(vv))) / tau); // a_target = a_cmd + poly(v)
+        a += h * (-(a - accelTarget(u, vv)) / tau); // a_target = a_cmd + poly(v) (停止処理込み)
       }
       out[i + 1] = a;
     }
@@ -845,6 +864,29 @@ const DATA = __PAYLOAD_JSON__;
       // パネル矩形でクリップ
       c.save();
       c.beginPath(); c.rect(g.px0, g.py0, g.plotW, g.plotH); c.clip();
+
+      // 停止区間の陰影（縦加速度パネルのみ）。観測 v ≤ v_stop の連続帯を薄青で塗り「停止」表示。
+      // 停止処理 ON ではこの帯で a_target=0 にゲートしている区間に相当する。
+      if (g.panel.meas === "accel") {
+        c.fillStyle = "rgba(70,130,180,0.13)";
+        const vstop = model.v_stop;
+        let i = iLo, labeled = false;
+        while (i <= iHi) {
+          const vv = run.ch.lon_vel[i];
+          if (vv != null && vv <= vstop) {
+            let j = i;
+            while (j + 1 <= iHi && run.ch.lon_vel[j + 1] != null && run.ch.lon_vel[j + 1] <= vstop) j++;
+            const x0 = X(i / RATE), x1 = X(j / RATE);
+            c.fillRect(x0, g.py0, Math.max(x1 - x0, 1.5), g.plotH);
+            if (!labeled) {
+              c.fillStyle = "#3b6ea5"; c.font = "9px sans-serif"; c.textAlign = "left"; c.textBaseline = "top";
+              c.fillText("停止(v≤" + vstop.toFixed(2) + ")", x0 + 2, g.py0 + 2);
+              c.fillStyle = "rgba(70,130,180,0.13)"; labeled = true;
+            }
+            i = j + 1;
+          } else i++;
+        }
+      }
 
       // 観測 (実線・実機色) / 指令 (破線・灰)。窓内 [iLo,iHi] のみ。null で break。
       const lines = [
