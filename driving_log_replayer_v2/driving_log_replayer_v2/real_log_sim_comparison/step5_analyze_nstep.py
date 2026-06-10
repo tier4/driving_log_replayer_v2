@@ -161,12 +161,24 @@ def _load_lib() -> ctypes.CDLL:
     lib.vm_create_delay_steer_acc_geared_wo_fall_guard.restype = c_void_p
     lib.vm_create_delay_steer_acc_geared_wo_fall_guard.argtypes = [c_double] * 15
 
+    # taiga_dyn: 14 共通引数 (wo_fall_guard の k_us を除く) + 7 物理パラメータ
+    # (mass, inertia_z, lf, lr, cornering_stiffness_front, cornering_stiffness_rear, vx_min_dyn)
+    lib.vm_create_taiga_dyn.restype = c_void_p
+    lib.vm_create_taiga_dyn.argtypes = [c_double] * 21
+
+    # taiga_x (PhysX backend)。physx_vendor 経由で常時ビルドされる。
+    # 引数: wheelbase, track_width, mass, inertia_z, cg_offset_x, max_steer,
+    #       max_accel, max_brake, wheel_radius, sub_dt, fixed_dt
+    lib.vm_create_taiga_x.restype = c_void_p
+    lib.vm_create_taiga_x.argtypes = [c_double] * 11
+
+    # reset は末尾に wz (実測 yaw rate) を取り、動的モデルの yaw rate state を seed する。
     lib.vm_reset_full.restype = None
-    lib.vm_reset_full.argtypes = [c_void_p] + [c_double] * 6
+    lib.vm_reset_full.argtypes = [c_void_p] + [c_double] * 7
 
     # State-only reset (queues untouched) + explicit queue setter
     lib.vm_reset_state.restype = None
-    lib.vm_reset_state.argtypes = [c_void_p] + [c_double] * 6
+    lib.vm_reset_state.argtypes = [c_void_p] + [c_double] * 7
 
     lib.vm_set_queues.restype = None
     lib.vm_set_queues.argtypes = [
@@ -196,6 +208,7 @@ def _load_lib() -> ctypes.CDLL:
         "vm_get_y",
         "vm_get_yaw",
         "vm_get_vx",
+        "vm_get_vy",
         "vm_get_steer",
         "vm_get_ax",
     ):
@@ -277,10 +290,62 @@ class VehicleModel:
                 p.get("k_us", 0.0),
             )
             self._steer_bias = p["steer_bias"]
+        elif model_type == "taiga_dyn":
+            # 動的自転車モデル。共通の縦・操舵パラメータ + 物理パラメータ (質量・ヨー慣性・
+            # 重心位置・前後コーナリング剛性・低速フォールバック閾値)。物理パラメータは妥当な
+            # 車両物理値を既定とし cases.yaml で上書き可能。
+            # NOTE: 物理パラメータ既定値 (mass/inertia_z/lf/lr/... と下の taiga_x の
+            # track_width/cg_offset_x/wheel_radius/max_accel/max_brake/fixed_dt) は
+            # scenario_simulator の ego_entity_simulation.cpp makeSimulationModel
+            # (TAIGA_DYN / TAIGA_X case) のフォールバック値と一致させること。両者が乖離すると
+            # この open-loop ハーネスと closed-loop sim の挙動がずれる。
+            wb = p["wheelbase"]
+            self._ptr = lib.vm_create_taiga_dyn(
+                p["vel_lim"],
+                p["steer_lim"],
+                p["vel_rate_lim"],
+                p["steer_rate_lim"],
+                wb,
+                sub_dt,
+                p["acc_time_delay"],
+                p["acc_time_constant"],
+                p["steer_time_delay"],
+                p["steer_time_constant"],
+                p["steer_dead_band"],
+                p["steer_bias"],
+                p.get("debug_acc_scaling_factor", 1.0),
+                p.get("debug_steer_scaling_factor", 1.0),
+                p.get("mass", 6560.0),
+                p.get("inertia_z", 25868.2318),
+                p.get("lf", wb * 0.5 + 0.94323),
+                p.get("lr", wb * 0.5 - 0.94323),
+                p.get("cornering_stiffness_front", 115830.0),
+                p.get("cornering_stiffness_rear", 535860.0),
+                p.get("vx_min_dyn", 1.0),
+            )
+            self._steer_bias = p["steer_bias"]
+        elif model_type == "taiga_x":
+            # 高忠実 PhysX backend (physx_vendor 経由で常時ビルド)。物理パラメータは
+            # 妥当な車両物理値を既定とし cases.yaml で上書き可能。
+            wb = p["wheelbase"]
+            self._ptr = lib.vm_create_taiga_x(
+                wb,
+                p.get("track_width", 1.754),
+                p.get("mass", 6560.0),
+                p.get("inertia_z", 25868.2318),
+                p.get("cg_offset_x", -0.94323),
+                p["steer_lim"],
+                p.get("max_accel", 2.3),
+                p.get("max_brake", 5.9),
+                p.get("wheel_radius", 0.3725),
+                sub_dt,
+                p.get("taiga_x_fixed_dt", 1.0 / 1200.0),
+            )
+            self._steer_bias = 0.0
         else:
             raise ValueError(
-                f"未対応の model_type: {model_type!r}. "
-                "対応: 'ideal_steer_acc', 'delay_steer_acc_geared_wo_fall_guard'"
+                f"未対応の model_type: {model_type!r}. 対応: 'ideal_steer_acc', "
+                "'delay_steer_acc_geared_wo_fall_guard', 'taiga_dyn', 'taiga_x'"
             )
         self._sub_dt = sub_dt
 
@@ -307,14 +372,19 @@ class VehicleModel:
         ax: float,
         acc_history: list[float],
         steer_history: list[float],
+        wz: float = 0.0,
     ) -> None:
         """
         状態と delay queue を実際の過去コマンド履歴でリセット。
 
         acc_history   : accel_des [oldest→newest], len == acc_q_size
         steer_history : steer_des [oldest→newest], len == steer_q_size
+        wz            : 実測 yaw rate [rad/s]。taiga_dyn など yaw rate を慣性付き state
+                        として持つ動的モデルの初期 yaw rate を seed する (毎 reset で 0 に
+                        すると小 N の per-step 誤差が立ち上がり過渡に支配されるため)。
+                        kinematic モデルでは無視される。
         """
-        self._lib.vm_reset_state(self._ptr, x, y, yaw, vx, steer_actual, ax)
+        self._lib.vm_reset_state(self._ptr, x, y, yaw, vx, steer_actual, ax, wz)
 
         n_acc = len(acc_history)
         n_steer = len(steer_history)
@@ -362,6 +432,11 @@ class VehicleModel:
         ideal_steer_acc は加速度状態を持たず指令をそのまま返す (1 次遅れ無し)。
         """
         return self._lib.vm_get_ax(self._ptr)
+
+    @property
+    def vy(self) -> float:
+        """横速度 [m/s]。kinematic モデルは 0、taiga_dyn は横速度 state を返す。"""
+        return self._lib.vm_get_vy(self._ptr)
 
     @property
     def wz(self) -> float:
@@ -684,6 +759,7 @@ def run_rollout(
                 ax=gt_ax[k0],
                 acc_history=_delay_history(t_cmd[k0], acc_q_size, t_cmd_full, accel_des_full),
                 steer_history=_delay_history(t_cmd[k0], steer_q_size, t_cmd_full, steer_des_full),
+                wz=float(gt_wz[k0]),
             )
 
             # -- 実コマンド系列を N 区間連続適用 (途中リセット無し) --

@@ -32,7 +32,7 @@ import yaml
 
 
 SUPPORTED_MODEL_TYPES: frozenset[str] = frozenset(
-    {"delay_steer_acc_geared_wo_fall_guard", "ideal_steer_acc"}
+    {"delay_steer_acc_geared_wo_fall_guard", "ideal_steer_acc", "taiga_dyn", "taiga_x"}
 )
 
 # vm_create_* / VehicleModel.__init__ が消費する物理パラメータ名。typo 検出用。
@@ -43,6 +43,12 @@ _KNOWN_PARAM_KEYS: frozenset[str] = frozenset({
     "steer_dead_band", "steer_bias",
     "debug_acc_scaling_factor", "debug_steer_scaling_factor",
     "k_us", "sub_dt",
+    # taiga_dyn / taiga_x dynamic-bicycle physical parameters
+    "mass", "inertia_z", "lf", "lr",
+    "cornering_stiffness_front", "cornering_stiffness_rear", "vx_min_dyn",
+    # taiga_x (PhysX backend) specific parameters
+    "track_width", "cg_offset_x", "max_accel", "max_brake", "wheel_radius",
+    "taiga_x_fixed_dt",
 })
 
 # tag は OUT_DIR = .../nstep/<tag>/ に直接連結されるため安全文字のみ許可。
