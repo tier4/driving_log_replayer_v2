@@ -65,6 +65,11 @@ Evaluation:
     # 注入してから closed-loop に切替 (EgoBagReplayer)。AUTONOMOUS 開始時に ego が速度を
     # 持つ本データセットで、停止発進ではなく実機と同じ走行中状態から sim を始める。
     ego_replay_duration: 8.0
+    # perception 再生を時刻同期ではなく sim ego 最近傍時刻のスナップショット再生にする。
+    # 時刻同期では sim ego のペース差で先行車が実機タイムラインどおり先行し抑制が弱まる
+    # (2026-06-11 計測: sim 巡航 3.19 vs 実機 2.34 m/s)。位置同期で先行車・信号を
+    # sim ego の進行度に合わせる。
+    replay_position_based: true
 
     models:
       normal:
