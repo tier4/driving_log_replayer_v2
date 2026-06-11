@@ -734,7 +734,7 @@ def build_scenario_dict(
     *,
     scenario_name: str = "auto_generated",
     sim_timeout: float = 600.0,
-    goal_tolerance: float = 15.0,
+    goal_tolerance: float = 5.0,
     goal_vicinity_tolerance: float = 30.0,
     settle_gate: float = 30.0,
     standstill_timeout: float = 0.0,
