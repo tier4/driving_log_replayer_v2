@@ -103,7 +103,7 @@ class RealLogSimComparisonEvaluator(Node):
             # sim run / case が 1 件も出力されなければ比較は成立しない → INCOMPLETE (失敗扱い)。
             # 例外が出なくても「有意な出力ゼロ」を Success と誤報しないための E1 ガード。
             # skip_sim (closed-loop sim を意図的に省略) のときは sim 0 件を失敗にしない。
-            sim_skipped = bool(counts.get("sim_skipped"))
+            sim_skipped = bool(counts["sim_skipped"])
             degenerate = (sim_p == 0 and not sim_skipped) or (case_p == 0)
             success = not degenerate
             counts_str = (

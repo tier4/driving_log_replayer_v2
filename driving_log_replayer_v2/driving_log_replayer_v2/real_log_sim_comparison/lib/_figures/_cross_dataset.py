@@ -44,12 +44,13 @@ def _matrix_height(n_rows: int) -> int:
     return 240 + 36 * max(n_rows, 1)
 
 
-def _force_category_axes(fig: go.Figure) -> None:
-    """全パネルの x/y 軸を category に明示する。
+def _force_matrix_category_axes(fig: go.Figure) -> None:
+    """行列図 (heatmap) の x/y 軸を category に明示する。
 
     DS ラベル (UUID 先頭 8 文字の hex) は "28443458" のように**純数字文字列**になり得る。
     plotly は軸 type を値から推論するため、数字文字列ラベルが数値軸と誤判定され
     tick/annotation の座標が NaN になる (SVG transform エラー)。行列図は常にカテゴリ軸。
+    coverage / bar 図など数値軸が適切な図では呼ばない。
     """
     fig.update_xaxes(type="category")
     fig.update_yaxes(type="category")
@@ -81,7 +82,7 @@ def build_fig_cross_closed_loop_heatmap(
         ), row=1, col=c)
         _annotate_heatmap(fig, mat, run_tags, ds_labels, row=1, col=c, fmt=fmt)
         fig.update_xaxes(title_text="sim run", row=1, col=c)
-    _force_category_axes(fig)
+    _force_matrix_category_axes(fig)
     fig.update_yaxes(title_text="dataset", row=1, col=1)
     return apply_base_layout(
         fig,
@@ -115,7 +116,7 @@ def build_fig_cross_nstep_heatmap(
             hovertemplate="%{y} / %{x}<br>%{z:.3f}<extra>" + unit + "</extra>",
         ), row=1, col=c)
         _annotate_heatmap(fig, mat, case_tags, ds_labels, row=1, col=c, fmt=fmt)
-    _force_category_axes(fig)
+    _force_matrix_category_axes(fig)
     fig.update_yaxes(title_text="dataset", row=1, col=1)
     return apply_base_layout(
         fig,
@@ -247,7 +248,7 @@ def build_fig_coverage_overview(cov_rows: list[dict]) -> go.Figure | None:
     fig.update_yaxes(title_text="カーブ数", row=2, col=2, secondary_y=True)
 
     fig.update_layout(barmode="stack")
-    # DS ラベルは純数字文字列になり得るため x 軸はカテゴリを明示 (_force_category_axes 参照)
+    # DS ラベルは純数字文字列になり得るため x 軸はカテゴリを明示 (_force_matrix_category_axes 参照)
     fig.update_xaxes(type="category")
     fig.update_yaxes(title_text="時間比率", row=1, col=1)
     fig.update_yaxes(title_text="ax [m/s²]", row=1, col=2)
@@ -287,7 +288,7 @@ def build_fig_loo_stability(
         hovertemplate="除外 %{y} / %{x}<br>Δscore %{z:+.3f}<extra></extra>",
     ))
     _annotate_heatmap(fig, score_delta, case_tags, ylabels, row=1, col=1, fmt="{:+.2f}")
-    _force_category_axes(fig)
+    _force_matrix_category_axes(fig)
     fig.update_xaxes(title_text="case")
     fig.update_yaxes(title_text="除外 dataset")
     return apply_base_layout(

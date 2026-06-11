@@ -39,32 +39,38 @@ from pathlib import Path
 import re
 import sys
 
+import yaml
+
 from .lib._collection import load_manifest, write_manifest
-from .lib._io import resolve_lite_bag
+from .lib._io import resolve_bundle_dir as _resolve_bundle, resolve_lite_bag
 
 _DEFAULT_COLLECTION = Path(__file__).parent / "sample" / "multi"
 _UUID_RE = re.compile(r"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}")
 
 
-def _resolve_bundle(raw: Path) -> Path:
-    """lite/ を含むバンドルディレクトリを解決 (run_analysis._resolve_bundle_dir と同方針)。"""
-    for c in (
-        raw,
-        raw / "result_archive" / "real_log_sim_comparison",
-        raw / "real_log_sim_comparison",
-    ):
-        if (c / "lite").is_dir():
-            return c.resolve()
-    raise FileNotFoundError(f"lite/ を含むバンドルが見つかりません: {raw}")
-
-
 def _infer_dataset_id(bundle: Path) -> str | None:
-    """バンドルの scenarios/auto_scenario.yaml の map filepath に含まれる UUID を dataset_id とみなす。"""
+    """バンドルの scenarios/auto_scenario.yaml の RoadNetwork.LogicFile.filepath から dataset UUID を取り出す。
+
+    auto_scenario.yaml は step2 が生成する OpenSCENARIO YAML で、
+    `OpenSCENARIO.RoadNetwork.LogicFile.filepath` に lanelet2 マップの絶対パスが入る。
+    このパスは `annotation_dataset/<UUID>/0/map/lanelet2_map.osm` 形式のため UUID が一意に特定できる。
+    全文 regex スキャンだと他フィールドの UUID-like 文字列に誤マッチする恐れがあるため、
+    構造的に特定フィールドを読む。
+    """
     scenario = bundle / "scenarios" / "auto_scenario.yaml"
     if not scenario.is_file():
         return None
-    text = scenario.read_text(encoding="utf-8", errors="ignore")
-    m = _UUID_RE.search(text)
+    try:
+        doc = yaml.safe_load(scenario.read_text(encoding="utf-8", errors="ignore"))
+    except yaml.YAMLError:
+        return None
+    filepath = (
+        ((doc or {}).get("OpenSCENARIO") or {})
+        .get("RoadNetwork", {})
+        .get("LogicFile", {})
+        .get("filepath", "")
+    )
+    m = _UUID_RE.search(str(filepath))
     return m.group(0) if m else None
 
 

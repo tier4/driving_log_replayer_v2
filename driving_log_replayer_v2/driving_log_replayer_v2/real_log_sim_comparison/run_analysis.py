@@ -28,27 +28,7 @@ from pathlib import Path
 import sys
 
 from .evaluator_node import _load_compare_config, build_common_env, run_analysis
-
-
-def _resolve_bundle_dir(raw: Path) -> Path:
-    """lite/ を含むバンドルディレクトリを解決する。
-
-    渡されたパスが以下のいずれでも受け付ける:
-      - バンドル自体 (.../result_archive/real_log_sim_comparison)
-      - out_dir (.../out/<timestamp>; 配下の result_archive/real_log_sim_comparison を探索)
-    """
-    candidates = [
-        raw,
-        raw / "result_archive" / "real_log_sim_comparison",
-        raw / "real_log_sim_comparison",
-    ]
-    for c in candidates:
-        if (c / "lite").is_dir():
-            return c.resolve()
-    raise FileNotFoundError(
-        f"lite/ を含むバンドルが見つかりません: {raw} "
-        f"(探索: {[str(c) for c in candidates]})"
-    )
+from .lib._io import resolve_bundle_dir as _resolve_bundle_dir
 
 
 def main() -> None:

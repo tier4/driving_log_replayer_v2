@@ -243,6 +243,24 @@ def nearest_point_distance(ref_xy: np.ndarray, query_xy: np.ndarray) -> np.ndarr
     return dists
 
 
+def resolve_bundle_dir(raw: Path) -> Path:
+    """lite/ を含むバンドルディレクトリを解決する。
+
+    以下の 3 形式を受け付ける:
+      - バンドル自体  (.../result_archive/real_log_sim_comparison)
+      - out_dir       (.../out/<timestamp>; 配下の result_archive/ を探索)
+      - 中間パス      (.../real_log_sim_comparison)
+    """
+    for c in (
+        raw,
+        raw / "result_archive" / "real_log_sim_comparison",
+        raw / "real_log_sim_comparison",
+    ):
+        if (c / "lite").is_dir():
+            return c.resolve()
+    raise FileNotFoundError(f"lite/ を含むバンドルが見つかりません: {raw}")
+
+
 def resolve_lite_bag(lite_dir: Path, name_stem: str) -> Path | None:
     """`<name_stem>.lite.mcap` (単一ファイル) → `<name_stem>.lite` (rosbag2 dir) の順で解決。
 

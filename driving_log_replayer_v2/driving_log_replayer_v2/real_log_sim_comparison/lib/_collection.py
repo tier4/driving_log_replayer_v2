@@ -30,6 +30,11 @@ from ._io import resolve_lite_bag
 MANIFEST_NAME = "collection.yaml"
 CROSS_DIR_NAME = "cross_dataset"
 
+# collection 直下を走査するときにデータセットディレクトリとみなさないサブディレクトリ名 (SSOT)。
+_COLLECTION_RESERVED_DIRS: frozenset[str] = frozenset(
+    {"runs", "datasets", CROSS_DIR_NAME, "__pycache__"}
+)
+
 
 @dataclass
 class DatasetEntry:
@@ -84,7 +89,7 @@ def discover_collection(collection_dir: Path) -> list[DatasetEntry]:
     ディレクトリに無い DS (sim 失敗等) も status 付きで返す (レポートで欠損を明示するため)。
     """
     root = datasets_root(collection_dir)
-    skip = {"runs", "datasets", CROSS_DIR_NAME, "__pycache__"}
+    skip = _COLLECTION_RESERVED_DIRS
     entries: dict[str, DatasetEntry] = {}
     if root.is_dir():
         for sub in sorted(root.iterdir()):
