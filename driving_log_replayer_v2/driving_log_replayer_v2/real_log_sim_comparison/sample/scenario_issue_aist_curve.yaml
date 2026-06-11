@@ -65,10 +65,10 @@ Evaluation:
     # DP 3モデル比較用 sim_runs: sim_dp_0303/sim_dp_0503 (大回りなし=FN検証) /
     # sim_dp_0410 (大回りあり=TP検証)。各 run に k_us=0.020 を設定。
     sim_runs_config: ./sim_runs_dp_compare.yaml
-    # real_provenance: 実機走行時の pilot-auto.x2 ブランチ / DP モデル版を記録。
-    # 実験スレッド (Slack: #group-reference-vehicle-x2-experiment) で確認し更新すること。
-    # 2026-03-17 実験の pilot-auto.x2 ブランチ・当日コミットは実験スレッドを参照。
-    real_provenance: "2026-03-17 お台場, J6 gen2 #15, pilot-auto.x2 ブランチ要確認(実験スレッド参照)"
+    # real_provenance: 実機走行時の pilot-auto.x2 ブランチ / DP モデル版の記録。
+    # Slack #group-reference-vehicle-x2-experiment, スレッド「2026/03/17 MJ20-003 beta/v4.3.1.2 お台場走行」
+    # OTA image: evaluation.tier4.jp/evaluation/reports/76851310-c69d-5b01-887f-eef9d055a821
+    real_provenance: "2026-03-17 お台場, MJ20-003 (J6 gen2), pilot-auto.x2 beta/v4.3.1.2"
     # replay: 実機 bag の信号を再現。
     # 停止→発進なしの定速走行課題のため traffic_signals の影響は小さい。
     traffic_signals: replay

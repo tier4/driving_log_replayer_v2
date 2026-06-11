@@ -61,10 +61,11 @@ Evaluation:
     # DP 3モデル比較用 sim_runs: sim_dp_0303/sim_dp_0503 (大回りなし=FN検証) /
     # sim_dp_0410 (大回りあり=TP検証)。各 run に k_us=0.020 を設定。
     sim_runs_config: ./sim_runs_dp_compare.yaml
-    # real_provenance: 実機走行時の pilot-auto.x2 ブランチ / DP モデル版を記録。
-    # 実験スレッド (Slack: #group-reference-vehicle-x2-experiment) で確認し更新すること。
-    # 2026-03-31 実験の pilot-auto.x2 ブランチ・当日コミットは実験スレッドを参照。
-    real_provenance: "2026-03-31 お台場, J6 gen2 #15, pilot-auto.x2 ブランチ要確認(実験スレッド参照)"
+    # real_provenance: 実機走行時の pilot-auto.x2 ブランチ / DP モデル版の記録。
+    # Slack #group-reference-vehicle-x2-experiment, スレッド「2026/03/31 MJ20-015 diffusion planner自動走行評価@お台場・高輪ルート」
+    # base: feat/v4.3/e2e (universe 69fcda6b/Mar-27, launcher 8b9f0a98/Mar-26) + trajectory_modifier/DP cherry-picks
+    # DP モデルは当日実験目的で複数切替（20260325-111332/111808/112009/111908/111559 等 epoch0040-0050）
+    real_provenance: "2026-03-31 お台場, MJ20-015 (J6 gen2), pilot-auto.x2 feat/v4.3/e2e (universe 69fcda6b + cherry-picks), DP実験モデル複数切替"
     # replay: 実機 bag の信号を再現。
     traffic_signals: replay
     loop_waypoints: 0
