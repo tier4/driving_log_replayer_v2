@@ -12,24 +12,23 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import sys
 from pathlib import Path
+import sys
 
 import pytest
 
 from driving_log_replayer_v2.perception_reproducer import ConditionGroup
-from driving_log_replayer_v2.perception_reproducer import MetricCondition
-from driving_log_replayer_v2.perception_reproducer import is_ego_in_any_area
 from driving_log_replayer_v2.perception_reproducer import is_ego_in_area
+from driving_log_replayer_v2.perception_reproducer import MetricCondition
 from driving_log_replayer_v2.planning_control import Area
 from driving_log_replayer_v2.planning_control import MinMax
 
 pytest.importorskip("builtin_interfaces")
 pytest.importorskip("tier4_metric_msgs")
 
-from builtin_interfaces.msg import Time  # noqa: E402
-from tier4_metric_msgs.msg import Metric as MetricMsg  # noqa: E402
-from tier4_metric_msgs.msg import MetricArray  # noqa: E402
+from builtin_interfaces.msg import Time
+from tier4_metric_msgs.msg import Metric as MetricMsg
+from tier4_metric_msgs.msg import MetricArray
 
 SCRIPTS_DIR = Path(__file__).resolve().parents[2] / "scripts"
 sys.path.insert(0, str(SCRIPTS_DIR))
