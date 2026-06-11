@@ -15,7 +15,7 @@
 
 """Orchestration node for real_log_sim_comparison.
 
-Runs the 11-stage comparison pipeline inside a cloud DLR2 job:
+Runs the 10-stage comparison pipeline inside a cloud DLR2 job:
   1. step1_make_lite       実機 input_bag → lite/real.lite/
   2. step2_bag_to_scenario lite/real.lite → scenarios/auto_scenario.yaml
   3. step3_run_sims        sim_runs.yaml の各 run を closed-loop 実行 → lite/<tag>.lite/
@@ -24,7 +24,6 @@ Runs the 11-stage comparison pipeline inside a cloud DLR2 job:
   6. step6_analyze_cases   nstep/*.csv を集約 (overlay/, cases_summary.md)
   7. step7_sweep_params    real.lite で車両モデルパラメータを rollout sweep 同定 (param_sweep/)
   8. step8_compare_dp_trajectory DiffusionPlanner 出力軌跡 real vs sim 比較 (figures/dp_*.svg)
-  10. step10_diagnose_curve カーブ/発進区間の乖離を縦横分解診断 (curve_diag/)
   11. step11_build_html_report comparison/ 配下の全プロットを集約 (result_archive/real_log_sim_comparison/index.html)
 
 Outputs are written to result_archive_path, which is collected by
@@ -266,7 +265,6 @@ def build_common_env(
 
     if compare_cfg.get("scenario_name"):
         env["SCENARIO_NAME"] = compare_cfg["scenario_name"]
-    env["CURVE_CONFIG_YAML"] = compare_cfg.get("curve_config_yaml", "")
     # 実機データ取得時の版・重み (外部記録)。step4 が provenance 掲載に使う。
     env["REAL_PROVENANCE"] = compare_cfg.get("real_provenance", "")
     # route-shaping 実験オプション (既定 0=start+goal のみ; step2 が読む)。D0 の修正ではない。
@@ -373,16 +371,6 @@ def run_analysis(
     except RuntimeError as exc:
         logger.warning(f"Stage 8 (step8_compare_dp_trajectory) failed but continuing: {exc}")
 
-    # ---- Stage 10: カーブ/発進区間の軌跡乖離 詳細診断 (縦横分解 + yaw 差) ----
-    logger.info("Stage 10: step10_diagnose_curve (curve/launch deviation decomposition)")
-    try:
-        _run([
-            sys.executable, "-m",
-            "driving_log_replayer_v2.real_log_sim_comparison.step10_diagnose_curve",
-        ], env=env, timeout=600)
-    except RuntimeError as exc:
-        logger.warning(f"Stage 10 (step10_diagnose_curve) failed but continuing: {exc}")
-
     # ---- Stage 11: comparison/ 配下の全アセットを 1 枚に埋め込んだ自己完結 HTML 生成 ----
     logger.info("Stage 11: step11_build_html_report (result_archive/real_log_sim_comparison/report.html)")
     try:
@@ -425,7 +413,6 @@ def run_analysis(
             (comparison_dir / "figures" / "dp_real_vs_sim.svg").exists()
             or (comparison_dir / "figures" / "dp_real_vs_sim.fig.json").exists()
         ),
-        "curve_diag_ok": int((comparison_dir / "curve_diag" / "curve_divergence.fig.json").exists()),
         # report.html / report.ipynb は comparison/ の親 (result_archive/) 直下に生成される。
         "report_html_ok": int((comparison_dir.parent / "report.html").exists()),
         "report_ipynb_ok": int((comparison_dir.parent / "report.ipynb").exists()),
@@ -435,7 +422,6 @@ def run_analysis(
         f"cases {cases_produced}/{len(cases_cfg.cases)}, "
         f"report={counts['report_ok']}, cases_summary={counts['cases_summary_ok']}, "
         f"param_sweep={counts['param_sweep_ok']}, dp_compare={counts['dp_compare_ok']}, "
-        f"curve_diag={counts['curve_diag_ok']}, "
         f"report_html={counts['report_html_ok']}, report_ipynb={counts['report_ipynb_ok']}"
     )
     return counts
@@ -446,8 +432,6 @@ def _load_compare_config(scenario_path_str: str) -> dict[str, Any]:
 
     Conditions に以下のキーを認識する（すべて任意）:
       - scenario_name (str): 図タイトル用シナリオ名
-      - curve_config_yaml (str): カーブ設定 YAML の scenario.yaml からの相対パス or 絶対パス
-                                 空文字を明示するとカーブ別解析スキップ
     """
     if not scenario_path_str:
         return {}
@@ -500,17 +484,6 @@ def _load_compare_config(scenario_path_str: str) -> dict[str, Any]:
         # でも指定できる (run_pipeline 参照)。
         if "skip_sim" in conditions:
             cfg["skip_sim"] = bool(conditions["skip_sim"])
-
-        if "curve_config_yaml" in conditions:
-            raw = str(conditions["curve_config_yaml"])
-            if raw == "":
-                # 空文字はカーブ別解析スキップを明示
-                cfg["curve_config_yaml"] = ""
-            else:
-                p = Path(raw)
-                if not p.is_absolute():
-                    p = scenario_path.parent / p
-                cfg["curve_config_yaml"] = str(p) if p.exists() else ""
 
         # cases_config (必須): Stage 5/6 のケース定義 YAML
         if "cases_config" in conditions:

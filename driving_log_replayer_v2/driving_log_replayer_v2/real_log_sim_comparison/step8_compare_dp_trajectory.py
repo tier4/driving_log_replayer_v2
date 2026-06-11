@@ -12,7 +12,7 @@
                         (trajectory_velocity_optimizer の影響を可視化)
   - `both` (既定)     : 両方
 
-比較の時刻基準は「発進 (curve_config があればカーブ②停止→発進、無ければ最初の発進)」。
+比較の時刻基準は「発進 (find_sim_launch による発進検出)」。
 evaluator_node は Stage 7 の後に env のみで実行する (追加設定不要)。比較対象の sim run は
 lite/ 配下の sim_*.lite を自動検出する (sim_normal を優先)。
 """
@@ -28,7 +28,7 @@ import sys
 import numpy as np
 import pandas as pd
 
-from .lib._events import find_autonomous_start, find_curve2_launch, find_sim_launch
+from .lib._events import find_autonomous_start, find_sim_launch
 from .lib._io import (
     DP_TRAJ_TOPIC as DP_TOPIC,
     iter_bag_messages,
@@ -53,7 +53,7 @@ TRACKED_OBJECTS_TOPIC = "/perception/object_recognition/tracking/objects"
 
 
 def _resolve_t0_and_launch(
-    bag: Path, *, is_real: bool, curve2_window: tuple[float, float]
+    bag: Path, *, is_real: bool
 ) -> tuple[int, float]:
     """bag から t0 (ns) と発進時刻 t_launch (s) を返す。"""
     from .lib._io import load_operation_mode
@@ -71,9 +71,7 @@ def _resolve_t0_and_launch(
     df_vel["t"] = (df_vel["t_ns"] - t0_ns) / 1e9
     df_vel = df_vel[df_vel["t"] >= 0].reset_index(drop=True)
 
-    t_launch = find_curve2_launch(df_vel, window=curve2_window)
-    if t_launch is None:
-        t_launch = find_sim_launch(df_vel, threshold=0.5, min_t=5.0)
+    t_launch = find_sim_launch(df_vel, threshold=0.5, min_t=5.0)
     if t_launch is None:
         t_launch = 0.0
     return t0_ns, float(t_launch)
@@ -202,8 +200,8 @@ def _run_real_actual(  # noqa: PLR0915
     sim_name = sim_tag_from_bag(sim_bag)  # 凡例・タイトルに表示するシミュレータ名 (例: sim_normal)
     print("\n=== DiffusionPlanner 計画軌跡 実機 vs シム 直接比較 ===\n")
 
-    t0_sim, tl_sim = _resolve_t0_and_launch(sim_bag, is_real=False, curve2_window=cfg.curve2_window)
-    t0_real, tl_real = _resolve_t0_and_launch(real_bag, is_real=True, curve2_window=cfg.curve2_window)
+    t0_sim, tl_sim = _resolve_t0_and_launch(sim_bag, is_real=False)
+    t0_real, tl_real = _resolve_t0_and_launch(real_bag, is_real=True)
     print(f"シム  : t_launch={tl_sim:.1f}s")
     print(f"実機  : t_launch={tl_real:.1f}s")
 
@@ -328,7 +326,7 @@ def _run_final_planning(  # noqa: PLR0915
     print("\n=== DP出力 vs 最終trajectory 速度比較 ===\n")
     sim_name = sim_tag_from_bag(sim_bag) if sim_bag is not None else "シム"
 
-    t0_real, tl_real = _resolve_t0_and_launch(real_bag, is_real=True, curve2_window=cfg.curve2_window)
+    t0_real, tl_real = _resolve_t0_and_launch(real_bag, is_real=True)
     print(f"実機 t_launch={tl_real:.1f}s")
 
     frames_dp = load_traj_frames(real_bag, DP_TOPIC, t0_real, tl_real)
@@ -339,7 +337,7 @@ def _run_final_planning(  # noqa: PLR0915
     frames_sim_dp: list[dict] = []
     t0_sim = tl_sim = None
     if sim_bag is not None:
-        t0_sim, tl_sim = _resolve_t0_and_launch(sim_bag, is_real=False, curve2_window=cfg.curve2_window)
+        t0_sim, tl_sim = _resolve_t0_and_launch(sim_bag, is_real=False)
         frames_sim_dp = load_traj_frames(sim_bag, DP_TOPIC, t0_sim, tl_sim)
         print(f"  シム t_launch={tl_sim:.1f}s, DP出力フレーム: {len(frames_sim_dp)}")
     else:

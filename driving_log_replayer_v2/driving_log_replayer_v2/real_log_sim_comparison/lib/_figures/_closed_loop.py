@@ -23,11 +23,8 @@ import plotly.graph_objects as go
 from ._common import (
     add_bottom_note as _bottom_note,
     apply_base_layout,
-    lanes_to_trace,
     make_grid,
-    map_ways_in_bbox,
     plotly_dash,
-    plotly_marker,
 )
 
 
@@ -66,59 +63,6 @@ def build_fig_timeseries_resp_cmd(
     fig.update_xaxes(title_text=xlabel, row=2, col=1)
     _bottom_note(fig, note, height=height)
     return apply_base_layout(fig, title=title, height=height)
-
-
-def _bbox_mask(x, y, cx, cy, mg):
-    return (x >= cx - mg) & (x <= cx + mg) & (y >= cy - mg) & (y <= cy + mg)
-
-
-def build_fig_curves_closeup(
-    curves: list[dict],
-    runs: list[dict],
-    map_ways: list[np.ndarray] | None = None,
-    *,
-    scenario_name: str = "",
-) -> go.Figure:
-    """カーブ別の軌跡比較（横 N 列、各列が 1 カーブの bbox 拡大）。旧 plot_curves。
-
-    curves: [{cx, cy, margin, label}]。runs: [{label, color, lw, ls, marker, ms, x, y}]（全軌跡）。
-    各列でレーン背景（bbox 内）+ bbox 内に入る各 run の軌跡を等倍表示する。凡例は先頭列のみ。
-    """
-    n = len(curves)
-    fig = make_grid(1, n, subplot_titles=[c.get("label", f"カーブ{i+1}") for i, c in enumerate(curves)],
-                    horizontal_spacing=0.06)
-    for col, c in enumerate(curves, start=1):
-        cx, cy, mg = c["cx"], c["cy"], c["margin"]
-        if map_ways:
-            ways = map_ways_in_bbox(map_ways, (cx - mg, cx + mg), (cy - mg, cy + mg))
-            if ways:
-                fig.add_trace(lanes_to_trace(ways), row=1, col=col)
-        for r in runs:
-            x = np.asarray(r["x"]); y = np.asarray(r["y"])
-            m = _bbox_mask(x, y, cx, cy, mg)
-            if not m.any():
-                continue
-            xs, ys = x[m], y[m]
-            fig.add_trace(go.Scatter(
-                x=xs, y=ys, mode="lines", name=r["label"], legendgroup=r["label"],
-                showlegend=col == 1,
-                line=dict(color=r["color"], width=r.get("lw", 1.5), dash=plotly_dash(r.get("ls", "-"))),
-            ), row=1, col=col)
-            me = max(1, len(xs) // 12)
-            fig.add_trace(go.Scatter(
-                x=xs[::me], y=ys[::me], mode="markers", legendgroup=r["label"], showlegend=False,
-                marker=dict(symbol=plotly_marker(r.get("marker", "o")), size=r.get("ms", 4) + 2,
-                            color=r["color"], line=dict(color="white", width=0.5)),
-                hoverinfo="skip",
-            ), row=1, col=col)
-        fig.update_xaxes(title_text="x [m]", range=[cx - mg, cx + mg], row=1, col=col)
-        ax_suffix = "" if col == 1 else str(col)
-        fig.update_yaxes(title_text="y [m]" if col == 1 else None, range=[cy - mg, cy + mg],
-                         scaleanchor=f"x{ax_suffix}", scaleratio=1, row=1, col=col)
-    return apply_base_layout(
-        fig, title=f"{scenario_name}<br>カーブ別軌跡比較" if scenario_name else "カーブ別軌跡比較",
-        height=620,
-    )
 
 
 def build_fig_vs_distance(

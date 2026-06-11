@@ -23,11 +23,6 @@ ScenarioDescription: |
       ROSBAG_ID=2a01750d-e115-4191-9252-9aeebe6c7455 \
       TEMPLATE=$(pwd)/sample/scenario_issue_aist_curve.yaml
 
-  curve_centers の確定:
-    python3 tools/suggest_curve_centers.py --bag work/dataset/<uuid>/input_bag
-    → 出力された cx/cy を sample/curve_config_aist_telecom.yaml に記入してから実行する。
-    この区間には左カーブが複数ある場合があるため、上位複数点を確認して特定すること。
-
   実行（dataset 構築後）:
     make -C <このディレクトリ> local_cloud_run \
       WEBAUTO_T4_ROOT=$(pwd)/work/dataset \
@@ -35,9 +30,7 @@ ScenarioDescription: |
 
   結果の確認:
     report.html の「シナリオ クローズループ比較」を確認。
-    停止→発進が「ない」課題のため、curves_closeup（領域ズーム軌跡）と
     velocity.fig.json / acceleration.fig.json で速度プロファイルを確認する。
-    - curve_diag/curve_divergence.md : 縦/横乖離の定量値
     TP = sim_dp_0410 の横乖離が顕著に大きい（速度超過・大回り再現）
     FN = sim_dp_0303 / sim_dp_0503 の横乖離が実機に近い
 
@@ -57,10 +50,6 @@ Evaluation:
         VehicleId: default
   Conditions:
     scenario_name: "産総研〜テレコム 左カーブ大回り 再現検証（DP 3モデル比較）"
-    # curve_config_aist_telecom.yaml: 産総研〜テレコム左カーブを主対象として
-    # step4 の curve0_analysis / step10 の curve_divergence を有効化する。
-    # curve_centers の cx/cy は suggest_curve_centers.py で取得し更新すること。
-    curve_config_yaml: ./curve_config_aist_telecom.yaml
     cases_config: ./cases.yaml
     # DP 3モデル比較用 sim_runs: sim_dp_0303/sim_dp_0503 (大回りなし=FN検証) /
     # sim_dp_0410 (大回りあり=TP検証)。各 run に k_us=0.020 を設定。

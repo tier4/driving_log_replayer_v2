@@ -43,7 +43,7 @@ def main() -> None:
     parser.add_argument(
         "--scenario",
         required=True,
-        help="scenario.yaml (Conditions の cases_config / sim_runs_config / curve_config_yaml を読む)",
+        help="scenario.yaml (Conditions の cases_config / sim_runs_config を読む)",
     )
     parser.add_argument(
         "--map-osm",

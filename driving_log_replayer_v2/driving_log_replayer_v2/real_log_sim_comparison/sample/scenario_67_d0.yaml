@@ -28,8 +28,6 @@ Evaluation:
         VehicleId: default
   Conditions:
     scenario_name: "D0 verify (67db293e, 周回 598.7m)"
-    # 67db293e は area_map 固定の curve 設定が前提とする map と別のため、curve 設定はスキップ。
-    curve_config_yaml: ""
     cases_config: ./cases.yaml
     sim_runs_config: ./sim_runs.yaml
     real_provenance: ""

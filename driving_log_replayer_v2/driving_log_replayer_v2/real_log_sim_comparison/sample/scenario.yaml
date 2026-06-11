@@ -29,11 +29,6 @@ Evaluation:
   Conditions:
     # 図タイトルに表示するシナリオ名 (任意。未指定なら ScenarioName を使用)
     scenario_name: "Override_E2E_x2j6gen2_odaiba_2026-05-12-A09"
-    # カーブ別解析を有効化する設定 YAML への相対パス (scenario.yaml からの相対パス)。
-    # 省略するとカーブ別プロット (curves_closeup / curve2_*) をスキップ。
-    # 既存 curve 設定 YAML は特定 area_map に対する curve_centers をハードコード
-    # 前提のため、別 map を使う dataset で実行する際は空文字でスキップする。
-    curve_config_yaml: ""
     # VehicleModel N-step 解析 (Stage 5/6) のケース定義 YAML (必須)。
     # 未指定だとパイプラインが Stage 5 で失敗する (cases.yaml が見つかりません)。
     cases_config: ./cases.yaml

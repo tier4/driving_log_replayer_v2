@@ -55,7 +55,7 @@ def iter_dataset_uuids(scenario: Path) -> list[str]:
 # Conditions 内で「scenario.yaml からの相対パス」として解釈されるキー
 # (evaluator_node._load_compare_config 参照)。single-dataset scenario は batch_root/scenarios/
 # に書き出すため、相対のままだとコピー先基準で解決されて壊れる → 元 scenario 基準の絶対へ変換。
-_PATH_CONDITION_KEYS = ("sim_runs_config", "cases_config", "curve_config_yaml")
+_PATH_CONDITION_KEYS = ("sim_runs_config", "cases_config")
 
 
 def write_single_dataset_scenario(scenario: Path, uuid: str, out_path: Path) -> Path:

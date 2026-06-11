@@ -20,8 +20,6 @@ import pandas as pd
 from .lib._events import (
     AUTONOMOUS_MODE as _AUTONOMOUS_MODE,
     find_autonomous_start as _find_autonomous_start,
-    find_curve2_exit as _find_curve2_exit_pure,
-    find_curve2_launch as _find_curve2_launch_pure,
     find_initial_launch as _find_initial_launch,
 )
 from .lib._io import (
@@ -42,11 +40,6 @@ from .lib._io import (
 from .lib._coverage import compute_coverage
 from .lib._fig_io import write_fig_json
 from .lib._figures import (
-    build_fig_curve_analysis,
-    build_fig_curve_steering_detail,
-    build_fig_curve_yaw_steer,
-    build_fig_curves_closeup,
-    build_fig_steer_response,
     build_fig_timeseries_resp_cmd,
     build_fig_vs_distance,
 )
@@ -71,19 +64,7 @@ OUT_DIR = BASE / "comparison"
 FIGS_DIR = OUT_DIR / "figures"
 SCENARIO_NAME = "real_log_sim_comparison"
 
-# `_apply_runtime_config()` で書き換えられる
-_CURVE2_INDEX = 1
-_CURVE2_WINDOW: tuple[float, float] = (20.0, 120.0)
-
 WHEELBASE = 5.15  # m — kinematic_state × steering から実データで推定
-
-# 地図座標系でのカーブ中心（後方互換デフォルト: x2_dev/2231）
-# None に設定するとカーブ別解析プロットをすべてスキップする。
-CURVE_CENTERS: list | None = [
-    {"label": "カーブ①（右折）", "cx": 89440, "cy": 43200, "margin": 20},
-    {"label": "カーブ②（左折）", "cx": 89301, "cy": 43085, "margin": 20},
-    {"label": "カーブ③（右折）", "cx": 89372, "cy": 42830, "margin": 40},
-]
 
 # ログ定義（path は main() が LITE_DIR を確定した後に `_rebuild_logs()` で補完）
 # kinematic / accel は sub-less / sub-prefixed の両方を試す候補リスト形式。
@@ -341,360 +322,6 @@ def plot_steering_vs_distance(data: dict):
     )
     FIGS_DIR.mkdir(parents=True, exist_ok=True)
     write_fig_json(fig, FIGS_DIR / "steering_vs_distance")
-
-
-def plot_curves(data: dict, map_ways: list | None):
-    """カーブ別の軌跡比較（横 N 列サブプロット）。"""
-    if not CURVE_CENTERS:
-        return
-    runs = [
-        {
-            "label": label, "color": d["color"], "lw": d["lw"], "ls": d["ls"],
-            "marker": d["marker"], "ms": d["ms"],
-            "x": np.asarray(d["kinematic"]["x"]), "y": np.asarray(d["kinematic"]["y"]),
-        }
-        for label, d in data.items() if not d["kinematic"].empty
-    ]
-    fig = build_fig_curves_closeup(CURVE_CENTERS, runs, map_ways, scenario_name=SCENARIO_NAME)
-    FIGS_DIR.mkdir(parents=True, exist_ok=True)
-    write_fig_json(fig, FIGS_DIR / "curves_closeup")
-
-
-# ---------------------------------------------------------------------------
-# カーブ②発進分析
-# ---------------------------------------------------------------------------
-
-
-def _find_curve_launch(
-    df_vel: pd.DataFrame, launch_window: tuple[float, float]
-) -> float | None:
-    """指定 window 内で「停止 → 発進」を検出する `_events.find_curve2_launch` ラッパー。"""
-    return _find_curve2_launch_pure(df_vel, window=launch_window)
-
-
-def _find_curve_exit(
-    df_kinematic: pd.DataFrame,
-    curve_idx: int,
-    t_launch: float,
-    radius: float = 30.0,
-) -> float | None:
-    """`curve_centers[curve_idx]` を中心とした退出時刻検出 (`_events.find_curve2_exit` ラッパー)."""
-    if not CURVE_CENTERS or not (0 <= curve_idx < len(CURVE_CENTERS)):
-        return None
-    c = CURVE_CENTERS[curve_idx]
-    return _find_curve2_exit_pure(
-        df_kinematic, (float(c["cx"]), float(c["cy"])), t_launch, radius=radius
-    )
-
-
-_CURVE_PRE = -2.0  # 表示窓の発進前余白 [s]
-_CURVE_MG = 80  # カーブ軌跡表示の半幅 [m]
-
-
-def _curve_launch_map(data: dict, launch_window: tuple[float, float]) -> dict[str, float]:
-    """各ログのカーブ発進 t を検出した {label: t_launch}（検出不能はスキップ）。"""
-    out: dict[str, float] = {}
-    for label, d in data.items():
-        t = _find_curve_launch(d["velocity"], launch_window)
-        if t is not None:
-            out[label] = t
-    return out
-
-
-def _curve_window(d: dict, curve_idx: int, t_l: float) -> tuple[float, float]:
-    """発進前2s〜カーブ退出後2s の絶対時刻窓 (t_start, t_end) を返す。"""
-    t_exit = _find_curve_exit(d["kinematic"], curve_idx, t_l)
-    t_post = (t_exit - t_l + 2.0) if t_exit is not None else 25.0
-    return t_l + _CURVE_PRE, t_l + t_post
-
-
-def _clip_rel(df: pd.DataFrame, t0: float, t1: float, t_l: float) -> pd.DataFrame:
-    """[t0, t1] で切り出し、発進相対時刻 tr=t-t_l を付けたコピーを返す。"""
-    sub = df[(df["t"] >= t0) & (df["t"] <= t1)].copy()
-    sub["tr"] = sub["t"] - t_l
-    return sub
-
-
-def _style(d: dict, label: str) -> dict:
-    return {"label": label, "color": d["color"], "lw": d["lw"], "ls": d["ls"],
-            "marker": d["marker"], "ms": d["ms"]}
-
-
-def _curve_traj_runs(data: dict, launch_t: dict, curve_idx: int) -> list[dict]:
-    """カーブ周辺軌跡 run（bbox 窓の seg + ★発進点）を整形する。"""
-    runs: list[dict] = []
-    for label, d in data.items():
-        if label not in launch_t:
-            continue
-        t_l = launch_t[label]
-        t0, t1 = _curve_window(d, curve_idx, t_l)
-        df_k = d["kinematic"]
-        seg = df_k[(df_k["t"] >= t0) & (df_k["t"] <= t1)]
-        if seg.empty:
-            continue
-        lr = df_k.iloc[(df_k["t"] - t_l).abs().argsort().iloc[0]]
-        runs.append({**_style(d, label), "seg_x": np.asarray(seg["x"]), "seg_y": np.asarray(seg["y"]),
-                     "launch_x": float(lr["x"]), "launch_y": float(lr["y"])})
-    return runs
-
-
-def _curve_obj(curve_idx: int) -> dict:
-    c = CURVE_CENTERS[curve_idx]
-    return {"cx": c["cx"], "cy": c["cy"], "mg": _CURVE_MG,
-            "label": c.get("label", f"カーブ{curve_idx + 1}")}
-
-
-def plot_curve_analysis(
-    data: dict,
-    map_ways: list | None,
-    curve_idx: int,
-    launch_window: tuple[float, float],
-):
-    """指定カーブの一時停止発進からの挙動を軌跡＋時系列で比較（上段全幅=軌跡, 下段3列）。"""
-    if not CURVE_CENTERS or not (0 <= curve_idx < len(CURVE_CENTERS)):
-        warnings.warn(f"plot_curve_analysis: curve_idx={curve_idx} が範囲外")
-        return
-    launch_t = _curve_launch_map(data, launch_window)
-    if not launch_t:
-        warnings.warn(f"発進時刻を検出できないため plot_curve_analysis(curve{curve_idx + 1}) をスキップ")
-        return
-
-    ts_runs: list[dict] = []
-    for label, d in data.items():
-        if label not in launch_t:
-            continue
-        t_l = launch_t[label]
-        t0, t1 = _curve_window(d, curve_idx, t_l)
-        vel = _clip_rel(d["velocity"], t0, t1, t_l)
-        acc = _clip_rel(d["accel"], t0, t1, t_l)
-        steer = _clip_rel(d["steering"], t0, t1, t_l)
-        cmd = _clip_rel(d["cmd"], t0, t1, t_l)
-        r = {**_style(d, label),
-             "t_vel": np.asarray(vel["tr"]), "vel": np.asarray(vel["lon_vel"]),
-             "t_acc": np.asarray(acc["tr"]), "acc": np.asarray(acc["accel"]),
-             "t_steer": np.asarray(steer["tr"]), "steer_deg": np.degrees(steer["steer"]),
-             "t_cmd": None}
-        if not cmd.empty:
-            r.update({"t_cmd": np.asarray(cmd["tr"]), "cmd_vel": np.asarray(cmd["cmd_vel"]),
-                      "cmd_acc": np.asarray(cmd["cmd_accel"]),
-                      "cmd_steer_deg": np.degrees(cmd["cmd_steer"])})
-        ts_runs.append(r)
-
-    fig = build_fig_curve_analysis(
-        _curve_obj(curve_idx), map_ways, _curve_traj_runs(data, launch_t, curve_idx), ts_runs,
-        scenario_name=SCENARIO_NAME,
-    )
-    FIGS_DIR.mkdir(parents=True, exist_ok=True)
-    write_fig_json(fig, FIGS_DIR / f"curve{curve_idx + 1}_analysis")
-
-
-def plot_curve_steering_detail(
-    data: dict,
-    map_ways: list | None,
-    curve_idx: int,
-    launch_window: tuple[float, float],
-):
-    """
-    指定カーブの一時停止発進からのステアリング詳細分析。
-
-    レイアウト（2列構成）:
-        左列 上段: 軌跡（対象カーブ付近）
-        左列 下段: 指令 vs 応答 の重ね描き（同一軸）
-        右列 上段: ステアリング角速度 [deg/s]
-        右列 中段: 指令追従誤差（応答 − 指令）[deg]
-        右列 下段: ステアリング角 累積絶対値（操舵量の積分）
-    """
-    if not CURVE_CENTERS or not (0 <= curve_idx < len(CURVE_CENTERS)):
-        warnings.warn(f"plot_curve_steering_detail: curve_idx={curve_idx} が範囲外")
-        return
-    launch_t = _curve_launch_map(data, launch_window)
-    if not launch_t:
-        warnings.warn(f"発進時刻を検出できないため plot_curve_steering_detail(curve{curve_idx + 1}) をスキップ")
-        return
-
-    steer_runs: list[dict] = []
-    for label, d in data.items():
-        if label not in launch_t:
-            continue
-        t_l = launch_t[label]
-        t0, t1 = _curve_window(d, curve_idx, t_l)
-        s = _clip_rel(d["steering"], t0, t1, t_l)
-        c = _clip_rel(d["cmd"], t0, t1, t_l)
-        t_s = np.asarray(s["tr"])
-        s_deg = np.degrees(s["steer"].values)
-        r = {**_style(d, label), "t_s": t_s, "steer_deg": s_deg, "t_cmd": None,
-             "rate_t": None, "err_t": None, "integ": np.zeros_like(t_s)}
-        if not c.empty:
-            r["t_cmd"] = np.asarray(c["tr"])
-            r["cmd_steer_deg"] = np.degrees(c["cmd_steer"].values)
-        if len(t_s) > 1:
-            dt = np.diff(t_s)
-            rate = np.diff(s_deg) / np.where(dt > 1e-6, dt, np.nan)
-            r["rate_t"], r["rate"] = t_s[1:], np.where(np.abs(rate) < 200, rate, np.nan)
-            r["integ"] = np.concatenate([[0], np.cumsum(np.abs(np.diff(s_deg)) * dt)])
-        if not c.empty and len(t_s) > 0:
-            cmd_interp = np.interp(t_s, c["tr"].values, np.degrees(c["cmd_steer"].values))
-            r["err_t"], r["err"] = t_s, s_deg - cmd_interp
-        steer_runs.append(r)
-
-    fig = build_fig_curve_steering_detail(
-        _curve_obj(curve_idx), map_ways, _curve_traj_runs(data, launch_t, curve_idx), steer_runs,
-        scenario_name=SCENARIO_NAME,
-    )
-    FIGS_DIR.mkdir(parents=True, exist_ok=True)
-    write_fig_json(fig, FIGS_DIR / f"curve{curve_idx + 1}_steering_detail")
-
-
-def plot_curve_yaw_steer(
-    data: dict,
-    curve_idx: int,
-    launch_window: tuple[float, float],
-):
-    """
-    ステア角と実際に進んだ方向（ヨーレート換算）の差分を可視化。
-
-    自転車モデル: yaw_rate_pred = v * tan(steer) / L
-    等価ステア角:  steer_equiv  = atan(L * yaw_rate_actual / v)
-
-    レイアウト（縦4段、共通t軸）:
-        段1: ステア角（実測）vs 等価ステア角（実ヨーレートから逆算） [deg]
-        段2: ステア角 − 等価ステア角 = 「進行方向とのズレ」[deg]
-        段3: 実ヨーレート vs 自転車モデル予測ヨーレート [deg/s]
-        段4: yaw角の累積変化量（カーブの深さ比較）[deg]
-    """
-    if not CURVE_CENTERS or not (0 <= curve_idx < len(CURVE_CENTERS)):
-        warnings.warn(f"plot_curve_yaw_steer: curve_idx={curve_idx} が範囲外")
-        return
-    launch_t = _curve_launch_map(data, launch_window)
-    if not launch_t:
-        return
-
-    yaw_runs: list[dict] = []
-    for label, d in data.items():
-        if label not in launch_t:
-            continue
-        t_l = launch_t[label]
-        t0, t1 = _curve_window(d, curve_idx, t_l)
-        kin = _clip_rel(d["kinematic"], t0, t1, t_l)
-        vel = _clip_rel(d["velocity"], t0, t1, t_l)
-        steer = _clip_rel(d["steering"], t0, t1, t_l)
-        if kin.empty or vel.empty or steer.empty:
-            continue
-        t_k = kin["tr"].values
-        yaw_u = np.unwrap(kin["yaw"].values)
-        yaw_rate = np.gradient(yaw_u, t_k)  # rad/s
-        v_i = np.interp(t_k, vel["tr"].values, vel["lon_vel"].values)
-        s_i = np.interp(t_k, steer["tr"].values, steer["steer"].values)  # rad
-        v_safe = np.where(v_i > 0.3, v_i, np.nan)  # 低速は等価ステア角が不安定
-        steer_equiv = np.arctan2(WHEELBASE * yaw_rate, v_safe)  # rad
-        yaw_rate_pred = v_i * np.tan(s_i) / WHEELBASE  # rad/s
-        diff_deg = np.clip(np.degrees(s_i - steer_equiv), -30, 30)
-        t0_idx = int(np.argmin(np.abs(t_k)))
-        yaw_runs.append({**_style(d, label), "t": t_k,
-                         "steer_deg": np.degrees(s_i), "equiv_deg": np.degrees(steer_equiv),
-                         "diff_deg": diff_deg, "yaw_rate_deg": np.degrees(yaw_rate),
-                         "yaw_rate_pred_deg": np.degrees(yaw_rate_pred),
-                         "yaw_cum_deg": np.degrees(yaw_u - yaw_u[t0_idx])})
-
-    fig = build_fig_curve_yaw_steer(
-        yaw_runs, scenario_name=SCENARIO_NAME,
-        curve_label=CURVE_CENTERS[curve_idx].get("label", f"カーブ{curve_idx + 1}"),
-        wheelbase=float(WHEELBASE),
-    )
-    FIGS_DIR.mkdir(parents=True, exist_ok=True)
-    write_fig_json(fig, FIGS_DIR / f"curve{curve_idx + 1}_yaw_steer")
-
-
-def plot_steer_response(
-    data: dict,
-    curve_idx: int,
-    launch_window: tuple[float, float],
-):
-    """
-    ステアリング応答性能の比較図。
-
-    ステア指令が 1deg を超えた瞬間を各ログの t=0 に揃え、
-    指令 vs 応答の「追従の遅れ・形の違い」を正規化して一目でわかるようにする。
-
-    レイアウト:
-        上段(大): 正規化ステア角（指令 vs 応答）— ピーク指令値で正規化して
-                  指令波形の形が揃った状態で応答のズレを比較
-        中段左: 追従誤差（応答 − 指令）の時系列
-        中段右: 立ち上がり時間（指令ピーク90%到達）の棒グラフ
-        下段左: RMSE [deg]の棒グラフ
-        下段右: ピーク追従率（応答ピーク / 指令ピーク）の棒グラフ
-    """
-    T_ONSET_PRE = -0.5  # onset 前の余白 [s]
-    T_ONSET_POST = 12.0  # onset 後の表示幅 [s]
-    ONSET_THRESH_DEG = 1.0
-
-    runs: list[dict] = []
-    bar_labels: list[str] = []
-    bar_colors: list[str] = []
-    rise_ms: list[float] = []
-    rmse_vals: list[float] = []
-    peak_vals: list[float] = []
-
-    for label, d in data.items():
-        t_l = _find_curve_launch(d["velocity"], launch_window)
-        if t_l is None:
-            continue
-        steer_r = _clip_rel(d["steering"], t_l - 3, t_l + 20, t_l)
-        cmd_r = _clip_rel(d["cmd"], t_l - 3, t_l + 20, t_l)
-        if steer_r.empty or cmd_r.empty:
-            continue
-        cmd_deg = np.degrees(cmd_r["cmd_steer"].values)
-        steer_deg = np.degrees(steer_r["steer"].values)
-
-        onset_mask = (cmd_r["tr"] >= 0) & (np.abs(cmd_deg) > ONSET_THRESH_DEG)
-        if not onset_mask.any():
-            continue
-        t_onset_cmd = float(cmd_r["tr"].values[onset_mask][0])
-        onset_mask_act = (steer_r["tr"] >= 0) & (np.abs(steer_deg) > ONSET_THRESH_DEG)
-        t_onset_act = (
-            float(steer_r["tr"].values[onset_mask_act][0]) if onset_mask_act.any() else t_onset_cmd
-        )
-        onset_delay = t_onset_act - t_onset_cmd
-
-        # onset t=0 で揃えた窓
-        t_c = cmd_r["tr"].values - t_onset_cmd
-        t_a = steer_r["tr"].values - t_onset_cmd
-        wc = (t_c >= T_ONSET_PRE) & (t_c <= T_ONSET_POST)
-        wa = (t_a >= T_ONSET_PRE) & (t_a <= T_ONSET_POST)
-        t_c_w, c_w = t_c[wc], cmd_deg[wc]
-        t_a_w, a_w = t_a[wa], steer_deg[wa]
-        if len(c_w) == 0 or len(a_w) == 0:
-            continue
-
-        peak_cmd = np.abs(c_w).max()
-        peak_act = np.abs(a_w).max()
-        c_norm = c_w / peak_cmd if peak_cmd > 0 else c_w
-        a_norm = a_w / peak_cmd if peak_cmd > 0 else a_w
-
-        dt = 0.02
-        t_grid = np.arange(T_ONSET_PRE, T_ONSET_POST, dt)
-        c_i = np.interp(t_grid, t_c_w, c_w, left=np.nan, right=np.nan)
-        a_i = np.interp(t_grid, t_a_w, a_w, left=np.nan, right=np.nan)
-        valid = ~(np.isnan(c_i) | np.isnan(a_i))
-        rmse = float(np.sqrt(np.mean((a_i[valid] - c_i[valid]) ** 2))) if valid.any() else np.nan
-
-        runs.append({**_style(d, label), "t_c": t_c_w, "c_norm": c_norm,
-                     "t_a": t_a_w, "a_norm": a_norm, "onset_delay": onset_delay,
-                     "err_t": t_grid, "err": a_i - c_i, "is_real": label == "実機"})
-        bar_labels.append(label)
-        bar_colors.append(d["color"])
-        rise_ms.append(onset_delay * 1000)
-        rmse_vals.append(rmse if not np.isnan(rmse) else 0.0)
-        peak_vals.append(peak_act / peak_cmd if peak_cmd > 0 else 0.0)
-
-    if not runs:
-        warnings.warn(f"発進検出ログがないため plot_steer_response(curve{curve_idx + 1}) をスキップ")
-        return
-    bars = {"labels": bar_labels, "colors": bar_colors,
-            "rise": rise_ms, "rmse": rmse_vals, "peak": peak_vals}
-    fig = build_fig_steer_response(runs, bars, scenario_name=SCENARIO_NAME)
-    FIGS_DIR.mkdir(parents=True, exist_ok=True)
-    write_fig_json(fig, FIGS_DIR / f"curve{curve_idx + 1}_steer_response")
 
 
 # ---------------------------------------------------------------------------
@@ -995,8 +622,7 @@ def _apply_runtime_config(cfg: RuntimeConfig) -> None:
     `main()` は cfg を渡すだけにしている (本体の `plot_*` は module-level 参照で動くため)。
     """
     global BASE, LITE_DIR, OUT_DIR, FIGS_DIR  # noqa: PLW0603
-    global SCENARIO_NAME, WHEELBASE, CURVE_CENTERS, LOGS  # noqa: PLW0603
-    global _CURVE2_WINDOW, _CURVE2_INDEX  # noqa: PLW0603
+    global SCENARIO_NAME, WHEELBASE, LOGS  # noqa: PLW0603
 
     BASE = cfg.base_dir
     LITE_DIR = cfg.lite_dir
@@ -1005,9 +631,6 @@ def _apply_runtime_config(cfg: RuntimeConfig) -> None:
 
     SCENARIO_NAME = cfg.scenario_name
     WHEELBASE = float(cfg.wheelbase_validation)
-    CURVE_CENTERS = cfg.curve_centers
-    _CURVE2_INDEX = cfg.curve2_index
-    _CURVE2_WINDOW = cfg.curve2_window
 
     # sim_runs.yaml 連動: cfg.sim_runs_config が指定されていれば全 run を LOGS dict に追加
     sim_runs_cfg = None
@@ -1142,19 +765,6 @@ def main() -> None:
     # 走行距離 (arc-length) 基準の重ね描き (B1): pacing 差を除き早期停止を露出。
     plot_velocity_vs_distance(loaded)
     plot_steering_vs_distance(loaded)
-
-    if CURVE_CENTERS:
-        plot_curves(loaded, map_ways)
-        # plot_curves (curve_centers の全カーブ一覧) は1枚で全カーブを概観する図。
-        # 個別カーブの詳細プロット(analysis/steering_detail/yaw_steer/steer_response)は
-        # cfg.plot_curves で対象を切り替える。
-        for spec in cfg.plot_curves:
-            idx = spec["index"]
-            win = spec["launch_window"]
-            plot_curve_analysis(loaded, map_ways, idx, win)
-            plot_curve_steering_detail(loaded, map_ways, idx, win)
-            plot_curve_yaw_steer(loaded, idx, win)
-            plot_steer_response(loaded, idx, win)
 
     print("\n=== レポート生成中 ===")
     try:

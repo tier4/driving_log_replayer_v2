@@ -64,7 +64,6 @@ CAPTIONS: dict[str, str] = {
     "steering": "ステア角時系列",
     "velocity_vs_distance": "走行距離基準 速度（pacing 差を除いた早期停止の露出）",
     "steering_vs_distance": "走行距離基準 ステア角",
-    "curves_closeup": "カーブ一覧図（全カーブ概観）",
     # step8: figures/
     "dp_real_vs_sim": "DiffusionPlanner 出力軌跡 実機 vs sim",
     "dp_vs_actual": "DP 計画速度 vs 実際速度",
@@ -79,21 +78,11 @@ CAPTIONS: dict[str, str] = {
     "growth_relative": "相対誤差成長（reference 比・dynamics 差の分離）",
     # step7: param_sweep/ (個別図のキャプションは _caption_for の正規表現で導出)
     "_overview_sensitivity": "スイープ感度オーバービュー（改善率ランキング + 正規化 RMSE カーブ）",
-    # step10: curve_diag/
-    "curve_divergence": "カーブ乖離 詳細診断（縦横分解 + yaw 差）",
     # step13: cross_dataset/
     "cross_closed_loop_heatmap": "dataset × sim run: closed-loop 軌跡乖離・完走率行列",
     "cross_normalized_bars": "dataset 横断 正規化 mean/worst 集約（ロバスト性ランキング）",
     "coverage_overview": "dataset 走行特性カバレッジ（速度域・加減速・曲率域・走行距離の偏り）",
     "loo_stability": "leave-one-out 安定性（除外 DS × case の score 変化）",
-}
-
-# step4 のカーブ別連番図 (curve1_analysis 等)。接頭辞除去後のサフィックスで照合。
-_CURVE_SUFFIX_CAPTIONS: dict[str, str] = {
-    "analysis": "カーブ個別分析（3 段）",
-    "steering_detail": "カーブ ステア詳細",
-    "yaw_steer": "カーブ yaw-steer 関係",
-    "steer_response": "カーブ ステア応答",
 }
 
 # 再生ビューア等、plotly でない自己完結 HTML を埋め込む際の高さ [px]。
@@ -209,7 +198,6 @@ _CLOSED_LOOP_STEMS: set[str] = {
     "trajectory_with_map",
     "trajectory_xy",
     "trajectory_playback",
-    "curves_closeup",
 }
 
 # 取り込む Markdown レポート: (comparison/ からの相対パス, 見出し, 所属カテゴリ)。
@@ -217,7 +205,6 @@ _MARKDOWN_REPORTS: list[tuple[str, str, str]] = [
     ("report.md", "比較レポート（step4: report.md）", "closed_loop"),
     ("param_sweep/param_sweep_summary.md", "パラメータ同定サマリ（step7: param_sweep_summary.md）", "real_analysis"),
     ("cases/cases_summary.md", "ケース集約サマリ（step6: cases_summary.md）", "ol_nstep"),
-    ("curve_diag/curve_divergence.md", "カーブ乖離サマリ（step10: curve_divergence.md）", "closed_loop"),
 ]
 
 
@@ -240,13 +227,6 @@ def _caption_for(stem: str) -> str:
     m = re.match(r"error_timeseries_overlay_n(\d+)$", stem)
     if m:
         return f"全ケース 誤差時系列 重ね描き（N={m.group(1)}）"
-    # curveN_<suffix> パターン照合
-    m = re.match(r"curve(\d+)_(.+)$", stem)
-    if m:
-        idx, suffix = m.group(1), m.group(2)
-        cap = _CURVE_SUFFIX_CAPTIONS.get(suffix)
-        if cap:
-            return f"カーブ{idx}: {cap}"
     # フォールバック: アンダースコアを空白に
     return stem.replace("_", " ")
 
@@ -268,9 +248,7 @@ def _classify(rel: Path) -> str:
         return "real_analysis"
     if top in {"nstep", "cases"}:
         return "ol_nstep"
-    if top == "curve_diag":
-        return "closed_loop"
-    if stem in _CLOSED_LOOP_STEMS or re.match(r"curve\d+_.+$", stem):
+    if stem in _CLOSED_LOOP_STEMS:
         return "closed_loop"
     return "other"
 
@@ -582,7 +560,7 @@ def _collect_figures(comparison_dir: Path) -> list[Path]:
 # レポート冒頭に置く分析パイプライン解説（README.ja.md の表と同期）。
 _PIPELINE_INTRO = """
 <details class="section" open id="sec-pipeline">
-<summary>分析パイプライン（13 段階）</summary>
+<summary>分析パイプライン（12 段階）</summary>
 <p class="sec-desc">評価ノードが実機ログ抽出から HTML/notebook 集約まで順に実行するパイプライン
 （Stage 1〜12 はデータセット単位、Stage 13 は複数データセットの collection 単位）。
 本レポートは各 stage の成果物（図・Markdown）をカテゴリ別に束ねたもの。
@@ -598,7 +576,6 @@ _PIPELINE_INTRO = """
 <tr><td>6</td><td>ケース集約解析 (step6_analyze_cases)</td><td>全ケースの N-step 誤差を横断集約 (cases_summary.md・cases_metrics.json・overlay)</td></tr>
 <tr><td>7</td><td>パラメータ sweep 同定 (step7_sweep_params)</td><td>車両モデル各パラメータを sweep し終端誤差最小値を同定 (param_sweep_summary.md)</td></tr>
 <tr><td>8</td><td>DP 軌跡比較 (step8_compare_dp_trajectory)</td><td>DiffusionPlanner 出力軌跡を実機 vs sim で比較 (dp_*)</td></tr>
-<tr><td>10</td><td>カーブ乖離診断 (step10_diagnose_curve)</td><td>カーブ/発進区間の乖離を縦横・速度・yaw で診断 (curve_divergence.md)</td></tr>
 <tr><td>11</td><td>HTML レポート生成 (step11_build_html_report)</td><td>図スペック・Markdown・設定 YAML を 1 枚に束ねた単一レポート (report.html)。マルチ DS では collection 全体 + 横断サマリーを束ねる</td></tr>
 <tr><td>12</td><td>notebook 生成 (step12_build_notebook)</td><td>各図を plotly で再描画 + 生 CSV からの再解析セルを備えた開発者向け notebook (report.ipynb)</td></tr>
 <tr><td>13</td><td>データセット横断分析 (step13_cross_dataset)</td><td>collection 内全 DS の metrics JSON を再集計 (モデル×DS 行列・正規化集約・カバレッジ・LOO 安定性)</td></tr>

@@ -6,9 +6,10 @@ ScenarioDescription: |
 
   課題ごとのセットアップ概要:
     ①カーブ大回り  : scenario_curve_wide_turn.yaml を使用（このファイルは不要）
-    ②停止位置手前  : 停止線手前での停止挙動を含む dataset。curve_config で停止線付近を定義。
-    ③急ブレーキ    : 同上。accel 時系列の急変化を curve2_analysis で目視確認。
-    ④加速不足      : 40km/h まで加速するシーンを含む dataset。curve_centers に加速区間を定義。
+    ②停止位置手前  : 停止線手前での停止挙動を含む dataset。
+                     step4 の velocity.fig.json / acceleration.fig.json で全軌跡を確認。
+    ③急ブレーキ    : 同上。accel 時系列の急変化を velocity.fig.json で目視確認。
+    ④加速不足      : 40km/h まで加速するシーンを含む dataset。
                      step4 の全軌跡 velocity.fig.json / velocity_vs_distance.fig.json で確認。
     ⑤発進停止振動  : 一時停止からの発進窓を含む dataset。
                      step4 の velocity.fig.json / acceleration.fig.json で全軌跡を確認。
@@ -16,8 +17,7 @@ ScenarioDescription: |
   使い方:
     1. このファイルをコピーして名前を変える: scenario_issue_<課題名>.yaml
     2. Datasets の UUID を差し替える
-    3. curve_config_<地図名>.yaml を用意し curve_centers に課題箇所の中心座標を定義する
-    4. make -C <この dir> local_cloud_run LOCAL_SCENARIO=$(pwd)/sample/scenario_issue_<課題名>.yaml
+    3. make -C <この dir> local_cloud_run LOCAL_SCENARIO=$(pwd)/sample/scenario_issue_<課題名>.yaml
     事前に対象 dataset を pull すること:
       webauto data annotation-dataset pull --project-id x2_dev \
         --annotation-dataset-id <UUID> --include-intermediate-artifacts
@@ -34,15 +34,6 @@ Evaluation:
         VehicleId: default
   Conditions:
     scenario_name: "<課題名> 再現検証"
-    # curve_config_yaml: 課題箇所の領域定義 YAML（sample/ 配下にコピーして編集）。
-    #   停止→発進が「ある」課題（②③）: curve_centers + plot_curves.launch_window を定義する。
-    #     → step4 の curveN_analysis（軌跡+速度/加速/ステア時系列）と step10 の
-    #       curve_divergence.md（縦/横乖離 定量値）が生成される。
-    #   停止→発進が「ない」課題（④⑤）: curve_centers のみ定義（launch_window は省略可）。
-    #     → step4 の curves_closeup（領域ズーム軌跡）が生成される。速度/加速は全軌跡の
-    #       velocity.fig.json / acceleration.fig.json で確認する。
-    #   curve_config_yaml を空文字にするとカーブ別解析をスキップ（全軌跡図のみ生成）。
-    curve_config_yaml: ./curve_config_<地図名>.yaml
     cases_config: ./cases.yaml
     sim_runs_config: ./sim_runs.yaml
     # real_provenance: 実機 bag 取得時の pilot-auto.x2 / DP モデル版を記録しておく。

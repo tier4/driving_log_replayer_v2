@@ -132,7 +132,7 @@ def generate_scenario(
 ) -> None:
     """テンプレート scenario.yaml の Datasets[0] UUID を uuid に書き換えて output_path に保存する。
 
-    Conditions 内の相対パス (sim_runs_config / cases_config / curve_config_yaml) は
+    Conditions 内の相対パス (sim_runs_config / cases_config) は
     テンプレートのディレクトリ基準で絶対パスに変換する。出力先が変わっても解決できるようにするため。
 
     provenance が指定された場合は Conditions.real_provenance に書き込む。
@@ -146,7 +146,7 @@ def generate_scenario(
 
     # 相対パスを絶対パスに変換
     conditions = doc.get("Evaluation", {}).get("Conditions", {}) or {}
-    for key in ("sim_runs_config", "cases_config", "curve_config_yaml"):
+    for key in ("sim_runs_config", "cases_config"):
         val = conditions.get(key)
         if val and not Path(val).is_absolute():
             conditions[key] = str((template_path.parent / val).resolve())

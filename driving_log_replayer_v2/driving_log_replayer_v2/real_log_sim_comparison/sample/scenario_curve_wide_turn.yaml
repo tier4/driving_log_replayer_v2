@@ -35,9 +35,6 @@ Evaluation:
         VehicleId: default
   Conditions:
     scenario_name: "カーブ大回り再現検証（テレポート駅前左折、DP 3モデル比較）"
-    # curve_config_miraikan.yaml は curve2 (テレポート駅前左折) を主対象として
-    # step4 の curve2_analysis / step10 の curve_divergence を有効化する。
-    curve_config_yaml: ./curve_config_miraikan.yaml
     cases_config: ./cases.yaml
     # DP 3モデル比較用 sim_runs: sim_dp_0303 / sim_dp_0503 (大回りなし=FN検証) /
     # sim_dp_0410 (大回りあり=TP検証)。各 run に k_us=0.020 を設定。

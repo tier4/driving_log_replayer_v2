@@ -22,10 +22,6 @@ ScenarioDescription: |
       ROSBAG_ID=f8b5e21f-8361-45a6-9079-05fbf40366a5 \
       TEMPLATE=$(pwd)/sample/scenario_issue_rotary_left.yaml
 
-  curve_centers の確定:
-    python3 tools/suggest_curve_centers.py --bag work/dataset/<uuid>/input_bag
-    → 出力された cx/cy を sample/curve_config_rotary.yaml に記入してから実行する。
-
   実行（dataset 構築後）:
     make -C <このディレクトリ> local_cloud_run \
       WEBAUTO_T4_ROOT=$(pwd)/work/dataset \
@@ -33,7 +29,7 @@ ScenarioDescription: |
 
   結果の確認:
     report.html の「シナリオ クローズループ比較」を確認。
-    - curve_diag/curve_divergence.md : 縦/横乖離の定量値（横乖離が大きければ大回り）
+    velocity.fig.json / acceleration.fig.json で速度プロファイルを確認する。
     TP = sim_dp_0410 の横乖離が顕著に大きい
     FN = sim_dp_0303 / sim_dp_0503 の横乖離が実機に近い（大回りしない）
 
@@ -53,10 +49,6 @@ Evaluation:
         VehicleId: default
   Conditions:
     scenario_name: "テレポート駅ロータリー入口 左旋回 大回り再現検証（DP 3モデル比較）"
-    # curve_config_rotary.yaml: ロータリー入口左旋回を主対象として
-    # step4 の curve0_analysis / step10 の curve_divergence を有効化する。
-    # curve_centers の cx/cy は suggest_curve_centers.py で取得し更新すること。
-    curve_config_yaml: ./curve_config_rotary.yaml
     cases_config: ./cases.yaml
     # DP 3モデル比較用 sim_runs: sim_dp_0303/sim_dp_0503 (大回りなし=FN検証) /
     # sim_dp_0410 (大回りあり=TP検証)。各 run に k_us=0.020 を設定。
