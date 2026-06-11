@@ -59,9 +59,6 @@ CAPTIONS: dict[str, str] = {
     "trajectory_xy": "軌跡比較（地図なし・インタラクティブ）",
     "trajectory_playback": "軌跡再生ビューア（時刻同期/位置同期シークバー・速度矢印・追従ズーム・DP計画軌跡）",
     "lon_lat_model": "縦横モデル検証ビューア（実機：運動方程式〔1次遅れ+自転車モデル〕の前方積算と、加速度/速度/ステア/ヨーレート/横Gの観測・指令を重ね描き。地図にシミュレーション軌跡も重畳。T/τ/k_us/β つまみ調整・ステア源切替）",
-    "velocity": "速度時系列",
-    "acceleration": "加速度時系列",
-    "steering": "ステア角時系列",
     "velocity_vs_distance": "走行距離基準 速度（pacing 差を除いた早期停止の露出）",
     "steering_vs_distance": "走行距離基準 ステア角",
     # step8: figures/
@@ -190,10 +187,7 @@ _CATEGORY_ORDER: list[str] = [key for key, _, _ in _CATEGORIES]
 # step4 が figures/ に出力する closed-loop 比較図（実機 vs sim）の stem。dp_*・brake 同定図は
 # 同じ figures/ に混在するため、ディレクトリではなくこの明示リスト + curveN_* パターンで判定する。
 _CLOSED_LOOP_STEMS: set[str] = {
-    "velocity",
     "velocity_vs_distance",
-    "acceleration",
-    "steering",
     "steering_vs_distance",
     "trajectory_with_map",
     "trajectory_xy",

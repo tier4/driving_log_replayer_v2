@@ -20,21 +20,17 @@ Stage 1〜6 の後段に位置する独立ステージ。Stage 1 が生成した
       (wheelbase は実測値が正しいため sweep せず固定)
   - 縦方向系 (同定メトリクス 縦 RMSE):
       acc_time_constant / acc_time_delay / debug_acc_scaling_factor
-  - 2D ペア (PAIR_SPECS): k_us × steer_time_constant / k_us × debug_steer_scaling_factor
-      の yaw RMSE ヒートマップ
-      (1 パラメータずつの sweep では見えないトレードオフ・谷の形状を可視化)
-
 evaluator_node が Stage 6 の後に env (BEST_MODEL_BASE_DIR) のみで実行する (追加設定不要)。
 手動実行・対象/グリッド変更も可能:
     python3 -m driving_log_replayer_v2.real_log_sim_comparison.step7_sweep_params \
         --base-dir <out_dir> \
-        [--params k_us,pair_k_us_steer_time_constant] \
+        [--params k_us,steer_time_constant] \
         [--grid k_us=0,0.01,0.02 --grid steer_time_constant=0.1,0.2,0.4] \
         [--metric acc_time_constant=ax]  # 同定メトリクス上書き (既定: 縦=vx, 横=yaw/lat) \
         [--horizons 2,5,10,20,40] [--stride 5]
 
 出力: <base-dir>/comparison/param_sweep/
-    <name>_sweep.{csv,svg} (各パラメータ), pair_<a>_<b>.{csv,svg} (2D),
+    <name>_sweep.{csv,svg} (各パラメータ),
     param_sweep_summary.md (同定値一覧)
 """
 
@@ -53,7 +49,6 @@ import plotly.graph_objects as go
 
 from .lib._fig_io import write_fig_json
 from .lib._figures import (
-    build_fig_pair_sweep,
     build_fig_sweep,
     build_fig_sweep_overview,
 )
@@ -182,21 +177,6 @@ SWEEP_SPECS: list[SweepSpec] = [
     ),
 ]
 
-# 2D ペア sweep: (param_a, param_b, metric)。1 パラメータずつでは見えない相関を可視化。
-# wheelbase は実測値が正しいため固定 (sweep 対象外)。
-PAIR_SPECS: list[tuple[str, str, str]] = [
-    ("k_us", "steer_time_constant", "yaw"),
-    ("k_us", "debug_steer_scaling_factor", "yaw"),
-]
-# 2D 用の縮小グリッド (フルグリッドの直積はコストが大きいため)
-_PAIR_GRID_ABS: dict[str, tuple[float, ...]] = {
-    "k_us": (0.0, 0.01, 0.02, 0.03, 0.04, 0.05),
-}
-_PAIR_GRID_ABS["debug_steer_scaling_factor"] = (0.80, 0.85, 0.90, 0.95, 1.0, 1.10)
-_PAIR_GRID_REL: dict[str, tuple[float, ...]] = {
-    "steer_time_constant": (0.5, 1.0, 1.5, 2.0, 3.0),
-}
-
 
 def _spec_by_name(name: str) -> SweepSpec:
     for spec in SWEEP_SPECS:
@@ -204,11 +184,6 @@ def _spec_by_name(name: str) -> SweepSpec:
             return spec
     raise KeyError(name)
 
-
-def _pair_grid(name: str, base_params: dict) -> list[float]:
-    if name in _PAIR_GRID_ABS:
-        return sorted(_PAIR_GRID_ABS[name])
-    return sorted(round(m * float(base_params[name]), 6) for m in _PAIR_GRID_REL[name])
 
 
 # ---------------------------------------------------------------------------
@@ -374,34 +349,6 @@ def sweep_with_extension(
 
     return res, ident, grid
 
-
-def run_pair_sweep(
-    data: dict,
-    t0_ns: int,
-    base_params: dict,
-    name_a: str,
-    name_b: str,
-    horizons: tuple[int, ...],
-    stride: int,
-) -> pd.DataFrame:
-    """2 パラメータの直積グリッドを sweep し最大 horizon の RMSE を集計する。"""
-    spec_a, spec_b = _spec_by_name(name_a), _spec_by_name(name_b)
-    grid_a = _pair_grid(name_a, base_params)
-    grid_b = _pair_grid(name_b, base_params)
-    h_max = max(horizons)
-    affects_gt = spec_a.affects_gt or spec_b.affects_gt
-    gt = None if affects_gt else s5._prepare_gt(data, t0_ns, base_params)
-
-    rows: list[dict] = []
-    for vb in grid_b:
-        for va in grid_a:
-            params = dict(base_params)
-            params[name_a] = va
-            params[name_b] = vb
-            rmse = _rollout_rmse(data, t0_ns, params, horizons, stride, gt)
-            rows.append({name_a: va, name_b: vb, **_rmse_row(rmse[h_max])})
-        print(f"  {name_b}={vb:g}: {name_a} {len(grid_a)} 点完了")
-    return pd.DataFrame(rows)
 
 
 # ---------------------------------------------------------------------------
@@ -818,35 +765,6 @@ def plot_sweep(
     write_fig_json(fig, out_path)
 
 
-def plot_pair_sweep(
-    res: pd.DataFrame,
-    name_a: str,
-    name_b: str,
-    metric: str,
-    h_max: int,
-    base_params: dict,
-    out_path: Path,
-) -> None:
-    """2D グリッドの RMSE ヒートマップ (最小点マーカー + セル注釈付き)。"""
-    metric_label, metric_unit, metric_col = _METRIC_INFO[metric]
-    grid_a = sorted(res[name_a].unique())
-    grid_b = sorted(res[name_b].unique())
-    mat = np.full((len(grid_b), len(grid_a)), np.nan)
-    for _, row in res.iterrows():
-        mat[grid_b.index(row[name_b]), grid_a.index(row[name_a])] = row[metric_col]
-    min_ij = tuple(int(v) for v in np.unravel_index(np.nanargmin(mat), mat.shape))
-
-    def _base_str(name: str) -> str:
-        v = _spec_by_name(name).base_value(base_params)
-        return f"{v:.4g}" if v is not None else "—"
-
-    fig = build_fig_pair_sweep(
-        mat, grid_a, grid_b, name_a, name_b, min_ij,
-        metric_label=metric_label, metric_unit=metric_unit, h_max=h_max,
-        base_str_a=_base_str(name_a), base_str_b=_base_str(name_b),
-    )
-    write_fig_json(fig, out_path)
-
 
 # ---------------------------------------------------------------------------
 # サマリ
@@ -1096,7 +1014,7 @@ def _parse_metric_overrides(items: list[str]) -> dict[str, str]:
 def main() -> None:
     parser = argparse.ArgumentParser(description="車両モデルパラメータ sweep 同定 (rollout)")
     add_common_cli_arguments(parser)
-    all_names = [s.name for s in SWEEP_SPECS] + [f"pair_{a}_{b}" for a, b, _ in PAIR_SPECS]
+    all_names = [s.name for s in SWEEP_SPECS]
     parser.add_argument(
         "--params",
         default="all",
@@ -1198,16 +1116,6 @@ def main() -> None:
         if ident["at_edge"]:
             print(f"  [WARN] 自動拡張後も最小がグリッド端 ({spec.name}={ident['grid_value']:.4g})。"
                   "bounds の端 (物理的に意味のある範囲の限界) に到達。")
-
-    # --- 2D pair sweep ---
-    for name_a, name_b, metric in PAIR_SPECS:
-        key = f"pair_{name_a}_{name_b}"
-        if key not in targets:
-            continue
-        print(f"\n=== 2D sweep: {name_a} × {name_b} ===")
-        res = run_pair_sweep(data, t0_ns, base_params, name_a, name_b, horizons, args.stride)
-        res.to_csv(out_dir / f"{key}.csv", index=False)
-        plot_pair_sweep(res, name_a, name_b, metric, h_max, base_params, out_dir / f"{key}.svg")
 
     if records:
         # ファイル名先頭の "_" は意図的: step11 はパス昇順で図を並べるため、

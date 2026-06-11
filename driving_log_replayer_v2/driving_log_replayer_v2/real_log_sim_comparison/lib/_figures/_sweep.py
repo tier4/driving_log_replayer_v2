@@ -71,60 +71,6 @@ def build_fig_sweep(
     return apply_base_layout(fig, title=title, height=380 * rows + 80)
 
 
-def build_fig_pair_sweep(
-    mat: np.ndarray,
-    grid_a: list[float],
-    grid_b: list[float],
-    name_a: str,
-    name_b: str,
-    min_ij: tuple[int, int],
-    *,
-    metric_label: str,
-    metric_unit: str,
-    h_max: int,
-    base_str_a: str = "—",
-    base_str_b: str = "—",
-) -> go.Figure:
-    """2D グリッドの RMSE ヒートマップ（最小点マーカー + セル注釈）。旧 plot_pair_sweep。
-
-    mat: shape (len(grid_b), len(grid_a))。min_ij: (i=grid_b 行, j=grid_a 列) の最小位置。
-    """
-    xlabels = [f"{v:g}" for v in grid_a]
-    ylabels = [f"{v:g}" for v in grid_b]
-    fig = go.Figure(go.Heatmap(
-        z=mat, x=xlabels, y=ylabels, colorscale="YlOrRd",
-        colorbar=dict(title=f"{metric_label} [{metric_unit}] @ N={h_max}"),
-        hovertemplate=f"{name_a}=%{{x}}<br>{name_b}=%{{y}}<br>%{{z:.4f}}<extra></extra>",
-    ))
-    # セル数値注釈（背景濃淡で文字色切替）。カテゴリ軸ラベルが数値風文字列（"0","0.85"等）だと
-    # annotation の x="0.85" が plotly に数値 0.85 と解釈され index に誤マップして全セルが
-    # 1 箇所に collapse する。そのため**カテゴリの整数 index (j, i)** で位置指定する（数値=index）。
-    finite = mat[np.isfinite(mat)]
-    thresh = (finite.min() + (finite.max() - finite.min()) * 0.6) if finite.size else 0.0
-    for i in range(len(ylabels)):
-        for j in range(len(xlabels)):
-            if np.isfinite(mat[i, j]):
-                fig.add_annotation(
-                    x=j, y=i, text=f"{mat[i, j]:.3f}", showarrow=False,
-                    xref="x", yref="y", xanchor="center", yanchor="middle",
-                    font=dict(size=10, color="white" if mat[i, j] > thresh else "black"),
-                )
-    mi, mj = min_ij
-    fig.add_trace(go.Scatter(
-        x=[xlabels[mj]], y=[ylabels[mi]], mode="markers",
-        name=f"最小 ({name_a}={grid_a[mj]:g}, {name_b}={grid_b[mi]:g})",
-        marker=dict(symbol="circle-open", size=18, color="blue", line=dict(width=2)),
-    ))
-    fig.update_xaxes(title_text=name_a, type="category")
-    fig.update_yaxes(title_text=name_b, type="category")
-    return apply_base_layout(
-        fig,
-        title=f"2D スイープ: {name_a} × {name_b} ({metric_label} @ N={h_max})"
-        f"<br><sub>仕様値: {name_a}={base_str_a}, {name_b}={base_str_b}</sub>",
-        height=560,
-        legend=dict(x=0.99, y=0.99, xanchor="right", yanchor="top"),
-    )
-
 
 def build_fig_sweep_overview(
     bars: list[dict],

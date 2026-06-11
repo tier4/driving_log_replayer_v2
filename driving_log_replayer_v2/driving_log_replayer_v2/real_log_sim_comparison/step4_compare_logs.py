@@ -40,7 +40,6 @@ from .lib._io import (
 from .lib._coverage import compute_coverage
 from .lib._fig_io import write_fig_json
 from .lib._figures import (
-    build_fig_timeseries_resp_cmd,
     build_fig_vs_distance,
 )
 from .lib._map import load_map_ways, resolve_map_osm
@@ -200,64 +199,6 @@ def _tr(d: dict, df: pd.DataFrame) -> np.ndarray:
     実機の初期停止が長くても比較時系列が発進時刻で揃う (実機だけ遅れる問題の一般対策)。
     `t_launch` は main で全ログ共通に算出し loaded[label] に格納済み (未設定なら 0)。"""
     return df["t"].to_numpy(dtype=float) - float(d.get("t_launch", 0.0))
-
-
-def _resp_cmd_runs(data: dict, resp_key: str, resp_col: str, cmd_col: str, *, deg=False):
-    """応答/指令 2 段時系列の run dict 列を整形する（_tr で発進整列）。"""
-    runs: list[dict] = []
-    for label, d in data.items():
-        resp, cmd = d[resp_key], d["cmd"]
-        if resp.empty:
-            continue
-        y_resp = np.degrees(resp[resp_col]) if deg else np.asarray(resp[resp_col])
-        r = {
-            "label": label, "color": d["color"], "lw": d["lw"], "ls": d["ls"],
-            "t_resp": _tr(d, resp), "y_resp": y_resp, "t_cmd": None, "y_cmd": None,
-        }
-        if not cmd.empty:
-            r["t_cmd"] = _tr(d, cmd)
-            r["y_cmd"] = np.degrees(cmd[cmd_col]) if deg else np.asarray(cmd[cmd_col])
-        runs.append(r)
-    return runs
-
-
-def plot_velocity(data: dict):
-    fig = build_fig_timeseries_resp_cmd(
-        _resp_cmd_runs(data, "velocity", "lon_vel", "cmd_vel"),
-        title=f"{SCENARIO_NAME}<br>速度比較（指令 vs 応答）",
-        resp_title="実応答 (VelocityReport.longitudinal_velocity)",
-        cmd_title="指令 (control_cmd.longitudinal.velocity) ─ 点線・薄色",
-        resp_ylabel="速度 [m/s]", cmd_ylabel="速度指令 [m/s]",
-        note=_TIME_AXIS_NOTE,
-    )
-    FIGS_DIR.mkdir(parents=True, exist_ok=True)
-    write_fig_json(fig, FIGS_DIR / "velocity")
-
-
-def plot_acceleration(data: dict):
-    fig = build_fig_timeseries_resp_cmd(
-        _resp_cmd_runs(data, "accel", "accel", "cmd_accel"),
-        title=f"{SCENARIO_NAME}<br>加速度比較（指令 vs 応答）",
-        resp_title="実応答 (localization/acceleration.accel.accel.linear.x)",
-        cmd_title="指令 (control_cmd.longitudinal.acceleration) ─ 点線・薄色",
-        resp_ylabel="加速度 [m/s²]", cmd_ylabel="加速度指令 [m/s²]",
-        note=_TIME_AXIS_NOTE,
-    )
-    FIGS_DIR.mkdir(parents=True, exist_ok=True)
-    write_fig_json(fig, FIGS_DIR / "acceleration")
-
-
-def plot_steering(data: dict):
-    fig = build_fig_timeseries_resp_cmd(
-        _resp_cmd_runs(data, "steering", "steer", "cmd_steer", deg=True),
-        title=f"{SCENARIO_NAME}<br>ステアリング比較（指令 vs 応答）",
-        resp_title="実応答 (SteeringReport.steering_tire_angle)",
-        cmd_title="指令 (control_cmd.lateral.steering_tire_angle) ─ 点線・薄色",
-        resp_ylabel="ステア角 [deg]", cmd_ylabel="ステア指令 [deg]",
-        note=_TIME_AXIS_NOTE,
-    )
-    FIGS_DIR.mkdir(parents=True, exist_ok=True)
-    write_fig_json(fig, FIGS_DIR / "steering")
 
 
 def _distance_of(t_query, df_kin: pd.DataFrame):
@@ -759,9 +700,6 @@ def main() -> None:
     plot_trajectory_playback(loaded, map_ways, FIGS_DIR, title=SCENARIO_NAME)
     # 縦横独立モデル検証ビューア (実機のみ・指令→モデル積算 vs 観測、T/τ つまみ調整)
     plot_model_viewer(loaded, map_ways, FIGS_DIR, load_sim_params(), title=SCENARIO_NAME)
-    plot_velocity(loaded)
-    plot_acceleration(loaded)
-    plot_steering(loaded)
     # 走行距離 (arc-length) 基準の重ね描き (B1): pacing 差を除き早期停止を露出。
     plot_velocity_vs_distance(loaded)
     plot_steering_vs_distance(loaded)

@@ -1,10 +1,9 @@
 """step4（実機 vs sim クローズループ比較）の図を組む build_fig_* 純関数群.
 
-matplotlib 版（step4 の plot_*）と 1:1 対応。step4 は ROS から DataFrame を読んで
-プレーンな配列/run dict に整形し、ここの純関数で `go.Figure` を組んで
-`write_fig_json` で吐く。本モジュールは ROS 非依存。
+step4 は ROS から DataFrame を読んでプレーンな配列/run dict に整形し、
+ここの純関数で `go.Figure` を組んで `write_fig_json` で吐く。本モジュールは ROS 非依存。
 
-run dict のスキーマ（時系列・軌跡で共通）::
+run dict のスキーマ（走行距離基準図）::
 
     {
       "label": str, "color": str,
@@ -26,43 +25,6 @@ from ._common import (
     make_grid,
     plotly_dash,
 )
-
-
-def build_fig_timeseries_resp_cmd(
-    runs: list[dict],
-    *,
-    title: str,
-    resp_title: str,
-    cmd_title: str,
-    resp_ylabel: str,
-    cmd_ylabel: str,
-    xlabel: str = "発進からの経過時間 [s]",
-    note: str | None = None,
-    height: int = 720,
-) -> go.Figure:
-    """応答（上段）/ 指令（下段・点線薄色）の 2 段時系列重ね描き。
-
-    旧 plot_velocity / plot_acceleration / plot_steering の共通 plotly 版。
-    run dict: {label, color, lw, ls, t_resp, y_resp, t_cmd?, y_cmd?}。
-    """
-    fig = make_grid(2, 1, subplot_titles=[resp_title, cmd_title], shared_xaxes=False)
-    for r in runs:
-        label = r["label"]
-        fig.add_trace(go.Scatter(
-            x=r["t_resp"], y=r["y_resp"], name=label, legendgroup=label, mode="lines",
-            line=dict(color=r["color"], width=r.get("lw", 1.5), dash=plotly_dash(r.get("ls", "-"))),
-        ), row=1, col=1)
-        if r.get("t_cmd") is not None and r.get("y_cmd") is not None:
-            fig.add_trace(go.Scatter(
-                x=r["t_cmd"], y=r["y_cmd"], name=label, legendgroup=label, mode="lines",
-                showlegend=False, opacity=0.65,
-                line=dict(color=r["color"], width=1.2, dash="dot"),
-            ), row=2, col=1)
-    fig.update_yaxes(title_text=resp_ylabel, row=1, col=1)
-    fig.update_yaxes(title_text=cmd_ylabel, row=2, col=1)
-    fig.update_xaxes(title_text=xlabel, row=2, col=1)
-    _bottom_note(fig, note, height=height)
-    return apply_base_layout(fig, title=title, height=height)
 
 
 def build_fig_vs_distance(
