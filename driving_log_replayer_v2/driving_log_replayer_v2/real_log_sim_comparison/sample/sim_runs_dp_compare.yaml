@@ -1,0 +1,40 @@
+# DiffusionPlanner 3 モデル比較用 sim run 定義（汎用）
+#
+# 幾何課題シナリオ（大回り/曲がり切れない系）との組み合わせで使用する。
+# 3 種の DiffusionPlanner モデルで closed-loop sim を実行し、
+# 課題箇所での軌跡乖離を比較する。
+#
+# 検証軸:
+#   TP: sim_dp_0410（実機で大回りあり）→ sim でも大回りが再現されること
+#   FN: sim_dp_0303/sim_dp_0503（実機で大回りなし）→ sim でも大回りが起きないこと
+#
+# k_us=0.020: simple_planning_simulator_v2 のアンダーステア補正。
+#   参考 PR: https://github.com/tier4/autoware_universe/pull/3039
+#
+# カーブ大回り専用の sim_runs_curve_wide_turn.yaml と同一の run 定義だが、
+# 用途を「幾何課題の DP モデル比較」一般に広げた汎用版。
+
+sim_runs:
+  # ベストモデル 0303: 実機で大回りなし (FN 検証用)
+  - tag: sim_dp_0303
+    vehicle_model: j6_gen2
+    architecture_type: awf/universe/20250130
+    dp_model_release: 20260303-180133_baseline_pre0060_sft0080
+    params:
+      k_us: 0.020
+
+  # ベストモデル 0503: 実機で大回りなし (FN 検証用)
+  - tag: sim_dp_0503
+    vehicle_model: j6_gen2
+    architecture_type: awf/universe/20250130
+    dp_model_release: 20260503-220950_with_takanawa_16days_weak_smoothing__0060__0080
+    params:
+      k_us: 0.020
+
+  # 大回りモデル 0410: 実機で大回りあり (TP 検証用)
+  - tag: sim_dp_0410
+    vehicle_model: j6_gen2
+    architecture_type: awf/universe/20250130
+    dp_model_release: 20260410-145919_lambda1e-6_ridge1e-8__epoch0020__epoch0040
+    params:
+      k_us: 0.020

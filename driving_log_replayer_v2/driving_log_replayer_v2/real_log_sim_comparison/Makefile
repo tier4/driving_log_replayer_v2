@@ -22,12 +22,17 @@ LOCAL_SCENARIO   ?= $(LOCAL_SAMPLE_DIR)/scenario.yaml
 
 PYTHON := python3
 
-.PHONY: help local_cloud_run local_analysis_run local_batch_run local_cross_analysis_run local_multidataset_run
+.PHONY: help local_cloud_run local_analysis_run local_batch_run local_cross_analysis_run local_multidataset_run issue_scenario
 
 help:
 	@echo "使い方: make -C $(MAKEFILE_DIR) <ターゲット>"
 	@echo ""
 	@echo "ターゲット:"
+	@echo "  issue_scenario      MOB rosbag リンクから課題シナリオを一括生成（download.py ラッパー）"
+	@echo "                      ROSBAG_ID=<file_id> [TEMPLATE=<scenario_template.yaml>]"
+	@echo "                      [PROVENANCE=<説明文>] [START=<ts>] [END=<ts>] [WORK_DIR=work]"
+	@echo "                      例: make issue_scenario ROSBAG_ID=f8b5e21f-8361-45a6-9079-05fbf40366a5 \\"
+	@echo "                               TEMPLATE=\$$(pwd)/sample/scenario_issue_rotary_left.yaml"
 	@echo "  local_cloud_run     webauto キャッシュの T4 dataset を使いパイプラインをワンコマンド実行"
 	@echo "                      (scenario.yaml の Datasets[0] のみ。複数 dataset は local_batch_run。"
 	@echo "                       SKIP_SIM=1 で closed-loop sim を省略)"
@@ -63,6 +68,13 @@ help:
 	@echo "  OUT_DIR          local_analysis_run の対象出力ディレクトリ (デフォルト: sample/out/latest)"
 	@echo "  BATCH_ROOT       local_batch_run の出力 root (デフォルト: sample/out/batch_<timestamp>)"
 	@echo "  COLLECTION_DIR   local_cross_analysis_run / local_multidataset_run の対象 collection"
+	@echo ""
+	@echo "  issue_scenario 変数:"
+	@echo "  ROSBAG_ID    (必須) webauto rosbag の file_id (MOB リンクの file_id= パラメータ)"
+	@echo "  TEMPLATE     課題 scenario テンプレート YAML (デフォルト: sample/scenario.yaml)"
+	@echo "  PROVENANCE   scenario の real_provenance に記録する文字列"
+	@echo "  START/END    rosbag の時刻スライス (webauto --slicing-start/end-timestamp 形式)"
+	@echo "  WORK_DIR     作業ディレクトリ (デフォルト: work)"
 
 # クラウド (Web.Auto evaluator) と同じ scenario.yaml ベースで、
 # webauto data annotation-dataset pull --include-intermediate-artifacts で
@@ -168,3 +180,46 @@ local_multidataset_run:
 	    source $(SETUP_BASH) && $(PYTHON) -m driving_log_replayer_v2.real_log_sim_comparison.multi_dataset_tune \
 	        --collection-dir "$(COLLECTION_DIR)" \
 	        --cases-config "$(LOCAL_SAMPLE_DIR)/cases.yaml"
+
+# MOB rosbag リンク（file_id）から課題シナリオを一括生成するワークフロー。
+# download.py で rosbag + 地図を取得し、課題テンプレートから scenario.yaml を生成する。
+# annotation-dataset が存在しない課題（MOB リンクのみ）の場合に使用する。
+#
+# 使い方:
+#   make issue_scenario ROSBAG_ID=<file_id> TEMPLATE=<scenario_template.yaml>
+#
+# 例（テレポート駅ロータリー左旋回）:
+#   make -C <このディレクトリ> issue_scenario \
+#       ROSBAG_ID=f8b5e21f-8361-45a6-9079-05fbf40366a5 \
+#       TEMPLATE=$(pwd)/sample/scenario_issue_rotary_left.yaml
+#
+# 完了後:
+#   1. python3 tools/suggest_curve_centers.py --bag work/dataset/<uuid>/input_bag
+#      → 出力の cx/cy を sample/curve_config_*.yaml に記入する
+#   2. make local_cloud_run WEBAUTO_T4_ROOT=$(pwd)/work/dataset LOCAL_SCENARIO=work/scenario_<uuid>.yaml
+
+ROSBAG_ID ?=
+TEMPLATE  ?= $(LOCAL_SAMPLE_DIR)/scenario.yaml
+PROVENANCE ?=
+WORK_DIR  ?= work
+
+issue_scenario:
+	@test -n "$(ROSBAG_ID)" || \
+	    { echo "[ERROR] ROSBAG_ID が指定されていません。例: make issue_scenario ROSBAG_ID=<file_id>"; exit 1; }
+	@test -f "$(TEMPLATE)" || \
+	    { echo "[ERROR] TEMPLATE が見つかりません: $(TEMPLATE)"; exit 1; }
+	@echo "[INFO] ROSBAG_ID : $(ROSBAG_ID)"
+	@echo "[INFO] TEMPLATE  : $(TEMPLATE)"
+	@echo "[INFO] WORK_DIR  : $(WORK_DIR)"
+	$(PYTHON) $(MAKEFILE_DIR)/download.py \
+	    --rosbag-id $(ROSBAG_ID) \
+	    --work-dir "$(WORK_DIR)" \
+	    --scenario-template "$(TEMPLATE)" \
+	    $(if $(PROVENANCE),--provenance "$(PROVENANCE)",) \
+	    $(if $(START),--start "$(START)",) \
+	    $(if $(END),--end "$(END)",)
+	@echo ""
+	@echo "[INFO] 次のステップ:"
+	@echo "  1. python3 tools/suggest_curve_centers.py --bag $(WORK_DIR)/dataset/<uuid>/input_bag"
+	@echo "     → 出力の cx/cy を sample/curve_config_*.yaml に記入する"
+	@echo "  2. make local_cloud_run WEBAUTO_T4_ROOT=\$$(pwd)/$(WORK_DIR)/dataset LOCAL_SCENARIO=$(WORK_DIR)/scenario_<uuid>.yaml"

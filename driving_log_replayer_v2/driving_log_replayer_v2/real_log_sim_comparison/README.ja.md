@@ -467,3 +467,105 @@ make local_cross_analysis_run COLLECTION_DIR=sample/out/multi_eval
 
 ロバスト同定（`make local_multidataset_run` = `multi_dataset_tune.py` の robust_search）は
 従来どおり real.lite 群での rollout 探索で、レポート用集約（Stage 13）とは役割が異なる。
+
+---
+
+## 課題シナリオの作成ワークフロー（MOB リンク → DP モデル比較）
+
+実機で起きた課題（DevOps 分析シートなどから特定）を Sim で再現し、
+DiffusionPlanner モデルの切り替えで TP/FN を検証するシナリオを作成する手順。
+
+### 0. 前提知識
+
+- **TP (True Positive)**: 課題が起きやすいモデル（`sim_dp_0410`）で Sim でも課題が再現されること
+- **FN (False Negative)**: 課題が起きにくいモデル（`sim_dp_0303` / `sim_dp_0503`）では
+  Sim でも課題が起きないこと
+- 課題の種別は Perception 系（誤認識など）ではなく、幾何/計画/制御系（大回り、曲がり切れない等）
+  を対象とする。DP モデル切り替えで再現性の差が出ることを前提とする。
+
+### 1. 対象課題の特定と rosbag file_id の取得
+
+MOB プラットフォームの rosbag 詳細画面 URL から `file_id` を取得する。
+例: `https://console.mob.tier4.jp/projects/x2_dev/rosbag?file_id=<FILE_ID>&rviz_id=...`
+
+### 2. データセットの構築（`make issue_scenario`）
+
+課題テンプレート YAML を選択し、`make issue_scenario` を実行する。
+
+```bash
+# テレポート駅ロータリー左旋回 課題の例
+make -C <real_log_sim_comparison ディレクトリ> issue_scenario \
+    ROSBAG_ID=f8b5e21f-8361-45a6-9079-05fbf40366a5 \
+    TEMPLATE=$(pwd)/sample/scenario_issue_rotary_left.yaml \
+    PROVENANCE="2026-03-31 お台場, pilot-auto.x2 ブランチ=XXX, DP モデル=XXX"
+```
+
+- **`ROSBAG_ID`**: webauto rosbag の file_id（MOB リンクの `file_id=` パラメータ）
+- **`TEMPLATE`**: 課題の種類に合うシナリオテンプレート（後述）
+- **`PROVENANCE`**: 実機走行時の pilot-auto.x2 ブランチ・当日コミット・DP モデルを記録する文字列。
+  実験スレッド（Slack: #group-reference-vehicle-x2-experiment）を参照して入力する。
+
+完了すると `work/dataset/<uuid>/{input_bag,map}/` と `work/scenario_<uuid>.yaml` が生成される。
+
+> **annotation-dataset が存在する場合（webauto で pull できる場合）**:  
+> `make issue_scenario` の代わりに
+> `webauto data annotation-dataset pull --project-id x2_dev --annotation-dataset-id <UUID> --include-intermediate-artifacts`
+> で pull し、シナリオ YAML の `<DATASET_UUID>` を置き換えても良い。
+
+### 3. curve_centers の確定（`tools/suggest_curve_centers.py`）
+
+```bash
+python3 tools/suggest_curve_centers.py \
+    --bag work/dataset/<uuid>/input_bag \
+    --top 5
+```
+
+出力された高 yaw-rate 点（旋回中心候補）の `cx`, `cy` を課題に対応する
+`sample/curve_config_*.yaml` に記入する。
+
+```yaml
+curve_centers:
+  - {label: "ロータリー入口（左旋回）", cx: 89421, cy: 43129, margin: 40}
+```
+
+- `cx`, `cy` は `/localization/kinematic_state` の `pose.pose.position.x/y`（地図座標）
+- `margin` は旋回半径に応じて調整（通常 20〜60）
+- 同一区間に複数旋回がある場合は `--top 5` で上位を確認して対象を特定する
+
+### 4. シナリオの実行
+
+```bash
+make -C <real_log_sim_comparison ディレクトリ> local_cloud_run \
+    WEBAUTO_T4_ROOT=$(pwd)/work/dataset \
+    LOCAL_SCENARIO=work/scenario_<uuid>.yaml
+```
+
+DP 3 モデル（`sim_dp_0303` / `sim_dp_0503` / `sim_dp_0410`）が自動で webauto から pull され、
+それぞれ closed-loop sim が実行される（GPU + 長時間 要）。
+
+### 5. 結果の確認
+
+`sample/out/latest/report.html` を開き、「シナリオ クローズループ比較」セクションを確認する。
+
+- `curves_closeup.fig.json`: カーブ領域のズーム軌跡（大回りの有無を目視）
+- `curve_diag/curve_divergence.md`: 縦/横乖離の定量値
+- **TP**: `sim_dp_0410` の横乖離が顕著に大きい（課題再現）
+- **FN**: `sim_dp_0303` / `sim_dp_0503` の横乖離が実機に近い（課題非再現）
+
+### 用意されているシナリオテンプレート
+
+| テンプレート | 対象課題 | curve_config |
+|---|---|---|
+| `sample/scenario_issue_template.yaml` | 汎用テンプレート（UUID・地図名は要書き換え） | `curve_config_<地図名>.yaml`（要作成） |
+| `sample/scenario_issue_rotary_left.yaml` | テレポート駅ロータリー入口 左旋回（曲がるタイミング早い） | `curve_config_rotary.yaml` |
+| `sample/scenario_issue_aist_curve.yaml` | 産総研脇〜テレコム 左カーブ大回り（速度超過・曲がり切れない） | `curve_config_aist_telecom.yaml` |
+| `sample/scenario_curve_wide_turn.yaml` | テレポート駅前交差点 左折 カーブ大回り（既存） | `curve_config_miraikan.yaml` |
+
+### pilot-auto.x2 バージョンの記録方針
+
+Sim では autoware 本体版は `autoware.repos` で固定されているため、
+「どの実機走行を Sim で再現しているか」の記録は `real_provenance` フィールドで行う。
+
+- `real_provenance` に実機走行日・pilot-auto.x2 ブランチ（当日最新コミット）・DP モデル版を記載する
+- 同日の実験ではブランチが同一であることが多いため、当日の実験スレッドを参照して確認する
+- DP モデルの比較は `sim_runs_config` の `dp_model_release` で制御する（webauto から自動 pull）

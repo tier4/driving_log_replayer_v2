@@ -2,7 +2,15 @@
 rosbag と地図を webauto CLI で取得し、local_cloud_run 用のディレクトリ構造を作る。
 
 Usage:
-    python3 download.py --environment-id <env_id> --rosbag-id <rosbag_id>
+    python3 download.py --rosbag-id <rosbag_id> [オプション]
+
+    # 最小構成（デフォルトの topic セットを使用）:
+    python3 download.py --rosbag-id <file_id>
+
+    # 課題テンプレートと provenance を指定してシナリオを自動生成:
+    python3 download.py --rosbag-id <file_id> \\
+        --scenario-template sample/scenario_issue_rotary_left.yaml \\
+        --provenance "2026-03-31 お台場, pilot-auto.x2 ブランチ=XXX"
 
 ディレクトリ構成:
     <work_dir>/          <- webauto のダウンロード先（生データ置き場）
@@ -27,6 +35,22 @@ import yaml
 
 PROJECT_ID = "x2_dev"
 _SCRIPT_DIR = Path(__file__).parent
+
+# step1_make_lite.py の "real" トピックセットと同一。
+# rosbag pull 時のデフォルト topic フィルタ（変更する場合は --topic で上書き可）。
+_DEFAULT_TOPICS: list[str] = [
+    "/system/operation_mode/state",
+    "/vehicle/status/velocity_status",
+    "/vehicle/status/steering_status",
+    "/localization/kinematic_state",
+    "/localization/acceleration",
+    "/control/command/control_cmd",
+    "/planning/trajectory_generator/neural_network_based_planner/diffusion_planner_node/output/trajectory",
+    "/perception/object_recognition/tracking/objects",
+    "/perception/object_recognition/detection/objects",
+    "/perception/traffic_light_recognition/traffic_signals",
+    "/planning/trajectory",
+]
 
 
 def run(cmd: list[str]) -> str:
@@ -100,11 +124,19 @@ def _collect_map(work_dir: Path, area_map_id: str, area_map_version_id: str, map
     shutil.copytree(src, map_dir, dirs_exist_ok=True)
 
 
-def generate_scenario(template_path: Path, uuid: str, output_path: Path) -> None:
+def generate_scenario(
+    template_path: Path,
+    uuid: str,
+    output_path: Path,
+    provenance: str | None = None,
+) -> None:
     """テンプレート scenario.yaml の Datasets[0] UUID を uuid に書き換えて output_path に保存する。
 
     Conditions 内の相対パス (sim_runs_config / cases_config / curve_config_yaml) は
     テンプレートのディレクトリ基準で絶対パスに変換する。出力先が変わっても解決できるようにするため。
+
+    provenance が指定された場合は Conditions.real_provenance に書き込む。
+    テンプレートに既に値がある場合は上書きする。
     """
     with template_path.open(encoding="utf-8") as f:
         doc = yaml.safe_load(f)
@@ -119,15 +151,26 @@ def generate_scenario(template_path: Path, uuid: str, output_path: Path) -> None
         if val and not Path(val).is_absolute():
             conditions[key] = str((template_path.parent / val).resolve())
 
+    # provenance の上書き
+    if provenance is not None:
+        conditions["real_provenance"] = provenance
+
     with output_path.open("w", encoding="utf-8") as f:
         yaml.safe_dump(doc, f, allow_unicode=True, sort_keys=False)
     print(f"[INFO] Scenario: {output_path}")
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description=__doc__)
+    parser = argparse.ArgumentParser(
+        description=__doc__,
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
     parser.add_argument("--rosbag-id", nargs='+', required=True)
-    parser.add_argument("--topic", nargs='+', required=True)
+    parser.add_argument(
+        "--topic", nargs='+', default=None,
+        help=("取得するトピックのリスト（スペース区切り）。"
+              "省略時はデフォルトの実機解析用トピックセット（step1_make_lite.py と同一）を使用。"),
+    )
     parser.add_argument("--start")
     parser.add_argument("--end")
     parser.add_argument("--work-dir", default="work", help="作業ディレクトリ (default: work)")
@@ -136,7 +179,16 @@ def main() -> None:
         default=str(_SCRIPT_DIR / "sample" / "scenario.yaml"),
         help="コピー元 scenario.yaml テンプレート (default: sample/scenario.yaml)",
     )
+    parser.add_argument(
+        "--provenance", default=None,
+        help=("生成 scenario.yaml の Conditions.real_provenance に設定する文字列。"
+              "実機走行時の pilot-auto.x2 ブランチ・DP モデル版等を記録する。"),
+    )
     args = parser.parse_args()
+
+    # topic が指定されなければデフォルトセットを使用
+    topics = args.topic if args.topic is not None else _DEFAULT_TOPICS
+    print(f"[INFO] topics ({len(topics)}): {topics}")
 
     work_dir = Path(args.work_dir)
 
@@ -157,7 +209,7 @@ def main() -> None:
     rosbag_dir = work_dir / "rosbag"
     rosbag_dir.mkdir(parents=True, exist_ok=True)
     rosbag_dir = Path(tempfile.mkdtemp(prefix="filtered_", dir=rosbag_dir))
-    pull_rosbag(args.rosbag_id, args.topic, rosbag_dir, args.start, args.end)
+    pull_rosbag(args.rosbag_id, topics, rosbag_dir, args.start, args.end)
 
     # Step 3: 地図を作業ディレクトリに落とす
     print("[INFO] Pulling map...")
@@ -179,7 +231,7 @@ def main() -> None:
     template_path = Path(args.scenario_template)
     scenario_out = (work_dir / f"scenario_{uuid}.yaml").resolve()
     if template_path.exists():
-        generate_scenario(template_path, uuid, scenario_out)
+        generate_scenario(template_path, uuid, scenario_out, provenance=args.provenance)
     else:
         print(f"[WARN] scenario-template が見つかりません: {template_path}", file=sys.stderr)
         scenario_out = None

@@ -1,0 +1,76 @@
+ScenarioFormatVersion: 3.0.0
+ScenarioName: real_log_sim_comparison_issue_aist_curve
+ScenarioDescription: |
+  産総研脇〜テレコムセンター駅前 左カーブ大回り 課題の Sim 再現検証シナリオ。
+  左カーブで走行速度が速いが減速する速度計画が発生せず、
+  右側に膨らみガードレールに衝突するリスクを検証する。
+
+  発生事象（DevOps分析_お台場.xlsx / シナリオ作成状況サマリ より）:
+    産総研脇交差点〜テレコムセンター駅前交差点間の左カーブで、
+    定速で左旋回する際、走行速度が速いが減速する速度計画が発生せず、
+    右側に膨らみ、ガードレールに衝突する可能性があったためOR。
+  機能分類: 08.DiffusionPlanner / カテゴリ: 右左折 / 優先度: Highest
+  rosbag file_id (一次): 2a01750d-e115-4191-9252-9aeebe6c7455 (2026-03-17)
+  rosbag file_id (代替): 80fbdebe-4d87-4375-b896-b4e77f75a5e5 (2026-03-31)
+  environment_id: ce963c1f-1ee9-4357-b0b6-00b6b6ae5984
+
+  検証軸:
+    True Positive  (TP): 大回りモデル (sim_dp_0410) で大回りが再現されること
+    False Negative (FN): ベストモデル (sim_dp_0303/0503) で大回りが発生しないこと
+
+  事前準備（rosbag から dataset を構築する場合）:
+    make -C <このディレクトリ> issue_scenario \
+      ROSBAG_ID=2a01750d-e115-4191-9252-9aeebe6c7455 \
+      TEMPLATE=$(pwd)/sample/scenario_issue_aist_curve.yaml
+
+  curve_centers の確定:
+    python3 tools/suggest_curve_centers.py --bag work/dataset/<uuid>/input_bag
+    → 出力された cx/cy を sample/curve_config_aist_telecom.yaml に記入してから実行する。
+    この区間には左カーブが複数ある場合があるため、上位複数点を確認して特定すること。
+
+  実行（dataset 構築後）:
+    make -C <このディレクトリ> local_cloud_run \
+      WEBAUTO_T4_ROOT=$(pwd)/work/dataset \
+      LOCAL_SCENARIO=work/scenario_<uuid>.yaml
+
+  結果の確認:
+    report.html の「シナリオ クローズループ比較」を確認。
+    停止→発進が「ない」課題のため、curves_closeup（領域ズーム軌跡）と
+    velocity.fig.json / acceleration.fig.json で速度プロファイルを確認する。
+    - curve_diag/curve_divergence.md : 縦/横乖離の定量値
+    TP = sim_dp_0410 の横乖離が顕著に大きい（速度超過・大回り再現）
+    FN = sim_dp_0303 / sim_dp_0503 の横乖離が実機に近い
+
+SensorModel: aip_x2_gen2
+VehicleModel: j6_gen2
+Evaluation:
+  UseCaseName: planning_control
+  SubUseCaseName: real_log_sim_comparison
+  UseCaseFormatVersion: 0.1.0
+  Datasets:
+    # 産総研脇〜テレコム左カーブ大回り課題を含む実機走行データセット。
+    # webauto data annotation-dataset pull --project-id x2_dev \
+    #   --annotation-dataset-id <UUID> --include-intermediate-artifacts
+    # または download.py / make issue_scenario でローカルデータセットを構築する。
+    # 既存 annotation-dataset 名: Override_E2E_LocalizationOff_x2j6gen2_odaiba_2026-03-17-A39
+    - <DATASET_UUID>:
+        VehicleId: default
+  Conditions:
+    scenario_name: "産総研〜テレコム 左カーブ大回り 再現検証（DP 3モデル比較）"
+    # curve_config_aist_telecom.yaml: 産総研〜テレコム左カーブを主対象として
+    # step4 の curve0_analysis / step10 の curve_divergence を有効化する。
+    # curve_centers の cx/cy は suggest_curve_centers.py で取得し更新すること。
+    curve_config_yaml: ./curve_config_aist_telecom.yaml
+    cases_config: ./cases.yaml
+    # DP 3モデル比較用 sim_runs: sim_dp_0303/sim_dp_0503 (大回りなし=FN検証) /
+    # sim_dp_0410 (大回りあり=TP検証)。各 run に k_us=0.020 を設定。
+    sim_runs_config: ./sim_runs_dp_compare.yaml
+    # real_provenance: 実機走行時の pilot-auto.x2 ブランチ / DP モデル版を記録。
+    # 実験スレッド (Slack: #group-reference-vehicle-x2-experiment) で確認し更新すること。
+    # 2026-03-17 実験の pilot-auto.x2 ブランチ・当日コミットは実験スレッドを参照。
+    real_provenance: "2026-03-17 お台場, J6 gen2 #15, pilot-auto.x2 ブランチ要確認(実験スレッド参照)"
+    # replay: 実機 bag の信号を再現。
+    # 停止→発進なしの定速走行課題のため traffic_signals の影響は小さい。
+    traffic_signals: replay
+    loop_waypoints: 0
+    reproduce_perception: false

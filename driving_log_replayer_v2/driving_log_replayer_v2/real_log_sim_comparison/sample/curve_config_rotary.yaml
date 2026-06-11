@@ -1,0 +1,35 @@
+# テレポート駅ロータリー入口 左旋回 のカーブ別解析設定
+#
+# 課題: テレポート駅ロータリー入口で、減速しながら左旋回する際、
+#       経路計画のパスが車線の左側にはみ出し、左ステアを切るタイミングが早くなり
+#       縁石に衝突する可能性がある（曲がるタイミングが早い）。
+# 参照: DevOps分析_お台場.xlsx「シナリオ作成状況サマリ」rosbag file_id=f8b5e21f
+#
+# cx/cy の決定方法:
+#   1. webauto で rosbag を取得する（下記コマンド）:
+#      make -C <このディレクトリ> issue_scenario ROSBAG_ID=f8b5e21f-8361-45a6-9079-05fbf40366a5 \
+#        TEMPLATE=$(pwd)/sample/scenario_issue_rotary_left.yaml
+#   2. suggest_curve_centers.py で旋回点の map 座標 (x, y) を取得する:
+#      python3 tools/suggest_curve_centers.py --bag work/dataset/<uuid>/input_bag
+#   3. 出力された "高 yaw-rate 点" の x, y を下記 cx, cy に設定し margin を調整する。
+#
+# 現在の値は GPS(lat=35.6263, lon=139.7790) と既存 curve_config_miraikan.yaml の
+# テレポート駅前交差点座標 (cx≈89301, cy≈43085) からの相対推定値。
+# suggest_curve_centers.py 実行後に実測値で更新すること。
+
+curve_centers:
+  # ロータリー入口左旋回（慎重な左カーブ）
+  - {label: "ロータリー入口（左旋回）", cx: 89420, cy: 43130, margin: 60}
+
+# curve_centers のうち主解析対象のインデックス (0始まり)
+curve2_index: 0
+
+# カーブ直前の一時停止/減速を検出する時刻窓 [s]（AUTONOMOUS 開始からの経過時間）
+# ロータリー入口は走行開始直後の可能性あり; 実機 bag の走行時間に合わせて調整すること。
+curve2_window:
+  start: 0.0
+  end: 120.0
+
+# 個別カーブ解析を生成する対象
+plot_curves:
+  - {index: 0, launch_window: {start: 0.0, end: 120.0}}  # ロータリー入口左旋回

@@ -1,0 +1,42 @@
+# 産総研脇〜テレコムセンター駅前 左カーブ大回り のカーブ別解析設定
+#
+# 課題: 産総研脇交差点〜テレコムセンター駅前交差点間の左カーブで、
+#       走行速度が速いが減速する速度計画が発生せず、右側に膨らみ
+#       ガードレールに衝突する可能性がある（曲がり切れない）。
+# 参照: DevOps分析_お台場.xlsx「シナリオ作成状況サマリ」rosbag file_id=2a01750d
+#
+# cx/cy の決定方法:
+#   1. webauto で rosbag を取得する（下記コマンド）:
+#      make -C <このディレクトリ> issue_scenario ROSBAG_ID=2a01750d-e115-4191-9252-9aeebe6c7455 \
+#        TEMPLATE=$(pwd)/sample/scenario_issue_aist_curve.yaml
+#   2. suggest_curve_centers.py で旋回点の map 座標 (x, y) を取得する:
+#      python3 tools/suggest_curve_centers.py --bag work/dataset/<uuid>/input_bag
+#   3. 出力された "高 yaw-rate 点" の x, y を下記 cx, cy に設定し margin を調整する。
+#
+# 現在の値は GPS(lat=35.6174, lon=139.7772) と既存 curve_config_miraikan.yaml の
+# テレポート駅前交差点座標 (cx≈89301, cy≈43085) からの相対推定値。
+# suggest_curve_centers.py 実行後に実測値で更新すること。
+#
+# この区間には左カーブが複数あることがある。suggest_curve_centers.py で
+# 上位複数点を確認し、課題該当箇所を特定してから curve_centers を設定すること。
+
+curve_centers:
+  # 産総研脇〜テレコム間の左カーブ（速度超過大回り）
+  - {label: "産総研〜テレコム左カーブ", cx: 89290, cy: 42200, margin: 60}
+
+# curve_centers のうち主解析対象のインデックス (0始まり)
+curve2_index: 0
+
+# カーブ直前の減速を検出する時刻窓 [s]（AUTONOMOUS 開始からの経過時間）
+# この課題は停止→発進なしで定速走行中に発生するため、
+# launch_window は幅広く設定する（plot_curves 参照）。
+curve2_window:
+  start: 0.0
+  end: 180.0
+
+# 個別カーブ解析を生成する対象
+# 停止→発進が「ない」課題（速度超過での大回り）は launch_window を省略でも可。
+# launch_window を設定した場合は「停止→発進」を探すが、発進点が見つからなければスキップ。
+# 全軌跡の velocity.fig.json / acceleration.fig.json で速度プロファイルを確認すること。
+plot_curves:
+  - {index: 0, launch_window: {start: 0.0, end: 180.0}}  # 産総研〜テレコム左カーブ
