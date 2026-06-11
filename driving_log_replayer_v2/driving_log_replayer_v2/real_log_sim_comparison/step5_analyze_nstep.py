@@ -1140,15 +1140,11 @@ def _apply_runtime_config(cfg: RuntimeConfig, case_tag: str, case_params: dict) 
 def main() -> None:
     parser = argparse.ArgumentParser(description="全走行 N-step オープンループ解析 (1 ケース 1 run)")
     add_common_cli_arguments(parser)
+    # --scenario は add_common_cli_arguments が追加済み (env: SCENARIO_CONFIG_YAML)。
     parser.add_argument(
         "--case-tag",
         default=os.environ.get("CASE_TAG", ""),
         help="Conditions.cases の対象 tag (必須; env: CASE_TAG)",
-    )
-    parser.add_argument(
-        "--scenario",
-        default=os.environ.get("SCENARIO_CONFIG_YAML", ""),
-        help="scenario.yaml のパス (Conditions.models / cases を含む; env: SCENARIO_CONFIG_YAML)",
     )
     args = parser.parse_args()
 
