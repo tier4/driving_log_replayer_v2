@@ -1062,8 +1062,8 @@ def main() -> None:
         comparison_dir.mkdir(parents=True, exist_ok=True)
         scenarios_dir = cfg.base_dir / "scenarios"
         per_ds_cfg: list[tuple[str, Path]] = []
-        if cfg.sim_runs_config:
-            per_ds_cfg.append(("sim 実行設定 (sim_runs)", cfg.sim_runs_config))
+        if cfg.scenario_config:
+            per_ds_cfg.append(("scenario 設定 (models/cases/sim_runs)", cfg.scenario_config))
         scenario_yaml = scenarios_dir / "auto_scenario.yaml"
         datasets = [ReportDataset(
             dataset_id=cfg.scenario_name or "dataset",

@@ -632,14 +632,14 @@ def _apply_runtime_config(cfg: RuntimeConfig) -> None:
     SCENARIO_NAME = cfg.scenario_name
     WHEELBASE = float(cfg.wheelbase_validation)
 
-    # sim_runs.yaml 連動: cfg.sim_runs_config が指定されていれば全 run を LOGS dict に追加
+    # scenario.yaml 連動: cfg.scenario_config が指定されていれば Conditions.sim_runs の全 run を LOGS dict に追加
     sim_runs_cfg = None
-    if cfg.sim_runs_config:
+    if cfg.scenario_config:
         try:
             from .lib._sim_runs_config import load_sim_runs_config  # noqa: PLC0415
-            sim_runs_cfg = load_sim_runs_config(cfg.sim_runs_config)
+            sim_runs_cfg = load_sim_runs_config(cfg.scenario_config)
         except Exception as exc:  # noqa: BLE001
-            warnings.warn(f"sim_runs.yaml 読み込み失敗: {exc} (sim 重ね描きスキップ)")
+            warnings.warn(f"scenario.yaml (sim_runs) 読み込み失敗: {exc} (sim 重ね描きスキップ)")
 
     LOGS = _rebuild_logs(LITE_DIR, cfg.topic_overrides or None, sim_runs_cfg)
 

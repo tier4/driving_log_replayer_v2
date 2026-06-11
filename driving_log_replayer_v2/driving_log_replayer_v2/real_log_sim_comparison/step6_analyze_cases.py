@@ -209,7 +209,7 @@ def write_cases_summary(
     lines.append("|---|---|---:|---:|---:|---:|---:|---|")
     for case in cases_cfg.cases:
         if case.tag not in ps:
-            lines.append(f"| {case.tag} | {case.vehicle_model} | — | — | — | — | — | 出力欠損 |")
+            lines.append(f"| {case.tag} | {case.vehicle_model_type} | — | — | — | — | — | 出力欠損 |")
             continue
         d = ps[case.tag]
         if case.tag == ref_tag:
@@ -219,7 +219,7 @@ def write_cases_summary(
         else:
             delta = "—"
         lines.append(
-            f"| {case.tag} | {case.vehicle_model} | {int(d['n'])} | "
+            f"| {case.tag} | {case.vehicle_model_type} | {int(d['n'])} | "
             f"{d['steer']:.4f} | {delta} | {d['long']:.3f} | {d['lat']:.3f} |  |"
         )
     lines.append("")
@@ -296,7 +296,7 @@ def write_cases_metrics(
         if not r:
             continue
         cases[case.tag] = {
-            "vehicle_model": case.vehicle_model,
+            "vehicle_model": case.vehicle_model_type,
             "n_steps_n1": int(len(n1(case_dfs[case.tag]))),
             "by_h": {str(h): {k: _finite(v) for k, v in m.items()} for h, m in r.items()},
         }
@@ -315,9 +315,10 @@ def write_cases_metrics(
 def main() -> None:
     parser = argparse.ArgumentParser(description="cases 集約解析 (Stage 4)")
     parser.add_argument(
-        "--cases-config",
-        default=os.environ.get("CASES_CONFIG_YAML", ""),
-        help="cases.yaml のパス (必須; env: CASES_CONFIG_YAML)",
+        "--scenario",
+        default=os.environ.get("SCENARIO_CONFIG_YAML", ""),
+        help="scenario.yaml のパス (Conditions.models / cases / overlay を含む; "
+             "env: SCENARIO_CONFIG_YAML)",
     )
     parser.add_argument(
         "--base-dir",
@@ -326,8 +327,8 @@ def main() -> None:
     )
     args = parser.parse_args()
 
-    if not args.cases_config:
-        print("ERROR: --cases-config (or CASES_CONFIG_YAML env) が未指定です", file=sys.stderr)
+    if not args.scenario:
+        print("ERROR: --scenario (or SCENARIO_CONFIG_YAML env) が未指定です", file=sys.stderr)
         sys.exit(2)
     if not args.base_dir:
         print("ERROR: --base-dir (or BEST_MODEL_BASE_DIR env) が未指定です", file=sys.stderr)
@@ -337,7 +338,7 @@ def main() -> None:
         load_cases_config,
     )
 
-    cases_cfg = load_cases_config(args.cases_config)
+    cases_cfg = load_cases_config(args.scenario)
     nstep_root = Path(args.base_dir) / "comparison" / "nstep"
     out_root = Path(args.base_dir) / "comparison" / "cases"
     overlay_dir = out_root / "overlay"

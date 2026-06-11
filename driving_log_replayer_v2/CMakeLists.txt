@@ -71,10 +71,7 @@ install(FILES "${ROS_REQUIREMENTS}"
 # sample/out/ 配下の実行結果 (untracked, 数GB) まで symlink install されてしまうため、
 # 必要ファイルを明示列挙する。
 install(FILES
-  driving_log_replayer_v2/real_log_sim_comparison/sample/cases.yaml
   driving_log_replayer_v2/real_log_sim_comparison/sample/scenario.yaml
-  driving_log_replayer_v2/real_log_sim_comparison/sample/sim_runs.yaml
-  driving_log_replayer_v2/real_log_sim_comparison/sample/curve_config_miraikan.yaml
   driving_log_replayer_v2/real_log_sim_comparison/sample/README.ja.md
   DESTINATION share/${PROJECT_NAME}/sample/real_log_sim_comparison
 )

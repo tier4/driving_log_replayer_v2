@@ -49,10 +49,6 @@ Evaluation:
         VehicleId: default
   Conditions:
     scenario_name: "テレポート駅ロータリー入口 左旋回 大回り再現検証（DP 3モデル比較）"
-    cases_config: ./cases.yaml
-    # DP 3モデル比較用 sim_runs: sim_dp_0303/sim_dp_0503 (大回りなし=FN検証) /
-    # sim_dp_0410 (大回りあり=TP検証)。各 run に k_us=0.020 を設定。
-    sim_runs_config: ./sim_runs_dp_compare.yaml
     # real_provenance: 実機走行時の pilot-auto.x2 ブランチ / DP モデル版の記録。
     # Slack #group-reference-vehicle-x2-experiment, スレッド「2026/03/31 MJ20-015 diffusion planner自動走行評価@お台場・高輪ルート」
     # base: feat/v4.3/e2e (universe 69fcda6b/Mar-27, launcher 8b9f0a98/Mar-26) + trajectory_modifier/DP cherry-picks
@@ -62,3 +58,51 @@ Evaluation:
     traffic_signals: replay
     loop_waypoints: 0
     reproduce_perception: false
+
+    models:
+      normal:
+        vehicle_model_type: delay_steer_acc_geared_wo_fall_guard
+        vehicle_model: j6_gen2
+        architecture_type: awf/universe/20250130
+      kus0020:
+        vehicle_model_type: delay_steer_acc_geared_wo_fall_guard
+        vehicle_model: j6_gen2
+        architecture_type: awf/universe/20250130
+        params: {k_us: 0.020}
+      best_normal:
+        vehicle_model_type: delay_steer_acc_geared_wo_fall_guard
+        vehicle_model: j6_gen2
+        architecture_type: awf/universe/20250130
+        params: {k_us: 0.018, steer_time_constant: 0.15, debug_steer_scaling_factor: 1.0, acc_time_constant: 0.30}
+      no_delay:
+        vehicle_model_type: delay_steer_acc_geared_wo_fall_guard
+        params: {acc_time_delay: 0.0, acc_time_constant: 0.0, steer_time_delay: 0.0, steer_time_constant: 0.0, steer_bias: 0.0}
+      taiga_dyn:
+        vehicle_model_type: taiga_dyn
+        vehicle_model: j6_gen2
+        architecture_type: awf/universe/20250130
+      taiga_x:
+        vehicle_model_type: taiga_x
+        vehicle_model: j6_gen2
+        architecture_type: awf/universe/20250130
+      dp_0303:
+        vehicle_model: j6_gen2
+        architecture_type: awf/universe/20250130
+        dp_model_release: 20260303-180133_baseline_pre0060_sft0080
+        params: {k_us: 0.020}
+      dp_0503:
+        vehicle_model: j6_gen2
+        architecture_type: awf/universe/20250130
+        dp_model_release: 20260503-220950_with_takanawa_16days_weak_smoothing__0060__0080
+        params: {k_us: 0.020}
+      dp_0410:
+        vehicle_model: j6_gen2
+        architecture_type: awf/universe/20250130
+        dp_model_release: 20260410-145919_lambda1e-6_ridge1e-8__epoch0020__epoch0040
+        params: {k_us: 0.020}
+
+    cases:    [normal, kus0020, best_normal, no_delay, taiga_dyn, taiga_x]
+    sim_runs: [dp_0303, dp_0503, dp_0410]
+    overlay:
+      reference_tag: normal
+      plots: [cascade_error, error_timeseries]

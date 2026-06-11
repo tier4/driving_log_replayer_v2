@@ -50,9 +50,9 @@ help:
 	@echo "  パイプライン構成:"
 	@echo "    1. step1_make_lite        実機 input_bag → lite/real.lite/"
 	@echo "    2. step2_bag_to_scenario  lite/real.lite → scenarios/auto_scenario.yaml"
-	@echo "    3. step3_run_sims         scenario_test_runner で sim_runs.yaml の各 run を実行 → lite/<tag>.lite/"
+	@echo "    3. step3_run_sims         scenario_test_runner で Conditions.sim_runs の各 run を実行 → lite/<tag>.lite/"
 	@echo "    4. step4_compare_logs     real + 全 sim run の lite を N-way 比較 (figures/, report.md, metrics_closed_loop.json)"
-	@echo "    5. step5_analyze_nstep    cases.yaml の各 case (VehicleModel パラメータ) で N-step オープンループ解析"
+	@echo "    5. step5_analyze_nstep    Conditions.cases の各 case (VehicleModel パラメータ) で N-step オープンループ解析"
 	@echo "    6. step6_analyze_cases    nstep/*.csv を集約 (overlay/, cases_summary.md, cases_metrics.json)"
 	@echo "    7. step7_sweep_params     real.lite で車両モデルパラメータを rollout sweep 同定 (param_sweep/)"
 	@echo "    8. step8_compare_dp_trajectory  DiffusionPlanner 出力軌跡 real vs sim 比較 (figures/dp_*)"
@@ -179,7 +179,7 @@ local_multidataset_run:
 	@echo "[INFO] COLLECTION_DIR: $(COLLECTION_DIR)" ; \
 	    source $(SETUP_BASH) && $(PYTHON) -m driving_log_replayer_v2.real_log_sim_comparison.multi_dataset_tune \
 	        --collection-dir "$(COLLECTION_DIR)" \
-	        --cases-config "$(LOCAL_SAMPLE_DIR)/cases.yaml"
+	        --scenario "$(LOCAL_SCENARIO)"
 
 # MOB rosbag リンク（file_id）から課題シナリオを一括生成するワークフロー。
 # download.py で rosbag + 地図を取得し、課題テンプレートから scenario.yaml を生成する。

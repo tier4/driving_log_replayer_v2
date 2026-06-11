@@ -132,14 +132,14 @@ def robust_search(ctxs: list[DatasetCtx], cfg) -> dict:
 
     目的: 全 horizon の正規化 mean + worst (yaw+縦+横) を最小化
     (lib._multi_agg.robust_score; worst を重み付きで含む)。
-    正規化 baseline は無補正 delay モデル (_BASELINE_MODEL) の rollout = cases.yaml の
-    overlay.reference_tag ケースと同定義で、step13_cross_dataset の正規化と一致する。
-    参照点 (現 best_normal) は cases.yaml の best_normal ケースから取得する
+    正規化 baseline は無補正 delay モデル (_BASELINE_MODEL) の rollout = Conditions.overlay.reference_tag
+    ケースと同定義で、step13_cross_dataset の正規化と一致する。
+    参照点 (現 best_normal) は scenario.yaml の best_normal ケースから取得する
     (ハードコードしない。yaml を更新後に再探索しても整合する)。
     """
     cur_case = cfg.find_case("best_normal")
     cur_best = dict(cur_case.params)
-    cur_model = cur_case.vehicle_model
+    cur_model = cur_case.vehicle_model_type
     sweeps = {
         "k_us": [0.0, 0.005, 0.010, 0.012, 0.015, 0.018, 0.020, 0.025, 0.030],
         "steer_time_constant": [0.08, 0.10, 0.12, 0.15, 0.20, 0.25, 0.30, 0.40, 0.50, 0.70],
@@ -208,7 +208,8 @@ def main() -> None:
         description="マルチデータセット横断のロバスト best_normal 同定 (robust_search)"
     )
     ap.add_argument("--collection-dir", default=str(Path(__file__).parent / "sample" / "multi"))
-    ap.add_argument("--cases-config", default=str(Path(__file__).parent / "sample" / "cases.yaml"))
+    ap.add_argument("--scenario", default=str(Path(__file__).parent / "sample" / "scenario.yaml"),
+                    help="scenario.yaml のパス (Conditions.models / cases を含む)")
     ap.add_argument(
         "--lite-dir",
         action="append",
@@ -235,7 +236,7 @@ def main() -> None:
         print("ERROR: 有効な dataset が 0 件", file=sys.stderr)
         sys.exit(1)
 
-    cfg = load_cases_config(args.cases_config)
+    cfg = load_cases_config(args.scenario)
     robust_search(ctxs, cfg)
 
 

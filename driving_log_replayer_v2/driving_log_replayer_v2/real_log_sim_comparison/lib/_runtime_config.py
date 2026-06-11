@@ -13,6 +13,10 @@ WHEELBASE は意図的に二系統で保持する:
   - `wheelbase_sim` = 4.76012 m
     シミュレータの仕様値 (`vehicle_info.param.yaml::wheel_base`)。
     `step5_analyze_nstep.py` の C++ 車両モデル再計算で使う。
+
+scenario_config:
+  scenario.yaml のパス。step4_compare_logs が sim 重ね描き (sim_runs) に使う。
+  旧 sim_runs_config (sim_runs.yaml への直接パス) を置き換えた。
 """
 
 from __future__ import annotations
@@ -44,8 +48,8 @@ class RuntimeConfig:
     map_osm_path: Path | None = None                # resolve_map_osm 適用後
     wheelbase_validation: float = _DEFAULT_WHEELBASE_VALIDATION
     wheelbase_sim: float = _DEFAULT_WHEELBASE_SIM
-    # sim_runs.yaml のパス (Stage 3 で参照、step4_compare_logs が sim 重ね描きに使う)
-    sim_runs_config: Path | None = None
+    # scenario.yaml のパス (step4_compare_logs が Conditions.sim_runs から sim 重ね描きに使う)
+    scenario_config: Path | None = None
     topic_overrides: dict[str, Any] = field(default_factory=dict)
 
 
@@ -84,11 +88,12 @@ def add_common_cli_arguments(parser: argparse.ArgumentParser) -> None:
         help="トピック設定 YAML パス (env: TOPIC_CONFIG_YAML)",
     )
     parser.add_argument(
-        "--sim-runs-config",
-        default=os.environ.get("SIM_RUNS_CONFIG_YAML"),
+        "--scenario",
+        default=os.environ.get("SCENARIO_CONFIG_YAML"),
         help=(
-            "sim_runs.yaml パス (env: SIM_RUNS_CONFIG_YAML)。"
-            "step4_compare_logs が sim 重ね描きに使う。未指定なら実機 single-log のみ"
+            "scenario.yaml パス (env: SCENARIO_CONFIG_YAML)。"
+            "step4_compare_logs が Conditions.sim_runs から sim 重ね描きに使う。"
+            "未指定なら実機 single-log のみ"
         ),
     )
 
@@ -176,11 +181,11 @@ def build_runtime_config(
         if loaded:
             cfg.topic_overrides = loaded
 
-    # --- sim_runs_config (step4_compare_logs が sim 重ね描きに使う) ---
-    if getattr(ns, "sim_runs_config", None):
-        sr = Path(ns.sim_runs_config)
-        cfg.sim_runs_config = sr if sr.exists() else None
-        if cfg.sim_runs_config is None:
-            warnings.warn(f"sim_runs.yaml が存在しません: {sr} (sim 重ね描きスキップ)")
+    # --- scenario_config (step4_compare_logs が Conditions.sim_runs から sim 重ね描きに使う) ---
+    if getattr(ns, "scenario", None):
+        sc = Path(ns.scenario)
+        cfg.scenario_config = sc if sc.exists() else None
+        if cfg.scenario_config is None:
+            warnings.warn(f"scenario.yaml が存在しません: {sc} (sim 重ね描きスキップ)")
 
     return cfg

@@ -25,9 +25,9 @@ collection が入口。
 |---|---|---|---|---|
 | 1 | 実機ログ抽出 (`step1_make_lite --kind real`) | `input_bag/*.{mcap,db3}` | `lite/real.lite/` | 1 |
 | 2 | scenario 自動生成 (`step2_bag_to_scenario`) | `input_bag/` + map | `scenarios/auto_scenario.yaml` (OpenSCENARIO) | 1 |
-| 3 | closed-loop シム実行 (`step3_run_sims`) | `auto_scenario.yaml` + `sim_runs.yaml` の 1 run | `lite/<run_tag>.lite/` | N (sim_runs) |
+| 3 | closed-loop シム実行 (`step3_run_sims`) | `auto_scenario.yaml` + `Conditions.sim_runs` の 1 run | `lite/<run_tag>.lite/` | N (sim_runs) |
 | 4 | 実機 + sim 比較解析 (`step4_compare_logs`) | `lite/{real, <run_tag>}.lite/` 群 | `comparison/{figures/, report.md, metrics_closed_loop.json}` (N-way 重ね描き + 機械可読メトリクス・実機カバレッジ) | 1 |
-| 5 | VehicleModel N-step オープンループ解析 (`step5_analyze_nstep`) | `lite/real.lite/` + `cases.yaml` の 1 ケース | `comparison/nstep/<tag>/` | N (cases) |
+| 5 | VehicleModel N-step オープンループ解析 (`step5_analyze_nstep`) | `lite/real.lite/` + `Conditions.cases` の 1 ケース | `comparison/nstep/<tag>/` | N (cases) |
 | 6 | ケース集約解析 (`step6_analyze_cases`) | `nstep/<tag>/nstep_delta.csv` 群 | `comparison/cases/{overlay/, cases_summary.md, cases_metrics.json}` | 1 |
 | 7 | 車両モデルパラメータ sweep 同定 (`step7_sweep_params`) | `lite/real.lite/` | `comparison/param_sweep/{<param>_sweep.{csv,fig.json}, pair_*.{csv,fig.json}, param_sweep_summary.md}` | 1 |
 | 8 | DP軌跡比較 (`step8_compare_dp_trajectory`) | `lite/{real, <sim>}.lite/` | `comparison/figures/dp_*.fig.json` | 1 |
@@ -138,20 +138,18 @@ Stage 3 (`step3_run_sims`) が `scenario_test_runner` で sim を回した結果
 | ---- | --- | ---- |
 | `scenario_name` | 任意 | 図タイトルに表示するシナリオ名。未指定時は `ScenarioName` を使用。 |
 | `curve_config_yaml` | 任意 | カーブ別解析設定 YAML への相対パス（`scenario.yaml` 基準）または絶対パス。空文字でカーブ別解析をスキップ。 |
-| `cases_config` | **必須** | Stage 5/6（VehicleModel N-step 解析 + 集約）の `cases.yaml` への相対パス。 |
-| `sim_runs_config` | **必須** | Stage 3/4（closed-loop sim + N-way 比較）の `sim_runs.yaml` への相対パス。 |
+| `models` | **必須** | 名前付き車両モデル定義レジストリ。各エントリに `vehicle_model_type`（open-loop クラス名）・`vehicle_model`（sim description パッケージ名）・`params`（simulator_model 上書き）等を記述。`cases`/`sim_runs` からこの名前で参照する。 |
+| `cases` | **必須** | Stage 5/6（N-step open-loop 解析）に使うモデル名リスト。各名前は `models` に `vehicle_model_type` を持つこと。 |
+| `sim_runs` | **必須** | Stage 3/4（closed-loop sim + N-way 比較）に使うモデル名リスト。各名前は `models` に `vehicle_model` を持つこと。 |
+| `overlay` | 任意 | Stage 6 集約の基準モデル（`reference_tag`）と重ね描き種類（`plots`）。 |
 | `real_provenance` | 任意 | 実機データ取得時の pilot-auto.x2 / DiffusionPlanner 重みの自由記述。比較プロット・report.md の provenance に掲載し、sim 実行時の版・重み（自動取得）との差を解釈する。 |
 | `traffic_signals` | 任意 (既定 `replay`) | 信号の扱い。`replay`=実機 bag の信号タイムシリーズを再現。`green`=全信号常時 green。`none`=scenario 側で信号をセットしない（`reproduce_perception` が信号を pose-sync 再生して所有する場合に使用）。sim 早期停止（旧称 D0）の真因は赤信号 replay の到達時刻 desync（実機が green 通過した信号に sim ego が赤で当たり永久停止）であり、`green`/`none` で周回を完走できる（live sim A/B 実測: replay=241m 停止 / green=519m 完走、実機 598.7m）。**赤信号停止も忠実に再現したい場合は `none` + `reproduce_perception: true`**（信号を ego-pose 同期で再生するため、実車が緑通過した位置は緑・赤停止した位置は赤になる）。 |
 | `loop_waypoints` | 任意 (既定 0) | route 形状を強制する **実験オプション**（**D0 の修正ではない**）。Stage 2 が start+goal に加え実走軌跡の膨らみ位置へ N 個の中間 LanePosition waypoint を挿入する。D0（sim 早期停止）の真因は赤信号 replay であり routing ではない（lanelet graph に shortcut が無く start+goal でも route は周回全体を引く）ことが live sim で確定したため、D0 解消には `traffic_signals: green` を使う。 |
 | `reproduce_perception` | 任意 (既定 false) | `true` で実機 input_bag の**先行車（tracked objects）と信号（traffic_signals）を ego-pose 同期**で各 sim に注入（`perception_reproducer_node` を Stage 3 が並走起動、`tracking/objects` / `traffic_signals` = DiffusionPlanner 入力に publish）。auto-scenario は NPC を持たないため、実機が先行車追従主体（cruise_following 等）の走行で sim ego が先行車不在により自由加速して実機より速くなるのを防ぎ、**実機の停止・加減速を再現**する。信号も pose-sync 再生するので、実車が緑通過した位置は緑・赤停止した位置は赤となり、**赤信号停止の忠実再現と D0 偽停止回避を両立**（その場合 `traffic_signals: none` と併用し scenario 側の信号設定を無効化）。アルゴリズム=走行中は pose-sync（lead を実相対位置に）/ego 停止中は記録を時間前進（dwell→departure を再生し ego を解放）。live 検証: 実機の先行車追従停止と速度エンベロープを再現し完走（実機 598m を ~586m/170s で追従、arc0-40m 平均速度 0.89m/s ≒ 実機 0.85 / 先行車無 green 1.79）。完全一致は real/sim の DiffusionPlanner 重み差により頭打ち。 |
 
-- **`sim_runs.yaml`**（Stage 3/4）: closed-loop sim の run 定義。`vehicle_model` と任意の
-  `params`（simulator_model 上書き）で run を増やす。任意の `dp_model_release`（webauto から自動 pull）/
-  `dp_model_dir`（ローカル既存）で **同一車両モデルのまま DiffusionPlanner モデルだけを差し替えて比較**できる
-  → [`docs/multi_dp_model_eval.ja.md`](docs/multi_dp_model_eval.ja.md)。
-- **`cases.yaml`**（Stage 5/6）: N-step 解析のケース定義。`vehicle_model` タイプと `params`。
+- **`models`（`Conditions.models`）**: `vehicle_model_type`（open-loop）/ `vehicle_model`（sim）/ `params`（共有）を同列に名前付きで定義。`cases`/`sim_runs` はこの名前リストで参照する。`dp_model_release`（webauto から自動 pull）/ `dp_model_dir`（ローカル既存）で **同一車両モデルのまま DiffusionPlanner モデルだけを差し替えて比較**できる → [`docs/multi_dp_model_eval.ja.md`](docs/multi_dp_model_eval.ja.md)。
 
-  両 YAML の書式・使える `vehicle_model` の種別は `sample/README.ja.md` を参照。
+  書式・使用例・フィールド詳細は `sample/README.ja.md` を参照。
 
 `curve_config_yaml`（任意）は以下の構造で記述する（`sample/curve_config_miraikan.yaml` 参照。
 特定 area_map 前提のハードコードを含むため、別 map の dataset では空文字でスキップ）。

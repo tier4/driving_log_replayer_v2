@@ -34,11 +34,49 @@ Evaluation:
         VehicleId: default
   Conditions:
     scenario_name: "<課題名> 再現検証"
-    cases_config: ./cases.yaml
-    sim_runs_config: ./sim_runs.yaml
     # real_provenance: 実機 bag 取得時の pilot-auto.x2 / DP モデル版を記録しておく。
     #   課題の TP/FN 解釈に使うため、実機走行時のモデル版を明記することを推奨。
     real_provenance: ""
     traffic_signals: replay
     loop_waypoints: 0
     reproduce_perception: false
+
+    models:
+      normal:
+        vehicle_model_type: delay_steer_acc_geared_wo_fall_guard
+        vehicle_model: j6_gen2
+        architecture_type: awf/universe/20250130
+      kus0020:
+        vehicle_model_type: delay_steer_acc_geared_wo_fall_guard
+        vehicle_model: j6_gen2
+        architecture_type: awf/universe/20250130
+        params: {k_us: 0.020}
+      best_normal:
+        vehicle_model_type: delay_steer_acc_geared_wo_fall_guard
+        vehicle_model: j6_gen2
+        architecture_type: awf/universe/20250130
+        params: {k_us: 0.018, steer_time_constant: 0.15, debug_steer_scaling_factor: 1.0, acc_time_constant: 0.30}
+      no_delay:
+        vehicle_model_type: delay_steer_acc_geared_wo_fall_guard
+        params: {acc_time_delay: 0.0, acc_time_constant: 0.0, steer_time_delay: 0.0, steer_time_constant: 0.0, steer_bias: 0.0}
+      taiga_dyn:
+        vehicle_model_type: taiga_dyn
+        vehicle_model: j6_gen2
+        architecture_type: awf/universe/20250130
+      taiga_x:
+        vehicle_model_type: taiga_x
+        vehicle_model: j6_gen2
+        architecture_type: awf/universe/20250130
+      perfect:
+        vehicle_model: j6_gen2_perfect_tracker
+        architecture_type: awf/universe/20250130
+      godot:
+        vehicle_model: j6_gen2_godot
+        architecture_type: awf/universe/20250130
+        godot_executable: /opt/godot_autoware_simulator/godot_autoware_simulator.x86_64
+
+    cases:    [normal, kus0020, best_normal, no_delay, taiga_dyn, taiga_x]
+    sim_runs: [normal, kus0020, best_normal, taiga_dyn, taiga_x, perfect, godot]
+    overlay:
+      reference_tag: normal
+      plots: [cascade_error, error_timeseries]

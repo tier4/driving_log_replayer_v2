@@ -1,14 +1,14 @@
 """Stage 3: 1 sim run の実行 (scenario_test_runner.launch.py 起動 + step1_make_lite --kind sim).
 
-sim_runs.yaml の tag に対応する設定を読み、ros2 launch を subprocess で起動し、
-出力 MCAP を step1_make_lite で lite 化する。
+scenario.yaml の Conditions.sim_runs の tag に対応する設定を読み、ros2 launch を
+subprocess で起動し、出力 MCAP を step1_make_lite で lite 化する。
 
 Usage:
     python3 -m driving_log_replayer_v2.real_log_sim_comparison.step3_run_sims \\
-        --run-tag sim_normal \\
+        --run-tag normal \\
         --scenario <auto_scenario.yaml> \\
-        --sim-runs-config <sim_runs.yaml> \\
-        --output-lite <lite/sim_normal.lite>
+        --config-scenario <scenario.yaml> \\
+        --output-lite <lite/normal.lite>
 
 注意:
 - nested ros2 launch (外側 evaluator_node の中で本ツールが内側 scenario_test_runner)
@@ -349,12 +349,13 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="Stage 3: 1 sim run の実行")
     parser.add_argument("--run-tag", required=True,
                         default=os.environ.get("SIM_RUN_TAG"),
-                        help="sim_runs.yaml の対象 tag (env: SIM_RUN_TAG)")
+                        help="Conditions.sim_runs の対象 tag (env: SIM_RUN_TAG)")
     parser.add_argument("--scenario", required=True,
                         help="OpenSCENARIO yaml パス (Stage 2 で生成)")
-    parser.add_argument("--sim-runs-config", required=True,
-                        default=os.environ.get("SIM_RUNS_CONFIG_YAML"),
-                        help="sim_runs.yaml パス (env: SIM_RUNS_CONFIG_YAML)")
+    parser.add_argument("--config-scenario", required=True,
+                        default=os.environ.get("SCENARIO_CONFIG_YAML"),
+                        help="scenario.yaml パス (Conditions.models / sim_runs を含む; "
+                             "env: SCENARIO_CONFIG_YAML)")
     parser.add_argument("--output-lite", required=True,
                         help="出力先 lite/<tag>.lite/ ディレクトリ")
     parser.add_argument("--reproduce-bag",
@@ -374,10 +375,10 @@ def main() -> None:
 
     from .lib._sim_runs_config import load_sim_runs_config  # noqa: PLC0415
     try:
-        sim_cfg = load_sim_runs_config(args.sim_runs_config)
+        sim_cfg = load_sim_runs_config(args.config_scenario)
         run = sim_cfg.find_run(args.run_tag)
     except (FileNotFoundError, ValueError, KeyError) as e:
-        print(f"ERROR: sim_runs.yaml: {e}", file=sys.stderr)
+        print(f"ERROR: scenario.yaml (Conditions.sim_runs): {e}", file=sys.stderr)
         sys.exit(2)
 
     print(f"[step3_run_sims] tag={run.tag}, vehicle_model={run.vehicle_model}, "

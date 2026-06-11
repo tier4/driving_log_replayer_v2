@@ -186,21 +186,21 @@ def run_pipeline(
     else:
         logger.warning("Stage 2: map OSM が無いため scenario 自動生成スキップ")
 
-    # ---- Stage 3: sim runs ループ (cases.yaml 同様、sim_runs.yaml 必須) ----
-    sim_runs_yaml = compare_cfg.get("sim_runs_config", "")
-    if not sim_runs_yaml or not Path(sim_runs_yaml).exists():
+    # ---- Stage 3: sim runs ループ (scenario.yaml の Conditions.sim_runs 必須) ----
+    scenario_config = compare_cfg.get("scenario_config", "")
+    if not scenario_config or not Path(scenario_config).exists():
         raise RuntimeError(
-            "sim_runs.yaml が見つかりません。scenario.yaml の Conditions.sim_runs_config に "
-            "sim run 定義 YAML への (絶対 or 相対) パスを指定してください。"
-            f" got: {sim_runs_yaml!r}"
+            "scenario.yaml が見つかりません。Conditions.models / sim_runs / cases を "
+            "scenario.yaml に直接記述してください。"
+            f" got: {scenario_config!r}"
         )
 
     from driving_log_replayer_v2.real_log_sim_comparison.lib._sim_runs_config import (  # noqa: PLC0415
         load_sim_runs_config,
     )
 
-    sim_cfg = load_sim_runs_config(sim_runs_yaml)
-    env["SIM_RUNS_CONFIG_YAML"] = sim_runs_yaml
+    sim_cfg = load_sim_runs_config(scenario_config)
+    env["SCENARIO_CONFIG_YAML"] = scenario_config
 
     # closed-loop sim のスキップ (open-loop 解析だけ欲しいとき・マルチ DS バッチの時間短縮)。
     # scenario.yaml の Conditions.skip_sim (クラウド) か env SKIP_SIM=1 (make 変数) で指定する。
@@ -233,7 +233,7 @@ def run_pipeline(
                     "driving_log_replayer_v2.real_log_sim_comparison.step3_run_sims",
                     "--run-tag", run.tag,
                     "--scenario", str(auto_scenario),
-                    "--sim-runs-config", sim_runs_yaml,
+                    "--config-scenario", scenario_config,
                     "--output-lite", str(sim_lite),
                 ], env=env_run, timeout=run.timeout_s, log_file=run_log)
             except RuntimeError as exc:
@@ -286,19 +286,20 @@ def run_analysis(
     lite/ (real + sim run) が揃っている前提で動く純解析部。run_pipeline (フルパイプライン)
     と run_analysis.py CLI (sim 実行済みバンドルの再解析) の両方から呼ばれる。
     """
-    sim_runs_yaml = compare_cfg.get("sim_runs_config", "")
-    if not sim_runs_yaml or not Path(sim_runs_yaml).exists():
+    scenario_config = compare_cfg.get("scenario_config", "")
+    if not scenario_config or not Path(scenario_config).exists():
         raise RuntimeError(
-            "sim_runs.yaml が見つかりません。scenario.yaml の Conditions.sim_runs_config を"
-            f"確認してください。 got: {sim_runs_yaml!r}"
+            "scenario.yaml が見つかりません。Conditions.models / sim_runs / cases を "
+            "scenario.yaml に直接記述してください。"
+            f" got: {scenario_config!r}"
         )
     from driving_log_replayer_v2.real_log_sim_comparison.lib._sim_runs_config import (  # noqa: PLC0415
         load_sim_runs_config,
     )
 
-    sim_cfg = load_sim_runs_config(sim_runs_yaml)
+    sim_cfg = load_sim_runs_config(scenario_config)
     env = env.copy()
-    env["SIM_RUNS_CONFIG_YAML"] = sim_runs_yaml
+    env["SCENARIO_CONFIG_YAML"] = scenario_config
 
     # ---- Stage 4: step4_compare_logs (real + 全 sim、sim_runs.yaml 連動で N-way) ----
     logger.info("Stage 4: step4_compare_logs (real + sim N-way)")
@@ -307,25 +308,16 @@ def run_analysis(
         "driving_log_replayer_v2.real_log_sim_comparison.step4_compare_logs",
     ], env=env, timeout=1800)
 
-    # ---- Stage 5: VehicleModel N-step オープンループ解析 (cases.yaml 必須) ----
-    cases_yaml = compare_cfg.get("cases_config", "")
-    if not cases_yaml or not Path(cases_yaml).exists():
-        raise RuntimeError(
-            "cases.yaml が見つかりません。scenario.yaml の Conditions.cases_config に "
-            "VehicleModel ケース定義 YAML への (絶対 or 相対) パスを指定してください。"
-            f" got: {cases_yaml!r}"
-        )
-
+    # ---- Stage 5: VehicleModel N-step オープンループ解析 (Conditions.cases 必須) ----
     from driving_log_replayer_v2.real_log_sim_comparison.lib._cases_config import (  # noqa: PLC0415
         load_cases_config,
     )
 
-    cases_cfg = load_cases_config(cases_yaml)
-    env["CASES_CONFIG_YAML"] = cases_yaml
+    cases_cfg = load_cases_config(scenario_config)
 
     logger.info(f"Stage 5: step5_analyze_nstep over {len(cases_cfg.cases)} case(s)")
     for case in cases_cfg.cases:
-        logger.info(f"  case: tag={case.tag}, vehicle_model={case.vehicle_model}")
+        logger.info(f"  case: tag={case.tag}, vehicle_model_type={case.vehicle_model_type}")
         env_case = env.copy()
         env_case["CASE_TAG"] = case.tag
         try:
@@ -333,7 +325,7 @@ def run_analysis(
                 sys.executable, "-m",
                 "driving_log_replayer_v2.real_log_sim_comparison.step5_analyze_nstep",
                 "--case-tag", case.tag,
-                "--cases-config", cases_yaml,
+                "--scenario", scenario_config,
             ], env=env_case, timeout=1800)
         except RuntimeError as exc:
             logger.warning(f"Stage 5 (case={case.tag}) failed but continuing: {exc}")
@@ -344,7 +336,7 @@ def run_analysis(
         _run([
             sys.executable, "-m",
             "driving_log_replayer_v2.real_log_sim_comparison.step6_analyze_cases",
-            "--cases-config", cases_yaml,
+            "--scenario", scenario_config,
         ], env=env, timeout=600)
     except RuntimeError as exc:
         logger.warning(f"Stage 6 (step6_analyze_cases) failed but continuing: {exc}")
@@ -485,21 +477,9 @@ def _load_compare_config(scenario_path_str: str) -> dict[str, Any]:
         if "skip_sim" in conditions:
             cfg["skip_sim"] = bool(conditions["skip_sim"])
 
-        # cases_config (必須): Stage 5/6 のケース定義 YAML
-        if "cases_config" in conditions:
-            raw = str(conditions["cases_config"])
-            p = Path(raw)
-            if not p.is_absolute():
-                p = scenario_path.parent / p
-            cfg["cases_config"] = str(p)
-
-        # sim_runs_config (必須): Stage 3/4 の sim run 定義 YAML
-        if "sim_runs_config" in conditions:
-            raw = str(conditions["sim_runs_config"])
-            p = Path(raw)
-            if not p.is_absolute():
-                p = scenario_path.parent / p
-            cfg["sim_runs_config"] = str(p)
+        # scenario_config: models / cases / sim_runs はすべて scenario.yaml 自身に統合済み。
+        # scenario_path をそのまま保持する (cases_config / sim_runs_config の外部ファイル参照は廃止)。
+        cfg["scenario_config"] = str(scenario_path)
 
         return cfg
     except Exception:

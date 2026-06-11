@@ -52,19 +52,13 @@ def iter_dataset_uuids(scenario: Path) -> list[str]:
     return uuids
 
 
-# Conditions 内で「scenario.yaml からの相対パス」として解釈されるキー
-# (evaluator_node._load_compare_config 参照)。single-dataset scenario は batch_root/scenarios/
-# に書き出すため、相対のままだとコピー先基準で解決されて壊れる → 元 scenario 基準の絶対へ変換。
-_PATH_CONDITION_KEYS = ("sim_runs_config", "cases_config")
-
-
 def write_single_dataset_scenario(scenario: Path, uuid: str, out_path: Path) -> Path:
     """Datasets を当該 UUID 1 件に絞った scenario を生成する。
 
     launch には t4_dataset_path/t4_dataset_id を明示で渡すが、scenario 側の Datasets も
     1 件に揃えておくことで「scenario には複数 dataset・実行は 1 dataset」という不整合を
-    下流 (evaluator / step2) に持ち込まない。Conditions の相対パス参照は元 scenario の
-    ディレクトリ基準の絶対パスへ書き換える (出力先が別ディレクトリのため)。
+    下流 (evaluator / step2) に持ち込まない。models / cases / sim_runs は scenario.yaml に
+    インライン化されているため相対パス変換は不要。
     """
     doc = yaml.safe_load(scenario.read_text(encoding="utf-8"))
     datasets = (doc.get("Evaluation") or {}).get("Datasets") or []
@@ -72,13 +66,6 @@ def write_single_dataset_scenario(scenario: Path, uuid: str, out_path: Path) -> 
     if not picked:
         raise ValueError(f"scenario に dataset {uuid} がありません: {scenario}")
     doc["Evaluation"]["Datasets"] = picked
-    conditions = (doc.get("Evaluation") or {}).get("Conditions") or {}
-    for key in _PATH_CONDITION_KEYS:
-        raw = conditions.get(key)
-        if raw:  # 空文字 (明示スキップ) はそのまま残す
-            p = Path(str(raw))
-            if not p.is_absolute():
-                conditions[key] = str((scenario.parent / p).resolve())
     out_path.parent.mkdir(parents=True, exist_ok=True)
     out_path.write_text(
         yaml.safe_dump(doc, allow_unicode=True, sort_keys=False), encoding="utf-8"

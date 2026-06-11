@@ -1143,22 +1143,22 @@ def main() -> None:
     parser.add_argument(
         "--case-tag",
         default=os.environ.get("CASE_TAG", ""),
-        help="cases.yaml の対象ケース tag (必須; env: CASE_TAG)",
+        help="Conditions.cases の対象 tag (必須; env: CASE_TAG)",
     )
     parser.add_argument(
-        "--cases-config",
-        default=os.environ.get("CASES_CONFIG_YAML", ""),
-        help="cases.yaml のパス (必須; env: CASES_CONFIG_YAML)",
+        "--scenario",
+        default=os.environ.get("SCENARIO_CONFIG_YAML", ""),
+        help="scenario.yaml のパス (Conditions.models / cases を含む; env: SCENARIO_CONFIG_YAML)",
     )
     args = parser.parse_args()
 
     if not args.case_tag:
         print("ERROR: --case-tag (or CASE_TAG env) が未指定です", file=sys.stderr)
         sys.exit(2)
-    if not args.cases_config:
+    if not args.scenario:
         print(
-            "ERROR: --cases-config (or CASES_CONFIG_YAML env) が未指定です。"
-            "cases.yaml を scenario.yaml の Conditions.cases_config で指定してください",
+            "ERROR: --scenario (or SCENARIO_CONFIG_YAML env) が未指定です。"
+            "scenario.yaml の Conditions.models / cases に定義してください",
             file=sys.stderr,
         )
         sys.exit(2)
@@ -1168,12 +1168,12 @@ def main() -> None:
     )
 
     try:
-        cases_cfg = load_cases_config(args.cases_config)
+        cases_cfg = load_cases_config(args.scenario)
         case = cases_cfg.find_case(args.case_tag)
     except (FileNotFoundError, ValueError, KeyError) as e:
-        print(f"ERROR: cases.yaml: {e}", file=sys.stderr)
+        print(f"ERROR: scenario.yaml (Conditions.cases): {e}", file=sys.stderr)
         sys.exit(2)
-    print(f"[case] tag={case.tag}, vehicle_model={case.vehicle_model}, params={case.params}")
+    print(f"[case] tag={case.tag}, vehicle_model_type={case.vehicle_model_type}, params={case.params}")
 
     cfg = build_runtime_config(args, default_base_dir=Path(__file__).parent)
     params = _apply_runtime_config(cfg, case.tag, case.params)
@@ -1196,9 +1196,9 @@ def main() -> None:
     # N>1 は dynamics 累積差の検出用に stride=5 でサンプリングする。
     # GT 準備は両呼び出しで同一なので 1 回だけ計算して共有する。
     gt = _prepare_gt(data, t0_ns, params)
-    df1 = run_rollout(data, t0_ns, params, case.vehicle_model, horizons=(1,), stride=1, gt=gt)
+    df1 = run_rollout(data, t0_ns, params, case.vehicle_model_type, horizons=(1,), stride=1, gt=gt)
     dfn = run_rollout(
-        data, t0_ns, params, case.vehicle_model, horizons=(2, 5, 10, 20, 40), stride=5, gt=gt
+        data, t0_ns, params, case.vehicle_model_type, horizons=(2, 5, 10, 20, 40), stride=5, gt=gt
     )
     df = pd.concat([df1, dfn], ignore_index=True)
 

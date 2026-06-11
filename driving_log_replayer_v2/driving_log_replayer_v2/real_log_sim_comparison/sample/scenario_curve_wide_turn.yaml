@@ -35,14 +35,71 @@ Evaluation:
         VehicleId: default
   Conditions:
     scenario_name: "カーブ大回り再現検証（テレポート駅前左折、DP 3モデル比較）"
-    cases_config: ./cases.yaml
-    # DP 3モデル比較用 sim_runs: sim_dp_0303 / sim_dp_0503 (大回りなし=FN検証) /
-    # sim_dp_0410 (大回りあり=TP検証)。各 run に k_us=0.020 を設定。
-    # sim_runs_dp_models.yaml は本セッション中に削除済み → 下記のように直接定義する。
-    sim_runs_config: ./sim_runs_curve_wide_turn.yaml
     real_provenance: ""
     # replay: 実機 bag の信号を再現。
     # 大回りは信号に関係なく curve2 でのみ発生するためデフォルトで可。
     traffic_signals: replay
     loop_waypoints: 0
     reproduce_perception: false
+
+    # ── モデルレジストリ ──────────────────────────────────────────────────────────
+    # open-loop cases: 標準 VehicleModel 解析 (normal/kus0020/best_normal/no_delay/taiga_*) を使う。
+    # sim_runs:  DP 3 モデル比較用 (大回り TP/FN 検証)。k_us=0.020 を全 run に設定。
+    #
+    # 検証軸:
+    #   TP: dp_0410 (実機で大回りあり) → sim でも大回りが再現されること
+    #   FN: dp_0303/dp_0503 (実機で大回りなし) → sim でも大回りが起きないこと
+    #
+    # k_us=0.020: simple_planning_simulator_v2 のアンダーステア補正。
+    #   参考 PR: https://github.com/tier4/autoware_universe/pull/3039
+    models:
+      normal:
+        vehicle_model_type: delay_steer_acc_geared_wo_fall_guard
+        vehicle_model: j6_gen2
+        architecture_type: awf/universe/20250130
+      kus0020:
+        vehicle_model_type: delay_steer_acc_geared_wo_fall_guard
+        vehicle_model: j6_gen2
+        architecture_type: awf/universe/20250130
+        params: {k_us: 0.020}
+      best_normal:
+        vehicle_model_type: delay_steer_acc_geared_wo_fall_guard
+        vehicle_model: j6_gen2
+        architecture_type: awf/universe/20250130
+        params: {k_us: 0.018, steer_time_constant: 0.15, debug_steer_scaling_factor: 1.0, acc_time_constant: 0.30}
+      no_delay:
+        vehicle_model_type: delay_steer_acc_geared_wo_fall_guard
+        params: {acc_time_delay: 0.0, acc_time_constant: 0.0, steer_time_delay: 0.0, steer_time_constant: 0.0, steer_bias: 0.0}
+      taiga_dyn:
+        vehicle_model_type: taiga_dyn
+        vehicle_model: j6_gen2
+        architecture_type: awf/universe/20250130
+      taiga_x:
+        vehicle_model_type: taiga_x
+        vehicle_model: j6_gen2
+        architecture_type: awf/universe/20250130
+      # DP 3 モデル比較 sim_runs (sim 専用; vehicle_model_type なし)
+      dp_0303:
+        # ベストモデル 0303: 実機で大回りなし (FN 検証用)
+        vehicle_model: j6_gen2
+        architecture_type: awf/universe/20250130
+        dp_model_release: 20260303-180133_baseline_pre0060_sft0080
+        params: {k_us: 0.020}
+      dp_0503:
+        # ベストモデル 0503: 実機で大回りなし (FN 検証用)
+        vehicle_model: j6_gen2
+        architecture_type: awf/universe/20250130
+        dp_model_release: 20260503-220950_with_takanawa_16days_weak_smoothing__0060__0080
+        params: {k_us: 0.020}
+      dp_0410:
+        # 大回りモデル 0410: 実機で大回りあり (TP 検証用)
+        vehicle_model: j6_gen2
+        architecture_type: awf/universe/20250130
+        dp_model_release: 20260410-145919_lambda1e-6_ridge1e-8__epoch0020__epoch0040
+        params: {k_us: 0.020}
+
+    cases:    [normal, kus0020, best_normal, no_delay, taiga_dyn, taiga_x]
+    sim_runs: [dp_0303, dp_0503, dp_0410]
+    overlay:
+      reference_tag: normal
+      plots: [cascade_error, error_timeseries]
