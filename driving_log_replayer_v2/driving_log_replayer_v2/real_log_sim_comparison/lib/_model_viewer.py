@@ -81,11 +81,11 @@ def plot_model_viewer(
         warnings.warn("kinematic データなし。縦横モデルビューアをスキップ", stacklevel=2)
         return
 
-    # つまみ初期値。tau/T [s], slope [s/(m/s)], steer_bias [rad], k_us [s^2/m]。
+    # つまみ初期値。tau/T [s], steer_bias [rad], k_us [s^2/m]。
     # load_sim_params はフォールバック付きで常に dict を返す。縦は加減速で別特性のため
     # throttle=acc_*, brake=brake_* をシード（実機モデルも acc/brake で別 time_constant・delay）。
-    # tau_acc_slope は速度依存の初期 0（つまみで調整）。k_us は yaml 未定義のことが多く
-    # その場合 0.0 (純キネマティック) をシード（best_normal の 0.018 等へつまみで調整可能）。
+    # tau_acc_slope はペイロードに含まれるが JS 側では使用しない (poly(v) と交絡するため削除済み)。
+    # k_us は yaml 未定義のことが多く 0.0 (純キネマティック) をシード（best_normal の 0.018 等へつまみで調整可能）。
     payload["model_seed"] = {
         "tau_acc_thr": float(sim_params["acc_time_constant"]),
         "t_acc_thr": float(sim_params["acc_time_delay"]),
@@ -358,6 +358,18 @@ const DATA = __PAYLOAD_JSON__;
     return a + (b - a) * (fi - i);
   }
 
+  // -------------------------------------------------------- 物理リミッタ補助関数
+  // C++ simple_planning_simulator と同等の飽和・不感帯を模倣する。
+  // sat(v, lim): ±lim への対称飽和。accLim/velLim/steerLim/steerRateLim はデフォルトで
+  // Infinity（事実上無効）。実機値が判明すれば payload 拡張で渡すことを想定。
+  function sat(v, lim) { return v > lim ? lim : (v < -lim ? -lim : v); }
+  function deadBand(e, w) { return Math.abs(e) < w ? 0 : (e > 0 ? e - w : e + w); }
+  const accLim       = Infinity;  // [m/s²]  vx_rate_lim 相当
+  const velLim       = Infinity;  // [m/s]   vx_lim 相当
+  const steerLim     = Infinity;  // [rad]   steer_lim 相当
+  const steerRateLim = Infinity;  // [rad/s] steer_rate_lim 相当
+  const db           = 0;         // [rad]   steer_dead_band（無効化）
+
   // 運動方程式を起点 t0 の観測値から窓右端 t1 まで前方積算する（sub-step Euler で安定化）。
   //   縦: a' = -(a - a_cmd(t-T_a))/τ_a ,  v' = a
   //   横: δ' = -(δ - δ_cmd(t-T_δ))/τ_δ (rad),  ω = v·tan(δ_src+β)/(L+k_us·v²),
@@ -535,12 +547,10 @@ const DATA = __PAYLOAD_JSON__;
   const fmtS = (v) => v.toFixed(3) + "s";
   const fmtKus = (v) => v.toFixed(3);
   const fmtDeg = (v) => v.toFixed(2) + "°";
-  const fmtSlope = (v) => v.toFixed(3);
   setupKnob("k_t_acc_thr", "v_t_acc_thr", "t_acc_thr", fmtS);
   setupKnob("k_tau_acc_thr", "v_tau_acc_thr", "tau_acc_thr", fmtS);
   setupKnob("k_t_acc_brk", "v_t_acc_brk", "t_acc_brk", fmtS);
   setupKnob("k_tau_acc_brk", "v_tau_acc_brk", "tau_acc_brk", fmtS);
-  setupKnob("k_tau_slope", "v_tau_slope", "tau_acc_slope", fmtSlope);
   setupKnob("k_t_steer", "v_t_steer", "t_steer", fmtS);
   setupKnob("k_tau_steer", "v_tau_steer", "tau_steer", fmtS);
   setupKnob("k_kus", "v_kus", "k_us", fmtKus);
@@ -582,17 +592,17 @@ const DATA = __PAYLOAD_JSON__;
     if (m.cornerOn) poly += " + " + m.c_corner.toFixed(3) + "·a_y²";
     $("eqpanel").innerHTML =
       "<b>運動方程式</b>（起点=シーク時刻から前方積算）<br>" +
-      "縦&nbsp; ȧ = −(a − a_target)/τ(v) ,&nbsp; a_target = a_cmd(t−T)" + poly + " ,&nbsp; v̇ = a<br>" +
-      "&nbsp;&nbsp;&nbsp; <span class='note'>[throttle/brake で T・τ 分離, τ(v)=τ₀+slope·v, 多項式補正は ON の次のみ" +
+      "縦&nbsp; ȧ = −(a − a_target)/τ ,&nbsp; a_target = a_cmd(t−T)" + poly + " ,&nbsp; v̇ = a<br>" +
+      "&nbsp;&nbsp;&nbsp; <span class='note'>[throttle/brake で T・τ 分離, 多項式補正は ON の次のみ" +
       (m.stopHandling ? " / 停止処理: v≤" + m.v_stop.toFixed(2) + "&ブレーキ指令で a_target=0・後退なし" : " / 停止処理OFF") + "]</span><br>" +
       "横&nbsp; δ̇ = −(δ − δ_cmd(t−T_δ))/τ_δ<br>" +
       "&nbsp;&nbsp;&nbsp; ω = v·tan(δ+β)/(L + k_us·v²) ,&nbsp; θ̇ = ω<br>" +
       "&nbsp;&nbsp;&nbsp; ẋ = v·cosθ , ẏ = v·sinθ ,&nbsp; a_y = v·ω<br>" +
-      "<span class='vals'>縦throttle T=" + m.t_acc_thr.toFixed(3) + "s τ₀=" + m.tau_acc_thr.toFixed(3) + "s&nbsp; " +
-      "brake T=" + m.t_acc_brk.toFixed(3) + "s τ₀=" + m.tau_acc_brk.toFixed(3) + "s&nbsp; slope=" + m.tau_acc_slope.toFixed(3) + "<br>" +
+      "<span class='vals'>縦throttle T=" + m.t_acc_thr.toFixed(3) + "s τ=" + m.tau_acc_thr.toFixed(3) + "s&nbsp; " +
+      "brake T=" + m.t_acc_brk.toFixed(3) + "s τ=" + m.tau_acc_brk.toFixed(3) + "s<br>" +
       "横 T_δ=" + m.t_steer.toFixed(3) + "s τ_δ=" + m.tau_steer.toFixed(3) + "s&nbsp; " +
       "k_us=" + m.k_us.toFixed(3) + " β=" + m.steer_bias.toFixed(2) + "° L=" + L.toFixed(3) + "m</span><br>" +
-      "<span class='note'>※ ω・位置・τ(v) の v は観測値を使用（縦誤差を分離）／ステア源: " + srcLabel +
+      "<span class='note'>※ ω・位置の v は観測値を使用（縦誤差を分離）／ステア源: " + srcLabel +
       "／注: 実シミュレータ(C++)の yaw 計算は ω=v·tan(δ)/(L+k_us·v²) で β を含まない（β はこのビューアの当てはめ用）</span>";
   }
   updateEquations();
@@ -615,13 +625,13 @@ const DATA = __PAYLOAD_JSON__;
     return (a + b) / 2;
   }
 
-  // 縦 accel を全区間で前方積算（throttle/brake 分離・τ(v)）。戻り: Float64Array(N) (NaN=無効)。
+  // 縦 accel を全区間で前方積算（throttle/brake 分離・定数 τ）。戻り: Float64Array(N) (NaN=無効)。
   function simAccelSeries() {
     let i0 = 0; while (i0 < N && run.ch.accel[i0] == null) i0++;
     const out = new Float64Array(N).fill(NaN);
     if (i0 >= N) return out;
     let a = run.ch.accel[i0];
-    const tauThr = model.tau_acc_thr, tauBrk = model.tau_acc_brk, slope = model.tau_acc_slope;
+    const tauThr = Math.max(model.tau_acc_thr, 0.02), tauBrk = Math.max(model.tau_acc_brk, 0.02);
     const Tthr = model.t_acc_thr, Tbrk = model.t_acc_brk;
     const outDt = 1 / RATE, h = outDt / SUBSTEP;
     let lastDrive = chanAt("cmd_accel", i0 / RATE); if (lastDrive == null) lastDrive = a;
@@ -639,8 +649,7 @@ const DATA = __PAYLOAD_JSON__;
         let u = throttle ? uThr : uBrk;
         if (u == null) u = lastDrive;
         lastDrive = u;
-        const tau0 = throttle ? tauThr : tauBrk;
-        const tau = Math.max(tau0 + slope * vv, 0.02);
+        const tau = throttle ? tauThr : tauBrk; // 定数 (下限クランプ済み)
         const wzo = chanAt("wz", tt); // カーブ抵抗の回帰子 a_y=v·wz 用 (観測)
         a += h * (-(a - accelTarget(u, vv, wzo != null ? wzo : 0)) / tau);
       }
@@ -729,9 +738,9 @@ const DATA = __PAYLOAD_JSON__;
     updateEquations(); markDirty();
     return { before, after };
   }
-  // 縦の最適化キー: 基本(T/τ/slope) + 有効な多項式補正の各次のみ。
+  // 縦の最適化キー: 基本(T/τ) + 有効な多項式補正の各次のみ。
   function lonKeys() {
-    const k = ["t_acc_thr", "tau_acc_thr", "t_acc_brk", "tau_acc_brk", "tau_acc_slope"];
+    const k = ["t_acc_thr", "tau_acc_thr", "t_acc_brk", "tau_acc_brk"];
     if (model.polyOn0) k.push("poly0");
     if (model.polyOn1) k.push("poly1");
     if (model.polyOn2) k.push("poly2");
