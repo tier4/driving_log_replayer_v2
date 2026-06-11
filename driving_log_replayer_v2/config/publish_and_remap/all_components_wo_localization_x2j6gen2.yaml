@@ -83,6 +83,8 @@ publish:
   - /system/emergency/hazard_lights_cmd
   - /system/emergency/turn_indicators_cmd
   - /system/fail_safe/mrm_state
+  # /control/command
+  - /control/command/control_cmd
   # `/control/external_cmd_selector` outputs
   - /control/external_cmd_selector/current_selector_mode
   - /external/selected/gear_cmd

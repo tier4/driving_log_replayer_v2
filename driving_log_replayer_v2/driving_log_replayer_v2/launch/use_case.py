@@ -57,10 +57,15 @@ def launch_autoware(context: LaunchContext) -> list:
             "planning_simulator.launch.xml",
         )
     else:
+        launch_file_name = (
+            "logging_simulator_j6_vehicle_interface.launch.xml"
+            if conf["vehicle_model"] == "j6_gen2"
+            else "logging_simulator.launch.xml"
+        )
         autoware_launch_file = Path(
             get_package_share_directory("autoware_launch"),
             "launch",
-            "logging_simulator.launch.xml",
+            launch_file_name,
         )
         launch_args["launch_vehicle_interface"] = "true"
         launch_args["launch_system_monitor"] = "true"
