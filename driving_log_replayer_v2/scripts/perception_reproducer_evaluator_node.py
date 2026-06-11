@@ -38,6 +38,7 @@ from driving_log_replayer_v2.perception_reproducer import ConditionGroup
 from driving_log_replayer_v2.perception_reproducer import EgoKinematicCondition
 from driving_log_replayer_v2.perception_reproducer import EgoKinematicResult
 from driving_log_replayer_v2.perception_reproducer import EgoKinematicTriggerCondition
+from driving_log_replayer_v2.perception_reproducer import is_ego_in_any_area
 from driving_log_replayer_v2.perception_reproducer import PerceptionReproducerScenario
 from driving_log_replayer_v2.perception_reproducer import TimeWaitResult
 from driving_log_replayer_v2.perception_reproducer import TimeWaitTriggerCondition
@@ -62,6 +63,8 @@ class EvaluatorState:
     fail_trigger_time: float | None = (
         None  # Time when fail condition was triggered (None means not triggered)
     )
+    latest_ego_x: float | None = None
+    latest_ego_y: float | None = None
 
 
 class ConditionGroupEvaluator:
@@ -183,6 +186,18 @@ class ConditionGroupEvaluator:
         """Handle dependency (end_at) passing. Deactivate this evaluator."""
         self.deactivate()
 
+    def is_ignored(self) -> bool:
+        """Return True if this group should skip evaluation (parent cascade or own ignore_areas)."""
+        if self.parent_evaluator is not None and self.parent_evaluator.is_ignored():
+            return True
+        x, y = self.state.latest_ego_x, self.state.latest_ego_y
+        if x is None or y is None:
+            return False
+        return is_ego_in_any_area(x, y, self.group.ignore_areas)
+
+    def _can_collect_frames(self) -> bool:
+        return self.is_active and not self.is_ignored()
+
     def _notify_dependents_first_pass(self) -> None:
         """Notify dependents when this evaluator first passes."""
         # Notify start_at dependents to activate
@@ -195,6 +210,9 @@ class ConditionGroupEvaluator:
     def evaluate(self) -> None:  # noqa: C901
         """Evaluate this condition group recursively and update internal state."""
         if not self.is_active:  # keep the internal state as is
+            return
+        if self.is_ignored():
+            self.summary = {"Status": "Ignored"}
             return
 
         results: list[bool] = []
@@ -221,11 +239,12 @@ class ConditionGroupEvaluator:
             results.append(self.time_wait_result.success)
             summary_dict["TimeWait"] = self.time_wait_result.summary
 
-        # Recursively evaluate nested evaluators (skip inactive ones)
+        # Recursively evaluate nested evaluators (skip inactive ones; ignored nested still
+        # contribute frozen success/summary to the parent aggregation)
         for nested_evaluator in self.nested_evaluators:
             if not nested_evaluator.is_active:
                 continue
-            nested_evaluator.evaluate()  # Update nested evaluator's state
+            nested_evaluator.evaluate()  # ignored nested sets Status: Ignored, keeps success
             results.append(nested_evaluator.success)
             summary_dict[nested_evaluator.group.group_name] = nested_evaluator.summary
 
@@ -247,7 +266,7 @@ class ConditionGroupEvaluator:
         self, msg: Odometry, acceleration_msg: AccelWithCovarianceStamped | None = None
     ) -> bool:
         updated = False
-        if self.is_active and self.ego_kinematic_result is not None:
+        if self._can_collect_frames() and self.ego_kinematic_result is not None:
             self.ego_kinematic_result.set_frame(msg, acceleration_msg)
             updated = True
 
@@ -257,7 +276,7 @@ class ConditionGroupEvaluator:
 
     def set_metric_frame(self, msg: MetricArray, topic: str) -> bool:
         updated = False
-        if self.is_active and self.metric_result is not None:
+        if self._can_collect_frames() and self.metric_result is not None:
             self.metric_result.set_frame(msg, topic)
             updated = True
 
@@ -273,7 +292,7 @@ class ConditionGroupEvaluator:
         diag_status: DiagnosticStatus = msg.status[0]
         if (
             diag_status.hardware_id in self.diag_target_hardware_ids
-            and self.is_active
+            and self._can_collect_frames()
             and self.diag_result is not None
         ):
             self.diag_result.set_frame(msg)
@@ -287,7 +306,7 @@ class ConditionGroupEvaluator:
         self, msg: PlanningFactorArray, topic: str, latest_kinematic_state: Odometry | None
     ) -> bool:
         updated = False
-        if self.is_active and self.planning_factor_result is not None:
+        if self._can_collect_frames() and self.planning_factor_result is not None:
             self.planning_factor_result.set_frame(msg, topic, latest_kinematic_state)
             updated = True
 
@@ -299,7 +318,7 @@ class ConditionGroupEvaluator:
 
     def set_time_wait_frame(self, current_time: float) -> bool:
         updated = False
-        if self.is_active and self.time_wait_result is not None:
+        if self._can_collect_frames() and self.time_wait_result is not None:
             self.time_wait_result.set_frame(current_time)
             updated = True
 
@@ -633,6 +652,8 @@ class PerceptionReproducerEvaluator(DLREvaluatorV2):
     def kinematic_state_cb(self, msg: Odometry) -> None:
         """Update latest kinematic state and propagate ego kinematic updates."""
         self.latest_kinematic_state = msg
+        self._evaluator_state.latest_ego_x = msg.pose.pose.position.x
+        self._evaluator_state.latest_ego_y = msg.pose.pose.position.y
         if self._evaluator_state.test_ended or self._evaluator_state.engaged_time is None:
             return
 

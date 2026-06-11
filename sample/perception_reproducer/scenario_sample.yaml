@@ -44,6 +44,12 @@ Evaluation:
       - group_name: check_safety_conditions
         start_at: wait_after_engage_5s
         group_type: all_of
+        # ignore_areas: optional; pause this group's fail evaluation while ego is inside the circle (baselink)
+        # ignore_areas:
+        #   - x: 30180.0
+        #     y: 29560.0
+        #     range: 5.0
+        #     area_condition: inside
         condition_list:
           - condition_class: metric
             condition_name: check_left_uncrossable_boundary_distance

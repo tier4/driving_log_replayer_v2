@@ -113,6 +113,13 @@ Evaluation:
       - group_name: check_safety_conditions
         start_at: time_wait_triggers
         group_type: all_of
+        # ignore_areas: pause fail evaluation while ego is inside any listed circle (baselink).
+        # Cascades to nested condition groups. Replaces splitting groups with end_at/start_at around checkpoints.
+        ignore_areas:
+          - x: 3900.0 # [m] same center as check_arrive_obstacle_area
+            y: 72000.0
+            range: 8.0 # [m]
+            area_condition: inside
         condition_list:
           - condition_class: metric
             condition_name: check_boundary_distance_ok # check BOUNDARY DISTANCE
