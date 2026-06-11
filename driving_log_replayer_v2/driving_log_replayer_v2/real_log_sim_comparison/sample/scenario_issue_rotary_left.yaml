@@ -96,7 +96,11 @@ Evaluation:
         vehicle_model: j6_gen2
         architecture_type: awf/universe/20250130
         dp_model_release: 20260303-180133_baseline_pre0060_sft0080
-        # この release は既定の diffusion_planner_for_x2_exp ではなく無印パッケージにある
+        # この release は既定の diffusion_planner_for_x2_exp ではなく無印パッケージにある。
+        # 注意: 20260303 系は onnx が旧形式 (major_version: 3) のため、現行ローカルの
+        # autoware_diffusion_planner (v4 要求) では "Unsupported major_version: 3" で
+        # inference 無効になり ego が走らない (2026-06-11 確認)。実行には実機当時の
+        # 3月版 autoware か v4 形式での再エクスポートが必要。
         dp_model_package: diffusion_planner_for_x2
         params: {k_us: 0.020}
       dp_0503:
