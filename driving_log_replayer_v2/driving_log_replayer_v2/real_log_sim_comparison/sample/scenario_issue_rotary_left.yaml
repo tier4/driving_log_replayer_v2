@@ -46,10 +46,10 @@ Evaluation:
   Datasets:
     # テレポート駅ロータリー入口左旋回 課題を含む実機走行データセット。
     # webauto data annotation-dataset pull --project-id x2_dev \
-    #   --annotation-dataset-id <UUID> --include-intermediate-artifacts
+    #   --annotation-dataset-id 69d51a06-7241-479d-9d54-8c4081568efe --include-intermediate-artifacts
     # または download.py / make issue_scenario でローカルデータセットを構築する。
-    # 既存 annotation-dataset 名: Override_E2E_LocalizationOff_x2j6gen2_odaiba_2026-03-31-A71
-    - <DATASET_UUID>:
+    # 既存 annotation-dataset 名: Override_E2E_x2j6gen2_odaiba_2026-03-31-A71
+    - 69d51a06-7241-479d-9d54-8c4081568efe:
         VehicleId: default
   Conditions:
     scenario_name: "テレポート駅ロータリー入口 左旋回 大回り再現検証（DP 3モデル比較）"

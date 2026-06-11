@@ -50,10 +50,10 @@ Evaluation:
   Datasets:
     # 産総研脇〜テレコム左カーブ大回り課題を含む実機走行データセット。
     # webauto data annotation-dataset pull --project-id x2_dev \
-    #   --annotation-dataset-id <UUID> --include-intermediate-artifacts
+    #   --annotation-dataset-id ab9a2ae2-dccb-48b6-9c39-24eadb062841 --include-intermediate-artifacts
     # または download.py / make issue_scenario でローカルデータセットを構築する。
-    # 既存 annotation-dataset 名: Override_E2E_LocalizationOff_x2j6gen2_odaiba_2026-03-17-A39
-    - <DATASET_UUID>:
+    # 既存 annotation-dataset 名: Override_E2E_x2j6gen2_odaiba_2026-03-17-A39
+    - ab9a2ae2-dccb-48b6-9c39-24eadb062841:
         VehicleId: default
   Conditions:
     scenario_name: "産総研〜テレコム 左カーブ大回り 再現検証（DP 3モデル比較）"
