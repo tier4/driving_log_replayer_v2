@@ -15,6 +15,41 @@ Launching the file executes the following steps:
 
 ## Evaluation Result
 
+### condition_group
+
+`condition_group` can be used in both `pass_conditions` and `fail_conditions`. Nested condition groups are supported.
+
+| Field            | Description                                                                                                                                                                                                                                                                                                                          |
+| ---------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `group_name`     | Unique identifier for this group. Referenced by `start_at` / `end_at` of other groups.                                                                                                                                                                                                                                               |
+| `group_type`     | `all_of` or `any_of`. How to combine results of conditions in `condition_list`.                                                                                                                                                                                                                                                      |
+| `start_at`       | Optional `group_name`. This group starts evaluating when the referenced group passes. `null` means start at ENGAGE.                                                                                                                                                                                                                  |
+| `end_at`         | Optional `group_name`. This group stops evaluating when the referenced group passes. `null` means end at `timeout_s`.                                                                                                                                                                                                                |
+| `ignore_areas`   | Optional list of circular areas (baselink). While ego is inside any of them, this group and its nested child groups skip frame collection and evaluation. Cascades to nested groups like `start_at` / `end_at`. Previously triggered `triggered` state is not rolled back. Evaluation summary shows `Status: Ignored` while skipped. |
+| `condition_list` | List of conditions or nested `condition_group` entries.                                                                                                                                                                                                                                                                              |
+
+Each item in `ignore_areas` uses the same `Area` format as other use cases:
+
+| Field            | Description                                                                                                                           |
+| ---------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
+| `x`, `y`         | Center of the circle in map coordinates.                                                                                              |
+| `range`          | Radius of the circle [m].                                                                                                             |
+| `area_condition` | `inside` (default): disable evaluation while ego is inside the circle. `outside`: disable evaluation while ego is outside the circle. |
+
+```yaml
+- group_name: check_safety_conditions
+  group_type: all_of
+  start_at: wait_after_engage_5s
+  ignore_areas:
+    - x: 30180.0
+      y: 29560.0
+      range: 5.0
+      area_condition: inside
+  condition_list:
+    - condition_class: metric
+      ...
+```
+
 ### Pass Conditions
 
 When all condition groups in `pass_conditions` meet ONCE, the test passes and terminates.
@@ -35,7 +70,7 @@ Evaluate if the specified wait time has elapsed.
 
 #### condition_group
 
-Nested condition groups are supported. The group can be configured with `start_at` and `end_at` to control when it becomes active.
+See [condition_group](#condition_group) above.
 
 ### Fail Conditions
 
@@ -63,7 +98,7 @@ Evaluate ego kinematic conditions (position, velocity, acceleration) continuousl
 
 #### condition_group
 
-Nested condition groups are supported. The group can be configured with `start_at` and `end_at` to control when it becomes active.
+See [condition_group](#condition_group) above.
 
 ## Output File for Evaluation Results
 

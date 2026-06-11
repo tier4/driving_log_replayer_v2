@@ -45,6 +45,22 @@ from driving_log_replayer_v2.result import ResultBase
 from driving_log_replayer_v2.scenario import Scenario
 
 
+def distance_to_area_baselink(x: float, y: float, area: Area) -> float:
+    """Return distance from ego baselink position to the area boundary (0.0 means matched)."""
+    distance_to_center = math.hypot(x - area.x, y - area.y)
+    if area.area_condition == "inside":
+        return max(0.0, distance_to_center - area.range)
+    return max(0.0, area.range - distance_to_center)
+
+
+def is_ego_in_area(x: float, y: float, area: Area) -> bool:
+    return distance_to_area_baselink(x, y, area) == 0.0
+
+
+def is_ego_in_any_area(x: float, y: float, areas: list[Area]) -> bool:
+    return any(is_ego_in_area(x, y, area) for area in areas)
+
+
 def _validate_unique_group_names(groups: list[ConditionGroup], context: str) -> None:
     """Validate that group_name is unique within a list of groups."""
     group_names: set[str] = set()
@@ -123,6 +139,9 @@ class ConditionGroup(BaseModel):
               this group starts evaluating. If null, starts at ENGAGED.
     end_at: Reference to another group_name. When that group passes, this group stops
             evaluating. If null, ends at timeout_s.
+    ignore_areas: Circular areas (baselink). While ego is inside any of them, this group
+                  and its nested child groups skip frame collection and evaluation.
+                  Cascades to nested groups like start_at/end_at.
     Note: For nested condition groups, the child group's time window is automatically
           constrained by the parent group's time window.
     """
@@ -132,6 +151,7 @@ class ConditionGroup(BaseModel):
     start_at: str | None = None  # Reference to another group_name or null (starts at ENGAGED)
     end_at: str | None = None  # Reference to another group_name or null (ends at timeout_s)
     group_type: Literal["any_of", "all_of"]
+    ignore_areas: list[Area] = []
     condition_list: list[
         Annotated[
             Union[  # noqa: UP007
@@ -263,14 +283,9 @@ class EgoKinematic(EvaluationItem):
 
         if self.condition.area is not None:
             if self.condition.area_check_type == "baselink":
-                distance_to_center = math.sqrt(
-                    (position_x - self.condition.area.x) ** 2
-                    + (position_y - self.condition.area.y) ** 2
+                distance_to_area = distance_to_area_baselink(
+                    position_x, position_y, self.condition.area
                 )
-                if self.condition.area.area_condition == "inside":
-                    distance_to_area = max(0.0, distance_to_center - self.condition.area.range)
-                else:
-                    distance_to_area = max(0.0, self.condition.area.range - distance_to_center)
             else:
                 err_msg = f"area_check_type = {self.condition.area_check_type} is to be implemented"
                 raise ValueError(err_msg)
