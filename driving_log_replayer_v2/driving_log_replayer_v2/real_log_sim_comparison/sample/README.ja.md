@@ -220,6 +220,90 @@ make local_cloud_run LOCAL_SCENARIO=/path/to/other_scenario.yaml
 | Stage 3 (sim) が全 run 失敗 | scenario_test_runner が起動できているか、auto_scenario.yaml が valid か `ros2 launch scenario_test_runner scenario_test_runner.launch.py scenario:=<...auto_scenario.yaml>` を手動で試行 |
 | sim 1 run で 10 分以上かかる | `sim_runs.yaml` の `timeout_s` を上げるか、`initialize_duration` を下げて確認 |
 
+## 実機課題別 再現検証シナリオ
+
+各実機課題は**課題が観測された実機データセット（rosbag）にしか含まれない**ため、
+専用の scenario.yaml を使って個別に実行する方式を採る。可視化は既存の
+curve_config + step4/step10 の領域別解析を再利用し、新ステップは追加しない。
+
+### ① カーブ大回り（具体シナリオ・実行可能）
+
+**ファイル**: `sample/scenario_curve_wide_turn.yaml` / `sample/sim_runs_curve_wide_turn.yaml`
+
+**検証内容**:
+テレポート駅前交差点の左折（curve2: cx=89301, cy=43085）で、DiffusionPlanner の
+3 モデル（0303/0503/0410）を比較して大回りの再現性を検証する。
+
+| run tag | 実機での挙動 | 検証軸 |
+|---|---|---|
+| `sim_dp_0303` | 大回りなし | FN 検証（sim でも大回りしないこと） |
+| `sim_dp_0503` | 大回りなし | FN 検証（同上） |
+| `sim_dp_0410` | 大回りあり | TP 検証（sim でも大回りが再現されること） |
+
+**実行**:
+```bash
+# 事前に dataset を pull
+webauto data annotation-dataset pull --project-id x2_dev \
+  --annotation-dataset-id 28443458-8d02-476d-b91c-528ea6027d18 \
+  --include-intermediate-artifacts
+
+# 専用シナリオで実行（クラウド評価推奨）
+make local_cloud_run LOCAL_SCENARIO=$(pwd)/sample/scenario_curve_wide_turn.yaml
+```
+
+**結果の確認** — `report.html` の「4. シナリオ クローズループ比較」セクション:
+- `curve2_analysis`: 実機 vs 3 sim の軌跡ズーム（大回りの有無を目視）
+- `curve2_steering_detail` / `curve2_yaw_steer`: ステア角・yaw 差の時系列
+- `curve_diag/curve_divergence.md`: 縦/横乖離の定量値（横乖離が大きければ大回り）
+
+---
+
+### ②〜⑤ その他の課題（テンプレート）
+
+**ファイル**: `sample/scenario_issue_template.yaml`
+
+このファイルをコピーして `scenario_issue_<課題名>.yaml` にリネームし、
+**Dataset UUID** と **curve_config_yaml** を編集して使う。
+
+| 課題 | 停止→発進 | curve_config の設定 | 確認する図 |
+|---|---|---|---|
+| ②停止位置手前 | あり | `curve_centers` に停止線付近を定義 + `plot_curves.launch_window` | `curveN_analysis` + `curve_divergence.md` |
+| ③急ブレーキ/ジリジリ | あり | 同上 | `curveN_analysis`（accel パネル）+ `curve_divergence.md` |
+| ④加速不足 | なし | `curve_centers` に加速区間を定義（`launch_window` は省略可） | `curves_closeup`（軌跡ズーム）+ `velocity.fig.json` / `velocity_vs_distance.fig.json` |
+| ⑤発進停止振動 | なし | `curve_centers` に発進窓付近を定義（または空文字でスキップ） | `velocity.fig.json` / `acceleration.fig.json`（全軌跡 overlay） |
+
+**curve_config の例（停止線付近・②③用）**:
+```yaml
+curve_centers:
+  - {label: "停止線（A交差点）", cx: 89310, cy: 43035, margin: 20}
+curve2_index: 0
+curve2_window: {start: 20.0, end: 80.0}
+plot_curves:
+  - {index: 0, launch_window: {start: 20.0, end: 80.0}}
+```
+
+**curve_config の例（加速区間・④用）**:
+```yaml
+curve_centers:
+  - {label: "加速区間", cx: 89350, cy: 42980, margin: 50}
+# plot_curves に launch_window を指定しないと curves_closeup 軌跡ズームのみ生成。
+# 速度は全軌跡の velocity.fig.json で確認する。
+```
+
+**実行**:
+```bash
+webauto data annotation-dataset pull --project-id x2_dev \
+  --annotation-dataset-id <課題の UUID> --include-intermediate-artifacts
+
+make local_cloud_run LOCAL_SCENARIO=$(pwd)/sample/scenario_issue_<課題名>.yaml
+```
+
+> **注意**: 複数課題の結果はシナリオごとに独立した `report.html` で確認する。
+> 同一条件で複数データセットを横断評価するには、同一 scenario に複数 Datasets を列挙して
+> `make local_batch_run LOCAL_SCENARIO=...` を使う。
+
+---
+
 ## 設計上の注意
 
 - **N=1 解析は「1 step 予測」**: 各ステップで実機状態にリセットして

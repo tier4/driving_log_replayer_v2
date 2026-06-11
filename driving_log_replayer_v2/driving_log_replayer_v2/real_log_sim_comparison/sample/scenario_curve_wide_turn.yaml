@@ -1,0 +1,51 @@
+ScenarioFormatVersion: 3.0.0
+ScenarioName: real_log_sim_comparison_curve_wide_turn
+ScenarioDescription: |
+  カーブ大回り課題の Sim 再現検証シナリオ。
+  テレポート駅前交差点の左折（curve2: cx=89301, cy=43085）を主な検証箇所とする。
+
+  検証軸:
+    True Positive  (TP): 大回りモデル (sim_dp_0410) で大回りが再現されること
+    False Negative (FN): ベストモデル (sim_dp_0303/0503) で大回りが発生しないこと
+
+  使い方:
+    make -C <この dir> local_cloud_run LOCAL_SCENARIO=$(pwd)/sample/scenario_curve_wide_turn.yaml
+  事前に 28443458 を pull しておくこと:
+    webauto data annotation-dataset pull --project-id x2_dev \
+      --annotation-dataset-id 28443458-8d02-476d-b91c-528ea6027d18 --include-intermediate-artifacts
+
+  結果の確認:
+    report.html の「4. シナリオ クローズループ比較」セクションを確認。
+    - curve2_analysis : 実機 vs 3 DP モデルの軌跡ズーム（大回りの有無を目視）
+    - curve2_steering_detail / curve2_yaw_steer : ステア角・yaw 差の時系列
+    - curve_diag/curve_divergence.md : 縦/横乖離の定量値（横乖離が大きければ大回り）
+    TP = sim_dp_0410 の横乖離が顕著に大きい
+    FN = sim_dp_0303 / sim_dp_0503 の横乖離が実機に近い（大回りしない）
+SensorModel: aip_x2_gen2
+VehicleModel: j6_gen2
+Evaluation:
+  UseCaseName: planning_control
+  SubUseCaseName: real_log_sim_comparison
+  UseCaseFormatVersion: 0.1.0
+  Datasets:
+    # Override_E2E_x2j6gen2_odaiba_2026-05-12-A09
+    # j6_gen2 実機 E2E 走行、お台場エリア、2026-05-12 記録。
+    # テレポート駅前交差点の左折 (curve2) を含む 276m / 60s の走行。
+    - 28443458-8d02-476d-b91c-528ea6027d18:
+        VehicleId: default
+  Conditions:
+    scenario_name: "カーブ大回り再現検証（テレポート駅前左折、DP 3モデル比較）"
+    # curve_config_miraikan.yaml は curve2 (テレポート駅前左折) を主対象として
+    # step4 の curve2_analysis / step10 の curve_divergence を有効化する。
+    curve_config_yaml: ./curve_config_miraikan.yaml
+    cases_config: ./cases.yaml
+    # DP 3モデル比較用 sim_runs: sim_dp_0303 / sim_dp_0503 (大回りなし=FN検証) /
+    # sim_dp_0410 (大回りあり=TP検証)。各 run に k_us=0.020 を設定。
+    # sim_runs_dp_models.yaml は本セッション中に削除済み → 下記のように直接定義する。
+    sim_runs_config: ./sim_runs_curve_wide_turn.yaml
+    real_provenance: ""
+    # replay: 実機 bag の信号を再現。
+    # 大回りは信号に関係なく curve2 でのみ発生するためデフォルトで可。
+    traffic_signals: replay
+    loop_waypoints: 0
+    reproduce_perception: false
