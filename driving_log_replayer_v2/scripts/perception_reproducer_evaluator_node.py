@@ -239,11 +239,12 @@ class ConditionGroupEvaluator:
             results.append(self.time_wait_result.success)
             summary_dict["TimeWait"] = self.time_wait_result.summary
 
-        # Recursively evaluate nested evaluators (skip inactive or ignored ones)
+        # Recursively evaluate nested evaluators (skip inactive ones; ignored nested still
+        # contribute frozen success/summary to the parent aggregation)
         for nested_evaluator in self.nested_evaluators:
-            if not nested_evaluator.is_active or nested_evaluator.is_ignored():
+            if not nested_evaluator.is_active:
                 continue
-            nested_evaluator.evaluate()  # Update nested evaluator's state
+            nested_evaluator.evaluate()  # ignored nested sets Status: Ignored, keeps success
             results.append(nested_evaluator.success)
             summary_dict[nested_evaluator.group.group_name] = nested_evaluator.summary
 
