@@ -35,6 +35,7 @@ lite ではなく **生の input_bag** を読む。evaluator_node からは
 from __future__ import annotations
 
 import argparse
+import json
 import math
 import os
 from pathlib import Path
@@ -912,6 +913,11 @@ def main() -> None:
                         default=int(os.environ.get("LOOP_WAYPOINTS", "0") or "0"),
                         help="opt-in (既定 0=start+goal のみ): 実走軌跡の膨らみ位置に N 個の中間 "
                              "LanePosition waypoint を挿入し周回経路を強制 (D0 緩和)。**要 live sim 検証**")
+    parser.add_argument("--replay-preroll", type=float,
+                        default=float(os.environ.get("REPLAY_PREROLL", "0") or "0"),
+                        help="ego replay の開始アンカーを AUTONOMOUS 開始 (t0) より何秒前に取るか [s] "
+                             "(env: REPLAY_PREROLL, 既定 0)。TeleportAction の start pose も同じ "
+                             "アンカー時刻の kinematic から取り、replay 注入開始時の pose ジャンプを防ぐ。")
     args = parser.parse_args()
 
     input_bag = Path(args.input_bag)
@@ -937,12 +943,18 @@ def main() -> None:
     # route 抽出は lane_ids の informational ログにのみ使う (start/goal には使わない)。
     _, _, lane_ids = _extract_route_info(input_bag)
 
+    # ego replay のアンカー時刻。preroll>0 なら t0 より前から replay を始める
+    # (start pose も同じアンカーから取り、注入開始時の pose ジャンプを防ぐ)。
+    preroll_s = max(0.0, args.replay_preroll)
+    t_anchor_ns = t0_ns - int(preroll_s * 1e9)
+
     # InitialPose / GoalPose は実機が AUTONOMOUS 区間で実際にいた位置 (kinematic) から取る。
     # LaneletRoute.start_pose はミッション計画上の起点で、記録された AUTONOMOUS 区間
     # (make_lite が抽出する real.lite) の外を指すことがある (過去ミッションの stale な
     # start_pose 等)。それを InitialPose にすると sim と実機が全く別の場所を走るため使わない。
-    start_world = _initial_pose_from_kinematic(input_bag, t0_ns)
-    start_source = "kinematic@AUTONOMOUS開始"
+    start_world = _initial_pose_from_kinematic(input_bag, t_anchor_ns)
+    start_source = (f"kinematic@AUTONOMOUS開始-{preroll_s:.1f}s" if preroll_s > 0.0
+                    else "kinematic@AUTONOMOUS開始")
     goal_world = _goal_pose_from_kinematic(input_bag, t0_ns)
     goal_source = "kinematic@AUTONOMOUS終了"
 
@@ -1013,6 +1025,15 @@ def main() -> None:
     with output_yaml.open("w", encoding="utf-8") as f:
         yaml.safe_dump(doc, f, sort_keys=False, allow_unicode=True)
     print(f"[step2_bag_to_scenario] Saved: {output_yaml}")
+
+    # ego/perception replay 用サイドカー。step3 が読み、bag metadata 開始時刻との差から
+    # scenario_test_runner の replay_start_time (= scenario time 0 に対応する bag 相対秒) を出す。
+    replay_json = output_yaml.with_suffix(".replay.json")
+    with replay_json.open("w", encoding="utf-8") as f:
+        json.dump({"t0_ns": int(t0_ns), "t_anchor_ns": int(t_anchor_ns),
+                   "preroll_s": preroll_s}, f, indent=2)
+    print(f"[step2_bag_to_scenario] Saved: {replay_json} "
+          f"(t0_ns={t0_ns}, t_anchor_ns={t_anchor_ns}, preroll={preroll_s}s)")
 
 
 if __name__ == "__main__":

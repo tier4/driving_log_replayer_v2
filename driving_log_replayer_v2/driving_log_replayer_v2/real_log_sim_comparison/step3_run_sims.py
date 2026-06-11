@@ -34,7 +34,58 @@ from pathlib import Path
 _FALLBACK_SIM_OUT_ROOT = Path("/tmp/scenario_test_runner")
 
 
-def _build_launch_cmd(run, scenario: Path, output_directory: Path) -> list[str]:
+def _resolve_replay(reproduce_bag: str, scenario: Path,
+                    ego_replay_duration: float, position_based: bool) -> dict | None:
+    """reproduce_bag から scenario_test_runner の replay launch 引数素材を解決する.
+
+    返り値 dict: {bag, replay_start_time, ego_replay_duration, position_based}。
+    - bag: input_bag ディレクトリそのもの (mcap/db3 とも metadata.yaml から rosbag2 が
+      storage を自動判別する。PerceptionReproducerSensor / EgoBagReplayer 双方が直接読む)
+    - replay_start_time: scenario time 0 に対応する bag 相対秒
+      (= t_anchor − bag metadata starting_time)。t_anchor は step2 のサイドカー
+      <scenario>.replay.json から読み、無ければ bag から AUTONOMOUS 開始を再計算する。
+    """
+    if not reproduce_bag:
+        return None
+    bag = Path(reproduce_bag)
+    if not bag.exists():
+        print(f"[step3_run_sims] WARN: reproduce_bag が見つかりません: {bag} "
+              "(perception/ego replay をスキップ)", file=sys.stderr)
+        return None
+
+    # t_anchor: step2 サイドカー優先、無ければ再計算 (replay.json は step2 と同時生成のため
+    # 通常存在する。フォールバックは scenario を手書きした場合等の保険)。
+    replay_json = scenario.with_suffix(".replay.json")
+    if replay_json.exists():
+        t_anchor_ns = int(json.loads(replay_json.read_text())["t_anchor_ns"])
+    else:
+        from .lib._events import find_autonomous_start  # noqa: PLC0415
+        from .lib._io import load_operation_mode, load_velocity  # noqa: PLC0415
+        print(f"[step3_run_sims] WARN: {replay_json} が無いため AUTONOMOUS 開始を再計算",
+              file=sys.stderr)
+        t_anchor_ns = find_autonomous_start(load_operation_mode(bag), load_velocity(bag))
+
+    import rosbag2_py  # noqa: PLC0415
+
+    from .lib._io import _detect_storage_id  # noqa: PLC0415
+    metadata = rosbag2_py.Info().read_metadata(str(bag), _detect_storage_id(bag))
+    bag_start_ns = int(metadata.starting_time.nanoseconds)
+    replay_start_time = (t_anchor_ns - bag_start_ns) / 1e9
+    if replay_start_time < 0.0:
+        print(f"[step3_run_sims] WARN: replay_start_time={replay_start_time:.3f}s < 0 "
+              "(t_anchor が bag 開始より前)。0 に丸めます", file=sys.stderr)
+        replay_start_time = 0.0
+    return {
+        "bag": bag,
+        "replay_start_time": replay_start_time,
+        "ego_replay_duration": ego_replay_duration,
+        "position_based": position_based,
+    }
+
+
+def _build_launch_cmd(
+    run, scenario: Path, output_directory: Path, replay: dict | None = None
+) -> list[str]:
     """scenario_test_runner.launch.py の ros2 launch 起動コマンドを組み立てる.
 
     注: rviz の起動は Autoware (planning_simulator.launch.xml) 側のメカニズムで、
@@ -62,6 +113,17 @@ def _build_launch_cmd(run, scenario: Path, output_directory: Path) -> list[str]:
     ]
     if run.godot_executable:
         cmd.append(f"godot_executable:={run.godot_executable}")
+    if replay is not None:
+        # replay_bag_path / replay_start_time / replay_ego_duration は launch の
+        # make_parameters() 経由で simple_sensor_simulator (perception 再生) と
+        # openscenario_interpreter (EgoBagReplayer) の両ノードに同じ値が渡る。
+        cmd += [
+            f"replay_bag_path:={replay['bag']}",
+            f"replay_start_time:={replay['replay_start_time']}",
+            f"replay_ego_duration:={replay['ego_replay_duration']}",
+        ]
+        if replay["position_based"]:
+            cmd.append("simple_sensor_simulator.replay_use_position_based:=true")
     # params: simulator_model パラメータ上書き。
     # scenario_test_runner.launch.py が simple_sensor_simulator. 接頭辞の launch 引数を
     # 収集し、simulator_model.param.yaml の後ろに連結する (後勝ち) ため、
@@ -246,8 +308,12 @@ def _webauto_json(args: list[str]) -> dict:
         raise RuntimeError(
             f"webauto 失敗 (rc={out.returncode}): {' '.join(cmd)}\n{out.stderr.strip()}"
         )
+    # pull 等は JSON の前に進捗テキスト ("---" 等) を stdout に混ぜるため、
+    # 最初の JSON 開始文字以降だけを解析する。
+    stdout = out.stdout
+    start = min((i for i in (stdout.find("{"), stdout.find("[")) if i >= 0), default=-1)
     try:
-        return json.loads(out.stdout)
+        return json.loads(stdout[start:]) if start >= 0 else json.loads(stdout)
     except json.JSONDecodeError as e:
         raise RuntimeError(
             f"webauto 出力の JSON 解析に失敗: {' '.join(cmd)}\n{out.stdout[:500]}"
@@ -360,9 +426,20 @@ def main() -> None:
                         help="出力先 lite/<tag>.lite/ ディレクトリ")
     parser.add_argument("--reproduce-bag",
                         default=os.environ.get("REPRODUCE_BAG", ""),
-                        help="指定すると実機 input_bag の先行車を ego-pose 同期で sim に注入する "
-                             "perception_reproducer ノードを sim と並走起動する (env: REPRODUCE_BAG)。"
-                             "空なら注入しない。")
+                        help="指定すると実機 input_bag の perception (検出物体・信号・占有格子) を "
+                             "simple_sensor_simulator 内蔵の PerceptionReproducerSensor で sim 時刻"
+                             "同期再生する (env: REPRODUCE_BAG)。空なら再生しない。")
+    parser.add_argument("--ego-replay-duration", type=float,
+                        default=float(os.environ.get("EGO_REPLAY_DURATION", "0") or "0"),
+                        help="scenario 開始から何秒間 ego 状態 (pose/twist/accel) を実機 bag から"
+                             "注入してから closed-loop に切替えるか [s] (env: EGO_REPLAY_DURATION, "
+                             "既定 0=無効)。rosbag 開始時に ego が速度を持つケースの初期状態合わせ。"
+                             "reproduce_bag の指定が必要。")
+    parser.add_argument("--replay-position-based", action="store_true",
+                        default=os.environ.get("REPLAY_POSITION_BASED", "") == "1",
+                        help="perception 再生を時刻同期ではなく sim ego 最近傍時刻のスナップショット"
+                             "再生にする (env: REPLAY_POSITION_BASED=1)。closed-loop 逸脱後の"
+                             "物体ずれ緩和用。")
     args = parser.parse_args()
 
     scenario = Path(args.scenario)
@@ -389,30 +466,21 @@ def main() -> None:
         prefix=f"sim_runner_{run.tag}_", dir="/tmp"))
     print(f"[step3_run_sims] tmp output_directory: {tmp_root}")
 
-    reproducer_proc: subprocess.Popen | None = None
     try:
-        # perception reproducer を sim と並走起動 (実機先行車を ego-pose 同期注入)。
-        # rclpy が late publisher を扱うため sim より先に起動して問題ない (起動時に bag を読み、
-        # sim ego topic が出たら購読開始)。同一 ROS_DOMAIN_ID は os.environ 継承で揃う。
-        if args.reproduce_bag and Path(args.reproduce_bag).exists():
-            repro_cmd = [
-                sys.executable, "-m",
-                "driving_log_replayer_v2.real_log_sim_comparison.perception_reproducer_node",
-                "--bag", str(args.reproduce_bag),
-            ]
-            # 信号を ego-govern するものに絞るための map。env MAP_OSM_PATH 優先、無ければ
-            # input_bag の隣 (<dataset>/map/lanelet2_map.osm) から導出。
-            map_osm = os.environ.get("MAP_OSM_PATH", "")
-            if not map_osm:
-                cand = Path(args.reproduce_bag).parent / "map" / "lanelet2_map.osm"
-                map_osm = str(cand) if cand.exists() else ""
-            if map_osm:
-                repro_cmd += ["--map", map_osm]
-            print(f"[step3_run_sims] $ {' '.join(repro_cmd)} (並走)", flush=True)
-            reproducer_proc = subprocess.Popen(repro_cmd)  # noqa: S603
-        elif args.reproduce_bag:
-            print(f"[step3_run_sims] WARN: reproduce_bag が見つかりません: {args.reproduce_bag} "
-                  "(perception 注入をスキップ)", file=sys.stderr)
+        # perception/ego replay の launch 引数素材を解決 (ssv2 内蔵の
+        # PerceptionReproducerSensor + EgoBagReplayer に渡す)。
+        replay = _resolve_replay(
+            args.reproduce_bag, scenario.resolve(),
+            args.ego_replay_duration, args.replay_position_based,
+        )
+        if replay is None and args.ego_replay_duration > 0.0:
+            print("[step3_run_sims] WARN: ego_replay_duration 指定がありますが reproduce_bag が"
+                  "解決できないため ego replay は無効です", file=sys.stderr)
+        if replay is not None:
+            print(f"[step3_run_sims] replay: bag={replay['bag']}, "
+                  f"replay_start_time={replay['replay_start_time']:.3f}s, "
+                  f"ego_replay_duration={replay['ego_replay_duration']}s, "
+                  f"position_based={replay['position_based']}")
 
         # DP モデルを解決 (dp_model_release 指定時は webauto から自動 pull)。
         dp_model_dir = _resolve_dp_model_dir(run)
@@ -421,7 +489,7 @@ def main() -> None:
         # DP モデル指定時は scenario 起動前に TensorRT エンジンを事前ビルド
         # (遅延ビルドによる scenario タイムアウト回避。sim_runs.yaml 駆動)。
         _prebuild_dp_engine(dp_model_dir)
-        cmd = _build_launch_cmd(run, scenario.resolve(), tmp_root)
+        cmd = _build_launch_cmd(run, scenario.resolve(), tmp_root, replay)
         _run_subprocess(cmd, timeout=run.timeout_s)
 
         # output_directory が効かない可能性に備え両方検索
@@ -452,6 +520,10 @@ def main() -> None:
             "dp_model_dir": dp_model_dir,
             "dp_model_release": run.dp_model_release,
             "params": run.params,
+            # 注入区間はメトリクスが実機と「一致して当然」のため、解析側が切替時刻を
+            # 参照できるよう記録する (replay 無効時は 0)。
+            "ego_replay_duration": replay["ego_replay_duration"] if replay else 0.0,
+            "replay_start_time": replay["replay_start_time"] if replay else None,
         })
         print(f"[step3_run_sims] provenance: DP={prov.get('dp_exp_name')} "
               f"(onnx {prov.get('dp_onnx_sha8')}) / autoware {prov.get('autoware_version')}")
@@ -459,12 +531,6 @@ def main() -> None:
         print(f"[step3_run_sims] Saved: {output_lite}")
 
     finally:
-        if reproducer_proc is not None and reproducer_proc.poll() is None:
-            reproducer_proc.terminate()
-            try:
-                reproducer_proc.wait(timeout=10)
-            except subprocess.TimeoutExpired:
-                reproducer_proc.kill()
         shutil.rmtree(tmp_root, ignore_errors=True)
         # フォールバック先もケース毎にクリア (次 run 干渉防止)
         shutil.rmtree(_FALLBACK_SIM_OUT_ROOT, ignore_errors=True)

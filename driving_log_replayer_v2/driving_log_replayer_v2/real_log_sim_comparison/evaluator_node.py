@@ -149,8 +149,10 @@ def run_pipeline(
     # Stage 2 (scenario 自動生成) が使う地図パス。build_common_env が解決済みの
     # MAP_OSM_PATH (存在しない場合は空文字) から復元する。
     map_osm = Path(env["MAP_OSM_PATH"]) if env["MAP_OSM_PATH"] else Path("")
-    # perception 再生 (既定 false; step3 が読む)。true で実機 input_bag の先行車を ego-pose 同期で
-    # 各 sim に注入し、実機の先行車追従 (停止・加減速) を再現する。
+    # perception 再生 (既定 false; step3 が読む)。true で実機 input_bag の検出物体・信号・
+    # 占有格子を simple_sensor_simulator 内蔵の PerceptionReproducerSensor が sim 時刻同期で
+    # 再生し、実機の先行車追従 (停止・加減速) を再現する。ego replay (EGO_REPLAY_DURATION)
+    # も同じ bag を使うため、reproduce_perception=true が前提。
     env["REPRODUCE_BAG"] = (
         str(input_bag_dir) if compare_cfg.get("reproduce_perception", False) else ""
     )
@@ -269,8 +271,19 @@ def build_common_env(
     env["REAL_PROVENANCE"] = compare_cfg.get("real_provenance", "")
     # route-shaping 実験オプション (既定 0=start+goal のみ; step2 が読む)。D0 の修正ではない。
     env["LOOP_WAYPOINTS"] = str(compare_cfg.get("loop_waypoints", 0))
-    # 信号の扱い (既定 replay; step2 が読む)。green で赤信号 replay 由来の D0 早期停止を回避。
-    env["TRAFFIC_SIGNALS"] = str(compare_cfg.get("traffic_signals", "replay"))
+    # 信号の扱い (step2 が読む)。green で赤信号 replay 由来の D0 早期停止を回避。
+    # reproduce_perception=true では PerceptionReproducerSensor が信号 topic を直接 publish
+    # して所有するため、scenario 側で信号をセットしない none を既定にする (二重 publisher 回避)。
+    reproduce_perception = bool(compare_cfg.get("reproduce_perception", False))
+    default_signals = "none" if reproduce_perception else "replay"
+    env["TRAFFIC_SIGNALS"] = str(compare_cfg.get("traffic_signals", default_signals))
+    # ego replay (step3 が読む)。scenario 開始から指定秒数、実機 bag の ego 状態を vehicle model
+    # に注入してから closed-loop に切替える。rosbag 開始時に ego が速度を持つケースの初期状態合わせ。
+    env["EGO_REPLAY_DURATION"] = str(compare_cfg.get("ego_replay_duration", 0.0))
+    # ego replay の開始アンカーを t0 より何秒前に取るか (step2 が読む)。
+    env["REPLAY_PREROLL"] = str(compare_cfg.get("replay_preroll", 0.0))
+    # perception 再生を ego 最近傍時刻スナップショット再生にする (step3 が読む)。
+    env["REPLAY_POSITION_BASED"] = "1" if compare_cfg.get("replay_position_based", False) else ""
     return env
 
 
@@ -464,11 +477,35 @@ def _load_compare_config(scenario_path_str: str) -> dict[str, Any]:
             ts = str(conditions["traffic_signals"]).strip().lower()
             cfg["traffic_signals"] = ts if ts in ("replay", "green", "none") else "replay"
 
-        # reproduce_perception (任意, 既定 false): true で実機 input_bag の先行車を ego-pose 同期で
-        # 各 sim に注入 (perception_reproducer_node)。NPC 無の auto-scenario に実機の先行車追従
-        # (停止・加減速) を再現させる。step3 が REPRODUCE_BAG 経由で起動。
+        # reproduce_perception (任意, 既定 false): true で実機 input_bag の検出物体・信号・
+        # 占有格子を simple_sensor_simulator 内蔵の PerceptionReproducerSensor が sim 時刻同期で
+        # 再生する。NPC 無の auto-scenario に実機の先行車追従 (停止・加減速) を再現させる。
+        # step3 が REPRODUCE_BAG 経由で launch 引数 replay_bag_path に変換する。
         if "reproduce_perception" in conditions:
             cfg["reproduce_perception"] = bool(conditions["reproduce_perception"])
+
+        # ego_replay_duration (任意, 既定 0=無効): scenario 開始から指定秒数、実機 bag の
+        # ego 状態 (pose/twist/accel) を traffic_simulator の EgoBagReplayer が vehicle model に
+        # 毎フレーム注入してから closed-loop に切替える。rosbag 開始時 (AUTONOMOUS 開始) に
+        # ego が速度を持つケースで初期状態を実機に合わせる。要 reproduce_perception=true。
+        if "ego_replay_duration" in conditions:
+            try:
+                cfg["ego_replay_duration"] = float(conditions["ego_replay_duration"])
+            except (TypeError, ValueError):
+                cfg["ego_replay_duration"] = 0.0
+
+        # replay_preroll (任意, 既定 0): ego replay の開始アンカーを AUTONOMOUS 開始より
+        # 何秒前に取るか [s]。step2 の start pose も同じアンカーから取る。
+        if "replay_preroll" in conditions:
+            try:
+                cfg["replay_preroll"] = float(conditions["replay_preroll"])
+            except (TypeError, ValueError):
+                cfg["replay_preroll"] = 0.0
+
+        # replay_position_based (任意, 既定 false): perception 再生を時刻同期ではなく
+        # sim ego 最近傍時刻のスナップショット再生にする (closed-loop 逸脱後の物体ずれ緩和)。
+        if "replay_position_based" in conditions:
+            cfg["replay_position_based"] = bool(conditions["replay_position_based"])
 
         # skip_sim (任意, 既定 false): true で Stage 3 (closed-loop sim 実行) をスキップし、
         # 実機ログのみの解析 (open-loop N-step / param sweep / カバレッジ等) を実行する。

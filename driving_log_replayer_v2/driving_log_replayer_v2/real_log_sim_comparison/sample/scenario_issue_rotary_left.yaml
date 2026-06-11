@@ -54,10 +54,17 @@ Evaluation:
     # base: feat/v4.3/e2e (universe 69fcda6b/Mar-27, launcher 8b9f0a98/Mar-26) + trajectory_modifier/DP cherry-picks
     # DP モデルは当日実験目的で複数切替（20260325-111332/111808/112009/111908/111559 等 epoch0040-0050）
     real_provenance: "2026-03-31 お台場, MJ20-015 (J6 gen2), pilot-auto.x2 feat/v4.3/e2e (universe 69fcda6b + cherry-picks), DP実験モデル複数切替"
-    # replay: 実機 bag の信号を再現。
-    traffic_signals: replay
+    # none: scenario 側で信号をセットしない (reproduce_perception の PerceptionReproducerSensor
+    # が実機 bag の信号 topic を直接 publish して所有するため、二重 publisher を避ける)。
+    traffic_signals: none
     loop_waypoints: 0
-    reproduce_perception: false
+    # 実機 input_bag の検出物体・信号・占有格子を simple_sensor_simulator 内蔵の
+    # PerceptionReproducerSensor で sim 時刻同期再生 (先行車追従・赤信号停止の忠実再現)。
+    reproduce_perception: true
+    # scenario 開始から 8 秒間、実機 bag の ego 状態 (pose/twist/accel) を vehicle model に
+    # 注入してから closed-loop に切替 (EgoBagReplayer)。AUTONOMOUS 開始時に ego が速度を
+    # 持つ本データセットで、停止発進ではなく実機と同じ走行中状態から sim を始める。
+    ego_replay_duration: 8.0
 
     models:
       normal:
@@ -89,11 +96,14 @@ Evaluation:
         vehicle_model: j6_gen2
         architecture_type: awf/universe/20250130
         dp_model_release: 20260303-180133_baseline_pre0060_sft0080
+        # この release は既定の diffusion_planner_for_x2_exp ではなく無印パッケージにある
+        dp_model_package: diffusion_planner_for_x2
         params: {k_us: 0.020}
       dp_0503:
         vehicle_model: j6_gen2
         architecture_type: awf/universe/20250130
         dp_model_release: 20260503-220950_with_takanawa_16days_weak_smoothing__0060__0080
+        dp_model_package: diffusion_planner_for_x2
         params: {k_us: 0.020}
       dp_0410:
         vehicle_model: j6_gen2
