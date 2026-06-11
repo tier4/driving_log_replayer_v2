@@ -13,8 +13,6 @@ import plotly.graph_objects as go
 # 図 (*.fig.json) の高さ [px] の単一ソース。build_fig_* (生成側) と step11 の iframe 高さ
 # (= 高さ + IFRAME_PAD; 自己完結 HTML ビューア用) の両方が参照する。
 FIG_HEIGHTS: dict[str, int] = {
-    "trajectory_with_map": 800,
-    "trajectory_xy": 800,
     "trajectory_playback": 1020,  # 地図ビュー + 下部同期時系列プロット (6 パネル ~252px)
     "lon_lat_model": 1080,  # 地図ビュー + 運動方程式 + 検証パネル5枚(2列3行 ~540px) + つまみ6個
     "map_distribution": 1000,  # 2 行 (N=1 / N=max) × 3 列

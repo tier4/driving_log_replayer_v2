@@ -38,10 +38,6 @@ from .lib._io import (
     resolve_topic,
 )
 from .lib._coverage import compute_coverage
-from .lib._fig_io import write_fig_json
-from .lib._figures import (
-    build_fig_vs_distance,
-)
 from .lib._map import load_map_ways, resolve_map_osm
 from .lib._model_viewer import plot_model_viewer
 from .lib._params_utils import load_sim_params
@@ -112,10 +108,10 @@ _SIM_MARKERS = ["^", "s", "D", "v", "P", "*", "X"]
 
 # 時間軸重ね描きへの注記: t=0 の基準がログ間で異なり (real=AUTONOMOUS 遷移 / sim=速度
 # fallback)、pacing も違うため、同一 t が同一地点を意味しない。走行距離基準は
-# velocity_vs_distance.svg / steering_vs_distance.svg を参照。
+# trajectory_playback.html の「距離軸」モードで対話的に確認できる。
 _TIME_AXIS_NOTE = (
     "注: t=0 は各ログの初回発進 (initial launch)。実機の初期停止時間が長くても全ログが発進で揃う"
-    "（pacing 差により同一 t は同一地点を意味しない。走行距離基準は *_vs_distance.svg を参照）"
+    "（pacing 差により同一 t は同一地点を意味しない。走行距離基準は軌跡再生ビューアの距離軸モードを参照）"
 )
 
 
@@ -199,70 +195,6 @@ def _tr(d: dict, df: pd.DataFrame) -> np.ndarray:
     実機の初期停止が長くても比較時系列が発進時刻で揃う (実機だけ遅れる問題の一般対策)。
     `t_launch` は main で全ログ共通に算出し loaded[label] に格納済み (未設定なら 0)。"""
     return df["t"].to_numpy(dtype=float) - float(d.get("t_launch", 0.0))
-
-
-def _distance_of(t_query, df_kin: pd.DataFrame):
-    """align_time 済み kinematic から累積走行距離 s(t) を作り、t_query における距離を返す。
-
-    kinematic は filter_localization 済み (無効フレーム除去済み) を前提とする。
-    範囲外は端点にクランプ (np.interp 既定)。kinematic 空なら None。
-    """
-    if df_kin.empty:
-        return None
-    s = cumulative_arc_length(df_kin["x"].to_numpy(), df_kin["y"].to_numpy())
-    return np.interp(np.asarray(t_query, dtype=float), df_kin["t"].to_numpy(), s)
-
-
-def plot_velocity_vs_distance(data: dict):
-    """速度応答を走行距離 (arc-length) 基準で重ね描き。
-
-    時間軸では pacing 差・初期化オフセットが「時間ずれ」に見えるが、距離基準にすると
-    各ログが経路上のどこまで進んだか・どこで停止したかが露出する (例: sim の早期停止)。
-    """
-    runs: list[dict] = []
-    for label, d in data.items():
-        vel, kin = d["velocity"], d["kinematic"]
-        if vel.empty or kin.empty:
-            continue
-        s = _distance_of(vel["t"], kin)
-        if s is None:
-            continue
-        runs.append({
-            "label": label, "color": d["color"], "lw": d["lw"], "ls": d["ls"],
-            "s": s, "y": np.asarray(vel["lon_vel"]),
-        })
-    fig = build_fig_vs_distance(
-        runs,
-        title=f"{SCENARIO_NAME}<br>速度比較（走行距離基準）",
-        subplot_title="実応答速度 vs 走行距離（早期停止・初期化オフセットを露出）",
-        ylabel="速度 [m/s]",
-    )
-    FIGS_DIR.mkdir(parents=True, exist_ok=True)
-    write_fig_json(fig, FIGS_DIR / "velocity_vs_distance")
-
-
-def plot_steering_vs_distance(data: dict):
-    """操舵応答を走行距離 (arc-length) 基準で重ね描き（pacing 差を除いた形状比較）。"""
-    runs: list[dict] = []
-    for label, d in data.items():
-        steer, kin = d["steering"], d["kinematic"]
-        if steer.empty or kin.empty:
-            continue
-        s = _distance_of(steer["t"], kin)
-        if s is None:
-            continue
-        runs.append({
-            "label": label, "color": d["color"], "lw": d["lw"], "ls": d["ls"],
-            "s": s, "y": np.degrees(np.asarray(steer["steer"])),
-        })
-    fig = build_fig_vs_distance(
-        runs,
-        title=f"{SCENARIO_NAME}<br>ステアリング比較（走行距離基準）",
-        subplot_title="実応答ステア角 vs 走行距離",
-        ylabel="ステア角 [deg]",
-    )
-    FIGS_DIR.mkdir(parents=True, exist_ok=True)
-    write_fig_json(fig, FIGS_DIR / "steering_vs_distance")
 
 
 # ---------------------------------------------------------------------------
@@ -695,16 +627,8 @@ def main() -> None:
     else:
         warnings.warn("地図ファイルが見つかりません。軌跡プロットは地図背景なしで描画します")
 
-    print("\n=== プロット生成中 ===")
-    # 軌跡再生ビューア (時刻同期/位置同期シークバー付き自己完結 HTML)
-    plot_trajectory_playback(loaded, map_ways, FIGS_DIR, title=SCENARIO_NAME)
-    # 縦横独立モデル検証ビューア (実機のみ・指令→モデル積算 vs 観測、T/τ つまみ調整)
-    plot_model_viewer(loaded, map_ways, FIGS_DIR, load_sim_params(), title=SCENARIO_NAME)
-    # 走行距離 (arc-length) 基準の重ね描き (B1): pacing 差を除き早期停止を露出。
-    plot_velocity_vs_distance(loaded)
-    plot_steering_vs_distance(loaded)
-
-    print("\n=== レポート生成中 ===")
+    print("\n=== メトリクス算出中 ===")
+    metrics: dict | None = None
     try:
         metrics = compute_closed_loop_metrics(loaded)
         metrics_path = OUT_DIR / "metrics_closed_loop.json"
@@ -719,6 +643,13 @@ def main() -> None:
         print(f"  保存: {report_path}")
     except Exception as e:  # noqa: BLE001
         warnings.warn(f"レポート生成失敗: {e}")
+
+    print("\n=== プロット生成中 ===")
+    # 軌跡再生ビューア (時刻同期/位置同期シークバー付き自己完結 HTML)
+    # metrics を渡して凡例パネルにクローズループ指標を表示
+    plot_trajectory_playback(loaded, map_ways, FIGS_DIR, title=SCENARIO_NAME, metrics=metrics)
+    # 縦横独立モデル検証ビューア (実機のみ・指令→モデル積算 vs 観測、T/τ つまみ調整)
+    plot_model_viewer(loaded, map_ways, FIGS_DIR, load_sim_params(), title=SCENARIO_NAME)
 
     print("\n完了。出力先:", FIGS_DIR)
 

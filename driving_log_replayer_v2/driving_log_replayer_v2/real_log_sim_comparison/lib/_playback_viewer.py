@@ -197,12 +197,44 @@ def _compact_dp_frames(frames: list[dict], offset: float = 0.0) -> dict:
     return {"t": out_t, "x": out_x, "y": out_y}
 
 
+def _build_metrics_payload(metrics: dict | None) -> dict | None:
+    """compute_closed_loop_metrics の結果から JS 表示用の最小ペイロードを抽出する。
+
+    ビューア凡例のクローズループ指標パネルに表示する値だけを渡す。
+    metrics が None / runs が空のときは None を返す（パネル非表示）。
+    """
+    if not metrics:
+        return None
+    runs_out = {}
+    for label, rec in (metrics.get("runs") or {}).items():
+        runs_out[label] = {
+            "completion_pct": rec.get("completion_pct"),
+            "s2r_mean_m": rec.get("s2r_mean_m"),
+            "s2r_max_m": rec.get("s2r_max_m"),
+            "r2s_mean_m": rec.get("r2s_mean_m"),
+            "r2s_max_m": rec.get("r2s_max_m"),
+            "vel_rmse_mps": rec.get("vel_rmse_mps"),
+            "steer_rmse_deg": rec.get("steer_rmse_deg"),
+            "status": rec.get("status"),
+        }
+    real_rec = metrics.get("real") or {}
+    return {
+        "real_dist_m": metrics.get("real_dist_m"),
+        "real_rmse": {
+            "vel_rmse_mps": real_rec.get("vel_rmse_mps"),
+            "steer_rmse_deg": real_rec.get("steer_rmse_deg"),
+        },
+        "runs": runs_out,
+    }
+
+
 def build_playback_payload(
     data: dict,
     map_ways: list | None,
     rate_hz: float = PLAYBACK_RATE_HZ,
     map_margin_m: float = MAP_MARGIN_M,
     title: str = "",
+    metrics: dict | None = None,
 ) -> dict | None:
     """
     step4 の `loaded` dict から埋め込み用 payload を構築する。
@@ -264,7 +296,7 @@ def build_playback_payload(
         for pts in map_ways_in_bbox(map_ways, (x_min, x_max), (y_min, y_max)):
             lanelets.append([[round(float(px), 2), round(float(py), 2)] for px, py in pts])
 
-    return {
+    payload: dict = {
         "title": title,
         "rate_hz": rate_hz,
         "n": n,
@@ -272,6 +304,10 @@ def build_playback_payload(
         "lanelets": lanelets,
         "runs": runs,
     }
+    m = _build_metrics_payload(metrics)
+    if m is not None:
+        payload["metrics"] = m
+    return payload
 
 
 def write_playback_html(payload: dict, out_path: Path) -> None:
@@ -291,9 +327,10 @@ def plot_trajectory_playback(
     map_ways: list | None,
     figs_dir: Path,
     title: str = "",
+    metrics: dict | None = None,
 ) -> None:
     """step4 から呼ぶエントリポイント。`figs_dir/trajectory_playback.html` を生成。"""
-    payload = build_playback_payload(data, map_ways, title=title)
+    payload = build_playback_payload(data, map_ways, title=title, metrics=metrics)
     if payload is None:
         import warnings  # noqa: PLC0415
 
@@ -336,6 +373,16 @@ _HTML_TEMPLATE = r"""<!DOCTYPE html>
   #plots { flex: none; height: 252px; position: relative; border-top: 1px solid #ddd; background: #fff; }
   #plots.hidden { display: none; }
   #plots canvas { position: absolute; inset: 0; width: 100%; height: 100%; }
+  /* クローズループ指標パネル（凡例内） */
+  .metrics-summary { font-size: 11px; border: 1px solid #ddd; border-radius: 3px; margin-top: 6px; padding: 3px 5px; }
+  .metrics-summary > summary { cursor: pointer; font-weight: 600; font-size: 11px; padding: 2px 0; }
+  .metrics-summary table { border-collapse: collapse; width: 100%; margin-top: 3px; }
+  .metrics-summary th, .metrics-summary td { font-size: 10px; padding: 1px 3px; border-bottom: 1px solid #eee; text-align: right; white-space: nowrap; }
+  .metrics-summary th { text-align: left; font-weight: 600; }
+  .metrics-summary td.ok { color: #1a6b1a; }
+  .metrics-summary td.ng { color: #b91c1c; }
+  /* プロット軸切替ラジオが無効時に淡色表示 */
+  .plotwin-group.disabled { opacity: 0.4; pointer-events: none; }
 </style>
 </head>
 <body>
@@ -366,8 +413,13 @@ _HTML_TEMPLATE = r"""<!DOCTYPE html>
     </span>
     <span class="grp" id="plotgrp">
       <label><input type="checkbox" id="showplots" checked> 下部時系列プロット</label>
-      時間幅 <input type="range" id="plotwin" min="2" max="60" value="10" style="width:80px">
-      <span id="plotwinval" style="font-family:monospace">10s</span>
+      軸:
+      <label><input type="radio" name="plotx" value="time" checked> 時間</label>
+      <label><input type="radio" name="plotx" value="dist"> 距離</label>
+      <span id="plotwingroup">
+        窓幅 <input type="range" id="plotwin" min="2" max="60" value="10" style="width:80px">
+        <span id="plotwinval" style="font-family:monospace">10s</span>
+      </span>
     </span>
   </div>
   <div id="seekrow">
@@ -415,14 +467,15 @@ const DATA = __PAYLOAD_JSON__;
   const hasPlots = N >= 2 && runs.some((r) => r.ch);
 
   // ------------------------------------------------------------------ state
-  let mode = "time";   // "time" | "pos"
+  let mode = "time";      // "time" | "pos"
   let playing = false;
   let speedMul = 1;
-  let showDp = hasDp;  // DP 計画軌跡 (破線) の表示
+  let showDp = hasDp;     // DP 計画軌跡 (破線) の表示
   let showPlots = hasPlots; // 下部同期時系列プロットの表示
-  let plotWindowS = 10; // 下部プロットの横軸(時間)表示幅 [s]。現在時刻中心のスライディング窓。
-  let curT = 0;        // 時刻同期モードの現在時刻 [s]
-  let curS = 0;        // 位置同期モードのベースライン走行距離 [m]
+  let plotXAxis = "time"; // "time" | "dist" — プロット横軸モード（地図の time/pos とは独立）
+  let plotWindowS = 10;   // 下部プロットの横軸(時間)表示幅 [s]。現在時刻中心のスライディング窓。
+  let curT = 0;           // 時刻同期モードの現在時刻 [s]
+  let curS = 0;           // 位置同期モードのベースライン走行距離 [m]
   const cam = { cx: 0, cy: 0, viewW: 100, targetViewW: 100, follow: true, init: false };
 
   // -------------------------------------------------------------------- DOM
@@ -520,6 +573,47 @@ const DATA = __PAYLOAD_JSON__;
     statEls[idx] = { row, stat };
   });
 
+  // クローズループ指標パネル（DATA.metrics がある場合のみ追加）
+  if (DATA.metrics && DATA.metrics.runs && Object.keys(DATA.metrics.runs).length > 0) {
+    const mDiv = document.createElement("details");
+    mDiv.className = "metrics-summary";
+    mDiv.open = true;
+    const mSum = document.createElement("summary");
+    mSum.textContent = "クローズループ指標";
+    mDiv.appendChild(mSum);
+    const tbl = document.createElement("table");
+    const hdrRow = tbl.insertRow();
+    ["run", "完走%", "乖離(s→r)[m]", "vRMSE", "δRMSE"].forEach((h) => {
+      const th = document.createElement("th");
+      th.textContent = h;
+      hdrRow.appendChild(th);
+    });
+    const fmtN = (v, d) => (v != null ? Number(v).toFixed(d) : "—");
+    for (const [label, rec] of Object.entries(DATA.metrics.runs)) {
+      const tr = tbl.insertRow();
+      const ok = rec.status === "OK";
+      const cells = [
+        label,
+        fmtN(rec.completion_pct, 1),
+        rec.s2r_mean_m != null
+          ? fmtN(rec.s2r_mean_m, 2) + "/" + fmtN(rec.s2r_max_m, 2)
+          : "—",
+        fmtN(rec.vel_rmse_mps, 3),
+        fmtN(rec.steer_rmse_deg, 2),
+      ];
+      cells.forEach((val, ci) => {
+        const td = document.createElement(ci === 0 ? "th" : "td");
+        td.textContent = val;
+        if (ci === 1 && rec.completion_pct != null) {
+          td.className = ok ? "ok" : "ng";
+        }
+        tr.appendChild(td);
+      });
+    }
+    mDiv.appendChild(tbl);
+    legendEl.appendChild(mDiv);
+  }
+
   function updateLegend(states) {
     runs.forEach((run, idx) => {
       const st = states[idx];
@@ -539,9 +633,9 @@ const DATA = __PAYLOAD_JSON__;
     pos: "位置同期: 実機の走行距離 s を基準に、各 run を自軌跡で同じ距離を走った地点に表示（同一走行距離比較・経路長差を含むため厳密な横偏差ではない）。矢印 = その地点の速度、凡例の t でどの run が時間的に先行/遅延かが分かる。",
   };
   const DP_HINT = " 破線 = その時点で最後に発行された DP 計画軌跡。";
-  const PLOT_HINT = " 下部プロット = 横軸は現在時刻中心の時間窓（既定 10s・スライダで調整）が再生に追従、" +
-    "実線=実測・破線=指令、ドット=各 run の現在位置（時刻同期は縦線同期、位置同期は run ごとに時刻がずれる）。" +
-    "「⚠」付きパネルは近似値。";
+  const PLOT_HINT = " 下部プロット: 時間軸=現在時刻中心の時間窓（窓幅スライダで調整）が再生に追従。" +
+    "距離軸=各 run 自軌跡の累積走行距離 s が横軸（全区間固定表示・pacing 差を除いた形状比較）。" +
+    "実線=実測・破線=指令、ドット=現在位置（縦線/ドット=再生位置）。「⚠」付きパネルは近似値。";
   const setHint = () => {
     hintEl.textContent = HINTS[mode] + (hasDp ? DP_HINT : "") + (hasPlots ? PLOT_HINT : "");
   };
@@ -841,7 +935,8 @@ const DATA = __PAYLOAD_JSON__;
     });
   }
 
-  // 毎フレーム描画: 現在の窓 [t0,t1] に合わせて軸・線(窓内)・カーソル・ドットを描く。
+  // 毎フレーム描画: 現在の窓 [t0,t1] に合わせて軸・線・カーソル・ドットを描く。
+  // plotXAxis==="dist" のときは横軸を累積走行距離 s に切替（全区間固定表示）。
   function drawPlots() {
     if (!hasPlots || !showPlots) return;
     const w = plotsEl.clientWidth, h = plotsEl.clientHeight;
@@ -851,13 +946,22 @@ const DATA = __PAYLOAD_JSON__;
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     ctx.clearRect(0, 0, w, h);
 
-    const [t0, t1] = plotWindow();
-    const iLo = Math.max(0, Math.floor(t0 * RATE) - 1);
-    const iHi = Math.min(N - 1, Math.ceil(t1 * RATE) + 1);
+    const distMode = (plotXAxis === "dist");
+    // 距離軸: sMax = 全 visible run の最大走行距離（少なくとも baseline を含む）
+    const sMax = distMode
+      ? Math.max(1, ...runs.filter((r) => r.visible).map((r) => r.s_total), baseline.s_total)
+      : 1;
+
+    // 時間軸用: スライディング窓
+    const [t0, t1] = distMode ? [0, T_MAX] : plotWindow();
+    const iLo = distMode ? 0 : Math.max(0, Math.floor(t0 * RATE) - 1);
+    const iHi = distMode ? N - 1 : Math.min(N - 1, Math.ceil(t1 * RATE) + 1);
     const states = runs.map((r) => (r.visible ? sample(r) : null));
 
     for (const g of plotGeom) {
-      const X = (t) => g.px0 + (t - t0) / (t1 - t0) * g.plotW;
+      // 横軸写像: 時間軸は窓相対、距離軸は [0, sMax] 全域
+      const Xt = (t) => g.px0 + (t - t0) / (t1 - t0) * g.plotW;
+      const Xd = (s) => g.px0 + (s / sMax) * g.plotW;
 
       // 枠・ゼロ線
       ctx.strokeStyle = "#ddd"; ctx.lineWidth = 1;
@@ -872,11 +976,16 @@ const DATA = __PAYLOAD_JSON__;
       const yt = (g.ymin < 0 && g.ymax > 0) ? [g.ymin, 0, g.ymax]
                                             : [g.ymin, (g.ymin + g.ymax) / 2, g.ymax];
       for (const v of yt) ctx.fillText(v.toFixed(Math.abs(v) >= 10 ? 0 : 1), g.px0 - 3, g.Y(v));
-      // x 目盛（窓の実時刻 t0 / 中央 / t1）
+      // x 目盛（時間: t0/中央/t1 秒、距離: 0/中央/sMax メートル）
       ctx.textAlign = "center"; ctx.textBaseline = "top";
       for (let k = 0; k <= 2; k++) {
-        const tt = t0 + (t1 - t0) * k / 2;
-        ctx.fillText(tt.toFixed(1) + (k === 2 ? "s" : ""), X(tt), g.py0 + g.plotH + 2);
+        if (distMode) {
+          const sv = sMax * k / 2;
+          ctx.fillText(sv.toFixed(0) + (k === 2 ? "m" : ""), Xd(sv), g.py0 + g.plotH + 2);
+        } else {
+          const tt = t0 + (t1 - t0) * k / 2;
+          ctx.fillText(tt.toFixed(1) + (k === 2 ? "s" : ""), Xt(tt), g.py0 + g.plotH + 2);
+        }
       }
       // 見出し（左）と近似注記タグ（右・橙）
       ctx.textAlign = "left"; ctx.textBaseline = "alphabetic";
@@ -891,7 +1000,8 @@ const DATA = __PAYLOAD_JSON__;
       ctx.save();
       ctx.beginPath(); ctx.rect(g.px0, g.py0, g.plotW, g.plotH); ctx.clip();
 
-      // 折れ線: 実測=実線, 指令=破線・淡色。窓内 [iLo,iHi] のみ。null で break。
+      // 折れ線: 実測=実線, 指令=破線・淡色。
+      // 時間軸: 窓内 [iLo,iHi] のみ / 距離軸: [0, run.n_valid) 全域・横軸は run.s[i]
       const specs = [
         { key: g.ch.meas, dash: false, alpha: 1.0, lw: 1.6 },
         { key: g.ch.cmd, dash: true, alpha: 0.5, lw: 1.2 },
@@ -900,30 +1010,50 @@ const DATA = __PAYLOAD_JSON__;
         if (!sp.key) continue;
         ctx.setLineDash(sp.dash ? [4, 3] : []);
         for (const run of runs) {
-          const arr = run.visible && run.ch && run.ch[sp.key];
+          if (!run.visible || !run.ch) continue;
+          const arr = run.ch[sp.key];
           if (!arr) continue;
           ctx.strokeStyle = run.color; ctx.globalAlpha = sp.alpha; ctx.lineWidth = sp.lw;
           ctx.beginPath();
           let pen = false;
-          for (let i = iLo; i <= iHi; i++) {
-            const v = arr[i];
-            if (v == null) { pen = false; continue; }
-            const xx = X(i / RATE), yy = g.Y(v);
-            if (!pen) { ctx.moveTo(xx, yy); pen = true; } else ctx.lineTo(xx, yy);
+          if (distMode) {
+            const nv = run.n_valid;
+            for (let i = 0; i < nv; i++) {
+              const v = arr[i];
+              if (v == null) { pen = false; continue; }
+              const xx = Xd(run.s[i]), yy = g.Y(v);
+              if (!pen) { ctx.moveTo(xx, yy); pen = true; } else ctx.lineTo(xx, yy);
+            }
+          } else {
+            for (let i = iLo; i <= iHi; i++) {
+              const v = arr[i];
+              if (v == null) { pen = false; continue; }
+              const xx = Xt(i / RATE), yy = g.Y(v);
+              if (!pen) { ctx.moveTo(xx, yy); pen = true; } else ctx.lineTo(xx, yy);
+            }
           }
           ctx.stroke();
         }
       }
       ctx.globalAlpha = 1; ctx.setLineDash([]);
 
-      // 縦カーソル（時刻同期のみ。位置同期は run ごとに t が異なるためドットで表す）
-      if (mode === "time") {
-        const cx = X(curT);
+      // 縦カーソル: 時間軸=時刻同期のみ縦線、距離軸=ベースラインの現在走行距離に縦線
+      if (distMode) {
+        const curSPlot = (mode === "time") ? sampleAtT(baseline, curT).s : curS;
+        if (curSPlot >= 0) {
+          const cx = Xd(curSPlot);
+          ctx.strokeStyle = "#999"; ctx.lineWidth = 1; ctx.setLineDash([3, 3]);
+          ctx.beginPath(); ctx.moveTo(cx, g.py0); ctx.lineTo(cx, g.py0 + g.plotH);
+          ctx.stroke(); ctx.setLineDash([]);
+        }
+      } else if (mode === "time") {
+        const cx = Xt(curT);
         ctx.strokeStyle = "#999"; ctx.lineWidth = 1; ctx.setLineDash([3, 3]);
         ctx.beginPath(); ctx.moveTo(cx, g.py0); ctx.lineTo(cx, g.py0 + g.plotH);
         ctx.stroke(); ctx.setLineDash([]);
       }
       // 各 run の現在サンプル位置にドット（実測値）
+      // 時間軸: x = st.t、距離軸: x = st.s
       runs.forEach((run, idx) => {
         const st = states[idx];
         if (!st || !run.ch) return;
@@ -931,7 +1061,8 @@ const DATA = __PAYLOAD_JSON__;
         if (v == null) return;
         ctx.globalAlpha = st.ended ? 0.4 : 1;
         ctx.fillStyle = run.color;
-        ctx.beginPath(); ctx.arc(X(st.t), g.Y(v), run.is_baseline ? 4 : 3, 0, Math.PI * 2);
+        const dotX = distMode ? Xd(st.s) : Xt(st.t);
+        ctx.beginPath(); ctx.arc(dotX, g.Y(v), run.is_baseline ? 4 : 3, 0, Math.PI * 2);
         ctx.fill();
         ctx.strokeStyle = "#fff"; ctx.lineWidth = 1; ctx.stroke();
         ctx.globalAlpha = 1;
@@ -953,6 +1084,21 @@ const DATA = __PAYLOAD_JSON__;
     $("plotwinval").textContent = e.target.valueAsNumber + "s";
     markDirty(); // 窓幅変更は y レンジ不変なので geom 再計算不要
   });
+  // 距離軸モードでは窓幅スライダを無効化（全区間固定表示）
+  function updatePlotXAxisUI() {
+    const distMode = (plotXAxis === "dist");
+    const winGroup = $("plotwingroup");
+    if (winGroup) winGroup.style.opacity = distMode ? "0.4" : "1";
+    if (winGroup) winGroup.style.pointerEvents = distMode ? "none" : "";
+  }
+  document.querySelectorAll("input[name=plotx]").forEach((el) => {
+    el.addEventListener("change", () => {
+      plotXAxis = el.value;
+      updatePlotXAxisUI();
+      markPlotStatic(); markDirty();
+    });
+  });
+  updatePlotXAxisUI();
 
   // --------------------------------------------------------------- 再生ループ
   // dirty フラグ: 再生中・UI 操作・リサイズ時のみ再描画し、アイドル時の

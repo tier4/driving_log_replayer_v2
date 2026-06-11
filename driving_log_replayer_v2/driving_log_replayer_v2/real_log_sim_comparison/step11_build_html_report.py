@@ -55,16 +55,8 @@ from .lib._runtime_config import add_common_cli_arguments, build_runtime_config
 # 未登録ファイルはファイル名を人間可読化してフォールバック。
 CAPTIONS: dict[str, str] = {
     # step4: figures/
-    "trajectory_with_map": "軌跡比較（地図背景付き・インタラクティブ）",
-    "trajectory_xy": "軌跡比較（地図なし・インタラクティブ）",
-    "trajectory_playback": "軌跡再生ビューア（時刻同期/位置同期シークバー・速度矢印・追従ズーム・DP計画軌跡）",
+    "trajectory_playback": "軌跡再生ビューア（時刻同期/位置同期シークバー・速度矢印・追従ズーム・距離軸プロット・メトリクスパネル）",
     "lon_lat_model": "縦横モデル検証ビューア（実機：運動方程式〔1次遅れ+自転車モデル〕の前方積算と、加速度/速度/ステア/ヨーレート/横Gの観測・指令を重ね描き。地図にシミュレーション軌跡も重畳。T/τ/k_us/β つまみ調整・ステア源切替）",
-    "velocity_vs_distance": "走行距離基準 速度（pacing 差を除いた早期停止の露出）",
-    "steering_vs_distance": "走行距離基準 ステア角",
-    # step8: figures/
-    "dp_real_vs_sim": "DiffusionPlanner 出力軌跡 実機 vs sim",
-    "dp_vs_actual": "DP 計画速度 vs 実際速度",
-    "dp_vs_final_traj": "実機 DP 出力 vs 最終 planning（optimizer 補正）",
     # step5: nstep/<tag>/
     "overview": "誤差概観（N=1）",
     "map_distribution": "誤差の位置分布（地図上・N=1 / N=max・インタラクティブ）",
@@ -153,26 +145,16 @@ def _is_fig_json(rel: Path) -> bool:
 # (key, タイトル, 1 行説明)。表示順はこのリスト順。"other" は未分類フォールバック。
 _CATEGORIES: list[tuple[str, str, str]] = [
     (
-        "real_analysis",
-        "1. 実機 rosbag 解析",
-        "実機走行ログ（SSOT）のみから抽出する特性・車両パラメータ同定。sim は介在しない。",
-    ),
-    (
-        "dp",
-        "2. プランナ出力比較（DiffusionPlanner）",
-        "DiffusionPlanner の出力軌跡を、実機の実走・最終 planning・sim 出力と比較する。",
-    ),
-    (
-        "ol_nstep",
-        "3. N-step オープンループ比較",
-        "各開始点で実機状態にリセットし、車両モデルを N ステップ連続予測（free-running rollout）して"
-        "実機との差を評価する。N=1 が毎ステップリセットの 1 ステップ予測（累積誤差を排除）、"
-        "N>1 で dynamics 差の累積が顕在化する。",
+        "model_validation",
+        "1. 縦横モデル検証",
+        "実機走行ログから車両モデルを同定し、N-step オープンループ予測・パラメータ sweep 感度を対話的に解析する。"
+        "縦横モデル検証ビューアが主役（指令→モデル積算 vs 観測、T/τ/k_us 調整、地図上軌跡重畳）。",
     ),
     (
         "closed_loop",
-        "4. シナリオ クローズループ比較",
-        "auto-scenario を Autoware+シミュレータで closed-loop 実行し、実機との軌跡・速度・操舵乖離を比較する。",
+        "2. シナリオ クローズループ比較",
+        "auto-scenario を Autoware+シミュレータで closed-loop 実行し、実機との軌跡・速度・操舵乖離を比較する。"
+        "軌跡再生ビューアが主役（時刻同期/位置同期シークバー、距離軸プロット、完走率/乖離/RMSE パネル）。",
     ),
     (
         "other",
@@ -184,21 +166,17 @@ _CATEGORY_TITLES: dict[str, str] = {key: title for key, title, _ in _CATEGORIES}
 _CATEGORY_DESCS: dict[str, str] = {key: desc for key, _, desc in _CATEGORIES}
 _CATEGORY_ORDER: list[str] = [key for key, _, _ in _CATEGORIES]
 
-# step4 が figures/ に出力する closed-loop 比較図（実機 vs sim）の stem。dp_*・brake 同定図は
-# 同じ figures/ に混在するため、ディレクトリではなくこの明示リスト + curveN_* パターンで判定する。
+# step4 が figures/ に出力する closed-loop 比較図（実機 vs sim）の stem。
+# trajectory_playback のみ残し、旧 vs_distance / trajectory_with_map / trajectory_xy は削除済み。
 _CLOSED_LOOP_STEMS: set[str] = {
-    "velocity_vs_distance",
-    "steering_vs_distance",
-    "trajectory_with_map",
-    "trajectory_xy",
     "trajectory_playback",
 }
 
 # 取り込む Markdown レポート: (comparison/ からの相対パス, 見出し, 所属カテゴリ)。
 _MARKDOWN_REPORTS: list[tuple[str, str, str]] = [
     ("report.md", "比較レポート（step4: report.md）", "closed_loop"),
-    ("param_sweep/param_sweep_summary.md", "パラメータ同定サマリ（step7: param_sweep_summary.md）", "real_analysis"),
-    ("cases/cases_summary.md", "ケース集約サマリ（step6: cases_summary.md）", "ol_nstep"),
+    ("param_sweep/param_sweep_summary.md", "パラメータ同定サマリ（step7: param_sweep_summary.md）", "model_validation"),
+    ("cases/cases_summary.md", "ケース集約サマリ（step6: cases_summary.md）", "model_validation"),
 ]
 
 
@@ -228,20 +206,22 @@ def _caption_for(stem: str) -> str:
 def _classify(rel: Path) -> str:
     """図の相対パス (comparison/ 基準) を概念セクションキーへ分類する。
 
-    figures/ 配下にはクローズループ図・DP 図が混在するため、
+    figures/ 配下にはクローズループ図が混在するため、
     ディレクトリだけでなく stem でも判定する。
+    dp_* は step8 が出力するが非掲載（_collect_figures で除外済み）のため、
+    ここには到達しない（念のため other へ落とす）。
     """
     top = rel.parts[0] if len(rel.parts) > 1 else "."
     stem = _asset_stem(rel)
 
     if stem.startswith("dp_"):
-        return "dp"
+        return "other"  # _collect_figures で除外済み・フォールバック
     if stem == "lon_lat_model":
-        return "real_analysis"
+        return "model_validation"
     if top == "param_sweep":
-        return "real_analysis"
+        return "model_validation"
     if top in {"nstep", "cases"}:
-        return "ol_nstep"
+        return "model_validation"
     if stem in _CLOSED_LOOP_STEMS:
         return "closed_loop"
     return "other"
@@ -541,8 +521,9 @@ def _collect_figures(comparison_dir: Path) -> list[Path]:
 
     plotly 図スペックと、再生ビューア (trajectory_playback.html 等の自己完結 HTML) を
     対象とする。report.html / plotly.min.js は元々 comparison/ の外なので入らない。
+    dp_* はレポートに掲載しない（step8 出力は保持するが非掲載）。
     """
-    figs = collect_fig_jsons(comparison_dir)
+    figs = [p for p in collect_fig_jsons(comparison_dir) if not _asset_stem(p).startswith("dp_")]
     playbacks = [
         p
         for p in comparison_dir.rglob("*" + _PLAYBACK_SUFFIX)
