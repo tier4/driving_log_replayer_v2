@@ -66,6 +66,8 @@ def remap_str(topic: str) -> str:
         return "/localization/kinematic_state:=/localization/reference_kinematic_state"
     if topic == "/planning/trajectory":
         return "/planning/trajectory:=/planning/reference_trajectory"
+    if topic == "/control/command/control_cmd":
+        return "/control/command/control_cmd:=/control/reference_control_cmd"
     return f"{topic}:=/unused{topic}"
 
 
