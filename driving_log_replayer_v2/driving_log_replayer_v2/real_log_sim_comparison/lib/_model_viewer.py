@@ -228,6 +228,9 @@ _HTML_TEMPLATE = r"""<!DOCTYPE html>
       <label><input type="checkbox" id="errpanels"> 誤差パネル(sim−観測)</label>
     </span>
     <span class="grp">
+      <label><input type="checkbox" id="idealtoggle" checked> 理想(実測入力)を青で表示</label>
+    </span>
+    <span class="grp">
       モデル <select id="modelsel"><option value="">(spec)</option></select>
     </span>
     <span class="grp">
@@ -298,6 +301,7 @@ const DATA = __PAYLOAD_JSON__;
   const L = DATA.wheelbase;        // wheelbase [m]
   const DEG = Math.PI / 180, RAD2DEG = 180 / Math.PI;
   const SIM_COLOR = "#d62728";     // シミュレーション線 (赤)
+  const IDEAL_COLOR = "#1f77b4";   // 理想線 (青・破線): 観測 accel/steer を入力に積算 (実車と完全一致の仮定)
   const CMD_COLOR = "#888";        // 指令線 (灰・破線)
   const PREVIEW_SEC = 1.5;         // 速度矢印 = PREVIEW_SEC 秒後の到達距離 [m]
   const SUBSTEP = 10;              // Euler sub-step 数/グリッドセル (tau が小さくても発振させない)
@@ -327,6 +331,7 @@ const DATA = __PAYLOAD_JSON__;
   let plotWindowS = 8;   // 予測窓幅 [s]。窓 = [curT, curT + plotWindowS] (左端=起点)。
   let curT = 0;          // 現在時刻 (= シミュレーション起点) [s]
   let showErr = false;   // 誤差専用パネル（sim−観測 時系列）を増設表示するか
+  let showIdeal = true;  // 理想線(観測 accel/steer を入力に積算した値)を青で重ねるか
   let steerSource = "sim"; // 自転車モデルへ渡す δ の源: "sim"(シミュレーション) | "obs"(観測)
   let optWholeBag = true;  // 最適化を全区間で行うか (false なら [curT, curT+optWindowS])
   let optWindowS = 10;     // 最適化窓幅 [s]（シーク位置を起点）
@@ -417,8 +422,10 @@ const DATA = __PAYLOAD_JSON__;
   //   横: δ' = -(δ - δ_cmd(t-T_δ))/τ_δ (rad),  ω = v·tan(δ_src+β)/(L+k_us·v²),
   //       θ' = ω,  x' = v·cosθ,  y' = v·sinθ,  a_y = v·ω
   // 横チェーンの v は観測 lon_vel を使用（縦誤差を分離）。δ_src は steerSource で sim/観測 を切替。
+  // ideal=true のときはアクチュエータモデル(指令→1次遅れ)を介さず、観測 accel/steer を入力として
+  // そのまま積算する（「加速度・ステア角が実車と完全一致した場合」の各種値。青で重ね描く）。
   // 戻り値: {t,a,v,deltaDeg,omega,ay,x,y}(各配列, RATE 解像度) / IC 欠損なら null。
-  function rollout(t0, t1) {
+  function rollout(t0, t1, ideal) {
     let a = chanAt("accel", t0);
     let v = chanAt("lon_vel", t0);
     const dDeg0 = chanAt("steer", t0);
@@ -440,19 +447,24 @@ const DATA = __PAYLOAD_JSON__;
     let lastUd = chanAt("cmd_steer", t0 - Td); // deg
     const out = { t: [], a: [], v: [], deltaDeg: [], omega: [], ay: [], x: [], y: [] };
 
+    // ideal 時・観測ステア源時は観測 δ を ω に使う（ideal では delta 自体が観測値）。
     const omegaAt = (tt, dRad) => {
       const vl = chanAt("lon_vel", tt);
       const vv = (vl != null) ? vl : v;
-      const dsrc = simSteer ? dRad
+      const dsrc = (simSteer && !ideal) ? dRad
         : ((chanAt("steer", tt) != null) ? chanAt("steer", tt) * DEG : dRad);
       return vv * Math.tan(dsrc + beta) / (L + kus * vv * vv);
     };
     const record = (tt) => {
-      const om = omegaAt(tt, delta);
+      // ideal では a・δ は観測値そのもの（実車と完全一致の仮定）。
+      const ao = chanAt("accel", tt), so = chanAt("steer", tt);
+      const aRec = ideal ? (ao != null ? ao : a) : a;
+      const dRec = ideal ? (so != null ? so * DEG : delta) : delta;
+      const om = omegaAt(tt, dRec);
       const vl = chanAt("lon_vel", tt);
       const vv = (vl != null) ? vl : v;
-      out.t.push(tt); out.a.push(a); out.v.push(v);
-      out.deltaDeg.push(delta * RAD2DEG);
+      out.t.push(tt); out.a.push(aRec); out.v.push(v);
+      out.deltaDeg.push(dRec * RAD2DEG);
       out.omega.push(om); out.ay.push(vv * om);
       out.x.push(x); out.y.push(y);
     };
@@ -463,30 +475,40 @@ const DATA = __PAYLOAD_JSON__;
         const tt = t + s * h;
         const vl = chanAt("lon_vel", tt);
         const vv = (vl != null) ? vl : v;   // 観測速度 (poly(v)・横チェーンで共用)
-        // 縦: throttle(a_cmd>=0)/brake(a_cmd<0) を判定し、該当 delay の指令 u と tau0 を採用。
-        // throttle 側の遅延指令の符号で判定 (差は僅少、null は brake 側→ホールドで fallback)。
-        const uThr = chanAt("cmd_accel", tt - TaThr);
-        const uBrk = chanAt("cmd_accel", tt - TaBrk);
-        let throttle;
-        if (uThr != null) throttle = (uThr >= 0);
-        else if (uBrk != null) throttle = (uBrk >= 0);
-        else throttle = (lastDrive >= 0);
-        let u = throttle ? uThr : uBrk;
-        if (u == null) u = lastDrive;
-        lastDrive = u;
-        const tauA = throttle ? tauThr : tauBrk; // 定数 (下限クランプ済み)
-        const wzo = chanAt("wz", tt); // カーブ抵抗の回帰子 a_y=v·wz 用 (観測)
-        a += h * (-(a - accelTarget(u, vv, wzo != null ? wzo : 0)) / tauA);
-        a = sat(a, accLim);                  // C++: pedal_acc を vx_rate_lim で飽和
+        // 縦: 既定はモデル(1次遅れ)。ideal 時は観測加速度をそのまま採用(実車と完全一致の仮定)。
+        if (ideal) {
+          const ao = chanAt("accel", tt); if (ao != null) a = ao;
+        } else {
+          // throttle(a_cmd>=0)/brake(a_cmd<0) を判定し、該当 delay の指令 u と tau0 を採用。
+          // throttle 側の遅延指令の符号で判定 (差は僅少、null は brake 側→ホールドで fallback)。
+          const uThr = chanAt("cmd_accel", tt - TaThr);
+          const uBrk = chanAt("cmd_accel", tt - TaBrk);
+          let throttle;
+          if (uThr != null) throttle = (uThr >= 0);
+          else if (uBrk != null) throttle = (uBrk >= 0);
+          else throttle = (lastDrive >= 0);
+          let u = throttle ? uThr : uBrk;
+          if (u == null) u = lastDrive;
+          lastDrive = u;
+          const tauA = throttle ? tauThr : tauBrk; // 定数 (下限クランプ済み)
+          const wzo = chanAt("wz", tt); // カーブ抵抗の回帰子 a_y=v·wz 用 (観測)
+          a += h * (-(a - accelTarget(u, vv, wzo != null ? wzo : 0)) / tauA);
+          a = sat(a, accLim);                  // C++: pedal_acc を vx_rate_lim で飽和
+        }
         v += h * a;
         if (model.stopHandling && v < 0) v = 0; // 後退なし (geared)
         v = sat(v, velLim);                  // C++: vel を vx_lim で飽和
-        // ステア(rad)。C++: steer_des を steer_lim 飽和→不感帯→steer_rate を rate_lim 飽和。
-        const ud = chanAt("cmd_steer", tt - Td); if (ud != null) lastUd = ud;
-        let driveD = (lastUd != null) ? lastUd * DEG : delta;
-        driveD = sat(driveD, steerLim);
-        delta += h * sat(-deadBand(delta - driveD, db) / tauD, steerRateLim);
-        // 横運動学（v は観測 vv, δ_src は sim/観測）
+        // ステア(rad)。既定はモデル(遅延+1次遅れ)。ideal 時は観測ステアをそのまま採用。
+        if (ideal) {
+          const so = chanAt("steer", tt); if (so != null) delta = so * DEG;
+        } else {
+          // C++: steer_des を steer_lim 飽和→不感帯→steer_rate を rate_lim 飽和。
+          const ud = chanAt("cmd_steer", tt - Td); if (ud != null) lastUd = ud;
+          let driveD = (lastUd != null) ? lastUd * DEG : delta;
+          driveD = sat(driveD, steerLim);
+          delta += h * sat(-deadBand(delta - driveD, db) / tauD, steerRateLim);
+        }
+        // 横運動学（v は観測 vv, δ_src は sim/観測/ideal）
         const om = omegaAt(tt, delta);
         yaw += h * om;
         x += h * vv * Math.cos(yaw);
@@ -503,9 +525,10 @@ const DATA = __PAYLOAD_JSON__;
       "シーク時刻を起点に運動方程式で前方積算したシミュレーション(赤)を観測(実線)・指令(破線灰)と重ねる。" +
       "縦 a→v、横 δ→ω→θ→位置（横の v は観測値を使用）。地図の赤線=シミュレーション軌跡。" +
       "座標系: X=進行方向, Y=横方向, θ=ヨー角(進行方向), δ=ステア角, ω=ヨーレート。" +
-      "凡例: 実線=観測(実機色), 破線灰=指令, 赤=シミュレーション。" +
+      "凡例: 実線=観測(実機色), 破線灰=指令, 赤=シミュレーション, 青破線=理想(加速度・ステア角が実車と完全一致した場合の積算値)。" +
+      "赤 vs 青でアクチュエータモデル(指令→応答)の誤差、青 vs 観測で運動学モデルの誤差を切り分けられる。" +
       "つまみ(T・τ・k_us・β)で即追従。位置が乖離してもモデル不良と即断せず予測窓を縮めて各段を切り分ける。" +
-      "「誤差パネル」を ON にすると各チャンネルの sim−観測 時系列 (窓内 RMSE 付き) を下段に増設表示する。";
+      "「誤差パネル」を ON にすると各チャンネルの sim−観測(赤)・理想−観測(青) 時系列 (窓内 RMSE 付き) を下段に増設表示する。";
   }
   setHint();
 
@@ -520,6 +543,7 @@ const DATA = __PAYLOAD_JSON__;
   $("speed").addEventListener("change", (e) => { speedMul = parseFloat(e.target.value); });
   $("steersrc").addEventListener("change", (e) => { steerSource = e.target.value; updateEquations(); markDirty(); });
   $("errpanels").addEventListener("change", (e) => { showErr = e.target.checked; markPlotStatic(); markDirty(); });
+  $("idealtoggle").addEventListener("change", (e) => { showIdeal = e.target.checked; markDirty(); });
   // パラメータ群（#knobs）の表示/非表示トグル（地図・プロットを広く使いたいとき隠す）。
   $("togglebtn").addEventListener("click", () => {
     const hidden = $("knobs").classList.toggle("hidden");
@@ -871,8 +895,8 @@ const DATA = __PAYLOAD_JSON__;
     ctx.fillText(m >= 1 ? m + " m" : m.toFixed(1) + " m", x0 + 4, y0 - 6);
   }
 
-  // 地図 1 フレーム描画。sim = rollout 結果 (null 可)。カメラ移動中なら true。
-  function drawMap(sim) {
+  // 地図 1 フレーム描画。sim = rollout 結果 (null 可)、ideal = 理想 rollout (null 可)。カメラ移動中なら true。
+  function drawMap(sim, ideal) {
     const wrap = cv.parentElement;
     const w = wrap.clientWidth, h = wrap.clientHeight;
     if (w === 0 || h === 0) return false;
@@ -926,6 +950,15 @@ const DATA = __PAYLOAD_JSON__;
       ctx.moveTo(SX(sim.x[0]), SY(sim.y[0]));
       for (let k = 1; k < sim.x.length; k++) ctx.lineTo(SX(sim.x[k]), SY(sim.y[k]));
       ctx.stroke();
+    }
+
+    // 理想軌跡（青・破線・観測 accel/steer を入力に積算）
+    if (ideal && ideal.x.length > 1) {
+      ctx.strokeStyle = IDEAL_COLOR; ctx.lineWidth = 2.0; ctx.setLineDash([6, 4]);
+      ctx.beginPath();
+      ctx.moveTo(SX(ideal.x[0]), SY(ideal.y[0]));
+      for (let k = 1; k < ideal.x.length; k++) ctx.lineTo(SX(ideal.x[k]), SY(ideal.y[k]));
+      ctx.stroke(); ctx.setLineDash([]);
     }
 
     // 現在位置マーカー + 速度(進行方位)矢印
@@ -999,13 +1032,13 @@ const DATA = __PAYLOAD_JSON__;
         ymin = -half; ymax = half;
       }
       if (ymax - ymin < 1e-6) { const cc = (ymin + ymax) / 2; ymin = cc - 1; ymax = cc + 1; }
-      const mg = (ymax - ymin) * 0.08; ymin -= mg; ymax += mg;
+      const mg = (ymax - ymin) * 0.20; ymin -= mg; ymax += mg; // y 余白 (上下に 20%)
       const Y = (v) => py0 + (1 - (v - ymin) / (ymax - ymin)) * plotH;
       plotGeom.push({ ox, oy, cellW, cellH, px0, py0, plotW, plotH, panel, ymin, ymax, Y });
     });
   }
 
-  function drawPlots(sim, t0, t1) {
+  function drawPlots(sim, ideal, t0, t1) {
     const w = plotsEl.clientWidth, h = plotsEl.clientHeight;
     if (w === 0 || h === 0 || !plotGeom.length) return;
     const dpr = window.devicePixelRatio || 1;
@@ -1019,19 +1052,22 @@ const DATA = __PAYLOAD_JSON__;
     for (const g of plotGeom) {
       const X = (t) => g.px0 + (t - t0) / (t1 - t0) * g.plotW;
 
-      // 誤差パネル: sim−観測 を sim 解像度で算出（同時刻の観測を補間）＋ 窓内 RMSE。
-      let errPts = null, errRmse = NaN;
+      // 誤差パネル: sim−観測（赤）・理想−観測（青）を rollout 解像度で算出（同時刻の観測を補間）＋ 窓内 RMSE。
+      let errPts = null, errRmse = NaN, idErrPts = null, idErrRmse = NaN;
       if (g.panel.isErr) {
-        const sarr = sim && sim[g.panel.sim];
-        if (sarr && sarr.length > 1) {
-          errPts = []; let se = 0, ne = 0;
+        const errOf = (roll) => {
+          const sarr = roll && roll[g.panel.sim];
+          if (!sarr || sarr.length <= 1) return [null, NaN];
+          const pts = []; let se = 0, ne = 0;
           for (let i = 0; i < sarr.length; i++) {
-            const o = chanAt(g.panel.meas, sim.t[i]);
-            if (o == null || !isFinite(sarr[i])) { errPts.push(null); continue; }
-            const e = sarr[i] - o; errPts.push(e); se += e * e; ne++;
+            const o = chanAt(g.panel.meas, roll.t[i]);
+            if (o == null || !isFinite(sarr[i])) { pts.push(null); continue; }
+            const e = sarr[i] - o; pts.push(e); se += e * e; ne++;
           }
-          errRmse = ne ? Math.sqrt(se / ne) : NaN;
-        }
+          return [pts, ne ? Math.sqrt(se / ne) : NaN];
+        };
+        [errPts, errRmse] = errOf(sim);
+        [idErrPts, idErrRmse] = errOf(ideal);
       }
 
       // 枠・ゼロ線
@@ -1058,6 +1094,7 @@ const DATA = __PAYLOAD_JSON__;
       c.fillStyle = "#333"; c.font = "11px sans-serif";
       let head = g.panel.label + " [" + g.panel.unit + "]";
       if (g.panel.isErr && isFinite(errRmse)) head += "  RMSE=" + errRmse.toFixed(errRmse >= 10 ? 1 : 3);
+      if (g.panel.isErr && idErrPts && isFinite(idErrRmse)) head += " / 理想=" + idErrRmse.toFixed(idErrRmse >= 10 ? 1 : 3);
       c.fillText(head, g.ox + 2, g.oy + 13);
 
       // パネル矩形でクリップ
@@ -1079,6 +1116,19 @@ const DATA = __PAYLOAD_JSON__;
             if (!pen) { c.moveTo(xx, yy); pen = true; } else c.lineTo(xx, yy);
           }
           c.stroke();
+        }
+        // 理想−観測（青・破線）
+        if (idErrPts) {
+          c.strokeStyle = IDEAL_COLOR; c.lineWidth = 1.4; c.setLineDash([5, 3]);
+          c.beginPath();
+          let pen = false;
+          for (let i = 0; i < idErrPts.length; i++) {
+            const e = idErrPts[i];
+            if (e == null) { pen = false; continue; }
+            const xx = X(ideal.t[i]), yy = g.Y(e);
+            if (!pen) { c.moveTo(xx, yy); pen = true; } else c.lineTo(xx, yy);
+          }
+          c.stroke(); c.setLineDash([]);
         }
         // 起点(左端)カーソル
         c.strokeStyle = "#999"; c.lineWidth = 1; c.setLineDash([3, 3]);
@@ -1143,6 +1193,16 @@ const DATA = __PAYLOAD_JSON__;
         c.stroke();
       }
 
+      // 理想 (青・破線): 観測 accel/steer を入力に積算した該当系列。
+      const iarr = ideal && ideal[g.panel.sim];
+      if (iarr && iarr.length > 1) {
+        c.strokeStyle = IDEAL_COLOR; c.lineWidth = 1.8; c.setLineDash([5, 3]);
+        c.beginPath();
+        c.moveTo(X(ideal.t[0]), g.Y(iarr[0]));
+        for (let i = 1; i < iarr.length; i++) c.lineTo(X(ideal.t[i]), g.Y(iarr[i]));
+        c.stroke(); c.setLineDash([]);
+      }
+
       // 起点(左端)カーソル + 観測初期値ドット
       c.strokeStyle = "#999"; c.lineWidth = 1; c.setLineDash([3, 3]);
       c.beginPath(); c.moveTo(X(t0), g.py0); c.lineTo(X(t0), g.py0 + g.plotH); c.stroke();
@@ -1179,10 +1239,11 @@ const DATA = __PAYLOAD_JSON__;
     lastTs = ts;
     if (dirty) {
       const [t0, t1] = plotWindow();
-      const sim = rollout(t0, t1);     // 1 フレーム 1 回だけ積分し地図・プロットで共有
-      const cont = drawMap(sim);
+      const sim = rollout(t0, t1, false);     // 1 フレーム 1 回だけ積分し地図・プロットで共有
+      const ideal = showIdeal ? rollout(t0, t1, true) : null; // 理想(実測入力)線
+      const cont = drawMap(sim, ideal);
       if (plotStaticDirty) { computePlotGeom(); plotStaticDirty = false; }
-      drawPlots(sim, t0, t1);
+      drawPlots(sim, ideal, t0, t1);
       dirty = cont;
     }
     requestAnimationFrame(tick);
