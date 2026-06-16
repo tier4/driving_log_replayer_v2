@@ -152,8 +152,10 @@ _CATEGORIES: list[tuple[str, str, str]] = [
     (
         "identification_basis",
         "2. 同定の数式的根拠",
-        "車両モデルパラメータ同定の数式的根拠を示す。パラメータ sweep 感度（k_us）と、実機ログから"
-        "直接推定した一次情報の根拠図（走行抵抗 poly(v)・カーブ抵抗 c_corner 等）を並置する。",
+        "車両モデルパラメータを「傾き = パラメータ」の数式的導出（§1 主軸）で同定し、独立な 2 つの"
+        "角度で追認する: 追認①実機ログでの傾き確認（走行抵抗 poly(v)・カーブ抵抗 c_corner・k_us"
+        "などの根拠図）と、追認②スイープ評価値（k_us 感度）。"
+        "配置は **§1 導出（テキスト）→ 追認プロット群 → §2–§4 追認・整合（読み取り表）** の順。",
     ),
     (
         "closed_loop",
@@ -178,9 +180,15 @@ _CLOSED_LOOP_STEMS: set[str] = {
 }
 
 # 取り込む Markdown レポート: (comparison/ からの相対パス, 見出し, 所属カテゴリ)。
+# セクション内で「図の前」に描画する Markdown。プロットを追認 (§2–§4) の位置へ送り、
+# 主軸の数式的導出 (§1, テキストのみ) を図より上に置くために使う。
+_MARKDOWN_REPORTS_PRE: list[tuple[str, str, str]] = [
+    ("param_sweep/param_sweep_derivation.md", "§1 主軸: 傾き = パラメータ の導出（step7）", "identification_basis"),
+]
+# セクション内で「図の後」に描画する Markdown (既定)。
 _MARKDOWN_REPORTS: list[tuple[str, str, str]] = [
     ("report.md", "比較レポート（step4: report.md）", "closed_loop"),
-    ("param_sweep/param_sweep_summary.md", "パラメータ同定サマリ（step7: param_sweep_summary.md）", "identification_basis"),
+    ("param_sweep/param_sweep_summary.md", "§2–§4 追認・整合（step7: param_sweep_summary.md）", "identification_basis"),
     ("cases/cases_summary.md", "ケース集約サマリ（step6: cases_summary.md）", "model_validation"),
 ]
 
@@ -790,16 +798,23 @@ def _render_dataset_report(
         by_cat.setdefault(_classify(rel), []).append(rel)
     case_tags = {c for rel in rels_all if (c := _case_of(rel)) is not None}
 
-    md_by_cat: dict[str, list[tuple[str, str, str]]] = {}
-    for rel, title, cat in _MARKDOWN_REPORTS:
-        path = entry.comparison_dir / rel
-        if path.exists():
-            anchor = f"md-{ns}-" + _slug(rel)
-            md_by_cat.setdefault(cat, []).append(
-                (anchor, title, _render_markdown(path.read_text(encoding="utf-8")))
-            )
+    def _collect_md(reports: list[tuple[str, str, str]]) -> dict[str, list[tuple[str, str, str]]]:
+        out: dict[str, list[tuple[str, str, str]]] = {}
+        for rel, title, cat in reports:
+            path = entry.comparison_dir / rel
+            if path.exists():
+                anchor = f"md-{ns}-" + _slug(rel)
+                out.setdefault(cat, []).append(
+                    (anchor, title, _render_markdown(path.read_text(encoding="utf-8")))
+                )
+        return out
 
-    active_cats = [c for c in _CATEGORY_ORDER if c in by_cat or c in md_by_cat]
+    md_pre_by_cat = _collect_md(_MARKDOWN_REPORTS_PRE)  # 図の前に描画 (§1 導出など)
+    md_by_cat = _collect_md(_MARKDOWN_REPORTS)          # 図の後に描画 (既定)
+
+    active_cats = [
+        c for c in _CATEGORY_ORDER if c in by_cat or c in md_by_cat or c in md_pre_by_cat
+    ]
 
     ds_attr = f" class='toc-sec ds-only' data-ds='{ns}' hidden" if multi else " class='toc-sec'"
     md_attr = f" class='toc-md ds-only' data-ds='{ns}' hidden" if multi else " class='toc-md'"
@@ -813,6 +828,14 @@ def _render_dataset_report(
             f"<span class='fname'>{html.escape(entry.dataset_id)}</span>"
             f" ／ 図 {len(images)} 枚</p>"
         )
+    def _emit_md(items: list[tuple[str, str, str]]) -> None:
+        for anchor, mtitle, md_html in items:
+            toc.append(f"<li{md_attr}><a href='#{anchor}'>{html.escape(mtitle)}</a></li>")
+            body.append(
+                f"<details class='md-report' open id='{anchor}'>"
+                f"<summary>{html.escape(mtitle)}</summary>{md_html}</details>"
+            )
+
     for cat in active_cats:
         sec_id = f"sec-{ns}-{cat}"
         toc.append(f"<li{ds_attr}><a href='#{sec_id}'>{html.escape(_CATEGORY_TITLES[cat])}</a></li>")
@@ -822,18 +845,14 @@ def _render_dataset_report(
             f"<p class='sec-desc'>{html.escape(_CATEGORY_DESCS[cat])}"
             f"<a class='toplink' href='#top'>↑ 先頭</a></p>"
         )
+        _emit_md(md_pre_by_cat.get(cat, []))  # 図の前: §1 主軸 (数式的導出・テキスト)
         if cat in by_cat:
-            body.extend(_render_category_images(
+            body.extend(_render_category_images(  # 追認プロット (実機ログ根拠・スイープ曲線)
                 by_cat[cat], entry.comparison_dir, ns, cat=cat, scenario_name=scenario_name
             ))
-        else:
+        elif cat not in md_pre_by_cat:
             body.append("<p class='empty'>（このセクションに該当する図はありませんでした）</p>")
-        for anchor, mtitle, md_html in md_by_cat.get(cat, []):
-            toc.append(f"<li{md_attr}><a href='#{anchor}'>{html.escape(mtitle)}</a></li>")
-            body.append(
-                f"<details class='md-report' open id='{anchor}'>"
-                f"<summary>{html.escape(mtitle)}</summary>{md_html}</details>"
-            )
+        _emit_md(md_by_cat.get(cat, []))      # 図の後: §2–§4 追認・整合
         body.append("</details>")
 
     # per-DS 実行構成 (auto_scenario + 追加設定)

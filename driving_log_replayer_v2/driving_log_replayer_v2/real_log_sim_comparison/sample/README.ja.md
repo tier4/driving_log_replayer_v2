@@ -204,7 +204,7 @@ sample/out/latest/
         ├── cases/
         │   ├── overlay/{cascade_error_overlay.png, error_timeseries_overlay.png}
         │   └── cases_summary.md          # Stage 6: N=1 RMSE + horizon 別 RMSE 横断表
-        ├── param_sweep/{<param>_sweep.{csv,svg}, pair_*.{csv,svg}, param_sweep_summary.md}  # Stage 7
+        ├── param_sweep/{<param>_sweep.{csv,svg}, pair_*.{csv,svg}, param_sweep_derivation.md(§1 導出), param_sweep_summary.md(§2-§4 追認・整合)}  # Stage 7
         ├── brake_sweep/{brake_sweep.csv, brake_sweep.png} # Stage 9: 縦方向 brake_tc 同定
         └── curve_diag/{curve_divergence.md, curve_divergence.png} # Stage 10: カーブ乖離診断
 ```
