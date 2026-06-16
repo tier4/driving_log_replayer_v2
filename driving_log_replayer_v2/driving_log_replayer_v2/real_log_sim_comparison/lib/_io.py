@@ -187,16 +187,16 @@ def load_kinematic(bag_path: Path, topic: str | list[str] | None = None) -> pd.D
 
 
 def load_accel(bag_path: Path, topic: str | list[str] | None = None) -> pd.DataFrame:
-    # accel_y(横加速度) は再生ビューアの同期プロットが直接計測値として使う。
+    # localization/acceleration は縦成分 (linear.x) のみ意味を持つ (横成分は構造的に 0)。
+    # 横加速度は再生ビューア側で v_lon·wz から算出する (_playback_viewer._build_channels)。
     return iter_to_df(
         bag_path,
         topic if topic is not None else DEFAULT_TOPICS["accel"],
         lambda t_ns, m: {
             "t_ns": t_ns,
             "accel": m.accel.accel.linear.x,
-            "accel_y": m.accel.accel.linear.y,
         },
-        ["t_ns", "accel", "accel_y"],
+        ["t_ns", "accel"],
     )
 
 

@@ -132,7 +132,7 @@ def _build_channels(d: dict, t_grid: np.ndarray, offset: float) -> dict:
       lon_vel / cmd_vel   縦速度・指令速度 [m/s]
       vy                  横速度 [m/s] (twist.linear.y, base_link 系・実測)
       accel / cmd_accel   縦加速度・指令 [m/s²]
-      ay                  横加速度 [m/s²] (accel.linear.y・実測)
+      ay                  横加速度 [m/s²] (= v_lon·wz・遠心加速度、sim と同式)
       steer / cmd_steer   ステア角・指令 [deg]
       wz                  角速度 yaw rate [rad/s] (twist.angular.z・実測)
       cmd_wz              角速度指令 [rad/s] = cmd_vel·tan(cmd_steer)/L (自転車近似)
@@ -146,10 +146,12 @@ def _build_channels(d: dict, t_grid: np.ndarray, offset: float) -> dict:
     vy = _resample_channel(kin, "vy", t_grid, offset)
     acc = _resample_channel(accel, "accel", t_grid, offset)
     cmd_acc = _resample_channel(cmd, "cmd_accel", t_grid, offset)
-    ay = _resample_channel(accel, "accel_y", t_grid, offset)
     steer_rad = _resample_channel(steer, "steer", t_grid, offset)
     cmd_steer_rad = _resample_channel(cmd, "cmd_steer", t_grid, offset)
     wz = _resample_channel(kin, "wz", t_grid, offset)
+    # 横加速度 (遠心加速度) a_y = v_lon·wz。localization/acceleration の横成分は常に 0 のため
+    # 実測の縦速度・ヨーレートから sim 側 (out.ay = vv·om) と同式で算出する。両信号が有効な点のみ。
+    ay = (lon_vel[0] * wz[0], lon_vel[1] & wz[1])
 
     # 角速度指令 (自転車近似): cmd_vel·tan(cmd_steer)/L。両信号が有効な点のみ。
     cmd_wz_vals = cmd_vel[0] * np.tan(cmd_steer_rad[0]) / PLAYBACK_WHEELBASE_M
