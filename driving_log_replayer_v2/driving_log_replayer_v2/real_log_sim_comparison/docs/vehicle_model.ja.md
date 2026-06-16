@@ -64,33 +64,18 @@ $$\dot\delta = -\frac{\delta - \delta_{cmd}(t - T_\delta)}{\tau_\delta}, \qquad 
 
 ---
 
-## 4. 実装間の差（2026-06 に C++ をビューア相当へ拡張）
+## 4. 実装間の差と運用注記
 
-`DELAY_STEER_ACC_GEARED_WO_FALL_GUARD` の C++ `calcModel` を検証ビューア（`_model_viewer.py`
-`lon_lat_model`）の表現力に揃えた。下表の項目は**両者で同形**になった（係数が 0 のとき従来の
-単一 τ・キネマティック自転車に厳密一致するので既存セットアップは挙動不変）。
+2026-06 に C++ `calcModel`（§2）を検証ビューア `lon_lat_model`（§3）と同じ運動方程式に揃えた
+（β・throttle/brake 分離 τ・poly(v)・縦横連成。係数 0 で従来の単一 τ・キネマティック自転車に厳密一致）。
+**残る差は無駄時間 T のみ**: C++ は入力キューが単一で τ だけ throttle/brake 分離（T は共通）、ビューアは
+\(T_{thr}/T_{brk}\) も分離する。
 
-| 項目 | 実シミュレータ（C++ `calcModel`） | 当てはめビューア（`_model_viewer.py`） |
-|---|---|---|
-| ヨーレートの \(\beta\)（bias） | **含む**（`steer_bias` → \(\tan(\delta+\beta)\)）。measured 側からヨー式へ移設 | 含む（\(\tan(\delta+\beta)\)） |
-| 縦の時定数 | throttle=`acc_time_constant` / brake=`brake_time_constant` で**分離**（\(\le0\) で単一 τ） | throttle/brake で \(T,\tau\) 分離 |
-| 定常オフセット poly(v) | `lon_drag_c0/c1/c2` を \(a_{target}\) に加算 | \(\mathrm{poly}(v)\) を当てはめ |
-| 縦横連成 \(c(v\omega)^2\) | `lon_lat_coupling` を \(a_{target}\) に加算 | あり（ON/OFF） |
-| 無駄時間 | 入力キュー（単一）。throttle/brake の **\(T\) 分離は未実装**（τ のみ分離） | 指令系列のシフト（throttle/brake で \(T\) も分離） |
-| ステア追従の基準 | 実ステア基準 \(\dot\delta = \mathrm{sat}(-(\delta_{actual}-\delta_{cmd})/\tau_\delta)\)（β は追従に入れない） | 同形 |
-
-**配線**: 新パラメータ（`brake_time_constant` / `lon_drag_c0/c1/c2` / `lon_lat_coupling`）は
-scenario.yaml `models.<name>.params` に書けば step3→launch→C++ `getParameter`（`ego_entity_simulation.cpp`）
-へ届く（KNOWN_PARAM_KEYS 登録済）。open-loop N-step rollout 用 ctypes ラッパー
-（`vehicle_model_c_wrapper.cpp` の `vm_create_*`、`step5_analyze_nstep.py` の argtypes）も同期済。
-
-**同定方針**: 縦の新項（brake τ・poly・coupling）は `_model_viewer.py` の lon_lat_model を実機ログへ
-LS フィットして得る（`tools/fit_lon_model.py` がプログラム再現。ビューアのドロップダウンで
-レジストリモデルを選んで対話当てはめも可）。`k_us` のみ rollout sweep で同定する（他パラメータの
-sweep は過適合のため不可とする方針）。**注意**: open-loop の accel-fit 最適は closed-loop 精度に
-そのまま転写されないことがある（poly の符号など）。採否は closed-loop 再現で検証すること。
-
-> **要点**: 係数が 0 のとき新項は消えて従来挙動に厳密一致する。レポートで「モデル」と言うとき
-> closed-loop sim と検証ビューアは（係数を合わせれば）同じ運動方程式を指す。
+- **配線**: 新パラメータ（`brake_time_constant` / `lon_drag_c0/c1/c2` / `lon_lat_coupling`）は
+  scenario.yaml `models.<name>.params` に書けば C++ `getParameter`（`ego_entity_simulation.cpp`）まで届く
+  （open-loop rollout 用 ctypes ラッパーも同期済）。
+- **同定**: 縦の新項は `tools/fit_lon_model.py`（または `_model_viewer.py` のドロップダウンで対話）で実機に
+  フィット、`k_us` のみ rollout sweep。**open-loop の当てはめ最適は closed-loop 精度に転写されないことが
+  ある**ため、採否は closed-loop 再現で検証する。
 
 ---
