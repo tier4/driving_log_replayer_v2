@@ -8,12 +8,11 @@
   comparison/cases/
     ├── overlay/
     │   ├── cascade_error_overlay.svg            # N=1 段階的誤差 (ステア応答→横位置)
-    │   ├── error_timeseries_overlay_n1.svg      # N=1 誤差時系列 重ね描き
-    │   ├── error_timeseries_overlay_n<max>.svg  # N=max 誤差時系列 重ね描き
-    │   ├── error_growth_overlay.svg             # horizon 別 RMSE 成長 重ね描き
-    │   ├── rmse_heatmap.svg                     # case × horizon 俯瞰
-    │   └── growth_relative.svg                  # reference 比の相対成長
+    │   └── error_growth_overlay.svg             # horizon 別 RMSE 成長 重ね描き
     └── cases_summary.md   # N=1 詳細 RMSE 表 + horizon 別 RMSE 表
+
+誤差時系列の対話的確認は縦横モデル検証ビューア (step4: lon_lat_model.html) の
+誤差パネルへ移設済み。case × horizon の俯瞰は cases_summary.md の表が担う。
 
 欠損ケース (CSV が無い) は警告ログを出してスキップ。集約処理は continue できる。
 
@@ -38,9 +37,6 @@ from .lib._fig_io import write_fig_json
 from .lib._figures import (
     build_fig_cascade_error_overlay,
     build_fig_error_growth_overlay,
-    build_fig_error_timeseries_overlay,
-    build_fig_growth_relative,
-    build_fig_rmse_heatmap,
 )
 from .lib._nstep_common import (
     ERR_METRICS,
@@ -109,18 +105,6 @@ def plot_cascade_error_overlay(
     write_fig_json(fig, out_path)
 
 
-def plot_error_timeseries_overlay(
-    case_dfs: dict[str, pd.DataFrame], horizon: int, out_path: Path
-) -> None:
-    """指定 horizon の終端誤差時系列を全 case 重ね描き。
-
-    N=1 では従来の per-step 誤差比較、N=max では RMSE 集約で消える
-    「コースのどこ (どのカーブ) でどのモデルが乖離するか」の比較になる。
-    """
-    fig = build_fig_error_timeseries_overlay(case_dfs, horizon)
-    write_fig_json(fig, out_path)
-
-
 def plot_error_growth_overlay(
     roll: dict[str, dict[int, dict[str, float]]], out_path: Path
 ) -> None:
@@ -129,41 +113,6 @@ def plot_error_growth_overlay(
     roll: tag → {horizon → {"pos","long","lat","yaw"}} (rmse_by_horizon の集約)。
     """
     fig = build_fig_error_growth_overlay(roll)
-    write_fig_json(fig, out_path)
-
-
-def plot_rmse_heatmap(
-    roll: dict[str, dict[int, dict[str, float]]], out_path: Path
-) -> None:
-    """case × horizon の RMSE ヒートマップ (位置/yaw の 2 パネル、数値注釈付き)。
-
-    cases_summary.md の表の図版化。2 変数 (シミュレータ構成 × rollout 長) の
-    全組み合わせを 1 枚で俯瞰する。ケース数が増えても破綻しない。
-    """
-    horizons = common_horizons(r.keys() for r in roll.values())
-    fig = build_fig_rmse_heatmap(roll, horizons)
-    if fig is None:
-        return
-    write_fig_json(fig, out_path)
-
-
-def plot_growth_relative(
-    roll: dict[str, dict[int, dict[str, float]]], ref_tag: str, out_path: Path
-) -> None:
-    """reference 比の誤差成長 (RMSE(case)/RMSE(ref) vs N)。
-
-    絶対 RMSE は全ケース共通のノイズ床 (小 N では実機計測ノイズが支配) に埋もれるため、
-    reference との比を取って dynamics 差だけを浮き上がらせる。
-    「N をどこまで伸ばすとモデル差が判別可能になるか」が読める。
-    """
-    if ref_tag not in roll:
-        print(f"[WARN] reference_tag={ref_tag} の nstep 出力が無いため相対成長プロットをスキップ",
-              file=sys.stderr)
-        return
-    horizons = common_horizons(r.keys() for r in roll.values())
-    fig = build_fig_growth_relative(roll, ref_tag, horizons)
-    if fig is None:
-        return
     write_fig_json(fig, out_path)
 
 
@@ -357,20 +306,10 @@ def main() -> None:
     plots_wanted = set(cases_cfg.overlay.plots)
     if "cascade_error" in plots_wanted:
         plot_cascade_error_overlay(case_dfs, overlay_dir / "cascade_error_overlay.svg")
-    if "error_timeseries" in plots_wanted and horizons:
-        # N=min (通常 1) と N=max の 2 枚。単一 horizon なら 1 枚のみ。
-        for h in sorted({horizons[0], horizons[-1]}):
-            plot_error_timeseries_overlay(
-                case_dfs, h, overlay_dir / f"error_timeseries_overlay_n{h}.svg"
-            )
 
-    # horizon 横断集約 (誤差成長・ヒートマップ・相対成長・RMSE 表)
+    # horizon 横断集約 (誤差成長 + RMSE 表)。誤差時系列は縦横モデル検証ビューアの誤差パネルへ移設。
     roll = {tag: rmse_by_horizon(df) for tag, df in case_dfs.items()}
     plot_error_growth_overlay(roll, overlay_dir / "error_growth_overlay.svg")
-    plot_rmse_heatmap(roll, overlay_dir / "rmse_heatmap.svg")
-    plot_growth_relative(
-        roll, cases_cfg.overlay.reference_tag, overlay_dir / "growth_relative.svg"
-    )
     write_cases_summary(case_dfs, roll, cases_cfg, out_root / "cases_summary.md")
     write_cases_metrics(case_dfs, roll, cases_cfg, horizons, out_root / "cases_metrics.json")
 

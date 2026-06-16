@@ -16,7 +16,7 @@ schema (scenario.yaml の Conditions ブロック):
     cases: [<name>, ...]               # vehicle_model_type が必須
     overlay:
       reference_tag: <str>
-      plots: [cascade_error, error_timeseries]
+      plots: [cascade_error]
 """
 
 from __future__ import annotations

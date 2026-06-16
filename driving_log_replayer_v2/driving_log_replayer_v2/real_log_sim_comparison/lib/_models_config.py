@@ -25,7 +25,7 @@ schema (Conditions ブロック):
     sim_runs: [<name>, ...]            # closed-loop sim 実行。vehicle_model 必須
     overlay:
       reference_tag: <str>             # 基準モデル (cases 集約の overlay 比較基準)
-      plots: [cascade_error, error_timeseries]
+      plots: [cascade_error]
 """
 
 from __future__ import annotations
@@ -59,6 +59,10 @@ KNOWN_PARAM_KEYS: frozenset[str] = frozenset({
     "steer_dead_band", "steer_bias",
     "debug_acc_scaling_factor", "debug_steer_scaling_factor",
     "k_us", "sub_dt",
+    # 縦横モデル検証ビューア相当の表現力 (delay_steer_acc_geared_wo_fall_guard)
+    # brake_time_constant=throttle/brake 分離, lon_drag_c0/c1/c2=走行抵抗 poly(v),
+    # lon_lat_coupling=縦横連成 c·(v·ω)²
+    "brake_time_constant", "lon_drag_c0", "lon_drag_c1", "lon_drag_c2", "lon_lat_coupling",
     # taiga_dyn / taiga_x 動的自転車モデル
     "mass", "inertia_z", "lf", "lr",
     "cornering_stiffness_front", "cornering_stiffness_rear", "vx_min_dyn",
@@ -108,7 +112,7 @@ class OverlaySpec:
     """cases 集約の overlay セクション."""
 
     reference_tag: str | None = None
-    plots: list[str] = field(default_factory=lambda: ["cascade_error", "error_timeseries"])
+    plots: list[str] = field(default_factory=lambda: ["cascade_error"])
 
 
 @dataclass
@@ -290,7 +294,7 @@ def load_models_doc(scenario_path: str | Path) -> ModelsDoc:
     overlay_raw = conditions.get("overlay") or {}
     overlay = OverlaySpec(
         reference_tag=overlay_raw.get("reference_tag"),
-        plots=list(overlay_raw.get("plots") or ["cascade_error", "error_timeseries"]),
+        plots=list(overlay_raw.get("plots") or ["cascade_error"]),
     )
 
     return ModelsDoc(

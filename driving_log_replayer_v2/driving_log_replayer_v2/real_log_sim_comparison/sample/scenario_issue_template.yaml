@@ -79,4 +79,4 @@ Evaluation:
     sim_runs: [normal, kus0020, best_normal, taiga_dyn, taiga_x, perfect, godot]
     overlay:
       reference_tag: normal
-      plots: [cascade_error, error_timeseries]
+      plots: [cascade_error]

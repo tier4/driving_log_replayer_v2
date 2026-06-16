@@ -102,4 +102,4 @@ Evaluation:
     sim_runs: [dp_0303, dp_0503, dp_0410]
     overlay:
       reference_tag: normal
-      plots: [cascade_error, error_timeseries]
+      plots: [cascade_error]

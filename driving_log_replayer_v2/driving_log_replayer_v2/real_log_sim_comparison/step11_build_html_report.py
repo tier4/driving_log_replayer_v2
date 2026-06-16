@@ -56,17 +56,16 @@ from .lib._runtime_config import add_common_cli_arguments, build_runtime_config
 CAPTIONS: dict[str, str] = {
     # step4: figures/
     "trajectory_playback": "軌跡再生ビューア（時刻同期/位置同期シークバー・速度矢印・追従ズーム・距離軸プロット・メトリクスパネル）",
-    "lon_lat_model": "縦横モデル検証ビューア（実機：運動方程式〔1次遅れ+自転車モデル〕の前方積算と、加速度/速度/ステア/ヨーレート/横Gの観測・指令を重ね描き。地図にシミュレーション軌跡も重畳。T/τ/k_us/β つまみ調整・ステア源切替）",
+    "lon_lat_model": "縦横モデル検証ビューア（実機：運動方程式〔1次遅れ+自転車モデル〕の前方積算と、加速度/速度/ステア/ヨーレート/横Gの観測・指令を重ね描き。地図にシミュレーション軌跡も重畳。T/τ/k_us/β つまみ調整・ステア源切替・誤差(sim−観測)パネル切替）",
     # step5: nstep/<tag>/
     "overview": "誤差概観（N=1）",
     "map_distribution": "誤差の位置分布（地図上・N=1 / N=max・インタラクティブ）",
     # step6: cases/overlay/
     "cascade_error_overlay": "全ケース カスケード誤差 重ね描き（N=1）",
     "error_growth_overlay": "全ケース 誤差成長 重ね描き",
-    "rmse_heatmap": "RMSE ヒートマップ（case × horizon 俯瞰）",
-    "growth_relative": "相対誤差成長（reference 比・dynamics 差の分離）",
     # step7: param_sweep/ (個別図のキャプションは _caption_for の正規表現で導出)
     "_overview_sensitivity": "スイープ感度オーバービュー（改善率ランキング + 正規化 RMSE カーブ）",
+    "acc_steady_evidence": "縦定常補正の実機根拠（poly(v)=p0+p1·v の切片/傾き・カーブ抵抗 c_corner）",
     # step13: cross_dataset/
     "cross_closed_loop_heatmap": "dataset × sim run: closed-loop 軌跡乖離・完走率行列",
     "cross_normalized_bars": "dataset 横断 正規化 mean/worst 集約（ロバスト性ランキング）",
@@ -195,10 +194,6 @@ def _caption_for(stem: str) -> str:
     m = re.match(r"pair_(.+)$", stem)
     if m:
         return f"2D ペア sweep（{m.group(1)}）"
-    # error_timeseries_overlay_n<N> パターン照合（step6、horizon 別の重ね描き）
-    m = re.match(r"error_timeseries_overlay_n(\d+)$", stem)
-    if m:
-        return f"全ケース 誤差時系列 重ね描き（N={m.group(1)}）"
     # フォールバック: アンダースコアを空白に
     return stem.replace("_", " ")
 

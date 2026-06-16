@@ -53,12 +53,49 @@ from ._playback_viewer import (
 MODEL_RATE_HZ = 50.0
 
 
+def _seed_from_params(params: dict) -> dict:
+    """モデルレジストリ/spec の params dict から lon_lat_model のつまみシードを構築する。
+
+    C++ closed-loop モデル (delay_steer_acc_geared_wo_fall_guard) のパラメータ名を
+    ビューアのつまみ名へ写像する。新表現力 (brake_time_constant=brake τ, lon_drag_c0/c1/c2=poly(v),
+    lon_lat_coupling=c_corner, steer_bias=β) もここで対応づけるので、レジストリのモデル
+    (best_normal 等) をビューアにそのまま適用できる。
+    """
+    def f(key: str, default: float) -> float:
+        try:
+            return float(params.get(key, default))
+        except (TypeError, ValueError):
+            return float(default)
+
+    acc_tc = f("acc_time_constant", 0.1)
+    acc_td = f("acc_time_delay", 0.1)
+    brake_tc = params.get("brake_time_constant")
+    brake_tc = float(brake_tc) if brake_tc not in (None, "", 0, 0.0) else acc_tc
+    return {
+        "tau_acc_thr": acc_tc,
+        "t_acc_thr": acc_td,
+        "tau_acc_brk": brake_tc,
+        "t_acc_brk": f("brake_delay", acc_td),
+        "tau_acc_slope": 0.0,
+        "poly0": f("lon_drag_c0", 0.0),
+        "poly1": f("lon_drag_c1", 0.0),
+        "poly2": f("lon_drag_c2", 0.0),
+        "v_stop": 0.2,
+        "c_corner": f("lon_lat_coupling", 0.0),
+        "tau_steer": f("steer_time_constant", 0.27),
+        "t_steer": f("steer_time_delay", 0.24),
+        "steer_bias": f("steer_bias", 0.0),
+        "k_us": f("k_us", 0.0),
+    }
+
+
 def plot_model_viewer(
     data: dict,
     map_ways: list | None,
     figs_dir: Path,
     sim_params: dict,
     title: str = "",
+    model_registry: dict | None = None,
 ) -> None:
     """step4 から呼ぶエントリポイント。`figs_dir/lon_lat_model.html` を生成。
 
@@ -81,27 +118,17 @@ def plot_model_viewer(
         warnings.warn("kinematic データなし。縦横モデルビューアをスキップ", stacklevel=2)
         return
 
-    # つまみ初期値。tau/T [s], steer_bias [rad], k_us [s^2/m]。
-    # load_sim_params はフォールバック付きで常に dict を返す。縦は加減速で別特性のため
-    # throttle=acc_*, brake=brake_* をシード（実機モデルも acc/brake で別 time_constant・delay）。
-    # tau_acc_slope はペイロードに含まれるが JS 側では使用しない (poly(v) と交絡するため削除済み)。
-    # k_us は yaml 未定義のことが多く 0.0 (純キネマティック) をシード（best_normal の 0.018 等へつまみで調整可能）。
-    payload["model_seed"] = {
-        "tau_acc_thr": float(sim_params["acc_time_constant"]),
-        "t_acc_thr": float(sim_params["acc_time_delay"]),
-        "tau_acc_brk": float(sim_params.get("brake_time_constant", sim_params["acc_time_constant"])),
-        "t_acc_brk": float(sim_params.get("brake_delay", sim_params["acc_time_delay"])),
-        "tau_acc_slope": 0.0,
-        "poly0": 0.0,  # 縦 定常補正 多項式係数 (0/1/2 次, 既定 OFF・0)。a_target に加算。
-        "poly1": 0.0,
-        "poly2": 0.0,
-        "v_stop": 0.2,  # 停止処理の速度しきい値 [m/s]。v<=v_stop かつブレーキ指令で実加速度を 0 に。
-        "c_corner": 0.0,  # カーブ抵抗係数 (既定 OFF・0)。a_target += c_corner*(v*wz)^2 (観測 v・wz)。
-        "tau_steer": float(sim_params["steer_time_constant"]),
-        "t_steer": float(sim_params["steer_time_delay"]),
-        "steer_bias": float(sim_params.get("steer_bias", 0.0)),
-        "k_us": float(sim_params.get("k_us", 0.0)),
-    }
+    # つまみ初期値（spec シード）。tau/T [s], steer_bias [rad], k_us [s^2/m]。
+    # 縦は加減速で別特性のため throttle=acc_*, brake=brake_* をシード。新表現力
+    # (poly(v)=lon_drag_*, c_corner=lon_lat_coupling, β=steer_bias) も _seed_from_params で対応。
+    payload["model_seed"] = _seed_from_params(sim_params)
+    # モデルレジストリ（scenario.yaml の models）。各モデルの params を spec に上書きして
+    # シード化し、ビューアのドロップダウンから「対応モデルのパラメータを簡単に適用」できるようにする。
+    registry_seeds: dict[str, dict] = {}
+    for name, mparams in (model_registry or {}).items():
+        merged = {**sim_params, **(mparams or {})}
+        registry_seeds[name] = _seed_from_params(merged)
+    payload["model_registry"] = registry_seeds
     # 自転車モデルの wheelbase L [m]（JS でハードコード二重定義しないようペイロードで渡す）。
     payload["wheelbase"] = float(PLAYBACK_WHEELBASE_M)
 
@@ -198,6 +225,12 @@ _HTML_TEMPLATE = r"""<!DOCTYPE html>
       </select>
     </span>
     <span class="grp">
+      <label><input type="checkbox" id="errpanels"> 誤差パネル(sim−観測)</label>
+    </span>
+    <span class="grp">
+      モデル <select id="modelsel"><option value="">(spec)</option></select>
+    </span>
+    <span class="grp">
       最小二乗最適化:
       <button id="opt_all">全体</button>
       <button id="opt_lon">縦</button>
@@ -278,13 +311,22 @@ const DATA = __PAYLOAD_JSON__;
     { label: "横G(横加速度)", unit: "m/s²", meas: "ay",     cmd: null,        sim: "ay" },
   ];
   const PLOT_COLS = 2;
-  const PLOT_ROWS = Math.ceil(PANELS.length / PLOT_COLS);
+  // 誤差専用パネル（旧 error_timeseries_overlay の移設先）。各チャンネルの sim−観測 を 1 本描く。
+  // 観測キー meas・sim キー sim は親パネルから引き継ぐ（isErr で描画分岐）。
+  const ERROR_PANELS = PANELS.map((p) => ({
+    label: p.label + " 誤差", unit: p.unit, meas: p.meas, sim: p.sim, isErr: true,
+  }));
+  // 表示中のパネル一覧（誤差トグル ON で誤差パネルを下段に増設）。geom/描画はこれを基準にする。
+  function activePanels() { return showErr ? PANELS.concat(ERROR_PANELS) : PANELS; }
+  function plotRows() { return Math.ceil(activePanels().length / PLOT_COLS); }
+  const PANEL_ROW_PX = 540 / 3;  // 既定 5 パネル (3 行) の 1 行高さ。誤差 ON で行数比例に拡張。
 
   // ----------------------------------------------------------------- state
   let playing = false;
   let speedMul = 1;
   let plotWindowS = 8;   // 予測窓幅 [s]。窓 = [curT, curT + plotWindowS] (左端=起点)。
   let curT = 0;          // 現在時刻 (= シミュレーション起点) [s]
+  let showErr = false;   // 誤差専用パネル（sim−観測 時系列）を増設表示するか
   let steerSource = "sim"; // 自転車モデルへ渡す δ の源: "sim"(シミュレーション) | "obs"(観測)
   let optWholeBag = true;  // 最適化を全区間で行うか (false なら [curT, curT+optWindowS])
   let optWindowS = 10;     // 最適化窓幅 [s]（シーク位置を起点）
@@ -462,7 +504,8 @@ const DATA = __PAYLOAD_JSON__;
       "縦 a→v、横 δ→ω→θ→位置（横の v は観測値を使用）。地図の赤線=シミュレーション軌跡。" +
       "座標系: X=進行方向, Y=横方向, θ=ヨー角(進行方向), δ=ステア角, ω=ヨーレート。" +
       "凡例: 実線=観測(実機色), 破線灰=指令, 赤=シミュレーション。" +
-      "つまみ(T・τ・k_us・β)で即追従。位置が乖離してもモデル不良と即断せず予測窓を縮めて各段を切り分ける。";
+      "つまみ(T・τ・k_us・β)で即追従。位置が乖離してもモデル不良と即断せず予測窓を縮めて各段を切り分ける。" +
+      "「誤差パネル」を ON にすると各チャンネルの sim−観測 時系列 (窓内 RMSE 付き) を下段に増設表示する。";
   }
   setHint();
 
@@ -476,6 +519,7 @@ const DATA = __PAYLOAD_JSON__;
   });
   $("speed").addEventListener("change", (e) => { speedMul = parseFloat(e.target.value); });
   $("steersrc").addEventListener("change", (e) => { steerSource = e.target.value; updateEquations(); markDirty(); });
+  $("errpanels").addEventListener("change", (e) => { showErr = e.target.checked; markPlotStatic(); markDirty(); });
   // パラメータ群（#knobs）の表示/非表示トグル（地図・プロットを広く使いたいとき隠す）。
   $("togglebtn").addEventListener("click", () => {
     const hidden = $("knobs").classList.toggle("hidden");
@@ -764,6 +808,43 @@ const DATA = __PAYLOAD_JSON__;
       " / ω " + b.before.toFixed(3) + "→" + b.after.toFixed(3);
   });
 
+  // ----- モデルレジストリ適用: scenario.yaml の models から選択して params をつまみへ反映 -----
+  function applyModelSeed(seed) {
+    if (!seed) return;
+    model.tau_acc_thr = seed.tau_acc_thr; model.t_acc_thr = seed.t_acc_thr;
+    model.tau_acc_brk = seed.tau_acc_brk; model.t_acc_brk = seed.t_acc_brk;
+    model.poly0 = seed.poly0; model.poly1 = seed.poly1; model.poly2 = seed.poly2;
+    model.c_corner = seed.c_corner;
+    model.tau_steer = seed.tau_steer; model.t_steer = seed.t_steer;
+    model.k_us = seed.k_us;
+    model.steer_bias = seed.steer_bias * RAD2DEG; // seed は rad、つまみは deg
+    // poly(v)・c_corner は係数が非ゼロなら自動 ON にしてつまみ有効化
+    const setTog = (valKey, onKey, cbId, slId) => {
+      const on = Math.abs(model[valKey]) > 1e-9;
+      model[onKey] = on;
+      const cb = $(cbId); if (cb) cb.checked = on;
+      const sl = $(slId); if (sl) sl.disabled = !on;
+    };
+    setTog("poly0", "polyOn0", "on_poly0", "k_poly0");
+    setTog("poly1", "polyOn1", "on_poly1", "k_poly1");
+    setTog("poly2", "polyOn2", "on_poly2", "k_poly2");
+    setTog("c_corner", "cornerOn", "on_corner", "k_corner");
+    for (const k of Object.keys(knobReg)) syncKnob(k);
+    updateEquations(); markDirty();
+  }
+  (function setupModelSelect() {
+    const reg = DATA.model_registry || {};
+    const sel = $("modelsel"); if (!sel) return;
+    for (const name of Object.keys(reg)) {
+      const o = document.createElement("option"); o.value = name; o.textContent = name;
+      sel.appendChild(o);
+    }
+    sel.addEventListener("change", () => {
+      const name = sel.value;
+      applyModelSeed(name && reg[name] ? reg[name] : DATA.model_seed);
+    });
+  })();
+
   // ------------------------------------------------------------------ 地図描画
   function drawArrowhead(x, y, ang, size) {
     ctx.beginPath();
@@ -882,6 +963,10 @@ const DATA = __PAYLOAD_JSON__;
   // パネル矩形 + y オートスケール (観測+指令の全域)。2列グリッド。構造変化時のみ。
   function computePlotGeom() {
     plotGeom = [];
+    const panels = activePanels();
+    const rows = plotRows();
+    // 誤差パネル ON で行数が増える分、プロット領域の高さを行数比例に拡張する（各行高さを確保）。
+    plotsEl.style.height = (rows * PANEL_ROW_PX) + "px";
     const w = plotsEl.clientWidth, h = plotsEl.clientHeight;
     if (w === 0 || h === 0) return;
     const dpr = window.devicePixelRatio || 1;
@@ -890,8 +975,8 @@ const DATA = __PAYLOAD_JSON__;
     const outpad = 6, gapX = 10, gapY = 10;
     const padL = 46, padR = 12, padT = 18, padB = 18;
     const cellW = (w - outpad * 2 - gapX * (PLOT_COLS - 1)) / PLOT_COLS;
-    const cellH = (h - outpad * 2 - gapY * (PLOT_ROWS - 1)) / PLOT_ROWS;
-    PANELS.forEach((panel, pi) => {
+    const cellH = (h - outpad * 2 - gapY * (rows - 1)) / rows;
+    panels.forEach((panel, pi) => {
       const col = pi % PLOT_COLS, rowi = Math.floor(pi / PLOT_COLS);
       const ox = outpad + col * (cellW + gapX);
       const oy = outpad + rowi * (cellH + gapY);
@@ -907,6 +992,12 @@ const DATA = __PAYLOAD_JSON__;
         }
       }
       if (!isFinite(ymin) || !isFinite(ymax)) { ymin = -1; ymax = 1; }
+      // 誤差パネルは観測スケールに対し 0 中心の対称レンジ（sim−観測 は観測値の数割で収まる前提。
+      // フレーム毎の揺れを避けて静的に固定する）。
+      if (panel.isErr) {
+        const half = Math.max(0.5 * (ymax - ymin), 1e-6);
+        ymin = -half; ymax = half;
+      }
       if (ymax - ymin < 1e-6) { const cc = (ymin + ymax) / 2; ymin = cc - 1; ymax = cc + 1; }
       const mg = (ymax - ymin) * 0.08; ymin -= mg; ymax += mg;
       const Y = (v) => py0 + (1 - (v - ymin) / (ymax - ymin)) * plotH;
@@ -928,6 +1019,21 @@ const DATA = __PAYLOAD_JSON__;
     for (const g of plotGeom) {
       const X = (t) => g.px0 + (t - t0) / (t1 - t0) * g.plotW;
 
+      // 誤差パネル: sim−観測 を sim 解像度で算出（同時刻の観測を補間）＋ 窓内 RMSE。
+      let errPts = null, errRmse = NaN;
+      if (g.panel.isErr) {
+        const sarr = sim && sim[g.panel.sim];
+        if (sarr && sarr.length > 1) {
+          errPts = []; let se = 0, ne = 0;
+          for (let i = 0; i < sarr.length; i++) {
+            const o = chanAt(g.panel.meas, sim.t[i]);
+            if (o == null || !isFinite(sarr[i])) { errPts.push(null); continue; }
+            const e = sarr[i] - o; errPts.push(e); se += e * e; ne++;
+          }
+          errRmse = ne ? Math.sqrt(se / ne) : NaN;
+        }
+      }
+
       // 枠・ゼロ線
       c.strokeStyle = "#ddd"; c.lineWidth = 1;
       c.strokeRect(g.px0, g.py0, g.plotW, g.plotH);
@@ -947,14 +1053,40 @@ const DATA = __PAYLOAD_JSON__;
         const tt = t0 + (t1 - t0) * k / 2;
         c.fillText(tt.toFixed(1) + (k === 2 ? "s" : ""), X(tt), g.py0 + g.plotH + 2);
       }
-      // 見出し
+      // 見出し（誤差パネルは窓内 RMSE を併記）
       c.textAlign = "left"; c.textBaseline = "alphabetic";
       c.fillStyle = "#333"; c.font = "11px sans-serif";
-      c.fillText(g.panel.label + " [" + g.panel.unit + "]", g.ox + 2, g.oy + 13);
+      let head = g.panel.label + " [" + g.panel.unit + "]";
+      if (g.panel.isErr && isFinite(errRmse)) head += "  RMSE=" + errRmse.toFixed(errRmse >= 10 ? 1 : 3);
+      c.fillText(head, g.ox + 2, g.oy + 13);
 
       // パネル矩形でクリップ
       c.save();
       c.beginPath(); c.rect(g.px0, g.py0, g.plotW, g.plotH); c.clip();
+
+      if (g.panel.isErr) {
+        // 誤差パネル: ゼロ線を強調し、誤差ライン (sim−観測, 赤) を 1 本描く。
+        c.strokeStyle = "#bbb"; c.lineWidth = 1;
+        c.beginPath(); c.moveTo(g.px0, g.Y(0)); c.lineTo(g.px0 + g.plotW, g.Y(0)); c.stroke();
+        if (errPts) {
+          c.strokeStyle = SIM_COLOR; c.lineWidth = 1.6;
+          c.beginPath();
+          let pen = false;
+          for (let i = 0; i < errPts.length; i++) {
+            const e = errPts[i];
+            if (e == null) { pen = false; continue; }
+            const xx = X(sim.t[i]), yy = g.Y(e);
+            if (!pen) { c.moveTo(xx, yy); pen = true; } else c.lineTo(xx, yy);
+          }
+          c.stroke();
+        }
+        // 起点(左端)カーソル
+        c.strokeStyle = "#999"; c.lineWidth = 1; c.setLineDash([3, 3]);
+        c.beginPath(); c.moveTo(X(t0), g.py0); c.lineTo(X(t0), g.py0 + g.plotH); c.stroke();
+        c.setLineDash([]);
+        c.restore();
+        continue;
+      }
 
       // 停止区間の陰影（縦加速度パネルのみ）。観測 v ≤ v_stop の連続帯を薄青で塗り「停止」表示。
       // 停止処理 ON ではこの帯で a_target=0 にゲートしている区間に相当する。

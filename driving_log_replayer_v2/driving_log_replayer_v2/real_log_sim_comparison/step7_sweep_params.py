@@ -679,6 +679,59 @@ def _ev_acc_scaling(ev, ident, base_value) -> dict:
             "desc": "指令→実測加速度 fit 傾き (応答遅れの散布を含む参考値)"}
 
 
+# --- 縦 定常補正 (poly(v) / カーブ抵抗) の実機根拠 -----------------------------
+# poly0/poly1/poly2・c_corner はビューア (lon_lat_model) のつまみで、sweep 同定対象では
+# ないが、定常状態の運動方程式から実機ログで直接読める。sweep とは独立に main() で
+# 1 枚の図にまとめて出力する (SWEEP_SPECS には載らないため _EVIDENCE_PLOTS には入れない)。
+
+
+def _acc_steady_residual(ev) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """準定常 (|da/dt| 小・走行中) の残差 r = a_実測 − a_指令 と v, a_y を返す。
+
+    1 次遅れ ȧ=−(a−a_target)/τ の定常 (ȧ=0) では a = a_target = a_cmd + poly(v)。
+    よって残差 r = a_実測 − a_指令 が定常補正 poly(v) (+ カーブ抵抗) を表す。
+    過渡では lag が混じるため |da/dt| が小さい準定常点だけを採る。
+    """
+    t = ev["t"]
+    r = ev["ax"] - ev["accel_des"]
+    rate = np.gradient(ev["ax"], t)
+    mask = (ev["vx"] > 0.5) & (np.abs(rate) < 0.2) & np.isfinite(r)
+    return ev["vx"][mask], r[mask], (ev["vx"] * ev["wz"])[mask]
+
+
+def _ev_acc_poly(ev) -> dict:
+    """poly(v)=p0+p1·v(+p2·v²): 残差 r=a_実測−a_指令 vs v。切片=p0, 傾き=p1 (曲率=p2)。"""
+    v, r, _ay = _acc_steady_residual(ev)
+    spec, coef = _scatter_fit_spec(
+        v, r, "速度 v [m/s]", "残差 a_実測 − a_指令 [m/s²]",
+        "実機ログ根拠: 縦定常補正 poly(v) (切片 = p0, 傾き = p1)",
+        "実測: localization/acceleration  指令: control_cmd (準定常 |da/dt|<0.2・v>0.5)",
+    )
+    if coef is not None:
+        spec["traces"].append(go.Scatter(
+            x=[None], y=[None], mode="lines",
+            name=f"→ p0 ≈ {float(coef[1]):.3f} m/s², p1 ≈ {float(coef[0]):.4f} 1/s",
+        ))
+    return spec
+
+
+def _ev_acc_corner(ev) -> dict:
+    """カーブ抵抗 c_corner: a_target += c·a_y² → poly(v) 除去後の残差 vs a_y² の傾き = c。"""
+    v, r, ay = _acc_steady_residual(ev)
+    base = _fit_line(v, r)  # poly(v) (1次) を先に除去して連成項のみ残す
+    r_corner = r - np.polyval(base, v) if base is not None else r
+    spec, coef = _scatter_fit_spec(
+        ay ** 2, r_corner, "横加速度² a_y² [m²/s⁴]", "poly(v) 除去後の残差 [m/s²]",
+        "実機ログ根拠: カーブ抵抗 c_corner (傾き = c)",
+        "実測: kinematic_state × acceleration  指令: control_cmd (準定常・poly(v) 除去済)",
+    )
+    if coef is not None:
+        spec["traces"].append(go.Scatter(
+            x=[None], y=[None], mode="lines", name=f"→ c_corner ≈ {float(coef[0]):.4g}",
+        ))
+    return spec
+
+
 # パラメータ名 → 根拠プロット関数 (ax, ev, ident, base_value) のリスト (パネル数分)
 _EVIDENCE_PLOTS: dict[str, list] = {
     "k_us": [_ev_k_us],
@@ -900,8 +953,69 @@ def write_summary(
         "",
     ]
     lines += _build_discussion(records)
+    lines += _build_derivation()
     out_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
     print(f"  Saved: {out_path}")
+
+
+def _build_derivation() -> list[str]:
+    """実機ログ根拠グラフの「傾き = パラメータ」をモデル式の変形から導出する静的セクション。
+
+    各根拠パネル (_ev_*) が縦軸・横軸をどう取ると 1 次回帰の傾きが物理パラメータになるかを、
+    車両モデル式の代数変形で示す (レポートは MathJax 対応のため LaTeX をそのまま流す)。
+    実際の評価式は _ev_k_us / _ev_steer_tc / _ev_acc_tc / _ev_*_scaling と一致させること。
+    """
+    return [
+        "## 同定の数式的根拠（傾き = パラメータ の導出）\n",
+        "実機ログ根拠グラフ（散布 + 1 次フィット）は、車両モデル式を変形して "
+        "**「傾きが物理パラメータそのものになる」ように縦軸・横軸を選んでいる**。"
+        "sweep（rollout 経由の同定）とは独立に、実機ログから直接 1 本の回帰直線で読める。\n",
+        "",
+        "### アンダーステア係数 $k_{us}$（`k_us` 根拠パネル）\n",
+        "運動学的自転車モデルのヨーレートは\n",
+        "$$\\omega = \\frac{v_x \\tan\\delta}{L + k_{us} v_x^2}.$$\n",
+        "両辺に $L + k_{us}v_x^2$ を掛けて $v_x$ で割り、$k_{us}$ の項を分離すると\n",
+        "$$\\tan\\delta = \\frac{L\\,\\omega}{v_x} + k_{us}\\,(v_x \\omega)"
+        "\\;\\Longleftrightarrow\\;"
+        "\\underbrace{\\tan\\delta - \\frac{L\\,\\omega}{v_x}}_{y}"
+        " = k_{us}\\,\\underbrace{(v_x \\omega)}_{x}.$$\n",
+        "横加速度 $a_y = v_x \\omega$ なので、**横軸に $a_y$、縦軸にステア残差 "
+        "$\\tan\\delta - L\\omega/v_x$ を取ると傾き $= k_{us}$**（切片 $\\approx$ ステアバイアス）。\n",
+        "",
+        "### 1 次遅れ時定数 $\\tau$（`steer_time_constant` / `acc_time_constant` 根拠パネル）\n",
+        "アクチュエータ応答を 1 次遅れ（無駄時間は未補正）とすると\n",
+        "$$\\dot\\delta = \\frac{\\delta_{des} - \\delta}{\\tau}"
+        "\\;\\Longleftrightarrow\\;"
+        "\\underbrace{\\dot\\delta}_{y} = \\frac{1}{\\tau}\\,"
+        "\\underbrace{(\\delta_{des} - \\delta)}_{x}.$$\n",
+        "**横軸に指令−実測 $(\\delta_{des}-\\delta)$、縦軸に実測の時間微分 $\\dot\\delta$ を取ると "
+        "傾き $= 1/\\tau$**（$\\tau = 1/\\text{傾き}$）。加速度版は $\\delta \\to a$ と読み替える "
+        "（$\\dot a = (a_{des}-a)/\\tau$）。\n",
+        "",
+        "### スケーリング係数 $s$（`debug_steer_scaling_factor` / `debug_acc_scaling_factor` 根拠パネル）\n",
+        "指令に対する実効ゲインを $s$ とすると（定常では応答遅れが平均化され）\n",
+        "$$\\underbrace{\\delta_{meas}}_{y} = s\\,\\underbrace{\\delta_{des}}_{x}.$$\n",
+        "**横軸に指令、縦軸に実測を取ると傾き $= s$**（応答遅れ分の散らばりを含むため参考値）。\n",
+        "",
+        "### 縦定常補正 $p_0, p_1, p_2$（`acc_steady_evidence` 根拠パネル・poly(v)）\n",
+        "加速度を 1 次遅れ $\\dot a = (a_{target} - a)/\\tau,\\; a_{target} = a_{cmd} + p(v)$ と置くと、"
+        "**定常**（$\\dot a = 0$）では $a = a_{cmd} + p(v)$。したがって残差は\n",
+        "$$\\underbrace{a_{実測} - a_{cmd}}_{y} = p(v) = p_0 + p_1 v + p_2 v^2.$$\n",
+        "**横軸に速度 $v$、縦軸に残差 $a_{実測}-a_{cmd}$ を取ると、切片 $= p_0$・傾き $= p_1$**"
+        "（2 次の曲率 $= p_2$）。転がり抵抗・勾配・空気抵抗など指令外の定常加速度を表す。"
+        "過渡は 1 次遅れの寄与が混じるため $|\\dot a|$ が小さい準定常点のみを使う。\n",
+        "",
+        "### カーブ抵抗 $c_{corner}$（`acc_steady_evidence` 根拠パネル・縦横連成）\n",
+        "カーブで増える縦減速を $a_{target} \\mathrel{+}= c_{corner}\\,a_y^2$ で補正する（$a_y = v\\,\\omega$）。"
+        "上の定常残差から poly$(v)$ を引いた残差は\n",
+        "$$\\underbrace{(a_{実測} - a_{cmd}) - p(v)}_{y} = c_{corner}\\,\\underbrace{a_y^2}_{x}.$$\n",
+        "**横軸に $a_y^2$、縦軸に poly$(v)$ 除去後の残差を取ると傾き $= c_{corner}$**。\n",
+        "",
+        "> 補足: **`steer_bias`** は上記 $k_{us}$ 回帰の切片（直進・低横加速度域 $a_y\\approx 0$ での "
+        "ステア残差の平均）であり、**`*_time_delay`** は指令と実測の微分相互相関のピーク位置で "
+        "あって、いずれも 1 次回帰の傾きではない（別パネルで推定）。",
+        "",
+    ]
 
 
 def _judge_evidence(sweep_v: float, ev_v: float | None, spec_v: float | None) -> str:
@@ -1075,6 +1189,15 @@ def main() -> None:
 
     # 実機ログ根拠プロット用の系列 (仕様値パラメータで GT を 1 回構築して共有)
     ev = build_evidence_data(s5._prepare_gt(data, t0_ns, base_params), base_params)
+
+    # 縦 定常補正 (poly(v)=p0+p1·v / カーブ抵抗 c_corner) の実機根拠。sweep 同定対象では
+    # ないがビューア (lon_lat_model) のつまみの物理根拠として 1 枚にまとめて出力する。
+    fig_steady = build_fig_sweep(
+        [_ev_acc_poly(ev), _ev_acc_corner(ev)],
+        title="実機ログ根拠: 縦 定常補正 (poly(v)=p0+p1·v / カーブ抵抗 c_corner)",
+        params=base_params,
+    )
+    write_fig_json(fig_steady, out_dir / "acc_steady_evidence.fig.json")
 
     # --- 1D sweep ---
     records: list[dict] = []

@@ -15,9 +15,6 @@ from ._closed_loop import (
 from ._cases import (
     build_fig_cascade_error_overlay,
     build_fig_error_growth_overlay,
-    build_fig_error_timeseries_overlay,
-    build_fig_growth_relative,
-    build_fig_rmse_heatmap,
 )
 from ._cross_dataset import (
     build_fig_coverage_overview,
@@ -45,9 +42,6 @@ __all__ = [
     "build_fig_dp_vs_actual",
     "build_fig_dp_vs_final_traj",
     "build_fig_error_growth_overlay",
-    "build_fig_error_timeseries_overlay",
-    "build_fig_growth_relative",
-    "build_fig_rmse_heatmap",
     "build_fig_overview",
     "build_fig_sweep",
     "build_fig_sweep_overview",
