@@ -24,7 +24,9 @@ Evaluation:
     # シナリオ比較適性: AUTONOMOUS 開始時に ego 停止 (v0≈0) し、停止→走行→停止の完全な
     # start→goal (276m / 60s) を含む。旧 f20a29ab (takanawa) は AUTONOMOUS が走行中に始まり
     # sim (停止初期化) と始点が不一致だったため、停止開始のこのデータセットに差し替え。
-    - 28443458-8d02-476d-b91c-528ea6027d18:
+    - 28443458-8d02-476d-b91c-528ea6027d18:   # odaiba A09 (stop-start, 2026-05-12)
+        VehicleId: default
+    - f20a29ab-c42a-41b8-a446-f7e89d37a790:   # takanawa (走行中開始/開放路, 2026-05-12)
         VehicleId: default
   Conditions:
     # 図タイトルに表示するシナリオ名 (任意。未指定なら ScenarioName を使用)
@@ -165,11 +167,11 @@ Evaluation:
 
     # ── cases: open-loop VehicleModel N-step 解析 (Stage 5/6) に使う名前リスト ──
     # vehicle_model_type が必須。名前 = 出力ディレクトリ nstep/<name>/
-    cases:    [normal, kus0020, best_normal, no_delay, taiga_dyn, taiga_x]
+    cases:    [normal, best_normal]
 
     # ── sim_runs: closed-loop シム実行 (Stage 3/4) に使う名前リスト ──
     # vehicle_model が必須。名前 = 出力ディレクトリ lite/<name>.lite/
-    sim_runs: [normal, kus0020, best_normal, taiga_dyn, taiga_x, perfect, godot]
+    sim_runs: [normal, best_normal, perfect]
 
     # ── overlay: cases 集約 (Stage 6) の基準モデルと重ね描き種類 ──
     overlay:

@@ -24,15 +24,15 @@ Evaluation:
     # シナリオ比較適性: AUTONOMOUS 開始時に ego 停止 (v0≈0) し、停止→走行→停止の完全な
     # start→goal (276m / 60s) を含む。旧 f20a29ab (takanawa) は AUTONOMOUS が走行中に始まり
     # sim (停止初期化) と始点が不一致だったため、停止開始のこのデータセットに差し替え。
-    - 28443458-8d02-476d-b91c-528ea6027d18:
+    - f20a29ab-c42a-41b8-a446-f7e89d37a790:
         VehicleId: default
   Conditions:
     # 図タイトルに表示するシナリオ名 (任意。未指定なら ScenarioName を使用)
-    scenario_name: "Override_E2E_x2j6gen2_odaiba_2026-05-12-A09"
+    scenario_name: "E2E_x2j6gen2_takanawa_2026-05-12_f20a29ab (replay validate)"
     # 実機データ取得時の pilot-auto.x2 / DiffusionPlanner 重みの自由記述 (任意)。
     # 実機の版・重みは外部 (車両デプロイ) のため自動取得できない。記録すると比較プロット・
     # report.md の provenance に掲載され、sim 実行時の版・重み (自動取得) との差を解釈できる。
-    real_provenance: ""
+    real_provenance: "2026-05-12 13:47 高輪GW(takanawa) E2E自律走行 / DP=diffusion_planner_for_x2_20260503-094624_with_takanawa_1day__epoch0060__epoch0080 (release bb6af734)"
     # none: scenario 側で信号をセットしない (reproduce_perception の PerceptionReproducerSensor
     # が実機 bag の信号 topic を直接 publish して所有するため、二重 publisher を避ける)。
     traffic_signals: none
@@ -74,6 +74,9 @@ Evaluation:
         vehicle_model_type: delay_steer_acc_geared_wo_fall_guard
         vehicle_model: j6_gen2
         architecture_type: awf/universe/20250130
+        # 採取時(2026-05-12 朝 odaiba A09 → 本来は午後takanawa)にデプロイされていた DP 重み。
+        dp_model_release: 20260503-094624_with_takanawa_1day__epoch0060__epoch0080
+        dp_model_package: diffusion_planner_for_x2
 
       kus0020:
         # normal + アンダーステア係数 k_us=0.020 rad/(m/s^2)。
@@ -103,8 +106,10 @@ Evaluation:
         vehicle_model_type: delay_steer_acc_geared_wo_fall_guard
         vehicle_model: j6_gen2
         architecture_type: awf/universe/20250130
+        dp_model_release: 20260503-094624_with_takanawa_1day__epoch0060__epoch0080
+        dp_model_package: diffusion_planner_for_x2
         params:
-          k_us: 0.018                       # 物理 understeer (実機推定 ~0.022 と整合)
+          k_us: 0.018                       # 物理 understeer。20DSロバスト同定。2DS open-loop k_us sweep 最適は~0.025だが closed-loop path(s2r)を悪化させ非転写のため robust 値を採用
           steer_time_constant: 0.15         # = 仕様値 (steer 側 proxy は多エリアで汎化せず)
           debug_steer_scaling_factor: 1.0   # = 仕様値 (同上)
           acc_time_constant: 0.30           # 縦方向 (pos-mean 改善。0.45 超は shiojiri pos を悪化)
@@ -165,11 +170,11 @@ Evaluation:
 
     # ── cases: open-loop VehicleModel N-step 解析 (Stage 5/6) に使う名前リスト ──
     # vehicle_model_type が必須。名前 = 出力ディレクトリ nstep/<name>/
-    cases:    [normal, kus0020, best_normal, no_delay, taiga_dyn, taiga_x]
+    cases:    [best_normal]
 
     # ── sim_runs: closed-loop シム実行 (Stage 3/4) に使う名前リスト ──
     # vehicle_model が必須。名前 = 出力ディレクトリ lite/<name>.lite/
-    sim_runs: [normal, kus0020, best_normal, taiga_dyn, taiga_x, perfect, godot]
+    sim_runs: [best_normal]
 
     # ── overlay: cases 集約 (Stage 6) の基準モデルと重ね描き種類 ──
     overlay:
