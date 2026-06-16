@@ -211,9 +211,46 @@ def nearest_point_distance(ref_xy: np.ndarray, query_xy: np.ndarray) -> np.ndarr
     return dists
 
 
-def _log_summary(d: dict) -> dict:
-    """1 ログの走行サマリ (kinematic odometry 基準 + velocity_status 参考)。"""
-    kin, vel = d["kinematic"], d["velocity"]
+# ゴール近傍除外 [m]。rosbag 終端のゴール付近は、実際に Autoware へ与えたゴールと一致せず
+# (開始は初期状態を丁寧に合わせ込むが終端はそうでない)、終端の動きの差は構造的に不可避なため
+# 精度算出から外す。env GOAL_EXCLUSION_M で上書き可 (0 で無効)。既定は closed-loop の
+# goal_vicinity_tolerance 既定値 (30m) に合わせる。
+try:
+    GOAL_EXCLUSION_M = float(os.environ.get("GOAL_EXCLUSION_M", "30.0"))
+except (TypeError, ValueError):
+    GOAL_EXCLUSION_M = 30.0
+
+
+def _goal_cut_time(kin: pd.DataFrame, goal_xy: tuple[float, float], excl_m: float) -> float:
+    """ログがゴール近傍 (goal_xy から excl_m 以内) へ最終接近して入る時刻を返す。
+    その時刻以降 (ゴール近傍区間) を精度算出から除外する。近傍に入らない (手前で停止等) や
+    excl_m<=0 のときは inf (除外なし)。point-to-point 走行前提 (start は goal から遠い)。"""
+    if kin.empty or excl_m <= 0.0 or "t" not in kin:
+        return float("inf")
+    x = kin["x"].to_numpy()
+    y = kin["y"].to_numpy()
+    t = kin["t"].to_numpy()
+    inside = np.hypot(x - goal_xy[0], y - goal_xy[1]) < excl_m
+    if not inside.any():
+        return float("inf")
+    idx = np.where(inside)[0]
+    start = idx[-1]
+    while start - 1 >= 0 and inside[start - 1]:
+        start -= 1
+    return float(t[start])
+
+
+def _before(df: pd.DataFrame, t_cut: float) -> pd.DataFrame:
+    """t < t_cut の行に限定 (ゴール近傍除外)。t_cut=inf なら全行。"""
+    if df.empty or "t" not in df or not np.isfinite(t_cut):
+        return df
+    return df[df["t"].to_numpy() < t_cut]
+
+
+def _log_summary(d: dict, t_cut: float = float("inf")) -> dict:
+    """1 ログの走行サマリ (kinematic odometry 基準 + velocity_status 参考)。
+    t_cut 未満 (ゴール近傍を除外した区間) で集計する。"""
+    kin, vel = _before(d["kinematic"], t_cut), _before(d["velocity"], t_cut)
     if not kin.empty:
         dist = float(cumulative_arc_length(kin["x"].to_numpy(), kin["y"].to_numpy())[-1])
     else:
@@ -256,10 +293,11 @@ def _fmt(x: float | None, prec: int = 1) -> str:
     return f"{x:.{prec}f}" if x is not None else "—"
 
 
-def _cmd_tracking_rmse(d: dict) -> dict:
-    """指令 vs 応答の RMSE (速度 [m/s]・ステア [deg])。データ欠落は None。"""
+def _cmd_tracking_rmse(d: dict, t_cut: float = float("inf")) -> dict:
+    """指令 vs 応答の RMSE (速度 [m/s]・ステア [deg])。データ欠落は None。
+    t_cut 未満 (ゴール近傍を除外した区間) で算出する。"""
     out: dict = {"vel_rmse_mps": None, "steer_rmse_deg": None}
-    cmd, vel, steer = d["cmd"], d["velocity"], d["steering"]
+    cmd, vel, steer = d["cmd"], _before(d["velocity"], t_cut), _before(d["steering"], t_cut)
     if not cmd.empty and not vel.empty:
         cmd_i = np.interp(vel["t"], cmd["t"], cmd["cmd_vel"])
         out["vel_rmse_mps"] = _finite(np.sqrt(np.mean((vel["lon_vel"].values - cmd_i) ** 2)))
@@ -281,24 +319,44 @@ def compute_closed_loop_metrics(data: dict) -> dict:
     """
     real = data.get("実機")
     real_kin = real["kinematic"] if real is not None else pd.DataFrame()
+    # ゴール = 実機 kinematic 終端位置。各ログのゴール近傍区間 (GOAL_EXCLUSION_M 以内) は
+    # 実際の Autoware ゴールと一致せず動きの差が構造的に不可避なため、全精度算出から除外する。
+    goal_xy = (
+        (float(real_kin["x"].to_numpy()[-1]), float(real_kin["y"].to_numpy()[-1]))
+        if not real_kin.empty
+        else None
+    )
+    t_cut = {
+        label: (
+            _goal_cut_time(d["kinematic"], goal_xy, GOAL_EXCLUSION_M)
+            if goal_xy is not None
+            else float("inf")
+        )
+        for label, d in data.items()
+    }
+    real_cut = t_cut.get("実機", float("inf"))
+    real_kin = _before(real_kin, real_cut)
     real_dist = (
         _finite(cumulative_arc_length(real_kin["x"].to_numpy(), real_kin["y"].to_numpy())[-1])
         if not real_kin.empty
         else None
     )
     summaries = {
-        label: {k: _finite(v) for k, v in _log_summary(d).items()} for label, d in data.items()
+        label: {k: _finite(v) for k, v in _log_summary(d, t_cut[label]).items()}
+        for label, d in data.items()
     }
 
     real_rec = None
     if real is not None:
         real_rec = {
             "summary": summaries["実機"],
-            **_cmd_tracking_rmse(real),
+            **_cmd_tracking_rmse(real, real_cut),
             "coverage": compute_coverage(
-                real["kinematic"], real["velocity"], real["accel"], real["steering"],
+                _before(real["kinematic"], real_cut), _before(real["velocity"], real_cut),
+                _before(real["accel"], real_cut), _before(real["steering"], real_cut),
                 wheelbase=float(WHEELBASE),
             ),
+            "goal_exclusion_m": GOAL_EXCLUSION_M,
         }
 
     ref_xy = real_kin[["x", "y"]].to_numpy() if not real_kin.empty else None
@@ -310,7 +368,7 @@ def compute_closed_loop_metrics(data: dict) -> dict:
             "vehicle_model": d.get("vehicle_model", ""),
             "perfect": bool(d.get("perfect", False)),
             "summary": summaries[label],
-            **_cmd_tracking_rmse(d),
+            **_cmd_tracking_rmse(d, t_cut[label]),
             "completion_pct": None,
             "s2r_mean_m": None, "s2r_max_m": None,
             "r2s_mean_m": None, "r2s_max_m": None,
@@ -319,8 +377,9 @@ def compute_closed_loop_metrics(data: dict) -> dict:
         dist = summaries[label]["dist"]
         if real_dist and dist is not None:
             rec["completion_pct"] = dist / real_dist * 100.0
+        kin_c = _before(d["kinematic"], t_cut[label])
         q_xy = (
-            d["kinematic"][["x", "y"]].to_numpy() if not d["kinematic"].empty
+            kin_c[["x", "y"]].to_numpy() if not kin_c.empty
             else np.empty((0, 2))
         )
         if ref_xy is not None and len(q_xy) >= 10:
@@ -648,8 +707,23 @@ def main() -> None:
     # 軌跡再生ビューア (時刻同期/位置同期シークバー付き自己完結 HTML)
     # metrics を渡して凡例パネルにクローズループ指標を表示
     plot_trajectory_playback(loaded, map_ways, FIGS_DIR, title=SCENARIO_NAME, metrics=metrics)
-    # 縦横独立モデル検証ビューア (実機のみ・指令→モデル積算 vs 観測、T/τ つまみ調整)
-    plot_model_viewer(loaded, map_ways, FIGS_DIR, load_sim_params(), title=SCENARIO_NAME)
+    # 縦横独立モデル検証ビューア (実機のみ・指令→モデル積算 vs 観測、T/τ つまみ調整)。
+    # モデルレジストリ (scenario.yaml の models) を渡し、対応モデル (best_normal 等) の params を
+    # ドロップダウンから簡単に適用できるようにする。
+    model_registry: dict = {}
+    if cfg.scenario_config:
+        try:
+            from .lib._models_config import load_models_doc  # noqa: PLC0415
+            model_registry = {
+                name: dict(spec.params)
+                for name, spec in load_models_doc(cfg.scenario_config).models.items()
+            }
+        except Exception as exc:  # noqa: BLE001
+            warnings.warn(f"model registry 読み込み失敗 (ビューアは spec のみ): {exc}")
+    plot_model_viewer(
+        loaded, map_ways, FIGS_DIR, load_sim_params(), title=SCENARIO_NAME,
+        model_registry=model_registry,
+    )
 
     print("\n完了。出力先:", FIGS_DIR)
 
