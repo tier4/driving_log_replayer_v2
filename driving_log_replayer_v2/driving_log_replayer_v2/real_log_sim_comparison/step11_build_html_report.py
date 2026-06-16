@@ -146,12 +146,18 @@ _CATEGORIES: list[tuple[str, str, str]] = [
     (
         "model_validation",
         "1. 縦横モデル検証",
-        "実機走行ログから車両モデルを同定し、N-step オープンループ予測・パラメータ sweep 感度を対話的に解析する。"
+        "実機走行ログから車両モデルを同定し、N-step オープンループ予測で当てはまりを検証する。"
         "縦横モデル検証ビューアが主役（指令→モデル積算 vs 観測、T/τ/k_us 調整、地図上軌跡重畳）。",
     ),
     (
+        "identification_basis",
+        "2. 同定の数式的根拠",
+        "車両モデルパラメータ同定の数式的根拠を示す。パラメータ sweep 感度（k_us）と、実機ログから"
+        "直接推定した一次情報の根拠図（走行抵抗 poly(v)・カーブ抵抗 c_corner 等）を並置する。",
+    ),
+    (
         "closed_loop",
-        "2. シナリオ クローズループ比較",
+        "3. シナリオ クローズループ比較",
         "auto-scenario を Autoware+シミュレータで closed-loop 実行し、実機との軌跡・速度・操舵乖離を比較する。"
         "軌跡再生ビューアが主役（時刻同期/位置同期シークバー、距離軸プロット、完走率/乖離/RMSE パネル）。",
     ),
@@ -174,7 +180,7 @@ _CLOSED_LOOP_STEMS: set[str] = {
 # 取り込む Markdown レポート: (comparison/ からの相対パス, 見出し, 所属カテゴリ)。
 _MARKDOWN_REPORTS: list[tuple[str, str, str]] = [
     ("report.md", "比較レポート（step4: report.md）", "closed_loop"),
-    ("param_sweep/param_sweep_summary.md", "パラメータ同定サマリ（step7: param_sweep_summary.md）", "model_validation"),
+    ("param_sweep/param_sweep_summary.md", "パラメータ同定サマリ（step7: param_sweep_summary.md）", "identification_basis"),
     ("cases/cases_summary.md", "ケース集約サマリ（step6: cases_summary.md）", "model_validation"),
 ]
 
@@ -214,7 +220,7 @@ def _classify(rel: Path) -> str:
     if stem == "lon_lat_model":
         return "model_validation"
     if top == "param_sweep":
-        return "model_validation"
+        return "identification_basis"  # sweep 図・実機ログ根拠図は「同定の数式的根拠」へ
     if top in {"nstep", "cases"}:
         return "model_validation"
     if stem in _CLOSED_LOOP_STEMS:

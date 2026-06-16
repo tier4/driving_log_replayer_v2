@@ -105,10 +105,11 @@ class SweepSpec:
         return sorted(round(m * base, 6) for m in self.grid_rel)
 
 
-# 個別 sweep 図 (<param>_sweep.fig.json) を出力する主要パラメータ。sweep 計算・CSV・
-# summary の同定表は全パラメータで行い、図はレポートで意味を持つ主要 3 つに絞る
-# (全体の感度比較は _overview_sensitivity が担う)。
-SWEEP_FIG_PARAMS: set[str] = {"k_us", "steer_time_constant", "acc_time_constant"}
+# 個別 sweep 図 (<param>_sweep.fig.json) を出力するパラメータ。sweep 計算・CSV・
+# summary の同定表は全パラメータで行い、図は k_us のみに絞る (sweep 同定対象は k_us のみ。
+# acc_time_constant は縦横モデル検証ビューアのフィット、steer_time_constant は仕様値で扱うため
+# これらの sweep 図は出さない。全体の感度比較は _overview_sensitivity が担う)。
+SWEEP_FIG_PARAMS: set[str] = {"k_us"}
 
 # スイープ対象の既定定義。グリッドは CLI --grid name=v1,v2,... で上書き可能。
 SWEEP_SPECS: list[SweepSpec] = [
