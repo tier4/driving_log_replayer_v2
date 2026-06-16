@@ -148,7 +148,9 @@ def _load_lib() -> ctypes.CDLL:
     lib.vm_create_ideal_steer_acc.argtypes = [c_double, c_double]  # wheelbase, sub_dt
 
     lib.vm_create_delay_steer_acc_geared_wo_fall_guard.restype = c_void_p
-    lib.vm_create_delay_steer_acc_geared_wo_fall_guard.argtypes = [c_double] * 15
+    # 15 base args + 5 verification-viewer-parity longitudinal terms
+    # (brake_time_constant, lon_drag_c0, lon_drag_c1, lon_drag_c2, lon_lat_coupling)
+    lib.vm_create_delay_steer_acc_geared_wo_fall_guard.argtypes = [c_double] * 20
 
     # taiga_dyn: 14 共通引数 (wo_fall_guard の k_us を除く) + 7 物理パラメータ
     # (mass, inertia_z, lf, lr, cornering_stiffness_front, cornering_stiffness_rear, vx_min_dyn)
@@ -277,6 +279,12 @@ class VehicleModel:
                 p.get("debug_acc_scaling_factor", 1.0),
                 p.get("debug_steer_scaling_factor", 1.0),
                 p.get("k_us", 0.0),
+                # verification-viewer-parity longitudinal terms (default neutral)
+                p.get("brake_time_constant", 0.0),
+                p.get("lon_drag_c0", 0.0),
+                p.get("lon_drag_c1", 0.0),
+                p.get("lon_drag_c2", 0.0),
+                p.get("lon_lat_coupling", 0.0),
             )
             self._steer_bias = p["steer_bias"]
         elif model_type == "taiga_dyn":
