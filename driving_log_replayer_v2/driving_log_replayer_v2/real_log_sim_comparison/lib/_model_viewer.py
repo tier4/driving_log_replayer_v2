@@ -82,6 +82,7 @@ def _seed_from_params(params: dict) -> dict:
         "poly2": f("lon_drag_c2", 0.0),
         "v_stop": 0.2,
         "c_corner": f("lon_lat_coupling", 0.0),
+        "c_slope": f("lon_slope_gain", 1.0),  # 勾配重力ゲイン (1.0=フル重力でプラント一致)
         "tau_steer": f("steer_time_constant", 0.27),
         "t_steer": f("steer_time_delay", 0.24),
         "steer_bias": f("steer_bias", 0.0),
@@ -257,6 +258,7 @@ _HTML_TEMPLATE = r"""<!DOCTYPE html>
       <div class="krow"><label><input type="checkbox" id="on_poly1">p₁·v</label><input type="range" id="k_poly1" min="-0.1" max="0.1" step="0.001" value="0" disabled><span class="kval" id="v_poly1"></span></div>
       <div class="krow"><label><input type="checkbox" id="on_poly2">p₂·v²</label><input type="range" id="k_poly2" min="-0.01" max="0.01" step="0.0001" value="0" disabled><span class="kval" id="v_poly2"></span></div>
       <div class="krow"><label><input type="checkbox" id="on_corner">c·a_y²</label><input type="range" id="k_corner" min="-0.5" max="0.1" step="0.005" value="0" disabled><span class="kval" id="v_corner"></span></div>
+      <div class="krow"><label><input type="checkbox" id="on_slope" checked>勾配 c·a_slope</label><input type="range" id="k_slope" min="-2" max="2" step="0.05" value="1"><span class="kval" id="v_slope"></span></div>
       <div class="krow"><label><input type="checkbox" id="on_stop" checked>停止 v_stop</label><input type="range" id="k_vstop" min="0" max="1" step="0.05" value="0.2"><span class="kval" id="v_vstop"></span></div>
     </div>
     <div class="kcard">
@@ -313,17 +315,21 @@ const DATA = __PAYLOAD_JSON__;
     { label: "ステア角",   unit: "deg",   meas: "steer",   cmd: "cmd_steer", sim: "deltaDeg" },
     { label: "ヨーレート", unit: "rad/s", meas: "wz",      cmd: "cmd_wz",    sim: "omega" },
     { label: "横G(横加速度)", unit: "m/s²", meas: "ay",     cmd: null,        sim: "ay" },
+    // 路面勾配の重力分力 a_slope=9.81·sin(pitch)（登り<0・減速）。縦加速度パネルと直接比較できる。
+    // 観測のみ（モデル積算する量ではない）ので cmd/sim は null。
+    { label: "勾配加速度(g·sinθ)", unit: "m/s²", meas: "slope_acc", cmd: null, sim: null },
   ];
   const PLOT_COLS = 2;
   // 誤差専用パネル（旧 error_timeseries_overlay の移設先）。各チャンネルの sim−観測 を 1 本描く。
-  // 観測キー meas・sim キー sim は親パネルから引き継ぐ（isErr で描画分岐）。
-  const ERROR_PANELS = PANELS.map((p) => ({
+  // 観測キー meas・sim キー sim は親パネルから引き継ぐ（isErr で描画分岐）。sim 系列を持つパネルのみ
+  // （勾配加速度は sim=null で誤差非対象）。
+  const ERROR_PANELS = PANELS.filter((p) => p.sim).map((p) => ({
     label: p.label + " 誤差", unit: p.unit, meas: p.meas, sim: p.sim, isErr: true,
   }));
   // 表示中のパネル一覧（誤差トグル ON で誤差パネルを下段に増設）。geom/描画はこれを基準にする。
   function activePanels() { return showErr ? PANELS.concat(ERROR_PANELS) : PANELS; }
   function plotRows() { return Math.ceil(activePanels().length / PLOT_COLS); }
-  const PANEL_ROW_PX = 540 / 3;  // 既定 5 パネル (3 行) の 1 行高さ。誤差 ON で行数比例に拡張。
+  const PANEL_ROW_PX = 540 / 3;  // 既定 6 パネル (2列×3行) の 1 行高さ。誤差 ON で行数比例に拡張。
 
   // ----------------------------------------------------------------- state
   let playing = false;
@@ -345,6 +351,7 @@ const DATA = __PAYLOAD_JSON__;
     polyOn0: false, polyOn1: false, polyOn2: false, // 多項式補正の各次 ON/OFF (既定 OFF)
     v_stop: DATA.model_seed.v_stop, stopHandling: true, // 停止処理 (既定 ON)
     c_corner: DATA.model_seed.c_corner, cornerOn: false, // カーブ抵抗 (縦横連成, 既定 OFF)
+    c_slope: DATA.model_seed.c_slope, slopeOn: true, // 勾配重力 (a_target += c_slope·a_slope, 既定 ON)
     tau_steer: DATA.model_seed.tau_steer, t_steer: DATA.model_seed.t_steer,
     k_us: DATA.model_seed.k_us,
     steer_bias: DATA.model_seed.steer_bias * RAD2DEG, // rad→deg (β つまみは度表示)
@@ -359,10 +366,13 @@ const DATA = __PAYLOAD_JSON__;
   }
   // 縦 加速度の目標値。停止処理 ON 時は v<=v_stop かつブレーキ指令(u<0)で 0（停車保持）。
   // カーブ抵抗 ON 時は観測 a_y=v·wz の2乗を c_corner 倍して加算（縦横連成・観測量を回帰子に）。
-  function accelTarget(u, v, wz) {
+  // 勾配 ON 時は路面勾配の重力分力 a_slope=9.81·sin(pitch)（観測量）を c_slope 倍して加算。
+  // simple_planning_simulator の acc_des = acc_cmd + acc_by_slope と同形（c_slope=1 でプラント一致）。
+  function accelTarget(u, v, wz, slopeAcc) {
     if (model.stopHandling && v <= model.v_stop && u < 0) return 0;
     let t = u + polyAccel(v);
     if (model.cornerOn) { const ay = v * wz; t += model.c_corner * ay * ay; }
+    if (model.slopeOn) t += model.c_slope * slopeAcc;
     return t;
   }
 
@@ -492,7 +502,8 @@ const DATA = __PAYLOAD_JSON__;
           lastDrive = u;
           const tauA = throttle ? tauThr : tauBrk; // 定数 (下限クランプ済み)
           const wzo = chanAt("wz", tt); // カーブ抵抗の回帰子 a_y=v·wz 用 (観測)
-          a += h * (-(a - accelTarget(u, vv, wzo != null ? wzo : 0)) / tauA);
+          const sa = chanAt("slope_acc", tt); // 勾配重力項 a_slope=9.81·sin(pitch) (観測)
+          a += h * (-(a - accelTarget(u, vv, wzo != null ? wzo : 0, sa != null ? sa : 0)) / tauA);
           a = sat(a, accLim);                  // C++: pedal_acc を vx_rate_lim で飽和
         }
         v += h * a;
@@ -527,6 +538,8 @@ const DATA = __PAYLOAD_JSON__;
       "座標系: X=進行方向, Y=横方向, θ=ヨー角(進行方向), δ=ステア角, ω=ヨーレート。" +
       "凡例: 実線=観測(実機色), 破線灰=指令, 赤=シミュレーション, 青破線=理想(加速度・ステア角が実車と完全一致した場合の積算値)。" +
       "赤 vs 青でアクチュエータモデル(指令→応答)の誤差、青 vs 観測で運動学モデルの誤差を切り分けられる。" +
+      "勾配 c·a_slope(既定ON): a_slope=9.81·sin(pitch) で路面勾配の重力分力を a_target に加算(登り<0=減速)。" +
+      "効果が見えるのは勾配が変化する区間で、ほぼ一定勾配では poly0 と交絡するため両者の同時 ON は避ける。" +
       "つまみ(T・τ・k_us・β)で即追従。位置が乖離してもモデル不良と即断せず予測窓を縮めて各段を切り分ける。" +
       "「誤差パネル」を ON にすると各チャンネルの sim−観測(赤)・理想−観測(青) 時系列 (窓内 RMSE 付き) を下段に増設表示する。";
   }
@@ -628,6 +641,7 @@ const DATA = __PAYLOAD_JSON__;
   setupKnob("k_poly2", "v_poly2", "poly2", (v) => v.toFixed(5));
   setupKnob("k_vstop", "v_vstop", "v_stop", (v) => v.toFixed(2) + "m/s");
   setupKnob("k_corner", "v_corner", "c_corner", (v) => v.toFixed(3));
+  setupKnob("k_slope", "v_slope", "c_slope", (v) => v.toFixed(2));
 
   // 多項式補正の各次 ON/OFF。OFF 時は係数を model から除外（=0扱い）し最適化対象からも外す。
   function setupPolyToggle(cbId, sliderId, onKey) {
@@ -642,6 +656,7 @@ const DATA = __PAYLOAD_JSON__;
   setupPolyToggle("on_poly1", "k_poly1", "polyOn1");
   setupPolyToggle("on_poly2", "k_poly2", "polyOn2");
   setupPolyToggle("on_corner", "k_corner", "cornerOn");
+  setupPolyToggle("on_slope", "k_slope", "slopeOn"); // 勾配重力 (既定 ON, k_slope は既定有効)
   // 停止処理トグル（既定 ON）。OFF で v_stop つまみを無効化。
   $("on_stop").addEventListener("change", (e) => {
     model.stopHandling = e.target.checked;
@@ -658,10 +673,12 @@ const DATA = __PAYLOAD_JSON__;
     if (m.polyOn1) poly += " + " + m.poly1.toFixed(4) + "·v";
     if (m.polyOn2) poly += " + " + m.poly2.toFixed(5) + "·v²";
     if (m.cornerOn) poly += " + " + m.c_corner.toFixed(3) + "·a_y²";
+    if (m.slopeOn) poly += " + " + m.c_slope.toFixed(2) + "·a_slope";
     $("eqpanel").innerHTML =
       "<b>運動方程式</b>（起点=シーク時刻から前方積算）<br>" +
       "縦&nbsp; ȧ = −(a − a_target)/τ ,&nbsp; a_target = a_cmd(t−T)" + poly + " ,&nbsp; v̇ = a<br>" +
       "&nbsp;&nbsp;&nbsp; <span class='note'>[throttle/brake で T・τ 分離, 多項式補正は ON の次のみ" +
+      (m.slopeOn ? " / a_slope=9.81·sin(pitch) 路面勾配の重力分力(登り<0)・poly0 と同時 ON は一定勾配で交絡" : "") +
       (m.stopHandling ? " / 停止処理: v≤" + m.v_stop.toFixed(2) + "&ブレーキ指令で a_target=0・後退なし" : " / 停止処理OFF") + "]</span><br>" +
       "横&nbsp; δ̇ = −(δ − δ_cmd(t−T_δ))/τ_δ<br>" +
       "&nbsp;&nbsp;&nbsp; ω = v·tan(δ+β)/(L + k_us·v²) ,&nbsp; θ̇ = ω<br>" +
@@ -719,7 +736,8 @@ const DATA = __PAYLOAD_JSON__;
         lastDrive = u;
         const tau = throttle ? tauThr : tauBrk; // 定数 (下限クランプ済み)
         const wzo = chanAt("wz", tt); // カーブ抵抗の回帰子 a_y=v·wz 用 (観測)
-        a += h * (-(a - accelTarget(u, vv, wzo != null ? wzo : 0)) / tau);
+        const sa = chanAt("slope_acc", tt); // 勾配重力項 (観測・rollout と同式で同定対象に含める)
+        a += h * (-(a - accelTarget(u, vv, wzo != null ? wzo : 0, sa != null ? sa : 0)) / tau);
       }
       out[i + 1] = a;
     }
@@ -813,6 +831,7 @@ const DATA = __PAYLOAD_JSON__;
     if (model.polyOn1) k.push("poly1");
     if (model.polyOn2) k.push("poly2");
     if (model.cornerOn) k.push("c_corner");
+    if (model.slopeOn) k.push("c_slope");
     return k;
   }
   const STEER_KEYS = ["t_steer", "tau_steer"];
@@ -839,6 +858,7 @@ const DATA = __PAYLOAD_JSON__;
     model.tau_acc_brk = seed.tau_acc_brk; model.t_acc_brk = seed.t_acc_brk;
     model.poly0 = seed.poly0; model.poly1 = seed.poly1; model.poly2 = seed.poly2;
     model.c_corner = seed.c_corner;
+    model.c_slope = (seed.c_slope != null) ? seed.c_slope : 1.0; // 勾配ゲイン (toggle は維持)
     model.tau_steer = seed.tau_steer; model.t_steer = seed.t_steer;
     model.k_us = seed.k_us;
     model.steer_bias = seed.steer_bias * RAD2DEG; // seed は rad、つまみは deg

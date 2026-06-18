@@ -170,11 +170,16 @@ def load_kinematic(bag_path: Path, topic: str | list[str] | None = None) -> pd.D
         p = m.pose.pose.position
         o = m.pose.pose.orientation
         yaw = math.atan2(2 * (o.w * o.z + o.x * o.y), 1 - 2 * (o.y * o.y + o.z * o.z))
+        # 路面ピッチ (tf2 getRPY と同符号=nose-down 正)。縦横モデルビューアの勾配重力項に使う。
+        # ekf_localizer は 2D EKF でピッチを推定状態に持たず、NDT 測定ピッチを Simple1DFilter で
+        # 平滑化した値が orientation に載る (Autoware 縦制御 RAW_PITCH と同じ信号)。
+        sinp = max(-1.0, min(1.0, 2.0 * (o.w * o.y - o.z * o.x)))
+        pitch = math.asin(sinp)
         # twist は base_link 系の車体速度。vy(横速度)・wz(角速度=yaw rate) は再生ビューアの
         # 同期プロットが直接計測値として使う (step5 と同形)。
         tw = m.twist.twist
         return {
-            "t_ns": t_ns, "x": p.x, "y": p.y, "yaw": yaw,
+            "t_ns": t_ns, "x": p.x, "y": p.y, "yaw": yaw, "pitch": pitch,
             "vx": tw.linear.x, "vy": tw.linear.y, "wz": tw.angular.z,
         }
 
@@ -182,7 +187,7 @@ def load_kinematic(bag_path: Path, topic: str | list[str] | None = None) -> pd.D
         bag_path,
         topic if topic is not None else DEFAULT_TOPICS["kinematic"],
         row,
-        ["t_ns", "x", "y", "yaw", "vx", "vy", "wz"],
+        ["t_ns", "x", "y", "yaw", "pitch", "vx", "vy", "wz"],
     )
 
 

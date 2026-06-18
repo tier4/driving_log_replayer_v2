@@ -133,6 +133,7 @@ def _build_channels(d: dict, t_grid: np.ndarray, offset: float) -> dict:
       vy                  横速度 [m/s] (twist.linear.y, base_link 系・実測)
       accel / cmd_accel   縦加速度・指令 [m/s²]
       ay                  横加速度 [m/s²] (= v_lon·wz・遠心加速度、sim と同式)
+      slope_acc           勾配加速度 [m/s²] (= 9.81·sin(pitch)、登り<0・縦横モデルの重力項用)
       steer / cmd_steer   ステア角・指令 [deg]
       wz                  角速度 yaw rate [rad/s] (twist.angular.z・実測)
       cmd_wz              角速度指令 [rad/s] = cmd_vel·tan(cmd_steer)/L (自転車近似)
@@ -152,6 +153,11 @@ def _build_channels(d: dict, t_grid: np.ndarray, offset: float) -> dict:
     # 横加速度 (遠心加速度) a_y = v_lon·wz。localization/acceleration の横成分は常に 0 のため
     # 実測の縦速度・ヨーレートから sim 側 (out.ay = vv·om) と同式で算出する。両信号が有効な点のみ。
     ay = (lon_vel[0] * wz[0], lon_vel[1] & wz[1])
+    # 勾配加速度 (重力分力) = 9.81·sin(pitch)。pitch は nose-down 正なので登り(nose-up)で負=減速。
+    # simple_planning_simulator の acc_by_slope=-9.81·sin(slope_angle登り正) と同符号。縦モデルの a_target に
+    # c_slope 倍して加算する (_model_viewer)。physical な参照量としてパネルにも表示。
+    pitch_ch = _resample_channel(kin, "pitch", t_grid, offset)
+    slope_acc = (9.81 * np.sin(pitch_ch[0]), pitch_ch[1])
 
     # 角速度指令 (自転車近似): cmd_vel·tan(cmd_steer)/L。両信号が有効な点のみ。
     cmd_wz_vals = cmd_vel[0] * np.tan(cmd_steer_rad[0]) / PLAYBACK_WHEELBASE_M
@@ -164,6 +170,7 @@ def _build_channels(d: dict, t_grid: np.ndarray, offset: float) -> dict:
         "accel": _channel_jsonlist(*acc, 3),
         "cmd_accel": _channel_jsonlist(*cmd_acc, 3),
         "ay": _channel_jsonlist(*ay, 3),
+        "slope_acc": _channel_jsonlist(*slope_acc, 3),
         "steer": _channel_jsonlist(np.degrees(steer_rad[0]), steer_rad[1], 2),
         "cmd_steer": _channel_jsonlist(np.degrees(cmd_steer_rad[0]), cmd_steer_rad[1], 2),
         "wz": _channel_jsonlist(*wz, 4),
