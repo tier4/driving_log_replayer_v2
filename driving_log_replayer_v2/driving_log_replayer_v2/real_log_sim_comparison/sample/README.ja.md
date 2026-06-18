@@ -142,7 +142,7 @@ launch に渡り、description の simulator_model.param.yaml を上書きする
 - `dp_model_dir`: 既にローカルに置いた DP モデルディレクトリ（`diffusion_planner.onnx` + `args.json`）を直接指定。
   `dp_model_release` とは排他。
 - いずれも未指定なら Autoware 既定モデル。詳細・前提（変更 A のクラウド反映、認証等）は
-  [`../docs/multi_dp_model_eval.ja.md`](../docs/multi_dp_model_eval.ja.md) を参照。
+  [`../docs/diffusion_planner_model_swap.ja.md`](../docs/diffusion_planner_model_swap.ja.md) を参照。
 
 ### 3. 実行
 

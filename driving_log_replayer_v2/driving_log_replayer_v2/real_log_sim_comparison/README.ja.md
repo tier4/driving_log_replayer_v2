@@ -159,7 +159,7 @@ Stage 3 (`step3_run_sims`) が `scenario_test_runner` で sim を回した結果
 | `replay_preroll` | 任意 (既定 0) | ego replay の開始アンカーを AUTONOMOUS 開始（t0）より何秒前に取るか [s]。Stage 2 の TeleportAction start pose も同じアンカー時刻の kinematic から取り、注入開始時の pose ジャンプを防ぐ。 |
 | `replay_position_based` | 任意 (既定 false) | perception 再生を時刻同期ではなく **sim ego 最近傍時刻のスナップショット再生**にする。closed-loop 切替後に sim ego が実機タイムラインから逸脱した場合の先行車・信号ずれを緩和する。 |
 
-- **`models`（`Conditions.models`）**: `vehicle_model_type`（open-loop）/ `vehicle_model`（sim）/ `params`（共有）を同列に名前付きで定義。`cases`/`sim_runs` はこの名前リストで参照する。`dp_model_release`（webauto から自動 pull）/ `dp_model_dir`（ローカル既存）で **同一車両モデルのまま DiffusionPlanner モデルだけを差し替えて比較**できる → [`docs/multi_dp_model_eval.ja.md`](docs/multi_dp_model_eval.ja.md)。
+- **`models`（`Conditions.models`）**: `vehicle_model_type`（open-loop）/ `vehicle_model`（sim）/ `params`（共有）を同列に名前付きで定義。`cases`/`sim_runs` はこの名前リストで参照する。`dp_model_release`（webauto から自動 pull）/ `dp_model_dir`（ローカル既存）で **同一車両モデルのまま DiffusionPlanner モデルだけを差し替えて比較**できる → [`docs/diffusion_planner_model_swap.ja.md`](docs/diffusion_planner_model_swap.ja.md)。
 
   書式・使用例・フィールド詳細は `sample/README.ja.md` を参照。
 
