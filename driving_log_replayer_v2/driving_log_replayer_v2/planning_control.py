@@ -318,11 +318,9 @@ class PlanningFactor(EvaluationItem):
                 "Factor_0": "NO_FACTOR",
             }
         else:
-            self._check_duration_gap(current_stamp)
-            session_duration = self._update_duration_session(current_stamp)
-
             condition_met = False
             info_dict = {}
+            session_duration: float | None = None
 
             current_velocity = (
                 latest_kinematic_state.twist.twist.linear.x
@@ -398,7 +396,10 @@ class PlanningFactor(EvaluationItem):
                     info_dict_per_factor.update(info_dict_acceleration_to_wall)
                     condition_met_per_factor &= acceleration_to_wall_met
 
-                if self.condition.duration is not None:
+                if self.condition.duration is not None and condition_met_per_factor:
+                    if session_duration is None:
+                        self._check_duration_gap(current_stamp)
+                        session_duration = self._update_duration_session(current_stamp)
                     duration_met, info_dict_duration = self.judge_duration(session_duration)
                     info_dict_per_factor.update(info_dict_duration)
                     condition_met_per_factor &= duration_met

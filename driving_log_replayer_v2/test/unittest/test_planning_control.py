@@ -227,7 +227,10 @@ def test_planning_factor_duration_first_frame() -> None:
 
 
 def test_planning_factor_duration_accumulates() -> None:
-    condition = create_planning_factor_condition(duration=MinMax(min=0.0, max=10.0))
+    condition = create_planning_factor_condition(
+        behavior=["STOP"],
+        duration=MinMax(min=0.0, max=10.0),
+    )
     evaluation_item = PlanningFactor(name="pf_0", condition=condition)
 
     evaluation_item.set_frame(create_planning_factor_array_msg(stamp_sec=1), None)
@@ -240,7 +243,10 @@ def test_planning_factor_duration_accumulates() -> None:
 
 
 def test_planning_factor_duration_empty_factors_resets_session() -> None:
-    condition = create_planning_factor_condition(duration=MinMax(min=0.1, max=10.0))
+    condition = create_planning_factor_condition(
+        behavior=["STOP"],
+        duration=MinMax(min=0.1, max=10.0),
+    )
     evaluation_item = PlanningFactor(name="pf_0", condition=condition)
 
     evaluation_item.set_frame(
@@ -256,7 +262,10 @@ def test_planning_factor_duration_empty_factors_resets_session() -> None:
 
 
 def test_planning_factor_duration_gap_resets_session() -> None:
-    condition = create_planning_factor_condition(duration=MinMax(min=0.1, max=10.0))
+    condition = create_planning_factor_condition(
+        behavior=["STOP"],
+        duration=MinMax(min=0.1, max=10.0),
+    )
     evaluation_item = PlanningFactor(name="pf_0", condition=condition)
 
     evaluation_item.set_frame(create_planning_factor_array_msg(stamp_sec=1), None)
@@ -266,17 +275,22 @@ def test_planning_factor_duration_gap_resets_session() -> None:
     assert result["Info"]["Factor_0"]["Duration"] == pytest.approx(0.1)
 
 
-def test_planning_factor_duration_advances_without_behavior_match() -> None:
+def test_planning_factor_duration_does_not_advance_without_behavior_match() -> None:
     condition = create_planning_factor_condition(
         behavior=["STOP"],
         duration=MinMax(min=0.0, max=10.0),
     )
     evaluation_item = PlanningFactor(name="pf_0", condition=condition)
 
-    evaluation_item.set_frame(
+    result = evaluation_item.set_frame(
         create_planning_factor_array_msg(stamp_sec=1, behavior=PlanningFactorMsg.SLOW_DOWN),
         None,
     )
+
+    assert result is not None
+    assert result["Result"]["Frame"] == "Fail"
+    assert "Duration" not in result["Info"]["Factor_0"]
+
     result = evaluation_item.set_frame(
         create_planning_factor_array_msg(
             stamp_sec=1,
@@ -287,8 +301,32 @@ def test_planning_factor_duration_advances_without_behavior_match() -> None:
     )
 
     assert result is not None
-    assert result["Result"]["Frame"] == "Fail"
-    assert result["Info"]["Factor_0"]["Duration"] == pytest.approx(0.5)
+    assert "Duration" not in result["Info"]["Factor_0"]
+
+
+def test_planning_factor_duration_gap_from_last_valid_frame() -> None:
+    condition = create_planning_factor_condition(
+        behavior=["STOP"],
+        duration=MinMax(min=0.1, max=10.0),
+    )
+    evaluation_item = PlanningFactor(name="pf_0", condition=condition)
+
+    evaluation_item.set_frame(create_planning_factor_array_msg(stamp_sec=1), None)
+    evaluation_item.set_frame(
+        create_planning_factor_array_msg(
+            stamp_sec=1,
+            stamp_nanosec=200_000_000,
+            behavior=PlanningFactorMsg.SLOW_DOWN,
+        ),
+        None,
+    )
+    result = evaluation_item.set_frame(
+        create_planning_factor_array_msg(stamp_sec=1, stamp_nanosec=700_000_000),
+        None,
+    )
+
+    assert result is not None
+    assert result["Info"]["Factor_0"]["Duration"] == pytest.approx(0.1)
 
 
 def test_planning_factor_duration_out_of_range() -> None:
