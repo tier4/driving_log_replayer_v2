@@ -143,6 +143,7 @@ class PlanningFactorCondition(BaseModel):
     acceleration_to_wall: MinMax | None = (
         None  # needed acceleration to the next control point with the current velocity
     )
+    duration: MinMax | None = None  # consecutive duration while factors exist in topic [s]
     judgement: Literal["positive", "negative"]  # positive or negative
 
 
@@ -153,7 +154,9 @@ class Conditions(BaseModel):
 
 class Evaluation(BaseModel):
     UseCaseName: Literal["planning_control"]
-    UseCaseFormatVersion: Literal["2.0.0", "2.1.0", "2.2.0", "2.3.0", "2.4.0", "2.5.0", "2.6.0"]
+    UseCaseFormatVersion: Literal[
+        "2.0.0", "2.1.0", "2.2.0", "2.3.0", "2.4.0", "2.5.0", "2.6.0", "2.7.0"
+    ]
     Conditions: Conditions
     Datasets: list[dict]
 
@@ -262,6 +265,9 @@ class MetricResult(ResultBase):
 
 @dataclass
 class PlanningFactor(EvaluationItem):
+    DURATION_INITIAL_S = 0.1
+    DURATION_GAP_STOP_S = 0.5
+
     def __post_init__(self) -> None:
         self.condition: PlanningFactorCondition
         self.success = self.condition.judgement == "negative"
@@ -272,6 +278,28 @@ class PlanningFactor(EvaluationItem):
         self.stop_vel_thr = 0.13889  # 0.5 [km/h] margin to consider as stop
         self.reach_wall_vel_margin = 0.55556  # 2[km/h] margin to consider as reaching the wall
         self.reach_wall_distance_margin = 0.2  # [m] margin to consider as reaching the wall
+        self.duration_session_start_stamp: float | None = None
+        self.duration_last_frame_stamp: float | None = None
+
+    def _reset_duration_session(self) -> None:
+        self.duration_session_start_stamp = None
+        self.duration_last_frame_stamp = None
+
+    def _check_duration_gap(self, current_stamp: float) -> None:
+        if (
+            self.duration_last_frame_stamp is not None
+            and current_stamp - self.duration_last_frame_stamp > self.DURATION_GAP_STOP_S
+        ):
+            self._reset_duration_session()
+
+    def _update_duration_session(self, current_stamp: float) -> float:
+        if self.duration_session_start_stamp is None:
+            self.duration_session_start_stamp = current_stamp
+            duration = self.DURATION_INITIAL_S
+        else:
+            duration = current_stamp - self.duration_session_start_stamp
+        self.duration_last_frame_stamp = current_stamp
+        return duration
 
     def set_frame(  # noqa: C901, PLR0915, PLR0912
         self, msg: PlanningFactorArray, latest_kinematic_state: Odometry | None
@@ -281,13 +309,18 @@ class PlanningFactor(EvaluationItem):
             return None
 
         self.total += 1
+        current_stamp = stamp_to_float(msg.header.stamp)
 
         if len(msg.factors) == 0:
+            self._reset_duration_session()
             condition_met = self.condition.judgement == "negative"
             info_dict = {
                 "Factor_0": "NO_FACTOR",
             }
         else:
+            self._check_duration_gap(current_stamp)
+            session_duration = self._update_duration_session(current_stamp)
+
             condition_met = False
             info_dict = {}
 
@@ -365,6 +398,11 @@ class PlanningFactor(EvaluationItem):
                     info_dict_per_factor.update(info_dict_acceleration_to_wall)
                     condition_met_per_factor &= acceleration_to_wall_met
 
+                if self.condition.duration is not None:
+                    duration_met, info_dict_duration = self.judge_duration(session_duration)
+                    info_dict_per_factor.update(info_dict_duration)
+                    condition_met_per_factor &= duration_met
+
                 condition_met_per_factor ^= self.condition.judgement == "negative"
 
                 info_dict[f"Factor_{i}"] = info_dict_per_factor
@@ -437,6 +475,12 @@ class PlanningFactor(EvaluationItem):
             "TimeToWall": time_to_wall,
         }
         return self.condition.time_to_wall.match_condition(time_to_wall), info_dict
+
+    def judge_duration(self, duration: float) -> tuple[bool, dict]:
+        info_dict = {
+            "Duration": duration,
+        }
+        return self.condition.duration.match_condition(duration), info_dict
 
     def judge_acceleration_to_wall(
         self, factor_distance: float, current_velocity: float, factor_velocity: float

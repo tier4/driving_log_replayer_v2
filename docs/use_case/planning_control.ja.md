@@ -56,6 +56,7 @@ Metric正常の条件を満たさないとき
 - シナリオにvelocity条件がある場合、planning_factorのvelocity(control_pointでの速度)がシナリオで指定した範囲に入っている。
 - シナリオにtime_to_wall条件がある場合、planning_factorのtime_to_wall(現在の速度でcontrol_pointに到達するまでの時間)がシナリオで指定した範囲に入っている。
 - シナリオにacceleration_to_wall条件がある場合、planning_factorのacceleration_to_wall(現在の速度でcontrol_pointに到達するために必要な加速度)がシナリオで指定した範囲に入っている。
+- シナリオにduration条件がある場合、topic内にfactorが存在し続けている連続時間がシナリオで指定した範囲に入っている。初回frameは0.1s、以降はsession開始時刻からのtimestamp差分。`factors`が空、または0.5s以上factor frameが来ない場合はsessionが中断される。durationのframe判定はfactorの有無のみで、他の子条件とは独立してsessionを進める。
 
 #### PlanningFactor正常(judgement: negative)
 
@@ -67,6 +68,7 @@ Metric正常の条件を満たさないとき
 - シナリオにvelocity条件がある場合、planning_factorのvelocity(control_pointでの速度)がシナリオで指定した範囲に入っている。
 - シナリオにtime_to_wall条件がある場合、planning_factorのtime_to_wall(現在の速度でcontrol_pointに到達するまでの時間)がシナリオで指定した範囲に入っている。
 - シナリオにacceleration_to_wall条件がある場合、planning_factorのacceleration_to_wall(現在の速度でcontrol_pointに到達するために必要な加速度)がシナリオで指定した範囲に入っている。
+- シナリオにduration条件がある場合、topic内にfactorが存在し続けている連続時間がシナリオで指定した範囲に入っている。初回frameは0.1s、以降はsession開始時刻からのtimestamp差分。`factors`が空、または0.5s以上factor frameが来ない場合はsessionが中断される。durationのframe判定はfactorの有無のみで、他の子条件とは独立してsessionを進める。
 
 #### PlanningFactor異常
 
