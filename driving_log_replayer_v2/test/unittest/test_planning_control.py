@@ -14,9 +14,16 @@
 
 from typing import Literal
 
+from autoware_internal_planning_msgs.msg import ControlPoint
+from autoware_internal_planning_msgs.msg import PlanningFactor as PlanningFactorMsg
+from autoware_internal_planning_msgs.msg import PlanningFactorArray
 from builtin_interfaces.msg import Time
+from geometry_msgs.msg import Point
+from geometry_msgs.msg import Pose
+from geometry_msgs.msg import Quaternion
 from pydantic import ValidationError
 import pytest
+from std_msgs.msg import Header
 from tier4_metric_msgs.msg import Metric as MetricMsg
 from tier4_metric_msgs.msg import MetricArray
 
@@ -24,6 +31,8 @@ from driving_log_replayer_v2.planning_control import Metric
 from driving_log_replayer_v2.planning_control import MetricCondition
 from driving_log_replayer_v2.planning_control import MinMax
 from driving_log_replayer_v2.planning_control import PlanningControlScenario
+from driving_log_replayer_v2.planning_control import PlanningFactor
+from driving_log_replayer_v2.planning_control import PlanningFactorCondition
 from driving_log_replayer_v2.scenario import load_sample_scenario
 
 
@@ -159,3 +168,186 @@ def test_metrics_fail_all_of() -> None:
         "Result": {"Total": "Fail", "Frame": "Fail"},
         "Info": {"MetricName": "acceleration", "MetricValue": 2.0},
     }
+
+
+def create_planning_factor_condition(
+    *,
+    behavior: list[str] | None = None,
+    duration: MinMax | None = None,
+    judgement: Literal["positive", "negative"] = "positive",
+) -> PlanningFactorCondition:
+    return PlanningFactorCondition(
+        condition_name="pf_check",
+        topic="/planning/planning_factors/obstacle_stop",
+        time={"start": 0.0, "end": 100.0},
+        condition_type="any_of",
+        behavior=behavior,
+        duration=duration,
+        judgement=judgement,
+    )
+
+
+def create_planning_factor_array_msg(
+    *,
+    stamp_sec: int = 1,
+    stamp_nanosec: int = 0,
+    behavior: int = PlanningFactorMsg.STOP,
+    factor_count: int = 1,
+) -> PlanningFactorArray:
+    control_point = ControlPoint()
+    control_point.distance = 10.0
+    control_point.velocity = 20.0
+    control_point.pose = Pose(
+        position=Point(x=0.0, y=0.0, z=0.0),
+        orientation=Quaternion(),
+    )
+
+    factors = []
+    for _ in range(factor_count):
+        factor = PlanningFactorMsg()
+        factor.behavior = behavior
+        factor.control_points = [control_point]
+        factors.append(factor)
+
+    msg = PlanningFactorArray()
+    msg.header = Header(stamp=Time(sec=stamp_sec, nanosec=stamp_nanosec))
+    msg.factors = factors
+    return msg
+
+
+def test_planning_factor_duration_first_frame() -> None:
+    condition = create_planning_factor_condition(duration=MinMax(min=0.1, max=10.0))
+    evaluation_item = PlanningFactor(name="pf_0", condition=condition)
+
+    result = evaluation_item.set_frame(create_planning_factor_array_msg(), None)
+
+    assert result is not None
+    assert result["Result"]["Frame"] == "Success"
+    assert result["Info"]["Factor_0"]["Duration"] == pytest.approx(0.1)
+
+
+def test_planning_factor_duration_accumulates() -> None:
+    condition = create_planning_factor_condition(
+        behavior=["STOP"],
+        duration=MinMax(min=0.0, max=10.0),
+    )
+    evaluation_item = PlanningFactor(name="pf_0", condition=condition)
+
+    evaluation_item.set_frame(create_planning_factor_array_msg(stamp_sec=1), None)
+    result = evaluation_item.set_frame(
+        create_planning_factor_array_msg(stamp_sec=1, stamp_nanosec=300_000_000), None
+    )
+
+    assert result is not None
+    assert result["Info"]["Factor_0"]["Duration"] == pytest.approx(0.4)
+
+
+def test_planning_factor_duration_empty_factors_resets_session() -> None:
+    condition = create_planning_factor_condition(
+        behavior=["STOP"],
+        duration=MinMax(min=0.1, max=10.0),
+    )
+    evaluation_item = PlanningFactor(name="pf_0", condition=condition)
+
+    evaluation_item.set_frame(
+        create_planning_factor_array_msg(stamp_sec=1, stamp_nanosec=500_000_000), None
+    )
+    empty_msg = create_planning_factor_array_msg(stamp_sec=2)
+    empty_msg.factors = []
+    evaluation_item.set_frame(empty_msg, None)
+    result = evaluation_item.set_frame(create_planning_factor_array_msg(stamp_sec=3), None)
+
+    assert result is not None
+    assert result["Info"]["Factor_0"]["Duration"] == pytest.approx(0.1)
+
+
+def test_planning_factor_duration_gap_resets_session() -> None:
+    condition = create_planning_factor_condition(
+        behavior=["STOP"],
+        duration=MinMax(min=0.1, max=10.0),
+    )
+    evaluation_item = PlanningFactor(name="pf_0", condition=condition)
+
+    evaluation_item.set_frame(create_planning_factor_array_msg(stamp_sec=1), None)
+    result = evaluation_item.set_frame(create_planning_factor_array_msg(stamp_sec=2), None)
+
+    assert result is not None
+    assert result["Info"]["Factor_0"]["Duration"] == pytest.approx(0.1)
+
+
+def test_planning_factor_duration_does_not_advance_without_behavior_match() -> None:
+    condition = create_planning_factor_condition(
+        behavior=["STOP"],
+        duration=MinMax(min=0.0, max=10.0),
+    )
+    evaluation_item = PlanningFactor(name="pf_0", condition=condition)
+
+    result = evaluation_item.set_frame(
+        create_planning_factor_array_msg(stamp_sec=1, behavior=PlanningFactorMsg.SLOW_DOWN),
+        None,
+    )
+
+    assert result is not None
+    assert result["Result"]["Frame"] == "Fail"
+    assert "Duration" not in result["Info"]["Factor_0"]
+
+    result = evaluation_item.set_frame(
+        create_planning_factor_array_msg(
+            stamp_sec=1,
+            stamp_nanosec=400_000_000,
+            behavior=PlanningFactorMsg.SLOW_DOWN,
+        ),
+        None,
+    )
+
+    assert result is not None
+    assert "Duration" not in result["Info"]["Factor_0"]
+
+
+def test_planning_factor_duration_gap_from_last_valid_frame() -> None:
+    condition = create_planning_factor_condition(
+        behavior=["STOP"],
+        duration=MinMax(min=0.1, max=10.0),
+    )
+    evaluation_item = PlanningFactor(name="pf_0", condition=condition)
+
+    evaluation_item.set_frame(create_planning_factor_array_msg(stamp_sec=1), None)
+    evaluation_item.set_frame(
+        create_planning_factor_array_msg(
+            stamp_sec=1,
+            stamp_nanosec=200_000_000,
+            behavior=PlanningFactorMsg.SLOW_DOWN,
+        ),
+        None,
+    )
+    result = evaluation_item.set_frame(
+        create_planning_factor_array_msg(stamp_sec=1, stamp_nanosec=700_000_000),
+        None,
+    )
+
+    assert result is not None
+    assert result["Info"]["Factor_0"]["Duration"] == pytest.approx(0.1)
+
+
+def test_planning_factor_duration_out_of_range() -> None:
+    condition = create_planning_factor_condition(duration=MinMax(min=1.0, max=10.0))
+    evaluation_item = PlanningFactor(name="pf_0", condition=condition)
+
+    result = evaluation_item.set_frame(create_planning_factor_array_msg(), None)
+
+    assert result is not None
+    assert result["Result"]["Frame"] == "Fail"
+    assert result["Info"]["Factor_0"]["Duration"] == pytest.approx(0.1)
+
+
+def test_planning_factor_duration_negative_judgement() -> None:
+    condition = create_planning_factor_condition(
+        duration=MinMax(min=1.0, max=10.0),
+        judgement="negative",
+    )
+    evaluation_item = PlanningFactor(name="pf_0", condition=condition)
+
+    result = evaluation_item.set_frame(create_planning_factor_array_msg(), None)
+
+    assert result is not None
+    assert result["Result"]["Frame"] == "Success"
