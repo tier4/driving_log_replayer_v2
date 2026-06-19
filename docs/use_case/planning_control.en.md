@@ -50,7 +50,7 @@ Normal if `/planning/planning_factors/**` meets all of the following conditions:
 - If there is a velocity condition in the scenario, the planning_factor's velocity (velocity at the control_point) is within the range specified in the scenario.
 - If there is a time_to_wall condition in the scenario, the planning_factor's time_to_wall (time to reach the control_point at current velocity) is within the range specified in the scenario.
 - If there is an acceleration_to_wall condition in the scenario, the planning_factor's acceleration_to_wall (acceleration needed to reach the control_point at current velocity) is within the range specified in the scenario.
-- If there is a duration condition in the scenario, the consecutive duration while factors exist in the topic is within the range specified in the scenario. The first frame is 0.1s, then timestamp delta from session start. The session resets when `factors` is empty or no factor frame arrives for 0.5s. Duration session tracking only requires factor presence and is independent from other sub-conditions.
+- If there is a duration condition in the scenario, the consecutive duration while factors exist in the topic is within the range specified in the scenario. The first frame is 0.1s, then 0.1s plus timestamp delta from session start. The session resets when `factors` is empty or no factor frame arrives for 0.5s. Duration session tracking only requires factor presence and is independent from other sub-conditions.
 
 #### PlanningFactor Normal(judgement: negative)
 
@@ -62,7 +62,7 @@ Normal if `/planning/planning_factors/**` does not meet any of the following con
 - If there is a velocity condition in the scenario, the planning_factor's velocity (velocity at the control_point) is within the range specified in the scenario.
 - If there is a time_to_wall condition in the scenario, the planning_factor's time_to_wall (time to reach the control_point at current velocity) is within the range specified in the scenario.
 - If there is an acceleration_to_wall condition in the scenario, the planning_factor's acceleration_to_wall (acceleration needed to reach the control_point at current velocity) is within the range specified in the scenario.
-- If there is a duration condition in the scenario, the consecutive duration while factors exist in the topic is within the range specified in the scenario. The first frame is 0.1s, then timestamp delta from session start. The session resets when `factors` is empty or no factor frame arrives for 0.5s. Duration session tracking only requires factor presence and is independent from other sub-conditions.
+- If there is a duration condition in the scenario, the consecutive duration while factors exist in the topic is within the range specified in the scenario. The first frame is 0.1s, then 0.1s plus timestamp delta from session start. The session resets when `factors` is empty or no factor frame arrives for 0.5s. Duration session tracking only requires factor presence and is independent from other sub-conditions.
 
 #### PlanningFactor Error
 

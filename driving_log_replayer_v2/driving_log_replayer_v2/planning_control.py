@@ -297,7 +297,7 @@ class PlanningFactor(EvaluationItem):
             self.duration_session_start_stamp = current_stamp
             duration = self.DURATION_INITIAL_S
         else:
-            duration = current_stamp - self.duration_session_start_stamp
+            duration = self.DURATION_INITIAL_S + (current_stamp - self.duration_session_start_stamp)
         self.duration_last_frame_stamp = current_stamp
         return duration
 

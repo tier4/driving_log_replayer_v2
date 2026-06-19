@@ -236,7 +236,7 @@ def test_planning_factor_duration_accumulates() -> None:
     )
 
     assert result is not None
-    assert result["Info"]["Factor_0"]["Duration"] == pytest.approx(0.3)
+    assert result["Info"]["Factor_0"]["Duration"] == pytest.approx(0.4)
 
 
 def test_planning_factor_duration_empty_factors_resets_session() -> None:
@@ -288,7 +288,7 @@ def test_planning_factor_duration_advances_without_behavior_match() -> None:
 
     assert result is not None
     assert result["Result"]["Frame"] == "Fail"
-    assert result["Info"]["Factor_0"]["Duration"] == pytest.approx(0.4)
+    assert result["Info"]["Factor_0"]["Duration"] == pytest.approx(0.5)
 
 
 def test_planning_factor_duration_out_of_range() -> None:

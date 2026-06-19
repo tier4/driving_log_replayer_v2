@@ -20,5 +20,5 @@ Evaluation:
         velocity: { min: 10.0, max: 40.0 } # [m/s] Specify the velocity to be judged. You can set velocity to null to ignore velocity condition.
         time_to_wall: { min: 0.0 } # [s] Specify the time to the next control point of this planning factor to be judged. You can set time_to_wall to null to ignore time_to_wall condition.
         acceleration_to_wall: { min: -3.0 } # [m/s^2] Specify the acceleration to the next control point of this planning factor to be judged. You can set acceleration_to_wall to null to ignore acceleration_to_wall condition.
-        duration: { min: 0.2 } # [s] Consecutive duration while factors exist in topic. First frame is 0.1s, then timestamp delta from session start. Session resets when factors is empty or gap exceeds 0.5s. You can set duration to null to ignore duration condition.
+        duration: { min: 0.2 } # [s] Consecutive duration while factors exist in topic. First frame is 0.1s, then 0.1s plus timestamp delta from session start. Session resets when factors is empty or gap exceeds 0.5s. You can set duration to null to ignore duration condition.
         judgement: positive # positive or negative
