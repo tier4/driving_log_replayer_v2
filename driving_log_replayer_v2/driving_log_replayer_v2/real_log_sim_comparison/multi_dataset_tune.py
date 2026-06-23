@@ -72,45 +72,108 @@ def _eval(ctx: DatasetCtx, override: dict, model_type: str) -> dict:
     return {h: rmse[h] for h in HORIZONS}
 
 
-def load_datasets(lite_dirs: list[tuple[str, Path]]) -> list[DatasetCtx]:
-    """収集された real.lite を読み込み DatasetCtx を構築する (baseline 誤差も計算)。"""
-    ctxs: list[DatasetCtx] = []
-    for ds_id, lite_dir in lite_dirs:
-        s5.LITE_DIR = lite_dir
-        real = resolve_lite_bag(lite_dir, "real")
-        if real is None:
-            print(f"[WARN] real.lite が見つかりません: {lite_dir}", file=sys.stderr)
-            continue
-        # 多数の異種データセットを横断するため、ロード失敗 (AUTONOMOUS 窓なし・トピック欠落・
-        # baseline 誤差が NaN/0 等) は致命にせず skip する。
-        try:
-            data = s5.load_real_bag(real)
-            t0_ns = s5.find_autonomous_start(data)
-            base = s5._build_params()
-            base["wheelbase"] = WHEELBASE
-            s5.SUB_DT = base["sub_dt"]
-            ctx = DatasetCtx(ds_id, data, t0_ns, base, {}, {})
-            ctx.base_metric = _eval(ctx, {}, _BASELINE_MODEL)  # 正規化基準 (horizon 別)
-            # 全 horizon で yaw>0 かつ縦横いずれかが正でなければ正規化分母が立たない
-            if not all(
-                ctx.base_metric[h]["yaw"] > 0
-                and (ctx.base_metric[h]["long"] > 0 or ctx.base_metric[h]["lat"] > 0)
-                for h in HORIZONS
-            ):
-                print(f"[SKIP] {ds_id}: baseline 誤差が無効 (yaw/縦/横≤0 or NaN)", file=sys.stderr)
+def _load_one(args: tuple[str, Path]) -> DatasetCtx | None:
+    """fork プールワーカー: 1 dataset を読み込み DatasetCtx を返す (失敗時 None)。
+
+    fork による COW 継承で呼ばれるため、s5.LITE_DIR / s5.SUB_DT への書き込みは
+    このワーカープロセス内のみに留まり、親プロセスには影響しない。
+    """
+    ds_id, lite_dir = args
+    s5.LITE_DIR = lite_dir
+    real = resolve_lite_bag(lite_dir, "real")
+    if real is None:
+        print(f"[WARN] real.lite が見つかりません: {lite_dir}", file=sys.stderr)
+        return None
+    try:
+        data = s5.load_real_bag(real)
+        t0_ns = s5.find_autonomous_start(data)
+        base = s5._build_params()
+        base["wheelbase"] = WHEELBASE
+        s5.SUB_DT = base["sub_dt"]
+        ctx = DatasetCtx(ds_id, data, t0_ns, base, {}, {})
+        ctx.base_metric = _eval(ctx, {}, _BASELINE_MODEL)
+        if not all(
+            ctx.base_metric[h]["yaw"] > 0
+            and (ctx.base_metric[h]["long"] > 0 or ctx.base_metric[h]["lat"] > 0)
+            for h in HORIZONS
+        ):
+            print(f"[SKIP] {ds_id}: baseline 誤差が無効 (yaw/縦/横≤0 or NaN)", file=sys.stderr)
+            return None
+    except Exception as e:  # noqa: BLE001
+        print(f"[SKIP] {ds_id}: ロード失敗 ({type(e).__name__}: {e})", file=sys.stderr)
+        return None
+    return ctx
+
+
+def load_datasets(lite_dirs: list[tuple[str, Path]], n_jobs: int = 1) -> list[DatasetCtx]:
+    """収集された real.lite を読み込み DatasetCtx を構築する (baseline 誤差も計算)。
+
+    n_jobs > 1 のとき fork プールで D 本を並列ロードする。入力順を保持するため
+    pool.map の返り値順 (None 除外) をそのまま使い、tie-break 再現を保証する。
+    """
+    if n_jobs <= 1:
+        # --jobs 1 の逐次パス (再現性の基準)
+        ctxs: list[DatasetCtx] = []
+        for ds_id, lite_dir in lite_dirs:
+            s5.LITE_DIR = lite_dir
+            real = resolve_lite_bag(lite_dir, "real")
+            if real is None:
+                print(f"[WARN] real.lite が見つかりません: {lite_dir}", file=sys.stderr)
                 continue
-        except Exception as e:  # noqa: BLE001
-            print(f"[SKIP] {ds_id}: ロード失敗 ({type(e).__name__}: {e})", file=sys.stderr)
-            continue
-        ctxs.append(ctx)
-        print(
-            f"[load] {ds_id}: "
-            + "  ".join(
-                f"baseline@N{h} yaw={ctx.base_metric[h]['yaw']:.4f} "
-                f"縦={ctx.base_metric[h]['long']:.3f} 横={ctx.base_metric[h]['lat']:.3f}"
-                for h in HORIZONS
+            # 多数の異種データセットを横断するため、ロード失敗 (AUTONOMOUS 窓なし・トピック欠落・
+            # baseline 誤差が NaN/0 等) は致命にせず skip する。
+            try:
+                data = s5.load_real_bag(real)
+                t0_ns = s5.find_autonomous_start(data)
+                base = s5._build_params()
+                base["wheelbase"] = WHEELBASE
+                s5.SUB_DT = base["sub_dt"]
+                ctx = DatasetCtx(ds_id, data, t0_ns, base, {}, {})
+                ctx.base_metric = _eval(ctx, {}, _BASELINE_MODEL)  # 正規化基準 (horizon 別)
+                # 全 horizon で yaw>0 かつ縦横いずれかが正でなければ正規化分母が立たない
+                if not all(
+                    ctx.base_metric[h]["yaw"] > 0
+                    and (ctx.base_metric[h]["long"] > 0 or ctx.base_metric[h]["lat"] > 0)
+                    for h in HORIZONS
+                ):
+                    print(f"[SKIP] {ds_id}: baseline 誤差が無効 (yaw/縦/横≤0 or NaN)", file=sys.stderr)
+                    continue
+            except Exception as e:  # noqa: BLE001
+                print(f"[SKIP] {ds_id}: ロード失敗 ({type(e).__name__}: {e})", file=sys.stderr)
+                continue
+            ctxs.append(ctx)
+            print(
+                f"[load] {ds_id}: "
+                + "  ".join(
+                    f"baseline@N{h} yaw={ctx.base_metric[h]['yaw']:.4f} "
+                    f"縦={ctx.base_metric[h]['long']:.3f} 横={ctx.base_metric[h]['lat']:.3f}"
+                    for h in HORIZONS
+                )
             )
-        )
+        return ctxs
+
+    # 並列パス: fork プールで D 本を並列ロード
+    mp_ctx = multiprocessing.get_context("fork")
+    with mp_ctx.Pool(n_jobs) as pool:
+        results = pool.map(_load_one, lite_dirs)
+
+    ctxs = []
+    for ctx in results:
+        if ctx is not None:
+            ctxs.append(ctx)
+            print(
+                f"[load] {ctx.dataset_id}: "
+                + "  ".join(
+                    f"baseline@N{h} yaw={ctx.base_metric[h]['yaw']:.4f} "
+                    f"縦={ctx.base_metric[h]['long']:.3f} 横={ctx.base_metric[h]['lat']:.3f}"
+                    for h in HORIZONS
+                )
+            )
+
+    # fork ワーカーは s5.SUB_DT を自身のコピーに書いているため、親の値は変わっていない。
+    # 後続の run_rollout が正しい sub_dt を使えるよう、最初の有効 ctx の値で親を更新する。
+    if ctxs:
+        s5.SUB_DT = ctxs[0].base["sub_dt"]
     return ctxs
 
 
@@ -126,7 +189,7 @@ def aggregate(ctxs: list[DatasetCtx], override: dict, model_type: str) -> dict:
 
 
 # ---------------------------------------------------------------------------
-# 並列評価サポート (fork プールによる trial 単位並列化)
+# 並列評価サポート (fork プールによる per-(trial × dataset) 並列化)
 # ---------------------------------------------------------------------------
 
 # worker が参照するグローバル ctxs。fork 前に親がセットし、子は COW で読み取り専用で継承する。
@@ -134,10 +197,16 @@ def aggregate(ctxs: list[DatasetCtx], override: dict, model_type: str) -> dict:
 _CTXS: list[DatasetCtx] = []
 
 
-def _worker_aggregate(args: tuple[dict, str]) -> dict:
-    """プールワーカー: グローバル _CTXS を使って aggregate を呼ぶ (fork COW 継承)。"""
-    override, model_type = args
-    return aggregate(_CTXS, override, model_type)
+def _worker_eval_one(args: tuple[int, int, dict, str]) -> tuple[int, int, str, dict]:
+    """プールワーカー: _CTXS[ctx_idx] で 1 dataset の誤差を評価し返す (fork COW 継承)。
+
+    返り値: (trial_idx, ctx_idx, dataset_id, metrics)
+    親が trial 単位に再集約するため、pickle 転送量は per-trial-aggregate より大幅に小さい。
+    """
+    trial_idx, ctx_idx, override, model_type = args
+    ctx = _CTXS[ctx_idx]
+    metrics = _eval(ctx, override, model_type)
+    return trial_idx, ctx_idx, ctx.dataset_id, metrics
 
 
 def _eval_grid(
@@ -145,16 +214,35 @@ def _eval_grid(
     ctxs: list[DatasetCtx],
     trials: list[dict],
     model_type: str,
+    n_jobs: int = 1,
 ) -> list[dict]:
     """trials を並列 (pool 非 None) または逐次で aggregate 評価し元順の agg リストを返す。
 
     pool が None のとき逐次実行して ctxs を直接使う (--jobs 1 での完全逐次互換)。
-    pool が非 None のとき fork ワーカーがグローバル _CTXS を使って評価する。
+    pool が非 None のとき (trial_idx, ctx_idx) を平坦化して pool.map し、親で trial 単位に
+    再集約する (per-(trial×dataset) 並列化)。
     いずれも返り値は trials と同順の agg リスト (tie-break の決定論的再現を保証)。
     """
     if pool is None:
         return [aggregate(ctxs, t, model_type) for t in trials]
-    return pool.map(_worker_aggregate, [(t, model_type) for t in trials])
+
+    n_trials = len(trials)
+    n_ctxs = len(ctxs)
+    # (trial_idx, ctx_idx) の直積を生成し一括 map
+    units = [
+        (ti, ci, trials[ti], model_type)
+        for ti in range(n_trials)
+        for ci in range(n_ctxs)
+    ]
+    chunksize = max(1, len(units) // (n_jobs * 4))
+    raw = pool.map(_worker_eval_one, units, chunksize=chunksize)
+
+    # trial 単位に per_ds_metrics を再構成し親で aggregate_normalized を呼ぶ
+    baselines = {ctx.dataset_id: ctx.base_metric for ctx in ctxs}
+    per_trial: list[list[tuple[str, dict]]] = [[] for _ in range(n_trials)]
+    for ti, _ci, ds_id, metrics in raw:
+        per_trial[ti].append((ds_id, metrics))
+    return [aggregate_normalized(pm, baselines) for pm in per_trial]
 
 
 _KUS0020 = {"k_us": 0.020}
@@ -210,10 +298,12 @@ def robust_search(ctxs: list[DatasetCtx], cfg, *, n_jobs: int = 1) -> dict:
         print(f"[INFO] 並列実行: {n_jobs} workers (fork)")
 
     try:
-        cur_agg = aggregate(ctxs, cur_best, cur_model)
+        # cur_best と kus0020 をまとめて並列評価 (un-pooled な逐次床を除去)
+        ref_aggs = _eval_grid(pool, ctxs, [cur_best, _KUS0020], cur_model, n_jobs)
+        cur_agg = ref_aggs[0]
         print("\n## robust coordinate descent (best_normal family, cross-dataset normalized)")
         print(format_agg("cur_best", cur_agg) + f"  score={robust_score(cur_agg):.4f}  {cur_best}")
-        print(format_agg("kus0020", aggregate(ctxs, _KUS0020, cur_model)))
+        print(format_agg("kus0020", ref_aggs[1]))
 
         # worst は robust_score に組み込み済み (ハード guard なし) なので mean↔worst の trade を許容する。
         state = dict(cur_best)
@@ -229,7 +319,7 @@ def robust_search(ctxs: list[DatasetCtx], cfg, *, n_jobs: int = 1) -> dict:
                 trials = [dict(state) for _ in grid]
                 for t, v in zip(trials, grid):
                     t[pname] = v
-                aggs = _eval_grid(pool, ctxs, trials, cur_model)
+                aggs = _eval_grid(pool, ctxs, trials, cur_model, n_jobs)
                 for v, agg in zip(grid, aggs):
                     s = robust_score(agg)
                     if s < best_s - 1e-6:
@@ -256,7 +346,7 @@ def robust_search(ctxs: list[DatasetCtx], cfg, *, n_jobs: int = 1) -> dict:
             t = dict(cur_best)  # descent 外の spec パラメータを保持
             t.update({k: v for k, v in zip(keys, combo)})
             refine_trials.append(t)
-        aggs = _eval_grid(pool, ctxs, refine_trials, cur_model)
+        aggs = _eval_grid(pool, ctxs, refine_trials, cur_model, n_jobs)
         for i, (combo, agg) in enumerate(zip(combos, aggs)):  # noqa: B007
             s = robust_score(agg)
             if s < best_s - 1e-6:
@@ -322,24 +412,26 @@ def main() -> None:
         sys.exit(1)
     print(f"datasets: {[d for d, _ in lite_dirs]}")
 
-    ctxs = load_datasets(lite_dirs)
+    n_jobs = max(1, args.jobs or 1)
+
+    # OMP スレッド数を抑制してから全 fork (load_datasets / robust_search 両方をカバー):
+    # worker 内の BLAS/OpenMP が親コア数分のスレッドを再起動するのを防ぎ、
+    # コア間の CPU リソース競合を回避する。load_datasets の前に設定しないと
+    # 並列ロード中の baseline rollout が oversubscribe する。
+    os.environ.setdefault("OMP_NUM_THREADS", "1")
+
+    ctxs = load_datasets(lite_dirs, n_jobs=n_jobs)
     if len(ctxs) < 1:
         print("ERROR: 有効な dataset が 0 件", file=sys.stderr)
         sys.exit(1)
 
     cfg = load_cases_config(args.scenario)
 
-    # OMP スレッド数を抑制してからフォーク:
-    # worker 内の BLAS/OpenMP が親コア数分のスレッドを再起動するのを防ぎ、
-    # コア間の CPU リソース競合を回避する。
-    os.environ.setdefault("OMP_NUM_THREADS", "1")
-
     # グローバル _CTXS に ctxs をセット (fork COW 継承パターン)。
     # pool.map は pickle 転送せず fork した子プロセスがグローバルを直接参照する。
     global _CTXS  # noqa: PLW0603
     _CTXS = ctxs
 
-    n_jobs = max(1, args.jobs or 1)
     result = robust_search(ctxs, cfg, n_jobs=n_jobs)
 
     if args.out:

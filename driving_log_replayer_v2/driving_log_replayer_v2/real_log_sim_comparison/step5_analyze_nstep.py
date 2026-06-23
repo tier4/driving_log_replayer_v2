@@ -736,44 +736,69 @@ def run_rollout(
 
     n = len(t_cmd)
     recs: list[dict] = []
-    for horizon in horizons:
-        n_before = len(recs)
-        # k_end = k0 + horizon ≤ n-1 まで使う (最終コマンド区間を落とさない)
-        for k0 in range(0, n - horizon, stride):
-            ivs = [t_cmd[k0 + j + 1] - t_cmd[k0 + j] for j in range(horizon)]
-            if any(iv <= 0.001 or iv > 1.0 for iv in ivs):
-                continue
 
-            # -- モデルを t_{k0} の実機状態にリセット（過去履歴を delay queue にセット） --
-            # ego_entity_simulation.cpp と同じ: state(4) = atan(wz*wb/vx) をキネマティック初期値に。
-            # vm_reset_state 内: state(4) = steer_actual - steer_bias
-            model.reset_with_history(
-                x=gt_x[k0],
-                y=gt_y[k0],
-                yaw=gt_yaw[k0],
-                vx=gt_vx[k0],
-                steer_actual=float(gt_steer_kinematic[k0]) + steer_bias,
-                ax=gt_ax[k0],
-                acc_history=_delay_history(t_cmd[k0], acc_q_size, t_cmd_full, accel_des_full),
-                steer_history=_delay_history(t_cmd[k0], steer_q_size, t_cmd_full, steer_des_full),
-                wz=float(gt_wz[k0]),
-            )
+    # horizon 融合: k0 ごとに最大 horizon まで1回だけ積分し、各 horizon 境界で記録する。
+    # free-running open-loop では長い horizon の途中状態（step h）は短い horizon の終端と
+    # ビット単位で同一のため、結果は元のループ構造（horizon 外側）と完全一致する。
+    #
+    # 元の horizon-major 出力順を再現するため、入力 horizons の出現インデックスでソートする。
+    # これにより (40,20) のような降順入力でも元コードと同じ行順が保たれる。
+    h_order = {h: i for i, h in enumerate(horizons)}
+    sorted_horizons = sorted(horizons)
+    min_h = sorted_horizons[0]
 
-            # -- 実コマンド系列を N 区間連続適用 (途中リセット無し) --
+    # horizon 別の記録数カウンタ (進捗 print 用)
+    h_counts = {h: 0 for h in horizons}
+
+    # k_end = k0 + horizon ≤ n-1 まで使う (最小 horizon で outer range を決定)
+    for k0 in range(0, n - min_h, stride):
+        # -- モデルを t_{k0} の実機状態にリセット（過去履歴を delay queue にセット）--
+        # ego_entity_simulation.cpp と同じ: state(4) = atan(wz*wb/vx) をキネマティック初期値に。
+        # vm_reset_state 内: state(4) = steer_actual - steer_bias
+        model.reset_with_history(
+            x=gt_x[k0],
+            y=gt_y[k0],
+            yaw=gt_yaw[k0],
+            vx=gt_vx[k0],
+            steer_actual=float(gt_steer_kinematic[k0]) + steer_bias,
+            ax=gt_ax[k0],
+            acc_history=_delay_history(t_cmd[k0], acc_q_size, t_cmd_full, accel_des_full),
+            steer_history=_delay_history(t_cmd[k0], steer_q_size, t_cmd_full, steer_des_full),
+            wz=float(gt_wz[k0]),
+        )
+
+        # 各 horizon 境界まで増分ステップし、区間不正が見つかった時点で打ち切る。
+        # 不正区間は元コードの per-horizon 事前チェック (ivs 全域 any(...)) と同等:
+        # 区間 j の iv が不正なら j を含む horizon 以上はすべて記録しない。
+        stepped = 0  # これまでにステップした区間数 (各 h まで積算)
+        cos_y = math.cos(gt_yaw[k0])
+        sin_y = math.sin(gt_yaw[k0])
+        for h in sorted_horizons:
+            if k0 >= n - h:
+                # この k0 では horizon h が範囲外 (昇順なので以降も全て範囲外)
+                break
+            # -- 実コマンド系列を [stepped, h) 区間だけ追加適用 --
             # 各区間は n_full 回の SUB_DT ステップ + 端数ステップで正確に積分する
             # (区間が SUB_DT より短い場合は n_full=0 で端数ステップのみ)。
-            for j in range(horizon):
-                k = k0 + j
-                iv = ivs[j]
-                ad = float(accel_des[k])
-                sd = float(steer_des[k])
+            bad = False
+            for j in range(stepped, h):
+                iv = t_cmd[k0 + j + 1] - t_cmd[k0 + j]
+                if iv <= 0.001 or iv > 1.0:
+                    bad = True
+                    break
+                ad = float(accel_des[k0 + j])
+                sd = float(steer_des[k0 + j])
                 n_full = int(iv / SUB_DT)
                 for _ in range(n_full):
                     model.step(ad, sd)
                 rem = iv - n_full * SUB_DT
                 if rem > 1e-6:
                     model.step_dt(ad, sd, rem)
-            k_end = k0 + horizon
+            if bad:
+                # 不正区間 → h 以上の horizon はすべて記録しない (元コードの continue と同等)
+                break
+            stepped = h
+            k_end = k0 + h
 
             # -- 終端誤差 (実機 − モデル) --
             dx = gt_x[k_end] - model.x
@@ -785,8 +810,6 @@ def run_rollout(
             real_dy = gt_y[k_end] - gt_y[k0]
             sim_dx = model.x - gt_x[k0]
             sim_dy = model.y - gt_y[k0]
-            cos_y = math.cos(gt_yaw[k0])
-            sin_y = math.sin(gt_yaw[k0])
             real_ds_long = real_dx * cos_y + real_dy * sin_y
             real_ds_lat = -real_dx * sin_y + real_dy * cos_y
             sim_ds_long = sim_dx * cos_y + sim_dy * sin_y
@@ -797,7 +820,7 @@ def run_rollout(
             # (sim_vy/ay は getVy()=0 / 未実装のため引き続き省略)。
             sim_wz = model.wz
             recs.append({
-                "horizon": horizon,
+                "horizon": h,
                 "k0": k0,
                 "tr": t_cmd[k0],  # AUTONOMOUS 開始からの経過時間 [s]
                 "elapsed": t_cmd[k_end] - t_cmd[k0],
@@ -834,7 +857,13 @@ def run_rollout(
                 "pos_err": math.hypot(dx, dy),
                 "yaw_err_deg": math.degrees(yaw_err),
             })
-        print(f"  horizon N={horizon}: {len(recs) - n_before} starts (stride={stride})")
+            h_counts[h] += 1
+
+    # 入力 horizon の出現順 (h_order) + k0 でソートし、元の horizon-major 出力順を再現する。
+    recs.sort(key=lambda r: (h_order[r["horizon"]], r["k0"]))
+
+    for h in horizons:
+        print(f"  horizon N={h}: {h_counts[h]} starts (stride={stride})")
     return pd.DataFrame(recs)
 
 
