@@ -430,21 +430,26 @@ def collect(
 
         input_bag_dir.mkdir(parents=True, exist_ok=True)
 
-        # pull-filtered-rosbag: tempdir に落として _collect_bag で flatten
-        # (download.py と同一パターン。pull 出力はネストした rosbag2 dir を作るため直接 input_bag_dir を
-        # 渡すと step1_make_lite が bag を見つけられない)
-        tmp_pull = Path(tempfile.mkdtemp(prefix="pull_", dir=ds_dir))
-        try:
-            print(f"  [pull] {file_name} → {tmp_pull.name}/ → {input_bag_dir.name}/")
-            _pull_rosbag(rosbag_id, topics, tmp_pull)
-            _collect_bag(tmp_pull, input_bag_dir)
-        except RuntimeError as e:
-            print(f"  [WARN] pull 失敗: {e}", file=sys.stderr)
-            rec["status"] = "pull_failed"
-            records.append(rec)
-            continue
-        finally:
-            shutil.rmtree(tmp_pull, ignore_errors=True)
+        # input_bag に .db3 が既存なら pull をスキップ (中断後の再開)
+        existing_db3 = list(input_bag_dir.glob("*.db3"))
+        if existing_db3:
+            print(f"  [SKIP pull] input_bag 既存 ({existing_db3[0].name})")
+        else:
+            # pull-filtered-rosbag: tempdir に落として _collect_bag で flatten
+            # (download.py と同一パターン。pull 出力はネストした rosbag2 dir を作るため直接 input_bag_dir を
+            # 渡すと step1_make_lite が bag を見つけられない)
+            tmp_pull = Path(tempfile.mkdtemp(prefix="pull_", dir=ds_dir))
+            try:
+                print(f"  [pull] {file_name} → {tmp_pull.name}/ → {input_bag_dir.name}/")
+                _pull_rosbag(rosbag_id, topics, tmp_pull)
+                _collect_bag(tmp_pull, input_bag_dir)
+            except RuntimeError as e:
+                print(f"  [WARN] pull 失敗: {e}", file=sys.stderr)
+                rec["status"] = "pull_failed"
+                records.append(rec)
+                continue
+            finally:
+                shutil.rmtree(tmp_pull, ignore_errors=True)
 
         # step1_make_lite (ROS 環境が source 済みであること)
         print(f"  [lite] {input_bag_dir} → {lite_path}")
