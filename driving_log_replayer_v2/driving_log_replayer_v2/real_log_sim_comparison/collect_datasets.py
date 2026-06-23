@@ -37,6 +37,7 @@ import argparse
 from datetime import datetime, timezone
 from pathlib import Path
 import re
+import shutil
 import sys
 
 import yaml
@@ -75,8 +76,16 @@ def _infer_dataset_id(bundle: Path) -> str | None:
 
 
 def _relink(dst: Path, src: Path) -> None:
-    if dst.is_symlink() or dst.exists():
+    """dst を src へのシンボリックリンクに置き換える。
+
+    dst がシンボリックリンク/ファイルなら unlink、ディレクトリなら rmtree で削除してから
+    symlink を張る。collect_raw_rosbags.py が作成した実ディレクトリ (rosbag2 bag) を
+    run_batch の collect_bundle が symlink に昇格させるケースを正しく処理するための実装。
+    """
+    if dst.is_symlink() or dst.is_file():
         dst.unlink()
+    elif dst.is_dir():
+        shutil.rmtree(dst)
     dst.symlink_to(src)
 
 

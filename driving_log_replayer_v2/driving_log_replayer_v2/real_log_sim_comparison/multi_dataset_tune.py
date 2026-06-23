@@ -217,6 +217,12 @@ def main() -> None:
         metavar="DATASET_ID=LITE_DIR",
         help="収集を使わず直接指定 (複数可)",
     )
+    ap.add_argument(
+        "--out",
+        default="",
+        help="FINAL params を保存する YAML ファイルパス (省略時は保存しない)。"
+        "scenario.yaml の models へ反映する際の受け渡しファイルとして使う",
+    )
     args = ap.parse_args()
 
     if args.lite_dir:
@@ -237,7 +243,20 @@ def main() -> None:
         sys.exit(1)
 
     cfg = load_cases_config(args.scenario)
-    robust_search(ctxs, cfg)
+    result = robust_search(ctxs, cfg)
+    if args.out:
+        import yaml as _yaml  # noqa: PLC0415
+        out_path = Path(args.out)
+        out_path.parent.mkdir(parents=True, exist_ok=True)
+        out_path.write_text(
+            _yaml.safe_dump(
+                {"params": result["params"], "score": result["score"]},
+                allow_unicode=True,
+                sort_keys=False,
+            ),
+            encoding="utf-8",
+        )
+        print(f"[INFO] FINAL params 保存: {out_path}")
 
 
 if __name__ == "__main__":

@@ -1036,6 +1036,13 @@ def main() -> None:
         help="collect_datasets.py の収集先 (collection root)。指定するとマルチ DS レポートを"
         "<collection>/report.html に生成する",
     )
+    parser.add_argument(
+        "--report-name",
+        default="report.html",
+        help="--collection-dir 使用時のレポートファイル名 (デフォルト: report.html)。"
+        "open-loop 集約レポートは aggregate_report.html を推奨 (クラウド per-dataset の"
+        "report.html と衝突しない)",
+    )
     args = parser.parse_args()
 
     shared_config_files = [
@@ -1050,7 +1057,7 @@ def main() -> None:
             warnings.warn(f"collection に comparison/ を持つデータセットがありません: {collection_dir}")
         cross_dir = collection_dir / CROSS_DIR_NAME
         scenario_name = ""
-        out_path = collection_dir / "report.html"
+        out_path = collection_dir / args.report_name
     else:
         cfg = build_runtime_config(args, default_base_dir=Path(__file__).parent)
         comparison_dir = cfg.out_dir

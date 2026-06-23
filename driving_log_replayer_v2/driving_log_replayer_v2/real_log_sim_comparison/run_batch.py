@@ -52,6 +52,32 @@ def iter_dataset_uuids(scenario: Path) -> list[str]:
     return uuids
 
 
+def write_raw_dataset_scenario(scenario: Path, uuid: str, out_path: Path) -> Path:
+    """raw モード用 single-dataset scenario 生成。
+
+    Datasets を uuid 1件に置換する (t4_dataset_path/t4_dataset_id は launch 引数で渡すため
+    Datasets エントリの内容は空で問題ない)。cases / models / sim_runs 等の Conditions は
+    テンプレート scenario の値をそのまま引き継ぐ。
+    """
+    doc = yaml.safe_load(scenario.read_text(encoding="utf-8"))
+    doc["Evaluation"]["Datasets"] = [{uuid: {}}]
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    out_path.write_text(
+        yaml.safe_dump(doc, allow_unicode=True, sort_keys=False), encoding="utf-8"
+    )
+    return out_path
+
+
+def _discover_raw_datasets(batch_root: Path) -> list[tuple[str, Path]]:
+    """raw モード: batch_root/datasets/ 配下の (uuid, t4_path) を昇順で返す。"""
+    ds_root = batch_root / "datasets"
+    if not ds_root.is_dir():
+        return []
+    return sorted(
+        [(sub.name, sub.resolve()) for sub in ds_root.iterdir() if sub.is_dir()]
+    )
+
+
 def write_single_dataset_scenario(scenario: Path, uuid: str, out_path: Path) -> Path:
     """Datasets を当該 UUID 1 件に絞った scenario を生成する。
 
@@ -128,15 +154,36 @@ def main() -> None:
     ap.add_argument("--skip-sim", action="store_true",
                     help="全 dataset で Stage 3 (closed-loop sim 実行) を省略し、実機ログのみの"
                     "解析 (open-loop N-step / sweep / カバレッジ) を実行する")
+    ap.add_argument("--input-mode", choices=["annotation", "raw"], default="annotation",
+                    help="dataset 解決モード。"
+                    "annotation: webauto キャッシュ (annotation_dataset) から解決 (既定・クラウド互換)。"
+                    "raw: collect_raw_rosbags.py で事前構築した <batch-root>/datasets/<uuid>/ を"
+                    "そのまま t4_dataset_path として使う (annotation_dataset 不要)。"
+                    "raw モードでは Datasets は --batch-root/datasets/ を自動検出し、"
+                    "aggregate_report.html として出力する")
     args = ap.parse_args()
 
     scenario = Path(args.scenario).resolve()
     batch_root = Path(args.batch_root).resolve()
     webauto_root = Path(args.webauto_root)
 
-    uuids = iter_dataset_uuids(scenario)
+    if args.input_mode == "raw":
+        raw_pairs = _discover_raw_datasets(batch_root)
+        if not raw_pairs:
+            print(
+                f"ERROR: raw モード: {batch_root}/datasets/ にデータセットが見つかりません。\n"
+                "先に collect_raw_rosbags.py で収集してください",
+                file=sys.stderr,
+            )
+            sys.exit(2)
+        uuids = [u for u, _ in raw_pairs]
+        raw_t4_paths = {u: p for u, p in raw_pairs}
+    else:
+        uuids = iter_dataset_uuids(scenario)
+        raw_t4_paths = {}
+
     if not uuids:
-        print(f"ERROR: scenario に Datasets がありません: {scenario}", file=sys.stderr)
+        print(f"ERROR: データセットが 0 件 (scenario={scenario})", file=sys.stderr)
         sys.exit(2)
     print(f"datasets ({len(uuids)}): {[u[:8] for u in uuids]}")
 
@@ -149,15 +196,20 @@ def main() -> None:
         if args.resume and _bundle_has_real_lite(output_dir):
             print(f"[SKIP] {uuid}: real.lite 済み (--resume)")
         else:
-            try:
-                t4_path = resolve_t4_dataset_path(webauto_root, uuid)
-            except DatasetResolutionError as e:
-                print(f"[WARN] {uuid}: dataset 解決失敗 — スキップ\n{e}", file=sys.stderr)
-                records.append({"dataset_id": uuid, "status": "collect_failed",
-                                "collected_at": _now()})
-                continue
-            scenario_single = batch_root / "scenarios" / f"{uuid}.scenario.yaml"
-            write_single_dataset_scenario(scenario, uuid, scenario_single)
+            if args.input_mode == "raw":
+                t4_path = raw_t4_paths[uuid]
+                scenario_single = batch_root / "scenarios" / f"{uuid}.scenario.yaml"
+                write_raw_dataset_scenario(scenario, uuid, scenario_single)
+            else:
+                try:
+                    t4_path = resolve_t4_dataset_path(webauto_root, uuid)
+                except DatasetResolutionError as e:
+                    print(f"[WARN] {uuid}: dataset 解決失敗 — スキップ\n{e}", file=sys.stderr)
+                    records.append({"dataset_id": uuid, "status": "collect_failed",
+                                    "collected_at": _now()})
+                    continue
+                scenario_single = batch_root / "scenarios" / f"{uuid}.scenario.yaml"
+                write_single_dataset_scenario(scenario, uuid, scenario_single)
             ok = run_one_dataset(
                 uuid, scenario_single, t4_path, output_dir, skip_sim=args.skip_sim
             )
@@ -205,17 +257,19 @@ def main() -> None:
          "--collection-dir", str(batch_root)],
         check=False, env=os.environ.copy(),
     )
-    print("\n=== Stage 11 (マルチ DS): report.html ===", flush=True)
-    r11 = subprocess.run(  # noqa: S603
-        [sys.executable, "-m", f"{_PKG}.step11_build_html_report",
-         "--collection-dir", str(batch_root)],
-        check=False, env=os.environ.copy(),
-    )
+    report_name = "aggregate_report.html" if args.input_mode == "raw" else "report.html"
+    print(f"\n=== Stage 11 (マルチ DS): {report_name} ===", flush=True)
+    r11_cmd = [
+        sys.executable, "-m", f"{_PKG}.step11_build_html_report",
+        "--collection-dir", str(batch_root),
+        "--report-name", report_name,
+    ]
+    r11 = subprocess.run(r11_cmd, check=False, env=os.environ.copy())  # noqa: S603
     if r13.returncode != 0 or r11.returncode != 0:
         print("[WARN] 横断分析またはレポート生成が失敗しました (per-dataset 成果物は有効)",
               file=sys.stderr)
         sys.exit(1)
-    print(f"\n完了。レポート: {batch_root / 'report.html'}")
+    print(f"\n完了。レポート: {batch_root / report_name}")
 
 
 if __name__ == "__main__":

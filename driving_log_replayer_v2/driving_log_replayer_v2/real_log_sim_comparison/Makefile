@@ -22,12 +22,18 @@ LOCAL_SCENARIO   ?= $(LOCAL_SAMPLE_DIR)/scenario.yaml
 
 PYTHON := python3
 
-.PHONY: help local_cloud_run local_analysis_run local_batch_run local_cross_analysis_run local_multidataset_run issue_scenario
+.PHONY: help local_cloud_run local_analysis_run local_batch_run local_cross_analysis_run local_multidataset_run issue_scenario collect_raw_rosbags open_loop_tune open_loop_batch
 
 help:
 	@echo "使い方: make -C $(MAKEFILE_DIR) <ターゲット>"
 	@echo ""
 	@echo "ターゲット:"
+	@echo "  collect_raw_rosbags  vehicle_id で生rosbagを収集し real.lite を生成 (open-loop 同定用)"
+	@echo "                       VEHICLE_ID=<uuid> ROOT=<dir> [DATE_FROM=YYYY-MM-DD] [DATE_TO=YYYY-MM-DD] [LIMIT=20]"
+	@echo "  open_loop_tune       軽量ループ (主): 全 real.lite で横断ロバスト同定 (multi_dataset_tune)"
+	@echo "                       ROOT=<collect_raw_rosbags の出力 root>"
+	@echo "  open_loop_batch      重量ループ (subset 精査): curated subset で full launch + 集約レポート"
+	@echo "                       ROOT=<dir> [RESUME=1]"
 	@echo "  issue_scenario      MOB rosbag リンクから課題シナリオを一括生成（download.py ラッパー）"
 	@echo "                      ROSBAG_ID=<file_id> [TEMPLATE=<scenario_template.yaml>]"
 	@echo "                      [PROVENANCE=<説明文>] [START=<ts>] [END=<ts>] [WORK_DIR=work]"
@@ -223,3 +229,78 @@ issue_scenario:
 	@echo "  1. python3 tools/suggest_curve_centers.py --bag $(WORK_DIR)/dataset/<uuid>/input_bag"
 	@echo "     → 出力の cx/cy を sample/curve_config_*.yaml に記入する"
 	@echo "  2. make local_cloud_run WEBAUTO_T4_ROOT=\$$(pwd)/$(WORK_DIR)/dataset LOCAL_SCENARIO=$(WORK_DIR)/scenario_<uuid>.yaml"
+
+# ------ open-loop: J6 #15号車の生rosbag 収集 & モデル磨き上げ ------
+# 軽量/重量の二経路で open-loop 専用の評価・同定フローを提供する。
+# closed-loop (local_cloud_run / local_batch_run) を壊さない振る舞い保存設計。
+#
+# 経路の使い分け:
+#   軽量ループ (主): collect_raw_rosbags → open_loop_tune
+#     real.lite さえあれば ROS launch 不要で数百本の横断ロバスト同定ができる。
+#     「できるだけ多く」の bag でモデルを磨き上げるメインルート。
+#
+#   重量ループ (subset 精査): collect_raw_rosbags → open_loop_batch
+#     厳選した数本〜数十本のみ full launch (SKIP_SIM=1) + step13 + 集約レポート。
+#     step5/6/7 の per-bag 詳細解析・検証ビューアが欲しい時に使う。
+
+# J6 #15 号車の vehicle_id (デフォルト)
+VEHICLE_ID ?= e14508f0-5cc8-410c-886b-23aea4a8d5d8
+# 収集ルート (collect_raw_rosbags / open_loop_tune / open_loop_batch が共通で使う)
+ROOT       ?= $(LOCAL_SAMPLE_DIR)/out/open_loop_$(shell date +%Y%m%d_%H%M%S)
+# 収集期間フィルタ (省略時は全期間)
+DATE_FROM  ?=
+DATE_TO    ?=
+# 最大収集本数 (DL 量ガード)
+LIMIT      ?= 20
+
+# Phase 0+1: rosbag 収集 + real.lite 化
+# (ROS 環境が source 済みである必要があるのは step1_make_lite のみ)
+collect_raw_rosbags:
+	@test -f $(SETUP_BASH) || \
+	    { echo "[ERROR] $(SETUP_BASH) が見つかりません。先にワークスペースをビルドしてください"; exit 1; }
+	@test -n "$(VEHICLE_ID)" || \
+	    { echo "[ERROR] VEHICLE_ID が未設定です。例: make collect_raw_rosbags VEHICLE_ID=<uuid>"; exit 1; }
+	@echo "[INFO] VEHICLE_ID: $(VEHICLE_ID)" ; \
+	    echo "[INFO] ROOT: $(ROOT)" ; \
+	    source $(SETUP_BASH) && $(PYTHON) -m driving_log_replayer_v2.real_log_sim_comparison.collect_raw_rosbags \
+	        --vehicle-id "$(VEHICLE_ID)" \
+	        --root "$(ROOT)" \
+	        --limit "$(LIMIT)" \
+	        $(if $(DATE_FROM),--date-from "$(DATE_FROM)",) \
+	        $(if $(DATE_TO),--date-to "$(DATE_TO)",)
+
+# Phase 2a: 軽量ループ (主) — 全 real.lite で横断ロバスト同定 (multi_dataset_tune)
+# FINAL params は <ROOT>/tuned_params.yaml に保存される。
+# これを scenario.yaml の Conditions.models 該当パラメータへ手動反映し、
+# 次の collect_raw_rosbags → open_loop_tune でさらに磨く。
+open_loop_tune:
+	@test -f $(SETUP_BASH) || \
+	    { echo "[ERROR] $(SETUP_BASH) が見つかりません。先にワークスペースをビルドしてください"; exit 1; }
+	@test -d "$(ROOT)" || \
+	    { echo "[ERROR] ROOT が見つかりません: $(ROOT) (先に collect_raw_rosbags を実行してください)"; exit 1; }
+	@test -f $(LOCAL_SCENARIO) || \
+	    { echo "[ERROR] $(LOCAL_SCENARIO) が見つかりません"; exit 1; }
+	@echo "[INFO] ROOT: $(ROOT)" ; \
+	    source $(SETUP_BASH) && $(PYTHON) -m driving_log_replayer_v2.real_log_sim_comparison.multi_dataset_tune \
+	        --collection-dir "$(ROOT)" \
+	        --scenario "$(LOCAL_SCENARIO)" \
+	        --out "$(ROOT)/tuned_params.yaml"
+
+# Phase 2b: 重量ループ (subset 精査) — curated subset で full launch + 集約レポート
+# ROOT/datasets/ 配下の全データセットを SKIP_SIM=1 (open-loop のみ) で実行し、
+# aggregate_report.html (クラウド per-dataset の report.html と衝突しない名前) を生成する。
+# 全件ではなく厳選した subset を ROOT/datasets/ に置いてから実行することを推奨。
+open_loop_batch:
+	@test -f $(SETUP_BASH) || \
+	    { echo "[ERROR] $(SETUP_BASH) が見つかりません。先にワークスペースをビルドしてください"; exit 1; }
+	@test -d "$(ROOT)" || \
+	    { echo "[ERROR] ROOT が見つかりません: $(ROOT) (先に collect_raw_rosbags を実行してください)"; exit 1; }
+	@test -f $(LOCAL_SCENARIO) || \
+	    { echo "[ERROR] $(LOCAL_SCENARIO) が見つかりません"; exit 1; }
+	@echo "[INFO] ROOT: $(ROOT)" ; \
+	    source $(SETUP_BASH) && $(PYTHON) -m driving_log_replayer_v2.real_log_sim_comparison.run_batch \
+	        --scenario "$(LOCAL_SCENARIO)" \
+	        --batch-root "$(ROOT)" \
+	        --input-mode raw \
+	        --skip-sim \
+	        $(if $(RESUME),--resume,)
