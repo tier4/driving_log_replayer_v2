@@ -153,13 +153,19 @@ def _get_field(item: dict, *keys: str) -> str | None:
 
 
 def _get_duration(item: dict) -> float | None:
-    """ログファイルの recording 時間 [s] を返す。不明なら None。"""
+    """ログファイルの recording 時間 [s] を返す。不明なら None。
+
+    log-file search の実フィールド名は start_timestamp / end_timestamp (snake_case)。
+    rosbag search との互換のため camelCase 候補も残す。
+    """
     start = _parse_timestamp(
-        _get_field(item, "recordingStartTime", "recording_start_time",
+        _get_field(item, "start_timestamp", "startTimestamp",
+                   "recordingStartTime", "recording_start_time",
                    "recordingStart", "recording_start")
     )
     end = _parse_timestamp(
-        _get_field(item, "recordingEndTime", "recording_end_time",
+        _get_field(item, "end_timestamp", "endTimestamp",
+                   "recordingEndTime", "recording_end_time",
                    "recordingEnd", "recording_end")
     )
     if start is None or end is None:
@@ -253,7 +259,8 @@ def _print_coverage_summary(selected: list[dict]) -> None:
     durations: list[float] = []
     for item in selected:
         ts = _parse_timestamp(
-            _get_field(item, "recordingStartTime", "recording_start_time",
+            _get_field(item, "start_timestamp", "startTimestamp",
+                       "recordingStartTime", "recording_start_time",
                        "recordingStart", "recording_start")
         )
         if ts:
@@ -377,7 +384,7 @@ def collect(
             {
                 "synthetic_id": _build_synthetic_id(item.get("id", "")),
                 "rosbag_id": item.get("id", ""),
-                "file_name": _get_field(item, "fileName", "file_name") or "",
+                "file_name": _get_field(item, "log_file_name", "fileName", "file_name") or "",
                 "duration_s": _get_duration(item),
                 "status": "dry_run",
             }
@@ -392,7 +399,7 @@ def collect(
 
     for i, item in enumerate(selected, start=1):
         rosbag_id = item.get("id", "")
-        file_name = _get_field(item, "fileName", "file_name") or rosbag_id
+        file_name = _get_field(item, "log_file_name", "fileName", "file_name") or rosbag_id
         dur = _get_duration(item)
         synthetic_id = _build_synthetic_id(rosbag_id)
 
