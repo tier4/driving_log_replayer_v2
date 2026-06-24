@@ -35,7 +35,6 @@ from . import step5_analyze_nstep as s5
 from .lib._cases_config import load_cases_config
 from .lib._io import resolve_lite_bag
 from .lib._multi_agg import HORIZONS, aggregate_normalized, format_agg, robust_score
-from .lib._nstep_common import rmse_by_horizon
 
 STRIDE = 5
 WHEELBASE = 4.76012
@@ -65,10 +64,9 @@ def _eval(ctx: DatasetCtx, override: dict, model_type: str) -> dict:
     if gt is None:
         gt = s5._prepare_gt(ctx.data, ctx.t0_ns, params)
         ctx.gt_cache[key] = gt
-    df = s5.run_rollout(
+    rmse = s5.eval_rollout_rmse(
         ctx.data, ctx.t0_ns, params, model_type, horizons=HORIZONS, stride=STRIDE, gt=gt
     )
-    rmse = rmse_by_horizon(df)
     return {h: rmse[h] for h in HORIZONS}
 
 
@@ -248,7 +246,13 @@ def _eval_grid(
 _KUS0020 = {"k_us": 0.020}
 
 
-def robust_search(ctxs: list[DatasetCtx], cfg, *, n_jobs: int = 1) -> dict:
+def robust_search(
+    ctxs: list[DatasetCtx],
+    cfg,
+    *,
+    n_jobs: int = 1,
+    search_subsample: int | None = None,
+) -> dict:
     """
     best_normal 集合 (代理含む) を coordinate descent で dataset 横断ロバスト最適化。
 
@@ -261,7 +265,11 @@ def robust_search(ctxs: list[DatasetCtx], cfg, *, n_jobs: int = 1) -> dict:
 
     n_jobs: 並列ワーカー数 (1 で逐次実行)。プールは gt 事前計算が完了した後にフォークする
     ことで、COW 継承により worker が gt_cache を再計算なしに利用できる。
+    search_subsample: 探索フェーズで使うデータセット数の上限 (既定 None=全件)。
+        指定時は探索中のみ ctxs[:N] を使い、最終パラメータの score 評価は全件で行う。
+        結果が変わりうる (オプトイン; 既定オフ)。
     """
+    ctxs_search = ctxs[:search_subsample] if search_subsample else ctxs
     cur_case = cfg.find_case("best_normal")
     cur_best = dict(cur_case.params)
     cur_model = cur_case.vehicle_model_type
@@ -290,6 +298,13 @@ def robust_search(ctxs: list[DatasetCtx], cfg, *, n_jobs: int = 1) -> dict:
             if key not in ctx.gt_cache:
                 ctx.gt_cache[key] = s5._prepare_gt(ctx.data, ctx.t0_ns, merged)
 
+    if search_subsample:
+        print(
+            f"[INFO] search_subsample={search_subsample}: "
+            f"探索フェーズは ctxs[:{ min(search_subsample, len(ctxs)) }] を使用 "
+            f"(全件={len(ctxs)})。最終 score 評価は全件。"
+        )
+
     # --- プール生成 (gt 事前計算の完了後にフォークして COW 共有を確定) ---
     pool = None
     if n_jobs > 1:
@@ -299,7 +314,7 @@ def robust_search(ctxs: list[DatasetCtx], cfg, *, n_jobs: int = 1) -> dict:
 
     try:
         # cur_best と kus0020 をまとめて並列評価 (un-pooled な逐次床を除去)
-        ref_aggs = _eval_grid(pool, ctxs, [cur_best, _KUS0020], cur_model, n_jobs)
+        ref_aggs = _eval_grid(pool, ctxs_search, [cur_best, _KUS0020], cur_model, n_jobs)
         cur_agg = ref_aggs[0]
         print("\n## robust coordinate descent (best_normal family, cross-dataset normalized)")
         print(format_agg("cur_best", cur_agg) + f"  score={robust_score(cur_agg):.4f}  {cur_best}")
@@ -319,7 +334,7 @@ def robust_search(ctxs: list[DatasetCtx], cfg, *, n_jobs: int = 1) -> dict:
                 trials = [dict(state) for _ in grid]
                 for t, v in zip(trials, grid):
                     t[pname] = v
-                aggs = _eval_grid(pool, ctxs, trials, cur_model, n_jobs)
+                aggs = _eval_grid(pool, ctxs_search, trials, cur_model, n_jobs)
                 for v, agg in zip(grid, aggs):
                     s = robust_score(agg)
                     if s < best_s - 1e-6:
@@ -346,13 +361,22 @@ def robust_search(ctxs: list[DatasetCtx], cfg, *, n_jobs: int = 1) -> dict:
             t = dict(cur_best)  # descent 外の spec パラメータを保持
             t.update({k: v for k, v in zip(keys, combo)})
             refine_trials.append(t)
-        aggs = _eval_grid(pool, ctxs, refine_trials, cur_model, n_jobs)
+        aggs = _eval_grid(pool, ctxs_search, refine_trials, cur_model, n_jobs)
         for i, (combo, agg) in enumerate(zip(combos, aggs)):  # noqa: B007
             s = robust_score(agg)
             if s < best_s - 1e-6:
                 best_s, best_agg, state = s, agg, refine_trials[i]
         print(format_agg("FINAL", best_agg) + f"  score={best_s:.4f}")
         print(f"FINAL params: {state}")
+
+        # search_subsample 指定時: 最終 params の score を全データセットで再評価
+        if search_subsample and len(ctxs_search) < len(ctxs):
+            print(f"[INFO] 最終 score を全 {len(ctxs)} データセットで評価中...")
+            full_agg = _eval_grid(pool, ctxs, [state], cur_model, n_jobs)[0]
+            best_agg = full_agg
+            best_s = robust_score(full_agg)
+            print(format_agg("FINAL(全件)", best_agg) + f"  score={best_s:.4f}")
+
         return {"params": state, "agg": best_agg, "score": best_s}
     finally:
         if pool is not None:
@@ -398,6 +422,17 @@ def main() -> None:
         metavar="N",
         help="並列ワーカー数 (既定: CPU コア数)。1 で逐次実行 (デバッグ・再現性検証用)",
     )
+    ap.add_argument(
+        "--search-subsample",
+        type=int,
+        default=None,
+        metavar="N",
+        help=(
+            "探索フェーズで使用するデータセット数の上限 (既定 None=全件)。"
+            "指定時は探索中のみ ctxs[:N] を使い、最終 score 評価は全件で行う。"
+            "数百データセット規模での追加高速化オプション。結果が変わりうる (既定オフ)。"
+        ),
+    )
     args = ap.parse_args()
 
     if args.lite_dir:
@@ -432,7 +467,7 @@ def main() -> None:
     global _CTXS  # noqa: PLW0603
     _CTXS = ctxs
 
-    result = robust_search(ctxs, cfg, n_jobs=n_jobs)
+    result = robust_search(ctxs, cfg, n_jobs=n_jobs, search_subsample=args.search_subsample)
 
     if args.out:
         import yaml as _yaml  # noqa: PLC0415
