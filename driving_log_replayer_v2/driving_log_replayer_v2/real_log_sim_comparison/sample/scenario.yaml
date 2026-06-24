@@ -174,7 +174,7 @@ Evaluation:
 
     # ── sim_runs: closed-loop シム実行 (Stage 3/4) に使う名前リスト ──
     # vehicle_model が必須。名前 = 出力ディレクトリ lite/<name>.lite/
-    sim_runs: [normal, kus0020, best_normal, taiga_dyn, taiga_x, perfect, godot, carla]
+    sim_runs: [normal, kus0020, best_normal, taiga_dyn, taiga_x, perfect, godot]
 
     # ── overlay: cases 集約 (Stage 6) の基準モデルと重ね描き種類 ──
     overlay:
