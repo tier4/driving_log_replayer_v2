@@ -48,6 +48,7 @@ class SimRunSpec:
     initialize_duration: int = 100
     architecture_type: str = "awf/universe/20250130"
     godot_executable: str | None = None
+    carla_path: str | None = None
     timeout_s: int = 600
     dp_model_dir: str | None = None
     dp_model_release: str | None = None
@@ -116,6 +117,7 @@ def load_sim_runs_config(scenario_path: str | Path) -> SimRunsConfig:
             initialize_duration=m.initialize_duration,
             architecture_type=m.architecture_type,
             godot_executable=m.godot_executable,
+            carla_path=m.carla_path,
             timeout_s=m.timeout_s,
             dp_model_dir=m.dp_model_dir,
             dp_model_release=m.dp_model_release,

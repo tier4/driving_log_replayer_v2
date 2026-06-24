@@ -78,7 +78,7 @@ KNOWN_PARAM_KEYS: frozenset[str] = frozenset({
 _KNOWN_MODEL_KEYS: frozenset[str] = frozenset({
     "vehicle_model_type", "vehicle_model", "params",
     "sensor_model", "initialize_duration", "architecture_type",
-    "godot_executable", "timeout_s",
+    "godot_executable", "carla_path", "timeout_s",
     "dp_model_dir", "dp_model_release", "dp_model_package",
 })
 
@@ -101,6 +101,7 @@ class ModelSpec:
     initialize_duration: int = 100
     architecture_type: str = "awf/universe/20250130"
     godot_executable: str | None = None
+    carla_path: str | None = None
     timeout_s: int = 600
     dp_model_dir: str | None = None
     dp_model_release: str | None = None
@@ -199,10 +200,21 @@ def load_models_doc(scenario_path: str | Path) -> ModelsDoc:
                 "godot_executable が未指定 (scenario_test_runner の既定パスにフォールバック)"
             )
 
+        # carla 警告
+        if isinstance(vm, str) and vm.endswith("_carla") and not entry.get("carla_path"):
+            warnings.warn(
+                f"{p}: models.{name} vehicle_model={vm!r} だが "
+                "carla_path が未指定 (scenario_test_runner が carla_path 必須エラーを出します)"
+            )
+
         # パス展開 (ros2 launch は ~ / ${VAR} を展開しないため)
         godot_exe = entry.get("godot_executable")
         if godot_exe:
             godot_exe = os.path.expandvars(os.path.expanduser(str(godot_exe)))
+
+        carla_path = entry.get("carla_path")
+        if carla_path:
+            carla_path = os.path.expandvars(os.path.expanduser(str(carla_path)))
 
         dp_model_dir = entry.get("dp_model_dir")
         if dp_model_dir:
@@ -233,6 +245,7 @@ def load_models_doc(scenario_path: str | Path) -> ModelsDoc:
             initialize_duration=int(entry.get("initialize_duration", 100)),
             architecture_type=str(entry.get("architecture_type", "awf/universe/20250130")),
             godot_executable=godot_exe,
+            carla_path=carla_path,
             timeout_s=int(entry.get("timeout_s", 600)),
             dp_model_dir=dp_model_dir,
             dp_model_release=dp_model_release,

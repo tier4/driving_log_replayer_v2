@@ -113,6 +113,8 @@ def _build_launch_cmd(
     ]
     if run.godot_executable:
         cmd.append(f"godot_executable:={run.godot_executable}")
+    if run.carla_path:
+        cmd.append(f"carla_path:={run.carla_path}")
     if replay is not None:
         # replay_bag_path / replay_start_time / replay_ego_duration は launch の
         # make_parameters() 経由で simple_sensor_simulator (perception 再生) と
