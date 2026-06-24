@@ -187,7 +187,7 @@ def get_launch_arguments() -> list:
     add_launch_arg(
         "with_optional_nodes",
         default_value="",
-        description="Launch other optional nodes. Using comma separated string. Currently available is 2d_detector. Ex: with_optional_nodes:=2d_detector",
+        description="Launch other optional nodes. Using comma separated string. Currently available is 2d_detector and 3d_detector. Ex: with_optional_nodes:=2d_detector",
     )
     return launch_arguments
 
