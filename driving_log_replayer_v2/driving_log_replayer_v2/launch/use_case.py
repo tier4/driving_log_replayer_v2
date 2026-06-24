@@ -94,6 +94,7 @@ def launch_optional_nodes(context: LaunchContext) -> list:
         detector_launch_file = Path(
             get_package_share_directory("edge_auto_jetson_launch"),
             "launch",
+            "camera_streampetr",
             "tensorrt_stream_petr.x2.launch.xml",
         )
         optional_nodes.append(
