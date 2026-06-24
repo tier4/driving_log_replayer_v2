@@ -38,7 +38,7 @@ import yaml
 from . import step5_analyze_nstep as s5
 from .lib._cases_config import load_cases_config
 from .lib._io import resolve_lite_bag
-from .lib._multi_agg import HORIZONS, aggregate_normalized, format_agg, robust_score
+from .lib._multi_agg import HORIZONS, WORST_W, acc_score, aggregate_normalized, format_agg, robust_score, steer_score
 
 STRIDE = 5
 WHEELBASE = 4.76012
@@ -280,6 +280,10 @@ def robust_search(
     n_jobs: int = 1,
     search_subsample: int | None = None,
     out_path: Path | None = None,
+    extra_enqueue: list[dict] | None = None,
+    worst_w: float = WORST_W,
+    phase: int = 0,
+    phase_fixed_params: dict | None = None,
 ) -> dict:
     """Optuna TPE でデータセット横断ロバスト最適化 (連続値 + 離散 delay)。
 
@@ -289,7 +293,11 @@ def robust_search(
       acc_time_delay: 離散 (suggest_categorical)。値を離散に保つことで gt_cache を
           全 trial で完全ヒットさせ COW 共有の効率を維持する。
     n_substep 等その他のパラメータは case_name の scenario.yaml 定義値を固定継承する。
-    warm start: trial 0 に scenario.yaml の case_name 定義値を投入する。
+    warm start: trial 0 に scenario.yaml の case_name 定義値を、extra_enqueue 指定時は
+        続く trial に追加 params を投入する。
+
+    phase: 0=全パラメータ同時最適化(既定), 1=acc のみ/long スコア, 2=steer のみ/yaw+lat スコア。
+    phase_fixed_params: phase=2 で acc 系を固定する値 (Phase 1 の --out YAML から読み込む)。
     """
     def _checkpoint(params: dict, score: float) -> None:
         if out_path is None:
@@ -314,18 +322,45 @@ def robust_search(
             f"(全件={len(ctxs)})。最終 score 評価は全件。"
         )
 
-    # 連続パラメータと探索範囲
-    CONTINUOUS_SPACE: dict[str, tuple[float, float]] = {
-        "k_us":                       (0.0,  0.030),
-        "steer_time_constant":        (0.05, 0.80),
-        "debug_steer_scaling_factor": (0.80, 1.05),
-        "acc_time_constant":          (0.20, 1.20),
-    }
+    # Phase に応じて探索空間・スコア関数・delay 探索フラグを決定
     # acc_time_delay は旧 sweeps と同じ離散候補 (gt_cache COW 共有のため離散に保つ)
     DELAY_CANDIDATES: tuple[float, ...] = (0.10, 0.15, 0.20, 0.30, 0.40, 0.50)
 
+    if phase == 1:
+        # Phase 1: acc パラメータのみ最適化 (long スコア)。steer 系は cur_best に固定。
+        CONTINUOUS_SPACE: dict[str, tuple[float, float]] = {
+            "acc_time_constant": (0.10, 1.20),
+        }
+        score_fn = acc_score
+        explore_delay = True
+        print(f"[Phase 1] acc パラメータ最適化 (long スコア)。steer 系は cur_best から固定。")
+    elif phase == 2:
+        # Phase 2: steer パラメータのみ最適化 (yaw+lat スコア)。acc 系は固定。
+        CONTINUOUS_SPACE = {
+            "steer_time_constant":        (0.05, 0.80),
+            "debug_steer_scaling_factor": (0.80, 1.05),
+            "k_us":                       (0.0,  0.05),
+        }
+        score_fn = steer_score
+        explore_delay = False  # acc_time_delay は cur_best (Phase 1 best) に固定
+        if phase_fixed_params:
+            cur_best.update(phase_fixed_params)
+            print(f"[Phase 2] steer パラメータ最適化 (yaw+lat スコア)。固定 acc params: {phase_fixed_params}")
+        else:
+            print(f"[Phase 2] steer パラメータ最適化 (yaw+lat スコア)。acc 系は cur_best から固定。")
+    else:
+        # Phase 0: 全パラメータ同時最適化 (従来の robust_score)
+        CONTINUOUS_SPACE = {
+            "steer_time_constant":        (0.05, 0.80),
+            "debug_steer_scaling_factor": (0.80, 1.05),
+            "acc_time_constant":          (0.10, 1.20),
+            "k_us":                       (0.0,  0.05),
+        }
+        score_fn = robust_score
+        explore_delay = True
+
     # gt 事前計算 (fork 前に親で完了し COW 共有)
-    acc_delay_set: set[float] = set(DELAY_CANDIDATES)
+    acc_delay_set: set[float] = set(DELAY_CANDIDATES) if explore_delay else set()
     if "acc_time_delay" in cur_best:
         acc_delay_set.add(float(cur_best["acc_time_delay"]))
     for ctx in ctxs:
@@ -347,8 +382,9 @@ def robust_search(
     try:
         # 初期スコア表示
         init_agg = _eval_grid(pool, ctxs_search, [cur_best], cur_model, n_jobs)[0]
-        init_score = robust_score(init_agg)
-        print(f"\n## Optuna TPE ({case_name}, {n_trials} trials, cross-dataset normalized)")
+        init_score = score_fn(init_agg, worst_w=worst_w)
+        phase_label = f"phase={phase}" if phase else "phase=0(all)"
+        print(f"\n## Optuna TPE ({case_name}, {n_trials} trials, cross-dataset normalized, worst_w={worst_w}, {phase_label})")
         print(format_agg("init", init_agg) + f"  score={init_score:.4f}  {cur_best}")
 
         best_result: dict = {"params": dict(cur_best), "score": init_score, "agg": init_agg}
@@ -358,12 +394,13 @@ def robust_search(
             params = dict(cur_best)  # 固定パラメータ (n_substep 等) を継承
             for pname, (lo, hi) in CONTINUOUS_SPACE.items():
                 params[pname] = trial.suggest_float(pname, lo, hi)
-            params["acc_time_delay"] = trial.suggest_categorical(
-                "acc_time_delay", DELAY_CANDIDATES
-            )
+            if explore_delay:
+                params["acc_time_delay"] = trial.suggest_categorical(
+                    "acc_time_delay", DELAY_CANDIDATES
+                )
 
             agg = _eval_grid(pool, ctxs_search, [params], cur_model, n_jobs)[0]
-            score = robust_score(agg)
+            score = score_fn(agg, worst_w=worst_w)
 
             if score < best_result["score"]:
                 best_result.update({"params": dict(params), "score": score, "agg": agg})
@@ -384,17 +421,25 @@ def robust_search(
         sampler = optuna.samplers.TPESampler(multivariate=True, seed=42)
         study = optuna.create_study(direction="minimize", sampler=sampler)
 
-        # warm start: cur_best を trial 0 として投入
-        enqueue: dict = {k: float(cur_best[k]) for k in CONTINUOUS_SPACE if k in cur_best}
+        # warm start: trial 0+ に既知良点を投入
         delay_list = list(DELAY_CANDIDATES)
-        if "acc_time_delay" in cur_best:
-            enqueue["acc_time_delay"] = float(cur_best["acc_time_delay"])
-        elif ctxs and "acc_time_delay" in ctxs[0].base:
-            spec_v = float(ctxs[0].base["acc_time_delay"])
-            enqueue["acc_time_delay"] = min(delay_list, key=lambda v: abs(v - spec_v))
-        else:
-            enqueue["acc_time_delay"] = delay_list[0]
-        study.enqueue_trial(enqueue)
+
+        def _make_enqueue(params: dict) -> dict:
+            eq: dict = {k: float(params[k]) for k in CONTINUOUS_SPACE if k in params}
+            if explore_delay:
+                if "acc_time_delay" in params:
+                    v = float(params["acc_time_delay"])
+                    eq["acc_time_delay"] = min(delay_list, key=lambda x: abs(x - v))
+                elif ctxs and "acc_time_delay" in ctxs[0].base:
+                    spec_v = float(ctxs[0].base["acc_time_delay"])
+                    eq["acc_time_delay"] = min(delay_list, key=lambda x: abs(x - spec_v))
+                else:
+                    eq["acc_time_delay"] = delay_list[0]
+            return eq
+
+        study.enqueue_trial(_make_enqueue(cur_best))
+        for ep in (extra_enqueue or []):
+            study.enqueue_trial(_make_enqueue(ep))
 
         study.optimize(objective, n_trials=n_trials, callbacks=[_log_cb])
 
@@ -408,7 +453,7 @@ def robust_search(
         if search_subsample and len(ctxs_search) < len(ctxs):
             print(f"[INFO] 最終 score を全 {len(ctxs)} データセットで評価中...")
             full_agg = _eval_grid(pool, ctxs, [state], cur_model, n_jobs)[0]
-            best_s = robust_score(full_agg)
+            best_s = score_fn(full_agg, worst_w=worst_w)
             best_result.update({"score": best_s, "agg": full_agg})
             print(format_agg("FINAL(全件)", full_agg) + f"  score={best_s:.4f}")
 
@@ -483,9 +528,51 @@ def main() -> None:
         ),
     )
     ap.add_argument(
+        "--enqueue-params",
+        action="append",
+        default=[],
+        metavar="YAML_PATH",
+        help=(
+            "warm start として追加 enqueue する params YAML (複数可)。"
+            "tuned_params_*.yaml を指定し既知良点から探索を始める。"
+            "acc_time_delay がない場合は最近接の離散候補に snap する"
+        ),
+    )
+    ap.add_argument(
+        "--worst-weight",
+        type=float,
+        default=WORST_W,
+        metavar="W",
+        help=(
+            f"robust_score の worst-case 項の重み (既定: {WORST_W})。"
+            "増やすと worst >1.0 を優先的に改善する。score のスケールが変わるため "
+            "異なる --worst-weight 間での score 比較は無効 (worst サブメトリクスで比較すること)。"
+        ),
+    )
+    ap.add_argument(
         "--verbose",
         action="store_true",
         help="per-dataset の [load] 行を出力する (既定: 集計サマリのみ)。--verbose 指定時は SKIP の traceback も表示",
+    )
+    ap.add_argument(
+        "--phase",
+        type=int,
+        default=0,
+        choices=[0, 1, 2],
+        help=(
+            "チューニングフェーズ (既定: 0=全パラメータ同時最適化)。"
+            "1=acc のみ探索・long スコア (steer 系は scenario.yaml の定義値に固定)。"
+            "2=steer のみ探索・yaw+lat スコア (acc 系は scenario.yaml 定義値または --phase-params に固定)。"
+        ),
+    )
+    ap.add_argument(
+        "--phase-params",
+        default="",
+        metavar="YAML_PATH",
+        help=(
+            "--phase 2 で acc 系 (acc_time_constant / acc_time_delay) を固定する YAML。"
+            "Phase 1 の --out で生成したファイルを指定する。省略時は scenario.yaml の定義値を使用。"
+        ),
     )
     args = ap.parse_args()
 
@@ -522,6 +609,26 @@ def main() -> None:
     _CTXS = ctxs
 
     out_path = Path(args.out) if args.out else None
+
+    extra_enqueue: list[dict] | None = None
+    if args.enqueue_params:
+        extra_enqueue = []
+        for path_str in args.enqueue_params:
+            p = Path(path_str)
+            with p.open("r") as f:
+                data = yaml.safe_load(f)
+            extra_enqueue.append(data["params"])
+        print(f"[INFO] extra enqueue: {len(extra_enqueue)} params loaded")
+
+    phase_fixed_params: dict | None = None
+    if args.phase == 2 and args.phase_params:
+        p = Path(args.phase_params)
+        with p.open("r") as f:
+            phase_data = yaml.safe_load(f)
+        acc_keys = {"acc_time_constant", "acc_time_delay"}
+        phase_fixed_params = {k: v for k, v in phase_data["params"].items() if k in acc_keys}
+        print(f"[INFO] Phase 2 固定 acc params (from {args.phase_params}): {phase_fixed_params}")
+
     result = robust_search(
         ctxs,
         cfg,
@@ -530,6 +637,10 @@ def main() -> None:
         n_jobs=n_jobs,
         search_subsample=args.search_subsample,
         out_path=out_path,
+        extra_enqueue=extra_enqueue,
+        worst_w=args.worst_weight,
+        phase=args.phase,
+        phase_fixed_params=phase_fixed_params,
     )
 
     if out_path is not None:

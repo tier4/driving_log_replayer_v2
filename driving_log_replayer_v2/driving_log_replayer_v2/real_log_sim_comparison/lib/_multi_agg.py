@@ -86,27 +86,65 @@ def aggregate_normalized(
     return {"per_ds": per_ds, "by_h": by_h_agg}
 
 
-def robust_score(agg: dict, horizons: tuple[int, ...] = HORIZONS) -> float:
+def robust_score(
+    agg: dict,
+    horizons: tuple[int, ...] = HORIZONS,
+    worst_w: float = WORST_W,
+) -> float:
     """ロバスト目的関数: 全 horizon の正規化 mean + worst (yaw + 0.5·縦 + 0.5·横)。小さいほど良い。
 
     horizon を等重みで集約する。縦・横は各 POS_W 倍で合算し yaw:位置 = 1:1 に保つ
     (pos を縦横へ分割しても yaw の相対重みが半減しないようにする)。mean だけだと縦/横の mean を
     稼ぐ proxy が特定エリアの worst を悪化させても採用されてしまうため、worst を重み付きで加えて
-    mean と worst を両立させる。
+    mean と worst を両立させる。worst_w でチューニング時に重みを調整できる (default=WORST_W=0.5)。
     """
     s = 0.0
     for h in horizons:
         b = agg["by_h"][h]
         s += b["nyaw_mean"] + POS_W * (b["nlong_mean"] + b["nlat_mean"])
-        s += WORST_W * (b["nyaw_worst"] + POS_W * (b["nlong_worst"] + b["nlat_worst"]))
+        s += worst_w * (b["nyaw_worst"] + POS_W * (b["nlong_worst"] + b["nlat_worst"]))
     return s
 
 
-def score_formula_md(horizons: tuple[int, ...] = HORIZONS) -> str:
+def steer_score(
+    agg: dict,
+    horizons: tuple[int, ...] = HORIZONS,
+    worst_w: float = WORST_W,
+) -> float:
+    """ステアパラメータ専用スコア: yaw + lat のみ (long は無視)。小さいほど良い。
+
+    2フェーズ独立チューニングの Phase 2 用。long⊥steer が成立するため long を除外する。
+    """
+    s = 0.0
+    for h in horizons:
+        b = agg["by_h"][h]
+        s += b["nyaw_mean"] + POS_W * b["nlat_mean"]
+        s += worst_w * (b["nyaw_worst"] + POS_W * b["nlat_worst"])
+    return s
+
+
+def acc_score(
+    agg: dict,
+    horizons: tuple[int, ...] = HORIZONS,
+    worst_w: float = WORST_W,
+) -> float:
+    """加速度パラメータ専用スコア: long のみ (yaw/lat は無視)。小さいほど良い。
+
+    2フェーズ独立チューニングの Phase 1 用。long⊥steer が成立するため yaw/lat を除外する。
+    """
+    s = 0.0
+    for h in horizons:
+        b = agg["by_h"][h]
+        s += b["nlong_mean"]
+        s += worst_w * b["nlong_worst"]
+    return s
+
+
+def score_formula_md(horizons: tuple[int, ...] = HORIZONS, worst_w: float = WORST_W) -> str:
     """robust_score の定義を Markdown 1 行で返す (レポート埋め込み用)。"""
     return (
         f"`score = Σ_h (nyaw_mean + {POS_W}·(nlong_mean + nlat_mean)) "
-        f"+ {WORST_W}·(nyaw_worst + {POS_W}·(nlong_worst + nlat_worst))`  "
+        f"+ {worst_w}·(nyaw_worst + {POS_W}·(nlong_worst + nlat_worst))`  "
         f"(h ∈ {list(horizons)}、縦横各 {POS_W} で yaw:位置=1:1、小さいほど良い)"
     )
 
