@@ -26,13 +26,13 @@ from __future__ import annotations
 import argparse
 import datetime
 from dataclasses import dataclass
-import itertools
 import multiprocessing
 import os
 from pathlib import Path
 import sys
 import traceback
 
+import optuna
 import yaml
 
 from . import step5_analyze_nstep as s5
@@ -271,33 +271,25 @@ def _eval_grid(
     return [aggregate_normalized(pm, baselines) for pm in per_trial]
 
 
-_KUS0020 = {"k_us": 0.020}
-
-
 def robust_search(
     ctxs: list[DatasetCtx],
     cfg,
     *,
     case_name: str = "best_normal",
+    n_trials: int = 200,
     n_jobs: int = 1,
     search_subsample: int | None = None,
     out_path: Path | None = None,
 ) -> dict:
-    """
-    best_normal 集合 (代理含む) を coordinate descent で dataset 横断ロバスト最適化。
+    """Optuna TPE でデータセット横断ロバスト最適化 (連続値 + 離散 delay)。
 
-    目的: 全 horizon の正規化 mean + worst (yaw+縦+横) を最小化
-    (lib._multi_agg.robust_score; worst を重み付きで含む)。
-    正規化 baseline は無補正 delay モデル (_BASELINE_MODEL) の rollout = Conditions.overlay.reference_tag
-    ケースと同定義で、step13_cross_dataset の正規化と一致する。
-    参照点 (現 best_normal) は scenario.yaml の best_normal ケースから取得する
-    (ハードコードしない。yaml を更新後に再探索しても整合する)。
-
-    n_jobs: 並列ワーカー数 (1 で逐次実行)。プールは gt 事前計算が完了した後にフォークする
-    ことで、COW 継承により worker が gt_cache を再計算なしに利用できる。
-    search_subsample: 探索フェーズで使うデータセット数の上限 (既定 None=全件)。
-        指定時は探索中のみ ctxs[:N] を使い、最終パラメータの score 評価は全件で行う。
-        結果が変わりうる (オプトイン; 既定オフ)。
+    探索空間:
+      k_us / steer_time_constant / debug_steer_scaling_factor / acc_time_constant:
+          連続値 (suggest_float)。TPE が実数空間を滑らかに探索する。
+      acc_time_delay: 離散 (suggest_categorical)。値を離散に保つことで gt_cache を
+          全 trial で完全ヒットさせ COW 共有の効率を維持する。
+    n_substep 等その他のパラメータは case_name の scenario.yaml 定義値を固定継承する。
+    warm start: trial 0 に scenario.yaml の case_name 定義値を投入する。
     """
     def _checkpoint(params: dict, score: float) -> None:
         if out_path is None:
@@ -314,24 +306,30 @@ def robust_search(
     cur_case = cfg.find_case(case_name)
     cur_best = dict(cur_case.params)
     cur_model = cur_case.vehicle_model_type
-    sweeps = {
-        "k_us": [0.0, 0.005, 0.010, 0.012, 0.015, 0.018, 0.020, 0.025, 0.030],
-        "steer_time_constant": [0.08, 0.10, 0.12, 0.15, 0.20, 0.25, 0.30, 0.40, 0.50, 0.70],
-        "debug_steer_scaling_factor": [0.85, 0.88, 0.90, 0.93, 0.96, 0.98, 1.0],
-        "acc_time_constant": [0.30, 0.35, 0.45, 0.50, 0.60, 0.70, 0.80, 1.0],
-        "acc_time_delay": [0.10, 0.15, 0.20, 0.30, 0.40, 0.50],
-    }
 
-    # --- gt 事前計算 (fork 前に親で完了し COW 共有) ---
-    # _GT_KEYS のうち探索中に変化するのは acc_time_delay のみ (steer_time_delay・wheelbase・
-    # sub_dt は全 run で定数)。cur_best 由来の値と sweeps["acc_time_delay"] を網羅することで
-    # worker での _prepare_gt 再計算をゼロにし、gt_cache の COW ページが shared のまま維持される。
-    acc_delay_candidates: set = set(sweeps["acc_time_delay"])
-    base_delay = cur_best.get("acc_time_delay")
-    if base_delay is not None:
-        acc_delay_candidates.add(float(base_delay))
+    if search_subsample:
+        print(
+            f"[INFO] search_subsample={search_subsample}: "
+            f"探索フェーズは ctxs[:{min(search_subsample, len(ctxs))}] を使用 "
+            f"(全件={len(ctxs)})。最終 score 評価は全件。"
+        )
+
+    # 連続パラメータと探索範囲
+    CONTINUOUS_SPACE: dict[str, tuple[float, float]] = {
+        "k_us":                       (0.0,  0.030),
+        "steer_time_constant":        (0.05, 0.80),
+        "debug_steer_scaling_factor": (0.80, 1.05),
+        "acc_time_constant":          (0.20, 1.20),
+    }
+    # acc_time_delay は旧 sweeps と同じ離散候補 (gt_cache COW 共有のため離散に保つ)
+    DELAY_CANDIDATES: tuple[float, ...] = (0.10, 0.15, 0.20, 0.30, 0.40, 0.50)
+
+    # gt 事前計算 (fork 前に親で完了し COW 共有)
+    acc_delay_set: set[float] = set(DELAY_CANDIDATES)
+    if "acc_time_delay" in cur_best:
+        acc_delay_set.add(float(cur_best["acc_time_delay"]))
     for ctx in ctxs:
-        for v in acc_delay_candidates:
+        for v in acc_delay_set:
             merged = dict(ctx.base)
             merged.update(cur_best)
             merged["acc_time_delay"] = v
@@ -339,14 +337,7 @@ def robust_search(
             if key not in ctx.gt_cache:
                 ctx.gt_cache[key] = s5._prepare_gt(ctx.data, ctx.t0_ns, merged)
 
-    if search_subsample:
-        print(
-            f"[INFO] search_subsample={search_subsample}: "
-            f"探索フェーズは ctxs[:{ min(search_subsample, len(ctxs)) }] を使用 "
-            f"(全件={len(ctxs)})。最終 score 評価は全件。"
-        )
-
-    # --- プール生成 (gt 事前計算の完了後にフォークして COW 共有を確定) ---
+    # プール生成 (gt 事前計算完了後にフォーク → COW 共有確定)
     pool = None
     if n_jobs > 1:
         mp_ctx = multiprocessing.get_context("fork")
@@ -354,73 +345,74 @@ def robust_search(
         print(f"[INFO] 並列実行: {n_jobs} workers (fork)")
 
     try:
-        # cur_best と kus0020 をまとめて並列評価 (un-pooled な逐次床を除去)
-        ref_aggs = _eval_grid(pool, ctxs_search, [cur_best, _KUS0020], cur_model, n_jobs)
-        cur_agg = ref_aggs[0]
-        print(f"\n## robust coordinate descent ({case_name} family, cross-dataset normalized)")
-        print(format_agg("cur_best", cur_agg) + f"  score={robust_score(cur_agg):.4f}  {cur_best}")
-        print(format_agg("kus0020", ref_aggs[1]))
+        # 初期スコア表示
+        init_agg = _eval_grid(pool, ctxs_search, [cur_best], cur_model, n_jobs)[0]
+        init_score = robust_score(init_agg)
+        print(f"\n## Optuna TPE ({case_name}, {n_trials} trials, cross-dataset normalized)")
+        print(format_agg("init", init_agg) + f"  score={init_score:.4f}  {cur_best}")
 
-        # worst は robust_score に組み込み済み (ハード guard なし) なので mean↔worst の trade を許容する。
-        state = dict(cur_best)
-        best_agg = cur_agg
-        best_s = robust_score(cur_agg)
-        for _pass in range(3):
-            improved = False
-            for pname, grid in sweeps.items():
-                # trials を一括並列評価し、元の反復順でリダクションを replay する。
-                # grid 内では pname 以外の state フィールドは変化しないため並列化が安全:
-                # 仮に前の v で state[pname] が更新されても、次の v では state[pname]=v で上書き
-                # されるため他フィールドの値は同一 (= 元コードの trial = {**state, pname: v} と等価)。
-                trials = [dict(state) for _ in grid]
-                for t, v in zip(trials, grid):
-                    t[pname] = v
-                aggs = _eval_grid(pool, ctxs_search, trials, cur_model, n_jobs)
-                for v, agg in zip(grid, aggs):
-                    s = robust_score(agg)
-                    if s < best_s - 1e-6:
-                        new_state = dict(state)
-                        new_state[pname] = v
-                        best_s, best_agg, state, improved = s, agg, new_state, True
-            print(format_agg(f"pass{_pass}", best_agg) + f"  score={best_s:.4f}  {state}")
-            _checkpoint(state, best_s)
-            if not improved:
-                break
-        # --- 直積グリッド精密化 (coordinate descent の経路依存を排除) ---
-        # descent 最適の近傍を主要 4 パラメータで直積評価し真の結合最小を確定する。
-        # acc/steer の遅延を spec 固定にすることで gt がデータセット毎 1 回キャッシュされ高速。
-        print("\n## product-grid refinement around descent optimum")
-        refine = {
-            "k_us": sorted({0.015, 0.018, 0.020, 0.025}),
-            "steer_time_constant": sorted({0.12, 0.15, 0.20, 0.30}),
-            "debug_steer_scaling_factor": sorted({0.93, 0.96, 0.98, 1.0}),
-            "acc_time_constant": sorted({0.10, 0.20, 0.30, 0.45, 0.60}),
-        }
-        keys = list(refine)
-        combos = list(itertools.product(*(refine[k] for k in keys)))
-        refine_trials = []
-        for combo in combos:
-            t = dict(cur_best)  # descent 外の spec パラメータを保持
-            t.update({k: v for k, v in zip(keys, combo)})
-            refine_trials.append(t)
-        aggs = _eval_grid(pool, ctxs_search, refine_trials, cur_model, n_jobs)
-        for i, (combo, agg) in enumerate(zip(combos, aggs)):  # noqa: B007
-            s = robust_score(agg)
-            if s < best_s - 1e-6:
-                best_s, best_agg, state = s, agg, refine_trials[i]
-        print(format_agg("FINAL", best_agg) + f"  score={best_s:.4f}")
+        best_result: dict = {"params": dict(cur_best), "score": init_score, "agg": init_agg}
+        _checkpoint(cur_best, init_score)
+
+        def objective(trial: optuna.Trial) -> float:
+            params = dict(cur_best)  # 固定パラメータ (n_substep 等) を継承
+            for pname, (lo, hi) in CONTINUOUS_SPACE.items():
+                params[pname] = trial.suggest_float(pname, lo, hi)
+            params["acc_time_delay"] = trial.suggest_categorical(
+                "acc_time_delay", DELAY_CANDIDATES
+            )
+
+            agg = _eval_grid(pool, ctxs_search, [params], cur_model, n_jobs)[0]
+            score = robust_score(agg)
+
+            if score < best_result["score"]:
+                best_result.update({"params": dict(params), "score": score, "agg": agg})
+                _checkpoint(params, score)
+
+            return score
+
+        def _log_cb(study: optuna.Study, trial: optuna.trial.FrozenTrial) -> None:
+            if trial.state == optuna.trial.TrialState.COMPLETE:
+                print(
+                    f"trial {trial.number + 1:3d}/{n_trials}"
+                    f"  score={trial.value:.4f}"
+                    f"  best={study.best_value:.4f}"
+                    f"  {trial.params}"
+                )
+
+        optuna.logging.set_verbosity(optuna.logging.WARNING)
+        sampler = optuna.samplers.TPESampler(multivariate=True, seed=42)
+        study = optuna.create_study(direction="minimize", sampler=sampler)
+
+        # warm start: cur_best を trial 0 として投入
+        enqueue: dict = {k: float(cur_best[k]) for k in CONTINUOUS_SPACE if k in cur_best}
+        delay_list = list(DELAY_CANDIDATES)
+        if "acc_time_delay" in cur_best:
+            enqueue["acc_time_delay"] = float(cur_best["acc_time_delay"])
+        elif ctxs and "acc_time_delay" in ctxs[0].base:
+            spec_v = float(ctxs[0].base["acc_time_delay"])
+            enqueue["acc_time_delay"] = min(delay_list, key=lambda v: abs(v - spec_v))
+        else:
+            enqueue["acc_time_delay"] = delay_list[0]
+        study.enqueue_trial(enqueue)
+
+        study.optimize(objective, n_trials=n_trials, callbacks=[_log_cb])
+
+        state = best_result["params"]
+        best_s = best_result["score"]
+        print(format_agg("FINAL", best_result["agg"]) + f"  score={best_s:.4f}")
         print(f"FINAL params: {state}")
         _checkpoint(state, best_s)
 
-        # search_subsample 指定時: 最終 params の score を全データセットで再評価
+        # search_subsample 指定時: 最終 params の score を全件で再評価
         if search_subsample and len(ctxs_search) < len(ctxs):
             print(f"[INFO] 最終 score を全 {len(ctxs)} データセットで評価中...")
             full_agg = _eval_grid(pool, ctxs, [state], cur_model, n_jobs)[0]
-            best_agg = full_agg
             best_s = robust_score(full_agg)
-            print(format_agg("FINAL(全件)", best_agg) + f"  score={best_s:.4f}")
+            best_result.update({"score": best_s, "agg": full_agg})
+            print(format_agg("FINAL(全件)", full_agg) + f"  score={best_s:.4f}")
 
-        return {"params": state, "agg": best_agg, "score": best_s}
+        return {"params": state, "agg": best_result["agg"], "score": best_s}
     finally:
         if pool is not None:
             pool.close()
@@ -470,6 +462,13 @@ def main() -> None:
         default=os.cpu_count(),
         metavar="N",
         help="並列ワーカー数 (既定: CPU コア数)。1 で逐次実行 (デバッグ・再現性検証用)",
+    )
+    ap.add_argument(
+        "--n-trials",
+        type=int,
+        default=200,
+        metavar="N",
+        help="Optuna TPE のトライアル数 (既定: 200)",
     )
     ap.add_argument(
         "--search-subsample",
@@ -527,6 +526,7 @@ def main() -> None:
         ctxs,
         cfg,
         case_name=args.case,
+        n_trials=args.n_trials,
         n_jobs=n_jobs,
         search_subsample=args.search_subsample,
         out_path=out_path,
