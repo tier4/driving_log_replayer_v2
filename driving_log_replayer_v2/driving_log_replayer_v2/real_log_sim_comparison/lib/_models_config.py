@@ -63,6 +63,8 @@ KNOWN_PARAM_KEYS: frozenset[str] = frozenset({
     # brake_time_constant=throttle/brake 分離, lon_drag_c0/c1/c2=走行抵抗 poly(v),
     # lon_lat_coupling=縦横連成 c·(v·ω)²
     "brake_time_constant", "lon_drag_c0", "lon_drag_c1", "lon_drag_c2", "lon_lat_coupling",
+    # Euler sub-steps per outer update() call (delay_steer_acc_geared_wo_fall_guard のみ有効)
+    "n_substep",
     # taiga_dyn / taiga_x 動的自転車モデル
     "mass", "inertia_z", "lf", "lr",
     "cornering_stiffness_front", "cornering_stiffness_rear", "vx_min_dyn",

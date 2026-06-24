@@ -83,6 +83,7 @@ MAP_BBOX_MARGIN = 10.0
 # params で明示上書きできる (ideal_steer は C++ 側が bias を持たないため 0.0 を明示)。
 _PARAMS_OVERRIDES = {
     "sub_dt": 1.0 / 30.0,
+    "n_substep": 1,
 }
 
 
@@ -112,8 +113,6 @@ SUB_DT: float = PARAMS["sub_dt"]
 
 # libvehicle_model_wrapper.so が vm_get_wz を export しているか (_load_lib で確定)。
 _HAS_WZ = False
-# libvehicle_model_wrapper.so が vm_integrate_to_horizons を export しているか (_load_lib で確定)。
-_HAS_INTEGRATE_TO_HORIZONS = False
 
 
 def _resolve_so_path() -> Path:
@@ -152,7 +151,10 @@ def _load_lib() -> ctypes.CDLL:
     lib.vm_create_delay_steer_acc_geared_wo_fall_guard.restype = c_void_p
     # 15 base args + 5 verification-viewer-parity longitudinal terms
     # (brake_time_constant, lon_drag_c0, lon_drag_c1, lon_drag_c2, lon_lat_coupling)
-    lib.vm_create_delay_steer_acc_geared_wo_fall_guard.argtypes = [c_double] * 20
+    # + 1 int n_substep (Euler sub-steps per outer update() call; 1 = original behaviour)
+    lib.vm_create_delay_steer_acc_geared_wo_fall_guard.argtypes = [c_double] * 20 + [
+        ctypes.c_int
+    ]
 
     # taiga_dyn: 14 共通引数 (wo_fall_guard の k_us を除く) + 7 物理パラメータ
     # (mass, inertia_z, lf, lr, cornering_stiffness_front, cornering_stiffness_rear, vx_min_dyn)
@@ -225,39 +227,33 @@ def _load_lib() -> ctypes.CDLL:
         )
 
     # vm_integrate_to_horizons: batch-integrate cmd intervals in C for open-loop tuning.
-    # Requires colcon rebuild with rung-2 C++ addition; optional for backward compat.
-    global _HAS_INTEGRATE_TO_HORIZONS  # noqa: PLW0603
+    # Requires colcon rebuild with simple_sensor_simulator C++ addition.
     _c_dbl_p = ctypes.POINTER(c_double)
     _c_int_p = ctypes.POINTER(ctypes.c_int)
-    if hasattr(lib, "vm_integrate_to_horizons"):
-        lib.vm_integrate_to_horizons.restype = None
-        lib.vm_integrate_to_horizons.argtypes = [
-            c_void_p,         # m
-            ctypes.c_int,     # n_intervals
-            ctypes.c_int,     # k0
-            _c_dbl_p,         # accel_des (full array)
-            _c_dbl_p,         # steer_des (full array)
-            _c_int_p,         # n_full    (full array, int32)
-            _c_dbl_p,         # rem       (full array)
-            c_double,         # rem_eps
-            ctypes.c_int,     # n_horizons
-            _c_int_p,         # horizons  (sorted ascending)
-            _c_dbl_p,         # x_out
-            _c_dbl_p,         # y_out
-            _c_dbl_p,         # yaw_out
-            _c_dbl_p,         # vx_out
-            _c_dbl_p,         # ax_out
-            _c_dbl_p,         # steer_out (raw getSteer() = steer_state + steer_bias)
-        ]
-        _HAS_INTEGRATE_TO_HORIZONS = True
-    else:
-        _HAS_INTEGRATE_TO_HORIZONS = False
-        print(
-            "[WARN] libvehicle_model_wrapper.so に vm_integrate_to_horizons が無いため"
-            " eval_rollout_rmse は Python ループにフォールバックします。"
-            " simple_sensor_simulator を再ビルドしてください。",
-            file=sys.stderr,
+    if not hasattr(lib, "vm_integrate_to_horizons"):
+        raise RuntimeError(
+            "libvehicle_model_wrapper.so に vm_integrate_to_horizons が未 export です。"
+            " simple_sensor_simulator を再ビルドしてください。"
         )
+    lib.vm_integrate_to_horizons.restype = None
+    lib.vm_integrate_to_horizons.argtypes = [
+        c_void_p,         # m
+        ctypes.c_int,     # n_intervals
+        ctypes.c_int,     # k0
+        _c_dbl_p,         # accel_des (full array)
+        _c_dbl_p,         # steer_des (full array)
+        _c_int_p,         # n_full    (full array, int32)
+        _c_dbl_p,         # rem       (full array)
+        c_double,         # rem_eps
+        ctypes.c_int,     # n_horizons
+        _c_int_p,         # horizons  (sorted ascending)
+        _c_dbl_p,         # x_out
+        _c_dbl_p,         # y_out
+        _c_dbl_p,         # yaw_out
+        _c_dbl_p,         # vx_out
+        _c_dbl_p,         # ax_out
+        _c_dbl_p,         # steer_out (raw getSteer() = steer_state + steer_bias)
+    ]
 
     # vm_step_dt はラッパーに未 export のため使わない。残ステップ (remainder) は無視。
     lib.vm_destroy.restype = None
@@ -322,6 +318,8 @@ class VehicleModel:
                 p.get("lon_drag_c1", 0.0),
                 p.get("lon_drag_c2", 0.0),
                 p.get("lon_lat_coupling", 0.0),
+                # Euler sub-steps per outer update() call (1 = original single-step behaviour)
+                int(p["n_substep"]),
             )
             self._steer_bias = p["steer_bias"]
         elif model_type == "taiga_dyn":
@@ -844,168 +842,98 @@ def eval_rollout_rmse(
         for h in sorted_horizons
     }
 
-    if _HAS_INTEGRATE_TO_HORIZONS:
-        # --- rung-2 C バッチパス ---
-        # ctypes ポインタをループ外で一度だけ変換しオーバーヘッドを最小化。
-        # per-k0 の ctypes.data_as 呼び出しは ~12 回 → 1 回 (k0 と n_valid のみ) に削減。
-        _cint_p = ctypes.POINTER(ctypes.c_int)
-        _cdbl_p = ctypes.POINTER(ctypes.c_double)
-        _lib_fn = model._lib.vm_integrate_to_horizons
-        _p_ad  = accel_des.ctypes.data_as(_cdbl_p)
-        _p_sd  = steer_des.ctypes.data_as(_cdbl_p)
-        _p_nf  = nfull_arr.ctypes.data_as(_cint_p)
-        _p_rem = rem_arr.ctypes.data_as(_cdbl_p)
-        _n_sh  = len(sorted_horizons)
-        _h_arr = np.array(sorted_horizons, dtype=np.int32)
-        _p_h   = _h_arr.ctypes.data_as(_cint_p)
-        # 出力バッファを一度だけ確保 (eval 間で再利用)
-        _x_out     = np.empty(_n_sh, dtype=np.float64)
-        _y_out     = np.empty(_n_sh, dtype=np.float64)
-        _yaw_out   = np.empty(_n_sh, dtype=np.float64)
-        _vx_out    = np.empty(_n_sh, dtype=np.float64)
-        _ax_out    = np.empty(_n_sh, dtype=np.float64)
-        _steer_buf = np.empty(_n_sh, dtype=np.float64)
-        _p_xo     = _x_out.ctypes.data_as(_cdbl_p)
-        _p_yo     = _y_out.ctypes.data_as(_cdbl_p)
-        _p_yawo   = _yaw_out.ctypes.data_as(_cdbl_p)
-        _p_vxo    = _vx_out.ctypes.data_as(_cdbl_p)
-        _p_axo    = _ax_out.ctypes.data_as(_cdbl_p)
-        _p_steero = _steer_buf.ctypes.data_as(_cdbl_p)
+    # --- C バッチパス (vm_integrate_to_horizons) ---
+    # ctypes ポインタをループ外で一度だけ変換しオーバーヘッドを最小化。
+    # per-k0 の ctypes.data_as 呼び出しは ~12 回 → 1 回 (k0 と n_valid のみ) に削減。
+    _cint_p = ctypes.POINTER(ctypes.c_int)
+    _cdbl_p = ctypes.POINTER(ctypes.c_double)
+    _lib_fn = model._lib.vm_integrate_to_horizons
+    _p_ad  = accel_des.ctypes.data_as(_cdbl_p)
+    _p_sd  = steer_des.ctypes.data_as(_cdbl_p)
+    _p_nf  = nfull_arr.ctypes.data_as(_cint_p)
+    _p_rem = rem_arr.ctypes.data_as(_cdbl_p)
+    _n_sh  = len(sorted_horizons)
+    _h_arr = np.array(sorted_horizons, dtype=np.int32)
+    _p_h   = _h_arr.ctypes.data_as(_cint_p)
+    # 出力バッファを一度だけ確保 (eval 間で再利用)
+    _x_out     = np.empty(_n_sh, dtype=np.float64)
+    _y_out     = np.empty(_n_sh, dtype=np.float64)
+    _yaw_out   = np.empty(_n_sh, dtype=np.float64)
+    _vx_out    = np.empty(_n_sh, dtype=np.float64)
+    _ax_out    = np.empty(_n_sh, dtype=np.float64)
+    _steer_buf = np.empty(_n_sh, dtype=np.float64)
+    _p_xo     = _x_out.ctypes.data_as(_cdbl_p)
+    _p_yo     = _y_out.ctypes.data_as(_cdbl_p)
+    _p_yawo   = _yaw_out.ctypes.data_as(_cdbl_p)
+    _p_vxo    = _vx_out.ctypes.data_as(_cdbl_p)
+    _p_axo    = _ax_out.ctypes.data_as(_cdbl_p)
+    _p_steero = _steer_buf.ctypes.data_as(_cdbl_p)
 
-        for k0 in range(0, n - min_h, stride):
-            model.reset_with_history(
-                x=float(gt_x[k0]),
-                y=float(gt_y[k0]),
-                yaw=float(gt_yaw[k0]),
-                vx=float(gt_vx[k0]),
-                steer_actual=float(gt_steer_kinematic[k0]) + steer_bias,
-                ax=float(gt_ax[k0]),
-                acc_history=acc_hist_all[k0],
-                steer_history=steer_hist_all[k0],
-                wz=float(gt_wz[k0]),
-            )
-            cos_y = cos_y_arr[k0]
-            sin_y = sin_y_arr[k0]
+    for k0 in range(0, n - min_h, stride):
+        model.reset_with_history(
+            x=float(gt_x[k0]),
+            y=float(gt_y[k0]),
+            yaw=float(gt_yaw[k0]),
+            vx=float(gt_vx[k0]),
+            steer_actual=float(gt_steer_kinematic[k0]) + steer_bias,
+            ax=float(gt_ax[k0]),
+            acc_history=acc_hist_all[k0],
+            steer_history=steer_hist_all[k0],
+            wz=float(gt_wz[k0]),
+        )
+        cos_y = cos_y_arr[k0]
+        sin_y = sin_y_arr[k0]
 
-            # 有効 horizon 数を決定 (昇順のため最大 len(sorted_horizons) 回のループ)
-            n_valid = 0
-            for h in sorted_horizons:
-                if k0 + h >= n:
-                    break
-                if bc[k0 + h] > bc[k0]:
-                    break
-                n_valid += 1
-            if n_valid == 0:
-                continue
+        # 有効 horizon 数を決定 (昇順のため最大 len(sorted_horizons) 回のループ)
+        n_valid = 0
+        for h in sorted_horizons:
+            if k0 + h >= n:
+                break
+            if bc[k0 + h] > bc[k0]:
+                break
+            n_valid += 1
+        if n_valid == 0:
+            continue
 
-            # C 関数に k0 とフル配列ポインタを渡し、一括積分 + horizon スナップ
-            _lib_fn(
-                model._ptr,
-                ctypes.c_int(sorted_horizons[n_valid - 1]),
-                ctypes.c_int(k0),
-                _p_ad, _p_sd, _p_nf, _p_rem,
-                1e-6,
-                ctypes.c_int(n_valid),
-                _p_h,
-                _p_xo, _p_yo, _p_yawo, _p_vxo, _p_axo, _p_steero,
-            )
+        # C 関数に k0 とフル配列ポインタを渡し、一括積分 + horizon スナップ
+        _lib_fn(
+            model._ptr,
+            ctypes.c_int(sorted_horizons[n_valid - 1]),
+            ctypes.c_int(k0),
+            _p_ad, _p_sd, _p_nf, _p_rem,
+            1e-6,
+            ctypes.c_int(n_valid),
+            _p_h,
+            _p_xo, _p_yo, _p_yawo, _p_vxo, _p_axo, _p_steero,
+        )
 
-            # horizon ごとの終端誤差を集計 (run_rollout と同一算術式)
-            for i in range(n_valid):
-                h = sorted_horizons[i]
-                k_end = k0 + h
-                mx = _x_out[i]
-                my = _y_out[i]
-                dx = gt_x[k_end] - mx
-                dy = gt_y[k_end] - my
-                yaw_err = (gt_yaw[k_end] - _yaw_out[i] + math.pi) % (2 * math.pi) - math.pi
-                real_dx = gt_x[k_end] - gt_x[k0]
-                real_dy = gt_y[k_end] - gt_y[k0]
-                sim_dx = mx - gt_x[k0]
-                sim_dy = my - gt_y[k0]
-                real_ds_long = real_dx * cos_y + real_dy * sin_y
-                real_ds_lat = -real_dx * sin_y + real_dy * cos_y
-                sim_ds_long = sim_dx * cos_y + sim_dy * sin_y
-                sim_ds_lat = -sim_dx * sin_y + sim_dy * cos_y
-                e = errs[h]
-                e["pos"].append(math.hypot(dx, dy))
-                e["ds_long"].append(real_ds_long - sim_ds_long)
-                e["ds_lat"].append(real_ds_lat - sim_ds_lat)
-                e["yaw_deg"].append(math.degrees(yaw_err))
-                # steer_buf[i] = raw getSteer() = steer_state + steer_bias
-                # ∴ gt_steer - steer_buf[i] = gt_steer - (steer_state + steer_bias) (Python パスと同一)
-                e["steer"].append(gt_steer[k_end] - float(_steer_buf[i]))
-                e["vx"].append(float(gt_vx[k_end]) - _vx_out[i])
-                e["ax"].append(float(gt_ax[k_end]) - _ax_out[i])
-
-    else:
-        # --- Python フォールバックパス (C API 未 export 時; 結果は C パスとビット同一) ---
-        for k0 in range(0, n - min_h, stride):
-            # ホイスト済み delay history でリセット (_delay_history per-eval 再計算を回避)
-            model.reset_with_history(
-                x=float(gt_x[k0]),
-                y=float(gt_y[k0]),
-                yaw=float(gt_yaw[k0]),
-                vx=float(gt_vx[k0]),
-                steer_actual=float(gt_steer_kinematic[k0]) + steer_bias,
-                ax=float(gt_ax[k0]),
-                acc_history=acc_hist_all[k0],
-                steer_history=steer_hist_all[k0],
-                wz=float(gt_wz[k0]),
-            )
-
-            cos_y = cos_y_arr[k0]
-            sin_y = sin_y_arr[k0]
-            stepped = 0
-
-            for h in sorted_horizons:
-                if k0 >= n - h:
-                    break
-                # O(1) bad-interval 判定 (per-j break の等価置換)
-                # bc[k0+h] - bc[k0] > 0 ⟺ [k0, k0+h) に bad interval が存在する。
-                # h が昇順のため、前 horizon で clean だった [k0, stepped) の再チェックは冗長だが
-                # 累積和なので結果は同一 (前 horizon で break 済みなら到達しない)。
-                if bc[k0 + h] > bc[k0]:
-                    break
-
-                # 区間 [stepped, h) を積分 (hoisted nfull_arr / rem_arr 参照; bad check 不要)
-                for j in range(stepped, h):
-                    idx = k0 + j
-                    n_full = nfull_arr[idx]
-                    ad = accel_des[idx]
-                    sd = steer_des[idx]
-                    for _ in range(n_full):
-                        model.step(ad, sd)
-                    rem = rem_arr[idx]
-                    if rem > 1e-6:
-                        model.step_dt(ad, sd, rem)
-                stepped = h
-                k_end = k0 + h
-
-                # 終端誤差 (run_rollout と同一の算術式; 加算順を保ちビット同一を保証)
-                mx = model.x
-                my = model.y
-                dx = gt_x[k_end] - mx
-                dy = gt_y[k_end] - my
-                yaw_err = (gt_yaw[k_end] - model.yaw + math.pi) % (2 * math.pi) - math.pi
-
-                real_dx = gt_x[k_end] - gt_x[k0]
-                real_dy = gt_y[k_end] - gt_y[k0]
-                sim_dx = mx - gt_x[k0]
-                sim_dy = my - gt_y[k0]
-                real_ds_long = real_dx * cos_y + real_dy * sin_y
-                real_ds_lat = -real_dx * sin_y + real_dy * cos_y
-                sim_ds_long = sim_dx * cos_y + sim_dy * sin_y
-                sim_ds_lat = -sim_dx * sin_y + sim_dy * cos_y
-
-                e = errs[h]
-                e["pos"].append(math.hypot(dx, dy))
-                e["ds_long"].append(real_ds_long - sim_ds_long)
-                e["ds_lat"].append(real_ds_lat - sim_ds_lat)
-                e["yaw_deg"].append(math.degrees(yaw_err))
-                e["steer"].append(gt_steer[k_end] - (model.steer_state + steer_bias))
-                e["vx"].append(float(gt_vx[k_end]) - model.vx)
-                e["ax"].append(float(gt_ax[k_end]) - model.ax)
+        # horizon ごとの終端誤差を集計 (run_rollout と同一算術式)
+        for i in range(n_valid):
+            h = sorted_horizons[i]
+            k_end = k0 + h
+            mx = _x_out[i]
+            my = _y_out[i]
+            dx = gt_x[k_end] - mx
+            dy = gt_y[k_end] - my
+            yaw_err = (gt_yaw[k_end] - _yaw_out[i] + math.pi) % (2 * math.pi) - math.pi
+            real_dx = gt_x[k_end] - gt_x[k0]
+            real_dy = gt_y[k_end] - gt_y[k0]
+            sim_dx = mx - gt_x[k0]
+            sim_dy = my - gt_y[k0]
+            real_ds_long = real_dx * cos_y + real_dy * sin_y
+            real_ds_lat = -real_dx * sin_y + real_dy * cos_y
+            sim_ds_long = sim_dx * cos_y + sim_dy * sin_y
+            sim_ds_lat = -sim_dx * sin_y + sim_dy * cos_y
+            e = errs[h]
+            e["pos"].append(math.hypot(dx, dy))
+            e["ds_long"].append(real_ds_long - sim_ds_long)
+            e["ds_lat"].append(real_ds_lat - sim_ds_lat)
+            e["yaw_deg"].append(math.degrees(yaw_err))
+            # steer_buf[i] = raw getSteer() = steer_state + steer_bias
+            # ∴ gt_steer - steer_buf[i] = gt_steer - (steer_state + steer_bias)
+            e["steer"].append(gt_steer[k_end] - float(_steer_buf[i]))
+            e["vx"].append(float(gt_vx[k_end]) - _vx_out[i])
+            e["ax"].append(float(gt_ax[k_end]) - _ax_out[i])
 
     def _rms(lst: list) -> float:
         v = np.asarray(lst, dtype=np.float64)

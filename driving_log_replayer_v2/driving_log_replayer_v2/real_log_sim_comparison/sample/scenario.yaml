@@ -109,6 +109,18 @@ Evaluation:
           debug_steer_scaling_factor: 1.0   # = 仕様値 (同上)
           acc_time_constant: 0.30           # 縦方向 (pos-mean 改善。0.45 超は shiojiri pos を悪化)
 
+      best_normal_substep:
+        # best_normal と同パラメータだが update() 内部で Euler 積分を n_substep 回に細分化。
+        # delay queue は 1 call/tick のまま変えず、運動学積分のみ細粒化する。
+        # n_substep=1 は best_normal と bit-identical。n_substep=10 でサブステップ効果を評価。
+        vehicle_model_type: delay_steer_acc_geared_wo_fall_guard
+        params:
+          k_us: 0.018
+          steer_time_constant: 0.15
+          debug_steer_scaling_factor: 1.0
+          acc_time_constant: 0.30
+          n_substep: 10
+
       no_delay:
         # 遅延・時定数を全てゼロにした理想即応相当 (cases 専用; vehicle_model なしのため sim_runs に含められない)。
         # delay_steer_acc_geared_wo_fall_guard で acc/steer の time_delay・time_constant を 0 に設定する。
@@ -165,7 +177,7 @@ Evaluation:
 
     # ── cases: open-loop VehicleModel N-step 解析 (Stage 5/6) に使う名前リスト ──
     # vehicle_model_type が必須。名前 = 出力ディレクトリ nstep/<name>/
-    cases:    [normal, kus0020, best_normal, no_delay, taiga_dyn, taiga_x]
+    cases:    [normal, kus0020, best_normal, best_normal_substep, no_delay, taiga_dyn, taiga_x]
 
     # ── sim_runs: closed-loop シム実行 (Stage 3/4) に使う名前リスト ──
     # vehicle_model が必須。名前 = 出力ディレクトリ lite/<name>.lite/

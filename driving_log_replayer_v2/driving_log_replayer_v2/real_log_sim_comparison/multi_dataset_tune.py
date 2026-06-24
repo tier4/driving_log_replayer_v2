@@ -278,6 +278,7 @@ def robust_search(
     ctxs: list[DatasetCtx],
     cfg,
     *,
+    case_name: str = "best_normal",
     n_jobs: int = 1,
     search_subsample: int | None = None,
     out_path: Path | None = None,
@@ -310,7 +311,7 @@ def robust_search(
         tmp.rename(out_path)
 
     ctxs_search = ctxs[:search_subsample] if search_subsample else ctxs
-    cur_case = cfg.find_case("best_normal")
+    cur_case = cfg.find_case(case_name)
     cur_best = dict(cur_case.params)
     cur_model = cur_case.vehicle_model_type
     sweeps = {
@@ -356,7 +357,7 @@ def robust_search(
         # cur_best と kus0020 をまとめて並列評価 (un-pooled な逐次床を除去)
         ref_aggs = _eval_grid(pool, ctxs_search, [cur_best, _KUS0020], cur_model, n_jobs)
         cur_agg = ref_aggs[0]
-        print("\n## robust coordinate descent (best_normal family, cross-dataset normalized)")
+        print(f"\n## robust coordinate descent ({case_name} family, cross-dataset normalized)")
         print(format_agg("cur_best", cur_agg) + f"  score={robust_score(cur_agg):.4f}  {cur_best}")
         print(format_agg("kus0020", ref_aggs[1]))
 
@@ -442,6 +443,12 @@ def main() -> None:
         description="マルチデータセット横断のロバスト best_normal 同定 (robust_search)"
     )
     ap.add_argument("--collection-dir", default=str(Path(__file__).parent / "sample" / "multi"))
+    ap.add_argument(
+        "--case",
+        default="best_normal",
+        metavar="CASE_NAME",
+        help="チューニング対象の scenario.yaml models エントリ名 (既定: best_normal)",
+    )
     ap.add_argument("--scenario", default=str(Path(__file__).parent / "sample" / "scenario.yaml"),
                     help="scenario.yaml のパス (Conditions.models / cases を含む)")
     ap.add_argument(
@@ -517,7 +524,12 @@ def main() -> None:
 
     out_path = Path(args.out) if args.out else None
     result = robust_search(
-        ctxs, cfg, n_jobs=n_jobs, search_subsample=args.search_subsample, out_path=out_path
+        ctxs,
+        cfg,
+        case_name=args.case,
+        n_jobs=n_jobs,
+        search_subsample=args.search_subsample,
+        out_path=out_path,
     )
 
     if out_path is not None:
