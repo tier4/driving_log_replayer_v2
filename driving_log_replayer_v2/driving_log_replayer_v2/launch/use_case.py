@@ -89,6 +89,18 @@ def launch_optional_nodes(context: LaunchContext) -> list:
     if "2d_detector" in nodes_list:
         optional_nodes.append(LogInfo(msg="launching 2D detector......"))
         optional_nodes.extend(launch_camera_2d_detector(context))
+    if "3d_detector" in nodes_list:
+        optional_nodes.append(LogInfo(msg="launching 3D detector......"))
+        detector_launch_file = Path(
+            get_package_share_directory("edge_auto_jetson_launch"),
+            "launch",
+            "tensorrt_stream_petr.x2.launch.xml",
+        )
+        optional_nodes.append(
+            IncludeLaunchDescription(
+                AnyLaunchDescriptionSource(detector_launch_file.as_posix()),
+            )
+        )
     if len(optional_nodes) == 0:
         optional_nodes.append(LogInfo(msg="no optional nodes to launch."))
     return optional_nodes
