@@ -574,6 +574,33 @@ def main() -> None:
             "Phase 1 の --out で生成したファイルを指定する。省略時は scenario.yaml の定義値を使用。"
         ),
     )
+    ap.add_argument(
+        "--report",
+        default="",
+        metavar="HTML_PATH",
+        help=(
+            "最適化完了後に HTML レポートを生成するパス。"
+            "省略時はレポートを生成しない。"
+            "--out が指定されている場合、今回の結果が自動で比較対象に含まれる。"
+        ),
+    )
+    ap.add_argument(
+        "--report-compare",
+        action="append",
+        default=[],
+        metavar="[LABEL=]YAML_PATH",
+        help=(
+            "レポートで比較する既存の params YAML（複数可）。"
+            "'label=path' 形式でラベルを指定、省略時はファイル名 stem をラベルに使う。"
+        ),
+    )
+    ap.add_argument(
+        "--report-worst-weight",
+        type=float,
+        default=1.0,
+        metavar="W",
+        help="レポートのスコア表示に使う worst 重み（既定: 1.0）",
+    )
     args = ap.parse_args()
 
     if args.lite_dir:
@@ -664,6 +691,35 @@ def main() -> None:
             encoding="utf-8",
         )
         print(f"[INFO] FINAL params 保存: {out_path}")
+
+    if args.report:
+        from .lib._tune_report import generate_report  # noqa: PLC0415
+
+        # 今回の結果を最初のエントリとして配置
+        report_configs: dict[str, dict] = {}
+        result_label = out_path.stem if out_path else "new_result"
+        report_configs[result_label] = result["params"]
+
+        # 比較対象 YAML をパース（label=path 形式 or path のみ）
+        for spec in args.report_compare:
+            if "=" in spec:
+                label, path_str = spec.split("=", 1)
+            else:
+                label = Path(spec).stem
+                path_str = spec
+            with open(path_str) as f:
+                compare_data = yaml.safe_load(f)
+            report_configs[label] = compare_data["params"]
+
+        generate_report(
+            ctxs=ctxs,
+            configs=report_configs,
+            out_html=Path(args.report),
+            model_type=_BASELINE_MODEL,
+            eval_fn=_eval,
+            stride=STRIDE,
+            worst_w=args.report_worst_weight,
+        )
 
 
 if __name__ == "__main__":
