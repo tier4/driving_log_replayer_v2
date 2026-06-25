@@ -340,6 +340,10 @@ def robust_search(
             "steer_time_constant":        (0.05, 0.80),
             "debug_steer_scaling_factor": (0.80, 1.05),
             "k_us":                       (0.0,  0.05),
+            # 速度依存 k_us: vx < vx_lo で k_us_eff=0、vx > vx_hi で k_us_eff=k_us
+            # 両方 0.0 (デフォルト) → ランプなし (全速度で k_us そのまま、後方互換)
+            "k_us_vx_lo":                 (0.5,  6.0),
+            "k_us_vx_hi":                 (1.0, 12.0),
         }
         score_fn = steer_score
         explore_delay = False  # acc_time_delay は cur_best (Phase 1 best) に固定
@@ -355,6 +359,8 @@ def robust_search(
             "debug_steer_scaling_factor": (0.80, 1.05),
             "acc_time_constant":          (0.10, 1.20),
             "k_us":                       (0.0,  0.05),
+            "k_us_vx_lo":                 (0.5,  6.0),
+            "k_us_vx_hi":                 (1.0, 12.0),
         }
         score_fn = robust_score
         explore_delay = True

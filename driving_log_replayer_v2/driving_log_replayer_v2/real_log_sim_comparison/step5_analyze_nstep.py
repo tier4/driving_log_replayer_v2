@@ -149,10 +149,11 @@ def _load_lib() -> ctypes.CDLL:
     lib.vm_create_ideal_steer_acc.argtypes = [c_double, c_double]  # wheelbase, sub_dt
 
     lib.vm_create_delay_steer_acc_geared_wo_fall_guard.restype = c_void_p
-    # 15 base args + 5 verification-viewer-parity longitudinal terms
+    # 15 base args + 2 speed-dependent k_us ramp (k_us_vx_lo, k_us_vx_hi)
+    # + 5 verification-viewer-parity longitudinal terms
     # (brake_time_constant, lon_drag_c0, lon_drag_c1, lon_drag_c2, lon_lat_coupling)
     # + 1 int n_substep (Euler sub-steps per outer update() call; 1 = original behaviour)
-    lib.vm_create_delay_steer_acc_geared_wo_fall_guard.argtypes = [c_double] * 20 + [
+    lib.vm_create_delay_steer_acc_geared_wo_fall_guard.argtypes = [c_double] * 22 + [
         ctypes.c_int
     ]
 
@@ -169,11 +170,11 @@ def _load_lib() -> ctypes.CDLL:
 
     # reset は末尾に wz (実測 yaw rate) を取り、動的モデルの yaw rate state を seed する。
     lib.vm_reset_full.restype = None
-    lib.vm_reset_full.argtypes = [c_void_p] + [c_double] * 7
+    lib.vm_reset_full.argtypes = [c_void_p] + [c_double] * 8  # +vy (末尾)
 
     # State-only reset (queues untouched) + explicit queue setter
     lib.vm_reset_state.restype = None
-    lib.vm_reset_state.argtypes = [c_void_p] + [c_double] * 7
+    lib.vm_reset_state.argtypes = [c_void_p] + [c_double] * 8  # +vy (末尾)
 
     lib.vm_set_queues.restype = None
     lib.vm_set_queues.argtypes = [
@@ -312,6 +313,10 @@ class VehicleModel:
                 p.get("debug_acc_scaling_factor", 1.0),
                 p.get("debug_steer_scaling_factor", 1.0),
                 p.get("k_us", 0.0),
+                # speed-dependent k_us ramp: k_us_eff = k_us * ramp(vx, lo, hi)
+                # both 0.0 → no ramp (full k_us at all speeds, backward compatible)
+                p.get("k_us_vx_lo", 0.0),
+                p.get("k_us_vx_hi", 0.0),
                 # verification-viewer-parity longitudinal terms (default neutral)
                 p.get("brake_time_constant", 0.0),
                 p.get("lon_drag_c0", 0.0),
@@ -405,6 +410,7 @@ class VehicleModel:
         acc_history: list[float],
         steer_history: list[float],
         wz: float = 0.0,
+        vy: float = 0.0,
     ) -> None:
         """
         状態と delay queue を実際の過去コマンド履歴でリセット。
@@ -415,8 +421,10 @@ class VehicleModel:
                         として持つ動的モデルの初期 yaw rate を seed する (毎 reset で 0 に
                         すると小 N の per-step 誤差が立ち上がり過渡に支配されるため)。
                         kinematic モデルでは無視される。
+        vy            : 実測横速度 [m/s]。taiga_dyn の横速度 state を seed する。
+                        kinematic モデルでは無視される。
         """
-        self._lib.vm_reset_state(self._ptr, x, y, yaw, vx, steer_actual, ax, wz)
+        self._lib.vm_reset_state(self._ptr, x, y, yaw, vx, steer_actual, ax, wz, vy)
 
         n_acc = len(acc_history)
         n_steer = len(steer_history)
@@ -1041,6 +1049,7 @@ def run_rollout(
             acc_history=_delay_history(t_cmd[k0], acc_q_size, t_cmd_full, accel_des_full),
             steer_history=_delay_history(t_cmd[k0], steer_q_size, t_cmd_full, steer_des_full),
             wz=float(gt_wz[k0]),
+            vy=float(gt_vy[k0]),
         )
 
         # 各 horizon 境界まで増分ステップし、区間不正が見つかった時点で打ち切る。

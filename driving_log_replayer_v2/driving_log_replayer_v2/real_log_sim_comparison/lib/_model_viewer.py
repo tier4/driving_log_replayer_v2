@@ -89,6 +89,10 @@ def _seed_from_params(params: dict) -> dict:
         "t_steer": f("steer_time_delay", 0.24),
         "steer_bias": f("steer_bias", 0.0),
         "k_us": f("k_us", 0.0),
+        # 速度依存 k_us ramp: k_us_eff = k_us * clamp((vx-lo)/(hi-lo), 0, 1)
+        # lo=hi=0 (デフォルト) → ランプなし (全速度で k_us そのまま)
+        "k_us_vx_lo": f("k_us_vx_lo", 0.0),
+        "k_us_vx_hi": f("k_us_vx_hi", 0.0),
         # C++ calcModel: steer_des = sat(cmd, lim) * debug_steer_scaling_factor, 同様に acc_des
         "steer_scaling": f("debug_steer_scaling_factor", 1.0),
         "acc_scaling": f("debug_acc_scaling_factor", 1.0),
@@ -278,6 +282,8 @@ _HTML_TEMPLATE = r"""<!DOCTYPE html>
       <div class="khead">自転車</div>
       <div class="krow"><span class="rlbl">k_us</span><input type="range" id="k_kus" min="0" max="0.05" step="0.001" value="0"><span class="kval" id="v_kus"></span></div>
       <div class="krow"><span class="rlbl">β</span><input type="range" id="k_bias" min="-2" max="2" step="0.01" value="0"><span class="kval" id="v_bias"></span></div>
+      <div class="krow"><span class="rlbl">k_us v_lo</span><input type="range" id="k_kus_vlo" min="0" max="8" step="0.1" value="0"><span class="kval" id="v_kus_vlo"></span></div>
+      <div class="krow"><span class="rlbl">k_us v_hi</span><input type="range" id="k_kus_vhi" min="0" max="15" step="0.1" value="0"><span class="kval" id="v_kus_vhi"></span></div>
     </div>
   </div>
   <div id="seekrow">
@@ -362,6 +368,8 @@ const DATA = __PAYLOAD_JSON__;
     c_slope: DATA.model_seed.c_slope, slopeOn: true, // 勾配重力 (a_target += c_slope·a_slope, 既定 ON)
     tau_steer: DATA.model_seed.tau_steer, t_steer: DATA.model_seed.t_steer,
     k_us: DATA.model_seed.k_us,
+    k_us_vx_lo: DATA.model_seed.k_us_vx_lo ?? 0,
+    k_us_vx_hi: DATA.model_seed.k_us_vx_hi ?? 0,
     steer_bias: DATA.model_seed.steer_bias * RAD2DEG, // rad→deg (β つまみは度表示)
     // C++ debug_steer_scaling_factor: steer_des = sat(cmd, lim) * scaling (飽和後に乗算)
     steer_scaling: DATA.model_seed.steer_scaling ?? 1.0,
@@ -463,6 +471,7 @@ const DATA = __PAYLOAD_JSON__;
     const Td = model.t_steer;
     const beta = model.steer_bias * DEG;   // deg→rad
     const kus = model.k_us;
+    const kusVxLo = model.k_us_vx_lo, kusVxHi = model.k_us_vx_hi;
     const simSteer = (steerSource === "sim");
     const outDt = 1 / RATE, h = outDt / SUBSTEP;
 
@@ -476,7 +485,10 @@ const DATA = __PAYLOAD_JSON__;
       const vv = (vl != null) ? vl : v;
       const dsrc = (simSteer && !ideal) ? dRad
         : ((chanAt("steer", tt) != null) ? chanAt("steer", tt) * DEG : dRad);
-      return vv * Math.tan(dsrc + beta) / (L + kus * vv * vv);
+      // C++: k_us_eff = k_us * ramp(vx, lo, hi); lo>=hi → no ramp
+      const kusRamp = (kusVxHi > kusVxLo)
+        ? Math.min(Math.max((vv - kusVxLo) / (kusVxHi - kusVxLo), 0), 1) : 1;
+      return vv * Math.tan(dsrc + beta) / (L + kus * kusRamp * vv * vv);
     };
     const record = (tt) => {
       // ideal では a・δ は観測値そのもの（実車と完全一致の仮定）。
@@ -652,6 +664,9 @@ const DATA = __PAYLOAD_JSON__;
   setupKnob("k_steer_sc", "v_steer_sc", "steer_scaling", (v) => v.toFixed(3) + "×");
   setupKnob("k_kus", "v_kus", "k_us", fmtKus);
   setupKnob("k_bias", "v_bias", "steer_bias", fmtDeg);
+  const fmtVx = (v) => v.toFixed(1) + "m/s";
+  setupKnob("k_kus_vlo", "v_kus_vlo", "k_us_vx_lo", fmtVx);
+  setupKnob("k_kus_vhi", "v_kus_vhi", "k_us_vx_hi", fmtVx);
   setupKnob("k_poly0", "v_poly0", "poly0", (v) => v.toFixed(3));
   setupKnob("k_poly1", "v_poly1", "poly1", (v) => v.toFixed(4));
   setupKnob("k_poly2", "v_poly2", "poly2", (v) => v.toFixed(5));
@@ -697,7 +712,9 @@ const DATA = __PAYLOAD_JSON__;
       (m.slopeOn ? " / a_slope=9.81·sin(pitch) 路面勾配の重力分力(登り<0)・poly0 と同時 ON は一定勾配で交絡" : "") +
       (m.stopHandling ? " / 停止処理: v≤" + m.v_stop.toFixed(2) + "&ブレーキ指令で a_target=0・後退なし" : " / 停止処理OFF") + "]</span><br>" +
       "横&nbsp; δ̇ = −(δ − sat(δ_cmd,lim)·s_steer(t−T_δ))/τ_δ ,&nbsp; s_steer=" + m.steer_scaling.toFixed(3) + "<br>" +
-      "&nbsp;&nbsp;&nbsp; ω = v·tan(δ+β)/(L + k_us·v²) ,&nbsp; θ̇ = ω<br>" +
+      "&nbsp;&nbsp;&nbsp; ω = v·tan(δ+β)/(L + k_us_eff·v²) ,&nbsp; θ̇ = ω<br>" +
+      "&nbsp;&nbsp;&nbsp; <span class='note'>k_us_eff = k_us·ramp(v," + m.k_us_vx_lo.toFixed(1) + "," + m.k_us_vx_hi.toFixed(1) + ")" +
+      ((m.k_us_vx_hi <= m.k_us_vx_lo) ? " [ramp 無効 → k_us_eff=k_us 常時]" : " [低速でゼロフェード]") + "</span><br>" +
       "&nbsp;&nbsp;&nbsp; ẋ = v·cosθ , ẏ = v·sinθ ,&nbsp; a_y = v·ω<br>" +
       "<span class='vals'>縦throttle T=" + m.t_acc_thr.toFixed(3) + "s τ=" + m.tau_acc_thr.toFixed(3) + "s&nbsp; " +
       "brake T=" + m.t_acc_brk.toFixed(3) + "s τ=" + m.tau_acc_brk.toFixed(3) + "s<br>" +
@@ -804,16 +821,19 @@ const DATA = __PAYLOAD_JSON__;
   }
   const residAccel = () => mseSeries(simAccelSeries(), "accel");
   const residSteer = () => mseSeries(simSteerSeries(), "steer");
-  // 自転車 ω=v·tan(δ_obs+β)/(L+k_us·v²) を観測 wz に当て込む（代数式・積分なし）。
+  // 自転車 ω=v·tan(δ_obs+β)/(L+k_us_eff·v²) を観測 wz に当て込む（代数式・積分なし）。
   function residBicycle() {
     const beta = model.steer_bias * DEG, kus = model.k_us;
+    const kusVxLo = model.k_us_vx_lo, kusVxHi = model.k_us_vx_hi;
     const wzA = run.ch.wz, dA = run.ch.steer, vA = run.ch.lon_vel;
     const [iLo, iHi] = optIndexRange();
     let se = 0, n = 0;
     for (let i = iLo; i <= iHi; i++) {
       const wz = wzA[i], dd = dA[i], vv = vA[i];
       if (wz == null || dd == null || vv == null) continue;
-      const om = vv * Math.tan(dd * DEG + beta) / (L + kus * vv * vv);
+      const kusRamp = (kusVxHi > kusVxLo)
+        ? Math.min(Math.max((vv - kusVxLo) / (kusVxHi - kusVxLo), 0), 1) : 1;
+      const om = vv * Math.tan(dd * DEG + beta) / (L + kus * kusRamp * vv * vv);
       se += (om - wz) * (om - wz); n++;
     }
     return n ? se / n : 1e9;
@@ -852,7 +872,7 @@ const DATA = __PAYLOAD_JSON__;
     return k;
   }
   const STEER_KEYS = ["t_steer", "tau_steer", "steer_scaling"];
-  const BIKE_KEYS = ["k_us", "steer_bias"];
+  const BIKE_KEYS = ["k_us", "steer_bias", "k_us_vx_lo", "k_us_vx_hi"];
   const showOpt = (name, r, unit) => {
     $("optstatus").textContent = " " + name + " RMSE " + r.before.toFixed(3) + "→" + r.after.toFixed(3) + " " + unit;
   };
@@ -878,6 +898,8 @@ const DATA = __PAYLOAD_JSON__;
     model.c_slope = (seed.c_slope != null) ? seed.c_slope : 1.0; // 勾配ゲイン (toggle は維持)
     model.tau_steer = seed.tau_steer; model.t_steer = seed.t_steer;
     model.k_us = seed.k_us;
+    model.k_us_vx_lo = seed.k_us_vx_lo ?? 0;
+    model.k_us_vx_hi = seed.k_us_vx_hi ?? 0;
     model.steer_bias = seed.steer_bias * RAD2DEG; // seed は rad、つまみは deg
     model.steer_scaling = seed.steer_scaling ?? 1.0;
     model.acc_scaling = seed.acc_scaling ?? 1.0;
