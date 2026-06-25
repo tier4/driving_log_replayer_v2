@@ -17,6 +17,7 @@ from geometry_msgs.msg import Point
 from geometry_msgs.msg import Point32
 from geometry_msgs.msg import Polygon as RosPolygon
 from geometry_msgs.msg import Quaternion as RosQuaternion
+from perception_eval.common.shape import ShapeType
 from pyquaternion.quaternion import Quaternion
 from shapely.geometry import Polygon
 from std_msgs.msg import Header
@@ -50,7 +51,7 @@ def test_footprint_from_ros_msg_normal() -> None:
         Point32(x=1.0, y=1.0, z=1.0),
         Point32(x=2.0, y=2.0, z=2.0),
     ]
-    eval_polygon = footprint_from_ros_msg(RosPolygon(points=ros_points))
+    eval_polygon = footprint_from_ros_msg(RosPolygon(points=ros_points), ShapeType.POLYGON)
     coords = ((0.0, 0.0, 0.0), (1.0, 1.0, 1.0), (2.0, 2.0, 2.0))
     assert eval_polygon == Polygon(coords)
 
@@ -60,11 +61,11 @@ def test_footprint_from_ros_msg_invalid_footprint() -> None:
         Point32(x=0.0, y=0.0, z=0.0),
         Point32(x=1.0, y=1.0, z=1.0),
     ]
-    eval_polygon = footprint_from_ros_msg(RosPolygon(points=ros_points))
+    eval_polygon = footprint_from_ros_msg(RosPolygon(points=ros_points), ShapeType.BOUNDING_BOX)
     assert eval_polygon is None
 
 
 def test_footprint_from_ros_msg_empty_footprint() -> None:
     ros_points = []
-    eval_polygon = footprint_from_ros_msg(RosPolygon(points=ros_points))
+    eval_polygon = footprint_from_ros_msg(RosPolygon(points=ros_points), ShapeType.BOUNDING_BOX)
     assert eval_polygon is None
