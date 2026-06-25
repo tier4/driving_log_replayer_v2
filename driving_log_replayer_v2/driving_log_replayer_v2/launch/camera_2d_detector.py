@@ -56,9 +56,11 @@ def create_2d_detector_container(
     # YOLOX node
     yolox_package_dir = Path(get_package_share_directory("autoware_tensorrt_yolox"))
     yolox_param_path = Path(yolox_package_dir, "config", yolox_param_file).as_posix()
-    
+
     # cspell:ignore semseg
-    roi_to_semantic_segmentation_remap_path = Path(yolox_package_dir, "config", "roi_to_semseg_label_remap.csv").as_posix()
+    roi_to_semantic_segmentation_remap_path = Path(
+        yolox_package_dir, "config", "roi_to_semseg_label_remap.csv"
+    ).as_posix()
     yolox_params = {
         "model_path": yolox_model_path,
         "label_path": yolox_label_path,
