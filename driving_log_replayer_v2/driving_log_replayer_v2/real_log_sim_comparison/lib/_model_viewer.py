@@ -75,7 +75,9 @@ def _seed_from_params(params: dict) -> dict:
         "tau_acc_thr": acc_tc,
         "t_acc_thr": acc_td,
         "tau_acc_brk": brake_tc,
-        "t_acc_brk": f("brake_delay", acc_td),
+        # C++ vm_create には brake 専用遅延パラメータが無く acc_time_delay を使う。
+        # JS viewer の t_acc_brk は C++ と同じ acc_td で初期化し実モデルに合わせる。
+        "t_acc_brk": acc_td,
         "tau_acc_slope": 0.0,
         "poly0": f("lon_drag_c0", 0.0),
         "poly1": f("lon_drag_c1", 0.0),
@@ -87,6 +89,11 @@ def _seed_from_params(params: dict) -> dict:
         "t_steer": f("steer_time_delay", 0.24),
         "steer_bias": f("steer_bias", 0.0),
         "k_us": f("k_us", 0.0),
+        # C++ calcModel: steer_des = sat(cmd, lim) * debug_steer_scaling_factor, 同様に acc_des
+        "steer_scaling": f("debug_steer_scaling_factor", 1.0),
+        "acc_scaling": f("debug_acc_scaling_factor", 1.0),
+        # C++ steer_dead_band（現在 0.0 の場合も seed に含め applyModelSeed で反映）
+        "steer_dead_band": f("steer_dead_band", 0.0),
     }
 
 
@@ -265,6 +272,7 @@ _HTML_TEMPLATE = r"""<!DOCTYPE html>
       <div class="khead">横・ステア</div>
       <div class="krow"><span class="rlbl">T</span><input type="range" id="k_t_steer" min="0" max="0.5" step="0.005" value="0.03"><span class="kval" id="v_t_steer"></span></div>
       <div class="krow"><span class="rlbl">τ</span><input type="range" id="k_tau_steer" min="0.02" max="1.5" step="0.005" value="0.50"><span class="kval" id="v_tau_steer"></span></div>
+      <div class="krow"><span class="rlbl">cmd 倍率</span><input type="range" id="k_steer_sc" min="0.5" max="1.5" step="0.005" value="1.0"><span class="kval" id="v_steer_sc"></span></div>
     </div>
     <div class="kcard">
       <div class="khead">自転車</div>
@@ -355,6 +363,12 @@ const DATA = __PAYLOAD_JSON__;
     tau_steer: DATA.model_seed.tau_steer, t_steer: DATA.model_seed.t_steer,
     k_us: DATA.model_seed.k_us,
     steer_bias: DATA.model_seed.steer_bias * RAD2DEG, // rad→deg (β つまみは度表示)
+    // C++ debug_steer_scaling_factor: steer_des = sat(cmd, lim) * scaling (飽和後に乗算)
+    steer_scaling: DATA.model_seed.steer_scaling ?? 1.0,
+    // C++ debug_acc_scaling_factor: pedal_acc_des = sat(cmd, lim) * scaling
+    acc_scaling: DATA.model_seed.acc_scaling ?? 1.0,
+    // C++ steer_dead_band (現状 0.0、seed から反映して将来変更に対応)
+    steer_dead_band: DATA.model_seed.steer_dead_band ?? 0,
   };
   // 縦 定常補正 多項式 poly(v)=p0+p1·v+p2·v²（有効な次のみ加算）。a_target に足す。
   function polyAccel(v) {
@@ -425,7 +439,6 @@ const DATA = __PAYLOAD_JSON__;
   const velLim       = Infinity;  // [m/s]   vx_lim 相当
   const steerLim     = Infinity;  // [rad]   steer_lim 相当
   const steerRateLim = Infinity;  // [rad/s] steer_rate_lim 相当
-  const db           = 0;         // [rad]   steer_dead_band（無効化）
 
   // 運動方程式を起点 t0 の観測値から窓右端 t1 まで前方積算する（sub-step Euler で安定化）。
   //   縦: a' = -(a - a_cmd(t-T_a))/τ_a ,  v' = a
@@ -503,7 +516,9 @@ const DATA = __PAYLOAD_JSON__;
           const tauA = throttle ? tauThr : tauBrk; // 定数 (下限クランプ済み)
           const wzo = chanAt("wz", tt); // カーブ抵抗の回帰子 a_y=v·wz 用 (観測)
           const sa = chanAt("slope_acc", tt); // 勾配重力項 a_slope=9.81·sin(pitch) (観測)
-          a += h * (-(a - accelTarget(u, vv, wzo != null ? wzo : 0, sa != null ? sa : 0)) / tauA);
+          // C++: pedal_acc_des = sat(cmd_acc, lim) * debug_acc_scaling_factor
+          const uScaled = u * model.acc_scaling;
+          a += h * (-(a - accelTarget(uScaled, vv, wzo != null ? wzo : 0, sa != null ? sa : 0)) / tauA);
           a = sat(a, accLim);                  // C++: pedal_acc を vx_rate_lim で飽和
         }
         v += h * a;
@@ -513,11 +528,11 @@ const DATA = __PAYLOAD_JSON__;
         if (ideal) {
           const so = chanAt("steer", tt); if (so != null) delta = so * DEG;
         } else {
-          // C++: steer_des を steer_lim 飽和→不感帯→steer_rate を rate_lim 飽和。
+          // C++: steer_des = sat(cmd_steer, steer_lim) * debug_steer_scaling_factor
           const ud = chanAt("cmd_steer", tt - Td); if (ud != null) lastUd = ud;
           let driveD = (lastUd != null) ? lastUd * DEG : delta;
-          driveD = sat(driveD, steerLim);
-          delta += h * sat(-deadBand(delta - driveD, db) / tauD, steerRateLim);
+          driveD = sat(driveD, steerLim) * model.steer_scaling;
+          delta += h * sat(-deadBand(delta - driveD, model.steer_dead_band) / tauD, steerRateLim);
         }
         // 横運動学（v は観測 vv, δ_src は sim/観測/ideal）
         const om = omegaAt(tt, delta);
@@ -634,6 +649,7 @@ const DATA = __PAYLOAD_JSON__;
   setupKnob("k_tau_acc_brk", "v_tau_acc_brk", "tau_acc_brk", fmtS);
   setupKnob("k_t_steer", "v_t_steer", "t_steer", fmtS);
   setupKnob("k_tau_steer", "v_tau_steer", "tau_steer", fmtS);
+  setupKnob("k_steer_sc", "v_steer_sc", "steer_scaling", (v) => v.toFixed(3) + "×");
   setupKnob("k_kus", "v_kus", "k_us", fmtKus);
   setupKnob("k_bias", "v_bias", "steer_bias", fmtDeg);
   setupKnob("k_poly0", "v_poly0", "poly0", (v) => v.toFixed(3));
@@ -680,12 +696,13 @@ const DATA = __PAYLOAD_JSON__;
       "&nbsp;&nbsp;&nbsp; <span class='note'>[throttle/brake で T・τ 分離, 多項式補正は ON の次のみ" +
       (m.slopeOn ? " / a_slope=9.81·sin(pitch) 路面勾配の重力分力(登り<0)・poly0 と同時 ON は一定勾配で交絡" : "") +
       (m.stopHandling ? " / 停止処理: v≤" + m.v_stop.toFixed(2) + "&ブレーキ指令で a_target=0・後退なし" : " / 停止処理OFF") + "]</span><br>" +
-      "横&nbsp; δ̇ = −(δ − δ_cmd(t−T_δ))/τ_δ<br>" +
+      "横&nbsp; δ̇ = −(δ − sat(δ_cmd,lim)·s_steer(t−T_δ))/τ_δ ,&nbsp; s_steer=" + m.steer_scaling.toFixed(3) + "<br>" +
       "&nbsp;&nbsp;&nbsp; ω = v·tan(δ+β)/(L + k_us·v²) ,&nbsp; θ̇ = ω<br>" +
       "&nbsp;&nbsp;&nbsp; ẋ = v·cosθ , ẏ = v·sinθ ,&nbsp; a_y = v·ω<br>" +
       "<span class='vals'>縦throttle T=" + m.t_acc_thr.toFixed(3) + "s τ=" + m.tau_acc_thr.toFixed(3) + "s&nbsp; " +
       "brake T=" + m.t_acc_brk.toFixed(3) + "s τ=" + m.tau_acc_brk.toFixed(3) + "s<br>" +
       "横 T_δ=" + m.t_steer.toFixed(3) + "s τ_δ=" + m.tau_steer.toFixed(3) + "s&nbsp; " +
+      "cmd倍率=" + m.steer_scaling.toFixed(3) + "×&nbsp; " +
       "k_us=" + m.k_us.toFixed(3) + " β=" + m.steer_bias.toFixed(2) + "° L=" + L.toFixed(3) + "m</span><br>" +
       "<span class='note'>※ ω・位置の v は観測値を使用（縦誤差を分離）／ステア源: " + srcLabel +
       "／注: 実シミュレータ(C++)の yaw 計算は ω=v·tan(δ)/(L+k_us·v²) で β を含まない（β はこのビューアの当てはめ用）</span>";
@@ -834,7 +851,7 @@ const DATA = __PAYLOAD_JSON__;
     if (model.slopeOn) k.push("c_slope");
     return k;
   }
-  const STEER_KEYS = ["t_steer", "tau_steer"];
+  const STEER_KEYS = ["t_steer", "tau_steer", "steer_scaling"];
   const BIKE_KEYS = ["k_us", "steer_bias"];
   const showOpt = (name, r, unit) => {
     $("optstatus").textContent = " " + name + " RMSE " + r.before.toFixed(3) + "→" + r.after.toFixed(3) + " " + unit;
@@ -862,6 +879,9 @@ const DATA = __PAYLOAD_JSON__;
     model.tau_steer = seed.tau_steer; model.t_steer = seed.t_steer;
     model.k_us = seed.k_us;
     model.steer_bias = seed.steer_bias * RAD2DEG; // seed は rad、つまみは deg
+    model.steer_scaling = seed.steer_scaling ?? 1.0;
+    model.acc_scaling = seed.acc_scaling ?? 1.0;
+    model.steer_dead_band = seed.steer_dead_band ?? 0;
     // poly(v)・c_corner は係数が非ゼロなら自動 ON にしてつまみ有効化
     const setTog = (valKey, onKey, cbId, slId) => {
       const on = Math.abs(model[valKey]) > 1e-9;
