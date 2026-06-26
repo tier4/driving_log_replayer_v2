@@ -38,9 +38,18 @@ if _INSTALL.exists() and str(_INSTALL) not in sys.path:
 from driving_log_replayer_v2.real_log_sim_comparison.lib._coverage import _curvature_coverage  # noqa: E402
 from driving_log_replayer_v2.real_log_sim_comparison.lib._io import load_kinematic, load_steering  # noqa: E402
 from driving_log_replayer_v2.real_log_sim_comparison.lib._map import load_map_ways, resolve_map_osm  # noqa: E402
+from driving_log_replayer_v2.real_log_sim_comparison.lib._multi_agg import (  # noqa: E402
+    HORIZONS as _HORIZONS,
+    acc_score as _acc_score,
+    aggregate_normalized as _agg_normalized,
+    robust_score as _robust_score,
+    steer_score as _steer_score,
+)
 from driving_log_replayer_v2.real_log_sim_comparison.lib._tune_report import _build_viewer_html  # noqa: E402
 from driving_log_replayer_v2.real_log_sim_comparison.multi_dataset_tune import (  # noqa: E402
+    _BASELINE_MODEL,
     _discover,
+    _eval as _tune_eval,
     load_datasets,
 )
 
@@ -54,6 +63,7 @@ WZ_MIN = 0.02         # [rad/s]
 DWZ_MAX = 0.30        # [rad/s²]
 K_US_CLIP = 0.5
 VX_EDGES = np.array([0.5, 1.0, 1.5, 2.0, 2.5, 3.0, 4.0, 5.0, 6.0, 8.0, 10.0, 12.0])
+_H_SPAN = {10: "≈0.33 s", 20: "≈0.67 s", 30: "≈1.0 s", 40: "≈1.33 s"}
 
 _MATHJAX_HEAD = (
     "<script>"
@@ -625,6 +635,123 @@ def _build_sec3(viewer_sections: list[str]) -> str:
 """
 
 
+def _build_sec_deviation(
+    df: pd.DataFrame,
+    n_ds: int,
+    recomputed_score: float | None = None,
+    expected_score: float | None = None,
+    score_name: str = "robust_score",
+) -> str:
+    """N-step 終端誤差の最大乖離テーブルセクション（phase14 vs baseline）。"""
+    horizons = sorted(df["h"].unique().tolist())
+
+    stats_list = []
+    for h in horizons:
+        sub = df[df["h"] == h]
+        stats_list.append({
+            "h": h,
+            "p14_yaw_mean": sub["p14_yaw"].mean(), "p14_yaw_max": sub["p14_yaw"].max(),
+            "p14_lat_mean": sub["p14_lat"].mean(), "p14_lat_max": sub["p14_lat"].max(),
+            "p14_long_mean": sub["p14_long"].mean(), "p14_long_max": sub["p14_long"].max(),
+            "p14_vx_mean": sub["p14_vx"].mean(), "p14_vx_max": sub["p14_vx"].max(),
+            "bl_yaw_mean": sub["bl_yaw"].mean(), "bl_yaw_max": sub["bl_yaw"].max(),
+            "bl_lat_mean": sub["bl_lat"].mean(), "bl_lat_max": sub["bl_lat"].max(),
+            "bl_long_mean": sub["bl_long"].mean(), "bl_long_max": sub["bl_long"].max(),
+            "bl_vx_mean": sub["bl_vx"].mean(), "bl_vx_max": sub["bl_vx"].max(),
+        })
+
+    score_html = ""
+    if recomputed_score is not None and expected_score is not None:
+        diff_pct = abs(recomputed_score - expected_score) / expected_score * 100
+        ok = diff_pct < 2.0
+        color = "#28a745" if ok else "#dc3545"
+        score_html = (
+            f'<div class="note" style="border-color:{color}">'
+            f"スコア再現検証 (<code>{score_name}</code>): 再計算 = <b>{recomputed_score:.4f}</b>、"
+            f"YAML 期待値 = <b>{expected_score:.4f}</b>（差 {diff_pct:.2f}%）"
+            + (" — ✓ 整合" if ok else " — ⚠ 不整合（override/model/SUB_DT を確認）")
+            + "</div>"
+        )
+
+    def _cell(p14_val: float, bl_val: float, fmt: str = ".3f") -> str:
+        ratio = p14_val / bl_val if bl_val > 0 else 1.0
+        if ratio < 0.99:
+            style = ' style="color:#28a745;font-weight:bold"'
+        elif ratio > 1.01:
+            style = ' style="color:#dc3545"'
+        else:
+            style = ""
+        return f"<td{style}>{p14_val:{fmt}}</td>"
+
+    tbody_rows = []
+    for s in stats_list:
+        h = s["h"]
+        span = _H_SPAN.get(h, "")
+        tbody_rows.append(
+            f'<tr>\n'
+            f'  <td rowspan="2" style="text-align:center"><b>N={h}</b><br>'
+            f'<small style="color:#888">{span}</small></td>\n'
+            f'  <td><b>phase14</b></td>\n'
+            f'  {_cell(s["p14_yaw_mean"], s["bl_yaw_mean"])}'
+            f'{_cell(s["p14_yaw_max"], s["bl_yaw_max"])}\n'
+            f'  {_cell(s["p14_lat_mean"], s["bl_lat_mean"])}'
+            f'{_cell(s["p14_lat_max"], s["bl_lat_max"])}\n'
+            f'  {_cell(s["p14_long_mean"], s["bl_long_mean"])}'
+            f'{_cell(s["p14_long_max"], s["bl_long_max"])}\n'
+            f'  {_cell(s["p14_vx_mean"], s["bl_vx_mean"], ".4f")}'
+            f'{_cell(s["p14_vx_max"], s["bl_vx_max"], ".4f")}\n'
+            f'</tr>\n'
+            f'<tr>\n'
+            f'  <td style="color:#888">baseline</td>\n'
+            f'  <td>{s["bl_yaw_mean"]:.3f}</td><td>{s["bl_yaw_max"]:.3f}</td>\n'
+            f'  <td>{s["bl_lat_mean"]:.3f}</td><td>{s["bl_lat_max"]:.3f}</td>\n'
+            f'  <td>{s["bl_long_mean"]:.3f}</td><td>{s["bl_long_max"]:.3f}</td>\n'
+            f'  <td>{s["bl_vx_mean"]:.4f}</td><td>{s["bl_vx_max"]:.4f}</td>\n'
+            f'</tr>'
+        )
+
+    tbody = "\n".join(tbody_rows)
+
+    return f"""
+<section id="deviation">
+<h2>0-6. 全 {n_ds} DS の N-step 終端誤差（phase14 vs baseline）</h2>
+<p>
+全データセットに対し phase14 パラメータと baseline（補正なし）で N-step ロールアウトを実施し、
+終端誤差 RMSE の DS 横断 <b>平均</b>（mean）と <b>最大</b>（worst-case DS）を N ごとに集計する。
+「最大」は「最も誤差が大きかった DS の RMSE」を指す（単一ステップの瞬間値ではない）。
+</p>
+{score_html}
+<table class="param-table" style="font-size:12px">
+  <thead>
+    <tr>
+      <th rowspan="2">N（時間）</th>
+      <th rowspan="2">モデル</th>
+      <th colspan="2">yaw 誤差 [deg]</th>
+      <th colspan="2">lat 誤差 [cm]</th>
+      <th colspan="2">long 誤差 [cm]</th>
+      <th colspan="2">速度誤差 vx [m/s]</th>
+    </tr>
+    <tr>
+      <th>平均</th><th>最大</th>
+      <th>平均</th><th>最大</th>
+      <th>平均</th><th>最大</th>
+      <th>平均</th><th>最大</th>
+    </tr>
+  </thead>
+  <tbody>
+{tbody}
+  </tbody>
+</table>
+<div class="note">
+phase14 の値が baseline より小さい場合は <b style="color:#28a745">緑（改善）</b>、
+大きい場合は <span style="color:#dc3545">赤（悪化）</span> で表示。
+RMSE は各 DS の全 k0 ステップ（stride=5）の終端誤差（N ステップ先）の二乗平均平方根。
+キャッシュは <code>--metrics-cache</code> で指定した CSV ファイルに保存される。
+</div>
+</section>
+"""
+
+
 def build_html(
     params: dict,
     kus_fig: go.Figure,
@@ -632,6 +759,7 @@ def build_html(
     viewer_sections: list[str],
     n_ds: int,
     baseline_score: float = 10.650,
+    deviation_html: str = "",
 ) -> str:
     score = params.get("_score", "N/A")
     phase14_score = float(score) if isinstance(score, (int, float, str)) and str(score) != "N/A" else baseline_score
@@ -659,11 +787,13 @@ def build_html(
 </p>
 <nav>
   <a href="#metrics">0. メトリクス解説</a>
+  {'<a href="#deviation">0-6. N-step 最大乖離</a>' if deviation_html else ""}
   <a href="#theory">1. 理論</a>
   <a href="#identification">2. 実機同定</a>
   <a href="#curve-viewer">3. カーブビューア</a>
 </nav>
 {sec0}
+{deviation_html}
 {sec1}
 {sec2}
 {sec3}
@@ -718,6 +848,13 @@ def main() -> None:
         "--viewer-uuids", type=str, default=None,
         help="ビューアに使う DS UUID をカンマ区切りで指定（省略時は curve_count 上位を自動選択）",
     )
+    ap.add_argument(
+        "--metrics-cache", type=Path, default=None,
+        help=(
+            "rollout メトリクス CSV キャッシュパス（指定時のみ偏差テーブルを生成）。"
+            "ファイルが存在すれば読み込み、なければ全 DS rollout を実行して保存する。"
+        ),
+    )
     args = ap.parse_args()
 
     # パラメータ読み込み
@@ -771,10 +908,109 @@ def main() -> None:
     for r in top_curve:
         print(f"  {r['uuid'][:12]}  curve_count={r['curve_count']}  kappa_max={r['kappa_max_abs']:.4f}")
 
-    # DatasetCtx 構築（ビューア用）
+    # Phase 3b / 3c: DatasetCtx 構築 & rollout メトリクス
     top_items = [(r["uuid"], Path(r["lite_dir"])) for r in top_curve]
-    print(f"\n[Phase 3b] DatasetCtx 構築 ({len(top_items)} DS) ...")
-    ctxs = load_datasets(top_items, n_jobs=min(args.n_jobs, len(top_items)))
+    deviation_html = ""
+    if args.metrics_cache and args.metrics_cache.exists():
+        # キャッシュあり → viewer DS のみ load、メトリクスは CSV から読む
+        print(f"\n[Phase 3b] DatasetCtx 構築 ({len(top_items)} DS) ...")
+        ctxs = load_datasets(top_items, n_jobs=min(args.n_jobs, len(top_items)))
+        print(f"\n[Phase 3c] rollout メトリクスキャッシュ読み込み ...")
+        df_rollout = pd.read_csv(args.metrics_cache)
+        n_ds_cache = df_rollout["uuid"].nunique()
+        n_h_cache = df_rollout["h"].nunique()
+        print(f"  {len(df_rollout)} 行（{n_ds_cache} DS × {n_h_cache} horizons）")
+        # score 再現検証（キャッシュロード時も実施）
+        per_ds_arg = []
+        bl_arg: dict = {}
+        for uuid_key, grp in df_rollout.groupby("uuid"):
+            gd = grp.set_index("h")[
+                ["p14_yaw", "p14_long", "p14_lat", "bl_yaw", "bl_long", "bl_lat"]
+            ].to_dict("index")
+            per_ds_arg.append((
+                uuid_key,
+                {int(h): {"yaw": v["p14_yaw"], "long": v["p14_long"], "lat": v["p14_lat"]}
+                 for h, v in gd.items()},
+            ))
+            bl_arg[uuid_key] = {
+                int(h): {"yaw": v["bl_yaw"], "long": v["bl_long"], "lat": v["bl_lat"]}
+                for h, v in gd.items()
+            }
+        agg = _agg_normalized(per_ds_arg, bl_arg)
+        expected = float(yaml_data.get("score", 0.0))
+        candidates = [
+            ("robust_score", _robust_score(agg)),
+            ("steer_score",  _steer_score(agg)),
+            ("acc_score",    _acc_score(agg)),
+        ]
+        best_name, recomputed = min(candidates, key=lambda kv: abs(kv[1] - expected))
+        diff_pct = abs(recomputed - expected) / expected * 100 if expected else float("inf")
+        print(f"  再現スコア: {recomputed:.4f} ({best_name})  期待値: {expected:.4f}  差: {diff_pct:.2f}%")
+        deviation_html = _build_sec_deviation(df_rollout, len(records), recomputed, expected, score_name=best_name)
+    elif args.metrics_cache:
+        # キャッシュなし → 全 DS load（ついでに viewer DS も取り出す）
+        all_items = [(r["uuid"], Path(r["lite_dir"])) for r in records]
+        print(f"\n[Phase 3b+3c] 全 DS DatasetCtx 構築 ({len(all_items)} DS) + rollout メトリクス計算 ...")
+        all_ctxs = load_datasets(all_items, n_jobs=args.n_jobs)
+        # viewer DS を all_ctxs から抽出（重複 load 回避）
+        ctxs_by_id = {c.dataset_id: c for c in all_ctxs}
+        ctxs = [ctxs_by_id[r["uuid"]] for r in top_curve if r["uuid"] in ctxs_by_id]
+        # phase14 override: YAML の全 params から _* メタキーを除外（hand-pick より安全）
+        override = {k: v for k, v in params.items() if not k.startswith("_")}
+        rows = []
+        for i, ctx in enumerate(all_ctxs, 1):
+            try:
+                p14 = _tune_eval(ctx, override, _BASELINE_MODEL)
+            except Exception as e:
+                print(f"  [WARN] {ctx.dataset_id[:12]}: eval 失敗 ({e})")
+                continue
+            bl = ctx.base_metric
+            for h in _HORIZONS:
+                rows.append({
+                    "uuid": ctx.dataset_id, "h": h,
+                    "p14_yaw": p14[h]["yaw"], "p14_long": p14[h]["long"],
+                    "p14_lat": p14[h]["lat"], "p14_vx": p14[h]["vx"],
+                    "bl_yaw": bl[h]["yaw"], "bl_long": bl[h]["long"],
+                    "bl_lat": bl[h]["lat"], "bl_vx": bl[h]["vx"],
+                })
+            if i % 100 == 0:
+                print(f"  {i}/{len(all_ctxs)} 完了", flush=True)
+        df_rollout = pd.DataFrame(rows)
+        args.metrics_cache.parent.mkdir(parents=True, exist_ok=True)
+        df_rollout.to_csv(args.metrics_cache, index=False)
+        print(f"  キャッシュ保存: {args.metrics_cache}")
+        # score 再現検証
+        per_ds_arg = []
+        bl_arg: dict = {}
+        for uuid_key, grp in df_rollout.groupby("uuid"):
+            grp_dict = grp.set_index("h")[
+                ["p14_yaw", "p14_long", "p14_lat", "bl_yaw", "bl_long", "bl_lat"]
+            ].to_dict("index")
+            per_ds_arg.append((
+                uuid_key,
+                {int(h): {"yaw": v["p14_yaw"], "long": v["p14_long"], "lat": v["p14_lat"]}
+                 for h, v in grp_dict.items()},
+            ))
+            bl_arg[uuid_key] = {
+                int(h): {"yaw": v["bl_yaw"], "long": v["bl_long"], "lat": v["bl_lat"]}
+                for h, v in grp_dict.items()
+            }
+        agg = _agg_normalized(per_ds_arg, bl_arg)
+        expected = float(yaml_data.get("score", 0.0))
+        # YAML の score は tuning --phase に応じて steer/acc/robust のいずれかなので最接近を選択
+        candidates = [
+            ("robust_score", _robust_score(agg)),
+            ("steer_score",  _steer_score(agg)),
+            ("acc_score",    _acc_score(agg)),
+        ]
+        best_name, recomputed = min(candidates, key=lambda kv: abs(kv[1] - expected))
+        diff_pct = abs(recomputed - expected) / expected * 100 if expected else float("inf")
+        print(f"  再現スコア: {recomputed:.4f} ({best_name})  期待値: {expected:.4f}  差: {diff_pct:.2f}%")
+        deviation_html = _build_sec_deviation(df_rollout, len(records), recomputed, expected, score_name=best_name)
+    else:
+        # --metrics-cache 未指定 → 通常の viewer DS のみ load
+        print(f"\n[Phase 3b] DatasetCtx 構築 ({len(top_items)} DS) ...")
+        ctxs = load_datasets(top_items, n_jobs=min(args.n_jobs, len(top_items)))
 
     curve_count_map = {r["uuid"]: r["curve_count"] for r in top_curve}
 
@@ -829,7 +1065,7 @@ def main() -> None:
     print("\n[Phase 4] plotly 図生成 & HTML 組み立て ...")
     kus_fig = build_kus_figure(bins, params)
     db_fig = build_deadband_figure(df_db, float(params.get("steer_dead_band", 0.0)))
-    html = build_html(params, kus_fig, db_fig, viewer_sections, len(records))
+    html = build_html(params, kus_fig, db_fig, viewer_sections, len(records), deviation_html=deviation_html)
 
     args.out.parent.mkdir(parents=True, exist_ok=True)
     args.out.write_text(html, encoding="utf-8")
