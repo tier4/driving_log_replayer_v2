@@ -1,5 +1,17 @@
 # Release Notes
 
+## Version 3.18.4
+
+Minor Tweak
+
+| Module                  | Feature    | Brief summary                                                                                                        | Pull request                                                        | Contributor                                     |
+| ----------------------- | ---------- | -------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------- | ----------------------------------------------- |
+| `perception`            | conversion | ignore footprint in shape_type is bbox                                                                               | [#377](https://github.com/tier4/driving_log_replayer_v2/issues/377) | [MasatoSaeki](https://github.com/MasatoSaeki)   |
+| `2d_detector`           | ros params | update tensorrt_yolox remapping param                                                                                | [#374](https://github.com/tier4/driving_log_replayer_v2/issues/374) | [badai-nguyen](https://github.com/badai-nguyen) |
+| `planning`              | method     | evaluate planning factor duration                                                                                    | [#373](https://github.com/tier4/driving_log_replayer_v2/issues/373) | [xtk8532704](https://github.com/xtk8532704)     |
+| `planning`              | refactor   | refactor planning_control_e2e_wo_diffusion_planner.yaml to allow turn on all planning node without diffusion planner | [#372](https://github.com/tier4/driving_log_replayer_v2/issues/372) | [xtk8532704](https://github.com/xtk8532704)     |
+| `perception reproducer` | condition  | new condition feature for perception reproducer                                                                      | [#371](https://github.com/tier4/driving_log_replayer_v2/issues/371) | [xtk8532704](https://github.com/xtk8532704)     |
+
 ## Version 3.18.3
 
 Minor Tweak

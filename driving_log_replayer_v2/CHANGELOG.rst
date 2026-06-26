@@ -2,6 +2,29 @@
 Changelog for package driving_log_replayer
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
+Forthcoming
+-----------
+* fix: ignore footprint in shape_type is bbox (`#377 <https://github.com/tier4/driving_log_replayer_v2/issues/377>`_)
+  * feat: ignore footprint in shape_type is bbox
+  * fix test
+  ---------
+* fix(2d_detector): update tensorrt_yolox remaping param (`#374 <https://github.com/tier4/driving_log_replayer_v2/issues/374>`_)
+  * fix(2d_detector): update tensorrt_yolox remaping param
+  * fix cspelling check
+  * pre-commit
+  ---------
+* feat: evaluate planning factor duration (`#373 <https://github.com/tier4/driving_log_replayer_v2/issues/373>`_)
+  * new feature judge the planning factor keep duration
+  * accumulate init time
+  * change logic
+* refactor planning_control_e2e_wo_diffusion_planner.yaml to allow turn on all planning node without diffusion planner. (`#372 <https://github.com/tier4/driving_log_replayer_v2/issues/372>`_)
+* feat: new condition feature for perception reproducer (`#371 <https://github.com/tier4/driving_log_replayer_v2/issues/371>`_)
+  * new feature for perception reproducer
+  * pre-commit
+  * fix bug, thanks for copilot
+  * precommit and unit test
+* Contributors: Kem (TiankuiXian), Masato Saeki, badai nguyen
+
 3.18.3 (2026-06-09)
 -------------------
 * feat(perception, perception_fp): add saved topic (`#369 <https://github.com/tier4/driving_log_replayer_v2/issues/369>`_)
