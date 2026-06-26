@@ -229,7 +229,7 @@ def launch_bag_recorder(context: LaunchContext) -> list:
         record_cmd += ["-e", launch_config.RECORD_TOPIC]
     else:
         record_cmd += ["-e", conf["override_topics_regex"]]
-    return [ExecuteProcess(cmd=record_cmd)]
+    return [ExecuteProcess(cmd=record_cmd), LogInfo(msg=f"record_command is {record_cmd}")]
 
 
 def launch_perception_reproducer(context: LaunchContext) -> list:
