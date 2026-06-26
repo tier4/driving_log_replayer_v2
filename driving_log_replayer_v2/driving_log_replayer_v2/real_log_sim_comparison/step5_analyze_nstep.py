@@ -817,6 +817,7 @@ def eval_rollout_rmse(
     gt_steer_kinematic = g["gt_steer_kinematic"]
     gt_wz = g["gt_wz"]
     gt_ax = g["gt_ax"]
+    gt_vy = g["gt_vy"]
 
     # hoisted arrays (pre-computed in _prepare_gt for this gt-key)
     nfull_arr = g["nfull_arr"]
@@ -888,6 +889,7 @@ def eval_rollout_rmse(
             acc_history=acc_hist_all[k0],
             steer_history=steer_hist_all[k0],
             wz=float(gt_wz[k0]),
+            vy=float(gt_vy[k0]),
         )
         cos_y = cos_y_arr[k0]
         sin_y = sin_y_arr[k0]

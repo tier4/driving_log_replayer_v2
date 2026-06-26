@@ -13,9 +13,9 @@ from __future__ import annotations
 
 import statistics as stats
 
-# 評価する horizon 群。step7 sweep と同じ最大 horizon (N=20) に加え、より長い N=40 で
-# dynamics 累積差を観測する。スコア (robust_score) は両 horizon を等重みで集約する。
-HORIZONS = (20, 40)
+# 評価する horizon 群。4点でホライズン方向の解像度を上げ、短期(N=10)・中期(N=20,30)・
+# 長期(N=40) を等重みで集約する。C ライブラリは任意 horizons に対応 (max(H) まで一括積分)。
+HORIZONS = (10, 20, 30, 40)
 
 # per-dataset 正規化の分母フロア (horizon 別・成分別)。ほぼ直進・低ダイナミクス走行は baseline
 # 誤差が極小で、相対誤差 (err/baseline) が暴発し worst-case を支配する (絶対値は微小なのに)。
@@ -24,9 +24,12 @@ HORIZONS = (20, 40)
 # 横 0.1〜3.4cm @N20; baseline モデルは縦方向の遅延/時定数が支配的)。フロアが大きすぎると
 # baseline ですら正規化値が 1 未満になりその成分の寄与が一律縮小される (= 信号を殺す) ため、
 # 各成分は分布下位の低ダイナ走行のみをクリップする水準に校正する (横は小さいのでフロアも低め)。
-YAW_FLOOR = {20: 0.12, 40: 0.24}   # deg (分布下位 ~20% の低ダイナ yaw をクリップ)
-LONG_FLOOR = {20: 2.0, 40: 4.5}    # cm  (縦は誤差が大きい → フロアも大きめ)
-LAT_FLOOR = {20: 0.6, 40: 1.2}     # cm  (横は誤差が小さい → フロアも小さめ)
+# N=10, N=30 は線形補間。N=10 の 0.06 は実分布 p50=0.066 deg とほぼ同値で 47% がクリップ
+# されるが、クリップ有 DS は nyaw<1.0 に収まり worst には寄与しない (設計通り)。
+# フロアを下げると外れた DS の denom が小さくなり nyaw が暴発するため 0.06 を維持。
+YAW_FLOOR  = {10: 0.06, 20: 0.12, 30: 0.18, 40: 0.24}   # deg
+LONG_FLOOR = {10: 1.0,  20: 2.0,  30: 3.25, 40: 4.5}    # cm
+LAT_FLOOR  = {10: 0.3,  20: 0.6,  30: 0.9,  40: 1.2}    # cm
 
 WORST_W = 0.5  # worst-case 項の重み (mean+worst 両方を balance する方針)
 POS_W = 0.5    # 縦・横 各成分の重み。pos を縦横に分けても yaw:位置 = 1:1 を維持する
