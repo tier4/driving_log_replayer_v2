@@ -145,7 +145,13 @@ def _ctx_to_viewer_data(ctx) -> dict | None:
     }
 
 
-def _build_viewer_html(ctx, configs: dict[str, dict], base_params: dict) -> str | None:
+def _build_viewer_html(
+    ctx,
+    configs: dict[str, dict],
+    base_params: dict,
+    map_ways: list | None = None,
+    initial_t: float | None = None,
+) -> str | None:
     """worst-case DS の縦横モデル検証ビューア HTML 文字列を生成する。
 
     _model_viewer._HTML_TEMPLATE に payload を埋め込んで返す（ファイル書き出しなし）。
@@ -161,11 +167,13 @@ def _build_viewer_html(ctx, configs: dict[str, dict], base_params: dict) -> str 
     if viewer_data is None:
         return None
 
-    payload = build_playback_payload(viewer_data, map_ways=None, rate_hz=MODEL_RATE_HZ, title=ctx.dataset_id)
+    payload = build_playback_payload(viewer_data, map_ways=map_ways, rate_hz=MODEL_RATE_HZ, title=ctx.dataset_id)
     if payload is None:
         return None
 
     first_params = {**base_params, **next(iter(configs.values()))}
+    if initial_t is not None and initial_t > 0:
+        payload["initial_t"] = float(initial_t)
     payload["model_seed"] = _seed_from_params(first_params)
 
     registry: dict[str, dict] = {}
