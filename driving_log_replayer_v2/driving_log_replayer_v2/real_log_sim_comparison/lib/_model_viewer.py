@@ -316,8 +316,9 @@ const DATA = __PAYLOAD_JSON__;
   const run = DATA.runs[0];
   const L = DATA.wheelbase;        // wheelbase [m]
   const DEG = Math.PI / 180, RAD2DEG = 180 / Math.PI;
-  const SIM_COLOR = "#d62728";     // シミュレーション線 (赤)
+  const SIM_COLOR = "#d62728";      // シミュレーション線 (赤)
   const IDEAL_COLOR = "#1f77b4";   // 理想線 (青・破線): 観測 accel/steer を入力に積算 (実車と完全一致の仮定)
+  const BASELINE_COLOR = "#ff7f0e"; // ベースラインモデル線 (オレンジ・常時重畳)
   const CMD_COLOR = "#888";        // 指令線 (灰・破線)
   const PREVIEW_SEC = 1.5;         // 速度矢印 = PREVIEW_SEC 秒後の到達距離 [m]
   const SUBSTEP = 10;              // Euler sub-step 数/グリッドセル (tau が小さくても発振させない)
@@ -557,13 +558,55 @@ const DATA = __PAYLOAD_JSON__;
     return out;
   }
 
+  // ベースライン用: model を一時スナップショット→seed 適用→rollout→復元。DOM 非更新。
+  function rolloutWithSeed(t0, t1, seed) {
+    if (!seed) return null;
+    const sv = {
+      k_us: model.k_us, k_us_vx_lo: model.k_us_vx_lo, k_us_vx_hi: model.k_us_vx_hi,
+      steer_dead_band: model.steer_dead_band,
+      tau_acc_thr: model.tau_acc_thr, t_acc_thr: model.t_acc_thr,
+      tau_acc_brk: model.tau_acc_brk, t_acc_brk: model.t_acc_brk,
+      tau_steer: model.tau_steer, t_steer: model.t_steer,
+      steer_bias: model.steer_bias,
+      steer_scaling: model.steer_scaling, acc_scaling: model.acc_scaling,
+      poly0: model.poly0, poly1: model.poly1, poly2: model.poly2,
+      polyOn0: model.polyOn0, polyOn1: model.polyOn1, polyOn2: model.polyOn2,
+      c_corner: model.c_corner, cornerOn: model.cornerOn, c_slope: model.c_slope,
+    };
+    model.k_us        = seed.k_us        ?? sv.k_us;
+    model.k_us_vx_lo  = seed.k_us_vx_lo  ?? sv.k_us_vx_lo;
+    model.k_us_vx_hi  = seed.k_us_vx_hi  ?? sv.k_us_vx_hi;
+    model.steer_dead_band = seed.steer_dead_band ?? sv.steer_dead_band;
+    model.tau_acc_thr = seed.tau_acc_thr ?? sv.tau_acc_thr;
+    model.t_acc_thr   = seed.t_acc_thr   ?? sv.t_acc_thr;
+    model.tau_acc_brk = seed.tau_acc_brk ?? sv.tau_acc_brk;
+    model.t_acc_brk   = seed.t_acc_brk   ?? sv.t_acc_brk;
+    model.tau_steer   = seed.tau_steer   ?? sv.tau_steer;
+    model.t_steer     = seed.t_steer     ?? sv.t_steer;
+    if (seed.steer_bias != null) model.steer_bias = seed.steer_bias * RAD2DEG;
+    model.steer_scaling = seed.steer_scaling ?? sv.steer_scaling;
+    model.acc_scaling   = seed.acc_scaling   ?? sv.acc_scaling;
+    model.poly0 = seed.poly0 ?? sv.poly0;
+    model.poly1 = seed.poly1 ?? sv.poly1;
+    model.poly2 = seed.poly2 ?? sv.poly2;
+    model.polyOn0 = Math.abs(model.poly0) > 1e-9;
+    model.polyOn1 = Math.abs(model.poly1) > 1e-9;
+    model.polyOn2 = Math.abs(model.poly2) > 1e-9;
+    model.c_corner = seed.c_corner ?? sv.c_corner;
+    model.cornerOn = Math.abs(model.c_corner) > 1e-9;
+    model.c_slope  = seed.c_slope  ?? sv.c_slope;
+    const result = rollout(t0, t1, false);
+    Object.assign(model, sv);
+    return result;
+  }
+
   // ------------------------------------------------------------------ 操作
   function setHint() {
     $("hint").textContent =
       "シーク時刻を起点に運動方程式で前方積算したシミュレーション(赤)を観測(実線)・指令(破線灰)と重ねる。" +
       "縦 a→v、横 δ→ω→θ→位置（横の v は観測値を使用）。地図の赤線=シミュレーション軌跡。" +
       "座標系: X=進行方向, Y=横方向, θ=ヨー角(進行方向), δ=ステア角, ω=ヨーレート。" +
-      "凡例: 実線=観測(実機色), 破線灰=指令, 赤=シミュレーション, 青破線=理想(加速度・ステア角が実車と完全一致した場合の積算値)。" +
+      "凡例: 実線=観測(実機色), 破線灰=指令, 赤=現在モデル(選択中config), オレンジ破線=ベースライン(k_us=0/deadband=0), 青破線=理想(加速度・ステア角が実車と完全一致した場合の積算値)。" +
       "赤 vs 青でアクチュエータモデル(指令→応答)の誤差、青 vs 観測で運動学モデルの誤差を切り分けられる。" +
       "勾配 c·a_slope(既定ON): a_slope=9.81·sin(pitch) で路面勾配の重力分力を a_target に加算(登り<0=減速)。" +
       "効果が見えるのは勾配が変化する区間で、ほぼ一定勾配では poly0 と交絡するため両者の同時 ON は避ける。" +
@@ -931,6 +974,11 @@ const DATA = __PAYLOAD_JSON__;
     });
   })();
 
+  // ベースライン seed を model_registry から自動検出（"baseline" を含む最初のキー）
+  const _blReg = DATA.model_registry || {};
+  const _blKey = Object.keys(_blReg).find(k => k.toLowerCase().includes('baseline')) || null;
+  const baselineSeed = _blKey ? _blReg[_blKey] : null;
+
   // ------------------------------------------------------------------ 地図描画
   function drawArrowhead(x, y, ang, size) {
     ctx.beginPath();
@@ -957,8 +1005,8 @@ const DATA = __PAYLOAD_JSON__;
     ctx.fillText(m >= 1 ? m + " m" : m.toFixed(1) + " m", x0 + 4, y0 - 6);
   }
 
-  // 地図 1 フレーム描画。sim = rollout 結果 (null 可)、ideal = 理想 rollout (null 可)。カメラ移動中なら true。
-  function drawMap(sim, ideal) {
+  // 地図 1 フレーム描画。sim = rollout 結果 (null 可)、ideal = 理想 rollout (null 可)、baseSim = ベースライン (null 可)。
+  function drawMap(sim, ideal, baseSim) {
     const wrap = cv.parentElement;
     const w = wrap.clientWidth, h = wrap.clientHeight;
     if (w === 0 || h === 0) return false;
@@ -1020,6 +1068,15 @@ const DATA = __PAYLOAD_JSON__;
       ctx.beginPath();
       ctx.moveTo(SX(ideal.x[0]), SY(ideal.y[0]));
       for (let k = 1; k < ideal.x.length; k++) ctx.lineTo(SX(ideal.x[k]), SY(ideal.y[k]));
+      ctx.stroke(); ctx.setLineDash([]);
+    }
+
+    // ベースラインモデル軌跡（オレンジ・破線・常時重畳）
+    if (baseSim && baseSim.x.length > 1) {
+      ctx.strokeStyle = BASELINE_COLOR; ctx.lineWidth = 2.0; ctx.setLineDash([4, 3]);
+      ctx.beginPath();
+      ctx.moveTo(SX(baseSim.x[0]), SY(baseSim.y[0]));
+      for (let k = 1; k < baseSim.x.length; k++) ctx.lineTo(SX(baseSim.x[k]), SY(baseSim.y[k]));
       ctx.stroke(); ctx.setLineDash([]);
     }
 
@@ -1100,7 +1157,7 @@ const DATA = __PAYLOAD_JSON__;
     });
   }
 
-  function drawPlots(sim, ideal, t0, t1) {
+  function drawPlots(sim, ideal, t0, t1, baseSim) {
     const w = plotsEl.clientWidth, h = plotsEl.clientHeight;
     if (w === 0 || h === 0 || !plotGeom.length) return;
     const dpr = window.devicePixelRatio || 1;
@@ -1265,6 +1322,16 @@ const DATA = __PAYLOAD_JSON__;
         c.stroke(); c.setLineDash([]);
       }
 
+      // ベースライン (オレンジ・破線): k_us=0/deadband=0 モデルの常時重畳。
+      const barr = baseSim && baseSim[g.panel.sim];
+      if (barr && barr.length > 1) {
+        c.strokeStyle = BASELINE_COLOR; c.lineWidth = 1.6; c.setLineDash([4, 3]);
+        c.beginPath();
+        c.moveTo(X(baseSim.t[0]), g.Y(barr[0]));
+        for (let i = 1; i < barr.length; i++) c.lineTo(X(baseSim.t[i]), g.Y(barr[i]));
+        c.stroke(); c.setLineDash([]);
+      }
+
       // 起点(左端)カーソル + 観測初期値ドット
       c.strokeStyle = "#999"; c.lineWidth = 1; c.setLineDash([3, 3]);
       c.beginPath(); c.moveTo(X(t0), g.py0); c.lineTo(X(t0), g.py0 + g.plotH); c.stroke();
@@ -1302,10 +1369,14 @@ const DATA = __PAYLOAD_JSON__;
     if (dirty) {
       const [t0, t1] = plotWindow();
       const sim = rollout(t0, t1, false);     // 1 フレーム 1 回だけ積分し地図・プロットで共有
+      // ベースライン: ドロップダウンが既に baseline でなければ常時重畳
+      const _selName = ($("modelsel") || {}).value || "";
+      const baseSim = (baselineSeed && sim && _selName !== _blKey)
+        ? rolloutWithSeed(t0, t1, baselineSeed) : null;
       const ideal = showIdeal ? rollout(t0, t1, true) : null; // 理想(実測入力)線
-      const cont = drawMap(sim, ideal);
+      const cont = drawMap(sim, ideal, baseSim);
       if (plotStaticDirty) { computePlotGeom(); plotStaticDirty = false; }
-      drawPlots(sim, ideal, t0, t1);
+      drawPlots(sim, ideal, t0, t1, baseSim);
       dirty = cont;
     }
     requestAnimationFrame(tick);
