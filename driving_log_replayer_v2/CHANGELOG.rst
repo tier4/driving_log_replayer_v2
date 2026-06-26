@@ -2,8 +2,8 @@
 Changelog for package driving_log_replayer
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-Forthcoming
------------
+3.18.4 (2026-06-26)
+-------------------
 * fix: ignore footprint in shape_type is bbox (`#377 <https://github.com/tier4/driving_log_replayer_v2/issues/377>`_)
   * feat: ignore footprint in shape_type is bbox
   * fix test
