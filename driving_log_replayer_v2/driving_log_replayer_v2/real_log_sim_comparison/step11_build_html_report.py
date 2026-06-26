@@ -71,6 +71,7 @@ CAPTIONS: dict[str, str] = {
     "cross_normalized_bars": "dataset 横断 正規化 mean/worst 集約（ロバスト性ランキング）",
     "coverage_overview": "dataset 走行特性カバレッジ（速度域・加減速・曲率域・走行距離の偏り）",
     "loo_stability": "leave-one-out 安定性（除外 DS × case の score 変化）",
+    "steer_diff_overview": "steer 制御不感帯分析（per-DS: |steer−steer_des| 分布・速度層別・dead_band 対応）",
 }
 
 # 再生ビューア等、plotly でない自己完結 HTML を埋め込む際の高さ [px]。
