@@ -105,14 +105,14 @@ def velocity_from_ros_msg(ros_velocity: Vector3) -> tuple[float, float, float]:
     return (ros_velocity.x, ros_velocity.y, ros_velocity.z)
 
 
-def footprint_from_ros_msg(ros_footprint: RosPolygon) -> Polygon | None:
+def footprint_from_ros_msg(ros_footprint: RosPolygon, shape_type: ShapeType) -> Polygon | None:
     coords = []
     for ros_point in ros_footprint.points:
         coords.append((ros_point.x, ros_point.y, ros_point.z))
-    if len(coords) >= 3:  # noqa
+    if shape_type == ShapeType.POLYGON:
         # polygon must be more than 3 points
         return Polygon(coords)
-    # footprint.points of bounding_box and cylinder are empty, so return None
+    # bounding_box and cylinder should set footprint to None
     return None
 
 
@@ -555,9 +555,7 @@ def list_dynamic_object_from_ros_msg(
                     perception_object.shape.dimensions,
                     shape_type_num,
                 ),
-                footprint=footprint_from_ros_msg(
-                    perception_object.shape.footprint,
-                ),
+                footprint=footprint_from_ros_msg(perception_object.shape.footprint, shape_type),
             ),
             velocity=velocity_from_ros_msg(
                 perception_object.kinematics.twist_with_covariance.twist.linear
