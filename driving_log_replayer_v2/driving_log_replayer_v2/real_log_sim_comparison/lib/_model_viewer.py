@@ -192,14 +192,6 @@ _HTML_TEMPLATE = r"""<!DOCTYPE html>
   #main { flex: 1; display: flex; min-height: 0; }
   #canvaswrap { flex: 1; position: relative; min-width: 0; background: #fdfdfd; }
   #cv { position: absolute; inset: 0; width: 100%; height: 100%; }
-  /* 運動方程式オーバーレイ（地図右上・半透明・クリック透過） */
-  #eqpanel { position: absolute; top: 8px; right: 8px; max-width: 460px; background: rgba(255,255,255,0.92);
-             border: 1px solid #ccd; border-radius: 5px; padding: 7px 10px; font-size: 11px; line-height: 1.5;
-             font-family: "SFMono-Regular", Menlo, Consolas, monospace; color: #222; pointer-events: none;
-             box-shadow: 0 1px 4px rgba(0,0,0,0.12); }
-  #eqpanel b { color: #2b4a8b; }
-  #eqpanel .vals { color: #b00; }
-  #eqpanel .note { color: #777; font-size: 10px; }
   #plots { flex: none; height: 540px; position: relative; border-top: 1px solid #ddd; background: #fff; }
   #plots canvas { position: absolute; inset: 0; width: 100%; height: 100%; }
   button, select { font-size: 12px; }
@@ -299,7 +291,7 @@ _HTML_TEMPLATE = r"""<!DOCTYPE html>
   </div>
   <div id="hint"></div>
   <div id="main">
-    <div id="canvaswrap"><canvas id="cv"></canvas><div id="eqpanel"></div></div>
+    <div id="canvaswrap"><canvas id="cv"></canvas></div>
   </div>
   <div id="plots">
     <canvas id="plotcv"></canvas>
@@ -624,7 +616,7 @@ const DATA = __PAYLOAD_JSON__;
     setPlaying(!playing);
   });
   $("speed").addEventListener("change", (e) => { speedMul = parseFloat(e.target.value); });
-  $("steersrc").addEventListener("change", (e) => { steerSource = e.target.value; updateEquations(); markDirty(); });
+  $("steersrc").addEventListener("change", (e) => { steerSource = e.target.value; markDirty(); });
   $("errpanels").addEventListener("change", (e) => { showErr = e.target.checked; markPlotStatic(); markDirty(); });
   $("idealtoggle").addEventListener("change", (e) => { showIdeal = e.target.checked; markDirty(); });
   // パラメータ群（#knobs）の表示/非表示トグル（地図・プロットを広く使いたいとき隠す）。
@@ -691,7 +683,7 @@ const DATA = __PAYLOAD_JSON__;
     show();
     sl.addEventListener("input", () => {
       model[modelKey] = sl.valueAsNumber;
-      show(); updateEquations();
+      show();
       markDirty(); // sim のみ再計算 → geom 再計算不要
     });
   }
@@ -723,7 +715,7 @@ const DATA = __PAYLOAD_JSON__;
     cb.addEventListener("change", () => {
       model[onKey] = cb.checked;
       sl.disabled = !cb.checked;
-      updateEquations(); markDirty();
+      markDirty();
     });
   }
   setupPolyToggle("on_poly0", "k_poly0", "polyOn0");
@@ -735,39 +727,8 @@ const DATA = __PAYLOAD_JSON__;
   $("on_stop").addEventListener("change", (e) => {
     model.stopHandling = e.target.checked;
     $("k_vstop").disabled = !e.target.checked;
-    updateEquations(); markDirty();
+    markDirty();
   });
-
-  // 運動方程式オーバーレイ（#1 deliverable）。つまみ/トグル変更でライブ更新。
-  function updateEquations() {
-    const m = model;
-    const srcLabel = steerSource === "sim" ? "シミュレーション δ" : "観測 δ";
-    let poly = "";
-    if (m.polyOn0) poly += " + " + m.poly0.toFixed(3);
-    if (m.polyOn1) poly += " + " + m.poly1.toFixed(4) + "·v";
-    if (m.polyOn2) poly += " + " + m.poly2.toFixed(5) + "·v²";
-    if (m.cornerOn) poly += " + " + m.c_corner.toFixed(3) + "·a_y²";
-    if (m.slopeOn) poly += " + " + m.c_slope.toFixed(2) + "·a_slope";
-    $("eqpanel").innerHTML =
-      "<b>運動方程式</b>（起点=シーク時刻から前方積算）<br>" +
-      "縦&nbsp; ȧ = −(a − a_target)/τ ,&nbsp; a_target = a_cmd(t−T)" + poly + " ,&nbsp; v̇ = a<br>" +
-      "&nbsp;&nbsp;&nbsp; <span class='note'>[throttle/brake で T・τ 分離, 多項式補正は ON の次のみ" +
-      (m.slopeOn ? " / a_slope=9.81·sin(pitch) 路面勾配の重力分力(登り<0)・poly0 と同時 ON は一定勾配で交絡" : "") +
-      (m.stopHandling ? " / 停止処理: v≤" + m.v_stop.toFixed(2) + "&ブレーキ指令で a_target=0・後退なし" : " / 停止処理OFF") + "]</span><br>" +
-      "横&nbsp; δ̇ = −(δ − sat(δ_cmd,lim)·s_steer(t−T_δ))/τ_δ ,&nbsp; s_steer=" + m.steer_scaling.toFixed(3) + "<br>" +
-      "&nbsp;&nbsp;&nbsp; ω = v·tan(δ+β)/(L + k_us_eff·v²) ,&nbsp; θ̇ = ω<br>" +
-      "&nbsp;&nbsp;&nbsp; <span class='note'>k_us_eff = k_us·ramp(v," + m.k_us_vx_lo.toFixed(1) + "," + m.k_us_vx_hi.toFixed(1) + ")" +
-      ((m.k_us_vx_hi <= m.k_us_vx_lo) ? " [ramp 無効 → k_us_eff=k_us 常時]" : " [低速でゼロフェード]") + "</span><br>" +
-      "&nbsp;&nbsp;&nbsp; ẋ = v·cosθ , ẏ = v·sinθ ,&nbsp; a_y = v·ω<br>" +
-      "<span class='vals'>縦throttle T=" + m.t_acc_thr.toFixed(3) + "s τ=" + m.tau_acc_thr.toFixed(3) + "s&nbsp; " +
-      "brake T=" + m.t_acc_brk.toFixed(3) + "s τ=" + m.tau_acc_brk.toFixed(3) + "s<br>" +
-      "横 T_δ=" + m.t_steer.toFixed(3) + "s τ_δ=" + m.tau_steer.toFixed(3) + "s&nbsp; " +
-      "cmd倍率=" + m.steer_scaling.toFixed(3) + "×&nbsp; " +
-      "k_us=" + m.k_us.toFixed(3) + " β=" + m.steer_bias.toFixed(2) + "° L=" + L.toFixed(3) + "m</span><br>" +
-      "<span class='note'>※ ω・位置の v は観測値を使用（縦誤差を分離）／ステア源: " + srcLabel +
-      "／注: 実シミュレータ(C++)の yaw 計算は ω=v·tan(δ)/(L+k_us·v²) で β を含まない（β はこのビューアの当てはめ用）</span>";
-  }
-  updateEquations();
 
   // -------------------------------------------------- 最小二乗最適化（全区間・出力誤差）
   // 各サブシステムを独立にフィット（運動方程式が階層的に分離できるため）:
@@ -901,7 +862,7 @@ const DATA = __PAYLOAD_JSON__;
     }
     const after = Math.sqrt(resid());
     for (const k of keys) syncKnob(k);
-    updateEquations(); markDirty();
+    markDirty();
     return { before, after };
   }
   // 縦の最適化キー: 基本(T/τ) + 有効な多項式補正の各次のみ。
@@ -959,7 +920,7 @@ const DATA = __PAYLOAD_JSON__;
     setTog("poly2", "polyOn2", "on_poly2", "k_poly2");
     setTog("c_corner", "cornerOn", "on_corner", "k_corner");
     for (const k of Object.keys(knobReg)) syncKnob(k);
-    updateEquations(); markDirty();
+    markDirty();
   }
   (function setupModelSelect() {
     const reg = DATA.model_registry || {};
