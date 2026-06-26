@@ -349,7 +349,7 @@ const DATA = __PAYLOAD_JSON__;
   let playing = false;
   let speedMul = 1;
   let plotWindowS = 8;   // 予測窓幅 [s]。窓 = [curT, curT + plotWindowS] (左端=起点)。
-  let curT = 0;          // 現在時刻 (= シミュレーション起点) [s]
+  let curT = (DATA.initial_t != null) ? DATA.initial_t : 0;  // 現在時刻 (= シミュレーション起点) [s]
   let showErr = false;   // 誤差専用パネル（sim−観測 時系列）を増設表示するか
   let showIdeal = true;  // 理想線(観測 accel/steer を入力に積算した値)を青で重ねるか
   let steerSource = "sim"; // 自転車モデルへ渡す δ の源: "sim"(シミュレーション) | "obs"(観測)
