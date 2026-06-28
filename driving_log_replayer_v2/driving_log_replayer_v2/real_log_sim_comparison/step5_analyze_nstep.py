@@ -149,13 +149,18 @@ def _load_lib() -> ctypes.CDLL:
     lib.vm_create_ideal_steer_acc.argtypes = [c_double, c_double]  # wheelbase, sub_dt
 
     lib.vm_create_delay_steer_acc_geared_wo_fall_guard.restype = c_void_p
-    # 15 base args + 2 speed-dependent k_us ramp (k_us_vx_lo, k_us_vx_hi)
+    # 15 base args (vx_lim..k_us)
+    # + 2 array pointers (k_us_thresholds, k_us_band_values) + 1 int (n_kus_bands)
     # + 5 verification-viewer-parity longitudinal terms
     # (brake_time_constant, lon_drag_c0, lon_drag_c1, lon_drag_c2, lon_lat_coupling)
     # + 1 int n_substep (Euler sub-steps per outer update() call; 1 = original behaviour)
-    lib.vm_create_delay_steer_acc_geared_wo_fall_guard.argtypes = [c_double] * 22 + [
-        ctypes.c_int
-    ]
+    _c_dbl_p_local = ctypes.POINTER(c_double)
+    lib.vm_create_delay_steer_acc_geared_wo_fall_guard.argtypes = (
+        [c_double] * 15 +               # base: vx_lim..k_us
+        [_c_dbl_p_local, _c_dbl_p_local, ctypes.c_int] +  # thresholds, band_values, n_kus_bands
+        [c_double] * 5 +                # brake, drag0/1/2, coupling
+        [ctypes.c_int]                  # n_substep
+    )
 
     # taiga_dyn: 14 共通引数 (wo_fall_guard の k_us を除く) + 7 物理パラメータ
     # (mass, inertia_z, lf, lr, cornering_stiffness_front, cornering_stiffness_rear, vx_min_dyn)
@@ -297,6 +302,34 @@ class VehicleModel:
             self._ptr = lib.vm_create_ideal_steer_acc(p["wheelbase"], sub_dt)
             self._steer_bias = 0.0
         elif model_type == "delay_steer_acc_geared_wo_fall_guard":
+            # k_us step-band mode: k_us_bands (list) + k_us_thresholds (list, len = len(bands)-1)
+            # n_kus_bands == 0 → legacy single k_us + optional ramp (backward compatible)
+            #
+            # Backward compat: k_us_lo/k_us_vx_thresh/k_us_mid/k_us_vx_thresh2 keys
+            # (Phase 14/43/44) → k_us_bands / k_us_thresholds
+            if "k_us_lo" in p and "k_us_bands" not in p:
+                thresh1 = p.get("k_us_vx_thresh", 0.0)
+                if thresh1 > 0.0:
+                    p = dict(p)
+                    thresh2 = p.get("k_us_vx_thresh2", 0.0)
+                    if "k_us_mid" in p and thresh2 > thresh1:
+                        p["k_us_bands"] = [p["k_us_lo"], p["k_us_mid"], p.get("k_us", 0.0)]
+                        p["k_us_thresholds"] = [thresh1, thresh2]
+                    else:
+                        p["k_us_bands"] = [p["k_us_lo"], p.get("k_us", 0.0)]
+                        p["k_us_thresholds"] = [thresh1]
+            kus_bands = p.get("k_us_bands", [])
+            kus_thresh = p.get("k_us_thresholds", [])
+            n_kus_bands = len(kus_bands)
+            if n_kus_bands > 0:
+                _c_dbl = ctypes.c_double
+                thresh_arr = (_c_dbl * max(n_kus_bands - 1, 1))(*kus_thresh[:n_kus_bands - 1])
+                bands_arr = (_c_dbl * n_kus_bands)(*kus_bands[:n_kus_bands])
+                thresh_ptr = ctypes.cast(thresh_arr, ctypes.POINTER(_c_dbl))
+                bands_ptr = ctypes.cast(bands_arr, ctypes.POINTER(_c_dbl))
+            else:
+                thresh_ptr = ctypes.cast(None, ctypes.POINTER(ctypes.c_double))
+                bands_ptr = ctypes.cast(None, ctypes.POINTER(ctypes.c_double))
             self._ptr = lib.vm_create_delay_steer_acc_geared_wo_fall_guard(
                 p["vel_lim"],
                 p["steer_lim"],
@@ -313,10 +346,10 @@ class VehicleModel:
                 p.get("debug_acc_scaling_factor", 1.0),
                 p.get("debug_steer_scaling_factor", 1.0),
                 p.get("k_us", 0.0),
-                # speed-dependent k_us ramp: k_us_eff = k_us * ramp(vx, lo, hi)
-                # both 0.0 → no ramp (full k_us at all speeds, backward compatible)
-                p.get("k_us_vx_lo", 0.0),
-                p.get("k_us_vx_hi", 0.0),
+                # step-band arrays (nullptr + n=0 → scalar k_us at all speeds)
+                thresh_ptr,
+                bands_ptr,
+                ctypes.c_int(n_kus_bands),
                 # verification-viewer-parity longitudinal terms (default neutral)
                 p.get("brake_time_constant", 0.0),
                 p.get("lon_drag_c0", 0.0),
@@ -891,9 +924,6 @@ def eval_rollout_rmse(
             wz=float(gt_wz[k0]),
             vy=float(gt_vy[k0]),
         )
-        cos_y = cos_y_arr[k0]
-        sin_y = sin_y_arr[k0]
-
         # 有効 horizon 数を決定 (昇順のため最大 len(sorted_horizons) 回のループ)
         n_valid = 0
         for h in sorted_horizons:
@@ -930,6 +960,9 @@ def eval_rollout_rmse(
             real_dy = gt_y[k_end] - gt_y[k0]
             sim_dx = mx - gt_x[k0]
             sim_dy = my - gt_y[k0]
+            # k_end 時点の GT yaw を基準に縦横を分解（k0 固定より物理的に正確）
+            cos_y = cos_y_arr[k_end]
+            sin_y = sin_y_arr[k_end]
             real_ds_long = real_dx * cos_y + real_dy * sin_y
             real_ds_lat = -real_dx * sin_y + real_dy * cos_y
             sim_ds_long = sim_dx * cos_y + sim_dy * sin_y
@@ -1058,8 +1091,6 @@ def run_rollout(
         # 不正区間は元コードの per-horizon 事前チェック (ivs 全域 any(...)) と同等:
         # 区間 j の iv が不正なら j を含む horizon 以上はすべて記録しない。
         stepped = 0  # これまでにステップした区間数 (各 h まで積算)
-        cos_y = math.cos(gt_yaw[k0])
-        sin_y = math.sin(gt_yaw[k0])
         for h in sorted_horizons:
             if k0 >= n - h:
                 # この k0 では horizon h が範囲外 (昇順なので以降も全て範囲外)
@@ -1092,11 +1123,13 @@ def run_rollout(
             dy = gt_y[k_end] - model.y
             yaw_err = (gt_yaw[k_end] - model.yaw + math.pi) % (2 * math.pi) - math.pi
 
-            # -- 変位の k0 ヨー基準ローカル分解 --
+            # -- 変位の k_end GT yaw 基準ローカル分解 --
             real_dx = gt_x[k_end] - gt_x[k0]
             real_dy = gt_y[k_end] - gt_y[k0]
             sim_dx = model.x - gt_x[k0]
             sim_dy = model.y - gt_y[k0]
+            cos_y = math.cos(gt_yaw[k_end])
+            sin_y = math.sin(gt_yaw[k_end])
             real_ds_long = real_dx * cos_y + real_dy * sin_y
             real_ds_lat = -real_dx * sin_y + real_dy * cos_y
             sim_ds_long = sim_dx * cos_y + sim_dy * sin_y

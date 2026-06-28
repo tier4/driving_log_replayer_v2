@@ -93,6 +93,13 @@ def _seed_from_params(params: dict) -> dict:
         # lo=hi=0 (デフォルト) → ランプなし (全速度で k_us そのまま)
         "k_us_vx_lo": f("k_us_vx_lo", 0.0),
         "k_us_vx_hi": f("k_us_vx_hi", 0.0),
+        # 速度依存 k_us ステップモデル（Phase 43+）:
+        #   vx < thresh1 → k_us_lo, thresh1 <= vx < thresh2 → k_us_mid, vx >= thresh2 → k_us
+        # thresh1=thresh2=0 のとき無効（ランプモデルにフォールバック）
+        "k_us_lo":         f("k_us_lo", 0.0),
+        "k_us_mid":        f("k_us_mid", 0.0),
+        "k_us_vx_thresh":  f("k_us_vx_thresh", 0.0),
+        "k_us_vx_thresh2": f("k_us_vx_thresh2", 0.0),
         # C++ calcModel: steer_des = sat(cmd, lim) * debug_steer_scaling_factor, 同様に acc_des
         "steer_scaling": f("debug_steer_scaling_factor", 1.0),
         "acc_scaling": f("debug_acc_scaling_factor", 1.0),
@@ -363,6 +370,10 @@ const DATA = __PAYLOAD_JSON__;
     k_us: DATA.model_seed.k_us,
     k_us_vx_lo: DATA.model_seed.k_us_vx_lo ?? 0,
     k_us_vx_hi: DATA.model_seed.k_us_vx_hi ?? 0,
+    k_us_lo: DATA.model_seed.k_us_lo ?? 0,
+    k_us_mid: DATA.model_seed.k_us_mid ?? 0,
+    k_us_vx_thresh: DATA.model_seed.k_us_vx_thresh ?? 0,
+    k_us_vx_thresh2: DATA.model_seed.k_us_vx_thresh2 ?? 0,
     steer_bias: DATA.model_seed.steer_bias * RAD2DEG, // rad→deg (β つまみは度表示)
     // C++ debug_steer_scaling_factor: steer_des = sat(cmd, lim) * scaling (飽和後に乗算)
     steer_scaling: DATA.model_seed.steer_scaling ?? 1.0,
@@ -463,10 +474,23 @@ const DATA = __PAYLOAD_JSON__;
     const tauD = Math.max(model.tau_steer, 1e-3);
     const Td = model.t_steer;
     const beta = model.steer_bias * DEG;   // deg→rad
-    const kus = model.k_us;
-    const kusVxLo = model.k_us_vx_lo, kusVxHi = model.k_us_vx_hi;
     const simSteer = (steerSource === "sim");
     const outDt = 1 / RATE, h = outDt / SUBSTEP;
+
+    // k_us_eff(vx): ステップモデル（thresh>0）またはランプモデルを自動選択。
+    // ステップモデル: thresh1>0 → vx<thresh1 で k_us_lo, vx<thresh2 で k_us_mid, それ以外 k_us
+    // ランプモデル:  k_us_eff = k_us * clamp((vx-lo)/(hi-lo), 0, 1)
+    const kusEff = (vv) => {
+      const thresh1 = model.k_us_vx_thresh, thresh2 = model.k_us_vx_thresh2;
+      if (thresh1 > 0 || thresh2 > 0) {
+        if (vv < thresh1) return model.k_us_lo;
+        if (thresh2 > thresh1 && vv < thresh2) return model.k_us_mid;
+        return model.k_us;
+      }
+      const lo = model.k_us_vx_lo, hi = model.k_us_vx_hi;
+      const ramp = (hi > lo) ? Math.min(Math.max((vv - lo) / (hi - lo), 0), 1) : 1;
+      return model.k_us * ramp;
+    };
 
     let lastDrive = chanAt("cmd_accel", t0); if (lastDrive == null) lastDrive = a; // 指令ホールド用
     let lastUd = chanAt("cmd_steer", t0 - Td); // deg
@@ -478,10 +502,7 @@ const DATA = __PAYLOAD_JSON__;
       const vv = (vl != null) ? vl : v;
       const dsrc = (simSteer && !ideal) ? dRad
         : ((chanAt("steer", tt) != null) ? chanAt("steer", tt) * DEG : dRad);
-      // C++: k_us_eff = k_us * ramp(vx, lo, hi); lo>=hi → no ramp
-      const kusRamp = (kusVxHi > kusVxLo)
-        ? Math.min(Math.max((vv - kusVxLo) / (kusVxHi - kusVxLo), 0), 1) : 1;
-      return vv * Math.tan(dsrc + beta) / (L + kus * kusRamp * vv * vv);
+      return vv * Math.tan(dsrc + beta) / (L + kusEff(vv) * vv * vv);
     };
     const record = (tt) => {
       // ideal では a・δ は観測値そのもの（実車と完全一致の仮定）。
@@ -555,6 +576,8 @@ const DATA = __PAYLOAD_JSON__;
     if (!seed) return null;
     const sv = {
       k_us: model.k_us, k_us_vx_lo: model.k_us_vx_lo, k_us_vx_hi: model.k_us_vx_hi,
+      k_us_lo: model.k_us_lo, k_us_mid: model.k_us_mid,
+      k_us_vx_thresh: model.k_us_vx_thresh, k_us_vx_thresh2: model.k_us_vx_thresh2,
       steer_dead_band: model.steer_dead_band,
       tau_acc_thr: model.tau_acc_thr, t_acc_thr: model.t_acc_thr,
       tau_acc_brk: model.tau_acc_brk, t_acc_brk: model.t_acc_brk,
@@ -565,9 +588,13 @@ const DATA = __PAYLOAD_JSON__;
       polyOn0: model.polyOn0, polyOn1: model.polyOn1, polyOn2: model.polyOn2,
       c_corner: model.c_corner, cornerOn: model.cornerOn, c_slope: model.c_slope,
     };
-    model.k_us        = seed.k_us        ?? sv.k_us;
-    model.k_us_vx_lo  = seed.k_us_vx_lo  ?? sv.k_us_vx_lo;
-    model.k_us_vx_hi  = seed.k_us_vx_hi  ?? sv.k_us_vx_hi;
+    model.k_us         = seed.k_us         ?? sv.k_us;
+    model.k_us_vx_lo   = seed.k_us_vx_lo   ?? sv.k_us_vx_lo;
+    model.k_us_vx_hi   = seed.k_us_vx_hi   ?? sv.k_us_vx_hi;
+    model.k_us_lo      = seed.k_us_lo      ?? sv.k_us_lo;
+    model.k_us_mid     = seed.k_us_mid     ?? sv.k_us_mid;
+    model.k_us_vx_thresh  = seed.k_us_vx_thresh  ?? sv.k_us_vx_thresh;
+    model.k_us_vx_thresh2 = seed.k_us_vx_thresh2 ?? sv.k_us_vx_thresh2;
     model.steer_dead_band = seed.steer_dead_band ?? sv.steer_dead_band;
     model.tau_acc_thr = seed.tau_acc_thr ?? sv.tau_acc_thr;
     model.t_acc_thr   = seed.t_acc_thr   ?? sv.t_acc_thr;
@@ -827,17 +854,26 @@ const DATA = __PAYLOAD_JSON__;
   const residSteer = () => mseSeries(simSteerSeries(), "steer");
   // 自転車 ω=v·tan(δ_obs+β)/(L+k_us_eff·v²) を観測 wz に当て込む（代数式・積分なし）。
   function residBicycle() {
-    const beta = model.steer_bias * DEG, kus = model.k_us;
-    const kusVxLo = model.k_us_vx_lo, kusVxHi = model.k_us_vx_hi;
+    const beta = model.steer_bias * DEG;
     const wzA = run.ch.wz, dA = run.ch.steer, vA = run.ch.lon_vel;
     const [iLo, iHi] = optIndexRange();
+    // kusEffStatic: rollout 内の kusEff と同じロジック（ローカルクロージャ不可のため再定義）
+    const thresh1 = model.k_us_vx_thresh, thresh2 = model.k_us_vx_thresh2;
+    const kusEffStatic = (vv) => {
+      if (thresh1 > 0 || thresh2 > 0) {
+        if (vv < thresh1) return model.k_us_lo;
+        if (thresh2 > thresh1 && vv < thresh2) return model.k_us_mid;
+        return model.k_us;
+      }
+      const lo = model.k_us_vx_lo, hi = model.k_us_vx_hi;
+      const ramp = (hi > lo) ? Math.min(Math.max((vv - lo) / (hi - lo), 0), 1) : 1;
+      return model.k_us * ramp;
+    };
     let se = 0, n = 0;
     for (let i = iLo; i <= iHi; i++) {
       const wz = wzA[i], dd = dA[i], vv = vA[i];
       if (wz == null || dd == null || vv == null) continue;
-      const kusRamp = (kusVxHi > kusVxLo)
-        ? Math.min(Math.max((vv - kusVxLo) / (kusVxHi - kusVxLo), 0), 1) : 1;
-      const om = vv * Math.tan(dd * DEG + beta) / (L + kus * kusRamp * vv * vv);
+      const om = vv * Math.tan(dd * DEG + beta) / (L + kusEffStatic(vv) * vv * vv);
       se += (om - wz) * (om - wz); n++;
     }
     return n ? se / n : 1e9;
@@ -904,6 +940,10 @@ const DATA = __PAYLOAD_JSON__;
     model.k_us = seed.k_us;
     model.k_us_vx_lo = seed.k_us_vx_lo ?? 0;
     model.k_us_vx_hi = seed.k_us_vx_hi ?? 0;
+    model.k_us_lo        = seed.k_us_lo        ?? 0;
+    model.k_us_mid       = seed.k_us_mid       ?? 0;
+    model.k_us_vx_thresh  = seed.k_us_vx_thresh  ?? 0;
+    model.k_us_vx_thresh2 = seed.k_us_vx_thresh2 ?? 0;
     model.steer_bias = seed.steer_bias * RAD2DEG; // seed は rad、つまみは deg
     model.steer_scaling = seed.steer_scaling ?? 1.0;
     model.acc_scaling = seed.acc_scaling ?? 1.0;

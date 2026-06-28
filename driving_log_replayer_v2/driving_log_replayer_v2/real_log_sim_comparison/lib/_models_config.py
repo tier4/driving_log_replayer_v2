@@ -58,7 +58,7 @@ KNOWN_PARAM_KEYS: frozenset[str] = frozenset({
     "steer_time_delay", "steer_time_constant",
     "steer_dead_band", "steer_bias",
     "debug_acc_scaling_factor", "debug_steer_scaling_factor",
-    "k_us", "sub_dt",
+    "k_us", "k_us_bands", "k_us_thresholds", "sub_dt",
     # 縦横モデル検証ビューア相当の表現力 (delay_steer_acc_geared_wo_fall_guard)
     # brake_time_constant=throttle/brake 分離, lon_drag_c0/c1/c2=走行抵抗 poly(v),
     # lon_lat_coupling=縦横連成 c·(v·ω)²
