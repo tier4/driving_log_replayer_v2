@@ -1954,9 +1954,11 @@ def main() -> None:
     long_fig  = build_long_figure(args.collection_dir, params)
     steer_fig = build_steer_id_figure(args.collection_dir, params)
 
-    print(f"  [1-4] 理想追従評価図生成 ({min(len(top_curve), _PERF_N_DS)} DS) ...")
-    perf_fig_box, perf_fig_traj = build_perfect_tracking_figure(top_curve, params)
-    perf_html = _build_sec14(perf_fig_box, perf_fig_traj, params, min(len(top_curve), _PERF_N_DS))
+    # 理想追従評価には curve 上位 _PERF_N_DS DS を使用（viewer 用 top_curve とは独立して選択）
+    perf_records = candidate_curve[:_PERF_N_DS]
+    print(f"  [1-4] 理想追従評価図生成 ({len(perf_records)} DS) ...")
+    perf_fig_box, perf_fig_traj = build_perfect_tracking_figure(perf_records, params)
+    perf_html = _build_sec14(perf_fig_box, perf_fig_traj, params, len(perf_records))
 
     html = build_html(
         params, long_fig, steer_fig, kus_fig, viewer_sections, len(records),
