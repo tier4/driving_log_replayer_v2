@@ -685,12 +685,53 @@ def robust_search(
         # banding/ramp を全て無効化 (update 後に上書き)
         cur_best["k_us_vx_lo"] = 0.0
         cur_best["k_us_vx_hi"] = 0.0
-        cur_best["k_us_vx_thresh"] = 0.0   # thresh=0 → step5 が k_us_bands を設定しない → scalar mode
+        cur_best["k_us_vx_thresh"] = 0.0   # thresh=0 → scalar mode
         cur_best["k_us_vx_thresh2"] = 0.0
-        cur_best.pop("k_us_lo", None)       # scalar mode では不要
-        cur_best.pop("k_us_mid", None)      # scalar mode では不要
+        cur_best.pop("k_us_lo", None)
+        cur_best.pop("k_us_mid", None)
+        # _build_params() が k_us_bands/k_us_thresholds を返す場合も無効化
+        cur_best.pop("k_us_bands", None)
+        cur_best.pop("k_us_thresholds", None)
         # k_us だけは探索対象なので固定しない
         _ = cur_best.pop("k_us", None)
+    elif phase == 48:
+        # Phase 48: k_us=0 固定で steer 系パラメータ最適化 (understeer 補正有効データ向け)。
+        # 6/16 以降の補正ありデータ (--ds-after 2026-06-16) で実行することを想定。
+        # understeer 補正が車両側で施されているため k_us=0 が物理的に正しい。
+        # steer 動力学 (DSF, time_constant, dead_band, bias, rate_lim) と
+        # acc_time_constant を再最適化する。
+        CONTINUOUS_SPACE = {
+            "steer_time_constant":        (0.10, 0.35),
+            "debug_steer_scaling_factor": (0.85, 1.15),
+            "steer_dead_band":            (0.0,  0.010),
+            "steer_bias":                 (-0.01, 0.01),
+            "steer_rate_lim":             (0.10, 0.80),
+            "acc_time_constant":          (0.10, 0.35),
+        }
+        score_fn = steer_score
+        explore_delay = False
+        explore_steer_delay = False
+        if phase_fixed_params:
+            cur_best.update(phase_fixed_params)
+            print(f"[Phase 48] k_us=0 固定, steer 系再最適化 (phase-params から初期化)。"
+                  f" steer_time_delay={cur_best.get('steer_time_delay', '未設定')}")
+        else:
+            print("[Phase 48] k_us=0 固定, steer 系再最適化 (cur_best から初期化)。")
+        # k_us=0 に固定し banding を完全無効化
+        cur_best["k_us"] = 0.0
+        cur_best["k_us_vx_lo"] = 0.0
+        cur_best["k_us_vx_hi"] = 0.0
+        cur_best["k_us_vx_thresh"] = 0.0
+        cur_best["k_us_vx_thresh2"] = 0.0
+        cur_best.pop("k_us_lo", None)
+        cur_best.pop("k_us_mid", None)
+        cur_best.pop("k_us_bands", None)
+        cur_best.pop("k_us_thresholds", None)
+        if phase_fixed_params:
+            # phase_fixed_params が banding を持っていても k_us=0 を上書き保持
+            cur_best["k_us"] = 0.0
+            cur_best.pop("k_us_bands", None)
+            cur_best.pop("k_us_thresholds", None)
     else:
         # Phase 0: 全パラメータ同時最適化 (従来の robust_score)
         CONTINUOUS_SPACE = {
@@ -992,7 +1033,7 @@ def main() -> None:
         "--phase",
         type=int,
         default=0,
-        choices=[0, 1, 2, 3, 4, 5, 10, 11, 12, 13, 14, 43, 44, 45, 46, 47],
+        choices=[0, 1, 2, 3, 4, 5, 10, 11, 12, 13, 14, 43, 44, 45, 46, 47, 48],
         help=(
             "チューニングフェーズ (既定: 0=全パラメータ同時最適化)。"
             "1=acc のみ探索・long スコア (steer 系は scenario.yaml の定義値に固定)。"
@@ -1098,7 +1139,7 @@ def main() -> None:
         all_params = phase_data.get("params", phase_data)
         acc_keys = {"acc_time_constant", "acc_time_delay"}
         # Phase 43/44/45/46/47: 前フェーズの全 params を cur_best として継承（探索空間外の値を保持）
-        if args.phase in (43, 44, 45, 46, 47):
+        if args.phase in (43, 44, 45, 46, 47, 48):
             fixed_keys = set(all_params.keys())
         # Phase 11/12/13: steer_time_delay も固定値として引き継ぐ
         # Phase 12/13: acc_time_constant は変数化するため固定しない (acc_time_delay のみ固定)
