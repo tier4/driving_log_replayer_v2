@@ -834,8 +834,6 @@ def _build_sec1(
 \\(\\text{{err}}_{{vx}}\\) を目的関数として他のパラメータと独立に同定できる。
 </p>
 
-<details>
-<summary>運動方程式の詳細</summary>
 <p><b>運動方程式:</b></p>
 \\[
 a_{{\\mathrm{{cmd,del}}}}(t) = a_{{\\mathrm{{cmd}}}}(t - T_a)
@@ -851,14 +849,12 @@ a_{{\\mathrm{{cmd,del}}}}(t) = a_{{\\mathrm{{cmd}}}}(t - T_a)
 時定数 \\(\\tau_a\\) の一次遅れでペダル加速度 \\(a_{{\\mathrm{{act}}}}\\) が応答する。
 速度 \\(v_x\\) はその積分として得られる。
 </p>
-</details>
 
 <h3>実機ログからの独立同定（全 {n_ds} DS）</h3>
 <p>
 <code>/control/command/control_cmd</code>（\\(a_{{\\mathrm{{cmd}}}}\\)）と
-<code>/localization/acceleration</code>（\\(a_{{\\mathrm{{act}}}}\\)）を全 DS concat し、
-純粋遅延 \\(T_a = {T_a}\\) s を適用した \\(a_{{\\mathrm{{cmd,del}}}}\\) と \\(a_{{\\mathrm{{act}}}}\\) の相関を示す。
-理想的な一次遅れ追従では点群が \\(y=x\\)（赤破線）付近に分布する。
+<code>/localization/acceleration</code>（\\(a_{{\\mathrm{{act}}}}\\)）を DS ごとに非線形最小二乗法（output-error NLS）で
+\\((\\tau_a, T_a)\\) を同定した分布を示す（橙実線 = チューン値、青点線 = 中央値）。
 </p>
 {long_html}
 <div class="note">
@@ -882,8 +878,6 @@ a_{{\\mathrm{{cmd,del}}}}(t) = a_{{\\mathrm{{cmd}}}}(t - T_a)
 \\(\\text{{err}}_{{\\mathrm{{steer}}}}\\) を目的関数として位置・ヨー誤差とは構造的に独立して同定できる。
 </p>
 
-<details>
-<summary>運動方程式の詳細</summary>
 <p><b>運動方程式:</b></p>
 \\[
 \\delta_{{\\mathrm{{cmd,del}}}}(t) = \\delta_{{\\mathrm{{cmd}}}}(t - T_\\delta)
@@ -911,11 +905,10 @@ a_{{\\mathrm{{cmd,del}}}}(t) = a_{{\\mathrm{{cmd}}}}(t - T_a)
 β（steer_bias）はアクチュエータ追従式自体には入らず（<code>getSteer()</code> は bias なし）、
 報告値の加算と 1-3 のヨー式の両方に現れる二重登場のパラメータである。
 </div>
-</details>
 
 <h3>実機ログからの独立同定（<code>identify_steer_dynamics.py</code> 結果）</h3>
 <p>
-各 DS の \\(\\delta_{{\\mathrm{{cmd}}}}\\) と \\(\\delta_{{\\mathrm{{act}}}}\\) に対して遅延グリッドサーチ + OLS で
+各 DS の \\(\\delta_{{\\mathrm{{cmd}}}}\\) と \\(\\delta_{{\\mathrm{{act}}}}\\) に対して遅延グリッドサーチ + output-error NLS で
 \\((\\tau_\\delta, T_\\delta)\\) を同定した分布を示す（橙実線 = チューン値、青点線 = 中央値）。
 </p>
 {steer_html}
@@ -950,8 +943,6 @@ a_{{\\mathrm{{cmd,del}}}}(t) = a_{{\\mathrm{{cmd}}}}(t - T_a)
 直進（\\(\\delta \\approx 0\\)）では感度がゼロなので、全 DS 集約スコアは k_us に対して構造的不可同定。
 </p>
 
-<details>
-<summary>運動方程式の詳細</summary>
 <p><b>運動方程式:</b></p>
 \\[
 \\omega(t) = \\frac{{v_x \\cdot \\tan\\bigl(\\delta_{{\\mathrm{{act}}}}(t) + \\beta\\bigr)}}{{\\max\\!\\left(L + k_{{\\mathrm{{us,eff}}}}(v_x)\\cdot v_x^2,\\; 0.05\\,L\\right)}},
@@ -970,7 +961,6 @@ a_{{\\mathrm{{cmd,del}}}}(t) = a_{{\\mathrm{{cmd}}}}(t - T_a)
 1-2 の DSF が k_us の v²δ 成分を部分吸収しているため、Phase 50 確定後の DSF 値を固定した上で
 k_us を同定することが重要。
 </div>
-</details>
 
 <h3>実機ログからの独立同定（全 {n_ds} DS、速度ビン別 OLS）</h3>
 
