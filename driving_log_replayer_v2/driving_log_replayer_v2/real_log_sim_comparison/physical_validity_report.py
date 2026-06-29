@@ -70,11 +70,12 @@ _H_SPAN = {10: "≈0.33 s", 20: "≈0.67 s", 30: "≈1.0 s", 40: "≈1.33 s"}
 _FIT_DT = 0.01          # モデルフィット用リサンプリング DT [s]
 _FIT_N_DS = 3           # フィット表示する代表 DS 数
 
-# 1-4. 理想追従評価用定数
+# 1-1/1-4. 理想追従評価用共通定数
 _PERF_HORIZONS: tuple[int, ...] = (10, 20, 50, 100)  # steps @ _FIT_DT → 0.10, 0.20, 0.50, 1.00 s
 _PERF_STRIDE = 5                                       # rollout reset stride [steps]
-_PERF_N_DS = 10                                        # box plot 用 DS 数
+_PERF_N_DS = 10                                        # 1-4 横方向 box plot 用 DS 数
 _PERF_N_TRAJ = 3                                       # 軌跡比較表示 DS 数
+_LONG_PERF_N_DS = 20                                   # 1-1 縦方向理想追従 box plot 用 DS 数
 
 def _sim_first_order(cmd: np.ndarray, tau: float, n_delay: int, dt: float = _FIT_DT) -> np.ndarray:
     """純粋遅延 + 一次遅れシミュレーション（lfilter 版）。"""
@@ -166,6 +167,40 @@ def _bicycle_trajectory_full(
         y   = y   + float(gt_vx[i]) * float(np.sin(yaw)) * dt
         yaw = yaw + float(wz_arr[i]) * dt
     return xs, ys
+
+
+def _long_nstep_perf(
+    gt_vx: np.ndarray,
+    a_cmd: np.ndarray,
+    horizon: int,
+    dt: float,
+    stride: int = _PERF_STRIDE,
+) -> np.ndarray:
+    """縦方向理想追従評価: a_cmd を遅れなしで直接積分した速度で N-step 走行し GT 変位と比較。
+
+    開始点で vx_ideal = vx_gt に初期化し、a_cmd を dt 積分して理想速度を求め、
+    その速度で積分した変位 s_ideal と GT 変位 s_gt の差の絶対値を返す。
+    タイヤスリップ・路面勾配・空気抵抗など a_cmd→vx 以外の未モデル要素は含まれない。
+
+    Returns: |s_ideal - s_gt| [m] 配列
+    """
+    n = len(gt_vx)
+    k0s = np.arange(0, n - horizon, stride)
+    k0s = k0s[gt_vx[k0s] > VX_MIN_CURVE]
+    if len(k0s) == 0:
+        return np.array([], dtype=float)
+
+    vx_sim = gt_vx[k0s].astype(float).copy()
+    s_sim  = np.zeros(len(k0s))
+    s_gt   = np.zeros(len(k0s))
+
+    for j in range(horizon):
+        ki = np.clip(k0s + j, 0, n - 1)
+        s_sim  += vx_sim * dt
+        vx_sim += a_cmd[ki] * dt
+        s_gt   += gt_vx[ki] * dt
+
+    return np.abs(s_sim - s_gt)
 
 
 def _find_mcap(collection_dir: Path, uuid: str) -> Path | None:
@@ -627,6 +662,68 @@ def build_long_figure(collection_dir: Path, params: dict) -> go.Figure:
         title_text=f"縦方向モデルフィット（代表 {n} DS — n_dyn 優先・走行区間のみ表示）",
         margin=dict(t=70, b=40),
         legend=dict(orientation="h", y=1.03, x=0),
+    )
+    return fig
+
+
+def build_long_perf_figure(records: list[dict]) -> go.Figure:
+    """縦方向理想追従評価: a_cmd 直接積分 vs GT 変位の box plot（ホライズン別）。
+
+    アクチュエータ遅れ（τ_a, T_a）なしで a_cmd を直接積分した場合の縦方向変位と
+    GT 変位の差を評価し、縦方向モデル構造外要素（路面勾配・空気抵抗・タイヤ）を定量化する。
+    """
+    h_labels = [f"{h * _FIT_DT:.2f}s" for h in _PERF_HORIZONS]
+    per_h_errors: dict[int, list[float]] = {h: [] for h in _PERF_HORIZONS}
+
+    n_ds = min(len(records), _LONG_PERF_N_DS)
+    for rec in records[:n_ds]:
+        mcap = Path(rec["lite_dir"]) / "real.lite" / "real.lite_0.mcap"
+        if not mcap.exists():
+            continue
+        try:
+            df_cmd = load_cmd(mcap, "/control/command/control_cmd")
+            df_vel = load_velocity(mcap)
+        except Exception:
+            continue
+        if df_cmd.empty or df_vel.empty:
+            continue
+
+        t0 = max(float(df_cmd["t_ns"].values[0]), float(df_vel["t_ns"].values[0]))
+        t1 = min(float(df_cmd["t_ns"].values[-1]), float(df_vel["t_ns"].values[-1]))
+        if (t1 - t0) < 2e9:
+            continue
+        t_ns  = np.arange(t0, t1, _FIT_DT * 1e9, dtype=np.float64)
+        t_s   = (t_ns - t0) * 1e-9
+        gt_vx   = np.interp(t_s, (df_vel["t_ns"].values - t0) * 1e-9, df_vel["lon_vel"].values)
+        a_cmd_a = np.interp(t_s, (df_cmd["t_ns"].values - t0) * 1e-9, df_cmd["cmd_accel"].values)
+        if len(gt_vx) < 50:
+            continue
+
+        for h in _PERF_HORIZONS:
+            errs = _long_nstep_perf(gt_vx, a_cmd_a, h, _FIT_DT)
+            per_h_errors[h].extend(errs.tolist())
+
+    fig = go.Figure()
+    for h, hl in zip(_PERF_HORIZONS, h_labels):
+        errs = per_h_errors[h]
+        if errs:
+            fig.add_trace(go.Box(
+                y=[e * 100 for e in errs], name=hl,
+                boxpoints="outliers", marker_size=3, marker_color="darkorange",
+            ))
+    if not any(per_h_errors[h] for h in _PERF_HORIZONS):
+        fig.add_annotation(
+            text="データなし（DS が見つかりません）",
+            xref="paper", yref="paper", x=0.5, y=0.5,
+            showarrow=False, font=dict(size=13),
+        )
+    fig.update_layout(
+        title=f"縦方向 理想追従評価（a_cmd 直接積分 vs GT 変位、上位 {n_ds} DS）",
+        xaxis_title="ホライズン [s]",
+        yaxis_title="|縦方向誤差| [cm]",
+        height=400,
+        showlegend=False,
+        margin=dict(t=60, b=40),
     )
     return fig
 
@@ -1131,6 +1228,7 @@ def _build_sec1(
     steer_fig: go.Figure,
     kus_fig: go.Figure,
     n_ds: int,
+    long_perf_fig: go.Figure | None = None,
 ) -> str:
     kus_rows = _kus_band_table_rows(params)
 
@@ -1151,6 +1249,28 @@ def _build_sec1(
     long_html  = long_fig.to_html(full_html=False, include_plotlyjs=False)
     steer_html = steer_fig.to_html(full_html=False, include_plotlyjs=False)
     kus_html   = kus_fig.to_html(full_html=False, include_plotlyjs=False)
+    long_perf_plot_html = long_perf_fig.to_html(full_html=False, include_plotlyjs=False) if long_perf_fig is not None else ""
+    _vx_min = VX_MIN_CURVE
+    _stride = _PERF_STRIDE
+    if long_perf_plot_html:
+        long_perf_subsection = (
+            "<h3>理想追従評価（a_cmd 直接積分）</h3>"
+            "<p>アクチュエータ遅れ（&tau;_a, T_a）が完全にゼロだった場合に残る縦方向位置ずれを評価する。<br>"
+            "各開始点で \\(v_{x,\\mathrm{ideal}}(t_0) = v_{x,\\mathrm{GT}}(t_0)\\) に初期化し、"
+            "\\(a_{\\mathrm{cmd}}\\) を直接積分して変位を計算、GT 変位と比較する。</p>"
+            "<div class=\"note\">"
+            "&#9888;&#65039; <b>設計上の帰結</b>: 縦方向の GT 変位は \\(v_x\\) の積分なので、"
+            "アクチュエータ遅れを除去した残差は"
+            "路面勾配・空気抵抗・タイヤ縦力などの <b>モデル構造外要素</b>"
+            "（および a_cmd &ne; GT 加速度起因のマップ/補正バイアス）を反映する。"
+            "</div>"
+            f"<p>走行区間（\\(v_x > {_vx_min}\\) m/s）を stride={_stride} ステップで走査し、"
+            "N-step ロールアウト終端の縦方向誤差絶対値を集計する。"
+            "ホライズン: N=10（0.10s）, N=20（0.20s）, N=50（0.50s）, N=100（1.00s）。</p>"
+            + long_perf_plot_html
+        )
+    else:
+        long_perf_subsection = ""
 
     return f"""
 <section id="sec-long">
@@ -1191,6 +1311,8 @@ a_{{\\mathrm{{cmd,del}}}}(t) = a_{{\\mathrm{{cmd}}}}(t - T_a)
   <tr><td><code>acc_time_delay</code> (T_a)</td><td>{T_a} s</td>
       <td>純粋遅延：指令が実際に入力されるまでの無駄時間</td></tr>
 </table>
+
+{long_perf_subsection}
 </section>
 
 <section id="sec-steer">
@@ -1571,12 +1693,13 @@ def build_html(
     label: str = "current",
     params_filename: str = "",
     perf_html: str = "",
+    long_perf_fig: go.Figure | None = None,
 ) -> str:
     score = params.get("_score", "N/A")
     phase14_score = float(score) if isinstance(score, (int, float, str)) and str(score) != "N/A" else 0.0
     sec_intro = _build_sec_model_intro(params, label=label, params_filename=params_filename)
     sec0 = _build_sec_metrics(baseline_score=baseline_score, phase14_score=phase14_score, label=label)
-    sec1 = _build_sec1(params, long_fig, steer_fig, kus_fig, n_ds)
+    sec1 = _build_sec1(params, long_fig, steer_fig, kus_fig, n_ds, long_perf_fig=long_perf_fig)
     sec3 = _build_sec3(viewer_sections, label=label)
 
     return f"""<!DOCTYPE html>
@@ -1954,9 +2077,14 @@ def main() -> None:
     long_fig  = build_long_figure(args.collection_dir, params)
     steer_fig = build_steer_id_figure(args.collection_dir, params)
 
-    # 理想追従評価には curve 上位 _PERF_N_DS DS を使用（viewer 用 top_curve とは独立して選択）
+    # 1-1 縦方向理想追従評価（全 records の先頭 _LONG_PERF_N_DS DS を使用）
+    long_perf_records = records[:_LONG_PERF_N_DS]
+    print(f"  [1-1] 縦方向理想追従評価図生成 ({len(long_perf_records)} DS) ...")
+    long_perf_fig = build_long_perf_figure(long_perf_records)
+
+    # 1-4 横方向理想追従評価には curve 上位 _PERF_N_DS DS を使用（viewer 用 top_curve とは独立して選択）
     perf_records = candidate_curve[:_PERF_N_DS]
-    print(f"  [1-4] 理想追従評価図生成 ({len(perf_records)} DS) ...")
+    print(f"  [1-4] 横方向理想追従評価図生成 ({len(perf_records)} DS) ...")
     perf_fig_box, perf_fig_traj = build_perfect_tracking_figure(perf_records, params)
     perf_html = _build_sec14(perf_fig_box, perf_fig_traj, params, len(perf_records))
 
@@ -1967,6 +2095,7 @@ def main() -> None:
         label=phase_label,
         params_filename=args.params.name,
         perf_html=perf_html,
+        long_perf_fig=long_perf_fig,
     )
 
     args.out.parent.mkdir(parents=True, exist_ok=True)
