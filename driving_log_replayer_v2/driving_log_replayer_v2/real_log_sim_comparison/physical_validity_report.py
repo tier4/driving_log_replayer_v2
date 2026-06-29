@@ -24,6 +24,7 @@ import pandas as pd
 import plotly.graph_objects as go
 import yaml
 from plotly.subplots import make_subplots
+from scipy.optimize import minimize_scalar
 from scipy.signal import lfilter
 
 # ---------------------------------------------------------------------------
@@ -559,8 +560,100 @@ def build_kus_figure(bins: dict, params: dict) -> go.Figure:
     return fig
 
 
+_N_CROSS_FIT_DS = 10      # 横断最小二乗法に使うデータセット数
+_DA_THRESH_FIT  = 0.15    # 動的区間フィルタ: |Δa_cmd/dt| [m/s²/s]（identify_long_dynamics.py と同値）
+_VX_MIN_FIT     = 0.5     # 動的区間フィルタ: 最低速度 [m/s]
+_DELAY_CANDIDATES = np.arange(0.0, 0.31 + 1e-9, 0.01)   # 遅延候補 0〜300ms, 10ms 刻み
+_TAU_BOUNDS     = (0.01, 5.0)                             # 時定数探索範囲 [s]
+
+
+def _fit_long_cross_dataset(
+    collection_dir: Path, df_id: pd.DataFrame
+) -> tuple[float, float, float]:
+    """全データセット横断での加速度一次遅れモデルの最小二乗法同定。
+
+    動的区間が豊富な上位 _N_CROSS_FIT_DS データセットのサンプルを一つのプールに集め、
+    遅延グリッドサーチ + output-error 最小二乗法で全体最適な (τ, T) を求める。
+
+    Returns: (tau [s], T [s], RMSE [m/s²])
+    """
+    _N_DYN_MIN = 100
+    df_cand = df_id[df_id["n_dyn"] >= _N_DYN_MIN] if "n_dyn" in df_id.columns else df_id
+    df_top  = df_cand.nlargest(min(_N_CROSS_FIT_DS, len(df_cand)), "n_dyn")
+
+    pooled: list[tuple[np.ndarray, np.ndarray]] = []   # (a_cmd_full, a_act_full, mask)
+    for row in df_top.itertuples():
+        mcap = _find_mcap(collection_dir, row.uuid)
+        if mcap is None:
+            continue
+        try:
+            df_cmd   = load_cmd(mcap, "/control/command/control_cmd")
+            df_accel = load_accel(mcap)
+            df_vel   = load_velocity(mcap)
+        except Exception:
+            continue
+        if df_cmd.empty or df_accel.empty or df_vel.empty:
+            continue
+
+        t0 = max(df_cmd["t_ns"].iloc[0], df_accel["t_ns"].iloc[0], df_vel["t_ns"].iloc[0])
+        t1 = min(df_cmd["t_ns"].iloc[-1], df_accel["t_ns"].iloc[-1], df_vel["t_ns"].iloc[-1])
+        if (t1 - t0) < 2e9:
+            continue
+        t_ns = np.arange(t0, t1, _FIT_DT * 1e9, dtype=np.float64)
+        t_s  = (t_ns - t0) * 1e-9
+
+        a_cmd_arr = np.interp(t_s, (df_cmd["t_ns"].values   - t0) * 1e-9, df_cmd["cmd_accel"].values)
+        a_act_arr = np.interp(t_s, (df_accel["t_ns"].values  - t0) * 1e-9, df_accel["accel"].values)
+        vx        = np.interp(t_s, (df_vel["t_ns"].values    - t0) * 1e-9, df_vel["lon_vel"].values)
+
+        d_cmd = np.abs(np.gradient(a_cmd_arr, _FIT_DT))
+        mask  = (vx > _VX_MIN_FIT) & (d_cmd > _DA_THRESH_FIT)
+        if mask.sum() < 50:
+            continue
+        pooled.append((a_cmd_arr, a_act_arr, mask))
+
+    if not pooled:
+        return float("nan"), float("nan"), float("nan")
+
+    def _total_mse(log_tau: float, n_delay: int) -> float:
+        tau = float(np.exp(log_tau))
+        sq_sum, n_sum = 0.0, 0
+        for a_cmd_arr, a_act_arr, mask in pooled:
+            a_sim = _sim_first_order(a_cmd_arr, tau, n_delay)
+            diff  = a_sim[mask] - a_act_arr[mask]
+            sq_sum += float(np.dot(diff, diff))
+            n_sum  += int(mask.sum())
+        return sq_sum / n_sum if n_sum > 0 else float("inf")
+
+    best_mse   = float("inf")
+    best_tau   = float("nan")
+    best_delay = float("nan")
+    log_lo, log_hi = np.log(_TAU_BOUNDS[0]), np.log(_TAU_BOUNDS[1])
+    for delay_s in _DELAY_CANDIDATES:
+        n_delay = int(round(delay_s / _FIT_DT))
+        res = minimize_scalar(
+            lambda lt, nd=n_delay: _total_mse(lt, nd),
+            bounds=(log_lo, log_hi), method="bounded",
+        )
+        tau = float(np.exp(res.x))
+        mse = float(res.fun)
+        if mse < best_mse:
+            best_mse   = mse
+            best_tau   = tau
+            best_delay = delay_s
+
+    return best_tau, best_delay, float(np.sqrt(best_mse))
+
+
 def build_long_figure(collection_dir: Path, params: dict) -> go.Figure:
-    """縦方向モデルフィット時系列（NLS 同定値 vs チューン値、代表 DS 3本）。"""
+    """縦方向モデルフィット時系列（横断最小二乗法同定値 vs チューニング値、代表データセット 3 本）。
+
+    トレース構成:
+    - 黒実線: 実測加速度
+    - 灰実線: 指令加速度
+    - 青点線: 全データセット横断最小二乗法同定値
+    - 橙実線: チューニング値
+    """
     csv_path = collection_dir / "long_dynamics_identified.csv"
 
     def _placeholder(msg: str) -> go.Figure:
@@ -580,9 +673,12 @@ def build_long_figure(collection_dir: Path, params: dict) -> go.Figure:
     tau_tune = float(params.get("acc_time_constant", float("nan")))
     T_tune   = float(params.get("acc_time_delay", float("nan")))
 
-    # 動的区間が豊富な DS を優先して選択（停止コマンド多数 DS を避ける）
+    # 全データセット横断で最小二乗法同定（一度だけ実行）
+    tau_cross, T_cross, rmse_cross = _fit_long_cross_dataset(collection_dir, df_id)
+
+    # 動的区間が豊富なデータセットを優先して表示用に選択
     _N_DYN_MIN = 100
-    df_cand = df_id[df_id["n_dyn"] >= _N_DYN_MIN]
+    df_cand = df_id[df_id["n_dyn"] >= _N_DYN_MIN] if "n_dyn" in df_id.columns else df_id
     if len(df_cand) < _FIT_N_DS:
         df_cand = df_id
     df_top = df_cand.nsmallest(_FIT_N_DS, "rmse_mps2")
@@ -607,33 +703,43 @@ def build_long_figure(collection_dir: Path, params: dict) -> go.Figure:
             continue
         t_ns  = np.arange(t0, t1, _FIT_DT * 1e9, dtype=np.float64)
         t_s   = (t_ns - t0) * 1e-9
-        a_cmd = np.interp(t_s, (df_cmd["t_ns"].values - t0) * 1e-9, df_cmd["cmd_accel"].values)
-        a_act = np.interp(t_s, (df_accel["t_ns"].values - t0) * 1e-9, df_accel["accel"].values)
-        vx    = np.interp(t_s, (df_vel["t_ns"].values - t0) * 1e-9, df_vel["lon_vel"].values)
+        a_cmd_arr = np.interp(t_s, (df_cmd["t_ns"].values - t0) * 1e-9, df_cmd["cmd_accel"].values)
+        a_act_arr = np.interp(t_s, (df_accel["t_ns"].values - t0) * 1e-9, df_accel["accel"].values)
+        vx        = np.interp(t_s, (df_vel["t_ns"].values - t0) * 1e-9, df_vel["lon_vel"].values)
 
-        # DS 全体でシミュレーション（初期過渡が走行区間に影響しないよう全期間使用）
-        a_sim_id = _sim_first_order(a_cmd, row.tau, int(round(row.delay / _FIT_DT)))
-        a_sim_tune = None
+        # 横断同定値でシミュレーション（初期過渡が走行区間に影響しないよう全期間使用）
+        a_sim_cross: np.ndarray | None = None
+        if not np.isnan(tau_cross):
+            a_sim_cross = _sim_first_order(a_cmd_arr, tau_cross, int(round(T_cross / _FIT_DT)))
+        a_sim_tune: np.ndarray | None = None
         if not (np.isnan(tau_tune) or np.isnan(T_tune)):
-            a_sim_tune = _sim_first_order(a_cmd, tau_tune, int(round(T_tune / _FIT_DT)))
+            a_sim_tune = _sim_first_order(a_cmd_arr, tau_tune, int(round(T_tune / _FIT_DT)))
 
         # 低速区間（停止・停車）をマスク → NaN で折れ線を途切れさせる
         moving = vx > VX_MIN_CURVE
+
         def _mask(arr: np.ndarray) -> list:
             a = arr.copy().astype(float)
             a[~moving] = np.nan
             return a.tolist()
 
         rows_data.append({
-            "label": f"{row.uuid[:8]}  RMSE={row.rmse_mps2:.3f} m/s²  τ={row.tau:.3f}s  T={row.delay:.3f}s",
+            "label": row.uuid[:8],
             "t": t_s.tolist(),
-            "a_act": _mask(a_act),
-            "a_sim_id": _mask(a_sim_id),
+            "a_cmd": _mask(a_cmd_arr),
+            "a_act": _mask(a_act_arr),
+            "a_sim_cross": _mask(a_sim_cross) if a_sim_cross is not None else None,
             "a_sim_tune": _mask(a_sim_tune) if a_sim_tune is not None else None,
         })
 
     if not rows_data:
-        return _placeholder("MCAP 読み込み失敗（DS ディレクトリが見つかりません）")
+        return _placeholder("MCAP 読み込み失敗（データセットディレクトリが見つかりません）")
+
+    cross_label = (
+        f"横断最小二乗法同定値  τ={tau_cross:.3f}s  遅延={T_cross:.3f}s  RMSE={rmse_cross:.3f} m/s²"
+        if not np.isnan(tau_cross) else "横断最小二乗法同定値（同定失敗）"
+    )
+    tune_label = f"チューニング値  τ={tau_tune:.3f}s  遅延={T_tune:.3f}s"
 
     n = len(rows_data)
     fig = make_subplots(rows=n, cols=1,
@@ -643,18 +749,25 @@ def build_long_figure(collection_dir: Path, params: dict) -> go.Figure:
     for i, r in enumerate(rows_data, 1):
         fig.add_trace(go.Scatter(
             x=r["t"], y=r["a_act"],
-            name="実測 a_act", line=dict(color="black", width=1.5),
+            name="実測加速度", line=dict(color="black", width=1.5),
             showlegend=show_legend, connectgaps=False,
         ), row=i, col=1)
         fig.add_trace(go.Scatter(
-            x=r["t"], y=r["a_sim_id"],
-            name="NLS 同定値", line=dict(color="steelblue", width=1.5, dash="dot"),
+            x=r["t"], y=r["a_cmd"],
+            name="指令加速度", line=dict(color="gray", width=1.2, dash="dash"),
             showlegend=show_legend, connectgaps=False,
         ), row=i, col=1)
+        if r["a_sim_cross"] is not None:
+            fig.add_trace(go.Scatter(
+                x=r["t"], y=r["a_sim_cross"],
+                name=cross_label,
+                line=dict(color="steelblue", width=1.5, dash="dot"),
+                showlegend=show_legend, connectgaps=False,
+            ), row=i, col=1)
         if r["a_sim_tune"] is not None:
             fig.add_trace(go.Scatter(
                 x=r["t"], y=r["a_sim_tune"],
-                name=f"チューン値 τ={tau_tune:.3f}s T={T_tune:.3f}s",
+                name=tune_label,
                 line=dict(color="darkorange", width=1.5),
                 showlegend=show_legend, connectgaps=False,
             ), row=i, col=1)
@@ -663,7 +776,7 @@ def build_long_figure(collection_dir: Path, params: dict) -> go.Figure:
     fig.update_xaxes(title_text="時刻 [s]", row=n, col=1)
     fig.update_layout(
         height=300 * n,
-        title_text=f"縦方向モデルフィット（代表 {n} DS — n_dyn 優先・走行区間のみ表示）",
+        title_text=f"縦方向モデルフィット（代表 {n} データセット — 動的区間優先・走行区間のみ表示）",
         margin=dict(t=70, b=40),
         legend=dict(orientation="h", y=1.03, x=0),
     )
