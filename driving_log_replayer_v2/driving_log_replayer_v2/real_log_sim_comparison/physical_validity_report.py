@@ -69,7 +69,6 @@ _H_SPAN = {10: "≈0.33 s", 20: "≈0.67 s", 30: "≈1.0 s", 40: "≈1.33 s"}
 
 _FIT_DT = 0.01          # モデルフィット用リサンプリング DT [s]
 _FIT_N_DS = 3           # フィット表示する代表 DS 数
-_FIT_T_MAX = 30.0       # フィット表示の最大時間長 [s]
 
 def _sim_first_order(cmd: np.ndarray, tau: float, n_delay: int, dt: float = _FIT_DT) -> np.ndarray:
     """純粋遅延 + 一次遅れシミュレーション（lfilter 版）。"""
@@ -456,7 +455,6 @@ def build_long_figure(collection_dir: Path, params: dict) -> go.Figure:
     df_id = pd.read_csv(csv_path)
     tau_tune = float(params.get("acc_time_constant", float("nan")))
     T_tune   = float(params.get("acc_time_delay", float("nan")))
-    n_max    = int(_FIT_T_MAX / _FIT_DT)
 
     # 動的区間が豊富な DS を優先して選択（停止コマンド多数 DS を避ける）
     _N_DYN_MIN = 100
@@ -489,14 +487,14 @@ def build_long_figure(collection_dir: Path, params: dict) -> go.Figure:
         a_act = np.interp(t_s, (df_accel["t_ns"].values - t0) * 1e-9, df_accel["accel"].values)
         vx    = np.interp(t_s, (df_vel["t_ns"].values - t0) * 1e-9, df_vel["lon_vel"].values)
 
-        np_ = min(len(t_s), n_max)
-        a_sim_id = _sim_first_order(a_cmd, row.tau, int(round(row.delay / _FIT_DT)))[:np_]
+        # DS 全体でシミュレーション（初期過渡が走行区間に影響しないよう全期間使用）
+        a_sim_id = _sim_first_order(a_cmd, row.tau, int(round(row.delay / _FIT_DT)))
         a_sim_tune = None
         if not (np.isnan(tau_tune) or np.isnan(T_tune)):
-            a_sim_tune = _sim_first_order(a_cmd, tau_tune, int(round(T_tune / _FIT_DT)))[:np_]
+            a_sim_tune = _sim_first_order(a_cmd, tau_tune, int(round(T_tune / _FIT_DT)))
 
         # 低速区間（停止・停車）をマスク → NaN で折れ線を途切れさせる
-        moving = vx[:np_] > VX_MIN_CURVE
+        moving = vx > VX_MIN_CURVE
         def _mask(arr: np.ndarray) -> list:
             a = arr.copy().astype(float)
             a[~moving] = np.nan
@@ -504,8 +502,8 @@ def build_long_figure(collection_dir: Path, params: dict) -> go.Figure:
 
         rows_data.append({
             "label": f"{row.uuid[:8]}  RMSE={row.rmse_mps2:.3f} m/s²  τ={row.tau:.3f}s  T={row.delay:.3f}s",
-            "t": t_s[:np_].tolist(),
-            "a_act": _mask(a_act[:np_]),
+            "t": t_s.tolist(),
+            "a_act": _mask(a_act),
             "a_sim_id": _mask(a_sim_id),
             "a_sim_tune": _mask(a_sim_tune) if a_sim_tune is not None else None,
         })
@@ -568,7 +566,6 @@ def build_steer_id_figure(collection_dir: Path, params: dict) -> go.Figure:
     df_id = pd.read_csv(csv_path)
     tau_tune = float(params.get("steer_time_constant", float("nan")))
     T_tune   = float(params.get("steer_time_delay", float("nan")))
-    n_max    = int(_FIT_T_MAX / _FIT_DT)
 
     # 動的区間が豊富な DS を優先して選択
     _N_DYN_MIN = 100
@@ -601,14 +598,14 @@ def build_steer_id_figure(collection_dir: Path, params: dict) -> go.Figure:
         d_act   = np.interp(t_s, (df_steer["t_ns"].values - t0) * 1e-9, df_steer["steer"].values)
         vx      = np.interp(t_s, (df_vel["t_ns"].values - t0) * 1e-9, df_vel["lon_vel"].values)
 
-        np_ = min(len(t_s), n_max)
-        d_sim_id = _sim_first_order(d_cmd, row.tau, int(round(row.delay / _FIT_DT)))[:np_]
+        # DS 全体でシミュレーション（初期過渡が走行区間に影響しないよう全期間使用）
+        d_sim_id = _sim_first_order(d_cmd, row.tau, int(round(row.delay / _FIT_DT)))
         d_sim_tune = None
         if not (np.isnan(tau_tune) or np.isnan(T_tune)):
-            d_sim_tune = _sim_first_order(d_cmd, tau_tune, int(round(T_tune / _FIT_DT)))[:np_]
+            d_sim_tune = _sim_first_order(d_cmd, tau_tune, int(round(T_tune / _FIT_DT)))
 
         # 低速区間をマスク
-        moving = vx[:np_] > VX_MIN_CURVE
+        moving = vx > VX_MIN_CURVE
         def _mask(arr: np.ndarray) -> list:
             a = arr.copy().astype(float)
             a[~moving] = np.nan
@@ -616,8 +613,8 @@ def build_steer_id_figure(collection_dir: Path, params: dict) -> go.Figure:
 
         rows_data.append({
             "label": f"{row.uuid[:8]}  RMSE={row.rmse_mrad:.1f} mrad  τ={row.tau:.3f}s  T={row.delay:.3f}s",
-            "t": t_s[:np_].tolist(),
-            "d_act": _mask(d_act[:np_]),
+            "t": t_s.tolist(),
+            "d_act": _mask(d_act),
             "d_sim_id": _mask(d_sim_id),
             "d_sim_tune": _mask(d_sim_tune) if d_sim_tune is not None else None,
         })
