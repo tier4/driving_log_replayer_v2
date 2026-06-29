@@ -664,11 +664,14 @@ def robust_search(
     elif phase == 47:
         # Phase 47: k_us のみ最適化 (understeer_compensation 切替効果の単離)。
         # Phase 46 の steer 動力学値を --phase-params で受け取り固定した上で、
-        # k_us (スカラー) だけを (0, 0.030) で探索する。
-        # 仮説: 補償前データ → k_us ≈ 0.016-0.020、補償後データ → k_us ≈ 0。
-        # 他パラメータが固定されているため、k_us の純効果を直接観測できる。
+        # k_us (スカラー) を負域含む対称範囲 (-0.03, +0.03) で探索する。
+        # 負域: 車両側補償が過補正の場合（オーバーステア残差）を捕捉するため。
+        # 安全性: calc_yaw_rate に denom フロアガード (>=0.05*L) を追加済みなので
+        #         負の k_us でも数値発散しない。
+        # 安全な下限の根拠: post-6/16 vx_max ≈ 11.49 m/s → min safe = -L/vx^2 ≈ -0.036
+        #                   -0.03 はその範囲内で十分なマージンを持つ。
         CONTINUOUS_SPACE = {
-            "k_us": (0.0, 0.030),
+            "k_us": (-0.03, 0.030),
         }
         score_fn = steer_score
         explore_delay = False
