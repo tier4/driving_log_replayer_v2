@@ -37,7 +37,7 @@ if _INSTALL.exists() and str(_INSTALL) not in sys.path:
     sys.path.insert(0, str(_INSTALL))
 
 from driving_log_replayer_v2.real_log_sim_comparison.lib._coverage import _curvature_coverage  # noqa: E402
-from driving_log_replayer_v2.real_log_sim_comparison.lib._io import load_accel, load_cmd, load_kinematic, load_steering  # noqa: E402
+from driving_log_replayer_v2.real_log_sim_comparison.lib._io import load_accel, load_cmd, load_kinematic, load_steering, load_velocity  # noqa: E402
 from driving_log_replayer_v2.real_log_sim_comparison.lib._map import load_map_ways, resolve_map_osm  # noqa: E402
 from driving_log_replayer_v2.real_log_sim_comparison.lib._multi_agg import (  # noqa: E402
     HORIZONS as _HORIZONS,
@@ -458,27 +458,36 @@ def build_long_figure(collection_dir: Path, params: dict) -> go.Figure:
     T_tune   = float(params.get("acc_time_delay", float("nan")))
     n_max    = int(_FIT_T_MAX / _FIT_DT)
 
+    # 動的区間が豊富な DS を優先して選択（停止コマンド多数 DS を避ける）
+    _N_DYN_MIN = 100
+    df_cand = df_id[df_id["n_dyn"] >= _N_DYN_MIN]
+    if len(df_cand) < _FIT_N_DS:
+        df_cand = df_id
+    df_top = df_cand.nsmallest(_FIT_N_DS, "rmse_mps2")
+
     rows_data = []
-    for row in df_id.nsmallest(_FIT_N_DS, "rmse_mps2").itertuples():
+    for row in df_top.itertuples():
         mcap = _find_mcap(collection_dir, row.uuid)
         if mcap is None:
             continue
         try:
             df_cmd   = load_cmd(mcap, "/control/command/control_cmd")
             df_accel = load_accel(mcap)
+            df_vel   = load_velocity(mcap)
         except Exception:
             continue
-        if df_cmd.empty or df_accel.empty:
+        if df_cmd.empty or df_accel.empty or df_vel.empty:
             continue
 
-        t0 = max(df_cmd["t_ns"].iloc[0], df_accel["t_ns"].iloc[0])
-        t1 = min(df_cmd["t_ns"].iloc[-1], df_accel["t_ns"].iloc[-1])
+        t0 = max(df_cmd["t_ns"].iloc[0], df_accel["t_ns"].iloc[0], df_vel["t_ns"].iloc[0])
+        t1 = min(df_cmd["t_ns"].iloc[-1], df_accel["t_ns"].iloc[-1], df_vel["t_ns"].iloc[-1])
         if (t1 - t0) < 2e9:
             continue
         t_ns  = np.arange(t0, t1, _FIT_DT * 1e9, dtype=np.float64)
         t_s   = (t_ns - t0) * 1e-9
         a_cmd = np.interp(t_s, (df_cmd["t_ns"].values - t0) * 1e-9, df_cmd["cmd_accel"].values)
         a_act = np.interp(t_s, (df_accel["t_ns"].values - t0) * 1e-9, df_accel["accel"].values)
+        vx    = np.interp(t_s, (df_vel["t_ns"].values - t0) * 1e-9, df_vel["lon_vel"].values)
 
         np_ = min(len(t_s), n_max)
         a_sim_id = _sim_first_order(a_cmd, row.tau, int(round(row.delay / _FIT_DT)))[:np_]
@@ -486,10 +495,19 @@ def build_long_figure(collection_dir: Path, params: dict) -> go.Figure:
         if not (np.isnan(tau_tune) or np.isnan(T_tune)):
             a_sim_tune = _sim_first_order(a_cmd, tau_tune, int(round(T_tune / _FIT_DT)))[:np_]
 
+        # 低速区間（停止・停車）をマスク → NaN で折れ線を途切れさせる
+        moving = vx[:np_] > VX_MIN_CURVE
+        def _mask(arr: np.ndarray) -> list:
+            a = arr.copy().astype(float)
+            a[~moving] = np.nan
+            return a.tolist()
+
         rows_data.append({
             "label": f"{row.uuid[:8]}  RMSE={row.rmse_mps2:.3f} m/s²  τ={row.tau:.3f}s  T={row.delay:.3f}s",
-            "t": t_s[:np_], "a_act": a_act[:np_],
-            "a_sim_id": a_sim_id, "a_sim_tune": a_sim_tune,
+            "t": t_s[:np_].tolist(),
+            "a_act": _mask(a_act[:np_]),
+            "a_sim_id": _mask(a_sim_id),
+            "a_sim_tune": _mask(a_sim_tune) if a_sim_tune is not None else None,
         })
 
     if not rows_data:
@@ -502,28 +520,28 @@ def build_long_figure(collection_dir: Path, params: dict) -> go.Figure:
     show_legend = True
     for i, r in enumerate(rows_data, 1):
         fig.add_trace(go.Scatter(
-            x=r["t"].tolist(), y=r["a_act"].tolist(),
+            x=r["t"], y=r["a_act"],
             name="実測 a_act", line=dict(color="black", width=1.5),
-            showlegend=show_legend,
+            showlegend=show_legend, connectgaps=False,
         ), row=i, col=1)
         fig.add_trace(go.Scatter(
-            x=r["t"].tolist(), y=r["a_sim_id"].tolist(),
+            x=r["t"], y=r["a_sim_id"],
             name="NLS 同定値", line=dict(color="steelblue", width=1.5, dash="dot"),
-            showlegend=show_legend,
+            showlegend=show_legend, connectgaps=False,
         ), row=i, col=1)
         if r["a_sim_tune"] is not None:
             fig.add_trace(go.Scatter(
-                x=r["t"].tolist(), y=r["a_sim_tune"].tolist(),
+                x=r["t"], y=r["a_sim_tune"],
                 name=f"チューン値 τ={tau_tune:.3f}s T={T_tune:.3f}s",
                 line=dict(color="darkorange", width=1.5),
-                showlegend=show_legend,
+                showlegend=show_legend, connectgaps=False,
             ), row=i, col=1)
         show_legend = False
         fig.update_yaxes(title_text="a [m/s²]", row=i, col=1)
     fig.update_xaxes(title_text="時刻 [s]", row=n, col=1)
     fig.update_layout(
         height=300 * n,
-        title_text=f"縦方向モデルフィット（代表 {n} DS — NLS rmse 最小順）",
+        title_text=f"縦方向モデルフィット（代表 {n} DS — n_dyn 優先・走行区間のみ表示）",
         margin=dict(t=70, b=40),
         legend=dict(orientation="h", y=1.03, x=0),
     )
@@ -552,27 +570,36 @@ def build_steer_id_figure(collection_dir: Path, params: dict) -> go.Figure:
     T_tune   = float(params.get("steer_time_delay", float("nan")))
     n_max    = int(_FIT_T_MAX / _FIT_DT)
 
+    # 動的区間が豊富な DS を優先して選択
+    _N_DYN_MIN = 100
+    df_cand = df_id[df_id["n_dyn"] >= _N_DYN_MIN]
+    if len(df_cand) < _FIT_N_DS:
+        df_cand = df_id
+    df_top = df_cand.nsmallest(_FIT_N_DS, "rmse_mrad")
+
     rows_data = []
-    for row in df_id.nsmallest(_FIT_N_DS, "rmse_mrad").itertuples():
+    for row in df_top.itertuples():
         mcap = _find_mcap(collection_dir, row.uuid)
         if mcap is None:
             continue
         try:
             df_cmd   = load_cmd(mcap, "/control/command/control_cmd")
             df_steer = load_steering(mcap)
+            df_vel   = load_velocity(mcap)
         except Exception:
             continue
-        if df_cmd.empty or df_steer.empty:
+        if df_cmd.empty or df_steer.empty or df_vel.empty:
             continue
 
-        t0 = max(df_cmd["t_ns"].iloc[0], df_steer["t_ns"].iloc[0])
-        t1 = min(df_cmd["t_ns"].iloc[-1], df_steer["t_ns"].iloc[-1])
+        t0 = max(df_cmd["t_ns"].iloc[0], df_steer["t_ns"].iloc[0], df_vel["t_ns"].iloc[0])
+        t1 = min(df_cmd["t_ns"].iloc[-1], df_steer["t_ns"].iloc[-1], df_vel["t_ns"].iloc[-1])
         if (t1 - t0) < 2e9:
             continue
         t_ns    = np.arange(t0, t1, _FIT_DT * 1e9, dtype=np.float64)
         t_s     = (t_ns - t0) * 1e-9
         d_cmd   = np.interp(t_s, (df_cmd["t_ns"].values - t0) * 1e-9, df_cmd["cmd_steer"].values)
         d_act   = np.interp(t_s, (df_steer["t_ns"].values - t0) * 1e-9, df_steer["steer"].values)
+        vx      = np.interp(t_s, (df_vel["t_ns"].values - t0) * 1e-9, df_vel["lon_vel"].values)
 
         np_ = min(len(t_s), n_max)
         d_sim_id = _sim_first_order(d_cmd, row.tau, int(round(row.delay / _FIT_DT)))[:np_]
@@ -580,10 +607,19 @@ def build_steer_id_figure(collection_dir: Path, params: dict) -> go.Figure:
         if not (np.isnan(tau_tune) or np.isnan(T_tune)):
             d_sim_tune = _sim_first_order(d_cmd, tau_tune, int(round(T_tune / _FIT_DT)))[:np_]
 
+        # 低速区間をマスク
+        moving = vx[:np_] > VX_MIN_CURVE
+        def _mask(arr: np.ndarray) -> list:
+            a = arr.copy().astype(float)
+            a[~moving] = np.nan
+            return a.tolist()
+
         rows_data.append({
             "label": f"{row.uuid[:8]}  RMSE={row.rmse_mrad:.1f} mrad  τ={row.tau:.3f}s  T={row.delay:.3f}s",
-            "t": t_s[:np_], "d_act": d_act[:np_],
-            "d_sim_id": d_sim_id, "d_sim_tune": d_sim_tune,
+            "t": t_s[:np_].tolist(),
+            "d_act": _mask(d_act[:np_]),
+            "d_sim_id": _mask(d_sim_id),
+            "d_sim_tune": _mask(d_sim_tune) if d_sim_tune is not None else None,
         })
 
     if not rows_data:
@@ -596,28 +632,28 @@ def build_steer_id_figure(collection_dir: Path, params: dict) -> go.Figure:
     show_legend = True
     for i, r in enumerate(rows_data, 1):
         fig.add_trace(go.Scatter(
-            x=r["t"].tolist(), y=r["d_act"].tolist(),
+            x=r["t"], y=r["d_act"],
             name="実測 δ_act", line=dict(color="black", width=1.5),
-            showlegend=show_legend,
+            showlegend=show_legend, connectgaps=False,
         ), row=i, col=1)
         fig.add_trace(go.Scatter(
-            x=r["t"].tolist(), y=r["d_sim_id"].tolist(),
+            x=r["t"], y=r["d_sim_id"],
             name="NLS 同定値", line=dict(color="steelblue", width=1.5, dash="dot"),
-            showlegend=show_legend,
+            showlegend=show_legend, connectgaps=False,
         ), row=i, col=1)
         if r["d_sim_tune"] is not None:
             fig.add_trace(go.Scatter(
-                x=r["t"].tolist(), y=r["d_sim_tune"].tolist(),
+                x=r["t"], y=r["d_sim_tune"],
                 name=f"チューン値 τ={tau_tune:.3f}s T={T_tune:.3f}s",
                 line=dict(color="darkorange", width=1.5),
-                showlegend=show_legend,
+                showlegend=show_legend, connectgaps=False,
             ), row=i, col=1)
         show_legend = False
         fig.update_yaxes(title_text="δ [rad]", row=i, col=1)
     fig.update_xaxes(title_text="時刻 [s]", row=n, col=1)
     fig.update_layout(
         height=300 * n,
-        title_text=f"操舵モデルフィット（代表 {n} DS — NLS rmse 最小順）",
+        title_text=f"操舵モデルフィット（代表 {n} DS — n_dyn 優先・走行区間のみ表示）",
         margin=dict(t=70, b=40),
         legend=dict(orientation="h", y=1.03, x=0),
     )
@@ -938,7 +974,7 @@ a_{{\\mathrm{{cmd,del}}}}(t) = a_{{\\mathrm{{cmd}}}}(t - T_a)
 <p>
 \\(a_{{\\mathrm{{cmd}}}}\\)（指令加速度）を入力として遅延グリッドサーチ + output-error NLS で
 同定した \\((\\tau_a, T_a)\\) のモデル出力（青点線）と実測 \\(a_{{\\mathrm{{act}}}}\\)（黒実線）を比較する。
-橙実線はチューン値でのシミュレーション結果。rmse が最小の代表 DS を表示。
+橙実線はチューン値でのシミュレーション結果。動的区間（n_dyn）が豊富な DS から rmse 最小順に選択し、低速・停車区間は除外して表示。
 </p>
 {long_html}
 
@@ -990,7 +1026,7 @@ a_{{\\mathrm{{cmd,del}}}}(t) = a_{{\\mathrm{{cmd}}}}(t - T_a)
 <p>
 \\(\\delta_{{\\mathrm{{cmd}}}}\\) を入力として遅延グリッドサーチ + output-error NLS で
 同定した \\((\\tau_\\delta, T_\\delta)\\) のモデル出力（青点線）と実測 \\(\\delta_{{\\mathrm{{act}}}}\\)（黒実線）を比較する。
-橙実線はチューン値でのシミュレーション結果。rmse が最小の代表 DS を表示。
+橙実線はチューン値でのシミュレーション結果。動的区間（n_dyn）が豊富な DS から rmse 最小順に選択し、低速・停車区間は除外して表示。
 </p>
 {steer_html}
 <div class="note">
