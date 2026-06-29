@@ -813,6 +813,60 @@ def _discover(collection_dir: Path) -> list[tuple[str, Path]]:
     return out
 
 
+def _ds_recording_date(ds_dir: Path) -> datetime.date | None:
+    """DS の録画日 (UTC) を mcap サマリから取得する。取得失敗時は None。"""
+    from mcap.reader import make_reader  # noqa: PLC0415
+
+    bag = resolve_lite_bag(ds_dir, "real")
+    if bag is None:
+        return None
+    if bag.is_dir():
+        mcaps = sorted(bag.glob("*.mcap"))
+        if not mcaps:
+            return None
+        bag = mcaps[0]
+    try:
+        with bag.open("rb") as f:
+            stats = make_reader(f).get_summary().statistics
+        if stats is None or stats.message_start_time == 0:
+            return None
+        return datetime.datetime.fromtimestamp(
+            stats.message_start_time / 1e9, tz=datetime.timezone.utc
+        ).date()
+    except Exception:
+        return None
+
+
+def _filter_by_date(
+    lite_dirs: list[tuple[str, Path]],
+    before: datetime.date | None,
+    after: datetime.date | None,
+) -> list[tuple[str, Path]]:
+    """録画日 (UTC) で DS をフィルタする。
+    before: この日より前 (exclusive)。after: この日以降 (inclusive)。
+    """
+    if before is None and after is None:
+        return lite_dirs
+    filtered = []
+    skipped = 0
+    for ds_id, ds_dir in lite_dirs:
+        rec = _ds_recording_date(ds_dir)
+        if rec is None:
+            print(f"[WARN] {ds_id}: 録画日取得失敗 → スキップ", file=sys.stderr)
+            skipped += 1
+            continue
+        if before is not None and rec >= before:
+            continue
+        if after is not None and rec < after:
+            continue
+        filtered.append((ds_id, ds_dir))
+    print(
+        f"[date filter] {len(lite_dirs)} → {len(filtered)} datasets "
+        f"(before={before or '—'}, after={after or '—'}, skip={skipped})"
+    )
+    return filtered
+
+
 def main() -> None:
     ap = argparse.ArgumentParser(
         description="マルチデータセット横断のロバスト best_normal 同定 (robust_search)"
@@ -893,6 +947,18 @@ def main() -> None:
         help="per-dataset の [load] 行を出力する (既定: 集計サマリのみ)。--verbose 指定時は SKIP の traceback も表示",
     )
     ap.add_argument(
+        "--ds-before",
+        default="",
+        metavar="YYYY-MM-DD",
+        help="この日付より前 (exclusive, UTC) に録画されたデータセットのみ使用する。understeer_compensation 切替前データの抽出に使う",
+    )
+    ap.add_argument(
+        "--ds-after",
+        default="",
+        metavar="YYYY-MM-DD",
+        help="この日付以降 (inclusive, UTC) に録画されたデータセットのみ使用する。understeer_compensation 切替後データの抽出に使う",
+    )
+    ap.add_argument(
         "--phase",
         type=int,
         default=0,
@@ -952,6 +1018,11 @@ def main() -> None:
             lite_dirs.append((ds_id.strip(), Path(raw.strip())))
     else:
         lite_dirs = _discover(Path(args.collection_dir))
+
+    ds_before = datetime.date.fromisoformat(args.ds_before) if args.ds_before else None
+    ds_after  = datetime.date.fromisoformat(args.ds_after)  if args.ds_after  else None
+    lite_dirs = _filter_by_date(lite_dirs, ds_before, ds_after)
+
     if not lite_dirs:
         print(f"ERROR: real.lite が見つかりません: {args.collection_dir}", file=sys.stderr)
         sys.exit(1)
