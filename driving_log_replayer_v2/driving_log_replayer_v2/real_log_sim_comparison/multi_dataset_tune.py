@@ -673,17 +673,24 @@ def robust_search(
         score_fn = steer_score
         explore_delay = False
         explore_steer_delay = False
-        # ランプを無効化 (k_us 定数スカラーのみ)
-        cur_best["k_us_vx_lo"] = 0.0
-        cur_best["k_us_vx_hi"] = 0.0
-        cur_best["k_us_lo"] = cur_best.get("k_us", 0.0)  # 速度帯分割も無効化
+        # ランプ・速度帯分割を完全無効化し、k_us をフラットスカラーとして扱う。
+        # phase_fixed_params (Phase 46) は k_us_vx_thresh=2.71 を持つが、
+        # thresh=0 に上書きすることで step5 の banding を無効化し、
+        # p.get("k_us", 0.0) が全速度帯に適用される scalar mode にする。
         if phase_fixed_params:
             cur_best.update(phase_fixed_params)
-            # k_us だけは探索対象なので固定しない
-            _ = cur_best.pop("k_us", None)
             print(f"[Phase 47] k_us のみ探索 (他は phase-params から固定)。steer_time_delay={cur_best.get('steer_time_delay', '未設定')}")
         else:
             print("[Phase 47] k_us のみ探索 (他は cur_best から固定)。")
+        # banding/ramp を全て無効化 (update 後に上書き)
+        cur_best["k_us_vx_lo"] = 0.0
+        cur_best["k_us_vx_hi"] = 0.0
+        cur_best["k_us_vx_thresh"] = 0.0   # thresh=0 → step5 が k_us_bands を設定しない → scalar mode
+        cur_best["k_us_vx_thresh2"] = 0.0
+        cur_best.pop("k_us_lo", None)       # scalar mode では不要
+        cur_best.pop("k_us_mid", None)      # scalar mode では不要
+        # k_us だけは探索対象なので固定しない
+        _ = cur_best.pop("k_us", None)
     else:
         # Phase 0: 全パラメータ同時最適化 (従来の robust_score)
         CONTINUOUS_SPACE = {
