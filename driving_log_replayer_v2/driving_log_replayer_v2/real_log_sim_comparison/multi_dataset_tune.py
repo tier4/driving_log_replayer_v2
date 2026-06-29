@@ -661,6 +661,29 @@ def robust_search(
             f"mid={_KUS_OLS_OVERRIDES['k_us_mid']:.3f}/hi={_KUS_OLS_OVERRIDES['k_us']:.3f})"
             f" + steer 動力学最適化。"
         )
+    elif phase == 47:
+        # Phase 47: k_us のみ最適化 (understeer_compensation 切替効果の単離)。
+        # Phase 46 の steer 動力学値を --phase-params で受け取り固定した上で、
+        # k_us (スカラー) だけを (0, 0.030) で探索する。
+        # 仮説: 補償前データ → k_us ≈ 0.016-0.020、補償後データ → k_us ≈ 0。
+        # 他パラメータが固定されているため、k_us の純効果を直接観測できる。
+        CONTINUOUS_SPACE = {
+            "k_us": (0.0, 0.030),
+        }
+        score_fn = steer_score
+        explore_delay = False
+        explore_steer_delay = False
+        # ランプを無効化 (k_us 定数スカラーのみ)
+        cur_best["k_us_vx_lo"] = 0.0
+        cur_best["k_us_vx_hi"] = 0.0
+        cur_best["k_us_lo"] = cur_best.get("k_us", 0.0)  # 速度帯分割も無効化
+        if phase_fixed_params:
+            cur_best.update(phase_fixed_params)
+            # k_us だけは探索対象なので固定しない
+            _ = cur_best.pop("k_us", None)
+            print(f"[Phase 47] k_us のみ探索 (他は phase-params から固定)。steer_time_delay={cur_best.get('steer_time_delay', '未設定')}")
+        else:
+            print("[Phase 47] k_us のみ探索 (他は cur_best から固定)。")
     else:
         # Phase 0: 全パラメータ同時最適化 (従来の robust_score)
         CONTINUOUS_SPACE = {
@@ -962,7 +985,7 @@ def main() -> None:
         "--phase",
         type=int,
         default=0,
-        choices=[0, 1, 2, 3, 4, 5, 10, 11, 12, 13, 14, 43, 44, 45, 46],
+        choices=[0, 1, 2, 3, 4, 5, 10, 11, 12, 13, 14, 43, 44, 45, 46, 47],
         help=(
             "チューニングフェーズ (既定: 0=全パラメータ同時最適化)。"
             "1=acc のみ探索・long スコア (steer 系は scenario.yaml の定義値に固定)。"
