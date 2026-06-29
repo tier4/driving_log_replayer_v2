@@ -36,7 +36,7 @@ if _INSTALL.exists() and str(_INSTALL) not in sys.path:
     sys.path.insert(0, str(_INSTALL))
 
 from driving_log_replayer_v2.real_log_sim_comparison.lib._coverage import _curvature_coverage  # noqa: E402
-from driving_log_replayer_v2.real_log_sim_comparison.lib._io import load_accel, load_cmd, load_kinematic, load_steering  # noqa: E402
+from driving_log_replayer_v2.real_log_sim_comparison.lib._io import load_cmd, load_kinematic, load_steering  # noqa: E402
 from driving_log_replayer_v2.real_log_sim_comparison.lib._map import load_map_ways, resolve_map_osm  # noqa: E402
 from driving_log_replayer_v2.real_log_sim_comparison.lib._multi_agg import (  # noqa: E402
     HORIZONS as _HORIZONS,
@@ -123,10 +123,6 @@ def _load_mcap_worker(args: tuple) -> dict | None:
         df_cmd = load_cmd(mcap, "/control/command/control_cmd")
     except Exception:
         df_cmd = pd.DataFrame()
-    try:
-        df_accel = load_accel(mcap)
-    except Exception:
-        df_accel = pd.DataFrame()
 
     t_k = df_kin["t_ns"].values * 1e-9
     vx = df_kin["vx"].values
@@ -156,21 +152,14 @@ def _load_mcap_worker(args: tuple) -> dict | None:
     except Exception:
         cov = {"curve_count": 0, "kappa_max_abs": 0.0}
 
-    # cmd_accel / a_act / cmd_steer（stride=10 で間引き: 10ms×10 = 100ms 解像度）
+    # cmd_steer（stride=10 で間引き: 操舵信号の時系列表示用）
     _STRIDE = 10
     t_sub = t_k[::_STRIDE]
     if not df_cmd.empty:
         t_c = df_cmd["t_ns"].values * 1e-9
-        cmd_accel_arr = np.interp(t_sub, t_c, df_cmd["cmd_accel"].values).tolist()
         cmd_steer_arr = np.interp(t_sub, t_c, df_cmd["cmd_steer"].values).tolist()
     else:
-        cmd_accel_arr = []
         cmd_steer_arr = []
-    if not df_accel.empty:
-        t_a = df_accel["t_ns"].values * 1e-9
-        a_act_arr = np.interp(t_sub, t_a, df_accel["accel"].values).tolist()
-    else:
-        a_act_arr = []
 
     return {
         "uuid": uuid,
@@ -181,8 +170,6 @@ def _load_mcap_worker(args: tuple) -> dict | None:
         "dwz": dwz.tolist(),
         "curve_count": cov["curve_count"],
         "kappa_max_abs": cov["kappa_max_abs"],
-        "cmd_accel": cmd_accel_arr,
-        "a_act": a_act_arr,
         "cmd_steer": cmd_steer_arr,
     }
 
@@ -419,79 +406,70 @@ def build_kus_figure(bins: dict, params: dict) -> go.Figure:
     return fig
 
 
-def build_long_figure(records: list[dict], params: dict) -> go.Figure:
-    """縦方向加速度の独立同定グラフ: a_cmd（遅延補正後）vs 実機 a_act 散布図。"""
-    T_a = float(params.get("acc_time_delay", 0.0))
-    DT_sub = 0.10  # stride=10 @ 10ms
-    n_delay = int(round(T_a / DT_sub))
-
-    all_cmd: list[np.ndarray] = []
-    all_act: list[np.ndarray] = []
-    for r in records:
-        cmd = np.asarray(r.get("cmd_accel", []))
-        act = np.asarray(r.get("a_act", []))
-        if len(cmd) < 5 or len(act) < 5:
-            continue
-        if 0 < n_delay < len(cmd):
-            cmd_del = np.empty_like(cmd)
-            cmd_del[:n_delay] = cmd[0]
-            cmd_del[n_delay:] = cmd[:-n_delay]
-        else:
-            cmd_del = cmd.copy()
-        n = min(len(cmd_del), len(act))
-        all_cmd.append(cmd_del[:n])
-        all_act.append(act[:n])
-
-    if not all_cmd:
+def build_long_figure(csv_path: Path, params: dict) -> go.Figure:
+    """縦方向動力学の直接同定分布グラフ（long_dynamics_identified.csv から）。"""
+    if not csv_path.exists():
         fig = go.Figure()
         fig.add_annotation(
-            text="データなし（cmd_accel / accel トピックが読み込めませんでした）",
+            text=(
+                f"<b>{csv_path.name} が見つかりません</b><br>"
+                "事前に <code>identify_long_dynamics.py</code> を実行してください。"
+            ),
             xref="paper", yref="paper", x=0.5, y=0.5, showarrow=False,
-            font=dict(size=13),
+            font=dict(size=13), align="center",
         )
         fig.update_layout(height=200)
         return fig
 
-    a_cmd_all = np.concatenate(all_cmd)
-    a_act_all = np.concatenate(all_act)
-    if len(a_cmd_all) > 60000:
-        rng = np.random.default_rng(42)
-        idx = rng.choice(len(a_cmd_all), 60000, replace=False)
-        a_cmd_all = a_cmd_all[idx]
-        a_act_all = a_act_all[idx]
+    df = pd.read_csv(csv_path)
+    tau_tuned = float(params.get("acc_time_constant", float("nan")))
+    T_tuned   = float(params.get("acc_time_delay", float("nan")))
+    tau_med   = float(df["tau"].median())
+    T_med     = float(df["delay"].median())
 
     fig = make_subplots(
         rows=1, cols=2,
         subplot_titles=[
-            f"a_cmd（T_a={T_a}s 遅延後）vs a_act — 全 {len(records)} DS",
-            "a_act 分布（実機加速度）",
+            f"τ_a（時定数）分布  中央値 = {tau_med:.3f} s",
+            f"T_a（純粋遅延）分布  中央値 = {T_med:.3f} s",
         ],
-        horizontal_spacing=0.14,
+        horizontal_spacing=0.12,
     )
 
-    fig.add_trace(go.Scattergl(
-        x=a_cmd_all.tolist(), y=a_act_all.tolist(),
-        mode="markers",
-        marker=dict(size=3, color="steelblue", opacity=0.25),
-        name="サンプル",
+    fig.add_trace(go.Histogram(
+        x=df["tau"].tolist(), nbinsx=40,
+        marker_color="steelblue", opacity=0.7, name="τ_a",
     ), row=1, col=1)
-    amax = float(max(float(np.nanmax(np.abs(a_cmd_all))), float(np.nanmax(np.abs(a_act_all))), 1.0))
-    fig.add_trace(go.Scatter(
-        x=[-amax, amax], y=[-amax, amax],
-        mode="lines", line=dict(color="red", dash="dash", width=1.5),
-        name="y=x（理想）",
-    ), row=1, col=1)
+    fig.add_vline(x=tau_med, line=dict(color="steelblue", width=2, dash="dot"),
+                  annotation_text=f"中央値 {tau_med:.3f}", annotation_position="top right",
+                  row=1, col=1)
+    if not np.isnan(tau_tuned):
+        fig.add_vline(x=tau_tuned, line=dict(color="darkorange", width=2.5),
+                      annotation_text=f"チューン値 {tau_tuned:.3f}",
+                      annotation_position="top left",
+                      row=1, col=1)
 
     fig.add_trace(go.Histogram(
-        x=a_act_all.tolist(), nbinsx=80,
-        marker_color="steelblue", opacity=0.7, showlegend=False,
+        x=df["delay"].tolist(), nbinsx=20,
+        marker_color="teal", opacity=0.7, name="T_a",
     ), row=1, col=2)
+    fig.add_vline(x=T_med, line=dict(color="teal", width=2, dash="dot"),
+                  annotation_text=f"中央値 {T_med:.3f}", annotation_position="top right",
+                  row=1, col=2)
+    if not np.isnan(T_tuned):
+        fig.add_vline(x=T_tuned, line=dict(color="darkorange", width=2.5),
+                      annotation_text=f"チューン値 {T_tuned:.3f}",
+                      annotation_position="top left",
+                      row=1, col=2)
 
-    fig.update_layout(height=400, margin=dict(t=60, b=40))
-    fig.update_xaxes(title_text="a_cmd 遅延後 [m/s²]", row=1, col=1)
-    fig.update_yaxes(title_text="a_act [m/s²]", row=1, col=1)
-    fig.update_xaxes(title_text="a_act [m/s²]", row=1, col=2)
-    fig.update_yaxes(title_text="カウント", row=1, col=2)
+    fig.update_layout(
+        height=380, showlegend=False,
+        title_text=f"縦方向動力学 直接同定（N = {len(df)} DS）",
+        margin=dict(t=70, b=40),
+    )
+    fig.update_xaxes(title_text="τ_a [s]", row=1, col=1)
+    fig.update_yaxes(title_text="DS 数", row=1, col=1)
+    fig.update_xaxes(title_text="T_a [s]", row=1, col=2)
     return fig
 
 
@@ -1603,7 +1581,9 @@ def main() -> None:
     # Phase 4: HTML 組み立て
     print("\n[Phase 4] plotly 図生成 & HTML 組み立て ...")
     kus_fig   = build_kus_figure(bins, params)
-    long_fig  = build_long_figure(records, params)
+    long_fig  = build_long_figure(
+        args.collection_dir / "long_dynamics_identified.csv", params
+    )
     steer_fig = build_steer_id_figure(
         args.collection_dir / "steer_dynamics_identified.csv", params
     )
