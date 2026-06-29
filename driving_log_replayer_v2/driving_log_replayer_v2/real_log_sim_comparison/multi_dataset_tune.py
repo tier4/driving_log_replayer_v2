@@ -1090,8 +1090,8 @@ def main() -> None:
             phase_data = yaml.safe_load(f)
         all_params = phase_data.get("params", phase_data)
         acc_keys = {"acc_time_constant", "acc_time_delay"}
-        # Phase 43/44/45: 前フェーズの全 params を cur_best として継承（探索空間外の値を保持）
-        if args.phase in (43, 44, 45, 46):
+        # Phase 43/44/45/46/47: 前フェーズの全 params を cur_best として継承（探索空間外の値を保持）
+        if args.phase in (43, 44, 45, 46, 47):
             fixed_keys = set(all_params.keys())
         # Phase 11/12/13: steer_time_delay も固定値として引き継ぐ
         # Phase 12/13: acc_time_constant は変数化するため固定しない (acc_time_delay のみ固定)
