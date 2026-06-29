@@ -171,18 +171,22 @@ def _bicycle_trajectory_full(
 
 def _long_nstep_perf(
     gt_vx: np.ndarray,
-    a_cmd: np.ndarray,
+    a_act: np.ndarray,
     horizon: int,
     dt: float,
     stride: int = _PERF_STRIDE,
 ) -> np.ndarray:
-    """縦方向理想追従評価: a_cmd を遅れなしで直接積分した速度で N-step 走行し GT 変位と比較。
+    """縦方向モデル構造限界評価: 実測加速度 a_act を直接積分し GT 変位と比較。
 
-    開始点で vx_ideal = vx_gt に初期化し、a_cmd を dt 積分して理想速度を求め、
-    その速度で積分した変位 s_ideal と GT 変位 s_gt の差の絶対値を返す。
-    タイヤスリップ・路面勾配・空気抵抗など a_cmd→vx 以外の未モデル要素は含まれない。
+    シミュレータの加速度応答が実機と完全一致（a_act_sim = a_act_gt）した場合に残る
+    縦方向変位誤差を評価する。残差は dvx/dt = a_act という運動方程式に含まれない
+    要素（路面勾配・空気抵抗・タイヤ縦力・センサーバイアス等）に由来する。
 
-    Returns: |s_ideal - s_gt| [m] 配列
+    1-4 横方向評価との対称性:
+      1-4: gt_steer を bicycle model に直接入力 → steer 完全追従時の横方向残差
+      本関数: gt_a_act を積分器に直接入力 → acc 完全追従時の縦方向残差
+
+    Returns: |s_sim - s_gt| [m] 配列
     """
     n = len(gt_vx)
     k0s = np.arange(0, n - horizon, stride)
@@ -197,7 +201,7 @@ def _long_nstep_perf(
     for j in range(horizon):
         ki = np.clip(k0s + j, 0, n - 1)
         s_sim  += vx_sim * dt
-        vx_sim += a_cmd[ki] * dt
+        vx_sim += a_act[ki] * dt
         s_gt   += gt_vx[ki] * dt
 
     return np.abs(s_sim - s_gt)
@@ -667,10 +671,10 @@ def build_long_figure(collection_dir: Path, params: dict) -> go.Figure:
 
 
 def build_long_perf_figure(records: list[dict]) -> go.Figure:
-    """縦方向理想追従評価: a_cmd 直接積分 vs GT 変位の box plot（ホライズン別）。
+    """縦方向モデル構造限界評価: 実測加速度 a_act 直接積分 vs GT 変位の box plot（ホライズン別）。
 
-    アクチュエータ遅れ（τ_a, T_a）なしで a_cmd を直接積分した場合の縦方向変位と
-    GT 変位の差を評価し、縦方向モデル構造外要素（路面勾配・空気抵抗・タイヤ）を定量化する。
+    シミュレータの加速度応答が実機と完全一致（a_act_sim = a_act_gt）した場合に残る
+    縦方向変位誤差を評価する。
     """
     h_labels = [f"{h * _FIT_DT:.2f}s" for h in _PERF_HORIZONS]
     per_h_errors: dict[int, list[float]] = {h: [] for h in _PERF_HORIZONS}
@@ -681,26 +685,26 @@ def build_long_perf_figure(records: list[dict]) -> go.Figure:
         if not mcap.exists():
             continue
         try:
-            df_cmd = load_cmd(mcap, "/control/command/control_cmd")
-            df_vel = load_velocity(mcap)
+            df_accel = load_accel(mcap)
+            df_vel   = load_velocity(mcap)
         except Exception:
             continue
-        if df_cmd.empty or df_vel.empty:
+        if df_accel.empty or df_vel.empty:
             continue
 
-        t0 = max(float(df_cmd["t_ns"].values[0]), float(df_vel["t_ns"].values[0]))
-        t1 = min(float(df_cmd["t_ns"].values[-1]), float(df_vel["t_ns"].values[-1]))
+        t0 = max(float(df_accel["t_ns"].values[0]), float(df_vel["t_ns"].values[0]))
+        t1 = min(float(df_accel["t_ns"].values[-1]), float(df_vel["t_ns"].values[-1]))
         if (t1 - t0) < 2e9:
             continue
         t_ns  = np.arange(t0, t1, _FIT_DT * 1e9, dtype=np.float64)
         t_s   = (t_ns - t0) * 1e-9
-        gt_vx   = np.interp(t_s, (df_vel["t_ns"].values - t0) * 1e-9, df_vel["lon_vel"].values)
-        a_cmd_a = np.interp(t_s, (df_cmd["t_ns"].values - t0) * 1e-9, df_cmd["cmd_accel"].values)
+        gt_vx  = np.interp(t_s, (df_vel["t_ns"].values   - t0) * 1e-9, df_vel["lon_vel"].values)
+        a_act  = np.interp(t_s, (df_accel["t_ns"].values  - t0) * 1e-9, df_accel["accel"].values)
         if len(gt_vx) < 50:
             continue
 
         for h in _PERF_HORIZONS:
-            errs = _long_nstep_perf(gt_vx, a_cmd_a, h, _FIT_DT)
+            errs = _long_nstep_perf(gt_vx, a_act, h, _FIT_DT)
             per_h_errors[h].extend(errs.tolist())
 
     fig = go.Figure()
@@ -718,7 +722,7 @@ def build_long_perf_figure(records: list[dict]) -> go.Figure:
             showarrow=False, font=dict(size=13),
         )
     fig.update_layout(
-        title=f"縦方向 理想追従評価（a_cmd 直接積分 vs GT 変位、上位 {n_ds} DS）",
+        title=f"縦方向 モデル構造限界評価（a_act 直接入力 vs GT 変位、上位 {n_ds} DS）",
         xaxis_title="ホライズン [s]",
         yaxis_title="|縦方向誤差| [cm]",
         height=400,
@@ -1254,15 +1258,17 @@ def _build_sec1(
     _stride = _PERF_STRIDE
     if long_perf_plot_html:
         long_perf_subsection = (
-            "<h3>理想追従評価（a_cmd 直接積分）</h3>"
-            "<p>アクチュエータ遅れ（&tau;_a, T_a）が完全にゼロだった場合に残る縦方向位置ずれを評価する。<br>"
-            "各開始点で \\(v_{x,\\mathrm{ideal}}(t_0) = v_{x,\\mathrm{GT}}(t_0)\\) に初期化し、"
-            "\\(a_{\\mathrm{cmd}}\\) を直接積分して変位を計算、GT 変位と比較する。</p>"
+            "<h3>モデル構造限界評価（acc 理想追従）</h3>"
+            "<p>シミュレータの加速度応答が実機と完全一致（\\(a_{\\mathrm{act,sim}} = a_{\\mathrm{act,gt}}\\)）した場合に"
+            "残る縦方向変位誤差を評価する。<br>"
+            "各開始点で \\(v_{x,\\mathrm{sim}}(t_0) = v_{x,\\mathrm{GT}}(t_0)\\) に初期化し、"
+            "実測加速度 \\(a_{\\mathrm{act}}\\) を直接積分して変位を計算、GT 変位と比較する。</p>"
+            "<p>1-4 横方向評価との対称性: "
+            "1-4 では <i>gt_steer</i> を bicycle model に直接入力して steer 完全追従時の横方向残差を評価する。"
+            "本評価では <i>gt_a_act</i> を積分器に直接入力して acc 完全追従時の縦方向残差を評価する。</p>"
             "<div class=\"note\">"
-            "&#9888;&#65039; <b>設計上の帰結</b>: 縦方向の GT 変位は \\(v_x\\) の積分なので、"
-            "アクチュエータ遅れを除去した残差は"
-            "路面勾配・空気抵抗・タイヤ縦力などの <b>モデル構造外要素</b>"
-            "（および a_cmd &ne; GT 加速度起因のマップ/補正バイアス）を反映する。"
+            "&#9888;&#65039; <b>残差の解釈</b>: \\(\\dot{v}_x = a_{\\mathrm{act}}\\) という運動方程式に含まれない"
+            "要素（路面勾配・空気抵抗・タイヤ縦力・加速度センサーバイアス等）が残差として現れる。"
             "</div>"
             f"<p>走行区間（\\(v_x > {_vx_min}\\) m/s）を stride={_stride} ステップで走査し、"
             "N-step ロールアウト終端の縦方向誤差絶対値を集計する。"
