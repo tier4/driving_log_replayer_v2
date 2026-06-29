@@ -70,6 +70,12 @@ _H_SPAN = {10: "≈0.33 s", 20: "≈0.67 s", 30: "≈1.0 s", 40: "≈1.33 s"}
 _FIT_DT = 0.01          # モデルフィット用リサンプリング DT [s]
 _FIT_N_DS = 3           # フィット表示する代表 DS 数
 
+# 1-4. 理想追従評価用定数
+_PERF_HORIZONS: tuple[int, ...] = (10, 20, 50, 100)  # steps @ _FIT_DT → 0.10, 0.20, 0.50, 1.00 s
+_PERF_STRIDE = 5                                       # rollout reset stride [steps]
+_PERF_N_DS = 10                                        # box plot 用 DS 数
+_PERF_N_TRAJ = 3                                       # 軌跡比較表示 DS 数
+
 def _sim_first_order(cmd: np.ndarray, tau: float, n_delay: int, dt: float = _FIT_DT) -> np.ndarray:
     """純粋遅延 + 一次遅れシミュレーション（lfilter 版）。"""
     n = len(cmd)
@@ -81,6 +87,85 @@ def _sim_first_order(cmd: np.ndarray, tau: float, n_delay: int, dt: float = _FIT
         cmd_del = cmd.copy()
     alpha = float(np.clip(dt / tau, 0.0, 1.0))
     return lfilter([alpha], [1.0, -(1.0 - alpha)], cmd_del)
+
+
+def _bicycle_nstep_perf(
+    gt_x: np.ndarray,
+    gt_y: np.ndarray,
+    gt_yaw: np.ndarray,
+    gt_vx: np.ndarray,
+    gt_steer: np.ndarray,
+    params: dict,
+    horizon: int,
+    dt: float,
+    stride: int = _PERF_STRIDE,
+) -> np.ndarray:
+    """純粋自転車モデルの N-step 横方向誤差（ベクトル化）。
+
+    gt_steer: 実測操舵角 [rad]（生センサ値。steer_bias は params から適用）
+    params.steer_bias / k_us(v) を C++ モデルと同一式で評価し積分する。
+    Returns: |横方向誤差| [m] 配列（vx > VX_MIN_CURVE な開始点のみ）
+    """
+    L = WHEELBASE
+    beta = float(params.get("steer_bias", 0.0))
+    k_us_arr = _kus_step_profile(gt_vx, params)
+    denom_arr = np.maximum(L + k_us_arr * gt_vx ** 2, 0.05 * L)
+    wz_arr = gt_vx * np.tan(gt_steer + beta) / denom_arr
+
+    n = len(gt_x)
+    k0s = np.arange(0, n - horizon, stride)
+    k0s = k0s[gt_vx[k0s] > VX_MIN_CURVE]
+    if len(k0s) == 0:
+        return np.array([], dtype=float)
+
+    bx   = gt_x[k0s].astype(float).copy()
+    by   = gt_y[k0s].astype(float).copy()
+    byaw = gt_yaw[k0s].astype(float).copy()
+
+    for j in range(horizon):
+        ki = np.clip(k0s + j, 0, n - 1)
+        vxi = gt_vx[ki]
+        wzi = wz_arr[ki]
+        bx   = bx   + vxi * np.cos(byaw) * dt
+        by   = by   + vxi * np.sin(byaw) * dt
+        byaw = byaw + wzi * dt
+
+    k_end = np.minimum(k0s + horizon, n - 1)
+    dx  = bx - gt_x[k_end]
+    dy  = by - gt_y[k_end]
+    lat = np.abs(-dx * np.sin(gt_yaw[k_end]) + dy * np.cos(gt_yaw[k_end]))
+    return lat
+
+
+def _bicycle_trajectory_full(
+    gt_vx: np.ndarray,
+    gt_steer: np.ndarray,
+    x0: float,
+    y0: float,
+    yaw0: float,
+    params: dict,
+    dt: float,
+) -> tuple[np.ndarray, np.ndarray]:
+    """自転車モデルの全区間連続積分軌跡（リセットなし）。
+    初期状態を GT に合わせ、実測 vx + steer で積分する（アクチュエータ遅れなし仮定）。
+    """
+    L = WHEELBASE
+    beta = float(params.get("steer_bias", 0.0))
+    k_us_arr = _kus_step_profile(gt_vx, params)
+    denom_arr = np.maximum(L + k_us_arr * gt_vx ** 2, 0.05 * L)
+    wz_arr = gt_vx * np.tan(gt_steer + beta) / denom_arr
+
+    n = len(gt_vx)
+    xs = np.empty(n)
+    ys = np.empty(n)
+    x, y, yaw = x0, y0, yaw0
+    for i in range(n):
+        xs[i] = x
+        ys[i] = y
+        x   = x   + float(gt_vx[i]) * float(np.cos(yaw)) * dt
+        y   = y   + float(gt_vx[i]) * float(np.sin(yaw)) * dt
+        yaw = yaw + float(wz_arr[i]) * dt
+    return xs, ys
 
 
 def _find_mcap(collection_dir: Path, uuid: str) -> Path | None:
@@ -657,6 +742,130 @@ def build_steer_id_figure(collection_dir: Path, params: dict) -> go.Figure:
     return fig
 
 
+def build_perfect_tracking_figure(
+    top_records: list[dict],
+    params: dict,
+) -> tuple[go.Figure, go.Figure]:
+    """理想追従（実測 vx + δ_act 入力）の N-step 横方向誤差 box plot + 軌跡比較図。
+
+    アクチュエータ追従が完璧だった場合の位置ずれを評価し、
+    モデル構造限界（タイヤスリップ・路面バンク・vy・k_us キャリブレーション誤差）を定量化する。
+    縦方向誤差は gt_vx を直接使うため積分上ほぼゼロになる（設計上の帰結）。
+    """
+    n_ds = min(len(top_records), _PERF_N_DS)
+    h_labels = [f"{h * _FIT_DT:.2f}s" for h in _PERF_HORIZONS]
+
+    per_h_errors: dict[int, list[float]] = {h: [] for h in _PERF_HORIZONS}
+    traj_data: list[dict] = []
+
+    for rec in top_records[:n_ds]:
+        mcap = Path(rec["lite_dir"]) / "real.lite" / "real.lite_0.mcap"
+        if not mcap.exists():
+            continue
+        try:
+            df_kin   = load_kinematic(mcap)
+            df_steer = load_steering(mcap)
+        except Exception:
+            continue
+        if df_kin.empty or df_steer.empty or len(df_kin) < 50:
+            continue
+
+        t0 = float(df_kin["t_ns"].values[0])
+        t1 = float(df_kin["t_ns"].values[-1])
+        t_ns = np.arange(t0, t1, _FIT_DT * 1e9, dtype=np.float64)
+        t_s  = (t_ns - t0) * 1e-9
+
+        def _ip(df_raw: pd.DataFrame, col: str) -> np.ndarray:
+            return np.interp(t_s, (df_raw["t_ns"].values - t0) * 1e-9, df_raw[col].values)
+
+        gt_x     = _ip(df_kin, "x")
+        gt_y     = _ip(df_kin, "y")
+        gt_yaw   = _ip(df_kin, "yaw")
+        gt_vx    = _ip(df_kin, "vx")
+        gt_steer = _ip(df_steer, "steer")
+
+        for h in _PERF_HORIZONS:
+            lat_errs = _bicycle_nstep_perf(gt_x, gt_y, gt_yaw, gt_vx, gt_steer, params, h, _FIT_DT)
+            per_h_errors[h].extend(lat_errs.tolist())
+
+        if len(traj_data) < _PERF_N_TRAJ:
+            bx, by = _bicycle_trajectory_full(
+                gt_vx, gt_steer, float(gt_x[0]), float(gt_y[0]), float(gt_yaw[0]), params, _FIT_DT
+            )
+            moving = gt_vx > VX_MIN_CURVE
+            _DS = 5
+            traj_data.append({
+                "uuid": rec["uuid"][:8],
+                "gt_x": (gt_x - gt_x[0])[::_DS],
+                "gt_y": (gt_y - gt_y[0])[::_DS],
+                "bx":   (bx   - gt_x[0])[::_DS],
+                "by":   (by   - gt_y[0])[::_DS],
+                "moving": moving[::_DS],
+            })
+
+    # ---- Box plot ----
+    fig_box = go.Figure()
+    for h, hl in zip(_PERF_HORIZONS, h_labels):
+        errs = per_h_errors[h]
+        if errs:
+            fig_box.add_trace(go.Box(
+                y=[e * 100 for e in errs],
+                name=hl,
+                boxpoints="outliers",
+                marker_size=3,
+                marker_color="steelblue",
+            ))
+    fig_box.update_layout(
+        title=f"理想追従 N-step 横方向誤差（上位 {n_ds} DS プール）",
+        xaxis_title="ホライズン [s]",
+        yaxis_title="|横方向誤差| [cm]",
+        height=400,
+        showlegend=False,
+        margin=dict(t=50, b=40),
+    )
+
+    # ---- 軌跡比較 ----
+    n_traj = len(traj_data)
+    if n_traj == 0:
+        fig_traj = go.Figure()
+        fig_traj.update_layout(title="軌跡データなし", height=300)
+    else:
+        fig_traj = make_subplots(
+            rows=1, cols=n_traj,
+            subplot_titles=[f"DS {d['uuid']}" for d in traj_data],
+            horizontal_spacing=0.08,
+        )
+        for i, td in enumerate(traj_data, start=1):
+            m = td["moving"]
+            gt_xm = td["gt_x"].copy().astype(float); gt_xm[~m] = np.nan
+            gt_ym = td["gt_y"].copy().astype(float); gt_ym[~m] = np.nan
+            bxm   = td["bx"].copy().astype(float);   bxm[~m]   = np.nan
+            bym   = td["by"].copy().astype(float);   bym[~m]   = np.nan
+            show_legend = (i == 1)
+            fig_traj.add_trace(go.Scatter(
+                x=gt_xm.tolist(), y=gt_ym.tolist(),
+                mode="lines", name="GT 軌跡",
+                line=dict(color="black", width=2),
+                legendgroup="gt", showlegend=show_legend,
+            ), row=1, col=i)
+            fig_traj.add_trace(go.Scatter(
+                x=bxm.tolist(), y=bym.tolist(),
+                mode="lines", name="自転車モデル（理想追従）",
+                line=dict(color="steelblue", width=1.5, dash="dash"),
+                legendgroup="bic", showlegend=show_legend,
+            ), row=1, col=i)
+        fig_traj.update_layout(
+            title="GT vs 自転車モデル軌跡（実測 vx + δ_act 入力、初期状態 GT 合わせ、リセットなし）",
+            height=480,
+            margin=dict(t=60, b=40),
+        )
+        for i in range(1, n_traj + 1):
+            fig_traj.update_xaxes(title_text="Δx [m]", row=1, col=i)
+            fig_traj.update_yaxes(title_text="Δy [m]", row=1, col=i)
+
+    return fig_box, fig_traj
+
+
 # ---------------------------------------------------------------------------
 # HTML セクション組み立て
 # ---------------------------------------------------------------------------
@@ -1117,6 +1326,60 @@ C_{{\\mathrm{{OLS}}}} = \\frac{{\\sum \\omega_i \\, \\tan(\\delta_i)}}{{\\sum \\
 """
 
 
+def _build_sec14(
+    fig_box: go.Figure,
+    fig_traj: go.Figure,
+    params: dict,
+    n_ds: int,
+) -> str:
+    """1-4. モデル構造限界（理想追従評価）セクション HTML。"""
+    box_html  = fig_box.to_html(full_html=False, include_plotlyjs=False)
+    traj_html = fig_traj.to_html(full_html=False, include_plotlyjs=False)
+    tau_a = f"{params.get('acc_time_constant', float('nan')):.3g}"
+    T_a   = f"{params.get('acc_time_delay', float('nan')):.3g}"
+    tau_d = f"{params.get('steer_time_constant', float('nan')):.3g}"
+    T_d   = f"{params.get('steer_time_delay', float('nan')):.3g}"
+    h_str = ", ".join(f"N={h}（{h * _FIT_DT:.2f}s）" for h in _PERF_HORIZONS)
+    return f"""
+<section id="sec-perf-tracking">
+<h2>1-4. モデル構造限界（理想追従評価）</h2>
+<p>
+アクチュエータ追従が完璧だった場合（実測 \\(v_x\\) と実測 \\(\\delta_{{\\mathrm{{act}}}}\\) を
+自転車モデルの直接入力として使用）に残る位置ずれを評価する。
+これにより <b>アクチュエータ遅れの寄与</b> と <b>モデル構造外の寄与</b>（タイヤスリップ、路面バンク、
+横速度 \\(v_y\\)、\\(k_{{\\mathrm{{us}}}}\\) キャリブレーション誤差）を分離できる。
+</p>
+<p>
+現行スコアとの差分 ≈ アクチュエータ応答が占める誤差分
+（τ_a={tau_a} s, T_a={T_a} s, τ_δ={tau_d} s, T_δ={T_d} s の合算効果）。
+</p>
+<div class="note">
+⚠️ <b>設計上の帰結</b>:
+縦方向誤差は \\(v_x\\) を GT から直接取得しているため積分上ほぼゼロになる。
+<b>横方向誤差のみが真のモデル構造限界を表す。</b><br>
+残差は「現行チューン値 \\(k_{{\\mathrm{{us}}}}\\) および \\(\\beta\\) での理想追従誤差」であるため、
+パラメータのキャリブレーション誤差も一部含む（現行パラメータ前提での下限値）。
+</div>
+
+<h3>横方向誤差分布（ホライズン別、上位 {n_ds} DS）</h3>
+<p>
+カーブ走行区間（\\(v_x > {VX_MIN_CURVE}\\) m/s）を stride={_PERF_STRIDE} ステップで走査し、
+N-step ロールアウト終端の横方向誤差絶対値を集計する。ホライズン: {h_str}。
+</p>
+{box_html}
+
+<h3>代表 DS の軌跡比較（GT vs 自転車モデル）</h3>
+<p>
+初期状態を GT に合わせ、実測 \\(v_x\\) と \\(\\delta_{{\\mathrm{{act}}}}\\) を入力として積分した
+自転車モデル軌跡（青破線）を GT 軌跡（黒実線）と比較する。
+リセットなしの連続積分であるため、後半の乖離はモデル構造誤差の累積を示す。
+座標は初期位置を原点 (0, 0) に正規化している。
+</p>
+{traj_html}
+</section>
+"""
+
+
 def _build_sec2(kus_fig: go.Figure, n_ds: int) -> str:
     kus_html = kus_fig.to_html(full_html=False, include_plotlyjs=False)
     return f"""
@@ -1307,6 +1570,7 @@ def build_html(
     deviation_html: str = "",
     label: str = "current",
     params_filename: str = "",
+    perf_html: str = "",
 ) -> str:
     score = params.get("_score", "N/A")
     phase14_score = float(score) if isinstance(score, (int, float, str)) and str(score) != "N/A" else 0.0
@@ -1339,12 +1603,14 @@ def build_html(
   <a href="#sec-long">1-1. 縦方向</a>
   <a href="#sec-steer">1-2. 操舵</a>
   <a href="#sec-yaw">1-3. ヨー・横方向</a>
+  {'<a href="#sec-perf-tracking">1-4. モデル構造限界</a>' if perf_html else ""}
   <a href="#curve-viewer">3. カーブビューア</a>
 </nav>
 {sec_intro}
 {sec0}
 {deviation_html}
 {sec1}
+{perf_html}
 {sec3}
 </body>
 </html>
@@ -1687,12 +1953,18 @@ def main() -> None:
     kus_fig   = build_kus_figure(bins, params)
     long_fig  = build_long_figure(args.collection_dir, params)
     steer_fig = build_steer_id_figure(args.collection_dir, params)
+
+    print(f"  [1-4] 理想追従評価図生成 ({min(len(top_curve), _PERF_N_DS)} DS) ...")
+    perf_fig_box, perf_fig_traj = build_perfect_tracking_figure(top_curve, params)
+    perf_html = _build_sec14(perf_fig_box, perf_fig_traj, params, min(len(top_curve), _PERF_N_DS))
+
     html = build_html(
         params, long_fig, steer_fig, kus_fig, viewer_sections, len(records),
         baseline_score=baseline_steer_score,
         deviation_html=deviation_html,
         label=phase_label,
         params_filename=args.params.name,
+        perf_html=perf_html,
     )
 
     args.out.parent.mkdir(parents=True, exist_ok=True)
