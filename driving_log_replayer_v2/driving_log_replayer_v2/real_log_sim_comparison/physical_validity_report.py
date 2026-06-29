@@ -1397,7 +1397,7 @@ def main() -> None:
         help="ビューアに使う DS UUID をカンマ区切りで指定（省略時は curve_count 上位を自動選択）",
     )
     ap.add_argument(
-        "--pinned-uuids", type=str, default="ce063d43",
+        "--pinned-uuids", type=str, default="",
         help="ビューアに必ず含める DS UUID をカンマ区切りで指定（前方一致）。--viewer-uuids や自動選択より優先して先頭に配置",
     )
     ap.add_argument(
