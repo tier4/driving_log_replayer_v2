@@ -1111,7 +1111,7 @@ def main() -> None:
         "--phase",
         type=int,
         default=0,
-        choices=[0, 1, 2, 3, 4, 5, 10, 11, 12, 13, 14, 43, 44, 45, 46, 47, 48],
+        choices=[0, 1, 2, 3, 4, 5, 10, 11, 12, 13, 14, 43, 44, 45, 46, 47, 48, 49, 50],
         help=(
             "チューニングフェーズ (既定: 0=全パラメータ同時最適化)。"
             "1=acc のみ探索・long スコア (steer 系は scenario.yaml の定義値に固定)。"
@@ -1216,9 +1216,18 @@ def main() -> None:
             phase_data = yaml.safe_load(f)
         all_params = phase_data.get("params", phase_data)
         acc_keys = {"acc_time_constant", "acc_time_delay"}
-        # Phase 43/44/45/46/47: 前フェーズの全 params を cur_best として継承（探索空間外の値を保持）
+        # Phase 43/44/45/46/47/48: 前フェーズの全 params を cur_best として継承（探索空間外の値を保持）
         if args.phase in (43, 44, 45, 46, 47, 48):
             fixed_keys = set(all_params.keys())
+        # Phase 49: vx_score 最適化。steer 系を固定し acc 系のみ探索。
+        elif args.phase == 49:
+            fixed_keys = set(all_params.keys()) - {"acc_time_constant", "acc_time_delay"}
+        # Phase 50: steer_dynamics_score 最適化。acc 系を固定し steer 系のみ探索。
+        elif args.phase == 50:
+            fixed_keys = set(all_params.keys()) - {
+                "steer_time_constant", "debug_steer_scaling_factor",
+                "steer_time_delay", "steer_bias",
+            }
         # Phase 11/12/13: steer_time_delay も固定値として引き継ぐ
         # Phase 12/13: acc_time_constant は変数化するため固定しない (acc_time_delay のみ固定)
         elif args.phase in (12, 13):

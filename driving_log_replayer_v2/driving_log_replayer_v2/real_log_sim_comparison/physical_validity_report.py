@@ -36,7 +36,7 @@ if _INSTALL.exists() and str(_INSTALL) not in sys.path:
     sys.path.insert(0, str(_INSTALL))
 
 from driving_log_replayer_v2.real_log_sim_comparison.lib._coverage import _curvature_coverage  # noqa: E402
-from driving_log_replayer_v2.real_log_sim_comparison.lib._io import load_kinematic, load_steering  # noqa: E402
+from driving_log_replayer_v2.real_log_sim_comparison.lib._io import load_accel, load_cmd, load_kinematic, load_steering  # noqa: E402
 from driving_log_replayer_v2.real_log_sim_comparison.lib._map import load_map_ways, resolve_map_osm  # noqa: E402
 from driving_log_replayer_v2.real_log_sim_comparison.lib._multi_agg import (  # noqa: E402
     HORIZONS as _HORIZONS,
@@ -119,6 +119,15 @@ def _load_mcap_worker(args: tuple) -> dict | None:
     if df_kin.empty or df_steer.empty or len(df_kin) < 10:
         return None
 
+    try:
+        df_cmd = load_cmd(mcap, "/control/command/control_cmd")
+    except Exception:
+        df_cmd = pd.DataFrame()
+    try:
+        df_accel = load_accel(mcap)
+    except Exception:
+        df_accel = pd.DataFrame()
+
     t_k = df_kin["t_ns"].values * 1e-9
     vx = df_kin["vx"].values
     wz = df_kin["wz"].values
@@ -147,6 +156,22 @@ def _load_mcap_worker(args: tuple) -> dict | None:
     except Exception:
         cov = {"curve_count": 0, "kappa_max_abs": 0.0}
 
+    # cmd_accel / a_act / cmd_steer（stride=10 で間引き: 10ms×10 = 100ms 解像度）
+    _STRIDE = 10
+    t_sub = t_k[::_STRIDE]
+    if not df_cmd.empty:
+        t_c = df_cmd["t_ns"].values * 1e-9
+        cmd_accel_arr = np.interp(t_sub, t_c, df_cmd["cmd_accel"].values).tolist()
+        cmd_steer_arr = np.interp(t_sub, t_c, df_cmd["cmd_steer"].values).tolist()
+    else:
+        cmd_accel_arr = []
+        cmd_steer_arr = []
+    if not df_accel.empty:
+        t_a = df_accel["t_ns"].values * 1e-9
+        a_act_arr = np.interp(t_sub, t_a, df_accel["accel"].values).tolist()
+    else:
+        a_act_arr = []
+
     return {
         "uuid": uuid,
         "lite_dir": lite_dir_str,
@@ -156,6 +181,9 @@ def _load_mcap_worker(args: tuple) -> dict | None:
         "dwz": dwz.tolist(),
         "curve_count": cov["curve_count"],
         "kappa_max_abs": cov["kappa_max_abs"],
+        "cmd_accel": cmd_accel_arr,
+        "a_act": a_act_arr,
+        "cmd_steer": cmd_steer_arr,
     }
 
 
@@ -388,6 +416,149 @@ def build_kus_figure(bins: dict, params: dict) -> go.Figure:
         legend=dict(x=0.02, y=0.98, bgcolor="rgba(255,255,255,0.8)"),
         margin=dict(l=60, r=20, t=70, b=40),
     )
+    return fig
+
+
+def build_long_figure(records: list[dict], params: dict) -> go.Figure:
+    """縦方向加速度の独立同定グラフ: a_cmd（遅延補正後）vs 実機 a_act 散布図。"""
+    T_a = float(params.get("acc_time_delay", 0.0))
+    DT_sub = 0.10  # stride=10 @ 10ms
+    n_delay = int(round(T_a / DT_sub))
+
+    all_cmd: list[np.ndarray] = []
+    all_act: list[np.ndarray] = []
+    for r in records:
+        cmd = np.asarray(r.get("cmd_accel", []))
+        act = np.asarray(r.get("a_act", []))
+        if len(cmd) < 5 or len(act) < 5:
+            continue
+        if 0 < n_delay < len(cmd):
+            cmd_del = np.empty_like(cmd)
+            cmd_del[:n_delay] = cmd[0]
+            cmd_del[n_delay:] = cmd[:-n_delay]
+        else:
+            cmd_del = cmd.copy()
+        n = min(len(cmd_del), len(act))
+        all_cmd.append(cmd_del[:n])
+        all_act.append(act[:n])
+
+    if not all_cmd:
+        fig = go.Figure()
+        fig.add_annotation(
+            text="データなし（cmd_accel / accel トピックが読み込めませんでした）",
+            xref="paper", yref="paper", x=0.5, y=0.5, showarrow=False,
+            font=dict(size=13),
+        )
+        fig.update_layout(height=200)
+        return fig
+
+    a_cmd_all = np.concatenate(all_cmd)
+    a_act_all = np.concatenate(all_act)
+    if len(a_cmd_all) > 60000:
+        rng = np.random.default_rng(42)
+        idx = rng.choice(len(a_cmd_all), 60000, replace=False)
+        a_cmd_all = a_cmd_all[idx]
+        a_act_all = a_act_all[idx]
+
+    fig = make_subplots(
+        rows=1, cols=2,
+        subplot_titles=[
+            f"a_cmd（T_a={T_a}s 遅延後）vs a_act — 全 {len(records)} DS",
+            "a_act 分布（実機加速度）",
+        ],
+        horizontal_spacing=0.14,
+    )
+
+    fig.add_trace(go.Scattergl(
+        x=a_cmd_all.tolist(), y=a_act_all.tolist(),
+        mode="markers",
+        marker=dict(size=3, color="steelblue", opacity=0.25),
+        name="サンプル",
+    ), row=1, col=1)
+    amax = float(max(float(np.nanmax(np.abs(a_cmd_all))), float(np.nanmax(np.abs(a_act_all))), 1.0))
+    fig.add_trace(go.Scatter(
+        x=[-amax, amax], y=[-amax, amax],
+        mode="lines", line=dict(color="red", dash="dash", width=1.5),
+        name="y=x（理想）",
+    ), row=1, col=1)
+
+    fig.add_trace(go.Histogram(
+        x=a_act_all.tolist(), nbinsx=80,
+        marker_color="steelblue", opacity=0.7, showlegend=False,
+    ), row=1, col=2)
+
+    fig.update_layout(height=400, margin=dict(t=60, b=40))
+    fig.update_xaxes(title_text="a_cmd 遅延後 [m/s²]", row=1, col=1)
+    fig.update_yaxes(title_text="a_act [m/s²]", row=1, col=1)
+    fig.update_xaxes(title_text="a_act [m/s²]", row=1, col=2)
+    fig.update_yaxes(title_text="カウント", row=1, col=2)
+    return fig
+
+
+def build_steer_id_figure(csv_path: Path, params: dict) -> go.Figure:
+    """操舵動力学の直接同定分布グラフ（steer_dynamics_identified.csv から）。"""
+    if not csv_path.exists():
+        fig = go.Figure()
+        fig.add_annotation(
+            text=(
+                f"<b>{csv_path.name} が見つかりません</b><br>"
+                "事前に <code>identify_steer_dynamics.py</code> を実行してください。"
+            ),
+            xref="paper", yref="paper", x=0.5, y=0.5, showarrow=False,
+            font=dict(size=13), align="center",
+        )
+        fig.update_layout(height=200)
+        return fig
+
+    df = pd.read_csv(csv_path)
+    tau_tuned = float(params.get("steer_time_constant", float("nan")))
+    T_tuned   = float(params.get("steer_time_delay", float("nan")))
+    tau_med   = float(df["tau"].median())
+    T_med     = float(df["delay"].median())
+
+    fig = make_subplots(
+        rows=1, cols=2,
+        subplot_titles=[
+            f"τ_δ（時定数）分布  中央値 = {tau_med:.3f} s",
+            f"T_δ（純粋遅延）分布  中央値 = {T_med:.3f} s",
+        ],
+        horizontal_spacing=0.12,
+    )
+
+    fig.add_trace(go.Histogram(
+        x=df["tau"].tolist(), nbinsx=40,
+        marker_color="steelblue", opacity=0.7, name="τ_δ",
+    ), row=1, col=1)
+    fig.add_vline(x=tau_med, line=dict(color="steelblue", width=2, dash="dot"),
+                  annotation_text=f"中央値 {tau_med:.3f}", annotation_position="top right",
+                  row=1, col=1)
+    if not np.isnan(tau_tuned):
+        fig.add_vline(x=tau_tuned, line=dict(color="darkorange", width=2.5),
+                      annotation_text=f"チューン値 {tau_tuned:.3f}",
+                      annotation_position="top left",
+                      row=1, col=1)
+
+    fig.add_trace(go.Histogram(
+        x=df["delay"].tolist(), nbinsx=20,
+        marker_color="teal", opacity=0.7, name="T_δ",
+    ), row=1, col=2)
+    fig.add_vline(x=T_med, line=dict(color="teal", width=2, dash="dot"),
+                  annotation_text=f"中央値 {T_med:.3f}", annotation_position="top right",
+                  row=1, col=2)
+    if not np.isnan(T_tuned):
+        fig.add_vline(x=T_tuned, line=dict(color="darkorange", width=2.5),
+                      annotation_text=f"チューン値 {T_tuned:.3f}",
+                      annotation_position="top left",
+                      row=1, col=2)
+
+    fig.update_layout(
+        height=380, showlegend=False,
+        title_text=f"操舵動力学 直接同定（N = {len(df)} DS）",
+        margin=dict(t=70, b=40),
+    )
+    fig.update_xaxes(title_text="τ_δ [s]", row=1, col=1)
+    fig.update_yaxes(title_text="DS 数", row=1, col=1)
+    fig.update_xaxes(title_text="T_δ [s]", row=1, col=2)
     return fig
 
 
@@ -650,37 +821,216 @@ def _build_sec_model_intro(params: dict, label: str, params_filename: str = "") 
 """
 
 
-def _build_sec1(params: dict) -> str:
+def _build_sec1(
+    params: dict,
+    long_fig: go.Figure,
+    steer_fig: go.Figure,
+    kus_fig: go.Figure,
+    n_ds: int,
+) -> str:
     kus_rows = _kus_band_table_rows(params)
 
+    def _fmt(v) -> str:
+        if isinstance(v, float):
+            return f"{v:.6g}"
+        return str(v)
+
+    tau_a = _fmt(params.get("acc_time_constant", "N/A"))
+    T_a   = _fmt(params.get("acc_time_delay", "N/A"))
+    tau_d = _fmt(params.get("steer_time_constant", "N/A"))
+    T_d   = _fmt(params.get("steer_time_delay", "N/A"))
+    DSF   = _fmt(params.get("debug_steer_scaling_factor", "N/A"))
+    beta  = _fmt(params.get("steer_bias", "N/A"))
+    db    = _fmt(params.get("steer_dead_band", "N/A"))
+    rlim  = _fmt(params.get("steer_rate_lim", "N/A"))
+
+    long_html  = long_fig.to_html(full_html=False, include_plotlyjs=False)
+    steer_html = steer_fig.to_html(full_html=False, include_plotlyjs=False)
+    kus_html   = kus_fig.to_html(full_html=False, include_plotlyjs=False)
+
     return f"""
-<section id="theory">
-<h2>1. モデル式要素の理論的説明</h2>
+<section id="sec-long">
+<h2>1-1. 縦方向（加速度アクチュエータ）— Phase 49 で同定</h2>
+<p>
+速度 \\(v_x\\) は横方向・操舵状態に依存せず縦方向のみで閉じるため（long ⊥ steer の直交性）、
+\\(\\text{{err}}_{{vx}}\\) を目的関数として他のパラメータと独立に同定できる。
+</p>
 
 <details>
-<summary>1-1. 速度依存アンダーステア補正（k_us 速度帯ステップ）</summary>
-<p>
-横方向の運動方程式（運動学的自転車モデル拡張）:
+<summary>運動方程式の詳細</summary>
+<p><b>運動方程式:</b></p>
 \\[
-\\omega = \\frac{{v \\cdot \\tan(\\delta + \\beta)}}{{L + k_{{\\mathrm{{us,eff}}}} \\cdot v^2}},
+a_{{\\mathrm{{cmd,del}}}}(t) = a_{{\\mathrm{{cmd}}}}(t - T_a)
+\\]
+\\[
+\\dot{{a}}_{{\\mathrm{{act}}}}(t) = \\frac{{a_{{\\mathrm{{cmd,del}}}}(t) - a_{{\\mathrm{{act}}}}(t)}}{{\\tau_a}}
+\\]
+\\[
+\\dot{{v}}_x(t) = a_{{\\mathrm{{act}}}}(t)
+\\]
+<p>
+加速度指令 \\(a_{{\\mathrm{{cmd}}}}\\) は純粋遅延 \\(T_a\\) だけ遅れてアクチュエータに届き、
+時定数 \\(\\tau_a\\) の一次遅れでペダル加速度 \\(a_{{\\mathrm{{act}}}}\\) が応答する。
+速度 \\(v_x\\) はその積分として得られる。
+</p>
+</details>
+
+<h3>実機ログからの独立同定（全 {n_ds} DS）</h3>
+<p>
+<code>/control/command/control_cmd</code>（\\(a_{{\\mathrm{{cmd}}}}\\)）と
+<code>/localization/acceleration</code>（\\(a_{{\\mathrm{{act}}}}\\)）を全 DS concat し、
+純粋遅延 \\(T_a = {T_a}\\) s を適用した \\(a_{{\\mathrm{{cmd,del}}}}\\) と \\(a_{{\\mathrm{{act}}}}\\) の相関を示す。
+理想的な一次遅れ追従では点群が \\(y=x\\)（赤破線）付近に分布する。
+</p>
+{long_html}
+<div class="note">
+<b>解釈</b>: 点群の傾きが 1 より大きい場合は加速度計が指令より強い（ゲイン過大）、
+小さい場合は弱い（ゲイン不足または τ_a が過大）。横方向の広がりは遅延 T_a のミスチューンに起因する。
+</div>
+
+<table class="param-table">
+  <tr><th>パラメータ</th><th>値</th><th>式中の役割</th><th>同定誤差量</th></tr>
+  <tr><td><code>acc_time_constant</code> (τ_a)</td><td>{tau_a} s</td>
+      <td>一次遅れ時定数：小さいほど加速応答が速い</td><td rowspan="2">err_vx</td></tr>
+  <tr><td><code>acc_time_delay</code> (T_a)</td><td>{T_a} s</td>
+      <td>純粋遅延：指令が実際に入力されるまでの無駄時間</td></tr>
+</table>
+</section>
+
+<section id="sec-steer">
+<h2>1-2. 操舵アクチュエータ（追従ループ）— Phase 50 で同定</h2>
+<p>
+操舵追従ループは実車位置・ヨーのフィードバックを持たないオープンループなので、
+\\(\\text{{err}}_{{\\mathrm{{steer}}}}\\) を目的関数として位置・ヨー誤差とは構造的に独立して同定できる。
+</p>
+
+<details>
+<summary>運動方程式の詳細</summary>
+<p><b>運動方程式:</b></p>
+\\[
+\\delta_{{\\mathrm{{cmd,del}}}}(t) = \\delta_{{\\mathrm{{cmd}}}}(t - T_\\delta)
+\\]
+\\[
+\\delta_{{\\mathrm{{des}}}}(t) = \\mathrm{{DSF}} \\cdot \\mathrm{{clamp}}(\\delta_{{\\mathrm{{cmd,del}}}},\\; \\pm\\delta_{{\\mathrm{{lim}}}})
+\\]
+\\[
+\\dot{{\\delta}}_{{\\mathrm{{act}}}}(t) = \\mathrm{{sat}}\\!\\left(
+  -\\frac{{\\delta_{{\\mathrm{{act}}}}(t) - \\delta_{{\\mathrm{{des}}}}(t) + \\mathrm{{db}}(\\cdot)}}{{\\tau_\\delta}},\\;
+  \\pm\\dot{{\\delta}}_{{\\mathrm{{lim}}}}
+\\right)
+\\]
+\\[
+\\delta_{{\\mathrm{{sim}}}}(t) = \\delta_{{\\mathrm{{act}}}}(t) + \\beta
+\\]
+<p>
+ここで \\(\\mathrm{{db}}(\\cdot)\\) は不感帯（\\(|\\delta_{{\\mathrm{{act}}}} - \\delta_{{\\mathrm{{des}}}}| \\leq \\delta_{{\\mathrm{{db}}}}\\) の範囲ではレート = 0）。
+報告操舵角 \\(\\delta_{{\\mathrm{{sim}}}}\\) には steer_bias β を加算する（β の一方の役割）。
+</p>
+<div class="note">
+⚠️ <b>結合点</b>: DSF は操舵指令に定数ゲインをかける形で、直進時の系統的な横力成分（v²δ 由来の
+アンダーステア成分）を部分的に吸収できる。
+したがって DSF の最適値は k_us の同定後に再検証することが望ましい。<br>
+β（steer_bias）はアクチュエータ追従式自体には入らず（<code>getSteer()</code> は bias なし）、
+報告値の加算と 1-3 のヨー式の両方に現れる二重登場のパラメータである。
+</div>
+</details>
+
+<h3>実機ログからの独立同定（<code>identify_steer_dynamics.py</code> 結果）</h3>
+<p>
+各 DS の \\(\\delta_{{\\mathrm{{cmd}}}}\\) と \\(\\delta_{{\\mathrm{{act}}}}\\) に対して遅延グリッドサーチ + OLS で
+\\((\\tau_\\delta, T_\\delta)\\) を同定した分布を示す（橙実線 = チューン値、青点線 = 中央値）。
+</p>
+{steer_html}
+<div class="note">
+⚠️ <b>注記</b>: <code>cmd_steer</code> は understeer converter 適用前（コントローラ出力）、
+<code>delta_act</code> は converter 適用後の実舵角である。定常ゲインは速度依存の補正を含むため、
+時定数 \\(\\tau_\\delta\\) と遅延 \\(T_\\delta\\) の分布は quasi-static で有効だが、ゲイン推定は低速帯（v &lt; 3 m/s）に限定して評価することが望ましい。
+</div>
+
+<table class="param-table">
+  <tr><th>パラメータ</th><th>値</th><th>式中の役割</th><th>同定誤差量</th></tr>
+  <tr><td><code>steer_time_constant</code> (τ_δ)</td><td>{tau_d} s</td>
+      <td>一次遅れ時定数：小さいほど操舵応答が速い</td><td rowspan="4">err_steer</td></tr>
+  <tr><td><code>steer_time_delay</code> (T_δ)</td><td>{T_d} s</td>
+      <td>純粋遅延：操舵指令の無駄時間</td></tr>
+  <tr><td><code>debug_steer_scaling_factor</code> (DSF)</td><td>{DSF}</td>
+      <td>指令スケーリング（1.0 = 補正なし）；遅延後に乗算</td></tr>
+  <tr><td><code>steer_bias</code> (β)</td><td>{beta} rad</td>
+      <td>報告操舵角への加算（δ_sim = δ_act + β）；ヨー式にも二重登場</td></tr>
+  <tr><td><code>steer_dead_band</code></td><td>{db} rad</td>
+      <td>不感帯幅（固定値・同定対象外）</td><td>—</td></tr>
+  <tr><td><code>steer_rate_lim</code></td><td>{rlim} rad/s</td>
+      <td>操舵レート飽和（固定値・同定対象外）</td><td>—</td></tr>
+</table>
+</section>
+
+<section id="sec-yaw">
+<h2>1-3. ヨー・横方向（運動学的自転車モデル）— 速度ビン別 OLS 同定</h2>
+<p>
+1-1（縦方向）・1-2（操舵追従）が先行して確定した後、
+\\(\\text{{err}}_{{wz}}\\) を目的関数として <b>高曲率サブセット</b> で k_us を同定する。
+直進（\\(\\delta \\approx 0\\)）では感度がゼロなので、全 DS 集約スコアは k_us に対して構造的不可同定。
+</p>
+
+<details>
+<summary>運動方程式の詳細</summary>
+<p><b>運動方程式:</b></p>
+\\[
+\\omega(t) = \\frac{{v_x \\cdot \\tan\\bigl(\\delta_{{\\mathrm{{act}}}}(t) + \\beta\\bigr)}}{{\\max\\!\\left(L + k_{{\\mathrm{{us,eff}}}}(v_x)\\cdot v_x^2,\\; 0.05\\,L\\right)}},
 \\qquad \\dot{{\\theta}} = \\omega
 \\]
-アンダーステア係数は速度帯ごとに定数を切り替えるステップ形状をとる:
 \\[
-k_{{\\mathrm{{us,eff}}}}(v) = k_{{\\mathrm{{us,band[i]}}}} \\quad \\text{{where }} i = \\max\\{{j : v \\geq \\mathrm{{threshold}}_j\\}}
+\\dot{{x}} = v_x \\cos\\theta, \\qquad \\dot{{y}} = v_x \\sin\\theta
+\\]
+<p>
+アンダーステア係数 \\(k_{{\\mathrm{{us,eff}}}}\\) は速度帯ごとの定数（速度帯ステップ）で実装される。
+β（steer_bias）はヨー式の \\(\\tan(\\cdot)\\) 引数にも加算され、系統的なヨーオフセットを生む
+（1-2 の報告値加算とは別経路で同一パラメータが効く）。
+</p>
+<div class="note">
+⚠️ <b>前提条件</b>: この式の入力 \\(\\delta_{{\\mathrm{{act}}}}\\) は 1-2 の結果に依存する。
+1-2 の DSF が k_us の v²δ 成分を部分吸収しているため、Phase 50 確定後の DSF 値を固定した上で
+k_us を同定することが重要。
+</div>
+</details>
+
+<h3>実機ログからの独立同定（全 {n_ds} DS、速度ビン別 OLS）</h3>
+
+<details>
+<summary>推定手法の詳細</summary>
+<p>
+定常旋回フィルタ（\\(|\\omega| > {WZ_MIN}\\) rad/s、\\(|\\dot{{\\omega}}| < {DWZ_MAX}\\) rad/s²、
+\\(v_x > {VX_MIN_CURVE}\\) m/s）を通過した各タイムステップを速度ビンに割り当て、
+ビン内で以下の2種類の推定を行う。
+</p>
+<p><b>① 最小二乗法推定（青丸・実線）</b>: 原点回帰 \\(\\tan(\\delta_{{\\mathrm{{eff}}}}) = C \\cdot \\omega\\) の最小二乗解
+\\[
+C_{{\\mathrm{{OLS}}}} = \\frac{{\\sum \\omega_i \\, \\tan(\\delta_i)}}{{\\sum \\omega_i^2}},
+\\qquad
+\\hat{{k}}_{{\\mathrm{{us}}}} = \\frac{{C_{{\\mathrm{{OLS}}}} - L / \\bar{{v}}_x}}{{\\bar{{v}}_x}}
+\\]
+ここで \\(\\bar{{v}}_x\\) はビン内の速度中央値、\\(L = {WHEELBASE}\\) m はホイールベース。
+</p>
+<p><b>② 個別サンプル（IQR バンド）</b>: 実機運動学ログの各タイムステップで瞬時 k_us を推定し、
+ビン内の 25〜75 パーセンタイルをバンドとして表示:
+\\[
+\\tilde{{k}}_{{\\mathrm{{us}}}}[i] = \\frac{{\\tan(\\delta_i) / \\omega_i - L / v_{{x,i}}}}{{v_{{x,i}}}}
 \\]
 </p>
-<p><b>物理的意味</b>:
-低速では慣性力が小さくタイヤ横力は無視できる（純運動学：\\(k_{{\\mathrm{{us,eff}}}}\\approx0\\)）。
-高速になるとタイヤの横すべり剛性に対して慣性力が大きくなり、旋回半径が広がる
-<em>アンダーステア</em>が現れる。分母の \\(k_{{\\mathrm{{us}}}} v^2\\) が大回り量を補正する。
-速度帯ごとに異なる係数を割り当てることで、速度域別の特性差を表現する。
-</p>
-<table class="param-table">
-  <tr><th>パラメータ</th><th>値</th><th>意味</th></tr>
-{kus_rows}
-</table>
 </details>
+{kus_html}
+<div class="note">
+<b>解釈</b>: 最小二乗法推定値が低速ビンでほぼ 0、高速ビンで正の値に推移していれば、
+ランプ形状は物理的実態と整合している。ただし J6 の多くの DS が低速（vx_mean ≈ 1.9 m/s）
+のため、高速ビンのサンプル数は少なく推定誤差が大きい点に注意（右パネルのサンプル数を参照）。
+</div>
+
+<table class="param-table">
+  <tr><th>パラメータ</th><th>値</th><th>式中の役割</th><th>同定誤差量</th></tr>
+{kus_rows}
+  <tr><td><code>steer_bias</code> (β) <i>[1-2 と共有]</i></td><td>{beta} rad</td>
+      <td>tan(δ_act + β) の引数：ヨーオフセットを生む</td><td>err_wz（間接）</td></tr>
+</table>
 </section>
 """
 
@@ -866,6 +1216,8 @@ RMSE は各 DS の全 k0 ステップ（stride=5）の終端誤差（N ステッ
 
 def build_html(
     params: dict,
+    long_fig: go.Figure,
+    steer_fig: go.Figure,
     kus_fig: go.Figure,
     viewer_sections: list[str],
     n_ds: int,
@@ -878,8 +1230,7 @@ def build_html(
     phase14_score = float(score) if isinstance(score, (int, float, str)) and str(score) != "N/A" else 0.0
     sec_intro = _build_sec_model_intro(params, label=label, params_filename=params_filename)
     sec0 = _build_sec_metrics(baseline_score=baseline_score, phase14_score=phase14_score, label=label)
-    sec1 = _build_sec1(params)
-    sec2 = _build_sec2(kus_fig, n_ds)
+    sec1 = _build_sec1(params, long_fig, steer_fig, kus_fig, n_ds)
     sec3 = _build_sec3(viewer_sections, label=label)
 
     return f"""<!DOCTYPE html>
@@ -903,15 +1254,15 @@ def build_html(
   <a href="#model-intro">モデルパラメータ</a>
   <a href="#metrics">0. メトリクス解説</a>
   {'<a href="#deviation">0-6. N-step 最大乖離</a>' if deviation_html else ""}
-  <a href="#theory">1. 理論</a>
-  <a href="#identification">2. 実機同定</a>
+  <a href="#sec-long">1-1. 縦方向</a>
+  <a href="#sec-steer">1-2. 操舵</a>
+  <a href="#sec-yaw">1-3. ヨー・横方向</a>
   <a href="#curve-viewer">3. カーブビューア</a>
 </nav>
 {sec_intro}
 {sec0}
 {deviation_html}
 {sec1}
-{sec2}
 {sec3}
 </body>
 </html>
@@ -1251,9 +1602,13 @@ def main() -> None:
 
     # Phase 4: HTML 組み立て
     print("\n[Phase 4] plotly 図生成 & HTML 組み立て ...")
-    kus_fig = build_kus_figure(bins, params)
+    kus_fig   = build_kus_figure(bins, params)
+    long_fig  = build_long_figure(records, params)
+    steer_fig = build_steer_id_figure(
+        args.collection_dir / "steer_dynamics_identified.csv", params
+    )
     html = build_html(
-        params, kus_fig, viewer_sections, len(records),
+        params, long_fig, steer_fig, kus_fig, viewer_sections, len(records),
         baseline_score=baseline_steer_score,
         deviation_html=deviation_html,
         label=phase_label,
