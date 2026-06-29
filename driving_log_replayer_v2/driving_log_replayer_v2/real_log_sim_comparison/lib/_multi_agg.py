@@ -40,6 +40,17 @@ WORST_W = 0.5  # worst-case 項の重み (mean+worst 両方を balance する方
 POS_W = 0.5    # 縦・横 各成分の重み。pos を縦横に分けても yaw:位置 = 1:1 を維持する
 #              (位置 = 0.5·縦 + 0.5·横)。旧 nyaw+npos のバランスと整合させるための補正。
 
+# vx [m/s] 正規化フロア (baseline p50 から校正予定; 現在は保守的な仮値)
+# 直進・定速走行では vx 誤差が極小になるため、relative explosion 防止のクリップ値。
+# 参考: acc_time_constant=0.25 のとき N=10 の vx RMSE は概ね 0.02〜0.05 m/s 程度。
+VX_FLOOR = {10: 0.02, 20: 0.04, 30: 0.06, 40: 0.08, 100: 0.12, 200: 0.15}  # m/s
+
+# steer [deg] 正規化フロア (baseline p50 から校正予定; 現在は保守的な仮値)
+# 直進走行では steer 誤差が極小になるため relative explosion 防止。
+# gt_steer は /vehicle/status/steering_status (converter 後) なので
+# sim の steer_des 追従 + understeer 補正オフセットが重畳される点に注意。
+STEER_FLOOR = {10: 0.05, 20: 0.10, 30: 0.15, 40: 0.20, 100: 0.40, 200: 0.80}  # deg
+
 
 def normalize_components(m: dict, baseline: dict, h: int) -> dict:
     """1 dataset・1 horizon の誤差 RMSE をフロアクリップ付き baseline 比で正規化する。
@@ -148,6 +159,54 @@ def acc_score(
     return s
 
 
+def aggregate_component(
+    per_ds_metrics: list[tuple[str, dict]],
+    baselines: dict[str, dict],
+    key: str,
+    floor_by_h: dict[int, float],
+    horizons: tuple[int, ...] = HORIZONS,
+) -> dict:
+    """単一成分 (vx / steer) の dataset 横断 baseline 比集約。
+
+    per_ds_metrics: [(dataset_id, {h: {key: float, ...}})]
+    baselines:      {dataset_id: {h: {key: float, ...}}}
+    key:            集約する成分名 ("vx" or "steer")
+    floor_by_h:     {h: floor_value} — VX_FLOOR / STEER_FLOOR を渡す
+    返り値: {"per_ds": [...], "by_h": {h: {"n_mean", "n_worst"}}}
+    """
+    per_ds = []
+    for ds_id, m in per_ds_metrics:
+        by_h = {}
+        for h in horizons:
+            v = m[h][key]
+            b = baselines[ds_id][h][key]
+            by_h[h] = {"raw": v, "n": v / max(b, floor_by_h[h])}
+        per_ds.append({"dataset_id": ds_id, "by_h": by_h})
+
+    by_h_agg = {}
+    for h in horizons:
+        ns = [d["by_h"][h]["n"] for d in per_ds]
+        by_h_agg[h] = {"n_mean": stats.mean(ns), "n_worst": max(ns)}
+    return {"per_ds": per_ds, "by_h": by_h_agg}
+
+
+def component_score(
+    agg: dict,
+    horizons: tuple[int, ...] = HORIZONS,
+    worst_w: float = WORST_W,
+) -> float:
+    """単一成分 baseline 比集約スコア (mean + worst_w * worst)。小さいほど良い。
+
+    aggregate_component の返り値を受け取る。
+    vx_score / steer_dynamics_score 共通の計算式。
+    """
+    s = 0.0
+    for h in horizons:
+        b = agg["by_h"][h]
+        s += b["n_mean"] + worst_w * b["n_worst"]
+    return s
+
+
 def score_formula_md(horizons: tuple[int, ...] = HORIZONS, worst_w: float = WORST_W) -> str:
     """robust_score の定義を Markdown 1 行で返す (レポート埋め込み用)。"""
     return (
@@ -158,13 +217,20 @@ def score_formula_md(horizons: tuple[int, ...] = HORIZONS, worst_w: float = WORS
 
 
 def format_agg(tag: str, agg: dict, horizons: tuple[int, ...] = HORIZONS) -> str:
-    """集約結果の 1 行サマリ (探索ログ用)。"""
+    """集約結果の 1 行サマリ (探索ログ用)。
+
+    aggregate_normalized 形式 (nyaw_mean/...) と
+    aggregate_component 形式 (n_mean/n_worst) の両方に対応。
+    """
     seg = []
     for h in horizons:
         b = agg["by_h"][h]
-        seg.append(
-            f"N{h}[ny_m={b['nyaw_mean']:.3f}/w={b['nyaw_worst']:.3f} "
-            f"nlo_m={b['nlong_mean']:.3f}/w={b['nlong_worst']:.3f} "
-            f"nla_m={b['nlat_mean']:.3f}/w={b['nlat_worst']:.3f}]"
-        )
+        if "n_mean" in b:
+            seg.append(f"N{h}[n_m={b['n_mean']:.3f}/w={b['n_worst']:.3f}]")
+        else:
+            seg.append(
+                f"N{h}[ny_m={b['nyaw_mean']:.3f}/w={b['nyaw_worst']:.3f} "
+                f"nlo_m={b['nlong_mean']:.3f}/w={b['nlong_worst']:.3f} "
+                f"nla_m={b['nlat_mean']:.3f}/w={b['nlat_worst']:.3f}]"
+            )
     return f"{tag:14s} " + " ".join(seg)

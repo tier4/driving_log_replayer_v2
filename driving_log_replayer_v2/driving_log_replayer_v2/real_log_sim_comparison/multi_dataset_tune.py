@@ -38,7 +38,12 @@ import yaml
 from . import step5_analyze_nstep as s5
 from .lib._cases_config import load_cases_config
 from .lib._io import resolve_lite_bag
-from .lib._multi_agg import HORIZONS, WORST_W, acc_score, aggregate_normalized, format_agg, robust_score, steer_score
+from .lib._multi_agg import (
+    HORIZONS, WORST_W,
+    VX_FLOOR, STEER_FLOOR,
+    acc_score, aggregate_normalized, aggregate_component, component_score,
+    format_agg, robust_score, steer_score,
+)
 
 STRIDE = 5
 WHEELBASE = 4.76012
@@ -241,6 +246,7 @@ def _eval_grid(
     trials: list[dict],
     model_type: str,
     n_jobs: int = 1,
+    agg_fn=None,
 ) -> list[dict]:
     """trials を並列 (pool 非 None) または逐次で aggregate 評価し元順の agg リストを返す。
 
@@ -248,9 +254,18 @@ def _eval_grid(
     pool が非 None のとき (trial_idx, ctx_idx) を平坦化して pool.map し、親で trial 単位に
     再集約する (per-(trial×dataset) 並列化)。
     いずれも返り値は trials と同順の agg リスト (tie-break の決定論的再現を保証)。
+    agg_fn: None → aggregate_normalized を使用。
+            callable(per_ds_metrics, baselines) → 任意の集約関数 (Phase 49/50 向け)。
     """
+    baselines = {ctx.dataset_id: ctx.base_metric for ctx in ctxs}
+    _agg = agg_fn if agg_fn is not None else (lambda pm, bs: aggregate_normalized(pm, bs))
+
     if pool is None:
-        return [aggregate(ctxs, t, model_type) for t in trials]
+        result = []
+        for t in trials:
+            per_ds = [(ctx.dataset_id, _eval(ctx, t, model_type)) for ctx in ctxs]
+            result.append(_agg(per_ds, baselines))
+        return result
 
     n_trials = len(trials)
     n_ctxs = len(ctxs)
@@ -263,12 +278,11 @@ def _eval_grid(
     chunksize = max(1, len(units) // (n_jobs * 4))
     raw = pool.map(_worker_eval_one, units, chunksize=chunksize)
 
-    # trial 単位に per_ds_metrics を再構成し親で aggregate_normalized を呼ぶ
-    baselines = {ctx.dataset_id: ctx.base_metric for ctx in ctxs}
+    # trial 単位に per_ds_metrics を再構成し集約
     per_trial: list[list[tuple[str, dict]]] = [[] for _ in range(n_trials)]
     for ti, _ci, ds_id, metrics in raw:
         per_trial[ti].append((ds_id, metrics))
-    return [aggregate_normalized(pm, baselines) for pm in per_trial]
+    return [_agg(pm, baselines) for pm in per_trial]
 
 
 def robust_search(
@@ -735,6 +749,64 @@ def robust_search(
             cur_best["k_us"] = 0.0
             cur_best.pop("k_us_bands", None)
             cur_best.pop("k_us_thresholds", None)
+    elif phase == 49:
+        # Phase 49: 縦速度方程式 vx_dot = f(acc_cmd, T_a, delay_a) に特化した最適化。
+        # eval_rollout_rmse の "vx" [m/s] 成分を目的関数とし、acc 遅れ・時定数のみ探索する。
+        # steer 系は cur_best に固定し、縦 ⊥ 横の独立性を活かして解像度を上げる。
+        # k_us=0 + banding 無効化も維持する（Phase 48 best_params を --phase-params で渡す想定）。
+        CONTINUOUS_SPACE = {
+            "acc_time_constant": (0.05, 0.60),
+        }
+        score_fn = component_score
+        _phase_agg_fn = lambda pm, bs: aggregate_component(pm, bs, "vx", VX_FLOOR)
+        explore_delay = True
+        explore_steer_delay = False
+        if phase_fixed_params:
+            cur_best.update(phase_fixed_params)
+            print(f"[Phase 49] 縦速度方程式: acc_time_delay/acc_time_constant → vx_score 最適化 (phase-params から初期化)。")
+        else:
+            print("[Phase 49] 縦速度方程式: acc_time_delay/acc_time_constant → vx_score 最適化 (cur_best から初期化)。")
+        # k_us=0 + banding 無効化を維持
+        cur_best["k_us"] = 0.0
+        cur_best["k_us_vx_lo"] = 0.0
+        cur_best["k_us_vx_hi"] = 0.0
+        cur_best["k_us_vx_thresh"] = 0.0
+        cur_best["k_us_vx_thresh2"] = 0.0
+        cur_best.pop("k_us_lo", None)
+        cur_best.pop("k_us_mid", None)
+        cur_best.pop("k_us_bands", None)
+        cur_best.pop("k_us_thresholds", None)
+    elif phase == 50:
+        # Phase 50: ステア動力学 steer_dot = f(steer_cmd, T_s, delay_s, DSF) に特化した最適化。
+        # eval_rollout_rmse の "steer" [deg] 成分を目的関数とし、steer 遅れ・時定数・DSF を探索。
+        # acc 系は cur_best に固定する。
+        # 注意: gt_steer = /vehicle/status/steering_status (converter 後の実測値) のため、
+        # err_steer には understeer 補正 (v² 依存) が v⁰ 定数として DSF に部分吸収される。
+        # これは Phase 50 の制約として許容し、k_us 同定 (Phase 51) で分離する設計。
+        CONTINUOUS_SPACE = {
+            "steer_time_constant":        (0.10, 0.35),
+            "debug_steer_scaling_factor": (0.85, 1.15),
+            "steer_bias":                 (-0.01, 0.01),
+        }
+        score_fn = component_score
+        _phase_agg_fn = lambda pm, bs: aggregate_component(pm, bs, "steer", STEER_FLOOR)
+        explore_delay = False
+        explore_steer_delay = True
+        if phase_fixed_params:
+            cur_best.update(phase_fixed_params)
+            print(f"[Phase 50] ステア動力学: steer_time_delay/steer_time_constant/DSF → steer_dynamics_score 最適化 (phase-params から初期化)。")
+        else:
+            print("[Phase 50] ステア動力学: steer_time_delay/steer_time_constant/DSF → steer_dynamics_score 最適化 (cur_best から初期化)。")
+        # k_us=0 + banding 無効化を維持
+        cur_best["k_us"] = 0.0
+        cur_best["k_us_vx_lo"] = 0.0
+        cur_best["k_us_vx_hi"] = 0.0
+        cur_best["k_us_vx_thresh"] = 0.0
+        cur_best["k_us_vx_thresh2"] = 0.0
+        cur_best.pop("k_us_lo", None)
+        cur_best.pop("k_us_mid", None)
+        cur_best.pop("k_us_bands", None)
+        cur_best.pop("k_us_thresholds", None)
     else:
         # Phase 0: 全パラメータ同時最適化 (従来の robust_score)
         CONTINUOUS_SPACE = {
@@ -754,6 +826,9 @@ def robust_search(
     # explore_steer_delay は Phase 10 のみ True (他 phase では未設定の場合を考慮)
     if "explore_steer_delay" not in locals():
         explore_steer_delay = False
+    # _phase_agg_fn は Phase 49/50 のみ設定 (他 phase では aggregate_normalized を使う)
+    if "_phase_agg_fn" not in locals():
+        _phase_agg_fn = None
 
     # gt 事前計算 (fork 前に親で完了し COW 共有)
     acc_delay_set: set[float] = set(DELAY_CANDIDATES) if explore_delay else set()
@@ -782,7 +857,7 @@ def robust_search(
 
     try:
         # 初期スコア表示
-        init_agg = _eval_grid(pool, ctxs_search, [cur_best], cur_model, n_jobs)[0]
+        init_agg = _eval_grid(pool, ctxs_search, [cur_best], cur_model, n_jobs, agg_fn=_phase_agg_fn)[0]
         init_score = score_fn(init_agg, worst_w=worst_w)
         phase_label = f"phase={phase}" if phase else "phase=0(all)"
         print(f"\n## Optuna TPE ({case_name}, {n_trials} trials, cross-dataset normalized, worst_w={worst_w}, {phase_label})")
@@ -804,7 +879,7 @@ def robust_search(
                     "steer_time_delay", STEER_DELAY_CANDIDATES
                 )
 
-            agg = _eval_grid(pool, ctxs_search, [params], cur_model, n_jobs)[0]
+            agg = _eval_grid(pool, ctxs_search, [params], cur_model, n_jobs, agg_fn=_phase_agg_fn)[0]
             score = score_fn(agg, worst_w=worst_w)
 
             if score < best_result["score"]:
@@ -864,7 +939,7 @@ def robust_search(
         # search_subsample 指定時: 最終 params の score を全件で再評価
         if search_subsample and len(ctxs_search) < len(ctxs):
             print(f"[INFO] 最終 score を全 {len(ctxs)} データセットで評価中...")
-            full_agg = _eval_grid(pool, ctxs, [state], cur_model, n_jobs)[0]
+            full_agg = _eval_grid(pool, ctxs, [state], cur_model, n_jobs, agg_fn=_phase_agg_fn)[0]
             best_s = score_fn(full_agg, worst_w=worst_w)
             best_result.update({"score": best_s, "agg": full_agg})
             print(format_agg("FINAL(全件)", full_agg) + f"  score={best_s:.4f}")

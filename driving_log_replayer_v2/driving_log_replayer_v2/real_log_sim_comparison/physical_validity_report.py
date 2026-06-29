@@ -50,6 +50,7 @@ from driving_log_replayer_v2.real_log_sim_comparison.multi_dataset_tune import (
     _BASELINE_MODEL,
     _discover,
     _eval as _tune_eval,
+    _filter_by_date,
     load_datasets,
 )
 
@@ -605,7 +606,7 @@ def _build_sec_model_intro(params: dict, label: str, params_filename: str = "") 
     <td>アンダーステア係数（全速度域）</td></tr>"""
 
     score = params.get("_score", "N/A")
-    score_str = f"{float(score):.4f}" if str(score) != "N/A" else "N/A"
+    score_str = f"{float(score):.4f}" if score is not None and str(score) != "N/A" else "N/A"
     src_str = f"<code>{params_filename}</code>" if params_filename else f"<code>{label}</code>"
 
     return f"""
@@ -773,7 +774,7 @@ def _build_sec_deviation(
 
     score_html = ""
     if recomputed_score is not None and expected_score is not None:
-        diff_pct = abs(recomputed_score - expected_score) / expected_score * 100
+        diff_pct = abs(recomputed_score - expected_score) / expected_score * 100 if expected_score else 0.0
         ok = diff_pct < 2.0
         color = "#28a745" if ok else "#dc3545"
         score_html = (
@@ -978,6 +979,14 @@ def main() -> None:
         "--label", type=str, default="current",
         help="レポート内のモデル名ラベル（デフォルト: current）",
     )
+    ap.add_argument(
+        "--ds-after", type=str, default=None,
+        help="この日付以降のDSのみ使用（YYYY-MM-DD形式、例: 2026-06-16）",
+    )
+    ap.add_argument(
+        "--ds-before", type=str, default=None,
+        help="この日付より前のDSのみ使用（YYYY-MM-DD形式）",
+    )
     args = ap.parse_args()
 
     phase_label = args.label
@@ -1012,12 +1021,17 @@ def main() -> None:
     print(f"  steer_dead_band={params.get('steer_dead_band',0):.5f} rad")
 
     # データセット列挙
+    import datetime as _dt
     ds_list = _discover(args.collection_dir)
     for extra in (args.extra_ds or []):
         uuid = extra.name
         if not any(u == uuid for u, _ in ds_list):
             ds_list.append((uuid, extra))
             print(f"  [extra-ds] {uuid} を追加")
+    ds_after_date  = _dt.date.fromisoformat(args.ds_after)  if args.ds_after  else None
+    ds_before_date = _dt.date.fromisoformat(args.ds_before) if args.ds_before else None
+    if ds_after_date or ds_before_date:
+        ds_list = _filter_by_date(ds_list, ds_before_date, ds_after_date)
     print(f"\nデータセット: {len(ds_list)} 件")
 
     # Phase 1: 並列 MCAP 読み込み
@@ -1097,15 +1111,18 @@ def main() -> None:
                 for h, v in gd.items()
             }
         agg = _agg_normalized(per_ds_arg, bl_arg)
-        expected = float(yaml_data.get("score", 0.0))
+        expected = float(yaml_data.get("score") or 0.0)
         candidates = [
             ("robust_score", _robust_score(agg)),
             ("steer_score",  _steer_score(agg)),
             ("acc_score",    _acc_score(agg)),
         ]
-        best_name, recomputed = min(candidates, key=lambda kv: abs(kv[1] - expected))
-        diff_pct = abs(recomputed - expected) / expected * 100 if expected else float("inf")
-        print(f"  再現スコア: {recomputed:.4f} ({best_name})  期待値: {expected:.4f}  差: {diff_pct:.2f}%")
+        if expected:
+            best_name, recomputed = min(candidates, key=lambda kv: abs(kv[1] - expected))
+        else:
+            best_name, recomputed = next(kv for kv in candidates if kv[0] == "steer_score")
+        diff_str = f"{abs(recomputed - expected) / expected * 100:.2f}%" if expected else "N/A"
+        print(f"  再現スコア: {recomputed:.4f} ({best_name})  期待値: {expected:.4f}  差: {diff_str}")
         # baseline (k_us=0) の steer_score を計算
         baseline_steer_score = _steer_score(_agg_normalized(list(bl_arg.items()), bl_arg))
         print(f"  baseline steer_score: {baseline_steer_score:.4f}")
@@ -1159,16 +1176,19 @@ def main() -> None:
                 for h, v in grp_dict.items()
             }
         agg = _agg_normalized(per_ds_arg, bl_arg)
-        expected = float(yaml_data.get("score", 0.0))
+        expected = float(yaml_data.get("score") or 0.0)
         # YAML の score は tuning --phase に応じて steer/acc/robust のいずれかなので最接近を選択
         candidates = [
             ("robust_score", _robust_score(agg)),
             ("steer_score",  _steer_score(agg)),
             ("acc_score",    _acc_score(agg)),
         ]
-        best_name, recomputed = min(candidates, key=lambda kv: abs(kv[1] - expected))
-        diff_pct = abs(recomputed - expected) / expected * 100 if expected else float("inf")
-        print(f"  再現スコア: {recomputed:.4f} ({best_name})  期待値: {expected:.4f}  差: {diff_pct:.2f}%")
+        if expected:
+            best_name, recomputed = min(candidates, key=lambda kv: abs(kv[1] - expected))
+        else:
+            best_name, recomputed = next(kv for kv in candidates if kv[0] == "steer_score")
+        diff_str = f"{abs(recomputed - expected) / expected * 100:.2f}%" if expected else "N/A"
+        print(f"  再現スコア: {recomputed:.4f} ({best_name})  期待値: {expected:.4f}  差: {diff_str}")
         # baseline (k_us=0) の steer_score を計算
         baseline_steer_score = _steer_score(_agg_normalized(list(bl_arg.items()), bl_arg))
         print(f"  baseline steer_score: {baseline_steer_score:.4f}")
