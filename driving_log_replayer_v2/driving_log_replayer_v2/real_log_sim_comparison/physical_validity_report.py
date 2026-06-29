@@ -24,6 +24,7 @@ import pandas as pd
 import plotly.graph_objects as go
 import yaml
 from plotly.subplots import make_subplots
+from scipy.signal import lfilter
 
 # ---------------------------------------------------------------------------
 # sys.path セットアップ
@@ -36,7 +37,7 @@ if _INSTALL.exists() and str(_INSTALL) not in sys.path:
     sys.path.insert(0, str(_INSTALL))
 
 from driving_log_replayer_v2.real_log_sim_comparison.lib._coverage import _curvature_coverage  # noqa: E402
-from driving_log_replayer_v2.real_log_sim_comparison.lib._io import load_cmd, load_kinematic, load_steering  # noqa: E402
+from driving_log_replayer_v2.real_log_sim_comparison.lib._io import load_accel, load_cmd, load_kinematic, load_steering  # noqa: E402
 from driving_log_replayer_v2.real_log_sim_comparison.lib._map import load_map_ways, resolve_map_osm  # noqa: E402
 from driving_log_replayer_v2.real_log_sim_comparison.lib._multi_agg import (  # noqa: E402
     HORIZONS as _HORIZONS,
@@ -65,6 +66,35 @@ DWZ_MAX = 0.30        # [rad/s²]
 K_US_CLIP = 0.5
 VX_EDGES = np.array([0.5, 1.0, 1.5, 2.0, 2.5, 3.0, 4.0, 5.0, 6.0, 8.0, 10.0, 12.0])
 _H_SPAN = {10: "≈0.33 s", 20: "≈0.67 s", 30: "≈1.0 s", 40: "≈1.33 s"}
+
+_FIT_DT = 0.01          # モデルフィット用リサンプリング DT [s]
+_FIT_N_DS = 3           # フィット表示する代表 DS 数
+_FIT_T_MAX = 30.0       # フィット表示の最大時間長 [s]
+
+def _sim_first_order(cmd: np.ndarray, tau: float, n_delay: int, dt: float = _FIT_DT) -> np.ndarray:
+    """純粋遅延 + 一次遅れシミュレーション（lfilter 版）。"""
+    n = len(cmd)
+    cmd_del = np.empty(n)
+    if n_delay > 0:
+        cmd_del[:n_delay] = cmd[0]
+        cmd_del[n_delay:] = cmd[:-n_delay]
+    else:
+        cmd_del = cmd.copy()
+    alpha = float(np.clip(dt / tau, 0.0, 1.0))
+    return lfilter([alpha], [1.0, -(1.0 - alpha)], cmd_del)
+
+
+def _find_mcap(collection_dir: Path, uuid: str) -> Path | None:
+    """DS uuid の MCAP パスを探して返す（見つからなければ None）。"""
+    for ds_dir in [
+        collection_dir / "datasets" / uuid,
+        collection_dir / uuid,
+    ]:
+        mcap = ds_dir / "real.lite" / "real.lite_0.mcap"
+        if mcap.exists():
+            return mcap
+    return None
+
 
 _MATHJAX_HEAD = (
     "<script>"
@@ -406,137 +436,191 @@ def build_kus_figure(bins: dict, params: dict) -> go.Figure:
     return fig
 
 
-def build_long_figure(csv_path: Path, params: dict) -> go.Figure:
-    """縦方向動力学の直接同定分布グラフ（long_dynamics_identified.csv から）。"""
-    if not csv_path.exists():
+def build_long_figure(collection_dir: Path, params: dict) -> go.Figure:
+    """縦方向モデルフィット時系列（NLS 同定値 vs チューン値、代表 DS 3本）。"""
+    csv_path = collection_dir / "long_dynamics_identified.csv"
+
+    def _placeholder(msg: str) -> go.Figure:
         fig = go.Figure()
-        fig.add_annotation(
-            text=(
-                f"<b>{csv_path.name} が見つかりません</b><br>"
-                "事前に <code>identify_long_dynamics.py</code> を実行してください。"
-            ),
-            xref="paper", yref="paper", x=0.5, y=0.5, showarrow=False,
-            font=dict(size=13), align="center",
-        )
+        fig.add_annotation(text=msg, xref="paper", yref="paper",
+                           x=0.5, y=0.5, showarrow=False, font=dict(size=13), align="center")
         fig.update_layout(height=200)
         return fig
 
-    df = pd.read_csv(csv_path)
-    tau_tuned = float(params.get("acc_time_constant", float("nan")))
-    T_tuned   = float(params.get("acc_time_delay", float("nan")))
-    tau_med   = float(df["tau"].median())
-    T_med     = float(df["delay"].median())
+    if not csv_path.exists():
+        return _placeholder(
+            f"<b>{csv_path.name} が見つかりません</b><br>"
+            "事前に <code>identify_long_dynamics.py</code> を実行してください。"
+        )
 
-    fig = make_subplots(
-        rows=1, cols=2,
-        subplot_titles=[
-            f"τ_a（時定数）分布  中央値 = {tau_med:.3f} s",
-            f"T_a（純粋遅延）分布  中央値 = {T_med:.3f} s",
-        ],
-        horizontal_spacing=0.12,
-    )
+    df_id = pd.read_csv(csv_path)
+    tau_tune = float(params.get("acc_time_constant", float("nan")))
+    T_tune   = float(params.get("acc_time_delay", float("nan")))
+    n_max    = int(_FIT_T_MAX / _FIT_DT)
 
-    fig.add_trace(go.Histogram(
-        x=df["tau"].tolist(), nbinsx=40,
-        marker_color="steelblue", opacity=0.7, name="τ_a",
-    ), row=1, col=1)
-    fig.add_vline(x=tau_med, line=dict(color="steelblue", width=2, dash="dot"),
-                  annotation_text=f"中央値 {tau_med:.3f}", annotation_position="top right",
-                  row=1, col=1)
-    if not np.isnan(tau_tuned):
-        fig.add_vline(x=tau_tuned, line=dict(color="darkorange", width=2.5),
-                      annotation_text=f"チューン値 {tau_tuned:.3f}",
-                      annotation_position="top left",
-                      row=1, col=1)
+    rows_data = []
+    for row in df_id.nsmallest(_FIT_N_DS, "rmse_mps2").itertuples():
+        mcap = _find_mcap(collection_dir, row.uuid)
+        if mcap is None:
+            continue
+        try:
+            df_cmd   = load_cmd(mcap, "/control/command/control_cmd")
+            df_accel = load_accel(mcap)
+        except Exception:
+            continue
+        if df_cmd.empty or df_accel.empty:
+            continue
 
-    fig.add_trace(go.Histogram(
-        x=df["delay"].tolist(), nbinsx=20,
-        marker_color="teal", opacity=0.7, name="T_a",
-    ), row=1, col=2)
-    fig.add_vline(x=T_med, line=dict(color="teal", width=2, dash="dot"),
-                  annotation_text=f"中央値 {T_med:.3f}", annotation_position="top right",
-                  row=1, col=2)
-    if not np.isnan(T_tuned):
-        fig.add_vline(x=T_tuned, line=dict(color="darkorange", width=2.5),
-                      annotation_text=f"チューン値 {T_tuned:.3f}",
-                      annotation_position="top left",
-                      row=1, col=2)
+        t0 = max(df_cmd["t_ns"].iloc[0], df_accel["t_ns"].iloc[0])
+        t1 = min(df_cmd["t_ns"].iloc[-1], df_accel["t_ns"].iloc[-1])
+        if (t1 - t0) < 2e9:
+            continue
+        t_ns  = np.arange(t0, t1, _FIT_DT * 1e9, dtype=np.float64)
+        t_s   = (t_ns - t0) * 1e-9
+        a_cmd = np.interp(t_s, (df_cmd["t_ns"].values - t0) * 1e-9, df_cmd["cmd_accel"].values)
+        a_act = np.interp(t_s, (df_accel["t_ns"].values - t0) * 1e-9, df_accel["accel"].values)
 
+        np_ = min(len(t_s), n_max)
+        a_sim_id = _sim_first_order(a_cmd, row.tau, int(round(row.delay / _FIT_DT)))[:np_]
+        a_sim_tune = None
+        if not (np.isnan(tau_tune) or np.isnan(T_tune)):
+            a_sim_tune = _sim_first_order(a_cmd, tau_tune, int(round(T_tune / _FIT_DT)))[:np_]
+
+        rows_data.append({
+            "label": f"{row.uuid[:8]}  RMSE={row.rmse_mps2:.3f} m/s²  τ={row.tau:.3f}s  T={row.delay:.3f}s",
+            "t": t_s[:np_], "a_act": a_act[:np_],
+            "a_sim_id": a_sim_id, "a_sim_tune": a_sim_tune,
+        })
+
+    if not rows_data:
+        return _placeholder("MCAP 読み込み失敗（DS ディレクトリが見つかりません）")
+
+    n = len(rows_data)
+    fig = make_subplots(rows=n, cols=1,
+                        subplot_titles=[r["label"] for r in rows_data],
+                        vertical_spacing=0.08)
+    show_legend = True
+    for i, r in enumerate(rows_data, 1):
+        fig.add_trace(go.Scatter(
+            x=r["t"].tolist(), y=r["a_act"].tolist(),
+            name="実測 a_act", line=dict(color="black", width=1.5),
+            showlegend=show_legend,
+        ), row=i, col=1)
+        fig.add_trace(go.Scatter(
+            x=r["t"].tolist(), y=r["a_sim_id"].tolist(),
+            name="NLS 同定値", line=dict(color="steelblue", width=1.5, dash="dot"),
+            showlegend=show_legend,
+        ), row=i, col=1)
+        if r["a_sim_tune"] is not None:
+            fig.add_trace(go.Scatter(
+                x=r["t"].tolist(), y=r["a_sim_tune"].tolist(),
+                name=f"チューン値 τ={tau_tune:.3f}s T={T_tune:.3f}s",
+                line=dict(color="darkorange", width=1.5),
+                showlegend=show_legend,
+            ), row=i, col=1)
+        show_legend = False
+        fig.update_yaxes(title_text="a [m/s²]", row=i, col=1)
+    fig.update_xaxes(title_text="時刻 [s]", row=n, col=1)
     fig.update_layout(
-        height=380, showlegend=False,
-        title_text=f"縦方向動力学 直接同定（N = {len(df)} DS）",
+        height=300 * n,
+        title_text=f"縦方向モデルフィット（代表 {n} DS — NLS rmse 最小順）",
         margin=dict(t=70, b=40),
+        legend=dict(orientation="h", y=1.03, x=0),
     )
-    fig.update_xaxes(title_text="τ_a [s]", row=1, col=1)
-    fig.update_yaxes(title_text="DS 数", row=1, col=1)
-    fig.update_xaxes(title_text="T_a [s]", row=1, col=2)
     return fig
 
 
-def build_steer_id_figure(csv_path: Path, params: dict) -> go.Figure:
-    """操舵動力学の直接同定分布グラフ（steer_dynamics_identified.csv から）。"""
-    if not csv_path.exists():
+def build_steer_id_figure(collection_dir: Path, params: dict) -> go.Figure:
+    """操舵モデルフィット時系列（NLS 同定値 vs チューン値、代表 DS 3本）。"""
+    csv_path = collection_dir / "steer_dynamics_identified.csv"
+
+    def _placeholder(msg: str) -> go.Figure:
         fig = go.Figure()
-        fig.add_annotation(
-            text=(
-                f"<b>{csv_path.name} が見つかりません</b><br>"
-                "事前に <code>identify_steer_dynamics.py</code> を実行してください。"
-            ),
-            xref="paper", yref="paper", x=0.5, y=0.5, showarrow=False,
-            font=dict(size=13), align="center",
-        )
+        fig.add_annotation(text=msg, xref="paper", yref="paper",
+                           x=0.5, y=0.5, showarrow=False, font=dict(size=13), align="center")
         fig.update_layout(height=200)
         return fig
 
-    df = pd.read_csv(csv_path)
-    tau_tuned = float(params.get("steer_time_constant", float("nan")))
-    T_tuned   = float(params.get("steer_time_delay", float("nan")))
-    tau_med   = float(df["tau"].median())
-    T_med     = float(df["delay"].median())
+    if not csv_path.exists():
+        return _placeholder(
+            f"<b>{csv_path.name} が見つかりません</b><br>"
+            "事前に <code>identify_steer_dynamics.py</code> を実行してください。"
+        )
 
-    fig = make_subplots(
-        rows=1, cols=2,
-        subplot_titles=[
-            f"τ_δ（時定数）分布  中央値 = {tau_med:.3f} s",
-            f"T_δ（純粋遅延）分布  中央値 = {T_med:.3f} s",
-        ],
-        horizontal_spacing=0.12,
-    )
+    df_id = pd.read_csv(csv_path)
+    tau_tune = float(params.get("steer_time_constant", float("nan")))
+    T_tune   = float(params.get("steer_time_delay", float("nan")))
+    n_max    = int(_FIT_T_MAX / _FIT_DT)
 
-    fig.add_trace(go.Histogram(
-        x=df["tau"].tolist(), nbinsx=40,
-        marker_color="steelblue", opacity=0.7, name="τ_δ",
-    ), row=1, col=1)
-    fig.add_vline(x=tau_med, line=dict(color="steelblue", width=2, dash="dot"),
-                  annotation_text=f"中央値 {tau_med:.3f}", annotation_position="top right",
-                  row=1, col=1)
-    if not np.isnan(tau_tuned):
-        fig.add_vline(x=tau_tuned, line=dict(color="darkorange", width=2.5),
-                      annotation_text=f"チューン値 {tau_tuned:.3f}",
-                      annotation_position="top left",
-                      row=1, col=1)
+    rows_data = []
+    for row in df_id.nsmallest(_FIT_N_DS, "rmse_mrad").itertuples():
+        mcap = _find_mcap(collection_dir, row.uuid)
+        if mcap is None:
+            continue
+        try:
+            df_cmd   = load_cmd(mcap, "/control/command/control_cmd")
+            df_steer = load_steering(mcap)
+        except Exception:
+            continue
+        if df_cmd.empty or df_steer.empty:
+            continue
 
-    fig.add_trace(go.Histogram(
-        x=df["delay"].tolist(), nbinsx=20,
-        marker_color="teal", opacity=0.7, name="T_δ",
-    ), row=1, col=2)
-    fig.add_vline(x=T_med, line=dict(color="teal", width=2, dash="dot"),
-                  annotation_text=f"中央値 {T_med:.3f}", annotation_position="top right",
-                  row=1, col=2)
-    if not np.isnan(T_tuned):
-        fig.add_vline(x=T_tuned, line=dict(color="darkorange", width=2.5),
-                      annotation_text=f"チューン値 {T_tuned:.3f}",
-                      annotation_position="top left",
-                      row=1, col=2)
+        t0 = max(df_cmd["t_ns"].iloc[0], df_steer["t_ns"].iloc[0])
+        t1 = min(df_cmd["t_ns"].iloc[-1], df_steer["t_ns"].iloc[-1])
+        if (t1 - t0) < 2e9:
+            continue
+        t_ns    = np.arange(t0, t1, _FIT_DT * 1e9, dtype=np.float64)
+        t_s     = (t_ns - t0) * 1e-9
+        d_cmd   = np.interp(t_s, (df_cmd["t_ns"].values - t0) * 1e-9, df_cmd["cmd_steer"].values)
+        d_act   = np.interp(t_s, (df_steer["t_ns"].values - t0) * 1e-9, df_steer["steer"].values)
 
+        np_ = min(len(t_s), n_max)
+        d_sim_id = _sim_first_order(d_cmd, row.tau, int(round(row.delay / _FIT_DT)))[:np_]
+        d_sim_tune = None
+        if not (np.isnan(tau_tune) or np.isnan(T_tune)):
+            d_sim_tune = _sim_first_order(d_cmd, tau_tune, int(round(T_tune / _FIT_DT)))[:np_]
+
+        rows_data.append({
+            "label": f"{row.uuid[:8]}  RMSE={row.rmse_mrad:.1f} mrad  τ={row.tau:.3f}s  T={row.delay:.3f}s",
+            "t": t_s[:np_], "d_act": d_act[:np_],
+            "d_sim_id": d_sim_id, "d_sim_tune": d_sim_tune,
+        })
+
+    if not rows_data:
+        return _placeholder("MCAP 読み込み失敗（DS ディレクトリが見つかりません）")
+
+    n = len(rows_data)
+    fig = make_subplots(rows=n, cols=1,
+                        subplot_titles=[r["label"] for r in rows_data],
+                        vertical_spacing=0.08)
+    show_legend = True
+    for i, r in enumerate(rows_data, 1):
+        fig.add_trace(go.Scatter(
+            x=r["t"].tolist(), y=r["d_act"].tolist(),
+            name="実測 δ_act", line=dict(color="black", width=1.5),
+            showlegend=show_legend,
+        ), row=i, col=1)
+        fig.add_trace(go.Scatter(
+            x=r["t"].tolist(), y=r["d_sim_id"].tolist(),
+            name="NLS 同定値", line=dict(color="steelblue", width=1.5, dash="dot"),
+            showlegend=show_legend,
+        ), row=i, col=1)
+        if r["d_sim_tune"] is not None:
+            fig.add_trace(go.Scatter(
+                x=r["t"].tolist(), y=r["d_sim_tune"].tolist(),
+                name=f"チューン値 τ={tau_tune:.3f}s T={T_tune:.3f}s",
+                line=dict(color="darkorange", width=1.5),
+                showlegend=show_legend,
+            ), row=i, col=1)
+        show_legend = False
+        fig.update_yaxes(title_text="δ [rad]", row=i, col=1)
+    fig.update_xaxes(title_text="時刻 [s]", row=n, col=1)
     fig.update_layout(
-        height=380, showlegend=False,
-        title_text=f"操舵動力学 直接同定（N = {len(df)} DS）",
+        height=300 * n,
+        title_text=f"操舵モデルフィット（代表 {n} DS — NLS rmse 最小順）",
         margin=dict(t=70, b=40),
+        legend=dict(orientation="h", y=1.03, x=0),
     )
-    fig.update_xaxes(title_text="τ_δ [s]", row=1, col=1)
-    fig.update_yaxes(title_text="DS 数", row=1, col=1)
-    fig.update_xaxes(title_text="T_δ [s]", row=1, col=2)
     return fig
 
 
@@ -850,17 +934,13 @@ a_{{\\mathrm{{cmd,del}}}}(t) = a_{{\\mathrm{{cmd}}}}(t - T_a)
 速度 \\(v_x\\) はその積分として得られる。
 </p>
 
-<h3>実機ログからの独立同定（全 {n_ds} DS）</h3>
+<h3>実機ログからの独立同定（代表 DS モデルフィット）</h3>
 <p>
-<code>/control/command/control_cmd</code>（\\(a_{{\\mathrm{{cmd}}}}\\)）と
-<code>/localization/acceleration</code>（\\(a_{{\\mathrm{{act}}}}\\)）を DS ごとに非線形最小二乗法（output-error NLS）で
-\\((\\tau_a, T_a)\\) を同定した分布を示す（橙実線 = チューン値、青点線 = 中央値）。
+\\(a_{{\\mathrm{{cmd}}}}\\)（指令加速度）を入力として遅延グリッドサーチ + output-error NLS で
+同定した \\((\\tau_a, T_a)\\) のモデル出力（青点線）と実測 \\(a_{{\\mathrm{{act}}}}\\)（黒実線）を比較する。
+橙実線はチューン値でのシミュレーション結果。rmse が最小の代表 DS を表示。
 </p>
 {long_html}
-<div class="note">
-<b>解釈</b>: 点群の傾きが 1 より大きい場合は加速度計が指令より強い（ゲイン過大）、
-小さい場合は弱い（ゲイン不足または τ_a が過大）。横方向の広がりは遅延 T_a のミスチューンに起因する。
-</div>
 
 <table class="param-table">
   <tr><th>パラメータ</th><th>値</th><th>式中の役割</th><th>同定誤差量</th></tr>
@@ -906,10 +986,11 @@ a_{{\\mathrm{{cmd,del}}}}(t) = a_{{\\mathrm{{cmd}}}}(t - T_a)
 報告値の加算と 1-3 のヨー式の両方に現れる二重登場のパラメータである。
 </div>
 
-<h3>実機ログからの独立同定（<code>identify_steer_dynamics.py</code> 結果）</h3>
+<h3>実機ログからの独立同定（代表 DS モデルフィット）</h3>
 <p>
-各 DS の \\(\\delta_{{\\mathrm{{cmd}}}}\\) と \\(\\delta_{{\\mathrm{{act}}}}\\) に対して遅延グリッドサーチ + output-error NLS で
-\\((\\tau_\\delta, T_\\delta)\\) を同定した分布を示す（橙実線 = チューン値、青点線 = 中央値）。
+\\(\\delta_{{\\mathrm{{cmd}}}}\\) を入力として遅延グリッドサーチ + output-error NLS で
+同定した \\((\\tau_\\delta, T_\\delta)\\) のモデル出力（青点線）と実測 \\(\\delta_{{\\mathrm{{act}}}}\\)（黒実線）を比較する。
+橙実線はチューン値でのシミュレーション結果。rmse が最小の代表 DS を表示。
 </p>
 {steer_html}
 <div class="note">
@@ -1571,12 +1652,8 @@ def main() -> None:
     # Phase 4: HTML 組み立て
     print("\n[Phase 4] plotly 図生成 & HTML 組み立て ...")
     kus_fig   = build_kus_figure(bins, params)
-    long_fig  = build_long_figure(
-        args.collection_dir / "long_dynamics_identified.csv", params
-    )
-    steer_fig = build_steer_id_figure(
-        args.collection_dir / "steer_dynamics_identified.csv", params
-    )
+    long_fig  = build_long_figure(args.collection_dir, params)
+    steer_fig = build_steer_id_figure(args.collection_dir, params)
     html = build_html(
         params, long_fig, steer_fig, kus_fig, viewer_sections, len(records),
         baseline_score=baseline_steer_score,
