@@ -39,7 +39,8 @@ if _INSTALL.exists() and str(_INSTALL) not in sys.path:
 
 from driving_log_replayer_v2.real_log_sim_comparison.lib._coverage import _curvature_coverage  # noqa: E402
 from driving_log_replayer_v2.real_log_sim_comparison.lib._io import load_accel, load_cmd, load_kinematic, load_steering, load_velocity  # noqa: E402
-from driving_log_replayer_v2.real_log_sim_comparison.lib._map import load_map_ways, resolve_map_osm  # noqa: E402
+from driving_log_replayer_v2.real_log_sim_comparison.lib._map import load_map_ways, map_ways_in_bbox, resolve_map_osm  # noqa: E402
+from driving_log_replayer_v2.real_log_sim_comparison.lib._plotly_utils import lanes_to_trace  # noqa: E402
 from driving_log_replayer_v2.real_log_sim_comparison.lib._multi_agg import (  # noqa: E402
     HORIZONS as _HORIZONS,
     acc_score as _acc_score,
@@ -69,14 +70,15 @@ VX_EDGES = np.array([0.5, 1.0, 1.5, 2.0, 2.5, 3.0, 4.0, 5.0, 6.0, 8.0, 10.0, 12.
 _H_SPAN = {10: "≈0.33 s", 20: "≈0.67 s", 30: "≈1.0 s", 40: "≈1.33 s"}
 
 _FIT_DT = 0.01          # モデルフィット用リサンプリング DT [s]
-_FIT_N_DS = 3           # フィット表示する代表データセット数
+_FIT_N_DATASET = 2      # フィット表示する代表データセット数（最良・最悪それぞれ）
 
 # 1-1/1-4. 理想追従評価用共通定数
 _PERF_HORIZONS: tuple[int, ...] = (10, 20, 50, 100)  # steps @ _FIT_DT → 0.10, 0.20, 0.50, 1.00 s
 _PERF_STRIDE = 5                                       # rollout reset stride [steps]
-_PERF_N_DS = 10                                        # 1-4 横方向 box plot 用 データセット数
+_PERF_N_DATASET = 10                                   # 1-4 横方向 box plot 用 データセット数
 _PERF_N_TRAJ = 3                                       # 軌跡比較表示 データセット数
-_LONG_PERF_N_DS = 20                                   # 1-1 縦方向理想追従 box plot 用 データセット数
+_LONG_PERF_N_DATASET = 20                                   # 1-1 縦方向理想追従 box plot 用 データセット数
+_DRIFT_A_TH = 0.3                                      # 加速/減速/巡航を分ける加速度閾値 [m/s²]
 
 def _sim_first_order(cmd: np.ndarray, tau: float, n_delay: int, dt: float = _FIT_DT) -> np.ndarray:
     """純粋遅延 + 一次遅れシミュレーション（lfilter 版）。"""
@@ -206,6 +208,62 @@ def _long_nstep_perf(
         s_gt   += gt_vx[ki] * dt
 
     return np.abs(s_sim - s_gt)
+
+
+def _long_drift_profile(
+    gt_vx: np.ndarray,
+    a_act: np.ndarray,
+    horizon: int,
+    dt: float,
+    stride: int = _PERF_STRIDE,
+) -> tuple[np.ndarray, np.ndarray, np.ndarray] | None:
+    """縦方向ドリフトプロファイル: box plot と同一 reset-stride ロールアウトで
+    各ステップ j の符号付き誤差を記録する。
+
+    _long_nstep_perf との整合性:
+      - 同一の k0s 走査・VX_MIN_CURVE フィルタ・初期化を使用。
+      - serr[:, horizon] を絶対値化したものが _long_nstep_perf の終端値に一致する。
+
+    Returns
+    -------
+    verr  : ndarray, shape (m, horizon+1)  速度誤差 vx_sim - gt_vx [m/s]
+    serr  : ndarray, shape (m, horizon+1)  変位誤差 s_sim - s_gt [m]
+    phase : ndarray, shape (m,)  int  0=減速, 1=巡航, 2=加速
+            （各開始点からホライズン内の a_act 平均値で分類）
+    None を返す場合: 有効な開始点が 0 のとき。
+    """
+    n = len(gt_vx)
+    k0s = np.arange(0, n - horizon, stride)
+    k0s = k0s[gt_vx[k0s] > VX_MIN_CURVE]
+    if len(k0s) == 0:
+        return None
+
+    m = len(k0s)
+    verr = np.zeros((m, horizon + 1), dtype=float)
+    serr = np.zeros((m, horizon + 1), dtype=float)
+
+    vx_sim = gt_vx[k0s].astype(float).copy()
+    s_sim  = np.zeros(m)
+    s_gt   = np.zeros(m)
+
+    for j in range(horizon):
+        ki = np.clip(k0s + j, 0, n - 1)
+        ki1 = np.clip(k0s + j + 1, 0, n - 1)
+        s_sim  += vx_sim * dt
+        vx_sim += a_act[ki] * dt
+        s_gt   += gt_vx[ki] * dt
+        verr[:, j + 1] = vx_sim - gt_vx[ki1]
+        serr[:, j + 1] = s_sim - s_gt
+
+    # 局面分類: 開始点からホライズン内の a_act 平均
+    mean_a = np.array([
+        float(np.mean(a_act[np.clip(k0 + np.arange(horizon), 0, n - 1)]))
+        for k0 in k0s
+    ])
+    phase = np.where(mean_a < -_DRIFT_A_TH, 0,
+             np.where(mean_a > _DRIFT_A_TH, 2, 1)).astype(int)
+
+    return verr, serr, phase
 
 
 def _find_mcap(collection_dir: Path, uuid: str) -> Path | None:
@@ -560,7 +618,7 @@ def build_kus_figure(bins: dict, params: dict) -> go.Figure:
     return fig
 
 
-_N_CROSS_FIT_DS = 10      # 横断最小二乗法に使うデータセット数
+_N_CROSS_FIT_DATASET = 10      # 横断最小二乗法に使うデータセット数
 _DA_THRESH_FIT  = 0.15    # 動的区間フィルタ: |Δa_cmd/dt| [m/s²/s]（identify_long_dynamics.py と同値）
 _VX_MIN_FIT     = 0.5     # 動的区間フィルタ: 最低速度 [m/s]
 _DELAY_CANDIDATES = np.arange(0.0, 0.31 + 1e-9, 0.01)   # 遅延候補 0〜300ms, 10ms 刻み
@@ -572,14 +630,14 @@ def _fit_long_cross_dataset(
 ) -> tuple[float, float, float]:
     """全データセット横断での加速度一次遅れモデルの最小二乗法同定。
 
-    動的区間が豊富な上位 _N_CROSS_FIT_DS データセットのサンプルを一つのプールに集め、
+    動的区間が豊富な上位 _N_CROSS_FIT_DATASET データセットのサンプルを一つのプールに集め、
     遅延グリッドサーチ + output-error 最小二乗法で全体最適な (τ, T) を求める。
 
     Returns: (tau [s], T [s], RMSE [m/s²])
     """
     _N_DYN_MIN = 100
     df_cand = df_id[df_id["n_dyn"] >= _N_DYN_MIN] if "n_dyn" in df_id.columns else df_id
-    df_top  = df_cand.nlargest(min(_N_CROSS_FIT_DS, len(df_cand)), "n_dyn")
+    df_top  = df_cand.nlargest(min(_N_CROSS_FIT_DATASET, len(df_cand)), "n_dyn")
 
     pooled: list[tuple[np.ndarray, np.ndarray]] = []   # (a_cmd_full, a_act_full, mask)
     for row in df_top.itertuples():
@@ -676,15 +734,23 @@ def build_long_figure(collection_dir: Path, params: dict, phase_label: str = "")
     # 全データセット横断で最小二乗法同定（一度だけ実行）
     tau_cross, T_cross, rmse_cross = _fit_long_cross_dataset(collection_dir, df_id)
 
-    # 動的区間が豊富なデータセットを優先して表示用に選択
+    # 動的区間が豊富なデータセットを候補にし、最良・最悪それぞれ _FIT_N_DATASET 本を選択
     _N_DYN_MIN = 100
     df_cand = df_id[df_id["n_dyn"] >= _N_DYN_MIN] if "n_dyn" in df_id.columns else df_id
-    if len(df_cand) < _FIT_N_DS:
+    if len(df_cand) < _FIT_N_DATASET * 2:
         df_cand = df_id
-    df_top = df_cand.nsmallest(_FIT_N_DS, "rmse_mps2")
+    df_best  = df_cand.nsmallest(_FIT_N_DATASET, "rmse_mps2")
+    df_worst = df_cand.nlargest(_FIT_N_DATASET, "rmse_mps2")
+    # 重複除去（小規模データセット時に同一行が両方に入る場合）
+    df_worst = df_worst[~df_worst.index.isin(df_best.index)]
+    # 最良を先、最悪を後に並べる
+    df_display = pd.concat([
+        df_best.assign(_case="最良"),
+        df_worst.assign(_case="最悪"),
+    ])
 
     rows_data = []
-    for row in df_top.itertuples():
+    for row in df_display.itertuples():
         mcap = _find_mcap(collection_dir, row.uuid)
         if mcap is None:
             continue
@@ -723,8 +789,10 @@ def build_long_figure(collection_dir: Path, params: dict, phase_label: str = "")
             a[~moving] = np.nan
             return a.tolist()
 
+        rmse_val = getattr(row, "rmse_mps2", float("nan"))
+        case_tag = getattr(row, "_case", "")
         rows_data.append({
-            "label": row.uuid[:8],
+            "label": f"[{case_tag}] {row.uuid[:8]}  RMSE={rmse_val:.3f} m/s²",
             "t": t_s.tolist(),
             "a_cmd": _mask(a_cmd_arr),
             "a_act": _mask(a_act_arr),
@@ -777,30 +845,49 @@ def build_long_figure(collection_dir: Path, params: dict, phase_label: str = "")
     fig.update_xaxes(title_text="時刻 [s]", row=n, col=1)
     fig.update_layout(
         height=300 * n,
-        title_text=f"縦方向モデルフィット（代表 {n} データセット — 動的区間優先・走行区間のみ表示）",
+        title_text=f"縦方向モデルフィット（最良・最悪 計 {n} 件、全データセット横断最小二乗法同定値・走行区間のみ表示）",
         margin=dict(t=70, b=40),
         legend=dict(orientation="h", y=1.03, x=0),
     )
     return fig
 
 
-def build_long_perf_figure(records: list[dict]) -> go.Figure:
-    """縦方向モデル構造限界評価: 実測加速度 a_act 直接積分 vs GT 変位の box plot（ホライズン別）。
+def build_long_perf_figure(
+    records: list[dict],
+    map_ways: list | None = None,
+) -> tuple[go.Figure, go.Figure, go.Figure]:
+    """縦方向モデル構造限界評価: 3 図を返す。
+
+    fig_box   : ホライズン別絶対誤差 box plot（従来どおり）
+    fig_growth : 符号付き誤差の成長カーブ（速度誤差・変位誤差 x 全体+局面別）
+    fig_map   : 地図上の変位誤差分布（rollout 開始点を誤差で色分け）
 
     シミュレータの加速度応答が実機と完全一致（a_act_sim = a_act_gt）した場合に残る
     縦方向変位誤差を評価する。
     """
     h_labels = [f"{h * _FIT_DT:.2f}s" for h in _PERF_HORIZONS]
     per_h_errors: dict[int, list[float]] = {h: [] for h in _PERF_HORIZONS}
+    _H_MAX = _PERF_HORIZONS[-1]  # 最長ホライズン（成長カーブ・地図分布用）
 
-    n_ds = min(len(records), _LONG_PERF_N_DS)
-    for rec in records[:n_ds]:
+    # 成長カーブ用プール
+    all_verr: list[np.ndarray] = []   # shape (m_i, H_max+1)
+    all_serr: list[np.ndarray] = []
+    all_phase: list[np.ndarray] = []  # int array (m_i,)
+
+    # 地図分布用プール（rollout 開始点 k0 の x/y と終端変位誤差）
+    map_x_pool: list[np.ndarray] = []
+    map_y_pool: list[np.ndarray] = []
+    map_serr_pool: list[np.ndarray] = []
+
+    n_dataset = min(len(records), _LONG_PERF_N_DATASET)
+    for rec in records[:n_dataset]:
         mcap = Path(rec["lite_dir"]) / "real.lite" / "real.lite_0.mcap"
         if not mcap.exists():
             continue
         try:
             df_accel = load_accel(mcap)
             df_vel   = load_velocity(mcap)
+            df_kin   = load_kinematic(mcap)
         except Exception:
             continue
         if df_accel.empty or df_vel.empty:
@@ -812,38 +899,212 @@ def build_long_perf_figure(records: list[dict]) -> go.Figure:
             continue
         t_ns  = np.arange(t0, t1, _FIT_DT * 1e9, dtype=np.float64)
         t_s   = (t_ns - t0) * 1e-9
-        gt_vx  = np.interp(t_s, (df_vel["t_ns"].values   - t0) * 1e-9, df_vel["lon_vel"].values)
-        a_act  = np.interp(t_s, (df_accel["t_ns"].values  - t0) * 1e-9, df_accel["accel"].values)
+        gt_vx = np.interp(t_s, (df_vel["t_ns"].values   - t0) * 1e-9, df_vel["lon_vel"].values)
+        a_act = np.interp(t_s, (df_accel["t_ns"].values  - t0) * 1e-9, df_accel["accel"].values)
         if len(gt_vx) < 50:
             continue
 
+        # box plot 用
         for h in _PERF_HORIZONS:
             errs = _long_nstep_perf(gt_vx, a_act, h, _FIT_DT)
             per_h_errors[h].extend(errs.tolist())
 
-    fig = go.Figure()
+        # 成長カーブ用（最長ホライズンで符号付きプロファイルを取得）
+        drift = _long_drift_profile(gt_vx, a_act, _H_MAX, _FIT_DT)
+        if drift is not None:
+            verr, serr, phase = drift
+            all_verr.append(verr)
+            all_serr.append(serr)
+            all_phase.append(phase)
+
+            # 地図分布用: k0s は _long_drift_profile と同一計算で x/y 位置を取得
+            if not df_kin.empty:
+                gt_x = np.interp(t_s, (df_kin["t_ns"].values - t0) * 1e-9, df_kin["x"].values)
+                gt_y = np.interp(t_s, (df_kin["t_ns"].values - t0) * 1e-9, df_kin["y"].values)
+                n = len(gt_vx)
+                k0s_map = np.arange(0, n - _H_MAX, _PERF_STRIDE)
+                k0s_map = k0s_map[gt_vx[k0s_map] > VX_MIN_CURVE]
+                if len(k0s_map) > 0:
+                    map_x_pool.append(gt_x[k0s_map])
+                    map_y_pool.append(gt_y[k0s_map])
+                    map_serr_pool.append(serr[:, _H_MAX])
+
+    # ------------------------------------------------------------------
+    # fig_box: 従来の絶対誤差 box plot
+    # ------------------------------------------------------------------
+    fig_box = go.Figure()
     for h, hl in zip(_PERF_HORIZONS, h_labels):
         errs = per_h_errors[h]
         if errs:
-            fig.add_trace(go.Box(
+            fig_box.add_trace(go.Box(
                 y=[e * 100 for e in errs], name=hl,
                 boxpoints="outliers", marker_size=3, marker_color="darkorange",
             ))
     if not any(per_h_errors[h] for h in _PERF_HORIZONS):
-        fig.add_annotation(
+        fig_box.add_annotation(
             text="データなし（データセットが見つかりません）",
             xref="paper", yref="paper", x=0.5, y=0.5,
             showarrow=False, font=dict(size=13),
         )
-    fig.update_layout(
-        title=f"縦方向 モデル構造限界評価（a_act 直接入力 vs GT 変位、上位 {n_ds} データセット）",
+    fig_box.update_layout(
+        title=f"縦方向 モデル構造限界評価（a_act 直接入力 vs GT 変位、上位 {n_dataset} データセット）",
         xaxis_title="ホライズン [s]",
         yaxis_title="|縦方向誤差| [cm]",
         height=400,
         showlegend=False,
         margin=dict(t=60, b=40),
     )
-    return fig
+
+    # ------------------------------------------------------------------
+    # fig_growth: 符号付き誤差の成長カーブ（コア + 局面分類）
+    # ------------------------------------------------------------------
+    _PHASE_COLORS = {0: "steelblue", 1: "gray", 2: "tomato"}
+    _PHASE_NAMES  = {0: "減速 (a < -0.3)", 1: "巡航", 2: "加速 (a > +0.3)"}
+
+    if all_verr:
+        verr_pool  = np.vstack(all_verr)   # (M, H_max+1)
+        serr_pool  = np.vstack(all_serr)   # (M, H_max+1)
+        phase_pool = np.concatenate(all_phase)  # (M,)
+        t_axis = np.arange(_H_MAX + 1) * _FIT_DT  # 0 → 1.0 s
+
+        fig_growth = make_subplots(
+            rows=1, cols=2,
+            subplot_titles=["速度誤差  vx_sim − GT vx  [m/s]",
+                            "変位誤差  s_sim − s_gt  [cm]"],
+            horizontal_spacing=0.10,
+        )
+
+        for col, (pool, scale, ytitle) in enumerate([
+            (verr_pool, 1.0,   "速度誤差 [m/s]<br><sup>正 = sim が GT より速い</sup>"),
+            (serr_pool, 100.0, "変位誤差 [cm]<br><sup>正 = sim が GT より進んでいる</sup>"),
+        ], start=1):
+            data = pool * scale
+            med  = np.median(data, axis=0)
+            q25  = np.percentile(data, 25, axis=0)
+            q75  = np.percentile(data, 75, axis=0)
+
+            # IQR 帯（半透明 fill）
+            fig_growth.add_trace(go.Scatter(
+                x=np.concatenate([t_axis, t_axis[::-1]]).tolist(),
+                y=np.concatenate([q75, q25[::-1]]).tolist(),
+                fill="toself", fillcolor="rgba(255,165,0,0.18)",
+                line=dict(color="rgba(0,0,0,0)"),
+                name="IQR 25–75%", showlegend=(col == 1),
+                legendgroup="iqr",
+            ), row=1, col=col)
+
+            # 全体中央値（橙実線）
+            fig_growth.add_trace(go.Scatter(
+                x=t_axis.tolist(), y=med.tolist(),
+                mode="lines", line=dict(color="darkorange", width=2.5),
+                name="中央値（全体）", showlegend=(col == 1),
+                legendgroup="med_all",
+            ), row=1, col=col)
+
+            # 局面別中央値（細線オーバーレイ）
+            for ph_id, ph_name in _PHASE_NAMES.items():
+                mask = phase_pool == ph_id
+                if mask.sum() < 5:
+                    continue
+                ph_med = np.median(data[mask], axis=0)
+                fig_growth.add_trace(go.Scatter(
+                    x=t_axis.tolist(), y=ph_med.tolist(),
+                    mode="lines",
+                    line=dict(color=_PHASE_COLORS[ph_id], width=1.2, dash="dot"),
+                    name=ph_name, showlegend=(col == 1),
+                    legendgroup=f"ph{ph_id}",
+                ), row=1, col=col)
+
+            # ゼロ基準線
+            fig_growth.add_hline(
+                y=0, line=dict(color="black", width=1, dash="dash"),
+                row=1, col=col,
+            )
+
+            fig_growth.update_yaxes(title_text=ytitle, row=1, col=col)
+            fig_growth.update_xaxes(title_text="ロールアウト経過時間 [s]", row=1, col=col)
+
+        fig_growth.update_layout(
+            title=(
+                f"縦方向ドリフト成長カーブ"
+                f"（符号付き・reset-stride ロールアウト、上位 {n_dataset} データセット）"
+            ),
+            height=430,
+            margin=dict(t=70, b=50),
+            legend=dict(orientation="v", x=1.02, y=1),
+        )
+    else:
+        fig_growth = go.Figure()
+        fig_growth.add_annotation(
+            text="データなし（ドリフトプロファイルを算出できるデータセットがありません）",
+            xref="paper", yref="paper", x=0.5, y=0.5,
+            showarrow=False, font=dict(size=13),
+        )
+        fig_growth.update_layout(height=300)
+
+    # ------------------------------------------------------------------
+    # fig_map: 地図上の変位誤差分布（rollout 開始点を 1.0s 終端誤差で色分け）
+    # ------------------------------------------------------------------
+    _MAP_MARGIN = 10.0
+    if not map_x_pool:
+        fig_map = go.Figure()
+        fig_map.add_annotation(
+            text="データなし（位置データを取得できませんでした）",
+            xref="paper", yref="paper",
+            x=0.5, y=0.5, showarrow=False, font=dict(size=13),
+        )
+        fig_map.update_layout(height=400)
+    else:
+        x_arr    = np.concatenate(map_x_pool)
+        y_arr    = np.concatenate(map_y_pool)
+        serr_arr = np.concatenate(map_serr_pool) * 100.0  # m → cm
+
+        x_min = float(x_arr.min()) - _MAP_MARGIN
+        x_max = float(x_arr.max()) + _MAP_MARGIN
+        y_min = float(y_arr.min()) - _MAP_MARGIN
+        y_max = float(y_arr.max()) + _MAP_MARGIN
+        vmax  = max(float(np.percentile(np.abs(serr_arr), 99)), 1e-6)
+
+        fig_map = go.Figure()
+
+        # 地図レーン背景
+        if map_ways is not None:
+            lane_ways = map_ways_in_bbox(map_ways, (x_min, x_max), (y_min, y_max))
+            if lane_ways:
+                fig_map.add_trace(lanes_to_trace(lane_ways))
+
+        # rollout 開始点を誤差値で色分け
+        fig_map.add_trace(go.Scatter(
+            x=x_arr.tolist(), y=y_arr.tolist(),
+            mode="markers",
+            marker=dict(
+                color=serr_arr.tolist(),
+                colorscale="RdBu",
+                reversescale=True,
+                cmin=-vmax, cmax=vmax,
+                size=4,
+                colorbar=dict(title="cm", thickness=14),
+            ),
+            showlegend=False,
+            hovertemplate=(
+                "x=%{x:.1f}m y=%{y:.1f}m<br>"
+                "変位誤差=%{marker.color:.2f}cm"
+                "<extra></extra>"
+            ),
+        ))
+
+        fig_map.update_xaxes(title_text="x [m]", range=[x_min, x_max])
+        fig_map.update_yaxes(
+            title_text="y [m]", range=[y_min, y_max],
+            scaleanchor="x", scaleratio=1,
+        )
+        fig_map.update_layout(
+            title="縦方向変位誤差の地図分布（1.0s 窓終端・rollout 開始点、正 = sim が GT より進む）",
+            height=600,
+            margin=dict(t=70, b=50, r=80),
+        )
+
+    return fig_box, fig_growth, fig_map
 
 
 def build_steer_id_figure(collection_dir: Path, params: dict) -> go.Figure:
@@ -867,15 +1128,21 @@ def build_steer_id_figure(collection_dir: Path, params: dict) -> go.Figure:
     tau_tune = float(params.get("steer_time_constant", float("nan")))
     T_tune   = float(params.get("steer_time_delay", float("nan")))
 
-    # 動的区間が豊富なデータセットを優先して選択
+    # 動的区間が豊富なデータセットを候補にし、最良・最悪それぞれ _FIT_N_DATASET 本を選択
     _N_DYN_MIN = 100
     df_cand = df_id[df_id["n_dyn"] >= _N_DYN_MIN]
-    if len(df_cand) < _FIT_N_DS:
+    if len(df_cand) < _FIT_N_DATASET * 2:
         df_cand = df_id
-    df_top = df_cand.nsmallest(_FIT_N_DS, "rmse_mrad")
+    df_best  = df_cand.nsmallest(_FIT_N_DATASET, "rmse_mrad")
+    df_worst = df_cand.nlargest(_FIT_N_DATASET, "rmse_mrad")
+    df_worst = df_worst[~df_worst.index.isin(df_best.index)]
+    df_display = pd.concat([
+        df_best.assign(_case="最良"),
+        df_worst.assign(_case="最悪"),
+    ])
 
     rows_data = []
-    for row in df_top.itertuples():
+    for row in df_display.itertuples():
         mcap = _find_mcap(collection_dir, row.uuid)
         if mcap is None:
             continue
@@ -911,8 +1178,9 @@ def build_steer_id_figure(collection_dir: Path, params: dict) -> go.Figure:
             a[~moving] = np.nan
             return a.tolist()
 
+        case_tag = getattr(row, "_case", "")
         rows_data.append({
-            "label": f"{row.uuid[:8]}  RMSE={row.rmse_mrad:.1f} mrad  τ={row.tau:.3f}s  T={row.delay:.3f}s",
+            "label": f"[{case_tag}] {row.uuid[:8]}  RMSE={row.rmse_mrad:.1f} mrad  τ={row.tau:.3f}s  T={row.delay:.3f}s",
             "t": t_s.tolist(),
             "d_act": _mask(d_act),
             "d_sim_id": _mask(d_sim_id),
@@ -950,7 +1218,7 @@ def build_steer_id_figure(collection_dir: Path, params: dict) -> go.Figure:
     fig.update_xaxes(title_text="時刻 [s]", row=n, col=1)
     fig.update_layout(
         height=300 * n,
-        title_text=f"操舵モデルフィット（代表 {n} データセット — n_dyn 優先・走行区間のみ表示）",
+        title_text=f"操舵モデルフィット（最良・最悪 計 {n} 件、走行区間のみ表示）",
         margin=dict(t=70, b=40),
         legend=dict(orientation="h", y=1.03, x=0),
     )
@@ -967,13 +1235,13 @@ def build_perfect_tracking_figure(
     モデル構造限界（タイヤスリップ・路面バンク・vy・k_us キャリブレーション誤差）を定量化する。
     縦方向誤差は gt_vx を直接使うため積分上ほぼゼロになる（設計上の帰結）。
     """
-    n_ds = min(len(top_records), _PERF_N_DS)
+    n_dataset = min(len(top_records), _PERF_N_DATASET)
     h_labels = [f"{h * _FIT_DT:.2f}s" for h in _PERF_HORIZONS]
 
     per_h_errors: dict[int, list[float]] = {h: [] for h in _PERF_HORIZONS}
     traj_data: list[dict] = []
 
-    for rec in top_records[:n_ds]:
+    for rec in top_records[:n_dataset]:
         mcap = Path(rec["lite_dir"]) / "real.lite" / "real.lite_0.mcap"
         if not mcap.exists():
             continue
@@ -1008,14 +1276,14 @@ def build_perfect_tracking_figure(
                 gt_vx, gt_steer, float(gt_x[0]), float(gt_y[0]), float(gt_yaw[0]), params, _FIT_DT
             )
             moving = gt_vx > VX_MIN_CURVE
-            _DS = 5
+            _PLOT_STRIDE = 5
             traj_data.append({
                 "uuid": rec["uuid"][:8],
-                "gt_x": (gt_x - gt_x[0])[::_DS],
-                "gt_y": (gt_y - gt_y[0])[::_DS],
-                "bx":   (bx   - gt_x[0])[::_DS],
-                "by":   (by   - gt_y[0])[::_DS],
-                "moving": moving[::_DS],
+                "gt_x": (gt_x - gt_x[0])[::_PLOT_STRIDE],
+                "gt_y": (gt_y - gt_y[0])[::_PLOT_STRIDE],
+                "bx":   (bx   - gt_x[0])[::_PLOT_STRIDE],
+                "by":   (by   - gt_y[0])[::_PLOT_STRIDE],
+                "moving": moving[::_PLOT_STRIDE],
             })
 
     # ---- Box plot ----
@@ -1031,7 +1299,7 @@ def build_perfect_tracking_figure(
                 marker_color="steelblue",
             ))
     fig_box.update_layout(
-        title=f"理想追従 N-step 横方向誤差（上位 {n_ds} データセット プール）",
+        title=f"理想追従 N-step 横方向誤差（上位 {n_dataset} データセット プール）",
         xaxis_title="ホライズン [s]",
         yaxis_title="|横方向誤差| [cm]",
         height=400,
@@ -1345,8 +1613,8 @@ def _build_sec1(
     long_fig: go.Figure,
     steer_fig: go.Figure,
     kus_fig: go.Figure,
-    n_ds: int,
-    long_perf_fig: go.Figure | None = None,
+    n_dataset: int,
+    long_perf_figs: tuple[go.Figure, go.Figure, go.Figure] | None = None,
 ) -> str:
     kus_rows = _kus_band_table_rows(params)
 
@@ -1364,13 +1632,18 @@ def _build_sec1(
     db    = _fmt(params.get("steer_dead_band", "N/A"))
     rlim  = _fmt(params.get("steer_rate_lim", "N/A"))
 
-    long_html  = long_fig.to_html(full_html=False, include_plotlyjs=False)
-    steer_html = steer_fig.to_html(full_html=False, include_plotlyjs=False)
+    _long_html_inner  = long_fig.to_html(full_html=False, include_plotlyjs=False)
+    _steer_html_inner = steer_fig.to_html(full_html=False, include_plotlyjs=False)
+    long_html  = f"<details><summary>時系列グラフを表示（クリックで展開）</summary>{_long_html_inner}</details>"
+    steer_html = f"<details><summary>時系列グラフを表示（クリックで展開）</summary>{_steer_html_inner}</details>"
     kus_html   = kus_fig.to_html(full_html=False, include_plotlyjs=False)
-    long_perf_plot_html = long_perf_fig.to_html(full_html=False, include_plotlyjs=False) if long_perf_fig is not None else ""
     _vx_min = VX_MIN_CURVE
     _stride = _PERF_STRIDE
-    if long_perf_plot_html:
+    if long_perf_figs is not None:
+        fig_box, fig_growth, fig_map = long_perf_figs
+        box_html    = fig_box.to_html(full_html=False, include_plotlyjs=False)
+        growth_html = fig_growth.to_html(full_html=False, include_plotlyjs=False)
+        map_html    = fig_map.to_html(full_html=False, include_plotlyjs=False)
         long_perf_subsection = (
             "<h3>モデル構造限界評価（acc 理想追従）</h3>"
             "<p>シミュレータの加速度応答が実機と完全一致（\\(a_{\\mathrm{act,sim}} = a_{\\mathrm{act,gt}}\\)）した場合に"
@@ -1387,7 +1660,18 @@ def _build_sec1(
             f"<p>走行区間（\\(v_x > {_vx_min}\\) m/s）を stride={_stride} ステップで走査し、"
             "N-step ロールアウト終端の縦方向誤差絶対値を集計する。"
             "ホライズン: N=10（0.10s）, N=20（0.20s）, N=50（0.50s）, N=100（1.00s）。</p>"
-            + long_perf_plot_html
+            + box_html
+            + "<p><b>図②: ドリフト成長カーブ（符号付き）</b> — "
+            "ゼロ線から片側に膨らむ傾向が系統的な過大／過小推定を示す。"
+            "帯（IQR 25–75%）はばらつき、膨らむ速さは蓄積の速度を表す。"
+            "局面別点線（青=減速・灰=巡航・赤=加速）でどの走行シーンでズレが生じるかを確認できる。"
+            "x 軸の 0.10/0.20/0.50/1.00s は上の box plot のホライズンと一致する。</p>"
+            + growth_html
+            + "<p><b>図③: 地図上の変位誤差分布</b> — "
+            "各点は rollout 開始位置（\\(v_x > v_{\\mathrm{min}}\\) を満たす 1.0s 窓の開始点）。"
+            "色は 1.0s 窓終端の変位誤差（赤 = sim が GT より進む過大推定、青 = 過小推定）。"
+            "路線・カーブ・区間ごとに誤差パターンを地理的に把握できる。</p>"
+            + map_html
         )
     else:
         long_perf_subsection = ""
@@ -1527,7 +1811,7 @@ a_{{\\mathrm{{cmd,del}}}}(t) = a_{{\\mathrm{{cmd}}}}(t - T_a)
 k_us を同定することが重要。
 </div>
 
-<h3>実機ログからの独立同定（全 {n_ds} データセット、速度ビン別 最小二乗法）</h3>
+<h3>実機ログからの独立同定（全 {n_dataset} データセット、速度ビン別 最小二乗法）</h3>
 
 <details>
 <summary>推定手法の詳細</summary>
@@ -1572,7 +1856,7 @@ def _build_sec14(
     fig_box: go.Figure,
     fig_traj: go.Figure,
     params: dict,
-    n_ds: int,
+    n_dataset: int,
 ) -> str:
     """1-4. モデル構造限界（理想追従評価）セクション HTML。"""
     box_html  = fig_box.to_html(full_html=False, include_plotlyjs=False)
@@ -1603,7 +1887,7 @@ def _build_sec14(
 パラメータのキャリブレーション誤差も一部含む（現行パラメータ前提での下限値）。
 </div>
 
-<h3>横方向誤差分布（ホライズン別、上位 {n_ds} データセット）</h3>
+<h3>横方向誤差分布（ホライズン別、上位 {n_dataset} データセット）</h3>
 <p>
 カーブ走行区間（\\(v_x > {VX_MIN_CURVE}\\) m/s）を stride={_PERF_STRIDE} ステップで走査し、
 N-step ロールアウト終端の横方向誤差絶対値を集計する。ホライズン: {h_str}。
@@ -1622,14 +1906,14 @@ N-step ロールアウト終端の横方向誤差絶対値を集計する。ホ�
 """
 
 
-def _build_sec2(kus_fig: go.Figure, n_ds: int) -> str:
+def _build_sec2(kus_fig: go.Figure, n_dataset: int) -> str:
     kus_html = kus_fig.to_html(full_html=False, include_plotlyjs=False)
     return f"""
 <section id="identification">
 <h2>2. 実機ログからの独立同定</h2>
 
 <details open>
-<summary>2-1. アンダーステア係数 k_us の速度依存性（全 {n_ds} データセット）</summary>
+<summary>2-1. アンダーステア係数 k_us の速度依存性（全 {n_dataset} データセット）</summary>
 <details>
 <summary>推定手法の詳細</summary>
 <p>
@@ -1682,7 +1966,7 @@ def _build_sec3(viewer_sections: list[str], label: str = "phase14") -> str:
 
 def _build_sec_deviation(
     df: pd.DataFrame,
-    n_ds: int,
+    n_dataset: int,
     recomputed_score: float | None = None,
     expected_score: float | None = None,
     score_name: str = "robust_score",
@@ -1760,7 +2044,7 @@ def _build_sec_deviation(
 
     return f"""
 <section id="deviation">
-<h2>0-6. 全 {n_ds} データセットの N-step 終端誤差（{label} vs baseline）</h2>
+<h2>0-6. 全 {n_dataset} データセットの N-step 終端誤差（{label} vs baseline）</h2>
 <p>
 全データセットに対し {label} パラメータと baseline（補正なし）で N-step ロールアウトを実施し、
 終端誤差 RMSE の データセット横断 <b>平均</b>（mean）と <b>最大</b>（worst-case データセット）を N ごとに集計する。
@@ -1804,19 +2088,19 @@ def build_html(
     steer_fig: go.Figure,
     kus_fig: go.Figure,
     viewer_sections: list[str],
-    n_ds: int,
+    n_dataset: int,
     baseline_score: float | None = None,
     deviation_html: str = "",
     label: str = "current",
     params_filename: str = "",
     perf_html: str = "",
-    long_perf_fig: go.Figure | None = None,
+    long_perf_figs: tuple[go.Figure, go.Figure, go.Figure] | None = None,
 ) -> str:
     score = params.get("_score", "N/A")
     phase14_score = float(score) if isinstance(score, (int, float, str)) and str(score) != "N/A" else 0.0
     sec_intro = _build_sec_model_intro(params, label=label, params_filename=params_filename)
     sec0 = _build_sec_metrics(baseline_score=baseline_score, phase14_score=phase14_score, label=label)
-    sec1 = _build_sec1(params, long_fig, steer_fig, kus_fig, n_ds, long_perf_fig=long_perf_fig)
+    sec1 = _build_sec1(params, long_fig, steer_fig, kus_fig, n_dataset, long_perf_figs=long_perf_figs)
     sec3 = _build_sec3(viewer_sections, label=label)
 
     return f"""<!DOCTYPE html>
@@ -1834,7 +2118,7 @@ def build_html(
 <p class="meta">
   生成元: <code>{params_filename or label}</code> &nbsp;|&nbsp;
   score: {score} &nbsp;|&nbsp;
-  有効データセット数: {n_ds}
+  有効データセット数: {n_dataset}
 </p>
 <nav>
   <a href="#model-intro">モデルパラメータ</a>
@@ -1920,11 +2204,11 @@ def main() -> None:
     )
     ap.add_argument(
         "--ds-after", type=str, default=None,
-        help="この日付以降のDSのみ使用（YYYY-MM-DD形式、例: 2026-06-16）",
+        help="この日付以降のデータセットのみ使用（YYYY-MM-DD形式、例: 2026-06-16）",
     )
     ap.add_argument(
         "--ds-before", type=str, default=None,
-        help="この日付より前のDSのみ使用（YYYY-MM-DD形式）",
+        help="この日付より前のデータセットのみ使用（YYYY-MM-DD形式）",
     )
     args = ap.parse_args()
 
@@ -2030,9 +2314,9 @@ def main() -> None:
         ctxs = load_datasets(top_items, n_jobs=min(args.n_jobs, len(top_items)))
         print(f"\n[Phase 3c] rollout メトリクスキャッシュ読み込み ...")
         df_rollout = pd.read_csv(args.metrics_cache)
-        n_ds_cache = df_rollout["uuid"].nunique()
+        n_dataset_cache = df_rollout["uuid"].nunique()
         n_h_cache = df_rollout["h"].nunique()
-        print(f"  {len(df_rollout)} 行（{n_ds_cache} データセット × {n_h_cache} horizons）")
+        print(f"  {len(df_rollout)} 行（{n_dataset_cache} データセット × {n_h_cache} horizons）")
         # score 再現検証（キャッシュロード時も実施）
         per_ds_arg = []
         bl_arg: dict = {}
@@ -2194,13 +2478,13 @@ def main() -> None:
     long_fig  = build_long_figure(args.collection_dir, params, phase_label=phase_label)
     steer_fig = build_steer_id_figure(args.collection_dir, params)
 
-    # 1-1 縦方向理想追従評価（全 records の先頭 _LONG_PERF_N_DS データセットを使用）
-    long_perf_records = records[:_LONG_PERF_N_DS]
+    # 1-1 縦方向理想追従評価（全 records の先頭 _LONG_PERF_N_DATASET データセットを使用）
+    long_perf_records = records[:_LONG_PERF_N_DATASET]
     print(f"  [1-1] 縦方向理想追従評価図生成 ({len(long_perf_records)} データセット) ...")
-    long_perf_fig = build_long_perf_figure(long_perf_records)
+    long_perf_figs = build_long_perf_figure(long_perf_records, map_ways=map_ways)
 
-    # 1-4 横方向理想追従評価には curve 上位 _PERF_N_DS データセットを使用（viewer 用 top_curve とは独立して選択）
-    perf_records = candidate_curve[:_PERF_N_DS]
+    # 1-4 横方向理想追従評価には curve 上位 _PERF_N_DATASET データセットを使用（viewer 用 top_curve とは独立して選択）
+    perf_records = candidate_curve[:_PERF_N_DATASET]
     print(f"  [1-4] 横方向理想追従評価図生成 ({len(perf_records)} データセット) ...")
     perf_fig_box, perf_fig_traj = build_perfect_tracking_figure(perf_records, params)
     perf_html = _build_sec14(perf_fig_box, perf_fig_traj, params, len(perf_records))
@@ -2212,7 +2496,7 @@ def main() -> None:
         label=phase_label,
         params_filename=args.params.name,
         perf_html=perf_html,
-        long_perf_fig=long_perf_fig,
+        long_perf_figs=long_perf_figs,
     )
 
     args.out.parent.mkdir(parents=True, exist_ok=True)
