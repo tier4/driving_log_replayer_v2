@@ -69,14 +69,14 @@ VX_EDGES = np.array([0.5, 1.0, 1.5, 2.0, 2.5, 3.0, 4.0, 5.0, 6.0, 8.0, 10.0, 12.
 _H_SPAN = {10: "≈0.33 s", 20: "≈0.67 s", 30: "≈1.0 s", 40: "≈1.33 s"}
 
 _FIT_DT = 0.01          # モデルフィット用リサンプリング DT [s]
-_FIT_N_DS = 3           # フィット表示する代表 DS 数
+_FIT_N_DS = 3           # フィット表示する代表データセット数
 
 # 1-1/1-4. 理想追従評価用共通定数
 _PERF_HORIZONS: tuple[int, ...] = (10, 20, 50, 100)  # steps @ _FIT_DT → 0.10, 0.20, 0.50, 1.00 s
 _PERF_STRIDE = 5                                       # rollout reset stride [steps]
-_PERF_N_DS = 10                                        # 1-4 横方向 box plot 用 DS 数
-_PERF_N_TRAJ = 3                                       # 軌跡比較表示 DS 数
-_LONG_PERF_N_DS = 20                                   # 1-1 縦方向理想追従 box plot 用 DS 数
+_PERF_N_DS = 10                                        # 1-4 横方向 box plot 用 データセット数
+_PERF_N_TRAJ = 3                                       # 軌跡比較表示 データセット数
+_LONG_PERF_N_DS = 20                                   # 1-1 縦方向理想追従 box plot 用 データセット数
 
 def _sim_first_order(cmd: np.ndarray, tau: float, n_delay: int, dt: float = _FIT_DT) -> np.ndarray:
     """純粋遅延 + 一次遅れシミュレーション（lfilter 版）。"""
@@ -209,7 +209,7 @@ def _long_nstep_perf(
 
 
 def _find_mcap(collection_dir: Path, uuid: str) -> Path | None:
-    """DS uuid の MCAP パスを探して返す（見つからなければ None）。"""
+    """データセット uuid の MCAP パスを探して返す（見つからなければ None）。"""
     for ds_dir in [
         collection_dir / "datasets" / uuid,
         collection_dir / uuid,
@@ -344,10 +344,10 @@ def load_all_mcap(ds_list: list, n_jobs: int = 8) -> list[dict]:
 
 
 # ---------------------------------------------------------------------------
-# Phase 2: k_us 速度ビン別 OLS 回帰
+# Phase 2: k_us 速度ビン別 最小二乗法回帰
 # ---------------------------------------------------------------------------
 def compute_kus_bins(records: list[dict]) -> dict:
-    """速度ビン別 OLS 回帰で k_us(v) を推定。モデル: tan(δ_eff) = (L/v + k_us·v)·ω"""
+    """速度ビン別 最小二乗法回帰で k_us(v) を推定。モデル: tan(δ_eff) = (L/v + k_us·v)·ω"""
     all_vx = np.concatenate([np.asarray(r["vx"]) for r in records])
     all_wz = np.concatenate([np.asarray(r["wz"]) for r in records])
     all_steer_eff = np.concatenate([np.asarray(r["steer_eff"]) for r in records])
@@ -383,7 +383,7 @@ def compute_kus_bins(records: list[dict]) -> dict:
         ts_b = tan_steer[mask_bin]
         vm = float(np.median(vx_b))
         vx_mid[i] = vm
-        # OLS 原点回帰: tan(steer) = C * wz => k_us = (C - L/v) / v
+        # 最小二乗法原点回帰: tan(steer) = C * wz => k_us = (C - L/v) / v
         C_ols = float(np.sum(wz_b * ts_b) / np.sum(wz_b ** 2))
         kus_ols[i] = (C_ols - WHEELBASE / vm) / vm
         # 個別サンプル percentile（外れ値確認用）
@@ -474,7 +474,7 @@ def build_kus_figure(bins: dict, params: dict) -> go.Figure:
     """k_us vs 速度の plotly 図（実測推定 + チューニング済み速度帯プロファイル重ね描き）。"""
     fig = make_subplots(
         rows=1, cols=2,
-        subplot_titles=["k_us 推定値（速度ビン別 OLS）", "速度ビン別 曲線走行サンプル数"],
+        subplot_titles=["k_us 推定値（速度ビン別 最小二乗法）", "速度ビン別 曲線走行サンプル数"],
         horizontal_spacing=0.12,
     )
 
@@ -496,13 +496,13 @@ def build_kus_figure(bins: dict, params: dict) -> go.Figure:
             showlegend=True, name="25–75%ile（個別サンプル）",
         ), row=1, col=1)
 
-    # OLS 推定値
+    # 最小二乗法推定値
     fig.add_trace(go.Scatter(
         x=vx_mid[valid].tolist(), y=kus_ols[valid].tolist(),
         mode="markers+lines",
         marker=dict(color="steelblue", size=7),
         line=dict(color="steelblue", width=2),
-        name="OLS 推定 k_us(v)",
+        name="最小二乗法推定 k_us(v)",
     ), row=1, col=1)
 
     # チューニング済み速度帯プロファイル（ステップ関数）
@@ -552,7 +552,7 @@ def build_kus_figure(bins: dict, params: dict) -> go.Figure:
     fig.update_yaxes(title_text="サンプル数", row=1, col=2)
     fig.update_layout(
         height=430,
-        title_text="実機ログからの k_us 独立同定（速度ビン別 OLS 回帰）",
+        title_text="実機ログからの k_us 独立同定（速度ビン別 最小二乗法回帰）",
         title_x=0.0,
         legend=dict(x=0.02, y=0.98, bgcolor="rgba(255,255,255,0.8)"),
         margin=dict(l=60, r=20, t=70, b=40),
@@ -830,12 +830,12 @@ def build_long_perf_figure(records: list[dict]) -> go.Figure:
             ))
     if not any(per_h_errors[h] for h in _PERF_HORIZONS):
         fig.add_annotation(
-            text="データなし（DS が見つかりません）",
+            text="データなし（データセットが見つかりません）",
             xref="paper", yref="paper", x=0.5, y=0.5,
             showarrow=False, font=dict(size=13),
         )
     fig.update_layout(
-        title=f"縦方向 モデル構造限界評価（a_act 直接入力 vs GT 変位、上位 {n_ds} DS）",
+        title=f"縦方向 モデル構造限界評価（a_act 直接入力 vs GT 変位、上位 {n_ds} データセット）",
         xaxis_title="ホライズン [s]",
         yaxis_title="|縦方向誤差| [cm]",
         height=400,
@@ -846,7 +846,7 @@ def build_long_perf_figure(records: list[dict]) -> go.Figure:
 
 
 def build_steer_id_figure(collection_dir: Path, params: dict) -> go.Figure:
-    """操舵モデルフィット時系列（NLS 同定値 vs チューン値、代表 DS 3本）。"""
+    """操舵モデルフィット時系列（非線形最小二乗法同定値 vs チューン値、代表データセット 3本）。"""
     csv_path = collection_dir / "steer_dynamics_identified.csv"
 
     def _placeholder(msg: str) -> go.Figure:
@@ -866,7 +866,7 @@ def build_steer_id_figure(collection_dir: Path, params: dict) -> go.Figure:
     tau_tune = float(params.get("steer_time_constant", float("nan")))
     T_tune   = float(params.get("steer_time_delay", float("nan")))
 
-    # 動的区間が豊富な DS を優先して選択
+    # 動的区間が豊富なデータセットを優先して選択
     _N_DYN_MIN = 100
     df_cand = df_id[df_id["n_dyn"] >= _N_DYN_MIN]
     if len(df_cand) < _FIT_N_DS:
@@ -897,7 +897,7 @@ def build_steer_id_figure(collection_dir: Path, params: dict) -> go.Figure:
         d_act   = np.interp(t_s, (df_steer["t_ns"].values - t0) * 1e-9, df_steer["steer"].values)
         vx      = np.interp(t_s, (df_vel["t_ns"].values - t0) * 1e-9, df_vel["lon_vel"].values)
 
-        # DS 全体でシミュレーション（初期過渡が走行区間に影響しないよう全期間使用）
+        # データセット全体でシミュレーション（初期過渡が走行区間に影響しないよう全期間使用）
         d_sim_id = _sim_first_order(d_cmd, row.tau, int(round(row.delay / _FIT_DT)))
         d_sim_tune = None
         if not (np.isnan(tau_tune) or np.isnan(T_tune)):
@@ -919,7 +919,7 @@ def build_steer_id_figure(collection_dir: Path, params: dict) -> go.Figure:
         })
 
     if not rows_data:
-        return _placeholder("MCAP 読み込み失敗（DS ディレクトリが見つかりません）")
+        return _placeholder("MCAP 読み込み失敗（データセット ディレクトリが見つかりません）")
 
     n = len(rows_data)
     fig = make_subplots(rows=n, cols=1,
@@ -934,7 +934,7 @@ def build_steer_id_figure(collection_dir: Path, params: dict) -> go.Figure:
         ), row=i, col=1)
         fig.add_trace(go.Scatter(
             x=r["t"], y=r["d_sim_id"],
-            name="NLS 同定値", line=dict(color="steelblue", width=1.5, dash="dot"),
+            name="非線形最小二乗法同定値", line=dict(color="steelblue", width=1.5, dash="dot"),
             showlegend=show_legend, connectgaps=False,
         ), row=i, col=1)
         if r["d_sim_tune"] is not None:
@@ -949,7 +949,7 @@ def build_steer_id_figure(collection_dir: Path, params: dict) -> go.Figure:
     fig.update_xaxes(title_text="時刻 [s]", row=n, col=1)
     fig.update_layout(
         height=300 * n,
-        title_text=f"操舵モデルフィット（代表 {n} DS — n_dyn 優先・走行区間のみ表示）",
+        title_text=f"操舵モデルフィット（代表 {n} データセット — n_dyn 優先・走行区間のみ表示）",
         margin=dict(t=70, b=40),
         legend=dict(orientation="h", y=1.03, x=0),
     )
@@ -1030,7 +1030,7 @@ def build_perfect_tracking_figure(
                 marker_color="steelblue",
             ))
     fig_box.update_layout(
-        title=f"理想追従 N-step 横方向誤差（上位 {n_ds} DS プール）",
+        title=f"理想追従 N-step 横方向誤差（上位 {n_ds} データセット プール）",
         xaxis_title="ホライズン [s]",
         yaxis_title="|横方向誤差| [cm]",
         height=400,
@@ -1046,7 +1046,7 @@ def build_perfect_tracking_figure(
     else:
         fig_traj = make_subplots(
             rows=1, cols=n_traj,
-            subplot_titles=[f"DS {d['uuid']}" for d in traj_data],
+            subplot_titles=[f"データセット {d['uuid']}" for d in traj_data],
             horizontal_spacing=0.08,
         )
         for i, td in enumerate(traj_data, start=1):
@@ -1166,14 +1166,14 @@ steer 系パラメータへの感度はほぼゼロ（逆もしかり）。こ�
   <li>\\(\\text{nyaw} > 1\\): baseline より悪い（過補正・副作用）</li>
 </ul>
 <p><b>なぜ正規化するか</b>:
-絶対誤差のまま集約すると、大カーブ・高速など「難しいシナリオ」（baseline 誤差が大きい DS）が
-スコアを支配してしまい、全 650 DS で均等に改善できているかを測れない。
-正規化により「baseline と比べてどれだけ改善したか」を全 DS で統一スケールで評価できる。
+絶対誤差のまま集約すると、大カーブ・高速など「難しいシナリオ」（baseline 誤差が大きいデータセット）が
+スコアを支配してしまい、全 650 データセットで均等に改善できているかを測れない。
+正規化により「baseline と比べてどれだけ改善したか」を全データセットで統一スケールで評価できる。
 </p>
 <table class="param-table">
   <tr><th>フロア定数</th><th>N=10</th><th>N=40</th><th>目的</th></tr>
   <tr><td>YAW_FLOOR</td><td>0.06 deg</td><td>0.24 deg</td>
-    <td>低ダイナミクス（ほぼ直進）の DS で分母がゼロ近くになる暴発を防ぐ</td></tr>
+    <td>低ダイナミクス（ほぼ直進）のデータセットで分母がゼロ近くになる暴発を防ぐ</td></tr>
   <tr><td>LONG_FLOOR</td><td>1.0 cm</td><td>4.5 cm</td><td>縦方向の同上</td></tr>
   <tr><td>LAT_FLOOR</td><td>0.3 cm</td><td>1.2 cm</td><td>横方向の同上</td></tr>
 </table>
@@ -1182,14 +1182,14 @@ steer 系パラメータへの感度はほぼゼロ（逆もしかり）。こ�
 <details>
 <summary>0-4. mean と worst</summary>
 <p>
-650 DS の正規化スコアに対して 2 種類の集約を行う:
+650 データセットの正規化スコアに対して 2 種類の集約を行う:
 </p>
 <ul>
-  <li><b>mean</b>: 全 DS の平均。「全体的に良い設定」を測る。</li>
-  <li><b>worst</b>: 全 DS の最大値（最悪ケース）。「どのシナリオでも崩れない頑健性」を測る。</li>
+  <li><b>mean</b>: 全データセットの平均。「全体的に良い設定」を測る。</li>
+  <li><b>worst</b>: 全データセットの最大値（最悪ケース）。「どのシナリオでも崩れない頑健性」を測る。</li>
 </ul>
 <p>
-mean だけを最小化すると、一部の DS に特化したパラメータが選ばれ worst が悪化することがある。
+mean だけを最小化すると、一部のデータセットに特化したパラメータが選ばれ worst が悪化することがある。
 worst だけだと過度に保守的になる。両者を組み合わせることでロバストな設定を探索する。
 </p>
 </details>
@@ -1204,7 +1204,7 @@ worst だけだと過度に保守的になる。両者を組み合わせるこ�
 + 0.5 (\\hat{\\text{nyaw}} + 0.5 \\hat{\\text{nlong}} + 0.5 \\hat{\\text{nlat}})
 \\right]
 \\]
-ここで \\(\\overline{\\cdot}\\) は mean、\\(\\hat{\\cdot}\\) は worst（全 DS の max）。
+ここで \\(\\overline{\\cdot}\\) は mean、\\(\\hat{\\cdot}\\) は worst（全データセットの max）。
 <b>スコアは小さいほど良い。</b>
 </p>
 <ul>
@@ -1214,7 +1214,7 @@ worst だけだと過度に保守的になる。両者を組み合わせるこ�
 __SCORE_BULLET__
 </ul>
 <div class="note">
-<b>直感的なスケール</b>: score が 1 下がると「全 650 DS・全 4 ホライズンで平均的に
+<b>直感的なスケール</b>: score が 1 下がると「全 650 データセット・全 4 ホライズンで平均的に
 nyaw が 1/8 改善した」相当（sum over 4 horizons × 2 terms (mean+0.5worst) でほぼ 8 で割る）。
 __NOTE_TEXT__
 </div>
@@ -1415,11 +1415,11 @@ a_{{\\mathrm{{cmd,del}}}}(t) = a_{{\\mathrm{{cmd}}}}(t - T_a)
 速度 \\(v_x\\) はその積分として得られる。
 </p>
 
-<h3>実機ログからの独立同定（代表 DS モデルフィット）</h3>
+<h3>実機ログからの独立同定（代表データセットモデルフィット）</h3>
 <p>
-\\(a_{{\\mathrm{{cmd}}}}\\)（指令加速度）を入力として遅延グリッドサーチ + output-error NLS で
+\\(a_{{\\mathrm{{cmd}}}}\\)（指令加速度）を入力として遅延グリッドサーチ + output-error 非線形最小二乗法で
 同定した \\((\\tau_a, T_a)\\) のモデル出力（青点線）と実測 \\(a_{{\\mathrm{{act}}}}\\)（黒実線）を比較する。
-橙実線はチューン値でのシミュレーション結果。動的区間（n_dyn）が豊富な DS から rmse 最小順に選択し、低速・停車区間は除外して表示。
+橙実線はチューン値でのシミュレーション結果。動的区間（n_dyn）が豊富なデータセットから rmse 最小順に選択し、低速・停車区間は除外して表示。
 </p>
 {long_html}
 
@@ -1469,11 +1469,11 @@ a_{{\\mathrm{{cmd,del}}}}(t) = a_{{\\mathrm{{cmd}}}}(t - T_a)
 報告値の加算と 1-3 のヨー式の両方に現れる二重登場のパラメータである。
 </div>
 
-<h3>実機ログからの独立同定（代表 DS モデルフィット）</h3>
+<h3>実機ログからの独立同定（代表データセットモデルフィット）</h3>
 <p>
-\\(\\delta_{{\\mathrm{{cmd}}}}\\) を入力として遅延グリッドサーチ + output-error NLS で
+\\(\\delta_{{\\mathrm{{cmd}}}}\\) を入力として遅延グリッドサーチ + output-error 非線形最小二乗法で
 同定した \\((\\tau_\\delta, T_\\delta)\\) のモデル出力（青点線）と実測 \\(\\delta_{{\\mathrm{{act}}}}\\)（黒実線）を比較する。
-橙実線はチューン値でのシミュレーション結果。動的区間（n_dyn）が豊富な DS から rmse 最小順に選択し、低速・停車区間は除外して表示。
+橙実線はチューン値でのシミュレーション結果。動的区間（n_dyn）が豊富なデータセットから rmse 最小順に選択し、低速・停車区間は除外して表示。
 </p>
 {steer_html}
 <div class="note">
@@ -1500,11 +1500,11 @@ a_{{\\mathrm{{cmd,del}}}}(t) = a_{{\\mathrm{{cmd}}}}(t - T_a)
 </section>
 
 <section id="sec-yaw">
-<h2>1-3. ヨー・横方向（運動学的自転車モデル）— 速度ビン別 OLS 同定</h2>
+<h2>1-3. ヨー・横方向（運動学的自転車モデル）— 速度ビン別 最小二乗法同定</h2>
 <p>
 1-1（縦方向）・1-2（操舵追従）が先行して確定した後、
 \\(\\text{{err}}_{{wz}}\\) を目的関数として <b>高曲率サブセット</b> で k_us を同定する。
-直進（\\(\\delta \\approx 0\\)）では感度がゼロなので、全 DS 集約スコアは k_us に対して構造的不可同定。
+直進（\\(\\delta \\approx 0\\)）では感度がゼロなので、全データセット集約スコアは k_us に対して構造的不可同定。
 </p>
 
 <p><b>運動方程式:</b></p>
@@ -1526,7 +1526,7 @@ a_{{\\mathrm{{cmd,del}}}}(t) = a_{{\\mathrm{{cmd}}}}(t - T_a)
 k_us を同定することが重要。
 </div>
 
-<h3>実機ログからの独立同定（全 {n_ds} DS、速度ビン別 OLS）</h3>
+<h3>実機ログからの独立同定（全 {n_ds} データセット、速度ビン別 最小二乗法）</h3>
 
 <details>
 <summary>推定手法の詳細</summary>
@@ -1553,7 +1553,7 @@ C_{{\\mathrm{{OLS}}}} = \\frac{{\\sum \\omega_i \\, \\tan(\\delta_i)}}{{\\sum \\
 {kus_html}
 <div class="note">
 <b>解釈</b>: 最小二乗法推定値が低速ビンでほぼ 0、高速ビンで正の値に推移していれば、
-ランプ形状は物理的実態と整合している。ただし J6 の多くの DS が低速（vx_mean ≈ 1.9 m/s）
+ランプ形状は物理的実態と整合している。ただし J6 の多くのデータセットが低速（vx_mean ≈ 1.9 m/s）
 のため、高速ビンのサンプル数は少なく推定誤差が大きい点に注意（右パネルのサンプル数を参照）。
 </div>
 
@@ -1602,14 +1602,14 @@ def _build_sec14(
 パラメータのキャリブレーション誤差も一部含む（現行パラメータ前提での下限値）。
 </div>
 
-<h3>横方向誤差分布（ホライズン別、上位 {n_ds} DS）</h3>
+<h3>横方向誤差分布（ホライズン別、上位 {n_ds} データセット）</h3>
 <p>
 カーブ走行区間（\\(v_x > {VX_MIN_CURVE}\\) m/s）を stride={_PERF_STRIDE} ステップで走査し、
 N-step ロールアウト終端の横方向誤差絶対値を集計する。ホライズン: {h_str}。
 </p>
 {box_html}
 
-<h3>代表 DS の軌跡比較（GT vs 自転車モデル）</h3>
+<h3>代表データセット の軌跡比較（GT vs 自転車モデル）</h3>
 <p>
 初期状態を GT に合わせ、実測 \\(v_x\\) と \\(\\delta_{{\\mathrm{{act}}}}\\) を入力として積分した
 自転車モデル軌跡（青破線）を GT 軌跡（黒実線）と比較する。
@@ -1655,7 +1655,7 @@ C_{{\\mathrm{{OLS}}}} = \\frac{{\\sum \\omega_i \\, \\tan(\\delta_i)}}{{\\sum \\
 {kus_html}
 <div class="note">
 <b>解釈</b>: 最小二乗法推定値が低速ビンでほぼ 0、高速ビンで正の値に推移していれば、
-ランプ形状は物理的実態と整合している。ただし J6 の多くの DS が低速（vx_mean ≈ 1.9 m/s）
+ランプ形状は物理的実態と整合している。ただし J6 の多くのデータセットが低速（vx_mean ≈ 1.9 m/s）
 のため、高速ビンのサンプル数は少なく推定誤差が大きい点に注意（右パネルのサンプル数を参照）。
 </div>
 </details>
@@ -1664,7 +1664,7 @@ C_{{\\mathrm{{OLS}}}} = \\frac{{\\sum \\omega_i \\, \\tan(\\delta_i)}}{{\\sum \\
 
 
 def _build_sec3(viewer_sections: list[str], label: str = "phase14") -> str:
-    body = "\n".join(viewer_sections) if viewer_sections else "<p>ビューア生成対象 DS なし</p>"
+    body = "\n".join(viewer_sections) if viewer_sections else "<p>ビューア生成対象 データセット なし</p>"
     return f"""
 <section id="curve-viewer">
 <h2>3. カーブ部での実機 vs モデル軌跡（インタラクティブビューア）</h2>
@@ -1674,9 +1674,6 @@ def _build_sec3(viewer_sections: list[str], label: str = "phase14") -> str:
 ドロップダウンで <b>{label}</b>（k_us ランプ＋deadband 有効）と
 <b>baseline</b>（k_us=0, deadband=0）を切り替えて実機軌跡への一致を比較できる。
 </p>
-<div class="note">
-⚠️ <code>debug_steer_scaling_factor</code> は JS モデル非対応（ステア挙動は近似）。ビューアは探索ツールとして利用すること。
-</div>
 {body}
 </section>
 """
@@ -1762,11 +1759,11 @@ def _build_sec_deviation(
 
     return f"""
 <section id="deviation">
-<h2>0-6. 全 {n_ds} DS の N-step 終端誤差（{label} vs baseline）</h2>
+<h2>0-6. 全 {n_ds} データセットの N-step 終端誤差（{label} vs baseline）</h2>
 <p>
 全データセットに対し {label} パラメータと baseline（補正なし）で N-step ロールアウトを実施し、
-終端誤差 RMSE の DS 横断 <b>平均</b>（mean）と <b>最大</b>（worst-case DS）を N ごとに集計する。
-「最大」は「最も誤差が大きかった DS の RMSE」を指す（単一ステップの瞬間値ではない）。
+終端誤差 RMSE の データセット横断 <b>平均</b>（mean）と <b>最大</b>（worst-case データセット）を N ごとに集計する。
+「最大」は「最も誤差が大きかった データセットの RMSE」を指す（単一ステップの瞬間値ではない）。
 </p>
 {score_html}
 <table class="param-table" style="font-size:12px">
@@ -1793,7 +1790,7 @@ def _build_sec_deviation(
 <div class="note">
 {label} の値が baseline より小さい場合は <b style="color:#28a745">緑（改善）</b>、
 大きい場合は <span style="color:#dc3545">赤（悪化）</span> で表示。
-RMSE は各 DS の全 k0 ステップ（stride=5）の終端誤差（N ステップ先）の二乗平均平方根。
+RMSE は各データセットの全 k0 ステップ（stride=5）の終端誤差（N ステップ先）の二乗平均平方根。
 キャッシュは <code>--metrics-cache</code> で指定した CSV ファイルに保存される。
 </div>
 </section>
@@ -1895,26 +1892,26 @@ def main() -> None:
         "--out", type=Path,
         default=Path("/home/kotaroyoshimoto/data/openloop_j6_15/physical_validity_report.html"),
     )
-    ap.add_argument("--n-curve-ds", type=int, default=3, help="ビューア埋め込みカーブ DS 数")
+    ap.add_argument("--n-curve-ds", type=int, default=3, help="ビューア埋め込みカーブ データセット数")
     ap.add_argument("--n-jobs", type=int, default=8)
     ap.add_argument(
         "--viewer-uuids", type=str, default=None,
-        help="ビューアに使う DS UUID をカンマ区切りで指定（省略時は curve_count 上位を自動選択）",
+        help="ビューアに使う データセット UUID をカンマ区切りで指定（省略時は curve_count 上位を自動選択）",
     )
     ap.add_argument(
         "--pinned-uuids", type=str, default="",
-        help="ビューアに必ず含める DS UUID をカンマ区切りで指定（前方一致）。--viewer-uuids や自動選択より優先して先頭に配置",
+        help="ビューアに必ず含める データセット UUID をカンマ区切りで指定（前方一致）。--viewer-uuids や自動選択より優先して先頭に配置",
     )
     ap.add_argument(
         "--metrics-cache", type=Path, default=None,
         help=(
             "rollout メトリクス CSV キャッシュパス（指定時のみ偏差テーブルを生成）。"
-            "ファイルが存在すれば読み込み、なければ全 DS rollout を実行して保存する。"
+            "ファイルが存在すれば読み込み、なければ全データセット rollout を実行して保存する。"
         ),
     )
     ap.add_argument(
         "--extra-ds", type=Path, nargs="*", default=[],
-        help="collection-dir 外から MCAP 解析・ビューアに追加する DS ディレクトリ（複数指定可）",
+        help="collection-dir 外から MCAP 解析・ビューアに追加する データセット ディレクトリ（複数指定可）",
     )
     ap.add_argument(
         "--label", type=str, default="current",
@@ -1980,14 +1977,14 @@ def main() -> None:
     records = load_all_mcap(ds_list, n_jobs=args.n_jobs)
     print(f"  有効: {len(records)} 件")
 
-    # Phase 2: k_us 速度ビン別 OLS
-    print("\n[Phase 2] k_us 速度ビン別 OLS ...")
+    # Phase 2: k_us 速度ビン別 最小二乗法
+    print("\n[Phase 2] k_us 速度ビン別 最小二乗法 ...")
     bins = compute_kus_bins(records)
     n_valid = int(np.isfinite(bins["kus_ols"]).sum())
     print(f"  有効速度ビン: {n_valid}/{len(bins['kus_ols'])}")
 
-    # Phase 3: カーブ多 DS 選定
-    print("\n[Phase 3] カーブ DS 選定 ...")
+    # Phase 3: カーブ多データセット選定
+    print("\n[Phase 3] カーブ データセット 選定 ...")
     record_by_uuid = {r["uuid"]: r for r in records}
 
     def _resolve_uuids(prefix_list: list[str]) -> list[dict]:
@@ -2027,14 +2024,14 @@ def main() -> None:
     top_items = [(r["uuid"], Path(r["lite_dir"])) for r in top_curve]
     deviation_html = ""
     if args.metrics_cache and args.metrics_cache.exists():
-        # キャッシュあり → viewer DS のみ load、メトリクスは CSV から読む
-        print(f"\n[Phase 3b] DatasetCtx 構築 ({len(top_items)} DS) ...")
+        # キャッシュあり → viewer データセット のみ load、メトリクスは CSV から読む
+        print(f"\n[Phase 3b] DatasetCtx 構築 ({len(top_items)} データセット) ...")
         ctxs = load_datasets(top_items, n_jobs=min(args.n_jobs, len(top_items)))
         print(f"\n[Phase 3c] rollout メトリクスキャッシュ読み込み ...")
         df_rollout = pd.read_csv(args.metrics_cache)
         n_ds_cache = df_rollout["uuid"].nunique()
         n_h_cache = df_rollout["h"].nunique()
-        print(f"  {len(df_rollout)} 行（{n_ds_cache} DS × {n_h_cache} horizons）")
+        print(f"  {len(df_rollout)} 行（{n_ds_cache} データセット × {n_h_cache} horizons）")
         # score 再現検証（キャッシュロード時も実施）
         per_ds_arg = []
         bl_arg: dict = {}
@@ -2069,11 +2066,11 @@ def main() -> None:
         print(f"  baseline steer_score: {baseline_steer_score:.4f}")
         deviation_html = _build_sec_deviation(df_rollout, len(records), recomputed, expected, score_name=best_name, label=phase_label)
     elif args.metrics_cache:
-        # キャッシュなし → 全 DS load（ついでに viewer DS も取り出す）
+        # キャッシュなし → 全データセット load（ついでに viewer データセット も取り出す）
         all_items = [(r["uuid"], Path(r["lite_dir"])) for r in records]
-        print(f"\n[Phase 3b+3c] 全 DS DatasetCtx 構築 ({len(all_items)} DS) + rollout メトリクス計算 ...")
+        print(f"\n[Phase 3b+3c] 全データセット DatasetCtx 構築 ({len(all_items)} データセット) + rollout メトリクス計算 ...")
         all_ctxs = load_datasets(all_items, n_jobs=args.n_jobs)
-        # viewer DS を all_ctxs から抽出（重複 load 回避）
+        # viewer データセットを all_ctxs から抽出（重複 load 回避）
         ctxs_by_id = {c.dataset_id: c for c in all_ctxs}
         ctxs = [ctxs_by_id[r["uuid"]] for r in top_curve if r["uuid"] in ctxs_by_id]
         # phase14 override: YAML の全 params から _* メタキーを除外（hand-pick より安全）
@@ -2136,8 +2133,8 @@ def main() -> None:
         deviation_html = _build_sec_deviation(df_rollout, len(records), recomputed, expected, score_name=best_name, label=phase_label)
     else:
         baseline_steer_score = None
-        # --metrics-cache 未指定 → 通常の viewer DS のみ load
-        print(f"\n[Phase 3b] DatasetCtx 構築 ({len(top_items)} DS) ...")
+        # --metrics-cache 未指定 → 通常の viewer データセット のみ load
+        print(f"\n[Phase 3b] DatasetCtx 構築 ({len(top_items)} データセット) ...")
         ctxs = load_datasets(top_items, n_jobs=min(args.n_jobs, len(top_items)))
 
     curve_count_map = {r["uuid"]: r["curve_count"] for r in top_curve}
@@ -2196,14 +2193,14 @@ def main() -> None:
     long_fig  = build_long_figure(args.collection_dir, params)
     steer_fig = build_steer_id_figure(args.collection_dir, params)
 
-    # 1-1 縦方向理想追従評価（全 records の先頭 _LONG_PERF_N_DS DS を使用）
+    # 1-1 縦方向理想追従評価（全 records の先頭 _LONG_PERF_N_DS データセットを使用）
     long_perf_records = records[:_LONG_PERF_N_DS]
-    print(f"  [1-1] 縦方向理想追従評価図生成 ({len(long_perf_records)} DS) ...")
+    print(f"  [1-1] 縦方向理想追従評価図生成 ({len(long_perf_records)} データセット) ...")
     long_perf_fig = build_long_perf_figure(long_perf_records)
 
-    # 1-4 横方向理想追従評価には curve 上位 _PERF_N_DS DS を使用（viewer 用 top_curve とは独立して選択）
+    # 1-4 横方向理想追従評価には curve 上位 _PERF_N_DS データセットを使用（viewer 用 top_curve とは独立して選択）
     perf_records = candidate_curve[:_PERF_N_DS]
-    print(f"  [1-4] 横方向理想追従評価図生成 ({len(perf_records)} DS) ...")
+    print(f"  [1-4] 横方向理想追従評価図生成 ({len(perf_records)} データセット) ...")
     perf_fig_box, perf_fig_traj = build_perfect_tracking_figure(perf_records, params)
     perf_html = _build_sec14(perf_fig_box, perf_fig_traj, params, len(perf_records))
 

@@ -157,9 +157,7 @@ def _build_viewer_html(
     _model_viewer._HTML_TEMPLATE に payload を埋め込んで返す（ファイル書き出しなし）。
     configs の最初のエントリをつまみ初期値とし、全エントリを model_registry に登録する。
 
-    注意: debug_steer_scaling_factor はビューアの JS モデルに非対応のため、
-    ステア挙動はつまみで完全再現できない（探索ツールとして利用すること）。
-    """
+"""
     from ._model_viewer import MODEL_RATE_HZ, _HTML_TEMPLATE, _seed_from_params  # noqa: PLC0415
     from ._playback_viewer import PLAYBACK_WHEELBASE_M, build_playback_payload  # noqa: PLC0415
 
@@ -463,15 +461,6 @@ def generate_report(
     score_tbl = _score_table_html(agg_results, worst_w)
     worst_tbl = _worst_ds_table_html(worst_ds_list, agg_results, baselines)
 
-    scaling_note = ""
-    if any("debug_steer_scaling_factor" in p for p in configs.values()):
-        scaling_note = (
-            "<p style='color:#b55;font-size:12px'>"
-            "⚠️ <b>注意</b>: <code>debug_steer_scaling_factor</code> はビューアの JS モデルに非対応。"
-            "ステア挙動はつまみで完全再現できません（探索用近似モデルとして利用してください）。"
-            "</p>"
-        )
-
     ds_sections: list[str] = []
     for ds_id, max_score in worst_ds_list:
         rollout_by_cfg = {
@@ -488,7 +477,6 @@ def generate_report(
             srcdoc = _html_stdlib.escape(viewer_htmls[ds_id], quote=True)
             viewer_section = f"""
 <h4>縦横モデル検証ビューア（インタラクティブ）</h4>
-{scaling_note}
 <p style="font-size:11px;color:#888">
   ドロップダウンで config を切り替え、つまみでパラメータを調整できます。
   「最適化」ボタンで最小二乗フィットも実行できます。
