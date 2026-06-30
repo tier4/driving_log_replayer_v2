@@ -14,6 +14,7 @@
 from __future__ import annotations
 
 import argparse
+import datetime as _dt
 import html as _html_stdlib
 import math
 import sys
@@ -269,12 +270,8 @@ def _long_drift_profile(
         serr[:, j + 1] = s_sim - s_gt
 
     # 局面分類: 開始点からホライズン内の a_act 平均
-    mean_a = np.empty(m, dtype=float)
-    for i2, k0 in enumerate(k0s):
-        acc_sum = 0.0
-        for j2 in range(horizon):
-            acc_sum += a_act[min(k0 + j2, n - 1)]
-        mean_a[i2] = acc_sum / horizon
+    ki_mean = np.minimum(k0s[:, None] + np.arange(horizon)[None, :], n - 1)
+    mean_a = a_act[ki_mean].mean(axis=1)
     phase = np.where(mean_a < -_DRIFT_A_TH, 0,
              np.where(mean_a > _DRIFT_A_TH, 2, 1)).astype(int)
 
@@ -334,17 +331,23 @@ def _slope_acc_on_grid(
     mcap: "Path",
     t_s: np.ndarray,
     t0: float,
-) -> tuple[np.ndarray, np.ndarray]:
-    """MCAP から pitch を読み込み、勾配加速度と pitch 配列をグリッドに補間して返す。
-    Returns: (slope_acc [m/s²], pitch_arr [rad])
+) -> np.ndarray:
+    """MCAP から pitch を読み込み、勾配加速度をグリッドに補間して返す。
+    読み込み失敗・pitch 列欠如時はゼロ配列を返す（t0/t1 区間決定には含めない：後方互換）。
     """
-    df_pitch = load_kinematic(mcap)
-    pitch_raw = np.interp(
-        t_s,
-        (df_pitch["t_ns"].values - t0) * 1e-9,
-        df_pitch["pitch"].values,
-    )
-    return _GRAVITY * np.sin(pitch_raw), pitch_raw
+    slope_acc = np.zeros_like(t_s)
+    try:
+        df_kin = load_kinematic(mcap)
+        if not df_kin.empty and "pitch" in df_kin.columns:
+            slope_acc = np.interp(
+                t_s,
+                (df_kin["t_ns"].values - t0) * 1e-9,
+                _GRAVITY * np.sin(df_kin["pitch"].values),
+                left=0.0, right=0.0,
+            )
+    except Exception:
+        pass
+    return slope_acc
 
 
 def _valid_k0s(
@@ -364,21 +367,21 @@ def _pick_best_worst(
     n: int = _FIT_N_DATASET,
 ) -> pd.DataFrame:
     """RMSE 列でフィルタ・ソートし最良・最悪 n 件の DataFrame を返す。
+
+    動的区間が豊富なデータセット（n_dyn >= _N_DYN_MIN）を候補にするが、
+    候補数が 2n 未満の場合は全データセットにフォールバックする。
     Returns: _case 列（"最良" / "最悪"）付き DataFrame。
     """
-    df_ok = df_id[df_id["n_dyn"] >= _N_DYN_MIN]
-    if df_ok.empty:
+    df_ok = df_id[df_id["n_dyn"] >= _N_DYN_MIN] if "n_dyn" in df_id.columns else df_id
+    if len(df_ok) < n * 2:
         df_ok = df_id
     best = df_ok.nsmallest(n, rmse_col)
     worst = df_ok.nlargest(n, rmse_col)
-    idx = best.index.union(worst.index)
-    best_idx = best.index
-    worst_idx = worst.index.difference(best_idx)
-    result = pd.concat([
-        df_id.loc[best_idx].assign(_case="最良"),
-        df_id.loc[worst_idx].assign(_case="最悪"),
+    worst = worst[~worst.index.isin(best.index)]
+    return pd.concat([
+        best.assign(_case="最良"),
+        worst.assign(_case="最悪"),
     ])
-    return result
 
 
 def _fmt(v) -> str:
@@ -387,67 +390,51 @@ def _fmt(v) -> str:
     return str(v)
 
 
-def _make_horizon_boxfig(
-    per_h_errors: list[np.ndarray],
-    h_labels: list[str],
-    n_dataset: int,
-    color: str,
-    title: str,
-    ytitle: str,
-    empty_annotation: str | None = None,
-) -> go.Figure:
-    """horizon ごとの誤差配列から box plot 図を生成する。
-    empty_annotation: データがない場合に annotation テキストを追加する（None = annotation なし）。
-    """
-    fig_box = go.Figure()
-    has_data = False
-    for errs, label in zip(per_h_errors, h_labels):
-        errs_pct = np.asarray(errs) * 100.0
-        valid = errs_pct[np.isfinite(errs_pct)]
-        if len(valid) == 0:
-            continue
-        has_data = True
-        fig_box.add_trace(go.Box(
-            y=valid.tolist(),
-            name=label,
-            boxpoints="outliers",
-            marker_color=color,
-        ))
-    if not has_data and empty_annotation is not None:
-        fig_box.add_annotation(
-            text=empty_annotation, x=0.5, y=0.5,
-            xref="paper", yref="paper", showarrow=False,
-        )
-    fig_box.update_layout(
-        title=title,
-        yaxis_title=ytitle,
-        showlegend=False,
-        height=350,
-        margin={"t": 50},
-        meta={"n_dataset": n_dataset},
-    )
-    return fig_box
-
-
-def _reconcile_score(
+def _reconcile_rollout_score(
     df_rollout: pd.DataFrame,
     yaml_data: dict,
-) -> tuple[str, float, float, float]:
-    """rollout 結果から best データセットのスコアを再現・検証する。
-    Returns: (best_uuid, recomputed_score, expected_score, baseline_steer_score)
+    n_records: int,
+    label: str,
+) -> tuple[str, float]:
+    """rollout メトリクスから score を再現検証し、baseline steer_score と偏差テーブル HTML を返す。
+
+    Returns: (deviation_html, baseline_steer_score)
     """
-    best_row = df_rollout.loc[df_rollout["acc_score"].idxmax()]
-    best_uuid = str(best_row.name)
-    recomputed = float(_acc_score(
-        best_row["rmse_mps2"], best_row["horizon_rmse_mps2"]
-    )) if "horizon_rmse_mps2" in best_row.index else float(best_row["acc_score"])
-    expected = float(best_row["acc_score"])
-    baseline_steer = float(
-        df_rollout["steer_score"].median()
-        if "steer_score" in df_rollout.columns
-        else 0.0
+    per_ds_arg = []
+    bl_arg: dict = {}
+    for uuid_key, grp in df_rollout.groupby("uuid"):
+        gd = grp.set_index("h")[
+            ["p14_yaw", "p14_long", "p14_lat", "bl_yaw", "bl_long", "bl_lat"]
+        ].to_dict("index")
+        per_ds_arg.append((
+            uuid_key,
+            {int(h): {"yaw": v["p14_yaw"], "long": v["p14_long"], "lat": v["p14_lat"]}
+             for h, v in gd.items()},
+        ))
+        bl_arg[uuid_key] = {
+            int(h): {"yaw": v["bl_yaw"], "long": v["bl_long"], "lat": v["bl_lat"]}
+            for h, v in gd.items()
+        }
+    agg = _agg_normalized(per_ds_arg, bl_arg)
+    expected = float(yaml_data.get("score") or 0.0)
+    # YAML の score は tuning --phase に応じて steer/acc/robust のいずれかなので最接近を選択
+    candidates = [
+        ("robust_score", _robust_score(agg)),
+        ("steer_score",  _steer_score(agg)),
+        ("acc_score",    _acc_score(agg)),
+    ]
+    if expected:
+        best_name, recomputed = min(candidates, key=lambda kv: abs(kv[1] - expected))
+    else:
+        best_name, recomputed = next(kv for kv in candidates if kv[0] == "steer_score")
+    diff_str = f"{abs(recomputed - expected) / expected * 100:.2f}%" if expected else "N/A"
+    print(f"  再現スコア: {recomputed:.4f} ({best_name})  期待値: {expected:.4f}  差: {diff_str}")
+    baseline_steer_score = _steer_score(_agg_normalized(list(bl_arg.items()), bl_arg))
+    print(f"  baseline steer_score: {baseline_steer_score:.4f}")
+    deviation_html = _build_sec_deviation(
+        df_rollout, n_records, recomputed, expected, score_name=best_name, label=label
     )
-    return best_uuid, recomputed, expected, baseline_steer
+    return deviation_html, baseline_steer_score
 
 
 _MATHJAX_HEAD = (
@@ -549,10 +536,10 @@ def _load_mcap_worker(args: tuple) -> dict | None:
     return {
         "uuid": uuid,
         "lite_dir": lite_dir_str,
-        "vx": vx.tolist(),
-        "wz": wz.tolist(),
-        "steer_eff": steer_eff.tolist(),
-        "dwz": dwz.tolist(),
+        "vx": vx,
+        "wz": wz,
+        "steer_eff": steer_eff,
+        "dwz": dwz,
         "curve_count": cov["curve_count"],
         "kappa_max_abs": cov["kappa_max_abs"],
         "cmd_steer": cmd_steer_arr,
@@ -579,10 +566,10 @@ def load_all_mcap(ds_list: list, n_jobs: int = 8) -> list[dict]:
 # ---------------------------------------------------------------------------
 def compute_kus_bins(records: list[dict]) -> dict:
     """速度ビン別 最小二乗法回帰で k_us(v) を推定。モデル: tan(δ_eff) = (L/v + k_us·v)·ω"""
-    all_vx = np.concatenate([np.asarray(r["vx"]) for r in records])
-    all_wz = np.concatenate([np.asarray(r["wz"]) for r in records])
-    all_steer_eff = np.concatenate([np.asarray(r["steer_eff"]) for r in records])
-    all_dwz = np.concatenate([np.asarray(r["dwz"]) for r in records])
+    all_vx = np.concatenate([r["vx"] for r in records])
+    all_wz = np.concatenate([r["wz"] for r in records])
+    all_steer_eff = np.concatenate([r["steer_eff"] for r in records])
+    all_dwz = np.concatenate([r["dwz"] for r in records])
 
     mask_ok = (
         (np.abs(all_wz) > WZ_MIN)
@@ -640,17 +627,16 @@ def compute_kus_bins(records: list[dict]) -> dict:
 # ---------------------------------------------------------------------------
 # plotly 図生成
 # ---------------------------------------------------------------------------
-def _kus_step_profile(vx: np.ndarray, params: dict) -> np.ndarray:
-    """params から N 段ステップの k_us プロファイルを計算して返す。
+def _resolve_kus_bands(params: dict) -> tuple[list | None, list | None]:
+    """params から k_us 速度帯 (bands, thresholds) を解決する。
 
     新形式: k_us_bands (list) + k_us_thresholds (list) を使用。
     後方互換: k_us_lo / k_us_vx_thresh / k_us_mid / k_us_vx_thresh2 を自動変換。
+    どちらの形式も無ければ (None, None) を返す。
     """
-    # 新形式 k_us_bands / k_us_thresholds
     bands = params.get("k_us_bands")
     thresholds = params.get("k_us_thresholds")
 
-    # 後方互換: k_us_lo / k_us_mid 形式から変換
     if bands is None and "k_us_lo" in params:
         thresh1 = params.get("k_us_vx_thresh", 0.0)
         if thresh1 > 0.0:
@@ -661,6 +647,13 @@ def _kus_step_profile(vx: np.ndarray, params: dict) -> np.ndarray:
             else:
                 bands = [params["k_us_lo"], params.get("k_us", 0.0)]
                 thresholds = [thresh1]
+
+    return bands, thresholds
+
+
+def _kus_step_profile(vx: np.ndarray, params: dict) -> np.ndarray:
+    """params から N 段ステップの k_us プロファイルを計算して返す。"""
+    bands, thresholds = _resolve_kus_bands(params)
 
     if bands is not None and thresholds is not None and len(bands) > 0:
         result = np.full_like(vx, bands[-1], dtype=float)
@@ -675,19 +668,7 @@ def _kus_step_profile(vx: np.ndarray, params: dict) -> np.ndarray:
 
 def _kus_band_label(params: dict) -> str:
     """速度帯パラメータを凡例文字列に変換。"""
-    bands = params.get("k_us_bands")
-    thresholds = params.get("k_us_thresholds")
-
-    if bands is None and "k_us_lo" in params:
-        thresh1 = params.get("k_us_vx_thresh", 0.0)
-        if thresh1 > 0.0:
-            thresh2 = params.get("k_us_vx_thresh2", 0.0)
-            if "k_us_mid" in params and thresh2 > thresh1:
-                bands = [params["k_us_lo"], params["k_us_mid"], params.get("k_us", 0.0)]
-                thresholds = [thresh1, thresh2]
-            else:
-                bands = [params["k_us_lo"], params.get("k_us", 0.0)]
-                thresholds = [thresh1]
+    bands, thresholds = _resolve_kus_bands(params)
 
     if bands is not None and thresholds is not None:
         parts = []
@@ -838,16 +819,14 @@ def _fit_long_cross_dataset(
         if df_cmd.empty or df_accel.empty or df_vel.empty:
             continue
 
-        t0 = max(df_cmd["t_ns"].iloc[0], df_accel["t_ns"].iloc[0], df_vel["t_ns"].iloc[0])
-        t1 = min(df_cmd["t_ns"].iloc[-1], df_accel["t_ns"].iloc[-1], df_vel["t_ns"].iloc[-1])
-        if (t1 - t0) < 2e9:
+        timebase = _common_timebase(df_cmd, df_accel, df_vel, min_span_ns=_MIN_SPAN_NS)
+        if timebase is None:
             continue
-        t_ns = np.arange(t0, t1, _FIT_DT * 1e9, dtype=np.float64)
-        t_s  = (t_ns - t0) * 1e-9
+        t_s, t0 = timebase
 
-        a_cmd_arr = np.interp(t_s, (df_cmd["t_ns"].values   - t0) * 1e-9, df_cmd["cmd_accel"].values)
-        a_act_arr = np.interp(t_s, (df_accel["t_ns"].values  - t0) * 1e-9, df_accel["accel"].values)
-        vx        = np.interp(t_s, (df_vel["t_ns"].values    - t0) * 1e-9, df_vel["lon_vel"].values)
+        a_cmd_arr = _resample(df_cmd, "cmd_accel", t_s, t0)
+        a_act_arr = _resample(df_accel, "accel", t_s, t0)
+        vx        = _resample(df_vel, "lon_vel", t_s, t0)
 
         # pitch から重力分力を計算（t0/t1 区間決定には含めない：後方互換）
         slope_acc_arr = np.zeros_like(a_act_arr)
@@ -940,18 +919,7 @@ def build_long_figure(collection_dir: Path, params: dict, phase_label: str = "")
     ) = _fit_long_cross_dataset(collection_dir, df_id)
 
     # 動的区間が豊富なデータセットを候補にし、最良・最悪それぞれ _FIT_N_DATASET 本を選択
-    df_cand = df_id[df_id["n_dyn"] >= _N_DYN_MIN] if "n_dyn" in df_id.columns else df_id
-    if len(df_cand) < _FIT_N_DATASET * 2:
-        df_cand = df_id
-    df_best  = df_cand.nsmallest(_FIT_N_DATASET, "rmse_mps2")
-    df_worst = df_cand.nlargest(_FIT_N_DATASET, "rmse_mps2")
-    # 重複除去（小規模データセット時に同一行が両方に入る場合）
-    df_worst = df_worst[~df_worst.index.isin(df_best.index)]
-    # 最良を先、最悪を後に並べる
-    df_display = pd.concat([
-        df_best.assign(_case="最良"),
-        df_worst.assign(_case="最悪"),
-    ])
+    df_display = _pick_best_worst(df_id, "rmse_mps2")
 
     rows_data = []
     for row in df_display.itertuples():
@@ -967,29 +935,15 @@ def build_long_figure(collection_dir: Path, params: dict, phase_label: str = "")
         if df_cmd.empty or df_accel.empty or df_vel.empty:
             continue
 
-        t0 = max(df_cmd["t_ns"].iloc[0], df_accel["t_ns"].iloc[0], df_vel["t_ns"].iloc[0])
-        t1 = min(df_cmd["t_ns"].iloc[-1], df_accel["t_ns"].iloc[-1], df_vel["t_ns"].iloc[-1])
-        if (t1 - t0) < 2e9:
+        timebase = _common_timebase(df_cmd, df_accel, df_vel, min_span_ns=_MIN_SPAN_NS)
+        if timebase is None:
             continue
-        t_ns  = np.arange(t0, t1, _FIT_DT * 1e9, dtype=np.float64)
-        t_s   = (t_ns - t0) * 1e-9
-        a_cmd_arr = np.interp(t_s, (df_cmd["t_ns"].values - t0) * 1e-9, df_cmd["cmd_accel"].values)
-        a_act_arr = np.interp(t_s, (df_accel["t_ns"].values - t0) * 1e-9, df_accel["accel"].values)
-        vx        = np.interp(t_s, (df_vel["t_ns"].values - t0) * 1e-9, df_vel["lon_vel"].values)
+        t_s, t0 = timebase
+        a_cmd_arr = _resample(df_cmd, "cmd_accel", t_s, t0)
+        a_act_arr = _resample(df_accel, "accel", t_s, t0)
+        vx        = _resample(df_vel, "lon_vel", t_s, t0)
 
-        # pitch から重力分力を計算（t0/t1 区間決定には含めない：後方互換）
-        slope_acc_arr: np.ndarray = np.zeros_like(a_act_arr)
-        try:
-            df_kin = load_kinematic(mcap)
-            if not df_kin.empty and "pitch" in df_kin.columns:
-                slope_acc_arr = np.interp(
-                    t_s,
-                    (df_kin["t_ns"].values - t0) * 1e-9,
-                    _GRAVITY * np.sin(df_kin["pitch"].values),
-                    left=0.0, right=0.0,
-                )
-        except Exception:
-            pass
+        slope_acc_arr = _slope_acc_on_grid(mcap, t_s, t0)
 
         # 横断同定値でシミュレーション（初期過渡が走行区間に影響しないよう全期間使用）
         a_sim_cross: np.ndarray | None = None
@@ -1130,14 +1084,12 @@ def build_long_perf_figure(
         if df_accel.empty or df_vel.empty:
             continue
 
-        t0 = max(float(df_accel["t_ns"].values[0]), float(df_vel["t_ns"].values[0]))
-        t1 = min(float(df_accel["t_ns"].values[-1]), float(df_vel["t_ns"].values[-1]))
-        if (t1 - t0) < 2e9:
+        timebase = _common_timebase(df_accel, df_vel, min_span_ns=_MIN_SPAN_NS)
+        if timebase is None:
             continue
-        t_ns  = np.arange(t0, t1, _FIT_DT * 1e9, dtype=np.float64)
-        t_s   = (t_ns - t0) * 1e-9
-        gt_vx = np.interp(t_s, (df_vel["t_ns"].values   - t0) * 1e-9, df_vel["lon_vel"].values)
-        a_act = np.interp(t_s, (df_accel["t_ns"].values  - t0) * 1e-9, df_accel["accel"].values)
+        t_s, t0 = timebase
+        gt_vx = _resample(df_vel, "lon_vel", t_s, t0)
+        a_act = _resample(df_accel, "accel", t_s, t0)
         if len(gt_vx) < 50:
             continue
 
@@ -1158,9 +1110,7 @@ def build_long_perf_figure(
             if not df_kin.empty:
                 gt_x = np.interp(t_s, (df_kin["t_ns"].values - t0) * 1e-9, df_kin["x"].values)
                 gt_y = np.interp(t_s, (df_kin["t_ns"].values - t0) * 1e-9, df_kin["y"].values)
-                n = len(gt_vx)
-                k0s_map = np.arange(0, n - _H_MAX, _PERF_STRIDE)
-                k0s_map = k0s_map[gt_vx[k0s_map] > VX_MIN_CURVE]
+                k0s_map = _valid_k0s(gt_vx, _H_MAX, _PERF_STRIDE)
                 if len(k0s_map) > 0:
                     map_x_pool.append(gt_x[k0s_map])
                     map_y_pool.append(gt_y[k0s_map])
@@ -1359,16 +1309,7 @@ def build_steer_id_figure(collection_dir: Path, params: dict) -> go.Figure:
     T_tune   = float(params.get("steer_time_delay", float("nan")))
 
     # 動的区間が豊富なデータセットを候補にし、最良・最悪それぞれ _FIT_N_DATASET 本を選択
-    df_cand = df_id[df_id["n_dyn"] >= _N_DYN_MIN]
-    if len(df_cand) < _FIT_N_DATASET * 2:
-        df_cand = df_id
-    df_best  = df_cand.nsmallest(_FIT_N_DATASET, "rmse_mrad")
-    df_worst = df_cand.nlargest(_FIT_N_DATASET, "rmse_mrad")
-    df_worst = df_worst[~df_worst.index.isin(df_best.index)]
-    df_display = pd.concat([
-        df_best.assign(_case="最良"),
-        df_worst.assign(_case="最悪"),
-    ])
+    df_display = _pick_best_worst(df_id, "rmse_mrad")
 
     rows_data = []
     for row in df_display.itertuples():
@@ -1384,15 +1325,13 @@ def build_steer_id_figure(collection_dir: Path, params: dict) -> go.Figure:
         if df_cmd.empty or df_steer.empty or df_vel.empty:
             continue
 
-        t0 = max(df_cmd["t_ns"].iloc[0], df_steer["t_ns"].iloc[0], df_vel["t_ns"].iloc[0])
-        t1 = min(df_cmd["t_ns"].iloc[-1], df_steer["t_ns"].iloc[-1], df_vel["t_ns"].iloc[-1])
-        if (t1 - t0) < 2e9:
+        timebase = _common_timebase(df_cmd, df_steer, df_vel, min_span_ns=_MIN_SPAN_NS)
+        if timebase is None:
             continue
-        t_ns    = np.arange(t0, t1, _FIT_DT * 1e9, dtype=np.float64)
-        t_s     = (t_ns - t0) * 1e-9
-        d_cmd   = np.interp(t_s, (df_cmd["t_ns"].values - t0) * 1e-9, df_cmd["cmd_steer"].values)
-        d_act   = np.interp(t_s, (df_steer["t_ns"].values - t0) * 1e-9, df_steer["steer"].values)
-        vx      = np.interp(t_s, (df_vel["t_ns"].values - t0) * 1e-9, df_vel["lon_vel"].values)
+        t_s, t0 = timebase
+        d_cmd   = _resample(df_cmd, "cmd_steer", t_s, t0)
+        d_act   = _resample(df_steer, "steer", t_s, t0)
+        vx      = _resample(df_vel, "lon_vel", t_s, t0)
 
         # データセット全体でシミュレーション（初期過渡が走行区間に影響しないよう全期間使用）
         d_sim_id = _sim_first_order(d_cmd, row.tau, int(round(row.delay / _FIT_DT)))
@@ -1478,10 +1417,7 @@ def build_perfect_tracking_figure(
         if df_kin.empty or df_steer.empty or len(df_kin) < 50:
             continue
 
-        t0 = float(df_kin["t_ns"].values[0])
-        t1 = float(df_kin["t_ns"].values[-1])
-        t_ns = np.arange(t0, t1, _FIT_DT * 1e9, dtype=np.float64)
-        t_s  = (t_ns - t0) * 1e-9
+        t_s, t0 = _common_timebase(df_kin)
 
         gt_x     = _resample(df_kin,   "x",     t_s, t0)
         gt_y     = _resample(df_kin,   "y",     t_s, t0)
@@ -1717,19 +1653,7 @@ __NOTE_TEXT__
 
 def _kus_band_table_rows(params: dict) -> str:
     """k_us 速度帯パラメータの HTML テーブル行を生成。"""
-    bands = params.get("k_us_bands")
-    thresholds = params.get("k_us_thresholds")
-
-    if bands is None and "k_us_lo" in params:
-        thresh1 = params.get("k_us_vx_thresh", 0.0)
-        if thresh1 > 0.0:
-            thresh2 = params.get("k_us_vx_thresh2", 0.0)
-            if "k_us_mid" in params and thresh2 > thresh1:
-                bands = [params["k_us_lo"], params["k_us_mid"], params.get("k_us", 0.0)]
-                thresholds = [thresh1, thresh2]
-            else:
-                bands = [params["k_us_lo"], params.get("k_us", 0.0)]
-                thresholds = [thresh1]
+    bands, thresholds = _resolve_kus_bands(params)
 
     if bands is not None and thresholds is not None:
         rows = []
@@ -1824,6 +1748,14 @@ def _build_sec_model_intro(params: dict, label: str, params_filename: str = "") 
 """
 
 
+def _fig_to_html(fig: go.Figure, *, collapsible: bool = False, summary: str = "時系列グラフを表示（クリックで展開）") -> str:
+    """Plotly Figure を埋め込みHTML（CDNなし、divのみ）に変換する。collapsible=True なら <details> でラップする。"""
+    html = fig.to_html(full_html=False, include_plotlyjs=False)
+    if collapsible:
+        return f"<details><summary>{summary}</summary>{html}</details>"
+    return html
+
+
 def _build_sec1(
     params: dict,
     long_fig: go.Figure,
@@ -1844,17 +1776,15 @@ def _build_sec1(
     db    = _fmt(params.get("steer_dead_band", "N/A"))
     rlim  = _fmt(params.get("steer_rate_lim", "N/A"))
 
-    _long_html_inner  = long_fig.to_html(full_html=False, include_plotlyjs=False)
-    _steer_html_inner = steer_fig.to_html(full_html=False, include_plotlyjs=False)
-    long_html  = f"<details><summary>時系列グラフを表示（クリックで展開）</summary>{_long_html_inner}</details>"
-    steer_html = f"<details><summary>時系列グラフを表示（クリックで展開）</summary>{_steer_html_inner}</details>"
-    kus_html   = kus_fig.to_html(full_html=False, include_plotlyjs=False)
+    long_html  = _fig_to_html(long_fig, collapsible=True)
+    steer_html = _fig_to_html(steer_fig, collapsible=True)
+    kus_html   = _fig_to_html(kus_fig)
     _vx_min = VX_MIN_CURVE
     _stride = _PERF_STRIDE
     if lat_perf_figs is not None:
         lat_fig_box, lat_fig_traj = lat_perf_figs
-        lat_box_html  = lat_fig_box.to_html(full_html=False, include_plotlyjs=False)
-        lat_traj_html = lat_fig_traj.to_html(full_html=False, include_plotlyjs=False)
+        lat_box_html  = _fig_to_html(lat_fig_box)
+        lat_traj_html = _fig_to_html(lat_fig_traj)
         lat_h_str = ", ".join(f"N={h}（{h * _FIT_DT:.2f}s）" for h in _PERF_HORIZONS)
         lat_perf_subsection = (
             "<h4>モデル構造限界評価（横方向理想追従）</h4>"
@@ -1884,9 +1814,9 @@ def _build_sec1(
 
     if long_perf_figs is not None:
         fig_box, fig_growth, fig_map = long_perf_figs
-        box_html    = fig_box.to_html(full_html=False, include_plotlyjs=False)
-        growth_html = fig_growth.to_html(full_html=False, include_plotlyjs=False)
-        map_html    = fig_map.to_html(full_html=False, include_plotlyjs=False)
+        box_html    = _fig_to_html(fig_box)
+        growth_html = _fig_to_html(fig_growth)
+        map_html    = _fig_to_html(fig_map)
         long_perf_subsection = (
             "<h4>モデル構造限界評価（acc 理想追従）</h4>"
             "<p>シミュレータの加速度応答が実機と完全一致（\\(a_{\\mathrm{act,sim}} = a_{\\mathrm{act,gt}}\\)）した場合に"
@@ -2407,18 +2337,7 @@ def main() -> None:
     params["_score"] = yaml_data.get("score", "N/A")
     print(f"パラメータ: {args.params.name}  (label={phase_label})")
     # k_us 速度帯表示（新形式 / 後方互換形式 両対応）
-    bands = params.get("k_us_bands")
-    thresholds = params.get("k_us_thresholds")
-    if bands is None and "k_us_lo" in params:
-        thresh1 = params.get("k_us_vx_thresh", 0.0)
-        thresh2 = params.get("k_us_vx_thresh2", 0.0)
-        if thresh1 > 0.0:
-            if "k_us_mid" in params and thresh2 > thresh1:
-                bands = [params["k_us_lo"], params["k_us_mid"], params.get("k_us", 0.0)]
-                thresholds = [thresh1, thresh2]
-            else:
-                bands = [params["k_us_lo"], params.get("k_us", 0.0)]
-                thresholds = [thresh1]
+    bands, thresholds = _resolve_kus_bands(params)
     if bands is not None and thresholds is not None:
         band_str = " | ".join(
             f"band[{i}]={b:.5f}" for i, b in enumerate(bands)
@@ -2431,7 +2350,6 @@ def main() -> None:
     print(f"  steer_dead_band={params.get('steer_dead_band',0):.5f} rad")
 
     # データセット列挙
-    import datetime as _dt
     ds_list = _discover(args.collection_dir)
     for extra in (args.extra_ds or []):
         uuid = extra.name
@@ -2505,38 +2423,9 @@ def main() -> None:
         n_h_cache = df_rollout["h"].nunique()
         print(f"  {len(df_rollout)} 行（{n_dataset_cache} データセット × {n_h_cache} horizons）")
         # score 再現検証（キャッシュロード時も実施）
-        per_ds_arg = []
-        bl_arg: dict = {}
-        for uuid_key, grp in df_rollout.groupby("uuid"):
-            gd = grp.set_index("h")[
-                ["p14_yaw", "p14_long", "p14_lat", "bl_yaw", "bl_long", "bl_lat"]
-            ].to_dict("index")
-            per_ds_arg.append((
-                uuid_key,
-                {int(h): {"yaw": v["p14_yaw"], "long": v["p14_long"], "lat": v["p14_lat"]}
-                 for h, v in gd.items()},
-            ))
-            bl_arg[uuid_key] = {
-                int(h): {"yaw": v["bl_yaw"], "long": v["bl_long"], "lat": v["bl_lat"]}
-                for h, v in gd.items()
-            }
-        agg = _agg_normalized(per_ds_arg, bl_arg)
-        expected = float(yaml_data.get("score") or 0.0)
-        candidates = [
-            ("robust_score", _robust_score(agg)),
-            ("steer_score",  _steer_score(agg)),
-            ("acc_score",    _acc_score(agg)),
-        ]
-        if expected:
-            best_name, recomputed = min(candidates, key=lambda kv: abs(kv[1] - expected))
-        else:
-            best_name, recomputed = next(kv for kv in candidates if kv[0] == "steer_score")
-        diff_str = f"{abs(recomputed - expected) / expected * 100:.2f}%" if expected else "N/A"
-        print(f"  再現スコア: {recomputed:.4f} ({best_name})  期待値: {expected:.4f}  差: {diff_str}")
-        # baseline (k_us=0) の steer_score を計算
-        baseline_steer_score = _steer_score(_agg_normalized(list(bl_arg.items()), bl_arg))
-        print(f"  baseline steer_score: {baseline_steer_score:.4f}")
-        deviation_html = _build_sec_deviation(df_rollout, len(records), recomputed, expected, score_name=best_name, label=phase_label)
+        deviation_html, baseline_steer_score = _reconcile_rollout_score(
+            df_rollout, yaml_data, len(records), phase_label
+        )
     elif args.metrics_cache:
         # キャッシュなし → 全データセット load（ついでに viewer データセット も取り出す）
         all_items = [(r["uuid"], Path(r["lite_dir"])) for r in records]
@@ -2570,39 +2459,9 @@ def main() -> None:
         df_rollout.to_csv(args.metrics_cache, index=False)
         print(f"  キャッシュ保存: {args.metrics_cache}")
         # score 再現検証
-        per_ds_arg = []
-        bl_arg: dict = {}
-        for uuid_key, grp in df_rollout.groupby("uuid"):
-            grp_dict = grp.set_index("h")[
-                ["p14_yaw", "p14_long", "p14_lat", "bl_yaw", "bl_long", "bl_lat"]
-            ].to_dict("index")
-            per_ds_arg.append((
-                uuid_key,
-                {int(h): {"yaw": v["p14_yaw"], "long": v["p14_long"], "lat": v["p14_lat"]}
-                 for h, v in grp_dict.items()},
-            ))
-            bl_arg[uuid_key] = {
-                int(h): {"yaw": v["bl_yaw"], "long": v["bl_long"], "lat": v["bl_lat"]}
-                for h, v in grp_dict.items()
-            }
-        agg = _agg_normalized(per_ds_arg, bl_arg)
-        expected = float(yaml_data.get("score") or 0.0)
-        # YAML の score は tuning --phase に応じて steer/acc/robust のいずれかなので最接近を選択
-        candidates = [
-            ("robust_score", _robust_score(agg)),
-            ("steer_score",  _steer_score(agg)),
-            ("acc_score",    _acc_score(agg)),
-        ]
-        if expected:
-            best_name, recomputed = min(candidates, key=lambda kv: abs(kv[1] - expected))
-        else:
-            best_name, recomputed = next(kv for kv in candidates if kv[0] == "steer_score")
-        diff_str = f"{abs(recomputed - expected) / expected * 100:.2f}%" if expected else "N/A"
-        print(f"  再現スコア: {recomputed:.4f} ({best_name})  期待値: {expected:.4f}  差: {diff_str}")
-        # baseline (k_us=0) の steer_score を計算
-        baseline_steer_score = _steer_score(_agg_normalized(list(bl_arg.items()), bl_arg))
-        print(f"  baseline steer_score: {baseline_steer_score:.4f}")
-        deviation_html = _build_sec_deviation(df_rollout, len(records), recomputed, expected, score_name=best_name, label=phase_label)
+        deviation_html, baseline_steer_score = _reconcile_rollout_score(
+            df_rollout, yaml_data, len(records), phase_label
+        )
     else:
         baseline_steer_score = None
         # --metrics-cache 未指定 → 通常の viewer データセット のみ load
