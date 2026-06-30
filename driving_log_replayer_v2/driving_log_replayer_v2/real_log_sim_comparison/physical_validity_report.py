@@ -736,11 +736,11 @@ def build_long_figure(collection_dir: Path, params: dict, phase_label: str = "")
         return _placeholder("MCAP 読み込み失敗（データセットディレクトリが見つかりません）")
 
     cross_label = (
-        f"一次遅れモデル（横断最小二乗法同定値）  τ={tau_cross:.3f}s  遅延={T_cross:.3f}s  RMSE={rmse_cross:.3f} m/s²"
-        if not np.isnan(tau_cross) else "一次遅れモデル（横断最小二乗法同定値）（同定失敗）"
+        f"横断最小二乗法同定値  τ={tau_cross:.3f}s  遅延={T_cross:.3f}s  RMSE={rmse_cross:.3f} m/s²"
+        if not np.isnan(tau_cross) else "横断最小二乗法同定値（同定失敗）"
     )
     _pl = phase_label or "チューニング値"
-    tune_label = f"一次遅れモデル（{_pl}）  τ={tau_tune:.3f}s  遅延={T_tune:.3f}s"
+    tune_label = f"{_pl}  τ={tau_tune:.3f}s  遅延={T_tune:.3f}s"
 
     n = len(rows_data)
     fig = make_subplots(rows=n, cols=1,
