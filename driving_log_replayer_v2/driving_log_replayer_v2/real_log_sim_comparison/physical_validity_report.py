@@ -81,11 +81,17 @@ _PERF_N_TRAJ = 3                                       # 軌跡比較表示 デ�
 _LONG_PERF_N_DATASET = 20                                   # 1-1 縦方向理想追従 box plot 用 データセット数
 _DRIFT_A_TH = 0.3                                      # 加速/減速/巡航を分ける加速度閾値 [m/s²]
 
+# リファクタ用共通定数
+_N_DYN_MIN = 100          # 動的フィット対象の最小サンプル数
+_MIN_SPAN_NS = 2e9        # タイムスパン下限 [ns]（2 秒）
+_GRAVITY = 9.81           # 重力加速度 [m/s²]
+_PITCH_RANGE_MIN_DEG = 0.57  # ピッチ推定に必要な最小範囲 [deg]
+
 def _sim_first_order(cmd: np.ndarray, tau: float, n_delay: int, dt: float = _FIT_DT) -> np.ndarray:
     """純粋遅延 + 一次遅れシミュレーション（lfilter 版）。"""
-    n = len(cmd)
-    cmd_del = np.empty(n)
     if n_delay > 0:
+        n = len(cmd)
+        cmd_del = np.empty(n)
         cmd_del[:n_delay] = cmd[0]
         cmd_del[n_delay:] = cmd[:-n_delay]
     else:
@@ -118,8 +124,7 @@ def _bicycle_nstep_perf(
     wz_arr = gt_vx * np.tan(gt_steer + beta) / denom_arr
 
     n = len(gt_x)
-    k0s = np.arange(0, n - horizon, stride)
-    k0s = k0s[gt_vx[k0s] > VX_MIN_CURVE]
+    k0s = _valid_k0s(gt_vx, horizon, stride)
     if len(k0s) == 0:
         return np.array([], dtype=float)
 
@@ -198,8 +203,7 @@ def _long_nstep_perf(
     Returns: |s_sim - s_gt| [m] 配列
     """
     n = len(gt_vx)
-    k0s = np.arange(0, n - horizon, stride)
-    k0s = k0s[gt_vx[k0s] > VX_MIN_CURVE]
+    k0s = _valid_k0s(gt_vx, horizon, stride)
     if len(k0s) == 0:
         return np.array([], dtype=float)
 
@@ -243,8 +247,7 @@ def _long_drift_profile(
     None を返す場合: 有効な開始点が 0 のとき。
     """
     n = len(gt_vx)
-    k0s = np.arange(0, n - horizon, stride)
-    k0s = k0s[gt_vx[k0s] > VX_MIN_CURVE]
+    k0s = _valid_k0s(gt_vx, horizon, stride)
     if len(k0s) == 0:
         return None
 
@@ -266,10 +269,12 @@ def _long_drift_profile(
         serr[:, j + 1] = s_sim - s_gt
 
     # 局面分類: 開始点からホライズン内の a_act 平均
-    mean_a = np.array([
-        float(np.mean(a_act[np.clip(k0 + np.arange(horizon), 0, n - 1)]))
-        for k0 in k0s
-    ])
+    mean_a = np.empty(m, dtype=float)
+    for i2, k0 in enumerate(k0s):
+        acc_sum = 0.0
+        for j2 in range(horizon):
+            acc_sum += a_act[min(k0 + j2, n - 1)]
+        mean_a[i2] = acc_sum / horizon
     phase = np.where(mean_a < -_DRIFT_A_TH, 0,
              np.where(mean_a > _DRIFT_A_TH, 2, 1)).astype(int)
 
@@ -286,6 +291,162 @@ def _find_mcap(collection_dir: Path, uuid: str) -> Path | None:
         if mcap.exists():
             return mcap
     return None
+
+
+def _common_timebase(
+    *dfs: pd.DataFrame, min_span_ns: float = 0.0
+) -> tuple[np.ndarray, float] | None:
+    """複数 df の共通タイムベース [s] と t0 [ns] を返す。
+    span が min_span_ns を下回る場合は None を返す（スキップ）。
+    """
+    t0 = float(max(d["t_ns"].iloc[0] for d in dfs))
+    t1 = float(min(d["t_ns"].iloc[-1] for d in dfs))
+    if (t1 - t0) < min_span_ns:
+        return None
+    t_ns = np.arange(t0, t1, _FIT_DT * 1e9, dtype=np.float64)
+    t_s = (t_ns - t0) * 1e-9
+    return t_s, t0
+
+
+def _resample(df: pd.DataFrame, col: str, t_s: np.ndarray, t0: float) -> np.ndarray:
+    """df[col] を共通タイムグリッド t_s へ線形補間する。"""
+    return np.interp(t_s, (df["t_ns"].values - t0) * 1e-9, df[col].values)
+
+
+def _placeholder_fig(msg: str, height: int = 200) -> go.Figure:
+    """データ不足時のプレースホルダー図を返す。"""
+    fig = go.Figure()
+    fig.add_annotation(text=msg, x=0.5, y=0.5, xref="paper", yref="paper",
+                       showarrow=False, font={"size": 14})
+    fig.update_layout(height=height)
+    return fig
+
+
+def _mask_stopped(arr: np.ndarray, moving: np.ndarray) -> list:
+    """停車中サンプルを NaN でマスクしたリストを返す。
+    moving: bool 配列（True のサンプルのみ有効）。
+    """
+    out = np.where(moving, arr.astype(float), np.nan)
+    return out.tolist()
+
+
+def _slope_acc_on_grid(
+    mcap: "Path",
+    t_s: np.ndarray,
+    t0: float,
+) -> tuple[np.ndarray, np.ndarray]:
+    """MCAP から pitch を読み込み、勾配加速度と pitch 配列をグリッドに補間して返す。
+    Returns: (slope_acc [m/s²], pitch_arr [rad])
+    """
+    df_pitch = load_kinematic(mcap)
+    pitch_raw = np.interp(
+        t_s,
+        (df_pitch["t_ns"].values - t0) * 1e-9,
+        df_pitch["pitch"].values,
+    )
+    return _GRAVITY * np.sin(pitch_raw), pitch_raw
+
+
+def _valid_k0s(
+    gt_vx: np.ndarray,
+    horizon: int,
+    stride: int = _PERF_STRIDE,
+) -> np.ndarray:
+    """VX_MIN_CURVE フィルタ済みの rollout 開始点インデックスを返す。"""
+    n = len(gt_vx)
+    k0s = np.arange(0, n - horizon, stride)
+    return k0s[gt_vx[k0s] > VX_MIN_CURVE]
+
+
+def _pick_best_worst(
+    df_id: pd.DataFrame,
+    rmse_col: str,
+    n: int = _FIT_N_DATASET,
+) -> pd.DataFrame:
+    """RMSE 列でフィルタ・ソートし最良・最悪 n 件の DataFrame を返す。
+    Returns: _case 列（"最良" / "最悪"）付き DataFrame。
+    """
+    df_ok = df_id[df_id["n_dyn"] >= _N_DYN_MIN]
+    if df_ok.empty:
+        df_ok = df_id
+    best = df_ok.nsmallest(n, rmse_col)
+    worst = df_ok.nlargest(n, rmse_col)
+    idx = best.index.union(worst.index)
+    best_idx = best.index
+    worst_idx = worst.index.difference(best_idx)
+    result = pd.concat([
+        df_id.loc[best_idx].assign(_case="最良"),
+        df_id.loc[worst_idx].assign(_case="最悪"),
+    ])
+    return result
+
+
+def _fmt(v: float) -> str:
+    """小数点以下 3 桁のフォーマット。"""
+    return f"{v:.3f}"
+
+
+def _make_horizon_boxfig(
+    per_h_errors: list[np.ndarray],
+    h_labels: list[str],
+    n_dataset: int,
+    color: str,
+    title: str,
+    ytitle: str,
+    empty_annotation: str | None = None,
+) -> go.Figure:
+    """horizon ごとの誤差配列から box plot 図を生成する。
+    empty_annotation: データがない場合に annotation テキストを追加する（None = annotation なし）。
+    """
+    fig_box = go.Figure()
+    has_data = False
+    for errs, label in zip(per_h_errors, h_labels):
+        errs_pct = np.asarray(errs) * 100.0
+        valid = errs_pct[np.isfinite(errs_pct)]
+        if len(valid) == 0:
+            continue
+        has_data = True
+        fig_box.add_trace(go.Box(
+            y=valid.tolist(),
+            name=label,
+            boxpoints="outliers",
+            marker_color=color,
+        ))
+    if not has_data and empty_annotation is not None:
+        fig_box.add_annotation(
+            text=empty_annotation, x=0.5, y=0.5,
+            xref="paper", yref="paper", showarrow=False,
+        )
+    fig_box.update_layout(
+        title=title,
+        yaxis_title=ytitle,
+        showlegend=False,
+        height=350,
+        margin={"t": 50},
+        meta={"n_dataset": n_dataset},
+    )
+    return fig_box
+
+
+def _reconcile_score(
+    df_rollout: pd.DataFrame,
+    yaml_data: dict,
+) -> tuple[str, float, float, float]:
+    """rollout 結果から best データセットのスコアを再現・検証する。
+    Returns: (best_uuid, recomputed_score, expected_score, baseline_steer_score)
+    """
+    best_row = df_rollout.loc[df_rollout["acc_score"].idxmax()]
+    best_uuid = str(best_row.name)
+    recomputed = float(_acc_score(
+        best_row["rmse_mps2"], best_row["horizon_rmse_mps2"]
+    )) if "horizon_rmse_mps2" in best_row.index else float(best_row["acc_score"])
+    expected = float(best_row["acc_score"])
+    baseline_steer = float(
+        df_rollout["steer_score"].median()
+        if "steer_score" in df_rollout.columns
+        else 0.0
+    )
+    return best_uuid, recomputed, expected, baseline_steer
 
 
 _MATHJAX_HEAD = (
