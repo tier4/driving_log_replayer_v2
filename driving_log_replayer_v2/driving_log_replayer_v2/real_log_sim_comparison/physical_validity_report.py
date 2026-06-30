@@ -645,7 +645,7 @@ def _fit_long_cross_dataset(
     return best_tau, best_delay, float(np.sqrt(best_mse))
 
 
-def build_long_figure(collection_dir: Path, params: dict) -> go.Figure:
+def build_long_figure(collection_dir: Path, params: dict, phase_label: str = "") -> go.Figure:
     """縦方向モデルフィット時系列（横断最小二乗法同定値 vs チューニング値、代表データセット 3 本）。
 
     トレース構成:
@@ -739,7 +739,8 @@ def build_long_figure(collection_dir: Path, params: dict) -> go.Figure:
         f"一次遅れモデル（横断最小二乗法同定値）  τ={tau_cross:.3f}s  遅延={T_cross:.3f}s  RMSE={rmse_cross:.3f} m/s²"
         if not np.isnan(tau_cross) else "一次遅れモデル（横断最小二乗法同定値）（同定失敗）"
     )
-    tune_label = f"一次遅れモデル（チューニング値）  τ={tau_tune:.3f}s  遅延={T_tune:.3f}s"
+    _pl = phase_label or "チューニング値"
+    tune_label = f"一次遅れモデル（{_pl}）  τ={tau_tune:.3f}s  遅延={T_tune:.3f}s"
 
     n = len(rows_data)
     fig = make_subplots(rows=n, cols=1,
@@ -2190,7 +2191,7 @@ def main() -> None:
     # Phase 4: HTML 組み立て
     print("\n[Phase 4] plotly 図生成 & HTML 組み立て ...")
     kus_fig   = build_kus_figure(bins, params)
-    long_fig  = build_long_figure(args.collection_dir, params)
+    long_fig  = build_long_figure(args.collection_dir, params, phase_label=phase_label)
     steer_fig = build_steer_id_figure(args.collection_dir, params)
 
     # 1-1 縦方向理想追従評価（全 records の先頭 _LONG_PERF_N_DS データセットを使用）
