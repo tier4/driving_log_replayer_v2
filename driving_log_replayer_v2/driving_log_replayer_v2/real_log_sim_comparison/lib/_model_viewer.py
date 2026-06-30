@@ -195,7 +195,7 @@ _HTML_TEMPLATE = r"""<!DOCTYPE html>
   #readout { min-width: 150px; font-family: monospace; font-size: 12px; text-align: right; }
   #seekrow .owin { display: flex; gap: 5px; align-items: center; white-space: nowrap; font-size: 12px; }
   #seekrow .owin input[type=range] { width: 90px; }
-  #hint { font-size: 11px; color: #777; padding: 3px 10px 6px; background: #fafafa; border-bottom: 1px solid #ddd; }
+  #hint { font-size: 11px; color: #777; padding: 4px 10px 6px; background: #fafafa; border-bottom: 1px solid #ddd; line-height: 1.6; }
   #main { flex: 1; display: flex; min-height: 0; }
   #canvaswrap { flex: 1; position: relative; min-width: 0; background: #fdfdfd; }
   #cv { position: absolute; inset: 0; width: 100%; height: 100%; }
@@ -229,17 +229,7 @@ _HTML_TEMPLATE = r"""<!DOCTYPE html>
       <span id="plotwinval" style="font-family:monospace">8s</span>
     </span>
     <span class="grp">
-      ステア源
-      <select id="steersrc">
-        <option value="sim" selected>シミュレーション δ</option>
-        <option value="obs">観測 δ</option>
-      </select>
-    </span>
-    <span class="grp">
       <label><input type="checkbox" id="errpanels"> 誤差パネル(sim−観測)</label>
-    </span>
-    <span class="grp">
-      <label><input type="checkbox" id="idealtoggle" checked> 理想(実測入力)を青で表示</label>
     </span>
     <span class="grp">
       モデル <select id="modelsel"><option value="">(spec)</option></select>
@@ -351,8 +341,11 @@ const DATA = __PAYLOAD_JSON__;
   let plotWindowS = 8;   // 予測窓幅 [s]。窓 = [curT, curT + plotWindowS] (左端=起点)。
   let curT = (DATA.initial_t != null) ? DATA.initial_t : 0;  // 現在時刻 (= シミュレーション起点) [s]
   let showErr = false;   // 誤差専用パネル（sim−観測 時系列）を増設表示するか
-  let showIdeal = true;  // 理想線(観測 accel/steer を入力に積算した値)を青で重ねるか
-  let steerSource = "sim"; // 自転車モデルへ渡す δ の源: "sim"(シミュレーション) | "obs"(観測)
+  let showObs = true;    // 観測（実線・実機色）を表示するか
+  let showCmd = true;    // 指令（破線灰）を表示するか
+  let showSim = true;    // 現在モデル（赤）を表示するか
+  let showBaseline = true; // ベースライン（橙・破線）を表示するか
+  let showIdeal = true;  // 理想線（青・破線）を表示するか
   let optWholeBag = true;  // 最適化を全区間で行うか (false なら [curT, curT+optWindowS])
   let optWindowS = 10;     // 最適化窓幅 [s]（シーク位置を起点）
   const cam = { cx: 0, cy: 0, viewW: 100, targetViewW: 100, follow: true, init: false };
@@ -456,7 +449,7 @@ const DATA = __PAYLOAD_JSON__;
   //   縦: a' = -(a - a_cmd(t-T_a))/τ_a ,  v' = a
   //   横: δ' = -(δ - δ_cmd(t-T_δ))/τ_δ (rad),  ω = v·tan(δ_src+β)/(L+k_us·v²),
   //       θ' = ω,  x' = v·cosθ,  y' = v·sinθ,  a_y = v·ω
-  // 横チェーンの v は観測 lon_vel を使用（縦誤差を分離）。δ_src は steerSource で sim/観測 を切替。
+  // 横チェーンの v は観測 lon_vel を使用（縦誤差を分離）。δ はシミュレーション（1次遅れ）で積算。
   // ideal=true のときはアクチュエータモデル(指令→1次遅れ)を介さず、観測 accel/steer を入力として
   // そのまま積算する（「加速度・ステア角が実車と完全一致した場合」の各種値。青で重ね描く）。
   // 戻り値: {t,a,v,deltaDeg,omega,ay,x,y}(各配列, RATE 解像度) / IC 欠損なら null。
@@ -474,7 +467,7 @@ const DATA = __PAYLOAD_JSON__;
     const tauD = Math.max(model.tau_steer, 1e-3);
     const Td = model.t_steer;
     const beta = model.steer_bias * DEG;   // deg→rad
-    const simSteer = (steerSource === "sim");
+    const simSteer = true;
     const outDt = 1 / RATE, h = outDt / SUBSTEP;
 
     // k_us_eff(vx): ステップモデル（thresh>0）またはランプモデルを自動選択。
@@ -492,8 +485,16 @@ const DATA = __PAYLOAD_JSON__;
       return model.k_us * ramp;
     };
 
-    let lastDrive = chanAt("cmd_accel", t0); if (lastDrive == null) lastDrive = a; // 指令ホールド用
-    let lastUd = chanAt("cmd_steer", t0 - Td); // deg
+    // ウォームアップ: t0 より前から a・delta を積分して内部状態を温める。
+    // 幅 W = 無駄時間 + 時定数×3（1次遅れが定常に近づくのに要する時間）。
+    // yaw/x/y はウォームアップ後に t0 の観測値でリセットするため更新しない。
+    const W = Math.max(TaThr, TaBrk, Td) + Math.max(tauThr, tauBrk, tauD) * 3;
+    const t0Warm = Math.max(0, t0 - W);
+    { const aW = chanAt("accel", t0Warm);    if (aW != null) a = aW; }
+    { const vW = chanAt("lon_vel", t0Warm);  if (vW != null) v = vW; }
+    { const dW = chanAt("steer", t0Warm);    if (dW != null) delta = dW * DEG; }
+    let lastDrive = chanAt("cmd_accel", t0Warm); if (lastDrive == null) lastDrive = a; // 指令ホールド用
+    let lastUd = chanAt("cmd_steer", t0Warm - Td); // deg
     const out = { t: [], a: [], v: [], deltaDeg: [], omega: [], ay: [], x: [], y: [] };
 
     // ideal 時・観測ステア源時は観測 δ を ω に使う（ideal では delta 自体が観測値）。
@@ -518,6 +519,43 @@ const DATA = __PAYLOAD_JSON__;
       out.x.push(x); out.y.push(y);
     };
 
+    for (let t = t0Warm; t < t0 - 1e-9; t += outDt) {
+      for (let s = 0; s < SUBSTEP; s++) {
+        const tt = t + s * h;
+        const vl = chanAt("lon_vel", tt);
+        const vv = (vl != null) ? vl : v;
+        if (ideal) {
+          const ao = chanAt("accel", tt); if (ao != null) a = ao;
+        } else {
+          const uThr = chanAt("cmd_accel", tt - TaThr);
+          const uBrk = chanAt("cmd_accel", tt - TaBrk);
+          let throttle;
+          if (uThr != null) throttle = (uThr >= 0);
+          else if (uBrk != null) throttle = (uBrk >= 0);
+          else throttle = (lastDrive >= 0);
+          let u = throttle ? uThr : uBrk;
+          if (u == null) u = lastDrive;
+          lastDrive = u;
+          const tauA = throttle ? tauThr : tauBrk;
+          const wzo = chanAt("wz", tt);
+          const sa = chanAt("slope_acc", tt);
+          a += h * (-(a - accelTarget(u * model.acc_scaling, vv, wzo != null ? wzo : 0, sa != null ? sa : 0)) / tauA);
+          a = sat(a, accLim);
+        }
+        v += h * a;
+        if (model.stopHandling && v < 0) v = 0;
+        v = sat(v, velLim);
+        if (ideal) {
+          const so = chanAt("steer", tt); if (so != null) delta = so * DEG;
+        } else {
+          const ud = chanAt("cmd_steer", tt - Td); if (ud != null) lastUd = ud;
+          let driveD = (lastUd != null) ? lastUd * DEG : delta;
+          driveD = sat(driveD, steerLim) * model.steer_scaling;
+          delta += h * sat(-deadBand(delta - driveD, model.steer_dead_band) / tauD, steerRateLim);
+        }
+      }
+    }
+    yaw = st0.yaw; x = st0.x; y = st0.y; // ウォームアップ中の位置誤差を t0 観測値でリセット
     record(t0);
     for (let t = t0; t < t1 - 1e-9; t += outDt) {
       for (let s = 0; s < SUBSTEP; s++) {
@@ -621,16 +659,19 @@ const DATA = __PAYLOAD_JSON__;
 
   // ------------------------------------------------------------------ 操作
   function setHint() {
-    $("hint").textContent =
-      "シーク時刻を起点に運動方程式で前方積算したシミュレーション(赤)を観測(実線)・指令(破線灰)と重ねる。" +
-      "縦 a→v、横 δ→ω→θ→位置（横の v は観測値を使用）。地図の赤線=シミュレーション軌跡。" +
-      "座標系: X=進行方向, Y=横方向, θ=ヨー角(進行方向), δ=ステア角, ω=ヨーレート。" +
-      "凡例: 実線=観測(実機色), 破線灰=指令, 赤=現在モデル(選択中config), オレンジ破線=ベースライン(k_us=0/deadband=0), 青破線=理想(加速度・ステア角が実車と完全一致した場合の積算値)。" +
-      "赤 vs 青でアクチュエータモデル(指令→応答)の誤差、青 vs 観測で運動学モデルの誤差を切り分けられる。" +
-      "勾配 c·a_slope(既定ON): a_slope=9.81·sin(pitch) で路面勾配の重力分力を a_target に加算(登り<0=減速)。" +
-      "効果が見えるのは勾配が変化する区間で、ほぼ一定勾配では poly0 と交絡するため両者の同時 ON は避ける。" +
-      "つまみ(T・τ・k_us・β)で即追従。位置が乖離してもモデル不良と即断せず予測窓を縮めて各段を切り分ける。" +
-      "「誤差パネル」を ON にすると各チャンネルの sim−観測(赤)・理想−観測(青) 時系列 (窓内 RMSE 付き) を下段に増設表示する。";
+    $("hint").innerHTML =
+      "<b>座標系</b>: X=進行, Y=横, θ=ヨー角, δ=ステア角, ω=ヨーレート &nbsp;｜&nbsp; " +
+      "<b>凡例</b>: " +
+      "<label style='cursor:pointer'><input type='checkbox' id='vis_obs' checked> 実線=観測</label> ／ " +
+      "<label style='cursor:pointer'><input type='checkbox' id='vis_cmd' checked> 破線灰=指令</label> ／ " +
+      "<label style='cursor:pointer'><input type='checkbox' id='vis_sim' checked> <span style='color:red;font-weight:bold'>赤</span>=現在モデル</label> ／ " +
+      "<label style='cursor:pointer'><input type='checkbox' id='vis_baseline' checked> <span style='color:darkorange;font-weight:bold'>橙破線</span>=ベースライン</label> ／ " +
+      "<label style='cursor:pointer'><input type='checkbox' id='vis_ideal' checked> <span style='color:steelblue;font-weight:bold'>青破線</span>=理想</label>";
+    $("vis_obs").addEventListener("change", (e) => { showObs = e.target.checked; markDirty(); });
+    $("vis_cmd").addEventListener("change", (e) => { showCmd = e.target.checked; markDirty(); });
+    $("vis_sim").addEventListener("change", (e) => { showSim = e.target.checked; markDirty(); });
+    $("vis_baseline").addEventListener("change", (e) => { showBaseline = e.target.checked; markDirty(); });
+    $("vis_ideal").addEventListener("change", (e) => { showIdeal = e.target.checked; markDirty(); });
   }
   setHint();
 
@@ -643,9 +684,7 @@ const DATA = __PAYLOAD_JSON__;
     setPlaying(!playing);
   });
   $("speed").addEventListener("change", (e) => { speedMul = parseFloat(e.target.value); });
-  $("steersrc").addEventListener("change", (e) => { steerSource = e.target.value; markDirty(); });
-  $("errpanels").addEventListener("change", (e) => { showErr = e.target.checked; markPlotStatic(); markDirty(); });
-  $("idealtoggle").addEventListener("change", (e) => { showIdeal = e.target.checked; markDirty(); });
+$("errpanels").addEventListener("change", (e) => { showErr = e.target.checked; markPlotStatic(); markDirty(); });
   // パラメータ群（#knobs）の表示/非表示トグル（地図・プロットを広く使いたいとき隠す）。
   $("togglebtn").addEventListener("click", () => {
     const hidden = $("knobs").classList.toggle("hidden");
@@ -1047,15 +1086,17 @@ const DATA = __PAYLOAD_JSON__;
     ctx.stroke();
 
     // 全軌跡 (薄く実機色)
-    ctx.strokeStyle = run.color; ctx.globalAlpha = 0.3; ctx.lineWidth = 1.5;
-    ctx.beginPath();
-    ctx.moveTo(SX(run.x[0]), SY(run.y[0]));
-    for (let k = 1; k < run.n_valid; k++) ctx.lineTo(SX(run.x[k]), SY(run.y[k]));
-    ctx.stroke();
-    ctx.globalAlpha = 1;
+    if (showObs) {
+      ctx.strokeStyle = run.color; ctx.globalAlpha = 0.3; ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      ctx.moveTo(SX(run.x[0]), SY(run.y[0]));
+      for (let k = 1; k < run.n_valid; k++) ctx.lineTo(SX(run.x[k]), SY(run.y[k]));
+      ctx.stroke();
+      ctx.globalAlpha = 1;
+    }
 
     // シミュレーション軌跡（赤・起点 t0 から窓いっぱい）
-    if (sim && sim.x.length > 1) {
+    if (showSim && sim && sim.x.length > 1) {
       ctx.strokeStyle = SIM_COLOR; ctx.lineWidth = 2.2;
       ctx.beginPath();
       ctx.moveTo(SX(sim.x[0]), SY(sim.y[0]));
@@ -1064,7 +1105,7 @@ const DATA = __PAYLOAD_JSON__;
     }
 
     // 理想軌跡（青・破線・観測 accel/steer を入力に積算）
-    if (ideal && ideal.x.length > 1) {
+    if (showIdeal && ideal && ideal.x.length > 1) {
       ctx.strokeStyle = IDEAL_COLOR; ctx.lineWidth = 2.0; ctx.setLineDash([6, 4]);
       ctx.beginPath();
       ctx.moveTo(SX(ideal.x[0]), SY(ideal.y[0]));
@@ -1073,7 +1114,7 @@ const DATA = __PAYLOAD_JSON__;
     }
 
     // ベースラインモデル軌跡（オレンジ・破線・常時重畳）
-    if (baseSim && baseSim.x.length > 1) {
+    if (showBaseline && baseSim && baseSim.x.length > 1) {
       ctx.strokeStyle = BASELINE_COLOR; ctx.lineWidth = 2.0; ctx.setLineDash([4, 3]);
       ctx.beginPath();
       ctx.moveTo(SX(baseSim.x[0]), SY(baseSim.y[0]));
@@ -1283,8 +1324,8 @@ const DATA = __PAYLOAD_JSON__;
 
       // 観測 (実線・実機色) / 指令 (破線・灰)。窓内 [iLo,iHi] のみ。null で break。
       const lines = [
-        { key: g.panel.meas, color: run.color, dash: false, alpha: 1.0, lw: 1.6 },
-        { key: g.panel.cmd, color: CMD_COLOR, dash: true, alpha: 0.9, lw: 1.2 },
+        { key: showObs ? g.panel.meas : null, color: run.color, dash: false, alpha: 1.0, lw: 1.6 },
+        { key: showCmd ? g.panel.cmd : null, color: CMD_COLOR, dash: true, alpha: 0.9, lw: 1.2 },
       ];
       for (const sp of lines) {
         const arr = sp.key && run.ch && run.ch[sp.key];
@@ -1304,7 +1345,7 @@ const DATA = __PAYLOAD_JSON__;
       c.setLineDash([]); c.globalAlpha = 1;
 
       // シミュレーション (赤・太め): rollout 出力の該当系列。
-      const sarr = sim && sim[g.panel.sim];
+      const sarr = showSim && sim && sim[g.panel.sim];
       if (sarr && sarr.length > 1) {
         c.strokeStyle = SIM_COLOR; c.lineWidth = 2.0;
         c.beginPath();
@@ -1314,7 +1355,7 @@ const DATA = __PAYLOAD_JSON__;
       }
 
       // 理想 (青・破線): 観測 accel/steer を入力に積算した該当系列。
-      const iarr = ideal && ideal[g.panel.sim];
+      const iarr = showIdeal && ideal && ideal[g.panel.sim];
       if (iarr && iarr.length > 1) {
         c.strokeStyle = IDEAL_COLOR; c.lineWidth = 1.8; c.setLineDash([5, 3]);
         c.beginPath();
@@ -1324,7 +1365,7 @@ const DATA = __PAYLOAD_JSON__;
       }
 
       // ベースライン (オレンジ・破線): k_us=0/deadband=0 モデルの常時重畳。
-      const barr = baseSim && baseSim[g.panel.sim];
+      const barr = showBaseline && baseSim && baseSim[g.panel.sim];
       if (barr && barr.length > 1) {
         c.strokeStyle = BASELINE_COLOR; c.lineWidth = 1.6; c.setLineDash([4, 3]);
         c.beginPath();
@@ -1372,7 +1413,7 @@ const DATA = __PAYLOAD_JSON__;
       const sim = rollout(t0, t1, false);     // 1 フレーム 1 回だけ積分し地図・プロットで共有
       // ベースライン: ドロップダウンが既に baseline でなければ常時重畳
       const _selName = ($("modelsel") || {}).value || "";
-      const baseSim = (baselineSeed && sim && _selName !== _blKey)
+      const baseSim = (showBaseline && baselineSeed && sim && _selName !== _blKey)
         ? rolloutWithSeed(t0, t1, baselineSeed) : null;
       const ideal = showIdeal ? rollout(t0, t1, true) : null; // 理想(実測入力)線
       const cont = drawMap(sim, ideal, baseSim);
