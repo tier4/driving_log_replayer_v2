@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import argparse
 import html as _html_stdlib
+import math
 import sys
 from concurrent.futures import ProcessPoolExecutor, as_completed
 from pathlib import Path
