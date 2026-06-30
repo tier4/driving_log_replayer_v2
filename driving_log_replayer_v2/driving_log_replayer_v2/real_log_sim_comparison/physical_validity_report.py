@@ -381,9 +381,10 @@ def _pick_best_worst(
     return result
 
 
-def _fmt(v: float) -> str:
-    """小数点以下 3 桁のフォーマット。"""
-    return f"{v:.3f}"
+def _fmt(v) -> str:
+    if isinstance(v, float):
+        return f"{v:.6g}"
+    return str(v)
 
 
 def _make_horizon_boxfig(
@@ -817,7 +818,6 @@ def _fit_long_cross_dataset(
          pitch_min [rad], pitch_max [rad])
         tau/T は勾配補正後の同定値（主要結果）。pitch_min/max は全プール DS の pitch 範囲。
     """
-    _N_DYN_MIN = 100
     df_cand = df_id[df_id["n_dyn"] >= _N_DYN_MIN] if "n_dyn" in df_id.columns else df_id
     df_top  = df_cand.nlargest(min(_N_CROSS_FIT_DATASET, len(df_cand)), "n_dyn")
 
@@ -856,7 +856,7 @@ def _fit_long_cross_dataset(
             if not df_kin.empty and "pitch" in df_kin.columns:
                 pitch_t_s = (df_kin["t_ns"].values - t0) * 1e-9
                 slope_acc_arr = np.interp(
-                    t_s, pitch_t_s, 9.81 * np.sin(df_kin["pitch"].values),
+                    t_s, pitch_t_s, _GRAVITY * np.sin(df_kin["pitch"].values),
                     left=0.0, right=0.0,
                 )
                 all_pitch.extend(df_kin["pitch"].values.tolist())
@@ -923,15 +923,8 @@ def build_long_figure(collection_dir: Path, params: dict, phase_label: str = "")
     """
     csv_path = collection_dir / "long_dynamics_identified.csv"
 
-    def _placeholder(msg: str) -> go.Figure:
-        fig = go.Figure()
-        fig.add_annotation(text=msg, xref="paper", yref="paper",
-                           x=0.5, y=0.5, showarrow=False, font=dict(size=13), align="center")
-        fig.update_layout(height=200)
-        return fig
-
     if not csv_path.exists():
-        return _placeholder(
+        return _placeholder_fig(
             f"<b>{csv_path.name} が見つかりません</b><br>"
             "事前に <code>identify_long_dynamics.py</code> を実行してください。"
         )
@@ -947,7 +940,6 @@ def build_long_figure(collection_dir: Path, params: dict, phase_label: str = "")
     ) = _fit_long_cross_dataset(collection_dir, df_id)
 
     # 動的区間が豊富なデータセットを候補にし、最良・最悪それぞれ _FIT_N_DATASET 本を選択
-    _N_DYN_MIN = 100
     df_cand = df_id[df_id["n_dyn"] >= _N_DYN_MIN] if "n_dyn" in df_id.columns else df_id
     if len(df_cand) < _FIT_N_DATASET * 2:
         df_cand = df_id
@@ -993,7 +985,7 @@ def build_long_figure(collection_dir: Path, params: dict, phase_label: str = "")
                 slope_acc_arr = np.interp(
                     t_s,
                     (df_kin["t_ns"].values - t0) * 1e-9,
-                    9.81 * np.sin(df_kin["pitch"].values),
+                    _GRAVITY * np.sin(df_kin["pitch"].values),
                     left=0.0, right=0.0,
                 )
         except Exception:
@@ -1014,24 +1006,19 @@ def build_long_figure(collection_dir: Path, params: dict, phase_label: str = "")
         # 低速区間（停止・停車）をマスク → NaN で折れ線を途切れさせる
         moving = vx > VX_MIN_CURVE
 
-        def _mask(arr: np.ndarray) -> list:
-            a = arr.copy().astype(float)
-            a[~moving] = np.nan
-            return a.tolist()
-
         rmse_val = getattr(row, "rmse_mps2", float("nan"))
         case_tag = getattr(row, "_case", "")
         rows_data.append({
             "label": f"[{case_tag}] {row.uuid[:8]}  RMSE={rmse_val:.3f} m/s²",
             "t": t_s.tolist(),
-            "a_cmd": _mask(a_cmd_arr),
-            "a_act": _mask(a_act_arr),
-            "a_sim_cross_slope": _mask(a_sim_cross_slope) if a_sim_cross_slope is not None else None,
-            "a_sim_tune": _mask(a_sim_tune) if a_sim_tune is not None else None,
+            "a_cmd": _mask_stopped(a_cmd_arr, moving),
+            "a_act": _mask_stopped(a_act_arr, moving),
+            "a_sim_cross_slope": _mask_stopped(a_sim_cross_slope, moving) if a_sim_cross_slope is not None else None,
+            "a_sim_tune": _mask_stopped(a_sim_tune, moving) if a_sim_tune is not None else None,
         })
 
     if not rows_data:
-        return _placeholder("MCAP 読み込み失敗（データセットディレクトリが見つかりません）")
+        return _placeholder_fig("MCAP 読み込み失敗（データセットディレクトリが見つかりません）")
 
     cross_slope_label = (
         f"横断同定値+勾配  τ={tau_cross:.3f}s  遅延={T_cross:.3f}s  RMSE={rmse_cross:.3f} m/s²"
@@ -1043,7 +1030,7 @@ def build_long_figure(collection_dir: Path, params: dict, phase_label: str = "")
     # pitch range から勾配補正の有効性を判定（キャプション用）
     p_min_deg = math.degrees(pitch_min_cross)
     p_max_deg = math.degrees(pitch_max_cross)
-    if not np.isnan(rmse_cross) and abs(p_max_deg - p_min_deg) >= 0.57:
+    if not np.isnan(rmse_cross) and abs(p_max_deg - p_min_deg) >= _PITCH_RANGE_MIN_DEG:
         slope_note = (
             f"勾配あり RMSE={rmse_cross:.3f} vs 勾配なし RMSE={rmse_cross_no_slope:.3f} m/s²、"
             f"pitch range {p_min_deg:+.2f}°〜{p_max_deg:+.2f}°"
@@ -1361,15 +1348,8 @@ def build_steer_id_figure(collection_dir: Path, params: dict) -> go.Figure:
     """操舵モデルフィット時系列（非線形最小二乗法同定値 vs チューン値、代表データセット 3本）。"""
     csv_path = collection_dir / "steer_dynamics_identified.csv"
 
-    def _placeholder(msg: str) -> go.Figure:
-        fig = go.Figure()
-        fig.add_annotation(text=msg, xref="paper", yref="paper",
-                           x=0.5, y=0.5, showarrow=False, font=dict(size=13), align="center")
-        fig.update_layout(height=200)
-        return fig
-
     if not csv_path.exists():
-        return _placeholder(
+        return _placeholder_fig(
             f"<b>{csv_path.name} が見つかりません</b><br>"
             "事前に <code>identify_steer_dynamics.py</code> を実行してください。"
         )
@@ -1379,7 +1359,6 @@ def build_steer_id_figure(collection_dir: Path, params: dict) -> go.Figure:
     T_tune   = float(params.get("steer_time_delay", float("nan")))
 
     # 動的区間が豊富なデータセットを候補にし、最良・最悪それぞれ _FIT_N_DATASET 本を選択
-    _N_DYN_MIN = 100
     df_cand = df_id[df_id["n_dyn"] >= _N_DYN_MIN]
     if len(df_cand) < _FIT_N_DATASET * 2:
         df_cand = df_id
@@ -1423,22 +1402,18 @@ def build_steer_id_figure(collection_dir: Path, params: dict) -> go.Figure:
 
         # 低速区間をマスク
         moving = vx > VX_MIN_CURVE
-        def _mask(arr: np.ndarray) -> list:
-            a = arr.copy().astype(float)
-            a[~moving] = np.nan
-            return a.tolist()
 
         case_tag = getattr(row, "_case", "")
         rows_data.append({
             "label": f"[{case_tag}] {row.uuid[:8]}  RMSE={row.rmse_mrad:.1f} mrad  τ={row.tau:.3f}s  T={row.delay:.3f}s",
             "t": t_s.tolist(),
-            "d_act": _mask(d_act),
-            "d_sim_id": _mask(d_sim_id),
-            "d_sim_tune": _mask(d_sim_tune) if d_sim_tune is not None else None,
+            "d_act": _mask_stopped(d_act, moving),
+            "d_sim_id": _mask_stopped(d_sim_id, moving),
+            "d_sim_tune": _mask_stopped(d_sim_tune, moving) if d_sim_tune is not None else None,
         })
 
     if not rows_data:
-        return _placeholder("MCAP 読み込み失敗（データセット ディレクトリが見つかりません）")
+        return _placeholder_fig("MCAP 読み込み失敗（データセット ディレクトリが見つかりません）")
 
     n = len(rows_data)
     fig = make_subplots(rows=n, cols=1,
@@ -1508,14 +1483,11 @@ def build_perfect_tracking_figure(
         t_ns = np.arange(t0, t1, _FIT_DT * 1e9, dtype=np.float64)
         t_s  = (t_ns - t0) * 1e-9
 
-        def _ip(df_raw: pd.DataFrame, col: str) -> np.ndarray:
-            return np.interp(t_s, (df_raw["t_ns"].values - t0) * 1e-9, df_raw[col].values)
-
-        gt_x     = _ip(df_kin, "x")
-        gt_y     = _ip(df_kin, "y")
-        gt_yaw   = _ip(df_kin, "yaw")
-        gt_vx    = _ip(df_kin, "vx")
-        gt_steer = _ip(df_steer, "steer")
+        gt_x     = _resample(df_kin,   "x",     t_s, t0)
+        gt_y     = _resample(df_kin,   "y",     t_s, t0)
+        gt_yaw   = _resample(df_kin,   "yaw",   t_s, t0)
+        gt_vx    = _resample(df_kin,   "vx",    t_s, t0)
+        gt_steer = _resample(df_steer, "steer", t_s, t0)
 
         for h in _PERF_HORIZONS:
             lat_errs = _bicycle_nstep_perf(gt_x, gt_y, gt_yaw, gt_vx, gt_steer, params, h, _FIT_DT)
@@ -1787,12 +1759,6 @@ def _kus_band_table_rows(params: dict) -> str:
 
 def _build_sec_model_intro(params: dict, label: str, params_filename: str = "") -> str:
     """レポート冒頭: モデルパラメータ一覧テーブル。"""
-
-    def _fmt(v) -> str:
-        if isinstance(v, float):
-            return f"{v:.6g}"
-        return str(v)
-
     # k_us 速度帯プロファイル行
     thresh1 = params.get("k_us_vx_thresh", 0.0)
     thresh2 = params.get("k_us_vx_thresh2", 0.0)
@@ -1868,11 +1834,6 @@ def _build_sec1(
     lat_perf_figs: tuple[go.Figure, go.Figure] | None = None,
 ) -> str:
     kus_rows = _kus_band_table_rows(params)
-
-    def _fmt(v) -> str:
-        if isinstance(v, float):
-            return f"{v:.6g}"
-        return str(v)
 
     tau_a = _fmt(params.get("acc_time_constant", "N/A"))
     T_a   = _fmt(params.get("acc_time_delay", "N/A"))
