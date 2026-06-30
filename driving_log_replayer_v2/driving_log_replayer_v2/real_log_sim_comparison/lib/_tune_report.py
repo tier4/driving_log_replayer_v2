@@ -125,7 +125,7 @@ def _ctx_to_viewer_data(ctx) -> dict | None:
         d["t"] = (d["t_ns"] - t0) / 1e9
         return d.drop(columns=["t_ns"])
 
-    kin = to_t(raw["kin"])                                                  # t, x, y, yaw, vx, vy, wz
+    kin = to_t(raw["kin"])                                                  # t, x, y, yaw, pitch, vx, vy, wz
     vel = to_t(raw["vel"]).rename(columns={"vx": "lon_vel"})               # t, lon_vel
     acc = to_t(raw["acc"]).rename(columns={"ax": "accel"}) if not raw["acc"].empty else pd.DataFrame(columns=["t", "accel"])  # t, accel
     steer = to_t(raw["steer"])                                              # t, steer [rad]
@@ -475,12 +475,30 @@ def generate_report(
         viewer_section = ""
         if ds_id in viewer_htmls:
             srcdoc = _html_stdlib.escape(viewer_htmls[ds_id], quote=True)
+            # pitch range から勾配パネルの有効/無効を判定してキャプションに注入
+            kin_df = ctx_map[ds_id].data.get("kin", pd.DataFrame())
+            if "pitch" in kin_df.columns and len(kin_df) > 0:
+                p_min_deg = math.degrees(float(kin_df["pitch"].min()))
+                p_max_deg = math.degrees(float(kin_df["pitch"].max()))
+                if abs(p_max_deg - p_min_deg) < 0.57:   # ≈ 0.01 rad
+                    slope_note = (
+                        f"勾配パネル: pitch range {p_min_deg:+.2f}°〜{p_max_deg:+.2f}°"
+                        f"（平坦路または pitch 未供給のため勾配項は無効）"
+                    )
+                else:
+                    slope_note = (
+                        f"勾配パネル: <code>/localization/kinematic_state</code> の pitch から"
+                        f" <code>a_slope=9.81·sin(pitch)</code> を表示"
+                        f"（登り&lt;0=減速; range {p_min_deg:+.2f}°〜{p_max_deg:+.2f}°）"
+                    )
+            else:
+                slope_note = "勾配パネル: pitch データなし（/localization/kinematic_state 未収録）"
             viewer_section = f"""
 <h4>縦横モデル検証ビューア（インタラクティブ）</h4>
 <p style="font-size:11px;color:#888">
   ドロップダウンで config を切り替え、つまみでパラメータを調整できます。
   「最適化」ボタンで最小二乗フィットも実行できます。
-  地図（lanelet）は非表示・<code>pitch</code> 非対応のため勾配パネルは常時 0 です。
+  地図（lanelet）は非表示。{slope_note}
 </p>
 <iframe srcdoc="{srcdoc}"
   width="100%" height="680" style="border:1px solid #ccc;border-radius:4px"

@@ -72,10 +72,10 @@ _H_SPAN = {10: "≈0.33 s", 20: "≈0.67 s", 30: "≈1.0 s", 40: "≈1.33 s"}
 _FIT_DT = 0.01          # モデルフィット用リサンプリング DT [s]
 _FIT_N_DATASET = 2      # フィット表示する代表データセット数（最良・最悪それぞれ）
 
-# 1-1/1-4. 理想追従評価用共通定数
+# 1-1/1-3. 理想追従評価用共通定数
 _PERF_HORIZONS: tuple[int, ...] = (10, 20, 50, 100)  # steps @ _FIT_DT → 0.10, 0.20, 0.50, 1.00 s
 _PERF_STRIDE = 5                                       # rollout reset stride [steps]
-_PERF_N_DATASET = 10                                   # 1-4 横方向 box plot 用 データセット数
+_PERF_N_DATASET = 10                                   # 1-3 横方向 box plot 用 データセット数
 _PERF_N_TRAJ = 3                                       # 軌跡比較表示 データセット数
 _LONG_PERF_N_DATASET = 20                                   # 1-1 縦方向理想追従 box plot 用 データセット数
 _DRIFT_A_TH = 0.3                                      # 加速/減速/巡航を分ける加速度閾値 [m/s²]
@@ -183,10 +183,15 @@ def _long_nstep_perf(
 
     シミュレータの加速度応答が実機と完全一致（a_act_sim = a_act_gt）した場合に残る
     縦方向変位誤差を評価する。残差は dvx/dt = a_act という運動方程式に含まれない
-    要素（路面勾配・空気抵抗・タイヤ縦力・センサーバイアス等）に由来する。
+    要素（空気抵抗・タイヤ縦力・センサーバイアス等）に由来する。
 
-    1-4 横方向評価との対称性:
-      1-4: gt_steer を bicycle model に直接入力 → steer 完全追従時の横方向残差
+    【重要】a_act は /localization/acceleration（autoware_twist2accel による速度の運動学的微分）
+    であり、路面勾配による重力分力を既に内包している。したがって本関数に slope_acc を
+    加えると二重計上になるため、勾配補正は行わない。
+    勾配寄与の分離・同定は build_long_figure / _fit_long_cross_dataset （A 系統）で行う。
+
+    1-3 横方向理想追従評価との対称性:
+      1-3: gt_steer を bicycle model に直接入力 → steer 完全追従時の横方向残差
       本関数: gt_a_act を積分器に直接入力 → acc 完全追従時の縦方向残差
 
     Returns: |s_sim - s_gt| [m] 配列
@@ -219,6 +224,10 @@ def _long_drift_profile(
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray] | None:
     """縦方向ドリフトプロファイル: box plot と同一 reset-stride ロールアウトで
     各ステップ j の符号付き誤差を記録する。
+
+    勾配補正について: _long_nstep_perf と同様に a_act をそのまま積分する。
+    a_act は速度の運動学的微分であり重力分力を内包するため slope_acc の加算は禁止。
+    勾配補正済みアクチュエータ同定は build_long_figure / _fit_long_cross_dataset を参照。
 
     _long_nstep_perf との整合性:
       - 同一の k0s 走査・VX_MIN_CURVE フィルタ・初期化を使用。
@@ -292,6 +301,7 @@ body { font-family: sans-serif; max-width: 1300px; margin: 0 auto; padding: 20px
 h1 { color: #222; }
 h2 { color: #444; border-bottom: 2px solid #bbb; padding-bottom: 4px; margin-top: 36px; }
 h3 { color: #555; margin-top: 20px; }
+h4 { color: #666; margin-top: 16px; margin-bottom: 6px; }
 p { line-height: 1.6; }
 code { background: #f0f0f0; padding: 2px 4px; border-radius: 3px; font-size: 12px; }
 .param-table { border-collapse: collapse; margin: 12px 0; font-size: 13px; }
@@ -627,19 +637,32 @@ _TAU_BOUNDS     = (0.01, 5.0)                             # 時定数探索範�
 
 def _fit_long_cross_dataset(
     collection_dir: Path, df_id: pd.DataFrame
-) -> tuple[float, float, float]:
-    """全データセット横断での加速度一次遅れモデルの最小二乗法同定。
+) -> tuple[float, float, float, float, float, float]:
+    """全データセット横断での加速度一次遅れモデルの最小二乗法同定（勾配補正対応）。
 
     動的区間が豊富な上位 _N_CROSS_FIT_DATASET データセットのサンプルを一つのプールに集め、
     遅延グリッドサーチ + output-error 最小二乗法で全体最適な (τ, T) を求める。
 
-    Returns: (tau [s], T [s], RMSE [m/s²])
+    勾配補正: a_act_corr = a_act − 9.81·sin(pitch) でフィット（勾配あり）と
+    生 a_act フィット（勾配なし）の両方を実行する。
+    a_act は速度の運動学的微分（重力を含まない）のため、slope_acc 減算は二重計上にならない。
+
+    設計前提: slope_acc は acc 時定数 τ（≈0.2–0.5s）に対しゆっくり変化するため、
+    重力補正は lag の「外側」（計測からの減算）で行う。
+
+    Returns:
+        (tau [s], T [s], rmse_slope [m/s²], rmse_no_slope [m/s²],
+         pitch_min [rad], pitch_max [rad])
+        tau/T は勾配補正後の同定値（主要結果）。pitch_min/max は全プール DS の pitch 範囲。
     """
     _N_DYN_MIN = 100
     df_cand = df_id[df_id["n_dyn"] >= _N_DYN_MIN] if "n_dyn" in df_id.columns else df_id
     df_top  = df_cand.nlargest(min(_N_CROSS_FIT_DATASET, len(df_cand)), "n_dyn")
 
-    pooled: list[tuple[np.ndarray, np.ndarray]] = []   # (a_cmd_full, a_act_full, mask)
+    # (a_cmd_arr, a_act_arr, a_act_corr_arr, mask)
+    pooled: list[tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]] = []
+    all_pitch: list[float] = []
+
     for row in df_top.itertuples():
         mcap = _find_mcap(collection_dir, row.uuid)
         if mcap is None:
@@ -664,43 +687,67 @@ def _fit_long_cross_dataset(
         a_act_arr = np.interp(t_s, (df_accel["t_ns"].values  - t0) * 1e-9, df_accel["accel"].values)
         vx        = np.interp(t_s, (df_vel["t_ns"].values    - t0) * 1e-9, df_vel["lon_vel"].values)
 
+        # pitch から重力分力を計算（t0/t1 区間決定には含めない：後方互換）
+        slope_acc_arr = np.zeros_like(a_act_arr)
+        try:
+            df_kin = load_kinematic(mcap)
+            if not df_kin.empty and "pitch" in df_kin.columns:
+                pitch_t_s = (df_kin["t_ns"].values - t0) * 1e-9
+                slope_acc_arr = np.interp(
+                    t_s, pitch_t_s, 9.81 * np.sin(df_kin["pitch"].values),
+                    left=0.0, right=0.0,
+                )
+                all_pitch.extend(df_kin["pitch"].values.tolist())
+        except Exception:
+            pass
+
+        a_act_corr_arr = a_act_arr - slope_acc_arr   # 重力補正後（lag 同定の対象）
+
         d_cmd = np.abs(np.gradient(a_cmd_arr, _FIT_DT))
         mask  = (vx > _VX_MIN_FIT) & (d_cmd > _DA_THRESH_FIT)
         if mask.sum() < 50:
             continue
-        pooled.append((a_cmd_arr, a_act_arr, mask))
+        pooled.append((a_cmd_arr, a_act_arr, a_act_corr_arr, mask))
+
+    pitch_min = float(min(all_pitch)) if all_pitch else 0.0
+    pitch_max = float(max(all_pitch)) if all_pitch else 0.0
 
     if not pooled:
-        return float("nan"), float("nan"), float("nan")
+        return float("nan"), float("nan"), float("nan"), float("nan"), pitch_min, pitch_max
 
-    def _total_mse(log_tau: float, n_delay: int) -> float:
+    def _total_mse(log_tau: float, n_delay: int, use_corr: bool) -> float:
         tau = float(np.exp(log_tau))
         sq_sum, n_sum = 0.0, 0
-        for a_cmd_arr, a_act_arr, mask in pooled:
+        for a_cmd_arr, a_act_arr, a_act_corr_arr, mask in pooled:
+            a_target = a_act_corr_arr if use_corr else a_act_arr
             a_sim = _sim_first_order(a_cmd_arr, tau, n_delay)
-            diff  = a_sim[mask] - a_act_arr[mask]
+            diff  = a_sim[mask] - a_target[mask]
             sq_sum += float(np.dot(diff, diff))
             n_sum  += int(mask.sum())
         return sq_sum / n_sum if n_sum > 0 else float("inf")
 
-    best_mse   = float("inf")
-    best_tau   = float("nan")
-    best_delay = float("nan")
     log_lo, log_hi = np.log(_TAU_BOUNDS[0]), np.log(_TAU_BOUNDS[1])
-    for delay_s in _DELAY_CANDIDATES:
-        n_delay = int(round(delay_s / _FIT_DT))
-        res = minimize_scalar(
-            lambda lt, nd=n_delay: _total_mse(lt, nd),
-            bounds=(log_lo, log_hi), method="bounded",
-        )
-        tau = float(np.exp(res.x))
-        mse = float(res.fun)
-        if mse < best_mse:
-            best_mse   = mse
-            best_tau   = tau
-            best_delay = delay_s
 
-    return best_tau, best_delay, float(np.sqrt(best_mse))
+    def _run_fit(use_corr: bool) -> tuple[float, float, float]:
+        best_mse, best_tau, best_delay = float("inf"), float("nan"), float("nan")
+        for delay_s in _DELAY_CANDIDATES:
+            n_delay = int(round(delay_s / _FIT_DT))
+            res = minimize_scalar(
+                lambda lt, nd=n_delay, uc=use_corr: _total_mse(lt, nd, uc),
+                bounds=(log_lo, log_hi), method="bounded",
+            )
+            tau = float(np.exp(res.x))
+            mse = float(res.fun)
+            if mse < best_mse:
+                best_mse, best_tau, best_delay = mse, tau, delay_s
+        return best_tau, best_delay, float(np.sqrt(best_mse))
+
+    # 勾配補正あり（主要結果: τ, T はこちらを使用）
+    tau_slope, T_slope, rmse_slope = _run_fit(use_corr=True)
+    # 勾配補正なし（比較用）
+    _, _, rmse_no_slope = _run_fit(use_corr=False)
+
+    return tau_slope, T_slope, rmse_slope, rmse_no_slope, pitch_min, pitch_max
 
 
 def build_long_figure(collection_dir: Path, params: dict, phase_label: str = "") -> go.Figure:
@@ -732,7 +779,10 @@ def build_long_figure(collection_dir: Path, params: dict, phase_label: str = "")
     T_tune   = float(params.get("acc_time_delay", float("nan")))
 
     # 全データセット横断で最小二乗法同定（一度だけ実行）
-    tau_cross, T_cross, rmse_cross = _fit_long_cross_dataset(collection_dir, df_id)
+    (
+        tau_cross, T_cross, rmse_cross, rmse_cross_no_slope,
+        pitch_min_cross, pitch_max_cross,
+    ) = _fit_long_cross_dataset(collection_dir, df_id)
 
     # 動的区間が豊富なデータセットを候補にし、最良・最悪それぞれ _FIT_N_DATASET 本を選択
     _N_DYN_MIN = 100
@@ -773,10 +823,28 @@ def build_long_figure(collection_dir: Path, params: dict, phase_label: str = "")
         a_act_arr = np.interp(t_s, (df_accel["t_ns"].values - t0) * 1e-9, df_accel["accel"].values)
         vx        = np.interp(t_s, (df_vel["t_ns"].values - t0) * 1e-9, df_vel["lon_vel"].values)
 
+        # pitch から重力分力を計算（t0/t1 区間決定には含めない：後方互換）
+        slope_acc_arr: np.ndarray = np.zeros_like(a_act_arr)
+        try:
+            df_kin = load_kinematic(mcap)
+            if not df_kin.empty and "pitch" in df_kin.columns:
+                slope_acc_arr = np.interp(
+                    t_s,
+                    (df_kin["t_ns"].values - t0) * 1e-9,
+                    9.81 * np.sin(df_kin["pitch"].values),
+                    left=0.0, right=0.0,
+                )
+        except Exception:
+            pass
+
         # 横断同定値でシミュレーション（初期過渡が走行区間に影響しないよう全期間使用）
         a_sim_cross: np.ndarray | None = None
         if not np.isnan(tau_cross):
             a_sim_cross = _sim_first_order(a_cmd_arr, tau_cross, int(round(T_cross / _FIT_DT)))
+        # 勾配補正あり: sim = Lag(a_cmd) + slope_acc（計測 a_act との重ね描き用）
+        a_sim_cross_slope: np.ndarray | None = None
+        if a_sim_cross is not None:
+            a_sim_cross_slope = a_sim_cross + slope_acc_arr
         a_sim_tune: np.ndarray | None = None
         if not (np.isnan(tau_tune) or np.isnan(T_tune)):
             a_sim_tune = _sim_first_order(a_cmd_arr, tau_tune, int(round(T_tune / _FIT_DT)))
@@ -796,19 +864,35 @@ def build_long_figure(collection_dir: Path, params: dict, phase_label: str = "")
             "t": t_s.tolist(),
             "a_cmd": _mask(a_cmd_arr),
             "a_act": _mask(a_act_arr),
-            "a_sim_cross": _mask(a_sim_cross) if a_sim_cross is not None else None,
+            "a_sim_cross_slope": _mask(a_sim_cross_slope) if a_sim_cross_slope is not None else None,
             "a_sim_tune": _mask(a_sim_tune) if a_sim_tune is not None else None,
         })
 
     if not rows_data:
         return _placeholder("MCAP 読み込み失敗（データセットディレクトリが見つかりません）")
 
-    cross_label = (
-        f"横断最小二乗法同定値  τ={tau_cross:.3f}s  遅延={T_cross:.3f}s  RMSE={rmse_cross:.3f} m/s²"
-        if not np.isnan(tau_cross) else "横断最小二乗法同定値（同定失敗）"
+    cross_slope_label = (
+        f"横断同定値+勾配  τ={tau_cross:.3f}s  遅延={T_cross:.3f}s  RMSE={rmse_cross:.3f} m/s²"
+        if not np.isnan(tau_cross) else "横断同定値+勾配（同定失敗）"
     )
     _pl = phase_label or "チューニング値"
     tune_label = f"{_pl}  τ={tau_tune:.3f}s  遅延={T_tune:.3f}s"
+
+    # pitch range から勾配補正の有効性を判定（キャプション用）
+    p_min_deg = math.degrees(pitch_min_cross)
+    p_max_deg = math.degrees(pitch_max_cross)
+    if not np.isnan(rmse_cross) and abs(p_max_deg - p_min_deg) >= 0.57:
+        slope_note = (
+            f"勾配あり RMSE={rmse_cross:.3f} vs 勾配なし RMSE={rmse_cross_no_slope:.3f} m/s²、"
+            f"pitch range {p_min_deg:+.2f}°〜{p_max_deg:+.2f}°"
+        )
+    elif not np.isnan(rmse_cross):
+        slope_note = (
+            f"RMSE={rmse_cross:.3f} m/s²、"
+            f"pitch range {p_min_deg:+.2f}°〜{p_max_deg:+.2f}°（平坦路 or pitch 未供給 → 勾配項は無効）"
+        )
+    else:
+        slope_note = "勾配補正: データ不足（pitch または bag 欠落）"
 
     n = len(rows_data)
     fig = make_subplots(rows=n, cols=1,
@@ -826,11 +910,12 @@ def build_long_figure(collection_dir: Path, params: dict, phase_label: str = "")
             name="指令加速度", line=dict(color="gray", width=1.2, dash="dash"),
             showlegend=show_legend, connectgaps=False,
         ), row=i, col=1)
-        if r["a_sim_cross"] is not None:
+        if r["a_sim_cross_slope"] is not None:
+            # 勾配あり: sim = Lag(a_cmd) + slope_acc（主要ライン）
             fig.add_trace(go.Scatter(
-                x=r["t"], y=r["a_sim_cross"],
-                name=cross_label,
-                line=dict(color="steelblue", width=1.5, dash="dot"),
+                x=r["t"], y=r["a_sim_cross_slope"],
+                name=cross_slope_label,
+                line=dict(color="royalblue", width=2.0),
                 showlegend=show_legend, connectgaps=False,
             ), row=i, col=1)
         if r["a_sim_tune"] is not None:
@@ -845,8 +930,11 @@ def build_long_figure(collection_dir: Path, params: dict, phase_label: str = "")
     fig.update_xaxes(title_text="時刻 [s]", row=n, col=1)
     fig.update_layout(
         height=300 * n,
-        title_text=f"縦方向モデルフィット（最良・最悪 計 {n} 件、全データセット横断最小二乗法同定値・走行区間のみ表示）",
-        margin=dict(t=70, b=40),
+        title_text=(
+            f"縦方向モデルフィット（最良・最悪 計 {n} 件、横断最小二乗法同定値・走行区間のみ表示）<br>"
+            f"<sup>{slope_note}</sup>"
+        ),
+        margin=dict(t=80, b=40),
         legend=dict(orientation="h", y=1.03, x=0),
     )
     return fig
@@ -1371,10 +1459,10 @@ def _build_sec_metrics(baseline_score: float | None, phase14_score: float, label
     # LaTeX を含む静的部分は通常文字列。プレースホルダを後置換で動的値に差し替える
     tmpl = """
 <section id="metrics">
-<h2>0. 評価メトリクスの物理的意味</h2>
+<h3>2-1. 評価メトリクスの物理的意味</h3>
 
 <details>
-<summary>0-1. N-step 前向き積分誤差</summary>
+<summary>① N-step 前向き積分誤差</summary>
 <p>
 車両モデルを実機ログの初期状態から N 個の制御コマンド区間だけ前向きに積分し、
 実機の自己位置推定軌跡との終端誤差を評価する。
@@ -1395,7 +1483,7 @@ def _build_sec_metrics(baseline_score: float | None, phase14_score: float, label
 </details>
 
 <details>
-<summary>0-2. 誤差の 3 成分（yaw・long・lat）</summary>
+<summary>② 誤差の 3 成分（yaw・long・lat）</summary>
 <table class="param-table">
   <tr><th>成分</th><th>単位</th><th>物理的意味</th><th>主な感度</th></tr>
   <tr>
@@ -1421,7 +1509,7 @@ steer 系パラメータへの感度はほぼゼロ（逆もしかり）。こ�
 </details>
 
 <details>
-<summary>0-3. 正規化スコア（nyaw, nlong, nlat）</summary>
+<summary>③ 正規化スコア（nyaw, nlong, nlat）</summary>
 <p>
 各データセットの誤差を <b>baseline モデル</b>（補正なし delay モデル、k_us=0・deadband=0 相当）の
 誤差で正規化する:
@@ -1449,7 +1537,7 @@ steer 系パラメータへの感度はほぼゼロ（逆もしかり）。こ�
 </details>
 
 <details>
-<summary>0-4. mean と worst</summary>
+<summary>④ mean と worst</summary>
 <p>
 650 データセットの正規化スコアに対して 2 種類の集約を行う:
 </p>
@@ -1464,7 +1552,7 @@ worst だけだと過度に保守的になる。両者を組み合わせるこ�
 </details>
 
 <details>
-<summary>0-5. ロバストスコア（robust_score）</summary>
+<summary>⑤ ロバストスコア（robust_score）</summary>
 <p>
 最終目的関数:
 \\[
@@ -1569,17 +1657,17 @@ def _build_sec_model_intro(params: dict, label: str, params_filename: str = "") 
 
     return f"""
 <section id="model-intro">
-<h2>モデルパラメータ一覧</h2>
+<h3>3-1. 完成パラメータ一覧</h3>
 <p>本レポートで検証するモデル（<b>{label}</b>）のパラメータを示す。
 ソースファイル: {src_str} &nbsp;|&nbsp; スコア（steer_score）: <b>{score_str}</b></p>
 
-<h3>アンダーステア補正（k_us 速度帯ステップ）</h3>
+<h4>アンダーステア補正（k_us 速度帯ステップ）</h4>
 <table class="param-table">
   <tr><th>パラメータ</th><th>値</th><th>説明</th></tr>
 {kus_profile_rows}
 </table>
 
-<h3>操舵系</h3>
+<h4>操舵系</h4>
 <table class="param-table">
   <tr><th>パラメータ</th><th>値</th><th>説明</th></tr>
   <tr><td><code>steer_time_constant</code></td><td>{_fmt(params.get('steer_time_constant', 'N/A'))} s</td>
@@ -1596,7 +1684,7 @@ def _build_sec_model_intro(params: dict, label: str, params_filename: str = "") 
     <td>操舵指令スケーリング係数（1.0 = 補正なし）</td></tr>
 </table>
 
-<h3>加速度系</h3>
+<h4>加速度系</h4>
 <table class="param-table">
   <tr><th>パラメータ</th><th>値</th><th>説明</th></tr>
   <tr><td><code>acc_time_constant</code></td><td>{_fmt(params.get('acc_time_constant', 'N/A'))} s</td>
@@ -1615,6 +1703,7 @@ def _build_sec1(
     kus_fig: go.Figure,
     n_dataset: int,
     long_perf_figs: tuple[go.Figure, go.Figure, go.Figure] | None = None,
+    lat_perf_figs: tuple[go.Figure, go.Figure] | None = None,
 ) -> str:
     kus_rows = _kus_band_table_rows(params)
 
@@ -1639,19 +1728,50 @@ def _build_sec1(
     kus_html   = kus_fig.to_html(full_html=False, include_plotlyjs=False)
     _vx_min = VX_MIN_CURVE
     _stride = _PERF_STRIDE
+    if lat_perf_figs is not None:
+        lat_fig_box, lat_fig_traj = lat_perf_figs
+        lat_box_html  = lat_fig_box.to_html(full_html=False, include_plotlyjs=False)
+        lat_traj_html = lat_fig_traj.to_html(full_html=False, include_plotlyjs=False)
+        lat_h_str = ", ".join(f"N={h}（{h * _FIT_DT:.2f}s）" for h in _PERF_HORIZONS)
+        lat_perf_subsection = (
+            "<h4>モデル構造限界評価（横方向理想追従）</h4>"
+            "<p>実測 \\(v_x\\) と \\(\\delta_{\\mathrm{act}}\\) を自転車モデルの直接入力として使用し、"
+            "アクチュエータ追従が完璧だった場合に残る横方向位置ずれを評価する。"
+            "残差は操舵・横方向のモデル構造限界（タイヤスリップ・路面バンク・\\(v_y\\)・"
+            "\\(k_{\\mathrm{us}}\\) キャリブレーション誤差）を表す。"
+            "現行 \\(k_{\\mathrm{us}}\\)・\\(\\beta\\) 前提での下限値である。</p>"
+            "<div class=\"note\">"
+            "&#9888;&#65039; <b>1-1 との対称性</b>: 1-1（acc 理想追従）が縦方向残差を評価するのと同様に、"
+            "本評価は横方向残差を評価する。縦方向は \\(v_x\\) を GT から直接取得するため積分上の縦誤差はほぼゼロとなり、"
+            "横方向誤差が真のモデル構造限界を示す。"
+            "</div>"
+            f"<p><b>図①: 横方向誤差分布（ホライズン別、上位 {_PERF_N_DATASET} データセット）</b> —"
+            f" カーブ走行区間（\\(v_x > {_vx_min}\\) m/s）を stride={_stride} ステップで走査し、"
+            f"N-step ロールアウト終端の横方向誤差絶対値を集計する。ホライズン: {lat_h_str}。</p>"
+            + lat_box_html
+            + "<p><b>図②: 代表データセットの軌跡比較（GT vs 自転車モデル）</b> —"
+            " 初期状態を GT に合わせ、実測 \\(v_x\\) と \\(\\delta_{\\mathrm{act}}\\) を入力として積分した"
+            "自転車モデル軌跡（青破線）を GT 軌跡（黒実線）と比較する。"
+            "リセットなしの連続積分であるため、後半の乖離はモデル構造誤差の累積を示す。"
+            "座標は初期位置を原点 (0, 0) に正規化している。</p>"
+            + lat_traj_html
+        )
+    else:
+        lat_perf_subsection = ""
+
     if long_perf_figs is not None:
         fig_box, fig_growth, fig_map = long_perf_figs
         box_html    = fig_box.to_html(full_html=False, include_plotlyjs=False)
         growth_html = fig_growth.to_html(full_html=False, include_plotlyjs=False)
         map_html    = fig_map.to_html(full_html=False, include_plotlyjs=False)
         long_perf_subsection = (
-            "<h3>モデル構造限界評価（acc 理想追従）</h3>"
+            "<h4>モデル構造限界評価（acc 理想追従）</h4>"
             "<p>シミュレータの加速度応答が実機と完全一致（\\(a_{\\mathrm{act,sim}} = a_{\\mathrm{act,gt}}\\)）した場合に"
             "残る縦方向変位誤差を評価する。<br>"
             "各開始点で \\(v_{x,\\mathrm{sim}}(t_0) = v_{x,\\mathrm{GT}}(t_0)\\) に初期化し、"
             "実測加速度 \\(a_{\\mathrm{act}}\\) を直接積分して変位を計算、GT 変位と比較する。</p>"
-            "<p>1-4 横方向評価との対称性: "
-            "1-4 では <i>gt_steer</i> を bicycle model に直接入力して steer 完全追従時の横方向残差を評価する。"
+            "<p>1-3 の横方向理想追従評価との対称性: "
+            "1-3 では <i>gt_steer</i> を bicycle model に直接入力して steer 完全追従時の横方向残差を評価する。"
             "本評価では <i>gt_a_act</i> を積分器に直接入力して acc 完全追従時の縦方向残差を評価する。</p>"
             "<div class=\"note\">"
             "&#9888;&#65039; <b>残差の解釈</b>: \\(\\dot{v}_x = a_{\\mathrm{act}}\\) という運動方程式に含まれない"
@@ -1678,7 +1798,7 @@ def _build_sec1(
 
     return f"""
 <section id="sec-long">
-<h2>1-1. 縦方向（加速度アクチュエータ）— Phase 49 で同定</h2>
+<h3>1-1. 縦モデル（加速度アクチュエータ）</h3>
 <p>
 速度 \\(v_x\\) は横方向・操舵状態に依存せず縦方向のみで閉じるため（long ⊥ steer の直交性）、
 \\(\\text{{err}}_{{vx}}\\) を目的関数として他のパラメータと独立に同定できる。
@@ -1700,7 +1820,7 @@ a_{{\\mathrm{{cmd,del}}}}(t) = a_{{\\mathrm{{cmd}}}}(t - T_a)
 速度 \\(v_x\\) はその積分として得られる。
 </p>
 
-<h3>実機ログからの独立同定（代表データセットモデルフィット）</h3>
+<h4>実機ログからの独立同定（代表データセットモデルフィット）</h4>
 <p>
 \\(a_{{\\mathrm{{cmd}}}}\\)（指令加速度）を入力として遅延グリッドサーチ + output-error 非線形最小二乗法で
 同定した \\((\\tau_a, T_a)\\) のモデル出力（青点線）と実測 \\(a_{{\\mathrm{{act}}}}\\)（黒実線）を比較する。
@@ -1720,7 +1840,7 @@ a_{{\\mathrm{{cmd,del}}}}(t) = a_{{\\mathrm{{cmd}}}}(t - T_a)
 </section>
 
 <section id="sec-steer">
-<h2>1-2. 操舵アクチュエータ（追従ループ）— Phase 50 で同定</h2>
+<h3>1-2. 操舵アクチュエータ（追従ループ）</h3>
 <p>
 操舵追従ループは実車位置・ヨーのフィードバックを持たないオープンループなので、
 \\(\\text{{err}}_{{\\mathrm{{steer}}}}\\) を目的関数として位置・ヨー誤差とは構造的に独立して同定できる。
@@ -1754,7 +1874,7 @@ a_{{\\mathrm{{cmd,del}}}}(t) = a_{{\\mathrm{{cmd}}}}(t - T_a)
 報告値の加算と 1-3 のヨー式の両方に現れる二重登場のパラメータである。
 </div>
 
-<h3>実機ログからの独立同定（代表データセットモデルフィット）</h3>
+<h4>実機ログからの独立同定（代表データセットモデルフィット）</h4>
 <p>
 \\(\\delta_{{\\mathrm{{cmd}}}}\\) を入力として遅延グリッドサーチ + output-error 非線形最小二乗法で
 同定した \\((\\tau_\\delta, T_\\delta)\\) のモデル出力（青点線）と実測 \\(\\delta_{{\\mathrm{{act}}}}\\)（黒実線）を比較する。
@@ -1785,7 +1905,7 @@ a_{{\\mathrm{{cmd,del}}}}(t) = a_{{\\mathrm{{cmd}}}}(t - T_a)
 </section>
 
 <section id="sec-yaw">
-<h2>1-3. ヨー・横方向（運動学的自転車モデル）— 速度ビン別 最小二乗法同定</h2>
+<h3>1-3. ヨー・横モデル（運動学的自転車モデル）</h3>
 <p>
 1-1（縦方向）・1-2（操舵追従）が先行して確定した後、
 \\(\\text{{err}}_{{wz}}\\) を目的関数として <b>高曲率サブセット</b> で k_us を同定する。
@@ -1807,11 +1927,11 @@ a_{{\\mathrm{{cmd,del}}}}(t) = a_{{\\mathrm{{cmd}}}}(t - T_a)
 </p>
 <div class="note">
 ⚠️ <b>前提条件</b>: この式の入力 \\(\\delta_{{\\mathrm{{act}}}}\\) は 1-2 の結果に依存する。
-1-2 の DSF が k_us の v²δ 成分を部分吸収しているため、Phase 50 確定後の DSF 値を固定した上で
-k_us を同定することが重要。
+1-2 の DSF が k_us の v²δ 成分を部分吸収しているため、<b>1-2 で確定した DSF 値を固定した上で</b>
+k_us を同定することが重要（DSF が v²δ 由来のアンダーステア成分を吸収するため、操舵と横は完全には独立でなく同定順序に依存する）。
 </div>
 
-<h3>実機ログからの独立同定（全 {n_dataset} データセット、速度ビン別 最小二乗法）</h3>
+<h4>実機ログからの独立同定（全 {n_dataset} データセット、速度ビン別 最小二乗法）</h4>
 
 <details>
 <summary>推定手法の詳細</summary>
@@ -1848,111 +1968,19 @@ C_{{\\mathrm{{OLS}}}} = \\frac{{\\sum \\omega_i \\, \\tan(\\delta_i)}}{{\\sum \\
   <tr><td><code>steer_bias</code> (β) <i>[1-2 と共有]</i></td><td>{beta} rad</td>
       <td>tan(δ_act + β) の引数：ヨーオフセットを生む</td><td>err_wz（間接）</td></tr>
 </table>
+
+{lat_perf_subsection}
 </section>
 """
 
 
-def _build_sec14(
-    fig_box: go.Figure,
-    fig_traj: go.Figure,
-    params: dict,
-    n_dataset: int,
-) -> str:
-    """1-4. モデル構造限界（理想追従評価）セクション HTML。"""
-    box_html  = fig_box.to_html(full_html=False, include_plotlyjs=False)
-    traj_html = fig_traj.to_html(full_html=False, include_plotlyjs=False)
-    tau_a = f"{params.get('acc_time_constant', float('nan')):.3g}"
-    T_a   = f"{params.get('acc_time_delay', float('nan')):.3g}"
-    tau_d = f"{params.get('steer_time_constant', float('nan')):.3g}"
-    T_d   = f"{params.get('steer_time_delay', float('nan')):.3g}"
-    h_str = ", ".join(f"N={h}（{h * _FIT_DT:.2f}s）" for h in _PERF_HORIZONS)
-    return f"""
-<section id="sec-perf-tracking">
-<h2>1-4. モデル構造限界（理想追従評価）</h2>
-<p>
-アクチュエータ追従が完璧だった場合（実測 \\(v_x\\) と実測 \\(\\delta_{{\\mathrm{{act}}}}\\) を
-自転車モデルの直接入力として使用）に残る位置ずれを評価する。
-これにより <b>アクチュエータ遅れの寄与</b> と <b>モデル構造外の寄与</b>（タイヤスリップ、路面バンク、
-横速度 \\(v_y\\)、\\(k_{{\\mathrm{{us}}}}\\) キャリブレーション誤差）を分離できる。
-</p>
-<p>
-現行スコアとの差分 ≈ アクチュエータ応答が占める誤差分
-（τ_a={tau_a} s, T_a={T_a} s, τ_δ={tau_d} s, T_δ={T_d} s の合算効果）。
-</p>
-<div class="note">
-⚠️ <b>設計上の帰結</b>:
-縦方向誤差は \\(v_x\\) を GT から直接取得しているため積分上ほぼゼロになる。
-<b>横方向誤差のみが真のモデル構造限界を表す。</b><br>
-残差は「現行チューン値 \\(k_{{\\mathrm{{us}}}}\\) および \\(\\beta\\) での理想追従誤差」であるため、
-パラメータのキャリブレーション誤差も一部含む（現行パラメータ前提での下限値）。
-</div>
-
-<h3>横方向誤差分布（ホライズン別、上位 {n_dataset} データセット）</h3>
-<p>
-カーブ走行区間（\\(v_x > {VX_MIN_CURVE}\\) m/s）を stride={_PERF_STRIDE} ステップで走査し、
-N-step ロールアウト終端の横方向誤差絶対値を集計する。ホライズン: {h_str}。
-</p>
-{box_html}
-
-<h3>代表データセット の軌跡比較（GT vs 自転車モデル）</h3>
-<p>
-初期状態を GT に合わせ、実測 \\(v_x\\) と \\(\\delta_{{\\mathrm{{act}}}}\\) を入力として積分した
-自転車モデル軌跡（青破線）を GT 軌跡（黒実線）と比較する。
-リセットなしの連続積分であるため、後半の乖離はモデル構造誤差の累積を示す。
-座標は初期位置を原点 (0, 0) に正規化している。
-</p>
-{traj_html}
-</section>
-"""
-
-
-def _build_sec2(kus_fig: go.Figure, n_dataset: int) -> str:
-    kus_html = kus_fig.to_html(full_html=False, include_plotlyjs=False)
-    return f"""
-<section id="identification">
-<h2>2. 実機ログからの独立同定</h2>
-
-<details open>
-<summary>2-1. アンダーステア係数 k_us の速度依存性（全 {n_dataset} データセット）</summary>
-<details>
-<summary>推定手法の詳細</summary>
-<p>
-定常旋回フィルタ（\\(|\\omega| > {WZ_MIN}\\) rad/s、\\(|\\dot{{\\omega}}| < {DWZ_MAX}\\) rad/s²、
-\\(v_x > {VX_MIN_CURVE}\\) m/s）を通過した各タイムステップを速度ビンに割り当て、
-ビン内で以下の2種類の推定を行う。
-</p>
-<p><b>① 最小二乗法推定（青丸・実線）</b>: 原点回帰 \\(\\tan(\\delta_{{\\mathrm{{eff}}}}) = C \\cdot \\omega\\) の最小二乗解
-\\[
-C_{{\\mathrm{{OLS}}}} = \\frac{{\\sum \\omega_i \\, \\tan(\\delta_i)}}{{\\sum \\omega_i^2}},
-\\qquad
-\\hat{{k}}_{{\\mathrm{{us}}}} = \\frac{{C_{{\\mathrm{{OLS}}}} - L / \\bar{{v}}_x}}{{\\bar{{v}}_x}}
-\\]
-ここで \\(\\bar{{v}}_x\\) はビン内の速度中央値、\\(L = {WHEELBASE}\\) m はホイールベース。
-</p>
-<p><b>② 個別サンプル（IQR バンド）</b>: 実機運動学ログの各タイムステップで瞬時 k_us を推定し、
-ビン内の 25〜75 パーセンタイルをバンドとして表示:
-\\[
-\\tilde{{k}}_{{\\mathrm{{us}}}}[i] = \\frac{{\\tan(\\delta_i) / \\omega_i - L / v_{{x,i}}}}{{v_{{x,i}}}}
-\\]
-チューニング済みランプ曲線（橙色破線）と重ね描きして形状の妥当性を確認する。
-</p>
-</details>
-{kus_html}
-<div class="note">
-<b>解釈</b>: 最小二乗法推定値が低速ビンでほぼ 0、高速ビンで正の値に推移していれば、
-ランプ形状は物理的実態と整合している。ただし J6 の多くのデータセットが低速（vx_mean ≈ 1.9 m/s）
-のため、高速ビンのサンプル数は少なく推定誤差が大きい点に注意（右パネルのサンプル数を参照）。
-</div>
-</details>
-</section>
-"""
 
 
 def _build_sec3(viewer_sections: list[str], label: str = "phase14") -> str:
     body = "\n".join(viewer_sections) if viewer_sections else "<p>ビューア生成対象 データセット なし</p>"
     return f"""
 <section id="curve-viewer">
-<h2>3. カーブ部での実機 vs モデル軌跡（インタラクティブビューア）</h2>
+<h3>3-2. カーブ部での実機 vs モデル軌跡（インタラクティブビューア・最終検証）</h3>
 <p>
 旋回イベント数 <code>curve_count</code>（\\(|\\kappa| > 0.02\\) m⁻¹、連続弧長 ≥ 10 m）が多い
 代表データセットについて縦横モデル検証ビューアを埋め込む。
@@ -2044,7 +2072,7 @@ def _build_sec_deviation(
 
     return f"""
 <section id="deviation">
-<h2>0-6. 全 {n_dataset} データセットの N-step 終端誤差（{label} vs baseline）</h2>
+<h3>2-2. 全 {n_dataset} データセットの N-step 終端誤差（{label} vs baseline）</h3>
 <p>
 全データセットに対し {label} パラメータと baseline（補正なし）で N-step ロールアウトを実施し、
 終端誤差 RMSE の データセット横断 <b>平均</b>（mean）と <b>最大</b>（worst-case データセット）を N ごとに集計する。
@@ -2093,15 +2121,48 @@ def build_html(
     deviation_html: str = "",
     label: str = "current",
     params_filename: str = "",
-    perf_html: str = "",
     long_perf_figs: tuple[go.Figure, go.Figure, go.Figure] | None = None,
+    lat_perf_figs: tuple[go.Figure, go.Figure] | None = None,
 ) -> str:
     score = params.get("_score", "N/A")
     phase14_score = float(score) if isinstance(score, (int, float, str)) and str(score) != "N/A" else 0.0
     sec_intro = _build_sec_model_intro(params, label=label, params_filename=params_filename)
     sec0 = _build_sec_metrics(baseline_score=baseline_score, phase14_score=phase14_score, label=label)
-    sec1 = _build_sec1(params, long_fig, steer_fig, kus_fig, n_dataset, long_perf_figs=long_perf_figs)
+    sec1 = _build_sec1(
+        params, long_fig, steer_fig, kus_fig, n_dataset,
+        long_perf_figs=long_perf_figs,
+        lat_perf_figs=lat_perf_figs,
+    )
     sec3 = _build_sec3(viewer_sections, label=label)
+
+    sec_overview = (
+        '<section id="overview">'
+        "<h2>本レポートの流れ</h2>"
+        "<p>① 縦モデルと操舵＆横モデルを各軸で独立同定 →"
+        " ② 両者を合わせて総合メトリクス（robust_score）で突き合わせ調整 →"
+        " ③ 完成パラメータをカーブ走行で最終検証、の3ステップで構成する。</p>"
+        "</section>"
+    )
+    sec_step1 = (
+        '<section id="step1">'
+        "<h2>1. 各軸の独立同定</h2>"
+        "<p>long ⊥ steer の直交性により、縦方向・操舵・ヨー横を構造的に独立して同定できる。"
+        "各軸で「実機ログからの同定」とその軸の「モデル構造限界（理想追従評価）」をまとめる。</p>"
+        "</section>"
+    )
+    sec_step2 = (
+        '<section id="step2">'
+        "<h2>2. 総合メトリクスによる調整</h2>"
+        "<p>独立同定した各軸パラメータを合わせ、全データセット横断の robust_score と N-step 終端誤差で"
+        " baseline と突き合わせて調整・検証する。</p>"
+        "</section>"
+    )
+    sec_step3 = (
+        '<section id="step3">'
+        "<h2>3. 完成パラメータ</h2>"
+        "<p>調整後の最終パラメータ一覧と、カーブ走行での実機 vs モデル軌跡の最終検証を示す。</p>"
+        "</section>"
+    )
 
     return f"""<!DOCTYPE html>
 <html lang="ja">
@@ -2121,20 +2182,23 @@ def build_html(
   有効データセット数: {n_dataset}
 </p>
 <nav>
-  <a href="#model-intro">モデルパラメータ</a>
-  <a href="#metrics">0. メトリクス解説</a>
-  {'<a href="#deviation">0-6. N-step 最大乖離</a>' if deviation_html else ""}
+  <a href="#overview">概要</a>
   <a href="#sec-long">1-1. 縦方向</a>
   <a href="#sec-steer">1-2. 操舵</a>
   <a href="#sec-yaw">1-3. ヨー・横方向</a>
-  {'<a href="#sec-perf-tracking">1-4. モデル構造限界</a>' if perf_html else ""}
-  <a href="#curve-viewer">3. カーブビューア</a>
+  <a href="#metrics">2-1. メトリクス解説</a>
+  {'<a href="#deviation">2-2. N-step 乖離</a>' if deviation_html else ""}
+  <a href="#model-intro">3-1. 完成パラメータ</a>
+  <a href="#curve-viewer">3-2. カーブビューア</a>
 </nav>
-{sec_intro}
+{sec_overview}
+{sec_step1}
+{sec1}
+{sec_step2}
 {sec0}
 {deviation_html}
-{sec1}
-{perf_html}
+{sec_step3}
+{sec_intro}
 {sec3}
 </body>
 </html>
@@ -2461,7 +2525,7 @@ def main() -> None:
         srcdoc = _html_stdlib.escape(vh, quote=True)
         cc = curve_count_map.get(ctx.dataset_id, "?")
         viewer_sections.append(f"""
-<h3>Dataset: <code>{ctx.dataset_id}</code>  &nbsp;（curve_count = {cc}）</h3>
+<h4>Dataset: <code>{ctx.dataset_id}</code>  &nbsp;（curve_count = {cc}）</h4>
 <p style="font-size:11px;color:#888">
   ドロップダウンで config を切り替え、つまみでパラメータを手動調整できます。
   「最適化」ボタンで最小二乗フィットも実行できます。
@@ -2483,11 +2547,10 @@ def main() -> None:
     print(f"  [1-1] 縦方向理想追従評価図生成 ({len(long_perf_records)} データセット) ...")
     long_perf_figs = build_long_perf_figure(long_perf_records, map_ways=map_ways)
 
-    # 1-4 横方向理想追従評価には curve 上位 _PERF_N_DATASET データセットを使用（viewer 用 top_curve とは独立して選択）
+    # 1-3 横方向理想追従評価には curve 上位 _PERF_N_DATASET データセットを使用（viewer 用 top_curve とは独立して選択）
     perf_records = candidate_curve[:_PERF_N_DATASET]
-    print(f"  [1-4] 横方向理想追従評価図生成 ({len(perf_records)} データセット) ...")
+    print(f"  [1-3] 横方向理想追従評価図生成 ({len(perf_records)} データセット) ...")
     perf_fig_box, perf_fig_traj = build_perfect_tracking_figure(perf_records, params)
-    perf_html = _build_sec14(perf_fig_box, perf_fig_traj, params, len(perf_records))
 
     html = build_html(
         params, long_fig, steer_fig, kus_fig, viewer_sections, len(records),
@@ -2495,8 +2558,8 @@ def main() -> None:
         deviation_html=deviation_html,
         label=phase_label,
         params_filename=args.params.name,
-        perf_html=perf_html,
         long_perf_figs=long_perf_figs,
+        lat_perf_figs=(perf_fig_box, perf_fig_traj),
     )
 
     args.out.parent.mkdir(parents=True, exist_ok=True)

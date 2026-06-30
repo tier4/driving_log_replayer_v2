@@ -41,6 +41,7 @@ from .lib._events import find_autonomous_start as _find_autonomous_start
 from .lib._io import (
     align_time,
     iter_bag_messages,
+    load_kinematic,
     load_operation_mode,
     load_steering,
     load_velocity,
@@ -538,24 +539,9 @@ def load_real_bag(path: Path) -> dict[str, pd.DataFrame]:
         path,
         ["/localization/kinematic_state", "/sub/localization/kinematic_state"],
     )
-    rows_kin = []
-    if kin_topic is not None:
-        for t_ns, ros in iter_bag_messages(path, [kin_topic]):
-            p = ros.pose.pose.position
-            o = ros.pose.pose.orientation
-            yaw = math.atan2(
-                2.0 * (o.w * o.z + o.x * o.y),
-                1.0 - 2.0 * (o.y * o.y + o.z * o.z),
-            )
-            rows_kin.append({
-                "t_ns": t_ns,
-                "x": p.x,
-                "y": p.y,
-                "yaw": yaw,
-                "vx": ros.twist.twist.linear.x,
-                "vy": ros.twist.twist.linear.y,
-                "wz": ros.twist.twist.angular.z,
-            })
+    # load_kinematic が SSOT（t_ns, x, y, yaw, pitch, vx, vy, wz を返す）。
+    # kin_topic is None の場合 iter_to_df が空 DF（列あり）を返すため後段ガード不変。
+    df_kin = load_kinematic(path, kin_topic)
 
     acc_topic = resolve_topic(
         path,
@@ -587,7 +573,7 @@ def load_real_bag(path: Path) -> dict[str, pd.DataFrame]:
         "mode": df_mode,
         "vel": df_vel,
         "steer": df_steer,
-        "kin": pd.DataFrame(rows_kin),
+        "kin": df_kin,
         "acc": pd.DataFrame(rows_acc),
         "cmd": pd.DataFrame(rows_cmd),
     }

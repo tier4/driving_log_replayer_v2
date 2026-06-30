@@ -947,7 +947,9 @@ $("errpanels").addEventListener("change", (e) => { showErr = e.target.checked; m
     if (model.polyOn1) k.push("poly1");
     if (model.polyOn2) k.push("poly2");
     if (model.cornerOn) k.push("c_corner");
-    if (model.slopeOn) k.push("c_slope");
+    // c_slope は物理事実（lon_slope_gain=1.0 固定）のためフィット対象から除外。
+    // 平坦路 bag では不可同定になり他の縦誤差と交絡するリスクがある。
+    // 感度探索には手動スライダ（k_slope）を使うこと。
     return k;
   }
   const STEER_KEYS = ["t_steer", "tau_steer", "steer_scaling"];
