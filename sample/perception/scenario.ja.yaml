@@ -28,6 +28,7 @@ Evaluation:
             x_position: null
             y_position: null
   degradation_topic: /perception/object_recognition/detection/objects # デグレード評価用のトピック。指定しない場合は評価タスクに基づいてトピックを決定する。
+  ignore_frames: "" # 評価から除外するフレームのインデックスをカンマ区切りで指定。指定しない場合は全てのフレームを評価対象とする。
   PerceptionEvaluationConfig:
     evaluation_config_dict:
       evaluation_task: detection # detection/tracking/prediction ここで指定したobjectsを評価する

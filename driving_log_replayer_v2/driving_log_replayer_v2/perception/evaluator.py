@@ -45,6 +45,7 @@ if TYPE_CHECKING:
 class PerceptionInvalidReason(InvalidReason):
     INVALID_ESTIMATED_OBJECTS = "Invalid Estimated Objects"
     NO_GROUND_TRUTH = "No Ground Truth"
+    IGNORED_FRAME = "Ignored Frame"
 
 
 class PerceptionEvaluator(Evaluator):
@@ -58,6 +59,7 @@ class PerceptionEvaluator(Evaluator):
         evaluation_topic: str,
         evaluation_task: str,
         frame_id_str: str,
+        ignore_frames: list[int],
     ) -> None:
         # NOTE: this class uses the perception_eval package, so not use parent logger, which means not call super().__init__()
         # instance variables
@@ -70,6 +72,7 @@ class PerceptionEvaluator(Evaluator):
         self.__analyzer: PerceptionAnalyzer3D
         self.__logger: logging.Logger
         self.__evaluation_topic = evaluation_topic
+        self.__ignore_frames = ignore_frames
 
         perception_evaluation_config["evaluation_config_dict"]["label_prefix"] = "autoware"
 
@@ -178,6 +181,18 @@ class PerceptionEvaluator(Evaluator):
             critical_object_filter_config=self.__critical_object_filter_config,
             frame_pass_fail_config=self.__frame_pass_fail_config,
         )
+
+        if int(frame_result.frame_name) in self.__ignore_frames:
+            self.__skip_counter += 1
+            self.__logger.info(
+                "Frame %s is ignored for evaluation.",
+                frame_result.frame_name,
+            )
+            return FrameResult(
+                is_valid=False,
+                invalid_reason=PerceptionInvalidReason.IGNORED_FRAME,
+                skip_counter=self.__skip_counter,
+            )
 
         # TODO: add topic delay
         self.__logger.info(

@@ -26,6 +26,44 @@ if TYPE_CHECKING:
     from driving_log_replayer_v2.scenario import ScenarioType
 
 
+def parse_ignore_frames(ignore_frames: str) -> list[int]:
+    ignore_set: set[int] = set()
+    if not ignore_frames or ignore_frames == "None":
+        return []
+
+    for raw_item in ignore_frames.split(","):
+        item = raw_item.strip()
+        if not item:
+            continue
+
+        if "-" in item:
+            # Split the range into start and end
+            start_str, end_str = item.split("-", 1)
+
+            # Check if both extracted strings are digits
+            if start_str.isdigit() and end_str.isdigit():
+                start, end = int(start_str), int(end_str)
+                ignore_set.update(range(start, end + 1))
+            else:
+                err_msg = (
+                    f"Invalid range format in ignore_frames: '{item}'. "
+                    "Expected format is 'start-end' where start and end are integers."
+                )
+                raise ValueError(err_msg)
+
+        elif item.isdigit():
+            # Check if the single string is composed of digits
+            ignore_set.add(int(item))
+
+        else:
+            err_msg = (
+                f"Invalid integer format in ignore_frames: '{item}'. Expected a single integer."
+            )
+            raise ValueError(err_msg)
+
+    return sorted(ignore_set)
+
+
 class EvaluationManager(ABC):
     """
     Base class for evaluation manager.
@@ -42,13 +80,22 @@ class EvaluationManager(ABC):
         result_archive_path: str,
         evaluation_topics_with_task: dict[str, list[str]],
         degradation_topic: str,
+        ignore_frames: str,
     ) -> None:
         # instance variables
         self._scenario: ScenarioType = scenario
         self._evaluators: dict[str, EvaluatorType]
         self._degradation_topics: list[str]
 
-        self._set_evaluators(t4_dataset_path, result_archive_path, evaluation_topics_with_task)
+        # argument has higher priority than scenario setting
+        if not ignore_frames:
+            ignore_frames = parse_ignore_frames(getattr(scenario.Evaluation, "ignore_frames", ""))
+        else:
+            ignore_frames = parse_ignore_frames(ignore_frames)
+
+        self._set_evaluators(
+            t4_dataset_path, result_archive_path, evaluation_topics_with_task, ignore_frames
+        )
         self._set_degradation_topics(degradation_topic)
 
     @abstractmethod
@@ -57,6 +104,7 @@ class EvaluationManager(ABC):
         t4_dataset_path: str,
         result_archive_path: str,
         evaluation_topics_with_task: dict[str, list[str]],
+        ignore_frames: list[int],
     ) -> None:
         """
         Set evaluators for each evaluation topic.
@@ -65,6 +113,7 @@ class EvaluationManager(ABC):
             t4_dataset_path (str): Path to T4 dataset.
             result_archive_path (str): Path to result archive.
             evaluation_topics_with_task (dict[str, list[str]]): Dictionary mapping evaluation topics to their tasks.
+            ignore_frames (list[int]): List of frame indices to be ignored during evaluation.
 
         """
         raise NotImplementedError

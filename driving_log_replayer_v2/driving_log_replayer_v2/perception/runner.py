@@ -126,6 +126,7 @@ class PerceptionRunner(Runner):
         storage: str,
         evaluation_topics_with_task: dict[str, list[str]],
         degradation_topic: str,
+        ignore_frames: str,
         enable_metrics_details: str,
         enable_analysis: str,
         analysis_max_distance: str,
@@ -146,6 +147,7 @@ class PerceptionRunner(Runner):
             storage,
             evaluation_topics_with_task,
             degradation_topic,
+            ignore_frames,
             enable_analysis,
         )
 
@@ -156,6 +158,7 @@ class PerceptionRunner(Runner):
         degradation_topic: str,
         result_jsonl_path: str,
         result_archive_path: str,
+        ignore_frames: str,
     ) -> list[UseCaseInfo]:
         use_case_info_list = [
             UseCaseInfo(
@@ -166,6 +169,7 @@ class PerceptionRunner(Runner):
                 evaluation_topics_with_task=evaluation_topics_with_task,
                 degradation_topic=degradation_topic,
                 result_jsonl_path=result_jsonl_path,
+                ignore_frames=ignore_frames,
             )
         ]
 
@@ -183,6 +187,7 @@ class PerceptionRunner(Runner):
                     evaluation_topics_with_task={"dummy_task": evaluation_topics},
                     degradation_topic="",
                     result_jsonl_path=planning_factor_result_jsonl_path,
+                    ignore_frames=ignore_frames,
                 )
             )
 
@@ -300,7 +305,10 @@ class PerceptionRunner(Runner):
                 "/driving_log_replayer_v2/marker/results", marker_results, header.stamp
             )  # results including evaluation topic and ground truth
         # handle when add_frame is fail caused by failed object conversion or no ground truth
-        elif frame_result.invalid_reason == PerceptionInvalidReason.NO_GROUND_TRUTH:
+        elif frame_result.invalid_reason in {
+            PerceptionInvalidReason.NO_GROUND_TRUTH,
+            PerceptionInvalidReason.INVALID_ESTIMATED_OBJECTS,
+        }:
             self.perc_result.set_info_frame(frame_result.data, frame_result.skip_counter)
         elif frame_result.invalid_reason == PerceptionInvalidReason.INVALID_ESTIMATED_OBJECTS:
             self.perc_result.set_warn_frame(frame_result.data, frame_result.skip_counter)
@@ -367,6 +375,7 @@ def evaluate(
     evaluation_tracking_topic_regex: str,
     evaluation_prediction_topic_regex: str,
     degradation_topic: str,
+    ignore_frames: str,
     enable_metrics_details: str,
     enable_analysis: str,
     analysis_max_distance: str,
@@ -387,6 +396,7 @@ def evaluate(
         storage,
         evaluation_topics_with_task,
         degradation_topic,
+        ignore_frames,
         enable_metrics_details,
         enable_analysis,
         analysis_max_distance,
@@ -437,6 +447,11 @@ def parse_args() -> argparse.Namespace:
         help="Topic name for degradation information. If you do not want to override the scenario setting, set it to '' or 'None'.",
     )
     parser.add_argument(
+        "--ignore-frames",
+        default="",
+        help="Comma-separated list of frame indices to ignore during evaluation.  If you do not want to ignore any frames, set it to '' or 'None'.",
+    )
+    parser.add_argument(
         "--enable-metrics-details",
         default="true",
         help="Enable to include metrics details in the evaluation result.",
@@ -472,6 +487,7 @@ def main() -> None:
         args.evaluation_tracking_topic_regex,
         args.evaluation_prediction_topic_regex,
         args.degradation_topic,
+        args.ignore_frames,
         args.enable_metrics_details,
         args.enable_analysis,
         args.analysis_max_distance,

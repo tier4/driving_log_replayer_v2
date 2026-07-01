@@ -33,9 +33,11 @@ class PerceptionFPEvaluator(Evaluator):
         self,
         result_archive_path: str,
         evaluation_topic: str,
+        ignore_frames: list[int],
     ) -> None:
         # additional instance variables
         self._skip_counter = 0
+        self._ignore_frames = ignore_frames  # not use yet
 
         super().__init__(result_archive_path, evaluation_topic)
 

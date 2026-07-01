@@ -153,6 +153,7 @@ class Evaluation(BaseModel):
     CriticalObjectFilterConfig: dict
     PerceptionPassFailConfig: dict
     degradation_topic: str | None = None
+    ignore_frames: str | None = None
 
 
 class IncludeUseCase(BaseModel):

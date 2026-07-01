@@ -25,6 +25,7 @@ class PerceptionFPEvaluationManager(EvaluationManager):
         result_archive_path: str,
         evaluation_topics_with_task: dict[str, list[str]],
         degradation_topic: str,
+        ignore_frames: str,
     ) -> None:
         super().__init__(
             scenario,
@@ -32,6 +33,7 @@ class PerceptionFPEvaluationManager(EvaluationManager):
             result_archive_path,
             evaluation_topics_with_task,
             degradation_topic,
+            ignore_frames,
         )
 
     def _set_evaluators(
@@ -39,6 +41,7 @@ class PerceptionFPEvaluationManager(EvaluationManager):
         t4_dataset_path: str,
         result_archive_path: str,
         evaluation_topics_with_task: dict[str, list[str]],
+        ignore_frames: list[int],
     ) -> None:
         _ = t4_dataset_path  # unused
         evaluation_topics = [
@@ -48,6 +51,7 @@ class PerceptionFPEvaluationManager(EvaluationManager):
             topic: PerceptionFPEvaluator(
                 result_archive_path,
                 topic,
+                ignore_frames,
             )
             for topic in evaluation_topics
         }
