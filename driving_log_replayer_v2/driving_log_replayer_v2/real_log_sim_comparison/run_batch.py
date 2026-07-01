@@ -23,22 +23,72 @@
 """
 
 from __future__ import annotations
-
 import argparse
 from datetime import datetime, timezone
 import os
 from pathlib import Path
 import subprocess
 import sys
-
+from concurrent.futures import ProcessPoolExecutor, as_completed
 import yaml
-
 from .collect_datasets import _resolve_bundle, collect_bundle, update_manifest
 from .lib._dataset import DatasetResolutionError, resolve_t4_dataset_path
 from .lib._io import resolve_lite_bag
 
 _PKG = "driving_log_replayer_v2.real_log_sim_comparison"
 _DEFAULT_WEBAUTO_ROOT = Path.home() / ".webauto" / "data" / "data" / "annotation_dataset"
+
+
+def _run_and_collect_worker(args: dict) -> dict:
+    uuid = args["uuid"]
+    scenario = Path(args["scenario"])
+    batch_root = Path(args["batch_root"])
+    input_mode = args["input_mode"]
+    skip_sim = args["skip_sim"]
+    skip_ol = args["skip_ol"]
+    resume = args["resume"]
+    webauto_root = Path(args["webauto_root"])
+
+    output_dir = batch_root / "runs" / uuid
+    status = "success"
+
+    if resume and _bundle_has_real_lite(output_dir):
+        status = "skipped"
+    else:
+        if input_mode == "raw":
+            t4_path = Path(args["raw_t4_path"])
+            scenario_single = batch_root / "scenarios" / f"{uuid}.scenario.yaml"
+            write_raw_dataset_scenario(scenario, uuid, scenario_single)
+        else:
+            try:
+                t4_path = resolve_t4_dataset_path(webauto_root, uuid)
+            except Exception as e:
+                now_str = datetime.now(timezone.utc).isoformat(timespec="seconds")
+                return {"dataset_id": uuid, "status": "collect_failed", "collected_at": now_str}
+            scenario_single = batch_root / "scenarios" / f"{uuid}.scenario.yaml"
+            write_single_dataset_scenario(scenario, uuid, scenario_single)
+
+        ok = run_one_dataset(
+            uuid, scenario_single, t4_path, output_dir,
+            skip_sim=skip_sim, skip_ol=skip_ol
+        )
+        if not ok and not _bundle_has_real_lite(output_dir):
+            now_str = datetime.now(timezone.utc).isoformat(timespec="seconds")
+            return {"dataset_id": uuid, "status": "sim_failed", "collected_at": now_str}
+
+    try:
+        bundle = _resolve_bundle(output_dir)
+        rec = collect_bundle(bundle, uuid, batch_root)
+        if status == "skipped":
+            rec["status"] = "skipped"
+    except Exception:
+        now_str = datetime.now(timezone.utc).isoformat(timespec="seconds")
+        return {"dataset_id": uuid, "status": "collect_failed", "collected_at": now_str}
+
+    if "comparison" not in rec["linked"]:
+        rec["status"] = "analysis_failed"
+
+    return rec
 
 
 def iter_dataset_uuids(scenario: Path) -> list[str]:
@@ -177,6 +227,8 @@ def main() -> None:
                     "そのまま t4_dataset_path として使う (annotation_dataset 不要)。"
                     "raw モードでは Datasets は --batch-root/datasets/ を自動検出し、"
                     "aggregate_report.html として出力する")
+    ap.add_argument("--jobs", type=int, default=min(4, os.cpu_count() or 1),
+                    help="並列ワーカー数 (既定: コア数または4の小さい方)")
     args = ap.parse_args()
 
     scenario = Path(args.scenario).resolve()
@@ -207,60 +259,46 @@ def main() -> None:
     if args.closed_loop_uuids:
         closed_loop_uuids = {u.strip() for u in args.closed_loop_uuids.split(",") if u.strip()}
 
+    tasks_args = []
+    for uuid in uuids:
+        if closed_loop_uuids:
+            skip_sim_for_this = uuid not in closed_loop_uuids
+        else:
+            skip_sim_for_this = args.skip_sim
+        t4_path_str = str(raw_t4_paths[uuid]) if args.input_mode == "raw" else ""
+        tasks_args.append({
+            "uuid": uuid,
+            "scenario": str(scenario),
+            "batch_root": str(batch_root),
+            "input_mode": args.input_mode,
+            "skip_sim": skip_sim_for_this,
+            "skip_ol": args.skip_ol,
+            "resume": args.resume,
+            "webauto_root": str(webauto_root),
+            "raw_t4_path": t4_path_str,
+        })
+
     records: list[dict] = []
     n_ok = 0
-    for i, uuid in enumerate(uuids, start=1):
-        print(f"\n=== [{i}/{len(uuids)}] dataset {uuid} ===", flush=True)
-        output_dir = batch_root / "runs" / uuid
-
-        if args.resume and _bundle_has_real_lite(output_dir):
-            print(f"[SKIP] {uuid}: real.lite 済み (--resume)")
-        else:
-            if args.input_mode == "raw":
-                t4_path = raw_t4_paths[uuid]
-                scenario_single = batch_root / "scenarios" / f"{uuid}.scenario.yaml"
-                write_raw_dataset_scenario(scenario, uuid, scenario_single)
-            else:
-                try:
-                    t4_path = resolve_t4_dataset_path(webauto_root, uuid)
-                except DatasetResolutionError as e:
-                    print(f"[WARN] {uuid}: dataset 解決失敗 — スキップ\n{e}", file=sys.stderr)
-                    records.append({"dataset_id": uuid, "status": "collect_failed",
-                                    "collected_at": _now()})
-                    continue
-                scenario_single = batch_root / "scenarios" / f"{uuid}.scenario.yaml"
-                write_single_dataset_scenario(scenario, uuid, scenario_single)
-            if closed_loop_uuids:
-                skip_sim_for_this = uuid not in closed_loop_uuids
-            else:
-                skip_sim_for_this = args.skip_sim
-
-            ok = run_one_dataset(
-                uuid, scenario_single, t4_path, output_dir,
-                skip_sim=skip_sim_for_this, skip_ol=args.skip_ol
-            )
-            if not ok and not _bundle_has_real_lite(output_dir):
-                print(f"[WARN] {uuid}: sim 実行失敗 (成果物なし) — スキップ", file=sys.stderr)
-                records.append({"dataset_id": uuid, "status": "sim_failed",
-                                "collected_at": _now()})
-                continue
-            if not ok:
-                print(f"[WARN] {uuid}: launch が非ゼロ終了したが成果物あり — 収集は継続",
-                      file=sys.stderr)
-
-        try:
-            bundle = _resolve_bundle(output_dir)
-            rec = collect_bundle(bundle, uuid, batch_root)
-        except FileNotFoundError as e:
-            print(f"[WARN] {uuid}: 収集失敗 — {e}", file=sys.stderr)
-            records.append({"dataset_id": uuid, "status": "collect_failed",
-                            "collected_at": _now()})
-            continue
-        if "comparison" not in rec["linked"]:
-            rec["status"] = "analysis_failed"  # real.lite はあるが解析成果物が無い
-        records.append(rec)
-        n_ok += 1
-        print(f"[OK] {uuid}: 収集完了 ({', '.join(rec['linked'])})")
+    n_total = len(uuids)
+    print(f"\n[INFO] 並列実行開始 (ワーカー数: {args.jobs})...", flush=True)
+    with ProcessPoolExecutor(max_workers=args.jobs) as pool:
+        futs = {pool.submit(_run_and_collect_worker, a): a["uuid"] for a in tasks_args}
+        for i, fut in enumerate(as_completed(futs), start=1):
+            uuid = futs[fut]
+            try:
+                rec = fut.result()
+                records.append(rec)
+                if rec.get("status") in ["success", "skipped", "analysis_failed"]:
+                    n_ok += 1
+                    status_label = "SKIP" if rec.get("status") == "skipped" else "OK"
+                    print(f"[{i}/{n_total}] {status_label}: {uuid[:8]} 収集完了 ({', '.join(rec.get('linked', []))})", flush=True)
+                else:
+                    print(f"[{i}/{n_total}] FAILED: {uuid[:8]} (status={rec.get('status')})", flush=True)
+            except Exception as e:
+                print(f"[{i}/{n_total}] ERROR: {uuid[:8]} ({e})", flush=True)
+                now_str = datetime.now(timezone.utc).isoformat(timespec="seconds")
+                records.append({"dataset_id": uuid, "status": "collect_failed", "collected_at": now_str})
 
     update_manifest(batch_root, records)
     print(f"\n=== バッチ完了: 成功 {n_ok} / {len(uuids)} ===")

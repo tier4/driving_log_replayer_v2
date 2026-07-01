@@ -109,6 +109,62 @@ def _load_light_worker(args: tuple) -> dict | None:
         "wz": wz.astype(np.float32),
     }
 
+def _fit_one_long_worker(ds: dict) -> tuple[float, float] | None:
+    a_cmd = ds["a_cmd"]
+    a_act = ds["a_act"]
+    vx = ds["vx"]
+    d_cmd_acc = np.abs(np.gradient(a_cmd, DT))
+    mask = (vx > VX_MIN) & (d_cmd_acc > DA_THRESH)
+    if mask.sum() < 50:
+        return None
+
+    best_mse = np.inf
+    best_tau = np.nan
+    best_delay = np.nan
+    for delay_s in np.arange(0.0, 0.31, 0.01):
+        n_delay = int(round(delay_s / DT))
+        tau, mse = _fit_tau_nls_long(a_cmd, a_act, n_delay, mask)
+        if mse < best_mse:
+            best_mse = mse
+            best_tau = tau
+            best_delay = delay_s
+    if np.isnan(best_tau):
+        return None
+    return best_tau, best_delay
+
+def _fit_one_steer_worker(ds: dict) -> tuple[float, float, float, float] | None:
+    d_cmd = ds["d_cmd"]
+    d_act = ds["d_act"]
+    vx = ds["vx"]
+    wz = ds["wz"]
+    d_cmd_steer = np.abs(np.gradient(d_cmd, DT))
+    mask_dyn = (vx > VX_MIN) & (d_cmd_steer > DSTEER_MIN / DT)
+    if mask_dyn.sum() < 50:
+        return None
+
+    mask_straight = (vx > 3.0) & (np.abs(wz) < 0.005)
+    bias = float(np.mean(d_act[mask_straight])) if mask_straight.sum() > 20 else 0.0005
+
+    d_act_nobias = d_act - bias
+    sum_cmd2 = np.sum(d_cmd[mask_dyn] ** 2)
+    dsf = float(np.sum(d_cmd[mask_dyn] * d_act_nobias[mask_dyn]) / sum_cmd2) if sum_cmd2 > 1e-5 else 1.0
+    dsf = float(np.clip(dsf, 0.8, 1.2))
+
+    best_mse = np.inf
+    best_tau = np.nan
+    best_delay = np.nan
+    for delay_s in np.arange(0.0, 0.16, 0.01):
+        n_delay = int(round(delay_s / DT))
+        d_cmd_scaled = dsf * d_cmd
+        tau, mse = _fit_tau_nls_steer(d_cmd_scaled, d_act_nobias, n_delay, mask_dyn)
+        if mse < best_mse:
+            best_mse = mse
+            best_tau = tau
+            best_delay = delay_s
+    if np.isnan(best_tau):
+        return None
+    return best_tau, best_delay, bias, dsf
+
 def main() -> None:
     ap = argparse.ArgumentParser(description="物理直接同定チューニング")
     ap.add_argument("--collection-dir", type=Path, required=True)
@@ -178,28 +234,14 @@ def main() -> None:
         print("\n=== 縦方向モデルの直接同定を実行中 ===")
         taus_long = []
         delays_long = []
-        for ds in datasets:
-            a_cmd = ds["a_cmd"]
-            a_act = ds["a_act"]
-            vx = ds["vx"]
-            d_cmd_acc = np.abs(np.gradient(a_cmd, DT))
-            mask = (vx > VX_MIN) & (d_cmd_acc > DA_THRESH)
-            if mask.sum() < 50:
-                continue
-
-            best_mse = np.inf
-            best_tau = np.nan
-            best_delay = np.nan
-            for delay_s in np.arange(0.0, 0.31, 0.01):
-                n_delay = int(round(delay_s / DT))
-                tau, mse = _fit_tau_nls_long(a_cmd, a_act, n_delay, mask)
-                if mse < best_mse:
-                    best_mse = mse
-                    best_tau = tau
-                    best_delay = delay_s
-            if not np.isnan(best_tau):
-                taus_long.append(best_tau)
-                delays_long.append(best_delay)
+        with ProcessPoolExecutor(max_workers=args.n_jobs) as pool:
+            futs = {pool.submit(_fit_one_long_worker, ds): ds["uuid"] for ds in datasets}
+            for fut in as_completed(futs):
+                res = fut.result()
+                if res is not None:
+                    tau, delay = res
+                    taus_long.append(tau)
+                    delays_long.append(delay)
 
         if taus_long:
             params["acc_time_constant"] = float(np.clip(np.median(taus_long), 0.1, 3.0))
@@ -218,42 +260,16 @@ def main() -> None:
         delays_steer = []
         biases = []
         dsfs = []
-
-        for ds in datasets:
-            d_cmd = ds["d_cmd"]
-            d_act = ds["d_act"]
-            vx = ds["vx"]
-            wz = ds["wz"]
-            d_cmd_steer = np.abs(np.gradient(d_cmd, DT))
-            mask_dyn = (vx > VX_MIN) & (d_cmd_steer > DSTEER_MIN / DT)
-            if mask_dyn.sum() < 50:
-                continue
-
-            # steer_bias: 直進走行区間 (vx > 3.0, |wz| < 0.005) の実測操舵角
-            mask_straight = (vx > 3.0) & (np.abs(wz) < 0.005)
-            bias = float(np.mean(d_act[mask_straight])) if mask_straight.sum() > 20 else 0.0005
-            biases.append(bias)
-
-            # DSF: 指令と実測のゲインスケーリング
-            d_act_nobias = d_act - bias
-            sum_cmd2 = np.sum(d_cmd[mask_dyn] ** 2)
-            dsf = float(np.sum(d_cmd[mask_dyn] * d_act_nobias[mask_dyn]) / sum_cmd2) if sum_cmd2 > 1e-5 else 1.0
-            dsfs.append(float(np.clip(dsf, 0.8, 1.2)))
-
-            best_mse = np.inf
-            best_tau = np.nan
-            best_delay = np.nan
-            for delay_s in np.arange(0.0, 0.16, 0.01):
-                n_delay = int(round(delay_s / DT))
-                d_cmd_scaled = dsf * d_cmd
-                tau, mse = _fit_tau_nls_steer(d_cmd_scaled, d_act_nobias, n_delay, mask_dyn)
-                if mse < best_mse:
-                    best_mse = mse
-                    best_tau = tau
-                    best_delay = delay_s
-            if not np.isnan(best_tau):
-                taus_steer.append(best_tau)
-                delays_steer.append(best_delay)
+        with ProcessPoolExecutor(max_workers=args.n_jobs) as pool:
+            futs = {pool.submit(_fit_one_steer_worker, ds): ds["uuid"] for ds in datasets}
+            for fut in as_completed(futs):
+                res = fut.result()
+                if res is not None:
+                    tau, delay, bias, dsf = res
+                    taus_steer.append(tau)
+                    delays_steer.append(delay)
+                    biases.append(bias)
+                    dsfs.append(dsf)
 
         if taus_steer:
             params["steer_time_constant"] = float(np.clip(np.median(taus_steer), 0.05, 0.8))
