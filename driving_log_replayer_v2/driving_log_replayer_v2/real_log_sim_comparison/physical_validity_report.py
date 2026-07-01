@@ -1651,9 +1651,10 @@ a_{{\\mathrm{{cmd,del}}}}(t) = a_{{\\mathrm{{cmd}}}}(t - T_a)
 \\dot{{v}}_x(t) = a_{{\\mathrm{{act}}}}(t) + a_{{\\mathrm{{slope}}}}(t)
 \\]
 <p>
-加速度指令 \\(a_{{\\mathrm{{cmd}}}}\\) は純粋遅延 \\(T_a\\) だけ遅れてアクチュエータに届き、
-時定数 \\(\\tau_a\\) の一次遅れでペダル加速度 \\(a_{{\\mathrm{{act}}}}\\) が応答する。
-車速 \\(v_x\\) は、ペダル加速度に応答遅れのない勾配重力加速度成分 \\(a_{{\\mathrm{{slope}}}}\\)（シミュレータへの外部入力）を加算して積分した値となる。
+加速度指令 \\(a_{{\\mathrm{{cmd}}}}\\) は純粋遅延 \\(T_a\\)（<code>acc_time_delay</code>）だけ遅れてアクチュエータに届き、
+時定数 \\(\\tau_a\\)（<code>acc_time_constant</code>）の一次遅れでアクチュエータ出力（実加速度） \\(a_{{\\mathrm{{act}}}}\\) が応答する。<br>
+車速 \\(v_x\\) は、アクチュエータ出力（実加速度）に応答遅れのない勾配重力加速度成分 \\(a_{{\\mathrm{{slope}}}}\\)（シミュレータへの外部入力）を加算して積分した値となる。<br>
+※ 目標加速度およびアクチュエータ出力加速度は <code>vel_rate_lim</code>、車速は <code>vel_lim</code> で制限されます。
 </p>
 
 <h3>実機ログからの独立同定（代表データセットモデルフィット）</h3>
@@ -1687,20 +1688,17 @@ a_{{\\mathrm{{cmd,del}}}}(t) = a_{{\\mathrm{{cmd}}}}(t - T_a)
 \\delta_{{\\mathrm{{cmd,del}}}}(t) = \\delta_{{\\mathrm{{cmd}}}}(t - T_\\delta)
 \\]
 \\[
-\\delta_{{\\mathrm{{des}}}}(t) = \\mathrm{{DSF}} \\cdot \\mathrm{{clamp}}(\\delta_{{\\mathrm{{cmd,del}}}},\\; \\pm\\delta_{{\\mathrm{{lim}}}})
+\\delta_{{\\mathrm{{des}}}}(t) = K_{{\\mathrm{{steer\\_scale}}}} \\cdot \\delta_{{\\mathrm{{cmd,del}}}}(t)
 \\]
 \\[
-\\dot{{\\delta}}_{{\\mathrm{{act}}}}(t) = \\mathrm{{sat}}\\!\\left(
-  -\\frac{{\\delta_{{\\mathrm{{act}}}}(t) - \\delta_{{\\mathrm{{des}}}}(t) + \\mathrm{{db}}(\\cdot)}}{{\\tau_\\delta}},\\;
-  \\pm\\dot{{\\delta}}_{{\\mathrm{{lim}}}}
-\\right)
+\\dot{{\\delta}}_{{\\mathrm{{act}}}}(t) = -\\frac{{\\delta_{{\\mathrm{{act}}}}(t) - \\delta_{{\\mathrm{{des}}}}(t)}}{{\\tau_\\delta}}
 \\]
 \\[
 \\delta_{{\\mathrm{{sim}}}}(t) = \\delta_{{\\mathrm{{act}}}}(t) + \\beta
 \\]
 <p>
-ここで \\(\\mathrm{{db}}(\\cdot)\\) は不感帯（\\(|\\delta_{{\\mathrm{{act}}}} - \\delta_{{\\mathrm{{des}}}}| \\leq \\delta_{{\\mathrm{{db}}}}\\) の範囲ではレート = 0）。
-報告操舵角 \\(\\delta_{{\\mathrm{{sim}}}}\\) には steer_bias β を加算する（β の一方の役割）。
+※ 目標操舵角は <code>steer_lim</code>、操舵速度は <code>steer_rate_lim</code> で制限され、不感帯 <code>steer_dead_band</code> が適用されます。<br>
+※ 報告操舵角には <code>steer_bias</code>（β）が加算されます。
 </p>
 <div class="note">
 ⚠️ <b>結合点</b>: 操舵ゲイン補正倍率（debug_steer_scaling_factor）は操舵指令に定数ゲインをかける形で、直進時の系統的な横力成分（v²δ 由来の
