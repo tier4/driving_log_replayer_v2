@@ -67,7 +67,6 @@ help:
 	@echo "      cl4. step_cl4_compare_dp_trajectory DiffusionPlanner 出力軌跡 real vs sim 比較 (figures/dp_*)"
 	@echo "    - レポート・横断分析系列:"
 	@echo "      html. step_report_html        図スペック・Markdown・設定 YAML を単一 report.html に集約"
-	@echo "      nb.   step_report_notebook    開発者向け report.ipynb 生成"
 	@echo "      cross.step_cross_dataset      collection 横断のモデル×データセット分析 + 物理妥当性検証の横断集約 (cross_dataset/)"
 	@echo ""
 	@echo "変数:"
@@ -165,9 +164,42 @@ local_multidataset_cloud_run: prepare_multidataset
 	    { echo "[ERROR] $(SETUP_BASH) が見つかりません。先にワークスペースをビルドしてください"; exit 1; }
 	@test -f $(LOCAL_SCENARIO) || \
 	    { echo "[ERROR] $(LOCAL_SCENARIO) が見つかりません"; exit 1; }
-	@echo "[INFO] Running batch simulation..."
+	@echo "[INFO] Step 1: Running initial open-loop batch run to collect real.lite across datasets..."
 	source $(SETUP_BASH) && $(PYTHON) -m driving_log_replayer_v2.real_log_sim_comparison.run_batch \
 	    --scenario "$(LOCAL_SCENARIO)" \
+	    --batch-root "$(MULTI_BATCH_ROOT)" \
+	    --input-mode raw \
+	    --skip-sim \
+	    $(if $(RESUME),--resume,)
+	@echo "[INFO] Step 2: Phase 1 Longitudinal Tuning..."
+	source $(SETUP_BASH) && $(PYTHON) -m driving_log_replayer_v2.real_log_sim_comparison.multi_dataset_tune \
+	    --collection-dir "$(MULTI_BATCH_ROOT)" \
+	    --scenario "$(LOCAL_SCENARIO)" \
+	    --phase 1 \
+	    --out "$(MULTI_BATCH_ROOT)/phase1_acc.yaml"
+	@echo "[INFO] Step 3: Phase 2 Lateral/Steer Tuning..."
+	source $(SETUP_BASH) && $(PYTHON) -m driving_log_replayer_v2.real_log_sim_comparison.multi_dataset_tune \
+	    --collection-dir "$(MULTI_BATCH_ROOT)" \
+	    --scenario "$(LOCAL_SCENARIO)" \
+	    --phase 2 \
+	    --phase-params "$(MULTI_BATCH_ROOT)/phase1_acc.yaml" \
+	    --out "$(MULTI_BATCH_ROOT)/phase2_steer.yaml"
+	@echo "[INFO] Step 4: Phase 0 Integrated Tuning & Validity Report Generation..."
+	source $(SETUP_BASH) && $(PYTHON) -m driving_log_replayer_v2.real_log_sim_comparison.multi_dataset_tune \
+	    --collection-dir "$(MULTI_BATCH_ROOT)" \
+	    --scenario "$(LOCAL_SCENARIO)" \
+	    --phase 0 \
+	    --phase-params "$(MULTI_BATCH_ROOT)/phase2_steer.yaml" \
+	    --out "$(MULTI_BATCH_ROOT)/tuned_params.yaml" \
+	    --report "$(MULTI_BATCH_ROOT)/physical_validity_report.html"
+	@echo "[INFO] Step 5: Applying tuned parameters to scenario..."
+	source $(SETUP_BASH) && $(PYTHON) -m driving_log_replayer_v2.real_log_sim_comparison.apply_tuned_params \
+	    --scenario "$(LOCAL_SCENARIO)" \
+	    --params "$(MULTI_BATCH_ROOT)/tuned_params.yaml" \
+	    --out "$(MULTI_BATCH_ROOT)/scenarios/tuned_scenario.yaml"
+	@echo "[INFO] Step 6: Running closed-loop batch run using tuned parameters for selected datasets..."
+	source $(SETUP_BASH) && $(PYTHON) -m driving_log_replayer_v2.real_log_sim_comparison.run_batch \
+	    --scenario "$(MULTI_BATCH_ROOT)/scenarios/tuned_scenario.yaml" \
 	    --batch-root "$(MULTI_BATCH_ROOT)" \
 	    --input-mode raw \
 	    --closed-loop-uuids "$(CLOSED_LOOP_UUIDS)" \

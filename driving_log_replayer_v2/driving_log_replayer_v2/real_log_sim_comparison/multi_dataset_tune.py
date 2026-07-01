@@ -285,6 +285,91 @@ def _eval_grid(
     return [_agg(pm, baselines) for pm in per_trial]
 
 
+def _run_worker(
+    worker_id: int,
+    db_url: str,
+    n_trials_w: int,
+    n_trials: int,
+    cur_best: dict,
+    CONTINUOUS_SPACE: dict,
+    explore_delay: bool,
+    DELAY_CANDIDATES: tuple[float, ...],
+    explore_steer_delay: bool,
+    STEER_DELAY_CANDIDATES: tuple[float, ...],
+    ctxs_search: list[DatasetCtx],
+    cur_model: str,
+    score_fn,
+    worst_w: float,
+    _phase_agg_fn,
+    out_path,
+) -> None:
+    """fork プールワーカー: SQLite 経由で Optuna study.optimize を並列実行。"""
+    import os
+    import yaml
+    import optuna
+
+    # Set OMP_NUM_THREADS to 1 to avoid core oversubscription in workers
+    os.environ["OMP_NUM_THREADS"] = "1"
+
+    # Reload study in worker
+    study = optuna.load_study(study_name="robust_search", storage=db_url)
+
+    def _checkpoint(params: dict, score: float) -> None:
+        if out_path is None:
+            return
+        tmp = out_path.with_suffix(".tmp")
+        out_path.parent.mkdir(parents=True, exist_ok=True)
+        tmp.write_text(
+            yaml.safe_dump({"params": params, "score": score}, allow_unicode=True, sort_keys=False),
+            encoding="utf-8",
+        )
+        tmp.rename(out_path)
+
+    def worker_objective(trial: optuna.Trial) -> float:
+        params = dict(cur_best)
+        for pname, (lo, hi) in CONTINUOUS_SPACE.items():
+            params[pname] = trial.suggest_float(pname, lo, hi)
+        if explore_delay:
+            params["acc_time_delay"] = trial.suggest_categorical(
+                "acc_time_delay", DELAY_CANDIDATES
+            )
+        if explore_steer_delay:
+            params["steer_time_delay"] = trial.suggest_categorical(
+                "steer_time_delay", STEER_DELAY_CANDIDATES
+            )
+
+        agg = _eval_grid(None, ctxs_search, [params], cur_model, 1, agg_fn=_phase_agg_fn)[0]
+        score = score_fn(agg, worst_w=worst_w)
+
+        try:
+            current_best = study.best_value
+        except ValueError:
+            current_best = float("inf")
+
+        if score < current_best:
+            _checkpoint(params, score)
+
+        return score
+
+    def worker_log(study: optuna.Study, trial: optuna.trial.FrozenTrial) -> None:
+        if trial.state == optuna.trial.TrialState.COMPLETE:
+            try:
+                n_completed = len(study.trials)
+                best_val = study.best_value
+            except Exception:
+                n_completed = 0
+                best_val = trial.value
+            print(
+                f"trial {n_completed:3d}/{n_trials} (worker {worker_id})"
+                f"  score={trial.value:.4f}"
+                f"  best={best_val:.4f}"
+                f"  {trial.params}"
+            )
+
+    study.optimize(worker_objective, n_trials=n_trials_w, callbacks=[worker_log])
+
+
+
 def robust_search(
     ctxs: list[DatasetCtx],
     cfg,
@@ -848,107 +933,198 @@ def robust_search(
                 if key not in ctx.gt_cache:
                     ctx.gt_cache[key] = s5._prepare_gt(ctx.data, ctx.t0_ns, merged)
 
-    # プール生成 (gt 事前計算完了後にフォーク → COW 共有確定)
-    pool = None
-    if n_jobs > 1:
-        mp_ctx = multiprocessing.get_context("fork")
-        pool = mp_ctx.Pool(n_jobs)
-        print(f"[INFO] 並列実行: {n_jobs} workers (fork)")
+    optuna.logging.set_verbosity(optuna.logging.WARNING)
+    sampler = optuna.samplers.TPESampler(multivariate=True, seed=42)
 
-    try:
-        # 初期スコア表示
-        init_agg = _eval_grid(pool, ctxs_search, [cur_best], cur_model, n_jobs, agg_fn=_phase_agg_fn)[0]
-        init_score = score_fn(init_agg, worst_w=worst_w)
-        phase_label = f"phase={phase}" if phase else "phase=0(all)"
-        print(f"\n## Optuna TPE ({case_name}, {n_trials} trials, cross-dataset normalized, worst_w={worst_w}, {phase_label})")
-        print(format_agg("init", init_agg) + f"  score={init_score:.4f}  {cur_best}")
+    # warm start: trial 0+ に既知良点を投入
+    delay_list = list(DELAY_CANDIDATES)
+    steer_delay_list = list(STEER_DELAY_CANDIDATES)
 
-        best_result: dict = {"params": dict(cur_best), "score": init_score, "agg": init_agg}
-        _checkpoint(cur_best, init_score)
+    def _make_enqueue(params: dict) -> dict:
+        eq: dict = {k: float(params[k]) for k in CONTINUOUS_SPACE if k in params}
+        if explore_delay:
+            if "acc_time_delay" in params:
+                v = float(params["acc_time_delay"])
+                eq["acc_time_delay"] = min(delay_list, key=lambda x: abs(x - v))
+            elif ctxs and "acc_time_delay" in ctxs[0].base:
+                spec_v = float(ctxs[0].base["acc_time_delay"])
+                eq["acc_time_delay"] = min(delay_list, key=lambda x: abs(x - spec_v))
+            else:
+                eq["acc_time_delay"] = delay_list[0]
+        if explore_steer_delay:
+            if "steer_time_delay" in params:
+                v = float(params["steer_time_delay"])
+                eq["steer_time_delay"] = min(steer_delay_list, key=lambda x: abs(x - v))
+            else:
+                eq["steer_time_delay"] = steer_delay_list[0]
+        return eq
 
-        def objective(trial: optuna.Trial) -> float:
-            params = dict(cur_best)  # 固定パラメータ (n_substep 等) を継承
-            for pname, (lo, hi) in CONTINUOUS_SPACE.items():
-                params[pname] = trial.suggest_float(pname, lo, hi)
-            if explore_delay:
-                params["acc_time_delay"] = trial.suggest_categorical(
-                    "acc_time_delay", DELAY_CANDIDATES
+    if n_jobs <= 1:
+        # Sequential path: in-memory Optuna (fully deterministic & low overhead)
+        try:
+            # 初期スコア表示
+            init_agg = _eval_grid(None, ctxs_search, [cur_best], cur_model, 1, agg_fn=_phase_agg_fn)[0]
+            init_score = score_fn(init_agg, worst_w=worst_w)
+            phase_label = f"phase={phase}" if phase else "phase=0(all)"
+            print(f"\n## Optuna TPE ({case_name}, {n_trials} trials, cross-dataset normalized, worst_w={worst_w}, {phase_label})")
+            print(format_agg("init", init_agg) + f"  score={init_score:.4f}  {cur_best}")
+
+            best_result: dict = {"params": dict(cur_best), "score": init_score, "agg": init_agg}
+            _checkpoint(cur_best, init_score)
+
+            def objective(trial: optuna.Trial) -> float:
+                params = dict(cur_best)
+                for pname, (lo, hi) in CONTINUOUS_SPACE.items():
+                    params[pname] = trial.suggest_float(pname, lo, hi)
+                if explore_delay:
+                    params["acc_time_delay"] = trial.suggest_categorical(
+                        "acc_time_delay", DELAY_CANDIDATES
+                    )
+                if explore_steer_delay:
+                    params["steer_time_delay"] = trial.suggest_categorical(
+                        "steer_time_delay", STEER_DELAY_CANDIDATES
+                    )
+
+                agg = _eval_grid(None, ctxs_search, [params], cur_model, 1, agg_fn=_phase_agg_fn)[0]
+                score = score_fn(agg, worst_w=worst_w)
+
+                if score < best_result["score"]:
+                    best_result.update({"params": dict(params), "score": score, "agg": agg})
+                    _checkpoint(params, score)
+
+                return score
+
+            def _log_cb(study: optuna.Study, trial: optuna.trial.FrozenTrial) -> None:
+                if trial.state == optuna.trial.TrialState.COMPLETE:
+                    print(
+                        f"trial {trial.number + 1:3d}/{n_trials}"
+                        f"  score={trial.value:.4f}"
+                        f"  best={study.best_value:.4f}"
+                        f"  {trial.params}"
+                    )
+
+            study = optuna.create_study(direction="minimize", sampler=sampler)
+            study.enqueue_trial(_make_enqueue(cur_best))
+            for ep in (extra_enqueue or []):
+                study.enqueue_trial(_make_enqueue(ep))
+
+            study.optimize(objective, n_trials=n_trials, callbacks=[_log_cb])
+
+            state = best_result["params"]
+            best_s = best_result["score"]
+            print(format_agg("FINAL", best_result["agg"]) + f"  score={best_s:.4f}")
+            print(f"FINAL params: {state}")
+            _checkpoint(state, best_s)
+
+            if search_subsample and len(ctxs_search) < len(ctxs):
+                print(f"[INFO] 最終 score を全 {len(ctxs)} データセットで評価中...")
+                full_agg = _eval_grid(None, ctxs, [state], cur_model, 1, agg_fn=_phase_agg_fn)[0]
+                best_s = score_fn(full_agg, worst_w=worst_w)
+                print(format_agg("FINAL(全件)", full_agg) + f"  score={best_s:.4f}")
+                best_result.update({"score": best_s, "agg": full_agg})
+
+            return {"params": state, "agg": best_result["agg"], "score": best_s}
+        finally:
+            pass
+
+    else:
+        # Parallel path: SQLite + Process-based concurrency (zero-copy for ctxs via fork COW)
+        import tempfile
+        from multiprocessing import Process
+
+        db_fd, db_path = tempfile.mkstemp(suffix=".db")
+        os.close(db_fd)
+        db_url = f"sqlite:///{db_path}"
+
+        try:
+            # 初期スコア表示
+            init_agg = _eval_grid(None, ctxs_search, [cur_best], cur_model, 1, agg_fn=_phase_agg_fn)[0]
+            init_score = score_fn(init_agg, worst_w=worst_w)
+            phase_label = f"phase={phase}" if phase else "phase=0(all)"
+            print(f"\n## Optuna TPE ({case_name}, {n_trials} trials, cross-dataset normalized, worst_w={worst_w}, {phase_label}) [SQLite Process Parallel: {n_jobs} jobs]")
+            print(format_agg("init", init_agg) + f"  score={init_score:.4f}  {cur_best}")
+            _checkpoint(cur_best, init_score)
+
+            # Create shared SQLite study
+            study = optuna.create_study(
+                study_name="robust_search",
+                storage=db_url,
+                direction="minimize",
+                sampler=sampler,
+                load_if_exists=True
+            )
+
+            study.enqueue_trial(_make_enqueue(cur_best))
+            for ep in (extra_enqueue or []):
+                study.enqueue_trial(_make_enqueue(ep))
+
+            trials_per_worker = [n_trials // n_jobs] * n_jobs
+            for i in range(n_trials % n_jobs):
+                trials_per_worker[i] += 1
+
+            processes = []
+            for worker_id, n_trials_w in enumerate(trials_per_worker):
+                if n_trials_w == 0:
+                    continue
+                p = Process(
+                    target=_run_worker,
+                    args=(
+                        worker_id,
+                        db_url,
+                        n_trials_w,
+                        n_trials,
+                        cur_best,
+                        CONTINUOUS_SPACE,
+                        explore_delay,
+                        DELAY_CANDIDATES,
+                        explore_steer_delay,
+                        STEER_DELAY_CANDIDATES,
+                        ctxs_search,
+                        cur_model,
+                        score_fn,
+                        worst_w,
+                        _phase_agg_fn,
+                        out_path,
+                    ),
                 )
-            if explore_steer_delay:
-                params["steer_time_delay"] = trial.suggest_categorical(
-                    "steer_time_delay", STEER_DELAY_CANDIDATES
-                )
+                p.start()
+                processes.append(p)
 
-            agg = _eval_grid(pool, ctxs_search, [params], cur_model, n_jobs, agg_fn=_phase_agg_fn)[0]
-            score = score_fn(agg, worst_w=worst_w)
+            for p in processes:
+                p.join()
 
-            if score < best_result["score"]:
-                best_result.update({"params": dict(params), "score": score, "agg": agg})
-                _checkpoint(params, score)
+            # Reload study results in the main process to find the overall best trial
+            study = optuna.load_study(study_name="robust_search", storage=db_url)
+            best_trial = study.best_trial
+            best_params = best_trial.params
+            best_s = best_trial.value
 
-            return score
+            state = dict(cur_best)
+            state.update(best_params)
 
-        def _log_cb(study: optuna.Study, trial: optuna.trial.FrozenTrial) -> None:
-            if trial.state == optuna.trial.TrialState.COMPLETE:
-                print(
-                    f"trial {trial.number + 1:3d}/{n_trials}"
-                    f"  score={trial.value:.4f}"
-                    f"  best={study.best_value:.4f}"
-                    f"  {trial.params}"
-                )
+            # Re-evaluate the best params to get the final agg
+            print(f"[INFO] Optuna optimization complete. Re-evaluating best params...")
+            final_agg = _eval_grid(None, ctxs_search, [state], cur_model, 1, agg_fn=_phase_agg_fn)[0]
 
-        optuna.logging.set_verbosity(optuna.logging.WARNING)
-        sampler = optuna.samplers.TPESampler(multivariate=True, seed=42)
-        study = optuna.create_study(direction="minimize", sampler=sampler)
+            print(format_agg("FINAL", final_agg) + f"  score={best_s:.4f}")
+            print(f"FINAL params: {state}")
+            _checkpoint(state, best_s)
 
-        # warm start: trial 0+ に既知良点を投入
-        delay_list = list(DELAY_CANDIDATES)
-        steer_delay_list = list(STEER_DELAY_CANDIDATES)
+            if search_subsample and len(ctxs_search) < len(ctxs):
+                print(f"[INFO] 最終 score を全 {len(ctxs)} データセットで評価中...")
+                full_agg = _eval_grid(None, ctxs, [state], cur_model, 1, agg_fn=_phase_agg_fn)[0]
+                best_s = score_fn(full_agg, worst_w=worst_w)
+                print(format_agg("FINAL(全件)", full_agg) + f"  score={best_s:.4f}")
+                final_agg = full_agg
 
-        def _make_enqueue(params: dict) -> dict:
-            eq: dict = {k: float(params[k]) for k in CONTINUOUS_SPACE if k in params}
-            if explore_delay:
-                if "acc_time_delay" in params:
-                    v = float(params["acc_time_delay"])
-                    eq["acc_time_delay"] = min(delay_list, key=lambda x: abs(x - v))
-                elif ctxs and "acc_time_delay" in ctxs[0].base:
-                    spec_v = float(ctxs[0].base["acc_time_delay"])
-                    eq["acc_time_delay"] = min(delay_list, key=lambda x: abs(x - spec_v))
-                else:
-                    eq["acc_time_delay"] = delay_list[0]
-            if explore_steer_delay:
-                if "steer_time_delay" in params:
-                    v = float(params["steer_time_delay"])
-                    eq["steer_time_delay"] = min(steer_delay_list, key=lambda x: abs(x - v))
-                else:
-                    eq["steer_time_delay"] = steer_delay_list[0]
-            return eq
+            return {"params": state, "agg": final_agg, "score": best_s}
 
-        study.enqueue_trial(_make_enqueue(cur_best))
-        for ep in (extra_enqueue or []):
-            study.enqueue_trial(_make_enqueue(ep))
-
-        study.optimize(objective, n_trials=n_trials, callbacks=[_log_cb])
-
-        state = best_result["params"]
-        best_s = best_result["score"]
-        print(format_agg("FINAL", best_result["agg"]) + f"  score={best_s:.4f}")
-        print(f"FINAL params: {state}")
-        _checkpoint(state, best_s)
-
-        # search_subsample 指定時: 最終 params の score を全件で再評価
-        if search_subsample and len(ctxs_search) < len(ctxs):
-            print(f"[INFO] 最終 score を全 {len(ctxs)} データセットで評価中...")
-            full_agg = _eval_grid(pool, ctxs, [state], cur_model, n_jobs, agg_fn=_phase_agg_fn)[0]
-            best_s = score_fn(full_agg, worst_w=worst_w)
-            best_result.update({"score": best_s, "agg": full_agg})
-            print(format_agg("FINAL(全件)", full_agg) + f"  score={best_s:.4f}")
-
-        return {"params": state, "agg": best_result["agg"], "score": best_s}
-    finally:
-        if pool is not None:
-            pool.close()
-            pool.join()
+        finally:
+            try:
+                if os.path.exists(db_path):
+                    os.remove(db_path)
+            except Exception as e:
+                print(f"[WARN] Failed to delete temp database {db_path}: {e}")
 
 
 def _discover(collection_dir: Path) -> list[tuple[str, Path]]:

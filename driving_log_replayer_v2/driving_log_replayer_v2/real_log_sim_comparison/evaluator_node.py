@@ -379,7 +379,7 @@ def run_analysis(
     except RuntimeError as exc:
         logger.warning(f"Stage CL4 (step_cl4_compare_dp_trajectory) failed but continuing: {exc}")
 
-    # ---- Stage Report HTML: comparison/ 配下の全アセットを 1 枚に埋め込んだ自己完結 HTML 生成 ----
+    # ---- Stage Report HTML: comparison/ 配下の全アセットを 1枚に埋め込んだ自己完結 HTML 生成 ----
     logger.info("Stage Report HTML: step_report_html (result_archive/real_log_sim_comparison/report.html)")
     try:
         _run([
@@ -388,16 +388,6 @@ def run_analysis(
         ], env=env, timeout=300)
     except RuntimeError as exc:
         logger.warning(f"Stage Report HTML (step_report_html) failed but continuing: {exc}")
-
-    # ---- Stage Report Notebook: 開発者向け notebook (report.ipynb) 生成 ----
-    logger.info("Stage Report Notebook: step_report_notebook (result_archive/real_log_sim_comparison/report.ipynb)")
-    try:
-        _run([
-            sys.executable, "-m",
-            "driving_log_replayer_v2.real_log_sim_comparison.step_report_notebook",
-        ], env=env, timeout=120)
-    except RuntimeError as exc:
-        logger.warning(f"Stage Report Notebook (step_report_notebook) failed but continuing: {exc}")
 
     # ---- 生成物カウント (E1: 沈黙の失敗対策) ----
     # Stage CL2 / OL1 は失敗継続するため、実際に出力が出た数を数えて成否判定の材料にする。
@@ -421,16 +411,15 @@ def run_analysis(
             (comparison_dir / "figures" / "dp_real_vs_sim.svg").exists()
             or (comparison_dir / "figures" / "dp_real_vs_sim.fig.json").exists()
         ),
-        # report.html / report.ipynb は comparison/ の親 (result_archive/) 直下に生成される。
+        # report.html は comparison/ の親 (result_archive/) 直下に生成される。
         "report_html_ok": int((comparison_dir.parent / "report.html").exists()),
-        "report_ipynb_ok": int((comparison_dir.parent / "report.ipynb").exists()),
     }
     logger.info(
         f"Pipeline outputs: sim_runs {sim_produced}/{len(sim_cfg.runs)}, "
         f"cases {cases_produced}/{len(cases_cfg.cases)}, "
         f"report={counts['report_ok']}, cases_summary={counts['cases_summary_ok']}, "
         f"param_sweep={counts['param_sweep_ok']}, dp_compare={counts['dp_compare_ok']}, "
-        f"report_html={counts['report_html_ok']}, report_ipynb={counts['report_ipynb_ok']}"
+        f"report_html={counts['report_html_ok']}"
     )
     return counts
 
