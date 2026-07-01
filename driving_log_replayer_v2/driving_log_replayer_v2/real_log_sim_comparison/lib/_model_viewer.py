@@ -90,13 +90,8 @@ def _seed_from_params(params: dict) -> dict:
         "steer_bias": f("steer_bias", 0.0),
         "k_us": f("k_us", 0.0),
 
-        # 速度依存 k_us ステップモデル（Phase 43+）:
-        #   vx < thresh1 → k_us_lo, thresh1 <= vx < thresh2 → k_us_mid, vx >= thresh2 → k_us
-        # thresh1=thresh2=0 のとき無効（ランプモデルにフォールバック）
-        "k_us_lo":         f("k_us_lo", 0.0),
-        "k_us_mid":        f("k_us_mid", 0.0),
-        "k_us_vx_thresh":  f("k_us_vx_thresh", 0.0),
-        "k_us_vx_thresh2": f("k_us_vx_thresh2", 0.0),
+        "k_us_bands": params.get("k_us_bands"),
+        "k_us_thresholds": params.get("k_us_thresholds"),
         # C++ calcModel: steer_des = sat(cmd, lim) * debug_steer_scaling_factor, 同様に acc_des
         "steer_scaling": f("debug_steer_scaling_factor", 1.0),
         "acc_scaling": f("debug_acc_scaling_factor", 1.0),
@@ -356,10 +351,8 @@ const DATA = __PAYLOAD_JSON__;
     c_slope: DATA.model_seed.c_slope, slopeOn: true, // 勾配重力 (a_target += c_slope·a_slope, 既定 ON)
     tau_steer: DATA.model_seed.tau_steer, t_steer: DATA.model_seed.t_steer,
     k_us: DATA.model_seed.k_us,
-    k_us_lo: DATA.model_seed.k_us_lo ?? 0,
-    k_us_mid: DATA.model_seed.k_us_mid ?? 0,
-    k_us_vx_thresh: DATA.model_seed.k_us_vx_thresh ?? 0,
-    k_us_vx_thresh2: DATA.model_seed.k_us_vx_thresh2 ?? 0,
+    k_us_bands: DATA.model_seed.k_us_bands ?? null,
+    k_us_thresholds: DATA.model_seed.k_us_thresholds ?? null,
     steer_bias: DATA.model_seed.steer_bias * RAD2DEG, // rad→deg (β つまみは度表示)
     // C++ debug_steer_scaling_factor: steer_des = sat(cmd, lim) * scaling (飽和後に乗算)
     steer_scaling: DATA.model_seed.steer_scaling ?? 1.0,
@@ -463,15 +456,14 @@ const DATA = __PAYLOAD_JSON__;
     const simSteer = true;
     const outDt = 1 / RATE, h = outDt / SUBSTEP;
 
-    // k_us_eff(vx): ステップモデル（thresh>0）またはランプモデルを自動選択。
-    // ステップモデル: thresh1>0 → vx<thresh1 で k_us_lo, vx<thresh2 で k_us_mid, それ以外 k_us
-    // ランプモデル:  k_us_eff = k_us * clamp((vx-lo)/(hi-lo), 0, 1)
+    // アンダーステア勾配 (k_us) 計算。C++ 版と同様に step bands (k_us_bands/k_us_thresholds) またはスカラー k_us を適用。
     const kusEff = (vv) => {
-      const thresh1 = model.k_us_vx_thresh, thresh2 = model.k_us_vx_thresh2;
-      if (thresh1 > 0 || thresh2 > 0) {
-        if (vv < thresh1) return model.k_us_lo;
-        if (thresh2 > thresh1 && vv < thresh2) return model.k_us_mid;
-        return model.k_us;
+      const bands = model.k_us_bands, thresh = model.k_us_thresholds;
+      if (bands && bands.length > 0 && thresh) {
+        for (let i = 0; i < thresh.length; i++) {
+          if (vv < thresh[i]) return bands[i];
+        }
+        return bands[bands.length - 1];
       }
       return model.k_us;
     };
@@ -605,8 +597,7 @@ const DATA = __PAYLOAD_JSON__;
     if (!seed) return null;
     const sv = {
       k_us: model.k_us,
-      k_us_lo: model.k_us_lo, k_us_mid: model.k_us_mid,
-      k_us_vx_thresh: model.k_us_vx_thresh, k_us_vx_thresh2: model.k_us_vx_thresh2,
+      k_us_bands: model.k_us_bands, k_us_thresholds: model.k_us_thresholds,
       steer_dead_band: model.steer_dead_band,
       tau_acc_thr: model.tau_acc_thr, t_acc_thr: model.t_acc_thr,
       tau_acc_brk: model.tau_acc_brk, t_acc_brk: model.t_acc_brk,
@@ -618,10 +609,8 @@ const DATA = __PAYLOAD_JSON__;
       c_corner: model.c_corner, cornerOn: model.cornerOn, c_slope: model.c_slope,
     };
     model.k_us         = seed.k_us         ?? sv.k_us;
-    model.k_us_lo      = seed.k_us_lo      ?? sv.k_us_lo;
-    model.k_us_mid     = seed.k_us_mid     ?? sv.k_us_mid;
-    model.k_us_vx_thresh  = seed.k_us_vx_thresh  ?? sv.k_us_vx_thresh;
-    model.k_us_vx_thresh2 = seed.k_us_vx_thresh2 ?? sv.k_us_vx_thresh2;
+    model.k_us_bands      = seed.k_us_bands      ?? sv.k_us_bands;
+    model.k_us_thresholds = seed.k_us_thresholds ?? sv.k_us_thresholds;
     model.steer_dead_band = seed.steer_dead_band ?? sv.steer_dead_band;
     model.tau_acc_thr = seed.tau_acc_thr ?? sv.tau_acc_thr;
     model.t_acc_thr   = seed.t_acc_thr   ?? sv.t_acc_thr;
@@ -884,12 +873,13 @@ $("errpanels").addEventListener("change", (e) => { showErr = e.target.checked; m
     const wzA = run.ch.wz, dA = run.ch.steer, vA = run.ch.lon_vel;
     const [iLo, iHi] = optIndexRange();
     // kusEffStatic: rollout 内の kusEff と同じロジック（ローカルクロージャ不可のため再定義）
-    const thresh1 = model.k_us_vx_thresh, thresh2 = model.k_us_vx_thresh2;
     const kusEffStatic = (vv) => {
-      if (thresh1 > 0 || thresh2 > 0) {
-        if (vv < thresh1) return model.k_us_lo;
-        if (thresh2 > thresh1 && vv < thresh2) return model.k_us_mid;
-        return model.k_us;
+      const bands = model.k_us_bands, thresh = model.k_us_thresholds;
+      if (bands && bands.length > 0 && thresh) {
+        for (let i = 0; i < thresh.length; i++) {
+          if (vv < thresh[i]) return bands[i];
+        }
+        return bands[bands.length - 1];
       }
       return model.k_us;
     };
@@ -964,10 +954,8 @@ $("errpanels").addEventListener("change", (e) => { showErr = e.target.checked; m
     model.c_slope = (seed.c_slope != null) ? seed.c_slope : 1.0; // 勾配ゲイン (toggle は維持)
     model.tau_steer = seed.tau_steer; model.t_steer = seed.t_steer;
     model.k_us = seed.k_us;
-    model.k_us_lo        = seed.k_us_lo        ?? 0;
-    model.k_us_mid       = seed.k_us_mid       ?? 0;
-    model.k_us_vx_thresh  = seed.k_us_vx_thresh  ?? 0;
-    model.k_us_vx_thresh2 = seed.k_us_vx_thresh2 ?? 0;
+    model.k_us_bands      = seed.k_us_bands      ?? null;
+    model.k_us_thresholds = seed.k_us_thresholds ?? null;
     model.steer_bias = seed.steer_bias * RAD2DEG; // seed は rad、つまみは deg
     model.steer_scaling = seed.steer_scaling ?? 1.0;
     model.acc_scaling = seed.acc_scaling ?? 1.0;

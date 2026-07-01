@@ -23,7 +23,7 @@ if _INSTALL.exists() and str(_INSTALL) not in sys.path:
     sys.path.insert(0, str(_INSTALL))
 
 from driving_log_replayer_v2.real_log_sim_comparison.multi_dataset_tune import (
-    _BASELINE_MODEL, _discover, _filter_by_date, load_datasets,
+    _BASELINE_MODEL, _discover, _filter_by_date, load_datasets, unify_step_bands,
 )
 import driving_log_replayer_v2.real_log_sim_comparison.step_ol1_analyze_nstep as s5
 import pandas as pd
@@ -59,14 +59,10 @@ PARAMS = yd.get("params", yd)
 
 
 def build_override(base: dict) -> dict:
-    ov = dict(base)
+    ov = unify_step_bands(dict(base))
     ov.update(PARAMS)
     ov["k_us_bands"]      = []
     ov["k_us_thresholds"] = []
-    ov["k_us_vx_thresh"]  = 0.0
-    ov["k_us_vx_thresh2"] = 0.0
-    ov.pop("k_us_lo",  None)
-    ov.pop("k_us_mid", None)
     return ov
 
 

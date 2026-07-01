@@ -304,21 +304,7 @@ class VehicleModel:
             self._steer_bias = 0.0
         elif model_type == "delay_steer_acc_geared_wo_fall_guard":
             # k_us step-band mode: k_us_bands (list) + k_us_thresholds (list, len = len(bands)-1)
-            # n_kus_bands == 0 → legacy single k_us + optional ramp (backward compatible)
-            #
-            # Backward compat: k_us_lo/k_us_vx_thresh/k_us_mid/k_us_vx_thresh2 keys
-            # (Phase 14/43/44) → k_us_bands / k_us_thresholds
-            if "k_us_lo" in p and "k_us_bands" not in p:
-                thresh1 = p.get("k_us_vx_thresh", 0.0)
-                if thresh1 > 0.0:
-                    p = dict(p)
-                    thresh2 = p.get("k_us_vx_thresh2", 0.0)
-                    if "k_us_mid" in p and thresh2 > thresh1:
-                        p["k_us_bands"] = [p["k_us_lo"], p["k_us_mid"], p.get("k_us", 0.0)]
-                        p["k_us_thresholds"] = [thresh1, thresh2]
-                    else:
-                        p["k_us_bands"] = [p["k_us_lo"], p.get("k_us", 0.0)]
-                        p["k_us_thresholds"] = [thresh1]
+            # n_kus_bands == 0 → legacy single k_us
             kus_bands = p.get("k_us_bands", [])
             kus_thresh = p.get("k_us_thresholds", [])
             n_kus_bands = len(kus_bands)

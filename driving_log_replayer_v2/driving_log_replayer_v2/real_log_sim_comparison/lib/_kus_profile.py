@@ -15,27 +15,8 @@ VX_EDGES = np.array([0.5, 1.0, 1.5, 2.0, 2.5, 3.0, 4.0, 5.0, 6.0, 8.0, 10.0, 12.
 
 
 def _resolve_kus_bands(params: dict) -> tuple[list | None, list | None]:
-    """params から k_us 速度帯 (bands, thresholds) を解決する。
-
-    新形式: k_us_bands (list) + k_us_thresholds (list) を使用。
-    後方互換: k_us_lo / k_us_vx_thresh / k_us_mid / k_us_vx_thresh2 を自動変換。
-    どちらの形式も無ければ (None, None) を返す。
-    """
-    bands = params.get("k_us_bands")
-    thresholds = params.get("k_us_thresholds")
-
-    if bands is None and "k_us_lo" in params:
-        thresh1 = params.get("k_us_vx_thresh", 0.0)
-        if thresh1 > 0.0:
-            thresh2 = params.get("k_us_vx_thresh2", 0.0)
-            if "k_us_mid" in params and thresh2 > thresh1:
-                bands = [params["k_us_lo"], params["k_us_mid"], params.get("k_us", 0.0)]
-                thresholds = [thresh1, thresh2]
-            else:
-                bands = [params["k_us_lo"], params.get("k_us", 0.0)]
-                thresholds = [thresh1]
-
-    return bands, thresholds
+    """params から k_us 速度帯 (bands, thresholds) を解決する。"""
+    return params.get("k_us_bands"), params.get("k_us_thresholds")
 
 
 def _kus_step_profile(vx: np.ndarray, params: dict) -> np.ndarray:

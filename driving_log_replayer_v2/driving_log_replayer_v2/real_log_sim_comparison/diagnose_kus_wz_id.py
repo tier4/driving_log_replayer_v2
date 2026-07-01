@@ -54,6 +54,7 @@ from driving_log_replayer_v2.real_log_sim_comparison.multi_dataset_tune import (
     _eval as _tune_eval,
     _filter_by_date,
     load_datasets,
+    unify_step_bands,
 )
 from driving_log_replayer_v2.real_log_sim_comparison.lib._multi_agg import (
     HORIZONS as POS_HORIZONS,
@@ -175,16 +176,8 @@ def _build_kus_override(
 
     thresh=0 → Python 側で bands/thresholds ベクタが空 → n_kus_bands_=0 → scalar mode に切替。
     """
-    override = dict(base_params)
-    # thresh=0 → scalar mode
-    override["k_us_vx_thresh"]  = 0.0
-    override["k_us_vx_thresh2"] = 0.0
-    # 旧式バンドキー（phase44 系 k_us_lo/mid）を除去
-    override.pop("k_us_lo", None)
-    override.pop("k_us_mid", None)
+    override = unify_step_bands(dict(base_params))
     # k_us_bands / k_us_thresholds を空リストで上書き → n_kus_bands=0 → scalar mode
-    # 重要: pop() では ctx.base 由来の同名キー（simulator_model.param.yaml の k_us_bands=[0,0.02,0.016]）
-    # が params.update(override) 後に残存する。空リストで明示的に上書きすることで消去する。
     override["k_us_bands"]      = []
     override["k_us_thresholds"] = []
     # sweep 対象: k_us スカラーを設定（Phase 47 では探索対象として pop; ここでは sweep 値を注入）

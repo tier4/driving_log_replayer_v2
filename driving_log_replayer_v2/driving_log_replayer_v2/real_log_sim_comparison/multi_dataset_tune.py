@@ -54,6 +54,26 @@ _GT_KEYS = ("acc_time_delay", "steer_time_delay", "wheelbase", "sub_dt")
 _VERBOSE: bool = False
 
 
+def unify_step_bands(params: dict) -> dict:
+    """k_us_lo/mid/vx_thresh/vx_thresh2 を k_us_bands/k_us_thresholds に統一する。"""
+    p = dict(params)
+    if "k_us_lo" in p:
+        thresh1 = p.get("k_us_vx_thresh", 0.0)
+        if thresh1 > 0.0:
+            thresh2 = p.get("k_us_vx_thresh2", 0.0)
+            if "k_us_mid" in p and thresh2 > thresh1:
+                p["k_us_bands"] = [p["k_us_lo"], p["k_us_mid"], p.get("k_us", 0.0)]
+                p["k_us_thresholds"] = [thresh1, thresh2]
+            else:
+                p["k_us_bands"] = [p["k_us_lo"], p.get("k_us", 0.0)]
+                p["k_us_thresholds"] = [thresh1]
+        p.pop("k_us_lo", None)
+        p.pop("k_us_mid", None)
+        p.pop("k_us_vx_thresh", None)
+        p.pop("k_us_vx_thresh2", None)
+    return p
+
+
 @dataclass
 class DatasetCtx:
     """1 データセットの rollout 実行コンテキスト (data/t0/base params を保持)。"""
@@ -338,6 +358,7 @@ def _run_worker(
                 "steer_time_delay", STEER_DELAY_CANDIDATES
             )
 
+        params = unify_step_bands(params)
         agg = _eval_grid(None, ctxs_search, [params], cur_model, 1, agg_fn=_phase_agg_fn)[0]
         score = score_fn(agg, worst_w=worst_w)
 
@@ -411,7 +432,7 @@ def robust_search(
 
     ctxs_search = ctxs[:search_subsample] if search_subsample else ctxs
     cur_case = cfg.find_case(case_name)
-    cur_best = dict(cur_case.params)
+    cur_best = unify_step_bands(dict(cur_case.params))
     cur_model = cur_case.vehicle_model_type
 
     if search_subsample:
@@ -957,6 +978,7 @@ def robust_search(
                         "steer_time_delay", STEER_DELAY_CANDIDATES
                     )
 
+                params = unify_step_bands(params)
                 agg = _eval_grid(None, ctxs_search, [params], cur_model, 1, agg_fn=_phase_agg_fn)[0]
                 score = score_fn(agg, worst_w=worst_w)
 
@@ -1354,7 +1376,7 @@ def main() -> None:
             p = Path(path_str)
             with p.open("r") as f:
                 data = yaml.safe_load(f)
-            extra_enqueue.append(data["params"])
+            extra_enqueue.append(unify_step_bands(data["params"]))
         print(f"[INFO] extra enqueue: {len(extra_enqueue)} params loaded")
 
     phase_fixed_params: dict | None = None
@@ -1362,7 +1384,7 @@ def main() -> None:
         p = Path(args.phase_params)
         with p.open("r") as f:
             phase_data = yaml.safe_load(f)
-        all_params = phase_data.get("params", phase_data)
+        all_params = unify_step_bands(phase_data.get("params", phase_data))
         acc_keys = {"acc_time_constant", "acc_time_delay"}
         # Phase 43/44/45/46/47/48: 前フェーズの全 params を cur_best として継承（探索空間外の値を保持）
         if args.phase in (43, 44, 45, 46, 47, 48):
