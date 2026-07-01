@@ -108,7 +108,7 @@ def write_single_dataset_scenario(scenario: Path, uuid: str, out_path: Path) -> 
 
 def run_one_dataset(
     uuid: str, scenario_single: Path, t4_dataset_path: Path, output_dir: Path,
-    *, skip_sim: bool = False,
+    *, skip_sim: bool = False, skip_ol: bool = False,
 ) -> bool:
     """1 dataset の per-dataset パイプラインを ros2 launch で実行する (成功で True)。
 
@@ -116,6 +116,7 @@ def run_one_dataset(
     呼び出し元 shell で source 済みであることを前提とする。
     skip_sim=True で SKIP_SIM=1 を evaluator_node へ伝搬し、Stage CL2 (closed-loop sim) を
     省略する (open-loop 解析のみ。詳細は evaluator_node.run_pipeline)。
+    skip_ol=True で SKIP_OL=1 を伝搬し、オープンループ解析も省略する。
     """
     output_dir.mkdir(parents=True, exist_ok=True)
     cmd = [
@@ -129,7 +130,9 @@ def run_one_dataset(
     env = os.environ.copy()
     if skip_sim:
         env["SKIP_SIM"] = "1"
-    print(f"[RUN] {uuid}{' (skip-sim)' if skip_sim else ''}: {' '.join(cmd)}", flush=True)
+    if skip_ol:
+        env["SKIP_OL"] = "1"
+    print(f"[RUN] {uuid}{' (skip-sim)' if skip_sim else ''}{' (skip-ol)' if skip_ol else ''}: {' '.join(cmd)}", flush=True)
     proc = subprocess.run(cmd, check=False, env=env)  # noqa: S603
     return proc.returncode == 0
 
@@ -161,6 +164,9 @@ def main() -> None:
     ap.add_argument("--skip-sim", action="store_true",
                     help="全 dataset で Stage CL2 (closed-loop sim 実行) を省略し、実機ログのみの"
                     "解析 (open-loop N-step / sweep / カバレッジ) を実行する")
+    ap.add_argument("--skip-ol", action="store_true",
+                    help="全 dataset でオープンループ解析 (Stage OL1/OL2/OL3 等) を省略し、"
+                    "実機ログの抽出 (Stage 0) とシナリオ生成 (Stage CL1) のみを実行する")
     ap.add_argument("--closed-loop-uuids", default="",
                     help="クローズドループシミュレーションを実行するデータセットUUID（カンマ区切り）。"
                     "指定された場合、これらのUUIDのみclosed-loopを実行し、それ以外はオープンループ解析のみ（skip-sim）とします。")
@@ -230,7 +236,8 @@ def main() -> None:
                 skip_sim_for_this = args.skip_sim
 
             ok = run_one_dataset(
-                uuid, scenario_single, t4_path, output_dir, skip_sim=skip_sim_for_this
+                uuid, scenario_single, t4_path, output_dir,
+                skip_sim=skip_sim_for_this, skip_ol=args.skip_ol
             )
             if not ok and not _bundle_has_real_lite(output_dir):
                 print(f"[WARN] {uuid}: sim 実行失敗 (成果物なし) — スキップ", file=sys.stderr)

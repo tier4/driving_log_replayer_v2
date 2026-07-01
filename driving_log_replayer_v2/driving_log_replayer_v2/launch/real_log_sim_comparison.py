@@ -34,6 +34,8 @@ NODE_PARAMS: dict[str, LaunchConfiguration] = {
     "map_path": LaunchConfiguration("map_path"),
     # lite MCAP の出力先として result_bag_path を使用（post_process が必須とする）
     "result_bag_path": LaunchConfiguration("result_bag_path"),
+    # データセット収集およびマニフェスト生成用のデータセットID
+    "t4_dataset_id": LaunchConfiguration("t4_dataset_id"),
 }
 
 USE_CASE_ARGS: list = []

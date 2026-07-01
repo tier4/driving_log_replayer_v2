@@ -170,6 +170,7 @@ local_multidataset_cloud_run: prepare_multidataset
 	    --batch-root "$(MULTI_BATCH_ROOT)" \
 	    --input-mode raw \
 	    --skip-sim \
+	    --skip-ol \
 	    $(if $(RESUME),--resume,)
 	@echo "[INFO] Step 2: Phase 1 Longitudinal Tuning..."
 	source $(SETUP_BASH) && $(PYTHON) -m driving_log_replayer_v2.real_log_sim_comparison.multi_dataset_tune \

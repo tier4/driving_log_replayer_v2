@@ -53,6 +53,7 @@ class RealLogSimComparisonEvaluator(Node):
             "result_bag_path",
             "scenario_path",
             "map_path",
+            "t4_dataset_id",
         ]:
             self.declare_parameter(param, "")
 
@@ -79,6 +80,12 @@ class RealLogSimComparisonEvaluator(Node):
         lite_dir = bundle_dir / "lite"
         comparison_dir = bundle_dir / "comparison"
 
+        t4_dataset_id = self.get_parameter("t4_dataset_id").value
+        if t4_dataset_id:
+            bundle_dir.mkdir(parents=True, exist_ok=True)
+            (bundle_dir / "dataset_id.txt").write_text(t4_dataset_id, encoding="utf-8")
+            self.get_logger().info(f"Wrote dataset_id.txt: {t4_dataset_id}")
+
         # post_process の create_metadata_yaml は result_bag_path に rosbag ファイルがないとエラーになる。
         # pipeline が途中で失敗しても post_process が通るよう、事前に空の MCAP を置く。
         _write_placeholder_result_bag(result_bag_path)
@@ -103,7 +110,10 @@ class RealLogSimComparisonEvaluator(Node):
             # 例外が出なくても「有意な出力ゼロ」を Success と誤報しないための E1 ガード。
             # skip_sim (closed-loop sim を意図的に省略) のときは sim 0 件を失敗にしない。
             sim_skipped = bool(counts["sim_skipped"])
+            skip_ol = os.environ.get("SKIP_OL") == "1"
             degenerate = (sim_p == 0 and not sim_skipped) or (case_p == 0)
+            if skip_ol:
+                degenerate = False
             success = not degenerate
             counts_str = (
                 f"sim_runs {'skipped' if sim_skipped else f'{sim_p}/{sim_e}'}, "
@@ -169,25 +179,6 @@ def run_pipeline(
         "--output", str(lite_bag),
     ], timeout=300)
 
-    # ---- Stage CL1: bag → scenario yaml 自動生成 ----
-    logger.info("Stage CL1: step_cl1_bag_to_scenario (auto-generate OpenSCENARIO yaml)")
-    scenarios_dir = comparison_dir.parent / "scenarios"
-    scenarios_dir.mkdir(parents=True, exist_ok=True)
-    auto_scenario = scenarios_dir / "auto_scenario.yaml"
-    if map_osm.is_file():
-        try:
-            _run([
-                sys.executable, "-m",
-                "driving_log_replayer_v2.real_log_sim_comparison.step_cl1_bag_to_scenario",
-                "--input-bag", str(input_bag_dir),
-                "--map", str(map_osm),
-                "--output", str(auto_scenario),
-            ], env=env, timeout=300)
-        except RuntimeError as exc:
-            logger.warning(f"Stage CL1 (step_cl1_bag_to_scenario) failed: {exc}")
-    else:
-        logger.warning("Stage CL1: map OSM が無いため scenario 自動生成スキップ")
-
     # ---- Stage CL2: sim runs ループ (scenario.yaml の Conditions.sim_runs 必須) ----
     scenario_config = compare_cfg.get("scenario_config", "")
     if not scenario_config or not Path(scenario_config).exists():
@@ -206,44 +197,63 @@ def run_pipeline(
 
     # closed-loop sim のスキップ (open-loop 解析だけ欲しいとき・マルチ DS バッチの時間短縮)。
     # scenario.yaml の Conditions.skip_sim (クラウド) か env SKIP_SIM=1 (make 変数) で指定する。
-    # Stage CL1 (scenario 生成) は軽量で、collect_datasets の dataset_id 推定が auto_scenario.yaml
-    # に依存するためスキップしない。Stage CL3 以降は sim lite 欠損時に実機のみで動く。
     skip_sim = bool(compare_cfg.get("skip_sim", False)) or env.get("SKIP_SIM") == "1"
+
+    scenarios_dir = comparison_dir.parent / "scenarios"
+    auto_scenario = scenarios_dir / "auto_scenario.yaml"
 
     if skip_sim:
         logger.info(
             f"Stage CL2: skipped (skip_sim) — {len(sim_cfg.runs)} run(s) defined but not executed"
         )
-    elif auto_scenario.exists():
-        logger.info(f"Stage CL2: step_cl2_run_sims over {len(sim_cfg.runs)} run(s)")
-        base_domain_id = int(os.environ.get("ROS_DOMAIN_ID", "0"))
-        # 各 sim run の実行ログ (ros2 launch / autoware / make_lite 等) は run ごとに分離保存する
-        # (集約ログを汚さず後から個別に追えるように)。result_archive 配下なのでアーカイブされる。
-        sim_logs_dir = comparison_dir / "sim_logs"
-        for i, run in enumerate(sim_cfg.runs):
-            sim_lite = lite_dir / f"{run.tag}.lite"
-            env_run = env.copy()
-            env_run["SIM_RUN_TAG"] = run.tag
-            # nested ros2 launch: DDS 衝突回避のため domain id を切替
-            env_run["ROS_DOMAIN_ID"] = str(base_domain_id + 10 + i)
-            run_log = sim_logs_dir / f"{run.tag}.log"
-            logger.info(f"  run: tag={run.tag}, vehicle_model={run.vehicle_model}, "
-                        f"ROS_DOMAIN_ID={env_run['ROS_DOMAIN_ID']}, log={run_log}")
+    else:
+        # シミュレーション実行が確定した段階で、初めて Stage CL1 シナリオ自動生成を行う
+        logger.info("Stage CL1: step_cl1_bag_to_scenario (auto-generate OpenSCENARIO yaml)")
+        scenarios_dir.mkdir(parents=True, exist_ok=True)
+        if map_osm.is_file():
             try:
                 _run([
                     sys.executable, "-m",
-                    "driving_log_replayer_v2.real_log_sim_comparison.step_cl2_run_sims",
-                    "--run-tag", run.tag,
-                    "--scenario", str(auto_scenario),
-                    "--config-scenario", scenario_config,
-                    "--output-lite", str(sim_lite),
-                ], env=env_run, timeout=run.timeout_s, log_file=run_log)
+                    "driving_log_replayer_v2.real_log_sim_comparison.step_cl1_bag_to_scenario",
+                    "--input-bag", str(input_bag_dir),
+                    "--map", str(map_osm),
+                    "--output", str(auto_scenario),
+                ], env=env, timeout=300)
             except RuntimeError as exc:
-                logger.warning(
-                    f"Stage CL2 (run={run.tag}) failed but continuing: {exc} (log: {run_log})"
-                )
-    else:
-        logger.warning("Stage CL2: auto_scenario.yaml が無いため sim 実行をスキップ")
+                logger.warning(f"Stage CL1 (step_cl1_bag_to_scenario) failed: {exc}")
+        else:
+            logger.warning("Stage CL1: map OSM が無いため scenario 自動生成スキップ")
+
+        if auto_scenario.exists():
+            logger.info(f"Stage CL2: step_cl2_run_sims over {len(sim_cfg.runs)} run(s)")
+            base_domain_id = int(os.environ.get("ROS_DOMAIN_ID", "0"))
+            # 各 sim run の実行ログ (ros2 launch / autoware / make_lite 等) は run ごとに分離保存する
+            # (集約ログを汚さず後から個別に追えるように)。result_archive 配下なのでアーカイブされる。
+            sim_logs_dir = comparison_dir / "sim_logs"
+            for i, run in enumerate(sim_cfg.runs):
+                sim_lite = lite_dir / f"{run.tag}.lite"
+                env_run = env.copy()
+                env_run["SIM_RUN_TAG"] = run.tag
+                # nested ros2 launch: DDS 衝突回避のため domain id を切替
+                env_run["ROS_DOMAIN_ID"] = str(base_domain_id + 10 + i)
+                run_log = sim_logs_dir / f"{run.tag}.log"
+                logger.info(f"  run: tag={run.tag}, vehicle_model={run.vehicle_model}, "
+                            f"ROS_DOMAIN_ID={env_run['ROS_DOMAIN_ID']}, log={run_log}")
+                try:
+                    _run([
+                        sys.executable, "-m",
+                        "driving_log_replayer_v2.real_log_sim_comparison.step_cl2_run_sims",
+                        "--run-tag", run.tag,
+                        "--scenario", str(auto_scenario),
+                        "--config-scenario", scenario_config,
+                        "--output-lite", str(sim_lite),
+                    ], env=env_run, timeout=run.timeout_s, log_file=run_log)
+                except RuntimeError as exc:
+                    logger.warning(
+                        f"Stage CL2 (run={run.tag}) failed but continuing: {exc} (log: {run_log})"
+                    )
+        else:
+            logger.warning("Stage CL2: auto_scenario.yaml が存在しないため sim 実行をスキップ")
 
     counts = run_analysis(lite_dir, comparison_dir, env, compare_cfg, logger)
     counts["sim_skipped"] = int(skip_sim)
@@ -306,6 +316,26 @@ def run_analysis(
             "scenario.yaml に直接記述してください。"
             f" got: {scenario_config!r}"
         )
+
+    skip_ol = env.get("SKIP_OL") == "1"
+    if skip_ol:
+        logger.info("SKIP_OL is enabled. Skipping all analysis stages.")
+        from driving_log_replayer_v2.real_log_sim_comparison.lib._sim_runs_config import (  # noqa: PLC0415
+            load_sim_runs_config,
+        )
+        from driving_log_replayer_v2.real_log_sim_comparison.lib._cases_config import (  # noqa: PLC0415
+            load_cases_config,
+        )
+        sim_cfg = load_sim_runs_config(scenario_config)
+        cases_cfg = load_cases_config(scenario_config)
+        return {
+            "sim_runs_produced": 0,
+            "sim_runs_expected": len(sim_cfg.runs),
+            "cases_produced": 0,
+            "cases_expected": len(cases_cfg.cases),
+            "report_ok": 0,
+            "cases_summary_ok": 0,
+        }
     from driving_log_replayer_v2.real_log_sim_comparison.lib._sim_runs_config import (  # noqa: PLC0415
         load_sim_runs_config,
     )

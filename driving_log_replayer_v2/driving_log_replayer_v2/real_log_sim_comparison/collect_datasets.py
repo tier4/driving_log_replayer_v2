@@ -50,14 +50,21 @@ _UUID_RE = re.compile(r"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]
 
 
 def _infer_dataset_id(bundle: Path) -> str | None:
-    """バンドルの scenarios/auto_scenario.yaml の RoadNetwork.LogicFile.filepath から dataset UUID を取り出す。
+    """バンドルから dataset UUID を取り出す。
 
-    auto_scenario.yaml は step2 が生成する OpenSCENARIO YAML で、
-    `OpenSCENARIO.RoadNetwork.LogicFile.filepath` に lanelet2 マップの絶対パスが入る。
-    このパスは `annotation_dataset/<UUID>/0/map/lanelet2_map.osm` 形式のため UUID が一意に特定できる。
-    全文 regex スキャンだと他フィールドの UUID-like 文字列に誤マッチする恐れがあるため、
-    構造的に特定フィールドを読む。
+    まず bundle 直下の `dataset_id.txt` を優先して読み込み、
+    存在しない場合は scenarios/auto_scenario.yaml の RoadNetwork.LogicFile.filepath からの
+    推定にフォールバックする（互換性維持）。
     """
+    meta_id = bundle / "dataset_id.txt"
+    if meta_id.is_file():
+        try:
+            val = meta_id.read_text(encoding="utf-8").strip()
+            if _UUID_RE.match(val):
+                return val
+        except Exception:
+            pass
+
     scenario = bundle / "scenarios" / "auto_scenario.yaml"
     if not scenario.is_file():
         return None
