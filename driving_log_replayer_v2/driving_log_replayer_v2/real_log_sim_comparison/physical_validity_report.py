@@ -1749,7 +1749,7 @@ a_{{\\mathrm{{cmd,del}}}}(t) = a_{{\\mathrm{{cmd}}}}(t - T_a)
 
 <p><b>運動方程式:</b></p>
 \\[
-\\omega(t) = \\frac{{v_x \\cdot \\tan\\bigl(\\delta_{{\\mathrm{{act}}}}(t) + \\beta\\bigr)}}{{\\max\\!\\left(L + k_{{\\mathrm{{us,eff}}}}(v_x)\\cdot v_x^2,\\; 0.05\\,L\\right)}},
+\\omega(t) = \\frac{{v_x \\cdot \\tan\\bigl(\\delta_{{\\mathrm{{act}}}}(t) + \\beta\\bigr)}}{{L + k_{{\\mathrm{{us,eff}}}}(v_x)\\cdot v_x^2}},
 \\qquad \\dot{{\\theta}} = \\omega
 \\]
 \\[
