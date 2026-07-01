@@ -905,7 +905,7 @@ def build_long_perf_figure(
             showarrow=False, font=dict(size=13),
         )
     fig_box.update_layout(
-        title=f"縦方向 モデル構造限界評価（a_act 直接入力 vs GT 変位、上位 {n_dataset} データセット）",
+        title=f"縦方向 モデル構造限界評価（a_act 直接入力 vs 実車変位、上位 {n_dataset} データセット）",
         xaxis_title="ホライズン [s]",
         yaxis_title="|縦方向誤差| [cm]",
         height=400,
@@ -927,14 +927,14 @@ def build_long_perf_figure(
 
         fig_growth = make_subplots(
             rows=1, cols=2,
-            subplot_titles=["速度誤差  vx_sim − GT vx  [m/s]",
-                            "変位誤差  s_sim − s_gt  [cm]"],
+            subplot_titles=["速度誤差  vx_sim − 実車 vx  [m/s]",
+                            "変位誤差  s_sim − 実車 s  [cm]"],
             horizontal_spacing=0.10,
         )
 
         for col, (pool, scale, ytitle) in enumerate([
-            (verr_pool, 1.0,   "速度誤差 [m/s]<br><sup>正 = sim が GT より速い</sup>"),
-            (serr_pool, 100.0, "変位誤差 [cm]<br><sup>正 = sim が GT より進んでいる</sup>"),
+            (verr_pool, 1.0,   "速度誤差 [m/s]<br><sup>正 = シミュレーションが実車より速い</sup>"),
+            (serr_pool, 100.0, "変位誤差 [cm]<br><sup>正 = シミュレーションが実車より進んでいる</sup>"),
         ], start=1):
             data = pool * scale
             med  = np.median(data, axis=0)
@@ -1057,7 +1057,7 @@ def build_long_perf_figure(
             scaleanchor="x", scaleratio=1,
         )
         fig_map.update_layout(
-            title="縦方向変位誤差の地図分布（1.0s 窓終端・rollout 開始点、正 = sim が GT より進む）",
+            title="縦方向変位誤差の地図分布（1.0s 窓終端・rollout 開始点、正 = シミュレーションが実車より進む）",
             height=600,
             margin=dict(t=70, b=50, r=80),
         )
@@ -1285,7 +1285,7 @@ def build_perfect_tracking_figure(
             show_legend = (i == 1)
             fig_traj.add_trace(go.Scatter(
                 x=gt_xm.tolist(), y=gt_ym.tolist(),
-                mode="lines", name="GT 軌跡",
+                mode="lines", name="実車 軌跡",
                 line=dict(color="black", width=2),
                 legendgroup="gt", showlegend=show_legend,
             ), row=1, col=i)
@@ -1296,7 +1296,7 @@ def build_perfect_tracking_figure(
                 legendgroup="bic", showlegend=show_legend,
             ), row=1, col=i)
         fig_traj.update_layout(
-            title="GT vs 自転車モデル軌跡（実測 vx + δ_act 入力、初期状態 GT 合わせ、リセットなし）",
+            title="実車 vs 自転車モデル軌跡（実測 vx + δ_act 入力、初期状態を実車ログに合わせたリセットなし積分）",
             height=480,
             margin=dict(t=60, b=40),
         )
@@ -1602,10 +1602,10 @@ def _build_sec1(
         map_html    = fig_map.to_html(full_html=False, include_plotlyjs=False)
         long_perf_subsection = (
             "<h3>モデル構造限界評価（acc 理想追従）</h3>"
-            "<p>シミュレータの加速度応答が実機と完全一致（\\(a_{\\mathrm{act,sim}} = a_{\\mathrm{act,gt}}\\)）した場合に"
+            "<p>シミュレータの加速度応答が実機と完全一致（\\(a_{\\mathrm{act,sim}} = a_{\\mathrm{act,real}}\\)）した場合に"
             "残る縦方向変位誤差を評価する。<br>"
-            "各開始点で \\(v_{x,\\mathrm{sim}}(t_0) = v_{x,\\mathrm{GT}}(t_0)\\) に初期化し、"
-            "実測加速度 \\(a_{\\mathrm{act}}\\) を直接積分して変位を計算、GT 変位と比較する。</p>"
+            "各開始点で \\(v_{x,\\mathrm{sim}}(t_0) = v_{x,\\mathrm{real}}(t_0)\\) に初期化し、"
+            "実測加速度 \\(a_{\\mathrm{act}}\\) を直接積分して変位を計算、実車変位と比較する。</p>"
             "<p>1-4 横方向評価との対称性: "
             "1-4 では <i>gt_steer</i> を bicycle model に直接入力して steer 完全追従時の横方向残差を評価する。"
             "本評価では <i>gt_a_act</i> を積分器に直接入力して acc 完全追従時の縦方向残差を評価する。</p>"
@@ -1619,13 +1619,13 @@ def _build_sec1(
             + box_html
             + "<p><b>図②: ドリフト成長カーブ（符号付き）</b> — "
             "ゼロ線から片側に膨らむ傾向が系統的な過大／過小推定を示す。"
-            "帯（IQR 25–75%）はばらつき、膨らむ速さは蓄積の速度を表す。"
+            "帯（四分位範囲 25–75%）はばらつき、膨らむ速さは蓄積の速度を表す。"
             "局面別点線（青=減速・灰=巡航・赤=加速）でどの走行シーンでズレが生じるかを確認できる。"
-            "x 軸の 0.10/0.20/0.50/1.00s は上の box plot のホライズンと一致する。</p>"
+            "x 軸 of 0.10/0.20/0.50/1.00s は上の box plot のホライズンと一致する。</p>"
             + growth_html
             + "<p><b>図③: 地図上の変位誤差分布</b> — "
             "各点は rollout 開始位置（\\(v_x > v_{\\mathrm{min}}\\) を満たす 1.0s 窓の開始点）。"
-            "色は 1.0s 窓終端の変位誤差（赤 = sim が GT より進む過大推定、青 = 過小推定）。"
+            "色は 1.0s 窓終端 of 変位誤差（赤 = シミュレーションが実車より進む過大推定、青 = 過小推定）。"
             "路線・カーブ・区間ごとに誤差パターンを地理的に把握できる。</p>"
             + map_html
         )
@@ -1634,7 +1634,7 @@ def _build_sec1(
 
     return f"""
 <section id="sec-long">
-<h2>1-1. 縦方向（加速度アクチュエータ）— Phase 49 で同定</h2>
+<h2>1-1. 縦方向（加速度アクチュエータ）の同定</h2>
 <p>
 速度 \\(v_x\\) は横方向・操舵状態に依存せず縦方向のみで閉じるため（long ⊥ steer の直交性）、
 \\(\\text{{err}}_{{vx}}\\) を目的関数として他のパラメータと独立に同定できる。
@@ -1660,12 +1660,12 @@ a_{{\\mathrm{{cmd,del}}}}(t) = a_{{\\mathrm{{cmd}}}}(t - T_a)
 <p>
 \\(a_{{\\mathrm{{cmd}}}}\\)（指令加速度）を入力として遅延グリッドサーチ + output-error 非線形最小二乗法で
 同定した \\((\\tau_a, T_a)\\) のモデル出力（青点線）と実測 \\(a_{{\\mathrm{{act}}}}\\)（黒実線）を比較する。
-橙実線はチューン値でのシミュレーション結果。動的区間（n_dyn）が豊富なデータセットから rmse 最小順に選択し、低速・停車区間は除外して表示。
+橙実線はチューン値でのシミュレーション結果。動的区間が豊富なデータセットから誤差（RMSE）が小さい順に選択し、低速・停車区間は除外して表示。
 </p>
 {long_html}
 
 <table class="param-table">
-  <tr><th>パラメータ</th><th>値</th><th>式中の役割</th><th>同定誤差量</th></tr>
+  <tr><th>パラメータ</th><th>値</th><th>式中の役割</th><th>同定誤差量（RMSE）</th></tr>
   <tr><td><code>acc_time_constant</code> (τ_a)</td><td>{tau_a} s</td>
       <td>一次遅れ時定数：小さいほど加速応答が速い</td><td rowspan="2">err_vx</td></tr>
   <tr><td><code>acc_time_delay</code> (T_a)</td><td>{T_a} s</td>
@@ -1676,7 +1676,7 @@ a_{{\\mathrm{{cmd,del}}}}(t) = a_{{\\mathrm{{cmd}}}}(t - T_a)
 </section>
 
 <section id="sec-steer">
-<h2>1-2. 操舵アクチュエータ（追従ループ）— Phase 50 で同定</h2>
+<h2>1-2. 操舵アクチュエータ（追従ループ）の同定</h2>
 <p>
 操舵追従ループは実車位置・ヨーのフィードバックを持たないオープンループなので、
 \\(\\text{{err}}_{{\\mathrm{{steer}}}}\\) を目的関数として位置・ヨー誤差とは構造的に独立して同定できる。
@@ -1703,9 +1703,9 @@ a_{{\\mathrm{{cmd,del}}}}(t) = a_{{\\mathrm{{cmd}}}}(t - T_a)
 報告操舵角 \\(\\delta_{{\\mathrm{{sim}}}}\\) には steer_bias β を加算する（β の一方の役割）。
 </p>
 <div class="note">
-⚠️ <b>結合点</b>: DSF は操舵指令に定数ゲインをかける形で、直進時の系統的な横力成分（v²δ 由来の
+⚠️ <b>結合点</b>: 操舵ゲイン補正倍率（debug_steer_scaling_factor）は操舵指令に定数ゲインをかける形で、直進時の系統的な横力成分（v²δ 由来の
 アンダーステア成分）を部分的に吸収できる。
-したがって DSF の最適値は k_us の同定後に再検証することが望ましい。<br>
+したがって操舵ゲイン補正倍率の最適値は k_us の同定後に再検証することが望ましい。<br>
 β（steer_bias）はアクチュエータ追従式自体には入らず（<code>getSteer()</code> は bias なし）、
 報告値の加算と 1-3 のヨー式の両方に現れる二重登場のパラメータである。
 </div>
@@ -1714,7 +1714,7 @@ a_{{\\mathrm{{cmd,del}}}}(t) = a_{{\\mathrm{{cmd}}}}(t - T_a)
 <p>
 \\(\\delta_{{\\mathrm{{cmd}}}}\\) を入力として遅延グリッドサーチ + output-error 非線形最小二乗法で
 同定した \\((\\tau_\\delta, T_\\delta)\\) のモデル出力（青点線）と実測 \\(\\delta_{{\\mathrm{{act}}}}\\)（黒実線）を比較する。
-橙実線はチューン値でのシミュレーション結果。動的区間（n_dyn）が豊富なデータセットから rmse 最小順に選択し、低速・停車区間は除外して表示。
+橙実線はチューン値でのシミュレーション結果。動的区間が豊富なデータセットから誤差（RMSE）が小さい順に選択し、低速・停車区間は除外して表示。
 </p>
 {steer_html}
 <div class="note">
@@ -1724,12 +1724,12 @@ a_{{\\mathrm{{cmd,del}}}}(t) = a_{{\\mathrm{{cmd}}}}(t - T_a)
 </div>
 
 <table class="param-table">
-  <tr><th>パラメータ</th><th>値</th><th>式中の役割</th><th>同定誤差量</th></tr>
+  <tr><th>パラメータ</th><th>値</th><th>式中の役割</th><th>同定誤差量（RMSE）</th></tr>
   <tr><td><code>steer_time_constant</code> (τ_δ)</td><td>{tau_d} s</td>
       <td>一次遅れ時定数：小さいほど操舵応答が速い</td><td rowspan="4">err_steer</td></tr>
   <tr><td><code>steer_time_delay</code> (T_δ)</td><td>{T_d} s</td>
       <td>純粋遅延：操舵指令の無駄時間</td></tr>
-  <tr><td><code>debug_steer_scaling_factor</code> (DSF)</td><td>{DSF}</td>
+  <tr><td><code>debug_steer_scaling_factor</code> (操舵ゲイン補正倍率)</td><td>{DSF}</td>
       <td>指令スケーリング（1.0 = 補正なし）；遅延後に乗算</td></tr>
   <tr><td><code>steer_bias</code> (β)</td><td>{beta} rad</td>
       <td>報告操舵角への加算（δ_sim = δ_act + β）；ヨー式にも二重登場</td></tr>
@@ -1762,7 +1762,7 @@ a_{{\\mathrm{{cmd,del}}}}(t) = a_{{\\mathrm{{cmd}}}}(t - T_a)
 </p>
 <div class="note">
 ⚠️ <b>前提条件</b>: この式の入力 \\(\\delta_{{\\mathrm{{act}}}}\\) は 1-2 の結果に依存する。
-1-2 の DSF が k_us の v²δ 成分を部分吸収しているため、Phase 50 確定後の DSF 値を固定した上で
+1-2 の操舵ゲイン補正倍率が k_us の v²δ 成分を部分吸収しているため、操舵ゲイン補正倍率の値を固定した上で
 k_us を同定することが重要。
 </div>
 
@@ -1836,7 +1836,7 @@ def _build_sec14(
 </p>
 <div class="note">
 ⚠️ <b>設計上の帰結</b>:
-縦方向誤差は \\(v_x\\) を GT から直接取得しているため積分上ほぼゼロになる。
+縦方向誤差は \\(v_x\\) を実車ログから直接取得しているため積分上ほぼゼロになる。
 <b>横方向誤差のみが真のモデル構造限界を表す。</b><br>
 残差は「現行チューン値 \\(k_{{\\mathrm{{us}}}}\\) および \\(\\beta\\) での理想追従誤差」であるため、
 パラメータのキャリブレーション誤差も一部含む（現行パラメータ前提での下限値）。
@@ -1849,10 +1849,10 @@ N-step ロールアウト終端の横方向誤差絶対値を集計する。ホ�
 </p>
 {box_html}
 
-<h3>代表データセット の軌跡比較（GT vs 自転車モデル）</h3>
+<h3>代表データセット の軌跡比較（実車 vs 自転車モデル）</h3>
 <p>
-初期状態を GT に合わせ、実測 \\(v_x\\) と \\(\\delta_{{\\mathrm{{act}}}}\\) を入力として積分した
-自転車モデル軌跡（青破線）を GT 軌跡（黒実線）と比較する。
+初期状態を実車ログに合わせ、実測 \\(v_x\\) と \\(\\delta_{{\\mathrm{{act}}}}\\) を入力として積分した
+自転車モデル軌跡（青破線）を実車の軌跡（黒実線）と比較する。
 リセットなしの連続積分であるため、後半の乖離はモデル構造誤差の累積を示す。
 座標は初期位置を原点 (0, 0) に正規化している。
 </p>
@@ -2171,7 +2171,7 @@ def build_html(
 <section id="sec-tuning">
 <h2>2. 統合最適化（パラメータ最適化）</h2>
 <p>
-各モデルの独立最適化パラメータをベースにした、全データセット横断での統合最適化（Phase 0）の結果を評価します。
+各モデルの独立最適化パラメータをベースにした、全データセット横断での統合最適化の結果を評価します。
 </p>
 {sec_metrics}
 {deviation_html}
