@@ -23,6 +23,7 @@ from launch.actions import GroupAction
 from launch.actions import IncludeLaunchDescription
 from launch.actions import LogInfo
 from launch.actions import OpaqueFunction
+from launch.actions import UnsetEnvironmentVariable
 from launch.launch_description_sources import AnyLaunchDescriptionSource
 from launch_ros.actions import Node
 from rosidl_runtime_py import message_to_ordereddict
@@ -70,6 +71,10 @@ def launch_autoware(context: LaunchContext) -> list:
     return [
         GroupAction(
             [
+                # launch Autoware after removing Qt plugin path set by cv2 (opencv-python)
+                # in perception, install opencv-python through nuscenes-devkit, which sets QT_QPA_PLATFORM_PLUGIN_PATH and QT_PLUGIN_PATH
+                UnsetEnvironmentVariable("QT_QPA_PLATFORM_PLUGIN_PATH"),
+                UnsetEnvironmentVariable("QT_PLUGIN_PATH"),
                 IncludeLaunchDescription(
                     AnyLaunchDescriptionSource(
                         autoware_launch_file.as_posix(),
@@ -77,7 +82,7 @@ def launch_autoware(context: LaunchContext) -> list:
                     launch_arguments=launch_args.items(),
                 ),
             ],
-            scoped=False,
+            scoped=True,  # Scoped to the Autoware group only, close the environment change
             forwarding=True,
         ),
     ]
