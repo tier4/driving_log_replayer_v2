@@ -192,7 +192,13 @@ local_multidataset_cloud_run: prepare_multidataset
 	    --phase 0 \
 	    --phase-params "$(MULTI_BATCH_ROOT)/phase2_steer.yaml" \
 	    --out "$(MULTI_BATCH_ROOT)/tuned_params.yaml" \
-	    --report "$(MULTI_BATCH_ROOT)/physical_validity_report.html"
+	    --report "$(MULTI_BATCH_ROOT)/tuning_report.html"
+	source $(SETUP_BASH) && $(PYTHON) -m driving_log_replayer_v2.real_log_sim_comparison.physical_validity_report \
+	    --params "$(MULTI_BATCH_ROOT)/tuned_params.yaml" \
+	    --collection-dir "$(MULTI_BATCH_ROOT)" \
+	    --out "$(MULTI_BATCH_ROOT)/physical_validity_report.html" \
+	    --metrics-cache "$(MULTI_BATCH_ROOT)/metrics_cache.csv" \
+	    --closed-loop-uuids "$(CLOSED_LOOP_UUIDS)"
 	@echo "[INFO] Step 5: Applying tuned parameters to scenario..."
 	source $(SETUP_BASH) && $(PYTHON) -m driving_log_replayer_v2.real_log_sim_comparison.apply_tuned_params \
 	    --scenario "$(LOCAL_SCENARIO)" \
