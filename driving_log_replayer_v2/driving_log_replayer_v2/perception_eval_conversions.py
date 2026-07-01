@@ -495,6 +495,8 @@ def get_perception_label_str(classification: ObjectClassification) -> str:
         ObjectClassification.MOTORCYCLE: "motorbike",
         ObjectClassification.BICYCLE: "bicycle",
         ObjectClassification.PEDESTRIAN: "pedestrian",
+        ObjectClassification.ANIMAL: "animal",
+        ObjectClassification.HAZARD: "hazard",
     }
     return label_str_dict.get(classification.label, "other")
 
