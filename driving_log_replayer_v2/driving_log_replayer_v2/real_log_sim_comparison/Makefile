@@ -168,14 +168,24 @@ local_multidataset_cloud_run: prepare_multidataset
 	    { echo "[ERROR] $(SETUP_BASH) が見つかりません。先にワークスペースをビルドしてください"; exit 1; }
 	@test -f $(LOCAL_SCENARIO) || \
 	    { echo "[ERROR] $(LOCAL_SCENARIO) が見つかりません"; exit 1; }
-	@echo "[INFO] Step 1: Running initial open-loop batch run to collect real.lite across datasets..."
-	source $(SETUP_BASH) && $(PYTHON) -m driving_log_replayer_v2.real_log_sim_comparison.run_batch \
-	    --scenario "$(LOCAL_SCENARIO)" \
-	    --batch-root "$(MULTI_BATCH_ROOT)" \
-	    --input-mode raw \
-	    --skip-sim \
-	    --skip-ol \
-	    $(if $(RESUME),--resume,)
+	@extracted=0 ; \
+	if [ -d "$(MULTI_BATCH_ROOT)/datasets" ] && [ -f "$(MULTI_BATCH_ROOT)/manifest.yaml" ]; then \
+	    num_extracted=$$(find "$(MULTI_BATCH_ROOT)/datasets" -mindepth 1 -maxdepth 1 -type d | wc -l) ; \
+	    if [ "$$num_extracted" -gt 0 ]; then \
+	        echo "[INFO] Step 1: Already found $$num_extracted extracted datasets in $(MULTI_BATCH_ROOT)/datasets. Skipping run_batch." ; \
+	        extracted=1 ; \
+	    fi ; \
+	fi ; \
+	if [ "$$extracted" -eq 0 ]; then \
+	    echo "[INFO] Step 1: Running initial open-loop batch run to collect real.lite across datasets..." ; \
+	    source $(SETUP_BASH) && $(PYTHON) -m driving_log_replayer_v2.real_log_sim_comparison.run_batch \
+	        --scenario "$(LOCAL_SCENARIO)" \
+	        --batch-root "$(MULTI_BATCH_ROOT)" \
+	        --input-mode raw \
+	        --skip-sim \
+	        --skip-ol \
+	        $(if $(RESUME),--resume,) ; \
+	fi
 	@echo "[INFO] Step 2: Phase 1 Longitudinal Tuning (Direct Physical Identification)..."
 	source $(SETUP_BASH) && $(PYTHON) -m driving_log_replayer_v2.real_log_sim_comparison.physical_tuning \
 	    --collection-dir "$(MULTI_BATCH_ROOT)" \
