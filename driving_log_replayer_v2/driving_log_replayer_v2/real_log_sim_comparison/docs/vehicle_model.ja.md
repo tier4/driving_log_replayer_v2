@@ -52,25 +52,19 @@ $$\omega = \dot\theta = \frac{v_x\,\tan(\delta_{\mathrm{act}} + \beta)}{L + k_{u
 
 ## 3. 運動方程式（実機当てはめ用ビューア：`lib/_model_viewer.py`）
 
-検証ビューア（`lon_lat_model`）は、実機 rosbag の指令系列から上記モデルを前方積算し、観測値と重ねて当てはまりを見るためのもの。実シミュレータより**当てはめ自由度が多い**式を使う。
+検証ビューア（`lon_lat_model`）は、実機 rosbag の指令系列から上記モデルを前方積算し、観測値と重ねて当てはまりを見るためのもの。
+実シミュレータ（§2）と完全に同一の運動方程式を使用します。
 
-$$\dot a_{\mathrm{act}} = -\frac{a_{\mathrm{act}} - a_{\mathrm{target}}}{\tau}, \qquad a_{\mathrm{target}} = a_{\mathrm{cmd}}(t - T) + \mathrm{poly}(v_x)$$
-
-$$\dot\delta_{\mathrm{act}} = -\frac{\delta_{\mathrm{act}} - \delta_{\mathrm{cmd}}(t - T_\delta)}{\tau_\delta}, \qquad \omega = \frac{v_x\,\tan(\delta_{\mathrm{act}} + \beta)}{L + k_{us}\,v_x^2}$$
-
-- **throttle/brake 分離**: \(a_{\mathrm{cmd}}\ge 0\)（駆動）と \(a_{\mathrm{cmd}}<0\)（制動）で \(T, \tau\) を別々に持つ。
-- **定常オフセット** \(\mathrm{poly}(v_x)=p_0+p_1 v_x+p_2 v_x^2\)（転がり抵抗・勾配・空気抵抗。各次 ON/OFF・最小二乗当てはめ）。
-- **ステアバイアス** \(\beta\): ヨーレート式に \(\delta_{\mathrm{act}}+\beta\) として入る当てはめ用の追加自由度。
-- 横チェーンの速度には観測 `lon_vel` を使い（縦の誤差を横テストに混入させないアイソレーション）、つまみ \(T, \tau, k_{us}, \beta\) を調整して目視で当てはめる。
+- **時定数の分離**: \(a_{\mathrm{cmd}}\ge 0\)（駆動）と \(a_{\mathrm{cmd}}<0\)（制動）で時定数 \(\tau_a\) を別々に持ちます。
+- **走行抵抗**: \(\mathrm{poly}(v_x)=p_0+p_1 v_x+p_2 v_x^2\)（各次 ON/OFF、つまみ調整および最小二乗当てはめが可能）。
+- 横チェーンの速度には観測 `lon_vel` を使い（縦の誤差を横テストに混入させないアイソレーション）、つまみを調整して目視で当てはめます。
 
 ---
 
-## 4. 実装間の差と運用注記
+## 4. 運用注記
 
-2026-06 に C++ `calcModel`（§2）を検証ビューア `lon_lat_model`（§3）と同じ運動方程式に揃えた
-（β・throttle/brake 分離 τ・poly(v)。係数 0 で従来の単一 τ・キネマティック自転車に厳密一致）。
-**残る差は無駄時間 T のみ**: C++ は入力キューが単一で τ だけ throttle/brake 分離（T は共通）、ビューアは
-\(T_{thr}/T_{brk}\) も分離する。
+2026-06 に C++ `calcModel`（§2）および検証ビューア `lon_lat_model`（§3）の運動方程式を完全に同期させました
+（\(\beta\) バイアス、時定数 \(\tau_a\) の加減速分離、走行抵抗 \(\mathrm{poly}(v_x)\) 等）。
 
 - **配線**: 新パラメータ（`brake_time_constant` / `lon_drag_c0/c1/c2`）は
   scenario.yaml `models.<name>.params` に書けば C++ `getParameter`（`ego_entity_simulation.cpp`）まで届く

@@ -239,9 +239,8 @@ _HTML_TEMPLATE = r"""<!DOCTYPE html>
   <div id="knobs">
     <div class="kcard">
       <div class="khead">縦・加速度</div>
-      <div class="krow"><span class="rlbl">throttle T</span><input type="range" id="k_t_acc_thr" min="0" max="0.5" step="0.005" value="0.1"><span class="kval" id="v_t_acc_thr"></span></div>
+      <div class="krow"><span class="rlbl">accel T</span><input type="range" id="k_t_acc_thr" min="0" max="0.5" step="0.005" value="0.1"><span class="kval" id="v_t_acc_thr"></span></div>
       <div class="krow"><span class="rlbl">throttle τ</span><input type="range" id="k_tau_acc_thr" min="0.02" max="1.5" step="0.005" value="0.26"><span class="kval" id="v_tau_acc_thr"></span></div>
-      <div class="krow"><span class="rlbl">brake T</span><input type="range" id="k_t_acc_brk" min="0" max="0.5" step="0.005" value="0.07"><span class="kval" id="v_t_acc_brk"></span></div>
       <div class="krow"><span class="rlbl">brake τ</span><input type="range" id="k_tau_acc_brk" min="0.02" max="1.5" step="0.005" value="0.15"><span class="kval" id="v_tau_acc_brk"></span></div>
     </div>
     <div class="kcard">
@@ -249,7 +248,6 @@ _HTML_TEMPLATE = r"""<!DOCTYPE html>
       <div class="krow"><label><input type="checkbox" id="on_poly0">p₀</label><input type="range" id="k_poly0" min="-1" max="1" step="0.01" value="0" disabled><span class="kval" id="v_poly0"></span></div>
       <div class="krow"><label><input type="checkbox" id="on_poly1">p₁·v</label><input type="range" id="k_poly1" min="-0.1" max="0.1" step="0.001" value="0" disabled><span class="kval" id="v_poly1"></span></div>
       <div class="krow"><label><input type="checkbox" id="on_poly2">p₂·v²</label><input type="range" id="k_poly2" min="-0.01" max="0.01" step="0.0001" value="0" disabled><span class="kval" id="v_poly2"></span></div>
-      <div class="krow"><label><input type="checkbox" id="on_corner">c·a_y²</label><input type="range" id="k_corner" min="-0.5" max="0.1" step="0.005" value="0" disabled><span class="kval" id="v_corner"></span></div>
       <div class="krow"><label><input type="checkbox" id="on_slope" checked>勾配 c·a_slope</label><input type="range" id="k_slope" min="-2" max="2" step="0.05" value="1"><span class="kval" id="v_slope"></span></div>
       <div class="krow"><label><input type="checkbox" id="on_stop" checked>停止 v_stop</label><input type="range" id="k_vstop" min="0" max="1" step="0.05" value="0.2"><span class="kval" id="v_vstop"></span></div>
     </div>
@@ -343,11 +341,10 @@ const DATA = __PAYLOAD_JSON__;
   // 縦は throttle/brake で tau・T を分離。tau は定数 (速度依存にしない。poly(v) と交絡するため)。
   const model = {
     tau_acc_thr: DATA.model_seed.tau_acc_thr, t_acc_thr: DATA.model_seed.t_acc_thr,
-    tau_acc_brk: DATA.model_seed.tau_acc_brk, t_acc_brk: DATA.model_seed.t_acc_brk,
+    tau_acc_brk: DATA.model_seed.tau_acc_brk,
     poly0: DATA.model_seed.poly0, poly1: DATA.model_seed.poly1, poly2: DATA.model_seed.poly2,
     polyOn0: false, polyOn1: false, polyOn2: false, // 多項式補正の各次 ON/OFF (既定 OFF)
     v_stop: DATA.model_seed.v_stop, stopHandling: true, // 停止処理 (既定 ON)
-    c_corner: DATA.model_seed.c_corner, cornerOn: false, // カーブ抵抗 (縦横連成, 既定 OFF)
     c_slope: DATA.model_seed.c_slope, slopeOn: true, // 勾配重力 (a_target += c_slope·a_slope, 既定 ON)
     tau_steer: DATA.model_seed.tau_steer, t_steer: DATA.model_seed.t_steer,
     k_us: DATA.model_seed.k_us,
@@ -447,9 +444,9 @@ const DATA = __PAYLOAD_JSON__;
     if (a == null || v == null || dDeg0 == null) return null;
     let delta = dDeg0 * DEG;        // rad
     let yaw = st0.yaw, x = st0.x, y = st0.y;
-    // 縦: throttle/brake で tau・T を分離。tau は定数 (速度依存にしない。poly(v) と交絡するため)。
+    // 縦: throttle/brake で tau を分離。delay T は共通。
     const tauThr = Math.max(model.tau_acc_thr, 0.02), tauBrk = Math.max(model.tau_acc_brk, 0.02);
-    const TaThr = model.t_acc_thr, TaBrk = model.t_acc_brk;
+    const TaThr = model.t_acc_thr;
     const tauD = Math.max(model.tau_steer, 1e-3);
     const Td = model.t_steer;
     const beta = model.steer_bias * DEG;   // deg→rad
@@ -471,7 +468,7 @@ const DATA = __PAYLOAD_JSON__;
     // ウォームアップ: t0 より前から a・delta を積分して内部状態を温める。
     // 幅 W = 無駄時間 + 時定数×3（1次遅れが定常に近づくのに要する時間）。
     // yaw/x/y はウォームアップ後に t0 の観測値でリセットするため更新しない。
-    const W = Math.max(TaThr, TaBrk, Td) + Math.max(tauThr, tauBrk, tauD) * 3;
+    const W = Math.max(TaThr, Td) + Math.max(tauThr, tauBrk, tauD) * 3;
     const t0Warm = Math.max(0, t0 - W);
     { const aW = chanAt("accel", t0Warm);    if (aW != null) a = aW; }
     { const vW = chanAt("lon_vel", t0Warm);  if (vW != null) v = vW; }
@@ -510,15 +507,9 @@ const DATA = __PAYLOAD_JSON__;
         if (ideal) {
           const ao = chanAt("accel", tt); if (ao != null) a = ao;
         } else {
-          const uThr = chanAt("cmd_accel", tt - TaThr);
-          const uBrk = chanAt("cmd_accel", tt - TaBrk);
-          let throttle;
-          if (uThr != null) throttle = (uThr >= 0);
-          else if (uBrk != null) throttle = (uBrk >= 0);
-          else throttle = (lastDrive >= 0);
-          let u = throttle ? uThr : uBrk;
-          if (u == null) u = lastDrive;
+          const u = chanAt("cmd_accel", tt - TaThr) ?? lastDrive;
           lastDrive = u;
+          const throttle = (u >= 0);
           const tauA = throttle ? tauThr : tauBrk;
           const wzo = chanAt("wz", tt);
           const sa = chanAt("slope_acc", tt);
@@ -549,17 +540,9 @@ const DATA = __PAYLOAD_JSON__;
         if (ideal) {
           const ao = chanAt("accel", tt); if (ao != null) a = ao;
         } else {
-          // throttle(a_cmd>=0)/brake(a_cmd<0) を判定し、該当 delay の指令 u と tau0 を採用。
-          // throttle 側の遅延指令の符号で判定 (差は僅少、null は brake 側→ホールドで fallback)。
-          const uThr = chanAt("cmd_accel", tt - TaThr);
-          const uBrk = chanAt("cmd_accel", tt - TaBrk);
-          let throttle;
-          if (uThr != null) throttle = (uThr >= 0);
-          else if (uBrk != null) throttle = (uBrk >= 0);
-          else throttle = (lastDrive >= 0);
-          let u = throttle ? uThr : uBrk;
-          if (u == null) u = lastDrive;
+          const u = chanAt("cmd_accel", tt - TaThr) ?? lastDrive;
           lastDrive = u;
+          const throttle = (u >= 0);
           const tauA = throttle ? tauThr : tauBrk; // 定数 (下限クランプ済み)
           const wzo = chanAt("wz", tt); // カーブ抵抗の回帰子 a_y=v·wz 用 (観測)
           const sa = chanAt("slope_acc", tt); // 勾配重力項 a_slope=9.81·sin(pitch) (観測)
@@ -600,13 +583,13 @@ const DATA = __PAYLOAD_JSON__;
       k_us_bands: model.k_us_bands, k_us_thresholds: model.k_us_thresholds,
       steer_dead_band: model.steer_dead_band,
       tau_acc_thr: model.tau_acc_thr, t_acc_thr: model.t_acc_thr,
-      tau_acc_brk: model.tau_acc_brk, t_acc_brk: model.t_acc_brk,
+      tau_acc_brk: model.tau_acc_brk,
       tau_steer: model.tau_steer, t_steer: model.t_steer,
       steer_bias: model.steer_bias,
       steer_scaling: model.steer_scaling, acc_scaling: model.acc_scaling,
       poly0: model.poly0, poly1: model.poly1, poly2: model.poly2,
       polyOn0: model.polyOn0, polyOn1: model.polyOn1, polyOn2: model.polyOn2,
-      c_corner: model.c_corner, cornerOn: model.cornerOn, c_slope: model.c_slope,
+      c_slope: model.c_slope,
     };
     model.k_us         = seed.k_us         ?? sv.k_us;
     model.k_us_bands      = seed.k_us_bands      ?? sv.k_us_bands;
@@ -615,7 +598,6 @@ const DATA = __PAYLOAD_JSON__;
     model.tau_acc_thr = seed.tau_acc_thr ?? sv.tau_acc_thr;
     model.t_acc_thr   = seed.t_acc_thr   ?? sv.t_acc_thr;
     model.tau_acc_brk = seed.tau_acc_brk ?? sv.tau_acc_brk;
-    model.t_acc_brk   = seed.t_acc_brk   ?? sv.t_acc_brk;
     model.tau_steer   = seed.tau_steer   ?? sv.tau_steer;
     model.t_steer     = seed.t_steer     ?? sv.t_steer;
     if (seed.steer_bias != null) model.steer_bias = seed.steer_bias * RAD2DEG;
@@ -627,8 +609,6 @@ const DATA = __PAYLOAD_JSON__;
     model.polyOn0 = Math.abs(model.poly0) > 1e-9;
     model.polyOn1 = Math.abs(model.poly1) > 1e-9;
     model.polyOn2 = Math.abs(model.poly2) > 1e-9;
-    model.c_corner = seed.c_corner ?? sv.c_corner;
-    model.cornerOn = Math.abs(model.c_corner) > 1e-9;
     model.c_slope  = seed.c_slope  ?? sv.c_slope;
     const result = rollout(t0, t1, false);
     Object.assign(model, sv);
@@ -736,7 +716,6 @@ $("errpanels").addEventListener("change", (e) => { showErr = e.target.checked; m
   const fmtDeg = (v) => v.toFixed(2) + "°";
   setupKnob("k_t_acc_thr", "v_t_acc_thr", "t_acc_thr", fmtS);
   setupKnob("k_tau_acc_thr", "v_tau_acc_thr", "tau_acc_thr", fmtS);
-  setupKnob("k_t_acc_brk", "v_t_acc_brk", "t_acc_brk", fmtS);
   setupKnob("k_tau_acc_brk", "v_tau_acc_brk", "tau_acc_brk", fmtS);
   setupKnob("k_t_steer", "v_t_steer", "t_steer", fmtS);
   setupKnob("k_tau_steer", "v_tau_steer", "tau_steer", fmtS);
@@ -797,7 +776,7 @@ $("errpanels").addEventListener("change", (e) => { showErr = e.target.checked; m
     if (i0 >= N) return out;
     let a = run.ch.accel[i0];
     const tauThr = Math.max(model.tau_acc_thr, 0.02), tauBrk = Math.max(model.tau_acc_brk, 0.02);
-    const Tthr = model.t_acc_thr, Tbrk = model.t_acc_brk;
+    const Tthr = model.t_acc_thr;
     const outDt = 1 / RATE, h = outDt / SUBSTEP;
     let lastDrive = chanAt("cmd_accel", i0 / RATE); if (lastDrive == null) lastDrive = a;
     out[i0] = a;
@@ -806,14 +785,9 @@ $("errpanels").addEventListener("change", (e) => { showErr = e.target.checked; m
       for (let s = 0; s < SUBSTEP; s++) {
         const tt = t + s * h;
         const vl = chanAt("lon_vel", tt); const vv = (vl != null) ? vl : 0;
-        const uThr = chanAt("cmd_accel", tt - Tthr), uBrk = chanAt("cmd_accel", tt - Tbrk);
-        let throttle;
-        if (uThr != null) throttle = (uThr >= 0);
-        else if (uBrk != null) throttle = (uBrk >= 0);
-        else throttle = (lastDrive >= 0);
-        let u = throttle ? uThr : uBrk;
-        if (u == null) u = lastDrive;
+        const u = chanAt("cmd_accel", tt - Tthr) ?? lastDrive;
         lastDrive = u;
+        const throttle = (u >= 0);
         const tau = throttle ? tauThr : tauBrk; // 定数 (下限クランプ済み)
         const wzo = chanAt("wz", tt); // カーブ抵抗の回帰子 a_y=v·wz 用 (観測)
         const sa = chanAt("slope_acc", tt); // 勾配重力項 (観測・rollout と同式で同定対象に含める)
@@ -917,11 +891,10 @@ $("errpanels").addEventListener("change", (e) => { showErr = e.target.checked; m
   }
   // 縦の最適化キー: 基本(T/τ) + 有効な多項式補正の各次のみ。
   function lonKeys() {
-    const k = ["t_acc_thr", "tau_acc_thr", "t_acc_brk", "tau_acc_brk"];
+    const k = ["t_acc_thr", "tau_acc_thr", "tau_acc_brk"];
     if (model.polyOn0) k.push("poly0");
     if (model.polyOn1) k.push("poly1");
     if (model.polyOn2) k.push("poly2");
-    if (model.cornerOn) k.push("c_corner");
     // c_slope は物理事実（lon_slope_gain=1.0 固定）のためフィット対象から除外。
     // 平坦路 bag では不可同定になり他の縦誤差と交絡するリスクがある。
     // 感度探索には手動スライダ（k_slope）を使うこと。
@@ -948,9 +921,8 @@ $("errpanels").addEventListener("change", (e) => { showErr = e.target.checked; m
   function applyModelSeed(seed) {
     if (!seed) return;
     model.tau_acc_thr = seed.tau_acc_thr; model.t_acc_thr = seed.t_acc_thr;
-    model.tau_acc_brk = seed.tau_acc_brk; model.t_acc_brk = seed.t_acc_brk;
+    model.tau_acc_brk = seed.tau_acc_brk;
     model.poly0 = seed.poly0; model.poly1 = seed.poly1; model.poly2 = seed.poly2;
-    model.c_corner = seed.c_corner;
     model.c_slope = (seed.c_slope != null) ? seed.c_slope : 1.0; // 勾配ゲイン (toggle は維持)
     model.tau_steer = seed.tau_steer; model.t_steer = seed.t_steer;
     model.k_us = seed.k_us;
@@ -960,7 +932,7 @@ $("errpanels").addEventListener("change", (e) => { showErr = e.target.checked; m
     model.steer_scaling = seed.steer_scaling ?? 1.0;
     model.acc_scaling = seed.acc_scaling ?? 1.0;
     model.steer_dead_band = seed.steer_dead_band ?? 0;
-    // poly(v)・c_corner は係数が非ゼロなら自動 ON にしてつまみ有効化
+    // poly(v) は係数が非ゼロなら自動 ON にしてつまみ有効化
     const setTog = (valKey, onKey, cbId, slId) => {
       const on = Math.abs(model[valKey]) > 1e-9;
       model[onKey] = on;
@@ -970,7 +942,6 @@ $("errpanels").addEventListener("change", (e) => { showErr = e.target.checked; m
     setTog("poly0", "polyOn0", "on_poly0", "k_poly0");
     setTog("poly1", "polyOn1", "on_poly1", "k_poly1");
     setTog("poly2", "polyOn2", "on_poly2", "k_poly2");
-    setTog("c_corner", "cornerOn", "on_corner", "k_corner");
     for (const k of Object.keys(knobReg)) syncKnob(k);
     markDirty();
   }
