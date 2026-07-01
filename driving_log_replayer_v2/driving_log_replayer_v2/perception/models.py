@@ -146,13 +146,14 @@ class Conditions(BaseModel):
 
 class Evaluation(BaseModel):
     UseCaseName: Literal["perception"]
-    UseCaseFormatVersion: Literal["1.0.0", "1.1.0", "1.2.0", "1.3.0", "1.4.0", "1.5.0"]
+    UseCaseFormatVersion: Literal["1.0.0", "1.1.0", "1.2.0", "1.3.0", "1.4.0", "1.5.0", "1.6.0"]
     Datasets: list[dict]
     Conditions: Conditions
     PerceptionEvaluationConfig: dict
     CriticalObjectFilterConfig: dict
     PerceptionPassFailConfig: dict
     degradation_topic: str | None = None
+    ignore_frames: str | None = None
 
 
 class IncludeUseCase(BaseModel):

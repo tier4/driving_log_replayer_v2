@@ -39,17 +39,20 @@ class PerceptionEvaluationManager(EvaluationManager):
         result_archive_path: str,
         evaluation_topics_with_task: dict[str, list[str]],
         degradation_topic: str,
+        ignore_frames: str,
     ) -> None:
         # additional instance variables
         self._degradation_evaluation_task: str = scenario.Evaluation.PerceptionEvaluationConfig[
             "evaluation_config_dict"
         ]["evaluation_task"]
+
         super().__init__(
             scenario,
             t4_dataset_path,
             result_archive_path,
             evaluation_topics_with_task,
             degradation_topic,
+            ignore_frames,
         )
 
     def _set_evaluators(
@@ -57,6 +60,7 @@ class PerceptionEvaluationManager(EvaluationManager):
         t4_dataset_path: str,
         result_archive_path: str,
         evaluation_topics_with_task: dict[str, list[str]],
+        ignore_frames: list[int],
     ) -> None:
         self._evaluators = {
             topic: PerceptionEvaluator(
@@ -70,6 +74,7 @@ class PerceptionEvaluationManager(EvaluationManager):
                 if self._degradation_evaluation_task != "fp_validation"
                 else "fp_validation",  # NOTE: The t4dataset used in fp_validation is specialized, so it cannot be performed concurrently with other evaluation tasks.
                 "base_link" if task == "detection" else "map",
+                ignore_frames,
             )
             for task, topics in evaluation_topics_with_task.items()
             for topic in topics

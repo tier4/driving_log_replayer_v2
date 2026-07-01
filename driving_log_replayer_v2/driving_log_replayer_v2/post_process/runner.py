@@ -47,6 +47,7 @@ class UseCaseInfo:
     ]  # If task is unnecessary, use dummy task name like {"dummy_task": [topic, ...]}
     degradation_topic: str
     result_jsonl_path: str
+    ignore_frames: str
 
 
 @dataclass(frozen=True, slots=True)
@@ -150,6 +151,7 @@ class Runner(ABC):
         storage: str,
         evaluation_topics_with_task: dict[str, list[str]],
         degradation_topic: str,
+        ignore_frames: str,
         enable_analysis: str,
     ) -> None:
         # instance variables
@@ -172,6 +174,7 @@ class Runner(ABC):
             degradation_topic,
             result_jsonl_path,
             result_archive_path,
+            ignore_frames,
         )
 
         # initialize evaluation manager, result, and result writer for each use case
@@ -184,6 +187,7 @@ class Runner(ABC):
                     result_archive_path,
                     use_case_info.evaluation_topics_with_task,
                     use_case_info.degradation_topic,
+                    use_case_info.ignore_frames,
                 ),
                 result=use_case_info.result_class(use_case_info.conditions),
                 result_writer=ResultWriter(
@@ -226,6 +230,7 @@ class Runner(ABC):
         degradation_topic: str,
         result_jsonl_path: str,
         result_archive_path: str,
+        ignore_frames: str,
     ) -> list[UseCaseInfo]:
         """
         Get use case info list for each use case.
@@ -236,6 +241,7 @@ class Runner(ABC):
             degradation_topic (str): Topic name for degradation information.
             result_jsonl_path (str): Path to the result jsonl file.
             result_archive_path (str): Path to the result archive directory. If necessary, use this to create result jsonl path for each use case.
+            ignore_frames (str): Comma-separated list of frame indices to ignore during evaluation.
 
         Returns:
             list[UseCaseInfo]: The list of use case info.

@@ -25,6 +25,7 @@ class GroundSegmentationEvaluationManager(EvaluationManager):
         result_archive_path: str,
         evaluation_topics_with_task: dict[str, list[str]],
         degradation_topic: str,
+        ignore_frames: str,
     ) -> None:
         super().__init__(
             scenario,
@@ -32,6 +33,7 @@ class GroundSegmentationEvaluationManager(EvaluationManager):
             result_archive_path,
             evaluation_topics_with_task,
             degradation_topic,
+            ignore_frames,
         )
 
     def _set_evaluators(
@@ -39,6 +41,7 @@ class GroundSegmentationEvaluationManager(EvaluationManager):
         t4_dataset_path: str,
         result_archive_path: str,
         evaluation_topics_with_task: dict[str, list[str]],
+        ignore_frames: list[int],
     ) -> None:
         evaluation_condition = self._scenario.Evaluation.Conditions
         evaluation_topics = [
@@ -50,6 +53,7 @@ class GroundSegmentationEvaluationManager(EvaluationManager):
                 result_archive_path,
                 topic,
                 evaluation_condition,
+                ignore_frames,
             )
             for topic in evaluation_topics
         }
