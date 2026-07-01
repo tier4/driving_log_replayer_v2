@@ -442,10 +442,7 @@ def robust_search(
             "steer_time_constant":        (0.05, 0.80),
             "debug_steer_scaling_factor": (0.75, 1.20),  # (0.80, 1.05) → (0.75, 1.20) に拡張
             "k_us":                       (0.0,  0.05),
-            # 速度依存 k_us: vx < vx_lo で k_us_eff=0、vx > vx_hi で k_us_eff=k_us
-            # 両方 0.0 (デフォルト) → ランプなし (全速度で k_us そのまま、後方互換)
-            "k_us_vx_lo":                 (0.5,  6.0),
-            "k_us_vx_hi":                 (1.0, 12.0),
+
             "steer_dead_band":            (0.0,  0.02),   # アクチュエータ不感帯 [rad]
             "steer_bias":                 (-0.01, 0.01),  # 系統的ステアオフセット [rad]
         }
@@ -468,9 +465,7 @@ def robust_search(
         }
         score_fn = steer_score
         explore_delay = False
-        # ランプを無効化 (k_us_vx_lo=k_us_vx_hi=0.0 → 全速度で定数 k_us)
-        cur_best["k_us_vx_lo"] = 0.0
-        cur_best["k_us_vx_hi"] = 0.0
+
         if phase_fixed_params:
             cur_best.update(phase_fixed_params)
             print(f"[Phase 3] no-ramp k_us 実験 (yaw+lat スコア)。固定 acc params: {phase_fixed_params}")
@@ -485,8 +480,7 @@ def robust_search(
             "steer_time_constant":        (0.05, 0.25),  # Phase 2 (0.05, 0.80) から絞り込み
             "debug_steer_scaling_factor": (0.75, 1.20),
             "k_us":                       (0.0,  0.05),
-            "k_us_vx_lo":                 (0.5,  6.0),
-            "k_us_vx_hi":                 (1.0, 12.0),
+
             "steer_dead_band":            (0.0,  0.02),
             "steer_bias":                 (-0.01, 0.01),
         }
@@ -505,8 +499,7 @@ def robust_search(
             "steer_time_constant":        (0.09, 0.15),  # Phase 4 [0.05, 0.25] から TC=0.12 中心に絞り込み
             "debug_steer_scaling_factor": (0.75, 1.20),
             "k_us":                       (0.0,  0.05),
-            "k_us_vx_lo":                 (0.5,  6.0),
-            "k_us_vx_hi":                 (1.0, 12.0),
+
             "steer_dead_band":            (0.0,  0.02),
             "steer_bias":                 (-0.01, 0.01),
         }
@@ -525,8 +518,7 @@ def robust_search(
             "steer_time_constant":        (0.09, 0.16),
             "debug_steer_scaling_factor": (0.92, 1.02),
             "k_us":                       (0.003, 0.010),
-            "k_us_vx_lo":                 (2.0,  6.0),
-            "k_us_vx_hi":                 (6.0, 13.0),
+
             "steer_dead_band":            (0.001, 0.005),
             "steer_bias":                 (-0.002, 0.003),
         }
@@ -541,14 +533,11 @@ def robust_search(
     elif phase == 11:
         # Phase 11: Phase 10 best から探索空間の境界を拡張した再チューニング。
         # Phase 10 観察: steer_time_constant best=0.157 (上限 0.16 付近)、
-        #                k_us_vx_lo best=2.127 (下限 2.0 付近) → 境界が制約。
         # steer_time_delay=0.066 は Phase 10 top 10 全試行で一致 → 固定。
         CONTINUOUS_SPACE = {
             "steer_time_constant":        (0.14, 0.30),   # 上限 0.16 → 0.30 に大幅拡張
             "debug_steer_scaling_factor": (0.92, 1.02),
             "k_us":                       (0.003, 0.012),  # 上限 0.010 → 0.012 に微拡張
-            "k_us_vx_lo":                 (1.0,  6.0),    # 下限 2.0 → 1.0 に拡張
-            "k_us_vx_hi":                 (6.0, 13.0),
             "steer_dead_band":            (0.001, 0.005),
             "steer_bias":                 (-0.002, 0.003),
         }
@@ -572,8 +561,7 @@ def robust_search(
             "steer_time_constant":        (0.14, 0.25),   # Phase 11 観察から最適域 0.17-0.19 付近
             "debug_steer_scaling_factor": (0.92, 1.02),
             "k_us":                       (0.003, 0.012),
-            "k_us_vx_lo":                 (1.0,  6.0),
-            "k_us_vx_hi":                 (6.0, 13.0),
+
             "steer_dead_band":            (0.001, 0.005),
             "steer_bias":                 (-0.002, 0.003),
             "acc_time_constant":          (0.10, 0.25),   # Phase 10/11 の固定 0.107 を変数化
@@ -595,8 +583,7 @@ def robust_search(
             "steer_time_constant":        (0.14, 0.25),
             "debug_steer_scaling_factor": (0.92, 1.02),
             "k_us":                       (0.003, 0.012),
-            "k_us_vx_lo":                 (1.0,  6.0),
-            "k_us_vx_hi":                 (6.0, 13.0),
+
             "steer_dead_band":            (0.001, 0.005),
             "steer_bias":                 (-0.002, 0.003),
             "acc_time_constant":          (0.10, 0.25),
@@ -618,8 +605,7 @@ def robust_search(
             "steer_time_constant":        (0.12, 0.22),
             "debug_steer_scaling_factor": (0.92, 1.02),
             "k_us":                       (0.003, 0.020),
-            "k_us_vx_lo":                 (1.0,  6.0),
-            "k_us_vx_hi":                 (6.0, 13.0),
+
             "k_us_lo":                    (0.005, 0.025),   # 低速帯 (vx < thresh) の k_us 定数
             "k_us_vx_thresh":             (2.0,  6.0),      # 低速/高速切り替え閾値 [m/s]
             "steer_dead_band":            (0.001, 0.005),
@@ -641,7 +627,6 @@ def robust_search(
         # 別の k_us_lo を設定して steer_score を改善する。
         # スイープ結果 (2026-06-28): 低速帯最良 k_us=0.010, 中速/高速=0.0035。
         # per-band oracle: サブセット -1.01% 改善 (Phase 42 比 → 全体 -10% 到達推定)。
-        # k_us_vx_lo/hi=0 に固定してランプを無効化し、定数切り替えのみ探索する。
         CONTINUOUS_SPACE = {
             "steer_time_constant":        (0.15, 0.25),
             "debug_steer_scaling_factor": (0.92, 1.02),
@@ -656,8 +641,6 @@ def robust_search(
         score_fn = steer_score
         explore_delay = False
         explore_steer_delay = False
-        cur_best["k_us_vx_lo"] = 0.0   # ランプを無効化
-        cur_best["k_us_vx_hi"] = 0.0
         if phase_fixed_params:
             cur_best.update(phase_fixed_params)
             print(f"[Phase 43] 速度帯別定数 k_us 最適化 (yaw+lat スコア)。固定 params: {phase_fixed_params} | steer_time_delay={cur_best.get('steer_time_delay', '未設定')}")
@@ -667,7 +650,6 @@ def robust_search(
         # Phase 44: 3分割速度帯定数 k_us (k_us_lo/k_us_mid/k_us + thresh1/thresh2) の最適化。
         # Phase 43 best_params を起点に、中速帯 (thresh1 <= vx < thresh2) を追加する。
         # k_us_lo/k_us_vx_thresh/k_us_mid/k_us_vx_thresh2 → step5 で k_us_bands/k_us_thresholds に変換。
-        # k_us_vx_lo/hi=0 に固定してランプを無効化する。
         CONTINUOUS_SPACE = {
             "steer_time_constant":        (0.15, 0.25),
             "debug_steer_scaling_factor": (0.92, 1.02),
@@ -684,8 +666,6 @@ def robust_search(
         score_fn = steer_score
         explore_delay = False
         explore_steer_delay = False
-        cur_best["k_us_vx_lo"] = 0.0   # ランプを無効化
-        cur_best["k_us_vx_hi"] = 0.0
         if phase_fixed_params:
             cur_best.update(phase_fixed_params)
             print(f"[Phase 44] 3分割速度帯 k_us 最適化 (yaw+lat スコア)。固定 params: {phase_fixed_params} | steer_time_delay={cur_best.get('steer_time_delay', '未設定')}")
@@ -713,8 +693,7 @@ def robust_search(
         score_fn = steer_score
         explore_delay = False
         explore_steer_delay = True   # steer_time_delay も探索
-        cur_best["k_us_vx_lo"] = 0.0
-        cur_best["k_us_vx_hi"] = 0.0
+
         cur_best["steer_dead_band"] = 0.0   # dead_band=0 固定
         if phase_fixed_params:
             cur_best.update(phase_fixed_params)
@@ -749,8 +728,7 @@ def robust_search(
             "k_us":            0.016,
             "k_us_vx_thresh":  2.71,
             "k_us_vx_thresh2": 5.91,
-            "k_us_vx_lo":      0.0,
-            "k_us_vx_hi":      0.0,
+
         }
         if phase_fixed_params:
             cur_best.update(phase_fixed_params)
@@ -784,9 +762,7 @@ def robust_search(
             print(f"[Phase 47] k_us のみ探索 (他は phase-params から固定)。steer_time_delay={cur_best.get('steer_time_delay', '未設定')}")
         else:
             print("[Phase 47] k_us のみ探索 (他は cur_best から固定)。")
-        # banding/ramp を全て無効化 (update 後に上書き)
-        cur_best["k_us_vx_lo"] = 0.0
-        cur_best["k_us_vx_hi"] = 0.0
+        # banding を全て無効化 (update 後に上書き)
         cur_best["k_us_vx_thresh"] = 0.0   # thresh=0 → scalar mode
         cur_best["k_us_vx_thresh2"] = 0.0
         cur_best.pop("k_us_lo", None)
@@ -821,8 +797,7 @@ def robust_search(
             print("[Phase 48] k_us=0 固定, steer 系再最適化 (cur_best から初期化)。")
         # k_us=0 に固定し banding を完全無効化
         cur_best["k_us"] = 0.0
-        cur_best["k_us_vx_lo"] = 0.0
-        cur_best["k_us_vx_hi"] = 0.0
+
         cur_best["k_us_vx_thresh"] = 0.0
         cur_best["k_us_vx_thresh2"] = 0.0
         cur_best.pop("k_us_lo", None)
@@ -853,8 +828,7 @@ def robust_search(
             print("[Phase 49] 縦速度方程式: acc_time_delay/acc_time_constant → vx_score 最適化 (cur_best から初期化)。")
         # k_us=0 + banding 無効化を維持
         cur_best["k_us"] = 0.0
-        cur_best["k_us_vx_lo"] = 0.0
-        cur_best["k_us_vx_hi"] = 0.0
+
         cur_best["k_us_vx_thresh"] = 0.0
         cur_best["k_us_vx_thresh2"] = 0.0
         cur_best.pop("k_us_lo", None)
@@ -884,8 +858,7 @@ def robust_search(
             print("[Phase 50] ステア動力学: steer_time_delay/steer_time_constant/DSF → steer_dynamics_score 最適化 (cur_best から初期化)。")
         # k_us=0 + banding 無効化を維持
         cur_best["k_us"] = 0.0
-        cur_best["k_us_vx_lo"] = 0.0
-        cur_best["k_us_vx_hi"] = 0.0
+
         cur_best["k_us_vx_thresh"] = 0.0
         cur_best["k_us_vx_thresh2"] = 0.0
         cur_best.pop("k_us_lo", None)
@@ -899,8 +872,7 @@ def robust_search(
             "debug_steer_scaling_factor": (0.75, 1.20),  # (0.80, 1.05) → (0.75, 1.20) に拡張
             "acc_time_constant":          (0.05, 1.20),  # 下限を 0.10→0.05 に拡張
             "k_us":                       (0.0,  0.05),
-            "k_us_vx_lo":                 (0.5,  6.0),
-            "k_us_vx_hi":                 (1.0, 12.0),
+
             "steer_dead_band":            (0.0,  0.02),   # アクチュエータ不感帯 [rad]
             "steer_bias":                 (-0.01, 0.01),  # 系統的ステアオフセット [rad]
         }

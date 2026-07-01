@@ -70,7 +70,6 @@ def main() -> None:
     # 1. best params ロード
     best = load_best_params()
     print(f"\n[best params] k_us={best.get('k_us'):.5f} "
-          f"vx_lo={best.get('k_us_vx_lo'):.2f} vx_hi={best.get('k_us_vx_hi'):.2f} "
           f"steer_tc={best.get('steer_time_constant'):.3f}", flush=True)
 
     # 2. データセットロード

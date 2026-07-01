@@ -63,8 +63,6 @@ def build_override(base: dict) -> dict:
     ov.update(PARAMS)
     ov["k_us_bands"]      = []
     ov["k_us_thresholds"] = []
-    ov["k_us_vx_lo"]      = 0.0
-    ov["k_us_vx_hi"]      = 0.0
     ov["k_us_vx_thresh"]  = 0.0
     ov["k_us_vx_thresh2"] = 0.0
     ov.pop("k_us_lo",  None)

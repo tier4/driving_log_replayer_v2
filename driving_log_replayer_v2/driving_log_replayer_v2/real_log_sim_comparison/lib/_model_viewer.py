@@ -89,10 +89,7 @@ def _seed_from_params(params: dict) -> dict:
         "t_steer": f("steer_time_delay", 0.24),
         "steer_bias": f("steer_bias", 0.0),
         "k_us": f("k_us", 0.0),
-        # 速度依存 k_us ramp: k_us_eff = k_us * clamp((vx-lo)/(hi-lo), 0, 1)
-        # lo=hi=0 (デフォルト) → ランプなし (全速度で k_us そのまま)
-        "k_us_vx_lo": f("k_us_vx_lo", 0.0),
-        "k_us_vx_hi": f("k_us_vx_hi", 0.0),
+
         # 速度依存 k_us ステップモデル（Phase 43+）:
         #   vx < thresh1 → k_us_lo, thresh1 <= vx < thresh2 → k_us_mid, vx >= thresh2 → k_us
         # thresh1=thresh2=0 のとき無効（ランプモデルにフォールバック）
@@ -271,8 +268,6 @@ _HTML_TEMPLATE = r"""<!DOCTYPE html>
       <div class="khead">自転車</div>
       <div class="krow"><span class="rlbl">k_us</span><input type="range" id="k_kus" min="0" max="0.05" step="0.001" value="0"><span class="kval" id="v_kus"></span></div>
       <div class="krow"><span class="rlbl">β</span><input type="range" id="k_bias" min="-2" max="2" step="0.01" value="0"><span class="kval" id="v_bias"></span></div>
-      <div class="krow"><span class="rlbl">k_us v_lo</span><input type="range" id="k_kus_vlo" min="0" max="8" step="0.1" value="0"><span class="kval" id="v_kus_vlo"></span></div>
-      <div class="krow"><span class="rlbl">k_us v_hi</span><input type="range" id="k_kus_vhi" min="0" max="15" step="0.1" value="0"><span class="kval" id="v_kus_vhi"></span></div>
     </div>
   </div>
   <div id="seekrow">
@@ -361,8 +356,6 @@ const DATA = __PAYLOAD_JSON__;
     c_slope: DATA.model_seed.c_slope, slopeOn: true, // 勾配重力 (a_target += c_slope·a_slope, 既定 ON)
     tau_steer: DATA.model_seed.tau_steer, t_steer: DATA.model_seed.t_steer,
     k_us: DATA.model_seed.k_us,
-    k_us_vx_lo: DATA.model_seed.k_us_vx_lo ?? 0,
-    k_us_vx_hi: DATA.model_seed.k_us_vx_hi ?? 0,
     k_us_lo: DATA.model_seed.k_us_lo ?? 0,
     k_us_mid: DATA.model_seed.k_us_mid ?? 0,
     k_us_vx_thresh: DATA.model_seed.k_us_vx_thresh ?? 0,
@@ -480,9 +473,7 @@ const DATA = __PAYLOAD_JSON__;
         if (thresh2 > thresh1 && vv < thresh2) return model.k_us_mid;
         return model.k_us;
       }
-      const lo = model.k_us_vx_lo, hi = model.k_us_vx_hi;
-      const ramp = (hi > lo) ? Math.min(Math.max((vv - lo) / (hi - lo), 0), 1) : 1;
-      return model.k_us * ramp;
+      return model.k_us;
     };
 
     // ウォームアップ: t0 より前から a・delta を積分して内部状態を温める。
@@ -613,7 +604,7 @@ const DATA = __PAYLOAD_JSON__;
   function rolloutWithSeed(t0, t1, seed) {
     if (!seed) return null;
     const sv = {
-      k_us: model.k_us, k_us_vx_lo: model.k_us_vx_lo, k_us_vx_hi: model.k_us_vx_hi,
+      k_us: model.k_us,
       k_us_lo: model.k_us_lo, k_us_mid: model.k_us_mid,
       k_us_vx_thresh: model.k_us_vx_thresh, k_us_vx_thresh2: model.k_us_vx_thresh2,
       steer_dead_band: model.steer_dead_band,
@@ -627,8 +618,6 @@ const DATA = __PAYLOAD_JSON__;
       c_corner: model.c_corner, cornerOn: model.cornerOn, c_slope: model.c_slope,
     };
     model.k_us         = seed.k_us         ?? sv.k_us;
-    model.k_us_vx_lo   = seed.k_us_vx_lo   ?? sv.k_us_vx_lo;
-    model.k_us_vx_hi   = seed.k_us_vx_hi   ?? sv.k_us_vx_hi;
     model.k_us_lo      = seed.k_us_lo      ?? sv.k_us_lo;
     model.k_us_mid     = seed.k_us_mid     ?? sv.k_us_mid;
     model.k_us_vx_thresh  = seed.k_us_vx_thresh  ?? sv.k_us_vx_thresh;
@@ -765,9 +754,7 @@ $("errpanels").addEventListener("change", (e) => { showErr = e.target.checked; m
   setupKnob("k_steer_sc", "v_steer_sc", "steer_scaling", (v) => v.toFixed(3) + "×");
   setupKnob("k_kus", "v_kus", "k_us", fmtKus);
   setupKnob("k_bias", "v_bias", "steer_bias", fmtDeg);
-  const fmtVx = (v) => v.toFixed(1) + "m/s";
-  setupKnob("k_kus_vlo", "v_kus_vlo", "k_us_vx_lo", fmtVx);
-  setupKnob("k_kus_vhi", "v_kus_vhi", "k_us_vx_hi", fmtVx);
+
   setupKnob("k_poly0", "v_poly0", "poly0", (v) => v.toFixed(3));
   setupKnob("k_poly1", "v_poly1", "poly1", (v) => v.toFixed(4));
   setupKnob("k_poly2", "v_poly2", "poly2", (v) => v.toFixed(5));
@@ -904,9 +891,7 @@ $("errpanels").addEventListener("change", (e) => { showErr = e.target.checked; m
         if (thresh2 > thresh1 && vv < thresh2) return model.k_us_mid;
         return model.k_us;
       }
-      const lo = model.k_us_vx_lo, hi = model.k_us_vx_hi;
-      const ramp = (hi > lo) ? Math.min(Math.max((vv - lo) / (hi - lo), 0), 1) : 1;
-      return model.k_us * ramp;
+      return model.k_us;
     };
     let se = 0, n = 0;
     for (let i = iLo; i <= iHi; i++) {
@@ -953,7 +938,7 @@ $("errpanels").addEventListener("change", (e) => { showErr = e.target.checked; m
     return k;
   }
   const STEER_KEYS = ["t_steer", "tau_steer", "steer_scaling"];
-  const BIKE_KEYS = ["k_us", "steer_bias", "k_us_vx_lo", "k_us_vx_hi"];
+  const BIKE_KEYS = ["k_us", "steer_bias"];
   const showOpt = (name, r, unit) => {
     $("optstatus").textContent = " " + name + " RMSE " + r.before.toFixed(3) + "→" + r.after.toFixed(3) + " " + unit;
   };
@@ -979,8 +964,6 @@ $("errpanels").addEventListener("change", (e) => { showErr = e.target.checked; m
     model.c_slope = (seed.c_slope != null) ? seed.c_slope : 1.0; // 勾配ゲイン (toggle は維持)
     model.tau_steer = seed.tau_steer; model.t_steer = seed.t_steer;
     model.k_us = seed.k_us;
-    model.k_us_vx_lo = seed.k_us_vx_lo ?? 0;
-    model.k_us_vx_hi = seed.k_us_vx_hi ?? 0;
     model.k_us_lo        = seed.k_us_lo        ?? 0;
     model.k_us_mid       = seed.k_us_mid       ?? 0;
     model.k_us_vx_thresh  = seed.k_us_vx_thresh  ?? 0;

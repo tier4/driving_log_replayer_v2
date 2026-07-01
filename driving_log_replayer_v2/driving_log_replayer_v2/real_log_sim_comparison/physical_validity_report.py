@@ -2545,7 +2545,7 @@ def main() -> None:
 
     # tuned 設定と baseline 設定（configs = {ラベル: override_params}）
     tuned_keys = [
-        "k_us", "k_us_vx_lo", "k_us_vx_hi",
+        "k_us",
         "k_us_lo", "k_us_mid", "k_us_vx_thresh", "k_us_vx_thresh2",
         "steer_dead_band", "steer_bias",
         "steer_time_constant", "steer_time_delay",
@@ -2557,7 +2557,7 @@ def main() -> None:
             k: params[k] for k in tuned_keys if k in params
         },
         "baseline（k_us=0 / deadband=0）": {
-            "k_us": 0.0, "k_us_vx_lo": 0.0, "k_us_vx_hi": 0.0, "steer_dead_band": 0.0,
+            "k_us": 0.0, "steer_dead_band": 0.0,
         },
     }
 

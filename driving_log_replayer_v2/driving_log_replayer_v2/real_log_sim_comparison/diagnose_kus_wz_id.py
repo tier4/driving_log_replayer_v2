@@ -168,17 +168,15 @@ def _build_kus_override(
 ) -> dict:
     """Phase 47 と同じ手順で banding を完全無効化し、k_us をスカラーとして設定する。
 
-    Phase 48 パラメータは k_us_vx_lo/hi/thresh* を持ち n_kus_bands_>0 になりうるため、
+    Phase 48 パラメータは k_us_vx_thresh* を持ち n_kus_bands_>0 になりうるため、
     k_us スカラーを override するだけでは calc_yaw_rate に届かない
     （banding が k_us_ を完全に隠蔽する。C++: if (n_kus_bands_ > 0) k_us_eff = band_values_[last]）。
-    multi_dataset_tune.py Phase 47 (lines 688-698) と同一処理で banding を無効化する。
+    multi_dataset_tune.py Phase 47 と同一処理で banding を無効化する。
 
     thresh=0 → Python 側で bands/thresholds ベクタが空 → n_kus_bands_=0 → scalar mode に切替。
     """
     override = dict(base_params)
-    # thresh=0 → scalar mode（Phase 47 line 691-692 と同一）
-    override["k_us_vx_lo"]     = 0.0
-    override["k_us_vx_hi"]     = 0.0
+    # thresh=0 → scalar mode
     override["k_us_vx_thresh"]  = 0.0
     override["k_us_vx_thresh2"] = 0.0
     # 旧式バンドキー（phase44 系 k_us_lo/mid）を除去
