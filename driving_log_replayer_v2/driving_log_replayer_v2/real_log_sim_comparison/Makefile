@@ -151,6 +151,8 @@ DATE_FROM          ?= 2026-06-16
 SRC_DATASET_ROOT   ?= /home/kotaroyoshimoto/data/openloop_j6_15_june
 CLOSED_LOOP_UUIDS  ?= 00d08afd-b605-5de1-9db0-51241fa87b18,01ccf59a-bf38-5d62-8a81-be0fe0e24b95
 MULTI_BATCH_ROOT   ?= /home/kotaroyoshimoto/data/openloop_j6_16_onwards
+N_TRIALS           ?= 50
+
 
 prepare_multidataset:
 	@echo "[INFO] Preparing datasets starting from $(DATE_FROM) in $(MULTI_BATCH_ROOT)..."
@@ -172,25 +174,30 @@ local_multidataset_cloud_run: prepare_multidataset
 	    --skip-sim \
 	    --skip-ol \
 	    $(if $(RESUME),--resume,)
-	@echo "[INFO] Step 2: Phase 1 Longitudinal Tuning..."
-	source $(SETUP_BASH) && $(PYTHON) -m driving_log_replayer_v2.real_log_sim_comparison.multi_dataset_tune \
+	@echo "[INFO] Step 2: Phase 1 Longitudinal Tuning (Direct Physical Identification)..."
+	source $(SETUP_BASH) && $(PYTHON) -m driving_log_replayer_v2.real_log_sim_comparison.physical_tuning \
 	    --collection-dir "$(MULTI_BATCH_ROOT)" \
 	    --scenario "$(LOCAL_SCENARIO)" \
 	    --phase 1 \
-	    --out "$(MULTI_BATCH_ROOT)/phase1_acc.yaml"
-	@echo "[INFO] Step 3: Phase 2 Lateral/Steer Tuning..."
-	source $(SETUP_BASH) && $(PYTHON) -m driving_log_replayer_v2.real_log_sim_comparison.multi_dataset_tune \
+	    --out "$(MULTI_BATCH_ROOT)/phase1_acc.yaml" \
+	    --n-jobs $(N_JOBS)
+	@echo "[INFO] Step 3: Phase 2 Lateral/Steer Tuning (Direct Physical Identification)..."
+	source $(SETUP_BASH) && $(PYTHON) -m driving_log_replayer_v2.real_log_sim_comparison.physical_tuning \
 	    --collection-dir "$(MULTI_BATCH_ROOT)" \
 	    --scenario "$(LOCAL_SCENARIO)" \
 	    --phase 2 \
 	    --phase-params "$(MULTI_BATCH_ROOT)/phase1_acc.yaml" \
-	    --out "$(MULTI_BATCH_ROOT)/phase2_steer.yaml"
-	@echo "[INFO] Step 4: Phase 0 Integrated Tuning & Validity Report Generation..."
+	    --out "$(MULTI_BATCH_ROOT)/phase2_steer.yaml" \
+	    --n-jobs $(N_JOBS)
+	@echo "[INFO] Step 4: Phase 0 Integrated Tuning & Validity Report Generation (Warm-Started Optuna)..."
 	source $(SETUP_BASH) && $(PYTHON) -m driving_log_replayer_v2.real_log_sim_comparison.multi_dataset_tune \
 	    --collection-dir "$(MULTI_BATCH_ROOT)" \
 	    --scenario "$(LOCAL_SCENARIO)" \
 	    --phase 0 \
 	    --phase-params "$(MULTI_BATCH_ROOT)/phase2_steer.yaml" \
+	    --enqueue-params "$(MULTI_BATCH_ROOT)/phase2_steer.yaml" \
+	    --n-trials $(N_TRIALS) \
+	    --jobs $(N_JOBS) \
 	    --out "$(MULTI_BATCH_ROOT)/tuned_params.yaml" \
 	    --report "$(MULTI_BATCH_ROOT)/tuning_report.html"
 	source $(SETUP_BASH) && $(PYTHON) -m driving_log_replayer_v2.real_log_sim_comparison.physical_validity_report \
