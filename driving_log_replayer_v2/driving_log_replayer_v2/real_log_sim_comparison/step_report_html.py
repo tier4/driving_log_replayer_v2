@@ -600,32 +600,7 @@ def _collect_figures(comparison_dir: Path) -> list[Path]:
     return sorted([*figs, *playbacks], key=lambda p: str(p))
 
 
-# レポート冒頭に置く分析パイプライン解説（README.ja.md の表と同期）。
-_PIPELINE_INTRO = """
-<details class="section" open id="sec-pipeline">
-<summary>分析パイプライン</summary>
-<p class="sec-desc">評価ノードが実機ログ抽出から HTML/notebook 集約まで順に実行するパイプライン
-（Stage 0〜Report Notebook はデータセット単位、Stage Cross Dataset は複数データセットの collection 単位）。
-本レポートは各 stage の成果物（図・Markdown）をカテゴリ別に束ねたもの。
-<a class="toplink" href="#top">↑ 先頭</a></p>
-<table>
-<thead><tr><th>Stage</th><th>名称</th><th>役割 / 主な成果物</th></tr></thead>
-<tbody>
-<tr><td>0</td><td>実機ログ抽出 (step0_make_lite)</td><td>input_bag から必要トピックを抽出し real.lite を生成 (共通基盤)</td></tr>
-<tr><td>OL1</td><td>VehicleModel N-step オープンループ解析 (step_ol1_analyze_nstep)</td><td>real.lite + cases.yaml の各ケースで free-running rollout の終端誤差を評価 (nstep/&lt;tag&gt;/)</td></tr>
-<tr><td>OL2</td><td>ケース集約解析 (step_ol2_analyze_cases)</td><td>全ケースの N-step 誤差を横断集約 (cases_summary.md・cases_metrics.json・overlay) + real.lite から縦/操舵/横 k_us の物理妥当性を直接同定 (physical_validity/)</td></tr>
-<tr><td>OL3</td><td>パラメータ sweep 同定 (step_ol3_sweep_params)</td><td>車両モデル各パラメータを sweep し終端誤差最小値を同定 (param_sweep_summary.md)</td></tr>
-<tr><td>CL1</td><td>scenario 自動生成 (step_cl1_bag_to_scenario)</td><td>実機 bag + 地図から OpenSCENARIO (auto_scenario.yaml) を生成</td></tr>
-<tr><td>CL2</td><td>closed-loop シム実行 (step_cl2_run_sims)</td><td>auto_scenario + sim_runs.yaml で sim を回し sim lite を生成</td></tr>
-<tr><td>CL3</td><td>実機 + sim 比較解析 (step_cl3_compare_logs)</td><td>速度・ステア・軌跡を N-way 重ね描き (report.md・metrics_closed_loop.json・図スペック)</td></tr>
-<tr><td>CL4</td><td>DP 軌跡比較 (step_cl4_compare_dp_trajectory)</td><td>DiffusionPlanner 出力軌跡を実機 vs sim で比較 (dp_*)</td></tr>
-<tr><td>Report HTML</td><td>HTML レポート生成 (step_report_html)</td><td>図スペック・Markdown・設定 YAML を 1 枚に束ねた単一レポート (report.html)。マルチ DS では collection 全体 + 横断サマリーを束ねる</td></tr>
-<tr><td>Report Notebook</td><td>notebook 生成 (step_report_notebook)</td><td>各図を plotly で再描画 + 生 CSV からの再解析セルを備えた開発者向け notebook (report.ipynb)</td></tr>
-<tr><td>Cross Dataset</td><td>データセット横断分析 (step_cross_dataset)</td><td>collection 内全 DS の metrics JSON を再集計 (モデル×DS 行列・正規化集約・カバレッジ・LOO 安定性・物理妥当性検証の横断集約)</td></tr>
-</tbody>
-</table>
-</details>
-"""
+_PIPELINE_INTRO = ""
 
 
 # 車両制御モデルの数式・座標系・定数を解説する固定ドキュメント（リポジトリ同梱・YAML と同じ
@@ -1038,7 +1013,6 @@ def build_html(
     # --- 目次 ---
     toc: list[str] = ["<nav class='toc'><h2>目次</h2>"]
     toc.append("<a class='toc-top' href='#top'>↑ 先頭へ</a><ul>")
-    toc.append("<li class='toc-sec'><a href='#sec-pipeline'>分析パイプライン（13 段階）</a></li>")
     doc_html = _render_doc_section()
     if doc_html:
         toc.append("<li class='toc-sec'><a href='#sec-model-doc'>車両制御モデル（数式・座標系・定数）</a></li>")
@@ -1101,7 +1075,6 @@ def build_html(
   <h1>real_log_sim_comparison 比較レポート</h1>
   <div class="meta">{meta}</div>
 </header>
-{_PIPELINE_INTRO}
 {doc_html}
 {empty_note}
 {cross_html}
