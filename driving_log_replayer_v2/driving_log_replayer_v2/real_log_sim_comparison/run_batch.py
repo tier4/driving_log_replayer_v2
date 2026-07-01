@@ -315,6 +315,11 @@ def main() -> None:
     except OSError:
         pass
 
+    if args.skip_sim and args.skip_ol:
+        print("\n[INFO] skip_sim と skip_ol が両方指定されているため（データ抽出のみ）、横断分析と HTML レポート生成をスキップします。", flush=True)
+        print(f"\n完了。成果物は {batch_root} に収集されました。")
+        return
+
     print("\n=== Stage Cross Dataset: 横断分析 ===", flush=True)
     r13 = subprocess.run(  # noqa: S603
         [sys.executable, "-m", f"{_PKG}.step_cross_dataset",
