@@ -785,7 +785,7 @@ def _bicycle_nstep_perf(
     L = WHEELBASE
     beta = float(params.get("steer_bias", 0.0))
     k_us_arr = _kus_step_profile(gt_vx, params)
-    denom_arr = np.maximum(L + k_us_arr * gt_vx ** 2, 0.05 * L)
+    denom_arr = L + k_us_arr * gt_vx ** 2
     wz_arr = gt_vx * np.tan(gt_steer + beta) / denom_arr
 
     n = len(gt_x)
@@ -827,7 +827,7 @@ def _bicycle_trajectory_full(
     L = WHEELBASE
     beta = float(params.get("steer_bias", 0.0))
     k_us_arr = _kus_step_profile(gt_vx, params)
-    denom_arr = np.maximum(L + k_us_arr * gt_vx ** 2, 0.05 * L)
+    denom_arr = L + k_us_arr * gt_vx ** 2
     wz_arr = gt_vx * np.tan(gt_steer + beta) / denom_arr
 
     n = len(gt_vx)
