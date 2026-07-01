@@ -13,9 +13,14 @@ collect_datasets.py が収集した per-dataset の機械可読メトリクス
    偏りを俯瞰する。
 4. **leave-one-out 安定性・外れ DS 検出**: DS を 1 つ除いた再集計でモデル比較の結論
    (best case) が入れ替わらないか、誤差プロファイルが他と乖離した DS が無いかを定量化する。
+5. **物理妥当性検証** (dataset 横断): 各 DS の `comparison/cases/cases_metrics.json
+   ["physical_validity"]` (step6 が出力する縦/操舵/横 k_us の実測同定値・十分統計量) を
+   横断集約する。k_us(v) は十分統計量の加算プールで再構成 (生サンプル再読込不要)、縦方向は
+   n_dyn 上位データセットのみ MCAP を再読込して横断最小二乗法フィット (有界コストの唯一の例外)。
 
 すべて per-dataset JSON の numpy 再集計のみ (open-loop rollout は step5 実行済みの値を使う)
-ため数秒で完了する。LOO も O(D²·C) の再集計で済む。
+ため数秒で完了する (物理妥当性検証の縦方向横断フィットのみ有界 MCAP 再読込あり)。
+LOO も O(D²·C) の再集計で済む。
 
 出力 (<collection>/cross_dataset/):
     cross_closed_loop_heatmap.fig.json
@@ -23,6 +28,10 @@ collect_datasets.py が収集した per-dataset の機械可読メトリクス
     cross_normalized_bars.fig.json
     coverage_overview.fig.json
     loo_stability.fig.json
+    cross_physical_validity_kus.fig.json      (per-dataset 出力が 1 件も無ければ省略)
+    cross_physical_validity_long.fig.json     (縦方向 per-dataset 出力が無ければ省略)
+    cross_physical_validity_steer.fig.json    (操舵 per-dataset 出力が無ければ省略)
+    physical_validity_summary.md
     cross_metrics.json    (step11 マルチ DS レポートとの契約 SSOT)
     cross_summary.md
 
@@ -36,6 +45,7 @@ from __future__ import annotations
 import argparse
 from collections import Counter
 import json
+import math
 from pathlib import Path
 import sys
 
@@ -51,10 +61,14 @@ from .lib._fig_io import write_fig_json
 from .lib._figures import (
     build_fig_coverage_overview,
     build_fig_cross_closed_loop_heatmap,
+    build_fig_cross_kus,
+    build_fig_cross_long,
     build_fig_cross_normalized_bars,
     build_fig_cross_nstep_heatmap,
+    build_fig_cross_steer,
     build_fig_loo_stability,
 )
+from .lib._models_config import load_models_doc
 from .lib._multi_agg import (
     HORIZONS,
     aggregate_normalized,
@@ -62,6 +76,12 @@ from .lib._multi_agg import (
     score_formula_md,
 )
 from .lib._nstep_common import metrics_description_md
+from .lib._physical_validity import (
+    compute_cross_long_rows,
+    compute_cross_steer_rows,
+    compute_kus_bins_from_sufficient_stats,
+    fit_long_cross_dataset_bounded,
+)
 
 _MIN_DS_LOO = 2       # LOO を実行する最小 DS 数 (2 は参考扱い)
 _MIN_DS_OUTLIER = 3   # 外れ検出 (robust z-score) の最小 DS 数
@@ -309,12 +329,183 @@ def detect_outliers(norm: dict, reference_tag: str) -> list[dict] | None:
 
 
 # ---------------------------------------------------------------------------
+# 物理妥当性検証 (dataset 横断)
+# ---------------------------------------------------------------------------
+
+
+def _discover_models_doc(collection_dir: Path, scenario_path: Path | None = None):
+    """Conditions.models/cases/overlay を含む scenario.yaml から ModelsDoc を読む (無ければ None)。
+
+    優先順位:
+      1. 明示指定された `scenario_path` (`--scenario`、local_cross_analysis_run/run_batch が渡す
+         元の LOCAL_SCENARIO) — 最も信頼できる、必ず Conditions.models を含む。
+      2. `run_batch.py::write_single_dataset_scenario` が collection ルート直下に書き出す
+         `<collection>/scenarios/<uuid>.scenario.yaml` (元 scenario.yaml のコピー、Datasets の
+         み 1 件に絞ったもの。Conditions は変更されないため models/cases/overlay を含む)。
+
+    **注意**: `datasets/<uuid>/scenarios/auto_scenario.yaml` (step2_bag_to_scenario.py 生成の
+    OpenSCENARIO) は `Evaluation.Conditions` を一切持たない別ファイルなので探索対象にしない
+    (誤って拾うと models=空dict で静かに degrade し、チューニング値重ね描きが消える)。
+    見つからない/読めない場合は None (物理妥当性の同定結果のみ表示し、重ね描きは省略する)。
+    """
+    if scenario_path is not None and scenario_path.is_file():
+        try:
+            return load_models_doc(scenario_path)
+        except Exception as exc:
+            print(f"[WARN] --scenario の読み込みに失敗: {scenario_path} ({exc})", file=sys.stderr)
+
+    for p in sorted((collection_dir / "scenarios").glob("*.yaml")):
+        try:
+            doc = load_models_doc(p)
+        except Exception:
+            continue
+        if doc.models:
+            return doc
+    return None
+
+
+def _collect_physical_validity(metrics: dict[str, dict]) -> dict[str, dict | None]:
+    """各 DS の cases_metrics.json["physical_validity"] を取り出す (欠損は None)。"""
+    return {ds: (m["cases"].get("physical_validity")) for ds, m in metrics.items()}
+
+
+def cross_physical_validity_analysis(
+    entries: list[DatasetEntry], metrics: dict[str, dict], collection_dir: Path,
+    scenario_path: Path | None = None,
+) -> dict | None:
+    """per-dataset の物理妥当性同定 (縦/操舵/横 k_us) を dataset 横断で集約する。
+
+    per-dataset 出力 (step6_analyze_cases の "physical_validity" キー) が 1 件も無ければ
+    None (呼び出し側は図・md を省略し理由を明記する)。
+    """
+    pv_by_ds = _collect_physical_validity(metrics)
+    per_ds_long = {ds: pv["long"] for ds, pv in pv_by_ds.items() if pv and pv.get("long")}
+    per_ds_steer = {ds: pv["steer"] for ds, pv in pv_by_ds.items() if pv and pv.get("steer")}
+    kus_bins_list = [pv["kus_bins"] for pv in pv_by_ds.values() if pv and pv.get("kus_bins")]
+
+    if not per_ds_long and not per_ds_steer and not kus_bins_list:
+        return None
+
+    models_doc = _discover_models_doc(collection_dir, scenario_path)
+    models = None
+    if models_doc is not None:
+        # sim_runs 専用モデル (taiga_x 等、k_us/tau_a と無関係な動的モデル) は重ね描き対象から
+        # 除外し、Conditions.cases が参照する open-loop VehicleModel のみに絞る。
+        models = {
+            name: spec for name, spec in models_doc.models.items() if name in models_doc.cases_list
+        }
+
+    bins = compute_kus_bins_from_sufficient_stats(kus_bins_list) if kus_bins_list else None
+
+    cross_fit_long = None
+    rows_long: list[dict] = []
+    if per_ds_long:
+        cross_fit_long = fit_long_cross_dataset_bounded(entries, per_ds_long)
+        rows_long = compute_cross_long_rows(entries, per_ds_long, cross_fit_long, models)
+
+    rows_steer: list[dict] = []
+    if per_ds_steer:
+        rows_steer = compute_cross_steer_rows(entries, per_ds_steer, models)
+
+    return {
+        "bins": bins,
+        "cross_fit_long": cross_fit_long,
+        "rows_long": rows_long,
+        "rows_steer": rows_steer,
+        "models": models,
+        "n_long": len(per_ds_long),
+        "n_steer": len(per_ds_steer),
+        "n_kus": len(kus_bins_list),
+    }
+
+
+def write_physical_validity_summary_md(out_path: Path, pv: dict | None) -> None:
+    """物理妥当性検証の dataset 横断サマリ Markdown を書き出す。"""
+    lines: list[str] = ["# 物理妥当性検証サマリ (dataset 横断)\n"]
+    if pv is None:
+        lines.append(
+            "per-dataset の `comparison/cases/cases_metrics.json[\"physical_validity\"]` が"
+            " 1 件も見つからないため省略 (per-dataset 解析 (step6) 未実行、または全 DS で"
+            " 縦・操舵・横 k_us のいずれも同定不能)。\n"
+        )
+        out_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+        print(f"  保存: {out_path}")
+        return
+
+    lines.append(
+        "各データセットで real.lite から直接同定した車両モデル物理パラメータ"
+        "（縦方向 τ_a/T_a + 路面勾配補正、操舵 τ_δ/T_δ、横方向 k_us(v)）を横断集約し、"
+        "Conditions.models のチューニング値と比較する（実測同定 vs チューニング値の 2-way 検証）。\n"
+    )
+
+    cf = pv.get("cross_fit_long")
+    if cf is not None and math.isfinite(cf.get("tau", float("nan"))):
+        lines.append(
+            f"- **縦方向横断同定** (n_dyn 上位 {cf.get('n_datasets', 0)} データセットをプール): "
+            f"τ_a={cf['tau']:.3f}s, T_a={cf['delay']:.3f}s, RMSE={cf['rmse_mps2']:.3f} m/s², "
+            f"pitch range {math.degrees(cf['pitch_min']):+.2f}°〜{math.degrees(cf['pitch_max']):+.2f}° "
+            f"(per-dataset 同定成功 DS数: {pv.get('n_long', 0)})"
+        )
+    else:
+        lines.append(f"- **縦方向横断同定**: per-dataset 同定成功 DS数 {pv.get('n_long', 0)} (横断フィット不能)")
+    lines.append(
+        f"- **操舵**: per-dataset 同定成功 DS数 {pv.get('n_steer', 0)} "
+        "(横断最小二乗法は行わず、best/worst データセットの時系列重ね描きのみ)"
+    )
+    lines.append(
+        f"- **横方向 k_us(v)**: per-dataset 出力 DS数 {pv.get('n_kus', 0)} "
+        "(十分統計量の加算プールで横断再構成。詳細は cross_physical_validity_kus.fig.json)"
+    )
+    if not pv.get("models"):
+        lines.append(
+            "\n> scenario.yaml が見つからないため Conditions.models のチューニング値重ね描きは省略。"
+        )
+    lines.append("")
+    out_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    print(f"  保存: {out_path}")
+
+
+# ---------------------------------------------------------------------------
 # 出力
 # ---------------------------------------------------------------------------
 
 
 def _nan_to_none(arr: np.ndarray) -> list:
     return [[None if not np.isfinite(v) else float(v) for v in row] for row in arr]
+
+
+def _pv_jsonable(pv: dict | None) -> dict | None:
+    """cross_physical_validity_analysis の返り値を cross_metrics.json 埋め込み用に圧縮する。
+
+    best/worst の時系列 (rows_long/rows_steer) は容量が大きいため図スペック側にのみ残し、
+    ここにはスカラ・十分統計量集約 (k_us bins) のみを持つ。
+    """
+    if pv is None:
+        return None
+
+    def _finite(x) -> float | None:
+        xf = float(x)
+        return xf if math.isfinite(xf) else None
+
+    bins = pv.get("bins")
+    bins_json = None
+    if bins is not None:
+        bins_json = {
+            "vx_mid": [_finite(v) for v in bins["vx_mid"]],
+            "kus_ols": [_finite(v) for v in bins["kus_ols"]],
+            "n_pts": [int(v) for v in bins["n_pts"]],
+        }
+    cf = pv.get("cross_fit_long")
+    cf_json = None
+    if cf is not None:
+        cf_json = {k: (_finite(v) if isinstance(v, float) else v) for k, v in cf.items()}
+    return {
+        "kus_bins": bins_json,
+        "long_cross_fit": cf_json,
+        "n_datasets": {
+            "long": pv.get("n_long", 0), "steer": pv.get("n_steer", 0), "kus": pv.get("n_kus", 0),
+        },
+    }
 
 
 def write_cross_metrics_json(
@@ -327,6 +518,7 @@ def write_cross_metrics_json(
     norm: dict,
     loo: dict | None,
     outliers: list[dict] | None,
+    pv: dict | None = None,
 ) -> None:
     """step11 マルチ DS レポートとの契約 SSOT (cross_metrics.json) を書き出す。"""
 
@@ -369,6 +561,7 @@ def write_cross_metrics_json(
             "by_excluded": loo["by_excluded"],
         },
         "outliers": outliers,
+        "physical_validity": _pv_jsonable(pv),
     }
     out_path.write_text(
         json.dumps(payload, ensure_ascii=False, allow_nan=False, indent=1), encoding="utf-8"
@@ -515,8 +708,15 @@ def write_cross_summary_md(
 # ---------------------------------------------------------------------------
 
 
-def run_cross_analysis(collection_dir: Path, out_dir: Path | None = None) -> Path:
-    """横断分析を実行し cross_dataset/ 出力ディレクトリを返す (run_batch から直接呼べる)。"""
+def run_cross_analysis(
+    collection_dir: Path, out_dir: Path | None = None, scenario_path: Path | None = None,
+) -> Path:
+    """横断分析を実行し cross_dataset/ 出力ディレクトリを返す (run_batch から直接呼べる)。
+
+    scenario_path: Conditions.models/cases/overlay を含む元 scenario.yaml (省略可)。
+    物理妥当性検証のチューニング値重ね描きに使う。省略時は collection_dir/scenarios/ 配下を
+    フォールバック探索する (`_discover_models_doc` 参照)。
+    """
     out_dir = out_dir or collection_dir / CROSS_DIR_NAME
     entries = discover_collection(collection_dir)
     if not entries:
@@ -578,6 +778,23 @@ def run_cross_analysis(collection_dir: Path, out_dir: Path | None = None) -> Pat
     if fig is not None:
         write_fig_json(fig, out_dir / "coverage_overview")
 
+    # 3b. 物理妥当性検証 (縦・操舵・横 k_us) — per-dataset 出力が無ければ None
+    pv = cross_physical_validity_analysis(entries, metrics, collection_dir, scenario_path)
+    if pv is not None:
+        if pv.get("bins") is not None:
+            fig = build_fig_cross_kus(pv["bins"], pv.get("models"))
+            if fig is not None:
+                write_fig_json(fig, out_dir / "cross_physical_validity_kus")
+        if pv.get("rows_long"):
+            fig = build_fig_cross_long(pv["rows_long"], pv["cross_fit_long"])
+            if fig is not None:
+                write_fig_json(fig, out_dir / "cross_physical_validity_long")
+        if pv.get("rows_steer"):
+            fig = build_fig_cross_steer(pv["rows_steer"])
+            if fig is not None:
+                write_fig_json(fig, out_dir / "cross_physical_validity_steer")
+    write_physical_validity_summary_md(out_dir / "physical_validity_summary.md", pv)
+
     # 4. LOO / 外れ検出
     loo = leave_one_out(norm)
     if loo is not None:
@@ -595,7 +812,7 @@ def run_cross_analysis(collection_dir: Path, out_dir: Path | None = None) -> Pat
     write_cross_metrics_json(
         out_dir / "cross_metrics.json",
         metrics=metrics, missing=missing, closed_m=closed_m, open_m=open_m,
-        norm=norm, loo=loo, outliers=outliers,
+        norm=norm, loo=loo, outliers=outliers, pv=pv,
     )
     write_cross_summary_md(
         out_dir / "cross_summary.md",
@@ -613,12 +830,16 @@ def main() -> None:
                     help="collect_datasets.py の収集先 (collection root)")
     ap.add_argument("--out-dir", default="",
                     help=f"出力先 (既定: <collection>/{CROSS_DIR_NAME})")
+    ap.add_argument("--scenario", default="",
+                    help="Conditions.models/cases/overlay を含む元 scenario.yaml (省略可、"
+                         "物理妥当性検証のチューニング値重ね描きに使う)")
     args = ap.parse_args()
 
     collection_dir = Path(args.collection_dir)
     out_dir = Path(args.out_dir) if args.out_dir else None
+    scenario_path = Path(args.scenario) if args.scenario else None
     try:
-        result = run_cross_analysis(collection_dir, out_dir)
+        result = run_cross_analysis(collection_dir, out_dir, scenario_path)
     except FileNotFoundError as e:
         print(f"ERROR: {e}", file=sys.stderr)
         sys.exit(1)

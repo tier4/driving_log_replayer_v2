@@ -63,6 +63,10 @@ CAPTIONS: dict[str, str] = {
     # step6: cases/overlay/
     "cascade_error_overlay": "全ケース カスケード誤差 重ね描き（N=1）",
     "error_growth_overlay": "全ケース 誤差成長 重ね描き",
+    # step6: cases/physical_validity/ (物理妥当性検証、Conditions.cases の N-way スイープとは独立な軸)
+    "long_fit": "縦方向モデルフィット（実測 vs 同定値 vs チューニング値、路面勾配補正込み）",
+    "steer_fit": "操舵モデルフィット（実測 vs 同定値 vs チューニング値）",
+    "kus_bins": "k_us(v) 速度ビン別 最小二乗法推定（実測同定 vs チューニング値）",
     # step7: param_sweep/ (個別図のキャプションは _caption_for の正規表現で導出)
     "_overview_sensitivity": "スイープ感度オーバービュー（改善率ランキング + 正規化 RMSE カーブ）",
     "acc_steady_evidence": "縦定常補正の実機根拠（poly(v)=p0+p1·v の切片/傾き・カーブ抵抗 c_corner）",
@@ -72,6 +76,10 @@ CAPTIONS: dict[str, str] = {
     "coverage_overview": "dataset 走行特性カバレッジ（速度域・加減速・曲率域・走行距離の偏り）",
     "loo_stability": "leave-one-out 安定性（除外 DS × case の score 変化）",
     "steer_diff_overview": "steer 制御不感帯分析（per-DS: |steer−steer_des| 分布・速度層別・dead_band 対応）",
+    # step13: cross_dataset/ (物理妥当性検証、dataset 横断)
+    "cross_physical_validity_kus": "dataset 横断 k_us(v) 独立同定（速度ビン別最小二乗法プール集計 + チューニング値比較）",
+    "cross_physical_validity_long": "dataset 横断 縦方向アクチュエータ遅れ同定（横断最小二乗法 + 路面勾配補正、最良/最悪データセット時系列）",
+    "cross_physical_validity_steer": "dataset 横断 操舵追従同定（best/worst データセット時系列 + チューニング値比較）",
 }
 
 # 再生ビューア等、plotly でない自己完結 HTML を埋め込む際の高さ [px]。
@@ -558,12 +566,12 @@ _PIPELINE_INTRO = """
 <tr><td>3</td><td>closed-loop シム実行 (step3_run_sims)</td><td>auto_scenario + sim_runs.yaml で sim を回し sim lite を生成</td></tr>
 <tr><td>4</td><td>実機 + sim 比較解析 (step4_compare_logs)</td><td>速度・ステア・軌跡を N-way 重ね描き (report.md・metrics_closed_loop.json・図スペック)</td></tr>
 <tr><td>5</td><td>VehicleModel N-step オープンループ解析 (step5_analyze_nstep)</td><td>real.lite + cases.yaml の各ケースで free-running rollout の終端誤差を評価 (nstep/&lt;tag&gt;/)</td></tr>
-<tr><td>6</td><td>ケース集約解析 (step6_analyze_cases)</td><td>全ケースの N-step 誤差を横断集約 (cases_summary.md・cases_metrics.json・overlay)</td></tr>
+<tr><td>6</td><td>ケース集約解析 (step6_analyze_cases)</td><td>全ケースの N-step 誤差を横断集約 (cases_summary.md・cases_metrics.json・overlay) + real.lite から縦/操舵/横 k_us の物理妥当性を直接同定 (physical_validity/)</td></tr>
 <tr><td>7</td><td>パラメータ sweep 同定 (step7_sweep_params)</td><td>車両モデル各パラメータを sweep し終端誤差最小値を同定 (param_sweep_summary.md)</td></tr>
 <tr><td>8</td><td>DP 軌跡比較 (step8_compare_dp_trajectory)</td><td>DiffusionPlanner 出力軌跡を実機 vs sim で比較 (dp_*)</td></tr>
 <tr><td>11</td><td>HTML レポート生成 (step11_build_html_report)</td><td>図スペック・Markdown・設定 YAML を 1 枚に束ねた単一レポート (report.html)。マルチ DS では collection 全体 + 横断サマリーを束ねる</td></tr>
 <tr><td>12</td><td>notebook 生成 (step12_build_notebook)</td><td>各図を plotly で再描画 + 生 CSV からの再解析セルを備えた開発者向け notebook (report.ipynb)</td></tr>
-<tr><td>13</td><td>データセット横断分析 (step13_cross_dataset)</td><td>collection 内全 DS の metrics JSON を再集計 (モデル×DS 行列・正規化集約・カバレッジ・LOO 安定性)</td></tr>
+<tr><td>13</td><td>データセット横断分析 (step13_cross_dataset)</td><td>collection 内全 DS の metrics JSON を再集計 (モデル×DS 行列・正規化集約・カバレッジ・LOO 安定性・物理妥当性検証の横断集約)</td></tr>
 </tbody>
 </table>
 </details>
@@ -776,8 +784,17 @@ def _render_cross_section(cross_dir: Path | None) -> tuple[list[str], str]:
             f"<summary>{html.escape(md.stem)}（step13）</summary>"
             f"{_render_markdown(md.read_text(encoding='utf-8'))}</details>"
         )
-    for fig in figs:
+    # 物理妥当性検証 (cross_physical_validity_*) は他の step13 図と混ざると読みづらいため
+    # 専用の見出しに分けて描画する (図の集合・順序は変えず、表示上の区切りのみ)。
+    _PV_STEMS = {"cross_physical_validity_kus", "cross_physical_validity_long", "cross_physical_validity_steer"}
+    model_figs = [f for f in figs if _asset_stem(f.relative_to(cross_dir)) not in _PV_STEMS]
+    pv_figs = [f for f in figs if _asset_stem(f.relative_to(cross_dir)) in _PV_STEMS]
+    for fig in model_figs:
         body.append(_figure(fig.relative_to(cross_dir), cross_dir, "cross"))
+    if pv_figs:
+        body.append("<h3>物理的妥当性検証（縦・操舵・横 k_us、実測同定 vs チューニング値）</h3>")
+        for fig in pv_figs:
+            body.append(_figure(fig.relative_to(cross_dir), cross_dir, "cross"))
     body.append("</details>")
     return toc, "".join(body)
 

@@ -28,6 +28,14 @@ from ._dp import (
     build_fig_dp_vs_actual,
     build_fig_dp_vs_final_traj,
 )
+from ._physical_validity import (
+    build_fig_cross_kus,
+    build_fig_cross_long,
+    build_fig_cross_steer,
+    build_fig_kus_single,
+    build_fig_long_single,
+    build_fig_steer_single,
+)
 from ._sweep import build_fig_sweep, build_fig_sweep_overview
 from ._nstep import build_fig_overview
 
@@ -35,14 +43,20 @@ __all__ = [
     "build_fig_cascade_error_overlay",
     "build_fig_coverage_overview",
     "build_fig_cross_closed_loop_heatmap",
+    "build_fig_cross_kus",
+    "build_fig_cross_long",
     "build_fig_cross_normalized_bars",
     "build_fig_cross_nstep_heatmap",
+    "build_fig_cross_steer",
+    "build_fig_kus_single",
     "build_fig_loo_stability",
+    "build_fig_long_single",
     "build_fig_dp_real_vs_sim",
     "build_fig_dp_vs_actual",
     "build_fig_dp_vs_final_traj",
     "build_fig_error_growth_overlay",
     "build_fig_overview",
+    "build_fig_steer_single",
     "build_fig_sweep",
     "build_fig_sweep_overview",
     "build_fig_vs_distance",

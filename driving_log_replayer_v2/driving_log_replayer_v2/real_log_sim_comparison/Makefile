@@ -60,12 +60,13 @@ help:
 	@echo "    4. step4_compare_logs     real + 全 sim run の lite を N-way 比較 (figures/, report.md, metrics_closed_loop.json)"
 	@echo "    5. step5_analyze_nstep    Conditions.cases の各 case (VehicleModel パラメータ) で N-step オープンループ解析"
 	@echo "    6. step6_analyze_cases    nstep/*.csv を集約 (overlay/, cases_summary.md, cases_metrics.json)"
+	@echo "                              + real.lite から縦/操舵/横 k_us の物理妥当性を直接同定 (cases/physical_validity/)"
 	@echo "    7. step7_sweep_params     real.lite で車両モデルパラメータを rollout sweep 同定 (param_sweep/)"
 	@echo "    8. step8_compare_dp_trajectory  DiffusionPlanner 出力軌跡 real vs sim 比較 (figures/dp_*)"
 	@echo "    10. step10_diagnose_curve カーブ/発進区間の乖離を縦横分解診断 (curve_diag/)"
 	@echo "    11. step11_build_html_report 図スペック・Markdown・設定 YAML を単一 report.html に集約"
 	@echo "    12. step12_build_notebook 開発者向け report.ipynb 生成"
-	@echo "    13. step13_cross_dataset  collection 横断のモデル×データセット分析 (cross_dataset/)"
+	@echo "    13. step13_cross_dataset  collection 横断のモデル×データセット分析 + 物理妥当性検証の横断集約 (cross_dataset/)"
 	@echo ""
 	@echo "変数:"
 	@echo "  WS_ROOT          colcon ワークスペースルート (デフォルト: $(WS_ROOT))"
@@ -170,6 +171,7 @@ local_cross_analysis_run:
 	    source $(SETUP_BASH) \
 	    && $(PYTHON) -m driving_log_replayer_v2.real_log_sim_comparison.step13_cross_dataset \
 	        --collection-dir "$(COLLECTION_DIR)" \
+	        $(if $(wildcard $(LOCAL_SCENARIO)),--scenario "$(LOCAL_SCENARIO)",) \
 	    && $(PYTHON) -m driving_log_replayer_v2.real_log_sim_comparison.step11_build_html_report \
 	        --collection-dir "$(COLLECTION_DIR)"
 

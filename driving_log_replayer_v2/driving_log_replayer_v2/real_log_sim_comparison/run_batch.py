@@ -254,7 +254,7 @@ def main() -> None:
     print("\n=== Stage 13: 横断分析 ===", flush=True)
     r13 = subprocess.run(  # noqa: S603
         [sys.executable, "-m", f"{_PKG}.step13_cross_dataset",
-         "--collection-dir", str(batch_root)],
+         "--collection-dir", str(batch_root), "--scenario", str(scenario)],
         check=False, env=os.environ.copy(),
     )
     report_name = "aggregate_report.html" if args.input_mode == "raw" else "report.html"
