@@ -1633,6 +1633,24 @@ def _build_sec1(
         long_perf_subsection = ""
 
     return f"""
+<section id="sec-coords">
+<h2>1-0. 座標系と主要な記号の定義</h2>
+<p>本レポートの運動方程式は、以下の車体基準（body frame）および進行方向基準の座標系に基づきます。</p>
+<table class="param-table">
+  <tr><th>記号</th><th>意味</th><th>単位</th></tr>
+  <tr><td>\(x, y\)</td><td>地図平面上の車両位置</td><td>m</td></tr>
+  <tr><td>\(\theta\)</td><td>ヨー角（車体の向き。地図 X 軸からの反時計回り回転）</td><td>rad</td></tr>
+  <tr><td>\(v_x\)</td><td>前進速度（進行方向＝車体 X 軸成分。<code>lon_vel</code>）</td><td>m/s</td></tr>
+  <tr><td>\(a_{{\mathrm{{act}}}}\)</td><td>アクチュエータ出力（実加速度。勾配重力加算前の値）</td><td>m/s²</td></tr>
+  <tr><td>\(a_{{\mathrm{{slope}}}}\)</td><td>路面勾配による重力加速度成分</td><td>m/s²</td></tr>
+  <tr><td>\(\delta_{{\mathrm{{act}}}}\)</td><td>前輪実ステア角</td><td>rad</td></tr>
+  <tr><td>\(\beta\)</td><td>ステアバイアス（系統的操舵オフセット。<code>steer_bias</code>）</td><td>rad</td></tr>
+  <tr><td>\(\omega\)</td><td>ヨーレート（\(\dot\theta\)）</td><td>rad/s</td></tr>
+  <tr><td>\(L\)</td><td>ホイールベース（<code>wheelbase</code>）</td><td>m</td></tr>
+  <tr><td>\(k_{{\mathrm{{us}}}}\)</td><td>アンダーステア係数（<code>k_us</code>）</td><td>rad/(m/s²)</td></tr>
+</table>
+</section>
+
 <section id="sec-long">
 <h2>1-1. 縦方向（加速度アクチュエータ）の同定</h2>
 <p>
@@ -2202,6 +2220,7 @@ def build_html(
 </p>
 <nav>
   <a href="#model-intro">モデルパラメータ</a>
+  <a href="#sec-coords">1-0. 座標系定義</a>
   <a href="#sec-long">1-1. 縦方向</a>
   <a href="#sec-steer">1-2. 操舵</a>
   <a href="#sec-yaw">1-3. ヨー・横方向</a>
