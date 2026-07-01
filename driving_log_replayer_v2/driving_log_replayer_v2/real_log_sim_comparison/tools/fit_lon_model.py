@@ -5,7 +5,7 @@
 を同定する。
 
 モデル (C++ calcModel と一致):
-    a_target(t) = a_cmd(t - T) + (c0 + c1·v + c2·v²) + coupling·(v·ω)²
+    a_target(t) = a_cmd(t - T) + (c0 + c1·v + c2·v²)
     ȧ = -(a - a_target) / τ,   τ = τ_thr (a_cmd>=0) / τ_brk (a_cmd<0)
     v̇ = a   (= 観測。ここでは a の応答を当てはめる)
 
@@ -92,7 +92,7 @@ def fit(datasets: list[dict]) -> dict:
                 # 基底応答 (IC=0): poly1,poly2,coupling
                 # poly0(定数)は除外: 停止時(v=0)に spurious 加速を生むと closed-loop で誤発進する。
                 # 走行抵抗は v=0 でゼロが物理的に正しい (poly(v)=c1·v+c2·v²)。
-                bases = [v, v * v, (v * wz) ** 2]
+                bases = [v, v * v]
                 basis_resp = [_integrate(b, tau, 0.0) for b in bases]
                 A_blocks.append(np.column_stack(basis_resp))
                 y_blocks.append(a - a_cmd_resp)
@@ -104,7 +104,7 @@ def fit(datasets: list[dict]) -> dict:
             if best is None or rmse < best["rmse"]:
                 best = {"rmse": rmse, "tau_thr": float(tau_thr), "tau_brk": float(tau_brk),
                         "c0": 0.0, "c1": float(coef[0]),
-                        "c2": float(coef[1]), "coupling": float(coef[2])}
+                        "c2": float(coef[1])}
     return best
 
 
@@ -143,7 +143,7 @@ def main() -> None:
     print(f"  lon_drag_c0  : {res['c0']:+.4f}")
     print(f"  lon_drag_c1  : {res['c1']:+.5f}")
     print(f"  lon_drag_c2  : {res['c2']:+.6f}")
-    print(f"  lon_lat_coupling: {res['coupling']:+.5f}")
+    # lon_lat_coupling is deleted
 
 
 if __name__ == "__main__":

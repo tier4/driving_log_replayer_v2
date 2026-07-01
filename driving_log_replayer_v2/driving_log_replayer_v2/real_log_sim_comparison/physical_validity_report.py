@@ -1645,7 +1645,10 @@ def _build_sec1(
 a_{{\\mathrm{{cmd,del}}}}(t) = a_{{\\mathrm{{cmd}}}}(t - T_a)
 \\]
 \\[
-\\dot{{a}}_{{\\mathrm{{act}}}}(t) = \\frac{{a_{{\\mathrm{{cmd,del}}}}(t) - a_{{\\mathrm{{act}}}}(t)}}{{\\tau_a}}
+a_{{\\mathrm{{target}}}}(t) = a_{{\\mathrm{{cmd,del}}}}(t) + \\bigl(c_0 + c_1 v_x(t) + c_2 v_x(t)^2\\bigr)
+\\]
+\\[
+\\dot{{a}}_{{\\mathrm{{act}}}}(t) = \\frac{{a_{{\\mathrm{{target}}}}(t) - a_{{\\mathrm{{act}}}}(t)}}{{\\tau_a}}
 \\]
 \\[
 \\dot{{v}}_x(t) = a_{{\\mathrm{{act}}}}(t) + a_{{\\mathrm{{slope}}}}(t)
@@ -1654,6 +1657,7 @@ a_{{\\mathrm{{cmd,del}}}}(t) = a_{{\\mathrm{{cmd}}}}(t - T_a)
 加速度指令 \\(a_{{\\mathrm{{cmd}}}}\\) は純粋遅延 \\(T_a\\)（<code>acc_time_delay</code>）だけ遅れてアクチュエータに届き、
 時定数 \\(\\tau_a\\)（<code>acc_time_constant</code>）の一次遅れでアクチュエータ出力（実加速度） \\(a_{{\\mathrm{{act}}}}\\) が応答する。<br>
 車速 \\(v_x\\) は、アクチュエータ出力（実加速度）に応答遅れのない勾配重力加速度成分 \\(a_{{\\mathrm{{slope}}}}\\)（シミュレータへの外部入力）を加算して積分した値となる。<br>
+※ 走行抵抗多項式（poly項）の係数 \(c_0, c_1, c_2\) はそれぞれ <code>lon_drag_c0</code>, <code>lon_drag_c1</code>, <code>lon_drag_c2</code> に対応します。<br>
 ※ 目標加速度およびアクチュエータ出力加速度は <code>vel_rate_lim</code>、車速は <code>vel_lim</code> で制限されます。
 </p>
 

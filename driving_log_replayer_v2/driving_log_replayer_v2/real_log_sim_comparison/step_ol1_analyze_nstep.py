@@ -153,13 +153,13 @@ def _load_lib() -> ctypes.CDLL:
     # 15 base args (vx_lim..k_us)
     # + 2 array pointers (k_us_thresholds, k_us_band_values) + 1 int (n_kus_bands)
     # + 5 verification-viewer-parity longitudinal terms
-    # (brake_time_constant, lon_drag_c0, lon_drag_c1, lon_drag_c2, lon_lat_coupling)
+    # (brake_time_constant, lon_drag_c0, lon_drag_c1, lon_drag_c2)
     # + 1 int n_substep (Euler sub-steps per outer update() call; 1 = original behaviour)
     _c_dbl_p_local = ctypes.POINTER(c_double)
     lib.vm_create_delay_steer_acc_geared_wo_fall_guard.argtypes = (
         [c_double] * 15 +               # base: vx_lim..k_us
         [_c_dbl_p_local, _c_dbl_p_local, ctypes.c_int] +  # thresholds, band_values, n_kus_bands
-        [c_double] * 5 +                # brake, drag0/1/2, coupling
+        [c_double] * 4 +                # brake, drag0/1/2
         [ctypes.c_int]                  # n_substep
     )
 
@@ -342,7 +342,6 @@ class VehicleModel:
                 p.get("lon_drag_c0", 0.0),
                 p.get("lon_drag_c1", 0.0),
                 p.get("lon_drag_c2", 0.0),
-                p.get("lon_lat_coupling", 0.0),
                 # Euler sub-steps per outer update() call (1 = original single-step behaviour)
                 int(p["n_substep"]),
             )

@@ -58,7 +58,7 @@ def _seed_from_params(params: dict) -> dict:
 
     C++ closed-loop モデル (delay_steer_acc_geared_wo_fall_guard) のパラメータ名を
     ビューアのつまみ名へ写像する。新表現力 (brake_time_constant=brake τ, lon_drag_c0/c1/c2=poly(v),
-    lon_lat_coupling=c_corner, steer_bias=β) もここで対応づけるので、レジストリのモデル
+    steer_bias=β) もここで対応づけるので、レジストリのモデル
     (best_normal 等) をビューアにそのまま適用できる。
     """
     def f(key: str, default: float) -> float:
@@ -83,7 +83,7 @@ def _seed_from_params(params: dict) -> dict:
         "poly1": f("lon_drag_c1", 0.0),
         "poly2": f("lon_drag_c2", 0.0),
         "v_stop": 0.2,
-        "c_corner": f("lon_lat_coupling", 0.0),
+        "c_corner": 0.0,
         "c_slope": f("lon_slope_gain", 1.0),  # 勾配重力ゲイン (1.0=フル重力でプラント一致)
         "tau_steer": f("steer_time_constant", 0.27),
         "t_steer": f("steer_time_delay", 0.24),
@@ -131,7 +131,7 @@ def plot_model_viewer(
 
     # つまみ初期値（spec シード）。tau/T [s], steer_bias [rad], k_us [s^2/m]。
     # 縦は加減速で別特性のため throttle=acc_*, brake=brake_* をシード。新表現力
-    # (poly(v)=lon_drag_*, c_corner=lon_lat_coupling, β=steer_bias) も _seed_from_params で対応。
+    # (poly(v)=lon_drag_*, β=steer_bias) も _seed_from_params で対応。
     payload["model_seed"] = _seed_from_params(sim_params)
     # モデルレジストリ（scenario.yaml の models）。各モデルの params を spec に上書きして
     # シード化し、ビューアのドロップダウンから「対応モデルのパラメータを簡単に適用」できるようにする。
