@@ -461,26 +461,9 @@ def compute_kus_bins(records: list[dict]) -> dict:
 # plotly 図生成
 # ---------------------------------------------------------------------------
 def _kus_step_profile(vx: np.ndarray, params: dict) -> np.ndarray:
-    """params から N 段ステップの k_us プロファイルを計算して返す。
-
-    新形式: k_us_bands (list) + k_us_thresholds (list) を使用。
-    後方互換: k_us_lo / k_us_vx_thresh / k_us_mid / k_us_vx_thresh2 を自動変換。
-    """
-    # 新形式 k_us_bands / k_us_thresholds
+    """params から N 段ステップ of k_us プロファイルを計算して返す。"""
     bands = params.get("k_us_bands")
     thresholds = params.get("k_us_thresholds")
-
-    # 後方互換: k_us_lo / k_us_mid 形式から変換
-    if bands is None and "k_us_lo" in params:
-        thresh1 = params.get("k_us_vx_thresh", 0.0)
-        if thresh1 > 0.0:
-            thresh2 = params.get("k_us_vx_thresh2", 0.0)
-            if "k_us_mid" in params and thresh2 > thresh1:
-                bands = [params["k_us_lo"], params["k_us_mid"], params.get("k_us", 0.0)]
-                thresholds = [thresh1, thresh2]
-            else:
-                bands = [params["k_us_lo"], params.get("k_us", 0.0)]
-                thresholds = [thresh1]
 
     if bands is not None and thresholds is not None and len(bands) > 0:
         result = np.full_like(vx, bands[-1], dtype=float)
@@ -497,17 +480,6 @@ def _kus_band_label(params: dict) -> str:
     """速度帯パラメータを凡例文字列に変換。"""
     bands = params.get("k_us_bands")
     thresholds = params.get("k_us_thresholds")
-
-    if bands is None and "k_us_lo" in params:
-        thresh1 = params.get("k_us_vx_thresh", 0.0)
-        if thresh1 > 0.0:
-            thresh2 = params.get("k_us_vx_thresh2", 0.0)
-            if "k_us_mid" in params and thresh2 > thresh1:
-                bands = [params["k_us_lo"], params["k_us_mid"], params.get("k_us", 0.0)]
-                thresholds = [thresh1, thresh2]
-            else:
-                bands = [params["k_us_lo"], params.get("k_us", 0.0)]
-                thresholds = [thresh1]
 
     if bands is not None and thresholds is not None:
         parts = []
@@ -572,13 +544,6 @@ def build_kus_figure(bins: dict, params: dict) -> go.Figure:
 
     # 閾値縦線
     thresholds = params.get("k_us_thresholds")
-    if thresholds is None and "k_us_lo" in params:
-        thresh1 = params.get("k_us_vx_thresh", 0.0)
-        thresh2 = params.get("k_us_vx_thresh2", 0.0)
-        if thresh1 > 0.0:
-            thresholds = [thresh1]
-            if thresh2 > thresh1:
-                thresholds.append(thresh2)
     colors = ["green", "purple", "brown", "teal"]
     for i, thr in enumerate(thresholds or []):
         clr = colors[i % len(colors)]
@@ -1491,16 +1456,7 @@ def _kus_band_table_rows(params: dict) -> str:
     bands = params.get("k_us_bands")
     thresholds = params.get("k_us_thresholds")
 
-    if bands is None and "k_us_lo" in params:
-        thresh1 = params.get("k_us_vx_thresh", 0.0)
-        if thresh1 > 0.0:
-            thresh2 = params.get("k_us_vx_thresh2", 0.0)
-            if "k_us_mid" in params and thresh2 > thresh1:
-                bands = [params["k_us_lo"], params["k_us_mid"], params.get("k_us", 0.0)]
-                thresholds = [thresh1, thresh2]
-            else:
-                bands = [params["k_us_lo"], params.get("k_us", 0.0)]
-                thresholds = [thresh1]
+
 
     if bands is not None and thresholds is not None:
         rows = []
@@ -1537,20 +1493,27 @@ def _build_sec_model_intro(params: dict, label: str, params_filename: str = "") 
         return str(v)
 
     # k_us 速度帯プロファイル行
-    thresh1 = params.get("k_us_vx_thresh", 0.0)
-    thresh2 = params.get("k_us_vx_thresh2", 0.0)
-    if thresh1 > 0 or thresh2 > 0:
-        kus_profile_rows = f"""\
-  <tr><td><code>k_us_lo</code></td><td>{_fmt(params.get('k_us_lo', 0.0))}</td>
-    <td>アンダーステア係数（vx &lt; {_fmt(thresh1)} m/s）</td></tr>
-  <tr><td><code>k_us_mid</code></td><td>{_fmt(params.get('k_us_mid', 0.0))}</td>
-    <td>アンダーステア係数（{_fmt(thresh1)} ≤ vx &lt; {_fmt(thresh2)} m/s）</td></tr>
-  <tr><td><code>k_us</code></td><td>{_fmt(params.get('k_us', 0.0))}</td>
-    <td>アンダーステア係数（vx ≥ {_fmt(thresh2)} m/s）</td></tr>
-  <tr><td><code>k_us_vx_thresh</code></td><td>{_fmt(thresh1)} m/s</td>
-    <td>k_us_lo → k_us_mid の切り替え速度</td></tr>
-  <tr><td><code>k_us_vx_thresh2</code></td><td>{_fmt(thresh2)} m/s</td>
-    <td>k_us_mid → k_us の切り替え速度</td></tr>"""
+    bands = params.get("k_us_bands")
+    thresholds = params.get("k_us_thresholds")
+    if bands is not None and thresholds is not None:
+        rows = []
+        for i, b in enumerate(bands):
+            if i == 0:
+                speed_range = f"vx &lt; {thresholds[0]:.2f} m/s"
+            elif i < len(thresholds):
+                speed_range = f"{thresholds[i-1]:.2f} ≤ vx &lt; {thresholds[i]:.2f} m/s"
+            else:
+                speed_range = f"vx ≥ {thresholds[-1]:.2f} m/s"
+            rows.append(
+                f"  <tr><td><code>k_us_band[{i}]</code></td>"
+                f"<td>{_fmt(b)}</td><td>{speed_range} のアンダーステア係数</td></tr>"
+            )
+        for i, thr in enumerate(thresholds):
+            rows.append(
+                f"  <tr><td><code>k_us_threshold[{i}]</code></td>"
+                f"<td>{_fmt(thr)} m/s</td><td>速度帯 {i} → {i+1} の切替閾値</td></tr>"
+            )
+        kus_profile_rows = "\n".join(rows)
     else:
         kus_profile_rows = f"""\
   <tr><td><code>k_us</code></td><td>{_fmt(params.get('k_us', 0.0))}</td>
@@ -2341,16 +2304,6 @@ def main() -> None:
     # k_us 速度帯表示（新形式 / 後方互換形式 両対応）
     bands = params.get("k_us_bands")
     thresholds = params.get("k_us_thresholds")
-    if bands is None and "k_us_lo" in params:
-        thresh1 = params.get("k_us_vx_thresh", 0.0)
-        thresh2 = params.get("k_us_vx_thresh2", 0.0)
-        if thresh1 > 0.0:
-            if "k_us_mid" in params and thresh2 > thresh1:
-                bands = [params["k_us_lo"], params["k_us_mid"], params.get("k_us", 0.0)]
-                thresholds = [thresh1, thresh2]
-            else:
-                bands = [params["k_us_lo"], params.get("k_us", 0.0)]
-                thresholds = [thresh1]
     if bands is not None and thresholds is not None:
         band_str = " | ".join(
             f"band[{i}]={b:.5f}" for i, b in enumerate(bands)
@@ -2546,7 +2499,7 @@ def main() -> None:
     # tuned 設定と baseline 設定（configs = {ラベル: override_params}）
     tuned_keys = [
         "k_us",
-        "k_us_lo", "k_us_mid", "k_us_vx_thresh", "k_us_vx_thresh2",
+        "k_us_bands", "k_us_thresholds",
         "steer_dead_band", "steer_bias",
         "steer_time_constant", "steer_time_delay",
         "acc_time_constant", "acc_time_delay",

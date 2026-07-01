@@ -35,6 +35,7 @@ from driving_log_replayer_v2.real_log_sim_comparison.multi_dataset_tune import (
     _discover,
     _eval as _tune_eval,
     load_datasets,
+    unify_step_bands,
 )
 from driving_log_replayer_v2.real_log_sim_comparison.lib._multi_agg import (
     HORIZONS,
@@ -115,12 +116,14 @@ def main() -> None:
     # パラメータ読み込み
     with open(PARAMS_YAML) as f:
         yaml_data = yaml.safe_load(f)
-    base_params: dict = {k: v for k, v in yaml_data.get("params", yaml_data).items()
-                         if not k.startswith("_")}
+    base_params: dict = unify_step_bands({
+        k: v for k, v in yaml_data.get("params", yaml_data).items()
+        if not k.startswith("_")
+    })
     print(f"基準パラメータ: {PARAMS_YAML.name}")
-    print(f"  k_us_lo={base_params.get('k_us_lo', 'N/A'):.5f}  "
-          f"k_us_mid={base_params.get('k_us_mid', 'N/A'):.5f}  "
-          f"k_us={base_params.get('k_us', 'N/A'):.5f}")
+    print(f"  k_us_bands={base_params.get('k_us_bands', 'N/A')}  "
+          f"k_us_thresholds={base_params.get('k_us_thresholds', 'N/A')}  "
+          f"k_us={base_params.get('k_us', 'N/A')}")
 
     # DS 発見
     ds_root = datasets_root(COLLECTION_DIR)
@@ -160,12 +163,26 @@ def main() -> None:
     print(f"\n[Step 3] k_us スイープ ({len(KUS_SWEEP)} 値 × {len(ctxs)} DS) ...")
     rows = []
     for kus_val in KUS_SWEEP:
-        # k_us_lo / k_us_mid / k_us をすべて kus_val に設定（速度帯の影響を除外して純粋なk_us感度を見る）
-        override_same = {**base_params,
-                         "k_us": kus_val, "k_us_lo": kus_val, "k_us_mid": kus_val}
+        # k_us_bands の全要素および k_us をすべて kus_val に設定
+        override_same = dict(base_params)
+        override_same["k_us"] = kus_val
+        if override_same.get("k_us_bands"):
+            override_same["k_us_bands"] = [kus_val] * len(override_same["k_us_bands"])
+
         # k_us のみ変化（速度帯は維持）
-        override_high = {**base_params, "k_us": kus_val}
-        override_mid  = {**base_params, "k_us_mid": kus_val}
+        override_high = dict(base_params)
+        override_high["k_us"] = kus_val
+        if override_high.get("k_us_bands"):
+            bands = list(override_high["k_us_bands"])
+            bands[-1] = kus_val
+            override_high["k_us_bands"] = bands
+
+        # k_us_mid のみ変化
+        override_mid = dict(base_params)
+        if override_mid.get("k_us_bands") and len(override_mid["k_us_bands"]) >= 2:
+            bands = list(override_mid["k_us_bands"])
+            bands[1] = kus_val
+            override_mid["k_us_bands"] = bands
 
         metrics_same, metrics_high, metrics_mid = {}, {}, {}
         for ctx in ctxs:

@@ -357,11 +357,7 @@ def main() -> None:
         k_us_mid = max(0.0, k_us_mid)
         k_us_hi = max(0.0, k_us_hi)
 
-        params["k_us_lo"] = k_us_lo
-        params["k_us_mid"] = k_us_mid
         params["k_us"] = k_us_hi
-        params["k_us_vx_thresh"] = thresh1
-        params["k_us_vx_thresh2"] = thresh2
         params["k_us_bands"] = [k_us_lo, k_us_mid, k_us_hi]
         params["k_us_thresholds"] = [thresh1, thresh2]
 
