@@ -209,6 +209,7 @@ local_multidataset_cloud_run: prepare_multidataset
 	    --phase-params "$(MULTI_BATCH_ROOT)/phase2_steer.yaml" \
 	    --enqueue-params "$(MULTI_BATCH_ROOT)/phase2_steer.yaml" \
 	    --n-trials $(N_TRIALS) \
+	    --search-subsample 15 \
 	    --jobs $(N_JOBS) \
 	    --out "$(MULTI_BATCH_ROOT)/tuned_params.yaml" \
 	    --report "$(MULTI_BATCH_ROOT)/tuning_report.html"
