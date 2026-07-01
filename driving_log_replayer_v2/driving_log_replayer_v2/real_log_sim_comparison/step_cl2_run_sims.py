@@ -1,10 +1,10 @@
-"""Stage 3: 1 sim run の実行 (scenario_test_runner.launch.py 起動 + step1_make_lite --kind sim).
+"""Stage CL2: 1 sim run の実行 (scenario_test_runner.launch.py 起動 + step0_make_lite --kind sim).
 
 scenario.yaml の Conditions.sim_runs の tag に対応する設定を読み、ros2 launch を
-subprocess で起動し、出力 MCAP を step1_make_lite で lite 化する。
+subprocess で起動し、出力 MCAP を step0_make_lite で lite 化する。
 
 Usage:
-    python3 -m driving_log_replayer_v2.real_log_sim_comparison.step3_run_sims \\
+    python3 -m driving_log_replayer_v2.real_log_sim_comparison.step_cl2_run_sims \\
         --run-tag normal \\
         --scenario <auto_scenario.yaml> \\
         --config-scenario <scenario.yaml> \\
@@ -498,12 +498,12 @@ def main() -> None:
             raise RuntimeError(
                 f"sim 出力 *.mcap が {tmp_root} / {_FALLBACK_SIM_OUT_ROOT} に見つかりません"
             )
-        print(f"[step3_run_sims] sim output mcap: {mcap}")
+        print(f"[step_cl2_run_sims] sim output mcap: {mcap}")
 
-        # step1_make_lite --kind sim で lite 化
+        # step0_make_lite --kind sim で lite 化
         make_lite_cmd = [
             sys.executable, "-m",
-            "driving_log_replayer_v2.real_log_sim_comparison.step1_make_lite",
+            "driving_log_replayer_v2.real_log_sim_comparison.step0_make_lite",
             "--kind", "sim",
             "--input", str(mcap),
             "--output", str(output_lite),

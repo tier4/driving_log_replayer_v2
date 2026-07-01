@@ -395,8 +395,8 @@ def generate_report(
     plot_configs : list[str] | None
         per-DS プロットに使う config ラベルのリスト（None なら最初の 2 つ）。
     """
-    # step5 モジュールは上位 package から参照する（循環回避）
-    from .. import step5_analyze_nstep as s5  # noqa: PLC0415
+    # step_ol1 モジュールは上位 package から参照する（循環回避）
+    from .. import step_ol1_analyze_nstep as s5  # noqa: PLC0415
 
     print(f"[report] レポート生成開始: {len(ctxs)} DS × {len(configs)} configs")
 

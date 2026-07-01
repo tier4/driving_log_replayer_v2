@@ -67,6 +67,11 @@ from .lib._figures import (
     build_fig_cross_nstep_heatmap,
     build_fig_cross_steer,
     build_fig_loo_stability,
+    build_fig_perfect_tracking_box,
+    build_fig_perfect_tracking_traj,
+    build_fig_long_perf_box,
+    build_fig_long_perf_growth,
+    build_fig_long_perf_map,
 )
 from .lib._models_config import load_models_doc
 from .lib._multi_agg import (
@@ -81,7 +86,11 @@ from .lib._physical_validity import (
     compute_cross_steer_rows,
     compute_kus_bins_from_sufficient_stats,
     fit_long_cross_dataset_bounded,
+    compute_long_perf_data,
+    compute_perfect_tracking_data,
+    merged_model_params,
 )
+from .lib._map import resolve_map_osm, load_map_ways
 
 _MIN_DS_LOO = 2       # LOO を実行する最小 DS 数 (2 は参考扱い)
 _MIN_DS_OUTLIER = 3   # 外れ検出 (robust z-score) の最小 DS 数
@@ -793,6 +802,38 @@ def run_cross_analysis(
             fig = build_fig_cross_steer(pv["rows_steer"])
             if fig is not None:
                 write_fig_json(fig, out_dir / "cross_physical_validity_steer")
+
+    # 3c. 理想追従予測（Perfect Tracking）の評価
+    # 縦方向
+    long_perf_data = compute_long_perf_data(entries)
+    if long_perf_data.get("n_dataset", 0) > 0:
+        fig_box = build_fig_long_perf_box(long_perf_data)
+        if fig_box is not None:
+            write_fig_json(fig_box, out_dir / "cross_long_perf_box")
+        fig_growth = build_fig_long_perf_growth(long_perf_data)
+        if fig_growth is not None:
+            write_fig_json(fig_growth, out_dir / "cross_long_perf_growth")
+
+        map_osm_path = resolve_map_osm(None)
+        map_ways = load_map_ways(map_osm_path) if map_osm_path else None
+        fig_map = build_fig_long_perf_map(long_perf_data, map_ways)
+        if fig_map is not None:
+            write_fig_json(fig_map, out_dir / "cross_long_perf_map")
+
+    # 横方向
+    ref_tag = reference_tag or "baseline"
+    model_doc = load_models_doc(scenario_path)
+    ref_model = model_doc.models.get(ref_tag)
+    ref_params = merged_model_params(ref_model.params) if ref_model else {}
+    perfect_tracking_data = compute_perfect_tracking_data(entries, ref_params)
+    if perfect_tracking_data.get("n_dataset", 0) > 0:
+        fig_box = build_fig_perfect_tracking_box(perfect_tracking_data)
+        if fig_box is not None:
+            write_fig_json(fig_box, out_dir / "cross_perfect_tracking_box")
+        fig_traj = build_fig_perfect_tracking_traj(perfect_tracking_data)
+        if fig_traj is not None:
+            write_fig_json(fig_traj, out_dir / "cross_perfect_tracking_traj")
+
     write_physical_validity_summary_md(out_dir / "physical_validity_summary.md", pv)
 
     # 4. LOO / 外れ検出

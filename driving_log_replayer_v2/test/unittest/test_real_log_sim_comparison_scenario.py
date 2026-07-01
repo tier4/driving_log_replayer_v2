@@ -6,11 +6,11 @@
 #
 #     http://www.apache.org/licenses/LICENSE-2.0
 
-"""`real_log_sim_comparison.step2_bag_to_scenario._select_apex_indices` のテスト (D0 周回 waypoint)."""
+"""`real_log_sim_comparison.step_cl1_bag_to_scenario._select_apex_indices` のテスト (D0 周回 waypoint)."""
 
 from __future__ import annotations
 
-from driving_log_replayer_v2.real_log_sim_comparison.step2_bag_to_scenario import (
+from driving_log_replayer_v2.real_log_sim_comparison.step_cl1_bag_to_scenario import (
     _build_initial_signal_actions,
     _build_signal_story_acts,
     _select_apex_indices,

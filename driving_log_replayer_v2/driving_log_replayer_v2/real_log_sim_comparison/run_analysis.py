@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
-"""sim 実行済みバンドルに対して解析ステージ (Stage 4〜11) だけを再実行する CLI.
+"""sim 実行済みバンドルに対して解析ステージ (Stage OL1〜OL3, CL3〜CL4, Reports) だけを再実行する CLI.
 
-`make local_cloud_run` のフルパイプライン (Stage 1〜3: lite 抽出・scenario 生成・sim 実行)
-は重いため、解析コード (step4〜step11) を変更して結果を作り直したいときに、既存の
+`make local_cloud_run` のフルパイプライン (Stage 0〜CL2: lite 抽出・scenario 生成・sim 実行)
+は重いため、解析コード (step_ol1〜step_report_notebook) を変更して結果を作り直したいときに、既存の
 出力バンドル (lite/ + comparison/ を含むディレクトリ) を入力として解析だけを回す。
 ROS launch 不要の純 Python CLI (オーケストレーションは evaluator_node.run_analysis を共用)。
 
@@ -33,7 +33,7 @@ from .lib._io import resolve_bundle_dir as _resolve_bundle_dir
 
 def main() -> None:
     parser = argparse.ArgumentParser(
-        description="sim 実行済みバンドルの解析ステージ (Stage 4〜11) 再実行"
+        description="sim 実行済みバンドルの解析ステージ (Stage OL1〜Reports) 再実行"
     )
     parser.add_argument(
         "--bundle-dir",

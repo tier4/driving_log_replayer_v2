@@ -56,11 +56,18 @@ def write_raw_dataset_scenario(scenario: Path, uuid: str, out_path: Path) -> Pat
     """raw モード用 single-dataset scenario 生成。
 
     Datasets を uuid 1件に置換する (t4_dataset_path/t4_dataset_id は launch 引数で渡すため
-    Datasets エントリの内容は空で問題ない)。cases / models / sim_runs 等の Conditions は
-    テンプレート scenario の値をそのまま引き継ぐ。
+    Datasets エントリの内容は空で問題ないが、VehicleId は必要なのでテンプレートから引き継ぐ)。
+    cases / models / sim_runs 等の Conditions はテンプレート scenario の値をそのまま引き継ぐ。
     """
     doc = yaml.safe_load(scenario.read_text(encoding="utf-8"))
-    doc["Evaluation"]["Datasets"] = [{uuid: {}}]
+    vehicle_id = "default"
+    datasets = (doc.get("Evaluation") or {}).get("Datasets") or []
+    if datasets and isinstance(datasets[0], dict):
+        first_val = next(iter(datasets[0].values()), {})
+        if isinstance(first_val, dict):
+            vehicle_id = first_val.get("VehicleId", "default")
+
+    doc["Evaluation"]["Datasets"] = [{uuid: {"VehicleId": vehicle_id}}]
     out_path.parent.mkdir(parents=True, exist_ok=True)
     out_path.write_text(
         yaml.safe_dump(doc, allow_unicode=True, sort_keys=False), encoding="utf-8"
@@ -107,7 +114,7 @@ def run_one_dataset(
 
     Makefile local_cloud_run の launch 行と同一。ROS 環境 (install/setup.bash) は
     呼び出し元 shell で source 済みであることを前提とする。
-    skip_sim=True で SKIP_SIM=1 を evaluator_node へ伝搬し、Stage 3 (closed-loop sim) を
+    skip_sim=True で SKIP_SIM=1 を evaluator_node へ伝搬し、Stage CL2 (closed-loop sim) を
     省略する (open-loop 解析のみ。詳細は evaluator_node.run_pipeline)。
     """
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -152,8 +159,11 @@ def main() -> None:
     ap.add_argument("--resume", action="store_true",
                     help="runs/<uuid> に real.lite が揃っている dataset の sim 実行をスキップ")
     ap.add_argument("--skip-sim", action="store_true",
-                    help="全 dataset で Stage 3 (closed-loop sim 実行) を省略し、実機ログのみの"
+                    help="全 dataset で Stage CL2 (closed-loop sim 実行) を省略し、実機ログのみの"
                     "解析 (open-loop N-step / sweep / カバレッジ) を実行する")
+    ap.add_argument("--closed-loop-uuids", default="",
+                    help="クローズドループシミュレーションを実行するデータセットUUID（カンマ区切り）。"
+                    "指定された場合、これらのUUIDのみclosed-loopを実行し、それ以外はオープンループ解析のみ（skip-sim）とします。")
     ap.add_argument("--input-mode", choices=["annotation", "raw"], default="annotation",
                     help="dataset 解決モード。"
                     "annotation: webauto キャッシュ (annotation_dataset) から解決 (既定・クラウド互換)。"
@@ -187,6 +197,10 @@ def main() -> None:
         sys.exit(2)
     print(f"datasets ({len(uuids)}): {[u[:8] for u in uuids]}")
 
+    closed_loop_uuids = set()
+    if args.closed_loop_uuids:
+        closed_loop_uuids = {u.strip() for u in args.closed_loop_uuids.split(",") if u.strip()}
+
     records: list[dict] = []
     n_ok = 0
     for i, uuid in enumerate(uuids, start=1):
@@ -210,8 +224,13 @@ def main() -> None:
                     continue
                 scenario_single = batch_root / "scenarios" / f"{uuid}.scenario.yaml"
                 write_single_dataset_scenario(scenario, uuid, scenario_single)
+            if closed_loop_uuids:
+                skip_sim_for_this = uuid not in closed_loop_uuids
+            else:
+                skip_sim_for_this = args.skip_sim
+
             ok = run_one_dataset(
-                uuid, scenario_single, t4_path, output_dir, skip_sim=args.skip_sim
+                uuid, scenario_single, t4_path, output_dir, skip_sim=skip_sim_for_this
             )
             if not ok and not _bundle_has_real_lite(output_dir):
                 print(f"[WARN] {uuid}: sim 実行失敗 (成果物なし) — スキップ", file=sys.stderr)
@@ -251,16 +270,16 @@ def main() -> None:
     except OSError:
         pass
 
-    print("\n=== Stage 13: 横断分析 ===", flush=True)
+    print("\n=== Stage Cross Dataset: 横断分析 ===", flush=True)
     r13 = subprocess.run(  # noqa: S603
-        [sys.executable, "-m", f"{_PKG}.step13_cross_dataset",
+        [sys.executable, "-m", f"{_PKG}.step_cross_dataset",
          "--collection-dir", str(batch_root), "--scenario", str(scenario)],
         check=False, env=os.environ.copy(),
     )
     report_name = "aggregate_report.html" if args.input_mode == "raw" else "report.html"
-    print(f"\n=== Stage 11 (マルチ DS): {report_name} ===", flush=True)
+    print(f"\n=== Stage Report HTML (マルチ DS): {report_name} ===", flush=True)
     r11_cmd = [
-        sys.executable, "-m", f"{_PKG}.step11_build_html_report",
+        sys.executable, "-m", f"{_PKG}.step_report_html",
         "--collection-dir", str(batch_root),
         "--report-name", report_name,
     ]

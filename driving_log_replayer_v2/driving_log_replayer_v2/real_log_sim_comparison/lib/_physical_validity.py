@@ -747,3 +747,318 @@ def compute_cross_steer_rows(
             "d_sim_models": d_sim_models,
         })
     return rows
+
+
+# 理想追従評価用定数 (physical_validity_report.py と同値)
+_PERF_STRIDE = 5
+_DRIFT_A_TH = 0.3
+
+
+def _valid_k0s(
+    gt_vx: np.ndarray,
+    horizon: int,
+    stride: int = _PERF_STRIDE,
+) -> np.ndarray:
+    """VX_MIN_CURVE フィルタ済みの rollout 開始点インデックスを返す。"""
+    n = len(gt_vx)
+    k0s = np.arange(0, n - horizon, stride)
+    return k0s[gt_vx[k0s] > VX_MIN_CURVE]
+
+
+def _bicycle_nstep_perf(
+    gt_x: np.ndarray,
+    gt_y: np.ndarray,
+    gt_yaw: np.ndarray,
+    gt_vx: np.ndarray,
+    gt_steer: np.ndarray,
+    params: dict,
+    horizon: int,
+    dt: float,
+    stride: int = _PERF_STRIDE,
+) -> np.ndarray:
+    """純粋自転車モデルの N-step 横方向誤差（ベクトル化）。
+
+    gt_steer: 実測操舵角 [rad]（生センサ値。steer_bias は params から適用）
+    params.steer_bias / k_us(v) を C++ モデルと同一式で評価し積分する。
+    Returns: |横方向誤差| [m] 配列（vx > VX_MIN_CURVE な開始点のみ）
+    """
+    L = WHEELBASE
+    beta = float(params.get("steer_bias", 0.0))
+    k_us_arr = _kus_step_profile(gt_vx, params)
+    denom_arr = np.maximum(L + k_us_arr * gt_vx ** 2, 0.05 * L)
+    wz_arr = gt_vx * np.tan(gt_steer + beta) / denom_arr
+
+    n = len(gt_x)
+    k0s = _valid_k0s(gt_vx, horizon, stride)
+    if len(k0s) == 0:
+        return np.array([], dtype=float)
+
+    bx   = gt_x[k0s].astype(float).copy()
+    by   = gt_y[k0s].astype(float).copy()
+    byaw = gt_yaw[k0s].astype(float).copy()
+
+    for j in range(horizon):
+        ki = np.clip(k0s + j, 0, n - 1)
+        vxi = gt_vx[ki]
+        wzi = wz_arr[ki]
+        bx   = bx   + vxi * np.cos(byaw) * dt
+        by   = by   + vxi * np.sin(byaw) * dt
+        byaw = byaw + wzi * dt
+
+    k_end = np.minimum(k0s + horizon, n - 1)
+    dx  = bx - gt_x[k_end]
+    dy  = by - gt_y[k_end]
+    lat = np.abs(-dx * np.sin(gt_yaw[k_end]) + dy * np.cos(gt_yaw[k_end]))
+    return lat
+
+
+def _bicycle_trajectory_full(
+    gt_vx: np.ndarray,
+    gt_steer: np.ndarray,
+    x0: float,
+    y0: float,
+    yaw0: float,
+    params: dict,
+    dt: float,
+) -> tuple[np.ndarray, np.ndarray]:
+    """自転車モデルの全区間連続積分軌跡（リセットなし）。
+    初期状態を GT に合わせ、実測 vx + steer で積分する（アクチュエータ遅れなし仮定）。
+    """
+    L = WHEELBASE
+    beta = float(params.get("steer_bias", 0.0))
+    k_us_arr = _kus_step_profile(gt_vx, params)
+    denom_arr = np.maximum(L + k_us_arr * gt_vx ** 2, 0.05 * L)
+    wz_arr = gt_vx * np.tan(gt_steer + beta) / denom_arr
+
+    n = len(gt_vx)
+    xs = np.empty(n)
+    ys = np.empty(n)
+    x, y, yaw = x0, y0, yaw0
+    for i in range(n):
+        xs[i] = x
+        ys[i] = y
+        x   = x   + float(gt_vx[i]) * float(np.cos(yaw)) * dt
+        y   = y   + float(gt_vx[i]) * float(np.sin(yaw)) * dt
+        yaw = yaw + float(wz_arr[i]) * dt
+    return xs, ys
+
+
+def _long_nstep_perf(
+    gt_vx: np.ndarray,
+    a_act: np.ndarray,
+    horizon: int,
+    dt: float,
+    stride: int = _PERF_STRIDE,
+) -> np.ndarray:
+    """縦方向モデル構造限界評価: 実測加速度 a_act を直接積分し GT 変位と比較。"""
+    n = len(gt_vx)
+    k0s = _valid_k0s(gt_vx, horizon, stride)
+    if len(k0s) == 0:
+        return np.array([], dtype=float)
+
+    vx_sim = gt_vx[k0s].astype(float).copy()
+    s_sim  = np.zeros(len(k0s))
+    s_gt   = np.zeros(len(k0s))
+
+    for j in range(horizon):
+        ki = np.clip(k0s + j, 0, n - 1)
+        s_sim  += vx_sim * dt
+        vx_sim += a_act[ki] * dt
+        s_gt   += gt_vx[ki] * dt
+
+    return np.abs(s_sim - s_gt)
+
+
+def _long_drift_profile(
+    gt_vx: np.ndarray,
+    a_act: np.ndarray,
+    horizon: int,
+    dt: float,
+    stride: int = _PERF_STRIDE,
+) -> tuple[np.ndarray, np.ndarray, np.ndarray] | None:
+    """縦方向ドリフトプロファイル"""
+    n = len(gt_vx)
+    k0s = _valid_k0s(gt_vx, horizon, stride)
+    if len(k0s) == 0:
+        return None
+
+    m = len(k0s)
+    verr = np.zeros((m, horizon + 1), dtype=float)
+    serr = np.zeros((m, horizon + 1), dtype=float)
+
+    vx_sim = gt_vx[k0s].astype(float).copy()
+    s_sim  = np.zeros(m)
+    s_gt   = np.zeros(m)
+
+    for j in range(horizon):
+        ki = np.clip(k0s + j, 0, n - 1)
+        ki1 = np.clip(k0s + j + 1, 0, n - 1)
+        s_sim  += vx_sim * dt
+        vx_sim += a_act[ki] * dt
+        s_gt   += gt_vx[ki] * dt
+        verr[:, j + 1] = vx_sim - gt_vx[ki1]
+        serr[:, j + 1] = s_sim - s_gt
+
+    ki_mean = np.minimum(k0s[:, None] + np.arange(horizon)[None, :], n - 1)
+    mean_a = a_act[ki_mean].mean(axis=1)
+    phase = np.where(mean_a < -_DRIFT_A_TH, 0,
+             np.where(mean_a > _DRIFT_A_TH, 2, 1)).astype(int)
+
+    return verr, serr, phase
+
+
+_PERF_HORIZONS = (10, 20, 50, 100)
+
+
+def compute_long_perf_data(
+    entries: list,
+) -> dict:
+    """縦方向モデル構造限界評価用のデータ算出を行う。"""
+    h_labels = [f"{h * _FIT_DT:.2f}s" for h in _PERF_HORIZONS]
+    per_h_errors: dict[int, list[float]] = {h: [] for h in _PERF_HORIZONS}
+    _H_MAX = _PERF_HORIZONS[-1]
+
+    all_verr: list[np.ndarray] = []
+    all_serr: list[np.ndarray] = []
+    all_phase: list[np.ndarray] = []
+
+    map_x_pool: list[np.ndarray] = []
+    map_y_pool: list[np.ndarray] = []
+    map_serr_pool: list[np.ndarray] = []
+
+    n_dataset = 0
+    for entry in entries[:20]:
+        if entry.real_lite is None:
+            continue
+        mcap = entry.real_lite / "real.lite_0.mcap"
+        if not mcap.exists():
+            mcaps = list(entry.real_lite.glob("*.mcap"))
+            if mcaps:
+                mcap = mcaps[0]
+            else:
+                continue
+        try:
+            df_accel = load_accel(mcap)
+            df_vel   = load_velocity(mcap)
+            df_kin   = load_kinematic(mcap)
+        except Exception:
+            continue
+        if df_accel.empty or df_vel.empty:
+            continue
+
+        timebase = _common_timebase(df_accel, df_vel, min_span_ns=_MIN_SPAN_NS)
+        if timebase is None:
+            continue
+        t_s, t0 = timebase
+        gt_vx = _resample(df_vel, "lon_vel", t_s, t0)
+        a_act = _resample(df_accel, "accel", t_s, t0)
+        if len(gt_vx) < 50:
+            continue
+
+        n_dataset += 1
+        for h in _PERF_HORIZONS:
+            errs = _long_nstep_perf(gt_vx, a_act, h, _FIT_DT)
+            per_h_errors[h].extend(errs.tolist())
+
+        drift = _long_drift_profile(gt_vx, a_act, _H_MAX, _FIT_DT)
+        if drift is not None:
+            verr, serr, phase = drift
+            all_verr.append(verr)
+            all_serr.append(serr)
+            all_phase.append(phase)
+
+            if not df_kin.empty:
+                gt_x = np.interp(t_s, (df_kin["t_ns"].values - t0) * 1e-9, df_kin["x"].values)
+                gt_y = np.interp(t_s, (df_kin["t_ns"].values - t0) * 1e-9, df_kin["y"].values)
+                k0s_map = _valid_k0s(gt_vx, _H_MAX, _PERF_STRIDE)
+                if len(k0s_map) > 0:
+                    map_x_pool.append(gt_x[k0s_map])
+                    map_y_pool.append(gt_y[k0s_map])
+                    map_serr_pool.append(serr[:, _H_MAX])
+
+    res = {
+        "n_dataset": n_dataset,
+        "h_labels": h_labels,
+        "per_h_errors": {str(h): v for h, v in per_h_errors.items()},
+    }
+
+    if all_verr:
+        res["verr_pool"] = np.vstack(all_verr).tolist()
+        res["serr_pool"] = np.vstack(all_serr).tolist()
+        res["phase_pool"] = np.concatenate(all_phase).tolist()
+
+    if map_x_pool:
+        res["map_x"] = np.concatenate(map_x_pool).tolist()
+        res["map_y"] = np.concatenate(map_y_pool).tolist()
+        res["map_serr"] = np.concatenate(map_serr_pool).tolist()
+
+    return res
+
+
+def compute_perfect_tracking_data(
+    entries: list,
+    params: dict,
+) -> dict:
+    """操舵理想追従評価用のデータ算出を行う。"""
+    h_labels = [f"{h * _FIT_DT:.2f}s" for h in _PERF_HORIZONS]
+    per_h_errors: dict[int, list[float]] = {h: [] for h in _PERF_HORIZONS}
+
+    traj_data: list[dict] = []
+    n_dataset = 0
+    for entry in entries[:10]:
+        if entry.real_lite is None:
+            continue
+        mcap = entry.real_lite / "real.lite_0.mcap"
+        if not mcap.exists():
+            mcaps = list(entry.real_lite.glob("*.mcap"))
+            if mcaps:
+                mcap = mcaps[0]
+            else:
+                continue
+        try:
+            df_kin   = load_kinematic(mcap)
+            df_steer = load_steering(mcap)
+        except Exception:
+            continue
+        if df_kin.empty or df_steer.empty or len(df_kin) < 50:
+            continue
+
+        timebase = _common_timebase(df_kin, df_steer, min_span_ns=_MIN_SPAN_NS)
+        if timebase is None:
+            continue
+        t_s, t0 = timebase
+
+        gt_x     = _resample(df_kin,   "x",     t_s, t0)
+        gt_y     = _resample(df_kin,   "y",     t_s, t0)
+        gt_yaw   = _resample(df_kin,   "yaw",   t_s, t0)
+        gt_vx    = _resample(df_kin,   "vx",    t_s, t0)
+        gt_steer = _resample(df_steer, "steer", t_s, t0)
+
+        n_dataset += 1
+        for h in _PERF_HORIZONS:
+            lat_errs = _bicycle_nstep_perf(gt_x, gt_y, gt_yaw, gt_vx, gt_steer, params, h, _FIT_DT)
+            per_h_errors[h].extend(lat_errs.tolist())
+
+        if len(traj_data) < 3:
+            bx, by = _bicycle_trajectory_full(
+                gt_vx, gt_steer, float(gt_x[0]), float(gt_y[0]), float(gt_yaw[0]), params, _FIT_DT
+            )
+            moving = gt_vx > VX_MIN_CURVE
+            _PLOT_STRIDE = 5
+            traj_data.append({
+                "uuid": entry.dataset_id[:8],
+                "gt_x": ((gt_x - gt_x[0])[::_PLOT_STRIDE]).tolist(),
+                "gt_y": ((gt_y - gt_y[0])[::_PLOT_STRIDE]).tolist(),
+                "bx":   ((bx   - gt_x[0])[::_PLOT_STRIDE]).tolist(),
+                "by":   ((by   - gt_y[0])[::_PLOT_STRIDE]).tolist(),
+                "moving": (moving[::_PLOT_STRIDE]).tolist(),
+            })
+
+    return {
+        "n_dataset": n_dataset,
+        "h_labels": h_labels,
+        "per_h_errors": {str(h): v for h, v in per_h_errors.items()},
+        "traj_data": traj_data,
+    }
+
+

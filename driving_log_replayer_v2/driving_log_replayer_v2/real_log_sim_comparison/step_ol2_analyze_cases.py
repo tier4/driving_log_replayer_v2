@@ -97,10 +97,10 @@ def rerender_case_figures(
 
     step5 はケース単体実行のため各図の軸が自ケースの値域で自動スケールされ、
     レポートのケース切替タブで軸が動いて比較しにくい。全ケースの CSV を持つ
-    step6 が、step5 のプロット関数 (LIMITS_DF 設定で統一軸モード) を呼び直して
+    step_ol2 が、step_ol1 のプロット関数 (LIMITS_DF 設定で統一軸モード) を呼び直して
     同名ファイルを上書きする。
     """
-    from . import step5_analyze_nstep as s5  # noqa: PLC0415 (plotly 含む重 import のため遅延)
+    from . import step_ol1_analyze_nstep as s5  # noqa: PLC0415 (plotly 含む重 import のため遅延)
 
     s5.LIMITS_DF = pd.concat(
         [df.assign(case=tag) for tag, df in case_dfs.items()], ignore_index=True

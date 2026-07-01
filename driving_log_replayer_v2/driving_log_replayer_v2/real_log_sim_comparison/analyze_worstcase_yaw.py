@@ -22,7 +22,7 @@ import yaml
 _HERE = Path(__file__).parent
 sys.path.insert(0, str(_HERE.parent.parent.parent.parent))
 
-import driving_log_replayer_v2.real_log_sim_comparison.step5_analyze_nstep as s5  # noqa: E402
+import driving_log_replayer_v2.real_log_sim_comparison.step_ol1_analyze_nstep as s5  # noqa: E402
 import driving_log_replayer_v2.real_log_sim_comparison.multi_dataset_tune as mdt  # noqa: E402
 from driving_log_replayer_v2.real_log_sim_comparison.lib._multi_agg import (  # noqa: E402
     aggregate_normalized,

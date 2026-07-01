@@ -12,8 +12,11 @@ import math
 
 import numpy as np
 import plotly.graph_objects as go
+from plotly.subplots import make_subplots
 
 from .._kus_profile import VX_EDGES, _kus_band_label, _kus_step_profile
+from .._map import map_ways_in_bbox
+from .._plotly_utils import lanes_to_trace
 from ._common import apply_base_layout, make_grid, qualitative_colors
 
 
@@ -280,3 +283,251 @@ def build_fig_cross_steer(rows_data: list[dict]) -> go.Figure:
         height=300 * n, margin=dict(t=70, b=40),
         legend=dict(orientation="h", y=1.03, x=0),
     )
+
+
+# ---------------------------------------------------------------------------
+# 理想追従評価プロット (physical_validity_report.py の描画ロジックを純関数化)
+# ---------------------------------------------------------------------------
+def build_fig_perfect_tracking_box(data: dict) -> go.Figure:
+    """操舵理想追従のホライズン別誤差 Box Plot。"""
+    fig = go.Figure()
+    keys = ["10", "20", "50", "100"]
+    h_labels = data.get("h_labels", ["0.10s", "0.20s", "0.50s", "1.00s"])
+    per_h_errors = data.get("per_h_errors") or {}
+
+    for k, hl in zip(keys, h_labels):
+        errs = per_h_errors.get(k)
+        if errs:
+            fig.add_trace(go.Box(
+                y=[e * 100 for e in errs],
+                name=hl,
+                boxpoints="outliers",
+                marker_size=3,
+                marker_color="steelblue",
+            ))
+    if not any(per_h_errors.get(k) for k in keys):
+        return _placeholder_fig("操舵理想追従データなし")
+
+    fig.update_layout(
+        title=f"理想追従 N-step 横方向誤差（上位 {data.get('n_dataset', 0)} データセット プール）",
+        xaxis_title="ホライズン [s]",
+        yaxis_title="|横方向誤差| [cm]",
+        height=400,
+        showlegend=False,
+        margin=dict(t=50, b=40),
+    )
+    return apply_base_layout(fig, title=fig.layout.title.text, height=400)
+
+
+def build_fig_perfect_tracking_traj(data: dict) -> go.Figure:
+    """代表データセットの軌跡比較プロット。"""
+    traj_data = data.get("traj_data") or []
+    n_traj = len(traj_data)
+    if n_traj == 0:
+        return _placeholder_fig("軌跡データなし")
+
+    fig = make_subplots(
+        rows=1, cols=n_traj,
+        subplot_titles=[f"データセット {d['uuid']}" for d in traj_data],
+        horizontal_spacing=0.08,
+    )
+    for i, td in enumerate(traj_data, start=1):
+        m = td["moving"]
+        gt_xm = [x if is_m else None for x, is_m in zip(td["gt_x"], m)]
+        gt_ym = [y if is_m else None for y, is_m in zip(td["gt_y"], m)]
+        bxm   = [x if is_m else None for x, is_m in zip(td["bx"], m)]
+        bym   = [y if is_m else None for y, is_m in zip(td["by"], m)]
+
+        show_legend = (i == 1)
+        fig.add_trace(go.Scatter(
+            x=gt_xm, y=gt_ym,
+            mode="lines", name="GT 軌跡",
+            line=dict(color="black", width=2),
+            legendgroup="gt", showlegend=show_legend,
+        ), row=1, col=i)
+        fig.add_trace(go.Scatter(
+            x=bxm, y=bym,
+            mode="lines", name="自転車モデル (理想追従)",
+            line=dict(color="royalblue", width=1.5, dash="dash"),
+            legendgroup="model", showlegend=show_legend,
+        ), row=1, col=i)
+        fig.update_xaxes(title_text="x [m]", row=1, col=i)
+        fig.update_yaxes(title_text="y [m]", scaleanchor=f"x{i}", scaleratio=1, row=1, col=i)
+
+    fig.update_layout(
+        title="代表データセットの軌跡比較（GT vs 自転車モデル）",
+        height=380,
+        legend=dict(orientation="h", y=1.1, x=0),
+    )
+    return apply_base_layout(fig, title=fig.layout.title.text, height=380)
+
+
+def build_fig_long_perf_box(data: dict) -> go.Figure:
+    """縦方向理想追従誤差の Box Plot。"""
+    fig = go.Figure()
+    keys = ["10", "20", "50", "100"]
+    h_labels = data.get("h_labels", ["0.10s", "0.20s", "0.50s", "1.00s"])
+    per_h_errors = data.get("per_h_errors") or {}
+
+    for k, hl in zip(keys, h_labels):
+        errs = per_h_errors.get(k)
+        if errs:
+            fig.add_trace(go.Box(
+                y=[e * 100 for e in errs], name=hl,
+                boxpoints="outliers", marker_size=3, marker_color="darkorange",
+            ))
+    if not any(per_h_errors.get(k) for k in keys):
+        return _placeholder_fig("縦方向理想追従データなし")
+
+    fig.update_layout(
+        title=f"縦方向 モデル構造限界評価（a_act 直接入力 vs GT 変位、上位 {data.get('n_dataset', 0)} データセット）",
+        xaxis_title="ホライズン [s]",
+        yaxis_title="|縦方向誤差| [cm]",
+        height=400,
+        showlegend=False,
+        margin=dict(t=60, b=40),
+    )
+    return apply_base_layout(fig, title=fig.layout.title.text, height=400)
+
+
+def build_fig_long_perf_growth(data: dict) -> go.Figure:
+    """縦方向のドリフト成長カーブ。"""
+    verr_pool = data.get("verr_pool")
+    serr_pool = data.get("serr_pool")
+    phase_pool = data.get("phase_pool")
+
+    if not verr_pool:
+        return _placeholder_fig("縦方向ドリフトプロファイルなし")
+
+    verr = np.array(verr_pool)
+    serr = np.array(serr_pool)
+    phase = np.array(phase_pool)
+
+    _H_MAX = verr.shape[1] - 1
+    _FIT_DT = 0.01
+    t_axis = np.arange(_H_MAX + 1) * _FIT_DT
+
+    fig = make_subplots(
+        rows=1, cols=2,
+        subplot_titles=["速度誤差  vx_sim − GT vx  [m/s]",
+                        "変位誤差  s_sim − s_gt  [cm]"],
+        horizontal_spacing=0.10,
+    )
+
+    _PHASE_COLORS = {0: "steelblue", 1: "gray", 2: "tomato"}
+    _PHASE_NAMES  = {0: "減速 (a < -0.3)", 1: "巡航", 2: "加速 (a > +0.3)"}
+
+    for col, (pool, scale, ytitle) in enumerate([
+        (verr, 1.0,   "速度誤差 [m/s]<br><sup>正 = sim が GT より速い</sup>"),
+        (serr, 100.0, "変位誤差 [cm]<br><sup>正 = sim が GT より進んでいる</sup>"),
+    ], start=1):
+        data_scaled = pool * scale
+        med  = np.median(data_scaled, axis=0)
+        q25  = np.percentile(data_scaled, 25, axis=0)
+        q75  = np.percentile(data_scaled, 75, axis=0)
+
+        # IQR 帯
+        fig.add_trace(go.Scatter(
+            x=np.concatenate([t_axis, t_axis[::-1]]).tolist(),
+            y=np.concatenate([q75, q25[::-1]]).tolist(),
+            fill="toself", fillcolor="rgba(255,165,0,0.18)",
+            line=dict(color="rgba(0,0,0,0)"),
+            name="IQR 25–75%", showlegend=(col == 1),
+            legendgroup="iqr",
+        ), row=1, col=col)
+
+        # 全体中央値
+        fig.add_trace(go.Scatter(
+            x=t_axis.tolist(), y=med.tolist(),
+            mode="lines", line=dict(color="darkorange", width=2.5),
+            name="中央値（全体）", showlegend=(col == 1),
+            legendgroup="med_all",
+        ), row=1, col=col)
+
+        # 局面別中央値
+        for ph_id, ph_name in _PHASE_NAMES.items():
+            mask = phase == ph_id
+            if mask.sum() < 5:
+                continue
+            ph_med = np.median(data_scaled[mask], axis=0)
+            fig.add_trace(go.Scatter(
+                x=t_axis.tolist(), y=ph_med.tolist(),
+                mode="lines",
+                line=dict(color=_PHASE_COLORS[ph_id], width=1.2, dash="dot"),
+                name=ph_name, showlegend=(col == 1),
+                legendgroup=f"ph{ph_id}",
+            ), row=1, col=col)
+
+        fig.add_hline(
+            y=0, line=dict(color="black", width=1, dash="dash"),
+            row=1, col=col,
+        )
+        fig.update_yaxes(title_text=ytitle, row=1, col=col)
+        fig.update_xaxes(title_text="ロールアウト経過時間 [s]", row=1, col=col)
+
+    fig.update_layout(
+        title=f"縦方向ドリフト成長カーブ（符号付き、上位 {data.get('n_dataset', 0)} データセット）",
+        height=430,
+        margin=dict(t=70, b=50),
+        legend=dict(orientation="v", x=1.02, y=1),
+    )
+    return apply_base_layout(fig, title=fig.layout.title.text, height=430)
+
+
+def build_fig_long_perf_map(data: dict, map_ways: list | None = None) -> go.Figure:
+    """縦方向変位誤差の地図上分布プロット。"""
+    map_x = data.get("map_x")
+    map_y = data.get("map_y")
+    map_serr = data.get("map_serr")
+
+    if not map_x:
+        return _placeholder_fig("位置データなし")
+
+    x_arr = np.array(map_x)
+    y_arr = np.array(map_y)
+    serr_arr = np.array(map_serr) * 100.0
+
+    _MAP_MARGIN = 10.0
+    x_min = float(x_arr.min()) - _MAP_MARGIN
+    x_max = float(x_arr.max()) + _MAP_MARGIN
+    y_min = float(y_arr.min()) - _MAP_MARGIN
+    y_max = float(y_arr.max()) + _MAP_MARGIN
+    vmax  = max(float(np.percentile(np.abs(serr_arr), 99)), 1e-6)
+
+    fig = go.Figure()
+
+    if map_ways is not None:
+        lane_ways = map_ways_in_bbox(map_ways, (x_min, x_max), (y_min, y_max))
+        if lane_ways:
+            fig.add_trace(lanes_to_trace(lane_ways))
+
+    fig.add_trace(go.Scatter(
+        x=x_arr.tolist(), y=y_arr.tolist(),
+        mode="markers",
+        marker=dict(
+            color=serr_arr.tolist(),
+            colorscale="RdBu",
+            reversescale=True,
+            cmin=-vmax, cmax=vmax,
+            size=4,
+            colorbar=dict(title="cm", thickness=14),
+        ),
+        showlegend=False,
+        hovertemplate=(
+            "x=%{x:.1f}m y=%{y:.1f}m<br>"
+            "変位誤差=%{marker.color:.2f}cm"
+            "<extra></extra>"
+        ),
+    ))
+    fig.update_xaxes(title_text="x [m]", range=[x_min, x_max])
+    fig.update_yaxes(
+        title_text="y [m]", range=[y_min, y_max],
+        scaleanchor="x", scaleratio=1,
+    )
+    fig.update_layout(
+        title="縦方向変位誤差の地図分布（1.0s 終端・rollout 開始点）",
+        height=600,
+        margin=dict(t=70, b=50, r=80),
+    )
+    return apply_base_layout(fig, title=fig.layout.title.text, height=600)
+

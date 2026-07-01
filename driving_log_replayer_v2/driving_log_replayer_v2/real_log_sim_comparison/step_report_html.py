@@ -80,6 +80,12 @@ CAPTIONS: dict[str, str] = {
     "cross_physical_validity_kus": "dataset 横断 k_us(v) 独立同定（速度ビン別最小二乗法プール集計 + チューニング値比較）",
     "cross_physical_validity_long": "dataset 横断 縦方向アクチュエータ遅れ同定（横断最小二乗法 + 路面勾配補正、最良/最悪データセット時系列）",
     "cross_physical_validity_steer": "dataset 横断 操舵追従同定（best/worst データセット時系列 + チューニング値比較）",
+    # step13: perfect tracking
+    "cross_perfect_tracking_box": "操舵理想追従 N-step 横方向誤差（モデル構造限界・ホライズン別）",
+    "cross_perfect_tracking_traj": "操舵理想追従 代表データセット軌跡比較（GT vs 自転車モデル）",
+    "cross_long_perf_box": "加速度理想追従 N-step 縦方向変位誤差（モデル構造限界・ホライズン別）",
+    "cross_long_perf_growth": "加速度理想追従 ドリフト成長カーブ（速度誤差・変位誤差）",
+    "cross_long_perf_map": "加速度理想追従 変位誤差の地図上分布",
 }
 
 # 再生ビューア等、plotly でない自己完結 HTML を埋め込む際の高さ [px]。
@@ -153,24 +159,29 @@ def _is_fig_json(rel: Path) -> bool:
 # (key, タイトル, 1 行説明)。表示順はこのリスト順。"other" は未分類フォールバック。
 _CATEGORIES: list[tuple[str, str, str]] = [
     (
-        "model_validation",
-        "1. 縦横モデル検証",
-        "実機走行ログから車両モデルを同定し、N-step オープンループ予測で当てはまりを検証する。"
-        "縦横モデル検証ビューアが主役（指令→モデル積算 vs 観測、T/τ/k_us 調整、地図上軌跡重畳）。",
+        "equations",
+        "1. 各運動方程式の提示",
+        "検証対象の運動方程式（キネマティック自転車モデル ＋ 各補正項）を提示します。",
     ),
     (
-        "identification_basis",
-        "2. 同定の数式的根拠",
-        "車両モデルパラメータを「傾き = パラメータ」の数式的導出（§1 主軸）で同定し、独立な 2 つの"
-        "角度で追認する: 追認①実機ログでの傾き確認（走行抵抗 poly(v)・カーブ抵抗 c_corner・k_us"
-        "などの根拠図）と、追認②スイープ評価値（k_us 感度）。"
-        "配置は **§1 導出（テキスト）→ 追認プロット群 → §2–§4 追認・整合（読み取り表）** の順。",
+        "pre_estimation_deviation",
+        "2. 推定前：実車とシミュレーションのズレ",
+        "パラメータ推定を行う前の、理想追従（操舵完全一致と仮定）における自車位置やモデル構造の限界によるズレを提示します。",
     ),
     (
-        "closed_loop",
-        "3. シナリオ クローズループ比較",
-        "auto-scenario を Autoware+シミュレータで closed-loop 実行し、実機との軌跡・速度・操舵乖離を比較する。"
-        "軌跡再生ビューアが主役（時刻同期/位置同期シークバー、距離軸プロット、完走率/乖離/RMSE パネル）。",
+        "parameter_estimation",
+        "3. パラメータ推定結果",
+        "実機ログから遅延などを固定（または目視調整）した上で、最小二乗法で同定した車両パラメータとそのフィッティング精度を提示します。",
+    ),
+    (
+        "post_estimation_residual",
+        "4. 推定後：シミュレーション残差の提示",
+        "パラメータ推定後における、直近10ステップ（ホライズン別）等の予測誤差や、位置（x, y）の変位誤差の成長度合い・分布を提示します。",
+    ),
+    (
+        "closed_loop_comparison",
+        "5. 最終的な Closed Loop シミュレーション残差",
+        "最終同定パラメータを用いて closed-loop シミュレーションを実行した際の、実機との軌跡・速度・操舵の乖離（カーブや加速の誤差）を提示します。",
     ),
     (
         "other",
@@ -192,13 +203,13 @@ _CLOSED_LOOP_STEMS: set[str] = {
 # セクション内で「図の前」に描画する Markdown。プロットを追認 (§2–§4) の位置へ送り、
 # 主軸の数式的導出 (§1, テキストのみ) を図より上に置くために使う。
 _MARKDOWN_REPORTS_PRE: list[tuple[str, str, str]] = [
-    ("param_sweep/param_sweep_derivation.md", "§1 主軸: 傾き = パラメータ の導出（step7）", "identification_basis"),
+    ("param_sweep/param_sweep_derivation.md", "§1 主軸: 傾き = パラメータ の導出（step7）", "parameter_estimation"),
 ]
 # セクション内で「図の後」に描画する Markdown (既定)。
 _MARKDOWN_REPORTS: list[tuple[str, str, str]] = [
-    ("report.md", "比較レポート（step4: report.md）", "closed_loop"),
-    ("param_sweep/param_sweep_summary.md", "§2–§4 追認・整合（step7: param_sweep_summary.md）", "identification_basis"),
-    ("cases/cases_summary.md", "ケース集約サマリ（step6: cases_summary.md）", "model_validation"),
+    ("report.md", "比較レポート（step4: report.md）", "closed_loop_comparison"),
+    ("param_sweep/param_sweep_summary.md", "§2–§4 追認・整合（step7: param_sweep_summary.md）", "parameter_estimation"),
+    ("cases/cases_summary.md", "ケース集約サマリ（step6: cases_summary.md）", "post_estimation_residual"),
 ]
 
 
@@ -222,26 +233,41 @@ def _caption_for(stem: str) -> str:
 
 
 def _classify(rel: Path) -> str:
-    """図の相対パス (comparison/ 基準) を概念セクションキーへ分類する。
-
-    figures/ 配下にはクローズループ図が混在するため、
-    ディレクトリだけでなく stem でも判定する。
-    dp_* は step8 が出力するが非掲載（_collect_figures で除外済み）のため、
-    ここには到達しない（念のため other へ落とす）。
-    """
+    """図の相対パス (comparison/ 基準) を概念セクションキーへ分類する。"""
     top = rel.parts[0] if len(rel.parts) > 1 else "."
     stem = _asset_stem(rel)
 
     if stem.startswith("dp_"):
-        return "other"  # _collect_figures で除外済み・フォールバック
-    if stem == "lon_lat_model":
-        return "model_validation"
+        return "other"
+
+    # 2. 推定前：実車とシミュレーションのズレ
+    if stem in {"cross_perfect_tracking_box", "cross_perfect_tracking_traj"}:
+        return "pre_estimation_deviation"
+
+    # 3. パラメータ推定結果
+    if stem in {
+        "cross_physical_validity_kus", "cross_physical_validity_long",
+        "cross_physical_validity_steer", "lon_lat_model"
+    }:
+        return "parameter_estimation"
     if top == "param_sweep":
-        return "identification_basis"  # sweep 図・実機ログ根拠図は「同定の数式的根拠」へ
+        return "parameter_estimation"
+
+    # 4. 推定後：シミュレーション残差の提示
+    if stem in {"cross_long_perf_box", "cross_long_perf_growth", "cross_long_perf_map"}:
+        return "post_estimation_residual"
     if top in {"nstep", "cases"}:
-        return "model_validation"
+        return "post_estimation_residual"
+
+    # 5. 最終的な Closed Loop シミュレーション残差
     if stem in _CLOSED_LOOP_STEMS:
-        return "closed_loop"
+        return "closed_loop_comparison"
+    if stem in {
+        "cross_closed_loop_heatmap", "cross_normalized_bars",
+        "coverage_overview", "loo_stability", "steer_diff_overview"
+    }:
+        return "closed_loop_comparison"
+
     return "other"
 
 
@@ -553,25 +579,25 @@ def _collect_figures(comparison_dir: Path) -> list[Path]:
 # レポート冒頭に置く分析パイプライン解説（README.ja.md の表と同期）。
 _PIPELINE_INTRO = """
 <details class="section" open id="sec-pipeline">
-<summary>分析パイプライン（12 段階）</summary>
+<summary>分析パイプライン</summary>
 <p class="sec-desc">評価ノードが実機ログ抽出から HTML/notebook 集約まで順に実行するパイプライン
-（Stage 1〜12 はデータセット単位、Stage 13 は複数データセットの collection 単位）。
+（Stage 0〜Report Notebook はデータセット単位、Stage Cross Dataset は複数データセットの collection 単位）。
 本レポートは各 stage の成果物（図・Markdown）をカテゴリ別に束ねたもの。
 <a class="toplink" href="#top">↑ 先頭</a></p>
 <table>
 <thead><tr><th>Stage</th><th>名称</th><th>役割 / 主な成果物</th></tr></thead>
 <tbody>
-<tr><td>1</td><td>実機ログ抽出 (step1_make_lite)</td><td>input_bag から必要トピックを抽出し real.lite を生成</td></tr>
-<tr><td>2</td><td>scenario 自動生成 (step2_bag_to_scenario)</td><td>実機 bag + 地図から OpenSCENARIO (auto_scenario.yaml) を生成</td></tr>
-<tr><td>3</td><td>closed-loop シム実行 (step3_run_sims)</td><td>auto_scenario + sim_runs.yaml で sim を回し sim lite を生成</td></tr>
-<tr><td>4</td><td>実機 + sim 比較解析 (step4_compare_logs)</td><td>速度・ステア・軌跡を N-way 重ね描き (report.md・metrics_closed_loop.json・図スペック)</td></tr>
-<tr><td>5</td><td>VehicleModel N-step オープンループ解析 (step5_analyze_nstep)</td><td>real.lite + cases.yaml の各ケースで free-running rollout の終端誤差を評価 (nstep/&lt;tag&gt;/)</td></tr>
-<tr><td>6</td><td>ケース集約解析 (step6_analyze_cases)</td><td>全ケースの N-step 誤差を横断集約 (cases_summary.md・cases_metrics.json・overlay) + real.lite から縦/操舵/横 k_us の物理妥当性を直接同定 (physical_validity/)</td></tr>
-<tr><td>7</td><td>パラメータ sweep 同定 (step7_sweep_params)</td><td>車両モデル各パラメータを sweep し終端誤差最小値を同定 (param_sweep_summary.md)</td></tr>
-<tr><td>8</td><td>DP 軌跡比較 (step8_compare_dp_trajectory)</td><td>DiffusionPlanner 出力軌跡を実機 vs sim で比較 (dp_*)</td></tr>
-<tr><td>11</td><td>HTML レポート生成 (step11_build_html_report)</td><td>図スペック・Markdown・設定 YAML を 1 枚に束ねた単一レポート (report.html)。マルチ DS では collection 全体 + 横断サマリーを束ねる</td></tr>
-<tr><td>12</td><td>notebook 生成 (step12_build_notebook)</td><td>各図を plotly で再描画 + 生 CSV からの再解析セルを備えた開発者向け notebook (report.ipynb)</td></tr>
-<tr><td>13</td><td>データセット横断分析 (step13_cross_dataset)</td><td>collection 内全 DS の metrics JSON を再集計 (モデル×DS 行列・正規化集約・カバレッジ・LOO 安定性・物理妥当性検証の横断集約)</td></tr>
+<tr><td>0</td><td>実機ログ抽出 (step0_make_lite)</td><td>input_bag から必要トピックを抽出し real.lite を生成 (共通基盤)</td></tr>
+<tr><td>OL1</td><td>VehicleModel N-step オープンループ解析 (step_ol1_analyze_nstep)</td><td>real.lite + cases.yaml の各ケースで free-running rollout の終端誤差を評価 (nstep/&lt;tag&gt;/)</td></tr>
+<tr><td>OL2</td><td>ケース集約解析 (step_ol2_analyze_cases)</td><td>全ケースの N-step 誤差を横断集約 (cases_summary.md・cases_metrics.json・overlay) + real.lite から縦/操舵/横 k_us の物理妥当性を直接同定 (physical_validity/)</td></tr>
+<tr><td>OL3</td><td>パラメータ sweep 同定 (step_ol3_sweep_params)</td><td>車両モデル各パラメータを sweep し終端誤差最小値を同定 (param_sweep_summary.md)</td></tr>
+<tr><td>CL1</td><td>scenario 自動生成 (step_cl1_bag_to_scenario)</td><td>実機 bag + 地図から OpenSCENARIO (auto_scenario.yaml) を生成</td></tr>
+<tr><td>CL2</td><td>closed-loop シム実行 (step_cl2_run_sims)</td><td>auto_scenario + sim_runs.yaml で sim を回し sim lite を生成</td></tr>
+<tr><td>CL3</td><td>実機 + sim 比較解析 (step_cl3_compare_logs)</td><td>速度・ステア・軌跡を N-way 重ね描き (report.md・metrics_closed_loop.json・図スペック)</td></tr>
+<tr><td>CL4</td><td>DP 軌跡比較 (step_cl4_compare_dp_trajectory)</td><td>DiffusionPlanner 出力軌跡を実機 vs sim で比較 (dp_*)</td></tr>
+<tr><td>Report HTML</td><td>HTML レポート生成 (step_report_html)</td><td>図スペック・Markdown・設定 YAML を 1 枚に束ねた単一レポート (report.html)。マルチ DS では collection 全体 + 横断サマリーを束ねる</td></tr>
+<tr><td>Report Notebook</td><td>notebook 生成 (step_report_notebook)</td><td>各図を plotly で再描画 + 生 CSV からの再解析セルを備えた開発者向け notebook (report.ipynb)</td></tr>
+<tr><td>Cross Dataset</td><td>データセット横断分析 (step_cross_dataset)</td><td>collection 内全 DS の metrics JSON を再集計 (モデル×DS 行列・正規化集約・カバレッジ・LOO 安定性・物理妥当性検証の横断集約)</td></tr>
 </tbody>
 </table>
 </details>
@@ -831,7 +857,7 @@ def _render_dataset_report(
     md_by_cat = _collect_md(_MARKDOWN_REPORTS)          # 図の後に描画 (既定)
 
     active_cats = [
-        c for c in _CATEGORY_ORDER if c in by_cat or c in md_by_cat or c in md_pre_by_cat
+        c for c in _CATEGORY_ORDER if c in by_cat or c in md_by_cat or c in md_pre_by_cat or c == "equations"
     ]
 
     ds_attr = f" class='toc-sec ds-only' data-ds='{ns}' hidden" if multi else " class='toc-sec'"
@@ -863,14 +889,39 @@ def _render_dataset_report(
             f"<p class='sec-desc'>{html.escape(_CATEGORY_DESCS[cat])}"
             f"<a class='toplink' href='#top'>↑ 先頭</a></p>"
         )
-        _emit_md(md_pre_by_cat.get(cat, []))  # 図の前: §1 主軸 (数式的導出・テキスト)
-        if cat in by_cat:
-            body.extend(_render_category_images(  # 追認プロット (実機ログ根拠・スイープ曲線)
-                by_cat[cat], entry.comparison_dir, ns, cat=cat, scenario_name=scenario_name
-            ))
-        elif cat not in md_pre_by_cat:
-            body.append("<p class='empty'>（このセクションに該当する図はありませんでした）</p>")
-        _emit_md(md_by_cat.get(cat, []))      # 図の後: §2–§4 追認・整合
+        if cat == "equations":
+            body.append(r"""
+<div class="note" style="background:#f9f9f9; padding:1.5rem; border-left:4px solid var(--accent); margin-bottom:1.5rem; border-radius:4px;">
+  <p>本検証で使用する運動方程式（キネマティック自転車モデル ＋ 補正項）は以下の通りです。</p>
+  <h5 style="margin-top:1rem; margin-bottom:0.5rem; font-size:1.05rem; font-weight:600;">■ 縦方向の運動方程式</h5>
+  \[
+  \begin{aligned}
+  \frac{da}{dt} &= -\frac{a - a_{\mathrm{target}}}{\tau(v)} \\
+  a_{\mathrm{target}} &= a_{\mathrm{cmd}}(t - T) + \mathrm{poly}(v) + c_{\mathrm{corner}}(v \cdot \omega_z)^2 \\
+  \mathrm{poly}(v) &= p_0 + p_1 v + p_2 v^2 \\
+  \frac{dv_x}{dt} &= a \quad (\text{クランプ・停止処理あり})
+  \end{aligned}
+  \]
+  <h5 style="margin-top:1.5rem; margin-bottom:0.5rem; font-size:1.05rem; font-weight:600;">■ 横方向の運動方程式</h5>
+  \[
+  \begin{aligned}
+  \frac{d\delta}{dt} &= -\frac{\delta - \delta_{\mathrm{cmd}}(t - T_{\delta})}{\tau_{\delta}} \\
+  \omega_z &= \frac{v \tan(\delta + \beta)}{L + k_{\mathrm{us}}(v) v^2} \\
+  \frac{d\theta}{dt} &= \omega_z \\
+  \frac{dx}{dt} &= v \cos\theta, \quad \frac{dy}{dt} = v \sin\theta, \quad a_y = v \cdot \omega_z
+  \end{aligned}
+  \]
+</div>
+            """)
+        else:
+            _emit_md(md_pre_by_cat.get(cat, []))  # 図の前: §1 主軸 (数式的導出・テキスト)
+            if cat in by_cat:
+                body.extend(_render_category_images(  # 追認プロット (実機ログ根拠・スイープ曲線)
+                    by_cat[cat], entry.comparison_dir, ns, cat=cat, scenario_name=scenario_name
+                ))
+            elif cat not in md_pre_by_cat:
+                body.append("<p class='empty'>（このセクションに該当する図はありませんでした）</p>")
+            _emit_md(md_by_cat.get(cat, []))      # 図の後: §2–§4 追認・整合
         body.append("</details>")
 
     # per-DS 実行構成 (auto_scenario + 追加設定)

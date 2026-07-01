@@ -23,19 +23,17 @@ collection が入口。
 
 | Stage | 名称 | 入力 | 出力 (`result_archive/real_log_sim_comparison/` 配下) | 実行回数 |
 |---|---|---|---|---|
-| 1 | 実機ログ抽出 (`step1_make_lite --kind real`) | `input_bag/*.{mcap,db3}` | `lite/real.lite/` | 1 |
-| 2 | scenario 自動生成 (`step2_bag_to_scenario`) | `input_bag/` + map | `scenarios/auto_scenario.yaml` (OpenSCENARIO) | 1 |
-| 3 | closed-loop シム実行 (`step3_run_sims`) | `auto_scenario.yaml` + `Conditions.sim_runs` の 1 run | `lite/<run_tag>.lite/` | N (sim_runs) |
-| 4 | 実機 + sim 比較解析 (`step4_compare_logs`) | `lite/{real, <run_tag>}.lite/` 群 | `comparison/{figures/, report.md, metrics_closed_loop.json}` (N-way 重ね描き + 機械可読メトリクス・実機カバレッジ) | 1 |
-| 5 | VehicleModel N-step オープンループ解析 (`step5_analyze_nstep`) | `lite/real.lite/` + `Conditions.cases` の 1 ケース | `comparison/nstep/<tag>/` | N (cases) |
-| 6 | ケース集約解析 (`step6_analyze_cases`) | `nstep/<tag>/nstep_delta.csv` 群 | `comparison/cases/{overlay/, cases_summary.md, cases_metrics.json}` | 1 |
-| 7 | 車両モデルパラメータ sweep 同定 (`step7_sweep_params`) | `lite/real.lite/` | `comparison/param_sweep/{<param>_sweep.{csv,fig.json}, pair_*.{csv,fig.json}, param_sweep_summary.md}` | 1 |
-| 8 | DP軌跡比較 (`step8_compare_dp_trajectory`) | `lite/{real, <sim>}.lite/` | `comparison/figures/dp_*.fig.json` | 1 |
-| 9 | 縦パラ同定 (`step9_identify_brake`) | `lite/real.lite/` | `comparison/brake_sweep/{brake_sweep.csv, .fig.json}` | 1 |
-| 10 | カーブ乖離診断 (`step10_diagnose_curve`) | `lite/{real, <sim>}.lite/` | `comparison/curve_diag/{curve_divergence.md, .fig.json}` | 1 |
-| 11 | HTML レポート生成 (`step11_build_html_report`) | `comparison/` 配下の全 `*.fig.json` + 再生 HTML + 各 `.md` + 設定 YAML | `report.html` (バンドルフォルダ直下・plotly.js を 1 回インライン + 図スペックを gzip+base64 遅延展開する単一 HTML。`--collection-dir` でマルチ DS レポート) | 1 |
-| 12 | notebook 生成 (`step12_build_notebook`) | `comparison/` 配下の全 `*.fig.json` | `report.ipynb` (各図を plotly で再描画 + 生 CSV からの再解析セル。開発者向け) | 1 |
-| 13 | データセット横断分析 (`step13_cross_dataset`) | collection 内全 DS の `metrics_closed_loop.json` + `cases_metrics.json` | `cross_dataset/{cross_*.fig.json, coverage_overview.fig.json, loo_stability.fig.json, cross_metrics.json, cross_summary.md}` (collection 単位・rollout 再実行なし) | 1 / collection |
+| 0 | 実機ログ抽出 (`step0_make_lite --kind real`) | `input_bag/*.{mcap,db3}` | `lite/real.lite/` | 1 |
+| OL1 | VehicleModel N-step オープンループ解析 (`step_ol1_analyze_nstep`) | `lite/real.lite/` + `Conditions.cases` の 1 ケース | `comparison/nstep/<tag>/` | N (cases) |
+| OL2 | ケース集約解析 (`step_ol2_analyze_cases`) | `nstep/<tag>/nstep_delta.csv` 群 | `comparison/cases/{overlay/, cases_summary.md, cases_metrics.json}` | 1 |
+| OL3 | パラメータ sweep 同定 (`step_ol3_sweep_params`) | `lite/real.lite/` | `comparison/param_sweep/{<param>_sweep.{csv,fig.json}, pair_*.{csv,fig.json}, param_sweep_summary.md}` | 1 |
+| CL1 | scenario 自動生成 (`step_cl1_bag_to_scenario`) | `input_bag/` + map | `scenarios/auto_scenario.yaml` (OpenSCENARIO) | 1 |
+| CL2 | closed-loop シム実行 (`step_cl2_run_sims`) | `auto_scenario.yaml` + `Conditions.sim_runs` の 1 run | `lite/<run_tag>.lite/` | N (sim_runs) |
+| CL3 | 実機 + sim 比較解析 (`step_cl3_compare_logs`) | `lite/{real, <run_tag>}.lite/` 群 | `comparison/{figures/, report.md, metrics_closed_loop.json}` (N-way 重ね描き + 機械可読メトリクス・実機カバレッジ) | 1 |
+| CL4 | DP軌跡比較 (`step_cl4_compare_dp_trajectory`) | `lite/{real, <sim>}.lite/` | `comparison/figures/dp_*.fig.json` | 1 |
+| Report HTML | HTML レポート生成 (`step_report_html`) | `comparison/` 配下の全 `*.fig.json` + 再生 HTML + 各 `.md` + 設定 YAML | `report.html` (バンドルフォルダ直下・plotly.js を 1 回インライン + 図スペックを gzip+base64 遅延展開する単一 HTML。`--collection-dir` でマルチ DS レポート) | 1 |
+| Report Notebook | notebook 生成 (`step_report_notebook`) | `comparison/` 配下の全 `*.fig.json` | `report.ipynb` (各図を plotly で再描画 + 生 CSV からの再解析セル。開発者向け) | 1 |
+| Cross Dataset | データセット横断分析 (`step_cross_dataset`) | collection 内全 DS の `metrics_closed_loop.json` + `cases_metrics.json` | `cross_dataset/{cross_*.fig.json, coverage_overview.fig.json, loo_stability.fig.json, cross_metrics.json, cross_summary.md}` (collection 単位・rollout 再実行なし) | 1 / collection |
 
 成否はパイプラインの例外有無で決まる。全 stage が完走すれば `result.jsonl` に
 `Success: true`、いずれかの subprocess が非ゼロ終了またはタイムアウトすると
@@ -77,9 +75,9 @@ map-pose z との差で**永久に発火しなかった**（2026-06-03 判明）
 
 | パス | 内容 |
 |---|---|
-| `step1_make_lite.py` … `step13_cross_dataset.py` | パイプラインの各 stage 実装（先頭 `stepN_` が実行順。step13 のみ collection 単位） |
-| `evaluator_node.py` | per-dataset パイプライン (Stage 1〜12) を orchestrate する ROS2 ノード。`lib/driving_log_replayer_v2/real_log_sim_comparison_evaluator_node.py` に install される（CMakeLists で `RENAME` 互換） |
-| `run_batch.py` | scenario.yaml の Datasets 全 UUID を順次ローカル実行するバッチドライバ（収集 + Stage 13 + マルチ DS report.html まで） |
+| `step0_make_lite.py` … `step_cross_dataset.py` | パイプラインの各 stage 実装（ファイル名が役割を示す。step_cross_dataset のみ collection 単位） |
+| `evaluator_node.py` | per-dataset パイプライン (Stage 0〜Report Notebook) を orchestrate する ROS2 ノード。`lib/driving_log_replayer_v2/real_log_sim_comparison_evaluator_node.py` に install される（CMakeLists で `RENAME` 互換） |
+| `run_batch.py` | scenario.yaml の Datasets 全 UUID を順次ローカル実行するバッチドライバ（収集 + Stage Cross Dataset + マルチ DS report.html まで） |
 | `collect_datasets.py` | per-dataset バンドル成果物を collection に symlink 収集（`collection.yaml` manifest 出力） |
 | `multi_dataset_tune.py` | 収集済み real.lite 群での open-loop ロバスト同定（robust_search） |
 | `lib/_*.py` | 共有ユーティリティ・内部設定（io / events / map / params / runtime_config / cases_config / sim_runs_config / provenance / collection / coverage / multi_agg）。stage 実装から `from .lib._x import` で参照 |
@@ -105,7 +103,7 @@ map-pose z との差で**永久に発火しなかった**（2026-06-03 判明）
 
 ### 抽出トピック
 
-評価ノードは ROS トピックを subscribe しない。`step1_make_lite` が rosbag を読み、
+評価ノードは ROS トピックを subscribe しない。`step0_make_lite` が rosbag を読み、
 以下のトピックのみを lite bag に書き出す。
 
 #### 実機ログ（`TOPICS["real"]`）
@@ -124,8 +122,8 @@ map-pose z との差で**永久に発火しなかった**（2026-06-03 判明）
 
 #### シミュレーションログ（`TOPICS["sim"]`）
 
-Stage 3 (`step3_run_sims`) が `scenario_test_runner` で sim を回した結果の rosbag から、
-`step1_make_lite.py` の `TOPICS["sim"]` で抽出して `lite/<run_tag>.lite/` を生成する。
+Stage CL2 (`step_cl2_run_sims`) が `scenario_test_runner` で sim を回した結果の rosbag から、
+`step0_make_lite.py` の `TOPICS["sim"]` で抽出して `lite/<run_tag>.lite/` を生成する。
 
 | Topic name | 用途 |
 | ---------- | ---- |
@@ -230,7 +228,7 @@ Stage 4〜10 の各図は matplotlib SVG ではなく **plotly Figure の JSON�
 
 ### `lite/`
 
-`step1_make_lite` が抽出した lite bag（rosbag2 mcap）。実機 `real.lite/` と、Stage 3 が
+`step0_make_lite` が抽出した lite bag（rosbag2 mcap）。実機 `real.lite/` と、Stage CL2 が
 `sim_runs.yaml` の各 run について生成する `<run_tag>.lite/`（例 `sim_normal.lite/`,
 `sim_kus0020.lite/`, `sim_perfect.lite/`, `sim_godot.lite/`）が併置される。
 
@@ -273,7 +271,7 @@ SVG の比較プロット（軌跡比較のみ plotly 製インタラクティ�
 
 ### `comparison/nstep/<case_tag>/`
 
-`step5_analyze_nstep`（Stage 5）によるケース別 N-step オープンループ解析の成果物。
+`step_ol1_analyze_nstep`（Stage OL1）によるケース別 N-step オープンループ解析の成果物。
 1 ケースあたり `nstep_delta.csv`（全 horizon 統一スキーマ）+ 図 2 枚
 （`overview.fig.json`, `map_distribution.fig.json`）+ `summary.txt`（N=1 詳細 RMSE +
 horizon 別 RMSE）。ケース横断の比較図は `cases/overlay/` が担う。

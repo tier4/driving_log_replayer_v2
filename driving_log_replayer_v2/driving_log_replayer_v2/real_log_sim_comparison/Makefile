@@ -22,7 +22,7 @@ LOCAL_SCENARIO   ?= $(LOCAL_SAMPLE_DIR)/scenario.yaml
 
 PYTHON := python3
 
-.PHONY: help local_cloud_run local_analysis_run local_batch_run local_cross_analysis_run local_multidataset_run issue_scenario collect_raw_rosbags open_loop_tune open_loop_batch
+.PHONY: help local_cloud_run local_analysis_run local_batch_run local_cross_analysis_run local_multidataset_run local_multidataset_cloud_run prepare_multidataset issue_scenario collect_raw_rosbags open_loop_tune open_loop_batch
 
 help:
 	@echo "使い方: make -C $(MAKEFILE_DIR) <ターゲット>"
@@ -54,19 +54,21 @@ help:
 	@echo "                      (multi_dataset_tune robust_search)"
 	@echo ""
 	@echo "  パイプライン構成:"
-	@echo "    1. step1_make_lite        実機 input_bag → lite/real.lite/"
-	@echo "    2. step2_bag_to_scenario  lite/real.lite → scenarios/auto_scenario.yaml"
-	@echo "    3. step3_run_sims         scenario_test_runner で Conditions.sim_runs の各 run を実行 → lite/<tag>.lite/"
-	@echo "    4. step4_compare_logs     real + 全 sim run の lite を N-way 比較 (figures/, report.md, metrics_closed_loop.json)"
-	@echo "    5. step5_analyze_nstep    Conditions.cases の各 case (VehicleModel パラメータ) で N-step オープンループ解析"
-	@echo "    6. step6_analyze_cases    nstep/*.csv を集約 (overlay/, cases_summary.md, cases_metrics.json)"
-	@echo "                              + real.lite から縦/操舵/横 k_us の物理妥当性を直接同定 (cases/physical_validity/)"
-	@echo "    7. step7_sweep_params     real.lite で車両モデルパラメータを rollout sweep 同定 (param_sweep/)"
-	@echo "    8. step8_compare_dp_trajectory  DiffusionPlanner 出力軌跡 real vs sim 比較 (figures/dp_*)"
-	@echo "    10. step10_diagnose_curve カーブ/発進区間の乖離を縦横分解診断 (curve_diag/)"
-	@echo "    11. step11_build_html_report 図スペック・Markdown・設定 YAML を単一 report.html に集約"
-	@echo "    12. step12_build_notebook 開発者向け report.ipynb 生成"
-	@echo "    13. step13_cross_dataset  collection 横断のモデル×データセット分析 + 物理妥当性検証の横断集約 (cross_dataset/)"
+	@echo "    0. step0_make_lite        実機 input_bag → lite/real.lite/ (共通基盤)"
+	@echo "    - Open-Loop (OL) 系列:"
+	@echo "      ol1. step_ol1_analyze_nstep   Conditions.cases の各 case (VehicleModel パラメータ) で N-step オープンループ解析"
+	@echo "      ol2. step_ol2_analyze_cases   nstep/*.csv を集約 (overlay/, cases_summary.md, cases_metrics.json)"
+	@echo "                                    + real.lite から縦/操舵/横 k_us の物理妥当性を直接同定 (cases/physical_validity/)"
+	@echo "      ol3. step_ol3_sweep_params    real.lite で車両モデルパラメータを rollout sweep 同定 (param_sweep/)"
+	@echo "    - Closed-Loop (CL) 系列:"
+	@echo "      cl1. step_cl1_bag_to_scenario lite/real.lite → scenarios/auto_scenario.yaml"
+	@echo "      cl2. step_cl2_run_sims        scenario_test_runner で Conditions.sim_runs の各 run を実行 → lite/<tag>.lite/"
+	@echo "      cl3. step_cl3_compare_logs    real + 全 sim run の lite を N-way 比較 (figures/, report.md, metrics_closed_loop.json)"
+	@echo "      cl4. step_cl4_compare_dp_trajectory DiffusionPlanner 出力軌跡 real vs sim 比較 (figures/dp_*)"
+	@echo "    - レポート・横断分析系列:"
+	@echo "      html. step_report_html        図スペック・Markdown・設定 YAML を単一 report.html に集約"
+	@echo "      nb.   step_report_notebook    開発者向け report.ipynb 生成"
+	@echo "      cross.step_cross_dataset      collection 横断のモデル×データセット分析 + 物理妥当性検証の横断集約 (cross_dataset/)"
 	@echo ""
 	@echo "変数:"
 	@echo "  WS_ROOT          colcon ワークスペースルート (デフォルト: $(WS_ROOT))"
@@ -108,7 +110,7 @@ local_cloud_run:
 	        with_autoware:=false
 
 # 既存の out/<timestamp> (lite/ に real + sim run が揃ったバンドル) を入力に、
-# 解析ステージ (Stage 4〜11) だけを再実行する。Stage 1〜3 (lite 抽出・scenario 生成・
+# 解析ステージ (Stage OL1〜Reports) だけを再実行する。Stage 0〜CL2 (lite 抽出・scenario 生成・
 # sim 実行) をスキップするため、解析コードの変更を数分で結果に反映できる。
 # 地図は local_cloud_run と同じく scenario.yaml の Datasets UUID から webauto キャッシュを
 # 解決する (見つからなければ地図背景なしで続行)。
@@ -144,6 +146,33 @@ local_analysis_run:
 # 後から closed-loop も欲しくなったら SKIP_SIM/RESUME 無しで同じ BATCH_ROOT を再実行する。
 BATCH_ROOT ?= $(LOCAL_SAMPLE_DIR)/out/batch_$(shell date +%Y%m%d_%H%M%S)
 
+# マルチデータセット版のクラウド相当ローカル実行
+# 6/16以降のデータセットを抽出し、指定した特定のデータセットのみでクローズドループを実行する
+DATE_FROM          ?= 2026-06-16
+SRC_DATASET_ROOT   ?= /home/kotaroyoshimoto/data/openloop_j6_15_june
+CLOSED_LOOP_UUIDS  ?= 00d08afd-b605-5de1-9db0-51241fa87b18,01ccf59a-bf38-5d62-8a81-be0fe0e24b95
+MULTI_BATCH_ROOT   ?= /home/kotaroyoshimoto/data/openloop_j6_16_onwards
+
+prepare_multidataset:
+	@echo "[INFO] Preparing datasets starting from $(DATE_FROM) in $(MULTI_BATCH_ROOT)..."
+	$(PYTHON) $(MAKEFILE_DIR)/prepare_datasets.py \
+	    --src-dir "$(SRC_DATASET_ROOT)/datasets" \
+	    --dst-dir "$(MULTI_BATCH_ROOT)/datasets" \
+	    --date "$(DATE_FROM)"
+
+local_multidataset_cloud_run: prepare_multidataset
+	@test -f $(SETUP_BASH) || \
+	    { echo "[ERROR] $(SETUP_BASH) が見つかりません。先にワークスペースをビルドしてください"; exit 1; }
+	@test -f $(LOCAL_SCENARIO) || \
+	    { echo "[ERROR] $(LOCAL_SCENARIO) が見つかりません"; exit 1; }
+	@echo "[INFO] Running batch simulation..."
+	source $(SETUP_BASH) && $(PYTHON) -m driving_log_replayer_v2.real_log_sim_comparison.run_batch \
+	    --scenario "$(LOCAL_SCENARIO)" \
+	    --batch-root "$(MULTI_BATCH_ROOT)" \
+	    --input-mode raw \
+	    --closed-loop-uuids "$(CLOSED_LOOP_UUIDS)" \
+	    $(if $(RESUME),--resume,)
+
 local_batch_run:
 	@test -f $(SETUP_BASH) || \
 	    { echo "[ERROR] $(SETUP_BASH) が見つかりません。先にワークスペースをビルドしてください"; exit 1; }
@@ -169,10 +198,10 @@ local_cross_analysis_run:
 	    { echo "[ERROR] COLLECTION_DIR が見つかりません: $(COLLECTION_DIR) (先に local_batch_run か collect_datasets.py で収集してください)"; exit 1; }
 	@echo "[INFO] COLLECTION_DIR: $(COLLECTION_DIR)" ; \
 	    source $(SETUP_BASH) \
-	    && $(PYTHON) -m driving_log_replayer_v2.real_log_sim_comparison.step13_cross_dataset \
+	    && $(PYTHON) -m driving_log_replayer_v2.real_log_sim_comparison.step_cross_dataset \
 	        --collection-dir "$(COLLECTION_DIR)" \
 	        $(if $(wildcard $(LOCAL_SCENARIO)),--scenario "$(LOCAL_SCENARIO)",) \
-	    && $(PYTHON) -m driving_log_replayer_v2.real_log_sim_comparison.step11_build_html_report \
+	    && $(PYTHON) -m driving_log_replayer_v2.real_log_sim_comparison.step_report_html \
 	        --collection-dir "$(COLLECTION_DIR)"
 
 # 複数データセット横断の open-loop ロバスト同定 (multi_dataset_tune robust_search)。
@@ -256,7 +285,7 @@ DATE_TO    ?=
 LIMIT      ?= 20
 
 # Phase 0+1: rosbag 収集 + real.lite 化
-# (ROS 環境が source 済みである必要があるのは step1_make_lite のみ)
+# (ROS 環境が source 済みである必要があるのは step0_make_lite のみ)
 collect_raw_rosbags:
 	@test -f $(SETUP_BASH) || \
 	    { echo "[ERROR] $(SETUP_BASH) が見つかりません。先にワークスペースをビルドしてください"; exit 1; }

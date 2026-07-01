@@ -27,15 +27,15 @@ DP モデル指定から実ロードまでの流れ。各ステップの実装�
 scenario.yaml の Conditions.models.<name>.{dp_model_release | dp_model_dir}
    │  (Conditions.sim_runs: [<name>, ...] が参照)
    ▼
-step3_run_sims._resolve_dp_model_dir(run)
+step_cl2_run_sims._resolve_dp_model_dir(run)
    │  dp_model_release → webauto ml package-release search/pull → onnx を含む dir
    │  dp_model_dir     → そのまま採用
-   ▼  dp_model_dir 決定
-step3_run_sims._setup_dp_model_env(dp_model_dir)
+   │  ▼  dp_model_dir 決定
+   step_cl2_run_sims._setup_dp_model_env(dp_model_dir)
    │  os.environ に DIFFUSION_PLANNER_ONNX_PATH / DIFFUSION_PLANNER_ARGS_PATH / DP_ONNX_PATH を設定
    │  併せて _ensure_installed_param_honors_env() で param yaml に $(env ...) を実行時注入
-   ▼
-step3_run_sims._prebuild_dp_engine(dp_model_dir)   # TensorRT エンジンを起動前に事前ビルド
+   │  ▼
+   step_cl2_run_sims._prebuild_dp_engine(dp_model_dir)   # TensorRT エンジンを起動前に事前ビルド
    ▼
 ros2 launch scenario_test_runner ...   (subprocess。os.environ を継承)
    │
@@ -47,7 +47,7 @@ DiffusionPlanner ノードが <dp_model_dir>/diffusion_planner.onnx をロード
 ```
 
 ポイントは、**正規の YAML（`diffusion_planner.param.yaml`）を書き換えずに、環境変数だけで onnx パスを
-差し替える**こと。`step3_run_sims` は **1 run-tag = 1 プロセス**で起動されるため、`os.environ` を直接
+差し替える**こと。`step_cl2_run_sims` は **1 run-tag = 1 プロセス**で起動されるため、`os.environ` を直接
 設定すれば (1) launch subprocess が継承し、(2) 同プロセスの provenance capture も同じ onnx を解決する。
 
 ---
@@ -131,7 +131,7 @@ loader が展開する（`load_models_doc` @ `lib/_models_config.py`）。`dp_mo
 
 ## 3. 仕組み詳細（実装）
 
-実装はすべて `step3_run_sims.py`（DP モデルの解決・env 設定・エンジン事前ビルド）と、autoware_launch /
+実装はすべて `step_cl2_run_sims.py`（DP モデルの解決・env 設定・エンジン事前ビルド）と、autoware_launch /
 autoware_diffusion_planner 側の launch・param yaml の連携で成り立つ。
 
 ### 3.1 param yaml の `$(env)` 置換（「変更 A」）
@@ -150,7 +150,7 @@ args_path:       $(env DIFFUSION_PLANNER_ARGS_PATH /opt/autoware/mlmodels/diffus
 
 ### 3.2 run ごとの env 設定（`_setup_dp_model_env`）
 
-`_setup_dp_model_env(dp_model_dir)` @ `step3_run_sims.py` が、解決済み `dp_model_dir` から `os.environ` に
+`_setup_dp_model_env(dp_model_dir)` @ `step_cl2_run_sims.py` が、解決済み `dp_model_dir` from `os.environ` に
 次を設定する:
 
 ```
@@ -169,7 +169,7 @@ onnx / args ファイルが欠落していれば既定モデルへ黙ってフ�
 
 ### 3.3 Web.Auto 自動 pull の解決フロー（`_resolve_dp_model_dir`）
 
-`_resolve_dp_model_dir(run)` @ `step3_run_sims.py`:
+`_resolve_dp_model_dir(run)` @ `step_cl2_run_sims.py`:
 
 1. `webauto ml package-release search --package-name <pkg> --package-release-name <release>` で
    **release 名 → `package_id` / `release_id`** を解決（名前完全一致でフィルタ）。
@@ -190,7 +190,7 @@ onnx / args ファイルが欠落していれば既定モデルへ黙ってフ�
 
 §3.1 の `$(env)` 化（変更 A）は、**build_only と scenario の両方が読む *インストール済* param yaml** が
 `$(env DIFFUSION_PLANNER_ONNX_PATH ...)` を持って初めて効く。`_ensure_installed_param_honors_env`
-@ `step3_run_sims.py` が、起動前に *インストール済* `diffusion_planner.param.yaml`（`ros2 pkg prefix
+@ `step_cl2_run_sims.py` が、起動前に *インストール済* `diffusion_planner.param.yaml`（`ros2 pkg prefix
 autoware_launch --share` で解決）へ `$(env ...)` を**実行時注入**する。これにより
 **launcher サブリポジトリ / autoware.repos を一切変更せず**に env 切り替えを有効化できる。
 
@@ -202,7 +202,7 @@ autoware_launch --share` で解決）へ `$(env ...)` を**実行時注入**す�
 ### 3.5 TensorRT エンジンの事前ビルドと隔離（`_prebuild_dp_engine`）
 
 env でモデルを切り替えると各モデルの初回ロード時にエンジンが**遅延ビルド**され、計時付きの scenario 実行
-中だとゴール到達前にタイムアウトし得る。`_prebuild_dp_engine(dp_model_dir)` @ `step3_run_sims.py` が、
+中だとゴール到達前にタイムアウトし得る。`_prebuild_dp_engine(dp_model_dir)` @ `step_cl2_run_sims.py` が、
 scenario 起動前に `diffusion_planner.launch.xml build_only:=true` を一度走らせ、エンジンを model dir に
 事前生成する（既にあれば高速ロードして終了、冪等）。
 
@@ -215,7 +215,7 @@ scenario 起動前に `diffusion_planner.launch.xml build_only:=true` を一度�
 
 ## 4. silent-wrong ガード（重要）
 
-`provenance.json` は step3 が立てた env（＝**意図**）を記録するだけで、**Autoware が実際にロードした
+`provenance.json` は step_cl2 が立てた env（＝**意図**）を記録するだけで、**Autoware が実際にロードした
 モデルそのものではない**。変更 A が *インストール済* autoware_launch に未反映だと、Autoware は既定モデルを
 全 run でロードするのに provenance は dp_model_dir 別の sha8 を記録し、「別モデルなのに同一挙動」という
 誤りが全チェック緑のまま通り得る。これを防ぐため `_setup_dp_model_env` が起動前に検証する:
@@ -236,9 +236,9 @@ grep onnx_model_path "$(ros2 pkg prefix autoware_launch --share)/config/planning
 
 ## 5. provenance と可視化
 
-- `step3` が各 lite に `provenance.json` を書く（`write_provenance` @ `lib/_provenance.py`）。記録項目は
+- `step_cl2` が各 lite に `provenance.json` を書く（`write_provenance` @ `lib/_provenance.py`）。記録項目は
   `dp_onnx_path` / `dp_onnx_sha8` / `dp_exp_name`（args.json の `exp_name`）/ `dp_train_set` /
-  `autoware_version` と、step3 が渡す `tag` / `vehicle_model` / `dp_model_dir` / `dp_model_release` 等。
+  `autoware_version` と、step_cl2 が渡す `tag` / `vehicle_model` / `dp_model_dir` / `dp_model_release` 等。
 - `format_provenance_line` @ `lib/_provenance.py` が `DP=<exp> (onnx <sha8>) / autoware <ver>` の 1 行に整形し、
   比較プロット・`report.md` / `report.html` にモデル識別を掲載する。
 - 軌跡 overlay（Stage 4）・DP 軌跡比較（Stage 8）・`report.html` は **tag（モデル名）単位**の N-way 比較の
@@ -251,10 +251,10 @@ grep onnx_model_path "$(ros2 pkg prefix autoware_launch --share)/config/planning
 
 ## 6. クラウド実行の前提
 
-**変更 A のクラウド反映は不要**（step3 がインストール済 param へ実行時注入するため。§3.4）。launcher
+**変更 A のクラウド反映は不要**（step_cl2 がインストール済 param へ実行時注入するため。§3.4）。launcher
 サブリポジトリ / autoware.repos の変更は行わなくてよい。ただし以下が前提:
 
-1. **install が書き込み可能なこと**: step3 がインストール済 `diffusion_planner.param.yaml` に `$(env ...)` を
+1. **install が書き込み可能なこと**: step_cl2 がインストール済 `diffusion_planner.param.yaml` に `$(env ...)` を
    注入できること（sim runtime ユーザーが書き込めること）。read-only なら `RuntimeError` で停止し、代替
    として launcher へ変更 A をコミット + autoware.repos 更新を案内する。
 2. **webauto 認証**: cloud の sim runtime コンテナで `webauto` 認証が使えること（自動 pull 用）。使えない
@@ -290,11 +290,11 @@ make local_batch_run                 # Datasets 全 UUID を順次実行 + 横�
 
 - 事前に対象走行の T4 dataset を `webauto data annotation-dataset pull --include-intermediate-artifacts`
   で取得しておくこと（詳細は [`../sample/README.ja.md`](../sample/README.ja.md)）。
-- `SKIP_SIM=1` を付けると Stage 3（closed-loop sim 実行）を省略し open-loop 解析のみ走る。DP モデル比較は
+- `SKIP_SIM=1` を付けると Stage CL2（closed-loop sim 実行）を省略し open-loop 解析のみ走る。DP モデル比較は
   closed-loop なので、比較したいときは `SKIP_SIM` を付けない。
 
 Makefile はローカルでも `driving_log_replayer_v2.launch.py` に `with_autoware:=false` を渡す。これは
-**外側の DLR launch が Autoware を立てない**意味で、closed-loop sim 自体は Stage 3 の `step3_run_sims` が
+**外側の DLR launch が Autoware を立てない**意味で、closed-loop sim 自体は Stage CL2 の `step_cl2_run_sims` が
 内部で `scenario_test_runner.launch.py`（= Autoware + DiffusionPlanner）を起動して動かす。したがって
 **ローカルでも closed-loop sim が走り、DP モデル間の軌跡・速度差を観察できる**（ego は自律走行する）。
 

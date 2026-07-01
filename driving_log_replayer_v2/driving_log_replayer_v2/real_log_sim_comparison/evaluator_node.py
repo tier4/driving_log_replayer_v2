@@ -135,60 +135,60 @@ def run_pipeline(
 ) -> dict[str, int]:
     """10 段階パイプラインを実行し、各段の生成物カウントを返す。
 
-    Stage 3/5/6 は個別 try/except で失敗継続する設計のため、例外が出ないことと
+    Stage CL2/OL1 は個別 try/except で失敗継続する設計のため、例外が出ないことと
     「有意な出力が出たこと」は別物。呼び出し側 (_run_once) が本カウントを使って
     成否 (sim run / case が 0 件なら INCOMPLETE) を判定し、result.jsonl に計上する。
     """
-    # Locate the real vehicle bag inside input_bag/ (db3 or mcap, auto-detected by step1_make_lite)
+    # Locate the real vehicle bag inside input_bag/ (db3 or mcap, auto-detected by step0_make_lite)
     input_bag_dir = t4_dataset_path / "input_bag"
     _validate_bag_dir(input_bag_dir)
     logger.info(f"Input bag: {input_bag_dir}")
 
     # ---- 共通 env ----
     env = build_common_env(comparison_dir, map_path, compare_cfg, logger)
-    # Stage 2 (scenario 自動生成) が使う地図パス。build_common_env が解決済みの
+    # Stage CL1 (scenario 自動生成) が使う地図パス。build_common_env が解決済みの
     # MAP_OSM_PATH (存在しない場合は空文字) から復元する。
     map_osm = Path(env["MAP_OSM_PATH"]) if env["MAP_OSM_PATH"] else Path("")
-    # perception 再生 (既定 false; step3 が読む)。true で実機 input_bag の検出物体・信号・
-    # 占有格子を simple_sensor_simulator 内蔵の PerceptionReproducerSensor が sim 時刻同期で
+    # perception 再生 (既定 false; step_cl2 が読む)。true で実機 input_bag の検出物体・信号・
+    # 占有格子を simple_sensor_simulator 内蔵 of PerceptionReproducerSensor が sim 時刻同期で
     # 再生し、実機の先行車追従 (停止・加減速) を再現する。ego replay (EGO_REPLAY_DURATION)
     # も同じ bag を使うため、reproduce_perception=true が前提。
     env["REPRODUCE_BAG"] = (
         str(input_bag_dir) if compare_cfg.get("reproduce_perception", False) else ""
     )
 
-    # ---- Stage 1: real lite bag ----
-    logger.info("Stage 1: generating real lite bag")
+    # ---- Stage 0: real lite bag ----
+    logger.info("Stage 0: generating real lite bag")
     lite_dir.mkdir(parents=True, exist_ok=True)
     lite_bag = lite_dir / "real.lite"
     _run([
         sys.executable, "-m",
-        "driving_log_replayer_v2.real_log_sim_comparison.step1_make_lite",
+        "driving_log_replayer_v2.real_log_sim_comparison.step0_make_lite",
         "--kind", "real",
         "--input", str(input_bag_dir),
         "--output", str(lite_bag),
     ], timeout=300)
 
-    # ---- Stage 2: bag → scenario yaml 自動生成 ----
-    logger.info("Stage 2: step2_bag_to_scenario (auto-generate OpenSCENARIO yaml)")
+    # ---- Stage CL1: bag → scenario yaml 自動生成 ----
+    logger.info("Stage CL1: step_cl1_bag_to_scenario (auto-generate OpenSCENARIO yaml)")
     scenarios_dir = comparison_dir.parent / "scenarios"
     scenarios_dir.mkdir(parents=True, exist_ok=True)
     auto_scenario = scenarios_dir / "auto_scenario.yaml"
-    if map_osm.exists():
+    if map_osm.is_file():
         try:
             _run([
                 sys.executable, "-m",
-                "driving_log_replayer_v2.real_log_sim_comparison.step2_bag_to_scenario",
+                "driving_log_replayer_v2.real_log_sim_comparison.step_cl1_bag_to_scenario",
                 "--input-bag", str(input_bag_dir),
                 "--map", str(map_osm),
                 "--output", str(auto_scenario),
             ], env=env, timeout=300)
         except RuntimeError as exc:
-            logger.warning(f"Stage 2 (step2_bag_to_scenario) failed: {exc}")
+            logger.warning(f"Stage CL1 (step_cl1_bag_to_scenario) failed: {exc}")
     else:
-        logger.warning("Stage 2: map OSM が無いため scenario 自動生成スキップ")
+        logger.warning("Stage CL1: map OSM が無いため scenario 自動生成スキップ")
 
-    # ---- Stage 3: sim runs ループ (scenario.yaml の Conditions.sim_runs 必須) ----
+    # ---- Stage CL2: sim runs ループ (scenario.yaml の Conditions.sim_runs 必須) ----
     scenario_config = compare_cfg.get("scenario_config", "")
     if not scenario_config or not Path(scenario_config).exists():
         raise RuntimeError(
@@ -206,16 +206,16 @@ def run_pipeline(
 
     # closed-loop sim のスキップ (open-loop 解析だけ欲しいとき・マルチ DS バッチの時間短縮)。
     # scenario.yaml の Conditions.skip_sim (クラウド) か env SKIP_SIM=1 (make 変数) で指定する。
-    # Stage 2 (scenario 生成) は軽量で、collect_datasets の dataset_id 推定が auto_scenario.yaml
-    # に依存するためスキップしない。Stage 4 以降は sim lite 欠損時に実機のみで動く。
+    # Stage CL1 (scenario 生成) は軽量で、collect_datasets の dataset_id 推定が auto_scenario.yaml
+    # に依存するためスキップしない。Stage CL3 以降は sim lite 欠損時に実機のみで動く。
     skip_sim = bool(compare_cfg.get("skip_sim", False)) or env.get("SKIP_SIM") == "1"
 
     if skip_sim:
         logger.info(
-            f"Stage 3: skipped (skip_sim) — {len(sim_cfg.runs)} run(s) defined but not executed"
+            f"Stage CL2: skipped (skip_sim) — {len(sim_cfg.runs)} run(s) defined but not executed"
         )
     elif auto_scenario.exists():
-        logger.info(f"Stage 3: step3_run_sims over {len(sim_cfg.runs)} run(s)")
+        logger.info(f"Stage CL2: step_cl2_run_sims over {len(sim_cfg.runs)} run(s)")
         base_domain_id = int(os.environ.get("ROS_DOMAIN_ID", "0"))
         # 各 sim run の実行ログ (ros2 launch / autoware / make_lite 等) は run ごとに分離保存する
         # (集約ログを汚さず後から個別に追えるように)。result_archive 配下なのでアーカイブされる。
@@ -232,7 +232,7 @@ def run_pipeline(
             try:
                 _run([
                     sys.executable, "-m",
-                    "driving_log_replayer_v2.real_log_sim_comparison.step3_run_sims",
+                    "driving_log_replayer_v2.real_log_sim_comparison.step_cl2_run_sims",
                     "--run-tag", run.tag,
                     "--scenario", str(auto_scenario),
                     "--config-scenario", scenario_config,
@@ -240,10 +240,10 @@ def run_pipeline(
                 ], env=env_run, timeout=run.timeout_s, log_file=run_log)
             except RuntimeError as exc:
                 logger.warning(
-                    f"Stage 3 (run={run.tag}) failed but continuing: {exc} (log: {run_log})"
+                    f"Stage CL2 (run={run.tag}) failed but continuing: {exc} (log: {run_log})"
                 )
     else:
-        logger.warning("Stage 3: auto_scenario.yaml が無いため sim 実行をスキップ")
+        logger.warning("Stage CL2: auto_scenario.yaml が無いため sim 実行をスキップ")
 
     counts = run_analysis(lite_dir, comparison_dir, env, compare_cfg, logger)
     counts["sim_skipped"] = int(skip_sim)
@@ -294,7 +294,7 @@ def run_analysis(
     compare_cfg: dict[str, Any],
     logger,
 ) -> dict[str, int]:
-    """解析ステージ (Stage 4〜11) を実行し、生成物カウントを返す。
+    """解析ステージを実行し、生成物カウントを返す。
 
     lite/ (real + sim run) が揃っている前提で動く純解析部。run_pipeline (フルパイプライン)
     と run_analysis.py CLI (sim 実行済みバンドルの再解析) の両方から呼ばれる。
@@ -314,21 +314,14 @@ def run_analysis(
     env = env.copy()
     env["SCENARIO_CONFIG_YAML"] = scenario_config
 
-    # ---- Stage 4: step4_compare_logs (real + 全 sim、sim_runs.yaml 連動で N-way) ----
-    logger.info("Stage 4: step4_compare_logs (real + sim N-way)")
-    _run([
-        sys.executable, "-m",
-        "driving_log_replayer_v2.real_log_sim_comparison.step4_compare_logs",
-    ], env=env, timeout=1800)
-
-    # ---- Stage 5: VehicleModel N-step オープンループ解析 (Conditions.cases 必須) ----
+    # ---- Stage OL1: VehicleModel N-step オープンループ解析 (Conditions.cases 必須) ----
     from driving_log_replayer_v2.real_log_sim_comparison.lib._cases_config import (  # noqa: PLC0415
         load_cases_config,
     )
 
     cases_cfg = load_cases_config(scenario_config)
 
-    logger.info(f"Stage 5: step5_analyze_nstep over {len(cases_cfg.cases)} case(s)")
+    logger.info(f"Stage OL1: step_ol1_analyze_nstep over {len(cases_cfg.cases)} case(s)")
     for case in cases_cfg.cases:
         logger.info(f"  case: tag={case.tag}, vehicle_model_type={case.vehicle_model_type}")
         env_case = env.copy()
@@ -336,68 +329,78 @@ def run_analysis(
         try:
             _run([
                 sys.executable, "-m",
-                "driving_log_replayer_v2.real_log_sim_comparison.step5_analyze_nstep",
+                "driving_log_replayer_v2.real_log_sim_comparison.step_ol1_analyze_nstep",
                 "--case-tag", case.tag,
                 "--scenario", scenario_config,
             ], env=env_case, timeout=1800)
         except RuntimeError as exc:
-            logger.warning(f"Stage 5 (case={case.tag}) failed but continuing: {exc}")
+            logger.warning(f"Stage OL1 (case={case.tag}) failed but continuing: {exc}")
 
-    # ---- Stage 6: ケース集約解析 (overlay 図 + cases_summary.md) ----
-    logger.info("Stage 6: step6_analyze_cases (cross-case aggregation)")
+    # ---- Stage OL2: ケース集約解析 (overlay 図 + cases_summary.md) ----
+    logger.info("Stage OL2: step_ol2_analyze_cases (cross-case aggregation)")
     try:
         _run([
             sys.executable, "-m",
-            "driving_log_replayer_v2.real_log_sim_comparison.step6_analyze_cases",
+            "driving_log_replayer_v2.real_log_sim_comparison.step_ol2_analyze_cases",
             "--scenario", scenario_config,
         ], env=env, timeout=600)
     except RuntimeError as exc:
-        logger.warning(f"Stage 6 (step6_analyze_cases) failed but continuing: {exc}")
+        logger.warning(f"Stage OL2 (step_ol2_analyze_cases) failed but continuing: {exc}")
 
-    # ---- Stage 7: 車両モデルパラメータ sweep 同定 (rollout, 追加設定不要) ----
-    # 実機 lite (Stage 1 出力) のみを使い、k_us/ステア・加速度時定数等を
+    # ---- Stage OL3: 車両モデルパラメータ sweep 同定 (rollout, 追加設定不要) ----
+    # 実機 lite (Stage 0 出力) のみを使い、k_us/ステア・加速度時定数等を
     # free-running rollout sweep で同定する独立ステージ (2D ペア sweep 含む)。
-    logger.info("Stage 7: step7_sweep_params (vehicle model parameter sweep via rollout)")
+    logger.info("Stage OL3: step_ol3_sweep_params (vehicle model parameter sweep via rollout)")
     try:
         _run([
             sys.executable, "-m",
-            "driving_log_replayer_v2.real_log_sim_comparison.step7_sweep_params",
+            "driving_log_replayer_v2.real_log_sim_comparison.step_ol3_sweep_params",
         ], env=env, timeout=1800)
     except RuntimeError as exc:
-        logger.warning(f"Stage 7 (step7_sweep_params) failed but continuing: {exc}")
+        logger.warning(f"Stage OL3 (step_ol3_sweep_params) failed but continuing: {exc}")
 
-    # ---- Stage 8: DiffusionPlanner 計画軌跡比較 (planner レベルの乖離分離) ----
-    logger.info("Stage 8: step8_compare_dp_trajectory (planner trajectory real vs sim)")
+    # ---- Stage CL3: step_cl3_compare_logs (real + 全 sim、sim_runs.yaml 連動で N-way) ----
+    logger.info("Stage CL3: step_cl3_compare_logs (real + sim N-way)")
     try:
         _run([
             sys.executable, "-m",
-            "driving_log_replayer_v2.real_log_sim_comparison.step8_compare_dp_trajectory",
+            "driving_log_replayer_v2.real_log_sim_comparison.step_cl3_compare_logs",
+        ], env=env, timeout=1800)
+    except RuntimeError as exc:
+        logger.warning(f"Stage CL3 (step_cl3_compare_logs) failed but continuing: {exc}")
+
+    # ---- Stage CL4: DiffusionPlanner 計画軌跡比較 (planner レベルの乖離分離) ----
+    logger.info("Stage CL4: step_cl4_compare_dp_trajectory (planner trajectory real vs sim)")
+    try:
+        _run([
+            sys.executable, "-m",
+            "driving_log_replayer_v2.real_log_sim_comparison.step_cl4_compare_dp_trajectory",
         ], env=env, timeout=900)
     except RuntimeError as exc:
-        logger.warning(f"Stage 8 (step8_compare_dp_trajectory) failed but continuing: {exc}")
+        logger.warning(f"Stage CL4 (step_cl4_compare_dp_trajectory) failed but continuing: {exc}")
 
-    # ---- Stage 11: comparison/ 配下の全アセットを 1 枚に埋め込んだ自己完結 HTML 生成 ----
-    logger.info("Stage 11: step11_build_html_report (result_archive/real_log_sim_comparison/report.html)")
+    # ---- Stage Report HTML: comparison/ 配下の全アセットを 1 枚に埋め込んだ自己完結 HTML 生成 ----
+    logger.info("Stage Report HTML: step_report_html (result_archive/real_log_sim_comparison/report.html)")
     try:
         _run([
             sys.executable, "-m",
-            "driving_log_replayer_v2.real_log_sim_comparison.step11_build_html_report",
+            "driving_log_replayer_v2.real_log_sim_comparison.step_report_html",
         ], env=env, timeout=300)
     except RuntimeError as exc:
-        logger.warning(f"Stage 11 (step11_build_html_report) failed but continuing: {exc}")
+        logger.warning(f"Stage Report HTML (step_report_html) failed but continuing: {exc}")
 
-    # ---- Stage 12: 開発者向け notebook (report.ipynb) 生成 ----
-    logger.info("Stage 12: step12_build_notebook (result_archive/real_log_sim_comparison/report.ipynb)")
+    # ---- Stage Report Notebook: 開発者向け notebook (report.ipynb) 生成 ----
+    logger.info("Stage Report Notebook: step_report_notebook (result_archive/real_log_sim_comparison/report.ipynb)")
     try:
         _run([
             sys.executable, "-m",
-            "driving_log_replayer_v2.real_log_sim_comparison.step12_build_notebook",
+            "driving_log_replayer_v2.real_log_sim_comparison.step_report_notebook",
         ], env=env, timeout=120)
     except RuntimeError as exc:
-        logger.warning(f"Stage 12 (step12_build_notebook) failed but continuing: {exc}")
+        logger.warning(f"Stage Report Notebook (step_report_notebook) failed but continuing: {exc}")
 
     # ---- 生成物カウント (E1: 沈黙の失敗対策) ----
-    # Stage 3/5 は失敗継続するため、実際に出力が出た数を数えて成否判定の材料にする。
+    # Stage CL2 / OL1 は失敗継続するため、実際に出力が出た数を数えて成否判定の材料にする。
     def _lite_exists(tag: str) -> bool:
         return (lite_dir / f"{tag}.lite").exists() or (lite_dir / f"{tag}.lite.mcap").exists()
 

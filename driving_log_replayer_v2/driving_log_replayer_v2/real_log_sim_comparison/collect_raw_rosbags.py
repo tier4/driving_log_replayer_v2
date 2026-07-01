@@ -204,20 +204,20 @@ def _collect_bag(pull_dir: Path, input_bag_dir: Path) -> None:
 
     pull-filtered-rosbag はネスト dir を作成するため、rglob で再帰的に全ファイルを
     input_bag_dir に平坦化する。metadata.yaml と *.mcap が直下に揃うことで
-    step1_make_lite._open_reader が bag を認識できる。
+    step0_make_lite._open_reader が bag を認識できる。
     """
     for path in pull_dir.rglob("*"):
         if path.is_file():
             shutil.copy(path, input_bag_dir)
 
 
-def _run_step1_make_lite(input_bag: Path, output_path: Path) -> bool:
-    """step1_make_lite --kind real で real.lite を生成する。成功で True。
+def _run_step0_make_lite(input_bag: Path, output_path: Path) -> bool:
+    """step0_make_lite --kind real で real.lite を生成する。成功で True。
 
     rosbag2_py が必要なため ROS 環境 (install/setup.bash) が source 済みであること。
     """
     cmd = [
-        sys.executable, "-m", f"{_PKG}.step1_make_lite",
+        sys.executable, "-m", f"{_PKG}.step0_make_lite",
         "--kind", "real",
         "--input", str(input_bag),
         "--output", str(output_path),
@@ -451,11 +451,11 @@ def collect(
             finally:
                 shutil.rmtree(tmp_pull, ignore_errors=True)
 
-        # step1_make_lite (ROS 環境が source 済みであること)
+        # step0_make_lite (ROS 環境が source 済みであること)
         print(f"  [lite] {input_bag_dir} → {lite_path}")
-        ok = _run_step1_make_lite(input_bag_dir, lite_path)
+        ok = _run_step0_make_lite(input_bag_dir, lite_path)
         if not ok:
-            print(f"  [WARN] step1_make_lite 失敗: {ds_dir}", file=sys.stderr)
+            print(f"  [WARN] step0_make_lite 失敗: {ds_dir}", file=sys.stderr)
             rec["status"] = "lite_failed"
         else:
             rec["status"] = "success"

@@ -20,7 +20,7 @@ Godot バイナリパスは cloud / local 共通で `/opt/godot_autoware_simulat
 10 段階パイプラインの各 stage の入出力は親ディレクトリの
 [`../README.ja.md`](../README.ja.md#パイプライン10-段階) を参照。ローカル実行で押さえる点:
 
-- Stage 3（sim 実行）と Stage 5（N-step 解析）はそれぞれ `Conditions.sim_runs` /
+- Stage CL2（sim 実行）と Stage OL1（N-step 解析）はそれぞれ `Conditions.sim_runs` /
   `Conditions.cases` の各エントリで N 回ループする。これらは `scenario.yaml` の
   `Conditions.models` に定義されたモデル名リストで参照する。**両方未指定だとパイプラインは失敗する**。
 
@@ -62,7 +62,7 @@ webauto data annotation-dataset pull \
 > 可能性が高い。
 
 `--include-intermediate-artifacts` を付けないと `input_bag/` に bag 本体
-(`*.mcap` / `*.db3`) が含まれず、`step1_make_lite` の入力が足りずに失敗する。
+(`*.mcap` / `*.db3`) が含まれず、`step0_make_lite` の入力が足りずに失敗する。
 
 ダウンロード結果は `~/.webauto/data/data/annotation_dataset/<UUID>/<frame>/` 配下に
 `annotation/`, `data/`, `input_bag/`, `map/` が展開される。`make local_cloud_run` は
@@ -170,17 +170,15 @@ make local_analysis_run OUT_DIR=sample/out/<timestamp>     # 対象を指定
 
 1. `scenario.yaml` から Datasets UUID を取得 → `~/.webauto/.../` から実体パス解決
 2. `out/<タイムスタンプ>/` を作成し、`out/latest` シンボリックリンクを更新
-3. `ros2 launch` で 10 段階パイプライン起動
-   - Stage 1: 実機 bag → lite/real.lite
-   - Stage 2: step2_bag_to_scenario → scenarios/auto_scenario.yaml
-   - Stage 3: Conditions.sim_runs の各 run で scenario_test_runner → lite/<tag>.lite
-   - Stage 4: step4_compare_logs → comparison/figures/, report.md (real + sim 重ね描き)
-   - Stage 5: Conditions.cases の各 tag で step5_analyze_nstep → nstep/<tag>/
-   - Stage 6: step6_analyze_cases → cases/overlay/, cases_summary.md
-   - Stage 7: step7_sweep_params → comparison/param_sweep/ (パラメータ sweep 同定; 追加設定不要)
-   - Stage 8: step8_compare_dp_trajectory → comparison/figures/dp_*.png (DP軌跡 real vs sim)
-   - Stage 9: step9_identify_brake → comparison/brake_sweep/ (縦方向 brake_tc 同定)
-   - Stage 10: step10_diagnose_curve → comparison/curve_diag/ (カーブ乖離 縦横分解診断)
+3. `ros2 launch` でパイプライン起動
+   - Stage 0: 実機 bag → lite/real.lite
+   - Stage OL1: Conditions.cases の各 tag で step_ol1_analyze_nstep → nstep/<tag>/
+   - Stage OL2: step_ol2_analyze_cases → cases/overlay/, cases_summary.md
+   - Stage OL3: step_ol3_sweep_params → comparison/param_sweep/ (パラメータ sweep 同定; 追加設定不要)
+   - Stage CL1: step_cl1_bag_to_scenario → scenarios/auto_scenario.yaml
+   - Stage CL2: Conditions.sim_runs の各 run で scenario_test_runner → lite/<tag>.lite
+   - Stage CL3: step_cl3_compare_logs → comparison/figures/, report.md (real + sim 重ね描き)
+   - Stage CL4: step_cl4_compare_dp_trajectory → comparison/figures/dp_*.png (DP軌跡 real vs sim)
 
 ### 4. 結果確認
 
@@ -192,21 +190,19 @@ sample/out/latest/
 ├── result.jsonl                       # 末尾行に {"Result":{"Success":true,...}}
 └── result_archive/
     ├── lite/
-    │   ├── real.lite/*.mcap              # Stage 1
-    │   └── <run_tag>.lite/*.mcap         # Stage 3: Conditions.sim_runs の各 run
+    │   ├── real.lite/*.mcap              # Stage 0
+    │   └── <run_tag>.lite/*.mcap         # Stage CL2: Conditions.sim_runs の各 run
     │                                     #   (既定 normal / kus0020 / best_normal / taiga_dyn / taiga_x / perfect / godot)
-    ├── scenarios/auto_scenario.yaml      # Stage 2
+    ├── scenarios/auto_scenario.yaml      # Stage CL1
     └── comparison/
-        ├── report.md                     # Stage 4: 比較統計レポート
-        ├── figures/*.png                 # Stage 4: 速度・操舵・軌跡, Stage 8: dp_*.png
+        ├── report.md                     # Stage CL3: 比較統計レポート
+        ├── figures/*.png                 # Stage CL3: 速度・操舵・軌跡, Stage CL4: dp_*.png
         ├── nstep/
-        │   └── <case_tag>/{*.svg + map_distribution.html, nstep_delta.csv, summary.txt}  # Stage 5
+        │   └── <case_tag>/{*.svg + map_distribution.html, nstep_delta.csv, summary.txt}  # Stage OL1
         ├── cases/
         │   ├── overlay/{cascade_error_overlay.png, error_timeseries_overlay.png}
-        │   └── cases_summary.md          # Stage 6: N=1 RMSE + horizon 別 RMSE 横断表
-        ├── param_sweep/{<param>_sweep.{csv,svg}, pair_*.{csv,svg}, param_sweep_derivation.md(§1 導出), param_sweep_summary.md(§2-§4 追認・整合)}  # Stage 7
-        ├── brake_sweep/{brake_sweep.csv, brake_sweep.png} # Stage 9: 縦方向 brake_tc 同定
-        └── curve_diag/{curve_divergence.md, curve_divergence.png} # Stage 10: カーブ乖離診断
+        │   └── cases_summary.md          # Stage OL2: N=1 RMSE + horizon 別 RMSE 横断表
+        └── param_sweep/{<param>_sweep.{csv,svg}, pair_*.{csv,svg}, param_sweep_derivation.md(§1 導出), param_sweep_summary.md(§2-§4 追認・整合)}  # Stage OL3
 ```
 
 ## 上書き可能な Makefile 変数
@@ -327,10 +323,10 @@ make local_cloud_run LOCAL_SCENARIO=$(pwd)/sample/scenario_issue_<課題名>.yam
   `SUB_DT × cmd_count` 秒だけモデルを進めるため、ケース間の `err_ds_long` /
   `err_ds_lat` 差は小さい (1 step ≒ 17cm 程度の移動内ではモデル差が位置に
   大きく現れない)。ケース差は主に `err_steer` に表れる。
-  長期軌跡の累積差は同じ `step5.run_rollout` の N>1 が `nstep_delta.csv` /
-  `error_growth.svg` として出力し、Stage 6 が `cases_summary.md` に横断集約する。
+  長期軌跡の累積差は同じ `step_ol1.run_rollout` の N>1 が `nstep_delta.csv` /
+  `error_growth.svg` として出力し、Stage OL2 が `cases_summary.md` に横断集約する。
 - **`overlay.reference_tag` は機能実装済み**: `cases_summary.md` の N=1 表に
   `Δsteer vs ref` 列、horizon 別横断表に `Δyaw vs ref` 列を出力する
-  (`step6_analyze_cases.py::write_cases_summary`)。
+  (`step_ol2_analyze_cases.py::write_cases_summary`)。
 - **k_us は N=1 では同定不可**: N=1 は k_us 非感度、`err_wz` は k_us=0 seeding
-  バイアスを含む。k_us 等の同定には Stage 7 (`step7_sweep_params`, 大 N rollout sweep) を使う。
+  バイアスを含む。k_us 等の同定には Stage OL3 (`step_ol3_sweep_params`, 大 N rollout sweep) を使う。
