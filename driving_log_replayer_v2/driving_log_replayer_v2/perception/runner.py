@@ -307,7 +307,7 @@ class PerceptionRunner(Runner):
         # handle when add_frame is fail caused by failed object conversion or no ground truth
         elif frame_result.invalid_reason in {
             PerceptionInvalidReason.NO_GROUND_TRUTH,
-            PerceptionInvalidReason.INVALID_ESTIMATED_OBJECTS,
+            PerceptionInvalidReason.IGNORED_FRAME,
         }:
             self.perc_result.set_info_frame(frame_result.data, frame_result.skip_counter)
         elif frame_result.invalid_reason == PerceptionInvalidReason.INVALID_ESTIMATED_OBJECTS:

@@ -49,9 +49,15 @@ class PlanningFactorEvaluationManager(EvaluationManager):
         result_archive_path: str,
         evaluation_topic: dict[str, list[str]],
         degradation_topic: str,
+        ignore_frames: str,
     ) -> None:
         super().__init__(
-            scenario, t4_dataset_path, result_archive_path, evaluation_topic, degradation_topic
+            scenario,
+            t4_dataset_path,
+            result_archive_path,
+            evaluation_topic,
+            degradation_topic,
+            ignore_frames,
         )
 
     def _set_evaluators(
@@ -59,13 +65,14 @@ class PlanningFactorEvaluationManager(EvaluationManager):
         t4_dataset_path: str,
         result_archive_path: str,
         evaluation_topics_with_task: dict[str, list[str]],
+        ignore_frames: list[int],
     ) -> None:
         _ = t4_dataset_path  # unused
         evaluation_topics = [
             topic for topics in evaluation_topics_with_task.values() for topic in topics
         ]
         self._evaluators = {
-            topic: PlanningFactorEvaluator(result_archive_path, topic)
+            topic: PlanningFactorEvaluator(result_archive_path, topic, ignore_frames)
             for topic in evaluation_topics
         }
 
@@ -76,7 +83,10 @@ class PlanningFactorEvaluationManager(EvaluationManager):
 
 
 class PlanningFactorEvaluator(Evaluator):
-    def __init__(self, result_archive_path: str, evaluation_topic: str) -> None:
+    def __init__(
+        self, result_archive_path: str, evaluation_topic: str, ignore_frames: list[int]
+    ) -> None:
+        self._ignore_frames = ignore_frames  # not used yet
         super().__init__(result_archive_path, evaluation_topic)
 
     def evaluate_frame(

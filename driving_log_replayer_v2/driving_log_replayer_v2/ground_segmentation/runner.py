@@ -92,7 +92,7 @@ class GroundSegmentationRunner(Runner):
         degradation_topic: str,
         result_jsonl_path: str,
         result_archive_path: str,
-        ignore_frames: list[int],
+        ignore_frames: str,
     ) -> list[UseCaseInfo]:
         _ = result_archive_path  # unused
         return [
