@@ -232,6 +232,9 @@ class PerceptionEvaluator(Evaluator):
         if self.__evaluator.evaluator_config.evaluation_task == "fp_validation":
             final_metrics = self.__get_fp_results()
         else:
+            self.__evaluator.frame_results = self.__remove_ignored_frames(
+                self.__evaluator.frame_results
+            )
             _ = self.__get_scene_results()  # TODO: use this result
             self.__analyzer = PerceptionAnalyzer3D(self.__evaluator.evaluator_config)
             self.__analyzer.add(self.__evaluator.frame_results)
@@ -268,6 +271,15 @@ class PerceptionEvaluator(Evaluator):
             or (evaluation_task in ("tracking", "prediction") and self.__frame_id_str == "map")
             or (evaluation_task == "fp_validation" and self.__frame_id_str in ("base_link", "map"))
         )
+
+    def __remove_ignored_frames(
+        self, frame_results: list[PerceptionFrameResult]
+    ) -> list[PerceptionFrameResult]:
+        return [
+            frame_result
+            for frame_result in frame_results
+            if int(frame_result.frame_name) not in self.__ignore_frames
+        ]
 
     def __get_scene_results(self) -> MetricsScore:
         num_critical_fail: int = sum(
