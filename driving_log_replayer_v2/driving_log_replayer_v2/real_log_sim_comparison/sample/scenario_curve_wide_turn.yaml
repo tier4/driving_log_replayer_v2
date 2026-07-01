@@ -98,7 +98,7 @@ Evaluation:
         dp_model_release: 20260410-145919_lambda1e-6_ridge1e-8__epoch0020__epoch0040
         params: {k_us: 0.020}
 
-    cases:    [normal, kus0020, best_normal, no_delay, taiga_dyn, taiga_x]
+    cases:    [normal, best_normal, taiga_x]
     sim_runs: [dp_0303, dp_0503, dp_0410]
     overlay:
       reference_tag: normal

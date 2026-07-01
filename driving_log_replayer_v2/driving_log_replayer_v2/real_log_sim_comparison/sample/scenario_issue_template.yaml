@@ -75,8 +75,8 @@ Evaluation:
         architecture_type: awf/universe/20250130
         godot_executable: /opt/godot_autoware_simulator/godot_autoware_simulator.x86_64
 
-    cases:    [normal, kus0020, best_normal, no_delay, taiga_dyn, taiga_x]
-    sim_runs: [normal, kus0020, best_normal, taiga_dyn, taiga_x, perfect, godot]
+    cases:    [normal, best_normal, taiga_x]
+    sim_runs: [normal, best_normal, taiga_x, godot]
     overlay:
       reference_tag: normal
       plots: [cascade_error]

@@ -177,11 +177,12 @@ Evaluation:
 
     # ── cases: open-loop VehicleModel N-step 解析 (Stage 5/6) に使う名前リスト ──
     # vehicle_model_type が必須。名前 = 出力ディレクトリ nstep/<name>/
-    cases:    [normal, kus0020, best_normal, best_normal_substep, no_delay, taiga_dyn, taiga_x]
+    cases:    [normal, best_normal, taiga_x]
 
     # ── sim_runs: closed-loop シム実行 (Stage 3/4) に使う名前リスト ──
     # vehicle_model が必須。名前 = 出力ディレクトリ lite/<name>.lite/
-    sim_runs: [normal, kus0020, best_normal, taiga_dyn, taiga_x, perfect, godot]
+    sim_runs: [normal, best_normal, taiga_x, godot]
+
 
     # ── overlay: cases 集約 (Stage 6) の基準モデルと重ね描き種類 ──
     overlay:
