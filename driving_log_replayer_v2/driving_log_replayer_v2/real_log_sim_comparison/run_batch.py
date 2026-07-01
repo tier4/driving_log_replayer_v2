@@ -332,6 +332,7 @@ def main() -> None:
         sys.executable, "-m", f"{_PKG}.step_report_html",
         "--collection-dir", str(batch_root),
         "--report-name", report_name,
+        "--no-embed-viewers",
     ]
     r11 = subprocess.run(r11_cmd, check=False, env=os.environ.copy())  # noqa: S603
     if r13.returncode != 0 or r11.returncode != 0:

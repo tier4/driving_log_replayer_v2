@@ -49,6 +49,8 @@ from .lib._inline_assets import gzip_b64, plotly_js_script
 from .lib._params_utils import _INFO_YAML, _SIM_YAML
 from .lib._plotly_utils import FIG_HEIGHTS, IFRAME_PAD
 from .lib._runtime_config import add_common_cli_arguments, build_runtime_config
+from .lib._playback_viewer import _HTML_TEMPLATE as PLAYBACK_TEMPLATE
+from .lib._model_viewer import _HTML_TEMPLATE as MODEL_TEMPLATE
 
 # --- 画像キャプション (ファイル名 stem → 日本語説明) ----------------------------
 # step4〜step13 が出力する既知の図（拡張子非依存の stem で引く）。
@@ -408,7 +410,7 @@ def _heading_html(caption: str | None, title_text: str | None, stem: str,
 
 
 def _figure(rel: Path, comparison_dir: Path, ns: str, caption: str | None = None,
-            scenario_name: str = "") -> str:
+            scenario_name: str = "", no_embed_viewers: bool = False) -> str:
     """1 図分の <figure> HTML を返す（gzip+base64 埋め込み・遅延描画）。
 
     - `*.fig.json` (plotly) → `<div class='plotly-fig pending'>` + 直後の
@@ -464,12 +466,32 @@ def _figure(rel: Path, comparison_dir: Path, ns: str, caption: str | None = None
     )
     fig_id = f"vf-{ns}-" + _slug(fname)
     height = _IFRAME_HEIGHTS.get(stem, _IFRAME_HEIGHT_DEFAULT)
+
+    if no_embed_viewers:
+        abs_uri = (comparison_dir / rel).resolve().absolute().as_uri()
+        return (
+            f"<figure>{cap_html}"
+            f"<div style='padding: 16px; border: 2px dashed #ccc; border-radius: 6px; text-align: center; background: #fafafa; margin: 12px 0;'>"
+            f"  <a href='{abs_uri}' target='_blank' style='font-weight: bold; color: #2b4a8b; text-decoration: underline; font-size: 1.05rem;'>"
+            f"    🗁 インタラクティブビューアを別タブで開く"
+            f"  </a>"
+            f"  <div style='font-size: 0.85rem; color: #666; margin-top: 6px;'>ローカルファイルパス: {html.escape(fname)}</div>"
+            f"</div>"
+            f"</figure>"
+        )
+
+    # ビューア重複排除: playback/model テンプレートの重複を防ぐため、HTML から DATA (JSON) のみ抽出
+    if stem in _SELFCONTAINED_HTML:
+        m = re.search(r"const DATA\s*=\s*(\{.*\});", text, re.DOTALL)
+        if m:
+            text = m.group(1)
+
     return (
         f"<figure>{cap_html}"
         f"<div class='viewer-fig pending' id='{fig_id}' style='height:{height}px' "
         f"data-title='{html.escape(caption_text)}'></div>"
         f"<script type='application/gzip+html+base64' class='viewersrc' "
-        f"data-target='{fig_id}'>{gzip_b64(text)}</script>"
+        f"data-target='{fig_id}' data-type='{stem}'>{gzip_b64(text)}</script>"
         f"</figure>"
     )
 
@@ -487,7 +509,8 @@ def _sorted_cases(tags: list[str]) -> list[str]:
 
 
 def _render_case_tabs(
-    per_case: dict[str, dict[str, Path]], comparison_dir: Path, ns: str, cat: str
+    per_case: dict[str, dict[str, Path]], comparison_dir: Path, ns: str, cat: str,
+    no_embed_viewers: bool = False
 ) -> list[str]:
     """プロット種別ごとにブロックを作り、ブロックごとに独立したケースタブを付ける。
 
@@ -518,14 +541,15 @@ def _render_case_tabs(
         for c in block_cases:
             out.append(
                 f"<div class='tabpanel case-{_slug(c)}'>"
-                f"{_figure(per_case[c][pt], comparison_dir, ns, caption=c)}</div>"
+                f"{_figure(per_case[c][pt], comparison_dir, ns, caption=c, no_embed_viewers=no_embed_viewers)}</div>"
             )
         out.append("</div>")
     return out
 
 
 def _render_category_images(
-    rels: list[Path], comparison_dir: Path, ns: str, cat: str = "", scenario_name: str = ""
+    rels: list[Path], comparison_dir: Path, ns: str, cat: str = "", scenario_name: str = "",
+    no_embed_viewers: bool = False
 ) -> list[str]:
     """カテゴリ内の図群を描画する。
 
@@ -540,10 +564,10 @@ def _render_category_images(
             per_case.setdefault(case, {})[_asset_stem(r)] = r
 
     out: list[str] = [
-        _figure(r, comparison_dir, ns, scenario_name=scenario_name) for r in flat
+        _figure(r, comparison_dir, ns, scenario_name=scenario_name, no_embed_viewers=no_embed_viewers) for r in flat
     ]
     if per_case:
-        out.extend(_render_case_tabs(per_case, comparison_dir, ns, cat))
+        out.extend(_render_case_tabs(per_case, comparison_dir, ns, cat, no_embed_viewers=no_embed_viewers))
     return out
 
 
@@ -666,6 +690,15 @@ _RENDER_GLUE = """
     var stream = new Blob([bytes]).stream().pipeThrough(new DecompressionStream("gzip"));
     return await new Response(stream).text();
   }
+  var templates = {};
+  async function getTemplate(type) {
+    if (templates[type]) return templates[type];
+    var el = document.getElementById("tpl-" + type);
+    if (!el) return "";
+    var t = await inflate(el.textContent);
+    templates[type] = t;
+    return t;
+  }
   async function render(div) {
     if (!div || div.dataset.rendered) return;
     var s = specScriptFor(div);
@@ -682,7 +715,13 @@ _RENDER_GLUE = """
     if (s.classList.contains("viewersrc")) {
       var iframe = document.createElement("iframe");
       iframe.title = div.dataset.title || "";
-      iframe.srcdoc = text;
+      var type = s.dataset.type === "trajectory_playback" ? "playback" : (s.dataset.type === "lon_lat_model" ? "model" : null);
+      if (type) {
+        var tpl = await getTemplate(type);
+        iframe.srcdoc = tpl.replace("__PAYLOAD_JSON__", text);
+      } else {
+        iframe.srcdoc = text;
+      }
       div.appendChild(iframe);
       return;
     }
@@ -952,6 +991,7 @@ def build_html(
     cross_dir: Path | None = None,
     shared_config_files: list[tuple[str, Path]] | None = None,
     scenario_name: str = "",
+    no_embed_viewers: bool = False,
 ) -> str:
     """datasets (1 つ以上) と横断分析出力から単一 report.html の文字列を組み立てる。
 
@@ -975,7 +1015,7 @@ def build_html(
     all_case_tags: set[str] = set()
     for entry, ns in zip(datasets, ns_list):
         toc_items, body_html, n_figs, case_tags = _render_dataset_report(
-            entry, ns, scenario_name, multi=multi
+            entry, ns, scenario_name, multi=multi, no_embed_viewers=no_embed_viewers
         )
         ds_tocs.extend(toc_items)
         ds_bodies.append(body_html)
@@ -1036,6 +1076,9 @@ def build_html(
 
     sync_css = _casesync_css(all_case_tags)
 
+    playback_tpl_b64 = gzip_b64(PLAYBACK_TEMPLATE)
+    model_tpl_b64 = gzip_b64(MODEL_TEMPLATE)
+
     return f"""<!DOCTYPE html>
 <html lang="ja">
 <head>
@@ -1064,6 +1107,8 @@ def build_html(
 {cross_html}
 {''.join(ds_bodies)}
 {shared_cfg_section}
+<script type="application/gzip+html+base64" id="tpl-playback">{playback_tpl_b64}</script>
+<script type="application/gzip+html+base64" id="tpl-model">{model_tpl_b64}</script>
 {_RENDER_GLUE}
 </main>
 </div>
@@ -1112,6 +1157,11 @@ def main() -> None:
         "open-loop 集約レポートは aggregate_report.html を推奨 (クラウド per-dataset の"
         "report.html と衝突しない)",
     )
+    parser.add_argument(
+        "--no-embed-viewers",
+        action="store_true",
+        help="自己完結再生ビューア (*.html) をインライン埋め込みせず、別タブで開くリンクにする (ファイルサイズ削減用)",
+    )
     args = parser.parse_args()
 
     shared_config_files = [
@@ -1152,6 +1202,7 @@ def main() -> None:
         cross_dir=cross_dir,
         shared_config_files=shared_config_files,
         scenario_name=scenario_name,
+        no_embed_viewers=args.no_embed_viewers,
     )
     out_path.write_text(html_text, encoding="utf-8")
     size_mb = out_path.stat().st_size / 1024 / 1024
