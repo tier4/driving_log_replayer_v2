@@ -25,8 +25,6 @@ from pathlib import Path
 
 import yaml
 
-from ._io import resolve_lite_bag
-
 MANIFEST_NAME = "collection.yaml"
 CROSS_DIR_NAME = "cross_dataset"
 
@@ -54,10 +52,46 @@ def _entry_from_dir(sub: Path, status: str = "success") -> DatasetEntry:
     return DatasetEntry(
         dataset_id=sub.name,
         dir=sub,
-        real_lite=resolve_lite_bag(sub, "real"),
+        real_lite=_resolve_real_lite(sub),
         comparison_dir=comparison if comparison.is_dir() else None,
         scenarios_dir=scenarios if scenarios.is_dir() else None,
         status=status,
+    )
+
+
+def _resolve_real_lite(sub: Path) -> Path | None:
+    """collection 配下の real.lite 互換ファイル/ディレクトリを解決する。"""
+    for cand in (sub / "real.lite.mcap", sub / "real.lite"):
+        if cand.exists():
+            return cand
+    return None
+
+
+def _is_dataset_dir(path: Path) -> bool:
+    """collection 配下の候補がデータセット実体かを判定する。"""
+    return path.is_dir() and path.name not in _COLLECTION_RESERVED_DIRS
+
+
+def _manifest_dataset_records(manifest: dict | None) -> list[dict]:
+    """manifest の datasets 配列を安全に取り出す。"""
+    if not manifest:
+        return []
+    datasets = manifest.get("datasets", [])
+    return datasets if isinstance(datasets, list) else []
+
+
+def _entry_from_manifest_record(rec: dict) -> DatasetEntry | None:
+    """manifest の 1 レコードを、ディレクトリ無しの DatasetEntry に変換する。"""
+    ds_id = rec.get("dataset_id")
+    if not ds_id:
+        return None
+    return DatasetEntry(
+        dataset_id=str(ds_id),
+        dir=None,
+        real_lite=None,
+        comparison_dir=None,
+        scenarios_dir=None,
+        status=str(rec.get("status", "success")),
     )
 
 
@@ -89,11 +123,10 @@ def discover_collection(collection_dir: Path) -> list[DatasetEntry]:
     ディレクトリに無い DS (sim 失敗等) も status 付きで返す (レポートで欠損を明示するため)。
     """
     root = datasets_root(collection_dir)
-    skip = _COLLECTION_RESERVED_DIRS
     entries: dict[str, DatasetEntry] = {}
     if root.is_dir():
         for sub in sorted(root.iterdir()):
-            if not sub.is_dir() or sub.name in skip:
+            if not _is_dataset_dir(sub):
                 continue
             e = _entry_from_dir(sub)
             if e.real_lite is None and e.comparison_dir is None:
@@ -101,18 +134,14 @@ def discover_collection(collection_dir: Path) -> list[DatasetEntry]:
             entries[e.dataset_id] = e
 
     manifest = load_manifest(collection_dir)
-    for rec in (manifest or {}).get("datasets", []):
-        ds_id = rec.get("dataset_id")
-        if not ds_id:
+    for rec in _manifest_dataset_records(manifest):
+        manifest_entry = _entry_from_manifest_record(rec)
+        if manifest_entry is None:
             continue
-        status = rec.get("status", "success")
-        if ds_id in entries:
-            entries[ds_id].status = status
+        if manifest_entry.dataset_id in entries:
+            entries[manifest_entry.dataset_id].status = manifest_entry.status
         else:
-            entries[ds_id] = DatasetEntry(
-                dataset_id=ds_id, dir=None, real_lite=None,
-                comparison_dir=None, scenarios_dir=None, status=status,
-            )
+            entries[manifest_entry.dataset_id] = manifest_entry
     return sorted(entries.values(), key=lambda e: e.dataset_id)
 
 

@@ -89,6 +89,76 @@ _DEFAULT_DP_PACKAGE = "diffusion_planner_for_x2_exp"
 _TAG_PATTERN = re.compile(r"^[A-Za-z0-9_\-.]+$")
 
 
+def _expand_path(value: Any) -> str | None:
+    """環境変数/チルダ展開が必要なパス値を正規化する。"""
+    if not value:
+        return None
+    return os.path.expandvars(os.path.expanduser(str(value)))
+
+
+def _load_yaml_doc(path: Path) -> dict[str, Any]:
+    """scenario.yaml を読み込む。"""
+    if not path.exists():
+        raise FileNotFoundError(f"scenario.yaml が見つかりません: {path}")
+
+    with path.open(encoding="utf-8") as f:
+        doc = yaml.safe_load(f) or {}
+    if not isinstance(doc, dict):
+        raise ValueError(f"{path}: YAML ルートがマッピング (dict) ではありません")
+    return doc
+
+
+def _load_conditions(path: Path) -> dict[str, Any]:
+    """scenario.yaml の Evaluation.Conditions を返す。"""
+    doc = _load_yaml_doc(path)
+    conditions = (doc.get("Evaluation") or {}).get("Conditions") or {}
+    if not isinstance(conditions, dict):
+        raise ValueError(f"{path}: Evaluation.Conditions がマッピング (dict) ではありません")
+    return conditions
+
+
+def _validate_named_model_list(
+    *,
+    scenario_path: Path,
+    models: dict[str, ModelSpec],
+    raw_names: Any,
+    list_name: str,
+    required_attr: str,
+    required_detail: str,
+    empty_note: str,
+) -> list[str]:
+    """models から cases / sim_runs の名前リストを検証する。"""
+    if not isinstance(raw_names, list):
+        raise ValueError(f"{scenario_path}: Conditions.{list_name} がリストではありません")
+
+    names: list[str] = []
+    for name in raw_names:
+        name = str(name)
+        if name not in models:
+            raise ValueError(
+                f"{scenario_path}: {list_name} に未定義の model 名 {name!r} が含まれます。"
+                f"定義済: {list(models.keys())}"
+            )
+        if getattr(models[name], required_attr) is None:
+            raise ValueError(
+                f"{scenario_path}: {list_name} に含まれる {name!r} には {required_detail} が必要です"
+            )
+        names.append(name)
+
+    if not names:
+        warnings.warn(f"{scenario_path}: Conditions.{list_name} が空です ({empty_note})")
+    return names
+
+
+def _load_overlay_spec(conditions: dict[str, Any]) -> OverlaySpec:
+    """overlay セクションを OverlaySpec に変換する。"""
+    overlay_raw = conditions.get("overlay") or {}
+    return OverlaySpec(
+        reference_tag=overlay_raw.get("reference_tag"),
+        plots=list(overlay_raw.get("plots") or ["cascade_error"]),
+    )
+
+
 @dataclass
 class ModelSpec:
     """1 モデルエントリの定義 (Conditions.models[<name>])."""
@@ -138,13 +208,7 @@ def load_models_doc(scenario_path: str | Path) -> ModelsDoc:
       - params に未知キーがあれば warn (typo 防止)。
     """
     p = Path(scenario_path)
-    if not p.exists():
-        raise FileNotFoundError(f"scenario.yaml が見つかりません: {p}")
-
-    with p.open(encoding="utf-8") as f:
-        doc = yaml.safe_load(f) or {}
-
-    conditions: dict = (doc.get("Evaluation") or {}).get("Conditions") or {}
+    conditions = _load_conditions(p)
 
     # ── models ──────────────────────────────────────────────────────────────
     raw_models = conditions.get("models") or {}
@@ -201,13 +265,8 @@ def load_models_doc(scenario_path: str | Path) -> ModelsDoc:
             )
 
         # パス展開 (ros2 launch は ~ / ${VAR} を展開しないため)
-        godot_exe = entry.get("godot_executable")
-        if godot_exe:
-            godot_exe = os.path.expandvars(os.path.expanduser(str(godot_exe)))
-
-        dp_model_dir = entry.get("dp_model_dir")
-        if dp_model_dir:
-            dp_model_dir = os.path.expandvars(os.path.expanduser(str(dp_model_dir)))
+        godot_exe = _expand_path(entry.get("godot_executable"))
+        dp_model_dir = _expand_path(entry.get("dp_model_dir"))
 
         dp_model_release = entry.get("dp_model_release")
         dp_model_package = entry.get("dp_model_package")
@@ -241,56 +300,28 @@ def load_models_doc(scenario_path: str | Path) -> ModelsDoc:
         )
 
     # ── cases リスト ─────────────────────────────────────────────────────────
-    raw_cases = conditions.get("cases") or []
-    if not isinstance(raw_cases, list):
-        raise ValueError(f"{p}: Conditions.cases がリストではありません")
-    cases_list: list[str] = []
-    for name in raw_cases:
-        name = str(name)
-        if name not in models:
-            raise ValueError(
-                f"{p}: cases に未定義の model 名 {name!r} が含まれます。"
-                f"定義済: {list(models.keys())}"
-            )
-        if models[name].vehicle_model_type is None:
-            raise ValueError(
-                f"{p}: cases に含まれる {name!r} には vehicle_model_type が必要です "
-                "(open-loop VehicleModel クラス選択)"
-            )
-        cases_list.append(name)
+    cases_list = _validate_named_model_list(
+        scenario_path=p,
+        models=models,
+        raw_names=conditions.get("cases") or [],
+        list_name="cases",
+        required_attr="vehicle_model_type",
+        required_detail="vehicle_model_type (open-loop VehicleModel クラス選択)",
+        empty_note="open-loop 解析はスキップされます",
+    )
 
     # ── sim_runs リスト ──────────────────────────────────────────────────────
-    raw_sim_runs = conditions.get("sim_runs") or []
-    if not isinstance(raw_sim_runs, list):
-        raise ValueError(f"{p}: Conditions.sim_runs がリストではありません")
-    sim_runs_list: list[str] = []
-    for name in raw_sim_runs:
-        name = str(name)
-        if name not in models:
-            raise ValueError(
-                f"{p}: sim_runs に未定義の model 名 {name!r} が含まれます。"
-                f"定義済: {list(models.keys())}"
-            )
-        if models[name].vehicle_model is None:
-            raise ValueError(
-                f"{p}: sim_runs に含まれる {name!r} には vehicle_model が必要です "
-                "(closed-loop description パッケージ)"
-            )
-        sim_runs_list.append(name)
-
-    if not cases_list:
-        warnings.warn(f"{p}: Conditions.cases が空です (open-loop 解析はスキップされます)")
-    if not sim_runs_list:
-        warnings.warn(f"{p}: Conditions.sim_runs が空です (closed-loop sim はスキップされます)")
-
-
-
-    # ── overlay ──────────────────────────────────────────────────────────────
-    overlay_raw = conditions.get("overlay") or {}
-    overlay = OverlaySpec(
-        reference_tag=overlay_raw.get("reference_tag"),
-        plots=list(overlay_raw.get("plots") or ["cascade_error"]),
+    sim_runs_list = _validate_named_model_list(
+        scenario_path=p,
+        models=models,
+        raw_names=conditions.get("sim_runs") or [],
+        list_name="sim_runs",
+        required_attr="vehicle_model",
+        required_detail="vehicle_model (closed-loop description パッケージ)",
+        empty_note="closed-loop sim はスキップされます",
     )
+
+    overlay = _load_overlay_spec(conditions)
 
     return ModelsDoc(
         models=models,

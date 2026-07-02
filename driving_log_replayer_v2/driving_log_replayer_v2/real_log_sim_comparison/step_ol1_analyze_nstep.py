@@ -937,7 +937,7 @@ def eval_rollout_rmse(
             continue
 
         # C 関数に k0 とフル配列ポインタを渡し、一括積分 + horizon スナップ
-        _lib_fn(
+        model._lib.vm_integrate_to_horizons(
             model._ptr,
             ctypes.c_int(sorted_horizons[n_valid - 1]),
             ctypes.c_int(k0),
