@@ -39,6 +39,7 @@ import argparse
 from dataclasses import dataclass, field
 import html
 import json
+import re
 from pathlib import Path
 import warnings
 
