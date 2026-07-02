@@ -6,15 +6,15 @@ Autoware + シミュレータで closed-loop 再現して、実機との乖離�
 
 他ユースケースと異なり、launch から **Autoware・bag player・bag recorder のいずれも
 起動しない**。評価ノード `real_log_sim_comparison_evaluator` がパイプライン
-(Stage 1〜12) を subprocess で直接実行する。複数データセットを束ねた横断分析
-(Stage 13) とマルチデータセットレポートは collection 単位で実行する
+(Stage 0〜Report HTML) を subprocess で直接実行する。複数データセットを束ねた横断分析
+(Stage Cross Dataset) とマルチデータセットレポートは collection 単位で実行する
 (後述「マルチデータセット評価」)。
 
-## パイプライン（13 段階）
+## パイプライン（9 段階）
 
 `sample/scenario.yaml` の `Datasets[0]` UUID = SSOT（実機 rosbag を含む
-annotation-dataset）が Stage 1〜12 の入口になる。Stage 13 は複数データセットの
-collection が入口。
+annotation-dataset）が Stage 0〜Report HTML の入口になる。Stage Cross Dataset と
+Physical Validity は複数データセットの collection が入口。
 
 > 全 stage の成果物は `result_archive/real_log_sim_comparison/` 配下の単一バンドルフォルダに
 > まとめて出力する（下表の出力パスはこのバンドルフォルダ基準）。Web.Auto は `result_archive/` の
@@ -26,20 +26,19 @@ collection が入口。
 | 0 | 実機ログ抽出 (`step0_make_lite --kind real`) | `input_bag/*.{mcap,db3}` | `lite/real.lite/` | 1 |
 | OL1 | VehicleModel N-step オープンループ解析 (`step_ol1_analyze_nstep`) | `lite/real.lite/` + `Conditions.cases` の 1 ケース | `comparison/nstep/<tag>/` | N (cases) |
 | OL2 | ケース集約解析 (`step_ol2_analyze_cases`) | `nstep/<tag>/nstep_delta.csv` 群 | `comparison/cases/{overlay/, cases_summary.md, cases_metrics.json}` | 1 |
-| OL3 | パラメータ sweep 同定 (`step_ol3_sweep_params`) | `lite/real.lite/` | `comparison/param_sweep/{<param>_sweep.{csv,fig.json}, pair_*.{csv,fig.json}, param_sweep_summary.md}` | 1 |
 | CL1 | scenario 自動生成 (`step_cl1_bag_to_scenario`) | `input_bag/` + map | `scenarios/auto_scenario.yaml` (OpenSCENARIO) | 1 |
 | CL2 | closed-loop シム実行 (`step_cl2_run_sims`) | `auto_scenario.yaml` + `Conditions.sim_runs` の 1 run | `lite/<run_tag>.lite/` | N (sim_runs) |
 | CL3 | 実機 + sim 比較解析 (`step_cl3_compare_logs`) | `lite/{real, <run_tag>}.lite/` 群 | `comparison/{figures/, report.md, metrics_closed_loop.json}` (N-way 重ね描き + 機械可読メトリクス・実機カバレッジ) | 1 |
 | CL4 | DP軌跡比較 (`step_cl4_compare_dp_trajectory`) | `lite/{real, <sim>}.lite/` | `comparison/figures/dp_*.fig.json` | 1 |
 | Report HTML | HTML レポート生成 (`step_report_html`) | `comparison/` 配下の全 `*.fig.json` + 再生 HTML + 各 `.md` + 設定 YAML | `report.html` (バンドルフォルダ直下・plotly.js を 1 回インライン + 図スペックを gzip+base64 遅延展開する単一 HTML。`--collection-dir` でマルチ DS レポート) | 1 |
-| Report Notebook | notebook 生成 (`step_report_notebook`) | `comparison/` 配下の全 `*.fig.json` | `report.ipynb` (各図を plotly で再描画 + 生 CSV からの再解析セル。開発者向け) | 1 |
 | Cross Dataset | データセット横断分析 (`step_cross_dataset`) | collection 内全 DS の `metrics_closed_loop.json` + `cases_metrics.json` | `cross_dataset/{cross_*.fig.json, coverage_overview.fig.json, loo_stability.fig.json, cross_metrics.json, cross_summary.md}` (collection 単位・rollout 再実行なし) | 1 / collection |
+| Physical Validity | チューニング検証レポート生成 (`physical_validity_report.py`) | collection 内の real.lite 群 + `tuned_params.yaml` | `physical_validity_report.html` (collection root 直下。チューニング済み車両パラメータの物理的妥当性を実機ログからの独立同定と理論式の両面で検証する collection 単位レポート。`make local_multidataset_cloud_run` の Step 4 で実行) | 1 / collection |
 
 成否はパイプラインの例外有無で決まる。全 stage が完走すれば `result.jsonl` に
 `Success: true`、いずれかの subprocess が非ゼロ終了またはタイムアウトすると
 `Success: false` と Python traceback が記録される。
 
-**closed-loop sim の終了条件** は Stage 2 が auto-scenario に書き込む（「厳密さより同じコースで
+**closed-loop sim の終了条件** は Stage CL1 が auto-scenario に書き込む（「厳密さより同じコースで
 確実に切り上げる」優先）。ゴール厳密到達 (`--goal-tolerance` 既定 15m) に加え、一定時間経過後に
 ゴール近傍 (`--goal-vicinity-tolerance` 既定 30m) へ入れば停止・通過・周回いずれでも切り上げる
 （exitSuccess）。これで「ゴール付近で止まってもタイムアウトせず」「通過しても周回し続けない」を
@@ -52,7 +51,7 @@ collection が入口。
 
 > **ゴール近傍は精度算出から除外する（終端は「追わず除外」）**: rosbag 終端のゴール付近は、実際に
 > Autoware へ与えたゴールと一致しないことがある（開始時は初期状態を丁寧に合わせ込むが、終端は
-> そうではない）。終端の動きの差は構造的に不可避なので、step4 は実機 kinematic 終端から
+> そうではない）。終端の動きの差は構造的に不可避なので、step_cl3_compare_logs は実機 kinematic 終端から
 > `GOAL_EXCLUSION_M`（既定 30m、env で上書き可）以内の区間を全精度指標（mean_speed / vel_rmse /
 > steer_rmse / s2r / r2s / completion）から除外する。これにより point-to-point 走行（例 takanawa）で
 > 終端の減速・混雑停止が指標を支配して見かけ上の大誤差を出す問題が解消し、巡航区間の純粋な再現性で
@@ -63,7 +62,7 @@ collection が入口。
 で書く。`ReachPositionCondition` は 3D の `hypot(x,y,z)` で距離判定し WorldPosition の z を
 literal 使用するため、map が標高（例 ~40m）を持つ dataset では `z=0` の WorldPosition だと ego の
 map-pose z との差で**永久に発火しなかった**（2026-06-03 判明）。LanePosition は z を map から得るので
-発火する。また Stage 3 は scenario_test_runner の `global_timeout`（scenario 実行の壁時計上限、
+発火する。また Stage CL2 は scenario_test_runner の `global_timeout`（scenario 実行の壁時計上限、
 既定 180s）を `max(180, timeout_s − initialize_duration − 60)` に引き上げる。本 sim は実機の約 3 倍
 遅く 180s 壁ではゴール到達前に打ち切られるため。実終了は scenario の exitSuccess、global_timeout は
 外側の壁セーフティ。
@@ -76,13 +75,13 @@ map-pose z との差で**永久に発火しなかった**（2026-06-03 判明）
 | パス | 内容 |
 |---|---|
 | `step0_make_lite.py` … `step_cross_dataset.py` | パイプラインの各 stage 実装（ファイル名が役割を示す。step_cross_dataset のみ collection 単位） |
-| `evaluator_node.py` | per-dataset パイプライン (Stage 0〜Report Notebook) を orchestrate する ROS2 ノード。`lib/driving_log_replayer_v2/real_log_sim_comparison_evaluator_node.py` に install される（CMakeLists で `RENAME` 互換） |
+| `evaluator_node.py` | per-dataset パイプライン (Stage 0〜Report HTML) を orchestrate する ROS2 ノード。`lib/driving_log_replayer_v2/real_log_sim_comparison_evaluator_node.py` に install される（CMakeLists で `RENAME` 互換） |
 | `run_batch.py` | scenario.yaml の Datasets 全 UUID を順次ローカル実行するバッチドライバ（収集 + Stage Cross Dataset + マルチ DS report.html まで） |
 | `collect_datasets.py` | per-dataset バンドル成果物を collection に symlink 収集（`collection.yaml` manifest 出力） |
 | `multi_dataset_tune.py` | 収集済み real.lite 群での open-loop ロバスト同定（robust_search） |
 | `lib/_*.py` | 共有ユーティリティ・内部設定（io / events / map / params / runtime_config / cases_config / sim_runs_config / provenance / collection / coverage / multi_agg）。stage 実装から `from .lib._x import` で参照 |
 | `Makefile` | `make local_cloud_run`（1 DS フル実行）/ `local_analysis_run`（解析のみ再実行）/ `local_batch_run`（複数 DS 一括）/ `local_cross_analysis_run`（横断分析のみ再実行）。詳細は `sample/README.ja.md` |
-| `sample/` | cloud / local 共通サンプル一式（`scenario.yaml`, `cases.yaml`, `sim_runs.yaml`, `curve_config_miraikan.yaml`）+ 手順 README。ローカル実行出力は `sample/out/`（gitignore） |
+| `sample/` | cloud / local 共通サンプル一式（`scenario.yaml` と課題別 `scenario_*.yaml`）+ 手順 README。ローカル実行出力は `sample/out/`（gitignore） |
 
 > **install パス**: CMakeLists が `sample/*` を
 > `share/driving_log_replayer_v2/sample/real_log_sim_comparison/` に install する
@@ -144,29 +143,21 @@ Stage CL2 (`step_cl2_run_sims`) が `scenario_test_runner` で sim を回した�
 | キー | 必須/任意 | 内容 |
 | ---- | --- | ---- |
 | `scenario_name` | 任意 | 図タイトルに表示するシナリオ名。未指定時は `ScenarioName` を使用。 |
-| `curve_config_yaml` | 任意 | カーブ別解析設定 YAML への相対パス（`scenario.yaml` 基準）または絶対パス。空文字でカーブ別解析をスキップ。 |
 | `models` | **必須** | 名前付き車両モデル定義レジストリ。各エントリに `vehicle_model_type`（open-loop クラス名）・`vehicle_model`（sim description パッケージ名）・`params`（simulator_model 上書き）等を記述。`cases`/`sim_runs` からこの名前で参照する。 |
-| `cases` | **必須** | Stage 5/6（N-step open-loop 解析）に使うモデル名リスト。各名前は `models` に `vehicle_model_type` を持つこと。 |
-| `sim_runs` | **必須** | Stage 3/4（closed-loop sim + N-way 比較）に使うモデル名リスト。各名前は `models` に `vehicle_model` を持つこと。 |
-| `overlay` | 任意 | Stage 6 集約の基準モデル（`reference_tag`）と重ね描き種類（`plots`）。 |
+| `cases` | **必須** | Stage OL1/OL2（N-step open-loop 解析）に使うモデル名リスト。各名前は `models` に `vehicle_model_type` を持つこと。 |
+| `sim_runs` | **必須** | Stage CL2/CL3（closed-loop sim + N-way 比較）に使うモデル名リスト。各名前は `models` に `vehicle_model` を持つこと。 |
+| `overlay` | 任意 | Stage OL2 集約の基準モデル（`reference_tag`）と重ね描き種類（`plots`）。 |
 | `real_provenance` | 任意 | 実機データ取得時の pilot-auto.x2 / DiffusionPlanner 重みの自由記述。比較プロット・report.md の provenance に掲載し、sim 実行時の版・重み（自動取得）との差を解釈する。 |
 | `traffic_signals` | 任意 (既定 `replay`、`reproduce_perception: true` 時は `none`) | 信号の扱い。`replay`=実機 bag の信号タイムシリーズを再現。`green`=全信号常時 green。`none`=scenario 側で信号をセットしない（`reproduce_perception` が信号 topic を直接 publish して所有する場合に使用）。sim 早期停止（旧称 D0）の真因は赤信号 replay の到達時刻 desync（実機が green 通過した信号に sim ego が赤で当たり永久停止）であり、`green`/`none` で周回を完走できる（live sim A/B 実測: replay=241m 停止 / green=519m 完走、実機 598.7m）。**赤信号停止も忠実に再現したい場合は `reproduce_perception: true`**（信号も bag から再生するため、実車が緑通過した位置は緑・赤停止した位置は赤になる）。 |
-| `loop_waypoints` | 任意 (既定 0) | route 形状を強制する **実験オプション**（**D0 の修正ではない**）。Stage 2 が start+goal に加え実走軌跡の膨らみ位置へ N 個の中間 LanePosition waypoint を挿入する。D0（sim 早期停止）の真因は赤信号 replay であり routing ではない（lanelet graph に shortcut が無く start+goal でも route は周回全体を引く）ことが live sim で確定したため、D0 解消には `traffic_signals: green` を使う。 |
-| `reproduce_perception` | 任意 (既定 false) | `true` で実機 input_bag の**検出物体（detection/objects）・信号（traffic_signals）・占有格子（occupancy_grid）を sim 時刻同期**で各 sim に再生（simple_sensor_simulator 内蔵の `PerceptionReproducerSensor`。Stage 3 が launch 引数 `replay_bag_path` / `replay_start_time` に変換し、通常の検出センサは抑止される）。auto-scenario は NPC を持たないため、実機が先行車追従主体（cruise_following 等）の走行で sim ego が先行車不在により自由加速して実機より速くなるのを防ぎ、**実機の停止・加減速を再現**する。信号も bag から再生するので、実車が緑通過した位置は緑・赤停止した位置は赤となり、**赤信号停止の忠実再現と D0 偽停止回避を両立**（`traffic_signals` の既定が `none` に切り替わり scenario 側の信号設定は無効化される）。時刻同期の代わりに sim ego 最近傍時刻のスナップショット再生にする場合は `replay_position_based: true`。完全一致は real/sim の DiffusionPlanner 重み差により頭打ち。 |
+| `loop_waypoints` | 任意 (既定 0) | route 形状を強制する **実験オプション**（**D0 の修正ではない**）。Stage CL1 が start+goal に加え実走軌跡の膨らみ位置へ N 個の中間 LanePosition waypoint を挿入する。D0（sim 早期停止）の真因は赤信号 replay であり routing ではない（lanelet graph に shortcut が無く start+goal でも route は周回全体を引く）ことが live sim で確定したため、D0 解消には `traffic_signals: green` を使う。 |
+| `reproduce_perception` | 任意 (既定 false) | `true` で実機 input_bag の**検出物体（detection/objects）・信号（traffic_signals）・占有格子（occupancy_grid）を sim 時刻同期**で各 sim に再生（simple_sensor_simulator 内蔵の `PerceptionReproducerSensor`。Stage CL2 が launch 引数 `replay_bag_path` / `replay_start_time` に変換し、通常の検出センサは抑止される）。auto-scenario は NPC を持たないため、実機が先行車追従主体（cruise_following 等）の走行で sim ego が先行車不在により自由加速して実機より速くなるのを防ぎ、**実機の停止・加減速を再現**する。信号も bag から再生するので、実車が緑通過した位置は緑・赤停止した位置は赤となり、**赤信号停止の忠実再現と D0 偽停止回避を両立**（`traffic_signals` の既定が `none` に切り替わり scenario 側の信号設定は無効化される）。時刻同期の代わりに sim ego 最近傍時刻のスナップショット再生にする場合は `replay_position_based: true`。完全一致は real/sim の DiffusionPlanner 重み差により頭打ち。 |
 | `ego_replay_duration` | 任意 (既定 0=無効) | scenario 開始から指定秒数、実機 bag の **ego 状態（pose/twist/accel）を traffic_simulator の `EgoBagReplayer` が vehicle model に毎フレーム注入**し、経過後に closed-loop へ切替える。AUTONOMOUS 開始時点で ego が速度を持つ rosbag に対し、停止発進ではなく**実機と同じ走行中状態から sim を始める**初期状態合わせ。Autoware 初期化（localization・route・engage）は scenario time 開始前に完了しているため注入と干渉せず、vehicle model は毎フレームシード済みのため切替に段差が出ない。要 `reproduce_perception: true`（同じ bag を使う）。切替時刻は provenance（`ego_replay_duration`）に記録され、注入区間のメトリクスは実機と一致して当然である点に注意。 |
-| `replay_preroll` | 任意 (既定 0) | ego replay の開始アンカーを AUTONOMOUS 開始（t0）より何秒前に取るか [s]。Stage 2 の TeleportAction start pose も同じアンカー時刻の kinematic から取り、注入開始時の pose ジャンプを防ぐ。 |
+| `replay_preroll` | 任意 (既定 0) | ego replay の開始アンカーを AUTONOMOUS 開始（t0）より何秒前に取るか [s]。Stage CL1 の TeleportAction start pose も同じアンカー時刻の kinematic から取り、注入開始時の pose ジャンプを防ぐ。 |
 | `replay_position_based` | 任意 (既定 false) | perception 再生を時刻同期ではなく **sim ego 最近傍時刻のスナップショット再生**にする。closed-loop 切替後に sim ego が実機タイムラインから逸脱した場合の先行車・信号ずれを緩和する。 |
 
 - **`models`（`Conditions.models`）**: `vehicle_model_type`（open-loop）/ `vehicle_model`（sim）/ `params`（共有）を同列に名前付きで定義。`cases`/`sim_runs` はこの名前リストで参照する。`dp_model_release`（webauto から自動 pull）/ `dp_model_dir`（ローカル既存）で **同一車両モデルのまま DiffusionPlanner モデルだけを差し替えて比較**できる → [`docs/diffusion_planner_model_swap.ja.md`](docs/diffusion_planner_model_swap.ja.md)。
 
   書式・使用例・フィールド詳細は `sample/README.ja.md` を参照。
-
-`curve_config_yaml`（任意）は以下の構造で記述する（`sample/curve_config_miraikan.yaml` 参照。
-特定 area_map 前提のハードコードを含むため、別 map の dataset では空文字でスキップ）。
-
-- `curve_centers`: 地図座標系でのカーブ中心リスト（`label`, `cx`, `cy`, `margin`）。`curves_closeup` プロット用。
-- `curve2_index`: `curve_centers` 内で N-step 解析の対象とするカーブのインデックス（0 始まり）。
-- `curve2_window`: カーブ② 直前の一時停止を検出する時刻窓 `[start, end]`（AUTONOMOUS 開始からの経過秒）。
 
 ## 出力（`result_archive/real_log_sim_comparison/` 配下）
 
@@ -176,27 +167,27 @@ Stage CL2 (`step_cl2_run_sims`) が `scenario_test_runner` で sim を回した�
 
 ### 図スペック `*.fig.json`（データ + プロットライブラリ構成）
 
-Stage 4〜10 の各図は matplotlib SVG ではなく **plotly Figure の JSON（データ + レイアウト）** を
+解析 stage（OL1/OL2/CL3/CL4）の各図は matplotlib SVG ではなく **plotly Figure の JSON（データ + レイアウト）** を
 `<stem>.fig.json` として `comparison/` 配下に出力する（`lib/_figures` の純関数 `build_fig_*` で組み、
 `lib/_fig_io.write_fig_json` が template を剥がし float を丸めて最小化 JSON 化）。描画は閲覧側
-（report.html / report.ipynb）の **plotly.js** が行う。旧方式（base64 SVG 埋め込み）と違い、画像では
-なく数値データを持つためズーム/パン/hover でき、notebook で再解析もできる。
+（report.html）の **plotly.js** が行う。旧方式（base64 SVG 埋め込み）と違い、画像では
+なく数値データを持つためズーム/パン/hover できる。
 
 ### `report.html`（バンドルフォルダ直下・単一 HTML レポート）
 
-`step11_build_html_report`（Stage 11）がバンドルフォルダ直下（`comparison/` の親）に生成する、
+`step_report_html`（Stage Report HTML）がバンドルフォルダ直下（`comparison/` の親）に生成する、
 `comparison/` 配下の全 `*.fig.json`・Markdown・設定 YAML を **1 枚にまとめた外部ロード無しの単一 HTML**。
 この 1 ファイルを渡すだけで Slack 等で共有・閲覧できる。出力ディレクトリ単位ではなく **比較の概念** で
 5 セクションに分けて並べる（読み手が「何を何と比べた図か」で辿れるようにするため）。各図は出力先ではなく
-(ディレクトリ, ファイル名 stem) の組で分類するので、`figures/` に混在する closed-loop 図・DP 図・brake
-同定図も正しいセクションに振り分く。
+(ディレクトリ, ファイル名 stem) の組で分類する。
 
-| セクション | 内容 | 主な図（出力元 step） |
+| セクション | 内容 | 主な図（出力元 stage） |
 |---|---|---|
-| 1. 実機 rosbag 解析 | 実機ログ(SSOT)のみから抽出する特性・車両パラメータ同定（sim 非介在） | `param_sweep`(7) / `brake_sweep`・`departure_brake_tc_sensitivity`・`real_cmd_acc_departure`(9) |
-| 2. プランナ出力比較 | DiffusionPlanner 出力軌跡を実走・最終 planning・sim 出力と比較 | `dp_real_vs_sim`・`dp_vs_actual`・`dp_vs_final_traj`(8) |
-| 3. N-step オープンループ比較 | 実機状態リセットから N ステップ連続予測した車両モデルの差（N=1 = 毎ステップリセット） | nstep の `overview`/`map_distribution`(5) + `cases/overlay`(6) |
-| 5. シナリオ クローズループ比較 | auto-scenario を sim で closed-loop 実行した実機との乖離 | `velocity`/`acceleration`/`steering`/`*_vs_distance`/`trajectory_with_map`/`trajectory_playback`/`curves_closeup`/`curve{N}_*`(4) + `curve_divergence`(10) |
+| 1. 推定前：実車とシミュレーションのズレ | パラメータ推定前の、理想追従（操舵完全一致と仮定）における自車位置やモデル構造の限界によるズレ | `cross_perfect_tracking_box`・`cross_perfect_tracking_traj`(Cross Dataset) |
+| 2. パラメータ推定結果 | 実機ログから最小二乗法で同定した車両パラメータとそのフィッティング精度 | `cross_physical_validity_{kus,long,steer}`(Cross Dataset) / `lon_lat_model`(CL3) |
+| 3. 推定後：シミュレーション残差の提示 | ホライズン別の予測誤差や、位置 (x, y) の変位誤差の成長度合い・分布 | nstep の `overview`/`map_distribution`(OL1) + `cases/overlay`(OL2) + `cross_long_perf_*`(Cross Dataset) |
+| 4. 最終的な Closed Loop シミュレーション残差 | 最終同定パラメータで closed-loop 実行した際の実機との軌跡・速度・操舵の乖離 | `trajectory_playback`(CL3) + `cross_closed_loop_heatmap`/`cross_normalized_bars`/`coverage_overview`/`loo_stability`(Cross Dataset) |
+| その他 | 上記いずれにも分類されなかった図 | `dp_real_vs_sim`・`dp_vs_actual`・`dp_vs_final_traj`(CL4) など |
 
 各セクションには 1 行説明を付ける。**CDN 不使用・オフライン可**:
 
@@ -212,24 +203,16 @@ Stage 4〜10 の各図は matplotlib SVG ではなく **plotly Figure の JSON�
 - **セクション折りたたみ**: 各セクション・Markdown レポート・設定ファイルは `<details open>` で開閉できる。
 - **サイド目次**: sticky 追従。「↑ 先頭へ」と各セクションの「↑ 先頭」リンク付き。
 
-3 種の Markdown レポート（`report.md`→5、`cases_summary.md`→3、`curve_divergence.md`→5）は所属セクション
+Markdown レポート（`cases_summary.md`→セクション 3）は所属セクション
 末尾に折りたたみで埋め込む。さらに末尾の「実行構成」セクションにシナリオ・sim 実行設定・車両モデル
 パラメータの各 YAML を生テキストで埋め込み、どの設定で生成した報告か追跡できるようにする。既知のいずれにも
 分類されない図は捨てず「その他」セクションに回す（黙って誤分類しない）。`plotly.js` を含め全て 1 ファイルに
 収めるため、`report.html` 1 つだけ取り出して共有してもオフラインでそのまま表示できる。
 
-### `report.ipynb`（開発者向け notebook）
-
-`step12_build_notebook`（Stage 12）がバンドルフォルダ直下に生成する Jupyter notebook。各 `*.fig.json` を
-`plotly.io.read_json(...).show()` で対話表示するセル（report.html と同じカテゴリ順）と、末尾に **生データ
-（`nstep_delta.csv`）から `lib/_figures` の `build_fig_*` で図を組み直す再解析セル**を備える。`lib/_figures`
-は ROS 非依存なので、ワークスペースを source 済みなら素の Jupyter kernel で全セルを実行でき、軸や系列を
-編集して試せる（配布用の静的共有は `report.html`、深掘り・再解析は `report.ipynb` という使い分け）。
-
 ### `lite/`
 
 `step0_make_lite` が抽出した lite bag（rosbag2 mcap）。実機 `real.lite/` と、Stage CL2 が
-`sim_runs.yaml` の各 run について生成する `<run_tag>.lite/`（例 `sim_normal.lite/`,
+`Conditions.sim_runs` の各 run について生成する `<run_tag>.lite/`（例 `sim_normal.lite/`,
 `sim_kus0020.lite/`, `sim_perfect.lite/`, `sim_godot.lite/`）が併置される。
 
 ### `comparison/report.md`
@@ -245,29 +228,15 @@ Markdown 形式の比較レポート。以下を含む。
 
 ### `comparison/figures/`
 
-SVG の比較プロット（軌跡比較のみ plotly 製インタラクティブ HTML）。
+自己完結 HTML ビューア（Stage CL3）と DP 軌跡比較の図スペック（Stage CL4）。
 
 | ファイル | 内容 |
 | -------- | ---- |
-| `velocity.fig.json` | 速度指令 vs 応答 |
-| `velocity_vs_distance.fig.json` | 速度応答 vs 走行距離（arc-length 基準、早期停止を露出） |
-| `acceleration.fig.json` | 加速度指令 vs 応答 |
-| `steering.fig.json` | 操舵指令 vs 応答 |
-| `steering_vs_distance.fig.json` | 操舵応答 vs 走行距離（arc-length 基準） |
-| `trajectory_with_map.fig.json` | 地図背景上での軌跡重ね合わせ（plotly・ズーム/パン/ホバー可） |
-| `trajectory_playback.html` | 軌跡再生ビューア（plotly 非依存の自己完結 canvas+JS）。シークバー・再生で各 run の現在位置を地図上に重ね表示。**時刻同期**（同一経過時刻）と**位置同期**（実機の走行距離 s 基準に各 run を自軌跡の弧長一致地点へ表示＝同一走行距離での横ずれ比較）の 2 モード。速度は進行方向矢印（長さ = v×1.5s 到達距離）と凡例の v/t/s 読み出しで表示。追従ズーム（表示中 run を自動フィット、視野幅調整可）/全体表示トグル・run 表示切替付き |
-| `dp_real_vs_sim.fig.json` | Stage 8: DiffusionPlanner 出力軌跡 実機 vs sim |
-| `dp_vs_actual.fig.json` | Stage 8: DP計画速度(d=0) vs actual速度 |
-| `dp_vs_final_traj.fig.json` | Stage 8: 実機 DP出力 vs 最終 planning（optimizer 補正） |
-| `curves_closeup.fig.json` | カーブ別の詳細拡大 |
-| `curve{N}_analysis.fig.json` | 指定カーブ 全体解析（{N}=`plot_curves[*].index + 1`） |
-| `curve{N}_steering_detail.fig.json` | 指定カーブ 操舵詳細 |
-| `curve{N}_yaw_steer.fig.json` | 指定カーブ ヨーレート・操舵関係 |
-| `curve{N}_steer_response.fig.json` | 指定カーブ ステアリング応答特性 |
-
-> `curve{N}_*` 系は `curve_config_yaml::plot_curves` で対象カーブを切り替え可能。
-> 未指定なら `curve2_index` のカーブだけ生成される（既定は `curve2_*` の 4 枚）。
-> `curve_config_yaml` が空ならカーブ別プロットは生成されない。
+| `trajectory_playback.html` | Stage CL3: 軌跡再生ビューア（plotly 非依存の自己完結 canvas+JS）。シークバー・再生で各 run の現在位置を地図上に重ね表示。**時刻同期**（同一経過時刻）と**位置同期**（実機の走行距離 s 基準に各 run を自軌跡の弧長一致地点へ表示＝同一走行距離での横ずれ比較）の 2 モード。速度は進行方向矢印（長さ = v×1.5s 到達距離）と凡例の v/t/s 読み出しで表示。追従ズーム（表示中 run を自動フィット、視野幅調整可）/全体表示トグル・run 表示切替付き |
+| `lon_lat_model.html` | Stage CL3: 縦横モデル検証ビューア（実機のみ。運動方程式〔1次遅れ+自転車モデル〕の前方積算と、加速度/速度/ステア/ヨーレート/横Gの観測・指令を重ね描き。地図にシミュレーション軌跡も重畳。T/τ/k_us/β つまみ調整・ステア源切替・誤差(sim−観測)パネル切替） |
+| `dp_real_vs_sim.fig.json` | Stage CL4: DiffusionPlanner 出力軌跡 実機 vs sim |
+| `dp_vs_actual.fig.json` | Stage CL4: DP計画速度(d=0) vs actual速度 |
+| `dp_vs_final_traj.fig.json` | Stage CL4: 実機 DP出力 vs 最終 planning（optimizer 補正） |
 
 ### `comparison/nstep/<case_tag>/`
 
@@ -275,14 +244,14 @@ SVG の比較プロット（軌跡比較のみ plotly 製インタラクティ�
 1 ケースあたり `nstep_delta.csv`（全 horizon 統一スキーマ）+ 図 2 枚
 （`overview.fig.json`, `map_distribution.fig.json`）+ `summary.txt`（N=1 詳細 RMSE +
 horizon 別 RMSE）。ケース横断の比較図は `cases/overlay/` が担う。
-ケースは `cases.yaml` で定義する。
+ケースは `scenario.yaml` の `Conditions.cases` で定義する。
 
 > N=1 は毎ステップ reset のため k_us/wheelbase に非感度。大 N の rollout（`run_rollout`）が
 > N ステップ連続予測で dynamics 差を顕在化する。
 
 ### `comparison/cases/`
 
-`step6_analyze_cases`（Stage 6）による全ケース集約解析の成果物。
+`step_ol2_analyze_cases`（Stage OL2）による全ケース集約解析の成果物。
 
 | ファイル | 内容 |
 |---|---|
@@ -291,57 +260,6 @@ horizon 別 RMSE）。ケース横断の比較図は `cases/overlay/` が担う�
 | `overlay/error_growth_overlay.fig.json` | 全ケースの horizon 別 RMSE 成長を重ね描き（位置/yaw） |
 
 > 誤差時系列の対話的確認は縦横モデル検証ビューア（`figures/lon_lat_model.html` の「誤差パネル」）へ移設した。case × horizon の俯瞰は `cases_summary.md` の表が担う。
-
-### `comparison/param_sweep/`
-
-`step7_sweep_params`（Stage 7）による車両モデルパラメータ sweep 同定の成果物。実機 lite を
-SSOT に、各パラメータ（k_us / steer_time_constant / steer_time_delay / steer_bias /
-steer_dead_band / debug_steer_scaling_factor / acc_time_constant / acc_time_delay /
-debug_acc_scaling_factor。wheelbase は実測値が正しいため固定）をグリッドで sweep して
-free-running rollout を回し、最大 horizon の終端誤差 RMSE（横方向系=yaw/横、縦方向系=縦）を
-最小化する値を同定する（N=1 は dynamics パラメータに非感度なため大 N の rollout を使用）。
-最小がグリッド端の場合は端方向へ自動拡張して再スイープする（等比/等差外挿、各パラメータの
-物理的 bounds まで。bounds 到達後も端なら summary に注記）。
-k_us × steer_time_constant / k_us × debug_steer_scaling_factor の 2D ペア sweep ヒートマップも生成する。
-
-| ファイル | 内容 |
-|---|---|
-| `<param>_sweep.csv` | param 値 × horizon → yaw / 位置 / 横 / 縦 RMSE（全パラメータ分） |
-| `<param>_sweep.fig.json` | 同定メトリクス・位置 RMSE vs param 曲線（同定値=赤線、仕様値=灰点線）+ 実機ログ根拠パネル（例: k_us は横加速度 vs ステア残差の understeer 勾配。sweep と独立な生データ直接観察によるクロスチェック）。図は主要 3 パラメータ（k_us / steer_time_constant / acc_time_constant）のみ生成し、その他は CSV と summary の表で確認する |
-| `pair_<a>_<b>.{csv,svg}` | 2D ペア sweep（RMSE ヒートマップ + 最小点） |
-| `param_sweep_summary.md` | 全パラメータの同定値 vs 仕様値の一覧表 |
-
-> 同定値はログ末尾に出力（グリッド最小 + 近傍 3 点の放物線サブグリッド推定）。最小がグリッド端の
-> 場合は範囲拡大を警告。`--kus-values` / `--horizons` / `--stride` で手動調整可能。
-
-### `comparison/brake_sweep/`
-
-`step9_identify_brake`（Stage 9）による縦方向パラメータ（brake_time_constant）同定の成果物。実機 lite の
-post-gate control_cmd をオープンループ入力に縦方向モデルを brake_tc グリッドで回し、発進直後の実機
-actual velocity へのフィット RMSE を最小化する brake_tc を同定する。
-
-| ファイル | 内容 |
-|---|---|
-| `brake_sweep.csv` | brake_tc × (RMSE / mean_err) |
-| `brake_sweep.fig.json` | 発進フィット RMSE vs brake_tc 曲線（同定値を赤線表示） |
-
-> 注: brake_tc は減速時に支配的で発進窓では弱くしか拘束されない（ill-posed）。RMSE が単調減少し最小が
-> 非物理的大値に張り付く場合は警告する（真の同定でなく launch 過大予測の代理；mean_err>0 を併読）。
-> robust な同定には減速・停止窓が必要（将来拡張）。
-
-### `comparison/curve_diag/`
-
-`step10_diagnose_curve`（Stage 10）によるカーブ/発進区間の軌跡乖離詳細診断。実機 vs sim を発進基準で
-整列し、乖離を実機進行方向基準の縦/横成分に分解（+ヨー差・速度差）して原因を切り分ける
-（step4 のカーブ別図にはない診断次元）。
-
-| ファイル | 内容 |
-|---|---|
-| `curve_divergence.md` | 縦/横乖離 peak/RMS・速度差 mean/RMS の定量サマリ |
-| `curve_divergence.fig.json` | 速度/速度差/ステア/ヨー差/乖離縦横分解の 5 段時系列 |
-
-> 縦方向支配なら pacing/速度差、横方向支配なら操舵・understeer 由来を示唆。比較対象 sim は
-> sim_*.lite を自動検出（sim_normal 優先）。sim/発進が無ければスキップ。
 
 ### `result_bag/`
 
@@ -375,18 +293,20 @@ post_process の `create_metadata_yaml` を通すためのプレースホルダ 
 
 ### ローカル（`make local_cloud_run`）
 
-webauto で T4 dataset を pull 済みの環境で `make local_cloud_run` 一発で 12 段階すべて走る。
+webauto で T4 dataset を pull 済みの環境で `make local_cloud_run` 一発で per-dataset パイプライン
+（Stage 0〜Report HTML）がすべて走る。
 ローカルでは `lib/_dataset.py`（解決の SSOT）が webauto キャッシュ
 `~/.webauto/data/data/annotation_dataset/<UUID>/<frame>` を解決し、クラウドと**同一の
 `t4_dataset_path` 契約**を渡す。すなわち `t4_dataset_path` 以降の扱いはローカル/クラウドで
 完全に共通で、両者の違いは「誰がパスを解決するか」（クラウド=Web.Auto ステージング /
 ローカル=`lib/_dataset.py`）だけ。
-手順詳細・`sim_runs.yaml`/`cases.yaml` の書式・トラブルシュート・Makefile 変数の上書き例は
+手順詳細・`Conditions.models`/`cases`/`sim_runs` の書式・トラブルシュート・Makefile 変数の上書き例は
 [`sample/README.ja.md`](sample/README.ja.md) を参照。
 
 ### ローカル解析のみ再実行（`make local_analysis_run`）
 
-sim 実行 (Stage 1〜3) は重いため、解析コード (step4〜step11) を変更して結果を作り直すときは
+sim 実行 (Stage 0〜CL2: lite 抽出・scenario 生成・sim 実行) は重いため、解析コード
+(Stage OL1〜Report HTML) を変更して結果を作り直すときは
 既存の出力バンドルを再利用して **解析ステージだけ** を回せる:
 
 ```bash
@@ -412,8 +332,8 @@ sample/out/batch_<ts>/                  # collection root (= COLLECTION_DIR)
 ├── runs/<dataset_uuid>/                # 各 DS の launch 出力 (従来 out/<ts> と同構造)
 ├── datasets/<dataset_uuid>/            # 収集ビュー (collect_datasets.py が symlink)
 │   ├── real.lite[.mcap]  comparison/  scenarios/
-├── cross_dataset/                      # Stage 13 出力 (横断分析の図 + cross_summary.md)
-└── report.html                         # マルチ DS 単一レポート (Stage 11 --collection-dir)
+├── cross_dataset/                      # Stage Cross Dataset 出力 (横断分析の図 + cross_summary.md)
+└── report.html                         # マルチ DS 単一レポート (step_report_html --collection-dir)
 ```
 
 ### 一括ローカル実行（`make local_batch_run`）
@@ -431,12 +351,12 @@ make local_batch_run SKIP_SIM=1           # closed-loop sim を省略 (open-loop
 実行する（クラウドの「1 評価ジョブ = 1 dataset」のローカル再現）。失敗 dataset は
 `collection.yaml` に status を記録してスキップし、残りで横断分析を続行する。
 
-**closed-loop sim のスキップ (`SKIP_SIM=1` / `Conditions.skip_sim`)**: Stage 3 は
+**closed-loop sim のスキップ (`SKIP_SIM=1` / `Conditions.skip_sim`)**: Stage CL2 は
 1 dataset あたり sim run 数 × 数分かかり、マルチ DS バッチでは支配的になる。closed-loop
 比較が不要なとき（open-loop N-step・パラメータ同定・カバレッジだけ欲しいとき）は
 `SKIP_SIM=1`（`local_cloud_run` / `local_batch_run` 共通、クラウドは scenario.yaml の
-`Conditions.skip_sim: true`）で Stage 3 だけを省略できる。Stage 2（scenario 生成）と
-Stage 4〜13 は実行され、sim 依存の図・行列（closed-loop 比較・DP 比較）は自動的に
+`Conditions.skip_sim: true`）で Stage CL2 だけを省略できる。Stage CL1（scenario 生成）と
+解析ステージ（Stage OL1/OL2/CL3/CL4・Report HTML・Cross Dataset）は実行され、sim 依存の図・行列（closed-loop 比較・DP 比較）は自動的に
 省略される。成否判定も「sim 0 件 = INCOMPLETE」を適用しない。後から closed-loop も
 欲しくなったら `SKIP_SIM`/`RESUME` 無しで同じ `BATCH_ROOT` を再実行する（real.lite
 抽出からやり直すが、支配的な sim 実行時間に対して誤差）。
@@ -452,19 +372,19 @@ python3 -m driving_log_replayer_v2.real_log_sim_comparison.collect_datasets \
 make local_cross_analysis_run COLLECTION_DIR=sample/out/multi_eval
 ```
 
-### 横断分析（Stage 13）とマルチ DS レポート
+### 横断分析（Stage Cross Dataset）とマルチ DS レポート
 
-`step13_cross_dataset` は per-dataset の機械可読メトリクス
+`step_cross_dataset` は per-dataset の機械可読メトリクス
 （`metrics_closed_loop.json` + `cases_metrics.json`）を再集計するだけで rollout を再実行
 しない（数秒で完了）。出力は 4 系統:
 
 1. **モデル×DS 行列**: closed-loop 軌跡乖離・完走率（DS × sim run）と open-loop N-step
    終端誤差（DS × case）のヒートマップ。どのモデルがどの dataset で悪いかを俯瞰する。
-2. **正規化 mean/worst 集約**: 各 DS の baseline（`cases.yaml` の `overlay.reference_tag`）
+2. **正規化 mean/worst 集約**: 各 DS の baseline（`Conditions.overlay` の `reference_tag`）
    誤差で正規化してから横断 mean/worst を取り、case をロバスト性でランキングする
    （`multi_dataset_tune` の同定スコアと同一定義 = `lib/_multi_agg.py`）。
 3. **走行特性カバレッジ**: DS 別の速度域滞在比率・加減速分布・曲率半径ビン別走行距離・
-   カーブ数（`lib/_coverage.py`、step4 が実機ログから集計）。評価データの偏りを可視化する。
+   カーブ数（`lib/_coverage.py`、step_cl3_compare_logs が実機ログから集計）。評価データの偏りを可視化する。
 4. **leave-one-out 安定性・外れ DS 検出**: DS を 1 つ除くと best case が入れ替わらないか、
    誤差プロファイルが他と乖離した DS（robust z-score）が無いかを定量化する。
    dataset 数 < 3 では理由を明記してスキップする（単一 DS でも同一コードパスで動く）。
@@ -476,7 +396,7 @@ make local_cross_analysis_run COLLECTION_DIR=sample/out/multi_eval
 （Chrome 80+ / Firefox 113+。`#ds=<id>` ハッシュで選択状態を共有できる）。
 
 ロバスト同定（`make local_multidataset_run` = `multi_dataset_tune.py` の robust_search）は
-従来どおり real.lite 群での rollout 探索で、レポート用集約（Stage 13）とは役割が異なる。
+従来どおり real.lite 群での rollout 探索で、レポート用集約（Stage Cross Dataset）とは役割が異なる。
 
 ---
 
@@ -522,27 +442,7 @@ make -C <real_log_sim_comparison ディレクトリ> issue_scenario \
 > `webauto data annotation-dataset pull --project-id x2_dev --annotation-dataset-id <UUID> --include-intermediate-artifacts`
 > で pull し、シナリオ YAML の `<DATASET_UUID>` を置き換えても良い。
 
-### 3. curve_centers の確定（`tools/suggest_curve_centers.py`）
-
-```bash
-python3 tools/suggest_curve_centers.py \
-    --bag work/dataset/<uuid>/input_bag \
-    --top 5
-```
-
-出力された高 yaw-rate 点（旋回中心候補）の `cx`, `cy` を課題に対応する
-`sample/curve_config_*.yaml` に記入する。
-
-```yaml
-curve_centers:
-  - {label: "ロータリー入口（左旋回）", cx: 89421, cy: 43129, margin: 40}
-```
-
-- `cx`, `cy` は `/localization/kinematic_state` の `pose.pose.position.x/y`（地図座標）
-- `margin` は旋回半径に応じて調整（通常 20〜60）
-- 同一区間に複数旋回がある場合は `--top 5` で上位を確認して対象を特定する
-
-### 4. シナリオの実行
+### 3. シナリオの実行
 
 ```bash
 make -C <real_log_sim_comparison ディレクトリ> local_cloud_run \
@@ -553,23 +453,24 @@ make -C <real_log_sim_comparison ディレクトリ> local_cloud_run \
 DP 3 モデル（`sim_dp_0303` / `sim_dp_0503` / `sim_dp_0410`）が自動で webauto から pull され、
 それぞれ closed-loop sim が実行される（GPU + 長時間 要）。
 
-### 5. 結果の確認
+### 4. 結果の確認
 
-`sample/out/latest/report.html` を開き、「シナリオ クローズループ比較」セクションを確認する。
+`sample/out/latest/report.html` を開き、「4. 最終的な Closed Loop シミュレーション残差」
+セクションを確認する。
 
-- `curves_closeup.fig.json`: カーブ領域のズーム軌跡（大回りの有無を目視）
-- `curve_diag/curve_divergence.md`: 縦/横乖離の定量値
-- **TP**: `sim_dp_0410` の横乖離が顕著に大きい（課題再現）
-- **FN**: `sim_dp_0303` / `sim_dp_0503` の横乖離が実機に近い（課題非再現）
+- `figures/trajectory_playback.html`: 実機 vs 各 sim の軌跡重ね表示（大回りの有無を目視）
+- `report.md` / `metrics_closed_loop.json`: 軌跡乖離（s2r / r2s）の定量値
+- **TP**: `sim_dp_0410` の軌跡乖離が顕著に大きい（課題再現）
+- **FN**: `sim_dp_0303` / `sim_dp_0503` の軌跡乖離が実機に近い（課題非再現）
 
 ### 用意されているシナリオテンプレート
 
-| テンプレート | 対象課題 | curve_config |
-|---|---|---|
-| `sample/scenario_issue_template.yaml` | 汎用テンプレート（UUID・地図名は要書き換え） | `curve_config_<地図名>.yaml`（要作成） |
-| `sample/scenario_issue_rotary_left.yaml` | テレポート駅ロータリー入口 左旋回（曲がるタイミング早い） | `curve_config_rotary.yaml` |
-| `sample/scenario_issue_aist_curve.yaml` | 産総研脇〜テレコム 左カーブ大回り（速度超過・曲がり切れない） | `curve_config_aist_telecom.yaml` |
-| `sample/scenario_curve_wide_turn.yaml` | テレポート駅前交差点 左折 カーブ大回り（既存） | `curve_config_miraikan.yaml` |
+| テンプレート | 対象課題 |
+|---|---|
+| `sample/scenario_issue_template.yaml` | 汎用テンプレート（UUID・地図名は要書き換え） |
+| `sample/scenario_issue_rotary_left.yaml` | テレポート駅ロータリー入口 左旋回（曲がるタイミング早い） |
+| `sample/scenario_issue_aist_curve.yaml` | 産総研脇〜テレコム 左カーブ大回り（速度超過・曲がり切れない） |
+| `sample/scenario_curve_wide_turn.yaml` | テレポート駅前交差点 左折 カーブ大回り（既存） |
 
 ### pilot-auto.x2 バージョンの記録方針
 

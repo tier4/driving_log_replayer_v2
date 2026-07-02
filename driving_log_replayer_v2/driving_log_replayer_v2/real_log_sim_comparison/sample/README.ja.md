@@ -1,6 +1,6 @@
 # real_log_sim_comparison サンプル (cloud / local 共通)
 
-`scenario.yaml` / `curve_config_miraikan.yaml` は
+`scenario.yaml` は
 cloud（Web.Auto evaluator）と local（`make local_cloud_run`）で**共通の単一サンプル**。
 
 - **cloud**: これらは CMakeLists で `share/driving_log_replayer_v2/sample/real_log_sim_comparison/`
@@ -10,21 +10,19 @@ cloud（Web.Auto evaluator）と local（`make local_cloud_run`）で**共通の
 
 Godot バイナリパスは cloud / local 共通で `/opt/godot_autoware_simulator/` に統一。cloud は
 `.webauto-ci` が自動配置、local は同じ `/opt` に配置（または symlink）する。
-`curve_config_miraikan.yaml` は `scenario.yaml` の `Conditions.curve_config_yaml` で参照する
-（現状サンプルは空文字で無効）。
 
 ---
 
 ## パイプライン概要
 
-10 段階パイプラインの各 stage の入出力は親ディレクトリの
-[`../README.ja.md`](../README.ja.md#パイプライン10-段階) を参照。ローカル実行で押さえる点:
+9 段階パイプラインの各 stage の入出力は親ディレクトリの
+[`../README.ja.md`](../README.ja.md#パイプライン9-段階) を参照。ローカル実行で押さえる点:
 
 - Stage CL2（sim 実行）と Stage OL1（N-step 解析）はそれぞれ `Conditions.sim_runs` /
   `Conditions.cases` の各エントリで N 回ループする。これらは `scenario.yaml` の
   `Conditions.models` に定義されたモデル名リストで参照する。**両方未指定だとパイプラインは失敗する**。
 
-> **実行時間**: Stage 3 は scenario_test_runner で Autoware を起動して closed-loop
+> **実行時間**: Stage CL2 は scenario_test_runner で Autoware を起動して closed-loop
 > シムを回すため 1 run あたり ~5 分。既定 `scenario.yaml` は 7 sim_runs（normal /
 > kus0020 / best_normal / taiga_dyn / taiga_x / perfect / godot）のため、end-to-end は ~40 分の見積もり。
 
@@ -57,7 +55,7 @@ webauto data annotation-dataset pull \
 > 使われる。サンプルの UUID は動作確認用の選択値なので、評価対象が異なる場合は
 > **必ず自分の評価対象 annotation-dataset の UUID に書き換えること**。
 >
-> 比較レポート (`comparison/report.md`) や `trajectory_with_map.png` で実機と
+> 比較レポート (`comparison/report.md`) や `trajectory_playback.html` で実機と
 > シム軌跡がまったく違う場所にプロットされている場合、この UUID が誤っている
 > 可能性が高い。
 
@@ -136,7 +134,7 @@ Godot 実行時は `godot_executable` パスが必要。`params` は `simple_sen
 launch に渡り、description の simulator_model.param.yaml を上書きする。
 
 **DiffusionPlanner モデルの切り替え**（同一車両モデルで DP モデルだけ変えてモデル選定したい場合）:
-- `dp_model_release`: Web.Auto ML パッケージの release 名。指定すると Stage 3 が `webauto ml package-release`
+- `dp_model_release`: Web.Auto ML パッケージの release 名。指定すると Stage CL2 が `webauto ml package-release`
   で **search→pull して自動取得**し、そのモデルで走らせる（`.webauto-ci.yml` 編集不要）。
   `dp_model_package` は package 名（既定 `diffusion_planner_for_x2_exp`）。
 - `dp_model_dir`: 既にローカルに置いた DP モデルディレクトリ（`diffusion_planner.onnx` + `args.json`）を直接指定。
@@ -158,8 +156,8 @@ make local_cloud_run
 make -C src/simulator/driving_log_replayer_v2/driving_log_replayer_v2/driving_log_replayer_v2/real_log_sim_comparison local_cloud_run
 ```
 
-**解析だけ再実行する場合**（sim 実行済みの out/ を再利用し Stage 4〜11 のみ。
-解析コード変更後の作り直しが数分で済む）:
+**解析だけ再実行する場合**（sim 実行済みの out/ を再利用し解析ステージ
+（Stage OL1〜Report HTML）のみ。解析コード変更後の作り直しが数分で済む）:
 
 ```bash
 make local_analysis_run                                    # sample/out/latest を再解析
@@ -174,11 +172,11 @@ make local_analysis_run OUT_DIR=sample/out/<timestamp>     # 対象を指定
    - Stage 0: 実機 bag → lite/real.lite
    - Stage OL1: Conditions.cases の各 tag で step_ol1_analyze_nstep → nstep/<tag>/
    - Stage OL2: step_ol2_analyze_cases → cases/overlay/, cases_summary.md
-   - Stage OL3: step_ol3_sweep_params → comparison/param_sweep/ (パラメータ sweep 同定; 追加設定不要)
    - Stage CL1: step_cl1_bag_to_scenario → scenarios/auto_scenario.yaml
    - Stage CL2: Conditions.sim_runs の各 run で scenario_test_runner → lite/<tag>.lite
    - Stage CL3: step_cl3_compare_logs → comparison/figures/, report.md (real + sim 重ね描き)
-   - Stage CL4: step_cl4_compare_dp_trajectory → comparison/figures/dp_*.png (DP軌跡 real vs sim)
+   - Stage CL4: step_cl4_compare_dp_trajectory → comparison/figures/dp_*.fig.json (DP軌跡 real vs sim)
+   - Stage Report HTML: step_report_html → report.html (単一 HTML レポート)
 
 ### 4. 結果確認
 
@@ -194,15 +192,15 @@ sample/out/latest/
     │   └── <run_tag>.lite/*.mcap         # Stage CL2: Conditions.sim_runs の各 run
     │                                     #   (既定 normal / kus0020 / best_normal / taiga_dyn / taiga_x / perfect / godot)
     ├── scenarios/auto_scenario.yaml      # Stage CL1
+    ├── report.html                       # Stage Report HTML: 単一 HTML レポート
     └── comparison/
         ├── report.md                     # Stage CL3: 比較統計レポート
-        ├── figures/*.png                 # Stage CL3: 速度・操舵・軌跡, Stage CL4: dp_*.png
+        ├── figures/                      # Stage CL3: trajectory_playback.html, lon_lat_model.html / Stage CL4: dp_*.fig.json
         ├── nstep/
-        │   └── <case_tag>/{*.svg + map_distribution.html, nstep_delta.csv, summary.txt}  # Stage OL1
-        ├── cases/
-        │   ├── overlay/{cascade_error_overlay.png, error_timeseries_overlay.png}
-        │   └── cases_summary.md          # Stage OL2: N=1 RMSE + horizon 別 RMSE 横断表
-        └── param_sweep/{<param>_sweep.{csv,svg}, pair_*.{csv,svg}, param_sweep_derivation.md(§1 導出), param_sweep_summary.md(§2-§4 追認・整合)}  # Stage OL3
+        │   └── <case_tag>/{overview.fig.json, map_distribution.fig.json, nstep_delta.csv, summary.txt}  # Stage OL1
+        └── cases/
+            ├── overlay/{cascade_error_overlay.fig.json, error_growth_overlay.fig.json}
+            └── cases_summary.md          # Stage OL2: N=1 RMSE + horizon 別 RMSE 横断表
 ```
 
 ## 上書き可能な Makefile 変数
@@ -230,21 +228,21 @@ make local_cloud_run LOCAL_SCENARIO=/path/to/other_scenario.yaml
 | `cases に vehicle_model_type なし` | `cases` に挙げたモデルに `vehicle_model_type` が必要。open-loop クラス名を追加する |
 | `sim_runs に vehicle_model なし` | `sim_runs` に挙げたモデルに `vehicle_model` が必要。description パッケージ名を追加する |
 | `未対応の model_type` | `vehicle_model_type` は `delay_steer_acc_geared_wo_fall_guard` / `ideal_steer_acc` / `taiga_dyn` / `taiga_x` のみ。新規 model 追加は `vehicle_model_c_wrapper.cpp` への factory 追加が必要 |
-| Stage 3 (sim) が全 run 失敗 | scenario_test_runner が起動できているか、auto_scenario.yaml が valid か `ros2 launch scenario_test_runner scenario_test_runner.launch.py scenario:=<...auto_scenario.yaml>` を手動で試行 |
+| Stage CL2 (sim) が全 run 失敗 | scenario_test_runner が起動できているか、auto_scenario.yaml が valid か `ros2 launch scenario_test_runner scenario_test_runner.launch.py scenario:=<...auto_scenario.yaml>` を手動で試行 |
 | sim 1 run で 10 分以上かかる | `Conditions.models.<name>.timeout_s` を上げるか、`initialize_duration` を下げて確認 |
 
 ## 実機課題別 再現検証シナリオ
 
 各実機課題は**課題が観測された実機データセット（rosbag）にしか含まれない**ため、
 専用の scenario.yaml を使って個別に実行する方式を採る。可視化は既存の
-curve_config + step4/step10 の領域別解析を再利用し、新ステップは追加しない。
+closed-loop 比較解析（step_cl3_compare_logs）を再利用し、新ステップは追加しない。
 
 ### ① カーブ大回り（具体シナリオ・実行可能）
 
 **ファイル**: `sample/scenario_curve_wide_turn.yaml`（models/cases/sim_runs をインライン記述）
 
 **検証内容**:
-テレポート駅前交差点の左折（curve2: cx=89301, cy=43085）で、DiffusionPlanner の
+テレポート駅前交差点の左折（cx=89301, cy=43085 付近）で、DiffusionPlanner の
 3 モデル（0303/0503/0410）を比較して大回りの再現性を検証する。
 
 | run tag | 実機での挙動 | 検証軸 |
@@ -264,10 +262,9 @@ webauto data annotation-dataset pull --project-id x2_dev \
 make local_cloud_run LOCAL_SCENARIO=$(pwd)/sample/scenario_curve_wide_turn.yaml
 ```
 
-**結果の確認** — `report.html` の「4. シナリオ クローズループ比較」セクション:
-- `curve2_analysis`: 実機 vs 3 sim の軌跡ズーム（大回りの有無を目視）
-- `curve2_steering_detail` / `curve2_yaw_steer`: ステア角・yaw 差の時系列
-- `curve_diag/curve_divergence.md`: 縦/横乖離の定量値（横乖離が大きければ大回り）
+**結果の確認** — `report.html` の「4. 最終的な Closed Loop シミュレーション残差」セクション:
+- `figures/trajectory_playback.html`: 実機 vs 3 sim の軌跡重ね表示（大回りの有無を目視）
+- `report.md` / `metrics_closed_loop.json`: 軌跡乖離（s2r / r2s）の定量値（乖離が大きければ大回り）
 
 ---
 
@@ -276,32 +273,14 @@ make local_cloud_run LOCAL_SCENARIO=$(pwd)/sample/scenario_curve_wide_turn.yaml
 **ファイル**: `sample/scenario_issue_template.yaml`
 
 このファイルをコピーして `scenario_issue_<課題名>.yaml` にリネームし、
-**Dataset UUID** と **curve_config_yaml** を編集して使う。
+**Dataset UUID** を編集して使う。
 
-| 課題 | 停止→発進 | curve_config の設定 | 確認する図 |
-|---|---|---|---|
-| ②停止位置手前 | あり | `curve_centers` に停止線付近を定義 + `plot_curves.launch_window` | `curveN_analysis` + `curve_divergence.md` |
-| ③急ブレーキ/ジリジリ | あり | 同上 | `curveN_analysis`（accel パネル）+ `curve_divergence.md` |
-| ④加速不足 | なし | `curve_centers` に加速区間を定義（`launch_window` は省略可） | `curves_closeup`（軌跡ズーム）+ `velocity.fig.json` / `velocity_vs_distance.fig.json` |
-| ⑤発進停止振動 | なし | `curve_centers` に発進窓付近を定義（または空文字でスキップ） | `velocity.fig.json` / `acceleration.fig.json`（全軌跡 overlay） |
-
-**curve_config の例（停止線付近・②③用）**:
-```yaml
-curve_centers:
-  - {label: "停止線（A交差点）", cx: 89310, cy: 43035, margin: 20}
-curve2_index: 0
-curve2_window: {start: 20.0, end: 80.0}
-plot_curves:
-  - {index: 0, launch_window: {start: 20.0, end: 80.0}}
-```
-
-**curve_config の例（加速区間・④用）**:
-```yaml
-curve_centers:
-  - {label: "加速区間", cx: 89350, cy: 42980, margin: 50}
-# plot_curves に launch_window を指定しないと curves_closeup 軌跡ズームのみ生成。
-# 速度は全軌跡の velocity.fig.json で確認する。
-```
+| 課題 | 停止→発進 | 確認する成果物 |
+|---|---|---|
+| ②停止位置手前 | あり | `trajectory_playback.html`（位置同期モードで停止位置を比較） + `report.md` の軌跡乖離 |
+| ③急ブレーキ/ジリジリ | あり | 同上（時刻同期モードで加減速タイミングを比較） |
+| ④加速不足 | なし | `trajectory_playback.html`（凡例の v/t/s 読み出し） + `report.md` の速度統計 |
+| ⑤発進停止振動 | なし | 同上 + `lon_lat_model.html`（縦方向モデル検証） |
 
 **実行**:
 ```bash
@@ -324,9 +303,11 @@ make local_cloud_run LOCAL_SCENARIO=$(pwd)/sample/scenario_issue_<課題名>.yam
   `err_ds_lat` 差は小さい (1 step ≒ 17cm 程度の移動内ではモデル差が位置に
   大きく現れない)。ケース差は主に `err_steer` に表れる。
   長期軌跡の累積差は同じ `step_ol1.run_rollout` の N>1 が `nstep_delta.csv` /
-  `error_growth.svg` として出力し、Stage OL2 が `cases_summary.md` に横断集約する。
+  `overview.fig.json` として出力し、Stage OL2 が `cases_summary.md` に横断集約する。
 - **`overlay.reference_tag` は機能実装済み**: `cases_summary.md` の N=1 表に
   `Δsteer vs ref` 列、horizon 別横断表に `Δyaw vs ref` 列を出力する
   (`step_ol2_analyze_cases.py::write_cases_summary`)。
 - **k_us は N=1 では同定不可**: N=1 は k_us 非感度、`err_wz` は k_us=0 seeding
-  バイアスを含む。k_us 等の同定には Stage OL3 (`step_ol3_sweep_params`, 大 N rollout sweep) を使う。
+  バイアスを含む。k_us 等の同定には収集済み real.lite 群での横断ロバスト同定
+  （`multi_dataset_tune`、大 N rollout 探索。`make local_multidataset_run` /
+  `open_loop_tune`）を使う。

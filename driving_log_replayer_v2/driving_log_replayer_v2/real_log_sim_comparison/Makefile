@@ -1,6 +1,6 @@
 # real_log_sim_comparison use case 専用 Makefile。
 # 同ディレクトリ配下に Python module / evaluator_node / README / sample をすべて集約しており、
-# `make local_cloud_run` で 10 段階パイプライン (実機ログ抽出 → scenario 自動生成 →
+# `make local_cloud_run` で 9 段階パイプライン (実機ログ抽出 → scenario 自動生成 →
 # sim 実行 (sim_runs.yaml) → 比較解析 → N-step オープンループ → 集約) をワンコマンド実行する。
 
 SHELL := /bin/bash
@@ -43,13 +43,13 @@ help:
 	@echo "                      (scenario.yaml の Datasets[0] のみ。複数 dataset は local_batch_run。"
 	@echo "                       SKIP_SIM=1 で closed-loop sim を省略)"
 	@echo "  local_analysis_run  既存出力 (OUT_DIR; 既定 sample/out/latest) の sim 実行結果を再利用し、"
-	@echo "                      解析ステージ (Stage 4〜12) だけを再実行 (解析コード変更後の作り直し用)"
+	@echo "                      解析ステージ (Stage OL1〜Report HTML) だけを再実行 (解析コード変更後の作り直し用)"
 	@echo "  local_batch_run     scenario.yaml の Datasets 全 UUID を順次ローカル実行し、収集 +"
-	@echo "                      横断分析 (Stage 13) + マルチ DS report.html まで実行"
+	@echo "                      横断分析 (Stage Cross Dataset) + マルチ DS report.html まで実行"
 	@echo "                      (BATCH_ROOT 既定 sample/out/batch_<ts>; RESUME=1 で再開;"
 	@echo "                       SKIP_SIM=1 で closed-loop sim を省略し open-loop 解析のみ)"
 	@echo "  local_cross_analysis_run  既存 collection (COLLECTION_DIR; 既定 sample/out/batch_latest) の"
-	@echo "                      横断分析 (Stage 13) + マルチ DS report.html だけを再実行"
+	@echo "                      横断分析 (Stage Cross Dataset) + マルチ DS report.html だけを再実行"
 	@echo "  local_multidataset_run  収集済み複数 real.lite (COLLECTION_DIR) で open-loop ロバスト同定"
 	@echo "                      (multi_dataset_tune robust_search)"
 	@echo ""
@@ -136,7 +136,7 @@ local_analysis_run:
 	        --map-osm "$$map_osm"
 
 # scenario.yaml の Datasets 全 UUID を順次ローカル実行するバッチ。各 dataset の per-dataset
-# パイプライン (Stage 1〜12) → collect_datasets 収集 → Stage 13 横断分析 → マルチ DS
+# パイプライン (Stage 0〜Report HTML) → collect_datasets 収集 → Stage Cross Dataset 横断分析 → マルチ DS
 # report.html まで一気通貫。失敗 dataset は WARN + collection.yaml に status 記録して継続。
 # RESUME=1 で real.lite が揃っている dataset の sim 実行をスキップ (中断再開用)。
 # SKIP_SIM=1 で Stage 3 (closed-loop sim 実行) を全 dataset で省略する。closed-loop 比較が
@@ -245,7 +245,7 @@ local_batch_run:
 	        $(if $(SKIP_SIM),--skip-sim,)
 
 # 既存 collection (local_batch_run の出力 or collect_datasets.py の手収集) の横断分析だけを
-# 再実行する (Stage 13 + マルチ DS report.html)。per-dataset の sim/解析はスキップするため、
+# 再実行する (Stage Cross Dataset + マルチ DS report.html)。per-dataset の sim/解析はスキップするため、
 # 横断分析コードの変更を数秒で結果に反映できる (local_analysis_run の横断版)。
 COLLECTION_DIR ?= $(LOCAL_SAMPLE_DIR)/out/batch_latest
 
@@ -289,9 +289,7 @@ local_multidataset_run:
 #       TEMPLATE=$(pwd)/sample/scenario_issue_rotary_left.yaml
 #
 # 完了後:
-#   1. python3 tools/suggest_curve_centers.py --bag work/dataset/<uuid>/input_bag
-#      → 出力の cx/cy を sample/curve_config_*.yaml に記入する
-#   2. make local_cloud_run WEBAUTO_T4_ROOT=$(pwd)/work/dataset LOCAL_SCENARIO=work/scenario_<uuid>.yaml
+#   make local_cloud_run WEBAUTO_T4_ROOT=$(pwd)/work/dataset LOCAL_SCENARIO=work/scenario_<uuid>.yaml
 
 ROSBAG_ID ?=
 TEMPLATE  ?= $(LOCAL_SAMPLE_DIR)/scenario.yaml
@@ -315,9 +313,7 @@ issue_scenario:
 	    $(if $(END),--end "$(END)",)
 	@echo ""
 	@echo "[INFO] 次のステップ:"
-	@echo "  1. python3 tools/suggest_curve_centers.py --bag $(WORK_DIR)/dataset/<uuid>/input_bag"
-	@echo "     → 出力の cx/cy を sample/curve_config_*.yaml に記入する"
-	@echo "  2. make local_cloud_run WEBAUTO_T4_ROOT=\$$(pwd)/$(WORK_DIR)/dataset LOCAL_SCENARIO=$(WORK_DIR)/scenario_<uuid>.yaml"
+	@echo "  make local_cloud_run WEBAUTO_T4_ROOT=\$$(pwd)/$(WORK_DIR)/dataset LOCAL_SCENARIO=$(WORK_DIR)/scenario_<uuid>.yaml"
 
 # ------ open-loop: J6 #15号車の生rosbag 収集 & モデル磨き上げ ------
 # 軽量/重量の二経路で open-loop 専用の評価・同定フローを提供する。
@@ -329,8 +325,8 @@ issue_scenario:
 #     「できるだけ多く」の bag でモデルを磨き上げるメインルート。
 #
 #   重量ループ (subset 精査): collect_raw_rosbags → open_loop_batch
-#     厳選した数本〜数十本のみ full launch (SKIP_SIM=1) + step13 + 集約レポート。
-#     step5/6/7 の per-bag 詳細解析・検証ビューアが欲しい時に使う。
+#     厳選した数本〜数十本のみ full launch (SKIP_SIM=1) + step_cross_dataset + 集約レポート。
+#     OL1/OL2 の per-bag 詳細解析・検証ビューアが欲しい時に使う。
 
 # J6 #15 号車の vehicle_id (デフォルト)
 VEHICLE_ID ?= e14508f0-5cc8-410c-886b-23aea4a8d5d8

@@ -98,7 +98,7 @@ Evaluation:
         # dp_model_package: diffusion_planner_for_x2_exp   # 既定。別 package のときのみ指定 (§7)
 ```
 
-`dp_model_release` を指定すると Stage 3 が `webauto ml package-release` で **search → pull** して自動取得し、
+`dp_model_release` を指定すると Stage CL2 が `webauto ml package-release` で **search → pull** して自動取得し、
 そのモデルで走らせる。解決ロジックは `_resolve_dp_model_dir`（§3.3）。
 
 ### 2.3 方式 B: ローカル既存ディレクトリを直接指定
@@ -241,7 +241,7 @@ grep onnx_model_path "$(ros2 pkg prefix autoware_launch --share)/config/planning
   `autoware_version` と、step_cl2 が渡す `tag` / `vehicle_model` / `dp_model_dir` / `dp_model_release` 等。
 - `format_provenance_line` @ `lib/_provenance.py` が `DP=<exp> (onnx <sha8>) / autoware <ver>` の 1 行に整形し、
   比較プロット・`report.md` / `report.html` にモデル識別を掲載する。
-- 軌跡 overlay（Stage 4）・DP 軌跡比較（Stage 8）・`report.html` は **tag（モデル名）単位**の N-way 比較の
+- 軌跡比較（Stage CL3）・DP 軌跡比較（Stage CL4）・`report.html` は **tag（モデル名）単位**の N-way 比較の
   ため、`dp_model_*` を変えた run も追加実装なしで重ね描き・比較できる。
 
 > provenance は「意図」の記録であり、**実ロードの証明には必要だが十分でない**。実際にそのモデルが
