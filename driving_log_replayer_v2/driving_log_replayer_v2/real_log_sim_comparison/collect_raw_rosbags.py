@@ -481,7 +481,11 @@ def collect(
                 rec = fut.result()
                 records.append(rec)
                 status_label = "SKIP" if rec.get("status") == "already_exists" else "OK" if rec.get("status") == "success" else "FAILED"
-                print(f"[{i}/{len(selected)}] {status_label}: {rosbag_id[:8]} (status={rec.get('status')})", flush=True)
+                if status_label in ["SKIP", "OK"]:
+                    if i % 10 == 0 or i == len(selected):
+                        print(f"[{i}/{len(selected)}] {status_label}: {rosbag_id[:8]} (status={rec.get('status')})", flush=True)
+                else:
+                    print(f"[{i}/{len(selected)}] {status_label}: {rosbag_id[:8]} (status={rec.get('status')})", flush=True)
             except Exception as e:
                 print(f"[{i}/{len(selected)}] ERROR: {rosbag_id[:8]} ({e})", file=sys.stderr, flush=True)
                 records.append({

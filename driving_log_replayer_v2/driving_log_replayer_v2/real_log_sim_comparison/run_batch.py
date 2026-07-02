@@ -427,7 +427,8 @@ def main() -> None:
                 if rec.get("status") in ["success", "skipped", "analysis_failed"]:
                     n_ok += 1
                     status_label = "SKIP" if rec.get("status") == "skipped" else "OK"
-                    print(f"[{i}/{n_total}] {status_label}: {uuid[:8]} 収集完了 ({', '.join(rec.get('linked', []))})", flush=True)
+                    if i % 10 == 0 or i == n_total:
+                        print(f"[{i}/{n_total}] {status_label}: {uuid[:8]} 収集完了 ({', '.join(rec.get('linked', []))})", flush=True)
                 else:
                     print(f"[{i}/{n_total}] FAILED: {uuid[:8]} (status={rec.get('status')})", flush=True)
             except Exception as e:
