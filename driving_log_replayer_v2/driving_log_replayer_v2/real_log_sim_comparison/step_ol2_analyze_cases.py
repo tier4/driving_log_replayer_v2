@@ -72,7 +72,6 @@ from .lib._physical_validity import (
     compute_steer_timeseries,
     fit_long_single,
     fit_steer_single,
-    physical_validity_jsonable,
 )
 
 VERBOSE = False
@@ -268,7 +267,6 @@ def write_cases_metrics(
         cases_cfg,
         horizons,
         physical_validity,
-        physical_validity_jsonable=physical_validity_jsonable,
     )
     out_path.write_text(
         json.dumps(payload, ensure_ascii=False, allow_nan=False, indent=1), encoding="utf-8"
