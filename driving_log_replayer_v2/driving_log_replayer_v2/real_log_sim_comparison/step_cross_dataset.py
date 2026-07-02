@@ -43,6 +43,7 @@ LOO も O(D²·C) の再集計で済む。
 from __future__ import annotations
 
 import argparse
+from collections import Counter
 import math
 from pathlib import Path
 import sys
@@ -71,6 +72,7 @@ from .lib._figures import (
     build_fig_long_perf_growth,
     build_fig_long_perf_map,
 )
+from .lib._multi_agg import HORIZONS
 from .lib._cross_dataset import (
     build_closed_loop_matrix,
     build_open_loop_matrix,

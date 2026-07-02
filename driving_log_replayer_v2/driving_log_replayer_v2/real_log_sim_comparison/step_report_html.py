@@ -184,6 +184,44 @@ def _caption_for(stem: str) -> str:
     return stem.replace("_", " ")
 
 
+def _classify(rel: Path) -> str:
+    """比較アセットの相対パスを概念セクションキーへ分類する。"""
+    top = rel.parts[0] if len(rel.parts) > 1 else "."
+    stem = asset_stem(rel)
+
+    if stem.startswith("dp_"):
+        return "other"
+
+    if stem in {"cross_perfect_tracking_box", "cross_perfect_tracking_traj"}:
+        return "pre_estimation_deviation"
+
+    if stem in {
+        "cross_physical_validity_kus",
+        "cross_physical_validity_long",
+        "cross_physical_validity_steer",
+        "lon_lat_model",
+    }:
+        return "parameter_estimation"
+
+    if stem in {"cross_long_perf_box", "cross_long_perf_growth", "cross_long_perf_map"}:
+        return "post_estimation_residual"
+    if top in {"nstep", "cases"}:
+        return "post_estimation_residual"
+
+    if stem in _CLOSED_LOOP_STEMS:
+        return "closed_loop_comparison"
+    if stem in {
+        "cross_closed_loop_heatmap",
+        "cross_normalized_bars",
+        "coverage_overview",
+        "loo_stability",
+        "steer_diff_overview",
+    }:
+        return "closed_loop_comparison"
+
+    return "other"
+
+
 _STYLE = """
 :root { --fg:#1a1a1a; --muted:#666; --border:#ddd; --accent:#2563eb; --bg:#fff; }
 * { box-sizing: border-box; }
