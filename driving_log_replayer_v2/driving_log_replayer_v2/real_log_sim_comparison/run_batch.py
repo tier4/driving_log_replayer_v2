@@ -39,6 +39,14 @@ _PKG = "driving_log_replayer_v2.real_log_sim_comparison"
 _DEFAULT_WEBAUTO_ROOT = Path.home() / ".webauto" / "data" / "data" / "annotation_dataset"
 
 
+def _remove_path(path: Path) -> None:
+    import shutil
+    if path.is_symlink() or path.is_file():
+        path.unlink()
+    elif path.is_dir():
+        shutil.rmtree(path)
+
+
 def _run_and_collect_worker(args: dict) -> dict:
     uuid = args["uuid"]
     scenario = Path(args["scenario"])
@@ -52,9 +60,8 @@ def _run_and_collect_worker(args: dict) -> dict:
     output_dir = batch_root / "runs" / uuid
     status = "success"
 
-    if resume and _bundle_has_real_lite(output_dir):
-        status = "skipped"
-    else:
+    if skip_sim and skip_ol:
+        # Specialized direct python extraction (bypass ROS 2 launch)
         if input_mode == "raw":
             t4_path = Path(args["raw_t4_path"])
             scenario_single = batch_root / "scenarios" / f"{uuid}.scenario.yaml"
@@ -68,13 +75,92 @@ def _run_and_collect_worker(args: dict) -> dict:
             scenario_single = batch_root / "scenarios" / f"{uuid}.scenario.yaml"
             write_single_dataset_scenario(scenario, uuid, scenario_single)
 
-        ok = run_one_dataset(
-            uuid, scenario_single, t4_path, output_dir,
-            skip_sim=skip_sim, skip_ol=skip_ol
-        )
-        if not ok and not _bundle_has_real_lite(output_dir):
-            now_str = datetime.now(timezone.utc).isoformat(timespec="seconds")
-            return {"dataset_id": uuid, "status": "sim_failed", "collected_at": now_str}
+        lite_dir = output_dir / "lite"
+        lite_dir.mkdir(parents=True, exist_ok=True)
+
+        existing_lite = resolve_lite_bag(t4_path, "real")
+        if resume and _bundle_has_real_lite(output_dir):
+            status = "skipped"
+        elif existing_lite is not None:
+            existing_lite = existing_lite.resolve()
+            dst_lite = lite_dir / existing_lite.name
+            if dst_lite.exists() or dst_lite.is_symlink():
+                _remove_path(dst_lite)
+            dst_lite.symlink_to(existing_lite)
+            status = "skipped"
+        else:
+            is_writable = False
+            test_file = t4_path / ".write_test"
+            try:
+                test_file.touch()
+                test_file.unlink()
+                is_writable = True
+            except OSError:
+                pass
+
+            if is_writable:
+                target_lite = t4_path / "real.lite"
+            else:
+                target_lite = lite_dir / "real.lite"
+
+            if target_lite.exists() or target_lite.is_symlink():
+                _remove_path(target_lite)
+
+            input_bag_dir = t4_path / "input_bag"
+            target_lite.parent.mkdir(parents=True, exist_ok=True)
+
+            cmd = [
+                sys.executable, "-m",
+                "driving_log_replayer_v2.real_log_sim_comparison.step0_make_lite",
+                "--kind", "real",
+                "--input", str(input_bag_dir),
+                "--output", str(target_lite),
+            ]
+            print(f"[DIRECT EXTRACT] {uuid[:8]}: {' '.join(cmd)}", flush=True)
+            try:
+                proc = subprocess.run(cmd, check=False, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
+                if proc.returncode != 0:
+                    print(f"[ERROR] Direct extraction failed for {uuid}:\n{proc.stdout}", file=sys.stderr)
+                    now_str = datetime.now(timezone.utc).isoformat(timespec="seconds")
+                    return {"dataset_id": uuid, "status": "sim_failed", "collected_at": now_str}
+            except Exception as e:
+                print(f"[ERROR] Direct extraction failed for {uuid}: {e}", file=sys.stderr)
+                now_str = datetime.now(timezone.utc).isoformat(timespec="seconds")
+                return {"dataset_id": uuid, "status": "sim_failed", "collected_at": now_str}
+
+            if is_writable:
+                dst_lite = lite_dir / "real.lite"
+                if dst_lite.exists() or dst_lite.is_symlink():
+                    _remove_path(dst_lite)
+                dst_lite.symlink_to(target_lite)
+
+        output_dir.mkdir(parents=True, exist_ok=True)
+        (output_dir / "dataset_id.txt").write_text(uuid, encoding="utf-8")
+
+    else:
+        if resume and _bundle_has_real_lite(output_dir):
+            status = "skipped"
+        else:
+            if input_mode == "raw":
+                t4_path = Path(args["raw_t4_path"])
+                scenario_single = batch_root / "scenarios" / f"{uuid}.scenario.yaml"
+                write_raw_dataset_scenario(scenario, uuid, scenario_single)
+            else:
+                try:
+                    t4_path = resolve_t4_dataset_path(webauto_root, uuid)
+                except Exception as e:
+                    now_str = datetime.now(timezone.utc).isoformat(timespec="seconds")
+                    return {"dataset_id": uuid, "status": "collect_failed", "collected_at": now_str}
+                scenario_single = batch_root / "scenarios" / f"{uuid}.scenario.yaml"
+                write_single_dataset_scenario(scenario, uuid, scenario_single)
+
+            ok = run_one_dataset(
+                uuid, scenario_single, t4_path, output_dir,
+                skip_sim=skip_sim, skip_ol=skip_ol
+            )
+            if not ok and not _bundle_has_real_lite(output_dir):
+                now_str = datetime.now(timezone.utc).isoformat(timespec="seconds")
+                return {"dataset_id": uuid, "status": "sim_failed", "collected_at": now_str}
 
     try:
         bundle = _resolve_bundle(output_dir)

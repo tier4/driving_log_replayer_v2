@@ -107,7 +107,11 @@ def collect_bundle(bundle: Path, dataset_id: str, collection_dir: Path) -> dict:
         raise FileNotFoundError(f"real.lite が見つかりません: {bundle / 'lite'}")
     dst_dir = collection_dir / "datasets" / dataset_id
     dst_dir.mkdir(parents=True, exist_ok=True)
-    _relink(dst_dir / real.name, real)  # real.lite または real.lite.mcap
+    dst_lite = dst_dir / real.name
+    if dst_lite.exists() and real.exists() and dst_lite.resolve() == real.resolve():
+        pass
+    else:
+        _relink(dst_lite, real)
     linked = [real.name]
     for name in ("comparison", "scenarios"):
         src = bundle / name
