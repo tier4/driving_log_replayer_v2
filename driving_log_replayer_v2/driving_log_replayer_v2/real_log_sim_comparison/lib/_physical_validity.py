@@ -1084,3 +1084,33 @@ def compute_perfect_tracking_data(
     }
 
 
+def physical_validity_jsonable(pv: dict | None) -> dict | None:
+    """physical_validity を cases/cross metrics JSON に埋め込める形へ変換する。
+
+    kus_bins は十分統計量のみを残す。step13 の横断集約はこの情報から再構成でき、
+    生サンプルの再読込を不要にする。
+    """
+    if pv is None:
+        return None
+
+    def _finite_or_none(x) -> float | None:
+        xf = float(x)
+        return xf if np.isfinite(xf) else None
+
+    def _fit(fit: dict | None) -> dict | None:
+        if fit is None:
+            return None
+        return {k: (_finite_or_none(v) if isinstance(v, float) else v) for k, v in fit.items()}
+
+    kus_bins = pv.get("kus_bins")
+    kus_bins_json = None
+    if kus_bins is not None:
+        kus_bins_json = {
+            "vx_mid": [_finite_or_none(v) for v in kus_bins["vx_mid"]],
+            "n_pts": [int(v) for v in kus_bins["n_pts"]],
+            "sum_wz2": [_finite_or_none(v) for v in kus_bins["sum_wz2"]],
+            "sum_wz_ts": [_finite_or_none(v) for v in kus_bins["sum_wz_ts"]],
+        }
+
+    return {"long": _fit(pv.get("long")), "steer": _fit(pv.get("steer")), "kus_bins": kus_bins_json}
+

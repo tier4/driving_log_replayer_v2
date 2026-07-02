@@ -57,11 +57,13 @@ from .lib._figures import (
 )
 from .lib._io import resolve_lite_bag
 from .lib._nstep_common import (
-    ERR_METRICS,
-    YAW_SEED_NOTE,
     common_horizons,
+    build_cases_metrics_payload,
+    horizon_summary_lines,
+    load_case_csvs,
     metrics_description_md,
     n1,
+    n1_summary_lines,
     rmse_by_horizon,
 )
 from .lib._physical_validity import (
@@ -70,24 +72,10 @@ from .lib._physical_validity import (
     compute_steer_timeseries,
     fit_long_single,
     fit_steer_single,
+    physical_validity_jsonable,
 )
 
 VERBOSE = False
-
-def _load_case_csvs(nstep_root: Path, tags: list[str]) -> dict[str, pd.DataFrame]:
-    """nstep/<tag>/nstep_delta.csv (Stage 3 出力) を全 tag 分読み込む。欠損 tag はスキップ。"""
-    out: dict[str, pd.DataFrame] = {}
-    for tag in tags:
-        csv = nstep_root / tag / "nstep_delta.csv"
-        if not csv.exists():
-            if VERBOSE:
-                print(f"[WARN] {csv} が無いため case={tag} をスキップ", file=sys.stderr)
-            continue
-        df = pd.read_csv(csv)
-        if df.empty:
-            continue
-        out[tag] = df
-    return out
 
 
 def rerender_case_figures(
@@ -165,56 +153,6 @@ def write_physical_validity_figures(pv: dict | None, real_lite: Path | None, out
     write_fig_json(build_fig_kus_single(pv.get("kus_bins"), models), out_dir / "kus_bins")
 
 
-def _finite_or_none(x) -> float | None:
-    xf = float(x)
-    return xf if math.isfinite(xf) else None
-
-
-def _rms(values) -> float:
-    """NaN を無視して RMS を返す。"""
-    arr = np.asarray(values, dtype=float)
-    return float(np.sqrt(np.nanmean(arr * arr)))
-
-
-def _n1_case_metrics(df: pd.DataFrame) -> dict[str, float]:
-    """N=1 のケース別 RMSE を集計する。"""
-    df1 = n1(df)
-    return {
-        "steer": _rms(df1["err_steer"].values) * (180.0 / math.pi),
-        "long": _rms(df1["err_ds_long"].values) * 100.0,
-        "lat": _rms(df1["err_ds_lat"].values) * 100.0,
-        "n": float(len(df1)),
-    }
-
-
-def _physical_validity_jsonable(pv: dict | None) -> dict | None:
-    """physical_validity dict を cases_metrics.json に埋め込める JSON 安全な形へ変換する。
-
-    kus_bins は IQR (p25/p75) を含まない十分統計量 (vx_mid/n_pts/sum_wz2/sum_wz_ts) のみを
-    残す — step13 横断集約が生サンプル再読込なしに加算プールできる形 (compute_kus_bins_from
-    _sufficient_stats 参照)。IQR は個別データセットの図描画時にのみ使う (json 化しない)。
-    """
-    if pv is None:
-        return None
-
-    def _fit(fit: dict | None) -> dict | None:
-        if fit is None:
-            return None
-        return {k: (_finite_or_none(v) if isinstance(v, float) else v) for k, v in fit.items()}
-
-    kus_bins = pv.get("kus_bins")
-    kus_bins_json = None
-    if kus_bins is not None:
-        kus_bins_json = {
-            "vx_mid": [_finite_or_none(v) for v in kus_bins["vx_mid"]],
-            "n_pts": [int(v) for v in kus_bins["n_pts"]],
-            "sum_wz2": [_finite_or_none(v) for v in kus_bins["sum_wz2"]],
-            "sum_wz_ts": [_finite_or_none(v) for v in kus_bins["sum_wz_ts"]],
-        }
-
-    return {"long": _fit(pv.get("long")), "steer": _fit(pv.get("steer")), "kus_bins": kus_bins_json}
-
-
 def _physical_validity_summary_lines(pv: dict | None) -> list[str]:
     """cases_summary.md に追記する物理妥当性検証セクションの Markdown 行。"""
     lines = ["## 物理妥当性検証 (実測同定 vs チューニング値)\n"]
@@ -259,94 +197,6 @@ def _physical_validity_summary_lines(pv: dict | None) -> list[str]:
     return lines
 
 
-def _n1_summary_lines(
-    case_dfs: dict[str, pd.DataFrame],
-    cases_cfg,
-) -> list[str]:
-    """N=1 のケース横断 RMSE 表を Markdown 行にする。"""
-    ps: dict[str, dict[str, float]] = {tag: _n1_case_metrics(df) for tag, df in case_dfs.items()}
-    ref_tag = cases_cfg.overlay.reference_tag
-    ref_steer = ps.get(ref_tag, {}).get("steer") if ref_tag else None
-
-    lines: list[str] = ["## N=1 (毎ステップリセット) RMSE\n"]
-    lines.append(
-        "| tag | vehicle_model | n_steps | RMSE err_steer [deg] | Δsteer vs ref [deg] | "
-        "RMSE err_ds_long [cm] | RMSE err_ds_lat [cm] | note |"
-    )
-    lines.append("|---|---|---:|---:|---:|---:|---:|---|")
-    for case in cases_cfg.cases:
-        if case.tag not in ps:
-            lines.append(f"| {case.tag} | {case.vehicle_model_type} | — | — | — | — | — | 出力欠損 |")
-            continue
-        d = ps[case.tag]
-        if case.tag == ref_tag:
-            delta = "基準"
-        elif ref_steer is not None:
-            delta = f"{d['steer'] - ref_steer:+.4f}"
-        else:
-            delta = "—"
-        lines.append(
-            f"| {case.tag} | {case.vehicle_model_type} | {int(d['n'])} | "
-            f"{d['steer']:.4f} | {delta} | {d['long']:.3f} | {d['lat']:.3f} |  |"
-        )
-    lines.append("")
-    lines.append(
-        "> N=1 は毎ステップ実機状態にリセットするため、k_us/wheelbase の累積差は "
-        "位置 RMSE にほぼ現れない。dynamics 差は下記 horizon 別 RMSE 表を参照。"
-    )
-    lines.append("")
-    return lines
-
-
-def _horizon_summary_lines(
-    roll: dict[str, dict[int, dict[str, float]]],
-    cases_cfg,
-) -> list[str]:
-    """horizon 別の終端誤差 RMSE 表を Markdown 行にする。"""
-    roll = {t: r for t, r in roll.items() if r}
-    if not roll:
-        return []
-
-    horizons = common_horizons(r.keys() for r in roll.values())
-    ref_tag = cases_cfg.overlay.reference_tag
-    ref_roll = roll.get(ref_tag) if horizons else None
-
-    lines: list[str] = ["## horizon 別 終端誤差 RMSE (free-running, ケース横断)\n"]
-    head = (
-        "| tag |"
-        + "".join(f" 縦@N{h}[cm] |" for h in horizons)
-        + "".join(f" 横@N{h}[cm] |" for h in horizons)
-        + "".join(f" yaw@N{h}[deg] |" for h in horizons)
-    )
-    if ref_roll:
-        head += f" Δyaw@N{horizons[-1]} vs ref [deg] |"
-    lines.append(head)
-    lines.append("|---|" + "---:|" * (len(horizons) * 3 + (1 if ref_roll else 0)))
-    for case in cases_cfg.cases:
-        r = roll.get(case.tag)
-        if not r:
-            continue
-        row = f"| {case.tag} |"
-        row += "".join(f" {r[h]['long']:.2f} |" for h in horizons)
-        row += "".join(f" {r[h]['lat']:.2f} |" for h in horizons)
-        row += "".join(f" {r[h]['yaw']:.3f} |" for h in horizons)
-        if ref_roll:
-            hl = horizons[-1]
-            if case.tag == ref_tag:
-                row += " 基準 |"
-            else:
-                row += f" {r[hl]['yaw'] - ref_roll[hl]['yaw']:+.3f} |"
-        lines.append(row)
-    lines.append("")
-    lines.append(
-        "> N ステップ連続予測 (途中リセット無し) の終端誤差。N を増やすほど dynamics 差が "
-        "累積し、k_us/wheelbase の効果が分離する (パラメータ同定の指標)。"
-        "小 N の yaw RMSE は seed (k_us=0 bicycle 逆算) 由来のバイアスを含む点に注意。"
-    )
-    lines.append("")
-    return lines
-
-
 def plot_cascade_error_overlay(
     case_dfs: dict[str, pd.DataFrame], out_path: Path
 ) -> None:
@@ -385,40 +235,13 @@ def write_cases_summary(
     lines.append("")
     lines.append(metrics_description_md())
     lines.append("")
-    lines += _n1_summary_lines(case_dfs, cases_cfg)
-    lines += _horizon_summary_lines(roll, cases_cfg)
+    lines += n1_summary_lines(case_dfs, cases_cfg)
+    lines += horizon_summary_lines(roll, cases_cfg)
     lines += _physical_validity_summary_lines(physical_validity)
 
     out_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
     if VERBOSE:
         print(f"  Saved: {out_path}")
-
-
-def _build_cases_metrics_payload(
-    case_dfs: dict[str, pd.DataFrame],
-    roll: dict[str, dict[int, dict[str, float]]],
-    cases_cfg,
-    horizons: list[int],
-    physical_validity: dict | None,
-) -> dict:
-    """cases_metrics.json の payload を構築する。"""
-    cases: dict[str, dict] = {}
-    for case in cases_cfg.cases:
-        r = roll.get(case.tag)
-        if not r:
-            continue
-        cases[case.tag] = {
-            "vehicle_model": case.vehicle_model_type,
-            "n_steps_n1": int(len(n1(case_dfs[case.tag]))),
-            "by_h": {str(h): {k: _finite_or_none(v) for k, v in m.items()} for h, m in r.items()},
-        }
-    return {
-        "schema_version": 1,
-        "reference_tag": cases_cfg.overlay.reference_tag,
-        "horizons": [int(h) for h in horizons],
-        "cases": cases,
-        "physical_validity": _physical_validity_jsonable(physical_validity),
-    }
 
 
 def write_cases_metrics(
@@ -436,9 +259,17 @@ def write_cases_metrics(
     reference_tag / horizons を含めることで step13 が DS 間の評価条件整合を検査できる。
 
     "physical_validity" キーは Conditions.cases の N-way スイープ ("cases" キー) とは独立に
-    追加する物理妥当性検証の機械可読 SSOT (schema は _physical_validity_jsonable 参照)。
+    追加する物理妥当性検証の機械可読 SSOT (schema は lib._physical_validity の
+    physical_validity_jsonable 参照)。
     """
-    payload = _build_cases_metrics_payload(case_dfs, roll, cases_cfg, horizons, physical_validity)
+    payload = build_cases_metrics_payload(
+        case_dfs,
+        roll,
+        cases_cfg,
+        horizons,
+        physical_validity,
+        physical_validity_jsonable=physical_validity_jsonable,
+    )
     out_path.write_text(
         json.dumps(payload, ensure_ascii=False, allow_nan=False, indent=1), encoding="utf-8"
     )
@@ -491,7 +322,7 @@ def main() -> None:
     overlay_dir = out_root / "overlay"
     overlay_dir.mkdir(parents=True, exist_ok=True)
 
-    case_dfs = _load_case_csvs(nstep_root, cases_cfg.tags)
+    case_dfs = load_case_csvs(nstep_root, cases_cfg.tags, verbose=VERBOSE)
     if not case_dfs:
         print("ERROR: 全 case の CSV が見つかりません。Stage 3 が成功したか確認してください",
               file=sys.stderr)
