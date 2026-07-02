@@ -85,10 +85,10 @@ from driving_log_replayer_v2.real_log_sim_comparison.lib._physical_validity impo
 
 _H_SPAN = {10: "≈0.33 s", 20: "≈0.67 s", 30: "≈1.0 s", 40: "≈1.33 s"}
 
-# 1-1/1-4. 理想追従評価に使うデータセット数（レポート固有。ホライズン・stride の SSOT は
+# 1-2/1-5. 理想追従評価に使うデータセット数（レポート固有。ホライズン・stride の SSOT は
 # lib._physical_validity の _PERF_HORIZONS / _PERF_STRIDE を import して使う）
-_PERF_N_DATASET = 10                                   # 1-4 横方向 box plot 用 データセット数
-_LONG_PERF_N_DATASET = 20                                   # 1-1 縦方向理想追従 box plot 用 データセット数
+_PERF_N_DATASET = 10                                   # 1-5 横方向 box plot 用 データセット数
+_LONG_PERF_N_DATASET = 20                                   # 1-2 縦方向理想追従 box plot 用 データセット数
 
 
 def _to_entries(ds_list: list) -> list[DatasetEntry]:
@@ -531,6 +531,11 @@ def _build_sec1(
     beta  = _fmt(params.get("steer_bias", "N/A"))
     db    = _fmt(params.get("steer_dead_band", "N/A"))
     rlim  = _fmt(params.get("steer_rate_lim", "N/A"))
+    n_substep = _fmt(params.get("n_substep", 1))
+    tau_brake = _fmt(params.get("brake_time_constant", 0.0))
+    drag_c0 = _fmt(params.get("lon_drag_c0", 0.0))
+    drag_c1 = _fmt(params.get("lon_drag_c1", 0.0))
+    drag_c2 = _fmt(params.get("lon_drag_c2", 0.0))
 
     _long_html_inner  = long_fig.to_html(full_html=False, include_plotlyjs=False)
     _steer_html_inner = steer_fig.to_html(full_html=False, include_plotlyjs=False)
@@ -550,8 +555,8 @@ def _build_sec1(
             "残る縦方向変位誤差を評価する。<br>"
             "各開始点で \\(v_{x,\\mathrm{sim}}(t_0) = v_{x,\\mathrm{real}}(t_0)\\) に初期化し、"
             "実測加速度 \\(a_{\\mathrm{act}}\\) を直接積分して変位を計算、実車変位と比較する。</p>"
-            "<p>1-4 横方向評価との対称性: "
-            "1-4 では <i>gt_steer</i> を bicycle model に直接入力して steer 完全追従時の横方向残差を評価する。"
+            "<p>1-5 横方向評価との対称性: "
+            "1-5 では <i>gt_steer</i> を bicycle model に直接入力して steer 完全追従時の横方向残差を評価する。"
             "本評価では <i>gt_a_act</i> を積分器に直接入力して acc 完全追従時の縦方向残差を評価する。</p>"
             "<div class=\"note\">"
             "&#9888;&#65039; <b>残差の解釈</b>: \\(\\dot{v}_x = a_{\\mathrm{act}}\\) という運動方程式に含まれない"
@@ -595,8 +600,124 @@ def _build_sec1(
 </table>
 </section>
 
+<section id="sec-state-space">
+<h2>1-1. 状態空間モデルと数値積分（Euler 法によるアップデート）</h2>
+<p>
+以降の 1-2（縦方向）・1-3（操舵）・1-4（ヨー・横方向）は、それぞれ独立に同定できるブロックとして
+運動方程式を提示しているが、実装（シミュレータ本体の車両モデル <code>calcModel</code> / <code>update</code>）は
+これらを一つの状態ベクトルとしてまとめ、\\(\\dot{{x}} = f(x, u)\\) という統一した状態方程式を
+共通の Euler 積分ループで毎ステップ時間発展させている。本節ではその全体像と、実際に実行される
+離散化アップデート処理を、実装の状態空間表現に沿って示す。
+</p>
+
+<h3>状態ベクトルと入力ベクトル</h3>
+<p>
+シミュレータの状態ベクトルは以下の 7 要素だが、そのうち連続時間の運動方程式（ODE）で積分されるのは
+\\(x, y, \\theta, v_x, \\delta_{{\\mathrm{{act}}}}, a_{{\\mathrm{{act}}}}\\) の 6 状態のみである。
+</p>
+<table class="param-table">
+  <tr><th>状態</th><th>記号</th><th>意味</th><th>ODE 積分</th></tr>
+  <tr><td><code>IDX::X</code></td><td>\\(x\\)</td><td>地図平面上の位置 x</td><td>する</td></tr>
+  <tr><td><code>IDX::Y</code></td><td>\\(y\\)</td><td>地図平面上の位置 y</td><td>する</td></tr>
+  <tr><td><code>IDX::YAW</code></td><td>\\(\\theta\\)</td><td>ヨー角</td><td>する</td></tr>
+  <tr><td><code>IDX::VX</code></td><td>\\(v_x\\)</td><td>前進速度</td><td>する</td></tr>
+  <tr><td><code>IDX::STEER</code></td><td>\\(\\delta_{{\\mathrm{{act}}}}\\)</td><td>前輪実ステア角</td><td>する</td></tr>
+  <tr><td><code>IDX::PEDAL_ACCX</code></td><td>\\(a_{{\\mathrm{{act}}}}\\)</td>
+      <td>アクチュエータ出力加速度（1-2 の \\(a_{{\\mathrm{{act}}}}\\) と同一の状態）</td><td>する</td></tr>
+  <tr><td><code>IDX::ACCX</code></td><td>\\(a_{{\\mathrm{{report}}}}\\)</td>
+      <td>レポート・可視化用の加速度。<code>calcModel</code> の微分には現れず、
+      Euler 更新後に \\((v_{{x,\\mathrm{{new}}}} - v_{{x,\\mathrm{{prev}}}}) / \\Delta t\\) として事後計算される
+      別枠の出力量（<b>ODE 状態の \\(a_{{\\mathrm{{act}}}}\\) とは別物</b>）。</td><td>しない（事後計算）</td></tr>
+</table>
+<p>
+入力ベクトルは \\(a_{{\\mathrm{{cmd,des}}}}\\)（加速度指令）、<code>gear</code>（ギア。連続値ではなく
+DRIVE/REVERSE/NEUTRAL/PARK 等を切り替える分岐選択用の離散入力）、\\(a_{{\\mathrm{{slope}}}}\\)（路面勾配による
+外部加速度入力）、\\(\\delta_{{\\mathrm{{cmd,des}}}}\\)（操舵指令）の 4 要素。<br>
+加えて、加速度指令・操舵指令それぞれの純粋遅延 \\(T_a, T_\\delta\\) を実現するための入力遅延キュー
+（FIFO バッファ）も実質的な離散状態であり、上記 7 次元の状態ベクトルだけでモデルが完結するわけではない。
+</p>
+
+<h3>連続時間の状態方程式（ベクトル形式）</h3>
+<p>
+6 状態をまとめると以下の \\(\\dot{{x}} = f(x, u)\\) になる。右辺の \\(\\omega(\\cdot), r_\\delta(\\cdot)\\) は
+簡潔にするための略記で、それぞれの中身（詳細な式と根拠）は直後の対応表に示す通り 1-2〜1-4 節が担当する。
+</p>
+\\[
+\\dot{{x}} =
+\\begin{{pmatrix}} \\dot x \\\\ \\dot y \\\\ \\dot\\theta \\\\ \\dot v_x \\\\ \\dot\\delta_{{\\mathrm{{act}}}} \\\\ \\dot a_{{\\mathrm{{act}}}} \\end{{pmatrix}}
+=
+\\begin{{pmatrix}}
+v_x \\cos\\theta \\\\
+v_x \\sin\\theta \\\\
+\\omega(v_x, \\delta_{{\\mathrm{{act}}}}) \\\\
+a_{{\\mathrm{{act}}}} + a_{{\\mathrm{{slope}}}} \\\\
+r_\\delta(\\delta_{{\\mathrm{{act}}}}, \\delta_{{\\mathrm{{des}}}}) \\\\
+\\bigl(a_{{\\mathrm{{target}}}} - a_{{\\mathrm{{act}}}}\\bigr) / \\tau_a
+\\end{{pmatrix}}
+\\]
+<table class="param-table">
+  <tr><th>行（状態の微分）</th><th>右辺の略記</th><th>中身（詳細な式）</th><th>担当セクション</th></tr>
+  <tr><td>\\(\\dot v_x\\)</td><td>\\(a_{{\\mathrm{{act}}}} + a_{{\\mathrm{{slope}}}}\\)</td>
+      <td>1 次遅れ＋走行抵抗多項式で決まる \\(a_{{\\mathrm{{act}}}}\\) をそのまま加算</td>
+      <td><b>1-2. 縦方向</b></td></tr>
+  <tr><td>\\(\\dot a_{{\\mathrm{{act}}}}\\)</td><td>\\((a_{{\\mathrm{{target}}}} - a_{{\\mathrm{{act}}}}) / \\tau_a\\)</td>
+      <td>\\(a_{{\\mathrm{{target}}}} = a_{{\\mathrm{{cmd,del}}}} + \\mathrm{{poly}}(v_x)\\) の一次遅れ追従</td>
+      <td><b>1-2. 縦方向</b></td></tr>
+  <tr><td>\\(\\dot\\delta_{{\\mathrm{{act}}}}\\)</td><td>\\(r_\\delta(\\delta_{{\\mathrm{{act}}}}, \\delta_{{\\mathrm{{des}}}})\\)</td>
+      <td>不感帯・レート飽和込みの操舵一次遅れ追従</td>
+      <td><b>1-3. 操舵</b></td></tr>
+  <tr><td>\\(\\dot\\theta\\)</td><td>\\(\\omega(v_x, \\delta_{{\\mathrm{{act}}}})\\)</td>
+      <td>アンダーステア係数 \\(k_{{\\mathrm{{us}}}}\\)・ステアバイアス \\(\\beta\\) 込みのヨーレート</td>
+      <td><b>1-4. ヨー・横方向</b></td></tr>
+  <tr><td>\\(\\dot x, \\dot y\\)</td><td>\\(v_x\\cos\\theta,\\ v_x\\sin\\theta\\)</td>
+      <td>キネマティック自転車モデルの位置積分</td>
+      <td><b>1-4. ヨー・横方向</b></td></tr>
+</table>
+
+<h3>実際の離散更新アルゴリズム（<code>update(dt)</code> の内部処理）</h3>
+<p>
+シミュレータは毎制御周期 \\(\\Delta t\\) ごとに、以下の手順で状態を更新する。
+</p>
+<ol>
+  <li>入力遅延キューから指令を取り出し、純粋遅延を適用した <code>delayed_input</code>
+      （\\(a_{{\\mathrm{{cmd,des}}}}(t-T_a)\\), \\(\\delta_{{\\mathrm{{cmd,des}}}}(t-T_\\delta)\\) 相当）を得る。</li>
+  <li><b>サブステップ Euler ループ</b>: \\(\\mathrm{{sub\\_dt}} = \\Delta t / n_{{\\mathrm{{substep}}}}\\) として、
+      \\[
+      x \\leftarrow x + f(x, u_{{\\mathrm{{del}}}}) \\cdot \\mathrm{{sub\\_dt}}
+      \\]
+      を \\(n_{{\\mathrm{{substep}}}}\\) 回反復する。これがそのまま
+      <code>SimModelInterface::updateEuler(dt, input)</code>（<code>state_ += calcModel(state_, input) * dt</code>）
+      の呼び出しであり、前進（陽的）Euler 法そのものである。各サブステップ後に \\(v_x\\) を
+      \\([-v_{{x,\\mathrm{{lim}}}}, v_{{x,\\mathrm{{lim}}}}]\\) に飽和させる。</li>
+  <li>サブステップループ全体（幅 \\(\\Delta t\\)）で発進・停止に伴う速度符号反転（ゼロクロス）を判定し、
+      該当すれば \\(v_x = 0\\) に丸める。</li>
+  <li>レポート用の \\(a_{{\\mathrm{{report}}}}\\)（<code>IDX::ACCX</code>）を
+      \\(\\bigl(v_{{x,\\mathrm{{new}}}} - v_{{x,\\mathrm{{prev}}}}\\bigr) / \\Delta t\\) として事後計算する
+      （\\(\\mathrm{{sub\\_dt}}\\) ではなく外側の \\(\\Delta t\\) を使う）。</li>
+</ol>
+<table class="param-table">
+  <tr><th>パラメータ</th><th>値</th><th>役割</th></tr>
+  <tr><td><code>n_substep</code></td><td>{n_substep}</td>
+      <td>1 制御周期あたりの Euler サブステップ数。大きいほど離散化誤差が小さくなる</td></tr>
+  <tr><td><code>brake_time_constant</code></td><td>{tau_brake} s</td>
+      <td>ブレーキ側（\\(a_{{\\mathrm{{cmd,des}}}} &lt; 0\\)）の時定数。0 以下なら <code>acc_time_constant</code>
+      にフォールバックし単一時定数として扱われる</td></tr>
+  <tr><td><code>lon_drag_c0, c1, c2</code></td><td>{drag_c0}, {drag_c1}, {drag_c2}</td>
+      <td>走行抵抗多項式 poly(\\(v_x\\))（1-2 の式に加算される定常項）</td></tr>
+</table>
+
+<div class="note">
+&#9888;&#65039; <b>なぜ陽的 Euler 法か（Runge-Kutta を使わない理由）</b>:
+操舵不感帯・レート飽和・ギア分岐・ブレーキ/スロットルでの時定数切替など、状態微分 \\(f(x, u)\\) は
+速度・指令の符号に応じて場合分けされる区分的な関数であり、微分可能性・連続性が保証されない。
+そのため中間点での評価を必要とする 4 次 Runge-Kutta 法（<code>updateRungeKutta</code>）は使えず、
+各ステップの実測状態のみを使う前進 Euler 法（<code>updateEuler</code>）を採用し、
+その代わりに <code>n_substep</code> によるサブステップ分割で離散化誤差を抑えている。
+</div>
+</section>
+
 <section id="sec-long">
-<h2>1-1. 縦方向（加速度アクチュエータ）の同定</h2>
+<h2>1-2. 縦方向（加速度アクチュエータ）の同定</h2>
 <p>
 速度 \\(v_x\\) は横方向・操舵状態に依存せず縦方向のみで閉じるため（long ⊥ steer の直交性）、
 \\(\\text{{err}}_{{vx}}\\) を目的関数として他のパラメータと独立に同定できる。
@@ -645,7 +766,7 @@ a_{{\\mathrm{{target}}}}(t) = a_{{\\mathrm{{cmd,del}}}}(t) + \\bigl(c_0 + c_1 v_
 </section>
 
 <section id="sec-steer">
-<h2>1-2. 操舵アクチュエータ（追従ループ）の同定</h2>
+<h2>1-3. 操舵アクチュエータ（追従ループ）の同定</h2>
 <p>
 操舵追従ループは実車位置・ヨーのフィードバックを持たないオープンループなので、
 \\(\\text{{err}}_{{\\mathrm{{steer}}}}\\) を目的関数として位置・ヨー誤差とは構造的に独立して同定できる。
@@ -673,7 +794,7 @@ a_{{\\mathrm{{target}}}}(t) = a_{{\\mathrm{{cmd,del}}}}(t) + \\bigl(c_0 + c_1 v_
 アンダーステア成分）を部分的に吸収できる。
 したがって操舵ゲイン補正倍率の最適値は k_us の同定後に再検証することが望ましい。<br>
 β（steer_bias）はアクチュエータ追従式自体には入らず（<code>getSteer()</code> は bias なし）、
-報告値の加算と 1-3 のヨー式の両方に現れる二重登場のパラメータである。
+報告値の加算と 1-4 のヨー式の両方に現れる二重登場のパラメータである。
 </div>
 
 <h3>実機ログからの独立同定（代表データセットモデルフィット）</h3>
@@ -707,9 +828,9 @@ a_{{\\mathrm{{target}}}}(t) = a_{{\\mathrm{{cmd,del}}}}(t) + \\bigl(c_0 + c_1 v_
 </table>
 </section>
 <section id="sec-yaw">
-<h2>1-3. ヨー・横方向（運動学的自転車モデル）— 速度ビン別 最小二乗法同定</h2>
+<h2>1-4. ヨー・横方向（運動学的自転車モデル）— 速度ビン別 最小二乗法同定</h2>
 <p>
-1-1（縦方向）・1-2（操舵追従）が先行して確定した後、
+1-2（縦方向）・1-3（操舵追従）が先行して確定した後、
 \\(\\text{{err}}_{{wz}}\\) を目的関数として <b>高曲率サブセット</b> で k_us を同定する。
 直進（\\(\\delta \\approx 0\\)）では感度がゼロなので、全データセット集約スコアは k_us に対して構造的不可同定。
 </p>
@@ -725,11 +846,11 @@ a_{{\\mathrm{{target}}}}(t) = a_{{\\mathrm{{cmd,del}}}}(t) + \\bigl(c_0 + c_1 v_
 <p>
 アンダーステア係数 \\(k_{{\\mathrm{{us,eff}}}}\\) は速度帯ごとの定数（速度帯ステップ）で実装される。
 β（steer_bias）はヨー式の \\(\\tan(\\cdot)\\) 引数にも加算され、系統的なヨーオフセットを生む
-（1-2 の報告値加算とは別経路で同一パラメータが効く）。
+（1-3 の報告値加算とは別経路で同一パラメータが効く）。
 </p>
 <div class="note">
-⚠️ <b>前提条件</b>: この式の入力 \\(\\delta_{{\\mathrm{{act}}}}\\) は 1-2 の結果に依存する。
-1-2 の操舵ゲイン補正倍率が k_us の v²δ 成分を部分吸収しているため、操舵ゲイン補正倍率の値を固定した上で
+⚠️ <b>前提条件</b>: この式の入力 \\(\\delta_{{\\mathrm{{act}}}}\\) は 1-3 の結果に依存する。
+1-3 の操舵ゲイン補正倍率が k_us の v²δ 成分を部分吸収しているため、操舵ゲイン補正倍率の値を固定した上で
 k_us を同定することが重要。
 </div>
 
@@ -767,7 +888,7 @@ C_{{\\mathrm{{OLS}}}} = \\frac{{\\sum \\omega_i \\, \\tan(\\delta_i)}}{{\\sum \\
 <table class="param-table">
   <tr><th>パラメータ</th><th>値</th><th>式中の役割</th><th>同定誤差量</th></tr>
 {kus_rows}
-  <tr><td><code>steer_bias</code> (β) <i>[1-2 と共有]</i></td><td>{beta} rad</td>
+  <tr><td><code>steer_bias</code> (β) <i>[1-3 と共有]</i></td><td>{beta} rad</td>
       <td>tan(δ_act + β) の引数：ヨーオフセットを生む</td><td>err_wz（間接）</td></tr>
 </table>
 </section>
@@ -780,7 +901,7 @@ def _build_sec14(
     params: dict,
     n_dataset: int,
 ) -> str:
-    """1-4. モデル構造限界（理想追従評価）セクション HTML。"""
+    """1-5. モデル構造限界（理想追従評価）セクション HTML。"""
     box_html  = fig_box.to_html(full_html=False, include_plotlyjs=False)
     traj_html = fig_traj.to_html(full_html=False, include_plotlyjs=False)
     tau_a = f"{params.get('acc_time_constant', float('nan')):.3g}"
@@ -790,7 +911,7 @@ def _build_sec14(
     h_str = ", ".join(f"N={h}（{h * _FIT_DT:.2f}s）" for h in _PERF_HORIZONS)
     return f"""
 <section id="sec-perf-tracking">
-<h2>1-4. モデル構造限界（理想追従評価）</h2>
+<h2>1-5. モデル構造限界（理想追従評価）</h2>
 <p>
 アクチュエータ追従が完璧だった場合（実測 \\(v_x\\) と実測 \\(\\delta_{{\\mathrm{{act}}}}\\) を
 自転車モデルの直接入力として使用）に残る位置ずれを評価する。
@@ -1168,11 +1289,12 @@ def build_html(
 <nav>
   <a href="#model-intro">モデルパラメータ</a>
   <a href="#sec-coords">1-0. 座標系定義</a>
-  <a href="#sec-long">1-1. 縦方向</a>
-  <a href="#sec-steer">1-2. 操舵</a>
-  <a href="#sec-yaw">1-3. ヨー・横方向</a>
+  <a href="#sec-state-space">1-1. 状態空間モデルと数値積分</a>
+  <a href="#sec-long">1-2. 縦方向</a>
+  <a href="#sec-steer">1-3. 操舵</a>
+  <a href="#sec-yaw">1-4. ヨー・横方向</a>
   <a href="#sec-tuning">2. 統合最適化</a>
-  {f'<a href="#sec-perf-tracking">1-4. モデル構造限界</a>' if perf_html else ""}
+  {f'<a href="#sec-perf-tracking">1-5. モデル構造限界</a>' if perf_html else ""}
   <a href="#curve-viewer">3. カーブビューア</a>
   {f'<a href="#sec-closed-loop">4. クローズドループ比較</a>' if closed_loop_html else ""}
 </nav>
@@ -1565,10 +1687,10 @@ def main() -> None:
                 break
     steer_fig = build_fig_cross_steer(rows_steer)
 
-    # 1-1 縦方向理想追従評価（全 records の先頭 _LONG_PERF_N_DATASET データセットを使用。
+    # 1-2 縦方向理想追従評価（全 records の先頭 _LONG_PERF_N_DATASET データセットを使用。
     # 計算・描画は lib 共有関数。タイトル文言のみレポート従来表記を labels/title で維持）
     long_perf_records = records[:_LONG_PERF_N_DATASET]
-    print(f"  [1-1] 縦方向理想追従評価図生成 ({len(long_perf_records)} データセット) ...")
+    print(f"  [1-2] 縦方向理想追従評価図生成 ({len(long_perf_records)} データセット) ...")
     long_perf_entries = _to_entries([(r["uuid"], Path(r["lite_dir"])) for r in long_perf_records])
     long_perf_data = compute_long_perf_data(long_perf_entries)
     _n_lp = long_perf_data.get("n_dataset", 0)
@@ -1598,9 +1720,9 @@ def main() -> None:
         ),
     )
 
-    # 1-4 横方向理想追従評価には curve 上位 _PERF_N_DATASET データセットを使用（viewer 用 top_curve とは独立して選択）
+    # 1-5 横方向理想追従評価には curve 上位 _PERF_N_DATASET データセットを使用（viewer 用 top_curve とは独立して選択）
     perf_records = candidate_curve[:_PERF_N_DATASET]
-    print(f"  [1-4] 横方向理想追従評価図生成 ({len(perf_records)} データセット) ...")
+    print(f"  [1-5] 横方向理想追従評価図生成 ({len(perf_records)} データセット) ...")
     perf_entries = _to_entries([(r["uuid"], Path(r["lite_dir"])) for r in perf_records])
     perf_data = compute_perfect_tracking_data(perf_entries, params)
     perf_fig_box = build_fig_perfect_tracking_box(perf_data)
