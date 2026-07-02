@@ -25,7 +25,6 @@ import plotly.graph_objects as go
 import yaml
 from plotly.subplots import make_subplots
 from scipy.optimize import minimize_scalar
-from scipy.signal import lfilter
 
 # ---------------------------------------------------------------------------
 
@@ -51,39 +50,37 @@ from driving_log_replayer_v2.real_log_sim_comparison.multi_dataset_tune import (
 )
 
 # ---------------------------------------------------------------------------
-# 定数
+# 定数 (物理定数・フィット定数の SSOT は lib._physical_validity。本ファイル固有の
+#       レポート表示用定数のみここで定義する)
 # ---------------------------------------------------------------------------
-WHEELBASE = 4.76012   # [m]
-STEER_BIAS = 0.0005   # [rad]
-VX_MIN_CURVE = 1.5    # [m/s]
-WZ_MIN = 0.02         # [rad/s]
-DWZ_MAX = 0.30        # [rad/s²]
-K_US_CLIP = 0.5
-VX_EDGES = np.array([0.5, 1.0, 1.5, 2.0, 2.5, 3.0, 4.0, 5.0, 6.0, 8.0, 10.0, 12.0])
+from driving_log_replayer_v2.real_log_sim_comparison.lib._physical_validity import (  # noqa: E402
+    DWZ_MAX,
+    K_US_CLIP,
+    STEER_BIAS,
+    VX_EDGES,
+    VX_MIN_CURVE,
+    WHEELBASE,
+    WZ_MIN,
+    _DA_THRESH_FIT,
+    _DELAY_CANDIDATES_LONG,
+    _DRIFT_A_TH,
+    _FIT_DT,
+    _FIT_N_DATASET,
+    _N_CROSS_FIT_DATASET,
+    _N_DYN_MIN,
+    _PERF_STRIDE,
+    _TAU_BOUNDS_LONG,
+    _VX_MIN_FIT,
+    _sim_first_order,
+)
+
 _H_SPAN = {10: "≈0.33 s", 20: "≈0.67 s", 30: "≈1.0 s", 40: "≈1.33 s"}
 
-_FIT_DT = 0.01          # モデルフィット用リサンプリング DT [s]
-_FIT_N_DATASET = 2      # フィット表示する代表データセット数（最良・最悪それぞれ）
-
-# 1-1/1-4. 理想追従評価用共通定数
+# 1-1/1-4. 理想追従評価用共通定数（レポート固有）
 _PERF_HORIZONS: tuple[int, ...] = (10, 20, 50, 100)  # steps @ _FIT_DT → 0.10, 0.20, 0.50, 1.00 s
-_PERF_STRIDE = 5                                       # rollout reset stride [steps]
 _PERF_N_DATASET = 10                                   # 1-4 横方向 box plot 用 データセット数
 _PERF_N_TRAJ = 3                                       # 軌跡比較表示 データセット数
 _LONG_PERF_N_DATASET = 20                                   # 1-1 縦方向理想追従 box plot 用 データセット数
-_DRIFT_A_TH = 0.3                                      # 加速/減速/巡航を分ける加速度閾値 [m/s²]
-
-def _sim_first_order(cmd: np.ndarray, tau: float, n_delay: int, dt: float = _FIT_DT) -> np.ndarray:
-    """純粋遅延 + 一次遅れシミュレーション（lfilter 版）。"""
-    n = len(cmd)
-    cmd_del = np.empty(n)
-    if n_delay > 0:
-        cmd_del[:n_delay] = cmd[0]
-        cmd_del[n_delay:] = cmd[:-n_delay]
-    else:
-        cmd_del = cmd.copy()
-    alpha = float(np.clip(dt / tau, 0.0, 1.0))
-    return lfilter([alpha], [1.0, -(1.0 - alpha)], cmd_del)
 
 
 def _bicycle_nstep_perf(
@@ -576,13 +573,6 @@ def build_kus_figure(bins: dict, params: dict) -> go.Figure:
     return fig
 
 
-_N_CROSS_FIT_DATASET = 10      # 横断最小二乗法に使うデータセット数
-_DA_THRESH_FIT  = 0.15    # 動的区間フィルタ: |Δa_cmd/dt| [m/s²/s]（identify_long_dynamics.py と同値）
-_VX_MIN_FIT     = 0.5     # 動的区間フィルタ: 最低速度 [m/s]
-_DELAY_CANDIDATES = np.arange(0.0, 0.31 + 1e-9, 0.01)   # 遅延候補 0〜300ms, 10ms 刻み
-_TAU_BOUNDS     = (0.01, 5.0)                             # 時定数探索範囲 [s]
-
-
 def _fit_long_cross_dataset(
     collection_dir: Path, df_id: pd.DataFrame
 ) -> tuple[float, float, float]:
@@ -593,7 +583,6 @@ def _fit_long_cross_dataset(
 
     Returns: (tau [s], T [s], RMSE [m/s²])
     """
-    _N_DYN_MIN = 100
     df_cand = df_id[df_id["n_dyn"] >= _N_DYN_MIN] if "n_dyn" in df_id.columns else df_id
     df_top  = df_cand.nlargest(min(_N_CROSS_FIT_DATASET, len(df_cand)), "n_dyn")
 
@@ -644,8 +633,8 @@ def _fit_long_cross_dataset(
     best_mse   = float("inf")
     best_tau   = float("nan")
     best_delay = float("nan")
-    log_lo, log_hi = np.log(_TAU_BOUNDS[0]), np.log(_TAU_BOUNDS[1])
-    for delay_s in _DELAY_CANDIDATES:
+    log_lo, log_hi = np.log(_TAU_BOUNDS_LONG[0]), np.log(_TAU_BOUNDS_LONG[1])
+    for delay_s in _DELAY_CANDIDATES_LONG:
         n_delay = int(round(delay_s / _FIT_DT))
         res = minimize_scalar(
             lambda lt, nd=n_delay: _total_mse(lt, nd),
@@ -693,7 +682,6 @@ def build_long_figure(collection_dir: Path, params: dict, phase_label: str = "")
     tau_cross, T_cross, rmse_cross = _fit_long_cross_dataset(collection_dir, df_id)
 
     # 動的区間が豊富なデータセットを候補にし、最良・最悪それぞれ _FIT_N_DATASET 本を選択
-    _N_DYN_MIN = 100
     df_cand = df_id[df_id["n_dyn"] >= _N_DYN_MIN] if "n_dyn" in df_id.columns else df_id
     if len(df_cand) < _FIT_N_DATASET * 2:
         df_cand = df_id
@@ -1087,7 +1075,6 @@ def build_steer_id_figure(collection_dir: Path, params: dict) -> go.Figure:
     T_tune   = float(params.get("steer_time_delay", float("nan")))
 
     # 動的区間が豊富なデータセットを候補にし、最良・最悪それぞれ _FIT_N_DATASET 本を選択
-    _N_DYN_MIN = 100
     df_cand = df_id[df_id["n_dyn"] >= _N_DYN_MIN]
     if len(df_cand) < _FIT_N_DATASET * 2:
         df_cand = df_id

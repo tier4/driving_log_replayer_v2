@@ -1,8 +1,9 @@
 """実機ログからの車両モデル物理妥当性同定 (縦方向 / 操舵 / 横方向 k_us).
 
-`physical_validity_report.py`（スタンドアロン検証スクリプト）の数値計算ロジックを
-per-dataset 解析 (step6_analyze_cases) / collection 横断解析 (step13_cross_dataset)
-の双方から再利用できる形に抽出したもの。plotly 描画は含まない (`lib._figures._physical_validity`
+数値計算ロジックと物理定数の SSOT (single source of truth)。
+`physical_validity_report.py`（スタンドアロン検証スクリプト）、per-dataset 解析
+(step6_analyze_cases)、collection 横断解析 (step13_cross_dataset) はいずれも
+本モジュールから import する。plotly 描画は含まない (`lib._figures._physical_validity`
 が担当)。ROS 非依存の関数と、MCAP を読む関数 (`lib._io` 経由) が混在するため、
 notebook (rclpy 無し kernel) からの利用は個別関数の依存を確認すること。
 
@@ -35,7 +36,9 @@ from ._params_utils import load_sim_params
 CMD_TOPIC = "/control/command/control_cmd"
 
 # ---------------------------------------------------------------------------
-# 定数 (physical_validity_report.py / identify_long_dynamics.py / identify_steer_dynamics.py と同値)
+# 定数 (本モジュールが SSOT: single source of truth。physical_validity_report.py 等は
+#       ここから import する。値の由来は同定手順 identify_long_dynamics.py /
+#       identify_steer_dynamics.py を参照)
 # ---------------------------------------------------------------------------
 WHEELBASE = 4.76012   # [m]
 STEER_BIAS = 0.0005   # [rad]
@@ -63,13 +66,13 @@ def merged_model_params(model_params: dict) -> dict:
     """
     return {**load_sim_params(), **model_params}
 
-# 縦方向 (identify_long_dynamics.py と同値)
+# 縦方向 (SSOT は本モジュール。由来は identify_long_dynamics.py の同定手順)
 _DA_THRESH_FIT = 0.15
 _VX_MIN_FIT = 0.5
 _DELAY_CANDIDATES_LONG = np.arange(0.0, 0.31 + 1e-9, 0.01)
 _TAU_BOUNDS_LONG = (0.01, 5.0)
 
-# 操舵 (identify_steer_dynamics.py と同値)
+# 操舵 (SSOT は本モジュール。由来は identify_steer_dynamics.py の同定手順)
 _DSTEER_MIN = 0.001
 _DELAY_CANDIDATES_STEER = np.arange(0.0, 0.15 + 1e-9, 0.01)
 _TAU_BOUNDS_STEER = (0.01, 2.0)
@@ -749,7 +752,7 @@ def compute_cross_steer_rows(
     return rows
 
 
-# 理想追従評価用定数 (physical_validity_report.py と同値)
+# 理想追従評価用定数 (本モジュールが SSOT。physical_validity_report.py はここから import する)
 _PERF_STRIDE = 5
 _DRIFT_A_TH = 0.3
 
