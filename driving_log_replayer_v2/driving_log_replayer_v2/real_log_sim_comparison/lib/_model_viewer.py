@@ -36,70 +36,9 @@
 
 from __future__ import annotations
 
-import warnings
-from pathlib import Path
-
-from ._html_utils import render_template_with_payload
-from ._model_seed import _seed_from_params
-from ._playback_viewer import (
-    BASELINE_LABEL,
-    PLAYBACK_WHEELBASE_M,
-    build_playback_payload,
-)
-
 # 指令ステップのエッジを残し無駄時間応答を見やすくするためのリサンプリングレート [Hz]。
 # 単一 run・少数チャンネルのみ埋め込むため、軌跡ビューア (10Hz) より高くても HTML は小さい。
 MODEL_RATE_HZ = 50.0
-
-
-def plot_model_viewer(
-    data: dict,
-    map_ways: list | None,
-    figs_dir: Path,
-    sim_params: dict,
-    title: str = "",
-    model_registry: dict | None = None,
-) -> None:
-    """step4 から呼ぶエントリポイント。`figs_dir/lon_lat_model.html` を生成。
-
-    Args:
-        data: step4 main() の loaded (label -> {"kinematic", "velocity", "accel",
-              "cmd", "steering", "color", "t_launch", ...})。
-        map_ways: `load_map_ways()` の戻り値 (None なら地図なし)。
-        figs_dir: 出力先 (comparison/figures/)。
-        sim_params: `load_sim_params()` の戻り値。つまみ初期値のシードに使う。
-        title: ビューア上部に表示するシナリオ名。
-    """
-    # 実機のみ抽出 (無ければ先頭 run をフォールバック)。
-    if BASELINE_LABEL in data:
-        real = {BASELINE_LABEL: data[BASELINE_LABEL]}
-    else:
-        real = dict(list(data.items())[:1])
-
-    payload = build_playback_payload(real, map_ways, rate_hz=MODEL_RATE_HZ, title=title)
-    if payload is None:
-        warnings.warn("kinematic データなし。縦横モデルビューアをスキップ", stacklevel=2)
-        return
-
-    # つまみ初期値（spec シード）。tau/T [s], steer_bias [rad], k_us [s^2/m]。
-    # 縦は加減速で別特性のため throttle=acc_*, brake=brake_* をシード。新表現力
-    # (poly(v)=lon_drag_*, β=steer_bias) も _seed_from_params で対応。
-    payload["model_seed"] = _seed_from_params(sim_params)
-    # モデルレジストリ（scenario.yaml の models）。各モデルの params を spec に上書きして
-    # シード化し、ビューアのドロップダウンから「対応モデルのパラメータを簡単に適用」できるようにする。
-    registry_seeds: dict[str, dict] = {}
-    for name, mparams in (model_registry or {}).items():
-        merged = {**sim_params, **(mparams or {})}
-        registry_seeds[name] = _seed_from_params(merged)
-    payload["model_registry"] = registry_seeds
-    # 自転車モデルの wheelbase L [m]（JS でハードコード二重定義しないようペイロードで渡す）。
-    payload["wheelbase"] = float(PLAYBACK_WHEELBASE_M)
-
-    out_path = Path(figs_dir) / "lon_lat_model.html"
-    out_path.parent.mkdir(parents=True, exist_ok=True)
-    html = render_template_with_payload(_HTML_TEMPLATE, payload)
-    out_path.write_text(html, encoding="utf-8")
-    print(f"  保存: {out_path.name}")
 
 
 # ---------------------------------------------------------------------------

@@ -39,10 +39,9 @@ from .lib._io import (
 )
 from .lib._coverage import compute_coverage
 from .lib._map import load_map_ways, resolve_map_osm
-from .lib._model_viewer import plot_model_viewer
 from .lib._params_utils import load_sim_params
-from .lib._playback_viewer import plot_trajectory_playback
 from .lib._provenance import format_provenance_line, read_provenance
+from .lib._viewer import plot_viewer
 from .lib._runtime_config import (
     RuntimeConfig,
     add_common_cli_arguments,
@@ -109,7 +108,7 @@ _SIM_MARKERS = ["^", "s", "D", "v", "P", "*", "X"]
 
 # 時間軸重ね描きへの注記: t=0 の基準がログ間で異なり (real=AUTONOMOUS 遷移 / sim=速度
 # fallback)、pacing も違うため、同一 t が同一地点を意味しない。走行距離基準は
-# trajectory_playback.html の「距離軸」モードで対話的に確認できる。
+# viewer.html の軌跡比較「距離軸」モードで対話的に確認できる。
 _TIME_AXIS_NOTE = (
     "注: t=0 は各ログの初回発進 (initial launch)。実機の初期停止時間が長くても全ログが発進で揃う"
     "（pacing 差により同一 t は同一地点を意味しない。走行距離基準は軌跡再生ビューアの距離軸モードを参照）"
@@ -581,7 +580,7 @@ def _load_dp_trajectories(bag: Path, t0_ns: int) -> list[dict]:
     """DiffusionPlanner 出力軌跡の全フレームを読み込む (playback ビューア用)。
 
     各フレーム = {"t": t0 基準の発行時刻 [s], "x": [...], "y": [...]} (world 座標)。
-    間引き・丸めは _playback_viewer 側 (payload 構築時) で行う。
+    間引き・丸めは viewer payload 構築時に行う。
     トピックが無い bag (旧ログ等) は空リストを返す。
     """
     topic = resolve_topic(bag, [DP_TRAJ_TOPIC, "/sub" + DP_TRAJ_TOPIC])
@@ -716,12 +715,7 @@ def main() -> None:
         warnings.warn(f"レポート生成失敗: {e}")
 
     _print("\n=== プロット生成中 ===")
-    # 軌跡再生ビューア (時刻同期/位置同期シークバー付き自己完結 HTML)
-    # metrics を渡して凡例パネルにクローズループ指標を表示
-    plot_trajectory_playback(loaded, map_ways, FIGS_DIR, title=SCENARIO_NAME, metrics=metrics)
-    # 縦横独立モデル検証ビューア (実機のみ・指令→モデル積算 vs 観測、T/τ つまみ調整)。
-    # モデルレジストリ (scenario.yaml の models) を渡し、対応モデル (best_normal 等) の params を
-    # ドロップダウンから簡単に適用できるようにする。
+    # 軌跡比較と縦横モデル検証を単一のオフライン viewer.html に統合する。
     model_registry: dict = {}
     if cfg.scenario_config:
         try:
@@ -732,9 +726,9 @@ def main() -> None:
             }
         except Exception as exc:  # noqa: BLE001
             warnings.warn(f"model registry 読み込み失敗 (ビューアは spec のみ): {exc}")
-    plot_model_viewer(
-        loaded, map_ways, FIGS_DIR, load_sim_params(), title=SCENARIO_NAME,
-        model_registry=model_registry,
+    plot_viewer(
+        loaded, map_ways, FIGS_DIR, sim_params=load_sim_params(),
+        title=SCENARIO_NAME, metrics=metrics, model_registry=model_registry,
     )
 
     _print("\n完了。出力先:", FIGS_DIR)

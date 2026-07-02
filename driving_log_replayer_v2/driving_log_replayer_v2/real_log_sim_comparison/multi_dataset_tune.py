@@ -479,7 +479,6 @@ def robust_search(
             init_score = score_fn(init_agg, worst_w=worst_w)
             phase_label = f"phase={phase}" if phase else "phase=0(all)"
             print(f"\n## Optuna TPE ({case_name}, {n_trials} trials, cross-dataset normalized, worst_w={worst_w}, {phase_label})")
-            print(format_agg("init", init_agg) + f"  score={init_score:.4f}  {cur_best}")
 
             best_result: dict = {"params": dict(cur_best), "score": init_score, "agg": init_agg}
             _checkpoint(cur_best, init_score)
@@ -517,8 +516,6 @@ def robust_search(
 
             state = best_result["params"]
             best_s = best_result["score"]
-            print(format_agg("FINAL", best_result["agg"]) + f"  score={best_s:.4f}")
-            print(f"FINAL params: {state}")
             _checkpoint(state, best_s)
 
             if search_subsample and len(ctxs_search) < len(ctxs):
@@ -545,7 +542,6 @@ def robust_search(
         init_score = score_fn(init_agg, worst_w=worst_w)
         phase_label = f"phase={phase}" if phase else "phase=0(all)"
         print(f"\n## Optuna TPE ({case_name}, {n_trials} trials, cross-dataset normalized, worst_w={worst_w}, {phase_label}) [SQLite Process Parallel: {n_jobs} jobs]")
-        print(format_agg("init", init_agg) + f"  score={init_score:.4f}  {cur_best}")
         _checkpoint(cur_best, init_score)
 
         study = optuna.create_study(
@@ -603,8 +599,6 @@ def robust_search(
         print("[INFO] Optuna optimization complete. Re-evaluating best params...")
         final_agg = _eval_grid(None, ctxs_search, [state], cur_model, 1, agg_fn=None)[0]
 
-        print(format_agg("FINAL", final_agg) + f"  score={best_s:.4f}")
-        print(f"FINAL params: {state}")
         _checkpoint(state, best_s)
 
         if search_subsample and len(ctxs_search) < len(ctxs):

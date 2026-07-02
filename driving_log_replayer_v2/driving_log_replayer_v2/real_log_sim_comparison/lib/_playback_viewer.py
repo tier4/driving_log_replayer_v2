@@ -24,12 +24,9 @@ JS 側は線形補間と二分探索のみを行う。
 
 from __future__ import annotations
 
-from pathlib import Path
-
 import numpy as np
 import pandas as pd
 
-from ._html_utils import render_template_with_payload
 from ._map import map_ways_in_bbox
 
 # 再生データのリサンプリングレート [Hz]。上げると滑らかになるが HTML サイズが増える。
@@ -317,32 +314,6 @@ def build_playback_payload(
     if m is not None:
         payload["metrics"] = m
     return payload
-
-
-def write_playback_html(payload: dict, out_path: Path) -> None:
-    """Payload を埋め込んだ自己完結ビューア HTML を書き出す。"""
-    out_path = Path(out_path)
-    out_path.parent.mkdir(parents=True, exist_ok=True)
-    html = render_template_with_payload(_HTML_TEMPLATE, payload)
-    out_path.write_text(html, encoding="utf-8")
-    print(f"  保存: {out_path.name}")
-
-
-def plot_trajectory_playback(
-    data: dict,
-    map_ways: list | None,
-    figs_dir: Path,
-    title: str = "",
-    metrics: dict | None = None,
-) -> None:
-    """step4 から呼ぶエントリポイント。`figs_dir/trajectory_playback.html` を生成。"""
-    payload = build_playback_payload(data, map_ways, title=title, metrics=metrics)
-    if payload is None:
-        import warnings  # noqa: PLC0415
-
-        warnings.warn("kinematic データなし。軌跡再生ビューアをスキップ", stacklevel=2)
-        return
-    write_playback_html(payload, Path(figs_dir) / "trajectory_playback.html")
 
 
 # ---------------------------------------------------------------------------

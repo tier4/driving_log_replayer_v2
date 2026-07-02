@@ -17,8 +17,6 @@ import pandas as pd
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 
-from ._html_utils import render_template_with_payload
-from ._model_seed import _seed_from_params
 from ._multi_agg import (
     HORIZONS,
     aggregate_normalized,
@@ -113,7 +111,7 @@ def _ctx_to_viewer_data(ctx) -> dict | None:
     t_ns → t [秒] 変換基準は ctx.t0_ns（自律走行開始時刻 = t=0）。
     t_launch=0.0 として自律走行開始から表示する。
     """
-    from ._playback_viewer import BASELINE_LABEL  # noqa: PLC0415
+    from ._viewer import BASELINE_LABEL  # noqa: PLC0415
 
     raw = ctx.data
     if raw["kin"].empty:
@@ -153,35 +151,30 @@ def _build_viewer_html(
     map_ways: list | None = None,
     initial_t: float | None = None,
 ) -> str | None:
-    """worst-case DS の縦横モデル検証ビューア HTML 文字列を生成する。
-
-    _model_viewer._HTML_TEMPLATE に payload を埋め込んで返す（ファイル書き出しなし）。
-    configs の最初のエントリをつまみ初期値とし、全エントリを model_registry に登録する。
-
-"""
-    from ._model_viewer import MODEL_RATE_HZ, _HTML_TEMPLATE  # noqa: PLC0415
-    from ._playback_viewer import PLAYBACK_WHEELBASE_M, build_playback_payload  # noqa: PLC0415
+    """worst-case DS のモデル検証タブだけを持つ viewer HTML を生成する."""
+    from ._viewer import build_viewer_payload, render_viewer_html  # noqa: PLC0415
 
     viewer_data = _ctx_to_viewer_data(ctx)
     if viewer_data is None:
         return None
 
-    payload = build_playback_payload(viewer_data, map_ways=map_ways, rate_hz=MODEL_RATE_HZ, title=ctx.dataset_id)
+    registry = {
+        label: {**base_params, **params}
+        for label, params in configs.items()
+    }
+    payload = build_viewer_payload(
+        viewer_data,
+        map_ways,
+        sim_params={**base_params, **next(iter(configs.values()))},
+        title=ctx.dataset_id,
+        model_registry=registry,
+        tabs=("model",),
+        initial_tab="model",
+        initial_t=initial_t,
+    )
     if payload is None:
         return None
-
-    first_params = {**base_params, **next(iter(configs.values()))}
-    if initial_t is not None and initial_t > 0:
-        payload["initial_t"] = float(initial_t)
-    payload["model_seed"] = _seed_from_params(first_params)
-
-    registry: dict[str, dict] = {}
-    for label, params in configs.items():
-        registry[label] = _seed_from_params({**base_params, **params})
-    payload["model_registry"] = registry
-    payload["wheelbase"] = float(PLAYBACK_WHEELBASE_M)
-
-    return render_template_with_payload(_HTML_TEMPLATE, payload)
+    return render_viewer_html(payload)
 
 
 # ---------------------------------------------------------------------------

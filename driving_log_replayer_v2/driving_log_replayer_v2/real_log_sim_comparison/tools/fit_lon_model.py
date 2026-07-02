@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""縦横モデル検証ビューア (lib/_model_viewer.py lon_lat_model) の縦方向モデルを実機ログに
+"""統合ビューア (lib/_viewer.py のモデル検証タブ) の縦方向モデルを実機ログに
 プログラムで最小二乗フィットし、C++ 拡張モデルの新パラメータ
 (acc_time_constant=throttle τ, brake_time_constant=brake τ, lon_drag_c0/c1/c2, lon_lat_coupling)
 を同定する。

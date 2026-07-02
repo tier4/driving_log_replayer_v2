@@ -1251,10 +1251,10 @@ def _build_sec_closed_loop_comparison(collection_dir: Path, uuids_str: str) -> s
             continue
             
         metrics_json = found_dir / "metrics_closed_loop.json"
-        playback_html = found_dir / "figures" / "trajectory_playback.html"
+        playback_html = found_dir / "figures" / "viewer.html"
         
         if not playback_html.exists():
-            playback_html_list = list(found_dir.glob("**/trajectory_playback.html"))
+            playback_html_list = list(found_dir.glob("**/viewer.html"))
             if playback_html_list:
                 playback_html = playback_html_list[0]
             
@@ -1302,7 +1302,7 @@ def _build_sec_closed_loop_comparison(collection_dir: Path, uuids_str: str) -> s
                   loading="lazy"></iframe>
                 """
             except Exception as e:
-                print(f"  [WARN] trajectory_playback.html 読み込み失敗: {e}")
+                print(f"  [WARN] viewer.html 読み込み失敗: {e}")
                 
         if iframe_html or metrics_tbl:
             sections.append(f"""

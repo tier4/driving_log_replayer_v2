@@ -4,7 +4,7 @@ from __future__ import annotations
 
 
 def _seed_from_params(params: dict) -> dict:
-    """モデルレジストリ/spec の params dict から lon_lat_model のつまみシードを構築する."""
+    """モデルレジストリ/spec の params dict からモデル検証つまみのシードを構築する."""
 
     def f(key: str, default: float) -> float:
         try:

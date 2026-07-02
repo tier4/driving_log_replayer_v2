@@ -2,7 +2,7 @@
 
 全ケースの N-step 誤差を 1 枚に重ね描きする overlay 図。入力は step6 が用意した
 ケース別 DataFrame（{tag: df}）や rmse_by_horizon 集約（{tag: {horizon: {...}}}）。
-ROS 非依存。誤差時系列の対話的確認は縦横モデル検証ビューア（_model_viewer）へ移設済み。
+ROS 非依存。誤差時系列の対話的確認は統合ビューアのモデル検証タブへ移設済み。
 """
 
 from __future__ import annotations

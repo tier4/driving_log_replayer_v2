@@ -4,7 +4,7 @@
 パイプライン (step4〜step10) は `comparison/` 配下の複数サブディレクトリ
 (figures/, nstep/<tag>/, cases/overlay/, curve_diag/) に
 多数の **plotly 図スペック (`*.fig.json` = データ + レイアウト)** と再生ビューア
-(`trajectory_playback.html`)、Markdown レポートを散らして出力する。本ステージは
+(`viewer.html`)、Markdown レポートを散らして出力する。本ステージは
 それらを走査し、全アセットを**外部参照なしで 1 枚に埋め込んだ**目次付き `report.html` を
 生成する。
 
@@ -20,7 +20,7 @@
   `<script type='application/gzip+json+base64'>` に **gzip+base64 圧縮した図スペック**。
   `IntersectionObserver` で可視化時に DecompressionStream('gzip') で展開 →
   `Plotly.newPlot` する (Chrome 80+ / Firefox 113+ 前提。非対応はエラーメッセージ表示)。
-- 自己完結ビューア (trajectory_playback.html 等) も同様に gzip+base64 の
+- 自己完結ビューア (viewer.html) も同様に gzip+base64 の
   `<script type='application/gzip+html+base64'>` で遅延埋め込みし、可視化時に
   `<iframe srcdoc>` を生成する (直書き iframe は非表示でも load 時にパース+実行され、
   マルチ DS では致命的なため)。
@@ -59,16 +59,13 @@ from .lib._report_html import (
 )
 from .lib._plotly_utils import FIG_HEIGHTS, IFRAME_PAD
 from .lib._runtime_config import add_common_cli_arguments, build_runtime_config
-from .lib._playback_viewer import _HTML_TEMPLATE as PLAYBACK_TEMPLATE
-from .lib._model_viewer import _HTML_TEMPLATE as MODEL_TEMPLATE
 
 # --- 画像キャプション (ファイル名 stem → 日本語説明) ----------------------------
 # step4〜step13 が出力する既知の図（拡張子非依存の stem で引く）。
 # 未登録ファイルはファイル名を人間可読化してフォールバック。
 CAPTIONS: dict[str, str] = {
     # step4: figures/
-    "trajectory_playback": "軌跡再生ビューア（時刻同期/位置同期シークバー・速度矢印・追従ズーム・距離軸プロット・メトリクスパネル）",
-    "lon_lat_model": "縦横モデル検証ビューア（実機：運動方程式〔1次遅れ+自転車モデル〕の前方積算と、加速度/速度/ステア/ヨーレート/横Gの観測・指令を重ね描き。地図にシミュレーション軌跡も重畳。T/τ/k_us/β つまみ調整・ステア源切替・誤差(sim−観測)パネル切替）",
+    "viewer": "走行ログ統合ビューア（軌跡比較／縦横モデル検証）",
     # step5: nstep/<tag>/
     "overview": "誤差概観（N=1）",
     "map_distribution": "誤差の位置分布（地図上・N=1 / N=max・インタラクティブ）",
@@ -107,7 +104,7 @@ _FIG_HEIGHT_DEFAULT = 600
 # iframe で埋め込む「自己完結 HTML ビューア」の stem 集合。canvas 独自 JS で
 # 外部参照を持たないものに限定する（plotly standalone HTML は plotly.min.js を相対参照
 # するため srcdoc 内で壊れる。それらは *.fig.json へ変換し本文に直接描画する）。
-_SELFCONTAINED_HTML: set[str] = {"trajectory_playback", "lon_lat_model"}
+_SELFCONTAINED_HTML: set[str] = {"viewer"}
 
 # report.html がこのサイズを超えたら警告する [MB]。
 _SIZE_WARN_MB = 150
@@ -158,10 +155,8 @@ _CATEGORY_DESCS: dict[str, str] = {key: desc for key, _, desc in _CATEGORIES}
 _CATEGORY_ORDER: list[str] = [key for key, _, _ in _CATEGORIES]
 
 # step4 が figures/ に出力する closed-loop 比較図（実機 vs sim）の stem。
-# trajectory_playback のみ残し、旧 vs_distance / trajectory_with_map / trajectory_xy は削除済み。
-_CLOSED_LOOP_STEMS: set[str] = {
-    "trajectory_playback",
-}
+# 統合 viewer の軌跡比較タブが closed-loop 比較を担う。
+_CLOSED_LOOP_STEMS: set[str] = {"viewer"}
 
 # 取り込む Markdown レポート: (comparison/ からの相対パス, 見出し, 所属カテゴリ)。
 # セクション内で「図の前」に描画する Markdown。プロットを追認 (§2–§4) の位置へ送り、
@@ -200,7 +195,7 @@ def _classify(rel: Path) -> str:
         "cross_physical_validity_kus",
         "cross_physical_validity_long",
         "cross_physical_validity_steer",
-        "lon_lat_model",
+        "viewer",
     }:
         return "parameter_estimation"
 
@@ -332,7 +327,8 @@ def _heading_html(caption: str | None, title_text: str | None, stem: str,
 
 
 def _figure(rel: Path, comparison_dir: Path, ns: str, caption: str | None = None,
-            scenario_name: str = "", no_embed_viewers: bool = False) -> str:
+            scenario_name: str = "", no_embed_viewers: bool = False,
+            initial_tab: str | None = None) -> str:
     """1 図分の <figure> HTML を返す（gzip+base64 埋め込み・遅延描画）。
 
     - `*.fig.json` (plotly) → `<div class='plotly-fig pending'>` + 直後の
@@ -347,6 +343,13 @@ def _figure(rel: Path, comparison_dir: Path, ns: str, caption: str | None = None
     fname = rel.as_posix()
     stem = asset_stem(rel)
     text = (comparison_dir / rel).read_text(encoding="utf-8", errors="replace")
+    if asset_stem(rel) == "viewer" and initial_tab:
+        text = re.sub(
+            r'("initial_tab"\s*:\s*)"(?:playback|model)"',
+            rf'\1"{initial_tab}"',
+            text,
+            count=1,
+        )
     if is_fig_json(rel):
         fig_id = f"fig-{ns}-" + slug(fname)
         # spec を 1 度だけパースし、(1) 高さ確保用の layout.height を取り、(2) plot 内タイトルを
@@ -401,12 +404,6 @@ def _figure(rel: Path, comparison_dir: Path, ns: str, caption: str | None = None
             f"</div>"
             f"</figure>"
         )
-
-    # ビューア重複排除: playback/model テンプレートの重複を防ぐため、HTML から DATA (JSON) のみ抽出
-    if stem in _SELFCONTAINED_HTML:
-        m = re.search(r"const DATA\s*=\s*(\{.*?\})\s*;", text, re.DOTALL)
-        if m:
-            text = m.group(1)
 
     return (
         f"<figure>{cap_html}"
@@ -485,8 +482,13 @@ def _render_category_images(
         if case is not None:
             per_case.setdefault(case, {})[asset_stem(r)] = r
 
+    initial_tab = "model" if cat == "parameter_estimation" else "playback"
     out: list[str] = [
-        _figure(r, comparison_dir, ns, scenario_name=scenario_name, no_embed_viewers=no_embed_viewers) for r in flat
+        _figure(
+            r, comparison_dir, ns, scenario_name=scenario_name,
+            no_embed_viewers=no_embed_viewers, initial_tab=initial_tab,
+        )
+        for r in flat
     ]
     if per_case:
         out.extend(_render_case_tabs(per_case, comparison_dir, ns, cat, no_embed_viewers=no_embed_viewers))
@@ -596,13 +598,7 @@ _RENDER_GLUE = """
     if (s.classList.contains("viewersrc")) {
       var iframe = document.createElement("iframe");
       iframe.title = div.dataset.title || "";
-      var type = s.dataset.type === "trajectory_playback" ? "playback" : (s.dataset.type === "lon_lat_model" ? "model" : null);
-      if (type) {
-        var tpl = await getTemplate(type);
-        iframe.srcdoc = tpl.replace("__PAYLOAD_JSON__", text);
-      } else {
-        iframe.srcdoc = text;
-      }
+      iframe.srcdoc = text;
       div.appendChild(iframe);
       return;
     }
@@ -743,6 +739,11 @@ def _render_dataset_report(
     by_cat: dict[str, list[Path]] = {}
     for rel in rels_all:
         by_cat.setdefault(_classify(rel), []).append(rel)
+        if asset_stem(rel) == "viewer":
+            by_cat.setdefault("parameter_estimation", []).append(rel)
+            by_cat.setdefault("closed_loop_comparison", []).append(rel)
+    for rels in by_cat.values():
+        rels[:] = list(dict.fromkeys(rels))
     case_tags = {c for rel in rels_all if (c := _case_of(rel)) is not None}
 
     if multi and no_embed_viewers:
@@ -939,9 +940,6 @@ def build_html(
 
     sync_css = _casesync_css(all_case_tags)
 
-    playback_tpl_b64 = gzip_b64(PLAYBACK_TEMPLATE)
-    model_tpl_b64 = gzip_b64(MODEL_TEMPLATE)
-
     return f"""<!DOCTYPE html>
 <html lang="ja">
 <head>
@@ -969,8 +967,6 @@ def build_html(
 {cross_html}
 {''.join(ds_bodies)}
 {shared_cfg_section}
-<script type="application/gzip+html+base64" id="tpl-playback">{playback_tpl_b64}</script>
-<script type="application/gzip+html+base64" id="tpl-model">{model_tpl_b64}</script>
 {_RENDER_GLUE}
 </main>
 </div>

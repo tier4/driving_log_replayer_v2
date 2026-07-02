@@ -55,7 +55,7 @@ webauto data annotation-dataset pull \
 > 使われる。サンプルの UUID は動作確認用の選択値なので、評価対象が異なる場合は
 > **必ず自分の評価対象 annotation-dataset の UUID に書き換えること**。
 >
-> 比較レポート (`comparison/report.md`) や `trajectory_playback.html` で実機と
+> 比較レポート (`comparison/report.md`) や `viewer.html` で実機と
 > シム軌跡がまったく違う場所にプロットされている場合、この UUID が誤っている
 > 可能性が高い。
 
@@ -195,7 +195,7 @@ sample/out/latest/
     ├── report.html                       # Stage Report HTML: 単一 HTML レポート
     └── comparison/
         ├── report.md                     # Stage CL3: 比較統計レポート
-        ├── figures/                      # Stage CL3: trajectory_playback.html, lon_lat_model.html / Stage CL4: dp_*.fig.json
+        ├── figures/                      # Stage CL3: viewer.html / Stage CL4: dp_*.fig.json
         ├── nstep/
         │   └── <case_tag>/{overview.fig.json, map_distribution.fig.json, nstep_delta.csv, summary.txt}  # Stage OL1
         └── cases/
@@ -263,7 +263,7 @@ make local_cloud_run LOCAL_SCENARIO=$(pwd)/sample/scenario_curve_wide_turn.yaml
 ```
 
 **結果の確認** — `report.html` の「4. 最終的な Closed Loop シミュレーション残差」セクション:
-- `figures/trajectory_playback.html`: 実機 vs 3 sim の軌跡重ね表示（大回りの有無を目視）
+- `figures/viewer.html`: 実機 vs 3 sim の軌跡比較とモデル検証
 - `report.md` / `metrics_closed_loop.json`: 軌跡乖離（s2r / r2s）の定量値（乖離が大きければ大回り）
 
 ---
@@ -277,10 +277,10 @@ make local_cloud_run LOCAL_SCENARIO=$(pwd)/sample/scenario_curve_wide_turn.yaml
 
 | 課題 | 停止→発進 | 確認する成果物 |
 |---|---|---|
-| ②停止位置手前 | あり | `trajectory_playback.html`（位置同期モードで停止位置を比較） + `report.md` の軌跡乖離 |
+| ②停止位置手前 | あり | `viewer.html`（位置同期モードで停止位置を比較） + `report.md` の軌跡乖離 |
 | ③急ブレーキ/ジリジリ | あり | 同上（時刻同期モードで加減速タイミングを比較） |
-| ④加速不足 | なし | `trajectory_playback.html`（凡例の v/t/s 読み出し） + `report.md` の速度統計 |
-| ⑤発進停止振動 | なし | 同上 + `lon_lat_model.html`（縦方向モデル検証） |
+| ④加速不足 | なし | `viewer.html`（凡例の v/t/s 読み出し） + `report.md` の速度統計 |
+| ⑤発進停止振動 | なし | 同上 + `viewer.html` のモデル検証タブ |
 
 **実行**:
 ```bash

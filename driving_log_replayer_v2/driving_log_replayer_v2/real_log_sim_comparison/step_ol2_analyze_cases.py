@@ -17,7 +17,7 @@
     ├── cases_summary.md   # N=1 詳細 RMSE 表 + horizon 別 RMSE 表 + 物理妥当性サマリ
     └── cases_metrics.json # 上記の機械可読版 ("physical_validity" キーに同定値を含む)
 
-誤差時系列の対話的確認は縦横モデル検証ビューア (step4: lon_lat_model.html) の
+誤差時系列の対話的確認は統合ビューア (step4: viewer.html) のモデル検証タブの
 誤差パネルへ移設済み。case × horizon の俯瞰は cases_summary.md の表が担う。
 
 欠損ケース (CSV が無い) は警告ログを出してスキップ。集約処理は continue できる。

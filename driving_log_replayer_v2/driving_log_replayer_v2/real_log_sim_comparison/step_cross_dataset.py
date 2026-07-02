@@ -44,6 +44,7 @@ from __future__ import annotations
 
 import argparse
 from collections import Counter
+import json
 import math
 from pathlib import Path
 import sys
@@ -73,17 +74,7 @@ from .lib._figures import (
     build_fig_long_perf_map,
 )
 from .lib._multi_agg import HORIZONS
-from .lib._multi_agg import aggregate_normalized, robust_score
-from .lib._cross_dataset import (
-    build_closed_loop_matrix,
-    build_open_loop_matrix,
-    cross_normalized,
-    cross_physical_validity_analysis,
-    detect_outliers,
-    leave_one_out,
-    resolve_reference_tag,
-    write_cross_metrics_json,
-)
+from .lib._multi_agg import aggregate_normalized, robust_score, score_formula_md
 from .lib._nstep_common import metrics_description_md
 from .lib._physical_validity import (
     compute_kus_bins_from_sufficient_stats,
@@ -95,6 +86,7 @@ from .lib._physical_validity import (
     merged_model_params,
 )
 from .lib._map import resolve_map_osm, load_map_ways
+from .lib._models_config import load_models_doc
 
 _MIN_DS_LOO = 2       # LOO を実行する最小 DS 数 (2 は参考扱い)
 _MIN_DS_OUTLIER = 3   # 外れ検出 (robust z-score) の最小 DS 数

@@ -184,9 +184,9 @@ Stage CL2 (`step_cl2_run_sims`) が `scenario_test_runner` で sim を回した�
 | セクション | 内容 | 主な図（出力元 stage） |
 |---|---|---|
 | 1. 推定前：実車とシミュレーションのズレ | パラメータ推定前の、理想追従（操舵完全一致と仮定）における自車位置やモデル構造の限界によるズレ | `cross_perfect_tracking_box`・`cross_perfect_tracking_traj`(Cross Dataset) |
-| 2. パラメータ推定結果 | 実機ログから最小二乗法で同定した車両パラメータとそのフィッティング精度 | `cross_physical_validity_{kus,long,steer}`(Cross Dataset) / `lon_lat_model`(CL3) |
+| 2. パラメータ推定結果 | 実機ログから最小二乗法で同定した車両パラメータとそのフィッティング精度 | `cross_physical_validity_{kus,long,steer}`(Cross Dataset) / `viewer` のモデル検証タブ(CL3) |
 | 3. 推定後：シミュレーション残差の提示 | ホライズン別の予測誤差や、位置 (x, y) の変位誤差の成長度合い・分布 | nstep の `overview`/`map_distribution`(OL1) + `cases/overlay`(OL2) + `cross_long_perf_*`(Cross Dataset) |
-| 4. 最終的な Closed Loop シミュレーション残差 | 最終同定パラメータで closed-loop 実行した際の実機との軌跡・速度・操舵の乖離 | `trajectory_playback`(CL3) + `cross_closed_loop_heatmap`/`cross_normalized_bars`/`coverage_overview`/`loo_stability`(Cross Dataset) |
+| 4. 最終的な Closed Loop シミュレーション残差 | 最終同定パラメータで closed-loop 実行した際の実機との軌跡・速度・操舵の乖離 | `viewer` の軌跡比較タブ(CL3) + `cross_closed_loop_heatmap`/`cross_normalized_bars`/`coverage_overview`/`loo_stability`(Cross Dataset) |
 | その他 | 上記いずれにも分類されなかった図 | `dp_real_vs_sim`・`dp_vs_actual`・`dp_vs_final_traj`(CL4) など |
 
 **`report.html` と `physical_validity_report.html` の役割分担**: 前者は解析パイプラインの成果物で、
@@ -203,7 +203,7 @@ scenario の Conditions に列挙された models 群を対象に自動生成さ
   インラインして共有する。`IntersectionObserver` でビューポート進入時に `Plotly.newPlot` 遅延描画する
   （数十図を一度に描かない）。折りたたみ `<details>` / 非選択ケースタブは display:none で IO が発火しない
   ため、details の toggle・ケース切替でも未描画図を reveal-render する。ズーム・パン・ホバー・凡例トグル可。
-- **playback ビューア**（`trajectory_playback`）: 独自 canvas JS の自己完結 HTML を `<iframe srcdoc>` で隔離埋め込み。
+- **統合ビューア**（`viewer`）: 軌跡比較とモデル検証をタブ化した自己完結 canvas HTML を `<iframe srcdoc>` で隔離埋め込み。
 - **プロット単位ケースタブ**（セクション 3）: `nstep/<case>/` の図をプロット種別ごとにまとめ、
   各ブロック先頭の「ケース切替: `baseline`/`kus0020`/`no_delay` …」を選ぶとそのブロックの図が切り替わる
   （純 CSS ラジオ＋`case-<slug>` クラス対応）。
@@ -239,8 +239,7 @@ Markdown 形式の比較レポート。以下を含む。
 
 | ファイル | 内容 |
 | -------- | ---- |
-| `trajectory_playback.html` | Stage CL3: 軌跡再生ビューア（plotly 非依存の自己完結 canvas+JS）。シークバー・再生で各 run の現在位置を地図上に重ね表示。**時刻同期**（同一経過時刻）と**位置同期**（実機の走行距離 s 基準に各 run を自軌跡の弧長一致地点へ表示＝同一走行距離での横ずれ比較）の 2 モード。速度は進行方向矢印（長さ = v×1.5s 到達距離）と凡例の v/t/s 読み出しで表示。追従ズーム（表示中 run を自動フィット、視野幅調整可）/全体表示トグル・run 表示切替付き |
-| `lon_lat_model.html` | Stage CL3: 縦横モデル検証ビューア（実機のみ。運動方程式〔1次遅れ+自転車モデル〕の前方積算と、加速度/速度/ステア/ヨーレート/横Gの観測・指令を重ね描き。地図にシミュレーション軌跡も重畳。T/τ/k_us/β つまみ調整・ステア源切替・誤差(sim−観測)パネル切替） |
+| `viewer.html` | Stage CL3: 軌跡比較と縦横モデル検証をタブ統合した、plotly非依存の自己完結canvasビューア。時刻／距離同期、DP軌跡、metrics、モデルつまみ、モデル選択、誤差表示、全最適化機能を収録 |
 | `dp_real_vs_sim.fig.json` | Stage CL4: DiffusionPlanner 出力軌跡 実機 vs sim |
 | `dp_vs_actual.fig.json` | Stage CL4: DP計画速度(d=0) vs actual速度 |
 | `dp_vs_final_traj.fig.json` | Stage CL4: 実機 DP出力 vs 最終 planning（optimizer 補正） |
@@ -266,7 +265,7 @@ horizon 別 RMSE）。ケース横断の比較図は `cases/overlay/` が担う�
 | `overlay/cascade_error_overlay.fig.json` | 全ケースを 1 枚に重ね描き（段階的誤差） |
 | `overlay/error_growth_overlay.fig.json` | 全ケースの horizon 別 RMSE 成長を重ね描き（位置/yaw） |
 
-> 誤差時系列の対話的確認は縦横モデル検証ビューア（`figures/lon_lat_model.html` の「誤差パネル」）へ移設した。case × horizon の俯瞰は `cases_summary.md` の表が担う。
+> 誤差時系列の対話的確認は統合ビューア（`figures/viewer.html` のモデル検証「誤差パネル」）へ移設した。case × horizon の俯瞰は `cases_summary.md` の表が担う。
 
 ### `result_bag/`
 
@@ -465,7 +464,7 @@ DP 3 モデル（`sim_dp_0303` / `sim_dp_0503` / `sim_dp_0410`）が自動で we
 `sample/out/latest/report.html` を開き、「4. 最終的な Closed Loop シミュレーション残差」
 セクションを確認する。
 
-- `figures/trajectory_playback.html`: 実機 vs 各 sim の軌跡重ね表示（大回りの有無を目視）
+- `figures/viewer.html`: 実機 vs 各 sim の軌跡比較と縦横モデル検証
 - `report.md` / `metrics_closed_loop.json`: 軌跡乖離（s2r / r2s）の定量値
 - **TP**: `sim_dp_0410` の軌跡乖離が顕著に大きい（課題再現）
 - **FN**: `sim_dp_0303` / `sim_dp_0503` の軌跡乖離が実機に近い（課題非再現）
