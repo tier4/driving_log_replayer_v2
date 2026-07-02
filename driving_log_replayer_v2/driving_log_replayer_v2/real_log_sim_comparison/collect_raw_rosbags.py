@@ -42,6 +42,7 @@ import subprocess
 import sys
 import tempfile
 import uuid as uuid_module
+from concurrent.futures import ProcessPoolExecutor, as_completed
 
 import yaml
 
@@ -226,6 +227,69 @@ def _run_step0_make_lite(input_bag: Path, output_path: Path) -> bool:
     return proc.returncode == 0
 
 
+def _collect_one_worker(args: dict) -> dict:
+    item = args["item"]
+    root = Path(args["root"])
+    topics = args["topics"]
+    now_iso = args["now_iso"]
+
+    rosbag_id = item.get("id", "")
+    file_name = _get_field(item, "log_file_name", "fileName", "file_name") or rosbag_id
+    dur = _get_duration(item)
+    synthetic_id = _build_synthetic_id(rosbag_id)
+
+    ds_dir = root / "datasets" / synthetic_id
+    input_bag_dir = ds_dir / "input_bag"
+    lite_path = ds_dir / "real.lite"
+
+    rec: dict = {
+        "synthetic_id": synthetic_id,
+        "rosbag_id": rosbag_id,
+        "file_name": file_name,
+        "duration_s": dur,
+        "collected_at": now_iso,
+        "status": "pending",
+    }
+
+    # 既に real.lite が存在すればスキップ (--resume 相当)
+    if lite_path.exists() or (ds_dir / "real.lite.mcap").exists():
+        print(f"  [SKIP] real.lite 既存: {ds_dir}", flush=True)
+        rec["status"] = "already_exists"
+        return rec
+
+    input_bag_dir.mkdir(parents=True, exist_ok=True)
+
+    # input_bag に .db3 が既存なら pull をスキップ (中断後の再開)
+    existing_db3 = list(input_bag_dir.glob("*.db3"))
+    if existing_db3:
+        print(f"  [SKIP pull] input_bag 既存 ({existing_db3[0].name})", flush=True)
+    else:
+        # pull-filtered-rosbag: tempdir に落として _collect_bag で flatten
+        tmp_pull = Path(tempfile.mkdtemp(prefix="pull_", dir=ds_dir))
+        try:
+            print(f"  [pull] {file_name} → {tmp_pull.name}/ → {input_bag_dir.name}/", flush=True)
+            _pull_rosbag(rosbag_id, topics, tmp_pull)
+            _collect_bag(tmp_pull, input_bag_dir)
+        except RuntimeError as e:
+            print(f"  [WARN] pull 失敗 {rosbag_id[:16]}: {e}", file=sys.stderr, flush=True)
+            rec["status"] = "pull_failed"
+            return rec
+        finally:
+            shutil.rmtree(tmp_pull, ignore_errors=True)
+
+    # step0_make_lite (ROS 環境が source 済みであること)
+    print(f"  [lite] {input_bag_dir} → {lite_path}", flush=True)
+    ok = _run_step0_make_lite(input_bag_dir, lite_path)
+    if not ok:
+        print(f"  [WARN] step0_make_lite 失敗: {ds_dir}", file=sys.stderr, flush=True)
+        rec["status"] = "lite_failed"
+    else:
+        rec["status"] = "success"
+        print(f"  [OK] {synthetic_id[:16]}...", flush=True)
+
+    return rec
+
+
 def _write_index(root: Path, records: list[dict]) -> Path:
     """raw_index.yaml を書く。既存を synthetic_id でマージ (べき等)。"""
     path = root / "raw_index.yaml"
@@ -297,6 +361,7 @@ def collect(
     min_duration_s: float = _MIN_DURATION_S_DEFAULT,
     topics: list[str] | None = None,
     dry_run: bool = False,
+    jobs: int = min(4, os.cpu_count() or 1),
 ) -> list[dict]:
     """vehicle_id で rosbag を収集し real.lite を生成する。
 
@@ -393,75 +458,38 @@ def collect(
         _write_index(root, records)
         return records
 
-    # --- Step 3: 各 bag を pull → step1_make_lite で real.lite 化 ---
+    # --- Step 3: 各 bag を pull → step1_make_lite で real.lite 化 (並列実行) ---
     records: list[dict] = []
     now_iso = datetime.now(timezone.utc).isoformat(timespec="seconds")
 
-    for i, item in enumerate(selected, start=1):
-        rosbag_id = item.get("id", "")
-        file_name = _get_field(item, "log_file_name", "fileName", "file_name") or rosbag_id
-        dur = _get_duration(item)
-        synthetic_id = _build_synthetic_id(rosbag_id)
-
-        print(
-            f"\n=== [{i}/{len(selected)}] {rosbag_id[:16]}... (dur={dur:.0f}s) ===",
-            flush=True,
-        )
-
-        ds_dir = root / "datasets" / synthetic_id
-        input_bag_dir = ds_dir / "input_bag"
-        lite_path = ds_dir / "real.lite"
-
-        rec: dict = {
-            "synthetic_id": synthetic_id,
-            "rosbag_id": rosbag_id,
-            "file_name": file_name,
-            "duration_s": dur,
-            "collected_at": now_iso,
-            "status": "pending",
+    tasks_args = [
+        {
+            "item": item,
+            "root": str(root),
+            "topics": topics,
+            "now_iso": now_iso,
         }
+        for item in selected
+    ]
 
-        # 既に real.lite が存在すればスキップ (--resume 相当)
-        if lite_path.exists() or (ds_dir / "real.lite.mcap").exists():
-            print(f"  [SKIP] real.lite 既存: {ds_dir}")
-            rec["status"] = "already_exists"
-            records.append(rec)
-            continue
-
-        input_bag_dir.mkdir(parents=True, exist_ok=True)
-
-        # input_bag に .db3 が既存なら pull をスキップ (中断後の再開)
-        existing_db3 = list(input_bag_dir.glob("*.db3"))
-        if existing_db3:
-            print(f"  [SKIP pull] input_bag 既存 ({existing_db3[0].name})")
-        else:
-            # pull-filtered-rosbag: tempdir に落として _collect_bag で flatten
-            # (download.py と同一パターン。pull 出力はネストした rosbag2 dir を作るため直接 input_bag_dir を
-            # 渡すと step1_make_lite が bag を見つけられない)
-            tmp_pull = Path(tempfile.mkdtemp(prefix="pull_", dir=ds_dir))
+    print(f"\n[INFO] 並列実行開始 (ワーカー数: {jobs})...", flush=True)
+    with ProcessPoolExecutor(max_workers=jobs) as pool:
+        futs = {pool.submit(_collect_one_worker, a): a["item"].get("id", "") for a in tasks_args}
+        for i, fut in enumerate(as_completed(futs), start=1):
+            rosbag_id = futs[fut]
             try:
-                print(f"  [pull] {file_name} → {tmp_pull.name}/ → {input_bag_dir.name}/")
-                _pull_rosbag(rosbag_id, topics, tmp_pull)
-                _collect_bag(tmp_pull, input_bag_dir)
-            except RuntimeError as e:
-                print(f"  [WARN] pull 失敗: {e}", file=sys.stderr)
-                rec["status"] = "pull_failed"
+                rec = fut.result()
                 records.append(rec)
-                continue
-            finally:
-                shutil.rmtree(tmp_pull, ignore_errors=True)
-
-        # step0_make_lite (ROS 環境が source 済みであること)
-        print(f"  [lite] {input_bag_dir} → {lite_path}")
-        ok = _run_step0_make_lite(input_bag_dir, lite_path)
-        if not ok:
-            print(f"  [WARN] step0_make_lite 失敗: {ds_dir}", file=sys.stderr)
-            rec["status"] = "lite_failed"
-        else:
-            rec["status"] = "success"
-            print(f"  [OK] {synthetic_id[:16]}...")
-
-        records.append(rec)
+                status_label = "SKIP" if rec.get("status") == "already_exists" else "OK" if rec.get("status") == "success" else "FAILED"
+                print(f"[{i}/{len(selected)}] {status_label}: {rosbag_id[:8]} (status={rec.get('status')})", flush=True)
+            except Exception as e:
+                print(f"[{i}/{len(selected)}] ERROR: {rosbag_id[:8]} ({e})", file=sys.stderr, flush=True)
+                records.append({
+                    "synthetic_id": _build_synthetic_id(rosbag_id),
+                    "rosbag_id": rosbag_id,
+                    "collected_at": now_iso,
+                    "status": "lite_failed",
+                })
 
     # --- Step 4: raw_index.yaml 更新 ---
     index_path = _write_index(root, records)
@@ -525,6 +553,10 @@ def main() -> None:
         "--dry-run", action="store_true",
         help="search と選別のみ実行し pull/lite 化はしない (件数・日付分布の事前確認用)",
     )
+    ap.add_argument(
+        "--jobs", type=int, default=min(4, os.cpu_count() or 1),
+        help="並列ワーカー数 (既定: コア数または4の小さい方)",
+    )
     args = ap.parse_args()
 
     root = Path(args.root).resolve()
@@ -539,6 +571,7 @@ def main() -> None:
         min_duration_s=args.min_duration,
         topics=args.topics,
         dry_run=args.dry_run,
+        jobs=args.jobs,
     )
 
     if not records:

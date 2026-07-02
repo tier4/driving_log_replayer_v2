@@ -351,6 +351,7 @@ collect_raw_rosbags:
 	        --vehicle-id "$(VEHICLE_ID)" \
 	        --root "$(ROOT)" \
 	        --limit "$(LIMIT)" \
+	        --jobs "$(N_JOBS)" \
 	        $(if $(DATE_FROM),--date-from "$(DATE_FROM)",) \
 	        $(if $(DATE_TO),--date-to "$(DATE_TO)",)
 
