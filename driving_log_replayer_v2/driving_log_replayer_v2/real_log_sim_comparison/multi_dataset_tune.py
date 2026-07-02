@@ -1340,7 +1340,6 @@ def main() -> None:
     if not lite_dirs:
         print(f"ERROR: real.lite が見つかりません: {args.collection_dir}", file=sys.stderr)
         sys.exit(1)
-    print(f"datasets: {[d for d, _ in lite_dirs]}")
 
     n_jobs = max(1, args.jobs or 1)
 
