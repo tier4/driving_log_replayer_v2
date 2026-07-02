@@ -40,13 +40,22 @@ from dataclasses import dataclass, field
 import html
 import json
 from pathlib import Path
-import re
 import warnings
 
 from .lib._collection import CROSS_DIR_NAME, discover_collection
-from .lib._fig_io import FIG_SUFFIX, collect_fig_jsons
+from .lib._fig_io import collect_fig_jsons
 from .lib._inline_assets import gzip_b64, plotly_js_script
 from .lib._params_utils import _INFO_YAML, _SIM_YAML
+from .lib._report_html import (
+    asset_stem,
+    collect_report_assets,
+    dataset_label,
+    is_fig_json,
+    render_config_details,
+    render_markdown,
+    scenario_date,
+    slug,
+)
 from .lib._plotly_utils import FIG_HEIGHTS, IFRAME_PAD
 from .lib._runtime_config import add_common_cli_arguments, build_runtime_config
 from .lib._playback_viewer import _HTML_TEMPLATE as PLAYBACK_TEMPLATE
@@ -94,9 +103,6 @@ _IFRAME_HEIGHT_DEFAULT = 650
 # plotly 図 div の高さを fig.json の layout.height から確保する際の最終フォールバック [px]。
 _FIG_HEIGHT_DEFAULT = 600
 
-# 収集対象。plotly 図スペック (*.fig.json) と、自己完結 HTML ビューア (*.html)。
-_PLAYBACK_SUFFIX = ".html"
-
 # iframe で埋め込む「自己完結 HTML ビューア」の stem 集合。canvas 独自 JS で
 # 外部参照を持たないものに限定する（plotly standalone HTML は plotly.min.js を相対参照
 # するため srcdoc 内で壊れる。それらは *.fig.json へ変換し本文に直接描画する）。
@@ -113,45 +119,8 @@ class ReportDataset:
     dataset_id: str
     comparison_dir: Path
     scenario_yaml: Path | None = None   # auto_scenario.yaml (ラベル導出 + 実行構成埋め込み)
-    label: str | None = None            # None なら _dataset_label() で導出
+    label: str | None = None            # None なら dataset_label() で導出
     config_files: tuple[tuple[str, Path], ...] = field(default=())  # per-DS 追加設定 YAML
-
-
-def _scenario_date(scenario_yaml: Path | None) -> str:
-    """auto_scenario.yaml の FileHeader.date (YYYY-MM-DD) を返す (取れなければ空)。"""
-    if scenario_yaml is None or not scenario_yaml.is_file():
-        return ""
-    try:
-        import yaml  # noqa: PLC0415
-
-        doc = yaml.safe_load(scenario_yaml.read_text(encoding="utf-8")) or {}
-        date = ((doc.get("OpenSCENARIO") or {}).get("FileHeader") or {}).get("date", "")
-        return str(date)[:10]
-    except Exception:  # noqa: BLE001
-        return ""
-
-
-def _dataset_label(entry: ReportDataset) -> str:
-    """セレクタ・見出しに使う人間可読ラベル (UUID は不親切なので日付を併記)。"""
-    if entry.label:
-        return entry.label
-    short = entry.dataset_id[:8]
-    date = _scenario_date(entry.scenario_yaml)
-    return f"{short} ｜ {date}" if date else short
-
-
-def _asset_stem(rel: Path) -> str:
-    """アセット相対パスから拡張子（.fig.json / .html）を除いた stem を返す。"""
-    name = rel.name
-    for suf in (FIG_SUFFIX, _PLAYBACK_SUFFIX):
-        if name.endswith(suf):
-            return name[: -len(suf)]
-    return rel.stem
-
-
-def _is_fig_json(rel: Path) -> bool:
-    """plotly 図スペック (*.fig.json) か（self-contained HTML ビューアと区別）。"""
-    return rel.name.endswith(FIG_SUFFIX)
 
 
 # --- 概念セクション定義 ---------------------------------------------------------
@@ -213,66 +182,6 @@ def _caption_for(stem: str) -> str:
         return f"dataset × case: open-loop N={m.group(1)} 終端誤差行列"
     # フォールバック: アンダースコアを空白に
     return stem.replace("_", " ")
-
-
-def _classify(rel: Path) -> str:
-    """図の相対パス (comparison/ 基準) を概念セクションキーへ分類する。"""
-    top = rel.parts[0] if len(rel.parts) > 1 else "."
-    stem = _asset_stem(rel)
-
-    if stem.startswith("dp_"):
-        return "other"
-
-    # 2. 推定前：実車とシミュレーションのズレ
-    if stem in {"cross_perfect_tracking_box", "cross_perfect_tracking_traj"}:
-        return "pre_estimation_deviation"
-
-    # 3. パラメータ推定結果
-    if stem in {
-        "cross_physical_validity_kus", "cross_physical_validity_long",
-        "cross_physical_validity_steer", "lon_lat_model"
-    }:
-        return "parameter_estimation"
-
-    # 4. 推定後：シミュレーション残差の提示
-    if stem in {"cross_long_perf_box", "cross_long_perf_growth", "cross_long_perf_map"}:
-        return "post_estimation_residual"
-    if top in {"nstep", "cases"}:
-        return "post_estimation_residual"
-
-    # 5. 最終的な Closed Loop シミュレーション残差
-    if stem in _CLOSED_LOOP_STEMS:
-        return "closed_loop_comparison"
-    if stem in {
-        "cross_closed_loop_heatmap", "cross_normalized_bars",
-        "coverage_overview", "loo_stability", "steer_diff_overview"
-    }:
-        return "closed_loop_comparison"
-
-    return "other"
-
-
-def _render_markdown(text: str) -> str:
-    """Markdown を HTML 化する。markdown パッケージが無ければ <pre> でフォールバック。
-
-    `pymdownx.arithmatex`（generic）で LaTeX 数式を MathJax 用 span（`\\(…\\)` / `\\[…\\]`）に
-    退避する。これにより `$$a_target$$` の `_` が `<em>` 化する等の Markdown 破壊を避ける
-    （MathJax の delimiter 設定は build_html の <head> と一致させること）。拡張が無い環境では
-    数式拡張のみ外して描画する（既存3レポートは `$` 非含有のため影響なし）。
-    """
-    try:
-        import markdown as _md  # noqa: PLC0415
-    except ImportError:
-        return f"<pre class='md-fallback'>{html.escape(text)}</pre>"
-    base = ["tables", "fenced_code"]
-    try:
-        return _md.markdown(
-            text,
-            extensions=[*base, "pymdownx.arithmatex"],
-            extension_configs={"pymdownx.arithmatex": {"generic": True}},
-        )
-    except (ImportError, ValueError):  # pymdownx 不在等
-        return _md.markdown(text, extensions=base)
 
 
 _STYLE = """
@@ -363,11 +272,6 @@ details.cfg-file > summary:hover { color: var(--accent); }
 """
 
 
-def _slug(text: str) -> str:
-    """HTML id/name 用に安全な文字へ変換する。"""
-    return re.sub(r"[^A-Za-z0-9_-]+", "-", text).strip("-").lower()
-
-
 def _heading_html(caption: str | None, title_text: str | None, stem: str,
                   scenario_name: str) -> str:
     """figcaption 見出しの HTML を返す。
@@ -402,10 +306,10 @@ def _figure(rel: Path, comparison_dir: Path, ns: str, caption: str | None = None
     base64 は HTML 安全な文字のみで `</script>` エスケープは不要。
     """
     fname = rel.as_posix()
-    stem = _asset_stem(rel)
+    stem = asset_stem(rel)
     text = (comparison_dir / rel).read_text(encoding="utf-8", errors="replace")
-    if _is_fig_json(rel):
-        fig_id = f"fig-{ns}-" + _slug(fname)
+    if is_fig_json(rel):
+        fig_id = f"fig-{ns}-" + slug(fname)
         # spec を 1 度だけパースし、(1) 高さ確保用の layout.height を取り、(2) plot 内タイトルを
         # 抽出して layout から除去（HTML 見出しへ統合）する。
         title_text = None
@@ -443,7 +347,7 @@ def _figure(rel: Path, comparison_dir: Path, ns: str, caption: str | None = None
         f"<figcaption>{html.escape(caption_text)}"
         f"<span class='fname'>{html.escape(fname)}</span></figcaption>"
     )
-    fig_id = f"vf-{ns}-" + _slug(fname)
+    fig_id = f"vf-{ns}-" + slug(fname)
     height = _IFRAME_HEIGHTS.get(stem, _IFRAME_HEIGHT_DEFAULT)
 
     if no_embed_viewers:
@@ -503,7 +407,7 @@ def _render_case_tabs(
     out: list[str] = []
     for pt in plot_types:
         caption = _caption_for(pt)
-        group = _slug(f"casesync-{ns}-{cat}-{pt}")
+        group = slug(f"casesync-{ns}-{cat}-{pt}")
         block_cases = [c for c in cases if pt in per_case[c]]
         out.append("<div class='casesync'>")
         out.append(
@@ -511,15 +415,15 @@ def _render_case_tabs(
         )
         out.append("<span class='casesync-label'>ケース切替:</span>")
         for i, c in enumerate(block_cases):
-            rid = f"{group}-{_slug(c)}"
+            rid = f"{group}-{slug(c)}"
             checked = " checked" if i == 0 else ""
             out.append(
-                f"<input type='radio' name='{group}' id='{rid}' class='cr-{_slug(c)}'{checked}>"
+                f"<input type='radio' name='{group}' id='{rid}' class='cr-{slug(c)}'{checked}>"
             )
             out.append(f"<label for='{rid}'>{html.escape(c)}</label>")
         for c in block_cases:
             out.append(
-                f"<div class='tabpanel case-{_slug(c)}'>"
+                f"<div class='tabpanel case-{slug(c)}'>"
                 f"{_figure(per_case[c][pt], comparison_dir, ns, caption=c, no_embed_viewers=no_embed_viewers)}</div>"
             )
         out.append("</div>")
@@ -540,7 +444,7 @@ def _render_category_images(
     for r in rels:
         case = _case_of(r)
         if case is not None:
-            per_case.setdefault(case, {})[_asset_stem(r)] = r
+            per_case.setdefault(case, {})[asset_stem(r)] = r
 
     out: list[str] = [
         _figure(r, comparison_dir, ns, scenario_name=scenario_name, no_embed_viewers=no_embed_viewers) for r in flat
@@ -557,26 +461,10 @@ def _casesync_css(case_tags: set[str]) -> str:
     ため、全 DS の case タグ和集合で 1 回だけ生成する。
     """
     return "\n".join(
-        f".casesync > input.cr-{_slug(c)}:checked ~ .tabpanel.case-{_slug(c)}"
+        f".casesync > input.cr-{slug(c)}:checked ~ .tabpanel.case-{slug(c)}"
         "{ display: block; }"
         for c in _sorted_cases(list(case_tags))
     )
-
-
-def _collect_figures(comparison_dir: Path) -> list[Path]:
-    """comparison/ 配下の図（*.fig.json + 自己完結ビューア *.html）を集める。
-
-    plotly 図スペックと、再生ビューア (trajectory_playback.html 等の自己完結 HTML) を
-    対象とする。report.html / plotly.min.js は元々 comparison/ の外なので入らない。
-    dp_* はレポートに掲載しない（step8 出力は保持するが非掲載）。
-    """
-    figs = [p for p in collect_fig_jsons(comparison_dir) if not _asset_stem(p).startswith("dp_")]
-    playbacks = [
-        p
-        for p in comparison_dir.rglob("*" + _PLAYBACK_SUFFIX)
-        if _asset_stem(p) in _SELFCONTAINED_HTML
-    ]
-    return sorted([*figs, *playbacks], key=lambda p: str(p))
 
 
 _PIPELINE_INTRO = ""
@@ -588,7 +476,7 @@ _MODEL_DOC = Path(__file__).parent / "docs" / "vehicle_model.ja.md"
 
 
 # MathJax (tex-svg) を CDN から読み込み、Markdown 中の LaTeX 数式を組版する。delimiter は
-# _render_markdown の pymdownx.arithmatex(generic) 出力（inline \(…\) / display \[…\]）に合わせる。
+# render_markdown の pymdownx.arithmatex(generic) 出力（inline \(…\) / display \[…\]）に合わせる。
 # CDN 参照のため数式描画にはネット接続が要る（plotly.js はオフライン用にインライン済み）。
 _MATHJAX_HEAD = (
     "<script>"
@@ -603,12 +491,12 @@ def _render_doc_section() -> str:
     """車両モデル解説ドキュメント (docs/vehicle_model.ja.md) を固定セクションとして埋め込む。
 
     ファイルが無ければ空文字（防御的）。_PIPELINE_INTRO と同じ「固定セクション」扱いで、
-    本文は _render_markdown（MathJax 対応）で HTML 化する。
+    本文は render_markdown（MathJax 対応）で HTML 化する。
     """
     if not _MODEL_DOC.exists():
         return ""
     try:
-        md_html = _render_markdown(_MODEL_DOC.read_text(encoding="utf-8"))
+        md_html = render_markdown(_MODEL_DOC.read_text(encoding="utf-8"))
     except OSError:
         return ""
     return (
@@ -756,24 +644,6 @@ _RENDER_GLUE = """
 """
 
 
-def _render_config_details(config_files: list[tuple[str, Path]]) -> str:
-    """設定 YAML 群を <details class='cfg-file'> の連結 HTML にする（存在するもののみ）。"""
-    blocks: list[str] = []
-    for title, path in config_files:
-        if path is None or not Path(path).exists():
-            continue
-        try:
-            text = Path(path).read_text(encoding="utf-8", errors="replace")
-        except OSError:
-            continue
-        blocks.append(
-            f"<details class='cfg-file'><summary>{html.escape(title)}"
-            f"<span class='fname'>{html.escape(Path(path).name)}</span></summary>"
-            f"<pre class='cfg-pre'>{html.escape(text)}</pre></details>"
-        )
-    return "".join(blocks)
-
-
 def _render_cross_section(cross_dir: Path | None) -> tuple[list[str], str]:
     """「0. データセット横断サマリー」セクション (toc 項目, body HTML) を返す。
 
@@ -796,18 +666,18 @@ def _render_cross_section(cross_dir: Path | None) -> tuple[list[str], str]:
         "<a class='toplink' href='#top'>↑ 先頭</a></p>",
     ]
     for md in mds:
-        anchor = "md-cross-" + _slug(md.stem)
+        anchor = "md-cross-" + slug(md.stem)
         toc.append(f"<li class='toc-md'><a href='#{anchor}'>{html.escape(md.stem)}</a></li>")
         body.append(
             f"<details class='md-report' open id='{anchor}'>"
             f"<summary>{html.escape(md.stem)}（step13）</summary>"
-            f"{_render_markdown(md.read_text(encoding='utf-8'))}</details>"
+            f"{render_markdown(md.read_text(encoding='utf-8'))}</details>"
         )
     # 物理妥当性検証 (cross_physical_validity_*) は他の step13 図と混ざると読みづらいため
     # 専用の見出しに分けて描画する (図の集合・順序は変えず、表示上の区切りのみ)。
     _PV_STEMS = {"cross_physical_validity_kus", "cross_physical_validity_long", "cross_physical_validity_steer"}
-    model_figs = [f for f in figs if _asset_stem(f.relative_to(cross_dir)) not in _PV_STEMS]
-    pv_figs = [f for f in figs if _asset_stem(f.relative_to(cross_dir)) in _PV_STEMS]
+    model_figs = [f for f in figs if asset_stem(f.relative_to(cross_dir)) not in _PV_STEMS]
+    pv_figs = [f for f in figs if asset_stem(f.relative_to(cross_dir)) in _PV_STEMS]
     for fig in model_figs:
         body.append(_figure(fig.relative_to(cross_dir), cross_dir, "cross"))
     if pv_figs:
@@ -829,7 +699,7 @@ def _render_dataset_report(
     ds-only クラス + data-ds を付ける (セレクタ選択時のみ表示)。単一 DS では包みを出さず
     常時表示 (従来同等の見た目)。
     """
-    images = _collect_figures(entry.comparison_dir)
+    images = collect_report_assets(entry.comparison_dir, _SELFCONTAINED_HTML)
     rels_all = [img.relative_to(entry.comparison_dir) for img in images]
     by_cat: dict[str, list[Path]] = {}
     for rel in rels_all:
@@ -837,7 +707,7 @@ def _render_dataset_report(
     case_tags = {c for rel in rels_all if (c := _case_of(rel)) is not None}
 
     if multi and no_embed_viewers:
-        label = _dataset_label(entry)
+        label = dataset_label(entry.dataset_id, scenario_yaml=entry.scenario_yaml, label=entry.label)
         rel_report_path = f"runs/{entry.dataset_id}/result_archive/real_log_sim_comparison/report.html"
         ds_attr = f" class='toc-sec ds-only' data-ds='{ns}' hidden"
         toc = [f"<li{ds_attr}><a href='#ds-{ns}'>個別詳細レポートリンク</a></li>"]
@@ -865,9 +735,9 @@ def _render_dataset_report(
         for rel, title, cat in reports:
             path = entry.comparison_dir / rel
             if path.exists():
-                anchor = f"md-{ns}-" + _slug(rel)
+                anchor = f"md-{ns}-" + slug(rel)
                 out.setdefault(cat, []).append(
-                    (anchor, title, _render_markdown(path.read_text(encoding="utf-8")))
+                    (anchor, title, render_markdown(path.read_text(encoding="utf-8")))
                 )
         return out
 
@@ -883,7 +753,7 @@ def _render_dataset_report(
     toc: list[str] = []
     body: list[str] = []
     if multi:
-        label = _dataset_label(entry)
+        label = dataset_label(entry.dataset_id, scenario_yaml=entry.scenario_yaml, label=entry.label)
         body.append(f"<section class='dataset-report' data-ds='{ns}' id='ds-{ns}' hidden>")
         body.append(
             f"<p class='ds-head'>データセット {html.escape(label)}"
@@ -923,7 +793,7 @@ def _render_dataset_report(
     if entry.scenario_yaml is not None:
         per_ds_cfg.append(("シナリオ (auto-scenario)", entry.scenario_yaml))
     per_ds_cfg.extend(entry.config_files)
-    cfg_html = _render_config_details(per_ds_cfg)
+    cfg_html = render_config_details(per_ds_cfg)
     if cfg_html:
         sec_id = f"sec-{ns}-config"
         toc.append(f"<li{ds_attr}><a href='#{sec_id}'>実行構成（このデータセット）</a></li>")
@@ -956,9 +826,9 @@ def build_html(
     """
     multi = len(datasets) > 1
     # ns: dataset_id 先頭 8 文字の slug。衝突時のみフル ID。
-    raw_ns = [_slug(e.dataset_id[:8]) or f"ds{i}" for i, e in enumerate(datasets)]
+    raw_ns = [slug(e.dataset_id[:8]) or f"ds{i}" for i, e in enumerate(datasets)]
     ns_list = [
-        ns if raw_ns.count(ns) == 1 else _slug(e.dataset_id)
+        ns if raw_ns.count(ns) == 1 else slug(e.dataset_id)
         for ns, e in zip(raw_ns, datasets)
     ]
 
@@ -982,7 +852,7 @@ def build_html(
     if multi:
         options = ["<option value=''>全体（横断サマリー）</option>"]
         options += [
-            f"<option value='{ns}'>{html.escape(_dataset_label(e))}</option>"
+            f"<option value='{ns}'>{html.escape(dataset_label(e.dataset_id, scenario_yaml=e.scenario_yaml, label=e.label))}</option>"
             for e, ns in zip(datasets, ns_list)
         ]
         ds_bar = (
@@ -998,7 +868,7 @@ def build_html(
         toc.append("<li class='toc-sec'><a href='#sec-model-doc'>車両制御モデル（数式・座標系・定数）</a></li>")
     toc.extend(cross_toc)
     toc.extend(ds_tocs)
-    shared_cfg_html = _render_config_details(shared_config_files or [])
+    shared_cfg_html = render_config_details(shared_config_files or [])
     if shared_cfg_html:
         toc.append("<li class='toc-sec'><a href='#sec-config-shared'>実行構成（共通）</a></li>")
     toc.append("</ul></nav>")
@@ -1088,7 +958,7 @@ def _datasets_from_collection(collection_dir: Path) -> list[ReportDataset]:
             comparison_dir=e.comparison_dir,
             scenario_yaml=scenario_yaml if scenario_yaml and scenario_yaml.is_file() else None,
         ))
-    return sorted(out, key=lambda d: (_scenario_date(d.scenario_yaml), d.dataset_id))
+    return sorted(out, key=lambda d: (scenario_date(d.scenario_yaml), d.dataset_id))
 
 
 VERBOSE = False
