@@ -61,8 +61,6 @@ from .lib._params_utils import load_sim_params
 from .lib._plotly_utils import FIG_HEIGHTS, lanes_to_trace
 from .lib._runtime_config import RuntimeConfig, add_common_cli_arguments, build_runtime_config
 
-# モジュールレベル設定 (main() で RuntimeConfig 経由で上書きされる)
-VERBOSE = False
 BASE = Path(os.environ.get("BEST_MODEL_BASE_DIR") or Path(__file__).parent)
 LITE_DIR = BASE / "lite"
 OUT_DIR = BASE / "comparison" / "nstep"
@@ -1508,10 +1506,10 @@ def save_summary(df: pd.DataFrame, verbose: bool = False) -> None:
             ]
 
     text = "\n".join(lines)
-    if verbose or VERBOSE:
+    if verbose:
         print(text)
     (OUT_DIR / "summary.txt").write_text(text + "\n", encoding="utf-8")
-    if verbose or VERBOSE:
+    if verbose:
         print(f"  Saved: {OUT_DIR / 'summary.txt'}")
 
 
@@ -1551,14 +1549,13 @@ def main() -> None:
     )
     args = parser.parse_args()
 
-    global VERBOSE
-    VERBOSE = bool(getattr(args, "verbose", False))
-    if not VERBOSE:
+    verbose = bool(getattr(args, "verbose", False))
+    if not verbose:
         import warnings
         warnings.simplefilter('ignore')
 
     def _print(*args, **kwargs):
-        if VERBOSE:
+        if verbose:
             print(*args, **kwargs)
 
     if not args.case_tag:
