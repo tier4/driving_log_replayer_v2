@@ -185,19 +185,12 @@ local_multidataset_cloud_run: prepare_multidataset
 	        --skip-ol \
 	        $(if $(RESUME),--resume,) ; \
 	fi
-	@echo "[INFO] Step 2: Phase 1 Longitudinal Tuning (Direct Physical Identification)..."
+	@echo "[INFO] Step 2+3: Phase 1+2 縦横一括同定 (Direct Physical Identification, データロード1回（最適化）)..."
 	source $(SETUP_BASH) && $(PYTHON) -m driving_log_replayer_v2.real_log_sim_comparison.physical_tuning \
 	    --collection-dir "$(MULTI_BATCH_ROOT)" \
 	    --scenario "$(LOCAL_SCENARIO)" \
-	    --phase 1 \
-	    --out "$(MULTI_BATCH_ROOT)/phase1_acc.yaml" \
-	    --n-jobs $(N_JOBS)
-	@echo "[INFO] Step 3: Phase 2 Lateral/Steer Tuning (Direct Physical Identification)..."
-	source $(SETUP_BASH) && $(PYTHON) -m driving_log_replayer_v2.real_log_sim_comparison.physical_tuning \
-	    --collection-dir "$(MULTI_BATCH_ROOT)" \
-	    --scenario "$(LOCAL_SCENARIO)" \
-	    --phase 2 \
-	    --phase-params "$(MULTI_BATCH_ROOT)/phase1_acc.yaml" \
+	    --phase 12 \
+	    --out-phase1 "$(MULTI_BATCH_ROOT)/phase1_acc.yaml" \
 	    --out "$(MULTI_BATCH_ROOT)/phase2_steer.yaml" \
 	    --n-jobs $(N_JOBS)
 	@echo "[INFO] Step 4: Phase 0 Integrated Tuning & Validity Report Generation (Warm-Started Optuna)..."

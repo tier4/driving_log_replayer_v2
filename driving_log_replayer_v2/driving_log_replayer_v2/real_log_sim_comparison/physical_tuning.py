@@ -181,10 +181,13 @@ def main() -> None:
     ap = argparse.ArgumentParser(description="物理直接同定チューニング")
     ap.add_argument("--collection-dir", type=Path, required=True)
     ap.add_argument("--scenario", type=Path, required=True)
-    ap.add_argument("--phase", type=int, choices=[1, 2], default=2,
-                    help="1: 縦方向のみ, 2: 縦＋横＋アンダーステア")
+    ap.add_argument("--phase", type=int, choices=[1, 2, 12], default=2,
+                    help="1: 縦方向のみ, 2: 縦＋横＋アンダーステア, 12: 両フェーズ一括（ロード1回）")
     ap.add_argument("--phase-params", type=str, default="", help="前フェーズの YAML パス")
-    ap.add_argument("--out", type=Path, required=True)
+    ap.add_argument("--out", type=Path, required=True,
+                    help="出力 YAML パス（--phase 12 の場合は Phase2 出力）")
+    ap.add_argument("--out-phase1", type=Path, default=None,
+                    help="--phase 12 のときの Phase1 出力 YAML パス（省略時は --out と同じディレクトリに phase1_acc.yaml）")
     ap.add_argument("--n-jobs", type=int, default=os.cpu_count())
     args = ap.parse_args()
 
@@ -222,7 +225,8 @@ def main() -> None:
         ds_root = args.collection_dir
     ds_dirs = sorted(ds_root.iterdir()) if ds_root.is_dir() else []
     tasks = [(d.name, str(d)) for d in ds_dirs if (d / "real.lite" / "real.lite_0.mcap").exists()]
-    print(f"\n[Phase 1/2] データセット並列ロード ({len(tasks)} 件)...")
+    phase_label = "1+2" if args.phase == 12 else str(args.phase)
+    print(f"\n[Phase {phase_label}] データセット並列ロード ({len(tasks)} 件)...")
 
     datasets = []
     with ProcessPoolExecutor(max_workers=args.n_jobs) as pool:
@@ -241,8 +245,11 @@ def main() -> None:
 
     params = inherited_params.copy()
 
+    # --phase 12 の場合: Phase1 同定 → phase1 YAML 出力 → Phase2 同定 → phase2 YAML 出力
+    # をこのプロセス内で連続実行し、データセットロードは1回だけで済ませる。
+
     # 1. 縦方向モデルパラメータの直接同定 (Phase 1 または Phase 2 で必要)
-    if args.phase == 1 or "acc_time_constant" not in params:
+    if args.phase in (1, 12) or "acc_time_constant" not in params:
         print("\n=== 縦方向モデルの直接同定を実行中 ===")
         taus_long = []
         delays_long = []
@@ -270,8 +277,28 @@ def main() -> None:
             params["acc_time_delay"] = 0.1
             params["debug_acc_scaling_factor"] = 1.0
 
+    # --phase 12 の場合: Phase1 結果を YAML として中間保存してから Phase2 へ進む
+    if args.phase == 12:
+        out_phase1 = args.out_phase1 or (args.out.parent / "phase1_acc.yaml")
+        out_phase1.parent.mkdir(parents=True, exist_ok=True)
+        yaml_phase1 = {
+            "params": params.copy(),
+            "score": 0.0,
+            "metadata": {
+                "collection_dir": str(args.collection_dir),
+                "n_datasets": len(tasks),
+                "n_valid": len(datasets),
+                "scenario": str(args.scenario),
+                "tuning_type": "physical_direct_fit",
+                "phase": 1,
+            }
+        }
+        with out_phase1.open("w") as f:
+            yaml.safe_dump(yaml_phase1, f, allow_unicode=True, sort_keys=False)
+        print(f"\n✓ Phase1 中間パラメータ保存完了: {out_phase1}")
+
     # 2. 操舵およびアンダーステア勾配の直接同定 (Phase 2)
-    if args.phase == 2:
+    if args.phase in (2, 12):
         print("\n=== 操舵モデルおよびアンダーステアの直接同定を実行中 ===")
         taus_steer = []
         delays_steer = []
@@ -397,6 +424,7 @@ def main() -> None:
             "n_valid": len(datasets),
             "scenario": str(args.scenario),
             "tuning_type": "physical_direct_fit",
+            "phase": args.phase,
         }
     }
     with args.out.open("w") as f:
