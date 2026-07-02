@@ -283,13 +283,7 @@ def load_models_doc(scenario_path: str | Path) -> ModelsDoc:
     if not sim_runs_list:
         warnings.warn(f"{p}: Conditions.sim_runs が空です (closed-loop sim はスキップされます)")
 
-    # 未使用モデルへの警告
-    used = set(cases_list) | set(sim_runs_list)
-    for name in models:
-        if name not in used:
-            warnings.warn(
-                f"{p}: models.{name} は cases にも sim_runs にも含まれていません (未使用)"
-            )
+
 
     # ── overlay ──────────────────────────────────────────────────────────────
     overlay_raw = conditions.get("overlay") or {}

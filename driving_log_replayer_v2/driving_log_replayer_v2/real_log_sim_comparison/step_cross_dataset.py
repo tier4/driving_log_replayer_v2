@@ -96,6 +96,8 @@ _MIN_DS_LOO = 2       # LOO を実行する最小 DS 数 (2 は参考扱い)
 _MIN_DS_OUTLIER = 3   # 外れ検出 (robust z-score) の最小 DS 数
 _OUTLIER_Z = 2.0
 
+VERBOSE = False
+
 
 def _short_labels(ds_ids: list[str]) -> dict[str, str]:
     """dataset_id → 短縮表示ラベル (先頭 8 文字、衝突時はフル ID)。"""
@@ -168,8 +170,9 @@ def _resolve_reference_tag(metrics: dict[str, dict]) -> str:
         return ""
     ref, _ = counts.most_common(1)[0]
     if len(counts) > 1:
-        print(f"[WARN] reference_tag が DS 間で不一致: {dict(counts)} → '{ref}' を採用",
-              file=sys.stderr)
+        if VERBOSE:
+            print(f"[WARN] reference_tag が DS 間で不一致: {dict(counts)} → '{ref}' を採用",
+                  file=sys.stderr)
     return ref
 
 
@@ -214,8 +217,9 @@ def cross_normalized(
             continue
         baselines[ds] = base
     if excluded:
-        print(f"[WARN] reference_tag={reference_tag} の有効な baseline が無い DS を"
-              f"正規化集約から除外: {excluded}", file=sys.stderr)
+        if VERBOSE:
+            print(f"[WARN] reference_tag={reference_tag} の有効な baseline が無い DS を"
+                  f"正規化集約から除外: {excluded}", file=sys.stderr)
 
     aggs: dict[str, dict] = {}
     scores: dict[str, float] = {}
@@ -361,7 +365,8 @@ def _discover_models_doc(collection_dir: Path, scenario_path: Path | None = None
         try:
             return load_models_doc(scenario_path)
         except Exception as exc:
-            print(f"[WARN] --scenario の読み込みに失敗: {scenario_path} ({exc})", file=sys.stderr)
+            if VERBOSE:
+                print(f"[WARN] --scenario の読み込みに失敗: {scenario_path} ({exc})", file=sys.stderr)
 
     for p in sorted((collection_dir / "scenarios").glob("*.yaml")):
         try:
@@ -438,7 +443,8 @@ def write_physical_validity_summary_md(out_path: Path, pv: dict | None) -> None:
             " 縦・操舵・横 k_us のいずれも同定不能)。\n"
         )
         out_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
-        print(f"  保存: {out_path}")
+        if VERBOSE:
+            print(f"  保存: {out_path}")
         return
 
     lines.append(
@@ -471,7 +477,8 @@ def write_physical_validity_summary_md(out_path: Path, pv: dict | None) -> None:
         )
     lines.append("")
     out_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
-    print(f"  保存: {out_path}")
+    if VERBOSE:
+        print(f"  保存: {out_path}")
 
 
 # ---------------------------------------------------------------------------
@@ -575,7 +582,8 @@ def write_cross_metrics_json(
     out_path.write_text(
         json.dumps(payload, ensure_ascii=False, allow_nan=False, indent=1), encoding="utf-8"
     )
-    print(f"  保存: {out_path}")
+    if VERBOSE:
+        print(f"  保存: {out_path}")
 
 
 def write_cross_summary_md(
@@ -709,7 +717,8 @@ def write_cross_summary_md(
             lines.append("")
 
     out_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
-    print(f"  保存: {out_path}")
+    if VERBOSE:
+        print(f"  保存: {out_path}")
 
 
 # ---------------------------------------------------------------------------
@@ -737,8 +746,9 @@ def run_cross_analysis(
         m = load_dataset_metrics(e)
         if m is None:
             missing.append(e)
-            print(f"[WARN] {e.dataset_id}: metrics JSON 欠損 (status={e.status})"
-                  " — 横断集約から除外", file=sys.stderr)
+            if VERBOSE:
+                print(f"[WARN] {e.dataset_id}: metrics JSON 欠損 (status={e.status})"
+                      " — 横断集約から除外", file=sys.stderr)
         else:
             metrics[e.dataset_id] = m
     if not metrics:
@@ -748,7 +758,8 @@ def run_cross_analysis(
         )
     n = len(metrics)
     labels = _short_labels(list(metrics))
-    print(f"datasets: {[labels[ds] for ds in metrics]} (有効 {n} / 欠損 {len(missing)})")
+    if VERBOSE:
+        print(f"datasets: {[labels[ds] for ds in metrics]} (有効 {n} / 欠損 {len(missing)})")
 
     out_dir.mkdir(parents=True, exist_ok=True)
 
@@ -874,7 +885,23 @@ def main() -> None:
     ap.add_argument("--scenario", default="",
                     help="Conditions.models/cases/overlay を含む元 scenario.yaml (省略可、"
                          "物理妥当性検証のチューニング値重ね描きに使う)")
+    ap.add_argument(
+        "--verbose",
+        action="store_true",
+        default=False,
+        help="詳細情報を出力する",
+    )
     args = ap.parse_args()
+
+    global VERBOSE
+    VERBOSE = args.verbose
+    if not VERBOSE:
+        import warnings
+        warnings.simplefilter('ignore')
+
+    def _print(*args, **kwargs):
+        if VERBOSE:
+            print(*args, **kwargs)
 
     collection_dir = Path(args.collection_dir)
     out_dir = Path(args.out_dir) if args.out_dir else None
@@ -884,7 +911,7 @@ def main() -> None:
     except FileNotFoundError as e:
         print(f"ERROR: {e}", file=sys.stderr)
         sys.exit(1)
-    print(f"\n完了。出力先: {result}")
+    _print(f"\n完了。出力先: {result}")
 
 
 if __name__ == "__main__":
