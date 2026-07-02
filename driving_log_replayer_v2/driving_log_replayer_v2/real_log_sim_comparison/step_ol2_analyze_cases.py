@@ -170,6 +170,23 @@ def _finite_or_none(x) -> float | None:
     return xf if math.isfinite(xf) else None
 
 
+def _rms(values) -> float:
+    """NaN を無視して RMS を返す。"""
+    arr = np.asarray(values, dtype=float)
+    return float(np.sqrt(np.nanmean(arr * arr)))
+
+
+def _n1_case_metrics(df: pd.DataFrame) -> dict[str, float]:
+    """N=1 のケース別 RMSE を集計する。"""
+    df1 = n1(df)
+    return {
+        "steer": _rms(df1["err_steer"].values) * (180.0 / math.pi),
+        "long": _rms(df1["err_ds_long"].values) * 100.0,
+        "lat": _rms(df1["err_ds_lat"].values) * 100.0,
+        "n": float(len(df1)),
+    }
+
+
 def _physical_validity_jsonable(pv: dict | None) -> dict | None:
     """physical_validity dict を cases_metrics.json に埋め込める JSON 安全な形へ変換する。
 
@@ -242,6 +259,94 @@ def _physical_validity_summary_lines(pv: dict | None) -> list[str]:
     return lines
 
 
+def _n1_summary_lines(
+    case_dfs: dict[str, pd.DataFrame],
+    cases_cfg,
+) -> list[str]:
+    """N=1 のケース横断 RMSE 表を Markdown 行にする。"""
+    ps: dict[str, dict[str, float]] = {tag: _n1_case_metrics(df) for tag, df in case_dfs.items()}
+    ref_tag = cases_cfg.overlay.reference_tag
+    ref_steer = ps.get(ref_tag, {}).get("steer") if ref_tag else None
+
+    lines: list[str] = ["## N=1 (毎ステップリセット) RMSE\n"]
+    lines.append(
+        "| tag | vehicle_model | n_steps | RMSE err_steer [deg] | Δsteer vs ref [deg] | "
+        "RMSE err_ds_long [cm] | RMSE err_ds_lat [cm] | note |"
+    )
+    lines.append("|---|---|---:|---:|---:|---:|---:|---|")
+    for case in cases_cfg.cases:
+        if case.tag not in ps:
+            lines.append(f"| {case.tag} | {case.vehicle_model_type} | — | — | — | — | — | 出力欠損 |")
+            continue
+        d = ps[case.tag]
+        if case.tag == ref_tag:
+            delta = "基準"
+        elif ref_steer is not None:
+            delta = f"{d['steer'] - ref_steer:+.4f}"
+        else:
+            delta = "—"
+        lines.append(
+            f"| {case.tag} | {case.vehicle_model_type} | {int(d['n'])} | "
+            f"{d['steer']:.4f} | {delta} | {d['long']:.3f} | {d['lat']:.3f} |  |"
+        )
+    lines.append("")
+    lines.append(
+        "> N=1 は毎ステップ実機状態にリセットするため、k_us/wheelbase の累積差は "
+        "位置 RMSE にほぼ現れない。dynamics 差は下記 horizon 別 RMSE 表を参照。"
+    )
+    lines.append("")
+    return lines
+
+
+def _horizon_summary_lines(
+    roll: dict[str, dict[int, dict[str, float]]],
+    cases_cfg,
+) -> list[str]:
+    """horizon 別の終端誤差 RMSE 表を Markdown 行にする。"""
+    roll = {t: r for t, r in roll.items() if r}
+    if not roll:
+        return []
+
+    horizons = common_horizons(r.keys() for r in roll.values())
+    ref_tag = cases_cfg.overlay.reference_tag
+    ref_roll = roll.get(ref_tag) if horizons else None
+
+    lines: list[str] = ["## horizon 別 終端誤差 RMSE (free-running, ケース横断)\n"]
+    head = (
+        "| tag |"
+        + "".join(f" 縦@N{h}[cm] |" for h in horizons)
+        + "".join(f" 横@N{h}[cm] |" for h in horizons)
+        + "".join(f" yaw@N{h}[deg] |" for h in horizons)
+    )
+    if ref_roll:
+        head += f" Δyaw@N{horizons[-1]} vs ref [deg] |"
+    lines.append(head)
+    lines.append("|---|" + "---:|" * (len(horizons) * 3 + (1 if ref_roll else 0)))
+    for case in cases_cfg.cases:
+        r = roll.get(case.tag)
+        if not r:
+            continue
+        row = f"| {case.tag} |"
+        row += "".join(f" {r[h]['long']:.2f} |" for h in horizons)
+        row += "".join(f" {r[h]['lat']:.2f} |" for h in horizons)
+        row += "".join(f" {r[h]['yaw']:.3f} |" for h in horizons)
+        if ref_roll:
+            hl = horizons[-1]
+            if case.tag == ref_tag:
+                row += " 基準 |"
+            else:
+                row += f" {r[hl]['yaw'] - ref_roll[hl]['yaw']:+.3f} |"
+        lines.append(row)
+    lines.append("")
+    lines.append(
+        "> N ステップ連続予測 (途中リセット無し) の終端誤差。N を増やすほど dynamics 差が "
+        "累積し、k_us/wheelbase の効果が分離する (パラメータ同定の指標)。"
+        "小 N の yaw RMSE は seed (k_us=0 bicycle 逆算) 由来のバイアスを含む点に注意。"
+    )
+    lines.append("")
+    return lines
+
+
 def plot_cascade_error_overlay(
     case_dfs: dict[str, pd.DataFrame], out_path: Path
 ) -> None:
@@ -273,101 +378,47 @@ def write_cases_summary(
     N=1 詳細 RMSE 表 (steer/縦/横, reference との Δ 付き) と
     horizon 別 終端誤差 RMSE 表 (縦/横/yaw) を 1 ファイルに集約する。
     """
-    rad2deg = 180.0 / math.pi
-    ref_tag = cases_cfg.overlay.reference_tag
-
-    # N=1 RMSE をケース別に集計
-    ps: dict[str, dict[str, float]] = {}
-    for tag, df in case_dfs.items():
-        df1 = n1(df)
-        ps[tag] = {
-            "steer": float(np.sqrt(np.nanmean(df1["err_steer"].values ** 2))) * rad2deg,
-            "long": float(np.sqrt(np.nanmean(df1["err_ds_long"].values ** 2))) * 100,
-            "lat": float(np.sqrt(np.nanmean(df1["err_ds_lat"].values ** 2))) * 100,
-            "n": float(len(df1)),
-        }
-    ref_steer = ps.get(ref_tag, {}).get("steer") if ref_tag else None
-
     lines: list[str] = ["# cases summary (N-step オープンループ)\n"]
+    ref_tag = cases_cfg.overlay.reference_tag
     if ref_tag:
         lines.append(f"reference tag: `{ref_tag}`\n")
     lines.append("")
     lines.append(metrics_description_md())
     lines.append("")
-
-    # --- N=1 詳細 RMSE 表 (reference との Δ 付き) ---
-    lines.append("## N=1 (毎ステップリセット) RMSE\n")
-    lines.append(
-        "| tag | vehicle_model | n_steps | RMSE err_steer [deg] | Δsteer vs ref [deg] | "
-        "RMSE err_ds_long [cm] | RMSE err_ds_lat [cm] | note |"
-    )
-    lines.append("|---|---|---:|---:|---:|---:|---:|---|")
-    for case in cases_cfg.cases:
-        if case.tag not in ps:
-            lines.append(f"| {case.tag} | {case.vehicle_model_type} | — | — | — | — | — | 出力欠損 |")
-            continue
-        d = ps[case.tag]
-        if case.tag == ref_tag:
-            delta = "基準"
-        elif ref_steer is not None:
-            delta = f"{d['steer'] - ref_steer:+.4f}"
-        else:
-            delta = "—"
-        lines.append(
-            f"| {case.tag} | {case.vehicle_model_type} | {int(d['n'])} | "
-            f"{d['steer']:.4f} | {delta} | {d['long']:.3f} | {d['lat']:.3f} |  |"
-        )
-    lines.append("")
-    lines.append(
-        "> N=1 は毎ステップ実機状態にリセットするため、k_us/wheelbase の累積差は "
-        "位置 RMSE にほぼ現れない。dynamics 差は下記 horizon 別 RMSE 表を参照。"
-    )
-    lines.append("")
-
-    # --- horizon 別 終端誤差 RMSE 表 (free-running, ケース横断) ---
-    roll = {t: r for t, r in roll.items() if r}
-    if roll:
-        # 表示する horizon は全 case で共通に存在するものを採用
-        horizons = common_horizons(r.keys() for r in roll.values())
-        # 全ケース共通の horizon が無い (horizon 集合が不一致) 場合は
-        # Δ 列の horizons[-1] 参照を避けるため reference 比較を無効化する。
-        ref_roll = roll.get(ref_tag) if horizons else None
-        lines.append("## horizon 別 終端誤差 RMSE (free-running, ケース横断)\n")
-        head = "| tag |" + "".join(f" 縦@N{h}[cm] |" for h in horizons) \
-            + "".join(f" 横@N{h}[cm] |" for h in horizons) \
-            + "".join(f" yaw@N{h}[deg] |" for h in horizons)
-        if ref_roll:
-            head += f" Δyaw@N{horizons[-1]} vs ref [deg] |"
-        lines.append(head)
-        lines.append("|---|" + "---:|" * (len(horizons) * 3 + (1 if ref_roll else 0)))
-        for case in cases_cfg.cases:
-            r = roll.get(case.tag)
-            if not r:
-                continue
-            row = f"| {case.tag} |"
-            row += "".join(f" {r[h]['long']:.2f} |" for h in horizons)
-            row += "".join(f" {r[h]['lat']:.2f} |" for h in horizons)
-            row += "".join(f" {r[h]['yaw']:.3f} |" for h in horizons)
-            if ref_roll:
-                hl = horizons[-1]
-                if case.tag == ref_tag:
-                    row += " 基準 |"
-                else:
-                    row += f" {r[hl]['yaw'] - ref_roll[hl]['yaw']:+.3f} |"
-            lines.append(row)
-        lines.append("")
-        lines.append(
-            "> N ステップ連続予測 (途中リセット無し) の終端誤差。N を増やすほど dynamics 差が "
-            "累積し、k_us/wheelbase の効果が分離する (パラメータ同定の指標)。"
-            "小 N の yaw RMSE は seed (k_us=0 bicycle 逆算) 由来のバイアスを含む点に注意。"
-        )
-        lines.append("")
-
+    lines += _n1_summary_lines(case_dfs, cases_cfg)
+    lines += _horizon_summary_lines(roll, cases_cfg)
     lines += _physical_validity_summary_lines(physical_validity)
 
     out_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
     if VERBOSE:
         print(f"  Saved: {out_path}")
+
+
+def _build_cases_metrics_payload(
+    case_dfs: dict[str, pd.DataFrame],
+    roll: dict[str, dict[int, dict[str, float]]],
+    cases_cfg,
+    horizons: list[int],
+    physical_validity: dict | None,
+) -> dict:
+    """cases_metrics.json の payload を構築する。"""
+    cases: dict[str, dict] = {}
+    for case in cases_cfg.cases:
+        r = roll.get(case.tag)
+        if not r:
+            continue
+        cases[case.tag] = {
+            "vehicle_model": case.vehicle_model_type,
+            "n_steps_n1": int(len(n1(case_dfs[case.tag]))),
+            "by_h": {str(h): {k: _finite_or_none(v) for k, v in m.items()} for h, m in r.items()},
+        }
+    return {
+        "schema_version": 1,
+        "reference_tag": cases_cfg.overlay.reference_tag,
+        "horizons": [int(h) for h in horizons],
+        "cases": cases,
+        "physical_validity": _physical_validity_jsonable(physical_validity),
+    }
 
 
 def write_cases_metrics(
@@ -387,28 +438,7 @@ def write_cases_metrics(
     "physical_validity" キーは Conditions.cases の N-way スイープ ("cases" キー) とは独立に
     追加する物理妥当性検証の機械可読 SSOT (schema は _physical_validity_jsonable 参照)。
     """
-
-    def _finite(x) -> float | None:
-        xf = float(x)
-        return xf if math.isfinite(xf) else None
-
-    cases: dict[str, dict] = {}
-    for case in cases_cfg.cases:
-        r = roll.get(case.tag)
-        if not r:
-            continue
-        cases[case.tag] = {
-            "vehicle_model": case.vehicle_model_type,
-            "n_steps_n1": int(len(n1(case_dfs[case.tag]))),
-            "by_h": {str(h): {k: _finite(v) for k, v in m.items()} for h, m in r.items()},
-        }
-    payload = {
-        "schema_version": 1,
-        "reference_tag": cases_cfg.overlay.reference_tag,
-        "horizons": [int(h) for h in horizons],
-        "cases": cases,
-        "physical_validity": _physical_validity_jsonable(physical_validity),
-    }
+    payload = _build_cases_metrics_payload(case_dfs, roll, cases_cfg, horizons, physical_validity)
     out_path.write_text(
         json.dumps(payload, ensure_ascii=False, allow_nan=False, indent=1), encoding="utf-8"
     )
@@ -436,16 +466,13 @@ def main() -> None:
         help="詳細情報を出力する",
     )
     args = parser.parse_args()
+    base_dir = Path(args.base_dir)
 
     global VERBOSE
     VERBOSE = args.verbose
     if not VERBOSE:
         import warnings
         warnings.simplefilter('ignore')
-
-    def _print(*args, **kwargs):
-        if VERBOSE:
-            print(*args, **kwargs)
 
     if not args.scenario:
         print("ERROR: --scenario (or SCENARIO_CONFIG_YAML env) が未指定です", file=sys.stderr)
@@ -459,8 +486,8 @@ def main() -> None:
     )
 
     cases_cfg = load_cases_config(args.scenario)
-    nstep_root = Path(args.base_dir) / "comparison" / "nstep"
-    out_root = Path(args.base_dir) / "comparison" / "cases"
+    nstep_root = base_dir / "comparison" / "nstep"
+    out_root = base_dir / "comparison" / "cases"
     overlay_dir = out_root / "overlay"
     overlay_dir.mkdir(parents=True, exist_ok=True)
 
@@ -471,7 +498,7 @@ def main() -> None:
         sys.exit(1)
 
     # ケース横断で軸範囲を統一して nstep/<tag>/ の図を上書き再描画
-    rerender_case_figures(case_dfs, cases_cfg, nstep_root, Path(args.base_dir))
+    rerender_case_figures(case_dfs, cases_cfg, nstep_root, base_dir)
 
     horizons = common_horizons(df["horizon"].unique() for df in case_dfs.values())
     plots_wanted = set(cases_cfg.overlay.plots)
@@ -484,7 +511,7 @@ def main() -> None:
 
     # 物理妥当性検証 (Conditions.cases の N-way スイープとは独立、real.lite から直接同定)。
     # real.lite 欠損や同定不能は WARN のみで継続し、既存 of N-way 集約には影響しない。
-    lite_dir = Path(args.base_dir) / "lite"
+    lite_dir = base_dir / "lite"
     real_lite = resolve_lite_bag(lite_dir, "real")
     # overlay.reference_tag は baseline 用の指定であり「チューニング値」ではないため、
     # 単体ではなく Conditions.cases の全モデルを重ね描き対象にする (base マージは描画側で行う)。
@@ -501,7 +528,8 @@ def main() -> None:
         case_dfs, roll, cases_cfg, horizons, out_root / "cases_metrics.json", physical_validity=pv,
     )
 
-    _print(f"\n完了。出力先: {out_root}")
+    if VERBOSE:
+        print(f"\n完了。出力先: {out_root}")
 
 
 if __name__ == "__main__":
