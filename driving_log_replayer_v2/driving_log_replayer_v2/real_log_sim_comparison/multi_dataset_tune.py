@@ -41,8 +41,7 @@ from .lib._io import resolve_lite_bag
 from .lib._physical_validity import WHEELBASE
 from .lib._multi_agg import (
     HORIZONS, WORST_W,
-    VX_FLOOR, STEER_FLOOR,
-    acc_score, aggregate_normalized, aggregate_component, component_score,
+    acc_score, aggregate_normalized,
     format_agg, robust_score, steer_score,
 )
 
@@ -275,7 +274,7 @@ def _eval_grid(
     再集約する (per-(trial×dataset) 並列化)。
     いずれも返り値は trials と同順の agg リスト (tie-break の決定論的再現を保証)。
     agg_fn: None → aggregate_normalized を使用。
-            callable(per_ds_metrics, baselines) → 任意の集約関数 (Phase 49/50 向け)。
+            callable(per_ds_metrics, baselines) → 任意の集約関数。
     """
     baselines = {ctx.dataset_id: ctx.base_metric for ctx in ctxs}
     _agg = agg_fn if agg_fn is not None else (lambda pm, bs: aggregate_normalized(pm, bs))
@@ -314,13 +313,10 @@ def _run_worker(
     CONTINUOUS_SPACE: dict,
     explore_delay: bool,
     DELAY_CANDIDATES: tuple[float, ...],
-    explore_steer_delay: bool,
-    STEER_DELAY_CANDIDATES: tuple[float, ...],
     ctxs_search: list[DatasetCtx],
     cur_model: str,
     score_fn,
     worst_w: float,
-    _phase_agg_fn,
     out_path,
 ) -> None:
     """fork プールワーカー: SQLite 経由で Optuna study.optimize を並列実行。"""
@@ -353,13 +349,9 @@ def _run_worker(
             params["acc_time_delay"] = trial.suggest_categorical(
                 "acc_time_delay", DELAY_CANDIDATES
             )
-        if explore_steer_delay:
-            params["steer_time_delay"] = trial.suggest_categorical(
-                "steer_time_delay", STEER_DELAY_CANDIDATES
-            )
 
         params = unify_step_bands(params)
-        agg = _eval_grid(None, ctxs_search, [params], cur_model, 1, agg_fn=_phase_agg_fn)[0]
+        agg = _eval_grid(None, ctxs_search, [params], cur_model, 1, agg_fn=None)[0]
         score = score_fn(agg, worst_w=worst_w)
 
         try:
@@ -439,9 +431,6 @@ def robust_search(
     # Phase に応じて探索空間・スコア関数・delay 探索フラグを決定
     # acc_time_delay は旧 sweeps と同じ離散候補 (gt_cache COW 共有のため離散に保つ)
     DELAY_CANDIDATES: tuple[float, ...] = (0.10, 0.15, 0.20, 0.30, 0.40, 0.50)
-    # steer_time_delay の離散候補 (SUB_DT=1/30s の整数倍に近い値)
-    # 0 step: 0.0315 (デフォルト ≈ 1step), 2step: 0.066, 3step: 0.099, 4step: 0.132
-    STEER_DELAY_CANDIDATES: tuple[float, ...] = (0.0315, 0.066, 0.099, 0.132)
 
     if phase == 1:
         # Phase 1: acc パラメータのみ最適化 (long スコア)。steer 系は cur_best に固定。
@@ -451,435 +440,23 @@ def robust_search(
         }
         score_fn = acc_score
         explore_delay = True
-        print(f"[Phase 1] acc パラメータ最適化 (long スコア)。steer 系は cur_best から固定。")
+        print("[Phase 1] acc パラメータ最適化 (long スコア)。steer 系は cur_best から固定。")
     elif phase == 2:
         # Phase 2: steer パラメータのみ最適化 (yaw+lat スコア)。acc 系は固定。
         CONTINUOUS_SPACE = {
             "steer_time_constant":        (0.05, 0.80),
             "debug_steer_scaling_factor": (0.75, 1.20),  # (0.80, 1.05) → (0.75, 1.20) に拡張
             "k_us":                       (0.0,  0.05),
-
             "steer_dead_band":            (0.0,  0.02),   # アクチュエータ不感帯 [rad]
             "steer_bias":                 (-0.01, 0.01),  # 系統的ステアオフセット [rad]
         }
         score_fn = steer_score
-        explore_delay = False  # acc_time_delay は cur_best (Phase 1 best) に固定
+        explore_delay = False
         if phase_fixed_params:
             cur_best.update(phase_fixed_params)
             print(f"[Phase 2] steer パラメータ最適化 (yaw+lat スコア)。固定 acc params: {phase_fixed_params}")
         else:
-            print(f"[Phase 2] steer パラメータ最適化 (yaw+lat スコア)。acc 系は cur_best から固定。")
-    elif phase == 3:
-        # Phase 3: no-ramp k_us 実験。k_us を全速度域で定数として扱い、ランプを無効化。
-        # データ分析から物理的 k_us ≈ 0.011-0.016 なので (0.0, 0.025) 範囲でカバー。
-        CONTINUOUS_SPACE = {
-            "steer_time_constant":        (0.05, 0.80),
-            "debug_steer_scaling_factor": (0.75, 1.20),
-            "k_us":                       (0.0,  0.025),  # 物理推定値 (0.011-0.016) をカバー
-            "steer_dead_band":            (0.0,  0.02),
-            "steer_bias":                 (-0.01, 0.01),
-        }
-        score_fn = steer_score
-        explore_delay = False
-
-        if phase_fixed_params:
-            cur_best.update(phase_fixed_params)
-            print(f"[Phase 3] no-ramp k_us 実験 (yaw+lat スコア)。固定 acc params: {phase_fixed_params}")
-        else:
-            print(f"[Phase 3] no-ramp k_us 実験 (yaw+lat スコア)。acc 系は cur_best から固定。")
-    elif phase == 4:
-        # Phase 4: TC 絞り込み再チューニング。
-        # コホートテストで TC=0.08 が全速度域で TC=0.142 を上回ることが判明したため、
-        # TC 範囲を [0.05, 0.25] に絞って Phase 2 と同じ steer パラメータを再探索する。
-        # k_us ランプも同時に再最適化し TC の最適値に合わせた k_us を探す。
-        CONTINUOUS_SPACE = {
-            "steer_time_constant":        (0.05, 0.25),  # Phase 2 (0.05, 0.80) から絞り込み
-            "debug_steer_scaling_factor": (0.75, 1.20),
-            "k_us":                       (0.0,  0.05),
-
-            "steer_dead_band":            (0.0,  0.02),
-            "steer_bias":                 (-0.01, 0.01),
-        }
-        score_fn = steer_score
-        explore_delay = False
-        if phase_fixed_params:
-            cur_best.update(phase_fixed_params)
-            print(f"[Phase 4] TC 絞り込み再チューニング (yaw+lat スコア)。固定 acc params: {phase_fixed_params}")
-        else:
-            print(f"[Phase 4] TC 絞り込み再チューニング (yaw+lat スコア)。acc 系は cur_best から固定。")
-    elif phase == 5:
-        # Phase 5: TC=0.12 中心で再チューニング。
-        # TC スイープ分析で TC=0.12 が steer_score 最良 (3.7567) と判明したため、
-        # TC 範囲を [0.09, 0.15] に絞って他 steer パラメータを再最適化する。
-        CONTINUOUS_SPACE = {
-            "steer_time_constant":        (0.09, 0.15),  # Phase 4 [0.05, 0.25] から TC=0.12 中心に絞り込み
-            "debug_steer_scaling_factor": (0.75, 1.20),
-            "k_us":                       (0.0,  0.05),
-
-            "steer_dead_band":            (0.0,  0.02),
-            "steer_bias":                 (-0.01, 0.01),
-        }
-        score_fn = steer_score
-        explore_delay = False
-        if phase_fixed_params:
-            cur_best.update(phase_fixed_params)
-            print(f"[Phase 5] TC=0.12 中心再チューニング (yaw+lat スコア)。固定 acc params: {phase_fixed_params}")
-        else:
-            print(f"[Phase 5] TC=0.12 中心再チューニング (yaw+lat スコア)。acc 系は cur_best から固定。")
-    elif phase == 10:
-        # Phase 10: steer_time_delay を離散候補に追加した Phase 9 相当の再チューニング。
-        # probe_steer_delay 結果: delay=0.099s で -0.155 (Phase9 比) の改善を確認。
-        # steer_time_delay は _GT_KEYS に含まれるため離散候補で gt_cache を効率化。
-        CONTINUOUS_SPACE = {
-            "steer_time_constant":        (0.09, 0.16),
-            "debug_steer_scaling_factor": (0.92, 1.02),
-            "k_us":                       (0.003, 0.010),
-
-            "steer_dead_band":            (0.001, 0.005),
-            "steer_bias":                 (-0.002, 0.003),
-        }
-        score_fn = steer_score
-        explore_delay = False
-        explore_steer_delay = True
-        if phase_fixed_params:
-            cur_best.update(phase_fixed_params)
-            print(f"[Phase 10] steer_time_delay 付き再チューニング (yaw+lat スコア)。固定 acc params: {phase_fixed_params}")
-        else:
-            print(f"[Phase 10] steer_time_delay 付き再チューニング (yaw+lat スコア)。acc 系は cur_best から固定。")
-    elif phase == 11:
-        # Phase 11: Phase 10 best から探索空間の境界を拡張した再チューニング。
-        # Phase 10 観察: steer_time_constant best=0.157 (上限 0.16 付近)、
-        # steer_time_delay=0.066 は Phase 10 top 10 全試行で一致 → 固定。
-        CONTINUOUS_SPACE = {
-            "steer_time_constant":        (0.14, 0.30),   # 上限 0.16 → 0.30 に大幅拡張
-            "debug_steer_scaling_factor": (0.92, 1.02),
-            "k_us":                       (0.003, 0.012),  # 上限 0.010 → 0.012 に微拡張
-            "steer_dead_band":            (0.001, 0.005),
-            "steer_bias":                 (-0.002, 0.003),
-        }
-        score_fn = steer_score
-        explore_delay = False
-        explore_steer_delay = False   # steer_time_delay=0.066 に固定 (phase_params から継承)
-        if phase_fixed_params:
-            cur_best.update(phase_fixed_params)
-            print(f"[Phase 11] 境界拡張再チューニング (yaw+lat スコア)。固定 params: {phase_fixed_params} | steer_time_delay={cur_best.get('steer_time_delay', '未設定')}")
-        else:
-            print(f"[Phase 11] 境界拡張再チューニング (yaw+lat スコア)。steer_time_delay は cur_best から固定。")
-    elif phase == 12:
-        # Phase 12: acc_time_constant を変数化した再チューニング。
-        # probe_p10_boundary_v2 結果 (2026-06-25):
-        #   - acc_time_constant=0.107 (固定) → 0.18 で -0.048 改善余地あり
-        #   - steer_time_constant 最適値は 0.165〜0.186 付近
-        #   - Phase 11 best: stc=0.178, score=7.0763
-        # Phase 10/11 では acc_time_constant を acc_time_delay と同じく固定していたが、
-        # 実際には acc_time_constant が最大の改善ポテンシャルを持つ。
-        CONTINUOUS_SPACE = {
-            "steer_time_constant":        (0.14, 0.25),   # Phase 11 観察から最適域 0.17-0.19 付近
-            "debug_steer_scaling_factor": (0.92, 1.02),
-            "k_us":                       (0.003, 0.012),
-
-            "steer_dead_band":            (0.001, 0.005),
-            "steer_bias":                 (-0.002, 0.003),
-            "acc_time_constant":          (0.10, 0.25),   # Phase 10/11 の固定 0.107 を変数化
-        }
-        score_fn = steer_score
-        explore_delay = False
-        explore_steer_delay = False   # steer_time_delay=0.066 に固定 (phase_params から継承)
-        if phase_fixed_params:
-            cur_best.update(phase_fixed_params)
-            print(f"[Phase 12] acc_time_constant 変数化チューニング (yaw+lat スコア)。固定 params: {phase_fixed_params} | steer_time_delay={cur_best.get('steer_time_delay', '未設定')}")
-        else:
-            print(f"[Phase 12] acc_time_constant 変数化チューニング (yaw+lat スコア)。steer_time_delay は cur_best から固定。")
-    elif phase == 13:
-        # Phase 13: steer_rate_lim を追加した Phase 12 再チューニング。
-        # steer_rate_lim 1D スキャン (2026-06-26): srl=0.40 で -0.5% 改善 (654 datasets)。
-        # discriminating test (新規 3055): srl=0.40 で同方向改善 → 物理的に有効と判定。
-        # tight bound (0.35-0.55 rad/s): 実機 p99=0.376 rad/s に基づく物理アンカー。
-        CONTINUOUS_SPACE = {
-            "steer_time_constant":        (0.14, 0.25),
-            "debug_steer_scaling_factor": (0.92, 1.02),
-            "k_us":                       (0.003, 0.012),
-
-            "steer_dead_band":            (0.001, 0.005),
-            "steer_bias":                 (-0.002, 0.003),
-            "acc_time_constant":          (0.10, 0.25),
-            "steer_rate_lim":             (0.35, 0.55),   # 物理アンカー tight bound
-        }
-        score_fn = steer_score
-        explore_delay = False
-        explore_steer_delay = False
-        if phase_fixed_params:
-            cur_best.update(phase_fixed_params)
-            print(f"[Phase 13] steer_rate_lim joint チューニング (yaw+lat スコア)。固定 params: {phase_fixed_params} | steer_time_delay={cur_best.get('steer_time_delay', '未設定')}")
-        else:
-            print(f"[Phase 13] steer_rate_lim joint チューニング (yaw+lat スコア)。steer_time_delay は cur_best から固定。")
-    elif phase == 14:
-        # Phase 14: 速度帯依存 k_us ランプ (k_us_lo/k_us_vx_thresh) 追加チューニング。
-        # NOTE: 元々「steer 角依存 k_us ランプ (k_us_steer_lo/hi)」として設計されたが、
-        # C++ 実装の変更により k_us_lo (低速帯 k_us 定数) と k_us_vx_thresh (閾値速度) に変更。
-        CONTINUOUS_SPACE = {
-            "steer_time_constant":        (0.12, 0.22),
-            "debug_steer_scaling_factor": (0.92, 1.02),
-            "k_us":                       (0.003, 0.020),
-
-            "k_us_lo":                    (0.005, 0.025),   # 低速帯 (vx < thresh) の k_us 定数
-            "k_us_vx_thresh":             (2.0,  6.0),      # 低速/高速切り替え閾値 [m/s]
-            "steer_dead_band":            (0.001, 0.005),
-            "steer_bias":                 (-0.002, 0.003),
-            "acc_time_constant":          (0.10, 0.25),
-            "steer_rate_lim":             (0.35, 0.55),
-        }
-        score_fn = steer_score
-        explore_delay = False
-        explore_steer_delay = False
-        if phase_fixed_params:
-            cur_best.update(phase_fixed_params)
-            print(f"[Phase 14] 速度帯依存 k_us チューニング (yaw+lat スコア)。固定 params: {phase_fixed_params} | steer_time_delay={cur_best.get('steer_time_delay', '未設定')}")
-        else:
-            print(f"[Phase 14] 速度帯依存 k_us チューニング (yaw+lat スコア)。steer_time_delay は cur_best から固定。")
-    elif phase == 43:
-        # Phase 43: 速度帯別定数 k_us (k_us_lo/k_us_vx_thresh) の最適化。
-        # Phase 42 best_params (k_us=0.0035, ランプなし) を起点に、低速帯 (vx < thresh) に
-        # 別の k_us_lo を設定して steer_score を改善する。
-        # スイープ結果 (2026-06-28): 低速帯最良 k_us=0.010, 中速/高速=0.0035。
-        # per-band oracle: サブセット -1.01% 改善 (Phase 42 比 → 全体 -10% 到達推定)。
-        CONTINUOUS_SPACE = {
-            "steer_time_constant":        (0.15, 0.25),
-            "debug_steer_scaling_factor": (0.92, 1.02),
-            "k_us":                       (0.002, 0.007),  # 高速帯 (vx >= thresh) の k_us
-            "k_us_lo":                    (0.005, 0.020),  # 低速帯 (vx < thresh) の k_us
-            "k_us_vx_thresh":             (2.0,   6.0),   # 低速/高速切り替え閾値 [m/s]
-            "steer_dead_band":            (0.001, 0.007),
-            "steer_bias":                 (-0.003, 0.003),
-            "acc_time_constant":          (0.12, 0.22),
-            "steer_rate_lim":             (0.40, 0.65),
-        }
-        score_fn = steer_score
-        explore_delay = False
-        explore_steer_delay = False
-        if phase_fixed_params:
-            cur_best.update(phase_fixed_params)
-            print(f"[Phase 43] 速度帯別定数 k_us 最適化 (yaw+lat スコア)。固定 params: {phase_fixed_params} | steer_time_delay={cur_best.get('steer_time_delay', '未設定')}")
-        else:
-            print(f"[Phase 43] 速度帯別定数 k_us 最適化 (yaw+lat スコア)。steer_time_delay は cur_best から固定。")
-    elif phase == 44:
-        # Phase 44: 3分割速度帯定数 k_us (k_us_lo/k_us_mid/k_us + thresh1/thresh2) の最適化。
-        # Phase 43 best_params を起点に、中速帯 (thresh1 <= vx < thresh2) を追加する。
-        # k_us_lo/k_us_vx_thresh/k_us_mid/k_us_vx_thresh2 → step5 で k_us_bands/k_us_thresholds に変換。
-        CONTINUOUS_SPACE = {
-            "steer_time_constant":        (0.15, 0.25),
-            "debug_steer_scaling_factor": (0.92, 1.02),
-            "k_us":                       (0.001, 0.007),  # 高速帯 (vx >= thresh2) の k_us
-            "k_us_lo":                    (0.005, 0.025),  # 低速帯 (vx < thresh1) の k_us
-            "k_us_mid":                   (0.002, 0.010),  # 中速帯 (thresh1 <= vx < thresh2) の k_us
-            "k_us_vx_thresh":             (2.0,   5.0),   # 低速/中速切り替え閾値 [m/s]
-            "k_us_vx_thresh2":            (5.0,  10.0),   # 中速/高速切り替え閾値 [m/s]
-            "steer_dead_band":            (0.001, 0.007),
-            "steer_bias":                 (-0.003, 0.003),
-            "acc_time_constant":          (0.12, 0.22),
-            "steer_rate_lim":             (0.40, 0.65),
-        }
-        score_fn = steer_score
-        explore_delay = False
-        explore_steer_delay = False
-        if phase_fixed_params:
-            cur_best.update(phase_fixed_params)
-            print(f"[Phase 44] 3分割速度帯 k_us 最適化 (yaw+lat スコア)。固定 params: {phase_fixed_params} | steer_time_delay={cur_best.get('steer_time_delay', '未設定')}")
-        else:
-            print(f"[Phase 44] 3分割速度帯 k_us 最適化 (yaw+lat スコア)。steer_time_delay は cur_best から固定。")
-    elif phase == 45:
-        # Phase 45: steer_dead_band=0 固定 + k_us 3分割 + steer_time_constant/delay 広域探索。
-        # 背景: Phase 44 で k_us が OLS 推定値 (~0.015) より大幅に低くなる原因として
-        # steer_dead_band との交絡を特定。dead_band=0 で固定し、k_us が本来の物理値に
-        # 近づくかを検証する。
-        # steer_time_constant と steer_time_delay は操舵一次遅れの直接同定
-        # (現 lib._physical_validity.fit_steer_single、旧 identify_steer_dynamics.py) に
-        # よる同定値 (τ_med, T_med) を参考に探索範囲を設定する。
-        CONTINUOUS_SPACE = {
-            "steer_time_constant":        (0.05, 0.50),   # 同定結果に応じて範囲設定
-            "debug_steer_scaling_factor": (0.92, 1.02),
-            "k_us":                       (0.001, 0.025),  # 高速帯 (vx >= thresh2)
-            "k_us_lo":                    (0.005, 0.030),  # 低速帯 (vx < thresh1)
-            "k_us_mid":                   (0.002, 0.020),  # 中速帯 (thresh1 <= vx < thresh2)
-            "k_us_vx_thresh":             (2.0,   5.0),
-            "k_us_vx_thresh2":            (5.0,  10.0),
-            "steer_bias":                 (-0.003, 0.003),
-            "acc_time_constant":          (0.12, 0.22),
-            "steer_rate_lim":             (0.40, 0.65),
-        }
-        score_fn = steer_score
-        explore_delay = False
-        explore_steer_delay = True   # steer_time_delay も探索
-
-        cur_best["steer_dead_band"] = 0.0   # dead_band=0 固定
-        if phase_fixed_params:
-            cur_best.update(phase_fixed_params)
-            print(f"[Phase 45] dead_band=0 固定 + k_us 3分割 + steer delay 探索。固定 params: {phase_fixed_params}")
-        else:
-            print("[Phase 45] steer_dead_band=0 固定 + k_us 3分割 + steer_time_constant/delay 広域探索。")
-    elif phase == 46:
-        # Phase 46: k_us を最小二乗法実測値から固定し、ステア動力学パラメータのみ最適化。
-        # 背景: 診断により open-loop rollout スコアは δ_cmd バイアスで k_us を低く引き寄せる
-        # 構造的問題が確認された。最小二乗法（δ_actual 使用）で得られた物理値を固定し、
-        # steer 動力学系（time_constant / delay / rate_lim 等）のみを探索する。
-        #
-        # k_us プロファイル（最小二乗法 重み付き平均から設定）:
-        #   k_us_lo  = 0.000 （< 2.71 m/s: 低速は物理的に understeer なし）
-        #   k_us_mid = 0.020 （2.71-5.91 m/s: 最小二乗法 重み付き平均）
-        #   k_us     = 0.016 （≥ 5.91 m/s: 最小二乗法 高速ビン重み付き平均）
-        CONTINUOUS_SPACE = {
-            "steer_time_constant":        (0.05, 0.50),
-            "debug_steer_scaling_factor": (0.90, 1.05),
-            "steer_bias":                 (-0.005, 0.005),
-            "acc_time_constant":          (0.10, 0.30),
-            "steer_rate_lim":             (0.30, 0.80),
-            "steer_dead_band":            (0.000, 0.010),
-        }
-        score_fn = steer_score
-        explore_delay = False
-        explore_steer_delay = True
-        # k_us を OLS 実測値で上書き（phase_fixed_params より後に適用して確実に固定）
-        _KUS_OLS_OVERRIDES = {
-            "k_us_lo":         0.000,
-            "k_us_mid":        0.020,
-            "k_us":            0.016,
-            "k_us_vx_thresh":  2.71,
-            "k_us_vx_thresh2": 5.91,
-
-        }
-        if phase_fixed_params:
-            cur_best.update(phase_fixed_params)
-        cur_best.update(_KUS_OLS_OVERRIDES)  # 最小二乗法の値で上書き（固定）
-        print(
-            f"[Phase 46] k_us を最小二乗法で固定 (lo={_KUS_OLS_OVERRIDES['k_us_lo']:.3f}/"
-            f"mid={_KUS_OLS_OVERRIDES['k_us_mid']:.3f}/hi={_KUS_OLS_OVERRIDES['k_us']:.3f})"
-            f" + steer 動力学最適化。"
-        )
-    elif phase == 47:
-        # Phase 47: k_us のみ最適化 (understeer_compensation 切替効果の単離)。
-        # Phase 46 の steer 動力学値を --phase-params で受け取り固定した上で、
-        # k_us (スカラー) を負域含む対称範囲 (-0.03, +0.03) で探索する。
-        # 安全性: 最高速が約 40 km/h (11.1 m/s) のため、k_us >= -0.03 でも
-        #         分母 L + k_us * vx^2 >= 1.06 > 0 となり、数値発散や反転はしない。
-        CONTINUOUS_SPACE = {
-            "k_us": (-0.03, 0.030),
-        }
-        score_fn = steer_score
-        explore_delay = False
-        explore_steer_delay = False
-        # ランプ・速度帯分割を完全無効化し、k_us をフラットスカラーとして扱う。
-        # phase_fixed_params (Phase 46) は k_us_vx_thresh=2.71 を持つが、
-        # thresh=0 に上書きすることで step5 の banding を無効化し、
-        # p.get("k_us", 0.0) が全速度帯に適用される scalar mode にする。
-        if phase_fixed_params:
-            cur_best.update(phase_fixed_params)
-            print(f"[Phase 47] k_us のみ探索 (他は phase-params から固定)。steer_time_delay={cur_best.get('steer_time_delay', '未設定')}")
-        else:
-            print("[Phase 47] k_us のみ探索 (他は cur_best から固定)。")
-        # banding を全て無効化 (update 後に上書き)
-        cur_best["k_us_vx_thresh"] = 0.0   # thresh=0 → scalar mode
-        cur_best["k_us_vx_thresh2"] = 0.0
-        cur_best.pop("k_us_lo", None)
-        cur_best.pop("k_us_mid", None)
-        # _build_params() が k_us_bands/k_us_thresholds を返す場合も無効化
-        cur_best.pop("k_us_bands", None)
-        cur_best.pop("k_us_thresholds", None)
-        # k_us だけは探索対象なので固定しない
-        _ = cur_best.pop("k_us", None)
-    elif phase == 48:
-        # Phase 48: k_us=0 固定で steer 系パラメータ最適化 (understeer 補正有効データ向け)。
-        # 6/16 以降の補正ありデータ (--ds-after 2026-06-16) で実行することを想定。
-        # understeer 補正が車両側で施されているため k_us=0 が物理的に正しい。
-        # steer 動力学 (DSF, time_constant, dead_band, bias, rate_lim) と
-        # acc_time_constant を再最適化する。
-        CONTINUOUS_SPACE = {
-            "steer_time_constant":        (0.10, 0.35),
-            "debug_steer_scaling_factor": (0.85, 1.15),
-            "steer_dead_band":            (0.0,  0.010),
-            "steer_bias":                 (-0.01, 0.01),
-            "steer_rate_lim":             (0.10, 0.80),
-            "acc_time_constant":          (0.10, 0.35),
-        }
-        score_fn = steer_score
-        explore_delay = False
-        explore_steer_delay = False
-        if phase_fixed_params:
-            cur_best.update(phase_fixed_params)
-            print(f"[Phase 48] k_us=0 固定, steer 系再最適化 (phase-params から初期化)。"
-                  f" steer_time_delay={cur_best.get('steer_time_delay', '未設定')}")
-        else:
-            print("[Phase 48] k_us=0 固定, steer 系再最適化 (cur_best から初期化)。")
-        # k_us=0 に固定し banding を完全無効化
-        cur_best["k_us"] = 0.0
-
-        cur_best["k_us_vx_thresh"] = 0.0
-        cur_best["k_us_vx_thresh2"] = 0.0
-        cur_best.pop("k_us_lo", None)
-        cur_best.pop("k_us_mid", None)
-        cur_best.pop("k_us_bands", None)
-        cur_best.pop("k_us_thresholds", None)
-        if phase_fixed_params:
-            # phase_fixed_params が banding を持っていても k_us=0 を上書き保持
-            cur_best["k_us"] = 0.0
-            cur_best.pop("k_us_bands", None)
-            cur_best.pop("k_us_thresholds", None)
-    elif phase == 49:
-        # Phase 49: 縦速度方程式 vx_dot = f(acc_cmd, T_a, delay_a) に特化した最適化。
-        # eval_rollout_rmse の "vx" [m/s] 成分を目的関数とし、acc 遅れ・時定数のみ探索する。
-        # steer 系は cur_best に固定し、縦 ⊥ 横の独立性を活かして解像度を上げる。
-        # k_us=0 + banding 無効化も維持する（Phase 48 best_params を --phase-params で渡す想定）。
-        CONTINUOUS_SPACE = {
-            "acc_time_constant":        (0.05, 0.60),
-            "debug_acc_scaling_factor": (0.80, 1.20),
-        }
-        score_fn = component_score
-        _phase_agg_fn = lambda pm, bs: aggregate_component(pm, bs, "vx", VX_FLOOR)
-        explore_delay = True
-        explore_steer_delay = False
-        if phase_fixed_params:
-            cur_best.update(phase_fixed_params)
-            print(f"[Phase 49] 縦速度方程式: acc_time_delay/acc_time_constant → vx_score 最適化 (phase-params から初期化)。")
-        else:
-            print("[Phase 49] 縦速度方程式: acc_time_delay/acc_time_constant → vx_score 最適化 (cur_best から初期化)。")
-        # k_us=0 + banding 無効化を維持
-        cur_best["k_us"] = 0.0
-
-        cur_best["k_us_vx_thresh"] = 0.0
-        cur_best["k_us_vx_thresh2"] = 0.0
-        cur_best.pop("k_us_lo", None)
-        cur_best.pop("k_us_mid", None)
-        cur_best.pop("k_us_bands", None)
-        cur_best.pop("k_us_thresholds", None)
-    elif phase == 50:
-        # Phase 50: ステア動力学 steer_dot = f(steer_cmd, T_s, delay_s, DSF) に特化した最適化。
-        # eval_rollout_rmse の "steer" [deg] 成分を目的関数とし、steer 遅れ・時定数・DSF を探索。
-        # acc 系は cur_best に固定する。
-        # 注意: gt_steer = /vehicle/status/steering_status (converter 後の実測値) のため、
-        # err_steer には understeer 補正 (v² 依存) が v⁰ 定数として DSF に部分吸収される。
-        # これは Phase 50 の制約として許容し、k_us 同定 (Phase 51) で分離する設計。
-        CONTINUOUS_SPACE = {
-            "steer_time_constant":        (0.10, 0.35),
-            "debug_steer_scaling_factor": (0.85, 1.15),
-            "steer_bias":                 (-0.01, 0.01),
-        }
-        score_fn = component_score
-        _phase_agg_fn = lambda pm, bs: aggregate_component(pm, bs, "steer", STEER_FLOOR)
-        explore_delay = False
-        explore_steer_delay = True
-        if phase_fixed_params:
-            cur_best.update(phase_fixed_params)
-            print(f"[Phase 50] ステア動力学: steer_time_delay/steer_time_constant/DSF → steer_dynamics_score 最適化 (phase-params から初期化)。")
-        else:
-            print("[Phase 50] ステア動力学: steer_time_delay/steer_time_constant/DSF → steer_dynamics_score 最適化 (cur_best から初期化)。")
-        # k_us=0 + banding 無効化を維持
-        cur_best["k_us"] = 0.0
-
-        cur_best["k_us_vx_thresh"] = 0.0
-        cur_best["k_us_vx_thresh2"] = 0.0
-        cur_best.pop("k_us_lo", None)
-        cur_best.pop("k_us_mid", None)
-        cur_best.pop("k_us_bands", None)
-        cur_best.pop("k_us_thresholds", None)
+            print("[Phase 2] steer パラメータ最適化 (yaw+lat スコア)。acc 系は cur_best から固定。")
     else:
         # Phase 0: 全パラメータ同時最適化 (従来の robust_score)
         CONTINUOUS_SPACE = {
@@ -894,39 +471,25 @@ def robust_search(
         }
         score_fn = robust_score
         explore_delay = True
-        explore_steer_delay = False
-
-    # explore_steer_delay は Phase 10 のみ True (他 phase では未設定の場合を考慮)
-    if "explore_steer_delay" not in locals():
-        explore_steer_delay = False
-    # _phase_agg_fn は Phase 49/50 のみ設定 (他 phase では aggregate_normalized を使う)
-    if "_phase_agg_fn" not in locals():
-        _phase_agg_fn = None
 
     # gt 事前計算 (fork 前に親で完了し COW 共有)
     acc_delay_set: set[float] = set(DELAY_CANDIDATES) if explore_delay else set()
     if "acc_time_delay" in cur_best:
         acc_delay_set.add(float(cur_best["acc_time_delay"]))
-    steer_delay_set: set[float] = set(STEER_DELAY_CANDIDATES) if explore_steer_delay else set()
-    if "steer_time_delay" in cur_best:
-        steer_delay_set.add(float(cur_best["steer_time_delay"]))
     for ctx in ctxs:
         for ad in (acc_delay_set or {float(cur_best.get("acc_time_delay", 0.1))}):
-            for sd in (steer_delay_set or {float(cur_best.get("steer_time_delay", 0.0315))}):
-                merged = dict(ctx.base)
-                merged.update(cur_best)
-                merged["acc_time_delay"] = ad
-                merged["steer_time_delay"] = sd
-                key = tuple(round(float(merged[k]), 9) for k in _GT_KEYS)
-                if key not in ctx.gt_cache:
-                    ctx.gt_cache[key] = s5._prepare_gt(ctx.data, ctx.t0_ns, merged)
+            merged = dict(ctx.base)
+            merged.update(cur_best)
+            merged["acc_time_delay"] = ad
+            key = tuple(round(float(merged[k]), 9) for k in _GT_KEYS)
+            if key not in ctx.gt_cache:
+                ctx.gt_cache[key] = s5._prepare_gt(ctx.data, ctx.t0_ns, merged)
 
     optuna.logging.set_verbosity(optuna.logging.WARNING)
     sampler = optuna.samplers.TPESampler(multivariate=True, seed=42)
 
     # warm start: trial 0+ に既知良点を投入
     delay_list = list(DELAY_CANDIDATES)
-    steer_delay_list = list(STEER_DELAY_CANDIDATES)
 
     def _make_enqueue(params: dict) -> dict:
         eq: dict = {k: float(params[k]) for k in CONTINUOUS_SPACE if k in params}
@@ -939,19 +502,12 @@ def robust_search(
                 eq["acc_time_delay"] = min(delay_list, key=lambda x: abs(x - spec_v))
             else:
                 eq["acc_time_delay"] = delay_list[0]
-        if explore_steer_delay:
-            if "steer_time_delay" in params:
-                v = float(params["steer_time_delay"])
-                eq["steer_time_delay"] = min(steer_delay_list, key=lambda x: abs(x - v))
-            else:
-                eq["steer_time_delay"] = steer_delay_list[0]
         return eq
 
     if n_jobs <= 1:
         # Sequential path: in-memory Optuna (fully deterministic & low overhead)
         try:
-            # 初期スコア表示
-            init_agg = _eval_grid(None, ctxs_search, [cur_best], cur_model, 1, agg_fn=_phase_agg_fn)[0]
+            init_agg = _eval_grid(None, ctxs_search, [cur_best], cur_model, 1, agg_fn=None)[0]
             init_score = score_fn(init_agg, worst_w=worst_w)
             phase_label = f"phase={phase}" if phase else "phase=0(all)"
             print(f"\n## Optuna TPE ({case_name}, {n_trials} trials, cross-dataset normalized, worst_w={worst_w}, {phase_label})")
@@ -965,22 +521,14 @@ def robust_search(
                 for pname, (lo, hi) in CONTINUOUS_SPACE.items():
                     params[pname] = trial.suggest_float(pname, lo, hi)
                 if explore_delay:
-                    params["acc_time_delay"] = trial.suggest_categorical(
-                        "acc_time_delay", DELAY_CANDIDATES
-                    )
-                if explore_steer_delay:
-                    params["steer_time_delay"] = trial.suggest_categorical(
-                        "steer_time_delay", STEER_DELAY_CANDIDATES
-                    )
+                    params["acc_time_delay"] = trial.suggest_categorical("acc_time_delay", DELAY_CANDIDATES)
 
                 params = unify_step_bands(params)
-                agg = _eval_grid(None, ctxs_search, [params], cur_model, 1, agg_fn=_phase_agg_fn)[0]
+                agg = _eval_grid(None, ctxs_search, [params], cur_model, 1, agg_fn=None)[0]
                 score = score_fn(agg, worst_w=worst_w)
-
                 if score < best_result["score"]:
                     best_result.update({"params": dict(params), "score": score, "agg": agg})
                     _checkpoint(params, score)
-
                 return score
 
             def _log_cb(study: optuna.Study, trial: optuna.trial.FrozenTrial) -> None:
@@ -1007,7 +555,7 @@ def robust_search(
 
             if search_subsample and len(ctxs_search) < len(ctxs):
                 print(f"[INFO] 最終 score を全 {len(ctxs)} データセットで評価中...")
-                full_agg = _eval_grid(None, ctxs, [state], cur_model, 1, agg_fn=_phase_agg_fn)[0]
+                full_agg = _eval_grid(None, ctxs, [state], cur_model, 1, agg_fn=None)[0]
                 best_s = score_fn(full_agg, worst_w=worst_w)
                 print(format_agg("FINAL(全件)", full_agg) + f"  score={best_s:.4f}")
                 best_result.update({"score": best_s, "agg": full_agg})
@@ -1016,104 +564,96 @@ def robust_search(
         finally:
             pass
 
-    else:
-        # Parallel path: SQLite + Process-based concurrency (zero-copy for ctxs via fork COW)
-        import tempfile
-        from multiprocessing import Process
+    # Parallel path: SQLite + Process-based concurrency (zero-copy for ctxs via fork COW)
+    import tempfile
+    from multiprocessing import Process
 
-        db_fd, db_path = tempfile.mkstemp(suffix=".db")
-        os.close(db_fd)
-        db_url = f"sqlite:///{db_path}"
+    db_fd, db_path = tempfile.mkstemp(suffix=".db")
+    os.close(db_fd)
+    db_url = f"sqlite:///{db_path}"
 
-        try:
-            # 初期スコア表示
-            init_agg = _eval_grid(None, ctxs_search, [cur_best], cur_model, 1, agg_fn=_phase_agg_fn)[0]
-            init_score = score_fn(init_agg, worst_w=worst_w)
-            phase_label = f"phase={phase}" if phase else "phase=0(all)"
-            print(f"\n## Optuna TPE ({case_name}, {n_trials} trials, cross-dataset normalized, worst_w={worst_w}, {phase_label}) [SQLite Process Parallel: {n_jobs} jobs]")
-            print(format_agg("init", init_agg) + f"  score={init_score:.4f}  {cur_best}")
-            _checkpoint(cur_best, init_score)
+    try:
+        init_agg = _eval_grid(None, ctxs_search, [cur_best], cur_model, 1, agg_fn=None)[0]
+        init_score = score_fn(init_agg, worst_w=worst_w)
+        phase_label = f"phase={phase}" if phase else "phase=0(all)"
+        print(f"\n## Optuna TPE ({case_name}, {n_trials} trials, cross-dataset normalized, worst_w={worst_w}, {phase_label}) [SQLite Process Parallel: {n_jobs} jobs]")
+        print(format_agg("init", init_agg) + f"  score={init_score:.4f}  {cur_best}")
+        _checkpoint(cur_best, init_score)
 
-            # Create shared SQLite study
-            study = optuna.create_study(
-                study_name="robust_search",
-                storage=db_url,
-                direction="minimize",
-                sampler=sampler,
-                load_if_exists=True
+        study = optuna.create_study(
+            study_name="robust_search",
+            storage=db_url,
+            direction="minimize",
+            sampler=sampler,
+            load_if_exists=True,
+        )
+
+        study.enqueue_trial(_make_enqueue(cur_best))
+        for ep in (extra_enqueue or []):
+            study.enqueue_trial(_make_enqueue(ep))
+
+        trials_per_worker = [n_trials // n_jobs] * n_jobs
+        for i in range(n_trials % n_jobs):
+            trials_per_worker[i] += 1
+
+        processes = []
+        for worker_id, n_trials_w in enumerate(trials_per_worker):
+            if n_trials_w == 0:
+                continue
+            p = Process(
+                target=_run_worker,
+                args=(
+                    worker_id,
+                    db_url,
+                    n_trials_w,
+                    n_trials,
+                    cur_best,
+                    CONTINUOUS_SPACE,
+                    explore_delay,
+                    DELAY_CANDIDATES,
+                    ctxs_search,
+                    cur_model,
+                    score_fn,
+                    worst_w,
+                    out_path,
+                ),
             )
+            p.start()
+            processes.append(p)
 
-            study.enqueue_trial(_make_enqueue(cur_best))
-            for ep in (extra_enqueue or []):
-                study.enqueue_trial(_make_enqueue(ep))
+        for p in processes:
+            p.join()
 
-            trials_per_worker = [n_trials // n_jobs] * n_jobs
-            for i in range(n_trials % n_jobs):
-                trials_per_worker[i] += 1
+        study = optuna.load_study(study_name="robust_search", storage=db_url)
+        best_trial = study.best_trial
+        best_params = best_trial.params
+        best_s = best_trial.value
 
-            processes = []
-            for worker_id, n_trials_w in enumerate(trials_per_worker):
-                if n_trials_w == 0:
-                    continue
-                p = Process(
-                    target=_run_worker,
-                    args=(
-                        worker_id,
-                        db_url,
-                        n_trials_w,
-                        n_trials,
-                        cur_best,
-                        CONTINUOUS_SPACE,
-                        explore_delay,
-                        DELAY_CANDIDATES,
-                        explore_steer_delay,
-                        STEER_DELAY_CANDIDATES,
-                        ctxs_search,
-                        cur_model,
-                        score_fn,
-                        worst_w,
-                        _phase_agg_fn,
-                        out_path,
-                    ),
-                )
-                p.start()
-                processes.append(p)
+        state = dict(cur_best)
+        state.update(best_params)
 
-            for p in processes:
-                p.join()
+        print("[INFO] Optuna optimization complete. Re-evaluating best params...")
+        final_agg = _eval_grid(None, ctxs_search, [state], cur_model, 1, agg_fn=None)[0]
 
-            # Reload study results in the main process to find the overall best trial
-            study = optuna.load_study(study_name="robust_search", storage=db_url)
-            best_trial = study.best_trial
-            best_params = best_trial.params
-            best_s = best_trial.value
+        print(format_agg("FINAL", final_agg) + f"  score={best_s:.4f}")
+        print(f"FINAL params: {state}")
+        _checkpoint(state, best_s)
 
-            state = dict(cur_best)
-            state.update(best_params)
+        if search_subsample and len(ctxs_search) < len(ctxs):
+            print(f"[INFO] 最終 score を全 {len(ctxs)} データセットで評価中...")
+            full_agg = _eval_grid(None, ctxs, [state], cur_model, 1, agg_fn=None)[0]
+            best_s = score_fn(full_agg, worst_w=worst_w)
+            print(format_agg("FINAL(全件)", full_agg) + f"  score={best_s:.4f}")
+            final_agg = full_agg
 
-            # Re-evaluate the best params to get the final agg
-            print(f"[INFO] Optuna optimization complete. Re-evaluating best params...")
-            final_agg = _eval_grid(None, ctxs_search, [state], cur_model, 1, agg_fn=_phase_agg_fn)[0]
+        return {"params": state, "agg": final_agg, "score": best_s}
 
-            print(format_agg("FINAL", final_agg) + f"  score={best_s:.4f}")
-            print(f"FINAL params: {state}")
-            _checkpoint(state, best_s)
-
-            if search_subsample and len(ctxs_search) < len(ctxs):
-                print(f"[INFO] 最終 score を全 {len(ctxs)} データセットで評価中...")
-                full_agg = _eval_grid(None, ctxs, [state], cur_model, 1, agg_fn=_phase_agg_fn)[0]
-                best_s = score_fn(full_agg, worst_w=worst_w)
-                print(format_agg("FINAL(全件)", full_agg) + f"  score={best_s:.4f}")
-                final_agg = full_agg
-
-            return {"params": state, "agg": final_agg, "score": best_s}
-
-        finally:
-            try:
-                if os.path.exists(db_path):
-                    os.remove(db_path)
-            except Exception as e:
-                print(f"[WARN] Failed to delete temp database {db_path}: {e}")
+    finally:
+        try:
+            if os.path.exists(db_path):
+                os.remove(db_path)
+        except Exception as e:
+            print(f"[WARN] Failed to delete temp database {db_path}: {e}")
 
 
 def _discover(collection_dir: Path) -> list[tuple[str, Path]]:
@@ -1276,15 +816,11 @@ def main() -> None:
         "--phase",
         type=int,
         default=0,
-        choices=[0, 1, 2, 3, 4, 5, 10, 11, 12, 13, 14, 43, 44, 45, 46, 47, 48, 49, 50],
+        choices=[0, 1, 2],
         help=(
             "チューニングフェーズ (既定: 0=全パラメータ同時最適化)。"
             "1=acc のみ探索・long スコア (steer 系は scenario.yaml の定義値に固定)。"
             "2=steer のみ探索・yaw+lat スコア (acc 系は scenario.yaml 定義値または --phase-params に固定)。"
-            "3=no-ramp k_us 実験・yaw+lat スコア (k_us をランプなし定数として探索、acc 系は固定)。"
-            "4=TC 絞り込み再チューニング・yaw+lat スコア (TC を [0.05, 0.25] に絞り steer パラメータを再探索)。"
-            "5=TC=0.12 中心再チューニング・yaw+lat スコア (TC を [0.09, 0.15] に絞り steer パラメータを再探索)。"
-            "10=steer_time_delay を離散候補に追加した Phase 9 相当の再チューニング (yaw+lat スコア)。"
         ),
     )
     ap.add_argument(
@@ -1380,25 +916,7 @@ def main() -> None:
             phase_data = yaml.safe_load(f)
         all_params = unify_step_bands(phase_data.get("params", phase_data))
         acc_keys = {"acc_time_constant", "acc_time_delay"}
-        # Phase 43/44/45/46/47/48: 前フェーズの全 params を cur_best として継承（探索空間外の値を保持）
-        if args.phase in (43, 44, 45, 46, 47, 48):
-            fixed_keys = set(all_params.keys())
-        # Phase 49: vx_score 最適化。steer 系を固定し acc 系のみ探索。
-        elif args.phase == 49:
-            fixed_keys = set(all_params.keys()) - {"acc_time_constant", "acc_time_delay"}
-        # Phase 50: steer_dynamics_score 最適化。acc 系を固定し steer 系のみ探索。
-        elif args.phase == 50:
-            fixed_keys = set(all_params.keys()) - {
-                "steer_time_constant", "debug_steer_scaling_factor",
-                "steer_time_delay", "steer_bias",
-            }
-        # Phase 11/12/13: steer_time_delay も固定値として引き継ぐ
-        # Phase 12/13: acc_time_constant は変数化するため固定しない (acc_time_delay のみ固定)
-        elif args.phase in (12, 13):
-            fixed_keys = {"acc_time_delay", "steer_time_delay"}
-        elif args.phase == 11:
-            fixed_keys = acc_keys | {"steer_time_delay"}
-        elif args.phase in (2, 3, 4, 5, 10):
+        if args.phase == 2:
             fixed_keys = acc_keys
         else:
             fixed_keys = set()
