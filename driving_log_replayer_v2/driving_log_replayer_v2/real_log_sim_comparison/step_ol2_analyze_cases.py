@@ -70,8 +70,9 @@ from .lib._physical_validity import (
     compute_steer_timeseries,
     fit_long_single,
     fit_steer_single,
-VERBOSE = False
+)
 
+VERBOSE = False
 
 def _load_case_csvs(nstep_root: Path, tags: list[str]) -> dict[str, pd.DataFrame]:
     """nstep/<tag>/nstep_delta.csv (Stage 3 出力) を全 tag 分読み込む。欠損 tag はスキップ。"""
