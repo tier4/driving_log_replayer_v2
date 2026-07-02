@@ -16,6 +16,29 @@ import pandas as pd
 AUTONOMOUS_MODE = 2
 
 
+def _debounced_moving_start(
+    df_vel: pd.DataFrame,
+    vel_threshold: float,
+    min_moving_duration: float,
+) -> int:
+    """速度が `min_moving_duration` 秒継続して `vel_threshold` を超える最初の時刻 (ns) を返す。
+
+    単点ノイズに脆弱なため、窓内に複数サンプルがあり全て移動中である場合のみ
+    「継続した発進」とみなす（デバウンス）。df_vel は align_time 前 (`t_ns` 列を持つ) を想定。
+    """
+    t_ns = df_vel["t_ns"].to_numpy()
+    moving = (df_vel["lon_vel"].to_numpy() > vel_threshold)
+    win_ns = min_moving_duration * 1e9
+    for i in np.flatnonzero(moving):
+        t_start = t_ns[i]
+        in_win = (t_ns >= t_start) & (t_ns < t_start + win_ns)
+        if in_win.sum() >= 2 and moving[in_win].all():
+            return int(t_start)
+    if moving.any():
+        return int(t_ns[int(np.argmax(moving))])
+    return int(t_ns[0])
+
+
 def find_autonomous_start(
     df_mode: pd.DataFrame,
     df_vel: pd.DataFrame,
@@ -23,35 +46,35 @@ def find_autonomous_start(
     vel_threshold: float = 0.1,
     min_moving_duration: float = 0.3,
 ) -> int:
-    """オートノマス開始時刻 (ns) を返す。
+    """解析開始時刻 (ns) を返す。
 
-    df_mode に AUTONOMOUS 遷移があればそれ、無ければ速度ベースでフォールバック。
-    速度フォールバックは単点ノイズに脆弱なため、`min_moving_duration` 秒だけ移動が
-    継続する最初の時刻を採用する（デバウンス）。df_vel は align_time 前
-    (`t_ns` 列を持つ) を想定。
+    先頭の「停止継続区間」と先頭の「MANUAL 区間」（AUTONOMOUS 以外）を、それぞれ
+    独立に判定して一括カットし、両者の終端の遅い方 (和集合) を採用する。
+    - 停止継続区間の終端: `min_moving_duration` 秒だけ移動が継続する最初の時刻
+      （単点ノイズ除けのデバウンス、df_vel は align_time 前 `t_ns` 列を想定）
+    - MANUAL 区間の終端: df_mode 中で最初に AUTONOMOUS になった時刻
+      （df_mode が空、または AUTONOMOUS が一度も観測されない場合は制約なし）
     """
-    if not df_mode.empty:
-        auto_rows = df_mode[df_mode["mode"] == AUTONOMOUS_MODE]
-        if not auto_rows.empty:
-            return int(auto_rows["t_ns"].iloc[0])
-        warnings.warn(
-            "AUTONOMOUS モード遷移が見つからないため速度ベースにフォールバック",
-            stacklevel=2,
-        )
     if df_vel.empty:
-        raise ValueError("df_mode も df_vel も空のため t0 を決定できない")
-    t_ns = df_vel["t_ns"].to_numpy()
-    moving = (df_vel["lon_vel"].to_numpy() > vel_threshold)
-    win_ns = min_moving_duration * 1e9
-    for i in np.flatnonzero(moving):
-        t_start = t_ns[i]
-        in_win = (t_ns >= t_start) & (t_ns < t_start + win_ns)
-        # 窓内に複数サンプルがあり、すべて移動中なら「継続した発進」とみなす
-        if in_win.sum() >= 2 and moving[in_win].all():
-            return int(t_start)
-    if moving.any():
-        return int(t_ns[int(np.argmax(moving))])
-    return int(t_ns[0])
+        raise ValueError("df_vel が空のため停止区間カットの終端を決定できず t0 を決定できない")
+
+    stop_cut_ns = _debounced_moving_start(df_vel, vel_threshold, min_moving_duration)
+
+    if df_mode.empty:
+        manual_cut_ns = int(df_vel["t_ns"].iloc[0])
+    else:
+        auto_rows = df_mode[df_mode["mode"] == AUTONOMOUS_MODE]
+        if auto_rows.empty:
+            warnings.warn(
+                "AUTONOMOUS モードが見つからないため MANUAL 区間カットは適用せず"
+                "停止区間カットのみで解析開始点を決定",
+                stacklevel=2,
+            )
+            manual_cut_ns = int(df_vel["t_ns"].iloc[0])
+        else:
+            manual_cut_ns = int(auto_rows["t_ns"].iloc[0])
+
+    return max(stop_cut_ns, manual_cut_ns)
 
 
 def find_sim_launch(

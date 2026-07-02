@@ -591,9 +591,9 @@ def load_real_bag(path: Path) -> dict[str, pd.DataFrame]:
 
 
 def find_autonomous_start(data: dict) -> int:
-    """AUTONOMOUS モードが最初に現れる t_ns を返す (`_events.find_autonomous_start` 経由)。"""
+    """解析開始 t_ns を返す (`_events.find_autonomous_start` 経由、停止継続+MANUAL区間の一括カット)。"""
     # `_events.find_autonomous_start` は `lon_vel` 列を想定するが、ここでは `vx` 列なので
-    # 一時的にリネームしてフォールバック用 DF を作る。
+    # 一時的にリネームして停止区間カット用 DF を作る。
     df_vel = data["vel"].rename(columns={"vx": "lon_vel"}) if "vx" in data["vel"].columns else data["vel"]
     return _find_autonomous_start(data["mode"], df_vel)
 

@@ -45,7 +45,7 @@ def test_find_autonomous_start_with_mode_transition() -> None:
     assert find_autonomous_start(df_mode, df_vel) == 200
 
 
-def test_find_autonomous_start_fallback_to_velocity() -> None:
+def test_find_autonomous_start_mode_present_but_no_autonomous() -> None:
     df_mode = pd.DataFrame({"t_ns": [0, 100], "mode": [0, 1]})
     df_vel = pd.DataFrame({"t_ns": [0, 100, 200], "lon_vel": [0.0, 0.05, 1.0]})
     with pytest.warns(UserWarning):
@@ -68,6 +68,32 @@ def test_find_autonomous_start_velocity_fallback_debounce_ignores_spike() -> Non
     df_vel = pd.DataFrame({"t_ns": [int(t * 1e9) for t in ts], "lon_vel": vs})
     t0 = find_autonomous_start(df_mode, df_vel, min_moving_duration=0.3)
     assert abs(t0 / 1e9 - 2.0) < 0.05
+
+
+def test_find_autonomous_start_manual_cut_wins_when_later_than_stop_cut() -> None:
+    # 発進 (停止区間の終端) は t=0.0s だが、MANUAL→AUTONOMOUS 遷移は t=2.0s と遅い。
+    # 一括カットは和集合 (遅い方) なので MANUAL 側の t=2.0s が採用される。
+    df_mode = pd.DataFrame({"t_ns": [0, 2_000_000_000], "mode": [0, AUTONOMOUS_MODE]})
+    ts = [i * 0.1 for i in range(31)]
+    df_vel = pd.DataFrame({"t_ns": [int(t * 1e9) for t in ts], "lon_vel": [1.0] * len(ts)})
+    assert find_autonomous_start(df_mode, df_vel) == 2_000_000_000
+
+
+def test_find_autonomous_start_mode_empty_uses_stop_cut_only() -> None:
+    # mode トピック自体が欠落 (空 DataFrame、警告なし) → 停止区間カットのみで決まる。
+    df_mode = pd.DataFrame(columns=["t_ns", "mode"])
+    ts = [i * 0.1 for i in range(21)]
+    vs = [0.0 if t < 1.0 else 1.0 for t in ts]
+    df_vel = pd.DataFrame({"t_ns": [int(t * 1e9) for t in ts], "lon_vel": vs})
+    t0 = find_autonomous_start(df_mode, df_vel)
+    assert abs(t0 / 1e9 - 1.0) < 0.05
+
+
+def test_find_autonomous_start_no_cut_needed_when_already_moving_and_autonomous() -> None:
+    # 先頭から AUTONOMOUS かつ移動中 → 停止区間・MANUAL 区間どちらも空でカットなし (t0=0)。
+    df_mode = pd.DataFrame({"t_ns": [0, 100_000_000], "mode": [AUTONOMOUS_MODE, AUTONOMOUS_MODE]})
+    df_vel = pd.DataFrame({"t_ns": [0, 100_000_000, 200_000_000], "lon_vel": [1.0, 1.0, 1.0]})
+    assert find_autonomous_start(df_mode, df_vel) == 0
 
 
 @pytest.mark.skip(reason="removed function")

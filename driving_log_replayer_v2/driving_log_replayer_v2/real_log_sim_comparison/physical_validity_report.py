@@ -582,16 +582,16 @@ def _build_sec1(
 <p>本レポートの運動方程式は、以下の車体基準（body frame）および進行方向基準の座標系に基づきます。</p>
 <table class="param-table">
   <tr><th>記号</th><th>意味</th><th>単位</th></tr>
-  <tr><td>\(x, y\)</td><td>地図平面上の車両位置</td><td>m</td></tr>
-  <tr><td>\(\theta\)</td><td>ヨー角（車体の向き。地図 X 軸からの反時計回り回転）</td><td>rad</td></tr>
-  <tr><td>\(v_x\)</td><td>前進速度（進行方向＝車体 X 軸成分。<code>lon_vel</code>）</td><td>m/s</td></tr>
-  <tr><td>\(a_{{\mathrm{{act}}}}\)</td><td>アクチュエータ出力（実加速度。勾配重力加算前の値）</td><td>m/s²</td></tr>
-  <tr><td>\(a_{{\mathrm{{slope}}}}\)</td><td>路面勾配による重力加速度成分</td><td>m/s²</td></tr>
-  <tr><td>\(\delta_{{\mathrm{{act}}}}\)</td><td>前輪実ステア角</td><td>rad</td></tr>
-  <tr><td>\(\beta\)</td><td>ステアバイアス（系統的操舵オフセット。<code>steer_bias</code>）</td><td>rad</td></tr>
-  <tr><td>\(\omega\)</td><td>ヨーレート（\(\dot\theta\)）</td><td>rad/s</td></tr>
-  <tr><td>\(L\)</td><td>ホイールベース（<code>wheelbase</code>）</td><td>m</td></tr>
-  <tr><td>\(k_{{\mathrm{{us}}}}\)</td><td>アンダーステア係数（<code>k_us</code>）</td><td>rad/(m/s²)</td></tr>
+  <tr><td>\\(x, y\\)</td><td>地図平面上の車両位置</td><td>m</td></tr>
+  <tr><td>\\(\\theta\\)</td><td>ヨー角（車体の向き。地図 X 軸からの反時計回り回転）</td><td>rad</td></tr>
+  <tr><td>\\(v_x\\)</td><td>前進速度（進行方向＝車体 X 軸成分。<code>lon_vel</code>）</td><td>m/s</td></tr>
+  <tr><td>\\(a_{{\\mathrm{{act}}}}\\)</td><td>アクチュエータ出力（実加速度。勾配重力加算前の値）</td><td>m/s²</td></tr>
+  <tr><td>\\(a_{{\\mathrm{{slope}}}}\\)</td><td>路面勾配による重力加速度成分</td><td>m/s²</td></tr>
+  <tr><td>\\(\\delta_{{\\mathrm{{act}}}}\\)</td><td>前輪実ステア角</td><td>rad</td></tr>
+  <tr><td>\\(\\beta\\)</td><td>ステアバイアス（系統的操舵オフセット。<code>steer_bias</code>）</td><td>rad</td></tr>
+  <tr><td>\\(\\omega\\)</td><td>ヨーレート（\\(\\dot\\theta\\)）</td><td>rad/s</td></tr>
+  <tr><td>\\(L\\)</td><td>ホイールベース（<code>wheelbase</code>）</td><td>m</td></tr>
+  <tr><td>\\(k_{{\\mathrm{{us}}}}\\)</td><td>アンダーステア係数（<code>k_us</code>）</td><td>rad/(m/s²)</td></tr>
 </table>
 </section>
 
@@ -619,7 +619,7 @@ a_{{\\mathrm{{target}}}}(t) = a_{{\\mathrm{{cmd,del}}}}(t) + \\bigl(c_0 + c_1 v_
 加速度指令 \\(a_{{\\mathrm{{cmd}}}}\\) は純粋遅延 \\(T_a\\)（<code>acc_time_delay</code>）だけ遅れてアクチュエータに届き、
 時定数 \\(\\tau_a\\)（<code>acc_time_constant</code>）の一次遅れでアクチュエータ出力（実加速度） \\(a_{{\\mathrm{{act}}}}\\) が応答する。<br>
 車速 \\(v_x\\) は、アクチュエータ出力（実加速度）に応答遅れのない勾配重力加速度成分 \\(a_{{\\mathrm{{slope}}}}\\)（シミュレータへの外部入力）を加算して積分した値となる。<br>
-※ 走行抵抗多項式（poly項）の係数 \(c_0, c_1, c_2\) はそれぞれ <code>lon_drag_c0</code>, <code>lon_drag_c1</code>, <code>lon_drag_c2</code> に対応します。<br>
+※ 走行抵抗多項式（poly項）の係数 \\(c_0, c_1, c_2\\) はそれぞれ <code>lon_drag_c0</code>, <code>lon_drag_c1</code>, <code>lon_drag_c2</code> に対応します。<br>
 ※ 目標加速度およびアクチュエータ出力加速度は <code>vel_rate_lim</code>、車速は <code>vel_lim</code> で制限されます。
 </p>
 

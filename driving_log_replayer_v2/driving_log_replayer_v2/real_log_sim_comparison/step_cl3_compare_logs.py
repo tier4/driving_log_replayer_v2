@@ -633,10 +633,11 @@ def main() -> None:
         df_mode = load_operation_mode(mcap_path)
         df_vel = load_velocity(mcap_path)
         t0 = _find_autonomous_start(df_mode, df_vel)
-        # t0 の決定根拠を明示 (real は mode 遷移 / sim は operation_mode 僅少で速度 fallback に
-        # なりがちで、両者の基準差が時間軸重ね描きの「見かけの時間ずれ」を生む)。
+        # t0 は「先頭の停止継続区間」と「先頭の MANUAL 区間」を独立にカットした和集合 (遅い方) で
+        # 決まる。has_auto は MANUAL 側カットが効いた (AUTONOMOUS 観測あり) かどうかの目安であり、
+        # AUTONOMOUS 観測があっても停止区間カットの方が遅ければ t0 はそちらに従う点に注意。
         has_auto = (not df_mode.empty) and bool((df_mode["mode"] == _AUTONOMOUS_MODE).any())
-        t0_method = "operation_mode(AUTONOMOUS)" if has_auto else "velocity_threshold(fallback)"
+        t0_method = "stop+manual cutoff (mode 利用)" if has_auto else "stop cutoff のみ (mode 情報なし/AUTONOMOUS未観測)"
         _print(f"    → t0 = {t0} ns [{t0_method}]")
 
         # localization 有効性ゲート: 原点(0,0)/瞬間移動の無効フレームを除外 (A0)。
