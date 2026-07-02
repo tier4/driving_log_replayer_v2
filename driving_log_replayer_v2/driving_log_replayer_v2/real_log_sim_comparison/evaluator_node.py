@@ -234,11 +234,11 @@ def run_pipeline(
             f" got: {scenario_config!r}"
         )
 
-    from driving_log_replayer_v2.real_log_sim_comparison.lib._sim_runs_config import (  # noqa: PLC0415
-        load_sim_runs_config,
+    from driving_log_replayer_v2.real_log_sim_comparison.lib._models_config import (  # noqa: PLC0415
+        load_run_models,
     )
 
-    sim_cfg = load_sim_runs_config(scenario_config)
+    sim_cfg = load_run_models(scenario_config)
     env["SCENARIO_CONFIG_YAML"] = scenario_config
 
     # closed-loop sim のスキップ (open-loop 解析だけ欲しいとき・マルチ DS バッチの時間短縮)。
@@ -366,14 +366,14 @@ def run_analysis(
     skip_ol = env.get("SKIP_OL") == "1"
     if skip_ol:
         logger.info("SKIP_OL is enabled. Skipping all analysis stages.")
-        from driving_log_replayer_v2.real_log_sim_comparison.lib._sim_runs_config import (  # noqa: PLC0415
-            load_sim_runs_config,
+        from driving_log_replayer_v2.real_log_sim_comparison.lib._models_config import (  # noqa: PLC0415
+            load_run_models,
         )
-        from driving_log_replayer_v2.real_log_sim_comparison.lib._cases_config import (  # noqa: PLC0415
-            load_cases_config,
+        from driving_log_replayer_v2.real_log_sim_comparison.lib._models_config import (  # noqa: PLC0415
+            load_models_doc,
         )
-        sim_cfg = load_sim_runs_config(scenario_config)
-        cases_cfg = load_cases_config(scenario_config)
+        sim_cfg = load_run_models(scenario_config)
+        cases_cfg = load_models_doc(scenario_config)
         return {
             "sim_runs_produced": 0,
             "sim_runs_expected": len(sim_cfg.runs),
@@ -382,20 +382,20 @@ def run_analysis(
             "report_ok": 0,
             "cases_summary_ok": 0,
         }
-    from driving_log_replayer_v2.real_log_sim_comparison.lib._sim_runs_config import (  # noqa: PLC0415
-        load_sim_runs_config,
+    from driving_log_replayer_v2.real_log_sim_comparison.lib._models_config import (  # noqa: PLC0415
+        load_run_models,
     )
 
-    sim_cfg = load_sim_runs_config(scenario_config)
+    sim_cfg = load_run_models(scenario_config)
     env = env.copy()
     env["SCENARIO_CONFIG_YAML"] = scenario_config
 
     # ---- Stage OL1: VehicleModel N-step オープンループ解析 (Conditions.cases 必須) ----
-    from driving_log_replayer_v2.real_log_sim_comparison.lib._cases_config import (  # noqa: PLC0415
-        load_cases_config,
+    from driving_log_replayer_v2.real_log_sim_comparison.lib._models_config import (  # noqa: PLC0415
+        load_models_doc,
     )
 
-    cases_cfg = load_cases_config(scenario_config)
+    cases_cfg = load_models_doc(scenario_config)
 
     logger.info(f"Stage OL1: step_ol1_analyze_nstep over {len(cases_cfg.cases)} case(s)")
     for case in cases_cfg.cases:

@@ -310,11 +310,11 @@ def main() -> None:
         print("ERROR: --base-dir (or BEST_MODEL_BASE_DIR env) が未指定です", file=sys.stderr)
         sys.exit(2)
 
-    from driving_log_replayer_v2.real_log_sim_comparison.lib._cases_config import (  # noqa: PLC0415
-        load_cases_config,
+    from driving_log_replayer_v2.real_log_sim_comparison.lib._models_config import (  # noqa: PLC0415
+        load_models_doc,
     )
 
-    cases_cfg = load_cases_config(args.scenario)
+    cases_cfg = load_models_doc(args.scenario)
     nstep_root = base_dir / "comparison" / "nstep"
     out_root = base_dir / "comparison" / "cases"
     overlay_dir = out_root / "overlay"

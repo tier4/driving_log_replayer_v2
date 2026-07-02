@@ -87,6 +87,8 @@ from .lib._cross_dataset import (
 from .lib._nstep_common import metrics_description_md
 from .lib._physical_validity import (
     compute_kus_bins_from_sufficient_stats,
+    compute_cross_long_rows,
+    compute_cross_steer_rows,
     compute_long_perf_data,
     compute_perfect_tracking_data,
     fit_long_cross_dataset_bounded,

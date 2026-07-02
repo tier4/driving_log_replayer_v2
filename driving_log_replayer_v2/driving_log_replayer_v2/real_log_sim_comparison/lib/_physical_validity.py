@@ -59,7 +59,7 @@ _N_CROSS_FIT_DATASET = 10   # 縦方向横断最小二乗法に使うデータ�
 def merged_model_params(model_params: dict) -> dict:
     """モデルの明示 params を load_sim_params() の既定値にマージする。
 
-    `lib._cases_config` の schema docstring 通り、Conditions.models.<name>.params は
+    `lib._models_config` の schema docstring 通り、Conditions.models.<name>.params は
     「base に上書きする差分」であって完全なパラメータ集合ではない (例: acc_time_constant のみ
     指定し acc_time_delay は既定値に委ねるケースがある)。マージ無しで `.get("acc_time_delay")`
     すると該当モデルが None 判定で overlay から黙って脱落するため、必ずここでマージしてから使う。
@@ -1113,4 +1113,3 @@ def physical_validity_jsonable(pv: dict | None) -> dict | None:
         }
 
     return {"long": _fit(pv.get("long")), "steer": _fit(pv.get("steer")), "kus_bins": kus_bins_json}
-

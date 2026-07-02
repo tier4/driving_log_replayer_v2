@@ -1551,12 +1551,12 @@ def main() -> None:
         )
         sys.exit(2)
 
-    from driving_log_replayer_v2.real_log_sim_comparison.lib._cases_config import (  # noqa: PLC0415
-        load_cases_config,
+    from driving_log_replayer_v2.real_log_sim_comparison.lib._models_config import (  # noqa: PLC0415
+        load_models_doc,
     )
 
     try:
-        cases_cfg = load_cases_config(args.scenario)
+        cases_cfg = load_models_doc(args.scenario)
         case = cases_cfg.find_case(args.case_tag)
     except (FileNotFoundError, ValueError, KeyError) as e:
         print(f"ERROR: scenario.yaml (Conditions.cases): {e}", file=sys.stderr)

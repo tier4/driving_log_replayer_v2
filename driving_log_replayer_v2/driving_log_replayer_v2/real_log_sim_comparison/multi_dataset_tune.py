@@ -37,7 +37,7 @@ import yaml
 
 from . import step_ol1_analyze_nstep as s5
 from .lib._collection import discover_collection
-from .lib._cases_config import load_cases_config
+from .lib._models_config import load_models_doc
 from .lib._io import resolve_lite_bag
 from .lib._params_utils import normalize_kus_step_bands
 from .lib._multi_agg import (
@@ -856,7 +856,7 @@ def main() -> None:
         print("ERROR: 有効な dataset が 0 件", file=sys.stderr)
         sys.exit(1)
 
-    cfg = load_cases_config(args.scenario)
+    cfg = load_models_doc(args.scenario)
 
     # グローバル _CTXS に ctxs をセット (fork COW 継承パターン)。
     # pool.map は pickle 転送せず fork した子プロセスがグローバルを直接参照する。

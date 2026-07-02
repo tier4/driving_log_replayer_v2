@@ -190,23 +190,6 @@ def aggregate_component(
     return {"per_ds": per_ds, "by_h": by_h_agg}
 
 
-def component_score(
-    agg: dict,
-    horizons: tuple[int, ...] = HORIZONS,
-    worst_w: float = WORST_W,
-) -> float:
-    """単一成分 baseline 比集約スコア (mean + worst_w * worst)。小さいほど良い。
-
-    aggregate_component の返り値を受け取る。
-    vx_score / steer_dynamics_score 共通の計算式。
-    """
-    s = 0.0
-    for h in horizons:
-        b = agg["by_h"][h]
-        s += b["n_mean"] + worst_w * b["n_worst"]
-    return s
-
-
 def score_formula_md(horizons: tuple[int, ...] = HORIZONS, worst_w: float = WORST_W) -> str:
     """robust_score の定義を Markdown 1 行で返す (レポート埋め込み用)。"""
     return (

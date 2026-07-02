@@ -450,9 +450,9 @@ def main() -> None:
         print(f"ERROR: scenario yaml が見つかりません: {scenario}", file=sys.stderr)
         sys.exit(1)
 
-    from .lib._sim_runs_config import load_sim_runs_config  # noqa: PLC0415
+    from .lib._models_config import load_run_models  # noqa: PLC0415
     try:
-        sim_cfg = load_sim_runs_config(args.config_scenario)
+        sim_cfg = load_run_models(args.config_scenario)
         run = sim_cfg.find_run(args.run_tag)
     except (FileNotFoundError, ValueError, KeyError) as e:
         print(f"ERROR: scenario.yaml (Conditions.sim_runs): {e}", file=sys.stderr)

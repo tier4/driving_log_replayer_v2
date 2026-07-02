@@ -177,6 +177,10 @@ class ModelSpec:
     dp_model_release: str | None = None
     dp_model_package: str | None = None
 
+    @property
+    def tag(self) -> str:
+        return self.name
+
 
 @dataclass
 class OverlaySpec:
@@ -194,6 +198,31 @@ class ModelsDoc:
     cases_list: list[str]
     sim_runs_list: list[str]
     overlay: OverlaySpec = field(default_factory=OverlaySpec)
+
+    def find_case(self, tag: str) -> ModelSpec:
+        return _find_named(self.cases, tag, "case")
+
+    def find_run(self, tag: str) -> ModelSpec:
+        return _find_named(self.runs, tag, "run")
+
+    @property
+    def tags(self) -> list[str]:
+        return self.cases_list
+
+    @property
+    def cases(self) -> list[ModelSpec]:
+        return [self.models[name] for name in self.cases_list]
+
+    @property
+    def runs(self) -> list[ModelSpec]:
+        return [self.models[name] for name in self.sim_runs_list]
+
+
+def _find_named(items: list[ModelSpec], tag: str, kind: str) -> ModelSpec:
+    for item in items:
+        if item.name == tag:
+            return item
+    raise KeyError(f"tag={tag!r} が Conditions.{kind}s に見つかりません")
 
 
 def load_models_doc(scenario_path: str | Path) -> ModelsDoc:
@@ -329,3 +358,17 @@ def load_models_doc(scenario_path: str | Path) -> ModelsDoc:
         sim_runs_list=sim_runs_list,
         overlay=overlay,
     )
+
+
+def load_run_models(scenario_path: str | Path) -> ModelsDoc:
+    doc = load_models_doc(scenario_path)
+    for name in doc.sim_runs_list:
+        model = doc.models[name]
+        for key, value in model.params.items():
+            if not isinstance(value, (int, float, bool, str)):
+                raise ValueError(
+                    f"{scenario_path}: models.{name}.params.{key} はスカラのみ可"
+                )
+        if model.vehicle_model_type and "vehicle_model_type" not in model.params:
+            model.params["vehicle_model_type"] = _VEHICLE_MODEL_TYPE_ENUM[model.vehicle_model_type]
+    return doc

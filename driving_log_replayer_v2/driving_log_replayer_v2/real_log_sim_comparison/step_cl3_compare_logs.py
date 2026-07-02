@@ -569,8 +569,8 @@ def _apply_runtime_config(cfg: RuntimeConfig) -> None:
     sim_runs_cfg = None
     if cfg.scenario_config:
         try:
-            from .lib._sim_runs_config import load_sim_runs_config  # noqa: PLC0415
-            sim_runs_cfg = load_sim_runs_config(cfg.scenario_config)
+            from .lib._models_config import load_run_models  # noqa: PLC0415
+            sim_runs_cfg = load_run_models(cfg.scenario_config)
         except Exception as exc:  # noqa: BLE001
             warnings.warn(f"scenario.yaml (sim_runs) 読み込み失敗: {exc} (sim 重ね描きスキップ)")
 

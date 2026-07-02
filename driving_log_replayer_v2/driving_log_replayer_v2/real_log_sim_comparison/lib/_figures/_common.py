@@ -24,10 +24,6 @@ from .._plotly_utils import lanes_to_trace  # noqa: F401
 # --- matplotlib スタイル → plotly 変換（軌跡・時系列の線/マーカー） -------------------
 _PLOTLY_DASH = {"-": "solid", "--": "dash", "-.": "dashdot", ":": "dot"}
 _PLOTLY_DASH_TUPLES = {(4, 2): "longdash", (3, 1, 1, 1): "longdashdot"}
-_PLOTLY_MARKER = {
-    "o": "circle", "^": "triangle-up", "s": "square", "D": "diamond",
-    "v": "triangle-down", "P": "cross", "*": "star", "X": "x",
-}
 
 
 def plotly_dash(ls) -> str:
@@ -35,11 +31,6 @@ def plotly_dash(ls) -> str:
     if isinstance(ls, tuple):
         return _PLOTLY_DASH_TUPLES.get(tuple(ls[1]), "dash")
     return _PLOTLY_DASH.get(ls, "solid")
-
-
-def plotly_marker(m) -> str:
-    """matplotlib marker 記号を plotly symbol へ（未知は circle）。"""
-    return _PLOTLY_MARKER.get(m, "circle")
 
 
 # --- レイアウト ------------------------------------------------------------------
@@ -114,26 +105,6 @@ def make_grid(rows: int, cols: int, *, subplot_titles=None, **kwargs):
 
 
 # --- 数値ヘルパー（matplotlib 側の派生量を plotly でも再現するため） -----------------
-def moving_average(y: np.ndarray, window: int) -> np.ndarray:
-    """中央寄せ移動平均（端は短縮窓）。matplotlib 版の raw+MA 重ね描きを再現する。
-
-    window<=1 や長さ不足では入力をそのまま返す。NaN は無視して平均する。
-    """
-    y = np.asarray(y, dtype=float)
-    n = len(y)
-    if window <= 1 or n == 0:
-        return y
-    half = window // 2
-    out = np.empty(n, dtype=float)
-    for i in range(n):
-        lo = max(0, i - half)
-        hi = min(n, i + half + 1)
-        seg = y[lo:hi]
-        valid = seg[~np.isnan(seg)]
-        out[i] = valid.mean() if valid.size else np.nan
-    return out
-
-
 def ma_window(n: int, divisor: int = 30, minimum: int = 3) -> int:
     """系列長 `n` から既定の移動平均窓を決める（matplotlib 側の `len/30` 慣習に合わせる）。"""
     return max(minimum, n // divisor)
@@ -167,15 +138,6 @@ def axis_range_from_limits(
     return [lo - pad * span, hi + pad * span]
 
 
-def viridis_colors(n: int) -> list[str]:
-    """viridis を `n` 等分サンプルした色（matplotlib の horizon 別色分けを再現）。"""
-    if n <= 0:
-        return []
-    if n == 1:
-        return pc.sample_colorscale("Viridis", [0.0])
-    return pc.sample_colorscale("Viridis", [i / (n - 1) for i in range(n)])
-
-
 def qualitative_colors(n: int) -> list[str]:
     """case 別など離散系列の循環色（matplotlib 既定 prop_cycle 相当の D3 10 色）。"""
     base = pc.qualitative.D3
@@ -186,5 +148,4 @@ def viridis_at(fracs) -> list[str]:
     """viridis を任意の位置 [0,1] でサンプルした色のリスト（連続値の色付け用）。"""
     fr = [min(1.0, max(0.0, float(f))) for f in fracs]
     return pc.sample_colorscale("Viridis", fr) if fr else []
-
 
