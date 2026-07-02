@@ -637,43 +637,81 @@ DRIVE/REVERSE/NEUTRAL/PARK 等を切り替える分岐選択用の離散入力�
 （FIFO バッファ）も実質的な離散状態であり、上記 7 次元の状態ベクトルだけでモデルが完結するわけではない。
 </p>
 
-<h3>状態・入力と ROS トピックの配線（実機ログ <code>real.lite</code>）</h3>
+<h3>状態・入力と ROS トピックの配線（実機ログ <code>real.lite</code> と scenario_simulator_v2）</h3>
 <p>
-上記の記号は、抽象的な数式上の変数ではなく、実機ログ（<code>real.lite</code>）内の以下の ROS トピックから
-直接読み出される実測値・実指令値である。シミュレータ本体も Autoware と同名のトピックで指令・状態を
-授受するため、記号とトピックの対応は実機・シミュレータ間で共通である。
+上記の記号は、抽象的な数式上の変数ではなく、以下の ROS トピックから直接読み出される実測値・実指令値である。
+Autoware の制御・プランニングスタックは自分が実機・シムいずれに繋がっているか区別しないため、
+この配線は本来、実機ログ（<code>real.lite</code>）と scenario_simulator_v2（<code>concealer::AutowareUniverse</code>
+が Autoware との橋渡し役を担う）とで一致していなければならない。実際に照合した結果を次表に示す。
 </p>
 <table class="param-table">
-  <tr><th>記号</th><th>ROS トピック</th><th>メッセージフィールド</th></tr>
+  <tr><th>記号</th><th>ROS トピック（実機・sim 共通）</th><th>メッセージフィールド</th>
+      <th>scenario_simulator_v2 側の実体</th></tr>
   <tr><td>\\(v_x\\)</td><td><code>/vehicle/status/velocity_status</code></td>
-      <td><code>longitudinal_velocity</code></td></tr>
+      <td><code>longitudinal_velocity</code></td>
+      <td>concealer が publish。値は <code>vehicle_model_ptr_->getVx()</code></td></tr>
   <tr><td>\\(\\delta_{{\\mathrm{{act}}}}\\)</td><td><code>/vehicle/status/steering_status</code></td>
-      <td><code>steering_tire_angle</code></td></tr>
+      <td><code>steering_tire_angle</code></td>
+      <td>concealer が publish。値は <code>vehicle_model_ptr_->getSteer()</code></td></tr>
   <tr><td>\\(a_{{\\mathrm{{report}}}}\\)（実測 \\(a_{{\\mathrm{{act}}}}\\) 相当として使用）</td>
-      <td><code>/localization/acceleration</code></td><td><code>accel.accel.linear.x</code></td></tr>
+      <td><code>/localization/acceleration</code></td><td><code>accel.accel.linear.x</code></td>
+      <td>concealer が publish。値は <code>vehicle_model_ptr_->getAx()</code></td></tr>
   <tr><td>\\(x\\)</td><td><code>/localization/kinematic_state</code></td>
-      <td><code>pose.pose.position.x</code></td></tr>
+      <td><code>pose.pose.position.x</code></td>
+      <td>concealer が publish。値は <code>getX()</code></td></tr>
   <tr><td>\\(y\\)</td><td><code>/localization/kinematic_state</code></td>
-      <td><code>pose.pose.position.y</code></td></tr>
+      <td><code>pose.pose.position.y</code></td>
+      <td>concealer が publish。値は <code>getY()</code></td></tr>
   <tr><td>\\(\\theta\\)</td><td><code>/localization/kinematic_state</code></td>
-      <td><code>pose.pose.orientation</code>（クォータニオンから yaw を算出）</td></tr>
+      <td><code>pose.pose.orientation</code>（クォータニオンから yaw を算出）</td>
+      <td>concealer が publish。値は <code>getYaw()</code></td></tr>
   <tr><td>\\(v_y\\)</td><td><code>/localization/kinematic_state</code></td>
-      <td><code>twist.twist.linear.y</code></td></tr>
+      <td><code>twist.twist.linear.y</code></td>
+      <td>concealer が publish。ただしモデルの <code>getVy()</code> は常に 0 固定
+      （実機ログの \\(v_y\\) のような実測横速度はシム側に存在しない）</td></tr>
   <tr><td>\\(\\omega\\)</td><td><code>/localization/kinematic_state</code></td>
-      <td><code>twist.twist.angular.z</code></td></tr>
-  <tr><td>\\(a_{{\\mathrm{{slope}}}}\\)</td><td><code>/localization/kinematic_state</code>（からの派生値）</td>
-      <td>専用トピックはなく、<code>orientation</code> から算出した pitch を用いて
-      \\(g\\sin(\\mathrm{{pitch}})\\) を事後計算する</td></tr>
+      <td><code>twist.twist.angular.z</code></td>
+      <td>concealer が publish。値は <code>getWz()</code></td></tr>
   <tr><td>\\(a_{{\\mathrm{{cmd,des}}}}\\)</td><td><code>/control/command/control_cmd</code></td>
-      <td><code>longitudinal.acceleration</code></td></tr>
+      <td><code>longitudinal.acceleration</code></td>
+      <td>concealer が subscribe し、<code>setInput()</code> の <code>PEDAL_ACCX_DES</code> に渡す</td></tr>
   <tr><td>\\(\\delta_{{\\mathrm{{cmd,des}}}}\\)</td><td><code>/control/command/control_cmd</code></td>
-      <td><code>lateral.steering_tire_angle</code></td></tr>
-  <tr><td><code>gear</code></td><td>（このパイプラインでは非購読）</td>
-      <td>前進走行区間のみを対象とし、常時 DRIVE 相当として扱う</td></tr>
+      <td><code>lateral.steering_tire_angle</code></td>
+      <td>concealer が subscribe し、<code>setInput()</code> の <code>STEER_DES</code> に渡す</td></tr>
+</table>
+<p>
+一方、\\(a_{{\\mathrm{{slope}}}}\\) と <code>gear</code> の 2 つは、実機・sim のどちらでも
+上記のような単純な「同一トピックの読み書き」ではなく、非対称な供給経路を持つ。
+</p>
+<table class="param-table">
+  <tr><th>記号</th><th>real.lite（実機ログ）側</th><th>scenario_simulator_v2 側</th></tr>
+  <tr><td>\\(a_{{\\mathrm{{slope}}}}\\)</td>
+      <td>専用トピックはない。<code>/localization/kinematic_state</code> の <code>orientation</code> から
+      算出した pitch を使い、レポート生成スクリプトが事後的に \\(g\\sin(\\mathrm{{pitch}})\\) を計算する</td>
+      <td>専用トピックはない。<code>EgoEntitySimulation::calculateAccelerationBySlope()</code> が
+      lanelet2 地図上の自車姿勢（走行中の map pose）から pitch を求め、同じ \\(g\\sin(\\mathrm{{pitch}})\\) を
+      毎ステップ計算して <code>SLOPE_ACCX</code> 入力に渡す</td></tr>
+  <tr><td><code>gear</code></td>
+      <td>このパイプラインの <code>real.lite</code> には抽出されておらず未使用
+      （前進走行区間のみを対象とし常時 DRIVE 相当として扱う）</td>
+      <td>実際には <code>/control/command/gear_cmd</code>（指令、concealer が subscribe）と
+      <code>/vehicle/status/gear_status</code>（レポート。ただし車両状態からの算出ではなく
+      指令値をそのままエコーバックする簡易実装）というトピックが存在する</td></tr>
 </table>
 <p class="meta">
-※ シミュレーションログとの比較では指令トピックのみ <code>/control/trajectory_follower/control_cmd</code>
-（trajectory_follower の生指令）に置き換わる場合がある。それ以外は実機・シム共通のトピック名
+&#9888;&#65039; <b>整合性まとめ</b>: 状態・指令の記号（\\(v_x, \\delta_{{\\mathrm{{act}}}}, a_{{\\mathrm{{report}}}},
+x, y, \\theta, \\omega, a_{{\\mathrm{{cmd,des}}}}, \\delta_{{\\mathrm{{cmd,des}}}}\\)）は実機・sim で
+完全に同一のトピック名・フィールドを使っており配線に相違はない。\\(a_{{\\mathrm{{slope}}}}\\) と
+<code>gear</code> のみ非対称だが、\\(a_{{\\mathrm{{slope}}}}\\) は「同じ物理量を異なる情報源
+（記録済み localization pitch 由来 vs. 走行中の地図ジオメトリ由来）から算出している」という
+設計上必然の違いであり、修正を要する不整合ではない。<code>gear</code> は実際にはトピックが存在するが、
+このパイプラインの抽出対象に含まれていないだけである。
+</p>
+<p class="meta">
+※ シミュレーションログとの比較では、レポートに記録される制御指令トピックのみ
+<code>/control/trajectory_follower/control_cmd</code>（trajectory_follower の生指令、post-gate 前）
+に置き換わる場合があるが、これは <code>concealer</code> が実際に vehicle model へ渡す指令
+（<code>/control/command/control_cmd</code>）とは別に、比較用として追加収集しているトピックである
 （<code>README.ja.md</code> の「抽出トピック」表を参照）。
 </p>
 
