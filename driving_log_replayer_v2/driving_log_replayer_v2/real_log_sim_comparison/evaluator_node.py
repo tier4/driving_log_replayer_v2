@@ -380,14 +380,15 @@ def run_analysis(
     # ---- Stage OL3: 車両モデルパラメータ sweep 同定 (rollout, 追加設定不要) ----
     # 実機 lite (Stage 0 出力) のみを使い、k_us/ステア・加速度時定数等を
     # free-running rollout sweep で同定する独立ステージ (2D ペア sweep 含む)。
-    logger.info("Stage OL3: step_ol3_sweep_params (vehicle model parameter sweep via rollout)")
-    try:
-        _run([
-            sys.executable, "-m",
-            "driving_log_replayer_v2.real_log_sim_comparison.step_ol3_sweep_params",
-        ], env=env, timeout=1800)
-    except RuntimeError as exc:
-        logger.warning(f"Stage OL3 (step_ol3_sweep_params) failed but continuing: {exc}")
+    # 後段での sweep 評価は基本不要なため、スキップ（削除）します。
+    # logger.info("Stage OL3: step_ol3_sweep_params (vehicle model parameter sweep via rollout)")
+    # try:
+    #     _run([
+    #         sys.executable, "-m",
+    #         "driving_log_replayer_v2.real_log_sim_comparison.step_ol3_sweep_params",
+    #     ], env=env, timeout=1800)
+    # except RuntimeError as exc:
+    #     logger.warning(f"Stage OL3 (step_ol3_sweep_params) failed but continuing: {exc}")
 
     # ---- Stage CL3: step_cl3_compare_logs (real + 全 sim、sim_runs.yaml 連動で N-way) ----
     logger.info("Stage CL3: step_cl3_compare_logs (real + sim N-way)")

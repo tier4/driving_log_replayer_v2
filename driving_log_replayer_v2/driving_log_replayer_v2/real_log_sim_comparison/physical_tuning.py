@@ -50,14 +50,24 @@ def _simulate_first_order(cmd: np.ndarray, tau: float, n_delay: int) -> np.ndarr
     alpha = float(np.clip(DT / tau, 0.0, 1.0))
     return lfilter([alpha], [1.0, -(1.0 - alpha)], del_arr)
 
-def _fit_tau_nls_long(a_cmd: np.ndarray, a_act: np.ndarray, n_delay: int, mask: np.ndarray) -> tuple[float, float]:
-    def _mse(log_tau: float) -> float:
+def _fit_tau_nls_long(a_cmd: np.ndarray, a_act: np.ndarray, n_delay: int, mask: np.ndarray) -> tuple[float, float, float]:
+    def _mse_and_asf(log_tau: float) -> tuple[float, float]:
         tau = float(np.exp(log_tau))
-        a_sim = _simulate_first_order(a_cmd, tau, n_delay)
-        return float(np.mean((a_sim[mask] - a_act[mask]) ** 2))
-    res = minimize_scalar(_mse, bounds=(np.log(0.01), np.log(5.0)), method="bounded")
+        a_sim_base = _simulate_first_order(a_cmd, tau, n_delay)
+        sum_sim2 = np.sum(a_sim_base[mask] ** 2)
+        asf = float(np.sum(a_sim_base[mask] * a_act[mask]) / sum_sim2) if sum_sim2 > 1e-5 else 1.0
+        asf = float(np.clip(asf, 0.8, 1.2))
+        a_sim = asf * a_sim_base
+        mse = float(np.mean((a_sim[mask] - a_act[mask]) ** 2))
+        return mse, asf
+
+    def _objective(log_tau: float) -> float:
+        return _mse_and_asf(log_tau)[0]
+
+    res = minimize_scalar(_objective, bounds=(np.log(0.01), np.log(5.0)), method="bounded")
     tau = float(np.exp(res.x))
-    return tau, float(res.fun)
+    _, asf = _mse_and_asf(res.x)
+    return tau, asf, _objective(res.x)
 
 def _fit_tau_nls_steer(d_cmd: np.ndarray, d_act: np.ndarray, n_delay: int, mask: np.ndarray) -> tuple[float, float]:
     def _mse(log_tau: float) -> float:
@@ -109,7 +119,7 @@ def _load_light_worker(args: tuple) -> dict | None:
         "wz": wz.astype(np.float32),
     }
 
-def _fit_one_long_worker(ds: dict) -> tuple[float, float] | None:
+def _fit_one_long_worker(ds: dict) -> tuple[float, float, float] | None:
     a_cmd = ds["a_cmd"]
     a_act = ds["a_act"]
     vx = ds["vx"]
@@ -121,16 +131,18 @@ def _fit_one_long_worker(ds: dict) -> tuple[float, float] | None:
     best_mse = np.inf
     best_tau = np.nan
     best_delay = np.nan
+    best_asf = np.nan
     for delay_s in np.arange(0.0, 0.31, 0.01):
         n_delay = int(round(delay_s / DT))
-        tau, mse = _fit_tau_nls_long(a_cmd, a_act, n_delay, mask)
+        tau, asf, mse = _fit_tau_nls_long(a_cmd, a_act, n_delay, mask)
         if mse < best_mse:
             best_mse = mse
             best_tau = tau
             best_delay = delay_s
+            best_asf = asf
     if np.isnan(best_tau):
         return None
-    return best_tau, best_delay
+    return best_tau, best_delay, best_asf
 
 def _fit_one_steer_worker(ds: dict) -> tuple[float, float, float, float] | None:
     d_cmd = ds["d_cmd"]
@@ -234,24 +246,29 @@ def main() -> None:
         print("\n=== 縦方向モデルの直接同定を実行中 ===")
         taus_long = []
         delays_long = []
+        asfs_long = []
         with ProcessPoolExecutor(max_workers=args.n_jobs) as pool:
             futs = {pool.submit(_fit_one_long_worker, ds): ds["uuid"] for ds in datasets}
             for fut in as_completed(futs):
                 res = fut.result()
                 if res is not None:
-                    tau, delay = res
+                    tau, delay, asf = res
                     taus_long.append(tau)
                     delays_long.append(delay)
+                    asfs_long.append(asf)
 
         if taus_long:
             params["acc_time_constant"] = float(np.clip(np.median(taus_long), 0.1, 3.0))
             params["acc_time_delay"] = float(np.clip(np.median(delays_long), 0.0, 0.3))
+            params["debug_acc_scaling_factor"] = float(np.clip(np.median(asfs_long), 0.8, 1.2))
             print(f"  同定結果: acc_time_constant = {params['acc_time_constant']:.4f} s")
             print(f"            acc_time_delay    = {params['acc_time_delay']:.4f} s")
+            print(f"            acc_scaling       = {params['debug_acc_scaling_factor']:.4f}")
         else:
             print("[WARN] 縦方向の動的条件を満たすデータがないため、デフォルト値を設定します。")
             params["acc_time_constant"] = 0.2
             params["acc_time_delay"] = 0.1
+            params["debug_acc_scaling_factor"] = 1.0
 
     # 2. 操舵およびアンダーステア勾配の直接同定 (Phase 2)
     if args.phase == 2:

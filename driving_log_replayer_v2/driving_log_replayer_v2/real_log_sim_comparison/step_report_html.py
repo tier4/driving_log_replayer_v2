@@ -161,28 +161,23 @@ def _is_fig_json(rel: Path) -> bool:
 # (key, タイトル, 1 行説明)。表示順はこのリスト順。"other" は未分類フォールバック。
 _CATEGORIES: list[tuple[str, str, str]] = [
     (
-        "equations",
-        "1. 各運動方程式の提示",
-        "検証対象の運動方程式（キネマティック自転車モデル ＋ 各補正項）を提示します。",
-    ),
-    (
         "pre_estimation_deviation",
-        "2. 推定前：実車とシミュレーションのズレ",
+        "1. 推定前：実車とシミュレーションのズレ",
         "パラメータ推定を行う前の、理想追従（操舵完全一致と仮定）における自車位置やモデル構造の限界によるズレを提示します。",
     ),
     (
         "parameter_estimation",
-        "3. パラメータ推定結果",
+        "2. パラメータ推定結果",
         "実機ログから遅延などを固定（または目視調整）した上で、最小二乗法で同定した車両パラメータとそのフィッティング精度を提示します。",
     ),
     (
         "post_estimation_residual",
-        "4. 推定後：シミュレーション残差の提示",
+        "3. 推定後：シミュレーション残差の提示",
         "パラメータ推定後における、直近10ステップ（ホライズン別）等の予測誤差や、位置（x, y）の変位誤差の成長度合い・分布を提示します。",
     ),
     (
         "closed_loop_comparison",
-        "5. 最終的な Closed Loop シミュレーション残差",
+        "4. 最終的な Closed Loop シミュレーション残差",
         "最終同定パラメータを用いて closed-loop シミュレーションを実行した際の、実機との軌跡・速度・操舵の乖離（カーブや加速の誤差）を提示します。",
     ),
     (
@@ -896,7 +891,7 @@ def _render_dataset_report(
     md_by_cat = _collect_md(_MARKDOWN_REPORTS)          # 図の後に描画 (既定)
 
     active_cats = [
-        c for c in _CATEGORY_ORDER if c in by_cat or c in md_by_cat or c in md_pre_by_cat or c == "equations"
+        c for c in _CATEGORY_ORDER if c in by_cat or c in md_by_cat or c in md_pre_by_cat
     ]
 
     ds_attr = f" class='toc-sec ds-only' data-ds='{ns}' hidden" if multi else " class='toc-sec'"
@@ -928,41 +923,15 @@ def _render_dataset_report(
             f"<p class='sec-desc'>{html.escape(_CATEGORY_DESCS[cat])}"
             f"<a class='toplink' href='#top'>↑ 先頭</a></p>"
         )
-        if cat == "equations":
-            body.append(r"""
-<div class="note" style="background:#f9f9f9; padding:1.5rem; border-left:4px solid var(--accent); margin-bottom:1.5rem; border-radius:4px;">
-  <p>本検証で使用する運動方程式（キネマティック自転車モデル ＋ 補正項）は以下の通りです。</p>
-  <h5 style="margin-top:1rem; margin-bottom:0.5rem; font-size:1.05rem; font-weight:600;">■ 縦方向の運動方程式</h5>
-  \[
-  \begin{aligned}
-  \frac{da_{\mathrm{act}}}{dt} &= -\frac{a_{\mathrm{act}} - a_{\mathrm{target}}}{\tau_a} \\
-  a_{\mathrm{target}} &= K_{\mathrm{acc\_scale}} \cdot a_{\mathrm{cmd}}(t - T_a) + \mathrm{poly}(v_x) \\
-  \mathrm{poly}(v_x) &= p_0 + p_1 v_x + p_2 v_x^2 \\
-  \frac{dv_x}{dt} &= a_{\mathrm{act}} + a_{\mathrm{slope}} \quad (\text{クランプ・停止・ギア処理あり})
-  \end{aligned}
-  \]
-  <h5 style="margin-top:1.5rem; margin-bottom:0.5rem; font-size:1.05rem; font-weight:600;">■ 横方向の運動方程式</h5>
-  \[
-  \begin{aligned}
-  \frac{d\delta_{\mathrm{act}}}{dt} &= -\frac{\delta_{\mathrm{act}} - \delta_{\mathrm{des}}}{\tau_{\delta}} \\
-  \delta_{\mathrm{des}} &= K_{\mathrm{steer\_scale}} \cdot \delta_{\mathrm{cmd}}(t - T_{\delta}) \\
-  \omega_z &= \frac{v_x \tan(\delta_{\mathrm{act}} + \beta)}{L + k_{us} v_x^2} \\
-  \frac{d\theta}{dt} &= \omega_z \\
-  \frac{dx}{dt} &= v_x \cos\theta, \quad \frac{dy}{dt} = v_x \sin\theta, \quad a_y = v_x \cdot \omega_z
-  \end{aligned}
-  \]
-</div>
-            """)
-        else:
-            _emit_md(md_pre_by_cat.get(cat, []))  # 図の前: §1 主軸 (数式的導出・テキスト)
-            if cat in by_cat:
-                body.extend(_render_category_images(  # 追認プロット (実機ログ根拠・スイープ曲線)
-                    by_cat[cat], entry.comparison_dir, ns, cat=cat, scenario_name=scenario_name,
-                    no_embed_viewers=no_embed_viewers
-                ))
-            elif cat not in md_pre_by_cat:
-                body.append("<p class='empty'>（このセクションに該当する図はありませんでした）</p>")
-            _emit_md(md_by_cat.get(cat, []))      # 図の後: §2–§4 追認・整合
+        _emit_md(md_pre_by_cat.get(cat, []))  # 図の前: §1 主軸 (数式的導出・テキスト)
+        if cat in by_cat:
+            body.extend(_render_category_images(  # 追認プロット (実機ログ根拠・スイープ曲線)
+                by_cat[cat], entry.comparison_dir, ns, cat=cat, scenario_name=scenario_name,
+                no_embed_viewers=no_embed_viewers
+            ))
+        elif cat not in md_pre_by_cat:
+            body.append("<p class='empty'>（このセクションに該当する図はありませんでした）</p>")
+        _emit_md(md_by_cat.get(cat, []))      # 図の後: §2–§4 追認・整合
         body.append("</details>")
 
     # per-DS 実行構成 (auto_scenario + 追加設定)

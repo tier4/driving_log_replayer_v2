@@ -452,7 +452,8 @@ def robust_search(
     if phase == 1:
         # Phase 1: acc パラメータのみ最適化 (long スコア)。steer 系は cur_best に固定。
         CONTINUOUS_SPACE: dict[str, tuple[float, float]] = {
-            "acc_time_constant": (0.05, 1.20),  # 下限を 0.10→0.05 に拡張
+            "acc_time_constant":        (0.05, 1.20),  # 下限を 0.10→0.05 に拡張
+            "debug_acc_scaling_factor": (0.80, 1.20),
         }
         score_fn = acc_score
         explore_delay = True
@@ -833,7 +834,8 @@ def robust_search(
         # steer 系は cur_best に固定し、縦 ⊥ 横の独立性を活かして解像度を上げる。
         # k_us=0 + banding 無効化も維持する（Phase 48 best_params を --phase-params で渡す想定）。
         CONTINUOUS_SPACE = {
-            "acc_time_constant": (0.05, 0.60),
+            "acc_time_constant":        (0.05, 0.60),
+            "debug_acc_scaling_factor": (0.80, 1.20),
         }
         score_fn = component_score
         _phase_agg_fn = lambda pm, bs: aggregate_component(pm, bs, "vx", VX_FLOOR)
@@ -889,6 +891,7 @@ def robust_search(
             "steer_time_constant":        (0.05, 0.80),
             "debug_steer_scaling_factor": (0.75, 1.20),  # (0.80, 1.05) → (0.75, 1.20) に拡張
             "acc_time_constant":          (0.05, 1.20),  # 下限を 0.10→0.05 に拡張
+            "debug_acc_scaling_factor":   (0.80, 1.20),
             "k_us":                       (0.0,  0.05),
 
             "steer_dead_band":            (0.0,  0.02),   # アクチュエータ不感帯 [rad]

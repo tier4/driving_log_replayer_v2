@@ -22,17 +22,18 @@
 
 ---
 
-## 2. 運動方程式（実シミュレータ：C++ `calcModel`）
+## 2. 運動方程式（実シミュレータ C++ `calcModel` ＆ オフライン評価・ビューア共通）
 
 状態 \(\big(x, y, \theta, v_x, \delta_{\mathrm{act}}, a_{\mathrm{act}}\big)\) の連続時間微分。
 C++の `PEDAL_ACCX` を実加速度 \(a_{\mathrm{act}}\)、`pedal_acc_des` を加速度指令 \(a_{\mathrm{cmd}}\) と読み替える。
+実機検証ビューア（`lon_lat_model`）や各種同定・評価スクリプトも、実シミュレータと完全に同期した同一の運動方程式を使用します。
 
 ### 縦方向（加速度の1次遅れ + 走行抵抗）
 
 $$\dot a_{\mathrm{act}} = -\frac{a_{\mathrm{act}} - a_{\mathrm{target}}}{\tau_{a}}, \qquad a_{\mathrm{target}} = a_{\mathrm{cmd,del}} + \mathrm{poly}(v_x), \qquad \dot v_x = a_{\mathrm{act}} + a_{\mathrm{slope}}$$
 
 - \(\tau_a\): **throttle/brake で分離**。\(a_{\mathrm{cmd}}\ge 0\) で `acc_time_constant`、\(a_{\mathrm{cmd}}<0\) で `brake_time_constant`（\(\le 0\) のとき `acc_time_constant` にフォールバック＝単一時定数）。
-- **走行抵抗** \(\mathrm{poly}(v_x)=\) `lon_drag_c0` \(+\) `lon_drag_c1`\(\,v_x +\) `lon_drag_c2`\(\,v_x^2\)（既定 0＝無効）。転がり抵抗・空気抵抗を加速度ターゲットに加える。
+- **走行抵抗** \(\mathrm{poly}(v_x)=\) `lon_drag_c0` \(+\) `lon_drag_c1`\(\,v_x +\) `lon_drag_c2`\(\,v_x^2\)。転がり抵抗・空気抵抗を加速度ターゲットに加える。
 - 指令 \(a_{\mathrm{cmd}}\) は無駄時間（dead time）\(T_a\) = `acc_time_delay` だけ遅延して入る \(a_{\mathrm{cmd,del}}(t) = a_{\mathrm{cmd}}(t - T_a) \cdot K_{\mathrm{acc\_scale}}\)（\(K_{\mathrm{acc\_scale}}\) は `debug_acc_scaling_factor`）。
 - \(a_{\mathrm{slope}}\) は外部入力 `SLOPE_ACCX`（路面勾配による重力加速度成分）。ギア状態（DRIVE/REVERSE/NEUTRAL/停止保持）で速度符号と停止処理が分岐する（geared）。
 - ※ 目標加速度および実加速度は `vel_rate_lim`、車速は `vel_lim` で制限されます。
@@ -45,32 +46,18 @@ $$\omega = \dot\theta = \frac{v_x\,\tan(\delta_{\mathrm{act}} + \beta)}{L + k_{u
 
 - \(\tau_\delta\) = `steer_time_constant`、無駄時間 \(T_\delta\) = `steer_time_delay`（遅延後の指令にゲインを掛けて目標操舵角とする： \(\delta_{\mathrm{des}} = K_{\mathrm{steer\_scale}} \cdot \delta_{\mathrm{cmd}}(t - T_{\delta})\)、\(K_{\mathrm{steer\_scale}}\) は `debug_steer_scaling_factor`）。
 - **ヨーバイアス** \(\beta\) = `steer_bias`: 実際のステア角ではなく、運動学式のヨーレート計算時に \(\tan(\delta_{\mathrm{act}}+\beta)\) として加算される。
-- **アンダーステア項** \(k_{us} v_x^2\): \(k_{us}=0\) かつ \(\beta=0\) で理想キネマティック自転車 \(\omega = v_x\tan\delta / L\) に一致する。\(k_{us}>0\) では分母が速度の2乗で増大し、同じ \(\delta_{\mathrm{act}}\) でも高速ほどヨーレートが小さく（曲がりにくく）なる＝アンダーステアを表す。
+- **アンダーステア項** \(k_{us} v_x^2\): \(k_{us}=0\) かつ \(\beta=0\) で理想キネマティック自転車 \(\omega = v_x\tan\delta / L\) に一致する。\(k_{us}>0\) では分母が速度의2乗で増大し、同じ \(\delta_{\mathrm{act}}\) でも高速ほどヨーレートが小さく（曲がりにくく）なる＝アンダーステアを表す。
 - ※ 目標操舵角は `steer_lim`、操舵速度は `steer_rate_lim` で制限され、不感帯 `steer_dead_band` が適用されます。
 
 ---
 
-## 3. 運動方程式（実機当てはめ用ビューア：`lib/_model_viewer.py`）
+## 3. チューニングおよび検証の運用方針
 
-検証ビューア（`lon_lat_model`）は、実機 rosbag の指令系列から上記モデルを前方積算し、観測値と重ねて当てはまりを見るためのもの。
-実シミュレータ（§2）と完全に同一の運動方程式を使用します。
+本レポートで提示される評価値は、上記の運動方程式をベースにして以下の二段階で同定・検証されたものです。
 
-- **時定数の分離**: \(a_{\mathrm{cmd}}\ge 0\)（駆動）と \(a_{\mathrm{cmd}}<0\)（制動）で時定数 \(\tau_a\) を別々に持ちます。
-- **走行抵抗**: \(\mathrm{poly}(v_x)=p_0+p_1 v_x+p_2 v_x^2\)（各次 ON/OFF、つまみ調整および最小二乗当てはめが可能）。
-- 横チェーンの速度には観測 `lon_vel` を使い（縦の誤差を横テストに混入させないアイソレーション）、つまみを調整して目視で当てはめます。
-
----
-
-## 4. 運用注記
-
-2026-06 に C++ `calcModel`（§2）および検証ビューア `lon_lat_model`（§3）の運動方程式を完全に同期させました
-（\(\beta\) バイアス、時定数 \(\tau_a\) の加減速分離、走行抵抗 \(\mathrm{poly}(v_x)\) 等）。
-
-- **配線**: 新パラメータ（`brake_time_constant` / `lon_drag_c0/c1/c2`）は
-  scenario.yaml `models.<name>.params` に書けば C++ `getParameter`（`ego_entity_simulation.cpp`）まで届く
-  （open-loop rollout 用 ctypes ラッパーも同期済）。
-- **同定**: 縦の新項は `tools/fit_lon_model.py`（または `_model_viewer.py` のドロップダウンで対話）で実機に
-  フィット、`k_us` のみ rollout sweep。**open-loop の当てはめ最適は closed-loop 精度に転写されないことが
-  ある**ため、採否は closed-loop 再現で検証する。
-
----
+1. **パラメータの最適化 (オープンループ同定)**
+   - 縦方向パラメータ（\(\tau_a\), 走行抵抗多項式, 遅延 \(T_a\)）は、実機走行ログの加速度・速度・指令値から最小二乗法を用いて最適値を直接同定します。
+   - 横方向パラメータ（ステアバイアス \(\beta\), アンダーステア係数 \(k_{us}\)）は、理想追従予測（Bicycle Model / Perfect Tracking）をもとに探索・同定します。
+2. **クローズドループ再現検証 (実シミュレータ走行)**
+   - 同定された最適パラメータ群を `scenario.yaml` の `models` パラメータに設定し、実機と同じ経路・車速指示を与えてクローズドループで走行シミュレーション（rollout）を実行します。
+   - オープンループでの最小誤差パラメータが、フィードバック制御や動的干渉を伴うクローズドループ精度に必ずしもそのまま直結しないため、最終的にはクローズドループ走行時の「実機軌跡からの平均乖離」および「完走率」をもって検証の合格基準とします。
