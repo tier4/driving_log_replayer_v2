@@ -584,19 +584,66 @@ def _build_sec1(
     return f"""
 <section id="sec-coords">
 <h2>1-0. 座標系と主要な記号の定義</h2>
-<p>本レポートの運動方程式は、以下の車体基準（body frame）および進行方向基準の座標系に基づきます。</p>
+<p>
+本レポートの運動方程式は、以下の車体基準（body frame）および進行方向基準の座標系に基づく。
+「状態ベクトル」列は、シミュレータの状態ベクトル（7 要素、詳細は
+<a href="#sec-state-space">1-1 節</a>）のどの成分に対応するかを示す（該当しない記号は入力・
+パラメータ・導出量のいずれかであり、状態ベクトルには含まれない）。「ROS トピック」列は、
+実機ログ（<code>real.lite</code>）と scenario_simulator_v2 の双方で共通に使われるトピック名を示す
+（両者の照合結果・例外は <a href="#rt-asymmetry">1-1 節末尾</a>を参照）。
+</p>
 <table class="param-table">
-  <tr><th>記号</th><th>意味</th><th>単位</th></tr>
-  <tr><td>\\(x, y\\)</td><td>地図平面上の車両位置</td><td>m</td></tr>
-  <tr><td>\\(\\theta\\)</td><td>ヨー角（車体の向き。地図 X 軸からの反時計回り回転）</td><td>rad</td></tr>
-  <tr><td>\\(v_x\\)</td><td>前進速度（進行方向＝車体 X 軸成分。<code>lon_vel</code>）</td><td>m/s</td></tr>
-  <tr><td>\\(a_{{\\mathrm{{act}}}}\\)</td><td>アクチュエータ出力（実加速度。勾配重力加算前の値）</td><td>m/s²</td></tr>
-  <tr><td>\\(a_{{\\mathrm{{slope}}}}\\)</td><td>路面勾配による重力加速度成分</td><td>m/s²</td></tr>
-  <tr><td>\\(\\delta_{{\\mathrm{{act}}}}\\)</td><td>前輪実ステア角</td><td>rad</td></tr>
-  <tr><td>\\(\\beta\\)</td><td>ステアバイアス（系統的操舵オフセット。<code>steer_bias</code>）</td><td>rad</td></tr>
-  <tr><td>\\(\\omega\\)</td><td>ヨーレート（\\(\\dot\\theta\\)）</td><td>rad/s</td></tr>
-  <tr><td>\\(L\\)</td><td>ホイールベース（<code>wheelbase</code>）</td><td>m</td></tr>
-  <tr><td>\\(k_{{\\mathrm{{us}}}}\\)</td><td>アンダーステア係数（<code>k_us</code>）</td><td>rad/(m/s²)</td></tr>
+  <tr><th>記号</th><th>意味</th><th>単位</th><th>状態ベクトル</th><th>ODE 積分</th>
+      <th>ROS トピック（実機・sim 共通）</th><th>フィールド</th></tr>
+  <tr><td>\\(x, y\\)</td><td>地図平面上の車両位置</td><td>m</td>
+      <td><code>IDX::X</code>, <code>IDX::Y</code></td><td>する</td>
+      <td><code>/localization/kinematic_state</code></td><td><code>pose.pose.position.{{x, y}}</code></td></tr>
+  <tr><td>\\(\\theta\\)</td><td>ヨー角（車体の向き。地図 X 軸からの反時計回り回転）</td><td>rad</td>
+      <td><code>IDX::YAW</code></td><td>する</td>
+      <td><code>/localization/kinematic_state</code></td><td><code>pose.pose.orientation</code></td></tr>
+  <tr><td>\\(v_x\\)</td><td>前進速度（進行方向＝車体 X 軸成分。<code>lon_vel</code>）</td><td>m/s</td>
+      <td><code>IDX::VX</code></td><td>する</td>
+      <td><code>/vehicle/status/velocity_status</code></td><td><code>longitudinal_velocity</code></td></tr>
+  <tr><td>\\(\\delta_{{\\mathrm{{act}}}}\\)</td><td>前輪実ステア角</td><td>rad</td>
+      <td><code>IDX::STEER</code></td><td>する</td>
+      <td><code>/vehicle/status/steering_status</code></td><td><code>steering_tire_angle</code></td></tr>
+  <tr><td>\\(a_{{\\mathrm{{act}}}}\\)</td><td>アクチュエータ出力（実加速度。勾配重力加算前の値）</td><td>m/s²</td>
+      <td><code>IDX::PEDAL_ACCX</code></td><td>する</td>
+      <td>—（直接の実測トピックなし。次行 \\(a_{{\\mathrm{{report}}}}\\) を実測相当として使用）</td><td>—</td></tr>
+  <tr><td>\\(a_{{\\mathrm{{report}}}}\\)</td>
+      <td>レポート・可視化用の加速度。<code>calcModel</code> の微分には現れず、
+      Euler 更新後に \\((v_{{x,\\mathrm{{new}}}} - v_{{x,\\mathrm{{prev}}}}) / \\Delta t\\) として事後計算される
+      別枠の出力量（<b>ODE 状態の \\(a_{{\\mathrm{{act}}}}\\) とは別物</b>。実測 \\(a_{{\\mathrm{{act}}}}\\) 相当として使用）</td>
+      <td>m/s²</td><td><code>IDX::ACCX</code></td><td>しない（事後計算）</td>
+      <td><code>/localization/acceleration</code></td><td><code>accel.accel.linear.x</code></td></tr>
+  <tr><td>\\(v_y\\)</td><td>横速度</td><td>m/s</td>
+      <td>—（モデルの <code>getVy()</code> は常に 0 固定）</td><td>—</td>
+      <td><code>/localization/kinematic_state</code></td><td><code>twist.twist.linear.y</code></td></tr>
+  <tr><td>\\(\\omega\\)</td><td>ヨーレート（\\(\\dot\\theta\\)）</td><td>rad/s</td>
+      <td>—（導出量。<code>calc_yaw_rate</code> で算出）</td><td>—</td>
+      <td><code>/localization/kinematic_state</code></td><td><code>twist.twist.angular.z</code></td></tr>
+  <tr><td>\\(a_{{\\mathrm{{slope}}}}\\)</td><td>路面勾配による重力加速度成分</td><td>m/s²</td>
+      <td>—（入力 <code>SLOPE_ACCX</code>）</td><td>—</td>
+      <td>専用トピックなし（<a href="#rt-asymmetry">1-1 節末尾</a>参照）</td><td>—</td></tr>
+  <tr><td>\\(a_{{\\mathrm{{cmd,des}}}}\\)</td><td>加速度指令</td><td>m/s²</td>
+      <td>—（入力）</td><td>—</td>
+      <td><code>/control/command/control_cmd</code></td><td><code>longitudinal.acceleration</code></td></tr>
+  <tr><td>\\(\\delta_{{\\mathrm{{cmd,des}}}}\\)</td><td>操舵指令</td><td>rad</td>
+      <td>—（入力）</td><td>—</td>
+      <td><code>/control/command/control_cmd</code></td><td><code>lateral.steering_tire_angle</code></td></tr>
+  <tr><td><code>gear</code></td><td>ギア（連続値ではなく DRIVE/REVERSE/NEUTRAL/PARK 等を切り替える
+      分岐選択用の離散入力）</td><td>—</td>
+      <td>—（入力）</td><td>—</td>
+      <td>専用トピックなし（<a href="#rt-asymmetry">1-1 節末尾</a>参照）</td><td>—</td></tr>
+  <tr><td>\\(\\beta\\)</td><td>ステアバイアス（系統的操舵オフセット。<code>steer_bias</code>）</td><td>rad</td>
+      <td>—（パラメータ）</td><td>—</td>
+      <td>—（設定パラメータ）</td><td>—</td></tr>
+  <tr><td>\\(L\\)</td><td>ホイールベース（<code>wheelbase</code>）</td><td>m</td>
+      <td>—（パラメータ）</td><td>—</td>
+      <td>—（設定パラメータ）</td><td>—</td></tr>
+  <tr><td>\\(k_{{\\mathrm{{us}}}}\\)</td><td>アンダーステア係数（<code>k_us</code>）</td><td>rad/(m/s²)</td>
+      <td>—（パラメータ）</td><td>—</td>
+      <td>—（設定パラメータ）</td><td>—</td></tr>
 </table>
 </section>
 
@@ -612,23 +659,12 @@ def _build_sec1(
 
 <h3>状態ベクトルと入力ベクトル</h3>
 <p>
-シミュレータの状態ベクトルは以下の 7 要素だが、そのうち連続時間の運動方程式（ODE）で積分されるのは
-\\(x, y, \\theta, v_x, \\delta_{{\\mathrm{{act}}}}, a_{{\\mathrm{{act}}}}\\) の 6 状態のみである。
+各記号の意味・単位・状態ベクトル内の位置（IDX）・ODE 積分の有無は
+<a href="#sec-coords">1-0 の記号表</a>にまとめた通り。シミュレータの状態ベクトルは 7 要素だが、
+そのうち連続時間の運動方程式（ODE）で積分されるのは \\(x, y, \\theta, v_x, \\delta_{{\\mathrm{{act}}}},
+a_{{\\mathrm{{act}}}}\\) の 6 状態のみであり、\\(a_{{\\mathrm{{report}}}}\\)（<code>IDX::ACCX</code>）は
+Euler 更新後の事後計算値である。
 </p>
-<table class="param-table">
-  <tr><th>状態</th><th>記号</th><th>意味</th><th>ODE 積分</th></tr>
-  <tr><td><code>IDX::X</code></td><td>\\(x\\)</td><td>地図平面上の位置 x</td><td>する</td></tr>
-  <tr><td><code>IDX::Y</code></td><td>\\(y\\)</td><td>地図平面上の位置 y</td><td>する</td></tr>
-  <tr><td><code>IDX::YAW</code></td><td>\\(\\theta\\)</td><td>ヨー角</td><td>する</td></tr>
-  <tr><td><code>IDX::VX</code></td><td>\\(v_x\\)</td><td>前進速度</td><td>する</td></tr>
-  <tr><td><code>IDX::STEER</code></td><td>\\(\\delta_{{\\mathrm{{act}}}}\\)</td><td>前輪実ステア角</td><td>する</td></tr>
-  <tr><td><code>IDX::PEDAL_ACCX</code></td><td>\\(a_{{\\mathrm{{act}}}}\\)</td>
-      <td>アクチュエータ出力加速度（1-2 の \\(a_{{\\mathrm{{act}}}}\\) と同一の状態）</td><td>する</td></tr>
-  <tr><td><code>IDX::ACCX</code></td><td>\\(a_{{\\mathrm{{report}}}}\\)</td>
-      <td>レポート・可視化用の加速度。<code>calcModel</code> の微分には現れず、
-      Euler 更新後に \\((v_{{x,\\mathrm{{new}}}} - v_{{x,\\mathrm{{prev}}}}) / \\Delta t\\) として事後計算される
-      別枠の出力量（<b>ODE 状態の \\(a_{{\\mathrm{{act}}}}\\) とは別物</b>）。</td><td>しない（事後計算）</td></tr>
-</table>
 <p>
 入力ベクトルは \\(a_{{\\mathrm{{cmd,des}}}}\\)（加速度指令）、<code>gear</code>（ギア。連続値ではなく
 DRIVE/REVERSE/NEUTRAL/PARK 等を切り替える分岐選択用の離散入力）、\\(a_{{\\mathrm{{slope}}}}\\)（路面勾配による
@@ -637,48 +673,15 @@ DRIVE/REVERSE/NEUTRAL/PARK 等を切り替える分岐選択用の離散入力�
 （FIFO バッファ）も実質的な離散状態であり、上記 7 次元の状態ベクトルだけでモデルが完結するわけではない。
 </p>
 
-<h3>状態・入力と ROS トピックの配線（実機ログ <code>real.lite</code> と scenario_simulator_v2）</h3>
+<h3 id="rt-asymmetry">状態・入力と ROS トピックの配線 — 例外（<code>a_slope</code> / <code>gear</code>）</h3>
 <p>
-上記の記号は、抽象的な数式上の変数ではなく、以下の ROS トピックから直接読み出される実測値・実指令値である。
-Autoware の制御・プランニングスタックは自分が実機・シムいずれに繋がっているか区別しないため、
-この配線は本来、実機ログ（<code>real.lite</code>）と scenario_simulator_v2（<code>concealer::AutowareUniverse</code>
-が Autoware との橋渡し役を担う）とで一致していなければならない。実際に照合した結果を次表に示す。
+<a href="#sec-coords">1-0 の記号表</a>に示した通り、状態・指令の記号
+（\\(v_x, \\delta_{{\\mathrm{{act}}}}, a_{{\\mathrm{{report}}}}, x, y, \\theta, v_y, \\omega,
+a_{{\\mathrm{{cmd,des}}}}, \\delta_{{\\mathrm{{cmd,des}}}}\\)）は、実機ログ（<code>real.lite</code>）と
+scenario_simulator_v2（<code>concealer::AutowareUniverse</code> が Autoware との橋渡し役を担う）とで
+完全に同一のトピック名・フィールドを使う。Autoware の制御・プランニングスタックは自分が実機・シム
+いずれに繋がっているか区別しないため、これは設計上当然の一致である。
 </p>
-<table class="param-table">
-  <tr><th>記号</th><th>ROS トピック（実機・sim 共通）</th><th>メッセージフィールド</th>
-      <th>scenario_simulator_v2 側の実体</th></tr>
-  <tr><td>\\(v_x\\)</td><td><code>/vehicle/status/velocity_status</code></td>
-      <td><code>longitudinal_velocity</code></td>
-      <td>concealer が publish。値は <code>vehicle_model_ptr_->getVx()</code></td></tr>
-  <tr><td>\\(\\delta_{{\\mathrm{{act}}}}\\)</td><td><code>/vehicle/status/steering_status</code></td>
-      <td><code>steering_tire_angle</code></td>
-      <td>concealer が publish。値は <code>vehicle_model_ptr_->getSteer()</code></td></tr>
-  <tr><td>\\(a_{{\\mathrm{{report}}}}\\)（実測 \\(a_{{\\mathrm{{act}}}}\\) 相当として使用）</td>
-      <td><code>/localization/acceleration</code></td><td><code>accel.accel.linear.x</code></td>
-      <td>concealer が publish。値は <code>vehicle_model_ptr_->getAx()</code></td></tr>
-  <tr><td>\\(x\\)</td><td><code>/localization/kinematic_state</code></td>
-      <td><code>pose.pose.position.x</code></td>
-      <td>concealer が publish。値は <code>getX()</code></td></tr>
-  <tr><td>\\(y\\)</td><td><code>/localization/kinematic_state</code></td>
-      <td><code>pose.pose.position.y</code></td>
-      <td>concealer が publish。値は <code>getY()</code></td></tr>
-  <tr><td>\\(\\theta\\)</td><td><code>/localization/kinematic_state</code></td>
-      <td><code>pose.pose.orientation</code>（クォータニオンから yaw を算出）</td>
-      <td>concealer が publish。値は <code>getYaw()</code></td></tr>
-  <tr><td>\\(v_y\\)</td><td><code>/localization/kinematic_state</code></td>
-      <td><code>twist.twist.linear.y</code></td>
-      <td>concealer が publish。ただしモデルの <code>getVy()</code> は常に 0 固定
-      （実機ログの \\(v_y\\) のような実測横速度はシム側に存在しない）</td></tr>
-  <tr><td>\\(\\omega\\)</td><td><code>/localization/kinematic_state</code></td>
-      <td><code>twist.twist.angular.z</code></td>
-      <td>concealer が publish。値は <code>getWz()</code></td></tr>
-  <tr><td>\\(a_{{\\mathrm{{cmd,des}}}}\\)</td><td><code>/control/command/control_cmd</code></td>
-      <td><code>longitudinal.acceleration</code></td>
-      <td>concealer が subscribe し、<code>setInput()</code> の <code>PEDAL_ACCX_DES</code> に渡す</td></tr>
-  <tr><td>\\(\\delta_{{\\mathrm{{cmd,des}}}}\\)</td><td><code>/control/command/control_cmd</code></td>
-      <td><code>lateral.steering_tire_angle</code></td>
-      <td>concealer が subscribe し、<code>setInput()</code> の <code>STEER_DES</code> に渡す</td></tr>
-</table>
 <p>
 一方、\\(a_{{\\mathrm{{slope}}}}\\) と <code>gear</code> の 2 つは、実機・sim のどちらでも
 上記のような単純な「同一トピックの読み書き」ではなく、非対称な供給経路を持つ。
@@ -699,10 +702,7 @@ Autoware の制御・プランニングスタックは自分が実機・シム�
       指令値をそのままエコーバックする簡易実装）というトピックが存在する</td></tr>
 </table>
 <p class="meta">
-&#9888;&#65039; <b>整合性まとめ</b>: 状態・指令の記号（\\(v_x, \\delta_{{\\mathrm{{act}}}}, a_{{\\mathrm{{report}}}},
-x, y, \\theta, \\omega, a_{{\\mathrm{{cmd,des}}}}, \\delta_{{\\mathrm{{cmd,des}}}}\\)）は実機・sim で
-完全に同一のトピック名・フィールドを使っており配線に相違はない。\\(a_{{\\mathrm{{slope}}}}\\) と
-<code>gear</code> のみ非対称だが、\\(a_{{\\mathrm{{slope}}}}\\) は「同じ物理量を異なる情報源
+&#9888;&#65039; <b>まとめ</b>: \\(a_{{\\mathrm{{slope}}}}\\) は「同じ物理量を異なる情報源
 （記録済み localization pitch 由来 vs. 走行中の地図ジオメトリ由来）から算出している」という
 設計上必然の違いであり、修正を要する不整合ではない。<code>gear</code> は実際にはトピックが存在するが、
 このパイプラインの抽出対象に含まれていないだけである。
