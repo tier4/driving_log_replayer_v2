@@ -59,7 +59,6 @@ help:
 	@echo "      ol1. step_ol1_analyze_nstep   Conditions.cases の各 case (VehicleModel パラメータ) で N-step オープンループ解析"
 	@echo "      ol2. step_ol2_analyze_cases   nstep/*.csv を集約 (overlay/, cases_summary.md, cases_metrics.json)"
 	@echo "                                    + real.lite から縦/操舵/横 k_us の物理妥当性を直接同定 (cases/physical_validity/)"
-	@echo "      ol3. step_ol3_sweep_params    real.lite で車両モデルパラメータを rollout sweep 同定 (param_sweep/)"
 	@echo "    - Closed-Loop (CL) 系列:"
 	@echo "      cl1. step_cl1_bag_to_scenario lite/real.lite → scenarios/auto_scenario.yaml"
 	@echo "      cl2. step_cl2_run_sims        scenario_test_runner で Conditions.sim_runs の各 run を実行 → lite/<tag>.lite/"
@@ -141,7 +140,7 @@ local_analysis_run:
 # report.html まで一気通貫。失敗 dataset は WARN + collection.yaml に status 記録して継続。
 # RESUME=1 で real.lite が揃っている dataset の sim 実行をスキップ (中断再開用)。
 # SKIP_SIM=1 で Stage 3 (closed-loop sim 実行) を全 dataset で省略する。closed-loop 比較が
-# 不要なとき (open-loop N-step / sweep / カバレッジだけ欲しいとき) のバッチ時間短縮用。
+# 不要なとき (open-loop N-step / カバレッジだけ欲しいとき) のバッチ時間短縮用。
 # 後から closed-loop も欲しくなったら SKIP_SIM/RESUME 無しで同じ BATCH_ROOT を再実行する。
 BATCH_ROOT ?= $(LOCAL_SAMPLE_DIR)/out/batch_$(shell date +%Y%m%d_%H%M%S)
 

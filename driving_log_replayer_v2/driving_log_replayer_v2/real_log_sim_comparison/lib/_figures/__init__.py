@@ -41,7 +41,6 @@ from ._physical_validity import (
     build_fig_long_perf_growth,
     build_fig_long_perf_map,
 )
-from ._sweep import build_fig_sweep, build_fig_sweep_overview
 from ._nstep import build_fig_overview
 
 __all__ = [
@@ -62,8 +61,6 @@ __all__ = [
     "build_fig_error_growth_overlay",
     "build_fig_overview",
     "build_fig_steer_single",
-    "build_fig_sweep",
-    "build_fig_sweep_overview",
     "build_fig_vs_distance",
     "build_fig_perfect_tracking_box",
     "build_fig_perfect_tracking_traj",

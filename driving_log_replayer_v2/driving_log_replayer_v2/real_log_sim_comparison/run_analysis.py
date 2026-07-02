@@ -76,7 +76,7 @@ def main() -> None:
     print(
         f"\n解析完了: sim_runs {sim_p}/{sim_e}, cases {case_p}/{case_e}, "
         f"report={counts['report_ok']}, cases_summary={counts['cases_summary_ok']}, "
-        f"param_sweep={counts['param_sweep_ok']}, report_html={counts['report_html_ok']}"
+        f"report_html={counts['report_html_ok']}"
     )
     print(f"レポート: {bundle_dir / 'report.html'}")
     if case_p == 0:

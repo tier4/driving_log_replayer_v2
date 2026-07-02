@@ -22,7 +22,6 @@ Runs the 10-stage comparison pipeline inside a cloud DLR2 job:
   4. step4_compare_logs    real + 全 sim を N-way 比較 (figures/, report.md)
   5. step5_analyze_nstep   cases.yaml の各 case で N-step オープンループ解析
   6. step6_analyze_cases   nstep/*.csv を集約 (overlay/, cases_summary.md)
-  7. step7_sweep_params    real.lite で車両モデルパラメータを rollout sweep 同定 (param_sweep/)
   8. step8_compare_dp_trajectory DiffusionPlanner 出力軌跡 real vs sim 比較 (figures/dp_*.svg)
   11. step11_build_html_report comparison/ 配下の全プロットを集約 (result_archive/real_log_sim_comparison/index.html)
 
@@ -377,19 +376,6 @@ def run_analysis(
     except RuntimeError as exc:
         logger.warning(f"Stage OL2 (step_ol2_analyze_cases) failed but continuing: {exc}")
 
-    # ---- Stage OL3: 車両モデルパラメータ sweep 同定 (rollout, 追加設定不要) ----
-    # 実機 lite (Stage 0 出力) のみを使い、k_us/ステア・加速度時定数等を
-    # free-running rollout sweep で同定する独立ステージ (2D ペア sweep 含む)。
-    # 後段での sweep 評価は基本不要なため、スキップ（削除）します。
-    # logger.info("Stage OL3: step_ol3_sweep_params (vehicle model parameter sweep via rollout)")
-    # try:
-    #     _run([
-    #         sys.executable, "-m",
-    #         "driving_log_replayer_v2.real_log_sim_comparison.step_ol3_sweep_params",
-    #     ], env=env, timeout=1800)
-    # except RuntimeError as exc:
-    #     logger.warning(f"Stage OL3 (step_ol3_sweep_params) failed but continuing: {exc}")
-
     # ---- Stage CL3: step_cl3_compare_logs (real + 全 sim、sim_runs.yaml 連動で N-way) ----
     logger.info("Stage CL3: step_cl3_compare_logs (real + sim N-way)")
     try:
@@ -437,7 +423,6 @@ def run_analysis(
         "cases_produced": cases_produced,
         "report_ok": int((comparison_dir / "report.md").exists()),
         "cases_summary_ok": int((comparison_dir / "cases" / "cases_summary.md").exists()),
-        "param_sweep_ok": int((comparison_dir / "param_sweep" / "param_sweep_summary.md").exists()),
         "dp_compare_ok": int(
             (comparison_dir / "figures" / "dp_real_vs_sim.svg").exists()
             or (comparison_dir / "figures" / "dp_real_vs_sim.fig.json").exists()
@@ -449,7 +434,7 @@ def run_analysis(
         f"Pipeline outputs: sim_runs {sim_produced}/{len(sim_cfg.runs)}, "
         f"cases {cases_produced}/{len(cases_cfg.cases)}, "
         f"report={counts['report_ok']}, cases_summary={counts['cases_summary_ok']}, "
-        f"param_sweep={counts['param_sweep_ok']}, dp_compare={counts['dp_compare_ok']}, "
+        f"dp_compare={counts['dp_compare_ok']}, "
         f"report_html={counts['report_html_ok']}"
     )
     return counts
@@ -531,7 +516,7 @@ def _load_compare_config(scenario_path_str: str) -> dict[str, Any]:
             cfg["replay_position_based"] = bool(conditions["replay_position_based"])
 
         # skip_sim (任意, 既定 false): true で Stage 3 (closed-loop sim 実行) をスキップし、
-        # 実機ログのみの解析 (open-loop N-step / param sweep / カバレッジ等) を実行する。
+        # 実機ログのみの解析 (open-loop N-step / カバレッジ等) を実行する。
         # closed-loop 比較が不要なとき・マルチ DS バッチの時間短縮用。ローカルは env SKIP_SIM=1
         # でも指定できる (run_pipeline 参照)。
         if "skip_sim" in conditions:

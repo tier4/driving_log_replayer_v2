@@ -2,7 +2,7 @@
 """Stage 11: comparison/ 配下の図スペック (*.fig.json) を 1 枚の単一 report.html に束ねる.
 
 パイプライン (step4〜step10) は `comparison/` 配下の複数サブディレクトリ
-(figures/, nstep/<tag>/, cases/overlay/, param_sweep/, curve_diag/) に
+(figures/, nstep/<tag>/, cases/overlay/, curve_diag/) に
 多数の **plotly 図スペック (`*.fig.json` = データ + レイアウト)** と再生ビューア
 (`trajectory_playback.html`)、Markdown レポートを散らして出力する。本ステージは
 それらを走査し、全アセットを**外部参照なしで 1 枚に埋め込んだ**目次付き `report.html` を
@@ -69,9 +69,6 @@ CAPTIONS: dict[str, str] = {
     "long_fit": "縦方向モデルフィット（実測 vs 同定値 vs チューニング値、路面勾配補正込み）",
     "steer_fit": "操舵モデルフィット（実測 vs 同定値 vs チューニング値）",
     "kus_bins": "k_us(v) 速度ビン別 最小二乗法推定（実測同定 vs チューニング値）",
-    # step7: param_sweep/ (個別図のキャプションは _caption_for の正規表現で導出)
-    "_overview_sensitivity": "スイープ感度オーバービュー（改善率ランキング + 正規化 RMSE カーブ）",
-    "acc_steady_evidence": "縦定常補正の実機根拠（poly(v)=p0+p1·v の切片/傾き）",
     # step13: cross_dataset/
     "cross_closed_loop_heatmap": "dataset × sim run: closed-loop 軌跡乖離・完走率行列",
     "cross_normalized_bars": "dataset 横断 正規化 mean/worst 集約（ロバスト性ランキング）",
@@ -214,13 +211,6 @@ def _caption_for(stem: str) -> str:
     m = re.match(r"cross_nstep_heatmap_n(\d+)$", stem)
     if m:
         return f"dataset × case: open-loop N={m.group(1)} 終端誤差行列"
-    # param_sweep の個別図 (step7): <param>_sweep / pair_<a>_<b>
-    m = re.match(r"(.+)_sweep$", stem)
-    if m:
-        return f"{m.group(1)} グリッド sweep 同定"
-    m = re.match(r"pair_(.+)$", stem)
-    if m:
-        return f"2D ペア sweep（{m.group(1)}）"
     # フォールバック: アンダースコアを空白に
     return stem.replace("_", " ")
 
@@ -242,8 +232,6 @@ def _classify(rel: Path) -> str:
         "cross_physical_validity_kus", "cross_physical_validity_long",
         "cross_physical_validity_steer", "lon_lat_model"
     }:
-        return "parameter_estimation"
-    if top == "param_sweep":
         return "parameter_estimation"
 
     # 4. 推定後：シミュレーション残差の提示
