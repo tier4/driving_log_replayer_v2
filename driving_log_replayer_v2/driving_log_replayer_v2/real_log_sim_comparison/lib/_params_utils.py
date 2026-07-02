@@ -8,7 +8,7 @@ from pathlib import Path
 def _find_desc_dir() -> Path:
     """j6_gen2_description/config のパスを解決する（ROS 非依存環境では寛容にフォールバック）。
 
-    ament_index_python (ROS) が無い環境（report.ipynb を素の Jupyter kernel で開く等）でも
+    ament_index_python (ROS) が無い環境（素の Python から単体実行する等）でも
     本モジュールを import できるよう、解決不能時は存在しないパスを返し、load_sim_params の
     既定値フォールバックに委ねる。pipeline (ROS 有) では従来どおり実パスを返す。
     """
