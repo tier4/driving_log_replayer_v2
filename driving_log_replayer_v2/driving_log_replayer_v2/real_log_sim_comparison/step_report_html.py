@@ -71,7 +71,7 @@ CAPTIONS: dict[str, str] = {
     "kus_bins": "k_us(v) 速度ビン別 最小二乗法推定（実測同定 vs チューニング値）",
     # step7: param_sweep/ (個別図のキャプションは _caption_for の正規表現で導出)
     "_overview_sensitivity": "スイープ感度オーバービュー（改善率ランキング + 正規化 RMSE カーブ）",
-    "acc_steady_evidence": "縦定常補正の実機根拠（poly(v)=p0+p1·v の切片/傾き・カーブ抵抗 c_corner）",
+    "acc_steady_evidence": "縦定常補正の実機根拠（poly(v)=p0+p1·v の切片/傾き）",
     # step13: cross_dataset/
     "cross_closed_loop_heatmap": "dataset × sim run: closed-loop 軌跡乖離・完走率行列",
     "cross_normalized_bars": "dataset 横断 正規化 mean/worst 集約（ロバスト性ランキング）",
@@ -199,13 +199,10 @@ _CLOSED_LOOP_STEMS: set[str] = {
 # 取り込む Markdown レポート: (comparison/ からの相対パス, 見出し, 所属カテゴリ)。
 # セクション内で「図の前」に描画する Markdown。プロットを追認 (§2–§4) の位置へ送り、
 # 主軸の数式的導出 (§1, テキストのみ) を図より上に置くために使う。
-_MARKDOWN_REPORTS_PRE: list[tuple[str, str, str]] = [
-    ("param_sweep/param_sweep_derivation.md", "§1 主軸: 傾き = パラメータ の導出（step7）", "parameter_estimation"),
-]
+_MARKDOWN_REPORTS_PRE: list[tuple[str, str, str]] = []
 # セクション内で「図の後」に描画する Markdown (既定)。
 _MARKDOWN_REPORTS: list[tuple[str, str, str]] = [
     ("report.md", "比較レポート（step4: report.md）", "closed_loop_comparison"),
-    ("param_sweep/param_sweep_summary.md", "§2–§4 追認・整合（step7: param_sweep_summary.md）", "parameter_estimation"),
     ("cases/cases_summary.md", "ケース集約サマリ（step6: cases_summary.md）", "post_estimation_residual"),
 ]
 
