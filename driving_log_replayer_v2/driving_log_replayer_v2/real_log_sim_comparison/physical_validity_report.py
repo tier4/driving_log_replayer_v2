@@ -637,6 +637,46 @@ DRIVE/REVERSE/NEUTRAL/PARK 等を切り替える分岐選択用の離散入力�
 （FIFO バッファ）も実質的な離散状態であり、上記 7 次元の状態ベクトルだけでモデルが完結するわけではない。
 </p>
 
+<h3>状態・入力と ROS トピックの配線（実機ログ <code>real.lite</code>）</h3>
+<p>
+上記の記号は、抽象的な数式上の変数ではなく、実機ログ（<code>real.lite</code>）内の以下の ROS トピックから
+直接読み出される実測値・実指令値である。シミュレータ本体も Autoware と同名のトピックで指令・状態を
+授受するため、記号とトピックの対応は実機・シミュレータ間で共通である。
+</p>
+<table class="param-table">
+  <tr><th>記号</th><th>ROS トピック</th><th>メッセージフィールド</th></tr>
+  <tr><td>\\(v_x\\)</td><td><code>/vehicle/status/velocity_status</code></td>
+      <td><code>longitudinal_velocity</code></td></tr>
+  <tr><td>\\(\\delta_{{\\mathrm{{act}}}}\\)</td><td><code>/vehicle/status/steering_status</code></td>
+      <td><code>steering_tire_angle</code></td></tr>
+  <tr><td>\\(a_{{\\mathrm{{report}}}}\\)（実測 \\(a_{{\\mathrm{{act}}}}\\) 相当として使用）</td>
+      <td><code>/localization/acceleration</code></td><td><code>accel.accel.linear.x</code></td></tr>
+  <tr><td>\\(x\\)</td><td><code>/localization/kinematic_state</code></td>
+      <td><code>pose.pose.position.x</code></td></tr>
+  <tr><td>\\(y\\)</td><td><code>/localization/kinematic_state</code></td>
+      <td><code>pose.pose.position.y</code></td></tr>
+  <tr><td>\\(\\theta\\)</td><td><code>/localization/kinematic_state</code></td>
+      <td><code>pose.pose.orientation</code>（クォータニオンから yaw を算出）</td></tr>
+  <tr><td>\\(v_y\\)</td><td><code>/localization/kinematic_state</code></td>
+      <td><code>twist.twist.linear.y</code></td></tr>
+  <tr><td>\\(\\omega\\)</td><td><code>/localization/kinematic_state</code></td>
+      <td><code>twist.twist.angular.z</code></td></tr>
+  <tr><td>\\(a_{{\\mathrm{{slope}}}}\\)</td><td><code>/localization/kinematic_state</code>（からの派生値）</td>
+      <td>専用トピックはなく、<code>orientation</code> から算出した pitch を用いて
+      \\(g\\sin(\\mathrm{{pitch}})\\) を事後計算する</td></tr>
+  <tr><td>\\(a_{{\\mathrm{{cmd,des}}}}\\)</td><td><code>/control/command/control_cmd</code></td>
+      <td><code>longitudinal.acceleration</code></td></tr>
+  <tr><td>\\(\\delta_{{\\mathrm{{cmd,des}}}}\\)</td><td><code>/control/command/control_cmd</code></td>
+      <td><code>lateral.steering_tire_angle</code></td></tr>
+  <tr><td><code>gear</code></td><td>（このパイプラインでは非購読）</td>
+      <td>前進走行区間のみを対象とし、常時 DRIVE 相当として扱う</td></tr>
+</table>
+<p class="meta">
+※ シミュレーションログとの比較では指令トピックのみ <code>/control/trajectory_follower/control_cmd</code>
+（trajectory_follower の生指令）に置き換わる場合がある。それ以外は実機・シム共通のトピック名
+（<code>README.ja.md</code> の「抽出トピック」表を参照）。
+</p>
+
 <h3>連続時間の状態方程式（ベクトル形式）</h3>
 <p>
 6 状態をまとめると以下の \\(\\dot{{x}} = f(x, u)\\) になる。右辺の \\(\\omega(\\cdot), r_\\delta(\\cdot)\\) は
@@ -659,20 +699,24 @@ r_\\delta(\\delta_{{\\mathrm{{act}}}}, \\delta_{{\\mathrm{{des}}}}) \\\\
   <tr><th>行（状態の微分）</th><th>右辺の略記</th><th>中身（詳細な式）</th><th>担当セクション</th></tr>
   <tr><td>\\(\\dot v_x\\)</td><td>\\(a_{{\\mathrm{{act}}}} + a_{{\\mathrm{{slope}}}}\\)</td>
       <td>1 次遅れ＋走行抵抗多項式で決まる \\(a_{{\\mathrm{{act}}}}\\) をそのまま加算</td>
-      <td><b>1-2. 縦方向</b></td></tr>
+      <td><a href="#sec-long"><b>1-2. 縦方向</b></a></td></tr>
   <tr><td>\\(\\dot a_{{\\mathrm{{act}}}}\\)</td><td>\\((a_{{\\mathrm{{target}}}} - a_{{\\mathrm{{act}}}}) / \\tau_a\\)</td>
       <td>\\(a_{{\\mathrm{{target}}}} = a_{{\\mathrm{{cmd,del}}}} + \\mathrm{{poly}}(v_x)\\) の一次遅れ追従</td>
-      <td><b>1-2. 縦方向</b></td></tr>
+      <td><a href="#sec-long"><b>1-2. 縦方向</b></a></td></tr>
   <tr><td>\\(\\dot\\delta_{{\\mathrm{{act}}}}\\)</td><td>\\(r_\\delta(\\delta_{{\\mathrm{{act}}}}, \\delta_{{\\mathrm{{des}}}})\\)</td>
       <td>不感帯・レート飽和込みの操舵一次遅れ追従</td>
-      <td><b>1-3. 操舵</b></td></tr>
+      <td><a href="#sec-steer"><b>1-3. 操舵</b></a></td></tr>
   <tr><td>\\(\\dot\\theta\\)</td><td>\\(\\omega(v_x, \\delta_{{\\mathrm{{act}}}})\\)</td>
       <td>アンダーステア係数 \\(k_{{\\mathrm{{us}}}}\\)・ステアバイアス \\(\\beta\\) 込みのヨーレート</td>
-      <td><b>1-4. ヨー・横方向</b></td></tr>
+      <td><a href="#sec-yaw"><b>1-4. ヨー・横方向</b></a></td></tr>
   <tr><td>\\(\\dot x, \\dot y\\)</td><td>\\(v_x\\cos\\theta,\\ v_x\\sin\\theta\\)</td>
       <td>キネマティック自転車モデルの位置積分</td>
-      <td><b>1-4. ヨー・横方向</b></td></tr>
+      <td><a href="#sec-yaw"><b>1-4. ヨー・横方向</b></a></td></tr>
 </table>
+<p class="meta">
+&#128279; 各行の詳細な式・実測同定結果は上のリンク先セクションを参照。逆方向にも、1-2〜1-4 の各セクション冒頭に
+本節（<a href="#sec-state-space">1-1. 状態空間モデル</a>）のどの行を担当しているかを明記している。
+</p>
 
 <h3>実際の離散更新アルゴリズム（<code>update(dt)</code> の内部処理）</h3>
 <p>
@@ -718,6 +762,9 @@ r_\\delta(\\delta_{{\\mathrm{{act}}}}, \\delta_{{\\mathrm{{des}}}}) \\\\
 
 <section id="sec-long">
 <h2>1-2. 縦方向（加速度アクチュエータ）の同定</h2>
+<p class="meta">
+&#128279; <a href="#sec-state-space">1-1 状態方程式</a> の \\(\\dot v_x, \\dot a_{{\\mathrm{{act}}}}\\) 行に対応。
+</p>
 <p>
 速度 \\(v_x\\) は横方向・操舵状態に依存せず縦方向のみで閉じるため（long ⊥ steer の直交性）、
 \\(\\text{{err}}_{{vx}}\\) を目的関数として他のパラメータと独立に同定できる。
@@ -767,6 +814,9 @@ a_{{\\mathrm{{target}}}}(t) = a_{{\\mathrm{{cmd,del}}}}(t) + \\bigl(c_0 + c_1 v_
 
 <section id="sec-steer">
 <h2>1-3. 操舵アクチュエータ（追従ループ）の同定</h2>
+<p class="meta">
+&#128279; <a href="#sec-state-space">1-1 状態方程式</a> の \\(\\dot\\delta_{{\\mathrm{{act}}}}\\) 行に対応。
+</p>
 <p>
 操舵追従ループは実車位置・ヨーのフィードバックを持たないオープンループなので、
 \\(\\text{{err}}_{{\\mathrm{{steer}}}}\\) を目的関数として位置・ヨー誤差とは構造的に独立して同定できる。
@@ -829,6 +879,9 @@ a_{{\\mathrm{{target}}}}(t) = a_{{\\mathrm{{cmd,del}}}}(t) + \\bigl(c_0 + c_1 v_
 </section>
 <section id="sec-yaw">
 <h2>1-4. ヨー・横方向（運動学的自転車モデル）— 速度ビン別 最小二乗法同定</h2>
+<p class="meta">
+&#128279; <a href="#sec-state-space">1-1 状態方程式</a> の \\(\\dot\\theta, \\dot x, \\dot y\\) 行に対応。
+</p>
 <p>
 1-2（縦方向）・1-3（操舵追従）が先行して確定した後、
 \\(\\text{{err}}_{{wz}}\\) を目的関数として <b>高曲率サブセット</b> で k_us を同定する。
