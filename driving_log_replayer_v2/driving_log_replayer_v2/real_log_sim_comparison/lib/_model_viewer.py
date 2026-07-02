@@ -12,8 +12,6 @@
         (各次 ON/OFF 切替・有効項のみ最小二乗最適化対象)。
         停止処理 (geared): v<=v_stop かつブレーキ指令時は a_target=0 (停車保持で実加速度は ~0)、
         速度は 0 下限クランプ (後退なし)。停止保持ブレーキ (cmd=-2 等) の誤差を解消。
-        縦横連成: カーブで縦の実減速が増える分を a_target += c_corner*(v*wz)^2 で補正
-        (観測 v・wz を回帰子に使う一方向カップリングで、横の独立同定を壊さない・ON/OFF 切替)。
   横  : delta' = -(delta - delta_cmd(t-T_d)) / tau_d        (delta は rad で積分)
         omega = v*tan(delta + beta) / (L + k_us*v^2) ,  theta' = omega
         x' = v*cos(theta) , y' = v*sin(theta) ,  a_y = v*omega
@@ -83,7 +81,6 @@ def _seed_from_params(params: dict) -> dict:
         "poly1": f("lon_drag_c1", 0.0),
         "poly2": f("lon_drag_c2", 0.0),
         "v_stop": 0.2,
-        "c_corner": 0.0,
         "c_slope": f("lon_slope_gain", 1.0),  # 勾配重力ゲイン (1.0=フル重力でプラント一致)
         "tau_steer": f("steer_time_constant", 0.27),
         "t_steer": f("steer_time_delay", 0.24),
@@ -727,7 +724,6 @@ $("errpanels").addEventListener("change", (e) => { showErr = e.target.checked; m
   setupKnob("k_poly1", "v_poly1", "poly1", (v) => v.toFixed(4));
   setupKnob("k_poly2", "v_poly2", "poly2", (v) => v.toFixed(5));
   setupKnob("k_vstop", "v_vstop", "v_stop", (v) => v.toFixed(2) + "m/s");
-  setupKnob("k_corner", "v_corner", "c_corner", (v) => v.toFixed(3));
   setupKnob("k_slope", "v_slope", "c_slope", (v) => v.toFixed(2));
 
   // 多項式補正の各次 ON/OFF。OFF 時は係数を model から除外（=0扱い）し最適化対象からも外す。
@@ -742,7 +738,6 @@ $("errpanels").addEventListener("change", (e) => { showErr = e.target.checked; m
   setupPolyToggle("on_poly0", "k_poly0", "polyOn0");
   setupPolyToggle("on_poly1", "k_poly1", "polyOn1");
   setupPolyToggle("on_poly2", "k_poly2", "polyOn2");
-  setupPolyToggle("on_corner", "k_corner", "cornerOn");
   setupPolyToggle("on_slope", "k_slope", "slopeOn"); // 勾配重力 (既定 ON, k_slope は既定有効)
   // 停止処理トグル（既定 ON）。OFF で v_stop つまみを無効化。
   $("on_stop").addEventListener("change", (e) => {
