@@ -60,7 +60,7 @@ def _run_and_collect_worker(args: dict) -> dict:
     output_dir = batch_root / "runs" / uuid
     status = "success"
 
-    if skip_sim and skip_ol:
+    if skip_sim:  # Autoware 不要なケース（skip_sim=True）は ros2 launch を使わず直接 Python 実行
         # Specialized direct python extraction (bypass ROS 2 launch)
         if input_mode == "raw":
             t4_path = Path(args["raw_t4_path"])
@@ -137,7 +137,16 @@ def _run_and_collect_worker(args: dict) -> dict:
         output_dir.mkdir(parents=True, exist_ok=True)
         (output_dir / "dataset_id.txt").write_text(uuid, encoding="utf-8")
 
-    else:
+        # skip_ol=False のときは open-loop 解析も直接 Python で実行する (ros2 launch 不要)
+        if not skip_ol and status != "skipped":
+            ok = run_analysis_direct(
+                uuid, scenario_single, t4_path, output_dir, skip_ol=False
+            )
+            if not ok:
+                print(f"[WARN] run_analysis_direct failed for {uuid[:8]} (analysis stage)",
+                      file=sys.stderr)
+
+    else:  # not skip_sim: Autoware を伴う closed-loop → ros2 launch を使う
         if resume and _bundle_has_real_lite(output_dir):
             status = "skipped"
         else:
@@ -242,6 +251,47 @@ def write_single_dataset_scenario(scenario: Path, uuid: str, out_path: Path) -> 
     return out_path
 
 
+def run_analysis_direct(
+    uuid: str, scenario_single: Path, t4_dataset_path: Path, output_dir: Path,
+    *, skip_ol: bool = False,
+) -> bool:
+    """ros2 launch を使わず直接 Python で解析ステージを実行する (skip_sim=True のとき用)。
+
+    evaluator_node.run_analysis を直接呼び出すことで ROS 2 の初期化オーバーヘッドを排除する。
+    lite_dir = output_dir/lite (直接抽出パスと同じレイアウト)。
+    """
+    import logging
+    from driving_log_replayer_v2.real_log_sim_comparison.evaluator_node import (
+        build_common_env,
+        run_analysis,
+        _load_compare_config,
+    )
+
+    lite_dir = output_dir / "lite"
+    comparison_dir = output_dir / "comparison"
+    comparison_dir.mkdir(parents=True, exist_ok=True)
+
+    compare_cfg = _load_compare_config(str(scenario_single))
+
+    logger = logging.getLogger(f"run_batch.{uuid[:8]}")
+    if not logger.handlers:
+        logging.basicConfig(level=logging.INFO, format="[%(name)s] %(levelname)s %(message)s")
+
+    env = build_common_env(comparison_dir, "", compare_cfg, logger)
+    env["SKIP_SIM"] = "1"
+    if skip_ol:
+        env["SKIP_OL"] = "1"
+
+    label = f"{uuid[:8]}{' (skip-ol)' if skip_ol else ''}"
+    print(f"[DIRECT ANALYSIS] {label}: run_analysis in-process", flush=True)
+    try:
+        run_analysis(lite_dir, comparison_dir, env, compare_cfg, logger)
+        return True
+    except Exception as e:
+        print(f"[ERROR] run_analysis_direct failed for {uuid}: {e}", file=sys.stderr)
+        return False
+
+
 def run_one_dataset(
     uuid: str, scenario_single: Path, t4_dataset_path: Path, output_dir: Path,
     *, skip_sim: bool = False, skip_ol: bool = False,
@@ -250,8 +300,7 @@ def run_one_dataset(
 
     Makefile local_cloud_run の launch 行と同一。ROS 環境 (install/setup.bash) は
     呼び出し元 shell で source 済みであることを前提とする。
-    skip_sim=True で SKIP_SIM=1 を evaluator_node へ伝搬し、Stage CL2 (closed-loop sim) を
-    省略する (open-loop 解析のみ。詳細は evaluator_node.run_pipeline)。
+    Autoware を伴う closed-loop (skip_sim=False) のときのみ呼ばれる。
     skip_ol=True で SKIP_OL=1 を伝搬し、オープンループ解析も省略する。
     """
     output_dir.mkdir(parents=True, exist_ok=True)
