@@ -925,6 +925,25 @@ def _long_drift_profile(
 _PERF_HORIZONS = (10, 20, 50, 100)
 
 
+def _entry_real_mcap(entry) -> Path | None:
+    """DatasetEntry.real_lite から代表 MCAP を解決する。
+
+    resolve_lite_bag の返り値は単一 `.mcap` ファイル / rosbag2 dir の両方があり得るため、
+    file はそのまま、dir は `real.lite_0.mcap` → 先頭 `*.mcap` の順で解決する。
+    """
+    rl = entry.real_lite
+    if rl is None:
+        return None
+    rl = Path(rl)
+    if rl.is_file():
+        return rl
+    mcap = rl / "real.lite_0.mcap"
+    if mcap.exists():
+        return mcap
+    mcaps = list(rl.glob("*.mcap"))
+    return mcaps[0] if mcaps else None
+
+
 def compute_long_perf_data(
     entries: list,
 ) -> dict:
@@ -943,15 +962,9 @@ def compute_long_perf_data(
 
     n_dataset = 0
     for entry in entries[:20]:
-        if entry.real_lite is None:
+        mcap = _entry_real_mcap(entry)
+        if mcap is None:
             continue
-        mcap = entry.real_lite / "real.lite_0.mcap"
-        if not mcap.exists():
-            mcaps = list(entry.real_lite.glob("*.mcap"))
-            if mcaps:
-                mcap = mcaps[0]
-            else:
-                continue
         try:
             df_accel = load_accel(mcap)
             df_vel   = load_velocity(mcap)
@@ -1021,15 +1034,9 @@ def compute_perfect_tracking_data(
     traj_data: list[dict] = []
     n_dataset = 0
     for entry in entries[:10]:
-        if entry.real_lite is None:
+        mcap = _entry_real_mcap(entry)
+        if mcap is None:
             continue
-        mcap = entry.real_lite / "real.lite_0.mcap"
-        if not mcap.exists():
-            mcaps = list(entry.real_lite.glob("*.mcap"))
-            if mcaps:
-                mcap = mcaps[0]
-            else:
-                continue
         try:
             df_kin   = load_kinematic(mcap)
             df_steer = load_steering(mcap)

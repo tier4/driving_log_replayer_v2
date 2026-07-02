@@ -346,8 +346,17 @@ def build_fig_perfect_tracking_box(data: dict) -> go.Figure:
     return apply_base_layout(fig, title=fig.layout.title.text, height=400)
 
 
-def build_fig_perfect_tracking_traj(data: dict) -> go.Figure:
-    """代表データセットの軌跡比較プロット。"""
+def build_fig_perfect_tracking_traj(
+    data: dict,
+    labels: dict | None = None,
+    height: int = 380,
+) -> go.Figure:
+    """代表データセットの軌跡比較プロット。
+
+    labels: 表示文言の上書き (省略時は従来どおり)。
+      キー: "title", "gt_name", "model_name", "x_title", "y_title"
+    """
+    lb = labels or {}
     traj_data = data.get("traj_data") or []
     n_traj = len(traj_data)
     if n_traj == 0:
@@ -368,29 +377,29 @@ def build_fig_perfect_tracking_traj(data: dict) -> go.Figure:
         show_legend = (i == 1)
         fig.add_trace(go.Scatter(
             x=gt_xm, y=gt_ym,
-            mode="lines", name="GT 軌跡",
+            mode="lines", name=lb.get("gt_name", "GT 軌跡"),
             line=dict(color="black", width=2),
             legendgroup="gt", showlegend=show_legend,
         ), row=1, col=i)
         fig.add_trace(go.Scatter(
             x=bxm, y=bym,
-            mode="lines", name="自転車モデル (理想追従)",
+            mode="lines", name=lb.get("model_name", "自転車モデル (理想追従)"),
             line=dict(color="royalblue", width=1.5, dash="dash"),
             legendgroup="model", showlegend=show_legend,
         ), row=1, col=i)
-        fig.update_xaxes(title_text="x [m]", row=1, col=i)
-        fig.update_yaxes(title_text="y [m]", scaleanchor=f"x{i}", scaleratio=1, row=1, col=i)
+        fig.update_xaxes(title_text=lb.get("x_title", "x [m]"), row=1, col=i)
+        fig.update_yaxes(title_text=lb.get("y_title", "y [m]"), scaleanchor=f"x{i}", scaleratio=1, row=1, col=i)
 
     fig.update_layout(
-        title="代表データセットの軌跡比較（GT vs 自転車モデル）",
-        height=380,
+        title=lb.get("title", "代表データセットの軌跡比較（GT vs 自転車モデル）"),
+        height=height,
         legend=dict(orientation="h", y=1.1, x=0),
     )
-    return apply_base_layout(fig, title=fig.layout.title.text, height=380)
+    return apply_base_layout(fig, title=fig.layout.title.text, height=height)
 
 
-def build_fig_long_perf_box(data: dict) -> go.Figure:
-    """縦方向理想追従誤差の Box Plot。"""
+def build_fig_long_perf_box(data: dict, title: str | None = None) -> go.Figure:
+    """縦方向理想追従誤差の Box Plot。title 指定でタイトルを上書きできる。"""
     fig = go.Figure()
     keys = ["10", "20", "50", "100"]
     h_labels = data.get("h_labels", ["0.10s", "0.20s", "0.50s", "1.00s"])
@@ -407,7 +416,7 @@ def build_fig_long_perf_box(data: dict) -> go.Figure:
         return _placeholder_fig("縦方向理想追従データなし")
 
     fig.update_layout(
-        title=f"縦方向 モデル構造限界評価（a_act 直接入力 vs GT 変位、上位 {data.get('n_dataset', 0)} データセット）",
+        title=title or f"縦方向 モデル構造限界評価（a_act 直接入力 vs GT 変位、上位 {data.get('n_dataset', 0)} データセット）",
         xaxis_title="ホライズン [s]",
         yaxis_title="|縦方向誤差| [cm]",
         height=400,
@@ -417,8 +426,13 @@ def build_fig_long_perf_box(data: dict) -> go.Figure:
     return apply_base_layout(fig, title=fig.layout.title.text, height=400)
 
 
-def build_fig_long_perf_growth(data: dict) -> go.Figure:
-    """縦方向のドリフト成長カーブ。"""
+def build_fig_long_perf_growth(data: dict, labels: dict | None = None) -> go.Figure:
+    """縦方向のドリフト成長カーブ。
+
+    labels: 表示文言の上書き (省略時は従来どおり)。
+      キー: "title", "subplot_titles" (2 要素), "y_titles" (2 要素)
+    """
+    lb = labels or {}
     verr_pool = data.get("verr_pool")
     serr_pool = data.get("serr_pool")
     phase_pool = data.get("phase_pool")
@@ -436,17 +450,21 @@ def build_fig_long_perf_growth(data: dict) -> go.Figure:
 
     fig = make_subplots(
         rows=1, cols=2,
-        subplot_titles=["速度誤差  vx_sim − GT vx  [m/s]",
-                        "変位誤差  s_sim − s_gt  [cm]"],
+        subplot_titles=lb.get("subplot_titles") or ["速度誤差  vx_sim − GT vx  [m/s]",
+                                                    "変位誤差  s_sim − s_gt  [cm]"],
         horizontal_spacing=0.10,
     )
 
     _PHASE_COLORS = {0: "steelblue", 1: "gray", 2: "tomato"}
     _PHASE_NAMES  = {0: "減速 (a < -0.3)", 1: "巡航", 2: "加速 (a > +0.3)"}
 
+    y_titles = lb.get("y_titles") or [
+        "速度誤差 [m/s]<br><sup>正 = sim が GT より速い</sup>",
+        "変位誤差 [cm]<br><sup>正 = sim が GT より進んでいる</sup>",
+    ]
     for col, (pool, scale, ytitle) in enumerate([
-        (verr, 1.0,   "速度誤差 [m/s]<br><sup>正 = sim が GT より速い</sup>"),
-        (serr, 100.0, "変位誤差 [cm]<br><sup>正 = sim が GT より進んでいる</sup>"),
+        (verr, 1.0,   y_titles[0]),
+        (serr, 100.0, y_titles[1]),
     ], start=1):
         data_scaled = pool * scale
         med  = np.median(data_scaled, axis=0)
@@ -493,7 +511,7 @@ def build_fig_long_perf_growth(data: dict) -> go.Figure:
         fig.update_xaxes(title_text="ロールアウト経過時間 [s]", row=1, col=col)
 
     fig.update_layout(
-        title=f"縦方向ドリフト成長カーブ（符号付き、上位 {data.get('n_dataset', 0)} データセット）",
+        title=lb.get("title") or f"縦方向ドリフト成長カーブ（符号付き、上位 {data.get('n_dataset', 0)} データセット）",
         height=430,
         margin=dict(t=70, b=50),
         legend=dict(orientation="v", x=1.02, y=1),
@@ -501,8 +519,10 @@ def build_fig_long_perf_growth(data: dict) -> go.Figure:
     return apply_base_layout(fig, title=fig.layout.title.text, height=430)
 
 
-def build_fig_long_perf_map(data: dict, map_ways: list | None = None) -> go.Figure:
-    """縦方向変位誤差の地図上分布プロット。"""
+def build_fig_long_perf_map(
+    data: dict, map_ways: list | None = None, title: str | None = None,
+) -> go.Figure:
+    """縦方向変位誤差の地図上分布プロット。title 指定でタイトルを上書きできる。"""
     map_x = data.get("map_x")
     map_y = data.get("map_y")
     map_serr = data.get("map_serr")
@@ -552,7 +572,7 @@ def build_fig_long_perf_map(data: dict, map_ways: list | None = None) -> go.Figu
         scaleanchor="x", scaleratio=1,
     )
     fig.update_layout(
-        title="縦方向変位誤差の地図分布（1.0s 終端・rollout 開始点）",
+        title=title or "縦方向変位誤差の地図分布（1.0s 終端・rollout 開始点）",
         height=600,
         margin=dict(t=70, b=50, r=80),
     )
