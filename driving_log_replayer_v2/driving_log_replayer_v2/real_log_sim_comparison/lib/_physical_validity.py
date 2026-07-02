@@ -275,7 +275,12 @@ def fit_steer_single(bag_path: Path) -> dict | None:
 # 横方向 k_us(v): 速度ビン別最小二乗法 (十分統計量つき、単一/複数データセット両対応)
 # ---------------------------------------------------------------------------
 def _extract_kus_arrays(bag_path: Path) -> dict | None:
-    """k_us 分析用の vx/wz/steer_eff/dwz を単一データセットから抽出する。"""
+    """k_us 分析用の vx/wz/steer_eff/dwz を単一データセットから抽出する。
+
+    付随情報として kinematic 時刻 t [s] と yaw [rad] も返す
+    (physical_validity_report の worker がカーブカバレッジ・cmd_steer 間引きに使う。
+    `compute_kus_bins` は vx/wz/steer_eff/dwz のみ参照し、余剰キーは無視される)。
+    """
     try:
         df_kin = load_kinematic(bag_path)
         df_steer = load_steering(bag_path)
@@ -303,7 +308,14 @@ def _extract_kus_arrays(bag_path: Path) -> dict | None:
             dwz[-1] = dwz_mid[-1]
             dwz[1:-1] = 0.5 * (dwz_mid[:-1] + dwz_mid[1:])
 
-    return {"vx": vx, "wz": wz, "steer_eff": steer_eff, "dwz": dwz}
+    return {
+        "vx": vx,
+        "wz": wz,
+        "steer_eff": steer_eff,
+        "dwz": dwz,
+        "t": t_k,
+        "yaw": df_kin["yaw"].values,
+    }
 
 
 def compute_kus_bins(records: list[dict]) -> dict:

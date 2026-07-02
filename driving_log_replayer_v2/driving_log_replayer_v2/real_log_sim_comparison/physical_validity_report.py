@@ -53,11 +53,9 @@ from driving_log_replayer_v2.real_log_sim_comparison.multi_dataset_tune import (
 # 定数 (物理定数・フィット定数の SSOT は lib._physical_validity。本ファイル固有の
 #       レポート表示用定数のみここで定義する)
 # ---------------------------------------------------------------------------
+from driving_log_replayer_v2.real_log_sim_comparison.lib._figures import build_fig_kus_single  # noqa: E402
 from driving_log_replayer_v2.real_log_sim_comparison.lib._physical_validity import (  # noqa: E402
     DWZ_MAX,
-    K_US_CLIP,
-    STEER_BIAS,
-    VX_EDGES,
     VX_MIN_CURVE,
     WHEELBASE,
     WZ_MIN,
@@ -71,7 +69,10 @@ from driving_log_replayer_v2.real_log_sim_comparison.lib._physical_validity impo
     _PERF_STRIDE,
     _TAU_BOUNDS_LONG,
     _VX_MIN_FIT,
+    _extract_kus_arrays,
+    _kus_step_profile,
     _sim_first_order,
+    compute_kus_bins,
 )
 
 _H_SPAN = {10: "≈0.33 s", 20: "≈0.67 s", 30: "≈1.0 s", 40: "≈1.33 s"}
@@ -313,41 +314,22 @@ def _load_mcap_worker(args: tuple) -> dict | None:
     mcap = lite_dir / "real.lite" / "real.lite_0.mcap"
     if not mcap.exists():
         return None
-    try:
-        df_kin = load_kinematic(mcap)
-        df_steer = load_steering(mcap)
-    except Exception:
+
+    # k_us 分析用配列 (vx/wz/steer_eff/dwz) + 付随情報 (t/yaw) は lib と共通化
+    rec = _extract_kus_arrays(mcap)
+    if rec is None:
         return None
-    if df_kin.empty or df_steer.empty or len(df_kin) < 10:
-        return None
+    t_k = rec["t"]
+    vx = rec["vx"]
 
     try:
         df_cmd = load_cmd(mcap, "/control/command/control_cmd")
     except Exception:
         df_cmd = pd.DataFrame()
 
-    t_k = df_kin["t_ns"].values * 1e-9
-    vx = df_kin["vx"].values
-    wz = df_kin["wz"].values
-
-    steer_raw = df_steer["steer"].values
-    t_s = df_steer["t_ns"].values * 1e-9
-    steer = np.interp(t_k, t_s, steer_raw)
-    steer_eff = steer - STEER_BIAS
-
-    # 角加速度（定常旋回フィルタ用）
-    dt = np.diff(t_k)
-    dt_safe = np.where(dt > 0, dt, 1e-3)
-    dwz_mid = np.diff(wz) / dt_safe
-    dwz = np.empty_like(wz)
-    dwz[0] = dwz_mid[0] if len(dwz_mid) > 0 else 0.0
-    dwz[-1] = dwz_mid[-1] if len(dwz_mid) > 0 else 0.0
-    dwz[1:-1] = 0.5 * (dwz_mid[:-1] + dwz_mid[1:])
-
     # カーブカバレッジ（_coverage._curvature_coverage は t 列を要求）
-    t0_ns = df_kin["t_ns"].values[0]
-    t_rel = (df_kin["t_ns"].values - t0_ns) * 1e-9
-    kin_cv = pd.DataFrame({"t": t_rel, "yaw": df_kin["yaw"].values})
+    t_rel = t_k - t_k[0]
+    kin_cv = pd.DataFrame({"t": t_rel, "yaw": rec["yaw"]})
     vel_cv = pd.DataFrame({"t": t_rel, "lon_vel": vx})
     try:
         cov = _curvature_coverage(kin_cv, vel_cv)
@@ -367,9 +349,9 @@ def _load_mcap_worker(args: tuple) -> dict | None:
         "uuid": uuid,
         "lite_dir": lite_dir_str,
         "vx": vx.tolist(),
-        "wz": wz.tolist(),
-        "steer_eff": steer_eff.tolist(),
-        "dwz": dwz.tolist(),
+        "wz": rec["wz"].tolist(),
+        "steer_eff": rec["steer_eff"].tolist(),
+        "dwz": rec["dwz"].tolist(),
         "curve_count": cov["curve_count"],
         "kappa_max_abs": cov["kappa_max_abs"],
         "cmd_steer": cmd_steer_arr,
@@ -389,188 +371,6 @@ def load_all_mcap(ds_list: list, n_jobs: int = 8) -> list[dict]:
             if i % 100 == 0:
                 print(f"  {i}/{len(args_list)} 読み込み済み", flush=True)
     return results
-
-
-# ---------------------------------------------------------------------------
-# Phase 2: k_us 速度ビン別 最小二乗法回帰
-# ---------------------------------------------------------------------------
-def compute_kus_bins(records: list[dict]) -> dict:
-    """速度ビン別 最小二乗法回帰で k_us(v) を推定。モデル: tan(δ_eff) = (L/v + k_us·v)·ω"""
-    all_vx = np.concatenate([np.asarray(r["vx"]) for r in records])
-    all_wz = np.concatenate([np.asarray(r["wz"]) for r in records])
-    all_steer_eff = np.concatenate([np.asarray(r["steer_eff"]) for r in records])
-    all_dwz = np.concatenate([np.asarray(r["dwz"]) for r in records])
-
-    mask_ok = (
-        (np.abs(all_wz) > WZ_MIN)
-        & (np.abs(all_dwz) < DWZ_MAX)
-        & (all_vx > VX_MIN_CURVE)
-    )
-    vx_f = all_vx[mask_ok]
-    wz_f = all_wz[mask_ok]
-    steer_f = all_steer_eff[mask_ok]
-    tan_steer = np.tan(np.clip(steer_f, -0.8, 0.8))
-
-    n_bins = len(VX_EDGES) - 1
-    vx_mid = np.empty(n_bins)
-    kus_ols = np.full(n_bins, np.nan)
-    kus_p25 = np.full(n_bins, np.nan)
-    kus_p75 = np.full(n_bins, np.nan)
-    n_pts = np.zeros(n_bins, dtype=int)
-
-    for i in range(n_bins):
-        lo, hi = VX_EDGES[i], VX_EDGES[i + 1]
-        mask_bin = (vx_f >= lo) & (vx_f < hi)
-        n = int(mask_bin.sum())
-        n_pts[i] = n
-        vx_mid[i] = (lo + hi) / 2
-        if n < 10:
-            continue
-        vx_b = vx_f[mask_bin]
-        wz_b = wz_f[mask_bin]
-        ts_b = tan_steer[mask_bin]
-        vm = float(np.median(vx_b))
-        vx_mid[i] = vm
-        # 最小二乗法原点回帰: tan(steer) = C * wz => k_us = (C - L/v) / v
-        C_ols = float(np.sum(wz_b * ts_b) / np.sum(wz_b ** 2))
-        kus_ols[i] = (C_ols - WHEELBASE / vm) / vm
-        # 個別サンプル percentile（外れ値確認用）
-        with np.errstate(divide="ignore", invalid="ignore"):
-            kus_each = (
-                ts_b / np.where(np.abs(wz_b) > 1e-6, wz_b, np.nan) - WHEELBASE / vx_b
-            ) / vx_b
-        kus_each = kus_each[np.isfinite(kus_each)]
-        kus_each = np.clip(kus_each, -K_US_CLIP, K_US_CLIP)
-        if len(kus_each) > 10:
-            kus_p25[i] = float(np.percentile(kus_each, 25))
-            kus_p75[i] = float(np.percentile(kus_each, 75))
-
-    return {
-        "vx_mid": vx_mid,
-        "kus_ols": kus_ols,
-        "kus_p25": kus_p25,
-        "kus_p75": kus_p75,
-        "n_pts": n_pts,
-    }
-
-
-# ---------------------------------------------------------------------------
-# plotly 図生成
-# ---------------------------------------------------------------------------
-def _kus_step_profile(vx: np.ndarray, params: dict) -> np.ndarray:
-    """params から N 段ステップ of k_us プロファイルを計算して返す。"""
-    bands = params.get("k_us_bands")
-    thresholds = params.get("k_us_thresholds")
-
-    if bands is not None and thresholds is not None and len(bands) > 0:
-        result = np.full_like(vx, bands[-1], dtype=float)
-        for i, thr in enumerate(thresholds):
-            result = np.where(vx < thr, bands[i], result)
-        return result
-
-    # レガシー: 単一 k_us（ランプなし）
-    k_us = params.get("k_us", 0.0)
-    return np.full_like(vx, k_us, dtype=float)
-
-
-def _kus_band_label(params: dict) -> str:
-    """速度帯パラメータを凡例文字列に変換。"""
-    bands = params.get("k_us_bands")
-    thresholds = params.get("k_us_thresholds")
-
-    if bands is not None and thresholds is not None:
-        parts = []
-        for i, b in enumerate(bands):
-            if i < len(thresholds):
-                parts.append(f"<{thresholds[i]:.1f}m/s: {b:.4f}")
-            else:
-                parts.append(f"≥{thresholds[-1]:.1f}m/s: {b:.4f}")
-        return " | ".join(parts)
-
-    return f"k_us={params.get('k_us', 0.0):.4f}"
-
-
-def build_kus_figure(bins: dict, params: dict) -> go.Figure:
-    """k_us vs 速度の plotly 図（実測推定 + チューニング済み速度帯プロファイル重ね描き）。"""
-    fig = make_subplots(
-        rows=1, cols=2,
-        subplot_titles=["k_us 推定値（速度ビン別 最小二乗法）", "速度ビン別 曲線走行サンプル数"],
-        horizontal_spacing=0.12,
-    )
-
-    vx_mid = bins["vx_mid"]
-    kus_ols = bins["kus_ols"]
-    kus_p25 = bins["kus_p25"]
-    kus_p75 = bins["kus_p75"]
-    n_pts = bins["n_pts"]
-    valid = np.isfinite(kus_ols)
-
-    # 実測 IQR バンド
-    valid_iqr = valid & np.isfinite(kus_p25)
-    if np.any(valid_iqr):
-        fig.add_trace(go.Scatter(
-            x=list(vx_mid[valid_iqr]) + list(vx_mid[valid_iqr][::-1]),
-            y=list(kus_p25[valid_iqr]) + list(kus_p75[valid_iqr][::-1]),
-            fill="toself", fillcolor="rgba(70,130,180,0.15)",
-            line=dict(color="rgba(255,255,255,0)"),
-            showlegend=True, name="25–75%ile（個別サンプル）",
-        ), row=1, col=1)
-
-    # 最小二乗法推定値
-    fig.add_trace(go.Scatter(
-        x=vx_mid[valid].tolist(), y=kus_ols[valid].tolist(),
-        mode="markers+lines",
-        marker=dict(color="steelblue", size=7),
-        line=dict(color="steelblue", width=2),
-        name="最小二乗法推定 k_us(v)",
-    ), row=1, col=1)
-
-    # チューニング済み速度帯プロファイル（ステップ関数）
-    vx_dense = np.linspace(0.0, 12.0, 600)
-    kus_tune = _kus_step_profile(vx_dense, params)
-    label = _kus_band_label(params)
-    fig.add_trace(go.Scatter(
-        x=vx_dense.tolist(), y=kus_tune.tolist(),
-        mode="lines",
-        line=dict(color="darkorange", width=2.5, dash="dash"),
-        name=f"チューニング済み速度帯 ({label})",
-    ), row=1, col=1)
-
-    # k_us=0 水平線
-    fig.add_hline(y=0.0, line=dict(color="gray", width=1, dash="dot"), row=1, col=1)
-
-    # 閾値縦線
-    thresholds = params.get("k_us_thresholds")
-    colors = ["green", "purple", "brown", "teal"]
-    for i, thr in enumerate(thresholds or []):
-        clr = colors[i % len(colors)]
-        fig.add_vline(
-            x=thr, line=dict(color=clr, width=1.2, dash="dash"),
-            annotation_text=f"thr{i+1}={thr:.1f}", annotation_position="top right",
-            row=1, col=1,
-        )
-
-    # サンプル数棒グラフ
-    bin_widths = np.diff(VX_EDGES)
-    fig.add_trace(go.Bar(
-        x=vx_mid.tolist(), y=n_pts.tolist(),
-        width=(bin_widths * 0.8).tolist(),
-        marker_color="steelblue", opacity=0.6,
-        name="サンプル数",
-        showlegend=False,
-    ), row=1, col=2)
-
-    fig.update_xaxes(title_text="車速 vx [m/s]")
-    fig.update_yaxes(title_text="k_us [rad·s²/m]", range=[-0.05, 0.12], row=1, col=1)
-    fig.update_yaxes(title_text="サンプル数", row=1, col=2)
-    fig.update_layout(
-        height=430,
-        title_text="実機ログからの k_us 独立同定（速度ビン別 最小二乗法回帰）",
-        title_x=0.0,
-        legend=dict(x=0.02, y=0.98, bgcolor="rgba(255,255,255,0.8)"),
-        margin=dict(l=60, r=20, t=70, b=40),
-    )
-    return fig
 
 
 def _fit_long_cross_dataset(
@@ -2554,7 +2354,11 @@ def main() -> None:
 
     # Phase 4: HTML 組み立て
     print("\n[Phase 4] plotly 図生成 & HTML 組み立て ...")
-    kus_fig   = build_kus_figure(bins, params)
+    kus_fig   = build_fig_kus_single(
+        bins, {"チューニング済み速度帯": params},
+        thresholds=params.get("k_us_thresholds"),
+        title="実機ログからの k_us 独立同定（速度ビン別 最小二乗法回帰）",
+    )
     long_fig  = build_long_figure(args.collection_dir, params, phase_label=phase_label)
     steer_fig = build_steer_id_figure(args.collection_dir, params)
 

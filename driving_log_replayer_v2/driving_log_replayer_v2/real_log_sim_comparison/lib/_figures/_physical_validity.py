@@ -100,13 +100,24 @@ def build_fig_steer_single(ts: dict | None, fit: dict | None) -> go.Figure:
     )
 
 
-def build_fig_kus_single(bins: dict | None, models: dict[str, dict]) -> go.Figure:
-    """k_us(v) 速度ビン別最小二乗法推定 (単一データセット、モデル別チューニング値重ね描き)。"""
+def build_fig_kus_single(
+    bins: dict | None,
+    models: dict[str, dict],
+    *,
+    thresholds: list | None = None,
+    title: str | None = None,
+) -> go.Figure:
+    """k_us(v) 速度ビン別最小二乗法推定 (単一データセット、モデル別チューニング値重ね描き)。
+
+    thresholds: k_us 速度帯の切替閾値 [m/s]。指定時のみ縦線を描く。
+    title: 図タイトルの上書き (None で既定の単一データセット向けタイトル)。
+    """
     if bins is None:
         return _placeholder_fig("横方向データ不足 (曲線走行サンプル不足)")
     return _build_fig_kus(
         bins, models or {},
-        title="k_us 独立同定（速度ビン別 最小二乗法回帰、単一データセット）",
+        title=title or "k_us 独立同定（速度ビン別 最小二乗法回帰、単一データセット）",
+        thresholds=thresholds,
     )
 
 
@@ -124,7 +135,13 @@ def build_fig_cross_kus(bins: dict | None, models: dict | None) -> go.Figure:
     )
 
 
-def _build_fig_kus(bins: dict, model_params: dict[str, dict], *, title: str) -> go.Figure:
+def _build_fig_kus(
+    bins: dict,
+    model_params: dict[str, dict],
+    *,
+    title: str,
+    thresholds: list | None = None,
+) -> go.Figure:
     fig = make_grid(
         rows=1, cols=2,
         subplot_titles=["k_us 推定値（速度ビン別 最小二乗法）", "速度ビン別 曲線走行サンプル数"],
@@ -167,6 +184,16 @@ def _build_fig_kus(bins: dict, model_params: dict[str, dict], *, title: str) -> 
         ), row=1, col=1)
 
     fig.add_hline(y=0.0, line=dict(color="gray", width=1, dash="dot"), row=1, col=1)
+
+    # k_us 速度帯の切替閾値縦線 (指定時のみ)
+    _thr_colors = ["green", "purple", "brown", "teal"]
+    for i, thr in enumerate(thresholds or []):
+        clr = _thr_colors[i % len(_thr_colors)]
+        fig.add_vline(
+            x=thr, line=dict(color=clr, width=1.2, dash="dash"),
+            annotation_text=f"thr{i+1}={thr:.1f}", annotation_position="top right",
+            row=1, col=1,
+        )
 
     bin_widths = np.diff(VX_EDGES)
     fig.add_trace(go.Bar(
