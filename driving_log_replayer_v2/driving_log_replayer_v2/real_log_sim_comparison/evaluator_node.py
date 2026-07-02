@@ -625,15 +625,15 @@ def _run(
     try:
         if log_file is not None:
             log_file.parent.mkdir(parents=True, exist_ok=True)
-            with log_file.open("w") as f:
+            with log_file.open("w", encoding="utf-8", errors="replace") as f:
                 result = subprocess.run(
                     cmd, check=False, cwd=cwd, env=env, timeout=timeout,
                     stdout=f, stderr=subprocess.STDOUT,
                 )
         else:
             result = subprocess.run(cmd, check=False, cwd=cwd, env=env, timeout=timeout)
-    except subprocess.TimeoutExpired:
-        raise RuntimeError(f"Command timed out after {timeout}s: {' '.join(str(c) for c in cmd)}")
+    except subprocess.TimeoutExpired as exc:
+        raise RuntimeError(f"Command timed out after {timeout}s: {' '.join(str(c) for c in cmd)}") from exc
     if result.returncode != 0:
         msg = f"Command failed (rc={result.returncode}): {' '.join(str(c) for c in cmd)}"
         raise RuntimeError(msg)

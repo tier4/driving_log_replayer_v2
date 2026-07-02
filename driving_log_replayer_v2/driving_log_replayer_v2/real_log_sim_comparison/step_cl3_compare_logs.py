@@ -53,6 +53,7 @@ from .lib._runtime_config import (
 # 設定 — main() で `_apply_runtime_config()` から上書きされる
 # ---------------------------------------------------------------------------
 
+VERBOSE = False
 BASE = Path(os.environ.get("BEST_MODEL_BASE_DIR") or Path(__file__).parent)
 LITE_DIR = BASE / "lite"
 OUT_DIR = BASE / "comparison"
@@ -604,20 +605,30 @@ def main() -> None:
     add_common_cli_arguments(parser)
     args = parser.parse_args()
 
+    global VERBOSE
+    VERBOSE = bool(getattr(args, "verbose", False))
+    if not VERBOSE:
+        import warnings
+        warnings.simplefilter('ignore')
+
+    def _print(*args, **kwargs):
+        if VERBOSE:
+            print(*args, **kwargs)
+
     cfg = build_runtime_config(args, default_base_dir=Path(__file__).parent)
     _apply_runtime_config(cfg)
 
     OUT_DIR.mkdir(parents=True, exist_ok=True)
     FIGS_DIR.mkdir(parents=True, exist_ok=True)
 
-    print("=== データ読み込み中 ===")
+    _print("=== データ読み込み中 ===")
     loaded: dict = {}
     for label, lcfg in LOGS.items():
         mcap_path: Path = lcfg["path"]
         if not mcap_path.exists():
             warnings.warn(f"[{label}] {mcap_path} が見つからないためスキップ")
             continue
-        print(f"  [{label}] {mcap_path.name}")
+        _print(f"  [{label}] {mcap_path.name}")
 
         df_mode = load_operation_mode(mcap_path)
         df_vel = load_velocity(mcap_path)
@@ -626,13 +637,13 @@ def main() -> None:
         # なりがちで、両者の基準差が時間軸重ね描きの「見かけの時間ずれ」を生む)。
         has_auto = (not df_mode.empty) and bool((df_mode["mode"] == _AUTONOMOUS_MODE).any())
         t0_method = "operation_mode(AUTONOMOUS)" if has_auto else "velocity_threshold(fallback)"
-        print(f"    → t0 = {t0} ns [{t0_method}]")
+        _print(f"    → t0 = {t0} ns [{t0_method}]")
 
         # localization 有効性ゲート: 原点(0,0)/瞬間移動の無効フレームを除外 (A0)。
         df_kin_raw = load_kinematic(mcap_path, lcfg["kinematic"])
         df_kin_clean, n_drop = filter_localization(df_kin_raw)
         if n_drop:
-            print(f"    → localization 無効フレーム除外: {n_drop}/{len(df_kin_raw)}")
+            _print(f"    → localization 無効フレーム除外: {n_drop}/{len(df_kin_raw)}")
 
         loaded[label] = {
             "velocity": align_time(df_vel, t0),
@@ -675,18 +686,18 @@ def main() -> None:
         d["t_launch"] = float(tl) if tl is not None else 0.0
 
     # Lanelet2 地図読み込み (RuntimeConfig が解決済みのパスを保持)
-    print("\n=== 地図読み込み中 ===")
+    _print("\n=== 地図読み込み中 ===")
     map_ways: list | None = None
     if cfg.map_osm_path is not None:
         try:
             map_ways = load_map_ways(cfg.map_osm_path)
-            print(f"  {len(map_ways)} ways をロード ({cfg.map_osm_path})")
+            _print(f"  {len(map_ways)} ways をロード ({cfg.map_osm_path})")
         except Exception as e:  # noqa: BLE001
             warnings.warn(f"地図ロード失敗: {e}")
     else:
         warnings.warn("地図ファイルが見つかりません。軌跡プロットは地図背景なしで描画します")
 
-    print("\n=== メトリクス算出中 ===")
+    _print("\n=== メトリクス算出中 ===")
     metrics: dict | None = None
     try:
         metrics = compute_closed_loop_metrics(loaded)
@@ -695,15 +706,15 @@ def main() -> None:
             json.dumps(metrics, ensure_ascii=False, allow_nan=False, indent=1),
             encoding="utf-8",
         )
-        print(f"  保存: {metrics_path}")
+        _print(f"  保存: {metrics_path}")
         report = build_report(metrics, loaded)
         report_path = OUT_DIR / "report.md"
         report_path.write_text(report, encoding="utf-8")
-        print(f"  保存: {report_path}")
+        _print(f"  保存: {report_path}")
     except Exception as e:  # noqa: BLE001
         warnings.warn(f"レポート生成失敗: {e}")
 
-    print("\n=== プロット生成中 ===")
+    _print("\n=== プロット生成中 ===")
     # 軌跡再生ビューア (時刻同期/位置同期シークバー付き自己完結 HTML)
     # metrics を渡して凡例パネルにクローズループ指標を表示
     plot_trajectory_playback(loaded, map_ways, FIGS_DIR, title=SCENARIO_NAME, metrics=metrics)
@@ -725,7 +736,7 @@ def main() -> None:
         model_registry=model_registry,
     )
 
-    print("\n完了。出力先:", FIGS_DIR)
+    _print("\n完了。出力先:", FIGS_DIR)
 
 
 if __name__ == "__main__":

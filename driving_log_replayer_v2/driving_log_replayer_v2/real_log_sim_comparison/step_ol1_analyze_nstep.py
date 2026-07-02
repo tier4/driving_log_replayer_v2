@@ -62,6 +62,7 @@ from .lib._plotly_utils import FIG_HEIGHTS, lanes_to_trace
 from .lib._runtime_config import RuntimeConfig, add_common_cli_arguments, build_runtime_config
 
 # モジュールレベル設定 (main() で RuntimeConfig 経由で上書きされる)
+VERBOSE = False
 BASE = Path(os.environ.get("BEST_MODEL_BASE_DIR") or Path(__file__).parent)
 LITE_DIR = BASE / "lite"
 OUT_DIR = BASE / "comparison" / "nstep"
@@ -1045,6 +1046,7 @@ def run_rollout(
     horizons: tuple[int, ...],
     stride: int,
     gt: dict | None = None,
+    verbose: bool = False,
 ) -> pd.DataFrame:
     """N-step オープンループ rollout を実行し統一スキーマの DataFrame を返す。
 
@@ -1223,8 +1225,9 @@ def run_rollout(
     # 入力 horizon の出現順 (h_order) + k0 でソートし、元の horizon-major 出力順を再現する。
     recs.sort(key=lambda r: (h_order[r["horizon"]], r["k0"]))
 
-    for h in horizons:
-        print(f"  horizon N={h}: {h_counts[h]} starts (stride={stride})")
+    if verbose:
+        for h in horizons:
+            print(f"  horizon N={h}: {h_counts[h]} starts (stride={stride})")
     return pd.DataFrame(recs)
 
 
@@ -1400,7 +1403,7 @@ def plot_map_distribution(df: pd.DataFrame, params: dict) -> None:
     write_fig_json(fig, OUT_DIR / "map_distribution")
 
 
-def save_summary(df: pd.DataFrame) -> None:
+def save_summary(df: pd.DataFrame, verbose: bool = False) -> None:
     rad2deg = 180.0 / math.pi
     df1 = n1(df)
     tr = df1["tr"].values
@@ -1505,9 +1508,11 @@ def save_summary(df: pd.DataFrame) -> None:
             ]
 
     text = "\n".join(lines)
-    print(text)
+    if verbose or VERBOSE:
+        print(text)
     (OUT_DIR / "summary.txt").write_text(text + "\n", encoding="utf-8")
-    print(f"  Saved: {OUT_DIR / 'summary.txt'}")
+    if verbose or VERBOSE:
+        print(f"  Saved: {OUT_DIR / 'summary.txt'}")
 
 
 # ---------------------------------------------------------------------------
@@ -1546,6 +1551,16 @@ def main() -> None:
     )
     args = parser.parse_args()
 
+    global VERBOSE
+    VERBOSE = bool(getattr(args, "verbose", False))
+    if not VERBOSE:
+        import warnings
+        warnings.simplefilter('ignore')
+
+    def _print(*args, **kwargs):
+        if VERBOSE:
+            print(*args, **kwargs)
+
     if not args.case_tag:
         print("ERROR: --case-tag (or CASE_TAG env) が未指定です", file=sys.stderr)
         sys.exit(2)
@@ -1567,7 +1582,7 @@ def main() -> None:
     except (FileNotFoundError, ValueError, KeyError) as e:
         print(f"ERROR: scenario.yaml (Conditions.cases): {e}", file=sys.stderr)
         sys.exit(2)
-    print(f"[case] tag={case.tag}, vehicle_model_type={case.vehicle_model_type}, params={case.params}")
+    _print(f"[case] tag={case.tag}, vehicle_model_type={case.vehicle_model_type}, params={case.params}")
 
     cfg = build_runtime_config(args, default_base_dir=Path(__file__).parent)
     params = _apply_runtime_config(cfg, case.tag, case.params)
@@ -1579,20 +1594,20 @@ def main() -> None:
     if real_bag is None:
         print(f"ERROR: real lite bag が見つかりません: {LITE_DIR}", file=sys.stderr)
         sys.exit(1)
-    print(f"Loading: {real_bag}")
+    _print(f"Loading: {real_bag}")
     data = load_real_bag(real_bag)
 
     t0_ns = find_autonomous_start(data)
-    print(f"AUTONOMOUS 開始: t0_ns={t0_ns}")
+    _print(f"AUTONOMOUS 開始: t0_ns={t0_ns}")
 
-    print(f"\n=== N-step オープンループ解析開始 (case={case.tag}) ===")
+    _print(f"\n=== N-step オープンループ解析開始 (case={case.tag}) ===")
     # N=1 は全ステップ (stride=1) で従来 per-step delta の解像度、
     # N>1 は dynamics 累積差の検出用に stride=5 でサンプリングする。
     # GT 準備は両呼び出しで同一なので 1 回だけ計算して共有する。
     gt = _prepare_gt(data, t0_ns, params)
-    df1 = run_rollout(data, t0_ns, params, case.vehicle_model_type, horizons=(1,), stride=1, gt=gt)
+    df1 = run_rollout(data, t0_ns, params, case.vehicle_model_type, horizons=(1,), stride=1, gt=gt, verbose=verbose)
     dfn = run_rollout(
-        data, t0_ns, params, case.vehicle_model_type, horizons=(2, 5, 10, 20, 40), stride=5, gt=gt
+        data, t0_ns, params, case.vehicle_model_type, horizons=(2, 5, 10, 20, 40), stride=5, gt=gt, verbose=verbose
     )
     df = pd.concat([df1, dfn], ignore_index=True)
 
@@ -1600,17 +1615,17 @@ def main() -> None:
         print("ERROR: 有効なステップが 0 件でした", file=sys.stderr)
         sys.exit(1)
 
-    print("\n=== 出力生成 ===")
+    _print("\n=== 出力生成 ===")
     df.to_csv(OUT_DIR / "nstep_delta.csv", index=False)
-    print(f"  Saved: {OUT_DIR / 'nstep_delta.csv'}")
+    _print(f"  Saved: {OUT_DIR / 'nstep_delta.csv'}")
 
-    save_summary(df)
+    save_summary(df, verbose=verbose)
 
     # ケース別に残す図は概観 + 地図分布の 2 つ（ケース横断比較は step6 の overlay が担う）
     plot_map_distribution(df, params)
     plot_overview(df1, params)
 
-    print(f"\n完了。出力先: {OUT_DIR}")
+    _print(f"\n完了。出力先: {OUT_DIR}")
 
 
 if __name__ == "__main__":

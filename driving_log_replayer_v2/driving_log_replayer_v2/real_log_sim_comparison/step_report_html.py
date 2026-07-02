@@ -1091,6 +1091,9 @@ def _datasets_from_collection(collection_dir: Path) -> list[ReportDataset]:
     return sorted(out, key=lambda d: (_scenario_date(d.scenario_yaml), d.dataset_id))
 
 
+VERBOSE = False
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(
         description="comparison/ 配下の全図スペック (*.fig.json)・Markdown・設定 YAML を"
@@ -1116,6 +1119,16 @@ def main() -> None:
         help="自己完結再生ビューア (*.html) をインライン埋め込みせず、別タブで開くリンクにする (ファイルサイズ削減用)",
     )
     args = parser.parse_args()
+
+    global VERBOSE
+    VERBOSE = args.verbose
+    if not VERBOSE:
+        import warnings
+        warnings.simplefilter('ignore')
+
+    def _print(*args, **kwargs):
+        if VERBOSE:
+            print(*args, **kwargs)
 
     shared_config_files = [
         ("シミュレータモデル (simulator_model.param)", _SIM_YAML),
@@ -1159,7 +1172,7 @@ def main() -> None:
     )
     out_path.write_text(html_text, encoding="utf-8")
     size_mb = out_path.stat().st_size / 1024 / 1024
-    print(f"  保存: {out_path} (データセット {len(datasets)} / {size_mb:.1f} MB)")
+    _print(f"  保存: {out_path} (データセット {len(datasets)} / {size_mb:.1f} MB)")
     if size_mb > _SIZE_WARN_MB:
         warnings.warn(
             f"report.html が {size_mb:.0f} MB ({_SIZE_WARN_MB} MB 超)。ブラウザの初回ロードが"

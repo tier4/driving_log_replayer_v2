@@ -51,6 +51,7 @@ class RuntimeConfig:
     # scenario.yaml のパス (step4_compare_logs が Conditions.sim_runs から sim 重ね描きに使う)
     scenario_config: Path | None = None
     topic_overrides: dict[str, Any] = field(default_factory=dict)
+    verbose: bool = False
 
 
 def add_common_cli_arguments(parser: argparse.ArgumentParser) -> None:
@@ -64,8 +65,8 @@ def add_common_cli_arguments(parser: argparse.ArgumentParser) -> None:
         "--map-osm",
         default=os.environ.get("MAP_OSM_PATH"),
         help=(
-            "lanelet2_map.osm の絶対パス (env: MAP_OSM_PATH)。"
-            "未指定=デフォルトディレクトリを試行、空文字=地図なし、パス=そのパスを使用。"
+             "lanelet2_map.osm の絶対パス (env: MAP_OSM_PATH)。"
+             "未指定=デフォルトディレクトリを試行、空文字=地図なし、パス=そのパスを使用。"
         ),
     )
     parser.add_argument(
@@ -95,6 +96,12 @@ def add_common_cli_arguments(parser: argparse.ArgumentParser) -> None:
             "step4_compare_logs が Conditions.sim_runs から sim 重ね描きに使う。"
             "未指定なら実機 single-log のみ"
         ),
+    )
+    parser.add_argument(
+        "--verbose",
+        action="store_true",
+        default=False,
+        help="詳細情報を出力する",
     )
 
 
@@ -151,6 +158,7 @@ def build_runtime_config(
         lite_dir=lite_dir,
         out_dir=out_dir,
         figs_dir=figs_dir,
+        verbose=bool(getattr(ns, "verbose", False)),
     )
 
     # --- scenario_name ---

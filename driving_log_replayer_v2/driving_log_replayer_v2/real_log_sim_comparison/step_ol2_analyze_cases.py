@@ -70,7 +70,8 @@ from .lib._physical_validity import (
     compute_steer_timeseries,
     fit_long_single,
     fit_steer_single,
-)
+VERBOSE = False
+
 
 def _load_case_csvs(nstep_root: Path, tags: list[str]) -> dict[str, pd.DataFrame]:
     """nstep/<tag>/nstep_delta.csv (Stage 3 出力) を全 tag 分読み込む。欠損 tag はスキップ。"""
@@ -78,7 +79,8 @@ def _load_case_csvs(nstep_root: Path, tags: list[str]) -> dict[str, pd.DataFrame
     for tag in tags:
         csv = nstep_root / tag / "nstep_delta.csv"
         if not csv.exists():
-            print(f"[WARN] {csv} が無いため case={tag} をスキップ", file=sys.stderr)
+            if VERBOSE:
+                print(f"[WARN] {csv} が無いため case={tag} をスキップ", file=sys.stderr)
             continue
         df = pd.read_csv(csv)
         if df.empty:
@@ -115,7 +117,8 @@ def rerender_case_figures(
             s5.BASE = base_dir
             s5.OUT_DIR = nstep_root / case.tag
             df1 = n1(df)
-            print(f"  [{case.tag}] ケース横断の統一軸で再描画")
+            if VERBOSE:
+                print(f"  [{case.tag}] ケース横断の統一軸で再描画")
             s5.plot_map_distribution(df, params)
             s5.plot_overview(df1, params)
     finally:
@@ -130,7 +133,8 @@ def analyze_physical_validity(real_lite: Path | None, models: dict[str, dict]) -
     real.lite が無い、またはいずれの軸も同定不能なら None (呼び出し側は WARN のみで継続)。
     """
     if real_lite is None:
-        print("[WARN] real.lite が見つからないため物理妥当性検証をスキップ", file=sys.stderr)
+        if VERBOSE:
+            print("[WARN] real.lite が見つからないため物理妥当性検証をスキップ", file=sys.stderr)
         return None
 
     long_fit = fit_long_single(real_lite)
@@ -138,7 +142,8 @@ def analyze_physical_validity(real_lite: Path | None, models: dict[str, dict]) -
     kus_bins = compute_kus_bins_single(real_lite)
 
     if long_fit is None and steer_fit is None and kus_bins is None:
-        print("[WARN] 物理妥当性検証: 縦・操舵・横 k_us のいずれも同定不能", file=sys.stderr)
+        if VERBOSE:
+            print("[WARN] 物理妥当性検証: 縦・操舵・横 k_us のいずれも同定不能", file=sys.stderr)
         return None
 
     return {"long": long_fit, "steer": steer_fit, "kus_bins": kus_bins, "models": models}
@@ -360,7 +365,8 @@ def write_cases_summary(
     lines += _physical_validity_summary_lines(physical_validity)
 
     out_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
-    print(f"  Saved: {out_path}")
+    if VERBOSE:
+        print(f"  Saved: {out_path}")
 
 
 def write_cases_metrics(
@@ -405,7 +411,8 @@ def write_cases_metrics(
     out_path.write_text(
         json.dumps(payload, ensure_ascii=False, allow_nan=False, indent=1), encoding="utf-8"
     )
-    print(f"  Saved: {out_path}")
+    if VERBOSE:
+        print(f"  Saved: {out_path}")
 
 
 def main() -> None:
@@ -421,7 +428,23 @@ def main() -> None:
         default=os.environ.get("BEST_MODEL_BASE_DIR", ""),
         help="comparison/nstep/ の親ディレクトリ (env: BEST_MODEL_BASE_DIR)",
     )
+    parser.add_argument(
+        "--verbose",
+        action="store_true",
+        default=False,
+        help="詳細情報を出力する",
+    )
     args = parser.parse_args()
+
+    global VERBOSE
+    VERBOSE = args.verbose
+    if not VERBOSE:
+        import warnings
+        warnings.simplefilter('ignore')
+
+    def _print(*args, **kwargs):
+        if VERBOSE:
+            print(*args, **kwargs)
 
     if not args.scenario:
         print("ERROR: --scenario (or SCENARIO_CONFIG_YAML env) が未指定です", file=sys.stderr)
@@ -459,7 +482,7 @@ def main() -> None:
     plot_error_growth_overlay(roll, overlay_dir / "error_growth_overlay.svg")
 
     # 物理妥当性検証 (Conditions.cases の N-way スイープとは独立、real.lite から直接同定)。
-    # real.lite 欠損や同定不能は WARN のみで継続し、既存の N-way 集約には影響しない。
+    # real.lite 欠損や同定不能は WARN のみで継続し、既存 of N-way 集約には影響しない。
     lite_dir = Path(args.base_dir) / "lite"
     real_lite = resolve_lite_bag(lite_dir, "real")
     # overlay.reference_tag は baseline 用の指定であり「チューニング値」ではないため、
@@ -477,7 +500,7 @@ def main() -> None:
         case_dfs, roll, cases_cfg, horizons, out_root / "cases_metrics.json", physical_validity=pv,
     )
 
-    print(f"\n完了。出力先: {out_root}")
+    _print(f"\n完了。出力先: {out_root}")
 
 
 if __name__ == "__main__":

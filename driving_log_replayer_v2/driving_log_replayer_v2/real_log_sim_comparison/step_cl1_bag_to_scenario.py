@@ -881,6 +881,9 @@ def build_scenario_dict(
 # ---------------------------------------------------------------------------
 
 
+VERBOSE = False
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="Stage 2: 実機 bag → OpenSCENARIO yaml 自動生成")
     parser.add_argument("--input-bag", required=True,
@@ -911,14 +914,30 @@ def main() -> None:
                              "信号に赤で当たり ego が永久停止する (D0) ことがあり、green/none で回避できる。")
     parser.add_argument("--loop-waypoints", type=int,
                         default=int(os.environ.get("LOOP_WAYPOINTS", "0") or "0"),
-                        help="opt-in (既定 0=start+goal のみ): 実走軌跡の膨らみ位置に N 個の中間 "
+                        help="opt-in (既定 0=start+goal のみ): 実走軌跡 of 膨らみ位置に N 個の中間 "
                              "LanePosition waypoint を挿入し周回経路を強制 (D0 緩和)。**要 live sim 検証**")
     parser.add_argument("--replay-preroll", type=float,
                         default=float(os.environ.get("REPLAY_PREROLL", "0") or "0"),
                         help="ego replay の開始アンカーを AUTONOMOUS 開始 (t0) より何秒前に取るか [s] "
                              "(env: REPLAY_PREROLL, 既定 0)。TeleportAction の start pose も同じ "
                              "アンカー時刻の kinematic から取り、replay 注入開始時の pose ジャンプを防ぐ。")
+    parser.add_argument(
+        "--verbose",
+        action="store_true",
+        default=False,
+        help="詳細情報を出力する",
+    )
     args = parser.parse_args()
+
+    global VERBOSE
+    VERBOSE = args.verbose
+    if not VERBOSE:
+        import warnings
+        warnings.simplefilter('ignore')
+
+    def _print(*args, **kwargs):
+        if VERBOSE:
+            print(*args, **kwargs)
 
     input_bag = Path(args.input_bag)
     map_osm = Path(args.map).resolve()
@@ -958,16 +977,16 @@ def main() -> None:
     goal_world = _goal_pose_from_kinematic(input_bag, t0_ns)
     goal_source = "kinematic@AUTONOMOUS終了"
 
-    print(f"[step2_bag_to_scenario] start=({start_world['x']:.1f}, {start_world['y']:.1f}, "
+    _print(f"[step2_bag_to_scenario] start=({start_world['x']:.1f}, {start_world['y']:.1f}, "
           f"h={start_world['h']:.3f}) ({start_source})")
-    print(f"[step2_bag_to_scenario] goal=({goal_world['x']:.1f}, {goal_world['y']:.1f}, "
+    _print(f"[step2_bag_to_scenario] goal=({goal_world['x']:.1f}, {goal_world['y']:.1f}, "
           f"h={goal_world['h']:.3f}) ({goal_source})")
 
     # 終了条件の時間ゲート: 実走 course 継続時間の半分 (ただし launch 遅延を超える 30s 以上)。
     # ループ経路は start≈goal のため近傍/静止条件が開始直後に誤発火する。これを時間で防ぐ。
     course_duration = _course_duration_s(input_bag, t0_ns)
     settle_gate = max(30.0, 0.5 * course_duration)
-    print(f"[step2_bag_to_scenario] course_duration={course_duration:.1f}s, "
+    _print(f"[step2_bag_to_scenario] course_duration={course_duration:.1f}s, "
           f"end-condition settle_gate={settle_gate:.1f}s, "
           f"goal_tolerance={args.goal_tolerance}, vicinity={args.goal_vicinity_tolerance}, "
           f"standstill_timeout={args.standstill_timeout}, sim_timeout={args.sim_timeout}")
@@ -975,33 +994,33 @@ def main() -> None:
     # RoutingAction は start + goal の 2 点のみを LanePosition で渡し、 mission_planner に
     # 経路計算を任せる (build_scenario_dict 参照)。 LaneletRoute.segments は map graph 上の
     # lane 連結 (実走行の lane sequence ではない) で不自然な chain を含むため sim では使わない。
-    print(f"[step2_bag_to_scenario] route lane_ids extracted (informational)={len(lane_ids)}, "
+    _print(f"[step2_bag_to_scenario] route lane_ids extracted (informational)={len(lane_ids)}, "
           f"using start+goal LanePosition routing (lane_ids 破棄)")
     lane_ids = []  # goal 到達条件は WorldPosition tolerance ベース (build_scenario_dict)
     signals = _extract_signal_timeseries(input_bag, t0_ns)
-    print(f"[step2_bag_to_scenario] signals: {len(signals)} ids, "
+    _print(f"[step2_bag_to_scenario] signals: {len(signals)} ids, "
           f"total state changes={sum(len(v) for v in signals.values())} "
           f"(traffic_signals={args.traffic_signals})")
     if args.traffic_signals == "green":
-        print("[step2_bag_to_scenario] traffic_signals=green: 全信号を常時 green に固定 "
+        _print("[step2_bag_to_scenario] traffic_signals=green: 全信号を常時 green に固定 "
               "(replay の到達時刻 desync で ego が赤停止する D0 を回避)")
     elif args.traffic_signals == "none":
         # scenario 側で信号を一切セットしない (perception_reproducer が pose-sync 再生して所有)。
         signals = {}
-        print("[step2_bag_to_scenario] traffic_signals=none: scenario 側で信号を設定しない "
+        _print("[step2_bag_to_scenario] traffic_signals=none: scenario 側で信号を設定しない "
               "(perception_reproducer が信号を pose-sync 再生して所有する前提)")
 
     # opt-in: 周回経路を強制する中間 waypoint (D0 緩和; 既定 N=0 で無効・要 live sim 検証)
     mid_waypoints = _select_loop_waypoints(input_bag, t0_ns, start_world, goal_world, args.loop_waypoints)
     if mid_waypoints:
         pts = ", ".join(f"({w['x']:.1f},{w['y']:.1f})" for w in mid_waypoints)
-        print(f"[step2_bag_to_scenario] loop_waypoints={len(mid_waypoints)} 挿入: {pts} "
+        _print(f"[step2_bag_to_scenario] loop_waypoints={len(mid_waypoints)} 挿入: {pts} "
               "(**要 live sim 検証**)")
 
     # 信号 ID → ego が到達したら trigger される lanelet ID (map.osm から逆引き)
     signal_to_lanelet = _signal_to_lanelet_map(map_osm, set(signals.keys()))
     unresolved = set(signals.keys()) - set(signal_to_lanelet.keys())
-    print(f"[step2_bag_to_scenario] signal→lanelet: {len(signal_to_lanelet)}/{len(signals)} 解決, "
+    _print(f"[step2_bag_to_scenario] signal→lanelet: {len(signal_to_lanelet)}/{len(signals)} 解決, "
           f"未解決 (Story trigger 出ない) = {sorted(unresolved)}")
 
     # yaml 構築
@@ -1024,7 +1043,7 @@ def main() -> None:
 
     with output_yaml.open("w", encoding="utf-8") as f:
         yaml.safe_dump(doc, f, sort_keys=False, allow_unicode=True)
-    print(f"[step2_bag_to_scenario] Saved: {output_yaml}")
+    _print(f"[step2_bag_to_scenario] Saved: {output_yaml}")
 
     # ego/perception replay 用サイドカー。step3 が読み、bag metadata 開始時刻との差から
     # scenario_test_runner の replay_start_time (= scenario time 0 に対応する bag 相対秒) を出す。
@@ -1032,7 +1051,7 @@ def main() -> None:
     with replay_json.open("w", encoding="utf-8") as f:
         json.dump({"t0_ns": int(t0_ns), "t_anchor_ns": int(t_anchor_ns),
                    "preroll_s": preroll_s}, f, indent=2)
-    print(f"[step2_bag_to_scenario] Saved: {replay_json} "
+    _print(f"[step2_bag_to_scenario] Saved: {replay_json} "
           f"(t0_ns={t0_ns}, t_anchor_ns={t_anchor_ns}, preroll={preroll_s}s)")
 
 

@@ -126,6 +126,9 @@ def filter_bag(input_path: Path, output_dir: Path, topics: set[str]) -> dict:
     }
 
 
+VERBOSE = False
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="rosbag トピックフィルタ — lite bag を生成")
     parser.add_argument(
@@ -150,7 +153,23 @@ def main() -> None:
             "形式: real: [topic, ...] および/または sim: [topic, ...]"
         ),
     )
+    parser.add_argument(
+        "--verbose",
+        action="store_true",
+        default=False,
+        help="詳細情報を出力する",
+    )
     args = parser.parse_args()
+
+    global VERBOSE
+    VERBOSE = args.verbose
+    if not VERBOSE:
+        import warnings
+        warnings.simplefilter('ignore')
+
+    def _print(*args, **kwargs):
+        if VERBOSE:
+            print(*args, **kwargs)
 
     if not args.input.exists():
         parser.error(f"入力が見つかりません: {args.input}")
@@ -164,31 +183,35 @@ def main() -> None:
             additional = extra.get(args.kind, [])
             if additional:
                 topics |= set(additional)
-                print(f"追加トピック ({args.kind}): {sorted(additional)}")
+                _print(f"追加トピック ({args.kind}): {sorted(additional)}")
         except Exception as e:
-            print(f"WARNING: topics-yaml 読み込み失敗: {e}", file=sys.stderr)
+            if VERBOSE:
+                print(f"WARNING: topics-yaml 読み込み失敗: {e}", file=sys.stderr)
 
     in_size = (
         sum(f.stat().st_size for f in args.input.rglob("*") if f.is_file())
         if args.input.is_dir()
         else args.input.stat().st_size
     )
-    print(f"種別  : {args.kind}")
-    print(f"入力  : {args.input} ({in_size / 1024 / 1024:.0f} MB)")
-    print(f"トピック: {sorted(topics)}")
+    _print(f"種別  : {args.kind}")
+    _print(f"入力  : {args.input} ({in_size / 1024 / 1024:.0f} MB)")
+    _print(f"トピック: {sorted(topics)}")
 
     stats = filter_bag(args.input, args.output, topics)
 
     total = sum(f.stat().st_size for f in args.output.rglob("*") if f.is_file())
-    print(f"  書き込み完了: {args.output} ({total / 1024 / 1024:.1f} MB)")
+    _print(f"  書き込み完了: {args.output} ({total / 1024 / 1024:.1f} MB)")
     # 診断出力 (A4): lite bag の時間範囲・件数・欠落トピックを明示し、短すぎる/空の bag を可視化。
-    print(f"  lite bag 全長: {stats['duration_s']:.1f} s, 総メッセージ: {stats['n_written']}")
-    for topic in sorted(stats["per_topic"]):
-        print(f"    {topic}: {stats['per_topic'][topic]}")
+    _print(f"  lite bag 全長: {stats['duration_s']:.1f} s, 総メッセージ: {stats['n_written']}")
+    if VERBOSE:
+        for topic in sorted(stats["per_topic"]):
+            print(f"    {topic}: {stats['per_topic'][topic]}")
     if stats["missing_topics"]:
-        print(f"  WARNING: 入力 bag に存在しなかったトピック: {stats['missing_topics']}", file=sys.stderr)
+        if VERBOSE:
+            print(f"  WARNING: 入力 bag に存在しなかったトピック: {stats['missing_topics']}", file=sys.stderr)
     if stats["n_written"] == 0:
-        print("  WARNING: 出力 lite bag が空です (トピック名不一致または入力 bag が空の可能性)", file=sys.stderr)
+        if VERBOSE:
+            print("  WARNING: 出力 lite bag が空です (トピック名不一致または入力 bag が空の可能性)", file=sys.stderr)
 
 
 if __name__ == "__main__":

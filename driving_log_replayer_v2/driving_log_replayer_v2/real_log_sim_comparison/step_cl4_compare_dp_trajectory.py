@@ -47,6 +47,7 @@ from .lib._provenance import format_provenance_line, read_provenance
 from .lib._runtime_config import RuntimeConfig, add_common_cli_arguments, build_runtime_config
 
 
+VERBOSE = False
 FINAL_TOPIC = "/planning/trajectory"
 SIG_TOPIC = "/perception/traffic_light_recognition/traffic_signals"
 TRACKED_OBJECTS_TOPIC = "/perception/object_recognition/tracking/objects"
@@ -197,18 +198,22 @@ def _load_traffic_signals(
 def _run_real_actual(  # noqa: PLR0915
     cfg: RuntimeConfig, real_bag: Path, sim_bag: Path
 ) -> None:
+    def _print(*args, **kwargs):
+        if cfg.verbose:
+            print(*args, **kwargs)
+
     sim_name = sim_tag_from_bag(sim_bag)  # 凡例・タイトルに表示するシミュレータ名 (例: sim_normal)
-    print("\n=== DiffusionPlanner 計画軌跡 実機 vs シム 直接比較 ===\n")
+    _print("\n=== DiffusionPlanner 計画軌跡 実機 vs シム 直接比較 ===\n")
 
     t0_sim, tl_sim = _resolve_t0_and_launch(sim_bag, is_real=False)
     t0_real, tl_real = _resolve_t0_and_launch(real_bag, is_real=True)
-    print(f"シム  : t_launch={tl_sim:.1f}s")
-    print(f"実機  : t_launch={tl_real:.1f}s")
+    _print(f"シム  : t_launch={tl_sim:.1f}s")
+    _print(f"実機  : t_launch={tl_real:.1f}s")
 
-    print("\n--- シム 交通信号10583 状態推移 ---")
+    _print("\n--- シム 交通信号10583 状態推移 ---")
     df_sig = _load_traffic_signals(sim_bag, t0_sim, tl_sim)
     if df_sig.empty:
-        print("  [警告] 交通信号データなし")
+        _print("  [警告] 交通信号データなし")
     else:
         sig_target = df_sig[df_sig["group_id"] == 10583]
         if not sig_target.empty:
@@ -219,42 +224,42 @@ def _run_real_actual(  # noqa: PLR0915
                     color_name = {1: "RED", 2: "AMBER", 3: "GREEN", 0: "UNKNOWN"}.get(
                         row["color"], "?"
                     )
-                    print(f"  t={row['t']:6.1f}s: 色={color_name} status={row['status']}")
+                    _print(f"  t={row['t']:6.1f}s: 色={color_name} status={row['status']}")
                     prev = state
         else:
-            print(f"  信号10583なし。存在グループ: {sorted(df_sig['group_id'].unique())[:10]}")
+            _print(f"  信号10583なし。存在グループ: {sorted(df_sig['group_id'].unique())[:10]}")
 
-    print("\n--- 追跡物体数（発進前後） ---")
+    _print("\n--- 追跡物体数（発進前後） ---")
     df_obj_real = _count_tracked_objects(real_bag, t0_real, tl_real)
     df_obj_sim = _count_tracked_objects(sim_bag, t0_sim, tl_sim)
     for label, df in [("実機", df_obj_real), ("シム", df_obj_sim)]:
         if not df.empty:
-            print(
+            _print(
                 f"  {label}: 平均{df['n_objects'].mean():.1f}物体, "
                 f"最大{df['n_objects'].max()}, 最小{df['n_objects'].min()}"
             )
         else:
-            print(f"  {label}: 追跡物体データなし")
+            _print(f"  {label}: 追跡物体データなし")
 
-    print("\n--- DiffusionPlanner計画軌跡ロード ---")
+    _print("\n--- DiffusionPlanner計画軌跡ロード ---")
     frames_sim = load_traj_frames(sim_bag, DP_TOPIC, t0_sim, tl_sim, window_s=15.0)
     frames_real = load_traj_frames(real_bag, DP_TOPIC, t0_real, tl_real, window_s=15.0)
-    print(f"  シム: {len(frames_sim)} フレーム")
-    print(f"  実機: {len(frames_real)} フレーム")
+    _print(f"  シム: {len(frames_sim)} フレーム")
+    _print(f"  実機: {len(frames_real)} フレーム")
 
-    print("\n--- DP計画速度 比較テーブル（t_rel=-1〜+10s） ---")
-    print(f"{'':>4} | {'------シム------':^42} | {'------実機------':^42}")
-    print(
+    _print("\n--- DP計画速度 比較テーブル（t_rel=-1〜+10s） ---")
+    _print(f"{'':>4} | {'------シム------':^42} | {'------実機------':^42}")
+    _print(
         f"{'t[s]':>4} | {'d=0':>6} {'d=5':>6} {'d=10':>6} {'d=20':>6} {'d=30':>6} {'d=50':>6} | "
         f"{'d=0':>6} {'d=5':>6} {'d=10':>6} {'d=20':>6} {'d=30':>6} {'d=50':>6}"
     )
-    print("  " + "-" * 95)
+    _print("  " + "-" * 95)
     for t_val in [-1.0, 0.0, 0.5, 1.0, 2.0, 3.0, 5.0, 7.0, 10.0]:
         sim_row = [_value_at(frames_sim, t_val, d) for d in [0, 5, 10, 20, 30, 50]]
         real_row = [_value_at(frames_real, t_val, d) for d in [0, 5, 10, 20, 30, 50]]
         sim_str = " ".join(f"{v:>6.2f}" if not np.isnan(v) else f"{'nan':>6}" for v in sim_row)
         real_str = " ".join(f"{v:>6.2f}" if not np.isnan(v) else f"{'nan':>6}" for v in real_row)
-        print(f"{t_val:>4.1f} | {sim_str} | {real_str}")
+        _print(f"{t_val:>4.1f} | {sim_str} | {real_str}")
 
     cfg.figs_dir.mkdir(parents=True, exist_ok=True)
     t_vec = np.linspace(-1, 12, 200)
@@ -290,7 +295,7 @@ def _run_real_actual(  # noqa: PLR0915
     write_fig_json(fig, cfg.figs_dir / "dp_real_vs_sim")
 
     # actual 速度との比較
-    print("\n--- DP計画速度(d=0) vs actual速度 ---")
+    _print("\n--- DP計画速度(d=0) vs actual速度 ---")
     df_vel_sim = load_velocity(sim_bag)
     df_vel_real = load_velocity(real_bag)
     df_vel_sim["t_rel"] = (df_vel_sim["t_ns"] - t0_sim) / 1e9 - tl_sim
@@ -323,38 +328,42 @@ def _run_real_actual(  # noqa: PLR0915
 def _run_final_planning(  # noqa: PLR0915
     cfg: RuntimeConfig, real_bag: Path, sim_bag: Path | None
 ) -> None:
-    print("\n=== DP出力 vs 最終trajectory 速度比較 ===\n")
+    def _print(*args, **kwargs):
+        if cfg.verbose:
+            print(*args, **kwargs)
+
+    _print("\n=== DP出力 vs 最終trajectory 速度比較 ===\n")
     sim_name = sim_tag_from_bag(sim_bag) if sim_bag is not None else "シム"
 
     t0_real, tl_real = _resolve_t0_and_launch(real_bag, is_real=True)
-    print(f"実機 t_launch={tl_real:.1f}s")
+    _print(f"実機 t_launch={tl_real:.1f}s")
 
     frames_dp = load_traj_frames(real_bag, DP_TOPIC, t0_real, tl_real)
     frames_final = load_traj_frames(real_bag, FINAL_TOPIC, t0_real, tl_real)
-    print(f"  DP出力フレーム: {len(frames_dp)}")
-    print(f"  最終軌跡フレーム: {len(frames_final)}")
+    _print(f"  DP出力フレーム: {len(frames_dp)}")
+    _print(f"  最終軌跡フレーム: {len(frames_final)}")
 
     frames_sim_dp: list[dict] = []
     t0_sim = tl_sim = None
     if sim_bag is not None:
         t0_sim, tl_sim = _resolve_t0_and_launch(sim_bag, is_real=False)
         frames_sim_dp = load_traj_frames(sim_bag, DP_TOPIC, t0_sim, tl_sim)
-        print(f"  シム t_launch={tl_sim:.1f}s, DP出力フレーム: {len(frames_sim_dp)}")
+        _print(f"  シム t_launch={tl_sim:.1f}s, DP出力フレーム: {len(frames_sim_dp)}")
     else:
-        print("  シム lite bag が無いためシム DP は比較対象外")
+        _print("  シム lite bag が無いためシム DP は比較対象外")
 
     t_vals = [-1.0, 0.0, 0.5, 1.0, 2.0, 3.0, 5.0, 7.0, 10.0, 12.0]
     d_list = [0, 5, 10, 20, 30]
 
-    print("\n--- 実機: DP出力 vs 最終trajectory（各距離の速度）---")
-    print(f"{'t[s]':>5} | {'------ DP出力 ------':^35} | {'--- 最終traj ---':^35}")
-    print(
+    _print("\n--- 実機: DP出力 vs 最終trajectory（各距離の速度）---")
+    _print(f"{'t[s]':>5} | {'------ DP出力 ------':^35} | {'--- 最終traj ---':^35}")
+    _print(
         f"{'':>5} | "
         + " ".join(f"d={d}m" for d in d_list)
         + " | "
         + " ".join(f"d={d}m" for d in d_list)
     )
-    print("-" * 90)
+    _print("-" * 90)
     for t_val in t_vals:
         dp_row = [_value_at(frames_dp, t_val, d) for d in d_list]
         fin_row = [_value_at(frames_final, t_val, d) for d in d_list]
@@ -362,7 +371,7 @@ def _run_final_planning(  # noqa: PLR0915
         def fmt(v: float) -> str:
             return f"{v:>6.2f}" if not np.isnan(v) else f"{'nan':>6}"
 
-        print(
+        _print(
             f"{t_val:>5.1f} | "
             + " ".join(fmt(v) for v in dp_row)
             + " | "
@@ -407,9 +416,9 @@ def _run_final_planning(  # noqa: PLR0915
     )
     write_fig_json(fig, cfg.figs_dir / "dp_vs_final_traj")
 
-    print("\n--- optimizer補正量の要約（実機）---")
-    print(f"{'t[s]':>5} | " + " ".join(f"{'d=' + str(d) + 'm':>7}" for d in d_list))
-    print("-" * 50)
+    _print("\n--- optimizer補正量の要約（実機）---")
+    _print(f"{'t[s]':>5} | " + " ".join(f"{'d=' + str(d) + 'm':>7}" for d in d_list))
+    _print("-" * 50)
     for t_val in [0.0, 1.0, 3.0, 5.0, 7.0, 10.0]:
         corr = [
             _value_at(frames_final, t_val, d) - _value_at(frames_dp, t_val, d)
@@ -419,7 +428,7 @@ def _run_final_planning(  # noqa: PLR0915
         def fmt(v: float) -> str:
             return f"{v:>+7.2f}" if not np.isnan(v) else f"{'nan':>7}"
 
-        print(f"{t_val:>5.1f} | " + " ".join(fmt(v) for v in corr))
+        _print(f"{t_val:>5.1f} | " + " ".join(fmt(v) for v in corr))
 
 
 # ---------------------------------------------------------------------------
@@ -439,20 +448,28 @@ def main() -> None:
     args = parser.parse_args()
 
     cfg = build_runtime_config(args, default_base_dir=Path(__file__).parent)
+    global VERBOSE
+    VERBOSE = cfg.verbose
+    if not VERBOSE:
+        import warnings
+        warnings.simplefilter('ignore')
+
     real_bag = resolve_lite_bag(cfg.lite_dir, "real")
     sim_bag = resolve_primary_sim_bag(cfg.lite_dir)
     if real_bag is None:
         print(f"ERROR: real lite bag が見つかりません: {cfg.lite_dir}", file=sys.stderr)
         sys.exit(1)
     if sim_bag is not None:
-        print(f"比較対象 sim lite: {sim_bag.name}")
+        if VERBOSE:
+            print(f"比較対象 sim lite: {sim_bag.name}")
 
     if args.target in ("real_actual", "both"):
         if sim_bag is None:
-            print(
-                "WARN: sim lite bag (sim_*.lite) が無いため real_actual target をスキップ",
-                file=sys.stderr,
-            )
+            if VERBOSE:
+                print(
+                    "WARN: sim lite bag (sim_*.lite) が無いため real_actual target をスキップ",
+                    file=sys.stderr,
+                )
         else:
             _run_real_actual(cfg, real_bag, sim_bag)
 
