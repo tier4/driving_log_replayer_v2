@@ -482,7 +482,7 @@ def _figure(rel: Path, comparison_dir: Path, ns: str, caption: str | None = None
 
     # ビューア重複排除: playback/model テンプレートの重複を防ぐため、HTML から DATA (JSON) のみ抽出
     if stem in _SELFCONTAINED_HTML:
-        m = re.search(r"const DATA\s*=\s*(\{.*\});", text, re.DOTALL)
+        m = re.search(r"const DATA\s*=\s*(\{.*?\})\s*;", text, re.DOTALL)
         if m:
             text = m.group(1)
 
@@ -856,6 +856,30 @@ def _render_dataset_report(
     for rel in rels_all:
         by_cat.setdefault(_classify(rel), []).append(rel)
     case_tags = {c for rel in rels_all if (c := _case_of(rel)) is not None}
+
+    if multi and no_embed_viewers:
+        label = _dataset_label(entry)
+        rel_report_path = f"runs/{entry.dataset_id}/result_archive/real_log_sim_comparison/report.html"
+        ds_attr = f" class='toc-sec ds-only' data-ds='{ns}' hidden"
+        toc = [f"<li{ds_attr}><a href='#ds-{ns}'>個別詳細レポートリンク</a></li>"]
+        body_html = f"""<section class='dataset-report' data-ds='{ns}' id='ds-{ns}' hidden>
+  <p class='ds-head'>データセット {html.escape(label)}
+    <span class='fname'>{html.escape(entry.dataset_id)}</span>
+  </p>
+  <div style='padding: 2rem; border: 2px dashed var(--border); border-radius: 8px; background: #fafafa; margin: 1.5rem 0; text-align: center;'>
+    <h3 style='margin-top: 0; font-size: 1.2rem; color: var(--fg);'>詳細レポート (個別)</h3>
+    <p style='color: var(--muted); font-size: 0.9rem; margin-bottom: 1.5rem;'>
+      このデータセットに関するすべての可視化グラフ、シミュレーション比較、およびインタラクティブ再生ビューアは個別のレポートファイルに収録されています。
+    </p>
+    <a href='{rel_report_path}' target='_blank' 
+       style='display: inline-block; padding: 0.75rem 1.5rem; background: var(--accent); color: white; text-decoration: none; font-weight: bold; border-radius: 6px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); transition: all 0.2s;'>
+      🗁 個別レポート（グラフ・ビューア付き）を別タブで開く
+    </a>
+    <div style='font-size: 0.8rem; color: var(--muted); margin-top: 1rem;'>相対パス: <code style='background: #eee; padding: 2px 6px; border-radius: 4px;'>{rel_report_path}</code></div>
+  </div>
+</section>"""
+        return toc, body_html, 0, case_tags
+
 
     def _collect_md(reports: list[tuple[str, str, str]]) -> dict[str, list[tuple[str, str, str]]]:
         out: dict[str, list[tuple[str, str, str]]] = {}

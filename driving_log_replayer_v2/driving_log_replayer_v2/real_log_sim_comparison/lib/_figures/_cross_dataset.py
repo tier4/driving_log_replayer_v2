@@ -28,16 +28,28 @@ def _annotate_heatmap(fig, mat: np.ndarray, xlabels, ylabels, *, row: int, col: 
     if len(finite) == 0:
         return
     thresh = finite.min() + (finite.max() - finite.min()) * 0.6
+    
+    xs = []
+    ys = []
+    texts = []
+    colors = []
     for i in range(len(ylabels)):
         for j in range(len(xlabels)):
             v = mat[i, j]
             if not math.isfinite(v):
                 continue
-            fig.add_annotation(
-                x=j, y=i, text=fmt.format(v), showarrow=False,
-                font=dict(size=10, color="white" if v > thresh else "black"),
-                row=row, col=col,
-            )
+            xs.append(j)
+            ys.append(i)
+            texts.append(fmt.format(v))
+            colors.append("white" if v > thresh else "black")
+            
+    fig.add_trace(go.Scatter(
+        x=xs, y=ys, text=texts, mode="text",
+        textfont=dict(size=10, color=colors),
+        showlegend=False,
+        hoverinfo="skip",
+    ), row=row, col=col)
+
 
 
 def _matrix_height(n_rows: int) -> int:
