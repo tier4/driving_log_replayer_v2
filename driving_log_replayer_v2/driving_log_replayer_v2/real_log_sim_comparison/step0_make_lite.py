@@ -1,27 +1,30 @@
 #!/usr/bin/env python3
-"""
-rosbag (db3 または mcap) から三方比較に必要なトピックだけを抽出して lite bag を生成する.
+"""rosbag (db3 または mcap) から必要トピックだけを抽出して lite bag を作る.
 
 Usage:
-    python3 step1_make_lite.py --kind real --input <bag_dir>  --output lite/real.lite
-    python3 step1_make_lite.py --kind sim  --input <bag_dir>  --output lite/sim_godot.lite
-    python3 step1_make_lite.py --kind sim  --input <bag_dir>  --output lite/sim_normal.lite
+    python3 step0_make_lite.py --kind real --input <bag_dir> --output lite/real.lite
+    python3 step0_make_lite.py --kind sim  --input <bag_dir> --output lite/sim_godot.lite
+    python3 step0_make_lite.py --kind sim  --input <bag_dir> --output lite/sim_normal.lite
 
 --input にはロスバッグのディレクトリ（db3 / mcap どちらでも可）または単一 .mcap ファイルを渡す。
 --output は rosbag2 bag ディレクトリとして出力される。
 """
 
+from __future__ import annotations
+
 import argparse
+from dataclasses import dataclass
 from pathlib import Path
 import shutil
 import sys
+from typing import Any
 
 import rosbag2_py
 import yaml
 
 from driving_log_replayer_v2.rosbag import create_metadata_yaml
 
-TOPICS: dict[str, set[str]] = {
+TOPICS_BY_KIND: dict[str, set[str]] = {
     "real": {
         "/system/operation_mode/state",
         "/vehicle/status/velocity_status",
@@ -55,6 +58,14 @@ TOPICS: dict[str, set[str]] = {
 }
 
 
+@dataclass(slots=True)
+class BagStats:
+    duration_s: float
+    n_written: int
+    per_topic: dict[str, int]
+    missing_topics: list[str]
+
+
 def _open_reader(input_path: Path) -> rosbag2_py.SequentialReader:
     if input_path.is_dir():
         create_metadata_yaml(str(input_path))
@@ -69,10 +80,31 @@ def _open_reader(input_path: Path) -> rosbag2_py.SequentialReader:
     return reader
 
 
-def filter_bag(input_path: Path, output_dir: Path, topics: set[str]) -> dict:
+def _bag_size_bytes(input_path: Path) -> int:
+    if input_path.is_dir():
+        return sum(f.stat().st_size for f in input_path.rglob("*") if f.is_file())
+    return input_path.stat().st_size
+
+
+def _load_extra_topics(topics_yaml: Path | None, kind: str) -> set[str]:
+    if topics_yaml is None:
+        return set()
+    with topics_yaml.open(encoding="utf-8") as f:
+        data = yaml.safe_load(f) or {}
+    if not isinstance(data, dict):
+        raise ValueError("topics-yaml は real/sim をキーに持つ mapping である必要があります")
+    topics = data.get(kind) or []
+    if topics is None:
+        return set()
+    if not isinstance(topics, list):
+        raise ValueError(f"topics-yaml の {kind} は list である必要があります")
+    return {str(topic) for topic in topics}
+
+
+def filter_bag(input_path: Path, output_dir: Path, topics: set[str]) -> BagStats:
     """rosbag（ディレクトリまたは単一 .mcap）からトピックを絞り込んで rosbag2 bag ディレクトリに書き出す.
 
-    戻り値: 診断用統計 {duration_s, n_written, per_topic: {topic: count}}。
+    戻り値: 診断用統計 BagStats(duration_s, n_written, per_topic, missing_topics)。
     本ツールは AUTONOMOUS による時間カットをしない (全区間コピー)。AUTONOMOUS 窓の
     切り出しは後段 (step4/step5 の find_autonomous_start) が担う。
     """
@@ -118,18 +150,27 @@ def filter_bag(input_path: Path, output_dir: Path, topics: set[str]) -> dict:
 
     del writer
     duration_s = (t_max - t_min) / 1e9 if (t_min is not None and t_max is not None) else 0.0
-    return {
-        "duration_s": duration_s,
-        "n_written": sum(per_topic.values()),
-        "per_topic": per_topic,
-        "missing_topics": sorted(topics - set(per_topic.keys())),
-    }
+    return BagStats(
+        duration_s=duration_s,
+        n_written=sum(per_topic.values()),
+        per_topic=per_topic,
+        missing_topics=sorted(topics - set(per_topic.keys())),
+    )
 
 
-VERBOSE = False
+def _configure_warnings(verbose: bool) -> None:
+    if not verbose:
+        import warnings
+
+        warnings.simplefilter("ignore")
 
 
-def main() -> None:
+def _print_verbose(verbose: bool, *args: Any, **kwargs: Any) -> None:
+    if verbose:
+        print(*args, **kwargs)
+
+
+def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="rosbag トピックフィルタ — lite bag を生成")
     parser.add_argument(
         "--kind",
@@ -159,60 +200,41 @@ def main() -> None:
         default=False,
         help="詳細情報を出力する",
     )
-    args = parser.parse_args()
+    args = parser.parse_args(argv)
 
-    global VERBOSE
-    VERBOSE = args.verbose
-    if not VERBOSE:
-        import warnings
-        warnings.simplefilter('ignore')
-
-    def _print(*args, **kwargs):
-        if VERBOSE:
-            print(*args, **kwargs)
+    _configure_warnings(args.verbose)
 
     if not args.input.exists():
         parser.error(f"入力が見つかりません: {args.input}")
 
-    topics = set(TOPICS[args.kind])
+    try:
+        topics = set(TOPICS_BY_KIND[args.kind]) | _load_extra_topics(args.topics_yaml, args.kind)
+    except Exception as exc:
+        print(f"WARNING: topics-yaml 読み込み失敗: {exc}", file=sys.stderr)
+        topics = set(TOPICS_BY_KIND[args.kind])
+    if args.topics_yaml is not None and topics != TOPICS_BY_KIND[args.kind]:
+        _print_verbose(args.verbose, f"追加トピック ({args.kind}): {sorted(topics - TOPICS_BY_KIND[args.kind])}")
 
-    if args.topics_yaml is not None:
-        try:
-            with open(args.topics_yaml, encoding="utf-8") as f:
-                extra = yaml.safe_load(f) or {}
-            additional = extra.get(args.kind, [])
-            if additional:
-                topics |= set(additional)
-                _print(f"追加トピック ({args.kind}): {sorted(additional)}")
-        except Exception as e:
-            if VERBOSE:
-                print(f"WARNING: topics-yaml 読み込み失敗: {e}", file=sys.stderr)
-
-    in_size = (
-        sum(f.stat().st_size for f in args.input.rglob("*") if f.is_file())
-        if args.input.is_dir()
-        else args.input.stat().st_size
-    )
-    _print(f"種別  : {args.kind}")
-    _print(f"入力  : {args.input} ({in_size / 1024 / 1024:.0f} MB)")
-    _print(f"トピック: {sorted(topics)}")
+    _print_verbose(args.verbose, f"種別  : {args.kind}")
+    _print_verbose(args.verbose, f"入力  : {args.input} ({_bag_size_bytes(args.input) / 1024 / 1024:.0f} MB)")
+    _print_verbose(args.verbose, f"トピック: {sorted(topics)}")
 
     stats = filter_bag(args.input, args.output, topics)
 
-    total = sum(f.stat().st_size for f in args.output.rglob("*") if f.is_file())
-    _print(f"  書き込み完了: {args.output} ({total / 1024 / 1024:.1f} MB)")
-    # 診断出力 (A4): lite bag の時間範囲・件数・欠落トピックを明示し、短すぎる/空の bag を可視化。
-    _print(f"  lite bag 全長: {stats['duration_s']:.1f} s, 総メッセージ: {stats['n_written']}")
-    if VERBOSE:
-        for topic in sorted(stats["per_topic"]):
-            print(f"    {topic}: {stats['per_topic'][topic]}")
-    if stats["missing_topics"]:
-        if VERBOSE:
-            print(f"  WARNING: 入力 bag に存在しなかったトピック: {stats['missing_topics']}", file=sys.stderr)
-    if stats["n_written"] == 0:
-        if VERBOSE:
-            print("  WARNING: 出力 lite bag が空です (トピック名不一致または入力 bag が空の可能性)", file=sys.stderr)
+    total = _bag_size_bytes(args.output)
+    _print_verbose(args.verbose, f"  書き込み完了: {args.output} ({total / 1024 / 1024:.1f} MB)")
+    # 診断出力: lite bag の時間範囲・件数・欠落トピックを明示し、短すぎる/空の bag を可視化。
+    _print_verbose(args.verbose, f"  lite bag 全長: {stats.duration_s:.1f} s, 総メッセージ: {stats.n_written}")
+    if args.verbose:
+        for topic in sorted(stats.per_topic):
+            print(f"    {topic}: {stats.per_topic[topic]}")
+    if stats.missing_topics:
+        _print_verbose(args.verbose, f"  WARNING: 入力 bag に存在しなかったトピック: {stats.missing_topics}", file=sys.stderr)
+    if stats.n_written == 0:
+        _print_verbose(args.verbose, "  WARNING: 出力 lite bag が空です (トピック名不一致または入力 bag が空の可能性)", file=sys.stderr)
+
+    return 0
 
 
 if __name__ == "__main__":
-    main()
+    raise SystemExit(main())
