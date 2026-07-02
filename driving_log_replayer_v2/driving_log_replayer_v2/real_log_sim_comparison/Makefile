@@ -151,7 +151,7 @@ SRC_DATASET_ROOT   ?= /home/kotaroyoshimoto/data/openloop_j6_15_june
 CLOSED_LOOP_UUIDS  ?= 00d08afd-b605-5de1-9db0-51241fa87b18,01ccf59a-bf38-5d62-8a81-be0fe0e24b95
 MULTI_BATCH_ROOT   ?= /home/kotaroyoshimoto/data/openloop_j6_16_onwards
 N_TRIALS           ?= 50
-N_JOBS             ?= 4
+N_JOBS             ?= 32
 
 
 
