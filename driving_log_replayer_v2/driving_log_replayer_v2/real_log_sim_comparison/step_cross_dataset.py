@@ -86,8 +86,10 @@ from .lib._cross_dataset import (
 )
 from .lib._nstep_common import metrics_description_md
 from .lib._physical_validity import (
+    compute_kus_bins_from_sufficient_stats,
     compute_long_perf_data,
     compute_perfect_tracking_data,
+    fit_long_cross_dataset_bounded,
     merged_model_params,
 )
 from .lib._map import resolve_map_osm, load_map_ways

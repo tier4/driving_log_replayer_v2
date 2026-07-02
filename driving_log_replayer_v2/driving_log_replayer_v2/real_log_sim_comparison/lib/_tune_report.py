@@ -9,7 +9,6 @@ generate_report() が公開 API。multi_dataset_tune.main() から呼ばれる�
 from __future__ import annotations
 
 import html as _html_stdlib
-import json
 import math
 import sys
 from pathlib import Path
@@ -18,6 +17,8 @@ import pandas as pd
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 
+from ._html_utils import render_template_with_payload
+from ._model_seed import _seed_from_params
 from ._multi_agg import (
     HORIZONS,
     aggregate_normalized,
@@ -158,7 +159,7 @@ def _build_viewer_html(
     configs の最初のエントリをつまみ初期値とし、全エントリを model_registry に登録する。
 
 """
-    from ._model_viewer import MODEL_RATE_HZ, _HTML_TEMPLATE, _seed_from_params  # noqa: PLC0415
+    from ._model_viewer import MODEL_RATE_HZ, _HTML_TEMPLATE  # noqa: PLC0415
     from ._playback_viewer import PLAYBACK_WHEELBASE_M, build_playback_payload  # noqa: PLC0415
 
     viewer_data = _ctx_to_viewer_data(ctx)
@@ -180,9 +181,7 @@ def _build_viewer_html(
     payload["model_registry"] = registry
     payload["wheelbase"] = float(PLAYBACK_WHEELBASE_M)
 
-    payload_json = json.dumps(payload, ensure_ascii=False, separators=(",", ":"))
-    payload_json = payload_json.replace("</", "<\\/")
-    return _HTML_TEMPLATE.replace("__PAYLOAD_JSON__", payload_json)
+    return render_template_with_payload(_HTML_TEMPLATE, payload)
 
 
 # ---------------------------------------------------------------------------

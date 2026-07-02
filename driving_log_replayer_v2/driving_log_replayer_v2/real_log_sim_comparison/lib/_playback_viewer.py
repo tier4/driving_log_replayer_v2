@@ -24,12 +24,12 @@ JS 側は線形補間と二分探索のみを行う。
 
 from __future__ import annotations
 
-import json
 from pathlib import Path
 
 import numpy as np
 import pandas as pd
 
+from ._html_utils import render_template_with_payload
 from ._map import map_ways_in_bbox
 
 # 再生データのリサンプリングレート [Hz]。上げると滑らかになるが HTML サイズが増える。
@@ -323,10 +323,7 @@ def write_playback_html(payload: dict, out_path: Path) -> None:
     """Payload を埋め込んだ自己完結ビューア HTML を書き出す。"""
     out_path = Path(out_path)
     out_path.parent.mkdir(parents=True, exist_ok=True)
-    # "</" を "<\/" にエスケープして </script> によるパーサ早期終了を防ぐ。
-    payload_json = json.dumps(payload, ensure_ascii=False, separators=(",", ":"))
-    payload_json = payload_json.replace("</", "<\\/")
-    html = _HTML_TEMPLATE.replace("__PAYLOAD_JSON__", payload_json)
+    html = render_template_with_payload(_HTML_TEMPLATE, payload)
     out_path.write_text(html, encoding="utf-8")
     print(f"  保存: {out_path.name}")
 

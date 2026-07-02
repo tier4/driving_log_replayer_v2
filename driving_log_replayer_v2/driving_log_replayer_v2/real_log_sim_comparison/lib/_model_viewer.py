@@ -36,10 +36,11 @@
 
 from __future__ import annotations
 
-import json
 import warnings
 from pathlib import Path
 
+from ._html_utils import render_template_with_payload
+from ._model_seed import _seed_from_params
 from ._playback_viewer import (
     BASELINE_LABEL,
     PLAYBACK_WHEELBASE_M,
@@ -49,52 +50,6 @@ from ._playback_viewer import (
 # 指令ステップのエッジを残し無駄時間応答を見やすくするためのリサンプリングレート [Hz]。
 # 単一 run・少数チャンネルのみ埋め込むため、軌跡ビューア (10Hz) より高くても HTML は小さい。
 MODEL_RATE_HZ = 50.0
-
-
-def _seed_from_params(params: dict) -> dict:
-    """モデルレジストリ/spec の params dict から lon_lat_model のつまみシードを構築する。
-
-    C++ closed-loop モデル (delay_steer_acc_geared_wo_fall_guard) のパラメータ名を
-    ビューアのつまみ名へ写像する。新表現力 (brake_time_constant=brake τ, lon_drag_c0/c1/c2=poly(v),
-    steer_bias=β) もここで対応づけるので、レジストリのモデル
-    (best_normal 等) をビューアにそのまま適用できる。
-    """
-    def f(key: str, default: float) -> float:
-        try:
-            return float(params.get(key, default))
-        except (TypeError, ValueError):
-            return float(default)
-
-    acc_tc = f("acc_time_constant", 0.1)
-    acc_td = f("acc_time_delay", 0.1)
-    brake_tc = params.get("brake_time_constant")
-    brake_tc = float(brake_tc) if brake_tc not in (None, "", 0, 0.0) else acc_tc
-    return {
-        "tau_acc_thr": acc_tc,
-        "t_acc_thr": acc_td,
-        "tau_acc_brk": brake_tc,
-        # C++ vm_create には brake 専用遅延パラメータが無く acc_time_delay を使う。
-        # JS viewer の t_acc_brk は C++ と同じ acc_td で初期化し実モデルに合わせる。
-        "t_acc_brk": acc_td,
-        "tau_acc_slope": 0.0,
-        "poly0": f("lon_drag_c0", 0.0),
-        "poly1": f("lon_drag_c1", 0.0),
-        "poly2": f("lon_drag_c2", 0.0),
-        "v_stop": 0.2,
-        "c_slope": f("lon_slope_gain", 1.0),  # 勾配重力ゲイン (1.0=フル重力でプラント一致)
-        "tau_steer": f("steer_time_constant", 0.27),
-        "t_steer": f("steer_time_delay", 0.24),
-        "steer_bias": f("steer_bias", 0.0),
-        "k_us": f("k_us", 0.0),
-
-        "k_us_bands": params.get("k_us_bands"),
-        "k_us_thresholds": params.get("k_us_thresholds"),
-        # C++ calcModel: steer_des = sat(cmd, lim) * debug_steer_scaling_factor, 同様に acc_des
-        "steer_scaling": f("debug_steer_scaling_factor", 1.0),
-        "acc_scaling": f("debug_acc_scaling_factor", 1.0),
-        # C++ steer_dead_band（現在 0.0 の場合も seed に含め applyModelSeed で反映）
-        "steer_dead_band": f("steer_dead_band", 0.0),
-    }
 
 
 def plot_model_viewer(
@@ -142,10 +97,7 @@ def plot_model_viewer(
 
     out_path = Path(figs_dir) / "lon_lat_model.html"
     out_path.parent.mkdir(parents=True, exist_ok=True)
-    payload_json = json.dumps(payload, ensure_ascii=False, separators=(",", ":"))
-    # "</" を "<\/" にエスケープして </script> によるパーサ早期終了を防ぐ。
-    payload_json = payload_json.replace("</", "<\\/")
-    html = _HTML_TEMPLATE.replace("__PAYLOAD_JSON__", payload_json)
+    html = render_template_with_payload(_HTML_TEMPLATE, payload)
     out_path.write_text(html, encoding="utf-8")
     print(f"  保存: {out_path.name}")
 
@@ -1372,5 +1324,3 @@ $("errpanels").addEventListener("change", (e) => { showErr = e.target.checked; m
 </body>
 </html>
 """
-
-from ._model_seed import _seed_from_params  # noqa: F401,E402
