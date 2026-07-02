@@ -1363,7 +1363,9 @@ $("errpanels").addEventListener("change", (e) => { showErr = e.target.checked; m
       const cont = drawMap(sim, ideal, baseSim);
       if (plotStaticDirty) { computePlotGeom(); plotStaticDirty = false; }
       drawPlots(sim, ideal, t0, t1, baseSim);
-      dirty = cont;
+      // drawMap が false を返すのはキャンバスが未サイズ（clientWidth===0）のケース。
+      // dirty=false にすると以降のフレームで再描画されなくなるため true を維持してリトライ。
+      dirty = (cont === false) ? true : cont;
     }
     requestAnimationFrame(tick);
   }
