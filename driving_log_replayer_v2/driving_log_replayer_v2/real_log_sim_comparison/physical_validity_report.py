@@ -85,10 +85,6 @@ from driving_log_replayer_v2.real_log_sim_comparison.lib._physical_validity impo
 
 _H_SPAN = {10: "≈0.33 s", 20: "≈0.67 s", 30: "≈1.0 s", 40: "≈1.33 s"}
 
-# per-dataset 実行時フィット対象データセット数。横断フィット (n_dyn 上位
-# _N_CROSS_FIT_DATASET 件を MCAP 再読込) の選定母集団 + best/worst 表示に十分な数。
-_PER_DS_FIT_N_DATASET = 2 * _N_CROSS_FIT_DATASET
-
 # 1-1/1-4. 理想追従評価に使うデータセット数（レポート固有。ホライズン・stride の SSOT は
 # lib._physical_validity の _PERF_HORIZONS / _PERF_STRIDE を import して使う）
 _PERF_N_DATASET = 10                                   # 1-4 横方向 box plot 用 データセット数
@@ -127,11 +123,12 @@ def fit_per_dataset(
 ) -> tuple[dict[str, dict], dict[str, dict]]:
     """縦方向 / 操舵の per-dataset 実行時フィットを並列実行する。
 
-    対象は real_lite を持つ先頭 _PER_DS_FIT_N_DATASET 件（`_discover` の uuid ソート順で
-    決定的）。旧 identify_{long,steer}_dynamics.py の事前 CSV 生成を置き換える実行時同定。
+    対象は real_lite を持つ全 entries。best/worst 図は「全件中の最良・最悪」を示すのが
+    目的のため、旧 identify_{long,steer}_dynamics.py（事前 CSV 生成）や正典
+    step_cross_dataset.py と同じく全件を母集団とする。
     Returns: (per_ds_long, per_ds_steer)  ({dataset_id: fit dict})
     """
-    targets = [e for e in entries if e.real_lite is not None][:_PER_DS_FIT_N_DATASET]
+    targets = [e for e in entries if e.real_lite is not None]
     per_ds_long: dict[str, dict] = {}
     per_ds_steer: dict[str, dict] = {}
     with ProcessPoolExecutor(max_workers=min(n_jobs, max(len(targets), 1))) as pool:
@@ -139,12 +136,14 @@ def fit_per_dataset(
             pool.submit(_fit_single_worker, (e.dataset_id, str(e.real_lite)))
             for e in targets
         ]
-        for fut in as_completed(futs):
+        for i, fut in enumerate(as_completed(futs), 1):
             uuid, long_fit, steer_fit = fut.result()
             if long_fit is not None:
                 per_ds_long[uuid] = long_fit
             if steer_fit is not None:
                 per_ds_steer[uuid] = steer_fit
+            if i % 100 == 0:
+                print(f"  {i}/{len(targets)} フィット済み", flush=True)
     return per_ds_long, per_ds_steer
 
 
@@ -1310,10 +1309,10 @@ def main() -> None:
     print(f"  有効速度ビン: {n_valid}/{len(bins['kus_ols'])}")
 
     # Phase 2b: 縦方向 / 操舵 per-dataset 実行時フィット（旧 identify_*_dynamics.py の
-    # 事前 CSV 生成を置き換え。先頭 _PER_DS_FIT_N_DATASET 件を並列同定する）
+    # 事前 CSV 生成を置き換え。best/worst 選定の母集団として全件を並列同定する）
     entries = _to_entries(ds_list)
-    n_fit_target = min(len([e for e in entries if e.real_lite is not None]), _PER_DS_FIT_N_DATASET)
-    print(f"\n[Phase 2b] 縦方向・操舵 per-dataset フィット ({n_fit_target} データセット並列) ...")
+    n_fit_target = len([e for e in entries if e.real_lite is not None])
+    print(f"\n[Phase 2b] 縦方向・操舵 per-dataset フィット (全 {n_fit_target} データセット並列) ...")
     per_ds_long, per_ds_steer = fit_per_dataset(entries, n_jobs=args.n_jobs)
     print(f"  縦方向: {len(per_ds_long)}/{n_fit_target} 件、操舵: {len(per_ds_steer)}/{n_fit_target} 件 同定成功")
 
