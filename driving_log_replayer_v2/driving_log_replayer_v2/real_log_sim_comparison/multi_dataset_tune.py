@@ -698,8 +698,9 @@ def robust_search(
         # 背景: Phase 44 で k_us が OLS 推定値 (~0.015) より大幅に低くなる原因として
         # steer_dead_band との交絡を特定。dead_band=0 で固定し、k_us が本来の物理値に
         # 近づくかを検証する。
-        # steer_time_constant と steer_time_delay は identify_steer_dynamics.py による
-        # 直接同定値 (τ_med, T_med) を参考に探索範囲を設定する。
+        # steer_time_constant と steer_time_delay は操舵一次遅れの直接同定
+        # (現 lib._physical_validity.fit_steer_single、旧 identify_steer_dynamics.py) に
+        # よる同定値 (τ_med, T_med) を参考に探索範囲を設定する。
         CONTINUOUS_SPACE = {
             "steer_time_constant":        (0.05, 0.50),   # 同定結果に応じて範囲設定
             "debug_steer_scaling_factor": (0.92, 1.02),

@@ -37,8 +37,8 @@ CMD_TOPIC = "/control/command/control_cmd"
 
 # ---------------------------------------------------------------------------
 # 定数 (本モジュールが SSOT: single source of truth。physical_validity_report.py 等は
-#       ここから import する。値の由来は同定手順 identify_long_dynamics.py /
-#       identify_steer_dynamics.py を参照)
+#       ここから import する。値の由来は旧同定スクリプト identify_long_dynamics.py /
+#       identify_steer_dynamics.py の同定手順 — 削除済みのため git 履歴を参照)
 # ---------------------------------------------------------------------------
 WHEELBASE = 4.76012   # [m]
 STEER_BIAS = 0.0005   # [rad]
@@ -66,13 +66,13 @@ def merged_model_params(model_params: dict) -> dict:
     """
     return {**load_sim_params(), **model_params}
 
-# 縦方向 (SSOT は本モジュール。由来は identify_long_dynamics.py の同定手順)
+# 縦方向 (SSOT は本モジュール。由来は旧 identify_long_dynamics.py の同定手順、git 履歴参照)
 _DA_THRESH_FIT = 0.15
 _VX_MIN_FIT = 0.5
 _DELAY_CANDIDATES_LONG = np.arange(0.0, 0.31 + 1e-9, 0.01)
 _TAU_BOUNDS_LONG = (0.01, 5.0)
 
-# 操舵 (SSOT は本モジュール。由来は identify_steer_dynamics.py の同定手順)
+# 操舵 (SSOT は本モジュール。由来は旧 identify_steer_dynamics.py の同定手順、git 履歴参照)
 _DSTEER_MIN = 0.001
 _DELAY_CANDIDATES_STEER = np.arange(0.0, 0.15 + 1e-9, 0.01)
 _TAU_BOUNDS_STEER = (0.01, 2.0)

@@ -18,19 +18,20 @@ import html as _html_stdlib
 import sys
 from concurrent.futures import ProcessPoolExecutor, as_completed
 from pathlib import Path
+from types import SimpleNamespace
 
 import numpy as np
 import pandas as pd
 import plotly.graph_objects as go
 import yaml
 from plotly.subplots import make_subplots
-from scipy.optimize import minimize_scalar
 
 # ---------------------------------------------------------------------------
 
 
+from driving_log_replayer_v2.real_log_sim_comparison.lib._collection import DatasetEntry  # noqa: E402
 from driving_log_replayer_v2.real_log_sim_comparison.lib._coverage import _curvature_coverage  # noqa: E402
-from driving_log_replayer_v2.real_log_sim_comparison.lib._io import load_accel, load_cmd, load_kinematic, load_steering, load_velocity  # noqa: E402
+from driving_log_replayer_v2.real_log_sim_comparison.lib._io import load_accel, load_cmd, load_kinematic, load_steering, load_velocity, resolve_lite_bag  # noqa: E402
 from driving_log_replayer_v2.real_log_sim_comparison.lib._map import load_map_ways, map_ways_in_bbox, resolve_map_osm  # noqa: E402
 from driving_log_replayer_v2.real_log_sim_comparison.lib._plotly_utils import lanes_to_trace  # noqa: E402
 from driving_log_replayer_v2.real_log_sim_comparison.lib._multi_agg import (  # noqa: E402
@@ -53,29 +54,36 @@ from driving_log_replayer_v2.real_log_sim_comparison.multi_dataset_tune import (
 # 定数 (物理定数・フィット定数の SSOT は lib._physical_validity。本ファイル固有の
 #       レポート表示用定数のみここで定義する)
 # ---------------------------------------------------------------------------
-from driving_log_replayer_v2.real_log_sim_comparison.lib._figures import build_fig_kus_single  # noqa: E402
+from driving_log_replayer_v2.real_log_sim_comparison.lib._figures import (  # noqa: E402
+    build_fig_cross_long,
+    build_fig_cross_steer,
+    build_fig_kus_single,
+)
 from driving_log_replayer_v2.real_log_sim_comparison.lib._physical_validity import (  # noqa: E402
     DWZ_MAX,
     VX_MIN_CURVE,
     WHEELBASE,
     WZ_MIN,
-    _DA_THRESH_FIT,
-    _DELAY_CANDIDATES_LONG,
     _DRIFT_A_TH,
     _FIT_DT,
-    _FIT_N_DATASET,
     _N_CROSS_FIT_DATASET,
-    _N_DYN_MIN,
     _PERF_STRIDE,
-    _TAU_BOUNDS_LONG,
-    _VX_MIN_FIT,
     _extract_kus_arrays,
     _kus_step_profile,
-    _sim_first_order,
+    compute_cross_long_rows,
+    compute_cross_steer_rows,
     compute_kus_bins,
+    fit_long_cross_dataset_bounded,
+    fit_long_single,
+    fit_steer_single,
+    merged_model_params,
 )
 
 _H_SPAN = {10: "≈0.33 s", 20: "≈0.67 s", 30: "≈1.0 s", 40: "≈1.33 s"}
+
+# per-dataset 実行時フィット対象データセット数。横断フィット (n_dyn 上位
+# _N_CROSS_FIT_DATASET 件を MCAP 再読込) の選定母集団 + best/worst 表示に十分な数。
+_PER_DS_FIT_N_DATASET = 2 * _N_CROSS_FIT_DATASET
 
 # 1-1/1-4. 理想追従評価用共通定数（レポート固有）
 _PERF_HORIZONS: tuple[int, ...] = (10, 20, 50, 100)  # steps @ _FIT_DT → 0.10, 0.20, 0.50, 1.00 s
@@ -257,16 +265,57 @@ def _long_drift_profile(
     return verr, serr, phase
 
 
-def _find_mcap(collection_dir: Path, uuid: str) -> Path | None:
-    """データセット uuid の MCAP パスを探して返す（見つからなければ None）。"""
-    for ds_dir in [
-        collection_dir / "datasets" / uuid,
-        collection_dir / uuid,
-    ]:
-        mcap = ds_dir / "real.lite" / "real.lite_0.mcap"
-        if mcap.exists():
-            return mcap
-    return None
+def _to_entries(ds_list: list) -> list[DatasetEntry]:
+    """`_discover` の (uuid, lite_dir) タプルリストを lib 共有関数用の DatasetEntry へ変換する。
+
+    real_lite の解決は lib._io.resolve_lite_bag（`real.lite.mcap` 単一ファイル →
+    `real.lite` rosbag2 dir の順）に委ねる。comparison/scenarios は本レポートでは不要。
+    """
+    entries: list[DatasetEntry] = []
+    for uuid, lite_dir in ds_list:
+        lite_dir = Path(lite_dir)
+        entries.append(DatasetEntry(
+            dataset_id=uuid,
+            dir=lite_dir,
+            real_lite=resolve_lite_bag(lite_dir, "real"),
+            comparison_dir=None,
+            scenarios_dir=None,
+            status="success",
+        ))
+    return entries
+
+
+def _fit_single_worker(args: tuple) -> tuple[str, dict | None, dict | None]:
+    """プロセスワーカー: 1 データセットの縦方向 / 操舵 一次遅れモデル同定。"""
+    uuid, bag_str = args
+    bag = Path(bag_str)
+    return uuid, fit_long_single(bag), fit_steer_single(bag)
+
+
+def fit_per_dataset(
+    entries: list[DatasetEntry], n_jobs: int = 8,
+) -> tuple[dict[str, dict], dict[str, dict]]:
+    """縦方向 / 操舵の per-dataset 実行時フィットを並列実行する。
+
+    対象は real_lite を持つ先頭 _PER_DS_FIT_N_DATASET 件（`_discover` の uuid ソート順で
+    決定的）。旧 identify_{long,steer}_dynamics.py の事前 CSV 生成を置き換える実行時同定。
+    Returns: (per_ds_long, per_ds_steer)  ({dataset_id: fit dict})
+    """
+    targets = [e for e in entries if e.real_lite is not None][:_PER_DS_FIT_N_DATASET]
+    per_ds_long: dict[str, dict] = {}
+    per_ds_steer: dict[str, dict] = {}
+    with ProcessPoolExecutor(max_workers=min(n_jobs, max(len(targets), 1))) as pool:
+        futs = [
+            pool.submit(_fit_single_worker, (e.dataset_id, str(e.real_lite)))
+            for e in targets
+        ]
+        for fut in as_completed(futs):
+            uuid, long_fit, steer_fit = fut.result()
+            if long_fit is not None:
+                per_ds_long[uuid] = long_fit
+            if steer_fit is not None:
+                per_ds_steer[uuid] = steer_fit
+    return per_ds_long, per_ds_steer
 
 
 _MATHJAX_HEAD = (
@@ -371,231 +420,6 @@ def load_all_mcap(ds_list: list, n_jobs: int = 8) -> list[dict]:
             if i % 100 == 0:
                 print(f"  {i}/{len(args_list)} 読み込み済み", flush=True)
     return results
-
-
-def _fit_long_cross_dataset(
-    collection_dir: Path, df_id: pd.DataFrame
-) -> tuple[float, float, float]:
-    """全データセット横断での加速度一次遅れモデルの最小二乗法同定。
-
-    動的区間が豊富な上位 _N_CROSS_FIT_DATASET データセットのサンプルを一つのプールに集め、
-    遅延グリッドサーチ + output-error 最小二乗法で全体最適な (τ, T) を求める。
-
-    Returns: (tau [s], T [s], RMSE [m/s²])
-    """
-    df_cand = df_id[df_id["n_dyn"] >= _N_DYN_MIN] if "n_dyn" in df_id.columns else df_id
-    df_top  = df_cand.nlargest(min(_N_CROSS_FIT_DATASET, len(df_cand)), "n_dyn")
-
-    pooled: list[tuple[np.ndarray, np.ndarray]] = []   # (a_cmd_full, a_act_full, mask)
-    for row in df_top.itertuples():
-        mcap = _find_mcap(collection_dir, row.uuid)
-        if mcap is None:
-            continue
-        try:
-            df_cmd   = load_cmd(mcap, "/control/command/control_cmd")
-            df_accel = load_accel(mcap)
-            df_vel   = load_velocity(mcap)
-        except Exception:
-            continue
-        if df_cmd.empty or df_accel.empty or df_vel.empty:
-            continue
-
-        t0 = max(df_cmd["t_ns"].iloc[0], df_accel["t_ns"].iloc[0], df_vel["t_ns"].iloc[0])
-        t1 = min(df_cmd["t_ns"].iloc[-1], df_accel["t_ns"].iloc[-1], df_vel["t_ns"].iloc[-1])
-        if (t1 - t0) < 2e9:
-            continue
-        t_ns = np.arange(t0, t1, _FIT_DT * 1e9, dtype=np.float64)
-        t_s  = (t_ns - t0) * 1e-9
-
-        a_cmd_arr = np.interp(t_s, (df_cmd["t_ns"].values   - t0) * 1e-9, df_cmd["cmd_accel"].values)
-        a_act_arr = np.interp(t_s, (df_accel["t_ns"].values  - t0) * 1e-9, df_accel["accel"].values)
-        vx        = np.interp(t_s, (df_vel["t_ns"].values    - t0) * 1e-9, df_vel["lon_vel"].values)
-
-        d_cmd = np.abs(np.gradient(a_cmd_arr, _FIT_DT))
-        mask  = (vx > _VX_MIN_FIT) & (d_cmd > _DA_THRESH_FIT)
-        if mask.sum() < 50:
-            continue
-        pooled.append((a_cmd_arr, a_act_arr, mask))
-
-    if not pooled:
-        return float("nan"), float("nan"), float("nan")
-
-    def _total_mse(log_tau: float, n_delay: int) -> float:
-        tau = float(np.exp(log_tau))
-        sq_sum, n_sum = 0.0, 0
-        for a_cmd_arr, a_act_arr, mask in pooled:
-            a_sim = _sim_first_order(a_cmd_arr, tau, n_delay)
-            diff  = a_sim[mask] - a_act_arr[mask]
-            sq_sum += float(np.dot(diff, diff))
-            n_sum  += int(mask.sum())
-        return sq_sum / n_sum if n_sum > 0 else float("inf")
-
-    best_mse   = float("inf")
-    best_tau   = float("nan")
-    best_delay = float("nan")
-    log_lo, log_hi = np.log(_TAU_BOUNDS_LONG[0]), np.log(_TAU_BOUNDS_LONG[1])
-    for delay_s in _DELAY_CANDIDATES_LONG:
-        n_delay = int(round(delay_s / _FIT_DT))
-        res = minimize_scalar(
-            lambda lt, nd=n_delay: _total_mse(lt, nd),
-            bounds=(log_lo, log_hi), method="bounded",
-        )
-        tau = float(np.exp(res.x))
-        mse = float(res.fun)
-        if mse < best_mse:
-            best_mse   = mse
-            best_tau   = tau
-            best_delay = delay_s
-
-    return best_tau, best_delay, float(np.sqrt(best_mse))
-
-
-def build_long_figure(collection_dir: Path, params: dict, phase_label: str = "") -> go.Figure:
-    """縦方向モデルフィット時系列（横断最小二乗法同定値 vs チューニング値、代表データセット 3 本）。
-
-    トレース構成:
-    - 黒実線: 実測加速度
-    - 灰実線: 指令加速度
-    - 青点線: 全データセット横断最小二乗法同定値
-    - 橙実線: チューニング値
-    """
-    csv_path = collection_dir / "long_dynamics_identified.csv"
-
-    def _placeholder(msg: str) -> go.Figure:
-        fig = go.Figure()
-        fig.add_annotation(text=msg, xref="paper", yref="paper",
-                           x=0.5, y=0.5, showarrow=False, font=dict(size=13), align="center")
-        fig.update_layout(height=200)
-        return fig
-
-    if not csv_path.exists():
-        return _placeholder(
-            f"<b>{csv_path.name} が見つかりません</b><br>"
-            "事前に <code>identify_long_dynamics.py</code> を実行してください。"
-        )
-
-    df_id = pd.read_csv(csv_path)
-    tau_tune = float(params.get("acc_time_constant", float("nan")))
-    T_tune   = float(params.get("acc_time_delay", float("nan")))
-
-    # 全データセット横断で最小二乗法同定（一度だけ実行）
-    tau_cross, T_cross, rmse_cross = _fit_long_cross_dataset(collection_dir, df_id)
-
-    # 動的区間が豊富なデータセットを候補にし、最良・最悪それぞれ _FIT_N_DATASET 本を選択
-    df_cand = df_id[df_id["n_dyn"] >= _N_DYN_MIN] if "n_dyn" in df_id.columns else df_id
-    if len(df_cand) < _FIT_N_DATASET * 2:
-        df_cand = df_id
-    df_best  = df_cand.nsmallest(_FIT_N_DATASET, "rmse_mps2")
-    df_worst = df_cand.nlargest(_FIT_N_DATASET, "rmse_mps2")
-    # 重複除去（小規模データセット時に同一行が両方に入る場合）
-    df_worst = df_worst[~df_worst.index.isin(df_best.index)]
-    # 最良を先、最悪を後に並べる
-    df_display = pd.concat([
-        df_best.assign(_case="最良"),
-        df_worst.assign(_case="最悪"),
-    ])
-
-    rows_data = []
-    for row in df_display.itertuples():
-        mcap = _find_mcap(collection_dir, row.uuid)
-        if mcap is None:
-            continue
-        try:
-            df_cmd   = load_cmd(mcap, "/control/command/control_cmd")
-            df_accel = load_accel(mcap)
-            df_vel   = load_velocity(mcap)
-        except Exception:
-            continue
-        if df_cmd.empty or df_accel.empty or df_vel.empty:
-            continue
-
-        t0 = max(df_cmd["t_ns"].iloc[0], df_accel["t_ns"].iloc[0], df_vel["t_ns"].iloc[0])
-        t1 = min(df_cmd["t_ns"].iloc[-1], df_accel["t_ns"].iloc[-1], df_vel["t_ns"].iloc[-1])
-        if (t1 - t0) < 2e9:
-            continue
-        t_ns  = np.arange(t0, t1, _FIT_DT * 1e9, dtype=np.float64)
-        t_s   = (t_ns - t0) * 1e-9
-        a_cmd_arr = np.interp(t_s, (df_cmd["t_ns"].values - t0) * 1e-9, df_cmd["cmd_accel"].values)
-        a_act_arr = np.interp(t_s, (df_accel["t_ns"].values - t0) * 1e-9, df_accel["accel"].values)
-        vx        = np.interp(t_s, (df_vel["t_ns"].values - t0) * 1e-9, df_vel["lon_vel"].values)
-
-        # 横断同定値でシミュレーション（初期過渡が走行区間に影響しないよう全期間使用）
-        a_sim_cross: np.ndarray | None = None
-        if not np.isnan(tau_cross):
-            a_sim_cross = _sim_first_order(a_cmd_arr, tau_cross, int(round(T_cross / _FIT_DT)))
-        a_sim_tune: np.ndarray | None = None
-        if not (np.isnan(tau_tune) or np.isnan(T_tune)):
-            a_sim_tune = _sim_first_order(a_cmd_arr, tau_tune, int(round(T_tune / _FIT_DT)))
-
-        # 低速区間（停止・停車）をマスク → NaN で折れ線を途切れさせる
-        moving = vx > VX_MIN_CURVE
-
-        def _mask(arr: np.ndarray) -> list:
-            a = arr.copy().astype(float)
-            a[~moving] = np.nan
-            return a.tolist()
-
-        rmse_val = getattr(row, "rmse_mps2", float("nan"))
-        case_tag = getattr(row, "_case", "")
-        rows_data.append({
-            "label": f"[{case_tag}] {row.uuid[:8]}  RMSE={rmse_val:.3f} m/s²",
-            "t": t_s.tolist(),
-            "a_cmd": _mask(a_cmd_arr),
-            "a_act": _mask(a_act_arr),
-            "a_sim_cross": _mask(a_sim_cross) if a_sim_cross is not None else None,
-            "a_sim_tune": _mask(a_sim_tune) if a_sim_tune is not None else None,
-        })
-
-    if not rows_data:
-        return _placeholder("MCAP 読み込み失敗（データセットディレクトリが見つかりません）")
-
-    cross_label = (
-        f"横断最小二乗法同定値  τ={tau_cross:.3f}s  遅延={T_cross:.3f}s  RMSE={rmse_cross:.3f} m/s²"
-        if not np.isnan(tau_cross) else "横断最小二乗法同定値（同定失敗）"
-    )
-    _pl = phase_label or "チューニング値"
-    tune_label = f"{_pl}  τ={tau_tune:.3f}s  遅延={T_tune:.3f}s"
-
-    n = len(rows_data)
-    fig = make_subplots(rows=n, cols=1,
-                        subplot_titles=[r["label"] for r in rows_data],
-                        vertical_spacing=0.08)
-    show_legend = True
-    for i, r in enumerate(rows_data, 1):
-        fig.add_trace(go.Scatter(
-            x=r["t"], y=r["a_act"],
-            name="実測加速度", line=dict(color="black", width=1.5),
-            showlegend=show_legend, connectgaps=False,
-        ), row=i, col=1)
-        fig.add_trace(go.Scatter(
-            x=r["t"], y=r["a_cmd"],
-            name="指令加速度", line=dict(color="gray", width=1.2, dash="dash"),
-            showlegend=show_legend, connectgaps=False,
-        ), row=i, col=1)
-        if r["a_sim_cross"] is not None:
-            fig.add_trace(go.Scatter(
-                x=r["t"], y=r["a_sim_cross"],
-                name=cross_label,
-                line=dict(color="steelblue", width=1.5, dash="dot"),
-                showlegend=show_legend, connectgaps=False,
-            ), row=i, col=1)
-        if r["a_sim_tune"] is not None:
-            fig.add_trace(go.Scatter(
-                x=r["t"], y=r["a_sim_tune"],
-                name=tune_label,
-                line=dict(color="darkorange", width=1.5),
-                showlegend=show_legend, connectgaps=False,
-            ), row=i, col=1)
-        show_legend = False
-        fig.update_yaxes(title_text="a [m/s²]", row=i, col=1)
-    fig.update_xaxes(title_text="時刻 [s]", row=n, col=1)
-    fig.update_layout(
-        height=300 * n,
-        title_text=f"縦方向モデルフィット（最良・最悪 計 {n} 件、全データセット横断最小二乗法同定値・走行区間のみ表示）",
-        margin=dict(t=70, b=40),
-        legend=dict(orientation="h", y=1.03, x=0),
-    )
-    return fig
 
 
 def build_long_perf_figure(
@@ -851,123 +675,6 @@ def build_long_perf_figure(
         )
 
     return fig_box, fig_growth, fig_map
-
-
-def build_steer_id_figure(collection_dir: Path, params: dict) -> go.Figure:
-    """操舵モデルフィット時系列（非線形最小二乗法同定値 vs チューン値、代表データセット 3本）。"""
-    csv_path = collection_dir / "steer_dynamics_identified.csv"
-
-    def _placeholder(msg: str) -> go.Figure:
-        fig = go.Figure()
-        fig.add_annotation(text=msg, xref="paper", yref="paper",
-                           x=0.5, y=0.5, showarrow=False, font=dict(size=13), align="center")
-        fig.update_layout(height=200)
-        return fig
-
-    if not csv_path.exists():
-        return _placeholder(
-            f"<b>{csv_path.name} が見つかりません</b><br>"
-            "事前に <code>identify_steer_dynamics.py</code> を実行してください。"
-        )
-
-    df_id = pd.read_csv(csv_path)
-    tau_tune = float(params.get("steer_time_constant", float("nan")))
-    T_tune   = float(params.get("steer_time_delay", float("nan")))
-
-    # 動的区間が豊富なデータセットを候補にし、最良・最悪それぞれ _FIT_N_DATASET 本を選択
-    df_cand = df_id[df_id["n_dyn"] >= _N_DYN_MIN]
-    if len(df_cand) < _FIT_N_DATASET * 2:
-        df_cand = df_id
-    df_best  = df_cand.nsmallest(_FIT_N_DATASET, "rmse_mrad")
-    df_worst = df_cand.nlargest(_FIT_N_DATASET, "rmse_mrad")
-    df_worst = df_worst[~df_worst.index.isin(df_best.index)]
-    df_display = pd.concat([
-        df_best.assign(_case="最良"),
-        df_worst.assign(_case="最悪"),
-    ])
-
-    rows_data = []
-    for row in df_display.itertuples():
-        mcap = _find_mcap(collection_dir, row.uuid)
-        if mcap is None:
-            continue
-        try:
-            df_cmd   = load_cmd(mcap, "/control/command/control_cmd")
-            df_steer = load_steering(mcap)
-            df_vel   = load_velocity(mcap)
-        except Exception:
-            continue
-        if df_cmd.empty or df_steer.empty or df_vel.empty:
-            continue
-
-        t0 = max(df_cmd["t_ns"].iloc[0], df_steer["t_ns"].iloc[0], df_vel["t_ns"].iloc[0])
-        t1 = min(df_cmd["t_ns"].iloc[-1], df_steer["t_ns"].iloc[-1], df_vel["t_ns"].iloc[-1])
-        if (t1 - t0) < 2e9:
-            continue
-        t_ns    = np.arange(t0, t1, _FIT_DT * 1e9, dtype=np.float64)
-        t_s     = (t_ns - t0) * 1e-9
-        d_cmd   = np.interp(t_s, (df_cmd["t_ns"].values - t0) * 1e-9, df_cmd["cmd_steer"].values)
-        d_act   = np.interp(t_s, (df_steer["t_ns"].values - t0) * 1e-9, df_steer["steer"].values)
-        vx      = np.interp(t_s, (df_vel["t_ns"].values - t0) * 1e-9, df_vel["lon_vel"].values)
-
-        # データセット全体でシミュレーション（初期過渡が走行区間に影響しないよう全期間使用）
-        d_sim_id = _sim_first_order(d_cmd, row.tau, int(round(row.delay / _FIT_DT)))
-        d_sim_tune = None
-        if not (np.isnan(tau_tune) or np.isnan(T_tune)):
-            d_sim_tune = _sim_first_order(d_cmd, tau_tune, int(round(T_tune / _FIT_DT)))
-
-        # 低速区間をマスク
-        moving = vx > VX_MIN_CURVE
-        def _mask(arr: np.ndarray) -> list:
-            a = arr.copy().astype(float)
-            a[~moving] = np.nan
-            return a.tolist()
-
-        case_tag = getattr(row, "_case", "")
-        rows_data.append({
-            "label": f"[{case_tag}] {row.uuid[:8]}  RMSE={row.rmse_mrad:.1f} mrad  τ={row.tau:.3f}s  T={row.delay:.3f}s",
-            "t": t_s.tolist(),
-            "d_act": _mask(d_act),
-            "d_sim_id": _mask(d_sim_id),
-            "d_sim_tune": _mask(d_sim_tune) if d_sim_tune is not None else None,
-        })
-
-    if not rows_data:
-        return _placeholder("MCAP 読み込み失敗（データセット ディレクトリが見つかりません）")
-
-    n = len(rows_data)
-    fig = make_subplots(rows=n, cols=1,
-                        subplot_titles=[r["label"] for r in rows_data],
-                        vertical_spacing=0.08)
-    show_legend = True
-    for i, r in enumerate(rows_data, 1):
-        fig.add_trace(go.Scatter(
-            x=r["t"], y=r["d_act"],
-            name="実測 δ_act", line=dict(color="black", width=1.5),
-            showlegend=show_legend, connectgaps=False,
-        ), row=i, col=1)
-        fig.add_trace(go.Scatter(
-            x=r["t"], y=r["d_sim_id"],
-            name="非線形最小二乗法同定値", line=dict(color="steelblue", width=1.5, dash="dot"),
-            showlegend=show_legend, connectgaps=False,
-        ), row=i, col=1)
-        if r["d_sim_tune"] is not None:
-            fig.add_trace(go.Scatter(
-                x=r["t"], y=r["d_sim_tune"],
-                name=f"チューン値 τ={tau_tune:.3f}s T={T_tune:.3f}s",
-                line=dict(color="darkorange", width=1.5),
-                showlegend=show_legend, connectgaps=False,
-            ), row=i, col=1)
-        show_legend = False
-        fig.update_yaxes(title_text="δ [rad]", row=i, col=1)
-    fig.update_xaxes(title_text="時刻 [s]", row=n, col=1)
-    fig.update_layout(
-        height=300 * n,
-        title_text=f"操舵モデルフィット（最良・最悪 計 {n} 件、走行区間のみ表示）",
-        margin=dict(t=70, b=40),
-        legend=dict(orientation="h", y=1.03, x=0),
-    )
-    return fig
 
 
 def build_perfect_tracking_figure(
@@ -1469,8 +1176,10 @@ a_{{\\mathrm{{target}}}}(t) = a_{{\\mathrm{{cmd,del}}}}(t) + \\bigl(c_0 + c_1 v_
 <h3>実機ログからの独立同定（代表データセットモデルフィット）</h3>
 <p>
 \\(a_{{\\mathrm{{cmd}}}}\\)（指令加速度）を入力として遅延グリッドサーチ + output-error 非線形最小二乗法で
-同定した \\((\\tau_a, T_a)\\) のモデル出力（青点線）と実測 \\(a_{{\\mathrm{{act}}}}\\)（黒実線）を比較する。
-橙実線はチューン値でのシミュレーション結果。動的区間が豊富なデータセットから誤差（RMSE）が小さい順に選択し、低速・停車区間は除外して表示。
+データセット横断同定した \\((\\tau_a, T_a)\\) のモデル出力（青実線、路面勾配補正込み）と
+実測 \\(a_{{\\mathrm{{act}}}}\\)（黒実線）を比較する。
+チューニング値でのシミュレーション結果（点線）も重ね描きする。per-dataset 同定誤差（RMSE）の
+最良・最悪データセットを選択し、低速・停車区間は除外して表示。
 </p>
 {long_html}
 
@@ -1520,8 +1229,9 @@ a_{{\\mathrm{{target}}}}(t) = a_{{\\mathrm{{cmd,del}}}}(t) + \\bigl(c_0 + c_1 v_
 <h3>実機ログからの独立同定（代表データセットモデルフィット）</h3>
 <p>
 \\(\\delta_{{\\mathrm{{cmd}}}}\\) を入力として遅延グリッドサーチ + output-error 非線形最小二乗法で
-同定した \\((\\tau_\\delta, T_\\delta)\\) のモデル出力（青点線）と実測 \\(\\delta_{{\\mathrm{{act}}}}\\)（黒実線）を比較する。
-橙実線はチューン値でのシミュレーション結果。動的区間が豊富なデータセットから誤差（RMSE）が小さい順に選択し、低速・停車区間は除外して表示。
+データセット別に同定した \\((\\tau_\\delta, T_\\delta)\\) のモデル出力（青点線）と実測 \\(\\delta_{{\\mathrm{{act}}}}\\)（黒実線）を比較する。
+チューニング値でのシミュレーション結果（破線）も重ね描きする。per-dataset 同定誤差（RMSE）の
+最良・最悪データセットを選択し、低速・停車区間は除外して表示。
 </p>
 {steer_html}
 <div class="note">
@@ -2148,6 +1858,14 @@ def main() -> None:
     n_valid = int(np.isfinite(bins["kus_ols"]).sum())
     print(f"  有効速度ビン: {n_valid}/{len(bins['kus_ols'])}")
 
+    # Phase 2b: 縦方向 / 操舵 per-dataset 実行時フィット（旧 identify_*_dynamics.py の
+    # 事前 CSV 生成を置き換え。先頭 _PER_DS_FIT_N_DATASET 件を並列同定する）
+    entries = _to_entries(ds_list)
+    n_fit_target = min(len([e for e in entries if e.real_lite is not None]), _PER_DS_FIT_N_DATASET)
+    print(f"\n[Phase 2b] 縦方向・操舵 per-dataset フィット ({n_fit_target} データセット並列) ...")
+    per_ds_long, per_ds_steer = fit_per_dataset(entries, n_jobs=args.n_jobs)
+    print(f"  縦方向: {len(per_ds_long)}/{n_fit_target} 件、操舵: {len(per_ds_steer)}/{n_fit_target} 件 同定成功")
+
     # Phase 3: カーブ多データセット選定
     print("\n[Phase 3] カーブ データセット 選定 ...")
     record_by_uuid = {r["uuid"]: r for r in records}
@@ -2359,8 +2077,43 @@ def main() -> None:
         thresholds=params.get("k_us_thresholds"),
         title="実機ログからの k_us 独立同定（速度ビン別 最小二乗法回帰）",
     )
-    long_fig  = build_long_figure(args.collection_dir, params, phase_label=phase_label)
-    steer_fig = build_steer_id_figure(args.collection_dir, params)
+    # 縦方向 / 操舵: 共有ライブラリの実行時フィット (per-dataset フィット結果 + 横断フィット)
+    # から best/worst 時系列図を生成する（旧: 事前生成 CSV 依存の build_long_figure /
+    # build_steer_id_figure）。凡例にチューン値 τ/T を残すためモデル名に値を埋め込む。
+    tuned_clean = {k: v for k, v in params.items() if not k.startswith("_")}
+    merged_tuned = merged_model_params(tuned_clean)
+
+    def _model_name(tau_key: str, delay_key: str) -> str:
+        tau = merged_tuned.get(tau_key)
+        delay = merged_tuned.get(delay_key)
+        if tau is None or delay is None:
+            return phase_label
+        return f"{phase_label} τ={float(tau):.3f}s T={float(delay):.3f}s"
+
+    models_long = {_model_name("acc_time_constant", "acc_time_delay"): SimpleNamespace(params=tuned_clean)}
+    models_steer = {_model_name("steer_time_constant", "steer_time_delay"): SimpleNamespace(params=tuned_clean)}
+
+    cross_fit_long = fit_long_cross_dataset_bounded(entries, per_ds_long)
+    if np.isfinite(cross_fit_long.get("tau", float("nan"))):
+        print(
+            f"  縦方向 横断同定: τ={cross_fit_long['tau']:.3f}s"
+            f" 遅延={cross_fit_long['delay']:.3f}s"
+            f" RMSE={cross_fit_long['rmse_mps2']:.3f} m/s²"
+            f" ({cross_fit_long.get('n_datasets', 0)} データセット)"
+        )
+    else:
+        print("  縦方向 横断同定: 失敗（有効データセットなし）")
+    rows_long = compute_cross_long_rows(entries, per_ds_long, cross_fit_long, models_long)
+    long_fig = build_fig_cross_long(rows_long, cross_fit_long)
+
+    rows_steer = compute_cross_steer_rows(entries, per_ds_steer, models_steer)
+    # 旧実装の表示要素を維持: 各 subplot タイトルに per-dataset 同定値 τ/T を付記
+    for r in rows_steer:
+        for ds_id, fit in per_ds_steer.items():
+            if ds_id[:8] in r["label"]:
+                r["label"] += f"  τ={fit['tau']:.3f}s T={fit['delay']:.3f}s"
+                break
+    steer_fig = build_fig_cross_steer(rows_steer)
 
     # 1-1 縦方向理想追従評価（全 records の先頭 _LONG_PERF_N_DATASET データセットを使用）
     long_perf_records = records[:_LONG_PERF_N_DATASET]
