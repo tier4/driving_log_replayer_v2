@@ -7,9 +7,9 @@
 
 使用法:
   python physical_validity_report.py \\
-    --params /home/kotaroyoshimoto/data/openloop_j6_15/tuned_params_june_phase14.yaml \\
-    --collection-dir /home/kotaroyoshimoto/data/openloop_j6_15_june \\
-    --out /home/kotaroyoshimoto/data/openloop_j6_15/physical_validity_report.html
+    --params <collection>/tuned_params.yaml \\
+    --collection-dir <collection> \\
+    --out <collection>/physical_validity_report.html
 """
 from __future__ import annotations
 
@@ -1213,16 +1213,16 @@ def _find_first_curve_t(ctx, pre_roll_s: float = 5.0) -> float:
 def main() -> None:
     ap = argparse.ArgumentParser(description="物理的妥当性レポート生成")
     ap.add_argument(
-        "--params", type=Path,
-        default=Path("/home/kotaroyoshimoto/data/openloop_j6_15/tuned_params_june_phase14.yaml"),
+        "--params", type=Path, required=True,
+        help="チューニング済みパラメータ YAML (tuned_params.yaml)",
     )
     ap.add_argument(
-        "--collection-dir", type=Path,
-        default=Path("/home/kotaroyoshimoto/data/openloop_j6_15_june"),
+        "--collection-dir", type=Path, required=True,
+        help="real.lite 群を収集した collection ディレクトリ",
     )
     ap.add_argument(
-        "--out", type=Path,
-        default=Path("/home/kotaroyoshimoto/data/openloop_j6_15/physical_validity_report.html"),
+        "--out", type=Path, required=True,
+        help="出力 HTML パス",
     )
     ap.add_argument("--n-curve-ds", type=int, default=3, help="ビューア埋め込みカーブ データセット数")
     ap.add_argument("--n-jobs", type=int, default=8)
