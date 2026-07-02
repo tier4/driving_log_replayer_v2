@@ -840,7 +840,8 @@ def _render_cross_section(cross_dir: Path | None) -> tuple[list[str], str]:
 
 
 def _render_dataset_report(
-    entry: ReportDataset, ns: str, scenario_name: str, *, multi: bool
+    entry: ReportDataset, ns: str, scenario_name: str, *, multi: bool,
+    no_embed_viewers: bool = False
 ) -> tuple[list[str], str, int, set[str]]:
     """1 データセット分のセクション群を描画する。
 
@@ -910,19 +911,20 @@ def _render_dataset_report(
   <h5 style="margin-top:1rem; margin-bottom:0.5rem; font-size:1.05rem; font-weight:600;">■ 縦方向の運動方程式</h5>
   \[
   \begin{aligned}
-  \frac{da}{dt} &= -\frac{a - a_{\mathrm{target}}}{\tau(v)} \\
-  a_{\mathrm{target}} &= a_{\mathrm{cmd}}(t - T) + \mathrm{poly}(v) + c_{\mathrm{corner}}(v \cdot \omega_z)^2 \\
-  \mathrm{poly}(v) &= p_0 + p_1 v + p_2 v^2 \\
-  \frac{dv_x}{dt} &= a \quad (\text{クランプ・停止処理あり})
+  \frac{da_{\mathrm{act}}}{dt} &= -\frac{a_{\mathrm{act}} - a_{\mathrm{target}}}{\tau_a} \\
+  a_{\mathrm{target}} &= K_{\mathrm{acc\_scale}} \cdot a_{\mathrm{cmd}}(t - T_a) + \mathrm{poly}(v_x) \\
+  \mathrm{poly}(v_x) &= p_0 + p_1 v_x + p_2 v_x^2 \\
+  \frac{dv_x}{dt} &= a_{\mathrm{act}} + a_{\mathrm{slope}} \quad (\text{クランプ・停止・ギア処理あり})
   \end{aligned}
   \]
   <h5 style="margin-top:1.5rem; margin-bottom:0.5rem; font-size:1.05rem; font-weight:600;">■ 横方向の運動方程式</h5>
   \[
   \begin{aligned}
-  \frac{d\delta}{dt} &= -\frac{\delta - \delta_{\mathrm{cmd}}(t - T_{\delta})}{\tau_{\delta}} \\
-  \omega_z &= \frac{v \tan(\delta + \beta)}{L + k_{\mathrm{us}}(v) v^2} \\
+  \frac{d\delta_{\mathrm{act}}}{dt} &= -\frac{\delta_{\mathrm{act}} - \delta_{\mathrm{des}}}{\tau_{\delta}} \\
+  \delta_{\mathrm{des}} &= K_{\mathrm{steer\_scale}} \cdot \delta_{\mathrm{cmd}}(t - T_{\delta}) \\
+  \omega_z &= \frac{v_x \tan(\delta_{\mathrm{act}} + \beta)}{L + k_{us} v_x^2} \\
   \frac{d\theta}{dt} &= \omega_z \\
-  \frac{dx}{dt} &= v \cos\theta, \quad \frac{dy}{dt} = v \sin\theta, \quad a_y = v \cdot \omega_z
+  \frac{dx}{dt} &= v_x \cos\theta, \quad \frac{dy}{dt} = v_x \sin\theta, \quad a_y = v_x \cdot \omega_z
   \end{aligned}
   \]
 </div>
@@ -931,7 +933,8 @@ def _render_dataset_report(
             _emit_md(md_pre_by_cat.get(cat, []))  # 図の前: §1 主軸 (数式的導出・テキスト)
             if cat in by_cat:
                 body.extend(_render_category_images(  # 追認プロット (実機ログ根拠・スイープ曲線)
-                    by_cat[cat], entry.comparison_dir, ns, cat=cat, scenario_name=scenario_name
+                    by_cat[cat], entry.comparison_dir, ns, cat=cat, scenario_name=scenario_name,
+                    no_embed_viewers=no_embed_viewers
                 ))
             elif cat not in md_pre_by_cat:
                 body.append("<p class='empty'>（このセクションに該当する図はありませんでした）</p>")
