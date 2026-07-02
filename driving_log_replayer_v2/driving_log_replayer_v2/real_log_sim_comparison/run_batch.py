@@ -39,6 +39,9 @@ _PKG = "driving_log_replayer_v2.real_log_sim_comparison"
 _DEFAULT_WEBAUTO_ROOT = Path.home() / ".webauto" / "data" / "data" / "annotation_dataset"
 
 
+VERBOSE = False
+
+
 def _remove_path(path: Path) -> None:
     import shutil
     if path.is_symlink() or path.is_file():
@@ -364,7 +367,12 @@ def main() -> None:
                     "aggregate_report.html として出力する")
     ap.add_argument("--jobs", type=int, default=min(4, os.cpu_count() or 1),
                     help="並列ワーカー数 (既定: コア数または4の小さい方)")
+    ap.add_argument("--verbose", action="store_true", default=False,
+                    help="詳細情報を出力する")
     args = ap.parse_args()
+
+    global VERBOSE
+    VERBOSE = args.verbose
 
     scenario = Path(args.scenario).resolve()
     batch_root = Path(args.batch_root).resolve()
@@ -388,7 +396,8 @@ def main() -> None:
     if not uuids:
         print(f"ERROR: データセットが 0 件 (scenario={scenario})", file=sys.stderr)
         sys.exit(2)
-    print(f"datasets ({len(uuids)}): {[u[:8] for u in uuids]}")
+    if VERBOSE:
+        print(f"datasets ({len(uuids)}): {[u[:8] for u in uuids]}")
 
     closed_loop_uuids = set()
     if args.closed_loop_uuids:
