@@ -52,9 +52,14 @@ from .lib._map import map_ways_in_bbox, resolve_map_osm
 from .lib._fig_io import write_fig_json
 from .lib._figures import build_fig_overview
 from .lib._nstep_common import (
+    interp_or_zeros,
     metrics_description_md,
     n1,
+    local_ds,
+    rms,
     rmse_by_horizon,
+    to_seconds,
+    wrap_pi,
 )
 from .lib._params_utils import load_sim_params
 from .lib._plotly_utils import FIG_HEIGHTS, lanes_to_trace
@@ -104,47 +109,6 @@ def _build_params(cfg: RuntimeConfig | None = None) -> dict:
 # ことで cases ループ起動時のオーバーヘッドを削減する。
 PARAMS: dict = {"sub_dt": 1.0 / 30.0}
 SUB_DT: float = PARAMS["sub_dt"]
-
-
-def _to_seconds(df: pd.DataFrame, t0_ns: int) -> pd.DataFrame:
-    """`t_ns` を `t` [s] に変換したコピーを返す。"""
-    out = df.copy()
-    out["t"] = (out["t_ns"] - t0_ns) / 1e9
-    return out.drop(columns=["t_ns"])
-
-
-def _interp_or_zeros(
-    t_new: np.ndarray,
-    t_ref: np.ndarray,
-    values: np.ndarray,
-    *,
-    empty_dtype: np.dtype | type = np.float64,
-) -> np.ndarray:
-    """`np.interp` の空 DF 用フォールバック付きラッパー。"""
-    if len(t_ref) == 0:
-        return np.zeros_like(t_new, dtype=empty_dtype)
-    return np.interp(t_new, t_ref, values)
-
-
-def _wrap_pi(angle):
-    """角度差を [-pi, pi) に正規化する。"""
-    return (angle + np.pi) % (2 * np.pi) - np.pi
-
-
-def _local_ds(
-    dx: np.ndarray,
-    dy: np.ndarray,
-    cos_y: np.ndarray,
-    sin_y: np.ndarray,
-) -> tuple[np.ndarray, np.ndarray]:
-    """yaw 基準の車両ローカル座標系へ変位を射影する。"""
-    return dx * cos_y + dy * sin_y, -dx * sin_y + dy * cos_y
-
-
-def _rms(values: np.ndarray) -> float:
-    """NaN を無視して RMSE を返す。"""
-    arr = np.asarray(values, dtype=float)
-    return float(np.sqrt(np.nanmean(arr * arr)))
 
 
 # ---------------------------------------------------------------------------
@@ -646,10 +610,10 @@ def _prepare_gt(data: dict, t0_ns: int, params: dict) -> dict:
     補間した GT 系列・過去コマンド系列を dict で返す。
     """
 
-    df_kin = _to_seconds(data["kin"], t0_ns).sort_values("t").reset_index(drop=True)
-    df_acc = _to_seconds(data["acc"], t0_ns).sort_values("t").reset_index(drop=True)
-    df_steer = _to_seconds(data["steer"], t0_ns).sort_values("t").reset_index(drop=True)
-    df_cmd = _to_seconds(data["cmd"], t0_ns).sort_values("t").reset_index(drop=True)
+    df_kin = to_seconds(data["kin"], t0_ns).sort_values("t").reset_index(drop=True)
+    df_acc = to_seconds(data["acc"], t0_ns).sort_values("t").reset_index(drop=True)
+    df_steer = to_seconds(data["steer"], t0_ns).sort_values("t").reset_index(drop=True)
+    df_cmd = to_seconds(data["cmd"], t0_ns).sort_values("t").reset_index(drop=True)
 
     if df_cmd.empty:
         raise RuntimeError("制御コマンドが空です")
@@ -714,9 +678,9 @@ def _prepare_gt(data: dict, t0_ns: int, params: dict) -> dict:
     gt_vx = np.interp(t_cmd, t_kin, df_kin["vx"].values)
     gt_wz = np.interp(t_cmd, t_kin, df_kin["wz"].values)
     gt_vy = np.interp(t_cmd, t_kin, df_kin["vy_pos"].values)
-    gt_ax = _interp_or_zeros(t_cmd, t_acc, df_acc["ax"].values)
+    gt_ax = interp_or_zeros(t_cmd, t_acc, df_acc["ax"].values)
     gt_ay = np.interp(t_cmd, t_kin, df_kin["ay_pos"].values)
-    gt_steer = _interp_or_zeros(t_cmd, t_steer, df_steer["steer"].values)
+    gt_steer = interp_or_zeros(t_cmd, t_steer, df_steer["steer"].values)
 
     # 角加速度: wz の時間微分
     gt_dwz = np.gradient(gt_wz, t_cmd)
@@ -1023,7 +987,7 @@ def eval_rollout_rmse(
         dy = g_y - my
 
         pos_err = np.hypot(dx, dy)
-        yaw_err = _wrap_pi(g_yaw - myaw)
+        yaw_err = wrap_pi(g_yaw - myaw)
 
         real_dx = g_x - g_x0
         real_dy = g_y - g_y0
@@ -1033,8 +997,8 @@ def eval_rollout_rmse(
         cos_y = cos_y_arr[k_end_arr]
         sin_y = sin_y_arr[k_end_arr]
 
-        real_ds_long, real_ds_lat = _local_ds(real_dx, real_dy, cos_y, sin_y)
-        sim_ds_long, sim_ds_lat = _local_ds(sim_dx, sim_dy, cos_y, sin_y)
+        real_ds_long, real_ds_lat = local_ds(real_dx, real_dy, cos_y, sin_y)
+        sim_ds_long, sim_ds_lat = local_ds(sim_dx, sim_dy, cos_y, sin_y)
 
         ds_long_err = real_ds_long - sim_ds_long
         ds_lat_err = real_ds_lat - sim_ds_lat
@@ -1044,13 +1008,13 @@ def eval_rollout_rmse(
         ax_err = g_ax - max_val
 
         res[h] = {
-            "pos": _rms(pos_err) * 100.0,
-            "long": _rms(ds_long_err) * 100.0,
-            "lat": _rms(ds_lat_err) * 100.0,
-            "yaw": _rms(np.degrees(yaw_err)),
-            "steer": _rms(steer_err) * 180.0 / np.pi,
-            "vx": _rms(vx_err),
-            "ax": _rms(ax_err),
+            "pos": rms(pos_err) * 100.0,
+            "long": rms(ds_long_err) * 100.0,
+            "lat": rms(ds_lat_err) * 100.0,
+            "yaw": rms(np.degrees(yaw_err)),
+            "steer": rms(steer_err) * 180.0 / np.pi,
+            "vx": rms(vx_err),
+            "ax": rms(ax_err),
         }
 
     return res
@@ -1182,7 +1146,7 @@ def run_rollout(
             # -- 終端誤差 (実機 − モデル) --
             dx = gt_x[k_end] - model.x
             dy = gt_y[k_end] - model.y
-            yaw_err = _wrap_pi(gt_yaw[k_end] - model.yaw)
+            yaw_err = wrap_pi(gt_yaw[k_end] - model.yaw)
 
             # -- 変位の k_end GT yaw 基準ローカル分解 --
             real_dx = gt_x[k_end] - gt_x[k0]
@@ -1191,8 +1155,8 @@ def run_rollout(
             sim_dy = model.y - gt_y[k0]
             cos_y = math.cos(gt_yaw[k_end])
             sin_y = math.sin(gt_yaw[k_end])
-            real_ds_long, real_ds_lat = _local_ds(real_dx, real_dy, cos_y, sin_y)
-            sim_ds_long, sim_ds_lat = _local_ds(sim_dx, sim_dy, cos_y, sin_y)
+            real_ds_long, real_ds_lat = local_ds(real_dx, real_dy, cos_y, sin_y)
+            sim_ds_long, sim_ds_lat = local_ds(sim_dx, sim_dy, cos_y, sin_y)
 
             sim_steer_kend = model.steer_state + steer_bias
             # sim_wz: モデルが予測した終端 yaw rate (vm_get_wz, k_us 依存)。未 export なら NaN
@@ -1426,11 +1390,11 @@ def save_summary(df: pd.DataFrame, verbose: bool = False) -> None:
 
     def rmse_cm(col, mask=None):
         v = df1[col].values if mask is None else df1[col].values[mask]
-        return _rms(v) * 100
+        return rms(v) * 100
 
     def rmse_deg(col, mask=None):
         v = df1[col].values if mask is None else df1[col].values[mask]
-        return _rms(v) * rad2deg
+        return rms(v) * rad2deg
 
     def mean_deg(col, mask=None):
         v = df1[col].values if mask is None else df1[col].values[mask]
@@ -1458,7 +1422,7 @@ def save_summary(df: pd.DataFrame, verbose: bool = False) -> None:
     ]
     # yaw rate 予測 RMSE (vm_get_wz export 時のみ)。steer/位置と異なり k_us 感度を持つ。
     if "err_wz" in df1.columns and np.isfinite(df1["err_wz"].values).any():
-        wz_rmse = _rms(df1["err_wz"].values) * rad2deg
+        wz_rmse = rms(df1["err_wz"].values) * rad2deg
         lines += [
             "--- 全区間: yaw rate 予測 (vm_get_wz, k_us 感度あり) ---",
             f"yaw rate 予測 RMSE: {wz_rmse:.4f} deg/s",
