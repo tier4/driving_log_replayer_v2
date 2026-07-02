@@ -77,3 +77,30 @@ def load_sim_params(params_dir: Path | None = None) -> dict:
         params.setdefault(k, v)
 
     return params
+
+
+def normalize_kus_step_bands(params: dict) -> dict:
+    """legacy の `k_us_lo/mid/vx_thresh/vx_thresh2` を step-band 形式に正規化する。
+
+    既存の `k_us_bands` / `k_us_thresholds` を壊さないよう、`k_us_lo` がある場合のみ
+    legacy 表現を新表現へ変換する。返り値は入力を破壊しないコピー。
+    """
+    p = dict(params)
+    if "k_us_lo" not in p:
+        return p
+
+    thresh1 = float(p.get("k_us_vx_thresh", 0.0))
+    if thresh1 > 0.0:
+        thresh2 = float(p.get("k_us_vx_thresh2", 0.0))
+        if "k_us_mid" in p and thresh2 > thresh1:
+            p["k_us_bands"] = [p["k_us_lo"], p["k_us_mid"], p.get("k_us", 0.0)]
+            p["k_us_thresholds"] = [thresh1, thresh2]
+        else:
+            p["k_us_bands"] = [p["k_us_lo"], p.get("k_us", 0.0)]
+            p["k_us_thresholds"] = [thresh1]
+
+    p.pop("k_us_lo", None)
+    p.pop("k_us_mid", None)
+    p.pop("k_us_vx_thresh", None)
+    p.pop("k_us_vx_thresh2", None)
+    return p

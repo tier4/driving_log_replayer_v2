@@ -36,14 +36,16 @@ import optuna
 import yaml
 
 from . import step_ol1_analyze_nstep as s5
+from .lib._collection import discover_collection
 from .lib._cases_config import load_cases_config
 from .lib._io import resolve_lite_bag
-from .lib._physical_validity import WHEELBASE
+from .lib._params_utils import normalize_kus_step_bands
 from .lib._multi_agg import (
     HORIZONS, WORST_W,
     acc_score, aggregate_normalized,
     format_agg, robust_score, steer_score,
 )
+from .lib._physical_validity import WHEELBASE
 
 STRIDE = 5
 _BASELINE_MODEL = "delay_steer_acc_geared_wo_fall_guard"
@@ -51,26 +53,6 @@ _BASELINE_MODEL = "delay_steer_acc_geared_wo_fall_guard"
 _GT_KEYS = ("acc_time_delay", "steer_time_delay", "wheelbase", "sub_dt")
 # fork 前に load_datasets が設定し、fork 後の worker は COW で継承する (P-5/P-7)
 _VERBOSE: bool = False
-
-
-def unify_step_bands(params: dict) -> dict:
-    """k_us_lo/mid/vx_thresh/vx_thresh2 を k_us_bands/k_us_thresholds に統一する。"""
-    p = dict(params)
-    if "k_us_lo" in p:
-        thresh1 = p.get("k_us_vx_thresh", 0.0)
-        if thresh1 > 0.0:
-            thresh2 = p.get("k_us_vx_thresh2", 0.0)
-            if "k_us_mid" in p and thresh2 > thresh1:
-                p["k_us_bands"] = [p["k_us_lo"], p["k_us_mid"], p.get("k_us", 0.0)]
-                p["k_us_thresholds"] = [thresh1, thresh2]
-            else:
-                p["k_us_bands"] = [p["k_us_lo"], p.get("k_us", 0.0)]
-                p["k_us_thresholds"] = [thresh1]
-        p.pop("k_us_lo", None)
-        p.pop("k_us_mid", None)
-        p.pop("k_us_vx_thresh", None)
-        p.pop("k_us_vx_thresh2", None)
-    return p
 
 
 @dataclass
@@ -100,13 +82,31 @@ def _eval(ctx: DatasetCtx, override: dict, model_type: str) -> dict:
     return {h: rmse[h] for h in HORIZONS}
 
 
-def _load_one(args: tuple[str, Path]) -> DatasetCtx | None:
-    """fork プールワーカー: 1 dataset を読み込み DatasetCtx を返す (失敗時 None)。
+def _baseline_metric_is_valid(metric: dict) -> bool:
+    """正規化の分母として使える baseline 誤差かを判定する。"""
+    return all(
+        metric[h]["yaw"] > 0
+        and (metric[h]["long"] > 0 or metric[h]["lat"] > 0)
+        for h in HORIZONS
+    )
 
-    fork による COW 継承で呼ばれるため、s5.LITE_DIR / s5.SUB_DT への書き込みは
-    このワーカープロセス内のみに留まり、親プロセスには影響しない。
-    """
-    ds_id, lite_dir = args
+
+def _baseline_metric_summary(metric: dict) -> str:
+    """baseline 誤差をログ向けに整形する。"""
+    return "  ".join(
+        f"baseline@N{h} yaw={metric[h]['yaw']:.4f} 縦={metric[h]['long']:.3f} 横={metric[h]['lat']:.3f}"
+        for h in HORIZONS
+    )
+
+
+def _load_dataset_ctx(
+    ds_id: str,
+    lite_dir: Path,
+    *,
+    verbose: bool = False,
+    log: bool = True,
+) -> DatasetCtx | None:
+    """1 dataset を読み込み、baseline を検証した DatasetCtx を返す。失敗時は None."""
     s5.LITE_DIR = lite_dir
     real = resolve_lite_bag(lite_dir, "real")
     if real is None:
@@ -120,21 +120,30 @@ def _load_one(args: tuple[str, Path]) -> DatasetCtx | None:
         s5.SUB_DT = base["sub_dt"]
         ctx = DatasetCtx(ds_id, data, t0_ns, base, {}, {})
         ctx.base_metric = _eval(ctx, {}, _BASELINE_MODEL)
-        if not all(
-            ctx.base_metric[h]["yaw"] > 0
-            and (ctx.base_metric[h]["long"] > 0 or ctx.base_metric[h]["lat"] > 0)
-            for h in HORIZONS
-        ):
+        if not _baseline_metric_is_valid(ctx.base_metric):
             print(f"[SKIP] {ds_id}: baseline 誤差が無効 (yaw/縦/横≤0 or NaN)", file=sys.stderr)
             return None
     except Exception as e:  # noqa: BLE001
         msg = f"[SKIP] {ds_id}: ロード失敗 ({type(e).__name__}: {e})"
-        if _VERBOSE:
+        if verbose:
             tb_lines = traceback.format_exc().strip().splitlines()
             msg += "\n  " + "\n  ".join(tb_lines[-3:])
         print(msg, file=sys.stderr)
         return None
+
+    if log:
+        print(f"[load] {ds_id}: {_baseline_metric_summary(ctx.base_metric)}")
     return ctx
+
+
+def _load_one(args: tuple[str, Path]) -> DatasetCtx | None:
+    """fork プールワーカー: 1 dataset を読み込み DatasetCtx を返す (失敗時 None)。
+
+    fork による COW 継承で呼ばれるため、s5.LITE_DIR / s5.SUB_DT への書き込みは
+    このワーカープロセス内のみに留まり、親プロセスには影響しない。
+    """
+    ds_id, lite_dir = args
+    return _load_dataset_ctx(ds_id, lite_dir, verbose=_VERBOSE, log=False)
 
 
 def load_datasets(
@@ -153,46 +162,12 @@ def load_datasets(
         # --jobs 1 の逐次パス (再現性の基準)
         ctxs: list[DatasetCtx] = []
         for ds_id, lite_dir in lite_dirs:
-            s5.LITE_DIR = lite_dir
-            real = resolve_lite_bag(lite_dir, "real")
-            if real is None:
-                print(f"[WARN] real.lite が見つかりません: {lite_dir}", file=sys.stderr)
-                continue
             # 多数の異種データセットを横断するため、ロード失敗 (AUTONOMOUS 窓なし・トピック欠落・
             # baseline 誤差が NaN/0 等) は致命にせず skip する。
-            try:
-                data = s5.load_real_bag(real)
-                t0_ns = s5.find_autonomous_start(data)
-                base = s5._build_params()
-                base["wheelbase"] = WHEELBASE
-                s5.SUB_DT = base["sub_dt"]
-                ctx = DatasetCtx(ds_id, data, t0_ns, base, {}, {})
-                ctx.base_metric = _eval(ctx, {}, _BASELINE_MODEL)  # 正規化基準 (horizon 別)
-                # 全 horizon で yaw>0 かつ縦横いずれかが正でなければ正規化分母が立たない
-                if not all(
-                    ctx.base_metric[h]["yaw"] > 0
-                    and (ctx.base_metric[h]["long"] > 0 or ctx.base_metric[h]["lat"] > 0)
-                    for h in HORIZONS
-                ):
-                    print(f"[SKIP] {ds_id}: baseline 誤差が無効 (yaw/縦/横≤0 or NaN)", file=sys.stderr)
-                    continue
-            except Exception as e:  # noqa: BLE001
-                msg = f"[SKIP] {ds_id}: ロード失敗 ({type(e).__name__}: {e})"
-                if verbose:
-                    tb_lines = traceback.format_exc().strip().splitlines()
-                    msg += "\n  " + "\n  ".join(tb_lines[-3:])
-                print(msg, file=sys.stderr)
+            ctx = _load_dataset_ctx(ds_id, lite_dir, verbose=verbose, log=verbose)
+            if ctx is None:
                 continue
             ctxs.append(ctx)
-            if verbose:
-                print(
-                    f"[load] {ds_id}: "
-                    + "  ".join(
-                        f"baseline@N{h} yaw={ctx.base_metric[h]['yaw']:.4f} "
-                        f"縦={ctx.base_metric[h]['long']:.3f} 横={ctx.base_metric[h]['lat']:.3f}"
-                        for h in HORIZONS
-                    )
-                )
         n_skip = len(lite_dirs) - len(ctxs)
         print(f"[INFO] ロード完了: {len(ctxs)}/{len(lite_dirs)} ({n_skip} SKIP)", file=sys.stderr)
         return ctxs
@@ -208,14 +183,7 @@ def load_datasets(
         if ctx is not None:
             ctxs.append(ctx)
             if verbose:
-                print(
-                    f"[load] {ctx.dataset_id}: "
-                    + "  ".join(
-                        f"baseline@N{h} yaw={ctx.base_metric[h]['yaw']:.4f} "
-                        f"縦={ctx.base_metric[h]['long']:.3f} 横={ctx.base_metric[h]['lat']:.3f}"
-                        for h in HORIZONS
-                    )
-                )
+                print(f"[load] {ctx.dataset_id}: {_baseline_metric_summary(ctx.base_metric)}")
 
     n_skip = sum(1 for r in results if r is None)
     print(f"[INFO] ロード完了: {len(ctxs)}/{len(lite_dirs)} ({n_skip} SKIP)", file=sys.stderr)
@@ -350,7 +318,7 @@ def _run_worker(
                 "acc_time_delay", DELAY_CANDIDATES
             )
 
-        params = unify_step_bands(params)
+        params = normalize_kus_step_bands(params)
         agg = _eval_grid(None, ctxs_search, [params], cur_model, 1, agg_fn=None)[0]
         score = score_fn(agg, worst_w=worst_w)
 
@@ -418,7 +386,7 @@ def robust_search(
 
     ctxs_search = ctxs[:search_subsample] if search_subsample else ctxs
     cur_case = cfg.find_case(case_name)
-    cur_best = unify_step_bands(dict(cur_case.params))
+    cur_best = normalize_kus_step_bands(dict(cur_case.params))
     cur_model = cur_case.vehicle_model_type
 
     if search_subsample:
@@ -523,7 +491,7 @@ def robust_search(
                 if explore_delay:
                     params["acc_time_delay"] = trial.suggest_categorical("acc_time_delay", DELAY_CANDIDATES)
 
-                params = unify_step_bands(params)
+                params = normalize_kus_step_bands(params)
                 agg = _eval_grid(None, ctxs_search, [params], cur_model, 1, agg_fn=None)[0]
                 score = score_fn(agg, worst_w=worst_w)
                 if score < best_result["score"]:
@@ -657,14 +625,12 @@ def robust_search(
 
 
 def _discover(collection_dir: Path) -> list[tuple[str, Path]]:
-    """収集ディレクトリ配下の <dataset_id>/real.lite を列挙 (datasets/ サブディレクトリ対応)。"""
-    from .lib._collection import datasets_root  # noqa: PLC0415
-
-    out = []
-    for sub in sorted(datasets_root(collection_dir).iterdir()):
-        if sub.is_dir() and resolve_lite_bag(sub, "real") is not None:
-            out.append((sub.name, sub))
-    return out
+    """収集ディレクトリ配下の <dataset_id>/real.lite を列挙する。"""
+    return [
+        (e.dataset_id, e.dir)
+        for e in discover_collection(collection_dir)
+        if e.dir is not None and e.real_lite is not None
+    ]
 
 
 def _ds_recording_date(ds_dir: Path) -> datetime.date | None:
@@ -906,7 +872,7 @@ def main() -> None:
             p = Path(path_str)
             with p.open("r") as f:
                 data = yaml.safe_load(f)
-            extra_enqueue.append(unify_step_bands(data["params"]))
+            extra_enqueue.append(normalize_kus_step_bands(data["params"]))
         print(f"[INFO] extra enqueue: {len(extra_enqueue)} params loaded")
 
     phase_fixed_params: dict | None = None
@@ -914,7 +880,7 @@ def main() -> None:
         p = Path(args.phase_params)
         with p.open("r") as f:
             phase_data = yaml.safe_load(f)
-        all_params = unify_step_bands(phase_data.get("params", phase_data))
+        all_params = normalize_kus_step_bands(phase_data.get("params", phase_data))
         acc_keys = {"acc_time_constant", "acc_time_delay"}
         if args.phase == 2:
             fixed_keys = acc_keys

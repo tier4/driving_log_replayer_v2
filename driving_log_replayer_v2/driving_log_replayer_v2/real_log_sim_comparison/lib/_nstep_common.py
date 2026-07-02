@@ -294,10 +294,10 @@ def build_cases_metrics_payload(
     cases_cfg,
     horizons: list[int],
     physical_validity: dict | None,
-    *,
-    physical_validity_jsonable,
 ) -> dict:
     """cases_metrics.json の payload を構築する。"""
+    from ._physical_validity import physical_validity_jsonable
+
     cases: dict[str, dict] = {}
     for case in cases_cfg.cases:
         df = case_dfs.get(case.tag)
