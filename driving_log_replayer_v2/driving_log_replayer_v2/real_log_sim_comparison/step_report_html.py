@@ -202,7 +202,6 @@ _CLOSED_LOOP_STEMS: set[str] = {
 _MARKDOWN_REPORTS_PRE: list[tuple[str, str, str]] = []
 # セクション内で「図の後」に描画する Markdown (既定)。
 _MARKDOWN_REPORTS: list[tuple[str, str, str]] = [
-    ("report.md", "比較レポート（step4: report.md）", "closed_loop_comparison"),
     ("cases/cases_summary.md", "ケース集約サマリ（step6: cases_summary.md）", "post_estimation_residual"),
 ]
 
