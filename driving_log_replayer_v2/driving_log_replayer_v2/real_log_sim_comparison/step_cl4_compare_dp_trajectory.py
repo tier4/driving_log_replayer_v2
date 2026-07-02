@@ -45,6 +45,11 @@ from .lib._figures import (
 )
 from .lib._provenance import format_provenance_line, read_provenance
 from .lib._runtime_config import RuntimeConfig, add_common_cli_arguments, build_runtime_config
+from .lib._playback_payload import (
+    BASELINE_LABEL,
+    PLAYBACK_WHEELBASE_M,
+    build_playback_payload,
+)
 
 
 VERBOSE = False

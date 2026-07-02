@@ -1372,3 +1372,5 @@ $("errpanels").addEventListener("change", (e) => { showErr = e.target.checked; m
 </body>
 </html>
 """
+
+from ._model_seed import _seed_from_params  # noqa: F401,E402

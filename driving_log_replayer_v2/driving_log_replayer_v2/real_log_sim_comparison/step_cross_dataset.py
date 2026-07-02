@@ -73,6 +73,7 @@ from .lib._figures import (
     build_fig_long_perf_map,
 )
 from .lib._multi_agg import HORIZONS
+from .lib._multi_agg import aggregate_normalized, robust_score
 from .lib._cross_dataset import (
     build_closed_loop_matrix,
     build_open_loop_matrix,

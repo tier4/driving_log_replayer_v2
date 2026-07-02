@@ -65,6 +65,10 @@ def find_autonomous_start(
     else:
         auto_rows = df_mode[df_mode["mode"] == AUTONOMOUS_MODE]
         if auto_rows.empty:
+            warnings.warn(
+                "df_mode に AUTONOMOUS が見つからないため速度カットのみを採用します",
+                stacklevel=2,
+            )
             manual_cut_ns = int(df_vel["t_ns"].iloc[0])
         else:
             manual_cut_ns = int(auto_rows["t_ns"].iloc[0])
