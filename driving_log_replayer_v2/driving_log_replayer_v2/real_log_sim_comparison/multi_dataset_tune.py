@@ -380,12 +380,6 @@ def _run_worker(
             except Exception:
                 n_completed = 0
                 best_val = trial.value
-            print(
-                f"trial {n_completed:3d}/{n_trials} (worker {worker_id})"
-                f"  score={trial.value:.4f}"
-                f"  best={best_val:.4f}"
-                f"  {trial.params}"
-            )
 
     study.optimize(worker_objective, n_trials=n_trials_w, callbacks=[worker_log])
 

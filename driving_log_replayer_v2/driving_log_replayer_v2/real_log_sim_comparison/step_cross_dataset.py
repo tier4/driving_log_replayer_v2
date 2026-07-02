@@ -759,7 +759,7 @@ def run_cross_analysis(
     n = len(metrics)
     labels = _short_labels(list(metrics))
     if VERBOSE:
-        print(f"datasets: {[labels[ds] for ds in metrics]} (有効 {n} / 欠損 {len(missing)})")
+        print(f"datasets: 有効 {n} / 欠損 {len(missing)}")
 
     out_dir.mkdir(parents=True, exist_ok=True)
 

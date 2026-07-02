@@ -65,11 +65,6 @@ def find_autonomous_start(
     else:
         auto_rows = df_mode[df_mode["mode"] == AUTONOMOUS_MODE]
         if auto_rows.empty:
-            warnings.warn(
-                "AUTONOMOUS モードが見つからないため MANUAL 区間カットは適用せず"
-                "停止区間カットのみで解析開始点を決定",
-                stacklevel=2,
-            )
             manual_cut_ns = int(df_vel["t_ns"].iloc[0])
         else:
             manual_cut_ns = int(auto_rows["t_ns"].iloc[0])

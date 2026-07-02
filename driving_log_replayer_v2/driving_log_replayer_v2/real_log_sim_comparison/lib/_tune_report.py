@@ -429,7 +429,6 @@ def generate_report(
     for ds_id, _ in worst_ds_list:
         ctx = ctx_map[ds_id]
         for cfg_name in plot_cfgs:
-            print(f"[report] rollout: {ds_id[:12]}/{cfg_name}", flush=True)
             rollout_data[(ds_id, cfg_name)] = _run_rollout_silent(
                 ctx, configs[cfg_name], model_type, HORIZONS, stride, s5
             )
@@ -452,7 +451,6 @@ def generate_report(
     viewer_htmls: dict[str, str] = {}
     for ds_id, _ in worst_ds_list[:VIEWER_MAX_DS]:
         ctx = ctx_map[ds_id]
-        print(f"[report] viewer: {ds_id[:12]}", flush=True)
         vh = _build_viewer_html(ctx, configs, base_params)
         if vh is not None:
             viewer_htmls[ds_id] = vh

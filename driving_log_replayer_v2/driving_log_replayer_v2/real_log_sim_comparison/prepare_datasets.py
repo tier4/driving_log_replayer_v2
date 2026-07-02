@@ -82,7 +82,6 @@ def main():
                 link_name.unlink()
             link_name.symlink_to(real_item)
             created += 1
-            print(f"[LINK] {item.name} ({date_str}) -> {real_item}")
 
     print(f"Processed {count} directories. Created {created} symlinks in {dst_path}")
 
