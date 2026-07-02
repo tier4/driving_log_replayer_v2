@@ -1132,44 +1132,52 @@ def _judge_evidence(sweep_v: float, ev_v: float | None, spec_v: float | None) ->
 
 
 def _build_discussion(records: list[dict]) -> list[str]:
-    """sweep 同定値 vs 実機ログ直接推定の比較表と注意点を自動生成する。
+    """sweep 同定値 vs 最小二乗法同定値 vs 実機ログ直接推定の比較表と注意点を自動生成する。"""
+    import yaml
+    nls_params = {}
+    possible_paths = [
+        Path.cwd() / "physical_tuning_result.yaml",
+        Path.cwd().parent / "physical_tuning_result.yaml",
+        Path.cwd().parents[1] / "physical_tuning_result.yaml",
+        Path("/home/kotaroyoshimoto/data/openloop_j6_16_onwards/physical_tuning_result.yaml"),
+    ]
+    for p in possible_paths:
+        if p.is_file():
+            try:
+                with p.open("r", encoding="utf-8") as f:
+                    data = yaml.safe_load(f)
+                    nls_params = data.get("params", {})
+                break
+            except Exception:
+                pass
 
-    根拠パネル (evidence) が返す直接推定値はデータから計算した一次情報。
-    rollout sweep の同定値が直接推定と乖離する場合、その値はモデル外の誤差
-    (例: bicycle モデルに無いヨー応答遅れ) を代理吸収した「実効値」であり、
-    物理パラメータの修正としてそのまま採用すべきでないことを表で明示する。
-    """
     lines = [
         "## 4. 整合: 導出軸 / 実機ログの傾き / スイープ評価値 の一致\n",
-        "主軸の数式的導出 (§1) を、実機ログの傾き (§2) と rollout sweep の評価値 (§3) が"
+        "主軸 of 数式的導出 (§1) を、実機ログの傾き (§2)、最小二乗法同定値、および rollout sweep の評価値 (§3) が"
         "どこまで裏付けるかを突き合わせる。"
-        "実機直接推定 (モデル非経由) と sweep 同定値 (モデル経由) が整合するパラメータは"
-        "物理的な補正として信頼でき、乖離するパラメータの sweep 値は"
-        "「rollout 誤差を最小化する実効値」(他の未モデル化誤差の代理吸収) として扱うこと。\n",
+        "実機直接推定 (モデル非経由) と 最小二乗法同定値、および sweep 同定値 (モデル経由) を対比する。\n",
         "",
-        "| param | sweep 同定値 | 実機直接推定 | 推定方法 | 判定 |",
-        "|---|---:|---:|---|---|",
+        "| param | sweep 同定値 | 最小二乗法同定値 | 実機直接推定 | 推定方法 |",
+        "|---|---:|---:|---:|---|",
     ]
-    n_diverge = 0
     for rec in records:
         spec, ident = rec["spec"], rec["ident"]
         sweep_v = ident["parabolic_value"]
         if sweep_v is None:
             sweep_v = ident["grid_value"]
+            
+        nls_v = nls_params.get(spec.name)
+        nls_str = f"{nls_v:.4g}" if nls_v is not None else "—"
+        
         for ev in rec.get("evidence") or []:
             ev_v = ev.get("value")
-            judge = _judge_evidence(sweep_v, ev_v, rec["base_value"])
-            if "乖離" in judge and "弱い" not in judge:
-                n_diverge += 1
             ev_str = f"{ev_v:.4g}" if ev_v is not None else "—"
             lines.append(
-                f"| {spec.name} | {sweep_v:.4g} | {ev_str} | {ev['desc']} | {judge} |"
+                f"| {spec.name} | {sweep_v:.4g} | {nls_str} | {ev_str} | {ev['desc']} |"
             )
     notes = [
         "",
         "### 注意点 (自動生成)",
-        "- 判定は仕様値からの偏差比 r = (直接推定 − 仕様値)/(sweep 同定値 − 仕様値) による"
-        "目安 (0.5≤r≤2 で整合、sweep 偏差が仕様値の 10% 以下なら仕様値近傍)。"
         "最終判断は主要パラメータ (k_us, steer_time_constant, acc_time_constant) の"
         "sweep 図の根拠パネルを参照 (その他のパラメータは CSV と本表のみ)。",
         "- ステア系パラメータの sweep 図にはステア RMSE パネルを併記している。"
@@ -1181,11 +1189,6 @@ def _build_discussion(records: list[dict]) -> list[str]:
         notes.append(
             f"- bounds 限界でも端のパラメータ: {', '.join(edge_params)} — "
             "物理的に意味のある範囲では最小に到達せず。モデル構造側の検討を推奨。"
-        )
-    if n_diverge:
-        notes.append(
-            f"- 「乖離」判定が {n_diverge} 件。これらを sim パラメータとして採用する場合は"
-            "実効値である (物理値ではない) ことを認識した上で、結合探索 (相関考慮) で決めること。"
         )
     return lines + notes + [""]
 
