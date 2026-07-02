@@ -43,8 +43,6 @@ LOO も O(D²·C) の再集計で済む。
 from __future__ import annotations
 
 import argparse
-from collections import Counter
-import json
 import math
 from pathlib import Path
 import sys
@@ -73,19 +71,18 @@ from .lib._figures import (
     build_fig_long_perf_growth,
     build_fig_long_perf_map,
 )
-from .lib._models_config import load_models_doc
-from .lib._multi_agg import (
-    HORIZONS,
-    aggregate_normalized,
-    robust_score,
-    score_formula_md,
+from .lib._cross_dataset import (
+    build_closed_loop_matrix,
+    build_open_loop_matrix,
+    cross_normalized,
+    cross_physical_validity_analysis,
+    detect_outliers,
+    leave_one_out,
+    resolve_reference_tag,
+    write_cross_metrics_json,
 )
 from .lib._nstep_common import metrics_description_md
 from .lib._physical_validity import (
-    compute_cross_long_rows,
-    compute_cross_steer_rows,
-    compute_kus_bins_from_sufficient_stats,
-    fit_long_cross_dataset_bounded,
     compute_long_perf_data,
     compute_perfect_tracking_data,
     merged_model_params,
@@ -102,7 +99,9 @@ VERBOSE = False
 def _short_labels(ds_ids: list[str]) -> dict[str, str]:
     """dataset_id → 短縮表示ラベル (先頭 8 文字、衝突時はフル ID)。"""
     short = {ds: ds[:8] for ds in ds_ids}
-    counts = Counter(short.values())
+    counts: dict[str, int] = {}
+    for s in short.values():
+        counts[s] = counts.get(s, 0) + 1
     return {ds: (s if counts[s] == 1 else ds) for ds, s in short.items()}
 
 
