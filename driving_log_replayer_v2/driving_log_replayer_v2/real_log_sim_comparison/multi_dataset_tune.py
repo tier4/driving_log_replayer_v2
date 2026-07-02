@@ -38,6 +38,7 @@ import yaml
 from . import step_ol1_analyze_nstep as s5
 from .lib._cases_config import load_cases_config
 from .lib._io import resolve_lite_bag
+from .lib._physical_validity import WHEELBASE
 from .lib._multi_agg import (
     HORIZONS, WORST_W,
     VX_FLOOR, STEER_FLOOR,
@@ -46,7 +47,6 @@ from .lib._multi_agg import (
 )
 
 STRIDE = 5
-WHEELBASE = 4.76012
 _BASELINE_MODEL = "delay_steer_acc_geared_wo_fall_guard"
 # _prepare_gt は params の delay/wheelbase/sub_dt にのみ依存 (run_rollout docstring)
 _GT_KEYS = ("acc_time_delay", "steer_time_delay", "wheelbase", "sub_dt")

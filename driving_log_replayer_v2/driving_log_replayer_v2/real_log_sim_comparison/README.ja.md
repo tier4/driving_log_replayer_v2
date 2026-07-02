@@ -189,6 +189,13 @@ Stage CL2 (`step_cl2_run_sims`) が `scenario_test_runner` で sim を回した�
 | 4. 最終的な Closed Loop シミュレーション残差 | 最終同定パラメータで closed-loop 実行した際の実機との軌跡・速度・操舵の乖離 | `trajectory_playback`(CL3) + `cross_closed_loop_heatmap`/`cross_normalized_bars`/`coverage_overview`/`loo_stability`(Cross Dataset) |
 | その他 | 上記いずれにも分類されなかった図 | `dp_real_vs_sim`・`dp_vs_actual`・`dp_vs_final_traj`(CL4) など |
 
+**`report.html` と `physical_validity_report.html` の役割分担**: 前者は解析パイプラインの成果物で、
+scenario の Conditions に列挙された models 群を対象に自動生成される。後者はチューニングワークフロー
+（`make local_multidataset_cloud_run` Step 4）の成果物で、同定された `tuned_params.yaml` 1 点に対する
+検証（score 再現・偏差テーブル・カーブビューア・closed-loop 比較）に特化する。物理妥当性の計算と図は
+どちらも同じ共有ライブラリ（`lib/_physical_validity.py`・`lib/_figures/_physical_validity.py`）を
+使っており、数式・定数の実装はそこに一本化されている。
+
 各セクションには 1 行説明を付ける。**CDN 不使用・オフライン可**:
 
 - **図 (`*.fig.json`)**: 各図の JSON を `<div class='plotly-fig'>` プレースホルダ直後の
