@@ -40,10 +40,12 @@ import plotly.graph_objects as go
 from .lib._events import find_autonomous_start as _find_autonomous_start
 from .lib._io import (
     iter_bag_messages,
+    load_gear_status,
     load_kinematic,
     load_operation_mode,
     load_steering,
     load_velocity,
+    require_drive_gear_mask,
     resolve_lite_bag,
     resolve_topic,
 )
@@ -64,6 +66,7 @@ from .lib._nstep_common import (
 from .lib._params_utils import load_sim_params
 from .lib._plotly_utils import FIG_HEIGHTS, lanes_to_trace
 from .lib._runtime_config import RuntimeConfig, add_common_cli_arguments, build_runtime_config
+from .lib._validation import require_non_empty_df
 
 BASE = Path(os.environ.get("BEST_MODEL_BASE_DIR") or Path(__file__).parent)
 LITE_DIR = BASE / "lite"
@@ -587,6 +590,7 @@ def load_real_bag(path: Path) -> dict[str, pd.DataFrame]:
         "kin": df_kin,
         "acc": pd.DataFrame(rows_acc),
         "cmd": pd.DataFrame(rows_cmd),
+        "gear": load_gear_status(path),
     }
 
 
@@ -614,11 +618,10 @@ def _prepare_gt(data: dict, t0_ns: int, params: dict) -> dict:
     df_acc = to_seconds(data["acc"], t0_ns).sort_values("t").reset_index(drop=True)
     df_steer = to_seconds(data["steer"], t0_ns).sort_values("t").reset_index(drop=True)
     df_cmd = to_seconds(data["cmd"], t0_ns).sort_values("t").reset_index(drop=True)
+    df_gear = data.get("gear")
 
-    if df_cmd.empty:
-        raise RuntimeError("制御コマンドが空です")
-    if df_kin.empty:
-        raise RuntimeError("運動学状態が空です")
+    require_non_empty_df(df_cmd, name="/control/command/control_cmd", context="step_ol1_analyze_nstep")
+    require_non_empty_df(df_kin, name="/localization/kinematic_state", context="step_ol1_analyze_nstep")
 
     # AUTONOMOUS 開始 (tr=0) から各系列末尾の min まで解析対象とする。
     # cmd だけ末尾まで取ると kin/acc/steer 側で np.interp が右端値に張り付き
@@ -643,10 +646,8 @@ def _prepare_gt(data: dict, t0_ns: int, params: dict) -> dict:
         drop=True
     )
 
-    if df_cmd.empty:
-        raise RuntimeError("制御コマンドが空です")
-    if df_kin.empty:
-        raise RuntimeError("運動学状態が空です")
+    require_non_empty_df(df_cmd, name="/control/command/control_cmd", context="step_ol1_analyze_nstep")
+    require_non_empty_df(df_kin, name="/localization/kinematic_state", context="step_ol1_analyze_nstep")
 
     # -- 位置微分による body frame 横速度・横加速度の計算 --
     # EKF の vy/ay は no-slip 拘束によりほぼゼロになるため、
@@ -751,6 +752,14 @@ def _prepare_gt(data: dict, t0_ns: int, params: dict) -> dict:
     # コマンド配列の直接参照 (per-eval df.values アクセスを回避)
     _accel_des_arr = df_cmd["accel_des"].values
     _steer_des_arr = df_cmd["steer_des"].values
+    _valid_gear = require_drive_gear_mask(
+        df_gear if df_gear is not None else pd.DataFrame(),
+        df_cmd["t_ns"].values,
+        context="step_ol1_analyze_nstep",
+    )
+    _bad_gear_cumsum = np.cumsum(
+        np.concatenate([[0], (~_valid_gear).view(np.uint8)])
+    ).astype(np.intp)  # shape (_n_h + 1)
 
     return {
         "t_cmd": t_cmd,
@@ -780,6 +789,8 @@ def _prepare_gt(data: dict, t0_ns: int, params: dict) -> dict:
         "sin_y_arr": _sin_y_arr,
         "accel_des_arr": _accel_des_arr,
         "steer_des_arr": _steer_des_arr,
+        "valid_gear_arr": _valid_gear,
+        "bad_gear_cumsum": _bad_gear_cumsum,
     }
 
 
@@ -841,6 +852,7 @@ def eval_rollout_rmse(
     nfull_arr = g["nfull_arr"]
     rem_arr = g["rem_arr"]
     bc = g["bad_iv_cumsum"]  # bc[k0+h] - bc[k0] > 0 iff bad interval in [k0, k0+h)
+    bg = g["bad_gear_cumsum"]  # bg[k0+h+1] - bg[k0] > 0 iff non-DRIVE sample in [k0, k0+h]
     acc_hist_all = g["acc_hist_all"]
     steer_hist_all = g["steer_hist_all"]
     cos_y_arr = g["cos_y_arr"]
@@ -865,6 +877,7 @@ def eval_rollout_rmse(
     gt_wz_list = gt_wz.tolist()
     gt_vy_list = gt_vy.tolist()
     bc_list = bc.tolist()
+    bg_list = bg.tolist()
 
     # Pre-calculate ctypes pointers to avoid array creation inside loop
     n_acc = acc_hist_all.shape[1]
@@ -931,6 +944,8 @@ def eval_rollout_rmse(
             if k0 + h >= n:
                 break
             if bc_list[k0 + h] > bc_list[k0]:
+                break
+            if bg_list[k0 + h + 1] > bg_list[k0]:
                 break
             n_valid += 1
         if n_valid == 0:
@@ -1070,6 +1085,7 @@ def run_rollout(
     gt_steer = g["gt_steer"]
     gt_dwz = g["gt_dwz"]
     gt_steer_kinematic = g["gt_steer_kinematic"]
+    bad_gear_cumsum = g["bad_gear_cumsum"]
     accel_des = g["df_cmd"]["accel_des"].values
     steer_des = g["df_cmd"]["steer_des"].values
 
@@ -1119,6 +1135,8 @@ def run_rollout(
         for h in sorted_horizons:
             if k0 >= n - h:
                 # この k0 では horizon h が範囲外 (昇順なので以降も全て範囲外)
+                break
+            if bad_gear_cumsum[k0 + h + 1] > bad_gear_cumsum[k0]:
                 break
             # -- 実コマンド系列を [stepped, h) 区間だけ追加適用 --
             # 各区間は n_full 回の SUB_DT ステップ + 端数ステップで正確に積分する

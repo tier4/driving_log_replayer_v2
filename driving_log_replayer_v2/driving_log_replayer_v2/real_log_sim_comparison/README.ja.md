@@ -112,9 +112,11 @@ map-pose z との差で**永久に発火しなかった**（2026-06-03 判明）
 | `/system/operation_mode/state` | AUTONOMOUS 区間の切り出し |
 | `/vehicle/status/velocity_status` | 速度応答 |
 | `/vehicle/status/steering_status` | 操舵応答 |
+| `/vehicle/status/gear_status` | gear 状態（DRIVE 系区間のみを同定・評価に使用。欠落する旧 lite は再生成必須） |
 | `/localization/kinematic_state` | 自車位置・軌跡 |
 | `/localization/acceleration` | 加速度応答 |
 | `/control/command/control_cmd` | 制御指令（post-gate） |
+| `/control/command/gear_cmd` | gear 指令（診断・sim 比較用） |
 | `/planning/trajectory_generator/neural_network_based_planner/diffusion_planner_node/output/trajectory` | DiffusionPlanner 出力軌跡（シムと直接比較） |
 | `/perception/object_recognition/tracking/objects` | 追跡物体（社会的コンテキストの確認） |
 | `/planning/trajectory` | 最終プランニング軌跡（optimizer 後段出力） |
@@ -129,10 +131,12 @@ Stage CL2 (`step_cl2_run_sims`) が `scenario_test_runner` で sim を回した�
 | `/system/operation_mode/state` | AUTONOMOUS 区間の切り出し |
 | `/vehicle/status/velocity_status` | 速度応答 |
 | `/vehicle/status/steering_status` | 操舵応答 |
+| `/vehicle/status/gear_status` | gear 状態（DRIVE 系区間のみを同定・評価に使用） |
 | `/localization/kinematic_state` | 自車位置・軌跡 |
 | `/localization/acceleration` | 加速度応答 |
 | `/control/trajectory_follower/control_cmd` | trajectory_follower の制御指令 |
 | `/control/command/control_cmd` | 制御指令（post-gate、実機との同段比較用） |
+| `/control/command/gear_cmd` | gear 指令（診断・実機との同段比較用） |
 | `/planning/trajectory_generator/neural_network_based_planner/diffusion_planner_node/output/trajectory` | DiffusionPlanner 出力軌跡（速度プロファイル分析用） |
 | `/perception/traffic_light_recognition/traffic_signals` | 交通信号状態（DiffusionPlanner 入力） |
 

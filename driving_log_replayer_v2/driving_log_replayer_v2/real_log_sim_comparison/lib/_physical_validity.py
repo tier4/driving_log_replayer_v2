@@ -29,9 +29,18 @@ import pandas as pd
 from scipy.optimize import minimize_scalar
 from scipy.signal import lfilter
 
-from ._io import load_accel, load_cmd, load_kinematic, load_steering, load_velocity
+from ._io import (
+    load_accel,
+    load_cmd,
+    load_gear_status,
+    load_kinematic,
+    load_steering,
+    load_velocity,
+    require_drive_gear_mask,
+)
 from ._kus_profile import VX_EDGES, _kus_band_label, _kus_step_profile  # noqa: F401  (re-export)
 from ._params_utils import load_sim_params
+from ._validation import require_non_empty_df
 
 CMD_TOPIC = "/control/command/control_cmd"
 
@@ -112,6 +121,19 @@ def _resample(df: pd.DataFrame, col: str, t_s: np.ndarray, t0: float) -> np.ndar
     return np.interp(t_s, (df["t_ns"].values - t0) * 1e-9, df[col].values)
 
 
+def _drive_mask_on_grid(bag_path: Path, t_s: np.ndarray, t0: float, *, context: str) -> np.ndarray:
+    """共通時間グリッド上で DRIVE 系 gear の mask を返す。gear_status 欠落はエラー。"""
+    df_gear = load_gear_status(bag_path)
+    target_t_ns = (t0 + t_s * 1e9).astype(np.int64)
+    return require_drive_gear_mask(df_gear, target_t_ns, context=context)
+
+
+def _require_dfs(context: str, **dfs: pd.DataFrame) -> None:
+    """必須 DataFrame 群が空でないことをまとめて検証する。"""
+    for name, df in dfs.items():
+        require_non_empty_df(df, name=name, context=context)
+
+
 def _mask_stopped(arr: np.ndarray, moving: np.ndarray) -> list:
     """停車中サンプルを NaN でマスクしたリストを返す (moving=True のみ有効)。"""
     out = np.where(moving, arr.astype(float), np.nan)
@@ -164,8 +186,12 @@ def fit_long_single(bag_path: Path) -> dict | None:
         df_vel = load_velocity(bag_path)
     except Exception:
         return None
-    if df_cmd.empty or df_accel.empty or df_vel.empty:
-        return None
+    _require_dfs(
+        f"fit_long_single:{bag_path}",
+        control_cmd=df_cmd,
+        localization_acceleration=df_accel,
+        velocity_status=df_vel,
+    )
 
     timebase = _common_timebase(df_cmd, df_accel, df_vel, min_span_ns=_MIN_SPAN_NS)
     if timebase is None:
@@ -175,11 +201,12 @@ def fit_long_single(bag_path: Path) -> dict | None:
     a_cmd_arr = _resample(df_cmd, "cmd_accel", t_s, t0)
     a_act_arr = _resample(df_accel, "accel", t_s, t0)
     vx = _resample(df_vel, "lon_vel", t_s, t0)
+    gear_drive = _drive_mask_on_grid(bag_path, t_s, t0, context=f"fit_long_single:{bag_path}")
     slope_acc_arr = _slope_acc_on_grid(bag_path, t_s, t0)
     a_act_corr = a_act_arr - slope_acc_arr
 
     d_cmd = np.abs(np.gradient(a_cmd_arr, _FIT_DT))
-    mask_dyn = (vx > _VX_MIN_FIT) & (d_cmd > _DA_THRESH_FIT)
+    mask_dyn = gear_drive & (vx > _VX_MIN_FIT) & (d_cmd > _DA_THRESH_FIT)
     if mask_dyn.sum() < 50:
         return None
 
@@ -227,8 +254,12 @@ def fit_steer_single(bag_path: Path) -> dict | None:
         df_vel = load_velocity(bag_path)
     except Exception:
         return None
-    if df_cmd.empty or df_steer.empty or df_vel.empty:
-        return None
+    _require_dfs(
+        f"fit_steer_single:{bag_path}",
+        control_cmd=df_cmd,
+        steering_status=df_steer,
+        velocity_status=df_vel,
+    )
 
     timebase = _common_timebase(df_cmd, df_steer, df_vel, min_span_ns=_MIN_SPAN_NS)
     if timebase is None:
@@ -238,9 +269,10 @@ def fit_steer_single(bag_path: Path) -> dict | None:
     d_cmd = _resample(df_cmd, "cmd_steer", t_s, t0)
     d_act = _resample(df_steer, "steer", t_s, t0)
     vx = _resample(df_vel, "lon_vel", t_s, t0)
+    gear_drive = _drive_mask_on_grid(bag_path, t_s, t0, context=f"fit_steer_single:{bag_path}")
 
     dd_cmd = np.abs(np.gradient(d_cmd, _FIT_DT))
-    mask_dyn = (vx > _VX_MIN_FIT) & (dd_cmd > _DSTEER_MIN / _FIT_DT)
+    mask_dyn = gear_drive & (vx > _VX_MIN_FIT) & (dd_cmd > _DSTEER_MIN / _FIT_DT)
     if mask_dyn.sum() < 50:
         return None
 
@@ -286,12 +318,22 @@ def _extract_kus_arrays(bag_path: Path) -> dict | None:
         df_steer = load_steering(bag_path)
     except Exception:
         return None
-    if df_kin.empty or df_steer.empty or len(df_kin) < 10:
+    _require_dfs(
+        f"_extract_kus_arrays:{bag_path}",
+        kinematic_state=df_kin,
+        steering_status=df_steer,
+    )
+    if len(df_kin) < 10:
         return None
 
     t_k = df_kin["t_ns"].values * 1e-9
     vx = df_kin["vx"].values
     wz = df_kin["wz"].values
+    gear_drive = require_drive_gear_mask(
+        load_gear_status(bag_path),
+        df_kin["t_ns"].values,
+        context=f"_extract_kus_arrays:{bag_path}",
+    )
 
     steer_raw = df_steer["steer"].values
     t_s = df_steer["t_ns"].values * 1e-9
@@ -313,6 +355,7 @@ def _extract_kus_arrays(bag_path: Path) -> dict | None:
         "wz": wz,
         "steer_eff": steer_eff,
         "dwz": dwz,
+        "gear_drive": gear_drive,
         "t": t_k,
         "yaw": df_kin["yaw"].values,
     }
@@ -330,9 +373,11 @@ def compute_kus_bins(records: list[dict]) -> dict:
     all_wz = np.concatenate([r["wz"] for r in records])
     all_steer_eff = np.concatenate([r["steer_eff"] for r in records])
     all_dwz = np.concatenate([r["dwz"] for r in records])
+    all_gear_drive = np.concatenate([r.get("gear_drive", np.ones_like(r["vx"], dtype=bool)) for r in records])
 
     mask_ok = (
-        (np.abs(all_wz) > WZ_MIN)
+        all_gear_drive
+        & (np.abs(all_wz) > WZ_MIN)
         & (np.abs(all_dwz) < DWZ_MAX)
         & (all_vx > VX_MIN_CURVE)
     )
@@ -461,8 +506,12 @@ def compute_long_timeseries(bag_path: Path, fit: dict | None, models: dict[str, 
         df_vel = load_velocity(bag_path)
     except Exception:
         return None
-    if df_cmd.empty or df_accel.empty or df_vel.empty:
-        return None
+    _require_dfs(
+        f"compute_long_timeseries:{bag_path}",
+        control_cmd=df_cmd,
+        localization_acceleration=df_accel,
+        velocity_status=df_vel,
+    )
     timebase = _common_timebase(df_cmd, df_accel, df_vel, min_span_ns=_MIN_SPAN_NS)
     if timebase is None:
         return None
@@ -471,8 +520,9 @@ def compute_long_timeseries(bag_path: Path, fit: dict | None, models: dict[str, 
     a_cmd_arr = _resample(df_cmd, "cmd_accel", t_s, t0)
     a_act_arr = _resample(df_accel, "accel", t_s, t0)
     vx = _resample(df_vel, "lon_vel", t_s, t0)
+    gear_drive = _drive_mask_on_grid(bag_path, t_s, t0, context=f"compute_long_timeseries:{bag_path}")
     slope_acc_arr = _slope_acc_on_grid(bag_path, t_s, t0)
-    moving = vx > VX_MIN_CURVE
+    moving = gear_drive & (vx > VX_MIN_CURVE)
 
     a_sim_fit = None
     if fit is not None and np.isfinite(fit.get("tau", float("nan"))):
@@ -515,8 +565,12 @@ def compute_steer_timeseries(bag_path: Path, fit: dict | None, models: dict[str,
         df_vel = load_velocity(bag_path)
     except Exception:
         return None
-    if df_cmd.empty or df_steer.empty or df_vel.empty:
-        return None
+    _require_dfs(
+        f"compute_steer_timeseries:{bag_path}",
+        control_cmd=df_cmd,
+        steering_status=df_steer,
+        velocity_status=df_vel,
+    )
     timebase = _common_timebase(df_cmd, df_steer, df_vel, min_span_ns=_MIN_SPAN_NS)
     if timebase is None:
         return None
@@ -525,7 +579,8 @@ def compute_steer_timeseries(bag_path: Path, fit: dict | None, models: dict[str,
     d_cmd = _resample(df_cmd, "cmd_steer", t_s, t0)
     d_act = _resample(df_steer, "steer", t_s, t0)
     vx = _resample(df_vel, "lon_vel", t_s, t0)
-    moving = vx > VX_MIN_CURVE
+    gear_drive = _drive_mask_on_grid(bag_path, t_s, t0, context=f"compute_steer_timeseries:{bag_path}")
+    moving = gear_drive & (vx > VX_MIN_CURVE)
 
     d_sim_fit = None
     if fit is not None and np.isfinite(fit.get("tau", float("nan"))):
@@ -600,8 +655,12 @@ def fit_long_cross_dataset_bounded(
             df_vel = load_velocity(e.real_lite)
         except Exception:
             continue
-        if df_cmd.empty or df_accel.empty or df_vel.empty:
-            continue
+        _require_dfs(
+            f"fit_long_cross_dataset_bounded:{e.dataset_id}",
+            control_cmd=df_cmd,
+            localization_acceleration=df_accel,
+            velocity_status=df_vel,
+        )
         timebase = _common_timebase(df_cmd, df_accel, df_vel, min_span_ns=_MIN_SPAN_NS)
         if timebase is None:
             continue
@@ -609,6 +668,7 @@ def fit_long_cross_dataset_bounded(
         a_cmd_arr = _resample(df_cmd, "cmd_accel", t_s, t0)
         a_act_arr = _resample(df_accel, "accel", t_s, t0)
         vx = _resample(df_vel, "lon_vel", t_s, t0)
+        gear_drive = _drive_mask_on_grid(e.real_lite, t_s, t0, context=f"fit_long_cross_dataset_bounded:{e.dataset_id}")
         slope_acc_arr = _slope_acc_on_grid(e.real_lite, t_s, t0)
 
         p_min, p_max = _pitch_range(e.real_lite)
@@ -617,7 +677,7 @@ def fit_long_cross_dataset_bounded(
 
         a_act_corr_arr = a_act_arr - slope_acc_arr
         d_cmd = np.abs(np.gradient(a_cmd_arr, _FIT_DT))
-        mask = (vx > _VX_MIN_FIT) & (d_cmd > _DA_THRESH_FIT)
+        mask = gear_drive & (vx > _VX_MIN_FIT) & (d_cmd > _DA_THRESH_FIT)
         if mask.sum() < 50:
             continue
         pooled.append((a_cmd_arr, a_act_corr_arr, mask))
@@ -671,8 +731,12 @@ def compute_cross_long_rows(
             df_vel = load_velocity(entry.real_lite)
         except Exception:
             continue
-        if df_cmd.empty or df_accel.empty or df_vel.empty:
-            continue
+        _require_dfs(
+            f"compute_cross_long_rows:{entry.dataset_id}",
+            control_cmd=df_cmd,
+            localization_acceleration=df_accel,
+            velocity_status=df_vel,
+        )
         timebase = _common_timebase(df_cmd, df_accel, df_vel, min_span_ns=_MIN_SPAN_NS)
         if timebase is None:
             continue
@@ -680,8 +744,9 @@ def compute_cross_long_rows(
         a_cmd_arr = _resample(df_cmd, "cmd_accel", t_s, t0)
         a_act_arr = _resample(df_accel, "accel", t_s, t0)
         vx = _resample(df_vel, "lon_vel", t_s, t0)
+        gear_drive = _drive_mask_on_grid(entry.real_lite, t_s, t0, context=f"compute_cross_long_rows:{entry.dataset_id}")
         slope_acc_arr = _slope_acc_on_grid(entry.real_lite, t_s, t0)
-        moving = vx > VX_MIN_CURVE
+        moving = gear_drive & (vx > VX_MIN_CURVE)
 
         a_sim_cross = None
         if np.isfinite(cross_fit.get("tau", float("nan"))):
@@ -727,8 +792,12 @@ def compute_cross_steer_rows(
             df_vel = load_velocity(entry.real_lite)
         except Exception:
             continue
-        if df_cmd.empty or df_steer.empty or df_vel.empty:
-            continue
+        _require_dfs(
+            f"compute_cross_steer_rows:{entry.dataset_id}",
+            control_cmd=df_cmd,
+            steering_status=df_steer,
+            velocity_status=df_vel,
+        )
         timebase = _common_timebase(df_cmd, df_steer, df_vel, min_span_ns=_MIN_SPAN_NS)
         if timebase is None:
             continue
@@ -736,7 +805,8 @@ def compute_cross_steer_rows(
         d_cmd = _resample(df_cmd, "cmd_steer", t_s, t0)
         d_act = _resample(df_steer, "steer", t_s, t0)
         vx = _resample(df_vel, "lon_vel", t_s, t0)
-        moving = vx > VX_MIN_CURVE
+        gear_drive = _drive_mask_on_grid(entry.real_lite, t_s, t0, context=f"compute_cross_steer_rows:{entry.dataset_id}")
+        moving = gear_drive & (vx > VX_MIN_CURVE)
 
         fit = per_ds_steer.get(entry.dataset_id, {})
         d_sim_fit = None
@@ -971,8 +1041,11 @@ def compute_long_perf_data(
             df_kin   = load_kinematic(mcap)
         except Exception:
             continue
-        if df_accel.empty or df_vel.empty:
-            continue
+        _require_dfs(
+            f"compute_long_perf_data:{entry.dataset_id}",
+            localization_acceleration=df_accel,
+            velocity_status=df_vel,
+        )
 
         timebase = _common_timebase(df_accel, df_vel, min_span_ns=_MIN_SPAN_NS)
         if timebase is None:
@@ -980,8 +1053,11 @@ def compute_long_perf_data(
         t_s, t0 = timebase
         gt_vx = _resample(df_vel, "lon_vel", t_s, t0)
         a_act = _resample(df_accel, "accel", t_s, t0)
+        gear_drive = _drive_mask_on_grid(mcap, t_s, t0, context=f"compute_perfect_longitudinal_data:{entry.dataset_id}")
         if len(gt_vx) < 50:
             continue
+        gt_vx = np.where(gear_drive, gt_vx, 0.0)
+        a_act = np.where(gear_drive, a_act, 0.0)
 
         n_dataset += 1
         for h in _PERF_HORIZONS:
@@ -1042,7 +1118,12 @@ def compute_perfect_tracking_data(
             df_steer = load_steering(mcap)
         except Exception:
             continue
-        if df_kin.empty or df_steer.empty or len(df_kin) < 50:
+        _require_dfs(
+            f"compute_perfect_tracking_data:{entry.dataset_id}",
+            kinematic_state=df_kin,
+            steering_status=df_steer,
+        )
+        if len(df_kin) < 50:
             continue
 
         timebase = _common_timebase(df_kin, df_steer, min_span_ns=_MIN_SPAN_NS)
@@ -1055,6 +1136,7 @@ def compute_perfect_tracking_data(
         gt_yaw   = _resample(df_kin,   "yaw",   t_s, t0)
         gt_vx    = _resample(df_kin,   "vx",    t_s, t0)
         gt_steer = _resample(df_steer, "steer", t_s, t0)
+        gear_drive = _drive_mask_on_grid(mcap, t_s, t0, context=f"compute_perfect_tracking_data:{entry.dataset_id}")
 
         n_dataset += 1
         for h in _PERF_HORIZONS:
@@ -1065,7 +1147,7 @@ def compute_perfect_tracking_data(
             bx, by = _bicycle_trajectory_full(
                 gt_vx, gt_steer, float(gt_x[0]), float(gt_y[0]), float(gt_yaw[0]), params, _FIT_DT
             )
-            moving = gt_vx > VX_MIN_CURVE
+            moving = gear_drive & (gt_vx > VX_MIN_CURVE)
             _PLOT_STRIDE = 5
             traj_data.append({
                 "uuid": entry.dataset_id[:8],

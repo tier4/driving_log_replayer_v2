@@ -18,6 +18,8 @@ from rclpy.serialization import deserialize_message
 import rosbag2_py
 from rosidl_runtime_py.utilities import get_message
 
+from ._validation import MissingRequiredGearError, require_asof_mask
+
 # DiffusionPlanner 出力軌跡トピック (step4 playback / step8 比較が共用)。
 # `/sub` プレフィックス付き旧ログは resolve_topic の候補リストで吸収する。
 DP_TRAJ_TOPIC = (
@@ -135,7 +137,27 @@ DEFAULT_TOPICS = {
         "/localization/acceleration",
         "/sub/localization/acceleration",
     ],
+    "gear_status": [
+        "/vehicle/status/gear_status",
+        "/sub/vehicle/status/gear_status",
+    ],
+    "gear_cmd": [
+        "/control/command/gear_cmd",
+        "/sub/control/command/gear_cmd",
+    ],
 }
+
+# autoware_vehicle_msgs/msg/GearReport.msg / GearCommand.msg.
+# DRIVE 系のみを open-loop 同定・評価の有効 gear とする。
+GEAR_NONE = 0
+GEAR_NEUTRAL = 1
+GEAR_DRIVE = 2
+GEAR_DRIVE_18 = 19
+GEAR_REVERSE = 20
+GEAR_REVERSE_2 = 21
+GEAR_PARK = 22
+GEAR_LOW = 23
+GEAR_LOW_2 = 24
 
 
 def load_operation_mode(bag_path: Path) -> pd.DataFrame:
@@ -223,6 +245,63 @@ def load_cmd(bag_path: Path, topic: str | list[str]) -> pd.DataFrame:
         },
         ["t_ns", "cmd_vel", "cmd_accel", "cmd_steer"],
     )
+
+
+def load_gear_status(bag_path: Path, topic: str | list[str] | None = None) -> pd.DataFrame:
+    """gear_status をロードする。
+
+    戻り値は `t_ns, gear`。gear は autoware_vehicle_msgs/GearReport.report の enum 値。
+    """
+    return iter_to_df(
+        bag_path,
+        topic if topic is not None else DEFAULT_TOPICS["gear_status"],
+        lambda t_ns, m: {"t_ns": t_ns, "gear": int(m.report)},
+        ["t_ns", "gear"],
+    )
+
+
+def load_gear_cmd(bag_path: Path, topic: str | list[str] | None = None) -> pd.DataFrame:
+    """gear_cmd をロードする。
+
+    戻り値は `t_ns, gear`。gear は autoware_vehicle_msgs/GearCommand.command の enum 値。
+    """
+    return iter_to_df(
+        bag_path,
+        topic if topic is not None else DEFAULT_TOPICS["gear_cmd"],
+        lambda t_ns, m: {"t_ns": t_ns, "gear": int(m.command)},
+        ["t_ns", "gear"],
+    )
+
+
+def is_drive_gear(gear: np.ndarray | pd.Series) -> np.ndarray:
+    """DRIVE 系 gear (2..19) の bool mask を返す。"""
+    arr = np.asarray(gear)
+    return (arr >= GEAR_DRIVE) & (arr <= GEAR_DRIVE_18)
+
+
+def require_drive_gear_mask(
+    df_gear: pd.DataFrame,
+    target_t_ns: np.ndarray | pd.Series,
+    *,
+    context: str,
+) -> np.ndarray:
+    """target 時刻ごとの gear_status を直前値で対応付け、DRIVE 系 mask を返す。
+
+    gear_status は本 pipeline の必須入力。欠落や target 時刻を覆えない場合は ValueError にして、
+    古い lite bag の暗黙 DRIVE 扱いを防ぐ。
+    """
+    try:
+        return require_asof_mask(
+            df_gear,
+            target_t_ns,
+            value_col="gear",
+            predicate=is_drive_gear,
+            name="/vehicle/status/gear_status",
+            context=context,
+            missing_error=MissingRequiredGearError,
+        )
+    except MissingRequiredGearError as exc:
+        raise MissingRequiredGearError(f"{exc}. real.lite を再生成してください") from exc
 
 
 # ---------------------------------------------------------------------------

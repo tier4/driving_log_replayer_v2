@@ -21,9 +21,14 @@ for _p in glob.glob("/home/kotaroyoshimoto/workspace/x2_e2e_44/install/*/local/l
 from driving_log_replayer_v2.real_log_sim_comparison.lib._io import (
     load_accel,
     load_cmd,
+    load_gear_status,
     load_steering,
     load_velocity,
     load_kinematic,
+    require_drive_gear_mask,
+)
+from driving_log_replayer_v2.real_log_sim_comparison.lib._validation import (
+    require_non_empty_df,
 )
 
 CMD_TOPIC = "/control/command/control_cmd"
@@ -38,6 +43,7 @@ K_US_CLIP = 0.05
 WHEELBASE = 2.74  # x2 の標準値。scenario.yaml から動的取得を試みる
 
 VX_EDGES = np.array([0.5, 1.0, 1.5, 2.0, 2.5, 3.0, 4.0, 5.0, 6.0, 8.0, 10.0, 12.0])
+
 
 def _simulate_first_order(cmd: np.ndarray, tau: float, n_delay: int) -> np.ndarray:
     n = len(cmd)
@@ -83,16 +89,18 @@ def _load_light_worker(args: tuple) -> dict | None:
     mcap = Path(ds_dir) / "real.lite" / "real.lite_0.mcap"
     if not mcap.exists():
         return None
-    try:
-        df_cmd = load_cmd(mcap, CMD_TOPIC)
-        df_accel = load_accel(mcap)
-        df_steer = load_steering(mcap)
-        df_vel = load_velocity(mcap)
-        df_kin = load_kinematic(mcap)
-    except Exception:
-        return None
-    if df_cmd.empty or df_accel.empty or df_steer.empty or df_vel.empty or df_kin.empty:
-        return None
+    df_cmd = load_cmd(mcap, CMD_TOPIC)
+    df_accel = load_accel(mcap)
+    df_steer = load_steering(mcap)
+    df_vel = load_velocity(mcap)
+    df_kin = load_kinematic(mcap)
+    df_gear = load_gear_status(mcap)
+    context = f"physical_tuning:{uuid}"
+    require_non_empty_df(df_cmd, name="/control/command/control_cmd", context=context)
+    require_non_empty_df(df_accel, name="/localization/acceleration", context=context)
+    require_non_empty_df(df_steer, name="/vehicle/status/steering_status", context=context)
+    require_non_empty_df(df_vel, name="/vehicle/status/velocity_status", context=context)
+    require_non_empty_df(df_kin, name="/localization/kinematic_state", context=context)
 
     t0 = max(df_cmd["t_ns"].iloc[0], df_accel["t_ns"].iloc[0], df_steer["t_ns"].iloc[0], df_vel["t_ns"].iloc[0], df_kin["t_ns"].iloc[0])
     t1 = min(df_cmd["t_ns"].iloc[-1], df_accel["t_ns"].iloc[-1], df_steer["t_ns"].iloc[-1], df_vel["t_ns"].iloc[-1], df_kin["t_ns"].iloc[-1])
@@ -108,6 +116,11 @@ def _load_light_worker(args: tuple) -> dict | None:
     d_act = np.interp(t_s, (df_steer["t_ns"].values - t0) * 1e-9, df_steer["steer"].values)
     vx = np.interp(t_s, (df_vel["t_ns"].values - t0) * 1e-9, df_vel["lon_vel"].values)
     wz = np.interp(t_s, (df_kin["t_ns"].values - t0) * 1e-9, df_kin["wz"].values)
+    gear_drive = require_drive_gear_mask(
+        df_gear,
+        t_ns.astype(np.int64),
+        context=context,
+    )
 
     return {
         "uuid": uuid,
@@ -117,14 +130,16 @@ def _load_light_worker(args: tuple) -> dict | None:
         "d_act": d_act.astype(np.float32),
         "vx": vx.astype(np.float32),
         "wz": wz.astype(np.float32),
+        "gear_drive": gear_drive,
     }
 
 def _fit_one_long_worker(ds: dict) -> tuple[float, float, float] | None:
     a_cmd = ds["a_cmd"]
     a_act = ds["a_act"]
     vx = ds["vx"]
+    gear_drive = ds["gear_drive"]
     d_cmd_acc = np.abs(np.gradient(a_cmd, DT))
-    mask = (vx > VX_MIN) & (d_cmd_acc > DA_THRESH)
+    mask = gear_drive & (vx > VX_MIN) & (d_cmd_acc > DA_THRESH)
     if mask.sum() < 50:
         return None
 
@@ -149,12 +164,13 @@ def _fit_one_steer_worker(ds: dict) -> tuple[float, float, float, float] | None:
     d_act = ds["d_act"]
     vx = ds["vx"]
     wz = ds["wz"]
+    gear_drive = ds["gear_drive"]
     d_cmd_steer = np.abs(np.gradient(d_cmd, DT))
-    mask_dyn = (vx > VX_MIN) & (d_cmd_steer > DSTEER_MIN / DT)
+    mask_dyn = gear_drive & (vx > VX_MIN) & (d_cmd_steer > DSTEER_MIN / DT)
     if mask_dyn.sum() < 50:
         return None
 
-    mask_straight = (vx > 3.0) & (np.abs(wz) < 0.005)
+    mask_straight = gear_drive & (vx > 3.0) & (np.abs(wz) < 0.005)
     bias = float(np.mean(d_act[mask_straight])) if mask_straight.sum() > 20 else 0.0005
 
     d_act_nobias = d_act - bias
@@ -341,6 +357,7 @@ def main() -> None:
             vx = ds["vx"]
             wz = ds["wz"]
             d_act = ds["d_act"]
+            gear_drive = ds["gear_drive"]
             # ヨー角加速度の算出
             dwz_mid = np.diff(wz) / DT
             dwz = np.empty_like(wz)
@@ -352,14 +369,17 @@ def main() -> None:
             all_wz.append(wz)
             all_steer.append(d_act)
             all_dwz.append(dwz)
+            # 非 DRIVE 区間は後段の定常旋回フィルタに入れない。
+            ds["gear_drive"] = gear_drive
 
         vx_all = np.concatenate(all_vx)
         wz_all = np.concatenate(all_wz)
         steer_all = np.concatenate(all_steer)
         dwz_all = np.concatenate(all_dwz)
+        gear_all = np.concatenate([ds["gear_drive"] for ds in datasets])
 
         # 定常旋回フィルタ
-        mask_ok = (np.abs(wz_all) > WZ_MIN) & (np.abs(dwz_all) < DWZ_MAX) & (vx_all > VX_MIN_CURVE)
+        mask_ok = gear_all & (np.abs(wz_all) > WZ_MIN) & (np.abs(dwz_all) < DWZ_MAX) & (vx_all > VX_MIN_CURVE)
         vx_f = vx_all[mask_ok]
         wz_f = wz_all[mask_ok]
         steer_f = steer_all[mask_ok] - params["steer_bias"]

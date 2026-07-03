@@ -695,8 +695,9 @@ scenario_simulator_v2（<code>concealer::AutowareUniverse</code> が Autoware �
       lanelet2 地図上の自車姿勢（走行中の map pose）から pitch を求め、同じ \\(g\\sin(\\mathrm{{pitch}})\\) を
       毎ステップ計算して <code>SLOPE_ACCX</code> 入力に渡す</td></tr>
   <tr><td><code>gear</code></td>
-      <td>このパイプラインの <code>real.lite</code> には抽出されておらず未使用
-      （前進走行区間のみを対象とし常時 DRIVE 相当として扱う）</td>
+      <td><code>/vehicle/status/gear_status</code> を <code>real.lite</code> に必須収集し、
+      DRIVE 系（<code>DRIVE</code>〜<code>DRIVE_18</code>）のサンプルだけを同定・評価に使う。
+      gear 欠落の旧 <code>real.lite</code> は再生成が必要</td>
       <td>実際には <code>/control/command/gear_cmd</code>（指令、concealer が subscribe）と
       <code>/vehicle/status/gear_status</code>（レポート。ただし車両状態からの算出ではなく
       指令値をそのままエコーバックする簡易実装）というトピックが存在する</td></tr>
@@ -704,8 +705,8 @@ scenario_simulator_v2（<code>concealer::AutowareUniverse</code> が Autoware �
 <p class="meta">
 &#9888;&#65039; <b>まとめ</b>: \\(a_{{\\mathrm{{slope}}}}\\) は「同じ物理量を異なる情報源
 （記録済み localization pitch 由来 vs. 走行中の地図ジオメトリ由来）から算出している」という
-設計上必然の違いであり、修正を要する不整合ではない。<code>gear</code> は実際にはトピックが存在するが、
-このパイプラインの抽出対象に含まれていないだけである。
+設計上必然の違いであり、修正を要する不整合ではない。<code>gear</code> は離散入力として
+評価対象区間を左右するため、現在の pipeline では <code>gear_status</code> を必須入力として扱う。
 </p>
 <p class="meta">
 ※ シミュレーションログとの比較では、レポートに記録される制御指令トピックのみ

@@ -81,15 +81,7 @@ def _run_and_collect_worker(args: dict) -> dict:
         lite_dir = output_dir / "lite"
         lite_dir.mkdir(parents=True, exist_ok=True)
 
-        existing_lite = resolve_lite_bag(t4_path, "real")
         if resume and _bundle_has_real_lite(output_dir):
-            status = "skipped"
-        elif existing_lite is not None:
-            existing_lite = existing_lite.resolve()
-            dst_lite = lite_dir / existing_lite.name
-            if dst_lite.exists() or dst_lite.is_symlink():
-                _remove_path(dst_lite)
-            dst_lite.symlink_to(existing_lite)
             status = "skipped"
         else:
             is_writable = False

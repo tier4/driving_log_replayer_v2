@@ -46,6 +46,7 @@ from .lib._multi_agg import (
     format_agg, robust_score, steer_score,
 )
 from .lib._physical_validity import WHEELBASE
+from .lib._validation import MissingRequiredDataError
 
 STRIDE = 5
 _BASELINE_MODEL = "delay_steer_acc_geared_wo_fall_guard"
@@ -65,6 +66,8 @@ class DatasetCtx:
     base: dict
     gt_cache: dict  # gt-key -> gt
     base_metric: dict  # baseline (無補正) の {h: {yaw, pos, long, lat, steer}} (h ∈ HORIZONS)
+    n_cmd_samples: int = 0
+    n_drive_samples: int = 0
 
 
 def _eval(ctx: DatasetCtx, override: dict, model_type: str) -> dict:
@@ -99,6 +102,13 @@ def _baseline_metric_summary(metric: dict) -> str:
     )
 
 
+def _gear_metric_summary(ctx: DatasetCtx) -> str:
+    if ctx.n_cmd_samples <= 0:
+        return "gear=0/0"
+    pct = 100.0 * ctx.n_drive_samples / ctx.n_cmd_samples
+    return f"gear DRIVE={ctx.n_drive_samples}/{ctx.n_cmd_samples} ({pct:.1f}%)"
+
+
 def _load_dataset_ctx(
     ds_id: str,
     lite_dir: Path,
@@ -120,9 +130,16 @@ def _load_dataset_ctx(
         s5.SUB_DT = base["sub_dt"]
         ctx = DatasetCtx(ds_id, data, t0_ns, base, {}, {})
         ctx.base_metric = _eval(ctx, {}, _BASELINE_MODEL)
+        if ctx.gt_cache:
+            gt0 = next(iter(ctx.gt_cache.values()))
+            valid_gear = gt0.get("valid_gear_arr", [])
+            ctx.n_cmd_samples = int(len(valid_gear))
+            ctx.n_drive_samples = int(sum(bool(v) for v in valid_gear))
         if not _baseline_metric_is_valid(ctx.base_metric):
             print(f"[SKIP] {ds_id}: baseline 誤差が無効 (yaw/縦/横≤0 or NaN)", file=sys.stderr)
             return None
+    except MissingRequiredDataError:
+        raise
     except Exception as e:  # noqa: BLE001
         msg = f"[SKIP] {ds_id}: ロード失敗 ({type(e).__name__}: {e})"
         if verbose:
@@ -132,7 +149,7 @@ def _load_dataset_ctx(
         return None
 
     if log:
-        print(f"[load] {ds_id}: {_baseline_metric_summary(ctx.base_metric)}")
+        print(f"[load] {ds_id}: {_gear_metric_summary(ctx)}  {_baseline_metric_summary(ctx.base_metric)}")
     return ctx
 
 
@@ -183,7 +200,7 @@ def load_datasets(
         if ctx is not None:
             ctxs.append(ctx)
             if verbose:
-                print(f"[load] {ctx.dataset_id}: {_baseline_metric_summary(ctx.base_metric)}")
+                print(f"[load] {ctx.dataset_id}: {_gear_metric_summary(ctx)}  {_baseline_metric_summary(ctx.base_metric)}")
 
     n_skip = sum(1 for r in results if r is None)
     print(f"[INFO] ロード完了: {len(ctxs)}/{len(lite_dirs)} ({n_skip} SKIP)", file=sys.stderr)

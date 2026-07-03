@@ -53,17 +53,16 @@ _PKG = "driving_log_replayer_v2.real_log_sim_comparison"
 # download.py の _DEFAULT_TOPICS (実走 pull で実績あり) をベースとし、
 # open-loop 追加候補 /control/trajectory_follower/control_cmd を付加する。
 #
-# ⚠️ pull-filtered-rosbag が不在 topic で失敗するかは Phase 0 で要確認。
-# 不確かなトピック (gear_status / actuation_status / sensing/imu 等) は
-# Phase 0 実測後に確認が取れてから追加すること。
 _OPENLOOP_TOPICS: list[str] = [
     # -- download.py _DEFAULT_TOPICS と同一 (pull 実績あり) --
     "/system/operation_mode/state",
     "/vehicle/status/velocity_status",
     "/vehicle/status/steering_status",
+    "/vehicle/status/gear_status",
     "/localization/kinematic_state",
     "/localization/acceleration",
     "/control/command/control_cmd",
+    "/control/command/gear_cmd",
     "/planning/trajectory_generator/neural_network_based_planner/diffusion_planner_node/output/trajectory",
     "/perception/object_recognition/tracking/objects",
     "/perception/object_recognition/detection/objects",

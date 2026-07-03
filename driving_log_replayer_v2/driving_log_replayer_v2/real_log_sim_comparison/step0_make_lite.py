@@ -23,15 +23,24 @@ import rosbag2_py
 import yaml
 
 from driving_log_replayer_v2.rosbag import create_metadata_yaml
+from driving_log_replayer_v2.real_log_sim_comparison.lib._validation import (
+    MissingRequiredDataError,
+    RequiredTopic,
+    REQUIRED_REAL_LITE_TOPICS,
+    REQUIRED_SIM_LITE_TOPICS,
+    validate_required_topics,
+)
 
 TOPICS_BY_KIND: dict[str, set[str]] = {
     "real": {
         "/system/operation_mode/state",
         "/vehicle/status/velocity_status",
         "/vehicle/status/steering_status",
+        "/vehicle/status/gear_status",
         "/localization/kinematic_state",
         "/localization/acceleration",
         "/control/command/control_cmd",
+        "/control/command/gear_cmd",
         # DiffusionPlanner出力軌跡（シムとの直接比較用）
         "/planning/trajectory_generator/neural_network_based_planner/diffusion_planner_node/output/trajectory",
         # 追跡物体（社会的コンテキスト有無の確認用）
@@ -45,16 +54,23 @@ TOPICS_BY_KIND: dict[str, set[str]] = {
         "/system/operation_mode/state",
         "/vehicle/status/velocity_status",
         "/vehicle/status/steering_status",
+        "/vehicle/status/gear_status",
         "/localization/kinematic_state",
         "/localization/acceleration",
         "/control/trajectory_follower/control_cmd",
         # post-gate制御指令（実機 /control/command/control_cmd と同一段での比較用）
         "/control/command/control_cmd",
+        "/control/command/gear_cmd",
         # DiffusionPlanner出力軌跡（速度プロファイル分析用）
         "/planning/trajectory_generator/neural_network_based_planner/diffusion_planner_node/output/trajectory",
         # 交通信号状態（DiffusionPlannerへの入力トピック）
         "/perception/traffic_light_recognition/traffic_signals",
     },
+}
+
+REQUIRED_TOPICS_BY_KIND: dict[str, list[RequiredTopic]] = {
+    "real": list(REQUIRED_REAL_LITE_TOPICS),
+    "sim": list(REQUIRED_SIM_LITE_TOPICS),
 }
 
 
@@ -230,6 +246,16 @@ def main(argv: list[str] | None = None) -> int:
             print(f"    {topic}: {stats.per_topic[topic]}")
     if stats.missing_topics:
         _print_verbose(args.verbose, f"  WARNING: 入力 bag に存在しなかったトピック: {stats.missing_topics}", file=sys.stderr)
+    try:
+        validate_required_topics(
+            set(stats.per_topic),
+            REQUIRED_TOPICS_BY_KIND[args.kind],
+            context=f"step0_make_lite --kind {args.kind}",
+            regeneration_hint="必須トピックを含む input_bag から lite bag を再生成してください。",
+        )
+    except MissingRequiredDataError as exc:
+        print(f"ERROR: {exc}", file=sys.stderr)
+        return 1
     if stats.n_written == 0:
         _print_verbose(args.verbose, "  WARNING: 出力 lite bag が空です (トピック名不一致または入力 bag が空の可能性)", file=sys.stderr)
 

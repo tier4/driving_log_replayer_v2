@@ -167,11 +167,9 @@ def run_pipeline(
     )
 
     # ---- Stage 0: real lite bag ----
-    logger.info("Stage 0: generating/reusing real lite bag")
+    logger.info("Stage 0: generating real lite bag")
     lite_dir.mkdir(parents=True, exist_ok=True)
     lite_bag = lite_dir / "real.lite"
-
-    from driving_log_replayer_v2.real_log_sim_comparison.lib._io import resolve_lite_bag
 
     def _remove_path_local(path: Path) -> None:
         import shutil
@@ -180,50 +178,43 @@ def run_pipeline(
         elif path.is_dir():
             shutil.rmtree(path)
 
-    existing_lite = resolve_lite_bag(t4_dataset_path, "real")
-    if existing_lite is not None:
-        existing_lite = existing_lite.resolve()
-        logger.info(f"Stage 0: reusing existing real lite bag from {existing_lite}")
-        lite_bag = lite_dir / existing_lite.name
+    # Check if t4_dataset_path is writable
+    is_writable = False
+    test_file = t4_dataset_path / ".write_test"
+    try:
+        test_file.touch()
+        test_file.unlink()
+        is_writable = True
+    except OSError:
+        pass
+
+    if is_writable:
+        target_lite = t4_dataset_path / "real.lite"
+        logger.info(f"Stage 0: generating and caching real lite bag in {target_lite}")
+        if target_lite.exists() or target_lite.is_symlink():
+            _remove_path_local(target_lite)
+        _run([
+            sys.executable, "-m",
+            "driving_log_replayer_v2.real_log_sim_comparison.step0_make_lite",
+            "--kind", "real",
+            "--input", str(input_bag_dir),
+            "--output", str(target_lite),
+        ], timeout=300)
+
         if lite_bag.exists() or lite_bag.is_symlink():
             _remove_path_local(lite_bag)
-        lite_bag.symlink_to(existing_lite)
+        lite_bag.symlink_to(target_lite)
     else:
-        # Check if t4_dataset_path is writable
-        is_writable = False
-        test_file = t4_dataset_path / ".write_test"
-        try:
-            test_file.touch()
-            test_file.unlink()
-            is_writable = True
-        except OSError:
-            pass
-
-        if is_writable:
-            target_lite = t4_dataset_path / "real.lite"
-            logger.info(f"Stage 0: generating and caching real lite bag in {target_lite}")
-            if target_lite.exists() or target_lite.is_symlink():
-                _remove_path_local(target_lite)
-            _run([
-                sys.executable, "-m",
-                "driving_log_replayer_v2.real_log_sim_comparison.step0_make_lite",
-                "--kind", "real",
-                "--input", str(input_bag_dir),
-                "--output", str(target_lite),
-            ], timeout=300)
-
-            if lite_bag.exists() or lite_bag.is_symlink():
-                _remove_path_local(lite_bag)
-            lite_bag.symlink_to(target_lite)
-        else:
-            logger.info(f"Stage 0: generating real lite bag in {lite_bag}")
-            _run([
-                sys.executable, "-m",
-                "driving_log_replayer_v2.real_log_sim_comparison.step0_make_lite",
-                "--kind", "real",
-                "--input", str(input_bag_dir),
-                "--output", str(lite_bag),
-            ], timeout=300)
+        logger.info(f"Stage 0: generating real lite bag in {lite_bag}")
+        if lite_bag.exists() or lite_bag.is_symlink():
+            _remove_path_local(lite_bag)
+        _run([
+            sys.executable, "-m",
+            "driving_log_replayer_v2.real_log_sim_comparison.step0_make_lite",
+            "--kind", "real",
+            "--input", str(input_bag_dir),
+            "--output", str(lite_bag),
+        ], timeout=300)
 
     # ---- Stage CL2: sim runs ループ (scenario.yaml の Conditions.sim_runs 必須) ----
     scenario_config = compare_cfg.get("scenario_config", "")
