@@ -699,9 +699,9 @@ def _build_sec1(
 
 <h3>離散化：Euler 法によるアップデート</h3>
 <p>
-毎制御周期 \\(\\Delta t\\) ごとに
+制御周期 \\(\\Delta t\\) ごとの離散時刻を \\(k = 0, 1, 2, \\dots\\) とすると、
 \\[
-x \\leftarrow x + f(x, u) \\cdot \\Delta t
+{{\\color{{#1565c0}} x_{{k+1}}}} = {{\\color{{#1565c0}} x_k}} + f({{\\color{{#1565c0}} x_k}}, {{\\color{{#e65100}} u_k}}) \\cdot \\Delta t
 \\]
 で状態を更新する（前進・陽的 Euler 法、実装は
 <code>SimModelInterface::updateEuler(dt, input)</code>）。
