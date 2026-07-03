@@ -1,5 +1,16 @@
 # Release Notes
 
+## Version 3.18.5
+
+Minor Tweak
+
+| Module       | Feature    | Brief summary                         | Pull request                                                        | Contributor                                   |
+| ------------ | ---------- | ------------------------------------- | ------------------------------------------------------------------- | --------------------------------------------- |
+| `perception` | conversion | add new class animal and hazard       | [#382](https://github.com/tier4/driving_log_replayer_v2/issues/382) | [MasatoSaeki](https://github.com/MasatoSaeki) |
+| `common`     | rviz       | enable to use rviz in perception      | [#381](https://github.com/tier4/driving_log_replayer_v2/issues/381) | [MasatoSaeki](https://github.com/MasatoSaeki) |
+| `perception` | condition  | ignore specified frames               | [#380](https://github.com/tier4/driving_log_replayer_v2/issues/380) | [MasatoSaeki](https://github.com/MasatoSaeki) |
+| `common`     | launcher   | introduce camera 3d detector launcher | [#375](https://github.com/tier4/driving_log_replayer_v2/issues/375) | [MasatoSaeki](https://github.com/MasatoSaeki) |
+
 ## Version 3.18.4
 
 Minor Tweak
