@@ -120,6 +120,7 @@ def _load_light_worker(args: tuple) -> dict | None:
         df_gear,
         t_ns.astype(np.int64),
         context=context,
+        allow_leading_gap=True,
     )
 
     return {

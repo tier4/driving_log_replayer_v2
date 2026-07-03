@@ -696,7 +696,8 @@ scenario_simulator_v2（<code>concealer::AutowareUniverse</code> が Autoware �
   <tr><td><code>gear</code></td>
       <td><code>/vehicle/status/gear_status</code> を <code>real.lite</code> に必須収集し、
       DRIVE 系（<code>DRIVE</code>〜<code>DRIVE_18</code>）のサンプルだけを同定・評価に使う。
-      gear 欠落の旧 <code>real.lite</code> は再生成が必要</td>
+      先頭未カバーは解析窓を後ろにずらして許容できるが、gear 欠落の旧 <code>real.lite</code>
+      は再生成が必要</td>
       <td>実際には <code>/control/command/gear_cmd</code>（指令、concealer が subscribe）と
       <code>/vehicle/status/gear_status</code>（レポート。ただし車両状態からの算出ではなく
       指令値をそのままエコーバックする簡易実装）というトピックが存在する</td></tr>
@@ -706,6 +707,7 @@ scenario_simulator_v2（<code>concealer::AutowareUniverse</code> が Autoware �
 （記録済み localization pitch 由来 vs. 走行中の地図ジオメトリ由来）から算出している」という
 設計上必然の違いであり、修正を要する不整合ではない。<code>gear</code> は離散入力として
 評価対象区間を左右するため、現在の pipeline では <code>gear_status</code> を必須入力として扱う。
+ただし、先頭が少し遅れるだけのケースは解析窓を後ろにずらして吸収する。
 </p>
 <p class="meta">
 ※ シミュレーションログとの比較では、レポートに記録される制御指令トピックのみ

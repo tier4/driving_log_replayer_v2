@@ -125,7 +125,7 @@ def _drive_mask_on_grid(bag_path: Path, t_s: np.ndarray, t0: float, *, context: 
     """共通時間グリッド上で DRIVE 系 gear の mask を返す。gear_status 欠落はエラー。"""
     df_gear = load_gear_status(bag_path)
     target_t_ns = (t0 + t_s * 1e9).astype(np.int64)
-    return require_drive_gear_mask(df_gear, target_t_ns, context=context)
+    return require_drive_gear_mask(df_gear, target_t_ns, context=context, allow_leading_gap=True)
 
 
 def _require_dfs(context: str, **dfs: pd.DataFrame) -> None:
@@ -333,6 +333,7 @@ def _extract_kus_arrays(bag_path: Path) -> dict | None:
         load_gear_status(bag_path),
         df_kin["t_ns"].values,
         context=f"_extract_kus_arrays:{bag_path}",
+        allow_leading_gap=True,
     )
 
     steer_raw = df_steer["steer"].values

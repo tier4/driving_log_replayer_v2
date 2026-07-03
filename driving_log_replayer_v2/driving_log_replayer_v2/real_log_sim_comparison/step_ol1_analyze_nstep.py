@@ -756,6 +756,7 @@ def _prepare_gt(data: dict, t0_ns: int, params: dict) -> dict:
         df_gear if df_gear is not None else pd.DataFrame(),
         df_cmd["t_ns"].values,
         context="step_ol1_analyze_nstep",
+        allow_leading_gap=True,
     )
     _bad_gear_cumsum = np.cumsum(
         np.concatenate([[0], (~_valid_gear).view(np.uint8)])

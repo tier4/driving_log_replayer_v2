@@ -112,7 +112,7 @@ map-pose z との差で**永久に発火しなかった**（2026-06-03 判明）
 | `/system/operation_mode/state` | AUTONOMOUS 区間の切り出し |
 | `/vehicle/status/velocity_status` | 速度応答 |
 | `/vehicle/status/steering_status` | 操舵応答 |
-| `/vehicle/status/gear_status` | gear 状態（DRIVE 系区間のみを同定・評価に使用。欠落する旧 lite は再生成必須） |
+| `/vehicle/status/gear_status` | gear 状態（DRIVE 系区間のみを同定・評価に使用。先頭未カバーは解析窓を後ろにずらして許容するが、欠落する旧 lite は再生成必須） |
 | `/localization/kinematic_state` | 自車位置・軌跡 |
 | `/localization/acceleration` | 加速度応答 |
 | `/control/command/control_cmd` | 制御指令（post-gate） |
@@ -131,7 +131,7 @@ Stage CL2 (`step_cl2_run_sims`) が `scenario_test_runner` で sim を回した�
 | `/system/operation_mode/state` | AUTONOMOUS 区間の切り出し |
 | `/vehicle/status/velocity_status` | 速度応答 |
 | `/vehicle/status/steering_status` | 操舵応答 |
-| `/vehicle/status/gear_status` | gear 状態（DRIVE 系区間のみを同定・評価に使用） |
+| `/vehicle/status/gear_status` | gear 状態（DRIVE 系区間のみを同定・評価に使用。先頭未カバーは解析窓を後ろにずらして許容） |
 | `/localization/kinematic_state` | 自車位置・軌跡 |
 | `/localization/acceleration` | 加速度応答 |
 | `/control/trajectory_follower/control_cmd` | trajectory_follower の制御指令 |

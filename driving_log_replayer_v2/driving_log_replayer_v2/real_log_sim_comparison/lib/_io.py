@@ -284,13 +284,18 @@ def require_drive_gear_mask(
     target_t_ns: np.ndarray | pd.Series,
     *,
     context: str,
+    allow_leading_gap: bool = False,
 ) -> np.ndarray:
     """target 時刻ごとの gear_status を直前値で対応付け、DRIVE 系 mask を返す。
 
     gear_status は本 pipeline の必須入力。欠落や target 時刻を覆えない場合は ValueError にして、
     古い lite bag の暗黙 DRIVE 扱いを防ぐ。
+
+    allow_leading_gap=True の場合のみ、gear_status の先頭より前にある target を非 DRIVE
+    扱いとして許容する。先頭欠落は分析窓のクリップとして扱い、gear 自体の欠損は許容しない。
     """
     try:
+        leading_gap_fill = -1 if allow_leading_gap else None
         return require_asof_mask(
             df_gear,
             target_t_ns,
@@ -299,6 +304,7 @@ def require_drive_gear_mask(
             name="/vehicle/status/gear_status",
             context=context,
             missing_error=MissingRequiredGearError,
+            leading_gap_fill=leading_gap_fill,
         )
     except MissingRequiredGearError as exc:
         raise MissingRequiredGearError(f"{exc}. real.lite を再生成してください") from exc

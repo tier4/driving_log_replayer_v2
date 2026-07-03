@@ -99,8 +99,12 @@ def asof_values(
     name: str,
     context: str,
     missing_error: type[MissingRequiredDataError] = MissingRequiredDataError,
+    leading_gap_fill: object | None = None,
 ) -> np.ndarray:
-    """target 時刻ごとの直前値を返す。時刻範囲を覆えない場合は例外。"""
+    """target 時刻ごとの直前値を返す。時刻範囲を覆えない場合は例外。
+
+    leading_gap_fill が与えられた場合、source の先頭より前の target はその値で埋める。
+    """
     require_non_empty_df(df, name=name, context=context)
     require_columns(df, ["t_ns", value_col], name=name, context=context)
 
@@ -121,6 +125,11 @@ def asof_values(
     values = src[value_col].to_numpy()
     idx = np.searchsorted(t_src, target, side="right") - 1
     if np.any(idx < 0):
+        if leading_gap_fill is not None:
+            clipped_idx = np.clip(idx, 0, len(values) - 1)
+            out = values[clipped_idx]
+            out[idx < 0] = leading_gap_fill
+            return out
         raise missing_error(f"{context}: {name} が target 時刻範囲の先頭を覆っていません")
 
     return values[idx]
@@ -135,6 +144,7 @@ def require_asof_mask(
     name: str,
     context: str,
     missing_error: type[MissingRequiredDataError] = MissingRequiredDataError,
+    leading_gap_fill: object | None = None,
 ) -> np.ndarray:
     """target 時刻ごとの直前値に predicate を適用し bool mask を返す。"""
     values = asof_values(
@@ -144,5 +154,6 @@ def require_asof_mask(
         name=name,
         context=context,
         missing_error=missing_error,
+        leading_gap_fill=leading_gap_fill,
     )
     return np.asarray(predicate(values), dtype=bool)
