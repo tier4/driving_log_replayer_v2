@@ -270,6 +270,87 @@ def build_fig_cross_long(rows_data: list[dict], cross_fit: dict) -> go.Figure:
     )
 
 
+def build_fig_cross_long_tau_pointwise(rows_data: list[dict], cross_fit: dict) -> go.Figure:
+    """縦方向 τ_a の瞬時推定値（隣接 2 サンプル差分からの逆算, tau-t グラフ）。
+
+    離散更新式 a[k]=(1-α)a[k-1]+αu[k] を τ_a について解いた
+    τ_a[k] = Δt(u[k]-a[k-1])/(a[k]-a[k-1]) を各時刻でプロットし、
+    横断最小二乗法フィット値 (横線) と比較する。
+    """
+    rows_with_tau = [r for r in rows_data if r.get("tau_pointwise") is not None]
+    if not rows_with_tau:
+        return _placeholder_fig("瞬時 τ_a 推定不可（横断フィット失敗、またはデータ不足）")
+
+    n = len(rows_with_tau)
+    fig = make_grid(
+        rows=n, cols=1, subplot_titles=[r["label"] for r in rows_with_tau], vertical_spacing=0.08,
+    )
+    tau_fit = cross_fit.get("tau", float("nan"))
+    show_legend = True
+    for i, r in enumerate(rows_with_tau, 1):
+        fig.add_trace(go.Scatter(
+            x=r["t"], y=r["tau_pointwise"], mode="markers",
+            marker=dict(color="steelblue", size=4, opacity=0.4),
+            name="瞬時 τ_a 推定値（隣接サンプル差分から逆算）",
+            showlegend=show_legend,
+        ), row=i, col=1)
+        if np.isfinite(tau_fit):
+            fig.add_hline(
+                y=tau_fit, line=dict(color="crimson", width=2, dash="dash"),
+                row=i, col=1,
+            )
+        fig.update_yaxes(title_text="τ_a [s]", range=[0, 2.0], row=i, col=1)
+        show_legend = False
+    fig.update_xaxes(title_text="時刻 [s]", row=n, col=1)
+
+    fit_note = f"横断最小二乗法フィット値 τ_a={tau_fit:.3f}s（赤破線）" if np.isfinite(tau_fit) else "横断フィット失敗"
+    return apply_base_layout(
+        fig,
+        title=f"縦方向 τ_a の瞬時推定値（点ごとの逆算 vs 最小二乗法フィット、最良・最悪 計 {n} 件）<br><sup>{fit_note}</sup>",
+        height=260 * n, margin=dict(t=80, b=40),
+        legend=dict(orientation="h", y=1.03, x=0),
+    )
+
+
+def build_fig_long_tau_pointwise_hist(cross_fit: dict) -> go.Figure:
+    """縦方向 τ_a の瞬時推定値の分布（横断フィットに使用した全データセットをプールしたヒストグラム）。
+
+    `fit_long_cross_dataset_bounded` が横断フィットに使った pooled データセット全件
+    （best/worst の代表 2〜4 件だけでなく、n_dyn 上位 n_top 件全て）について、
+    最適無駄時間固定で計算した瞬時 τ_a[k] 推定値 (`tau_pointwise_all`) の分布を示す。
+    """
+    values = cross_fit.get("tau_pointwise_all") or []
+    if not values:
+        return _placeholder_fig("瞬時 τ_a 推定不可（横断フィット失敗、またはデータ不足）")
+
+    arr = np.asarray(values, dtype=float)
+    tau_fit = cross_fit.get("tau", float("nan"))
+    median = float(np.median(arr))
+
+    fig = go.Figure()
+    fig.add_trace(go.Histogram(
+        x=arr.tolist(), nbinsx=60, marker_color="steelblue", opacity=0.75,
+        name=f"瞬時 τ_a 推定値（n={len(arr)}）",
+    ))
+    if np.isfinite(tau_fit):
+        fig.add_vline(
+            x=tau_fit, line=dict(color="crimson", width=2, dash="dash"),
+            annotation_text=f"横断LSフィット値 {tau_fit:.3f}s", annotation_position="top right",
+        )
+    fig.add_vline(
+        x=median, line=dict(color="darkorange", width=1.5, dash="dot"),
+        annotation_text=f"中央値 {median:.3f}s", annotation_position="top left",
+    )
+    fig.update_xaxes(title_text="瞬時 τ_a 推定値 [s]", range=[0, 2.0])
+    fig.update_yaxes(title_text="サンプル数")
+    n_ds = cross_fit.get("n_datasets", 0)
+    return apply_base_layout(
+        fig,
+        title=f"縦方向 τ_a の瞬時推定値の分布（横断フィット使用 {n_ds} データセットをプール、計 {len(arr)} 点）",
+        height=380,
+    )
+
+
 def build_fig_cross_steer(rows_data: list[dict]) -> go.Figure:
     """dataset 横断 操舵モデルフィット (best/worst 時系列 + per-dataset 同定値 + モデル別チューン値)。"""
     if not rows_data:

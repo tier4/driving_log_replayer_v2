@@ -90,19 +90,44 @@ _TAU_BOUNDS_STEER = (0.01, 2.0)
 # ---------------------------------------------------------------------------
 # 共通ヘルパー
 # ---------------------------------------------------------------------------
+def _delay_shift(cmd: np.ndarray, n_delay: int) -> np.ndarray:
+    """指令 cmd を n_delay サンプルぶん遅延させる (先頭は cmd[0] で埋める)。"""
+    if n_delay <= 0:
+        return cmd.copy()
+    n = len(cmd)
+    cmd_del = np.empty(n)
+    cmd_del[:n_delay] = cmd[0]
+    cmd_del[n_delay:] = cmd[:-n_delay]
+    return cmd_del
+
+
 def _sim_first_order(cmd: np.ndarray, tau: float, n_delay: int, dt: float = _FIT_DT) -> np.ndarray:
     """純粋遅延 + 一次遅れシミュレーション (lfilter 版)。"""
-    if n_delay > 0:
-        n = len(cmd)
-        cmd_del = np.empty(n)
-        cmd_del[:n_delay] = cmd[0]
-        cmd_del[n_delay:] = cmd[:-n_delay]
-    else:
-        cmd_del = cmd.copy()
+    cmd_del = _delay_shift(cmd, n_delay)
     # tau<=0 は "no_delay" 系モデル等が意図する瞬時追従 (一次遅れ極限) を表すため、
     # 0除算を避けて alpha=1.0 (即時追従) にフォールバックする。
     alpha = 1.0 if tau <= 0.0 else float(np.clip(dt / tau, 0.0, 1.0))
     return lfilter([alpha], [1.0, -(1.0 - alpha)], cmd_del)
+
+
+def _pointwise_tau_estimate(
+    a_cmd_arr: np.ndarray, a_act_corr: np.ndarray, mask_dyn: np.ndarray, n_delay: int, dt: float = _FIT_DT,
+) -> np.ndarray:
+    """離散更新式 a[k] = (1-α)a[k-1] + α u[k] を隣接 2 サンプルから逆算した瞬時 τ 推定値。
+
+    τ[k] = dt * (u[k] - a[k-1]) / (a[k] - a[k-1])。分母が小さい (停車・定常区間)・
+    mask_dyn 外・τ が非物理的 (負値) なサンプルは NaN にする。戻り値は a_act_corr と同じ長さ
+    (先頭は差分が取れないため NaN)。
+    """
+    u = _delay_shift(a_cmd_arr, n_delay)
+    da = np.diff(a_act_corr)
+    numer = dt * (u[1:] - a_act_corr[:-1])
+    with np.errstate(divide="ignore", invalid="ignore"):
+        tau_raw = numer / da
+    valid = mask_dyn[1:] & (np.abs(da) > 1e-3) & np.isfinite(tau_raw) & (tau_raw > 0)
+    out = np.full(len(a_act_corr), np.nan)
+    out[1:][valid] = tau_raw[valid]
+    return out
 
 
 def _common_timebase(*dfs: pd.DataFrame, min_span_ns: float = 0.0) -> tuple[np.ndarray, float] | None:
@@ -689,6 +714,7 @@ def fit_long_cross_dataset_bounded(
         return {
             "tau": float("nan"), "delay": float("nan"), "rmse_mps2": float("nan"),
             "pitch_min": pitch_min, "pitch_max": pitch_max, "n_datasets": 0,
+            "tau_pointwise_all": [],
         }
 
     def _total_mse(log_tau: float, n_delay: int) -> float:
@@ -711,9 +737,19 @@ def fit_long_cross_dataset_bounded(
         if res.fun < best_mse:
             best_mse, best_tau, best_delay = res.fun, float(np.exp(res.x)), delay_s
 
+    # 横断フィットに使った全 pooled データセットについて、最適無駄時間 (best_delay) 固定で
+    # 瞬時 τ_a 推定値 (点ごとの逆算) を計算しプールする。分布の可視化 (ヒストグラム) 用。
+    tau_pointwise_all: list[float] = []
+    if np.isfinite(best_delay):
+        n_delay_best = int(round(best_delay / _FIT_DT))
+        for a_cmd_arr, a_act_corr_arr, mask in pooled:
+            tp = _pointwise_tau_estimate(a_cmd_arr, a_act_corr_arr, mask, n_delay_best)
+            tau_pointwise_all.extend(tp[np.isfinite(tp)].tolist())
+
     return {
         "tau": best_tau, "delay": best_delay, "rmse_mps2": float(np.sqrt(best_mse)),
         "pitch_min": pitch_min, "pitch_max": pitch_max, "n_datasets": len(pooled),
+        "tau_pointwise_all": tau_pointwise_all,
     }
 
 
@@ -750,10 +786,14 @@ def compute_cross_long_rows(
         moving = gear_drive & (vx > VX_MIN_CURVE)
 
         a_sim_cross = None
+        tau_pointwise = None
         if np.isfinite(cross_fit.get("tau", float("nan"))):
-            a_sim_cross = _sim_first_order(
-                a_cmd_arr, cross_fit["tau"], int(round(cross_fit["delay"] / _FIT_DT))
-            ) + slope_acc_arr
+            n_delay_cross = int(round(cross_fit["delay"] / _FIT_DT))
+            a_sim_cross = _sim_first_order(a_cmd_arr, cross_fit["tau"], n_delay_cross) + slope_acc_arr
+            a_act_corr = a_act_arr - slope_acc_arr
+            d_cmd = np.abs(np.gradient(a_cmd_arr, _FIT_DT))
+            mask_dyn = gear_drive & (vx > _VX_MIN_FIT) & (d_cmd > _DA_THRESH_FIT)
+            tau_pointwise = _pointwise_tau_estimate(a_cmd_arr, a_act_corr, mask_dyn, n_delay_cross)
 
         a_sim_models: dict[str, list] = {}
         for name, spec in (models or {}).items():
@@ -774,6 +814,7 @@ def compute_cross_long_rows(
             "a_act": _mask_stopped(a_act_arr, moving),
             "a_sim_cross": _mask_stopped(a_sim_cross, moving) if a_sim_cross is not None else None,
             "a_sim_models": a_sim_models,
+            "tau_pointwise": tau_pointwise.tolist() if tau_pointwise is not None else None,
         })
     return rows
 

@@ -54,11 +54,13 @@ from driving_log_replayer_v2.real_log_sim_comparison.multi_dataset_tune import (
 # ---------------------------------------------------------------------------
 from driving_log_replayer_v2.real_log_sim_comparison.lib._figures import (  # noqa: E402
     build_fig_cross_long,
+    build_fig_cross_long_tau_pointwise,
     build_fig_cross_steer,
     build_fig_kus_single,
     build_fig_long_perf_box,
     build_fig_long_perf_growth,
     build_fig_long_perf_map,
+    build_fig_long_tau_pointwise_hist,
     build_fig_perfect_tracking_box,
     build_fig_perfect_tracking_traj,
 )
@@ -437,6 +439,8 @@ def _build_sec1(
     kus_fig: go.Figure,
     n_dataset: int,
     long_perf_figs: tuple[go.Figure, go.Figure, go.Figure] | None = None,
+    long_tau_fig: go.Figure | None = None,
+    long_tau_hist_fig: go.Figure | None = None,
 ) -> str:
     """1-0. 座標系と主要な記号の定義 + モデルパラメータの定義を含む sec1 全体 HTML を返す。"""
     kus_rows = _kus_band_table_rows(params)
@@ -496,6 +500,10 @@ def _build_sec1(
     long_html  = f"<details><summary>時系列グラフを表示（クリックで展開）</summary>{_long_html_inner}</details>"
     steer_html = f"<details><summary>時系列グラフを表示（クリックで展開）</summary>{_steer_html_inner}</details>"
     kus_html   = kus_fig.to_html(full_html=False, include_plotlyjs=False)
+    long_tau_html = long_tau_fig.to_html(full_html=False, include_plotlyjs=False) if long_tau_fig is not None else ""
+    long_tau_hist_html = (
+        long_tau_hist_fig.to_html(full_html=False, include_plotlyjs=False) if long_tau_hist_fig is not None else ""
+    )
     _vx_min = VX_MIN_CURVE
     _stride = _PERF_STRIDE
     _dt_long  = _FIT_DT
@@ -810,7 +818,34 @@ a_{{\\mathrm{{sim}}}}[k] = \\alpha \\sum_{{i=0}}^{{k}} (1-\\alpha)^{{k-i}}\\, u[
 正規方程式には帰着できず、数値的な非線形最小二乗として解く必要がある。
 </p>
 
-<p><b>② 目的関数と対数変換による 1 次元探索</b>: 動的区間マスク \\(\\mathcal{{K}}\\)
+<p><b>② 隣接サンプルからの直接逆算（点ごとの \\(\\tau_a\\) 推定）とその限界</b>: ①の漸化式
+\\(a_{{\\mathrm{{sim}}}}[k] = (1-\\alpha)\\, a_{{\\mathrm{{sim}}}}[k-1] + \\alpha\\, u[k]\\) に実測値
+\\(a_{{\\mathrm{{sim}}}}[k] \\approx a_{{\\mathrm{{act,corr}}}}[k]\\) を代入して \\(\\alpha\\)（＝\\(\\Delta t/\\tau_a\\)）について
+直接解くと、
+\\[
+\\alpha = \\frac{{a_{{\\mathrm{{act,corr}}}}[k] - a_{{\\mathrm{{act,corr}}}}[k-1]}}{{u[k] - a_{{\\mathrm{{act,corr}}}}[k-1]}}
+\\quad\\Longrightarrow\\quad
+\\tau_a[k] = \\frac{{\\Delta t}}{{\\alpha}}
+= \\Delta t\\, \\frac{{u[k] - a_{{\\mathrm{{act,corr}}}}[k-1]}}{{a_{{\\mathrm{{act,corr}}}}[k] - a_{{\\mathrm{{act,corr}}}}[k-1]}}
+\\]
+という「\\(\\tau_a = \\cdots\\)」の閉形式が各サンプル \\(k\\) ごとに得られる。これを代表データセット
+（横断フィットの最良・最悪データセット）の全時刻についてプロットしたものが下図
+（横軸: 時刻、縦軸: 点ごとの \\(\\tau_a[k]\\) 推定値、赤破線: 横断最小二乗法フィット値）である。
+</p>
+{long_tau_html}
+<p>
+分母 \\(a_{{\\mathrm{{act,corr}}}}[k] - a_{{\\mathrm{{act,corr}}}}[k-1]\\) が小さい区間（緩加速・定常走行）では
+測定ノイズが増幅されて \\(\\tau_a[k]\\) が大きく散らばり、非物理的な値（負値・極端な発散）も生じる
+（グラフでは負値・τ範囲外は除外して表示）。この不安定さが、単純な点ごとの逆算ではなく、
+全時刻の残差二乗和を最小化する非線形最小二乗（次項③）が採用されている理由である。<br>
+下図は最良・最悪の代表 2〜4 件だけでなく、横断フィットに使用した全データセット
+（n_dyn 上位、最大 {_N_CROSS_FIT_DATASET} 件）をプールした瞬時 \\(\\tau_a[k]\\) 推定値のヒストグラムである。
+分布の広がり・歪み・裾の長さが、代表データセットの散布図（上図）で見えていた散らばりが
+局所的な現象ではなくデータセット横断で一貫した傾向であることを示す。
+</p>
+{long_tau_hist_html}
+
+<p><b>③ 目的関数と対数変換による 1 次元探索</b>: 動的区間マスク \\(\\mathcal{{K}}\\)
 （DRIVE ギア・走行中・\\(|\\dot a_{{\\mathrm{{cmd}}}}|\\) 閾値超過）上での残差二乗平均
 \\[
 J(\\tau_a;\\, T_a) = \\frac{{1}}{{|\\mathcal{{K}}|}} \\sum_{{k \\in \\mathcal{{K}}}}
@@ -827,7 +862,7 @@ J\\bigl(e^{{\\theta}};\\, T_a\\bigr)
 広いダイナミックレンジに対して均等な探索分解能を確保できる。
 </p>
 
-<p><b>③ 無駄時間グリッドサーチ（外側ループ）</b>: ①②の内側最小化を候補
+<p><b>④ 無駄時間グリッドサーチ（外側ループ）</b>: ③の内側最小化を候補
 \\(T_a = m\\Delta t\\)（\\(m = 0, \\dots, M\\)）ごとに実行し、
 \\[
 (\\tau_a^{{*}},\\, T_a^{{*}}) = \\operatorname*{{arg\\,min}}_{{T_a \\in \\{{0,\\Delta t,\\dots,M\\Delta t\\}}}}
@@ -1342,6 +1377,8 @@ def build_html(
     perf_html: str = "",
     long_perf_figs: tuple[go.Figure, go.Figure, go.Figure] | None = None,
     closed_loop_html: str = "",
+    long_tau_fig: go.Figure | None = None,
+    long_tau_hist_fig: go.Figure | None = None,
 ) -> str:
     score = params.get("_score", "N/A")
     phase14_score = float(score) if isinstance(score, (int, float, str)) and str(score) != "N/A" else 0.0
@@ -1358,7 +1395,10 @@ def build_html(
 </section>
 """
 
-    sec1 = _build_sec1(params, long_fig, steer_fig, kus_fig, n_dataset, long_perf_figs=long_perf_figs)
+    sec1 = _build_sec1(
+        params, long_fig, steer_fig, kus_fig, n_dataset,
+        long_perf_figs=long_perf_figs, long_tau_fig=long_tau_fig, long_tau_hist_fig=long_tau_hist_fig,
+    )
     sec3 = _build_sec3(viewer_sections, label=label)
 
     return f"""<!DOCTYPE html>
@@ -1767,6 +1807,8 @@ def main() -> None:
         print("  縦方向 横断同定: 失敗（有効データセットなし）")
     rows_long = compute_cross_long_rows(entries, per_ds_long, cross_fit_long, models_long)
     long_fig = build_fig_cross_long(rows_long, cross_fit_long)
+    long_tau_fig = build_fig_cross_long_tau_pointwise(rows_long, cross_fit_long)
+    long_tau_hist_fig = build_fig_long_tau_pointwise_hist(cross_fit_long)
 
     rows_steer = compute_cross_steer_rows(entries, per_ds_steer, models_steer)
     # 旧実装の表示要素を維持: 各 subplot タイトルに per-dataset 同定値 τ/T を付記
@@ -1840,6 +1882,8 @@ def main() -> None:
         perf_html=perf_html,
         long_perf_figs=long_perf_figs,
         closed_loop_html=closed_loop_html,
+        long_tau_fig=long_tau_fig,
+        long_tau_hist_fig=long_tau_hist_fig,
     )
 
     args.out.parent.mkdir(parents=True, exist_ok=True)
