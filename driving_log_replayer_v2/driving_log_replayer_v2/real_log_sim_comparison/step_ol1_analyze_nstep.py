@@ -583,13 +583,15 @@ def load_real_bag(path: Path) -> dict[str, pd.DataFrame]:
                 "steer_des": ros.lateral.steering_tire_angle,
             })
 
+    # 空でも列スキーマを維持しておくと、後段の to_seconds()/require_non_empty_df() が
+    # 期待通りに「必須データ欠損」として扱える。
     return {
         "mode": df_mode,
         "vel": df_vel,
         "steer": df_steer,
         "kin": df_kin,
-        "acc": pd.DataFrame(rows_acc),
-        "cmd": pd.DataFrame(rows_cmd),
+        "acc": pd.DataFrame(rows_acc, columns=["t_ns", "ax", "ay"]),
+        "cmd": pd.DataFrame(rows_cmd, columns=["t_ns", "accel_des", "steer_des"]),
         "gear": load_gear_status(path),
     }
 
