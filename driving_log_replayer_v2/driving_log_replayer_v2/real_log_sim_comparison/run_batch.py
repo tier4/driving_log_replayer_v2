@@ -67,8 +67,43 @@ def _target_real_lite(t4_path: Path, lite_dir: Path) -> tuple[Path, bool]:
     return (t4_path / "real.lite", True) if is_writable else (lite_dir / "real.lite", False)
 
 
+def _real_lite_is_valid(path: Path) -> bool:
+    """real.lite ディレクトリが有効かどうかを検証する。
+
+    シンボリックリンク先まで辿り、実体が rosbag2 ディレクトリ（.mcap ファイルが 1 つ以上
+    存在する）であれば有効とみなす。input_bag に必須トピックが欠損していた場合に
+    step0_make_lite が生成する空・ゼロサイズの bag を「無効」として検出し、
+    フォールバック済みの有効な bag は「有効」として再生成をスキップする。
+    """
+    real_path = path.resolve() if path.is_symlink() else path
+    if not real_path.is_dir():
+        return False
+    return any(real_path.glob("*.mcap"))
+
+
 def _run_step0_real(uuid: str, t4_path: Path, lite_dir: Path) -> tuple[bool, str]:
     target_lite, is_writable = _target_real_lite(t4_path, lite_dir)
+
+    # lite_dir/real.lite が有効（mcap が存在する）なら再生成をスキップする。
+    # フォールバックで生成済みの valid な bag を上書きしないようにするためのガード。
+    # 無効（空・mcap なし・古い input_bag 由来）な場合は削除して再実行する。
+    existing_in_lite_dir = lite_dir / "real.lite"
+    if existing_in_lite_dir.exists() or existing_in_lite_dir.is_symlink():
+        if _real_lite_is_valid(existing_in_lite_dir):
+            print(
+                f"[SKIP step0] {uuid[:8]}: 有効な real.lite が既に存在するためスキップします"
+                f" ({existing_in_lite_dir})",
+                flush=True,
+            )
+            return True, "[skipped: valid real.lite already exists]"
+        else:
+            print(
+                f"[INVALID real.lite] {uuid[:8]}: real.lite が無効（mcap なし）のため削除して再生成します"
+                f" ({existing_in_lite_dir})",
+                flush=True,
+            )
+            _remove_path(existing_in_lite_dir)
+
     if target_lite.exists() or target_lite.is_symlink():
         _remove_path(target_lite)
 

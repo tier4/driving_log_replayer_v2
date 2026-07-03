@@ -619,7 +619,9 @@ def _prepare_gt(data: dict, t0_ns: int, params: dict) -> dict:
     df_kin = to_seconds(data["kin"], t0_ns).sort_values("t").reset_index(drop=True)
     df_acc = to_seconds(data["acc"], t0_ns).sort_values("t").reset_index(drop=True)
     df_steer = to_seconds(data["steer"], t0_ns).sort_values("t").reset_index(drop=True)
-    df_cmd = to_seconds(data["cmd"], t0_ns).sort_values("t").reset_index(drop=True)
+    # to_seconds() は t_ns を落とすため、gear 判定に使う元タイムスタンプは別保持する。
+    df_cmd_raw = data["cmd"].sort_values("t_ns").reset_index(drop=True)
+    df_cmd = to_seconds(df_cmd_raw, t0_ns).sort_values("t").reset_index(drop=True)
     df_gear = data.get("gear")
 
     require_non_empty_df(df_cmd, name="/control/command/control_cmd", context="step_ol1_analyze_nstep")
@@ -756,7 +758,7 @@ def _prepare_gt(data: dict, t0_ns: int, params: dict) -> dict:
     _steer_des_arr = df_cmd["steer_des"].values
     _valid_gear = require_drive_gear_mask(
         df_gear if df_gear is not None else pd.DataFrame(),
-        df_cmd["t_ns"].values,
+        df_cmd_raw["t_ns"].values,
         context="step_ol1_analyze_nstep",
         allow_leading_gap=True,
     )

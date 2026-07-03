@@ -370,11 +370,11 @@ def compute_kus_bins(records: list[dict]) -> dict:
     十分統計量 (sum_wz2/sum_wz_ts) を含めるため、collection 横断側で生サンプルなしに
     加算的にプール再構成できる (`compute_kus_bins_from_sufficient_stats`)。
     """
-    all_vx = np.concatenate([r["vx"] for r in records])
-    all_wz = np.concatenate([r["wz"] for r in records])
-    all_steer_eff = np.concatenate([r["steer_eff"] for r in records])
-    all_dwz = np.concatenate([r["dwz"] for r in records])
-    all_gear_drive = np.concatenate([r.get("gear_drive", np.ones_like(r["vx"], dtype=bool)) for r in records])
+    all_vx = np.concatenate([r["vx"] for r in records]) if records else np.empty(0)
+    all_wz = np.concatenate([r["wz"] for r in records]) if records else np.empty(0)
+    all_steer_eff = np.concatenate([r["steer_eff"] for r in records]) if records else np.empty(0)
+    all_dwz = np.concatenate([r["dwz"] for r in records]) if records else np.empty(0)
+    all_gear_drive = np.concatenate([r.get("gear_drive", np.ones_like(r["vx"], dtype=bool)) for r in records]) if records else np.empty(0, dtype=bool)
 
     mask_ok = (
         all_gear_drive

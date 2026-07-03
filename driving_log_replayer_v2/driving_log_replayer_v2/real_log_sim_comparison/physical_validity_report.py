@@ -428,82 +428,6 @@ def _kus_band_table_rows(params: dict) -> str:
     return f"  <tr><td><code>k_us</code></td><td>{k_us:.6f} rad·s²/m</td><td>アンダーステア係数（速度依存なし）</td></tr>"
 
 
-def _build_sec_model_params(params: dict) -> str:
-    """1-0. で使うモデルパラメータ定義のまとめ。"""
-
-    def _fmt(v) -> str:
-        if isinstance(v, float):
-            return f"{v:.6g}"
-        return str(v)
-
-    bands = params.get("k_us_bands")
-    thresholds = params.get("k_us_thresholds")
-    if bands is not None and thresholds is not None:
-        kus_rows = []
-        for i, b in enumerate(bands):
-            if i == 0:
-                speed_range = f"vx &lt; {thresholds[0]:.2f} m/s"
-            elif i < len(thresholds):
-                speed_range = f"{thresholds[i-1]:.2f} ≤ vx &lt; {thresholds[i]:.2f} m/s"
-            else:
-                speed_range = f"vx ≥ {thresholds[-1]:.2f} m/s"
-            kus_rows.append(
-                f"  <tr><td><code>k_us_band[{i}]</code></td>"
-                f"<td>{_fmt(b)} rad·s²/m</td>"
-                f"<td>{speed_range} のアンダーステア係数</td></tr>"
-            )
-        for i, thr in enumerate(thresholds):
-            kus_rows.append(
-                f"  <tr><td><code>k_us_threshold[{i}]</code></td>"
-                f"<td>{_fmt(thr)} m/s</td><td>速度帯 {i} → {i+1} の切替閾値</td></tr>"
-            )
-        kus_profile_rows = "\n".join(kus_rows)
-    else:
-        kus_profile_rows = f"""\
-  <tr><td><code>k_us</code></td><td>{_fmt(params.get('k_us', 0.0))} rad·s²/m</td>
-    <td>全速度域で一定のアンダーステア係数</td></tr>"""
-
-    return f"""
-<h3>モデルパラメータの定義</h3>
-<p>
-この節で使う設定値の意味をここに集約する。
-上の記号定義で説明した <code>β</code> / <code>L</code> / <code>k_us</code> は、ここでは設定名との対応関係を補足する。
-</p>
-
-<h4>アンダーステア補正</h4>
-<table class="param-table">
-  <tr><th>パラメータ</th><th>値</th><th>説明</th></tr>
-{kus_profile_rows}
-</table>
-
-<h4>操舵系</h4>
-<table class="param-table">
-  <tr><th>パラメータ</th><th>値</th><th>説明</th></tr>
-  <tr><td><code>steer_time_constant</code></td><td>{_fmt(params.get('steer_time_constant', 'N/A'))} s</td>
-    <td>操舵アクチュエータ 1 次遅れ時定数 <code>τ_δ</code></td></tr>
-  <tr><td><code>steer_time_delay</code></td><td>{_fmt(params.get('steer_time_delay', 'N/A'))} s</td>
-    <td>操舵指令の純粋遅延 <code>T_δ</code></td></tr>
-  <tr><td><code>steer_bias</code></td><td>{_fmt(params.get('steer_bias', 'N/A'))} rad</td>
-    <td>系統的操舵オフセット。上表の <code>β</code> と同じ値</td></tr>
-  <tr><td><code>steer_rate_lim</code></td><td>{_fmt(params.get('steer_rate_lim', 'N/A'))} rad/s</td>
-    <td>操舵レート制限（飽和速度）</td></tr>
-  <tr><td><code>steer_dead_band</code></td><td>{_fmt(params.get('steer_dead_band', 'N/A'))} rad</td>
-    <td>操舵不感帯幅（±dead_band 以内の指令は無視）</td></tr>
-  <tr><td><code>debug_steer_scaling_factor</code></td><td>{_fmt(params.get('debug_steer_scaling_factor', 'N/A'))}</td>
-    <td>操舵指令に掛ける定数倍率（1.0 = 補正なし）</td></tr>
-</table>
-
-<h4>加速度系</h4>
-<table class="param-table">
-  <tr><th>パラメータ</th><th>値</th><th>説明</th></tr>
-  <tr><td><code>acc_time_constant</code></td><td>{_fmt(params.get('acc_time_constant', 'N/A'))} s</td>
-    <td>加速度アクチュエータ 1 次遅れ時定数 <code>τ_a</code></td></tr>
-  <tr><td><code>acc_time_delay</code></td><td>{_fmt(params.get('acc_time_delay', 'N/A'))} s</td>
-    <td>加速度指令の純粋遅延 <code>T_a</code></td></tr>
-</table>
-"""
-
-
 def _build_sec1(
     params: dict,
     long_fig: go.Figure,
@@ -512,10 +436,46 @@ def _build_sec1(
     n_dataset: int,
     long_perf_figs: tuple[go.Figure, go.Figure, go.Figure] | None = None,
 ) -> str:
+    """1-0. 座標系と主要な記号の定義 + モデルパラメータの定義を含む sec1 全体 HTML を返す。"""
     kus_rows = _kus_band_table_rows(params)
-    model_param_defs = _build_sec_model_params(params)
 
-    def _fmt(v) -> str:
+    # ---------- モデルパラメータの定義（旧 _build_sec_model_params）----------
+    def _fmt_p(v) -> str:
+        if isinstance(v, float):
+            return f"{v:.6g}"
+        return str(v)
+
+    bands = params.get("k_us_bands")
+    thresholds = params.get("k_us_thresholds")
+    if bands is not None and thresholds is not None:
+        _kus_rows_p = []
+        for i, b in enumerate(bands):
+            if i == 0:
+                speed_range = f"vx &lt; {thresholds[0]:.2f} m/s"
+            elif i < len(thresholds):
+                speed_range = f"{thresholds[i-1]:.2f} ≤ vx &lt; {thresholds[i]:.2f} m/s"
+            else:
+                speed_range = f"vx ≥ {thresholds[-1]:.2f} m/s"
+            _kus_rows_p.append(
+                f"  <tr><td><code>k_us_band[{i}]</code></td>"
+                f"<td>{_fmt_p(b)} rad·s²/m</td>"
+                f"<td>{speed_range} のアンダーステア係数</td></tr>"
+            )
+        for i, thr in enumerate(thresholds):
+            _kus_rows_p.append(
+                f"  <tr><td><code>k_us_threshold[{i}]</code></td>"
+                f"<td>{_fmt_p(thr)} m/s</td><td>速度帯 {i} → {i+1} の切替閾値</td></tr>"
+            )
+        kus_profile_rows = "\n".join(_kus_rows_p)
+    else:
+        kus_profile_rows = (
+            f"  <tr><td><code>k_us</code></td>"
+            f"<td>{_fmt_p(params.get('k_us', 0.0))} rad·s²/m</td>"
+            f"<td>全速度域で一定のアンダーステア係数</td></tr>"
+        )
+
+
+    def _fmt(v) -> str:  # noqa: E306 (ローカル _fmt。上の _fmt_p とスコープが異なる)
         if isinstance(v, float):
             return f"{v:.6g}"
         return str(v)
@@ -583,67 +543,103 @@ def _build_sec1(
 <h2>1-0. 座標系と主要な記号の定義</h2>
 <p>
 本レポートの運動方程式は、以下の車体基準（body frame）および進行方向基準の座標系に基づく。
-「状態ベクトル」列は、シミュレータの状態ベクトル（7 要素、詳細は
-<a href="#sec-state-space">1-1 節</a>）のどの成分に対応するかを示す（該当しない記号は入力・
-パラメータ・導出量のいずれかであり、状態ベクトルには含まれない）。「ROS トピック」列は、
-実機ログ（<code>real.lite</code>）と scenario_simulator_v2 の双方で共通に使われるトピック名を示す
-（両者の照合結果・例外は <a href="#rt-asymmetry">1-1 節末尾</a>を参照）。
+「実装ラベル」列は、シミュレータ内部の状態ベクトル（7 要素、詳細は
+<a href="#sec-state-space">1-1 節</a>）の IDX か、対応する YAML 設定名を示す（該当しない記号は入力・
+導出量などであり、実装ラベル欄には <code>—</code> あるいは補助注記を記す）。「ROS トピック / フィールド」列は、
+実機ログ（<code>real.lite</code>）と scenario_simulator_v2 の双方で共通に使われるトピック名と
+フィールドを <code>topic.field</code> 形式でまとめる（両者の照合結果・例外は
+<a href="#rt-asymmetry">1-1 節末尾</a>を参照）。
 </p>
 <table class="param-table">
-  <tr><th>記号</th><th>意味</th><th>単位</th><th>状態ベクトル</th><th>ODE 積分</th>
-      <th>ROS トピック（実機・sim 共通）</th><th>フィールド</th></tr>
+  <tr><th>記号</th><th>意味</th><th>単位</th><th>実装ラベル</th>
+      <th>ROS トピック / フィールド</th>
+  </tr>
   <tr><td>\\(x, y\\)</td><td>地図平面上の車両位置</td><td>m</td>
-      <td><code>IDX::X</code>, <code>IDX::Y</code></td><td>する</td>
-      <td><code>/localization/kinematic_state</code></td><td><code>pose.pose.position.{{x, y}}</code></td></tr>
+      <td><code>IDX::X</code>, <code>IDX::Y</code></td>
+      <td><code>/localization/kinematic_state.pose.pose.position.{{x, y}}</code></td>
+  </tr>
   <tr><td>\\(\\theta\\)</td><td>ヨー角（車体の向き。地図 X 軸からの反時計回り回転）</td><td>rad</td>
-      <td><code>IDX::YAW</code></td><td>する</td>
-      <td><code>/localization/kinematic_state</code></td><td><code>pose.pose.orientation</code></td></tr>
+      <td><code>IDX::YAW</code></td>
+      <td><code>/localization/kinematic_state.pose.pose.orientation</code></td>
+  </tr>
   <tr><td>\\(v_x\\)</td><td>前進速度（進行方向＝車体 X 軸成分。<code>lon_vel</code>）</td><td>m/s</td>
-      <td><code>IDX::VX</code></td><td>する</td>
-      <td><code>/vehicle/status/velocity_status</code></td><td><code>longitudinal_velocity</code></td></tr>
+      <td><code>IDX::VX</code></td>
+      <td><code>/vehicle/status/velocity_status.longitudinal_velocity</code></td>
+  </tr>
   <tr><td>\\(\\delta_{{\\mathrm{{act}}}}\\)</td><td>前輪実ステア角</td><td>rad</td>
-      <td><code>IDX::STEER</code></td><td>する</td>
-      <td><code>/vehicle/status/steering_status</code></td><td><code>steering_tire_angle</code></td></tr>
+      <td><code>IDX::STEER</code></td>
+      <td><code>/vehicle/status/steering_status.steering_tire_angle</code></td>
+  </tr>
   <tr><td>\\(a_{{\\mathrm{{act}}}}\\)</td><td>アクチュエータ出力（実加速度。勾配重力加算前の値）</td><td>m/s²</td>
-      <td><code>IDX::PEDAL_ACCX</code></td><td>する</td>
-      <td>—（直接の実測トピックなし。次行 \\(a_{{\\mathrm{{report}}}}\\) を実測相当として使用）</td><td>—</td></tr>
+      <td><code>IDX::PEDAL_ACCX</code></td>
+      <td>—（直接の実測トピックなし。次行 \\(a_{{\\mathrm{{report}}}}\\) を実測相当として使用）</td>
+  </tr>
   <tr><td>\\(a_{{\\mathrm{{report}}}}\\)</td>
       <td>レポート・可視化用の加速度。<code>calcModel</code> の微分には現れず、
       Euler 更新後に \\((v_{{x,\\mathrm{{new}}}} - v_{{x,\\mathrm{{prev}}}}) / \\Delta t\\) として事後計算される
       別枠の出力量（<b>ODE 状態の \\(a_{{\\mathrm{{act}}}}\\) とは別物</b>。実測 \\(a_{{\\mathrm{{act}}}}\\) 相当として使用）</td>
-      <td>m/s²</td><td><code>IDX::ACCX</code></td><td>しない（事後計算）</td>
-      <td><code>/localization/acceleration</code></td><td><code>accel.accel.linear.x</code></td></tr>
+      <td>m/s²</td><td><code>IDX::ACCX</code></td>
+      <td><code>/localization/acceleration.accel.accel.linear.x</code></td>
+  </tr>
   <tr><td>\\(v_y\\)</td><td>横速度</td><td>m/s</td>
-      <td>—（モデルの <code>getVy()</code> は常に 0 固定）</td><td>—</td>
-      <td><code>/localization/kinematic_state</code></td><td><code>twist.twist.linear.y</code></td></tr>
+      <td>—（モデルの <code>getVy()</code> は常に 0 固定）</td>
+      <td><code>/localization/kinematic_state.twist.twist.linear.y</code></td>
+  </tr>
   <tr><td>\\(\\omega\\)</td><td>ヨーレート（\\(\\dot\\theta\\)）</td><td>rad/s</td>
-      <td>—（導出量。<code>calc_yaw_rate</code> で算出）</td><td>—</td>
-      <td><code>/localization/kinematic_state</code></td><td><code>twist.twist.angular.z</code></td></tr>
+      <td>—（導出量。<code>calc_yaw_rate</code> で算出）</td>
+      <td><code>/localization/kinematic_state.twist.twist.angular.z</code></td>
+  </tr>
   <tr><td>\\(a_{{\\mathrm{{slope}}}}\\)</td><td>路面勾配による重力加速度成分</td><td>m/s²</td>
-      <td>—（入力 <code>SLOPE_ACCX</code>）</td><td>—</td>
-      <td>専用トピックなし（<a href="#rt-asymmetry">1-1 節末尾</a>参照）</td><td>—</td></tr>
+      <td>—（入力 <code>SLOPE_ACCX</code>）</td>
+      <td>専用トピックなし（<a href="#rt-asymmetry">1-1 節末尾</a>参照）</td>
+  </tr>
   <tr><td>\\(a_{{\\mathrm{{cmd,des}}}}\\)</td><td>加速度指令</td><td>m/s²</td>
-      <td>—（入力）</td><td>—</td>
-      <td><code>/control/command/control_cmd</code></td><td><code>longitudinal.acceleration</code></td></tr>
+      <td>—（入力）</td>
+      <td><code>/control/command/control_cmd.longitudinal.acceleration</code></td>
+  </tr>
   <tr><td>\\(\\delta_{{\\mathrm{{cmd,des}}}}\\)</td><td>操舵指令</td><td>rad</td>
-      <td>—（入力）</td><td>—</td>
-      <td><code>/control/command/control_cmd</code></td><td><code>lateral.steering_tire_angle</code></td></tr>
+      <td>—（入力）</td>
+      <td><code>/control/command/control_cmd.lateral.steering_tire_angle</code></td>
+  </tr>
   <tr><td><code>gear</code></td><td>ギア（連続値ではなく DRIVE/REVERSE/NEUTRAL/PARK 等を切り替える
       分岐選択用の離散入力）</td><td>—</td>
-      <td>—（入力）</td><td>—</td>
-      <td>専用トピックなし（<a href="#rt-asymmetry">1-1 節末尾</a>参照）</td><td>—</td></tr>
-  <tr><td>\\(\\beta\\)</td><td>ステアバイアス（系統的操舵オフセット。<code>steer_bias</code>）</td><td>rad</td>
-      <td>—（パラメータ）</td><td>—</td>
-      <td>—（設定パラメータ）</td><td>—</td></tr>
-  <tr><td>\\(L\\)</td><td>ホイールベース（<code>wheelbase</code>）</td><td>m</td>
-      <td>—（パラメータ）</td><td>—</td>
-      <td>—（設定パラメータ）</td><td>—</td></tr>
-  <tr><td>\\(k_{{\\mathrm{{us}}}}\\)</td><td>アンダーステア係数（<code>k_us</code>）</td><td>rad/(m/s²)</td>
-      <td>—（パラメータ）</td><td>—</td>
-      <td>—（設定パラメータ）</td><td>—</td></tr>
+      <td>—（入力）</td>
+      <td>専用トピックなし（<a href="#rt-asymmetry">1-1 節末尾</a>参照）</td>
+  </tr>
+  <tr><td>\\(\\beta\\)</td><td>ステアバイアス（系統的操舵オフセット）</td><td>rad</td>
+      <td><code>steer_bias</code></td>
+      <td>—（設定パラメータ）</td>
+  </tr>
+  <tr><td>\\(L\\)</td><td>ホイールベース</td><td>m</td>
+      <td><code>wheelbase</code></td>
+      <td>—（設定パラメータ）</td>
+  </tr>
+  <tr><td>\\(k_{{\\mathrm{{us}}}}\\)</td><td>アンダーステア係数（速度依存ランプ）</td><td>rad·s²/m</td>
+      <td><code>k_us_bands / k_us</code></td>
+      <td>—（設定パラメータ）</td>
+  </tr>
+  <tr><td>\\(\\tau_\\delta\\)</td><td>操舵 1 次遅れ時定数</td><td>s</td>
+      <td><code>steer_time_constant</code></td><td>—（設定パラメータ）</td>
+  </tr>
+  <tr><td>\\(T_\\delta\\)</td><td>操舵純粋遅延</td><td>s</td>
+      <td><code>steer_time_delay</code></td><td>—（設定パラメータ）</td>
+  </tr>
+  <tr><td>\\(\\tau_a\\)</td><td>加速度 1 次遅れ時定数</td><td>s</td>
+      <td><code>acc_time_constant</code></td><td>—（設定パラメータ）</td>
+  </tr>
+  <tr><td>\\(T_a\\)</td><td>加速度純粋遅延</td><td>s</td>
+      <td><code>acc_time_delay</code></td><td>—（設定パラメータ）</td>
+  </tr>
+  <tr><td>\\(d\\)</td><td>操舵不感帯幅（±d 以内の指令は無視）</td><td>rad</td>
+      <td><code>steer_dead_band</code></td><td>—（設定パラメータ）</td>
+  </tr>
+  <tr><td>\\(K_{{\\mathrm{{steer\_scale}}}}\\)</td><td>操舵指令スケーリング倍率（1.0 = 補正なし）</td><td>—</td>
+      <td><code>debug_steer_scaling_factor</code></td><td>—（設定パラメータ）</td>
+  </tr>
+  <tr><td>\\(\\dot{{\\delta}}_{{\\mathrm{{lim}}}}\\)</td><td>操舵レート制限（飽和速度）</td><td>rad/s</td>
+      <td><code>steer_rate_lim</code></td><td>—（設定パラメータ）</td>
+  </tr>
 </table>
-<p class="meta">下の小節で、記号に対応するモデルパラメータの意味と値をまとめている。</p>
-{model_param_defs}
 </section>
 
 <section id="sec-state-space">
@@ -658,7 +654,7 @@ def _build_sec1(
 
 <h3>状態ベクトルと入力ベクトル</h3>
 <p>
-各記号の意味・単位・状態ベクトル内の位置（IDX）・ODE 積分の有無は
+各記号の意味・単位・実装ラベル（IDX または設定名）は
 <a href="#sec-coords">1-0 の記号表</a>にまとめた通り。シミュレータの状態ベクトルは 7 要素だが、
 そのうち連続時間の運動方程式（ODE）で積分されるのは \\(x, y, \\theta, v_x, \\delta_{{\\mathrm{{act}}}},
 a_{{\\mathrm{{act}}}}\\) の 6 状態のみであり、\\(a_{{\\mathrm{{report}}}}\\)（<code>IDX::ACCX</code>）は
