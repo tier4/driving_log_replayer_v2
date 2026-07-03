@@ -488,11 +488,6 @@ def _build_sec1(
     beta  = _fmt(params.get("steer_bias", "N/A"))
     db    = _fmt(params.get("steer_dead_band", "N/A"))
     rlim  = _fmt(params.get("steer_rate_lim", "N/A"))
-    n_substep = _fmt(params.get("n_substep", 1))
-    tau_brake = _fmt(params.get("brake_time_constant", 0.0))
-    drag_c0 = _fmt(params.get("lon_drag_c0", 0.0))
-    drag_c1 = _fmt(params.get("lon_drag_c1", 0.0))
-    drag_c2 = _fmt(params.get("lon_drag_c2", 0.0))
 
     _long_html_inner  = long_fig.to_html(full_html=False, include_plotlyjs=False)
     _steer_html_inner = steer_fig.to_html(full_html=False, include_plotlyjs=False)
@@ -547,8 +542,7 @@ def _build_sec1(
 <a href="#sec-state-space">1-1 節</a>）の IDX か、対応する YAML 設定名を示す（該当しない記号は入力・
 導出量などであり、実装ラベル欄には <code>—</code> あるいは補助注記を記す）。「ROS トピック / フィールド」列は、
 実機ログ（<code>real.lite</code>）と scenario_simulator_v2 の双方で共通に使われるトピック名と
-フィールドを <code>topic.field</code> 形式でまとめる（両者の照合結果・例外は
-<a href="#rt-asymmetry">1-1 節末尾</a>を参照）。
+フィールドを <code>topic.field</code> 形式でまとめる。
 </p>
 <table class="param-table">
   <tr><th>記号</th><th>意味</th><th>単位</th><th>実装ラベル</th>
@@ -591,7 +585,7 @@ def _build_sec1(
   </tr>
   <tr><td>\\(a_{{\\mathrm{{slope}}}}\\)</td><td>路面勾配による重力加速度成分</td><td>m/s²</td>
       <td>—（入力 <code>SLOPE_ACCX</code>）</td>
-      <td>専用トピックなし（<a href="#rt-asymmetry">1-1 節末尾</a>参照）</td>
+      <td>専用トピックなし（pitch から算出）</td>
   </tr>
   <tr><td>\\(a_{{\\mathrm{{cmd,des}}}}\\)</td><td>加速度指令</td><td>m/s²</td>
       <td>—（入力）</td>
@@ -604,7 +598,7 @@ def _build_sec1(
   <tr><td><code>gear</code></td><td>ギア（連続値ではなく DRIVE/REVERSE/NEUTRAL/PARK 等を切り替える
       分岐選択用の離散入力）</td><td>—</td>
       <td>—（入力）</td>
-      <td>専用トピックなし（<a href="#rt-asymmetry">1-1 節末尾</a>参照）</td>
+      <td>専用トピックなし（<code>gear_status</code> を使用）</td>
   </tr>
   <tr><td>\\(\\beta\\)</td><td>ステアバイアス（系統的操舵オフセット）</td><td>rad</td>
       <td><code>steer_bias</code></td>
@@ -645,155 +639,73 @@ def _build_sec1(
 <section id="sec-state-space">
 <h2>1-1. 状態空間モデルと数値積分（Euler 法によるアップデート）</h2>
 <p>
-以降の 1-2（縦方向）・1-3（操舵）・1-4（ヨー・横方向）は、それぞれ独立に同定できるブロックとして
-運動方程式を提示しているが、実装（シミュレータ本体の車両モデル <code>calcModel</code> / <code>update</code>）は
-これらを一つの状態ベクトルとしてまとめ、\\(\\dot{{x}} = f(x, u)\\) という統一した状態方程式を
-共通の Euler 積分ループで毎ステップ時間発展させている。本節ではその全体像と、実際に実行される
-離散化アップデート処理を、実装の状態空間表現に沿って示す。
-</p>
-
-<h3>状態ベクトルと入力ベクトル</h3>
-<p>
-各記号の意味・単位・実装ラベル（IDX または設定名）は
-<a href="#sec-coords">1-0 の記号表</a>にまとめた通り。シミュレータの状態ベクトルは 7 要素だが、
-そのうち連続時間の運動方程式（ODE）で積分されるのは \\(x, y, \\theta, v_x, \\delta_{{\\mathrm{{act}}}},
-a_{{\\mathrm{{act}}}}\\) の 6 状態のみであり、\\(a_{{\\mathrm{{report}}}}\\)（<code>IDX::ACCX</code>）は
-Euler 更新後の事後計算値である。
-</p>
-<p>
-入力ベクトルは \\(a_{{\\mathrm{{cmd,des}}}}\\)（加速度指令）、<code>gear</code>（ギア。連続値ではなく
-DRIVE/REVERSE/NEUTRAL/PARK 等を切り替える分岐選択用の離散入力）、\\(a_{{\\mathrm{{slope}}}}\\)（路面勾配による
-外部加速度入力）、\\(\\delta_{{\\mathrm{{cmd,des}}}}\\)（操舵指令）の 4 要素。<br>
-加えて、加速度指令・操舵指令それぞれの純粋遅延 \\(T_a, T_\\delta\\) を実現するための入力遅延キュー
-（FIFO バッファ）も実質的な離散状態であり、上記 7 次元の状態ベクトルだけでモデルが完結するわけではない。
-</p>
-
-<h3 id="rt-asymmetry">状態・入力と ROS トピックの配線 — 例外（<code>a_slope</code> / <code>gear</code>）</h3>
-<p>
-<a href="#sec-coords">1-0 の記号表</a>に示した通り、状態・指令の記号
-（\\(v_x, \\delta_{{\\mathrm{{act}}}}, a_{{\\mathrm{{report}}}}, x, y, \\theta, v_y, \\omega,
-a_{{\\mathrm{{cmd,des}}}}, \\delta_{{\\mathrm{{cmd,des}}}}\\)）は、実機ログ（<code>real.lite</code>）と
-scenario_simulator_v2（<code>concealer::AutowareUniverse</code> が Autoware との橋渡し役を担う）とで
-完全に同一のトピック名・フィールドを使う。Autoware の制御・プランニングスタックは自分が実機・シム
-いずれに繋がっているか区別しないため、これは設計上当然の一致である。
-</p>
-<p>
-一方、\\(a_{{\\mathrm{{slope}}}}\\) と <code>gear</code> の 2 つは、実機・sim のどちらでも
-上記のような単純な「同一トピックの読み書き」ではなく、非対称な供給経路を持つ。
-</p>
-<table class="param-table">
-  <tr><th>記号</th><th>real.lite（実機ログ）側</th><th>scenario_simulator_v2 側</th></tr>
-  <tr><td>\\(a_{{\\mathrm{{slope}}}}\\)</td>
-      <td>専用トピックはない。<code>/localization/kinematic_state</code> の <code>orientation</code> から
-      算出した pitch を使い、レポート生成スクリプトが事後的に \\(g\\sin(\\mathrm{{pitch}})\\) を計算する</td>
-      <td>専用トピックはない。<code>EgoEntitySimulation::calculateAccelerationBySlope()</code> が
-      lanelet2 地図上の自車姿勢（走行中の map pose）から pitch を求め、同じ \\(g\\sin(\\mathrm{{pitch}})\\) を
-      毎ステップ計算して <code>SLOPE_ACCX</code> 入力に渡す</td></tr>
-  <tr><td><code>gear</code></td>
-      <td><code>/vehicle/status/gear_status</code> を <code>real.lite</code> に必須収集し、
-      DRIVE 系（<code>DRIVE</code>〜<code>DRIVE_18</code>）のサンプルだけを同定・評価に使う。
-      先頭未カバーは解析窓を後ろにずらして許容できるが、gear 欠落の旧 <code>real.lite</code>
-      は再生成が必要</td>
-      <td>実際には <code>/control/command/gear_cmd</code>（指令、concealer が subscribe）と
-      <code>/vehicle/status/gear_status</code>（レポート。ただし車両状態からの算出ではなく
-      指令値をそのままエコーバックする簡易実装）というトピックが存在する</td></tr>
-</table>
-<p class="meta">
-&#9888;&#65039; <b>まとめ</b>: \\(a_{{\\mathrm{{slope}}}}\\) は「同じ物理量を異なる情報源
-（記録済み localization pitch 由来 vs. 走行中の地図ジオメトリ由来）から算出している」という
-設計上必然の違いであり、修正を要する不整合ではない。<code>gear</code> は離散入力として
-評価対象区間を左右するため、現在の pipeline では <code>gear_status</code> を必須入力として扱う。
-ただし、先頭が少し遅れるだけのケースは解析窓を後ろにずらして吸収する。
-</p>
-<p class="meta">
-※ シミュレーションログとの比較では、レポートに記録される制御指令トピックのみ
-<code>/control/trajectory_follower/control_cmd</code>（trajectory_follower の生指令、post-gate 前）
-に置き換わる場合があるが、これは <code>concealer</code> が実際に vehicle model へ渡す指令
-（<code>/control/command/control_cmd</code>）とは別に、比較用として追加収集しているトピックである
-（<code>README.ja.md</code> の「抽出トピック」表を参照）。
+1-2（縦方向）・1-3（操舵）・1-4（ヨー・横方向）で個別に同定する運動方程式を、実装では一つの状態ベクトルに
+まとめた \\(\\dot{{x}} = f(x, u)\\) として扱い、共通の Euler 積分ループで毎ステップ時間発展させている。
+各記号の意味・単位・ROS トピックは <a href="#sec-coords">1-0 の記号表</a>を参照。
 </p>
 
 <h3>連続時間の状態方程式（ベクトル形式）</h3>
-<p>
-6 状態をまとめると以下の \\(\\dot{{x}} = f(x, u)\\) になる。右辺の \\(\\omega(\\cdot), r_\\delta(\\cdot)\\) は
-簡潔にするための略記で、それぞれの中身（詳細な式と根拠）は直後の対応表に示す通り 1-2〜1-4 節が担当する。
+<p class="meta">
+<span style="color:#1565c0">青字</span>が状態ベクトル x（6状態）、<span style="color:#e65100">橙字</span>が入力ベクトル u。
+</p>
+\\[
+{{\\color{{#1565c0}} x}} =
+\\begin{{pmatrix}}
+{{\\color{{#1565c0}} x}} \\\\
+{{\\color{{#1565c0}} y}} \\\\
+{{\\color{{#1565c0}} \\theta}} \\\\
+{{\\color{{#1565c0}} v_x}} \\\\
+{{\\color{{#1565c0}} \\delta_{{\\mathrm{{act}}}}}} \\\\
+{{\\color{{#1565c0}} a_{{\\mathrm{{act}}}}}}
+\\end{{pmatrix}}
+, \\qquad
+{{\\color{{#e65100}} u}} =
+\\begin{{pmatrix}}
+{{\\color{{#e65100}} a_{{\\mathrm{{cmd,des}}}}}} \\\\
+{{\\color{{#e65100}} \\delta_{{\\mathrm{{cmd,des}}}}}} \\\\
+{{\\color{{#e65100}} a_{{\\mathrm{{slope}}}}}} \\\\
+{{\\color{{#e65100}} \\mathrm{{gear}}}}
+\\end{{pmatrix}}
+\\]
+<p class="meta">
+<code>gear</code> は連続値ではなく分岐選択用の離散入力（DRIVE/REVERSE/NEUTRAL/PARK 等）。
+\\(a_{{\\mathrm{{cmd,des}}}}, \\delta_{{\\mathrm{{cmd,des}}}}\\) は純粋遅延 \\(T_a, T_\\delta\\) を経て、
+下の状態方程式では \\(a_{{\\mathrm{{target}}}}, \\delta_{{\\mathrm{{des}}}}\\)（橙字のまま）として現れる。
 </p>
 \\[
 \\dot{{x}} =
-\\begin{{pmatrix}} \\dot x \\\\ \\dot y \\\\ \\dot\\theta \\\\ \\dot v_x \\\\ \\dot\\delta_{{\\mathrm{{act}}}} \\\\ \\dot a_{{\\mathrm{{act}}}} \\end{{pmatrix}}
+\\begin{{pmatrix}}
+{{\\color{{#1565c0}} \\dot x}} \\\\
+{{\\color{{#1565c0}} \\dot y}} \\\\
+{{\\color{{#1565c0}} \\dot\\theta}} \\\\
+{{\\color{{#1565c0}} \\dot v_x}} \\\\
+{{\\color{{#1565c0}} \\dot\\delta_{{\\mathrm{{act}}}}}} \\\\
+{{\\color{{#1565c0}} \\dot a_{{\\mathrm{{act}}}}}}
+\\end{{pmatrix}}
 =
 \\begin{{pmatrix}}
-v_x \\cos\\theta \\\\
-v_x \\sin\\theta \\\\
-\\omega(v_x, \\delta_{{\\mathrm{{act}}}}) \\\\
-a_{{\\mathrm{{act}}}} + a_{{\\mathrm{{slope}}}} \\\\
-r_\\delta(\\delta_{{\\mathrm{{act}}}}, \\delta_{{\\mathrm{{des}}}}) \\\\
-\\bigl(a_{{\\mathrm{{target}}}} - a_{{\\mathrm{{act}}}}\\bigr) / \\tau_a
+{{\\color{{#1565c0}} v_x}} \\cos{{\\color{{#1565c0}} \\theta}} \\\\
+{{\\color{{#1565c0}} v_x}} \\sin{{\\color{{#1565c0}} \\theta}} \\\\
+\\dfrac{{{{\\color{{#1565c0}} v_x}}\\,\\tan({{\\color{{#1565c0}} \\delta_{{\\mathrm{{act}}}}}}+\\beta)}}{{L + k_{{\\mathrm{{us,eff}}}}({{\\color{{#1565c0}} v_x}})\\,{{\\color{{#1565c0}} v_x}}^2}} \\\\
+{{\\color{{#1565c0}} a_{{\\mathrm{{act}}}}}} + {{\\color{{#e65100}} a_{{\\mathrm{{slope}}}}}} \\\\
+\\dfrac{{{{\\color{{#e65100}} \\delta_{{\\mathrm{{des}}}}}} - {{\\color{{#1565c0}} \\delta_{{\\mathrm{{act}}}}}}}}{{\\tau_\\delta}} \\\\
+\\dfrac{{{{\\color{{#e65100}} a_{{\\mathrm{{target}}}}}} - {{\\color{{#1565c0}} a_{{\\mathrm{{act}}}}}}}}{{\\tau_a}}
 \\end{{pmatrix}}
 \\]
-<table class="param-table">
-  <tr><th>行（状態の微分）</th><th>右辺の略記</th><th>中身（詳細な式）</th><th>担当セクション</th></tr>
-  <tr><td>\\(\\dot v_x\\)</td><td>\\(a_{{\\mathrm{{act}}}} + a_{{\\mathrm{{slope}}}}\\)</td>
-      <td>1 次遅れ＋走行抵抗多項式で決まる \\(a_{{\\mathrm{{act}}}}\\) をそのまま加算</td>
-      <td><a href="#sec-long"><b>1-2. 縦方向</b></a></td></tr>
-  <tr><td>\\(\\dot a_{{\\mathrm{{act}}}}\\)</td><td>\\((a_{{\\mathrm{{target}}}} - a_{{\\mathrm{{act}}}}) / \\tau_a\\)</td>
-      <td>\\(a_{{\\mathrm{{target}}}} = a_{{\\mathrm{{cmd,del}}}} + \\mathrm{{poly}}(v_x)\\) の一次遅れ追従</td>
-      <td><a href="#sec-long"><b>1-2. 縦方向</b></a></td></tr>
-  <tr><td>\\(\\dot\\delta_{{\\mathrm{{act}}}}\\)</td><td>\\(r_\\delta(\\delta_{{\\mathrm{{act}}}}, \\delta_{{\\mathrm{{des}}}})\\)</td>
-      <td>不感帯・レート飽和込みの操舵一次遅れ追従</td>
-      <td><a href="#sec-steer"><b>1-3. 操舵</b></a></td></tr>
-  <tr><td>\\(\\dot\\theta\\)</td><td>\\(\\omega(v_x, \\delta_{{\\mathrm{{act}}}})\\)</td>
-      <td>アンダーステア係数 \\(k_{{\\mathrm{{us}}}}\\)・ステアバイアス \\(\\beta\\) 込みのヨーレート</td>
-      <td><a href="#sec-yaw"><b>1-4. ヨー・横方向</b></a></td></tr>
-  <tr><td>\\(\\dot x, \\dot y\\)</td><td>\\(v_x\\cos\\theta,\\ v_x\\sin\\theta\\)</td>
-      <td>キネマティック自転車モデルの位置積分</td>
-      <td><a href="#sec-yaw"><b>1-4. ヨー・横方向</b></a></td></tr>
-</table>
 <p class="meta">
-&#128279; 各行の詳細な式・実測同定結果は上のリンク先セクションを参照。逆方向にも、1-2〜1-4 の各セクション冒頭に
-本節（<a href="#sec-state-space">1-1. 状態空間モデル</a>）のどの行を担当しているかを明記している。
+&#128279; \\(\\tau_\\delta, \\beta\\) は <a href="#sec-steer">1-3</a>、\\(\\tau_a\\) は <a href="#sec-long">1-2</a>、
+\\(L, k_{{\\mathrm{{us,eff}}}}\\) は <a href="#sec-yaw">1-4</a> で定義。
 </p>
 
-<h3>実際の離散更新アルゴリズム（<code>update(dt)</code> の内部処理）</h3>
+<h3>離散化：Euler 法によるアップデート</h3>
 <p>
-シミュレータは毎制御周期 \\(\\Delta t\\) ごとに、以下の手順で状態を更新する。
+毎制御周期 \\(\\Delta t\\) ごとに
+\\[
+x \\leftarrow x + f(x, u) \\cdot \\Delta t
+\\]
+で状態を更新する（前進・陽的 Euler 法、実装は
+<code>SimModelInterface::updateEuler(dt, input)</code>）。
 </p>
-<ol>
-  <li>入力遅延キューから指令を取り出し、純粋遅延を適用した <code>delayed_input</code>
-      （\\(a_{{\\mathrm{{cmd,des}}}}(t-T_a)\\), \\(\\delta_{{\\mathrm{{cmd,des}}}}(t-T_\\delta)\\) 相当）を得る。</li>
-  <li><b>サブステップ Euler ループ</b>: \\(\\mathrm{{sub\\_dt}} = \\Delta t / n_{{\\mathrm{{substep}}}}\\) として、
-      \\[
-      x \\leftarrow x + f(x, u_{{\\mathrm{{del}}}}) \\cdot \\mathrm{{sub\\_dt}}
-      \\]
-      を \\(n_{{\\mathrm{{substep}}}}\\) 回反復する。これがそのまま
-      <code>SimModelInterface::updateEuler(dt, input)</code>（<code>state_ += calcModel(state_, input) * dt</code>）
-      の呼び出しであり、前進（陽的）Euler 法そのものである。各サブステップ後に \\(v_x\\) を
-      \\([-v_{{x,\\mathrm{{lim}}}}, v_{{x,\\mathrm{{lim}}}}]\\) に飽和させる。</li>
-  <li>サブステップループ全体（幅 \\(\\Delta t\\)）で発進・停止に伴う速度符号反転（ゼロクロス）を判定し、
-      該当すれば \\(v_x = 0\\) に丸める。</li>
-  <li>レポート用の \\(a_{{\\mathrm{{report}}}}\\)（<code>IDX::ACCX</code>）を
-      \\(\\bigl(v_{{x,\\mathrm{{new}}}} - v_{{x,\\mathrm{{prev}}}}\\bigr) / \\Delta t\\) として事後計算する
-      （\\(\\mathrm{{sub\\_dt}}\\) ではなく外側の \\(\\Delta t\\) を使う）。</li>
-</ol>
-<table class="param-table">
-  <tr><th>パラメータ</th><th>値</th><th>役割</th></tr>
-  <tr><td><code>n_substep</code></td><td>{n_substep}</td>
-      <td>1 制御周期あたりの Euler サブステップ数。大きいほど離散化誤差が小さくなる</td></tr>
-  <tr><td><code>brake_time_constant</code></td><td>{tau_brake} s</td>
-      <td>ブレーキ側（\\(a_{{\\mathrm{{cmd,des}}}} &lt; 0\\)）の時定数。0 以下なら <code>acc_time_constant</code>
-      にフォールバックし単一時定数として扱われる</td></tr>
-  <tr><td><code>lon_drag_c0, c1, c2</code></td><td>{drag_c0}, {drag_c1}, {drag_c2}</td>
-      <td>走行抵抗多項式 poly(\\(v_x\\))（1-2 の式に加算される定常項）</td></tr>
-</table>
-
-<div class="note">
-&#9888;&#65039; <b>なぜ陽的 Euler 法か（Runge-Kutta を使わない理由）</b>:
-操舵不感帯・レート飽和・ギア分岐・ブレーキ/スロットルでの時定数切替など、状態微分 \\(f(x, u)\\) は
-速度・指令の符号に応じて場合分けされる区分的な関数であり、微分可能性・連続性が保証されない。
-そのため中間点での評価を必要とする 4 次 Runge-Kutta 法（<code>updateRungeKutta</code>）は使えず、
-各ステップの実測状態のみを使う前進 Euler 法（<code>updateEuler</code>）を採用し、
-その代わりに <code>n_substep</code> によるサブステップ分割で離散化誤差を抑えている。
-</div>
 </section>
 
 <section id="sec-long">
