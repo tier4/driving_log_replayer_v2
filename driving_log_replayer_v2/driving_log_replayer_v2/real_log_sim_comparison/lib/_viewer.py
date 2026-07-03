@@ -112,10 +112,10 @@ _HTML_TEMPLATE = r"""<!DOCTYPE html>
 <html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>走行ログ統合ビューア</title>
 <style>
-html,body{margin:0;height:100%;font-family:"Hiragino Sans","Noto Sans CJK JP",sans-serif;background:#eef1f4;color:#222}
-#app{height:100%;display:flex;flex-direction:column}.tabs{display:flex;gap:2px;padding:8px 10px 0;background:#17212b}
-.tabs button{border:0;padding:8px 18px;background:#344454;color:#dce5ec;cursor:pointer;border-radius:5px 5px 0 0}
-.tabs button.active{background:#fff;color:#17212b;font-weight:700}.frame{flex:1;min-height:0;background:#fff}
+html,body{margin:0;height:100%;font-family:"Hiragino Sans","Noto Sans CJK JP",sans-serif;background:#fff;color:#222}
+#app{height:100%;display:flex;flex-direction:column}.tabs{display:flex;gap:4px;padding:8px 10px 0;background:#f5f7fa;border-bottom:1px solid #d8dee8}
+.tabs button{border:1px solid #d8dee8;border-bottom:0;padding:8px 18px;background:#e9edf3;color:#344054;cursor:pointer;border-radius:5px 5px 0 0}
+.tabs button.active{background:#fff;color:#17212b;font-weight:700;box-shadow:0 -1px 0 #fff inset}.frame{flex:1;min-height:0;background:#fff}
 iframe{width:100%;height:100%;border:0;display:block}.empty{padding:2rem;color:#666}
 </style></head><body><div id="app"><div class="tabs" id="tabs"></div><div class="frame" id="frame"></div></div>
 <script>
