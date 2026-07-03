@@ -67,10 +67,12 @@ from driving_log_replayer_v2.real_log_sim_comparison.lib._physical_validity impo
     VX_MIN_CURVE,
     WHEELBASE,
     WZ_MIN,
+    _DELAY_CANDIDATES_LONG,
     _FIT_DT,
     _N_CROSS_FIT_DATASET,
     _PERF_HORIZONS,
     _PERF_STRIDE,
+    _TAU_BOUNDS_LONG,
     _extract_kus_arrays,
     compute_cross_long_rows,
     compute_cross_steer_rows,
@@ -496,6 +498,11 @@ def _build_sec1(
     kus_html   = kus_fig.to_html(full_html=False, include_plotlyjs=False)
     _vx_min = VX_MIN_CURVE
     _stride = _PERF_STRIDE
+    _dt_long  = _FIT_DT
+    _delay_lo = _DELAY_CANDIDATES_LONG[0]
+    _delay_hi = _DELAY_CANDIDATES_LONG[-1]
+    _delay_m  = len(_DELAY_CANDIDATES_LONG) - 1
+    _tau_lo, _tau_hi = _TAU_BOUNDS_LONG
     if long_perf_figs is not None:
         fig_box, fig_growth, fig_map = long_perf_figs
         box_html    = fig_box.to_html(full_html=False, include_plotlyjs=False)
@@ -772,6 +779,70 @@ a_{{\\mathrm{{target}}}}(t) = a_{{\\mathrm{{cmd}}}}(t - T_a)
 チューニング値でのシミュレーション結果（点線）も重ね描きする。per-dataset 同定誤差（RMSE）の
 最良・最悪データセットを選択し、低速・停車区間は除外して表示。
 </p>
+
+<details>
+<summary>推定手法の詳細</summary>
+<p>
+無駄時間 \\(T_a\\) は実装上、制御周期 \\(\\Delta t\\)（={_dt_long:.2f} s）の整数倍
+（サンプル数換算 \\(n_{{\\mathrm{{delay}}}} = \\mathrm{{round}}(T_a / \\Delta t)\\)）でしか区別できない。
+そこで \\(T_a\\) を
+\\[
+T_a \\in \\{{0,\\ \\Delta t,\\ 2\\Delta t,\\ \\dots,\\ M\\Delta t\\}},
+\\qquad M = {_delay_m}\\ \\bigl(T_a: {_delay_lo:.2f}\\text{{–}}{_delay_hi:.2f}\\ \\mathrm{{s}}\\bigr)
+\\]
+の有限個の候補に固定した外側グリッドサーチとし、各候補ごとに連続値の時定数 \\(\\tau_a\\) を
+内側の非線形最小二乗最適化で求める二段探索（grid search × 1 次元非線形最小二乗）を行う。
+</p>
+
+<p><b>① 固定 \\(T_a\\) に対するシミュレーション出力</b>: 無駄時間ぶんシフト済みの指令
+\\(u[k] = a_{{\\mathrm{{cmd}}}}[k - n_{{\\mathrm{{delay}}}}]\\) を入力として、1-1 節と同じ 1 次遅れ構造を持つ
+離散フィルタ（指数移動平均 / 1 次 IIR）
+\\[
+a_{{\\mathrm{{sim}}}}[k] = (1-\\alpha)\\, a_{{\\mathrm{{sim}}}}[k-1] + \\alpha\\, u[k],
+\\qquad \\alpha := \\frac{{\\Delta t}}{{\\tau_a}} \\in (0, 1]
+\\]
+でシミュレーション軌道を生成する（\\(a_{{\\mathrm{{sim}}}}[-1]=0\\) を初期状態とする）。この漸化式を展開すると
+\\[
+a_{{\\mathrm{{sim}}}}[k] = \\alpha \\sum_{{i=0}}^{{k}} (1-\\alpha)^{{k-i}}\\, u[i]
+\\]
+となり、\\(a_{{\\mathrm{{sim}}}}\\) は \\(\\alpha\\)（≡ \\(\\tau_a\\)）のべき乗を通じて非線形に依存する。
+このため output-error 規準（シミュレーション軌道と実測値の残差二乗和）は \\(\\tau_a\\) に関する線形回帰・
+正規方程式には帰着できず、数値的な非線形最小二乗として解く必要がある。
+</p>
+
+<p><b>② 目的関数と対数変換による 1 次元探索</b>: 動的区間マスク \\(\\mathcal{{K}}\\)
+（DRIVE ギア・走行中・\\(|\\dot a_{{\\mathrm{{cmd}}}}|\\) 閾値超過）上での残差二乗平均
+\\[
+J(\\tau_a;\\, T_a) = \\frac{{1}}{{|\\mathcal{{K}}|}} \\sum_{{k \\in \\mathcal{{K}}}}
+\\bigl(a_{{\\mathrm{{sim}}}}[k;\\, \\tau_a, T_a] - a_{{\\mathrm{{act,corr}}}}[k]\\bigr)^2
+\\]
+を最小化する。\\(\\tau_a\\) の探索範囲（{_tau_lo:.2f}〜{_tau_hi:.3g} s）が 2 桁以上に及ぶため、
+\\(\\theta = \\ln \\tau_a\\) と置換して
+\\[
+\\theta^*(T_a) = \\operatorname*{{arg\\,min}}_{{\\theta \\in [\\ln \\tau_{{\\min}},\\, \\ln \\tau_{{\\max}}]}}
+J\\bigl(e^{{\\theta}};\\, T_a\\bigr)
+\\]
+を有界 1 次元非線形最小化（Brent 法, <code>scipy.optimize.minimize_scalar(method="bounded")</code>）で解き、
+\\(\\tau_a^*(T_a) = e^{{\\theta^*(T_a)}}\\) を得る。対数空間にすることで正値制約を自動的に満たしつつ、
+広いダイナミックレンジに対して均等な探索分解能を確保できる。
+</p>
+
+<p><b>③ 無駄時間グリッドサーチ（外側ループ）</b>: ①②の内側最小化を候補
+\\(T_a = m\\Delta t\\)（\\(m = 0, \\dots, M\\)）ごとに実行し、
+\\[
+(\\tau_a^{{*}},\\, T_a^{{*}}) = \\operatorname*{{arg\\,min}}_{{T_a \\in \\{{0,\\Delta t,\\dots,M\\Delta t\\}}}}
+J\\bigl(\\tau_a^*(T_a);\\, T_a\\bigr)
+\\]
+により大域最適な組を選ぶ。複数データセットを横断して同定する場合は、残差二乗和とサンプル数を
+データセット間でプールした
+\\[
+J_{{\\mathrm{{pool}}}}(\\tau_a; T_a) =
+\\frac{{\\sum_d \\sum_{{k \\in \\mathcal{{K}}_d}} \\bigl(a_{{\\mathrm{{sim}},d}}[k] - a_{{\\mathrm{{act,corr}},d}}[k]\\bigr)^2}}
+{{\\sum_d |\\mathcal{{K}}_d|}}
+\\]
+を同じ手順で最小化し、単一の共有パラメータ \\((\\tau_a^*, T_a^*)\\) を得る。
+</p>
+</details>
 {long_html}
 
 <table class="param-table">
