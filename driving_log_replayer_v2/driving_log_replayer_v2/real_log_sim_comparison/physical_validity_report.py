@@ -428,19 +428,18 @@ def _kus_band_table_rows(params: dict) -> str:
     return f"  <tr><td><code>k_us</code></td><td>{k_us:.6f} rad·s²/m</td><td>アンダーステア係数（速度依存なし）</td></tr>"
 
 
-def _build_sec_model_intro(params: dict, label: str, params_filename: str = "") -> str:
-    """レポート冒頭: モデルパラメータ一覧テーブル。"""
+def _build_sec_model_params(params: dict) -> str:
+    """1-0. で使うモデルパラメータ定義のまとめ。"""
 
     def _fmt(v) -> str:
         if isinstance(v, float):
             return f"{v:.6g}"
         return str(v)
 
-    # k_us 速度帯プロファイル行
     bands = params.get("k_us_bands")
     thresholds = params.get("k_us_thresholds")
     if bands is not None and thresholds is not None:
-        rows = []
+        kus_rows = []
         for i, b in enumerate(bands):
             if i == 0:
                 speed_range = f"vx &lt; {thresholds[0]:.2f} m/s"
@@ -448,63 +447,60 @@ def _build_sec_model_intro(params: dict, label: str, params_filename: str = "") 
                 speed_range = f"{thresholds[i-1]:.2f} ≤ vx &lt; {thresholds[i]:.2f} m/s"
             else:
                 speed_range = f"vx ≥ {thresholds[-1]:.2f} m/s"
-            rows.append(
+            kus_rows.append(
                 f"  <tr><td><code>k_us_band[{i}]</code></td>"
-                f"<td>{_fmt(b)}</td><td>{speed_range} のアンダーステア係数</td></tr>"
+                f"<td>{_fmt(b)} rad·s²/m</td>"
+                f"<td>{speed_range} のアンダーステア係数</td></tr>"
             )
         for i, thr in enumerate(thresholds):
-            rows.append(
+            kus_rows.append(
                 f"  <tr><td><code>k_us_threshold[{i}]</code></td>"
                 f"<td>{_fmt(thr)} m/s</td><td>速度帯 {i} → {i+1} の切替閾値</td></tr>"
             )
-        kus_profile_rows = "\n".join(rows)
+        kus_profile_rows = "\n".join(kus_rows)
     else:
         kus_profile_rows = f"""\
-  <tr><td><code>k_us</code></td><td>{_fmt(params.get('k_us', 0.0))}</td>
-    <td>アンダーステア係数（全速度域）</td></tr>"""
-
-    score = params.get("_score", "N/A")
-    score_str = f"{float(score):.4f}" if score is not None and str(score) != "N/A" else "N/A"
-    src_str = f"<code>{params_filename}</code>" if params_filename else f"<code>{label}</code>"
+  <tr><td><code>k_us</code></td><td>{_fmt(params.get('k_us', 0.0))} rad·s²/m</td>
+    <td>全速度域で一定のアンダーステア係数</td></tr>"""
 
     return f"""
-<section id="model-intro">
-<h2>モデルパラメータ一覧</h2>
-<p>本レポートで検証するモデル（<b>{label}</b>）のパラメータを示す。
-ソースファイル: {src_str} &nbsp;|&nbsp; スコア（steer_score）: <b>{score_str}</b></p>
+<h3>モデルパラメータの定義</h3>
+<p>
+この節で使う設定値の意味をここに集約する。
+上の記号定義で説明した <code>β</code> / <code>L</code> / <code>k_us</code> は、ここでは設定名との対応関係を補足する。
+</p>
 
-<h3>アンダーステア補正（k_us 速度帯ステップ）</h3>
+<h4>アンダーステア補正</h4>
 <table class="param-table">
   <tr><th>パラメータ</th><th>値</th><th>説明</th></tr>
 {kus_profile_rows}
 </table>
 
-<h3>操舵系</h3>
+<h4>操舵系</h4>
 <table class="param-table">
   <tr><th>パラメータ</th><th>値</th><th>説明</th></tr>
   <tr><td><code>steer_time_constant</code></td><td>{_fmt(params.get('steer_time_constant', 'N/A'))} s</td>
-    <td>操舵アクチュエータ 1 次遅れ時定数 τ_δ</td></tr>
+    <td>操舵アクチュエータ 1 次遅れ時定数 <code>τ_δ</code></td></tr>
   <tr><td><code>steer_time_delay</code></td><td>{_fmt(params.get('steer_time_delay', 'N/A'))} s</td>
-    <td>操舵指令の純粋遅延 T_δ</td></tr>
+    <td>操舵指令の純粋遅延 <code>T_δ</code></td></tr>
   <tr><td><code>steer_bias</code></td><td>{_fmt(params.get('steer_bias', 'N/A'))} rad</td>
-    <td>系統的操舵オフセット β（左右対称バイアス補正）</td></tr>
+    <td>系統的操舵オフセット。上表の <code>β</code> と同じ値</td></tr>
   <tr><td><code>steer_rate_lim</code></td><td>{_fmt(params.get('steer_rate_lim', 'N/A'))} rad/s</td>
     <td>操舵レート制限（飽和速度）</td></tr>
   <tr><td><code>steer_dead_band</code></td><td>{_fmt(params.get('steer_dead_band', 'N/A'))} rad</td>
     <td>操舵不感帯幅（±dead_band 以内の指令は無視）</td></tr>
   <tr><td><code>debug_steer_scaling_factor</code></td><td>{_fmt(params.get('debug_steer_scaling_factor', 'N/A'))}</td>
-    <td>操舵指令スケーリング係数（1.0 = 補正なし）</td></tr>
+    <td>操舵指令に掛ける定数倍率（1.0 = 補正なし）</td></tr>
 </table>
 
-<h3>加速度系</h3>
+<h4>加速度系</h4>
 <table class="param-table">
   <tr><th>パラメータ</th><th>値</th><th>説明</th></tr>
   <tr><td><code>acc_time_constant</code></td><td>{_fmt(params.get('acc_time_constant', 'N/A'))} s</td>
-    <td>加速度アクチュエータ 1 次遅れ時定数 τ_a</td></tr>
+    <td>加速度アクチュエータ 1 次遅れ時定数 <code>τ_a</code></td></tr>
   <tr><td><code>acc_time_delay</code></td><td>{_fmt(params.get('acc_time_delay', 'N/A'))} s</td>
-    <td>加速度指令の純粋遅延 T_a</td></tr>
+    <td>加速度指令の純粋遅延 <code>T_a</code></td></tr>
 </table>
-</section>
 """
 
 
@@ -517,6 +513,7 @@ def _build_sec1(
     long_perf_figs: tuple[go.Figure, go.Figure, go.Figure] | None = None,
 ) -> str:
     kus_rows = _kus_band_table_rows(params)
+    model_param_defs = _build_sec_model_params(params)
 
     def _fmt(v) -> str:
         if isinstance(v, float):
@@ -645,6 +642,8 @@ def _build_sec1(
       <td>—（パラメータ）</td><td>—</td>
       <td>—（設定パラメータ）</td><td>—</td></tr>
 </table>
+<p class="meta">下の小節で、記号に対応するモデルパラメータの意味と値をまとめている。</p>
+{model_param_defs}
 </section>
 
 <section id="sec-state-space">
@@ -1344,7 +1343,6 @@ def build_html(
 ) -> str:
     score = params.get("_score", "N/A")
     phase14_score = float(score) if isinstance(score, (int, float, str)) and str(score) != "N/A" else 0.0
-    sec_intro = _build_sec_model_intro(params, label=label, params_filename=params_filename)
     sec_metrics = _build_sec_metrics(baseline_score=baseline_score, phase14_score=phase14_score, label=label)
     
     sec_tuning = f"""
@@ -1379,7 +1377,6 @@ def build_html(
   有効データセット数: {n_dataset}
 </p>
 <nav>
-  <a href="#model-intro">モデルパラメータ</a>
   <a href="#sec-coords">1-0. 座標系定義</a>
   <a href="#sec-state-space">1-1. 状態空間モデルと数値積分</a>
   <a href="#sec-long">1-2. 縦方向</a>
@@ -1390,7 +1387,6 @@ def build_html(
   <a href="#curve-viewer">3. カーブビューア</a>
   {f'<a href="#sec-closed-loop">4. クローズドループ比較</a>' if closed_loop_html else ""}
 </nav>
-{sec_intro}
 {sec1}
 {sec_tuning}
 {perf_html}
