@@ -22,7 +22,7 @@ LOCAL_SCENARIO   ?= $(LOCAL_SAMPLE_DIR)/scenario.yaml
 
 PYTHON := python3
 
-.PHONY: help local_cloud_run local_analysis_run local_batch_run local_cross_analysis_run local_multidataset_run local_multidataset_cloud_run prepare_multidataset issue_scenario collect_raw_rosbags open_loop_tune open_loop_batch
+.PHONY: help local_cloud_run local_analysis_run local_batch_run local_cross_analysis_run local_multidataset_run local_multidataset_cloud_run prepare_multidataset issue_scenario collect_raw_rosbags open_loop_tune open_loop_batch physical_validity_report_nodata
 
 help:
 	@echo "使い方: make -C $(MAKEFILE_DIR) <ターゲット>"
@@ -386,3 +386,33 @@ open_loop_batch:
 	        --input-mode raw \
 	        --skip-sim \
 	        $(if $(RESUME),--resume,)
+
+# データセットなしで physical_validity_report を生成する。
+# tuned_params.yaml (--params) のパラメータ値のみを使い、real.lite データは一切読まずに
+# HTML レポートを生成する。出力ファイル名は physical_validity_report_nodata.html として
+# データあり版 (physical_validity_report.html) と区別する。
+#
+# 使い方:
+#   make physical_validity_report_nodata MULTI_BATCH_ROOT=<dir> [PARAMS=<yaml>] [NODATA_OUT=<html>]
+#
+# 変数:
+#   MULTI_BATCH_ROOT  collection ディレクトリ兼デフォルト出力先 (既定: $(MULTI_BATCH_ROOT))
+#   PARAMS            使用するパラメータ YAML (既定: $(MULTI_BATCH_ROOT)/tuned_params.yaml)
+#   NODATA_OUT        出力 HTML パス (既定: $(MULTI_BATCH_ROOT)/physical_validity_report_nodata.html)
+PARAMS     ?= $(MULTI_BATCH_ROOT)/tuned_params.yaml
+NODATA_OUT ?= $(MULTI_BATCH_ROOT)/physical_validity_report_nodata.html
+
+physical_validity_report_nodata:
+	@test -f $(SETUP_BASH) || \
+	    { echo "[ERROR] $(SETUP_BASH) が見つかりません。先にワークスペースをビルドしてください"; exit 1; }
+	@test -f "$(PARAMS)" || \
+	    { echo "[ERROR] パラメータ YAML が見つかりません: $(PARAMS)"; exit 1; }
+	@_nodata_col="$(MULTI_BATCH_ROOT)/.empty_collection" ; \
+	    mkdir -p "$$_nodata_col" ; \
+	    echo "[INFO] PARAMS   : $(PARAMS)" ; \
+	    echo "[INFO] OUT      : $(NODATA_OUT)" ; \
+	    echo "[INFO] COLL_DIR : $$_nodata_col (空ディレクトリ = データなし)" ; \
+	    source $(SETUP_BASH) && $(PYTHON) -m driving_log_replayer_v2.real_log_sim_comparison.physical_validity_report \
+	        --params "$(PARAMS)" \
+	        --collection-dir "$$_nodata_col" \
+	        --out "$(NODATA_OUT)"
