@@ -48,7 +48,7 @@ def resolve_map_osm(override: str | Path | None) -> Path | None:
     if s == "":
         return None
     p = Path(s)
-    if not p.exists():
+    if not p.is_file():
         warnings.warn(f"map_osm パスが存在しません: {p}", stacklevel=2)
         return None
     return p

@@ -304,8 +304,8 @@ def build_common_env(
     env = os.environ.copy()
     env["BEST_MODEL_BASE_DIR"] = str(comparison_dir.parent)  # lite/ and comparison/ live here
 
-    map_osm = Path(map_path) / "lanelet2_map.osm" if map_path else Path("")
-    if map_osm.exists():
+    map_osm = Path(map_path) / "lanelet2_map.osm" if map_path else None
+    if map_osm is not None and map_osm.is_file():
         env["MAP_OSM_PATH"] = str(map_osm)
         logger.info(f"Map OSM: {map_osm}")
     else:
