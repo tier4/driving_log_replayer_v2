@@ -2,6 +2,23 @@
 Changelog for package driving_log_replayer
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
+Forthcoming
+-----------
+* feat: add new class animal and hazard (`#382 <https://github.com/tier4/driving_log_replayer_v2/issues/382>`_)
+* fix: enable to use rviz in perception (`#381 <https://github.com/tier4/driving_log_replayer_v2/issues/381>`_)
+* feat: ignore specified frames (`#380 <https://github.com/tier4/driving_log_replayer_v2/issues/380>`_)
+  * feat: ignore specified frames
+  * fix
+  * remove skipped frames
+  * update perception format version
+  * update sample version
+  ---------
+* feat: introduce camera 3d detector launcher (`#375 <https://github.com/tier4/driving_log_replayer_v2/issues/375>`_)
+  * feat: introduce 3d detector launcher
+  * chore
+  ---------
+* Contributors: Masato Saeki
+
 3.18.4 (2026-06-26)
 -------------------
 * fix: ignore footprint in shape_type is bbox (`#377 <https://github.com/tier4/driving_log_replayer_v2/issues/377>`_)
