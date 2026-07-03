@@ -2,8 +2,8 @@
 Changelog for package driving_log_replayer
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-Forthcoming
------------
+3.18.5 (2026-07-03)
+-------------------
 * feat: add new class animal and hazard (`#382 <https://github.com/tier4/driving_log_replayer_v2/issues/382>`_)
 * fix: enable to use rviz in perception (`#381 <https://github.com/tier4/driving_log_replayer_v2/issues/381>`_)
 * feat: ignore specified frames (`#380 <https://github.com/tier4/driving_log_replayer_v2/issues/380>`_)
