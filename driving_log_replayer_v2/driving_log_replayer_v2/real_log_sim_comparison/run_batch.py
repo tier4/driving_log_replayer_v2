@@ -27,16 +27,21 @@ import argparse
 from datetime import datetime, timezone
 import os
 from pathlib import Path
+import shutil
 import subprocess
 import sys
+import tempfile
 from concurrent.futures import ProcessPoolExecutor, as_completed
 import yaml
 from .collect_datasets import _resolve_bundle, collect_bundle, update_manifest
-from .lib._dataset import DatasetResolutionError, resolve_t4_dataset_path
+from .collect_raw_rosbags import _OPENLOOP_TOPICS
+from .lib._dataset import resolve_t4_dataset_path
 from .lib._io import resolve_lite_bag
 
 _PKG = "driving_log_replayer_v2.real_log_sim_comparison"
 _DEFAULT_WEBAUTO_ROOT = Path.home() / ".webauto" / "data" / "data" / "annotation_dataset"
+_DEFAULT_WEBAUTO_PROJECT = "x2_dev"
+_DEFAULT_WEBAUTO_PULL_TIMEOUT_SEC = 3600
 
 
 VERBOSE = False
@@ -48,6 +53,169 @@ def _remove_path(path: Path) -> None:
         path.unlink()
     elif path.is_dir():
         shutil.rmtree(path)
+
+
+def _target_real_lite(t4_path: Path, lite_dir: Path) -> tuple[Path, bool]:
+    is_writable = False
+    test_file = t4_path / ".write_test"
+    try:
+        test_file.touch()
+        test_file.unlink()
+        is_writable = True
+    except OSError:
+        pass
+    return (t4_path / "real.lite", True) if is_writable else (lite_dir / "real.lite", False)
+
+
+def _run_step0_real(uuid: str, t4_path: Path, lite_dir: Path) -> tuple[bool, str]:
+    target_lite, is_writable = _target_real_lite(t4_path, lite_dir)
+    if target_lite.exists() or target_lite.is_symlink():
+        _remove_path(target_lite)
+
+    input_bag_dir = t4_path / "input_bag"
+    target_lite.parent.mkdir(parents=True, exist_ok=True)
+    cmd = [
+        sys.executable, "-m",
+        "driving_log_replayer_v2.real_log_sim_comparison.step0_make_lite",
+        "--kind", "real",
+        "--input", str(input_bag_dir),
+        "--output", str(target_lite),
+    ]
+    print(f"[DIRECT EXTRACT] {uuid[:8]}: {' '.join(cmd)}", flush=True)
+    try:
+        proc = subprocess.run(cmd, check=False, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
+    except Exception as e:
+        return False, str(e)
+    if proc.returncode != 0:
+        return False, proc.stdout
+
+    if is_writable:
+        dst_lite = lite_dir / "real.lite"
+        if dst_lite.exists() or dst_lite.is_symlink():
+            _remove_path(dst_lite)
+        dst_lite.symlink_to(target_lite)
+    return True, proc.stdout
+
+
+def _step0_failure_can_fallback(output: str) -> bool:
+    return "必須トピックが欠損" in output or "/vehicle/status/gear_status" in output
+
+
+def _pull_and_resolve_webauto_dataset(uuid: str, webauto_root: Path) -> Path:
+    project_id = os.environ.get("WEBAUTO_PROJECT_ID", _DEFAULT_WEBAUTO_PROJECT)
+    timeout = int(os.environ.get("WEBAUTO_PULL_TIMEOUT_SEC", str(_DEFAULT_WEBAUTO_PULL_TIMEOUT_SEC)))
+    cmd = [
+        "webauto", "data", "annotation-dataset", "pull",
+        "--project-id", project_id,
+        "--annotation-dataset-id", uuid,
+        "--include-intermediate-artifacts",
+    ]
+    print(f"[WEBAUTO PULL] {uuid[:8]}: {' '.join(cmd)}", flush=True)
+    proc = subprocess.run(
+        cmd,
+        check=False,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        text=True,
+        timeout=timeout,
+    )
+    if proc.returncode != 0:
+        raise RuntimeError(f"webauto pull failed for {uuid}:\n{proc.stdout}")
+    return resolve_t4_dataset_path(webauto_root, uuid)
+
+
+def _find_raw_rosbag_id(uuid: str, t4_path: Path) -> str | None:
+    for parent in (t4_path, *t4_path.parents):
+        index = parent / "raw_index.yaml"
+        if not index.is_file():
+            continue
+        data = yaml.safe_load(index.read_text(encoding="utf-8")) or {}
+        for rec in data.get("records", []):
+            if rec.get("synthetic_id") == uuid and rec.get("rosbag_id"):
+                return str(rec["rosbag_id"])
+    return None
+
+
+def _pull_raw_rosbag_dataset(uuid: str, source_t4_path: Path, lite_dir: Path) -> Path:
+    rosbag_id = _find_raw_rosbag_id(uuid, source_t4_path)
+    if not rosbag_id:
+        raise RuntimeError(f"raw_index.yaml に synthetic_id={uuid} の rosbag_id が見つかりません")
+
+    project_id = os.environ.get("WEBAUTO_PROJECT_ID", _DEFAULT_WEBAUTO_PROJECT)
+    timeout = int(os.environ.get("WEBAUTO_PULL_TIMEOUT_SEC", str(_DEFAULT_WEBAUTO_PULL_TIMEOUT_SEC)))
+    fallback_t4_path = lite_dir.parent / "fallback_raw_dataset"
+    input_bag_dir = fallback_t4_path / "input_bag"
+    tmp_pull = Path(tempfile.mkdtemp(prefix="webauto_raw_pull_", dir=lite_dir.parent))
+    try:
+        if input_bag_dir.exists() or input_bag_dir.is_symlink():
+            _remove_path(input_bag_dir)
+        input_bag_dir.mkdir(parents=True, exist_ok=True)
+
+        cmd = [
+            "webauto", "data", "log-file", "pull-filtered-rosbag",
+            "--project-id", project_id,
+            "--log-file-ids", rosbag_id,
+            "--target-dir", str(tmp_pull),
+            "--topics", ",".join(_OPENLOOP_TOPICS),
+        ]
+        print(f"[WEBAUTO RAW PULL] {uuid[:8]}: rosbag_id={rosbag_id[:16]}...", flush=True)
+        proc = subprocess.run(
+            cmd,
+            check=False,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            text=True,
+            timeout=timeout,
+        )
+        if proc.returncode != 0:
+            raise RuntimeError(f"webauto log-file pull-filtered-rosbag failed for {uuid}:\n{proc.stdout}")
+
+        for path in tmp_pull.rglob("*"):
+            if path.is_file():
+                shutil.copy(path, input_bag_dir)
+
+        source_map = source_t4_path / "map"
+        fallback_map = fallback_t4_path / "map"
+        if source_map.exists() and not fallback_map.exists() and not fallback_map.is_symlink():
+            fallback_map.symlink_to(source_map.resolve())
+        return fallback_t4_path
+    finally:
+        shutil.rmtree(tmp_pull, ignore_errors=True)
+
+
+def _run_step0_real_with_webauto_fallback(
+    uuid: str,
+    t4_path: Path,
+    lite_dir: Path,
+    webauto_root: Path,
+) -> tuple[bool, Path, str]:
+    ok, output = _run_step0_real(uuid, t4_path, lite_dir)
+    if ok:
+        return True, t4_path, output
+    if not _step0_failure_can_fallback(output):
+        return False, t4_path, output
+
+    print(
+        f"[INFO] Step0 validation failed for {uuid[:8]}; pulling source data from webauto and retrying.",
+        flush=True,
+    )
+    try:
+        fallback_t4_path = _pull_raw_rosbag_dataset(uuid, t4_path, lite_dir)
+    except Exception as raw_exc:
+        try:
+            fallback_t4_path = _pull_and_resolve_webauto_dataset(uuid, webauto_root)
+        except Exception as ann_exc:
+            return (
+                False,
+                t4_path,
+                f"{output}\n[webauto raw fallback failed]\n{raw_exc}"
+                f"\n[webauto annotation fallback failed]\n{ann_exc}",
+            )
+
+    ok, retry_output = _run_step0_real(uuid, fallback_t4_path, lite_dir)
+    if ok:
+        return True, fallback_t4_path, retry_output
+    return False, fallback_t4_path, f"{output}\n[webauto fallback retry failed]\n{retry_output}"
 
 
 def _run_and_collect_worker(args: dict) -> dict:
@@ -84,50 +252,13 @@ def _run_and_collect_worker(args: dict) -> dict:
         if resume and _bundle_has_real_lite(output_dir):
             status = "skipped"
         else:
-            is_writable = False
-            test_file = t4_path / ".write_test"
-            try:
-                test_file.touch()
-                test_file.unlink()
-                is_writable = True
-            except OSError:
-                pass
-
-            if is_writable:
-                target_lite = t4_path / "real.lite"
-            else:
-                target_lite = lite_dir / "real.lite"
-
-            if target_lite.exists() or target_lite.is_symlink():
-                _remove_path(target_lite)
-
-            input_bag_dir = t4_path / "input_bag"
-            target_lite.parent.mkdir(parents=True, exist_ok=True)
-
-            cmd = [
-                sys.executable, "-m",
-                "driving_log_replayer_v2.real_log_sim_comparison.step0_make_lite",
-                "--kind", "real",
-                "--input", str(input_bag_dir),
-                "--output", str(target_lite),
-            ]
-            print(f"[DIRECT EXTRACT] {uuid[:8]}: {' '.join(cmd)}", flush=True)
-            try:
-                proc = subprocess.run(cmd, check=False, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
-                if proc.returncode != 0:
-                    print(f"[ERROR] Direct extraction failed for {uuid}:\n{proc.stdout}", file=sys.stderr)
-                    now_str = datetime.now(timezone.utc).isoformat(timespec="seconds")
-                    return {"dataset_id": uuid, "status": "sim_failed", "collected_at": now_str}
-            except Exception as e:
-                print(f"[ERROR] Direct extraction failed for {uuid}: {e}", file=sys.stderr)
+            ok, t4_path, output = _run_step0_real_with_webauto_fallback(
+                uuid, t4_path, lite_dir, webauto_root
+            )
+            if not ok:
+                print(f"[ERROR] Direct extraction failed for {uuid}:\n{output}", file=sys.stderr)
                 now_str = datetime.now(timezone.utc).isoformat(timespec="seconds")
                 return {"dataset_id": uuid, "status": "sim_failed", "collected_at": now_str}
-
-            if is_writable:
-                dst_lite = lite_dir / "real.lite"
-                if dst_lite.exists() or dst_lite.is_symlink():
-                    _remove_path(dst_lite)
-                dst_lite.symlink_to(target_lite)
 
         output_dir.mkdir(parents=True, exist_ok=True)
         (output_dir / "dataset_id.txt").write_text(uuid, encoding="utf-8")
@@ -162,6 +293,18 @@ def _run_and_collect_worker(args: dict) -> dict:
                 uuid, scenario_single, t4_path, output_dir,
                 skip_sim=skip_sim, skip_ol=skip_ol
             )
+            if not ok and input_mode == "raw":
+                try:
+                    try:
+                        fallback_t4_path = _pull_raw_rosbag_dataset(uuid, t4_path, output_dir / "lite")
+                    except Exception:
+                        fallback_t4_path = _pull_and_resolve_webauto_dataset(uuid, webauto_root)
+                    ok = run_one_dataset(
+                        uuid, scenario_single, fallback_t4_path, output_dir,
+                        skip_sim=skip_sim, skip_ol=skip_ol
+                    )
+                except Exception as e:
+                    print(f"[ERROR] webauto fallback failed for {uuid}: {e}", file=sys.stderr)
             if not ok and not _bundle_has_real_lite(output_dir):
                 now_str = datetime.now(timezone.utc).isoformat(timespec="seconds")
                 return {"dataset_id": uuid, "status": "sim_failed", "collected_at": now_str}

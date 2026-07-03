@@ -168,10 +168,11 @@ local_multidataset_cloud_run: prepare_multidataset
 	@test -f $(LOCAL_SCENARIO) || \
 	    { echo "[ERROR] $(LOCAL_SCENARIO) が見つかりません"; exit 1; }
 	@extracted=0 ; \
-	if [ -d "$(MULTI_BATCH_ROOT)/datasets" ] && [ -f "$(MULTI_BATCH_ROOT)/manifest.yaml" ]; then \
-	    num_extracted=$$(find "$(MULTI_BATCH_ROOT)/datasets" -mindepth 1 -maxdepth 1 -type d | wc -l) ; \
-	    if [ "$$num_extracted" -gt 0 ]; then \
-	        echo "[INFO] Step 1: Already found $$num_extracted extracted datasets in $(MULTI_BATCH_ROOT)/datasets. Skipping run_batch." ; \
+	if [ -n "$(RESUME)" ] && [ -d "$(MULTI_BATCH_ROOT)/datasets" ] && [ -f "$(MULTI_BATCH_ROOT)/manifest.yaml" ]; then \
+	    num_datasets=$$(find -L "$(MULTI_BATCH_ROOT)/datasets" -mindepth 1 -maxdepth 1 -type d | wc -l) ; \
+	    num_lite=$$(find -L "$(MULTI_BATCH_ROOT)/datasets" -path "*/real.lite/real.lite_0.mcap" -type f | wc -l) ; \
+	    if [ "$$num_datasets" -gt 0 ] && [ "$$num_lite" -ge "$$num_datasets" ]; then \
+	        echo "[INFO] Step 1: RESUME=1 and found $$num_lite/$$num_datasets real.lite datasets. Skipping run_batch." ; \
 	        extracted=1 ; \
 	    fi ; \
 	fi ; \
@@ -180,6 +181,7 @@ local_multidataset_cloud_run: prepare_multidataset
 	    source $(SETUP_BASH) && $(PYTHON) -m driving_log_replayer_v2.real_log_sim_comparison.run_batch \
 	        --scenario "$(LOCAL_SCENARIO)" \
 	        --batch-root "$(MULTI_BATCH_ROOT)" \
+	        --webauto-root "$(WEBAUTO_T4_ROOT)" \
 	        --input-mode raw \
 	        --skip-sim \
 	        --skip-ol \
@@ -220,6 +222,7 @@ local_multidataset_cloud_run: prepare_multidataset
 	source $(SETUP_BASH) && $(PYTHON) -m driving_log_replayer_v2.real_log_sim_comparison.run_batch \
 	    --scenario "$(MULTI_BATCH_ROOT)/scenarios/tuned_scenario.yaml" \
 	    --batch-root "$(MULTI_BATCH_ROOT)" \
+	    --webauto-root "$(WEBAUTO_T4_ROOT)" \
 	    --input-mode raw \
 	    --closed-loop-uuids "$(CLOSED_LOOP_UUIDS)" \
 	    $(if $(RESUME),--resume,)
