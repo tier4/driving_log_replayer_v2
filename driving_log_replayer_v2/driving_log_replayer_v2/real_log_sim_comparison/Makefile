@@ -145,9 +145,8 @@ local_analysis_run:
 BATCH_ROOT ?= $(LOCAL_SAMPLE_DIR)/out/batch_$(shell date +%Y%m%d_%H%M%S)
 
 # マルチデータセット版のクラウド相当ローカル実行
-# 6/16以降のデータセットを抽出し、指定した特定のデータセットのみでクローズドループを実行する
-DATE_FROM          ?= 2026-06-16
-SRC_DATASET_ROOT   ?= /home/kotaroyoshimoto/data/openloop_j6_15_june
+# /home/kotaroyoshimoto/data/openloop_j6_16_onwards は唯一の利用 dataset root なので、
+# datasets/ は symlink staging ではなく実データディレクトリとして事前構成する。
 CLOSED_LOOP_UUIDS  ?= 00d08afd-b605-5de1-9db0-51241fa87b18,01ccf59a-bf38-5d62-8a81-be0fe0e24b95
 MULTI_BATCH_ROOT   ?= /home/kotaroyoshimoto/data/openloop_j6_16_onwards
 N_TRIALS           ?= 50
@@ -156,11 +155,20 @@ N_JOBS             ?= 32
 
 
 prepare_multidataset:
-	@echo "[INFO] Preparing datasets starting from $(DATE_FROM) in $(MULTI_BATCH_ROOT)..."
-	$(PYTHON) $(MAKEFILE_DIR)/prepare_datasets.py \
-	    --src-dir "$(SRC_DATASET_ROOT)/datasets" \
-	    --dst-dir "$(MULTI_BATCH_ROOT)/datasets" \
-	    --date "$(DATE_FROM)"
+	@echo "[INFO] Validating real datasets in $(MULTI_BATCH_ROOT)..."
+	@test -d "$(MULTI_BATCH_ROOT)/datasets" || \
+	    { echo "[ERROR] datasets directory does not exist: $(MULTI_BATCH_ROOT)/datasets"; exit 1; }
+	@num_symlinks=$$(find "$(MULTI_BATCH_ROOT)/datasets" -type l | wc -l) ; \
+	    if [ "$$num_symlinks" -ne 0 ]; then \
+	        echo "[ERROR] $(MULTI_BATCH_ROOT)/datasets contains $$num_symlinks symlinks. Convert them to real directories first." ; \
+	        exit 1 ; \
+	    fi ; \
+	    num_datasets=$$(find "$(MULTI_BATCH_ROOT)/datasets" -mindepth 1 -maxdepth 1 -type d | wc -l) ; \
+	    if [ "$$num_datasets" -eq 0 ]; then \
+	        echo "[ERROR] No real dataset directories found in $(MULTI_BATCH_ROOT)/datasets" ; \
+	        exit 1 ; \
+	    fi ; \
+	    echo "[INFO] Found $$num_datasets real dataset directories."
 
 local_multidataset_cloud_run: prepare_multidataset
 	@test -f $(SETUP_BASH) || \
@@ -168,9 +176,9 @@ local_multidataset_cloud_run: prepare_multidataset
 	@test -f $(LOCAL_SCENARIO) || \
 	    { echo "[ERROR] $(LOCAL_SCENARIO) が見つかりません"; exit 1; }
 	@extracted=0 ; \
-	if [ -n "$(RESUME)" ] && [ -d "$(MULTI_BATCH_ROOT)/datasets" ] && [ -f "$(MULTI_BATCH_ROOT)/manifest.yaml" ]; then \
-	    num_datasets=$$(find -L "$(MULTI_BATCH_ROOT)/datasets" -mindepth 1 -maxdepth 1 -type d | wc -l) ; \
-	    num_lite=$$(find -L "$(MULTI_BATCH_ROOT)/datasets" -path "*/real.lite/real.lite_0.mcap" -type f | wc -l) ; \
+	if [ -n "$(RESUME)" ] && [ -d "$(MULTI_BATCH_ROOT)/datasets" ]; then \
+	    num_datasets=$$(find "$(MULTI_BATCH_ROOT)/datasets" -mindepth 1 -maxdepth 1 -type d | wc -l) ; \
+	    num_lite=$$(find "$(MULTI_BATCH_ROOT)/datasets" -path "*/real.lite/real.lite_0.mcap" -type f | wc -l) ; \
 	    if [ "$$num_datasets" -gt 0 ] && [ "$$num_lite" -ge "$$num_datasets" ]; then \
 	        echo "[INFO] Step 1: RESUME=1 and found $$num_lite/$$num_datasets real.lite datasets. Skipping run_batch." ; \
 	        extracted=1 ; \

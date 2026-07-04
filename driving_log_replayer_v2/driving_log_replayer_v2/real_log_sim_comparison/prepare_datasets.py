@@ -1,18 +1,22 @@
 #!/usr/bin/env python3
 import argparse
-from datetime import datetime, timezone, timedelta
-import os
+import shutil
+from datetime import datetime
+from datetime import timedelta
+from datetime import timezone
 import pathlib
 import re
 import sys
+
 import yaml
+
 
 def get_dataset_date(dataset_path: pathlib.Path) -> str | None:
     # 1. db3 または mcap ファイル名から日付を正規表現で抽出
     bag_dir = dataset_path / "input_bag"
     if not bag_dir.is_dir():
         return None
-    
+
     # db3 または mcap ファイルを検索
     for entry in bag_dir.iterdir():
         if entry.is_file() and entry.suffix in (".db3", ".mcap"):
@@ -38,8 +42,32 @@ def get_dataset_date(dataset_path: pathlib.Path) -> str | None:
 
     return None
 
-def main():
-    parser = argparse.ArgumentParser(description="Filter datasets by date and create symlinks.")
+
+def copy_dataset(src: pathlib.Path, dst: pathlib.Path) -> bool:
+    """Copy one dataset directory into dst without preserving symlink topology."""
+    if dst.is_dir() and not dst.is_symlink():
+        return False
+
+    if dst.is_symlink():
+        dst.unlink()
+    elif dst.exists():
+        msg = f"Destination exists and is not a directory: {dst}"
+        raise RuntimeError(msg)
+
+    tmp_dst = dst.with_name(f".{dst.name}.tmp")
+    if tmp_dst.exists() or tmp_dst.is_symlink():
+        if tmp_dst.is_dir() and not tmp_dst.is_symlink():
+            shutil.rmtree(tmp_dst)
+        else:
+            tmp_dst.unlink()
+
+    shutil.copytree(src, tmp_dst, symlinks=False)
+    tmp_dst.rename(dst)
+    return True
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser(description="Filter datasets by date and copy real data.")
     parser.add_argument("--src-dir", required=True, help="Source datasets directory")
     parser.add_argument("--dst-dir", required=True, help="Destination datasets directory")
     parser.add_argument("--date", default="2026-06-16", help="Threshold date (YYYY-MM-DD)")
@@ -59,31 +87,35 @@ def main():
 
     count = 0
     created = 0
+    skipped_existing = 0
     # src_path 直下にあるサブディレクトリ（UUID名）を走査
     for item in sorted(src_path.iterdir()):
         if not item.is_dir():
             continue
-        
+
         # シンボリックリンク切れの場合は実体が存在しないため除外
         try:
             real_item = item.resolve(strict=True)
         except FileNotFoundError:
             continue
-            
+
         count += 1
         date_str = get_dataset_date(real_item)
         if not date_str:
             continue
-            
-        if date_str >= args.date:
-            # シンボリックリンクの作成
-            link_name = dst_path / item.name
-            if link_name.exists() or link_name.is_symlink():
-                link_name.unlink()
-            link_name.symlink_to(real_item)
-            created += 1
 
-    print(f"Processed {count} directories. Created {created} symlinks in {dst_path}")
+        if date_str >= args.date:
+            dataset_dst = dst_path / item.name
+            if copy_dataset(real_item, dataset_dst):
+                created += 1
+            else:
+                skipped_existing += 1
+
+    print(
+        f"Processed {count} directories. Copied {created} datasets "
+        f"({skipped_existing} existing) into {dst_path}"
+    )
+
 
 if __name__ == "__main__":
     main()
