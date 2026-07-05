@@ -553,7 +553,7 @@ def _build_sec1(
 <h2>1-0. 座標系と主要な記号の定義</h2>
 <p>
 本レポートの運動方程式は、以下の車体基準（body frame）および進行方向基準の座標系に基づく。
-「実装ラベル」列は、シミュレータ内部の状態ベクトル（7 要素、詳細は
+「実装ラベル」列は、シミュレータ内部の状態ベクトル（6 状態、詳細は
 <a href="#sec-state-space">1-1 節</a>）の IDX か、対応する YAML 設定名を示す（該当しない記号は入力・
 導出量などであり、実装ラベル欄には <code>—</code> あるいは補助注記を記す）。「ROS トピック / フィールド」列は、
 実機ログ（<code>real.lite</code>）と scenario_simulator_v2 の双方で共通に使われるトピック名と
@@ -610,10 +610,10 @@ def _build_sec1(
       <td>—（入力）</td>
       <td><code>/control/command/control_cmd.lateral.steering_tire_angle</code></td>
   </tr>
-  <tr><td><code>gear</code></td><td>ギア（連続値ではなく DRIVE/REVERSE/NEUTRAL/PARK 等を切り替える
-      分岐選択用の離散入力）</td><td>—</td>
-      <td>—（入力）</td>
-      <td>専用トピックなし（<code>gear_status</code> を使用）</td>
+  <tr><td><code>gear</code></td><td>ギア状態。運動方程式の連続入力ではなく、DRIVE 系
+      （<code>GearReport.report</code> の enum 値 2..19）だけを同定・評価に使うための離散マスク</td><td>—</td>
+      <td>—（評価マスク）</td>
+      <td><code>/vehicle/status/gear_status.report</code>（直前値で時刻対応）</td>
   </tr>
   <tr><td>\\(\\beta\\)</td><td>ステアバイアス（系統的操舵オフセット）</td><td>rad</td>
       <td><code>steer_bias</code></td>
@@ -678,14 +678,15 @@ def _build_sec1(
 \\begin{{pmatrix}}
 {{\\color{{#e65100}} a_{{\\mathrm{{cmd,des}}}}}} \\\\
 {{\\color{{#e65100}} \\delta_{{\\mathrm{{cmd,des}}}}}} \\\\
-{{\\color{{#e65100}} a_{{\\mathrm{{slope}}}}}} \\\\
-{{\\color{{#e65100}} \\mathrm{{gear}}}}
+{{\\color{{#e65100}} a_{{\\mathrm{{slope}}}}}}
 \\end{{pmatrix}}
 \\]
 <p class="meta">
-<code>gear</code> は連続値ではなく分岐選択用の離散入力（DRIVE/REVERSE/NEUTRAL/PARK 等）。
 \\(a_{{\\mathrm{{cmd,des}}}}, \\delta_{{\\mathrm{{cmd,des}}}}\\) は純粋遅延 \\(T_a, T_\\delta\\) を経て、
 下の状態方程式では \\(a_{{\\mathrm{{target}}}}, \\delta_{{\\mathrm{{des}}}}\\)（橙字のまま）として現れる。
+<code>gear</code> はこの入力ベクトルには含めず、<code>/vehicle/status/gear_status</code> の直前値から
+DRIVE 系（enum 値 2..19）の時刻だけを残す評価マスクとして適用する。非 DRIVE 系
+（NEUTRAL/REVERSE/PARK/LOW 等）は同定・評価窓から除外される。
 </p>
 \\[
 \\dot{{x}} =
