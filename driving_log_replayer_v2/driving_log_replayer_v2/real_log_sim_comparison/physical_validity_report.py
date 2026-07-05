@@ -777,13 +777,14 @@ DRIVE 系（enum 値 2..19）の時刻だけを残す評価マスクとして適
 \\qquad
 {{\\color{{#e65100}} a_{{\\mathrm{{target}}}}}}(t) = {{\\color{{#e65100}} a_{{\\mathrm{{cmd}}}}}}(t - T_a)
 \\]
-<p>
-加速度指令 \\(a_{{\\mathrm{{cmd}}}}\\) は純粋遅延 \\(T_a\\)（<code>acc_time_delay</code>）だけ遅れてアクチュエータに届き、
-時定数 \\(\\tau_a\\)（<code>acc_time_constant</code>）の一次遅れでアクチュエータ出力（実加速度） \\(a_{{\\mathrm{{act}}}}\\) が応答する。<br>
-車速 \\(v_x\\) は、アクチュエータ出力（実加速度）に応答遅れのない勾配重力加速度成分 \\(a_{{\\mathrm{{slope}}}}\\)（シミュレータへの外部入力）を加算して積分した値となる。<br>
-※ 一般形では \\(a_{{\\mathrm{{target}}}}\\) に走行抵抗多項式 \\(c_0 + c_1 v_x + c_2 v_x^2\\)（<code>lon_drag_c0</code>, <code>lon_drag_c1</code>, <code>lon_drag_c2</code>）が加算されるが、現在すべて 0（同定対象外・未フィット）のため上式では省略した。<br>
-※ 目標加速度およびアクチュエータ出力加速度は <code>vel_rate_lim</code>、車速は <code>vel_lim</code> で制限されます。
-</p>
+<p><b>式中の定数・補足:</b></p>
+<ul>
+  <li>\\(T_a\\)（<code>acc_time_delay</code>）: 加速度指令 \\(a_{{\\mathrm{{cmd}}}}\\) がアクチュエータに届くまでの純粋遅延。</li>
+  <li>\\(\\tau_a\\)（<code>acc_time_constant</code>）: 目標加速度 \\(a_{{\\mathrm{{target}}}}\\) に対するアクチュエータ出力 \\(a_{{\\mathrm{{act}}}}\\) の一次遅れ時定数。</li>
+  <li>\\(a_{{\\mathrm{{slope}}}}\\): 応答遅れを持たない勾配重力加速度成分。\\(\\dot v_x\\) への外部入力。</li>
+  <li>走行抵抗: 一般形では \\(a_{{\\mathrm{{target}}}}\\) に \\(c_0 + c_1 v_x + c_2 v_x^2\\)（<code>lon_drag_c0</code>, <code>lon_drag_c1</code>, <code>lon_drag_c2</code>）を加算。現在はすべて 0 のため上式では省略。</li>
+  <li>制限値: 目標加速度とアクチュエータ出力加速度は <code>vel_rate_lim</code>、車速は <code>vel_lim</code>。</li>
+</ul>
 
 <h3>実機ログからの独立同定（代表データセットモデルフィット）</h3>
 <p>
@@ -907,7 +908,7 @@ J_{{\\mathrm{{pool}}}}(\\tau_a; T_a) =
 \\(\\text{{err}}_{{\\mathrm{{steer}}}}\\) を目的関数として位置・ヨー誤差とは構造的に独立して同定できる。
 </p>
 
-<p><b>運動方程式:</b></p>
+<p><b>運動方程式（1-1 と同じ状態・入力表記）:</b></p>
 \\[
 {{\\color{{#1565c0}} \\dot\\delta_{{\\mathrm{{act}}}}}}(t)
 = \\dfrac{{{{\\color{{#e65100}} \\delta_{{\\mathrm{{des}}}}}}(t) - {{\\color{{#1565c0}} \\delta_{{\\mathrm{{act}}}}}}(t)}}{{\\tau_\\delta}},
@@ -915,16 +916,18 @@ J_{{\\mathrm{{pool}}}}(\\tau_a; T_a) =
 {{\\color{{#e65100}} \\delta_{{\\mathrm{{des}}}}}}(t)
 = K_{{\\mathrm{{steer\\_scale}}}} \\cdot {{\\color{{#e65100}} \\delta_{{\\mathrm{{cmd}}}}}}(t - T_\\delta)
 \\]
-<p>
-※ 目標操舵角は <code>steer_lim</code>、操舵速度は <code>steer_rate_lim</code> で制限され、不感帯 <code>steer_dead_band</code> が適用されます。<br>
-※ 報告操舵角には <code>steer_bias</code>（β）が加算されます。
-</p>
+<p><b>式中の定数・補足:</b></p>
+<ul>
+  <li>\\(T_\\delta\\)（<code>steer_time_delay</code>）: 操舵指令 \\(\\delta_{{\\mathrm{{cmd}}}}\\) がアクチュエータに届くまでの純粋遅延。</li>
+  <li>\\(\\tau_\\delta\\)（<code>steer_time_constant</code>）: 目標操舵角 \\(\\delta_{{\\mathrm{{des}}}}\\) に対する実舵角 \\(\\delta_{{\\mathrm{{act}}}}\\) の一次遅れ時定数。</li>
+  <li>\\(K_{{\\mathrm{{steer\\_scale}}}}\\)（<code>debug_steer_scaling_factor</code>）: 遅延後の操舵指令に乗算する定数ゲイン。</li>
+  <li>制限値・不感帯: 目標操舵角は <code>steer_lim</code>、操舵速度は <code>steer_rate_lim</code>、不感帯は <code>steer_dead_band</code>。</li>
+  <li>\\(\\beta\\)（<code>steer_bias</code>）: アクチュエータ追従式の外側で扱うバイアス。報告操舵角と 1-4 のヨー式への加算値。</li>
+</ul>
 <div class="note">
 ⚠️ <b>結合点</b>: 操舵ゲイン補正倍率（debug_steer_scaling_factor）は操舵指令に定数ゲインをかける形で、直進時の系統的な横力成分（v²δ 由来の
 アンダーステア成分）を部分的に吸収できる。
-したがって操舵ゲイン補正倍率の最適値は k_us の同定後に再検証することが望ましい。<br>
-β（steer_bias）はアクチュエータ追従式自体には入らず（<code>getSteer()</code> は bias なし）、
-報告値の加算と 1-4 のヨー式の両方に現れる二重登場のパラメータである。
+したがって操舵ゲイン補正倍率の最適値は k_us の同定後に再検証することが望ましい。
 </div>
 
 <h3>実機ログからの独立同定（代表データセットモデルフィット）</h3>
@@ -968,7 +971,7 @@ J_{{\\mathrm{{pool}}}}(\\tau_a; T_a) =
 直進（\\(\\delta \\approx 0\\)）では感度がゼロなので、全データセット集約スコアは k_us に対して構造的不可同定。
 </p>
 
-<p><b>運動方程式:</b></p>
+<p><b>運動方程式（1-1 と同じ状態表記）:</b></p>
 \\[
 \\begin{{pmatrix}}
 {{\\color{{#1565c0}} \\dot x}} \\\\
@@ -982,16 +985,13 @@ J_{{\\mathrm{{pool}}}}(\\tau_a; T_a) =
 \\dfrac{{{{\\color{{#1565c0}} v_x}}\\,\\tan({{\\color{{#1565c0}} \\delta_{{\\mathrm{{act}}}}}}+\\beta)}}{{L + k_{{\\mathrm{{us,eff}}}}({{\\color{{#1565c0}} v_x}})\\,{{\\color{{#1565c0}} v_x}}^2}}
 \\end{{pmatrix}}
 \\]
-<p>
-アンダーステア係数 \\(k_{{\\mathrm{{us,eff}}}}\\) は速度帯ごとの定数（速度帯ステップ）で実装される。
-β（steer_bias）はヨー式の \\(\\tan(\\cdot)\\) 引数にも加算され、系統的なヨーオフセットを生む
-（1-3 の報告値加算とは別経路で同一パラメータが効く）。
-</p>
-<div class="note">
-⚠️ <b>前提条件</b>: この式で使う \\(\\delta_{{\\mathrm{{act}}}}\\) は 1-3 の結果に依存する。
-1-3 の操舵ゲイン補正倍率が k_us の v²δ 成分を部分吸収しているため、操舵ゲイン補正倍率の値を固定した上で
-k_us を同定することが重要。
-</div>
+<p><b>式中の定数・補足:</b></p>
+<ul>
+  <li>\\(L\\)（<code>wheelbase</code>）: 自転車モデルのホイールベース。</li>
+  <li>\\(k_{{\\mathrm{{us,eff}}}}\\)（<code>k_us_bands / k_us</code>）: 速度帯ごとのアンダーステア係数。</li>
+  <li>\\(\\beta\\)（<code>steer_bias</code>）: ヨー式の \\(\\tan(\\cdot)\\) 引数に入るバイアス。系統的なヨーオフセット成分。</li>
+  <li>\\(\\delta_{{\\mathrm{{act}}}}\\): 1-3 の操舵追従結果。操舵ゲイン補正倍率による k_us の \\(v^2\\delta\\) 成分の部分吸収に注意。</li>
+</ul>
 
 <h3>実機ログからの独立同定（全 {n_dataset} データセット、速度ビン別 最小二乗法）</h3>
 
