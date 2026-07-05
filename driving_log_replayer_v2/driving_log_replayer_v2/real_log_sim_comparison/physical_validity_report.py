@@ -763,14 +763,19 @@ DRIVE 系（enum 値 2..19）の時刻だけを残す評価マスクとして適
 \\(\\text{{err}}_{{vx}}\\) を目的関数として他のパラメータと独立に同定できる。
 </p>
 
-<p><b>運動方程式:</b></p>
+<p><b>運動方程式（1-1 と同じ状態・入力表記）:</b></p>
 \\[
-a_{{\\mathrm{{target}}}}(t) = a_{{\\mathrm{{cmd}}}}(t - T_a)
-\\]
-\\[
-\\dot{{a}}_{{\\mathrm{{act}}}}(t) = \\frac{{a_{{\\mathrm{{target}}}}(t) - a_{{\\mathrm{{act}}}}(t)}}{{\\tau_a}},
+\\begin{{pmatrix}}
+{{\\color{{#1565c0}} \\dot v_x}} \\\\
+{{\\color{{#1565c0}} \\dot a_{{\\mathrm{{act}}}}}}
+\\end{{pmatrix}}
+=
+\\begin{{pmatrix}}
+{{\\color{{#1565c0}} a_{{\\mathrm{{act}}}}}} + {{\\color{{#e65100}} a_{{\\mathrm{{slope}}}}}} \\\\
+\\dfrac{{{{\\color{{#e65100}} a_{{\\mathrm{{target}}}}}} - {{\\color{{#1565c0}} a_{{\\mathrm{{act}}}}}}}}{{\\tau_a}}
+\\end{{pmatrix}},
 \\qquad
-\\dot{{v}}_x(t) = a_{{\\mathrm{{act}}}}(t) + a_{{\\mathrm{{slope}}}}(t)
+{{\\color{{#e65100}} a_{{\\mathrm{{target}}}}}}(t) = {{\\color{{#e65100}} a_{{\\mathrm{{cmd}}}}}}(t - T_a)
 \\]
 <p>
 加速度指令 \\(a_{{\\mathrm{{cmd}}}}\\) は純粋遅延 \\(T_a\\)（<code>acc_time_delay</code>）だけ遅れてアクチュエータに届き、
@@ -904,12 +909,11 @@ J_{{\\mathrm{{pool}}}}(\\tau_a; T_a) =
 
 <p><b>運動方程式:</b></p>
 \\[
-\\delta_{{\\mathrm{{des}}}}(t) = K_{{\\mathrm{{steer\\_scale}}}} \\cdot \\delta_{{\\mathrm{{cmd}}}}(t - T_\\delta)
-\\]
-\\[
-\\dot{{\\delta}}_{{\\mathrm{{act}}}}(t) = -\\frac{{\\delta_{{\\mathrm{{act}}}}(t) - \\delta_{{\\mathrm{{des}}}}(t)}}{{\\tau_\\delta}},
+{{\\color{{#1565c0}} \\dot\\delta_{{\\mathrm{{act}}}}}}(t)
+= \\dfrac{{{{\\color{{#e65100}} \\delta_{{\\mathrm{{des}}}}}}(t) - {{\\color{{#1565c0}} \\delta_{{\\mathrm{{act}}}}}}(t)}}{{\\tau_\\delta}},
 \\qquad
-\\delta_{{\\mathrm{{sim}}}}(t) = \\delta_{{\\mathrm{{act}}}}(t) + \\beta
+{{\\color{{#e65100}} \\delta_{{\\mathrm{{des}}}}}}(t)
+= K_{{\\mathrm{{steer\\_scale}}}} \\cdot {{\\color{{#e65100}} \\delta_{{\\mathrm{{cmd}}}}}}(t - T_\\delta)
 \\]
 <p>
 ※ 目標操舵角は <code>steer_lim</code>、操舵速度は <code>steer_rate_lim</code> で制限され、不感帯 <code>steer_dead_band</code> が適用されます。<br>
@@ -966,11 +970,17 @@ J_{{\\mathrm{{pool}}}}(\\tau_a; T_a) =
 
 <p><b>運動方程式:</b></p>
 \\[
-\\omega(t) = \\frac{{v_x \\cdot \\tan\\bigl(\\delta_{{\\mathrm{{act}}}}(t) + \\beta\\bigr)}}{{L + k_{{\\mathrm{{us,eff}}}}(v_x)\\cdot v_x^2}},
-\\qquad \\dot{{\\theta}} = \\omega
-\\]
-\\[
-\\dot{{x}} = v_x \\cos\\theta, \\qquad \\dot{{y}} = v_x \\sin\\theta
+\\begin{{pmatrix}}
+{{\\color{{#1565c0}} \\dot x}} \\\\
+{{\\color{{#1565c0}} \\dot y}} \\\\
+{{\\color{{#1565c0}} \\dot\\theta}}
+\\end{{pmatrix}}
+=
+\\begin{{pmatrix}}
+{{\\color{{#1565c0}} v_x}} \\cos{{\\color{{#1565c0}} \\theta}} \\\\
+{{\\color{{#1565c0}} v_x}} \\sin{{\\color{{#1565c0}} \\theta}} \\\\
+\\dfrac{{{{\\color{{#1565c0}} v_x}}\\,\\tan({{\\color{{#1565c0}} \\delta_{{\\mathrm{{act}}}}}}+\\beta)}}{{L + k_{{\\mathrm{{us,eff}}}}({{\\color{{#1565c0}} v_x}})\\,{{\\color{{#1565c0}} v_x}}^2}}
+\\end{{pmatrix}}
 \\]
 <p>
 アンダーステア係数 \\(k_{{\\mathrm{{us,eff}}}}\\) は速度帯ごとの定数（速度帯ステップ）で実装される。
@@ -978,7 +988,7 @@ J_{{\\mathrm{{pool}}}}(\\tau_a; T_a) =
 （1-3 の報告値加算とは別経路で同一パラメータが効く）。
 </p>
 <div class="note">
-⚠️ <b>前提条件</b>: この式の入力 \\(\\delta_{{\\mathrm{{act}}}}\\) は 1-3 の結果に依存する。
+⚠️ <b>前提条件</b>: この式で使う \\(\\delta_{{\\mathrm{{act}}}}\\) は 1-3 の結果に依存する。
 1-3 の操舵ゲイン補正倍率が k_us の v²δ 成分を部分吸収しているため、操舵ゲイン補正倍率の値を固定した上で
 k_us を同定することが重要。
 </div>
