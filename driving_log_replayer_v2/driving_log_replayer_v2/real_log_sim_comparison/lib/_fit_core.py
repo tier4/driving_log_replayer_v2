@@ -233,8 +233,9 @@ def equation_residual_at_params(
 ) -> dict:
     """与えられたパラメータでの ODE 方程式残差 `E[k] = RHS − LHS` を評価する (同定はしない)。
 
-    方針D: パラメータは出力誤差型で推定した値をそのまま渡し、その解が
-    `dot_act = (s·cmd(t−T) − (act − β))/τ` をどれだけ満たすかを診断する。
+    full-RHS 遅延: cmd・act の両方を同じ遅延 T で評価する。
+    `dot_act = (s·cmd(t−T) − (act(t−T) − β))/τ`
+    これにより 1-1 の状態方程式（full-RHS 遅延）および vehicle_model_fitting の残差式と一致する。
     LHS は act の SG 平滑化微分、RHS は上式の右辺。目的関数ではなく整合診断・レポート統一記法用。
 
     Returns: {"resid": E[mask] 配列, "rmse_resid": √mean(E²), "n": サンプル数}。
@@ -248,10 +249,13 @@ def equation_residual_at_params(
     lhs = savgol_derivative(act, dt, window_s, polyorder)
     act_s = savgol_smooth(act, dt, window_s, polyorder)
     if t_s is not None:
-        cmd_del = delay_shift_frac(cmd, t_s, float(delay))
+        cmd_del = delay_shift_frac(cmd,   t_s, float(delay))
+        act_del = delay_shift_frac(act_s, t_s, float(delay))
     else:
-        cmd_del = delay_shift(cmd, int(round(float(delay) / dt)))
-    rhs = (scale * cmd_del - (act_s - bias)) / tau
+        n_steps = int(round(float(delay) / dt))
+        cmd_del = delay_shift(cmd,   n_steps)
+        act_del = delay_shift(act_s, n_steps)
+    rhs = (scale * cmd_del - (act_del - bias)) / tau
     r = (rhs - lhs)[mask]
     return {
         "resid": r,

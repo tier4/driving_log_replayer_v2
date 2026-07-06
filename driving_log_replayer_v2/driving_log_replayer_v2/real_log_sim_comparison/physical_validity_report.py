@@ -772,16 +772,15 @@ a_{{\\mathrm{{real}}}} := a_{{\\mathrm{{report}}}} - a_{{\\mathrm{{slope}}}}
 </p>
 <h3>方程式残差で見る</h3>
 <p>
-同定では状態を現在時刻に固定した<b>指令のみ遅延の縮約</b>（\\(a_{{\\mathrm{{act}}}}(t-T_a)\\to a_{{\\mathrm{{act}}}}(t)\\)）を用いる。
-遅延後入力を \\(u[k] = a_{{\\mathrm{{cmd,des}}}}[k - n_{{\\mathrm{{delay}}}}]\\) とすると、縮約した
+full-RHS 遅延を適用した残差診断。指令・状態をともに \\(t-T_a\\) で評価した
 \\(\\dot a_{{\\mathrm{{act}}}}\\) 式の左辺と右辺は
 \\[
 \\mathrm{{LHS}}_a[k] = \\widehat{{\\dot a}}_{{\\mathrm{{real}}}}[k],
 \\qquad
 \\mathrm{{RHS}}_a[k;\\tau_a,T_a] =
-\\frac{{u[k] - a_{{\\mathrm{{real}}}}[k]}}{{\\tau_a}}
+\\frac{{u[k] - a_{{\\mathrm{{real}}}}[k-n_{{\\mathrm{{delay}}}}]}}{{\\tau_a}}
 \\]
-である。方程式残差は <code>vehicle_model_fitting</code> と同じ符号で
+である。ここで \\(u[k] = a_{{\\mathrm{{cmd,des}}}}[k - n_{{\\mathrm{{delay}}}}]\\)。方程式残差は
 \\[
 E_a[k;\\tau_a,T_a]
 = \\mathrm{{RHS}}_a[k;\\tau_a,T_a] - \\mathrm{{LHS}}_a[k],
@@ -796,9 +795,8 @@ J_a
 推定はこの式を積分した出力誤差で行い、方程式残差は推定後の共通診断として使う。
 </p>
 <p class="meta">
-&#128279; この残差診断と実フィット（<code>_fit_core.py</code> の <code>equation_residual_at_params</code> / 出力誤差最適化）は
-上記の<b>指令のみ遅延の縮約</b>で \\((\\tau_a, T_a)\\) を同定し、下のヒストグラムもこの縮約で計算している。
-モデル自体（<a href="#sec-state-space">1-1</a>・上のモデル式）は full-RHS 遅延であり、縮約は同定に適した特別な場合で矛盾はない。
+&#128279; この残差式は <code>_fit_core.py</code> の <code>equation_residual_at_params</code>（full-RHS 遅延）および
+<a href="#sec-state-space">1-1</a> の状態方程式と完全に対応する（<code>vehicle_model_fitting</code> の残差式と同一形式）。
 </p>
 {long_resid_hist_html}
 
@@ -849,19 +847,24 @@ J_a
 </p>
 <h3>方程式残差で見る</h3>
 <p>
-縦方向と同じく、同定では状態 \\(\\delta_{{\\mathrm{{act}}}}\\) を現在時刻に固定した<b>指令のみ遅延の縮約</b>
-（\\(\\delta_{{\\mathrm{{act}}}}(t-T_\\delta)\\to\\delta_{{\\mathrm{{act}}}}(t)\\)）を用い、左辺と右辺の差を
+full-RHS 遅延を適用した残差診断。指令・実舵角をともに \\(t-T_\\delta\\) で評価した
+\\(\\dot\\delta_{{\\mathrm{{act}}}}\\) 式の左辺と右辺を
 \\[
 \\mathrm{{LHS}}_\\delta[k] = \\widehat{{\\dot\\delta}}_{{\\mathrm{{act}}}}[k],
 \\qquad
 \\mathrm{{RHS}}_\\delta[k;\\tau_\\delta,T_\\delta] =
-\\frac{{\\delta_{{\\mathrm{{des}}}}[k] - \\delta_{{\\mathrm{{act}}}}[k]}}{{\\tau_\\delta}},
+\\frac{{\\delta_{{\\mathrm{{des}}}}[k] - \\delta_{{\\mathrm{{act}}}}[k-n_{{\\mathrm{{delay}}}}]}}{{\\tau_\\delta}},
 \\]
 \\[
 E_\\delta[k;\\tau_\\delta,T_\\delta]
 = \\mathrm{{RHS}}_\\delta[k;\\tau_\\delta,T_\\delta] - \\mathrm{{LHS}}_\\delta[k]
 \\]
-と置く。残差が 0 付近に集まれば、同定した \\((\\tau_\\delta,T_\\delta)\\) は操舵の状態方程式と整合している。
+と置く。\\(\\delta_{{\\mathrm{{des}}}}[k] = K_{{\\mathrm{{steer\_scale}}}} \\cdot \\delta_{{\\mathrm{{cmd,des}}}}[k-n_{{\\mathrm{{delay}}}}]\\)。
+残差が 0 付近に集まれば、同定した \\((\\tau_\\delta,T_\\delta)\\) は操舵の状態方程式と整合している。
+</p>
+<p class="meta">
+&#128279; この残差式は <code>_fit_core.py</code> の <code>equation_residual_at_params</code>（full-RHS 遅延）から生成される。
+<code>vehicle_model_fitting</code> の操舵残差式と同一形式。推定自体は出力誤差型（モデル出力と実測操舵角の差の最小化）で行い、方程式残差は推定後の共通診断として使う。
 </p>
 {steer_resid_hist_html}
 
