@@ -257,6 +257,7 @@ def build_fig_cross_long(rows_data: list[dict], cross_fit: dict) -> go.Figure:
         return _placeholder_fig("MCAP 読み込み失敗（best/worst データセットが見つかりません）")
 
     n = len(rows_data)
+    n_datasets = sum(len(r.get("dataset_ids", [r.get("dataset_id")])) for r in rows_data)
     all_model_names: list[str] = []
     for r in rows_data:
         for name in (r.get("a_sim_models") or {}):
@@ -318,7 +319,10 @@ def build_fig_cross_long(rows_data: list[dict], cross_fit: dict) -> go.Figure:
     slope_note = f"横断フィット使用データセット数={cross_fit.get('n_datasets', 0)}、pitch range {p_min_deg:+.2f}°〜{p_max_deg:+.2f}°"
     return apply_base_layout(
         fig,
-        title=f"dataset 横断 縦方向モデルフィット（最良・最悪 計 {n} 件、低速/停車区間はグレー表示）<br><sup>{slope_note}</sup>",
+        title=(
+            f"dataset 横断 縦方向モデルフィット（選択 {n_datasets} データセットを "
+            f"{n} 連続区間で表示、低速/停車区間はグレー表示）<br><sup>{slope_note}</sup>"
+        ),
         height=300 * n, margin=dict(t=80, b=40),
         legend=dict(orientation="h", y=1.03, x=0),
     )
@@ -336,6 +340,7 @@ def build_fig_cross_long_tau_pointwise(rows_data: list[dict], cross_fit: dict) -
         return _placeholder_fig("瞬時 τ_a 推定不可（横断フィット失敗、またはデータ不足）")
 
     n = len(rows_with_tau)
+    n_datasets = sum(len(r.get("dataset_ids", [r.get("dataset_id")])) for r in rows_with_tau)
     fig = make_grid(
         rows=n, cols=1, subplot_titles=[r["label"] for r in rows_with_tau], vertical_spacing=0.08,
     )
@@ -360,7 +365,10 @@ def build_fig_cross_long_tau_pointwise(rows_data: list[dict], cross_fit: dict) -
     fit_note = f"横断最小二乗法フィット値 τ_a={tau_fit:.3f}s（赤破線）" if np.isfinite(tau_fit) else "横断フィット失敗"
     return apply_base_layout(
         fig,
-        title=f"縦方向 τ_a の瞬時推定値（点ごとの逆算 vs 最小二乗法フィット、最良・最悪 計 {n} 件）<br><sup>{fit_note}</sup>",
+        title=(
+            f"縦方向 τ_a の瞬時推定値（選択 {n_datasets} データセットを {n} 連続区間で表示）"
+            f"<br><sup>{fit_note}</sup>"
+        ),
         height=260 * n, margin=dict(t=80, b=40),
         legend=dict(orientation="h", y=1.03, x=0),
     )
@@ -411,6 +419,7 @@ def build_fig_cross_steer(rows_data: list[dict]) -> go.Figure:
         return _placeholder_fig("MCAP 読み込み失敗（best/worst データセットが見つかりません）")
 
     n = len(rows_data)
+    n_datasets = sum(len(r.get("dataset_ids", [r.get("dataset_id")])) for r in rows_data)
     all_model_names: list[str] = []
     for r in rows_data:
         for name in (r.get("d_sim_models") or {}):
@@ -441,7 +450,8 @@ def build_fig_cross_steer(rows_data: list[dict]) -> go.Figure:
         fig.update_yaxes(title_text="δ [rad]", row=i, col=1)
     fig.update_xaxes(title_text="時刻 [s]", row=n, col=1)
     return apply_base_layout(
-        fig, title=f"dataset 横断 操舵モデルフィット（最良・最悪 計 {n} 件）",
+        fig,
+        title=f"dataset 横断 操舵モデルフィット（選択 {n_datasets} データセットを {n} 連続区間で表示）",
         height=300 * n, margin=dict(t=70, b=40),
         legend=dict(orientation="h", y=1.03, x=0),
     )

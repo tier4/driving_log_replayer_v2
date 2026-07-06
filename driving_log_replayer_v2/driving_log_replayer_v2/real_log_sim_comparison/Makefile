@@ -158,9 +158,9 @@ prepare_multidataset:
 	@echo "[INFO] Validating real datasets in $(MULTI_BATCH_ROOT)..."
 	@test -d "$(MULTI_BATCH_ROOT)/datasets" || \
 	    { echo "[ERROR] datasets directory does not exist: $(MULTI_BATCH_ROOT)/datasets"; exit 1; }
-	@num_symlinks=$$(find "$(MULTI_BATCH_ROOT)/datasets" -type l | wc -l) ; \
+	@num_symlinks=$$(find "$(MULTI_BATCH_ROOT)/datasets" -mindepth 1 -maxdepth 1 -type l | wc -l) ; \
 	    if [ "$$num_symlinks" -ne 0 ]; then \
-	        echo "[ERROR] $(MULTI_BATCH_ROOT)/datasets contains $$num_symlinks symlinks. Convert them to real directories first." ; \
+	        echo "[ERROR] $(MULTI_BATCH_ROOT)/datasets contains $$num_symlinks top-level symlinks. Convert them to real directories first." ; \
 	        exit 1 ; \
 	    fi ; \
 	    num_datasets=$$(find "$(MULTI_BATCH_ROOT)/datasets" -mindepth 1 -maxdepth 1 -type d | wc -l) ; \

@@ -102,6 +102,16 @@ def _delay_shift(cmd: np.ndarray, n_delay: int) -> np.ndarray:
     return cmd_del
 
 
+def _delay_shift_frac(cmd: np.ndarray, t_s: np.ndarray, delay: float) -> np.ndarray:
+    """指令 cmd を非整数サンプル (連続値) delay [s] ぶん遅延させる (線形補間)。
+
+    T のグリッドサーチ (_delay_shift, 1サンプル刻み) では表現できない
+    サブサンプル精度での T 再最適化 substep 用。t_s より前を参照する場合は
+    cmd[0] で外挿する (_delay_shift の先頭埋めと同じ境界規約)。
+    """
+    return np.interp(t_s - delay, t_s, cmd, left=cmd[0])
+
+
 def _sim_first_order(
     cmd: np.ndarray,
     tau: float,
@@ -117,6 +127,26 @@ def _sim_first_order(
     cmd_del = _delay_shift(cmd, n_delay)
     # tau<=0 は "no_delay" 系モデル等が意図する瞬時追従 (一次遅れ極限) を表すため、
     # 0除算を避けて alpha=1.0 (即時追従) にフォールバックする。
+    alpha = 1.0 if tau <= 0.0 else float(np.clip(dt / tau, 0.0, 1.0))
+    if y0 is not None:
+        if len(cmd_del) == 0:
+            return cmd_del.astype(float)
+        zi = [float(y0) - alpha * float(cmd_del[0])]
+        out, _ = lfilter([alpha], [1.0, -(1.0 - alpha)], cmd_del, zi=zi)
+        return out
+    return lfilter([alpha], [1.0, -(1.0 - alpha)], cmd_del)
+
+
+def _sim_first_order_frac(
+    cmd: np.ndarray,
+    tau: float,
+    delay: float,
+    t_s: np.ndarray,
+    dt: float = _FIT_DT,
+    y0: float | None = None,
+) -> np.ndarray:
+    """`_sim_first_order` の連続 delay [s] 版 (T 再最適化 substep 専用、tau は呼び出し側で固定)。"""
+    cmd_del = _delay_shift_frac(cmd, t_s, delay)
     alpha = 1.0 if tau <= 0.0 else float(np.clip(dt / tau, 0.0, 1.0))
     if y0 is not None:
         if len(cmd_del) == 0:
@@ -226,6 +256,14 @@ def _pitch_range(bag_path: Path) -> tuple[float, float]:
 def fit_long_single(bag_path: Path) -> dict | None:
     """縦方向一次遅れモデルの単一データセット同定 (路面勾配補正込み)。
 
+    Step 1 (グリッドサーチ): T を _DELAY_CANDIDATES_LONG (1/30s 刻み) 上に固定し、
+        各 T について tau を NLS で連続最適化、MSE 最小の (T, tau) ペアを採る。
+    Step 2 (substep): Step 1 の tau を固定し、T を近傍 ±1グリッド幅の範囲で
+        fractional delay (線形補間) により連続最適化する。T はサンプル整数倍に
+        量子化されているため、Step 1 だけでは T の分解能がグリッド幅 (1/30s) に
+        制限される。tau を固定して T のみ連続最適化することで、そのグリッド量子化
+        誤差をサブサンプル精度で補正する (tau は再最適化しない = 純粋な T 再探索)。
+
     Returns: {"tau", "delay", "rmse_mps2", "n_dyn", "pitch_min", "pitch_max"} | None
     """
     try:
@@ -276,6 +314,18 @@ def fit_long_single(bag_path: Path) -> dict | None:
 
     if np.isnan(best_tau):
         return None
+
+    # Step 2 (substep): tau = best_tau に固定し、T を近傍 ±1グリッド幅で連続再最適化する。
+    def _mse_frac_delay(delay: float) -> float:
+        a_sim = _sim_first_order_frac(a_cmd_arr, best_tau, delay, t_s, y0=float(a_act_corr[0]))
+        diff = a_sim[mask_dyn] - a_act_corr[mask_dyn]
+        return float(np.mean(diff ** 2))
+
+    delay_lo = max(0.0, best_delay - _FIT_DT)
+    delay_hi = min(float(_DELAY_CANDIDATES_LONG[-1]), best_delay + _FIT_DT)
+    res_delay = minimize_scalar(_mse_frac_delay, bounds=(delay_lo, delay_hi), method="bounded")
+    if res_delay.fun < best_mse:
+        best_mse, best_delay = res_delay.fun, float(res_delay.x)
 
     pitch_min, pitch_max = _pitch_range(bag_path)
     return {
@@ -692,6 +742,102 @@ def pick_best_worst_entries(
     return [(e, "最良") for e, _ in best] + [(e, "最悪") for e, _ in worst]
 
 
+_CONTIGUOUS_GAP_NS = 2.0 * _FIT_DT * 1e9
+
+
+def _merge_contiguous_timeseries_rows(rows: list[dict]) -> list[dict]:
+    """ROS 絶対時刻が連続するデータセットの時系列行を結合する。"""
+    valid = [r for r in rows if r.get("t") and r.get("_t0_ns") is not None]
+    if not valid:
+        return rows
+
+    ordered = sorted(valid, key=lambda r: float(r["_t0_ns"]))
+    groups: list[list[dict]] = []
+    for row in ordered:
+        if groups:
+            prev_end_ns = max(
+                float(r["_t0_ns"]) + float(r["t"][-1]) * 1e9 for r in groups[-1]
+            )
+            if float(row["_t0_ns"]) - prev_end_ns <= _CONTIGUOUS_GAP_NS:
+                groups[-1].append(row)
+                continue
+        groups.append([row])
+
+    merged_rows: list[dict] = []
+    for group in groups:
+        if len(group) == 1:
+            row = dict(group[0])
+            row["dataset_ids"] = [row.get("dataset_id", "")]
+            merged_rows.append(row)
+            continue
+
+        scalar_keys: set[str] = set()
+        mapping_keys: dict[str, set[str]] = {}
+        for row in group:
+            n = len(row["t"])
+            for key, value in row.items():
+                if isinstance(value, list) and len(value) == n:
+                    scalar_keys.add(key)
+                elif isinstance(value, dict):
+                    names = {
+                        name for name, series in value.items()
+                        if isinstance(series, list) and len(series) == n
+                    }
+                    if names:
+                        mapping_keys.setdefault(key, set()).update(names)
+        scalar_keys.discard("t")
+
+        group_t0_ns = float(group[0]["_t0_ns"])
+        t_merged: list[float] = []
+        scalar_merged = {key: [] for key in scalar_keys}
+        mapping_merged = {
+            key: {name: [] for name in names}
+            for key, names in mapping_keys.items()
+        }
+        last_ns = float("-inf")
+        for row in group:
+            t_abs_ns = float(row["_t0_ns"]) + np.asarray(row["t"], dtype=float) * 1e9
+            keep = t_abs_ns > last_ns + 0.5 * _FIT_DT * 1e9
+            if not np.any(keep):
+                continue
+            indices = np.flatnonzero(keep)
+            t_merged.extend(((t_abs_ns[indices] - group_t0_ns) * 1e-9).tolist())
+            for key in scalar_keys:
+                value = row.get(key)
+                source = (
+                    value
+                    if isinstance(value, list) and len(value) == len(row["t"])
+                    else [np.nan] * len(row["t"])
+                )
+                scalar_merged[key].extend(np.asarray(source)[indices].tolist())
+            for key, named_series in mapping_merged.items():
+                source_map = row.get(key) or {}
+                for name, target in named_series.items():
+                    source = source_map.get(name, [np.nan] * len(row["t"]))
+                    target.extend(np.asarray(source)[indices].tolist())
+            last_ns = float(t_abs_ns[indices[-1]])
+
+        dataset_ids = [str(row.get("dataset_id", "")) for row in group]
+        case_tags = list(dict.fromkeys(str(row.get("case_tag", "")) for row in group))
+        merged = {
+            key: value for key, value in group[0].items()
+            if key not in scalar_keys and key not in mapping_keys and key != "t"
+        }
+        merged.update(scalar_merged)
+        merged.update(mapping_merged)
+        merged.update({
+            "t": t_merged,
+            "_t0_ns": group_t0_ns,
+            "dataset_ids": dataset_ids,
+            "label": (
+                f"[{'/'.join(filter(None, case_tags))}] "
+                f"{dataset_ids[0][:8]} → {dataset_ids[-1][:8]}（{len(dataset_ids)}件連続）"
+            ),
+        })
+        merged_rows.append(merged)
+    return merged_rows
+
+
 def fit_long_cross_dataset_bounded(
     entries: list, per_ds_long: dict[str, dict], n_top: int = _N_CROSS_FIT_DATASET,
 ) -> dict:
@@ -850,6 +996,9 @@ def compute_cross_long_rows(
         rmse = fit.get("rmse_mps2", float("nan"))
         rows.append({
             "label": f"[{case_tag}] {entry.dataset_id[:8]}  RMSE={rmse:.3f} m/s²",
+            "dataset_id": entry.dataset_id,
+            "case_tag": case_tag,
+            "_t0_ns": t0,
             "t": t_s.tolist(),
             "moving": moving.tolist(),
             "a_cmd": _mask_stopped(a_cmd_arr, moving),
@@ -862,7 +1011,7 @@ def compute_cross_long_rows(
             "a_sim_models_low": a_sim_models_low,
             "tau_pointwise": tau_pointwise.tolist() if tau_pointwise is not None else None,
         })
-    return rows
+    return _merge_contiguous_timeseries_rows(rows)
 
 
 def compute_cross_steer_rows(
@@ -914,12 +1063,15 @@ def compute_cross_steer_rows(
         rmse = fit.get("rmse_mrad", float("nan"))
         rows.append({
             "label": f"[{case_tag}] {entry.dataset_id[:8]}  RMSE={rmse:.1f} mrad",
+            "dataset_id": entry.dataset_id,
+            "case_tag": case_tag,
+            "_t0_ns": t0,
             "t": t_s.tolist(),
             "d_act": _mask_stopped(d_act, moving),
             "d_sim_fit": _mask_stopped(d_sim_fit, moving) if d_sim_fit is not None else None,
             "d_sim_models": d_sim_models,
         })
-    return rows
+    return _merge_contiguous_timeseries_rows(rows)
 
 
 # 理想追従評価用定数 (本モジュールが SSOT。physical_validity_report.py はここから import する)

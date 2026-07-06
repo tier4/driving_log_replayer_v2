@@ -764,10 +764,10 @@ DRIVE 系（enum 値 2..19）の時刻だけを残す評価マスクとして適
 この一次遅れ式は操舵角・ヨー角・横位置を参照しないため、操舵・横方向パラメータとは独立に扱える。
 1-0 の \\(a_{{\\mathrm{{report}}}}\\) には勾配成分が含まれるため、同定時だけ
 \\[
-a_{{\\mathrm{{obs}}}} := a_{{\\mathrm{{report}}}} - a_{{\\mathrm{{slope}}}}
+a_{{\\mathrm{{real}}}} := a_{{\\mathrm{{report}}}} - a_{{\\mathrm{{slope}}}}
 \\approx a_{{\\mathrm{{act}}}}
 \\]
-と置き、\\(a_{{\\mathrm{{act}}}}\\) の観測値として使う。
+と置き、実車ログから得た \\(a_{{\\mathrm{{act}}}}\\) 相当値として使う。
 </p>
 
 <p><b>モデル式:</b></p>
@@ -788,17 +788,18 @@ a_{{\\mathrm{{obs}}}} := a_{{\\mathrm{{report}}}} - a_{{\\mathrm{{slope}}}}
 <ul>
   <li>\\(T_a\\): 指令が効き始めるまでの純粋遅延（<code>acc_time_delay</code>）。</li>
   <li>\\(\\tau_a\\): 目標加速度へ近づく速さを表す一次遅れ時定数（<code>acc_time_constant</code>）。</li>
-  <li>\\(\\widehat{{a}}_{{\\mathrm{{act}}}}\\): モデルから計算した \\(a_{{\\mathrm{{act}}}}\\) の推定値。</li>
-  <li>\\(a_{{\\mathrm{{obs}}}}\\): 1-2 内だけで使う勾配補正後の観測値。</li>
+  <li>\\(a_{{\\mathrm{{real}}}}\\): 実車ログの勾配補正後加速度。</li>
+  <li>\\(a_{{\\mathrm{{sim}}}}\\): モデルから計算した加速度。</li>
   <li>走行抵抗項（<code>lon_drag_c*</code>）は現在 0 のため省略する。</li>
 </ul>
 
 <h3>実機ログからの独立同定（代表データセットモデルフィット）</h3>
 <p>
 図では、横断同定した \\((\\tau_a, T_a)\\) のモデル出力（青）と実測加速度（黒）を比較する。
-同定では \\(\\widehat{{a}}_{{\\mathrm{{act}}}} - a_{{\\mathrm{{obs}}}}\\) を評価し、
+同定では \\(a_{{\\mathrm{{sim}}}} - a_{{\\mathrm{{real}}}}\\) を評価し、
 表示ではモデル出力に \\(a_{{\\mathrm{{slope}}}}\\) を戻して \\(a_{{\\mathrm{{report}}}}\\) と比較する。
 チューニング値（点線）も重ね、低速・停車区間は同定対象外としてグレー表示する。
+ROS 時刻が連続するデータセットは、同じ時系列グラフに結合して表示する。
 </p>
 
 <details>
@@ -819,25 +820,25 @@ T_a \\in \\{{0,\\ \\Delta t,\\ 2\\Delta t,\\ \\dots,\\ M\\Delta t\\}},
 <p><b>① 固定 \\(T_a\\) でロールアウト</b>: 遅延後の入力
 \\(u[k] = a_{{\\mathrm{{cmd,des}}}}[k - n_{{\\mathrm{{delay}}}}]\\) を一次遅れフィルタへ入れる。
 \\[
-\\widehat{{a}}_{{\\mathrm{{act}}}}[0] = a_{{\\mathrm{{obs}}}}[0], \\qquad
-\\widehat{{a}}_{{\\mathrm{{act}}}}[k]
-= (1-\\alpha)\\, \\widehat{{a}}_{{\\mathrm{{act}}}}[k-1] + \\alpha\\, u[k]\quad(k\\ge 1),
+a_{{\\mathrm{{sim}}}}[0] = a_{{\\mathrm{{real}}}}[0], \\qquad
+a_{{\\mathrm{{sim}}}}[k]
+= (1-\\alpha)\\, a_{{\\mathrm{{sim}}}}[k-1] + \\alpha\\, u[k]\quad(k\\ge 1),
 \\qquad \\alpha := \\min\\!\\left(\\frac{{\\Delta t}}{{\\tau_a}},\\,1\\right) \\in (0, 1]
 \\]
 初期値は実測補正加速度に合わせる。これにより、ログ切り出し開始時の初期条件誤差を同定誤差に混ぜない。
-\\(\\widehat{{a}}_{{\\mathrm{{act}}}}\\) は \\(\\tau_a\\) に非線形に依存するため、線形回帰ではなく数値最小化で解く。
+\\(a_{{\\mathrm{{sim}}}}\\) は \\(\\tau_a\\) に非線形に依存するため、線形回帰ではなく数値最小化で解く。
 </p>
 
 <p><b>② 点ごとの逆算と限界</b>: 隣接 2 サンプルだけを使うと、各時刻の \\(\\tau_a[k]\\) は
 次のように直接計算できる。
 \\[
-\\alpha = \\frac{{a_{{\\mathrm{{obs}}}}[k] - a_{{\\mathrm{{obs}}}}[k-1]}}
-{{u[k] - a_{{\\mathrm{{obs}}}}[k-1]}}
+\\alpha = \\frac{{a_{{\\mathrm{{real}}}}[k] - a_{{\\mathrm{{real}}}}[k-1]}}
+{{u[k] - a_{{\\mathrm{{real}}}}[k-1]}}
 \\quad\\Longrightarrow\\quad
 \\tau_a[k] = \\frac{{\\Delta t}}{{\\alpha}}
 = \\Delta t\\,
-\\frac{{u[k] - a_{{\\mathrm{{obs}}}}[k-1]}}
-{{a_{{\\mathrm{{obs}}}}[k] - a_{{\\mathrm{{obs}}}}[k-1]}}
+\\frac{{u[k] - a_{{\\mathrm{{real}}}}[k-1]}}
+{{a_{{\\mathrm{{real}}}}[k] - a_{{\\mathrm{{real}}}}[k-1]}}
 \\]
 ただし、これは差分が小さい区間でノイズに非常に弱い。下図はこの点ごとの推定値と、
 横断最小二乗フィット値（赤破線）を比較したもの。
@@ -855,8 +856,8 @@ T_a \\in \\{{0,\\ \\Delta t,\\ 2\\Delta t,\\ \\dots,\\ M\\Delta t\\}},
 \\(\\mathcal{{K}}\\) で、次の平均二乗誤差を最小化する。
 \\[
 J(\\tau_a;\\, T_a) = \\frac{{1}}{{|\\mathcal{{K}}|}} \\sum_{{k \\in \\mathcal{{K}}}}
-\\bigl(\\widehat{{a}}_{{\\mathrm{{act}}}}[k;\\, \\tau_a, T_a]
-- a_{{\\mathrm{{obs}}}}[k]\\bigr)^2
+\\bigl(a_{{\\mathrm{{sim}}}}[k;\\, \\tau_a, T_a]
+- a_{{\\mathrm{{real}}}}[k]\\bigr)^2
 \\]
 \\(\\tau_a\\) は正値なので、実装では \\(\\theta = \\ln \\tau_a\\) に変換して有界 1 次元最小化する。
 \\[
@@ -877,7 +878,7 @@ J\\bigl(\\tau_a^*(T_a);\\, T_a\\bigr)
 \\[
 J_{{\\mathrm{{pool}}}}(\\tau_a; T_a) =
 \\frac{{\\sum_d \\sum_{{k \\in \\mathcal{{K}}_d}}
-\\bigl(\\widehat{{a}}_{{\\mathrm{{act}},d}}[k] - a_{{\\mathrm{{obs}},d}}[k]\\bigr)^2}}
+\\bigl(a_{{\\mathrm{{sim}},d}}[k] - a_{{\\mathrm{{real}},d}}[k]\\bigr)^2}}
 {{\\sum_d |\\mathcal{{K}}_d|}}
 \\]
 を同じ手順で最小化する。
@@ -889,7 +890,7 @@ J_{{\\mathrm{{pool}}}}(\\tau_a; T_a) =
   <tr><th>パラメータ</th><th>値</th><th>式中の役割</th><th>同定誤差量（RMSE）</th></tr>
   <tr><td><code>acc_time_constant</code> (\\(\\tau_a\\))</td><td>{tau_a} s</td>
       <td>一次遅れ時定数：小さいほど加速応答が速い</td>
-      <td rowspan="2">\\(\\widehat{{a}}_{{\\mathrm{{act}}}} - a_{{\\mathrm{{obs}}}}\\)</td></tr>
+      <td rowspan="2">\\(a_{{\\mathrm{{sim}}}} - a_{{\\mathrm{{real}}}}\\)</td></tr>
   <tr><td><code>acc_time_delay</code> (\\(T_a\\))</td><td>{T_a} s</td>
       <td>純粋遅延：指令が実際に入力されるまでの遅延時間</td></tr>
 </table>
