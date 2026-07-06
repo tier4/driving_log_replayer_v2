@@ -757,7 +757,8 @@ DRIVE 系（enum 値 2..19）の時刻だけを残す評価マスクとして適
 <section id="sec-long">
 <h2>1-2. 縦方向（加速度アクチュエータ）の同定</h2>
 <p class="meta">
-&#128279; <a href="#sec-state-space">1-1 状態方程式</a> の \\(\\dot v_x, \\dot a_{{\\mathrm{{act}}}}\\) 行に対応。
+&#128279; <a href="#sec-state-space">1-1 状態方程式</a> の \\(\\dot v_x\\) 式・
+\\(\\dot a_{{\\mathrm{{act}}}}\\) 式に対応。
 </p>
 <p>
 ここでは加速度指令 \\(a_{{\\mathrm{{cmd,des}}}}\\) からアクチュエータ状態
@@ -771,7 +772,7 @@ a_{{\\mathrm{{real}}}} := a_{{\\mathrm{{report}}}} - a_{{\\mathrm{{slope}}}}
 と置き、実車ログから得た \\(a_{{\\mathrm{{act}}}}\\) 相当値として使う。
 </p>
 
-<p><b>モデル式:</b></p>
+<p><b>モデル式（\\(\\dot v_x\\) 式・\\(\\dot a_{{\\mathrm{{act}}}}\\) 式の縦方向部分）:</b></p>
 \\[
 \\begin{{pmatrix}}
 {{\\color{{#1565c0}} \\dot v_x}} \\\\
@@ -797,7 +798,10 @@ a_{{\\mathrm{{real}}}} := a_{{\\mathrm{{report}}}} - a_{{\\mathrm{{slope}}}}
 <h3>実機ログからの独立同定（代表データセットモデルフィット）</h3>
 <p>
 図では、横断同定した \\((\\tau_a, T_a)\\) のモデル出力（青）と実測加速度（黒）を比較する。
-同定では \\(a_{{\\mathrm{{sim}}}} - a_{{\\mathrm{{real}}}}\\) を評価し、
+同定実装では、\\(\\dot a_{{\\mathrm{{act}}}}\\) 式の右辺・左辺を
+直接微分ノイズ込みで差し引くのではなく、\\(\\dot a_{{\\mathrm{{act}}}}\\) 式を Euler 積分した
+モデル出力と実測値の差
+\\(a_{{\\mathrm{{sim}}}} - a_{{\\mathrm{{real}}}}\\) を評価し、
 表示ではモデル出力に \\(a_{{\\mathrm{{slope}}}}\\) を戻して \\(a_{{\\mathrm{{report}}}}\\) と比較する。
 チューニング値（点線）も重ね、低速・停車区間は同定対象外としてグレー表示する。
 ROS 時刻が連続するデータセットは、同じ時系列グラフに結合して表示する。
@@ -853,7 +857,31 @@ a_{{\\mathrm{{sim}}}}[k]
 </p>
 {long_tau_hist_html}
 
-<p><b>③ 内側: \\(\\tau_a\\) 一次元最小化</b>: DRIVE ギア・走行中・指令変化ありのサンプル集合
+<p><b>③ 左辺・右辺残差と実装上の目的関数</b>:
+\\(\\dot a_{{\\mathrm{{act}}}}\\) 式を実測ログ上でそのまま評価すると、左辺と右辺は
+\\[
+\\mathrm{{LHS}}_a[k] =
+\\frac{{a_{{\\mathrm{{real}}}}[k] - a_{{\\mathrm{{real}}}}[k-1]}}{{\\Delta t}},
+\\qquad
+\\mathrm{{RHS}}_a[k;\\tau_a,T_a] =
+\\frac{{u[k] - a_{{\\mathrm{{real}}}}[k-1]}}{{\\tau_a}}
+\\]
+であり、瞬時方程式残差は
+\\[
+r^{{\\mathrm{{diff}}}}_a[k;\\tau_a,T_a]
+= \\mathrm{{LHS}}_a[k] - \\mathrm{{RHS}}_a[k;\\tau_a,T_a]
+\\]
+となる。したがって「右辺と左辺の差分」を直接評価関数にするなら、
+\\[
+J^{{\\mathrm{{diff}}}}_a(\\tau_a;T_a)
+= \\frac{{1}}{{|\\mathcal{{K}}|}} \\sum_{{k\\in\\mathcal{{K}}}}
+\\left(r^{{\\mathrm{{diff}}}}_a[k;\\tau_a,T_a]\\right)^2
+\\]
+である。ただし現在の実装（<code>fit_first_order_delay</code>）は、加速度微分でノイズが増幅する
+この瞬時残差を最適化には使わず、\\(\\dot a_{{\\mathrm{{act}}}}\\) 式を積分した出力誤差を最小化する。
+</p>
+
+<p><b>④ 内側: \\(\\tau_a\\) 一次元最小化</b>: DRIVE ギア・走行中・指令変化ありのサンプル集合
 \\(\\mathcal{{K}}\\) で、次の平均二乗誤差を最小化する。
 \\[
 J(\\tau_a;\\, T_a) = \\frac{{1}}{{|\\mathcal{{K}}|}} \\sum_{{k \\in \\mathcal{{K}}}}
@@ -869,7 +897,7 @@ J\\bigl(e^{{\\theta}};\\, T_a\\bigr)
 <code>scipy.optimize.minimize_scalar(method="bounded")</code>。
 </p>
 
-<p><b>④ 外側: \\(T_a\\) 一次元グリッドサーチ</b>: 各 \\(T_a = m\\Delta t\\) で③を解き、
+<p><b>⑤ 外側: \\(T_a\\) 一次元グリッドサーチ</b>: 各 \\(T_a = m\\Delta t\\) で④を解き、
 最も小さい目的関数値を選ぶ。
 \\[
 (\\tau_a^{{*}},\\, T_a^{{*}}) = \\operatorname*{{arg\\,min}}_{{T_a \\in \\{{0,\\Delta t,\\dots,M\\Delta t\\}}}}
@@ -902,14 +930,15 @@ J_{{\\mathrm{{pool}}}}(\\tau_a; T_a) =
 <section id="sec-steer">
 <h2>1-3. 操舵アクチュエータ（追従ループ）の同定</h2>
 <p class="meta">
-&#128279; <a href="#sec-state-space">1-1 状態方程式</a> の \\(\\dot\\delta_{{\\mathrm{{act}}}}\\) 行に対応。
+&#128279; <a href="#sec-state-space">1-1 状態方程式</a> の
+\\(\\dot\\delta_{{\\mathrm{{act}}}}\\) 式に対応。
 </p>
 <p>
 操舵追従ループは実車位置・ヨーのフィードバックを持たないオープンループなので、
 モデル出力と実測操舵角の残差を使い、位置・ヨー誤差とは独立に同定できる。
 </p>
 
-<p><b>運動方程式（1-1 と同じ状態・入力表記）:</b></p>
+<p><b>運動方程式（\\(\\dot\\delta_{{\\mathrm{{act}}}}\\) 式と同じ状態・入力表記）:</b></p>
 \\[
 {{\\color{{#1565c0}} \\dot\\delta_{{\\mathrm{{act}}}}}}(t)
 = \\dfrac{{{{\\color{{#e65100}} \\delta_{{\\mathrm{{des}}}}}}(t) - {{\\color{{#1565c0}} \\delta_{{\\mathrm{{act}}}}}}(t)}}{{\\tau_\\delta}},
@@ -938,6 +967,49 @@ J_{{\\mathrm{{pool}}}}(\\tau_a; T_a) =
 チューニング値でのシミュレーション結果（破線）も重ね描きする。per-dataset 同定誤差（RMSE）の
 最良・最悪データセットを選択し、低速・停車区間は除外して表示。
 </p>
+<details>
+<summary>操舵同定の評価関数</summary>
+<p>
+\\(\\dot\\delta_{{\\mathrm{{act}}}}\\) 式を実測ログ上で微分形のまま評価すると、
+左辺・右辺と瞬時方程式残差は
+\\[
+\\mathrm{{LHS}}_\\delta[k] =
+\\frac{{\\delta_{{\\mathrm{{act}}}}[k] - \\delta_{{\\mathrm{{act}}}}[k-1]}}{{\\Delta t}},
+\\qquad
+\\mathrm{{RHS}}_\\delta[k;\\tau_\\delta,T_\\delta] =
+\\frac{{\\delta_{{\\mathrm{{des}}}}[k] - \\delta_{{\\mathrm{{act}}}}[k-1]}}{{\\tau_\\delta}},
+\\]
+\\[
+r^{{\\mathrm{{diff}}}}_\\delta[k;\\tau_\\delta,T_\\delta]
+= \\mathrm{{LHS}}_\\delta[k] - \\mathrm{{RHS}}_\\delta[k;\\tau_\\delta,T_\\delta].
+\\]
+この右辺・左辺差分を直接最小化するなら
+\\[
+J^{{\\mathrm{{diff}}}}_\\delta(\\tau_\\delta;T_\\delta)
+= \\frac{{1}}{{|\\mathcal{{K}}_\\delta|}}
+\\sum_{{k\\in\\mathcal{{K}}_\\delta}}
+\\left(r^{{\\mathrm{{diff}}}}_\\delta[k;\\tau_\\delta,T_\\delta]\\right)^2
+\\]
+となる。現在の実装は縦方向と同じ <code>fit_first_order_delay</code> を使うため、最適化対象は微分形残差ではなく
+\\(\\dot\\delta_{{\\mathrm{{act}}}}\\) 式を積分したモデル出力
+\\[
+\\delta_{{\\mathrm{{sim}}}}[k]
+= (1-\\alpha_\\delta)\\delta_{{\\mathrm{{sim}}}}[k-1]
+ + \\alpha_\\delta\\delta_{{\\mathrm{{des}}}}[k],
+\\qquad
+\\alpha_\\delta := \\min\\!\\left(\\frac{{\\Delta t}}{{\\tau_\\delta}},1\\right)
+\\]
+と実測値の差である:
+\\[
+J_\\delta(\\tau_\\delta;T_\\delta)
+= \\frac{{1}}{{|\\mathcal{{K}}_\\delta|}}
+\\sum_{{k\\in\\mathcal{{K}}_\\delta}}
+\\bigl(\\delta_{{\\mathrm{{sim}}}}[k;\\tau_\\delta,T_\\delta]
+-\\delta_{{\\mathrm{{act}}}}[k]\\bigr)^2 .
+\\]
+遅延 \\(T_\\delta\\) はグリッドサーチ、\\(\\tau_\\delta\\) は log 空間の bounded 一次元最小化で求める。
+</p>
+</details>
 {steer_html}
 <div class="note">
 ⚠️ <b>注記</b>: <code>cmd_steer</code> は understeer converter 適用前（コントローラ出力）、
@@ -964,7 +1036,8 @@ J_{{\\mathrm{{pool}}}}(\\tau_a; T_a) =
 <section id="sec-yaw">
 <h2>1-4. ヨー・横方向（運動学的自転車モデル）— 速度ビン別 最小二乗法同定</h2>
 <p class="meta">
-&#128279; <a href="#sec-state-space">1-1 状態方程式</a> の \\(\\dot\\theta, \\dot x, \\dot y\\) 行に対応。
+&#128279; <a href="#sec-state-space">1-1 状態方程式</a> の \\(\\dot x\\) 式・
+\\(\\dot y\\) 式・\\(\\dot\\theta\\) 式に対応。
 </p>
 <p>
 1-2（縦方向）・1-3（操舵追従）が先行して確定した後、
@@ -973,7 +1046,7 @@ J_{{\\mathrm{{pool}}}}(\\tau_a; T_a) =
 ほぼゼロなので、全データセット集約スコアだけでは \\(k_{{\\mathrm{{us}}}}\\) を同定できない。
 </p>
 
-<p><b>運動方程式（1-1 と同じ状態表記）:</b></p>
+<p><b>運動方程式（\\(\\dot x\\) 式・\\(\\dot y\\) 式・\\(\\dot\\theta\\) 式と同じ状態表記）:</b></p>
 \\[
 \\begin{{pmatrix}}
 {{\\color{{#1565c0}} \\dot x}} \\\\
@@ -1005,15 +1078,32 @@ J_{{\\mathrm{{pool}}}}(\\tau_a; T_a) =
 \\(v_x > {VX_MIN_CURVE}\\) m/s）を通過した各タイムステップを速度ビンに割り当て、
 ビン内で以下の2種類の推定を行う。
 </p>
-<p><b>① 最小二乗法推定（青丸・実線）</b>: 各サンプルの補正済み操舵角を
-\\(\\delta_i := \\delta_{{\\mathrm{{act}},i}} + \\beta\\) と置き、原点回帰
-\\(\\tan(\\delta_i) = C \\cdot \\omega_i\\) の最小二乗解
+<p><b>① 最小二乗法推定（青丸・実線）</b>: \\(\\dot\\theta\\) 式より
+\\[
+\\omega_i = \\dot\\theta_i
+= \\frac{{v_i\\tan(\\delta_i)}}{{L+k_{{\\mathrm{{us}}}}v_i^2}}
+\\quad\\Longleftrightarrow\\quad
+\\tan(\\delta_i) = \\left(\\frac{{L}}{{v_i}} + k_{{\\mathrm{{us}}}}v_i\\right)\\omega_i .
+\\]
+速度ビン内では \\(v_i\\) を代表値 \\(\\bar{{v}}_x\\) で近似し、各サンプルの補正済み操舵角を
+\\(\\delta_i := \\delta_{{\\mathrm{{act}},i}} + \\beta\\) と置く。左辺を
+\\(y_i=\\tan(\\delta_i)\\)、右辺の係数を \\(C\\omega_i\\) とした原点回帰の残差は
+\\[
+r_i(C) = y_i - C\\omega_i .
+\\]
+したがって右辺と左辺の差分の二乗和を評価関数にすると
+\\[
+J(C) = \\sum_i \\bigl(y_i - C\\omega_i\\bigr)^2
+\\]
+であり、その最小二乗解は
 \\[
 C_{{\\mathrm{{OLS}}}} = \\frac{{\\sum \\omega_i \\, \\tan(\\delta_i)}}{{\\sum \\omega_i^2}},
 \\qquad
 \\hat{{k}}_{{\\mathrm{{us}}}} = \\frac{{C_{{\\mathrm{{OLS}}}} - L / \\bar{{v}}_x}}{{\\bar{{v}}_x}}
 \\]
 ここで \\(\\bar{{v}}_x\\) はビン内の速度中央値、\\(L = {WHEELBASE}\\) m はホイールベース。
+この横方向 \\(k_{{\\mathrm{{us}}}}\\) 同定は、実装上もこの左辺・右辺差分
+\\(\\tan(\\delta_i)-C\\omega_i\\) の最小二乗問題として解かれている。
 </p>
 <p><b>② 個別サンプル（IQR バンド）</b>: 実機運動学ログの各タイムステップで瞬時 \\(k_{{\\mathrm{{us}}}}\\) を推定し、
 ビン内の 25〜75 パーセンタイルをバンドとして表示:
@@ -1109,15 +1199,32 @@ def _build_sec2(kus_fig: go.Figure, n_dataset: int) -> str:
 \\(v_x > {VX_MIN_CURVE}\\) m/s）を通過した各タイムステップを速度ビンに割り当て、
 ビン内で以下の2種類の推定を行う。
 </p>
-<p><b>① 最小二乗法推定（青丸・実線）</b>: 各サンプルの補正済み操舵角を
-\\(\\delta_i := \\delta_{{\\mathrm{{act}},i}} + \\beta\\) と置き、原点回帰
-\\(\\tan(\\delta_i) = C \\cdot \\omega_i\\) の最小二乗解
+<p><b>① 最小二乗法推定（青丸・実線）</b>: \\(\\dot\\theta\\) 式より
+\\[
+\\omega_i = \\dot\\theta_i
+= \\frac{{v_i\\tan(\\delta_i)}}{{L+k_{{\\mathrm{{us}}}}v_i^2}}
+\\quad\\Longleftrightarrow\\quad
+\\tan(\\delta_i) = \\left(\\frac{{L}}{{v_i}} + k_{{\\mathrm{{us}}}}v_i\\right)\\omega_i .
+\\]
+速度ビン内では \\(v_i\\) を代表値 \\(\\bar{{v}}_x\\) で近似し、各サンプルの補正済み操舵角を
+\\(\\delta_i := \\delta_{{\\mathrm{{act}},i}} + \\beta\\) と置く。左辺を
+\\(y_i=\\tan(\\delta_i)\\)、右辺の係数を \\(C\\omega_i\\) とした原点回帰の残差は
+\\[
+r_i(C) = y_i - C\\omega_i .
+\\]
+したがって右辺と左辺の差分の二乗和を評価関数にすると
+\\[
+J(C) = \\sum_i \\bigl(y_i - C\\omega_i\\bigr)^2
+\\]
+であり、その最小二乗解は
 \\[
 C_{{\\mathrm{{OLS}}}} = \\frac{{\\sum \\omega_i \\, \\tan(\\delta_i)}}{{\\sum \\omega_i^2}},
 \\qquad
 \\hat{{k}}_{{\\mathrm{{us}}}} = \\frac{{C_{{\\mathrm{{OLS}}}} - L / \\bar{{v}}_x}}{{\\bar{{v}}_x}}
 \\]
 ここで \\(\\bar{{v}}_x\\) はビン内の速度中央値、\\(L = {WHEELBASE}\\) m はホイールベース。
+この横方向 \\(k_{{\\mathrm{{us}}}}\\) 同定は、実装上もこの左辺・右辺差分
+\\(\\tan(\\delta_i)-C\\omega_i\\) の最小二乗問題として解かれている。
 </p>
 <p><b>② 個別サンプル（IQR バンド）</b>: 実機運動学ログの各タイムステップで瞬時 \\(k_{{\\mathrm{{us}}}}\\) を推定し、
 ビン内の 25〜75 パーセンタイルをバンドとして表示:
