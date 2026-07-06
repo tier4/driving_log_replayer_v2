@@ -40,6 +40,7 @@ from ._io import (
 from ._fit_core import (
     delay_shift as _delay_shift,
     delay_shift_frac as _delay_shift_frac,
+    equation_residual_at_params,
     fit_first_order_delay,
 )
 from ._fit_core import sim_first_order as _core_sim_first_order
@@ -92,6 +93,13 @@ _TAU_BOUNDS_LONG = (_FIT_DT, 5.0)
 _DSTEER_MIN = 0.001
 _DELAY_CANDIDATES_STEER = np.arange(0.0, 0.15 + 1e-9, _FIT_DT)
 _TAU_BOUNDS_STEER = (_FIT_DT, 2.0)
+
+# 方程式残差診断 (equation_residual_at_params) の LHS を作る Savitzky-Golay 平滑化微分パラメータ。
+# 窓は「対象 τ 下限より短く」するのが原則 (立ち上がりの過平滑化で残差の位相を歪める)。
+# 縦 0.2s / 操舵 0.1s。推定量ではなく診断用なので、同定値には影響しない。
+_SG_POLYORDER = 2
+_SG_WINDOW_LONG = 0.2    # [s]
+_SG_WINDOW_STEER = 0.1   # [s]
 
 
 # ---------------------------------------------------------------------------
@@ -246,8 +254,11 @@ def fit_long_single(bag_path: Path) -> dict | None:
     if mask_dyn.sum() < _MIN_FIT_SAMPLES:
         return None
 
-    # 遅延グリッド × log-τ 同定 + Step2 サブサンプル遅延再最適化 (共通カーネル)。
-    # y0 で出力初期値を勾配補正済み観測に合わせる (検証側 SSOT の従来挙動)。
+    # パラメータ推定: 出力誤差型 (一次遅れシミュレーション MSE 最小化) を主推定量とする。
+    # 実測で微分残差型は τ↔むだ時間トレードオフにより τ を構造的に膨張させるため、推定量は
+    # 出力誤差型を維持する (方針D)。y0 で出力初期値を勾配補正済み観測に合わせる。
+    # 微分残差 J_diff は目的関数ではなく、この同定値での整合診断として直下で評価する
+    # (レポート側 main() の _pool_resid が全データセットぶんをプールしてヒスト化)。
     fit = fit_first_order_delay(
         a_cmd_arr, a_act_corr, mask_dyn, _FIT_DT,
         tau_bounds=_TAU_BOUNDS_LONG, delay_candidates=_DELAY_CANDIDATES_LONG,
@@ -256,11 +267,21 @@ def fit_long_single(bag_path: Path) -> dict | None:
     if fit is None:
         return None
 
+    # 診断 (方針D): 上で同定した (τ, T) における dot a_act 方程式の残差 r[k]=LHS−RHS を評価。
+    # 目的関数ではなく「同定結果が ODE をどれだけ満たすか」の整合診断・レポート統一記法用。
+    resid = equation_residual_at_params(
+        a_cmd_arr, a_act_corr, mask_dyn, _FIT_DT,
+        tau=fit["tau"], delay=fit["delay"], scale=1.0, bias=0.0,
+        window_s=_SG_WINDOW_LONG, polyorder=_SG_POLYORDER, t_s=t_s,
+    )
+
     pitch_min, pitch_max = _pitch_range(bag_path)
     return {
         "tau": fit["tau"],
         "delay": fit["delay"],
         "rmse_mps2": fit["rmse"],
+        "rmse_resid": resid["rmse_resid"],       # 診断: 方程式残差 RMSE [m/s³]
+        "resid_samples": resid["resid"].tolist(),  # 診断: mask 内残差 (ヒスト集約用)
         "n_dyn": int(mask_dyn.sum()),
         "pitch_min": pitch_min,
         "pitch_max": pitch_max,
@@ -303,6 +324,8 @@ def fit_steer_single(bag_path: Path) -> dict | None:
     if mask_dyn.sum() < _MIN_FIT_SAMPLES:
         return None
 
+    # パラメータ推定: 出力誤差型を主推定量とする (方針D)。微分残差 J_diff は目的関数ではなく、
+    # この同定値での整合診断として直下で評価する (レポート側 main() の _pool_resid がプール集約)。
     fit = fit_first_order_delay(
         d_cmd, d_act, mask_dyn, _FIT_DT,
         tau_bounds=_TAU_BOUNDS_STEER, delay_candidates=_DELAY_CANDIDATES_STEER,
@@ -310,10 +333,21 @@ def fit_steer_single(bag_path: Path) -> dict | None:
     if fit is None:
         return None
 
+    # 診断 (方針D): 同定した (τ, T) における dot δ_act 方程式の残差 r[k]=LHS−RHS を評価。
+    # 出力誤差型は bias β を同定しないため scale=1/bias=0 で評価する (残差の直流成分は未モデル化の
+    # 中点ズレを反映する = 診断シグナル)。
+    resid = equation_residual_at_params(
+        d_cmd, d_act, mask_dyn, _FIT_DT,
+        tau=fit["tau"], delay=fit["delay"], scale=1.0, bias=0.0,
+        window_s=_SG_WINDOW_STEER, polyorder=_SG_POLYORDER, t_s=t_s,
+    )
+
     return {
         "tau": fit["tau"],
         "delay": fit["delay"],
         "rmse_mrad": fit["rmse"] * 1000.0,
+        "rmse_resid": resid["rmse_resid"],        # 診断: 方程式残差 RMSE [rad/s]
+        "resid_samples": resid["resid"].tolist(),   # 診断: mask 内残差 (ヒスト集約用)
         "n_dyn": int(mask_dyn.sum()),
     }
 
