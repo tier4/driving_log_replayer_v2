@@ -725,8 +725,8 @@ DRIVE 系（enum 値 2..19）の時刻だけを残す評価マスクとして適
 {{\\color{{#1565c0}} v_x}} \\sin{{\\color{{#1565c0}} \\theta}} \\\\
 \\dfrac{{{{\\color{{#1565c0}} v_x}}\\,\\tan({{\\color{{#1565c0}} \\delta_{{\\mathrm{{act}}}}}}+\\beta)}}{{L + k_{{\\mathrm{{us}}}}\\,{{\\color{{#1565c0}} v_x}}^2}} \\\\
 {{\\color{{#1565c0}} a_{{\\mathrm{{act}}}}}} + {{\\color{{#e65100}} a_{{\\mathrm{{slope}}}}}} \\\\
-\\dfrac{{{{\\color{{#e65100}} \\delta_{{\\mathrm{{des}}}}}} - {{\\color{{#1565c0}} \\delta_{{\\mathrm{{act}}}}}}}}{{\\tau_\\delta}} \\\\
-\\dfrac{{{{\\color{{#e65100}} a_{{\\mathrm{{target}}}}}} - {{\\color{{#1565c0}} a_{{\\mathrm{{act}}}}}}}}{{\\tau_a}}
+\\dfrac{{{{\\color{{#e65100}} \\delta_{{\\mathrm{{cmd,des}}}}}}(t-T_\\delta) - {{\\color{{#1565c0}} \\delta_{{\\mathrm{{act}}}}}}}}{{\\tau_\\delta}} \\\\
+\\dfrac{{{{\\color{{#e65100}} a_{{\\mathrm{{cmd,des}}}}}}(t-T_a) - {{\\color{{#1565c0}} a_{{\\mathrm{{act}}}}}}}}{{\\tau_a}}
 \\end{{pmatrix}}
 \\]
 <p class="meta">
@@ -772,6 +772,29 @@ DRIVE 系（enum 値 2..19）の時刻だけを残す評価マスクとして適
 \\end{{pmatrix}}
 \\cdot \\Delta t
 \\]
+
+<h3>遅延モード：指令のみ遅延（旧）／ full-RHS 遅延（新）</h3>
+<p>
+無駄時間 \\(T_a, T_\\delta\\) の掛け方には 2 通りがあり、<code>vehicle_model_type</code> で選択する。
+両者は全遅延 \\(=0\\) のとき数値的に一致する（full-RHS 遅延は指令のみ遅延の厳密な一般化）。
+</p>
+<ul>
+  <li><b>指令のみ遅延</b>（<code>DELAY_STEER_ACC_GEARED_WO_FALL_GUARD</code>、既定）：無駄時間は<b>指令</b>にのみ掛かる。
+    上の状態方程式のとおり、\\(\\dot a_{{\\mathrm{{act}}}}\\) は現在の \\(a_{{\\mathrm{{act}}}}\\) に対して遅延指令
+    \\(a_{{\\mathrm{{target}}}}=a_{{\\mathrm{{cmd,des}}}}(t-T_a)\\) を、\\(\\dot\\delta_{{\\mathrm{{act}}}}\\) は現在の
+    \\(\\delta_{{\\mathrm{{act}}}}\\) に対して遅延指令 \\(\\delta_{{\\mathrm{{des}}}}\\) を用いる。</li>
+  <li><b>full-RHS 遅延</b>（<code>DELAY_STEER_ACC_GEARED_FOR_DIFFUSION_PLANNER</code>、新）：加速度・操舵チャネルの
+    <b>右辺全体</b>を \\(t-T\\) で評価する。すなわち状態フィードバックも遅延させる：
+\\[
+{{\\color{{#1565c0}} \\dot a_{{\\mathrm{{act}}}}}}(t)
+= -\\dfrac{{{{\\color{{#1565c0}} a_{{\\mathrm{{act}}}}}}(t-T_a) - {{\\color{{#e65100}} a_{{\\mathrm{{cmd,del}}}}}}}}{{\\tau_a}},
+\\qquad
+{{\\color{{#1565c0}} \\dot\\delta_{{\\mathrm{{act}}}}}}(t)
+= -\\dfrac{{{{\\color{{#1565c0}} \\delta_{{\\mathrm{{act}}}}}}(t-T_\\delta) - {{\\color{{#e65100}} \\delta_{{\\mathrm{{des}}}}}}}}{{\\tau_\\delta}}
+\\]
+    加速度チャネルは状態 \\(a_{{\\mathrm{{act}}}}\\) を \\(t-T_a\\) で評価する（C++ の <code>pedal_delayed</code> に対応）。
+    \\(a_{{\\mathrm{{slope}}}}\\) は速度式 \\(\\dot v_x\\) 側の外部入力なので遅延させない。ヨー・位置・速度式は現在状態で評価する。</li>
+</ul>
 </section>
 
 <section id="sec-long">
@@ -825,6 +848,11 @@ J_a
 </p>
 <p>
 推定はこの式を積分した出力誤差で行い、方程式残差は推定後の共通診断として使う。
+</p>
+<p class="meta">
+&#128279; ここでのオープンループ同定は<b>指令のみ遅延</b>の縮約形で \\((\\tau_a, T_a)\\) をフィットする。
+クローズドループの実シミュレータ（<a href="#sec-state-space">1-1</a>）は DIFFUSION_PLANNER では
+<b>full-RHS 遅延</b>（状態フィードバックも \\(t-T_a\\) で評価）を用いるが、これは同定に適した縮約であり矛盾ではない。
 </p>
 {long_resid_hist_html}
 
