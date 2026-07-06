@@ -27,7 +27,6 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 from scipy.optimize import minimize_scalar
-from scipy.signal import lfilter
 
 from ._io import (
     load_accel,
@@ -38,6 +37,13 @@ from ._io import (
     load_velocity,
     require_drive_gear_mask,
 )
+from ._fit_core import (
+    delay_shift as _delay_shift,
+    delay_shift_frac as _delay_shift_frac,
+    fit_first_order_delay,
+)
+from ._fit_core import sim_first_order as _core_sim_first_order
+from ._fit_core import sim_first_order_frac as _core_sim_first_order_frac
 from ._kus_profile import VX_EDGES, _kus_band_label, _kus_step_profile  # noqa: F401  (re-export)
 from ._params_utils import load_sim_params
 from ._validation import require_non_empty_df
@@ -91,70 +97,14 @@ _TAU_BOUNDS_STEER = (_FIT_DT, 2.0)
 # ---------------------------------------------------------------------------
 # 共通ヘルパー
 # ---------------------------------------------------------------------------
-def _delay_shift(cmd: np.ndarray, n_delay: int) -> np.ndarray:
-    """指令 cmd を n_delay サンプルぶん遅延させる (先頭は cmd[0] で埋める)。"""
-    if n_delay <= 0:
-        return cmd.copy()
-    n = len(cmd)
-    cmd_del = np.empty(n)
-    cmd_del[:n_delay] = cmd[0]
-    cmd_del[n_delay:] = cmd[:-n_delay]
-    return cmd_del
+# 一次遅れ + 純粋遅延の数値カーネルは lib._fit_core (SSOT)。ここでは検証側の既定 DT
+# (_FIT_DT = 1/30) を注入する薄いラッパーだけ置く (多数の呼び出しが dt を省略するため)。
+def _sim_first_order(cmd, tau, n_delay, dt=_FIT_DT, y0=None):
+    return _core_sim_first_order(cmd, tau, n_delay, dt, y0=y0)
 
 
-def _delay_shift_frac(cmd: np.ndarray, t_s: np.ndarray, delay: float) -> np.ndarray:
-    """指令 cmd を非整数サンプル (連続値) delay [s] ぶん遅延させる (線形補間)。
-
-    T のグリッドサーチ (_delay_shift, 1サンプル刻み) では表現できない
-    サブサンプル精度での T 再最適化 substep 用。t_s より前を参照する場合は
-    cmd[0] で外挿する (_delay_shift の先頭埋めと同じ境界規約)。
-    """
-    return np.interp(t_s - delay, t_s, cmd, left=cmd[0])
-
-
-def _sim_first_order(
-    cmd: np.ndarray,
-    tau: float,
-    n_delay: int,
-    dt: float = _FIT_DT,
-    y0: float | None = None,
-) -> np.ndarray:
-    """純粋遅延 + 一次遅れシミュレーション。
-
-    y0 を指定した場合は出力初期値を観測状態に合わせ、k=1 以降を一次遅れで更新する。
-    未指定時は従来どおりゼロ初期状態の lfilter として評価する。
-    """
-    cmd_del = _delay_shift(cmd, n_delay)
-    # tau<=0 は "no_delay" 系モデル等が意図する瞬時追従 (一次遅れ極限) を表すため、
-    # 0除算を避けて alpha=1.0 (即時追従) にフォールバックする。
-    alpha = 1.0 if tau <= 0.0 else float(np.clip(dt / tau, 0.0, 1.0))
-    if y0 is not None:
-        if len(cmd_del) == 0:
-            return cmd_del.astype(float)
-        zi = [float(y0) - alpha * float(cmd_del[0])]
-        out, _ = lfilter([alpha], [1.0, -(1.0 - alpha)], cmd_del, zi=zi)
-        return out
-    return lfilter([alpha], [1.0, -(1.0 - alpha)], cmd_del)
-
-
-def _sim_first_order_frac(
-    cmd: np.ndarray,
-    tau: float,
-    delay: float,
-    t_s: np.ndarray,
-    dt: float = _FIT_DT,
-    y0: float | None = None,
-) -> np.ndarray:
-    """`_sim_first_order` の連続 delay [s] 版 (T 再最適化 substep 専用、tau は呼び出し側で固定)。"""
-    cmd_del = _delay_shift_frac(cmd, t_s, delay)
-    alpha = 1.0 if tau <= 0.0 else float(np.clip(dt / tau, 0.0, 1.0))
-    if y0 is not None:
-        if len(cmd_del) == 0:
-            return cmd_del.astype(float)
-        zi = [float(y0) - alpha * float(cmd_del[0])]
-        out, _ = lfilter([alpha], [1.0, -(1.0 - alpha)], cmd_del, zi=zi)
-        return out
-    return lfilter([alpha], [1.0, -(1.0 - alpha)], cmd_del)
+def _sim_first_order_frac(cmd, tau, delay, t_s, dt=_FIT_DT, y0=None):
+    return _core_sim_first_order_frac(cmd, tau, delay, t_s, dt, y0=y0)
 
 
 def _pointwise_tau_estimate(
@@ -296,42 +246,21 @@ def fit_long_single(bag_path: Path) -> dict | None:
     if mask_dyn.sum() < _MIN_FIT_SAMPLES:
         return None
 
-    def _mse(log_tau: float, n_delay: int) -> float:
-        tau = float(np.exp(log_tau))
-        a_sim = _sim_first_order(a_cmd_arr, tau, n_delay, y0=float(a_act_corr[0]))
-        diff = a_sim[mask_dyn] - a_act_corr[mask_dyn]
-        return float(np.mean(diff ** 2))
-
-    log_lo, log_hi = np.log(_TAU_BOUNDS_LONG[0]), np.log(_TAU_BOUNDS_LONG[1])
-    best_mse, best_tau, best_delay = float("inf"), float("nan"), float("nan")
-    for delay_s in _DELAY_CANDIDATES_LONG:
-        n_delay = int(round(delay_s / _FIT_DT))
-        res = minimize_scalar(
-            lambda lt, nd=n_delay: _mse(lt, nd), bounds=(log_lo, log_hi), method="bounded",
-        )
-        if res.fun < best_mse:
-            best_mse, best_tau, best_delay = res.fun, float(np.exp(res.x)), delay_s
-
-    if np.isnan(best_tau):
+    # 遅延グリッド × log-τ 同定 + Step2 サブサンプル遅延再最適化 (共通カーネル)。
+    # y0 で出力初期値を勾配補正済み観測に合わせる (検証側 SSOT の従来挙動)。
+    fit = fit_first_order_delay(
+        a_cmd_arr, a_act_corr, mask_dyn, _FIT_DT,
+        tau_bounds=_TAU_BOUNDS_LONG, delay_candidates=_DELAY_CANDIDATES_LONG,
+        y0=float(a_act_corr[0]), frac_delay=True, t_s=t_s,
+    )
+    if fit is None:
         return None
-
-    # Step 2 (substep): tau = best_tau に固定し、T を近傍 ±1グリッド幅で連続再最適化する。
-    def _mse_frac_delay(delay: float) -> float:
-        a_sim = _sim_first_order_frac(a_cmd_arr, best_tau, delay, t_s, y0=float(a_act_corr[0]))
-        diff = a_sim[mask_dyn] - a_act_corr[mask_dyn]
-        return float(np.mean(diff ** 2))
-
-    delay_lo = max(0.0, best_delay - _FIT_DT)
-    delay_hi = min(float(_DELAY_CANDIDATES_LONG[-1]), best_delay + _FIT_DT)
-    res_delay = minimize_scalar(_mse_frac_delay, bounds=(delay_lo, delay_hi), method="bounded")
-    if res_delay.fun < best_mse:
-        best_mse, best_delay = res_delay.fun, float(res_delay.x)
 
     pitch_min, pitch_max = _pitch_range(bag_path)
     return {
-        "tau": best_tau,
-        "delay": best_delay,
-        "rmse_mps2": float(np.sqrt(best_mse)),
+        "tau": fit["tau"],
+        "delay": fit["delay"],
+        "rmse_mps2": fit["rmse"],
         "n_dyn": int(mask_dyn.sum()),
         "pitch_min": pitch_min,
         "pitch_max": pitch_max,
@@ -374,29 +303,17 @@ def fit_steer_single(bag_path: Path) -> dict | None:
     if mask_dyn.sum() < _MIN_FIT_SAMPLES:
         return None
 
-    def _mse(log_tau: float, n_delay: int) -> float:
-        tau = float(np.exp(log_tau))
-        d_sim = _sim_first_order(d_cmd, tau, n_delay)
-        diff = d_sim[mask_dyn] - d_act[mask_dyn]
-        return float(np.mean(diff ** 2))
-
-    log_lo, log_hi = np.log(_TAU_BOUNDS_STEER[0]), np.log(_TAU_BOUNDS_STEER[1])
-    best_mse, best_tau, best_delay = float("inf"), float("nan"), float("nan")
-    for delay_s in _DELAY_CANDIDATES_STEER:
-        n_delay = int(round(delay_s / _FIT_DT))
-        res = minimize_scalar(
-            lambda lt, nd=n_delay: _mse(lt, nd), bounds=(log_lo, log_hi), method="bounded",
-        )
-        if res.fun < best_mse:
-            best_mse, best_tau, best_delay = res.fun, float(np.exp(res.x)), delay_s
-
-    if np.isnan(best_tau):
+    fit = fit_first_order_delay(
+        d_cmd, d_act, mask_dyn, _FIT_DT,
+        tau_bounds=_TAU_BOUNDS_STEER, delay_candidates=_DELAY_CANDIDATES_STEER,
+    )
+    if fit is None:
         return None
 
     return {
-        "tau": best_tau,
-        "delay": best_delay,
-        "rmse_mrad": float(np.sqrt(best_mse)) * 1000.0,
+        "tau": fit["tau"],
+        "delay": fit["delay"],
+        "rmse_mrad": fit["rmse"] * 1000.0,
         "n_dyn": int(mask_dyn.sum()),
     }
 

@@ -8,9 +8,6 @@ from concurrent.futures import ProcessPoolExecutor, as_completed
 from pathlib import Path
 
 import numpy as np
-import pandas as pd
-from scipy.optimize import minimize_scalar
-from scipy.signal import lfilter
 
 # 依存パッケージロード用のパス追加
 # workspace の install dist-packages ディレクトリを走査してロード可能にする
@@ -18,6 +15,9 @@ for _p in glob.glob("/home/kotaroyoshimoto/workspace/x2_e2e_44/install/*/local/l
     if _p not in sys.path:
         sys.path.insert(0, _p)
 
+from driving_log_replayer_v2.real_log_sim_comparison.lib._fit_core import (
+    fit_first_order_delay,
+)
 from driving_log_replayer_v2.real_log_sim_comparison.lib._io import (
     load_accel,
     load_cmd,
@@ -64,45 +64,13 @@ WHEELBASE = WHEELBASE_SSOT
 
 VX_EDGES = np.array([0.5, 1.0, 1.5, 2.0, 2.5, 3.0, 4.0, 5.0, 6.0, 8.0, 10.0, 12.0])
 
+# 縦/操舵フィットの遅延グリッド (production 固有: DT=0.01 刻みで検証側 1/30 より細かい)。
+# 一次遅れ + 純粋遅延の同定本体は lib._fit_core.fit_first_order_delay (SSOT) に集約。
+DELAY_GRID_LONG = np.arange(0.0, 0.31, 0.01)
+DELAY_GRID_STEER = np.arange(0.0, 0.16, 0.01)
+TAU_BOUNDS_LONG = (0.01, 5.0)
+TAU_BOUNDS_STEER = (0.01, 2.0)
 
-def _simulate_first_order(cmd: np.ndarray, tau: float, n_delay: int) -> np.ndarray:
-    n = len(cmd)
-    del_arr = np.empty(n)
-    if n_delay > 0:
-        del_arr[:n_delay] = cmd[0]
-        del_arr[n_delay:] = cmd[:-n_delay]
-    else:
-        del_arr = cmd.copy()
-    alpha = float(np.clip(DT / tau, 0.0, 1.0))
-    return lfilter([alpha], [1.0, -(1.0 - alpha)], del_arr)
-
-def _fit_tau_nls_long(a_cmd: np.ndarray, a_act: np.ndarray, n_delay: int, mask: np.ndarray) -> tuple[float, float, float]:
-    def _mse_and_asf(log_tau: float) -> tuple[float, float]:
-        tau = float(np.exp(log_tau))
-        a_sim_base = _simulate_first_order(a_cmd, tau, n_delay)
-        sum_sim2 = np.sum(a_sim_base[mask] ** 2)
-        asf = float(np.sum(a_sim_base[mask] * a_act[mask]) / sum_sim2) if sum_sim2 > 1e-5 else 1.0
-        asf = float(np.clip(asf, 0.8, 1.2))
-        a_sim = asf * a_sim_base
-        mse = float(np.mean((a_sim[mask] - a_act[mask]) ** 2))
-        return mse, asf
-
-    def _objective(log_tau: float) -> float:
-        return _mse_and_asf(log_tau)[0]
-
-    res = minimize_scalar(_objective, bounds=(np.log(0.01), np.log(5.0)), method="bounded")
-    tau = float(np.exp(res.x))
-    _, asf = _mse_and_asf(res.x)
-    return tau, asf, _objective(res.x)
-
-def _fit_tau_nls_steer(d_cmd: np.ndarray, d_act: np.ndarray, n_delay: int, mask: np.ndarray) -> tuple[float, float]:
-    def _mse(log_tau: float) -> float:
-        tau = float(np.exp(log_tau))
-        d_sim = _simulate_first_order(d_cmd, tau, n_delay)
-        return float(np.mean((d_sim[mask] - d_act[mask]) ** 2))
-    res = minimize_scalar(_mse, bounds=(np.log(0.01), np.log(2.0)), method="bounded")
-    tau = float(np.exp(res.x))
-    return tau, float(res.fun)
 
 def _load_light_worker(args: tuple) -> dict | None:
     uuid, ds_dir = args
@@ -154,31 +122,27 @@ def _load_light_worker(args: tuple) -> dict | None:
         "gear_drive": gear_drive,
     }
 
+def _long_mask(ds: dict) -> np.ndarray:
+    """縦方向同定の動的マスク: DRIVE 中 & vx>VX_MIN & 指令加速度変化が大きい区間。"""
+    d_cmd_acc = np.abs(np.gradient(ds["a_cmd"], DT))
+    return ds["gear_drive"] & (ds["vx"] > VX_MIN) & (d_cmd_acc > DA_THRESH)
+
+
 def _fit_one_long_worker(ds: dict) -> tuple[float, float, float] | None:
     a_cmd = ds["a_cmd"]
     a_act = ds["a_act"]
-    vx = ds["vx"]
-    gear_drive = ds["gear_drive"]
-    d_cmd_acc = np.abs(np.gradient(a_cmd, DT))
-    mask = gear_drive & (vx > VX_MIN) & (d_cmd_acc > DA_THRESH)
+    mask = _long_mask(ds)
     if mask.sum() < 50:
         return None
 
-    best_mse = np.inf
-    best_tau = np.nan
-    best_delay = np.nan
-    best_asf = np.nan
-    for delay_s in np.arange(0.0, 0.31, 0.01):
-        n_delay = int(round(delay_s / DT))
-        tau, asf, mse = _fit_tau_nls_long(a_cmd, a_act, n_delay, mask)
-        if mse < best_mse:
-            best_mse = mse
-            best_tau = tau
-            best_delay = delay_s
-            best_asf = asf
-    if np.isnan(best_tau):
+    # 遅延グリッド × log-τ 同定 + 射影スケール (debug_acc_scaling_factor) = 共通カーネル。
+    fit = fit_first_order_delay(
+        a_cmd, a_act, mask, DT,
+        tau_bounds=TAU_BOUNDS_LONG, delay_candidates=DELAY_GRID_LONG, fit_scale=True,
+    )
+    if fit is None:
         return None
-    return best_tau, best_delay, best_asf
+    return fit["tau"], fit["delay"], fit["scale"]
 
 def _fit_one_steer_worker(ds: dict) -> tuple[float, float, float, float] | None:
     d_cmd = ds["d_cmd"]
@@ -191,6 +155,7 @@ def _fit_one_steer_worker(ds: dict) -> tuple[float, float, float, float] | None:
     if mask_dyn.sum() < 50:
         return None
 
+    # bias (直進区間の実操舵中点) と dsf (射影スケール) は操舵 production 固有の前処理。
     mask_straight = gear_drive & (vx > 3.0) & (np.abs(wz) < 0.005)
     bias = float(np.mean(d_act[mask_straight])) if mask_straight.sum() > 20 else 0.0005
 
@@ -199,20 +164,14 @@ def _fit_one_steer_worker(ds: dict) -> tuple[float, float, float, float] | None:
     dsf = float(np.sum(d_cmd[mask_dyn] * d_act_nobias[mask_dyn]) / sum_cmd2) if sum_cmd2 > 1e-5 else 1.0
     dsf = float(np.clip(dsf, 0.8, 1.2))
 
-    best_mse = np.inf
-    best_tau = np.nan
-    best_delay = np.nan
-    for delay_s in np.arange(0.0, 0.16, 0.01):
-        n_delay = int(round(delay_s / DT))
-        d_cmd_scaled = dsf * d_cmd
-        tau, mse = _fit_tau_nls_steer(d_cmd_scaled, d_act_nobias, n_delay, mask_dyn)
-        if mse < best_mse:
-            best_mse = mse
-            best_tau = tau
-            best_delay = delay_s
-    if np.isnan(best_tau):
+    # dsf を cmd に前掛けし、bias 除去済み実操舵に対して τ・遅延を同定 (共通カーネル、scale なし)。
+    fit = fit_first_order_delay(
+        dsf * d_cmd, d_act_nobias, mask_dyn, DT,
+        tau_bounds=TAU_BOUNDS_STEER, delay_candidates=DELAY_GRID_STEER,
+    )
+    if fit is None:
         return None
-    return best_tau, best_delay, bias, dsf
+    return fit["tau"], fit["delay"], bias, dsf
 
 def main() -> None:
     ap = argparse.ArgumentParser(description="物理直接同定チューニング")
@@ -313,6 +272,9 @@ def main() -> None:
                     asfs_long.append(asf)
 
         if taus_long:
+            # τ / delay / scale はいずれも per-dataset median を採る。縦の drag(v) 多項式・throttle/brake
+            # 非対称 τ は Step 3 で pooled 同定を試作したが、c0=0 制約下で aero-only (c2·v²) の寄与は
+            # ~0%、改善は c1>0 の非物理な bias 誤当てはめ由来と判明したため撤去 (実測ログ参照)。
             params["acc_time_constant"] = float(np.clip(np.median(taus_long), 0.1, 3.0))
             params["acc_time_delay"] = float(np.clip(np.median(delays_long), 0.0, 0.3))
             params["debug_acc_scaling_factor"] = float(np.clip(np.median(asfs_long), 0.8, 1.2))
