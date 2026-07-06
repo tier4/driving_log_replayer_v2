@@ -127,6 +127,7 @@ class PerceptionRunner(Runner):
         evaluation_topics_with_task: dict[str, list[str]],
         degradation_topic: str,
         ignore_frames: str,
+        ignore_target_uuids: str,
         enable_metrics_details: str,
         enable_analysis: str,
         analysis_max_distance: str,
@@ -136,6 +137,7 @@ class PerceptionRunner(Runner):
         self._enable_metrics_details = enable_metrics_details
         self._analysis_max_distance = analysis_max_distance
         self._analysis_distance_interval = analysis_distance_interval
+        self._ignore_target_uuids = ignore_target_uuids
 
         super().__init__(
             PerceptionScenario,
@@ -150,6 +152,18 @@ class PerceptionRunner(Runner):
             ignore_frames,
             enable_analysis,
         )
+
+    def _modify_scenario(self, scenario: PerceptionScenario) -> PerceptionScenario:
+        if self._ignore_target_uuids == "true":
+            evaluation_config_dict = scenario.Evaluation.PerceptionEvaluationConfig[
+                "evaluation_config_dict"
+            ]
+            if "target_uuids" in evaluation_config_dict:
+                evaluation_config_dict["target_uuids"] = None
+            critical_object_filter_config = scenario.Evaluation.CriticalObjectFilterConfig
+            if "target_uuids" in critical_object_filter_config:
+                critical_object_filter_config["target_uuids"] = None
+        return scenario
 
     def _get_use_case_info_list(
         self,
@@ -376,6 +390,7 @@ def evaluate(
     evaluation_prediction_topic_regex: str,
     degradation_topic: str,
     ignore_frames: str,
+    ignore_target_uuids: str,
     enable_metrics_details: str,
     enable_analysis: str,
     analysis_max_distance: str,
@@ -397,6 +412,7 @@ def evaluate(
         evaluation_topics_with_task,
         degradation_topic,
         ignore_frames,
+        ignore_target_uuids,
         enable_metrics_details,
         enable_analysis,
         analysis_max_distance,
@@ -452,6 +468,11 @@ def parse_args() -> argparse.Namespace:
         help="Comma-separated list of frame indices to ignore during evaluation.  If you do not want to ignore any frames, set it to '' or 'None'.",
     )
     parser.add_argument(
+        "--ignore-target-uuids",
+        default="false",
+        help="Whether to ignore target UUIDs during evaluation. If you do not want to ignore target UUIDs, set it to 'false'. It is possible to override scenario setting by setting it to 'true'.",
+    )
+    parser.add_argument(
         "--enable-metrics-details",
         default="true",
         help="Enable to include metrics details in the evaluation result.",
@@ -488,6 +509,7 @@ def main() -> None:
         args.evaluation_prediction_topic_regex,
         args.degradation_topic,
         args.ignore_frames,
+        args.ignore_target_uuids,
         args.enable_metrics_details,
         args.enable_analysis,
         args.analysis_max_distance,

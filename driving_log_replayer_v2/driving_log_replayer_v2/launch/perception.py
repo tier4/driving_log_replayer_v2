@@ -114,6 +114,11 @@ USE_CASE_ARGS: list[DeclareLaunchArgument] = [
         description="Comma-separated list of frame indices to ignore during evaluation. If you do not want to ignore any frames, set it to '' or 'None'.",
     ),
     DeclareLaunchArgument(
+        "ignore_target_uuids",
+        default_value="false",
+        description="Whether to ignore target UUIDs during evaluation. If you do not want to ignore target UUIDs, set it to 'false'. It is possible to override scenario setting by setting it to 'true'.",
+    ),
+    DeclareLaunchArgument(
         "enable_metrics_details",
         default_value="true",
         description="Enable to include metrics details in the evaluation result.",
