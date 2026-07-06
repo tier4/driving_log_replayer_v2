@@ -22,7 +22,7 @@ LOCAL_SCENARIO   ?= $(LOCAL_SAMPLE_DIR)/scenario.yaml
 
 PYTHON := python3
 
-.PHONY: help local_cloud_run local_analysis_run local_batch_run local_cross_analysis_run local_multidataset_run local_multidataset_cloud_run prepare_multidataset issue_scenario collect_raw_rosbags open_loop_tune open_loop_batch physical_validity_report_nodata
+.PHONY: help local_cloud_run local_analysis_run local_batch_run local_cross_analysis_run local_multidataset_run local_multidataset_cloud_run prepare_multidataset issue_scenario collect_raw_rosbags open_loop_tune open_loop_batch physical_validity_report_nodata extract fit_lon fit_steer fit_merge fit_report reidentify apply closed_loop
 
 help:
 	@echo "使い方: make -C $(MAKEFILE_DIR) <ターゲット>"
@@ -52,6 +52,17 @@ help:
 	@echo "                      横断分析 (Stage Cross Dataset) + マルチ DS report.html だけを再実行"
 	@echo "  local_multidataset_run  収集済み複数 real.lite (COLLECTION_DIR) で open-loop ロバスト同定"
 	@echo "                      (multi_dataset_tune robust_search)"
+	@echo ""
+	@echo "  マルチデータセット同定パイプライン (分割ターゲット; MULTI_BATCH_ROOT を対象):"
+	@echo "    local_multidataset_cloud_run  フル: extract→reidentify→apply→closed_loop の薄い連結"
+	@echo "    reidentify          再同定のみ (fit_lon→fit_steer→fit_merge→fit_report; extract/sim なし・実測~2.5分)"
+	@echo "    extract             Step1: 全 dataset の real.lite 抽出 (RESUME=1 で揃っていればスキップ)"
+	@echo "    fit_lon             Step2: 縦方向 直接同定 → phase1_acc.yaml"
+	@echo "    fit_steer           Step3: 操舵+k_us 直接同定 (fit_lon 必須) → phase2_steer.yaml"
+	@echo "    fit_merge           Step4a: warm-start Optuna 統合 (fit_steer 必須) → tuned_params.yaml + tuning_report.html"
+	@echo "    fit_report          Step4b: 物理妥当性レポート (fit_merge 必須) → physical_validity_report.html"
+	@echo "    apply               Step5: 同定パラメータを scenario に反映 (fit_merge 必須) → tuned_scenario.yaml"
+	@echo "    closed_loop         Step6: tuned scenario で closed-loop 実 sim (apply 必須)"
 	@echo ""
 	@echo "  パイプライン構成:"
 	@echo "    0. step0_make_lite        実機 input_bag → lite/real.lite/ (共通基盤)"
@@ -152,7 +163,15 @@ MULTI_BATCH_ROOT   ?= /home/kotaroyoshimoto/data/openloop_j6_16_onwards
 N_TRIALS           ?= 50
 N_JOBS             ?= 32
 
-
+# パイプライン各段の中間成果物 (分割ターゲット間で受け渡す SSOT パス)。
+# fit_lon → fit_steer → fit_merge → fit_report → apply → closed_loop がこれらを介して連結する。
+PHASE1_ACC      := $(MULTI_BATCH_ROOT)/phase1_acc.yaml
+PHASE2_STEER    := $(MULTI_BATCH_ROOT)/phase2_steer.yaml
+TUNED_PARAMS    := $(MULTI_BATCH_ROOT)/tuned_params.yaml
+TUNING_REPORT   := $(MULTI_BATCH_ROOT)/tuning_report.html
+VALIDITY_REPORT := $(MULTI_BATCH_ROOT)/physical_validity_report.html
+METRICS_CACHE   := $(MULTI_BATCH_ROOT)/metrics_cache.csv
+TUNED_SCENARIO  := $(MULTI_BATCH_ROOT)/scenarios/tuned_scenario.yaml
 
 prepare_multidataset:
 	@echo "[INFO] Validating real datasets in $(MULTI_BATCH_ROOT)..."
@@ -170,7 +189,23 @@ prepare_multidataset:
 	    fi ; \
 	    echo "[INFO] Found $$num_datasets real dataset directories."
 
-local_multidataset_cloud_run: prepare_multidataset
+# ---------------------------------------------------------------------------
+# マルチデータセット同定パイプラインの分割ターゲット群。
+# local_multidataset_cloud_run はこれらを $(MAKE) で順に呼ぶ薄いオーケストレータ。
+# 各サブターゲットは独立に単体実行でき (毎回再実行の .PHONY)、中間成果物 (PHASE1_ACC 等)
+# を介して連結する。モデル構造イテレーション中は reidentify (extract/sim なし・実測2.5分) を回す。
+#
+# 依存グラフ:
+#   extract → fit_lon → fit_steer → fit_merge → fit_report → apply → closed_loop
+#                                    ( reidentify = fit_lon..fit_report の4段 )
+#
+# 注意 (実測): 同定・Optuna・レポートは合計 ~2.5分。重いのは extract の初回 (webauto pull +
+#   372件 real.lite 抽出) と closed_loop の ros2 launch 実 sim。fit 系の高速化・N_JOBS 増は無意味。
+# ---------------------------------------------------------------------------
+
+# Step 1: 全 dataset の real.lite を抽出 (raw → topic 絞り込み mcap)。
+# RESUME=1 かつ real.lite が揃っていれば run_batch をスキップ。
+extract:
 	@test -f $(SETUP_BASH) || \
 	    { echo "[ERROR] $(SETUP_BASH) が見つかりません。先にワークスペースをビルドしてください"; exit 1; }
 	@test -f $(LOCAL_SCENARIO) || \
@@ -180,12 +215,12 @@ local_multidataset_cloud_run: prepare_multidataset
 	    num_datasets=$$(find "$(MULTI_BATCH_ROOT)/datasets" -mindepth 1 -maxdepth 1 -type d | wc -l) ; \
 	    num_lite=$$(find "$(MULTI_BATCH_ROOT)/datasets" -path "*/real.lite/real.lite_0.mcap" -type f | wc -l) ; \
 	    if [ "$$num_datasets" -gt 0 ] && [ "$$num_lite" -ge "$$num_datasets" ]; then \
-	        echo "[INFO] Step 1: RESUME=1 and found $$num_lite/$$num_datasets real.lite datasets. Skipping run_batch." ; \
+	        echo "[INFO] extract: RESUME=1 and found $$num_lite/$$num_datasets real.lite datasets. Skipping run_batch." ; \
 	        extracted=1 ; \
 	    fi ; \
 	fi ; \
 	if [ "$$extracted" -eq 0 ]; then \
-	    echo "[INFO] Step 1: Running initial open-loop batch run to collect real.lite across datasets..." ; \
+	    echo "[INFO] extract: Running initial open-loop batch run to collect real.lite across datasets..." ; \
 	    source $(SETUP_BASH) && $(PYTHON) -m driving_log_replayer_v2.real_log_sim_comparison.run_batch \
 	        --scenario "$(LOCAL_SCENARIO)" \
 	        --batch-root "$(MULTI_BATCH_ROOT)" \
@@ -195,45 +230,114 @@ local_multidataset_cloud_run: prepare_multidataset
 	        --skip-ol \
 	        $(if $(RESUME),--resume,) ; \
 	fi
-	@echo "[INFO] Step 2+3: Phase 1+2 縦横一括同定 (Direct Physical Identification, データロード1回（最適化）)..."
+
+# Step 2: 縦方向モデルの直接同定 → PHASE1_ACC。
+fit_lon:
+	@test -f $(SETUP_BASH) || \
+	    { echo "[ERROR] $(SETUP_BASH) が見つかりません。先にワークスペースをビルドしてください"; exit 1; }
+	@echo "[INFO] fit_lon: Phase 1 縦方向 直接同定 → $(PHASE1_ACC)"
 	source $(SETUP_BASH) && $(PYTHON) -m driving_log_replayer_v2.real_log_sim_comparison.physical_tuning \
 	    --collection-dir "$(MULTI_BATCH_ROOT)" \
 	    --scenario "$(LOCAL_SCENARIO)" \
-	    --phase 12 \
-	    --out-phase1 "$(MULTI_BATCH_ROOT)/phase1_acc.yaml" \
-	    --out "$(MULTI_BATCH_ROOT)/phase2_steer.yaml" \
+	    --phase 1 \
+	    --out "$(PHASE1_ACC)" \
 	    --n-jobs $(N_JOBS)
-	@echo "[INFO] Step 4: Phase 0 Integrated Tuning & Validity Report Generation (Warm-Started Optuna)..."
+
+# Step 3: 操舵 + k_us の直接同定 (PHASE1_ACC の縦方向値を継承) → PHASE2_STEER。
+fit_steer:
+	@test -f $(SETUP_BASH) || \
+	    { echo "[ERROR] $(SETUP_BASH) が見つかりません。先にワークスペースをビルドしてください"; exit 1; }
+	@test -f "$(PHASE1_ACC)" || \
+	    { echo "[ERROR] $(PHASE1_ACC) がありません。先に 'make fit_lon' を実行してください"; exit 1; }
+	@echo "[INFO] fit_steer: Phase 2 操舵+k_us 直接同定 (継承: $(PHASE1_ACC)) → $(PHASE2_STEER)"
+	source $(SETUP_BASH) && $(PYTHON) -m driving_log_replayer_v2.real_log_sim_comparison.physical_tuning \
+	    --collection-dir "$(MULTI_BATCH_ROOT)" \
+	    --scenario "$(LOCAL_SCENARIO)" \
+	    --phase 2 \
+	    --phase-params "$(PHASE1_ACC)" \
+	    --out "$(PHASE2_STEER)" \
+	    --n-jobs $(N_JOBS)
+
+# Step 4a: warm-start Optuna 統合チューニング → TUNED_PARAMS + TUNING_REPORT。
+fit_merge:
+	@test -f $(SETUP_BASH) || \
+	    { echo "[ERROR] $(SETUP_BASH) が見つかりません。先にワークスペースをビルドしてください"; exit 1; }
+	@test -f "$(PHASE2_STEER)" || \
+	    { echo "[ERROR] $(PHASE2_STEER) がありません。先に 'make fit_steer' を実行してください"; exit 1; }
+	@echo "[INFO] fit_merge: Phase 0 Warm-Started Optuna 統合チューニング → $(TUNED_PARAMS)"
 	source $(SETUP_BASH) && $(PYTHON) -m driving_log_replayer_v2.real_log_sim_comparison.multi_dataset_tune \
 	    --collection-dir "$(MULTI_BATCH_ROOT)" \
 	    --scenario "$(LOCAL_SCENARIO)" \
 	    --phase 0 \
-	    --phase-params "$(MULTI_BATCH_ROOT)/phase2_steer.yaml" \
-	    --enqueue-params "$(MULTI_BATCH_ROOT)/phase2_steer.yaml" \
+	    --phase-params "$(PHASE2_STEER)" \
+	    --enqueue-params "$(PHASE2_STEER)" \
 	    --n-trials $(N_TRIALS) \
 	    --search-subsample 15 \
 	    --jobs $(N_JOBS) \
-	    --out "$(MULTI_BATCH_ROOT)/tuned_params.yaml" \
-	    --report "$(MULTI_BATCH_ROOT)/tuning_report.html"
+	    --out "$(TUNED_PARAMS)" \
+	    --report "$(TUNING_REPORT)"
+
+# Step 4b: 物理妥当性レポート生成 → VALIDITY_REPORT。
+fit_report:
+	@test -f $(SETUP_BASH) || \
+	    { echo "[ERROR] $(SETUP_BASH) が見つかりません。先にワークスペースをビルドしてください"; exit 1; }
+	@test -f "$(TUNED_PARAMS)" || \
+	    { echo "[ERROR] $(TUNED_PARAMS) がありません。先に 'make fit_merge' を実行してください"; exit 1; }
+	@echo "[INFO] fit_report: 物理妥当性レポート生成 → $(VALIDITY_REPORT)"
 	source $(SETUP_BASH) && $(PYTHON) -m driving_log_replayer_v2.real_log_sim_comparison.physical_validity_report \
-	    --params "$(MULTI_BATCH_ROOT)/tuned_params.yaml" \
+	    --params "$(TUNED_PARAMS)" \
 	    --collection-dir "$(MULTI_BATCH_ROOT)" \
-	    --out "$(MULTI_BATCH_ROOT)/physical_validity_report.html" \
-	    --metrics-cache "$(MULTI_BATCH_ROOT)/metrics_cache.csv" \
+	    --out "$(VALIDITY_REPORT)" \
+	    --metrics-cache "$(METRICS_CACHE)" \
 	    --closed-loop-uuids "$(CLOSED_LOOP_UUIDS)"
-	@echo "[INFO] Step 5: Applying tuned parameters to scenario..."
+
+# 集約: 再同定 (extract/closed_loop なし)。モデル構造イテレーションの本命パス (実測 ~2.5分)。
+# prepare_multidataset を prereq にし、datasets/ 未整備時は physical_tuning 内部の
+# "有効データセット 0 件" ではなく親切な検証エラーで即座に止める。
+reidentify: prepare_multidataset
+	@echo "[INFO] === reidentify: fit_lon → fit_steer → fit_merge → fit_report (extract/sim なし) ==="
+	$(MAKE) fit_lon
+	$(MAKE) fit_steer
+	$(MAKE) fit_merge
+	$(MAKE) fit_report
+
+# Step 5: 同定パラメータを scenario に反映 → TUNED_SCENARIO。
+apply:
+	@test -f $(SETUP_BASH) || \
+	    { echo "[ERROR] $(SETUP_BASH) が見つかりません。先にワークスペースをビルドしてください"; exit 1; }
+	@test -f "$(TUNED_PARAMS)" || \
+	    { echo "[ERROR] $(TUNED_PARAMS) がありません。先に 'make fit_merge' を実行してください"; exit 1; }
+	@echo "[INFO] apply: 同定パラメータを scenario に反映 → $(TUNED_SCENARIO)"
 	source $(SETUP_BASH) && $(PYTHON) -m driving_log_replayer_v2.real_log_sim_comparison.apply_tuned_params \
 	    --scenario "$(LOCAL_SCENARIO)" \
-	    --params "$(MULTI_BATCH_ROOT)/tuned_params.yaml" \
-	    --out "$(MULTI_BATCH_ROOT)/scenarios/tuned_scenario.yaml"
-	@echo "[INFO] Step 6: Running closed-loop batch run using tuned parameters for selected datasets..."
+	    --params "$(TUNED_PARAMS)" \
+	    --out "$(TUNED_SCENARIO)"
+
+# Step 6: 同定済みパラメータで closed-loop 実シミュレーション (ros2 launch)。
+closed_loop:
+	@test -f $(SETUP_BASH) || \
+	    { echo "[ERROR] $(SETUP_BASH) が見つかりません。先にワークスペースをビルドしてください"; exit 1; }
+	@test -f "$(TUNED_SCENARIO)" || \
+	    { echo "[ERROR] $(TUNED_SCENARIO) がありません。先に 'make apply' を実行してください"; exit 1; }
+	@echo "[INFO] closed_loop: tuned scenario で closed-loop 実 sim を実行..."
 	source $(SETUP_BASH) && $(PYTHON) -m driving_log_replayer_v2.real_log_sim_comparison.run_batch \
-	    --scenario "$(MULTI_BATCH_ROOT)/scenarios/tuned_scenario.yaml" \
+	    --scenario "$(TUNED_SCENARIO)" \
 	    --batch-root "$(MULTI_BATCH_ROOT)" \
 	    --webauto-root "$(WEBAUTO_T4_ROOT)" \
 	    --input-mode raw \
 	    --closed-loop-uuids "$(CLOSED_LOOP_UUIDS)" \
 	    $(if $(RESUME),--resume,)
+
+# オーケストレータ: extract → reidentify → apply → closed_loop を順に実行 (従来のフルパイプライン)。
+local_multidataset_cloud_run: prepare_multidataset
+	@test -f $(SETUP_BASH) || \
+	    { echo "[ERROR] $(SETUP_BASH) が見つかりません。先にワークスペースをビルドしてください"; exit 1; }
+	@test -f $(LOCAL_SCENARIO) || \
+	    { echo "[ERROR] $(LOCAL_SCENARIO) が見つかりません"; exit 1; }
+	$(MAKE) extract
+	$(MAKE) reidentify
+	$(MAKE) apply
+	$(MAKE) closed_loop
 
 local_batch_run:
 	@test -f $(SETUP_BASH) || \

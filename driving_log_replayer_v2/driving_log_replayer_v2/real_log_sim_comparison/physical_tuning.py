@@ -30,17 +30,37 @@ from driving_log_replayer_v2.real_log_sim_comparison.lib._io import (
 from driving_log_replayer_v2.real_log_sim_comparison.lib._validation import (
     require_non_empty_df,
 )
+# 物理定数の SSOT は lib._physical_validity。チューニング(本モジュール)と検証
+# (physical_validity_report) で同じ車両ジオメトリ・同定条件を使うため、そこから import する。
+# k_us の定常旋回フィルタ (VX_MIN_CURVE / WZ_MIN / DWZ_MAX) は「同定した母集団」と
+# 「検証する母集団」を一致させるため必ず共有する (かつては tuning=(0.5,0.01,0.1) と
+# validation=(1.5,0.02,0.30) で別母集団を見ていた)。
+from driving_log_replayer_v2.real_log_sim_comparison.lib._physical_validity import (
+    WHEELBASE as WHEELBASE_SSOT,
+    VX_MIN_CURVE,
+    WZ_MIN,
+    DWZ_MAX,
+)
 
 CMD_TOPIC = "/control/command/control_cmd"
-DT = 0.01           # 10msサンプリング
+DT = 0.01           # 10msサンプリング (本モジュール固有: 遅延グリッド分解能を上げるため
+                    # 検証側 _physical_validity の 1/30 とは意図的に異なる。A-2 参照)
+# 縦/操舵フィットの動的マスク閾値。_physical_validity の _VX_MIN_FIT / _DA_THRESH_FIT /
+# _DSTEER_MIN と同値 (同一役割・現状一致)。将来ドリフトさせないこと。
 VX_MIN = 0.5
 DA_THRESH = 0.15
 DSTEER_MIN = 0.001
-WZ_MIN = 0.01
-DWZ_MAX = 0.1
-VX_MIN_CURVE = 0.5
+# K_US_CLIP: 本モジュールでは「速度ビン別 OLS 推定値 k_val」のクリップ (per-bin, sim へ渡す
+# パラメータの安全上限)。_physical_validity の同名 K_US_CLIP=0.5 は「per-sample の IQR 表示用
+# クリップ」で役割・粒度が異なるため意図的に別値。再チューニング後、k_us がこの 0.05 上限に
+# 張り付く場合は妥当性を再検討すること (wheelbase 変更で k_val の大きさが変わるため)。
 K_US_CLIP = 0.05
-WHEELBASE = 2.74  # x2 の標準値。scenario.yaml から動的取得を試みる
+# 車両ホイールベース [m]。権威ある源は j6_gen2_description/config/vehicle_info.param.yaml
+# (= 4.76012)。ここではその値を再エクスポートする _physical_validity の SSOT を既定値とする。
+# scenario に明示があれば main() でそれを優先する。
+# 注意: wheelbase は「同定して反映する値」ではなく固定ジオメトリ。tuning 出力を源にして
+# 循環させないこと (常に車両記述由来の値を使う)。
+WHEELBASE = WHEELBASE_SSOT
 
 VX_EDGES = np.array([0.5, 1.0, 1.5, 2.0, 2.5, 3.0, 4.0, 5.0, 6.0, 8.0, 10.0, 12.0])
 
@@ -208,8 +228,12 @@ def main() -> None:
     ap.add_argument("--n-jobs", type=int, default=os.cpu_count())
     args = ap.parse_args()
 
-    # scenario.yaml から wheelbase をロード
+    # scenario.yaml から wheelbase をロード (明示があれば SSOT 既定値より優先)。
+    # 見つからなければ SSOT 既定値 (WHEELBASE_SSOT = j6_gen2 由来 4.76012) を明示ログ付きで使う。
+    # かつて既定値が乗用車の 2.74 で、scenario に wheelbase が無いと無言で 2.74 に落ち、
+    # 検証側 4.76012 と別ジオメトリで k_us を同定してしまう不具合があった (k_us は L/v で効く)。
     global WHEELBASE
+    wb_found = None
     try:
         with args.scenario.open("r") as f:
             scen = yaml.safe_load(f)
@@ -219,11 +243,18 @@ def main() -> None:
                 if case_key in models:
                     wb = models[case_key].get("wheelbase")
                     if wb:
-                        WHEELBASE = float(wb)
-                        print(f"[INFO] scenario.yaml から wheelbase を取得しました: {WHEELBASE}")
+                        wb_found = float(wb)
                         break
     except Exception as e:
-        print(f"[WARN] scenario.yaml のパースに失敗しました (既定値 {WHEELBASE} を使用): {e}")
+        print(f"[WARN] scenario.yaml のパースに失敗しました: {e}")
+
+    if wb_found is not None:
+        WHEELBASE = wb_found
+        print(f"[INFO] scenario.yaml から wheelbase を取得しました: {WHEELBASE}")
+    else:
+        # サイレントフォールバック禁止: SSOT 既定値を使うことを必ず明示する。
+        print(f"[WARN] scenario.yaml に wheelbase の記載がないため、SSOT 既定値を使用します: "
+              f"{WHEELBASE} (source: lib._physical_validity.WHEELBASE = j6_gen2_description)")
 
     # 前フェーズのパラメータの読み込み（継承用）
     inherited_params = {}
