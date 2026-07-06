@@ -414,6 +414,53 @@ def build_fig_long_tau_pointwise_hist(cross_fit: dict) -> go.Figure:
     )
 
 
+def build_fig_equation_residual_hist(
+    resid_samples,
+    *,
+    channel_label: str,
+    unit_label: str,
+    rmse_median: float = float("nan"),
+) -> go.Figure:
+    """同定済みパラメータでの ODE 方程式残差 r[k]=LHS−RHS の分布（診断・方針D）。
+
+    パラメータは出力誤差型で推定した値を用い、その解が状態微分方程式
+    `dot_x = RHS(θ)` をどれだけ満たすかを示す整合診断。0 中心・低分散なら良同定。
+    目的関数ではない（縦・操舵・ヨーの 3 式をこの共通の残差形 E=RHS−LHS で統一提示する）。
+    """
+    arr = np.asarray(list(resid_samples), dtype=float)
+    arr = arr[np.isfinite(arr)]
+    if arr.size == 0:
+        return _placeholder_fig(f"{channel_label}: 方程式残差の評価不可（同定失敗またはデータ不足）")
+
+    mean = float(np.mean(arr))
+    lo, hi = (float(x) for x in np.percentile(arr, [1, 99]))
+    if not (hi > lo):  # 退化時のフォールバック
+        lo, hi = float(arr.min()), float(arr.max() + 1e-9)
+
+    # 全データセットをプールすると生サンプルは数十万点になるため、HTML には生値を埋め込まず
+    # np.histogram で事前ビニングした棒 (go.Bar) にする (見た目は同じ・埋め込みサイズは一定)。
+    counts, edges = np.histogram(arr, bins=80, range=(lo, hi))
+    centers = (edges[:-1] + edges[1:]) / 2.0
+    fig = go.Figure()
+    fig.add_trace(go.Bar(
+        x=centers.tolist(), y=counts.tolist(), width=float(edges[1] - edges[0]),
+        marker_color="teal", opacity=0.75, name=f"残差 r[k]（n={arr.size}）",
+    ))
+    fig.add_vline(x=0.0, line=dict(color="black", width=1.5))
+    fig.add_vline(
+        x=mean, line=dict(color="crimson", width=1.5, dash="dot"),
+        annotation_text=f"平均 {mean:.3g}", annotation_position="top right",
+    )
+    fig.update_xaxes(title_text=f"方程式残差 r[k] = LHS − RHS  [{unit_label}]", range=[lo, hi])
+    fig.update_yaxes(title_text="サンプル数")
+    extra = f"、残差 RMSE 中央値 {rmse_median:.3g} {unit_label}" if np.isfinite(rmse_median) else ""
+    return apply_base_layout(
+        fig,
+        title=f"{channel_label}: 同定パラメータでの方程式残差 r[k] の分布（整合診断{extra}）",
+        height=360,
+    )
+
+
 _NSTEP_ERROR_METRICS = [
     ("p14_yaw", "yaw [deg]", "steelblue"),
     ("p14_lat", "lat [cm]", "darkorange"),
