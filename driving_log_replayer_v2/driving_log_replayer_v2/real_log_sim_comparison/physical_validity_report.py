@@ -62,9 +62,6 @@ from driving_log_replayer_v2.real_log_sim_comparison.lib._figures import (  # no
     build_fig_cross_steer,
     build_fig_equation_residual_hist,
     build_fig_kus_single,
-    build_fig_long_perf_box,
-    build_fig_long_perf_growth,
-    build_fig_long_perf_map,
     build_fig_nstep_error_hist,
     build_fig_nstep_error_growth,
     build_fig_perfect_tracking_box,
@@ -75,17 +72,14 @@ from driving_log_replayer_v2.real_log_sim_comparison.lib._physical_validity impo
     VX_MIN_CURVE,
     WHEELBASE,
     WZ_MIN,
-    _DELAY_CANDIDATES_LONG,
     _FIT_DT,
     _N_CROSS_FIT_DATASET,
     _PERF_HORIZONS,
     _PERF_STRIDE,
-    _TAU_BOUNDS_LONG,
     _extract_kus_arrays,
     compute_cross_long_rows,
     compute_cross_steer_rows,
     compute_kus_bins,
-    compute_long_perf_data,
     compute_perfect_tracking_data,
     fit_long_cross_dataset_bounded,
     fit_long_single,
@@ -98,7 +92,6 @@ _H_SPAN = {10: "≈0.33 s", 20: "≈0.67 s", 30: "≈1.0 s", 40: "≈1.33 s"}
 # 1-2/1-5. 理想追従評価に使うデータセット数（レポート固有。ホライズン・stride の SSOT は
 # lib._physical_validity の _PERF_HORIZONS / _PERF_STRIDE を import して使う）
 _PERF_N_DATASET = 10                                   # 1-5 横方向 box plot 用 データセット数
-_LONG_PERF_N_DATASET = 20                                   # 1-2 縦方向理想追従 box plot 用 データセット数
 
 
 def _resolve_report_models(
@@ -471,7 +464,6 @@ def _build_sec1(
     steer_fig: go.Figure,
     kus_fig: go.Figure,
     n_dataset: int,
-    long_perf_figs: tuple[go.Figure, go.Figure, go.Figure] | None = None,
     long_resid_hist_fig: go.Figure | None = None,
     steer_resid_hist_fig: go.Figure | None = None,
 ) -> str:
@@ -518,53 +510,6 @@ def _build_sec1(
         steer_resid_hist_fig.to_html(full_html=False, include_plotlyjs=False)
         if steer_resid_hist_fig is not None else ""
     )
-    _vx_min = VX_MIN_CURVE
-    _stride = _PERF_STRIDE
-    _dt_long  = _FIT_DT
-    _delay_lo = _DELAY_CANDIDATES_LONG[0]
-    _delay_hi = _DELAY_CANDIDATES_LONG[-1]
-    _delay_m  = len(_DELAY_CANDIDATES_LONG) - 1
-    _tau_lo, _tau_hi = _TAU_BOUNDS_LONG
-    _horizon_desc = ", ".join(f"N={h}（{h * _dt_long:.2f}s）" for h in _PERF_HORIZONS)
-    _horizon_axis = "/".join(f"{h * _dt_long:.2f}s" for h in _PERF_HORIZONS)
-    _horizon_max = _PERF_HORIZONS[-1] * _dt_long
-    if long_perf_figs is not None:
-        fig_box, fig_growth, fig_map = long_perf_figs
-        box_html    = fig_box.to_html(full_html=False, include_plotlyjs=False)
-        growth_html = fig_growth.to_html(full_html=False, include_plotlyjs=False)
-        map_html    = fig_map.to_html(full_html=False, include_plotlyjs=False)
-        long_perf_subsection = (
-            "<h3>加速度・速度の縦方向整合性評価</h3>"
-            "<p>実測加速度 \\(a_{\\mathrm{report}}\\) を速度更新へ直接使った場合に"
-            "残る縦方向変位誤差を評価する。<br>"
-            "各開始点で \\(v_{x,\\mathrm{sim}}(t_0) = v_{x,\\mathrm{real}}(t_0)\\) に初期化し、"
-            "\\(a_{\\mathrm{report}}\\) を直接積分して変位を計算、実車変位と比較する。</p>"
-            "<p>1-5 横方向評価との対応: "
-            "1-5 では実測 \\(\\delta_{\\mathrm{act}}\\) を bicycle model に直接入力して横方向残差を評価する。"
-            "本評価では実測 \\(a_{\\mathrm{report}}\\) を積分器へ直接入力して縦方向残差を評価する。</p>"
-            "<div class=\"note\">"
-            "&#9888;&#65039; <b>残差の解釈</b>: \\(\\dot{v}_x = a_{\\mathrm{report}}\\) として再積分した結果なので、"
-            "速度と加速度の計測・時刻同期・離散化の不整合が残差として現れる。"
-            "</div>"
-            f"<p>走行区間（\\(v_x > {_vx_min}\\) m/s）を stride={_stride} ステップで走査し、"
-            "N-step Open Loop評価（ロールアウト）終端の縦方向誤差絶対値を集計する。"
-            f"ホライズン: {_horizon_desc}。</p>"
-            + box_html
-            + "<p><b>図②: ドリフト成長カーブ（符号付き）</b> — "
-            "ゼロ線から片側に膨らむ傾向が系統的な過大／過小推定を示す。"
-            "帯（四分位範囲 25–75%）はばらつき、膨らむ速さは蓄積の速度を表す。"
-            "局面別点線（青=減速・灰=巡航・赤=加速）でどの走行シーンでズレが生じるかを確認できる。"
-            f"x 軸 of {_horizon_axis} は上の box plot のホライズンと一致する。</p>"
-            + growth_html
-            + "<p><b>図③: 地図上の変位誤差分布</b> — "
-            f"各点は rollout 開始位置（\\(v_x > v_{{\\mathrm{{min}}}}\\) を満たす {_horizon_max:.2f}s 窓の開始点）。"
-            f"色は {_horizon_max:.2f}s 窓終端 of 変位誤差（赤 = シミュレーションが実車より進む過大推定、青 = 過小推定）。"
-            "路線・カーブ・区間ごとに誤差パターンを地理的に把握できる。</p>"
-            + map_html
-        )
-    else:
-        long_perf_subsection = ""
-
     return f"""
 <section id="sec-coords">
 <h2>1-0. 座標系と主要な記号の定義</h2>
@@ -881,8 +826,6 @@ J_a
   <tr><td><code>acc_time_delay</code> (\\(T_a\\))</td><td>{T_a} s</td>
       <td>純粋遅延：指令が実際に入力されるまでの遅延時間</td></tr>
 </table>
-
-{long_perf_subsection}
 </section>
 
 <section id="sec-steer">
@@ -1429,7 +1372,6 @@ def build_html(
     label: str = "current",
     params_filename: str = "",
     perf_html: str = "",
-    long_perf_figs: tuple[go.Figure, go.Figure, go.Figure] | None = None,
     closed_loop_html: str = "",
     long_resid_hist_fig: go.Figure | None = None,
     steer_resid_hist_fig: go.Figure | None = None,
@@ -1451,7 +1393,6 @@ def build_html(
 
     sec1 = _build_sec1(
         params, long_fig, steer_fig, kus_fig, n_dataset,
-        long_perf_figs=long_perf_figs,
         long_resid_hist_fig=long_resid_hist_fig, steer_resid_hist_fig=steer_resid_hist_fig,
     )
     sec3 = _build_sec3(viewer_sections, label=label)
@@ -1918,39 +1859,6 @@ def main() -> None:
         rmse_median=_resid_steer_med,
     )
 
-    # 1-2 縦方向理想追従評価（全 records の先頭 _LONG_PERF_N_DATASET データセットを使用。
-    # 計算・描画は lib 共有関数。タイトル文言のみレポート従来表記を labels/title で維持）
-    long_perf_records = records[:_LONG_PERF_N_DATASET]
-    print(f"  [1-2] 縦方向理想追従評価図生成 ({len(long_perf_records)} データセット) ...")
-    long_perf_entries = _to_entries([(r["uuid"], Path(r["lite_dir"])) for r in long_perf_records])
-    long_perf_data = compute_long_perf_data(long_perf_entries)
-    _n_lp = long_perf_data.get("n_dataset", 0)
-    long_perf_figs = (
-        build_fig_long_perf_box(
-            long_perf_data,
-            title=f"縦方向 整合性評価（a_report 直接入力 vs 実車変位、上位 {_n_lp} データセット）",
-        ),
-        build_fig_long_perf_growth(
-            long_perf_data,
-            labels={
-                "title": (
-                    f"縦方向ドリフト成長カーブ"
-                    f"（符号付き・reset-stride ロールアウト、上位 {_n_lp} データセット）"
-                ),
-                "subplot_titles": ["速度誤差  v_x,sim − 実車 v_x  [m/s]",
-                                   "変位誤差  s_sim − 実車 s  [cm]"],
-                "y_titles": [
-                    "速度誤差 [m/s]<br><sup>正 = シミュレーションが実車より速い</sup>",
-                    "変位誤差 [cm]<br><sup>正 = シミュレーションが実車より進んでいる</sup>",
-                ],
-            },
-        ),
-        build_fig_long_perf_map(
-            long_perf_data, map_ways,
-            title="縦方向変位誤差の地図分布（1.0s 窓終端・rollout 開始点、正 = シミュレーションが実車より進む）",
-        ),
-    )
-
     # 1-5 横方向理想追従評価には curve 上位 _PERF_N_DATASET データセットを使用（viewer 用 top_curve とは独立して選択）
     perf_records = candidate_curve[:_PERF_N_DATASET]
     print(f"  [1-5] 横方向理想追従評価図生成 ({len(perf_records)} データセット) ...")
@@ -1979,7 +1887,6 @@ def main() -> None:
         label=phase_label,
         params_filename=args.params.name,
         perf_html=perf_html,
-        long_perf_figs=long_perf_figs,
         closed_loop_html=closed_loop_html,
         long_resid_hist_fig=long_resid_hist_fig,
         steer_resid_hist_fig=steer_resid_hist_fig,
