@@ -1,5 +1,14 @@
 # Release Notes
 
+## Version 3.18.6
+
+Minor Tweak
+
+| Module       | Feature   | Brief summary                                          | Pull request                                                        | Contributor                                   |
+| ------------ | --------- | ------------------------------------------------------ | ------------------------------------------------------------------- | --------------------------------------------- |
+| `perception` | arguments | ignore target_uuids in scenario using args             | [#387](https://github.com/tier4/driving_log_replayer_v2/issues/387) | [MasatoSaeki](https://github.com/MasatoSaeki) |
+| `common`     | bug fix   | use time_offset correctly even if play_rate is not 1.0 | [#385](https://github.com/tier4/driving_log_replayer_v2/issues/385) | [MasatoSaeki](https://github.com/MasatoSaeki) |
+
 ## Version 3.18.5
 
 Minor Tweak

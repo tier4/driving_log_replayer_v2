@@ -2,6 +2,12 @@
 Changelog for package driving_log_replayer
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
+Forthcoming
+-----------
+* feat: ignore target_uuids in scenario using args (`#387 <https://github.com/tier4/driving_log_replayer_v2/issues/387>`_)
+* fix: use time_offset correctly even if play_rate is not 1.0 (`#385 <https://github.com/tier4/driving_log_replayer_v2/issues/385>`_)
+* Contributors: Masato Saeki
+
 3.18.5 (2026-07-03)
 -------------------
 * feat: add new class animal and hazard (`#382 <https://github.com/tier4/driving_log_replayer_v2/issues/382>`_)
