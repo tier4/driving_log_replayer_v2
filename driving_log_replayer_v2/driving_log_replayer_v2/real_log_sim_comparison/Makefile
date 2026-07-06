@@ -159,6 +159,13 @@ BATCH_ROOT ?= $(LOCAL_SAMPLE_DIR)/out/batch_$(shell date +%Y%m%d_%H%M%S)
 # /home/kotaroyoshimoto/data/openloop_j6_16_onwards は唯一の利用 dataset root なので、
 # datasets/ は symlink staging ではなく実データディレクトリとして事前構成する。
 CLOSED_LOOP_UUIDS  ?= 00d08afd-b605-5de1-9db0-51241fa87b18,01ccf59a-bf38-5d62-8a81-be0fe0e24b95
+# closed-loop 実 sim 用の地図ディレクトリ (lanelet2_map.osm を含む)。
+# raw モードの datasets/<uuid> は map を持たないため、run_batch が closed-loop UUID の
+# t4_dataset_path/map として symlink する (無いと Stage CL1/CL2 がスキップされ runs が空になる)。
+# 既定は CLOSED_LOOP_UUIDS の rosbag が記録された environment (ce963c1f) の地図 project 2231
+# (MGRS grid 54SUE。実機 pose 範囲が本地図の座標範囲に内包されることを確認済み) の
+# 記録日 (2026-06-23) 直前の最新版。
+CLOSED_LOOP_MAP    ?= $(HOME)/.webauto/simulation/data/map/x2_dev/2231/2231-20260525005702640410
 MULTI_BATCH_ROOT   ?= /home/kotaroyoshimoto/data/openloop_j6_16_onwards
 N_TRIALS           ?= 50
 N_JOBS             ?= 32
@@ -326,6 +333,7 @@ closed_loop:
 	    --webauto-root "$(WEBAUTO_T4_ROOT)" \
 	    --input-mode raw \
 	    --closed-loop-uuids "$(CLOSED_LOOP_UUIDS)" \
+	    --closed-loop-map "$(CLOSED_LOOP_MAP)" \
 	    $(if $(RESUME),--resume,)
 
 # オーケストレータ: extract → reidentify → apply → closed_loop を順に実行 (従来のフルパイプライン)。

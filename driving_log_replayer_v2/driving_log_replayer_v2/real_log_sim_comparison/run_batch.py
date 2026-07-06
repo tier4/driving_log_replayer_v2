@@ -253,6 +253,84 @@ def _run_step0_real_with_webauto_fallback(
     return False, fallback_t4_path, f"{output}\n[webauto fallback retry failed]\n{retry_output}"
 
 
+def _input_bag_has_topic(input_bag_dir: Path, topic: str) -> bool:
+    """input_bag の metadata.yaml に指定トピックが含まれるかを軽量に判定する。
+
+    ROS のデシリアライズを避け metadata.yaml のテキストで判定する
+    (トピック名は rosbag2 metadata に文字列として列挙される)。
+    """
+    meta = input_bag_dir / "metadata.yaml"
+    if not meta.is_file():
+        return False
+    try:
+        return topic in meta.read_text(encoding="utf-8")
+    except OSError:
+        return False
+
+
+def _stage_closed_loop_t4(
+    uuid: str, datasets_t4_path: Path, output_dir: Path, map_dir: Path | None
+) -> Path:
+    """closed-loop 実 sim 用の t4_dataset_path を非破壊で用意する。
+
+    closed-loop sim は t4_dataset_path/input_bag と t4_dataset_path/map/lanelet2_map.osm の
+    両方を必要とする (evaluator Stage 0 の real.lite 化 + Stage CL1 の OpenSCENARIO 自動生成)。
+    ところが collect_raw_rosbags で構築した datasets/<uuid>/input_bag は
+    /vehicle/status/gear_status を欠き (extract フィルタ由来)、map も持たない。
+    そこで:
+      - input_bag: gear_status を含む runs/<uuid>/fallback_raw_dataset/input_bag を優先採用
+        (無い/gear なしの場合は datasets 版のまま)。
+      - map: 指定された map_dir (lanelet2_map.osm を含む) を symlink する。
+    元の datasets/<uuid> は改変しない。staging 先は runs/<uuid>/closed_loop_t4/。
+    """
+    t4 = output_dir / "closed_loop_t4"
+    t4.mkdir(parents=True, exist_ok=True)
+
+    # --- input_bag: gear_status を含むものを選ぶ ---
+    fallback_bag = output_dir / "fallback_raw_dataset" / "input_bag"
+    datasets_bag = datasets_t4_path / "input_bag"
+    if fallback_bag.is_dir() and _input_bag_has_topic(
+        fallback_bag, "/vehicle/status/gear_status"
+    ):
+        src_bag = fallback_bag
+    else:
+        src_bag = datasets_bag
+    link_bag = t4 / "input_bag"
+    if link_bag.exists() or link_bag.is_symlink():
+        _remove_path(link_bag)
+    link_bag.symlink_to(src_bag.resolve())
+
+    # --- map: Stage CL1 (scenario 自動生成) に必須。指定があれば symlink する ---
+    if map_dir is not None:
+        link_map = t4 / "map"
+        if link_map.exists() or link_map.is_symlink():
+            _remove_path(link_map)
+        link_map.symlink_to(Path(map_dir).resolve())
+
+    return t4
+
+
+def _resolve_collect_bundle(output_dir: Path) -> Path:
+    """closed-loop 収集用のバンドルを解決する。
+
+    closed-loop の evaluator (ros2 launch) は成果物を
+    output_dir/result_archive/real_log_sim_comparison/{lite,comparison}/ に出力する。
+    一方 output_dir 直下には open-loop 処理で作られた lite/ が残ることがあり、
+    resolve_bundle_dir は lite/ の有無だけで判定するため comparison/ を欠く浅いバンドル
+    (output_dir) を返してしまう。ここでは lite/ と comparison/ の両方を持つ候補を優先し、
+    metrics_closed_loop.json を含む comparison/ を確実に収集できるようにする。
+    どの候補も両方を満たさなければ従来解決 (resolve_bundle_dir) にフォールバックする。
+    """
+    for c in (
+        output_dir / "result_archive" / "real_log_sim_comparison",
+        output_dir,
+        output_dir / "real_log_sim_comparison",
+    ):
+        if (c / "lite").is_dir() and (c / "comparison").is_dir():
+            return c.resolve()
+    return _resolve_bundle(output_dir)
+
+
 def _run_and_collect_worker(args: dict) -> dict:
     uuid = args["uuid"]
     scenario = Path(args["scenario"])
@@ -315,6 +393,13 @@ def _run_and_collect_worker(args: dict) -> dict:
                 t4_path = Path(args["raw_t4_path"])
                 scenario_single = batch_root / "scenarios" / f"{uuid}.scenario.yaml"
                 write_raw_dataset_scenario(scenario, uuid, scenario_single)
+                # closed-loop 実 sim には gear_status 付き input_bag と map/lanelet2_map.osm が
+                # 必要。datasets/<uuid> はこれらを欠くため、非破壊 staging した t4 を使う。
+                map_dir_str = args.get("closed_loop_map") or ""
+                t4_path = _stage_closed_loop_t4(
+                    uuid, t4_path, output_dir,
+                    Path(map_dir_str) if map_dir_str else None,
+                )
             else:
                 try:
                     t4_path = resolve_t4_dataset_path(webauto_root, uuid)
@@ -345,7 +430,15 @@ def _run_and_collect_worker(args: dict) -> dict:
                 return {"dataset_id": uuid, "status": "sim_failed", "collected_at": now_str}
 
     try:
-        bundle = _resolve_bundle(output_dir)
+        # closed-loop (ros2 launch) は result_archive/real_log_sim_comparison/ 配下に
+        # lite/ + comparison/ を出力するが、output_dir 直下にも open-loop 由来の lite/ が
+        # 残るため resolve_bundle_dir は comparison を欠く浅いバンドルを返しうる。
+        # closed-loop では lite/ と comparison/ の両方を持つ深いバンドルを優先し、
+        # metrics_closed_loop.json を含む comparison/ を確実に収集する。
+        if not skip_sim:
+            bundle = _resolve_collect_bundle(output_dir)
+        else:
+            bundle = _resolve_bundle(output_dir)
         rec = collect_bundle(bundle, uuid, batch_root)
         if status == "skipped":
             rec["status"] = "skipped"
@@ -528,6 +621,10 @@ def main() -> None:
     ap.add_argument("--closed-loop-uuids", default="",
                     help="クローズドループシミュレーションを実行するデータセットUUID（カンマ区切り）。"
                     "指定された場合、これらのUUIDのみclosed-loopを実行し、それ以外はオープンループ解析のみ（skip-sim）とします。")
+    ap.add_argument("--closed-loop-map", default="",
+                    help="closed-loop 実 sim 用の地図ディレクトリ (lanelet2_map.osm を含む)。"
+                    "raw モードの datasets/<uuid> は map を持たないため、closed-loop UUID の "
+                    "t4_dataset_path/map として symlink する。空なら map 無し (Stage CL1/CL2 スキップ)。")
     ap.add_argument("--input-mode", choices=["annotation", "raw"], default="annotation",
                     help="dataset 解決モード。"
                     "annotation: webauto キャッシュ (annotation_dataset) から解決 (既定・クラウド互換)。"
@@ -590,6 +687,7 @@ def main() -> None:
             "resume": args.resume,
             "webauto_root": str(webauto_root),
             "raw_t4_path": t4_path_str,
+            "closed_loop_map": args.closed_loop_map,
         })
 
     records: list[dict] = []
