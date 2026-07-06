@@ -56,6 +56,7 @@ from driving_log_replayer_v2.real_log_sim_comparison.lib._figures import (  # no
     build_fig_cross_long,
     build_fig_cross_long_tau_pointwise,
     build_fig_cross_steer,
+    build_fig_equation_residual_hist,
     build_fig_kus_single,
     build_fig_long_perf_box,
     build_fig_long_perf_growth,
@@ -443,6 +444,8 @@ def _build_sec1(
     long_perf_figs: tuple[go.Figure, go.Figure, go.Figure] | None = None,
     long_tau_fig: go.Figure | None = None,
     long_tau_hist_fig: go.Figure | None = None,
+    long_resid_hist_fig: go.Figure | None = None,
+    steer_resid_hist_fig: go.Figure | None = None,
 ) -> str:
     """1-0. 座標系と主要な記号の定義 + モデルパラメータの定義を含む sec1 全体 HTML を返す。"""
     kus_rows = _kus_band_table_rows(params)
@@ -505,6 +508,14 @@ def _build_sec1(
     long_tau_html = long_tau_fig.to_html(full_html=False, include_plotlyjs=False) if long_tau_fig is not None else ""
     long_tau_hist_html = (
         long_tau_hist_fig.to_html(full_html=False, include_plotlyjs=False) if long_tau_hist_fig is not None else ""
+    )
+    long_resid_hist_html = (
+        long_resid_hist_fig.to_html(full_html=False, include_plotlyjs=False)
+        if long_resid_hist_fig is not None else ""
+    )
+    steer_resid_hist_html = (
+        steer_resid_hist_fig.to_html(full_html=False, include_plotlyjs=False)
+        if steer_resid_hist_fig is not None else ""
     )
     _vx_min = VX_MIN_CURVE
     _stride = _PERF_STRIDE
@@ -658,6 +669,18 @@ def _build_sec1(
 1-2（縦方向）・1-3（操舵）・1-4（ヨー・横方向）で個別に同定する運動方程式を、実装では一つの状態ベクトルに
 まとめた \\(\\dot{{\\mathbf{{x}}}} = f(\\mathbf{{x}}, \\mathbf{{u}})\\) として扱い、共通の Euler 積分ループで毎ステップ時間発展させている。
 各記号の意味・単位・ROS トピックは <a href="#sec-coords">1-0 の記号表</a>を参照。
+</p>
+<p>
+<b>同定の統一ストーリー</b>: 3 つの状態方程式はいずれも、その自然な線形空間で
+方程式残差 \\(E = \\mathrm{{RHS}}(\\theta) - \\mathrm{{LHS}}\\) を定義できる（縦・操舵は状態微分空間
+\\(\\dot a_{{\\mathrm{{act}}}}, \\dot\\delta_{{\\mathrm{{act}}}}\\)、ヨーは \\(\\tan\\delta\\) 空間に整理した \\(\\dot\\theta\\) 式）。
+以降の各節・診断図では符号を反転した残差 \\(r = \\mathrm{{LHS}} - \\mathrm{{RHS}} = -E\\) を用いる
+（0 中心・低分散が良同定という判定は符号によらない）。
+ヨー \\(k_{{\\mathrm{{us}}}}\\) はこの残差の線形最小二乗を<b>そのまま推定に用いる</b>（残差が \\(\\tan\\delta\\) 空間で
+線形なため良条件）。一方<b>縦・操舵は、状態微分の残差最小化がむだ時間↔時定数トレードオフにより
+\\(\\tau\\) を構造的に膨張させる</b>ため（1-2 ③ 参照）、推定はむだ時間に対して良条件な<b>出力誤差型</b>
+（一次遅れシミュレーションと実測の差の最小化）で行い、\\(E\\) は同定結果の<b>整合診断</b>として全式共通の
+形で提示する。
 </p>
 
 <h3>連続時間の状態方程式（ベクトル形式）</h3>
@@ -857,29 +880,38 @@ a_{{\\mathrm{{sim}}}}[k]
 </p>
 {long_tau_hist_html}
 
-<p><b>③ 左辺・右辺残差と実装上の目的関数</b>:
-\\(\\dot a_{{\\mathrm{{act}}}}\\) 式を実測ログ上でそのまま評価すると、左辺と右辺は
+<p><b>③ 方程式残差 \\(E = \\mathrm{{RHS}} - \\mathrm{{LHS}}\\)（統一診断）</b>:
+\\(\\dot a_{{\\mathrm{{act}}}}\\) 式の左辺（状態微分）と右辺は
 \\[
-\\mathrm{{LHS}}_a[k] =
-\\frac{{a_{{\\mathrm{{real}}}}[k] - a_{{\\mathrm{{real}}}}[k-1]}}{{\\Delta t}},
+\\mathrm{{LHS}}_a[k] = \\widehat{{\\dot a}}_{{\\mathrm{{real}}}}[k],
 \\qquad
 \\mathrm{{RHS}}_a[k;\\tau_a,T_a] =
-\\frac{{u[k] - a_{{\\mathrm{{real}}}}[k-1]}}{{\\tau_a}}
+\\frac{{u[k] - a_{{\\mathrm{{real}}}}[k]}}{{\\tau_a}}
 \\]
-であり、瞬時方程式残差は
+であり、方程式残差は
 \\[
 r^{{\\mathrm{{diff}}}}_a[k;\\tau_a,T_a]
-= \\mathrm{{LHS}}_a[k] - \\mathrm{{RHS}}_a[k;\\tau_a,T_a]
-\\]
-となる。したがって「右辺と左辺の差分」を直接評価関数にするなら、
-\\[
-J^{{\\mathrm{{diff}}}}_a(\\tau_a;T_a)
+= \\mathrm{{LHS}}_a[k] - \\mathrm{{RHS}}_a[k;\\tau_a,T_a],
+\\qquad
+J^{{\\mathrm{{diff}}}}_a
 = \\frac{{1}}{{|\\mathcal{{K}}|}} \\sum_{{k\\in\\mathcal{{K}}}}
-\\left(r^{{\\mathrm{{diff}}}}_a[k;\\tau_a,T_a]\\right)^2
+\\left(r^{{\\mathrm{{diff}}}}_a[k]\\right)^2
 \\]
-である。ただし現在の実装（<code>fit_first_order_delay</code>）は、加速度微分でノイズが増幅する
-この瞬時残差を最適化には使わず、\\(\\dot a_{{\\mathrm{{act}}}}\\) 式を積分した出力誤差を最小化する。
-</p>
+となる。左辺 \\(\\widehat{{\\dot a}}_{{\\mathrm{{real}}}}\\) は加速度微分のノイズを抑えるため
+Savitzky-Golay 平滑化微分で評価し、右辺の回帰子 \\(a_{{\\mathrm{{real}}}}\\) にも同じ平滑化を施す。
+この \\(E = \\mathrm{{RHS}} - \\mathrm{{LHS}}\\) の残差形は<b>操舵（1-3）・ヨー（1-4）と共通</b>であり、
+3 つの状態方程式を単一のストーリーで診断する。</p>
+
+<p><b>ただし \\(J^{{\\mathrm{{diff}}}}_a\\) は目的関数には使わない</b>（診断量として提示するに留める）。理由は 2 つ:
+(1) 加速度微分はノイズを増幅する。(2) より本質的に、実データでは方程式残差最小化は
+<b>むだ時間と \\(\\tau_a\\) のトレードオフ</b>により \\(\\tau_a\\) を構造的に膨張させる
+（瞬時残差は遅れを大きな \\(\\tau_a\\) で吸収するため。実測では縦・操舵とも出力誤差型の 3〜15 倍に
+膨張し、参照実装 <code>vehicle_model_fitting</code> も \\(\\tau_a\\) を上限にクランプして初めて抑えている）。
+そのため<b>パラメータ推定は次項④の出力誤差 \\(J\\)</b>（むだ時間に対して良条件）で行い、
+\\(J^{{\\mathrm{{diff}}}}_a\\) はその同定結果が方程式をどれだけ満たすかの<b>整合診断</b>として扱う。
+下図は同定済み \\((\\tau_a, T_a)\\) における残差 \\(r^{{\\mathrm{{diff}}}}_a[k]\\) の全データセットプール分布で、
+0 中心・低分散なら良同定を意味する。</p>
+{long_resid_hist_html}
 
 <p><b>④ 内側: \\(\\tau_a\\) 一次元最小化</b>: DRIVE ギア・走行中・指令変化ありのサンプル集合
 \\(\\mathcal{{K}}\\) で、次の平均二乗誤差を最小化する。
@@ -970,27 +1002,32 @@ J_{{\\mathrm{{pool}}}}(\\tau_a; T_a) =
 <details>
 <summary>操舵同定の評価関数</summary>
 <p>
-\\(\\dot\\delta_{{\\mathrm{{act}}}}\\) 式を実測ログ上で微分形のまま評価すると、
-左辺・右辺と瞬時方程式残差は
+\\(\\dot\\delta_{{\\mathrm{{act}}}}\\) 式の左辺（状態微分）・右辺と方程式残差は、
+<b>縦（1-2 ③）と共通の \\(E = \\mathrm{{RHS}} - \\mathrm{{LHS}}\\) の形</b>で
 \\[
-\\mathrm{{LHS}}_\\delta[k] =
-\\frac{{\\delta_{{\\mathrm{{act}}}}[k] - \\delta_{{\\mathrm{{act}}}}[k-1]}}{{\\Delta t}},
+\\mathrm{{LHS}}_\\delta[k] = \\widehat{{\\dot\\delta}}_{{\\mathrm{{act}}}}[k],
 \\qquad
 \\mathrm{{RHS}}_\\delta[k;\\tau_\\delta,T_\\delta] =
-\\frac{{\\delta_{{\\mathrm{{des}}}}[k] - \\delta_{{\\mathrm{{act}}}}[k-1]}}{{\\tau_\\delta}},
+\\frac{{\\delta_{{\\mathrm{{des}}}}[k] - \\delta_{{\\mathrm{{act}}}}[k]}}{{\\tau_\\delta}},
 \\]
 \\[
 r^{{\\mathrm{{diff}}}}_\\delta[k;\\tau_\\delta,T_\\delta]
-= \\mathrm{{LHS}}_\\delta[k] - \\mathrm{{RHS}}_\\delta[k;\\tau_\\delta,T_\\delta].
-\\]
-この右辺・左辺差分を直接最小化するなら
-\\[
-J^{{\\mathrm{{diff}}}}_\\delta(\\tau_\\delta;T_\\delta)
+= \\mathrm{{LHS}}_\\delta[k] - \\mathrm{{RHS}}_\\delta[k;\\tau_\\delta,T_\\delta],
+\\qquad
+J^{{\\mathrm{{diff}}}}_\\delta
 = \\frac{{1}}{{|\\mathcal{{K}}_\\delta|}}
 \\sum_{{k\\in\\mathcal{{K}}_\\delta}}
-\\left(r^{{\\mathrm{{diff}}}}_\\delta[k;\\tau_\\delta,T_\\delta]\\right)^2
+\\left(r^{{\\mathrm{{diff}}}}_\\delta[k]\\right)^2
 \\]
-となる。現在の実装は縦方向と同じ <code>fit_first_order_delay</code> を使うため、最適化対象は微分形残差ではなく
+となる（左辺は縦と同じく Savitzky-Golay 平滑化微分で評価）。
+縦方向と同じ理由（微分ノイズ増幅 + むだ時間↔\\(\\tau_\\delta\\) トレードオフによる \\(\\tau_\\delta\\) 膨張）で
+\\(J^{{\\mathrm{{diff}}}}_\\delta\\) は<b>目的関数には使わず整合診断に留める</b>。下図に同定済み
+\\((\\tau_\\delta, T_\\delta)\\) での残差分布を示す（出力誤差型は中点バイアス \\(\\beta\\) を同定しないため、
+残差の直流成分は未モデル化の中点ズレを反映する）。
+</p>
+{steer_resid_hist_html}
+<p>
+<b>パラメータ推定</b>は縦方向と同じ <code>fit_first_order_delay</code>（出力誤差型）を使い、最適化対象は
 \\(\\dot\\delta_{{\\mathrm{{act}}}}\\) 式を積分したモデル出力
 \\[
 \\delta_{{\\mathrm{{sim}}}}[k]
@@ -1041,9 +1078,12 @@ J_\\delta(\\tau_\\delta;T_\\delta)
 </p>
 <p>
 1-2（縦方向）・1-3（操舵追従）が先行して確定した後、
-ヨーレート残差 \\(\\widehat{{\\omega}}-\\omega\\) を目的関数として <b>高曲率サブセット</b> で
-\\(k_{{\\mathrm{{us}}}}\\) を同定する。直進（\\(\\delta_{{\\mathrm{{act}}}}+\\beta \\approx 0\\)）では感度が
-ほぼゼロなので、全データセット集約スコアだけでは \\(k_{{\\mathrm{{us}}}}\\) を同定できない。
+\\(\\dot\\theta\\) 式の残差 \\(E = \\mathrm{{RHS}} - \\mathrm{{LHS}}\\) を <b>高曲率サブセット</b> で最小化して
+\\(k_{{\\mathrm{{us}}}}\\) を同定する。縦・操舵と同じ方程式残差の原理だが、\\(\\dot\\theta\\) 式は
+\\(\\tan\\delta\\) 空間で \\(k_{{\\mathrm{{us}}}}\\) について<b>線形</b>であり、この空間では残差最小化が良条件なため、
+縦・操舵と違い<b>この残差を直接推定に用いる</b>（出力誤差型への迂回が不要）。
+直進（\\(\\delta_{{\\mathrm{{act}}}}+\\beta \\approx 0\\)）では感度がほぼゼロなので、全データセット集約
+スコアだけでは \\(k_{{\\mathrm{{us}}}}\\) を同定できない。
 </p>
 
 <p><b>運動方程式（\\(\\dot x\\) 式・\\(\\dot y\\) 式・\\(\\dot\\theta\\) 式と同じ状態表記）:</b></p>
@@ -1506,6 +1546,8 @@ def build_html(
     closed_loop_html: str = "",
     long_tau_fig: go.Figure | None = None,
     long_tau_hist_fig: go.Figure | None = None,
+    long_resid_hist_fig: go.Figure | None = None,
+    steer_resid_hist_fig: go.Figure | None = None,
 ) -> str:
     score = params.get("_score", "N/A")
     phase14_score = float(score) if isinstance(score, (int, float, str)) and str(score) != "N/A" else 0.0
@@ -1525,6 +1567,7 @@ def build_html(
     sec1 = _build_sec1(
         params, long_fig, steer_fig, kus_fig, n_dataset,
         long_perf_figs=long_perf_figs, long_tau_fig=long_tau_fig, long_tau_hist_fig=long_tau_hist_fig,
+        long_resid_hist_fig=long_resid_hist_fig, steer_resid_hist_fig=steer_resid_hist_fig,
     )
     sec3 = _build_sec3(viewer_sections, label=label)
 
@@ -1946,6 +1989,30 @@ def main() -> None:
                 break
     steer_fig = build_fig_cross_steer(rows_steer)
 
+    # 方程式残差の整合診断 (方針D): 各データセットの出力誤差同定パラメータでの残差 r[k]=LHS−RHS を
+    # 全データセットでプールし分布を示す。目的関数ではなく「同定結果が ODE をどれだけ満たすか」の診断。
+    def _pool_resid(per_ds: dict[str, dict]) -> tuple[list[float], float]:
+        pooled: list[float] = []
+        rmses: list[float] = []
+        for fit in per_ds.values():
+            pooled.extend(fit.get("resid_samples", []) or [])
+            rr = fit.get("rmse_resid", float("nan"))
+            if np.isfinite(rr):
+                rmses.append(float(rr))
+        med = float(np.median(rmses)) if rmses else float("nan")
+        return pooled, med
+
+    _resid_long_pool, _resid_long_med = _pool_resid(per_ds_long)
+    _resid_steer_pool, _resid_steer_med = _pool_resid(per_ds_steer)
+    long_resid_hist_fig = build_fig_equation_residual_hist(
+        _resid_long_pool, channel_label="縦 (dot a_act 式)", unit_label="m/s³",
+        rmse_median=_resid_long_med,
+    )
+    steer_resid_hist_fig = build_fig_equation_residual_hist(
+        _resid_steer_pool, channel_label="操舵 (dot δ_act 式)", unit_label="rad/s",
+        rmse_median=_resid_steer_med,
+    )
+
     # 1-2 縦方向理想追従評価（全 records の先頭 _LONG_PERF_N_DATASET データセットを使用。
     # 計算・描画は lib 共有関数。タイトル文言のみレポート従来表記を labels/title で維持）
     long_perf_records = records[:_LONG_PERF_N_DATASET]
@@ -2011,6 +2078,8 @@ def main() -> None:
         closed_loop_html=closed_loop_html,
         long_tau_fig=long_tau_fig,
         long_tau_hist_fig=long_tau_hist_fig,
+        long_resid_hist_fig=long_resid_hist_fig,
+        steer_resid_hist_fig=steer_resid_hist_fig,
     )
 
     args.out.parent.mkdir(parents=True, exist_ok=True)
