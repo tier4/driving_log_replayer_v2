@@ -2,7 +2,7 @@
 """
 物理的妥当性レポート生成スクリプト
 
-速度依存アンダーステア係数ランプと操舵不感帯の物理的妥当性を、
+アンダーステア係数と操舵不感帯の物理的妥当性を、
 実機ログからの独立同定と理論式の両面から検証する HTML レポートを生成する。
 
 使用法:
@@ -403,36 +403,9 @@ __NOTE_TEXT__
 
 
 def _kus_band_table_rows(params: dict) -> str:
-    """k_us 速度帯パラメータの HTML テーブル行を生成。"""
-    bands = params.get("k_us_bands")
-    thresholds = params.get("k_us_thresholds")
-
-
-
-    if bands is not None and thresholds is not None:
-        rows = []
-        for i, b in enumerate(bands):
-            if i == 0:
-                speed_range = f"\\(v_x\\) &lt; {thresholds[0]:.2f} m/s"
-            elif i < len(thresholds):
-                speed_range = f"{thresholds[i-1]:.2f} ≤ \\(v_x\\) &lt; {thresholds[i]:.2f} m/s"
-            else:
-                speed_range = f"\\(v_x\\) ≥ {thresholds[-1]:.2f} m/s"
-            rows.append(
-                f"  <tr><td><code>k_us_band[{i}]</code></td>"
-                f"<td>{b:.6f} rad·s²/m</td>"
-                f"<td>{speed_range} の \\(k_{{\\mathrm{{us,eff}}}}\\)</td></tr>"
-            )
-        for i, thr in enumerate(thresholds):
-            rows.append(
-                f"  <tr><td><code>k_us_threshold[{i}]</code></td>"
-                f"<td>{thr:.3f} m/s</td>"
-                f"<td>速度帯 {i} → {i+1} の切替閾値</td></tr>"
-            )
-        return "\n".join(rows)
-
+    """k_us パラメータの HTML テーブル行を生成。"""
     k_us = params.get("k_us", 0.0)
-    return f"  <tr><td><code>k_us</code></td><td>{k_us:.6f} rad·s²/m</td><td>アンダーステア係数（速度依存なし）</td></tr>"
+    return f"  <tr><td><code>k_us</code></td><td>{k_us:.6f} rad·s²/m</td><td>アンダーステア係数（全速度域一定）</td></tr>"
 
 
 def _build_sec1(
@@ -456,34 +429,11 @@ def _build_sec1(
             return f"{v:.6g}"
         return str(v)
 
-    bands = params.get("k_us_bands")
-    thresholds = params.get("k_us_thresholds")
-    if bands is not None and thresholds is not None:
-        _kus_rows_p = []
-        for i, b in enumerate(bands):
-            if i == 0:
-                speed_range = f"\\(v_x\\) &lt; {thresholds[0]:.2f} m/s"
-            elif i < len(thresholds):
-                speed_range = f"{thresholds[i-1]:.2f} ≤ \\(v_x\\) &lt; {thresholds[i]:.2f} m/s"
-            else:
-                speed_range = f"\\(v_x\\) ≥ {thresholds[-1]:.2f} m/s"
-            _kus_rows_p.append(
-                f"  <tr><td><code>k_us_band[{i}]</code></td>"
-                f"<td>{_fmt_p(b)} rad·s²/m</td>"
-                f"<td>{speed_range} のアンダーステア係数</td></tr>"
-            )
-        for i, thr in enumerate(thresholds):
-            _kus_rows_p.append(
-                f"  <tr><td><code>k_us_threshold[{i}]</code></td>"
-                f"<td>{_fmt_p(thr)} m/s</td><td>速度帯 {i} → {i+1} の切替閾値</td></tr>"
-            )
-        kus_profile_rows = "\n".join(_kus_rows_p)
-    else:
-        kus_profile_rows = (
-            f"  <tr><td><code>k_us</code></td>"
-            f"<td>{_fmt_p(params.get('k_us', 0.0))} rad·s²/m</td>"
-            f"<td>全速度域で一定のアンダーステア係数</td></tr>"
-        )
+    kus_profile_rows = (
+        f"  <tr><td><code>k_us</code></td>"
+        f"<td>{_fmt_p(params.get('k_us', 0.0))} rad·s²/m</td>"
+        f"<td>全速度域で一定のアンダーステア係数</td></tr>"
+    )
 
 
     def _fmt(v) -> str:  # noqa: E306 (ローカル _fmt。上の _fmt_p とスコープが異なる)
@@ -640,9 +590,9 @@ def _build_sec1(
       <td><code>wheelbase</code></td>
       <td>—（設定パラメータ）</td>
   </tr>
-  <tr><td>\\(k_{{\\mathrm{{us}}}},\ k_{{\\mathrm{{us,eff}}}}(v_x)\\)</td>
-      <td>速度帯ごとのアンダーステア係数と、速度から選ばれる実効値</td><td>rad·s²/m</td>
-      <td><code>k_us_bands / k_us</code></td>
+  <tr><td>\\(k_{{\\mathrm{{us}}}}\\)</td>
+      <td>アンダーステア係数（全速度域一定）</td><td>rad·s²/m</td>
+      <td><code>k_us</code></td>
       <td>—（設定パラメータ）</td>
   </tr>
   <tr><td>\\(\\tau_\\delta\\)</td><td>操舵 1 次遅れ時定数</td><td>s</td>
@@ -726,7 +676,7 @@ DRIVE 系（enum 値 2..19）の時刻だけを残す評価マスクとして適
 \\begin{{pmatrix}}
 {{\\color{{#1565c0}} v_x}} \\cos{{\\color{{#1565c0}} \\theta}} \\\\
 {{\\color{{#1565c0}} v_x}} \\sin{{\\color{{#1565c0}} \\theta}} \\\\
-\\dfrac{{{{\\color{{#1565c0}} v_x}}\\,\\tan({{\\color{{#1565c0}} \\delta_{{\\mathrm{{act}}}}}}+\\beta)}}{{L + k_{{\\mathrm{{us,eff}}}}({{\\color{{#1565c0}} v_x}})\\,{{\\color{{#1565c0}} v_x}}^2}} \\\\
+\\dfrac{{{{\\color{{#1565c0}} v_x}}\\,\\tan({{\\color{{#1565c0}} \\delta_{{\\mathrm{{act}}}}}}+\\beta)}}{{L + k_{{\\mathrm{{us}}}}\\,{{\\color{{#1565c0}} v_x}}^2}} \\\\
 {{\\color{{#1565c0}} a_{{\\mathrm{{act}}}}}} + {{\\color{{#e65100}} a_{{\\mathrm{{slope}}}}}} \\\\
 \\dfrac{{{{\\color{{#e65100}} \\delta_{{\\mathrm{{des}}}}}} - {{\\color{{#1565c0}} \\delta_{{\\mathrm{{act}}}}}}}}{{\\tau_\\delta}} \\\\
 \\dfrac{{{{\\color{{#e65100}} a_{{\\mathrm{{target}}}}}} - {{\\color{{#1565c0}} a_{{\\mathrm{{act}}}}}}}}{{\\tau_a}}
@@ -734,7 +684,7 @@ DRIVE 系（enum 値 2..19）の時刻だけを残す評価マスクとして適
 \\]
 <p class="meta">
 &#128279; \\(\\tau_\\delta, \\beta\\) は <a href="#sec-steer">1-3</a>、\\(\\tau_a\\) は <a href="#sec-long">1-2</a>、
-\\(L, k_{{\\mathrm{{us,eff}}}}\\) は <a href="#sec-yaw">1-4</a> で定義。
+\\(L, k_{{\\mathrm{{us}}}}\\) は <a href="#sec-yaw">1-4</a> で定義。
 </p>
 
 <h3>離散化：Euler 法によるアップデート</h3>
@@ -768,7 +718,7 @@ DRIVE 系（enum 値 2..19）の時刻だけを残す評価マスクとして適
 \\begin{{pmatrix}}
 {{\\color{{#1565c0}} v_{{x,k}}}} \\cos{{\\color{{#1565c0}} \\theta_k}} \\\\
 {{\\color{{#1565c0}} v_{{x,k}}}} \\sin{{\\color{{#1565c0}} \\theta_k}} \\\\
-\\dfrac{{{{\\color{{#1565c0}} v_{{x,k}}}}\\,\\tan({{\\color{{#1565c0}} \\delta_{{\\mathrm{{act}},k}}}}+\\beta)}}{{L + k_{{\\mathrm{{us,eff}}}}({{\\color{{#1565c0}} v_{{x,k}}}})\\,{{\\color{{#1565c0}} v_{{x,k}}}}^2}} \\\\
+\\dfrac{{{{\\color{{#1565c0}} v_{{x,k}}}}\\,\\tan({{\\color{{#1565c0}} \\delta_{{\\mathrm{{act}},k}}}}+\\beta)}}{{L + k_{{\\mathrm{{us}}}}\\,{{\\color{{#1565c0}} v_{{x,k}}}}^2}} \\\\
 {{\\color{{#1565c0}} a_{{\\mathrm{{act}},k}}}} + {{\\color{{#e65100}} a_{{\\mathrm{{slope}},k}}}} \\\\
 \\dfrac{{{{\\color{{#e65100}} \\delta_{{\\mathrm{{des}},k}}}} - {{\\color{{#1565c0}} \\delta_{{\\mathrm{{act}},k}}}}}}{{\\tau_\\delta}} \\\\
 \\dfrac{{{{\\color{{#e65100}} a_{{\\mathrm{{target}},k}}}} - {{\\color{{#1565c0}} a_{{\\mathrm{{act}},k}}}}}}{{\\tau_a}}
@@ -815,7 +765,6 @@ a_{{\\mathrm{{real}}}} := a_{{\\mathrm{{report}}}} - a_{{\\mathrm{{slope}}}}
   <li>\\(\\tau_a\\): 目標加速度へ近づく速さを表す一次遅れ時定数（<code>acc_time_constant</code>）。</li>
   <li>\\(a_{{\\mathrm{{real}}}}\\): 実車ログの勾配補正後加速度。</li>
   <li>\\(a_{{\\mathrm{{sim}}}}\\): モデルから計算した加速度。</li>
-  <li>走行抵抗項（<code>lon_drag_c*</code>）は現在 0 のため省略する。</li>
 </ul>
 
 <h3>実機ログからの独立同定（代表データセットモデルフィット）</h3>
@@ -1071,7 +1020,7 @@ J_\\delta(\\tau_\\delta;T_\\delta)
 </table>
 </section>
 <section id="sec-yaw">
-<h2>1-4. ヨー・横方向（運動学的自転車モデル）— 速度ビン別 最小二乗法同定</h2>
+<h2>1-4. ヨー・横方向（運動学的自転車モデル）— スカラー 最小二乗法同定</h2>
 <p class="meta">
 &#128279; <a href="#sec-state-space">1-1 状態方程式</a> の \\(\\dot x\\) 式・
 \\(\\dot y\\) 式・\\(\\dot\\theta\\) 式に対応。
@@ -1097,56 +1046,51 @@ J_\\delta(\\tau_\\delta;T_\\delta)
 \\begin{{pmatrix}}
 {{\\color{{#1565c0}} v_x}} \\cos{{\\color{{#1565c0}} \\theta}} \\\\
 {{\\color{{#1565c0}} v_x}} \\sin{{\\color{{#1565c0}} \\theta}} \\\\
-\\dfrac{{{{\\color{{#1565c0}} v_x}}\\,\\tan({{\\color{{#1565c0}} \\delta_{{\\mathrm{{act}}}}}}+\\beta)}}{{L + k_{{\\mathrm{{us,eff}}}}({{\\color{{#1565c0}} v_x}})\\,{{\\color{{#1565c0}} v_x}}^2}}
+\\dfrac{{{{\\color{{#1565c0}} v_x}}\\,\\tan({{\\color{{#1565c0}} \\delta_{{\\mathrm{{act}}}}}}+\\beta)}}{{L + k_{{\\mathrm{{us}}}}\\,{{\\color{{#1565c0}} v_x}}^2}}
 \\end{{pmatrix}}
 \\]
 <p><b>式中の定数・補足:</b></p>
 <ul>
   <li>\\(L\\)（<code>wheelbase</code>）: 自転車モデルのホイールベース。</li>
-  <li>\\(k_{{\\mathrm{{us,eff}}}}(v_x)\\): 速度帯ごとの \\(k_{{\\mathrm{{us}}}}\\) から
-  速度 \\(v_x\\) に応じて選ばれる実効値。</li>
+  <li>\\(k_{{\\mathrm{{us}}}}\\): アンダーステア係数（全速度域で一定のスカラー）。</li>
   <li>\\(\\beta\\)（<code>steer_bias</code>）: ヨー式の \\(\\tan(\\cdot)\\) 引数に入るバイアス。系統的なヨーオフセット成分。</li>
   <li>\\(\\delta_{{\\mathrm{{act}}}}\\): 1-3 の操舵追従結果。操舵ゲイン補正倍率による \\(k_{{\\mathrm{{us}}}}\\) の \\(v_x^2\\delta\\) 成分の部分吸収に注意。</li>
 </ul>
 
-<h3>実機ログからの独立同定（全 {n_dataset} データセット、速度ビン別 最小二乗法）</h3>
+<h3>実機ログからの独立同定（全 {n_dataset} データセット、スカラー 最小二乗法）</h3>
 
 <details>
 <summary>推定手法の詳細</summary>
 <p>
 定常旋回フィルタ（\\(|\\omega| > {WZ_MIN}\\) rad/s、\\(|\\dot{{\\omega}}| < {DWZ_MAX}\\) rad/s²、
-\\(v_x > {VX_MIN_CURVE}\\) m/s）を通過した各タイムステップを速度ビンに割り当て、
-ビン内で以下の2種類の推定を行う。
+\\(v_x > {VX_MIN_CURVE}\\) m/s）を通過した全タイムステップを一括して、以下の2種類の推定を行う。
 </p>
-<p><b>① 最小二乗法推定（青丸・実線）</b>: \\(\\dot\\theta\\) 式より
+<p><b>① 最小二乗法推定（青・水平線）</b>: \\(\\dot\\theta\\) 式より
 \\[
 \\omega_i = \\dot\\theta_i
 = \\frac{{v_i\\tan(\\delta_i)}}{{L+k_{{\\mathrm{{us}}}}v_i^2}}
 \\quad\\Longleftrightarrow\\quad
-\\tan(\\delta_i) = \\left(\\frac{{L}}{{v_i}} + k_{{\\mathrm{{us}}}}v_i\\right)\\omega_i .
+\\tan(\\delta_i) - \\frac{{L\\,\\omega_i}}{{v_i}} = k_{{\\mathrm{{us}}}}\\,(v_i\\,\\omega_i) .
 \\]
-速度ビン内では \\(v_i\\) を代表値 \\(\\bar{{v}}_x\\) で近似し、各サンプルの補正済み操舵角を
-\\(\\delta_i := \\delta_{{\\mathrm{{act}},i}} + \\beta\\) と置く。左辺を
-\\(y_i=\\tan(\\delta_i)\\)、右辺の係数を \\(C\\omega_i\\) とした原点回帰の残差は
+各サンプルの補正済み操舵角を \\(\\delta_i := \\delta_{{\\mathrm{{act}},i}} + \\beta\\) と置き、
+\\(x_i = v_i\\,\\omega_i\\)、\\(y_i = \\tan(\\delta_i) - L\\,\\omega_i / v_i\\) とした原点回帰の残差は
 \\[
-r_i(C) = y_i - C\\omega_i .
+r_i(k_{{\\mathrm{{us}}}}) = y_i - k_{{\\mathrm{{us}}}}\\,x_i .
 \\]
-したがって右辺と左辺の差分の二乗和を評価関数にすると
+その二乗和を評価関数にすると
 \\[
-J(C) = \\sum_i \\bigl(y_i - C\\omega_i\\bigr)^2
+J(k_{{\\mathrm{{us}}}}) = \\sum_i \\bigl(y_i - k_{{\\mathrm{{us}}}}\\,x_i\\bigr)^2
 \\]
 であり、その最小二乗解は
 \\[
-C_{{\\mathrm{{OLS}}}} = \\frac{{\\sum \\omega_i \\, \\tan(\\delta_i)}}{{\\sum \\omega_i^2}},
-\\qquad
-\\hat{{k}}_{{\\mathrm{{us}}}} = \\frac{{C_{{\\mathrm{{OLS}}}} - L / \\bar{{v}}_x}}{{\\bar{{v}}_x}}
+\\hat{{k}}_{{\\mathrm{{us}}}} = \\frac{{\\sum_i x_i\\,y_i}}{{\\sum_i x_i^2}}
+= \\frac{{\\sum_i (v_i\\omega_i)\\,\\bigl(\\tan(\\delta_i) - L\\omega_i/v_i\\bigr)}}{{\\sum_i (v_i\\omega_i)^2}}
 \\]
-ここで \\(\\bar{{v}}_x\\) はビン内の速度中央値、\\(L = {WHEELBASE}\\) m はホイールベース。
-この横方向 \\(k_{{\\mathrm{{us}}}}\\) 同定は、実装上もこの左辺・右辺差分
-\\(\\tan(\\delta_i)-C\\omega_i\\) の最小二乗問題として解かれている。
+ここで \\(L = {WHEELBASE}\\) m はホイールベース。十分統計量
+\\(\\sum x_i^2,\\ \\sum x_i y_i\\) は加算的なので、データセット横断でも生サンプル再読込なしにプールできる。
 </p>
 <p><b>② 個別サンプル（IQR バンド）</b>: 実機運動学ログの各タイムステップで瞬時 \\(k_{{\\mathrm{{us}}}}\\) を推定し、
-ビン内の 25〜75 パーセンタイルをバンドとして表示:
+25〜75 パーセンタイルをバンドとして表示:
 \\[
 \\tilde{{k}}_{{\\mathrm{{us}}}}[i] = \\frac{{\\tan(\\delta_i) / \\omega_i - L / v_{{x,i}}}}{{v_{{x,i}}}}
 \\]
@@ -1154,9 +1098,9 @@ C_{{\\mathrm{{OLS}}}} = \\frac{{\\sum \\omega_i \\, \\tan(\\delta_i)}}{{\\sum \\
 </details>
 {kus_html}
 <div class="note">
-<b>解釈</b>: 最小二乗法推定値が低速ビンでほぼ 0、高速ビンで正の値に推移していれば、
-ランプ形状は物理的実態と整合している。ただし J6 の多くのデータセットが低速（\\(v_x\\) mean ≈ 1.9 m/s）
-のため、高速ビンのサンプル数は少なく推定誤差が大きい点に注意（右パネルのサンプル数を参照）。
+<b>解釈</b>: 最小二乗法推定値がモデル設定値 \\(k_{{\\mathrm{{us}}}}\\)（破線）と近ければ整合している。
+ただし直進（\\(\\delta_{{\\mathrm{{act}}}}+\\beta\\approx 0\\)）では感度がほぼゼロで、J6 の多くのデータセットが
+低速（\\(v_x\\) mean ≈ 1.9 m/s）のため、推定誤差が大きい点に注意（凡例のサンプル数 n を参照）。
 </div>
 
 <table class="param-table">
@@ -1231,54 +1175,42 @@ def _build_sec2(kus_fig: go.Figure, n_dataset: int) -> str:
 <h2>2. 実機ログからの独立同定</h2>
 
 <details open>
-<summary>2-1. アンダーステア係数 \\(k_{{\\mathrm{{us}}}}\\) の速度依存性（全 {n_dataset} データセット）</summary>
+<summary>2-1. アンダーステア係数 \\(k_{{\\mathrm{{us}}}}\\) の独立同定（全 {n_dataset} データセット）</summary>
 <details>
 <summary>推定手法の詳細</summary>
 <p>
 定常旋回フィルタ（\\(|\\omega| > {WZ_MIN}\\) rad/s、\\(|\\dot{{\\omega}}| < {DWZ_MAX}\\) rad/s²、
-\\(v_x > {VX_MIN_CURVE}\\) m/s）を通過した各タイムステップを速度ビンに割り当て、
-ビン内で以下の2種類の推定を行う。
+\\(v_x > {VX_MIN_CURVE}\\) m/s）を通過した全タイムステップを一括して、以下の2種類の推定を行う。
 </p>
-<p><b>① 最小二乗法推定（青丸・実線）</b>: \\(\\dot\\theta\\) 式より
+<p><b>① 最小二乗法推定（青・水平線）</b>: \\(\\dot\\theta\\) 式より
 \\[
 \\omega_i = \\dot\\theta_i
 = \\frac{{v_i\\tan(\\delta_i)}}{{L+k_{{\\mathrm{{us}}}}v_i^2}}
 \\quad\\Longleftrightarrow\\quad
-\\tan(\\delta_i) = \\left(\\frac{{L}}{{v_i}} + k_{{\\mathrm{{us}}}}v_i\\right)\\omega_i .
+\\tan(\\delta_i) - \\frac{{L\\,\\omega_i}}{{v_i}} = k_{{\\mathrm{{us}}}}\\,(v_i\\,\\omega_i) .
 \\]
-速度ビン内では \\(v_i\\) を代表値 \\(\\bar{{v}}_x\\) で近似し、各サンプルの補正済み操舵角を
-\\(\\delta_i := \\delta_{{\\mathrm{{act}},i}} + \\beta\\) と置く。左辺を
-\\(y_i=\\tan(\\delta_i)\\)、右辺の係数を \\(C\\omega_i\\) とした原点回帰の残差は
+各サンプルの補正済み操舵角を \\(\\delta_i := \\delta_{{\\mathrm{{act}},i}} + \\beta\\) と置き、
+\\(x_i = v_i\\,\\omega_i\\)、\\(y_i = \\tan(\\delta_i) - L\\,\\omega_i / v_i\\) とした原点回帰の
+最小二乗解は
 \\[
-r_i(C) = y_i - C\\omega_i .
+\\hat{{k}}_{{\\mathrm{{us}}}} = \\frac{{\\sum_i x_i\\,y_i}}{{\\sum_i x_i^2}}
 \\]
-したがって右辺と左辺の差分の二乗和を評価関数にすると
-\\[
-J(C) = \\sum_i \\bigl(y_i - C\\omega_i\\bigr)^2
-\\]
-であり、その最小二乗解は
-\\[
-C_{{\\mathrm{{OLS}}}} = \\frac{{\\sum \\omega_i \\, \\tan(\\delta_i)}}{{\\sum \\omega_i^2}},
-\\qquad
-\\hat{{k}}_{{\\mathrm{{us}}}} = \\frac{{C_{{\\mathrm{{OLS}}}} - L / \\bar{{v}}_x}}{{\\bar{{v}}_x}}
-\\]
-ここで \\(\\bar{{v}}_x\\) はビン内の速度中央値、\\(L = {WHEELBASE}\\) m はホイールベース。
-この横方向 \\(k_{{\\mathrm{{us}}}}\\) 同定は、実装上もこの左辺・右辺差分
-\\(\\tan(\\delta_i)-C\\omega_i\\) の最小二乗問題として解かれている。
+ここで \\(L = {WHEELBASE}\\) m はホイールベース。十分統計量
+\\(\\sum x_i^2,\\ \\sum x_i y_i\\) は加算的なので、データセット横断でも生サンプル再読込なしにプールできる。
 </p>
 <p><b>② 個別サンプル（IQR バンド）</b>: 実機運動学ログの各タイムステップで瞬時 \\(k_{{\\mathrm{{us}}}}\\) を推定し、
-ビン内の 25〜75 パーセンタイルをバンドとして表示:
+25〜75 パーセンタイルをバンドとして表示:
 \\[
 \\tilde{{k}}_{{\\mathrm{{us}}}}[i] = \\frac{{\\tan(\\delta_i) / \\omega_i - L / v_{{x,i}}}}{{v_{{x,i}}}}
 \\]
-チューニング済みランプ曲線（橙色破線）と重ね描きして形状の妥当性を確認する。
+チューニング済み \\(k_{{\\mathrm{{us}}}}\\)（橙色破線）と重ね描きして妥当性を確認する。
 </p>
 </details>
 {kus_html}
 <div class="note">
-<b>解釈</b>: 最小二乗法推定値が低速ビンでほぼ 0、高速ビンで正の値に推移していれば、
-ランプ形状は物理的実態と整合している。ただし J6 の多くのデータセットが低速（\\(v_x\\) mean ≈ 1.9 m/s）
-のため、高速ビンのサンプル数は少なく推定誤差が大きい点に注意（右パネルのサンプル数を参照）。
+<b>解釈</b>: 最小二乗法推定値がモデル設定値 \\(k_{{\\mathrm{{us}}}}\\)（破線）と近ければ整合している。
+ただし直進（\\(\\delta_{{\\mathrm{{act}}}}+\\beta\\approx 0\\)）では感度がほぼゼロで、J6 の多くのデータセットが
+低速（\\(v_x\\) mean ≈ 1.9 m/s）のため、推定誤差が大きい点に注意（凡例のサンプル数 n を参照）。
 </div>
 </details>
 </section>
@@ -1293,7 +1225,7 @@ def _build_sec3(viewer_sections: list[str], label: str = "phase14") -> str:
 <p>
 旋回イベント数 <code>curve_count</code>（\\(|\\kappa| > 0.02\\) m⁻¹、連続弧長 ≥ 10 m）が多い
 代表データセットについて縦横モデル検証ビューアを埋め込む。
-ドロップダウンで <b>{label}</b>（\\(k_{{\\mathrm{{us}}}}\\) ランプ＋<code>steer_dead_band</code> 有効）と
+ドロップダウンで <b>{label}</b>（\\(k_{{\\mathrm{{us}}}}\\)＋<code>steer_dead_band</code> 有効）と
 <b>baseline</b>（\\(k_{{\\mathrm{{us}}}}=0\\), <code>steer_dead_band</code>=0）を切り替えて実機軌跡への一致を比較できる。
 </p>
 {body}
@@ -1691,18 +1623,7 @@ def main() -> None:
     params: dict = yaml_data.get("params", yaml_data)
     params["_score"] = yaml_data.get("score", "N/A")
     print(f"パラメータ: {args.params.name}  (label={phase_label})")
-    # k_us 速度帯表示（新形式 / 後方互換形式 両対応）
-    bands = params.get("k_us_bands")
-    thresholds = params.get("k_us_thresholds")
-    if bands is not None and thresholds is not None:
-        band_str = " | ".join(
-            f"band[{i}]={b:.5f}" for i, b in enumerate(bands)
-        )
-        thr_str = " | ".join(f"thr[{i}]={t:.2f}" for i, t in enumerate(thresholds))
-        print(f"  k_us 速度帯: {band_str}")
-        print(f"  閾値: {thr_str} m/s")
-    else:
-        print(f"  k_us={params.get('k_us', 0):.5f} (速度依存なし)")
+    print(f"  k_us={params.get('k_us', 0):.5f} (全速度域一定)")
     print(f"  steer_dead_band={params.get('steer_dead_band',0):.5f} rad")
 
     # データセット列挙
@@ -1724,11 +1645,10 @@ def main() -> None:
     records = load_all_mcap(ds_list, n_jobs=args.n_jobs)
     print(f"  有効: {len(records)} 件")
 
-    # Phase 2: k_us 速度ビン別 最小二乗法
-    print("\n[Phase 2] k_us 速度ビン別 最小二乗法 ...")
+    # Phase 2: スカラー k_us 最小二乗法
+    print("\n[Phase 2] スカラー k_us 最小二乗法 ...")
     bins = compute_kus_bins(records)
-    n_valid = int(np.isfinite(bins["kus_ols"]).sum())
-    print(f"  有効速度ビン: {n_valid}/{len(bins['kus_ols'])}")
+    print(f"  k_us={bins['k_us']:.5f} (曲線走行サンプル n={bins['n_pts']})")
 
     # Phase 2b: 縦方向 / 操舵 per-dataset 実行時フィット（旧 identify_*_dynamics.py の
     # 事前 CSV 生成を置き換え。best/worst 選定の母集団として全件を並列同定する）
@@ -1897,14 +1817,13 @@ def main() -> None:
     # tuned 設定と baseline 設定（configs = {ラベル: override_params}）
     tuned_keys = [
         "k_us",
-        "k_us_bands", "k_us_thresholds",
         "steer_dead_band", "steer_bias",
         "steer_time_constant", "steer_time_delay",
         "acc_time_constant", "acc_time_delay",
         "debug_steer_scaling_factor", "steer_rate_lim",
     ]
     configs: dict[str, dict] = {
-        f"{phase_label}（アンダーステア係数ランプ＋steer_dead_band）": {
+        f"{phase_label}（アンダーステア係数＋steer_dead_band）": {
             k: params[k] for k in tuned_keys if k in params
         },
         "baseline（アンダーステア係数=0 / steer_dead_band=0）": {
@@ -1945,9 +1864,8 @@ def main() -> None:
     # Phase 4: HTML 組み立て
     print("\n[Phase 4] plotly 図生成 & HTML 組み立て ...")
     kus_fig   = build_fig_kus_single(
-        bins, {"チューニング済み速度帯": params},
-        thresholds=params.get("k_us_thresholds"),
-        title="実機ログからのアンダーステア係数独立同定（速度ビン別 最小二乗法回帰）",
+        bins, {"チューニング済み": params},
+        title="実機ログからのアンダーステア係数独立同定（最小二乗法回帰・スカラー）",
     )
     # 縦方向 / 操舵: 共有ライブラリの実行時フィット (per-dataset フィット結果 + 横断フィット)
     # から best/worst 時系列図を生成する（旧: 事前生成 CSV 依存の build_long_figure /

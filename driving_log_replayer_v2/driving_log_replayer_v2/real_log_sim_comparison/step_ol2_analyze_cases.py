@@ -13,7 +13,7 @@
     ├── physical_validity/
     │   ├── long_fit.fig.json                    # 縦方向モデルフィット (実測/指令/同定値/チューン値)
     │   ├── steer_fit.fig.json                   # 操舵モデルフィット
-    │   └── kus_bins.fig.json                    # k_us(v) 速度ビン別最小二乗法推定
+    │   └── kus_bins.fig.json                    # スカラー k_us 最小二乗法推定
     ├── cases_summary.md   # N=1 詳細 RMSE 表 + horizon 別 RMSE 表 + 物理妥当性サマリ
     └── cases_metrics.json # 上記の機械可読版 ("physical_validity" キーに同定値を含む)
 
@@ -187,8 +187,8 @@ def _physical_validity_summary_lines(pv: dict | None) -> list[str]:
 
     kus_bins = pv.get("kus_bins")
     if kus_bins is not None:
-        n_curve = int(np.sum(kus_bins["n_pts"]))
-        lines.append(f"- **横方向 k_us(v)**: 曲線走行サンプル数={n_curve} (詳細は kus_bins.fig.json)")
+        n_curve = int(kus_bins["n_pts"])
+        lines.append(f"- **横方向 k_us**: 曲線走行サンプル数={n_curve} (詳細は kus_bins.fig.json)")
     else:
         lines.append("- **横方向 k_us(v)**: 曲線走行サンプル不足のため同定不能")
 

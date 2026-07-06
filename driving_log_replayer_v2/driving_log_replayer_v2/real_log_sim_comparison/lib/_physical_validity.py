@@ -12,9 +12,9 @@ notebook (rclpy 無し kernel) からの利用は個別関数の依存を確認�
              (a_act は速度の運動学的微分で重力分力を内包するため、pitch から重力分力を
               引いた a_corr をフィット対象にする。二重計上防止のため a_act 自体には加算しない)
     操舵:   ddelta/dt = (delta_cmd(t-T) - delta_act) / tau
-    横方向: tan(steer_eff) = (L/v + k_us(v)*v) * wz  (原点回帰、k_us は速度ビン別)
+    横方向: tan(steer_eff) = (L/v + k_us*v) * wz  (原点回帰、k_us はスカラー)
 
-collection 横断の k_us(v) は十分統計量 (sum_wz2, sum_wz_ts) の加算プールで再構成できる
+collection 横断の k_us は十分統計量 (sum_x2, sum_xy) の加算プールで再構成できる
 (原点回帰の正規方程式が線形加算的なため、生サンプル再読込は不要)。縦方向の横断フィットは
 非線形遅延グリッドサーチのため十分統計量に還元できず、n_dyn 上位データセットのみ MCAP を
 再読込する (`fit_long_cross_dataset_bounded`)。
@@ -45,7 +45,6 @@ from ._fit_core import (
 )
 from ._fit_core import sim_first_order as _core_sim_first_order
 from ._fit_core import sim_first_order_frac as _core_sim_first_order_frac
-from ._kus_profile import VX_EDGES, _kus_band_label, _kus_step_profile  # noqa: F401  (re-export)
 from ._params_utils import load_sim_params
 from ._validation import require_non_empty_df
 
@@ -353,7 +352,7 @@ def fit_steer_single(bag_path: Path) -> dict | None:
 
 
 # ---------------------------------------------------------------------------
-# 横方向 k_us(v): 速度ビン別最小二乗法 (十分統計量つき、単一/複数データセット両対応)
+# 横方向 k_us: 全速度域一括の原点回帰 (スカラー、十分統計量つき、単一/複数データセット両対応)
 # ---------------------------------------------------------------------------
 def _extract_kus_arrays(bag_path: Path) -> dict | None:
     """k_us 分析用の vx/wz/steer_eff/dwz を単一データセットから抽出する。
@@ -412,12 +411,13 @@ def _extract_kus_arrays(bag_path: Path) -> dict | None:
 
 
 def compute_kus_bins(records: list[dict]) -> dict:
-    """速度ビン別 最小二乗法回帰で k_us(v) を推定する。
+    """全速度域一括の最小二乗法回帰でスカラー k_us を推定する。
 
-    モデル: tan(δ_eff) = (L/v + k_us·v)·ω (原点回帰)。
+    モデル: tan(δ_eff) = (L/v + k_us·v)·ω (原点回帰)。整理すると
+    y = tan(δ_eff) − L·ω/v を x = v·ω に回帰して k_us = Σ(xy)/Σ(x²)。
     records は `_extract_kus_arrays` の返り値の list (単一データセットなら 1 要素)。
-    十分統計量 (sum_wz2/sum_wz_ts) を含めるため、collection 横断側で生サンプルなしに
-    加算的にプール再構成できる (`compute_kus_bins_from_sufficient_stats`)。
+    十分統計量 (sum_x2/sum_xy) は加算的なので、collection 横断側で生サンプルなしに
+    プール再構成できる (`compute_kus_bins_from_sufficient_stats`)。
     """
     all_vx = np.concatenate([r["vx"] for r in records]) if records else np.empty(0)
     all_wz = np.concatenate([r["wz"] for r in records]) if records else np.empty(0)
@@ -436,57 +436,36 @@ def compute_kus_bins(records: list[dict]) -> dict:
     steer_f = all_steer_eff[mask_ok]
     tan_steer = np.tan(np.clip(steer_f, -0.8, 0.8))
 
-    n_bins = len(VX_EDGES) - 1
-    vx_mid = np.empty(n_bins)
-    kus_ols = np.full(n_bins, np.nan)
-    kus_p25 = np.full(n_bins, np.nan)
-    kus_p75 = np.full(n_bins, np.nan)
-    n_pts = np.zeros(n_bins, dtype=int)
-    sum_wz2 = np.zeros(n_bins)
-    sum_wz_ts = np.zeros(n_bins)
+    # 原点回帰 y = k_us·x,  x = v·ω,  y = tan(δ_eff) − L·ω/v
+    x = vx_f * wz_f
+    y = tan_steer - WHEELBASE * wz_f / vx_f if len(vx_f) else np.empty(0)
+    sum_x2 = float(np.sum(x * x))
+    sum_xy = float(np.sum(x * y))
+    n_pts = int(len(vx_f))
+    k_us = sum_xy / sum_x2 if (n_pts >= 10 and sum_x2 > 0) else float("nan")
 
-    for i in range(n_bins):
-        lo, hi = VX_EDGES[i], VX_EDGES[i + 1]
-        mask_bin = (vx_f >= lo) & (vx_f < hi)
-        n = int(mask_bin.sum())
-        n_pts[i] = n
-        vx_mid[i] = (lo + hi) / 2
-        if n < 10:
-            continue
-        vx_b = vx_f[mask_bin]
-        wz_b = wz_f[mask_bin]
-        ts_b = tan_steer[mask_bin]
-        vm = float(np.median(vx_b))
-        vx_mid[i] = vm
-        sum_wz2[i] = float(np.sum(wz_b ** 2))
-        sum_wz_ts[i] = float(np.sum(wz_b * ts_b))
-        # 最小二乗法原点回帰: tan(steer) = C * wz => k_us = (C - L/v) / v
-        C_ols = sum_wz_ts[i] / sum_wz2[i] if sum_wz2[i] > 0 else float("nan")
-        kus_ols[i] = (C_ols - WHEELBASE / vm) / vm
-        # 個別サンプル percentile (外れ値確認用)
-        with np.errstate(divide="ignore", invalid="ignore"):
-            kus_each = (
-                ts_b / np.where(np.abs(wz_b) > 1e-6, wz_b, np.nan) - WHEELBASE / vx_b
-            ) / vx_b
-        kus_each = kus_each[np.isfinite(kus_each)]
-        kus_each = np.clip(kus_each, -K_US_CLIP, K_US_CLIP)
-        if len(kus_each) > 10:
-            kus_p25[i] = float(np.percentile(kus_each, 25))
-            kus_p75[i] = float(np.percentile(kus_each, 75))
+    # 個別サンプル percentile (外れ値確認用)
+    with np.errstate(divide="ignore", invalid="ignore"):
+        kus_each = (
+            tan_steer / np.where(np.abs(wz_f) > 1e-6, wz_f, np.nan) - WHEELBASE / vx_f
+        ) / vx_f
+    kus_each = kus_each[np.isfinite(kus_each)]
+    kus_each = np.clip(kus_each, -K_US_CLIP, K_US_CLIP)
+    kus_p25 = float(np.percentile(kus_each, 25)) if len(kus_each) > 10 else float("nan")
+    kus_p75 = float(np.percentile(kus_each, 75)) if len(kus_each) > 10 else float("nan")
 
     return {
-        "vx_mid": vx_mid,
-        "kus_ols": kus_ols,
+        "k_us": k_us,
+        "n_pts": n_pts,
+        "sum_x2": sum_x2,
+        "sum_xy": sum_xy,
         "kus_p25": kus_p25,
         "kus_p75": kus_p75,
-        "n_pts": n_pts,
-        "sum_wz2": sum_wz2,
-        "sum_wz_ts": sum_wz_ts,
     }
 
 
 def compute_kus_bins_single(bag_path: Path) -> dict | None:
-    """単一データセットの k_us(v) 速度ビン別回帰 (十分統計量つき)。"""
+    """単一データセットのスカラー k_us 回帰 (十分統計量つき)。"""
     rec = _extract_kus_arrays(bag_path)
     if rec is None:
         return None
@@ -494,51 +473,38 @@ def compute_kus_bins_single(bag_path: Path) -> dict | None:
 
 
 def compute_kus_bins_from_sufficient_stats(per_ds_bins: list[dict]) -> dict:
-    """複数データセットの十分統計量 (sum_wz2/sum_wz_ts) を加算的にプールし k_us(v) を再構成する。
+    """複数データセットの十分統計量 (sum_x2/sum_xy) を加算的にプールしスカラー k_us を再構成する。
 
-    原点回帰 tan(steer)=C*wz の正規方程式 C=Σ(wz·ts)/Σ(wz²) は加算的に成り立つため、
+    原点回帰 y=k_us·x の正規方程式 k_us=Σ(xy)/Σ(x²) は加算的に成り立つため、
     生サンプルの再読込なしに全データセット結合と同一の最小二乗解が得られる。
-    IQR (p25/p75) は個別サンプル分布に依存し十分統計量から再構成できないため省略する
-    (NaN のまま返す。描画側は IQR バンドを描かない)。
+    IQR (p25/p75) は個別サンプル分布に依存し十分統計量から再構成できないため省略する。
     """
-    n_bins = len(VX_EDGES) - 1
     if not per_ds_bins:
         return {
-            "vx_mid": (VX_EDGES[:-1] + VX_EDGES[1:]) / 2,
-            "kus_ols": np.full(n_bins, np.nan),
-            "kus_p25": np.full(n_bins, np.nan),
-            "kus_p75": np.full(n_bins, np.nan),
-            "n_pts": np.zeros(n_bins, dtype=int),
+            "k_us": float("nan"),
+            "n_pts": 0,
+            "sum_x2": 0.0,
+            "sum_xy": 0.0,
+            "kus_p25": float("nan"),
+            "kus_p75": float("nan"),
         }
 
-    sum_wz2 = np.zeros(n_bins)
-    sum_wz_ts = np.zeros(n_bins)
-    n_pts = np.zeros(n_bins, dtype=int)
-    weighted_vx_mid = np.zeros(n_bins)
+    sum_x2 = 0.0
+    sum_xy = 0.0
+    n_pts = 0
     for b in per_ds_bins:
-        b_n_pts = np.asarray(b["n_pts"], dtype=int)
-        sum_wz2 += np.nan_to_num(np.asarray(b["sum_wz2"], dtype=float))
-        sum_wz_ts += np.nan_to_num(np.asarray(b["sum_wz_ts"], dtype=float))
-        weighted_vx_mid += b_n_pts * np.nan_to_num(np.asarray(b["vx_mid"], dtype=float))
-        n_pts += b_n_pts
+        sum_x2 += float(np.nan_to_num(b.get("sum_x2", 0.0)))
+        sum_xy += float(np.nan_to_num(b.get("sum_xy", 0.0)))
+        n_pts += int(b.get("n_pts", 0))
 
-    bin_center = (VX_EDGES[:-1] + VX_EDGES[1:]) / 2
-    with np.errstate(invalid="ignore", divide="ignore"):
-        vx_mid = np.where(n_pts > 0, weighted_vx_mid / np.maximum(n_pts, 1), bin_center)
-
-    kus_ols = np.full(n_bins, np.nan)
-    for i in range(n_bins):
-        if n_pts[i] < 10 or sum_wz2[i] <= 0:
-            continue
-        C_ols = sum_wz_ts[i] / sum_wz2[i]
-        kus_ols[i] = (C_ols - WHEELBASE / vx_mid[i]) / vx_mid[i]
-
+    k_us = sum_xy / sum_x2 if (n_pts >= 10 and sum_x2 > 0) else float("nan")
     return {
-        "vx_mid": vx_mid,
-        "kus_ols": kus_ols,
-        "kus_p25": np.full(n_bins, np.nan),
-        "kus_p75": np.full(n_bins, np.nan),
+        "k_us": k_us,
         "n_pts": n_pts,
+        "sum_x2": sum_x2,
+        "sum_xy": sum_xy,
+        "kus_p25": float("nan"),
+        "kus_p75": float("nan"),
     }
 
 
@@ -1055,13 +1021,13 @@ def _bicycle_nstep_perf(
     """純粋自転車モデルの N-step 横方向誤差（ベクトル化）。
 
     gt_steer: 実測操舵角 [rad]（生センサ値。steer_bias は params から適用）
-    params.steer_bias / k_us(v) を C++ モデルと同一式で評価し積分する。
+    params.steer_bias / スカラー k_us を C++ モデルと同一式で評価し積分する。
     Returns: |横方向誤差| [m] 配列（vx > VX_MIN_CURVE な開始点のみ）
     """
     L = WHEELBASE
     beta = float(params.get("steer_bias", 0.0))
-    k_us_arr = _kus_step_profile(gt_vx, params)
-    denom_arr = L + k_us_arr * gt_vx ** 2
+    k_us = float(params.get("k_us", 0.0))
+    denom_arr = L + k_us * gt_vx ** 2
     wz_arr = gt_vx * np.tan(gt_steer + beta) / denom_arr
 
     n = len(gt_x)
@@ -1102,8 +1068,8 @@ def _bicycle_trajectory_full(
     """
     L = WHEELBASE
     beta = float(params.get("steer_bias", 0.0))
-    k_us_arr = _kus_step_profile(gt_vx, params)
-    denom_arr = L + k_us_arr * gt_vx ** 2
+    k_us = float(params.get("k_us", 0.0))
+    denom_arr = L + k_us * gt_vx ** 2
     wz_arr = gt_vx * np.tan(gt_steer + beta) / denom_arr
 
     n = len(gt_vx)
@@ -1381,10 +1347,10 @@ def physical_validity_jsonable(pv: dict | None) -> dict | None:
     kus_bins_json = None
     if kus_bins is not None:
         kus_bins_json = {
-            "vx_mid": [_finite_or_none(v) for v in kus_bins["vx_mid"]],
-            "n_pts": [int(v) for v in kus_bins["n_pts"]],
-            "sum_wz2": [_finite_or_none(v) for v in kus_bins["sum_wz2"]],
-            "sum_wz_ts": [_finite_or_none(v) for v in kus_bins["sum_wz_ts"]],
+            "k_us": _finite_or_none(kus_bins["k_us"]),
+            "n_pts": int(kus_bins["n_pts"]),
+            "sum_x2": _finite_or_none(kus_bins["sum_x2"]),
+            "sum_xy": _finite_or_none(kus_bins["sum_xy"]),
         }
 
     return {"long": _fit(pv.get("long")), "steer": _fit(pv.get("steer")), "kus_bins": kus_bins_json}

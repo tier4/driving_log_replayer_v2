@@ -90,7 +90,6 @@ MAP_BBOX_MARGIN = 10.0
 # params で明示上書きできる (ideal_steer は C++ 側が bias を持たないため 0.0 を明示)。
 _PARAMS_OVERRIDES = {
     "sub_dt": 1.0 / 30.0,
-    "n_substep": 1,
 }
 
 
@@ -157,17 +156,7 @@ def _load_lib() -> ctypes.CDLL:
 
     lib.vm_create_delay_steer_acc_geared_wo_fall_guard.restype = c_void_p
     # 15 base args (vx_lim..k_us)
-    # + 2 array pointers (k_us_thresholds, k_us_band_values) + 1 int (n_kus_bands)
-    # + 5 verification-viewer-parity longitudinal terms
-    # (brake_time_constant, lon_drag_c0, lon_drag_c1, lon_drag_c2)
-    # + 1 int n_substep (Euler sub-steps per outer update() call; 1 = original behaviour)
-    _c_dbl_p_local = ctypes.POINTER(c_double)
-    lib.vm_create_delay_steer_acc_geared_wo_fall_guard.argtypes = (
-        [c_double] * 15 +               # base: vx_lim..k_us
-        [_c_dbl_p_local, _c_dbl_p_local, ctypes.c_int] +  # thresholds, band_values, n_kus_bands
-        [c_double] * 4 +                # brake, drag0/1/2
-        [ctypes.c_int]                  # n_substep
-    )
+    lib.vm_create_delay_steer_acc_geared_wo_fall_guard.argtypes = [c_double] * 15
 
     # taiga_dyn: 14 共通引数 (wo_fall_guard の k_us を除く) + 7 物理パラメータ
     # (mass, inertia_z, lf, lr, cornering_stiffness_front, cornering_stiffness_rear, vx_min_dyn)
@@ -308,20 +297,6 @@ class VehicleModel:
             self._ptr = lib.vm_create_ideal_steer_acc(p["wheelbase"], sub_dt)
             self._steer_bias = 0.0
         elif model_type == "delay_steer_acc_geared_wo_fall_guard":
-            # k_us step-band mode: k_us_bands (list) + k_us_thresholds (list, len = len(bands)-1)
-            # n_kus_bands == 0 → legacy single k_us
-            kus_bands = p.get("k_us_bands", [])
-            kus_thresh = p.get("k_us_thresholds", [])
-            n_kus_bands = len(kus_bands)
-            if n_kus_bands > 0:
-                _c_dbl = ctypes.c_double
-                thresh_arr = (_c_dbl * max(n_kus_bands - 1, 1))(*kus_thresh[:n_kus_bands - 1])
-                bands_arr = (_c_dbl * n_kus_bands)(*kus_bands[:n_kus_bands])
-                thresh_ptr = ctypes.cast(thresh_arr, ctypes.POINTER(_c_dbl))
-                bands_ptr = ctypes.cast(bands_arr, ctypes.POINTER(_c_dbl))
-            else:
-                thresh_ptr = ctypes.cast(None, ctypes.POINTER(ctypes.c_double))
-                bands_ptr = ctypes.cast(None, ctypes.POINTER(ctypes.c_double))
             self._ptr = lib.vm_create_delay_steer_acc_geared_wo_fall_guard(
                 p["vel_lim"],
                 p["steer_lim"],
@@ -338,17 +313,6 @@ class VehicleModel:
                 p.get("debug_acc_scaling_factor", 1.0),
                 p.get("debug_steer_scaling_factor", 1.0),
                 p.get("k_us", 0.0),
-                # step-band arrays (nullptr + n=0 → scalar k_us at all speeds)
-                thresh_ptr,
-                bands_ptr,
-                ctypes.c_int(n_kus_bands),
-                # verification-viewer-parity longitudinal terms (default neutral)
-                p.get("brake_time_constant", 0.0),
-                p.get("lon_drag_c0", 0.0),
-                p.get("lon_drag_c1", 0.0),
-                p.get("lon_drag_c2", 0.0),
-                # Euler sub-steps per outer update() call (1 = original single-step behaviour)
-                int(p["n_substep"]),
             )
             self._steer_bias = p["steer_bias"]
         elif model_type == "taiga_dyn":

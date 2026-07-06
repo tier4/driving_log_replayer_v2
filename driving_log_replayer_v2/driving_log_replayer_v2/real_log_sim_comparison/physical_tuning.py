@@ -62,8 +62,6 @@ K_US_CLIP = 0.05
 # 循環させないこと (常に車両記述由来の値を使う)。
 WHEELBASE = WHEELBASE_SSOT
 
-VX_EDGES = np.array([0.5, 1.0, 1.5, 2.0, 2.5, 3.0, 4.0, 5.0, 6.0, 8.0, 10.0, 12.0])
-
 # 縦/操舵フィットの遅延グリッド (production 固有: DT=0.01 刻みで検証側 1/30 より細かい)。
 # 一次遅れ + 純粋遅延の同定本体は lib._fit_core.fit_first_order_delay (SSOT) に集約。
 DELAY_GRID_LONG = np.arange(0.0, 0.31, 0.01)
@@ -379,49 +377,18 @@ def main() -> None:
         steer_f = steer_all[mask_ok] - params["steer_bias"]
         tan_steer = np.tan(np.clip(steer_f, -0.8, 0.8))
 
-        n_bins = len(VX_EDGES) - 1
-        vx_mid = []
-        kus_ols = []
-        for i in range(n_bins):
-            lo, hi = VX_EDGES[i], VX_EDGES[i + 1]
-            mask_bin = (vx_f >= lo) & (vx_f < hi)
-            n = int(mask_bin.sum())
-            if n < 10:
-                continue
-            vx_b = vx_f[mask_bin]
-            wz_b = wz_f[mask_bin]
-            ts_b = tan_steer[mask_bin]
-            vm = float(np.median(vx_b))
-
-            C_ols = float(np.sum(wz_b * ts_b) / np.sum(wz_b ** 2))
-            k_val = (C_ols - WHEELBASE / vm) / vm
-            k_val = float(np.clip(k_val, -K_US_CLIP, K_US_CLIP))
-            vx_mid.append(vm)
-            kus_ols.append(k_val)
-
-        # 速度閾値 [3.0, 6.0] m/s で区切ってステップ段を決定
-        thresh1 = 3.0
-        thresh2 = 6.0
-        lo_vals = [k for v, k in zip(vx_mid, kus_ols) if v < thresh1]
-        mid_vals = [k for v, k in zip(vx_mid, kus_ols) if thresh1 <= v < thresh2]
-        hi_vals = [k for v, k in zip(vx_mid, kus_ols) if v >= thresh2]
-
-        k_us_lo = float(np.median(lo_vals)) if lo_vals else 0.008
-        k_us_mid = float(np.median(mid_vals)) if mid_vals else 0.008
-        k_us_hi = float(np.median(hi_vals)) if hi_vals else 0.008
-
+        # スカラー原点回帰 y = k_us·x,  x = v·ω,  y = tan(δ) − L·ω/v
+        x = vx_f * wz_f
+        y = tan_steer - WHEELBASE * wz_f / vx_f if len(vx_f) else np.empty(0)
+        sum_x2 = float(np.sum(x * x))
+        sum_xy = float(np.sum(x * y))
+        n_pts = int(len(vx_f))
+        k_us = sum_xy / sum_x2 if (n_pts >= 10 and sum_x2 > 0) else 0.008
         # 下限クリップ (アンダーステア補正として正の値を担保)
-        k_us_lo = max(0.0, k_us_lo)
-        k_us_mid = max(0.0, k_us_mid)
-        k_us_hi = max(0.0, k_us_hi)
+        k_us = float(np.clip(k_us, 0.0, K_US_CLIP))
 
-        params["k_us"] = k_us_hi
-        params["k_us_bands"] = [k_us_lo, k_us_mid, k_us_hi]
-        params["k_us_thresholds"] = [thresh1, thresh2]
-
-        print(f"  同定結果: k_us_lo  (< {thresh1}m/s)  = {k_us_lo:.5f}")
-        print(f"            k_us_mid (3.0-6.0m/s) = {k_us_mid:.5f}")
-        print(f"            k_us_hi  (>= {thresh2}m/s) = {k_us_hi:.5f}")
+        params["k_us"] = k_us
+        print(f"  同定結果: k_us = {k_us:.5f} (曲線走行サンプル n={n_pts})")
 
     # 結果を YAML 出力
     out_dir = args.out.parent

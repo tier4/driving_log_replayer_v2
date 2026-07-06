@@ -28,12 +28,12 @@
 C++の `PEDAL_ACCX` を実加速度 \(a_{\mathrm{act}}\)、`pedal_acc_des` を加速度指令 \(a_{\mathrm{cmd}}\) と読み替える。
 統合ビューア（`viewer.html` のモデル検証タブ）や各種同定・評価スクリプトも、実シミュレータと完全に同期した同一の運動方程式を使用します。
 
-### 縦方向（加速度の1次遅れ + 走行抵抗）
+### 縦方向（加速度の1次遅れ）
 
-$$\dot a_{\mathrm{act}} = -\frac{a_{\mathrm{act}} - a_{\mathrm{target}}}{\tau_{a}}, \qquad a_{\mathrm{target}} = a_{\mathrm{cmd,del}} + \mathrm{poly}(v_x), \qquad \dot v_x = a_{\mathrm{act}} + a_{\mathrm{slope}}$$
+$$\dot a_{\mathrm{act}} = -\frac{a_{\mathrm{act}} - a_{\mathrm{target}}}{\tau_{a}}, \qquad a_{\mathrm{target}} = a_{\mathrm{cmd,del}}, \qquad \dot v_x = a_{\mathrm{act}} + a_{\mathrm{slope}}$$
 
-- \(\tau_a\): **throttle/brake で分離**。\(a_{\mathrm{cmd}}\ge 0\) で `acc_time_constant`、\(a_{\mathrm{cmd}}<0\) で `brake_time_constant`（\(\le 0\) のとき `acc_time_constant` にフォールバック＝単一時定数）。
-- **走行抵抗** \(\mathrm{poly}(v_x)=\) `lon_drag_c0` \(+\) `lon_drag_c1`\(\,v_x +\) `lon_drag_c2`\(\,v_x^2\)。転がり抵抗・空気抵抗を加速度ターゲットに加える。
+- \(\tau_a\): 加速度の1次遅れ時定数 `acc_time_constant`（単一時定数）。
+- **［`DELAY_STEER_ACC_GEARED_FOR_DIFFUSION_PLANNER` 専用の追加項］** throttle/brake で \(\tau_a\) を分離（\(a_{\mathrm{cmd}}<0\) で `brake_time_constant`、\(\le 0\) で `acc_time_constant` にフォールバック）し、走行抵抗 \(\mathrm{poly}(v_x)=\) `lon_drag_c0` \(+\) `lon_drag_c1`\(\,v_x +\) `lon_drag_c2`\(\,v_x^2\) を \(a_{\mathrm{target}}\) に加える。`DELAY_STEER_ACC_GEARED_WO_FALL_GUARD` はこれらを持たない。
 - 指令 \(a_{\mathrm{cmd}}\) は無駄時間（dead time）\(T_a\) = `acc_time_delay` だけ遅延して入る \(a_{\mathrm{cmd,del}}(t) = a_{\mathrm{cmd}}(t - T_a) \cdot K_{\mathrm{acc\_scale}}\)（\(K_{\mathrm{acc\_scale}}\) は `debug_acc_scaling_factor`）。
 - \(a_{\mathrm{slope}}\) は外部入力 `SLOPE_ACCX`（路面勾配による重力加速度成分）。ギア状態（DRIVE/REVERSE/NEUTRAL/停止保持）で速度符号と停止処理が分岐する（geared）。
 - ※ 目標加速度および実加速度は `vel_rate_lim`、車速は `vel_lim` で制限されます。

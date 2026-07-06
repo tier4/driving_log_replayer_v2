@@ -505,9 +505,10 @@ def _pv_jsonable(pv: dict | None) -> dict | None:
     bins_json = None
     if bins is not None:
         bins_json = {
-            "vx_mid": [_finite(v) for v in bins["vx_mid"]],
-            "kus_ols": [_finite(v) for v in bins["kus_ols"]],
-            "n_pts": [int(v) for v in bins["n_pts"]],
+            "k_us": _finite(bins["k_us"]),
+            "n_pts": int(bins["n_pts"]),
+            "sum_x2": _finite(bins["sum_x2"]),
+            "sum_xy": _finite(bins["sum_xy"]),
         }
     cf = pv.get("cross_fit_long")
     cf_json = None

@@ -5,13 +5,10 @@
 十分かを対話的に検証する自己完結 HTML (canvas + インライン JS、plotly 非依存・オフライン動作)。
 
 検証する運動方程式（起点 t0 = シーク時刻から前方積算）:
-  縦  : a' = -(a - a_target) / tau(v)  ,  a_target = a_cmd(t-T) + poly(v)  ,  v' = a
-        加減速で特性が異なるため throttle(a_cmd>=0) と brake(a_cmd<0) で T・tau を分離。
-        速度帯依存も tau(v) = tau0 + slope*v (v は観測 lon_vel) で表現。
-        定常オフセット (転がり抵抗・勾配・空気抵抗) を多項式 poly(v)=p0+p1*v+p2*v^2 で補正
-        (各次 ON/OFF 切替・有効項のみ最小二乗最適化対象)。
+  縦  : a' = -(a - a_target) / tau  ,  a_target = a_cmd(t-T)  ,  v' = a
         停止処理 (geared): v<=v_stop かつブレーキ指令時は a_target=0 (停車保持で実加速度は ~0)、
         速度は 0 下限クランプ (後退なし)。停止保持ブレーキ (cmd=-2 等) の誤差を解消。
+        勾配 ON 時は路面勾配の重力分力 a_slope を c_slope 倍して a_target に加算。
   横  : delta' = -(delta - delta_cmd(t-T_d)) / tau_d        (delta は rad で積分)
         omega = v*tan(delta + beta) / (L + k_us*v^2) ,  theta' = omega
         x' = v*cos(theta) , y' = v*sin(theta) ,  a_y = v*omega
@@ -129,14 +126,10 @@ _HTML_TEMPLATE = r"""<!DOCTYPE html>
     <div class="kcard">
       <div class="khead">縦・加速度</div>
       <div class="krow"><span class="rlbl">accel T</span><input type="range" id="k_t_acc_thr" min="0" max="0.5" step="0.005" value="0.1"><span class="kval" id="v_t_acc_thr"></span></div>
-      <div class="krow"><span class="rlbl">throttle τ</span><input type="range" id="k_tau_acc_thr" min="0.02" max="1.5" step="0.005" value="0.26"><span class="kval" id="v_tau_acc_thr"></span></div>
-      <div class="krow"><span class="rlbl">brake τ</span><input type="range" id="k_tau_acc_brk" min="0.02" max="1.5" step="0.005" value="0.15"><span class="kval" id="v_tau_acc_brk"></span></div>
+      <div class="krow"><span class="rlbl">τ</span><input type="range" id="k_tau_acc_thr" min="0.02" max="1.5" step="0.005" value="0.26"><span class="kval" id="v_tau_acc_thr"></span></div>
     </div>
     <div class="kcard">
-      <div class="khead">縦・補正（定常・連成・停止）</div>
-      <div class="krow"><label><input type="checkbox" id="on_poly0">p₀</label><input type="range" id="k_poly0" min="-1" max="1" step="0.01" value="0" disabled><span class="kval" id="v_poly0"></span></div>
-      <div class="krow"><label><input type="checkbox" id="on_poly1">p₁·v</label><input type="range" id="k_poly1" min="-0.1" max="0.1" step="0.001" value="0" disabled><span class="kval" id="v_poly1"></span></div>
-      <div class="krow"><label><input type="checkbox" id="on_poly2">p₂·v²</label><input type="range" id="k_poly2" min="-0.01" max="0.01" step="0.0001" value="0" disabled><span class="kval" id="v_poly2"></span></div>
+      <div class="khead">縦・補正（勾配・停止）</div>
       <div class="krow"><label><input type="checkbox" id="on_slope" checked>勾配 c·a_slope</label><input type="range" id="k_slope" min="-2" max="2" step="0.05" value="1"><span class="kval" id="v_slope"></span></div>
       <div class="krow"><label><input type="checkbox" id="on_stop" checked>停止 v_stop</label><input type="range" id="k_vstop" min="0" max="1" step="0.05" value="0.2"><span class="kval" id="v_vstop"></span></div>
     </div>
@@ -227,18 +220,13 @@ const DATA = __PAYLOAD_JSON__;
   let optWindowS = 10;     // 最適化窓幅 [s]（シーク位置を起点）
   const cam = { cx: 0, cy: 0, viewW: 100, targetViewW: 100, follow: true, init: false };
   // model: tau/T [s], steer_bias [deg](UI 単位; rollout で rad 変換), k_us [s^2/m]
-  // 縦は throttle/brake で tau・T を分離。tau は定数 (速度依存にしない。poly(v) と交絡するため)。
+  // tau は定数 (速度依存にしない)。
   const model = {
     tau_acc_thr: DATA.model_seed.tau_acc_thr, t_acc_thr: DATA.model_seed.t_acc_thr,
-    tau_acc_brk: DATA.model_seed.tau_acc_brk,
-    poly0: DATA.model_seed.poly0, poly1: DATA.model_seed.poly1, poly2: DATA.model_seed.poly2,
-    polyOn0: false, polyOn1: false, polyOn2: false, // 多項式補正の各次 ON/OFF (既定 OFF)
     v_stop: DATA.model_seed.v_stop, stopHandling: true, // 停止処理 (既定 ON)
     c_slope: DATA.model_seed.c_slope, slopeOn: true, // 勾配重力 (a_target += c_slope·a_slope, 既定 ON)
     tau_steer: DATA.model_seed.tau_steer, t_steer: DATA.model_seed.t_steer,
     k_us: DATA.model_seed.k_us,
-    k_us_bands: DATA.model_seed.k_us_bands ?? null,
-    k_us_thresholds: DATA.model_seed.k_us_thresholds ?? null,
     steer_bias: DATA.model_seed.steer_bias * RAD2DEG, // rad→deg (β つまみは度表示)
     // C++ debug_steer_scaling_factor: steer_des = sat(cmd, lim) * scaling (飽和後に乗算)
     steer_scaling: DATA.model_seed.steer_scaling ?? 1.0,
@@ -251,22 +239,13 @@ const DATA = __PAYLOAD_JSON__;
     // t-d でサンプリング)。既定は seed（run のモデル種別）由来、無ければ false で旧挙動維持。
     fullRhsDelay: DATA.model_seed.full_rhs_delay ?? false,
   };
-  // 縦 定常補正 多項式 poly(v)=p0+p1·v+p2·v²（有効な次のみ加算）。a_target に足す。
-  function polyAccel(v) {
-    let p = 0;
-    if (model.polyOn0) p += model.poly0;
-    if (model.polyOn1) p += model.poly1 * v;
-    if (model.polyOn2) p += model.poly2 * v * v;
-    return p;
-  }
   // 縦 加速度の目標値。停止処理 ON 時は v<=v_stop かつブレーキ指令(u<0)で 0（停車保持）。
-  // カーブ抵抗 ON 時は観測 a_y=v·wz の2乗を c_corner 倍して加算（縦横連成・観測量を回帰子に）。
   // 勾配 ON 時は路面勾配の重力分力 a_slope=9.81·sin(pitch)（観測量）を c_slope 倍して加算。
   // simple_planning_simulator の acc_des = acc_cmd + acc_by_slope と同形（c_slope=1 でプラント一致）。
+  // wz 引数は full-RHS 遅延経路との signature 互換のため残すが本体では未使用。
   function accelTarget(u, v, wz, slopeAcc) {
     if (model.stopHandling && v <= model.v_stop && u < 0) return 0;
-    let t = u + polyAccel(v);
-    if (model.cornerOn) { const ay = v * wz; t += model.c_corner * ay * ay; }
+    let t = u;
     if (model.slopeOn) t += model.c_slope * slopeAcc;
     return t;
   }
@@ -349,8 +328,7 @@ const DATA = __PAYLOAD_JSON__;
     if (a == null || v == null || dDeg0 == null) return null;
     let delta = dDeg0 * DEG;        // rad
     let yaw = st0.yaw, x = st0.x, y = st0.y;
-    // 縦: throttle/brake で tau を分離。delay T は共通。
-    const tauThr = Math.max(model.tau_acc_thr, 0.02), tauBrk = Math.max(model.tau_acc_brk, 0.02);
+    const tauThr = Math.max(model.tau_acc_thr, 0.02);
     const TaThr = model.t_acc_thr;
     const tauD = Math.max(model.tau_steer, 1e-3);
     const Td = model.t_steer;
@@ -363,22 +341,13 @@ const DATA = __PAYLOAD_JSON__;
     const aHist = makeHist(), dHist = makeHist();
     const nTaSteps = Math.round(TaThr / h), nTdSteps = Math.round(Td / h);
 
-    // アンダーステア勾配 (k_us) 計算。C++ 版と同様に step bands (k_us_bands/k_us_thresholds) またはスカラー k_us を適用。
-    const kusEff = (vv) => {
-      const bands = model.k_us_bands, thresh = model.k_us_thresholds;
-      if (bands && bands.length > 0 && thresh) {
-        for (let i = 0; i < thresh.length; i++) {
-          if (vv < thresh[i]) return bands[i];
-        }
-        return bands[bands.length - 1];
-      }
-      return model.k_us;
-    };
+    // アンダーステア勾配 (k_us) はスカラー。
+    const kusEff = (vv) => model.k_us;
 
     // ウォームアップ: t0 より前から a・delta を積分して内部状態を温める。
     // 幅 W = 無駄時間 + 時定数×3（1次遅れが定常に近づくのに要する時間）。
     // yaw/x/y はウォームアップ後に t0 の観測値でリセットするため更新しない。
-    const W = Math.max(TaThr, Td) + Math.max(tauThr, tauBrk, tauD) * 3;
+    const W = Math.max(TaThr, Td) + Math.max(tauThr, tauD) * 3;
     const t0Warm = Math.max(0, t0 - W);
     { const aW = chanAt("accel", t0Warm);    if (aW != null) a = aW; }
     { const vW = chanAt("lon_vel", t0Warm);  if (vW != null) v = vW; }
@@ -420,8 +389,7 @@ const DATA = __PAYLOAD_JSON__;
         } else {
           const u = chanAt("cmd_accel", tt - TaThr) ?? lastDrive;
           lastDrive = u;
-          const throttle = (u >= 0);
-          const tauA = throttle ? tauThr : tauBrk;
+          const tauA = tauThr;
           const wzo = chanAt("wz", tt);
           const sa = chanAt("slope_acc", tt);  // slope は current（C++: SLOPE は VX 式・非遅延）
           // full-RHS: 状態 a と drag/corner の車体状態 (v, wz) を t-d で評価。useFull=false で現在値に退化。
@@ -453,16 +421,15 @@ const DATA = __PAYLOAD_JSON__;
         const tt = t + s * h;
         if (useFull) { aHist.push(a); dHist.push(delta); }
         const vl = chanAt("lon_vel", tt);
-        const vv = (vl != null) ? vl : v;   // 観測速度 (poly(v)・横チェーンで共用)
+        const vv = (vl != null) ? vl : v;   // 観測速度 (横チェーンで共用)
         // 縦: 既定はモデル(1次遅れ)。ideal 時は観測加速度をそのまま採用(実車と完全一致の仮定)。
         if (ideal) {
           const ao = chanAt("accel", tt); if (ao != null) a = ao;
         } else {
           const u = chanAt("cmd_accel", tt - TaThr) ?? lastDrive;
           lastDrive = u;
-          const throttle = (u >= 0);
-          const tauA = throttle ? tauThr : tauBrk; // 定数 (下限クランプ済み)
-          const wzo = chanAt("wz", tt); // カーブ抵抗の回帰子 a_y=v·wz 用 (観測)
+          const tauA = tauThr; // 定数 (下限クランプ済み)
+          const wzo = chanAt("wz", tt); // 観測ヨーレート (full-RHS 遅延経路で参照)
           const sa = chanAt("slope_acc", tt); // 勾配重力項 a_slope=9.81·sin(pitch) (観測・current)
           // C++: pedal_acc_des = sat(cmd_acc, lim) * debug_acc_scaling_factor
           const uScaled = u * model.acc_scaling;
@@ -505,36 +472,23 @@ const DATA = __PAYLOAD_JSON__;
     if (!seed) return null;
     const sv = {
       k_us: model.k_us,
-      k_us_bands: model.k_us_bands, k_us_thresholds: model.k_us_thresholds,
       steer_dead_band: model.steer_dead_band,
       tau_acc_thr: model.tau_acc_thr, t_acc_thr: model.t_acc_thr,
-      tau_acc_brk: model.tau_acc_brk,
       tau_steer: model.tau_steer, t_steer: model.t_steer,
       steer_bias: model.steer_bias,
       steer_scaling: model.steer_scaling, acc_scaling: model.acc_scaling,
-      poly0: model.poly0, poly1: model.poly1, poly2: model.poly2,
-      polyOn0: model.polyOn0, polyOn1: model.polyOn1, polyOn2: model.polyOn2,
       c_slope: model.c_slope,
       fullRhsDelay: model.fullRhsDelay,
     };
     model.k_us         = seed.k_us         ?? sv.k_us;
-    model.k_us_bands      = seed.k_us_bands      ?? sv.k_us_bands;
-    model.k_us_thresholds = seed.k_us_thresholds ?? sv.k_us_thresholds;
     model.steer_dead_band = seed.steer_dead_band ?? sv.steer_dead_band;
     model.tau_acc_thr = seed.tau_acc_thr ?? sv.tau_acc_thr;
     model.t_acc_thr   = seed.t_acc_thr   ?? sv.t_acc_thr;
-    model.tau_acc_brk = seed.tau_acc_brk ?? sv.tau_acc_brk;
     model.tau_steer   = seed.tau_steer   ?? sv.tau_steer;
     model.t_steer     = seed.t_steer     ?? sv.t_steer;
     if (seed.steer_bias != null) model.steer_bias = seed.steer_bias * RAD2DEG;
     model.steer_scaling = seed.steer_scaling ?? sv.steer_scaling;
     model.acc_scaling   = seed.acc_scaling   ?? sv.acc_scaling;
-    model.poly0 = seed.poly0 ?? sv.poly0;
-    model.poly1 = seed.poly1 ?? sv.poly1;
-    model.poly2 = seed.poly2 ?? sv.poly2;
-    model.polyOn0 = Math.abs(model.poly0) > 1e-9;
-    model.polyOn1 = Math.abs(model.poly1) > 1e-9;
-    model.polyOn2 = Math.abs(model.poly2) > 1e-9;
     model.c_slope  = seed.c_slope  ?? sv.c_slope;
     // baseline も自身のモデル種別の遅延モードで描画（seed に無ければ現在値を維持）。
     model.fullRhsDelay = seed.full_rhs_delay ?? sv.fullRhsDelay;
@@ -644,20 +598,16 @@ $("errpanels").addEventListener("change", (e) => { showErr = e.target.checked; m
   const fmtDeg = (v) => v.toFixed(2) + "°";
   setupKnob("k_t_acc_thr", "v_t_acc_thr", "t_acc_thr", fmtS);
   setupKnob("k_tau_acc_thr", "v_tau_acc_thr", "tau_acc_thr", fmtS);
-  setupKnob("k_tau_acc_brk", "v_tau_acc_brk", "tau_acc_brk", fmtS);
   setupKnob("k_t_steer", "v_t_steer", "t_steer", fmtS);
   setupKnob("k_tau_steer", "v_tau_steer", "tau_steer", fmtS);
   setupKnob("k_steer_sc", "v_steer_sc", "steer_scaling", (v) => v.toFixed(3) + "×");
   setupKnob("k_kus", "v_kus", "k_us", fmtKus);
   setupKnob("k_bias", "v_bias", "steer_bias", fmtDeg);
 
-  setupKnob("k_poly0", "v_poly0", "poly0", (v) => v.toFixed(3));
-  setupKnob("k_poly1", "v_poly1", "poly1", (v) => v.toFixed(4));
-  setupKnob("k_poly2", "v_poly2", "poly2", (v) => v.toFixed(5));
   setupKnob("k_vstop", "v_vstop", "v_stop", (v) => v.toFixed(2) + "m/s");
   setupKnob("k_slope", "v_slope", "c_slope", (v) => v.toFixed(2));
 
-  // 多項式補正の各次 ON/OFF。OFF 時は係数を model から除外（=0扱い）し最適化対象からも外す。
+  // トグル ON/OFF。OFF 時はスライダを無効化し最適化対象からも外す。
   function setupPolyToggle(cbId, sliderId, onKey) {
     const cb = $(cbId), sl = $(sliderId);
     cb.addEventListener("change", () => {
@@ -666,9 +616,6 @@ $("errpanels").addEventListener("change", (e) => { showErr = e.target.checked; m
       markDirty();
     });
   }
-  setupPolyToggle("on_poly0", "k_poly0", "polyOn0");
-  setupPolyToggle("on_poly1", "k_poly1", "polyOn1");
-  setupPolyToggle("on_poly2", "k_poly2", "polyOn2");
   setupPolyToggle("on_slope", "k_slope", "slopeOn"); // 勾配重力 (既定 ON, k_slope は既定有効)
   // 停止処理トグル（既定 ON）。OFF で v_stop つまみを無効化。
   $("on_stop").addEventListener("change", (e) => {
@@ -684,7 +631,7 @@ $("errpanels").addEventListener("change", (e) => { showErr = e.target.checked; m
 
   // -------------------------------------------------- 最小二乗最適化（全区間・出力誤差）
   // 各サブシステムを独立にフィット（運動方程式が階層的に分離できるため）:
-  //   縦a: 1次遅れ(throttle/brake分離・τ(v)) を観測 accel に, 横δ: 1次遅れを観測 steer に,
+  //   縦a: 1次遅れ を観測 accel に, 横δ: 1次遅れを観測 steer に,
   //   自転車ω: v·tan(δ+β)/(L+k_us·v²)(代数式・観測δ/v) を観測 wz に当て込む。
   // a・δ は安定フィルタ, ω は代数式なので全区間積分してもドリフトせず, 出力誤差最小化が
   // 表示中の赤線一致と一致する（速度・位置は積分でドリフトするため目的量にしない）。
@@ -700,13 +647,13 @@ $("errpanels").addEventListener("change", (e) => { showErr = e.target.checked; m
     return (a + b) / 2;
   }
 
-  // 縦 accel を全区間で前方積算（throttle/brake 分離・定数 τ）。戻り: Float64Array(N) (NaN=無効)。
+  // 縦 accel を全区間で前方積算（定数 τ）。戻り: Float64Array(N) (NaN=無効)。
   function simAccelSeries() {
     let i0 = 0; while (i0 < N && run.ch.accel[i0] == null) i0++;
     const out = new Float64Array(N).fill(NaN);
     if (i0 >= N) return out;
     let a = run.ch.accel[i0];
-    const tauThr = Math.max(model.tau_acc_thr, 0.02), tauBrk = Math.max(model.tau_acc_brk, 0.02);
+    const tauThr = Math.max(model.tau_acc_thr, 0.02);
     const Tthr = model.t_acc_thr;
     const outDt = 1 / RATE, h = outDt / SUBSTEP;
     // full-RHS（新モデル）: 状態 a と drag/corner の (v, wz) を t-d で評価。warmup が無いため最初の
@@ -724,9 +671,8 @@ $("errpanels").addEventListener("change", (e) => { showErr = e.target.checked; m
         const vl = chanAt("lon_vel", tt); const vv = (vl != null) ? vl : 0;
         const u = chanAt("cmd_accel", tt - Tthr) ?? lastDrive;
         lastDrive = u;
-        const throttle = (u >= 0);
-        const tau = throttle ? tauThr : tauBrk; // 定数 (下限クランプ済み)
-        const wzo = chanAt("wz", tt); // カーブ抵抗の回帰子 a_y=v·wz 用 (観測)
+        const tau = tauThr; // 定数 (下限クランプ済み)
+        const wzo = chanAt("wz", tt); // 観測ヨーレート (full-RHS 遅延経路で参照)
         const sa = chanAt("slope_acc", tt); // 勾配重力項 (観測・current・非遅延)
         const aFb = useFull ? aHist.at(nTaSteps) : a;
         const vAcc = useFull ? (chanAt("lon_vel", tt - Tthr) ?? vv) : vv;
@@ -787,22 +733,13 @@ $("errpanels").addEventListener("change", (e) => { showErr = e.target.checked; m
   }
   const residAccel = () => mseSeries(simAccelSeries(), "accel");
   const residSteer = () => mseSeries(simSteerSeries(), "steer");
-  // 自転車 ω=v·tan(δ_obs+β)/(L+k_us_eff·v²) を観測 wz に当て込む（代数式・積分なし）。
+  // 自転車 ω=v·tan(δ_obs+β)/(L+k_us·v²) を観測 wz に当て込む（代数式・積分なし）。
   function residBicycle() {
     const beta = model.steer_bias * DEG;
     const wzA = run.ch.wz, dA = run.ch.steer, vA = run.ch.lon_vel;
     const [iLo, iHi] = optIndexRange();
-    // kusEffStatic: rollout 内の kusEff と同じロジック（ローカルクロージャ不可のため再定義）
-    const kusEffStatic = (vv) => {
-      const bands = model.k_us_bands, thresh = model.k_us_thresholds;
-      if (bands && bands.length > 0 && thresh) {
-        for (let i = 0; i < thresh.length; i++) {
-          if (vv < thresh[i]) return bands[i];
-        }
-        return bands[bands.length - 1];
-      }
-      return model.k_us;
-    };
+    // k_us はスカラー。
+    const kusEffStatic = (vv) => model.k_us;
     let se = 0, n = 0;
     for (let i = iLo; i <= iHi; i++) {
       const wz = wzA[i], dd = dA[i], vv = vA[i];
@@ -835,12 +772,9 @@ $("errpanels").addEventListener("change", (e) => { showErr = e.target.checked; m
     markDirty();
     return { before, after };
   }
-  // 縦の最適化キー: 基本(T/τ) + 有効な多項式補正の各次のみ。
+  // 縦の最適化キー: 基本(T/τ)。
   function lonKeys() {
-    const k = ["t_acc_thr", "tau_acc_thr", "tau_acc_brk"];
-    if (model.polyOn0) k.push("poly0");
-    if (model.polyOn1) k.push("poly1");
-    if (model.polyOn2) k.push("poly2");
+    const k = ["t_acc_thr", "tau_acc_thr"];
     // c_slope は物理事実（lon_slope_gain=1.0 固定）のためフィット対象から除外。
     // 平坦路 bag では不可同定になり他の縦誤差と交絡するリスクがある。
     // 感度探索には手動スライダ（k_slope）を使うこと。
@@ -867,13 +801,9 @@ $("errpanels").addEventListener("change", (e) => { showErr = e.target.checked; m
   function applyModelSeed(seed) {
     if (!seed) return;
     model.tau_acc_thr = seed.tau_acc_thr; model.t_acc_thr = seed.t_acc_thr;
-    model.tau_acc_brk = seed.tau_acc_brk;
-    model.poly0 = seed.poly0; model.poly1 = seed.poly1; model.poly2 = seed.poly2;
     model.c_slope = (seed.c_slope != null) ? seed.c_slope : 1.0; // 勾配ゲイン (toggle は維持)
     model.tau_steer = seed.tau_steer; model.t_steer = seed.t_steer;
     model.k_us = seed.k_us;
-    model.k_us_bands      = seed.k_us_bands      ?? null;
-    model.k_us_thresholds = seed.k_us_thresholds ?? null;
     model.steer_bias = seed.steer_bias * RAD2DEG; // seed は rad、つまみは deg
     model.steer_scaling = seed.steer_scaling ?? 1.0;
     model.acc_scaling = seed.acc_scaling ?? 1.0;
@@ -881,16 +811,6 @@ $("errpanels").addEventListener("change", (e) => { showErr = e.target.checked; m
     // 遅延モード（旧/新モデル）も seed から反映しトグルへ同期。
     model.fullRhsDelay = seed.full_rhs_delay ?? false;
     { const cb = $("on_fullrhs"); if (cb) cb.checked = !!model.fullRhsDelay; }
-    // poly(v) は係数が非ゼロなら自動 ON にしてつまみ有効化
-    const setTog = (valKey, onKey, cbId, slId) => {
-      const on = Math.abs(model[valKey]) > 1e-9;
-      model[onKey] = on;
-      const cb = $(cbId); if (cb) cb.checked = on;
-      const sl = $(slId); if (sl) sl.disabled = !on;
-    };
-    setTog("poly0", "polyOn0", "on_poly0", "k_poly0");
-    setTog("poly1", "polyOn1", "on_poly1", "k_poly1");
-    setTog("poly2", "polyOn2", "on_poly2", "k_poly2");
     for (const k of Object.keys(knobReg)) syncKnob(k);
     markDirty();
   }

@@ -39,7 +39,6 @@ from . import step_ol1_analyze_nstep as s5
 from .lib._collection import discover_collection
 from .lib._models_config import load_models_doc
 from .lib._io import resolve_lite_bag
-from .lib._params_utils import normalize_kus_step_bands
 from .lib._multi_agg import (
     HORIZONS, WORST_W,
     acc_score, aggregate_normalized,
@@ -335,7 +334,6 @@ def _run_worker(
                 "acc_time_delay", DELAY_CANDIDATES
             )
 
-        params = normalize_kus_step_bands(params)
         agg = _eval_grid(None, ctxs_search, [params], cur_model, 1, agg_fn=None)[0]
         score = score_fn(agg, worst_w=worst_w)
 
@@ -384,17 +382,15 @@ def robust_search(
           連続値 (suggest_float)。TPE が実数空間を滑らかに探索する。
       acc_time_delay: 離散 (suggest_categorical)。値を離散に保つことで gt_cache を
           全 trial で完全ヒットさせ COW 共有の効率を維持する。
-    n_substep 等その他のパラメータは case_name の scenario.yaml 定義値を固定継承する。
+    その他のパラメータは case_name の scenario.yaml 定義値を固定継承する。
     warm start: trial 0 に scenario.yaml の case_name 定義値を、extra_enqueue 指定時は
         続く trial に追加 params を投入する。
 
     phase: 0=全パラメータ同時最適化(既定), 1=acc のみ/long スコア, 2=steer のみ/yaw+lat スコア。
     phase_fixed_params: phase=2 で acc 系を固定する値 (Phase 1 の --out YAML から読み込む)。
-    base_override: 直接同定 (--phase-params) の全 params。CONTINUOUS_SPACE / acc_time_delay /
-        k_us_bands·k_us_thresholds を除くキー (= steer_time_delay/steer_rate_lim 等) を cur_best に
-        透過し、Optuna が探索しない同定値を tuned_params.yaml → apply → closed_loop まで届ける。
-        k_us_bands はステップバンド適用時に scalar k_us 探索をシャドウ (bands 優先) するため除外し、
-        専用ステップで扱う。
+    base_override: 直接同定 (--phase-params) の全 params。CONTINUOUS_SPACE / acc_time_delay を
+        除くキー (= steer_time_delay/steer_rate_lim 等) を cur_best に透過し、Optuna が探索しない
+        同定値を tuned_params.yaml → apply → closed_loop まで届ける。
     """
     def _checkpoint(params: dict, score: float) -> None:
         if out_path is None:
@@ -409,7 +405,7 @@ def robust_search(
 
     ctxs_search = ctxs[:search_subsample] if search_subsample else ctxs
     cur_case = cfg.find_case(case_name)
-    cur_best = normalize_kus_step_bands(dict(cur_case.params))
+    cur_best = dict(cur_case.params)
     cur_model = cur_case.vehicle_model_type
 
     if search_subsample:
@@ -465,14 +461,12 @@ def robust_search(
 
     # Step 1.5: 直接同定 (--phase-params) の値のうち Optuna が探索しないキーを cur_best に透過。
     # これで fit_lon/fit_steer が出した param が既定で tuned_params.yaml → apply → closed_loop に届く。
-    # 除外: CONTINUOUS_SPACE (Optuna が上書き探索) / acc_time_delay (categorical 探索) /
-    #       k_us_bands·k_us_thresholds (scalar k_us 探索をシャドウ; 専用ステップで扱う)。
+    # 除外: CONTINUOUS_SPACE (Optuna が上書き探索) / acc_time_delay (categorical 探索)。
     if base_override:
-        searched = set(CONTINUOUS_SPACE) | {"acc_time_delay", "k_us_bands", "k_us_thresholds"}
+        searched = set(CONTINUOUS_SPACE) | {"acc_time_delay"}
         passthrough = {k: v for k, v in base_override.items() if k not in searched}
         if passthrough:
             cur_best.update(passthrough)
-            cur_best = normalize_kus_step_bands(cur_best)
             print(f"[Phase {phase}] 直接同定値を透過 (Optuna 非探索): {sorted(passthrough)}")
 
     # gt 事前計算 (fork 前に親で完了し COW 共有)
@@ -525,7 +519,6 @@ def robust_search(
                 if explore_delay:
                     params["acc_time_delay"] = trial.suggest_categorical("acc_time_delay", DELAY_CANDIDATES)
 
-                params = normalize_kus_step_bands(params)
                 agg = _eval_grid(None, ctxs_search, [params], cur_model, 1, agg_fn=None)[0]
                 score = score_fn(agg, worst_w=worst_w)
                 if score < best_result["score"]:
@@ -901,7 +894,7 @@ def main() -> None:
             p = Path(path_str)
             with p.open("r") as f:
                 data = yaml.safe_load(f)
-            extra_enqueue.append(normalize_kus_step_bands(data["params"]))
+            extra_enqueue.append(data["params"])
         print(f"[INFO] extra enqueue: {len(extra_enqueue)} params loaded")
 
     phase_fixed_params: dict | None = None
@@ -910,7 +903,7 @@ def main() -> None:
         p = Path(args.phase_params)
         with p.open("r") as f:
             phase_data = yaml.safe_load(f)
-        all_params = normalize_kus_step_bands(phase_data.get("params", phase_data))
+        all_params = phase_data.get("params", phase_data)
         base_override = all_params
         acc_keys = {"acc_time_constant", "acc_time_delay"}
         if args.phase == 2:

@@ -64,21 +64,6 @@ def main():
     else:
         print(f"[WARN] Target model '{args.model}' not found in scenario.yaml models registry")
 
-    # Update best_normal_substep if present
-    substep_model = f"{args.model}_substep"
-    if substep_model in models:
-        if not isinstance(models[substep_model], dict):
-            models[substep_model] = {}
-        if "params" not in models[substep_model] or not isinstance(models[substep_model]["params"], dict):
-            models[substep_model]["params"] = {}
-        
-        # Apply parameters while preserving n_substep if it exists
-        n_substep = models[substep_model]["params"].get("n_substep", 10)
-        for k, v in tuned_params.items():
-            models[substep_model]["params"][k] = v
-        models[substep_model]["params"]["n_substep"] = n_substep
-        print(f"[INFO] Applied tuned parameters to '{substep_model}' (n_substep={n_substep})")
-
     # Write output
     out_path = args.out if args.out else args.scenario
     out_path.parent.mkdir(parents=True, exist_ok=True)

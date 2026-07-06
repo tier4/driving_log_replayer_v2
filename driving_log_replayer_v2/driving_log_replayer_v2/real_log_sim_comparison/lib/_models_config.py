@@ -58,12 +58,7 @@ KNOWN_PARAM_KEYS: frozenset[str] = frozenset({
     "steer_time_delay", "steer_time_constant",
     "steer_dead_band", "steer_bias",
     "debug_acc_scaling_factor", "debug_steer_scaling_factor",
-    "k_us", "k_us_bands", "k_us_thresholds", "sub_dt",
-    # 縦横モデル検証ビューア相当の表現力 (delay_steer_acc_geared_wo_fall_guard)
-    # brake_time_constant=throttle/brake 分離, lon_drag_c0/c1/c2=走行抵抗 poly(v)
-    "brake_time_constant", "lon_drag_c0", "lon_drag_c1", "lon_drag_c2",
-    # Euler sub-steps per outer update() call (delay_steer_acc_geared_wo_fall_guard のみ有効)
-    "n_substep",
+    "k_us", "sub_dt",
     # taiga_dyn / taiga_x 動的自転車モデル
     "mass", "inertia_z", "lf", "lr",
     "cornering_stiffness_front", "cornering_stiffness_rear", "vx_min_dyn",

@@ -15,7 +15,6 @@ import pandas as pd
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 
-from .._kus_profile import VX_EDGES, _kus_band_label, _kus_step_profile
 from .._map import map_ways_in_bbox
 from .._plotly_utils import lanes_to_trace
 from ._common import apply_base_layout, make_grid, qualitative_colors
@@ -141,34 +140,31 @@ def build_fig_kus_single(
     bins: dict | None,
     models: dict[str, dict],
     *,
-    thresholds: list | None = None,
     title: str | None = None,
 ) -> go.Figure:
-    """k_us(v) 速度ビン別最小二乗法推定 (単一データセット、モデル別チューニング値重ね描き)。
+    """スカラー k_us 最小二乗法推定 (単一データセット、モデル別チューニング値重ね描き)。
 
-    thresholds: k_us 速度帯の切替閾値 [m/s]。指定時のみ縦線を描く。
     title: 図タイトルの上書き (None で既定の単一データセット向けタイトル)。
     """
     if bins is None:
         return _placeholder_fig("横方向データ不足 (曲線走行サンプル不足)")
     return _build_fig_kus(
         bins, models or {},
-        title=title or "k_us 独立同定（速度ビン別 最小二乗法回帰、単一データセット）",
-        thresholds=thresholds,
+        title=title or "k_us 独立同定（最小二乗法回帰・スカラー、単一データセット）",
     )
 
 
 # ---------------------------------------------------------------------------
-# collection 横断: k_us(v) プール再構成 + モデル別チューン値重ね描き
+# collection 横断: k_us プール再構成 + モデル別チューン値重ね描き
 # ---------------------------------------------------------------------------
 def build_fig_cross_kus(bins: dict | None, models: dict | None) -> go.Figure:
-    """dataset 横断 k_us(v) 独立同定 (十分統計量プール集計 + モデル別チューニング値比較)。"""
+    """dataset 横断 スカラー k_us 独立同定 (十分統計量プール集計 + モデル別チューニング値比較)。"""
     if bins is None:
         return _placeholder_fig("横方向データ不足 (全データセットで曲線走行サンプル不足)")
     model_params = {name: spec.params for name, spec in (models or {}).items()}
     return _build_fig_kus(
         bins, model_params,
-        title="dataset 横断 k_us(v) 独立同定（速度ビン別最小二乗法プール集計）",
+        title="dataset 横断 スカラー k_us 独立同定（最小二乗法プール集計）",
     )
 
 
@@ -177,72 +173,45 @@ def _build_fig_kus(
     model_params: dict[str, dict],
     *,
     title: str,
-    thresholds: list | None = None,
 ) -> go.Figure:
-    fig = make_grid(
-        rows=1, cols=2,
-        subplot_titles=["k_us 推定値（速度ビン別 最小二乗法）", "速度ビン別 曲線走行サンプル数"],
-        horizontal_spacing=0.12,
-    )
+    fig = go.Figure()
 
-    vx_mid = np.asarray(bins["vx_mid"], dtype=float)
-    kus_ols = np.asarray(bins["kus_ols"], dtype=float)
-    n_pts = np.asarray(bins["n_pts"])
-    valid = np.isfinite(kus_ols)
+    k_us = float(bins.get("k_us", float("nan")))
+    n_pts = int(bins.get("n_pts", 0))
+    kus_p25 = float(bins.get("kus_p25", float("nan")))
+    kus_p75 = float(bins.get("kus_p75", float("nan")))
+    vx = [0.0, 12.0]
 
-    kus_p25 = np.asarray(bins.get("kus_p25", np.full_like(vx_mid, np.nan)), dtype=float)
-    kus_p75 = np.asarray(bins.get("kus_p75", np.full_like(vx_mid, np.nan)), dtype=float)
-    valid_iqr = valid & np.isfinite(kus_p25) & np.isfinite(kus_p75)
-    if np.any(valid_iqr):
+    # IQR 帯（個別サンプル分布）。k_us はスカラーなので速度域全体で水平な帯として描く。
+    if np.isfinite(kus_p25) and np.isfinite(kus_p75):
         fig.add_trace(go.Scatter(
-            x=list(vx_mid[valid_iqr]) + list(vx_mid[valid_iqr][::-1]),
-            y=list(kus_p25[valid_iqr]) + list(kus_p75[valid_iqr][::-1]),
+            x=vx + vx[::-1], y=[kus_p25, kus_p25, kus_p75, kus_p75],
             fill="toself", fillcolor="rgba(70,130,180,0.15)",
             line=dict(color="rgba(255,255,255,0)"),
             showlegend=True, name="25–75%ile（個別サンプル）",
-        ), row=1, col=1)
+        ))
 
-    fig.add_trace(go.Scatter(
-        x=vx_mid[valid].tolist(), y=kus_ols[valid].tolist(),
-        mode="markers+lines",
-        marker=dict(color="steelblue", size=7),
-        line=dict(color="steelblue", width=2),
-        name="最小二乗法推定 k_us(v)",
-    ), row=1, col=1)
+    # 同定スカラー k_us（水平線）
+    if np.isfinite(k_us):
+        fig.add_trace(go.Scatter(
+            x=vx, y=[k_us, k_us], mode="lines",
+            line=dict(color="steelblue", width=2.5),
+            name=f"最小二乗法推定 k_us={k_us:.4f}（n={n_pts}）",
+        ))
 
-    vx_dense = np.linspace(0.0, 12.0, 600)
+    # モデル別チューニング値（水平破線）
     colors = qualitative_colors(len(model_params)) if model_params else []
     for (name, params), color in zip(model_params.items(), colors):
-        kus_tune = _kus_step_profile(vx_dense, params)
-        label = f"{name}: {_kus_band_label(params)}"
+        kv = float(params.get("k_us", 0.0))
         fig.add_trace(go.Scatter(
-            x=vx_dense.tolist(), y=kus_tune.tolist(), mode="lines",
-            line=dict(color=color, width=2.5, dash="dash"), name=label,
-        ), row=1, col=1)
+            x=vx, y=[kv, kv], mode="lines",
+            line=dict(color=color, width=2.0, dash="dash"),
+            name=f"{name}: k_us={kv:.4f}",
+        ))
 
-    fig.add_hline(y=0.0, line=dict(color="gray", width=1, dash="dot"), row=1, col=1)
-
-    # k_us 速度帯の切替閾値縦線 (指定時のみ)
-    _thr_colors = ["green", "purple", "brown", "teal"]
-    for i, thr in enumerate(thresholds or []):
-        clr = _thr_colors[i % len(_thr_colors)]
-        fig.add_vline(
-            x=thr, line=dict(color=clr, width=1.2, dash="dash"),
-            annotation_text=f"thr{i+1}={thr:.1f}", annotation_position="top right",
-            row=1, col=1,
-        )
-
-    bin_widths = np.diff(VX_EDGES)
-    fig.add_trace(go.Bar(
-        x=vx_mid.tolist(), y=n_pts.tolist(),
-        width=(bin_widths * 0.8).tolist(),
-        marker_color="steelblue", opacity=0.6,
-        name="サンプル数", showlegend=False,
-    ), row=1, col=2)
-
-    fig.update_xaxes(title_text="車速 vx [m/s]")
-    fig.update_yaxes(title_text="k_us [rad·s²/m]", range=[-0.05, 0.12], row=1, col=1)
-    fig.update_yaxes(title_text="サンプル数", row=1, col=2)
+    fig.add_hline(y=0.0, line=dict(color="gray", width=1, dash="dot"))
+    fig.update_xaxes(title_text="車速 vx [m/s]", range=[0, 12])
+    fig.update_yaxes(title_text="k_us [rad·s²/m]", range=[-0.05, 0.12])
     return apply_base_layout(
         fig, title=title, height=430,
         legend=dict(x=0.02, y=0.98, bgcolor="rgba(255,255,255,0.8)"),
