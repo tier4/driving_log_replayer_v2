@@ -113,6 +113,7 @@ _HTML_TEMPLATE = r"""<!DOCTYPE html>
     </span>
     <span class="grp">
       モデル <select id="modelsel"><option value="">(spec)</option></select>
+      <label title="ON=full-RHS 遅延 (新 DELAY_STEER_ACC_GEARED_FOR_DIFFUSION_PLANNER。状態フィードバックも t-d)／OFF=指令のみ遅延 (旧 wo_fall_guard)"><input type="checkbox" id="on_fullrhs"> full-RHS遅延</label>
     </span>
     <span class="grp">
       最小二乗最適化:
@@ -245,6 +246,10 @@ const DATA = __PAYLOAD_JSON__;
     acc_scaling: DATA.model_seed.acc_scaling ?? 1.0,
     // C++ steer_dead_band (現状 0.0、seed から反映して将来変更に対応)
     steer_dead_band: DATA.model_seed.steer_dead_band ?? 0,
+    // 遅延モード。false=指令のみ遅延 (旧 DELAY_STEER_ACC_GEARED_WO_FALL_GUARD)、
+    // true=full-RHS 遅延 (新 DELAY_STEER_ACC_GEARED_FOR_DIFFUSION_PLANNER。状態フィードバックも
+    // t-d でサンプリング)。既定は seed（run のモデル種別）由来、無ければ false で旧挙動維持。
+    fullRhsDelay: DATA.model_seed.full_rhs_delay ?? false,
   };
   // 縦 定常補正 多項式 poly(v)=p0+p1·v+p2·v²（有効な次のみ加算）。a_target に足す。
   function polyAccel(v) {
@@ -311,6 +316,18 @@ const DATA = __PAYLOAD_JSON__;
   // Infinity（事実上無効）。実機値が判明すれば payload 拡張で渡すことを想定。
   function sat(v, lim) { return v > lim ? lim : (v < -lim ? -lim : v); }
   function deadBand(e, w) { return Math.abs(e) < w ? 0 : (e > 0 ? e - w : e + w); }
+
+  // full-RHS 遅延（新モデル）用の状態履歴。各 substep 冒頭で現在状態を push し、at(nDelay) で
+  // nDelay ステップ前の値を返す。履歴が足りなければ最古値（＝seed）を返す（C++ 派生の状態履歴
+  // バッファ定数充填 seeding に対応）。nDelay=0 なら現在値そのもの（＝指令のみ遅延に退化）。
+  // rollout / simAccelSeries / simSteerSeries の 3 経路で共有し、遅延処理の実装ドリフトを防ぐ。
+  function makeHist() {
+    const buf = [];
+    return {
+      push: (val) => { buf.push(val); },
+      at: (nDelay) => { const i = buf.length - 1 - nDelay; return buf[i < 0 ? 0 : i]; },
+    };
+  }
   const accLim       = Infinity;  // [m/s²]  vx_rate_lim 相当
   const velLim       = Infinity;  // [m/s]   vx_lim 相当
   const steerLim     = Infinity;  // [rad]   steer_lim 相当
@@ -340,6 +357,11 @@ const DATA = __PAYLOAD_JSON__;
     const beta = model.steer_bias * DEG;   // deg→rad
     const simSteer = true;
     const outDt = 1 / RATE, h = outDt / SUBSTEP;
+    // full-RHS 遅延（新モデル）用: 積分状態 a・delta の履歴を保持し、accel/steer チャネルの右辺全体を
+    // t-d でサンプリングする。指令のみ遅延（旧モデル）では useFull=false で従来経路を byte 等価に保つ。
+    const useFull = model.fullRhsDelay;
+    const aHist = makeHist(), dHist = makeHist();
+    const nTaSteps = Math.round(TaThr / h), nTdSteps = Math.round(Td / h);
 
     // アンダーステア勾配 (k_us) 計算。C++ 版と同様に step bands (k_us_bands/k_us_thresholds) またはスカラー k_us を適用。
     const kusEff = (vv) => {
@@ -390,6 +412,7 @@ const DATA = __PAYLOAD_JSON__;
     for (let t = t0Warm; t < t0 - 1e-9; t += outDt) {
       for (let s = 0; s < SUBSTEP; s++) {
         const tt = t + s * h;
+        if (useFull) { aHist.push(a); dHist.push(delta); }
         const vl = chanAt("lon_vel", tt);
         const vv = (vl != null) ? vl : v;
         if (ideal) {
@@ -400,8 +423,12 @@ const DATA = __PAYLOAD_JSON__;
           const throttle = (u >= 0);
           const tauA = throttle ? tauThr : tauBrk;
           const wzo = chanAt("wz", tt);
-          const sa = chanAt("slope_acc", tt);
-          a += h * (-(a - accelTarget(u * model.acc_scaling, vv, wzo != null ? wzo : 0, sa != null ? sa : 0)) / tauA);
+          const sa = chanAt("slope_acc", tt);  // slope は current（C++: SLOPE は VX 式・非遅延）
+          // full-RHS: 状態 a と drag/corner の車体状態 (v, wz) を t-d で評価。useFull=false で現在値に退化。
+          const aFb = useFull ? aHist.at(nTaSteps) : a;
+          const vAcc = useFull ? (chanAt("lon_vel", tt - TaThr) ?? vv) : vv;
+          const wzAcc = useFull ? chanAt("wz", tt - TaThr) : wzo;
+          a += h * (-(aFb - accelTarget(u * model.acc_scaling, vAcc, wzAcc != null ? wzAcc : 0, sa != null ? sa : 0)) / tauA);
           a = sat(a, accLim);
         }
         v += h * a;
@@ -413,7 +440,9 @@ const DATA = __PAYLOAD_JSON__;
           const ud = chanAt("cmd_steer", tt - Td); if (ud != null) lastUd = ud;
           let driveD = (lastUd != null) ? lastUd * DEG : delta;
           driveD = sat(driveD, steerLim) * model.steer_scaling;
-          delta += h * sat(-deadBand(delta - driveD, model.steer_dead_band) / tauD, steerRateLim);
+          // full-RHS: ステア状態フィードバックも t-d（C++: steer_diff = steer_delayed - steer_des）。
+          const dFb = useFull ? dHist.at(nTdSteps) : delta;
+          delta += h * sat(-deadBand(dFb - driveD, model.steer_dead_band) / tauD, steerRateLim);
         }
       }
     }
@@ -422,6 +451,7 @@ const DATA = __PAYLOAD_JSON__;
     for (let t = t0; t < t1 - 1e-9; t += outDt) {
       for (let s = 0; s < SUBSTEP; s++) {
         const tt = t + s * h;
+        if (useFull) { aHist.push(a); dHist.push(delta); }
         const vl = chanAt("lon_vel", tt);
         const vv = (vl != null) ? vl : v;   // 観測速度 (poly(v)・横チェーンで共用)
         // 縦: 既定はモデル(1次遅れ)。ideal 時は観測加速度をそのまま採用(実車と完全一致の仮定)。
@@ -433,10 +463,15 @@ const DATA = __PAYLOAD_JSON__;
           const throttle = (u >= 0);
           const tauA = throttle ? tauThr : tauBrk; // 定数 (下限クランプ済み)
           const wzo = chanAt("wz", tt); // カーブ抵抗の回帰子 a_y=v·wz 用 (観測)
-          const sa = chanAt("slope_acc", tt); // 勾配重力項 a_slope=9.81·sin(pitch) (観測)
+          const sa = chanAt("slope_acc", tt); // 勾配重力項 a_slope=9.81·sin(pitch) (観測・current)
           // C++: pedal_acc_des = sat(cmd_acc, lim) * debug_acc_scaling_factor
           const uScaled = u * model.acc_scaling;
-          a += h * (-(a - accelTarget(uScaled, vv, wzo != null ? wzo : 0, sa != null ? sa : 0)) / tauA);
+          // full-RHS（新モデル）: 状態 a と drag/corner の車体状態 (v, wz) を t-d で評価
+          // （C++: pedal_delayed, calc_drag(vel_delayed)）。slope は非遅延。useFull=false で退化。
+          const aFb = useFull ? aHist.at(nTaSteps) : a;
+          const vAcc = useFull ? (chanAt("lon_vel", tt - TaThr) ?? vv) : vv;
+          const wzAcc = useFull ? chanAt("wz", tt - TaThr) : wzo;
+          a += h * (-(aFb - accelTarget(uScaled, vAcc, wzAcc != null ? wzAcc : 0, sa != null ? sa : 0)) / tauA);
           a = sat(a, accLim);                  // C++: pedal_acc を vx_rate_lim で飽和
         }
         v += h * a;
@@ -450,7 +485,9 @@ const DATA = __PAYLOAD_JSON__;
           const ud = chanAt("cmd_steer", tt - Td); if (ud != null) lastUd = ud;
           let driveD = (lastUd != null) ? lastUd * DEG : delta;
           driveD = sat(driveD, steerLim) * model.steer_scaling;
-          delta += h * sat(-deadBand(delta - driveD, model.steer_dead_band) / tauD, steerRateLim);
+          // full-RHS（新モデル）: ステア状態フィードバックも t-d（C++: steer_delayed - steer_des）。
+          const dFb = useFull ? dHist.at(nTdSteps) : delta;
+          delta += h * sat(-deadBand(dFb - driveD, model.steer_dead_band) / tauD, steerRateLim);
         }
         // 横運動学（v は観測 vv, δ_src は sim/観測/ideal）
         const om = omegaAt(tt, delta);
@@ -478,6 +515,7 @@ const DATA = __PAYLOAD_JSON__;
       poly0: model.poly0, poly1: model.poly1, poly2: model.poly2,
       polyOn0: model.polyOn0, polyOn1: model.polyOn1, polyOn2: model.polyOn2,
       c_slope: model.c_slope,
+      fullRhsDelay: model.fullRhsDelay,
     };
     model.k_us         = seed.k_us         ?? sv.k_us;
     model.k_us_bands      = seed.k_us_bands      ?? sv.k_us_bands;
@@ -498,6 +536,8 @@ const DATA = __PAYLOAD_JSON__;
     model.polyOn1 = Math.abs(model.poly1) > 1e-9;
     model.polyOn2 = Math.abs(model.poly2) > 1e-9;
     model.c_slope  = seed.c_slope  ?? sv.c_slope;
+    // baseline も自身のモデル種別の遅延モードで描画（seed に無ければ現在値を維持）。
+    model.fullRhsDelay = seed.full_rhs_delay ?? sv.fullRhsDelay;
     const result = rollout(t0, t1, false);
     Object.assign(model, sv);
     return result;
@@ -636,6 +676,11 @@ $("errpanels").addEventListener("change", (e) => { showErr = e.target.checked; m
     $("k_vstop").disabled = !e.target.checked;
     markDirty();
   });
+  // full-RHS 遅延トグル（旧/新モデル切替）。既定は seed（run のモデル種別）由来。
+  { const cb = $("on_fullrhs"); if (cb) {
+    cb.checked = !!model.fullRhsDelay;
+    cb.addEventListener("change", (e) => { model.fullRhsDelay = e.target.checked; markDirty(); });
+  } }
 
   // -------------------------------------------------- 最小二乗最適化（全区間・出力誤差）
   // 各サブシステムを独立にフィット（運動方程式が階層的に分離できるため）:
@@ -664,20 +709,29 @@ $("errpanels").addEventListener("change", (e) => { showErr = e.target.checked; m
     const tauThr = Math.max(model.tau_acc_thr, 0.02), tauBrk = Math.max(model.tau_acc_brk, 0.02);
     const Tthr = model.t_acc_thr;
     const outDt = 1 / RATE, h = outDt / SUBSTEP;
+    // full-RHS（新モデル）: 状態 a と drag/corner の (v, wz) を t-d で評価。warmup が無いため最初の
+    // round(T/h) サンプルの seed は観測初期値（rollout の温めた履歴より粗いが挙動は退化で一致）。
+    const useFull = model.fullRhsDelay;
+    const aHist = makeHist();
+    const nTaSteps = Math.round(Tthr / h);
     let lastDrive = chanAt("cmd_accel", i0 / RATE); if (lastDrive == null) lastDrive = a;
     out[i0] = a;
     for (let i = i0; i < N - 1; i++) {
       const t = i / RATE;
       for (let s = 0; s < SUBSTEP; s++) {
         const tt = t + s * h;
+        if (useFull) aHist.push(a);
         const vl = chanAt("lon_vel", tt); const vv = (vl != null) ? vl : 0;
         const u = chanAt("cmd_accel", tt - Tthr) ?? lastDrive;
         lastDrive = u;
         const throttle = (u >= 0);
         const tau = throttle ? tauThr : tauBrk; // 定数 (下限クランプ済み)
         const wzo = chanAt("wz", tt); // カーブ抵抗の回帰子 a_y=v·wz 用 (観測)
-        const sa = chanAt("slope_acc", tt); // 勾配重力項 (観測・rollout と同式で同定対象に含める)
-        a += h * (-(a - accelTarget(u, vv, wzo != null ? wzo : 0, sa != null ? sa : 0)) / tau);
+        const sa = chanAt("slope_acc", tt); // 勾配重力項 (観測・current・非遅延)
+        const aFb = useFull ? aHist.at(nTaSteps) : a;
+        const vAcc = useFull ? (chanAt("lon_vel", tt - Tthr) ?? vv) : vv;
+        const wzAcc = useFull ? chanAt("wz", tt - Tthr) : wzo;
+        a += h * (-(aFb - accelTarget(u, vAcc, wzAcc != null ? wzAcc : 0, sa != null ? sa : 0)) / tau);
       }
       out[i + 1] = a;
     }
@@ -691,15 +745,21 @@ $("errpanels").addEventListener("change", (e) => { showErr = e.target.checked; m
     let dDeg = run.ch.steer[i0];
     const tau = Math.max(model.tau_steer, 1e-3), Td = model.t_steer;
     const outDt = 1 / RATE, h = outDt / SUBSTEP;
+    // full-RHS（新モデル）: ステア状態フィードバックも t-d。seed は観測初期値。
+    const useFull = model.fullRhsDelay;
+    const dHist = makeHist();
+    const nTdSteps = Math.round(Td / h);
     let lastU = chanAt("cmd_steer", i0 / RATE); if (lastU == null) lastU = dDeg;
     out[i0] = dDeg;
     for (let i = i0; i < N - 1; i++) {
       const t = i / RATE;
       for (let s = 0; s < SUBSTEP; s++) {
         const tt = t + s * h;
+        if (useFull) dHist.push(dDeg);
         const u = chanAt("cmd_steer", tt - Td); if (u != null) lastU = u;
         const drive = (lastU != null) ? lastU : dDeg;
-        dDeg += h * (-(dDeg - drive) / tau);
+        const dFb = useFull ? dHist.at(nTdSteps) : dDeg;
+        dDeg += h * (-(dFb - drive) / tau);
       }
       out[i + 1] = dDeg;
     }
@@ -818,6 +878,9 @@ $("errpanels").addEventListener("change", (e) => { showErr = e.target.checked; m
     model.steer_scaling = seed.steer_scaling ?? 1.0;
     model.acc_scaling = seed.acc_scaling ?? 1.0;
     model.steer_dead_band = seed.steer_dead_band ?? 0;
+    // 遅延モード（旧/新モデル）も seed から反映しトグルへ同期。
+    model.fullRhsDelay = seed.full_rhs_delay ?? false;
+    { const cb = $("on_fullrhs"); if (cb) cb.checked = !!model.fullRhsDelay; }
     // poly(v) は係数が非ゼロなら自動 ON にしてつまみ有効化
     const setTog = (valKey, onKey, cbId, slId) => {
       const on = Math.abs(model[valKey]) > 1e-9;

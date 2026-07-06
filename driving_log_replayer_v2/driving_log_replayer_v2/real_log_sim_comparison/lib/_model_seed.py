@@ -16,7 +16,15 @@ def _seed_from_params(params: dict) -> dict:
     acc_td = f("acc_time_delay", 0.1)
     brake_tc = params.get("brake_time_constant")
     brake_tc = float(brake_tc) if brake_tc not in (None, "", 0, 0.0) else acc_tc
+    # full-RHS 遅延（新モデル DELAY_STEER_ACC_GEARED_FOR_DIFFUSION_PLANNER）か、指令のみ遅延
+    # （旧モデル wo_fall_guard）か。ビューアの遅延モードトグルの既定値を run のモデル種別から決める。
+    # 未指定 / 旧モデルは False（＝指令のみ遅延）で既存挙動を維持。
+    full_rhs_delay = (
+        str(params.get("vehicle_model_type", "")).upper()
+        == "DELAY_STEER_ACC_GEARED_FOR_DIFFUSION_PLANNER"
+    )
     return {
+        "full_rhs_delay": full_rhs_delay,
         "tau_acc_thr": acc_tc,
         "t_acc_thr": acc_td,
         "tau_acc_brk": brake_tc,

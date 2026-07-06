@@ -49,6 +49,22 @@ $$\omega = \dot\theta = \frac{v_x\,\tan(\delta_{\mathrm{act}} + \beta)}{L + k_{u
 - **アンダーステア項** \(k_{us} v_x^2\): \(k_{us}=0\) かつ \(\beta=0\) で理想キネマティック自転車 \(\omega = v_x\tan\delta / L\) に一致する。\(k_{us}>0\) では分母が速度의2乗で増大し、同じ \(\delta_{\mathrm{act}}\) でも高速ほどヨーレートが小さく（曲がりにくく）なる＝アンダーステアを表す。
 - ※ 目標操舵角は `steer_lim`、操舵速度は `steer_rate_lim` で制限され、不感帯 `steer_dead_band` が適用されます。
 
+### 遅延モード：指令のみ遅延（旧）／ full-RHS 遅延（新）
+
+無駄時間の掛け方には 2 通りがあり、`vehicle_model_type` で選択する。
+
+- **指令のみ遅延（`DELAY_STEER_ACC_GEARED_WO_FALL_GUARD`、既定）**：無駄時間は**指令**にのみ掛かる。縦の \(\dot a_{\mathrm{act}}\) は現在の \(a_{\mathrm{act}}\)・現在の \(v_x\) に対して遅延指令 \(a_{\mathrm{cmd,del}}\) を、横の \(\dot\delta_{\mathrm{act}}\) は現在の \(\delta_{\mathrm{act}}\) に対して遅延指令 \(\delta_{\mathrm{des}}\) を用いる（上式のとおり）。
+- **full-RHS 遅延（`DELAY_STEER_ACC_GEARED_FOR_DIFFUSION_PLANNER`、新）**：ステア・加速度チャネルの**右辺全体**を \(t-T\) で評価する。すなわち状態フィードバックも遅延させる：
+
+$$\dot a_{\mathrm{act}}(t) = -\frac{a_{\mathrm{act}}(t-T_a) - \big(a_{\mathrm{cmd,del}} + \mathrm{poly}(v_x(t-T_a))\big)}{\tau_a}, \qquad \dot\delta_{\mathrm{act}}(t) = -\frac{\delta_{\mathrm{act}}(t-T_\delta) - \delta_{\mathrm{des}}}{\tau_\delta}$$
+
+  - 加速度チャネルは \(a_{\mathrm{act}}\) と走行抵抗 \(\mathrm{poly}(v_x)\) の車体速度 \(v_x\) を \(t-T_a\) で評価する（C++ の `calc_drag(vel_delayed)` に対応）。
+  - \(a_{\mathrm{slope}}\)（`SLOPE_ACCX`）は**遅延させない**（C++ では速度式 \(\dot v_x\) 側の外部入力であり無駄時間対象外）。
+  - ヨー式・位置式・速度式 \(\dot v_x = a_{\mathrm{act}} + a_{\mathrm{slope}}\) は現在状態で評価する（ヨー観測遅延 \(d_{tt}\) はこのモデルでは対象外＝将来拡張）。
+  - 全遅延 \(=0\) のとき指令のみ遅延と数値的に一致する（＝旧モデルの厳密な一般化）。
+
+統合ビューア（`viewer.html` のモデル検証タブ）は両モードに対応する。トグル **「full-RHS遅延」** で切り替え（既定は `vehicle_model_type` 由来）。ビューアは連続時間の線形補間で状態履歴を参照するため、離散キューの C++ 実装とは定式化が一致する一方で数値の完全一致（bit 一致）はしない。
+
 ---
 
 ## 3. チューニングおよび検証の運用方針
