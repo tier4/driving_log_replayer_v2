@@ -703,8 +703,12 @@ E[k] = \\mathrm{{RHS}}[k;\\theta] - \\mathrm{{LHS}}[k]
 \\end{{pmatrix}}
 \\]
 <p class="meta">
-\\(a_{{\\mathrm{{cmd,des}}}}, \\delta_{{\\mathrm{{cmd,des}}}}\\) は純粋遅延 \\(T_a, T_\\delta\\) を経て、
-下の状態方程式では \\(a_{{\\mathrm{{target}}}}, \\delta_{{\\mathrm{{des}}}}\\)（橙字のまま）として現れる。
+\\(a_{{\\mathrm{{cmd,des}}}}, \\delta_{{\\mathrm{{cmd,des}}}}\\) は純粋遅延 \\(T_a, T_\\delta\\) を経て入力される。
+下の状態方程式はアクチュエータ2チャネルの右辺全体を \\(t-T\\) で評価する
+<b>full-RHS 遅延</b>（<code>DELAY_STEER_ACC_GEARED_FOR_DIFFUSION_PLANNER</code>）で統一し、
+指令だけでなく状態フィードバック \\(a_{{\\mathrm{{act}}}}, \\delta_{{\\mathrm{{act}}}}\\) も同じ \\((t-T_a), (t-T_\\delta)\\) で参照する
+（Euler 形の \\(n_a = \\mathrm{{round}}(T_a/\\Delta t), n_\\delta = \\mathrm{{round}}(T_\\delta/\\Delta t)\\) は遅延サンプル数。
+旧「指令のみ遅延」との関係は<a href="#sec-delay-mode">本節末</a>を参照）。
 <code>gear</code> はこの入力ベクトルには含めず、<code>/vehicle/status/gear_status</code> の直前値から
 DRIVE 系（enum 値 2..19）の時刻だけを残す評価マスクとして適用する。非 DRIVE 系
 （NEUTRAL/REVERSE/PARK/LOW 等）は同定・評価窓から除外される。
@@ -725,8 +729,8 @@ DRIVE 系（enum 値 2..19）の時刻だけを残す評価マスクとして適
 {{\\color{{#1565c0}} v_x}} \\sin{{\\color{{#1565c0}} \\theta}} \\\\
 \\dfrac{{{{\\color{{#1565c0}} v_x}}\\,\\tan({{\\color{{#1565c0}} \\delta_{{\\mathrm{{act}}}}}}+\\beta)}}{{L + k_{{\\mathrm{{us}}}}\\,{{\\color{{#1565c0}} v_x}}^2}} \\\\
 {{\\color{{#1565c0}} a_{{\\mathrm{{act}}}}}} + {{\\color{{#e65100}} a_{{\\mathrm{{slope}}}}}} \\\\
-\\dfrac{{{{\\color{{#e65100}} \\delta_{{\\mathrm{{cmd,des}}}}}}(t-T_\\delta) - {{\\color{{#1565c0}} \\delta_{{\\mathrm{{act}}}}}}}}{{\\tau_\\delta}} \\\\
-\\dfrac{{{{\\color{{#e65100}} a_{{\\mathrm{{cmd,des}}}}}}(t-T_a) - {{\\color{{#1565c0}} a_{{\\mathrm{{act}}}}}}}}{{\\tau_a}}
+\\dfrac{{{{\\color{{#e65100}} \\delta_{{\\mathrm{{cmd,des}}}}}}(t-T_\\delta) - {{\\color{{#1565c0}} \\delta_{{\\mathrm{{act}}}}}}(t-T_\\delta)}}{{\\tau_\\delta}} \\\\
+\\dfrac{{{{\\color{{#e65100}} a_{{\\mathrm{{cmd,des}}}}}}(t-T_a) - {{\\color{{#1565c0}} a_{{\\mathrm{{act}}}}}}(t-T_a)}}{{\\tau_a}}
 \\end{{pmatrix}}
 \\]
 <p class="meta">
@@ -741,7 +745,8 @@ DRIVE 系（enum 値 2..19）の時刻だけを残す評価マスクとして適
 {{\\color{{#1565c0}} \\mathbf{{x}}_{{k+1}}}} = {{\\color{{#1565c0}} \\mathbf{{x}}_k}} + f({{\\color{{#1565c0}} \\mathbf{{x}}_k}}, {{\\color{{#e65100}} \\mathbf{{u}}_k}}) \\cdot \\Delta t
 \\]
 で状態を更新する（前進・陽的 Euler 法、実装は
-<code>SimModelInterface::updateEuler(dt, input)</code>）。\\(f\\) を展開すると、各状態は次のように更新される。
+<code>SimModelInterface::updateEuler(dt, input)</code>）。\\(f\\) を展開すると、各状態は次のように更新される
+（full-RHS 遅延のため、アクチュエータ2チャネルは右辺で状態を \\(k-n_a, k-n_\\delta\\) サンプル前に参照する）。
 </p>
 \\[
 \\begin{{pmatrix}}
@@ -767,34 +772,26 @@ DRIVE 系（enum 値 2..19）の時刻だけを残す評価マスクとして適
 {{\\color{{#1565c0}} v_{{x,k}}}} \\sin{{\\color{{#1565c0}} \\theta_k}} \\\\
 \\dfrac{{{{\\color{{#1565c0}} v_{{x,k}}}}\\,\\tan({{\\color{{#1565c0}} \\delta_{{\\mathrm{{act}},k}}}}+\\beta)}}{{L + k_{{\\mathrm{{us}}}}\\,{{\\color{{#1565c0}} v_{{x,k}}}}^2}} \\\\
 {{\\color{{#1565c0}} a_{{\\mathrm{{act}},k}}}} + {{\\color{{#e65100}} a_{{\\mathrm{{slope}},k}}}} \\\\
-\\dfrac{{{{\\color{{#e65100}} \\delta_{{\\mathrm{{des}},k}}}} - {{\\color{{#1565c0}} \\delta_{{\\mathrm{{act}},k}}}}}}{{\\tau_\\delta}} \\\\
-\\dfrac{{{{\\color{{#e65100}} a_{{\\mathrm{{target}},k}}}} - {{\\color{{#1565c0}} a_{{\\mathrm{{act}},k}}}}}}{{\\tau_a}}
+\\dfrac{{{{\\color{{#e65100}} \\delta_{{\\mathrm{{cmd,des}},\\,k-n_\\delta}}}} - {{\\color{{#1565c0}} \\delta_{{\\mathrm{{act}},\\,k-n_\\delta}}}}}}{{\\tau_\\delta}} \\\\
+\\dfrac{{{{\\color{{#e65100}} a_{{\\mathrm{{cmd,des}},\\,k-n_a}}}} - {{\\color{{#1565c0}} a_{{\\mathrm{{act}},\\,k-n_a}}}}}}{{\\tau_a}}
 \\end{{pmatrix}}
 \\cdot \\Delta t
 \\]
 
-<h3>遅延モード：指令のみ遅延（旧）／ full-RHS 遅延（新）</h3>
+<h3 id="sec-delay-mode">full-RHS 遅延と旧モデルとの関係</h3>
 <p>
-無駄時間 \\(T_a, T_\\delta\\) の掛け方には 2 通りがあり、<code>vehicle_model_type</code> で選択する。
-両者は全遅延 \\(=0\\) のとき数値的に一致する（full-RHS 遅延は指令のみ遅延の厳密な一般化）。
+上の状態方程式は、アクチュエータ2チャネル（\\(\\dot a_{{\\mathrm{{act}}}}, \\dot\\delta_{{\\mathrm{{act}}}}\\)）の
+<b>右辺全体</b>を \\(t-T\\) で評価する <b>full-RHS 遅延</b>
+（<code>DELAY_STEER_ACC_GEARED_FOR_DIFFUSION_PLANNER</code>）で統一している。指令だけでなく状態
+\\(a_{{\\mathrm{{act}}}}, \\delta_{{\\mathrm{{act}}}}\\) も \\(t-T\\) で参照する（C++ の <code>pedal_delayed</code> /
+<code>steer_delayed</code> に対応）。\\(a_{{\\mathrm{{slope}}}}\\) は速度式 \\(\\dot v_x\\) 側の外部入力なので
+遅延させず、ヨー・位置・速度式は現在状態で評価する。
 </p>
-<ul>
-  <li><b>指令のみ遅延</b>（<code>DELAY_STEER_ACC_GEARED_WO_FALL_GUARD</code>、既定）：無駄時間は<b>指令</b>にのみ掛かる。
-    上の状態方程式のとおり、\\(\\dot a_{{\\mathrm{{act}}}}\\) は現在の \\(a_{{\\mathrm{{act}}}}\\) に対して遅延指令
-    \\(a_{{\\mathrm{{target}}}}=a_{{\\mathrm{{cmd,des}}}}(t-T_a)\\) を、\\(\\dot\\delta_{{\\mathrm{{act}}}}\\) は現在の
-    \\(\\delta_{{\\mathrm{{act}}}}\\) に対して遅延指令 \\(\\delta_{{\\mathrm{{des}}}}\\) を用いる。</li>
-  <li><b>full-RHS 遅延</b>（<code>DELAY_STEER_ACC_GEARED_FOR_DIFFUSION_PLANNER</code>、新）：加速度・操舵チャネルの
-    <b>右辺全体</b>を \\(t-T\\) で評価する。すなわち状態フィードバックも遅延させる：
-\\[
-{{\\color{{#1565c0}} \\dot a_{{\\mathrm{{act}}}}}}(t)
-= -\\dfrac{{{{\\color{{#1565c0}} a_{{\\mathrm{{act}}}}}}(t-T_a) - {{\\color{{#e65100}} a_{{\\mathrm{{cmd,del}}}}}}}}{{\\tau_a}},
-\\qquad
-{{\\color{{#1565c0}} \\dot\\delta_{{\\mathrm{{act}}}}}}(t)
-= -\\dfrac{{{{\\color{{#1565c0}} \\delta_{{\\mathrm{{act}}}}}}(t-T_\\delta) - {{\\color{{#e65100}} \\delta_{{\\mathrm{{des}}}}}}}}{{\\tau_\\delta}}
-\\]
-    加速度チャネルは状態 \\(a_{{\\mathrm{{act}}}}\\) を \\(t-T_a\\) で評価する（C++ の <code>pedal_delayed</code> に対応）。
-    \\(a_{{\\mathrm{{slope}}}}\\) は速度式 \\(\\dot v_x\\) 側の外部入力なので遅延させない。ヨー・位置・速度式は現在状態で評価する。</li>
-</ul>
+<p>
+旧 <code>DELAY_STEER_ACC_GEARED_WO_FALL_GUARD</code> は状態フィードバックを<b>現在時刻</b>で評価する
+「指令のみ遅延」で、上式で状態の遅延を 0 とした（\\(a_{{\\mathrm{{act}}}}(t-T_a)\\to a_{{\\mathrm{{act}}}}(t)\\)、
+\\(\\delta_{{\\mathrm{{act}}}}(t-T_\\delta)\\to\\delta_{{\\mathrm{{act}}}}(t)\\)）特別な場合であり、full-RHS 遅延はその厳密な一般化である。
+</p>
 </section>
 
 <section id="sec-long">
