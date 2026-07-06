@@ -262,7 +262,6 @@ class PerceptionEvaluator(Evaluator):
         if hasattr(self, f"_{self.__class__.__name__}__analyzer"):
             return self.__analyzer
         err_msg = "Analyzer is not available. Please call get_evaluation_results() first."
-
         raise RuntimeError(err_msg)
 
     def __check_evaluation_task_and_frame_id(self, evaluation_task: str) -> bool:
