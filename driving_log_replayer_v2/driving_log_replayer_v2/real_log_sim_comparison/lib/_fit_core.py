@@ -7,13 +7,22 @@
 勾配補正・fractional delay の差分」だけをフラグで渡す。
 
 - sim_first_order / sim_first_order_frac : 純粋遅延 + 一次遅れシミュレーション
-- fit_first_order_delay                 : 遅延グリッド × log-τ 同定 (+ 任意スケール/frac)
+- fit_first_order_delay                 : 遅延グリッド × log-τ 同定 (+ 任意スケール/frac) — 出力誤差型 (推定量)
+- savgol_derivative / savgol_smooth     : 状態微分 (LHS) の SG 平滑化・回帰子平滑化
+- equation_residual_at_params           : 与パラメータでの ODE 残差 r=LHS−RHS を評価 (整合診断・同定はしない)
+
+パラメータ推定は出力誤差型 (fit_first_order_delay = 一次遅れシミュレーションと実測の差の最小化) で行う。
+実データでは方程式残差 (LHS−RHS) を目的関数にすると、むだ時間と時定数のトレードオフにより τ が構造的に
+膨張する (縦・操舵とも出力誤差型の 3〜15 倍) ため、推定量には用いない。方程式残差は
+`equation_residual_at_params` で「同定結果が ODE をどれだけ満たすか」の整合診断 (レポート統一記法
+`E = RHS(param) − LHS`) として評価する。参照設計 ~/software/vehicle_model_fitting も同じ残差形だが、
+非線形 least_squares の bounded 最適化で τ を境界にクランプして初めて抑えている点に注意。
 """
 from __future__ import annotations
 
 import numpy as np
 from scipy.optimize import minimize_scalar
-from scipy.signal import lfilter
+from scipy.signal import lfilter, savgol_filter
 
 
 def delay_shift(cmd: np.ndarray, n_delay: int) -> np.ndarray:
@@ -154,4 +163,98 @@ def fit_first_order_delay(
         "scale": best_scale,
         "rmse": float(np.sqrt(best_mse)),
         "mse": best_mse,
+    }
+
+
+# ---------------------------------------------------------------------------
+# 方程式残差の SG 平滑化微分 (LHS) と診断評価
+#
+# 参照設計 ~/software/vehicle_model_fitting/design.md: 各 ODE を E = RHS(param) − LHS に整理する
+# (LHS = 状態微分)。本モジュールではこの残差を「推定量」には使わず (実データで τ が膨張するため)、
+# 出力誤差型で同定したパラメータの整合診断として `equation_residual_at_params` で評価する。
+# SG 平滑化微分 (savgol_derivative) は加速度/操舵微分のノイズを抑えて LHS を作るために用いる。
+# ---------------------------------------------------------------------------
+
+
+def _savgol_window(n: int, dt: float, window_s: float, polyorder: int) -> int | None:
+    """window_s [s] を有効な SG 窓長 (奇数・polyorder<win<=n) に換算する。取れない場合 None。"""
+    win = int(round(window_s / dt))
+    if win % 2 == 0:
+        win += 1
+    if win <= polyorder:
+        win = polyorder + 1 if (polyorder + 1) % 2 == 1 else polyorder + 2
+    if win > n:
+        win = n if n % 2 == 1 else n - 1
+    if win <= polyorder:
+        return None
+    return win
+
+
+def savgol_derivative(
+    y: np.ndarray, dt: float, window_s: float = 0.2, polyorder: int = 2,
+) -> np.ndarray:
+    """Savitzky-Golay 平滑化1階微分 (窓は秒指定)。窓が取れない短信号は np.gradient に縮退する。
+
+    方程式残差診断の LHS (状態微分) 生成用。窓を秒で定義するのは DT が異なる呼び出し側 (production
+    DT=0.01 と検証 1/30) で挙動を揃えるため。窓は同定対象 τ 下限より短く保つこと (立ち上がりを
+    過平滑化すると τ を過大評価する)。
+    """
+    y = np.asarray(y, dtype=float)
+    win = _savgol_window(len(y), dt, window_s, polyorder)
+    if win is None:
+        return np.gradient(y, dt)
+    return savgol_filter(y, window_length=win, polyorder=polyorder, deriv=1, delta=dt)
+
+
+def savgol_smooth(
+    y: np.ndarray, dt: float, window_s: float = 0.2, polyorder: int = 2,
+) -> np.ndarray:
+    """Savitzky-Golay 平滑化 (deriv=0)。診断残差で RHS の回帰子 act にも LHS と同じ窓を適用し一貫させる。"""
+    y = np.asarray(y, dtype=float)
+    win = _savgol_window(len(y), dt, window_s, polyorder)
+    if win is None:
+        return y.copy()
+    return savgol_filter(y, window_length=win, polyorder=polyorder, deriv=0, delta=dt)
+
+
+def equation_residual_at_params(
+    cmd: np.ndarray,
+    act: np.ndarray,
+    mask: np.ndarray,
+    dt: float,
+    *,
+    tau: float,
+    delay: float,
+    scale: float = 1.0,
+    bias: float = 0.0,
+    window_s: float = 0.2,
+    polyorder: int = 2,
+    t_s: np.ndarray | None = None,
+) -> dict:
+    """与えられたパラメータでの ODE 方程式残差 `r[k] = LHS − RHS` を評価する (同定はしない)。
+
+    方針D: パラメータは出力誤差型で推定した値をそのまま渡し、その解が
+    `dot_act = (s·cmd(t−T) − (act − β))/τ` をどれだけ満たすかを診断する。
+    LHS は act の SG 平滑化微分、RHS は上式の右辺。目的関数ではなく整合診断・レポート統一記法用。
+
+    Returns: {"resid": r[mask] 配列, "rmse_resid": √mean(r²), "n": サンプル数}。
+    """
+    cmd = np.asarray(cmd, dtype=float)
+    act = np.asarray(act, dtype=float)
+    mask = np.asarray(mask, dtype=bool)
+    if not np.isfinite(tau) or tau <= 0 or int(np.count_nonzero(mask)) == 0:
+        return {"resid": np.array([]), "rmse_resid": float("nan"), "n": 0}
+
+    lhs = savgol_derivative(act, dt, window_s, polyorder)
+    act_s = savgol_smooth(act, dt, window_s, polyorder)
+    if t_s is not None:
+        cmd_del = delay_shift_frac(cmd, t_s, float(delay))
+    else:
+        cmd_del = delay_shift(cmd, int(round(float(delay) / dt)))
+    rhs = (scale * cmd_del - (act_s - bias)) / tau
+    r = (lhs - rhs)[mask]
+    return {
+        "resid": r,
+        "rmse_resid": float(np.sqrt(np.mean(r ** 2))),
+        "n": int(r.size),
     }
