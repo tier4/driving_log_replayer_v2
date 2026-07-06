@@ -512,37 +512,40 @@ def _build_sec1(
     _delay_hi = _DELAY_CANDIDATES_LONG[-1]
     _delay_m  = len(_DELAY_CANDIDATES_LONG) - 1
     _tau_lo, _tau_hi = _TAU_BOUNDS_LONG
+    _horizon_desc = ", ".join(f"N={h}（{h * _dt_long:.2f}s）" for h in _PERF_HORIZONS)
+    _horizon_axis = "/".join(f"{h * _dt_long:.2f}s" for h in _PERF_HORIZONS)
+    _horizon_max = _PERF_HORIZONS[-1] * _dt_long
     if long_perf_figs is not None:
         fig_box, fig_growth, fig_map = long_perf_figs
         box_html    = fig_box.to_html(full_html=False, include_plotlyjs=False)
         growth_html = fig_growth.to_html(full_html=False, include_plotlyjs=False)
         map_html    = fig_map.to_html(full_html=False, include_plotlyjs=False)
         long_perf_subsection = (
-            "<h3>モデル構造限界評価（acc 理想追従）</h3>"
-            "<p>シミュレータの加速度応答が実機と完全一致（\\(a_{\\mathrm{act,sim}} = a_{\\mathrm{act,real}}\\)）した場合に"
+            "<h3>加速度・速度の縦方向整合性評価</h3>"
+            "<p>実測加速度 \\(a_{\\mathrm{report}}\\) を速度更新へ直接使った場合に"
             "残る縦方向変位誤差を評価する。<br>"
             "各開始点で \\(v_{x,\\mathrm{sim}}(t_0) = v_{x,\\mathrm{real}}(t_0)\\) に初期化し、"
-            "実測加速度 \\(a_{\\mathrm{act}}\\) を直接積分して変位を計算、実車変位と比較する。</p>"
-            "<p>1-5 横方向評価との対称性: "
-            "1-5 では <i>gt_steer</i> を bicycle model に直接入力して steer 完全追従時の横方向残差を評価する。"
-            "本評価では <i>gt_a_act</i> を積分器に直接入力して acc 完全追従時の縦方向残差を評価する。</p>"
+            "\\(a_{\\mathrm{report}}\\) を直接積分して変位を計算、実車変位と比較する。</p>"
+            "<p>1-5 横方向評価との対応: "
+            "1-5 では実測 \\(\\delta_{\\mathrm{act}}\\) を bicycle model に直接入力して横方向残差を評価する。"
+            "本評価では実測 \\(a_{\\mathrm{report}}\\) を積分器へ直接入力して縦方向残差を評価する。</p>"
             "<div class=\"note\">"
-            "&#9888;&#65039; <b>残差の解釈</b>: \\(\\dot{v}_x = a_{\\mathrm{act}}\\) という運動方程式に含まれない"
-            "要素（路面勾配・空気抵抗・タイヤ縦力・加速度センサーバイアス等）が残差として現れる。"
+            "&#9888;&#65039; <b>残差の解釈</b>: \\(\\dot{v}_x = a_{\\mathrm{report}}\\) として再積分した結果なので、"
+            "速度と加速度の計測・時刻同期・離散化の不整合が残差として現れる。"
             "</div>"
             f"<p>走行区間（\\(v_x > {_vx_min}\\) m/s）を stride={_stride} ステップで走査し、"
             "N-step ロールアウト終端の縦方向誤差絶対値を集計する。"
-            "ホライズン: N=10（0.10s）, N=20（0.20s）, N=50（0.50s）, N=100（1.00s）。</p>"
+            f"ホライズン: {_horizon_desc}。</p>"
             + box_html
             + "<p><b>図②: ドリフト成長カーブ（符号付き）</b> — "
             "ゼロ線から片側に膨らむ傾向が系統的な過大／過小推定を示す。"
             "帯（四分位範囲 25–75%）はばらつき、膨らむ速さは蓄積の速度を表す。"
             "局面別点線（青=減速・灰=巡航・赤=加速）でどの走行シーンでズレが生じるかを確認できる。"
-            "x 軸 of 0.10/0.20/0.50/1.00s は上の box plot のホライズンと一致する。</p>"
+            f"x 軸 of {_horizon_axis} は上の box plot のホライズンと一致する。</p>"
             + growth_html
             + "<p><b>図③: 地図上の変位誤差分布</b> — "
-            "各点は rollout 開始位置（\\(v_x > v_{\\mathrm{min}}\\) を満たす 1.0s 窓の開始点）。"
-            "色は 1.0s 窓終端 of 変位誤差（赤 = シミュレーションが実車より進む過大推定、青 = 過小推定）。"
+            f"各点は rollout 開始位置（\\(v_x > v_{{\\mathrm{{min}}}}\\) を満たす {_horizon_max:.2f}s 窓の開始点）。"
+            f"色は {_horizon_max:.2f}s 窓終端 of 変位誤差（赤 = シミュレーションが実車より進む過大推定、青 = 過小推定）。"
             "路線・カーブ・区間ごとに誤差パターンを地理的に把握できる。</p>"
             + map_html
         )
@@ -580,14 +583,15 @@ def _build_sec1(
       <td><code>IDX::STEER</code></td>
       <td><code>/vehicle/status/steering_status.steering_tire_angle</code></td>
   </tr>
-  <tr><td>\\(a_{{\\mathrm{{act}}}}\\)</td><td>アクチュエータ出力（実加速度。勾配重力加算前の値）</td><td>m/s²</td>
+  <tr><td>\\(a_{{\\mathrm{{act}}}}\\)</td>
+      <td>加速度アクチュエータの内部状態（勾配重力加算前の出力）</td><td>m/s²</td>
       <td><code>IDX::PEDAL_ACCX</code></td>
       <td>—（直接の実測トピックなし。次行 \\(a_{{\\mathrm{{report}}}}\\) を実測相当として使用）</td>
   </tr>
   <tr><td>\\(a_{{\\mathrm{{report}}}}\\)</td>
-      <td>レポート・可視化用の加速度。<code>calcModel</code> の微分には現れず、
+      <td>実測・可視化用の縦加速度。<code>calcModel</code> の状態ではなく、
       Euler 更新後に \\((v_{{x,\\mathrm{{new}}}} - v_{{x,\\mathrm{{prev}}}}) / \\Delta t\\) として事後計算される
-      別枠の出力量（<b>ODE 状態の \\(a_{{\\mathrm{{act}}}}\\) とは別物</b>。実測 \\(a_{{\\mathrm{{act}}}}\\) 相当として使用）</td>
+      出力量。モデル上は \\(a_{{\\mathrm{{report}}}} = a_{{\\mathrm{{act}}}} + a_{{\\mathrm{{slope}}}}\\)。</td>
       <td>m/s²</td><td><code>IDX::ACCX</code></td>
       <td><code>/localization/acceleration.accel.accel.linear.x</code></td>
   </tr>
@@ -624,7 +628,8 @@ def _build_sec1(
       <td><code>wheelbase</code></td>
       <td>—（設定パラメータ）</td>
   </tr>
-  <tr><td>\\(k_{{\\mathrm{{us}}}}\\)</td><td>アンダーステア係数（速度依存ランプ）</td><td>rad·s²/m</td>
+  <tr><td>\\(k_{{\\mathrm{{us}}}},\ k_{{\\mathrm{{us,eff}}}}(v_x)\\)</td>
+      <td>速度帯ごとのアンダーステア係数と、速度から選ばれる実効値</td><td>rad·s²/m</td>
       <td><code>k_us_bands / k_us</code></td>
       <td>—（設定パラメータ）</td>
   </tr>
@@ -640,14 +645,8 @@ def _build_sec1(
   <tr><td>\\(T_a\\)</td><td>加速度純粋遅延</td><td>s</td>
       <td><code>acc_time_delay</code></td><td>—（設定パラメータ）</td>
   </tr>
-  <tr><td>\\(d\\)</td><td>操舵不感帯幅（±d 以内の指令は無視）</td><td>rad</td>
-      <td><code>steer_dead_band</code></td><td>—（設定パラメータ）</td>
-  </tr>
   <tr><td>\\(K_{{\\mathrm{{steer\_scale}}}}\\)</td><td>操舵指令スケーリング倍率（1.0 = 補正なし）</td><td>—</td>
       <td><code>debug_steer_scaling_factor</code></td><td>—（設定パラメータ）</td>
-  </tr>
-  <tr><td>\\(\\dot{{\\delta}}_{{\\mathrm{{lim}}}}\\)</td><td>操舵レート制限（飽和速度）</td><td>rad/s</td>
-      <td><code>steer_rate_lim</code></td><td>—（設定パラメータ）</td>
   </tr>
 </table>
 </section>
@@ -656,16 +655,16 @@ def _build_sec1(
 <h2>1-1. 状態空間モデルと数値積分（Euler 法によるアップデート）</h2>
 <p>
 1-2（縦方向）・1-3（操舵）・1-4（ヨー・横方向）で個別に同定する運動方程式を、実装では一つの状態ベクトルに
-まとめた \\(\\dot{{x}} = f(x, u)\\) として扱い、共通の Euler 積分ループで毎ステップ時間発展させている。
+まとめた \\(\\dot{{\\mathbf{{x}}}} = f(\\mathbf{{x}}, \\mathbf{{u}})\\) として扱い、共通の Euler 積分ループで毎ステップ時間発展させている。
 各記号の意味・単位・ROS トピックは <a href="#sec-coords">1-0 の記号表</a>を参照。
 </p>
 
 <h3>連続時間の状態方程式（ベクトル形式）</h3>
 <p class="meta">
-<span style="color:#1565c0">青字</span>が状態ベクトル x（6状態）、<span style="color:#e65100">橙字</span>が入力ベクトル u。
+<span style="color:#1565c0">青字</span>が状態ベクトル \\(\\mathbf{{x}}\\)（6状態）、<span style="color:#e65100">橙字</span>が入力ベクトル \\(\\mathbf{{u}}\\)。
 </p>
 \\[
-{{\\color{{#1565c0}} x}} =
+{{\\color{{#1565c0}} \\mathbf{{x}}}} =
 \\begin{{pmatrix}}
 {{\\color{{#1565c0}} x}} \\\\
 {{\\color{{#1565c0}} y}} \\\\
@@ -675,7 +674,7 @@ def _build_sec1(
 {{\\color{{#1565c0}} a_{{\\mathrm{{act}}}}}}
 \\end{{pmatrix}}
 , \\qquad
-{{\\color{{#e65100}} u}} =
+{{\\color{{#e65100}} \\mathbf{{u}}}} =
 \\begin{{pmatrix}}
 {{\\color{{#e65100}} a_{{\\mathrm{{cmd,des}}}}}} \\\\
 {{\\color{{#e65100}} \\delta_{{\\mathrm{{cmd,des}}}}}} \\\\
@@ -690,7 +689,7 @@ DRIVE 系（enum 値 2..19）の時刻だけを残す評価マスクとして適
 （NEUTRAL/REVERSE/PARK/LOW 等）は同定・評価窓から除外される。
 </p>
 \\[
-\\dot{{x}} =
+\\dot{{\\mathbf{{x}}}} =
 \\begin{{pmatrix}}
 {{\\color{{#1565c0}} \\dot x}} \\\\
 {{\\color{{#1565c0}} \\dot y}} \\\\
@@ -718,7 +717,7 @@ DRIVE 系（enum 値 2..19）の時刻だけを残す評価マスクとして適
 <p>
 制御周期 \\(\\Delta t\\) ごとの離散時刻を \\(k = 0, 1, 2, \\dots\\) とすると、
 \\[
-{{\\color{{#1565c0}} x_{{k+1}}}} = {{\\color{{#1565c0}} x_k}} + f({{\\color{{#1565c0}} x_k}}, {{\\color{{#e65100}} u_k}}) \\cdot \\Delta t
+{{\\color{{#1565c0}} \\mathbf{{x}}_{{k+1}}}} = {{\\color{{#1565c0}} \\mathbf{{x}}_k}} + f({{\\color{{#1565c0}} \\mathbf{{x}}_k}}, {{\\color{{#e65100}} \\mathbf{{u}}_k}}) \\cdot \\Delta t
 \\]
 で状態を更新する（前進・陽的 Euler 法、実装は
 <code>SimModelInterface::updateEuler(dt, input)</code>）。\\(f\\) を展開すると、各状態は次のように更新される。
@@ -760,14 +759,18 @@ DRIVE 系（enum 値 2..19）の時刻だけを残す評価マスクとして適
 &#128279; <a href="#sec-state-space">1-1 状態方程式</a> の \\(\\dot v_x, \\dot a_{{\\mathrm{{act}}}}\\) 行に対応。
 </p>
 <p>
-加速度アクチュエータの一次遅れ式は、入力 \\(a_{{\\mathrm{{cmd}}}}\\) と状態
-\\(a_{{\\mathrm{{act}}}}\\) だけで閉じており、操舵角・ヨー角・横位置を参照しない。
-さらに \\(a_{{\\mathrm{{act}}}}\\) は実機ログから観測できるため、路面勾配成分を差し引いた
-\\(a_{{\\mathrm{{act,corr}}}}\\) とモデル出力 \\(a_{{\\mathrm{{sim}}}}\\) の残差を目的関数として、
-\\(\\tau_a, T_a\\) を操舵・横方向パラメータとは独立に同定できる。
+ここでは加速度指令 \\(a_{{\\mathrm{{cmd,des}}}}\\) からアクチュエータ状態
+\\(a_{{\\mathrm{{act}}}}\\) までの応答を同定する。
+この一次遅れ式は操舵角・ヨー角・横位置を参照しないため、操舵・横方向パラメータとは独立に扱える。
+1-0 の \\(a_{{\\mathrm{{report}}}}\\) には勾配成分が含まれるため、同定時だけ
+\\[
+a_{{\\mathrm{{obs}}}} := a_{{\\mathrm{{report}}}} - a_{{\\mathrm{{slope}}}}
+\\approx a_{{\\mathrm{{act}}}}
+\\]
+と置き、\\(a_{{\\mathrm{{act}}}}\\) の観測値として使う。
 </p>
 
-<p><b>運動方程式（1-1 と同じ状態・入力表記）:</b></p>
+<p><b>モデル式:</b></p>
 \\[
 \\begin{{pmatrix}}
 {{\\color{{#1565c0}} \\dot v_x}} \\\\
@@ -779,119 +782,105 @@ DRIVE 系（enum 値 2..19）の時刻だけを残す評価マスクとして適
 \\dfrac{{{{\\color{{#e65100}} a_{{\\mathrm{{target}}}}}} - {{\\color{{#1565c0}} a_{{\\mathrm{{act}}}}}}}}{{\\tau_a}}
 \\end{{pmatrix}},
 \\qquad
-{{\\color{{#e65100}} a_{{\\mathrm{{target}}}}}}(t) = {{\\color{{#e65100}} a_{{\\mathrm{{cmd}}}}}}(t - T_a)
+{{\\color{{#e65100}} a_{{\\mathrm{{target}}}}}}(t) = {{\\color{{#e65100}} a_{{\\mathrm{{cmd,des}}}}}}(t - T_a)
 \\]
-<p><b>式中の定数・補足:</b></p>
+<p><b>記号:</b></p>
 <ul>
-  <li>\\(T_a\\)（<code>acc_time_delay</code>）: 加速度指令 \\(a_{{\\mathrm{{cmd}}}}\\) がアクチュエータに届くまでの純粋遅延。</li>
-  <li>\\(\\tau_a\\)（<code>acc_time_constant</code>）: 目標加速度 \\(a_{{\\mathrm{{target}}}}\\) に対するアクチュエータ出力 \\(a_{{\\mathrm{{act}}}}\\) の一次遅れ時定数。</li>
-  <li>\\(a_{{\\mathrm{{slope}}}}\\): 応答遅れを持たない勾配重力加速度成分。\\(\\dot v_x\\) への外部入力。</li>
-  <li>走行抵抗: 一般形では \\(a_{{\\mathrm{{target}}}}\\) に \\(c_0 + c_1 v_x + c_2 v_x^2\\)（<code>lon_drag_c0</code>, <code>lon_drag_c1</code>, <code>lon_drag_c2</code>）を加算。現在はすべて 0 のため上式では省略。</li>
-  <li>制限値: 目標加速度とアクチュエータ出力加速度は <code>vel_rate_lim</code>、車速は <code>vel_lim</code>。</li>
+  <li>\\(T_a\\): 指令が効き始めるまでの純粋遅延（<code>acc_time_delay</code>）。</li>
+  <li>\\(\\tau_a\\): 目標加速度へ近づく速さを表す一次遅れ時定数（<code>acc_time_constant</code>）。</li>
+  <li>\\(\\widehat{{a}}_{{\\mathrm{{act}}}}\\): モデルから計算した \\(a_{{\\mathrm{{act}}}}\\) の推定値。</li>
+  <li>\\(a_{{\\mathrm{{obs}}}}\\): 1-2 内だけで使う勾配補正後の観測値。</li>
+  <li>走行抵抗項（<code>lon_drag_c*</code>）は現在 0 のため省略する。</li>
 </ul>
 
 <h3>実機ログからの独立同定（代表データセットモデルフィット）</h3>
 <p>
-\\(a_{{\\mathrm{{cmd}}}}\\)（指令加速度）を入力として遅延グリッドサーチ + output-error 非線形最小二乗法で
-データセット横断同定した \\((\\tau_a, T_a)\\) のモデル出力（青実線）と
-実測 \\(a_{{\\mathrm{{act}}}}\\)（黒実線）を比較する。最小二乗の目的関数では
-\\(a_{{\\mathrm{{sim}}}} - a_{{\\mathrm{{act,corr}}}}\\) を使い、表示では路面勾配成分をモデル出力へ戻している。
-チューニング値でのシミュレーション結果（点線）も重ね描きする。per-dataset 同定誤差（RMSE）の
-最良・最悪データセットを選択し、低速・停車区間は同定対象から除外したうえで図上ではグレー表示する。
+図では、横断同定した \\((\\tau_a, T_a)\\) のモデル出力（青）と実測加速度（黒）を比較する。
+同定では \\(\\widehat{{a}}_{{\\mathrm{{act}}}} - a_{{\\mathrm{{obs}}}}\\) を評価し、
+表示ではモデル出力に \\(a_{{\\mathrm{{slope}}}}\\) を戻して \\(a_{{\\mathrm{{report}}}}\\) と比較する。
+チューニング値（点線）も重ね、低速・停車区間は同定対象外としてグレー表示する。
 </p>
 
 <details>
 <summary>推定手法の詳細</summary>
 <p>
-純粋遅延 \\(T_a\\) は実装上、制御周期 \\(\\Delta t\\)（={_dt_long:.2f} s）の整数倍
-（サンプル数換算 \\(n_{{\\mathrm{{delay}}}} = \\mathrm{{round}}(T_a / \\Delta t)\\)）でしか区別できない。
-そこで \\(T_a\\) を
+純粋遅延 \\(T_a\\) は制御周期 \\(\\Delta t\\)（={_dt_long:.3f} s）単位で扱う。
+探索は 2 層に分ける。
+</p>
+<ul>
+  <li><b>外側</b>: \\(T_a\\) の \\(\\Delta t\\) 刻み一次元グリッドサーチ。</li>
+  <li><b>内側</b>: 固定した \\(T_a\\) ごとの \\(\\tau_a\\) 連続値一次元最小化。</li>
+</ul>
 \\[
 T_a \\in \\{{0,\\ \\Delta t,\\ 2\\Delta t,\\ \\dots,\\ M\\Delta t\\}},
 \\qquad M = {_delay_m}\\ \\bigl(T_a: {_delay_lo:.2f}\\text{{–}}{_delay_hi:.2f}\\ \\mathrm{{s}}\\bigr)
 \\]
-の有限個の候補に固定した外側グリッドサーチとし、各候補ごとに連続値の時定数 \\(\\tau_a\\) を
-内側の非線形最小二乗最適化で求める二段探索（grid search × 1 次元非線形最小二乗）を行う。
+
+<p><b>① 固定 \\(T_a\\) でロールアウト</b>: 遅延後の入力
+\\(u[k] = a_{{\\mathrm{{cmd,des}}}}[k - n_{{\\mathrm{{delay}}}}]\\) を一次遅れフィルタへ入れる。
+\\[
+\\widehat{{a}}_{{\\mathrm{{act}}}}[0] = a_{{\\mathrm{{obs}}}}[0], \\qquad
+\\widehat{{a}}_{{\\mathrm{{act}}}}[k]
+= (1-\\alpha)\\, \\widehat{{a}}_{{\\mathrm{{act}}}}[k-1] + \\alpha\\, u[k]\quad(k\\ge 1),
+\\qquad \\alpha := \\min\\!\\left(\\frac{{\\Delta t}}{{\\tau_a}},\\,1\\right) \\in (0, 1]
+\\]
+初期値は実測補正加速度に合わせる。これにより、ログ切り出し開始時の初期条件誤差を同定誤差に混ぜない。
+\\(\\widehat{{a}}_{{\\mathrm{{act}}}}\\) は \\(\\tau_a\\) に非線形に依存するため、線形回帰ではなく数値最小化で解く。
 </p>
 
-<p><b>① 固定 \\(T_a\\) に対するシミュレーション出力</b>: 純粋遅延ぶんシフト済みの指令
-\\(u[k] = a_{{\\mathrm{{cmd}}}}[k - n_{{\\mathrm{{delay}}}}]\\) を入力として、1-1 節と同じ 1 次遅れ構造を持つ
-離散フィルタ（指数移動平均 / 1 次 IIR）
+<p><b>② 点ごとの逆算と限界</b>: 隣接 2 サンプルだけを使うと、各時刻の \\(\\tau_a[k]\\) は
+次のように直接計算できる。
 \\[
-a_{{\\mathrm{{sim}}}}[0] = a_{{\\mathrm{{act,corr}}}}[0], \\qquad
-a_{{\\mathrm{{sim}}}}[k] = (1-\\alpha)\\, a_{{\\mathrm{{sim}}}}[k-1] + \\alpha\\, u[k]\quad(k\\ge 1),
-\\qquad \\alpha := \\frac{{\\Delta t}}{{\\tau_a}} \\in (0, 1]
-\\]
-でシミュレーション軌道を生成する。初期値はログ切り出し開始時の実測補正加速度に合わせることで、
-初期条件誤差を \\(\\tau_a, T_a\\) の同定誤差に混入させない。この漸化式を展開すると
-\\[
-a_{{\\mathrm{{sim}}}}[k] =
-(1-\\alpha)^k a_{{\\mathrm{{act,corr}}}}[0]
-+ \\alpha \\sum_{{i=1}}^{{k}} (1-\\alpha)^{{k-i}}\\, u[i]
-\\]
-となり、\\(a_{{\\mathrm{{sim}}}}\\) は \\(\\alpha\\)（≡ \\(\\tau_a\\)）のべき乗を通じて非線形に依存する。
-このため output-error 規準（シミュレーション軌道と実測値の残差二乗和）は \\(\\tau_a\\) に関する線形回帰・
-正規方程式には帰着できず、数値的な非線形最小二乗として解く必要がある。
-</p>
-
-<p><b>② 隣接サンプルからの直接逆算（点ごとの \\(\\tau_a\\) 推定）とその限界</b>: ①の漸化式
-\\(a_{{\\mathrm{{sim}}}}[k] = (1-\\alpha)\\, a_{{\\mathrm{{sim}}}}[k-1] + \\alpha\\, u[k]\\) に実測値
-\\(a_{{\\mathrm{{sim}}}}[k] \\approx a_{{\\mathrm{{act,corr}}}}[k]\\) を代入して \\(\\alpha\\)（＝\\(\\Delta t/\\tau_a\\)）について
-直接解くと、
-\\[
-\\alpha = \\frac{{a_{{\\mathrm{{act,corr}}}}[k] - a_{{\\mathrm{{act,corr}}}}[k-1]}}{{u[k] - a_{{\\mathrm{{act,corr}}}}[k-1]}}
+\\alpha = \\frac{{a_{{\\mathrm{{obs}}}}[k] - a_{{\\mathrm{{obs}}}}[k-1]}}
+{{u[k] - a_{{\\mathrm{{obs}}}}[k-1]}}
 \\quad\\Longrightarrow\\quad
 \\tau_a[k] = \\frac{{\\Delta t}}{{\\alpha}}
-= \\Delta t\\, \\frac{{u[k] - a_{{\\mathrm{{act,corr}}}}[k-1]}}{{a_{{\\mathrm{{act,corr}}}}[k] - a_{{\\mathrm{{act,corr}}}}[k-1]}}
+= \\Delta t\\,
+\\frac{{u[k] - a_{{\\mathrm{{obs}}}}[k-1]}}
+{{a_{{\\mathrm{{obs}}}}[k] - a_{{\\mathrm{{obs}}}}[k-1]}}
 \\]
-という「\\(\\tau_a = \\cdots\\)」の閉形式が各サンプル \\(k\\) ごとに得られる。これを代表データセット
-（横断フィットの最良・最悪データセット）の全時刻についてプロットしたものが下図
-（横軸: 時刻、縦軸: 点ごとの \\(\\tau_a[k]\\) 推定値、赤破線: 横断最小二乗法フィット値）である。
+ただし、これは差分が小さい区間でノイズに非常に弱い。下図はこの点ごとの推定値と、
+横断最小二乗フィット値（赤破線）を比較したもの。
 </p>
 {long_tau_html}
 <p>
-分母 \\(a_{{\\mathrm{{act,corr}}}}[k] - a_{{\\mathrm{{act,corr}}}}[k-1]\\) が小さい区間（緩加速・定常走行）では
-測定ノイズが増幅されて \\(\\tau_a[k]\\) が大きく散らばり、非物理的な値（負値・極端な発散）も生じる
-（グラフでは負値・τ範囲外は除外して表示）。この不安定さが、単純な点ごとの逆算ではなく、
-全時刻の残差二乗和を最小化する非線形最小二乗（次項③）が採用されている理由である。<br>
-下図は最良・最悪の代表 2〜4 件だけでなく、横断フィットに使用した全データセット
-（n_dyn 上位、最大 {_N_CROSS_FIT_DATASET} 件）をプールした瞬時 \\(\\tau_a[k]\\) 推定値のヒストグラムである。
-分布の広がり・歪み・裾の長さが、代表データセットの散布図（上図）で見えていた散らばりが
-局所的な現象ではなくデータセット横断で一貫した傾向であることを示す。
+緩加速・定常走行では分母が小さくなり、\\(\\tau_a[k]\\) は大きく散る。
+そのため、点ごとの逆算値は診断用に留め、同定値は全時刻の残差二乗和で決める。
+下図は横断フィットに使った全データセット（最大 {_N_CROSS_FIT_DATASET} 件）の
+\\(\\tau_a[k]\\) 分布である。
 </p>
 {long_tau_hist_html}
 
-<p><b>③ 目的関数と対数変換による 1 次元探索</b>: 動的区間マスク \\(\\mathcal{{K}}\\)
-（DRIVE ギア・走行中・\\(|\\dot a_{{\\mathrm{{cmd}}}}|\\) 閾値超過）上での残差二乗平均
+<p><b>③ 内側: \\(\\tau_a\\) 一次元最小化</b>: DRIVE ギア・走行中・指令変化ありのサンプル集合
+\\(\\mathcal{{K}}\\) で、次の平均二乗誤差を最小化する。
 \\[
 J(\\tau_a;\\, T_a) = \\frac{{1}}{{|\\mathcal{{K}}|}} \\sum_{{k \\in \\mathcal{{K}}}}
-\\bigl(a_{{\\mathrm{{sim}}}}[k;\\, \\tau_a, T_a] - a_{{\\mathrm{{act,corr}}}}[k]\\bigr)^2
+\\bigl(\\widehat{{a}}_{{\\mathrm{{act}}}}[k;\\, \\tau_a, T_a]
+- a_{{\\mathrm{{obs}}}}[k]\\bigr)^2
 \\]
-を最小化する。\\(\\tau_a\\) の探索範囲（{_tau_lo:.2f}〜{_tau_hi:.3g} s）が 2 桁以上に及ぶため、
-\\(\\theta = \\ln \\tau_a\\) と置換して
+\\(\\tau_a\\) は正値なので、実装では \\(\\theta = \\ln \\tau_a\\) に変換して有界 1 次元最小化する。
 \\[
 \\theta^*(T_a) = \\operatorname*{{arg\\,min}}_{{\\theta \\in [\\ln \\tau_{{\\min}},\\, \\ln \\tau_{{\\max}}]}}
 J\\bigl(e^{{\\theta}};\\, T_a\\bigr)
 \\]
-を有界 1 次元非線形最小化（Brent 法, <code>scipy.optimize.minimize_scalar(method="bounded")</code>）で解き、
-\\(\\tau_a^*(T_a) = e^{{\\theta^*(T_a)}}\\) を得る。対数空間にすることで正値制約を自動的に満たしつつ、
-広いダイナミックレンジに対して均等な探索分解能を確保できる。
+探索範囲は \\(\\tau_a={_tau_lo:.3f}\\)〜{_tau_hi:.3g} s、解法は
+<code>scipy.optimize.minimize_scalar(method="bounded")</code>。
 </p>
 
-<p><b>④ 純粋遅延グリッドサーチ（外側ループ）</b>: ③の内側最小化を候補
-\\(T_a = m\\Delta t\\)（\\(m = 0, \\dots, M\\)）ごとに実行し、
+<p><b>④ 外側: \\(T_a\\) 一次元グリッドサーチ</b>: 各 \\(T_a = m\\Delta t\\) で③を解き、
+最も小さい目的関数値を選ぶ。
 \\[
 (\\tau_a^{{*}},\\, T_a^{{*}}) = \\operatorname*{{arg\\,min}}_{{T_a \\in \\{{0,\\Delta t,\\dots,M\\Delta t\\}}}}
 J\\bigl(\\tau_a^*(T_a);\\, T_a\\bigr)
 \\]
-により大域最適な組を選ぶ。複数データセットを横断して同定する場合は、残差二乗和とサンプル数を
-データセット間でプールした
+複数データセットを横断する場合は、残差二乗和とサンプル数をプールした
 \\[
 J_{{\\mathrm{{pool}}}}(\\tau_a; T_a) =
-\\frac{{\\sum_d \\sum_{{k \\in \\mathcal{{K}}_d}} \\bigl(a_{{\\mathrm{{sim}},d}}[k] - a_{{\\mathrm{{act,corr}},d}}[k]\\bigr)^2}}
+\\frac{{\\sum_d \\sum_{{k \\in \\mathcal{{K}}_d}}
+\\bigl(\\widehat{{a}}_{{\\mathrm{{act}},d}}[k] - a_{{\\mathrm{{obs}},d}}[k]\\bigr)^2}}
 {{\\sum_d |\\mathcal{{K}}_d|}}
 \\]
-を同じ手順で最小化し、単一の共有パラメータ \\((\\tau_a^*, T_a^*)\\) を得る。
+を同じ手順で最小化する。
 </p>
 </details>
 {long_html}
@@ -899,7 +888,8 @@ J_{{\\mathrm{{pool}}}}(\\tau_a; T_a) =
 <table class="param-table">
   <tr><th>パラメータ</th><th>値</th><th>式中の役割</th><th>同定誤差量（RMSE）</th></tr>
   <tr><td><code>acc_time_constant</code> (\\(\\tau_a\\))</td><td>{tau_a} s</td>
-      <td>一次遅れ時定数：小さいほど加速応答が速い</td><td rowspan="2">\\(a_{{\\mathrm{{sim}}}} - a_{{\\mathrm{{act,corr}}}}\\)</td></tr>
+      <td>一次遅れ時定数：小さいほど加速応答が速い</td>
+      <td rowspan="2">\\(\\widehat{{a}}_{{\\mathrm{{act}}}} - a_{{\\mathrm{{obs}}}}\\)</td></tr>
   <tr><td><code>acc_time_delay</code> (\\(T_a\\))</td><td>{T_a} s</td>
       <td>純粋遅延：指令が実際に入力されるまでの遅延時間</td></tr>
 </table>
@@ -914,7 +904,7 @@ J_{{\\mathrm{{pool}}}}(\\tau_a; T_a) =
 </p>
 <p>
 操舵追従ループは実車位置・ヨーのフィードバックを持たないオープンループなので、
-\\(\\text{{err}}_{{\\mathrm{{steer}}}}\\) を目的関数として位置・ヨー誤差とは構造的に独立して同定できる。
+モデル出力と実測操舵角の残差を使い、位置・ヨー誤差とは独立に同定できる。
 </p>
 
 <p><b>運動方程式（1-1 と同じ状態・入力表記）:</b></p>
@@ -923,11 +913,11 @@ J_{{\\mathrm{{pool}}}}(\\tau_a; T_a) =
 = \\dfrac{{{{\\color{{#e65100}} \\delta_{{\\mathrm{{des}}}}}}(t) - {{\\color{{#1565c0}} \\delta_{{\\mathrm{{act}}}}}}(t)}}{{\\tau_\\delta}},
 \\qquad
 {{\\color{{#e65100}} \\delta_{{\\mathrm{{des}}}}}}(t)
-= K_{{\\mathrm{{steer\\_scale}}}} \\cdot {{\\color{{#e65100}} \\delta_{{\\mathrm{{cmd}}}}}}(t - T_\\delta)
+= K_{{\\mathrm{{steer\\_scale}}}} \\cdot {{\\color{{#e65100}} \\delta_{{\\mathrm{{cmd,des}}}}}}(t - T_\\delta)
 \\]
 <p><b>式中の定数・補足:</b></p>
 <ul>
-  <li>\\(T_\\delta\\)（<code>steer_time_delay</code>）: 操舵指令 \\(\\delta_{{\\mathrm{{cmd}}}}\\) がアクチュエータに届くまでの純粋遅延。</li>
+  <li>\\(T_\\delta\\)（<code>steer_time_delay</code>）: 操舵指令 \\(\\delta_{{\\mathrm{{cmd,des}}}}\\) がアクチュエータに届くまでの純粋遅延。</li>
   <li>\\(\\tau_\\delta\\)（<code>steer_time_constant</code>）: 目標操舵角 \\(\\delta_{{\\mathrm{{des}}}}\\) に対する実舵角 \\(\\delta_{{\\mathrm{{act}}}}\\) の一次遅れ時定数。</li>
   <li>\\(K_{{\\mathrm{{steer\\_scale}}}}\\)（<code>debug_steer_scaling_factor</code>）: 遅延後の操舵指令に乗算する定数ゲイン。</li>
   <li>制限値・不感帯: 目標操舵角は <code>steer_lim</code>、操舵速度は <code>steer_rate_lim</code>、不感帯は <code>steer_dead_band</code>。</li>
@@ -941,7 +931,7 @@ J_{{\\mathrm{{pool}}}}(\\tau_a; T_a) =
 
 <h3>実機ログからの独立同定（代表データセットモデルフィット）</h3>
 <p>
-\\(\\delta_{{\\mathrm{{cmd}}}}\\) を入力として遅延グリッドサーチ + output-error 非線形最小二乗法で
+\\(\\delta_{{\\mathrm{{cmd,des}}}}\\) を入力として遅延グリッドサーチ + output-error 非線形最小二乗法で
 データセット別に同定した \\((\\tau_\\delta, T_\\delta)\\) のモデル出力（青点線）と実測 \\(\\delta_{{\\mathrm{{act}}}}\\)（黒実線）を比較する。
 チューニング値でのシミュレーション結果（破線）も重ね描きする。per-dataset 同定誤差（RMSE）の
 最良・最悪データセットを選択し、低速・停車区間は除外して表示。
@@ -956,7 +946,7 @@ J_{{\\mathrm{{pool}}}}(\\tau_a; T_a) =
 <table class="param-table">
   <tr><th>パラメータ</th><th>値</th><th>式中の役割</th><th>同定誤差量（RMSE）</th></tr>
   <tr><td><code>steer_time_constant</code> (\\(\\tau_\\delta\\))</td><td>{tau_d} s</td>
-      <td>一次遅れ時定数：小さいほど操舵応答が速い</td><td rowspan="4">\\(\\text{{err}}_{{\\mathrm{{steer}}}}\\)</td></tr>
+      <td>一次遅れ時定数：小さいほど操舵応答が速い</td><td rowspan="4">モデル出力 − 実測操舵角</td></tr>
   <tr><td><code>steer_time_delay</code> (\\(T_\\delta\\))</td><td>{T_d} s</td>
       <td>純粋遅延：操舵指令が実際に入力されるまでの遅延時間</td></tr>
   <tr><td><code>debug_steer_scaling_factor</code> (操舵ゲイン補正倍率)</td><td>{DSF}</td>
@@ -976,8 +966,9 @@ J_{{\\mathrm{{pool}}}}(\\tau_a; T_a) =
 </p>
 <p>
 1-2（縦方向）・1-3（操舵追従）が先行して確定した後、
-\\(\\text{{err}}_{{wz}}\\) を目的関数として <b>高曲率サブセット</b> で \\(k_{{\\mathrm{{us}}}}\\) を同定する。
-直進（\\(\\delta \\approx 0\\)）では感度がゼロなので、全データセット集約スコアは \\(k_{{\\mathrm{{us}}}}\\) に対して構造的不可同定。
+ヨーレート残差 \\(\\widehat{{\\omega}}-\\omega\\) を目的関数として <b>高曲率サブセット</b> で
+\\(k_{{\\mathrm{{us}}}}\\) を同定する。直進（\\(\\delta_{{\\mathrm{{act}}}}+\\beta \\approx 0\\)）では感度が
+ほぼゼロなので、全データセット集約スコアだけでは \\(k_{{\\mathrm{{us}}}}\\) を同定できない。
 </p>
 
 <p><b>運動方程式（1-1 と同じ状態表記）:</b></p>
@@ -997,7 +988,8 @@ J_{{\\mathrm{{pool}}}}(\\tau_a; T_a) =
 <p><b>式中の定数・補足:</b></p>
 <ul>
   <li>\\(L\\)（<code>wheelbase</code>）: 自転車モデルのホイールベース。</li>
-  <li>\\(k_{{\\mathrm{{us,eff}}}}\\)（<code>k_us_bands / k_us</code>）: 速度帯ごとのアンダーステア係数。</li>
+  <li>\\(k_{{\\mathrm{{us,eff}}}}(v_x)\\): 速度帯ごとの \\(k_{{\\mathrm{{us}}}}\\) から
+  速度 \\(v_x\\) に応じて選ばれる実効値。</li>
   <li>\\(\\beta\\)（<code>steer_bias</code>）: ヨー式の \\(\\tan(\\cdot)\\) 引数に入るバイアス。系統的なヨーオフセット成分。</li>
   <li>\\(\\delta_{{\\mathrm{{act}}}}\\): 1-3 の操舵追従結果。操舵ゲイン補正倍率による \\(k_{{\\mathrm{{us}}}}\\) の \\(v_x^2\\delta\\) 成分の部分吸収に注意。</li>
 </ul>
@@ -1011,7 +1003,9 @@ J_{{\\mathrm{{pool}}}}(\\tau_a; T_a) =
 \\(v_x > {VX_MIN_CURVE}\\) m/s）を通過した各タイムステップを速度ビンに割り当て、
 ビン内で以下の2種類の推定を行う。
 </p>
-<p><b>① 最小二乗法推定（青丸・実線）</b>: 原点回帰 \\(\\tan(\\delta_{{\\mathrm{{eff}}}}) = C \\cdot \\omega\\) の最小二乗解
+<p><b>① 最小二乗法推定（青丸・実線）</b>: 各サンプルの補正済み操舵角を
+\\(\\delta_i := \\delta_{{\\mathrm{{act}},i}} + \\beta\\) と置き、原点回帰
+\\(\\tan(\\delta_i) = C \\cdot \\omega_i\\) の最小二乗解
 \\[
 C_{{\\mathrm{{OLS}}}} = \\frac{{\\sum \\omega_i \\, \\tan(\\delta_i)}}{{\\sum \\omega_i^2}},
 \\qquad
@@ -1037,7 +1031,8 @@ C_{{\\mathrm{{OLS}}}} = \\frac{{\\sum \\omega_i \\, \\tan(\\delta_i)}}{{\\sum \\
   <tr><th>パラメータ</th><th>値</th><th>式中の役割</th><th>同定誤差量</th></tr>
 {kus_rows}
   <tr><td><code>steer_bias</code> (\\(\\beta\\)) <i>[1-3 と共有]</i></td><td>{beta} rad</td>
-      <td>\\(\\tan(\\delta_{{\\mathrm{{act}}}} + \\beta)\\) の引数：ヨーオフセット成分</td><td>\\(\\text{{err}}_{{wz}}\\)（間接）</td></tr>
+      <td>\\(\\tan(\\delta_{{\\mathrm{{act}}}} + \\beta)\\) の引数：ヨーオフセット成分</td>
+      <td>\\(\\widehat{{\\omega}}-\\omega\\)（間接）</td></tr>
 </table>
 </section>
 """
@@ -1112,7 +1107,9 @@ def _build_sec2(kus_fig: go.Figure, n_dataset: int) -> str:
 \\(v_x > {VX_MIN_CURVE}\\) m/s）を通過した各タイムステップを速度ビンに割り当て、
 ビン内で以下の2種類の推定を行う。
 </p>
-<p><b>① 最小二乗法推定（青丸・実線）</b>: 原点回帰 \\(\\tan(\\delta_{{\\mathrm{{eff}}}}) = C \\cdot \\omega\\) の最小二乗解
+<p><b>① 最小二乗法推定（青丸・実線）</b>: 各サンプルの補正済み操舵角を
+\\(\\delta_i := \\delta_{{\\mathrm{{act}},i}} + \\beta\\) と置き、原点回帰
+\\(\\tan(\\delta_i) = C \\cdot \\omega_i\\) の最小二乗解
 \\[
 C_{{\\mathrm{{OLS}}}} = \\frac{{\\sum \\omega_i \\, \\tan(\\delta_i)}}{{\\sum \\omega_i^2}},
 \\qquad
@@ -1849,7 +1846,7 @@ def main() -> None:
     long_perf_figs = (
         build_fig_long_perf_box(
             long_perf_data,
-            title=f"縦方向 モデル構造限界評価（a_act 直接入力 vs 実車変位、上位 {_n_lp} データセット）",
+            title=f"縦方向 整合性評価（a_report 直接入力 vs 実車変位、上位 {_n_lp} データセット）",
         ),
         build_fig_long_perf_growth(
             long_perf_data,

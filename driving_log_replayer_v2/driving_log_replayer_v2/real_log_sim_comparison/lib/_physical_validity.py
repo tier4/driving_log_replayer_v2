@@ -56,8 +56,9 @@ WZ_MIN = 0.02         # [rad/s]
 DWZ_MAX = 0.30        # [rad/s²]
 K_US_CLIP = 0.5
 
-_FIT_DT = 0.01          # モデルフィット用リサンプリング DT [s]
-_N_DYN_MIN = 100        # 動的フィット対象の最小サンプル数
+_FIT_DT = 1.0 / 30.0    # モデルフィット用リサンプリング DT [s] (制御コマンド周期 30 Hz)
+_N_DYN_MIN = int(round(1.0 / _FIT_DT))  # 動的フィット対象の最小サンプル数 (約 1 秒)
+_MIN_FIT_SAMPLES = int(round(0.5 / _FIT_DT))  # 単一フィット可否判定の最小サンプル数 (約 0.5 秒)
 _MIN_SPAN_NS = 2e9      # タイムスパン下限 [ns] (2 秒)
 _GRAVITY = 9.81         # 重力加速度 [m/s²]
 
@@ -78,13 +79,13 @@ def merged_model_params(model_params: dict) -> dict:
 # 縦方向 (SSOT は本モジュール。由来は旧 identify_long_dynamics.py の同定手順、git 履歴参照)
 _DA_THRESH_FIT = 0.15
 _VX_MIN_FIT = 0.5
-_DELAY_CANDIDATES_LONG = np.arange(0.0, 0.31 + 1e-9, 0.01)
-_TAU_BOUNDS_LONG = (0.01, 5.0)
+_DELAY_CANDIDATES_LONG = np.arange(0.0, 0.30 + 1e-9, _FIT_DT)
+_TAU_BOUNDS_LONG = (_FIT_DT, 5.0)
 
 # 操舵 (SSOT は本モジュール。由来は旧 identify_steer_dynamics.py の同定手順、git 履歴参照)
 _DSTEER_MIN = 0.001
-_DELAY_CANDIDATES_STEER = np.arange(0.0, 0.15 + 1e-9, 0.01)
-_TAU_BOUNDS_STEER = (0.01, 2.0)
+_DELAY_CANDIDATES_STEER = np.arange(0.0, 0.15 + 1e-9, _FIT_DT)
+_TAU_BOUNDS_STEER = (_FIT_DT, 2.0)
 
 
 # ---------------------------------------------------------------------------
@@ -254,7 +255,7 @@ def fit_long_single(bag_path: Path) -> dict | None:
 
     d_cmd = np.abs(np.gradient(a_cmd_arr, _FIT_DT))
     mask_dyn = gear_drive & (vx > _VX_MIN_FIT) & (d_cmd > _DA_THRESH_FIT)
-    if mask_dyn.sum() < 50:
+    if mask_dyn.sum() < _MIN_FIT_SAMPLES:
         return None
 
     def _mse(log_tau: float, n_delay: int) -> float:
@@ -320,7 +321,7 @@ def fit_steer_single(bag_path: Path) -> dict | None:
 
     dd_cmd = np.abs(np.gradient(d_cmd, _FIT_DT))
     mask_dyn = gear_drive & (vx > _VX_MIN_FIT) & (dd_cmd > _DSTEER_MIN / _FIT_DT)
-    if mask_dyn.sum() < 50:
+    if mask_dyn.sum() < _MIN_FIT_SAMPLES:
         return None
 
     def _mse(log_tau: float, n_delay: int) -> float:
@@ -737,7 +738,7 @@ def fit_long_cross_dataset_bounded(
         a_act_corr_arr = a_act_arr - slope_acc_arr
         d_cmd = np.abs(np.gradient(a_cmd_arr, _FIT_DT))
         mask = gear_drive & (vx > _VX_MIN_FIT) & (d_cmd > _DA_THRESH_FIT)
-        if mask.sum() < 50:
+        if mask.sum() < _MIN_FIT_SAMPLES:
             continue
         pooled.append((a_cmd_arr, a_act_corr_arr, mask))
 
@@ -1169,6 +1170,7 @@ def compute_long_perf_data(
 
     res = {
         "n_dataset": n_dataset,
+        "dt_s": _FIT_DT,
         "h_labels": h_labels,
         "per_h_errors": {str(h): v for h, v in per_h_errors.items()},
     }
@@ -1247,6 +1249,7 @@ def compute_perfect_tracking_data(
 
     return {
         "n_dataset": n_dataset,
+        "dt_s": _FIT_DT,
         "h_labels": h_labels,
         "per_h_errors": {str(h): v for h, v in per_h_errors.items()},
         "traj_data": traj_data,

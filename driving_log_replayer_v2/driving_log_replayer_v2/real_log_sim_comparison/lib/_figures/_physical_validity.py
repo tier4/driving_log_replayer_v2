@@ -454,7 +454,7 @@ def build_fig_perfect_tracking_box(data: dict) -> go.Figure:
     """操舵理想追従のホライズン別誤差 Box Plot。"""
     fig = go.Figure()
     keys = ["10", "20", "50", "100"]
-    h_labels = data.get("h_labels", ["0.10s", "0.20s", "0.50s", "1.00s"])
+    h_labels = data.get("h_labels", ["0.33s", "0.67s", "1.67s", "3.33s"])
     per_h_errors = data.get("per_h_errors") or {}
 
     for k, hl in zip(keys, h_labels):
@@ -537,7 +537,7 @@ def build_fig_long_perf_box(data: dict, title: str | None = None) -> go.Figure:
     """縦方向理想追従誤差の Box Plot。title 指定でタイトルを上書きできる。"""
     fig = go.Figure()
     keys = ["10", "20", "50", "100"]
-    h_labels = data.get("h_labels", ["0.10s", "0.20s", "0.50s", "1.00s"])
+    h_labels = data.get("h_labels", ["0.33s", "0.67s", "1.67s", "3.33s"])
     per_h_errors = data.get("per_h_errors") or {}
 
     for k, hl in zip(keys, h_labels):
@@ -551,7 +551,7 @@ def build_fig_long_perf_box(data: dict, title: str | None = None) -> go.Figure:
         return _placeholder_fig("縦方向理想追従データなし")
 
     fig.update_layout(
-        title=title or f"縦方向 モデル構造限界評価（a_act 直接入力 vs GT 変位、上位 {data.get('n_dataset', 0)} データセット）",
+        title=title or f"縦方向 整合性評価（a_report 直接入力 vs GT 変位、上位 {data.get('n_dataset', 0)} データセット）",
         xaxis_title="ホライズン [s]",
         yaxis_title="|縦方向誤差| [cm]",
         height=400,
@@ -580,8 +580,8 @@ def build_fig_long_perf_growth(data: dict, labels: dict | None = None) -> go.Fig
     phase = np.array(phase_pool)
 
     _H_MAX = verr.shape[1] - 1
-    _FIT_DT = 0.01
-    t_axis = np.arange(_H_MAX + 1) * _FIT_DT
+    dt_s = float(data.get("dt_s", 1.0 / 30.0))
+    t_axis = np.arange(_H_MAX + 1) * dt_s
 
     fig = make_subplots(
         rows=1, cols=2,
