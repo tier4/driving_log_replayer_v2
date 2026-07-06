@@ -635,7 +635,7 @@ def compute_steer_timeseries(bag_path: Path, fit: dict | None, models: dict[str,
 
 
 # ---------------------------------------------------------------------------
-# collection 横断: best/worst データセット選定・縦方向横断フィット (有界 MCAP 再読込)
+# collection 横断: データセット選定・縦方向横断フィット (有界 MCAP 再読込)
 # ---------------------------------------------------------------------------
 def pick_best_worst_entries(
     entries: list, per_ds_fit: dict[str, dict], rmse_key: str, n: int = _FIT_N_DATASET,
@@ -657,6 +657,17 @@ def pick_best_worst_entries(
     best_ids = {e.dataset_id for e, _ in best}
     worst = [c for c in ok_sorted[::-1][:n] if c[0].dataset_id not in best_ids]
     return [(e, "最良") for e, _ in best] + [(e, "最悪") for e, _ in worst]
+
+
+def _valid_fit_entries(entries: list, per_ds_fit: dict[str, dict], rmse_key: str) -> list:
+    """時系列表示候補になる per-dataset fit 済み entry を返す。"""
+    return [
+        e for e in entries
+        if e.real_lite is not None
+        and e.dataset_id in per_ds_fit
+        and per_ds_fit[e.dataset_id].get(rmse_key) is not None
+        and np.isfinite(per_ds_fit[e.dataset_id][rmse_key])
+    ]
 
 
 _CONTIGUOUS_GAP_NS = 2.0 * _FIT_DT * 1e9
@@ -712,13 +723,21 @@ def _merge_contiguous_timeseries_rows(rows: list[dict]) -> list[dict]:
             for key, names in mapping_keys.items()
         }
         last_ns = float("-inf")
+        last_out_s = float("-inf")
         for row in group:
             t_abs_ns = float(row["_t0_ns"]) + np.asarray(row["t"], dtype=float) * 1e9
             keep = t_abs_ns > last_ns + 0.5 * _FIT_DT * 1e9
-            if not np.any(keep):
-                continue
-            indices = np.flatnonzero(keep)
-            t_merged.extend(((t_abs_ns[indices] - group_t0_ns) * 1e-9).tolist())
+            if np.any(keep):
+                indices = np.flatnonzero(keep)
+                t_out = (t_abs_ns[indices] - group_t0_ns) * 1e-9
+            else:
+                # Some extracted real.lite MCAPs reset/overlap ROS record timestamps per
+                # dataset. They are still a selected contiguous group, so append by each
+                # row's relative time instead of dropping the whole row as duplicate time.
+                indices = np.arange(len(row["t"]))
+                row_t = np.asarray(row["t"], dtype=float)
+                t_out = last_out_s + _FIT_DT + (row_t[indices] - row_t[indices[0]])
+            t_merged.extend(t_out.tolist())
             for key in scalar_keys:
                 value = row.get(key)
                 source = (
@@ -733,6 +752,7 @@ def _merge_contiguous_timeseries_rows(rows: list[dict]) -> list[dict]:
                     source = source_map.get(name, [np.nan] * len(row["t"]))
                     target.extend(np.asarray(source)[indices].tolist())
             last_ns = float(t_abs_ns[indices[-1]])
+            last_out_s = float(t_merged[-1])
 
         dataset_ids = [str(row.get("dataset_id", "")) for row in group]
         case_tags = list(dict.fromkeys(str(row.get("case_tag", "")) for row in group))
@@ -753,6 +773,35 @@ def _merge_contiguous_timeseries_rows(rows: list[dict]) -> list[dict]:
         })
         merged_rows.append(merged)
     return merged_rows
+
+
+def _pick_longest_contiguous_timeseries_row(rows: list[dict]) -> list[dict]:
+    """連続結合後の最長時系列だけを返す。"""
+    merged = _merge_contiguous_timeseries_rows(rows)
+    if not merged:
+        return []
+
+    def _duration(row: dict) -> float:
+        t = row.get("t") or []
+        return float(t[-1] - t[0]) if len(t) >= 2 else 0.0
+
+    best = max(
+        merged,
+        key=lambda row: (
+            _duration(row),
+            len(row.get("dataset_ids", [row.get("dataset_id", "")])),
+            len(row.get("t") or []),
+        ),
+    )
+    row = dict(best)
+    dataset_ids = [str(x) for x in row.get("dataset_ids", [row.get("dataset_id", "")])]
+    duration_s = _duration(row)
+    row["case_tag"] = "最長連続"
+    row["label"] = (
+        f"[最長連続] {dataset_ids[0][:8]} → {dataset_ids[-1][:8]}"
+        f"（{len(dataset_ids)}件連続、{duration_s:.1f}s）"
+    )
+    return [row]
 
 
 def fit_long_cross_dataset_bounded(
@@ -853,12 +902,10 @@ def fit_long_cross_dataset_bounded(
 def compute_cross_long_rows(
     entries: list, per_ds_long: dict[str, dict], cross_fit: dict, models: dict | None,
 ) -> list[dict]:
-    """best/worst データセットの縦方向時系列 (横断フィット + モデル別チューン値重ね描き用)。"""
-    picks = pick_best_worst_entries(entries, per_ds_long, "rmse_mps2")
+    """最長連続データセットの縦方向時系列 (横断フィット + モデル別チューン値重ね描き用)。"""
+    candidates = _valid_fit_entries(entries, per_ds_long, "rmse_mps2")
     rows: list[dict] = []
-    for entry, case_tag in picks:
-        if entry.real_lite is None:
-            continue
+    for entry in candidates:
         try:
             df_cmd = load_cmd(entry.real_lite, CMD_TOPIC)
             df_accel = load_accel(entry.real_lite)
@@ -880,66 +927,87 @@ def compute_cross_long_rows(
         vx = _resample(df_vel, "lon_vel", t_s, t0)
         gear_drive = _drive_mask_on_grid(entry.real_lite, t_s, t0, context=f"compute_cross_long_rows:{entry.dataset_id}")
         slope_acc_arr = _slope_acc_on_grid(entry.real_lite, t_s, t0)
+        a_act_corr = a_act_arr - slope_acc_arr
+        d_cmd = np.abs(np.gradient(a_cmd_arr, _FIT_DT))
+        mask_dyn = gear_drive & (vx > _VX_MIN_FIT) & (d_cmd > _DA_THRESH_FIT)
         moving = gear_drive & (vx > VX_MIN_CURVE)
 
         a_sim_cross = None
+        a_sim_cross_corr = None
         tau_pointwise = None
         if np.isfinite(cross_fit.get("tau", float("nan"))):
             n_delay_cross = int(round(cross_fit["delay"] / _FIT_DT))
-            a_act_corr = a_act_arr - slope_acc_arr
-            a_sim_cross = _sim_first_order(
+            a_sim_cross_corr = _sim_first_order(
                 a_cmd_arr, cross_fit["tau"], n_delay_cross, y0=float(a_act_corr[0]),
-            ) + slope_acc_arr
-            d_cmd = np.abs(np.gradient(a_cmd_arr, _FIT_DT))
-            mask_dyn = gear_drive & (vx > _VX_MIN_FIT) & (d_cmd > _DA_THRESH_FIT)
+            )
+            a_sim_cross = a_sim_cross_corr + slope_acc_arr
             tau_pointwise = _pointwise_tau_estimate(a_cmd_arr, a_act_corr, mask_dyn, n_delay_cross)
 
         a_sim_models: dict[str, list] = {}
         a_sim_models_low: dict[str, list] = {}
+        a_sim_models_raw: dict[str, list] = {}
+        dot_a_sim_models: dict[str, list] = {}
         for name, spec in (models or {}).items():
             merged = merged_model_params(spec.params)
             tau = merged.get("acc_time_constant")
             delay = merged.get("acc_time_delay")
             if tau is None or delay is None:
                 continue
-            sim = _sim_first_order(
+            sim_corr = _sim_first_order(
                 a_cmd_arr, float(tau), int(round(float(delay) / _FIT_DT)),
                 y0=float(a_act_arr[0] - slope_acc_arr[0]),
-            ) + slope_acc_arr
+            )
+            sim = sim_corr + slope_acc_arr
             a_sim_models[name] = _mask_stopped(sim, moving)
             a_sim_models_low[name] = _mask_moving(sim, moving)
+            a_sim_models_raw[name] = sim.tolist()
+            dot_a_sim_models[name] = np.gradient(sim_corr, _FIT_DT).tolist()
 
         fit = per_ds_long.get(entry.dataset_id, {})
         rmse = fit.get("rmse_mps2", float("nan"))
         rows.append({
-            "label": f"[{case_tag}] {entry.dataset_id[:8]}  RMSE={rmse:.3f} m/s²",
+            "label": f"[最長連続候補] {entry.dataset_id[:8]}  RMSE={rmse:.3f} m/s²",
             "dataset_id": entry.dataset_id,
-            "case_tag": case_tag,
+            "case_tag": "最長連続候補",
             "_t0_ns": t0,
             "t": t_s.tolist(),
             "moving": moving.tolist(),
+            "gear_drive": gear_drive.tolist(),
+            "mask_dyn": mask_dyn.tolist(),
+            "vx": vx.tolist(),
+            "a_cmd_raw": a_cmd_arr.tolist(),
+            "a_act_raw": a_act_arr.tolist(),
+            "a_act_corr": a_act_corr.tolist(),
+            "slope_acc": slope_acc_arr.tolist(),
+            "dot_a_cmd": np.gradient(a_cmd_arr, _FIT_DT).tolist(),
+            "dot_a_act": np.gradient(a_act_corr, _FIT_DT).tolist(),
+            "dot_a_sim_cross": (
+                np.gradient(a_sim_cross_corr, _FIT_DT).tolist()
+                if a_sim_cross_corr is not None else None
+            ),
             "a_cmd": _mask_stopped(a_cmd_arr, moving),
             "a_cmd_low": _mask_moving(a_cmd_arr, moving),
             "a_act": _mask_stopped(a_act_arr, moving),
             "a_act_low": _mask_moving(a_act_arr, moving),
             "a_sim_cross": _mask_stopped(a_sim_cross, moving) if a_sim_cross is not None else None,
+            "a_sim_cross_raw": a_sim_cross.tolist() if a_sim_cross is not None else None,
             "a_sim_cross_low": _mask_moving(a_sim_cross, moving) if a_sim_cross is not None else None,
             "a_sim_models": a_sim_models,
+            "a_sim_models_raw": a_sim_models_raw,
             "a_sim_models_low": a_sim_models_low,
+            "dot_a_sim_models": dot_a_sim_models,
             "tau_pointwise": tau_pointwise.tolist() if tau_pointwise is not None else None,
         })
-    return _merge_contiguous_timeseries_rows(rows)
+    return _pick_longest_contiguous_timeseries_row(rows)
 
 
 def compute_cross_steer_rows(
     entries: list, per_ds_steer: dict[str, dict], models: dict | None,
 ) -> list[dict]:
-    """best/worst データセットの操舵時系列 (per-dataset フィット + モデル別チューン値重ね描き用)。"""
-    picks = pick_best_worst_entries(entries, per_ds_steer, "rmse_mrad")
+    """最長連続データセットの操舵時系列 (per-dataset フィット + モデル別チューン値重ね描き用)。"""
+    candidates = _valid_fit_entries(entries, per_ds_steer, "rmse_mrad")
     rows: list[dict] = []
-    for entry, case_tag in picks:
-        if entry.real_lite is None:
-            continue
+    for entry in candidates:
         try:
             df_cmd = load_cmd(entry.real_lite, CMD_TOPIC)
             df_steer = load_steering(entry.real_lite)
@@ -960,14 +1028,22 @@ def compute_cross_steer_rows(
         d_act = _resample(df_steer, "steer", t_s, t0)
         vx = _resample(df_vel, "lon_vel", t_s, t0)
         gear_drive = _drive_mask_on_grid(entry.real_lite, t_s, t0, context=f"compute_cross_steer_rows:{entry.dataset_id}")
+        dot_d_cmd = np.gradient(d_cmd, _FIT_DT)
+        dot_d_act = np.gradient(d_act, _FIT_DT)
+        mask_dyn = gear_drive & (vx > _VX_MIN_FIT) & (np.abs(dot_d_cmd) > _DSTEER_MIN / _FIT_DT)
         moving = gear_drive & (vx > VX_MIN_CURVE)
 
         fit = per_ds_steer.get(entry.dataset_id, {})
         d_sim_fit = None
+        dot_d_open_fit = None
         if np.isfinite(fit.get("tau", float("nan"))):
-            d_sim_fit = _sim_first_order(d_cmd, fit["tau"], int(round(fit["delay"] / _FIT_DT)))
+            n_delay_fit = int(round(fit["delay"] / _FIT_DT))
+            d_sim_fit = _sim_first_order(d_cmd, fit["tau"], n_delay_fit)
+            dot_d_open_fit = (_delay_shift(d_cmd, n_delay_fit) - d_act) / max(float(fit["tau"]), 1e-9)
 
         d_sim_models: dict[str, list] = {}
+        d_sim_models_raw: dict[str, list] = {}
+        dot_d_sim_models: dict[str, list] = {}
         for name, spec in (models or {}).items():
             merged = merged_model_params(spec.params)
             tau = merged.get("steer_time_constant")
@@ -976,19 +1052,34 @@ def compute_cross_steer_rows(
                 continue
             sim = _sim_first_order(d_cmd, float(tau), int(round(float(delay) / _FIT_DT)))
             d_sim_models[name] = _mask_stopped(sim, moving)
+            d_sim_models_raw[name] = sim.tolist()
+            dot_d_sim_models[name] = np.gradient(sim, _FIT_DT).tolist()
 
         rmse = fit.get("rmse_mrad", float("nan"))
         rows.append({
-            "label": f"[{case_tag}] {entry.dataset_id[:8]}  RMSE={rmse:.1f} mrad",
+            "label": f"[最長連続候補] {entry.dataset_id[:8]}  RMSE={rmse:.1f} mrad",
             "dataset_id": entry.dataset_id,
-            "case_tag": case_tag,
+            "case_tag": "最長連続候補",
             "_t0_ns": t0,
             "t": t_s.tolist(),
+            "moving": moving.tolist(),
+            "gear_drive": gear_drive.tolist(),
+            "mask_dyn": mask_dyn.tolist(),
+            "vx": vx.tolist(),
+            "d_cmd": d_cmd.tolist(),
+            "dot_d_cmd": dot_d_cmd.tolist(),
+            "dot_d_act": dot_d_act.tolist(),
+            "dot_d_sim_fit": np.gradient(d_sim_fit, _FIT_DT).tolist() if d_sim_fit is not None else None,
+            "dot_d_open_fit": dot_d_open_fit.tolist() if dot_d_open_fit is not None else None,
             "d_act": _mask_stopped(d_act, moving),
+            "d_act_raw": d_act.tolist(),
             "d_sim_fit": _mask_stopped(d_sim_fit, moving) if d_sim_fit is not None else None,
+            "d_sim_fit_raw": d_sim_fit.tolist() if d_sim_fit is not None else None,
             "d_sim_models": d_sim_models,
+            "d_sim_models_raw": d_sim_models_raw,
+            "dot_d_sim_models": dot_d_sim_models,
         })
-    return _merge_contiguous_timeseries_rows(rows)
+    return _pick_longest_contiguous_timeseries_row(rows)
 
 
 # 理想追従評価用定数 (本モジュールが SSOT。physical_validity_report.py はここから import する)

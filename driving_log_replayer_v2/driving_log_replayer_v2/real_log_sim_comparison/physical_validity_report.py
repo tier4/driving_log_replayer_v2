@@ -127,7 +127,7 @@ def fit_per_dataset(
 ) -> tuple[dict[str, dict], dict[str, dict]]:
     """縦方向 / 操舵の per-dataset 実行時フィットを並列実行する。
 
-    対象は real_lite を持つ全 entries。best/worst 図は「全件中の最良・最悪」を示すのが
+    対象は real_lite を持つ全 entries。最長連続時系列図は全件から候補を選ぶのが
     目的のため、旧 identify_{long,steer}_dynamics.py（事前 CSV 生成）や正典
     step_cross_dataset.py と同じく全件を母集団とする。
     Returns: (per_ds_long, per_ds_steer)  ({dataset_id: fit dict})
@@ -723,13 +723,11 @@ DRIVE 系（enum 値 2..19）の時刻だけを残す評価マスクとして適
 \\(\\dot a_{{\\mathrm{{act}}}}\\) 式に対応。
 </p>
 <p>
-縦方向は、加速度指令が実加速度にどれだけ遅れて追従するかを見る。
-実測加速度は勾配成分を引いた
+実測加速度は勾配成分を引いたものを使う。
 \\[
 a_{{\\mathrm{{real}}}} := a_{{\\mathrm{{report}}}} - a_{{\\mathrm{{slope}}}}
 \\approx a_{{\\mathrm{{act}}}}
 \\]
-を使う。操舵・ヨーとは独立な一次遅れ問題として扱う。
 </p>
 
 <p><b>モデル式:</b></p>
@@ -784,6 +782,7 @@ J_a
 <p>
 図では、同定した \\((\\tau_a,T_a)\\) でのモデル出力と実測加速度を重ねる。
 表示時はモデル出力に \\(a_{{\\mathrm{{slope}}}}\\) を戻し、\\(a_{{\\mathrm{{report}}}}\\) と比較する。
+連続するデータセットは ROS 絶対時刻で結合し、1 本の時系列として表示する。
 </p>
 {long_html}
 
@@ -804,10 +803,6 @@ J_a
 <p class="meta">
 &#128279; <a href="#sec-state-space">1-1 状態方程式</a> の
 \\(\\dot\\delta_{{\\mathrm{{act}}}}\\) 式に対応。
-</p>
-<p>
-操舵は、操舵指令が実舵角にどれだけ遅れて追従するかを見る。
-位置・ヨーの残差は使わず、\\(\\dot\\delta_{{\\mathrm{{act}}}}\\) 式の残差で追従系だけを切り出す。
 </p>
 
 <p><b>モデル式:</b></p>
@@ -852,6 +847,7 @@ E_\\delta[k;\\tau_\\delta,T_\\delta]
 <p>
 図では、同定した \\((\\tau_\\delta,T_\\delta)\\) のモデル出力と実測 \\(\\delta_{{\\mathrm{{act}}}}\\) を重ねる。
 チューニング値でのシミュレーション結果も比較として表示する。
+連続するデータセットは ROS 絶対時刻で結合し、1 本の時系列として表示する。
 </p>
 {steer_html}
 <div class="note">
@@ -1506,7 +1502,7 @@ def main() -> None:
     print(f"  k_us={bins['k_us']:.5f} (曲線走行サンプル n={bins['n_pts']})")
 
     # Phase 2b: 縦方向 / 操舵 per-dataset 実行時フィット（旧 identify_*_dynamics.py の
-    # 事前 CSV 生成を置き換え。best/worst 選定の母集団として全件を並列同定する）
+    # 事前 CSV 生成を置き換え。最長連続時系列選定の母集団として全件を並列同定する）
     entries = _to_entries(ds_list)
     n_fit_target = len([e for e in entries if e.real_lite is not None])
     print(f"\n[Phase 2b] 縦方向・操舵 per-dataset フィット (全 {n_fit_target} データセット並列) ...")
@@ -1723,7 +1719,7 @@ def main() -> None:
         title="実機ログからのアンダーステア係数独立同定（最小二乗法回帰・スカラー）",
     )
     # 縦方向 / 操舵: 共有ライブラリの実行時フィット (per-dataset フィット結果 + 横断フィット)
-    # から best/worst 時系列図を生成する（旧: 事前生成 CSV 依存の build_long_figure /
+    # から最長連続時系列図を生成する（旧: 事前生成 CSV 依存の build_long_figure /
     # build_steer_id_figure）。凡例にチューン値 τ/T を残すためモデル名に値を埋め込む。
     tuned_clean = {k: v for k, v in params.items() if not k.startswith("_")}
     merged_tuned = merged_model_params(tuned_clean)

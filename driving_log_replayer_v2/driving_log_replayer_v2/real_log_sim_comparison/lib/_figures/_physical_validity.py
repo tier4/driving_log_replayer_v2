@@ -1,7 +1,7 @@
 """物理妥当性検証 (縦方向 / 操舵 / 横方向 k_us) の図スペック (ROS 非依存・純関数).
 
 per-dataset (step6_analyze_cases) の単一データセット図と、collection 横断
-(step13_cross_dataset) の best/worst データセット + 横断フィット重ね描き図の両方を提供する。
+(step13_cross_dataset) の最長連続データセット + 横断フィット重ね描き図の両方を提供する。
 データ整形は `lib._physical_validity` (ROS 依存の MCAP 読み込みを含む) が担当し、
 本モジュールは計算済み dict/list を受けて `go.Figure` を組むだけの純関数。
 """
@@ -45,6 +45,91 @@ def _low_speed_trace(x: list, y: list, *, dash: str = "solid", showlegend: bool 
         connectgaps=False,
         hovertemplate="低速・停車区間<br>t=%{x:.2f}s<br>a=%{y:.3f} m/s²<extra></extra>",
     )
+
+
+def _series_or(row: dict, *keys: str) -> list | None:
+    for key in keys:
+        value = row.get(key)
+        if value is not None:
+            return value
+    return None
+
+
+def _mask_or(row: dict, *keys: str) -> list | None:
+    for key in keys:
+        value = row.get(key)
+        if value is not None:
+            return value
+    return None
+
+
+def _add_inactive_bands(fig: go.Figure, t: list, mask: list | None, rows: list[int]) -> None:
+    """mask=False の区間を薄い背景として描く。"""
+    if mask is None or not t:
+        return
+    t_arr = np.asarray(t, dtype=float)
+    mask_arr = np.asarray(mask, dtype=bool)
+    if len(t_arr) != len(mask_arr):
+        return
+    inactive = ~mask_arr
+    if not inactive.any():
+        return
+    changes = np.flatnonzero(np.diff(inactive.astype(np.int8)) != 0) + 1
+    bounds = np.concatenate([[0], changes, [len(inactive)]])
+    n_added = 0
+    for start, end in zip(bounds[:-1], bounds[1:]):
+        if not inactive[start]:
+            continue
+        if n_added >= 120:
+            break
+        x0 = float(t_arr[start])
+        x1 = float(t_arr[end - 1])
+        for row in rows:
+            fig.add_vrect(
+                x0=x0, x1=x1, row=row, col=1,
+                fillcolor="lightgray", opacity=0.28,
+                line_width=0, layer="below",
+            )
+        n_added += 1
+
+
+def _mask_area_trace(t: list, mask: list | None, vx: list | None, *, showlegend: bool) -> go.Scatter | None:
+    if mask is None or vx is None:
+        return None
+    mask_arr = np.asarray(mask, dtype=bool)
+    vx_arr = np.asarray(vx, dtype=float)
+    if len(mask_arr) != len(vx_arr):
+        return None
+    ymax = float(np.nanmax(vx_arr)) if np.isfinite(vx_arr).any() else 1.0
+    y = np.where(mask_arr, 0.18 * max(ymax, 1.0), np.nan)
+    return go.Scatter(
+        x=t, y=y.tolist(), mode="lines", fill="tozeroy",
+        line=dict(color="rgba(120,120,120,0.0)", width=0),
+        fillcolor="rgba(120,120,120,0.22)",
+        name="同定対象区間", legendgroup="fit_mask", legendrank=910,
+        showlegend=showlegend,
+        hovertemplate="同定対象区間<br>t=%{x:.2f}s<extra></extra>",
+    )
+
+
+def _model_color_map(names: list[str]) -> dict[str, str]:
+    if not names:
+        return {}
+    base = ["darkorange", "seagreen", "mediumpurple", "indianred"]
+    if len(names) <= len(base):
+        colors = base[:len(names)]
+    else:
+        colors = base + qualitative_colors(len(names) - len(base))
+    return dict(zip(names, colors))
+
+
+def _legend_entry(name: str, group: str, showlegend: bool, rank: int) -> dict:
+    return {
+        "name": name,
+        "legendgroup": group,
+        "legendrank": rank,
+        "showlegend": showlegend,
+    }
 
 
 # ---------------------------------------------------------------------------
@@ -219,70 +304,116 @@ def _build_fig_kus(
 
 
 # ---------------------------------------------------------------------------
-# collection 横断: best/worst 時系列 + 横断フィット + モデル別チューン値
+# collection 横断: 最長連続時系列 + 横断フィット + モデル別チューン値
 # ---------------------------------------------------------------------------
 def build_fig_cross_long(rows_data: list[dict], cross_fit: dict) -> go.Figure:
-    """dataset 横断 縦方向モデルフィット (best/worst 時系列 + 横断最小二乗法同定値)。"""
+    """dataset 横断 縦方向モデルフィット (最長連続時系列 + 横断最小二乗法同定値)。"""
     if not rows_data:
-        return _placeholder_fig("MCAP 読み込み失敗（best/worst データセットが見つかりません）")
+        return _placeholder_fig("MCAP 読み込み失敗（最長連続データセットが見つかりません）")
 
     n = len(rows_data)
     n_datasets = sum(len(r.get("dataset_ids", [r.get("dataset_id")])) for r in rows_data)
     all_model_names: list[str] = []
     for r in rows_data:
-        for name in (r.get("a_sim_models") or {}):
+        for name in (r.get("a_sim_models_raw") or r.get("a_sim_models") or {}):
             if name not in all_model_names:
                 all_model_names.append(name)
-    colors = qualitative_colors(len(all_model_names))
-    color_of = dict(zip(all_model_names, colors))
+    color_of = _model_color_map(all_model_names)
 
-    fig = make_grid(rows=n, cols=1, subplot_titles=[r["label"] for r in rows_data], vertical_spacing=0.08)
+    total_rows = 3 * n
+    titles: list[str] = []
+    row_heights: list[float] = []
+    for r in rows_data:
+        titles.extend([r["label"], "", ""])
+        row_heights.extend([0.48, 0.32, 0.20])
+    fig = make_subplots(
+        rows=total_rows, cols=1,
+        subplot_titles=titles,
+        shared_xaxes=False,
+        vertical_spacing=0.025,
+        row_heights=row_heights,
+    )
     show_legend = True
-    low_legend_shown = False
-    for i, r in enumerate(rows_data, 1):
-        for key, dash in (
-            ("a_act_low", "solid"),
-            ("a_cmd_low", "dash"),
-            ("a_sim_cross_low", "solid"),
-        ):
-            if _has_visible_values(r.get(key)):
-                fig.add_trace(_low_speed_trace(
-                    r["t"], r[key], dash=dash, showlegend=not low_legend_shown,
-                ), row=i, col=1)
-                low_legend_shown = True
-        for series in (r.get("a_sim_models_low") or {}).values():
-            if _has_visible_values(series):
-                fig.add_trace(_low_speed_trace(
-                    r["t"], series, dash="dot", showlegend=not low_legend_shown,
-                ), row=i, col=1)
-                low_legend_shown = True
+    mask_legend_shown = False
+    for i, r in enumerate(rows_data):
+        row_main = 3 * i + 1
+        row_diag = row_main + 1
+        row_vx = row_main + 2
+        t = r["t"]
+        active_mask = _mask_or(r, "mask_dyn", "moving")
+        _add_inactive_bands(fig, t, active_mask, [row_main, row_diag, row_vx])
 
         fig.add_trace(go.Scatter(
-            x=r["t"], y=r["a_act"], name="実測加速度",
-            line=dict(color="black", width=1.5), showlegend=show_legend, connectgaps=False,
-        ), row=i, col=1)
+            x=t, y=_series_or(r, "a_act_raw", "a_act"),
+            line=dict(color="black", width=1.5), connectgaps=False,
+            **_legend_entry("実測: a_report / dot_a_real", "long_actual", show_legend, 10),
+        ), row=row_main, col=1)
         fig.add_trace(go.Scatter(
-            x=r["t"], y=r["a_cmd"], name="指令加速度",
-            line=dict(color="gray", width=1.2, dash="dash"), showlegend=show_legend, connectgaps=False,
-        ), row=i, col=1)
-        if r.get("a_sim_cross") is not None:
+            x=t, y=_series_or(r, "a_cmd_raw", "a_cmd"),
+            line=dict(color="seagreen", width=1.1, dash="dash"), connectgaps=False,
+            **_legend_entry("指令: a_cmd / dot_a_cmd", "long_cmd", show_legend, 20),
+        ), row=row_main, col=1)
+        if _series_or(r, "a_sim_cross_raw", "a_sim_cross") is not None:
             label = (
-                f"横断同定値 τ={cross_fit['tau']:.3f}s T={cross_fit['delay']:.3f}s "
-                f"RMSE={cross_fit.get('rmse_mps2', float('nan')):.3f} m/s²"
+                f"横断同定: a_sim / dot_a_sim "
+                f"(τ={cross_fit['tau']:.3f}s, T={cross_fit['delay']:.3f}s)"
             )
             fig.add_trace(go.Scatter(
-                x=r["t"], y=r["a_sim_cross"], name=label,
-                line=dict(color="royalblue", width=2.0), showlegend=show_legend, connectgaps=False,
-            ), row=i, col=1)
-        for name, series in (r.get("a_sim_models") or {}).items():
+                x=t, y=_series_or(r, "a_sim_cross_raw", "a_sim_cross"),
+                line=dict(color="royalblue", width=2.0), connectgaps=False,
+                **_legend_entry(label, "long_cross_fit", show_legend, 30),
+            ), row=row_main, col=1)
+        for name, series in (r.get("a_sim_models_raw") or r.get("a_sim_models") or {}).items():
+            group = f"long_model_{name}"
             fig.add_trace(go.Scatter(
-                x=r["t"], y=series, name=f"{name} (チューニング値)",
+                x=t, y=series,
                 line=dict(color=color_of[name], width=1.3, dash="dot"),
-                showlegend=show_legend, connectgaps=False,
-            ), row=i, col=1)
+                connectgaps=False,
+                **_legend_entry(f"{name}: a_sim / dot_a_sim (チューニング値)", group, show_legend, 40),
+            ), row=row_main, col=1)
+
+        if r.get("dot_a_act") is not None:
+            fig.add_trace(go.Scatter(
+                x=t, y=r["dot_a_act"],
+                line=dict(color="black", width=1.2), connectgaps=False,
+                **_legend_entry("実測 dot_a_real", "long_actual", False, 10),
+            ), row=row_diag, col=1)
+        if r.get("dot_a_cmd") is not None:
+            fig.add_trace(go.Scatter(
+                x=t, y=r["dot_a_cmd"],
+                line=dict(color="seagreen", width=0.9, dash="dash"), connectgaps=False,
+                **_legend_entry("指令 dot_a_cmd", "long_cmd", False, 20),
+            ), row=row_diag, col=1)
+        if r.get("dot_a_sim_cross") is not None:
+            fig.add_trace(go.Scatter(
+                x=t, y=r["dot_a_sim_cross"],
+                line=dict(color="royalblue", width=1.3), connectgaps=False,
+                **_legend_entry("横断同定 dot_a_sim", "long_cross_fit", False, 30),
+            ), row=row_diag, col=1)
+        for name, series in (r.get("dot_a_sim_models") or {}).items():
+            fig.add_trace(go.Scatter(
+                x=t, y=series,
+                line=dict(color=color_of.get(name, "darkorange"), width=1.0, dash="dot"),
+                connectgaps=False,
+                **_legend_entry(f"{name} dot_a_sim", f"long_model_{name}", False, 40),
+            ), row=row_diag, col=1)
+        fig.add_hline(y=0.0, line=dict(color="gray", width=0.7, dash="dot"), row=row_diag, col=1)
+
+        if r.get("vx") is not None:
+            fig.add_trace(go.Scatter(
+                x=t, y=r["vx"],
+                line=dict(color="mediumpurple", width=1.2), connectgaps=False,
+                **_legend_entry("車速 v_x", "speed", show_legend, 900),
+            ), row=row_vx, col=1)
+        mask_trace = _mask_area_trace(t, active_mask, r.get("vx"), showlegend=show_legend and not mask_legend_shown)
+        if mask_trace is not None:
+            fig.add_trace(mask_trace, row=row_vx, col=1)
+            mask_legend_shown = True
         show_legend = False
-        fig.update_yaxes(title_text="a [m/s²]", row=i, col=1)
-    fig.update_xaxes(title_text="時刻 [s]", row=n, col=1)
+        fig.update_yaxes(title_text="a [m/s²]", row=row_main, col=1)
+        fig.update_yaxes(title_text="dot_a [m/s³]", row=row_diag, col=1)
+        fig.update_yaxes(title_text="vx [m/s]", row=row_vx, col=1)
+        fig.update_xaxes(title_text="時刻 [s]", row=row_vx, col=1)
 
     p_min_deg = math.degrees(cross_fit.get("pitch_min", 0.0))
     p_max_deg = math.degrees(cross_fit.get("pitch_max", 0.0))
@@ -291,9 +422,9 @@ def build_fig_cross_long(rows_data: list[dict], cross_fit: dict) -> go.Figure:
         fig,
         title=(
             f"dataset 横断 縦方向モデルフィット（選択 {n_datasets} データセットを "
-            f"{n} 連続区間で表示、低速/停車区間はグレー表示）<br><sup>{slope_note}</sup>"
+            f"{n} 最長連続区間で表示、同定対象外区間はグレー背景）<br><sup>{slope_note}</sup>"
         ),
-        height=300 * n, margin=dict(t=80, b=40),
+        height=620 * n, margin=dict(t=90, b=40),
         legend=dict(orientation="h", y=1.03, x=0),
     )
 
@@ -500,45 +631,115 @@ def build_fig_nstep_error_hist(df: pd.DataFrame, label: str = "tuned") -> go.Fig
 
 
 def build_fig_cross_steer(rows_data: list[dict]) -> go.Figure:
-    """dataset 横断 操舵モデルフィット (best/worst 時系列 + per-dataset 同定値 + モデル別チューン値)。"""
+    """dataset 横断 操舵モデルフィット (最長連続時系列 + per-dataset 同定値 + モデル別チューン値)。"""
     if not rows_data:
-        return _placeholder_fig("MCAP 読み込み失敗（best/worst データセットが見つかりません）")
+        return _placeholder_fig("MCAP 読み込み失敗（最長連続データセットが見つかりません）")
 
     n = len(rows_data)
     n_datasets = sum(len(r.get("dataset_ids", [r.get("dataset_id")])) for r in rows_data)
     all_model_names: list[str] = []
     for r in rows_data:
-        for name in (r.get("d_sim_models") or {}):
+        for name in (r.get("d_sim_models_raw") or r.get("d_sim_models") or {}):
             if name not in all_model_names:
                 all_model_names.append(name)
-    colors = qualitative_colors(len(all_model_names))
-    color_of = dict(zip(all_model_names, colors))
+    color_of = _model_color_map(all_model_names)
 
-    fig = make_grid(rows=n, cols=1, subplot_titles=[r["label"] for r in rows_data], vertical_spacing=0.08)
+    total_rows = 3 * n
+    titles: list[str] = []
+    row_heights: list[float] = []
+    for r in rows_data:
+        titles.extend([r["label"], "", ""])
+        row_heights.extend([0.48, 0.32, 0.20])
+    fig = make_subplots(
+        rows=total_rows, cols=1,
+        subplot_titles=titles,
+        shared_xaxes=False,
+        vertical_spacing=0.025,
+        row_heights=row_heights,
+    )
     show_legend = True
-    for i, r in enumerate(rows_data, 1):
+    mask_legend_shown = False
+    for i, r in enumerate(rows_data):
+        row_main = 3 * i + 1
+        row_diag = row_main + 1
+        row_vx = row_main + 2
+        t = r["t"]
+        active_mask = _mask_or(r, "mask_dyn", "moving")
+        _add_inactive_bands(fig, t, active_mask, [row_main, row_diag, row_vx])
+
+        if r.get("d_cmd") is not None:
+            fig.add_trace(go.Scatter(
+                x=t, y=r["d_cmd"],
+                line=dict(color="seagreen", width=1.1, dash="dash"),
+                connectgaps=False,
+                **_legend_entry("指令 δ_cmd", "steer_cmd", show_legend, 10),
+            ), row=row_main, col=1)
         fig.add_trace(go.Scatter(
-            x=r["t"], y=r["d_act"], name="実測 δ_act",
-            line=dict(color="black", width=1.5), showlegend=show_legend, connectgaps=False,
-        ), row=i, col=1)
-        if r.get("d_sim_fit") is not None:
+            x=t, y=_series_or(r, "d_act_raw", "d_act"),
+            line=dict(color="black", width=1.5), connectgaps=False,
+            **_legend_entry("実測: δ_act / dot_δ_act", "steer_actual", show_legend, 20),
+        ), row=row_main, col=1)
+        if _series_or(r, "d_sim_fit_raw", "d_sim_fit") is not None:
             fig.add_trace(go.Scatter(
-                x=r["t"], y=r["d_sim_fit"], name="非線形最小二乗法同定値（当該データセット）",
-                line=dict(color="steelblue", width=1.5, dash="dot"), showlegend=show_legend, connectgaps=False,
-            ), row=i, col=1)
-        for name, series in (r.get("d_sim_models") or {}).items():
+                x=t, y=_series_or(r, "d_sim_fit_raw", "d_sim_fit"),
+                line=dict(color="royalblue", width=1.5), connectgaps=False,
+                **_legend_entry("当該データセット同定: δ_sim / dot_δ_sim", "steer_fit", show_legend, 30),
+            ), row=row_main, col=1)
+        for name, series in (r.get("d_sim_models_raw") or r.get("d_sim_models") or {}).items():
+            group = f"steer_model_{name}"
             fig.add_trace(go.Scatter(
-                x=r["t"], y=series, name=f"{name} (チューニング値)",
-                line=dict(color=color_of[name], width=1.3, dash="dash"),
-                showlegend=show_legend, connectgaps=False,
-            ), row=i, col=1)
+                x=t, y=series,
+                line=dict(color=color_of[name], width=1.3, dash="dot"),
+                connectgaps=False,
+                **_legend_entry(f"{name}: δ_sim / dot_δ_sim (チューニング値)", group, show_legend, 40),
+            ), row=row_main, col=1)
+
+        if r.get("dot_d_act") is not None:
+            fig.add_trace(go.Scatter(
+                x=t, y=r["dot_d_act"],
+                line=dict(color="black", width=1.2), connectgaps=False,
+                **_legend_entry("実測 dot_δ_act", "steer_actual", False, 20),
+            ), row=row_diag, col=1)
+        if r.get("dot_d_sim_fit") is not None:
+            fig.add_trace(go.Scatter(
+                x=t, y=r["dot_d_sim_fit"],
+                line=dict(color="royalblue", width=1.2), connectgaps=False,
+                **_legend_entry("当該データセット同定 dot_δ_sim", "steer_fit", False, 30),
+            ), row=row_diag, col=1)
+        if r.get("dot_d_open_fit") is not None:
+            fig.add_trace(go.Scatter(
+                x=t, y=r["dot_d_open_fit"],
+                line=dict(color="darkorange", width=1.2), connectgaps=False,
+                **_legend_entry("当該データセット同定 RHS dot_δ", "steer_fit_rhs", show_legend, 35),
+            ), row=row_diag, col=1)
+        for name, series in (r.get("dot_d_sim_models") or {}).items():
+            fig.add_trace(go.Scatter(
+                x=t, y=series,
+                line=dict(color=color_of.get(name, "darkorange"), width=1.0, dash="dot"),
+                connectgaps=False,
+                **_legend_entry(f"{name} dot_δ_sim", f"steer_model_{name}", False, 40),
+            ), row=row_diag, col=1)
+        fig.add_hline(y=0.0, line=dict(color="gray", width=0.7, dash="dot"), row=row_diag, col=1)
+
+        if r.get("vx") is not None:
+            fig.add_trace(go.Scatter(
+                x=t, y=r["vx"],
+                line=dict(color="mediumpurple", width=1.2), connectgaps=False,
+                **_legend_entry("車速 v_x", "speed", show_legend, 900),
+            ), row=row_vx, col=1)
+        mask_trace = _mask_area_trace(t, active_mask, r.get("vx"), showlegend=show_legend and not mask_legend_shown)
+        if mask_trace is not None:
+            fig.add_trace(mask_trace, row=row_vx, col=1)
+            mask_legend_shown = True
         show_legend = False
-        fig.update_yaxes(title_text="δ [rad]", row=i, col=1)
-    fig.update_xaxes(title_text="時刻 [s]", row=n, col=1)
+        fig.update_yaxes(title_text="δ [rad]", row=row_main, col=1)
+        fig.update_yaxes(title_text="dot_delta [rad/s]", row=row_diag, col=1)
+        fig.update_yaxes(title_text="vx [m/s]", row=row_vx, col=1)
+        fig.update_xaxes(title_text="時刻 [s]", row=row_vx, col=1)
     return apply_base_layout(
         fig,
-        title=f"dataset 横断 操舵モデルフィット（選択 {n_datasets} データセットを {n} 連続区間で表示）",
-        height=300 * n, margin=dict(t=70, b=40),
+        title=f"dataset 横断 操舵モデルフィット（選択 {n_datasets} データセットを {n} 最長連続区間で表示、同定対象外区間はグレー背景）",
+        height=620 * n, margin=dict(t=80, b=40),
         legend=dict(orientation="h", y=1.03, x=0),
     )
 
