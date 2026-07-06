@@ -9,10 +9,10 @@
 - sim_first_order / sim_first_order_frac : 純粋遅延 + 一次遅れシミュレーション
 - fit_first_order_delay                 : 遅延グリッド × log-τ 同定 (+ 任意スケール/frac) — 出力誤差型 (推定量)
 - savgol_derivative / savgol_smooth     : 状態微分 (LHS) の SG 平滑化・回帰子平滑化
-- equation_residual_at_params           : 与パラメータでの ODE 残差 r=LHS−RHS を評価 (整合診断・同定はしない)
+- equation_residual_at_params           : 与パラメータでの ODE 残差 E=RHS−LHS を評価 (整合診断・同定はしない)
 
 パラメータ推定は出力誤差型 (fit_first_order_delay = 一次遅れシミュレーションと実測の差の最小化) で行う。
-実データでは方程式残差 (LHS−RHS) を目的関数にすると、むだ時間と時定数のトレードオフにより τ が構造的に
+実データでは方程式残差 (RHS−LHS) を目的関数にすると、むだ時間と時定数のトレードオフにより τ が構造的に
 膨張する (縦・操舵とも出力誤差型の 3〜15 倍) ため、推定量には用いない。方程式残差は
 `equation_residual_at_params` で「同定結果が ODE をどれだけ満たすか」の整合診断 (レポート統一記法
 `E = RHS(param) − LHS`) として評価する。参照設計 ~/software/vehicle_model_fitting も同じ残差形だが、
@@ -231,13 +231,13 @@ def equation_residual_at_params(
     polyorder: int = 2,
     t_s: np.ndarray | None = None,
 ) -> dict:
-    """与えられたパラメータでの ODE 方程式残差 `r[k] = LHS − RHS` を評価する (同定はしない)。
+    """与えられたパラメータでの ODE 方程式残差 `E[k] = RHS − LHS` を評価する (同定はしない)。
 
     方針D: パラメータは出力誤差型で推定した値をそのまま渡し、その解が
     `dot_act = (s·cmd(t−T) − (act − β))/τ` をどれだけ満たすかを診断する。
     LHS は act の SG 平滑化微分、RHS は上式の右辺。目的関数ではなく整合診断・レポート統一記法用。
 
-    Returns: {"resid": r[mask] 配列, "rmse_resid": √mean(r²), "n": サンプル数}。
+    Returns: {"resid": E[mask] 配列, "rmse_resid": √mean(E²), "n": サンプル数}。
     """
     cmd = np.asarray(cmd, dtype=float)
     act = np.asarray(act, dtype=float)
@@ -252,7 +252,7 @@ def equation_residual_at_params(
     else:
         cmd_del = delay_shift(cmd, int(round(float(delay) / dt)))
     rhs = (scale * cmd_del - (act_s - bias)) / tau
-    r = (lhs - rhs)[mask]
+    r = (rhs - lhs)[mask]
     return {
         "resid": r,
         "rmse_resid": float(np.sqrt(np.mean(r ** 2))),

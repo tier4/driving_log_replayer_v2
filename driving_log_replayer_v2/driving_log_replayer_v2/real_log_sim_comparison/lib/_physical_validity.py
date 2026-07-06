@@ -266,7 +266,7 @@ def fit_long_single(bag_path: Path) -> dict | None:
     if fit is None:
         return None
 
-    # 診断 (方針D): 上で同定した (τ, T) における dot a_act 方程式の残差 r[k]=LHS−RHS を評価。
+    # 診断 (方針D): 上で同定した (τ, T) における dot a_act 方程式の残差 E[k]=RHS−LHS を評価。
     # 目的関数ではなく「同定結果が ODE をどれだけ満たすか」の整合診断・レポート統一記法用。
     resid = equation_residual_at_params(
         a_cmd_arr, a_act_corr, mask_dyn, _FIT_DT,
@@ -332,7 +332,7 @@ def fit_steer_single(bag_path: Path) -> dict | None:
     if fit is None:
         return None
 
-    # 診断 (方針D): 同定した (τ, T) における dot δ_act 方程式の残差 r[k]=LHS−RHS を評価。
+    # 診断 (方針D): 同定した (τ, T) における dot δ_act 方程式の残差 E[k]=RHS−LHS を評価。
     # 出力誤差型は bias β を同定しないため scale=1/bias=0 で評価する (残差の直流成分は未モデル化の
     # 中点ズレを反映する = 診断シグナル)。
     resid = equation_residual_at_params(

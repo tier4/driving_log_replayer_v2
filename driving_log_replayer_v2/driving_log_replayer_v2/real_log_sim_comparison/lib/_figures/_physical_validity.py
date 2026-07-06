@@ -390,7 +390,7 @@ def build_fig_equation_residual_hist(
     unit_label: str,
     rmse_median: float = float("nan"),
 ) -> go.Figure:
-    """同定済みパラメータでの ODE 方程式残差 r[k]=LHS−RHS の分布（診断・方針D）。
+    """同定済みパラメータでの ODE 方程式残差 E[k]=RHS−LHS の分布（診断・方針D）。
 
     パラメータは出力誤差型で推定した値を用い、その解が状態微分方程式
     `dot_x = RHS(θ)` をどれだけ満たすかを示す整合診断。0 中心・低分散なら良同定。
@@ -413,19 +413,19 @@ def build_fig_equation_residual_hist(
     fig = go.Figure()
     fig.add_trace(go.Bar(
         x=centers.tolist(), y=counts.tolist(), width=float(edges[1] - edges[0]),
-        marker_color="teal", opacity=0.75, name=f"残差 r[k]（n={arr.size}）",
+        marker_color="teal", opacity=0.75, name=f"残差 E[k]（n={arr.size}）",
     ))
     fig.add_vline(x=0.0, line=dict(color="black", width=1.5))
     fig.add_vline(
         x=mean, line=dict(color="crimson", width=1.5, dash="dot"),
         annotation_text=f"平均 {mean:.3g}", annotation_position="top right",
     )
-    fig.update_xaxes(title_text=f"方程式残差 r[k] = LHS − RHS  [{unit_label}]", range=[lo, hi])
+    fig.update_xaxes(title_text=f"方程式残差 E[k] = RHS − LHS  [{unit_label}]", range=[lo, hi])
     fig.update_yaxes(title_text="サンプル数")
     extra = f"、残差 RMSE 中央値 {rmse_median:.3g} {unit_label}" if np.isfinite(rmse_median) else ""
     return apply_base_layout(
         fig,
-        title=f"{channel_label}: 同定パラメータでの方程式残差 r[k] の分布（整合診断{extra}）",
+        title=f"{channel_label}: 同定パラメータでの方程式残差 E[k] の分布（整合診断{extra}）",
         height=360,
     )
 

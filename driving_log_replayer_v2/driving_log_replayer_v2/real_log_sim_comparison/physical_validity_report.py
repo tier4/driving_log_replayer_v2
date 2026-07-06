@@ -613,16 +613,13 @@ def _build_sec1(
 各記号の意味・単位・ROS トピックは <a href="#sec-coords">1-0 の記号表</a>を参照。
 </p>
 <p>
-<b>同定の統一ストーリー</b>: 3 つの状態方程式はいずれも、その自然な線形空間で
-方程式残差 \\(E = \\mathrm{{RHS}}(\\theta) - \\mathrm{{LHS}}\\) を定義できる（縦・操舵は状態微分空間
-\\(\\dot a_{{\\mathrm{{act}}}}, \\dot\\delta_{{\\mathrm{{act}}}}\\)、ヨーは \\(\\tan\\delta\\) 空間に整理した \\(\\dot\\theta\\) 式）。
-以降の各節・診断図では符号を反転した残差 \\(r = \\mathrm{{LHS}} - \\mathrm{{RHS}} = -E\\) を用いる
-（0 中心・低分散が良同定という判定は符号によらない）。
-ヨー \\(k_{{\\mathrm{{us}}}}\\) はこの残差の線形最小二乗を<b>そのまま推定に用いる</b>（残差が \\(\\tan\\delta\\) 空間で
-線形なため良条件）。一方<b>縦・操舵は、状態微分の残差最小化がむだ時間↔時定数トレードオフにより
-\\(\\tau\\) を構造的に膨張させる</b>ため（1-2 ③ 参照）、推定はむだ時間に対して良条件な<b>出力誤差型</b>
-（一次遅れシミュレーションと実測の差の最小化）で行い、\\(E\\) は同定結果の<b>整合診断</b>として全式共通の
-形で提示する。
+<b>同定の統一ストーリー</b>: 各状態方程式を \\(\\mathrm{{LHS}} = \\mathrm{{RHS}}(\\theta)\\) と見て、
+方程式残差を
+\\[
+E[k] = \\mathrm{{RHS}}[k;\\theta] - \\mathrm{{LHS}}[k]
+\\]
+で定義する。これは <code>vehicle_model_fitting</code> と同じ符号で、0 中心・低分散なら式と実測がよく合っている。
+縦・操舵ではこの残差を整合診断として示し、ヨーでは線形最小二乗の同定量として直接使う。
 </p>
 
 <h3>連続時間の状態方程式（ベクトル形式）</h3>
@@ -759,14 +756,14 @@ a_{{\\mathrm{{real}}}} := a_{{\\mathrm{{report}}}} - a_{{\\mathrm{{slope}}}}
 \\mathrm{{RHS}}_a[k;\\tau_a,T_a] =
 \\frac{{u[k] - a_{{\\mathrm{{real}}}}[k]}}{{\\tau_a}}
 \\]
-である。方程式残差は
+である。方程式残差は <code>vehicle_model_fitting</code> と同じ符号で
 \\[
-r^{{\\mathrm{{diff}}}}_a[k;\\tau_a,T_a]
-= \\mathrm{{LHS}}_a[k] - \\mathrm{{RHS}}_a[k;\\tau_a,T_a],
+E_a[k;\\tau_a,T_a]
+= \\mathrm{{RHS}}_a[k;\\tau_a,T_a] - \\mathrm{{LHS}}_a[k],
 \\qquad
-J^{{\\mathrm{{diff}}}}_a
+J_a
 = \\frac{{1}}{{|\\mathcal{{K}}|}} \\sum_{{k\\in\\mathcal{{K}}}}
-\\left(r^{{\\mathrm{{diff}}}}_a[k]\\right)^2
+\\left(E_a[k]\\right)^2
 \\]
 で評価する。0 中心で低分散なら、同定した \\((\\tau_a,T_a)\\) が運動方程式と整合している。
 </p>
@@ -831,8 +828,8 @@ J^{{\\mathrm{{diff}}}}_a
 \\frac{{\\delta_{{\\mathrm{{des}}}}[k] - \\delta_{{\\mathrm{{act}}}}[k]}}{{\\tau_\\delta}},
 \\]
 \\[
-r^{{\\mathrm{{diff}}}}_\\delta[k;\\tau_\\delta,T_\\delta]
-= \\mathrm{{LHS}}_\\delta[k] - \\mathrm{{RHS}}_\\delta[k;\\tau_\\delta,T_\\delta]
+E_\\delta[k;\\tau_\\delta,T_\\delta]
+= \\mathrm{{RHS}}_\\delta[k;\\tau_\\delta,T_\\delta] - \\mathrm{{LHS}}_\\delta[k]
 \\]
 と置く。残差が 0 付近に集まれば、同定した \\((\\tau_\\delta,T_\\delta)\\) は操舵の状態方程式と整合している。
 </p>
@@ -1763,7 +1760,7 @@ def main() -> None:
                 break
     steer_fig = build_fig_cross_steer(rows_steer)
 
-    # 方程式残差の整合診断 (方針D): 各データセットの出力誤差同定パラメータでの残差 r[k]=LHS−RHS を
+    # 方程式残差の整合診断 (方針D): 各データセットの出力誤差同定パラメータでの残差 E[k]=RHS−LHS を
     # 全データセットでプールし分布を示す。目的関数ではなく「同定結果が ODE をどれだけ満たすか」の診断。
     def _pool_resid(per_ds: dict[str, dict]) -> tuple[list[float], float]:
         pooled: list[float] = []
