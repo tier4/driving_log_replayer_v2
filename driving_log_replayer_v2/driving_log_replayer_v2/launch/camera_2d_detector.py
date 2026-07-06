@@ -57,7 +57,7 @@ def create_2d_detector_container(
     yolox_package_dir = Path(get_package_share_directory("autoware_tensorrt_yolox"))
     yolox_param_path = Path(yolox_package_dir, "config", yolox_param_file).as_posix()
     roi_remap_path = Path(
-        get_package_share_directory("edge_auto_jetson_launch"),
+        get_package_share_directory("driving_log_replayer_v2"),
         "config",
         "roi_to_semseg_label_remap.csv",
     ).as_posix()
