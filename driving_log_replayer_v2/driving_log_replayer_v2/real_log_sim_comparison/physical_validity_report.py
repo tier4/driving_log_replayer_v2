@@ -2,7 +2,7 @@
 """
 物理的妥当性レポート生成スクリプト
 
-速度依存 k_us ランプと操舵不感帯の物理的妥当性を、
+速度依存アンダーステア係数ランプと操舵不感帯の物理的妥当性を、
 実機ログからの独立同定と理論式の両面から検証する HTML レポートを生成する。
 
 使用法:
@@ -268,7 +268,8 @@ def _build_sec_metrics(baseline_score: float | None, phase14_score: float, label
             f"（baseline = <b>{baseline_score:.3f}</b> → 約 <b>{improvement_pct:.1f}%</b> 改善）</li>"
         )
         note_text = (
-            f"{label}（{phase14_score:.3f}）が baseline（k_us=0 / deadband=0, score={baseline_score:.3f}）より"
+            f"{label}（{phase14_score:.3f}）が baseline（\\(k_{{\\mathrm{{us}}}}=0\\) / "
+            f"<code>steer_dead_band</code>=0, score={baseline_score:.3f}）より"
             f" {improvement_pct:.1f}% 低いことは、yaw/lat 誤差が baseline の約 {nyaw_ratio:.0f}% まで縮小したことを意味する。"
         )
     else:
@@ -289,7 +290,7 @@ def _build_sec_metrics(baseline_score: float | None, phase14_score: float, label
 </p>
 <table class="param-table">
   <tr><th>ホライズン</th><th>時間スパン（30 Hz 基準）</th><th>主に捉える現象</th></tr>
-  <tr><td>N=10</td><td>≈ 0.33 秒先</td><td>アクチュエータ遅れ・1次遅れ時定数（即応性）</td></tr>
+  <tr><td>N=10</td><td>≈ 0.33 秒先</td><td>アクチュエータ遅れ・一次遅れ時定数（即応性）</td></tr>
   <tr><td>N=20</td><td>≈ 0.67 秒先</td><td>中期の操舵追従・加速度変動</td></tr>
   <tr><td>N=30</td><td>≈ 1.0 秒先</td><td>ホイールベース・ステアバイアスの累積効果</td></tr>
   <tr><td>N=40</td><td>≈ 1.33 秒先</td><td>アンダーステア・カーブ全体の軌跡ドリフト</td></tr>
@@ -307,17 +308,17 @@ def _build_sec_metrics(baseline_score: float | None, phase14_score: float, label
   <tr>
     <td><b>yaw 誤差</b></td><td>deg</td>
     <td>N ステップ後の車両姿勢角（ヨー角）誤差。旋回量の過不足を示す。</td>
-    <td>操舵時定数 τ_δ、k_us、ホイールベース</td>
+    <td>操舵一次遅れ時定数 \\(\\tau_\\delta\\)、\\(k_{{\\mathrm{{us}}}}\\)、ホイールベース \\(L\\)</td>
   </tr>
   <tr>
     <td><b>long 誤差</b></td><td>cm</td>
     <td>進行方向の位置誤差（前後方向）。加速度の積算ズレを示す。</td>
-    <td>加速度時定数 τ_a、遅延 T_a</td>
+    <td>加速度一次遅れ時定数 \\(\\tau_a\\)、純粋遅延 \\(T_a\\)</td>
   </tr>
   <tr>
     <td><b>lat 誤差</b></td><td>cm</td>
     <td>横方向の位置誤差。操舵追従精度とアンダーステアの積算効果を示す。</td>
-    <td>k_us、steer_dead_band、τ_δ、steer_bias</td>
+    <td>\\(k_{{\\mathrm{{us}}}}\\)、<code>steer_dead_band</code>、\\(\\tau_\\delta\\)、<code>steer_bias</code></td>
   </tr>
 </table>
 <div class="note">
@@ -329,7 +330,7 @@ steer 系パラメータへの感度はほぼゼロ（逆もしかり）。こ�
 <details>
 <summary>0-3. 正規化スコア（nyaw, nlong, nlat）</summary>
 <p>
-各データセットの誤差を <b>baseline モデル</b>（補正なし delay モデル、k_us=0・deadband=0 相当）の
+各データセットの誤差を <b>baseline モデル</b>（補正なし遅延モデル、\\(k_{{\\mathrm{{us}}}}=0\\)・<code>steer_dead_band</code>=0 相当）の
 誤差で正規化する:
 \\[
 \\text{nyaw} = \\frac{\\text{yaw}_{\\mathrm{tuned}}}{\\max(\\text{yaw}_{\\mathrm{baseline}},\\; \\text{floor}_{\\mathrm{yaw}})}
@@ -410,15 +411,15 @@ def _kus_band_table_rows(params: dict) -> str:
         rows = []
         for i, b in enumerate(bands):
             if i == 0:
-                speed_range = f"vx &lt; {thresholds[0]:.2f} m/s"
+                speed_range = f"\\(v_x\\) &lt; {thresholds[0]:.2f} m/s"
             elif i < len(thresholds):
-                speed_range = f"{thresholds[i-1]:.2f} ≤ vx &lt; {thresholds[i]:.2f} m/s"
+                speed_range = f"{thresholds[i-1]:.2f} ≤ \\(v_x\\) &lt; {thresholds[i]:.2f} m/s"
             else:
-                speed_range = f"vx ≥ {thresholds[-1]:.2f} m/s"
+                speed_range = f"\\(v_x\\) ≥ {thresholds[-1]:.2f} m/s"
             rows.append(
                 f"  <tr><td><code>k_us_band[{i}]</code></td>"
                 f"<td>{b:.6f} rad·s²/m</td>"
-                f"<td>{speed_range} の k_us_eff</td></tr>"
+                f"<td>{speed_range} の \\(k_{{\\mathrm{{us,eff}}}}\\)</td></tr>"
             )
         for i, thr in enumerate(thresholds):
             rows.append(
@@ -457,11 +458,11 @@ def _build_sec1(
         _kus_rows_p = []
         for i, b in enumerate(bands):
             if i == 0:
-                speed_range = f"vx &lt; {thresholds[0]:.2f} m/s"
+                speed_range = f"\\(v_x\\) &lt; {thresholds[0]:.2f} m/s"
             elif i < len(thresholds):
-                speed_range = f"{thresholds[i-1]:.2f} ≤ vx &lt; {thresholds[i]:.2f} m/s"
+                speed_range = f"{thresholds[i-1]:.2f} ≤ \\(v_x\\) &lt; {thresholds[i]:.2f} m/s"
             else:
-                speed_range = f"vx ≥ {thresholds[-1]:.2f} m/s"
+                speed_range = f"\\(v_x\\) ≥ {thresholds[-1]:.2f} m/s"
             _kus_rows_p.append(
                 f"  <tr><td><code>k_us_band[{i}]</code></td>"
                 f"<td>{_fmt_p(b)} rad·s²/m</td>"
@@ -759,8 +760,11 @@ DRIVE 系（enum 値 2..19）の時刻だけを残す評価マスクとして適
 &#128279; <a href="#sec-state-space">1-1 状態方程式</a> の \\(\\dot v_x, \\dot a_{{\\mathrm{{act}}}}\\) 行に対応。
 </p>
 <p>
-速度 \\(v_x\\) は横方向・操舵状態に依存せず縦方向のみで閉じるため（long ⊥ steer の直交性）、
-\\(\\text{{err}}_{{vx}}\\) を目的関数として他のパラメータと独立に同定できる。
+加速度アクチュエータの一次遅れ式は、入力 \\(a_{{\\mathrm{{cmd}}}}\\) と状態
+\\(a_{{\\mathrm{{act}}}}\\) だけで閉じており、操舵角・ヨー角・横位置を参照しない。
+さらに \\(a_{{\\mathrm{{act}}}}\\) は実機ログから観測できるため、路面勾配成分を差し引いた
+\\(a_{{\\mathrm{{act,corr}}}}\\) とモデル出力 \\(a_{{\\mathrm{{sim}}}}\\) の残差を目的関数として、
+\\(\\tau_a, T_a\\) を操舵・横方向パラメータとは独立に同定できる。
 </p>
 
 <p><b>運動方程式（1-1 と同じ状態・入力表記）:</b></p>
@@ -789,16 +793,17 @@ DRIVE 系（enum 値 2..19）の時刻だけを残す評価マスクとして適
 <h3>実機ログからの独立同定（代表データセットモデルフィット）</h3>
 <p>
 \\(a_{{\\mathrm{{cmd}}}}\\)（指令加速度）を入力として遅延グリッドサーチ + output-error 非線形最小二乗法で
-データセット横断同定した \\((\\tau_a, T_a)\\) のモデル出力（青実線、路面勾配補正込み）と
-実測 \\(a_{{\\mathrm{{act}}}}\\)（黒実線）を比較する。
+データセット横断同定した \\((\\tau_a, T_a)\\) のモデル出力（青実線）と
+実測 \\(a_{{\\mathrm{{act}}}}\\)（黒実線）を比較する。最小二乗の目的関数では
+\\(a_{{\\mathrm{{sim}}}} - a_{{\\mathrm{{act,corr}}}}\\) を使い、表示では路面勾配成分をモデル出力へ戻している。
 チューニング値でのシミュレーション結果（点線）も重ね描きする。per-dataset 同定誤差（RMSE）の
-最良・最悪データセットを選択し、低速・停車区間は除外して表示。
+最良・最悪データセットを選択し、低速・停車区間は同定対象から除外したうえで図上ではグレー表示する。
 </p>
 
 <details>
 <summary>推定手法の詳細</summary>
 <p>
-無駄時間 \\(T_a\\) は実装上、制御周期 \\(\\Delta t\\)（={_dt_long:.2f} s）の整数倍
+純粋遅延 \\(T_a\\) は実装上、制御周期 \\(\\Delta t\\)（={_dt_long:.2f} s）の整数倍
 （サンプル数換算 \\(n_{{\\mathrm{{delay}}}} = \\mathrm{{round}}(T_a / \\Delta t)\\)）でしか区別できない。
 そこで \\(T_a\\) を
 \\[
@@ -809,16 +814,20 @@ T_a \\in \\{{0,\\ \\Delta t,\\ 2\\Delta t,\\ \\dots,\\ M\\Delta t\\}},
 内側の非線形最小二乗最適化で求める二段探索（grid search × 1 次元非線形最小二乗）を行う。
 </p>
 
-<p><b>① 固定 \\(T_a\\) に対するシミュレーション出力</b>: 無駄時間ぶんシフト済みの指令
+<p><b>① 固定 \\(T_a\\) に対するシミュレーション出力</b>: 純粋遅延ぶんシフト済みの指令
 \\(u[k] = a_{{\\mathrm{{cmd}}}}[k - n_{{\\mathrm{{delay}}}}]\\) を入力として、1-1 節と同じ 1 次遅れ構造を持つ
 離散フィルタ（指数移動平均 / 1 次 IIR）
 \\[
-a_{{\\mathrm{{sim}}}}[k] = (1-\\alpha)\\, a_{{\\mathrm{{sim}}}}[k-1] + \\alpha\\, u[k],
+a_{{\\mathrm{{sim}}}}[0] = a_{{\\mathrm{{act,corr}}}}[0], \\qquad
+a_{{\\mathrm{{sim}}}}[k] = (1-\\alpha)\\, a_{{\\mathrm{{sim}}}}[k-1] + \\alpha\\, u[k]\quad(k\\ge 1),
 \\qquad \\alpha := \\frac{{\\Delta t}}{{\\tau_a}} \\in (0, 1]
 \\]
-でシミュレーション軌道を生成する（\\(a_{{\\mathrm{{sim}}}}[-1]=0\\) を初期状態とする）。この漸化式を展開すると
+でシミュレーション軌道を生成する。初期値はログ切り出し開始時の実測補正加速度に合わせることで、
+初期条件誤差を \\(\\tau_a, T_a\\) の同定誤差に混入させない。この漸化式を展開すると
 \\[
-a_{{\\mathrm{{sim}}}}[k] = \\alpha \\sum_{{i=0}}^{{k}} (1-\\alpha)^{{k-i}}\\, u[i]
+a_{{\\mathrm{{sim}}}}[k] =
+(1-\\alpha)^k a_{{\\mathrm{{act,corr}}}}[0]
++ \\alpha \\sum_{{i=1}}^{{k}} (1-\\alpha)^{{k-i}}\\, u[i]
 \\]
 となり、\\(a_{{\\mathrm{{sim}}}}\\) は \\(\\alpha\\)（≡ \\(\\tau_a\\)）のべき乗を通じて非線形に依存する。
 このため output-error 規準（シミュレーション軌道と実測値の残差二乗和）は \\(\\tau_a\\) に関する線形回帰・
@@ -869,7 +878,7 @@ J\\bigl(e^{{\\theta}};\\, T_a\\bigr)
 広いダイナミックレンジに対して均等な探索分解能を確保できる。
 </p>
 
-<p><b>④ 無駄時間グリッドサーチ（外側ループ）</b>: ③の内側最小化を候補
+<p><b>④ 純粋遅延グリッドサーチ（外側ループ）</b>: ③の内側最小化を候補
 \\(T_a = m\\Delta t\\)（\\(m = 0, \\dots, M\\)）ごとに実行し、
 \\[
 (\\tau_a^{{*}},\\, T_a^{{*}}) = \\operatorname*{{arg\\,min}}_{{T_a \\in \\{{0,\\Delta t,\\dots,M\\Delta t\\}}}}
@@ -889,10 +898,10 @@ J_{{\\mathrm{{pool}}}}(\\tau_a; T_a) =
 
 <table class="param-table">
   <tr><th>パラメータ</th><th>値</th><th>式中の役割</th><th>同定誤差量（RMSE）</th></tr>
-  <tr><td><code>acc_time_constant</code> (τ_a)</td><td>{tau_a} s</td>
-      <td>一次遅れ時定数：小さいほど加速応答が速い</td><td rowspan="2">err_vx</td></tr>
-  <tr><td><code>acc_time_delay</code> (T_a)</td><td>{T_a} s</td>
-      <td>純粋遅延：指令が実際に入力されるまでの無駄時間</td></tr>
+  <tr><td><code>acc_time_constant</code> (\\(\\tau_a\\))</td><td>{tau_a} s</td>
+      <td>一次遅れ時定数：小さいほど加速応答が速い</td><td rowspan="2">\\(a_{{\\mathrm{{sim}}}} - a_{{\\mathrm{{act,corr}}}}\\)</td></tr>
+  <tr><td><code>acc_time_delay</code> (\\(T_a\\))</td><td>{T_a} s</td>
+      <td>純粋遅延：指令が実際に入力されるまでの遅延時間</td></tr>
 </table>
 
 {long_perf_subsection}
@@ -927,7 +936,7 @@ J_{{\\mathrm{{pool}}}}(\\tau_a; T_a) =
 <div class="note">
 ⚠️ <b>結合点</b>: 操舵ゲイン補正倍率（debug_steer_scaling_factor）は操舵指令に定数ゲインをかける形で、直進時の系統的な横力成分（v²δ 由来の
 アンダーステア成分）を部分的に吸収できる。
-したがって操舵ゲイン補正倍率の最適値は k_us の同定後に再検証することが望ましい。
+したがって操舵ゲイン補正倍率の最適値は \\(k_{{\\mathrm{{us}}}}\\) の同定後に再検証することが望ましい。
 </div>
 
 <h3>実機ログからの独立同定（代表データセットモデルフィット）</h3>
@@ -946,14 +955,14 @@ J_{{\\mathrm{{pool}}}}(\\tau_a; T_a) =
 
 <table class="param-table">
   <tr><th>パラメータ</th><th>値</th><th>式中の役割</th><th>同定誤差量（RMSE）</th></tr>
-  <tr><td><code>steer_time_constant</code> (τ_δ)</td><td>{tau_d} s</td>
-      <td>一次遅れ時定数：小さいほど操舵応答が速い</td><td rowspan="4">err_steer</td></tr>
-  <tr><td><code>steer_time_delay</code> (T_δ)</td><td>{T_d} s</td>
-      <td>純粋遅延：操舵指令の無駄時間</td></tr>
+  <tr><td><code>steer_time_constant</code> (\\(\\tau_\\delta\\))</td><td>{tau_d} s</td>
+      <td>一次遅れ時定数：小さいほど操舵応答が速い</td><td rowspan="4">\\(\\text{{err}}_{{\\mathrm{{steer}}}}\\)</td></tr>
+  <tr><td><code>steer_time_delay</code> (\\(T_\\delta\\))</td><td>{T_d} s</td>
+      <td>純粋遅延：操舵指令が実際に入力されるまでの遅延時間</td></tr>
   <tr><td><code>debug_steer_scaling_factor</code> (操舵ゲイン補正倍率)</td><td>{DSF}</td>
       <td>指令スケーリング（1.0 = 補正なし）；遅延後に乗算</td></tr>
-  <tr><td><code>steer_bias</code> (β)</td><td>{beta} rad</td>
-      <td>報告操舵角への加算（δ_sim = δ_act + β）；ヨー式にも二重登場</td></tr>
+  <tr><td><code>steer_bias</code> (\\(\\beta\\))</td><td>{beta} rad</td>
+      <td>報告操舵角への加算値（\\(\\delta_{{\\mathrm{{act}}}} + \\beta\\)）；1-4 のヨー式と共有</td></tr>
   <tr><td><code>steer_dead_band</code></td><td>{db} rad</td>
       <td>不感帯幅（固定値・同定対象外）</td><td>—</td></tr>
   <tr><td><code>steer_rate_lim</code></td><td>{rlim} rad/s</td>
@@ -967,8 +976,8 @@ J_{{\\mathrm{{pool}}}}(\\tau_a; T_a) =
 </p>
 <p>
 1-2（縦方向）・1-3（操舵追従）が先行して確定した後、
-\\(\\text{{err}}_{{wz}}\\) を目的関数として <b>高曲率サブセット</b> で k_us を同定する。
-直進（\\(\\delta \\approx 0\\)）では感度がゼロなので、全データセット集約スコアは k_us に対して構造的不可同定。
+\\(\\text{{err}}_{{wz}}\\) を目的関数として <b>高曲率サブセット</b> で \\(k_{{\\mathrm{{us}}}}\\) を同定する。
+直進（\\(\\delta \\approx 0\\)）では感度がゼロなので、全データセット集約スコアは \\(k_{{\\mathrm{{us}}}}\\) に対して構造的不可同定。
 </p>
 
 <p><b>運動方程式（1-1 と同じ状態表記）:</b></p>
@@ -990,7 +999,7 @@ J_{{\\mathrm{{pool}}}}(\\tau_a; T_a) =
   <li>\\(L\\)（<code>wheelbase</code>）: 自転車モデルのホイールベース。</li>
   <li>\\(k_{{\\mathrm{{us,eff}}}}\\)（<code>k_us_bands / k_us</code>）: 速度帯ごとのアンダーステア係数。</li>
   <li>\\(\\beta\\)（<code>steer_bias</code>）: ヨー式の \\(\\tan(\\cdot)\\) 引数に入るバイアス。系統的なヨーオフセット成分。</li>
-  <li>\\(\\delta_{{\\mathrm{{act}}}}\\): 1-3 の操舵追従結果。操舵ゲイン補正倍率による k_us の \\(v^2\\delta\\) 成分の部分吸収に注意。</li>
+  <li>\\(\\delta_{{\\mathrm{{act}}}}\\): 1-3 の操舵追従結果。操舵ゲイン補正倍率による \\(k_{{\\mathrm{{us}}}}\\) の \\(v_x^2\\delta\\) 成分の部分吸収に注意。</li>
 </ul>
 
 <h3>実機ログからの独立同定（全 {n_dataset} データセット、速度ビン別 最小二乗法）</h3>
@@ -1010,7 +1019,7 @@ C_{{\\mathrm{{OLS}}}} = \\frac{{\\sum \\omega_i \\, \\tan(\\delta_i)}}{{\\sum \\
 \\]
 ここで \\(\\bar{{v}}_x\\) はビン内の速度中央値、\\(L = {WHEELBASE}\\) m はホイールベース。
 </p>
-<p><b>② 個別サンプル（IQR バンド）</b>: 実機運動学ログの各タイムステップで瞬時 k_us を推定し、
+<p><b>② 個別サンプル（IQR バンド）</b>: 実機運動学ログの各タイムステップで瞬時 \\(k_{{\\mathrm{{us}}}}\\) を推定し、
 ビン内の 25〜75 パーセンタイルをバンドとして表示:
 \\[
 \\tilde{{k}}_{{\\mathrm{{us}}}}[i] = \\frac{{\\tan(\\delta_i) / \\omega_i - L / v_{{x,i}}}}{{v_{{x,i}}}}
@@ -1020,15 +1029,15 @@ C_{{\\mathrm{{OLS}}}} = \\frac{{\\sum \\omega_i \\, \\tan(\\delta_i)}}{{\\sum \\
 {kus_html}
 <div class="note">
 <b>解釈</b>: 最小二乗法推定値が低速ビンでほぼ 0、高速ビンで正の値に推移していれば、
-ランプ形状は物理的実態と整合している。ただし J6 の多くのデータセットが低速（vx_mean ≈ 1.9 m/s）
+ランプ形状は物理的実態と整合している。ただし J6 の多くのデータセットが低速（\\(v_x\\) mean ≈ 1.9 m/s）
 のため、高速ビンのサンプル数は少なく推定誤差が大きい点に注意（右パネルのサンプル数を参照）。
 </div>
 
 <table class="param-table">
   <tr><th>パラメータ</th><th>値</th><th>式中の役割</th><th>同定誤差量</th></tr>
 {kus_rows}
-  <tr><td><code>steer_bias</code> (β) <i>[1-3 と共有]</i></td><td>{beta} rad</td>
-      <td>tan(δ_act + β) の引数：ヨーオフセットを生む</td><td>err_wz（間接）</td></tr>
+  <tr><td><code>steer_bias</code> (\\(\\beta\\)) <i>[1-3 と共有]</i></td><td>{beta} rad</td>
+      <td>\\(\\tan(\\delta_{{\\mathrm{{act}}}} + \\beta)\\) の引数：ヨーオフセット成分</td><td>\\(\\text{{err}}_{{wz}}\\)（間接）</td></tr>
 </table>
 </section>
 """
@@ -1059,7 +1068,7 @@ def _build_sec14(
 </p>
 <p>
 現行スコアとの差分 ≈ アクチュエータ応答が占める誤差分
-（τ_a={tau_a} s, T_a={T_a} s, τ_δ={tau_d} s, T_δ={T_d} s の合算効果）。
+（\\(\\tau_a\\)={tau_a} s, \\(T_a\\)={T_a} s, \\(\\tau_\\delta\\)={tau_d} s, \\(T_\\delta\\)={T_d} s の合算効果）。
 </p>
 <div class="note">
 ⚠️ <b>設計上の帰結</b>:
@@ -1095,7 +1104,7 @@ def _build_sec2(kus_fig: go.Figure, n_dataset: int) -> str:
 <h2>2. 実機ログからの独立同定</h2>
 
 <details open>
-<summary>2-1. アンダーステア係数 k_us の速度依存性（全 {n_dataset} データセット）</summary>
+<summary>2-1. アンダーステア係数 \\(k_{{\\mathrm{{us}}}}\\) の速度依存性（全 {n_dataset} データセット）</summary>
 <details>
 <summary>推定手法の詳細</summary>
 <p>
@@ -1111,7 +1120,7 @@ C_{{\\mathrm{{OLS}}}} = \\frac{{\\sum \\omega_i \\, \\tan(\\delta_i)}}{{\\sum \\
 \\]
 ここで \\(\\bar{{v}}_x\\) はビン内の速度中央値、\\(L = {WHEELBASE}\\) m はホイールベース。
 </p>
-<p><b>② 個別サンプル（IQR バンド）</b>: 実機運動学ログの各タイムステップで瞬時 k_us を推定し、
+<p><b>② 個別サンプル（IQR バンド）</b>: 実機運動学ログの各タイムステップで瞬時 \\(k_{{\\mathrm{{us}}}}\\) を推定し、
 ビン内の 25〜75 パーセンタイルをバンドとして表示:
 \\[
 \\tilde{{k}}_{{\\mathrm{{us}}}}[i] = \\frac{{\\tan(\\delta_i) / \\omega_i - L / v_{{x,i}}}}{{v_{{x,i}}}}
@@ -1122,7 +1131,7 @@ C_{{\\mathrm{{OLS}}}} = \\frac{{\\sum \\omega_i \\, \\tan(\\delta_i)}}{{\\sum \\
 {kus_html}
 <div class="note">
 <b>解釈</b>: 最小二乗法推定値が低速ビンでほぼ 0、高速ビンで正の値に推移していれば、
-ランプ形状は物理的実態と整合している。ただし J6 の多くのデータセットが低速（vx_mean ≈ 1.9 m/s）
+ランプ形状は物理的実態と整合している。ただし J6 の多くのデータセットが低速（\\(v_x\\) mean ≈ 1.9 m/s）
 のため、高速ビンのサンプル数は少なく推定誤差が大きい点に注意（右パネルのサンプル数を参照）。
 </div>
 </details>
@@ -1138,8 +1147,8 @@ def _build_sec3(viewer_sections: list[str], label: str = "phase14") -> str:
 <p>
 旋回イベント数 <code>curve_count</code>（\\(|\\kappa| > 0.02\\) m⁻¹、連続弧長 ≥ 10 m）が多い
 代表データセットについて縦横モデル検証ビューアを埋め込む。
-ドロップダウンで <b>{label}</b>（k_us ランプ＋deadband 有効）と
-<b>baseline</b>（k_us=0, deadband=0）を切り替えて実機軌跡への一致を比較できる。
+ドロップダウンで <b>{label}</b>（\\(k_{{\\mathrm{{us}}}}\\) ランプ＋<code>steer_dead_band</code> 有効）と
+<b>baseline</b>（\\(k_{{\\mathrm{{us}}}}=0\\), <code>steer_dead_band</code>=0）を切り替えて実機軌跡への一致を比較できる。
 </p>
 {body}
 </section>
@@ -1252,7 +1261,7 @@ def _build_sec_deviation(
       <th colspan="4">yaw 誤差 [deg]</th>
       <th colspan="4">lat 誤差 [cm]</th>
       <th colspan="4">long 誤差 [cm]</th>
-      <th colspan="4">速度誤差 vx [m/s]</th>
+      <th colspan="4">速度誤差 \\(v_x\\) [m/s]</th>
     </tr>
     <tr>
       <th>平均</th><th>95%点</th><th>99%点</th><th>最大</th>
@@ -1745,10 +1754,10 @@ def main() -> None:
         "debug_steer_scaling_factor", "steer_rate_lim",
     ]
     configs: dict[str, dict] = {
-        f"{phase_label}（k_us ランプ＋deadband）": {
+        f"{phase_label}（アンダーステア係数ランプ＋steer_dead_band）": {
             k: params[k] for k in tuned_keys if k in params
         },
-        "baseline（k_us=0 / deadband=0）": {
+        "baseline（アンダーステア係数=0 / steer_dead_band=0）": {
             "k_us": 0.0, "steer_dead_band": 0.0,
         },
     }
@@ -1788,7 +1797,7 @@ def main() -> None:
     kus_fig   = build_fig_kus_single(
         bins, {"チューニング済み速度帯": params},
         thresholds=params.get("k_us_thresholds"),
-        title="実機ログからの k_us 独立同定（速度ビン別 最小二乗法回帰）",
+        title="実機ログからのアンダーステア係数独立同定（速度ビン別 最小二乗法回帰）",
     )
     # 縦方向 / 操舵: 共有ライブラリの実行時フィット (per-dataset フィット結果 + 横断フィット)
     # から best/worst 時系列図を生成する（旧: 事前生成 CSV 依存の build_long_figure /
@@ -1849,7 +1858,7 @@ def main() -> None:
                     f"縦方向ドリフト成長カーブ"
                     f"（符号付き・reset-stride ロールアウト、上位 {_n_lp} データセット）"
                 ),
-                "subplot_titles": ["速度誤差  vx_sim − 実車 vx  [m/s]",
+                "subplot_titles": ["速度誤差  v_x,sim − 実車 v_x  [m/s]",
                                    "変位誤差  s_sim − 実車 s  [cm]"],
                 "y_titles": [
                     "速度誤差 [m/s]<br><sup>正 = シミュレーションが実車より速い</sup>",
@@ -1872,7 +1881,7 @@ def main() -> None:
     perf_fig_traj = build_fig_perfect_tracking_traj(
         perf_data,
         labels={
-            "title": "実車 vs 自転車モデル軌跡（実測 vx + δ_act 入力、初期状態を実車ログに合わせたリセットなし積分）",
+            "title": "実車 vs 自転車モデル軌跡（実測 v_x + 実舵角入力、初期状態を実車ログに合わせたリセットなし積分）",
             "gt_name": "実車 軌跡",
             "model_name": "自転車モデル（理想追従）",
             "x_title": "Δx [m]",
