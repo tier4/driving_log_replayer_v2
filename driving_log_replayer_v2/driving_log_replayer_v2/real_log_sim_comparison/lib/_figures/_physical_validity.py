@@ -29,6 +29,24 @@ def _placeholder_fig(msg: str, height: int = 200) -> go.Figure:
     return fig
 
 
+def _has_visible_values(series: list | None) -> bool:
+    if series is None:
+        return False
+    arr = np.asarray(series, dtype=float)
+    return bool(np.isfinite(arr).any())
+
+
+def _low_speed_trace(x: list, y: list, *, dash: str = "solid", showlegend: bool = False) -> go.Scatter:
+    return go.Scatter(
+        x=x, y=y,
+        name="低速・停車区間（同定対象外）",
+        line=dict(color="rgba(120,120,120,0.45)", width=1.0, dash=dash),
+        showlegend=showlegend,
+        connectgaps=False,
+        hovertemplate="低速・停車区間<br>t=%{x:.2f}s<br>a=%{y:.3f} m/s²<extra></extra>",
+    )
+
+
 # ---------------------------------------------------------------------------
 # per-dataset: 単一データセット時系列
 # ---------------------------------------------------------------------------
@@ -38,6 +56,24 @@ def build_fig_long_single(ts: dict | None, fit: dict | None) -> go.Figure:
         return _placeholder_fig("縦方向データ不足 (MCAP 読み込み失敗、または動的区間不足)")
 
     fig = go.Figure()
+    low_legend_shown = False
+    for key, dash in (
+        ("a_act_low", "solid"),
+        ("a_cmd_low", "dash"),
+        ("a_sim_fit_low", "solid"),
+    ):
+        if _has_visible_values(ts.get(key)):
+            fig.add_trace(_low_speed_trace(
+                ts["t"], ts[key], dash=dash, showlegend=not low_legend_shown,
+            ))
+            low_legend_shown = True
+    for series in (ts.get("a_sim_models_low") or {}).values():
+        if _has_visible_values(series):
+            fig.add_trace(_low_speed_trace(
+                ts["t"], series, dash="dot", showlegend=not low_legend_shown,
+            ))
+            low_legend_shown = True
+
     fig.add_trace(go.Scatter(x=ts["t"], y=ts["a_act"], name="実測加速度",
                               line=dict(color="black", width=1.5), connectgaps=False))
     fig.add_trace(go.Scatter(x=ts["t"], y=ts["a_cmd"], name="指令加速度",
@@ -63,7 +99,7 @@ def build_fig_long_single(ts: dict | None, fit: dict | None) -> go.Figure:
     fig.update_xaxes(title_text="時刻 [s]")
     return apply_base_layout(
         fig,
-        title="縦方向モデルフィット（実測 vs 同定値 vs モデル別チューニング値、路面勾配補正込み・走行区間のみ表示）",
+        title="縦方向モデルフィット（実測 vs 同定値 vs モデル別チューニング値、路面勾配補正込み・低速/停車区間はグレー表示）",
         height=380,
     )
 
@@ -231,7 +267,25 @@ def build_fig_cross_long(rows_data: list[dict], cross_fit: dict) -> go.Figure:
 
     fig = make_grid(rows=n, cols=1, subplot_titles=[r["label"] for r in rows_data], vertical_spacing=0.08)
     show_legend = True
+    low_legend_shown = False
     for i, r in enumerate(rows_data, 1):
+        for key, dash in (
+            ("a_act_low", "solid"),
+            ("a_cmd_low", "dash"),
+            ("a_sim_cross_low", "solid"),
+        ):
+            if _has_visible_values(r.get(key)):
+                fig.add_trace(_low_speed_trace(
+                    r["t"], r[key], dash=dash, showlegend=not low_legend_shown,
+                ), row=i, col=1)
+                low_legend_shown = True
+        for series in (r.get("a_sim_models_low") or {}).values():
+            if _has_visible_values(series):
+                fig.add_trace(_low_speed_trace(
+                    r["t"], series, dash="dot", showlegend=not low_legend_shown,
+                ), row=i, col=1)
+                low_legend_shown = True
+
         fig.add_trace(go.Scatter(
             x=r["t"], y=r["a_act"], name="実測加速度",
             line=dict(color="black", width=1.5), showlegend=show_legend, connectgaps=False,
@@ -264,7 +318,7 @@ def build_fig_cross_long(rows_data: list[dict], cross_fit: dict) -> go.Figure:
     slope_note = f"横断フィット使用データセット数={cross_fit.get('n_datasets', 0)}、pitch range {p_min_deg:+.2f}°〜{p_max_deg:+.2f}°"
     return apply_base_layout(
         fig,
-        title=f"dataset 横断 縦方向モデルフィット（最良・最悪 計 {n} 件、路面勾配補正込み）<br><sup>{slope_note}</sup>",
+        title=f"dataset 横断 縦方向モデルフィット（最良・最悪 計 {n} 件、低速/停車区間はグレー表示）<br><sup>{slope_note}</sup>",
         height=300 * n, margin=dict(t=80, b=40),
         legend=dict(orientation="h", y=1.03, x=0),
     )
@@ -658,4 +712,3 @@ def build_fig_long_perf_map(
         margin=dict(t=70, b=50, r=80),
     )
     return apply_base_layout(fig, title=fig.layout.title.text, height=600)
-

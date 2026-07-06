@@ -101,12 +101,28 @@ def _delay_shift(cmd: np.ndarray, n_delay: int) -> np.ndarray:
     return cmd_del
 
 
-def _sim_first_order(cmd: np.ndarray, tau: float, n_delay: int, dt: float = _FIT_DT) -> np.ndarray:
-    """純粋遅延 + 一次遅れシミュレーション (lfilter 版)。"""
+def _sim_first_order(
+    cmd: np.ndarray,
+    tau: float,
+    n_delay: int,
+    dt: float = _FIT_DT,
+    y0: float | None = None,
+) -> np.ndarray:
+    """純粋遅延 + 一次遅れシミュレーション。
+
+    y0 を指定した場合は出力初期値を観測状態に合わせ、k=1 以降を一次遅れで更新する。
+    未指定時は従来どおりゼロ初期状態の lfilter として評価する。
+    """
     cmd_del = _delay_shift(cmd, n_delay)
     # tau<=0 は "no_delay" 系モデル等が意図する瞬時追従 (一次遅れ極限) を表すため、
     # 0除算を避けて alpha=1.0 (即時追従) にフォールバックする。
     alpha = 1.0 if tau <= 0.0 else float(np.clip(dt / tau, 0.0, 1.0))
+    if y0 is not None:
+        if len(cmd_del) == 0:
+            return cmd_del.astype(float)
+        zi = [float(y0) - alpha * float(cmd_del[0])]
+        out, _ = lfilter([alpha], [1.0, -(1.0 - alpha)], cmd_del, zi=zi)
+        return out
     return lfilter([alpha], [1.0, -(1.0 - alpha)], cmd_del)
 
 
@@ -162,6 +178,12 @@ def _require_dfs(context: str, **dfs: pd.DataFrame) -> None:
 def _mask_stopped(arr: np.ndarray, moving: np.ndarray) -> list:
     """停車中サンプルを NaN でマスクしたリストを返す (moving=True のみ有効)。"""
     out = np.where(moving, arr.astype(float), np.nan)
+    return out.tolist()
+
+
+def _mask_moving(arr: np.ndarray, moving: np.ndarray) -> list:
+    """走行中サンプルを NaN でマスクしたリストを返す (moving=False のみ有効)。"""
+    out = np.where(~moving, arr.astype(float), np.nan)
     return out.tolist()
 
 
@@ -237,7 +259,7 @@ def fit_long_single(bag_path: Path) -> dict | None:
 
     def _mse(log_tau: float, n_delay: int) -> float:
         tau = float(np.exp(log_tau))
-        a_sim = _sim_first_order(a_cmd_arr, tau, n_delay)
+        a_sim = _sim_first_order(a_cmd_arr, tau, n_delay, y0=float(a_act_corr[0]))
         diff = a_sim[mask_dyn] - a_act_corr[mask_dyn]
         return float(np.mean(diff ** 2))
 
@@ -553,10 +575,14 @@ def compute_long_timeseries(bag_path: Path, fit: dict | None, models: dict[str, 
     a_sim_fit = None
     if fit is not None and np.isfinite(fit.get("tau", float("nan"))):
         a_sim_fit = _sim_first_order(
-            a_cmd_arr, fit["tau"], int(round(fit["delay"] / _FIT_DT))
+            a_cmd_arr,
+            fit["tau"],
+            int(round(fit["delay"] / _FIT_DT)),
+            y0=float(a_act_arr[0] - slope_acc_arr[0]),
         ) + slope_acc_arr
 
     a_sim_models: dict[str, list] = {}
+    a_sim_models_low: dict[str, list] = {}
     model_tune: dict[str, dict] = {}
     for name, raw_params in (models or {}).items():
         merged = merged_model_params(raw_params)
@@ -565,17 +591,24 @@ def compute_long_timeseries(bag_path: Path, fit: dict | None, models: dict[str, 
         if tau_tune is None or T_tune is None:
             continue
         sim = _sim_first_order(
-            a_cmd_arr, float(tau_tune), int(round(float(T_tune) / _FIT_DT))
+            a_cmd_arr, float(tau_tune), int(round(float(T_tune) / _FIT_DT)),
+            y0=float(a_act_arr[0] - slope_acc_arr[0]),
         ) + slope_acc_arr
         a_sim_models[name] = _mask_stopped(sim, moving)
+        a_sim_models_low[name] = _mask_moving(sim, moving)
         model_tune[name] = {"tau": float(tau_tune), "T": float(T_tune)}
 
     return {
         "t": t_s.tolist(),
+        "moving": moving.tolist(),
         "a_cmd": _mask_stopped(a_cmd_arr, moving),
+        "a_cmd_low": _mask_moving(a_cmd_arr, moving),
         "a_act": _mask_stopped(a_act_arr, moving),
+        "a_act_low": _mask_moving(a_act_arr, moving),
         "a_sim_fit": _mask_stopped(a_sim_fit, moving) if a_sim_fit is not None else None,
+        "a_sim_fit_low": _mask_moving(a_sim_fit, moving) if a_sim_fit is not None else None,
         "a_sim_models": a_sim_models,
+        "a_sim_models_low": a_sim_models_low,
         "model_tune": model_tune,
     }
 
@@ -721,7 +754,7 @@ def fit_long_cross_dataset_bounded(
         tau = float(np.exp(log_tau))
         sq_sum, n_sum = 0.0, 0
         for a_cmd_arr, a_act_corr_arr, mask in pooled:
-            a_sim = _sim_first_order(a_cmd_arr, tau, n_delay)
+            a_sim = _sim_first_order(a_cmd_arr, tau, n_delay, y0=float(a_act_corr_arr[0]))
             diff = a_sim[mask] - a_act_corr_arr[mask]
             sq_sum += float(np.dot(diff, diff))
             n_sum += int(mask.sum())
@@ -789,31 +822,43 @@ def compute_cross_long_rows(
         tau_pointwise = None
         if np.isfinite(cross_fit.get("tau", float("nan"))):
             n_delay_cross = int(round(cross_fit["delay"] / _FIT_DT))
-            a_sim_cross = _sim_first_order(a_cmd_arr, cross_fit["tau"], n_delay_cross) + slope_acc_arr
             a_act_corr = a_act_arr - slope_acc_arr
+            a_sim_cross = _sim_first_order(
+                a_cmd_arr, cross_fit["tau"], n_delay_cross, y0=float(a_act_corr[0]),
+            ) + slope_acc_arr
             d_cmd = np.abs(np.gradient(a_cmd_arr, _FIT_DT))
             mask_dyn = gear_drive & (vx > _VX_MIN_FIT) & (d_cmd > _DA_THRESH_FIT)
             tau_pointwise = _pointwise_tau_estimate(a_cmd_arr, a_act_corr, mask_dyn, n_delay_cross)
 
         a_sim_models: dict[str, list] = {}
+        a_sim_models_low: dict[str, list] = {}
         for name, spec in (models or {}).items():
             merged = merged_model_params(spec.params)
             tau = merged.get("acc_time_constant")
             delay = merged.get("acc_time_delay")
             if tau is None or delay is None:
                 continue
-            sim = _sim_first_order(a_cmd_arr, float(tau), int(round(float(delay) / _FIT_DT))) + slope_acc_arr
+            sim = _sim_first_order(
+                a_cmd_arr, float(tau), int(round(float(delay) / _FIT_DT)),
+                y0=float(a_act_arr[0] - slope_acc_arr[0]),
+            ) + slope_acc_arr
             a_sim_models[name] = _mask_stopped(sim, moving)
+            a_sim_models_low[name] = _mask_moving(sim, moving)
 
         fit = per_ds_long.get(entry.dataset_id, {})
         rmse = fit.get("rmse_mps2", float("nan"))
         rows.append({
             "label": f"[{case_tag}] {entry.dataset_id[:8]}  RMSE={rmse:.3f} m/s²",
             "t": t_s.tolist(),
+            "moving": moving.tolist(),
             "a_cmd": _mask_stopped(a_cmd_arr, moving),
+            "a_cmd_low": _mask_moving(a_cmd_arr, moving),
             "a_act": _mask_stopped(a_act_arr, moving),
+            "a_act_low": _mask_moving(a_act_arr, moving),
             "a_sim_cross": _mask_stopped(a_sim_cross, moving) if a_sim_cross is not None else None,
+            "a_sim_cross_low": _mask_moving(a_sim_cross, moving) if a_sim_cross is not None else None,
             "a_sim_models": a_sim_models,
+            "a_sim_models_low": a_sim_models_low,
             "tau_pointwise": tau_pointwise.tolist() if tau_pointwise is not None else None,
         })
     return rows
