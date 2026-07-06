@@ -817,14 +817,17 @@ a_{{\\mathrm{{real}}}} := a_{{\\mathrm{{report}}}} - a_{{\\mathrm{{slope}}}}
 =
 \\begin{{pmatrix}}
 {{\\color{{#1565c0}} a_{{\\mathrm{{act}}}}}} + {{\\color{{#e65100}} a_{{\\mathrm{{slope}}}}}} \\\\
-\\dfrac{{{{\\color{{#e65100}} a_{{\\mathrm{{target}}}}}} - {{\\color{{#1565c0}} a_{{\\mathrm{{act}}}}}}}}{{\\tau_a}}
-\\end{{pmatrix}},
-\\qquad
-{{\\color{{#e65100}} a_{{\\mathrm{{target}}}}}}(t) = {{\\color{{#e65100}} a_{{\\mathrm{{cmd,des}}}}}}(t - T_a)
+\\dfrac{{{{\\color{{#e65100}} a_{{\\mathrm{{cmd,des}}}}}}(t-T_a) - {{\\color{{#1565c0}} a_{{\\mathrm{{act}}}}}}(t-T_a)}}{{\\tau_a}}
+\\end{{pmatrix}}
 \\]
+<p class="meta">
+<a href="#sec-state-space">1-1</a> と同じ <b>full-RHS 遅延</b>：\\(\\dot a_{{\\mathrm{{act}}}}\\) は指令・状態とも
+\\(t-T_a\\) で評価する。\\(a_{{\\mathrm{{slope}}}}\\) は \\(\\dot v_x\\) 側の入力で非遅延。
+</p>
 <h3>方程式残差で見る</h3>
 <p>
-遅延後入力を \\(u[k] = a_{{\\mathrm{{cmd,des}}}}[k - n_{{\\mathrm{{delay}}}}]\\) とすると、
+同定では状態を現在時刻に固定した<b>指令のみ遅延の縮約</b>（\\(a_{{\\mathrm{{act}}}}(t-T_a)\\to a_{{\\mathrm{{act}}}}(t)\\)）を用いる。
+遅延後入力を \\(u[k] = a_{{\\mathrm{{cmd,des}}}}[k - n_{{\\mathrm{{delay}}}}]\\) とすると、縮約した
 \\(\\dot a_{{\\mathrm{{act}}}}\\) 式の左辺と右辺は
 \\[
 \\mathrm{{LHS}}_a[k] = \\widehat{{\\dot a}}_{{\\mathrm{{real}}}}[k],
@@ -847,9 +850,9 @@ J_a
 推定はこの式を積分した出力誤差で行い、方程式残差は推定後の共通診断として使う。
 </p>
 <p class="meta">
-&#128279; ここでのオープンループ同定は<b>指令のみ遅延</b>の縮約形で \\((\\tau_a, T_a)\\) をフィットする。
-クローズドループの実シミュレータ（<a href="#sec-state-space">1-1</a>）は DIFFUSION_PLANNER では
-<b>full-RHS 遅延</b>（状態フィードバックも \\(t-T_a\\) で評価）を用いるが、これは同定に適した縮約であり矛盾ではない。
+&#128279; この残差診断と実フィット（<code>_fit_core.py</code> の <code>equation_residual_at_params</code> / 出力誤差最適化）は
+上記の<b>指令のみ遅延の縮約</b>で \\((\\tau_a, T_a)\\) を同定し、下のヒストグラムもこの縮約で計算している。
+モデル自体（<a href="#sec-state-space">1-1</a>・上のモデル式）は full-RHS 遅延であり、縮約は同定に適した特別な場合で矛盾はない。
 </p>
 {long_resid_hist_html}
 
@@ -891,14 +894,19 @@ J_a
 <p><b>モデル式:</b></p>
 \\[
 {{\\color{{#1565c0}} \\dot\\delta_{{\\mathrm{{act}}}}}}(t)
-= \\dfrac{{{{\\color{{#e65100}} \\delta_{{\\mathrm{{des}}}}}}(t) - {{\\color{{#1565c0}} \\delta_{{\\mathrm{{act}}}}}}(t)}}{{\\tau_\\delta}},
+= \\dfrac{{{{\\color{{#e65100}} \\delta_{{\\mathrm{{des}}}}}}(t) - {{\\color{{#1565c0}} \\delta_{{\\mathrm{{act}}}}}}(t-T_\\delta)}}{{\\tau_\\delta}},
 \\qquad
 {{\\color{{#e65100}} \\delta_{{\\mathrm{{des}}}}}}(t)
 = K_{{\\mathrm{{steer\\_scale}}}} \\cdot {{\\color{{#e65100}} \\delta_{{\\mathrm{{cmd,des}}}}}}(t - T_\\delta)
 \\]
+<p class="meta">
+<a href="#sec-state-space">1-1</a> と同じ <b>full-RHS 遅延</b>：指令遅延（\\(\\delta_{{\\mathrm{{des}}}}\\) 内の \\(t-T_\\delta\\)）に加え、
+状態フィードバック \\(\\delta_{{\\mathrm{{act}}}}\\) も \\(t-T_\\delta\\) で評価する。
+</p>
 <h3>方程式残差で見る</h3>
 <p>
-縦方向と同じく、左辺と右辺の差を
+縦方向と同じく、同定では状態 \\(\\delta_{{\\mathrm{{act}}}}\\) を現在時刻に固定した<b>指令のみ遅延の縮約</b>
+（\\(\\delta_{{\\mathrm{{act}}}}(t-T_\\delta)\\to\\delta_{{\\mathrm{{act}}}}(t)\\)）を用い、左辺と右辺の差を
 \\[
 \\mathrm{{LHS}}_\\delta[k] = \\widehat{{\\dot\\delta}}_{{\\mathrm{{act}}}}[k],
 \\qquad
