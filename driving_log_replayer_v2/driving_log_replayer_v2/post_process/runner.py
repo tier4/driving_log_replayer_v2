@@ -167,6 +167,9 @@ class Runner(ABC):
             result_jsonl_path,
         )
 
+        # modify the scenario if necessary
+        scenario = self._modify_scenario(scenario)
+
         # get use case info list
         use_case_info_list: list[UseCaseInfo] = self._get_use_case_info_list(
             scenario,
@@ -221,6 +224,19 @@ class Runner(ABC):
 
         # save scenario.yaml to check later
         shutil.copy(scenario_path, Path(result_archive_path).joinpath("scenario.yaml"))
+
+    def _modify_scenario(self, scenario: ScenarioType) -> ScenarioType:
+        """
+        Modify the scenario object if necessary.
+
+        Args:
+            scenario (ScenarioType): The original scenario object.
+
+        Returns:
+            ScenarioType: The modified scenario object.
+
+        """
+        return scenario
 
     @abstractmethod
     def _get_use_case_info_list(
