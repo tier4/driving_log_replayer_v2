@@ -11,6 +11,7 @@ from __future__ import annotations
 import math
 
 import numpy as np
+import pandas as pd
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 
@@ -410,6 +411,75 @@ def build_fig_long_tau_pointwise_hist(cross_fit: dict) -> go.Figure:
         fig,
         title=f"縦方向 τ_a の瞬時推定値の分布（横断フィット使用 {n_ds} データセットをプール、計 {len(arr)} 点）",
         height=380,
+    )
+
+
+_NSTEP_ERROR_METRICS = [
+    ("p14_yaw", "yaw [deg]", "steelblue"),
+    ("p14_lat", "lat [cm]", "darkorange"),
+    ("p14_long", "long [cm]", "seagreen"),
+    ("p14_vx", "vx [m/s]", "indianred"),
+]
+_NSTEP_ERROR_QUANTILES = [
+    (0.50, "中央値", "#555555"),
+    (0.90, "90%ile", "#1f77b4"),
+    (0.95, "95%ile", "#ff7f0e"),
+    (0.99, "99%ile", "#d62728"),
+]
+
+
+def build_fig_nstep_error_hist(df: pd.DataFrame, label: str = "tuned") -> go.Figure:
+    """N-step 終端誤差 (yaw/lat/long/vx) の horizon 別分布ヒストグラム（{label} モデルのみ）。
+
+    サマリテーブルの 平均/99%ile だけでは裾の形（二峰性・突発外れ値の割合）が分からないため、
+    データセット横断 RMSE の分布そのものを可視化し、50/90/95/99パーセンタイルを縦線で重ねる。
+    """
+    if df is None or len(df) == 0:
+        return _placeholder_fig("N-step 終端誤差データなし")
+
+    horizons = sorted(df["h"].unique().tolist())
+    if not horizons:
+        return _placeholder_fig("N-step 終端誤差データなし")
+
+    fig = make_subplots(
+        rows=len(horizons), cols=len(_NSTEP_ERROR_METRICS),
+        subplot_titles=[f"N={h}  {mlabel}" for h in horizons for _, mlabel, _ in _NSTEP_ERROR_METRICS],
+        vertical_spacing=0.05, horizontal_spacing=0.04,
+    )
+    for ri, h in enumerate(horizons, start=1):
+        sub = df[df["h"] == h]
+        for ci, (col, mlabel, color) in enumerate(_NSTEP_ERROR_METRICS, start=1):
+            vals = sub[col].dropna().to_numpy(dtype=float) if col in sub else np.array([])
+            if len(vals) == 0:
+                continue
+            fig.add_trace(go.Histogram(
+                x=vals.tolist(), nbinsx=30, marker_color=color, opacity=0.75,
+                showlegend=False, name=mlabel,
+            ), row=ri, col=ci)
+            for q, _qname, qcolor in _NSTEP_ERROR_QUANTILES:
+                qv = float(np.quantile(vals, q))
+                fig.add_vline(
+                    x=qv, row=ri, col=ci,
+                    line=dict(color=qcolor, width=1.3, dash="dot" if q < 0.99 else "dash"),
+                )
+        for ci, (_col, mlabel, _color) in enumerate(_NSTEP_ERROR_METRICS, start=1):
+            if ri == len(horizons):
+                fig.update_xaxes(title_text=mlabel, row=ri, col=ci)
+    fig.update_yaxes(title_text="データセット数", col=1)
+
+    # 凡例用ダミートレース (縦線の色 = パーセンタイルの対応を示すだけで描画には寄与しない)
+    for q, qname, qcolor in _NSTEP_ERROR_QUANTILES:
+        fig.add_trace(go.Scatter(
+            x=[None], y=[None], mode="lines",
+            line=dict(color=qcolor, width=1.3, dash="dot" if q < 0.99 else "dash"),
+            name=qname, showlegend=True,
+        ), row=1, col=1)
+
+    return apply_base_layout(
+        fig,
+        title=f"N-step 終端誤差の分布（{label}、データセット横断 RMSE のヒストグラム）",
+        height=280 * len(horizons) + 40,
+        legend=dict(orientation="h", y=1.02, x=0),
     )
 
 

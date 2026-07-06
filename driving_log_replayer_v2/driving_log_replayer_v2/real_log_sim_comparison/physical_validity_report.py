@@ -61,6 +61,7 @@ from driving_log_replayer_v2.real_log_sim_comparison.lib._figures import (  # no
     build_fig_long_perf_growth,
     build_fig_long_perf_map,
     build_fig_long_tau_pointwise_hist,
+    build_fig_nstep_error_hist,
     build_fig_perfect_tracking_box,
     build_fig_perfect_tracking_traj,
 )
@@ -1169,14 +1170,14 @@ def _build_sec_deviation(
         sub = df[df["h"] == h]
         stats_list.append({
             "h": h,
-            "p14_yaw_mean": sub["p14_yaw"].mean(), "p14_yaw_p95": sub["p14_yaw"].quantile(0.95), "p14_yaw_p99": sub["p14_yaw"].quantile(0.99), "p14_yaw_max": sub["p14_yaw"].max(),
-            "p14_lat_mean": sub["p14_lat"].mean(), "p14_lat_p95": sub["p14_lat"].quantile(0.95), "p14_lat_p99": sub["p14_lat"].quantile(0.99), "p14_lat_max": sub["p14_lat"].max(),
-            "p14_long_mean": sub["p14_long"].mean(), "p14_long_p95": sub["p14_long"].quantile(0.95), "p14_long_p99": sub["p14_long"].quantile(0.99), "p14_long_max": sub["p14_long"].max(),
-            "p14_vx_mean": sub["p14_vx"].mean(), "p14_vx_p95": sub["p14_vx"].quantile(0.95), "p14_vx_p99": sub["p14_vx"].quantile(0.99), "p14_vx_max": sub["p14_vx"].max(),
-            "bl_yaw_mean": sub["bl_yaw"].mean(), "bl_yaw_p95": sub["bl_yaw"].quantile(0.95), "bl_yaw_p99": sub["bl_yaw"].quantile(0.99), "bl_yaw_max": sub["bl_yaw"].max(),
-            "bl_lat_mean": sub["bl_lat"].mean(), "bl_lat_p95": sub["bl_lat"].quantile(0.95), "bl_lat_p99": sub["bl_lat"].quantile(0.99), "bl_lat_max": sub["bl_lat"].max(),
-            "bl_long_mean": sub["bl_long"].mean(), "bl_long_p95": sub["bl_long"].quantile(0.95), "bl_long_p99": sub["bl_long"].quantile(0.99), "bl_long_max": sub["bl_long"].max(),
-            "bl_vx_mean": sub["bl_vx"].mean(), "bl_vx_p95": sub["bl_vx"].quantile(0.95), "bl_vx_p99": sub["bl_vx"].quantile(0.99), "bl_vx_max": sub["bl_vx"].max(),
+            "p14_yaw_mean": sub["p14_yaw"].mean(), "p14_yaw_p99": sub["p14_yaw"].quantile(0.99),
+            "p14_lat_mean": sub["p14_lat"].mean(), "p14_lat_p99": sub["p14_lat"].quantile(0.99),
+            "p14_long_mean": sub["p14_long"].mean(), "p14_long_p99": sub["p14_long"].quantile(0.99),
+            "p14_vx_mean": sub["p14_vx"].mean(), "p14_vx_p99": sub["p14_vx"].quantile(0.99),
+            "bl_yaw_mean": sub["bl_yaw"].mean(), "bl_yaw_p99": sub["bl_yaw"].quantile(0.99),
+            "bl_lat_mean": sub["bl_lat"].mean(), "bl_lat_p99": sub["bl_lat"].quantile(0.99),
+            "bl_long_mean": sub["bl_long"].mean(), "bl_long_p99": sub["bl_long"].quantile(0.99),
+            "bl_vx_mean": sub["bl_vx"].mean(), "bl_vx_p99": sub["bl_vx"].quantile(0.99),
         })
 
     score_html = ""
@@ -1212,43 +1213,35 @@ def _build_sec_deviation(
             f'<small style="color:#888">{span}</small></td>\n'
             f'  <td><b>{label}</b></td>\n'
             f'  {_cell(s["p14_yaw_mean"], s["bl_yaw_mean"])}'
-            f'{_cell(s["p14_yaw_p95"], s["bl_yaw_p95"])}'
-            f'{_cell(s["p14_yaw_p99"], s["bl_yaw_p99"])}'
-            f'{_cell(s["p14_yaw_max"], s["bl_yaw_max"])}\n'
+            f'{_cell(s["p14_yaw_p99"], s["bl_yaw_p99"])}\n'
             f'  {_cell(s["p14_lat_mean"], s["bl_lat_mean"])}'
-            f'{_cell(s["p14_lat_p95"], s["bl_lat_p95"])}'
-            f'{_cell(s["p14_lat_p99"], s["bl_lat_p99"])}'
-            f'{_cell(s["p14_lat_max"], s["bl_lat_max"])}\n'
+            f'{_cell(s["p14_lat_p99"], s["bl_lat_p99"])}\n'
             f'  {_cell(s["p14_long_mean"], s["bl_long_mean"])}'
-            f'{_cell(s["p14_long_p95"], s["bl_long_p95"])}'
-            f'{_cell(s["p14_long_p99"], s["bl_long_p99"])}'
-            f'{_cell(s["p14_long_max"], s["bl_long_max"])}\n'
+            f'{_cell(s["p14_long_p99"], s["bl_long_p99"])}\n'
             f'  {_cell(s["p14_vx_mean"], s["bl_vx_mean"], ".4f")}'
-            f'{_cell(s["p14_vx_p95"], s["bl_vx_p95"], ".4f")}'
-            f'{_cell(s["p14_vx_p99"], s["bl_vx_p99"], ".4f")}'
-            f'{_cell(s["p14_vx_max"], s["bl_vx_max"], ".4f")}\n'
+            f'{_cell(s["p14_vx_p99"], s["bl_vx_p99"], ".4f")}\n'
             f'</tr>\n'
             f'<tr>\n'
             f'  <td style="color:#888">baseline</td>\n'
-            f'  <td>{s["bl_yaw_mean"]:.3f}</td><td>{s["bl_yaw_p95"]:.3f}</td><td>{s["bl_yaw_p99"]:.3f}</td><td>{s["bl_yaw_max"]:.3f}</td>\n'
-            f'  <td>{s["bl_lat_mean"]:.3f}</td><td>{s["bl_lat_p95"]:.3f}</td><td>{s["bl_lat_p99"]:.3f}</td><td>{s["bl_lat_max"]:.3f}</td>\n'
-            f'  <td>{s["bl_long_mean"]:.3f}</td><td>{s["bl_long_p95"]:.3f}</td><td>{s["bl_long_p99"]:.3f}</td><td>{s["bl_long_max"]:.3f}</td>\n'
-            f'  <td>{s["bl_vx_mean"]:.4f}</td><td>{s["bl_vx_p95"]:.4f}</td><td>{s["bl_vx_p99"]:.4f}</td><td>{s["bl_vx_max"]:.4f}</td>\n'
+            f'  <td>{s["bl_yaw_mean"]:.3f}</td><td>{s["bl_yaw_p99"]:.3f}</td>\n'
+            f'  <td>{s["bl_lat_mean"]:.3f}</td><td>{s["bl_lat_p99"]:.3f}</td>\n'
+            f'  <td>{s["bl_long_mean"]:.3f}</td><td>{s["bl_long_p99"]:.3f}</td>\n'
+            f'  <td>{s["bl_vx_mean"]:.4f}</td><td>{s["bl_vx_p99"]:.4f}</td>\n'
             f'</tr>'
         )
 
     tbody = "\n".join(tbody_rows)
+
+    hist_fig = build_fig_nstep_error_hist(df, label=label)
+    hist_html = hist_fig.to_html(full_html=False, include_plotlyjs=False)
 
     return f"""
 <section id="deviation">
 <h2>N-step 終端誤差（{label} vs baseline）</h2>
 <p>
 全データセットに対し {label} パラメータと baseline（補正なし）で N-step ロールアウトを実施し、
-終端誤差 RMSE の データセット横断 <b>平均</b>（mean）、<b>95パーセンタイル</b>（95%点）、<b>99パーセンタイル</b>（99%点）、<b>最大</b>（worst-case データセット）を N ごとに集計する。
-「最大」は「最も誤差が大きかった データセットの RMSE」を指す。
-</p>
-<p>
-最大乖離（Worst値）は突発的なノイズ等で大きくなる場合がありますが、<b>95%点や99%点</b>の指標を見ることで、大部分の走行区間でモデルが極めて高い精度（OKの範囲内）で適合していることを確認できます。
+終端誤差 RMSE の データセット横断 <b>平均</b>（mean）と <b>99パーセンタイル</b>（99%ile）を N ごとに集計する。
+分布の形（裾の太さ・外れ値の割合）を確認したい場合は下の「詳細評価結果」のヒストグラムを参照。
 </p>
 {score_html}
 <table class="param-table" style="font-size:12px">
@@ -1256,16 +1249,16 @@ def _build_sec_deviation(
     <tr>
       <th rowspan="2">N（時間）</th>
       <th rowspan="2">モデル</th>
-      <th colspan="4">yaw 誤差 [deg]</th>
-      <th colspan="4">lat 誤差 [cm]</th>
-      <th colspan="4">long 誤差 [cm]</th>
-      <th colspan="4">速度誤差 \\(v_x\\) [m/s]</th>
+      <th colspan="2">yaw 誤差 [deg]</th>
+      <th colspan="2">lat 誤差 [cm]</th>
+      <th colspan="2">long 誤差 [cm]</th>
+      <th colspan="2">速度誤差 \\(v_x\\) [m/s]</th>
     </tr>
     <tr>
-      <th>平均</th><th>95%点</th><th>99%点</th><th>最大</th>
-      <th>平均</th><th>95%点</th><th>99%点</th><th>最大</th>
-      <th>平均</th><th>95%点</th><th>99%点</th><th>最大</th>
-      <th>平均</th><th>95%点</th><th>99%点</th><th>最大</th>
+      <th>平均</th><th>99%ile</th>
+      <th>平均</th><th>99%ile</th>
+      <th>平均</th><th>99%ile</th>
+      <th>平均</th><th>99%ile</th>
     </tr>
   </thead>
   <tbody>
@@ -1278,6 +1271,15 @@ def _build_sec_deviation(
 RMSE は各データセットの全 k0 ステップ（stride=5）の終端誤差（N ステップ先）の二乗平均平方根。
 キャッシュは <code>--metrics-cache</code> で指定した CSV ファイルに保存される。
 </div>
+<details>
+<summary>詳細評価結果: N-step 誤差分布（ヒストグラム）</summary>
+<p>
+{label} モデルのデータセット横断 RMSE の分布を N・誤差成分ごとにヒストグラムで示す。
+縦線は 中央値／90%ile／95%ile／99%ile。表の「平均」「99%ile」だけでは見えない
+裾の太さ（大きく外れるデータセットがどの程度の割合あるか）を確認できる。
+</p>
+{hist_html}
+</details>
 </section>
 """
 
