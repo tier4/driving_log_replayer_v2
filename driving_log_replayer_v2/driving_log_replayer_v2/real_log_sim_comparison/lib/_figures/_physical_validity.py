@@ -429,17 +429,17 @@ _NSTEP_ERROR_QUANTILES = [
 
 
 def build_fig_nstep_error_hist(df: pd.DataFrame, label: str = "tuned") -> go.Figure:
-    """N-step 終端誤差 (yaw/lat/long/vx) の horizon 別分布ヒストグラム（{label} モデルのみ）。
+    """N-step Open Loop評価: 終端誤差 (yaw/lat/long/vx) の horizon 別分布ヒストグラム（{label} モデルのみ）。
 
     サマリテーブルの 平均/99%ile だけでは裾の形（二峰性・突発外れ値の割合）が分からないため、
     データセット横断 RMSE の分布そのものを可視化し、50/90/95/99パーセンタイルを縦線で重ねる。
     """
     if df is None or len(df) == 0:
-        return _placeholder_fig("N-step 終端誤差データなし")
+        return _placeholder_fig("N-step Open Loop評価データなし")
 
     horizons = sorted(df["h"].unique().tolist())
     if not horizons:
-        return _placeholder_fig("N-step 終端誤差データなし")
+        return _placeholder_fig("N-step Open Loop評価データなし")
 
     fig = make_subplots(
         rows=len(horizons), cols=len(_NSTEP_ERROR_METRICS),
@@ -477,7 +477,7 @@ def build_fig_nstep_error_hist(df: pd.DataFrame, label: str = "tuned") -> go.Fig
 
     return apply_base_layout(
         fig,
-        title=f"N-step 終端誤差の分布（{label}、データセット横断 RMSE のヒストグラム）",
+        title=f"N-step Open Loop評価: 終端誤差の分布（{label}、データセット横断 RMSE のヒストグラム）",
         height=280 * len(horizons) + 40,
         legend=dict(orientation="h", y=1.02, x=0),
     )
@@ -551,7 +551,7 @@ def build_fig_perfect_tracking_box(data: dict) -> go.Figure:
         return _placeholder_fig("操舵理想追従データなし")
 
     fig.update_layout(
-        title=f"理想追従 N-step 横方向誤差（上位 {data.get('n_dataset', 0)} データセット プール）",
+        title=f"N-step Open Loop評価: 理想追従 横方向誤差（上位 {data.get('n_dataset', 0)} データセット プール）",
         xaxis_title="ホライズン [s]",
         yaxis_title="|横方向誤差| [cm]",
         height=400,

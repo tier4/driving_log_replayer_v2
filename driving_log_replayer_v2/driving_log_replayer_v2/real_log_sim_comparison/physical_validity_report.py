@@ -282,7 +282,7 @@ def _build_sec_metrics(baseline_score: float | None, phase14_score: float, label
 <h2>0. 評価メトリクスの物理的意味</h2>
 
 <details>
-<summary>0-1. N-step 前向き積分誤差</summary>
+<summary>0-1. N-step Open Loop評価: 前向き積分誤差</summary>
 <p>
 車両モデルを実機ログの初期状態から N 個の制御コマンド区間だけ前向きに積分し、
 実機の自己位置推定軌跡との終端誤差を評価する。
@@ -535,7 +535,7 @@ def _build_sec1(
             "速度と加速度の計測・時刻同期・離散化の不整合が残差として現れる。"
             "</div>"
             f"<p>走行区間（\\(v_x > {_vx_min}\\) m/s）を stride={_stride} ステップで走査し、"
-            "N-step ロールアウト終端の縦方向誤差絶対値を集計する。"
+            "N-step Open Loop評価（ロールアウト）終端の縦方向誤差絶対値を集計する。"
             f"ホライズン: {_horizon_desc}。</p>"
             + box_html
             + "<p><b>図②: ドリフト成長カーブ（符号付き）</b> — "
@@ -1078,7 +1078,7 @@ def _build_sec14(
 <h3>横方向誤差分布（ホライズン別、上位 {n_dataset} データセット）</h3>
 <p>
 カーブ走行区間（\\(v_x > {VX_MIN_CURVE}\\) m/s）を stride={_PERF_STRIDE} ステップで走査し、
-N-step ロールアウト終端の横方向誤差絶対値を集計する。ホライズン: {h_str}。
+N-step Open Loop評価（ロールアウト）終端の横方向誤差絶対値を集計する。ホライズン: {h_str}。
 </p>
 {box_html}
 
@@ -1162,7 +1162,7 @@ def _build_sec_deviation(
     score_name: str = "robust_score",
     label: str = "phase14",
 ) -> str:
-    """N-step 終端誤差の最大乖離テーブルセクション（tuned vs baseline）。"""
+    """N-step Open Loop評価: 終端誤差テーブルセクション（tuned vs baseline）。"""
     horizons = sorted(df["h"].unique().tolist())
 
     stats_list = []
@@ -1237,9 +1237,9 @@ def _build_sec_deviation(
 
     return f"""
 <section id="deviation">
-<h2>N-step 終端誤差（{label} vs baseline）</h2>
+<h2>N-step Open Loop評価: 終端誤差（{label} vs baseline）</h2>
 <p>
-全データセットに対し {label} パラメータと baseline（補正なし）で N-step ロールアウトを実施し、
+全データセットに対し {label} パラメータと baseline（補正なし）で N-step Open Loop評価（ロールアウト）を実施し、
 終端誤差 RMSE の データセット横断 <b>平均</b>（mean）と <b>99パーセンタイル</b>（99%ile）を N ごとに集計する。
 分布の形（裾の太さ・外れ値の割合）を確認したい場合は下の「詳細評価結果」のヒストグラムを参照。
 </p>
@@ -1272,7 +1272,7 @@ RMSE は各データセットの全 k0 ステップ（stride=5）の終端誤差
 キャッシュは <code>--metrics-cache</code> で指定した CSV ファイルに保存される。
 </div>
 <details>
-<summary>詳細評価結果: N-step 誤差分布（ヒストグラム）</summary>
+<summary>詳細評価結果: N-step Open Loop評価 誤差分布（ヒストグラム）</summary>
 <p>
 {label} モデルのデータセット横断 RMSE の分布を N・誤差成分ごとにヒストグラムで示す。
 縦線は 中央値／90%ile／95%ile／99%ile。表の「平均」「99%ile」だけでは見えない
