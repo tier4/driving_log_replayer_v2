@@ -125,7 +125,8 @@ Conditions:
 ```
 
 **`vehicle_model_type`（open-loop クラス名）** は `delay_steer_acc_geared_wo_fall_guard` /
-`ideal_steer_acc` / `taiga_dyn` / `taiga_x` の 4 種類。`params` で未指定のキーは
+`delay_steer_acc_geared_for_diffusion_planner` / `ideal_steer_acc` / `taiga_dyn` /
+`taiga_x` の 5 種類。`params` で未指定のキーは
 `load_sim_params()` (j6_gen2_description の YAML) で補完（`wheelbase` は不要）。
 
 **`vehicle_model`（sim description パッケージ名）** は `j6_gen2` (通常シム) /
@@ -227,7 +228,7 @@ make local_cloud_run LOCAL_SCENARIO=/path/to/other_scenario.yaml
 | `Conditions.models に未定義名` | `scenario.yaml` の `Conditions.cases` / `sim_runs` に挙げた名前が `models` に存在するか確認 |
 | `cases に vehicle_model_type なし` | `cases` に挙げたモデルに `vehicle_model_type` が必要。open-loop クラス名を追加する |
 | `sim_runs に vehicle_model なし` | `sim_runs` に挙げたモデルに `vehicle_model` が必要。description パッケージ名を追加する |
-| `未対応の model_type` | `vehicle_model_type` は `delay_steer_acc_geared_wo_fall_guard` / `ideal_steer_acc` / `taiga_dyn` / `taiga_x` のみ。新規 model 追加は `vehicle_model_c_wrapper.cpp` への factory 追加が必要 |
+| `未対応の model_type` | `vehicle_model_type` は `delay_steer_acc_geared_wo_fall_guard` / `delay_steer_acc_geared_for_diffusion_planner` / `ideal_steer_acc` / `taiga_dyn` / `taiga_x` のみ。新規 model 追加は `vehicle_model_c_wrapper.cpp` への factory 追加が必要 |
 | Stage CL2 (sim) が全 run 失敗 | scenario_test_runner が起動できているか、auto_scenario.yaml が valid か `ros2 launch scenario_test_runner scenario_test_runner.launch.py scenario:=<...auto_scenario.yaml>` を手動で試行 |
 | sim 1 run で 10 分以上かかる | `Conditions.models.<name>.timeout_s` を上げるか、`initialize_duration` を下げて確認 |
 

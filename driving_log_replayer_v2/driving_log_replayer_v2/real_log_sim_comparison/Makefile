@@ -169,6 +169,7 @@ CLOSED_LOOP_MAP    ?= $(HOME)/.webauto/simulation/data/map/x2_dev/2231/2231-2026
 MULTI_BATCH_ROOT   ?= /home/kotaroyoshimoto/data/openloop_j6_16_onwards
 N_TRIALS           ?= 50
 N_JOBS             ?= 32
+MODEL_CASE         ?= best_normal
 
 # パイプライン各段の中間成果物 (分割ターゲット間で受け渡す SSOT パス)。
 # fit_lon → fit_steer → fit_merge → fit_report → apply → closed_loop がこれらを介して連結する。
@@ -293,6 +294,8 @@ fit_report:
 	@echo "[INFO] fit_report: 物理妥当性レポート生成 → $(VALIDITY_REPORT)"
 	source $(SETUP_BASH) && $(PYTHON) -m driving_log_replayer_v2.real_log_sim_comparison.physical_validity_report \
 	    --params "$(TUNED_PARAMS)" \
+	    --scenario "$(LOCAL_SCENARIO)" \
+	    --case "$(MODEL_CASE)" \
 	    --collection-dir "$(MULTI_BATCH_ROOT)" \
 	    --out "$(VALIDITY_REPORT)" \
 	    --metrics-cache "$(METRICS_CACHE)" \
@@ -534,5 +537,7 @@ physical_validity_report_nodata:
 	    echo "[INFO] COLL_DIR : $$_nodata_col (空ディレクトリ = データなし)" ; \
 	    source $(SETUP_BASH) && $(PYTHON) -m driving_log_replayer_v2.real_log_sim_comparison.physical_validity_report \
 	        --params "$(PARAMS)" \
+	        --scenario "$(LOCAL_SCENARIO)" \
+	        --case "$(MODEL_CASE)" \
 	        --collection-dir "$$_nodata_col" \
 	        --out "$(NODATA_OUT)"

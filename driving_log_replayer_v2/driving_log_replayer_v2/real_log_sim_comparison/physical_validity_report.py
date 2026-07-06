@@ -14,7 +14,9 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import html as _html_stdlib
+import json
 import sys
 from concurrent.futures import ProcessPoolExecutor, as_completed
 from pathlib import Path
@@ -32,6 +34,9 @@ from driving_log_replayer_v2.real_log_sim_comparison.lib._collection import Data
 from driving_log_replayer_v2.real_log_sim_comparison.lib._coverage import _curvature_coverage  # noqa: E402
 from driving_log_replayer_v2.real_log_sim_comparison.lib._io import load_cmd, resolve_lite_bag  # noqa: E402
 from driving_log_replayer_v2.real_log_sim_comparison.lib._map import load_map_ways, resolve_map_osm  # noqa: E402
+from driving_log_replayer_v2.real_log_sim_comparison.lib._models_config import (  # noqa: E402
+    load_models_doc,
+)
 from driving_log_replayer_v2.real_log_sim_comparison.lib._multi_agg import (  # noqa: E402
     HORIZONS as _HORIZONS,
     acc_score as _acc_score,
@@ -93,6 +98,59 @@ _H_SPAN = {10: "≈0.33 s", 20: "≈0.67 s", 30: "≈1.0 s", 40: "≈1.33 s"}
 # lib._physical_validity の _PERF_HORIZONS / _PERF_STRIDE を import して使う）
 _PERF_N_DATASET = 10                                   # 1-5 横方向 box plot 用 データセット数
 _LONG_PERF_N_DATASET = 20                                   # 1-2 縦方向理想追従 box plot 用 データセット数
+
+
+def _resolve_report_models(
+    scenario: Path | None, current_case: str
+) -> tuple[str, dict, str, dict, str]:
+    """Return current type/params, baseline type/params, and baseline case name."""
+    if scenario is None:
+        return _BASELINE_MODEL, {}, _BASELINE_MODEL, {}, "baseline"
+
+    doc = load_models_doc(scenario)
+    if current_case not in doc.models:
+        raise ValueError(
+            f"{scenario}: current case {current_case!r} が Conditions.models にありません"
+        )
+    reference = doc.overlay.reference_tag
+    if not reference or reference not in doc.models:
+        raise ValueError(
+            f"{scenario}: Conditions.overlay.reference_tag に有効な baseline model が必要です"
+        )
+    current = doc.models[current_case]
+    baseline = doc.models[reference]
+    if current.vehicle_model_type is None or baseline.vehicle_model_type is None:
+        raise ValueError("current/baseline model の vehicle_model_type は必須です")
+    return (
+        current.vehicle_model_type,
+        dict(current.params),
+        baseline.vehicle_model_type,
+        dict(baseline.params),
+        reference,
+    )
+
+
+def _model_fingerprint(model_type: str, params: dict) -> str:
+    payload = json.dumps(
+        {"model_type": model_type, "params": params},
+        sort_keys=True,
+        separators=(",", ":"),
+        default=str,
+    )
+    return hashlib.sha256(payload.encode()).hexdigest()[:16]
+
+
+def _metrics_cache_matches(path: Path, expected: dict[str, str]) -> bool:
+    try:
+        header = pd.read_csv(path, nrows=1)
+    except Exception as exc:  # noqa: BLE001
+        print(f"  [WARN] metrics cache を読めません ({exc})。再計算します")
+        return False
+    for key, value in expected.items():
+        if key not in header.columns or header.empty or str(header.iloc[0][key]) != value:
+            print(f"  [INFO] metrics cache の {key} が現在条件と不一致。再計算します")
+            return False
+    return True
 
 
 def _to_entries(ds_list: list) -> list[DatasetEntry]:
@@ -1428,6 +1486,14 @@ def main() -> None:
         "--out", type=Path, required=True,
         help="出力 HTML パス",
     )
+    ap.add_argument(
+        "--scenario", type=Path, default=None,
+        help="current/baseline のモデル定義を含む scenario.yaml",
+    )
+    ap.add_argument(
+        "--case", default="best_normal",
+        help="current として評価する Conditions.models の名前（既定: best_normal）",
+    )
     ap.add_argument("--n-curve-ds", type=int, default=3, help="ビューア埋め込みカーブ データセット数")
     ap.add_argument("--n-jobs", type=int, default=8)
     ap.add_argument(
@@ -1473,7 +1539,20 @@ def main() -> None:
         yaml_data = yaml.safe_load(f)
     params: dict = yaml_data.get("params", yaml_data)
     params["_score"] = yaml_data.get("score", "N/A")
+    current_model, current_base_params, baseline_model, baseline_params, baseline_case = (
+        _resolve_report_models(args.scenario, args.case)
+    )
+    tuned_params = {k: v for k, v in params.items() if not k.startswith("_")}
+    current_eval_params = {**current_base_params, **tuned_params}
+    cache_identity = {
+        "current_model_type": current_model,
+        "baseline_model_type": baseline_model,
+        "current_fingerprint": _model_fingerprint(current_model, current_eval_params),
+        "baseline_fingerprint": _model_fingerprint(baseline_model, baseline_params),
+    }
     print(f"パラメータ: {args.params.name}  (label={phase_label})")
+    print(f"  current: {args.case} ({current_model})")
+    print(f"  baseline: {baseline_case} ({baseline_model})")
     print(f"  k_us={params.get('k_us', 0):.5f} (全速度域一定)")
     print(f"  steer_dead_band={params.get('steer_dead_band',0):.5f} rad")
 
@@ -1549,10 +1628,20 @@ def main() -> None:
     # Phase 3b / 3c: DatasetCtx 構築 & rollout メトリクス
     top_items = [(r["uuid"], Path(r["lite_dir"])) for r in top_curve]
     deviation_html = ""
-    if args.metrics_cache and args.metrics_cache.exists():
+    cache_is_valid = bool(
+        args.metrics_cache
+        and args.metrics_cache.exists()
+        and _metrics_cache_matches(args.metrics_cache, cache_identity)
+    )
+    if cache_is_valid:
         # キャッシュあり → viewer データセット のみ load、メトリクスは CSV から読む
         print(f"\n[Phase 3b] DatasetCtx 構築 ({len(top_items)} データセット) ...")
-        ctxs = load_datasets(top_items, n_jobs=min(args.n_jobs, len(top_items)))
+        ctxs = load_datasets(
+            top_items,
+            n_jobs=min(args.n_jobs, len(top_items)),
+            baseline_model_type=baseline_model,
+            baseline_params=baseline_params,
+        )
         print(f"\n[Phase 3c] rollout メトリクスキャッシュ読み込み ...")
         df_rollout = pd.read_csv(args.metrics_cache)
         n_dataset_cache = df_rollout["uuid"].nunique()
@@ -1595,16 +1684,20 @@ def main() -> None:
         # キャッシュなし → 全データセット load（ついでに viewer データセット も取り出す）
         all_items = [(r["uuid"], Path(r["lite_dir"])) for r in records]
         print(f"\n[Phase 3b+3c] 全データセット DatasetCtx 構築 ({len(all_items)} データセット) + rollout メトリクス計算 ...")
-        all_ctxs = load_datasets(all_items, n_jobs=args.n_jobs)
+        all_ctxs = load_datasets(
+            all_items,
+            n_jobs=args.n_jobs,
+            baseline_model_type=baseline_model,
+            baseline_params=baseline_params,
+        )
         # viewer データセットを all_ctxs から抽出（重複 load 回避）
         ctxs_by_id = {c.dataset_id: c for c in all_ctxs}
         ctxs = [ctxs_by_id[r["uuid"]] for r in top_curve if r["uuid"] in ctxs_by_id]
         # phase14 override: YAML の全 params から _* メタキーを除外（hand-pick より安全）
-        override = {k: v for k, v in params.items() if not k.startswith("_")}
         rows = []
         for i, ctx in enumerate(all_ctxs, 1):
             try:
-                p14 = _tune_eval(ctx, override, _BASELINE_MODEL)
+                p14 = _tune_eval(ctx, current_eval_params, current_model)
             except Exception as e:
                 print(f"  [WARN] {ctx.dataset_id[:12]}: eval 失敗 ({e})")
                 continue
@@ -1616,6 +1709,7 @@ def main() -> None:
                     "p14_lat": p14[h]["lat"], "p14_vx": p14[h]["vx"],
                     "bl_yaw": bl[h]["yaw"], "bl_long": bl[h]["long"],
                     "bl_lat": bl[h]["lat"], "bl_vx": bl[h]["vx"],
+                    **cache_identity,
                 })
             if i % 100 == 0:
                 print(f"  {i}/{len(all_ctxs)} 完了", flush=True)
@@ -1661,24 +1755,24 @@ def main() -> None:
         baseline_steer_score = None
         # --metrics-cache 未指定 → 通常の viewer データセット のみ load
         print(f"\n[Phase 3b] DatasetCtx 構築 ({len(top_items)} データセット) ...")
-        ctxs = load_datasets(top_items, n_jobs=min(args.n_jobs, len(top_items)))
+        ctxs = load_datasets(
+            top_items,
+            n_jobs=min(args.n_jobs, len(top_items)),
+            baseline_model_type=baseline_model,
+            baseline_params=baseline_params,
+        )
 
     curve_count_map = {r["uuid"]: r["curve_count"] for r in top_curve}
 
-    # tuned 設定と baseline 設定（configs = {ラベル: override_params}）
-    tuned_keys = [
-        "k_us",
-        "steer_dead_band", "steer_bias",
-        "steer_time_constant", "steer_time_delay",
-        "acc_time_constant", "acc_time_delay",
-        "debug_steer_scaling_factor", "steer_rate_lim",
-    ]
+    # Viewer はモデル種別も含む完全な設定を受け取り、異種モデル間で式を切り替える。
     configs: dict[str, dict] = {
-        f"{phase_label}（アンダーステア係数＋steer_dead_band）": {
-            k: params[k] for k in tuned_keys if k in params
+        f"{phase_label}（{args.case} / {current_model}）": {
+            **current_eval_params,
+            "vehicle_model_type": current_model.upper(),
         },
-        "baseline（アンダーステア係数=0 / steer_dead_band=0）": {
-            "k_us": 0.0, "steer_dead_band": 0.0,
+        f"baseline（{baseline_case} / {baseline_model}）": {
+            **baseline_params,
+            "vehicle_model_type": baseline_model.upper(),
         },
     }
 
@@ -1721,7 +1815,7 @@ def main() -> None:
     # 縦方向 / 操舵: 共有ライブラリの実行時フィット (per-dataset フィット結果 + 横断フィット)
     # から最長連続時系列図を生成する（旧: 事前生成 CSV 依存の build_long_figure /
     # build_steer_id_figure）。凡例にチューン値 τ/T を残すためモデル名に値を埋め込む。
-    tuned_clean = {k: v for k, v in params.items() if not k.startswith("_")}
+    tuned_clean = current_eval_params
     merged_tuned = merged_model_params(tuned_clean)
 
     def _model_name(tau_key: str, delay_key: str) -> str:

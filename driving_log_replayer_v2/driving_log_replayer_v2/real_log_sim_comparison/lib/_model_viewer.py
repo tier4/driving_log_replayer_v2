@@ -222,7 +222,11 @@ const DATA = __PAYLOAD_JSON__;
   // model: tau/T [s], steer_bias [deg](UI 単位; rollout で rad 変換), k_us [s^2/m]
   // tau は定数 (速度依存にしない)。
   const model = {
-    tau_acc_thr: DATA.model_seed.tau_acc_thr, t_acc_thr: DATA.model_seed.t_acc_thr,
+    tau_acc_thr: DATA.model_seed.tau_acc_thr, tau_acc_brk: DATA.model_seed.tau_acc_brk,
+    t_acc_thr: DATA.model_seed.t_acc_thr,
+    lon_drag_c0: DATA.model_seed.lon_drag_c0 ?? 0,
+    lon_drag_c1: DATA.model_seed.lon_drag_c1 ?? 0,
+    lon_drag_c2: DATA.model_seed.lon_drag_c2 ?? 0,
     v_stop: DATA.model_seed.v_stop, stopHandling: true, // 停止処理 (既定 ON)
     c_slope: DATA.model_seed.c_slope, slopeOn: true, // 勾配重力 (a_target += c_slope·a_slope, 既定 ON)
     tau_steer: DATA.model_seed.tau_steer, t_steer: DATA.model_seed.t_steer,
@@ -246,6 +250,9 @@ const DATA = __PAYLOAD_JSON__;
   function accelTarget(u, v, wz, slopeAcc) {
     if (model.stopHandling && v <= model.v_stop && u < 0) return 0;
     let t = u;
+    if (model.fullRhsDelay) {
+      t += model.lon_drag_c0 + model.lon_drag_c1 * v + model.lon_drag_c2 * v * v;
+    }
     if (model.slopeOn) t += model.c_slope * slopeAcc;
     return t;
   }
@@ -389,7 +396,7 @@ const DATA = __PAYLOAD_JSON__;
         } else {
           const u = chanAt("cmd_accel", tt - TaThr) ?? lastDrive;
           lastDrive = u;
-          const tauA = tauThr;
+          const tauA = u * model.acc_scaling >= 0 ? tauThr : Math.max(model.tau_acc_brk, 0.02);
           const wzo = chanAt("wz", tt);
           const sa = chanAt("slope_acc", tt);  // slope は current（C++: SLOPE は VX 式・非遅延）
           // full-RHS: 状態 a と drag/corner の車体状態 (v, wz) を t-d で評価。useFull=false で現在値に退化。
@@ -428,7 +435,7 @@ const DATA = __PAYLOAD_JSON__;
         } else {
           const u = chanAt("cmd_accel", tt - TaThr) ?? lastDrive;
           lastDrive = u;
-          const tauA = tauThr; // 定数 (下限クランプ済み)
+          const tauA = u * model.acc_scaling >= 0 ? tauThr : Math.max(model.tau_acc_brk, 0.02);
           const wzo = chanAt("wz", tt); // 観測ヨーレート (full-RHS 遅延経路で参照)
           const sa = chanAt("slope_acc", tt); // 勾配重力項 a_slope=9.81·sin(pitch) (観測・current)
           // C++: pedal_acc_des = sat(cmd_acc, lim) * debug_acc_scaling_factor
@@ -473,7 +480,10 @@ const DATA = __PAYLOAD_JSON__;
     const sv = {
       k_us: model.k_us,
       steer_dead_band: model.steer_dead_band,
-      tau_acc_thr: model.tau_acc_thr, t_acc_thr: model.t_acc_thr,
+      tau_acc_thr: model.tau_acc_thr, tau_acc_brk: model.tau_acc_brk,
+      t_acc_thr: model.t_acc_thr,
+      lon_drag_c0: model.lon_drag_c0, lon_drag_c1: model.lon_drag_c1,
+      lon_drag_c2: model.lon_drag_c2,
       tau_steer: model.tau_steer, t_steer: model.t_steer,
       steer_bias: model.steer_bias,
       steer_scaling: model.steer_scaling, acc_scaling: model.acc_scaling,
@@ -483,7 +493,11 @@ const DATA = __PAYLOAD_JSON__;
     model.k_us         = seed.k_us         ?? sv.k_us;
     model.steer_dead_band = seed.steer_dead_band ?? sv.steer_dead_band;
     model.tau_acc_thr = seed.tau_acc_thr ?? sv.tau_acc_thr;
+    model.tau_acc_brk = seed.tau_acc_brk ?? sv.tau_acc_brk;
     model.t_acc_thr   = seed.t_acc_thr   ?? sv.t_acc_thr;
+    model.lon_drag_c0 = seed.lon_drag_c0 ?? sv.lon_drag_c0;
+    model.lon_drag_c1 = seed.lon_drag_c1 ?? sv.lon_drag_c1;
+    model.lon_drag_c2 = seed.lon_drag_c2 ?? sv.lon_drag_c2;
     model.tau_steer   = seed.tau_steer   ?? sv.tau_steer;
     model.t_steer     = seed.t_steer     ?? sv.t_steer;
     if (seed.steer_bias != null) model.steer_bias = seed.steer_bias * RAD2DEG;
@@ -671,7 +685,7 @@ $("errpanels").addEventListener("change", (e) => { showErr = e.target.checked; m
         const vl = chanAt("lon_vel", tt); const vv = (vl != null) ? vl : 0;
         const u = chanAt("cmd_accel", tt - Tthr) ?? lastDrive;
         lastDrive = u;
-        const tau = tauThr; // 定数 (下限クランプ済み)
+        const tau = u >= 0 ? tauThr : Math.max(model.tau_acc_brk, 0.02);
         const wzo = chanAt("wz", tt); // 観測ヨーレート (full-RHS 遅延経路で参照)
         const sa = chanAt("slope_acc", tt); // 勾配重力項 (観測・current・非遅延)
         const aFb = useFull ? aHist.at(nTaSteps) : a;
@@ -801,6 +815,10 @@ $("errpanels").addEventListener("change", (e) => { showErr = e.target.checked; m
   function applyModelSeed(seed) {
     if (!seed) return;
     model.tau_acc_thr = seed.tau_acc_thr; model.t_acc_thr = seed.t_acc_thr;
+    model.tau_acc_brk = seed.tau_acc_brk ?? seed.tau_acc_thr;
+    model.lon_drag_c0 = seed.lon_drag_c0 ?? 0;
+    model.lon_drag_c1 = seed.lon_drag_c1 ?? 0;
+    model.lon_drag_c2 = seed.lon_drag_c2 ?? 0;
     model.c_slope = (seed.c_slope != null) ? seed.c_slope : 1.0; // 勾配ゲイン (toggle は維持)
     model.tau_steer = seed.tau_steer; model.t_steer = seed.t_steer;
     model.k_us = seed.k_us;

@@ -53,6 +53,8 @@ _BASELINE_MODEL = "delay_steer_acc_geared_wo_fall_guard"
 _GT_KEYS = ("acc_time_delay", "steer_time_delay", "wheelbase", "sub_dt")
 # fork 前に load_datasets が設定し、fork 後の worker は COW で継承する (P-5/P-7)
 _VERBOSE: bool = False
+_LOAD_BASELINE_MODEL: str = _BASELINE_MODEL
+_LOAD_BASELINE_PARAMS: dict = {}
 
 
 @dataclass
@@ -114,6 +116,8 @@ def _load_dataset_ctx(
     *,
     verbose: bool = False,
     log: bool = True,
+    baseline_model_type: str = _BASELINE_MODEL,
+    baseline_params: dict | None = None,
 ) -> DatasetCtx | None:
     """1 dataset を読み込み、baseline を検証した DatasetCtx を返す。失敗時は None."""
     s5.LITE_DIR = lite_dir
@@ -128,7 +132,7 @@ def _load_dataset_ctx(
         base["wheelbase"] = WHEELBASE
         s5.SUB_DT = base["sub_dt"]
         ctx = DatasetCtx(ds_id, data, t0_ns, base, {}, {})
-        ctx.base_metric = _eval(ctx, {}, _BASELINE_MODEL)
+        ctx.base_metric = _eval(ctx, baseline_params or {}, baseline_model_type)
         if ctx.gt_cache:
             gt0 = next(iter(ctx.gt_cache.values()))
             valid_gear = gt0.get("valid_gear_arr", [])
@@ -159,11 +163,23 @@ def _load_one(args: tuple[str, Path]) -> DatasetCtx | None:
     このワーカープロセス内のみに留まり、親プロセスには影響しない。
     """
     ds_id, lite_dir = args
-    return _load_dataset_ctx(ds_id, lite_dir, verbose=_VERBOSE, log=False)
+    return _load_dataset_ctx(
+        ds_id,
+        lite_dir,
+        verbose=_VERBOSE,
+        log=False,
+        baseline_model_type=_LOAD_BASELINE_MODEL,
+        baseline_params=_LOAD_BASELINE_PARAMS,
+    )
 
 
 def load_datasets(
-    lite_dirs: list[tuple[str, Path]], n_jobs: int = 1, verbose: bool = False
+    lite_dirs: list[tuple[str, Path]],
+    n_jobs: int = 1,
+    verbose: bool = False,
+    *,
+    baseline_model_type: str = _BASELINE_MODEL,
+    baseline_params: dict | None = None,
 ) -> list[DatasetCtx]:
     """収集された real.lite を読み込み DatasetCtx を構築する (baseline 誤差も計算)。
 
@@ -171,8 +187,10 @@ def load_datasets(
     pool.imap の返り値順 (None 除外) をそのまま使い、tie-break 再現を保証する。
     verbose=False (既定) のとき per-dataset の [load] 行を抑制し集計サマリのみ出力する。
     """
-    global _VERBOSE  # noqa: PLW0603
+    global _LOAD_BASELINE_MODEL, _LOAD_BASELINE_PARAMS, _VERBOSE  # noqa: PLW0603
     _VERBOSE = verbose
+    _LOAD_BASELINE_MODEL = baseline_model_type
+    _LOAD_BASELINE_PARAMS = dict(baseline_params or {})
 
     if n_jobs <= 1:
         # --jobs 1 の逐次パス (再現性の基準)
@@ -180,7 +198,14 @@ def load_datasets(
         for ds_id, lite_dir in lite_dirs:
             # 多数の異種データセットを横断するため、ロード失敗 (AUTONOMOUS 窓なし・トピック欠落・
             # baseline 誤差が NaN/0 等) は致命にせず skip する。
-            ctx = _load_dataset_ctx(ds_id, lite_dir, verbose=verbose, log=verbose)
+            ctx = _load_dataset_ctx(
+                ds_id,
+                lite_dir,
+                verbose=verbose,
+                log=verbose,
+                baseline_model_type=baseline_model_type,
+                baseline_params=baseline_params,
+            )
             if ctx is None:
                 continue
             ctxs.append(ctx)

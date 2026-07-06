@@ -44,6 +44,7 @@ import yaml
 # step3_run_sims が simple_sensor_simulator.vehicle_model_type:=<ENUM> として launch に渡す。
 _VEHICLE_MODEL_TYPE_ENUM: dict[str, str] = {
     "delay_steer_acc_geared_wo_fall_guard": "DELAY_STEER_ACC_GEARED_WO_FALL_GUARD",
+    "delay_steer_acc_geared_for_diffusion_planner": "DELAY_STEER_ACC_GEARED_FOR_DIFFUSION_PLANNER",
     "ideal_steer_acc": "IDEAL_STEER_ACC",
     "taiga_dyn": "TAIGA_DYN",
     "taiga_x": "TAIGA_X",
@@ -55,6 +56,7 @@ SUPPORTED_VMT: frozenset[str] = frozenset(_VEHICLE_MODEL_TYPE_ENUM.keys())
 KNOWN_PARAM_KEYS: frozenset[str] = frozenset({
     "vel_lim", "steer_lim", "vel_rate_lim", "steer_rate_lim",
     "wheelbase", "acc_time_delay", "acc_time_constant",
+    "brake_time_constant", "lon_drag_c0", "lon_drag_c1", "lon_drag_c2",
     "steer_time_delay", "steer_time_constant",
     "steer_dead_band", "steer_bias",
     "debug_acc_scaling_factor", "debug_steer_scaling_factor",

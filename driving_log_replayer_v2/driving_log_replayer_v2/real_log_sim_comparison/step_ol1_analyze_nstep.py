@@ -158,6 +158,10 @@ def _load_lib() -> ctypes.CDLL:
     # 15 base args (vx_lim..k_us)
     lib.vm_create_delay_steer_acc_geared_wo_fall_guard.argtypes = [c_double] * 15
 
+    lib.vm_create_delay_steer_acc_geared_for_diffusion_planner.restype = c_void_p
+    # 15 base args + brake tau + longitudinal drag polynomial coefficients.
+    lib.vm_create_delay_steer_acc_geared_for_diffusion_planner.argtypes = [c_double] * 19
+
     # taiga_dyn: 14 共通引数 (wo_fall_guard の k_us を除く) + 7 物理パラメータ
     # (mass, inertia_z, lf, lr, cornering_stiffness_front, cornering_stiffness_rear, vx_min_dyn)
     lib.vm_create_taiga_dyn.restype = c_void_p
@@ -315,6 +319,29 @@ class VehicleModel:
                 p.get("k_us", 0.0),
             )
             self._steer_bias = p["steer_bias"]
+        elif model_type == "delay_steer_acc_geared_for_diffusion_planner":
+            self._ptr = lib.vm_create_delay_steer_acc_geared_for_diffusion_planner(
+                p["vel_lim"],
+                p["steer_lim"],
+                p["vel_rate_lim"],
+                p["steer_rate_lim"],
+                p["wheelbase"],
+                sub_dt,
+                p["acc_time_delay"],
+                p["acc_time_constant"],
+                p["steer_time_delay"],
+                p["steer_time_constant"],
+                p["steer_dead_band"],
+                p["steer_bias"],
+                p.get("debug_acc_scaling_factor", 1.0),
+                p.get("debug_steer_scaling_factor", 1.0),
+                p.get("k_us", 0.0),
+                p.get("brake_time_constant", 0.0),
+                p.get("lon_drag_c0", 0.0),
+                p.get("lon_drag_c1", 0.0),
+                p.get("lon_drag_c2", 0.0),
+            )
+            self._steer_bias = p["steer_bias"]
         elif model_type == "taiga_dyn":
             # 動的自転車モデル。共通の縦・操舵パラメータ + 物理パラメータ (質量・ヨー慣性・
             # 重心位置・前後コーナリング剛性・低速フォールバック閾値)。物理パラメータは妥当な
@@ -370,7 +397,8 @@ class VehicleModel:
         else:
             raise ValueError(
                 f"未対応の model_type: {model_type!r}. 対応: 'ideal_steer_acc', "
-                "'delay_steer_acc_geared_wo_fall_guard', 'taiga_dyn', 'taiga_x'"
+                "'delay_steer_acc_geared_wo_fall_guard', "
+                "'delay_steer_acc_geared_for_diffusion_planner', 'taiga_dyn', 'taiga_x'"
             )
 
     def __del__(self):
