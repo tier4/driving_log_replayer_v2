@@ -630,6 +630,79 @@ def build_fig_nstep_error_hist(df: pd.DataFrame, label: str = "tuned") -> go.Fig
     )
 
 
+_NSTEP_GROWTH_METRICS = [
+    ("yaw", "yaw [deg]"),
+    ("lat", "lat [cm]"),
+    ("long", "long [cm]"),
+    ("vx", "vx [m/s]"),
+]
+
+
+def build_fig_nstep_error_growth(
+    df: pd.DataFrame, label: str = "tuned", baseline_label: str = "baseline"
+) -> go.Figure:
+    """N-step Open Loop評価: 終端誤差 (yaw/lat/long/vx) の horizon 別ドリフト成長カーブ。
+
+    ヒストグラムが各 horizon の分布（裾の形）を見るのに対し、こちらは横軸 = horizon N（ステップ数）で
+    データセット横断 RMSE の中央値 + IQR 帯を描き、誤差がホライズンとともにどう成長するかを
+    tuned と baseline で比較する。データは build_fig_nstep_error_hist と同じ df を消費する。
+    """
+    if df is None or len(df) == 0:
+        return _placeholder_fig("N-step Open Loop評価データなし")
+    horizons = sorted(df["h"].unique().tolist())
+    if not horizons:
+        return _placeholder_fig("N-step Open Loop評価データなし")
+
+    fig = make_subplots(
+        rows=1, cols=len(_NSTEP_GROWTH_METRICS),
+        subplot_titles=[mlabel for _, mlabel in _NSTEP_GROWTH_METRICS],
+        horizontal_spacing=0.06,
+    )
+    # (列プレフィックス, 凡例名, 線色, IQR 帯色)
+    series = [
+        ("p14", label, "darkorange", "rgba(255,165,0,0.18)"),
+        ("bl", baseline_label, "steelblue", "rgba(70,130,180,0.15)"),
+    ]
+    hx = np.array(horizons, dtype=float)
+    for ci, (metric, mlabel) in enumerate(_NSTEP_GROWTH_METRICS, start=1):
+        for prefix, slabel, color, fillcolor in series:
+            col = f"{prefix}_{metric}"
+            if col not in df:
+                continue
+            med, q25, q75 = [], [], []
+            for h in horizons:
+                vals = df[df["h"] == h][col].dropna().to_numpy(dtype=float)
+                if len(vals) == 0:
+                    med.append(np.nan); q25.append(np.nan); q75.append(np.nan)
+                    continue
+                med.append(float(np.median(vals)))
+                q25.append(float(np.percentile(vals, 25)))
+                q75.append(float(np.percentile(vals, 75)))
+            med_a, q25_a, q75_a = np.array(med), np.array(q25), np.array(q75)
+            fig.add_trace(go.Scatter(
+                x=np.concatenate([hx, hx[::-1]]).tolist(),
+                y=np.concatenate([q75_a, q25_a[::-1]]).tolist(),
+                fill="toself", fillcolor=fillcolor,
+                line=dict(color="rgba(0,0,0,0)"),
+                name=f"{slabel} IQR", legendgroup=prefix,
+                showlegend=False, hoverinfo="skip",
+            ), row=1, col=ci)
+            fig.add_trace(go.Scatter(
+                x=hx.tolist(), y=med_a.tolist(),
+                mode="lines+markers", line=dict(color=color, width=2.2),
+                name=slabel, legendgroup=prefix, showlegend=(ci == 1),
+            ), row=1, col=ci)
+        fig.update_xaxes(title_text="horizon N [step]", row=1, col=ci)
+        fig.update_yaxes(title_text=mlabel, row=1, col=ci)
+
+    return apply_base_layout(
+        fig,
+        title=f"N-step Open Loop評価: 終端誤差のドリフト成長カーブ（{label} vs {baseline_label}、中央値 + IQR）",
+        height=380,
+        legend=dict(orientation="h", y=1.10, x=0),
+    )
+
+
 def build_fig_cross_steer(rows_data: list[dict]) -> go.Figure:
     """dataset 横断 操舵モデルフィット (最長連続時系列 + per-dataset 同定値 + モデル別チューン値)。"""
     if not rows_data:

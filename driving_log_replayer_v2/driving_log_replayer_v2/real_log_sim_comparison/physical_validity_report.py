@@ -66,6 +66,7 @@ from driving_log_replayer_v2.real_log_sim_comparison.lib._figures import (  # no
     build_fig_long_perf_growth,
     build_fig_long_perf_map,
     build_fig_nstep_error_hist,
+    build_fig_nstep_error_growth,
     build_fig_perfect_tracking_box,
     build_fig_perfect_tracking_traj,
 )
@@ -1258,13 +1259,17 @@ def _build_sec_deviation(
     hist_fig = build_fig_nstep_error_hist(df, label=label)
     hist_html = hist_fig.to_html(full_html=False, include_plotlyjs=False)
 
+    growth_fig = build_fig_nstep_error_growth(df, label=label)
+    growth_html = growth_fig.to_html(full_html=False, include_plotlyjs=False)
+
     return f"""
 <section id="deviation">
 <h2>N-step Open Loop評価: 終端誤差（{label} vs baseline）</h2>
 <p>
 全データセットに対し {label} パラメータと baseline（補正なし）で N-step Open Loop評価（ロールアウト）を実施し、
 終端誤差 RMSE の データセット横断 <b>平均</b>（mean）と <b>99パーセンタイル</b>（99%ile）を N ごとに集計する。
-分布の形（裾の太さ・外れ値の割合）を確認したい場合は下の「詳細評価結果」のヒストグラムを参照。
+下の<b>ドリフト成長カーブ</b>は横軸 = horizon N（ステップ数）で誤差の中央値 + IQR 帯の成長を {label} と baseline で比較する。
+分布の形（裾の太さ・外れ値の割合）を確認したい場合は「詳細評価結果」のヒストグラムを参照。
 </p>
 {score_html}
 <table class="param-table" style="font-size:12px">
@@ -1294,6 +1299,12 @@ def _build_sec_deviation(
 RMSE は各データセットの全 k0 ステップ（stride=5）の終端誤差（N ステップ先）の二乗平均平方根。
 キャッシュは <code>--metrics-cache</code> で指定した CSV ファイルに保存される。
 </div>
+<h3>ドリフト成長カーブ（horizon 別 終端誤差の中央値 + IQR）</h3>
+<p>
+横軸を horizon N（ステップ数）にとり、各 N での データセット横断 終端誤差 RMSE の中央値を実線、
+25–75%ile を帯で示す。誤差が N とともにどう成長するか、{label} と baseline の傾きの差を一目で比較できる。
+</p>
+{growth_html}
 <details>
 <summary>詳細評価結果: N-step Open Loop評価 誤差分布（ヒストグラム）</summary>
 <p>
