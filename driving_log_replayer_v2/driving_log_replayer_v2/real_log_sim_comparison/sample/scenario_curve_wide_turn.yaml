@@ -54,7 +54,7 @@ Evaluation:
     #   参考 PR: https://github.com/tier4/autoware_universe/pull/3039
     models:
       baseline:
-        vehicle_model_type: delay_steer_acc_geared_for_diffusion_planner
+        vehicle_model_type: delay_steer_acc_geared_wo_fall_guard
         params:
           acc_time_delay: 0.1
           acc_time_constant: 0.1

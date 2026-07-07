@@ -71,7 +71,7 @@ Evaluation:
       baseline:
         # j6_gen2_description の DELAY_STEER_ACC_GEARED_WO_FALL_GUARD (dynamics 既定値)。
         # open-loop でも closed-loop でも dynamics 既定値の基準線として使う。
-        vehicle_model_type: delay_steer_acc_geared_for_diffusion_planner
+        vehicle_model_type: delay_steer_acc_geared_wo_fall_guard
         params:
           acc_time_delay: 0.1
           acc_time_constant: 0.1
@@ -84,15 +84,6 @@ Evaluation:
           k_us: 0.0
         vehicle_model: j6_gen2
         architecture_type: awf/universe/20250130
-
-      kus0020:
-        # normal + アンダーステア係数 k_us=0.020 rad/(m/s^2)。
-        # ω = vx·tan(δ)/(L + k_us·vx^2)。normal (k_us=0) との差で understeer の寄与を切り分ける。
-        vehicle_model_type: delay_steer_acc_geared_for_diffusion_planner
-        vehicle_model: j6_gen2
-        architecture_type: awf/universe/20250130
-        params:
-          k_us: 0.020
 
       current:
         # 複数データセット・多エリア横断でロバスト同定した最善パラメータ調整版。
@@ -119,46 +110,6 @@ Evaluation:
           debug_steer_scaling_factor: 1.0   # = 仕様値 (同上)
           acc_time_constant: 0.30           # 縦方向 (pos-mean 改善。0.45 超は shiojiri pos を悪化)
 
-      no_delay:
-        # 遅延・時定数を全てゼロにした理想即応相当 (cases 専用; vehicle_model なしのため sim_runs に含められない)。
-        # delay_steer_acc_geared_for_diffusion_planner で acc/steer の time_delay・time_constant を 0 に設定する。
-        # time_delay=0 は入力キュー長 round(delay/dt)=0 で遅延なし。time_constant=0 は C++ 側の
-        # MIN_TIME_CONSTANT=0.03s にクリップされる (ゼロ割防止) が、SUB_DT=1/30s 以下なので実質 1 ステップ
-        # で応答 = ほぼ即応。steer_bias=0.0 で phantom offset を排除し理想性を保つ (未指定だと
-        # load_sim_params() のシム仕様 steer_bias ≈ 0.0005 が継承され余計なオフセットが乗る)。
-        vehicle_model_type: delay_steer_acc_geared_for_diffusion_planner
-        params:
-          acc_time_delay: 0.0
-          acc_time_constant: 0.0
-          steer_time_delay: 0.0
-          steer_time_constant: 0.0
-          steer_bias: 0.0
-
-      # ── Taiga 動的車両モデル系 ───────────────────────────────────────────
-      taiga_dyn:
-        # 動的自転車モデル (taiga_dyn)。既存のキネマティック自転車 (yaw rate = vx·tan(δ)/L の瞬時関数)
-        # と異なり、前後コーナリング剛性 Cf/Cr とヨー慣性 Iz により横速度 vy・ヨーレート wz を慣性付き
-        # state として積分する。低速 (vx < vx_min_dyn) ではキネマティック yaw rate にフォールバックして
-        # 1/vx 特異点を回避し、reset 時に wz を実測値 (gt_wz) で seed する。物理パラメータ未指定分は
-        # VehicleModel.__init__ の既定値 (質量 6560kg, Iz 25868kg·m², 重心由来の lf/lr, コーナリング剛性
-        # Cf/Cr) で補完される。Cf/Cr は定常旋回照合で要キャリブレーション。
-        # sim では loader が vehicle_model_type=TAIGA_DYN を params に自動注入する。
-        vehicle_model_type: taiga_dyn
-        vehicle_model: j6_gen2
-        architecture_type: awf/universe/20250130
-
-      taiga_x:
-        # 高忠実な剛体+タイヤ物理モデル (taiga_x)。NVIDIA PhysX をバックエンドに使う。PhysX は
-        # physx_vendor パッケージ経由で常時ビルドされる (simple_sensor_simulator が依存)。
-        # 内部は固定 1/1200s でサブステップ積分し、外側 dt あたり ceil(dt/fixed_dt) 回進める。
-        # per-step reset は剛体テレポート+速度/車輪回転セットによる近似。物理パラメータ未指定分は
-        # VehicleModel.__init__ の既定値 (質量 6560kg, Iz 25868kg·m², track 1.754m, 重心オフセット
-        # -0.943m, 車輪半径 0.3725m, max_accel/brake) で補完される。
-        # sim では loader が vehicle_model_type=TAIGA_X を params に自動注入する。
-        vehicle_model_type: taiga_x
-        vehicle_model: j6_gen2
-        architecture_type: awf/universe/20250130
-
       # ── sim 専用 (vehicle_model_type なし → cases に含められない) ────────
       perfect:
         # 理想軌跡追従 (planner 出力を完全追従)。dynamics 誤差ゼロの上限基準。Godot binary 不要。
@@ -175,11 +126,11 @@ Evaluation:
 
     # ── cases: open-loop VehicleModel N-step 解析 (Stage 5/6) に使う名前リスト ──
     # vehicle_model_type が必須。名前 = 出力ディレクトリ nstep/<name>/
-    cases:    [baseline, current, taiga_x]
+    cases:    [baseline, current]
 
     # ── sim_runs: closed-loop シム実行 (Stage 3/4) に使う名前リスト ──
     # vehicle_model が必須。名前 = 出力ディレクトリ lite/<name>.lite/
-    sim_runs: [baseline, current, taiga_x, godot]
+    sim_runs: [baseline, current, godot]
 
 
     # ── overlay: cases 集約 (Stage 6) の基準モデルと重ね描き種類 ──

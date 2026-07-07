@@ -48,7 +48,7 @@ from .lib._physical_validity import WHEELBASE
 from .lib._validation import MissingRequiredDataError
 
 STRIDE = 5
-_BASELINE_MODEL = "delay_steer_acc_geared_for_diffusion_planner"
+_BASELINE_MODEL = "delay_steer_acc_geared_wo_fall_guard"
 # _prepare_gt は params の delay/wheelbase/sub_dt にのみ依存 (run_rollout docstring)
 _GT_KEYS = ("acc_time_delay", "steer_time_delay", "wheelbase", "sub_dt")
 # fork 前に load_datasets が設定し、fork 後の worker は COW で継承する (P-5/P-7)
