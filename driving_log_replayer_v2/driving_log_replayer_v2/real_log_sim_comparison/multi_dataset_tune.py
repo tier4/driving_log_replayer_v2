@@ -447,7 +447,7 @@ def robust_search(
     if phase == 1:
         # Phase 1: acc パラメータのみ最適化 (long スコア)。steer 系は cur_best に固定。
         CONTINUOUS_SPACE: dict[str, tuple[float, float]] = {
-            "acc_time_constant":        (0.05, 1.20),  # 下限を 0.10→0.05 に拡張
+            "acc_time_constant":        (0.20, 0.30),  # 直接同定値(phase1: ~0.25)近傍に限定し、yaw/lat とのトレードオフで非物理的な値に逃げるのを防ぐ
             "debug_acc_scaling_factor": (0.80, 1.20),
         }
         score_fn = acc_score
@@ -474,7 +474,7 @@ def robust_search(
         CONTINUOUS_SPACE = {
             "steer_time_constant":        (0.05, 0.80),
             "debug_steer_scaling_factor": (0.75, 1.20),  # (0.80, 1.05) → (0.75, 1.20) に拡張
-            "acc_time_constant":          (0.05, 1.20),  # 下限を 0.10→0.05 に拡張
+            "acc_time_constant":          (0.20, 0.30),  # 直接同定値(phase1: ~0.25)近傍に限定し、yaw/lat とのトレードオフで非物理的な値に逃げるのを防ぐ
             "debug_acc_scaling_factor":   (0.80, 1.20),
             "k_us":                       (0.0,  0.05),
 
