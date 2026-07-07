@@ -22,7 +22,7 @@ LOCAL_SCENARIO   ?= $(LOCAL_SAMPLE_DIR)/scenario.yaml
 
 PYTHON := python3
 
-.PHONY: help local_cloud_run local_analysis_run local_batch_run local_cross_analysis_run local_multidataset_run local_multidataset_cloud_run prepare_multidataset issue_scenario collect_raw_rosbags open_loop_tune open_loop_batch physical_validity_report_nodata extract fit_lon fit_steer fit_merge fit_report reidentify apply closed_loop release_model_param
+.PHONY: help local_cloud_run local_analysis_run local_batch_run local_cross_analysis_run local_multidataset_run local_multidataset_cloud_run prepare_multidataset issue_scenario collect_raw_rosbags open_loop_tune open_loop_batch physical_validity_report_nodata extract fit_lon fit_steer fit_merge fit_report reidentify apply closed_loop release_model_param reidentify_v2
 
 help:
 	@echo "使い方: make -C $(MAKEFILE_DIR) <ターゲット>"
@@ -64,6 +64,10 @@ help:
 	@echo "                        + リリースノート用抜粋レポート → physical_validity_release_note.html"
 	@echo "    apply               Step5: 同定パラメータを scenario に反映 (fit_merge 必須) → tuned_scenario.yaml"
 	@echo "    closed_loop         Step6: tuned scenario で closed-loop 実 sim (apply 必須)"
+	@echo ""
+	@echo "  reidentify v2 (reidentify/ 配下、vehicle_model_fitting 流のシンプルなスクリプト集への再構成版):"
+	@echo "    reidentify_v2       extract→fit_lon→fit_steer→fit_merge→report→release を run_reidentify.py で実行"
+	@echo "                        (出力は MULTI_BATCH_ROOT/reidentify_v2/ 配下。詳細は reidentify/README.md)"
 	@echo ""
 	@echo "  パイプライン構成:"
 	@echo "    0. step0_make_lite        実機 input_bag → lite/real.lite/ (共通基盤)"
@@ -339,6 +343,22 @@ reidentify: prepare_multidataset
 	$(MAKE) fit_merge
 	$(MAKE) fit_report
 	$(MAKE) release_model_param
+
+# reidentify v2: vehicle_model_fitting 流のシンプルなスクリプト集 (reidentify/) への再構成版。
+# extract→fit_lon→fit_steer→fit_merge→report→release を run_reidentify.py が薄く連結する
+# (詳細・依存関係・旧パイプラインとの差分は reidentify/README.md 参照)。
+# 出力は $(MULTI_BATCH_ROOT)/reidentify_v2/ 配下 (旧パイプラインの成果物と衝突しない)。
+reidentify_v2:
+	@test -f $(SETUP_BASH) || \
+	    { echo "[ERROR] $(SETUP_BASH) が見つかりません。先にワークスペースをビルドしてください"; exit 1; }
+	@test -f $(LOCAL_SCENARIO) || \
+	    { echo "[ERROR] $(LOCAL_SCENARIO) が見つかりません"; exit 1; }
+	source $(SETUP_BASH) && $(PYTHON) -m driving_log_replayer_v2.real_log_sim_comparison.reidentify.run_reidentify \
+	    --collection-dir "$(MULTI_BATCH_ROOT)" \
+	    --scenario "$(LOCAL_SCENARIO)" \
+	    --case "$(MODEL_CASE)" \
+	    --n-trials $(N_TRIALS) \
+	    --n-jobs $(N_JOBS)
 
 # Step 5: 同定パラメータを scenario に反映 → TUNED_SCENARIO。
 apply:
