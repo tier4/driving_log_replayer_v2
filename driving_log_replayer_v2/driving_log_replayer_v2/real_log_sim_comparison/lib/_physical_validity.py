@@ -42,6 +42,7 @@ from ._fit_core import (
     delay_shift_frac as _delay_shift_frac,
     equation_residual_at_params,
     fit_first_order_delay,
+    fit_first_order_delay_residual_3phase,
 )
 from ._fit_core import sim_first_order as _core_sim_first_order
 from ._fit_core import sim_first_order_frac as _core_sim_first_order_frac
@@ -86,7 +87,7 @@ def merged_model_params(model_params: dict) -> dict:
 _DA_THRESH_FIT = 0.15
 _VX_MIN_FIT = 0.5
 _DELAY_CANDIDATES_LONG = np.arange(0.0, 0.30 + 1e-9, _FIT_DT)
-_TAU_BOUNDS_LONG = (_FIT_DT, 5.0)
+_TAU_BOUNDS_LONG = (_FIT_DT, 0.5)
 
 # 操舵 (SSOT は本モジュール。由来は旧 identify_steer_dynamics.py の同定手順、git 履歴参照)
 _DSTEER_MIN = 0.001
@@ -253,15 +254,12 @@ def fit_long_single(bag_path: Path) -> dict | None:
     if mask_dyn.sum() < _MIN_FIT_SAMPLES:
         return None
 
-    # パラメータ推定: 出力誤差型 (一次遅れシミュレーション MSE 最小化) を主推定量とする。
-    # 実測で微分残差型は τ↔むだ時間トレードオフにより τ を構造的に膨張させるため、推定量は
-    # 出力誤差型を維持する (方針D)。y0 で出力初期値を勾配補正済み観測に合わせる。
-    # 微分残差 J_diff は目的関数ではなく、この同定値での整合診断として直下で評価する
-    # (レポート側 main() の _pool_resid が全データセットぶんをプールしてヒスト化)。
-    fit = fit_first_order_delay(
+    # パラメータ推定: 3段階交互最適化＋方程式残差最小二乗法で同定する。
+    # 縦方向 (加速度) には LPF (窓幅 10ステップ) を適用しノイズを低減。
+    fit = fit_first_order_delay_residual_3phase(
         a_cmd_arr, a_act_corr, mask_dyn, _FIT_DT,
         tau_bounds=_TAU_BOUNDS_LONG, delay_candidates=_DELAY_CANDIDATES_LONG,
-        y0=float(a_act_corr[0]), frac_delay=True, t_s=t_s,
+        filter_w=10, x0_dict={"tau": 0.1},
     )
     if fit is None:
         return None
@@ -284,6 +282,9 @@ def fit_long_single(bag_path: Path) -> dict | None:
         "n_dyn": int(mask_dyn.sum()),
         "pitch_min": pitch_min,
         "pitch_max": pitch_max,
+        "cmd_arr": a_cmd_arr,
+        "act_arr": a_act_corr,
+        "mask_arr": mask_dyn,
     }
 
 
@@ -323,11 +324,11 @@ def fit_steer_single(bag_path: Path) -> dict | None:
     if mask_dyn.sum() < _MIN_FIT_SAMPLES:
         return None
 
-    # パラメータ推定: 出力誤差型を主推定量とする (方針D)。微分残差 J_diff は目的関数ではなく、
-    # この同定値での整合診断として直下で評価する (レポート側 main() の _pool_resid がプール集約)。
-    fit = fit_first_order_delay(
+    # パラメータ推定: 3段階交互最適化＋方程式残差最小二乗法で同定する。
+    fit = fit_first_order_delay_residual_3phase(
         d_cmd, d_act, mask_dyn, _FIT_DT,
         tau_bounds=_TAU_BOUNDS_STEER, delay_candidates=_DELAY_CANDIDATES_STEER,
+        filter_w=1, x0_dict={"tau": 0.1},
     )
     if fit is None:
         return None
@@ -348,6 +349,9 @@ def fit_steer_single(bag_path: Path) -> dict | None:
         "rmse_resid": resid["rmse_resid"],        # 診断: 方程式残差 RMSE [rad/s]
         "resid_samples": resid["resid"].tolist(),   # 診断: mask 内残差 (ヒスト集約用)
         "n_dyn": int(mask_dyn.sum()),
+        "cmd_arr": d_cmd,
+        "act_arr": d_act,
+        "mask_arr": mask_dyn,
     }
 
 
@@ -863,25 +867,51 @@ def fit_long_cross_dataset_bounded(
             "tau_pointwise_all": [],
         }
 
-    def _total_mse(log_tau: float, n_delay: int) -> float:
-        tau = float(np.exp(log_tau))
-        sq_sum, n_sum = 0.0, 0
-        for a_cmd_arr, a_act_corr_arr, mask in pooled:
-            a_sim = _sim_first_order(a_cmd_arr, tau, n_delay, y0=float(a_act_corr_arr[0]))
-            diff = a_sim[mask] - a_act_corr_arr[mask]
-            sq_sum += float(np.dot(diff, diff))
-            n_sum += int(mask.sum())
-        return sq_sum / n_sum if n_sum > 0 else float("inf")
+    from scipy.optimize import least_squares
 
-    log_lo, log_hi = np.log(_TAU_BOUNDS_LONG[0]), np.log(_TAU_BOUNDS_LONG[1])
-    best_mse, best_tau, best_delay = float("inf"), float("nan"), float("nan")
+    # 各データセットについて、状態微分を算出し LPF (移動平均 10ステップ) を適用
+    processed_pooled = []
+    for a_cmd_arr, a_act_corr_arr, mask in pooled:
+        dot_act = np.gradient(a_act_corr_arr, _FIT_DT)
+        cmd_f = _moving_avg(a_cmd_arr, 10)
+        act_f = _moving_avg(a_act_corr_arr, 10)
+        dot_act_f = _moving_avg(dot_act, 10)
+        processed_pooled.append((cmd_f, act_f, dot_act_f, mask))
+
+    def _residuals(x, n_steps):
+        tau_inv = float(x[0])
+        errs = []
+        for cmd_f, act_f, dot_act_f, mask in processed_pooled:
+            c_del = _delay_shift(cmd_f, n_steps)
+            a_del = _delay_shift(act_f, n_steps)
+            E = tau_inv * (c_del - a_del) - dot_act_f
+            errs.append(E[mask])
+        return np.concatenate(errs)
+
+    tau_inv_min = 1.0 / _TAU_BOUNDS_LONG[1]
+    tau_inv_max = 1.0 / _TAU_BOUNDS_LONG[0]
+    bounds = ([tau_inv_min], [tau_inv_max])
+
+    # Phase 1: d = 0 固定で最適化
+    res1 = least_squares(lambda x: _residuals(x, 0), [1.0 / 0.2], bounds=bounds)
+
+    # Phase 2: 得られたパラメータ固定で delay をグリッドサーチ
+    best_cost = None
+    best_n = 0
     for delay_s in _DELAY_CANDIDATES_LONG:
         n_delay = int(round(delay_s / _FIT_DT))
-        res = minimize_scalar(
-            lambda lt, nd=n_delay: _total_mse(lt, nd), bounds=(log_lo, log_hi), method="bounded",
-        )
-        if res.fun < best_mse:
-            best_mse, best_tau, best_delay = res.fun, float(np.exp(res.x)), delay_s
+        cost = float(np.sum(_residuals(res1.x, n_delay) ** 2))
+        if best_cost is None or cost < best_cost:
+            best_cost = cost
+            best_n = n_delay
+
+    # Phase 3: 最良 delay 固定でパラメータを再最適化
+    res3 = least_squares(lambda x: _residuals(x, best_n), res1.x, bounds=bounds)
+
+    best_tau = 1.0 / float(res3.x[0])
+    best_delay = float(best_n * _FIT_DT)
+    n_total_samples = sum(int(mask.sum()) for _, _, _, mask in processed_pooled)
+    best_rmse = float(np.sqrt(best_cost / n_total_samples)) if n_total_samples > 0 else float("nan")
 
     # 横断フィットに使った全 pooled データセットについて、最適無駄時間 (best_delay) 固定で
     # 瞬時 τ_a 推定値 (点ごとの逆算) を計算しプールする。分布の可視化 (ヒストグラム) 用。
@@ -893,7 +923,7 @@ def fit_long_cross_dataset_bounded(
             tau_pointwise_all.extend(tp[np.isfinite(tp)].tolist())
 
     return {
-        "tau": best_tau, "delay": best_delay, "rmse_mps2": float(np.sqrt(best_mse)),
+        "tau": best_tau, "delay": best_delay, "rmse_mps2": best_rmse,
         "pitch_min": pitch_min, "pitch_max": pitch_max, "n_datasets": len(pooled),
         "tau_pointwise_all": tau_pointwise_all,
     }

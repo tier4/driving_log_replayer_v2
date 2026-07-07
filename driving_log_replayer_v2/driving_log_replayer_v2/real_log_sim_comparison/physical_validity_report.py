@@ -67,6 +67,14 @@ from driving_log_replayer_v2.real_log_sim_comparison.lib._figures import (  # no
     build_fig_perfect_tracking_box,
     build_fig_perfect_tracking_traj,
 )
+from scipy.optimize import least_squares, minimize_scalar  # noqa: E402
+from driving_log_replayer_v2.real_log_sim_comparison.lib._fit_core import (  # noqa: E402
+    delay_shift,
+    savgol_derivative,
+    savgol_smooth,
+)
+from driving_log_replayer_v2.real_log_sim_comparison.lib._figures._common import apply_base_layout  # noqa: E402
+
 from driving_log_replayer_v2.real_log_sim_comparison.lib._physical_validity import (  # noqa: E402
     DWZ_MAX,
     VX_MIN_CURVE,
@@ -85,6 +93,13 @@ from driving_log_replayer_v2.real_log_sim_comparison.lib._physical_validity impo
     fit_long_single,
     fit_steer_single,
     merged_model_params,
+    _DELAY_CANDIDATES_LONG,
+    _DELAY_CANDIDATES_STEER,
+    _TAU_BOUNDS_LONG,
+    _TAU_BOUNDS_STEER,
+    _SG_WINDOW_LONG,
+    _SG_WINDOW_STEER,
+    _SG_POLYORDER,
 )
 
 _H_SPAN = {10: "≈0.33 s", 20: "≈0.67 s", 30: "≈1.0 s", 40: "≈1.33 s"}
@@ -201,6 +216,140 @@ def fit_per_dataset(
             if i % 100 == 0:
                 print(f"  {i}/{len(targets)} フィット済み", flush=True)
     return per_ds_long, per_ds_steer
+
+
+def optimize_tau_with_equation_residual(
+    per_ds: dict[str, dict],
+    delay_candidates: np.ndarray,
+    dt: float,
+    tau_bounds: tuple[float, float],
+    window_s: float,
+    polyorder: int = 2,
+) -> list[dict]:
+    """遅延を candidates に固定し、方程式残差の MSE を最小化する tau を最適化する。"""
+    results = []
+    ds_precomputed = []
+    for uuid, fit in per_ds.items():
+        if "cmd_arr" not in fit or "act_arr" not in fit or "mask_arr" not in fit:
+            continue
+        cmd = np.asarray(fit["cmd_arr"], dtype=float)
+        act = np.asarray(fit["act_arr"], dtype=float)
+        mask = np.asarray(fit["mask_arr"], dtype=bool)
+        if len(cmd) == 0 or mask.sum() == 0:
+            continue
+        lhs = savgol_derivative(act, dt, window_s, polyorder)
+        act_s = savgol_smooth(act, dt, window_s, polyorder)
+        ds_precomputed.append({
+            "cmd": cmd,
+            "act_s": act_s,
+            "lhs": lhs,
+            "mask": mask,
+        })
+    if not ds_precomputed:
+        return []
+    for delay in delay_candidates:
+        n_steps = int(round(float(delay) / dt))
+        x_list = []
+        y_list = []
+        for dp in ds_precomputed:
+            cmd_del = delay_shift(dp["cmd"], n_steps)
+            act_del = delay_shift(dp["act_s"], n_steps)
+            mask = dp["mask"]
+            x_list.append(cmd_del[mask] - act_del[mask])
+            y_list.append(dp["lhs"][mask])
+        X = np.concatenate(x_list)
+        Y = np.concatenate(y_list)
+        tau_inv_min = 1.0 / tau_bounds[1]
+        tau_inv_max = 1.0 / tau_bounds[0]
+
+        def _res(x):
+            tau_inv = float(x[0])
+            return tau_inv * X - Y
+
+        res = least_squares(_res, [1.0 / 0.2], bounds=([tau_inv_min], [tau_inv_max]))
+        best_tau = 1.0 / float(res.x[0])
+        resid = res.fun
+        best_mse = float(np.mean(resid ** 2))
+        best_rmse = float(np.sqrt(best_mse))
+        results.append({
+            "delay": float(delay),
+            "tau": best_tau,
+            "rmse": best_rmse,
+            "mean": float(np.mean(resid)),
+            "std": float(np.std(resid)),
+            "resid_samples": resid.tolist(),
+        })
+    if results:
+        min_idx = np.argmin([r["rmse"] for r in results])
+        for idx, r in enumerate(results):
+            r["selected"] = (idx == min_idx)
+    return results
+
+
+def build_fig_residual_candidates_hist(
+    results: list[dict],
+    channel_label: str,
+    unit_label: str,
+) -> go.Figure:
+    """遅延固定＆時定数最適化ペアごとの方程式残差ヒストグラムを、ドロップダウン付きのgo.Figureとして構成する。"""
+    fig = go.Figure()
+    valid_results = [r for r in results if len(r.get("resid_samples", [])) > 0]
+    if not valid_results:
+        fig.add_annotation(text="データなし", showarrow=False)
+        return fig
+    selected_idx = 0
+    for idx, r in enumerate(valid_results):
+        if r.get("selected", False):
+            selected_idx = idx
+            break
+    for idx, r in enumerate(valid_results):
+        arr = np.asarray(r["resid_samples"], dtype=float)
+        arr = arr[np.isfinite(arr)]
+        lo, hi = (float(x) for x in np.percentile(arr, [1, 99]))
+        if not (hi > lo):
+            lo, hi = float(arr.min()), float(arr.max() + 1e-9)
+        counts, edges = np.histogram(arr, bins=80, range=(lo, hi))
+        centers = (edges[:-1] + edges[1:]) / 2.0
+        is_visible = (idx == selected_idx)
+        fig.add_trace(go.Bar(
+            x=centers.tolist(),
+            y=counts.tolist(),
+            width=float(edges[1] - edges[0]),
+            marker_color="teal",
+            opacity=0.75,
+            name=f"Delay={r['delay']:.3f}s, τ={r['tau']:.3f}s",
+            visible=is_visible,
+        ))
+    buttons = []
+    for idx, r in enumerate(valid_results):
+        visibility = [False] * len(valid_results)
+        visibility[idx] = True
+        title_text = f"{channel_label}: 方程式残差 E[k] の分布 (遅延={r['delay']:.3f}s, τ={r['tau']:.3f}s)"
+        buttons.append(dict(
+            label=f"遅延 {r['delay']:.3f} s (最適 τ={r['tau']:.3f} s)",
+            method="update",
+            args=[
+                {"visible": visibility},
+                {"title": title_text}
+            ]
+        ))
+    fig.update_layout(
+        updatemenus=[
+            dict(
+                active=selected_idx,
+                buttons=buttons,
+                x=0.0,
+                xanchor="left",
+                y=1.15,
+                yanchor="top"
+            )
+        ]
+    )
+    fig.update_xaxes(title_text=f"方程式残差 E[k] = RHS − LHS  [{unit_label}]")
+    fig.update_yaxes(title_text="サンプル数")
+    selected_r = valid_results[selected_idx]
+    title_text = f"{channel_label}: 方程式残差 E[k] の分布 (遅延={selected_r['delay']:.3f}s, τ={selected_r['tau']:.3f}s)"
+    return apply_base_layout(fig, title=title_text, height=380)
 
 
 _MATHJAX_HEAD = (
@@ -466,6 +615,8 @@ def _build_sec1(
     n_dataset: int,
     long_resid_hist_fig: go.Figure | None = None,
     steer_resid_hist_fig: go.Figure | None = None,
+    long_resid_opt_html: str = "",
+    steer_resid_opt_html: str = "",
 ) -> str:
     """1-0. 座標系と主要な記号の定義 + モデルパラメータの定義を含む sec1 全体 HTML を返す。"""
     kus_rows = _kus_band_table_rows(params)
@@ -799,6 +950,7 @@ J_a
 <a href="#sec-state-space">1-1</a> の状態方程式と完全に対応する（<code>vehicle_model_fitting</code> の残差式と同一形式）。
 </p>
 {long_resid_hist_html}
+{long_resid_opt_html}
 
 <p><b>主なパラメータ:</b></p>
 <ul>
@@ -867,6 +1019,7 @@ E_\\delta[k;\\tau_\\delta,T_\\delta]
 <code>vehicle_model_fitting</code> の操舵残差式と同一形式。推定自体は出力誤差型（モデル出力と実測操舵角の差の最小化）で行い、方程式残差は推定後の共通診断として使う。
 </p>
 {steer_resid_hist_html}
+{steer_resid_opt_html}
 
 <p>
 推定はこの式を積分したモデル出力と実測操舵角の差で行う。
@@ -1378,6 +1531,8 @@ def build_html(
     closed_loop_html: str = "",
     long_resid_hist_fig: go.Figure | None = None,
     steer_resid_hist_fig: go.Figure | None = None,
+    long_resid_opt_html: str = "",
+    steer_resid_opt_html: str = "",
 ) -> str:
     score = params.get("_score", "N/A")
     phase14_score = float(score) if isinstance(score, (int, float, str)) and str(score) != "N/A" else 0.0
@@ -1397,6 +1552,7 @@ def build_html(
     sec1 = _build_sec1(
         params, long_fig, steer_fig, kus_fig, n_dataset,
         long_resid_hist_fig=long_resid_hist_fig, steer_resid_hist_fig=steer_resid_hist_fig,
+        long_resid_opt_html=long_resid_opt_html, steer_resid_opt_html=steer_resid_opt_html,
     )
     sec3 = _build_sec3(viewer_sections, label=label)
 
@@ -1881,6 +2037,94 @@ def main() -> None:
     )
     perf_html = _build_sec14(perf_fig_box, perf_fig_traj, params, len(perf_records))
 
+    # [1-2] 方程式残差による縦方向パラメータ最適化とヒストグラム生成
+    print("  [1-2] 方程式残差による縦方向パラメータ最適化とヒストグラム生成...")
+    long_opt_results = optimize_tau_with_equation_residual(
+        per_ds_long,
+        delay_candidates=_DELAY_CANDIDATES_LONG,
+        dt=_FIT_DT,
+        tau_bounds=_TAU_BOUNDS_LONG,
+        window_s=_SG_WINDOW_LONG,
+        polyorder=_SG_POLYORDER,
+    )
+    long_resid_opt_html = ""
+    if long_opt_results:
+        long_opt_fig = build_fig_residual_candidates_hist(
+            long_opt_results,
+            channel_label="縦 (dot a_act 式)",
+            unit_label="m/s³",
+        )
+        long_opt_rows = ""
+        for r in long_opt_results:
+            selected_style = "style='background-color: #e8f5e9; font-weight: bold;'" if r["selected"] else ""
+            selected_text = "<b>★ 選択</b>" if r["selected"] else "—"
+            long_opt_rows += f"""<tr {selected_style}>
+                <td>{r['delay']:.3f} s</td>
+                <td>{r['tau']:.3f} s</td>
+                <td>{r['rmse']:.4f} m/s³</td>
+                <td>{r['mean']:.4e} m/s³</td>
+                <td>{r['std']:.4f} m/s³</td>
+                <td>{selected_text}</td>
+            </tr>"""
+        long_opt_fig_html = long_opt_fig.to_html(full_html=False, include_plotlyjs=False)
+        long_resid_opt_html = f"""
+        <details>
+          <summary><b>遅延固定時の時定数最適化と方程式残差の評価結果（クリックで展開）</b></summary>
+          <p>
+            遅延時間 \\(T_a\\) を \\(\\Delta t\\) の整数倍に固定した上で、方程式残差の二乗和（MSE）を最小化するように時定数 \\(\\tau_a\\) を最適化した結果です。全データセットから抽出した動的サンプルをプールして評価しています。
+          </p>
+          <table class="param-table">
+            <tr><th>固定遅延 \\(T_a\\)</th><th>最適時定数 \\(\\tau_a\\)</th><th>方程式残差 RMSE</th><th>残差平均</th><th>残差標準偏差</th><th>判定</th></tr>
+            {long_opt_rows}
+          </table>
+          {long_opt_fig_html}
+        </details>
+        """
+
+    # [1-3] 方程式残差による操舵パラメータ最適化とヒストグラム生成
+    print("  [1-3] 方程式残差による操舵パラメータ最適化とヒストグラム生成...")
+    steer_opt_results = optimize_tau_with_equation_residual(
+        per_ds_steer,
+        delay_candidates=_DELAY_CANDIDATES_STEER,
+        dt=_FIT_DT,
+        tau_bounds=_TAU_BOUNDS_STEER,
+        window_s=_SG_WINDOW_STEER,
+        polyorder=_SG_POLYORDER,
+    )
+    steer_resid_opt_html = ""
+    if steer_opt_results:
+        steer_opt_fig = build_fig_residual_candidates_hist(
+            steer_opt_results,
+            channel_label="操舵 (dot δ_act 式)",
+            unit_label="rad/s",
+        )
+        steer_opt_rows = ""
+        for r in steer_opt_results:
+            selected_style = "style='background-color: #e8f5e9; font-weight: bold;'" if r["selected"] else ""
+            selected_text = "<b>★ 選択</b>" if r["selected"] else "—"
+            steer_opt_rows += f"""<tr {selected_style}>
+                <td>{r['delay']:.3f} s</td>
+                <td>{r['tau']:.3f} s</td>
+                <td>{r['rmse']:.4f} rad/s</td>
+                <td>{r['mean']:.4e} rad/s</td>
+                <td>{r['std']:.4f} rad/s</td>
+                <td>{selected_text}</td>
+            </tr>"""
+        steer_opt_fig_html = steer_opt_fig.to_html(full_html=False, include_plotlyjs=False)
+        steer_resid_opt_html = f"""
+        <details>
+          <summary><b>遅延固定時の時定数最適化と方程式残差の評価結果（クリックで展開）</b></summary>
+          <p>
+            遅延時間 \\(T_\\delta\\) を \\(\\Delta t\\) の整数倍に固定した上で、方程式残差の二乗和（MSE）を最小化するように時定数 \\(\\tau_\\delta\\) を最適化した結果です。全データセットから抽出した動的サンプルをプールして評価しています。
+          </p>
+          <table class="param-table">
+            <tr><th>固定遅延 \\(T_\\delta\\)</th><th>最適時定数 \\(\\tau_\\delta\\)</th><th>方程式残差 RMSE</th><th>残差平均</th><th>残差標準偏差</th><th>判定</th></tr>
+            {steer_opt_rows}
+          </table>
+          {steer_opt_fig_html}
+        </details>
+        """
+
     closed_loop_html = _build_sec_closed_loop_comparison(args.collection_dir, args.closed_loop_uuids)
 
     html = build_html(
@@ -1893,6 +2137,8 @@ def main() -> None:
         closed_loop_html=closed_loop_html,
         long_resid_hist_fig=long_resid_hist_fig,
         steer_resid_hist_fig=steer_resid_hist_fig,
+        long_resid_opt_html=long_resid_opt_html,
+        steer_resid_opt_html=steer_resid_opt_html,
     )
 
     args.out.parent.mkdir(parents=True, exist_ok=True)
