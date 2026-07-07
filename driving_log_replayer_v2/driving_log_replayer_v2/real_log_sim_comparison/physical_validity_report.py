@@ -2367,11 +2367,13 @@ def main() -> None:
     ]
     rows_long = compute_cross_long_rows(
         entries, per_ds_long, cross_fit_long, models_long, pinned_uuids=long_steer_pinned_uuids,
+        n_jobs=args.n_jobs,
     )
     long_fig = build_fig_cross_long(rows_long, cross_fit_long)
 
     rows_steer = compute_cross_steer_rows(
         entries, per_ds_steer, models_steer, pinned_uuids=long_steer_pinned_uuids,
+        n_jobs=args.n_jobs,
     )
     # 旧実装の表示要素を維持: 各 subplot タイトルに per-dataset 同定値 τ/T を付記
     for r in rows_steer:
