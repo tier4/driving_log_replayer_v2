@@ -424,7 +424,7 @@ def build_fig_cross_long(rows_data: list[dict], cross_fit: dict) -> go.Figure:
             f"dataset 横断 縦方向モデルフィット（選択 {n_datasets} データセットを "
             f"{n} 最長連続区間で表示、同定対象外区間はグレー背景）<br><sup>{slope_note}</sup>"
         ),
-        height=620 * n, margin=dict(t=90, b=40),
+        height=900 * n, margin=dict(t=90, b=40),
         legend=dict(orientation="h", y=1.03, x=0),
     )
 
@@ -794,7 +794,7 @@ def build_fig_cross_steer(rows_data: list[dict]) -> go.Figure:
     return apply_base_layout(
         fig,
         title=f"dataset 横断 操舵モデルフィット（選択 {n_datasets} データセットを {n} 最長連続区間で表示、同定対象外区間はグレー背景）",
-        height=620 * n, margin=dict(t=80, b=40),
+        height=900 * n, margin=dict(t=80, b=40),
         legend=dict(orientation="h", y=1.03, x=0),
     )
 
