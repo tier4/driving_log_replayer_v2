@@ -21,7 +21,7 @@
 from __future__ import annotations
 
 import numpy as np
-from scipy.optimize import minimize_scalar
+from scipy.optimize import least_squares, minimize_scalar
 from scipy.signal import lfilter, savgol_filter
 
 
@@ -262,3 +262,147 @@ def equation_residual_at_params(
         "rmse_resid": float(np.sqrt(np.mean(r ** 2))),
         "n": int(r.size),
     }
+
+
+def _moving_avg(x: np.ndarray, w: int) -> np.ndarray:
+    """中央移動平均フィルタ（窓幅 w、端は edge-padding）。
+
+    np.convolve mode='same' を利用して前後均等のフィルタを適用する。
+    """
+    if w <= 1:
+        return np.asarray(x, dtype=float).copy()
+    x = np.asarray(x, dtype=float)
+    half = w // 2
+    padded = np.pad(x, (half, w - 1 - half), mode="edge")
+    return np.convolve(padded, np.ones(w) / w, mode="valid")
+
+
+def fit_first_order_delay_residual_3phase(
+    cmd: np.ndarray,
+    act: np.ndarray,
+    mask: np.ndarray,
+    dt: float,
+    *,
+    tau_bounds: tuple[float, float],
+    delay_candidates: np.ndarray,
+    fit_scale: bool = False,
+    scale_bounds: tuple[float, float] = (0.8, 1.2),
+    filter_w: int = 1,
+    x0_dict: dict | None = None,
+) -> dict | None:
+    """3段階交互最適化による一次遅れ＋純粋遅延の方程式残差最小二乗フィッティング。
+
+    最適化変数:
+      - fit_scale = False: [tau_inv]
+      - fit_scale = True : [tau_inv, scale]
+
+    逆数変数 tau_inv = 1 / tau を用いることで勾配爆発を防ぐ。
+
+    Phase 1: d=0 固定で least_squares 最適化
+    Phase 2: Phase 1 パラメータ固定で delay_candidates グリッドサーチ (MSE最小)
+    Phase 3: 最良 delay 固定で least_squares 再最適化
+    """
+    cmd = np.asarray(cmd, dtype=float)
+    act = np.asarray(act, dtype=float)
+    mask = np.asarray(mask, dtype=bool)
+
+    if int(np.count_nonzero(mask)) == 0:
+        return None
+
+    # 状態微分（LHS）の算出
+    dot_act = np.gradient(act, dt)
+
+    # 移動平均（LPF）の適用
+    if filter_w > 1:
+        cmd_f = _moving_avg(cmd, filter_w)
+        act_f = _moving_avg(act, filter_w)
+        dot_act_f = _moving_avg(dot_act, filter_w)
+    else:
+        cmd_f = cmd.copy()
+        act_f = act.copy()
+        dot_act_f = dot_act.copy()
+
+    # ウォームスタート（初期値）設定
+    tau_init = 0.2
+    scale_init = 1.0
+    if x0_dict is not None:
+        for t_key in ["tau", "tau_a", "tau_delta"]:
+            if t_key in x0_dict and x0_dict[t_key] is not None and x0_dict[t_key] > 0:
+                tau_init = float(x0_dict[t_key])
+                break
+        if "scale" in x0_dict and x0_dict["scale"] is not None:
+            scale_init = float(x0_dict["scale"])
+
+    tau_inv_init = 1.0 / tau_init
+
+    x0 = [tau_inv_init, scale_init] if fit_scale else [tau_inv_init]
+
+    # Bounds 設定
+    tau_inv_min = 1.0 / tau_bounds[1]
+    tau_inv_max = 1.0 / tau_bounds[0]
+
+    if fit_scale:
+        bounds = (
+            [tau_inv_min, scale_bounds[0]],
+            [tau_inv_max, scale_bounds[1]]
+        )
+    else:
+        bounds = (
+            [tau_inv_min],
+            [tau_inv_max]
+        )
+
+    def _residuals(x, n_steps):
+        tau_inv = float(x[0])
+        s = float(x[1]) if fit_scale else 1.0
+
+        c_del = delay_shift(cmd_f, n_steps)
+        a_del = delay_shift(act_f, n_steps)
+
+        E = tau_inv * (s * c_del - a_del) - dot_act_f
+        return E[mask]
+
+    # Phase 1: d = 0 固定で最適化
+    res1 = least_squares(lambda x: _residuals(x, 0), x0, bounds=bounds)
+
+    # Phase 2: 得られたパラメータ固定で delay をグリッドサーチ
+    best_cost = None
+    best_n = 0
+    for delay_s in delay_candidates:
+        n_steps = int(round(float(delay_s) / dt))
+        cost = float(np.sum(_residuals(res1.x, n_steps) ** 2))
+        if best_cost is None or cost < best_cost:
+            best_cost = cost
+            best_n = n_steps
+
+    # Phase 3: 最良 delay 固定でパラメータを再最適化
+    res3 = least_squares(lambda x: _residuals(x, best_n), res1.x, bounds=bounds)
+
+    # 最終結果のパース
+    tau_inv_fit = float(res3.x[0])
+    tau_fit = 1.0 / tau_inv_fit
+    scale_fit = float(res3.x[1]) if fit_scale else 1.0
+    delay_fit = float(best_n * dt)
+
+    n_samples = int(np.count_nonzero(mask))
+    rmse_fit = float(np.sqrt(best_cost / n_samples)) if n_samples > 0 else float("nan")
+
+    # 元の (平滑化していない) cmd, act 信号を用いて、最終パラメータにおける残差を計算して返す
+    # (診断用)
+    resid_final = []
+    if n_samples > 0:
+        c_del_raw = delay_shift(cmd, best_n)
+        a_del_raw = delay_shift(act, best_n)
+        dot_act_raw = np.gradient(act, dt)
+        E_raw = tau_inv_fit * (scale_fit * c_del_raw - a_del_raw) - dot_act_raw
+        resid_final = E_raw[mask].tolist()
+
+    return {
+        "tau": tau_fit,
+        "delay": delay_fit,
+        "scale": scale_fit,
+        "rmse": rmse_fit,
+        "resid_samples": resid_final,
+        "cost": best_cost,
+    }
+

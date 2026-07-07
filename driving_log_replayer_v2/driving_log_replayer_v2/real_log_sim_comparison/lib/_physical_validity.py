@@ -38,6 +38,7 @@ from ._io import (
     require_drive_gear_mask,
 )
 from ._fit_core import (
+    _moving_avg as _moving_avg,
     delay_shift as _delay_shift,
     delay_shift_frac as _delay_shift_frac,
     equation_residual_at_params,

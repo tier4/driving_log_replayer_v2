@@ -752,12 +752,6 @@ def build_fig_cross_steer(rows_data: list[dict]) -> go.Figure:
             line=dict(color="black", width=1.5), connectgaps=False,
             **_legend_entry("実測: δ_act / dot_δ_act", "steer_actual", show_legend, 20),
         ), row=row_main, col=1)
-        if _series_or(r, "d_sim_fit_raw", "d_sim_fit") is not None:
-            fig.add_trace(go.Scatter(
-                x=t, y=_series_or(r, "d_sim_fit_raw", "d_sim_fit"),
-                line=dict(color="royalblue", width=1.5), connectgaps=False,
-                **_legend_entry("当該データセット同定: δ_sim / dot_δ_sim", "steer_fit", show_legend, 30),
-            ), row=row_main, col=1)
         for name, series in (r.get("d_sim_models_raw") or r.get("d_sim_models") or {}).items():
             group = f"steer_model_{name}"
             fig.add_trace(go.Scatter(
@@ -772,18 +766,6 @@ def build_fig_cross_steer(rows_data: list[dict]) -> go.Figure:
                 x=t, y=r["dot_d_act"],
                 line=dict(color="black", width=1.2), connectgaps=False,
                 **_legend_entry("実測 dot_δ_act", "steer_actual", False, 20),
-            ), row=row_diag, col=1)
-        if r.get("dot_d_sim_fit") is not None:
-            fig.add_trace(go.Scatter(
-                x=t, y=r["dot_d_sim_fit"],
-                line=dict(color="royalblue", width=1.2), connectgaps=False,
-                **_legend_entry("当該データセット同定 dot_δ_sim", "steer_fit", False, 30),
-            ), row=row_diag, col=1)
-        if r.get("dot_d_open_fit") is not None:
-            fig.add_trace(go.Scatter(
-                x=t, y=r["dot_d_open_fit"],
-                line=dict(color="darkorange", width=1.2), connectgaps=False,
-                **_legend_entry("当該データセット同定 RHS dot_δ", "steer_fit_rhs", show_legend, 35),
             ), row=row_diag, col=1)
         for name, series in (r.get("dot_d_sim_models") or {}).items():
             fig.add_trace(go.Scatter(
