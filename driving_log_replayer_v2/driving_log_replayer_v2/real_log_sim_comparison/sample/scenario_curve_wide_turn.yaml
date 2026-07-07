@@ -72,7 +72,7 @@ Evaluation:
         vehicle_model: j6_gen2
         architecture_type: awf/universe/20250130
         params: {k_us: 0.020}
-      best_normal:
+      current:
         vehicle_model_type: delay_steer_acc_geared_for_diffusion_planner
         vehicle_model: j6_gen2
         architecture_type: awf/universe/20250130
@@ -108,7 +108,7 @@ Evaluation:
         dp_model_release: 20260410-145919_lambda1e-6_ridge1e-8__epoch0020__epoch0040
         params: {k_us: 0.020}
 
-    cases:    [baseline, best_normal, taiga_x]
+    cases:    [baseline, current, taiga_x]
     sim_runs: [dp_0303, dp_0503, dp_0410]
     overlay:
       reference_tag: baseline

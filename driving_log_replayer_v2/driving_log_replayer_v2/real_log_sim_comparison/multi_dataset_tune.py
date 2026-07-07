@@ -389,7 +389,7 @@ def robust_search(
     ctxs: list[DatasetCtx],
     cfg,
     *,
-    case_name: str = "best_normal",
+    case_name: str = "current",
     n_trials: int = 200,
     n_jobs: int = 1,
     search_subsample: int | None = None,
@@ -736,14 +736,14 @@ def _filter_by_date(
 
 def main() -> None:
     ap = argparse.ArgumentParser(
-        description="マルチデータセット横断のロバスト best_normal 同定 (robust_search)"
+        description="マルチデータセット横断のロバスト current 同定 (robust_search)"
     )
     ap.add_argument("--collection-dir", default=str(Path(__file__).parent / "sample" / "multi"))
     ap.add_argument(
         "--case",
-        default="best_normal",
+        default="current",
         metavar="CASE_NAME",
-        help="チューニング対象の scenario.yaml models エントリ名 (既定: best_normal)",
+        help="チューニング対象の scenario.yaml models エントリ名 (既定: current)",
     )
     ap.add_argument("--scenario", default=str(Path(__file__).parent / "sample" / "scenario.yaml"),
                     help="scenario.yaml のパス (Conditions.models / cases を含む)")

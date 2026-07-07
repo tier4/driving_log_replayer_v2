@@ -22,7 +22,7 @@ LOCAL_SCENARIO   ?= $(LOCAL_SAMPLE_DIR)/scenario.yaml
 
 PYTHON := python3
 
-.PHONY: help local_cloud_run local_analysis_run local_batch_run local_cross_analysis_run local_multidataset_run local_multidataset_cloud_run prepare_multidataset issue_scenario collect_raw_rosbags open_loop_tune open_loop_batch physical_validity_report_nodata extract fit_lon fit_steer fit_merge fit_report reidentify apply closed_loop
+.PHONY: help local_cloud_run local_analysis_run local_batch_run local_cross_analysis_run local_multidataset_run local_multidataset_cloud_run prepare_multidataset issue_scenario collect_raw_rosbags open_loop_tune open_loop_batch physical_validity_report_nodata extract fit_lon fit_steer fit_merge fit_report reidentify apply closed_loop release_model_param
 
 help:
 	@echo "使い方: make -C $(MAKEFILE_DIR) <ターゲット>"
@@ -170,7 +170,7 @@ CLOSED_LOOP_MAP    ?= $(HOME)/.webauto/simulation/data/map/x2_dev/2231/2231-2026
 MULTI_BATCH_ROOT   ?= /home/kotaroyoshimoto/data/openloop_j6_16_onwards
 N_TRIALS           ?= 50
 N_JOBS             ?= 32
-MODEL_CASE         ?= best_normal
+MODEL_CASE         ?= current
 
 # パイプライン各段の中間成果物 (分割ターゲット間で受け渡す SSOT パス)。
 # fit_lon → fit_steer → fit_merge → fit_report → apply → closed_loop がこれらを介して連結する。
@@ -305,15 +305,28 @@ fit_report:
 	    --metrics-cache "$(METRICS_CACHE)" \
 	    --closed-loop-uuids "$(CLOSED_LOOP_UUIDS)"
 
+# Step 4c: モデルパラメータリリース用 YAML 生成
+release_model_param:
+	@test -f $(SETUP_BASH) || \
+	    { echo "[ERROR] $(SETUP_BASH) が見つかりません。先にワークスペースをビルドしてください"; exit 1; }
+	@test -f "$(TUNED_PARAMS)" || \
+	    { echo "[ERROR] $(TUNED_PARAMS) がありません。先に 'make fit_merge' を実行してください"; exit 1; }
+	@echo "[INFO] release_model_param: モデルパラメータリリース用 YAML 生成 → $(MULTI_BATCH_ROOT)/simulator_model.param.yaml"
+	source $(SETUP_BASH) && $(PYTHON) -m driving_log_replayer_v2.real_log_sim_comparison.release_model_params \
+	    --input-param "/home/kotaroyoshimoto/workspace/x2_e2e_44/src/description/vehicle/j6_gen2_description/j6_gen2_description/config/simulator_model.param.yaml" \
+	    --tuned-params "$(TUNED_PARAMS)" \
+	    --out-dir "$(MULTI_BATCH_ROOT)"
+
 # 集約: 再同定 (extract/closed_loop なし)。モデル構造イテレーションの本命パス (実測 ~2.5分)。
 # prepare_multidataset を prereq にし、datasets/ 未整備時は physical_tuning 内部の
 # "有効データセット 0 件" ではなく親切な検証エラーで即座に止める。
 reidentify: prepare_multidataset
-	@echo "[INFO] === reidentify: fit_lon → fit_steer → fit_merge → fit_report (extract/sim なし) ==="
+	@echo "[INFO] === reidentify: fit_lon → fit_steer → fit_merge → fit_report → release_model_param (extract/sim なし) ==="
 	$(MAKE) fit_lon
 	$(MAKE) fit_steer
 	$(MAKE) fit_merge
 	$(MAKE) fit_report
+	$(MAKE) release_model_param
 
 # Step 5: 同定パラメータを scenario に反映 → TUNED_SCENARIO。
 apply:

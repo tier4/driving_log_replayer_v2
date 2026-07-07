@@ -11,7 +11,7 @@ def main():
     parser.add_argument("--scenario", required=True, type=Path, help="Input scenario.yaml")
     parser.add_argument("--params", required=True, type=Path, help="Input tuned_params.yaml")
     parser.add_argument("--out", type=Path, help="Output scenario.yaml (default: overwrite input)")
-    parser.add_argument("--model", default="best_normal", help="Model name to apply parameters to")
+    parser.add_argument("--model", default="current", help="Model name to apply parameters to")
     args = parser.parse_args()
 
     if not args.scenario.is_file():

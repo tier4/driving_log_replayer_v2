@@ -1951,8 +1951,8 @@ def main() -> None:
         help="current/baseline のモデル定義を含む scenario.yaml",
     )
     ap.add_argument(
-        "--case", default="best_normal",
-        help="current として評価する Conditions.models の名前（既定: best_normal）",
+        "--case", default="current",
+        help="current として評価する Conditions.models の名前（既定: current）",
     )
     ap.add_argument("--n-curve-ds", type=int, default=3, help="ビューア埋め込みカーブ データセット数")
     ap.add_argument("--n-jobs", type=int, default=8)

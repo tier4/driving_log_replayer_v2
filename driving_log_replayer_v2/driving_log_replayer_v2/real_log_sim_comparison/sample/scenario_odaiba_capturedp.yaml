@@ -97,7 +97,7 @@ Evaluation:
         params:
           k_us: 0.020
 
-      best_normal:
+      current:
         # 複数データセット・多エリア横断でロバスト同定した最善パラメータ調整版。
         # E2E 自律走行 20 データセット・5 エリア横断 (takanawa / odaiba / kawasaki / omika / shiojiri) の
         # open-loop N=20 rollout 終端誤差を、各データセットの normal 比に正規化 (分母は低ダイナミクス走行の
@@ -180,11 +180,11 @@ Evaluation:
 
     # ── cases: open-loop VehicleModel N-step 解析 (Stage 5/6) に使う名前リスト ──
     # vehicle_model_type が必須。名前 = 出力ディレクトリ nstep/<name>/
-    cases:    [best_normal]
+    cases:    [current]
 
     # ── sim_runs: closed-loop シム実行 (Stage 3/4) に使う名前リスト ──
     # vehicle_model が必須。名前 = 出力ディレクトリ lite/<name>.lite/
-    sim_runs: [best_normal]
+    sim_runs: [current]
 
     # ── overlay: cases 集約 (Stage 6) の基準モデルと重ね描き種類 ──
     overlay:

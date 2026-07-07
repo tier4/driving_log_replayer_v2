@@ -196,7 +196,7 @@ def main() -> None:
             scen = yaml.safe_load(f)
             # models -> best_normal -> wheelbase などがあれば取得
             models = scen.get("Conditions", {}).get("models", {})
-            for case_key in ["best_normal", "case_normal", "normal"]:
+            for case_key in ["current", "best_normal", "case_normal", "normal", "baseline"]:
                 if case_key in models:
                     wb = models[case_key].get("wheelbase")
                     if wb:

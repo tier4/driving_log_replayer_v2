@@ -59,7 +59,7 @@ Evaluation:
         vehicle_model: j6_gen2
         architecture_type: awf/universe/20250130
         params: {k_us: 0.020}
-      best_normal:
+      current:
         vehicle_model_type: delay_steer_acc_geared_for_diffusion_planner
         vehicle_model: j6_gen2
         architecture_type: awf/universe/20250130
@@ -83,8 +83,8 @@ Evaluation:
         architecture_type: awf/universe/20250130
         godot_executable: /opt/godot_autoware_simulator/godot_autoware_simulator.x86_64
 
-    cases:    [baseline, best_normal, taiga_x]
-    sim_runs: [baseline, best_normal, taiga_x, godot]
+    cases:    [baseline, current, taiga_x]
+    sim_runs: [baseline, current, taiga_x, godot]
     overlay:
       reference_tag: baseline
       plots: [cascade_error]
