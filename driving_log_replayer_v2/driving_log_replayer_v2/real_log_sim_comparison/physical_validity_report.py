@@ -69,6 +69,7 @@ from driving_log_replayer_v2.real_log_sim_comparison.lib._figures import (  # no
 )
 from scipy.optimize import least_squares, minimize_scalar  # noqa: E402
 from driving_log_replayer_v2.real_log_sim_comparison.lib._fit_core import (  # noqa: E402
+    _moving_avg,
     delay_shift,
     savgol_derivative,
     savgol_smooth,
@@ -223,8 +224,7 @@ def optimize_tau_with_equation_residual(
     delay_candidates: np.ndarray,
     dt: float,
     tau_bounds: tuple[float, float],
-    window_s: float,
-    polyorder: int = 2,
+    filter_w: int = 1,
 ) -> list[dict]:
     """遅延を candidates に固定し、方程式残差の MSE を最小化する tau を最適化する。"""
     results = []
@@ -237,12 +237,21 @@ def optimize_tau_with_equation_residual(
         mask = np.asarray(fit["mask_arr"], dtype=bool)
         if len(cmd) == 0 or mask.sum() == 0:
             continue
-        lhs = savgol_derivative(act, dt, window_s, polyorder)
-        act_s = savgol_smooth(act, dt, window_s, polyorder)
+
+        dot_act = np.gradient(act, dt)
+        if filter_w > 1:
+            cmd_f = _moving_avg(cmd, filter_w)
+            act_f = _moving_avg(act, filter_w)
+            dot_act_f = _moving_avg(dot_act, filter_w)
+        else:
+            cmd_f = cmd.copy()
+            act_f = act.copy()
+            dot_act_f = dot_act.copy()
+
         ds_precomputed.append({
-            "cmd": cmd,
-            "act_s": act_s,
-            "lhs": lhs,
+            "cmd_f": cmd_f,
+            "act_f": act_f,
+            "dot_act_f": dot_act_f,
             "mask": mask,
         })
     if not ds_precomputed:
@@ -252,11 +261,11 @@ def optimize_tau_with_equation_residual(
         x_list = []
         y_list = []
         for dp in ds_precomputed:
-            cmd_del = delay_shift(dp["cmd"], n_steps)
-            act_del = delay_shift(dp["act_s"], n_steps)
+            cmd_del = delay_shift(dp["cmd_f"], n_steps)
+            act_del = delay_shift(dp["act_f"], n_steps)
             mask = dp["mask"]
             x_list.append(cmd_del[mask] - act_del[mask])
-            y_list.append(dp["lhs"][mask])
+            y_list.append(dp["dot_act_f"][mask])
         X = np.concatenate(x_list)
         Y = np.concatenate(y_list)
         tau_inv_min = 1.0 / tau_bounds[1]
@@ -2083,8 +2092,7 @@ def main() -> None:
         delay_candidates=_DELAY_CANDIDATES_LONG,
         dt=_FIT_DT,
         tau_bounds=_TAU_BOUNDS_LONG,
-        window_s=_SG_WINDOW_LONG,
-        polyorder=_SG_POLYORDER,
+        filter_w=10,
     )
     long_resid_opt_html = ""
     if long_opt_results:
@@ -2127,8 +2135,7 @@ def main() -> None:
         delay_candidates=_DELAY_CANDIDATES_STEER,
         dt=_FIT_DT,
         tau_bounds=_TAU_BOUNDS_STEER,
-        window_s=_SG_WINDOW_STEER,
-        polyorder=_SG_POLYORDER,
+        filter_w=1,
     )
     steer_resid_opt_html = ""
     if steer_opt_results:
