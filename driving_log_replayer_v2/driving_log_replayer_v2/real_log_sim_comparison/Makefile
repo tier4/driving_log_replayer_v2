@@ -251,6 +251,8 @@ fit_lon:
 	    --scenario "$(LOCAL_SCENARIO)" \
 	    --phase 1 \
 	    --out "$(PHASE1_ACC)" \
+	    --case "$(MODEL_CASE)" \
+	    $(if $(filter 1,$(SKIP_LON)),--skip-lon,) \
 	    --n-jobs $(N_JOBS)
 
 # Step 3: 操舵 + k_us の直接同定 (PHASE1_ACC の縦方向値を継承) → PHASE2_STEER。
@@ -266,6 +268,8 @@ fit_steer:
 	    --phase 2 \
 	    --phase-params "$(PHASE1_ACC)" \
 	    --out "$(PHASE2_STEER)" \
+	    --case "$(MODEL_CASE)" \
+	    $(if $(filter 1,$(SKIP_STEER)),--skip-steer,) \
 	    --n-jobs $(N_JOBS)
 
 # Step 4a: warm-start Optuna 統合チューニング → TUNED_PARAMS + TUNING_REPORT。
@@ -274,18 +278,26 @@ fit_merge:
 	    { echo "[ERROR] $(SETUP_BASH) が見つかりません。先にワークスペースをビルドしてください"; exit 1; }
 	@test -f "$(PHASE2_STEER)" || \
 	    { echo "[ERROR] $(PHASE2_STEER) がありません。先に 'make fit_steer' を実行してください"; exit 1; }
-	@echo "[INFO] fit_merge: Phase 0 Warm-Started Optuna 統合チューニング → $(TUNED_PARAMS)"
-	source $(SETUP_BASH) && $(PYTHON) -m driving_log_replayer_v2.real_log_sim_comparison.multi_dataset_tune \
-	    --collection-dir "$(MULTI_BATCH_ROOT)" \
-	    --scenario "$(LOCAL_SCENARIO)" \
-	    --phase 0 \
-	    --phase-params "$(PHASE2_STEER)" \
-	    --enqueue-params "$(PHASE2_STEER)" \
-	    --n-trials $(N_TRIALS) \
-	    --search-subsample 15 \
-	    --jobs $(N_JOBS) \
-	    --out "$(TUNED_PARAMS)" \
-	    --report "$(TUNING_REPORT)"
+	@if [ "$(SKIP_LON)" = "1" ] && [ "$(SKIP_STEER)" = "1" ]; then \
+	    echo "[INFO] SKIP_LON=1 かつ SKIP_STEER=1 のため、Optuna 統合チューニングをスキップし、$(PHASE2_STEER) を $(TUNED_PARAMS) にコピーします"; \
+	    cp "$(PHASE2_STEER)" "$(TUNED_PARAMS)"; \
+	else \
+	    merge_phase=0; \
+	    if [ "$(SKIP_LON)" = "1" ]; then merge_phase=2; fi; \
+	    if [ "$(SKIP_STEER)" = "1" ]; then merge_phase=1; fi; \
+	    echo "[INFO] fit_merge: Warm-Started Optuna 統合チューニング (phase=$$merge_phase) → $(TUNED_PARAMS)"; \
+	    source $(SETUP_BASH) && $(PYTHON) -m driving_log_replayer_v2.real_log_sim_comparison.multi_dataset_tune \
+	        --collection-dir "$(MULTI_BATCH_ROOT)" \
+	        --scenario "$(LOCAL_SCENARIO)" \
+	        --phase $$merge_phase \
+	        --phase-params "$(PHASE2_STEER)" \
+	        --enqueue-params "$(PHASE2_STEER)" \
+	        --n-trials $(N_TRIALS) \
+	        --search-subsample 15 \
+	        --jobs $(N_JOBS) \
+	        --out "$(TUNED_PARAMS)" \
+	        --report "$(TUNING_REPORT)"; \
+	fi
 
 # Step 4b: 物理妥当性レポート生成 → VALIDITY_REPORT。
 fit_report:

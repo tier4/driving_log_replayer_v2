@@ -183,27 +183,31 @@ def main() -> None:
     ap.add_argument("--out-phase1", type=Path, default=None,
                     help="--phase 12 のときの Phase1 出力 YAML パス（省略時は --out と同じディレクトリに phase1_acc.yaml）")
     ap.add_argument("--n-jobs", type=int, default=os.cpu_count())
+    ap.add_argument("--case", type=str, default="current",
+                    help="ベースとなる scenario.yaml 内の models エントリ名 (既定: current)")
+    ap.add_argument("--skip-lon", action="store_true", help="縦方向モデルの直接同定をスキップし、scenario から取得した値を設定する")
+    ap.add_argument("--skip-steer", action="store_true", help="操舵・横方向モデルの直接同定をスキップし、scenario から取得した値を設定する")
     args = ap.parse_args()
 
-    # scenario.yaml から wheelbase をロード (明示があれば SSOT 既定値より優先)。
-    # 見つからなければ SSOT 既定値 (WHEELBASE_SSOT = j6_gen2 由来 4.76012) を明示ログ付きで使う。
-    # かつて既定値が乗用車の 2.74 で、scenario に wheelbase が無いと無言で 2.74 に落ち、
-    # 検証側 4.76012 と別ジオメトリで k_us を同定してしまう不具合があった (k_us は L/v で効く)。
+    # scenario.yaml から wheelbase およびパラメータ群をロード
     global WHEELBASE
     wb_found = None
+    scenario_params = {}
     try:
         with args.scenario.open("r") as f:
             scen = yaml.safe_load(f)
-            # models -> best_normal -> wheelbase などがあれば取得
             models = scen.get("Conditions", {}).get("models", {})
-            for case_key in ["current", "best_normal", "case_normal", "normal", "baseline"]:
+            for case_key in [args.case, "current", "best_normal", "case_normal", "normal", "baseline"]:
                 if case_key in models:
                     wb = models[case_key].get("wheelbase")
                     if wb:
                         wb_found = float(wb)
                         break
+            case_data = models.get(args.case, {})
+            scenario_params = case_data.get("params", {})
+            print(f"[INFO] scenario.yaml の '{args.case}' からパラメータを取得しました: {list(scenario_params.keys())}")
     except Exception as e:
-        print(f"[WARN] scenario.yaml のパースに失敗しました: {e}")
+        print(f"[WARN] scenario.yaml のパースまたはパラメータ取得に失敗しました: {e}")
 
     if wb_found is not None:
         WHEELBASE = wb_found
@@ -254,7 +258,15 @@ def main() -> None:
     # をこのプロセス内で連続実行し、データセットロードは1回だけで済ませる。
 
     # 1. 縦方向モデルパラメータの直接同定 (Phase 1 または Phase 2 で必要)
-    if args.phase in (1, 12) or "acc_time_constant" not in params:
+    if args.skip_lon:
+        print("\n=== 縦方向モデルの直接同定をスキップ（元の値を引き継ぎ） ===")
+        params["acc_time_constant"] = float(scenario_params.get("acc_time_constant", 0.30))
+        params["acc_time_delay"] = float(scenario_params.get("acc_time_delay", 0.1))
+        params["debug_acc_scaling_factor"] = float(scenario_params.get("debug_acc_scaling_factor", 1.0))
+        print(f"  設定パラメータ: acc_time_constant = {params['acc_time_constant']:.4f} s")
+        print(f"                  acc_time_delay    = {params['acc_time_delay']:.4f} s")
+        print(f"                  acc_scaling       = {params['debug_acc_scaling_factor']:.4f}")
+    elif args.phase in (1, 12) or "acc_time_constant" not in params:
         print("\n=== 縦方向モデルの直接同定を実行中 ===")
         taus_long = []
         delays_long = []
@@ -307,88 +319,103 @@ def main() -> None:
 
     # 2. 操舵およびアンダーステア勾配の直接同定 (Phase 2)
     if args.phase in (2, 12):
-        print("\n=== 操舵モデルおよびアンダーステアの直接同定を実行中 ===")
-        taus_steer = []
-        delays_steer = []
-        biases = []
-        dsfs = []
-        with ProcessPoolExecutor(max_workers=args.n_jobs) as pool:
-            futs = {pool.submit(_fit_one_steer_worker, ds): ds["uuid"] for ds in datasets}
-            for fut in as_completed(futs):
-                res = fut.result()
-                if res is not None:
-                    tau, delay, bias, dsf = res
-                    taus_steer.append(tau)
-                    delays_steer.append(delay)
-                    biases.append(bias)
-                    dsfs.append(dsf)
-
-        if taus_steer:
-            params["steer_time_constant"] = float(np.clip(np.median(taus_steer), 0.05, 0.8))
-            params["steer_time_delay"] = float(np.clip(np.median(delays_steer), 0.0, 0.15))
-            params["steer_bias"] = float(np.median(biases))
-            params["debug_steer_scaling_factor"] = float(np.median(dsfs))
-            params["steer_dead_band"] = 0.001  # 固定初期値
-            params["steer_rate_lim"] = 5.0      # 固定値
-            print(f"  同定結果: steer_time_constant = {params['steer_time_constant']:.4f} s")
-            print(f"            steer_time_delay    = {params['steer_time_delay']:.4f} s")
-            print(f"            steer_bias          = {params['steer_bias']:.6f} rad")
-            print(f"            steer_scaling       = {params['debug_steer_scaling_factor']:.4f}")
+        if args.skip_steer:
+            print("\n=== 操舵モデルおよびアンダーステアの直接同定をスキップ（元の値を引き継ぎ） ===")
+            params["steer_time_constant"] = float(scenario_params.get("steer_time_constant", 0.15))
+            params["steer_time_delay"] = float(scenario_params.get("steer_time_delay", 0.17))
+            params["steer_bias"] = float(scenario_params.get("steer_bias", 0.0))
+            params["debug_steer_scaling_factor"] = float(scenario_params.get("debug_steer_scaling_factor", 1.0))
+            params["steer_dead_band"] = float(scenario_params.get("steer_dead_band", 0.0))
+            params["steer_rate_lim"] = float(scenario_params.get("steer_rate_lim", 5.0))
+            params["k_us"] = float(scenario_params.get("k_us", 0.018))
+            print(f"  設定パラメータ: steer_time_constant = {params['steer_time_constant']:.4f} s")
+            print(f"                  steer_time_delay    = {params['steer_time_delay']:.4f} s")
+            print(f"                  steer_bias          = {params['steer_bias']:.6f} rad")
+            print(f"                  steer_scaling       = {params['debug_steer_scaling_factor']:.4f}")
+            print(f"                  k_us                = {params['k_us']:.5f}")
         else:
-            print("[WARN] 操舵の動的条件を満たすデータがないため、デフォルト値を設定します。")
-            params["steer_time_constant"] = 0.12
-            params["steer_time_delay"] = 0.05
-            params["steer_bias"] = 0.0005
-            params["debug_steer_scaling_factor"] = 1.0
+            print("\n=== 操舵モデルおよびアンダーステアの直接同定を実行中 ===")
+            taus_steer = []
+            delays_steer = []
+            biases = []
+            dsfs = []
+            with ProcessPoolExecutor(max_workers=args.n_jobs) as pool:
+                futs = {pool.submit(_fit_one_steer_worker, ds): ds["uuid"] for ds in datasets}
+                for fut in as_completed(futs):
+                    res = fut.result()
+                    if res is not None:
+                        tau, delay, bias, dsf = res
+                        taus_steer.append(tau)
+                        delays_steer.append(delay)
+                        biases.append(bias)
+                        dsfs.append(dsf)
 
-        # 3. アンダーステア勾配 (k_us) の速度依存プロファイル同定
-        print("\n=== アンダーステア勾配 (k_us) の速度ビン別直接同定を実行中 ===")
-        # 各データセットから定常旋回フィルタを通した全体点群を作成
-        all_vx, all_wz, all_steer, all_dwz = [], [], [], []
-        for ds in datasets:
-            vx = ds["vx"]
-            wz = ds["wz"]
-            d_act = ds["d_act"]
-            gear_drive = ds["gear_drive"]
-            # ヨー角加速度の算出
-            dwz_mid = np.diff(wz) / DT
-            dwz = np.empty_like(wz)
-            dwz[0] = dwz_mid[0] if len(dwz_mid) > 0 else 0.0
-            dwz[-1] = dwz_mid[-1] if len(dwz_mid) > 0 else 0.0
-            dwz[1:-1] = 0.5 * (dwz_mid[:-1] + dwz_mid[1:])
+            if taus_steer:
+                params["steer_time_constant"] = float(np.clip(np.median(taus_steer), 0.05, 0.8))
+                params["steer_time_delay"] = float(np.clip(np.median(delays_steer), 0.0, 0.15))
+                params["steer_bias"] = float(np.median(biases))
+                params["debug_steer_scaling_factor"] = float(np.median(dsfs))
+                params["steer_dead_band"] = 0.001  # 固定初期値
+                params["steer_rate_lim"] = 5.0      # 固定値
+                print(f"  同定結果: steer_time_constant = {params['steer_time_constant']:.4f} s")
+                print(f"            steer_time_delay    = {params['steer_time_delay']:.4f} s")
+                print(f"            steer_bias          = {params['steer_bias']:.6f} rad")
+                print(f"            steer_scaling       = {params['debug_steer_scaling_factor']:.4f}")
+            else:
+                print("[WARN] 操舵の動的条件を満たすデータがないため、デフォルト値を設定します。")
+                params["steer_time_constant"] = 0.12
+                params["steer_time_delay"] = 0.05
+                params["steer_bias"] = 0.0005
+                params["debug_steer_scaling_factor"] = 1.0
 
-            all_vx.append(vx)
-            all_wz.append(wz)
-            all_steer.append(d_act)
-            all_dwz.append(dwz)
-            # 非 DRIVE 区間は後段の定常旋回フィルタに入れない。
-            ds["gear_drive"] = gear_drive
+            # 3. アンダーステア勾配 (k_us) の速度依存プロファイル同定
+            print("\n=== アンダーステア勾配 (k_us) の速度ビン別直接同定を実行中 ===")
+            # 各データセットから定常旋回フィルタを通した全体点群を作成
+            all_vx, all_wz, all_steer, all_dwz = [], [], [], []
+            for ds in datasets:
+                vx = ds["vx"]
+                wz = ds["wz"]
+                d_act = ds["d_act"]
+                gear_drive = ds["gear_drive"]
+                # ヨー角加速度の算出
+                dwz_mid = np.diff(wz) / DT
+                dwz = np.empty_like(wz)
+                dwz[0] = dwz_mid[0] if len(dwz_mid) > 0 else 0.0
+                dwz[-1] = dwz_mid[-1] if len(dwz_mid) > 0 else 0.0
+                dwz[1:-1] = 0.5 * (dwz_mid[:-1] + dwz_mid[1:])
 
-        vx_all = np.concatenate(all_vx)
-        wz_all = np.concatenate(all_wz)
-        steer_all = np.concatenate(all_steer)
-        dwz_all = np.concatenate(all_dwz)
-        gear_all = np.concatenate([ds["gear_drive"] for ds in datasets])
+                all_vx.append(vx)
+                all_wz.append(wz)
+                all_steer.append(d_act)
+                all_dwz.append(dwz)
+                # 非 DRIVE 区間は後段の定常旋回フィルタに入れない。
+                ds["gear_drive"] = gear_drive
 
-        # 定常旋回フィルタ
-        mask_ok = gear_all & (np.abs(wz_all) > WZ_MIN) & (np.abs(dwz_all) < DWZ_MAX) & (vx_all > VX_MIN_CURVE)
-        vx_f = vx_all[mask_ok]
-        wz_f = wz_all[mask_ok]
-        steer_f = steer_all[mask_ok] - params["steer_bias"]
-        tan_steer = np.tan(np.clip(steer_f, -0.8, 0.8))
+            vx_all = np.concatenate(all_vx)
+            wz_all = np.concatenate(all_wz)
+            steer_all = np.concatenate(all_steer)
+            dwz_all = np.concatenate(all_dwz)
+            gear_all = np.concatenate([ds["gear_drive"] for ds in datasets])
 
-        # スカラー原点回帰 y = k_us·x,  x = v·ω,  y = tan(δ) − L·ω/v
-        x = vx_f * wz_f
-        y = tan_steer - WHEELBASE * wz_f / vx_f if len(vx_f) else np.empty(0)
-        sum_x2 = float(np.sum(x * x))
-        sum_xy = float(np.sum(x * y))
-        n_pts = int(len(vx_f))
-        k_us = sum_xy / sum_x2 if (n_pts >= 10 and sum_x2 > 0) else 0.008
-        # 下限クリップ (アンダーステア補正として正の値を担保)
-        k_us = float(np.clip(k_us, 0.0, K_US_CLIP))
+            # 定常旋回フィルタ
+            mask_ok = gear_all & (np.abs(wz_all) > WZ_MIN) & (np.abs(dwz_all) < DWZ_MAX) & (vx_all > VX_MIN_CURVE)
+            vx_f = vx_all[mask_ok]
+            wz_f = wz_all[mask_ok]
+            steer_f = steer_all[mask_ok] - params["steer_bias"]
+            tan_steer = np.tan(np.clip(steer_f, -0.8, 0.8))
 
-        params["k_us"] = k_us
-        print(f"  同定結果: k_us = {k_us:.5f} (曲線走行サンプル n={n_pts})")
+            # スカラー原点回帰 y = k_us·x,  x = v·ω,  y = tan(δ) − L·ω/v
+            x = vx_f * wz_f
+            y = tan_steer - WHEELBASE * wz_f / vx_f if len(vx_f) else np.empty(0)
+            sum_x2 = float(np.sum(x * x))
+            sum_xy = float(np.sum(x * y))
+            n_pts = int(len(vx_f))
+            k_us = sum_xy / sum_x2 if (n_pts >= 10 and sum_x2 > 0) else 0.008
+            # 下限クリップ (アンダーステア補正として正の値を担保)
+            k_us = float(np.clip(k_us, 0.0, K_US_CLIP))
+
+            params["k_us"] = k_us
+            print(f"  同定結果: k_us = {k_us:.5f} (曲線走行サンプル n={n_pts})")
 
     # 結果を YAML 出力
     out_dir = args.out.parent
