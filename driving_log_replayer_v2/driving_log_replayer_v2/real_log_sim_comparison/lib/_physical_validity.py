@@ -290,6 +290,11 @@ def fit_long_single(bag_path: Path) -> dict | None:
         "cmd_arr": a_cmd_arr,
         "act_arr": a_act_corr,
         "mask_arr": mask_dyn,
+        "phase1_tau": fit.get("phase1_tau"),
+        "phase1_delay": fit.get("phase1_delay"),
+        "phase2_delay": fit.get("phase2_delay"),
+        "phase3_tau": fit.get("phase3_tau"),
+        "phase3_delay": fit.get("phase3_delay"),
     }
 
 
@@ -361,6 +366,11 @@ def fit_steer_single(bag_path: Path) -> dict | None:
         "cmd_arr": d_cmd,
         "act_arr": d_act,
         "mask_arr": mask_dyn,
+        "phase1_tau": fit.get("phase1_tau"),
+        "phase1_delay": fit.get("phase1_delay"),
+        "phase2_delay": fit.get("phase2_delay"),
+        "phase3_tau": fit.get("phase3_tau"),
+        "phase3_delay": fit.get("phase3_delay"),
     }
 
 
@@ -943,6 +953,11 @@ def fit_long_cross_dataset_bounded(
         "tau": best_tau, "delay": best_delay, "rmse_mps2": best_rmse,
         "pitch_min": pitch_min, "pitch_max": pitch_max, "n_datasets": len(pooled),
         "tau_pointwise_all": tau_pointwise_all,
+        "phase1_tau": 1.0 / float(res1.x[0]),
+        "phase1_delay": float(n_steps_init * _FIT_DT),
+        "phase2_delay": float(best_n * _FIT_DT),
+        "phase3_tau": best_tau,
+        "phase3_delay": best_delay,
     }
 
 

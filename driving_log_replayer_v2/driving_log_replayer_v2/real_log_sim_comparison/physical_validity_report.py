@@ -958,7 +958,7 @@ J_a
 <div class="note">
   <b>3段階交互最適化 (3-Phase Alternating Optimization) のアルゴリズム:</b>
   <ol>
-    <li><b>Phase 1 (遅延ゼロ固定最適化):</b> 無駄時間 \(T_a\) を 0 に固定した状態で、逆数変数 \(\tau_a^{-1} = 1/\tau_a\) に対して最小二乗法で最適化を行い、初期探索パラメータを決定します。逆数変数を用いることで勾配爆発を防ぎます。</li>
+    <li><b>Phase 1 (初期値固定時定数最適化):</b> 無駄時間 \(T_a\) を初期パラメータの基準値（Acc: 0.101s）に固定した状態で、逆数変数 \(\tau_a^{-1} = 1/\tau_a\) に対して最小二乗法で最適化を行い、初期探索パラメータを決定します。逆数変数を用いることで勾配爆発を防ぎます。</li>
     <li><b>Phase 2 (遅延グリッドサーチ):</b> Phase 1 で得られたパラメータを固定したまま、事前に定義された遅延候補（グリッド）の中から方程式残差の二乗和 (MSE) を最小化する無駄時間 \(T_a\) を探索します。</li>
     <li><b>Phase 3 (パラメータ再最適化):</b> Phase 2 で決定された最良の無駄時間 \(T_a\) に固定した上で、再び時定数 \(\tau_a\) などのパラメータを最小二乗法で再最適化し、最終的な同定値を得ます。</li>
   </ol>
@@ -1038,7 +1038,7 @@ E_\\delta[k;\\tau_\\delta,T_\\delta]
 <div class="note">
   <b>3段階交互最適化 (3-Phase Alternating Optimization) のアルゴリズム:</b>
   <ol>
-    <li><b>Phase 1 (遅延ゼロ固定最適化):</b> 無駄時間 \(T_\delta\) を 0 に固定した状態で、逆数変数 \(\tau_\delta^{-1} = 1/\tau_\delta\) に対して最小二乗法で最適化を行い、初期探索パラメータを決定します。</li>
+    <li><b>Phase 1 (初期値固定時定数最適化):</b> 無駄時間 \(T_\delta\) を初期パラメータの基準値（Steer: 0.0315s）に固定した状態で、逆数変数 \(\tau_\delta^{-1} = 1/\tau_\delta\) に対して最小二乗法で最適化を行い、初期探索パラメータを決定します。</li>
     <li><b>Phase 2 (遅延グリッドサーチ):</b> Phase 1 で得られたパラメータを固定したまま、事前に定義された遅延候補（グリッド）の中から方程式残差の二乗和 (MSE) を最小化する無駄時間 \(T_\delta\) を探索します。</li>
     <li><b>Phase 3 (パラメータ再最適化):</b> Phase 2 で決定された最良の無駄時間 \(T_\delta\) に固定した上で、再び時定数 \(\tau_\delta\) などのパラメータを最小二乗法で再最適化し、最終的な同定値を得ます。</li>
   </ol>
@@ -2114,12 +2114,31 @@ def main() -> None:
                 <td>{selected_text}</td>
             </tr>"""
         long_opt_fig_html = long_opt_fig.to_html(full_html=False, include_plotlyjs=False)
+        long_process_log = ""
+        if "phase1_tau" in cross_fit_long:
+            p1_t = cross_fit_long["phase1_tau"]
+            p1_d = cross_fit_long["phase1_delay"]
+            p2_d = cross_fit_long["phase2_delay"]
+            p3_t = cross_fit_long["phase3_tau"]
+            p3_d = cross_fit_long["phase3_delay"]
+            long_process_log = f"""
+            <div class="note" style="margin-top: 10px; margin-bottom: 15px; border-left: 4px solid #4caf50; background-color: #f9f9f9; padding: 10px;">
+              <b>【実行ログ】縦方向・横断同定における3段階最適化 (3-Phase) の遷移挙動:</b>
+              <ul style="margin: 5px 0 0 0; padding-left: 20px;">
+                <li><b>Phase 1 (初期値固定時定数最適化):</b> 初期基準遅延 \\(T_a = {p1_d:.3f}\\) s 固定で時定数を同定 &rarr; \\(\\tau_a = {p1_t:.4f}\\) s</li>
+                <li><b>Phase 2 (遅延グリッドサーチ):</b> 時定数を \\({p1_t:.4f}\\) s に固定し、残差二乗和を最小化する遅延を決定 &rarr; \\(T_a = {p2_d:.3f}\\) s （下表で最小RMSEとなる行）</li>
+                <li><b>Phase 3 (最終パラメータ再最適化):</b> 決定遅延 \\(T_a = {p3_d:.3f}\\) s 固定で時定数を精密再同定 &rarr; \\(\\tau_a = {p3_t:.4f}\\) s, \\(T_a = {p3_d:.3f}\\) s</li>
+              </ul>
+            </div>
+            """
+
         long_resid_opt_html = f"""
         <details>
           <summary><b>遅延固定時の時定数最適化と方程式残差の評価結果（クリックで展開）</b></summary>
           <p>
             遅延時間 \\(T_a\\) を \\(\\Delta t\\) の整数倍に固定した上で、方程式残差の二乗和（MSE）を最小化するように時定数 \\(\\tau_a\\) を最適化した結果です。全データセットから抽出した動的サンプルをプールして評価しています。
           </p>
+          {long_process_log}
           <table class="param-table">
             <tr><th>固定遅延 \\(T_a\\)</th><th>最適時定数 \\(\\tau_a\\)</th><th>方程式残差 RMSE</th><th>残差平均</th><th>残差標準偏差</th><th>判定</th></tr>
             {long_opt_rows}
@@ -2161,7 +2180,7 @@ def main() -> None:
         <details>
           <summary><b>遅延固定時の時定数最適化と方程式残差の評価結果（クリックで展開）</b></summary>
           <p>
-            遅延時間 \\(T_\\delta\\) を \\(\\Delta t\\) の整数倍に固定した上で、方程式残差の二乗和（MSE）を最小化するように時定数 \\(\\tau_\\delta\\) を最適化した結果です。全データセットから抽出した動的サンプルをプールして評価しています。
+            遅延時間 \\(T_\\delta\\) を \\(\\Delta t\\) の整数倍に固定した上で、方程式残差の二乗和（MSE）を最小化するように時定数 \\(\\tau_\\delta\\) を最適化した結果です（3段階交互最適化における <b>Phase 2 (遅延グリッドサーチ)</b> のプール探索プロセスに対応します。判定が「★ 選択」された行の遅延時間が、Phase 3 での時定数再最適化に用いられます）。全データセットから抽出した動的サンプルをプールして評価しています。
           </p>
           <table class="param-table">
             <tr><th>固定遅延 \\(T_\\delta\\)</th><th>最適時定数 \\(\\tau_\\delta\\)</th><th>方程式残差 RMSE</th><th>残差平均</th><th>残差標準偏差</th><th>判定</th></tr>

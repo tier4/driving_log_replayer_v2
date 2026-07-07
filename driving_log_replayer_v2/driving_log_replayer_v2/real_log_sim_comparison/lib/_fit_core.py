@@ -370,6 +370,7 @@ def fit_first_order_delay_residual_3phase(
 
     # Phase 1: d = delay_init 固定で最適化
     res1 = least_squares(lambda x: _residuals(x, n_steps_init), x0, bounds=bounds)
+    phase1_tau = 1.0 / float(res1.x[0])
 
     # Phase 2: 得られたパラメータ固定で delay をグリッドサーチ
     best_cost = None
@@ -380,6 +381,7 @@ def fit_first_order_delay_residual_3phase(
         if best_cost is None or cost < best_cost:
             best_cost = cost
             best_n = n_steps
+    phase2_delay = float(best_n * dt)
 
     # Phase 3: 最良 delay 固定でパラメータを再最適化
     res3 = least_squares(lambda x: _residuals(x, best_n), res1.x, bounds=bounds)
@@ -418,5 +420,10 @@ def fit_first_order_delay_residual_3phase(
         "resid_samples": resid_final,        # LPF 後の残差（主値：ヒスト集計・RMSE 計算用）
         "resid_samples_raw": resid_final_raw,  # 生信号での残差（時系列グラフ参考値用）
         "cost": best_cost,
+        "phase1_tau": phase1_tau,
+        "phase1_delay": delay_init,
+        "phase2_delay": phase2_delay,
+        "phase3_tau": tau_fit,
+        "phase3_delay": delay_fit,
     }
 
