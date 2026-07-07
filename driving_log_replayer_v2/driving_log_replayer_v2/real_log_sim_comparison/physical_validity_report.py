@@ -71,6 +71,7 @@ from scipy.optimize import least_squares, minimize_scalar  # noqa: E402
 from driving_log_replayer_v2.real_log_sim_comparison.lib._fit_core import (  # noqa: E402
     _moving_avg,
     delay_shift,
+    equation_residual_at_params,
     savgol_derivative,
     savgol_smooth,
 )
@@ -81,6 +82,7 @@ from driving_log_replayer_v2.real_log_sim_comparison.lib._physical_validity impo
     VX_MIN_CURVE,
     WHEELBASE,
     WZ_MIN,
+    _DRIFT_A_TH,
     _FIT_DT,
     _N_CROSS_FIT_DATASET,
     _PERF_HORIZONS,
@@ -617,6 +619,161 @@ def _kus_band_table_rows(params: dict) -> str:
     return f"  <tr><td><code>k_us</code></td><td>{k_us:.6f} rad·s²/m</td><td>アンダーステア係数（全速度域一定）</td></tr>"
 
 
+_ACCEL_PHASE_NAMES: dict[str, str] = {"accel": "加速中", "cruise": "巡航中", "decel": "減速中"}
+
+
+def _split_resid_by_phase(e: np.ndarray, act_masked: np.ndarray) -> dict[str, np.ndarray]:
+    """残差配列 e（mask 適用済み）を、対応する実測加速度 act_masked の符号で
+    加速中 (> +_DRIFT_A_TH) / 巡航中 / 減速中 (< -_DRIFT_A_TH) に3分割する。
+
+    閾値は `lib._physical_validity._long_drift_profile` の phase 分類（_DRIFT_A_TH=0.3 [m/s²]）
+    と同じ規約を流用し、レポート内で「加速/巡航/減速」の定義を統一する。
+    """
+    return {
+        "accel": e[act_masked > _DRIFT_A_TH],
+        "cruise": e[(act_masked >= -_DRIFT_A_TH) & (act_masked <= _DRIFT_A_TH)],
+        "decel": e[act_masked < -_DRIFT_A_TH],
+    }
+
+
+def _pool_resid_long_tuned_by_phase(per_ds: dict[str, dict]) -> dict[str, list[float]]:
+    """縦方向 tuned: 各データセット既存の残差（各データセット自身の同定済み tau/delay で
+    計算済みの `fit["resid_samples"]`）を、実測加速度の符号で加速/巡航/減速に分けて
+    データセット横断で RMSE をプールする（再計算不要）。
+    """
+    out: dict[str, list[float]] = {name: [] for name in _ACCEL_PHASE_NAMES}
+    for fit in per_ds.values():
+        resid_samples = fit.get("resid_samples")
+        if not resid_samples or "act_arr" not in fit or "mask_arr" not in fit:
+            continue
+        e = np.asarray(resid_samples, dtype=float)
+        mask = np.asarray(fit["mask_arr"], dtype=bool)
+        act_masked = np.asarray(fit["act_arr"], dtype=float)[mask]
+        if len(act_masked) != len(e):
+            continue
+        for name, sub in _split_resid_by_phase(e, act_masked).items():
+            if sub.size > 0:
+                out[name].append(float(np.sqrt(np.mean(sub ** 2))))
+    return out
+
+
+def _pool_resid_long_baseline_by_phase(
+    per_ds: dict[str, dict], tau: float, delay: float, window_s: float,
+) -> dict[str, list[float]]:
+    """縦方向 baseline: 全データセット共通の baseline (tau, delay) を実測配列に代入して
+    方程式残差を再計算し、実測加速度の符号で加速/巡航/減速に分けて RMSE をプールする。
+    """
+    out: dict[str, list[float]] = {name: [] for name in _ACCEL_PHASE_NAMES}
+    for fit in per_ds.values():
+        if "cmd_arr" not in fit or "act_arr" not in fit or "mask_arr" not in fit:
+            continue
+        cmd = np.asarray(fit["cmd_arr"], dtype=float)
+        act = np.asarray(fit["act_arr"], dtype=float)
+        mask = np.asarray(fit["mask_arr"], dtype=bool)
+        t_s = np.asarray(fit.get("t_s", np.arange(len(cmd)) * _FIT_DT), dtype=float)
+        resid = equation_residual_at_params(
+            cmd, act, mask, _FIT_DT, tau=tau, delay=delay,
+            scale=1.0, bias=0.0, window_s=window_s, polyorder=_SG_POLYORDER, t_s=t_s,
+        )
+        e = np.asarray(resid["resid"], dtype=float)
+        act_masked = act[mask]
+        if len(act_masked) != len(e):
+            continue
+        for name, sub in _split_resid_by_phase(e, act_masked).items():
+            if sub.size > 0:
+                out[name].append(float(np.sqrt(np.mean(sub ** 2))))
+    return out
+
+
+def _build_fit_rmse_table_html(
+    tuned_rmses: list[float],
+    baseline_rmses: list[float],
+    unit_label: str,
+    label: str,
+    phase_tuned: dict[str, list[float]] | None = None,
+    phase_baseline: dict[str, list[float]] | None = None,
+) -> str:
+    """方程式残差RMSE (J) の tuned vs baseline 比較テーブル（平均・中央値・99%ile、データセット横断）。
+
+    1-2（縦方向）・1-3（操舵）の各セクション末尾に挿入する。ここでの J は
+    `equation_residual_at_params` の `rmse_resid`（同じ実測配列に tuned / baseline
+    パラメータをそれぞれ代入して評価した方程式残差 RMSE）であり、各セクション末尾の
+    param-table にある「同定誤差量（RMSE）」列（\\(a_{sim}-a_{real}\\) 等の出力誤差、
+    数値は未表示）とは別の量である点に注意。
+
+    `phase_tuned`/`phase_baseline`（縦方向のみ; `_pool_resid_long_*_by_phase` の戻り値）を
+    渡すと、実測加速度の符号による 加速中/巡航中/減速中 の内訳行を追加する。
+    """
+    if not tuned_rmses or not baseline_rmses:
+        return ""
+
+    def _cell(t_val: float, b_val: float) -> str:
+        ratio = t_val / b_val if b_val > 0 else 1.0
+        if ratio < 0.99:
+            style = ' style="color:#28a745;font-weight:bold"'
+        elif ratio > 1.01:
+            style = ' style="color:#dc3545"'
+        else:
+            style = ""
+        return f"<td{style}>{t_val:.4g}</td>"
+
+    def _stats(vals: list[float]) -> tuple[float, float, float]:
+        arr = np.asarray(vals)
+        return float(arr.mean()), float(np.median(arr)), float(np.quantile(arr, 0.99))
+
+    t_mean, t_med, t_p99 = _stats(tuned_rmses)
+    b_mean, b_med, b_p99 = _stats(baseline_rmses)
+
+    phase_rows = ""
+    if phase_tuned and phase_baseline:
+        row_blocks = []
+        for name, name_ja in _ACCEL_PHASE_NAMES.items():
+            t_vals, b_vals = phase_tuned.get(name, []), phase_baseline.get(name, [])
+            if not t_vals or not b_vals:
+                continue
+            pt_mean, pt_med, pt_p99 = _stats(t_vals)
+            pb_mean, pb_med, pb_p99 = _stats(b_vals)
+            row_blocks.append(
+                f'<tr><td><b>{label}</b>（{name_ja}）</td>'
+                f'{_cell(pt_mean, pb_mean)}{_cell(pt_med, pb_med)}{_cell(pt_p99, pb_p99)}</tr>\n'
+                f'<tr><td style="color:#888">baseline（{name_ja}）</td>'
+                f'<td>{pb_mean:.4g}</td><td>{pb_med:.4g}</td><td>{pb_p99:.4g}</td></tr>'
+            )
+        if row_blocks:
+            phase_rows = (
+                '<tr><td colspan="4" style="background:#f0f0f0">'
+                f'<b>フェーズ別内訳</b>（実測加速度: 加速 &gt; +{_DRIFT_A_TH:g}, '
+                f'減速 &lt; -{_DRIFT_A_TH:g} m/s²、それ以外は巡航中。'
+                'lib._physical_validity._long_drift_profile と同じ閾値規約）</td></tr>\n'
+                + "\n".join(row_blocks)
+            )
+
+    return f"""
+<h3>フィッティング精度: 方程式残差RMSE 比較（{label} vs baseline）</h3>
+<p>
+全データセットについて、同じ実測配列に {label} パラメータと baseline（補正なし）を
+それぞれ代入し、方程式残差 \\(J\\)（<code>equation_residual_at_params</code> の
+<code>rmse_resid</code>、単位 {unit_label}）をデータセット横断で集計した。
+これは上の残差ヒストグラム（{label} vs baseline 重ね描画）と同じ量であり、
+本節末尾の表にある「同定誤差量（RMSE）」列（\\(a_{{\\mathrm{{sim}}}} - a_{{\\mathrm{{real}}}}\\) 等の
+出力誤差）とは別物である。
+</p>
+<table class="param-table" style="font-size:12px">
+  <thead><tr><th>モデル</th><th>平均</th><th>中央値</th><th>99%ile</th></tr></thead>
+  <tbody>
+    <tr><td><b>{label}</b></td>{_cell(t_mean, b_mean)}{_cell(t_med, b_med)}{_cell(t_p99, b_p99)}</tr>
+    <tr><td style="color:#888">baseline</td>
+        <td>{b_mean:.4g}</td><td>{b_med:.4g}</td><td>{b_p99:.4g}</td></tr>
+{phase_rows}
+  </tbody>
+</table>
+<div class="note">
+{label} の値が baseline より小さい場合は <b style="color:#28a745">緑（改善）</b>、
+大きい場合は <span style="color:#dc3545">赤（悪化）</span> で表示。
+</div>
+"""
+
+
 def _build_sec1(
     params: dict,
     long_fig: go.Figure,
@@ -627,6 +784,8 @@ def _build_sec1(
     steer_resid_hist_fig: go.Figure | None = None,
     long_resid_opt_html: str = "",
     steer_resid_opt_html: str = "",
+    long_fit_rmse_html: str = "",
+    steer_fit_rmse_html: str = "",
 ) -> str:
     """1-0. 座標系と主要な記号の定義 + モデルパラメータの定義を含む sec1 全体 HTML を返す。"""
     kus_rows = _kus_band_table_rows(params)
@@ -994,6 +1153,7 @@ J_a
   <tr><td><code>acc_time_delay</code> (\\(T_a\\))</td><td>{T_a} s</td>
       <td>純粋遅延：指令が実際に入力されるまでの遅延時間</td></tr>
 </table>
+{long_fit_rmse_html}
 </section>
 
 <section id="sec-steer">
@@ -1086,6 +1246,7 @@ E_\\delta[k;\\tau_\\delta,T_\\delta]
   <tr><td><code>steer_rate_lim</code></td><td>{rlim} rad/s</td>
       <td>操舵レート飽和（固定値・同定対象外）</td><td>—</td></tr>
 </table>
+{steer_fit_rmse_html}
 </section>
 <section id="sec-yaw">
 <h2>1-4. ヨー・横方向（運動学的自転車モデル）— スカラー 最小二乗法同定</h2>
@@ -1556,6 +1717,8 @@ def build_html(
     steer_resid_hist_fig: go.Figure | None = None,
     long_resid_opt_html: str = "",
     steer_resid_opt_html: str = "",
+    long_fit_rmse_html: str = "",
+    steer_fit_rmse_html: str = "",
 ) -> str:
     score = params.get("_score", "N/A")
     phase14_score = float(score) if isinstance(score, (int, float, str)) and str(score) != "N/A" else 0.0
@@ -1576,6 +1739,7 @@ def build_html(
         params, long_fig, steer_fig, kus_fig, n_dataset,
         long_resid_hist_fig=long_resid_hist_fig, steer_resid_hist_fig=steer_resid_hist_fig,
         long_resid_opt_html=long_resid_opt_html, steer_resid_opt_html=steer_resid_opt_html,
+        long_fit_rmse_html=long_fit_rmse_html, steer_fit_rmse_html=steer_fit_rmse_html,
     )
     sec3 = _build_sec3(viewer_sections, label=label)
 
@@ -1716,6 +1880,29 @@ def main() -> None:
     merged_tuned = merged_model_params(current_eval_params)
     steer_bias = float(merged_tuned.get("steer_bias", 0.0005))
     wheelbase = float(merged_tuned.get("wheelbase", 4.76012))
+
+    # 1-2/1-3 末尾の baseline 比較テーブル用: baseline（補正なしデフォルト）の縦方向・操舵パラメータ
+    merged_baseline = merged_model_params(baseline_params)
+    baseline_tau_a = float(merged_baseline.get("acc_time_constant"))
+    baseline_T_a = float(merged_baseline.get("acc_time_delay"))
+    baseline_tau_d = float(merged_baseline.get("steer_time_constant"))
+    baseline_T_d = float(merged_baseline.get("steer_time_delay"))
+
+    # baseline と current(tuned) の車両モデル種別が一致するかどうか。
+    # 1-2/1-3 末尾の方程式残差RMSE比較（equation_residual_at_params に baseline の (tau, delay) を
+    # 代入する方式）は、baseline_model が current_model と "同じ運動方程式形" を持つ場合にのみ有効。
+    # 例えば ideal_steer_acc は縦方向に一次遅れ・遅延を持たず、taiga_x は acc_time_constant/
+    # acc_time_delay という parameterization 自体を持たないため、これらが baseline_model や
+    # current_model に指定された場合、同じ式へのパラメータ代入という前提が崩れる。
+    # _resolve_report_models はモデル種別の一致を保証しないため、ここで明示的に確認し、
+    # 一致しない場合は 1-2/1-3 の新テーブル・残差ヒストグラムの baseline 重ね描画を無効化する。
+    _model_types_match = current_model == baseline_model
+    if not _model_types_match:
+        print(
+            f"  [WARN] baseline モデル種別 ({baseline_model}) が current モデル種別 ({current_model}) と"
+            " 異なるため、1-2/1-3 の方程式残差RMSE baseline 比較はスキップします"
+            "（運動方程式形が同一である保証がないため）。",
+        )
 
     # Override global WHEELBASE in both this script and the imported module
     global WHEELBASE
@@ -2044,7 +2231,7 @@ def main() -> None:
 
     # 方程式残差の評価結果: 各データセットの3段階交互最適化で同定されたパラメータでの残差 E[k]=RHS−LHS を
     # 全データセットでプールし分布を示す。
-    def _pool_resid(per_ds: dict[str, dict]) -> tuple[list[float], float]:
+    def _pool_resid(per_ds: dict[str, dict]) -> tuple[list[float], float, list[float]]:
         pooled: list[float] = []
         rmses: list[float] = []
         for fit in per_ds.values():
@@ -2053,18 +2240,86 @@ def main() -> None:
             if np.isfinite(rr):
                 rmses.append(float(rr))
         med = float(np.median(rmses)) if rmses else float("nan")
-        return pooled, med
+        return pooled, med, rmses
 
-    _resid_long_pool, _resid_long_med = _pool_resid(per_ds_long)
-    _resid_steer_pool, _resid_steer_med = _pool_resid(per_ds_steer)
+    def _pool_resid_at_params(
+        per_ds: dict[str, dict], tau: float, delay: float, window_s: float,
+    ) -> tuple[list[float], float, list[float]]:
+        """per_ds に保存済みの実測配列 (cmd_arr/act_arr/mask_arr/t_s) を使い、
+        baseline など任意の (tau, delay) での方程式残差 RMSE を再計算する。
+        tuned 側 (_pool_resid) と同じプール方式で pooled residuals・中央値・
+        per-dataset RMSE 一覧を返す（実機ログの再読み込み・モデル再フィットは不要）。
+        """
+        pooled: list[float] = []
+        rmses: list[float] = []
+        for fit in per_ds.values():
+            if "cmd_arr" not in fit or "act_arr" not in fit or "mask_arr" not in fit:
+                continue
+            cmd = np.asarray(fit["cmd_arr"], dtype=float)
+            act = np.asarray(fit["act_arr"], dtype=float)
+            mask = np.asarray(fit["mask_arr"], dtype=bool)
+            t_s = np.asarray(fit.get("t_s", np.arange(len(cmd)) * _FIT_DT), dtype=float)
+            resid = equation_residual_at_params(
+                cmd, act, mask, _FIT_DT, tau=tau, delay=delay,
+                scale=1.0, bias=0.0, window_s=window_s, polyorder=_SG_POLYORDER, t_s=t_s,
+            )
+            pooled.extend(resid["resid"].tolist())
+            if np.isfinite(resid["rmse_resid"]):
+                rmses.append(float(resid["rmse_resid"]))
+        med = float(np.median(rmses)) if rmses else float("nan")
+        return pooled, med, rmses
+
+    _resid_long_pool, _resid_long_med, _resid_long_rmses = _pool_resid(per_ds_long)
+    _resid_steer_pool, _resid_steer_med, _resid_steer_rmses = _pool_resid(per_ds_steer)
+
+    if _model_types_match:
+        _resid_long_bl_pool, _resid_long_bl_med, _resid_long_bl_rmses = _pool_resid_at_params(
+            per_ds_long, baseline_tau_a, baseline_T_a, _SG_WINDOW_LONG,
+        )
+        _resid_steer_bl_pool, _resid_steer_bl_med, _resid_steer_bl_rmses = _pool_resid_at_params(
+            per_ds_steer, baseline_tau_d, baseline_T_d, _SG_WINDOW_STEER,
+        )
+        _long_phase_tuned = _pool_resid_long_tuned_by_phase(per_ds_long)
+        _long_phase_baseline = _pool_resid_long_baseline_by_phase(
+            per_ds_long, baseline_tau_a, baseline_T_a, _SG_WINDOW_LONG,
+        )
+    else:
+        # baseline_model と current_model の運動方程式形が同一である保証がないため、
+        # baseline の (tau, delay) を代入した残差計算・比較テーブルは行わない。
+        _resid_long_bl_pool, _resid_long_bl_med, _resid_long_bl_rmses = [], float("nan"), []
+        _resid_steer_bl_pool, _resid_steer_bl_med, _resid_steer_bl_rmses = [], float("nan"), []
+        _long_phase_tuned, _long_phase_baseline = {}, {}
+
     long_resid_hist_fig = build_fig_equation_residual_hist(
         _resid_long_pool, channel_label="縦 (dot a_act 式)", unit_label="m/s³",
         rmse_median=_resid_long_med,
+        baseline_resid_samples=_resid_long_bl_pool or None, baseline_rmse_median=_resid_long_bl_med,
     )
     steer_resid_hist_fig = build_fig_equation_residual_hist(
         _resid_steer_pool, channel_label="操舵 (dot δ_act 式)", unit_label="rad/s",
         rmse_median=_resid_steer_med,
+        baseline_resid_samples=_resid_steer_bl_pool or None, baseline_rmse_median=_resid_steer_bl_med,
     )
+
+    if _model_types_match:
+        long_fit_rmse_html = _build_fit_rmse_table_html(
+            _resid_long_rmses, _resid_long_bl_rmses, "m/s³", phase_label,
+            phase_tuned=_long_phase_tuned, phase_baseline=_long_phase_baseline,
+        )
+        steer_fit_rmse_html = _build_fit_rmse_table_html(
+            _resid_steer_rmses, _resid_steer_bl_rmses, "rad/s", phase_label,
+        )
+    else:
+        _model_mismatch_note = (
+            '<div class="note" style="border-color:#dc3545">'
+            f"⚠️ baseline（<code>{baseline_model}</code>）と {phase_label}（<code>{current_model}</code>）は"
+            "車両モデル種別が異なるため、方程式残差RMSEの baseline 比較"
+            "（同一の一次遅れ+純粋遅延式へのパラメータ代入方式）は運動方程式形の一致を前提としており、"
+            "意味のある値にならないため省略しました。"
+            "</div>"
+        )
+        long_fit_rmse_html = _model_mismatch_note
+        steer_fit_rmse_html = _model_mismatch_note
 
     # 1-5 横方向理想追従評価には curve 上位 _PERF_N_DATASET データセットを使用（viewer 用 top_curve とは独立して選択）
     perf_records = candidate_curve[:_PERF_N_DATASET]
@@ -2204,6 +2459,8 @@ def main() -> None:
         steer_resid_hist_fig=steer_resid_hist_fig,
         long_resid_opt_html=long_resid_opt_html,
         steer_resid_opt_html=steer_resid_opt_html,
+        long_fit_rmse_html=long_fit_rmse_html,
+        steer_fit_rmse_html=steer_fit_rmse_html,
     )
 
     args.out.parent.mkdir(parents=True, exist_ok=True)
