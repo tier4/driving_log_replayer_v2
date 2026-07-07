@@ -1874,7 +1874,7 @@ def build_release_note_html(
   <style>{_STYLE}</style>
 </head>
 <body>
-<h1>車両モデル物理的妥当性検証レポート（要約）— {label}</h1>
+<h1>currentモデルリリースレポート— {label}</h1>
 <p class="meta">
   生成元: <code>{params_filename or label}</code> &nbsp;|&nbsp;
   有効データセット数: {n_dataset}
