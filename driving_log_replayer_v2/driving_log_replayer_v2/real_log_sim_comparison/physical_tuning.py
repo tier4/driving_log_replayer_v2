@@ -196,7 +196,7 @@ def main() -> None:
     try:
         with args.scenario.open("r") as f:
             scen = yaml.safe_load(f)
-            models = scen.get("Conditions", {}).get("models", {})
+            models = scen.get("Evaluation", {}).get("Conditions", {}).get("models", {})
             for case_key in [args.case, "current", "best_normal", "case_normal", "normal", "baseline"]:
                 if case_key in models:
                     wb = models[case_key].get("wheelbase")
