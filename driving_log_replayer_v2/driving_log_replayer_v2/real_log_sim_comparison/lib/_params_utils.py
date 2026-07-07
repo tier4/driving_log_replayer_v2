@@ -61,7 +61,6 @@ def load_sim_params(params_dir: Path | None = None) -> dict:
         "acc_time_delay": 0.101,
         "acc_time_constant": 0.2589,
         "brake_delay": 0.0685,
-        "brake_time_constant": 0.15,
         "steer_time_delay": 0.0315,
         "steer_time_constant": 0.4983,
         "steer_dead_band": 0.0,

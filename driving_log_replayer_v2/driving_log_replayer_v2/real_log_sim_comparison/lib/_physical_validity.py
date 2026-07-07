@@ -89,6 +89,9 @@ _DA_THRESH_FIT = 0.15
 _VX_MIN_FIT = 0.5
 _DELAY_CANDIDATES_LONG = np.arange(0.0, 0.30 + 1e-9, _FIT_DT)
 _TAU_BOUNDS_LONG = (_FIT_DT, 0.5)
+# 縦方向 3段階交互最適化の Phase 1 (時定数の初期最適化) はスキップし、この固定値を
+# tau として与えて Phase 2 (遅延グリッドサーチ) 以降に渡す（per-dataset・横断同定の両方に適用）。
+_LONG_PHASE1_FIXED_TAU = 0.3
 
 # 操舵 (SSOT は本モジュール。由来は旧 identify_steer_dynamics.py の同定手順、git 履歴参照)
 _DSTEER_MIN = 0.001
@@ -265,6 +268,7 @@ def fit_long_single(bag_path: Path) -> dict | None:
         a_cmd_arr, a_act_corr, mask_dyn, _FIT_DT,
         tau_bounds=_TAU_BOUNDS_LONG, delay_candidates=_DELAY_CANDIDATES_LONG,
         filter_w=10, x0_dict={"tau": tau_baseline, "delay": delay_baseline},
+        fixed_phase1_tau=_LONG_PHASE1_FIXED_TAU,
     )
     if fit is None:
         return None
@@ -803,8 +807,16 @@ def _merge_contiguous_timeseries_rows(rows: list[dict]) -> list[dict]:
     return merged_rows
 
 
-def _pick_longest_contiguous_timeseries_row(rows: list[dict]) -> list[dict]:
-    """連続結合後の最長時系列だけを返す。"""
+def _pick_longest_contiguous_timeseries_row(
+    rows: list[dict], pinned_uuids: list[str] | None = None,
+) -> list[dict]:
+    """連続結合後の最長時系列に加え、`pinned_uuids`（前方一致）に該当する連続系列も返す。
+
+    最長系列は自動選択のため、確認したい特定データセットが最長でない限り時系列グラフに
+    現れない。`pinned_uuids` に指定したデータセット UUID（前方一致）を含む連続系列があれば、
+    最長系列とは別に必ず追加表示する（重複・欠落は呼び出し側で判定できるよう、含まれた
+    dataset_id は `dataset_ids` のまま返す）。
+    """
     merged = _merge_contiguous_timeseries_rows(rows)
     if not merged:
         return []
@@ -812,6 +824,9 @@ def _pick_longest_contiguous_timeseries_row(rows: list[dict]) -> list[dict]:
     def _duration(row: dict) -> float:
         t = row.get("t") or []
         return float(t[-1] - t[0]) if len(t) >= 2 else 0.0
+
+    def _ids_of(row: dict) -> list[str]:
+        return [str(x) for x in row.get("dataset_ids", [row.get("dataset_id", "")])]
 
     best = max(
         merged,
@@ -822,14 +837,38 @@ def _pick_longest_contiguous_timeseries_row(rows: list[dict]) -> list[dict]:
         ),
     )
     row = dict(best)
-    dataset_ids = [str(x) for x in row.get("dataset_ids", [row.get("dataset_id", "")])]
+    dataset_ids = _ids_of(row)
     duration_s = _duration(row)
     row["case_tag"] = "最長連続"
     row["label"] = (
         f"[最長連続] {dataset_ids[0][:8]} → {dataset_ids[-1][:8]}"
         f"（{len(dataset_ids)}件連続、{duration_s:.1f}s）"
     )
-    return [row]
+    result = [row]
+
+    included_ids: set[str] = set(dataset_ids)
+    for prefix in pinned_uuids or []:
+        if any(ds_id.startswith(prefix) for ds_id in included_ids):
+            continue  # 既に best 系列に含まれている
+        match = next(
+            (g for g in merged if any(str(d).startswith(prefix) for d in _ids_of(g))),
+            None,
+        )
+        if match is None:
+            continue
+        match_ids = _ids_of(match)
+        if included_ids & set(match_ids):
+            continue  # 別の pinned prefix で既に追加済みのグループ
+        pinned_row = dict(match)
+        pinned_duration_s = _duration(pinned_row)
+        pinned_row["case_tag"] = "指定データセット"
+        pinned_row["label"] = (
+            f"[指定] {match_ids[0][:8]} → {match_ids[-1][:8]}"
+            f"（{len(match_ids)}件連続、{pinned_duration_s:.1f}s）"
+        )
+        result.append(pinned_row)
+        included_ids.update(match_ids)
+    return result
 
 
 def fit_long_cross_dataset_bounded(
@@ -921,21 +960,24 @@ def fit_long_cross_dataset_bounded(
     delay_baseline = sim_params.get("acc_time_delay", 0.101)
     n_steps_init = int(round(delay_baseline / _FIT_DT))
 
-    # Phase 1: d = n_steps_init 固定で最適化
-    res1 = least_squares(lambda x: _residuals(x, n_steps_init), [1.0 / tau_baseline], bounds=bounds)
+    # Phase 1: 時定数の初期最適化はスキップし、_LONG_PHASE1_FIXED_TAU を tau として固定した
+    # 上で Phase 2 (遅延グリッドサーチ) に渡す（fit_long_single と同じ方針、per-dataset・
+    # 横断同定の両方に適用）。
+    phase1_tau = _LONG_PHASE1_FIXED_TAU
+    res1_x = [1.0 / phase1_tau]
 
     # Phase 2: 得られたパラメータ固定で delay をグリッドサーチ
     best_cost = None
     best_n = 0
     for delay_s in _DELAY_CANDIDATES_LONG:
         n_delay = int(round(delay_s / _FIT_DT))
-        cost = float(np.sum(_residuals(res1.x, n_delay) ** 2))
+        cost = float(np.sum(_residuals(res1_x, n_delay) ** 2))
         if best_cost is None or cost < best_cost:
             best_cost = cost
             best_n = n_delay
 
     # Phase 3: 最良 delay 固定でパラメータを再最適化
-    res3 = least_squares(lambda x: _residuals(x, best_n), res1.x, bounds=bounds)
+    res3 = least_squares(lambda x: _residuals(x, best_n), res1_x, bounds=bounds)
 
     best_tau = 1.0 / float(res3.x[0])
     best_delay = float(best_n * _FIT_DT)
@@ -955,7 +997,7 @@ def fit_long_cross_dataset_bounded(
         "tau": best_tau, "delay": best_delay, "rmse_mps2": best_rmse,
         "pitch_min": pitch_min, "pitch_max": pitch_max, "n_datasets": len(pooled),
         "tau_pointwise_all": tau_pointwise_all,
-        "phase1_tau": 1.0 / float(res1.x[0]),
+        "phase1_tau": phase1_tau,
         "phase1_delay": float(n_steps_init * _FIT_DT),
         "phase2_delay": float(best_n * _FIT_DT),
         "phase3_tau": best_tau,
@@ -965,6 +1007,7 @@ def fit_long_cross_dataset_bounded(
 
 def compute_cross_long_rows(
     entries: list, per_ds_long: dict[str, dict], cross_fit: dict, models: dict | None,
+    pinned_uuids: list[str] | None = None,
 ) -> list[dict]:
     """最長連続データセットの縦方向時系列 (横断フィット + モデル別チューン値重ね描き用)。"""
     candidates = _valid_fit_entries(entries, per_ds_long, "rmse_mps2")
@@ -1062,11 +1105,12 @@ def compute_cross_long_rows(
             "dot_a_sim_models": dot_a_sim_models,
             "tau_pointwise": tau_pointwise.tolist() if tau_pointwise is not None else None,
         })
-    return _pick_longest_contiguous_timeseries_row(rows)
+    return _pick_longest_contiguous_timeseries_row(rows, pinned_uuids)
 
 
 def compute_cross_steer_rows(
     entries: list, per_ds_steer: dict[str, dict], models: dict | None,
+    pinned_uuids: list[str] | None = None,
 ) -> list[dict]:
     """最長連続データセットの操舵時系列 (per-dataset フィット + モデル別チューン値重ね描き用)。"""
     candidates = _valid_fit_entries(entries, per_ds_steer, "rmse_mrad")
@@ -1143,7 +1187,7 @@ def compute_cross_steer_rows(
             "d_sim_models_raw": d_sim_models_raw,
             "dot_d_sim_models": dot_d_sim_models,
         })
-    return _pick_longest_contiguous_timeseries_row(rows)
+    return _pick_longest_contiguous_timeseries_row(rows, pinned_uuids)
 
 
 # 理想追従評価用定数 (本モジュールが SSOT。physical_validity_report.py はここから import する)

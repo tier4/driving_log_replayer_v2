@@ -160,8 +160,8 @@ def _load_lib() -> ctypes.CDLL:
     lib.vm_create_delay_steer_acc_geared_wo_fall_guard.argtypes = [c_double] * 15
 
     lib.vm_create_delay_steer_acc_geared_for_diffusion_planner.restype = c_void_p
-    # 15 base args + brake tau + longitudinal drag polynomial coefficients.
-    lib.vm_create_delay_steer_acc_geared_for_diffusion_planner.argtypes = [c_double] * 19
+    # 15 base args (vx_lim..k_us)。wo_fall_guard と同じ引数構成 (full-RHS delay のみが差分)。
+    lib.vm_create_delay_steer_acc_geared_for_diffusion_planner.argtypes = [c_double] * 15
 
     # taiga_dyn: 14 共通引数 (wo_fall_guard の k_us を除く) + 7 物理パラメータ
     # (mass, inertia_z, lf, lr, cornering_stiffness_front, cornering_stiffness_rear, vx_min_dyn)
@@ -337,10 +337,6 @@ class VehicleModel:
                 p.get("debug_acc_scaling_factor", 1.0),
                 p.get("debug_steer_scaling_factor", 1.0),
                 p.get("k_us", 0.0),
-                p.get("brake_time_constant", 0.0),
-                p.get("lon_drag_c0", 0.0),
-                p.get("lon_drag_c1", 0.0),
-                p.get("lon_drag_c2", 0.0),
             )
             self._steer_bias = p["steer_bias"]
         elif model_type == "taiga_dyn":

@@ -289,6 +289,7 @@ def fit_first_order_delay_residual_3phase(
     scale_bounds: tuple[float, float] = (0.8, 1.2),
     filter_w: int = 1,
     x0_dict: dict | None = None,
+    fixed_phase1_tau: float | None = None,
 ) -> dict | None:
     """3段階交互最適化による一次遅れ＋純粋遅延の方程式残差最小二乗フィッティング。
 
@@ -298,7 +299,8 @@ def fit_first_order_delay_residual_3phase(
 
     逆数変数 tau_inv = 1 / tau を用いることで勾配爆発を防ぐ。
 
-    Phase 1: d=0 固定で least_squares 最適化
+    Phase 1: d=0 固定で least_squares 最適化（`fixed_phase1_tau` 指定時はこの最適化自体を
+             スキップし、その値を tau として固定した上で Phase 2 に渡す）
     Phase 2: Phase 1 パラメータ固定で delay_candidates グリッドサーチ (MSE最小)
     Phase 3: 最良 delay 固定で least_squares 再最適化
     """
@@ -368,23 +370,29 @@ def fit_first_order_delay_residual_3phase(
         E = tau_inv * (s * c_del - a_del) - dot_act_f
         return E[mask]
 
-    # Phase 1: d = delay_init 固定で最適化
-    res1 = least_squares(lambda x: _residuals(x, n_steps_init), x0, bounds=bounds)
-    phase1_tau = 1.0 / float(res1.x[0])
+    # Phase 1: d = delay_init 固定で最適化（fixed_phase1_tau 指定時は最適化をスキップし、
+    # その値を tau として固定した x をそのまま Phase 2 に渡す）
+    if fixed_phase1_tau is not None:
+        phase1_tau = float(fixed_phase1_tau)
+        res1_x = [1.0 / phase1_tau, scale_init] if fit_scale else [1.0 / phase1_tau]
+    else:
+        res1 = least_squares(lambda x: _residuals(x, n_steps_init), x0, bounds=bounds)
+        phase1_tau = 1.0 / float(res1.x[0])
+        res1_x = res1.x
 
     # Phase 2: 得られたパラメータ固定で delay をグリッドサーチ
     best_cost = None
     best_n = 0
     for delay_s in delay_candidates:
         n_steps = int(round(float(delay_s) / dt))
-        cost = float(np.sum(_residuals(res1.x, n_steps) ** 2))
+        cost = float(np.sum(_residuals(res1_x, n_steps) ** 2))
         if best_cost is None or cost < best_cost:
             best_cost = cost
             best_n = n_steps
     phase2_delay = float(best_n * dt)
 
     # Phase 3: 最良 delay 固定でパラメータを再最適化
-    res3 = least_squares(lambda x: _residuals(x, best_n), res1.x, bounds=bounds)
+    res3 = least_squares(lambda x: _residuals(x, best_n), res1_x, bounds=bounds)
 
     # 最終結果のパース
     tau_inv_fit = float(res3.x[0])

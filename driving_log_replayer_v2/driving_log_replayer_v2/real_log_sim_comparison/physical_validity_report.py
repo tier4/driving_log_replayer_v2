@@ -76,6 +76,9 @@ from driving_log_replayer_v2.real_log_sim_comparison.lib._fit_core import (  # n
     savgol_smooth,
 )
 from driving_log_replayer_v2.real_log_sim_comparison.lib._figures._common import apply_base_layout  # noqa: E402
+from driving_log_replayer_v2.real_log_sim_comparison.lib._fig_io import fig_to_compact_json  # noqa: E402
+from driving_log_replayer_v2.real_log_sim_comparison.lib._inline_assets import gzip_b64  # noqa: E402
+from driving_log_replayer_v2.real_log_sim_comparison.step_report_html import _RENDER_GLUE  # noqa: E402
 
 from driving_log_replayer_v2.real_log_sim_comparison.lib._physical_validity import (  # noqa: E402
     DWZ_MAX,
@@ -394,7 +397,46 @@ details > summary {
 details > summary::before { content: "▶"; font-size: 10px; color: #888; transition: transform 0.15s; }
 details[open] > summary::before { transform: rotate(90deg); }
 details > summary::-webkit-details-marker { display: none; }
+figure { margin: 0; }
+figure .plotly-fig { width: 100%; min-height: 120px; border: 1px solid #ddd;
+                     border-radius: 4px; background: #fff; }
+.plotly-fig.pending::before {
+  content: "図を描画中…"; display: block; padding: 32px;
+  color: #888; font-size: 13px; text-align: center; }
+.fig-error { padding: 32px; color: #b91c1c; font-size: 13px; text-align: center; }
+figcaption { margin-bottom: 6px; font-weight: 600; }
+figcaption .fname { font-weight: 400; color: #888; font-size: 12px; margin-left: 8px; }
 """
+
+
+def _lazy_fig_html(fig: go.Figure, fig_id: str, fname: str, caption: str | None = None) -> str:
+    """`go.Figure` を gzip+base64 遅延描画の `<figure>` HTML に変換する。
+
+    step_report_html.py が cases/*.fig.json を埋め込む方式（`plotly-fig pending` +
+    `<script class='figspec'>` + `_RENDER_GLUE` による IntersectionObserver 遅延描画）と
+    表示スタイル・埋め込み方式を統一するためのヘルパー。plot 内 `layout.title` は
+    figcaption 見出しへ移し、レイアウトからは除去する（重なって隠れるため）。
+    """
+    text = fig_to_compact_json(fig)
+    spec_obj = json.loads(text)
+    layout = spec_obj.get("layout") or {}
+    height = int(layout.get("height") or 400)
+    title_text = None
+    t = layout.get("title")
+    if isinstance(t, dict):
+        title_text = t.get("text")
+    if "title" in layout:
+        layout.pop("title", None)
+        text = json.dumps(spec_obj, separators=(",", ":"), ensure_ascii=False)
+    heading = caption if caption is not None else (title_text or fname)
+    return (
+        f"<figure><figcaption>{heading}"
+        f"<span class='fname'>{_html_stdlib.escape(fname)}</span></figcaption>"
+        f"<div class='plotly-fig pending' id='{fig_id}' style='height:{height}px'></div>"
+        f"<script type='application/gzip+json+base64' class='figspec' "
+        f"data-target='{fig_id}'>{gzip_b64(text)}</script>"
+        f"</figure>"
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -743,8 +785,7 @@ def _build_fit_rmse_table_html(
             phase_rows = (
                 '<tr><td colspan="4" style="background:#f0f0f0">'
                 f'<b>フェーズ別内訳</b>（実測加速度: 加速 &gt; +{_DRIFT_A_TH:g}, '
-                f'減速 &lt; -{_DRIFT_A_TH:g} m/s²、それ以外は巡航中。'
-                'lib._physical_validity._long_drift_profile と同じ閾値規約）</td></tr>\n'
+                f'減速 &lt; -{_DRIFT_A_TH:g} m/s²、それ以外は巡航中</td></tr>\n'
                 + "\n".join(row_blocks)
             )
 
@@ -817,8 +858,12 @@ def _build_sec1(
     db    = _fmt(params.get("steer_dead_band", "N/A"))
     rlim  = _fmt(params.get("steer_rate_lim", "N/A"))
 
-    _long_html_inner  = long_fig.to_html(full_html=False, include_plotlyjs=False)
-    _steer_html_inner = steer_fig.to_html(full_html=False, include_plotlyjs=False)
+    _long_html_inner = _lazy_fig_html(
+        long_fig, "fig-sec-long-timeseries", "sec1-2/long_fit（dataset横断）",
+    )
+    _steer_html_inner = _lazy_fig_html(
+        steer_fig, "fig-sec-steer-timeseries", "sec1-3/steer_fit（dataset横断）",
+    )
     long_html  = f"<details><summary>時系列グラフを表示（クリックで展開）</summary>{_long_html_inner}</details>"
     steer_html = f"<details><summary>時系列グラフを表示（クリックで展開）</summary>{_steer_html_inner}</details>"
     kus_html   = kus_fig.to_html(full_html=False, include_plotlyjs=False)
@@ -1117,9 +1162,9 @@ J_a
 <div class="note">
   <b>3段階交互最適化 (3-Phase Alternating Optimization) のアルゴリズム:</b>
   <ol>
-    <li><b>Phase 1 (初期値固定時定数最適化):</b> 無駄時間 \(T_a\) を初期パラメータの基準値（Acc: 0.101s）に固定した状態で、逆数変数 \(\tau_a^{-1} = 1/\tau_a\) に対して最小二乗法で最適化を行い、初期探索パラメータを決定します。逆数変数を用いることで勾配爆発を防ぎます。</li>
-    <li><b>Phase 2 (遅延グリッドサーチ):</b> Phase 1 で得られたパラメータを固定したまま、事前に定義された遅延候補（グリッド）の中から方程式残差の二乗和 (MSE) を最小化する無駄時間 \(T_a\) を探索します。</li>
-    <li><b>Phase 3 (パラメータ再最適化):</b> Phase 2 で決定された最良の無駄時間 \(T_a\) に固定した上で、再び時定数 \(\tau_a\) などのパラメータを最小二乗法で再最適化し、最終的な同定値を得ます。</li>
+    <li><b>Phase 1 (時定数固定):</b> \(\tau_a\) を固定値 0.3 s として与えます（最小二乗法による最適化はスキップ）。</li>
+    <li><b>Phase 2 (遅延グリッドサーチ):</b> Phase 1 の固定 \(\tau_a\) を用いたまま、事前に定義された遅延候補（グリッド）の中から方程式残差の二乗和 (MSE) を最小化する無駄時間 \(T_a\) を探索します。</li>
+    <li><b>Phase 3 (パラメータ再最適化):</b> Phase 2 で決定された最良の無駄時間 \(T_a\) に固定した上で、時定数 \(\tau_a\) を最小二乗法で最適化し、最終的な同定値を得ます。</li>
   </ol>
 </div>
 <p class="meta">
@@ -1776,6 +1821,7 @@ def build_html(
 {perf_html}
 {sec3}
 {closed_loop_html}
+{_RENDER_GLUE}
 </body>
 </html>
 """
@@ -1834,6 +1880,12 @@ def main() -> None:
     ap.add_argument(
         "--pinned-uuids", type=str, default="",
         help="ビューアに必ず含める データセット UUID をカンマ区切りで指定（前方一致）。--viewer-uuids や自動選択より優先して先頭に配置",
+    )
+    ap.add_argument(
+        "--long-steer-pinned-uuids", type=str,
+        default="049b35fe-6310-59b0-a778-d47ab6163beb",
+        help="1-2/1-3の時系列グラフ（縦方向/操舵）に必ず含めるデータセットUUIDをカンマ区切りで"
+             "指定（前方一致）。自動選択される最長連続系列に追加して表示する",
     )
     ap.add_argument(
         "--metrics-cache", type=Path, default=None,
@@ -2217,10 +2269,18 @@ def main() -> None:
         )
     else:
         print("  縦方向 横断同定: 失敗（有効データセットなし）")
-    rows_long = compute_cross_long_rows(entries, per_ds_long, cross_fit_long, models_long)
+
+    long_steer_pinned_uuids = [
+        u.strip() for u in args.long_steer_pinned_uuids.split(",") if u.strip()
+    ]
+    rows_long = compute_cross_long_rows(
+        entries, per_ds_long, cross_fit_long, models_long, pinned_uuids=long_steer_pinned_uuids,
+    )
     long_fig = build_fig_cross_long(rows_long, cross_fit_long)
 
-    rows_steer = compute_cross_steer_rows(entries, per_ds_steer, models_steer)
+    rows_steer = compute_cross_steer_rows(
+        entries, per_ds_steer, models_steer, pinned_uuids=long_steer_pinned_uuids,
+    )
     # 旧実装の表示要素を維持: 各 subplot タイトルに per-dataset 同定値 τ/T を付記
     for r in rows_steer:
         for ds_id, fit in per_ds_steer.items():
@@ -2228,6 +2288,16 @@ def main() -> None:
                 r["label"] += f"  τ={fit['tau']:.3f}s T={fit['delay']:.3f}s"
                 break
     steer_fig = build_fig_cross_steer(rows_steer)
+
+    for prefix in long_steer_pinned_uuids:
+        for name, rows in (("縦方向 (1-2)", rows_long), ("操舵 (1-3)", rows_steer)):
+            hit = any(
+                str(d).startswith(prefix)
+                for r in rows
+                for d in r.get("dataset_ids", [r.get("dataset_id", "")])
+            )
+            if not hit:
+                print(f"  ⚠ 指定データセット '{prefix}' が {name} の時系列グラフに反映されませんでした（同定失敗 or データなし）")
 
     # 方程式残差の評価結果: 各データセットの3段階交互最適化で同定されたパラメータでの残差 E[k]=RHS−LHS を
     # 全データセットでプールし分布を示す。
@@ -2372,7 +2442,6 @@ def main() -> None:
         long_process_log = ""
         if "phase1_tau" in cross_fit_long:
             p1_t = cross_fit_long["phase1_tau"]
-            p1_d = cross_fit_long["phase1_delay"]
             p2_d = cross_fit_long["phase2_delay"]
             p3_t = cross_fit_long["phase3_tau"]
             p3_d = cross_fit_long["phase3_delay"]
@@ -2380,9 +2449,9 @@ def main() -> None:
             <div class="note" style="margin-top: 10px; margin-bottom: 15px; border-left: 4px solid #4caf50; background-color: #f9f9f9; padding: 10px;">
               <b>【実行ログ】縦方向・横断同定における3段階最適化 (3-Phase) の遷移挙動:</b>
               <ul style="margin: 5px 0 0 0; padding-left: 20px;">
-                <li><b>Phase 1 (初期値固定時定数最適化):</b> 初期基準遅延 \\(T_a = {p1_d:.3f}\\) s 固定で時定数を同定 &rarr; \\(\\tau_a = {p1_t:.4f}\\) s</li>
-                <li><b>Phase 2 (遅延グリッドサーチ):</b> 時定数を \\({p1_t:.4f}\\) s に固定し、残差二乗和を最小化する遅延を決定 &rarr; \\(T_a = {p2_d:.3f}\\) s （下表で最小RMSEとなる行）</li>
-                <li><b>Phase 3 (最終パラメータ再最適化):</b> 決定遅延 \\(T_a = {p3_d:.3f}\\) s 固定で時定数を精密再同定 &rarr; \\(\\tau_a = {p3_t:.4f}\\) s, \\(T_a = {p3_d:.3f}\\) s</li>
+                <li><b>Phase 1 (時定数固定):</b> \\(\\tau_a\\) を固定値 \\({p1_t:.4f}\\) s として設定（最適化はスキップ）</li>
+                <li><b>Phase 2 (遅延グリッドサーチ):</b> 固定した \\(\\tau_a = {p1_t:.4f}\\) s のまま、残差二乗和を最小化する遅延を決定 &rarr; \\(T_a = {p2_d:.3f}\\) s （下表で最小RMSEとなる行）</li>
+                <li><b>Phase 3 (最終パラメータ再最適化):</b> 決定遅延 \\(T_a = {p3_d:.3f}\\) s 固定で時定数を再最適化 &rarr; \\(\\tau_a = {p3_t:.4f}\\) s, \\(T_a = {p3_d:.3f}\\) s</li>
               </ul>
             </div>
             """
