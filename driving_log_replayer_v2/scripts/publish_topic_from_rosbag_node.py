@@ -15,17 +15,24 @@
 # limitations under the License.
 
 import rclpy
-from rclpy.duration import Duration
-from rclpy.executors import MultiThreadedExecutor
 from rclpy.node import Node
+from rclpy.qos import DurabilityPolicy
+from rclpy.qos import HistoryPolicy
+from rclpy.qos import QoSProfile
+from rclpy.qos import ReliabilityPolicy
+from rosgraph_msgs.msg import Clock
 
 from driving_log_replayer_v2.rosbag import RosbagReader
 
+RELIABLE_QOS = QoSProfile(
+    reliability=ReliabilityPolicy.RELIABLE,
+    history=HistoryPolicy.KEEP_LAST,
+    depth=10,
+    durability=DurabilityPolicy.VOLATILE,
+)
+
 
 class PublishTopicFromRosbagNode(Node):
-    SLEEP_DURATION_BETWEEN_PUBLISH = Duration(seconds=0.1)
-    TIMER_PERIOD = 0.1
-
     def __init__(self) -> None:
         super().__init__("publish_topic_from_rosbag_node")
 
@@ -37,44 +44,53 @@ class PublishTopicFromRosbagNode(Node):
             self.get_parameter("publish_topic_from_rosbag").get_parameter_value().string_value
         )
 
-        # load the topic to publish
         topic_list = topics_with_comma.split(",") if topics_with_comma != "" else []
+        topic_list = [topic.strip() for topic in topic_list if topic.strip()]
         if len(topic_list) == 0:
-            rclpy.shutdown()
+            raise RuntimeError("publish_topic_from_rosbag must specify at least one topic.")
 
-        # load the rosbag
         self._rosbag_reader = RosbagReader(bag_dir, topic_list)
         topic_name2type = self._rosbag_reader.get_topic_name2type()
 
-        # create the publisher
         self._publisher_map: dict[str, rclpy.publisher.Publisher] = {}
         for topic in topic_list:
             topic_type = topic_name2type.get(topic)
-            if topic_type is not None:
-                self._publisher_map[topic] = self.create_publisher(topic_type, topic, 10)
-            else:
+            if topic_type is None:
                 self.get_logger().error(f"Topic {topic} not found in the rosbag.")
+                continue
+            self._publisher_map[topic] = self.create_publisher(topic_type, topic, RELIABLE_QOS)
 
-        # create timer
-        self.create_timer(self.TIMER_PERIOD, self.publish)
+        self._pending_messages = self._rosbag_reader.read_all_messages()
+        self._next_message_index = 0
+        self.get_logger().info(
+            f"Loaded {len(self._pending_messages)} messages for {len(self._publisher_map)} topics."
+        )
 
-    def publish(self) -> None:
-        for topic_name, msg, _ in self._rosbag_reader.read_first_messages():
-            self._publisher_map[topic_name].publish(msg)
-            self._clock.sleep_for(
-                self.SLEEP_DURATION_BETWEEN_PUBLISH
-            )  # sleep to wait for Autoware to process the message
-        rclpy.shutdown()
+        self.create_subscription(Clock, "/clock", self._on_clock, 10)
+
+    def _on_clock(self, msg: Clock) -> None:
+        now_ns = msg.clock.sec * 1_000_000_000 + msg.clock.nanosec
+        while self._next_message_index < len(self._pending_messages):
+            topic_name, ros_msg, ros_timestamp = self._pending_messages[self._next_message_index]
+            if ros_timestamp > now_ns:
+                break
+            publisher = self._publisher_map.get(topic_name)
+            if publisher is not None:
+                publisher.publish(ros_msg)
+            self._next_message_index += 1
 
 
 def main() -> None:
     rclpy.init()
-    executor = MultiThreadedExecutor()
-    publish_topic_from_rosbag_node = PublishTopicFromRosbagNode()
-    executor.add_node(publish_topic_from_rosbag_node)
-    executor.spin()
-    publish_topic_from_rosbag_node.destroy_node()
-    rclpy.shutdown()
+    node = PublishTopicFromRosbagNode()
+    try:
+        rclpy.spin(node)
+    except KeyboardInterrupt:
+        pass
+    finally:
+        node.destroy_node()
+        if rclpy.ok():
+            rclpy.shutdown()
 
 
 if __name__ == "__main__":

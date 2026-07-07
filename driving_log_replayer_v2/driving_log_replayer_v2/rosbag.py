@@ -59,6 +59,20 @@ class RosbagReader:
                 break
         return result
 
+    def read_all_messages(self) -> list[tuple[str, Any, int]]:
+        """Return all messages for topics in topic_list, sorted by bag timestamp."""
+        topics = list(self._topic_name2type.keys())
+        self._reader.set_filter(StorageFilter(topics=topics))
+        result: list[tuple[str, Any, int]] = []
+        while self._reader.has_next():
+            topic_name, msg_bytes, ros_timestamp = self._reader.read_next()
+            if topic_name not in self._topic_name2type:
+                continue
+            msg = deserialize_message(msg_bytes, self._topic_name2type[topic_name])
+            result.append((topic_name, msg, ros_timestamp))
+        result.sort(key=lambda item: item[2])
+        return result
+
     def read_last_messages(self) -> list[tuple[str, Any, int]]:
         """Return the last message per topic in topic_list."""
         self._reader.set_filter(StorageFilter(topics=list(self._topic_list)))

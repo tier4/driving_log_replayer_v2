@@ -33,3 +33,58 @@
   history: keep_last
   depth: 1
   durability: transient_local
+/sensing/camera/camera0/camera_info:
+  reliability: reliable
+  history: keep_last
+  depth: 10
+  durability: volatile
+/sensing/camera/camera1/camera_info:
+  reliability: reliable
+  history: keep_last
+  depth: 10
+  durability: volatile
+/sensing/camera/camera2/camera_info:
+  reliability: reliable
+  history: keep_last
+  depth: 10
+  durability: volatile
+/sensing/camera/camera3/camera_info:
+  reliability: reliable
+  history: keep_last
+  depth: 10
+  durability: volatile
+/sensing/camera/camera4/camera_info:
+  reliability: reliable
+  history: keep_last
+  depth: 10
+  durability: volatile
+/sensing/camera/camera5/camera_info:
+  reliability: reliable
+  history: keep_last
+  depth: 10
+  durability: volatile
+/sensing/camera/camera6/camera_info:
+  reliability: reliable
+  history: keep_last
+  depth: 10
+  durability: volatile
+/sensing/camera/camera7/camera_info:
+  reliability: reliable
+  history: keep_last
+  depth: 10
+  durability: volatile
+/sensing/camera/camera8/camera_info:
+  reliability: reliable
+  history: keep_last
+  depth: 10
+  durability: volatile
+/sensing/camera/camera9/camera_info:
+  reliability: reliable
+  history: keep_last
+  depth: 10
+  durability: volatile
+/sensing/camera/camera10/camera_info:
+  reliability: reliable
+  history: keep_last
+  depth: 10
+  durability: volatile

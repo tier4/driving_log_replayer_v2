@@ -22,7 +22,6 @@ from launch import LaunchContext
 from launch.actions import ExecuteProcess
 from launch.actions import IncludeLaunchDescription
 from launch.actions import LogInfo
-from launch.actions import TimerAction
 from launch_ros.actions import Node
 import yaml
 
@@ -84,10 +83,20 @@ def system_defined_remap(conf: dict) -> list[str]:
     return remap_list
 
 
+def get_relay_topics_from_rosbag(conf: dict) -> list[str]:
+    topics_with_comma = conf.get("publish_topic_from_rosbag", "")
+    if topics_with_comma == "":
+        return []
+    return [topic.strip() for topic in topics_with_comma.split(",") if topic.strip()]
+
+
 def user_defined_publish(conf: dict) -> list[str]:
     publish_list = []
     if conf["publish_profile"] != "":
         publish_list.extend(extract_topics_from_profile(conf["publish_profile"], "publish"))
+    relay_topics = set(get_relay_topics_from_rosbag(conf))
+    if relay_topics:
+        publish_list = [topic for topic in publish_list if topic not in relay_topics]
     return publish_list
 
 
@@ -111,31 +120,21 @@ def user_defined_remap(conf: dict) -> list[str]:
     return remap_list
 
 
-def get_pre_task_before_play_rosbag(
-    context: LaunchContext, on_exit: ExecuteProcess
-) -> Node | ExecuteProcess:
-    conf = context.launch_configurations
-    if conf["publish_topic_from_rosbag"] != "":
-        return Node(
-            package="driving_log_replayer_v2",
-            namespace="/driving_log_replayer_v2",
-            executable="publish_topic_from_rosbag_node.py",
-            output="screen",
-            name="publish_topic_from_rosbag_node",
-            parameters=[
-                {
-                    "use_sim_time": False,  # In order to trigger the timer without play rosbag
-                    "input_bag": conf["input_bag"],
-                    "publish_topic_from_rosbag": conf["publish_topic_from_rosbag"],
-                }
-            ],
-            on_exit=[on_exit],
-        )
-    return TimerAction(  # dummy timer for logging
-        period=0.0,
-        actions=[
-            LogInfo(msg="pre-task before play rosbag is not activated"),
-            on_exit,
+def get_publish_topic_from_rosbag_node(conf: dict) -> Node | None:
+    if conf["publish_topic_from_rosbag"] == "":
+        return None
+    return Node(
+        package="driving_log_replayer_v2",
+        namespace="/driving_log_replayer_v2",
+        executable="publish_topic_from_rosbag_node.py",
+        output="screen",
+        name="publish_topic_from_rosbag_node",
+        parameters=[
+            {
+                "use_sim_time": True,
+                "input_bag": conf["input_bag"],
+                "publish_topic_from_rosbag": conf["publish_topic_from_rosbag"],
+            }
         ],
     )
 
@@ -192,16 +191,29 @@ def launch_bag_player(
         if conf["record_only"] == "true"
         else ExecuteProcess(cmd=play_cmd, output="screen")
     )
-    delay_player_for_pre_task = ExecuteProcess(
-        cmd=["sleep", conf["play_delay"]], on_exit=[bag_player]
+    on_exit_actions: list = [bag_player]
+    relay_node = get_publish_topic_from_rosbag_node(conf)
+    if relay_node is not None:
+        on_exit_actions.append(relay_node)
+    delay_player_for_bag = ExecuteProcess(
+        cmd=["sleep", conf["play_delay"]], on_exit=on_exit_actions
     )
-    pre_task_player = get_pre_task_before_play_rosbag(context, on_exit=delay_player_for_pre_task)
     delay_player_for_autoware = ExecuteProcess(
-        cmd=["sleep", conf["play_delay"]], on_exit=[pre_task_player]
+        cmd=["sleep", conf["play_delay"]], on_exit=[delay_player_for_bag]
+    )
+    relay_topics = get_relay_topics_from_rosbag(conf)
+    relay_log = (
+        f"relay_topics_from_rosbag is {relay_topics}"
+        if relay_topics
+        else "relay_topics_from_rosbag is not activated"
     )
     return [
         delay_player_for_autoware,
-        LogInfo(msg=f"remap_command is {remap_list}, topics_command is {publish_list}"),
+        LogInfo(
+            msg=(
+                f"remap_command is {remap_list}, topics_command is {publish_list}, {relay_log}"
+            )
+        ),
     ]
 
 
