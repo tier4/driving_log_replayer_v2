@@ -128,8 +128,38 @@ def _build_launch_cmd(
     # scenario_test_runner.launch.py が simple_sensor_simulator. 接頭辞の launch 引数を
     # 収集し、simulator_model.param.yaml の後ろに連結する (後勝ち) ため、
     # description パッケージを増やさずに dynamics 変種 (例 k_us) を作れる。
+    is_diffusion_planner = (run.vehicle_model_type == "delay_steer_acc_geared_for_diffusion_planner")
+    version = 1
+    if is_diffusion_planner:
+        version_key = "delay_steer_acc_geared_for_diffusion_planner.version"
+        if version_key in run.params:
+            try:
+                version = int(run.params[version_key])
+            except (ValueError, TypeError):
+                pass
+
+    namespaced_keys = {
+        "acc_time_delay",
+        "acc_time_constant",
+        "steer_time_delay",
+        "steer_time_constant",
+        "steer_dead_band",
+        "steer_bias",
+        "debug_acc_scaling_factor",
+        "debug_steer_scaling_factor",
+        "k_us",
+    }
+
     for key, value in run.params.items():
-        cmd.append(f"simple_sensor_simulator.{key}:={value}")
+        if is_diffusion_planner and key in namespaced_keys:
+            ns_key = f"delay_steer_acc_geared_for_diffusion_planner.v{version}.{key}"
+            cmd.append(f"simple_sensor_simulator.{ns_key}:={value}")
+        else:
+            cmd.append(f"simple_sensor_simulator.{key}:={value}")
+
+    if is_diffusion_planner and "delay_steer_acc_geared_for_diffusion_planner.version" not in run.params:
+        cmd.append(f"simple_sensor_simulator.delay_steer_acc_geared_for_diffusion_planner.version:={version}")
+
     return cmd
 
 

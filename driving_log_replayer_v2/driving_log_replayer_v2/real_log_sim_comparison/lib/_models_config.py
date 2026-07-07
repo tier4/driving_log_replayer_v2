@@ -70,6 +70,7 @@ KNOWN_PARAM_KEYS: frozenset[str] = frozenset({
     "arx_ax_coeffs", "arx_wz_coeffs",
     # sim params (vehicle_model_type は sim で注入されるため params には書かない)
     "vehicle_model_type",
+    "delay_steer_acc_geared_for_diffusion_planner.version",
 })
 
 _KNOWN_MODEL_KEYS: frozenset[str] = frozenset({

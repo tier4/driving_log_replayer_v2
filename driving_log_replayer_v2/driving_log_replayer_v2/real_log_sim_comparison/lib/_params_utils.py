@@ -8,10 +8,13 @@ from pathlib import Path
 def _find_desc_dir() -> Path:
     """j6_gen2_description/config のパスを解決する（ROS 非依存環境では寛容にフォールバック）。
 
-    ament_index_python (ROS) が無い環境（素の Python から単体実行する等）でも
-    本モジュールを import できるよう、解決不能時は存在しないパスを返し、load_sim_params の
-    既定値フォールバックに委ねる。pipeline (ROS 有) では従来どおり実パスを返す。
+    まず本ライブラリの `real_log_sim_comparison/config` 配下のローカルコピーを確認し、
+    存在すれば優先的に使用することでベースラインの意図しない更新を防ぐ。
     """
+    local_dir = Path(__file__).parent.parent / "config"
+    if (local_dir / "simulator_model.param.yaml").exists():
+        return local_dir
+
     try:
         from ament_index_python.packages import get_package_share_directory  # noqa: PLC0415
 

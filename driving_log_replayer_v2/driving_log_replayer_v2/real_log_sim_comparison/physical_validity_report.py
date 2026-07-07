@@ -136,6 +136,11 @@ def _resolve_report_models(
     baseline = doc.models[reference]
     if current.vehicle_model_type is None or baseline.vehicle_model_type is None:
         raise ValueError("current/baseline model の vehicle_model_type は必須です")
+    if baseline.vehicle_model_type != "delay_steer_acc_geared_wo_fall_guard":
+        raise ValueError(
+            f"baseline model の vehicle_model_type は 'delay_steer_acc_geared_wo_fall_guard' である必要があります。"
+            f"現在の値: {baseline.vehicle_model_type}"
+        )
     return (
         current.vehicle_model_type,
         dict(current.params),
@@ -2026,7 +2031,10 @@ def main() -> None:
     # current_model に指定された場合、同じ式へのパラメータ代入という前提が崩れる。
     # _resolve_report_models はモデル種別の一致を保証しないため、ここで明示的に確認し、
     # 一致しない場合は 1-2/1-3 の新テーブル・残差ヒストグラムの baseline 重ね描画を無効化する。
-    _model_types_match = current_model == baseline_model
+    _model_types_match = (
+        current_model == baseline_model or
+        ({current_model, baseline_model} <= {"delay_steer_acc_geared_wo_fall_guard", "delay_steer_acc_geared_for_diffusion_planner"})
+    )
     if not _model_types_match:
         print(
             f"  [WARN] baseline モデル種別 ({baseline_model}) が current モデル種別 ({current_model}) と"
