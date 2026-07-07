@@ -36,6 +36,7 @@ from driving_log_replayer_v2.real_log_sim_comparison.lib._io import load_cmd, re
 from driving_log_replayer_v2.real_log_sim_comparison.lib._map import load_map_ways, resolve_map_osm  # noqa: E402
 from driving_log_replayer_v2.real_log_sim_comparison.lib._models_config import (  # noqa: E402
     load_models_doc,
+    resolve_baseline_model,
 )
 from driving_log_replayer_v2.real_log_sim_comparison.lib._multi_agg import (  # noqa: E402
     HORIZONS as _HORIZONS,
@@ -127,25 +128,23 @@ def _resolve_report_models(
         raise ValueError(
             f"{scenario}: current case {current_case!r} が Conditions.models にありません"
         )
-    reference = doc.overlay.reference_tag
-    if not reference or reference not in doc.models:
-        raise ValueError(
-            f"{scenario}: Conditions.overlay.reference_tag に有効な baseline model が必要です"
-        )
     current = doc.models[current_case]
-    baseline = doc.models[reference]
-    if current.vehicle_model_type is None or baseline.vehicle_model_type is None:
-        raise ValueError("current/baseline model の vehicle_model_type は必須です")
-    if baseline.vehicle_model_type not in {"delay_steer_acc_geared_wo_fall_guard", "delay_steer_acc_geared_for_diffusion_planner"}:
+    if current.vehicle_model_type is None:
+        raise ValueError("current model の vehicle_model_type は必須です")
+    try:
+        baseline_model_type, baseline_params, reference = resolve_baseline_model(doc)
+    except ValueError as e:
+        raise ValueError(f"{scenario}: {e}") from e
+    if baseline_model_type not in {"delay_steer_acc_geared_wo_fall_guard", "delay_steer_acc_geared_for_diffusion_planner"}:
         raise ValueError(
             f"baseline model の vehicle_model_type は 'delay_steer_acc_geared_wo_fall_guard' または 'delay_steer_acc_geared_for_diffusion_planner' である必要があります。"
-            f"現在の値: {baseline.vehicle_model_type}"
+            f"現在の値: {baseline_model_type}"
         )
     return (
         current.vehicle_model_type,
         dict(current.params),
-        baseline.vehicle_model_type,
-        dict(baseline.params),
+        baseline_model_type,
+        baseline_params,
         reference,
     )
 

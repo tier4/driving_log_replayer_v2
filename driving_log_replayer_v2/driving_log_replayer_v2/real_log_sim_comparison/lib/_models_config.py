@@ -357,6 +357,25 @@ def load_models_doc(scenario_path: str | Path) -> ModelsDoc:
     )
 
 
+def resolve_baseline_model(doc: ModelsDoc) -> tuple[str, dict, str]:
+    """Conditions.overlay.reference_tag が指す baseline model の
+    (vehicle_model_type, params, case_name) を返す。
+
+    scenario.yaml をこの解決の唯一の SSOT とする。呼び出し側 (multi_dataset_tune.py の
+    スコア正規化・physical_validity_report.py のレポート比較) が別々に baseline model を
+    ハードコードすると、片方だけ更新されて静かに不整合を起こす (2026-07-07 に実際発生)。
+    """
+    reference = doc.overlay.reference_tag
+    if not reference or reference not in doc.models:
+        raise ValueError(
+            f"Conditions.overlay.reference_tag に有効な baseline model 名が必要です (現在: {reference!r})"
+        )
+    baseline = doc.models[reference]
+    if baseline.vehicle_model_type is None:
+        raise ValueError(f"baseline model {reference!r} には vehicle_model_type が必要です")
+    return baseline.vehicle_model_type, dict(baseline.params), reference
+
+
 def load_run_models(scenario_path: str | Path) -> ModelsDoc:
     doc = load_models_doc(scenario_path)
     for name in doc.sim_runs_list:

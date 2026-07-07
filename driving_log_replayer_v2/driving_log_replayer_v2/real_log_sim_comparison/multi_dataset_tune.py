@@ -37,7 +37,7 @@ import yaml
 
 from . import step_ol1_analyze_nstep as s5
 from .lib._collection import discover_collection
-from .lib._models_config import load_models_doc
+from .lib._models_config import load_models_doc, resolve_baseline_model
 from .lib._io import resolve_lite_bag
 from .lib._multi_agg import (
     HORIZONS, WORST_W,
@@ -48,6 +48,9 @@ from .lib._physical_validity import WHEELBASE
 from .lib._validation import MissingRequiredDataError
 
 STRIDE = 5
+# フォールバック既定値のみ。実運用では main() が scenario.yaml の
+# Conditions.overlay.reference_tag (resolve_baseline_model) から解決した値を
+# 明示的に渡す。ここを直接書き換えても scenario.yaml と分離したままなので反映されない。
 _BASELINE_MODEL = "delay_steer_acc_geared_wo_fall_guard"
 # _prepare_gt は params の delay/wheelbase/sub_dt にのみ依存 (run_rollout docstring)
 _GT_KEYS = ("acc_time_delay", "steer_time_delay", "wheelbase", "sub_dt")
@@ -892,18 +895,28 @@ def main() -> None:
 
     n_jobs = max(1, args.jobs or 1)
 
+    # baseline model は scenario.yaml (Conditions.overlay.reference_tag) を唯一の SSOT として
+    # 解決する。load_datasets より前に確定させ、baseline 側の rollout 評価に明示的に渡す
+    # (_BASELINE_MODEL 定数への暗黙依存は事故の元 — 2026-07-07 に実際発生)。
+    cfg = load_models_doc(args.scenario)
+    baseline_model_type, baseline_params, baseline_case = resolve_baseline_model(cfg)
+    cur_model = cfg.find_case(args.case).vehicle_model_type
+    print(f"[INFO] baseline model = {baseline_model_type} (scenario.yaml の '{baseline_case}' ケース)")
+    print(f"[INFO] current model  = {cur_model} ('{args.case}' ケース)")
+
     # OMP スレッド数を抑制してから全 fork (load_datasets / robust_search 両方をカバー):
     # worker 内の BLAS/OpenMP が親コア数分のスレッドを再起動するのを防ぎ、
     # コア間の CPU リソース競合を回避する。load_datasets の前に設定しないと
     # 並列ロード中の baseline rollout が oversubscribe する。
     os.environ.setdefault("OMP_NUM_THREADS", "1")
 
-    ctxs = load_datasets(lite_dirs, n_jobs=n_jobs, verbose=args.verbose)
+    ctxs = load_datasets(
+        lite_dirs, n_jobs=n_jobs, verbose=args.verbose,
+        baseline_model_type=baseline_model_type, baseline_params=baseline_params,
+    )
     if len(ctxs) < 1:
         print("ERROR: 有効な dataset が 0 件", file=sys.stderr)
         sys.exit(1)
-
-    cfg = load_models_doc(args.scenario)
 
     # グローバル _CTXS に ctxs をセット (fork COW 継承パターン)。
     # pool.map は pickle 転送せず fork した子プロセスがグローバルを直接参照する。
@@ -998,7 +1011,7 @@ def main() -> None:
             ctxs=ctxs,
             configs=report_configs,
             out_html=Path(args.report),
-            model_type=_BASELINE_MODEL,
+            model_type=cur_model,
             eval_fn=_eval,
             stride=STRIDE,
             worst_w=args.report_worst_weight,
