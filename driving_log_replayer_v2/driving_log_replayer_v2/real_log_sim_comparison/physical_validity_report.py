@@ -944,8 +944,16 @@ J_a
 で評価する。0 中心で低分散なら、同定した \\((\\tau_a,T_a)\\) が運動方程式と整合している。
 </p>
 <p>
-推定はこの式を積分した出力誤差で行い、方程式残差は推定後の共通診断として使う。
+パラメータ同定は、<code>_fit_core.py</code> の <code>fit_first_order_delay_residual_3phase</code> による3段階交互最適化を用いた方程式残差の最小二乗法で直接行われます。
 </p>
+<div class="note">
+  <b>3段階交互最適化 (3-Phase Alternating Optimization) のアルゴリズム:</b>
+  <ol>
+    <li><b>Phase 1 (遅延ゼロ固定最適化):</b> 無駄時間 \(T_a\) を 0 に固定した状態で、逆数変数 \(\tau_a^{-1} = 1/\tau_a\) に対して最小二乗法で最適化を行い、初期探索パラメータを決定します。逆数変数を用いることで勾配爆発を防ぎます。</li>
+    <li><b>Phase 2 (遅延グリッドサーチ):</b> Phase 1 で得られたパラメータを固定したまま、事前に定義された遅延候補（グリッド）の中から方程式残差の二乗和 (MSE) を最小化する無駄時間 \(T_a\) を探索します。</li>
+    <li><b>Phase 3 (パラメータ再最適化):</b> Phase 2 で決定された最良の無駄時間 \(T_a\) に固定した上で、再び時定数 \(\tau_a\) などのパラメータを最小二乗法で再最適化し、最終的な同定値を得ます。</li>
+  </ol>
+</div>
 <p class="meta">
 &#128279; この残差式は <code>_fit_core.py</code> の <code>equation_residual_at_params</code>（full-RHS 遅延）および
 <a href="#sec-state-space">1-1</a> の状態方程式と完全に対応する（<code>vehicle_model_fitting</code> の残差式と同一形式）。
@@ -1015,17 +1023,23 @@ E_\\delta[k;\\tau_\\delta,T_\\delta]
 と置く。\\(\\delta_{{\\mathrm{{des}}}}[k] = K_{{\\mathrm{{steer\_scale}}}} \\cdot \\delta_{{\\mathrm{{cmd,des}}}}[k-n_{{\\mathrm{{delay}}}}]\\)。
 残差が 0 付近に集まれば、同定した \\((\\tau_\\delta,T_\\delta)\\) は操舵の状態方程式と整合している。
 </p>
+<p>
+パラメータ同定は、縦方向と同様に <code>_fit_core.py</code> の <code>fit_first_order_delay_residual_3phase</code> による3段階交互最適化を用いた方程式残差の最小二乗法で直接行われます。
+</p>
+<div class="note">
+  <b>3段階交互最適化 (3-Phase Alternating Optimization) のアルゴリズム:</b>
+  <ol>
+    <li><b>Phase 1 (遅延ゼロ固定最適化):</b> 無駄時間 \(T_\delta\) を 0 に固定した状態で、逆数変数 \(\tau_\delta^{-1} = 1/\tau_\delta\) に対して最小二乗法で最適化を行い、初期探索パラメータを決定します。</li>
+    <li><b>Phase 2 (遅延グリッドサーチ):</b> Phase 1 で得られたパラメータを固定したまま、事前に定義された遅延候補（グリッド）の中から方程式残差の二乗和 (MSE) を最小化する無駄時間 \(T_\delta\) を探索します。</li>
+    <li><b>Phase 3 (パラメータ再最適化):</b> Phase 2 で決定された最良の無駄時間 \(T_\delta\) に固定した上で、再び時定数 \(\tau_\delta\) などのパラメータを最小二乗法で再最適化し、最終的な同定値を得ます。</li>
+  </ol>
+</div>
 <p class="meta">
 &#128279; この残差式は <code>_fit_core.py</code> の <code>equation_residual_at_params</code>（full-RHS 遅延）から生成される。
-<code>vehicle_model_fitting</code> の操舵残差式と同一形式。推定自体は出力誤差型（モデル出力と実測操舵角の差の最小化）で行い、方程式残差は推定後の共通診断として使う。
+<code>vehicle_model_fitting</code> の操舵残差式と同一形式。
 </p>
 {steer_resid_hist_html}
 {steer_resid_opt_html}
-
-<p>
-推定はこの式を積分したモデル出力と実測操舵角の差で行う。
-方程式残差は、推定後に「式として無理がないか」を見る共通診断である。
-</p>
 
 <p><b>主なパラメータ:</b></p>
 <ul>
@@ -1073,9 +1087,8 @@ E_\\delta[k;\\tau_\\delta,T_\\delta]
 <p>
 1-2（縦方向）・1-3（操舵追従）が先行して確定した後、
 \\(\\dot\\theta\\) 式の残差 \\(E = \\mathrm{{RHS}} - \\mathrm{{LHS}}\\) を <b>高曲率サブセット</b> で最小化して
-\\(k_{{\\mathrm{{us}}}}\\) を同定する。縦・操舵と同じ方程式残差の原理だが、\\(\\dot\\theta\\) 式は
-\\(\\tan\\delta\\) 空間で \\(k_{{\\mathrm{{us}}}}\\) について<b>線形</b>であり、この空間では残差最小化が良条件なため、
-縦・操舵と違い<b>この残差を直接推定に用いる</b>（出力誤差型への迂回が不要）。
+\\(k_{{\\mathrm{{us}}}}\\) を同定する。縦・操舵と同じ方程式残差の原理であり、この残差を直接推定（最小二乗法による同定）に用います。
+\\(\\dot\\theta\\) 式は \\(\\tan\\delta\\) 空間で \\(k_{{\\mathrm{{us}}}}\\) について<b>線形</b>であり、この空間では残差最小化が極めて良条件なため直接解くことができます。
 直進（\\(\\delta_{{\\mathrm{{act}}}}+\\beta \\approx 0\\)）では感度がほぼゼロなので、全データセット集約
 スコアだけでは \\(k_{{\\mathrm{{us}}}}\\) を同定できない。
 </p>
@@ -2020,8 +2033,8 @@ def main() -> None:
                 break
     steer_fig = build_fig_cross_steer(rows_steer)
 
-    # 方程式残差の整合診断 (方針D): 各データセットの出力誤差同定パラメータでの残差 E[k]=RHS−LHS を
-    # 全データセットでプールし分布を示す。目的関数ではなく「同定結果が ODE をどれだけ満たすか」の診断。
+    # 方程式残差の評価結果: 各データセットの3段階交互最適化で同定されたパラメータでの残差 E[k]=RHS−LHS を
+    # 全データセットでプールし分布を示す。
     def _pool_resid(per_ds: dict[str, dict]) -> tuple[list[float], float]:
         pooled: list[float] = []
         rmses: list[float] = []

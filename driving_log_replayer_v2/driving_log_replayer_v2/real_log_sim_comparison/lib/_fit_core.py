@@ -387,22 +387,30 @@ def fit_first_order_delay_residual_3phase(
     n_samples = int(np.count_nonzero(mask))
     rmse_fit = float(np.sqrt(best_cost / n_samples)) if n_samples > 0 else float("nan")
 
-    # 元の (平滑化していない) cmd, act 信号を用いて、最終パラメータにおける残差を計算して返す
-    # (診断用)
+    # LPF 後の (平滑化済み) cmd_f, act_f, dot_act_f を用いて、最終パラメータにおける残差を計算する
+    # (同定はLPF後で行われているため、診断残差もLPF後を主値とする)
     resid_final = []
+    resid_final_raw = []
     if n_samples > 0:
+        c_del_f = delay_shift(cmd_f, best_n)
+        a_del_f = delay_shift(act_f, best_n)
+        E_f = tau_inv_fit * (scale_fit * c_del_f - a_del_f) - dot_act_f
+        resid_final = E_f[mask].tolist()
+
+        # 生の (平滑化していない) 残差は時系列グラフでの参考値として別途保持
         c_del_raw = delay_shift(cmd, best_n)
         a_del_raw = delay_shift(act, best_n)
         dot_act_raw = np.gradient(act, dt)
         E_raw = tau_inv_fit * (scale_fit * c_del_raw - a_del_raw) - dot_act_raw
-        resid_final = E_raw[mask].tolist()
+        resid_final_raw = E_raw[mask].tolist()
 
     return {
         "tau": tau_fit,
         "delay": delay_fit,
         "scale": scale_fit,
         "rmse": rmse_fit,
-        "resid_samples": resid_final,
+        "resid_samples": resid_final,        # LPF 後の残差（主値：ヒスト集計・RMSE 計算用）
+        "resid_samples_raw": resid_final_raw,  # 生信号での残差（時系列グラフ参考値用）
         "cost": best_cost,
     }
 
