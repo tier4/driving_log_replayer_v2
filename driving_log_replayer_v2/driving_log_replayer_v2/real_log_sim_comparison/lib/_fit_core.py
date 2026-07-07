@@ -325,6 +325,7 @@ def fit_first_order_delay_residual_3phase(
     # ウォームスタート（初期値）設定
     tau_init = 0.2
     scale_init = 1.0
+    delay_init = 0.0
     if x0_dict is not None:
         for t_key in ["tau", "tau_a", "tau_delta"]:
             if t_key in x0_dict and x0_dict[t_key] is not None and x0_dict[t_key] > 0:
@@ -332,8 +333,13 @@ def fit_first_order_delay_residual_3phase(
                 break
         if "scale" in x0_dict and x0_dict["scale"] is not None:
             scale_init = float(x0_dict["scale"])
+        for d_key in ["delay", "T", "acc_time_delay", "steer_time_delay"]:
+            if d_key in x0_dict and x0_dict[d_key] is not None and x0_dict[d_key] >= 0:
+                delay_init = float(x0_dict[d_key])
+                break
 
     tau_inv_init = 1.0 / tau_init
+    n_steps_init = int(round(delay_init / dt))
 
     x0 = [tau_inv_init, scale_init] if fit_scale else [tau_inv_init]
 
@@ -362,8 +368,8 @@ def fit_first_order_delay_residual_3phase(
         E = tau_inv * (s * c_del - a_del) - dot_act_f
         return E[mask]
 
-    # Phase 1: d = 0 固定で最適化
-    res1 = least_squares(lambda x: _residuals(x, 0), x0, bounds=bounds)
+    # Phase 1: d = delay_init 固定で最適化
+    res1 = least_squares(lambda x: _residuals(x, n_steps_init), x0, bounds=bounds)
 
     # Phase 2: 得られたパラメータ固定で delay をグリッドサーチ
     best_cost = None

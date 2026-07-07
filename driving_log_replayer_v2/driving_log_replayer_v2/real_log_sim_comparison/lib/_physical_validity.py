@@ -257,10 +257,14 @@ def fit_long_single(bag_path: Path) -> dict | None:
 
     # パラメータ推定: 3段階交互最適化＋方程式残差最小二乗法で同定する。
     # 縦方向 (加速度) には LPF (窓幅 10ステップ) を適用しノイズを低減。
+    sim_params = load_sim_params()
+    tau_baseline = sim_params.get("acc_time_constant", 0.2589)
+    delay_baseline = sim_params.get("acc_time_delay", 0.101)
+
     fit = fit_first_order_delay_residual_3phase(
         a_cmd_arr, a_act_corr, mask_dyn, _FIT_DT,
         tau_bounds=_TAU_BOUNDS_LONG, delay_candidates=_DELAY_CANDIDATES_LONG,
-        filter_w=10, x0_dict={"tau": 0.1},
+        filter_w=10, x0_dict={"tau": tau_baseline, "delay": delay_baseline},
     )
     if fit is None:
         return None
@@ -326,10 +330,14 @@ def fit_steer_single(bag_path: Path) -> dict | None:
         return None
 
     # パラメータ推定: 3段階交互最適化＋方程式残差最小二乗法で同定する。
+    sim_params = load_sim_params()
+    tau_baseline = sim_params.get("steer_time_constant", 0.4983)
+    delay_baseline = sim_params.get("steer_time_delay", 0.0315)
+
     fit = fit_first_order_delay_residual_3phase(
         d_cmd, d_act, mask_dyn, _FIT_DT,
         tau_bounds=_TAU_BOUNDS_STEER, delay_candidates=_DELAY_CANDIDATES_STEER,
-        filter_w=1, x0_dict={"tau": 0.1},
+        filter_w=1, x0_dict={"tau": tau_baseline, "delay": delay_baseline},
     )
     if fit is None:
         return None
@@ -896,8 +904,13 @@ def fit_long_cross_dataset_bounded(
     tau_inv_max = 1.0 / _TAU_BOUNDS_LONG[0]
     bounds = ([tau_inv_min], [tau_inv_max])
 
-    # Phase 1: d = 0 固定で最適化
-    res1 = least_squares(lambda x: _residuals(x, 0), [1.0 / 0.2], bounds=bounds)
+    sim_params = load_sim_params()
+    tau_baseline = sim_params.get("acc_time_constant", 0.2589)
+    delay_baseline = sim_params.get("acc_time_delay", 0.101)
+    n_steps_init = int(round(delay_baseline / _FIT_DT))
+
+    # Phase 1: d = n_steps_init 固定で最適化
+    res1 = least_squares(lambda x: _residuals(x, n_steps_init), [1.0 / tau_baseline], bounds=bounds)
 
     # Phase 2: 得られたパラメータ固定で delay をグリッドサーチ
     best_cost = None

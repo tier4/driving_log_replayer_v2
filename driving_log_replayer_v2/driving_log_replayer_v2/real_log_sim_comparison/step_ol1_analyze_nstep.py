@@ -67,6 +67,7 @@ from .lib._params_utils import load_sim_params
 from .lib._plotly_utils import FIG_HEIGHTS, lanes_to_trace
 from .lib._runtime_config import RuntimeConfig, add_common_cli_arguments, build_runtime_config
 from .lib._validation import require_non_empty_df
+from .lib._physical_validity import VX_MIN_CURVE
 
 BASE = Path(os.environ.get("BEST_MODEL_BASE_DIR") or Path(__file__).parent)
 LITE_DIR = BASE / "lite"
@@ -921,6 +922,8 @@ def eval_rollout_rmse(
     sim_steer = np.full((num_steps, _n_sh), np.nan, dtype=np.float64)
 
     for step_idx, k0 in enumerate(k0_range):
+        if gt_vx_list[k0] <= VX_MIN_CURVE:
+            continue
         model.reset_with_history_ptr(
             x=gt_x_list[k0],
             y=gt_y_list[k0],
@@ -1109,6 +1112,8 @@ def run_rollout(
 
     # k_end = k0 + horizon ≤ n-1 まで使う (最小 horizon で outer range を決定)
     for k0 in range(0, n - min_h, stride):
+        if gt_vx[k0] <= VX_MIN_CURVE:
+            continue
         # -- モデルを t_{k0} の実機状態にリセット（過去履歴を delay queue にセット）--
         # ego_entity_simulation.cpp と同じ: state(4) = atan(wz*wb/vx) をキネマティック初期値に。
         # vm_reset_state 内: state(4) = steer_actual - steer_bias
