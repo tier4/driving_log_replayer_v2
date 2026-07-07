@@ -235,8 +235,9 @@ def optimize_tau_with_equation_residual(
     dt: float,
     tau_bounds: tuple[float, float],
     filter_w: int = 1,
+    fixed_tau: float = None,
 ) -> list[dict]:
-    """遅延を candidates に固定し、方程式残差の MSE を最小化する tau を最適化する。"""
+    """遅延を candidates に固定し、方程式残差の MSE を最小化する tau を最適化する（または指定された fixed_tau を用いる）。"""
     results = []
     ds_precomputed = []
     for uuid, fit in per_ds.items():
@@ -281,13 +282,18 @@ def optimize_tau_with_equation_residual(
         tau_inv_min = 1.0 / tau_bounds[1]
         tau_inv_max = 1.0 / tau_bounds[0]
 
-        def _res(x):
-            tau_inv = float(x[0])
-            return tau_inv * X - Y
+        if fixed_tau is not None:
+            best_tau = fixed_tau
+            tau_inv = 1.0 / fixed_tau
+            resid = tau_inv * X - Y
+        else:
+            def _res(x):
+                tau_inv = float(x[0])
+                return tau_inv * X - Y
 
-        res = least_squares(_res, [1.0 / 0.2], bounds=([tau_inv_min], [tau_inv_max]))
-        best_tau = 1.0 / float(res.x[0])
-        resid = res.fun
+            res = least_squares(_res, [1.0 / 0.2], bounds=([tau_inv_min], [tau_inv_max]))
+            best_tau = 1.0 / float(res.x[0])
+            resid = res.fun
         best_mse = float(np.mean(resid ** 2))
         best_rmse = float(np.sqrt(best_mse))
         results.append({
@@ -2425,8 +2431,17 @@ def main() -> None:
         med = float(np.median(rmses)) if rmses else float("nan")
         return pooled, med, rmses
 
-    _resid_long_pool, _resid_long_med, _resid_long_rmses = _pool_resid(per_ds_long)
-    _resid_steer_pool, _resid_steer_med, _resid_steer_rmses = _pool_resid(per_ds_steer)
+    final_tau_a = float(merged_tuned.get("acc_time_constant"))
+    final_T_a = float(merged_tuned.get("acc_time_delay"))
+    final_tau_d = float(merged_tuned.get("steer_time_constant"))
+    final_T_d = float(merged_tuned.get("steer_time_delay"))
+
+    _resid_long_pool, _resid_long_med, _resid_long_rmses = _pool_resid_at_params(
+        per_ds_long, final_tau_a, final_T_a, _SG_WINDOW_LONG,
+    )
+    _resid_steer_pool, _resid_steer_med, _resid_steer_rmses = _pool_resid_at_params(
+        per_ds_steer, final_tau_d, final_T_d, _SG_WINDOW_STEER,
+    )
 
     if _model_types_match:
         _resid_long_bl_pool, _resid_long_bl_med, _resid_long_bl_rmses = _pool_resid_at_params(
@@ -2435,7 +2450,9 @@ def main() -> None:
         _resid_steer_bl_pool, _resid_steer_bl_med, _resid_steer_bl_rmses = _pool_resid_at_params(
             per_ds_steer, baseline_tau_d, baseline_T_d, _SG_WINDOW_STEER,
         )
-        _long_phase_tuned = _pool_resid_long_tuned_by_phase(per_ds_long)
+        _long_phase_tuned = _pool_resid_long_baseline_by_phase(
+            per_ds_long, final_tau_a, final_T_a, _SG_WINDOW_LONG,
+        )
         _long_phase_baseline = _pool_resid_long_baseline_by_phase(
             per_ds_long, baseline_tau_a, baseline_T_a, _SG_WINDOW_LONG,
         )
@@ -2498,12 +2515,21 @@ def main() -> None:
 
     # [1-2] 方程式残差による縦方向パラメータ最適化とヒストグラム生成
     print("  [1-2] 方程式残差による縦方向パラメータ最適化とヒストグラム生成...")
+    long_fixed_tau = cross_fit_long.get("phase1_tau") if (cross_fit_long and "phase1_tau" in cross_fit_long) else None
+    top_entries_long = sorted(
+        (e for e in entries if e.real_lite is not None and e.dataset_id in per_ds_long),
+        key=lambda e: per_ds_long[e.dataset_id].get("n_dyn", 0),
+        reverse=True,
+    )[:_N_CROSS_FIT_DATASET]
+    top_dataset_ids_long = {e.dataset_id for e in top_entries_long}
+    filtered_per_ds_long = {k: v for k, v in per_ds_long.items() if k in top_dataset_ids_long}
     long_opt_results = optimize_tau_with_equation_residual(
-        per_ds_long,
+        filtered_per_ds_long,
         delay_candidates=_DELAY_CANDIDATES_LONG,
         dt=_FIT_DT,
         tau_bounds=_TAU_BOUNDS_LONG,
         filter_w=10,
+        fixed_tau=long_fixed_tau,
     )
     long_resid_opt_html = ""
     if long_opt_results:
