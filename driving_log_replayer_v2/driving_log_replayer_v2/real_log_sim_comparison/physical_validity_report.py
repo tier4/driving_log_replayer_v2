@@ -1843,6 +1843,7 @@ def build_release_note_html(
     label: str = "current",
     params_filename: str = "",
     n_dataset: int = 0,
+    current_model: str = "current",
 ) -> str:
     """N-step Open Loop評価とフィッティング評価だけを抜粋したリリースノート用の自己完結 HTML を返す。
 
@@ -1874,7 +1875,7 @@ def build_release_note_html(
   <style>{_STYLE}</style>
 </head>
 <body>
-<h1>currentモデルリリースレポート— {label}</h1>
+<h1>{current_model}モデルリリースレポート— {label}</h1>
 <p class="meta">
   生成元: <code>{params_filename or label}</code> &nbsp;|&nbsp;
   有効データセット数: {n_dataset}
@@ -1982,8 +1983,8 @@ def main() -> None:
         help="collection-dir 外から MCAP 解析・ビューアに追加する データセット ディレクトリ（複数指定可）",
     )
     ap.add_argument(
-        "--label", type=str, default="current",
-        help="レポート内のモデル名ラベル（デフォルト: current）",
+        "--label", type=str, default=None,
+        help="レポート内のモデル名ラベル（デフォルト: scenario.yamlでのモデル種別名、例: delay_steer_acc_geared_for_diffusion_planner）",
     )
     ap.add_argument(
         "--ds-after", type=str, default=None,
@@ -1999,8 +2000,6 @@ def main() -> None:
     )
     args = ap.parse_args()
 
-    phase_label = args.label
-
     with open(args.params) as f:
         yaml_data = yaml.safe_load(f)
     params: dict = yaml_data.get("params", yaml_data)
@@ -2008,6 +2007,7 @@ def main() -> None:
     current_model, current_base_params, baseline_model, baseline_params, baseline_case = (
         _resolve_report_models(args.scenario, args.case)
     )
+    phase_label = args.label if args.label is not None else current_model
     tuned_params = {k: v for k, v in params.items() if not k.startswith("_")}
     current_eval_params = {**current_base_params, **tuned_params}
 
@@ -2636,6 +2636,7 @@ def main() -> None:
             label=phase_label,
             params_filename=args.params.name,
             n_dataset=len(records),
+            current_model=current_model,
         )
         args.release_note_out.parent.mkdir(parents=True, exist_ok=True)
         args.release_note_out.write_text(release_note_html, encoding="utf-8")
