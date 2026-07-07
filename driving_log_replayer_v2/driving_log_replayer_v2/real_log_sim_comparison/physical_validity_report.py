@@ -136,9 +136,9 @@ def _resolve_report_models(
     baseline = doc.models[reference]
     if current.vehicle_model_type is None or baseline.vehicle_model_type is None:
         raise ValueError("current/baseline model の vehicle_model_type は必須です")
-    if baseline.vehicle_model_type != "delay_steer_acc_geared_wo_fall_guard":
+    if baseline.vehicle_model_type not in {"delay_steer_acc_geared_wo_fall_guard", "delay_steer_acc_geared_for_diffusion_planner"}:
         raise ValueError(
-            f"baseline model の vehicle_model_type は 'delay_steer_acc_geared_wo_fall_guard' である必要があります。"
+            f"baseline model の vehicle_model_type は 'delay_steer_acc_geared_wo_fall_guard' または 'delay_steer_acc_geared_for_diffusion_planner' である必要があります。"
             f"現在の値: {baseline.vehicle_model_type}"
         )
     return (

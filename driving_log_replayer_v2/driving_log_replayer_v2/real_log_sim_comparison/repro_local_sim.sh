@@ -54,7 +54,7 @@ EOF
 cat > "${REPRO_DIR}/cases.yaml" <<'EOF'
 cases:
   - tag: baseline
-    vehicle_model: delay_steer_acc_geared_wo_fall_guard
+    vehicle_model: delay_steer_acc_geared_for_diffusion_planner
     params:
       wheelbase: 4.76012
 overlay:

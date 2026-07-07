@@ -61,22 +61,32 @@ Evaluation:
     reproduce_perception: false
 
     models:
-      normal:
-        vehicle_model_type: delay_steer_acc_geared_wo_fall_guard
+      baseline:
+        vehicle_model_type: delay_steer_acc_geared_for_diffusion_planner
+        params:
+          acc_time_delay: 0.1
+          acc_time_constant: 0.1
+          steer_time_delay: 0.17
+          steer_time_constant: 0.15
+          steer_dead_band: 0.0
+          steer_bias: 0.0
+          debug_acc_scaling_factor: 1.0
+          debug_steer_scaling_factor: 1.0
+          k_us: 0.0
         vehicle_model: j6_gen2
         architecture_type: awf/universe/20250130
       kus0020:
-        vehicle_model_type: delay_steer_acc_geared_wo_fall_guard
+        vehicle_model_type: delay_steer_acc_geared_for_diffusion_planner
         vehicle_model: j6_gen2
         architecture_type: awf/universe/20250130
         params: {k_us: 0.020}
       best_normal:
-        vehicle_model_type: delay_steer_acc_geared_wo_fall_guard
+        vehicle_model_type: delay_steer_acc_geared_for_diffusion_planner
         vehicle_model: j6_gen2
         architecture_type: awf/universe/20250130
         params: {k_us: 0.018, steer_time_constant: 0.15, debug_steer_scaling_factor: 1.0, acc_time_constant: 0.30}
       no_delay:
-        vehicle_model_type: delay_steer_acc_geared_wo_fall_guard
+        vehicle_model_type: delay_steer_acc_geared_for_diffusion_planner
         params: {acc_time_delay: 0.0, acc_time_constant: 0.0, steer_time_delay: 0.0, steer_time_constant: 0.0, steer_bias: 0.0}
       taiga_dyn:
         vehicle_model_type: taiga_dyn
@@ -103,8 +113,8 @@ Evaluation:
         dp_model_release: 20260410-145919_lambda1e-6_ridge1e-8__epoch0020__epoch0040
         params: {k_us: 0.020}
 
-    cases:    [normal, best_normal, taiga_x]
+    cases:    [baseline, best_normal, taiga_x]
     sim_runs: [dp_0303, dp_0503, dp_0410]
     overlay:
-      reference_tag: normal
+      reference_tag: baseline
       plots: [cascade_error]

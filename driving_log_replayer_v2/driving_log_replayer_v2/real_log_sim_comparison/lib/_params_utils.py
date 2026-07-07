@@ -60,7 +60,7 @@ def load_sim_params(params_dir: Path | None = None) -> dict:
 
     # フォールバック（YAML 読み取り失敗時）
     defaults = {
-        "vehicle_model_type": "DELAY_STEER_ACC_GEARED_WO_FALL_GUARD",
+        "vehicle_model_type": "DELAY_STEER_ACC_GEARED_FOR_DIFFUSION_PLANNER",
         "acc_time_delay": 0.101,
         "acc_time_constant": 0.2589,
         "brake_delay": 0.0685,

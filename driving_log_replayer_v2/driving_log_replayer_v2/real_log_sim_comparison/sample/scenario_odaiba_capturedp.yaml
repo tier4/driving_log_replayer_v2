@@ -64,14 +64,24 @@ Evaluation:
     # vehicle_model_type → sim enum 自動注入:
     #   vehicle_model_type を持つ model が sim_runs に含まれると、loader が
     #   simple_sensor_simulator.vehicle_model_type:=<ENUM> を自動注入する
-    #   (taiga_dyn→TAIGA_DYN, taiga_x→TAIGA_X, delay_steer_acc_geared_wo_fall_guard→DELAY_...)。
+    #   (taiga_dyn→TAIGA_DYN, taiga_x→TAIGA_X, delay_steer_acc_geared_for_diffusion_planner→DELAY_...)。
     #   perfect / godot は vehicle_model_type を持たないので注入しない。
     models:
-      # ── delay_steer_acc_geared_wo_fall_guard 系 ──────────────────────────
-      normal:
+      # ── delay_steer_acc_geared_for_diffusion_planner 系 ──────────────────────────
+      baseline:
         # j6_gen2_description の DELAY_STEER_ACC_GEARED_WO_FALL_GUARD (dynamics 既定値)。
         # open-loop でも closed-loop でも dynamics 既定値の基準線として使う。
-        vehicle_model_type: delay_steer_acc_geared_wo_fall_guard
+        vehicle_model_type: delay_steer_acc_geared_for_diffusion_planner
+        params:
+          acc_time_delay: 0.1
+          acc_time_constant: 0.1
+          steer_time_delay: 0.17
+          steer_time_constant: 0.15
+          steer_dead_band: 0.0
+          steer_bias: 0.0
+          debug_acc_scaling_factor: 1.0
+          debug_steer_scaling_factor: 1.0
+          k_us: 0.0
         vehicle_model: j6_gen2
         architecture_type: awf/universe/20250130
         # 採取時(2026-05-12 10:09 odaiba A09)にデプロイされていた DP 重み。
@@ -81,7 +91,7 @@ Evaluation:
       kus0020:
         # normal + アンダーステア係数 k_us=0.020 rad/(m/s^2)。
         # ω = vx·tan(δ)/(L + k_us·vx^2)。normal (k_us=0) との差で understeer の寄与を切り分ける。
-        vehicle_model_type: delay_steer_acc_geared_wo_fall_guard
+        vehicle_model_type: delay_steer_acc_geared_for_diffusion_planner
         vehicle_model: j6_gen2
         architecture_type: awf/universe/20250130
         params:
@@ -103,7 +113,7 @@ Evaluation:
         #   kus0020 (yaw mean 0.656 / worst 1.111 / pos mean 0.954) を yaw mean・worst と pos mean で上回る。
         # sim でも spec 値の steer_time_constant / debug_steer_scaling_factor を明示する
         # (暗黙の description 既定に依存させない)。
-        vehicle_model_type: delay_steer_acc_geared_wo_fall_guard
+        vehicle_model_type: delay_steer_acc_geared_for_diffusion_planner
         vehicle_model: j6_gen2
         architecture_type: awf/universe/20250130
         dp_model_release: 20260428-081756_fix_control_to_traj_loss__epoch0050__epoch0080
@@ -116,12 +126,12 @@ Evaluation:
 
       no_delay:
         # 遅延・時定数を全てゼロにした理想即応相当 (cases 専用; vehicle_model なしのため sim_runs に含められない)。
-        # delay_steer_acc_geared_wo_fall_guard で acc/steer の time_delay・time_constant を 0 に設定する。
+        # delay_steer_acc_geared_for_diffusion_planner で acc/steer の time_delay・time_constant を 0 に設定する。
         # time_delay=0 は入力キュー長 round(delay/dt)=0 で遅延なし。time_constant=0 は C++ 側の
         # MIN_TIME_CONSTANT=0.03s にクリップされる (ゼロ割防止) が、SUB_DT=1/30s 以下なので実質 1 ステップ
         # で応答 = ほぼ即応。steer_bias=0.0 で phantom offset を排除し理想性を保つ (未指定だと
         # load_sim_params() のシム仕様 steer_bias ≈ 0.0005 が継承され余計なオフセットが乗る)。
-        vehicle_model_type: delay_steer_acc_geared_wo_fall_guard
+        vehicle_model_type: delay_steer_acc_geared_for_diffusion_planner
         params:
           acc_time_delay: 0.0
           acc_time_constant: 0.0
@@ -178,6 +188,6 @@ Evaluation:
 
     # ── overlay: cases 集約 (Stage 6) の基準モデルと重ね描き種類 ──
     overlay:
-      reference_tag: normal
+      reference_tag: baseline
       plots:
         - cascade_error

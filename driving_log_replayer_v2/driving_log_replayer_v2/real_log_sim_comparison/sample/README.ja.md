@@ -23,8 +23,8 @@ Godot バイナリパスは cloud / local 共通で `/opt/godot_autoware_simulat
   `Conditions.models` に定義されたモデル名リストで参照する。**両方未指定だとパイプラインは失敗する**。
 
 > **実行時間**: Stage CL2 は scenario_test_runner で Autoware を起動して closed-loop
-> シムを回すため 1 run あたり ~5 分。既定 `scenario.yaml` は 7 sim_runs（normal /
-> kus0020 / best_normal / taiga_dyn / taiga_x / perfect / godot）のため、end-to-end は ~40 分の見積もり。
+> シムを回すため 1 run あたり ~5 分。既定 `scenario.yaml` は 7 sim_runs（baseline /
+> kus0020 / best_baseline / taiga_dyn / taiga_x / perfect / godot）のため、end-to-end は ~40 分の見積もり。
 
 ---
 
@@ -90,20 +90,20 @@ Conditions:
   #   godot_executable:    sim 専用 (*_godot のとき必須)
   #   dp_model_dir/release/package: sim 専用 DiffusionPlanner モデル切替 (任意)
   models:
-    normal:
-      vehicle_model_type: delay_steer_acc_geared_wo_fall_guard
+    baseline:
+      vehicle_model_type: delay_steer_acc_geared_for_diffusion_planner
       vehicle_model: j6_gen2
       architecture_type: awf/universe/20250130
     kus0020:
-      vehicle_model_type: delay_steer_acc_geared_wo_fall_guard
+      vehicle_model_type: delay_steer_acc_geared_for_diffusion_planner
       vehicle_model: j6_gen2
       params: {k_us: 0.020}
-    best_normal:
-      vehicle_model_type: delay_steer_acc_geared_wo_fall_guard
+    best_baseline:
+      vehicle_model_type: delay_steer_acc_geared_for_diffusion_planner
       vehicle_model: j6_gen2
       params: {k_us: 0.018, steer_time_constant: 0.15, debug_steer_scaling_factor: 1.0, acc_time_constant: 0.30}
     no_delay:                          # cases 専用 (vehicle_model なし → sim_runs に含められない)
-      vehicle_model_type: delay_steer_acc_geared_wo_fall_guard
+      vehicle_model_type: delay_steer_acc_geared_for_diffusion_planner
       params: {acc_time_delay: 0.0, acc_time_constant: 0.0, steer_time_delay: 0.0, steer_time_constant: 0.0, steer_bias: 0.0}
     taiga_dyn:
       vehicle_model_type: taiga_dyn    # sim では TAIGA_DYN enum を自動注入
@@ -117,14 +117,14 @@ Conditions:
       vehicle_model: j6_gen2_godot
       godot_executable: /opt/godot_autoware_simulator/godot_autoware_simulator.x86_64
 
-  cases:    [normal, kus0020, best_normal, no_delay, taiga_dyn, taiga_x]
-  sim_runs: [normal, kus0020, best_normal, taiga_dyn, taiga_x, perfect, godot]
+  cases:    [baseline, kus0020, best_baseline, no_delay, taiga_dyn, taiga_x]
+  sim_runs: [baseline, kus0020, best_baseline, taiga_dyn, taiga_x, perfect, godot]
   overlay:
-    reference_tag: normal
+    reference_tag: baseline
     plots: [cascade_error, error_timeseries]
 ```
 
-**`vehicle_model_type`（open-loop クラス名）** は `delay_steer_acc_geared_wo_fall_guard` /
+**`vehicle_model_type`（open-loop クラス名）** は `delay_steer_acc_geared_for_diffusion_planner` /
 `delay_steer_acc_geared_for_diffusion_planner` / `ideal_steer_acc` / `taiga_dyn` /
 `taiga_x` の 5 種類。`params` で未指定のキーは
 `load_sim_params()` (j6_gen2_description の YAML) で補完（`wheelbase` は不要）。
@@ -191,7 +191,7 @@ sample/out/latest/
     ├── lite/
     │   ├── real.lite/*.mcap              # Stage 0
     │   └── <run_tag>.lite/*.mcap         # Stage CL2: Conditions.sim_runs の各 run
-    │                                     #   (既定 normal / kus0020 / best_normal / taiga_dyn / taiga_x / perfect / godot)
+    │                                     #   (既定 baseline / kus0020 / best_baseline / taiga_dyn / taiga_x / perfect / godot)
     ├── scenarios/auto_scenario.yaml      # Stage CL1
     ├── report.html                       # Stage Report HTML: 単一 HTML レポート
     └── comparison/
@@ -228,7 +228,7 @@ make local_cloud_run LOCAL_SCENARIO=/path/to/other_scenario.yaml
 | `Conditions.models に未定義名` | `scenario.yaml` の `Conditions.cases` / `sim_runs` に挙げた名前が `models` に存在するか確認 |
 | `cases に vehicle_model_type なし` | `cases` に挙げたモデルに `vehicle_model_type` が必要。open-loop クラス名を追加する |
 | `sim_runs に vehicle_model なし` | `sim_runs` に挙げたモデルに `vehicle_model` が必要。description パッケージ名を追加する |
-| `未対応の model_type` | `vehicle_model_type` は `delay_steer_acc_geared_wo_fall_guard` / `delay_steer_acc_geared_for_diffusion_planner` / `ideal_steer_acc` / `taiga_dyn` / `taiga_x` のみ。新規 model 追加は `vehicle_model_c_wrapper.cpp` への factory 追加が必要 |
+| `未対応の model_type` | `vehicle_model_type` は `delay_steer_acc_geared_for_diffusion_planner` / `delay_steer_acc_geared_for_diffusion_planner` / `ideal_steer_acc` / `taiga_dyn` / `taiga_x` のみ。新規 model 追加は `vehicle_model_c_wrapper.cpp` への factory 追加が必要 |
 | Stage CL2 (sim) が全 run 失敗 | scenario_test_runner が起動できているか、auto_scenario.yaml が valid か `ros2 launch scenario_test_runner scenario_test_runner.launch.py scenario:=<...auto_scenario.yaml>` を手動で試行 |
 | sim 1 run で 10 分以上かかる | `Conditions.models.<name>.timeout_s` を上げるか、`initialize_duration` を下げて確認 |
 
