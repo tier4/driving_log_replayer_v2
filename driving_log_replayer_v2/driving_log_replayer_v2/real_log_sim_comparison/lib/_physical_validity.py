@@ -359,10 +359,10 @@ def fit_steer_single(bag_path: Path) -> dict | None:
 # ---------------------------------------------------------------------------
 # 横方向 k_us: 全速度域一括の原点回帰 (スカラー、十分統計量つき、単一/複数データセット両対応)
 # ---------------------------------------------------------------------------
-def _extract_kus_arrays(bag_path: Path) -> dict | None:
+def _extract_kus_arrays(bag_path: Path, steer_bias: float | None = None) -> dict | None:
     """k_us 分析用の vx/wz/steer_eff/dwz を単一データセットから抽出する。
 
-    付随情報として kinematic 時刻 t [s] と yaw [rad] も返す
+    付随情報として kinematic 時刻 t [s] 和 yaw [rad] も返す
     (physical_validity_report の worker がカーブカバレッジ・cmd_steer 間引きに使う。
     `compute_kus_bins` は vx/wz/steer_eff/dwz のみ参照し、余剰キーは無視される)。
     """
@@ -392,7 +392,10 @@ def _extract_kus_arrays(bag_path: Path) -> dict | None:
     steer_raw = df_steer["steer"].values
     t_s = df_steer["t_ns"].values * 1e-9
     steer = np.interp(t_k, t_s, steer_raw)
-    steer_eff = steer - STEER_BIAS
+    
+    if steer_bias is None:
+        steer_bias = STEER_BIAS
+    steer_eff = steer - steer_bias
 
     dt = np.diff(t_k)
     dt_safe = np.where(dt > 0, dt, 1e-3)
@@ -469,9 +472,9 @@ def compute_kus_bins(records: list[dict]) -> dict:
     }
 
 
-def compute_kus_bins_single(bag_path: Path) -> dict | None:
+def compute_kus_bins_single(bag_path: Path, steer_bias: float | None = None) -> dict | None:
     """単一データセットのスカラー k_us 回帰 (十分統計量つき)。"""
-    rec = _extract_kus_arrays(bag_path)
+    rec = _extract_kus_arrays(bag_path, steer_bias=steer_bias)
     if rec is None:
         return None
     return compute_kus_bins([rec])

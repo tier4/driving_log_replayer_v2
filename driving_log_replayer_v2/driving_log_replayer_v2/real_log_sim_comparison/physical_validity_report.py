@@ -391,15 +391,15 @@ details > summary::-webkit-details-marker { display: none; }
 # ---------------------------------------------------------------------------
 def _load_mcap_worker(args: tuple) -> dict | None:
     """プロセスワーカー: 1 MCAP から k_us 分析用データとカーブカバレッジを抽出。"""
-    # 引数は (uuid: str, lite_dir: str) のタプル（pickle 対応のため str）
-    uuid, lite_dir_str = args
+    # 引数は (uuid: str, lite_dir: str, steer_bias: float | None) のタプル
+    uuid, lite_dir_str, steer_bias = args
     lite_dir = Path(lite_dir_str)
     mcap = lite_dir / "real.lite" / "real.lite_0.mcap"
     if not mcap.exists():
         return None
 
     # k_us 分析用配列 (vx/wz/steer_eff/dwz) + 付随情報 (t/yaw) は lib と共通化
-    rec = _extract_kus_arrays(mcap)
+    rec = _extract_kus_arrays(mcap, steer_bias=steer_bias)
     if rec is None:
         return None
     t_k = rec["t"]
@@ -419,7 +419,7 @@ def _load_mcap_worker(args: tuple) -> dict | None:
     except Exception:
         cov = {"curve_count": 0, "kappa_max_abs": 0.0}
 
-    # cmd_steer（stride=10 で間引き: 操舵信号の時系列表示用）
+    # cmd_steer（stride=10 で間引き: 操舵信号 of 時系列表示用）
     _STRIDE = 10
     t_sub = t_k[::_STRIDE]
     if not df_cmd.empty:
@@ -435,15 +435,16 @@ def _load_mcap_worker(args: tuple) -> dict | None:
         "wz": rec["wz"].tolist(),
         "steer_eff": rec["steer_eff"].tolist(),
         "dwz": rec["dwz"].tolist(),
+        "gear_drive": rec["gear_drive"].tolist(),
         "curve_count": cov["curve_count"],
         "kappa_max_abs": cov["kappa_max_abs"],
         "cmd_steer": cmd_steer_arr,
     }
 
 
-def load_all_mcap(ds_list: list, n_jobs: int = 8) -> list[dict]:
+def load_all_mcap(ds_list: list, steer_bias: float | None = None, n_jobs: int = 8) -> list[dict]:
     """全データセットを並列 MCAP 読み込み。"""
-    args_list = [(uuid, str(lite_dir)) for uuid, lite_dir in ds_list]
+    args_list = [(uuid, str(lite_dir), steer_bias) for uuid, lite_dir in ds_list]
     results: list[dict] = []
     with ProcessPoolExecutor(max_workers=n_jobs) as pool:
         futs = {pool.submit(_load_mcap_worker, a): a for a in args_list}
@@ -1688,6 +1689,18 @@ def main() -> None:
     )
     tuned_params = {k: v for k, v in params.items() if not k.startswith("_")}
     current_eval_params = {**current_base_params, **tuned_params}
+
+    # Resolve fully merged parameters to extract vehicle geometry and steer bias overrides
+    merged_tuned = merged_model_params(current_eval_params)
+    steer_bias = float(merged_tuned.get("steer_bias", 0.0005))
+    wheelbase = float(merged_tuned.get("wheelbase", 4.76012))
+
+    # Override global WHEELBASE in both this script and the imported module
+    global WHEELBASE
+    WHEELBASE = wheelbase
+    import driving_log_replayer_v2.real_log_sim_comparison.lib._physical_validity as _pv
+    _pv.WHEELBASE = wheelbase
+
     cache_identity = {
         "current_model_type": current_model,
         "baseline_model_type": baseline_model,
@@ -1698,6 +1711,8 @@ def main() -> None:
     print(f"  current: {args.case} ({current_model})")
     print(f"  baseline: {baseline_case} ({baseline_model})")
     print(f"  k_us={params.get('k_us', 0):.5f} (全速度域一定)")
+    print(f"  steer_bias={steer_bias:.5f} rad")
+    print(f"  wheelbase={wheelbase:.5f} m")
     print(f"  steer_dead_band={params.get('steer_dead_band',0):.5f} rad")
 
     # データセット列挙
@@ -1716,7 +1731,7 @@ def main() -> None:
 
     # Phase 1: 並列 MCAP 読み込み
     print("\n[Phase 1] MCAP 並列読み込み ...")
-    records = load_all_mcap(ds_list, n_jobs=args.n_jobs)
+    records = load_all_mcap(ds_list, steer_bias=steer_bias, n_jobs=args.n_jobs)
     print(f"  有効: {len(records)} 件")
 
     # Phase 2: スカラー k_us 最小二乗法
@@ -1777,6 +1792,7 @@ def main() -> None:
         and args.metrics_cache.exists()
         and _metrics_cache_matches(args.metrics_cache, cache_identity)
     )
+    baseline_score = None
     if cache_is_valid:
         # キャッシュあり → viewer データセット のみ load、メトリクスは CSV から読む
         print(f"\n[Phase 3b] DatasetCtx 構築 ({len(top_items)} データセット) ...")
@@ -1820,9 +1836,14 @@ def main() -> None:
             best_name, recomputed = next(kv for kv in candidates if kv[0] == "steer_score")
         diff_str = f"{abs(recomputed - expected) / expected * 100:.2f}%" if expected else "N/A"
         print(f"  再現スコア: {recomputed:.4f} ({best_name})  期待値: {expected:.4f}  差: {diff_str}")
-        # baseline (k_us=0) の steer_score を計算
-        baseline_steer_score = _steer_score(_agg_normalized(list(bl_arg.items()), bl_arg))
-        print(f"  baseline steer_score: {baseline_steer_score:.4f}")
+        # baseline (k_us=0) の該当スコアを計算
+        if best_name == "robust_score":
+            baseline_score = _robust_score(_agg_normalized(list(bl_arg.items()), bl_arg))
+        elif best_name == "acc_score":
+            baseline_score = _acc_score(_agg_normalized(list(bl_arg.items()), bl_arg))
+        else:
+            baseline_score = _steer_score(_agg_normalized(list(bl_arg.items()), bl_arg))
+        print(f"  baseline {best_name}: {baseline_score:.4f}")
         deviation_html = _build_sec_deviation(df_rollout, len(records), recomputed, expected, score_name=best_name, label=phase_label)
     elif args.metrics_cache:
         # キャッシュなし → 全データセット load（ついでに viewer データセット も取り出す）
@@ -1891,12 +1912,17 @@ def main() -> None:
             best_name, recomputed = next(kv for kv in candidates if kv[0] == "steer_score")
         diff_str = f"{abs(recomputed - expected) / expected * 100:.2f}%" if expected else "N/A"
         print(f"  再現スコア: {recomputed:.4f} ({best_name})  期待値: {expected:.4f}  差: {diff_str}")
-        # baseline (k_us=0) の steer_score を計算
-        baseline_steer_score = _steer_score(_agg_normalized(list(bl_arg.items()), bl_arg))
-        print(f"  baseline steer_score: {baseline_steer_score:.4f}")
+        # baseline (k_us=0) の該当スコアを計算
+        if best_name == "robust_score":
+            baseline_score = _robust_score(_agg_normalized(list(bl_arg.items()), bl_arg))
+        elif best_name == "acc_score":
+            baseline_score = _acc_score(_agg_normalized(list(bl_arg.items()), bl_arg))
+        else:
+            baseline_score = _steer_score(_agg_normalized(list(bl_arg.items()), bl_arg))
+        print(f"  baseline {best_name}: {baseline_score:.4f}")
         deviation_html = _build_sec_deviation(df_rollout, len(records), recomputed, expected, score_name=best_name, label=phase_label)
     else:
-        baseline_steer_score = None
+        pass
         # --metrics-cache 未指定 → 通常の viewer データセット のみ load
         print(f"\n[Phase 3b] DatasetCtx 構築 ({len(top_items)} データセット) ...")
         ctxs = load_datasets(
@@ -2129,7 +2155,7 @@ def main() -> None:
 
     html = build_html(
         params, long_fig, steer_fig, kus_fig, viewer_sections, len(records),
-        baseline_score=baseline_steer_score,
+        baseline_score=baseline_score,
         deviation_html=deviation_html,
         label=phase_label,
         params_filename=args.params.name,
