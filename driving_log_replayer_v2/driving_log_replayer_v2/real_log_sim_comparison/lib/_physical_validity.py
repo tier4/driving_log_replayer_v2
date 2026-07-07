@@ -1004,191 +1004,214 @@ def fit_long_cross_dataset_bounded(
     }
 
 
+def _compute_cross_long_row_worker(args) -> dict | None:
+    entry, fit, cross_fit, models = args
+    try:
+        df_cmd = load_cmd(entry.real_lite, CMD_TOPIC)
+        df_accel = load_accel(entry.real_lite)
+        df_vel = load_velocity(entry.real_lite)
+    except Exception:
+        return None
+    _require_dfs(
+        f"compute_cross_long_rows:{entry.dataset_id}",
+        control_cmd=df_cmd,
+        localization_acceleration=df_accel,
+        velocity_status=df_vel,
+    )
+    timebase = _common_timebase(df_cmd, df_accel, df_vel, min_span_ns=_MIN_SPAN_NS)
+    if timebase is None:
+        return None
+    t_s, t0 = timebase
+    a_cmd_arr = _resample(df_cmd, "cmd_accel", t_s, t0)
+    a_act_arr = _resample(df_accel, "accel", t_s, t0)
+    vx = _resample(df_vel, "lon_vel", t_s, t0)
+    gear_drive = _drive_mask_on_grid(entry.real_lite, t_s, t0, context=f"compute_cross_long_rows:{entry.dataset_id}")
+    slope_acc_arr = _slope_acc_on_grid(entry.real_lite, t_s, t0)
+    a_act_corr = a_act_arr - slope_acc_arr
+    d_cmd = np.abs(np.gradient(a_cmd_arr, _FIT_DT))
+    mask_dyn = gear_drive & (vx > _VX_MIN_FIT) & (d_cmd > _DA_THRESH_FIT)
+    moving = gear_drive & (vx > VX_MIN_CURVE)
+
+    a_sim_cross = None
+    a_sim_cross_corr = None
+    tau_pointwise = None
+    if np.isfinite(cross_fit.get("tau", float("nan"))):
+        n_delay_cross = int(round(cross_fit["delay"] / _FIT_DT))
+        a_sim_cross_corr = _sim_first_order(
+            a_cmd_arr, cross_fit["tau"], n_delay_cross, y0=float(a_act_corr[0]),
+        )
+        a_sim_cross = a_sim_cross_corr + slope_acc_arr
+        tau_pointwise = _pointwise_tau_estimate(a_cmd_arr, a_act_corr, mask_dyn, n_delay_cross)
+
+    a_sim_models: dict[str, list] = {}
+    a_sim_models_low: dict[str, list] = {}
+    a_sim_models_raw: dict[str, list] = {}
+    dot_a_sim_models: dict[str, list] = {}
+    for name, spec in (models or {}).items():
+        merged = merged_model_params(spec.params)
+        tau = merged.get("acc_time_constant")
+        delay = merged.get("acc_time_delay")
+        if tau is None or delay is None:
+            continue
+        sim_corr = _sim_first_order(
+            a_cmd_arr, float(tau), int(round(float(delay) / _FIT_DT)),
+            y0=float(a_act_arr[0] - slope_acc_arr[0]),
+        )
+        sim = sim_corr + slope_acc_arr
+        a_sim_models[name] = _mask_stopped(sim, mask_dyn)
+        a_sim_models_low[name] = _mask_moving(sim, mask_dyn)
+        a_sim_models_raw[name] = _mask_stopped(sim, mask_dyn)
+        dot_a_sim_models[name] = _mask_stopped(np.gradient(sim_corr, _FIT_DT), mask_dyn)
+
+    rmse = fit.get("rmse_mps2", float("nan"))
+    return {
+        "label": f"[最長連続候補] {entry.dataset_id[:8]}  RMSE={rmse:.3f} m/s²",
+        "dataset_id": entry.dataset_id,
+        "case_tag": "最長連続候補",
+        "_t0_ns": t0,
+        "t": t_s.tolist(),
+        "moving": moving.tolist(),
+        "gear_drive": gear_drive.tolist(),
+        "mask_dyn": mask_dyn.tolist(),
+        "vx": vx.tolist(),
+        "a_cmd_raw": a_cmd_arr.tolist(),
+        "a_act_raw": a_act_arr.tolist(),
+        "a_act_corr": a_act_corr.tolist(),
+        "slope_acc": slope_acc_arr.tolist(),
+        "dot_a_cmd": np.gradient(a_cmd_arr, _FIT_DT).tolist(),
+        "dot_a_act": np.gradient(a_act_corr, _FIT_DT).tolist(),
+        "dot_a_sim_cross": (
+            _mask_stopped(np.gradient(a_sim_cross_corr, _FIT_DT), mask_dyn)
+            if a_sim_cross_corr is not None else None
+        ),
+        "a_cmd": _mask_stopped(a_cmd_arr, moving),
+        "a_cmd_low": _mask_moving(a_cmd_arr, moving),
+        "a_act": _mask_stopped(a_act_arr, moving),
+        "a_act_low": _mask_moving(a_act_arr, moving),
+        "a_sim_cross": _mask_stopped(a_sim_cross, mask_dyn) if a_sim_cross is not None else None,
+        "a_sim_cross_raw": _mask_stopped(a_sim_cross, mask_dyn) if a_sim_cross is not None else None,
+        "a_sim_cross_low": _mask_moving(a_sim_cross, mask_dyn) if a_sim_cross is not None else None,
+        "a_sim_models": a_sim_models,
+        "a_sim_models_raw": a_sim_models_raw,
+        "a_sim_models_low": a_sim_models_low,
+        "dot_a_sim_models": dot_a_sim_models,
+        "tau_pointwise": tau_pointwise.tolist() if tau_pointwise is not None else None,
+    }
+
+
 def compute_cross_long_rows(
     entries: list, per_ds_long: dict[str, dict], cross_fit: dict, models: dict | None,
     pinned_uuids: list[str] | None = None,
+    n_jobs: int = 8,
 ) -> list[dict]:
     """最長連続データセットの縦方向時系列 (横断フィット + モデル別チューン値重ね描き用)。"""
     candidates = _valid_fit_entries(entries, per_ds_long, "rmse_mps2")
+    from concurrent.futures import ProcessPoolExecutor
+    worker_args = [
+        (entry, per_ds_long.get(entry.dataset_id, {}), cross_fit, models)
+        for entry in candidates
+    ]
     rows: list[dict] = []
-    for entry in candidates:
-        try:
-            df_cmd = load_cmd(entry.real_lite, CMD_TOPIC)
-            df_accel = load_accel(entry.real_lite)
-            df_vel = load_velocity(entry.real_lite)
-        except Exception:
-            continue
-        _require_dfs(
-            f"compute_cross_long_rows:{entry.dataset_id}",
-            control_cmd=df_cmd,
-            localization_acceleration=df_accel,
-            velocity_status=df_vel,
-        )
-        timebase = _common_timebase(df_cmd, df_accel, df_vel, min_span_ns=_MIN_SPAN_NS)
-        if timebase is None:
-            continue
-        t_s, t0 = timebase
-        a_cmd_arr = _resample(df_cmd, "cmd_accel", t_s, t0)
-        a_act_arr = _resample(df_accel, "accel", t_s, t0)
-        vx = _resample(df_vel, "lon_vel", t_s, t0)
-        gear_drive = _drive_mask_on_grid(entry.real_lite, t_s, t0, context=f"compute_cross_long_rows:{entry.dataset_id}")
-        slope_acc_arr = _slope_acc_on_grid(entry.real_lite, t_s, t0)
-        a_act_corr = a_act_arr - slope_acc_arr
-        d_cmd = np.abs(np.gradient(a_cmd_arr, _FIT_DT))
-        mask_dyn = gear_drive & (vx > _VX_MIN_FIT) & (d_cmd > _DA_THRESH_FIT)
-        moving = gear_drive & (vx > VX_MIN_CURVE)
-
-        a_sim_cross = None
-        a_sim_cross_corr = None
-        tau_pointwise = None
-        if np.isfinite(cross_fit.get("tau", float("nan"))):
-            n_delay_cross = int(round(cross_fit["delay"] / _FIT_DT))
-            a_sim_cross_corr = _sim_first_order(
-                a_cmd_arr, cross_fit["tau"], n_delay_cross, y0=float(a_act_corr[0]),
-            )
-            a_sim_cross = a_sim_cross_corr + slope_acc_arr
-            tau_pointwise = _pointwise_tau_estimate(a_cmd_arr, a_act_corr, mask_dyn, n_delay_cross)
-
-        a_sim_models: dict[str, list] = {}
-        a_sim_models_low: dict[str, list] = {}
-        a_sim_models_raw: dict[str, list] = {}
-        dot_a_sim_models: dict[str, list] = {}
-        for name, spec in (models or {}).items():
-            merged = merged_model_params(spec.params)
-            tau = merged.get("acc_time_constant")
-            delay = merged.get("acc_time_delay")
-            if tau is None or delay is None:
-                continue
-            sim_corr = _sim_first_order(
-                a_cmd_arr, float(tau), int(round(float(delay) / _FIT_DT)),
-                y0=float(a_act_arr[0] - slope_acc_arr[0]),
-            )
-            sim = sim_corr + slope_acc_arr
-            # 同定対象区間 (mask_dyn) 外はシミュレーション結果を表示しない
-            a_sim_models[name] = _mask_stopped(sim, mask_dyn)
-            a_sim_models_low[name] = _mask_moving(sim, mask_dyn)
-            a_sim_models_raw[name] = _mask_stopped(sim, mask_dyn)
-            dot_a_sim_models[name] = _mask_stopped(np.gradient(sim_corr, _FIT_DT), mask_dyn)
-
-        fit = per_ds_long.get(entry.dataset_id, {})
-        rmse = fit.get("rmse_mps2", float("nan"))
-        rows.append({
-            "label": f"[最長連続候補] {entry.dataset_id[:8]}  RMSE={rmse:.3f} m/s²",
-            "dataset_id": entry.dataset_id,
-            "case_tag": "最長連続候補",
-            "_t0_ns": t0,
-            "t": t_s.tolist(),
-            "moving": moving.tolist(),
-            "gear_drive": gear_drive.tolist(),
-            "mask_dyn": mask_dyn.tolist(),
-            "vx": vx.tolist(),
-            "a_cmd_raw": a_cmd_arr.tolist(),
-            "a_act_raw": a_act_arr.tolist(),
-            "a_act_corr": a_act_corr.tolist(),
-            "slope_acc": slope_acc_arr.tolist(),
-            "dot_a_cmd": np.gradient(a_cmd_arr, _FIT_DT).tolist(),
-            "dot_a_act": np.gradient(a_act_corr, _FIT_DT).tolist(),
-            "dot_a_sim_cross": (
-                _mask_stopped(np.gradient(a_sim_cross_corr, _FIT_DT), mask_dyn)
-                if a_sim_cross_corr is not None else None
-            ),
-            "a_cmd": _mask_stopped(a_cmd_arr, moving),
-            "a_cmd_low": _mask_moving(a_cmd_arr, moving),
-            "a_act": _mask_stopped(a_act_arr, moving),
-            "a_act_low": _mask_moving(a_act_arr, moving),
-            # 同定対象区間 (mask_dyn) 外はシミュレーション結果を表示しない
-            "a_sim_cross": _mask_stopped(a_sim_cross, mask_dyn) if a_sim_cross is not None else None,
-            "a_sim_cross_raw": _mask_stopped(a_sim_cross, mask_dyn) if a_sim_cross is not None else None,
-            "a_sim_cross_low": _mask_moving(a_sim_cross, mask_dyn) if a_sim_cross is not None else None,
-            "a_sim_models": a_sim_models,
-            "a_sim_models_raw": a_sim_models_raw,
-            "a_sim_models_low": a_sim_models_low,
-            "dot_a_sim_models": dot_a_sim_models,
-            "tau_pointwise": tau_pointwise.tolist() if tau_pointwise is not None else None,
-        })
+    with ProcessPoolExecutor(max_workers=n_jobs) as executor:
+        results = executor.map(_compute_cross_long_row_worker, worker_args)
+        for r in results:
+            if r is not None:
+                rows.append(r)
     return _pick_longest_contiguous_timeseries_row(rows, pinned_uuids)
+
+
+def _compute_cross_steer_row_worker(args) -> dict | None:
+    entry, fit, models = args
+    try:
+        df_cmd = load_cmd(entry.real_lite, CMD_TOPIC)
+        df_steer = load_steering(entry.real_lite)
+        df_vel = load_velocity(entry.real_lite)
+    except Exception:
+        return None
+    _require_dfs(
+        f"compute_cross_steer_rows:{entry.dataset_id}",
+        control_cmd=df_cmd,
+        steering_status=df_steer,
+        velocity_status=df_vel,
+    )
+    timebase = _common_timebase(df_cmd, df_steer, df_vel, min_span_ns=_MIN_SPAN_NS)
+    if timebase is None:
+        return None
+    t_s, t0 = timebase
+    d_cmd = _resample(df_cmd, "cmd_steer", t_s, t0)
+    d_act = _resample(df_steer, "steer", t_s, t0)
+    vx = _resample(df_vel, "lon_vel", t_s, t0)
+    gear_drive = _drive_mask_on_grid(entry.real_lite, t_s, t0, context=f"compute_cross_steer_rows:{entry.dataset_id}")
+    dot_d_cmd = np.gradient(d_cmd, _FIT_DT)
+    dot_d_act = np.gradient(d_act, _FIT_DT)
+    mask_dyn = gear_drive & (vx > _VX_MIN_FIT) & (np.abs(dot_d_cmd) > _DSTEER_MIN / _FIT_DT)
+    moving = gear_drive & (vx > VX_MIN_CURVE)
+
+    d_sim_fit = None
+    dot_d_open_fit = None
+    if np.isfinite(fit.get("tau", float("nan"))):
+        n_delay_fit = int(round(fit["delay"] / _FIT_DT))
+        d_sim_fit = _sim_first_order(d_cmd, fit["tau"], n_delay_fit)
+        dot_d_open_fit = (_delay_shift(d_cmd, n_delay_fit) - d_act) / max(float(fit["tau"]), 1e-9)
+
+    d_sim_models: dict[str, list] = {}
+    d_sim_models_raw: dict[str, list] = {}
+    dot_d_sim_models: dict[str, list] = {}
+    for name, spec in (models or {}).items():
+        merged = merged_model_params(spec.params)
+        tau = merged.get("steer_time_constant")
+        delay = merged.get("steer_time_delay")
+        if tau is None or delay is None:
+            continue
+        sim = _sim_first_order(d_cmd, float(tau), int(round(float(delay) / _FIT_DT)))
+        d_sim_models[name] = _mask_stopped(sim, mask_dyn)
+        d_sim_models_raw[name] = _mask_stopped(sim, mask_dyn)
+        dot_d_sim_models[name] = _mask_stopped(np.gradient(sim, _FIT_DT), mask_dyn)
+
+    rmse = fit.get("rmse_mrad", float("nan"))
+    return {
+        "label": f"[最長連続候補] {entry.dataset_id[:8]}  RMSE={rmse:.1f} mrad",
+        "dataset_id": entry.dataset_id,
+        "case_tag": "最長連続候補",
+        "_t0_ns": t0,
+        "t": t_s.tolist(),
+        "moving": moving.tolist(),
+        "gear_drive": gear_drive.tolist(),
+        "mask_dyn": mask_dyn.tolist(),
+        "vx": vx.tolist(),
+        "d_cmd": d_cmd.tolist(),
+        "dot_d_cmd": dot_d_cmd.tolist(),
+        "dot_d_act": dot_d_act.tolist(),
+        "dot_d_sim_fit": np.gradient(d_sim_fit, _FIT_DT).tolist() if d_sim_fit is not None else None,
+        "dot_d_open_fit": dot_d_open_fit.tolist() if dot_d_open_fit is not None else None,
+        "d_act": _mask_stopped(d_act, moving),
+        "d_act_raw": d_act.tolist(),
+        "d_sim_fit": _mask_stopped(d_sim_fit, moving) if d_sim_fit is not None else None,
+        "d_sim_fit_raw": d_sim_fit.tolist() if d_sim_fit is not None else None,
+        "d_sim_models": d_sim_models,
+        "d_sim_models_raw": d_sim_models_raw,
+        "dot_d_sim_models": dot_d_sim_models,
+    }
 
 
 def compute_cross_steer_rows(
     entries: list, per_ds_steer: dict[str, dict], models: dict | None,
     pinned_uuids: list[str] | None = None,
+    n_jobs: int = 8,
 ) -> list[dict]:
     """最長連続データセットの操舵時系列 (per-dataset フィット + モデル別チューン値重ね描き用)。"""
     candidates = _valid_fit_entries(entries, per_ds_steer, "rmse_mrad")
+    from concurrent.futures import ProcessPoolExecutor
+    worker_args = [
+        (entry, per_ds_steer.get(entry.dataset_id, {}), models)
+        for entry in candidates
+    ]
     rows: list[dict] = []
-    for entry in candidates:
-        try:
-            df_cmd = load_cmd(entry.real_lite, CMD_TOPIC)
-            df_steer = load_steering(entry.real_lite)
-            df_vel = load_velocity(entry.real_lite)
-        except Exception:
-            continue
-        _require_dfs(
-            f"compute_cross_steer_rows:{entry.dataset_id}",
-            control_cmd=df_cmd,
-            steering_status=df_steer,
-            velocity_status=df_vel,
-        )
-        timebase = _common_timebase(df_cmd, df_steer, df_vel, min_span_ns=_MIN_SPAN_NS)
-        if timebase is None:
-            continue
-        t_s, t0 = timebase
-        d_cmd = _resample(df_cmd, "cmd_steer", t_s, t0)
-        d_act = _resample(df_steer, "steer", t_s, t0)
-        vx = _resample(df_vel, "lon_vel", t_s, t0)
-        gear_drive = _drive_mask_on_grid(entry.real_lite, t_s, t0, context=f"compute_cross_steer_rows:{entry.dataset_id}")
-        dot_d_cmd = np.gradient(d_cmd, _FIT_DT)
-        dot_d_act = np.gradient(d_act, _FIT_DT)
-        mask_dyn = gear_drive & (vx > _VX_MIN_FIT) & (np.abs(dot_d_cmd) > _DSTEER_MIN / _FIT_DT)
-        moving = gear_drive & (vx > VX_MIN_CURVE)
-
-        fit = per_ds_steer.get(entry.dataset_id, {})
-        d_sim_fit = None
-        dot_d_open_fit = None
-        if np.isfinite(fit.get("tau", float("nan"))):
-            n_delay_fit = int(round(fit["delay"] / _FIT_DT))
-            d_sim_fit = _sim_first_order(d_cmd, fit["tau"], n_delay_fit)
-            dot_d_open_fit = (_delay_shift(d_cmd, n_delay_fit) - d_act) / max(float(fit["tau"]), 1e-9)
-
-        d_sim_models: dict[str, list] = {}
-        d_sim_models_raw: dict[str, list] = {}
-        dot_d_sim_models: dict[str, list] = {}
-        for name, spec in (models or {}).items():
-            merged = merged_model_params(spec.params)
-            tau = merged.get("steer_time_constant")
-            delay = merged.get("steer_time_delay")
-            if tau is None or delay is None:
-                continue
-            sim = _sim_first_order(d_cmd, float(tau), int(round(float(delay) / _FIT_DT)))
-            # 同定対象区間 (mask_dyn) 外はシミュレーション結果を表示しない
-            d_sim_models[name] = _mask_stopped(sim, mask_dyn)
-            d_sim_models_raw[name] = _mask_stopped(sim, mask_dyn)
-            dot_d_sim_models[name] = _mask_stopped(np.gradient(sim, _FIT_DT), mask_dyn)
-
-        rmse = fit.get("rmse_mrad", float("nan"))
-        rows.append({
-            "label": f"[最長連続候補] {entry.dataset_id[:8]}  RMSE={rmse:.1f} mrad",
-            "dataset_id": entry.dataset_id,
-            "case_tag": "最長連続候補",
-            "_t0_ns": t0,
-            "t": t_s.tolist(),
-            "moving": moving.tolist(),
-            "gear_drive": gear_drive.tolist(),
-            "mask_dyn": mask_dyn.tolist(),
-            "vx": vx.tolist(),
-            "d_cmd": d_cmd.tolist(),
-            "dot_d_cmd": dot_d_cmd.tolist(),
-            "dot_d_act": dot_d_act.tolist(),
-            "dot_d_sim_fit": np.gradient(d_sim_fit, _FIT_DT).tolist() if d_sim_fit is not None else None,
-            "dot_d_open_fit": dot_d_open_fit.tolist() if dot_d_open_fit is not None else None,
-            "d_act": _mask_stopped(d_act, moving),
-            "d_act_raw": d_act.tolist(),
-            "d_sim_fit": _mask_stopped(d_sim_fit, moving) if d_sim_fit is not None else None,
-            "d_sim_fit_raw": d_sim_fit.tolist() if d_sim_fit is not None else None,
-            "d_sim_models": d_sim_models,
-            "d_sim_models_raw": d_sim_models_raw,
-            "dot_d_sim_models": dot_d_sim_models,
-        })
+    with ProcessPoolExecutor(max_workers=n_jobs) as executor:
+        results = executor.map(_compute_cross_steer_row_worker, worker_args)
+        for r in results:
+            if r is not None:
+                rows.append(r)
     return _pick_longest_contiguous_timeseries_row(rows, pinned_uuids)
 
 
