@@ -1064,10 +1064,11 @@ def compute_cross_long_rows(
                 y0=float(a_act_arr[0] - slope_acc_arr[0]),
             )
             sim = sim_corr + slope_acc_arr
-            a_sim_models[name] = _mask_stopped(sim, moving)
-            a_sim_models_low[name] = _mask_moving(sim, moving)
-            a_sim_models_raw[name] = sim.tolist()
-            dot_a_sim_models[name] = np.gradient(sim_corr, _FIT_DT).tolist()
+            # 同定対象区間 (mask_dyn) 外はシミュレーション結果を表示しない
+            a_sim_models[name] = _mask_stopped(sim, mask_dyn)
+            a_sim_models_low[name] = _mask_moving(sim, mask_dyn)
+            a_sim_models_raw[name] = _mask_stopped(sim, mask_dyn)
+            dot_a_sim_models[name] = _mask_stopped(np.gradient(sim_corr, _FIT_DT), mask_dyn)
 
         fit = per_ds_long.get(entry.dataset_id, {})
         rmse = fit.get("rmse_mps2", float("nan"))
@@ -1088,16 +1089,17 @@ def compute_cross_long_rows(
             "dot_a_cmd": np.gradient(a_cmd_arr, _FIT_DT).tolist(),
             "dot_a_act": np.gradient(a_act_corr, _FIT_DT).tolist(),
             "dot_a_sim_cross": (
-                np.gradient(a_sim_cross_corr, _FIT_DT).tolist()
+                _mask_stopped(np.gradient(a_sim_cross_corr, _FIT_DT), mask_dyn)
                 if a_sim_cross_corr is not None else None
             ),
             "a_cmd": _mask_stopped(a_cmd_arr, moving),
             "a_cmd_low": _mask_moving(a_cmd_arr, moving),
             "a_act": _mask_stopped(a_act_arr, moving),
             "a_act_low": _mask_moving(a_act_arr, moving),
-            "a_sim_cross": _mask_stopped(a_sim_cross, moving) if a_sim_cross is not None else None,
-            "a_sim_cross_raw": a_sim_cross.tolist() if a_sim_cross is not None else None,
-            "a_sim_cross_low": _mask_moving(a_sim_cross, moving) if a_sim_cross is not None else None,
+            # 同定対象区間 (mask_dyn) 外はシミュレーション結果を表示しない
+            "a_sim_cross": _mask_stopped(a_sim_cross, mask_dyn) if a_sim_cross is not None else None,
+            "a_sim_cross_raw": _mask_stopped(a_sim_cross, mask_dyn) if a_sim_cross is not None else None,
+            "a_sim_cross_low": _mask_moving(a_sim_cross, mask_dyn) if a_sim_cross is not None else None,
             "a_sim_models": a_sim_models,
             "a_sim_models_raw": a_sim_models_raw,
             "a_sim_models_low": a_sim_models_low,
@@ -1158,9 +1160,10 @@ def compute_cross_steer_rows(
             if tau is None or delay is None:
                 continue
             sim = _sim_first_order(d_cmd, float(tau), int(round(float(delay) / _FIT_DT)))
-            d_sim_models[name] = _mask_stopped(sim, moving)
-            d_sim_models_raw[name] = sim.tolist()
-            dot_d_sim_models[name] = np.gradient(sim, _FIT_DT).tolist()
+            # 同定対象区間 (mask_dyn) 外はシミュレーション結果を表示しない
+            d_sim_models[name] = _mask_stopped(sim, mask_dyn)
+            d_sim_models_raw[name] = _mask_stopped(sim, mask_dyn)
+            dot_d_sim_models[name] = _mask_stopped(np.gradient(sim, _FIT_DT), mask_dyn)
 
         rmse = fit.get("rmse_mrad", float("nan"))
         rows.append({
