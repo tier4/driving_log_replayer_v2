@@ -1,0 +1,31 @@
+/**:
+  ros__parameters:
+    simulated_frame_id: "base_link"
+    origin_frame_id: "map"
+    vehicle_model_type: "DELAY_STEER_ACC_GEARED_FOR_DIFFUSION_PLANNER"
+    initialize_source: "INITIAL_POSE_TOPIC"
+    timer_sampling_time_ms: 25
+    add_measurement_noise: False
+    enable_road_slope_simulation: True
+    vel_lim: 50.0
+    vel_rate_lim: 7.0
+    steer_lim: 1.0
+    steer_rate_lim: 5.0
+    acc_time_delay: 0.1
+    acc_time_constant: 0.1
+    steer_time_delay: 0.17
+    steer_time_constant: 0.15
+    x_stddev: 0.0001 # x standard deviation for dummy covariance in map coordinate
+    y_stddev: 0.0001 # y standard deviation for dummy covariance in map coordinate
+    delay_steer_acc_geared_for_diffusion_planner:
+      version: 1
+      v1:
+        acc_time_delay: 0.1
+        acc_time_constant: 0.1
+        steer_time_delay: 0.17
+        steer_time_constant: 0.15
+        steer_dead_band: 0.0
+        steer_bias: 0.0
+        debug_acc_scaling_factor: 1.0
+        debug_steer_scaling_factor: 1.0
+        k_us: 0.0
