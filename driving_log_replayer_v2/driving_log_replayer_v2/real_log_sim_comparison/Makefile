@@ -61,6 +61,7 @@ help:
 	@echo "    fit_steer           Step3: 操舵+k_us 直接同定 (fit_lon 必須) → phase2_steer.yaml"
 	@echo "    fit_merge           Step4a: warm-start Optuna 統合 (fit_steer 必須) → tuned_params.yaml + tuning_report.html"
 	@echo "    fit_report          Step4b: 物理妥当性レポート (fit_merge 必須) → physical_validity_report.html"
+	@echo "                        + リリースノート用抜粋レポート → physical_validity_release_note.html"
 	@echo "    apply               Step5: 同定パラメータを scenario に反映 (fit_merge 必須) → tuned_scenario.yaml"
 	@echo "    closed_loop         Step6: tuned scenario で closed-loop 実 sim (apply 必須)"
 	@echo ""
@@ -178,6 +179,7 @@ PHASE2_STEER    := $(MULTI_BATCH_ROOT)/phase2_steer.yaml
 TUNED_PARAMS    := $(MULTI_BATCH_ROOT)/tuned_params.yaml
 TUNING_REPORT   := $(MULTI_BATCH_ROOT)/tuning_report.html
 VALIDITY_REPORT := $(MULTI_BATCH_ROOT)/physical_validity_report.html
+RELEASE_NOTE_REPORT := $(MULTI_BATCH_ROOT)/physical_validity_release_note.html
 METRICS_CACHE   := $(MULTI_BATCH_ROOT)/metrics_cache.csv
 TUNED_SCENARIO  := $(MULTI_BATCH_ROOT)/scenarios/tuned_scenario.yaml
 
@@ -292,12 +294,14 @@ fit_report:
 	@test -f "$(TUNED_PARAMS)" || \
 	    { echo "[ERROR] $(TUNED_PARAMS) がありません。先に 'make fit_merge' を実行してください"; exit 1; }
 	@echo "[INFO] fit_report: 物理妥当性レポート生成 → $(VALIDITY_REPORT)"
+	@echo "[INFO] fit_report: リリースノート用レポート生成 → $(RELEASE_NOTE_REPORT)"
 	source $(SETUP_BASH) && $(PYTHON) -m driving_log_replayer_v2.real_log_sim_comparison.physical_validity_report \
 	    --params "$(TUNED_PARAMS)" \
 	    --scenario "$(LOCAL_SCENARIO)" \
 	    --case "$(MODEL_CASE)" \
 	    --collection-dir "$(MULTI_BATCH_ROOT)" \
 	    --out "$(VALIDITY_REPORT)" \
+	    --release-note-out "$(RELEASE_NOTE_REPORT)" \
 	    --metrics-cache "$(METRICS_CACHE)" \
 	    --closed-loop-uuids "$(CLOSED_LOOP_UUIDS)"
 
