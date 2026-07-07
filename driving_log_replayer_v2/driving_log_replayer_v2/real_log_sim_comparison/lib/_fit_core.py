@@ -290,6 +290,7 @@ def fit_first_order_delay_residual_3phase(
     filter_w: int = 1,
     x0_dict: dict | None = None,
     fixed_phase1_tau: float | None = None,
+    skip_phase3: bool = False,
 ) -> dict | None:
     """3段階交互最適化による一次遅れ＋純粋遅延の方程式残差最小二乗フィッティング。
 
@@ -392,13 +393,17 @@ def fit_first_order_delay_residual_3phase(
     phase2_delay = float(best_n * dt)
 
     # Phase 3: 最良 delay 固定でパラメータを再最適化
-    res3 = least_squares(lambda x: _residuals(x, best_n), res1_x, bounds=bounds)
-
-    # 最終結果のパース
-    tau_inv_fit = float(res3.x[0])
-    tau_fit = 1.0 / tau_inv_fit
-    scale_fit = float(res3.x[1]) if fit_scale else 1.0
-    delay_fit = float(best_n * dt)
+    if skip_phase3:
+        tau_inv_fit = float(res1_x[0])
+        tau_fit = 1.0 / tau_inv_fit
+        scale_fit = float(res1_x[1]) if fit_scale else 1.0
+        delay_fit = phase2_delay
+    else:
+        res3 = least_squares(lambda x: _residuals(x, best_n), res1_x, bounds=bounds)
+        tau_inv_fit = float(res3.x[0])
+        tau_fit = 1.0 / tau_inv_fit
+        scale_fit = float(res3.x[1]) if fit_scale else 1.0
+        delay_fit = float(best_n * dt)
 
     n_samples = int(np.count_nonzero(mask))
     rmse_fit = float(np.sqrt(best_cost / n_samples)) if n_samples > 0 else float("nan")

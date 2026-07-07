@@ -1160,11 +1160,11 @@ J_a
 パラメータ同定は、<code>_fit_core.py</code> の <code>fit_first_order_delay_residual_3phase</code> による3段階交互最適化を用いた方程式残差の最小二乗法で直接行われます。
 </p>
 <div class="note">
-  <b>3段階交互最適化 (3-Phase Alternating Optimization) のアルゴリズム:</b>
+  <b>3段階交互最適化 (3-Phase Alternating Optimization) のアルゴリズム (縦方向):</b>
   <ol>
-    <li><b>Phase 1 (時定数固定):</b> \(\tau_a\) を固定値 0.3 s として与えます（最小二乗法による最適化はスキップ）。</li>
-    <li><b>Phase 2 (遅延グリッドサーチ):</b> Phase 1 の固定 \(\tau_a\) を用いたまま、事前に定義された遅延候補（グリッド）の中から方程式残差の二乗和 (MSE) を最小化する無駄時間 \(T_a\) を探索します。</li>
-    <li><b>Phase 3 (パラメータ再最適化):</b> Phase 2 で決定された最良の無駄時間 \(T_a\) に固定した上で、時定数 \(\tau_a\) を最小二乗法で最適化し、最終的な同定値を得ます。</li>
+    <li><b>Phase 1 (初期値固定時定数最適化):</b> 無駄時間 \(T_a\) を初期パラメータの基準値に固定した状態で、時定数 \(\tau_a\) を最小二乗法で最適化し初期パラメータを決定します（\(\tau_a\) の初期固定値指定がある場合は最適化をスキップしてその値を使用）。</li>
+    <li><b>Phase 2 (遅延グリッドサーチ):</b> Phase 1 で得られたパラメータを固定したまま、事前に定義された遅延候補（グリッド）の中から方程式残差の二乗和 (MSE) を最小化する無駄時間 \(T_a\) を探索します。</li>
+    <li><b>Phase 3 (再最適化スキップ):</b> 縦方向では、初期遅延による時定数決定の固定関係を維持するため、Phase 3 (再最適化) をスキップし、Phase 1/2 で得られた時定数 \(\tau_a\) と遅延時間 \(T_a\) を最終的な同定値とします。</li>
   </ol>
 </div>
 <p class="meta">
@@ -1827,6 +1827,80 @@ def build_html(
 """
 
 
+def build_release_note_html(
+    deviation_html: str,
+    long_fig: go.Figure,
+    steer_fig: go.Figure,
+    long_resid_hist_fig: go.Figure,
+    steer_resid_hist_fig: go.Figure,
+    long_fit_rmse_html: str,
+    steer_fit_rmse_html: str,
+    label: str = "current",
+    params_filename: str = "",
+    n_dataset: int = 0,
+) -> str:
+    """N-step Open Loop評価とフィッティング評価だけを抜粋したリリースノート用の自己完結 HTML を返す。
+
+    main() で既に計算済みの値をそのまま受け取り、MCAP 再読込・再フィットは行わない。
+    """
+    deviation_section = deviation_html or (
+        '<section id="deviation"><h2>N-step Open Loop評価</h2>'
+        '<div class="note">--metrics-cache 未指定のため、このレポートでは省略されました。</div>'
+        "</section>"
+    )
+
+    long_ts_html = _lazy_fig_html(
+        long_fig, "rn-fig-long-timeseries", "release-note/long_fit（dataset横断）",
+    )
+    steer_ts_html = _lazy_fig_html(
+        steer_fig, "rn-fig-steer-timeseries", "release-note/steer_fit（dataset横断）",
+    )
+    long_resid_hist_html = long_resid_hist_fig.to_html(full_html=False, include_plotlyjs=False)
+    steer_resid_hist_html = steer_resid_hist_fig.to_html(full_html=False, include_plotlyjs=False)
+
+    return f"""<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>物理的妥当性レポート（要約）— {label}</title>
+  {_MATHJAX_HEAD}
+  {_PLOTLY_CDN}
+  <style>{_STYLE}</style>
+</head>
+<body>
+<h1>車両モデル物理的妥当性検証レポート（要約）— {label}</h1>
+<p class="meta">
+  生成元: <code>{params_filename or label}</code> &nbsp;|&nbsp;
+  有効データセット数: {n_dataset}
+</p>
+<nav>
+  <a href="#deviation">N-step Open Loop評価</a>
+  <a href="#rn-fit">フィッティング評価</a>
+</nav>
+
+{deviation_section}
+
+<section id="rn-fit">
+<h2>縦横モデルのフィッティング評価</h2>
+
+<h3>縦方向</h3>
+{long_fit_rmse_html}
+<details><summary>時系列グラフを表示（クリックで展開）</summary>{long_ts_html}</details>
+{long_resid_hist_html}
+
+<h3>操舵</h3>
+{steer_fit_rmse_html}
+<details><summary>時系列グラフを表示（クリックで展開）</summary>{steer_ts_html}</details>
+{steer_resid_hist_html}
+</section>
+
+{_RENDER_GLUE}
+</body>
+</html>
+"""
+
+
 # ---------------------------------------------------------------------------
 # メイン
 # ---------------------------------------------------------------------------
@@ -1862,6 +1936,10 @@ def main() -> None:
     ap.add_argument(
         "--out", type=Path, required=True,
         help="出力 HTML パス",
+    )
+    ap.add_argument(
+        "--release-note-out", type=Path, default=None,
+        help="N-step Open Loop評価とフィッティング評価のみを抜粋したリリースノート用 HTML の出力パス（省略時は生成しない）",
     )
     ap.add_argument(
         "--scenario", type=Path, default=None,
@@ -2442,16 +2520,17 @@ def main() -> None:
         long_process_log = ""
         if "phase1_tau" in cross_fit_long:
             p1_t = cross_fit_long["phase1_tau"]
+            p1_d = cross_fit_long.get("phase1_delay", 0.101)
             p2_d = cross_fit_long["phase2_delay"]
             p3_t = cross_fit_long["phase3_tau"]
             p3_d = cross_fit_long["phase3_delay"]
             long_process_log = f"""
             <div class="note" style="margin-top: 10px; margin-bottom: 15px; border-left: 4px solid #4caf50; background-color: #f9f9f9; padding: 10px;">
-              <b>【実行ログ】縦方向・横断同定における3段階最適化 (3-Phase) の遷移挙動:</b>
+              <b>【実行ログ】縦方向・横断同定における最適化の遷移挙動:</b>
               <ul style="margin: 5px 0 0 0; padding-left: 20px;">
-                <li><b>Phase 1 (時定数固定):</b> \\(\\tau_a\\) を固定値 \\({p1_t:.4f}\\) s として設定（最適化はスキップ）</li>
+                <li><b>Phase 1 (時定数固定):</b> \\(\\tau_a\\) を固定値 \\({p1_t:.4f}\\) s として設定（初期遅延 \\(T_a = {p1_d:.3f}\\) s、最適化はスキップ）</li>
                 <li><b>Phase 2 (遅延グリッドサーチ):</b> 固定した \\(\\tau_a = {p1_t:.4f}\\) s のまま、残差二乗和を最小化する遅延を決定 &rarr; \\(T_a = {p2_d:.3f}\\) s （下表で最小RMSEとなる行）</li>
-                <li><b>Phase 3 (最終パラメータ再最適化):</b> 決定遅延 \\(T_a = {p3_d:.3f}\\) s 固定で時定数を再最適化 &rarr; \\(\\tau_a = {p3_t:.4f}\\) s, \\(T_a = {p3_d:.3f}\\) s</li>
+                <li><b>Phase 3 (再最適化スキップ):</b> 縦方向では基準値での時定数決定の固定関係を維持するため、Phase 3 (再最適化) をスキップし、Phase 1/2 の結果（\\(\\tau_a = {p3_t:.4f}\\) s, \\(T_a = {p3_d:.3f}\\) s）を最終同定値として採用します。</li>
               </ul>
             </div>
             """
@@ -2536,6 +2615,24 @@ def main() -> None:
     args.out.write_text(html, encoding="utf-8")
     size_kb = args.out.stat().st_size // 1024
     print(f"\n✓ 完了: {args.out}  ({size_kb} KB)")
+
+    if args.release_note_out:
+        release_note_html = build_release_note_html(
+            deviation_html=deviation_html,
+            long_fig=long_fig,
+            steer_fig=steer_fig,
+            long_resid_hist_fig=long_resid_hist_fig,
+            steer_resid_hist_fig=steer_resid_hist_fig,
+            long_fit_rmse_html=long_fit_rmse_html,
+            steer_fit_rmse_html=steer_fit_rmse_html,
+            label=phase_label,
+            params_filename=args.params.name,
+            n_dataset=len(records),
+        )
+        args.release_note_out.parent.mkdir(parents=True, exist_ok=True)
+        args.release_note_out.write_text(release_note_html, encoding="utf-8")
+        rn_size_kb = args.release_note_out.stat().st_size // 1024
+        print(f"✓ 完了（リリースノート）: {args.release_note_out}  ({rn_size_kb} KB)")
 
 
 if __name__ == "__main__":

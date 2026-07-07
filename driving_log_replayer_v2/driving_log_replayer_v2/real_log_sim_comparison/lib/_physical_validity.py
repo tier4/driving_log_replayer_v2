@@ -269,6 +269,7 @@ def fit_long_single(bag_path: Path) -> dict | None:
         tau_bounds=_TAU_BOUNDS_LONG, delay_candidates=_DELAY_CANDIDATES_LONG,
         filter_w=10, x0_dict={"tau": tau_baseline, "delay": delay_baseline},
         fixed_phase1_tau=_LONG_PHASE1_FIXED_TAU,
+        skip_phase3=True,
     )
     if fit is None:
         return None
@@ -976,10 +977,8 @@ def fit_long_cross_dataset_bounded(
             best_cost = cost
             best_n = n_delay
 
-    # Phase 3: 最良 delay 固定でパラメータを再最適化
-    res3 = least_squares(lambda x: _residuals(x, best_n), res1_x, bounds=bounds)
-
-    best_tau = 1.0 / float(res3.x[0])
+    # Phase 3: 最良 delay 固定でパラメータを再最適化 (1-2縦方向ではPhase 3をスキップ)
+    best_tau = phase1_tau
     best_delay = float(best_n * _FIT_DT)
     n_total_samples = sum(int(mask.sum()) for _, _, _, mask in processed_pooled)
     best_rmse = float(np.sqrt(best_cost / n_total_samples)) if n_total_samples > 0 else float("nan")
