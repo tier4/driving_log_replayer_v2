@@ -938,6 +938,70 @@ def build_fig_perfect_tracking_traj(
     return apply_base_layout(fig, title=fig.layout.title.text, height=height)
 
 
+def build_fig_residual_candidates_hist(
+    results: list[dict],
+    channel_label: str,
+    unit_label: str,
+) -> go.Figure:
+    """遅延固定＆時定数最適化ペアごとの方程式残差ヒストグラム。"""
+    fig = go.Figure()
+    valid_results = [r for r in results if len(r.get("resid_samples", [])) > 0]
+    if not valid_results:
+        fig.add_annotation(text="データなし", showarrow=False)
+        return fig
+
+    selected_idx = 0
+    for idx, r in enumerate(valid_results):
+        if r.get("selected", False):
+            selected_idx = idx
+            break
+
+    for idx, r in enumerate(valid_results):
+        arr = np.asarray(r["resid_samples"], dtype=float)
+        arr = arr[np.isfinite(arr)]
+        lo, hi = (float(x) for x in np.percentile(arr, [1, 99]))
+        if not (hi > lo):
+            lo, hi = float(arr.min()), float(arr.max() + 1e-9)
+        counts, edges = np.histogram(arr, bins=80, range=(lo, hi))
+        centers = (edges[:-1] + edges[1:]) / 2.0
+        fig.add_trace(go.Bar(
+            x=centers.tolist(),
+            y=counts.tolist(),
+            width=float(edges[1] - edges[0]),
+            marker_color="teal",
+            opacity=0.75,
+            name=f"Delay={r['delay']:.3f}s, τ={r['tau']:.3f}s",
+            visible=(idx == selected_idx),
+        ))
+
+    buttons = []
+    for idx, r in enumerate(valid_results):
+        visibility = [False] * len(valid_results)
+        visibility[idx] = True
+        title_text = f"{channel_label}: 方程式残差 E[k] の分布 (遅延={r['delay']:.3f}s, τ={r['tau']:.3f}s)"
+        buttons.append(dict(
+            label=f"遅延 {r['delay']:.3f} s (最適 τ={r['tau']:.3f} s)",
+            method="update",
+            args=[{"visible": visibility}, {"title": title_text}],
+        ))
+
+    fig.update_layout(updatemenus=[
+        dict(
+            active=selected_idx,
+            buttons=buttons,
+            x=0.0,
+            xanchor="left",
+            y=1.15,
+            yanchor="top",
+        )
+    ])
+    fig.update_xaxes(title_text=f"方程式残差 E[k] = RHS − LHS  [{unit_label}]")
+    fig.update_yaxes(title_text="サンプル数")
+    selected_r = valid_results[selected_idx]
+    title_text = f"{channel_label}: 方程式残差 E[k] の分布 (遅延={selected_r['delay']:.3f}s, τ={selected_r['tau']:.3f}s)"
+    return apply_base_layout(fig, title=title_text, height=380)
+
+
 def build_fig_xy_equation_residual_hist(data: dict) -> go.Figure:
     """x/y 状態方程式残差の fitted vs baseline ヒストグラム。"""
     fitted = data.get("fitted") or {}
