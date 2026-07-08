@@ -22,7 +22,10 @@ from .settings import (
     LONG_VX_MIN,
     MIN_FIT_SAMPLES,
     RESAMPLE_DT,
+    ACCEL_SOURCE,
+    ACCEL_DELAY_MAP,
 )
+
 
 
 def _long_mask(ds: dict) -> np.ndarray:
@@ -47,7 +50,9 @@ def _fit_one(ds: dict) -> tuple[float, float, float] | None:
     )
     if fit is None:
         return None
-    return fit["tau"], fit["delay"], fit["scale"]
+    corrected_delay = max(0.0, fit["delay"] - ACCEL_DELAY_MAP.get(ACCEL_SOURCE, 0.0))
+    return fit["tau"], corrected_delay, fit["scale"]
+
 
 
 def fit_lon(collection_dir: Path, *, n_jobs: int = 1) -> dict:

@@ -32,7 +32,8 @@ RUN_PY := source "$(SETUP_BASH)" && MPLCONFIGDIR="$(MPLCONFIGDIR)" PYTHONPATH="$
 endif
 RUN_PY_NO_SETUP := MPLCONFIGDIR="$(MPLCONFIGDIR)" PYTHONPATH="$(PYTHONPATH_PREFIX):$${PYTHONPATH:-}" $(PYTHON)
 
-.PHONY: help local_cloud_run local_analysis_run local_batch_run local_cross_analysis_run local_multidataset_run local_multidataset_cloud_run prepare_multidataset issue_scenario collect_raw_rosbags open_loop_tune open_loop_batch physical_validity_report_nodata lite lite_ol lite_cl extract fit_lon fit_steer fit_merge fit_report reidentify apply closed_loop release_model_param reidentify_v2
+.PHONY: help local_cloud_run local_analysis_run local_batch_run local_cross_analysis_run local_multidataset_run local_multidataset_cloud_run prepare_multidataset issue_scenario collect_raw_rosbags open_loop_tune open_loop_batch physical_validity_report_nodata lite lite_ol lite_cl extract fit_lon fit_steer fit_merge fit_report reidentify apply closed_loop release_model_param reidentify_v2 compare_accel
+
 
 help:
 	@echo "使い方: make -C $(MAKEFILE_DIR) <ターゲット>"
@@ -643,3 +644,35 @@ physical_validity_report_nodata:
 	        --case "$(MODEL_CASE)" \
 	        --collection-dir "$$_nodata_col" \
 	        --out "$(NODATA_OUT)"
+
+# 加速度トピック・微分・位置2回微分の比較プロットを生成する。
+#
+# 使い方:
+#   make compare_accel CSV=<reidentify_cache.csvのパス> [OUT=<png出力パス>]
+#   または (MULTI_BATCH_ROOT を使用し、特定の UUID を指定):
+#   make compare_accel UUID=<uuid> [OUT=<png出力パス>]
+#
+# 例:
+#   make compare_accel CSV=/path/to/reidentify_cache.csv
+#   make compare_accel UUID=00d08afd-b605-5de1-9db0-51241fa87b18
+compare_accel:
+	@if [ -z "$(CSV)" ] && [ -z "$(UUID)" ]; then \
+	    echo "[ERROR] CSV または UUID を指定してください。"; \
+	    echo "  例1: make compare_accel CSV=/path/to/reidentify_cache.csv"; \
+	    echo "  例2: make compare_accel UUID=00d08afd-b605-5de1-9db0-51241fa87b18 [MULTI_BATCH_ROOT=<dir>]"; \
+	    exit 1; \
+	fi
+	@csv_path="$(CSV)" ; \
+	if [ -n "$(UUID)" ]; then \
+	    batch_root="$(or $(MULTI_BATCH_ROOT),/home/kotaroyoshimoto/data/openloop_j6_16_onwards)" ; \
+	    csv_path="$$batch_root/datasets/$(UUID)/reidentify_cache.csv" ; \
+	fi ; \
+	test -f "$$csv_path" || { echo "[ERROR] CSV ファイルが見つかりません: $$csv_path"; exit 1; } ; \
+	out_path="$(OUT)" ; \
+	if [ -z "$$out_path" ]; then \
+	    out_path="$$(dirname "$$csv_path")/acceleration_comparison.png" ; \
+	fi ; \
+	echo "[INFO] Input CSV : $$csv_path" ; \
+	echo "[INFO] Output PNG: $$out_path" ; \
+	$(RUN_PY_NO_SETUP) $(MAKEFILE_DIR)/tools/compare_accel.py --csv "$$csv_path" --out "$$out_path"
+

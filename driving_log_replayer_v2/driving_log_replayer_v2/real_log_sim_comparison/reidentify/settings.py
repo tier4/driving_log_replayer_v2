@@ -43,11 +43,12 @@ STEER_CLIP_RAD = 0.8
 
 K_US_CLIP = 0.05
 
-SEARCH_DELAY_CANDIDATES = (0.10, 0.15, 0.20, 0.30, 0.40, 0.50)
+SEARCH_DELAY_CANDIDATES = (0.0, 0.05, 0.10, 0.15, 0.20, 0.30, 0.40, 0.50)
 SEARCH_SPACE_ACC = {
-    "acc_time_constant": (0.20, 0.30),
+    "acc_time_constant": (0.05, 0.30),
     "debug_acc_scaling_factor": (0.80, 1.20),
 }
+
 SEARCH_SPACE_STEER = {
     "steer_time_constant": (0.05, 0.80),
     "debug_steer_scaling_factor": (0.75, 1.20),
@@ -88,3 +89,19 @@ TAIGA_X_DEFAULTS = {
 }
 
 RELEASE_MODEL_KEY = "delay_steer_acc_geared_for_diffusion_planner"
+
+# Acceleration source configuration
+# "accel"          : Use the original /localization/acceleration topic (default with lag)
+# "kinematic_diff"  : Differentiate /localization/kinematic_state vx (recommended)
+# "velocity_diff"   : Differentiate /vehicle/status/velocity_status longitudinal_velocity
+ACCEL_SOURCE = "kinematic_diff"
+
+# Processing lag correction (seconds) to be subtracted from identified delay.
+# - "accel" has a known ~80ms processing/filtering lag from EKF.
+# - Differentiated signals smoothed with a centered moving average have a phase lag of 0.
+ACCEL_DELAY_MAP = {
+    "accel": 0.080,
+    "kinematic_diff": 0.0,
+    "velocity_diff": 0.0,
+}
+

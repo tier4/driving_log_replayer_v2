@@ -15,6 +15,8 @@ from ..lib._collection import discover_collection
 from ..lib._validation import require_non_empty_df
 from .csv_schema import CACHE_NAME, SIGNAL_COLUMNS
 from .gear import require_drive_gear_mask
+from .settings import ACCEL_SOURCE
+
 
 
 def read_dataset_csv(csv_path: Path) -> dict[str, pd.DataFrame]:
@@ -76,7 +78,35 @@ def build_resampled(dfs: dict[str, pd.DataFrame], dt: float, *, context: str) ->
     t_s = (t_ns - t0) * 1e-9
 
     a_cmd = np.interp(t_s, (df_cmd["t_ns"].values - t0) * 1e-9, df_cmd["cmd_accel"].values)
-    a_act = np.interp(t_s, (df_accel["t_ns"].values - t0) * 1e-9, df_accel["accel"].values)
+    
+    if ACCEL_SOURCE == "accel":
+        accel_t_ns = df_accel["t_ns"].values
+        accel_val = df_accel["accel"].values
+    elif ACCEL_SOURCE == "kinematic_diff":
+        t_s_kin = df_kin["t_ns"].values * 1e-9
+        vx = df_kin["vx"].values
+        dt = np.diff(t_s_kin)
+        dv = np.diff(vx)
+        raw_accel = np.zeros_like(vx)
+        raw_accel[1:] = dv / np.maximum(dt, 1e-6)
+        smooth_accel = pd.Series(raw_accel).rolling(window=10, min_periods=1, center=True).mean().values
+        accel_t_ns = df_kin["t_ns"].values
+        accel_val = smooth_accel
+    elif ACCEL_SOURCE == "velocity_diff":
+        t_s_vel = df_vel["t_ns"].values * 1e-9
+        lon_vel = df_vel["lon_vel"].values
+        dt = np.diff(t_s_vel)
+        dv = np.diff(lon_vel)
+        raw_accel = np.zeros_like(lon_vel)
+        raw_accel[1:] = dv / np.maximum(dt, 1e-6)
+        smooth_accel = pd.Series(raw_accel).rolling(window=10, min_periods=1, center=True).mean().values
+        accel_t_ns = df_vel["t_ns"].values
+        accel_val = smooth_accel
+    else:
+        raise ValueError(f"Unknown ACCEL_SOURCE: {ACCEL_SOURCE}")
+
+    a_act = np.interp(t_s, (accel_t_ns - t0) * 1e-9, accel_val)
+
     d_cmd = np.interp(t_s, (df_cmd["t_ns"].values - t0) * 1e-9, df_cmd["cmd_steer"].values)
     d_act = np.interp(t_s, (df_steer["t_ns"].values - t0) * 1e-9, df_steer["steer"].values)
     vx = np.interp(t_s, (df_vel["t_ns"].values - t0) * 1e-9, df_vel["lon_vel"].values)

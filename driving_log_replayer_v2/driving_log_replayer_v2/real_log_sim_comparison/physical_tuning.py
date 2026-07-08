@@ -33,6 +33,12 @@ from driving_log_replayer_v2.real_log_sim_comparison.lib._io import (
 from driving_log_replayer_v2.real_log_sim_comparison.lib._validation import (
     require_non_empty_df,
 )
+from driving_log_replayer_v2.real_log_sim_comparison.reidentify.settings import (
+    ACCEL_SOURCE,
+    ACCEL_DELAY_MAP,
+)
+import pandas as pd
+
 # 物理定数の SSOT は lib._physical_validity。チューニング(本モジュール)と検証
 # (physical_validity_report) で同じ車両ジオメトリ・同定条件を使うため、そこから import する。
 # k_us の定常旋回フィルタ (VX_MIN_CURVE / WZ_MIN / DWZ_MAX) は「同定した母集団」と
@@ -100,7 +106,35 @@ def _load_light_worker(args: tuple) -> dict | None:
     t_s = (t_ns - t0) * 1e-9
 
     a_cmd = np.interp(t_s, (df_cmd["t_ns"].values - t0) * 1e-9, df_cmd["cmd_accel"].values)
-    a_act = np.interp(t_s, (df_accel["t_ns"].values - t0) * 1e-9, df_accel["accel"].values)
+    
+    if ACCEL_SOURCE == "accel":
+        accel_t_ns = df_accel["t_ns"].values
+        accel_val = df_accel["accel"].values
+    elif ACCEL_SOURCE == "kinematic_diff":
+        t_s_kin = df_kin["t_ns"].values * 1e-9
+        vx = df_kin["vx"].values
+        dt = np.diff(t_s_kin)
+        dv = np.diff(vx)
+        raw_accel = np.zeros_like(vx)
+        raw_accel[1:] = dv / np.maximum(dt, 1e-6)
+        smooth_accel = pd.Series(raw_accel).rolling(window=10, min_periods=1, center=True).mean().values
+        accel_t_ns = df_kin["t_ns"].values
+        accel_val = smooth_accel
+    elif ACCEL_SOURCE == "velocity_diff":
+        t_s_vel = df_vel["t_ns"].values * 1e-9
+        lon_vel = df_vel["lon_vel"].values
+        dt = np.diff(t_s_vel)
+        dv = np.diff(lon_vel)
+        raw_accel = np.zeros_like(lon_vel)
+        raw_accel[1:] = dv / np.maximum(dt, 1e-6)
+        smooth_accel = pd.Series(raw_accel).rolling(window=10, min_periods=1, center=True).mean().values
+        accel_t_ns = df_vel["t_ns"].values
+        accel_val = smooth_accel
+    else:
+        raise ValueError(f"Unknown ACCEL_SOURCE: {ACCEL_SOURCE}")
+
+    a_act = np.interp(t_s, (accel_t_ns - t0) * 1e-9, accel_val)
+
     d_cmd = np.interp(t_s, (df_cmd["t_ns"].values - t0) * 1e-9, df_cmd["cmd_steer"].values)
     d_act = np.interp(t_s, (df_steer["t_ns"].values - t0) * 1e-9, df_steer["steer"].values)
     vx = np.interp(t_s, (df_vel["t_ns"].values - t0) * 1e-9, df_vel["lon_vel"].values)
@@ -143,7 +177,9 @@ def _fit_one_long_worker(ds: dict) -> tuple[float, float, float] | None:
     )
     if fit is None:
         return None
-    return fit["tau"], fit["delay"], fit["scale"]
+    corrected_delay = max(0.0, fit["delay"] - ACCEL_DELAY_MAP.get(ACCEL_SOURCE, 0.0))
+    return fit["tau"], corrected_delay, fit["scale"]
+
 
 def _fit_one_steer_worker(ds: dict) -> tuple[float, float, float, float] | None:
     d_cmd = ds["d_cmd"]
