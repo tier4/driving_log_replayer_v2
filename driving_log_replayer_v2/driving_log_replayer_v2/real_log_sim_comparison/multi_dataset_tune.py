@@ -44,6 +44,12 @@ from .lib._multi_agg import (
     acc_score, aggregate_normalized,
     format_agg, robust_score, steer_score,
 )
+from .lib._parallel import (
+    default_parallel_jobs,
+    normalize_parallel_jobs,
+    pool_chunksize,
+    set_worker_thread_env_defaults,
+)
 from .lib._physical_validity import WHEELBASE
 from .lib._validation import MissingRequiredDataError
 
@@ -218,8 +224,9 @@ def load_datasets(
 
     # 並列パス: fork プールで D 本を並列ロード (pool.imap で順序保証・ピーク転送を平準化)
     mp_ctx = multiprocessing.get_context("fork")
-    chunksize = max(1, len(lite_dirs) // (n_jobs * 4))
-    with mp_ctx.Pool(n_jobs) as pool:
+    n_workers = normalize_parallel_jobs(n_jobs, n_tasks=len(lite_dirs))
+    chunksize = pool_chunksize(len(lite_dirs), n_workers)
+    with mp_ctx.Pool(n_workers) as pool:
         results = list(pool.imap(_load_one, lite_dirs, chunksize=chunksize))
 
     ctxs = []
@@ -306,7 +313,7 @@ def _eval_grid(
         for ti in range(n_trials)
         for ci in range(n_ctxs)
     ]
-    chunksize = max(1, len(units) // (n_jobs * 4))
+    chunksize = pool_chunksize(len(units), n_jobs)
     raw = pool.map(_worker_eval_one, units, chunksize=chunksize)
 
     # trial 単位に per_ds_metrics を再構成し集約
@@ -336,8 +343,7 @@ def _run_worker(
     import yaml
     import optuna
 
-    # Set OMP_NUM_THREADS to 1 to avoid core oversubscription in workers
-    os.environ["OMP_NUM_THREADS"] = "1"
+    set_worker_thread_env_defaults()
 
     # Reload study in worker
     study = optuna.load_study(study_name="robust_search", storage=db_url)
@@ -766,9 +772,9 @@ def main() -> None:
     ap.add_argument(
         "--jobs",
         type=int,
-        default=os.cpu_count(),
+        default=default_parallel_jobs(),
         metavar="N",
-        help="並列ワーカー数 (既定: CPU コア数)。1 で逐次実行 (デバッグ・再現性検証用)",
+        help="並列ワーカー数 (既定: REAL_LOG_SIM_COMPARISON_JOBS または CPU コア数)。1 で逐次実行",
     )
     ap.add_argument(
         "--n-trials",
@@ -893,7 +899,7 @@ def main() -> None:
         print(f"ERROR: real.lite が見つかりません: {args.collection_dir}", file=sys.stderr)
         sys.exit(1)
 
-    n_jobs = max(1, args.jobs or 1)
+    n_jobs = normalize_parallel_jobs(args.jobs)
 
     # baseline model は scenario.yaml (Conditions.overlay.reference_tag) を唯一の SSOT として
     # 解決する。load_datasets より前に確定させ、baseline 側の rollout 評価に明示的に渡す
@@ -908,7 +914,7 @@ def main() -> None:
     # worker 内の BLAS/OpenMP が親コア数分のスレッドを再起動するのを防ぎ、
     # コア間の CPU リソース競合を回避する。load_datasets の前に設定しないと
     # 並列ロード中の baseline rollout が oversubscribe する。
-    os.environ.setdefault("OMP_NUM_THREADS", "1")
+    set_worker_thread_env_defaults()
 
     ctxs = load_datasets(
         lite_dirs, n_jobs=n_jobs, verbose=args.verbose,

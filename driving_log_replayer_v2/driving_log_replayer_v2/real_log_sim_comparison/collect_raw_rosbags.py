@@ -46,6 +46,8 @@ from concurrent.futures import ProcessPoolExecutor, as_completed
 
 import yaml
 
+from .lib._parallel import default_parallel_jobs, normalize_parallel_jobs
+
 PROJECT_ID = "x2_dev"
 _PKG = "driving_log_replayer_v2.real_log_sim_comparison"
 
@@ -360,7 +362,7 @@ def collect(
     min_duration_s: float = _MIN_DURATION_S_DEFAULT,
     topics: list[str] | None = None,
     dry_run: bool = False,
-    jobs: int = min(4, os.cpu_count() or 1),
+    jobs: int | None = None,
 ) -> list[dict]:
     """vehicle_id で rosbag を収集し real.lite を生成する。
 
@@ -379,6 +381,7 @@ def collect(
     """
     if topics is None:
         topics = _OPENLOOP_TOPICS
+    jobs = normalize_parallel_jobs(jobs, default=default_parallel_jobs(cap=4))
 
     print(
         f"[collect] vehicle_id={vehicle_id} limit={limit} "
@@ -471,8 +474,9 @@ def collect(
         for item in selected
     ]
 
-    print(f"\n[INFO] 並列実行開始 (ワーカー数: {jobs})...", flush=True)
-    with ProcessPoolExecutor(max_workers=jobs) as pool:
+    n_workers = normalize_parallel_jobs(jobs, n_tasks=len(tasks_args))
+    print(f"\n[INFO] 並列実行開始 (ワーカー数: {n_workers})...", flush=True)
+    with ProcessPoolExecutor(max_workers=n_workers) as pool:
         futs = {pool.submit(_collect_one_worker, a): a["item"].get("id", "") for a in tasks_args}
         for i, fut in enumerate(as_completed(futs), start=1):
             rosbag_id = futs[fut]
@@ -557,8 +561,8 @@ def main() -> None:
         help="search と選別のみ実行し pull/lite 化はしない (件数・日付分布の事前確認用)",
     )
     ap.add_argument(
-        "--jobs", type=int, default=min(4, os.cpu_count() or 1),
-        help="並列ワーカー数 (既定: コア数または4の小さい方)",
+        "--jobs", type=int, default=default_parallel_jobs(cap=4),
+        help="並列ワーカー数 (既定: REAL_LOG_SIM_COMPARISON_JOBS または最大4)",
     )
     args = ap.parse_args()
 

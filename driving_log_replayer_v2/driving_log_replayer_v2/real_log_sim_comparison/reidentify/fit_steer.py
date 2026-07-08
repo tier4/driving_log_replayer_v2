@@ -4,13 +4,13 @@ from __future__ import annotations
 
 import argparse
 from concurrent.futures import ProcessPoolExecutor, as_completed
-import os
 from pathlib import Path
 
 import numpy as np
 import yaml
 
 from . import fit_core
+from ..lib._parallel import default_parallel_jobs, normalize_parallel_jobs
 from .load_data import build_resampled, discover_cached_datasets, read_dataset_csv
 from .physical_constants import DWZ_MAX, VX_MIN_CURVE, WZ_MIN
 from .scenario_params import resolve_wheelbase
@@ -84,10 +84,11 @@ def fit_steer(
 ) -> dict:
     """collection 配下の全 CSV キャッシュから操舵モデル + k_us を直接同定する。"""
     tasks = discover_cached_datasets(collection_dir)
+    n_workers = normalize_parallel_jobs(n_jobs, n_tasks=len(tasks))
     print(f"[fit_steer] データセット並列ロード ({len(tasks)} 件)...")
 
     datasets: list[dict] = []
-    with ProcessPoolExecutor(max_workers=n_jobs) as pool:
+    with ProcessPoolExecutor(max_workers=n_workers) as pool:
         futs = [pool.submit(_load_one, t) for t in tasks]
         for fut in as_completed(futs):
             r = fut.result()
@@ -104,7 +105,8 @@ def fit_steer(
     delays: list[float] = []
     biases: list[float] = []
     dsfs: list[float] = []
-    with ProcessPoolExecutor(max_workers=n_jobs) as pool:
+    n_workers = normalize_parallel_jobs(n_jobs, n_tasks=len(datasets))
+    with ProcessPoolExecutor(max_workers=n_workers) as pool:
         futs = [pool.submit(_fit_one_steer, ds) for ds in datasets]
         for fut in as_completed(futs):
             res = fut.result()
@@ -229,12 +231,12 @@ def main() -> None:
     ap.add_argument("--scenario", type=Path, default=None, help="wheelbase 解決用の scenario.yaml (任意)")
     ap.add_argument("--case", type=str, default="current")
     ap.add_argument("--out", type=Path, required=True)
-    ap.add_argument("--n-jobs", type=int, default=os.cpu_count())
+    ap.add_argument("--n-jobs", type=int, default=default_parallel_jobs())
     args = ap.parse_args()
     run(
         args.collection_dir, args.out,
         phase1_params_path=args.phase1_params, scenario=args.scenario, case=args.case,
-        n_jobs=args.n_jobs,
+        n_jobs=normalize_parallel_jobs(args.n_jobs),
     )
 
 

@@ -4,13 +4,13 @@ from __future__ import annotations
 
 import argparse
 from concurrent.futures import ProcessPoolExecutor, as_completed
-import os
 from pathlib import Path
 
 import numpy as np
 import yaml
 
 from . import fit_core
+from ..lib._parallel import default_parallel_jobs, normalize_parallel_jobs
 from .load_data import build_resampled, discover_cached_datasets, read_dataset_csv
 from .settings import (
     ACC_SCALE_BOUNDS,
@@ -53,10 +53,11 @@ def _fit_one(ds: dict) -> tuple[float, float, float] | None:
 def fit_lon(collection_dir: Path, *, n_jobs: int = 1) -> dict:
     """collection 配下の全 CSV キャッシュから縦方向モデルを直接同定する。"""
     tasks = discover_cached_datasets(collection_dir)
+    n_workers = normalize_parallel_jobs(n_jobs, n_tasks=len(tasks))
     print(f"[fit_lon] データセット並列ロード ({len(tasks)} 件)...")
 
     datasets: list[dict] = []
-    with ProcessPoolExecutor(max_workers=n_jobs) as pool:
+    with ProcessPoolExecutor(max_workers=n_workers) as pool:
         futs = [pool.submit(_load_one, t) for t in tasks]
         for fut in as_completed(futs):
             r = fut.result()
@@ -70,7 +71,8 @@ def fit_lon(collection_dir: Path, *, n_jobs: int = 1) -> dict:
     taus: list[float] = []
     delays: list[float] = []
     scales: list[float] = []
-    with ProcessPoolExecutor(max_workers=n_jobs) as pool:
+    n_workers = normalize_parallel_jobs(n_jobs, n_tasks=len(datasets))
+    with ProcessPoolExecutor(max_workers=n_workers) as pool:
         futs = [pool.submit(_fit_one, ds) for ds in datasets]
         for fut in as_completed(futs):
             res = fut.result()
@@ -121,9 +123,9 @@ def main() -> None:
     ap = argparse.ArgumentParser(description="縦方向モデルの直接同定 (Step2)")
     ap.add_argument("--collection-dir", type=Path, required=True)
     ap.add_argument("--out", type=Path, required=True)
-    ap.add_argument("--n-jobs", type=int, default=os.cpu_count())
+    ap.add_argument("--n-jobs", type=int, default=default_parallel_jobs())
     args = ap.parse_args()
-    run(args.collection_dir, args.out, n_jobs=args.n_jobs)
+    run(args.collection_dir, args.out, n_jobs=normalize_parallel_jobs(args.n_jobs))
 
 
 if __name__ == "__main__":

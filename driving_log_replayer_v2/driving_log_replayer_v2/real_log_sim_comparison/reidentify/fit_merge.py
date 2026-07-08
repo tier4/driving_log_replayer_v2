@@ -16,6 +16,12 @@ import yaml
 from ..lib._collection import discover_collection
 from ..lib._models_config import load_models_doc, resolve_baseline_model
 from ..lib._multi_agg import HORIZONS, WORST_W, acc_score, aggregate_normalized, format_agg, robust_score, steer_score
+from ..lib._parallel import (
+    default_parallel_jobs,
+    normalize_parallel_jobs,
+    pool_chunksize,
+    set_worker_thread_env_defaults,
+)
 from . import rollout
 from .csv_schema import CACHE_NAME
 from .load_data import build_rollout_data, read_dataset_csv
@@ -154,8 +160,9 @@ def load_datasets(
     _LOAD_BASELINE_PARAMS = dict(baseline_params or {})
 
     mp_ctx = multiprocessing.get_context("fork")
-    chunksize = max(1, len(tasks) // (n_jobs * 4))
-    with mp_ctx.Pool(n_jobs) as pool:
+    n_workers = normalize_parallel_jobs(n_jobs, n_tasks=len(tasks))
+    chunksize = pool_chunksize(len(tasks), n_workers)
+    with mp_ctx.Pool(n_workers) as pool:
         results = list(pool.imap(_load_one, tasks, chunksize=chunksize))
 
     ctxs = []
@@ -199,7 +206,7 @@ def _eval_grid(
     n_trials = len(trials)
     n_ctxs = len(ctxs)
     units = [(ti, ci, trials[ti], model_type) for ti in range(n_trials) for ci in range(n_ctxs)]
-    chunksize = max(1, len(units) // (n_jobs * 4))
+    chunksize = pool_chunksize(len(units), n_jobs)
     raw = pool.map(_worker_eval_one, units, chunksize=chunksize)
 
     per_trial: list[list[tuple[str, dict]]] = [[] for _ in range(n_trials)]
@@ -214,7 +221,7 @@ def _run_worker(
     ctxs_search: list[DatasetCtx], cur_model: str, score_fn, worst_w: float, out_path,
 ) -> None:
     """fork プールワーカー: SQLite 経由で Optuna study.optimize を並列実行。"""
-    os.environ["OMP_NUM_THREADS"] = "1"
+    set_worker_thread_env_defaults()
     study = optuna.load_study(study_name="robust_search", storage=db_url)
 
     def _checkpoint(params: dict, score: float) -> None:
@@ -479,7 +486,7 @@ def fit_merge(
     print(f"[INFO] baseline model = {baseline_model_type} (scenario.yaml の '{baseline_case}' ケース)")
     print(f"[INFO] current model  = {cur_model} ('{case}' ケース)")
 
-    os.environ.setdefault("OMP_NUM_THREADS", "1")
+    set_worker_thread_env_defaults()
 
     ctxs = load_datasets(tasks, n_jobs=n_jobs, verbose=verbose, baseline_model_type=baseline_model_type, baseline_params=baseline_params)
     if len(ctxs) < 1:
@@ -547,7 +554,7 @@ def main() -> None:
     ap.add_argument("--phase", type=int, default=0, choices=[0, 1, 2])
     ap.add_argument("--phase-params", type=Path, default=None, help="Step3 (fit_steer) の出力 YAML (warm-start兼passthrough)")
     ap.add_argument("--n-trials", type=int, default=50)
-    ap.add_argument("--jobs", type=int, default=os.cpu_count())
+    ap.add_argument("--jobs", type=int, default=default_parallel_jobs())
     ap.add_argument("--search-subsample", type=int, default=None)
     ap.add_argument("--worst-weight", type=float, default=WORST_W)
     ap.add_argument("--verbose", action="store_true")
@@ -555,7 +562,7 @@ def main() -> None:
     args = ap.parse_args()
     run(
         args.collection_dir, args.scenario, args.out, case=args.case, phase=args.phase,
-        phase2_params_path=args.phase_params, n_trials=args.n_trials, n_jobs=max(1, args.jobs or 1),
+        phase2_params_path=args.phase_params, n_trials=args.n_trials, n_jobs=normalize_parallel_jobs(args.jobs),
         search_subsample=args.search_subsample, worst_w=args.worst_weight, verbose=args.verbose,
     )
 

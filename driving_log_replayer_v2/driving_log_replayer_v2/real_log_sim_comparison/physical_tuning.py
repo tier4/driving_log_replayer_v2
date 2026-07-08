@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 import argparse
 import sys
-import os
 import glob
 import yaml
 from concurrent.futures import ProcessPoolExecutor, as_completed
@@ -17,6 +16,10 @@ for _p in glob.glob("/home/kotaroyoshimoto/workspace/x2_e2e_44/install/*/local/l
 
 from driving_log_replayer_v2.real_log_sim_comparison.lib._fit_core import (
     fit_first_order_delay,
+)
+from driving_log_replayer_v2.real_log_sim_comparison.lib._parallel import (
+    default_parallel_jobs,
+    normalize_parallel_jobs,
 )
 from driving_log_replayer_v2.real_log_sim_comparison.lib._io import (
     load_accel,
@@ -182,7 +185,7 @@ def main() -> None:
                     help="出力 YAML パス（--phase 12 の場合は Phase2 出力）")
     ap.add_argument("--out-phase1", type=Path, default=None,
                     help="--phase 12 のときの Phase1 出力 YAML パス（省略時は --out と同じディレクトリに phase1_acc.yaml）")
-    ap.add_argument("--n-jobs", type=int, default=os.cpu_count())
+    ap.add_argument("--n-jobs", type=int, default=default_parallel_jobs())
     ap.add_argument("--case", type=str, default="current",
                     help="ベースとなる scenario.yaml 内の models エントリ名 (既定: current)")
     ap.add_argument("--skip-lon", action="store_true", help="縦方向モデルの直接同定をスキップし、scenario から取得した値を設定する")
@@ -235,10 +238,12 @@ def main() -> None:
     ds_dirs = sorted(ds_root.iterdir()) if ds_root.is_dir() else []
     tasks = [(d.name, str(d)) for d in ds_dirs if (d / "real.lite" / "real.lite_0.mcap").exists()]
     phase_label = "1+2" if args.phase == 12 else str(args.phase)
+    args.n_jobs = normalize_parallel_jobs(args.n_jobs)
     print(f"\n[Phase {phase_label}] データセット並列ロード ({len(tasks)} 件)...")
 
     datasets = []
-    with ProcessPoolExecutor(max_workers=args.n_jobs) as pool:
+    n_workers = normalize_parallel_jobs(args.n_jobs, n_tasks=len(tasks))
+    with ProcessPoolExecutor(max_workers=n_workers) as pool:
         futs = {pool.submit(_load_light_worker, t): t for t in tasks}
         for i, fut in enumerate(as_completed(futs), 1):
             r = fut.result()
@@ -271,7 +276,8 @@ def main() -> None:
         taus_long = []
         delays_long = []
         asfs_long = []
-        with ProcessPoolExecutor(max_workers=args.n_jobs) as pool:
+        n_workers = normalize_parallel_jobs(args.n_jobs, n_tasks=len(datasets))
+        with ProcessPoolExecutor(max_workers=n_workers) as pool:
             futs = {pool.submit(_fit_one_long_worker, ds): ds["uuid"] for ds in datasets}
             for fut in as_completed(futs):
                 res = fut.result()
@@ -339,7 +345,8 @@ def main() -> None:
             delays_steer = []
             biases = []
             dsfs = []
-            with ProcessPoolExecutor(max_workers=args.n_jobs) as pool:
+            n_workers = normalize_parallel_jobs(args.n_jobs, n_tasks=len(datasets))
+            with ProcessPoolExecutor(max_workers=n_workers) as pool:
                 futs = {pool.submit(_fit_one_steer_worker, ds): ds["uuid"] for ds in datasets}
                 for fut in as_completed(futs):
                     res = fut.result()

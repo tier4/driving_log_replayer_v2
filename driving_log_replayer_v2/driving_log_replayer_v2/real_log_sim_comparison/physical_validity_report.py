@@ -38,6 +38,11 @@ from driving_log_replayer_v2.real_log_sim_comparison.lib._models_config import (
     load_models_doc,
     resolve_baseline_model,
 )
+from driving_log_replayer_v2.real_log_sim_comparison.lib._parallel import (  # noqa: E402
+    default_parallel_jobs,
+    normalize_parallel_jobs,
+    set_worker_thread_env_defaults,
+)
 from driving_log_replayer_v2.real_log_sim_comparison.lib._multi_agg import (  # noqa: E402
     HORIZONS as _HORIZONS,
     acc_score as _acc_score,
@@ -207,9 +212,10 @@ def fit_per_dataset(
     Returns: (per_ds_long, per_ds_steer)  ({dataset_id: fit dict})
     """
     targets = [e for e in entries if e.real_lite is not None]
+    n_workers = normalize_parallel_jobs(n_jobs, n_tasks=len(targets))
     per_ds_long: dict[str, dict] = {}
     per_ds_steer: dict[str, dict] = {}
-    with ProcessPoolExecutor(max_workers=min(n_jobs, max(len(targets), 1))) as pool:
+    with ProcessPoolExecutor(max_workers=n_workers) as pool:
         futs = [
             pool.submit(_fit_single_worker, (e.dataset_id, str(e.real_lite)))
             for e in targets
@@ -415,8 +421,9 @@ def _load_mcap_worker(args: tuple) -> dict | None:
 def load_all_mcap(ds_list: list, steer_bias: float | None = None, n_jobs: int = 8) -> list[dict]:
     """全データセットを並列 MCAP 読み込み。"""
     args_list = [(uuid, str(lite_dir), steer_bias) for uuid, lite_dir in ds_list]
+    n_workers = normalize_parallel_jobs(n_jobs, n_tasks=len(args_list))
     results: list[dict] = []
-    with ProcessPoolExecutor(max_workers=n_jobs) as pool:
+    with ProcessPoolExecutor(max_workers=n_workers) as pool:
         futs = {pool.submit(_load_mcap_worker, a): a for a in args_list}
         for i, fut in enumerate(as_completed(futs), 1):
             r = fut.result()
@@ -1870,7 +1877,12 @@ def main() -> None:
         help="current として評価する Conditions.models の名前（既定: current）",
     )
     ap.add_argument("--n-curve-ds", type=int, default=3, help="ビューア埋め込みカーブ データセット数")
-    ap.add_argument("--n-jobs", type=int, default=8)
+    ap.add_argument(
+        "--n-jobs",
+        type=int,
+        default=default_parallel_jobs(),
+        help="並列ワーカー数 (既定: REAL_LOG_SIM_COMPARISON_JOBS または CPU コア数)",
+    )
     ap.add_argument(
         "--viewer-uuids", type=str, default=None,
         help="ビューアに使う データセット UUID をカンマ区切りで指定（省略時は curve_count 上位を自動選択）",
@@ -1913,6 +1925,8 @@ def main() -> None:
         help="クローズドループ比較をレポートに含めるデータセット UUID をカンマ区切りで指定",
     )
     args = ap.parse_args()
+    args.n_jobs = normalize_parallel_jobs(args.n_jobs)
+    set_worker_thread_env_defaults()
 
     with open(args.params) as f:
         yaml_data = yaml.safe_load(f)

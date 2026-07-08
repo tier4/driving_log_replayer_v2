@@ -47,6 +47,7 @@ from ._fit_core import (
     fit_first_order_delay_residual_3phase,
     savgol_derivative,
 )
+from ._parallel import normalize_parallel_jobs
 from ._fit_core import sim_first_order as _core_sim_first_order
 from ._fit_core import sim_first_order_frac as _core_sim_first_order_frac
 from ._params_utils import load_sim_params
@@ -1113,8 +1114,11 @@ def compute_cross_long_rows(
         (entry, per_ds_long.get(entry.dataset_id, {}), cross_fit, models)
         for entry in candidates
     ]
+    if not worker_args:
+        return []
+    n_workers = normalize_parallel_jobs(n_jobs, n_tasks=len(worker_args))
     rows: list[dict] = []
-    with ProcessPoolExecutor(max_workers=n_jobs) as executor:
+    with ProcessPoolExecutor(max_workers=n_workers) as executor:
         results = executor.map(_compute_cross_long_row_worker, worker_args)
         for r in results:
             if r is not None:
@@ -1208,8 +1212,11 @@ def compute_cross_steer_rows(
         (entry, per_ds_steer.get(entry.dataset_id, {}), models)
         for entry in candidates
     ]
+    if not worker_args:
+        return []
+    n_workers = normalize_parallel_jobs(n_jobs, n_tasks=len(worker_args))
     rows: list[dict] = []
-    with ProcessPoolExecutor(max_workers=n_jobs) as executor:
+    with ProcessPoolExecutor(max_workers=n_workers) as executor:
         results = executor.map(_compute_cross_steer_row_worker, worker_args)
         for r in results:
             if r is not None:

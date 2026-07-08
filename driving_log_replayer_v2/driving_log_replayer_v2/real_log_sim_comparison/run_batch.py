@@ -37,6 +37,7 @@ from .collect_datasets import _resolve_bundle, collect_bundle, update_manifest
 from .collect_raw_rosbags import _OPENLOOP_TOPICS
 from .lib._dataset import resolve_t4_dataset_path
 from .lib._lite_resolver import resolve_lite_bag
+from .lib._parallel import default_parallel_jobs, normalize_parallel_jobs
 
 _PKG = "driving_log_replayer_v2.real_log_sim_comparison"
 _DEFAULT_WEBAUTO_ROOT = Path.home() / ".webauto" / "data" / "data" / "annotation_dataset"
@@ -646,13 +647,14 @@ def main() -> None:
                     "そのまま t4_dataset_path として使う (annotation_dataset 不要)。"
                     "raw モードでは Datasets は --batch-root/datasets/ を自動検出し、"
                     "aggregate_report.html として出力する")
-    ap.add_argument("--jobs", type=int, default=min(4, os.cpu_count() or 1),
-                    help="並列ワーカー数 (既定: コア数または4の小さい方)")
+    ap.add_argument("--jobs", type=int, default=default_parallel_jobs(cap=4),
+                    help="並列ワーカー数 (既定: REAL_LOG_SIM_COMPARISON_JOBS または最大4)")
     ap.add_argument("--verbose", action="store_true", default=False,
                     help="詳細情報を出力する")
     ap.add_argument("--write-single-scenario", default="",
                     help="内部/Makefile用: '<uuid>=<path>' に raw mode single-dataset scenario を書き出して終了する")
     args = ap.parse_args()
+    args.jobs = normalize_parallel_jobs(args.jobs)
 
     global VERBOSE
     VERBOSE = args.verbose
@@ -723,8 +725,9 @@ def main() -> None:
     records: list[dict] = []
     n_ok = 0
     n_total = len(uuids)
-    print(f"\n[INFO] 並列実行開始 (ワーカー数: {args.jobs})...", flush=True)
-    with ProcessPoolExecutor(max_workers=args.jobs) as pool:
+    n_workers = normalize_parallel_jobs(args.jobs, n_tasks=len(tasks_args))
+    print(f"\n[INFO] 並列実行開始 (ワーカー数: {n_workers})...", flush=True)
+    with ProcessPoolExecutor(max_workers=n_workers) as pool:
         futs = {pool.submit(_run_and_collect_worker, a): a["uuid"] for a in tasks_args}
         for i, fut in enumerate(as_completed(futs), start=1):
             uuid = futs[fut]

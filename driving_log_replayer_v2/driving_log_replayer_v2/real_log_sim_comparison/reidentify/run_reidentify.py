@@ -3,9 +3,9 @@
 from __future__ import annotations
 
 import argparse
-import os
 from pathlib import Path
 
+from ..lib._parallel import default_parallel_jobs, normalize_parallel_jobs
 from .settings import DEFAULT_INPUT_PARAM, DEFAULT_OUTPUT_DIR_NAME
 
 ALL_STEPS = ("extract", "fit_lon", "fit_steer", "fit_merge", "report", "release")
@@ -77,12 +77,13 @@ def main() -> None:
     )
     ap.add_argument("--input-param", type=Path, default=DEFAULT_INPUT_PARAM, help="リリース用ベース simulator_model.param.yaml")
     ap.add_argument("--n-trials", type=int, default=50)
-    ap.add_argument("--n-jobs", type=int, default=os.cpu_count())
+    ap.add_argument("--n-jobs", type=int, default=default_parallel_jobs())
     ap.add_argument(
         "--only", default="",
         help=f"実行するステップをカンマ区切りで指定 (既定: 全ステップ)。選択肢: {','.join(ALL_STEPS)}",
     )
     args = ap.parse_args()
+    args.n_jobs = normalize_parallel_jobs(args.n_jobs)
 
     out_dir = args.out_dir or (args.collection_dir / DEFAULT_OUTPUT_DIR_NAME)
     out_dir.mkdir(parents=True, exist_ok=True)

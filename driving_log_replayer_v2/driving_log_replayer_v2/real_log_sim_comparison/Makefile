@@ -186,7 +186,7 @@ CLOSED_LOOP_UUIDS  ?= 00d08afd-b605-5de1-9db0-51241fa87b18,01ccf59a-bf38-5d62-8a
 CLOSED_LOOP_MAP    ?= $(HOME)/.webauto/simulation/data/map/x2_dev/2231/2231-20260525005702640410
 MULTI_BATCH_ROOT   ?= /home/kotaroyoshimoto/data/openloop_j6_16_onwards
 N_TRIALS           ?= 50
-N_JOBS             ?= 32
+N_JOBS             ?= $(or $(REAL_LOG_SIM_COMPARISON_JOBS),32)
 MODEL_CASE         ?= current
 
 # パイプライン各段の中間成果物 (分割ターゲット間で受け渡す SSOT パス)。
