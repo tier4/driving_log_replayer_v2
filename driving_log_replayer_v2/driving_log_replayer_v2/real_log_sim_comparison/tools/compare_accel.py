@@ -6,8 +6,16 @@ import matplotlib.pyplot as plt
 from pathlib import Path
 from scipy.signal import correlate
 
-def analyze_and_plot(csv_path: Path, output_png: Path):
-    df = pd.read_csv(csv_path)
+# Set thinner lines globally (about half of default)
+plt.rcParams['lines.linewidth'] = 0.8
+
+
+def analyze_and_plot(csv_path: Path, output_png: Path) -> float | None:
+    try:
+        df = pd.read_csv(csv_path)
+    except Exception as e:
+        print(f"Failed to read {csv_path}: {e}")
+        return None
     
     # Extract topics
     df_accel = df[df["topic"] == "accel"][["t_ns", "accel"]].dropna().sort_values("t_ns").reset_index(drop=True)
@@ -16,8 +24,8 @@ def analyze_and_plot(csv_path: Path, output_png: Path):
     df_cmd = df[df["topic"] == "cmd"][["t_ns", "cmd_accel"]].dropna().sort_values("t_ns").reset_index(drop=True)
     
     if df_accel.empty or df_vel.empty or df_kin.empty:
-        print(f"Error: Missing required topics in {csv_path}")
-        return
+        print(f"Warning: Missing required topics in {csv_path.parent.name}")
+        return None
         
     t0_ns = min(df_accel["t_ns"].iloc[0], df_vel["t_ns"].iloc[0], df_kin["t_ns"].iloc[0])
     
@@ -57,19 +65,28 @@ def analyze_and_plot(csv_path: Path, output_png: Path):
     # Compute cross-correlation lag for EKF vx diff LPF
     t_min = max(df_accel["t_s"].iloc[0], df_vel["t_s"].iloc[0], df_kin["t_s"].iloc[0])
     t_max = min(df_accel["t_s"].iloc[-1], df_vel["t_s"].iloc[-1], df_kin["t_s"].iloc[-1])
+    
+    if (t_max - t_min) < 2.0:
+        print(f"Warning: Dataset {csv_path.parent.name} is too short ({t_max - t_min:.1f}s)")
+        return None
+        
     dt_resample = 0.01
     t_grid = np.arange(t_min, t_max, dt_resample)
     
     accel_orig_r = np.interp(t_grid, df_accel["t_s"].values, df_accel["accel"].values)
     accel_kin_diff_lpf_r = np.interp(t_grid, df_kin["t_s"].values[1:], df_kin["accel_diff_lpf"].values[1:])
     
-    a_orig_norm = accel_orig_r - np.mean(accel_orig_r)
-    a_kin_norm = accel_kin_diff_lpf_r - np.mean(accel_kin_diff_lpf_r)
-    corr_kin = correlate(a_orig_norm, a_kin_norm, mode='full')
-    lags = np.arange(-len(a_orig_norm) + 1, len(a_orig_norm))
-    lag_kin_s = lags[np.argmax(corr_kin)] * dt_resample
+    # Avoid computing correlation on steady data without acceleration variance
+    if np.std(accel_orig_r) < 0.05 or np.std(accel_kin_diff_lpf_r) < 0.05:
+        lag_kin_s = 0.0
+    else:
+        a_orig_norm = accel_orig_r - np.mean(accel_orig_r)
+        a_kin_norm = accel_kin_diff_lpf_r - np.mean(accel_kin_diff_lpf_r)
+        corr_kin = correlate(a_orig_norm, a_kin_norm, mode='full')
+        lags = np.arange(-len(a_orig_norm) + 1, len(a_orig_norm))
+        lag_kin_s = lags[np.argmax(corr_kin)] * dt_resample
     
-    print(f"Computed lag (/localization/acceleration vs kinematic_state vx diff): {lag_kin_s:.3f} s")
+    print(f"{csv_path.parent.name[:8]}: Computed lag = {lag_kin_s:+.3f} s")
     
     # Plotting
     fig, axes = plt.subplots(4, 1, figsize=(12, 12), sharex=True)
@@ -112,17 +129,74 @@ def analyze_and_plot(csv_path: Path, output_png: Path):
     axes[3].set_ylabel("Accel [m/s^2]")
     axes[3].legend()
     axes[3].grid(True)
-    axes[3].set_title("Aligned Accelerations (Original shifted to align with vx diff)")
-    
+    # Set y-limits of axes[2] and axes[3] based on all signals except position 2nd differential
+    # to prevent large position derivative spikes from squishing the main acceleration signals.
+    ref_signals = []
+    if not df_accel.empty:
+        ref_signals.append(df_accel["accel"].values)
+    if "accel_diff_lpf" in df_vel and not df_vel["accel_diff_lpf"].empty:
+        ref_signals.append(df_vel["accel_diff_lpf"].dropna().values)
+    if "accel_diff_lpf" in df_kin and not df_kin["accel_diff_lpf"].empty:
+        ref_signals.append(df_kin["accel_diff_lpf"].dropna().values)
+
+    if ref_signals:
+        flat_refs = np.concatenate(ref_signals)
+        flat_refs = flat_refs[np.isfinite(flat_refs)]
+        if len(flat_refs) > 0:
+            y_min = np.min(flat_refs)
+            y_max = np.max(flat_refs)
+            # Add 10% padding (at least 0.5 m/s^2)
+            pad = max(0.5, (y_max - y_min) * 0.1)
+            # Limit the maximum y-axis range to [-1.5, 1.5]
+            ylim_min = max(-1.5, y_min - pad)
+            ylim_max = min(1.5, y_max + pad)
+            axes[2].set_ylim(ylim_min, ylim_max)
+            axes[3].set_ylim(ylim_min, ylim_max)
+
+
     plt.tight_layout()
+
     plt.savefig(output_png)
     plt.close()
-    print(f"Saved plot to {output_png}")
+    
+    return lag_kin_s
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Compare acceleration signals and compute delay.")
-    parser.add_argument("--csv", type=Path, required=True, help="Path to reidentify_cache.csv")
-    parser.add_argument("--out", type=Path, required=True, help="Path to output plot PNG")
+    group = parser.add_mutually_exclusive_group(required=True)
+    group.add_argument("--csv", type=Path, help="Path to a single reidentify_cache.csv")
+    group.add_argument("--collection-dir", type=Path, help="Path to the collection directory (contains multiple dataset folders)")
+    parser.add_argument("--out", type=Path, help="Path to output plot PNG (only applicable with --csv)")
     args = parser.parse_args()
     
-    analyze_and_plot(args.csv, args.out)
+    if args.csv:
+        out_png = args.out if args.out else args.csv.parent / "acceleration_comparison.png"
+        analyze_and_plot(args.csv, out_png)
+        print(f"Saved plot to {out_png}")
+    else:
+        # Collection mode: search for all reidentify_cache.csv
+        csv_paths = sorted(args.collection_dir.rglob("reidentify_cache.csv"))
+        print(f"Found {len(csv_paths)} datasets with cache in {args.collection_dir}. Starting batch generation...")
+        
+        success = 0
+        failed = 0
+        lags = []
+        
+        for csv_path in csv_paths:
+            out_png = csv_path.parent / "acceleration_comparison.png"
+            try:
+                lag = analyze_and_plot(csv_path, out_png)
+                if lag is not None:
+                    lags.append(lag)
+                    success += 1
+                else:
+                    failed += 1
+            except Exception as e:
+                print(f"[Error] Failed to process {csv_path.parent.name}: {e}")
+                failed += 1
+                
+        print(f"\nBatch Generation Summary:")
+        print(f"  Successfully generated: {success} plots")
+        print(f"  Failed/Skipped: {failed}")
+        if lags:
+            print(f"  Average computed lag  : {np.mean(lags):.3f} s (std: {np.std(lags):.3f})")

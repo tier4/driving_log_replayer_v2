@@ -32,7 +32,8 @@ RUN_PY := source "$(SETUP_BASH)" && MPLCONFIGDIR="$(MPLCONFIGDIR)" PYTHONPATH="$
 endif
 RUN_PY_NO_SETUP := MPLCONFIGDIR="$(MPLCONFIGDIR)" PYTHONPATH="$(PYTHONPATH_PREFIX):$${PYTHONPATH:-}" $(PYTHON)
 
-.PHONY: help local_cloud_run local_analysis_run local_batch_run local_cross_analysis_run local_multidataset_run local_multidataset_cloud_run prepare_multidataset issue_scenario collect_raw_rosbags open_loop_tune open_loop_batch physical_validity_report_nodata lite lite_ol lite_cl extract fit_lon fit_steer fit_merge fit_report reidentify apply closed_loop release_model_param reidentify_v2 compare_accel
+.PHONY: help local_cloud_run local_analysis_run local_batch_run local_cross_analysis_run local_multidataset_run local_multidataset_cloud_run prepare_multidataset issue_scenario collect_raw_rosbags open_loop_tune open_loop_batch physical_validity_report_nodata lite lite_ol lite_cl extract fit_lon fit_steer fit_merge fit_report reidentify apply closed_loop release_model_param reidentify_v2 compare_accel compare_accel_all
+
 
 
 help:
@@ -675,4 +676,18 @@ compare_accel:
 	echo "[INFO] Input CSV : $$csv_path" ; \
 	echo "[INFO] Output PNG: $$out_path" ; \
 	$(RUN_PY_NO_SETUP) $(MAKEFILE_DIR)/tools/compare_accel.py --csv "$$csv_path" --out "$$out_path"
+
+# 全データセットに対して比較プロットを一括生成する。
+#
+# 使い方:
+#   make compare_accel_all [MULTI_BATCH_ROOT=<dir>]
+#
+# 例:
+#   make compare_accel_all
+compare_accel_all:
+	@batch_root="$(or $(MULTI_BATCH_ROOT),/home/kotaroyoshimoto/data/openloop_j6_16_onwards)" ; \
+	test -d "$$batch_root/datasets" || { echo "[ERROR] datasets ディレクトリが見つかりません: $$batch_root/datasets"; exit 1; } ; \
+	echo "[INFO] Batch plotting in progress..." ; \
+	$(RUN_PY_NO_SETUP) $(MAKEFILE_DIR)/tools/compare_accel.py --collection-dir "$$batch_root/datasets"
+
 
