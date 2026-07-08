@@ -391,6 +391,52 @@ def _moving_avg(x: np.ndarray, w: int) -> np.ndarray:
     return np.convolve(padded, np.ones(w) / w, mode="valid")
 
 
+def build_first_order_residual_datasets(
+    per_ds: dict[str, dict],
+    dt: float,
+    *,
+    filter_w: int = 1,
+    cmd_key: str = "cmd_arr",
+    act_key: str = "act_arr",
+    mask_key: str = "mask_arr",
+) -> list[dict]:
+    """一次遅れ ODE residual 用に、delay 非依存の dataset 材料を事前計算する。
+
+    返す各 dataset は `cmd_f`, `act_f`, `lhs`, `mask` を持つ。
+    `lhs` は `d act / dt` で、`filter_w` 指定時は RHS の回帰子と同じ移動平均を適用する。
+    delay に依存する `cmd_del` / `act_del` は grid candidate ごとに変わるため、
+    residual callback 側で計算する。
+    """
+    datasets: list[dict] = []
+    for dataset_id, fit in per_ds.items():
+        if cmd_key not in fit or act_key not in fit or mask_key not in fit:
+            continue
+        cmd = np.asarray(fit[cmd_key], dtype=float)
+        act = np.asarray(fit[act_key], dtype=float)
+        mask = np.asarray(fit[mask_key], dtype=bool)
+        if len(cmd) == 0 or len(act) != len(cmd) or len(mask) != len(cmd) or int(mask.sum()) == 0:
+            continue
+
+        lhs = np.gradient(act, dt)
+        if filter_w > 1:
+            cmd_f = _moving_avg(cmd, filter_w)
+            act_f = _moving_avg(act, filter_w)
+            lhs_f = _moving_avg(lhs, filter_w)
+        else:
+            cmd_f = cmd.copy()
+            act_f = act.copy()
+            lhs_f = lhs.copy()
+
+        datasets.append({
+            "dataset_id": dataset_id,
+            "cmd_f": cmd_f,
+            "act_f": act_f,
+            "lhs": lhs_f,
+            "mask": mask,
+        })
+    return datasets
+
+
 def fit_first_order_delay_residual_3phase(
     cmd: np.ndarray,
     act: np.ndarray,

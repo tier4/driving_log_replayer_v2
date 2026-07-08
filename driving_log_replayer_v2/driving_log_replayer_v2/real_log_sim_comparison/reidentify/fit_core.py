@@ -9,6 +9,7 @@ from __future__ import annotations
 from ..lib._fit_core import (
     delay_shift,
     delay_shift_frac,
+    build_first_order_residual_datasets,
     equation_residual_at_params,
     fit_first_order_delay,
     fit_first_order_delay_residual_3phase,
@@ -21,6 +22,7 @@ from ..lib._fit_core import (
 __all__ = [
     "delay_shift",
     "delay_shift_frac",
+    "build_first_order_residual_datasets",
     "equation_residual_at_params",
     "fit_first_order_delay",
     "fit_first_order_delay_residual_3phase",

@@ -70,7 +70,7 @@ from driving_log_replayer_v2.real_log_sim_comparison.lib._figures import (  # no
     build_fig_xy_equation_residual_hist,
 )
 from driving_log_replayer_v2.real_log_sim_comparison.lib._fit_core import (  # noqa: E402
-    _moving_avg,
+    build_first_order_residual_datasets,
     delay_shift,
     equation_residual_at_params,
     fit_equation_residual_grid,
@@ -232,33 +232,8 @@ def optimize_tau_with_equation_residual(
     fixed_tau: float = None,
 ) -> list[dict]:
     """遅延候補ごとに tau_inv を同時最小二乗で最適化し、候補別の残差診断を返す。"""
-    ds_precomputed = []
-    for uuid, fit in per_ds.items():
-        if "cmd_arr" not in fit or "act_arr" not in fit or "mask_arr" not in fit:
-            continue
-        cmd = np.asarray(fit["cmd_arr"], dtype=float)
-        act = np.asarray(fit["act_arr"], dtype=float)
-        mask = np.asarray(fit["mask_arr"], dtype=bool)
-        if len(cmd) == 0 or mask.sum() == 0:
-            continue
-
-        dot_act = np.gradient(act, dt)
-        if filter_w > 1:
-            cmd_f = _moving_avg(cmd, filter_w)
-            act_f = _moving_avg(act, filter_w)
-            dot_act_f = _moving_avg(dot_act, filter_w)
-        else:
-            cmd_f = cmd.copy()
-            act_f = act.copy()
-            dot_act_f = dot_act.copy()
-
-        ds_precomputed.append({
-            "cmd_f": cmd_f,
-            "act_f": act_f,
-            "dot_act_f": dot_act_f,
-            "mask": mask,
-        })
-    if not ds_precomputed:
+    residual_datasets = build_first_order_residual_datasets(per_ds, dt, filter_w=filter_w)
+    if not residual_datasets:
         return []
 
     tau_inv_min = 1.0 / tau_bounds[1]
@@ -275,10 +250,10 @@ def optimize_tau_with_equation_residual(
         cmd_del = delay_shift(dp["cmd_f"], n_steps)
         act_del = delay_shift(dp["act_f"], n_steps)
         mask = dp["mask"]
-        return (tau_inv * (cmd_del - act_del) - dp["dot_act_f"])[mask]
+        return (tau_inv * (cmd_del - act_del) - dp["lhs"])[mask]
 
     fit = fit_equation_residual_grid(
-        ds_precomputed,
+        residual_datasets,
         param_specs=[
             {"name": "tau_inv", "initial": tau_inv_initial, "bounds": (tau_inv_min, tau_inv_max)},
         ],
