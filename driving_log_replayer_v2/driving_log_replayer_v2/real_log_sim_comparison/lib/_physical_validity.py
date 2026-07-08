@@ -1525,7 +1525,7 @@ def compute_perfect_tracking_data(
             lat_errs = _bicycle_nstep_perf(gt_x, gt_y, gt_yaw, gt_vx, gt_steer, params, h, _FIT_DT)
             per_h_errors[h].extend(lat_errs.tolist())
 
-        if len(traj_data) < 3:
+        if len(traj_data) < 6:
             bx, by = _bicycle_trajectory_full(
                 gt_vx, gt_steer, float(gt_x[0]), float(gt_y[0]), float(gt_yaw[0]), params, _FIT_DT
             )
