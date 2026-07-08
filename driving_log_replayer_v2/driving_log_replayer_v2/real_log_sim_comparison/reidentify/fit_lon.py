@@ -1,15 +1,5 @@
 #!/usr/bin/env python3
-"""[Step2] 縦方向モデルの直接同定 → phase1_acc.yaml (ROS フリー)。
-
-physical_tuning.py の phase1 ロジック(`_long_mask`/`_fit_one_long_worker`)を、
-データ読込元を CSV キャッシュ (load_data.py) に差し替えて移植したもの。
-出力 YAML スキーマは旧 `phase1_acc.yaml` と同一に保つ (fit_merge.py・旧
-パイプラインとの互換性のため)。
-
-旧 physical_tuning.py にあった --skip-lon (scenario.yaml の値をそのまま
-引き継ぐ) は、新パイプラインでは常に直接同定する方針としてここでは持たない
-(必要な場合は旧パイプラインを使う)。
-"""
+"""[Step2] 縦方向モデルの直接同定 → phase1_acc.yaml。"""
 from __future__ import annotations
 
 import argparse
@@ -22,33 +12,38 @@ import yaml
 
 from . import fit_core
 from .load_data import build_resampled, discover_cached_datasets, read_dataset_csv
-
-DT = 0.01  # 10ms サンプリング (遅延グリッド分解能を上げるため)
-VX_MIN = 0.5
-DA_THRESH = 0.15
-TAU_BOUNDS_LONG = (0.01, 5.0)
-DELAY_GRID_LONG = np.arange(0.0, 0.31, 0.01)
+from .settings import (
+    ACC_SCALE_BOUNDS,
+    LONG_DA_THRESH,
+    LONG_DELAY_GRID,
+    LONG_RESULT_DELAY_BOUNDS,
+    LONG_RESULT_TAU_BOUNDS,
+    LONG_TAU_BOUNDS,
+    LONG_VX_MIN,
+    MIN_FIT_SAMPLES,
+    RESAMPLE_DT,
+)
 
 
 def _long_mask(ds: dict) -> np.ndarray:
-    """縦方向同定の動的マスク: DRIVE 中 & vx>VX_MIN & 指令加速度変化が大きい区間。"""
-    d_cmd_acc = np.abs(np.gradient(ds["a_cmd"], DT))
-    return ds["gear_drive"] & (ds["vx"] > VX_MIN) & (d_cmd_acc > DA_THRESH)
+    """縦方向同定の動的マスクを返す。"""
+    d_cmd_acc = np.abs(np.gradient(ds["a_cmd"], RESAMPLE_DT))
+    return ds["gear_drive"] & (ds["vx"] > LONG_VX_MIN) & (d_cmd_acc > LONG_DA_THRESH)
 
 
 def _load_one(task: tuple[str, Path]) -> dict | None:
     ds_id, csv_path = task
     dfs = read_dataset_csv(csv_path)
-    return build_resampled(dfs, DT, context=f"fit_lon:{ds_id}")
+    return build_resampled(dfs, RESAMPLE_DT, context=f"fit_lon:{ds_id}")
 
 
 def _fit_one(ds: dict) -> tuple[float, float, float] | None:
     mask = _long_mask(ds)
-    if mask.sum() < 50:
+    if mask.sum() < MIN_FIT_SAMPLES:
         return None
     fit = fit_core.fit_first_order_delay(
-        ds["a_cmd"], ds["a_act"], mask, DT,
-        tau_bounds=TAU_BOUNDS_LONG, delay_candidates=DELAY_GRID_LONG, fit_scale=True,
+        ds["a_cmd"], ds["a_act"], mask, RESAMPLE_DT,
+        tau_bounds=LONG_TAU_BOUNDS, delay_candidates=LONG_DELAY_GRID, fit_scale=True,
     )
     if fit is None:
         return None
@@ -85,18 +80,20 @@ def fit_lon(collection_dir: Path, *, n_jobs: int = 1) -> dict:
                 delays.append(delay)
                 scales.append(scale)
 
-    if taus:
-        params = {
-            "acc_time_constant": float(np.clip(np.median(taus), 0.1, 3.0)),
-            "acc_time_delay": float(np.clip(np.median(delays), 0.0, 0.3)),
-            "debug_acc_scaling_factor": float(np.clip(np.median(scales), 0.8, 1.2)),
-        }
-        print(f"  同定結果: acc_time_constant = {params['acc_time_constant']:.4f} s")
-        print(f"            acc_time_delay    = {params['acc_time_delay']:.4f} s")
-        print(f"            acc_scaling       = {params['debug_acc_scaling_factor']:.4f}")
-    else:
-        print("[WARN] 縦方向の動的条件を満たすデータがないため、デフォルト値を設定します。")
-        params = {"acc_time_constant": 0.2, "acc_time_delay": 0.1, "debug_acc_scaling_factor": 1.0}
+    if not taus:
+        raise RuntimeError(
+            "縦方向の動的条件を満たすデータがありません "
+            f"(各 dataset {MIN_FIT_SAMPLES} samples 以上が必要)。"
+        )
+
+    params = {
+        "acc_time_constant": float(np.clip(np.median(taus), *LONG_RESULT_TAU_BOUNDS)),
+        "acc_time_delay": float(np.clip(np.median(delays), *LONG_RESULT_DELAY_BOUNDS)),
+        "debug_acc_scaling_factor": float(np.clip(np.median(scales), *ACC_SCALE_BOUNDS)),
+    }
+    print(f"  同定結果: acc_time_constant = {params['acc_time_constant']:.4f} s")
+    print(f"            acc_time_delay    = {params['acc_time_delay']:.4f} s")
+    print(f"            acc_scaling       = {params['debug_acc_scaling_factor']:.4f}")
 
     return {
         "params": params,

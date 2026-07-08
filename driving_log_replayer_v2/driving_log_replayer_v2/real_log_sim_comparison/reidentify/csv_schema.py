@@ -1,8 +1,4 @@
-"""reidentify_cache.csv の列スキーマ (extract.py / load_data.py 共有、ROS 非依存)。
-
-`extract.py` は rclpy/rosbag2_py に依存するため、load_data.py がそれを import
-してしまうと ROS フリーの前提が壊れる。両者が参照する定数だけをこの薄いモジュール
-に集約し、依存の混入を防ぐ。
+"""CSVにしてROS依存を切る
 """
 from __future__ import annotations
 

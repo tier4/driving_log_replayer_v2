@@ -1,11 +1,5 @@
 #!/usr/bin/env python3
-"""[Step3] 操舵 + k_us (アンダーステア勾配) の直接同定 → phase2_steer.yaml (ROS フリー)。
-
-physical_tuning.py の phase2 ロジック(`_fit_one_steer_worker` + k_us 速度ビン別
-回帰)を、データ読込元を CSV キャッシュ (load_data.py) に差し替えて移植したもの。
-出力 YAML には Step2 (fit_lon) の params を継承した上で操舵系パラメータを追加する
-(旧 `phase2_steer.yaml` と同じ「縦+横 全パラメータ入り」のスキーマ)。
-"""
+"""[Step3] 操舵 + k_us の直接同定 → phase2_steer.yaml。"""
 from __future__ import annotations
 
 import argparse
@@ -20,21 +14,33 @@ from . import fit_core
 from .load_data import build_resampled, discover_cached_datasets, read_dataset_csv
 from .physical_constants import DWZ_MAX, VX_MIN_CURVE, WZ_MIN
 from .scenario_params import resolve_wheelbase
-
-DT = 0.01
-VX_MIN = 0.5
-DSTEER_MIN = 0.001
-TAU_BOUNDS_STEER = (0.01, 2.0)
-DELAY_GRID_STEER = np.arange(0.0, 0.16, 0.01)
-# per-bin OLS 推定値のクリップ上限 (physical_tuning.py 固有値。lib._physical_validity
-# の K_US_CLIP=0.5 は per-sample IQR 表示用で役割が異なるため意図的に別値)。
-K_US_CLIP = 0.05
+from .settings import (
+    DEFAULT_WHEELBASE,
+    K_US_CLIP,
+    MIN_FIT_SAMPLES,
+    MIN_K_US_SAMPLES,
+    RESAMPLE_DT,
+    STEER_BIAS_MIN_SAMPLES,
+    STEER_CLIP_RAD,
+    STEER_CMD_ENERGY_MIN,
+    STEER_DEFAULT_DEAD_BAND,
+    STEER_DEFAULT_RATE_LIM,
+    STEER_DELAY_GRID,
+    STEER_DSTEER_MIN,
+    STEER_RESULT_DELAY_BOUNDS,
+    STEER_RESULT_TAU_BOUNDS,
+    STEER_SCALE_BOUNDS,
+    STEER_STRAIGHT_VX_MIN,
+    STEER_STRAIGHT_WZ_MAX,
+    STEER_TAU_BOUNDS,
+    STEER_VX_MIN,
+)
 
 
 def _load_one(task: tuple[str, Path]) -> dict | None:
     ds_id, csv_path = task
     dfs = read_dataset_csv(csv_path)
-    return build_resampled(dfs, DT, context=f"fit_steer:{ds_id}")
+    return build_resampled(dfs, RESAMPLE_DT, context=f"fit_steer:{ds_id}")
 
 
 def _fit_one_steer(ds: dict) -> tuple[float, float, float, float] | None:
@@ -43,22 +49,26 @@ def _fit_one_steer(ds: dict) -> tuple[float, float, float, float] | None:
     vx = ds["vx"]
     wz = ds["wz"]
     gear_drive = ds["gear_drive"]
-    d_cmd_steer = np.abs(np.gradient(d_cmd, DT))
-    mask_dyn = gear_drive & (vx > VX_MIN) & (d_cmd_steer > DSTEER_MIN / DT)
-    if mask_dyn.sum() < 50:
+    d_cmd_steer = np.abs(np.gradient(d_cmd, RESAMPLE_DT))
+    mask_dyn = gear_drive & (vx > STEER_VX_MIN) & (d_cmd_steer > STEER_DSTEER_MIN / RESAMPLE_DT)
+    if mask_dyn.sum() < MIN_FIT_SAMPLES:
         return None
 
-    mask_straight = gear_drive & (vx > 3.0) & (np.abs(wz) < 0.005)
-    bias = float(np.mean(d_act[mask_straight])) if mask_straight.sum() > 20 else 0.0005
+    mask_straight = gear_drive & (vx > STEER_STRAIGHT_VX_MIN) & (np.abs(wz) < STEER_STRAIGHT_WZ_MAX)
+    if mask_straight.sum() < STEER_BIAS_MIN_SAMPLES:
+        return None
+    bias = float(np.mean(d_act[mask_straight]))
 
     d_act_nobias = d_act - bias
     sum_cmd2 = np.sum(d_cmd[mask_dyn] ** 2)
-    dsf = float(np.sum(d_cmd[mask_dyn] * d_act_nobias[mask_dyn]) / sum_cmd2) if sum_cmd2 > 1e-5 else 1.0
-    dsf = float(np.clip(dsf, 0.8, 1.2))
+    if sum_cmd2 <= STEER_CMD_ENERGY_MIN:
+        return None
+    dsf = float(np.sum(d_cmd[mask_dyn] * d_act_nobias[mask_dyn]) / sum_cmd2)
+    dsf = float(np.clip(dsf, *STEER_SCALE_BOUNDS))
 
     fit = fit_core.fit_first_order_delay(
-        dsf * d_cmd, d_act_nobias, mask_dyn, DT,
-        tau_bounds=TAU_BOUNDS_STEER, delay_candidates=DELAY_GRID_STEER,
+        dsf * d_cmd, d_act_nobias, mask_dyn, RESAMPLE_DT,
+        tau_bounds=STEER_TAU_BOUNDS, delay_candidates=STEER_DELAY_GRID,
     )
     if fit is None:
         return None
@@ -69,7 +79,7 @@ def fit_steer(
     collection_dir: Path,
     *,
     phase1_params: dict | None = None,
-    wheelbase: float = 4.76012,
+    wheelbase: float = DEFAULT_WHEELBASE,
     n_jobs: int = 1,
 ) -> dict:
     """collection 配下の全 CSV キャッシュから操舵モデル + k_us を直接同定する。"""
@@ -105,31 +115,28 @@ def fit_steer(
                 biases.append(bias)
                 dsfs.append(dsf)
 
-    if taus:
-        params["steer_time_constant"] = float(np.clip(np.median(taus), 0.05, 0.8))
-        params["steer_time_delay"] = float(np.clip(np.median(delays), 0.0, 0.15))
-        params["steer_bias"] = float(np.median(biases))
-        params["debug_steer_scaling_factor"] = float(np.median(dsfs))
-        params["steer_dead_band"] = 0.001
-        params["steer_rate_lim"] = 5.0
-        print(f"  同定結果: steer_time_constant = {params['steer_time_constant']:.4f} s")
-        print(f"            steer_time_delay    = {params['steer_time_delay']:.4f} s")
-        print(f"            steer_bias          = {params['steer_bias']:.6f} rad")
-        print(f"            steer_scaling       = {params['debug_steer_scaling_factor']:.4f}")
-    else:
-        print("[WARN] 操舵の動的条件を満たすデータがないため、デフォルト値を設定します。")
-        params["steer_time_constant"] = 0.12
-        params["steer_time_delay"] = 0.05
-        params["steer_bias"] = 0.0005
-        params["debug_steer_scaling_factor"] = 1.0
+    if not taus:
+        raise RuntimeError(
+            "操舵の動的条件を満たすデータがありません "
+            f"(各 dataset {MIN_FIT_SAMPLES} samples 以上が必要)。"
+        )
 
-    # k_us (アンダーステア勾配) の速度ビン別直接同定: 全データセットの定常旋回サンプルを
-    # プールしてスカラー原点回帰 y = k_us·x (x=v·ω, y=tan(δ)-L·ω/v) を解く。
+    params["steer_time_constant"] = float(np.clip(np.median(taus), *STEER_RESULT_TAU_BOUNDS))
+    params["steer_time_delay"] = float(np.clip(np.median(delays), *STEER_RESULT_DELAY_BOUNDS))
+    params["steer_bias"] = float(np.median(biases))
+    params["debug_steer_scaling_factor"] = float(np.median(dsfs))
+    params["steer_dead_band"] = STEER_DEFAULT_DEAD_BAND
+    params["steer_rate_lim"] = STEER_DEFAULT_RATE_LIM
+    print(f"  同定結果: steer_time_constant = {params['steer_time_constant']:.4f} s")
+    print(f"            steer_time_delay    = {params['steer_time_delay']:.4f} s")
+    print(f"            steer_bias          = {params['steer_bias']:.6f} rad")
+    print(f"            steer_scaling       = {params['debug_steer_scaling_factor']:.4f}")
+
     print("[fit_steer] k_us 直接同定を実行中...")
     all_vx, all_wz, all_steer, all_dwz = [], [], [], []
     for ds in datasets:
         wz = ds["wz"]
-        dwz_mid = np.diff(wz) / DT
+        dwz_mid = np.diff(wz) / RESAMPLE_DT
         dwz = np.empty_like(wz)
         dwz[0] = dwz_mid[0] if len(dwz_mid) > 0 else 0.0
         dwz[-1] = dwz_mid[-1] if len(dwz_mid) > 0 else 0.0
@@ -149,14 +156,16 @@ def fit_steer(
     vx_f = vx_all[mask_ok]
     wz_f = wz_all[mask_ok]
     steer_f = steer_all[mask_ok] - params["steer_bias"]
-    tan_steer = np.tan(np.clip(steer_f, -0.8, 0.8))
+    tan_steer = np.tan(np.clip(steer_f, -STEER_CLIP_RAD, STEER_CLIP_RAD))
 
     x = vx_f * wz_f
     y = tan_steer - wheelbase * wz_f / vx_f if len(vx_f) else np.empty(0)
     sum_x2 = float(np.sum(x * x))
     sum_xy = float(np.sum(x * y))
     n_pts = int(len(vx_f))
-    k_us = sum_xy / sum_x2 if (n_pts >= 10 and sum_x2 > 0) else 0.008
+    if n_pts < MIN_K_US_SAMPLES or sum_x2 <= 0:
+        raise RuntimeError(f"k_us 回帰に十分な定常旋回サンプルがありません (n={n_pts})。")
+    k_us = sum_xy / sum_x2
     k_us = float(np.clip(k_us, 0.0, K_US_CLIP))
     params["k_us"] = k_us
     print(f"  同定結果: k_us = {k_us:.5f} (曲線走行サンプル n={n_pts})")

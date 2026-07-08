@@ -1,16 +1,5 @@
 #!/usr/bin/env python3
-"""[Step4a] Optuna warm-start 統合チューニング → tuned_params.yaml (ROS フリー)。
-
-multi_dataset_tune.py の `DatasetCtx`/`_eval`/`load_datasets`/`robust_search` を
-移植し、`step_ol1_analyze_nstep as s5` への依存を `rollout` モジュール
-(CSV キャッシュ・ctypes 車両モデルのみ、報告系を持たない) に差し替えたもの。
-
-`lib._models_config`(scenario.yaml SSOT)・`lib._multi_agg`(スコア関数、外部
-依存ゼロ)・`lib._collection`(collection 発見)はいずれも ROS 非依存の SSOT
-なのでそのまま import する。plotly HTML レポート生成 (`lib._tune_report`)・
---ds-before/--ds-after 日付フィルタ (`mcap` 直読み)・--lite-dir 手動指定は
-今回のシンプル化で持たない (必要な場合は旧 multi_dataset_tune.py を使う)。
-"""
+"""[Step4a] Optuna warm-start 統合チューニング → tuned_params.yaml。"""
 from __future__ import annotations
 
 import argparse
@@ -30,8 +19,8 @@ from ..lib._multi_agg import HORIZONS, WORST_W, acc_score, aggregate_normalized,
 from . import rollout
 from .csv_schema import CACHE_NAME
 from .load_data import build_rollout_data, read_dataset_csv
+from .settings import ROLLOUT_STRIDE, SEARCH_DELAY_CANDIDATES, SEARCH_SPACE_ACC, SEARCH_SPACE_STEER
 
-STRIDE = 5
 _GT_KEYS = ("acc_time_delay", "steer_time_delay", "wheelbase", "sub_dt")
 
 
@@ -58,7 +47,9 @@ def _eval(ctx: DatasetCtx, override: dict, model_type: str) -> dict:
     if gt is None:
         gt = rollout._prepare_gt(ctx.data, ctx.t0_ns, params)
         ctx.gt_cache[key] = gt
-    rmse = rollout.eval_rollout_rmse(ctx.data, ctx.t0_ns, params, model_type, horizons=HORIZONS, stride=STRIDE, gt=gt)
+    rmse = rollout.eval_rollout_rmse(
+        ctx.data, ctx.t0_ns, params, model_type, horizons=HORIZONS, stride=ROLLOUT_STRIDE, gt=gt,
+    )
     return {h: rmse[h] for h in HORIZONS}
 
 
@@ -286,39 +277,22 @@ def robust_search(
     if search_subsample:
         print(f"[INFO] search_subsample={search_subsample}: 探索は ctxs[:{min(search_subsample, len(ctxs))}] を使用 (全件={len(ctxs)})。")
 
-    delay_candidates: tuple[float, ...] = (0.10, 0.15, 0.20, 0.30, 0.40, 0.50)
+    delay_candidates = SEARCH_DELAY_CANDIDATES
 
     if phase == 1:
-        continuous_space: dict[str, tuple[float, float]] = {
-            "acc_time_constant": (0.20, 0.30),
-            "debug_acc_scaling_factor": (0.80, 1.20),
-        }
+        continuous_space: dict[str, tuple[float, float]] = dict(SEARCH_SPACE_ACC)
         score_fn = acc_score
         explore_delay = True
         print("[Phase 1] acc パラメータ最適化 (long スコア)。steer 系は cur_best から固定。")
     elif phase == 2:
-        continuous_space = {
-            "steer_time_constant": (0.05, 0.80),
-            "debug_steer_scaling_factor": (0.75, 1.20),
-            "k_us": (0.0, 0.05),
-            "steer_dead_band": (0.0, 0.02),
-            "steer_bias": (-0.01, 0.01),
-        }
+        continuous_space = dict(SEARCH_SPACE_STEER)
         score_fn = steer_score
         explore_delay = False
         if phase_fixed_params:
             cur_best.update(phase_fixed_params)
             print(f"[Phase 2] steer パラメータ最適化 (yaw+lat スコア)。固定 acc params: {phase_fixed_params}")
     else:
-        continuous_space = {
-            "steer_time_constant": (0.05, 0.80),
-            "debug_steer_scaling_factor": (0.75, 1.20),
-            "acc_time_constant": (0.20, 0.30),
-            "debug_acc_scaling_factor": (0.80, 1.20),
-            "k_us": (0.0, 0.05),
-            "steer_dead_band": (0.0, 0.02),
-            "steer_bias": (-0.01, 0.01),
-        }
+        continuous_space = {**SEARCH_SPACE_STEER, **SEARCH_SPACE_ACC}
         score_fn = robust_score
         explore_delay = True
 
@@ -332,8 +306,10 @@ def robust_search(
     acc_delay_set: set[float] = set(delay_candidates) if explore_delay else set()
     if "acc_time_delay" in cur_best:
         acc_delay_set.add(float(cur_best["acc_time_delay"]))
+    else:
+        acc_delay_set.add(float(ctxs[0].base["acc_time_delay"]))
     for ctx in ctxs:
-        for ad in (acc_delay_set or {float(cur_best.get("acc_time_delay", 0.1))}):
+        for ad in acc_delay_set:
             merged = dict(ctx.base)
             merged.update(cur_best)
             merged["acc_time_delay"] = ad
