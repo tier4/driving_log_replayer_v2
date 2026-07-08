@@ -319,7 +319,8 @@ fit_report:
 	    --out "$(VALIDITY_REPORT)" \
 	    --release-note-out "$(RELEASE_NOTE_REPORT)" \
 	    --metrics-cache "$(METRICS_CACHE)" \
-	    --closed-loop-uuids "$(CLOSED_LOOP_UUIDS)"
+	    --closed-loop-uuids "$(CLOSED_LOOP_UUIDS)" \
+	    --n-curve-ds 0
 
 # Step 4c: モデルパラメータリリース用 YAML 生成
 release_model_param:
