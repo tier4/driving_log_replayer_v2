@@ -1,14 +1,5 @@
 #!/usr/bin/env python3
-"""[Step4b] 簡易物理妥当性レポート (matplotlib + テキストサマリー、ROS フリー)。
-
-旧 `physical_validity_report.py`(plotly 図・地図オーバーレイ・モデル検証 viewer
-HTML・リリースノート生成、2675行)の全機能は再現しない。ユーザー合意の上での
-機能ダウングレード版: vehicle_model_fitting の `debug.py` 相当に、
-tuned_params.yaml の同定値サマリー・縦横フィット品質の重畳プロット・
-k_us 速度ビン別散布図のみを matplotlib + テキストで出力する。
-(plotly HTML・地図オーバーレイ・viewer・リリースノートは生成しない。
-それらが必要な場合は旧 physical_validity_report.py を使う。)
-"""
+"""[Step4b] matplotlib 図とテキストの簡易妥当性レポート。"""
 from __future__ import annotations
 
 import argparse
@@ -33,16 +24,37 @@ from . import fit_core
 from .load_data import build_resampled, discover_cached_datasets, read_dataset_csv
 from .physical_constants import DWZ_MAX, VX_MIN_CURVE, WZ_MIN
 from .scenario_params import resolve_wheelbase
+from .settings import (
+    K_US_CLIP,
+    REPORT_MAX_PLOT_DATASETS,
+    REPORT_PLOT_WINDOW_S,
+    REPORT_SAMPLE_DATASETS,
+    REPORT_VALID_ACC_TAU_BOUNDS,
+    REPORT_VALID_STEER_TAU_BOUNDS,
+    RESAMPLE_DT,
+    STEER_CLIP_RAD,
+)
 
-DT = 0.01
-N_SAMPLE_DATASETS = 5
-PLOT_WINDOW_S = 60.0  # 重畳プロットに表示する時間窓 [s]
+REQUIRED_REPORT_PARAMS = (
+    "acc_time_constant",
+    "acc_time_delay",
+    "debug_acc_scaling_factor",
+    "steer_time_constant",
+    "steer_time_delay",
+    "debug_steer_scaling_factor",
+    "steer_bias",
+    "k_us",
+)
 
 
 def load_tuned_params(path: Path) -> dict:
     with Path(path).open("r") as f:
         data = yaml.safe_load(f)
-    return dict(data.get("params", data))
+    params = dict(data.get("params", data))
+    missing = sorted(k for k in REQUIRED_REPORT_PARAMS if k not in params)
+    if missing:
+        raise ValueError(f"tuned params に必要キーがありません: {missing}")
+    return params
 
 
 def _sample_datasets(collection_dir: Path, n: int) -> list[dict]:
@@ -50,7 +62,7 @@ def _sample_datasets(collection_dir: Path, n: int) -> list[dict]:
     out = []
     for ds_id, csv_path in tasks:
         dfs = read_dataset_csv(csv_path)
-        ds = build_resampled(dfs, DT, context=f"report:{ds_id}")
+        ds = build_resampled(dfs, RESAMPLE_DT, context=f"report:{ds_id}")
         if ds is not None:
             ds["dataset_id"] = ds_id
             out.append(ds)
@@ -65,22 +77,22 @@ def _channel_rmse(cmd: np.ndarray, act: np.ndarray, sim: np.ndarray, mask: np.nd
 
 def build_report_figure(datasets: list[dict], params: dict, wheelbase: float) -> tuple[plt.Figure, dict]:
     """縦・操舵の当てはめ品質重畳プロット + k_us 散布図を1枚の図にまとめる。"""
-    n_ds = min(len(datasets), 3)
+    n_ds = min(len(datasets), REPORT_MAX_PLOT_DATASETS)
     fig, axes = plt.subplots(n_ds + 1, 2, figsize=(12, 3.2 * (n_ds + 1)), squeeze=False)
     metrics: dict = {"long_rmse": [], "steer_rmse": []}
 
-    acc_delay_n = int(round(params.get("acc_time_delay", 0.1) / DT))
-    steer_delay_n = int(round(params.get("steer_time_delay", 0.05) / DT))
+    acc_delay_n = int(round(params["acc_time_delay"] / RESAMPLE_DT))
+    steer_delay_n = int(round(params["steer_time_delay"] / RESAMPLE_DT))
 
     for i in range(n_ds):
         ds = datasets[i]
-        n_win = min(len(ds["a_cmd"]), int(PLOT_WINDOW_S / DT))
-        t = np.arange(n_win) * DT
+        n_win = min(len(ds["a_cmd"]), int(REPORT_PLOT_WINDOW_S / RESAMPLE_DT))
+        t = np.arange(n_win) * RESAMPLE_DT
 
         sim_a = fit_core.sim_first_order(
-            ds["a_cmd"][:n_win].astype(float), params.get("acc_time_constant", 0.25),
-            acc_delay_n, DT, y0=float(ds["a_act"][0]),
-        ) * params.get("debug_acc_scaling_factor", 1.0)
+            ds["a_cmd"][:n_win].astype(float), params["acc_time_constant"],
+            acc_delay_n, RESAMPLE_DT, y0=float(ds["a_act"][0]),
+        ) * params["debug_acc_scaling_factor"]
         ax = axes[i, 0]
         ax.plot(t, ds["a_cmd"][:n_win], label="a_cmd", alpha=0.5)
         ax.plot(t, ds["a_act"][:n_win], label="a_act (実測)", linewidth=1.5)
@@ -90,9 +102,9 @@ def build_report_figure(datasets: list[dict], params: dict, wheelbase: float) ->
         ax.legend(fontsize=7)
 
         sim_d = fit_core.sim_first_order(
-            ds["d_cmd"][:n_win].astype(float), params.get("steer_time_constant", 0.15),
-            steer_delay_n, DT, y0=float(ds["d_act"][0]),
-        ) * params.get("debug_steer_scaling_factor", 1.0) + params.get("steer_bias", 0.0)
+            ds["d_cmd"][:n_win].astype(float), params["steer_time_constant"],
+            steer_delay_n, RESAMPLE_DT, y0=float(ds["d_act"][0]),
+        ) * params["debug_steer_scaling_factor"] + params["steer_bias"]
         ax2 = axes[i, 1]
         ax2.plot(t, ds["d_cmd"][:n_win], label="d_cmd", alpha=0.5)
         ax2.plot(t, ds["d_act"][:n_win], label="d_act (実測)", linewidth=1.5)
@@ -110,7 +122,7 @@ def build_report_figure(datasets: list[dict], params: dict, wheelbase: float) ->
     all_vx, all_wz, all_steer, all_dwz, all_gear = [], [], [], [], []
     for ds in datasets:
         wz = ds["vx"] * 0 + ds["wz"]  # copy
-        dwz_mid = np.diff(wz) / DT
+        dwz_mid = np.diff(wz) / RESAMPLE_DT
         dwz = np.empty_like(wz)
         dwz[0] = dwz_mid[0] if len(dwz_mid) else 0.0
         dwz[-1] = dwz_mid[-1] if len(dwz_mid) else 0.0
@@ -130,11 +142,14 @@ def build_report_figure(datasets: list[dict], params: dict, wheelbase: float) ->
         gear_all = np.concatenate(all_gear)
         mask_ok = gear_all & (np.abs(wz_all) > WZ_MIN) & (np.abs(dwz_all) < DWZ_MAX) & (vx_all > VX_MIN_CURVE)
         x = vx_all[mask_ok] * wz_all[mask_ok]
-        y = np.tan(np.clip(steer_all[mask_ok] - params.get("steer_bias", 0.0), -0.8, 0.8)) - wheelbase * wz_all[mask_ok] / vx_all[mask_ok]
+        y = (
+            np.tan(np.clip(steer_all[mask_ok] - params["steer_bias"], -STEER_CLIP_RAD, STEER_CLIP_RAD))
+            - wheelbase * wz_all[mask_ok] / vx_all[mask_ok]
+        )
         ax_k.scatter(x, y, s=4, alpha=0.3)
         if len(x):
             xs = np.linspace(x.min(), x.max(), 50)
-            ax_k.plot(xs, params.get("k_us", 0.0) * xs, color="red", label=f"k_us={params.get('k_us', 0.0):.5f}")
+            ax_k.plot(xs, params["k_us"] * xs, color="red", label=f"k_us={params['k_us']:.5f}")
         ax_k.set_xlabel("v * wz")
         ax_k.set_ylabel("tan(steer) - L*wz/v")
         ax_k.set_title("k_us 定常旋回回帰")
@@ -165,29 +180,36 @@ def build_text_summary(params: dict, wheelbase: float, metrics: dict, *, n_datas
         lines.append(f"  操舵 RMSE (サンプル平均)         = {np.nanmean(metrics['steer_rmse']):.5f} rad")
     lines.append("")
     lines.append("-- 妥当性チェック (閾値は lib._physical_validity 由来の定数) --")
-    k_us = params.get("k_us")
-    if k_us is not None:
-        ok = 0.0 <= k_us <= 0.05
-        lines.append(f"  k_us={k_us:.5f} in [0, 0.05]: {'OK' if ok else 'NG'}")
-    tau_a = params.get("acc_time_constant")
-    if tau_a is not None:
-        ok = 0.05 <= tau_a <= 1.0
-        lines.append(f"  acc_time_constant={tau_a:.4f} in [0.05, 1.0]: {'OK' if ok else 'NG (要確認)'}")
-    tau_d = params.get("steer_time_constant")
-    if tau_d is not None:
-        ok = 0.02 <= tau_d <= 1.0
-        lines.append(f"  steer_time_constant={tau_d:.4f} in [0.02, 1.0]: {'OK' if ok else 'NG (要確認)'}")
+    k_us = params["k_us"]
+    ok = 0.0 <= k_us <= K_US_CLIP
+    lines.append(f"  k_us={k_us:.5f} in [0, {K_US_CLIP:.2f}]: {'OK' if ok else 'NG'}")
+    tau_a = params["acc_time_constant"]
+    ok = REPORT_VALID_ACC_TAU_BOUNDS[0] <= tau_a <= REPORT_VALID_ACC_TAU_BOUNDS[1]
+    lines.append(
+        f"  acc_time_constant={tau_a:.4f} in "
+        f"[{REPORT_VALID_ACC_TAU_BOUNDS[0]}, {REPORT_VALID_ACC_TAU_BOUNDS[1]}]: "
+        f"{'OK' if ok else 'NG (要確認)'}"
+    )
+    tau_d = params["steer_time_constant"]
+    ok = REPORT_VALID_STEER_TAU_BOUNDS[0] <= tau_d <= REPORT_VALID_STEER_TAU_BOUNDS[1]
+    lines.append(
+        f"  steer_time_constant={tau_d:.4f} in "
+        f"[{REPORT_VALID_STEER_TAU_BOUNDS[0]}, {REPORT_VALID_STEER_TAU_BOUNDS[1]}]: "
+        f"{'OK' if ok else 'NG (要確認)'}"
+    )
     lines.append("=" * 72)
     return "\n".join(lines)
 
 
 def build_report(
     collection_dir: Path, tuned_params_path: Path, out_png: Path, out_txt: Path,
-    *, scenario: Path | None = None, case: str = "current", n_sample_datasets: int = N_SAMPLE_DATASETS,
+    *, scenario: Path | None = None, case: str = "current", n_sample_datasets: int = REPORT_SAMPLE_DATASETS,
 ) -> None:
     params = load_tuned_params(tuned_params_path)
     wheelbase = resolve_wheelbase(scenario, case)
     datasets = _sample_datasets(collection_dir, n_sample_datasets)
+    if not datasets:
+        raise RuntimeError("レポート対象の有効な CSV キャッシュがありません。")
 
     fig, metrics = build_report_figure(datasets, params, wheelbase)
     out_png.parent.mkdir(parents=True, exist_ok=True)

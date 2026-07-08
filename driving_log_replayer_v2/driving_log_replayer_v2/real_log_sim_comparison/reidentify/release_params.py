@@ -1,9 +1,5 @@
 #!/usr/bin/env python3
-"""[Step4c] 同定済みパラメータのリリース用 YAML 生成 (ROS フリー)。
-
-`release_model_params.py` をほぼ無修正で移設したもの (外部依存 yaml のみで、
-既に vehicle_model_fitting 相当のシンプルなスタイル)。
-"""
+"""[Step4c] 同定済みパラメータのリリース用 YAML 生成。"""
 from __future__ import annotations
 
 import argparse
@@ -12,7 +8,7 @@ import sys
 
 import yaml
 
-MODEL_KEY = "delay_steer_acc_geared_for_diffusion_planner"
+from .settings import RELEASE_MODEL_KEY
 
 
 def release(input_param: Path, tuned_params: Path, out_dir: Path) -> Path:
@@ -36,12 +32,12 @@ def release(input_param: Path, tuned_params: Path, out_dir: Path) -> Path:
         ros_params = param_data["/**"]["ros__parameters"]
     except KeyError as exc:
         raise KeyError("Could not find '/**' -> 'ros__parameters' in the input YAML.") from exc
-    if MODEL_KEY not in ros_params:
-        raise KeyError(f"Could not find '{MODEL_KEY}' in ros__parameters.")
+    if RELEASE_MODEL_KEY not in ros_params:
+        raise KeyError(f"Could not find '{RELEASE_MODEL_KEY}' in ros__parameters.")
 
-    model_params = ros_params[MODEL_KEY]
+    model_params = ros_params[RELEASE_MODEL_KEY]
     if not isinstance(model_params, dict):
-        raise ValueError(f"'{MODEL_KEY}' is not a dictionary.")
+        raise ValueError(f"'{RELEASE_MODEL_KEY}' is not a dictionary.")
 
     model_params["version"] = 100
     model_params["v100"] = params
