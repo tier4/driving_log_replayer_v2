@@ -1551,6 +1551,93 @@ def compute_perfect_tracking_data(
     }
 
 
+_XY_EQUATION_PARAM_DEFS = (
+    ("param1", "xy_param1", 0.0, (-5.0, 5.0)),
+    ("param2", "xy_param2", 0.0, (-5.0, 5.0)),
+)
+
+
+def _xy_equation_param_specs(params: dict) -> list[dict]:
+    """x/y 方程式 residual fitting 用の named parameter specs を返す。"""
+    return [
+        {
+            "name": name,
+            "initial": float(params.get(config_key, default)),
+            "bounds": bounds,
+        }
+        for name, config_key, default, bounds in _XY_EQUATION_PARAM_DEFS
+    ]
+
+
+def _xy_equation_baseline_params() -> dict[str, float]:
+    return {name: float(default) for name, _config_key, default, _bounds in _XY_EQUATION_PARAM_DEFS}
+
+
+def _xy_equation_rhs(params_dict: dict, yaw: np.ndarray, vx: np.ndarray, wz: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+    """x/y 状態方程式 RHS を評価する。追加項の実験時はこの関数と param specs を更新する。"""
+    p1 = float(params_dict["param1"])
+    p2 = float(params_dict["param2"])
+    rhs_x = vx * np.cos(yaw) + p1 * wz * vx
+    rhs_y = vx * np.sin(yaw) + p2 * wz * vx
+    return rhs_x, rhs_y
+
+
+def _xy_equation_residual(params_dict: dict, _grid: dict, dataset: dict) -> np.ndarray:
+    rhs_x, rhs_y = _xy_equation_rhs(params_dict, dataset["yaw"], dataset["vx"], dataset["wz"])
+    mask = dataset["mask"]
+    ex = rhs_x - dataset["lhs_x"]
+    ey = rhs_y - dataset["lhs_y"]
+    return np.concatenate([ex[mask], ey[mask]])
+
+
+def _collect_xy_equation_residual_components(datasets: list[dict], params_dict: dict) -> dict:
+    ex_all: list[float] = []
+    ey_all: list[float] = []
+    for dataset in datasets:
+        rhs_x, rhs_y = _xy_equation_rhs(params_dict, dataset["yaw"], dataset["vx"], dataset["wz"])
+        mask = dataset["mask"]
+        ex_all.extend((rhs_x - dataset["lhs_x"])[mask].tolist())
+        ey_all.extend((rhs_y - dataset["lhs_y"])[mask].tolist())
+    ex_arr = np.asarray(ex_all, dtype=float)
+    ey_arr = np.asarray(ey_all, dtype=float)
+    both = np.concatenate([ex_arr, ey_arr]) if ex_arr.size or ey_arr.size else np.array([], dtype=float)
+    return {
+        "resid_x": ex_arr.tolist(),
+        "resid_y": ey_arr.tolist(),
+        "rmse_x": float(np.sqrt(np.mean(ex_arr ** 2))) if ex_arr.size else float("nan"),
+        "rmse_y": float(np.sqrt(np.mean(ey_arr ** 2))) if ey_arr.size else float("nan"),
+        "rmse": float(np.sqrt(np.mean(both ** 2))) if both.size else float("nan"),
+        "n": int(both.size),
+    }
+
+
+def _integrate_xy_equation_trajectory(td: dict, params_dict: dict) -> dict:
+    gt_x = td["x"]
+    gt_y = td["y"]
+    yaw = td["yaw"]
+    vx = td["vx"]
+    wz = td["wz"]
+    n = len(gt_x)
+    xs = np.empty(n)
+    ys = np.empty(n)
+    xs[0] = float(gt_x[0])
+    ys[0] = float(gt_y[0])
+    for i in range(1, n):
+        j = i - 1
+        rhs_x, rhs_y = _xy_equation_rhs(params_dict, yaw[j:j + 1], vx[j:j + 1], wz[j:j + 1])
+        xs[i] = xs[i - 1] + float(rhs_x[0]) * _FIT_DT
+        ys[i] = ys[i - 1] + float(rhs_y[0]) * _FIT_DT
+    stride = int(td["stride"])
+    return {
+        "uuid": td["uuid"],
+        "gt_x": ((gt_x - gt_x[0])[::stride]).tolist(),
+        "gt_y": ((gt_y - gt_y[0])[::stride]).tolist(),
+        "bx": ((xs - gt_x[0])[::stride]).tolist(),
+        "by": ((ys - gt_y[0])[::stride]).tolist(),
+        "moving": (td["moving"][::stride]).tolist(),
+    }
+
+
 def compute_xy_equation_residual_data(
     entries: list,
     params: dict,
@@ -1633,89 +1720,24 @@ def compute_xy_equation_residual_data(
                 "stride": _PLOT_STRIDE,
             })
 
-    def _xy_residual(params_dict: dict, _grid: dict, dataset: dict) -> np.ndarray:
-        p1 = float(params_dict["param1"])
-        p2 = float(params_dict["param2"])
-        yaw = dataset["yaw"]
-        vx = dataset["vx"]
-        wz = dataset["wz"]
-        mask = dataset["mask"]
-        rhs_x = vx * np.cos(yaw) + p1 * wz * vx
-        rhs_y = vx * np.sin(yaw) + p2 * wz * vx
-        ex = rhs_x - dataset["lhs_x"]
-        ey = rhs_y - dataset["lhs_y"]
-        return np.concatenate([ex[mask], ey[mask]])
-
     fit = fit_equation_residual_grid(
         datasets,
-        param_specs=[
-            {"name": "param1", "initial": float(params.get("xy_param1", 0.0)), "bounds": (-5.0, 5.0)},
-            {"name": "param2", "initial": float(params.get("xy_param2", 0.0)), "bounds": (-5.0, 5.0)},
-        ],
-        residual_func=_xy_residual,
+        param_specs=_xy_equation_param_specs(params),
+        residual_func=_xy_equation_residual,
     )
 
-    def _collect_components(params_dict: dict) -> dict:
-        ex_all: list[float] = []
-        ey_all: list[float] = []
-        for dataset in datasets:
-            p1 = float(params_dict["param1"])
-            p2 = float(params_dict["param2"])
-            yaw = dataset["yaw"]
-            vx = dataset["vx"]
-            wz = dataset["wz"]
-            mask = dataset["mask"]
-            ex = vx * np.cos(yaw) + p1 * wz * vx - dataset["lhs_x"]
-            ey = vx * np.sin(yaw) + p2 * wz * vx - dataset["lhs_y"]
-            ex_all.extend(ex[mask].tolist())
-            ey_all.extend(ey[mask].tolist())
-        ex_arr = np.asarray(ex_all, dtype=float)
-        ey_arr = np.asarray(ey_all, dtype=float)
-        both = np.concatenate([ex_arr, ey_arr]) if ex_arr.size or ey_arr.size else np.array([], dtype=float)
-        return {
-            "resid_x": ex_arr.tolist(),
-            "resid_y": ey_arr.tolist(),
-            "rmse_x": float(np.sqrt(np.mean(ex_arr ** 2))) if ex_arr.size else float("nan"),
-            "rmse_y": float(np.sqrt(np.mean(ey_arr ** 2))) if ey_arr.size else float("nan"),
-            "rmse": float(np.sqrt(np.mean(both ** 2))) if both.size else float("nan"),
-            "n": int(both.size),
-        }
-
     fitted_params = fit["params"] if fit is not None else {"param1": float("nan"), "param2": float("nan")}
-    fitted = _collect_components(fitted_params) if fit is not None else {
+    fitted = _collect_xy_equation_residual_components(datasets, fitted_params) if fit is not None else {
         "resid_x": [], "resid_y": [], "rmse_x": float("nan"), "rmse_y": float("nan"), "rmse": float("nan"), "n": 0,
     }
-    baseline = _collect_components({"param1": 0.0, "param2": 0.0}) if datasets else {
+    baseline = _collect_xy_equation_residual_components(datasets, _xy_equation_baseline_params()) if datasets else {
         "resid_x": [], "resid_y": [], "rmse_x": float("nan"), "rmse_y": float("nan"), "rmse": float("nan"), "n": 0,
     }
 
-    fitted_traj: list[dict] = []
-    p1 = float(fitted_params.get("param1", 0.0)) if fit is not None else 0.0
-    p2 = float(fitted_params.get("param2", 0.0)) if fit is not None else 0.0
-    for td in traj_data:
-        gt_x = td["x"]
-        gt_y = td["y"]
-        yaw = td["yaw"]
-        vx = td["vx"]
-        wz = td["wz"]
-        n = len(gt_x)
-        xs = np.empty(n)
-        ys = np.empty(n)
-        xs[0] = float(gt_x[0])
-        ys[0] = float(gt_y[0])
-        for i in range(1, n):
-            j = i - 1
-            xs[i] = xs[i - 1] + float(vx[j] * np.cos(yaw[j]) + p1 * wz[j] * vx[j]) * _FIT_DT
-            ys[i] = ys[i - 1] + float(vx[j] * np.sin(yaw[j]) + p2 * wz[j] * vx[j]) * _FIT_DT
-        stride = int(td["stride"])
-        fitted_traj.append({
-            "uuid": td["uuid"],
-            "gt_x": ((gt_x - gt_x[0])[::stride]).tolist(),
-            "gt_y": ((gt_y - gt_y[0])[::stride]).tolist(),
-            "bx": ((xs - gt_x[0])[::stride]).tolist(),
-            "by": ((ys - gt_y[0])[::stride]).tolist(),
-            "moving": (td["moving"][::stride]).tolist(),
-        })
+    fitted_traj = [
+        _integrate_xy_equation_trajectory(td, fitted_params if fit is not None else _xy_equation_baseline_params())
+        for td in traj_data
+    ]
 
     return {
         "n_dataset": n_dataset,
