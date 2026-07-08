@@ -73,8 +73,7 @@ help:
 	@echo "    fit_lon             Step2: 縦方向 直接同定 → phase1_acc.yaml"
 	@echo "    fit_steer           Step3: 操舵+k_us 直接同定 (fit_lon 必須) → phase2_steer.yaml"
 	@echo "    fit_merge           Step4a: reidentify v2 warm-start Optuna 統合 (fit_steer 必須) → tuned_params.yaml"
-	@echo "    fit_report          Step4b: reidentify v2 簡易物理妥当性レポート (fit_merge 必須)"
-	@echo "                        → validity_report.png + validity_report.txt"
+	@echo "    fit_report          Step4b: 物理妥当性レポート (fit_merge 必須) → physical_validity_report.html"
 	@echo "    apply               Step5: 同定パラメータを scenario に反映 (fit_merge 必須) → tuned_scenario.yaml"
 	@echo "    closed_loop         Step6: tuned scenario で closed-loop 実 sim (apply 必須)"
 	@echo ""
@@ -354,19 +353,22 @@ fit_merge:
 
 # Step 4b: 物理妥当性レポート生成 → VALIDITY_REPORT。
 fit_report:
-	@if [ "$(NO_SETUP)" != "1" ]; then \
-	    test -f $(SETUP_BASH) || { echo "[ERROR] $(SETUP_BASH) が見つかりません。先にワークスペースをビルドしてください"; exit 1; }; \
-	fi
+	@test -f $(SETUP_BASH) || \
+	    { echo "[ERROR] $(SETUP_BASH) が見つかりません。先にワークスペースをビルドしてください"; exit 1; }
 	@test -f "$(TUNED_PARAMS)" || \
 	    { echo "[ERROR] $(TUNED_PARAMS) がありません。先に 'make fit_merge' を実行してください"; exit 1; }
-	@echo "[INFO] fit_report: reidentify v2 簡易物理妥当性レポート生成 → $(REIDENTIFY_REPORT_PNG), $(REIDENTIFY_REPORT_TXT)"
-	$(RUN_PY) -m driving_log_replayer_v2.real_log_sim_comparison.reidentify.report \
-	    --collection-dir "$(MULTI_BATCH_ROOT)" \
-	    --tuned-params "$(TUNED_PARAMS)" \
+	@echo "[INFO] fit_report: 物理妥当性レポート生成 → $(VALIDITY_REPORT)"
+	@echo "[INFO] fit_report: リリースノート用レポート生成 → $(RELEASE_NOTE_REPORT)"
+	source "$(SETUP_BASH)" && MPLCONFIGDIR="$(MPLCONFIGDIR)" PYTHONPATH="$(PYTHONPATH_PREFIX):$${PYTHONPATH:-}" $(PYTHON) -m driving_log_replayer_v2.real_log_sim_comparison.physical_validity_report \
+	    --params "$(TUNED_PARAMS)" \
 	    --scenario "$(LOCAL_SCENARIO)" \
 	    --case "$(MODEL_CASE)" \
-	    --out-png "$(REIDENTIFY_REPORT_PNG)" \
-	    --out-txt "$(REIDENTIFY_REPORT_TXT)"
+	    --collection-dir "$(MULTI_BATCH_ROOT)" \
+	    --out "$(VALIDITY_REPORT)" \
+	    --release-note-out "$(RELEASE_NOTE_REPORT)" \
+	    --metrics-cache "$(METRICS_CACHE)" \
+	    --closed-loop-uuids "$(CLOSED_LOOP_UUIDS)" \
+	    --n-curve-ds 0
 
 # Step 4c: モデルパラメータリリース用 YAML 生成
 release_model_param:
@@ -448,7 +450,7 @@ local_multidataset_cloud_run: prepare_multidataset
 	@test -f $(LOCAL_SCENARIO) || \
 	    { echo "[ERROR] $(LOCAL_SCENARIO) が見つかりません"; exit 1; }
 	$(MAKE) lite
-	$(MAKE) reidentify NO_SETUP=1
+	$(MAKE) reidentify
 	$(MAKE) apply NO_SETUP=1
 	$(MAKE) closed_loop
 
