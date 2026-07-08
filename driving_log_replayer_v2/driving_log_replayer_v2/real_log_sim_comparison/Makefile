@@ -329,7 +329,7 @@ fit_steer:
 	@echo "[INFO] fit_steer: Phase 2 操舵+k_us 直接同定 (継承: $(PHASE1_ACC)) → $(PHASE2_STEER)"
 	$(RUN_PY) -m driving_log_replayer_v2.real_log_sim_comparison.reidentify.fit_steer \
 	    --collection-dir "$(MULTI_BATCH_ROOT)" \
-	    --phase-params "$(PHASE1_ACC)" \
+	    --phase1-params "$(PHASE1_ACC)" \
 	    --scenario "$(LOCAL_SCENARIO)" \
 	    --case "$(MODEL_CASE)" \
 	    --out "$(PHASE2_STEER)" \
