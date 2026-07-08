@@ -125,8 +125,8 @@ def fit_steer(
     params["steer_time_delay"] = float(np.clip(np.median(delays), *STEER_RESULT_DELAY_BOUNDS))
     params["steer_bias"] = float(np.median(biases))
     params["debug_steer_scaling_factor"] = float(np.median(dsfs))
-    params["steer_dead_band"] = STEER_DEFAULT_DEAD_BAND
-    params["steer_rate_lim"] = STEER_DEFAULT_RATE_LIM
+    params.setdefault("steer_dead_band", STEER_DEFAULT_DEAD_BAND)
+    params.setdefault("steer_rate_lim", STEER_DEFAULT_RATE_LIM)
     print(f"  同定結果: steer_time_constant = {params['steer_time_constant']:.4f} s")
     print(f"            steer_time_delay    = {params['steer_time_delay']:.4f} s")
     print(f"            steer_bias          = {params['steer_bias']:.6f} rad")
@@ -199,6 +199,17 @@ def run(
             phase1_data = yaml.safe_load(f)
         phase1_params = dict(phase1_data.get("params", phase1_data))
         print(f"[fit_steer] Step2 (fit_lon) のパラメータを引き継ぎました: {list(phase1_params.keys())}")
+
+    if scenario is not None and scenario.exists():
+        try:
+            from ..lib._models_config import load_models_doc
+            cfg = load_models_doc(scenario)
+            case_params = dict(cfg.find_case(case).params)
+            for k, v in case_params.items():
+                phase1_params.setdefault(k, v)
+            print(f"[fit_steer] scenario.yaml の '{case}' からパラメータを引き継ぎました: {list(case_params.keys())}")
+        except Exception as e:
+            print(f"[fit_steer] Warning: {case} のパラメータを scenario.yaml からロードできませんでした: {e}")
 
     wheelbase = resolve_wheelbase(scenario, case)
     print(f"[fit_steer] wheelbase = {wheelbase}")

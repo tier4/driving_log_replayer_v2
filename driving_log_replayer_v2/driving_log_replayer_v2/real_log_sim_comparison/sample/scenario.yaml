@@ -109,6 +109,7 @@ Evaluation:
           steer_time_constant: 0.15         # = 仕様値 (steer 側 proxy は多エリアで汎化せず)
           debug_steer_scaling_factor: 1.0   # = 仕様値 (同上)
           acc_time_constant: 0.30           # 縦方向 (pos-mean 改善。0.45 超は shiojiri pos を悪化)
+          steer_rate_lim: 0.6
 
       # ── sim 専用 (vehicle_model_type なし → cases に含められない) ────────
       perfect:
