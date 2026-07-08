@@ -30,6 +30,7 @@ RUN_PY := MPLCONFIGDIR="$(MPLCONFIGDIR)" PYTHONPATH="$(PYTHONPATH_PREFIX):$${PYT
 else
 RUN_PY := source "$(SETUP_BASH)" && MPLCONFIGDIR="$(MPLCONFIGDIR)" PYTHONPATH="$(PYTHONPATH_PREFIX):$${PYTHONPATH:-}" $(PYTHON)
 endif
+RUN_PY_NO_SETUP := MPLCONFIGDIR="$(MPLCONFIGDIR)" PYTHONPATH="$(PYTHONPATH_PREFIX):$${PYTHONPATH:-}" $(PYTHON)
 
 .PHONY: help local_cloud_run local_analysis_run local_batch_run local_cross_analysis_run local_multidataset_run local_multidataset_cloud_run prepare_multidataset issue_scenario collect_raw_rosbags open_loop_tune open_loop_batch physical_validity_report_nodata lite lite_ol lite_cl extract fit_lon fit_steer fit_merge fit_report reidentify apply closed_loop release_model_param reidentify_v2
 
@@ -66,7 +67,7 @@ help:
 	@echo "    local_multidataset_cloud_run  フル: extract→reidentify→apply→closed_loop の薄い連結"
 	@echo "    lite                OL向け real.lite+CSV cache と CL向け closed_loop_t4 staging を準備"
 	@echo "    lite_ol             OL向け: datasets/<uuid>/real.lite + reidentify_cache.csv を準備"
-	@echo "    lite_cl             CL向け: runs/<uuid>/closed_loop_t4/{input_bag,map} を準備"
+	@echo "    lite_cl             CL向け: datasets/<uuid>/cl/{t4,scenario.yaml} を準備"
 	@echo "    reidentify          再同定のみ (fit_lon→fit_steer→fit_merge→fit_report; extract/sim なし・実測~2.5分)"
 	@echo "    extract             Step1: 全 dataset の real.lite 抽出 (RESUME=1 で揃っていればスキップ)"
 	@echo "    fit_lon             Step2: 縦方向 直接同定 → phase1_acc.yaml"
@@ -254,7 +255,8 @@ lite_cl: prepare_multidataset
 	    uuid="$$(echo "$$raw_uuid" | xargs)" ; \
 	    test -n "$$uuid" || continue ; \
 	    ds="$(MULTI_BATCH_ROOT)/datasets/$$uuid" ; \
-	    out="$(MULTI_BATCH_ROOT)/runs/$$uuid/closed_loop_t4" ; \
+	    cl_dir="$$ds/cl" ; \
+	    out="$$cl_dir/t4" ; \
 	    fallback="$(MULTI_BATCH_ROOT)/runs/$$uuid/fallback_raw_dataset/input_bag" ; \
 	    src="$$ds/input_bag" ; \
 	    test -d "$$ds" || { echo "[ERROR] CL dataset が見つかりません: $$ds"; exit 1; } ; \
@@ -262,14 +264,19 @@ lite_cl: prepare_multidataset
 	        src="$$fallback" ; \
 	    fi ; \
 	    test -d "$$src" || { echo "[ERROR] CL input_bag が見つかりません: $$src"; exit 1; } ; \
-	    mkdir -p "$$out" ; \
+	    mkdir -p "$$out" "$$cl_dir" ; \
 	    rm -rf "$$out/input_bag" ; \
 	    ln -s "$$(realpath "$$src")" "$$out/input_bag" ; \
 	    if [ -n "$(CLOSED_LOOP_MAP)" ]; then \
 	        rm -rf "$$out/map" ; \
 	        ln -s "$$(realpath "$(CLOSED_LOOP_MAP)")" "$$out/map" ; \
 	    fi ; \
-	    echo "[INFO] lite_cl: $$uuid -> $$out (input_bag=$$src, map=$(CLOSED_LOOP_MAP))" ; \
+	    $(RUN_PY_NO_SETUP) -m driving_log_replayer_v2.real_log_sim_comparison.run_batch \
+	        --scenario "$(LOCAL_SCENARIO)" \
+	        --batch-root "$(MULTI_BATCH_ROOT)" \
+	        --write-single-scenario "$$uuid=$$cl_dir/scenario.yaml" \
+	        --input-mode raw ; \
+	    echo "[INFO] lite_cl: $$uuid -> $$cl_dir (t4=$$out, scenario=$$cl_dir/scenario.yaml)" ; \
 	done
 
 extract:
@@ -423,6 +430,7 @@ closed_loop:
 	    { echo "[ERROR] $(SETUP_BASH) が見つかりません。先にワークスペースをビルドしてください"; exit 1; }
 	@test -f "$(TUNED_SCENARIO)" || \
 	    { echo "[ERROR] $(TUNED_SCENARIO) がありません。先に 'make apply' を実行してください"; exit 1; }
+	$(MAKE) lite_cl LOCAL_SCENARIO="$(TUNED_SCENARIO)"
 	@echo "[INFO] closed_loop: tuned scenario で closed-loop 実 sim を実行..."
 	source $(SETUP_BASH) && $(PYTHON) -m driving_log_replayer_v2.real_log_sim_comparison.run_batch \
 	    --scenario "$(TUNED_SCENARIO)" \

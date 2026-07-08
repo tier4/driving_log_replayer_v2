@@ -310,6 +310,14 @@ def _stage_closed_loop_t4(
     return t4
 
 
+def _dataset_cl_t4(dataset_dir: Path) -> Path | None:
+    """Return dataset-bound closed-loop staging t4 if lite_cl prepared it."""
+    t4 = dataset_dir / "cl" / "t4"
+    if (t4 / "input_bag").exists():
+        return t4
+    return None
+
+
 def _resolve_collect_bundle(output_dir: Path) -> Path:
     """closed-loop 収集用のバンドルを解決する。
 
@@ -391,15 +399,21 @@ def _run_and_collect_worker(args: dict) -> dict:
         else:
             if input_mode == "raw":
                 t4_path = Path(args["raw_t4_path"])
-                scenario_single = batch_root / "scenarios" / f"{uuid}.scenario.yaml"
-                write_raw_dataset_scenario(scenario, uuid, scenario_single)
-                # closed-loop 実 sim には gear_status 付き input_bag と map/lanelet2_map.osm が
-                # 必要。datasets/<uuid> はこれらを欠くため、非破壊 staging した t4 を使う。
-                map_dir_str = args.get("closed_loop_map") or ""
-                t4_path = _stage_closed_loop_t4(
-                    uuid, t4_path, output_dir,
-                    Path(map_dir_str) if map_dir_str else None,
-                )
+                staged_t4 = _dataset_cl_t4(t4_path)
+                if staged_t4 is not None:
+                    scenario_single = t4_path / "cl" / "scenario.yaml"
+                    write_raw_dataset_scenario(scenario, uuid, scenario_single)
+                    t4_path = staged_t4
+                else:
+                    scenario_single = batch_root / "scenarios" / f"{uuid}.scenario.yaml"
+                    write_raw_dataset_scenario(scenario, uuid, scenario_single)
+                    # closed-loop 実 sim には gear_status 付き input_bag と map/lanelet2_map.osm が
+                    # 必要。datasets/<uuid> はこれらを欠くため、非破壊 staging した t4 を使う。
+                    map_dir_str = args.get("closed_loop_map") or ""
+                    t4_path = _stage_closed_loop_t4(
+                        uuid, t4_path, output_dir,
+                        Path(map_dir_str) if map_dir_str else None,
+                    )
             else:
                 try:
                     t4_path = resolve_t4_dataset_path(webauto_root, uuid)
@@ -636,6 +650,8 @@ def main() -> None:
                     help="並列ワーカー数 (既定: コア数または4の小さい方)")
     ap.add_argument("--verbose", action="store_true", default=False,
                     help="詳細情報を出力する")
+    ap.add_argument("--write-single-scenario", default="",
+                    help="内部/Makefile用: '<uuid>=<path>' に raw mode single-dataset scenario を書き出して終了する")
     args = ap.parse_args()
 
     global VERBOSE
@@ -644,6 +660,20 @@ def main() -> None:
     scenario = Path(args.scenario).resolve()
     batch_root = Path(args.batch_root).resolve()
     webauto_root = Path(args.webauto_root)
+
+    if args.write_single_scenario:
+        if "=" not in args.write_single_scenario:
+            print("ERROR: --write-single-scenario は '<uuid>=<path>' 形式で指定してください", file=sys.stderr)
+            sys.exit(2)
+        uuid, out = args.write_single_scenario.split("=", 1)
+        uuid = uuid.strip()
+        out_path = Path(out).resolve()
+        if args.input_mode == "raw":
+            write_raw_dataset_scenario(scenario, uuid, out_path)
+        else:
+            write_single_dataset_scenario(scenario, uuid, out_path)
+        print(f"[INFO] wrote single dataset scenario: {out_path}")
+        return
 
     if args.input_mode == "raw":
         raw_pairs = _discover_raw_datasets(batch_root)
