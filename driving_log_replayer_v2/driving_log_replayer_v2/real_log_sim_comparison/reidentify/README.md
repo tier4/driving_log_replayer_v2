@@ -25,10 +25,12 @@ collection ディレクトリ(複数データセットの `real.lite` を束ね�
 ```
 reidentify/
 ├── README.md            # 本ファイル
+├── Makefile             # reidentify 単体の実行入口
 ├── csv_schema.py          # CSV キャッシュの列スキーマ (extract.py / load_data.py 共有)
 ├── extract.py              # [Step1] real.lite → dataset毎 CSV キャッシュ (ROS 依存はここだけ)
 ├── gear.py                  # DRIVE 系 gear 判定 (ROS フリー、lib._io の値を複製)
 ├── physical_constants.py     # k_us 定常旋回フィルタ閾値 (ROS フリー、lib._physical_validity の値を複製)
+├── settings.py                # reidentify 固有の閾値・探索範囲・既定パス
 ├── scenario_params.py         # scenario.yaml から wheelbase を読む薄いヘルパー
 ├── load_data.py                 # CSV 読込 → 同定用の resampled 配列 / rollout 用の生 DataFrame 群
 ├── fit_core.py                   # lib/_fit_core.py (同定カーネル SSOT) の re-export
@@ -42,6 +44,32 @@ reidentify/
 ```
 
 ## 実行方法
+
+`reidentify/` 単体で Makefile から実行できる。
+
+```bash
+make run \
+    COLLECTION_DIR=<collection_dir> \
+    SCENARIO=<scenario.yaml> \
+    CASE=current \
+    N_TRIALS=50 \
+    N_JOBS=32
+```
+
+CSV キャッシュ済みで ROS setup を省略したい場合は、対象ステップを絞って実行する。
+
+```bash
+make run \
+    COLLECTION_DIR=<collection_dir> \
+    SCENARIO=<scenario.yaml> \
+    ONLY=fit_lon,fit_steer,fit_merge,report,release \
+    NO_SETUP=1
+```
+
+各ステップは `make fit_lon` / `make fit_steer` / `make fit_merge` /
+`make report` / `make release` でも個別実行できる。
+
+Python module として直接呼ぶこともできる。
 
 ```bash
 source <workspace>/install/setup.bash  # extract 実行時は必要 (rclpy/rosbag2_py)
@@ -90,3 +118,11 @@ python3 -m driving_log_replayer_v2.real_log_sim_comparison.reidentify.run_reiden
 
 出力 YAML (`phase1_acc.yaml` / `phase2_steer.yaml` / `tuned_params.yaml`) の
 スキーマは旧パイプラインと同一に保っている。
+
+## 現在の単純化方針
+
+- reidentify 固有の閾値・探索範囲・既定パスは `settings.py` に集約する。
+- 縦方向/操舵/k_us の同定に十分なサンプルが無い場合、固定デフォルト値で
+  成果物を出さずにエラー終了する。
+- `report.py` は `tuned_params.yaml` の必須キーが欠けている場合、暗黙の
+  デフォルト値で描画せずエラー終了する。
