@@ -114,7 +114,7 @@ from driving_log_replayer_v2.real_log_sim_comparison.lib._physical_validity impo
 
 _H_SPAN = {10: "≈0.33 s", 20: "≈0.67 s", 30: "≈1.0 s", 40: "≈1.33 s"}
 
-# 1-5. x/y 方程式残差評価に使うデータセット数
+# 2-4. x/y 方程式残差評価に使うデータセット数
 _PERF_N_DATASET = 10
 
 
@@ -457,10 +457,10 @@ def _build_sec_metrics(baseline_score: float | None, phase14_score: float, label
     # LaTeX を含む静的部分は通常文字列。プレースホルダを後置換で動的値に差し替える
     tmpl = """
 <section id="metrics">
-<h2>0. 評価メトリクスの物理的意味</h2>
+<h3>3-1. 総合最適化の評価関数</h3>
 
 <details>
-<summary>0-1. N-step Open Loop評価: 前向き積分誤差</summary>
+<summary>N-step Open Loop評価: 前向き積分誤差</summary>
 <p>
 車両モデルを実機ログの初期状態から N 個の制御コマンド区間だけ前向きに積分し、
 実機の自己位置推定軌跡との終端誤差を評価する。
@@ -481,7 +481,7 @@ def _build_sec_metrics(baseline_score: float | None, phase14_score: float, label
 </details>
 
 <details>
-<summary>0-2. 誤差の 3 成分（yaw・long・lat）</summary>
+<summary>誤差の 3 成分（yaw・long・lat）</summary>
 <table class="param-table">
   <tr><th>成分</th><th>単位</th><th>物理的意味</th><th>主な感度</th></tr>
   <tr>
@@ -507,7 +507,7 @@ steer 系パラメータへの感度はほぼゼロ（逆もしかり）。こ�
 </details>
 
 <details>
-<summary>0-3. 正規化スコア（nyaw, nlong, nlat）</summary>
+<summary>正規化スコア（nyaw, nlong, nlat）</summary>
 <p>
 各データセットの誤差を <b>baseline モデル</b>（補正なし遅延モデル、\\(k_{{\\mathrm{{us}}}}=0\\)・<code>steer_dead_band</code>=0 相当）の
 誤差で正規化する:
@@ -535,7 +535,7 @@ steer 系パラメータへの感度はほぼゼロ（逆もしかり）。こ�
 </details>
 
 <details>
-<summary>0-4. mean と worst</summary>
+<summary>mean と worst</summary>
 <p>
 650 データセットの正規化スコアに対して 2 種類の集約を行う:
 </p>
@@ -550,7 +550,7 @@ worst だけだと過度に保守的になる。両者を組み合わせるこ�
 </details>
 
 <details>
-<summary>0-5. ロバストスコア（robust_score）</summary>
+<summary>ロバストスコア（robust_score）</summary>
 <p>
 最終目的関数:
 \\[
@@ -661,7 +661,7 @@ def _build_fit_rmse_table_html(
 ) -> str:
     """方程式残差RMSE (J) の tuned vs baseline 比較テーブル（平均・中央値・99%ile、データセット横断）。
 
-    1-2（縦方向）・1-3（操舵）の各セクション末尾に挿入する。ここでの J は
+    2-1（縦方向）・2-2（操舵）の各セクション末尾に挿入する。ここでの J は
     `equation_residual_at_params` の `rmse_resid`（同じ実測配列に tuned / baseline
     パラメータをそれぞれ代入して評価した方程式残差 RMSE）であり、各セクション末尾の
     param-table にある「同定誤差量（RMSE）」列（\\(a_{sim}-a_{real}\\) 等の出力誤差、
@@ -752,7 +752,7 @@ def _build_sec1(
     long_fit_rmse_html: str = "",
     steer_fit_rmse_html: str = "",
 ) -> str:
-    """1-0. 座標系と主要な記号の定義 + モデルパラメータの定義を含む sec1 全体 HTML を返す。"""
+    """1章の方程式紹介と2章の方程式別 residual/fitting セクション HTML を返す。"""
     kus_rows = _kus_band_table_rows(params)
 
     # ---------- モデルパラメータの定義（旧 _build_sec_model_params）----------
@@ -783,10 +783,10 @@ def _build_sec1(
     rlim  = _fmt(params.get("steer_rate_lim", "N/A"))
 
     _long_html_inner = _lazy_fig_html(
-        long_fig, "fig-sec-long-timeseries", "sec1-2/long_fit（dataset横断）",
+        long_fig, "fig-sec-long-timeseries", "sec2-1/long_fit（dataset横断）",
     )
     _steer_html_inner = _lazy_fig_html(
-        steer_fig, "fig-sec-steer-timeseries", "sec1-3/steer_fit（dataset横断）",
+        steer_fig, "fig-sec-steer-timeseries", "sec2-2/steer_fit（dataset横断）",
     )
     long_html  = f"<details><summary>時系列グラフを表示（クリックで展開）</summary>{_long_html_inner}</details>"
     steer_html = f"<details><summary>時系列グラフを表示（クリックで展開）</summary>{_steer_html_inner}</details>"
@@ -801,11 +801,11 @@ def _build_sec1(
     )
     return f"""
 <section id="sec-coords">
-<h2>1-0. 座標系と主要な記号の定義</h2>
+<h2>1-1. 座標系と主要な記号の定義</h2>
 <p>
 本レポートの運動方程式は、以下の車体基準（body frame）および進行方向基準の座標系に基づく。
 「実装ラベル」列は、シミュレータ内部の状態ベクトル（6 状態、詳細は
-<a href="#sec-state-space">1-1 節</a>）の IDX か、対応する YAML 設定名を示す（該当しない記号は入力・
+<a href="#sec-state-space">1-2 節</a>）の IDX か、対応する YAML 設定名を示す（該当しない記号は入力・
 導出量などであり、実装ラベル欄には <code>—</code> あるいは補助注記を記す）。「ROS トピック / フィールド」列は、
 実機ログ（<code>real.lite</code>）と scenario_simulator_v2 の双方で共通に使われるトピック名と
 フィールドを <code>topic.field</code> 形式でまとめる。
@@ -899,11 +899,11 @@ def _build_sec1(
 </section>
 
 <section id="sec-state-space">
-<h2>1-1. 状態空間モデルと数値積分（Euler 法によるアップデート）</h2>
+<h2>1-2. 状態空間モデルと数値積分（Euler 法によるアップデート）</h2>
 <p>
-1-2（縦方向）・1-3（操舵）・1-4（ヨー・横方向）で個別に同定する運動方程式を、実装では一つの状態ベクトルに
+2-1（縦方向）・2-2（操舵）・2-3（ヨー・横方向）・2-4（x/y）で residual 評価する運動方程式を、実装では一つの状態ベクトルに
 まとめた \\(\\dot{{\\mathbf{{x}}}} = f(\\mathbf{{x}}, \\mathbf{{u}})\\) として扱い、共通の Euler 積分ループで毎ステップ時間発展させている。
-各記号の意味・単位・ROS トピックは <a href="#sec-coords">1-0 の記号表</a>を参照。
+各記号の意味・単位・ROS トピックは <a href="#sec-coords">1-1 の記号表</a>を参照。
 </p>
 <p>
 <b>同定の統一ストーリー</b>: 各状態方程式を \\(\\mathrm{{LHS}} = \\mathrm{{RHS}}(\\theta)\\) と見て、
@@ -969,8 +969,8 @@ DRIVE 系（enum 値 2..19）の時刻だけを残す評価マスクとして適
 \\end{{pmatrix}}
 \\]
 <p class="meta">
-&#128279; \\(\\tau_\\delta, \\beta\\) は <a href="#sec-steer">1-3</a>、\\(\\tau_a\\) は <a href="#sec-long">1-2</a>、
-\\(L, k_{{\\mathrm{{us}}}}\\) は <a href="#sec-yaw">1-4</a> で定義。
+&#128279; \\(\\tau_\\delta, \\beta\\) は <a href="#sec-steer">2-2</a>、\\(\\tau_a\\) は <a href="#sec-long">2-1</a>、
+\\(L, k_{{\\mathrm{{us}}}}\\) は <a href="#sec-yaw">2-3</a> で評価。
 </p>
 
 <h3>離散化：Euler 法によるアップデート</h3>
@@ -1030,9 +1030,9 @@ DRIVE 系（enum 値 2..19）の時刻だけを残す評価マスクとして適
 </section>
 
 <section id="sec-long">
-<h2>1-2. 縦方向（加速度アクチュエータ）の同定</h2>
+<h2>2-1. 縦方向（加速度アクチュエータ）の方程式残差とフィッティング</h2>
 <p class="meta">
-&#128279; <a href="#sec-state-space">1-1 状態方程式</a> の \\(\\dot v_x\\) 式・
+&#128279; <a href="#sec-state-space">1-2 状態方程式</a> の \\(\\dot v_x\\) 式・
 \\(\\dot a_{{\\mathrm{{act}}}}\\) 式に対応。
 </p>
 <p>
@@ -1056,7 +1056,7 @@ a_{{\\mathrm{{real}}}} := a_{{\\mathrm{{report}}}} - a_{{\\mathrm{{slope}}}}
 \\end{{pmatrix}}
 \\]
 <p class="meta">
-<a href="#sec-state-space">1-1</a> と同じ <b>full-RHS 遅延</b>：\\(\\dot a_{{\\mathrm{{act}}}}\\) は指令・状態とも
+<a href="#sec-state-space">1-2</a> と同じ <b>full-RHS 遅延</b>：\\(\\dot a_{{\\mathrm{{act}}}}\\) は指令・状態とも
 \\(t-T_a\\) で評価する。\\(a_{{\\mathrm{{slope}}}}\\) は \\(\\dot v_x\\) 側の入力で非遅延。
 </p>
 <h3>方程式残差で見る</h3>
@@ -1088,7 +1088,7 @@ J_a
 </p>
 <p class="meta">
 &#128279; この残差式は <code>_fit_core.py</code> の <code>equation_residual_at_params</code>（full-RHS 遅延）および
-<a href="#sec-state-space">1-1</a> の状態方程式と完全に対応する（<code>vehicle_model_fitting</code> の残差式と同一形式）。
+<a href="#sec-state-space">1-2</a> の状態方程式と完全に対応する（<code>vehicle_model_fitting</code> の残差式と同一形式）。
 </p>
 {long_resid_hist_html}
 {long_resid_opt_html}
@@ -1121,9 +1121,9 @@ J_a
 </section>
 
 <section id="sec-steer">
-<h2>1-3. 操舵アクチュエータ（追従ループ）の同定</h2>
+<h2>2-2. 操舵アクチュエータ（追従ループ）の方程式残差とフィッティング</h2>
 <p class="meta">
-&#128279; <a href="#sec-state-space">1-1 状態方程式</a> の
+&#128279; <a href="#sec-state-space">1-2 状態方程式</a> の
 \\(\\dot\\delta_{{\\mathrm{{act}}}}\\) 式に対応。
 </p>
 
@@ -1136,7 +1136,7 @@ J_a
 = K_{{\\mathrm{{steer\\_scale}}}} \\cdot {{\\color{{#e65100}} \\delta_{{\\mathrm{{cmd,des}}}}}}(t - T_\\delta)
 \\]
 <p class="meta">
-<a href="#sec-state-space">1-1</a> と同じ <b>full-RHS 遅延</b>：指令遅延（\\(\\delta_{{\\mathrm{{des}}}}\\) 内の \\(t-T_\\delta\\)）に加え、
+<a href="#sec-state-space">1-2</a> と同じ <b>full-RHS 遅延</b>：指令遅延（\\(\\delta_{{\\mathrm{{des}}}}\\) 内の \\(t-T_\\delta\\)）に加え、
 状態フィードバック \\(\\delta_{{\\mathrm{{act}}}}\\) も \\(t-T_\\delta\\) で評価する。
 </p>
 <h3>方程式残差で見る</h3>
@@ -1174,7 +1174,7 @@ E_\\delta[k;\\tau_\\delta,T_\\delta]
   <li>\\(T_\\delta\\): 操舵純粋遅延（<code>steer_time_delay</code>）。</li>
   <li>\\(\\tau_\\delta\\): 操舵一次遅れ時定数（<code>steer_time_constant</code>）。</li>
   <li>\\(K_{{\\mathrm{{steer\\_scale}}}}\\): 操舵指令スケーリング倍率（<code>debug_steer_scaling_factor</code>）。</li>
-  <li>\\(\\beta\\): 追従式の外側で 1-4 のヨー式に渡す操舵バイアス。</li>
+  <li>\\(\\beta\\): 追従式の外側で 2-3 のヨー式に渡す操舵バイアス。</li>
 </ul>
 
 <h3>実機ログとの比較</h3>
@@ -1199,7 +1199,7 @@ E_\\delta[k;\\tau_\\delta,T_\\delta]
   <tr><td><code>debug_steer_scaling_factor</code> (操舵ゲイン補正倍率)</td><td>{DSF}</td>
       <td>指令スケーリング（1.0 = 補正なし）；遅延後に乗算</td></tr>
   <tr><td><code>steer_bias</code> (\\(\\beta\\))</td><td>{beta} rad</td>
-      <td>報告操舵角への加算値（\\(\\delta_{{\\mathrm{{act}}}} + \\beta\\)）；1-4 のヨー式と共有</td></tr>
+      <td>報告操舵角への加算値（\\(\\delta_{{\\mathrm{{act}}}} + \\beta\\)）；2-3 のヨー式と共有</td></tr>
   <tr><td><code>steer_dead_band</code></td><td>{db} rad</td>
       <td>不感帯幅（固定値・同定対象外）</td><td>—</td></tr>
   <tr><td><code>steer_rate_lim</code></td><td>{rlim} rad/s</td>
@@ -1208,13 +1208,13 @@ E_\\delta[k;\\tau_\\delta,T_\\delta]
 {steer_fit_rmse_html}
 </section>
 <section id="sec-yaw">
-<h2>1-4. ヨー・横方向（運動学的自転車モデル）— スカラー 最小二乗法同定</h2>
+<h2>2-3. ヨー・横方向（運動学的自転車モデル）の方程式残差とフィッティング</h2>
 <p class="meta">
-&#128279; <a href="#sec-state-space">1-1 状態方程式</a> の \\(\\dot x\\) 式・
+&#128279; <a href="#sec-state-space">1-2 状態方程式</a> の \\(\\dot x\\) 式・
 \\(\\dot y\\) 式・\\(\\dot\\theta\\) 式に対応。
 </p>
 <p>
-1-2（縦方向）・1-3（操舵追従）が先行して確定した後、
+2-1（縦方向）・2-2（操舵追従）が先行して確定した後、
 \\(\\dot\\theta\\) 式の残差 \\(E = \\mathrm{{RHS}} - \\mathrm{{LHS}}\\) を <b>高曲率サブセット</b> で最小化して
 \\(k_{{\\mathrm{{us}}}}\\) を同定する。縦・操舵と同じ方程式残差の原理であり、この残差を直接推定（最小二乗法による同定）に用います。
 \\(\\dot\\theta\\) 式は \\(\\tan\\delta\\) 空間で \\(k_{{\\mathrm{{us}}}}\\) について<b>線形</b>であり、この空間では残差最小化が極めて良条件なため直接解くことができます。
@@ -1241,7 +1241,7 @@ E_\\delta[k;\\tau_\\delta,T_\\delta]
   <li>\\(L\\)（<code>wheelbase</code>）: 自転車モデルのホイールベース。</li>
   <li>\\(k_{{\\mathrm{{us}}}}\\): アンダーステア係数（全速度域で一定のスカラー）。</li>
   <li>\\(\\beta\\)（<code>steer_bias</code>）: ヨー式の \\(\\tan(\\cdot)\\) 引数に入るバイアス。系統的なヨーオフセット成分。</li>
-  <li>\\(\\delta_{{\\mathrm{{act}}}}\\): 1-3 の操舵追従結果。操舵ゲイン補正倍率による \\(k_{{\\mathrm{{us}}}}\\) の \\(v_x^2\\delta\\) 成分の部分吸収に注意。</li>
+  <li>\\(\\delta_{{\\mathrm{{act}}}}\\): 2-2 の操舵追従結果。操舵ゲイン補正倍率による \\(k_{{\\mathrm{{us}}}}\\) の \\(v_x^2\\delta\\) 成分の部分吸収に注意。</li>
 </ul>
 
 <h3>実機ログからの独立同定（全 {n_dataset} データセット、スカラー 最小二乗法）</h3>
@@ -1293,7 +1293,7 @@ J(k_{{\\mathrm{{us}}}}) = \\sum_i \\bigl(y_i - k_{{\\mathrm{{us}}}}\\,x_i\\bigr)
 <table class="param-table">
   <tr><th>パラメータ</th><th>値</th><th>式中の役割</th><th>同定誤差量</th></tr>
 {kus_rows}
-  <tr><td><code>steer_bias</code> (\\(\\beta\\)) <i>[1-3 と共有]</i></td><td>{beta} rad</td>
+  <tr><td><code>steer_bias</code> (\\(\\beta\\)) <i>[2-2 と共有]</i></td><td>{beta} rad</td>
       <td>\\(\\tan(\\delta_{{\\mathrm{{act}}}} + \\beta)\\) の引数：ヨーオフセット成分</td>
       <td>\\(\\widehat{{\\omega}}-\\omega\\)（間接）</td></tr>
 </table>
@@ -1301,14 +1301,14 @@ J(k_{{\\mathrm{{us}}}}) = \\sum_i \\bigl(y_i - k_{{\\mathrm{{us}}}}\\,x_i\\bigr)
 """
 
 
-def _build_sec14(
+def _build_sec24(
     fig_resid: go.Figure,
     fig_traj: go.Figure,
     xy_data: dict,
     params: dict,
     n_dataset: int,
 ) -> str:
-    """1-5. x/y 状態方程式 residual 評価セクション HTML。"""
+    """2-4. x/y 状態方程式 residual/fitting 評価セクション HTML。"""
     resid_html = fig_resid.to_html(full_html=False, include_plotlyjs=False)
     traj_html = fig_traj.to_html(full_html=False, include_plotlyjs=False)
     tau_a = f"{params.get('acc_time_constant', float('nan')):.3g}"
@@ -1326,7 +1326,7 @@ def _build_sec14(
 
     return f"""
 <section id="sec-perf-tracking">
-<h2>1-5. x/y 状態方程式の残差評価</h2>
+<h2>2-4. x/y 位置式の方程式残差とフィッティング</h2>
 <p>
 アクチュエータ追従後の位置式そのものを、実測 \\(x,y,\\theta,v_x,\\dot{{\\theta}}\\) から作る
 方程式残差 \\(E = \\mathrm{{RHS}} - \\mathrm{{LHS}}\\) で評価する。
@@ -1366,61 +1366,11 @@ def _build_sec14(
 </section>
 """
 
-
-def _build_sec2(kus_fig: go.Figure, n_dataset: int) -> str:
-    kus_html = kus_fig.to_html(full_html=False, include_plotlyjs=False)
-    return f"""
-<section id="identification">
-<h2>2. 実機ログからの独立同定</h2>
-
-<details open>
-<summary>2-1. アンダーステア係数 \\(k_{{\\mathrm{{us}}}}\\) の独立同定（全 {n_dataset} データセット）</summary>
-<details>
-<summary>推定手法の詳細</summary>
-<p>
-定常旋回フィルタ（\\(|\\omega| > {WZ_MIN}\\) rad/s、\\(|\\dot{{\\omega}}| < {DWZ_MAX}\\) rad/s²、
-\\(v_x > {VX_MIN_CURVE}\\) m/s）を通過した全タイムステップを一括して、以下の2種類の推定を行う。
-</p>
-<p><b>① 最小二乗法推定（青・水平線）</b>: \\(\\dot\\theta\\) 式より
-\\[
-\\omega_i = \\dot\\theta_i
-= \\frac{{v_i\\tan(\\delta_i)}}{{L+k_{{\\mathrm{{us}}}}v_i^2}}
-\\quad\\Longleftrightarrow\\quad
-\\tan(\\delta_i) - \\frac{{L\\,\\omega_i}}{{v_i}} = k_{{\\mathrm{{us}}}}\\,(v_i\\,\\omega_i) .
-\\]
-各サンプルの補正済み操舵角を \\(\\delta_i := \\delta_{{\\mathrm{{act}},i}} + \\beta\\) と置き、
-\\(x_i = v_i\\,\\omega_i\\)、\\(y_i = \\tan(\\delta_i) - L\\,\\omega_i / v_i\\) とした原点回帰の
-最小二乗解は
-\\[
-\\hat{{k}}_{{\\mathrm{{us}}}} = \\frac{{\\sum_i x_i\\,y_i}}{{\\sum_i x_i^2}}
-\\]
-ここで \\(L = {WHEELBASE}\\) m はホイールベース。十分統計量
-\\(\\sum x_i^2,\\ \\sum x_i y_i\\) は加算的なので、データセット横断でも生サンプル再読込なしにプールできる。
-</p>
-<p><b>② 個別サンプル（IQR バンド）</b>: 実機運動学ログの各タイムステップで瞬時 \\(k_{{\\mathrm{{us}}}}\\) を推定し、
-25〜75 パーセンタイルをバンドとして表示:
-\\[
-\\tilde{{k}}_{{\\mathrm{{us}}}}[i] = \\frac{{\\tan(\\delta_i) / \\omega_i - L / v_{{x,i}}}}{{v_{{x,i}}}}
-\\]
-チューニング済み \\(k_{{\\mathrm{{us}}}}\\)（橙色破線）と重ね描きして妥当性を確認する。
-</p>
-</details>
-{kus_html}
-<div class="note">
-<b>解釈</b>: 最小二乗法推定値がモデル設定値 \\(k_{{\\mathrm{{us}}}}\\)（破線）と近ければ整合している。
-ただし直進（\\(\\delta_{{\\mathrm{{act}}}}+\\beta\\approx 0\\)）では感度がほぼゼロで、J6 の多くのデータセットが
-低速（\\(v_x\\) mean ≈ 1.9 m/s）のため、推定誤差が大きい点に注意（凡例のサンプル数 n を参照）。
-</div>
-</details>
-</section>
-"""
-
-
 def _build_sec3(viewer_sections: list[str], label: str = "phase14") -> str:
     body = "\n".join(viewer_sections) if viewer_sections else "<p>ビューア生成対象 データセット なし</p>"
     return f"""
 <section id="curve-viewer">
-<h2>3. カーブ部での実機 vs モデル軌跡（インタラクティブビューア）</h2>
+<h2>4-2. カーブ部での実機 vs モデル軌跡（インタラクティブビューア）</h2>
 <p>
 旋回イベント数 <code>curve_count</code>（\\(|\\kappa| > 0.02\\) m⁻¹、連続弧長 ≥ 10 m）が多い
 代表データセットについて縦横モデル検証ビューアを埋め込む。
@@ -1518,7 +1468,7 @@ def _build_sec_deviation(
 
     return f"""
 <section id="deviation">
-<h2>N-step Open Loop評価: 終端誤差（{label} vs baseline）</h2>
+<h2>4-1. N-step Open Loop評価: 終端誤差（{label} vs baseline）</h2>
 <p>
 全データセットに対し {label} パラメータと baseline（補正なし）で N-step Open Loop評価（ロールアウト）を実施し、
 終端誤差 RMSE の データセット横断 <b>平均</b>（mean）と <b>99パーセンタイル</b>（99%ile）を N ごとに集計する。
@@ -1662,7 +1612,7 @@ def _build_sec_closed_loop_comparison(collection_dir: Path, uuids_str: str) -> s
     body = "\n".join(sections)
     return f"""
 <section id="sec-closed-loop">
-<h2>4. クローズドループシミュレーション比較</h2>
+<h2>4-3. クローズドループシミュレーション比較</h2>
 <p>
 指定されたデータセットについて、実機走行ログ vs クローズドループシミュレーションによる走行結果の比較（軌跡再生ビューア）を提示します。
 </p>
@@ -1697,12 +1647,11 @@ def build_html(
     
     sec_tuning = f"""
 <section id="sec-tuning">
-<h2>2. 統合最適化（パラメータ最適化）</h2>
+<h2>3. 総合最適化（パラメータ最適化）</h2>
 <p>
-各モデルの独立最適化パラメータをベースにした、全データセット横断での統合最適化の結果を評価します。
+各式の方程式残差ベースのフィッティング結果をベースにした、全データセット横断での総合最適化の結果を評価します。
 </p>
 {sec_metrics}
-{deviation_html}
 </section>
 """
 
@@ -1732,19 +1681,21 @@ def build_html(
   有効データセット数: {n_dataset}
 </p>
 <nav>
-  <a href="#sec-coords">1-0. 座標系定義</a>
-  <a href="#sec-state-space">1-1. 状態空間モデルと数値積分</a>
-  <a href="#sec-long">1-2. 縦方向</a>
-  <a href="#sec-steer">1-3. 操舵</a>
-  <a href="#sec-yaw">1-4. ヨー・横方向</a>
-  <a href="#sec-tuning">2. 統合最適化</a>
-  {f'<a href="#sec-perf-tracking">1-5. x/y 残差</a>' if perf_html else ""}
-  <a href="#curve-viewer">3. カーブビューア</a>
-  {f'<a href="#sec-closed-loop">4. クローズドループ比較</a>' if closed_loop_html else ""}
+  <a href="#sec-coords">1-1. 座標系定義</a>
+  <a href="#sec-state-space">1-2. 状態空間モデル</a>
+  <a href="#sec-long">2-1. 縦方向</a>
+  <a href="#sec-steer">2-2. 操舵</a>
+  <a href="#sec-yaw">2-3. ヨー・横方向</a>
+  {f'<a href="#sec-perf-tracking">2-4. x/y 残差</a>' if perf_html else ""}
+  <a href="#sec-tuning">3. 総合最適化</a>
+  {f'<a href="#deviation">4-1. N-step評価</a>' if deviation_html else ""}
+  <a href="#curve-viewer">4-2. カーブビューア</a>
+  {f'<a href="#sec-closed-loop">4-3. CL比較</a>' if closed_loop_html else ""}
 </nav>
 {sec1}
-{sec_tuning}
 {perf_html}
+{sec_tuning}
+{deviation_html}
 {sec3}
 {closed_loop_html}
 {_RENDER_GLUE}
@@ -1771,7 +1722,7 @@ def build_release_note_html(
     main() で既に計算済みの値をそのまま受け取り、MCAP 再読込・再フィットは行わない。
     """
     deviation_section = deviation_html or (
-        '<section id="deviation"><h2>N-step Open Loop評価</h2>'
+        '<section id="deviation"><h2>4-1. N-step Open Loop評価</h2>'
         '<div class="note">--metrics-cache 未指定のため、このレポートでは省略されました。</div>'
         "</section>"
     )
@@ -1894,7 +1845,7 @@ def main() -> None:
     ap.add_argument(
         "--long-steer-pinned-uuids", type=str,
         default="049b35fe-6310-59b0-a778-d47ab6163beb",
-        help="1-2/1-3の時系列グラフ（縦方向/操舵）に必ず含めるデータセットUUIDをカンマ区切りで"
+        help="2-1/2-2の時系列グラフ（縦方向/操舵）に必ず含めるデータセットUUIDをカンマ区切りで"
              "指定（前方一致）。自動選択される最長連続系列に追加して表示する",
     )
     ap.add_argument(
@@ -1944,7 +1895,7 @@ def main() -> None:
     steer_bias = float(merged_tuned.get("steer_bias", 0.0005))
     wheelbase = float(merged_tuned.get("wheelbase", 4.76012))
 
-    # 1-2/1-3 末尾の baseline 比較テーブル用: baseline（補正なしデフォルト）の縦方向・操舵パラメータ
+    # 2-1/2-2 末尾の baseline 比較テーブル用: baseline（補正なしデフォルト）の縦方向・操舵パラメータ
     merged_baseline = merged_model_params(baseline_params)
     baseline_tau_a = float(merged_baseline.get("acc_time_constant"))
     baseline_T_a = float(merged_baseline.get("acc_time_delay"))
@@ -1952,13 +1903,13 @@ def main() -> None:
     baseline_T_d = float(merged_baseline.get("steer_time_delay"))
 
     # baseline と current(tuned) の車両モデル種別が一致するかどうか。
-    # 1-2/1-3 末尾の方程式残差RMSE比較（equation_residual_at_params に baseline の (tau, delay) を
+    # 2-1/2-2 末尾の方程式残差RMSE比較（equation_residual_at_params に baseline の (tau, delay) を
     # 代入する方式）は、baseline_model が current_model と "同じ運動方程式形" を持つ場合にのみ有効。
     # 例えば ideal_steer_acc は縦方向に一次遅れ・遅延を持たず、taiga_x は acc_time_constant/
     # acc_time_delay という parameterization 自体を持たないため、これらが baseline_model や
     # current_model に指定された場合、同じ式へのパラメータ代入という前提が崩れる。
     # _resolve_report_models はモデル種別の一致を保証しないため、ここで明示的に確認し、
-    # 一致しない場合は 1-2/1-3 の新テーブル・残差ヒストグラムの baseline 重ね描画を無効化する。
+    # 一致しない場合は 2-1/2-2 の新テーブル・残差ヒストグラムの baseline 重ね描画を無効化する。
     _model_types_match = (
         current_model == baseline_model or
         ({current_model, baseline_model} <= {"delay_steer_acc_geared_wo_fall_guard", "delay_steer_acc_geared_for_diffusion_planner"})
@@ -1966,7 +1917,7 @@ def main() -> None:
     if not _model_types_match:
         print(
             f"  [WARN] baseline モデル種別 ({baseline_model}) が current モデル種別 ({current_model}) と"
-            " 異なるため、1-2/1-3 の方程式残差RMSE baseline 比較はスキップします"
+            " 異なるため、2-1/2-2 の方程式残差RMSE baseline 比較はスキップします"
             "（運動方程式形が同一である保証がないため）。",
         )
 
@@ -2306,7 +2257,7 @@ def main() -> None:
     steer_fig = build_fig_cross_steer(rows_steer)
 
     for prefix in long_steer_pinned_uuids:
-        for name, rows in (("縦方向 (1-2)", rows_long), ("操舵 (1-3)", rows_steer)):
+        for name, rows in (("縦方向 (2-1)", rows_long), ("操舵 (2-2)", rows_steer)):
             hit = any(
                 str(d).startswith(prefix)
                 for r in rows
@@ -2418,9 +2369,9 @@ def main() -> None:
         long_fit_rmse_html = _model_mismatch_note
         steer_fit_rmse_html = _model_mismatch_note
 
-    # 1-5 x/y 方程式残差評価には curve 上位 _PERF_N_DATASET データセットを使用（viewer 用 top_curve とは独立して選択）
+    # 2-4 x/y 方程式残差評価には curve 上位 _PERF_N_DATASET データセットを使用（viewer 用 top_curve とは独立して選択）
     perf_records = candidate_curve[:_PERF_N_DATASET]
-    print(f"  [1-5] x/y 方程式残差評価図生成 ({len(perf_records)} データセット) ...")
+    print(f"  [2-4] x/y 方程式残差評価図生成 ({len(perf_records)} データセット) ...")
     perf_entries = _to_entries([(r["uuid"], Path(r["lite_dir"])) for r in perf_records])
     perf_data = compute_xy_equation_residual_data(perf_entries, params)
     perf_fig_resid = build_fig_xy_equation_residual_hist(perf_data)
@@ -2435,10 +2386,10 @@ def main() -> None:
         },
         height=480,
     )
-    perf_html = _build_sec14(perf_fig_resid, perf_fig_traj, perf_data, params, int(perf_data.get("n_dataset", 0)))
+    perf_html = _build_sec24(perf_fig_resid, perf_fig_traj, perf_data, params, int(perf_data.get("n_dataset", 0)))
 
-    # [1-2] 方程式残差による縦方向パラメータ最適化とヒストグラム生成
-    print("  [1-2] 方程式残差による縦方向パラメータ最適化とヒストグラム生成...")
+    # [2-1] 方程式残差による縦方向パラメータ最適化とヒストグラム生成
+    print("  [2-1] 方程式残差による縦方向パラメータ最適化とヒストグラム生成...")
     top_entries_long = sorted(
         (e for e in entries if e.real_lite is not None and e.dataset_id in per_ds_long),
         key=lambda e: per_ds_long[e.dataset_id].get("n_dyn", 0),
@@ -2464,8 +2415,8 @@ def main() -> None:
             tau_inv_symbol="\\tau_a^{-1}",
         )
 
-    # [1-3] 方程式残差による操舵パラメータ最適化とヒストグラム生成
-    print("  [1-3] 方程式残差による操舵パラメータ最適化とヒストグラム生成...")
+    # [2-2] 方程式残差による操舵パラメータ最適化とヒストグラム生成
+    print("  [2-2] 方程式残差による操舵パラメータ最適化とヒストグラム生成...")
     steer_opt_results = optimize_tau_with_equation_residual(
         per_ds_steer,
         delay_candidates=_DELAY_CANDIDATES_STEER,
