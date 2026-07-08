@@ -859,7 +859,7 @@ def build_fig_perfect_tracking_box(data: dict) -> go.Figure:
 def build_fig_perfect_tracking_traj(
     data: dict,
     labels: dict | None = None,
-    height: int = 380,
+    height: int | None = None,
 ) -> go.Figure:
     """代表データセットの軌跡比較プロット。
 
@@ -872,33 +872,63 @@ def build_fig_perfect_tracking_traj(
     if n_traj == 0:
         return _placeholder_fig("軌跡データなし")
 
+    cols = min(3, n_traj)
+    rows = (n_traj + cols - 1) // cols
+
+    if height is None:
+        height = 380 * rows
+    else:
+        height = max(height, 380 * rows)
+
     fig = make_subplots(
-        rows=1, cols=n_traj,
+        rows=rows, cols=cols,
         subplot_titles=[f"データセット {d['uuid']}" for d in traj_data],
         horizontal_spacing=0.08,
+        vertical_spacing=0.15 if rows > 1 else 0.0,
     )
-    for i, td in enumerate(traj_data, start=1):
+    for idx, td in enumerate(traj_data):
+        r = idx // cols + 1
+        c = idx % cols + 1
+        axis_idx = idx + 1
+
         m = td["moving"]
         gt_xm = [x if is_m else None for x, is_m in zip(td["gt_x"], m)]
         gt_ym = [y if is_m else None for y, is_m in zip(td["gt_y"], m)]
         bxm   = [x if is_m else None for x, is_m in zip(td["bx"], m)]
         bym   = [y if is_m else None for y, is_m in zip(td["by"], m)]
 
-        show_legend = (i == 1)
+        show_legend = (idx == 0)
+
+        # 1. 同定対象外（全体を薄い色で描画）
+        fig.add_trace(go.Scatter(
+            x=td["gt_x"], y=td["gt_y"],
+            mode="lines", name=lb.get("gt_name", "GT 軌跡") + " (対象外)",
+            line=dict(color="rgba(0, 0, 0, 0.15)", width=2),
+            legendgroup="gt_fade", showlegend=False,
+        ), row=r, col=c)
+        fig.add_trace(go.Scatter(
+            x=td["bx"], y=td["by"],
+            mode="lines", name=lb.get("model_name", "自転車モデル (理想追従)") + " (対象外)",
+            line=dict(color="rgba(65, 105, 225, 0.15)", width=1.5, dash="dash"),
+            legendgroup="model_fade", showlegend=False,
+        ), row=r, col=c)
+
+        # 2. 同定対象部分（濃い色で重ね描き）
         fig.add_trace(go.Scatter(
             x=gt_xm, y=gt_ym,
             mode="lines", name=lb.get("gt_name", "GT 軌跡"),
             line=dict(color="black", width=2),
             legendgroup="gt", showlegend=show_legend,
-        ), row=1, col=i)
+        ), row=r, col=c)
         fig.add_trace(go.Scatter(
             x=bxm, y=bym,
             mode="lines", name=lb.get("model_name", "自転車モデル (理想追従)"),
             line=dict(color="royalblue", width=1.5, dash="dash"),
             legendgroup="model", showlegend=show_legend,
-        ), row=1, col=i)
-        fig.update_xaxes(title_text=lb.get("x_title", "x [m]"), row=1, col=i)
-        fig.update_yaxes(title_text=lb.get("y_title", "y [m]"), scaleanchor=f"x{i}", scaleratio=1, row=1, col=i)
+        ), row=r, col=c)
+
+        fig.update_xaxes(title_text=lb.get("x_title", "x [m]"), row=r, col=c)
+        fig.update_yaxes(title_text=lb.get("y_title", "y [m]"), scaleanchor=f"x{axis_idx}", scaleratio=1, row=r, col=c)
 
     fig.update_layout(
         title=lb.get("title", "代表データセットの軌跡比較（GT vs 自転車モデル）"),
