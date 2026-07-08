@@ -65,7 +65,7 @@ from driving_log_replayer_v2.real_log_sim_comparison.lib._figures import (  # no
     build_fig_kus_single,
     build_fig_nstep_error_hist,
     build_fig_nstep_error_growth,
-    build_fig_perfect_tracking_traj,
+    build_fig_perfect_tracking_traj as build_fig_xy_equation_traj,
     build_fig_xy_equation_residual_hist,
 )
 from driving_log_replayer_v2.real_log_sim_comparison.lib._fit_core import (  # noqa: E402
@@ -2410,7 +2410,7 @@ def main() -> None:
     perf_entries = _to_entries([(r["uuid"], Path(r["lite_dir"])) for r in perf_records])
     perf_data = compute_xy_equation_residual_data(perf_entries, params)
     perf_fig_resid = build_fig_xy_equation_residual_hist(perf_data)
-    perf_fig_traj = build_fig_perfect_tracking_traj(
+    perf_fig_traj = build_fig_xy_equation_traj(
         perf_data,
         labels={
             "title": "実車 vs x/y residual fitted 式（初期状態を実車ログに合わせたリセットなし積分）",

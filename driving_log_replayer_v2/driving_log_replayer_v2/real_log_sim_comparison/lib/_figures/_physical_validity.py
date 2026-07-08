@@ -823,7 +823,9 @@ def build_fig_cross_steer(rows_data: list[dict]) -> go.Figure:
 
 
 # ---------------------------------------------------------------------------
-# 理想追従評価プロット (physical_validity_report.py の描画ロジックを純関数化)
+# Perfect Tracking 系プロット。
+# build_fig_perfect_tracking_traj は GT vs model trajectory の汎用形なので、
+# physical_validity_report.py の x/y 方程式残差セクションでも label 差し替えで再利用する。
 # ---------------------------------------------------------------------------
 def build_fig_perfect_tracking_box(data: dict) -> go.Figure:
     """操舵理想追従のホライズン別誤差 Box Plot。"""

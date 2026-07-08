@@ -1217,7 +1217,9 @@ def compute_cross_steer_rows(
     return _pick_longest_contiguous_timeseries_row(rows, pinned_uuids)
 
 
-# 理想追従評価用定数 (本モジュールが SSOT。physical_validity_report.py はここから import する)
+# Perfect Tracking 評価用定数。
+# physical_validity_report.py の 1-5 は x/y 方程式残差評価へ移行済みだが、
+# step_cross_dataset.py は従来の Perfect Tracking 図を継続利用する。
 _PERF_STRIDE = 5
 _DRIFT_A_TH = 0.3
 
@@ -1487,7 +1489,11 @@ def compute_perfect_tracking_data(
     entries: list,
     params: dict,
 ) -> dict:
-    """操舵理想追従評価用のデータ算出を行う。"""
+    """操舵理想追従評価用のデータ算出を行う。
+
+    cross-dataset レポート向けの従来指標。physical_validity_report.py の 1-5 は
+    `compute_xy_equation_residual_data` による方程式残差評価を使う。
+    """
     h_labels = [f"{h * _FIT_DT:.2f}s" for h in _PERF_HORIZONS]
     per_h_errors: dict[int, list[float]] = {h: [] for h in _PERF_HORIZONS}
 
