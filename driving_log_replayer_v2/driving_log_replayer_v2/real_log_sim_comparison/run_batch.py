@@ -36,7 +36,7 @@ import yaml
 from .collect_datasets import _resolve_bundle, collect_bundle, update_manifest
 from .collect_raw_rosbags import _OPENLOOP_TOPICS
 from .lib._dataset import resolve_t4_dataset_path
-from .lib._io import resolve_lite_bag
+from .lib._lite_resolver import resolve_lite_bag
 
 _PKG = "driving_log_replayer_v2.real_log_sim_comparison"
 _DEFAULT_WEBAUTO_ROOT = Path.home() / ".webauto" / "data" / "data" / "annotation_dataset"
@@ -523,21 +523,21 @@ def run_analysis_direct(
 ) -> bool:
     """ros2 launch を使わず直接 Python で解析ステージを実行する (skip_sim=True のとき用)。
 
-    evaluator_node.run_analysis を直接呼び出すことで ROS 2 の初期化オーバーヘッドを排除する。
+    ROS-free orchestration helper を直接呼び出すことで ROS 2 の初期化オーバーヘッドを排除する。
     lite_dir = output_dir/lite (直接抽出パスと同じレイアウト)。
     """
     import logging
-    from driving_log_replayer_v2.real_log_sim_comparison.evaluator_node import (
+    from driving_log_replayer_v2.real_log_sim_comparison.lib._analysis_pipeline import (
         build_common_env,
+        load_compare_config,
         run_analysis,
-        _load_compare_config,
     )
 
     lite_dir = output_dir / "lite"
     comparison_dir = output_dir / "comparison"
     comparison_dir.mkdir(parents=True, exist_ok=True)
 
-    compare_cfg = _load_compare_config(str(scenario_single))
+    compare_cfg = load_compare_config(str(scenario_single))
 
     logger = logging.getLogger(f"run_batch.{uuid[:8]}")
     if not logger.handlers:

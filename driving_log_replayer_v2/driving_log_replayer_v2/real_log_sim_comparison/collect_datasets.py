@@ -43,7 +43,7 @@ import sys
 import yaml
 
 from .lib._collection import load_manifest, write_manifest
-from .lib._io import resolve_bundle_dir as _resolve_bundle, resolve_lite_bag
+from .lib._lite_resolver import resolve_bundle_dir as _resolve_bundle, resolve_lite_bag
 
 _DEFAULT_COLLECTION = Path(__file__).parent / "sample" / "multi"
 _UUID_RE = re.compile(r"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}")

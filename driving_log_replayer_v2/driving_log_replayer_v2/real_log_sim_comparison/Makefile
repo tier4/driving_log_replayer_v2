@@ -21,8 +21,17 @@ LOCAL_SAMPLE_DIR ?= $(MAKEFILE_DIR)/sample
 LOCAL_SCENARIO   ?= $(LOCAL_SAMPLE_DIR)/scenario.yaml
 
 PYTHON := python3
+PYTHONPATH_PREFIX := $(abspath $(MAKEFILE_DIR)/../..)
+MPLCONFIGDIR ?= /tmp/matplotlib-cache
+NO_SETUP ?=
 
-.PHONY: help local_cloud_run local_analysis_run local_batch_run local_cross_analysis_run local_multidataset_run local_multidataset_cloud_run prepare_multidataset issue_scenario collect_raw_rosbags open_loop_tune open_loop_batch physical_validity_report_nodata extract fit_lon fit_steer fit_merge fit_report reidentify apply closed_loop release_model_param reidentify_v2
+ifeq ($(NO_SETUP),1)
+RUN_PY := MPLCONFIGDIR="$(MPLCONFIGDIR)" PYTHONPATH="$(PYTHONPATH_PREFIX):$${PYTHONPATH:-}" $(PYTHON)
+else
+RUN_PY := source "$(SETUP_BASH)" && MPLCONFIGDIR="$(MPLCONFIGDIR)" PYTHONPATH="$(PYTHONPATH_PREFIX):$${PYTHONPATH:-}" $(PYTHON)
+endif
+
+.PHONY: help local_cloud_run local_analysis_run local_batch_run local_cross_analysis_run local_multidataset_run local_multidataset_cloud_run prepare_multidataset issue_scenario collect_raw_rosbags open_loop_tune open_loop_batch physical_validity_report_nodata lite lite_ol lite_cl extract fit_lon fit_steer fit_merge fit_report reidentify apply closed_loop release_model_param reidentify_v2
 
 help:
 	@echo "使い方: make -C $(MAKEFILE_DIR) <ターゲット>"
@@ -55,13 +64,16 @@ help:
 	@echo ""
 	@echo "  マルチデータセット同定パイプライン (分割ターゲット; MULTI_BATCH_ROOT を対象):"
 	@echo "    local_multidataset_cloud_run  フル: extract→reidentify→apply→closed_loop の薄い連結"
+	@echo "    lite                OL向け real.lite+CSV cache と CL向け closed_loop_t4 staging を準備"
+	@echo "    lite_ol             OL向け: datasets/<uuid>/real.lite + reidentify_cache.csv を準備"
+	@echo "    lite_cl             CL向け: runs/<uuid>/closed_loop_t4/{input_bag,map} を準備"
 	@echo "    reidentify          再同定のみ (fit_lon→fit_steer→fit_merge→fit_report; extract/sim なし・実測~2.5分)"
 	@echo "    extract             Step1: 全 dataset の real.lite 抽出 (RESUME=1 で揃っていればスキップ)"
 	@echo "    fit_lon             Step2: 縦方向 直接同定 → phase1_acc.yaml"
 	@echo "    fit_steer           Step3: 操舵+k_us 直接同定 (fit_lon 必須) → phase2_steer.yaml"
-	@echo "    fit_merge           Step4a: warm-start Optuna 統合 (fit_steer 必須) → tuned_params.yaml + tuning_report.html"
-	@echo "    fit_report          Step4b: 物理妥当性レポート (fit_merge 必須) → physical_validity_report.html"
-	@echo "                        + リリースノート用抜粋レポート → physical_validity_release_note.html"
+	@echo "    fit_merge           Step4a: reidentify v2 warm-start Optuna 統合 (fit_steer 必須) → tuned_params.yaml"
+	@echo "    fit_report          Step4b: reidentify v2 簡易物理妥当性レポート (fit_merge 必須)"
+	@echo "                        → validity_report.png + validity_report.txt"
 	@echo "    apply               Step5: 同定パラメータを scenario に反映 (fit_merge 必須) → tuned_scenario.yaml"
 	@echo "    closed_loop         Step6: tuned scenario で closed-loop 実 sim (apply 必須)"
 	@echo ""
@@ -131,8 +143,9 @@ local_cloud_run:
 OUT_DIR ?= $(LOCAL_SAMPLE_DIR)/out/latest
 
 local_analysis_run:
-	@test -f $(SETUP_BASH) || \
-	    { echo "[ERROR] $(SETUP_BASH) が見つかりません。先にワークスペースをビルドしてください"; exit 1; }
+	@if [ "$(NO_SETUP)" != "1" ]; then \
+	    test -f $(SETUP_BASH) || { echo "[ERROR] $(SETUP_BASH) が見つかりません。先にワークスペースをビルドしてください"; exit 1; }; \
+	fi
 	@test -f $(LOCAL_SCENARIO) || \
 	    { echo "[ERROR] $(LOCAL_SCENARIO) が見つかりません"; exit 1; }
 	@test -d "$(OUT_DIR)" || \
@@ -146,7 +159,7 @@ local_analysis_run:
 	    fi ; \
 	    if [ -z "$$map_osm" ] ; then echo "[WARN] 地図を解決できないため地図背景なしで実行します" ; fi ; \
 	    echo "[INFO] OUT_DIR: $(OUT_DIR)" ; \
-	    source $(SETUP_BASH) && $(PYTHON) -m driving_log_replayer_v2.real_log_sim_comparison.run_analysis \
+	    $(RUN_PY) -m driving_log_replayer_v2.real_log_sim_comparison.run_analysis \
 	        --bundle-dir "$(OUT_DIR)" \
 	        --scenario "$(LOCAL_SCENARIO)" \
 	        --map-osm "$$map_osm"
@@ -184,8 +197,11 @@ TUNED_PARAMS    := $(MULTI_BATCH_ROOT)/tuned_params.yaml
 TUNING_REPORT   := $(MULTI_BATCH_ROOT)/tuning_report.html
 VALIDITY_REPORT := $(MULTI_BATCH_ROOT)/physical_validity_report.html
 RELEASE_NOTE_REPORT := $(MULTI_BATCH_ROOT)/physical_validity_release_note.html
+REIDENTIFY_REPORT_PNG := $(MULTI_BATCH_ROOT)/validity_report.png
+REIDENTIFY_REPORT_TXT := $(MULTI_BATCH_ROOT)/validity_report.txt
 METRICS_CACHE   := $(MULTI_BATCH_ROOT)/metrics_cache.csv
 TUNED_SCENARIO  := $(MULTI_BATCH_ROOT)/scenarios/tuned_scenario.yaml
+INPUT_PARAM      ?= /home/kotaroyoshimoto/workspace/x2_e2e_44/src/description/vehicle/j6_gen2_description/j6_gen2_description/config/simulator_model.param.yaml
 
 prepare_multidataset:
 	@echo "[INFO] Validating real datasets in $(MULTI_BATCH_ROOT)..."
@@ -219,6 +235,43 @@ prepare_multidataset:
 
 # Step 1: 全 dataset の real.lite を抽出 (raw → topic 絞り込み mcap)。
 # RESUME=1 かつ real.lite が揃っていれば run_batch をスキップ。
+lite:
+	$(MAKE) lite_ol
+	$(MAKE) lite_cl
+
+lite_ol: extract
+
+lite_cl: prepare_multidataset
+	@test -n "$(CLOSED_LOOP_UUIDS)" || \
+	    { echo "[ERROR] CLOSED_LOOP_UUIDS が未設定です"; exit 1; }
+	@if [ -n "$(CLOSED_LOOP_MAP)" ]; then \
+	    test -d "$(CLOSED_LOOP_MAP)" || { echo "[ERROR] CLOSED_LOOP_MAP が見つかりません: $(CLOSED_LOOP_MAP)"; exit 1; }; \
+	    test -f "$(CLOSED_LOOP_MAP)/lanelet2_map.osm" || { echo "[ERROR] CLOSED_LOOP_MAP/lanelet2_map.osm が見つかりません: $(CLOSED_LOOP_MAP)"; exit 1; }; \
+	fi
+	@echo "[INFO] lite_cl: Preparing closed-loop staging for UUIDs: $(CLOSED_LOOP_UUIDS)"
+	@IFS=',' read -ra uuids <<< "$(CLOSED_LOOP_UUIDS)" ; \
+	for raw_uuid in "$${uuids[@]}"; do \
+	    uuid="$$(echo "$$raw_uuid" | xargs)" ; \
+	    test -n "$$uuid" || continue ; \
+	    ds="$(MULTI_BATCH_ROOT)/datasets/$$uuid" ; \
+	    out="$(MULTI_BATCH_ROOT)/runs/$$uuid/closed_loop_t4" ; \
+	    fallback="$(MULTI_BATCH_ROOT)/runs/$$uuid/fallback_raw_dataset/input_bag" ; \
+	    src="$$ds/input_bag" ; \
+	    test -d "$$ds" || { echo "[ERROR] CL dataset が見つかりません: $$ds"; exit 1; } ; \
+	    if [ -f "$$fallback/metadata.yaml" ] && grep -q "/vehicle/status/gear_status" "$$fallback/metadata.yaml"; then \
+	        src="$$fallback" ; \
+	    fi ; \
+	    test -d "$$src" || { echo "[ERROR] CL input_bag が見つかりません: $$src"; exit 1; } ; \
+	    mkdir -p "$$out" ; \
+	    rm -rf "$$out/input_bag" ; \
+	    ln -s "$$(realpath "$$src")" "$$out/input_bag" ; \
+	    if [ -n "$(CLOSED_LOOP_MAP)" ]; then \
+	        rm -rf "$$out/map" ; \
+	        ln -s "$$(realpath "$(CLOSED_LOOP_MAP)")" "$$out/map" ; \
+	    fi ; \
+	    echo "[INFO] lite_cl: $$uuid -> $$out (input_bag=$$src, map=$(CLOSED_LOOP_MAP))" ; \
+	done
+
 extract:
 	@test -f $(SETUP_BASH) || \
 	    { echo "[ERROR] $(SETUP_BASH) が見つかりません。先にワークスペースをビルドしてください"; exit 1; }
@@ -244,93 +297,80 @@ extract:
 	        --skip-ol \
 	        $(if $(RESUME),--resume,) ; \
 	fi
+	@echo "[INFO] extract: Generating reidentify CSV cache for ROS-free downstream steps..."
+	$(RUN_PY) -m driving_log_replayer_v2.real_log_sim_comparison.reidentify.extract \
+	    --collection-dir "$(MULTI_BATCH_ROOT)"
 
 # Step 2: 縦方向モデルの直接同定 → PHASE1_ACC。
 fit_lon:
-	@test -f $(SETUP_BASH) || \
-	    { echo "[ERROR] $(SETUP_BASH) が見つかりません。先にワークスペースをビルドしてください"; exit 1; }
+	@if [ "$(NO_SETUP)" != "1" ]; then \
+	    test -f $(SETUP_BASH) || { echo "[ERROR] $(SETUP_BASH) が見つかりません。先にワークスペースをビルドしてください"; exit 1; }; \
+	fi
 	@echo "[INFO] fit_lon: Phase 1 縦方向 直接同定 → $(PHASE1_ACC)"
-	source $(SETUP_BASH) && $(PYTHON) -m driving_log_replayer_v2.real_log_sim_comparison.physical_tuning \
+	$(RUN_PY) -m driving_log_replayer_v2.real_log_sim_comparison.reidentify.fit_lon \
 	    --collection-dir "$(MULTI_BATCH_ROOT)" \
-	    --scenario "$(LOCAL_SCENARIO)" \
-	    --phase 1 \
 	    --out "$(PHASE1_ACC)" \
-	    --case "$(MODEL_CASE)" \
-	    $(if $(filter 1,$(SKIP_LON)),--skip-lon,) \
 	    --n-jobs $(N_JOBS)
 
 # Step 3: 操舵 + k_us の直接同定 (PHASE1_ACC の縦方向値を継承) → PHASE2_STEER。
 fit_steer:
-	@test -f $(SETUP_BASH) || \
-	    { echo "[ERROR] $(SETUP_BASH) が見つかりません。先にワークスペースをビルドしてください"; exit 1; }
+	@if [ "$(NO_SETUP)" != "1" ]; then \
+	    test -f $(SETUP_BASH) || { echo "[ERROR] $(SETUP_BASH) が見つかりません。先にワークスペースをビルドしてください"; exit 1; }; \
+	fi
 	@test -f "$(PHASE1_ACC)" || \
 	    { echo "[ERROR] $(PHASE1_ACC) がありません。先に 'make fit_lon' を実行してください"; exit 1; }
 	@echo "[INFO] fit_steer: Phase 2 操舵+k_us 直接同定 (継承: $(PHASE1_ACC)) → $(PHASE2_STEER)"
-	source $(SETUP_BASH) && $(PYTHON) -m driving_log_replayer_v2.real_log_sim_comparison.physical_tuning \
+	$(RUN_PY) -m driving_log_replayer_v2.real_log_sim_comparison.reidentify.fit_steer \
 	    --collection-dir "$(MULTI_BATCH_ROOT)" \
-	    --scenario "$(LOCAL_SCENARIO)" \
-	    --phase 2 \
 	    --phase-params "$(PHASE1_ACC)" \
-	    --out "$(PHASE2_STEER)" \
+	    --scenario "$(LOCAL_SCENARIO)" \
 	    --case "$(MODEL_CASE)" \
-	    $(if $(filter 1,$(SKIP_STEER)),--skip-steer,) \
+	    --out "$(PHASE2_STEER)" \
 	    --n-jobs $(N_JOBS)
 
 # Step 4a: warm-start Optuna 統合チューニング → TUNED_PARAMS + TUNING_REPORT。
 fit_merge:
-	@test -f $(SETUP_BASH) || \
-	    { echo "[ERROR] $(SETUP_BASH) が見つかりません。先にワークスペースをビルドしてください"; exit 1; }
+	@if [ "$(NO_SETUP)" != "1" ]; then \
+	    test -f $(SETUP_BASH) || { echo "[ERROR] $(SETUP_BASH) が見つかりません。先にワークスペースをビルドしてください"; exit 1; }; \
+	fi
 	@test -f "$(PHASE2_STEER)" || \
 	    { echo "[ERROR] $(PHASE2_STEER) がありません。先に 'make fit_steer' を実行してください"; exit 1; }
-	@if [ "$(SKIP_LON)" = "1" ] && [ "$(SKIP_STEER)" = "1" ]; then \
-	    echo "[INFO] SKIP_LON=1 かつ SKIP_STEER=1 のため、Optuna 統合チューニングをスキップし、$(PHASE2_STEER) を $(TUNED_PARAMS) にコピーします"; \
-	    cp "$(PHASE2_STEER)" "$(TUNED_PARAMS)"; \
-	else \
-	    merge_phase=0; \
-	    if [ "$(SKIP_LON)" = "1" ]; then merge_phase=2; fi; \
-	    if [ "$(SKIP_STEER)" = "1" ]; then merge_phase=1; fi; \
-	    echo "[INFO] fit_merge: Warm-Started Optuna 統合チューニング (phase=$$merge_phase) → $(TUNED_PARAMS)"; \
-	    source $(SETUP_BASH) && $(PYTHON) -m driving_log_replayer_v2.real_log_sim_comparison.multi_dataset_tune \
-	        --collection-dir "$(MULTI_BATCH_ROOT)" \
-	        --scenario "$(LOCAL_SCENARIO)" \
-	        --phase $$merge_phase \
-	        --phase-params "$(PHASE2_STEER)" \
-	        --enqueue-params "$(PHASE2_STEER)" \
-	        --n-trials $(N_TRIALS) \
-	        --search-subsample 15 \
-	        --jobs $(N_JOBS) \
-	        --out "$(TUNED_PARAMS)" \
-	        --report "$(TUNING_REPORT)"; \
-	fi
+	@echo "[INFO] fit_merge: reidentify v2 warm-start Optuna 統合チューニング → $(TUNED_PARAMS)"
+	$(RUN_PY) -m driving_log_replayer_v2.real_log_sim_comparison.reidentify.fit_merge \
+	    --collection-dir "$(MULTI_BATCH_ROOT)" \
+	    --scenario "$(LOCAL_SCENARIO)" \
+	    --case "$(MODEL_CASE)" \
+	    --phase-params "$(PHASE2_STEER)" \
+	    --n-trials $(N_TRIALS) \
+	    --jobs $(N_JOBS) \
+	    --out "$(TUNED_PARAMS)"
 
 # Step 4b: 物理妥当性レポート生成 → VALIDITY_REPORT。
 fit_report:
-	@test -f $(SETUP_BASH) || \
-	    { echo "[ERROR] $(SETUP_BASH) が見つかりません。先にワークスペースをビルドしてください"; exit 1; }
+	@if [ "$(NO_SETUP)" != "1" ]; then \
+	    test -f $(SETUP_BASH) || { echo "[ERROR] $(SETUP_BASH) が見つかりません。先にワークスペースをビルドしてください"; exit 1; }; \
+	fi
 	@test -f "$(TUNED_PARAMS)" || \
 	    { echo "[ERROR] $(TUNED_PARAMS) がありません。先に 'make fit_merge' を実行してください"; exit 1; }
-	@echo "[INFO] fit_report: 物理妥当性レポート生成 → $(VALIDITY_REPORT)"
-	@echo "[INFO] fit_report: リリースノート用レポート生成 → $(RELEASE_NOTE_REPORT)"
-	source $(SETUP_BASH) && $(PYTHON) -m driving_log_replayer_v2.real_log_sim_comparison.physical_validity_report \
-	    --params "$(TUNED_PARAMS)" \
+	@echo "[INFO] fit_report: reidentify v2 簡易物理妥当性レポート生成 → $(REIDENTIFY_REPORT_PNG), $(REIDENTIFY_REPORT_TXT)"
+	$(RUN_PY) -m driving_log_replayer_v2.real_log_sim_comparison.reidentify.report \
+	    --collection-dir "$(MULTI_BATCH_ROOT)" \
+	    --tuned-params "$(TUNED_PARAMS)" \
 	    --scenario "$(LOCAL_SCENARIO)" \
 	    --case "$(MODEL_CASE)" \
-	    --collection-dir "$(MULTI_BATCH_ROOT)" \
-	    --out "$(VALIDITY_REPORT)" \
-	    --release-note-out "$(RELEASE_NOTE_REPORT)" \
-	    --metrics-cache "$(METRICS_CACHE)" \
-	    --closed-loop-uuids "$(CLOSED_LOOP_UUIDS)" \
-	    --n-curve-ds 0
+	    --out-png "$(REIDENTIFY_REPORT_PNG)" \
+	    --out-txt "$(REIDENTIFY_REPORT_TXT)"
 
 # Step 4c: モデルパラメータリリース用 YAML 生成
 release_model_param:
-	@test -f $(SETUP_BASH) || \
-	    { echo "[ERROR] $(SETUP_BASH) が見つかりません。先にワークスペースをビルドしてください"; exit 1; }
+	@if [ "$(NO_SETUP)" != "1" ]; then \
+	    test -f $(SETUP_BASH) || { echo "[ERROR] $(SETUP_BASH) が見つかりません。先にワークスペースをビルドしてください"; exit 1; }; \
+	fi
 	@test -f "$(TUNED_PARAMS)" || \
 	    { echo "[ERROR] $(TUNED_PARAMS) がありません。先に 'make fit_merge' を実行してください"; exit 1; }
 	@echo "[INFO] release_model_param: モデルパラメータリリース用 YAML 生成 → $(MULTI_BATCH_ROOT)/simulator_model.param.yaml"
-	source $(SETUP_BASH) && $(PYTHON) -m driving_log_replayer_v2.real_log_sim_comparison.release_model_params \
-	    --input-param "/home/kotaroyoshimoto/workspace/x2_e2e_44/src/description/vehicle/j6_gen2_description/j6_gen2_description/config/simulator_model.param.yaml" \
+	$(RUN_PY) -m driving_log_replayer_v2.real_log_sim_comparison.reidentify.release_params \
+	    --input-param "$(INPUT_PARAM)" \
 	    --tuned-params "$(TUNED_PARAMS)" \
 	    --out-dir "$(MULTI_BATCH_ROOT)"
 
@@ -339,36 +379,40 @@ release_model_param:
 # "有効データセット 0 件" ではなく親切な検証エラーで即座に止める。
 reidentify: prepare_multidataset
 	@echo "[INFO] === reidentify: fit_lon → fit_steer → fit_merge → fit_report → release_model_param (extract/sim なし) ==="
-	$(MAKE) fit_lon
-	$(MAKE) fit_steer
-	$(MAKE) fit_merge
-	$(MAKE) fit_report
-	$(MAKE) release_model_param
+	$(MAKE) fit_lon NO_SETUP=$(NO_SETUP)
+	$(MAKE) fit_steer NO_SETUP=$(NO_SETUP)
+	$(MAKE) fit_merge NO_SETUP=$(NO_SETUP)
+	$(MAKE) fit_report NO_SETUP=$(NO_SETUP)
+	$(MAKE) release_model_param NO_SETUP=$(NO_SETUP)
 
 # reidentify v2: vehicle_model_fitting 流のシンプルなスクリプト集 (reidentify/) への再構成版。
 # extract→fit_lon→fit_steer→fit_merge→report→release を run_reidentify.py が薄く連結する
 # (詳細・依存関係・旧パイプラインとの差分は reidentify/README.md 参照)。
 # 出力は $(MULTI_BATCH_ROOT)/reidentify_v2/ 配下 (旧パイプラインの成果物と衝突しない)。
 reidentify_v2:
-	@test -f $(SETUP_BASH) || \
-	    { echo "[ERROR] $(SETUP_BASH) が見つかりません。先にワークスペースをビルドしてください"; exit 1; }
+	@if [ "$(NO_SETUP)" != "1" ]; then \
+	    test -f $(SETUP_BASH) || { echo "[ERROR] $(SETUP_BASH) が見つかりません。先にワークスペースをビルドしてください"; exit 1; }; \
+	fi
 	@test -f $(LOCAL_SCENARIO) || \
 	    { echo "[ERROR] $(LOCAL_SCENARIO) が見つかりません"; exit 1; }
-	source $(SETUP_BASH) && $(PYTHON) -m driving_log_replayer_v2.real_log_sim_comparison.reidentify.run_reidentify \
+	$(RUN_PY) -m driving_log_replayer_v2.real_log_sim_comparison.reidentify.run_reidentify \
 	    --collection-dir "$(MULTI_BATCH_ROOT)" \
 	    --scenario "$(LOCAL_SCENARIO)" \
 	    --case "$(MODEL_CASE)" \
+	    --out-dir "$(MULTI_BATCH_ROOT)" \
+	    --input-param "$(INPUT_PARAM)" \
 	    --n-trials $(N_TRIALS) \
 	    --n-jobs $(N_JOBS)
 
 # Step 5: 同定パラメータを scenario に反映 → TUNED_SCENARIO。
 apply:
-	@test -f $(SETUP_BASH) || \
-	    { echo "[ERROR] $(SETUP_BASH) が見つかりません。先にワークスペースをビルドしてください"; exit 1; }
+	@if [ "$(NO_SETUP)" != "1" ]; then \
+	    test -f $(SETUP_BASH) || { echo "[ERROR] $(SETUP_BASH) が見つかりません。先にワークスペースをビルドしてください"; exit 1; }; \
+	fi
 	@test -f "$(TUNED_PARAMS)" || \
 	    { echo "[ERROR] $(TUNED_PARAMS) がありません。先に 'make fit_merge' を実行してください"; exit 1; }
 	@echo "[INFO] apply: 同定パラメータを scenario に反映 → $(TUNED_SCENARIO)"
-	source $(SETUP_BASH) && $(PYTHON) -m driving_log_replayer_v2.real_log_sim_comparison.apply_tuned_params \
+	$(RUN_PY) -m driving_log_replayer_v2.real_log_sim_comparison.apply_tuned_params \
 	    --scenario "$(LOCAL_SCENARIO)" \
 	    --params "$(TUNED_PARAMS)" \
 	    --out "$(TUNED_SCENARIO)"
@@ -395,9 +439,9 @@ local_multidataset_cloud_run: prepare_multidataset
 	    { echo "[ERROR] $(SETUP_BASH) が見つかりません。先にワークスペースをビルドしてください"; exit 1; }
 	@test -f $(LOCAL_SCENARIO) || \
 	    { echo "[ERROR] $(LOCAL_SCENARIO) が見つかりません"; exit 1; }
-	$(MAKE) extract
-	$(MAKE) reidentify
-	$(MAKE) apply
+	$(MAKE) lite
+	$(MAKE) reidentify NO_SETUP=1
+	$(MAKE) apply NO_SETUP=1
 	$(MAKE) closed_loop
 
 local_batch_run:
@@ -523,23 +567,21 @@ collect_raw_rosbags:
 	        --jobs "$(N_JOBS)" \
 	        $(if $(DATE_FROM),--date-from "$(DATE_FROM)",) \
 	        $(if $(DATE_TO),--date-to "$(DATE_TO)",)
+	@echo "[INFO] collect_raw_rosbags: Generating reidentify CSV cache for ROS-free tuning..."
+	$(RUN_PY) -m driving_log_replayer_v2.real_log_sim_comparison.reidentify.extract \
+	    --collection-dir "$(ROOT)"
 
 # Phase 2a: 軽量ループ (主) — 全 real.lite で横断ロバスト同定 (multi_dataset_tune)
 # FINAL params は <ROOT>/tuned_params.yaml に保存される。
 # これを scenario.yaml の Conditions.models 該当パラメータへ手動反映し、
 # 次の collect_raw_rosbags → open_loop_tune でさらに磨く。
 open_loop_tune:
-	@test -f $(SETUP_BASH) || \
-	    { echo "[ERROR] $(SETUP_BASH) が見つかりません。先にワークスペースをビルドしてください"; exit 1; }
 	@test -d "$(ROOT)" || \
 	    { echo "[ERROR] ROOT が見つかりません: $(ROOT) (先に collect_raw_rosbags を実行してください)"; exit 1; }
 	@test -f $(LOCAL_SCENARIO) || \
 	    { echo "[ERROR] $(LOCAL_SCENARIO) が見つかりません"; exit 1; }
-	@echo "[INFO] ROOT: $(ROOT)" ; \
-	    source $(SETUP_BASH) && $(PYTHON) -m driving_log_replayer_v2.real_log_sim_comparison.multi_dataset_tune \
-	        --collection-dir "$(ROOT)" \
-	        --scenario "$(LOCAL_SCENARIO)" \
-	        --out "$(ROOT)/tuned_params.yaml"
+	@echo "[INFO] ROOT: $(ROOT)"
+	$(MAKE) reidentify NO_SETUP=1 MULTI_BATCH_ROOT="$(ROOT)" LOCAL_SCENARIO="$(LOCAL_SCENARIO)"
 
 # Phase 2b: 重量ループ (subset 精査) — curated subset で full launch + 集約レポート
 # ROOT/datasets/ 配下の全データセットを SKIP_SIM=1 (open-loop のみ) で実行し、

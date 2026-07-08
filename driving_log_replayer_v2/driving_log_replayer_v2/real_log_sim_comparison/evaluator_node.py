@@ -642,6 +642,16 @@ def _write_result_jsonl(path: Path, success: bool, summary: str) -> None:
         f.write("\n")
 
 
+# Keep the historical evaluator_node function names, but route the analysis-only
+# orchestration through the ROS-free implementation used by local CLIs.
+from driving_log_replayer_v2.real_log_sim_comparison.lib import _analysis_pipeline as _analysis_pipeline  # noqa: E402
+
+build_common_env = _analysis_pipeline.build_common_env
+run_analysis = _analysis_pipeline.run_analysis
+_load_compare_config = _analysis_pipeline.load_compare_config
+_run = _analysis_pipeline.run_command
+
+
 # ── Entry point ───────────────────────────────────────────────────────────────
 
 def main() -> None:

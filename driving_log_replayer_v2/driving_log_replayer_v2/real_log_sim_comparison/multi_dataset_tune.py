@@ -38,7 +38,7 @@ import yaml
 from . import step_ol1_analyze_nstep as s5
 from .lib._collection import discover_collection
 from .lib._models_config import load_models_doc, resolve_baseline_model
-from .lib._io import resolve_lite_bag
+from .lib._lite_resolver import resolve_lite_bag
 from .lib._multi_agg import (
     HORIZONS, WORST_W,
     acc_score, aggregate_normalized,

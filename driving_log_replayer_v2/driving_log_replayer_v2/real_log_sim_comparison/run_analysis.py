@@ -27,8 +27,8 @@ import logging
 from pathlib import Path
 import sys
 
-from .evaluator_node import _load_compare_config, build_common_env, run_analysis
-from .lib._io import resolve_bundle_dir as _resolve_bundle_dir
+from .lib._analysis_pipeline import build_common_env, load_compare_config, run_analysis
+from .lib._lite_resolver import resolve_bundle_dir as _resolve_bundle_dir
 
 
 def main() -> None:
@@ -60,7 +60,7 @@ def main() -> None:
     comparison_dir = bundle_dir / "comparison"
     logger.info(f"Bundle: {bundle_dir}")
 
-    compare_cfg = _load_compare_config(args.scenario)
+    compare_cfg = load_compare_config(args.scenario)
     if not compare_cfg:
         print(f"ERROR: scenario.yaml が読めません: {args.scenario}", file=sys.stderr)
         sys.exit(2)
