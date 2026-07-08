@@ -42,8 +42,10 @@ from ._fit_core import (
     delay_shift as _delay_shift,
     delay_shift_frac as _delay_shift_frac,
     equation_residual_at_params,
+    fit_equation_residual_grid,
     fit_first_order_delay,
     fit_first_order_delay_residual_3phase,
+    savgol_derivative,
 )
 from ._fit_core import sim_first_order as _core_sim_first_order
 from ._fit_core import sim_first_order_frac as _core_sim_first_order_frac
@@ -1546,6 +1548,183 @@ def compute_perfect_tracking_data(
         "h_labels": h_labels,
         "per_h_errors": {str(h): v for h, v in per_h_errors.items()},
         "traj_data": traj_data,
+    }
+
+
+def compute_xy_equation_residual_data(
+    entries: list,
+    params: dict,
+) -> dict:
+    """x/y 状態方程式の残差評価・追加項パラメータ同時最適化を行う。
+
+    対象式:
+      xdot = vx * cos(yaw) + param1 * yawdot * vx
+      ydot = vx * sin(yaw) + param2 * yawdot * vx
+
+    LHS は実測 x/y の SG 平滑化微分、RHS は実測 vx/yaw/yawdot から作る。
+    param1/param2 は全 dataset の E_x/E_y をプールして同時 least_squares する。
+    """
+    datasets: list[dict] = []
+    traj_data: list[dict] = []
+    n_dataset = 0
+    for entry in entries[:10]:
+        mcap = _entry_real_mcap(entry)
+        if mcap is None:
+            continue
+        try:
+            df_kin = load_kinematic(mcap)
+        except Exception:
+            continue
+        _require_dfs(f"compute_xy_equation_residual_data:{entry.dataset_id}", kinematic_state=df_kin)
+        if len(df_kin) < 50:
+            continue
+
+        timebase = _common_timebase(df_kin, min_span_ns=_MIN_SPAN_NS)
+        if timebase is None:
+            continue
+        t_s, t0 = timebase
+
+        gt_x = _resample(df_kin, "x", t_s, t0)
+        gt_y = _resample(df_kin, "y", t_s, t0)
+        gt_yaw = _resample(df_kin, "yaw", t_s, t0)
+        gt_vx = _resample(df_kin, "vx", t_s, t0)
+        gt_wz = _resample(df_kin, "wz", t_s, t0)
+        try:
+            gear_drive = _drive_mask_on_grid(mcap, t_s, t0, context=f"compute_xy_equation_residual_data:{entry.dataset_id}")
+        except Exception:
+            gear_drive = np.ones_like(gt_vx, dtype=bool)
+
+        lhs_x = savgol_derivative(gt_x, _FIT_DT, window_s=0.2, polyorder=2)
+        lhs_y = savgol_derivative(gt_y, _FIT_DT, window_s=0.2, polyorder=2)
+        mask = (
+            gear_drive
+            & (gt_vx > VX_MIN_CURVE)
+            & np.isfinite(lhs_x)
+            & np.isfinite(lhs_y)
+            & np.isfinite(gt_yaw)
+            & np.isfinite(gt_vx)
+            & np.isfinite(gt_wz)
+        )
+        if int(np.count_nonzero(mask)) < _MIN_FIT_SAMPLES:
+            continue
+
+        datasets.append({
+            "yaw": gt_yaw,
+            "vx": gt_vx,
+            "wz": gt_wz,
+            "lhs_x": lhs_x,
+            "lhs_y": lhs_y,
+            "mask": mask,
+        })
+        n_dataset += 1
+
+        if len(traj_data) < 6:
+            moving = mask
+            _PLOT_STRIDE = 5
+            # 追加項込み RHS を連続積分した軌跡は fit 後に作るため、ここでは GT と入力だけ保持する。
+            traj_data.append({
+                "uuid": entry.dataset_id[:8],
+                "x": gt_x,
+                "y": gt_y,
+                "yaw": gt_yaw,
+                "vx": gt_vx,
+                "wz": gt_wz,
+                "moving": moving,
+                "stride": _PLOT_STRIDE,
+            })
+
+    def _xy_residual(params_dict: dict, _grid: dict, dataset: dict) -> np.ndarray:
+        p1 = float(params_dict["param1"])
+        p2 = float(params_dict["param2"])
+        yaw = dataset["yaw"]
+        vx = dataset["vx"]
+        wz = dataset["wz"]
+        mask = dataset["mask"]
+        rhs_x = vx * np.cos(yaw) + p1 * wz * vx
+        rhs_y = vx * np.sin(yaw) + p2 * wz * vx
+        ex = rhs_x - dataset["lhs_x"]
+        ey = rhs_y - dataset["lhs_y"]
+        return np.concatenate([ex[mask], ey[mask]])
+
+    fit = fit_equation_residual_grid(
+        datasets,
+        param_specs=[
+            {"name": "param1", "initial": float(params.get("xy_param1", 0.0)), "bounds": (-5.0, 5.0)},
+            {"name": "param2", "initial": float(params.get("xy_param2", 0.0)), "bounds": (-5.0, 5.0)},
+        ],
+        residual_func=_xy_residual,
+    )
+
+    def _collect_components(params_dict: dict) -> dict:
+        ex_all: list[float] = []
+        ey_all: list[float] = []
+        for dataset in datasets:
+            p1 = float(params_dict["param1"])
+            p2 = float(params_dict["param2"])
+            yaw = dataset["yaw"]
+            vx = dataset["vx"]
+            wz = dataset["wz"]
+            mask = dataset["mask"]
+            ex = vx * np.cos(yaw) + p1 * wz * vx - dataset["lhs_x"]
+            ey = vx * np.sin(yaw) + p2 * wz * vx - dataset["lhs_y"]
+            ex_all.extend(ex[mask].tolist())
+            ey_all.extend(ey[mask].tolist())
+        ex_arr = np.asarray(ex_all, dtype=float)
+        ey_arr = np.asarray(ey_all, dtype=float)
+        both = np.concatenate([ex_arr, ey_arr]) if ex_arr.size or ey_arr.size else np.array([], dtype=float)
+        return {
+            "resid_x": ex_arr.tolist(),
+            "resid_y": ey_arr.tolist(),
+            "rmse_x": float(np.sqrt(np.mean(ex_arr ** 2))) if ex_arr.size else float("nan"),
+            "rmse_y": float(np.sqrt(np.mean(ey_arr ** 2))) if ey_arr.size else float("nan"),
+            "rmse": float(np.sqrt(np.mean(both ** 2))) if both.size else float("nan"),
+            "n": int(both.size),
+        }
+
+    fitted_params = fit["params"] if fit is not None else {"param1": float("nan"), "param2": float("nan")}
+    fitted = _collect_components(fitted_params) if fit is not None else {
+        "resid_x": [], "resid_y": [], "rmse_x": float("nan"), "rmse_y": float("nan"), "rmse": float("nan"), "n": 0,
+    }
+    baseline = _collect_components({"param1": 0.0, "param2": 0.0}) if datasets else {
+        "resid_x": [], "resid_y": [], "rmse_x": float("nan"), "rmse_y": float("nan"), "rmse": float("nan"), "n": 0,
+    }
+
+    fitted_traj: list[dict] = []
+    p1 = float(fitted_params.get("param1", 0.0)) if fit is not None else 0.0
+    p2 = float(fitted_params.get("param2", 0.0)) if fit is not None else 0.0
+    for td in traj_data:
+        gt_x = td["x"]
+        gt_y = td["y"]
+        yaw = td["yaw"]
+        vx = td["vx"]
+        wz = td["wz"]
+        n = len(gt_x)
+        xs = np.empty(n)
+        ys = np.empty(n)
+        xs[0] = float(gt_x[0])
+        ys[0] = float(gt_y[0])
+        for i in range(1, n):
+            j = i - 1
+            xs[i] = xs[i - 1] + float(vx[j] * np.cos(yaw[j]) + p1 * wz[j] * vx[j]) * _FIT_DT
+            ys[i] = ys[i - 1] + float(vx[j] * np.sin(yaw[j]) + p2 * wz[j] * vx[j]) * _FIT_DT
+        stride = int(td["stride"])
+        fitted_traj.append({
+            "uuid": td["uuid"],
+            "gt_x": ((gt_x - gt_x[0])[::stride]).tolist(),
+            "gt_y": ((gt_y - gt_y[0])[::stride]).tolist(),
+            "bx": ((xs - gt_x[0])[::stride]).tolist(),
+            "by": ((ys - gt_y[0])[::stride]).tolist(),
+            "moving": (td["moving"][::stride]).tolist(),
+        })
+
+    return {
+        "n_dataset": n_dataset,
+        "dt_s": _FIT_DT,
+        "fit": fit,
+        "params": fitted_params,
+        "fitted": fitted,
+        "baseline": baseline,
+        "traj_data": fitted_traj,
     }
 
 

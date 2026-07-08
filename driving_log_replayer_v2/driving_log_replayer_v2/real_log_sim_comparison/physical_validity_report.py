@@ -65,16 +65,14 @@ from driving_log_replayer_v2.real_log_sim_comparison.lib._figures import (  # no
     build_fig_kus_single,
     build_fig_nstep_error_hist,
     build_fig_nstep_error_growth,
-    build_fig_perfect_tracking_box,
     build_fig_perfect_tracking_traj,
+    build_fig_xy_equation_residual_hist,
 )
-from scipy.optimize import least_squares, minimize_scalar  # noqa: E402
 from driving_log_replayer_v2.real_log_sim_comparison.lib._fit_core import (  # noqa: E402
     _moving_avg,
     delay_shift,
     equation_residual_at_params,
-    savgol_derivative,
-    savgol_smooth,
+    fit_equation_residual_grid,
 )
 from driving_log_replayer_v2.real_log_sim_comparison.lib._figures._common import apply_base_layout  # noqa: E402
 from driving_log_replayer_v2.real_log_sim_comparison.lib._fig_io import fig_to_compact_json  # noqa: E402
@@ -89,13 +87,11 @@ from driving_log_replayer_v2.real_log_sim_comparison.lib._physical_validity impo
     _DRIFT_A_TH,
     _FIT_DT,
     _N_CROSS_FIT_DATASET,
-    _PERF_HORIZONS,
-    _PERF_STRIDE,
     _extract_kus_arrays,
     compute_cross_long_rows,
     compute_cross_steer_rows,
     compute_kus_bins,
-    compute_perfect_tracking_data,
+    compute_xy_equation_residual_data,
     fit_long_cross_dataset_bounded,
     fit_long_single,
     fit_steer_single,
@@ -111,9 +107,8 @@ from driving_log_replayer_v2.real_log_sim_comparison.lib._physical_validity impo
 
 _H_SPAN = {10: "≈0.33 s", 20: "≈0.67 s", 30: "≈1.0 s", 40: "≈1.33 s"}
 
-# 1-2/1-5. 理想追従評価に使うデータセット数（レポート固有。ホライズン・stride の SSOT は
-# lib._physical_validity の _PERF_HORIZONS / _PERF_STRIDE を import して使う）
-_PERF_N_DATASET = 10                                   # 1-5 横方向 box plot 用 データセット数
+# 1-5. x/y 方程式残差評価に使うデータセット数
+_PERF_N_DATASET = 10
 
 
 def _resolve_report_models(
@@ -236,8 +231,7 @@ def optimize_tau_with_equation_residual(
     filter_w: int = 1,
     fixed_tau: float = None,
 ) -> list[dict]:
-    """遅延を candidates に固定し、方程式残差の MSE を最小化する tau を最適化する（または指定された fixed_tau を用いる）。"""
-    results = []
+    """遅延候補ごとに tau_inv を同時最小二乗で最適化し、候補別の残差診断を返す。"""
     ds_precomputed = []
     for uuid, fit in per_ds.items():
         if "cmd_arr" not in fit or "act_arr" not in fit or "mask_arr" not in fit:
@@ -266,47 +260,49 @@ def optimize_tau_with_equation_residual(
         })
     if not ds_precomputed:
         return []
-    for delay in delay_candidates:
-        n_steps = int(round(float(delay) / dt))
-        x_list = []
-        y_list = []
-        for dp in ds_precomputed:
-            cmd_del = delay_shift(dp["cmd_f"], n_steps)
-            act_del = delay_shift(dp["act_f"], n_steps)
-            mask = dp["mask"]
-            x_list.append(cmd_del[mask] - act_del[mask])
-            y_list.append(dp["dot_act_f"][mask])
-        X = np.concatenate(x_list)
-        Y = np.concatenate(y_list)
-        tau_inv_min = 1.0 / tau_bounds[1]
-        tau_inv_max = 1.0 / tau_bounds[0]
 
-        if fixed_tau is not None:
-            best_tau = fixed_tau
-            tau_inv = 1.0 / fixed_tau
-            resid = tau_inv * X - Y
-        else:
-            def _res(x):
-                tau_inv = float(x[0])
-                return tau_inv * X - Y
+    tau_inv_min = 1.0 / tau_bounds[1]
+    tau_inv_max = 1.0 / tau_bounds[0]
+    tau_inv_initial = 1.0 / float(fixed_tau) if fixed_tau is not None else 1.0 / 0.2
+    if fixed_tau is not None:
+        eps = max(abs(tau_inv_initial) * 1e-12, 1e-12)
+        tau_inv_min = tau_inv_initial - eps
+        tau_inv_max = tau_inv_initial + eps
 
-            res = least_squares(_res, [1.0 / 0.2], bounds=([tau_inv_min], [tau_inv_max]))
-            best_tau = 1.0 / float(res.x[0])
-            resid = res.fun
-        best_mse = float(np.mean(resid ** 2))
-        best_rmse = float(np.sqrt(best_mse))
+    def _residual(params_dict: dict, grid: dict, dp: dict) -> np.ndarray:
+        tau_inv = float(params_dict["tau_inv"])
+        n_steps = int(grid["n_steps"])
+        cmd_del = delay_shift(dp["cmd_f"], n_steps)
+        act_del = delay_shift(dp["act_f"], n_steps)
+        mask = dp["mask"]
+        return (tau_inv * (cmd_del - act_del) - dp["dot_act_f"])[mask]
+
+    fit = fit_equation_residual_grid(
+        ds_precomputed,
+        param_specs=[
+            {"name": "tau_inv", "initial": tau_inv_initial, "bounds": (tau_inv_min, tau_inv_max)},
+        ],
+        grid_candidates=[
+            {"delay": float(delay), "n_steps": int(round(float(delay) / dt))}
+            for delay in delay_candidates
+        ],
+        residual_func=_residual,
+    )
+    if fit is None:
+        return []
+
+    results = []
+    for cand in fit["candidates"]:
+        tau_inv = float(cand["params"]["tau_inv"])
         results.append({
-            "delay": float(delay),
-            "tau": best_tau,
-            "rmse": best_rmse,
-            "mean": float(np.mean(resid)),
-            "std": float(np.std(resid)),
-            "resid_samples": resid.tolist(),
+            "delay": float(cand["grid"]["delay"]),
+            "tau": 1.0 / tau_inv,
+            "rmse": float(cand["rmse"]),
+            "mean": float(cand["mean"]),
+            "std": float(cand["std"]),
+            "resid_samples": cand["resid_samples"],
+            "selected": bool(cand.get("selected", False)),
         })
-    if results:
-        min_idx = np.argmin([r["rmse"] for r in results])
-        for idx, r in enumerate(results):
-            r["selected"] = (idx == min_idx)
     return results
 
 
@@ -374,6 +370,58 @@ def build_fig_residual_candidates_hist(
     selected_r = valid_results[selected_idx]
     title_text = f"{channel_label}: 方程式残差 E[k] の分布 (遅延={selected_r['delay']:.3f}s, τ={selected_r['tau']:.3f}s)"
     return apply_base_layout(fig, title=title_text, height=380)
+
+
+def build_equation_residual_optimization_report_html(
+    results: list[dict],
+    *,
+    channel_label: str,
+    unit_label: str,
+    delay_symbol: str,
+    tau_symbol: str,
+    tau_inv_symbol: str,
+    extra_note: str = "",
+) -> str:
+    """方程式残差パラメータ最適化の候補表 + residual histogram HTML を共通生成する。"""
+    if not results:
+        return ""
+
+    fig = build_fig_residual_candidates_hist(
+        results,
+        channel_label=channel_label,
+        unit_label=unit_label,
+    )
+    rows = ""
+    for r in results:
+        selected_style = "style='background-color: #e8f5e9; font-weight: bold;'" if r["selected"] else ""
+        selected_text = "<b>★ 選択</b>" if r["selected"] else "—"
+        rows += f"""<tr {selected_style}>
+            <td>{r['delay']:.3f} s</td>
+            <td>{r['tau']:.3f} s</td>
+            <td>{r['rmse']:.4f} {unit_label}</td>
+            <td>{r['mean']:.4e} {unit_label}</td>
+            <td>{r['std']:.4f} {unit_label}</td>
+            <td>{selected_text}</td>
+        </tr>"""
+
+    fig_html = fig.to_html(full_html=False, include_plotlyjs=False)
+    extra = f" {extra_note}" if extra_note else ""
+    return f"""
+    <details>
+      <summary><b>遅延固定時の時定数最適化と方程式残差の評価結果（クリックで展開）</b></summary>
+      <p>
+        遅延時間 \\({delay_symbol}\\) を \\(\\Delta t\\) の整数倍に固定した各候補について、
+        方程式残差の二乗和（MSE）を最小化するように \\({tau_inv_symbol}\\) を同時最小二乗で最適化した結果です。
+        判定が「★ 選択」された行が、候補横断で residual RMSE 最小の組です。
+        全データセットから抽出した動的サンプルをプールして評価しています。{extra}
+      </p>
+      <table class="param-table">
+        <tr><th>固定遅延 \\({delay_symbol}\\)</th><th>最適時定数 \\({tau_symbol}\\)</th><th>方程式残差 RMSE</th><th>残差平均</th><th>残差標準偏差</th><th>判定</th></tr>
+        {rows}
+      </table>
+      {fig_html}
+    </details>
+    """
 
 
 _MATHJAX_HEAD = (
@@ -1167,16 +1215,11 @@ J_a
 で評価する。0 中心で低分散なら、同定した \\((\\tau_a,T_a)\\) が運動方程式と整合している。
 </p>
 <p>
-パラメータ同定は、<code>_fit_core.py</code> の <code>fit_first_order_delay_residual_3phase</code> による3段階交互最適化を用いた方程式残差の最小二乗法で直接行われます。
+パラメータ同定は、<code>_fit_core.py</code> の汎用 residual optimizer により、
+各遅延候補 \\(T_a\\) ごとに連続パラメータ \\(\tau_a^{-1}\\) を同時最小二乗で最適化し、
+全候補の中で residual RMSE が最小となる組を選ぶ。
+パラメータは名前付きで扱うため、将来の追加項や最適化変数の宣言順を入れ替えても結果参照は順序に依存しない。
 </p>
-<div class="note">
-  <b>3段階交互最適化 (3-Phase Alternating Optimization) のアルゴリズム (縦方向):</b>
-  <ol>
-    <li><b>Phase 1 (初期値固定時定数最適化):</b> 無駄時間 \(T_a\) を初期パラメータの基準値に固定した状態で、時定数 \(\tau_a\) を最小二乗法で最適化し初期パラメータを決定します（\(\tau_a\) の初期固定値指定がある場合は最適化をスキップしてその値を使用）。</li>
-    <li><b>Phase 2 (遅延グリッドサーチ):</b> Phase 1 で得られたパラメータを固定したまま、事前に定義された遅延候補（グリッド）の中から方程式残差の二乗和 (MSE) を最小化する無駄時間 \(T_a\) を探索します。</li>
-    <li><b>Phase 3 (再最適化スキップ):</b> 縦方向では、初期遅延による時定数決定の固定関係を維持するため、Phase 3 (再最適化) をスキップし、Phase 1/2 で得られた時定数 \(\tau_a\) と遅延時間 \(T_a\) を最終的な同定値とします。</li>
-  </ol>
-</div>
 <p class="meta">
 &#128279; この残差式は <code>_fit_core.py</code> の <code>equation_residual_at_params</code>（full-RHS 遅延）および
 <a href="#sec-state-space">1-1</a> の状態方程式と完全に対応する（<code>vehicle_model_fitting</code> の残差式と同一形式）。
@@ -1248,16 +1291,11 @@ E_\\delta[k;\\tau_\\delta,T_\\delta]
 残差が 0 付近に集まれば、同定した \\((\\tau_\\delta,T_\\delta)\\) は操舵の状態方程式と整合している。
 </p>
 <p>
-パラメータ同定は、縦方向と同様に <code>_fit_core.py</code> の <code>fit_first_order_delay_residual_3phase</code> による3段階交互最適化を用いた方程式残差の最小二乗法で直接行われます。
+パラメータ同定は縦方向と同じ汎用 residual optimizer を用いる。
+各遅延候補 \\(T_\delta\\) ごとに \\(\tau_\delta^{-1}\\) を同時最小二乗で最適化し、
+候補横断で residual RMSE が最小となる組を選ぶ。
+この形式は x/y 式など他の状態方程式にも同じ callback 形式で拡張できる。
 </p>
-<div class="note">
-  <b>3段階交互最適化 (3-Phase Alternating Optimization) のアルゴリズム:</b>
-  <ol>
-    <li><b>Phase 1 (初期値固定時定数最適化):</b> 無駄時間 \(T_\delta\) を初期パラメータの基準値（Steer: 0.0315s）に固定した状態で、逆数変数 \(\tau_\delta^{-1} = 1/\tau_\delta\) に対して最小二乗法で最適化を行い、初期探索パラメータを決定します。</li>
-    <li><b>Phase 2 (遅延グリッドサーチ):</b> Phase 1 で得られたパラメータを固定したまま、事前に定義された遅延候補（グリッド）の中から方程式残差の二乗和 (MSE) を最小化する無駄時間 \(T_\delta\) を探索します。</li>
-    <li><b>Phase 3 (パラメータ再最適化):</b> Phase 2 で決定された最良の無駄時間 \(T_\delta\) に固定した上で、再び時定数 \(\tau_\delta\) などのパラメータを最小二乗法で再最適化し、最終的な同定値を得ます。</li>
-  </ol>
-</div>
 <p class="meta">
 &#128279; この残差式は <code>_fit_core.py</code> の <code>equation_residual_at_params</code>（full-RHS 遅延）から生成される。
 <code>vehicle_model_fitting</code> の操舵残差式と同一形式。
@@ -1398,52 +1436,64 @@ J(k_{{\\mathrm{{us}}}}) = \\sum_i \\bigl(y_i - k_{{\\mathrm{{us}}}}\\,x_i\\bigr)
 
 
 def _build_sec14(
-    fig_box: go.Figure,
+    fig_resid: go.Figure,
     fig_traj: go.Figure,
+    xy_data: dict,
     params: dict,
     n_dataset: int,
 ) -> str:
-    """1-5. モデル構造限界（理想追従評価）セクション HTML。"""
-    box_html  = fig_box.to_html(full_html=False, include_plotlyjs=False)
+    """1-5. x/y 状態方程式 residual 評価セクション HTML。"""
+    resid_html = fig_resid.to_html(full_html=False, include_plotlyjs=False)
     traj_html = fig_traj.to_html(full_html=False, include_plotlyjs=False)
     tau_a = f"{params.get('acc_time_constant', float('nan')):.3g}"
     T_a   = f"{params.get('acc_time_delay', float('nan')):.3g}"
     tau_d = f"{params.get('steer_time_constant', float('nan')):.3g}"
     T_d   = f"{params.get('steer_time_delay', float('nan')):.3g}"
-    h_str = ", ".join(f"N={h}（{h * _FIT_DT:.2f}s）" for h in _PERF_HORIZONS)
+    fit_params = xy_data.get("params") or {}
+    fitted = xy_data.get("fitted") or {}
+    baseline = xy_data.get("baseline") or {}
+    p1 = float(fit_params.get("param1", float("nan")))
+    p2 = float(fit_params.get("param2", float("nan")))
+
+    def _fmt(v: float, unit: str = "") -> str:
+        return f"{float(v):.4g}{unit}" if np.isfinite(float(v)) else "nan"
+
     return f"""
 <section id="sec-perf-tracking">
-<h2>1-5. モデル構造限界（理想追従評価）</h2>
+<h2>1-5. x/y 状態方程式の残差評価</h2>
 <p>
-アクチュエータ追従が完璧だった場合（実測 \\(v_x\\) と実測 \\(\\delta_{{\\mathrm{{act}}}}\\) を
-自転車モデルの直接入力として使用）に残る位置ずれを評価する。
-これにより <b>アクチュエータ遅れの寄与</b> と <b>モデル構造外の寄与</b>（タイヤスリップ、路面バンク、
-横速度 \\(v_y\\)、\\(k_{{\\mathrm{{us}}}}\\) キャリブレーション誤差）を分離できる。
+アクチュエータ追従後の位置式そのものを、実測 \\(x,y,\\theta,v_x,\\dot{{\\theta}}\\) から作る
+方程式残差 \\(E = \\mathrm{{RHS}} - \\mathrm{{LHS}}\\) で評価する。
+今回の追加項は、旋回率と速度の積に比例する補正として
+\\[
+\\dot x = v_x\\cos\\theta + p_1\\dot\\theta v_x,\\qquad
+\\dot y = v_x\\sin\\theta + p_2\\dot\\theta v_x
+\\]
+を用い、全対象データセットの \\(E_x,E_y\\) をプールして \\(p_1,p_2\\) を同時最小二乗で同定する。
 </p>
 <p>
-現行スコアとの差分 ≈ アクチュエータ応答が占める誤差分
-（\\(\\tau_a\\)={tau_a} s, \\(T_a\\)={T_a} s, \\(\\tau_\\delta\\)={tau_d} s, \\(T_\\delta\\)={T_d} s の合算効果）。
+アクチュエータ側の同定値は \\(\\tau_a\\)={tau_a} s, \\(T_a\\)={T_a} s,
+\\(\\tau_\\delta\\)={tau_d} s, \\(T_\\delta\\)={T_d} s。ここではそれらを前提に、
+将来 x/y 式へ追加する項を同じ residual fitting の形式で評価できるようにしている。
 </p>
-<div class="note">
-⚠️ <b>設計上の帰結</b>:
-縦方向誤差は \\(v_x\\) を実車ログから直接取得しているため積分上ほぼゼロになる。
-<b>横方向誤差のみが真のモデル構造限界を表す。</b><br>
-残差は「現行チューン値 \\(k_{{\\mathrm{{us}}}}\\) および \\(\\beta\\) での理想追従誤差」であるため、
-パラメータのキャリブレーション誤差も一部含む（現行パラメータ前提での下限値）。
-</div>
 
-<h3>横方向誤差分布（ホライズン別、上位 {n_dataset} データセット）</h3>
-<p>
-カーブ走行区間（\\(v_x > {VX_MIN_CURVE}\\) m/s）を stride={_PERF_STRIDE} ステップで走査し、
-N-step Open Loop評価（ロールアウト）終端の横方向誤差絶対値を集計する。ホライズン: {h_str}。
-</p>
-{box_html}
+<table class="param-table">
+  <tr><th>項目</th><th>fitted</th><th>baseline（\\(p_1=p_2=0\\)）</th></tr>
+  <tr><td>\\(p_1\\)</td><td>{_fmt(p1)}</td><td>0</td></tr>
+  <tr><td>\\(p_2\\)</td><td>{_fmt(p2)}</td><td>0</td></tr>
+  <tr><td>combined RMSE</td><td>{_fmt(fitted.get("rmse", float("nan")), " m/s")}</td><td>{_fmt(baseline.get("rmse", float("nan")), " m/s")}</td></tr>
+  <tr><td>\\(E_x\\) RMSE</td><td>{_fmt(fitted.get("rmse_x", float("nan")), " m/s")}</td><td>{_fmt(baseline.get("rmse_x", float("nan")), " m/s")}</td></tr>
+  <tr><td>\\(E_y\\) RMSE</td><td>{_fmt(fitted.get("rmse_y", float("nan")), " m/s")}</td><td>{_fmt(baseline.get("rmse_y", float("nan")), " m/s")}</td></tr>
+  <tr><td>sample count</td><td>{int(fitted.get("n", 0))}</td><td>{int(baseline.get("n", 0))}</td></tr>
+</table>
 
-<h3>代表データセット の軌跡比較（実車 vs 自転車モデル）</h3>
+<h3>x/y 方程式残差分布（上位 {n_dataset} データセット）</h3>
+{resid_html}
+
+<h3>代表データセットの軌跡比較（実車 vs x/y residual fitted 式）</h3>
 <p>
-初期状態を実車ログに合わせ、実測 \\(v_x\\) と \\(\\delta_{{\\mathrm{{act}}}}\\) を入力として積分した
-自転車モデル軌跡（青破線）を実車の軌跡（黒実線）と比較する。
-リセットなしの連続積分であるため、後半の乖離はモデル構造誤差の累積を示す。
+初期状態を実車ログに合わせ、最適化後の x/y 右辺をリセットなしで積分した軌跡（青破線）を
+実車の軌跡（黒実線）と比較する。主評価は上の瞬時方程式残差であり、この図は累積挙動の参考表示である。
 座標は初期位置を原点 (0, 0) に正規化している。
 </p>
 {traj_html}
@@ -1822,7 +1872,7 @@ def build_html(
   <a href="#sec-steer">1-3. 操舵</a>
   <a href="#sec-yaw">1-4. ヨー・横方向</a>
   <a href="#sec-tuning">2. 統合最適化</a>
-  {f'<a href="#sec-perf-tracking">1-5. モデル構造限界</a>' if perf_html else ""}
+  {f'<a href="#sec-perf-tracking">1-5. x/y 残差</a>' if perf_html else ""}
   <a href="#curve-viewer">3. カーブビューア</a>
   {f'<a href="#sec-closed-loop">4. クローズドループ比較</a>' if closed_loop_html else ""}
 </nav>
@@ -2392,7 +2442,7 @@ def main() -> None:
             if not hit:
                 print(f"  ⚠ 指定データセット '{prefix}' が {name} の時系列グラフに反映されませんでした（同定失敗 or データなし）")
 
-    # 方程式残差の評価結果: 各データセットの3段階交互最適化で同定されたパラメータでの残差 E[k]=RHS−LHS を
+    # 方程式残差の評価結果: 各データセットで同定されたパラメータでの残差 E[k]=RHS−LHS を
     # 全データセットでプールし分布を示す。
     def _pool_resid(per_ds: dict[str, dict]) -> tuple[list[float], float, list[float]]:
         pooled: list[float] = []
@@ -2495,28 +2545,27 @@ def main() -> None:
         long_fit_rmse_html = _model_mismatch_note
         steer_fit_rmse_html = _model_mismatch_note
 
-    # 1-5 横方向理想追従評価には curve 上位 _PERF_N_DATASET データセットを使用（viewer 用 top_curve とは独立して選択）
+    # 1-5 x/y 方程式残差評価には curve 上位 _PERF_N_DATASET データセットを使用（viewer 用 top_curve とは独立して選択）
     perf_records = candidate_curve[:_PERF_N_DATASET]
-    print(f"  [1-5] 横方向理想追従評価図生成 ({len(perf_records)} データセット) ...")
+    print(f"  [1-5] x/y 方程式残差評価図生成 ({len(perf_records)} データセット) ...")
     perf_entries = _to_entries([(r["uuid"], Path(r["lite_dir"])) for r in perf_records])
-    perf_data = compute_perfect_tracking_data(perf_entries, params)
-    perf_fig_box = build_fig_perfect_tracking_box(perf_data)
+    perf_data = compute_xy_equation_residual_data(perf_entries, params)
+    perf_fig_resid = build_fig_xy_equation_residual_hist(perf_data)
     perf_fig_traj = build_fig_perfect_tracking_traj(
         perf_data,
         labels={
-            "title": "実車 vs 自転車モデル軌跡（実測 v_x + 実舵角入力、初期状態を実車ログに合わせたリセットなし積分）",
+            "title": "実車 vs x/y residual fitted 式（初期状態を実車ログに合わせたリセットなし積分）",
             "gt_name": "実車 軌跡",
-            "model_name": "自転車モデル（理想追従）",
+            "model_name": "x/y fitted 式",
             "x_title": "Δx [m]",
             "y_title": "Δy [m]",
         },
         height=480,
     )
-    perf_html = _build_sec14(perf_fig_box, perf_fig_traj, params, len(perf_records))
+    perf_html = _build_sec14(perf_fig_resid, perf_fig_traj, perf_data, params, int(perf_data.get("n_dataset", 0)))
 
     # [1-2] 方程式残差による縦方向パラメータ最適化とヒストグラム生成
     print("  [1-2] 方程式残差による縦方向パラメータ最適化とヒストグラム生成...")
-    long_fixed_tau = cross_fit_long.get("phase1_tau") if (cross_fit_long and "phase1_tau" in cross_fit_long) else None
     top_entries_long = sorted(
         (e for e in entries if e.real_lite is not None and e.dataset_id in per_ds_long),
         key=lambda e: per_ds_long[e.dataset_id].get("n_dyn", 0),
@@ -2530,60 +2579,17 @@ def main() -> None:
         dt=_FIT_DT,
         tau_bounds=_TAU_BOUNDS_LONG,
         filter_w=10,
-        fixed_tau=long_fixed_tau,
     )
     long_resid_opt_html = ""
     if long_opt_results:
-        long_opt_fig = build_fig_residual_candidates_hist(
+        long_resid_opt_html = build_equation_residual_optimization_report_html(
             long_opt_results,
             channel_label="縦 (dot a_act 式)",
             unit_label="m/s³",
+            delay_symbol="T_a",
+            tau_symbol="\\tau_a",
+            tau_inv_symbol="\\tau_a^{-1}",
         )
-        long_opt_rows = ""
-        for r in long_opt_results:
-            selected_style = "style='background-color: #e8f5e9; font-weight: bold;'" if r["selected"] else ""
-            selected_text = "<b>★ 選択</b>" if r["selected"] else "—"
-            long_opt_rows += f"""<tr {selected_style}>
-                <td>{r['delay']:.3f} s</td>
-                <td>{r['tau']:.3f} s</td>
-                <td>{r['rmse']:.4f} m/s³</td>
-                <td>{r['mean']:.4e} m/s³</td>
-                <td>{r['std']:.4f} m/s³</td>
-                <td>{selected_text}</td>
-            </tr>"""
-        long_opt_fig_html = long_opt_fig.to_html(full_html=False, include_plotlyjs=False)
-        long_process_log = ""
-        if "phase1_tau" in cross_fit_long:
-            p1_t = cross_fit_long["phase1_tau"]
-            p1_d = cross_fit_long.get("phase1_delay", 0.101)
-            p2_d = cross_fit_long["phase2_delay"]
-            p3_t = cross_fit_long["phase3_tau"]
-            p3_d = cross_fit_long["phase3_delay"]
-            long_process_log = f"""
-            <div class="note" style="margin-top: 10px; margin-bottom: 15px; border-left: 4px solid #4caf50; background-color: #f9f9f9; padding: 10px;">
-              <b>【実行ログ】縦方向・横断同定における最適化の遷移挙動:</b>
-              <ul style="margin: 5px 0 0 0; padding-left: 20px;">
-                <li><b>Phase 1 (時定数固定):</b> \\(\\tau_a\\) を固定値 \\({p1_t:.4f}\\) s として設定（初期遅延 \\(T_a = {p1_d:.3f}\\) s、最適化はスキップ）</li>
-                <li><b>Phase 2 (遅延グリッドサーチ):</b> 固定した \\(\\tau_a = {p1_t:.4f}\\) s のまま、残差二乗和を最小化する遅延を決定 &rarr; \\(T_a = {p2_d:.3f}\\) s （下表で最小RMSEとなる行）</li>
-                <li><b>Phase 3 (再最適化スキップ):</b> 縦方向では基準値での時定数決定の固定関係を維持するため、Phase 3 (再最適化) をスキップし、Phase 1/2 の結果（\\(\\tau_a = {p3_t:.4f}\\) s, \\(T_a = {p3_d:.3f}\\) s）を最終同定値として採用します。</li>
-              </ul>
-            </div>
-            """
-
-        long_resid_opt_html = f"""
-        <details>
-          <summary><b>遅延固定時の時定数最適化と方程式残差の評価結果（クリックで展開）</b></summary>
-          <p>
-            遅延時間 \\(T_a\\) を \\(\\Delta t\\) の整数倍に固定した上で、方程式残差の二乗和（MSE）を最小化するように時定数 \\(\\tau_a\\) を最適化した結果です。全データセットから抽出した動的サンプルをプールして評価しています。
-          </p>
-          {long_process_log}
-          <table class="param-table">
-            <tr><th>固定遅延 \\(T_a\\)</th><th>最適時定数 \\(\\tau_a\\)</th><th>方程式残差 RMSE</th><th>残差平均</th><th>残差標準偏差</th><th>判定</th></tr>
-            {long_opt_rows}
-          </table>
-          {long_opt_fig_html}
-        </details>
-        """
 
     # [1-3] 方程式残差による操舵パラメータ最適化とヒストグラム生成
     print("  [1-3] 方程式残差による操舵パラメータ最適化とヒストグラム生成...")
@@ -2596,37 +2602,14 @@ def main() -> None:
     )
     steer_resid_opt_html = ""
     if steer_opt_results:
-        steer_opt_fig = build_fig_residual_candidates_hist(
+        steer_resid_opt_html = build_equation_residual_optimization_report_html(
             steer_opt_results,
             channel_label="操舵 (dot δ_act 式)",
             unit_label="rad/s",
+            delay_symbol="T_\\delta",
+            tau_symbol="\\tau_\\delta",
+            tau_inv_symbol="\\tau_\\delta^{-1}",
         )
-        steer_opt_rows = ""
-        for r in steer_opt_results:
-            selected_style = "style='background-color: #e8f5e9; font-weight: bold;'" if r["selected"] else ""
-            selected_text = "<b>★ 選択</b>" if r["selected"] else "—"
-            steer_opt_rows += f"""<tr {selected_style}>
-                <td>{r['delay']:.3f} s</td>
-                <td>{r['tau']:.3f} s</td>
-                <td>{r['rmse']:.4f} rad/s</td>
-                <td>{r['mean']:.4e} rad/s</td>
-                <td>{r['std']:.4f} rad/s</td>
-                <td>{selected_text}</td>
-            </tr>"""
-        steer_opt_fig_html = steer_opt_fig.to_html(full_html=False, include_plotlyjs=False)
-        steer_resid_opt_html = f"""
-        <details>
-          <summary><b>遅延固定時の時定数最適化と方程式残差の評価結果（クリックで展開）</b></summary>
-          <p>
-            遅延時間 \\(T_\\delta\\) を \\(\\Delta t\\) の整数倍に固定した上で、方程式残差の二乗和（MSE）を最小化するように時定数 \\(\\tau_\\delta\\) を最適化した結果です（3段階交互最適化における <b>Phase 2 (遅延グリッドサーチ)</b> のプール探索プロセスに対応します。判定が「★ 選択」された行の遅延時間が、Phase 3 での時定数再最適化に用いられます）。全データセットから抽出した動的サンプルをプールして評価しています。
-          </p>
-          <table class="param-table">
-            <tr><th>固定遅延 \\(T_\\delta\\)</th><th>最適時定数 \\(\\tau_\\delta\\)</th><th>方程式残差 RMSE</th><th>残差平均</th><th>残差標準偏差</th><th>判定</th></tr>
-            {steer_opt_rows}
-          </table>
-          {steer_opt_fig_html}
-        </details>
-        """
 
     closed_loop_html = _build_sec_closed_loop_comparison(args.collection_dir, args.closed_loop_uuids)
 

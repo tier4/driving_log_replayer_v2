@@ -938,6 +938,75 @@ def build_fig_perfect_tracking_traj(
     return apply_base_layout(fig, title=fig.layout.title.text, height=height)
 
 
+def build_fig_xy_equation_residual_hist(data: dict) -> go.Figure:
+    """x/y 状態方程式残差の fitted vs baseline ヒストグラム。"""
+    fitted = data.get("fitted") or {}
+    baseline = data.get("baseline") or {}
+    fx = np.asarray(fitted.get("resid_x") or [], dtype=float)
+    fy = np.asarray(fitted.get("resid_y") or [], dtype=float)
+    bx = np.asarray(baseline.get("resid_x") or [], dtype=float)
+    by = np.asarray(baseline.get("resid_y") or [], dtype=float)
+    arrays = [a[np.isfinite(a)] for a in (fx, fy, bx, by) if a.size]
+    if not arrays or not any(a.size for a in arrays):
+        return _placeholder_fig("x/y 方程式残差データなし", height=320)
+
+    fig = make_subplots(rows=1, cols=2, subplot_titles=("x 式 residual", "y 式 residual"))
+
+    def _range(*vals: np.ndarray) -> tuple[float, float] | None:
+        arrs = [v[np.isfinite(v)] for v in vals if v.size]
+        if not arrs:
+            return None
+        arr = np.concatenate(arrs)
+        if arr.size == 0:
+            return None
+        lo, hi = (float(x) for x in np.percentile(arr, [1, 99]))
+        if not hi > lo:
+            lo, hi = float(arr.min()), float(arr.max() + 1e-9)
+        return lo, hi
+
+    for col, fitted_arr, baseline_arr, label in (
+        (1, fx, bx, "x"),
+        (2, fy, by, "y"),
+    ):
+        rr = _range(fitted_arr, baseline_arr)
+        if rr is None:
+            continue
+        lo, hi = rr
+        fig.add_trace(go.Histogram(
+            x=baseline_arr.tolist(),
+            xbins=dict(start=lo, end=hi, size=(hi - lo) / 80.0),
+            histnorm="probability density",
+            marker_color="orange",
+            opacity=0.45,
+            name="baseline (param=0)",
+            legendgroup="baseline",
+            showlegend=(col == 1),
+        ), row=1, col=col)
+        fig.add_trace(go.Histogram(
+            x=fitted_arr.tolist(),
+            xbins=dict(start=lo, end=hi, size=(hi - lo) / 80.0),
+            histnorm="probability density",
+            marker_color="teal",
+            opacity=0.60,
+            name="fitted",
+            legendgroup="fitted",
+            showlegend=(col == 1),
+        ), row=1, col=col)
+        fig.update_xaxes(title_text=f"E_{label} = RHS - LHS [m/s]", row=1, col=col, range=[lo, hi])
+        fig.update_yaxes(title_text="密度", row=1, col=col)
+
+    params = data.get("params") or {}
+    p1 = params.get("param1", float("nan"))
+    p2 = params.get("param2", float("nan"))
+    fig.update_layout(
+        barmode="overlay",
+        title=f"x/y 方程式残差分布（param1={p1:.4g}, param2={p2:.4g}）",
+        height=400,
+        margin=dict(t=70, b=45),
+    )
+    return apply_base_layout(fig, title=fig.layout.title.text, height=400)
+
+
 def build_fig_long_perf_box(data: dict, title: str | None = None) -> go.Figure:
     """縦方向理想追従誤差の Box Plot。title 指定でタイトルを上書きできる。"""
     fig = go.Figure()

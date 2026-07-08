@@ -264,6 +264,120 @@ def equation_residual_at_params(
     }
 
 
+def fit_equation_residual_grid(
+    datasets: list[dict],
+    *,
+    param_specs: list[dict],
+    residual_func,
+    grid_candidates: list[dict] | None = None,
+    loss: str = "linear",
+    max_nfev: int | None = None,
+) -> dict | None:
+    """名前付き連続パラメータを同時最適化する汎用方程式残差フィッタ。
+
+    `residual_func(params, grid, dataset)` が返す `E = RHS - LHS` の残差配列を
+    全 dataset で連結し、`param_specs` の連続パラメータを `least_squares` で同時に
+    最適化する。`grid_candidates` を渡すと、各 grid 候補ごとに連続パラメータを同時最適化し、
+    RMSE 最小の候補を選ぶ。パラメータは名前で返すため、宣言順を入れ替えても呼び出し側の
+    参照は壊れない。
+
+    param_specs:
+      [{"name": str, "initial": float, "bounds": (lo, hi)}, ...]
+
+    Returns:
+      {
+        "params": {name: value}, "grid": {...}, "rmse": float, "mean": float,
+        "std": float, "n": int, "resid_samples": list[float],
+        "candidates": [同形の候補診断...]
+      }
+    """
+    if not datasets or not param_specs:
+        return None
+
+    names = [str(p["name"]) for p in param_specs]
+    if len(set(names)) != len(names):
+        raise ValueError("param_specs contains duplicate parameter names")
+
+    x0 = []
+    lower = []
+    upper = []
+    for spec in param_specs:
+        lo, hi = spec.get("bounds", (-np.inf, np.inf))
+        init = float(spec.get("initial", 0.0))
+        lo = float(lo)
+        hi = float(hi)
+        if not hi > lo:
+            raise ValueError(f"invalid bounds for {spec['name']}: {(lo, hi)}")
+        x0.append(float(np.clip(init, lo, hi)))
+        lower.append(lo)
+        upper.append(hi)
+
+    grids = grid_candidates if grid_candidates is not None else [{}]
+    if not grids:
+        return None
+
+    def _params_from_x(x: np.ndarray) -> dict[str, float]:
+        return {name: float(value) for name, value in zip(names, x)}
+
+    def _stack_residuals(x: np.ndarray, grid: dict) -> np.ndarray:
+        params = _params_from_x(x)
+        chunks = []
+        for dataset in datasets:
+            r = np.asarray(residual_func(params, grid, dataset), dtype=float).reshape(-1)
+            if r.size:
+                r = r[np.isfinite(r)]
+            if r.size:
+                chunks.append(r)
+        if not chunks:
+            return np.array([], dtype=float)
+        return np.concatenate(chunks)
+
+    candidates: list[dict] = []
+    best: dict | None = None
+    for grid in grids:
+        grid_dict = dict(grid)
+        initial_resid = _stack_residuals(np.asarray(x0, dtype=float), grid_dict)
+        if initial_resid.size == 0:
+            continue
+        res = least_squares(
+            lambda x, g=grid_dict: _stack_residuals(x, g),
+            np.asarray(x0, dtype=float),
+            bounds=(np.asarray(lower, dtype=float), np.asarray(upper, dtype=float)),
+            loss=loss,
+            max_nfev=max_nfev,
+        )
+        resid = _stack_residuals(res.x, grid_dict)
+        if resid.size == 0:
+            continue
+        rmse = float(np.sqrt(np.mean(resid ** 2)))
+        cand = {
+            "params": _params_from_x(res.x),
+            "grid": grid_dict,
+            "rmse": rmse,
+            "mean": float(np.mean(resid)),
+            "std": float(np.std(resid)),
+            "n": int(resid.size),
+            "resid_samples": resid.tolist(),
+            "cost": float(res.cost),
+            "success": bool(res.success),
+            "message": str(res.message),
+        }
+        candidates.append(cand)
+        if best is None or rmse < best["rmse"]:
+            best = cand
+
+    if best is None:
+        return None
+
+    for cand in candidates:
+        cand["selected"] = cand is best
+
+    return {
+        **best,
+        "candidates": candidates,
+    }
+
+
 def _moving_avg(x: np.ndarray, w: int) -> np.ndarray:
     """中央移動平均フィルタ（窓幅 w、端は edge-padding）。
 
@@ -439,4 +553,3 @@ def fit_first_order_delay_residual_3phase(
         "phase3_tau": tau_fit,
         "phase3_delay": delay_fit,
     }
-
