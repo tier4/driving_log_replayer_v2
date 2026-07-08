@@ -1,29 +1,12 @@
 #!/usr/bin/env python3
-"""reidentify v2 パイプラインのオーケストレーションエントリポイント。
-
-vehicle_model_fitting の `run.py` に相当。extract → fit_lon → fit_steer →
-fit_merge → report → release_params を順に呼ぶ薄い制御ロジックのみを持つ
-(ロジックは各ステップファイルに閉じる)。
-
---only で一部ステップだけ実行できる。`extract` を含めなければ `extract.py`
-(rclpy/rosbag2_py 依存)を import すらしないため、ROS 環境を source していない
-状態でも CSV キャッシュ済みの collection に対して fit_lon 以降だけを実行できる。
-
-使い方:
-    python3 -m driving_log_replayer_v2.real_log_sim_comparison.reidentify.run_reidentify \\
-        --collection-dir <dir> --scenario <scenario.yaml> [--case current] \\
-        [--only fit_merge,report] [--n-trials 50] [--n-jobs 32]
-"""
+"""reidentify v2 パイプラインのオーケストレーションエントリポイント。"""
 from __future__ import annotations
 
 import argparse
 import os
 from pathlib import Path
 
-DEFAULT_INPUT_PARAM = Path(
-    "/home/kotaroyoshimoto/workspace/x2_e2e_44/src/description/vehicle/"
-    "j6_gen2_description/j6_gen2_description/config/simulator_model.param.yaml"
-)
+from .settings import DEFAULT_INPUT_PARAM, DEFAULT_OUTPUT_DIR_NAME
 
 ALL_STEPS = ("extract", "fit_lon", "fit_steer", "fit_merge", "report", "release")
 
@@ -90,7 +73,7 @@ def main() -> None:
     ap.add_argument("--case", default="current")
     ap.add_argument(
         "--out-dir", type=Path, default=None,
-        help="中間/最終成果物の出力先 (既定: <collection-dir>/reidentify_v2、旧パイプラインの出力と衝突しない)",
+        help=f"中間/最終成果物の出力先 (既定: <collection-dir>/{DEFAULT_OUTPUT_DIR_NAME})",
     )
     ap.add_argument("--input-param", type=Path, default=DEFAULT_INPUT_PARAM, help="リリース用ベース simulator_model.param.yaml")
     ap.add_argument("--n-trials", type=int, default=50)
@@ -101,7 +84,7 @@ def main() -> None:
     )
     args = ap.parse_args()
 
-    out_dir = args.out_dir or (args.collection_dir / "reidentify_v2")
+    out_dir = args.out_dir or (args.collection_dir / DEFAULT_OUTPUT_DIR_NAME)
     out_dir.mkdir(parents=True, exist_ok=True)
 
     steps = [s.strip() for s in args.only.split(",") if s.strip()] if args.only else list(ALL_STEPS)

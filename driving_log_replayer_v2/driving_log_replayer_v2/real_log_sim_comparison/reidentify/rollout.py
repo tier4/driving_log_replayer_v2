@@ -1,15 +1,4 @@
-"""N-step オープンループロールアウト評価 (ROS フリー、コンパイル済み車両モデル使用)。
-
-`step_ol1_analyze_nstep.py` から `VehicleModel`(ctypes ラッパー)・`_prepare_gt`・
-`eval_rollout_rmse` を抽出したもの。closed-loop 実 sim と同じコンパイル済み C++
-車両モデル (`libvehicle_model_wrapper.so`) を ctypes 経由で呼ぶことで同定精度の
-sim 忠実性を保つ (pure-python 再実装には置き換えない)。報告・CLI・地図描画は
-一切持ち込まない。
-
-外部依存: numpy, pandas, ctypes(標準), ament_index_python(.so 解決用)。
-lib._events / lib._nstep_common / lib._validation / lib._params_utils は
-(lib._io と異なり) ROS 非依存なのでそのまま SSOT として import する。
-"""
+"""N-step オープンループロールアウト評価。"""
 from __future__ import annotations
 
 import ctypes
@@ -26,15 +15,25 @@ from ..lib._params_utils import load_sim_params
 from ..lib._validation import require_non_empty_df
 from .gear import require_drive_gear_mask
 from .physical_constants import VX_MIN_CURVE
+from .settings import (
+    BAD_INTERVAL_MAX_S,
+    BAD_INTERVAL_MIN_S,
+    DEFAULT_WHEELBASE,
+    KINEMATIC_STEER_VX_MIN,
+    ROLLING_SMOOTH_WINDOW_S,
+    ROLL_OUT_CONTEXT,
+    ROLLOUT_SUB_DT,
+    TAIGA_DYN_DEFAULTS,
+    TAIGA_X_DEFAULTS,
+)
 
-# N-step 解析固有の積分刻み (30Hz)。closed-loop sim と直接比較しないため独立に定義してよい。
-SUB_DT: float = 1.0 / 30.0
+SUB_DT: float = ROLLOUT_SUB_DT
 
 
 def build_params(wheelbase: float | None = None) -> dict:
     """`vehicle_info.param.yaml` + N-step 解析固有の上書きで params dict を構築する。"""
     base = load_sim_params()
-    base.setdefault("wheelbase", base.get("wheel_base", 4.76012))
+    base.setdefault("wheelbase", base.get("wheel_base", DEFAULT_WHEELBASE))
     base["sub_dt"] = SUB_DT
     if wheelbase is not None:
         base["wheelbase"] = float(wheelbase)
@@ -206,20 +205,26 @@ class VehicleModel:
                 p["steer_time_delay"], p["steer_time_constant"], p["steer_dead_band"],
                 p["steer_bias"], p.get("debug_acc_scaling_factor", 1.0),
                 p.get("debug_steer_scaling_factor", 1.0),
-                p.get("mass", 6560.0), p.get("inertia_z", 25868.2318),
-                p.get("lf", wb * 0.5 + 0.94323), p.get("lr", wb * 0.5 - 0.94323),
-                p.get("cornering_stiffness_front", 115830.0),
-                p.get("cornering_stiffness_rear", 535860.0),
-                p.get("vx_min_dyn", 1.0),
+                p.get("mass", TAIGA_DYN_DEFAULTS["mass"]),
+                p.get("inertia_z", TAIGA_DYN_DEFAULTS["inertia_z"]),
+                p.get("lf", wb * 0.5 - TAIGA_DYN_DEFAULTS["cg_offset_x"]),
+                p.get("lr", wb * 0.5 + TAIGA_DYN_DEFAULTS["cg_offset_x"]),
+                p.get("cornering_stiffness_front", TAIGA_DYN_DEFAULTS["cornering_stiffness_front"]),
+                p.get("cornering_stiffness_rear", TAIGA_DYN_DEFAULTS["cornering_stiffness_rear"]),
+                p.get("vx_min_dyn", TAIGA_DYN_DEFAULTS["vx_min_dyn"]),
             )
             self._steer_bias = p["steer_bias"]
         elif model_type == "taiga_x":
             wb = p["wheelbase"]
             self._ptr = lib.vm_create_taiga_x(
-                wb, p.get("track_width", 1.754), p.get("mass", 6560.0),
-                p.get("inertia_z", 25868.2318), p.get("cg_offset_x", -0.94323),
-                p["steer_lim"], p.get("max_accel", 2.3), p.get("max_brake", 5.9),
-                p.get("wheel_radius", 0.3725), sub_dt, p.get("taiga_x_fixed_dt", 1.0 / 1200.0),
+                wb, p.get("track_width", TAIGA_X_DEFAULTS["track_width"]),
+                p.get("mass", TAIGA_X_DEFAULTS["mass"]),
+                p.get("inertia_z", TAIGA_X_DEFAULTS["inertia_z"]),
+                p.get("cg_offset_x", TAIGA_X_DEFAULTS["cg_offset_x"]),
+                p["steer_lim"], p.get("max_accel", TAIGA_X_DEFAULTS["max_accel"]),
+                p.get("max_brake", TAIGA_X_DEFAULTS["max_brake"]),
+                p.get("wheel_radius", TAIGA_X_DEFAULTS["wheel_radius"]),
+                sub_dt, p.get("taiga_x_fixed_dt", TAIGA_X_DEFAULTS["taiga_x_fixed_dt"]),
             )
             self._steer_bias = 0.0
         else:
@@ -259,8 +264,8 @@ def _prepare_gt(data: dict, t0_ns: int, params: dict) -> dict:
     df_cmd = to_seconds(df_cmd_raw, t0_ns).sort_values("t").reset_index(drop=True)
     df_gear = data.get("gear")
 
-    require_non_empty_df(df_cmd, name="/control/command/control_cmd", context="reidentify.rollout")
-    require_non_empty_df(df_kin, name="/localization/kinematic_state", context="reidentify.rollout")
+    require_non_empty_df(df_cmd, name="/control/command/control_cmd", context=ROLL_OUT_CONTEXT)
+    require_non_empty_df(df_kin, name="/localization/kinematic_state", context=ROLL_OUT_CONTEXT)
 
     t_lo = 0.0
     t_hi_candidates = [df_cmd["t"].max(), df_kin["t"].max()]
@@ -277,8 +282,8 @@ def _prepare_gt(data: dict, t0_ns: int, params: dict) -> dict:
     df_acc = df_acc[(df_acc["t"] >= t_lo - 1) & (df_acc["t"] <= t_hi + 1)].reset_index(drop=True)
     df_steer = df_steer[(df_steer["t"] >= t_lo - 1) & (df_steer["t"] <= t_hi + 1)].reset_index(drop=True)
 
-    require_non_empty_df(df_cmd, name="/control/command/control_cmd", context="reidentify.rollout")
-    require_non_empty_df(df_kin, name="/localization/kinematic_state", context="reidentify.rollout")
+    require_non_empty_df(df_cmd, name="/control/command/control_cmd", context=ROLL_OUT_CONTEXT)
+    require_non_empty_df(df_kin, name="/localization/kinematic_state", context=ROLL_OUT_CONTEXT)
 
     _t_kin_raw = df_kin["t"].values
     _yaw_raw = np.unwrap(df_kin["yaw"].values)
@@ -286,7 +291,7 @@ def _prepare_gt(data: dict, t0_ns: int, params: dict) -> dict:
     _vy_map = np.gradient(df_kin["y"].values, _t_kin_raw)
     _vy_body = -_vx_map * np.sin(_yaw_raw) + _vy_map * np.cos(_yaw_raw)
     _dt_mean = float(np.mean(np.diff(_t_kin_raw)))
-    _half_win = max(3, int(round(0.3 / _dt_mean)))
+    _half_win = max(3, int(round(ROLLING_SMOOTH_WINDOW_S / _dt_mean)))
     _win = 2 * _half_win + 1
     _vy_smooth = pd.Series(_vy_body).rolling(_win, center=True, min_periods=1).mean().values
     _ay_body = np.gradient(_vy_smooth, _t_kin_raw)
@@ -313,10 +318,9 @@ def _prepare_gt(data: dict, t0_ns: int, params: dict) -> dict:
     gt_dwz = np.gradient(gt_wz, t_cmd)
 
     _wb = params["wheelbase"]
-    _vx_thresh = 0.5
     gt_steer_kinematic = np.where(
-        gt_vx > _vx_thresh,
-        np.arctan(gt_wz * _wb / np.where(gt_vx > _vx_thresh, gt_vx, 1.0)),
+        gt_vx > KINEMATIC_STEER_VX_MIN,
+        np.arctan(gt_wz * _wb / np.where(gt_vx > KINEMATIC_STEER_VX_MIN, gt_vx, 1.0)),
         gt_steer,
     )
 
@@ -331,7 +335,7 @@ def _prepare_gt(data: dict, t0_ns: int, params: dict) -> dict:
     _nfull_arr = (_iv_arr / _sub_dt_h).astype(np.int32)
     _rem_arr = _iv_arr - _nfull_arr * _sub_dt_h
 
-    _bad_iv = (_iv_arr <= 0.001) | (_iv_arr > 1.0)
+    _bad_iv = (_iv_arr <= BAD_INTERVAL_MIN_S) | (_iv_arr > BAD_INTERVAL_MAX_S)
     _bad_iv_cumsum = np.cumsum(np.concatenate([[0], _bad_iv.view(np.uint8)])).astype(np.intp)
 
     _acc_q_sz = round(params["acc_time_delay"] / _sub_dt_h)
@@ -363,7 +367,7 @@ def _prepare_gt(data: dict, t0_ns: int, params: dict) -> dict:
     _valid_gear = require_drive_gear_mask(
         df_gear if df_gear is not None else pd.DataFrame(),
         df_cmd_raw["t_ns"].values,
-        context="reidentify.rollout",
+        context=ROLL_OUT_CONTEXT,
         allow_leading_gap=True,
     )
     _bad_gear_cumsum = np.cumsum(np.concatenate([[0], (~_valid_gear).view(np.uint8)])).astype(np.intp)
