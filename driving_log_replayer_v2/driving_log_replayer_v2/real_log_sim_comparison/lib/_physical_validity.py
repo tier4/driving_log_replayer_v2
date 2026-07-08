@@ -1498,8 +1498,8 @@ def compute_perfect_tracking_data(
 ) -> dict:
     """操舵理想追従評価用のデータ算出を行う。
 
-    cross-dataset レポート向けの従来指標。physical_validity_report.py の 1-5 は
-    `compute_xy_equation_residual_data` による方程式残差評価を使う。
+    cross-dataset レポート向けの従来指標。physical_validity_report.py の 2-4 は
+    観測状態を直接代入する `compute_xy_equation_residual_data` による方程式残差評価を使う。
     """
     h_labels = [f"{h * _FIT_DT:.2f}s" for h in _PERF_HORIZONS]
     per_h_errors: dict[int, list[float]] = {h: [] for h in _PERF_HORIZONS}
@@ -1587,7 +1587,13 @@ def _xy_equation_baseline_params() -> dict[str, float]:
 
 
 def _xy_equation_rhs(params_dict: dict, yaw: np.ndarray, vx: np.ndarray, wz: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
-    """x/y 状態方程式 RHS を評価する。追加項の実験時はこの関数と param specs を更新する。"""
+    """x/y 状態方程式 RHS を観測状態の直接代入で評価する。
+
+    x/y 式の同定では、前段のステア・加速度モデルをロールアウトしない。観測された
+    yaw/vx/wz をそのまま RHS に入れることで、アクチュエータ式や yaw 式の誤差を
+    x/y 追加項のフィッティングに混入させない。
+    追加項の実験時はこの関数と param specs を更新する。
+    """
     p1 = float(params_dict["param1"])
     p2 = float(params_dict["param2"])
     rhs_x = vx * np.cos(yaw) + p1 * wz * vx
@@ -1625,6 +1631,7 @@ def _collect_xy_equation_residual_components(datasets: list[dict], params_dict: 
 
 
 def _integrate_xy_equation_trajectory(td: dict, params_dict: dict) -> dict:
+    """観測 yaw/vx/wz を固定入力として x/y 式だけを積分した参考軌跡を作る。"""
     gt_x = td["x"]
     gt_y = td["y"]
     yaw = td["yaw"]
@@ -1661,7 +1668,9 @@ def compute_xy_equation_residual_data(
       xdot = vx * cos(yaw) + param1 * yawdot * vx
       ydot = vx * sin(yaw) + param2 * yawdot * vx
 
-    LHS は実測 x/y の SG 平滑化微分、RHS は実測 vx/yaw/yawdot から作る。
+    ステア・加速度は完全追従した前提とし、前段モデルは一切ロールアウトしない。
+    LHS は実測 x/y の SG 平滑化微分、RHS は観測 vx/yaw/yawdot の直接代入から作る。
+    これにより、加速度追従式・操舵追従式・yaw 式の誤差を x/y 追加項の同定に混入させない。
     param1/param2 は全 dataset の E_x/E_y をプールして同時 least_squares する。
     """
     datasets: list[dict] = []
@@ -1722,6 +1731,7 @@ def compute_xy_equation_residual_data(
             moving = mask
             _PLOT_STRIDE = 5
             # 追加項込み RHS を連続積分した軌跡は fit 後に作るため、ここでは GT と入力だけ保持する。
+            # 入力は観測 yaw/vx/wz のまま固定し、前段モデルの誤差を軌跡比較にも混ぜない。
             traj_data.append({
                 "uuid": entry.dataset_id[:8],
                 "x": gt_x,
@@ -1756,6 +1766,8 @@ def compute_xy_equation_residual_data(
         "n_dataset": n_dataset,
         "dt_s": _FIT_DT,
         "fit": fit,
+        "state_source": "observed_state_direct_substitution",
+        "assumption": "perfect_steer_acc_tracking",
         "params": fitted_params,
         "fitted": fitted,
         "baseline": baseline,
