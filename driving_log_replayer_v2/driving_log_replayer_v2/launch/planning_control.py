@@ -39,6 +39,8 @@ RECORD_TOPIC = """^/tf$\
 |^/api/operation_mode/state$\
 |^/awapi/.*/get/.*$\
 |^/sensing/gnss/septentrio/nav_sat_fix$\
+|^/sensing/camera/.*/compressed$\
+|^/sensing/camera/.*/camera_info$\
 |^/planning/ground_truth_trajectory$\
 |^/planning/reference_trajectory\
 |^/vehicle/status/control_mode$\
