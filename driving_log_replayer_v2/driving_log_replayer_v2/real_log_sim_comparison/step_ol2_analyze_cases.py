@@ -12,8 +12,7 @@
     │   └── error_growth_overlay.svg             # horizon 別 RMSE 成長 重ね描き
     ├── physical_validity/
     │   ├── long_fit.fig.json                    # 縦方向モデルフィット (実測/指令/同定値/チューン値)
-    │   ├── steer_fit.fig.json                   # 操舵モデルフィット
-    │   └── kus_bins.fig.json                    # スカラー k_us 最小二乗法推定
+    │   └── steer_fit.fig.json                   # 操舵モデルフィット
     ├── cases_summary.md   # N=1 詳細 RMSE 表 + horizon 別 RMSE 表 + 物理妥当性サマリ
     └── cases_metrics.json # 上記の機械可読版 ("physical_validity" キーに同定値を含む)
 
@@ -51,7 +50,6 @@ from .lib._fig_io import write_fig_json
 from .lib._figures import (
     build_fig_cascade_error_overlay,
     build_fig_error_growth_overlay,
-    build_fig_kus_single,
     build_fig_long_single,
     build_fig_steer_single,
 )
@@ -138,7 +136,7 @@ def analyze_physical_validity(real_lite: Path | None, models: dict[str, dict]) -
 
 
 def write_physical_validity_figures(pv: dict | None, real_lite: Path | None, out_dir: Path) -> None:
-    """物理妥当性検証の図 (long_fit/steer_fit/kus_bins.fig.json) を書き出す。"""
+    """物理妥当性検証の図 (long_fit/steer_fit.fig.json) を書き出す。"""
     if pv is None or real_lite is None:
         return
     models = pv.get("models") or {}
@@ -148,8 +146,6 @@ def write_physical_validity_figures(pv: dict | None, real_lite: Path | None, out
 
     steer_ts = compute_steer_timeseries(real_lite, pv.get("steer"), models)
     write_fig_json(build_fig_steer_single(steer_ts, pv.get("steer")), out_dir / "steer_fit")
-
-    write_fig_json(build_fig_kus_single(pv.get("kus_bins"), models), out_dir / "kus_bins")
 
 
 def _physical_validity_summary_lines(pv: dict | None) -> list[str]:
@@ -188,7 +184,7 @@ def _physical_validity_summary_lines(pv: dict | None) -> list[str]:
     kus_bins = pv.get("kus_bins")
     if kus_bins is not None:
         n_curve = int(kus_bins["n_pts"])
-        lines.append(f"- **横方向 k_us**: 曲線走行サンプル数={n_curve} (詳細は kus_bins.fig.json)")
+        lines.append(f"- **横方向 k_us**: 曲線走行サンプル数={n_curve} (metrics JSON のみ)")
     else:
         lines.append("- **横方向 k_us(v)**: 曲線走行サンプル不足のため同定不能")
 

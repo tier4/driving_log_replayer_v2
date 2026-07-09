@@ -14,9 +14,9 @@ collect_datasets.py が収集した per-dataset の機械可読メトリクス
 4. **leave-one-out 安定性・外れ DS 検出**: DS を 1 つ除いた再集計でモデル比較の結論
    (best case) が入れ替わらないか、誤差プロファイルが他と乖離した DS が無いかを定量化する。
 5. **物理妥当性検証** (dataset 横断): 各 DS の `comparison/cases/cases_metrics.json
-   ["physical_validity"]` (step6 が出力する縦/操舵/横 k_us の実測同定値・十分統計量) を
-   横断集約する。k_us(v) は十分統計量の加算プールで再構成 (生サンプル再読込不要)、縦方向は
-   n_dyn 上位データセットのみ MCAP を再読込して横断最小二乗法フィット (有界コストの唯一の例外)。
+   ["physical_validity"]` (step6 が出力する縦/操舵の実測同定値) を横断集約する。
+   縦方向は n_dyn 上位データセットのみ MCAP を再読込して横断最小二乗法フィット
+   (有界コストの唯一の例外)。
 
 すべて per-dataset JSON の numpy 再集計のみ (open-loop rollout は step5 実行済みの値を使う)
 ため数秒で完了する (物理妥当性検証の縦方向横断フィットのみ有界 MCAP 再読込あり)。
@@ -28,7 +28,6 @@ LOO も O(D²·C) の再集計で済む。
     cross_normalized_bars.fig.json
     coverage_overview.fig.json
     loo_stability.fig.json
-    cross_physical_validity_kus.fig.json      (per-dataset 出力が 1 件も無ければ省略)
     cross_physical_validity_long.fig.json     (縦方向 per-dataset 出力が無ければ省略)
     cross_physical_validity_steer.fig.json    (操舵 per-dataset 出力が無ければ省略)
     physical_validity_summary.md
@@ -61,7 +60,6 @@ from .lib._fig_io import write_fig_json
 from .lib._figures import (
     build_fig_coverage_overview,
     build_fig_cross_closed_loop_heatmap,
-    build_fig_cross_kus,
     build_fig_cross_long,
     build_fig_cross_normalized_bars,
     build_fig_cross_nstep_heatmap,
@@ -465,10 +463,6 @@ def write_physical_validity_summary_md(out_path: Path, pv: dict | None) -> None:
         f"- **操舵**: per-dataset 同定成功 DS数 {pv.get('n_steer', 0)} "
         "(横断最小二乗法は行わず、best/worst データセットの時系列重ね描きのみ)"
     )
-    lines.append(
-        f"- **横方向 k_us(v)**: per-dataset 出力 DS数 {pv.get('n_kus', 0)} "
-        "(十分統計量の加算プールで横断再構成。詳細は cross_physical_validity_kus.fig.json)"
-    )
     if not pv.get("models"):
         lines.append(
             "\n> scenario.yaml が見つからないため Conditions.models のチューニング値重ね描きは省略。"
@@ -797,13 +791,9 @@ def run_cross_analysis(
     if fig is not None:
         write_fig_json(fig, out_dir / "coverage_overview")
 
-    # 3b. 物理妥当性検証 (縦・操舵・横 k_us) — per-dataset 出力が無ければ None
+    # 3b. 物理妥当性検証 (縦・操舵) — per-dataset 出力が無ければ None
     pv = cross_physical_validity_analysis(entries, metrics, collection_dir, scenario_path)
     if pv is not None:
-        if pv.get("bins") is not None:
-            fig = build_fig_cross_kus(pv["bins"], pv.get("models"))
-            if fig is not None:
-                write_fig_json(fig, out_dir / "cross_physical_validity_kus")
         if pv.get("rows_long"):
             fig = build_fig_cross_long(pv["rows_long"], pv["cross_fit_long"])
             if fig is not None:

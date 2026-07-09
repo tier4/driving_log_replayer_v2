@@ -221,84 +221,92 @@ def build_fig_steer_single(ts: dict | None, fit: dict | None) -> go.Figure:
     )
 
 
-def build_fig_kus_single(
-    bins: dict | None,
-    models: dict[str, dict],
-    *,
-    title: str | None = None,
-) -> go.Figure:
-    """スカラー k_us 最小二乗法推定 (単一データセット、モデル別チューニング値重ね描き)。
+def build_fig_yaw_equation_residual(yaw_data: dict | None) -> go.Figure:
+    """yaw rate 方程式残差 E = RHS(k_us) - wz_meas による k_us 同定結果。"""
+    if not yaw_data or int(yaw_data.get("n", 0)) == 0:
+        return _placeholder_fig("yaw 方程式残差の評価不可（曲線走行サンプル不足）", height=360)
 
-    title: 図タイトルの上書き (None で既定の単一データセット向けタイトル)。
-    """
-    if bins is None:
-        return _placeholder_fig("横方向データ不足 (曲線走行サンプル不足)")
-    return _build_fig_kus(
-        bins, models or {},
-        title=title or "k_us 独立同定（最小二乗法回帰・スカラー、単一データセット）",
+    series = [
+        ("fitted", "residual fitted", "steelblue"),
+        ("tuned", "tuned params", "seagreen"),
+        ("baseline", "baseline k_us=0", "darkorange"),
+    ]
+    arrays: dict[str, np.ndarray] = {}
+    for key, _label, _color in series:
+        arr = np.asarray((yaw_data.get(key) or {}).get("resid", []), dtype=float)
+        arr = arr[np.isfinite(arr)]
+        if arr.size:
+            arrays[key] = arr
+    if not arrays:
+        return _placeholder_fig("yaw 方程式残差の評価不可（有効な残差なし）", height=360)
+
+    pooled = np.concatenate(list(arrays.values()))
+    lo, hi = (float(x) for x in np.percentile(pooled, [1, 99]))
+    if not hi > lo:
+        lo, hi = float(pooled.min()), float(pooled.max() + 1e-9)
+
+    fig = make_subplots(
+        rows=1, cols=2,
+        column_widths=[0.66, 0.34],
+        subplot_titles=["yaw rate 方程式残差分布", "RMSE 比較"],
+        horizontal_spacing=0.12,
+    )
+    for key, label, color in series:
+        arr = arrays.get(key)
+        if arr is None:
+            continue
+        counts, edges = np.histogram(arr, bins=80, range=(lo, hi))
+        centers = (edges[:-1] + edges[1:]) / 2.0
+        fig.add_trace(
+            go.Bar(
+                x=centers.tolist(),
+                y=counts.tolist(),
+                width=float(edges[1] - edges[0]),
+                marker_color=color,
+                opacity=0.52,
+                name=f"{label} (n={arr.size})",
+            ),
+            row=1,
+            col=1,
+        )
+
+    bar_x = []
+    bar_y = []
+    bar_text = []
+    colors = []
+    for key, label, color in series:
+        stats = yaw_data.get(key) or {}
+        rmse = float(stats.get("rmse", float("nan")))
+        if not np.isfinite(rmse):
+            continue
+        bar_x.append(label)
+        bar_y.append(rmse)
+        bar_text.append(f"{rmse:.4g}")
+        colors.append(color)
+    fig.add_trace(
+        go.Bar(x=bar_x, y=bar_y, text=bar_text, textposition="outside", marker_color=colors, showlegend=False),
+        row=1,
+        col=2,
     )
 
+    fitted_k = float((yaw_data.get("params") or {}).get("k_us", float("nan")))
+    tuned_k = float((yaw_data.get("tuned_params") or {}).get("k_us", float("nan")))
+    n = int(yaw_data.get("n", 0))
+    subtitle = f"E = v_x tan(delta_eff)/(L+k_us v_x^2) - wz_meas, n={n}"
+    if np.isfinite(fitted_k):
+        subtitle += f"<br>residual fitted k_us={fitted_k:.5f}"
+    if np.isfinite(tuned_k):
+        subtitle += f" / tuned={tuned_k:.5f}"
 
-# ---------------------------------------------------------------------------
-# collection 横断: k_us プール再構成 + モデル別チューン値重ね描き
-# ---------------------------------------------------------------------------
-def build_fig_cross_kus(bins: dict | None, models: dict | None) -> go.Figure:
-    """dataset 横断 スカラー k_us 独立同定 (十分統計量プール集計 + モデル別チューニング値比較)。"""
-    if bins is None:
-        return _placeholder_fig("横方向データ不足 (全データセットで曲線走行サンプル不足)")
-    model_params = {name: spec.params for name, spec in (models or {}).items()}
-    return _build_fig_kus(
-        bins, model_params,
-        title="dataset 横断 スカラー k_us 独立同定（最小二乗法プール集計）",
-    )
-
-
-def _build_fig_kus(
-    bins: dict,
-    model_params: dict[str, dict],
-    *,
-    title: str,
-) -> go.Figure:
-    fig = go.Figure()
-
-    k_us = float(bins.get("k_us", float("nan")))
-    n_pts = int(bins.get("n_pts", 0))
-    kus_p25 = float(bins.get("kus_p25", float("nan")))
-    kus_p75 = float(bins.get("kus_p75", float("nan")))
-    vx = [0.0, 12.0]
-
-    # IQR 帯（個別サンプル分布）。k_us はスカラーなので速度域全体で水平な帯として描く。
-    if np.isfinite(kus_p25) and np.isfinite(kus_p75):
-        fig.add_trace(go.Scatter(
-            x=vx + vx[::-1], y=[kus_p25, kus_p25, kus_p75, kus_p75],
-            fill="toself", fillcolor="rgba(70,130,180,0.15)",
-            line=dict(color="rgba(255,255,255,0)"),
-            showlegend=True, name="25–75%ile（個別サンプル）",
-        ))
-
-    # 同定スカラー k_us（水平線）
-    if np.isfinite(k_us):
-        fig.add_trace(go.Scatter(
-            x=vx, y=[k_us, k_us], mode="lines",
-            line=dict(color="steelblue", width=2.5),
-            name=f"最小二乗法推定 k_us={k_us:.4f}（n={n_pts}）",
-        ))
-
-    # モデル別チューニング値（水平破線）
-    colors = qualitative_colors(len(model_params)) if model_params else []
-    for (name, params), color in zip(model_params.items(), colors):
-        kv = float(params.get("k_us", 0.0))
-        fig.add_trace(go.Scatter(
-            x=vx, y=[kv, kv], mode="lines",
-            line=dict(color=color, width=2.0, dash="dash"),
-            name=f"{name}: k_us={kv:.4f}",
-        ))
-
-    fig.add_hline(y=0.0, line=dict(color="gray", width=1, dash="dot"))
-    fig.update_xaxes(title_text="車速 vx [m/s]", range=[0, 12])
-    fig.update_yaxes(title_text="k_us [rad·s²/m]", range=[-0.05, 0.12])
+    fig.add_vline(x=0.0, line=dict(color="black", width=1.5), row=1, col=1)
+    fig.update_layout(barmode="overlay")
+    fig.update_xaxes(title_text="方程式残差 E_yaw [rad/s]", range=[lo, hi], row=1, col=1)
+    fig.update_yaxes(title_text="サンプル数", row=1, col=1)
+    fig.update_yaxes(title_text="RMSE [rad/s]", row=1, col=2)
     return apply_base_layout(
-        fig, title=title, height=430,
+        fig,
+        title=f"ヨー式 k_us 同定（方程式残差最小化）: {subtitle}",
+        height=430,
         legend=dict(x=0.02, y=0.98, bgcolor="rgba(255,255,255,0.8)"),
     )
 

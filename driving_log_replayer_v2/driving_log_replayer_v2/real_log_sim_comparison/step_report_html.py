@@ -75,7 +75,6 @@ CAPTIONS: dict[str, str] = {
     # step6: cases/physical_validity/ (物理妥当性検証、Conditions.cases の N-way スイープとは独立な軸)
     "long_fit": "縦方向モデルフィット（実測 vs 同定値 vs チューニング値、路面勾配補正込み）",
     "steer_fit": "操舵モデルフィット（実測 vs 同定値 vs チューニング値）",
-    "kus_bins": "スカラー k_us 最小二乗法推定（実測同定 vs チューニング値）",
     # step13: cross_dataset/
     "cross_closed_loop_heatmap": "dataset × sim run: closed-loop 軌跡乖離・完走率行列",
     "cross_normalized_bars": "dataset 横断 正規化 mean/worst 集約（ロバスト性ランキング）",
@@ -83,7 +82,6 @@ CAPTIONS: dict[str, str] = {
     "loo_stability": "leave-one-out 安定性（除外 DS × case の score 変化）",
     "steer_diff_overview": "steer 制御不感帯分析（per-DS: |steer−steer_des| 分布・速度層別・dead_band 対応）",
     # step13: cross_dataset/ (物理妥当性検証、dataset 横断)
-    "cross_physical_validity_kus": "dataset 横断 スカラー k_us 独立同定（最小二乗法プール集計 + チューニング値比較）",
     "cross_physical_validity_long": "dataset 横断 縦方向アクチュエータ遅れ同定（横断最小二乗法 + 路面勾配補正、最良/最悪データセット時系列）",
     "cross_physical_validity_steer": "dataset 横断 操舵追従同定（best/worst データセット時系列 + チューニング値比較）",
     # step13: perfect tracking
@@ -192,7 +190,6 @@ def _classify(rel: Path) -> str:
         return "pre_estimation_deviation"
 
     if stem in {
-        "cross_physical_validity_kus",
         "cross_physical_validity_long",
         "cross_physical_validity_steer",
         "viewer",
@@ -710,13 +707,13 @@ def _render_cross_section(cross_dir: Path | None) -> tuple[list[str], str]:
         )
     # 物理妥当性検証 (cross_physical_validity_*) は他の step13 図と混ざると読みづらいため
     # 専用の見出しに分けて描画する (図の集合・順序は変えず、表示上の区切りのみ)。
-    _PV_STEMS = {"cross_physical_validity_kus", "cross_physical_validity_long", "cross_physical_validity_steer"}
+    _PV_STEMS = {"cross_physical_validity_long", "cross_physical_validity_steer"}
     model_figs = [f for f in figs if asset_stem(f.relative_to(cross_dir)) not in _PV_STEMS]
     pv_figs = [f for f in figs if asset_stem(f.relative_to(cross_dir)) in _PV_STEMS]
     for fig in model_figs:
         body.append(_figure(fig.relative_to(cross_dir), cross_dir, "cross"))
     if pv_figs:
-        body.append("<h3>物理的妥当性検証（縦・操舵・横 k_us、実測同定 vs チューニング値）</h3>")
+        body.append("<h3>物理的妥当性検証（縦・操舵、実測同定 vs チューニング値）</h3>")
         for fig in pv_figs:
             body.append(_figure(fig.relative_to(cross_dir), cross_dir, "cross"))
     body.append("</details>")

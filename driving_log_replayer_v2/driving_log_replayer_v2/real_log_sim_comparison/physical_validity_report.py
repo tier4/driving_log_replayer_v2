@@ -67,11 +67,11 @@ from driving_log_replayer_v2.real_log_sim_comparison.lib._figures import (  # no
     build_fig_cross_long,
     build_fig_cross_steer,
     build_fig_equation_residual_hist,
-    build_fig_kus_single,
     build_fig_nstep_error_hist,
     build_fig_nstep_error_growth,
     build_fig_perfect_tracking_traj as build_fig_xy_equation_traj,
     build_fig_xy_equation_residual_hist,
+    build_fig_yaw_equation_residual,
 )
 from driving_log_replayer_v2.real_log_sim_comparison.lib._fit_core import (  # noqa: E402
     build_first_order_residual_datasets,
@@ -97,7 +97,7 @@ from driving_log_replayer_v2.real_log_sim_comparison.lib._physical_validity impo
     _extract_kus_arrays,
     compute_cross_long_rows,
     compute_cross_steer_rows,
-    compute_kus_bins,
+    compute_yaw_equation_residual_data,
     compute_xy_equation_residual_data,
     fit_long_cross_dataset_bounded,
     fit_long_single,
@@ -876,6 +876,7 @@ def _build_sec1(
     steer_fig: go.Figure,
     kus_fig: go.Figure,
     n_dataset: int,
+    yaw_resid_data: dict | None = None,
     long_resid_hist_fig: go.Figure | None = None,
     steer_resid_hist_fig: go.Figure | None = None,
     long_resid_opt_html: str = "",
@@ -929,6 +930,26 @@ def _build_sec1(
     steer_resid_hist_html = (
         steer_resid_hist_fig.to_html(full_html=False, include_plotlyjs=False)
         if steer_resid_hist_fig is not None else ""
+    )
+
+    def _yaw_stat(model_key: str, stat_key: str) -> str:
+        if not yaw_resid_data:
+            return "N/A"
+        value = (yaw_resid_data.get(model_key) or {}).get(stat_key)
+        try:
+            vf = float(value)
+        except (TypeError, ValueError):
+            return "N/A"
+        return f"{vf:.4g}" if np.isfinite(vf) else "N/A"
+
+    yaw_n_samples = int((yaw_resid_data or {}).get("n", 0))
+    yaw_fit_params = (yaw_resid_data or {}).get("params") or {}
+    yaw_kus_fit = _fmt(yaw_fit_params.get("k_us", "N/A"))
+    kus_rows = (
+        f"  <tr><td><code>k_us</code> tuned params</td>"
+        f"<td>{_fmt(params.get('k_us', 0.0))} rad·s²/m</td>"
+        f"<td>チューニング済みモデルに設定されているアンダーステア係数</td>"
+        f"<td>{_yaw_stat('tuned', 'rmse')} rad/s</td></tr>"
     )
     return f"""
 <section id="sec-coords">
@@ -1042,14 +1063,14 @@ def _build_sec1(
 各記号の意味・単位・ROS トピックは <a href="#sec-coords">1-1 の記号表</a>を参照。
 </p>
 <p>
-<b>同定の統一ストーリー</b>: 各状態方程式を \\(\\mathrm{{LHS}} = \\mathrm{{RHS}}(\\theta)\\) と見て、
+<b>同定の統一ストーリー</b>: 2章のオープンループ同定では、他の不確実なモデルの積分値を使わず、
+センサーから得た実測値を対象式の \\(\\mathrm{{RHS}}\\) と \\(\\mathrm{{LHS}}\\) に直接代入する。
 方程式残差を
 \\[
 E[k] = \\mathrm{{RHS}}[k;\\theta] - \\mathrm{{LHS}}[k]
 \\]
-で定義する。これは <code>vehicle_model_fitting</code> と同じ符号で、0 中心・低分散なら式と実測がよく合っている。
-縦・操舵ではこの残差を整合診断として示し、ヨーでは線形最小二乗の同定量として直接使う。
-x/y 位置式は積分後の軌跡 \\((x,y)\\) と実測軌跡の差で \\(c\\) を同定するため、2-4 では方程式残差ではなく軌跡誤差を主評価にする。
+で定義し、この残差 RMSE が最小となるパラメータを同定・評価する。
+0 中心・低分散なら、対象式と実測がよく整合している。
 </p>
 
 <h3>連続時間の状態方程式（ベクトル形式）</h3>
@@ -1199,7 +1220,8 @@ a_{{\\mathrm{{real}}}} := a_{{\\mathrm{{report}}}} - a_{{\\mathrm{{slope}}}}
 </p>
 <h3>方程式残差で見る</h3>
 <p>
-full-RHS 遅延を適用した残差診断。指令・状態をともに \\(t-T_a\\) で評価した
+full-RHS 遅延を適用した方程式残差によるオープンループ同定。
+指令・状態をともに \\(t-T_a\\) で評価した
 \\(\\dot a_{{\\mathrm{{act}}}}\\) 式の左辺と右辺は
 \\[
 \\mathrm{{LHS}}_a[k] = \\widehat{{\\dot a}}_{{\\mathrm{{real}}}}[k],
@@ -1219,14 +1241,13 @@ J_a
 で評価する。0 中心で低分散なら、同定した \\((\\tau_a,T_a)\\) が運動方程式と整合している。
 </p>
 <p>
-パラメータ同定は、<code>_fit_core.py</code> の汎用 residual optimizer により、
-各遅延候補 \\(T_a\\) ごとに連続パラメータ \\(\tau_a^{-1}\\) を同時最小二乗で最適化し、
+パラメータ同定は、<code>_fit_core.py</code> の residual optimizer により、
+各遅延候補 \\(T_a\\) ごとに連続パラメータ \\(\tau_a^{-1}\\) を最小二乗で最適化し、
 全候補の中で residual RMSE が最小となる組を選ぶ。
-パラメータは名前付きで扱うため、将来の追加項や最適化変数の宣言順を入れ替えても結果参照は順序に依存しない。
 </p>
 <p class="meta">
 &#128279; この残差式は <code>_fit_core.py</code> の <code>equation_residual_at_params</code>（full-RHS 遅延）および
-<a href="#sec-state-space">1-2</a> の状態方程式と完全に対応する（<code>vehicle_model_fitting</code> の残差式と同一形式）。
+<a href="#sec-state-space">1-2</a> の状態方程式と対応する。
 </p>
 {long_resid_hist_html}
 {long_resid_opt_html}
@@ -1279,7 +1300,8 @@ J_a
 </p>
 <h3>方程式残差で見る</h3>
 <p>
-full-RHS 遅延を適用した残差診断。指令・実舵角をともに \\(t-T_\\delta\\) で評価した
+full-RHS 遅延を適用した方程式残差によるオープンループ同定。
+指令・実舵角をともに \\(t-T_\\delta\\) で評価した
 \\(\\dot\\delta_{{\\mathrm{{act}}}}\\) 式の左辺と右辺を
 \\[
 \\mathrm{{LHS}}_\\delta[k] = \\widehat{{\\dot\\delta}}_{{\\mathrm{{act}}}}[k],
@@ -1295,14 +1317,12 @@ E_\\delta[k;\\tau_\\delta,T_\\delta]
 残差が 0 付近に集まれば、同定した \\((\\tau_\\delta,T_\\delta)\\) は操舵の状態方程式と整合している。
 </p>
 <p>
-パラメータ同定は縦方向と同じ汎用 residual optimizer を用いる。
-各遅延候補 \\(T_\delta\\) ごとに \\(\tau_\delta^{-1}\\) を同時最小二乗で最適化し、
+パラメータ同定は縦方向と同じ residual optimizer を用いる。
+各遅延候補 \\(T_\delta\\) ごとに \\(\tau_\delta^{-1}\\) を最小二乗で最適化し、
 候補横断で residual RMSE が最小となる組を選ぶ。
-この形式は x/y 式など他の状態方程式にも同じ callback 形式で拡張できる。
 </p>
 <p class="meta">
 &#128279; この残差式は <code>_fit_core.py</code> の <code>equation_residual_at_params</code>（full-RHS 遅延）から生成される。
-<code>vehicle_model_fitting</code> の操舵残差式と同一形式。
 </p>
 {steer_resid_hist_html}
 {steer_resid_opt_html}
@@ -1346,18 +1366,20 @@ E_\\delta[k;\\tau_\\delta,T_\\delta]
 {steer_fit_rmse_html}
 </section>
 <section id="sec-yaw">
-<h2>2-3. ヨー・横方向（運動学的自転車モデル）の方程式残差とフィッティング</h2>
+<h2>2-3. ヨー・横方向（運動学的自転車モデル）のオープンループ同定</h2>
 <p class="meta">
 &#128279; <a href="#sec-state-space">1-2 状態方程式</a> の \\(\\dot x\\) 式・
 \\(\\dot y\\) 式・\\(\\dot\\theta\\) 式に対応。
 </p>
 <p>
 2-1（縦方向）・2-2（操舵追従）が先行して確定した後、
-\\(\\dot\\theta\\) 式の残差 \\(E = \\mathrm{{RHS}} - \\mathrm{{LHS}}\\) を <b>高曲率サブセット</b> で最小化して
-\\(k_{{\\mathrm{{us}}}}\\) を同定する。縦・操舵と同じ方程式残差の原理であり、この残差を直接推定（最小二乗法による同定）に用います。
-\\(\\dot\\theta\\) 式は \\(\\tan\\delta\\) 空間で \\(k_{{\\mathrm{{us}}}}\\) について<b>線形</b>であり、この空間では残差最小化が極めて良条件なため直接解くことができます。
-直進（\\(\\delta_{{\\mathrm{{act}}}}+\\beta \\approx 0\\)）では感度がほぼゼロなので、全データセット集約
-スコアだけでは \\(k_{{\\mathrm{{us}}}}\\) を同定できない。
+観測された \\(v_x\\)、\\(\\delta_{{\\mathrm{{act}}}}\\)、\\(\\omega_{{\\mathrm{{meas}}}}\\) を
+\\(\\dot\\theta\\) 式に直接代入し、方程式残差
+\\(E_\\theta=\\mathrm{{RHS}}-\\mathrm{{LHS}}\\) の RMSE が最小となる
+\\(k_{{\\mathrm{{us}}}}\\) を同定する。
+他のモデルで積分した yaw は使わないため、前段モデルや長時間積分ドリフトの影響を混ぜずに
+ヨー式そのものの整合性を見る。
+直進（\\(\\delta_{{\\mathrm{{act}}}}+\\beta \\approx 0\\)）では感度がほぼゼロなので、曲率のある区間だけを評価対象にする。
 </p>
 
 <p><b>運動方程式（\\(\\dot x\\) 式・\\(\\dot y\\) 式・\\(\\dot\\theta\\) 式と同じ状態表記）:</b></p>
@@ -1382,58 +1404,56 @@ E_\\delta[k;\\tau_\\delta,T_\\delta]
   <li>\\(\\delta_{{\\mathrm{{act}}}}\\): 2-2 の操舵追従結果。操舵ゲイン補正倍率による \\(k_{{\\mathrm{{us}}}}\\) の \\(v_x^2\\delta\\) 成分の部分吸収に注意。</li>
 </ul>
 
-<h3>実機ログからの独立同定（全 {n_dataset} データセット、スカラー 最小二乗法）</h3>
+<h3>実機ログからの独立同定（全 {n_dataset} データセット、yaw 方程式残差）</h3>
 
 <details>
-<summary>推定手法の詳細</summary>
+<summary>yaw 方程式残差同定手法の詳細</summary>
 <p>
 定常旋回フィルタ（\\(|\\omega| > {WZ_MIN}\\) rad/s、\\(|\\dot{{\\omega}}| < {DWZ_MAX}\\) rad/s²、
-\\(v_x > {VX_MIN_CURVE}\\) m/s）を通過した全タイムステップを一括して、以下の2種類の推定を行う。
+\\(v_x > {VX_MIN_CURVE}\\) m/s）を通過した実測サンプル {yaw_n_samples} 点について、
+以下の \\(\\dot\\theta\\) 式の RHS と LHS を直接比較する。
 </p>
-<p><b>① 最小二乗法推定（青・水平線）</b>: \\(\\dot\\theta\\) 式より
 \\[
-\\omega_i = \\dot\\theta_i
-= \\frac{{v_i\\tan(\\delta_i)}}{{L+k_{{\\mathrm{{us}}}}v_i^2}}
-\\quad\\Longleftrightarrow\\quad
-\\tan(\\delta_i) - \\frac{{L\\,\\omega_i}}{{v_i}} = k_{{\\mathrm{{us}}}}\\,(v_i\\,\\omega_i) .
+\\mathrm{{LHS}}_\\theta[k] = \\omega_{{\\mathrm{{meas}}}}[k],
+\\qquad
+\\mathrm{{RHS}}_\\theta[k;k_{{\\mathrm{{us}}}}]
+= \\frac{{v_x[k]\\tan(\\delta_{{\\mathrm{{eff}}}}[k])}}{{L+k_{{\\mathrm{{us}}}}v_x[k]^2}}
 \\]
-各サンプルの補正済み操舵角を \\(\\delta_i := \\delta_{{\\mathrm{{act}},i}} + \\beta\\) と置き、
-\\(x_i = v_i\\,\\omega_i\\)、\\(y_i = \\tan(\\delta_i) - L\\,\\omega_i / v_i\\) とした原点回帰の残差は
+<p>
+ここで \\(\\delta_{{\\mathrm{{eff}}}}\\) は既存の <code>_extract_kus_arrays</code> と同じ
+steer bias 適用後の実舵角である。評価関数は
 \\[
-r_i(k_{{\\mathrm{{us}}}}) = y_i - k_{{\\mathrm{{us}}}}\\,x_i .
+E_\\theta[k;k_{{\\mathrm{{us}}}}]
+= \\mathrm{{RHS}}_\\theta[k;k_{{\\mathrm{{us}}}}] - \\mathrm{{LHS}}_\\theta[k],
+\\qquad
+J_\\theta(k_{{\\mathrm{{us}}}})
+= \\frac{{1}}{{N}}\\sum_k E_\\theta[k;k_{{\\mathrm{{us}}}}]^2
 \\]
-その二乗和を評価関数にすると
-\\[
-J(k_{{\\mathrm{{us}}}}) = \\sum_i \\bigl(y_i - k_{{\\mathrm{{us}}}}\\,x_i\\bigr)^2
-\\]
-であり、その最小二乗解は
-\\[
-\\hat{{k}}_{{\\mathrm{{us}}}} = \\frac{{\\sum_i x_i\\,y_i}}{{\\sum_i x_i^2}}
-= \\frac{{\\sum_i (v_i\\omega_i)\\,\\bigl(\\tan(\\delta_i) - L\\omega_i/v_i\\bigr)}}{{\\sum_i (v_i\\omega_i)^2}}
-\\]
-ここで \\(L = {WHEELBASE}\\) m はホイールベース。十分統計量
-\\(\\sum x_i^2,\\ \\sum x_i y_i\\) は加算的なので、データセット横断でも生サンプル再読込なしにプールできる。
-</p>
-<p><b>② 個別サンプル（IQR バンド）</b>: 実機運動学ログの各タイムステップで瞬時 \\(k_{{\\mathrm{{us}}}}\\) を推定し、
-25〜75 パーセンタイルをバンドとして表示:
-\\[
-\\tilde{{k}}_{{\\mathrm{{us}}}}[i] = \\frac{{\\tan(\\delta_i) / \\omega_i - L / v_{{x,i}}}}{{v_{{x,i}}}}
-\\]
+で、\\(J_\\theta\\) が最小となる \\(k_{{\\mathrm{{us}}}}\\) を選ぶ。
 </p>
 </details>
+
 {kus_html}
-<div class="note">
-<b>解釈</b>: 最小二乗法推定値がモデル設定値 \\(k_{{\\mathrm{{us}}}}\\)（破線）と近ければ整合している。
-ただし直進（\\(\\delta_{{\\mathrm{{act}}}}+\\beta\\approx 0\\)）では感度がほぼゼロで、J6 の多くのデータセットが
-低速（\\(v_x\\) mean ≈ 1.9 m/s）のため、推定誤差が大きい点に注意（凡例のサンプル数 n を参照）。
-</div>
+
+<p>
+residual fitted 値がチューニング済みモデル設定値 \\(k_{{\\mathrm{{us}}}}\\) と近く、
+かつ tuned params の方程式残差 RMSE が baseline（\\(k_{{\\mathrm{{us}}}}=0\\)）より小さければ、
+ヨー式の補正は実機ログと整合している。
+低速・小曲率のデータセットが多い場合は、凡例のサンプル数と RMSE 差を併せて確認する。
+</p>
 
 <table class="param-table">
-  <tr><th>パラメータ</th><th>値</th><th>式中の役割</th><th>同定誤差量</th></tr>
+  <tr><th>パラメータ / モデル</th><th>値</th><th>式中の役割</th><th>yaw 方程式残差 RMSE</th></tr>
+  <tr><td><code>k_us</code> residual fitted</td><td>{yaw_kus_fit} rad·s²/m</td>
+      <td>yaw rate 方程式残差を最小化する本節の独立同定値</td>
+      <td>{_yaw_stat("fitted", "rmse")} rad/s</td></tr>
 {kus_rows}
+  <tr><td>baseline（\\(k_{{\\mathrm{{us}}}}=0\\)）</td><td>0 rad·s²/m</td>
+      <td>アンダーステア補正なし</td>
+      <td>{_yaw_stat("baseline", "rmse")} rad/s</td></tr>
   <tr><td><code>steer_bias</code> (\\(\\beta\\)) <i>[2-2 と共有]</i></td><td>{beta} rad</td>
       <td>\\(\\tan(\\delta_{{\\mathrm{{act}}}} + \\beta)\\) の引数：ヨーオフセット成分</td>
-      <td>\\(\\widehat{{\\omega}}-\\omega\\)（間接）</td></tr>
+      <td>固定値</td></tr>
 </table>
 </section>
 """
@@ -1949,6 +1969,7 @@ def build_html(
     params_filename: str = "",
     perf_html: str = "",
     closed_loop_html: str = "",
+    yaw_resid_data: dict | None = None,
     long_resid_hist_fig: go.Figure | None = None,
     steer_resid_hist_fig: go.Figure | None = None,
     long_resid_opt_html: str = "",
@@ -1972,6 +1993,7 @@ def build_html(
 
     sec1 = _build_sec1(
         params, long_fig, steer_fig, kus_fig, n_dataset,
+        yaw_resid_data=yaw_resid_data,
         long_resid_hist_fig=long_resid_hist_fig, steer_resid_hist_fig=steer_resid_hist_fig,
         long_resid_opt_html=long_resid_opt_html, steer_resid_opt_html=steer_resid_opt_html,
         long_fit_rmse_html=long_fit_rmse_html, steer_fit_rmse_html=steer_fit_rmse_html,
@@ -2286,10 +2308,13 @@ def main() -> None:
     records = load_all_mcap(ds_list, steer_bias=steer_bias, n_jobs=args.n_jobs)
     print(f"  有効: {len(records)} 件")
 
-    # Phase 2: スカラー k_us 最小二乗法
-    print("\n[Phase 2] スカラー k_us 最小二乗法 ...")
-    bins = compute_kus_bins(records)
-    print(f"  k_us={bins['k_us']:.5f} (曲線走行サンプル n={bins['n_pts']})")
+    # Phase 2: 横方向 k_us 同定（yaw 方程式残差）
+    print("\n[Phase 2] yaw 方程式残差による k_us 同定 ...")
+    yaw_resid_data = compute_yaw_equation_residual_data(records, params)
+    print(
+        f"  residual k_us={yaw_resid_data['params']['k_us']:.5f} "
+        f"(RMSE={yaw_resid_data['fitted']['rmse']:.5f} rad/s, n={yaw_resid_data['n']})"
+    )
 
     # Phase 2b: 縦方向 / 操舵 per-dataset 実行時フィット（旧 identify_*_dynamics.py の
     # 事前 CSV 生成を置き換え。最長連続時系列選定の母集団として全件を並列同定する）
@@ -2522,10 +2547,7 @@ def main() -> None:
 
     # Phase 4: HTML 組み立て
     print("\n[Phase 4] plotly 図生成 & HTML 組み立て ...")
-    kus_fig   = build_fig_kus_single(
-        bins, {"チューニング済み": params},
-        title="実機ログからのアンダーステア係数独立同定（最小二乗法回帰・スカラー）",
-    )
+    kus_fig = build_fig_yaw_equation_residual(yaw_resid_data)
     # 縦方向 / 操舵: 共有ライブラリの実行時フィット (per-dataset フィット結果 + 横断フィット)
     # から最長連続時系列図を生成する（旧: 事前生成 CSV 依存の build_long_figure /
     # build_steer_id_figure）。凡例にチューン値 τ/T を残すためモデル名に値を埋め込む。
@@ -2806,6 +2828,7 @@ def main() -> None:
         params_filename=args.params.name,
         perf_html=perf_html,
         closed_loop_html=closed_loop_html,
+        yaw_resid_data=yaw_resid_data,
         long_resid_hist_fig=long_resid_hist_fig,
         steer_resid_hist_fig=steer_resid_hist_fig,
         long_resid_opt_html=long_resid_opt_html,

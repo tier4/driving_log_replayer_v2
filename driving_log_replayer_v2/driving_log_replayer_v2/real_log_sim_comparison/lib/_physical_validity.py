@@ -520,6 +520,110 @@ def compute_kus_bins_single(bag_path: Path, steer_bias: float | None = None) -> 
     return compute_kus_bins([rec])
 
 
+# ---------------------------------------------------------------------------
+# 横方向 yaw: 実測値直接代入による方程式残差 k_us 同定
+# ---------------------------------------------------------------------------
+def _build_yaw_residual_arrays(records: list[dict]) -> dict:
+    all_vx = np.concatenate([r["vx"] for r in records]) if records else np.empty(0)
+    all_wz = np.concatenate([r["wz"] for r in records]) if records else np.empty(0)
+    all_steer_eff = np.concatenate([r["steer_eff"] for r in records]) if records else np.empty(0)
+    all_dwz = np.concatenate([r["dwz"] for r in records]) if records else np.empty(0)
+    all_gear_drive = (
+        np.concatenate([r.get("gear_drive", np.ones_like(r["vx"], dtype=bool)) for r in records])
+        if records else np.empty(0, dtype=bool)
+    )
+    mask_ok = (
+        all_gear_drive
+        & (np.abs(all_wz) > WZ_MIN)
+        & (np.abs(all_dwz) < DWZ_MAX)
+        & (all_vx > VX_MIN_CURVE)
+        & np.isfinite(all_vx)
+        & np.isfinite(all_wz)
+        & np.isfinite(all_steer_eff)
+    )
+    return {
+        "vx": all_vx[mask_ok],
+        "wz": all_wz[mask_ok],
+        "steer_eff": all_steer_eff[mask_ok],
+    }
+
+
+def _yaw_equation_residual_at_kus(arrays: dict, k_us: float) -> np.ndarray:
+    vx = np.asarray(arrays.get("vx", []), dtype=float)
+    wz = np.asarray(arrays.get("wz", []), dtype=float)
+    steer_eff = np.asarray(arrays.get("steer_eff", []), dtype=float)
+    if len(vx) == 0:
+        return np.empty(0)
+    denom = WHEELBASE + float(k_us) * vx * vx
+    valid = denom > 1e-6
+    rhs = np.empty_like(vx)
+    rhs[:] = np.nan
+    rhs[valid] = vx[valid] * np.tan(np.clip(steer_eff[valid], -0.8, 0.8)) / denom[valid]
+    resid = rhs - wz
+    return resid[np.isfinite(resid)]
+
+
+def _collect_yaw_residual_stats(arrays: dict, k_us: float) -> dict:
+    resid = _yaw_equation_residual_at_kus(arrays, k_us)
+    abs_resid = np.abs(resid)
+    return {
+        "k_us": float(k_us),
+        "resid": resid.tolist(),
+        "rmse": float(np.sqrt(np.mean(resid ** 2))) if resid.size else float("nan"),
+        "mean": float(np.mean(resid)) if resid.size else float("nan"),
+        "std": float(np.std(resid)) if resid.size else float("nan"),
+        "abs_p50": float(np.percentile(abs_resid, 50)) if resid.size else float("nan"),
+        "abs_p90": float(np.percentile(abs_resid, 90)) if resid.size else float("nan"),
+        "abs_p99": float(np.percentile(abs_resid, 99)) if resid.size else float("nan"),
+        "n": int(resid.size),
+    }
+
+
+def compute_yaw_equation_residual_data(records: list[dict], params: dict) -> dict:
+    """yaw rate 式の方程式残差 `E = RHS(k_us) - wz_meas` で k_us を同定・評価する。"""
+    arrays = _build_yaw_residual_arrays(records)
+    lo, hi = 0.0, K_US_CLIP
+
+    def objective(k_us: float) -> float:
+        resid = _yaw_equation_residual_at_kus(arrays, k_us)
+        if resid.size == 0:
+            return float("inf")
+        return float(np.mean(resid ** 2))
+
+    if len(arrays["vx"]) >= 10:
+        result = minimize_scalar(objective, bounds=(lo, hi), method="bounded")
+        k_fit = float(result.x) if result.success else float("nan")
+        fit = {
+            "params": {"k_us": k_fit},
+            "success": bool(result.success),
+            "objective_rmse": float(np.sqrt(objective(k_fit))) if np.isfinite(k_fit) else float("nan"),
+            "bounds": {"k_us": [lo, hi]},
+            "nfev": int(getattr(result, "nfev", 0)),
+        }
+    else:
+        k_fit = float("nan")
+        fit = None
+
+    tuned_k = float(params.get("k_us", 0.0))
+    fitted = _collect_yaw_residual_stats(arrays, k_fit) if np.isfinite(k_fit) else {
+        "k_us": float("nan"), "resid": [], "rmse": float("nan"), "mean": float("nan"),
+        "std": float("nan"), "abs_p50": float("nan"), "abs_p90": float("nan"),
+        "abs_p99": float("nan"), "n": 0,
+    }
+    return {
+        "fit": fit,
+        "params": {"k_us": k_fit},
+        "tuned_params": {"k_us": tuned_k},
+        "baseline_params": {"k_us": 0.0},
+        "fitted": fitted,
+        "tuned": _collect_yaw_residual_stats(arrays, tuned_k),
+        "baseline": _collect_yaw_residual_stats(arrays, 0.0),
+        "n_dataset": len(records),
+        "n": int(len(arrays["vx"])),
+        "unit": "rad/s",
+    }
+
+
 def compute_kus_bins_from_sufficient_stats(per_ds_bins: list[dict]) -> dict:
     """複数データセットの十分統計量 (sum_x2/sum_xy) を加算的にプールしスカラー k_us を再構成する。
 
@@ -958,8 +1062,6 @@ def fit_long_cross_dataset_bounded(
             "tau_pointwise_all": [],
         }
 
-    from scipy.optimize import least_squares
-
     # 各データセットについて、状態微分を算出し LPF (移動平均 10ステップ) を適用
     processed_pooled = []
     for a_cmd_arr, a_act_corr_arr, mask in pooled:
@@ -979,12 +1081,7 @@ def fit_long_cross_dataset_bounded(
             errs.append(E[mask])
         return np.concatenate(errs)
 
-    tau_inv_min = 1.0 / _TAU_BOUNDS_LONG[1]
-    tau_inv_max = 1.0 / _TAU_BOUNDS_LONG[0]
-    bounds = ([tau_inv_min], [tau_inv_max])
-
     sim_params = load_sim_params()
-    tau_baseline = sim_params.get("acc_time_constant", 0.2589)
     delay_baseline = sim_params.get("acc_time_delay", 0.101)
     n_steps_init = int(round(delay_baseline / _FIT_DT))
 
