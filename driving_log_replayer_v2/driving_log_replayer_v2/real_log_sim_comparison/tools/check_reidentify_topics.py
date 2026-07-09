@@ -5,18 +5,48 @@ import argparse
 from dataclasses import dataclass
 from pathlib import Path
 
+from matplotlib import font_manager
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 from scipy.signal import savgol_filter
 
 plt.rcParams["lines.linewidth"] = 0.8
+plt.rcParams["axes.unicode_minus"] = False
 
 DT_RESAMPLE = 0.01
 MAX_LAG_S = 0.50
 MIN_DURATION_S = 2.0
 DIFF_ROLLING_WINDOW = 10
 POSE_ROLLING_WINDOW = 15
+
+
+def _configure_japanese_font() -> bool:
+    candidates = [
+        "Noto Sans CJK JP",
+        "Noto Sans JP",
+        "IPAexGothic",
+        "IPAGothic",
+        "TakaoGothic",
+        "Yu Gothic",
+        "Hiragino Sans",
+        "Meiryo",
+    ]
+    for family in candidates:
+        try:
+            font_manager.findfont(
+                font_manager.FontProperties(family=family),
+                fallback_to_default=False,
+            )
+        except ValueError:
+            continue
+        plt.rcParams["font.family"] = [family, "DejaVu Sans"]
+        return True
+    return False
+
+
+_HAS_JAPANESE_FONT = _configure_japanese_font()
+MOVING_AVG_LABEL = "移動平均" if _HAS_JAPANESE_FONT else "MovingAvg"
 
 
 try:
@@ -333,7 +363,7 @@ def analyze_and_plot(csv_path: Path, output_png: Path) -> list[SourceMetrics] | 
         AccelSource("accel", "/localization/acceleration", "#d62728", accel_topic),
         AccelSource(
             "kinematic_diff",
-            f"kinematic.vx diff+MovingAvg({DIFF_ROLLING_WINDOW})",
+            f"kinematic.vx diff+{MOVING_AVG_LABEL}({DIFF_ROLLING_WINDOW})",
             "#2ca02c",
             kin_diff_accel,
         ),
@@ -345,7 +375,7 @@ def analyze_and_plot(csv_path: Path, output_png: Path) -> list[SourceMetrics] | 
         ),
         AccelSource(
             "velocity_diff",
-            f"velocity_status.lon_vel diff+MovingAvg({DIFF_ROLLING_WINDOW})",
+            f"velocity_status.lon_vel diff+{MOVING_AVG_LABEL}({DIFF_ROLLING_WINDOW})",
             "#1f77b4",
             vel_diff_accel,
         ),
@@ -357,7 +387,7 @@ def analyze_and_plot(csv_path: Path, output_png: Path) -> list[SourceMetrics] | 
         ),
         AccelSource(
             "position_2diff",
-            f"kinematic pose diff(2)+MovingAvg({POSE_ROLLING_WINDOW})",
+            f"kinematic pose diff(2)+{MOVING_AVG_LABEL}({POSE_ROLLING_WINDOW})",
             "#ff7f0e",
             pos_2diff_accel,
         ),
@@ -399,19 +429,18 @@ def analyze_and_plot(csv_path: Path, output_png: Path) -> list[SourceMetrics] | 
 
     metrics_by_name = {m.name: m for m in metrics}
     current = next((s for s in sources if s.name == ACCEL_SOURCE), sources[1])
-    current_metrics = metrics_by_name.get(current.name)
 
     fig, axes = plt.subplots(5, 1, figsize=(13, 15), sharex=True)
     fig.suptitle(
         f"Acceleration Source Consistency - {csv_path.parent.name} "
-        f"(current={ACCEL_SOURCE}, MovingAvg({DIFF_ROLLING_WINDOW})/({POSE_ROLLING_WINDOW}), "
+        f"(current={ACCEL_SOURCE}, {MOVING_AVG_LABEL}({DIFF_ROLLING_WINDOW})/({POSE_ROLLING_WINDOW}), "
         f"{_savgol_label()})",
         fontsize=12,
     )
 
     axes[0].plot(t_grid, vel_status_grid, label="velocity_status.lon_vel", color="#1f77b4")
     axes[0].plot(t_grid, kin_vx_grid, label="kinematic_state.twist.linear.x", color="#2ca02c", linestyle="--")
-    axes[0].plot(t_grid, pose_v_grid, label=f"kinematic pose diff(1)+MovingAvg({POSE_ROLLING_WINDOW})", color="#ff7f0e", linestyle=":")
+    axes[0].plot(t_grid, pose_v_grid, label=f"kinematic pose diff(1)+{MOVING_AVG_LABEL}({POSE_ROLLING_WINDOW})", color="#ff7f0e", linestyle=":")
     axes[0].set_ylabel("Velocity [m/s]")
     axes[0].set_title("Velocity consistency")
     axes[0].legend(loc="upper right")
@@ -431,15 +460,13 @@ def analyze_and_plot(csv_path: Path, output_png: Path) -> list[SourceMetrics] | 
     axes[1].grid(True)
 
     axes[2].plot(t_grid, current.accel, label=f"{current.label} (current)", color=current.color)
-    if current_metrics is not None:
-        shifted_accel_topic = _resample(t_grid + current_metrics.lag_s, accel_topic, t_grid)
-        axes[2].plot(
-            t_grid,
-            shifted_accel_topic,
-            label=f"/localization/acceleration shifted by {current_metrics.lag_s:+.3f}s to align with source",
-            color="#9467bd",
-            linestyle="--",
-        )
+    axes[2].plot(
+        t_grid,
+        accel_topic,
+        label="/localization/acceleration (unshifted)",
+        color="#9467bd",
+        linestyle="--",
+    )
     axes[2].text(
         0.01,
         0.98,
