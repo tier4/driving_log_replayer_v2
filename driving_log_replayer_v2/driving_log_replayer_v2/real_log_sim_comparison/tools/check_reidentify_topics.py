@@ -333,7 +333,7 @@ def analyze_and_plot(csv_path: Path, output_png: Path) -> list[SourceMetrics] | 
         AccelSource("accel", "/localization/acceleration", "#d62728", accel_topic),
         AccelSource(
             "kinematic_diff",
-            f"kinematic.vx diff+移動平均({DIFF_ROLLING_WINDOW})",
+            f"kinematic.vx diff+MovingAvg({DIFF_ROLLING_WINDOW})",
             "#2ca02c",
             kin_diff_accel,
         ),
@@ -345,7 +345,7 @@ def analyze_and_plot(csv_path: Path, output_png: Path) -> list[SourceMetrics] | 
         ),
         AccelSource(
             "velocity_diff",
-            f"velocity_status.lon_vel diff+移動平均({DIFF_ROLLING_WINDOW})",
+            f"velocity_status.lon_vel diff+MovingAvg({DIFF_ROLLING_WINDOW})",
             "#1f77b4",
             vel_diff_accel,
         ),
@@ -357,7 +357,7 @@ def analyze_and_plot(csv_path: Path, output_png: Path) -> list[SourceMetrics] | 
         ),
         AccelSource(
             "position_2diff",
-            f"kinematic pose diff(2)+移動平均({POSE_ROLLING_WINDOW})",
+            f"kinematic pose diff(2)+MovingAvg({POSE_ROLLING_WINDOW})",
             "#ff7f0e",
             pos_2diff_accel,
         ),
@@ -404,21 +404,21 @@ def analyze_and_plot(csv_path: Path, output_png: Path) -> list[SourceMetrics] | 
     fig, axes = plt.subplots(5, 1, figsize=(13, 15), sharex=True)
     fig.suptitle(
         f"Acceleration Source Consistency - {csv_path.parent.name} "
-        f"(current={ACCEL_SOURCE}, 移動平均({DIFF_ROLLING_WINDOW})/({POSE_ROLLING_WINDOW}), "
+        f"(current={ACCEL_SOURCE}, MovingAvg({DIFF_ROLLING_WINDOW})/({POSE_ROLLING_WINDOW}), "
         f"{_savgol_label()})",
         fontsize=12,
     )
 
     axes[0].plot(t_grid, vel_status_grid, label="velocity_status.lon_vel", color="#1f77b4")
     axes[0].plot(t_grid, kin_vx_grid, label="kinematic_state.twist.linear.x", color="#2ca02c", linestyle="--")
-    axes[0].plot(t_grid, pose_v_grid, label=f"kinematic pose diff(1)+移動平均({POSE_ROLLING_WINDOW})", color="#ff7f0e", linestyle=":")
+    axes[0].plot(t_grid, pose_v_grid, label=f"kinematic pose diff(1)+MovingAvg({POSE_ROLLING_WINDOW})", color="#ff7f0e", linestyle=":")
     axes[0].set_ylabel("Velocity [m/s]")
     axes[0].set_title("Velocity consistency")
     axes[0].legend(loc="upper right")
     axes[0].grid(True)
 
     for src in sources:
-        lw = 1.3 if src.name == ACCEL_SOURCE else 0.8
+        lw = 0.3 if src.name == ACCEL_SOURCE else 0.5
         alpha = 0.95 if src.name == ACCEL_SOURCE else 0.75
         axes[1].plot(t_grid, src.accel, label=src.label, color=src.color, linewidth=lw, alpha=alpha)
     if cmd_accel_grid is not None:
