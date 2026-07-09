@@ -101,7 +101,8 @@ fit_merge: require-common require-scenario require-setup
 	    --phase-params "$(OUT_DIR)/phase2_steer.yaml" \
 	    --n-trials $(N_TRIALS) \
 	    --jobs $(N_JOBS) \
-	    --out "$(OUT_DIR)/tuned_params.yaml"
+	    --out "$(OUT_DIR)/tuned_params.yaml" \
+	    --input-param "$(INPUT_PARAM)"
 
 report: require-common require-scenario require-setup
 	@test -f "$(OUT_DIR)/tuned_params.yaml" || { echo "[ERROR] missing $(OUT_DIR)/tuned_params.yaml"; exit 1; }

@@ -160,7 +160,7 @@ def build_report_figure(datasets: list[dict], params: dict, wheelbase: float) ->
     return fig, metrics
 
 
-def build_text_summary(params: dict, wheelbase: float, metrics: dict, *, n_datasets: int) -> str:
+def build_text_summary(params: dict, wheelbase: float, metrics: dict, *, n_datasets: int, comparison: dict | None = None) -> str:
     lines = [
         "=" * 72,
         "簡易物理妥当性レポート (reidentify v2, 機能ダウングレード版)",
@@ -173,6 +173,23 @@ def build_text_summary(params: dict, wheelbase: float, metrics: dict, *, n_datas
     for k in sorted(params.keys()):
         lines.append(f"  {k:32s} = {params[k]}")
     lines.append("")
+
+    if comparison:
+        lines.append("-- N-step ロールアウト性能比較 (基準 baseline に対する相対比、小さいほど良) --")
+        for name, data in comparison.items():
+            score = data.get("score", float("nan"))
+            by_h = data.get("by_h", {})
+            seg = []
+            for h in sorted(by_h.keys()):
+                b = by_h[h]
+                seg.append(
+                    f"N{h}[ny_m={b['nyaw_mean']:.3f}/w={b['nyaw_worst']:.3f} "
+                    f"nlo_m={b['nlong_mean']:.3f}/w={b['nlong_worst']:.3f} "
+                    f"nla_m={b['nlat_mean']:.3f}/w={b['nlat_worst']:.3f}]"
+                )
+            lines.append(f"  {name:12s} : " + " ".join(seg) + f"  score={score:.4f}")
+        lines.append("")
+
     lines.append("-- 当てはめ品質 (サンプル窓 RMSE) --")
     if metrics["long_rmse"]:
         lines.append(f"  縦方向 accel RMSE (サンプル平均) = {np.nanmean(metrics['long_rmse']):.4f} m/s^2")
@@ -206,6 +223,16 @@ def build_report(
     *, scenario: Path | None = None, case: str = "current", n_sample_datasets: int = REPORT_SAMPLE_DATASETS,
 ) -> None:
     params = load_tuned_params(tuned_params_path)
+
+    # Load comparison if present
+    comparison = None
+    try:
+        with tuned_params_path.open("r", encoding="utf-8") as f:
+            tuned_data = yaml.safe_load(f) or {}
+            comparison = tuned_data.get("comparison")
+    except Exception as e:
+        print(f"[WARN] Failed to load comparison from tuned params: {e}")
+
     wheelbase = resolve_wheelbase(scenario, case)
     datasets = _sample_datasets(collection_dir, n_sample_datasets)
     if not datasets:
@@ -216,7 +243,7 @@ def build_report(
     fig.savefig(out_png, dpi=120)
     plt.close(fig)
 
-    text = build_text_summary(params, wheelbase, metrics, n_datasets=len(datasets))
+    text = build_text_summary(params, wheelbase, metrics, n_datasets=len(datasets), comparison=comparison)
     out_txt.parent.mkdir(parents=True, exist_ok=True)
     out_txt.write_text(text, encoding="utf-8")
     print(text)

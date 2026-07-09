@@ -39,12 +39,14 @@ def _step_fit_steer(
 
 def _step_fit_merge(
     collection_dir: Path, scenario: Path, out_dir: Path, phase2_out: Path, case: str, n_trials: int, n_jobs: int,
+    input_param: Path | None = None,
 ) -> Path:
     from . import fit_merge  # noqa: PLC0415
 
     out = out_dir / "tuned_params.yaml"
     fit_merge.run(
         collection_dir, scenario, out, case=case, phase2_params_path=phase2_out, n_trials=n_trials, n_jobs=n_jobs,
+        input_param=input_param,
     )
     return out
 
@@ -110,6 +112,7 @@ def main() -> None:
         print("\n[run_reidentify] === Step4a: fit_merge ===")
         tuned_out = _step_fit_merge(
             args.collection_dir, args.scenario, out_dir, phase2_out, args.case, args.n_trials, args.n_jobs,
+            input_param=args.input_param,
         )
     if "report" in steps:
         print("\n[run_reidentify] === Step4b: report ===")
