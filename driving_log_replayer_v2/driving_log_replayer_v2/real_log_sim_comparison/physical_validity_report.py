@@ -114,7 +114,7 @@ from driving_log_replayer_v2.real_log_sim_comparison.lib._physical_validity impo
 
 _H_SPAN = {10: "≈0.33 s", 20: "≈0.67 s", 30: "≈1.0 s", 40: "≈1.33 s"}
 
-# 2-4. x/y 方程式残差評価に使うデータセット数
+# 2-4. x/y heading 補正軌跡フィットに使うデータセット数
 _PERF_N_DATASET = 10
 
 
@@ -880,6 +880,11 @@ def _build_sec1(
       <td><code>k_us</code></td>
       <td>—（設定パラメータ）</td>
   </tr>
+  <tr><td>\\(c\\)</td>
+      <td>x/y 位置式の heading 補正係数（\\(\\theta_{{\\mathrm{{eff}}}}=\\theta-cv_x\\dot\\theta\\)）</td><td>s²/m</td>
+      <td><code>xy_heading_rate_coeff</code></td>
+      <td>—（2-4 で実測軌跡から同定）</td>
+  </tr>
   <tr><td>\\(\\tau_\\delta\\)</td><td>操舵 1 次遅れ時定数</td><td>s</td>
       <td><code>steer_time_constant</code></td><td>—（設定パラメータ）</td>
   </tr>
@@ -901,7 +906,7 @@ def _build_sec1(
 <section id="sec-state-space">
 <h2>1-2. 状態空間モデルと数値積分（Euler 法によるアップデート）</h2>
 <p>
-2-1（縦方向）・2-2（操舵）・2-3（ヨー・横方向）・2-4（x/y）で residual 評価する運動方程式を、実装では一つの状態ベクトルに
+2-1（縦方向）・2-2（操舵）・2-3（ヨー・横方向）・2-4（x/y）で評価する運動方程式を、実装では一つの状態ベクトルに
 まとめた \\(\\dot{{\\mathbf{{x}}}} = f(\\mathbf{{x}}, \\mathbf{{u}})\\) として扱い、共通の Euler 積分ループで毎ステップ時間発展させている。
 各記号の意味・単位・ROS トピックは <a href="#sec-coords">1-1 の記号表</a>を参照。
 </p>
@@ -913,6 +918,7 @@ E[k] = \\mathrm{{RHS}}[k;\\theta] - \\mathrm{{LHS}}[k]
 \\]
 で定義する。これは <code>vehicle_model_fitting</code> と同じ符号で、0 中心・低分散なら式と実測がよく合っている。
 縦・操舵ではこの残差を整合診断として示し、ヨーでは線形最小二乗の同定量として直接使う。
+x/y 位置式は積分後の軌跡 \\((x,y)\\) と実測軌跡の差で \\(c\\) を同定するため、2-4 では方程式残差ではなく軌跡誤差を主評価にする。
 </p>
 
 <h3>連続時間の状態方程式（ベクトル形式）</h3>
@@ -960,8 +966,8 @@ DRIVE 系（enum 値 2..19）の時刻だけを残す評価マスクとして適
 \\end{{pmatrix}}
 =
 \\begin{{pmatrix}}
-{{\\color{{#1565c0}} v_x}} \\cos{{\\color{{#1565c0}} \\theta}} \\\\
-{{\\color{{#1565c0}} v_x}} \\sin{{\\color{{#1565c0}} \\theta}} \\\\
+{{\\color{{#1565c0}} v_x}} \\cos\\left({{\\color{{#1565c0}} \\theta}} - c\\,{{\\color{{#1565c0}} v_x}}\\,{{\\color{{#1565c0}} \\dot\\theta}}\\right) \\\\
+{{\\color{{#1565c0}} v_x}} \\sin\\left({{\\color{{#1565c0}} \\theta}} - c\\,{{\\color{{#1565c0}} v_x}}\\,{{\\color{{#1565c0}} \\dot\\theta}}\\right) \\\\
 \\dfrac{{{{\\color{{#1565c0}} v_x}}\\,\\tan({{\\color{{#1565c0}} \\delta_{{\\mathrm{{act}}}}}}+\\beta)}}{{L + k_{{\\mathrm{{us}}}}\\,{{\\color{{#1565c0}} v_x}}^2}} \\\\
 {{\\color{{#1565c0}} a_{{\\mathrm{{act}}}}}} + {{\\color{{#e65100}} a_{{\\mathrm{{slope}}}}}} \\\\
 \\dfrac{{{{\\color{{#e65100}} \\delta_{{\\mathrm{{cmd,des}}}}}}(t-T_\\delta) - {{\\color{{#1565c0}} \\delta_{{\\mathrm{{act}}}}}}(t-T_\\delta)}}{{\\tau_\\delta}} \\\\
@@ -970,7 +976,8 @@ DRIVE 系（enum 値 2..19）の時刻だけを残す評価マスクとして適
 \\]
 <p class="meta">
 &#128279; \\(\\tau_\\delta, \\beta\\) は <a href="#sec-steer">2-2</a>、\\(\\tau_a\\) は <a href="#sec-long">2-1</a>、
-\\(L, k_{{\\mathrm{{us}}}}\\) は <a href="#sec-yaw">2-3</a> で評価。
+\\(L, k_{{\\mathrm{{us}}}}\\) は <a href="#sec-yaw">2-3</a>、\\(c\\) は <a href="#sec-perf-tracking">2-4</a> で評価。
+位置式の \\(\\dot\\theta\\) は同じ右辺3行目のヨーレートを指す。
 </p>
 
 <h3>離散化：Euler 法によるアップデート</h3>
@@ -1003,8 +1010,8 @@ DRIVE 系（enum 値 2..19）の時刻だけを残す評価マスクとして適
 \\end{{pmatrix}}
 +
 \\begin{{pmatrix}}
-{{\\color{{#1565c0}} v_{{x,k}}}} \\cos{{\\color{{#1565c0}} \\theta_k}} \\\\
-{{\\color{{#1565c0}} v_{{x,k}}}} \\sin{{\\color{{#1565c0}} \\theta_k}} \\\\
+{{\\color{{#1565c0}} v_{{x,k}}}} \\cos\\left({{\\color{{#1565c0}} \\theta_k}} - c\\,{{\\color{{#1565c0}} v_{{x,k}}}}\\,{{\\color{{#1565c0}} \\dot\\theta_k}}\\right) \\\\
+{{\\color{{#1565c0}} v_{{x,k}}}} \\sin\\left({{\\color{{#1565c0}} \\theta_k}} - c\\,{{\\color{{#1565c0}} v_{{x,k}}}}\\,{{\\color{{#1565c0}} \\dot\\theta_k}}\\right) \\\\
 \\dfrac{{{{\\color{{#1565c0}} v_{{x,k}}}}\\,\\tan({{\\color{{#1565c0}} \\delta_{{\\mathrm{{act}},k}}}}+\\beta)}}{{L + k_{{\\mathrm{{us}}}}\\,{{\\color{{#1565c0}} v_{{x,k}}}}^2}} \\\\
 {{\\color{{#1565c0}} a_{{\\mathrm{{act}},k}}}} + {{\\color{{#e65100}} a_{{\\mathrm{{slope}},k}}}} \\\\
 \\dfrac{{{{\\color{{#e65100}} \\delta_{{\\mathrm{{cmd,des}},\\,k-n_\\delta}}}} - {{\\color{{#1565c0}} \\delta_{{\\mathrm{{act}},\\,k-n_\\delta}}}}}}{{\\tau_\\delta}} \\\\
@@ -1308,7 +1315,7 @@ def _build_sec24(
     params: dict,
     n_dataset: int,
 ) -> str:
-    """2-4. x/y 状態方程式 residual/fitting 評価セクション HTML。"""
+    """2-4. x/y 状態方程式 trajectory fitting 評価セクション HTML。"""
     resid_html = fig_resid.to_html(full_html=False, include_plotlyjs=False)
     traj_html = fig_traj.to_html(full_html=False, include_plotlyjs=False)
     tau_a = f"{params.get('acc_time_constant', float('nan')):.3g}"
@@ -1318,50 +1325,49 @@ def _build_sec24(
     fit_params = xy_data.get("params") or {}
     fitted = xy_data.get("fitted") or {}
     baseline = xy_data.get("baseline") or {}
-    p1 = float(fit_params.get("param1", float("nan")))
-    p2 = float(fit_params.get("param2", float("nan")))
+    c_xy = float(fit_params.get("xy_heading_rate_coeff", float("nan")))
 
     def _fmt(v: float, unit: str = "") -> str:
         return f"{float(v):.4g}{unit}" if np.isfinite(float(v)) else "nan"
 
     return f"""
 <section id="sec-perf-tracking">
-<h2>2-4. x/y 位置式の方程式残差とフィッティング</h2>
+<h2>2-4. x/y 位置式のheading補正と軌跡フィッティング</h2>
 <p>
 ステア・加速度は完全追従した前提とし、観測された \\(x,y,\\theta,v_x,\\dot{{\\theta}}\\) を
-状態方程式へ直接代入して、位置式そのものの方程式残差 \\(E = \\mathrm{{RHS}} - \\mathrm{{LHS}}\\) を評価する。
-ここでは前段の加速度追従式・操舵追従式・ヨー式をロールアウトしないため、それらの誤差は x/y 追加項の同定に混入しない。
-今回の追加項は、旋回率と速度の積に比例する補正として
+状態方程式へ直接代入し、位置式だけを積分した軌跡が実測軌跡に一致するように
+heading 補正係数 \\(c\\) を同定する。
+ここでは前段の加速度追従式・操舵追従式・ヨー式をロールアウトしないため、それらの誤差は x/y 補正項の同定に混入しない。
+今回の補正は、旋回率と速度の積に比例して有効 heading をずらす形式として
 \\[
-\\dot x = v_x\\cos\\theta + p_1\\dot\\theta v_x,\\qquad
-\\dot y = v_x\\sin\\theta + p_2\\dot\\theta v_x
+\\dot x = v_x\\cos(\\theta - c v_x\\dot\\theta),\\qquad
+\\dot y = v_x\\sin(\\theta - c v_x\\dot\\theta)
 \\]
-を用い、全対象データセットの \\(E_x,E_y\\) をプールして \\(p_1,p_2\\) を同時最小二乗で同定する。
+を用い、全対象データセットの積分後の \\(x,y\\) 位置誤差をプールして \\(c\\) を同定する。
 </p>
 <p>
 アクチュエータ側の同定値（\\(\\tau_a\\)={tau_a} s, \\(T_a\\)={T_a} s,
-\\(\\tau_\\delta\\)={tau_d} s, \\(T_\\delta\\)={T_d} s）は本節の residual fitting には代入しない。
+\\(\\tau_\\delta\\)={tau_d} s, \\(T_\\delta\\)={T_d} s）は本節の trajectory fitting には代入しない。
 将来 x/y 式へ追加する項も、この観測状態の直接代入形式で評価する。
 </p>
 
 <table class="param-table">
-  <tr><th>項目</th><th>fitted</th><th>baseline（\\(p_1=p_2=0\\)）</th></tr>
-  <tr><td>\\(p_1\\)</td><td>{_fmt(p1)}</td><td>0</td></tr>
-  <tr><td>\\(p_2\\)</td><td>{_fmt(p2)}</td><td>0</td></tr>
-  <tr><td>combined RMSE</td><td>{_fmt(fitted.get("rmse", float("nan")), " m/s")}</td><td>{_fmt(baseline.get("rmse", float("nan")), " m/s")}</td></tr>
-  <tr><td>\\(E_x\\) RMSE</td><td>{_fmt(fitted.get("rmse_x", float("nan")), " m/s")}</td><td>{_fmt(baseline.get("rmse_x", float("nan")), " m/s")}</td></tr>
-  <tr><td>\\(E_y\\) RMSE</td><td>{_fmt(fitted.get("rmse_y", float("nan")), " m/s")}</td><td>{_fmt(baseline.get("rmse_y", float("nan")), " m/s")}</td></tr>
+  <tr><th>項目</th><th>fitted</th><th>baseline（\\(c=0\\)）</th></tr>
+  <tr><td>\\(c\\) / <code>xy_heading_rate_coeff</code></td><td>{_fmt(c_xy)}</td><td>0</td></tr>
+  <tr><td>combined trajectory RMSE</td><td>{_fmt(fitted.get("rmse", float("nan")), " m")}</td><td>{_fmt(baseline.get("rmse", float("nan")), " m")}</td></tr>
+  <tr><td>\\(x\\) trajectory RMSE</td><td>{_fmt(fitted.get("rmse_x", float("nan")), " m")}</td><td>{_fmt(baseline.get("rmse_x", float("nan")), " m")}</td></tr>
+  <tr><td>\\(y\\) trajectory RMSE</td><td>{_fmt(fitted.get("rmse_y", float("nan")), " m")}</td><td>{_fmt(baseline.get("rmse_y", float("nan")), " m")}</td></tr>
   <tr><td>sample count</td><td>{int(fitted.get("n", 0))}</td><td>{int(baseline.get("n", 0))}</td></tr>
 </table>
 
-<h3>x/y 方程式残差分布（上位 {n_dataset} データセット）</h3>
+<h3>x/y 軌跡位置誤差分布（上位 {n_dataset} データセット）</h3>
 {resid_html}
 
-<h3>代表データセットの軌跡比較（実車 vs x/y residual fitted 式）</h3>
+<h3>代表データセットの軌跡比較（実車 vs x/y heading fitted 式）</h3>
 <p>
 初期状態を実車ログに合わせ、観測 \\(\\theta,v_x,\\dot\\theta\\) を固定入力として最適化後の x/y 右辺だけを
 リセットなしで積分した軌跡（青破線）を
-実車の軌跡（黒実線）と比較する。主評価は上の瞬時方程式残差であり、この図は累積挙動の参考表示である。
+実車の軌跡（黒実線）と比較する。主評価は上の積分軌跡の位置誤差である。
 座標は初期位置を原点 (0, 0) に正規化している。
 </p>
 {traj_html}
@@ -2371,18 +2377,18 @@ def main() -> None:
         long_fit_rmse_html = _model_mismatch_note
         steer_fit_rmse_html = _model_mismatch_note
 
-    # 2-4 x/y 方程式残差評価には curve 上位 _PERF_N_DATASET データセットを使用（viewer 用 top_curve とは独立して選択）
+    # 2-4 x/y heading 補正軌跡フィットには curve 上位 _PERF_N_DATASET データセットを使用（viewer 用 top_curve とは独立して選択）
     perf_records = candidate_curve[:_PERF_N_DATASET]
-    print(f"  [2-4] x/y 方程式残差評価図生成 ({len(perf_records)} データセット) ...")
+    print(f"  [2-4] x/y heading 補正軌跡フィット図生成 ({len(perf_records)} データセット) ...")
     perf_entries = _to_entries([(r["uuid"], Path(r["lite_dir"])) for r in perf_records])
     perf_data = compute_xy_equation_residual_data(perf_entries, params)
     perf_fig_resid = build_fig_xy_equation_residual_hist(perf_data)
     perf_fig_traj = build_fig_xy_equation_traj(
         perf_data,
         labels={
-            "title": "実車 vs x/y residual fitted 式（初期状態を実車ログに合わせたリセットなし積分）",
+            "title": "実車 vs x/y heading fitted 式（初期状態を実車ログに合わせたリセットなし積分）",
             "gt_name": "実車 軌跡",
-            "model_name": "x/y fitted 式",
+            "model_name": "x/y heading fitted 式",
             "x_title": "Δx [m]",
             "y_title": "Δy [m]",
         },

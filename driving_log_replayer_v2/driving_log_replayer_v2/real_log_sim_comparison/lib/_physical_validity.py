@@ -42,7 +42,6 @@ from ._fit_core import (
     delay_shift as _delay_shift,
     delay_shift_frac as _delay_shift_frac,
     equation_residual_at_params,
-    fit_equation_residual_grid,
     fit_first_order_delay,
     fit_first_order_delay_residual_3phase,
     savgol_derivative,
@@ -1225,7 +1224,7 @@ def compute_cross_steer_rows(
 
 
 # Perfect Tracking 評価用定数。
-# physical_validity_report.py の 1-5 は x/y 方程式残差評価へ移行済みだが、
+# physical_validity_report.py の 1-5 は x/y heading 補正軌跡フィットへ移行済みだが、
 # step_cross_dataset.py は従来の Perfect Tracking 図を継続利用する。
 _PERF_STRIDE = 5
 _DRIFT_A_TH = 0.3
@@ -1564,26 +1563,16 @@ def compute_perfect_tracking_data(
     }
 
 
-_XY_EQUATION_PARAM_DEFS = (
-    ("param1", "xy_param1", 0.0, (-5.0, 5.0)),
-    ("param2", "xy_param2", 0.0, (-5.0, 5.0)),
-)
+_XY_HEADING_RATE_COEFF = "xy_heading_rate_coeff"
+_XY_HEADING_RATE_COEFF_BOUNDS = (-5.0, 5.0)
 
 
-def _xy_equation_param_specs(params: dict) -> list[dict]:
-    """x/y 方程式 residual fitting 用の named parameter specs を返す。"""
-    return [
-        {
-            "name": name,
-            "initial": float(params.get(config_key, default)),
-            "bounds": bounds,
-        }
-        for name, config_key, default, bounds in _XY_EQUATION_PARAM_DEFS
-    ]
+def _xy_equation_initial_params(params: dict) -> dict[str, float]:
+    return {_XY_HEADING_RATE_COEFF: float(params.get(_XY_HEADING_RATE_COEFF, 0.0))}
 
 
 def _xy_equation_baseline_params() -> dict[str, float]:
-    return {name: float(default) for name, _config_key, default, _bounds in _XY_EQUATION_PARAM_DEFS}
+    return {_XY_HEADING_RATE_COEFF: 0.0}
 
 
 def _xy_equation_rhs(params_dict: dict, yaw: np.ndarray, vx: np.ndarray, wz: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
@@ -1591,32 +1580,94 @@ def _xy_equation_rhs(params_dict: dict, yaw: np.ndarray, vx: np.ndarray, wz: np.
 
     x/y 式の同定では、前段のステア・加速度モデルをロールアウトしない。観測された
     yaw/vx/wz をそのまま RHS に入れることで、アクチュエータ式や yaw 式の誤差を
-    x/y 追加項のフィッティングに混入させない。
-    追加項の実験時はこの関数と param specs を更新する。
+    x/y 補正項のフィッティングに混入させない。
     """
-    p1 = float(params_dict["param1"])
-    p2 = float(params_dict["param2"])
-    rhs_x = vx * np.cos(yaw) + p1 * wz * vx
-    rhs_y = vx * np.sin(yaw) + p2 * wz * vx
+    c = float(params_dict[_XY_HEADING_RATE_COEFF])
+    yaw_eff = yaw - c * vx * wz
+    rhs_x = vx * np.cos(yaw_eff)
+    rhs_y = vx * np.sin(yaw_eff)
     return rhs_x, rhs_y
 
 
-def _xy_equation_residual(params_dict: dict, _grid: dict, dataset: dict) -> np.ndarray:
-    rhs_x, rhs_y = _xy_equation_rhs(params_dict, dataset["yaw"], dataset["vx"], dataset["wz"])
+def _integrate_xy_equation_arrays(
+    params_dict: dict,
+    yaw: np.ndarray,
+    vx: np.ndarray,
+    wz: np.ndarray,
+    x0: float,
+    y0: float,
+) -> tuple[np.ndarray, np.ndarray]:
+    n = len(yaw)
+    xs = np.empty(n)
+    ys = np.empty(n)
+    xs[0] = float(x0)
+    ys[0] = float(y0)
+    for i in range(1, n):
+        j = i - 1
+        rhs_x, rhs_y = _xy_equation_rhs(params_dict, yaw[j:j + 1], vx[j:j + 1], wz[j:j + 1])
+        xs[i] = xs[i - 1] + float(rhs_x[0]) * _FIT_DT
+        ys[i] = ys[i - 1] + float(rhs_y[0]) * _FIT_DT
+    return xs, ys
+
+
+def _xy_equation_trajectory_residual(params_dict: dict, dataset: dict) -> np.ndarray:
+    xs, ys = _integrate_xy_equation_arrays(
+        params_dict,
+        dataset["yaw"],
+        dataset["vx"],
+        dataset["wz"],
+        float(dataset["x"][0]),
+        float(dataset["y"][0]),
+    )
     mask = dataset["mask"]
-    ex = rhs_x - dataset["lhs_x"]
-    ey = rhs_y - dataset["lhs_y"]
+    ex = xs - dataset["x"]
+    ey = ys - dataset["y"]
     return np.concatenate([ex[mask], ey[mask]])
+
+
+def _fit_xy_heading_rate_coeff(datasets: list[dict], params: dict) -> dict | None:
+    if not datasets:
+        return None
+
+    lo, hi = _XY_HEADING_RATE_COEFF_BOUNDS
+    initial = _xy_equation_initial_params(params)
+
+    def objective(c: float) -> float:
+        params_dict = {_XY_HEADING_RATE_COEFF: float(c)}
+        resid_parts = [_xy_equation_trajectory_residual(params_dict, dataset) for dataset in datasets]
+        resid = np.concatenate(resid_parts) if resid_parts else np.array([], dtype=float)
+        resid = resid[np.isfinite(resid)]
+        if resid.size == 0:
+            return float("inf")
+        return float(np.mean(resid ** 2))
+
+    result = minimize_scalar(objective, bounds=(lo, hi), method="bounded")
+    c_fit = float(result.x) if result.success else initial[_XY_HEADING_RATE_COEFF]
+    rmse = float(np.sqrt(objective(c_fit))) if np.isfinite(c_fit) else float("nan")
+    return {
+        "params": {_XY_HEADING_RATE_COEFF: c_fit},
+        "success": bool(result.success),
+        "objective_rmse_m": rmse,
+        "bounds": {_XY_HEADING_RATE_COEFF: [lo, hi]},
+        "nfev": int(getattr(result, "nfev", 0)),
+    }
 
 
 def _collect_xy_equation_residual_components(datasets: list[dict], params_dict: dict) -> dict:
     ex_all: list[float] = []
     ey_all: list[float] = []
     for dataset in datasets:
-        rhs_x, rhs_y = _xy_equation_rhs(params_dict, dataset["yaw"], dataset["vx"], dataset["wz"])
+        xs, ys = _integrate_xy_equation_arrays(
+            params_dict,
+            dataset["yaw"],
+            dataset["vx"],
+            dataset["wz"],
+            float(dataset["x"][0]),
+            float(dataset["y"][0]),
+        )
         mask = dataset["mask"]
-        ex_all.extend((rhs_x - dataset["lhs_x"])[mask].tolist())
-        ey_all.extend((rhs_y - dataset["lhs_y"])[mask].tolist())
+        ex_all.extend((xs - dataset["x"])[mask].tolist())
+        ey_all.extend((ys - dataset["y"])[mask].tolist())
     ex_arr = np.asarray(ex_all, dtype=float)
     ey_arr = np.asarray(ey_all, dtype=float)
     both = np.concatenate([ex_arr, ey_arr]) if ex_arr.size or ey_arr.size else np.array([], dtype=float)
@@ -1634,19 +1685,14 @@ def _integrate_xy_equation_trajectory(td: dict, params_dict: dict) -> dict:
     """観測 yaw/vx/wz を固定入力として x/y 式だけを積分した参考軌跡を作る。"""
     gt_x = td["x"]
     gt_y = td["y"]
-    yaw = td["yaw"]
-    vx = td["vx"]
-    wz = td["wz"]
-    n = len(gt_x)
-    xs = np.empty(n)
-    ys = np.empty(n)
-    xs[0] = float(gt_x[0])
-    ys[0] = float(gt_y[0])
-    for i in range(1, n):
-        j = i - 1
-        rhs_x, rhs_y = _xy_equation_rhs(params_dict, yaw[j:j + 1], vx[j:j + 1], wz[j:j + 1])
-        xs[i] = xs[i - 1] + float(rhs_x[0]) * _FIT_DT
-        ys[i] = ys[i - 1] + float(rhs_y[0]) * _FIT_DT
+    xs, ys = _integrate_xy_equation_arrays(
+        params_dict,
+        td["yaw"],
+        td["vx"],
+        td["wz"],
+        float(gt_x[0]),
+        float(gt_y[0]),
+    )
     stride = int(td["stride"])
     return {
         "uuid": td["uuid"],
@@ -1662,16 +1708,16 @@ def compute_xy_equation_residual_data(
     entries: list,
     params: dict,
 ) -> dict:
-    """x/y 状態方程式の残差評価・追加項パラメータ同時最適化を行う。
+    """x/y 状態方程式の軌跡フィット評価・heading 補正パラメータ最適化を行う。
 
     対象式:
-      xdot = vx * cos(yaw) + param1 * yawdot * vx
-      ydot = vx * sin(yaw) + param2 * yawdot * vx
+      xdot = vx * cos(yaw - xy_heading_rate_coeff * vx * yawdot)
+      ydot = vx * sin(yaw - xy_heading_rate_coeff * vx * yawdot)
 
     ステア・加速度は完全追従した前提とし、前段モデルは一切ロールアウトしない。
-    LHS は実測 x/y の SG 平滑化微分、RHS は観測 vx/yaw/yawdot の直接代入から作る。
-    これにより、加速度追従式・操舵追従式・yaw 式の誤差を x/y 追加項の同定に混入させない。
-    param1/param2 は全 dataset の E_x/E_y をプールして同時 least_squares する。
+    RHS は観測 vx/yaw/yawdot の直接代入から作り、積分軌跡を実測 x/y と比較する。
+    これにより、加速度追従式・操舵追従式・yaw 式の誤差を x/y 補正項の同定に混入させない。
+    xy_heading_rate_coeff は全 dataset の軌跡誤差をプールして最小化する。
     """
     datasets: list[dict] = []
     traj_data: list[dict] = []
@@ -1703,13 +1749,11 @@ def compute_xy_equation_residual_data(
         except Exception:
             gear_drive = np.ones_like(gt_vx, dtype=bool)
 
-        lhs_x = savgol_derivative(gt_x, _FIT_DT, window_s=0.2, polyorder=2)
-        lhs_y = savgol_derivative(gt_y, _FIT_DT, window_s=0.2, polyorder=2)
         mask = (
             gear_drive
             & (gt_vx > VX_MIN_CURVE)
-            & np.isfinite(lhs_x)
-            & np.isfinite(lhs_y)
+            & np.isfinite(gt_x)
+            & np.isfinite(gt_y)
             & np.isfinite(gt_yaw)
             & np.isfinite(gt_vx)
             & np.isfinite(gt_wz)
@@ -1718,11 +1762,11 @@ def compute_xy_equation_residual_data(
             continue
 
         datasets.append({
+            "x": gt_x,
+            "y": gt_y,
             "yaw": gt_yaw,
             "vx": gt_vx,
             "wz": gt_wz,
-            "lhs_x": lhs_x,
-            "lhs_y": lhs_y,
             "mask": mask,
         })
         n_dataset += 1
@@ -1730,7 +1774,7 @@ def compute_xy_equation_residual_data(
         if len(traj_data) < 6:
             moving = mask
             _PLOT_STRIDE = 5
-            # 追加項込み RHS を連続積分した軌跡は fit 後に作るため、ここでは GT と入力だけ保持する。
+            # 補正込み RHS を連続積分した軌跡は fit 後に作るため、ここでは GT と入力だけ保持する。
             # 入力は観測 yaw/vx/wz のまま固定し、前段モデルの誤差を軌跡比較にも混ぜない。
             traj_data.append({
                 "uuid": entry.dataset_id[:8],
@@ -1743,13 +1787,9 @@ def compute_xy_equation_residual_data(
                 "stride": _PLOT_STRIDE,
             })
 
-    fit = fit_equation_residual_grid(
-        datasets,
-        param_specs=_xy_equation_param_specs(params),
-        residual_func=_xy_equation_residual,
-    )
+    fit = _fit_xy_heading_rate_coeff(datasets, params)
 
-    fitted_params = fit["params"] if fit is not None else {"param1": float("nan"), "param2": float("nan")}
+    fitted_params = fit["params"] if fit is not None else {_XY_HEADING_RATE_COEFF: float("nan")}
     fitted = _collect_xy_equation_residual_components(datasets, fitted_params) if fit is not None else {
         "resid_x": [], "resid_y": [], "rmse_x": float("nan"), "rmse_y": float("nan"), "rmse": float("nan"), "n": 0,
     }

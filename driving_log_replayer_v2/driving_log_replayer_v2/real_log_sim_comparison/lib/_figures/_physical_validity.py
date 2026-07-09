@@ -825,7 +825,7 @@ def build_fig_cross_steer(rows_data: list[dict]) -> go.Figure:
 # ---------------------------------------------------------------------------
 # Perfect Tracking 系プロット。
 # build_fig_perfect_tracking_traj は GT vs model trajectory の汎用形なので、
-# physical_validity_report.py の x/y 方程式残差セクションでも label 差し替えで再利用する。
+# physical_validity_report.py の x/y heading 補正軌跡フィットセクションでも label 差し替えで再利用する。
 # ---------------------------------------------------------------------------
 def build_fig_perfect_tracking_box(data: dict) -> go.Figure:
     """操舵理想追従のホライズン別誤差 Box Plot。"""
@@ -1005,7 +1005,7 @@ def build_fig_residual_candidates_hist(
 
 
 def build_fig_xy_equation_residual_hist(data: dict) -> go.Figure:
-    """x/y 状態方程式残差の fitted vs baseline ヒストグラム。"""
+    """x/y 状態方程式を積分した軌跡位置誤差の fitted vs baseline ヒストグラム。"""
     fitted = data.get("fitted") or {}
     baseline = data.get("baseline") or {}
     fx = np.asarray(fitted.get("resid_x") or [], dtype=float)
@@ -1014,9 +1014,9 @@ def build_fig_xy_equation_residual_hist(data: dict) -> go.Figure:
     by = np.asarray(baseline.get("resid_y") or [], dtype=float)
     arrays = [a[np.isfinite(a)] for a in (fx, fy, bx, by) if a.size]
     if not arrays or not any(a.size for a in arrays):
-        return _placeholder_fig("x/y 方程式残差データなし", height=320)
+        return _placeholder_fig("x/y 軌跡位置誤差データなし", height=320)
 
-    fig = make_subplots(rows=1, cols=2, subplot_titles=("x 式 residual", "y 式 residual"))
+    fig = make_subplots(rows=1, cols=2, subplot_titles=("x 軌跡誤差", "y 軌跡誤差"))
 
     def _range(*vals: np.ndarray) -> tuple[float, float] | None:
         arrs = [v[np.isfinite(v)] for v in vals if v.size]
@@ -1044,7 +1044,7 @@ def build_fig_xy_equation_residual_hist(data: dict) -> go.Figure:
             histnorm="probability density",
             marker_color="orange",
             opacity=0.45,
-            name="baseline (param=0)",
+            name="baseline (c=0)",
             legendgroup="baseline",
             showlegend=(col == 1),
         ), row=1, col=col)
@@ -1058,15 +1058,14 @@ def build_fig_xy_equation_residual_hist(data: dict) -> go.Figure:
             legendgroup="fitted",
             showlegend=(col == 1),
         ), row=1, col=col)
-        fig.update_xaxes(title_text=f"E_{label} = RHS - LHS [m/s]", row=1, col=col, range=[lo, hi])
+        fig.update_xaxes(title_text=f"{label} position error [m]", row=1, col=col, range=[lo, hi])
         fig.update_yaxes(title_text="密度", row=1, col=col)
 
     params = data.get("params") or {}
-    p1 = params.get("param1", float("nan"))
-    p2 = params.get("param2", float("nan"))
+    c_xy = params.get("xy_heading_rate_coeff", float("nan"))
     fig.update_layout(
         barmode="overlay",
-        title=f"x/y 方程式残差分布（param1={p1:.4g}, param2={p2:.4g}）",
+        title=f"x/y 軌跡位置誤差分布（xy_heading_rate_coeff={c_xy:.4g}）",
         height=400,
         margin=dict(t=70, b=45),
     )
