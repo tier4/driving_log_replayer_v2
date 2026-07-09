@@ -870,6 +870,75 @@ def _build_fit_rmse_table_multi_html(
 """
 
 
+def _build_residual_rmse_comparison_html(
+    model_rows: list[dict],
+    unit_label: str,
+    title_label: str,
+    baseline_tag: str = "baseline",
+    note: str = "",
+) -> str:
+    cleaned_rows = []
+    for row in model_rows:
+        vals = np.asarray(row.get("rmses") or [], dtype=float)
+        vals = vals[np.isfinite(vals)]
+        if vals.size:
+            cleaned = dict(row)
+            cleaned["rmses"] = vals.tolist()
+            cleaned_rows.append(cleaned)
+    valid_rows = cleaned_rows
+    if not valid_rows:
+        return ""
+
+    baseline = next((r for r in valid_rows if r["tag"] == baseline_tag), valid_rows[0])
+    b_vals = np.asarray(baseline["rmses"], dtype=float)
+    b_mean = float(np.mean(b_vals))
+    b_med = float(np.median(b_vals))
+    b_p99 = float(np.quantile(b_vals, 0.99))
+
+    def _stats(vals: list[float]) -> tuple[float, float, float]:
+        arr = np.asarray(vals, dtype=float)
+        return float(np.mean(arr)), float(np.median(arr)), float(np.quantile(arr, 0.99))
+
+    def _cell(val: float, base: float) -> str:
+        ratio = val / base if base > 0 else 1.0
+        if ratio < 0.99:
+            style = ' style="color:#28a745;font-weight:bold"'
+        elif ratio > 1.01:
+            style = ' style="color:#dc3545"'
+        else:
+            style = ""
+        return f"<td{style}>{val:.4g}</td>"
+
+    rows = []
+    for row in valid_rows:
+        mean, med, p99 = _stats(row["rmses"])
+        model_style = ' style="color:#888"' if row["tag"] == baseline_tag else ""
+        rows.append(
+            f'<tr><td{model_style}><b>{row["tag"]}</b></td>'
+            f'{_cell(mean, b_mean)}{_cell(med, b_med)}{_cell(p99, b_p99)}</tr>'
+        )
+
+    note_html = f"<p>{note}</p>" if note else ""
+    return f"""
+<h3>フィッティング精度: 方程式残差RMSE 比較（{title_label}）</h3>
+<p>
+同じ実測配列に各モデルのパラメータを代入し、方程式残差 RMSE（単位 {unit_label}）を
+データセット横断で集計した。
+</p>
+{note_html}
+<table class="param-table" style="font-size:12px">
+  <thead><tr><th>モデル</th><th>平均</th><th>中央値</th><th>99%ile</th></tr></thead>
+  <tbody>
+{chr(10).join(rows)}
+  </tbody>
+</table>
+<div class="note">
+各セルは <code>{baseline['tag']}</code> より小さい場合は <b style="color:#28a745">緑（改善）</b>、
+大きい場合は <span style="color:#dc3545">赤（悪化）</span> で表示。
+</div>
+"""
+
+
 def _build_sec1(
     params: dict,
     long_fig: go.Figure,
@@ -932,24 +1001,25 @@ def _build_sec1(
         if steer_resid_hist_fig is not None else ""
     )
 
-    def _yaw_stat(model_key: str, stat_key: str) -> str:
-        if not yaw_resid_data:
-            return "N/A"
-        value = (yaw_resid_data.get(model_key) or {}).get(stat_key)
-        try:
-            vf = float(value)
-        except (TypeError, ValueError):
-            return "N/A"
-        return f"{vf:.4g}" if np.isfinite(vf) else "N/A"
-
     yaw_n_samples = int((yaw_resid_data or {}).get("n", 0))
     yaw_fit_params = (yaw_resid_data or {}).get("params") or {}
     yaw_kus_fit = _fmt(yaw_fit_params.get("k_us", "N/A"))
+    yaw_resid_rmse_html = ""
+    if yaw_resid_data:
+        yaw_resid_rmse_html = _build_residual_rmse_comparison_html(
+            [
+                {"tag": "residual fitted", "rmses": (yaw_resid_data.get("fitted") or {}).get("rmses", [])},
+                {"tag": "tuned params", "rmses": (yaw_resid_data.get("tuned") or {}).get("rmses", [])},
+                {"tag": "baseline", "rmses": (yaw_resid_data.get("baseline") or {}).get("rmses", [])},
+            ],
+            "rad/s",
+            "ヨー dot θ 式",
+            baseline_tag="baseline",
+        )
     kus_rows = (
         f"  <tr><td><code>k_us</code> tuned params</td>"
         f"<td>{_fmt(params.get('k_us', 0.0))} rad·s²/m</td>"
-        f"<td>チューニング済みモデルに設定されているアンダーステア係数</td>"
-        f"<td>{_yaw_stat('tuned', 'rmse')} rad/s</td></tr>"
+        f"<td>チューニング済みモデルに設定されているアンダーステア係数</td></tr>"
     )
     return f"""
 <section id="sec-coords">
@@ -1426,25 +1496,18 @@ J_\\theta(k_{{\\mathrm{{us}}}})
 
 {kus_html}
 
-<p>
-residual fitted 値がチューニング済みモデル設定値 \\(k_{{\\mathrm{{us}}}}\\) と近く、
-かつ tuned params の方程式残差 RMSE が baseline（\\(k_{{\\mathrm{{us}}}}=0\\)）より小さければ、
-ヨー式の補正は実機ログと整合している。
-低速・小曲率のデータセットが多い場合は、凡例のサンプル数と RMSE 差を併せて確認する。
-</p>
+{yaw_resid_rmse_html}
 
 <table class="param-table">
-  <tr><th>パラメータ / モデル</th><th>値</th><th>式中の役割</th><th>yaw 方程式残差 RMSE</th></tr>
+  <tr><th>パラメータ / モデル</th><th>値</th><th>式中の役割</th></tr>
   <tr><td><code>k_us</code> residual fitted</td><td>{yaw_kus_fit} rad·s²/m</td>
-      <td>yaw rate 方程式残差を最小化する本節の独立同定値</td>
-      <td>{_yaw_stat("fitted", "rmse")} rad/s</td></tr>
+      <td>yaw rate 方程式残差を最小化する本節の独立同定値</td></tr>
 {kus_rows}
   <tr><td>baseline（\\(k_{{\\mathrm{{us}}}}=0\\)）</td><td>0 rad·s²/m</td>
-      <td>アンダーステア補正なし</td>
-      <td>{_yaw_stat("baseline", "rmse")} rad/s</td></tr>
+      <td>アンダーステア補正なし</td></tr>
   <tr><td><code>steer_bias</code> (\\(\\beta\\)) <i>[2-2 と共有]</i></td><td>{beta} rad</td>
       <td>\\(\\tan(\\delta_{{\\mathrm{{act}}}} + \\beta)\\) の引数：ヨーオフセット成分</td>
-      <td>固定値</td></tr>
+      </tr>
 </table>
 </section>
 """
@@ -1468,6 +1531,16 @@ def _build_sec24(
     fitted = xy_data.get("fitted") or {}
     baseline = xy_data.get("baseline") or {}
     c_xy = float(fit_params.get("xy_heading_rate_coeff", float("nan")))
+    xy_resid_rmse_html = _build_residual_rmse_comparison_html(
+        [
+            {"tag": "trajectory fitted", "rmses": fitted.get("rmses", [])},
+            {"tag": "baseline", "rmses": baseline.get("rmses", [])},
+        ],
+        "m",
+        "x/y 位置式",
+        baseline_tag="baseline",
+        note="2-4 では、観測状態を直接代入した x/y 右辺を積分した後の位置残差を、2-1/2-2 と同じ表形式で集計する。",
+    )
 
     def _fmt(v: float, unit: str = "") -> str:
         return f"{float(v):.4g}{unit}" if np.isfinite(float(v)) else "nan"
@@ -1509,11 +1582,10 @@ heading 補正係数 \\(c\\) を同定する。
 <table class="param-table">
   <tr><th>項目</th><th>fitted</th><th>baseline（\\(c=0\\)）</th></tr>
   <tr><td>\\(c\\) / <code>xy_heading_rate_coeff</code></td><td>{_fmt(c_xy)}</td><td>0</td></tr>
-  <tr><td>combined trajectory RMSE</td><td>{_fmt(fitted.get("rmse", float("nan")), " m")}</td><td>{_fmt(baseline.get("rmse", float("nan")), " m")}</td></tr>
-  <tr><td>\\(x\\) trajectory RMSE</td><td>{_fmt(fitted.get("rmse_x", float("nan")), " m")}</td><td>{_fmt(baseline.get("rmse_x", float("nan")), " m")}</td></tr>
-  <tr><td>\\(y\\) trajectory RMSE</td><td>{_fmt(fitted.get("rmse_y", float("nan")), " m")}</td><td>{_fmt(baseline.get("rmse_y", float("nan")), " m")}</td></tr>
   <tr><td>sample count</td><td>{int(fitted.get("n", 0))}</td><td>{int(baseline.get("n", 0))}</td></tr>
 </table>
+
+{xy_resid_rmse_html}
 
 <h3>x/y 軌跡位置誤差分布（上位 {n_dataset} データセット）</h3>
 {resid_html}

@@ -579,6 +579,16 @@ def _collect_yaw_residual_stats(arrays: dict, k_us: float) -> dict:
     }
 
 
+def _yaw_residual_rmses_by_record(records: list[dict], k_us: float) -> list[float]:
+    rmses: list[float] = []
+    for record in records:
+        arrays = _build_yaw_residual_arrays([record])
+        resid = _yaw_equation_residual_at_kus(arrays, k_us)
+        if resid.size:
+            rmses.append(float(np.sqrt(np.mean(resid ** 2))))
+    return rmses
+
+
 def compute_yaw_equation_residual_data(records: list[dict], params: dict) -> dict:
     """yaw rate 式の方程式残差 `E = RHS(k_us) - wz_meas` で k_us を同定・評価する。"""
     arrays = _build_yaw_residual_arrays(records)
@@ -610,14 +620,22 @@ def compute_yaw_equation_residual_data(records: list[dict], params: dict) -> dic
         "std": float("nan"), "abs_p50": float("nan"), "abs_p90": float("nan"),
         "abs_p99": float("nan"), "n": 0,
     }
+    if np.isfinite(k_fit):
+        fitted["rmses"] = _yaw_residual_rmses_by_record(records, k_fit)
+    else:
+        fitted["rmses"] = []
+    tuned = _collect_yaw_residual_stats(arrays, tuned_k)
+    tuned["rmses"] = _yaw_residual_rmses_by_record(records, tuned_k)
+    baseline = _collect_yaw_residual_stats(arrays, 0.0)
+    baseline["rmses"] = _yaw_residual_rmses_by_record(records, 0.0)
     return {
         "fit": fit,
         "params": {"k_us": k_fit},
         "tuned_params": {"k_us": tuned_k},
         "baseline_params": {"k_us": 0.0},
         "fitted": fitted,
-        "tuned": _collect_yaw_residual_stats(arrays, tuned_k),
-        "baseline": _collect_yaw_residual_stats(arrays, 0.0),
+        "tuned": tuned,
+        "baseline": baseline,
         "n_dataset": len(records),
         "n": int(len(arrays["vx"])),
         "unit": "rad/s",
@@ -1790,6 +1808,7 @@ def _fit_xy_heading_rate_coeff(datasets: list[dict], params: dict) -> dict | Non
 def _collect_xy_equation_residual_components(datasets: list[dict], params_dict: dict) -> dict:
     ex_all: list[float] = []
     ey_all: list[float] = []
+    rmses: list[float] = []
     for dataset in datasets:
         xs, ys = _integrate_xy_equation_arrays(
             params_dict,
@@ -1800,8 +1819,13 @@ def _collect_xy_equation_residual_components(datasets: list[dict], params_dict: 
             float(dataset["y"][0]),
         )
         mask = dataset["mask"]
-        ex_all.extend((xs - dataset["x"])[mask].tolist())
-        ey_all.extend((ys - dataset["y"])[mask].tolist())
+        ex = (xs - dataset["x"])[mask]
+        ey = (ys - dataset["y"])[mask]
+        ex_all.extend(ex.tolist())
+        ey_all.extend(ey.tolist())
+        both_ds = np.concatenate([ex, ey]) if ex.size or ey.size else np.array([], dtype=float)
+        if both_ds.size:
+            rmses.append(float(np.sqrt(np.mean(both_ds ** 2))))
     ex_arr = np.asarray(ex_all, dtype=float)
     ey_arr = np.asarray(ey_all, dtype=float)
     both = np.concatenate([ex_arr, ey_arr]) if ex_arr.size or ey_arr.size else np.array([], dtype=float)
@@ -1811,6 +1835,7 @@ def _collect_xy_equation_residual_components(datasets: list[dict], params_dict: 
         "rmse_x": float(np.sqrt(np.mean(ex_arr ** 2))) if ex_arr.size else float("nan"),
         "rmse_y": float(np.sqrt(np.mean(ey_arr ** 2))) if ey_arr.size else float("nan"),
         "rmse": float(np.sqrt(np.mean(both ** 2))) if both.size else float("nan"),
+        "rmses": rmses,
         "n": int(both.size),
     }
 
@@ -1925,10 +1950,12 @@ def compute_xy_equation_residual_data(
 
     fitted_params = fit["params"] if fit is not None else {_XY_HEADING_RATE_COEFF: float("nan")}
     fitted = _collect_xy_equation_residual_components(datasets, fitted_params) if fit is not None else {
-        "resid_x": [], "resid_y": [], "rmse_x": float("nan"), "rmse_y": float("nan"), "rmse": float("nan"), "n": 0,
+        "resid_x": [], "resid_y": [], "rmse_x": float("nan"), "rmse_y": float("nan"),
+        "rmse": float("nan"), "rmses": [], "n": 0,
     }
     baseline = _collect_xy_equation_residual_components(datasets, _xy_equation_baseline_params()) if datasets else {
-        "resid_x": [], "resid_y": [], "rmse_x": float("nan"), "rmse_y": float("nan"), "rmse": float("nan"), "n": 0,
+        "resid_x": [], "resid_y": [], "rmse_x": float("nan"), "rmse_y": float("nan"),
+        "rmse": float("nan"), "rmses": [], "n": 0,
     }
 
     fitted_traj = [

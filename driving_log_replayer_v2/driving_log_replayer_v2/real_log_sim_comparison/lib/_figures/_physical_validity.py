@@ -245,12 +245,7 @@ def build_fig_yaw_equation_residual(yaw_data: dict | None) -> go.Figure:
     if not hi > lo:
         lo, hi = float(pooled.min()), float(pooled.max() + 1e-9)
 
-    fig = make_subplots(
-        rows=1, cols=2,
-        column_widths=[0.66, 0.34],
-        subplot_titles=["yaw rate 方程式残差分布", "RMSE 比較"],
-        horizontal_spacing=0.12,
-    )
+    fig = go.Figure()
     for key, label, color in series:
         arr = arrays.get(key)
         if arr is None:
@@ -265,29 +260,8 @@ def build_fig_yaw_equation_residual(yaw_data: dict | None) -> go.Figure:
                 marker_color=color,
                 opacity=0.52,
                 name=f"{label} (n={arr.size})",
-            ),
-            row=1,
-            col=1,
+            )
         )
-
-    bar_x = []
-    bar_y = []
-    bar_text = []
-    colors = []
-    for key, label, color in series:
-        stats = yaw_data.get(key) or {}
-        rmse = float(stats.get("rmse", float("nan")))
-        if not np.isfinite(rmse):
-            continue
-        bar_x.append(label)
-        bar_y.append(rmse)
-        bar_text.append(f"{rmse:.4g}")
-        colors.append(color)
-    fig.add_trace(
-        go.Bar(x=bar_x, y=bar_y, text=bar_text, textposition="outside", marker_color=colors, showlegend=False),
-        row=1,
-        col=2,
-    )
 
     fitted_k = float((yaw_data.get("params") or {}).get("k_us", float("nan")))
     tuned_k = float((yaw_data.get("tuned_params") or {}).get("k_us", float("nan")))
@@ -298,15 +272,14 @@ def build_fig_yaw_equation_residual(yaw_data: dict | None) -> go.Figure:
     if np.isfinite(tuned_k):
         subtitle += f" / tuned={tuned_k:.5f}"
 
-    fig.add_vline(x=0.0, line=dict(color="black", width=1.5), row=1, col=1)
+    fig.add_vline(x=0.0, line=dict(color="black", width=1.5))
     fig.update_layout(barmode="overlay")
-    fig.update_xaxes(title_text="方程式残差 E_yaw [rad/s]", range=[lo, hi], row=1, col=1)
-    fig.update_yaxes(title_text="サンプル数", row=1, col=1)
-    fig.update_yaxes(title_text="RMSE [rad/s]", row=1, col=2)
+    fig.update_xaxes(title_text="方程式残差 E_yaw [rad/s]", range=[lo, hi])
+    fig.update_yaxes(title_text="サンプル数")
     return apply_base_layout(
         fig,
-        title=f"ヨー式 k_us 同定（方程式残差最小化）: {subtitle}",
-        height=430,
+        title=f"ヨー式 k_us 同定: 方程式残差 E_yaw の分布（{subtitle}）",
+        height=360,
         legend=dict(x=0.02, y=0.98, bgcolor="rgba(255,255,255,0.8)"),
     )
 
