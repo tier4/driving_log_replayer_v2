@@ -92,11 +92,11 @@ RELEASE_MODEL_KEY = "delay_steer_acc_geared_for_diffusion_planner"
 
 # Acceleration source configuration
 # "accel"          : Use the original /localization/acceleration topic (default with lag)
-# "kinematic_diff"  : Differentiate /localization/kinematic_state vx with diff+rolling mean
+# "kinematic_diff"  : Differentiate /localization/kinematic_state vx with diff+rolling mean (current default)
 # "velocity_diff"   : Differentiate /vehicle/status/velocity_status longitudinal_velocity with diff+rolling mean
-# "kinematic_savgol": Differentiate /localization/kinematic_state vx with Savitzky-Golay (recommended)
+# "kinematic_savgol": Differentiate /localization/kinematic_state vx with Savitzky-Golay
 # "velocity_savgol" : Differentiate /vehicle/status/velocity_status longitudinal_velocity with Savitzky-Golay
-ACCEL_SOURCE = "kinematic_savgol"
+ACCEL_SOURCE = "kinematic_diff"
 ACCEL_SAVGOL_WINDOW_S = 0.2
 ACCEL_SAVGOL_POLYORDER = 2
 

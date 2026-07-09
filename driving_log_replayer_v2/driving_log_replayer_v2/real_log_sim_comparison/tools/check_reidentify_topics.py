@@ -46,7 +46,7 @@ def _configure_japanese_font() -> bool:
 
 
 _HAS_JAPANESE_FONT = _configure_japanese_font()
-MOVING_AVG_LABEL = "移動平均" if _HAS_JAPANESE_FONT else "MovingAvg"
+MOVING_AVG_LABEL = "中央移動平均" if _HAS_JAPANESE_FONT else "CenteredMovingAvg"
 
 
 try:
@@ -429,14 +429,36 @@ def analyze_and_plot(csv_path: Path, output_png: Path) -> list[SourceMetrics] | 
 
     metrics_by_name = {m.name: m for m in metrics}
     current = next((s for s in sources if s.name == ACCEL_SOURCE), sources[1])
+    current_metric = metrics_by_name.get(current.name)
+    accel_topic_shifted = (
+        _resample(t_grid + current_metric.lag_s, accel_topic, t_grid)
+        if current_metric is not None
+        else np.full_like(t_grid, np.nan, dtype=float)
+    )
 
-    fig, axes = plt.subplots(5, 1, figsize=(13, 15), sharex=True)
+    fig = plt.figure(figsize=(13, 25))
+    grid = fig.add_gridspec(
+        5,
+        1,
+        height_ratios=[1.0, 1.0, 4.8, 1.0, 1.0],
+        hspace=0.42,
+    )
+    axes = [
+        fig.add_subplot(grid[0]),
+        fig.add_subplot(grid[1]),
+        None,
+        fig.add_subplot(grid[3]),
+        fig.add_subplot(grid[4]),
+    ]
+    lag_grid = grid[2].subgridspec(4, 1, hspace=0.36)
+    lag_axes = np.array([fig.add_subplot(lag_grid[i, 0]) for i in range(4)])
     fig.suptitle(
         f"Acceleration Source Consistency - {csv_path.parent.name} "
         f"(current={ACCEL_SOURCE}, {MOVING_AVG_LABEL}({DIFF_ROLLING_WINDOW})/({POSE_ROLLING_WINDOW}), "
         f"{_savgol_label()})",
         fontsize=12,
     )
+    fig.subplots_adjust(top=0.965, bottom=0.035, left=0.07, right=0.985)
 
     axes[0].plot(t_grid, vel_status_grid, label="velocity_status.lon_vel", color="#1f77b4")
     axes[0].plot(t_grid, kin_vx_grid, label="kinematic_state.twist.linear.x", color="#2ca02c", linestyle="--")
@@ -459,29 +481,54 @@ def analyze_and_plot(csv_path: Path, output_png: Path) -> list[SourceMetrics] | 
     axes[1].legend(loc="upper right")
     axes[1].grid(True)
 
-    axes[2].plot(t_grid, current.accel, label=f"{current.label} (current)", color=current.color)
-    axes[2].plot(
-        t_grid,
-        accel_topic,
-        label="/localization/acceleration (unshifted)",
-        color="#9467bd",
-        linestyle="--",
-    )
-    axes[2].text(
-        0.01,
-        0.98,
-        _metrics_table(metrics),
-        transform=axes[2].transAxes,
-        va="top",
-        ha="left",
-        family="monospace",
-        fontsize=8,
-        bbox={"facecolor": "white", "edgecolor": "#cccccc", "alpha": 0.88},
-    )
-    axes[2].set_ylabel("Accel [m/s^2]")
-    axes[2].set_title("Lag/correlation against /localization/acceleration (positive src_lag = source is later)")
-    axes[2].legend(loc="upper right")
-    axes[2].grid(True)
+    lag_edges = np.linspace(t_grid[0], t_grid[-1], 5)
+    for idx, ax in enumerate(lag_axes):
+        t_start = lag_edges[idx]
+        t_end = lag_edges[idx + 1]
+        ax.plot(
+            t_grid,
+            current.accel,
+            label=f"{current.label} (current)",
+            color=current.color,
+        )
+        ax.plot(
+            t_grid,
+            accel_topic,
+            label="/localization/acceleration (unshifted)",
+            color="#9467bd",
+            linestyle="--",
+        )
+        ax.plot(
+            t_grid,
+            accel_topic_shifted,
+            label=(
+                f"/localization/acceleration shifted ({current_metric.lag_s:+.3f}s)"
+                if current_metric is not None
+                else None
+            ),
+            color="#9467bd",
+            linestyle=":",
+            alpha=0.85,
+        )
+        ax.set_xlim(t_start, t_end)
+        ax.set_title(f"Lag/corr {idx + 1}: {t_start:.1f}-{t_end:.1f}s", fontsize=9)
+        ax.grid(True)
+        ax.set_ylabel("Accel [m/s^2]")
+        if idx == 3:
+            ax.set_xlabel("Time [s]")
+        ax.legend(loc="upper right", fontsize=8)
+        if idx == 0:
+            ax.text(
+                0.01,
+                0.98,
+                _metrics_table(metrics),
+                transform=ax.transAxes,
+                va="top",
+                ha="left",
+                family="monospace",
+                fontsize=7,
+                bbox={"facecolor": "white", "edgecolor": "#cccccc", "alpha": 0.88},
+            )
 
     integrated_by_name: dict[str, np.ndarray] = {}
     axes[3].plot(t_grid, vel_status_grid, label="velocity_status.lon_vel", color="black", linewidth=1.2)
@@ -525,7 +572,8 @@ def analyze_and_plot(csv_path: Path, output_png: Path) -> list[SourceMetrics] | 
     accel_ylim = _finite_percentile_ylim([s.accel for s in sources], pct=98.0)
     if accel_ylim is not None:
         axes[1].set_ylim(*accel_ylim)
-        axes[2].set_ylim(*accel_ylim)
+        for ax in lag_axes:
+            ax.set_ylim(*accel_ylim)
     residual_ylim = _finite_percentile_ylim(
         [integrated_by_name[s.name] - vel_status_grid for s in sources],
         pct=95.0,
@@ -533,7 +581,6 @@ def analyze_and_plot(csv_path: Path, output_png: Path) -> list[SourceMetrics] | 
     if residual_ylim is not None:
         axes[4].set_ylim(*residual_ylim)
 
-    plt.tight_layout(rect=(0, 0, 1, 0.97))
     output_png.parent.mkdir(parents=True, exist_ok=True)
     plt.savefig(output_png, dpi=140)
     plt.close(fig)
