@@ -418,8 +418,10 @@ def analyze_and_plot(csv_path: Path, output_png: Path) -> list[SourceMetrics] | 
     axes[0].grid(True)
 
     for src in sources:
-        lw = 0.3 if src.name == ACCEL_SOURCE else 0.5
-        alpha = 0.95 if src.name == ACCEL_SOURCE else 0.75
+        if "savgol" in src.name:
+            continue
+        lw = 0.3
+        alpha = 1.0
         axes[1].plot(t_grid, src.accel, label=src.label, color=src.color, linewidth=lw, alpha=alpha)
     if cmd_accel_grid is not None:
         axes[1].plot(t_grid, cmd_accel_grid, label="cmd_accel", color="black", linestyle=":", alpha=0.55)
