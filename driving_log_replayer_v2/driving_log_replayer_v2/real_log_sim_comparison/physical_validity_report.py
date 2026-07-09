@@ -370,6 +370,26 @@ code { background: #f0f0f0; padding: 2px 4px; border-radius: 3px; font-size: 12p
 .param-table { border-collapse: collapse; margin: 12px 0; font-size: 13px; }
 .param-table td, .param-table th { border: 1px solid #ddd; padding: 6px 12px; }
 .param-table th { background: #f5f5f5; }
+.rmse-cell { min-width: 190px; }
+.rmse-main { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; }
+.rmse-value { font-weight: 600; }
+.rmse-ratio { color: #666; font-size: 11px; white-space: nowrap; }
+.rmse-bar {
+  position: relative; height: 10px; margin-top: 5px; background: #f1f3f5;
+  border-radius: 999px; overflow: hidden;
+}
+.rmse-bar::after {
+  content: ""; position: absolute; left: 50%; top: 0; bottom: 0;
+  border-left: 1px solid rgba(0,0,0,0.38);
+}
+.rmse-fill {
+  position: absolute; top: 0; bottom: 0; left: 0; border-radius: 999px;
+  background: #adb5bd;
+}
+.rmse-fill.good { background: #28a745; }
+.rmse-fill.bad { background: #dc3545; }
+.rmse-fill.neutral { background: #868e96; }
+.rmse-hint { margin-top: 2px; color: #777; font-size: 10px; }
 .meta { color: #888; font-size: 12px; margin-bottom: 16px; }
 .note { background: #fff8e1; border-left: 4px solid #ffc107; padding: 8px 12px;
         margin: 8px 0; font-size: 13px; }
@@ -779,7 +799,8 @@ def _build_fit_rmse_table_html(
 本節末尾の表にある「同定誤差量（RMSE）」列（\\(a_{{\\mathrm{{sim}}}} - a_{{\\mathrm{{real}}}}\\) 等の
 出力誤差）とは別物である。
 </p>
-<table class="param-table" style="font-size:12px">
+<div style="overflow-x:auto">
+<table class="param-table" style="font-size:12px; min-width: 980px">
   <thead><tr><th>モデル</th><th>平均</th><th>中央値</th><th>99%ile</th></tr></thead>
   <tbody>
     <tr><td><b>{label}</b></td>{_cell(t_mean, b_mean)}{_cell(t_med, b_med)}{_cell(t_p99, b_p99)}</tr>
@@ -788,6 +809,7 @@ def _build_fit_rmse_table_html(
 {phase_rows}
   </tbody>
 </table>
+</div>
 <div class="note">
 {label} の値が baseline より小さい場合は <b style="color:#28a745">緑（改善）</b>、
 大きい場合は <span style="color:#dc3545">赤（悪化）</span> で表示。
@@ -815,15 +837,31 @@ def _build_fit_rmse_table_multi_html(
         arr = np.asarray(vals, dtype=float)
         return float(np.mean(arr)), float(np.median(arr)), float(np.quantile(arr, 0.99))
 
-    def _cell(val: float, base: float) -> str:
-        ratio = val / base if base > 0 else 1.0
-        if ratio < 0.99:
-            style = ' style="color:#28a745;font-weight:bold"'
-        elif ratio > 1.01:
-            style = ' style="color:#dc3545"'
+    def _visual_cell(val: float, base: float) -> str:
+        if not np.isfinite(val) or not np.isfinite(base):
+            return '<td class="rmse-cell">N/A</td>'
+        ratio = val / base if base > 0 else float("nan")
+        if np.isfinite(ratio):
+            width = min(max(ratio, 0.0), 2.0) * 50.0
+            ratio_txt = f"{ratio:.2f}x"
+            pct = (1.0 - ratio) * 100.0
+            pct_txt = f"{pct:+.0f}%"
         else:
-            style = ""
-        return f"<td{style}>{val:.4g}</td>"
+            width = 50.0
+            ratio_txt = "N/A"
+            pct_txt = "N/A"
+        cls = "neutral"
+        if np.isfinite(ratio) and ratio < 0.99:
+            cls = "good"
+        elif np.isfinite(ratio) and ratio > 1.01:
+            cls = "bad"
+        title = f"RMSE={val:.4g}, baseline={base:.4g}, ratio={ratio_txt}, improvement={pct_txt}"
+        return (
+            f'<td class="rmse-cell" title="{title}">'
+            f'<div class="rmse-main"><span class="rmse-value">{val:.4g}</span></div>'
+            f'<div class="rmse-bar"><span class="rmse-fill {cls}" style="width:{width:.1f}%"></span></div>'
+            f'</td>'
+        )
 
     rows = []
     for row in valid_rows:
@@ -832,7 +870,10 @@ def _build_fit_rmse_table_multi_html(
         rows.append(
             f'<tr><td{model_style}><b>{row["tag"]}</b><br>'
             f'<small>{row.get("acceleration_source", "-")}</small></td>'
-            f'{_cell(mean, b_mean)}{_cell(med, b_med)}{_cell(p99, b_p99)}</tr>'
+            f'<td>{len(row["rmses"])}</td>'
+            f'{_visual_cell(mean, b_mean)}'
+            f'{_visual_cell(med, b_med)}'
+            f'{_visual_cell(p99, b_p99)}</tr>'
         )
 
     skipped = [r for r in model_rows if not r.get("rmses")]
@@ -851,14 +892,24 @@ def _build_fit_rmse_table_multi_html(
 方程式残差 \\(J\\)（<code>equation_residual_at_params</code> の <code>rmse_resid</code>、単位 {unit_label}）を
 データセット横断で集計した。
 </p>
-<table class="param-table" style="font-size:12px">
-  <thead><tr><th>モデル<br><small>acceleration source</small></th><th>平均</th><th>中央値</th><th>99%ile</th></tr></thead>
+<div style="overflow-x:auto">
+<table class="param-table" style="font-size:12px; min-width: 760px">
+  <thead>
+    <tr>
+      <th>モデル<br><small>acceleration source</small></th><th>n</th>
+      <th>平均<br><small>baseline=中央線</small></th>
+      <th>中央値<br><small>baseline=中央線</small></th>
+      <th>99%ile<br><small>baseline=中央線</small></th>
+    </tr>
+  </thead>
   <tbody>
 {chr(10).join(rows)}
   </tbody>
 </table>
+</div>
 <div class="note">
-各セルは <code>{baseline['tag']}</code> より小さい場合に緑、大きい場合に赤で表示。
+RMSE列の単位は {unit_label}。横棒は baseline を中央線（1.0x）として表示する。
+緑は baseline より小さい残差、赤は大きい残差。バーが短いほど良い。
 </div>
 {skipped_html}
 """
@@ -894,15 +945,31 @@ def _build_residual_rmse_comparison_html(
         arr = np.asarray(vals, dtype=float)
         return float(np.mean(arr)), float(np.median(arr)), float(np.quantile(arr, 0.99))
 
-    def _cell(val: float, base: float) -> str:
-        ratio = val / base if base > 0 else 1.0
-        if ratio < 0.99:
-            style = ' style="color:#28a745;font-weight:bold"'
-        elif ratio > 1.01:
-            style = ' style="color:#dc3545"'
+    def _visual_cell(val: float, base: float) -> str:
+        if not np.isfinite(val) or not np.isfinite(base):
+            return '<td class="rmse-cell">N/A</td>'
+        ratio = val / base if base > 0 else float("nan")
+        if np.isfinite(ratio):
+            width = min(max(ratio, 0.0), 2.0) * 50.0
+            ratio_txt = f"{ratio:.2f}x"
+            pct = (1.0 - ratio) * 100.0
+            pct_txt = f"{pct:+.0f}%"
         else:
-            style = ""
-        return f"<td{style}>{val:.4g}</td>"
+            width = 50.0
+            ratio_txt = "N/A"
+            pct_txt = "N/A"
+        cls = "neutral"
+        if np.isfinite(ratio) and ratio < 0.99:
+            cls = "good"
+        elif np.isfinite(ratio) and ratio > 1.01:
+            cls = "bad"
+        title = f"RMSE={val:.4g}, baseline={base:.4g}, ratio={ratio_txt}, improvement={pct_txt}"
+        return (
+            f'<td class="rmse-cell" title="{title}">'
+            f'<div class="rmse-main"><span class="rmse-value">{val:.4g}</span></div>'
+            f'<div class="rmse-bar"><span class="rmse-fill {cls}" style="width:{width:.1f}%"></span></div>'
+            f'</td>'
+        )
 
     rows = []
     for row in valid_rows:
@@ -910,7 +977,10 @@ def _build_residual_rmse_comparison_html(
         model_style = ' style="color:#888"' if row["tag"] == baseline_tag else ""
         rows.append(
             f'<tr><td{model_style}><b>{row["tag"]}</b></td>'
-            f'{_cell(mean, b_mean)}{_cell(med, b_med)}{_cell(p99, b_p99)}</tr>'
+            f'<td>{len(row["rmses"])}</td>'
+            f'{_visual_cell(mean, b_mean)}'
+            f'{_visual_cell(med, b_med)}'
+            f'{_visual_cell(p99, b_p99)}</tr>'
         )
 
     note_html = f"<p>{note}</p>" if note else ""
@@ -921,15 +991,24 @@ def _build_residual_rmse_comparison_html(
 データセット横断で集計した。
 </p>
 {note_html}
-<table class="param-table" style="font-size:12px">
-  <thead><tr><th>モデル</th><th>平均</th><th>中央値</th><th>99%ile</th></tr></thead>
+<div style="overflow-x:auto">
+<table class="param-table" style="font-size:12px; min-width: 760px">
+  <thead>
+    <tr>
+      <th>比較行</th><th>n</th>
+      <th>平均<br><small>baseline=中央線</small></th>
+      <th>中央値<br><small>baseline=中央線</small></th>
+      <th>99%ile<br><small>baseline=中央線</small></th>
+    </tr>
+  </thead>
   <tbody>
 {chr(10).join(rows)}
   </tbody>
 </table>
+</div>
 <div class="note">
-各セルは <code>{baseline['tag']}</code> より小さい場合は <b style="color:#28a745">緑（改善）</b>、
-大きい場合は <span style="color:#dc3545">赤（悪化）</span> で表示。
+RMSE列の単位は {unit_label}。横棒は baseline を中央線（1.0x）として表示する。
+緑は baseline より小さい残差、赤は大きい残差。バーが短いほど良い。
 </div>
 """
 
