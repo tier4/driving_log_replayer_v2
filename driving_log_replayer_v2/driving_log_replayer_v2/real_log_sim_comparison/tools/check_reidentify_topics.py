@@ -15,6 +15,8 @@ plt.rcParams["lines.linewidth"] = 0.8
 DT_RESAMPLE = 0.01
 MAX_LAG_S = 0.50
 MIN_DURATION_S = 2.0
+DIFF_ROLLING_WINDOW = 10
+POSE_ROLLING_WINDOW = 15
 
 
 try:
@@ -233,6 +235,10 @@ def _fmt(value: float, digits: int = 3) -> str:
     return f"{value:.{digits}f}"
 
 
+def _savgol_label() -> str:
+    return f"SavGol {ACCEL_SAVGOL_WINDOW_S:.2f}s p{ACCEL_SAVGOL_POLYORDER}"
+
+
 def _metrics_table(metrics: list[SourceMetrics]) -> str:
     lines = ["source              src_lag corr   a_rmse  int_v_rmse"]
     for m in metrics:
@@ -288,7 +294,7 @@ def analyze_and_plot(csv_path: Path, output_png: Path) -> list[SourceMetrics] | 
     vy_map = np.gradient(df_kin["y"].to_numpy(dtype=float)) / dt_kin
     yaw = df_kin["yaw"].to_numpy(dtype=float)
     pose_v_lon = vx_map * np.cos(yaw) + vy_map * np.sin(yaw)
-    pose_v_lon_smooth = _rolling_mean(pose_v_lon, 15)
+    pose_v_lon_smooth = _rolling_mean(pose_v_lon, POSE_ROLLING_WINDOW)
 
     accel_topic = _resample(
         df_accel["t_s"].to_numpy(dtype=float),
@@ -306,17 +312,17 @@ def analyze_and_plot(csv_path: Path, output_png: Path) -> list[SourceMetrics] | 
 
     vel_diff_accel = _resample(
         t_vel,
-        _diff_like_reidentify(t_vel, lon_vel, smooth_window=10),
+        _diff_like_reidentify(t_vel, lon_vel, smooth_window=DIFF_ROLLING_WINDOW),
         t_grid,
     )
     kin_diff_accel = _resample(
         t_kin,
-        _diff_like_reidentify(t_kin, kin_vx, smooth_window=10),
+        _diff_like_reidentify(t_kin, kin_vx, smooth_window=DIFF_ROLLING_WINDOW),
         t_grid,
     )
     pos_2diff_accel = _resample(
         t_kin,
-        _diff_like_reidentify(t_kin, pose_v_lon_smooth, smooth_window=15),
+        _diff_like_reidentify(t_kin, pose_v_lon_smooth, smooth_window=POSE_ROLLING_WINDOW),
         t_grid,
     )
     vel_savgol_accel = _savgol_derivative_grid(vel_status_grid, deriv=1)
@@ -325,12 +331,42 @@ def analyze_and_plot(csv_path: Path, output_png: Path) -> list[SourceMetrics] | 
 
     sources = [
         AccelSource("accel", "/localization/acceleration", "#d62728", accel_topic),
-        AccelSource("kinematic_diff", "kinematic_state.vx diff+rolling", "#2ca02c", kin_diff_accel),
-        AccelSource("kinematic_savgol", "kinematic_state.vx SavGol d/dt", "#006d2c", kin_savgol_accel),
-        AccelSource("velocity_diff", "velocity_status.lon_vel diff+rolling", "#1f77b4", vel_diff_accel),
-        AccelSource("velocity_savgol", "velocity_status.lon_vel SavGol d/dt", "#08519c", vel_savgol_accel),
-        AccelSource("position_2diff", "kinematic pose diff+rolling", "#ff7f0e", pos_2diff_accel),
-        AccelSource("position_savgol", "kinematic pose velocity SavGol d/dt", "#8c510a", pos_savgol_accel),
+        AccelSource(
+            "kinematic_diff",
+            f"kinematic.vx diff+rolling w={DIFF_ROLLING_WINDOW}",
+            "#2ca02c",
+            kin_diff_accel,
+        ),
+        AccelSource(
+            "kinematic_savgol",
+            f"kinematic.vx {_savgol_label()} d/dt",
+            "#006d2c",
+            kin_savgol_accel,
+        ),
+        AccelSource(
+            "velocity_diff",
+            f"velocity_status.lon_vel diff+rolling w={DIFF_ROLLING_WINDOW}",
+            "#1f77b4",
+            vel_diff_accel,
+        ),
+        AccelSource(
+            "velocity_savgol",
+            f"velocity_status.lon_vel {_savgol_label()} d/dt",
+            "#08519c",
+            vel_savgol_accel,
+        ),
+        AccelSource(
+            "position_2diff",
+            f"kinematic pose diff+rolling w={POSE_ROLLING_WINDOW}",
+            "#ff7f0e",
+            pos_2diff_accel,
+        ),
+        AccelSource(
+            "position_savgol",
+            f"kinematic pose velocity {_savgol_label()} d/dt",
+            "#8c510a",
+            pos_savgol_accel,
+        ),
     ]
 
     metrics: list[SourceMetrics] = []
@@ -368,8 +404,9 @@ def analyze_and_plot(csv_path: Path, output_png: Path) -> list[SourceMetrics] | 
     fig, axes = plt.subplots(5, 1, figsize=(13, 15), sharex=True)
     fig.suptitle(
         f"Acceleration Source Consistency - {csv_path.parent.name} "
-        f"(current reidentify ACCEL_SOURCE={ACCEL_SOURCE})",
-        fontsize=13,
+        f"(current={ACCEL_SOURCE}, rolling w={DIFF_ROLLING_WINDOW}/{POSE_ROLLING_WINDOW}, "
+        f"{_savgol_label()})",
+        fontsize=12,
     )
 
     axes[0].plot(t_grid, vel_status_grid, label="velocity_status.lon_vel", color="#1f77b4")
