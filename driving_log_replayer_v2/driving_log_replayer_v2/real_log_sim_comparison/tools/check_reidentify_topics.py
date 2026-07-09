@@ -41,6 +41,7 @@ class AccelSource:
 class SourceMetrics:
     name: str
     label: str
+    # Positive means this source is later than /localization/acceleration.
     lag_s: float
     corr: float
     accel_rmse: float
@@ -169,7 +170,7 @@ def _best_lag_metrics(ref: np.ndarray, src: np.ndarray, dt: float) -> tuple[floa
 
     for shift in range(-max_shift, max_shift + 1):
         if shift > 0:
-            # Positive lag means the reference acceleration topic is later than src.
+            # Positive shift means the reference acceleration topic is later than src.
             ref_seg = ref[shift:]
             src_seg = src[:-shift]
         elif shift < 0:
@@ -233,7 +234,7 @@ def _fmt(value: float, digits: int = 3) -> str:
 
 
 def _metrics_table(metrics: list[SourceMetrics]) -> str:
-    lines = ["source              lag     corr   a_rmse  int_v_rmse"]
+    lines = ["source              src_lag corr   a_rmse  int_v_rmse"]
     for m in metrics:
         marker = "*" if m.name == ACCEL_SOURCE else " "
         lines.append(
@@ -334,11 +335,12 @@ def analyze_and_plot(csv_path: Path, output_png: Path) -> list[SourceMetrics] | 
 
     metrics: list[SourceMetrics] = []
     for src in sources:
-        lag_s, corr, accel_rmse = (
+        ref_lag_s, corr, accel_rmse = (
             (0.0, 1.0, 0.0)
             if src.name == "accel"
             else _best_lag_metrics(accel_topic, src.accel, DT_RESAMPLE)
         )
+        source_lag_s = -ref_lag_s
         v0_status = vel_status_grid[np.where(np.isfinite(vel_status_grid))[0][0]]
         v0_kin = kin_vx_grid[np.where(np.isfinite(kin_vx_grid))[0][0]]
         vel_from_accel = _integrate_accel(src.accel, DT_RESAMPLE, float(v0_status))
@@ -350,7 +352,7 @@ def analyze_and_plot(csv_path: Path, output_png: Path) -> list[SourceMetrics] | 
             SourceMetrics(
                 name=src.name,
                 label=src.label,
-                lag_s=lag_s,
+                lag_s=source_lag_s,
                 corr=corr,
                 accel_rmse=accel_rmse,
                 vel_rmse_status=_rmse(vel_from_accel, vel_status_grid),
@@ -391,11 +393,11 @@ def analyze_and_plot(csv_path: Path, output_png: Path) -> list[SourceMetrics] | 
 
     axes[2].plot(t_grid, current.accel, label=f"{current.label} (current)", color=current.color)
     if current_metrics is not None:
-        shifted_accel_topic = _resample(t_grid - current_metrics.lag_s, accel_topic, t_grid)
+        shifted_accel_topic = _resample(t_grid + current_metrics.lag_s, accel_topic, t_grid)
         axes[2].plot(
             t_grid,
             shifted_accel_topic,
-            label=f"/localization/acceleration shifted by {current_metrics.lag_s:+.3f}s",
+            label=f"/localization/acceleration shifted by {current_metrics.lag_s:+.3f}s to align with source",
             color="#9467bd",
             linestyle="--",
         )
@@ -411,7 +413,7 @@ def analyze_and_plot(csv_path: Path, output_png: Path) -> list[SourceMetrics] | 
         bbox={"facecolor": "white", "edgecolor": "#cccccc", "alpha": 0.88},
     )
     axes[2].set_ylabel("Accel [m/s^2]")
-    axes[2].set_title("Lag/correlation against /localization/acceleration (* = current reidentify source)")
+    axes[2].set_title("Lag/correlation against /localization/acceleration (positive src_lag = source is later)")
     axes[2].legend(loc="upper right")
     axes[2].grid(True)
 
@@ -475,7 +477,7 @@ def analyze_and_plot(csv_path: Path, output_png: Path) -> list[SourceMetrics] | 
     for m in ranked:
         marker = "*" if m.name == ACCEL_SOURCE else " "
         print(
-            f"  {marker}{m.name:<15} lag={m.lag_s:+.3f}s corr={_fmt(m.corr)} "
+            f"  {marker}{m.name:<15} src_lag={m.lag_s:+.3f}s corr={_fmt(m.corr)} "
             f"a_rmse={_fmt(m.accel_rmse)} v_rmse={_fmt(m.vel_rmse_status)} "
             f"v_drift={_fmt(m.vel_drift_status)}"
         )
@@ -547,7 +549,7 @@ def main() -> None:
     print(f"  Failed/Skipped: {failed}")
     if current_lags:
         print(
-            f"  Current source ({ACCEL_SOURCE}) lag: "
+            f"  Current source ({ACCEL_SOURCE}) src_lag: "
             f"{np.mean(current_lags):.3f} s (std: {np.std(current_lags):.3f})"
         )
     if current_vel_rmse:
