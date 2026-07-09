@@ -92,16 +92,21 @@ RELEASE_MODEL_KEY = "delay_steer_acc_geared_for_diffusion_planner"
 
 # Acceleration source configuration
 # "accel"          : Use the original /localization/acceleration topic (default with lag)
-# "kinematic_diff"  : Differentiate /localization/kinematic_state vx (recommended)
-# "velocity_diff"   : Differentiate /vehicle/status/velocity_status longitudinal_velocity
-ACCEL_SOURCE = "kinematic_diff"
+# "kinematic_diff"  : Differentiate /localization/kinematic_state vx with diff+rolling mean
+# "velocity_diff"   : Differentiate /vehicle/status/velocity_status longitudinal_velocity with diff+rolling mean
+# "kinematic_savgol": Differentiate /localization/kinematic_state vx with Savitzky-Golay (recommended)
+# "velocity_savgol" : Differentiate /vehicle/status/velocity_status longitudinal_velocity with Savitzky-Golay
+ACCEL_SOURCE = "kinematic_savgol"
+ACCEL_SAVGOL_WINDOW_S = 0.2
+ACCEL_SAVGOL_POLYORDER = 2
 
 # Processing lag correction (seconds) to be subtracted from identified delay.
 # - "accel" has a known ~80ms processing/filtering lag from EKF.
-# - Differentiated signals smoothed with a centered moving average have a phase lag of 0.
+# - Centered offline differentiated signals have a phase lag of 0.
 ACCEL_DELAY_MAP = {
     "accel": 0.080,
     "kinematic_diff": 0.0,
     "velocity_diff": 0.0,
+    "kinematic_savgol": 0.0,
+    "velocity_savgol": 0.0,
 }
-

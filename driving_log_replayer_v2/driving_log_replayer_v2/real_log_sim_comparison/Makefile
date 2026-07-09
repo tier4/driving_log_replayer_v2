@@ -32,7 +32,7 @@ RUN_PY := source "$(SETUP_BASH)" && MPLCONFIGDIR="$(MPLCONFIGDIR)" PYTHONPATH="$
 endif
 RUN_PY_NO_SETUP := MPLCONFIGDIR="$(MPLCONFIGDIR)" PYTHONPATH="$(PYTHONPATH_PREFIX):$${PYTHONPATH:-}" $(PYTHON)
 
-.PHONY: help local_cloud_run local_analysis_run local_batch_run local_cross_analysis_run local_multidataset_run local_multidataset_cloud_run prepare_multidataset issue_scenario collect_raw_rosbags open_loop_tune open_loop_batch physical_validity_report_nodata lite lite_ol lite_cl extract fit_lon fit_steer fit_merge fit_report reidentify apply closed_loop release_model_param reidentify_v2 compare_accel compare_accel_all
+.PHONY: help local_cloud_run local_analysis_run local_batch_run local_cross_analysis_run local_multidataset_run local_multidataset_cloud_run prepare_multidataset issue_scenario collect_raw_rosbags open_loop_tune open_loop_batch physical_validity_report_nodata lite lite_ol lite_cl extract fit_lon fit_steer fit_merge fit_report reidentify apply closed_loop release_model_param reidentify_v2 check_reidentify_topics check_reidentify_topics_all
 
 
 
@@ -82,6 +82,8 @@ help:
 	@echo "  reidentify v2 (reidentify/ 配下、vehicle_model_fitting 流のシンプルなスクリプト集への再構成版):"
 	@echo "    reidentify_v2       extract→fit_lon→fit_steer→fit_merge→report→release を run_reidentify.py で実行"
 	@echo "                        (出力は MULTI_BATCH_ROOT/reidentify_v2/ 配下。詳細は reidentify/README.md)"
+	@echo "    check_reidentify_topics"
+	@echo "                        reidentify_cache.csv の位置/速度/加速度 topic 整合性を PNG 診断"
 	@echo ""
 	@echo "  パイプライン構成:"
 	@echo "    0. step0_make_lite        実機 input_bag → lite/real.lite/ (共通基盤)"
@@ -646,21 +648,21 @@ physical_validity_report_nodata:
 	        --collection-dir "$$_nodata_col" \
 	        --out "$(NODATA_OUT)"
 
-# 加速度トピック・微分・位置2回微分の比較プロットを生成する。
+# reidentify が使う位置・速度・加速度 topic の微分/積分整合性診断 PNG を生成する。
 #
 # 使い方:
-#   make compare_accel CSV=<reidentify_cache.csvのパス> [OUT=<png出力パス>]
+#   make check_reidentify_topics CSV=<reidentify_cache.csvのパス> [OUT=<png出力パス>]
 #   または (MULTI_BATCH_ROOT を使用し、特定の UUID を指定):
-#   make compare_accel UUID=<uuid> [OUT=<png出力パス>]
+#   make check_reidentify_topics UUID=<uuid> [OUT=<png出力パス>]
 #
 # 例:
-#   make compare_accel CSV=/path/to/reidentify_cache.csv
-#   make compare_accel UUID=00d08afd-b605-5de1-9db0-51241fa87b18
-compare_accel:
+#   make check_reidentify_topics CSV=/path/to/reidentify_cache.csv
+#   make check_reidentify_topics UUID=00d08afd-b605-5de1-9db0-51241fa87b18
+check_reidentify_topics:
 	@if [ -z "$(CSV)" ] && [ -z "$(UUID)" ]; then \
 	    echo "[ERROR] CSV または UUID を指定してください。"; \
-	    echo "  例1: make compare_accel CSV=/path/to/reidentify_cache.csv"; \
-	    echo "  例2: make compare_accel UUID=00d08afd-b605-5de1-9db0-51241fa87b18 [MULTI_BATCH_ROOT=<dir>]"; \
+	    echo "  例1: make check_reidentify_topics CSV=/path/to/reidentify_cache.csv"; \
+	    echo "  例2: make check_reidentify_topics UUID=00d08afd-b605-5de1-9db0-51241fa87b18 [MULTI_BATCH_ROOT=<dir>]"; \
 	    exit 1; \
 	fi
 	@csv_path="$(CSV)" ; \
@@ -671,23 +673,21 @@ compare_accel:
 	test -f "$$csv_path" || { echo "[ERROR] CSV ファイルが見つかりません: $$csv_path"; exit 1; } ; \
 	out_path="$(OUT)" ; \
 	if [ -z "$$out_path" ]; then \
-	    out_path="$$(dirname "$$csv_path")/acceleration_comparison.png" ; \
+	    out_path="$$(dirname "$$csv_path")/reidentify_topic_consistency.png" ; \
 	fi ; \
 	echo "[INFO] Input CSV : $$csv_path" ; \
 	echo "[INFO] Output PNG: $$out_path" ; \
-	$(RUN_PY_NO_SETUP) $(MAKEFILE_DIR)/tools/compare_accel.py --csv "$$csv_path" --out "$$out_path"
+	$(RUN_PY_NO_SETUP) $(MAKEFILE_DIR)/tools/check_reidentify_topics.py --csv "$$csv_path" --out "$$out_path"
 
-# 全データセットに対して比較プロットを一括生成する。
+# 全データセットに対して topic 整合性診断 PNG を一括生成する。
 #
 # 使い方:
-#   make compare_accel_all [MULTI_BATCH_ROOT=<dir>]
+#   make check_reidentify_topics_all [MULTI_BATCH_ROOT=<dir>]
 #
 # 例:
-#   make compare_accel_all
-compare_accel_all:
+#   make check_reidentify_topics_all
+check_reidentify_topics_all:
 	@batch_root="$(or $(MULTI_BATCH_ROOT),/home/kotaroyoshimoto/data/openloop_j6_16_onwards)" ; \
 	test -d "$$batch_root/datasets" || { echo "[ERROR] datasets ディレクトリが見つかりません: $$batch_root/datasets"; exit 1; } ; \
 	echo "[INFO] Batch plotting in progress..." ; \
-	$(RUN_PY_NO_SETUP) $(MAKEFILE_DIR)/tools/compare_accel.py --collection-dir "$$batch_root/datasets"
-
-
+	$(RUN_PY_NO_SETUP) $(MAKEFILE_DIR)/tools/check_reidentify_topics.py --collection-dir "$$batch_root/datasets"
