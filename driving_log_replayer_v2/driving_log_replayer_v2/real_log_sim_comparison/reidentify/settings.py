@@ -3,6 +3,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from ..lib._accel_source import ACCEL_DELAY_MAP, ACCEL_SAVGOL_POLYORDER, ACCEL_SAVGOL_WINDOW_S
+
 DEFAULT_OUTPUT_DIR_NAME = "reidentify_v2"
 DEFAULT_INPUT_PARAM = Path(
     "/home/kotaroyoshimoto/workspace/x2_e2e_44/src/description/vehicle/"
@@ -97,16 +99,3 @@ RELEASE_MODEL_KEY = "delay_steer_acc_geared_for_diffusion_planner"
 # "kinematic_savgol": Differentiate /localization/kinematic_state vx with Savitzky-Golay
 # "velocity_savgol" : Differentiate /vehicle/status/velocity_status longitudinal_velocity with Savitzky-Golay
 ACCEL_SOURCE = "kinematic_diff"
-ACCEL_SAVGOL_WINDOW_S = 0.2
-ACCEL_SAVGOL_POLYORDER = 2
-
-# Processing lag correction (seconds) to be subtracted from identified delay.
-# - "accel" has a known ~80ms processing/filtering lag from EKF.
-# - Centered offline differentiated signals have a phase lag of 0.
-ACCEL_DELAY_MAP = {
-    "accel": 0.080,
-    "kinematic_diff": 0.0,
-    "velocity_diff": 0.0,
-    "kinematic_savgol": 0.0,
-    "velocity_savgol": 0.0,
-}

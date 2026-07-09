@@ -37,6 +37,7 @@ from ._io import (
     load_velocity,
     require_drive_gear_mask,
 )
+from ._accel_source import accel_on_grid, normalize_accel_source
 from ._fit_core import (
     _moving_avg as _moving_avg,
     delay_shift as _delay_shift,
@@ -217,7 +218,7 @@ def _pitch_range(bag_path: Path) -> tuple[float, float]:
 # ---------------------------------------------------------------------------
 # 縦方向: 単一データセット同定 (路面勾配補正込み)
 # ---------------------------------------------------------------------------
-def fit_long_single(bag_path: Path) -> dict | None:
+def fit_long_single(bag_path: Path, acceleration_source: str = "accel") -> dict | None:
     """縦方向一次遅れモデルの単一データセット同定 (路面勾配補正込み)。
 
     Step 1 (グリッドサーチ): T を _DELAY_CANDIDATES_LONG (1/30s 刻み) 上に固定し、
@@ -234,6 +235,7 @@ def fit_long_single(bag_path: Path) -> dict | None:
         df_cmd = load_cmd(bag_path, CMD_TOPIC)
         df_accel = load_accel(bag_path)
         df_vel = load_velocity(bag_path)
+        df_kin = load_kinematic(bag_path)
     except Exception:
         return None
     _require_dfs(
@@ -241,15 +243,25 @@ def fit_long_single(bag_path: Path) -> dict | None:
         control_cmd=df_cmd,
         localization_acceleration=df_accel,
         velocity_status=df_vel,
+        localization_kinematic_state=df_kin,
     )
 
-    timebase = _common_timebase(df_cmd, df_accel, df_vel, min_span_ns=_MIN_SPAN_NS)
+    source = normalize_accel_source(acceleration_source)
+    timebase = _common_timebase(df_cmd, df_accel, df_vel, df_kin, min_span_ns=_MIN_SPAN_NS)
     if timebase is None:
         return None
     t_s, t0 = timebase
 
     a_cmd_arr = _resample(df_cmd, "cmd_accel", t_s, t0)
-    a_act_arr = _resample(df_accel, "accel", t_s, t0)
+    a_act_arr = accel_on_grid(
+        source,
+        df_accel=df_accel,
+        df_vel=df_vel,
+        df_kin=df_kin,
+        t_s=t_s,
+        t0_ns=t0,
+        dt=_FIT_DT,
+    )
     vx = _resample(df_vel, "lon_vel", t_s, t0)
     gear_drive = _drive_mask_on_grid(bag_path, t_s, t0, context=f"fit_long_single:{bag_path}")
     slope_acc_arr = _slope_acc_on_grid(bag_path, t_s, t0)
@@ -298,6 +310,7 @@ def fit_long_single(bag_path: Path) -> dict | None:
         "act_arr": a_act_corr,
         "mask_arr": mask_dyn,
         "t_s": t_s,
+        "acceleration_source": source,
         "phase1_tau": fit.get("phase1_tau"),
         "phase1_delay": fit.get("phase1_delay"),
         "phase2_delay": fit.get("phase2_delay"),
@@ -876,6 +889,7 @@ def _pick_longest_contiguous_timeseries_row(
 
 def fit_long_cross_dataset_bounded(
     entries: list, per_ds_long: dict[str, dict], n_top: int = _N_CROSS_FIT_DATASET,
+    acceleration_source: str = "accel",
 ) -> dict:
     """縦方向一次遅れモデルの横断最小二乗法同定 (n_dyn 上位 n_top データセットのみ MCAP 再読込)。
 
@@ -890,11 +904,13 @@ def fit_long_cross_dataset_bounded(
 
     pooled: list[tuple[np.ndarray, np.ndarray, np.ndarray]] = []
     all_pitch: list[float] = []
+    source = normalize_accel_source(acceleration_source)
     for e in ranked:
         try:
             df_cmd = load_cmd(e.real_lite, CMD_TOPIC)
             df_accel = load_accel(e.real_lite)
             df_vel = load_velocity(e.real_lite)
+            df_kin = load_kinematic(e.real_lite)
         except Exception:
             continue
         _require_dfs(
@@ -902,13 +918,22 @@ def fit_long_cross_dataset_bounded(
             control_cmd=df_cmd,
             localization_acceleration=df_accel,
             velocity_status=df_vel,
+            localization_kinematic_state=df_kin,
         )
-        timebase = _common_timebase(df_cmd, df_accel, df_vel, min_span_ns=_MIN_SPAN_NS)
+        timebase = _common_timebase(df_cmd, df_accel, df_vel, df_kin, min_span_ns=_MIN_SPAN_NS)
         if timebase is None:
             continue
         t_s, t0 = timebase
         a_cmd_arr = _resample(df_cmd, "cmd_accel", t_s, t0)
-        a_act_arr = _resample(df_accel, "accel", t_s, t0)
+        a_act_arr = accel_on_grid(
+            source,
+            df_accel=df_accel,
+            df_vel=df_vel,
+            df_kin=df_kin,
+            t_s=t_s,
+            t0_ns=t0,
+            dt=_FIT_DT,
+        )
         vx = _resample(df_vel, "lon_vel", t_s, t0)
         gear_drive = _drive_mask_on_grid(e.real_lite, t_s, t0, context=f"fit_long_cross_dataset_bounded:{e.dataset_id}")
         slope_acc_arr = _slope_acc_on_grid(e.real_lite, t_s, t0)
@@ -1007,11 +1032,13 @@ def fit_long_cross_dataset_bounded(
 
 
 def _compute_cross_long_row_worker(args) -> dict | None:
-    entry, fit, cross_fit, models = args
+    entry, fit, cross_fit, models, acceleration_source = args
+    source = normalize_accel_source(acceleration_source)
     try:
         df_cmd = load_cmd(entry.real_lite, CMD_TOPIC)
         df_accel = load_accel(entry.real_lite)
         df_vel = load_velocity(entry.real_lite)
+        df_kin = load_kinematic(entry.real_lite)
     except Exception:
         return None
     _require_dfs(
@@ -1019,13 +1046,22 @@ def _compute_cross_long_row_worker(args) -> dict | None:
         control_cmd=df_cmd,
         localization_acceleration=df_accel,
         velocity_status=df_vel,
+        localization_kinematic_state=df_kin,
     )
-    timebase = _common_timebase(df_cmd, df_accel, df_vel, min_span_ns=_MIN_SPAN_NS)
+    timebase = _common_timebase(df_cmd, df_accel, df_vel, df_kin, min_span_ns=_MIN_SPAN_NS)
     if timebase is None:
         return None
     t_s, t0 = timebase
     a_cmd_arr = _resample(df_cmd, "cmd_accel", t_s, t0)
-    a_act_arr = _resample(df_accel, "accel", t_s, t0)
+    a_act_arr = accel_on_grid(
+        source,
+        df_accel=df_accel,
+        df_vel=df_vel,
+        df_kin=df_kin,
+        t_s=t_s,
+        t0_ns=t0,
+        dt=_FIT_DT,
+    )
     vx = _resample(df_vel, "lon_vel", t_s, t0)
     gear_drive = _drive_mask_on_grid(entry.real_lite, t_s, t0, context=f"compute_cross_long_rows:{entry.dataset_id}")
     slope_acc_arr = _slope_acc_on_grid(entry.real_lite, t_s, t0)
@@ -1105,12 +1141,13 @@ def compute_cross_long_rows(
     entries: list, per_ds_long: dict[str, dict], cross_fit: dict, models: dict | None,
     pinned_uuids: list[str] | None = None,
     n_jobs: int = 8,
+    acceleration_source: str = "accel",
 ) -> list[dict]:
     """最長連続データセットの縦方向時系列 (横断フィット + モデル別チューン値重ね描き用)。"""
     candidates = _valid_fit_entries(entries, per_ds_long, "rmse_mps2")
     from concurrent.futures import ProcessPoolExecutor
     worker_args = [
-        (entry, per_ds_long.get(entry.dataset_id, {}), cross_fit, models)
+        (entry, per_ds_long.get(entry.dataset_id, {}), cross_fit, models, acceleration_source)
         for entry in candidates
     ]
     if not worker_args:

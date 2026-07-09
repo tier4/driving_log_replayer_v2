@@ -39,6 +39,8 @@ from typing import Any
 
 import yaml
 
+from ._accel_source import normalize_accel_source
+
 
 # vehicle_model_type (open-loop クラス名) → sim の vehicle_model_type パラメータ (enum 文字列)
 # step3_run_sims が simple_sensor_simulator.vehicle_model_type:=<ENUM> として launch に渡す。
@@ -74,7 +76,8 @@ KNOWN_PARAM_KEYS: frozenset[str] = frozenset({
 })
 
 _KNOWN_MODEL_KEYS: frozenset[str] = frozenset({
-    "vehicle_model_type", "vehicle_model", "params",
+    "vehicle_model_type", "vehicle_model", "acceleration_source",
+    "model_role", "version", "source_param_path", "params",
     "sensor_model", "initialize_duration", "architecture_type",
     "godot_executable", "timeout_s",
     "dp_model_dir", "dp_model_release", "dp_model_package",
@@ -163,6 +166,10 @@ class ModelSpec:
     name: str
     vehicle_model_type: str | None = None      # open-loop VehicleModel クラス名
     vehicle_model: str | None = None           # closed-loop description パッケージ名
+    acceleration_source: str = "accel"          # 評価用実測加速度系列
+    model_role: str | None = None
+    version: str | int | None = None
+    source_param_path: str | None = None
     params: dict[str, Any] = field(default_factory=dict)
     # sim 専用フィールド (open-loop では無視)
     sensor_model: str = "aip_x2_gen2"
@@ -194,6 +201,7 @@ class ModelsDoc:
     models: dict[str, ModelSpec]
     cases_list: list[str]
     sim_runs_list: list[str]
+    comparison_models_list: list[str] = field(default_factory=list)
     overlay: OverlaySpec = field(default_factory=OverlaySpec)
 
     def find_case(self, tag: str) -> ModelSpec:
@@ -213,6 +221,11 @@ class ModelsDoc:
     @property
     def runs(self) -> list[ModelSpec]:
         return [self.models[name] for name in self.sim_runs_list]
+
+    @property
+    def comparison_models(self) -> list[ModelSpec]:
+        names = self.comparison_models_list or self.cases_list
+        return [self.models[name] for name in names]
 
 
 def _find_named(items: list[ModelSpec], tag: str, kind: str) -> ModelSpec:
@@ -314,6 +327,10 @@ def load_models_doc(scenario_path: str | Path) -> ModelsDoc:
             name=name,
             vehicle_model_type=vmt,
             vehicle_model=str(vm) if vm is not None else None,
+            acceleration_source=normalize_accel_source(entry.get("acceleration_source"), default="accel"),
+            model_role=str(entry["model_role"]) if entry.get("model_role") is not None else None,
+            version=entry.get("version"),
+            source_param_path=_expand_path(entry.get("source_param_path")),
             params=dict(raw_params),
             sensor_model=str(entry.get("sensor_model", "aip_x2_gen2")),
             initialize_duration=int(entry.get("initialize_duration", 100)),
@@ -347,12 +364,24 @@ def load_models_doc(scenario_path: str | Path) -> ModelsDoc:
         empty_note="closed-loop sim はスキップされます",
     )
 
+    # ── comparison_models リスト ─────────────────────────────────────────────
+    comparison_models_list = _validate_named_model_list(
+        scenario_path=p,
+        models=models,
+        raw_names=conditions.get("comparison_models", cases_list),
+        list_name="comparison_models",
+        required_attr="vehicle_model_type",
+        required_detail="vehicle_model_type (比較評価用 open-loop VehicleModel クラス選択)",
+        empty_note="比較評価は Conditions.cases にフォールバックします",
+    )
+
     overlay = _load_overlay_spec(conditions)
 
     return ModelsDoc(
         models=models,
         cases_list=cases_list,
         sim_runs_list=sim_runs_list,
+        comparison_models_list=comparison_models_list,
         overlay=overlay,
     )
 

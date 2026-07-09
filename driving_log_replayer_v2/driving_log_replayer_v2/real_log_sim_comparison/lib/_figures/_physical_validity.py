@@ -611,6 +611,17 @@ def build_fig_nstep_error_hist(df: pd.DataFrame, label: str = "tuned") -> go.Fig
     if not horizons:
         return _placeholder_fig("N-step Open Loop評価データなし")
 
+    if "model" in df.columns and "p14_yaw" not in df.columns:
+        model_df = df[df["model"].astype(str) == label]
+        if model_df.empty:
+            model_df = df
+        df = model_df.rename(columns={
+            "yaw": "p14_yaw",
+            "lat": "p14_lat",
+            "long": "p14_long",
+            "vx": "p14_vx",
+        })
+
     fig = make_subplots(
         rows=len(horizons), cols=len(_NSTEP_ERROR_METRICS),
         subplot_titles=[f"N={h}  {mlabel}" for h in horizons for _, mlabel, _ in _NSTEP_ERROR_METRICS],
@@ -675,6 +686,51 @@ def build_fig_nstep_error_growth(
     horizons = sorted(df["h"].unique().tolist())
     if not horizons:
         return _placeholder_fig("N-step Open Loop評価データなし")
+
+    if "model" in df.columns and "p14_yaw" not in df.columns:
+        fig = make_subplots(
+            rows=1, cols=len(_NSTEP_GROWTH_METRICS),
+            subplot_titles=[mlabel for _, mlabel in _NSTEP_GROWTH_METRICS],
+            horizontal_spacing=0.06,
+        )
+        palette = ["steelblue", "darkorange", "seagreen", "indianred", "purple", "teal"]
+        models = list(dict.fromkeys(df["model"].astype(str).tolist()))
+        hx = np.array(horizons, dtype=float)
+        for ci, (metric, mlabel) in enumerate(_NSTEP_GROWTH_METRICS, start=1):
+            for mi, model in enumerate(models):
+                color = palette[mi % len(palette)]
+                med, q25, q75 = [], [], []
+                for h in horizons:
+                    vals = df[(df["h"] == h) & (df["model"].astype(str) == model)][metric].dropna().to_numpy(dtype=float)
+                    if len(vals) == 0:
+                        med.append(np.nan); q25.append(np.nan); q75.append(np.nan)
+                        continue
+                    med.append(float(np.median(vals)))
+                    q25.append(float(np.percentile(vals, 25)))
+                    q75.append(float(np.percentile(vals, 75)))
+                med_a, q25_a, q75_a = np.array(med), np.array(q25), np.array(q75)
+                fig.add_trace(go.Scatter(
+                    x=np.concatenate([hx, hx[::-1]]).tolist(),
+                    y=np.concatenate([q75_a, q25_a[::-1]]).tolist(),
+                    fill="toself", fillcolor="rgba(128,128,128,0.10)",
+                    line=dict(color="rgba(0,0,0,0)"),
+                    name=f"{model} IQR", legendgroup=model,
+                    showlegend=False, hoverinfo="skip",
+                ), row=1, col=ci)
+                fig.add_trace(go.Scatter(
+                    x=hx.tolist(), y=med_a.tolist(),
+                    mode="lines+markers", line=dict(color=color, width=2.2),
+                    name=model, legendgroup=model, showlegend=(ci == 1),
+                ), row=1, col=ci)
+            fig.update_xaxes(title_text="horizon N [step]", row=1, col=ci)
+            fig.update_yaxes(title_text=mlabel, row=1, col=ci)
+
+        return apply_base_layout(
+            fig,
+            title="N-step Open Loop評価: 終端誤差のドリフト成長カーブ（全比較モデル、中央値 + IQR）",
+            height=380,
+            legend=dict(orientation="h", y=1.10, x=0),
+        )
 
     fig = make_subplots(
         rows=1, cols=len(_NSTEP_GROWTH_METRICS),

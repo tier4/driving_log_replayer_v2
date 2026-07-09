@@ -161,6 +161,68 @@ def _model_fingerprint(model_type: str, params: dict) -> str:
     return hashlib.sha256(payload.encode()).hexdigest()[:16]
 
 
+def _build_comparison_specs(
+    scenario: Path | None,
+    current_case: str,
+    current_eval_params: dict,
+) -> list[dict]:
+    """Resolve N-way comparison models from scenario.yaml."""
+    if scenario is None:
+        return [
+            {
+                "tag": "baseline",
+                "label": "baseline",
+                "model_type": _BASELINE_MODEL,
+                "params": {},
+                "acceleration_source": "accel",
+                "is_current": False,
+            },
+            {
+                "tag": current_case,
+                "label": current_case,
+                "model_type": _BASELINE_MODEL,
+                "params": current_eval_params,
+                "acceleration_source": "accel",
+                "is_current": True,
+            },
+        ]
+
+    doc = load_models_doc(scenario)
+    names = [spec.name for spec in doc.comparison_models]
+    if current_case not in names:
+        names.append(current_case)
+
+    out: list[dict] = []
+    for name in names:
+        spec = doc.models[name]
+        if spec.vehicle_model_type is None:
+            continue
+        params = current_eval_params if name == current_case else dict(spec.params)
+        out.append({
+            "tag": name,
+            "label": name,
+            "model_type": spec.vehicle_model_type,
+            "params": params,
+            "acceleration_source": spec.acceleration_source,
+            "is_current": name == current_case,
+        })
+    return out
+
+
+def _comparison_fingerprint(specs: list[dict]) -> str:
+    payload = [
+        {
+            "tag": s["tag"],
+            "model_type": s["model_type"],
+            "acceleration_source": s["acceleration_source"],
+            "params": s["params"],
+        }
+        for s in specs
+    ]
+    raw = json.dumps(payload, sort_keys=True, separators=(",", ":"), default=str)
+    return hashlib.sha256(raw.encode()).hexdigest()[:16]
+
+
 def _metrics_cache_matches(path: Path, expected: dict[str, str]) -> bool:
     try:
         header = pd.read_csv(path, nrows=1)
@@ -196,13 +258,13 @@ def _to_entries(ds_list: list) -> list[DatasetEntry]:
 
 def _fit_single_worker(args: tuple) -> tuple[str, dict | None, dict | None]:
     """プロセスワーカー: 1 データセットの縦方向 / 操舵 一次遅れモデル同定。"""
-    uuid, bag_str = args
+    uuid, bag_str, acceleration_source = args
     bag = Path(bag_str)
-    return uuid, fit_long_single(bag), fit_steer_single(bag)
+    return uuid, fit_long_single(bag, acceleration_source=acceleration_source), fit_steer_single(bag)
 
 
 def fit_per_dataset(
-    entries: list[DatasetEntry], n_jobs: int = 8,
+    entries: list[DatasetEntry], n_jobs: int = 8, acceleration_source: str = "accel",
 ) -> tuple[dict[str, dict], dict[str, dict]]:
     """縦方向 / 操舵の per-dataset 実行時フィットを並列実行する。
 
@@ -217,7 +279,7 @@ def fit_per_dataset(
     per_ds_steer: dict[str, dict] = {}
     with ProcessPoolExecutor(max_workers=n_workers) as pool:
         futs = [
-            pool.submit(_fit_single_worker, (e.dataset_id, str(e.real_lite)))
+            pool.submit(_fit_single_worker, (e.dataset_id, str(e.real_lite), acceleration_source))
             for e in targets
         ]
         for i, fut in enumerate(as_completed(futs), 1):
@@ -736,6 +798,75 @@ def _build_fit_rmse_table_html(
 {label} の値が baseline より小さい場合は <b style="color:#28a745">緑（改善）</b>、
 大きい場合は <span style="color:#dc3545">赤（悪化）</span> で表示。
 </div>
+"""
+
+
+def _build_fit_rmse_table_multi_html(
+    model_rows: list[dict],
+    unit_label: str,
+    title_label: str,
+    baseline_tag: str = "baseline",
+) -> str:
+    valid_rows = [r for r in model_rows if r.get("rmses")]
+    if not valid_rows:
+        return ""
+
+    baseline = next((r for r in valid_rows if r["tag"] == baseline_tag), valid_rows[0])
+    b_vals = np.asarray(baseline["rmses"], dtype=float)
+    b_mean = float(np.mean(b_vals))
+    b_med = float(np.median(b_vals))
+    b_p99 = float(np.quantile(b_vals, 0.99))
+
+    def _stats(vals: list[float]) -> tuple[float, float, float]:
+        arr = np.asarray(vals, dtype=float)
+        return float(np.mean(arr)), float(np.median(arr)), float(np.quantile(arr, 0.99))
+
+    def _cell(val: float, base: float) -> str:
+        ratio = val / base if base > 0 else 1.0
+        if ratio < 0.99:
+            style = ' style="color:#28a745;font-weight:bold"'
+        elif ratio > 1.01:
+            style = ' style="color:#dc3545"'
+        else:
+            style = ""
+        return f"<td{style}>{val:.4g}</td>"
+
+    rows = []
+    for row in valid_rows:
+        mean, med, p99 = _stats(row["rmses"])
+        model_style = ' style="color:#888"' if row["tag"] == baseline_tag else ""
+        rows.append(
+            f'<tr><td{model_style}><b>{row["tag"]}</b><br>'
+            f'<small>{row.get("acceleration_source", "-")}</small></td>'
+            f'{_cell(mean, b_mean)}{_cell(med, b_med)}{_cell(p99, b_p99)}</tr>'
+        )
+
+    skipped = [r for r in model_rows if not r.get("rmses")]
+    skipped_html = ""
+    if skipped:
+        skipped_html = (
+            "<div class=\"note\">比較をスキップしたモデル: "
+            + ", ".join(f"<code>{r['tag']}</code> ({r.get('reason', 'N/A')})" for r in skipped)
+            + "</div>"
+        )
+
+    return f"""
+<h3>フィッティング精度: 方程式残差RMSE 比較（{title_label}）</h3>
+<p>
+各比較モデルのパラメータを、それぞれの <code>acceleration_source</code> に対応する同じ実測配列へ代入し、
+方程式残差 \\(J\\)（<code>equation_residual_at_params</code> の <code>rmse_resid</code>、単位 {unit_label}）を
+データセット横断で集計した。
+</p>
+<table class="param-table" style="font-size:12px">
+  <thead><tr><th>モデル<br><small>acceleration source</small></th><th>平均</th><th>中央値</th><th>99%ile</th></tr></thead>
+  <tbody>
+{chr(10).join(rows)}
+  </tbody>
+</table>
+<div class="note">
+各セルは <code>{baseline['tag']}</code> より小さい場合に緑、大きい場合に赤で表示。
+</div>
+{skipped_html}
 """
 
 
@@ -1399,6 +1530,16 @@ def _build_sec_deviation(
     label: str = "phase14",
 ) -> str:
     """N-step Open Loop評価: 終端誤差テーブルセクション（tuned vs baseline）。"""
+    if "model" in df.columns:
+        return _build_sec_deviation_long(
+            df,
+            n_dataset,
+            recomputed_score=recomputed_score,
+            expected_score=expected_score,
+            score_name=score_name,
+            label=label,
+        )
+
     horizons = sorted(df["h"].unique().tolist())
 
     stats_list = []
@@ -1524,6 +1665,172 @@ RMSE は各データセットの全 k0 ステップ（stride=5）の終端誤差
 縦線は 中央値／90%ile／95%ile／99%ile。表の「平均」「99%ile」だけでは見えない
 裾の太さ（大きく外れるデータセットがどの程度の割合あるか）を確認できる。
 </p>
+{hist_html}
+</details>
+</section>
+"""
+
+
+def _rollout_score_args_from_df(
+    df_rollout: pd.DataFrame, current_tag: str, baseline_tag: str,
+) -> tuple[list[tuple[str, dict]], dict]:
+    per_ds_arg = []
+    bl_arg: dict = {}
+    if "model" in df_rollout.columns:
+        for uuid_key, grp in df_rollout.groupby("uuid"):
+            cur = grp[grp["model"] == current_tag].set_index("h")
+            base = grp[grp["model"] == baseline_tag].set_index("h")
+            if cur.empty or base.empty:
+                continue
+            per_ds_arg.append((
+                uuid_key,
+                {
+                    int(h): {"yaw": v["yaw"], "long": v["long"], "lat": v["lat"]}
+                    for h, v in cur[["yaw", "long", "lat"]].to_dict("index").items()
+                },
+            ))
+            bl_arg[uuid_key] = {
+                int(h): {"yaw": v["yaw"], "long": v["long"], "lat": v["lat"]}
+                for h, v in base[["yaw", "long", "lat"]].to_dict("index").items()
+            }
+        return per_ds_arg, bl_arg
+
+    for uuid_key, grp in df_rollout.groupby("uuid"):
+        gd = grp.set_index("h")[
+            ["p14_yaw", "p14_long", "p14_lat", "bl_yaw", "bl_long", "bl_lat"]
+        ].to_dict("index")
+        per_ds_arg.append((
+            uuid_key,
+            {int(h): {"yaw": v["p14_yaw"], "long": v["p14_long"], "lat": v["p14_lat"]}
+             for h, v in gd.items()},
+        ))
+        bl_arg[uuid_key] = {
+            int(h): {"yaw": v["bl_yaw"], "long": v["bl_long"], "lat": v["bl_lat"]}
+            for h, v in gd.items()
+        }
+    return per_ds_arg, bl_arg
+
+
+def _build_sec_deviation_long(
+    df: pd.DataFrame,
+    n_dataset: int,
+    recomputed_score: float | None = None,
+    expected_score: float | None = None,
+    score_name: str = "robust_score",
+    label: str = "current",
+) -> str:
+    horizons = sorted(df["h"].unique().tolist())
+    models = list(dict.fromkeys(df["model"].astype(str).tolist()))
+    baseline_tag = "baseline" if "baseline" in models else models[0]
+
+    score_html = ""
+    if recomputed_score is not None and expected_score is not None:
+        diff_pct = abs(recomputed_score - expected_score) / expected_score * 100 if expected_score else 0.0
+        ok = diff_pct < 2.0
+        color = "#28a745" if ok else "#dc3545"
+        score_html = (
+            f'<div class="note" style="border-color:{color}">'
+            f"スコア再現検証 (<code>{score_name}</code>): 再計算 = <b>{recomputed_score:.4f}</b>、"
+            f"YAML 期待値 = <b>{expected_score:.4f}</b>（差 {diff_pct:.2f}%）"
+            + (" — ✓ 整合" if ok else " — ⚠ 不整合（override/model/SUB_DT を確認）")
+            + "</div>"
+        )
+
+    def _cell(val: float, base: float, fmt: str = ".3f") -> str:
+        ratio = val / base if base > 0 else 1.0
+        if ratio < 0.99:
+            style = ' style="color:#28a745;font-weight:bold"'
+        elif ratio > 1.01:
+            style = ' style="color:#dc3545"'
+        else:
+            style = ""
+        return f"<td{style}>{val:{fmt}}</td>"
+
+    rows: list[str] = []
+    for h in horizons:
+        h_df = df[df["h"] == h]
+        span = _H_SPAN.get(h, "")
+        base_df = h_df[h_df["model"] == baseline_tag]
+        base_stats = {
+            metric: (
+                float(base_df[metric].mean()) if not base_df.empty else 1.0,
+                float(base_df[metric].quantile(0.99)) if not base_df.empty else 1.0,
+            )
+            for metric in ("yaw", "lat", "long", "vx")
+        }
+        first = True
+        for model in models:
+            sub = h_df[h_df["model"] == model]
+            if sub.empty:
+                continue
+            row_span = f' rowspan="{len(models)}"' if first else ""
+            h_cell = (
+                f'  <td{row_span} style="text-align:center"><b>N={h}</b><br>'
+                f'<small style="color:#888">{span}</small></td>\n'
+                if first else ""
+            )
+            model_style = ' style="color:#888"' if model == baseline_tag else ""
+            rows.append(
+                f'<tr>\n'
+                f'{h_cell}'
+                f'  <td{model_style}><b>{model}</b><br><small>{sub["acceleration_source"].iloc[0]}</small></td>\n'
+                f'  {_cell(float(sub["yaw"].mean()), base_stats["yaw"][0])}'
+                f'{_cell(float(sub["yaw"].quantile(0.99)), base_stats["yaw"][1])}\n'
+                f'  {_cell(float(sub["lat"].mean()), base_stats["lat"][0])}'
+                f'{_cell(float(sub["lat"].quantile(0.99)), base_stats["lat"][1])}\n'
+                f'  {_cell(float(sub["long"].mean()), base_stats["long"][0])}'
+                f'{_cell(float(sub["long"].quantile(0.99)), base_stats["long"][1])}\n'
+                f'  {_cell(float(sub["vx"].mean()), base_stats["vx"][0], ".4f")}'
+                f'{_cell(float(sub["vx"].quantile(0.99)), base_stats["vx"][1], ".4f")}\n'
+                f'</tr>'
+            )
+            first = False
+
+    hist_df = df[df["model"] == label] if label in models else df[df["model"] == models[-1]]
+    hist_fig = build_fig_nstep_error_hist(hist_df, label=label)
+    hist_html = hist_fig.to_html(full_html=False, include_plotlyjs=False)
+    growth_fig = build_fig_nstep_error_growth(df, label=label, baseline_label=baseline_tag)
+    growth_html = growth_fig.to_html(full_html=False, include_plotlyjs=False)
+
+    return f"""
+<section id="deviation">
+<h2>4-1. N-step Open Loop評価: 終端誤差（比較対象 {len(models)} モデル）</h2>
+<p>
+全データセットに対し scenario.yaml の <code>Conditions.comparison_models</code> に含まれる各モデルで
+N-step Open Loop評価（ロールアウト）を実施し、終端誤差 RMSE のデータセット横断 <b>平均</b>と
+<b>99パーセンタイル</b>を N ごとに集計する。各モデルの実測加速度系列は
+<code>acceleration_source</code> 列に従う。
+</p>
+{score_html}
+<table class="param-table" style="font-size:12px">
+  <thead>
+    <tr>
+      <th rowspan="2">N（時間）</th>
+      <th rowspan="2">モデル<br><small>acceleration source</small></th>
+      <th colspan="2">yaw 誤差 [deg]</th>
+      <th colspan="2">lat 誤差 [cm]</th>
+      <th colspan="2">long 誤差 [cm]</th>
+      <th colspan="2">速度誤差 \\(v_x\\) [m/s]</th>
+    </tr>
+    <tr>
+      <th>平均</th><th>99%ile</th>
+      <th>平均</th><th>99%ile</th>
+      <th>平均</th><th>99%ile</th>
+      <th>平均</th><th>99%ile</th>
+    </tr>
+  </thead>
+  <tbody>
+{chr(10).join(rows)}
+  </tbody>
+</table>
+<div class="note">
+各セルは <code>{baseline_tag}</code> より小さい場合に緑、大きい場合に赤で表示。
+RMSE は各データセットの全 k0 ステップ（stride=5）の終端誤差（N ステップ先）の二乗平均平方根。
+</div>
+<h3>ドリフト成長カーブ（horizon 別 終端誤差の中央値 + IQR）</h3>
+{growth_html}
+<details>
+<summary>詳細評価結果: {label} の N-step Open Loop評価 誤差分布（ヒストグラム）</summary>
 {hist_html}
 </details>
 </section>
@@ -1897,6 +2204,12 @@ def main() -> None:
     phase_label = args.label if args.label is not None else current_model
     tuned_params = {k: v for k, v in params.items() if not k.startswith("_")}
     current_eval_params = {**current_base_params, **tuned_params}
+    comparison_specs = _build_comparison_specs(args.scenario, args.case, current_eval_params)
+    comparison_fingerprint = _comparison_fingerprint(comparison_specs)
+    baseline_accel_source = next(
+        (s["acceleration_source"] for s in comparison_specs if s["tag"] == baseline_case),
+        "accel",
+    )
 
     # Resolve fully merged parameters to extract vehicle geometry and steer bias overrides
     merged_tuned = merged_model_params(current_eval_params)
@@ -1940,10 +2253,15 @@ def main() -> None:
         "baseline_model_type": baseline_model,
         "current_fingerprint": _model_fingerprint(current_model, current_eval_params),
         "baseline_fingerprint": _model_fingerprint(baseline_model, baseline_params),
+        "comparison_fingerprint": comparison_fingerprint,
     }
     print(f"パラメータ: {args.params.name}  (label={phase_label})")
     print(f"  current: {args.case} ({current_model})")
     print(f"  baseline: {baseline_case} ({baseline_model})")
+    print(
+        "  comparison_models: "
+        + ", ".join(f"{s['tag']}({s['model_type']}, accel={s['acceleration_source']})" for s in comparison_specs)
+    )
     print(f"  k_us={params.get('k_us', 0):.5f} (全速度域一定)")
     print(f"  steer_bias={steer_bias:.5f} rad")
     print(f"  wheelbase={wheelbase:.5f} m")
@@ -1977,8 +2295,17 @@ def main() -> None:
     # 事前 CSV 生成を置き換え。最長連続時系列選定の母集団として全件を並列同定する）
     entries = _to_entries(ds_list)
     n_fit_target = len([e for e in entries if e.real_lite is not None])
-    print(f"\n[Phase 2b] 縦方向・操舵 per-dataset フィット (全 {n_fit_target} データセット並列) ...")
-    per_ds_long, per_ds_steer = fit_per_dataset(entries, n_jobs=args.n_jobs)
+    current_accel_source = next(
+        (s["acceleration_source"] for s in comparison_specs if s["tag"] == args.case),
+        "accel",
+    )
+    print(
+        f"\n[Phase 2b] 縦方向・操舵 per-dataset フィット "
+        f"(全 {n_fit_target} データセット並列, long accel_source={current_accel_source}) ..."
+    )
+    per_ds_long, per_ds_steer = fit_per_dataset(
+        entries, n_jobs=args.n_jobs, acceleration_source=current_accel_source,
+    )
     print(f"  縦方向: {len(per_ds_long)}/{n_fit_target} 件、操舵: {len(per_ds_steer)}/{n_fit_target} 件 同定成功")
 
     # Phase 3: カーブ多データセット選定
@@ -2035,6 +2362,7 @@ def main() -> None:
             n_jobs=min(args.n_jobs, len(top_items)),
             baseline_model_type=baseline_model,
             baseline_params=baseline_params,
+            baseline_acceleration_source=baseline_accel_source,
         )
         print(f"\n[Phase 3c] rollout メトリクスキャッシュ読み込み ...")
         df_rollout = pd.read_csv(args.metrics_cache)
@@ -2042,21 +2370,7 @@ def main() -> None:
         n_h_cache = df_rollout["h"].nunique()
         print(f"  {len(df_rollout)} 行（{n_dataset_cache} データセット × {n_h_cache} horizons）")
         # score 再現検証（キャッシュロード時も実施）
-        per_ds_arg = []
-        bl_arg: dict = {}
-        for uuid_key, grp in df_rollout.groupby("uuid"):
-            gd = grp.set_index("h")[
-                ["p14_yaw", "p14_long", "p14_lat", "bl_yaw", "bl_long", "bl_lat"]
-            ].to_dict("index")
-            per_ds_arg.append((
-                uuid_key,
-                {int(h): {"yaw": v["p14_yaw"], "long": v["p14_long"], "lat": v["p14_lat"]}
-                 for h, v in gd.items()},
-            ))
-            bl_arg[uuid_key] = {
-                int(h): {"yaw": v["bl_yaw"], "long": v["bl_long"], "lat": v["bl_lat"]}
-                for h, v in gd.items()
-            }
+        per_ds_arg, bl_arg = _rollout_score_args_from_df(df_rollout, args.case, baseline_case)
         agg = _agg_normalized(per_ds_arg, bl_arg)
         expected = float(yaml_data.get("score") or 0.0)
         candidates = [
@@ -2078,7 +2392,7 @@ def main() -> None:
         else:
             baseline_score = _steer_score(_agg_normalized(list(bl_arg.items()), bl_arg))
         print(f"  baseline {best_name}: {baseline_score:.4f}")
-        deviation_html = _build_sec_deviation(df_rollout, len(records), recomputed, expected, score_name=best_name, label=phase_label)
+        deviation_html = _build_sec_deviation(df_rollout, len(records), recomputed, expected, score_name=best_name, label=args.case)
     elif args.metrics_cache:
         # キャッシュなし → 全データセット load（ついでに viewer データセット も取り出す）
         all_items = [(r["uuid"], Path(r["lite_dir"])) for r in records]
@@ -2088,28 +2402,37 @@ def main() -> None:
             n_jobs=args.n_jobs,
             baseline_model_type=baseline_model,
             baseline_params=baseline_params,
+            baseline_acceleration_source=baseline_accel_source,
         )
         # viewer データセットを all_ctxs から抽出（重複 load 回避）
         ctxs_by_id = {c.dataset_id: c for c in all_ctxs}
         ctxs = [ctxs_by_id[r["uuid"]] for r in top_curve if r["uuid"] in ctxs_by_id]
-        # phase14 override: YAML の全 params から _* メタキーを除外（hand-pick より安全）
         rows = []
         for i, ctx in enumerate(all_ctxs, 1):
-            try:
-                p14 = _tune_eval(ctx, current_eval_params, current_model)
-            except Exception as e:
-                print(f"  [WARN] {ctx.dataset_id[:12]}: eval 失敗 ({e})")
-                continue
-            bl = ctx.base_metric
-            for h in _HORIZONS:
-                rows.append({
-                    "uuid": ctx.dataset_id, "h": h,
-                    "p14_yaw": p14[h]["yaw"], "p14_long": p14[h]["long"],
-                    "p14_lat": p14[h]["lat"], "p14_vx": p14[h]["vx"],
-                    "bl_yaw": bl[h]["yaw"], "bl_long": bl[h]["long"],
-                    "bl_lat": bl[h]["lat"], "bl_vx": bl[h]["vx"],
-                    **cache_identity,
-                })
+            for spec in comparison_specs:
+                try:
+                    metric = _tune_eval(
+                        ctx,
+                        spec["params"],
+                        spec["model_type"],
+                        spec["acceleration_source"],
+                    )
+                except Exception as e:
+                    print(f"  [WARN] {ctx.dataset_id[:12]} {spec['tag']}: eval 失敗 ({e})")
+                    continue
+                for h in _HORIZONS:
+                    rows.append({
+                        "uuid": ctx.dataset_id,
+                        "h": h,
+                        "model": spec["tag"],
+                        "model_type": spec["model_type"],
+                        "acceleration_source": spec["acceleration_source"],
+                        "yaw": metric[h]["yaw"],
+                        "long": metric[h]["long"],
+                        "lat": metric[h]["lat"],
+                        "vx": metric[h]["vx"],
+                        **cache_identity,
+                    })
             if i % 100 == 0:
                 print(f"  {i}/{len(all_ctxs)} 完了", flush=True)
         df_rollout = pd.DataFrame(rows)
@@ -2117,21 +2440,7 @@ def main() -> None:
         df_rollout.to_csv(args.metrics_cache, index=False)
         print(f"  キャッシュ保存: {args.metrics_cache}")
         # score 再現検証
-        per_ds_arg = []
-        bl_arg: dict = {}
-        for uuid_key, grp in df_rollout.groupby("uuid"):
-            grp_dict = grp.set_index("h")[
-                ["p14_yaw", "p14_long", "p14_lat", "bl_yaw", "bl_long", "bl_lat"]
-            ].to_dict("index")
-            per_ds_arg.append((
-                uuid_key,
-                {int(h): {"yaw": v["p14_yaw"], "long": v["p14_long"], "lat": v["p14_lat"]}
-                 for h, v in grp_dict.items()},
-            ))
-            bl_arg[uuid_key] = {
-                int(h): {"yaw": v["bl_yaw"], "long": v["bl_long"], "lat": v["bl_lat"]}
-                for h, v in grp_dict.items()
-            }
+        per_ds_arg, bl_arg = _rollout_score_args_from_df(df_rollout, args.case, baseline_case)
         agg = _agg_normalized(per_ds_arg, bl_arg)
         expected = float(yaml_data.get("score") or 0.0)
         # YAML の score は tuning --phase に応じて steer/acc/robust のいずれかなので最接近を選択
@@ -2154,7 +2463,7 @@ def main() -> None:
         else:
             baseline_score = _steer_score(_agg_normalized(list(bl_arg.items()), bl_arg))
         print(f"  baseline {best_name}: {baseline_score:.4f}")
-        deviation_html = _build_sec_deviation(df_rollout, len(records), recomputed, expected, score_name=best_name, label=phase_label)
+        deviation_html = _build_sec_deviation(df_rollout, len(records), recomputed, expected, score_name=best_name, label=args.case)
     else:
         pass
         # --metrics-cache 未指定 → 通常の viewer データセット のみ load
@@ -2164,6 +2473,7 @@ def main() -> None:
             n_jobs=min(args.n_jobs, len(top_items)),
             baseline_model_type=baseline_model,
             baseline_params=baseline_params,
+            baseline_acceleration_source=baseline_accel_source,
         )
 
     curve_count_map = {r["uuid"]: r["curve_count"] for r in top_curve}
@@ -2232,7 +2542,9 @@ def main() -> None:
     models_long = {_model_name("acc_time_constant", "acc_time_delay"): SimpleNamespace(params=tuned_clean)}
     models_steer = {_model_name("steer_time_constant", "steer_time_delay"): SimpleNamespace(params=tuned_clean)}
 
-    cross_fit_long = fit_long_cross_dataset_bounded(entries, per_ds_long)
+    cross_fit_long = fit_long_cross_dataset_bounded(
+        entries, per_ds_long, acceleration_source=current_accel_source,
+    )
     if np.isfinite(cross_fit_long.get("tau", float("nan"))):
         print(
             f"  縦方向 横断同定: τ={cross_fit_long['tau']:.3f}s"
@@ -2248,7 +2560,7 @@ def main() -> None:
     ]
     rows_long = compute_cross_long_rows(
         entries, per_ds_long, cross_fit_long, models_long, pinned_uuids=long_steer_pinned_uuids,
-        n_jobs=args.n_jobs,
+        n_jobs=args.n_jobs, acceleration_source=current_accel_source,
     )
     long_fig = build_fig_cross_long(rows_long, cross_fit_long)
 
@@ -2326,9 +2638,22 @@ def main() -> None:
         per_ds_steer, final_tau_d, final_T_d, _SG_WINDOW_STEER,
     )
 
+    delay_model_types = {
+        "delay_steer_acc_geared_wo_fall_guard",
+        "delay_steer_acc_geared_for_diffusion_planner",
+    }
+    long_sources = {s["acceleration_source"] for s in comparison_specs}
+    per_ds_long_by_source: dict[str, dict[str, dict]] = {current_accel_source: per_ds_long}
+    for source in sorted(long_sources - {current_accel_source}):
+        print(f"  [residual] 縦方向 residual 用 source={source} の per-dataset fit を追加計算 ...")
+        per_ds_long_by_source[source], _unused_steer = fit_per_dataset(
+            entries, n_jobs=args.n_jobs, acceleration_source=source,
+        )
+
     if _model_types_match:
         _resid_long_bl_pool, _resid_long_bl_med, _resid_long_bl_rmses = _pool_resid_at_params(
-            per_ds_long, baseline_tau_a, baseline_T_a, _SG_WINDOW_LONG,
+            per_ds_long_by_source.get(baseline_accel_source, per_ds_long),
+            baseline_tau_a, baseline_T_a, _SG_WINDOW_LONG,
         )
         _resid_steer_bl_pool, _resid_steer_bl_med, _resid_steer_bl_rmses = _pool_resid_at_params(
             per_ds_steer, baseline_tau_d, baseline_T_d, _SG_WINDOW_STEER,
@@ -2337,7 +2662,8 @@ def main() -> None:
             per_ds_long, final_tau_a, final_T_a, _SG_WINDOW_LONG,
         )
         _long_phase_baseline = _pool_resid_long_baseline_by_phase(
-            per_ds_long, baseline_tau_a, baseline_T_a, _SG_WINDOW_LONG,
+            per_ds_long_by_source.get(baseline_accel_source, per_ds_long),
+            baseline_tau_a, baseline_T_a, _SG_WINDOW_LONG,
         )
     else:
         # baseline_model と current_model の運動方程式形が同一である保証がないため、
@@ -2345,6 +2671,46 @@ def main() -> None:
         _resid_long_bl_pool, _resid_long_bl_med, _resid_long_bl_rmses = [], float("nan"), []
         _resid_steer_bl_pool, _resid_steer_bl_med, _resid_steer_bl_rmses = [], float("nan"), []
         _long_phase_tuned, _long_phase_baseline = {}, {}
+
+    long_resid_rows: list[dict] = []
+    steer_resid_rows: list[dict] = []
+    for spec in comparison_specs:
+        merged = merged_model_params(spec["params"])
+        model_type = spec["model_type"]
+        source = spec["acceleration_source"]
+        if model_type not in delay_model_types:
+            reason = f"unsupported model_type={model_type}"
+            long_resid_rows.append({"tag": spec["tag"], "acceleration_source": source, "rmses": [], "reason": reason})
+            steer_resid_rows.append({"tag": spec["tag"], "acceleration_source": "-", "rmses": [], "reason": reason})
+            continue
+        tau_a = merged.get("acc_time_constant")
+        delay_a = merged.get("acc_time_delay")
+        tau_d = merged.get("steer_time_constant")
+        delay_d = merged.get("steer_time_delay")
+        if tau_a is not None and delay_a is not None:
+            _pool, _med, rmses = _pool_resid_at_params(
+                per_ds_long_by_source.get(source, per_ds_long),
+                float(tau_a),
+                float(delay_a),
+                _SG_WINDOW_LONG,
+            )
+            long_resid_rows.append({
+                "tag": spec["tag"],
+                "acceleration_source": source,
+                "rmses": rmses,
+            })
+        if tau_d is not None and delay_d is not None:
+            _pool, _med, rmses = _pool_resid_at_params(
+                per_ds_steer,
+                float(tau_d),
+                float(delay_d),
+                _SG_WINDOW_STEER,
+            )
+            steer_resid_rows.append({
+                "tag": spec["tag"],
+                "acceleration_source": "-",
+                "rmses": rmses,
+            })
 
     long_resid_hist_fig = build_fig_equation_residual_hist(
         _resid_long_pool, channel_label="縦 (dot a_act 式)", unit_label="m/s³",
@@ -2357,25 +2723,12 @@ def main() -> None:
         baseline_resid_samples=_resid_steer_bl_pool or None, baseline_rmse_median=_resid_steer_bl_med,
     )
 
-    if _model_types_match:
-        long_fit_rmse_html = _build_fit_rmse_table_html(
-            _resid_long_rmses, _resid_long_bl_rmses, "m/s³", phase_label,
-            phase_tuned=_long_phase_tuned, phase_baseline=_long_phase_baseline,
-        )
-        steer_fit_rmse_html = _build_fit_rmse_table_html(
-            _resid_steer_rmses, _resid_steer_bl_rmses, "rad/s", phase_label,
-        )
-    else:
-        _model_mismatch_note = (
-            '<div class="note" style="border-color:#dc3545">'
-            f"⚠️ baseline（<code>{baseline_model}</code>）と {phase_label}（<code>{current_model}</code>）は"
-            "車両モデル種別が異なるため、方程式残差RMSEの baseline 比較"
-            "（同一の一次遅れ+純粋遅延式へのパラメータ代入方式）は運動方程式形の一致を前提としており、"
-            "意味のある値にならないため省略しました。"
-            "</div>"
-        )
-        long_fit_rmse_html = _model_mismatch_note
-        steer_fit_rmse_html = _model_mismatch_note
+    long_fit_rmse_html = _build_fit_rmse_table_multi_html(
+        long_resid_rows, "m/s³", "縦方向 dot a_act 式", baseline_tag=baseline_case,
+    )
+    steer_fit_rmse_html = _build_fit_rmse_table_multi_html(
+        steer_resid_rows, "rad/s", "操舵 dot δ_act 式", baseline_tag=baseline_case,
+    )
 
     # 2-4 x/y heading 補正軌跡フィットには curve 上位 _PERF_N_DATASET データセットを使用（viewer 用 top_curve とは独立して選択）
     perf_records = candidate_curve[:_PERF_N_DATASET]

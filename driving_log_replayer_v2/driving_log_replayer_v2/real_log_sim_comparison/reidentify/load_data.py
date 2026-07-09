@@ -10,40 +10,13 @@ from pathlib import Path
 
 import numpy as np
 import pandas as pd
-from scipy.signal import savgol_filter
 
 from ..lib._collection import discover_collection
+from ..lib._accel_source import accel_on_grid
 from ..lib._validation import require_non_empty_df
 from .csv_schema import CACHE_NAME, SIGNAL_COLUMNS
 from .gear import require_drive_gear_mask
-from .settings import ACCEL_SOURCE, ACCEL_SAVGOL_POLYORDER, ACCEL_SAVGOL_WINDOW_S
-
-
-def _savgol_window(n: int, dt: float, window_s: float, polyorder: int) -> int | None:
-    win = int(round(window_s / dt))
-    if win % 2 == 0:
-        win += 1
-    if win <= polyorder:
-        win = polyorder + 1 if (polyorder + 1) % 2 == 1 else polyorder + 2
-    if win > n:
-        win = n if n % 2 == 1 else n - 1
-    if win <= polyorder:
-        return None
-    return win
-
-
-def _savgol_derivative_grid(values: np.ndarray, dt: float) -> np.ndarray:
-    values = np.asarray(values, dtype=float)
-    win = _savgol_window(len(values), dt, ACCEL_SAVGOL_WINDOW_S, ACCEL_SAVGOL_POLYORDER)
-    if win is None:
-        return np.gradient(values, dt)
-    return savgol_filter(
-        values,
-        window_length=win,
-        polyorder=ACCEL_SAVGOL_POLYORDER,
-        deriv=1,
-        delta=dt,
-    )
+from .settings import ACCEL_SOURCE
 
 
 def read_dataset_csv(csv_path: Path) -> dict[str, pd.DataFrame]:
@@ -106,41 +79,15 @@ def build_resampled(dfs: dict[str, pd.DataFrame], dt: float, *, context: str) ->
 
     a_cmd = np.interp(t_s, (df_cmd["t_ns"].values - t0) * 1e-9, df_cmd["cmd_accel"].values)
     
-    a_act = None
-    if ACCEL_SOURCE == "accel":
-        accel_t_ns = df_accel["t_ns"].values
-        accel_val = df_accel["accel"].values
-    elif ACCEL_SOURCE == "kinematic_diff":
-        t_s_kin = df_kin["t_ns"].values * 1e-9
-        vx = df_kin["vx"].values
-        sample_dt = np.diff(t_s_kin)
-        dv = np.diff(vx)
-        raw_accel = np.zeros_like(vx)
-        raw_accel[1:] = dv / np.maximum(sample_dt, 1e-6)
-        smooth_accel = pd.Series(raw_accel).rolling(window=10, min_periods=1, center=True).mean().values
-        accel_t_ns = df_kin["t_ns"].values
-        accel_val = smooth_accel
-    elif ACCEL_SOURCE == "velocity_diff":
-        t_s_vel = df_vel["t_ns"].values * 1e-9
-        lon_vel = df_vel["lon_vel"].values
-        sample_dt = np.diff(t_s_vel)
-        dv = np.diff(lon_vel)
-        raw_accel = np.zeros_like(lon_vel)
-        raw_accel[1:] = dv / np.maximum(sample_dt, 1e-6)
-        smooth_accel = pd.Series(raw_accel).rolling(window=10, min_periods=1, center=True).mean().values
-        accel_t_ns = df_vel["t_ns"].values
-        accel_val = smooth_accel
-    elif ACCEL_SOURCE == "kinematic_savgol":
-        vx_grid = np.interp(t_s, (df_kin["t_ns"].values - t0) * 1e-9, df_kin["vx"].values)
-        a_act = _savgol_derivative_grid(vx_grid, dt)
-    elif ACCEL_SOURCE == "velocity_savgol":
-        vx_grid = np.interp(t_s, (df_vel["t_ns"].values - t0) * 1e-9, df_vel["lon_vel"].values)
-        a_act = _savgol_derivative_grid(vx_grid, dt)
-    else:
-        raise ValueError(f"Unknown ACCEL_SOURCE: {ACCEL_SOURCE}")
-
-    if a_act is None:
-        a_act = np.interp(t_s, (accel_t_ns - t0) * 1e-9, accel_val)
+    a_act = accel_on_grid(
+        ACCEL_SOURCE,
+        df_accel=df_accel,
+        df_vel=df_vel,
+        df_kin=df_kin,
+        t_s=t_s,
+        t0_ns=t0,
+        dt=dt,
+    )
 
     d_cmd = np.interp(t_s, (df_cmd["t_ns"].values - t0) * 1e-9, df_cmd["cmd_steer"].values)
     d_act = np.interp(t_s, (df_steer["t_ns"].values - t0) * 1e-9, df_steer["steer"].values)
@@ -161,14 +108,25 @@ def build_resampled(dfs: dict[str, pd.DataFrame], dt: float, *, context: str) ->
     }
 
 
-def build_rollout_data(dfs: dict[str, pd.DataFrame]) -> dict[str, pd.DataFrame]:
+def build_rollout_data(
+    dfs: dict[str, pd.DataFrame], *, acceleration_source: str = "accel"
+) -> dict[str, pd.DataFrame]:
     """rollout.py の `_prepare_gt`/`find_autonomous_start` が期待する data dict を組み立てる。
 
     `step_ol1_analyze_nstep.load_real_bag` の戻り値と同じキー・列構成にする
     (mode/vel(vx)/steer/kin/acc(ax)/cmd(accel_des,steer_des)/gear)。
     """
     df_vel = dfs["velocity"].rename(columns={"lon_vel": "vx"})
-    df_acc = dfs["accel"].rename(columns={"accel": "ax"})
+    from ..lib._accel_source import accel_dataframe_from_source
+
+    df_acc = accel_dataframe_from_source(
+        acceleration_source,
+        df_accel=dfs["accel"],
+        df_vel=dfs["velocity"],
+        df_kin=dfs["kinematic"],
+        out_col="ax",
+    )
+    df_acc["ay"] = 0.0
     df_cmd = dfs["cmd"].rename(columns={"cmd_accel": "accel_des", "cmd_steer": "steer_des"})
     df_cmd = df_cmd[["t_ns", "accel_des", "steer_des"]]
     return {
