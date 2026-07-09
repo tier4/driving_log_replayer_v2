@@ -1368,8 +1368,7 @@ E_\\delta[k;\\tau_\\delta,T_\\delta]
 <section id="sec-yaw">
 <h2>2-3. ヨー・横方向（運動学的自転車モデル）のオープンループ同定</h2>
 <p class="meta">
-&#128279; <a href="#sec-state-space">1-2 状態方程式</a> の \\(\\dot x\\) 式・
-\\(\\dot y\\) 式・\\(\\dot\\theta\\) 式に対応。
+&#128279; <a href="#sec-state-space">1-2 状態方程式</a> の \\(\\dot\\theta\\) 式に対応。
 </p>
 <p>
 2-1（縦方向）・2-2（操舵追従）が先行して確定した後、
@@ -1382,19 +1381,11 @@ E_\\delta[k;\\tau_\\delta,T_\\delta]
 直進（\\(\\delta_{{\\mathrm{{act}}}}+\\beta \\approx 0\\)）では感度がほぼゼロなので、曲率のある区間だけを評価対象にする。
 </p>
 
-<p><b>運動方程式（\\(\\dot x\\) 式・\\(\\dot y\\) 式・\\(\\dot\\theta\\) 式と同じ状態表記）:</b></p>
+<p><b>運動方程式（\\(\\dot\\theta\\) 式）:</b></p>
 \\[
-\\begin{{pmatrix}}
-{{\\color{{#1565c0}} \\dot x}} \\\\
-{{\\color{{#1565c0}} \\dot y}} \\\\
 {{\\color{{#1565c0}} \\dot\\theta}}
-\\end{{pmatrix}}
 =
-\\begin{{pmatrix}}
-{{\\color{{#1565c0}} v_x}} \\cos{{\\color{{#1565c0}} \\theta}} \\\\
-{{\\color{{#1565c0}} v_x}} \\sin{{\\color{{#1565c0}} \\theta}} \\\\
 \\dfrac{{{{\\color{{#1565c0}} v_x}}\\,\\tan({{\\color{{#1565c0}} \\delta_{{\\mathrm{{act}}}}}}+\\beta)}}{{L + k_{{\\mathrm{{us}}}}\\,{{\\color{{#1565c0}} v_x}}^2}}
-\\end{{pmatrix}}
 \\]
 <p><b>式中の定数・補足:</b></p>
 <ul>
@@ -1491,8 +1482,21 @@ heading 補正係数 \\(c\\) を同定する。
 ここでは前段の加速度追従式・操舵追従式・ヨー式をロールアウトしないため、それらの誤差は x/y 補正項の同定に混入しない。
 今回の補正は、旋回率と速度の積に比例して有効 heading をずらす形式として
 \\[
-\\dot x = v_x\\cos(\\theta - c v_x\\dot\\theta),\\qquad
-\\dot y = v_x\\sin(\\theta - c v_x\\dot\\theta)
+{{\\color{{#1565c0}} \\dot x}}
+= {{\\color{{#1565c0}} v_x}}\\cos\\left(
+{{\\color{{#1565c0}} \\theta}}
+- {{\\color{{#6a1b9a}} c}}\\,
+{{\\color{{#1565c0}} v_x}}\\,
+{{\\color{{#1565c0}} \\dot\\theta}}
+\\right),
+\\qquad
+{{\\color{{#1565c0}} \\dot y}}
+= {{\\color{{#1565c0}} v_x}}\\sin\\left(
+{{\\color{{#1565c0}} \\theta}}
+- {{\\color{{#6a1b9a}} c}}\\,
+{{\\color{{#1565c0}} v_x}}\\,
+{{\\color{{#1565c0}} \\dot\\theta}}
+\\right)
 \\]
 を用い、全対象データセットの積分後の \\(x,y\\) 位置誤差をプールして \\(c\\) を同定する。
 </p>
