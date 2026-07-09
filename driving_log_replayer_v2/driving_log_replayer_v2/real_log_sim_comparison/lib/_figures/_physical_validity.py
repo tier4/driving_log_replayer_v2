@@ -226,14 +226,27 @@ def build_fig_yaw_equation_residual(yaw_data: dict | None) -> go.Figure:
     if not yaw_data or int(yaw_data.get("n", 0)) == 0:
         return _placeholder_fig("yaw 方程式残差の評価不可（曲線走行サンプル不足）", height=360)
 
-    series = [
-        ("fitted", "residual fitted", "steelblue"),
-        ("tuned", "tuned params", "seagreen"),
-        ("baseline", "baseline k_us=0", "darkorange"),
-    ]
+    model_series = []
+    palette = ["darkorange", "seagreen", "mediumpurple", "teal", "firebrick", "slategray"]
+    for idx, (tag, stats) in enumerate((yaw_data.get("models") or {}).items()):
+        k_us = float(stats.get("k_us", float("nan")))
+        label = f"{tag} k_us={k_us:.5f}" if np.isfinite(k_us) else tag
+        model_series.append((f"model:{tag}", label, palette[idx % len(palette)]))
+    if model_series:
+        series = model_series + [("fitted", "residual fitted (reference)", "steelblue")]
+    else:
+        series = [
+            ("fitted", "residual fitted", "steelblue"),
+            ("tuned", "tuned params", "seagreen"),
+            ("baseline", "baseline k_us=0", "darkorange"),
+        ]
     arrays: dict[str, np.ndarray] = {}
     for key, _label, _color in series:
-        arr = np.asarray((yaw_data.get(key) or {}).get("resid", []), dtype=float)
+        if key.startswith("model:"):
+            stats = (yaw_data.get("models") or {}).get(key.split(":", 1)[1]) or {}
+        else:
+            stats = yaw_data.get(key) or {}
+        arr = np.asarray(stats.get("resid", []), dtype=float)
         arr = arr[np.isfinite(arr)]
         if arr.size:
             arrays[key] = arr
@@ -264,13 +277,10 @@ def build_fig_yaw_equation_residual(yaw_data: dict | None) -> go.Figure:
         )
 
     fitted_k = float((yaw_data.get("params") or {}).get("k_us", float("nan")))
-    tuned_k = float((yaw_data.get("tuned_params") or {}).get("k_us", float("nan")))
     n = int(yaw_data.get("n", 0))
     subtitle = f"E = v_x tan(delta_eff)/(L+k_us v_x^2) - wz_meas, n={n}"
     if np.isfinite(fitted_k):
         subtitle += f"<br>residual fitted k_us={fitted_k:.5f}"
-    if np.isfinite(tuned_k):
-        subtitle += f" / tuned={tuned_k:.5f}"
 
     fig.add_vline(x=0.0, line=dict(color="black", width=1.5))
     fig.update_layout(barmode="overlay")

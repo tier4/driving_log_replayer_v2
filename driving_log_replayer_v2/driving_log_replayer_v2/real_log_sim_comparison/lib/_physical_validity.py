@@ -1,4 +1,4 @@
-"""実機ログからの車両モデル物理妥当性同定 (縦方向 / 操舵 / 横方向 k_us).
+"""実機ログからの車両モデル物理妥当性同定 (縦方向 / 操舵 / yaw 方程式残差).
 
 数値計算ロジックと物理定数の SSOT (single source of truth)。
 `physical_validity_report.py`（スタンドアロン検証スクリプト）、per-dataset 解析
@@ -12,12 +12,12 @@ notebook (rclpy 無し kernel) からの利用は個別関数の依存を確認�
              (a_act は速度の運動学的微分で重力分力を内包するため、pitch から重力分力を
               引いた a_corr をフィット対象にする。二重計上防止のため a_act 自体には加算しない)
     操舵:   ddelta/dt = (delta_cmd(t-T) - delta_act) / tau
-    横方向: tan(steer_eff) = (L/v + k_us*v) * wz  (原点回帰、k_us はスカラー)
+    yaw:    wz = v_x * tan(delta_eff) / (L + k_us * v_x^2)
 
-collection 横断の k_us は十分統計量 (sum_x2, sum_xy) の加算プールで再構成できる
-(原点回帰の正規方程式が線形加算的なため、生サンプル再読込は不要)。縦方向の横断フィットは
-非線形遅延グリッドサーチのため十分統計量に還元できず、n_dyn 上位データセットのみ MCAP を
-再読込する (`fit_long_cross_dataset_bounded`)。
+physical_validity_report.py の 2-3 では、観測値を yaw 式へ直接代入した方程式残差
+`RHS(k_us) - wz_meas` を最小化して k_us を評価する。縦方向の横断フィットは
+非線形遅延グリッドサーチのため、n_dyn 上位データセットのみ MCAP を再読込する
+(`fit_long_cross_dataset_bounded`)。
 """
 
 from __future__ import annotations
@@ -397,14 +397,14 @@ def fit_steer_single(bag_path: Path) -> dict | None:
 
 
 # ---------------------------------------------------------------------------
-# 横方向 k_us: 全速度域一括の原点回帰 (スカラー、十分統計量つき、単一/複数データセット両対応)
+# 横方向 yaw: k_us/yaw 方程式残差分析用の実測配列抽出
 # ---------------------------------------------------------------------------
 def _extract_kus_arrays(bag_path: Path, steer_bias: float | None = None) -> dict | None:
-    """k_us 分析用の vx/wz/steer_eff/dwz を単一データセットから抽出する。
+    """k_us/yaw 分析用の vx/wz/steer_eff/dwz を単一データセットから抽出する。
 
     付随情報として kinematic 時刻 t [s] 和 yaw [rad] も返す
     (physical_validity_report の worker がカーブカバレッジ・cmd_steer 間引きに使う。
-    `compute_kus_bins` は vx/wz/steer_eff/dwz のみ参照し、余剰キーは無視される)。
+    yaw 方程式残差評価は vx/wz/steer_eff/dwz のみ参照し、余剰キーは無視される)。
     """
     try:
         df_kin = load_kinematic(bag_path)
@@ -432,7 +432,7 @@ def _extract_kus_arrays(bag_path: Path, steer_bias: float | None = None) -> dict
     steer_raw = df_steer["steer"].values
     t_s = df_steer["t_ns"].values * 1e-9
     steer = np.interp(t_k, t_s, steer_raw)
-    
+
     if steer_bias is None:
         steer_bias = STEER_BIAS
     steer_eff = steer - steer_bias
@@ -458,71 +458,6 @@ def _extract_kus_arrays(bag_path: Path, steer_bias: float | None = None) -> dict
     }
 
 
-def compute_kus_bins(records: list[dict]) -> dict:
-    """全速度域一括の最小二乗法回帰でスカラー k_us を推定する。
-
-    モデル: tan(δ_eff) = (L/v + k_us·v)·ω (原点回帰)。整理すると
-    y = tan(δ_eff) − L·ω/v を x = v·ω に回帰して k_us = Σ(xy)/Σ(x²)。
-    records は `_extract_kus_arrays` の返り値の list (単一データセットなら 1 要素)。
-    十分統計量 (sum_x2/sum_xy) は加算的なので、collection 横断側で生サンプルなしに
-    プール再構成できる (`compute_kus_bins_from_sufficient_stats`)。
-    """
-    all_vx = np.concatenate([r["vx"] for r in records]) if records else np.empty(0)
-    all_wz = np.concatenate([r["wz"] for r in records]) if records else np.empty(0)
-    all_steer_eff = np.concatenate([r["steer_eff"] for r in records]) if records else np.empty(0)
-    all_dwz = np.concatenate([r["dwz"] for r in records]) if records else np.empty(0)
-    all_gear_drive = np.concatenate([r.get("gear_drive", np.ones_like(r["vx"], dtype=bool)) for r in records]) if records else np.empty(0, dtype=bool)
-
-    mask_ok = (
-        all_gear_drive
-        & (np.abs(all_wz) > WZ_MIN)
-        & (np.abs(all_dwz) < DWZ_MAX)
-        & (all_vx > VX_MIN_CURVE)
-    )
-    vx_f = all_vx[mask_ok]
-    wz_f = all_wz[mask_ok]
-    steer_f = all_steer_eff[mask_ok]
-    tan_steer = np.tan(np.clip(steer_f, -0.8, 0.8))
-
-    # 原点回帰 y = k_us·x,  x = v·ω,  y = tan(δ_eff) − L·ω/v
-    x = vx_f * wz_f
-    y = tan_steer - WHEELBASE * wz_f / vx_f if len(vx_f) else np.empty(0)
-    sum_x2 = float(np.sum(x * x))
-    sum_xy = float(np.sum(x * y))
-    n_pts = int(len(vx_f))
-    k_us = sum_xy / sum_x2 if (n_pts >= 10 and sum_x2 > 0) else float("nan")
-
-    # 個別サンプル percentile (外れ値確認用)
-    with np.errstate(divide="ignore", invalid="ignore"):
-        kus_each = (
-            tan_steer / np.where(np.abs(wz_f) > 1e-6, wz_f, np.nan) - WHEELBASE / vx_f
-        ) / vx_f
-    kus_each = kus_each[np.isfinite(kus_each)]
-    kus_each = np.clip(kus_each, -K_US_CLIP, K_US_CLIP)
-    kus_p25 = float(np.percentile(kus_each, 25)) if len(kus_each) > 10 else float("nan")
-    kus_p75 = float(np.percentile(kus_each, 75)) if len(kus_each) > 10 else float("nan")
-
-    return {
-        "k_us": k_us,
-        "n_pts": n_pts,
-        "sum_x2": sum_x2,
-        "sum_xy": sum_xy,
-        "kus_p25": kus_p25,
-        "kus_p75": kus_p75,
-    }
-
-
-def compute_kus_bins_single(bag_path: Path, steer_bias: float | None = None) -> dict | None:
-    """単一データセットのスカラー k_us 回帰 (十分統計量つき)。"""
-    rec = _extract_kus_arrays(bag_path, steer_bias=steer_bias)
-    if rec is None:
-        return None
-    return compute_kus_bins([rec])
-
-
-# ---------------------------------------------------------------------------
-# 横方向 yaw: 実測値直接代入による方程式残差 k_us 同定
-# ---------------------------------------------------------------------------
 def _build_yaw_residual_arrays(records: list[dict]) -> dict:
     all_vx = np.concatenate([r["vx"] for r in records]) if records else np.empty(0)
     all_wz = np.concatenate([r["wz"] for r in records]) if records else np.empty(0)
@@ -589,7 +524,11 @@ def _yaw_residual_rmses_by_record(records: list[dict], k_us: float) -> list[floa
     return rmses
 
 
-def compute_yaw_equation_residual_data(records: list[dict], params: dict) -> dict:
+def compute_yaw_equation_residual_data(
+    records: list[dict],
+    params: dict,
+    model_params: dict[str, dict] | None = None,
+) -> dict:
     """yaw rate 式の方程式残差 `E = RHS(k_us) - wz_meas` で k_us を同定・評価する。"""
     arrays = _build_yaw_residual_arrays(records)
     lo, hi = 0.0, K_US_CLIP
@@ -628,6 +567,13 @@ def compute_yaw_equation_residual_data(records: list[dict], params: dict) -> dic
     tuned["rmses"] = _yaw_residual_rmses_by_record(records, tuned_k)
     baseline = _collect_yaw_residual_stats(arrays, 0.0)
     baseline["rmses"] = _yaw_residual_rmses_by_record(records, 0.0)
+    model_stats: dict[str, dict] = {}
+    for tag, raw_params in (model_params or {}).items():
+        merged = merged_model_params(raw_params)
+        k_model = float(merged.get("k_us", 0.0))
+        stats = _collect_yaw_residual_stats(arrays, k_model)
+        stats["rmses"] = _yaw_residual_rmses_by_record(records, k_model)
+        model_stats[tag] = stats
     return {
         "fit": fit,
         "params": {"k_us": k_fit},
@@ -636,45 +582,10 @@ def compute_yaw_equation_residual_data(records: list[dict], params: dict) -> dic
         "fitted": fitted,
         "tuned": tuned,
         "baseline": baseline,
+        "models": model_stats,
         "n_dataset": len(records),
         "n": int(len(arrays["vx"])),
         "unit": "rad/s",
-    }
-
-
-def compute_kus_bins_from_sufficient_stats(per_ds_bins: list[dict]) -> dict:
-    """複数データセットの十分統計量 (sum_x2/sum_xy) を加算的にプールしスカラー k_us を再構成する。
-
-    原点回帰 y=k_us·x の正規方程式 k_us=Σ(xy)/Σ(x²) は加算的に成り立つため、
-    生サンプルの再読込なしに全データセット結合と同一の最小二乗解が得られる。
-    IQR (p25/p75) は個別サンプル分布に依存し十分統計量から再構成できないため省略する。
-    """
-    if not per_ds_bins:
-        return {
-            "k_us": float("nan"),
-            "n_pts": 0,
-            "sum_x2": 0.0,
-            "sum_xy": 0.0,
-            "kus_p25": float("nan"),
-            "kus_p75": float("nan"),
-        }
-
-    sum_x2 = 0.0
-    sum_xy = 0.0
-    n_pts = 0
-    for b in per_ds_bins:
-        sum_x2 += float(np.nan_to_num(b.get("sum_x2", 0.0)))
-        sum_xy += float(np.nan_to_num(b.get("sum_xy", 0.0)))
-        n_pts += int(b.get("n_pts", 0))
-
-    k_us = sum_xy / sum_x2 if (n_pts >= 10 and sum_x2 > 0) else float("nan")
-    return {
-        "k_us": k_us,
-        "n_pts": n_pts,
-        "sum_x2": sum_x2,
-        "sum_xy": sum_xy,
-        "kus_p25": float("nan"),
-        "kus_p75": float("nan"),
     }
 
 
@@ -1978,9 +1889,6 @@ def compute_xy_equation_residual_data(
 
 def physical_validity_jsonable(pv: dict | None) -> dict | None:
     """physical_validity を cases/cross metrics JSON に埋め込める形へ変換する。
-
-    kus_bins は十分統計量のみを残す。step13 の横断集約はこの情報から再構成でき、
-    生サンプルの再読込を不要にする。
     """
     if pv is None:
         return None
@@ -1994,14 +1902,4 @@ def physical_validity_jsonable(pv: dict | None) -> dict | None:
             return None
         return {k: (_finite_or_none(v) if isinstance(v, float) else v) for k, v in fit.items()}
 
-    kus_bins = pv.get("kus_bins")
-    kus_bins_json = None
-    if kus_bins is not None:
-        kus_bins_json = {
-            "k_us": _finite_or_none(kus_bins["k_us"]),
-            "n_pts": int(kus_bins["n_pts"]),
-            "sum_x2": _finite_or_none(kus_bins["sum_x2"]),
-            "sum_xy": _finite_or_none(kus_bins["sum_xy"]),
-        }
-
-    return {"long": _fit(pv.get("long")), "steer": _fit(pv.get("steer")), "kus_bins": kus_bins_json}
+    return {"long": _fit(pv.get("long")), "steer": _fit(pv.get("steer"))}

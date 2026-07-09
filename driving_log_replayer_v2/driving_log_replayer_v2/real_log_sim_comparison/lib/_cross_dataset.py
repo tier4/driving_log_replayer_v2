@@ -20,9 +20,7 @@ from ._multi_agg import HORIZONS, POS_W, WORST_W, aggregate_normalized, robust_s
 from ._physical_validity import (
     compute_cross_long_rows,
     compute_cross_steer_rows,
-    compute_kus_bins_from_sufficient_stats,
     fit_long_cross_dataset_bounded,
-    physical_validity_jsonable,
 )
 
 _MIN_DS_LOO = 2
@@ -268,13 +266,12 @@ def cross_physical_validity_analysis(
     *,
     verbose: bool = False,
 ) -> dict | None:
-    """per-dataset の物理妥当性同定 (縦/操舵/横 k_us) を dataset 横断で集約する。"""
+    """per-dataset の物理妥当性同定 (縦/操舵) を dataset 横断で集約する。"""
     pv_by_ds = collect_physical_validity(metrics)
     per_ds_long = {ds: pv["long"] for ds, pv in pv_by_ds.items() if pv and pv.get("long")}
     per_ds_steer = {ds: pv["steer"] for ds, pv in pv_by_ds.items() if pv and pv.get("steer")}
-    kus_bins_list = [pv["kus_bins"] for pv in pv_by_ds.values() if pv and pv.get("kus_bins")]
 
-    if not per_ds_long and not per_ds_steer and not kus_bins_list:
+    if not per_ds_long and not per_ds_steer:
         return None
 
     models_doc = _discover_models_doc(collection_dir, scenario_path, verbose=verbose)
@@ -283,8 +280,6 @@ def cross_physical_validity_analysis(
         models = {
             name: spec for name, spec in models_doc.models.items() if name in models_doc.cases_list
         }
-
-    bins = compute_kus_bins_from_sufficient_stats(kus_bins_list) if kus_bins_list else None
 
     cross_fit_long = None
     rows_long: list[dict] = []
@@ -297,14 +292,12 @@ def cross_physical_validity_analysis(
         rows_steer = compute_cross_steer_rows(entries, per_ds_steer, models)
 
     return {
-        "bins": bins,
         "cross_fit_long": cross_fit_long,
         "rows_long": rows_long,
         "rows_steer": rows_steer,
         "models": models,
         "n_long": len(per_ds_long),
         "n_steer": len(per_ds_steer),
-        "n_kus": len(kus_bins_list),
     }
 
 
@@ -326,6 +319,25 @@ def write_cross_metrics_json(
         return {
             "per_ds": agg["per_ds"],
             "by_h": {str(h): v for h, v in agg["by_h"].items()},
+        }
+
+    def _finite(x) -> float | None:
+        xf = float(x)
+        return xf if math.isfinite(xf) else None
+
+    def _pv_jsonable(cross_pv: dict | None) -> dict | None:
+        if cross_pv is None:
+            return None
+        cf = cross_pv.get("cross_fit_long")
+        cf_json = None
+        if cf is not None:
+            cf_json = {k: (_finite(v) if isinstance(v, float) else v) for k, v in cf.items()}
+        return {
+            "long_cross_fit": cf_json,
+            "n_datasets": {
+                "long": cross_pv.get("n_long", 0),
+                "steer": cross_pv.get("n_steer", 0),
+            },
         }
 
     payload = {
@@ -364,10 +376,9 @@ def write_cross_metrics_json(
             "by_excluded": loo["by_excluded"],
         },
         "outliers": outliers,
-        "physical_validity": physical_validity_jsonable(pv),
+        "physical_validity": _pv_jsonable(pv),
     }
     out_path.write_text(
         __import__("json").dumps(payload, ensure_ascii=False, allow_nan=False, indent=1),
         encoding="utf-8",
     )
-

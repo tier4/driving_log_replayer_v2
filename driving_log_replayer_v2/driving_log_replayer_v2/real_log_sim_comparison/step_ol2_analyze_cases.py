@@ -26,8 +26,8 @@
 シミュレータ (ケース) ごとに図が分かれていてもレポートのタブ切替で軸が動かない。
 
 **物理妥当性検証** (`analyze_physical_validity`) は Conditions.cases の N-way スイープとは
-独立な軸で、real.lite から縦(τ_a/T_a + 路面勾配補正)・操舵(τ_δ/T_δ)・横 k_us(v) を
-直接同定し、Conditions.cases の全モデルパラメータ (base マージ済みチューニング値) と比較する
+独立な軸で、real.lite から縦(τ_a/T_a + 路面勾配補正)・操舵(τ_δ/T_δ) を直接同定し、
+Conditions.cases の全モデルパラメータ (base マージ済みチューニング値) と比較する
 2-way (同定値 vs チューニング値) の妥当性検証。overlay.reference_tag は baseline 用の
 指定であり「チューニング値」ではないため、単体ではなく cases 全モデルを重ね描き対象にする。
 既存の N-way 集約 (cases_summary/cases_metrics の "cases" キー) は変更しない —
@@ -65,7 +65,6 @@ from .lib._nstep_common import (
     rmse_by_horizon,
 )
 from .lib._physical_validity import (
-    compute_kus_bins_single,
     compute_long_timeseries,
     compute_steer_timeseries,
     fit_long_single,
@@ -112,7 +111,7 @@ def rerender_case_figures(
 
 
 def analyze_physical_validity(real_lite: Path | None, models: dict[str, dict]) -> dict | None:
-    """real.lite から縦・操舵・横方向の物理妥当性同定を行う。
+    """real.lite から縦・操舵の物理妥当性同定を行う。
 
     Conditions.cases の N-way スイープとは独立な 2-way (実測同定 vs チューニング値) 検証。
     models: {ケース tag: raw params (case.params、base 未マージ)}。base マージは描画側で行う。
@@ -125,14 +124,13 @@ def analyze_physical_validity(real_lite: Path | None, models: dict[str, dict]) -
 
     long_fit = fit_long_single(real_lite)
     steer_fit = fit_steer_single(real_lite)
-    kus_bins = compute_kus_bins_single(real_lite)
 
-    if long_fit is None and steer_fit is None and kus_bins is None:
+    if long_fit is None and steer_fit is None:
         if VERBOSE:
-            print("[WARN] 物理妥当性検証: 縦・操舵・横 k_us のいずれも同定不能", file=sys.stderr)
+            print("[WARN] 物理妥当性検証: 縦・操舵のいずれも同定不能", file=sys.stderr)
         return None
 
-    return {"long": long_fit, "steer": steer_fit, "kus_bins": kus_bins, "models": models}
+    return {"long": long_fit, "steer": steer_fit, "models": models}
 
 
 def write_physical_validity_figures(pv: dict | None, real_lite: Path | None, out_dir: Path) -> None:
@@ -180,13 +178,6 @@ def _physical_validity_summary_lines(pv: dict | None) -> list[str]:
         )
     else:
         lines.append("- **操舵**: 動的区間不足のため同定不能")
-
-    kus_bins = pv.get("kus_bins")
-    if kus_bins is not None:
-        n_curve = int(kus_bins["n_pts"])
-        lines.append(f"- **横方向 k_us**: 曲線走行サンプル数={n_curve} (metrics JSON のみ)")
-    else:
-        lines.append("- **横方向 k_us(v)**: 曲線走行サンプル不足のため同定不能")
 
     lines.append("")
     return lines

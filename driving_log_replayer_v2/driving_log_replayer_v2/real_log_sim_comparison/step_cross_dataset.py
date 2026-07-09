@@ -75,7 +75,6 @@ from .lib._multi_agg import HORIZONS
 from .lib._multi_agg import aggregate_normalized, robust_score, score_formula_md
 from .lib._nstep_common import metrics_description_md
 from .lib._physical_validity import (
-    compute_kus_bins_from_sufficient_stats,
     compute_cross_long_rows,
     compute_cross_steer_rows,
     compute_long_perf_data,
@@ -383,7 +382,7 @@ def cross_physical_validity_analysis(
     entries: list[DatasetEntry], metrics: dict[str, dict], collection_dir: Path,
     scenario_path: Path | None = None,
 ) -> dict | None:
-    """per-dataset の物理妥当性同定 (縦/操舵/横 k_us) を dataset 横断で集約する。
+    """per-dataset の物理妥当性同定 (縦/操舵) を dataset 横断で集約する。
 
     per-dataset 出力 (step6_analyze_cases の "physical_validity" キー) が 1 件も無ければ
     None (呼び出し側は図・md を省略し理由を明記する)。
@@ -391,9 +390,8 @@ def cross_physical_validity_analysis(
     pv_by_ds = _collect_physical_validity(metrics)
     per_ds_long = {ds: pv["long"] for ds, pv in pv_by_ds.items() if pv and pv.get("long")}
     per_ds_steer = {ds: pv["steer"] for ds, pv in pv_by_ds.items() if pv and pv.get("steer")}
-    kus_bins_list = [pv["kus_bins"] for pv in pv_by_ds.values() if pv and pv.get("kus_bins")]
 
-    if not per_ds_long and not per_ds_steer and not kus_bins_list:
+    if not per_ds_long and not per_ds_steer:
         return None
 
     models_doc = _discover_models_doc(collection_dir, scenario_path)
@@ -404,8 +402,6 @@ def cross_physical_validity_analysis(
         models = {
             name: spec for name, spec in models_doc.models.items() if name in models_doc.cases_list
         }
-
-    bins = compute_kus_bins_from_sufficient_stats(kus_bins_list) if kus_bins_list else None
 
     cross_fit_long = None
     rows_long: list[dict] = []
@@ -418,14 +414,12 @@ def cross_physical_validity_analysis(
         rows_steer = compute_cross_steer_rows(entries, per_ds_steer, models)
 
     return {
-        "bins": bins,
         "cross_fit_long": cross_fit_long,
         "rows_long": rows_long,
         "rows_steer": rows_steer,
         "models": models,
         "n_long": len(per_ds_long),
         "n_steer": len(per_ds_steer),
-        "n_kus": len(kus_bins_list),
     }
 
 
@@ -436,7 +430,7 @@ def write_physical_validity_summary_md(out_path: Path, pv: dict | None) -> None:
         lines.append(
             "per-dataset の `comparison/cases/cases_metrics.json[\"physical_validity\"]` が"
             " 1 件も見つからないため省略 (per-dataset 解析 (step6) 未実行、または全 DS で"
-            " 縦・操舵・横 k_us のいずれも同定不能)。\n"
+            " 縦・操舵のいずれも同定不能)。\n"
         )
         out_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
         if VERBOSE:
@@ -445,7 +439,7 @@ def write_physical_validity_summary_md(out_path: Path, pv: dict | None) -> None:
 
     lines.append(
         "各データセットで real.lite から直接同定した車両モデル物理パラメータ"
-        "（縦方向 τ_a/T_a + 路面勾配補正、操舵 τ_δ/T_δ、横方向 k_us(v)）を横断集約し、"
+        "（縦方向 τ_a/T_a + 路面勾配補正、操舵 τ_δ/T_δ）を横断集約し、"
         "Conditions.models のチューニング値と比較する（実測同定 vs チューニング値の 2-way 検証）。\n"
     )
 
@@ -486,7 +480,7 @@ def _pv_jsonable(pv: dict | None) -> dict | None:
     """cross_physical_validity_analysis の返り値を cross_metrics.json 埋め込み用に圧縮する。
 
     best/worst の時系列 (rows_long/rows_steer) は容量が大きいため図スペック側にのみ残し、
-    ここにはスカラ・十分統計量集約 (k_us bins) のみを持つ。
+    JSON 側には横断フィットのスカラ結果だけを持つ。
     """
     if pv is None:
         return None
@@ -495,24 +489,14 @@ def _pv_jsonable(pv: dict | None) -> dict | None:
         xf = float(x)
         return xf if math.isfinite(xf) else None
 
-    bins = pv.get("bins")
-    bins_json = None
-    if bins is not None:
-        bins_json = {
-            "k_us": _finite(bins["k_us"]),
-            "n_pts": int(bins["n_pts"]),
-            "sum_x2": _finite(bins["sum_x2"]),
-            "sum_xy": _finite(bins["sum_xy"]),
-        }
     cf = pv.get("cross_fit_long")
     cf_json = None
     if cf is not None:
         cf_json = {k: (_finite(v) if isinstance(v, float) else v) for k, v in cf.items()}
     return {
-        "kus_bins": bins_json,
         "long_cross_fit": cf_json,
         "n_datasets": {
-            "long": pv.get("n_long", 0), "steer": pv.get("n_steer", 0), "kus": pv.get("n_kus", 0),
+            "long": pv.get("n_long", 0), "steer": pv.get("n_steer", 0),
         },
     }
 

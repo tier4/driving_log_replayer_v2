@@ -188,7 +188,7 @@ Stage CL2 (`step_cl2_run_sims`) が `scenario_test_runner` で sim を回した�
 | セクション | 内容 | 主な図（出力元 stage） |
 |---|---|---|
 | 1. 推定前：実車とシミュレーションのズレ | パラメータ推定前の、理想追従（操舵完全一致と仮定）における自車位置やモデル構造の限界によるズレ | `cross_perfect_tracking_box`・`cross_perfect_tracking_traj`(Cross Dataset) |
-| 2. パラメータ推定結果 | 実機ログから最小二乗法で同定した車両パラメータとそのフィッティング精度 | `cross_physical_validity_{kus,long,steer}`(Cross Dataset) / `viewer` のモデル検証タブ(CL3) |
+| 2. パラメータ推定結果 | 実機ログから最小二乗法で同定した車両パラメータとそのフィッティング精度 | `cross_physical_validity_{long,steer}`(Cross Dataset) / `viewer` のモデル検証タブ(CL3) |
 | 3. 推定後：シミュレーション残差の提示 | ホライズン別の予測誤差や、位置 (x, y) の変位誤差の成長度合い・分布 | nstep の `overview`/`map_distribution`(OL1) + `cases/overlay`(OL2) + `cross_long_perf_*`(Cross Dataset) |
 | 4. 最終的な Closed Loop シミュレーション残差 | 最終同定パラメータで closed-loop 実行した際の実機との軌跡・速度・操舵の乖離 | `viewer` の軌跡比較タブ(CL3) + `cross_closed_loop_heatmap`/`cross_normalized_bars`/`coverage_overview`/`loo_stability`(Cross Dataset) |
 | その他 | 上記いずれにも分類されなかった図 | `dp_real_vs_sim`・`dp_vs_actual`・`dp_vs_final_traj`(CL4) など |

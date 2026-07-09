@@ -90,7 +90,7 @@ help:
 	@echo "    - Open-Loop (OL) 系列:"
 	@echo "      ol1. step_ol1_analyze_nstep   Conditions.cases の各 case (VehicleModel パラメータ) で N-step オープンループ解析"
 	@echo "      ol2. step_ol2_analyze_cases   nstep/*.csv を集約 (overlay/, cases_summary.md, cases_metrics.json)"
-	@echo "                                    + real.lite から縦/操舵/横 k_us の物理妥当性を直接同定 (cases/physical_validity/)"
+	@echo "                                    + real.lite から縦/操舵の物理妥当性を直接同定 (cases/physical_validity/)"
 	@echo "    - Closed-Loop (CL) 系列:"
 	@echo "      cl1. step_cl1_bag_to_scenario lite/real.lite → scenarios/auto_scenario.yaml"
 	@echo "      cl2. step_cl2_run_sims        scenario_test_runner で Conditions.sim_runs の各 run を実行 → lite/<tag>.lite/"

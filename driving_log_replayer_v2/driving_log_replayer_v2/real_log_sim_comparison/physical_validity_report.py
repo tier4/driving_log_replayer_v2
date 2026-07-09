@@ -114,7 +114,7 @@ from driving_log_replayer_v2.real_log_sim_comparison.lib._physical_validity impo
 
 _H_SPAN = {10: "≈0.33 s", 20: "≈0.67 s", 30: "≈1.0 s", 40: "≈1.33 s"}
 
-# 2-4. x/y heading 補正軌跡フィットに使うデータセット数
+# 2-4. x/y heading 補正の状態方程式整合性検証に使うデータセット数
 _PERF_N_DATASET = 10
 
 
@@ -641,12 +641,6 @@ __NOTE_TEXT__
     return tmpl.replace("__SCORE_BULLET__", score_bullet).replace("__NOTE_TEXT__", note_text)
 
 
-def _kus_band_table_rows(params: dict) -> str:
-    """k_us パラメータの HTML テーブル行を生成。"""
-    k_us = params.get("k_us", 0.0)
-    return f"  <tr><td><code>k_us</code></td><td>{k_us:.6f} rad·s²/m</td><td>アンダーステア係数（全速度域一定）</td></tr>"
-
-
 _ACCEL_PHASE_NAMES: dict[str, str] = {"accel": "加速中", "cruise": "巡航中", "decel": "減速中"}
 
 
@@ -876,6 +870,7 @@ def _build_residual_rmse_comparison_html(
     title_label: str,
     baseline_tag: str = "baseline",
     note: str = "",
+    heading_prefix: str = "状態方程式整合性",
 ) -> str:
     cleaned_rows = []
     for row in model_rows:
@@ -920,9 +915,9 @@ def _build_residual_rmse_comparison_html(
 
     note_html = f"<p>{note}</p>" if note else ""
     return f"""
-<h3>フィッティング精度: 方程式残差RMSE 比較（{title_label}）</h3>
+<h3>{heading_prefix}: 残差RMSE 比較（{title_label}）</h3>
 <p>
-同じ実測配列に各モデルのパラメータを代入し、方程式残差 RMSE（単位 {unit_label}）を
+同じ実測配列に各比較行のパラメータを代入し、方程式残差 RMSE（単位 {unit_label}）を
 データセット横断で集計した。
 </p>
 {note_html}
@@ -954,22 +949,7 @@ def _build_sec1(
     steer_fit_rmse_html: str = "",
 ) -> str:
     """1章の方程式紹介と2章の方程式別 residual/fitting セクション HTML を返す。"""
-    kus_rows = _kus_band_table_rows(params)
-
-    # ---------- モデルパラメータの定義（旧 _build_sec_model_params）----------
-    def _fmt_p(v) -> str:
-        if isinstance(v, float):
-            return f"{v:.6g}"
-        return str(v)
-
-    kus_profile_rows = (
-        f"  <tr><td><code>k_us</code></td>"
-        f"<td>{_fmt_p(params.get('k_us', 0.0))} rad·s²/m</td>"
-        f"<td>全速度域で一定のアンダーステア係数</td></tr>"
-    )
-
-
-    def _fmt(v) -> str:  # noqa: E306 (ローカル _fmt。上の _fmt_p とスコープが異なる)
+    def _fmt(v) -> str:
         if isinstance(v, float):
             return f"{v:.6g}"
         return str(v)
@@ -1005,22 +985,35 @@ def _build_sec1(
     yaw_fit_params = (yaw_resid_data or {}).get("params") or {}
     yaw_kus_fit = _fmt(yaw_fit_params.get("k_us", "N/A"))
     yaw_resid_rmse_html = ""
+    yaw_model_rows = []
     if yaw_resid_data:
+        yaw_models = yaw_resid_data.get("models") or {}
+        yaw_model_rows = [
+            {"tag": tag, "rmses": stats.get("rmses", [])}
+            for tag, stats in yaw_models.items()
+        ]
+        yaw_model_rows.append(
+            {"tag": "residual fitted (reference)", "rmses": (yaw_resid_data.get("fitted") or {}).get("rmses", [])}
+        )
         yaw_resid_rmse_html = _build_residual_rmse_comparison_html(
-            [
-                {"tag": "residual fitted", "rmses": (yaw_resid_data.get("fitted") or {}).get("rmses", [])},
-                {"tag": "tuned params", "rmses": (yaw_resid_data.get("tuned") or {}).get("rmses", [])},
-                {"tag": "baseline", "rmses": (yaw_resid_data.get("baseline") or {}).get("rmses", [])},
-            ],
+            yaw_model_rows,
             "rad/s",
             "ヨー dot θ 式",
             baseline_tag="baseline",
+            note=(
+                "2-3 は外部入力を持つアクチュエータ応答ではなく、観測された状態変数 "
+                "\\(v_x, \\delta_{\\mathrm{act}}, \\omega\\) だけで閉じる yaw 状態方程式の整合性検証である。"
+                "<code>residual fitted</code> は比較モデルではなく、この式だけで見た参考最適値。"
+            ),
         )
-    kus_rows = (
-        f"  <tr><td><code>k_us</code> tuned params</td>"
-        f"<td>{_fmt(params.get('k_us', 0.0))} rad·s²/m</td>"
-        f"<td>チューニング済みモデルに設定されているアンダーステア係数</td></tr>"
-    )
+    yaw_param_rows = []
+    for tag, stats in ((yaw_resid_data or {}).get("models") or {}).items():
+        yaw_param_rows.append(
+            f"  <tr><td><code>k_us</code> {tag}</td>"
+            f"<td>{_fmt(stats.get('k_us', 0.0))} rad·s²/m</td>"
+            f"<td>モデル設定値を yaw 状態方程式へ直接代入</td></tr>"
+        )
+    yaw_param_rows_html = "\n".join(yaw_param_rows)
     return f"""
 <section id="sec-coords">
 <h2>1-1. 座標系と主要な記号の定義</h2>
@@ -1502,9 +1495,7 @@ J_\\theta(k_{{\\mathrm{{us}}}})
   <tr><th>パラメータ / モデル</th><th>値</th><th>式中の役割</th></tr>
   <tr><td><code>k_us</code> residual fitted</td><td>{yaw_kus_fit} rad·s²/m</td>
       <td>yaw rate 方程式残差を最小化する本節の独立同定値</td></tr>
-{kus_rows}
-  <tr><td>baseline（\\(k_{{\\mathrm{{us}}}}=0\\)）</td><td>0 rad·s²/m</td>
-      <td>アンダーステア補正なし</td></tr>
+{yaw_param_rows_html}
   <tr><td><code>steer_bias</code> (\\(\\beta\\)) <i>[2-2 と共有]</i></td><td>{beta} rad</td>
       <td>\\(\\tan(\\delta_{{\\mathrm{{act}}}} + \\beta)\\) の引数：ヨーオフセット成分</td>
       </tr>
@@ -1520,7 +1511,7 @@ def _build_sec24(
     params: dict,
     n_dataset: int,
 ) -> str:
-    """2-4. x/y 状態方程式 trajectory fitting 評価セクション HTML。"""
+    """2-4. x/y 状態方程式の整合性検証セクション HTML。"""
     resid_html = fig_resid.to_html(full_html=False, include_plotlyjs=False)
     traj_html = fig_traj.to_html(full_html=False, include_plotlyjs=False)
     tau_a = f"{params.get('acc_time_constant', float('nan')):.3g}"
@@ -1533,13 +1524,17 @@ def _build_sec24(
     c_xy = float(fit_params.get("xy_heading_rate_coeff", float("nan")))
     xy_resid_rmse_html = _build_residual_rmse_comparison_html(
         [
-            {"tag": "trajectory fitted", "rmses": fitted.get("rmses", [])},
-            {"tag": "baseline", "rmses": baseline.get("rmses", [])},
+            {"tag": "c fitted (reference)", "rmses": fitted.get("rmses", [])},
+            {"tag": "c=0", "rmses": baseline.get("rmses", [])},
         ],
         "m",
         "x/y 位置式",
-        baseline_tag="baseline",
-        note="2-4 では、観測状態を直接代入した x/y 右辺を積分した後の位置残差を、2-1/2-2 と同じ表形式で集計する。",
+        baseline_tag="c=0",
+        note=(
+            "2-4 は制御入力に対する応答同定ではなく、観測された \\(x,y,\\theta,v_x,\\dot\\theta\\) "
+            "だけで閉じる位置状態方程式の整合性検証である。"
+            "<code>c fitted</code> は比較モデルではなく、heading 補正項を追加した場合の参考最適値。"
+        ),
     )
 
     def _fmt(v: float, unit: str = "") -> str:
@@ -1547,11 +1542,11 @@ def _build_sec24(
 
     return f"""
 <section id="sec-perf-tracking">
-<h2>2-4. x/y 位置式のheading補正と軌跡フィッティング</h2>
+<h2>2-4. x/y 位置式の heading 補正と状態方程式整合性</h2>
 <p>
 ステア・加速度は完全追従した前提とし、観測された \\(x,y,\\theta,v_x,\\dot{{\\theta}}\\) を
-状態方程式へ直接代入し、位置式だけを積分した軌跡が実測軌跡に一致するように
-heading 補正係数 \\(c\\) を同定する。
+状態方程式へ直接代入し、位置式だけを積分した軌跡が実測軌跡にどれだけ一致するかを見る。
+heading 補正係数 \\(c\\) は、既存モデルの入力応答パラメータではなく、この位置式に補正項を追加した場合の参考値として同定する。
 ここでは前段の加速度追従式・操舵追従式・ヨー式をロールアウトしないため、それらの誤差は x/y 補正項の同定に混入しない。
 今回の補正は、旋回率と速度の積に比例して有効 heading をずらす形式として
 \\[
@@ -1575,12 +1570,12 @@ heading 補正係数 \\(c\\) を同定する。
 </p>
 <p>
 アクチュエータ側の同定値（\\(\\tau_a\\)={tau_a} s, \\(T_a\\)={T_a} s,
-\\(\\tau_\\delta\\)={tau_d} s, \\(T_\\delta\\)={T_d} s）は本節の trajectory fitting には代入しない。
+\\(\\tau_\\delta\\)={tau_d} s, \\(T_\\delta\\)={T_d} s）は本節の位置式整合性検証には代入しない。
 将来 x/y 式へ追加する項も、この観測状態の直接代入形式で評価する。
 </p>
 
 <table class="param-table">
-  <tr><th>項目</th><th>fitted</th><th>baseline（\\(c=0\\)）</th></tr>
+  <tr><th>項目</th><th>reference fitted</th><th>補正なし（\\(c=0\\)）</th></tr>
   <tr><td>\\(c\\) / <code>xy_heading_rate_coeff</code></td><td>{_fmt(c_xy)}</td><td>0</td></tr>
   <tr><td>sample count</td><td>{int(fitted.get("n", 0))}</td><td>{int(baseline.get("n", 0))}</td></tr>
 </table>
@@ -1590,10 +1585,10 @@ heading 補正係数 \\(c\\) を同定する。
 <h3>x/y 軌跡位置誤差分布（上位 {n_dataset} データセット）</h3>
 {resid_html}
 
-<h3>代表データセットの軌跡比較（実車 vs x/y heading fitted 式）</h3>
+<h3>代表データセットの軌跡比較（実車 vs x/y heading 補正式）</h3>
 <p>
 初期状態を実車ログに合わせ、観測 \\(\\theta,v_x,\\dot\\theta\\) を固定入力として最適化後の x/y 右辺だけを
-リセットなしで積分した軌跡（青破線）を
+リセットなしで積分した参考軌跡（青破線）を
 実車の軌跡（黒実線）と比較する。主評価は上の積分軌跡の位置誤差である。
 座標は初期位置を原点 (0, 0) に正規化している。
 </p>
@@ -2303,7 +2298,7 @@ def main() -> None:
     tuned_params = {k: v for k, v in params.items() if not k.startswith("_")}
     current_eval_params = {**current_base_params, **tuned_params}
     comparison_specs = _build_comparison_specs(args.scenario, args.case, current_eval_params)
-    comparison_fingerprint = _comparison_fingerprint(comparison_specs)
+    comparison_model_params = {spec["tag"]: spec["params"] for spec in comparison_specs}
     baseline_accel_source = next(
         (s["acceleration_source"] for s in comparison_specs if s["tag"] == baseline_case),
         "accel",
@@ -2320,6 +2315,8 @@ def main() -> None:
     baseline_T_a = float(merged_baseline.get("acc_time_delay"))
     baseline_tau_d = float(merged_baseline.get("steer_time_constant"))
     baseline_T_d = float(merged_baseline.get("steer_time_delay"))
+    comparison_model_params.setdefault(baseline_case, baseline_params)
+    comparison_fingerprint = _comparison_fingerprint(comparison_specs)
 
     # baseline と current(tuned) の車両モデル種別が一致するかどうか。
     # 2-1/2-2 末尾の方程式残差RMSE比較（equation_residual_at_params に baseline の (tau, delay) を
@@ -2386,7 +2383,11 @@ def main() -> None:
 
     # Phase 2: 横方向 k_us 同定（yaw 方程式残差）
     print("\n[Phase 2] yaw 方程式残差による k_us 同定 ...")
-    yaw_resid_data = compute_yaw_equation_residual_data(records, params)
+    yaw_resid_data = compute_yaw_equation_residual_data(
+        records,
+        params,
+        model_params=comparison_model_params,
+    )
     print(
         f"  residual k_us={yaw_resid_data['params']['k_us']:.5f} "
         f"(RMSE={yaw_resid_data['fitted']['rmse']:.5f} rad/s, n={yaw_resid_data['n']})"
@@ -2828,18 +2829,18 @@ def main() -> None:
         steer_resid_rows, "rad/s", "操舵 dot δ_act 式", baseline_tag=baseline_case,
     )
 
-    # 2-4 x/y heading 補正軌跡フィットには curve 上位 _PERF_N_DATASET データセットを使用（viewer 用 top_curve とは独立して選択）
+    # 2-4 x/y heading 補正の状態方程式整合性検証には curve 上位 _PERF_N_DATASET データセットを使用（viewer 用 top_curve とは独立して選択）
     perf_records = candidate_curve[:_PERF_N_DATASET]
-    print(f"  [2-4] x/y heading 補正軌跡フィット図生成 ({len(perf_records)} データセット) ...")
+    print(f"  [2-4] x/y heading 補正の状態方程式整合性図生成 ({len(perf_records)} データセット) ...")
     perf_entries = _to_entries([(r["uuid"], Path(r["lite_dir"])) for r in perf_records])
     perf_data = compute_xy_equation_residual_data(perf_entries, params)
     perf_fig_resid = build_fig_xy_equation_residual_hist(perf_data)
     perf_fig_traj = build_fig_xy_equation_traj(
         perf_data,
         labels={
-            "title": "実車 vs x/y heading fitted 式（初期状態を実車ログに合わせたリセットなし積分）",
+            "title": "実車 vs x/y heading 補正式（初期状態を実車ログに合わせたリセットなし積分）",
             "gt_name": "実車 軌跡",
-            "model_name": "x/y heading fitted 式",
+            "model_name": "x/y heading 補正式",
             "x_title": "Δx [m]",
             "y_title": "Δy [m]",
         },
