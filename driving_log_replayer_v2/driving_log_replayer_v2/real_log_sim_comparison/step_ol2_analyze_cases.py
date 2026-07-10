@@ -64,6 +64,7 @@ from .lib._nstep_common import (
     n1_summary_lines,
     rmse_by_horizon,
 )
+from .lib._accel_source import normalize_accel_source
 from .lib._physical_validity import (
     compute_long_timeseries,
     compute_steer_timeseries,
@@ -110,11 +111,15 @@ def rerender_case_figures(
         s5.LIMITS_DF = None
 
 
-def analyze_physical_validity(real_lite: Path | None, models: dict[str, dict]) -> dict | None:
+def analyze_physical_validity(
+    real_lite: Path | None, models: dict[str, dict], acceleration_source: str = "accel",
+) -> dict | None:
     """real.lite から縦・操舵の物理妥当性同定を行う。
 
     Conditions.cases の N-way スイープとは独立な 2-way (実測同定 vs チューニング値) 検証。
     models: {ケース tag: raw params (case.params、base 未マージ)}。base マージは描画側で行う。
+    acceleration_source: 縦方向の「実測」a_act 取得元。呼び出し側が Conditions.cases の
+    acceleration_source (scenario.yaml) から解決して渡す (既定は従来通り "accel")。
     real.lite が無い、またはいずれの軸も同定不能なら None (呼び出し側は WARN のみで継続)。
     """
     if real_lite is None:
@@ -122,7 +127,7 @@ def analyze_physical_validity(real_lite: Path | None, models: dict[str, dict]) -
             print("[WARN] real.lite が見つからないため物理妥当性検証をスキップ", file=sys.stderr)
         return None
 
-    long_fit = fit_long_single(real_lite)
+    long_fit = fit_long_single(real_lite, acceleration_source=acceleration_source)
     steer_fit = fit_steer_single(real_lite)
 
     if long_fit is None and steer_fit is None:
@@ -130,7 +135,10 @@ def analyze_physical_validity(real_lite: Path | None, models: dict[str, dict]) -
             print("[WARN] 物理妥当性検証: 縦・操舵のいずれも同定不能", file=sys.stderr)
         return None
 
-    return {"long": long_fit, "steer": steer_fit, "models": models}
+    return {
+        "long": long_fit, "steer": steer_fit, "models": models,
+        "acceleration_source": acceleration_source,
+    }
 
 
 def write_physical_validity_figures(pv: dict | None, real_lite: Path | None, out_dir: Path) -> None:
@@ -139,7 +147,9 @@ def write_physical_validity_figures(pv: dict | None, real_lite: Path | None, out
         return
     models = pv.get("models") or {}
 
-    long_ts = compute_long_timeseries(real_lite, pv.get("long"), models)
+    long_ts = compute_long_timeseries(
+        real_lite, pv.get("long"), models, acceleration_source=pv.get("acceleration_source", "accel"),
+    )
     write_fig_json(build_fig_long_single(long_ts, pv.get("long")), out_dir / "long_fit")
 
     steer_ts = compute_steer_timeseries(real_lite, pv.get("steer"), models)
@@ -162,7 +172,8 @@ def _physical_validity_summary_lines(pv: dict | None) -> list[str]:
     long_fit = pv.get("long")
     if long_fit is not None:
         lines.append(
-            f"- **縦方向** (路面勾配補正込み): τ_a={long_fit['tau']:.3f}s, "
+            f"- **縦方向** (実測 a_act ソース: `{pv.get('acceleration_source', 'accel')}`、"
+            f"路面勾配補正込み): τ_a={long_fit['tau']:.3f}s, "
             f"T_a={long_fit['delay']:.3f}s, RMSE={long_fit['rmse_mps2']:.3f} m/s², "
             f"n_dyn={long_fit['n_dyn']}, "
             f"pitch range {math.degrees(long_fit['pitch_min']):+.2f}°〜{math.degrees(long_fit['pitch_max']):+.2f}°"
@@ -332,7 +343,29 @@ def main() -> None:
     # overlay.reference_tag は baseline 用の指定であり「チューニング値」ではないため、
     # 単体ではなく Conditions.cases の全モデルを重ね描き対象にする (base マージは描画側で行う)。
     models = {c.tag: c.params for c in cases_cfg.cases}
-    pv = analyze_physical_validity(real_lite, models)
+
+    # 縦方向「実測」a_act の取得元: 各 case が同じ acceleration_source なら素直にそれを使う。
+    # 混在する場合 (例: baseline/v1=accel, current=kinematic_diff) は cases 末尾
+    # (通常 "current"、実際にチューニング対象のモデル) の指定を優先し、他 case は
+    # 異なる実測ソースと比較される旨を WARN で明記する (単一の重ね描き図・同定である以上、
+    # 全 case を同時に厳密公平比較する設計にはなっていないため)。
+    case_accel_sources = {c.tag: c.acceleration_source for c in cases_cfg.cases}
+    unique_sources = set(case_accel_sources.values())
+    if len(unique_sources) <= 1:
+        long_accel_source = normalize_accel_source(next(iter(unique_sources), "accel"))
+    else:
+        long_accel_source = normalize_accel_source(cases_cfg.cases[-1].acceleration_source)
+        mismatched = [
+            tag for tag, src in case_accel_sources.items() if src != long_accel_source
+        ]
+        print(
+            f"[WARN] Conditions.cases の acceleration_source が混在しています "
+            f"({case_accel_sources})。物理妥当性検証は '{cases_cfg.cases[-1].tag}' の "
+            f"acceleration_source='{long_accel_source}' を実測 a_act として同定し、"
+            f"{mismatched} は異なるソースで同定されたモデルとの比較になる点に注意",
+            file=sys.stderr,
+        )
+    pv = analyze_physical_validity(real_lite, models, acceleration_source=long_accel_source)
     pv_dir = out_root / "physical_validity"
     pv_dir.mkdir(parents=True, exist_ok=True)
     write_physical_validity_figures(pv, real_lite, pv_dir)

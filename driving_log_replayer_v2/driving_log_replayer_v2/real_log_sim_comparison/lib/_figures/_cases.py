@@ -84,3 +84,49 @@ def build_fig_error_growth_overlay(roll: dict[str, dict[int, dict[str, float]]])
         fig.update_xaxes(title_text="rollout 長 N [step]", row=1, col=c)
         fig.update_yaxes(title_text=ylabel, row=1, col=c)
     return apply_base_layout(fig, title="cases overlay: N-step 誤差成長 (free-running)", height=460)
+
+
+def build_fig_nstep_comparison(
+    comparison: dict[str, dict], *, tags_order: list[str] | None = None,
+) -> go.Figure:
+    """multi_dataset_tune / reidentify.fit_merge の N-step 正規化誤差 (comparison ブロック) を
+    モデル横断で重ね描きする。上段=mean、下段=worst。yaw/長手/横 の3列。
+
+    comparison: tuned_params.yaml の `comparison` キー
+        {tag: {"score": float, "by_h": {horizon: {"nyaw_mean","nyaw_worst",
+        "nlong_mean","nlong_worst","nlat_mean","nlat_worst"}}}}。
+    1.0 = 正規化基準 (baseline 相当)。1.0 より下が改善、上が悪化。
+    """
+    tags = tags_order if tags_order else list(comparison.keys())
+    tags = [t for t in tags if t in comparison]
+    colors = dict(zip(tags, qualitative_colors(len(tags))))
+    cols = [
+        ("nyaw", "yaw", "deg 系正規化誤差"),
+        ("nlong", "縦方向", "long 系正規化誤差"),
+        ("nlat", "横方向", "lat 系正規化誤差"),
+    ]
+    fig = make_grid(
+        2, 3,
+        subplot_titles=[f"{label} (mean)" for _, label, _ in cols] + [f"{label} (worst)" for _, label, _ in cols],
+        horizontal_spacing=0.08, vertical_spacing=0.14,
+    )
+    for c, (key, _label, ylabel) in enumerate(cols, start=1):
+        for row, stat in ((1, "mean"), (2, "worst")):
+            for tag in tags:
+                by_h = comparison[tag].get("by_h", {})
+                horizons = sorted(int(h) for h in by_h)
+                if not horizons:
+                    continue
+                y = [by_h[h if h in by_h else str(h)][f"{key}_{stat}"] for h in horizons]
+                fig.add_trace(go.Scatter(
+                    x=horizons, y=y, mode="lines+markers",
+                    name=tag, legendgroup=tag, showlegend=(c == 1 and row == 1),
+                    line=dict(color=colors[tag], width=1.6),
+                    marker=dict(size=7),
+                ), row=row, col=c)
+            fig.add_hline(y=1.0, line=dict(color="gray", width=1, dash="dot"), row=row, col=c)
+            fig.update_xaxes(title_text="rollout 長 N [step]", row=row, col=c)
+            fig.update_yaxes(title_text=ylabel, row=row, col=c)
+    return apply_base_layout(
+        fig, title="N-step Open Loop 正規化誤差比較 (1.0=baseline基準、小さいほど良い)", height=620,
+    )

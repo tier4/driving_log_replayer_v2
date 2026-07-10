@@ -37,7 +37,9 @@ from driving_log_replayer_v2.real_log_sim_comparison.reidentify.settings import 
     ACCEL_SOURCE,
     ACCEL_DELAY_MAP,
 )
-import pandas as pd
+from driving_log_replayer_v2.real_log_sim_comparison.lib._accel_source import (
+    accel_dataframe_from_source,
+)
 
 # 物理定数の SSOT は lib._physical_validity。チューニング(本モジュール)と検証
 # (physical_validity_report) で同じ車両ジオメトリ・同定条件を使うため、そこから import する。
@@ -107,31 +109,16 @@ def _load_light_worker(args: tuple) -> dict | None:
 
     a_cmd = np.interp(t_s, (df_cmd["t_ns"].values - t0) * 1e-9, df_cmd["cmd_accel"].values)
     
-    if ACCEL_SOURCE == "accel":
-        accel_t_ns = df_accel["t_ns"].values
-        accel_val = df_accel["accel"].values
-    elif ACCEL_SOURCE == "kinematic_diff":
-        t_s_kin = df_kin["t_ns"].values * 1e-9
-        vx = df_kin["vx"].values
-        dt = np.diff(t_s_kin)
-        dv = np.diff(vx)
-        raw_accel = np.zeros_like(vx)
-        raw_accel[1:] = dv / np.maximum(dt, 1e-6)
-        smooth_accel = pd.Series(raw_accel).rolling(window=10, min_periods=1, center=True).mean().values
-        accel_t_ns = df_kin["t_ns"].values
-        accel_val = smooth_accel
-    elif ACCEL_SOURCE == "velocity_diff":
-        t_s_vel = df_vel["t_ns"].values * 1e-9
-        lon_vel = df_vel["lon_vel"].values
-        dt = np.diff(t_s_vel)
-        dv = np.diff(lon_vel)
-        raw_accel = np.zeros_like(lon_vel)
-        raw_accel[1:] = dv / np.maximum(dt, 1e-6)
-        smooth_accel = pd.Series(raw_accel).rolling(window=10, min_periods=1, center=True).mean().values
-        accel_t_ns = df_vel["t_ns"].values
-        accel_val = smooth_accel
-    else:
-        raise ValueError(f"Unknown ACCEL_SOURCE: {ACCEL_SOURCE}")
+    # 加速度ソース選択ロジックの SSOT は lib._accel_source (kinematic_diff/velocity_diff/
+    # kinematic_savgol/velocity_savgol 全対応)。かつてはここに accel/kinematic_diff/velocity_diff
+    # のみを個別実装した重複コードがあり、savgol 系ソースを選ぶと ValueError で落ちていた。
+    acc_df = accel_dataframe_from_source(
+        ACCEL_SOURCE,
+        df_accel=df_accel, df_vel=df_vel, df_kin=df_kin,
+        accel_col="accel", velocity_col="lon_vel", kin_vx_col="vx", out_col="accel",
+    )
+    accel_t_ns = acc_df["t_ns"].values
+    accel_val = acc_df["accel"].values
 
     a_act = np.interp(t_s, (accel_t_ns - t0) * 1e-9, accel_val)
 

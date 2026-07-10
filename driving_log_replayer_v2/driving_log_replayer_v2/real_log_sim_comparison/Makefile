@@ -189,7 +189,15 @@ CLOSED_LOOP_UUIDS  ?= 00d08afd-b605-5de1-9db0-51241fa87b18,01ccf59a-bf38-5d62-8a
 # 記録日 (2026-06-23) 直前の最新版。
 CLOSED_LOOP_MAP    ?= $(HOME)/.webauto/simulation/data/map/x2_dev/2231/2231-20260525005702640410
 MULTI_BATCH_ROOT   ?= /home/kotaroyoshimoto/data/openloop_j6_16_onwards
-N_TRIALS           ?= 50
+# fit_merge (reidentify/fit_merge.py robust_search) は k_us/steer_time_constant/
+# debug_steer_scaling_factor/steer_dead_band/steer_bias/acc_time_constant/
+# debug_acc_scaling_factor (+離散 acc_time_delay) の7次元同時最適化。N_TRIALS=50 では
+# N_JOBS=32 並列だとワーカー1台あたり平均1.5試行しかなく、TPEが収束する前に予算切れになる。
+# 実験: N_TRIALS=50 で2回実行 → steer_time_constant が 0.629s→0.074s と全く異なる値に
+# 発散しどちらも nyaw が悪化 (score 23.15/23.79)。N_TRIALS=200 (ワーカーあたり6.25試行)
+# では score=16.90 と安定して改善 (v1=15.34 に近づく)。N_JOBS=32 前提でワーカーあたり
+# 20試行相当となる 640 を既定にした。
+N_TRIALS           ?= 640
 N_JOBS             ?= $(or $(REAL_LOG_SIM_COMPARISON_JOBS),32)
 MODEL_CASE         ?= current
 

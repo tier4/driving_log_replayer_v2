@@ -67,6 +67,7 @@ from driving_log_replayer_v2.real_log_sim_comparison.lib._figures import (  # no
     build_fig_cross_long,
     build_fig_cross_steer,
     build_fig_equation_residual_hist,
+    build_fig_nstep_comparison,
     build_fig_nstep_error_hist,
     build_fig_nstep_error_growth,
     build_fig_perfect_tracking_traj as build_fig_xy_equation_traj,
@@ -911,6 +912,16 @@ def _build_fit_rmse_table_multi_html(
 RMSE列の単位は {unit_label}。横棒は baseline を中央線（1.0x）として表示する。
 緑は baseline より小さい残差、赤は大きい残差。バーが短いほど良い。
 </div>
+<div class="note" style="border-left:3px solid #d9822b; padding-left:8px; margin-top:6px;">
+⚠️ <b>この指標は τ（時定数）が大きいほど単調に良化するバイアスを持つ</b>
+（RHS=(cmd−act)/τ は τ→∞ で 0 に潰れ、残差は LHS ノイズ床に漸近するため）。
+実データで直接この残差を最小化すると τ が非物理的に膨張することが分かっており
+（本モジュール内 `equation_residual_at_params` の設計コメント参照）、この表は
+「宣言済みパラメータが ODE をどれだけ満たすか」の整合診断であって、τ の異なるモデル間の
+優劣判定（＝どちらのモデルが実際の追従精度で優れるか）には使わないこと。モデル比較には
+N-step 軌跡追従スコア（tuned_params.yaml の `score`/`comparison.*`）や rollout 偏差テーブルなど
+出力誤差（シミュレーション追従）ベースの指標を使うこと。
+</div>
 {skipped_html}
 """
 
@@ -1698,6 +1709,7 @@ def _build_sec_deviation(
     expected_score: float | None = None,
     score_name: str = "robust_score",
     label: str = "phase14",
+    comparison: dict | None = None,
 ) -> str:
     """N-step Open Loop評価: 終端誤差テーブルセクション（tuned vs baseline）。"""
     if "model" in df.columns:
@@ -1708,6 +1720,7 @@ def _build_sec_deviation(
             expected_score=expected_score,
             score_name=score_name,
             label=label,
+            comparison=comparison,
         )
 
     horizons = sorted(df["h"].unique().tolist())
@@ -1888,6 +1901,7 @@ def _build_sec_deviation_long(
     expected_score: float | None = None,
     score_name: str = "robust_score",
     label: str = "current",
+    comparison: dict | None = None,
 ) -> str:
     horizons = sorted(df["h"].unique().tolist())
     models = list(dict.fromkeys(df["model"].astype(str).tolist()))
@@ -1907,14 +1921,27 @@ def _build_sec_deviation_long(
         )
 
     def _cell(val: float, base: float, fmt: str = ".3f") -> str:
-        ratio = val / base if base > 0 else 1.0
-        if ratio < 0.99:
-            style = ' style="color:#28a745;font-weight:bold"'
-        elif ratio > 1.01:
-            style = ' style="color:#dc3545"'
+        if not np.isfinite(val) or not np.isfinite(base):
+            return '<td class="rmse-cell" style="min-width:70px">N/A</td>'
+        ratio = val / base if base > 0 else float("nan")
+        if np.isfinite(ratio):
+            width = min(max(ratio, 0.0), 2.0) * 50.0
+            pct_txt = f"{(1.0 - ratio) * 100.0:+.0f}%"
         else:
-            style = ""
-        return f"<td{style}>{val:{fmt}}</td>"
+            width = 50.0
+            pct_txt = "N/A"
+        cls = "neutral"
+        if np.isfinite(ratio) and ratio < 0.99:
+            cls = "good"
+        elif np.isfinite(ratio) and ratio > 1.01:
+            cls = "bad"
+        title = f"値={val:{fmt}}, baseline={base:{fmt}}, ratio={ratio:.2f}x, baseline比={pct_txt}"
+        return (
+            f'<td class="rmse-cell" style="min-width:70px" title="{title}">'
+            f'<div class="rmse-main"><span class="rmse-value">{val:{fmt}}</span></div>'
+            f'<div class="rmse-bar"><span class="rmse-fill {cls}" style="width:{width:.1f}%"></span></div>'
+            f'</td>'
+        )
 
     rows: list[str] = []
     for h in horizons:
@@ -1962,6 +1989,22 @@ def _build_sec_deviation_long(
     growth_fig = build_fig_nstep_error_growth(df, label=label, baseline_label=baseline_tag)
     growth_html = growth_fig.to_html(full_html=False, include_plotlyjs=False)
 
+    nstep_comparison_html = ""
+    if comparison:
+        _tags_order = [t for t in (baseline_tag, "v1", "tuned") if t in comparison]
+        _tags_order += [t for t in comparison if t not in _tags_order]
+        nstep_fig = build_fig_nstep_comparison(comparison, tags_order=_tags_order)
+        nstep_comparison_html = f"""
+<h3>正規化誤差サマリ（チューニング時に最適化された指標そのもの）</h3>
+<p>
+<code>tuned_params.yaml</code> の <code>comparison</code>（同定パイプラインが実際に最適化に
+使った robust_score の内訳、baseline 比 1.0 に正規化した yaw/縦/横 誤差）をそのまま可視化した。
+1.0 未満が baseline より改善、大きいほど悪化。下の生値テーブル・ドリフト成長カーブと
+対になる要約図。
+</p>
+{nstep_fig.to_html(full_html=False, include_plotlyjs=False)}
+"""
+
     return f"""
 <section id="deviation">
 <h2>4-1. N-step Open Loop評価: 終端誤差（比較対象 {len(models)} モデル）</h2>
@@ -1972,6 +2015,8 @@ N-step Open Loop評価（ロールアウト）を実施し、終端誤差 RMSE �
 <code>acceleration_source</code> 列に従う。
 </p>
 {score_html}
+{nstep_comparison_html}
+<div style="overflow-x:auto">
 <table class="param-table" style="font-size:12px">
   <thead>
     <tr>
@@ -1993,8 +2038,10 @@ N-step Open Loop評価（ロールアウト）を実施し、終端誤差 RMSE �
 {chr(10).join(rows)}
   </tbody>
 </table>
+</div>
 <div class="note">
-各セルは <code>{baseline_tag}</code> より小さい場合に緑、大きい場合に赤で表示。
+横棒は <code>{baseline_tag}</code> を中央線（1.0x）として表示（緑=改善、赤=悪化、バーが短いほど良い）。
+セルにマウスオーバーで具体値・baseline比を表示。
 RMSE は各データセットの全 k0 ステップ（stride=5）の終端誤差（N ステップ先）の二乗平均平方根。
 </div>
 <h3>ドリフト成長カーブ（horizon 別 終端誤差の中央値 + IQR）</h3>
@@ -2573,7 +2620,10 @@ def main() -> None:
         else:
             baseline_score = _steer_score(_agg_normalized(list(bl_arg.items()), bl_arg))
         print(f"  baseline {best_name}: {baseline_score:.4f}")
-        deviation_html = _build_sec_deviation(df_rollout, len(records), recomputed, expected, score_name=best_name, label=args.case)
+        deviation_html = _build_sec_deviation(
+            df_rollout, len(records), recomputed, expected, score_name=best_name, label=args.case,
+            comparison=yaml_data.get("comparison"),
+        )
     elif args.metrics_cache:
         # キャッシュなし → 全データセット load（ついでに viewer データセット も取り出す）
         all_items = [(r["uuid"], Path(r["lite_dir"])) for r in records]
@@ -2644,7 +2694,10 @@ def main() -> None:
         else:
             baseline_score = _steer_score(_agg_normalized(list(bl_arg.items()), bl_arg))
         print(f"  baseline {best_name}: {baseline_score:.4f}")
-        deviation_html = _build_sec_deviation(df_rollout, len(records), recomputed, expected, score_name=best_name, label=args.case)
+        deviation_html = _build_sec_deviation(
+            df_rollout, len(records), recomputed, expected, score_name=best_name, label=args.case,
+            comparison=yaml_data.get("comparison"),
+        )
     else:
         pass
         # --metrics-cache 未指定 → 通常の viewer データセット のみ load
@@ -2907,6 +2960,43 @@ def main() -> None:
     steer_fit_rmse_html = _build_fit_rmse_table_multi_html(
         steer_resid_rows, "rad/s", "操舵 dot δ_act 式", baseline_tag=baseline_case,
     )
+
+    # 各モデルを自身の acceleration_source で評価する上の表は、パラメータの当てはまりと
+    # ソース間のノイズ・波形非対称性が混ざって見える (例: current だけ kinematic_diff で
+    # 採点されるため、accel で採点される baseline/v1 と直接比較すると差が誇張/相殺されうる)。
+    # 全モデルを同一の acceleration_source (per_ds_long_by_source に既に揃っている全ソース)
+    # に固定して再評価した表を並べ、「パラメータ適合度」と「ソースの非対称性」を切り分ける。
+    long_common_source_html = ""
+    for common_source in sorted(long_sources):
+        common_rows: list[dict] = []
+        for spec in comparison_specs:
+            merged = merged_model_params(spec["params"])
+            model_type = spec["model_type"]
+            if model_type not in delay_model_types:
+                common_rows.append({
+                    "tag": spec["tag"], "acceleration_source": common_source, "rmses": [],
+                    "reason": f"unsupported model_type={model_type}",
+                })
+                continue
+            tau_a = merged.get("acc_time_constant")
+            delay_a = merged.get("acc_time_delay")
+            if tau_a is None or delay_a is None:
+                common_rows.append({
+                    "tag": spec["tag"], "acceleration_source": common_source, "rmses": [],
+                    "reason": "acc_time_constant/acc_time_delay 未定義",
+                })
+                continue
+            _pool, _med, rmses = _pool_resid_at_params(
+                per_ds_long_by_source.get(common_source, per_ds_long),
+                float(tau_a), float(delay_a), _SG_WINDOW_LONG,
+            )
+            common_rows.append({"tag": spec["tag"], "acceleration_source": common_source, "rmses": rmses})
+        long_common_source_html += _build_fit_rmse_table_multi_html(
+            common_rows, "m/s³",
+            f"縦方向 dot a_act 式 — 共通ソース比較 (全モデルを acceleration_source=&quot;{common_source}&quot; で評価)",
+            baseline_tag=baseline_case,
+        )
+    long_fit_rmse_html += long_common_source_html
 
     # 2-4 x/y heading 補正の状態方程式整合性検証には curve 上位 _PERF_N_DATASET データセットを使用（viewer 用 top_curve とは独立して選択）
     perf_records = candidate_curve[:_PERF_N_DATASET]

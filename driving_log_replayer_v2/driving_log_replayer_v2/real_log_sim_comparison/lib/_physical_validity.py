@@ -592,15 +592,20 @@ def compute_yaw_equation_residual_data(
 # ---------------------------------------------------------------------------
 # 時系列 (実測/指令/フィット/チューン値) — per-dataset 図・collection 横断図の共通計算
 # ---------------------------------------------------------------------------
-def compute_long_timeseries(bag_path: Path, fit: dict | None, models: dict[str, dict]) -> dict | None:
+def compute_long_timeseries(
+    bag_path: Path, fit: dict | None, models: dict[str, dict], acceleration_source: str = "accel",
+) -> dict | None:
     """1 データセットの縦方向時系列 (実測/指令/フィット/モデル別チューン値、路面勾配補正込み) を計算する。
 
     models: {モデル名: raw params (case.params、base 未マージ)}。base マージは内部で行う。
+    acceleration_source: 「実測」a_act の取得元 (`fit_long_single` 同定に使ったソースと揃えること)。
     """
+    source = normalize_accel_source(acceleration_source)
     try:
         df_cmd = load_cmd(bag_path, CMD_TOPIC)
         df_accel = load_accel(bag_path)
         df_vel = load_velocity(bag_path)
+        df_kin = load_kinematic(bag_path)
     except Exception:
         return None
     _require_dfs(
@@ -615,7 +620,9 @@ def compute_long_timeseries(bag_path: Path, fit: dict | None, models: dict[str, 
     t_s, t0 = timebase
 
     a_cmd_arr = _resample(df_cmd, "cmd_accel", t_s, t0)
-    a_act_arr = _resample(df_accel, "accel", t_s, t0)
+    a_act_arr = accel_on_grid(
+        source, df_accel=df_accel, df_vel=df_vel, df_kin=df_kin, t_s=t_s, t0_ns=t0, dt=_FIT_DT,
+    )
     vx = _resample(df_vel, "lon_vel", t_s, t0)
     gear_drive = _drive_mask_on_grid(bag_path, t_s, t0, context=f"compute_long_timeseries:{bag_path}")
     slope_acc_arr = _slope_acc_on_grid(bag_path, t_s, t0)
@@ -1470,8 +1477,13 @@ def _entry_real_mcap(entry) -> Path | None:
 
 def compute_long_perf_data(
     entries: list,
+    acceleration_source: str = "accel",
 ) -> dict:
-    """縦方向モデル構造限界評価用のデータ算出を行う。"""
+    """縦方向モデル構造限界評価用のデータ算出を行う。
+
+    acceleration_source: 「実測」a_act の取得元。既定は従来通り `accel`。
+    """
+    source = normalize_accel_source(acceleration_source)
     h_labels = [f"{h * _FIT_DT:.2f}s" for h in _PERF_HORIZONS]
     per_h_errors: dict[int, list[float]] = {h: [] for h in _PERF_HORIZONS}
     _H_MAX = _PERF_HORIZONS[-1]
@@ -1506,7 +1518,9 @@ def compute_long_perf_data(
             continue
         t_s, t0 = timebase
         gt_vx = _resample(df_vel, "lon_vel", t_s, t0)
-        a_act = _resample(df_accel, "accel", t_s, t0)
+        a_act = accel_on_grid(
+            source, df_accel=df_accel, df_vel=df_vel, df_kin=df_kin, t_s=t_s, t0_ns=t0, dt=_FIT_DT,
+        )
         gear_drive = _drive_mask_on_grid(mcap, t_s, t0, context=f"compute_perfect_longitudinal_data:{entry.dataset_id}")
         if len(gt_vx) < 50:
             continue
@@ -1902,4 +1916,8 @@ def physical_validity_jsonable(pv: dict | None) -> dict | None:
             return None
         return {k: (_finite_or_none(v) if isinstance(v, float) else v) for k, v in fit.items()}
 
-    return {"long": _fit(pv.get("long")), "steer": _fit(pv.get("steer"))}
+    return {
+        "long": _fit(pv.get("long")),
+        "steer": _fit(pv.get("steer")),
+        "acceleration_source": pv.get("acceleration_source", "accel"),
+    }

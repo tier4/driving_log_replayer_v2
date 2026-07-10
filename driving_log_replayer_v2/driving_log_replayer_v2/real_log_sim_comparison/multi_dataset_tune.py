@@ -442,6 +442,8 @@ def robust_search(
     out_path: Path | None = None,
     extra_enqueue: list[dict] | None = None,
     worst_w: float = WORST_W,
+    delay_candidates: tuple[float, ...] | None = None,
+    acceleration_source: str | None = None,
     phase: int = 0,
     phase_fixed_params: dict | None = None,
     base_override: dict | None = None,
@@ -462,6 +464,15 @@ def robust_search(
     base_override: 直接同定 (--phase-params) の全 params。CONTINUOUS_SPACE / acc_time_delay を
         除くキー (= steer_time_delay/steer_rate_lim 等) を cur_best に透過し、Optuna が探索しない
         同定値を tuned_params.yaml → apply → closed_loop まで届ける。
+    delay_candidates: acc_time_delay の離散探索候補 (既定 None で従来の
+        (0.10, 0.15, 0.20, 0.30, 0.40, 0.50) を使用)。real.lite からの直接システム同定
+        (lib._physical_validity.fit_long_single) が示す値の近傍に絞って再探索し、
+        グリッド境界張り付き (既定グリッドの最大値 0.50 に current が張り付く現象) が
+        目的関数上も妥当か検証する用途を想定。
+    acceleration_source: 縦方向の実測 a_act 取得元を scenario.yaml の case_name 定義から
+        上書きする (既定 None で cur_case.acceleration_source を使用)。同一の目的関数・
+        同一の探索予算で acceleration_source だけを変えた A/B 比較に使う
+        (scenario.yaml を書き換えずに済む)。
     """
     def _checkpoint(params: dict, score: float) -> None:
         if out_path is None:
@@ -478,7 +489,11 @@ def robust_search(
     cur_case = cfg.find_case(case_name)
     cur_best = dict(cur_case.params)
     cur_model = cur_case.vehicle_model_type
-    cur_accel_source = cur_case.acceleration_source
+    cur_accel_source = (
+        normalize_accel_source(acceleration_source)
+        if acceleration_source is not None
+        else cur_case.acceleration_source
+    )
 
     if search_subsample:
         print(
@@ -489,7 +504,7 @@ def robust_search(
 
     # Phase に応じて探索空間・スコア関数・delay 探索フラグを決定
     # acc_time_delay は旧 sweeps と同じ離散候補 (gt_cache COW 共有のため離散に保つ)
-    DELAY_CANDIDATES: tuple[float, ...] = (0.10, 0.15, 0.20, 0.30, 0.40, 0.50)
+    DELAY_CANDIDATES: tuple[float, ...] = delay_candidates or (0.10, 0.15, 0.20, 0.30, 0.40, 0.50)
 
     if phase == 1:
         # Phase 1: acc パラメータのみ最適化 (long スコア)。steer 系は cur_best に固定。
@@ -939,6 +954,27 @@ def main() -> None:
         metavar="W",
         help="レポートのスコア表示に使う worst 重み（既定: 1.0）",
     )
+    ap.add_argument(
+        "--delay-candidates",
+        default="",
+        metavar="D1,D2,...",
+        help=(
+            "acc_time_delay の離散探索候補をカンマ区切り秒数で上書き "
+            "(既定: 空文字列=従来の 0.10,0.15,0.20,0.30,0.40,0.50)。"
+            "real.lite からの直接同定 (physical_validity_report の縦方向 dot a_act 式 同定) が"
+            "示す値の近傍に絞って境界張り付きを検証する用途を想定"
+        ),
+    )
+    ap.add_argument(
+        "--acceleration-source",
+        default="",
+        metavar="SOURCE",
+        help=(
+            "縦方向の実測 a_act 取得元を scenario.yaml の case_name 定義から上書き "
+            "(既定: 空文字列=scenario.yaml の定義値を使用)。同一の目的関数・同一の探索予算で "
+            "acceleration_source だけを変えた A/B 比較用 (scenario.yaml を書き換えずに済む)"
+        ),
+    )
     args = ap.parse_args()
 
     if args.lite_dir:
@@ -1025,6 +1061,16 @@ def main() -> None:
         phase_fixed_params = {k: v for k, v in all_params.items() if k in fixed_keys}
         print(f"[INFO] Phase {args.phase} 固定 params (from {args.phase_params}): {list(phase_fixed_params.keys())}")
 
+    delay_candidates: tuple[float, ...] | None = None
+    if args.delay_candidates:
+        delay_candidates = tuple(sorted(float(x) for x in args.delay_candidates.split(",") if x.strip()))
+        print(f"[INFO] acc_time_delay 探索候補を上書き: {delay_candidates}")
+
+    acceleration_source: str | None = None
+    if args.acceleration_source:
+        acceleration_source = normalize_accel_source(args.acceleration_source)
+        print(f"[INFO] acceleration_source を上書き: {acceleration_source}")
+
     result = robust_search(
         ctxs,
         cfg,
@@ -1038,6 +1084,8 @@ def main() -> None:
         phase=args.phase,
         phase_fixed_params=phase_fixed_params,
         base_override=base_override,
+        delay_candidates=delay_candidates,
+        acceleration_source=acceleration_source,
     )
 
     if out_path is not None:
