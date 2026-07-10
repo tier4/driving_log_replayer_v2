@@ -67,7 +67,6 @@ from driving_log_replayer_v2.real_log_sim_comparison.lib._figures import (  # no
     build_fig_cross_long,
     build_fig_cross_steer,
     build_fig_equation_residual_hist,
-    build_fig_nstep_comparison,
     build_fig_nstep_error_hist,
     build_fig_nstep_error_growth,
     build_fig_perfect_tracking_traj as build_fig_xy_equation_traj,
@@ -1709,7 +1708,6 @@ def _build_sec_deviation(
     expected_score: float | None = None,
     score_name: str = "robust_score",
     label: str = "phase14",
-    comparison: dict | None = None,
 ) -> str:
     """N-step Open Loop評価: 終端誤差テーブルセクション（tuned vs baseline）。"""
     if "model" in df.columns:
@@ -1720,7 +1718,6 @@ def _build_sec_deviation(
             expected_score=expected_score,
             score_name=score_name,
             label=label,
-            comparison=comparison,
         )
 
     horizons = sorted(df["h"].unique().tolist())
@@ -1901,7 +1898,6 @@ def _build_sec_deviation_long(
     expected_score: float | None = None,
     score_name: str = "robust_score",
     label: str = "current",
-    comparison: dict | None = None,
 ) -> str:
     horizons = sorted(df["h"].unique().tolist())
     models = list(dict.fromkeys(df["model"].astype(str).tolist()))
@@ -1989,22 +1985,6 @@ def _build_sec_deviation_long(
     growth_fig = build_fig_nstep_error_growth(df, label=label, baseline_label=baseline_tag)
     growth_html = growth_fig.to_html(full_html=False, include_plotlyjs=False)
 
-    nstep_comparison_html = ""
-    if comparison:
-        _tags_order = [t for t in (baseline_tag, "v1", "tuned") if t in comparison]
-        _tags_order += [t for t in comparison if t not in _tags_order]
-        nstep_fig = build_fig_nstep_comparison(comparison, tags_order=_tags_order)
-        nstep_comparison_html = f"""
-<h3>正規化誤差サマリ（チューニング時に最適化された指標そのもの）</h3>
-<p>
-<code>tuned_params.yaml</code> の <code>comparison</code>（同定パイプラインが実際に最適化に
-使った robust_score の内訳、baseline 比 1.0 に正規化した yaw/縦/横 誤差）をそのまま可視化した。
-1.0 未満が baseline より改善、大きいほど悪化。下の生値テーブル・ドリフト成長カーブと
-対になる要約図。
-</p>
-{nstep_fig.to_html(full_html=False, include_plotlyjs=False)}
-"""
-
     return f"""
 <section id="deviation">
 <h2>4-1. N-step Open Loop評価: 終端誤差（比較対象 {len(models)} モデル）</h2>
@@ -2015,7 +1995,6 @@ N-step Open Loop評価（ロールアウト）を実施し、終端誤差 RMSE �
 <code>acceleration_source</code> 列に従う。
 </p>
 {score_html}
-{nstep_comparison_html}
 <div style="overflow-x:auto">
 <table class="param-table" style="font-size:12px">
   <thead>
@@ -2622,7 +2601,6 @@ def main() -> None:
         print(f"  baseline {best_name}: {baseline_score:.4f}")
         deviation_html = _build_sec_deviation(
             df_rollout, len(records), recomputed, expected, score_name=best_name, label=args.case,
-            comparison=yaml_data.get("comparison"),
         )
     elif args.metrics_cache:
         # キャッシュなし → 全データセット load（ついでに viewer データセット も取り出す）
@@ -2696,7 +2674,6 @@ def main() -> None:
         print(f"  baseline {best_name}: {baseline_score:.4f}")
         deviation_html = _build_sec_deviation(
             df_rollout, len(records), recomputed, expected, score_name=best_name, label=args.case,
-            comparison=yaml_data.get("comparison"),
         )
     else:
         pass

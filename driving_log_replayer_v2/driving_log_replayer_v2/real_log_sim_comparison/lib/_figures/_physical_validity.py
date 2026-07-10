@@ -416,7 +416,6 @@ def build_fig_cross_long(rows_data: list[dict], cross_fit: dict) -> go.Figure:
             f"{n} 最長連続区間で表示、同定対象外区間はグレー背景）<br><sup>{slope_note}</sup>"
         ),
         height=900 * n, margin=dict(t=90, b=40),
-        legend=dict(orientation="h", y=1.03, x=0),
     )
 
 
@@ -462,7 +461,6 @@ def build_fig_cross_long_tau_pointwise(rows_data: list[dict], cross_fit: dict) -
             f"<br><sup>{fit_note}</sup>"
         ),
         height=260 * n, margin=dict(t=80, b=40),
-        legend=dict(orientation="h", y=1.03, x=0),
     )
 
 
@@ -651,7 +649,6 @@ def build_fig_nstep_error_hist(df: pd.DataFrame, label: str = "tuned") -> go.Fig
         fig,
         title=f"N-step Open Loop評価: 終端誤差の分布（{label}、データセット横断 RMSE のヒストグラム）",
         height=280 * len(horizons) + 40,
-        legend=dict(orientation="h", y=1.02, x=0),
     )
 
 
@@ -720,7 +717,6 @@ def build_fig_nstep_error_growth(
             fig,
             title="N-step Open Loop評価: 終端誤差のドリフト成長カーブ（全比較モデル、中央値 + IQR）",
             height=380,
-            legend=dict(orientation="h", y=1.10, x=0),
         )
 
     fig = make_subplots(
@@ -769,7 +765,6 @@ def build_fig_nstep_error_growth(
         fig,
         title=f"N-step Open Loop評価: 終端誤差のドリフト成長カーブ（{label} vs {baseline_label}、中央値 + IQR）",
         height=380,
-        legend=dict(orientation="h", y=1.10, x=0),
     )
 
 
@@ -865,7 +860,6 @@ def build_fig_cross_steer(rows_data: list[dict]) -> go.Figure:
         fig,
         title=f"dataset 横断 操舵モデルフィット（選択 {n_datasets} データセットを {n} 最長連続区間で表示、同定対象外区間はグレー背景）",
         height=900 * n, margin=dict(t=80, b=40),
-        legend=dict(orientation="h", y=1.03, x=0),
     )
 
 
@@ -982,7 +976,6 @@ def build_fig_perfect_tracking_traj(
     fig.update_layout(
         title=lb.get("title", "代表データセットの軌跡比較（GT vs 自転車モデル）"),
         height=height,
-        legend=dict(orientation="h", y=1.1, x=0),
     )
     return apply_base_layout(fig, title=fig.layout.title.text, height=height)
 

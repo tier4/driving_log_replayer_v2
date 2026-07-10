@@ -43,20 +43,46 @@ def apply_base_layout(
     # 凡例は既定で **水平・図の最上端**。右側縦置きは横幅を食ってプロットが潰れるため水平に
     # するが、`y=1.02`（paper 基準）だと最上段サブプロットタイトルと重なって隠れる
     # （paper 単位はプロット領域高=height-margin に正規化され、margin を増やしても凡例が
-    # 相対的に下がるため衝突が解けない循環に陥る）。`yref="container"` で図の絶対最上端に
-    # ピン留めし、上マージンに凡例帯を確保することで height 非依存にサブプロットタイトルの
-    # 上へ逃がす。上マージンは最悪ケース（2 行凡例 + 2 行サブプロットタイトル）に合わせる。
-    # 凡例位置を自前指定する図は kwargs の legend= で上書きする。
+    # 相対的に下がるため衝突が解けない循環に陥る）。`yref="container"` で図の絶対最上端を
+    # 基準に height 非依存の px オフセットで配置する。
+    #
+    # 【注意】title も legend も同じ y≈0.99〜1.0 帯域に置くと重なって表示が潰れる。さらに
+    # title 単体でも、複数行 (`<br>` 付き、例: メインタイトル + `<sup>` 注記) を
+    # `y=0.99, yanchor="top"` のような "ほぼ最上端" に置くと、1 行目が container の外側に
+    # はみ出して欠ける（kaleido/plotly の複数行 title アンカー実装上、yanchor="top" でも
+    # 見た目のブロック開始位置が y より上に来るため。1 行タイトルなら気づかない程度だが
+    # 2 行だと明確に上端が欠ける。実測で確認済み）。よって title は行数に応じて y を
+    # 下げて確保し、legend は title のさらに下、margin.t はその両方が収まる値まで
+    # 自動的に引き上げる（呼び出し側が margin= で明示指定してもこれより小さくはしない）。
+    h = height or 450
+    line_px = 20  # フォントサイズ14相当の実測ベース行送り
+    n_title_lines = title.count("<br>") + 1 if title else 0
+    # title ブロックの「開始」に必要な最上端からのオフセット（複数行はみ出し対策込み）。
+    title_top_px = 16 + line_px * n_title_lines if title else 6
+    # legend は title ブロック（title_top_px 起点、n_title_lines 行分）の下に置く。
+    legend_top_px = title_top_px + line_px * n_title_lines + 10 if title else 6
+    # legend の下にサブプロットタイトル等と衝突しない余白を確保した上での必要マージン。
+    required_margin_t = legend_top_px + 24
+
+    margin_kw = kwargs.pop("margin", None)
+    caller_margin_t = margin_kw.get("t") if isinstance(margin_kw, dict) else None
+    margin_t = max(required_margin_t, caller_margin_t or 0, 100)
+    margin = dict(l=60, r=20, t=margin_t, b=50)
+    if isinstance(margin_kw, dict):
+        margin.update({k: v for k, v in margin_kw.items() if k != "t"})
+
+    legend_y = max(0.0, 1.0 - legend_top_px / h)
     layout = dict(
         autosize=True,
-        margin=dict(l=60, r=20, t=100, b=50),
-        legend=dict(orientation="h", yref="container", yanchor="top", y=1.0,
+        margin=margin,
+        legend=dict(orientation="h", yref="container", yanchor="top", y=legend_y,
                     xref="paper", xanchor="left", x=0, bgcolor="rgba(255,255,255,0.7)"),
         font=dict(size=12),
     )
     if title is not None:
+        title_y = max(0.0, 1.0 - title_top_px / h)
         layout["title"] = dict(text=title, font=dict(size=14), x=0.5, xanchor="center",
-                               y=0.99, yanchor="top")
+                               y=title_y, yanchor="top")
     if height is not None:
         layout["height"] = height
     layout.update(kwargs)

@@ -15,7 +15,6 @@ from ._closed_loop import (
 from ._cases import (
     build_fig_cascade_error_overlay,
     build_fig_error_growth_overlay,
-    build_fig_nstep_comparison,
 )
 from ._cross_dataset import (
     build_fig_coverage_overview,
@@ -70,7 +69,6 @@ __all__ = [
     "build_fig_dp_vs_actual",
     "build_fig_dp_vs_final_traj",
     "build_fig_error_growth_overlay",
-    "build_fig_nstep_comparison",
     "build_fig_overview",
     "build_fig_residual_candidates_hist",
     "build_fig_steer_single",
