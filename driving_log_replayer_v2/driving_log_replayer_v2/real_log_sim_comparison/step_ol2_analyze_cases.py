@@ -64,6 +64,7 @@ from .lib._nstep_common import (
     n1_summary_lines,
     rmse_by_horizon,
 )
+from .lib._vehicle_models import merge_vehicle_model_params
 from .lib._accel_source import normalize_accel_source
 from .lib._physical_validity import (
     compute_long_timeseries,
@@ -98,8 +99,7 @@ def rerender_case_figures(
             df = case_dfs.get(case.tag)
             if df is None:
                 continue
-            params = s5._build_params()
-            params.update(case.params)
+            params = merge_vehicle_model_params(s5._build_params(), case.params, case.vehicle_model_type)
             s5.BASE = base_dir
             s5.OUT_DIR = nstep_root / case.tag
             df1 = n1(df)

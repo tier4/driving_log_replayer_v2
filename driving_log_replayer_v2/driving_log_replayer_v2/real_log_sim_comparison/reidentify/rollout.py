@@ -2,10 +2,6 @@
 from __future__ import annotations
 
 import ctypes
-import os
-from pathlib import Path
-import sys
-
 import numpy as np
 import pandas as pd
 
@@ -13,6 +9,7 @@ from ..lib._events import find_autonomous_start as _find_autonomous_start
 from ..lib._nstep_common import interp_or_zeros, local_ds, rms, to_seconds
 from ..lib._params_utils import load_sim_params
 from ..lib._validation import require_non_empty_df
+from ..lib._vehicle_models import VehicleModel
 from .gear import require_drive_gear_mask
 from .physical_constants import VX_MIN_CURVE
 from .settings import (
@@ -23,8 +20,6 @@ from .settings import (
     ROLLING_SMOOTH_WINDOW_S,
     ROLL_OUT_CONTEXT,
     ROLLOUT_SUB_DT,
-    TAIGA_DYN_DEFAULTS,
-    TAIGA_X_DEFAULTS,
 )
 
 SUB_DT: float = ROLLOUT_SUB_DT
@@ -44,208 +39,6 @@ def find_autonomous_start(data: dict) -> int:
     """解析開始 t_ns を返す (`lib._events.find_autonomous_start` 経由)。"""
     df_vel = data["vel"].rename(columns={"vx": "lon_vel"}) if "vx" in data["vel"].columns else data["vel"]
     return _find_autonomous_start(data["mode"], df_vel)
-
-
-# ---------------------------------------------------------------------------
-# DELAY_STEER_ACC_GEARED_WO_FALL_GUARD の C++ ctypes ラッパー
-# ---------------------------------------------------------------------------
-
-_HAS_WZ = False
-
-
-def _resolve_so_path() -> Path:
-    """libvehicle_model_wrapper.so の場所を解決する。
-
-    優先順: 1. VEHICLE_MODEL_SO_PATH 環境変数  2. ament_index_python での解決。
-    """
-    env = os.environ.get("VEHICLE_MODEL_SO_PATH")
-    if env:
-        p = Path(env)
-        if p.exists():
-            return p
-    from ament_index_python.packages import get_package_share_directory
-
-    share = Path(get_package_share_directory("simple_sensor_simulator"))
-    return share / "libvehicle_model_wrapper.so"
-
-
-def _load_lib() -> ctypes.CDLL:
-    so = _resolve_so_path()
-    if not so.exists():
-        raise FileNotFoundError(
-            f"{so} が見つかりません。simple_sensor_simulator を colcon build してください。"
-        )
-    lib = ctypes.CDLL(str(so))
-
-    c_double = ctypes.c_double
-    c_void_p = ctypes.c_void_p
-
-    lib.vm_create_ideal_steer_acc.restype = c_void_p
-    lib.vm_create_ideal_steer_acc.argtypes = [c_double, c_double]
-
-    lib.vm_create_delay_steer_acc_geared_wo_fall_guard.restype = c_void_p
-    lib.vm_create_delay_steer_acc_geared_wo_fall_guard.argtypes = [c_double] * 15
-
-    lib.vm_create_delay_steer_acc_geared_for_diffusion_planner.restype = c_void_p
-    lib.vm_create_delay_steer_acc_geared_for_diffusion_planner.argtypes = [c_double] * 15
-
-    lib.vm_create_taiga_dyn.restype = c_void_p
-    lib.vm_create_taiga_dyn.argtypes = [c_double] * 21
-
-    lib.vm_create_taiga_x.restype = c_void_p
-    lib.vm_create_taiga_x.argtypes = [c_double] * 11
-
-    lib.vm_reset_full.restype = None
-    lib.vm_reset_full.argtypes = [c_void_p] + [c_double] * 8
-
-    lib.vm_reset_state.restype = None
-    lib.vm_reset_state.argtypes = [c_void_p] + [c_double] * 8
-
-    lib.vm_set_queues.restype = None
-    lib.vm_set_queues.argtypes = [
-        c_void_p,
-        ctypes.POINTER(c_double),
-        ctypes.c_int,
-        ctypes.POINTER(c_double),
-        ctypes.c_int,
-    ]
-
-    lib.vm_get_acc_q_size.restype = ctypes.c_int
-    lib.vm_get_acc_q_size.argtypes = [c_void_p]
-    lib.vm_get_steer_q_size.restype = ctypes.c_int
-    lib.vm_get_steer_q_size.argtypes = [c_void_p]
-
-    lib.vm_set_input.restype = None
-    lib.vm_set_input.argtypes = [c_void_p, c_double, c_double]
-
-    lib.vm_step.restype = None
-    lib.vm_step.argtypes = [c_void_p]
-
-    lib.vm_step_dt.restype = None
-    lib.vm_step_dt.argtypes = [c_void_p, c_double]
-
-    for fn in ("vm_get_x", "vm_get_y", "vm_get_yaw", "vm_get_vx", "vm_get_vy", "vm_get_steer", "vm_get_ax"):
-        getattr(lib, fn).restype = c_double
-        getattr(lib, fn).argtypes = [c_void_p]
-
-    global _HAS_WZ  # noqa: PLW0603
-    if hasattr(lib, "vm_get_wz"):
-        lib.vm_get_wz.restype = c_double
-        lib.vm_get_wz.argtypes = [c_void_p]
-        _HAS_WZ = True
-    else:
-        _HAS_WZ = False
-        print(
-            "[WARN] libvehicle_model_wrapper.so に vm_get_wz が無いため sim_wz は NaN。"
-            "simple_sensor_simulator を再ビルドしてください。",
-            file=sys.stderr,
-        )
-
-    _c_dbl_p = ctypes.POINTER(c_double)
-    _c_int_p = ctypes.POINTER(ctypes.c_int)
-    if not hasattr(lib, "vm_integrate_to_horizons"):
-        raise RuntimeError(
-            "libvehicle_model_wrapper.so に vm_integrate_to_horizons が未 export です。"
-            " simple_sensor_simulator を再ビルドしてください。"
-        )
-    lib.vm_integrate_to_horizons.restype = None
-    lib.vm_integrate_to_horizons.argtypes = [
-        c_void_p, ctypes.c_int, ctypes.c_int,
-        _c_dbl_p, _c_dbl_p, _c_int_p, _c_dbl_p, c_double,
-        ctypes.c_int, _c_int_p,
-        _c_dbl_p, _c_dbl_p, _c_dbl_p, _c_dbl_p, _c_dbl_p, _c_dbl_p,
-    ]
-
-    lib.vm_destroy.restype = None
-    lib.vm_destroy.argtypes = [c_void_p]
-
-    return lib
-
-
-class VehicleModel:
-    """SimModelInterface 派生の C ラッパーを model_type で dispatch。"""
-
-    _lib: ctypes.CDLL | None = None
-
-    @classmethod
-    def _get_lib(cls) -> ctypes.CDLL:
-        if cls._lib is None:
-            cls._lib = _load_lib()
-        return cls._lib
-
-    def __init__(self, params: dict, sub_dt: float, model_type: str):
-        p = params
-        lib = self._get_lib()
-        self._lib = lib
-        if model_type == "ideal_steer_acc":
-            self._ptr = lib.vm_create_ideal_steer_acc(p["wheelbase"], sub_dt)
-            self._steer_bias = 0.0
-        elif model_type in (
-            "delay_steer_acc_geared_wo_fall_guard",
-            "delay_steer_acc_geared_for_diffusion_planner",
-        ):
-            factory = (
-                lib.vm_create_delay_steer_acc_geared_wo_fall_guard
-                if model_type == "delay_steer_acc_geared_wo_fall_guard"
-                else lib.vm_create_delay_steer_acc_geared_for_diffusion_planner
-            )
-            self._ptr = factory(
-                p["vel_lim"], p["steer_lim"], p["vel_rate_lim"], p["steer_rate_lim"],
-                p["wheelbase"], sub_dt, p["acc_time_delay"], p["acc_time_constant"],
-                p["steer_time_delay"], p["steer_time_constant"], p["steer_dead_band"],
-                p["steer_bias"], p.get("debug_acc_scaling_factor", 1.0),
-                p.get("debug_steer_scaling_factor", 1.0), p.get("k_us", 0.0),
-            )
-            self._steer_bias = p["steer_bias"]
-        elif model_type == "taiga_dyn":
-            wb = p["wheelbase"]
-            self._ptr = lib.vm_create_taiga_dyn(
-                p["vel_lim"], p["steer_lim"], p["vel_rate_lim"], p["steer_rate_lim"],
-                wb, sub_dt, p["acc_time_delay"], p["acc_time_constant"],
-                p["steer_time_delay"], p["steer_time_constant"], p["steer_dead_band"],
-                p["steer_bias"], p.get("debug_acc_scaling_factor", 1.0),
-                p.get("debug_steer_scaling_factor", 1.0),
-                p.get("mass", TAIGA_DYN_DEFAULTS["mass"]),
-                p.get("inertia_z", TAIGA_DYN_DEFAULTS["inertia_z"]),
-                p.get("lf", wb * 0.5 - TAIGA_DYN_DEFAULTS["cg_offset_x"]),
-                p.get("lr", wb * 0.5 + TAIGA_DYN_DEFAULTS["cg_offset_x"]),
-                p.get("cornering_stiffness_front", TAIGA_DYN_DEFAULTS["cornering_stiffness_front"]),
-                p.get("cornering_stiffness_rear", TAIGA_DYN_DEFAULTS["cornering_stiffness_rear"]),
-                p.get("vx_min_dyn", TAIGA_DYN_DEFAULTS["vx_min_dyn"]),
-            )
-            self._steer_bias = p["steer_bias"]
-        elif model_type == "taiga_x":
-            wb = p["wheelbase"]
-            self._ptr = lib.vm_create_taiga_x(
-                wb, p.get("track_width", TAIGA_X_DEFAULTS["track_width"]),
-                p.get("mass", TAIGA_X_DEFAULTS["mass"]),
-                p.get("inertia_z", TAIGA_X_DEFAULTS["inertia_z"]),
-                p.get("cg_offset_x", TAIGA_X_DEFAULTS["cg_offset_x"]),
-                p["steer_lim"], p.get("max_accel", TAIGA_X_DEFAULTS["max_accel"]),
-                p.get("max_brake", TAIGA_X_DEFAULTS["max_brake"]),
-                p.get("wheel_radius", TAIGA_X_DEFAULTS["wheel_radius"]),
-                sub_dt, p.get("taiga_x_fixed_dt", TAIGA_X_DEFAULTS["taiga_x_fixed_dt"]),
-            )
-            self._steer_bias = 0.0
-        else:
-            raise ValueError(
-                f"未対応の model_type: {model_type!r}. 対応: 'ideal_steer_acc', "
-                "'delay_steer_acc_geared_wo_fall_guard', "
-                "'delay_steer_acc_geared_for_diffusion_planner', 'taiga_dyn', 'taiga_x'"
-            )
-
-    def __del__(self):
-        if hasattr(self, "_ptr") and self._ptr and hasattr(self, "_lib") and self._lib:
-            self._lib.vm_destroy(self._ptr)
-            self._ptr = None
-
-    def reset_with_history_ptr(
-        self, x: float, y: float, yaw: float, vx: float, steer_actual: float, ax: float,
-        acc_ptr, n_acc: int, steer_ptr, n_steer: int, wz: float = 0.0, vy: float = 0.0,
-    ) -> None:
-        """状態と delay queue を pre-computed ctypes ポインタでリセット。"""
-        self._lib.vm_reset_state(self._ptr, x, y, yaw, vx, steer_actual, ax, wz, vy)
-        self._lib.vm_set_queues(self._ptr, acc_ptr, ctypes.c_int(n_acc), steer_ptr, ctypes.c_int(n_steer))
 
 
 # ---------------------------------------------------------------------------

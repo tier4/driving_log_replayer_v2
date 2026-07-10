@@ -51,6 +51,7 @@ from ._parallel import normalize_parallel_jobs
 from ._fit_core import sim_first_order as _core_sim_first_order
 from ._fit_core import sim_first_order_frac as _core_sim_first_order_frac
 from ._params_utils import load_sim_params
+from ._vehicle_models import merge_vehicle_model_params
 from ._validation import require_non_empty_df
 
 CMD_TOPIC = "/control/command/control_cmd"
@@ -85,7 +86,7 @@ def merged_model_params(model_params: dict) -> dict:
     指定し acc_time_delay は既定値に委ねるケースがある)。マージ無しで `.get("acc_time_delay")`
     すると該当モデルが None 判定で overlay から黙って脱落するため、必ずここでマージしてから使う。
     """
-    return {**load_sim_params(), **model_params}
+    return merge_vehicle_model_params(load_sim_params(), model_params)
 
 # 縦方向 (SSOT は本モジュール。由来は旧 identify_long_dynamics.py の同定手順、git 履歴参照)
 _DA_THRESH_FIT = 0.15

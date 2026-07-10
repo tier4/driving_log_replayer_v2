@@ -13,9 +13,9 @@
 解析窓: AUTONOMOUS 開始から制御コマンド系列末尾まで。
 時系列軸 tr は AUTONOMOUS 開始時刻からの経過時間 [s]。
 
-使用モデル: DELAY_STEER_ACC_GEARED_WO_FALL_GUARD (C++ ctypes 経由)
-  ライブラリ: libvehicle_model_wrapper.so (simple_sensor_simulator パッケージが提供)
-  パラメータ: j6_gen2_description パッケージの config/simulator_model.param.yaml
+使用モデル: scenario.yaml の Conditions.models.<tag>.vehicle_model_type で選択される
+  C++ 車両モデル (libvehicle_model_wrapper.so / ctypes 経由)
+  パラメータ: simulator_model.param.yaml 由来の base に scenario.yaml の params を上書き
 
 出力:
   comparison/nstep/<tag>/
@@ -67,6 +67,7 @@ from .lib._params_utils import load_sim_params
 from .lib._plotly_utils import FIG_HEIGHTS, lanes_to_trace
 from .lib._runtime_config import RuntimeConfig, add_common_cli_arguments, build_runtime_config
 from .lib._validation import require_non_empty_df
+from .lib._vehicle_models import VehicleModel, merge_vehicle_model_params
 from .lib._physical_validity import VX_MIN_CURVE
 
 BASE = Path(os.environ.get("BEST_MODEL_BASE_DIR") or Path(__file__).parent)
@@ -87,7 +88,7 @@ MAP_BBOX_MARGIN = 10.0
 # phantom bias で、ideal_steer 以外の全ケース (baseline/kus0020/shorter_wb) の
 # err_steer を一律に汚染し、図の注釈 (load_sim_params 由来 0.0005 を表示) とも
 # 自己矛盾していた。Stage3 closed-loop sim と整合させるため override から除外し、
-# load_sim_params() のシム仕様 steer_bias をそのまま使う。ケース固有値は cases.yaml の
+# load_sim_params() のシム仕様 steer_bias をそのまま使う。ケース固有値は scenario.yaml の
 # params で明示上書きできる (ideal_steer は C++ 側が bias を持たないため 0.0 を明示)。
 _PARAMS_OVERRIDES = {
     "sub_dt": 1.0 / 30.0,
@@ -112,419 +113,6 @@ def _build_params(cfg: RuntimeConfig | None = None) -> dict:
 # ことで cases ループ起動時のオーバーヘッドを削減する。
 PARAMS: dict = {"sub_dt": 1.0 / 30.0}
 SUB_DT: float = PARAMS["sub_dt"]
-
-
-# ---------------------------------------------------------------------------
-# DELAY_STEER_ACC_GEARED_WO_FALL_GUARD の C++ ctypes ラッパー
-# ---------------------------------------------------------------------------
-
-# libvehicle_model_wrapper.so が vm_get_wz を export しているか (_load_lib で確定)。
-_HAS_WZ = False
-
-
-def _resolve_so_path() -> Path:
-    """libvehicle_model_wrapper.so の場所を解決する。
-
-    優先順:
-      1. VEHICLE_MODEL_SO_PATH 環境変数
-      2. ament_index_python で simple_sensor_simulator パッケージ share を解決
-    """
-    env = os.environ.get("VEHICLE_MODEL_SO_PATH")
-    if env:
-        p = Path(env)
-        if p.exists():
-            return p
-    from ament_index_python.packages import get_package_share_directory
-
-    share = Path(get_package_share_directory("simple_sensor_simulator"))
-    return share / "libvehicle_model_wrapper.so"
-
-
-def _load_lib() -> ctypes.CDLL:
-    so = _resolve_so_path()
-    if not so.exists():
-        raise FileNotFoundError(
-            f"{so} が見つかりません。simple_sensor_simulator を colcon build してください。"
-        )
-    lib = ctypes.CDLL(str(so))
-
-    c_double = ctypes.c_double
-    c_void_p = ctypes.c_void_p
-
-    # model-specific factories (returns VmModel * as c_void_p)
-    lib.vm_create_ideal_steer_acc.restype = c_void_p
-    lib.vm_create_ideal_steer_acc.argtypes = [c_double, c_double]  # wheelbase, sub_dt
-
-    lib.vm_create_delay_steer_acc_geared_wo_fall_guard.restype = c_void_p
-    # 15 base args (vx_lim..k_us)
-    lib.vm_create_delay_steer_acc_geared_wo_fall_guard.argtypes = [c_double] * 15
-
-    lib.vm_create_delay_steer_acc_geared_for_diffusion_planner.restype = c_void_p
-    # 15 base args (vx_lim..k_us)。wo_fall_guard と同じ引数構成 (full-RHS delay のみが差分)。
-    lib.vm_create_delay_steer_acc_geared_for_diffusion_planner.argtypes = [c_double] * 15
-
-    # taiga_dyn: 14 共通引数 (wo_fall_guard の k_us を除く) + 7 物理パラメータ
-    # (mass, inertia_z, lf, lr, cornering_stiffness_front, cornering_stiffness_rear, vx_min_dyn)
-    lib.vm_create_taiga_dyn.restype = c_void_p
-    lib.vm_create_taiga_dyn.argtypes = [c_double] * 21
-
-    # taiga_x (PhysX backend)。physx_vendor 経由で常時ビルドされる。
-    # 引数: wheelbase, track_width, mass, inertia_z, cg_offset_x, max_steer,
-    #       max_accel, max_brake, wheel_radius, sub_dt, fixed_dt
-    lib.vm_create_taiga_x.restype = c_void_p
-    lib.vm_create_taiga_x.argtypes = [c_double] * 11
-
-    # reset は末尾に wz (実測 yaw rate) を取り、動的モデルの yaw rate state を seed する。
-    lib.vm_reset_full.restype = None
-    lib.vm_reset_full.argtypes = [c_void_p] + [c_double] * 8  # +vy (末尾)
-
-    # State-only reset (queues untouched) + explicit queue setter
-    lib.vm_reset_state.restype = None
-    lib.vm_reset_state.argtypes = [c_void_p] + [c_double] * 8  # +vy (末尾)
-
-    lib.vm_set_queues.restype = None
-    lib.vm_set_queues.argtypes = [
-        c_void_p,
-        ctypes.POINTER(c_double),
-        ctypes.c_int,
-        ctypes.POINTER(c_double),
-        ctypes.c_int,
-    ]
-
-    lib.vm_get_acc_q_size.restype = ctypes.c_int
-    lib.vm_get_acc_q_size.argtypes = [c_void_p]
-    lib.vm_get_steer_q_size.restype = ctypes.c_int
-    lib.vm_get_steer_q_size.argtypes = [c_void_p]
-
-    lib.vm_set_input.restype = None
-    lib.vm_set_input.argtypes = [c_void_p, c_double, c_double]
-
-    lib.vm_step.restype = None
-    lib.vm_step.argtypes = [c_void_p]
-
-    lib.vm_step_dt.restype = None
-    lib.vm_step_dt.argtypes = [c_void_p, c_double]
-
-    for fn in (
-        "vm_get_x",
-        "vm_get_y",
-        "vm_get_yaw",
-        "vm_get_vx",
-        "vm_get_vy",
-        "vm_get_steer",
-        "vm_get_ax",
-    ):
-        getattr(lib, fn).restype = c_double
-        getattr(lib, fn).argtypes = [c_void_p]
-
-    # wz (yaw rate) は新しめのラッパーのみ export (vehicle_model_c_wrapper.cpp の vm_get_wz)。
-    # k_us 依存の calc_yaw_rate を経由するため per-step でも understeer の寄与を観測できる。
-    # 古い .so との後方互換のため存在時のみ束縛し、_HAS_WZ フラグで制御する。
-    global _HAS_WZ  # noqa: PLW0603
-    if hasattr(lib, "vm_get_wz"):
-        lib.vm_get_wz.restype = c_double
-        lib.vm_get_wz.argtypes = [c_void_p]
-        _HAS_WZ = True
-    else:
-        _HAS_WZ = False
-        print(
-            "[WARN] libvehicle_model_wrapper.so に vm_get_wz が無いため sim_wz は NaN。"
-            "simple_sensor_simulator を再ビルドしてください。",
-            file=sys.stderr,
-        )
-
-    # vm_integrate_to_horizons: batch-integrate cmd intervals in C for open-loop tuning.
-    # Requires colcon rebuild with simple_sensor_simulator C++ addition.
-    _c_dbl_p = ctypes.POINTER(c_double)
-    _c_int_p = ctypes.POINTER(ctypes.c_int)
-    if not hasattr(lib, "vm_integrate_to_horizons"):
-        raise RuntimeError(
-            "libvehicle_model_wrapper.so に vm_integrate_to_horizons が未 export です。"
-            " simple_sensor_simulator を再ビルドしてください。"
-        )
-    lib.vm_integrate_to_horizons.restype = None
-    lib.vm_integrate_to_horizons.argtypes = [
-        c_void_p,         # m
-        ctypes.c_int,     # n_intervals
-        ctypes.c_int,     # k0
-        _c_dbl_p,         # accel_des (full array)
-        _c_dbl_p,         # steer_des (full array)
-        _c_int_p,         # n_full    (full array, int32)
-        _c_dbl_p,         # rem       (full array)
-        c_double,         # rem_eps
-        ctypes.c_int,     # n_horizons
-        _c_int_p,         # horizons  (sorted ascending)
-        _c_dbl_p,         # x_out
-        _c_dbl_p,         # y_out
-        _c_dbl_p,         # yaw_out
-        _c_dbl_p,         # vx_out
-        _c_dbl_p,         # ax_out
-        _c_dbl_p,         # steer_out (raw getSteer() = steer_state + steer_bias)
-    ]
-
-    # vm_step_dt はラッパーに未 export のため使わない。残ステップ (remainder) は無視。
-    lib.vm_destroy.restype = None
-    lib.vm_destroy.argtypes = [c_void_p]
-
-    return lib
-
-
-class VehicleModel:
-    """SimModelInterface 派生の C ラッパーを model_type で dispatch."""
-
-    _lib: ctypes.CDLL | None = None
-
-    @classmethod
-    def _get_lib(cls) -> ctypes.CDLL:
-        if cls._lib is None:
-            cls._lib = _load_lib()
-        return cls._lib
-
-    def __init__(self, params: dict, sub_dt: float, model_type: str):
-        """
-        model_type:
-          - "delay_steer_acc_geared_wo_fall_guard": 旧既定。15 引数 (params の wheelbase,
-            steer_bias, time_constant 等 + debug_*_scaling_factor, k_us)
-          - "ideal_steer_acc": wheelbase のみ
-        params は load_sim_params() の base に cases.yaml の case.params が上書きされた dict。
-
-        注: ideal_steer_acc は d(vx)/dt = ax (加速度指令を直接積分; 停止/ギア拘束なし) のため、
-        停止中 (real_vx≈0) にブレーキ指令を与える step で sim_vx がわずかに負になり得る
-        (実測: 停止中ブレーキの 672 step で sim_vx 平均 -0.05 m/s)。これは dynamics-free な ideal
-        モデルの仕様で、「停止中に後退する」という微小な予測誤差を忠実に表すもの (クランプすると
-        その誤差を隠す)。1 step (~0.03s) の位置寄与は ~mm で err_ds への影響は無視可能
-        (負 step の err_ds_long RMSE ≈ 0.09cm vs 全体 1.38cm)。delay_steer_acc_geared はギア拘束で発生しない。
-        """
-        p = params
-        lib = self._get_lib()
-        self._lib = lib
-        if model_type == "ideal_steer_acc":
-            self._ptr = lib.vm_create_ideal_steer_acc(p["wheelbase"], sub_dt)
-            self._steer_bias = 0.0
-        elif model_type == "delay_steer_acc_geared_wo_fall_guard":
-            self._ptr = lib.vm_create_delay_steer_acc_geared_wo_fall_guard(
-                p["vel_lim"],
-                p["steer_lim"],
-                p["vel_rate_lim"],
-                p["steer_rate_lim"],
-                p["wheelbase"],
-                sub_dt,
-                p["acc_time_delay"],
-                p["acc_time_constant"],
-                p["steer_time_delay"],
-                p["steer_time_constant"],
-                p["steer_dead_band"],
-                p["steer_bias"],
-                p.get("debug_acc_scaling_factor", 1.0),
-                p.get("debug_steer_scaling_factor", 1.0),
-                p.get("k_us", 0.0),
-            )
-            self._steer_bias = p["steer_bias"]
-        elif model_type == "delay_steer_acc_geared_for_diffusion_planner":
-            self._ptr = lib.vm_create_delay_steer_acc_geared_for_diffusion_planner(
-                p["vel_lim"],
-                p["steer_lim"],
-                p["vel_rate_lim"],
-                p["steer_rate_lim"],
-                p["wheelbase"],
-                sub_dt,
-                p["acc_time_delay"],
-                p["acc_time_constant"],
-                p["steer_time_delay"],
-                p["steer_time_constant"],
-                p["steer_dead_band"],
-                p["steer_bias"],
-                p.get("debug_acc_scaling_factor", 1.0),
-                p.get("debug_steer_scaling_factor", 1.0),
-                p.get("k_us", 0.0),
-            )
-            self._steer_bias = p["steer_bias"]
-        elif model_type == "taiga_dyn":
-            # 動的自転車モデル。共通の縦・操舵パラメータ + 物理パラメータ (質量・ヨー慣性・
-            # 重心位置・前後コーナリング剛性・低速フォールバック閾値)。物理パラメータは妥当な
-            # 車両物理値を既定とし cases.yaml で上書き可能。
-            # NOTE: 物理パラメータ既定値 (mass/inertia_z/lf/lr/... と下の taiga_x の
-            # track_width/cg_offset_x/wheel_radius/max_accel/max_brake/fixed_dt) は
-            # scenario_simulator の ego_entity_simulation.cpp makeSimulationModel
-            # (TAIGA_DYN / TAIGA_X case) のフォールバック値と一致させること。両者が乖離すると
-            # この open-loop ハーネスと closed-loop sim の挙動がずれる。
-            wb = p["wheelbase"]
-            self._ptr = lib.vm_create_taiga_dyn(
-                p["vel_lim"],
-                p["steer_lim"],
-                p["vel_rate_lim"],
-                p["steer_rate_lim"],
-                wb,
-                sub_dt,
-                p["acc_time_delay"],
-                p["acc_time_constant"],
-                p["steer_time_delay"],
-                p["steer_time_constant"],
-                p["steer_dead_band"],
-                p["steer_bias"],
-                p.get("debug_acc_scaling_factor", 1.0),
-                p.get("debug_steer_scaling_factor", 1.0),
-                p.get("mass", 6560.0),
-                p.get("inertia_z", 25868.2318),
-                p.get("lf", wb * 0.5 + 0.94323),
-                p.get("lr", wb * 0.5 - 0.94323),
-                p.get("cornering_stiffness_front", 115830.0),
-                p.get("cornering_stiffness_rear", 535860.0),
-                p.get("vx_min_dyn", 1.0),
-            )
-            self._steer_bias = p["steer_bias"]
-        elif model_type == "taiga_x":
-            # 高忠実 PhysX backend (physx_vendor 経由で常時ビルド)。物理パラメータは
-            # 妥当な車両物理値を既定とし cases.yaml で上書き可能。
-            wb = p["wheelbase"]
-            self._ptr = lib.vm_create_taiga_x(
-                wb,
-                p.get("track_width", 1.754),
-                p.get("mass", 6560.0),
-                p.get("inertia_z", 25868.2318),
-                p.get("cg_offset_x", -0.94323),
-                p["steer_lim"],
-                p.get("max_accel", 2.3),
-                p.get("max_brake", 5.9),
-                p.get("wheel_radius", 0.3725),
-                sub_dt,
-                p.get("taiga_x_fixed_dt", 1.0 / 1200.0),
-            )
-            self._steer_bias = 0.0
-        else:
-            raise ValueError(
-                f"未対応の model_type: {model_type!r}. 対応: 'ideal_steer_acc', "
-                "'delay_steer_acc_geared_wo_fall_guard', "
-                "'delay_steer_acc_geared_for_diffusion_planner', 'taiga_dyn', 'taiga_x'"
-            )
-
-    def __del__(self):
-        if hasattr(self, "_ptr") and self._ptr and hasattr(self, "_lib") and self._lib:
-            self._lib.vm_destroy(self._ptr)
-            self._ptr = None
-
-    @property
-    def acc_q_size(self) -> int:
-        return self._lib.vm_get_acc_q_size(self._ptr)
-
-    @property
-    def steer_q_size(self) -> int:
-        return self._lib.vm_get_steer_q_size(self._ptr)
-
-    def reset_with_history(
-        self,
-        x: float,
-        y: float,
-        yaw: float,
-        vx: float,
-        steer_actual: float,
-        ax: float,
-        acc_history: list[float],
-        steer_history: list[float],
-        wz: float = 0.0,
-        vy: float = 0.0,
-    ) -> None:
-        """
-        状態と delay queue を実際の過去コマンド履歴でリセット。
-
-        acc_history   : accel_des [oldest→newest], len == acc_q_size
-        steer_history : steer_des [oldest→newest], len == steer_q_size
-        wz            : 実測 yaw rate [rad/s]。taiga_dyn など yaw rate を慣性付き state
-                        として持つ動的モデルの初期 yaw rate を seed する (毎 reset で 0 に
-                        すると小 N の per-step 誤差が立ち上がり過渡に支配されるため)。
-                        kinematic モデルでは無視される。
-        vy            : 実測横速度 [m/s]。taiga_dyn の横速度 state を seed する。
-                        kinematic モデルでは無視される。
-        """
-        self._lib.vm_reset_state(self._ptr, x, y, yaw, vx, steer_actual, ax, wz, vy)
-
-        n_acc = len(acc_history)
-        n_steer = len(steer_history)
-        ArrAcc = (ctypes.c_double * n_acc)(*acc_history)
-        ArrSteer = (ctypes.c_double * n_steer)(*steer_history)
-        self._lib.vm_set_queues(
-            self._ptr,
-            ArrAcc,
-            ctypes.c_int(n_acc),
-            ArrSteer,
-            ctypes.c_int(n_steer),
-        )
-
-    def reset_with_history_ptr(
-        self,
-        x: float,
-        y: float,
-        yaw: float,
-        vx: float,
-        steer_actual: float,
-        ax: float,
-        acc_ptr: ctypes.POINTER(ctypes.c_double),
-        n_acc: int,
-        steer_ptr: ctypes.POINTER(ctypes.c_double),
-        n_steer: int,
-        wz: float = 0.0,
-        vy: float = 0.0,
-    ) -> None:
-        """状態と delay queue を pre-computed ctypes ポインタでリセット。"""
-        self._lib.vm_reset_state(self._ptr, x, y, yaw, vx, steer_actual, ax, wz, vy)
-        self._lib.vm_set_queues(
-            self._ptr,
-            acc_ptr,
-            ctypes.c_int(n_acc),
-            steer_ptr,
-            ctypes.c_int(n_steer),
-        )
-
-    def step(self, accel_des: float, steer_des: float) -> None:
-        """Euler 1 ステップ積分（sub_dt 秒）。"""
-        self._lib.vm_set_input(self._ptr, accel_des, steer_des)
-        self._lib.vm_step(self._ptr)
-
-    def step_dt(self, accel_des: float, steer_des: float, dt: float) -> None:
-        """Euler 1 ステップ積分（任意 dt 秒）。
-        端数補正 (interval < SUB_DT) 用。dt は SUB_DT より十分小さい範囲で呼ぶこと。"""
-        self._lib.vm_set_input(self._ptr, accel_des, steer_des)
-        self._lib.vm_step_dt(self._ptr, ctypes.c_double(dt))
-
-    @property
-    def x(self) -> float:
-        return self._lib.vm_get_x(self._ptr)
-
-    @property
-    def y(self) -> float:
-        return self._lib.vm_get_y(self._ptr)
-
-    @property
-    def yaw(self) -> float:
-        return self._lib.vm_get_yaw(self._ptr)
-
-    @property
-    def vx(self) -> float:
-        return self._lib.vm_get_vx(self._ptr)
-
-    @property
-    def ax(self) -> float:
-        """縦方向加速度 state_[5] [m/s²]。vm_get_ax は常時バインド (_load_lib)。
-
-        ideal_steer_acc は加速度状態を持たず指令をそのまま返す (1 次遅れ無し)。
-        """
-        return self._lib.vm_get_ax(self._ptr)
-
-    @property
-    def vy(self) -> float:
-        """横速度 [m/s]。kinematic モデルは 0、taiga_dyn は横速度 state を返す。"""
-        return self._lib.vm_get_vy(self._ptr)
-
-    @property
-    def wz(self) -> float:
-        """yaw rate [rad/s]。ラッパーが vm_get_wz を export していなければ NaN。"""
-        if not _HAS_WZ:
-            return float("nan")
-        return self._lib.vm_get_wz(self._ptr)
-
-    @property
-    def steer_state(self) -> float:
-        return self._lib.vm_get_steer(self._ptr) - self._steer_bias
 
 
 # ---------------------------------------------------------------------------
@@ -1516,8 +1104,10 @@ def save_summary(df: pd.DataFrame, verbose: bool = False) -> None:
 # ---------------------------------------------------------------------------
 
 
-def _apply_runtime_config(cfg: RuntimeConfig, case_tag: str, case_params: dict) -> dict:
-    """RuntimeConfig + cases.yaml の case エントリ をモジュールレベル変数に反映。
+def _apply_runtime_config(
+    cfg: RuntimeConfig, case_tag: str, case_params: dict, vehicle_model_type: str | None = None
+) -> dict:
+    """RuntimeConfig + scenario.yaml の case エントリ をモジュールレベル変数に反映。
 
     OUT_DIR は nstep/<case_tag>/ に固定。PARAMS は load_sim_params()
     の base に case_params を上書きしたもの。
@@ -1530,8 +1120,7 @@ def _apply_runtime_config(cfg: RuntimeConfig, case_tag: str, case_params: dict) 
     # 入力 bag のデフォルトパス (実体は _resolve_real_mcap が file/dir 両対応)
     REAL_BAG_DIR = LITE_DIR / "real.lite.mcap"
 
-    PARAMS = _build_params(cfg)
-    PARAMS.update(case_params)
+    PARAMS = merge_vehicle_model_params(_build_params(cfg), case_params, vehicle_model_type)
     SUB_DT = PARAMS["sub_dt"]
     return PARAMS
 
@@ -1580,7 +1169,7 @@ def main() -> None:
     _print(f"[case] tag={case.tag}, vehicle_model_type={case.vehicle_model_type}, params={case.params}")
 
     cfg = build_runtime_config(args, default_base_dir=Path(__file__).parent)
-    params = _apply_runtime_config(cfg, case.tag, case.params)
+    params = _apply_runtime_config(cfg, case.tag, case.params, case.vehicle_model_type)
 
     OUT_DIR.mkdir(parents=True, exist_ok=True)
 

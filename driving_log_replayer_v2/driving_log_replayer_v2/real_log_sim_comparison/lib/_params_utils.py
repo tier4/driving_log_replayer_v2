@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from ._vehicle_models import apply_versioned_model_params
+
 
 def _find_desc_dir() -> Path:
     """j6_gen2_description/config のパスを解決する（ROS 非依存環境では寛容にフォールバック）。
@@ -57,6 +59,8 @@ def load_sim_params(params_dir: Path | None = None) -> dict:
             params.update(ros_p)
         except Exception:
             pass
+
+    params = apply_versioned_model_params(params)
 
     # フォールバック（YAML 読み取り失敗時）
     defaults = {

@@ -53,6 +53,7 @@ from .lib._parallel import (
 )
 from .lib._physical_validity import WHEELBASE
 from .lib._validation import MissingRequiredDataError
+from .lib._vehicle_models import merge_vehicle_model_params
 
 STRIDE = 5
 # フォールバック既定値のみ。実運用では main() が scenario.yaml の
@@ -94,8 +95,7 @@ def _eval(
     ctx: DatasetCtx, override: dict, model_type: str, acceleration_source: str = "accel"
 ) -> dict:
     """1 dataset・1 パラメータ組の horizon 別終端誤差 RMSE {h: {yaw,pos,long,lat,steer}}。"""
-    params = dict(ctx.base)
-    params.update(override)
+    params = merge_vehicle_model_params(ctx.base, override, model_type)
     source = normalize_accel_source(acceleration_source)
     data = _ctx_data(ctx, source)
     key = (source, *tuple(round(float(params[k]), 9) for k in _GT_KEYS))

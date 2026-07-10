@@ -24,6 +24,7 @@ from ..lib._parallel import (
     pool_chunksize,
     set_worker_thread_env_defaults,
 )
+from ..lib._vehicle_models import merge_vehicle_model_params
 from . import rollout
 from .csv_schema import CACHE_NAME
 from .load_data import build_rollout_data, read_dataset_csv
@@ -59,8 +60,7 @@ def _eval(
     ctx: DatasetCtx, override: dict, model_type: str, acceleration_source: str = "accel",
 ) -> dict:
     """1 dataset・1 パラメータ組の horizon 別終端誤差 RMSE {h: {yaw,pos,long,lat,steer}}。"""
-    params = dict(ctx.base)
-    params.update(override)
+    params = merge_vehicle_model_params(ctx.base, override, model_type)
     source = normalize_accel_source(acceleration_source)
     data = _ctx_data(ctx, source)
     key = (source, *tuple(round(float(params[k]), 9) for k in _GT_KEYS))

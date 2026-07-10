@@ -29,6 +29,8 @@ import sys
 import tempfile
 from pathlib import Path
 
+from .lib._vehicle_models import get_vehicle_model_spec
+
 
 # scenario_test_runner.launch.py が output_directory 引数を無視する場合の既定出力先
 _FALLBACK_SIM_OUT_ROOT = Path("/tmp/scenario_test_runner")
@@ -128,37 +130,26 @@ def _build_launch_cmd(
     # scenario_test_runner.launch.py が simple_sensor_simulator. 接頭辞の launch 引数を
     # 収集し、simulator_model.param.yaml の後ろに連結する (後勝ち) ため、
     # description パッケージを増やさずに dynamics 変種 (例 k_us) を作れる。
-    is_diffusion_planner = (run.vehicle_model_type == "delay_steer_acc_geared_for_diffusion_planner")
+    model_spec = get_vehicle_model_spec(run.vehicle_model_type) if run.vehicle_model_type else None
+    ns_root = model_spec.namespaced_param_root if model_spec else None
+    version_key = model_spec.version_param_key if model_spec else None
     version = 1
-    if is_diffusion_planner:
-        version_key = "delay_steer_acc_geared_for_diffusion_planner.version"
+    if version_key:
         if version_key in run.params:
             try:
                 version = int(run.params[version_key])
             except (ValueError, TypeError):
                 pass
 
-    namespaced_keys = {
-        "acc_time_delay",
-        "acc_time_constant",
-        "steer_time_delay",
-        "steer_time_constant",
-        "steer_dead_band",
-        "steer_bias",
-        "debug_acc_scaling_factor",
-        "debug_steer_scaling_factor",
-        "k_us",
-    }
-
     for key, value in run.params.items():
-        if is_diffusion_planner and key in namespaced_keys:
-            ns_key = f"delay_steer_acc_geared_for_diffusion_planner.v{version}.{key}"
+        if ns_root and model_spec and key in model_spec.namespaced_param_keys:
+            ns_key = f"{ns_root}.v{version}.{key}"
             cmd.append(f"simple_sensor_simulator.{ns_key}:={value}")
         else:
             cmd.append(f"simple_sensor_simulator.{key}:={value}")
 
-    if is_diffusion_planner and "delay_steer_acc_geared_for_diffusion_planner.version" not in run.params:
-        cmd.append(f"simple_sensor_simulator.delay_steer_acc_geared_for_diffusion_planner.version:={version}")
+    if version_key and version_key not in run.params:
+        cmd.append(f"simple_sensor_simulator.{version_key}:={version}")
 
     return cmd
 

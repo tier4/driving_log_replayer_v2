@@ -40,40 +40,15 @@ from typing import Any
 import yaml
 
 from ._accel_source import normalize_accel_source
+from ._vehicle_models import (
+    SUPPORTED_VMT,
+    known_vehicle_model_param_keys,
+    vehicle_model_type_to_enum,
+)
 
 
-# vehicle_model_type (open-loop クラス名) → sim の vehicle_model_type パラメータ (enum 文字列)
-# step3_run_sims が simple_sensor_simulator.vehicle_model_type:=<ENUM> として launch に渡す。
-_VEHICLE_MODEL_TYPE_ENUM: dict[str, str] = {
-    "delay_steer_acc_geared_wo_fall_guard": "DELAY_STEER_ACC_GEARED_WO_FALL_GUARD",
-    "delay_steer_acc_geared_for_diffusion_planner": "DELAY_STEER_ACC_GEARED_FOR_DIFFUSION_PLANNER",
-    "ideal_steer_acc": "IDEAL_STEER_ACC",
-    "taiga_dyn": "TAIGA_DYN",
-    "taiga_x": "TAIGA_X",
-}
-
-SUPPORTED_VMT: frozenset[str] = frozenset(_VEHICLE_MODEL_TYPE_ENUM.keys())
-
-# vm_create_* / VehicleModel.__init__ が消費する物理パラメータ名 (typo 検出用)
-KNOWN_PARAM_KEYS: frozenset[str] = frozenset({
-    "vel_lim", "steer_lim", "vel_rate_lim", "steer_rate_lim",
-    "wheelbase", "acc_time_delay", "acc_time_constant",
-    "steer_time_delay", "steer_time_constant",
-    "steer_dead_band", "steer_bias",
-    "debug_acc_scaling_factor", "debug_steer_scaling_factor",
-    "k_us", "sub_dt",
-    # taiga_dyn / taiga_x 動的自転車モデル
-    "mass", "inertia_z", "lf", "lr",
-    "cornering_stiffness_front", "cornering_stiffness_rear", "vx_min_dyn",
-    # taiga_x (PhysX backend) 専用
-    "track_width", "cg_offset_x", "max_accel", "max_brake", "wheel_radius",
-    "taiga_x_fixed_dt",
-    # learned_arx
-    "arx_ax_coeffs", "arx_wz_coeffs",
-    # sim params (vehicle_model_type は sim で注入されるため params には書かない)
-    "vehicle_model_type",
-    "delay_steer_acc_geared_for_diffusion_planner.version",
-})
+# vm_create_* / VehicleModel が消費する物理パラメータ名 (typo 検出用)
+KNOWN_PARAM_KEYS: frozenset[str] = known_vehicle_model_param_keys()
 
 _KNOWN_MODEL_KEYS: frozenset[str] = frozenset({
     "vehicle_model_type", "vehicle_model", "acceleration_source",
@@ -415,5 +390,5 @@ def load_run_models(scenario_path: str | Path) -> ModelsDoc:
                     f"{scenario_path}: models.{name}.params.{key} はスカラのみ可"
                 )
         if model.vehicle_model_type and "vehicle_model_type" not in model.params:
-            model.params["vehicle_model_type"] = _VEHICLE_MODEL_TYPE_ENUM[model.vehicle_model_type]
+            model.params["vehicle_model_type"] = vehicle_model_type_to_enum(model.vehicle_model_type)
     return doc
