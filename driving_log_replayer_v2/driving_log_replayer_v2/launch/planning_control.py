@@ -25,7 +25,7 @@ RECORD_TOPIC = """^/tf$\
 |^/perception/object_recognition/.*/objects$\
 |^/perception/object_recognition/detection/rois[0-9]+$\
 |^/perception/traffic_light_recognition/traffic_signals/markers$\
-|^/perception/traffic_light_recognition/traffic_signals$\
+|^/perception/.*/traffic_signals$\
 |^/system/v2x/virtual_traffic_light_states$\
 |^/localization/kinematic_state$\
 |^/localization/initialization_state$\
