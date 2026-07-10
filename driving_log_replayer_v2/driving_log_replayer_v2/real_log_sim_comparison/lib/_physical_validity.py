@@ -1666,39 +1666,19 @@ def _xy_equation_rhs(params_dict: dict, yaw: np.ndarray, vx: np.ndarray, wz: np.
     return rhs_x, rhs_y
 
 
-def _integrate_xy_equation_arrays(
-    params_dict: dict,
-    yaw: np.ndarray,
-    vx: np.ndarray,
-    wz: np.ndarray,
-    x0: float,
-    y0: float,
-) -> tuple[np.ndarray, np.ndarray]:
-    n = len(yaw)
-    xs = np.empty(n)
-    ys = np.empty(n)
-    xs[0] = float(x0)
-    ys[0] = float(y0)
-    for i in range(1, n):
-        j = i - 1
-        rhs_x, rhs_y = _xy_equation_rhs(params_dict, yaw[j:j + 1], vx[j:j + 1], wz[j:j + 1])
-        xs[i] = xs[i - 1] + float(rhs_x[0]) * _FIT_DT
-        ys[i] = ys[i - 1] + float(rhs_y[0]) * _FIT_DT
-    return xs, ys
+def _xy_equation_residual(params_dict: dict, dataset: dict) -> np.ndarray:
+    """瞬間方程式残差 E = RHS(c) − LHS（LHS = 実測 x/y の SG 平滑化微分）。
 
-
-def _xy_equation_trajectory_residual(params_dict: dict, dataset: dict) -> np.ndarray:
-    xs, ys = _integrate_xy_equation_arrays(
-        params_dict,
-        dataset["yaw"],
-        dataset["vx"],
-        dataset["wz"],
-        float(dataset["x"][0]),
-        float(dataset["y"][0]),
-    )
+    積分軌跡の発散ではなく、各時刻の「実測速度ベクトル」と「モデル式が予測する
+    速度ベクトル」を直接比較する。実車の入出力関係とモデル式の入出力関係が
+    一致しているかを見るには、積分誤差の蓄積を混ぜないこちらの方が適切
+    （積分は区間長・積分方法・入力ソースのノイズ特性など c と無関係な要因で
+    誤差の大小が変わってしまう）。
+    """
+    rhs_x, rhs_y = _xy_equation_rhs(params_dict, dataset["yaw"], dataset["vx"], dataset["wz"])
     mask = dataset["mask"]
-    ex = xs - dataset["x"]
-    ey = ys - dataset["y"]
+    ex = rhs_x - dataset["lhs_x"]
+    ey = rhs_y - dataset["lhs_y"]
     return np.concatenate([ex[mask], ey[mask]])
 
 
@@ -1711,7 +1691,7 @@ def _fit_xy_heading_rate_coeff(datasets: list[dict], params: dict) -> dict | Non
 
     def objective(c: float) -> float:
         params_dict = {_XY_HEADING_RATE_COEFF: float(c)}
-        resid_parts = [_xy_equation_trajectory_residual(params_dict, dataset) for dataset in datasets]
+        resid_parts = [_xy_equation_residual(params_dict, dataset) for dataset in datasets]
         resid = np.concatenate(resid_parts) if resid_parts else np.array([], dtype=float)
         resid = resid[np.isfinite(resid)]
         if resid.size == 0:
@@ -1735,17 +1715,10 @@ def _collect_xy_equation_residual_components(datasets: list[dict], params_dict: 
     ey_all: list[float] = []
     rmses: list[float] = []
     for dataset in datasets:
-        xs, ys = _integrate_xy_equation_arrays(
-            params_dict,
-            dataset["yaw"],
-            dataset["vx"],
-            dataset["wz"],
-            float(dataset["x"][0]),
-            float(dataset["y"][0]),
-        )
+        rhs_x, rhs_y = _xy_equation_rhs(params_dict, dataset["yaw"], dataset["vx"], dataset["wz"])
         mask = dataset["mask"]
-        ex = (xs - dataset["x"])[mask]
-        ey = (ys - dataset["y"])[mask]
+        ex = (rhs_x - dataset["lhs_x"])[mask]
+        ey = (rhs_y - dataset["lhs_y"])[mask]
         ex_all.extend(ex.tolist())
         ey_all.extend(ey.tolist())
         both_ds = np.concatenate([ex, ey]) if ex.size or ey.size else np.array([], dtype=float)
@@ -1765,8 +1738,32 @@ def _collect_xy_equation_residual_components(datasets: list[dict], params_dict: 
     }
 
 
+def _integrate_xy_equation_arrays(
+    params_dict: dict,
+    yaw: np.ndarray,
+    vx: np.ndarray,
+    wz: np.ndarray,
+    x0: float,
+    y0: float,
+) -> tuple[np.ndarray, np.ndarray]:
+    """x/y だけを積分する参考軌跡（見た目の直感的な一致度確認専用、c の定量評価には
+    `_xy_equation_residual` の瞬間残差を使うこと）。yaw は実測をそのまま毎ステップ使う。
+    """
+    n = len(yaw)
+    xs = np.empty(n)
+    ys = np.empty(n)
+    xs[0] = float(x0)
+    ys[0] = float(y0)
+    for i in range(1, n):
+        j = i - 1
+        rhs_x, rhs_y = _xy_equation_rhs(params_dict, yaw[j:j + 1], vx[j:j + 1], wz[j:j + 1])
+        xs[i] = xs[i - 1] + float(rhs_x[0]) * _FIT_DT
+        ys[i] = ys[i - 1] + float(rhs_y[0]) * _FIT_DT
+    return xs, ys
+
+
 def _integrate_xy_equation_trajectory(td: dict, params_dict: dict) -> dict:
-    """観測 yaw/vx/wz を固定入力として x/y 式だけを積分した参考軌跡を作る。"""
+    """観測 yaw/vx/wz を固定入力として x/y 式だけを積分した参考軌跡を作る（見た目確認用）。"""
     gt_x = td["x"]
     gt_y = td["y"]
     xs, ys = _integrate_xy_equation_arrays(
@@ -1792,16 +1789,22 @@ def compute_xy_equation_residual_data(
     entries: list,
     params: dict,
 ) -> dict:
-    """x/y 状態方程式の軌跡フィット評価・heading 補正パラメータ最適化を行う。
+    """x/y 状態方程式の瞬間残差評価・heading 補正パラメータ最適化を行う。
 
     対象式:
       xdot = vx * cos(yaw - xy_heading_rate_coeff * vx * yawdot)
       ydot = vx * sin(yaw - xy_heading_rate_coeff * vx * yawdot)
 
     ステア・加速度は完全追従した前提とし、前段モデルは一切ロールアウトしない。
-    RHS は観測 vx/yaw/yawdot の直接代入から作り、積分軌跡を実測 x/y と比較する。
-    これにより、加速度追従式・操舵追従式・yaw 式の誤差を x/y 補正項の同定に混入させない。
-    xy_heading_rate_coeff は全 dataset の軌跡誤差をプールして最小化する。
+    RHS は観測 vx/yaw/yawdot の直接代入から作り、LHS（実測 x/y の SG 平滑化微分 =
+    実測速度ベクトル）との瞬間残差 E=RHS-LHS を全 dataset の全時刻でプールして
+    xy_heading_rate_coeff を最小二乗フィットする。積分軌跡（区間長・積分方法・
+    入力ソースのノイズ特性など c と無関係な要因で誤差の大小が変わる）ではなく
+    瞬間残差を使うのは、実車の入出力関係とモデル式の入出力関係が一致しているかを
+    直接検証するため。これにより、加速度追従式・操舵追従式・yaw 式の誤差を
+    x/y 補正項の同定に混入させない。
+    traj_data（軌跡の見た目確認用、fitted_params/baseline params 双方で積分）は
+    定量評価とは独立に、直感的な一致度確認のためだけに残す。
     """
     datasets: list[dict] = []
     traj_data: list[dict] = []
@@ -1845,12 +1848,18 @@ def compute_xy_equation_residual_data(
         if int(np.count_nonzero(mask)) < _MIN_FIT_SAMPLES:
             continue
 
+        # 瞬間残差 E=RHS-LHS 用の LHS（実測 x/y の SG 平滑化微分 = 実測速度ベクトル）。
+        lhs_x = savgol_derivative(gt_x, _FIT_DT, window_s=0.2, polyorder=2)
+        lhs_y = savgol_derivative(gt_y, _FIT_DT, window_s=0.2, polyorder=2)
+
         datasets.append({
             "x": gt_x,
             "y": gt_y,
             "yaw": gt_yaw,
             "vx": gt_vx,
             "wz": gt_wz,
+            "lhs_x": lhs_x,
+            "lhs_y": lhs_y,
             "mask": mask,
         })
         n_dataset += 1
@@ -1883,10 +1892,15 @@ def compute_xy_equation_residual_data(
         "rmse": float("nan"), "rmses": [], "n": 0,
     }
 
-    fitted_traj = [
-        _integrate_xy_equation_trajectory(td, fitted_params if fit is not None else _xy_equation_baseline_params())
-        for td in traj_data
-    ]
+    fitted_traj = []
+    for td in traj_data:
+        ft = _integrate_xy_equation_trajectory(
+            td, fitted_params if fit is not None else _xy_equation_baseline_params(),
+        )
+        bt = _integrate_xy_equation_trajectory(td, _xy_equation_baseline_params())
+        ft["bl_x"] = bt["bx"]
+        ft["bl_y"] = bt["by"]
+        fitted_traj.append(ft)
 
     return {
         "n_dataset": n_dataset,

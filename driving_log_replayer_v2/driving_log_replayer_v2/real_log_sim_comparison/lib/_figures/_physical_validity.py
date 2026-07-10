@@ -939,6 +939,10 @@ def build_fig_perfect_tracking_traj(
         gt_ym = [y if is_m else None for y, is_m in zip(td["gt_y"], m)]
         bxm   = [x if is_m else None for x, is_m in zip(td["bx"], m)]
         bym   = [y if is_m else None for y, is_m in zip(td["by"], m)]
+        has_baseline = "bl_x" in td and "bl_y" in td
+        if has_baseline:
+            blxm = [x if is_m else None for x, is_m in zip(td["bl_x"], m)]
+            blym = [y if is_m else None for y, is_m in zip(td["bl_y"], m)]
 
         show_legend = (idx == 0)
 
@@ -949,6 +953,13 @@ def build_fig_perfect_tracking_traj(
             line=dict(color="rgba(0, 0, 0, 0.15)", width=2),
             legendgroup="gt_fade", showlegend=False,
         ), row=r, col=c)
+        if has_baseline:
+            fig.add_trace(go.Scatter(
+                x=td["bl_x"], y=td["bl_y"],
+                mode="lines", name=lb.get("baseline_name", "baseline") + " (対象外)",
+                line=dict(color="rgba(230, 126, 34, 0.15)", width=1.5, dash="dot"),
+                legendgroup="baseline_fade", showlegend=False,
+            ), row=r, col=c)
         fig.add_trace(go.Scatter(
             x=td["bx"], y=td["by"],
             mode="lines", name=lb.get("model_name", "自転車モデル (理想追従)") + " (対象外)",
@@ -963,6 +974,13 @@ def build_fig_perfect_tracking_traj(
             line=dict(color="black", width=2),
             legendgroup="gt", showlegend=show_legend,
         ), row=r, col=c)
+        if has_baseline:
+            fig.add_trace(go.Scatter(
+                x=blxm, y=blym,
+                mode="lines", name=lb.get("baseline_name", "baseline"),
+                line=dict(color="darkorange", width=1.5, dash="dot"),
+                legendgroup="baseline", showlegend=show_legend,
+            ), row=r, col=c)
         fig.add_trace(go.Scatter(
             x=bxm, y=bym,
             mode="lines", name=lb.get("model_name", "自転車モデル (理想追従)"),
@@ -1045,7 +1063,12 @@ def build_fig_residual_candidates_hist(
 
 
 def build_fig_xy_equation_residual_hist(data: dict) -> go.Figure:
-    """x/y 状態方程式を積分した軌跡位置誤差の fitted vs baseline ヒストグラム。"""
+    """x/y 状態方程式の瞬間残差 E=RHS(c)-LHS（LHS=実測速度ベクトル）の fitted vs baseline ヒストグラム。
+
+    積分軌跡の位置誤差ではなく、各時刻の実測速度ベクトルとモデル式が予測する速度ベクトルの
+    差（単位 m/s）。積分誤差の蓄積を混ぜずに実車の入出力関係とモデル式の入出力関係が
+    一致しているかを直接見る。
+    """
     fitted = data.get("fitted") or {}
     baseline = data.get("baseline") or {}
     fx = np.asarray(fitted.get("resid_x") or [], dtype=float)
@@ -1054,7 +1077,7 @@ def build_fig_xy_equation_residual_hist(data: dict) -> go.Figure:
     by = np.asarray(baseline.get("resid_y") or [], dtype=float)
     arrays = [a[np.isfinite(a)] for a in (fx, fy, bx, by) if a.size]
     if not arrays or not any(a.size for a in arrays):
-        return _placeholder_fig("x/y 軌跡位置誤差データなし", height=320)
+        return _placeholder_fig("x/y 方程式残差データなし", height=320)
 
     fig = make_subplots(rows=1, cols=2, subplot_titles=("x 軌跡誤差", "y 軌跡誤差"))
 
@@ -1098,14 +1121,14 @@ def build_fig_xy_equation_residual_hist(data: dict) -> go.Figure:
             legendgroup="fitted",
             showlegend=(col == 1),
         ), row=1, col=col)
-        fig.update_xaxes(title_text=f"{label} position error [m]", row=1, col=col, range=[lo, hi])
+        fig.update_xaxes(title_text=f"{label}dot 方程式残差 [m/s]", row=1, col=col, range=[lo, hi])
         fig.update_yaxes(title_text="密度", row=1, col=col)
 
     params = data.get("params") or {}
     c_xy = params.get("xy_heading_rate_coeff", float("nan"))
     fig.update_layout(
         barmode="overlay",
-        title=f"x/y 軌跡位置誤差分布（xy_heading_rate_coeff={c_xy:.4g}）",
+        title=f"x/y 式 瞬間方程式残差分布（xy_heading_rate_coeff={c_xy:.4g}）",
         height=400,
         margin=dict(t=70, b=45),
     )
