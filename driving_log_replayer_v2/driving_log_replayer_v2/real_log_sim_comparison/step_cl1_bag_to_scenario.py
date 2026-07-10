@@ -48,11 +48,6 @@ import yaml
 from .lib._io import iter_bag_messages, list_bag_topics, load_kinematic, load_operation_mode, load_velocity
 from .lib._events import find_autonomous_start
 
-
-# ---------------------------------------------------------------------------
-# Topic candidates
-# ---------------------------------------------------------------------------
-
 _ROUTE_TOPICS = [
     "/planning/mission_planning/route",
 ]
@@ -60,12 +55,6 @@ _SIGNAL_TOPICS = [
     "/perception/traffic_light_recognition/traffic_signals",
     "/perception/traffic_light_recognition/traffic_lights",
 ]
-
-
-# ---------------------------------------------------------------------------
-# Pose helpers
-# ---------------------------------------------------------------------------
-
 
 def _quat_to_yaw(qx: float, qy: float, qz: float, qw: float) -> float:
     """quaternion → yaw (rad)."""
@@ -86,9 +75,7 @@ def _pose_to_world(pose) -> dict:
     }
 
 
-# ---------------------------------------------------------------------------
 # Route extraction
-# ---------------------------------------------------------------------------
 
 
 def _extract_route_info(input_bag: Path) -> tuple[dict | None, dict | None, list[int]]:
@@ -226,12 +213,6 @@ def _select_loop_waypoints(
         xs, ys, start_world["x"], start_world["y"], goal_world["x"], goal_world["y"], n
     )
     return [{"x": xs[i], "y": ys[i], "z": z, "h": yaws[i], "p": 0.0, "r": 0.0} for i in idxs]
-
-
-# ---------------------------------------------------------------------------
-# Map parsing: WorldPosition → LanePosition 解決 (中央線ジオメトリ)
-# ---------------------------------------------------------------------------
-
 
 # WorldPosition→LanePosition 変換で使う、map 単位の全 lanelet 中央線キャッシュ。
 _CENTERLINE_CACHE: dict[str, dict[int, list[tuple[float, float]]]] = {}
@@ -371,12 +352,6 @@ def _signal_to_lanelet_map(map_osm_path: Path, target_sig_ids: set[int]) -> dict
                     result[ref] = lanelet_id
     return result
 
-
-# ---------------------------------------------------------------------------
-# Traffic signal extraction
-# ---------------------------------------------------------------------------
-
-
 # Autoware の signal color / shape / status enum → OpenSCENARIO state 文字列
 # autoware_perception_msgs/msg/TrafficLightElement の定数と一致 (UNKNOWN=0)
 _COLOR_NAMES = {1: "red", 2: "amber", 3: "green", 4: "white"}
@@ -438,12 +413,6 @@ def _extract_signal_timeseries(input_bag: Path, t0_ns: int) -> dict[int, list[tu
             if not prev or prev[-1][1] != state:
                 by_id.setdefault(sig_id, []).append((t_rel, state))
     return by_id
-
-
-# ---------------------------------------------------------------------------
-# OpenSCENARIO yaml builder
-# ---------------------------------------------------------------------------
-
 
 def _build_initial_signal_actions(
     signals: dict[int, list[tuple[float, str]]],
@@ -874,12 +843,6 @@ def build_scenario_dict(
             },
         },
     }
-
-
-# ---------------------------------------------------------------------------
-# main
-# ---------------------------------------------------------------------------
-
 
 VERBOSE = False
 

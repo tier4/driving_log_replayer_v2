@@ -41,9 +41,7 @@ def find_autonomous_start(data: dict) -> int:
     return _find_autonomous_start(data["mode"], df_vel)
 
 
-# ---------------------------------------------------------------------------
 # N-step オープンループ解析
-# ---------------------------------------------------------------------------
 
 
 def _prepare_gt(data: dict, t0_ns: int, params: dict) -> dict:

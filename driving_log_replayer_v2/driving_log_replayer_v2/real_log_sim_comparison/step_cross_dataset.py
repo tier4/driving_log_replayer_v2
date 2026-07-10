@@ -101,9 +101,7 @@ def _short_labels(ds_ids: list[str]) -> dict[str, str]:
     return {ds: (s if counts[s] == 1 else ds) for ds, s in short.items()}
 
 
-# ---------------------------------------------------------------------------
 # 行列化
-# ---------------------------------------------------------------------------
 
 
 def build_closed_loop_matrix(metrics: dict[str, dict]) -> dict:
@@ -234,9 +232,7 @@ def cross_normalized(
             "aggs": aggs, "scores": scores, "ranking": ranking}
 
 
-# ---------------------------------------------------------------------------
 # leave-one-out / 外れ検出 (集約済み per_ds 値の再集計のみ)
-# ---------------------------------------------------------------------------
 
 
 def leave_one_out(norm: dict) -> dict | None:
@@ -336,9 +332,7 @@ def detect_outliers(norm: dict, reference_tag: str) -> list[dict] | None:
     return sorted(out, key=lambda r: -abs(r["z"]))
 
 
-# ---------------------------------------------------------------------------
 # 物理妥当性検証 (dataset 横断)
-# ---------------------------------------------------------------------------
 
 
 def _discover_models_doc(collection_dir: Path, scenario_path: Path | None = None):
@@ -467,9 +461,7 @@ def write_physical_validity_summary_md(out_path: Path, pv: dict | None) -> None:
         print(f"  保存: {out_path}")
 
 
-# ---------------------------------------------------------------------------
 # 出力
-# ---------------------------------------------------------------------------
 
 
 def _nan_to_none(arr: np.ndarray) -> list:
@@ -698,9 +690,7 @@ def write_cross_summary_md(
         print(f"  保存: {out_path}")
 
 
-# ---------------------------------------------------------------------------
 # メイン
-# ---------------------------------------------------------------------------
 
 
 def run_cross_analysis(

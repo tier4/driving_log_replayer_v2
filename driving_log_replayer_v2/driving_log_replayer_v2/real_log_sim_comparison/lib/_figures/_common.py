@@ -1,14 +1,4 @@
-"""`lib/_figures` 配下の build_fig_* が共有する plotly 描画ヘルパー.
-
-matplotlib SVG を廃し各図を `go.Figure` で組む新方式の土台。ここに描画の共通語彙
-（サブプロット枠・移動平均・最小二乗フィット・速度ビン色分け・散布間引き・地図背景・
-パラメータ注釈・matplotlib スタイル→plotly 変換）を集約し、各図モジュールは
-データ整形済みの配列/DataFrame を受けて図を組み立てるだけにする。
-
-**ROS 非依存**: plotly / numpy と ROS 非依存 lib（`_plotly_utils`/`_map`）のみに依存し、
-notebook（rclpy 無し kernel）からも import できる。`_io`（rosbag2_py 依存）は絶対に
-import しないこと。
-"""
+"""`lib/_figures` 配下の build_fig_* が共有する plotly 描画ヘルパー。"""
 
 from __future__ import annotations
 
@@ -17,11 +7,9 @@ import plotly.colors as pc
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 
-# ROS 非依存 lib のみ再利用（_io は import しない）
 from .._map import map_ways_in_bbox  # noqa: F401  (build_fig_* が地図 bbox 抽出に使う)
 from .._plotly_utils import lanes_to_trace  # noqa: F401
 
-# --- matplotlib スタイル → plotly 変換（軌跡・時系列の線/マーカー） -------------------
 _PLOTLY_DASH = {"-": "solid", "--": "dash", "-.": "dashdot", ":": "dot"}
 _PLOTLY_DASH_TUPLES = {(4, 2): "longdash", (3, 1, 1, 1): "longdashdot"}
 
@@ -33,7 +21,6 @@ def plotly_dash(ls) -> str:
     return _PLOTLY_DASH.get(ls, "solid")
 
 
-# --- レイアウト ------------------------------------------------------------------
 # 全図共通の体裁。template は write_fig_json で剥がす（plotly.js 内蔵テーマで描く）ため
 # ここでは指定しない。
 def apply_base_layout(
@@ -174,4 +161,3 @@ def viridis_at(fracs) -> list[str]:
     """viridis を任意の位置 [0,1] でサンプルした色のリスト（連続値の色付け用）。"""
     fr = [min(1.0, max(0.0, float(f))) for f in fracs]
     return pc.sample_colorscale("Viridis", fr) if fr else []
-

@@ -38,10 +38,8 @@ from __future__ import annotations
 MODEL_RATE_HZ = 50.0
 
 
-# ---------------------------------------------------------------------------
 # HTML テンプレート（__PAYLOAD_JSON__ を JSON で置換する）
 # 地図描画・カメラ lerp は _playback_viewer の draw() を単一 run・時刻同期に簡略化して移植。
-# ---------------------------------------------------------------------------
 
 _HTML_TEMPLATE = r"""<!DOCTYPE html>
 <html lang="ja">

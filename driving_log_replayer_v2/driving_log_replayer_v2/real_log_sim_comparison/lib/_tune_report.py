@@ -24,9 +24,7 @@ from ._multi_agg import (
     robust_score,
 )
 
-# ---------------------------------------------------------------------------
 # 定数
-# ---------------------------------------------------------------------------
 H_FOCUS = 40          # worst DS 選定・可視化の基準 horizon
 TOP_N_WORST = 5       # 各 config の worst-case DS top-N (和集合を取る)
 REPORT_MAX_DS = 10    # per-DS プロットに表示する DS 数の上限
@@ -44,9 +42,7 @@ _COLORS = [
 _PLOTLY_CDN = '<script src="https://cdn.plot.ly/plotly-2.35.2.min.js"></script>'
 
 
-# ---------------------------------------------------------------------------
 # 内部ユーティリティ
-# ---------------------------------------------------------------------------
 
 def _eval_config(ctxs, params: dict, model_type: str, eval_fn) -> tuple[dict, list]:
     """全 DS を評価して (agg, per_ds_metrics) を返す。
@@ -177,9 +173,7 @@ def _build_viewer_html(
     return render_viewer_html(payload)
 
 
-# ---------------------------------------------------------------------------
 # HTML 構築
-# ---------------------------------------------------------------------------
 
 def _score_table_html(agg_results: dict[str, dict], worst_w: float) -> str:
     header_cells = "<th>設定</th>"
@@ -351,9 +345,7 @@ def _ds_figure(
     return fig
 
 
-# ---------------------------------------------------------------------------
 # 公開 API
-# ---------------------------------------------------------------------------
 
 def generate_report(
     ctxs,

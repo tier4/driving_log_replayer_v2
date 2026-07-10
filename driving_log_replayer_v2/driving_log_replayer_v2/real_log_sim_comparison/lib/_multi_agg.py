@@ -13,42 +13,18 @@ from __future__ import annotations
 
 import statistics as stats
 
-# 評価する horizon 群。短期(N=10〜40)・中期(N=100) を等重みで集約する。
-# N=200 (30fps で 6.67 秒先) は open-loop 積分ドリフトで yaw/長/横とも noisy になり
-# baseline を上回る (=悪化) ことが多く、score/レポート双方の signal を歪めるため除外。
 HORIZONS = (10, 20, 30, 40, 100)
 
-# per-dataset 正規化の分母フロア (horizon 別・成分別)。ほぼ直進・低ダイナミクス走行は baseline
-# 誤差が極小で、相対誤差 (err/baseline) が暴発し worst-case を支配する (絶対値は微小なのに)。
-# pos を縦/横に分けると縦・横でスケールが大きく異なる。20 dataset の baseline 分布
-# (multi_dataset_tune.load_datasets の print) では【縦の方が横より大きい】(縦 1.3〜7.4cm vs
-# 横 0.1〜3.4cm @N20; baseline モデルは縦方向の遅延/時定数が支配的)。フロアが大きすぎると
-# baseline ですら正規化値が 1 未満になりその成分の寄与が一律縮小される (= 信号を殺す) ため、
-# 各成分は分布下位の低ダイナ走行のみをクリップする水準に校正する (横は小さいのでフロアも低め)。
-# N=10, N=30 は線形補間。N=10 の 0.06 は実分布 p50=0.066 deg とほぼ同値で 47% がクリップ
-# されるが、クリップ有 DS は nyaw<1.0 に収まり worst には寄与しない (設計通り)。
-# フロアを下げると外れた DS の denom が小さくなり nyaw が暴発するため 0.06 を維持。
-# N=100 は 100 DS サンプルの reference (無補正) 誤差 p50 を基準に設定。
-# N=100: yaw_p50≈1.09, lat_p50≈15.4, long_p50≈49.9 → 切りよく丸め
-# N≥100 では open-loop 積分ドリフトで LAT/LONG が爆発的に増大するため、
-# baseline と同程度でクリップする (各 DS の nlat/nlong ≈ 1 を起点に改善を測る設計)。
+# 直進・低ダイナミクス走行の極小 baseline で相対誤差が暴発しないようにする分母フロア。
 YAW_FLOOR  = {10: 0.06, 20: 0.12, 30: 0.18, 40: 0.24, 100: 1.0}    # deg
 LONG_FLOOR = {10: 1.0,  20: 2.0,  30: 3.25, 40: 4.5,  100: 50.0}  # cm
 LAT_FLOOR  = {10: 0.3,  20: 0.6,  30: 0.9,  40: 1.2,  100: 15.0}   # cm
 
 WORST_W = 0.5  # worst-case 項の重み (mean+worst 両方を balance する方針)
 POS_W = 0.5    # 縦・横 各成分の重み。pos を縦横に分けても yaw:位置 = 1:1 を維持する
-#              (位置 = 0.5·縦 + 0.5·横)。旧 nyaw+npos のバランスと整合させるための補正。
 
-# vx [m/s] 正規化フロア (baseline p50 から校正予定; 現在は保守的な仮値)
-# 直進・定速走行では vx 誤差が極小になるため、relative explosion 防止のクリップ値。
-# 参考: acc_time_constant=0.25 のとき N=10 の vx RMSE は概ね 0.02〜0.05 m/s 程度。
 VX_FLOOR = {10: 0.02, 20: 0.04, 30: 0.06, 40: 0.08, 100: 0.12, 200: 0.15}  # m/s
 
-# steer [deg] 正規化フロア (baseline p50 から校正予定; 現在は保守的な仮値)
-# 直進走行では steer 誤差が極小になるため relative explosion 防止。
-# gt_steer は /vehicle/status/steering_status (converter 後) なので
-# sim の steer_des 追従 + understeer 補正オフセットが重畳される点に注意。
 STEER_FLOOR = {10: 0.05, 20: 0.10, 30: 0.15, 40: 0.20, 100: 0.40, 200: 0.80}  # deg
 
 

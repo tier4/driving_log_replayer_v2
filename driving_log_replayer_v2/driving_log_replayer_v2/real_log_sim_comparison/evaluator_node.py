@@ -13,21 +13,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""Orchestration node for real_log_sim_comparison.
-
-Runs the 10-stage comparison pipeline inside a cloud DLR2 job:
-  1. step1_make_lite       実機 input_bag → lite/real.lite/
-  2. step2_bag_to_scenario lite/real.lite → scenarios/auto_scenario.yaml
-  3. step3_run_sims        sim_runs.yaml の各 run を closed-loop 実行 → lite/<tag>.lite/
-  4. step4_compare_logs    real + 全 sim を N-way 比較 (figures/, report.md)
-  5. step5_analyze_nstep   cases.yaml の各 case で N-step オープンループ解析
-  6. step6_analyze_cases   nstep/*.csv を集約 (overlay/, cases_summary.md)
-  8. step8_compare_dp_trajectory DiffusionPlanner 出力軌跡 real vs sim 比較 (figures/dp_*.svg)
-  11. step11_build_html_report comparison/ 配下の全プロットを集約 (result_archive/real_log_sim_comparison/index.html)
-
-Outputs are written to result_archive_path, which is collected by
-`logging.additional_log_archive` in .webauto-ci.yml.
-"""
+"""Cloud DLR2 orchestration node for real_log_sim_comparison."""
 
 import json
 import os
@@ -56,7 +42,6 @@ class RealLogSimComparisonEvaluator(Node):
         ]:
             self.declare_parameter(param, "")
 
-        # Fire once after ROS init to avoid blocking the spin loop.
         self._timer = self.create_timer(0.1, self._run_once)
 
     def _run_once(self) -> None:
@@ -89,7 +74,6 @@ class RealLogSimComparisonEvaluator(Node):
         # pipeline が途中で失敗しても post_process が通るよう、事前に空の MCAP を置く。
         _write_placeholder_result_bag(result_bag_path)
 
-        # scenario_path は use_case.py が共通で渡す。scenario.yaml から Conditions を読む。
         scenario_path_str = self.get_parameter("scenario_path").value
         compare_cfg = _load_compare_config(scenario_path_str)
 
@@ -105,9 +89,7 @@ class RealLogSimComparisonEvaluator(Node):
             )
             sim_p, sim_e = counts["sim_runs_produced"], counts["sim_runs_expected"]
             case_p, case_e = counts["cases_produced"], counts["cases_expected"]
-            # sim run / case が 1 件も出力されなければ比較は成立しない → INCOMPLETE (失敗扱い)。
-            # 例外が出なくても「有意な出力ゼロ」を Success と誤報しないための E1 ガード。
-            # skip_sim (closed-loop sim を意図的に省略) のときは sim 0 件を失敗にしない。
+            # 例外が出なくても有意な出力ゼロなら INCOMPLETE とする。
             sim_skipped = bool(counts["sim_skipped"])
             skip_ol = os.environ.get("SKIP_OL") == "1"
             degenerate = (sim_p == 0 and not sim_skipped) or (case_p == 0)
@@ -130,9 +112,6 @@ class RealLogSimComparisonEvaluator(Node):
         _write_result_jsonl(result_jsonl_path, success, summary)
         os._exit(0)
 
-
-# ── Pipeline steps ────────────────────────────────────────────────────────────
-
 def run_pipeline(
     t4_dataset_path: Path,
     lite_dir: Path,
@@ -148,12 +127,10 @@ def run_pipeline(
     「有意な出力が出たこと」は別物。呼び出し側 (_run_once) が本カウントを使って
     成否 (sim run / case が 0 件なら INCOMPLETE) を判定し、result.jsonl に計上する。
     """
-    # Locate the real vehicle bag inside input_bag/ (db3 or mcap, auto-detected by step0_make_lite)
     input_bag_dir = t4_dataset_path / "input_bag"
     _validate_bag_dir(input_bag_dir)
     logger.info(f"Input bag: {input_bag_dir}")
 
-    # ---- 共通 env ----
     env = build_common_env(comparison_dir, map_path, compare_cfg, logger)
     # Stage CL1 (scenario 自動生成) が使う地図パス。build_common_env が解決済みの
     # MAP_OSM_PATH (存在しない場合は空文字) から復元する。
@@ -166,7 +143,6 @@ def run_pipeline(
         str(input_bag_dir) if compare_cfg.get("reproduce_perception", False) else ""
     )
 
-    # ---- Stage 0: real lite bag ----
     logger.info("Stage 0: generating real lite bag")
     lite_dir.mkdir(parents=True, exist_ok=True)
     lite_bag = lite_dir / "real.lite"
@@ -178,7 +154,6 @@ def run_pipeline(
         elif path.is_dir():
             shutil.rmtree(path)
 
-    # Check if t4_dataset_path is writable
     is_writable = False
     test_file = t4_dataset_path / ".write_test"
     try:
@@ -216,7 +191,6 @@ def run_pipeline(
             "--output", str(lite_bag),
         ], timeout=300)
 
-    # ---- Stage CL2: sim runs ループ (scenario.yaml の Conditions.sim_runs 必須) ----
     scenario_config = compare_cfg.get("scenario_config", "")
     if not scenario_config or not Path(scenario_config).exists():
         raise RuntimeError(
@@ -244,7 +218,6 @@ def run_pipeline(
             f"Stage CL2: skipped (skip_sim) — {len(sim_cfg.runs)} run(s) defined but not executed"
         )
     else:
-        # シミュレーション実行が確定した段階で、初めて Stage CL1 シナリオ自動生成を行う
         logger.info("Stage CL1: step_cl1_bag_to_scenario (auto-generate OpenSCENARIO yaml)")
         scenarios_dir.mkdir(parents=True, exist_ok=True)
         if map_osm.is_file():
@@ -271,7 +244,6 @@ def run_pipeline(
                 sim_lite = lite_dir / f"{run.tag}.lite"
                 env_run = env.copy()
                 env_run["SIM_RUN_TAG"] = run.tag
-                # nested ros2 launch: DDS 衝突回避のため domain id を切替
                 env_run["ROS_DOMAIN_ID"] = str(base_domain_id + 10 + i)
                 run_log = sim_logs_dir / f"{run.tag}.log"
                 logger.info(f"  run: tag={run.tag}, vehicle_model={run.vehicle_model}, "
@@ -381,7 +353,6 @@ def run_analysis(
     env = env.copy()
     env["SCENARIO_CONFIG_YAML"] = scenario_config
 
-    # ---- Stage OL1: VehicleModel N-step オープンループ解析 (Conditions.cases 必須) ----
     from driving_log_replayer_v2.real_log_sim_comparison.lib._models_config import (  # noqa: PLC0415
         load_models_doc,
     )
@@ -403,7 +374,6 @@ def run_analysis(
         except RuntimeError as exc:
             logger.warning(f"Stage OL1 (case={case.tag}) failed but continuing: {exc}")
 
-    # ---- Stage OL2: ケース集約解析 (overlay 図 + cases_summary.md) ----
     logger.info("Stage OL2: step_ol2_analyze_cases (cross-case aggregation)")
     try:
         _run([
@@ -414,7 +384,6 @@ def run_analysis(
     except RuntimeError as exc:
         logger.warning(f"Stage OL2 (step_ol2_analyze_cases) failed but continuing: {exc}")
 
-    # ---- Stage CL3: step_cl3_compare_logs (real + 全 sim、sim_runs.yaml 連動で N-way) ----
     logger.info("Stage CL3: step_cl3_compare_logs (real + sim N-way)")
     try:
         _run([
@@ -424,7 +393,6 @@ def run_analysis(
     except RuntimeError as exc:
         logger.warning(f"Stage CL3 (step_cl3_compare_logs) failed but continuing: {exc}")
 
-    # ---- Stage CL4: DiffusionPlanner 計画軌跡比較 (planner レベルの乖離分離) ----
     logger.info("Stage CL4: step_cl4_compare_dp_trajectory (planner trajectory real vs sim)")
     try:
         _run([
@@ -434,7 +402,6 @@ def run_analysis(
     except RuntimeError as exc:
         logger.warning(f"Stage CL4 (step_cl4_compare_dp_trajectory) failed but continuing: {exc}")
 
-    # ---- Stage Report HTML: comparison/ 配下の全アセットを 1枚に埋め込んだ自己完結 HTML 生成 ----
     logger.info("Stage Report HTML: step_report_html (result_archive/real_log_sim_comparison/report.html)")
     try:
         _run([
@@ -444,7 +411,6 @@ def run_analysis(
     except RuntimeError as exc:
         logger.warning(f"Stage Report HTML (step_report_html) failed but continuing: {exc}")
 
-    # ---- 生成物カウント (E1: 沈黙の失敗対策) ----
     # Stage CL2 / OL1 は失敗継続するため、実際に出力が出た数を数えて成否判定の材料にする。
     def _lite_exists(tag: str) -> bool:
         return (lite_dir / f"{tag}.lite").exists() or (lite_dir / f"{tag}.lite.mcap").exists()
@@ -465,7 +431,6 @@ def run_analysis(
             (comparison_dir / "figures" / "dp_real_vs_sim.svg").exists()
             or (comparison_dir / "figures" / "dp_real_vs_sim.fig.json").exists()
         ),
-        # report.html は comparison/ の親 (result_archive/) 直下に生成される。
         "report_html_ok": int((comparison_dir.parent / "report.html").exists()),
     }
     logger.info(
@@ -502,66 +467,40 @@ def _load_compare_config(scenario_path_str: str) -> dict[str, Any]:
         elif "ScenarioName" in doc:
             cfg["scenario_name"] = str(doc["ScenarioName"])
 
-        # real_provenance (任意): 実機データ取得時の pilot-auto.x2 / DP 重みの自由記述
-        # (例 "autoware v0.48.x / DP exp neighbor320_xxx")。版・重み差の解釈用に provenance 掲載。
         if "real_provenance" in conditions:
             cfg["real_provenance"] = str(conditions["real_provenance"])
 
-        # loop_waypoints (任意, 既定 0): 実走軌跡形状を強制する route-shaping 実験オプション。
-        # 注: D0 (sim 早期停止) の真因は赤信号 replay であり routing ではない (live sim で確定)
-        # ため、loop_waypoints は D0 の修正ではない。route は start+goal でも周回全体を引く。
         if "loop_waypoints" in conditions:
             try:
                 cfg["loop_waypoints"] = int(conditions["loop_waypoints"])
             except (TypeError, ValueError):
                 cfg["loop_waypoints"] = 0
 
-        # traffic_signals (任意, 既定 replay): 信号の扱い。replay=実機 bag の信号を再現、
-        # green=全信号常時 green。replay は到達時刻 desync で実機が green 通過した信号に
-        # sim ego が赤で当たり永久停止する (D0 の真因) ことがあり、green で周回を完走できる。
         if "traffic_signals" in conditions:
             ts = str(conditions["traffic_signals"]).strip().lower()
             cfg["traffic_signals"] = ts if ts in ("replay", "green", "none") else "replay"
 
-        # reproduce_perception (任意, 既定 false): true で実機 input_bag の検出物体・信号・
-        # 占有格子を simple_sensor_simulator 内蔵の PerceptionReproducerSensor が sim 時刻同期で
-        # 再生する。NPC 無の auto-scenario に実機の先行車追従 (停止・加減速) を再現させる。
-        # step3 が REPRODUCE_BAG 経由で launch 引数 replay_bag_path に変換する。
         if "reproduce_perception" in conditions:
             cfg["reproduce_perception"] = bool(conditions["reproduce_perception"])
 
-        # ego_replay_duration (任意, 既定 0=無効): scenario 開始から指定秒数、実機 bag の
-        # ego 状態 (pose/twist/accel) を traffic_simulator の EgoBagReplayer が vehicle model に
-        # 毎フレーム注入してから closed-loop に切替える。rosbag 開始時 (AUTONOMOUS 開始) に
-        # ego が速度を持つケースで初期状態を実機に合わせる。要 reproduce_perception=true。
         if "ego_replay_duration" in conditions:
             try:
                 cfg["ego_replay_duration"] = float(conditions["ego_replay_duration"])
             except (TypeError, ValueError):
                 cfg["ego_replay_duration"] = 0.0
 
-        # replay_preroll (任意, 既定 0): ego replay の開始アンカーを AUTONOMOUS 開始より
-        # 何秒前に取るか [s]。step2 の start pose も同じアンカーから取る。
         if "replay_preroll" in conditions:
             try:
                 cfg["replay_preroll"] = float(conditions["replay_preroll"])
             except (TypeError, ValueError):
                 cfg["replay_preroll"] = 0.0
 
-        # replay_position_based (任意, 既定 false): perception 再生を時刻同期ではなく
-        # sim ego 最近傍時刻のスナップショット再生にする (closed-loop 逸脱後の物体ずれ緩和)。
         if "replay_position_based" in conditions:
             cfg["replay_position_based"] = bool(conditions["replay_position_based"])
 
-        # skip_sim (任意, 既定 false): true で Stage 3 (closed-loop sim 実行) をスキップし、
-        # 実機ログのみの解析 (open-loop N-step / カバレッジ等) を実行する。
-        # closed-loop 比較が不要なとき・マルチ DS バッチの時間短縮用。ローカルは env SKIP_SIM=1
-        # でも指定できる (run_pipeline 参照)。
         if "skip_sim" in conditions:
             cfg["skip_sim"] = bool(conditions["skip_sim"])
 
-        # scenario_config: models / cases / sim_runs はすべて scenario.yaml 自身に統合済み。
-        # scenario_path をそのまま保持する (cases_config / sim_runs_config の外部ファイル参照は廃止)。
         cfg["scenario_config"] = str(scenario_path)
 
         return cfg
@@ -642,17 +581,13 @@ def _write_result_jsonl(path: Path, success: bool, summary: str) -> None:
         f.write("\n")
 
 
-# Keep the historical evaluator_node function names, but route the analysis-only
-# orchestration through the ROS-free implementation used by local CLIs.
+# Keep evaluator_node imports stable while sharing the ROS-free CLI implementation.
 from driving_log_replayer_v2.real_log_sim_comparison.lib import _analysis_pipeline as _analysis_pipeline  # noqa: E402
 
 build_common_env = _analysis_pipeline.build_common_env
 run_analysis = _analysis_pipeline.run_analysis
 _load_compare_config = _analysis_pipeline.load_compare_config
 _run = _analysis_pipeline.run_command
-
-
-# ── Entry point ───────────────────────────────────────────────────────────────
 
 def main() -> None:
     rclpy.init()

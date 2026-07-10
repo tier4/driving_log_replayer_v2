@@ -27,7 +27,6 @@ import pandas as pd
 import plotly.graph_objects as go
 import yaml
 
-# ---------------------------------------------------------------------------
 
 
 from driving_log_replayer_v2.real_log_sim_comparison.lib._collection import DatasetEntry  # noqa: E402
@@ -59,10 +58,8 @@ from driving_log_replayer_v2.real_log_sim_comparison.multi_dataset_tune import (
     load_datasets,
 )
 
-# ---------------------------------------------------------------------------
 # 定数 (物理定数・フィット定数の SSOT は lib._physical_validity。本ファイル固有の
 #       レポート表示用定数のみここで定義する)
-# ---------------------------------------------------------------------------
 from driving_log_replayer_v2.real_log_sim_comparison.lib._figures import (  # noqa: E402
     build_fig_cross_long,
     build_fig_cross_steer,
@@ -444,9 +441,7 @@ def _lazy_fig_html(fig: go.Figure, fig_id: str, fname: str, caption: str | None 
     )
 
 
-# ---------------------------------------------------------------------------
 # Phase 1: 並列 MCAP 読み込みワーカー（k_us 分析 + カーブカバレッジ）
-# ---------------------------------------------------------------------------
 def _load_mcap_worker(args: tuple) -> dict | None:
     """プロセスワーカー: 1 MCAP から k_us 分析用データとカーブカバレッジを抽出。"""
     # 引数は (uuid: str, lite_dir: str, steer_bias: float | None) のタプル
@@ -516,9 +511,7 @@ def load_all_mcap(ds_list: list, steer_bias: float | None = None, n_jobs: int = 
     return results
 
 
-# ---------------------------------------------------------------------------
 # HTML セクション組み立て
-# ---------------------------------------------------------------------------
 def _build_sec_metrics(baseline_score: float | None, phase14_score: float, label: str = "current") -> str:
     """各種メトリクスの直感的・物理的解説セクション。"""
     if baseline_score and baseline_score > 0:
@@ -2299,9 +2292,7 @@ def build_release_note_html(
 """
 
 
-# ---------------------------------------------------------------------------
 # メイン
-# ---------------------------------------------------------------------------
 def _find_first_curve_t(ctx, pre_roll_s: float = 5.0) -> float:
     """DatasetCtx の運動学データから最初のカーブ開始時刻を検出し、pre_roll_s 秒前を返す。"""
     kin = ctx.data["kin"]

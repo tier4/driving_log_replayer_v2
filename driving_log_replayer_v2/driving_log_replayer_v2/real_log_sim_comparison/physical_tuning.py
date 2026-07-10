@@ -8,8 +8,6 @@ from pathlib import Path
 
 import numpy as np
 
-# 依存パッケージロード用のパス追加
-# workspace の install dist-packages ディレクトリを走査してロード可能にする
 for _p in glob.glob("/home/kotaroyoshimoto/workspace/x2_e2e_44/install/*/local/lib/python3.10/dist-packages"):
     if _p not in sys.path:
         sys.path.insert(0, _p)
@@ -41,11 +39,6 @@ from driving_log_replayer_v2.real_log_sim_comparison.lib._accel_source import (
     accel_dataframe_from_source,
 )
 
-# 物理定数の SSOT は lib._physical_validity。チューニング(本モジュール)と検証
-# (physical_validity_report) で同じ車両ジオメトリ・同定条件を使うため、そこから import する。
-# k_us の定常旋回フィルタ (VX_MIN_CURVE / WZ_MIN / DWZ_MAX) は「同定した母集団」と
-# 「検証する母集団」を一致させるため必ず共有する (かつては tuning=(0.5,0.01,0.1) と
-# validation=(1.5,0.02,0.30) で別母集団を見ていた)。
 from driving_log_replayer_v2.real_log_sim_comparison.lib._physical_validity import (
     WHEELBASE as WHEELBASE_SSOT,
     VX_MIN_CURVE,
@@ -55,26 +48,15 @@ from driving_log_replayer_v2.real_log_sim_comparison.lib._physical_validity impo
 
 CMD_TOPIC = "/control/command/control_cmd"
 DT = 0.01           # 10msサンプリング (本モジュール固有: 遅延グリッド分解能を上げるため
-                    # 検証側 _physical_validity の 1/30 とは意図的に異なる。A-2 参照)
-# 縦/操舵フィットの動的マスク閾値。_physical_validity の _VX_MIN_FIT / _DA_THRESH_FIT /
-# _DSTEER_MIN と同値 (同一役割・現状一致)。将来ドリフトさせないこと。
+	                    # 検証側 _physical_validity の 1/30 とは意図的に異なる。A-2 参照)
 VX_MIN = 0.5
 DA_THRESH = 0.15
 DSTEER_MIN = 0.001
-# K_US_CLIP: 本モジュールでは「速度ビン別 OLS 推定値 k_val」のクリップ (per-bin, sim へ渡す
-# パラメータの安全上限)。_physical_validity の同名 K_US_CLIP=0.5 は「per-sample の IQR 表示用
-# クリップ」で役割・粒度が異なるため意図的に別値。再チューニング後、k_us がこの 0.05 上限に
-# 張り付く場合は妥当性を再検討すること (wheelbase 変更で k_val の大きさが変わるため)。
+# 速度ビン別 OLS 推定値 k_val のクリップ。per-sample 表示用の K_US_CLIP とは役割が違う。
 K_US_CLIP = 0.05
-# 車両ホイールベース [m]。権威ある源は j6_gen2_description/config/vehicle_info.param.yaml
-# (= 4.76012)。ここではその値を再エクスポートする _physical_validity の SSOT を既定値とする。
-# scenario に明示があれば main() でそれを優先する。
-# 注意: wheelbase は「同定して反映する値」ではなく固定ジオメトリ。tuning 出力を源にして
-# 循環させないこと (常に車両記述由来の値を使う)。
+# wheelbase は同定値ではなく固定ジオメトリ。scenario 明示値があれば main() で優先する。
 WHEELBASE = WHEELBASE_SSOT
 
-# 縦/操舵フィットの遅延グリッド (production 固有: DT=0.01 刻みで検証側 1/30 より細かい)。
-# 一次遅れ + 純粋遅延の同定本体は lib._fit_core.fit_first_order_delay (SSOT) に集約。
 DELAY_GRID_LONG = np.arange(0.0, 0.31, 0.01)
 DELAY_GRID_STEER = np.arange(0.0, 0.16, 0.01)
 TAU_BOUNDS_LONG = (0.01, 5.0)
@@ -109,9 +91,6 @@ def _load_light_worker(args: tuple) -> dict | None:
 
     a_cmd = np.interp(t_s, (df_cmd["t_ns"].values - t0) * 1e-9, df_cmd["cmd_accel"].values)
     
-    # 加速度ソース選択ロジックの SSOT は lib._accel_source (kinematic_diff/velocity_diff/
-    # kinematic_savgol/velocity_savgol 全対応)。かつてはここに accel/kinematic_diff/velocity_diff
-    # のみを個別実装した重複コードがあり、savgol 系ソースを選ぶと ValueError で落ちていた。
     acc_df = accel_dataframe_from_source(
         ACCEL_SOURCE,
         df_accel=df_accel, df_vel=df_vel, df_kin=df_kin,

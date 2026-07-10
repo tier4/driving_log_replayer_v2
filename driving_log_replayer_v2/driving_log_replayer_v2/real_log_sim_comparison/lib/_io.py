@@ -114,9 +114,7 @@ def iter_to_df(
     return pd.DataFrame(rows)
 
 
-# ---------------------------------------------------------------------------
 # 高位 loader 群 — 戻り値は (t_ns: int64, ...) 形式の DataFrame
-# ---------------------------------------------------------------------------
 
 # 既定のトピック候補 (sub-less / sub-prefixed 両対応)
 DEFAULT_TOPICS = {
@@ -310,9 +308,7 @@ def require_drive_gear_mask(
         raise MissingRequiredGearError(f"{exc}. real.lite を再生成してください") from exc
 
 
-# ---------------------------------------------------------------------------
 # 時刻整列・幾何ヘルパー
-# ---------------------------------------------------------------------------
 
 
 def align_time(df: pd.DataFrame, t0_ns: int) -> pd.DataFrame:

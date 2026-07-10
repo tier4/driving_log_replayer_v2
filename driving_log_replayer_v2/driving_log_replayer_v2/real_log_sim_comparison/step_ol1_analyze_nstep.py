@@ -1,28 +1,5 @@
 #!/usr/bin/env python3
-"""全走行区間の N-step オープンループ解析（C++ 車両モデル使用）.
-
-手法 (run_rollout で N=1 と N>1 を統一):
-  各開始点 k0 について:
-    1. C++ 車両モデルを t_{k0} の実機状態にリセット（過去コマンド履歴を delay queue にセット）
-    2. 実機制御コマンド系列を N 区間連続で ZOH 適用（途中リセット無し = free-running）
-    3. 終端 t_{k0+N} の予測状態を実機状態と比較（k0 ヨー基準の車両ローカル座標系・実機 − モデル）
-
-  N=1 (stride=1, 全ステップ) が従来の per-step delta（毎ステップリセット、累積誤差を排除した
-  1 ステップ予測精度）。N>1 (stride=5) は dynamics 差 (k_us/wheelbase/時定数) の累積を顕在化する。
-
-解析窓: AUTONOMOUS 開始から制御コマンド系列末尾まで。
-時系列軸 tr は AUTONOMOUS 開始時刻からの経過時間 [s]。
-
-使用モデル: scenario.yaml の Conditions.models.<tag>.vehicle_model_type で選択される
-  C++ 車両モデル (libvehicle_model_wrapper.so / ctypes 経由)
-  パラメータ: simulator_model.param.yaml 由来の base に scenario.yaml の params を上書き
-
-出力:
-  comparison/nstep/<tag>/
-    nstep_delta.csv (全 horizon 統一スキーマ), summary.txt,
-    overview.fig.json, map_distribution.fig.json
-  （ケース横断の比較図は step6 の cases/overlay/ が担う）
-"""
+"""全走行区間の N-step オープンループ解析（C++ 車両モデル使用）。"""
 
 from __future__ import annotations
 
@@ -74,32 +51,17 @@ BASE = Path(os.environ.get("BEST_MODEL_BASE_DIR") or Path(__file__).parent)
 LITE_DIR = BASE / "lite"
 OUT_DIR = BASE / "comparison" / "nstep"
 
-# 実機 lite bag は単一ファイルでも directory bag でも受け付ける。
 REAL_BAG_DIR = LITE_DIR / "real.lite.mcap"
 
-# 地図プロットの bbox margin [m] (走行軌跡の min/max からの余白)
 MAP_BBOX_MARGIN = 10.0
 
-# 本ステージ専用の上書き値 (load_sim_params() のシム既定値に上塗りする)。
-# sub_dt は N-step 解析の積分刻み (30Hz) で本ステージ固有の設定。
-#
-# 旧コードは steer_bias=0.01 をここで上塗りしていたが、これはシム仕様値
-# (simulator_model.param.yaml の steer_bias ≈ 0.0005 rad) と乖離した非物理的な
-# phantom bias で、ideal_steer 以外の全ケース (baseline/kus0020/shorter_wb) の
-# err_steer を一律に汚染し、図の注釈 (load_sim_params 由来 0.0005 を表示) とも
-# 自己矛盾していた。Stage3 closed-loop sim と整合させるため override から除外し、
-# load_sim_params() のシム仕様 steer_bias をそのまま使う。ケース固有値は scenario.yaml の
-# params で明示上書きできる (ideal_steer は C++ 側が bias を持たないため 0.0 を明示)。
 _PARAMS_OVERRIDES = {
     "sub_dt": 1.0 / 30.0,
 }
 
 
 def _build_params(cfg: RuntimeConfig | None = None) -> dict:
-    """`vehicle_info.param.yaml` + 本ステージ専用上書きで PARAMS を構築する。
-
-    `_PARAMS_OVERRIDES` は N-step 解析固有の意図的な差分なので維持する。
-    """
+    """`vehicle_info.param.yaml` に N-step 固有の上書きを反映する。"""
     base = load_sim_params()
     base.setdefault("wheelbase", base.get("wheel_base", 4.76012))
     base.update(_PARAMS_OVERRIDES)
@@ -108,16 +70,8 @@ def _build_params(cfg: RuntimeConfig | None = None) -> dict:
     return base
 
 
-# Placeholder; 実際の値は main() 内 _apply_runtime_config(cfg, case_tag, case_params) で
-# 上書きされる。module import 時に load_sim_params() (YAML 読込) を走らせない
-# ことで cases ループ起動時のオーバーヘッドを削減する。
 PARAMS: dict = {"sub_dt": 1.0 / 30.0}
 SUB_DT: float = PARAMS["sub_dt"]
-
-
-# ---------------------------------------------------------------------------
-# データ読み込み
-# ---------------------------------------------------------------------------
 
 
 def load_real_bag(path: Path) -> dict[str, pd.DataFrame]:
@@ -130,8 +84,6 @@ def load_real_bag(path: Path) -> dict[str, pd.DataFrame]:
         path,
         ["/localization/kinematic_state", "/sub/localization/kinematic_state"],
     )
-    # load_kinematic が SSOT（t_ns, x, y, yaw, pitch, vx, vy, wz を返す）。
-    # kin_topic is None の場合 iter_to_df が空 DF（列あり）を返すため後段ガード不変。
     df_kin = load_kinematic(path, kin_topic)
 
     acc_topic = resolve_topic(
@@ -181,11 +133,6 @@ def find_autonomous_start(data: dict) -> int:
     return _find_autonomous_start(data["mode"], df_vel)
 
 
-# ---------------------------------------------------------------------------
-# N-step オープンループ解析
-# ---------------------------------------------------------------------------
-
-
 def _prepare_gt(data: dict, t0_ns: int, params: dict) -> dict:
     """run_rollout の GT 準備。
 
@@ -230,7 +177,6 @@ def _prepare_gt(data: dict, t0_ns: int, params: dict) -> dict:
     require_non_empty_df(df_cmd, name="/control/command/control_cmd", context="step_ol1_analyze_nstep")
     require_non_empty_df(df_kin, name="/localization/kinematic_state", context="step_ol1_analyze_nstep")
 
-    # -- 位置微分による body frame 横速度・横加速度の計算 --
     # EKF の vy/ay は no-slip 拘束によりほぼゼロになるため、
     # pose position を微分して body frame に変換する。
     _t_kin_raw = df_kin["t"].values
@@ -248,7 +194,6 @@ def _prepare_gt(data: dict, t0_ns: int, params: dict) -> dict:
     df_kin["vy_pos"] = _vy_smooth
     df_kin["ay_pos"] = _ay_smooth
 
-    # -- GT を cmd タイムスタンプに線形補間 --
     t_cmd = df_cmd["t"].values
     t_kin = df_kin["t"].values
     t_acc = df_acc["t"].values
@@ -264,7 +209,6 @@ def _prepare_gt(data: dict, t0_ns: int, params: dict) -> dict:
     gt_ay = np.interp(t_cmd, t_kin, df_kin["ay_pos"].values)
     gt_steer = interp_or_zeros(t_cmd, t_steer, df_steer["steer"].values)
 
-    # 角加速度: wz の時間微分
     gt_dwz = np.gradient(gt_wz, t_cmd)
 
     # 運動学ステア: ego_entity_simulation.cpp と同じ初期化方式
@@ -277,14 +221,10 @@ def _prepare_gt(data: dict, t0_ns: int, params: dict) -> dict:
         gt_steer,
     )
 
-    # 過去コマンド補間用（queue 分の過去を含む全区間）
     t_cmd_full = df_cmd_full["t"].values
     accel_des_full = df_cmd_full["accel_des"].values
     steer_des_full = df_cmd_full["steer_des"].values
 
-    # ---------------------------------------------------------------------------
-    # Hoisted invariant arrays for eval_rollout_rmse
-    # ---------------------------------------------------------------------------
     # swept params (k_us, steer_time_constant, debug_steer_scaling_factor,
     # acc_time_constant) は _GT_KEYS に含まれないため、同一 gt-key の eval 呼び出し間で
     # これらの配列は不変。_prepare_gt で一度だけ計算し gt dict に保持することで
@@ -292,7 +232,6 @@ def _prepare_gt(data: dict, t0_ns: int, params: dict) -> dict:
     _sub_dt_h = SUB_DT  # 前計算時点の値を固定 (eval_rollout_rmse と一致)
     _n_h = len(t_cmd)
 
-    # per-interval arrays: iv_arr[k] = t_cmd[k+1] - t_cmd[k]
     _iv_arr = np.diff(t_cmd)                             # shape (_n_h - 1,)
     _nfull_arr = (_iv_arr / _sub_dt_h).astype(np.int32)   # int(iv / sub_dt); int32 for C API
     _rem_arr = _iv_arr - _nfull_arr * _sub_dt_h           # 端数 (iv mod sub_dt)
@@ -304,7 +243,6 @@ def _prepare_gt(data: dict, t0_ns: int, params: dict) -> dict:
         np.concatenate([[0], _bad_iv.view(np.uint8)])
     ).astype(np.intp)  # shape (_n_h,)
 
-    # 全 k0 の delay history を一括ベクトル計算 (q_size は gt-key 不変)
     _acc_q_sz = round(params["acc_time_delay"] / _sub_dt_h)
     _steer_q_sz = round(params["steer_time_delay"] / _sub_dt_h)
     if _acc_q_sz > 0 and _n_h > 0:
@@ -360,7 +298,6 @@ def _prepare_gt(data: dict, t0_ns: int, params: dict) -> dict:
         "gt_steer": gt_steer,
         "gt_dwz": gt_dwz,
         "gt_steer_kinematic": gt_steer_kinematic,
-        # hoisted invariant arrays (eval_rollout_rmse 専用)
         "iv_arr": _iv_arr,
         "nfull_arr": _nfull_arr,
         "rem_arr": _rem_arr,
@@ -461,7 +398,6 @@ def eval_rollout_rmse(
     bc_list = bc.tolist()
     bg_list = bg.tolist()
 
-    # Pre-calculate ctypes pointers to avoid array creation inside loop
     n_acc = acc_hist_all.shape[1]
     n_steer = steer_hist_all.shape[1]
     acc_base = acc_hist_all.ctypes.data
@@ -471,7 +407,6 @@ def eval_rollout_rmse(
     acc_ptrs = [ctypes.cast(acc_base + k0 * n_acc * 8, _cdbl_p) for k0 in range(n)]
     steer_ptrs = [ctypes.cast(steer_base + k0 * n_steer * 8, _cdbl_p) for k0 in range(n)]
 
-    # --- C バッチパス (vm_integrate_to_horizons) ---
     _cint_p = ctypes.POINTER(ctypes.c_int)
     _p_ad  = accel_des.ctypes.data_as(_cdbl_p)
     _p_sd  = steer_des.ctypes.data_as(_cdbl_p)
@@ -481,7 +416,6 @@ def eval_rollout_rmse(
     _h_arr = np.array(sorted_horizons, dtype=np.int32)
     _p_h   = _h_arr.ctypes.data_as(_cint_p)
 
-    # 出力バッファを一度だけ確保 (eval 間で再利用)
     _x_out     = np.empty(_n_sh, dtype=np.float64)
     _y_out     = np.empty(_n_sh, dtype=np.float64)
     _yaw_out   = np.empty(_n_sh, dtype=np.float64)
@@ -495,7 +429,6 @@ def eval_rollout_rmse(
     _p_axo    = _ax_out.ctypes.data_as(_cdbl_p)
     _p_steero = _steer_buf.ctypes.data_as(_cdbl_p)
 
-    # Pre-allocate array for simulation outputs to vectorize after the loop
     k0_range = range(0, n - min_h, stride)
     num_steps = len(k0_range)
     sim_x = np.full((num_steps, _n_sh), np.nan, dtype=np.float64)
@@ -522,7 +455,6 @@ def eval_rollout_rmse(
             wz=gt_wz_list[k0],
             vy=gt_vy_list[k0],
         )
-        # 有効 horizon 数を決定 (昇順のため最大 len(sorted_horizons) 回のループ)
         n_valid = 0
         for h in sorted_horizons:
             if k0 + h >= n:
@@ -535,7 +467,6 @@ def eval_rollout_rmse(
         if n_valid == 0:
             continue
 
-        # C 関数に k0 とフル配列ポインタを渡し、一括積分 + horizon スナップ
         model._lib.vm_integrate_to_horizons(
             model._ptr,
             ctypes.c_int(sorted_horizons[n_valid - 1]),
@@ -554,7 +485,6 @@ def eval_rollout_rmse(
         sim_ax[step_idx, :n_valid] = _ax_out[:n_valid]
         sim_steer[step_idx, :n_valid] = _steer_buf[:n_valid]
 
-    # Vectorized evaluation over all horizons using NumPy
     res = {}
     k0_arr = np.array(list(k0_range), dtype=np.intp)
     for i, h in enumerate(sorted_horizons):
@@ -639,12 +569,12 @@ def run_rollout(
     した後、実コマンド系列を horizon (=N) 区間連続適用 (途中リセット無し = free-running) し、
     終端 k_end = k0 + N の予測状態を実機と比較する。
 
-    - N=1 が従来の per-step delta（毎ステップリセットの 1 ステップ予測; 累積誤差を排除）。
+    - N=1 は毎ステップリセットの 1 ステップ予測で、累積誤差を排除する。
     - N>1 では yaw 積分に効く k_us / wheelbase / 時定数の累積差が顕在化する
       (N=1 では全 dynamics ケースで位置 RMSE がほぼ同一になる既知の限界)。
 
     誤差の符号規約は「実機 − モデル」。ds_* の縦横分解は k0 時点の実機ヨー基準の
-    車両ローカル座標系 (N=1 で旧 per-step delta と同一)。pos_err / yaw_err_deg は座標系不変。
+    車両ローカル座標系。pos_err / yaw_err_deg は座標系不変。
 
     【重要・k_us が異なるケース間で小 N の err_wz / yaw_err を比較してはいけない】
     リセット時の steer は gt_steer_kinematic = atan(wz*wb/vx) (k_us=0 の bicycle 逆算) を
@@ -681,24 +611,19 @@ def run_rollout(
     n = len(t_cmd)
     recs: list[dict] = []
 
-    # horizon 融合: k0 ごとに最大 horizon まで1回だけ積分し、各 horizon 境界で記録する。
+    # k0 ごとに最大 horizon まで 1 回だけ積分し、各 horizon 境界で記録する。
     # free-running open-loop では長い horizon の途中状態（step h）は短い horizon の終端と
-    # ビット単位で同一のため、結果は元のループ構造（horizon 外側）と完全一致する。
-    #
-    # 元の horizon-major 出力順を再現するため、入力 horizons の出現インデックスでソートする。
-    # これにより (40,20) のような降順入力でも元コードと同じ行順が保たれる。
+    # ビット単位で同一になる。
     h_order = {h: i for i, h in enumerate(horizons)}
     sorted_horizons = sorted(horizons)
     min_h = sorted_horizons[0]
 
-    # horizon 別の記録数カウンタ (進捗 print 用)
     h_counts = {h: 0 for h in horizons}
 
     # k_end = k0 + horizon ≤ n-1 まで使う (最小 horizon で outer range を決定)
     for k0 in range(0, n - min_h, stride):
         if gt_vx[k0] <= VX_MIN_CURVE:
             continue
-        # -- モデルを t_{k0} の実機状態にリセット（過去履歴を delay queue にセット）--
         # ego_entity_simulation.cpp と同じ: state(4) = atan(wz*wb/vx) をキネマティック初期値に。
         # vm_reset_state 内: state(4) = steer_actual - steer_bias
         model.reset_with_history(
@@ -720,11 +645,9 @@ def run_rollout(
         stepped = 0  # これまでにステップした区間数 (各 h まで積算)
         for h in sorted_horizons:
             if k0 >= n - h:
-                # この k0 では horizon h が範囲外 (昇順なので以降も全て範囲外)
                 break
             if bad_gear_cumsum[k0 + h + 1] > bad_gear_cumsum[k0]:
                 break
-            # -- 実コマンド系列を [stepped, h) 区間だけ追加適用 --
             # 各区間は n_full 回の SUB_DT ステップ + 端数ステップで正確に積分する
             # (区間が SUB_DT より短い場合は n_full=0 で端数ステップのみ)。
             bad = False
@@ -742,17 +665,14 @@ def run_rollout(
                 if rem > 1e-6:
                     model.step_dt(ad, sd, rem)
             if bad:
-                # 不正区間 → h 以上の horizon はすべて記録しない (元コードの continue と同等)
                 break
             stepped = h
             k_end = k0 + h
 
-            # -- 終端誤差 (実機 − モデル) --
             dx = gt_x[k_end] - model.x
             dy = gt_y[k_end] - model.y
             yaw_err = wrap_pi(gt_yaw[k_end] - model.yaw)
 
-            # -- 変位の k_end GT yaw 基準ローカル分解 --
             real_dx = gt_x[k_end] - gt_x[k0]
             real_dy = gt_y[k_end] - gt_y[k0]
             sim_dx = model.x - gt_x[k0]
@@ -763,38 +683,33 @@ def run_rollout(
             sim_ds_long, sim_ds_lat = local_ds(sim_dx, sim_dy, cos_y, sin_y)
 
             sim_steer_kend = model.steer_state + steer_bias
-            # sim_wz: モデルが予測した終端 yaw rate (vm_get_wz, k_us 依存)。未 export なら NaN
-            # (sim_vy/ay は getVy()=0 / 未実装のため引き続き省略)。
             sim_wz = model.wz
             recs.append({
                 "horizon": h,
                 "k0": k0,
-                "tr": t_cmd[k0],  # AUTONOMOUS 開始からの経過時間 [s]
+                "tr": t_cmd[k0],
                 "elapsed": t_cmd[k_end] - t_cmd[k0],
-                "accel_des": float(accel_des[k_end - 1]),  # 最終適用コマンド (N=1 で旧 per-step と同一)
+                "accel_des": float(accel_des[k_end - 1]),
                 "steer_des": float(steer_des[k_end - 1]),
                 "pos_x": gt_x[k0],
                 "pos_y": gt_y[k0],
                 "real_vx": gt_vx[k0],
-                "real_steer_k0": gt_steer[k0],  # リセット時の実機ステア
-                "real_steer_kend": gt_steer[k_end],  # 終端の実機ステア（予測の比較対象）
-                "sim_steer_kend": sim_steer_kend,  # モデルが予測した終端ステア
-                "err_steer": gt_steer[k_end] - sim_steer_kend,  # 予測誤差 [rad]
+                "real_steer_k0": gt_steer[k0],
+                "real_steer_kend": gt_steer[k_end],
+                "sim_steer_kend": sim_steer_kend,
+                "err_steer": gt_steer[k_end] - sim_steer_kend,
                 "real_ax": gt_ax[k0],
-                "real_ay": gt_ay[k_end],  # 終端 — err_steer 規約に統一
+                "real_ay": gt_ay[k_end],
                 "real_vy": gt_vy[k_end],
                 "real_wz": gt_wz[k_end],
-                "err_wz": gt_wz[k_end] - sim_wz,  # yaw rate 予測誤差 [rad/s] (sim_wz は実機値と err から導出可)
+                "err_wz": gt_wz[k_end] - sim_wz,
                 "real_dwz": gt_dwz[k_end],
                 "sim_vx": model.vx,
-                # 終端の縦方向 GT との比較 (sweep 目的メトリクス用)。real_vx/real_ax は k0 値の
-                # ままにし意味を変えない。err_ax は加速度トピックが無いログ (gt_ax=zeros) では
-                # 無意味になるが、縦方向 sweep 対象データには /localization/acceleration がある前提。
                 "real_vx_kend": gt_vx[k_end],
-                "err_vx": gt_vx[k_end] - model.vx,  # 速度予測誤差 [m/s]
+                "err_vx": gt_vx[k_end] - model.vx,
                 "real_ax_kend": gt_ax[k_end],
                 "sim_ax": model.ax,
-                "err_ax": gt_ax[k_end] - model.ax,  # 加速度予測誤差 [m/s²]
+                "err_ax": gt_ax[k_end] - model.ax,
                 "real_ds_long": real_ds_long,
                 "real_ds_lat": real_ds_lat,
                 "sim_ds_long": sim_ds_long,
@@ -813,11 +728,6 @@ def run_rollout(
         for h in horizons:
             print(f"  horizon N={h}: {h_counts[h]} starts (stride={stride})")
     return pd.DataFrame(recs)
-
-
-# ---------------------------------------------------------------------------
-# プロット
-# ---------------------------------------------------------------------------
 
 
 def plot_overview(df: pd.DataFrame, params: dict) -> None:
@@ -889,13 +799,11 @@ def plot_map_distribution(df: pd.DataFrame, params: dict) -> None:
                          "kinematic_state/pose.orientation vs rollout 終端 state_[2]"))
         return cols
 
-    # 走行軌跡の bbox + margin で地図プロット範囲を自動算出
     x_min = float(df["pos_x"].min()) - MAP_BBOX_MARGIN
     x_max = float(df["pos_x"].max()) + MAP_BBOX_MARGIN
     y_min = float(df["pos_y"].min()) - MAP_BBOX_MARGIN
     y_max = float(df["pos_y"].max()) + MAP_BBOX_MARGIN
 
-    # plotly インタラクティブ HTML（ズーム・パン・ホバー可）として出力する。
     from plotly.subplots import make_subplots  # noqa: PLC0415
 
     n_rows = len(row_horizons)
@@ -926,10 +834,8 @@ def plot_map_distribution(df: pd.DataFrame, params: dict) -> None:
             axis_suffix = str(axis_i) if axis_i > 1 else ""
             if lane_template is not None:
                 fig.add_trace(go.Scatter(lane_template), row=row_idx, col=col_idx)
-            # ケース横断の colorbar 統一 (LIMITS_DF 設定時)
             unified = _unified_absmax(col_name, scale_, horizon=h)
             vmax = unified if unified is not None else max(abs(vals).max(), 1e-6)
-            # 各セルの colorbar をサブプロット右端に配置（x/y axis domain を使う）
             x_dom = fig.layout[f"xaxis{axis_suffix}"].domain
             y_dom = fig.layout[f"yaxis{axis_suffix}"].domain
             fig.add_trace(
@@ -1004,7 +910,6 @@ def save_summary(df: pd.DataFrame, verbose: bool = False) -> None:
         v = df1[col].values if mask is None else df1[col].values[mask]
         return float(np.mean(v)) * rad2deg
 
-    # メトリクス説明を先頭にコメント (# ) 行として埋め込む
     desc_lines = ["# " + ln if ln else "#" for ln in metrics_description_md().splitlines()]
     lines = [
         *desc_lines,
@@ -1035,7 +940,6 @@ def save_summary(df: pd.DataFrame, verbose: bool = False) -> None:
             "",
         ]
     lines.append("--- 時間帯別 (4 等分 equal-time bins / 縦・横・ステア RMSE) ---")
-    # 時間軸を 4 等分した equal-time bins で RMSE を集計する
     t_min, t_max = float(tr[0]), float(tr[-1])
     T_span = t_max - t_min
     bands: list[tuple[str, float, float]] = []
@@ -1068,7 +972,6 @@ def save_summary(df: pd.DataFrame, verbose: bool = False) -> None:
                 f"ステア={rmse_deg('err_steer', mask):.4f} deg  (n={mask.sum()})"
             )
 
-    # --- horizon 別 RMSE (free-running, リセット無し N ステップ後の対実機誤差) ---
     lines += ["", "=== horizon 別 終端誤差 RMSE (free-running) ==="]
     rmse = rmse_by_horizon(df)
     for horizon, r in rmse.items():
@@ -1079,8 +982,6 @@ def save_summary(df: pd.DataFrame, verbose: bool = False) -> None:
             f"(縦={r['long']:.2f}, 横={r['lat']:.2f} cm)  yaw RMSE={r['yaw']:.3f} deg  (n={len(sub)})"
         )
 
-    # 透明化: sim_vx<0 (ideal_steer_acc が停止中ブレーキで微小後退する仕様) の件数を注記。
-    # バグではなく dynamics-free モデルの忠実な挙動で、位置誤差寄与は無視可能 (VehicleModel docstring 参照)。
     if "sim_vx" in df1.columns:
         n_neg = int((df1["sim_vx"].values < 0).sum())
         if n_neg > 0:
@@ -1098,12 +999,6 @@ def save_summary(df: pd.DataFrame, verbose: bool = False) -> None:
     if verbose:
         print(f"  Saved: {OUT_DIR / 'summary.txt'}")
 
-
-# ---------------------------------------------------------------------------
-# メイン
-# ---------------------------------------------------------------------------
-
-
 def _apply_runtime_config(
     cfg: RuntimeConfig, case_tag: str, case_params: dict, vehicle_model_type: str | None = None
 ) -> dict:
@@ -1117,7 +1012,6 @@ def _apply_runtime_config(
     BASE = cfg.base_dir
     LITE_DIR = cfg.lite_dir
     OUT_DIR = cfg.out_dir / "nstep" / case_tag
-    # 入力 bag のデフォルトパス (実体は _resolve_real_mcap が file/dir 両対応)
     REAL_BAG_DIR = LITE_DIR / "real.lite.mcap"
 
     PARAMS = merge_vehicle_model_params(_build_params(cfg), case_params, vehicle_model_type)
@@ -1128,7 +1022,6 @@ def _apply_runtime_config(
 def main() -> None:
     parser = argparse.ArgumentParser(description="全走行 N-step オープンループ解析 (1 ケース 1 run)")
     add_common_cli_arguments(parser)
-    # --scenario は add_common_cli_arguments が追加済み (env: SCENARIO_CONFIG_YAML)。
     parser.add_argument(
         "--case-tag",
         default=os.environ.get("CASE_TAG", ""),
@@ -1173,7 +1066,6 @@ def main() -> None:
 
     OUT_DIR.mkdir(parents=True, exist_ok=True)
 
-    # 入力 bag は単一 `.mcap` ファイル or `.lite` ディレクトリの両方を試す (lib._io 共通リゾルバ)
     real_bag = resolve_lite_bag(LITE_DIR, "real")
     if real_bag is None:
         print(f"ERROR: real lite bag が見つかりません: {LITE_DIR}", file=sys.stderr)
@@ -1185,8 +1077,6 @@ def main() -> None:
     _print(f"AUTONOMOUS 開始: t0_ns={t0_ns}")
 
     _print(f"\n=== N-step オープンループ解析開始 (case={case.tag}) ===")
-    # N=1 は全ステップ (stride=1) で従来 per-step delta の解像度、
-    # N>1 は dynamics 累積差の検出用に stride=5 でサンプリングする。
     # GT 準備は両呼び出しで同一なので 1 回だけ計算して共有する。
     gt = _prepare_gt(data, t0_ns, params)
     df1 = run_rollout(data, t0_ns, params, case.vehicle_model_type, horizons=(1,), stride=1, gt=gt, verbose=verbose)

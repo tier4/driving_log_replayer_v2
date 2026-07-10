@@ -154,9 +154,7 @@ def _value_at(frames: list[dict], t_target: float, d_target: float, *, tol: floa
     return float("nan")
 
 
-# ---------------------------------------------------------------------------
 # real_actual target — 実機 DP vs シム DP
-# ---------------------------------------------------------------------------
 
 
 def _count_tracked_objects(
@@ -320,9 +318,7 @@ def _run_real_actual(  # noqa: PLR0915
     write_fig_json(fig2, cfg.figs_dir / "dp_vs_actual")
 
 
-# ---------------------------------------------------------------------------
 # final_planning target — 実機 DP vs 最終 planning/trajectory
-# ---------------------------------------------------------------------------
 
 
 def _run_final_planning(  # noqa: PLR0915
@@ -431,9 +427,7 @@ def _run_final_planning(  # noqa: PLR0915
         _print(f"{t_val:>5.1f} | " + " ".join(fmt(v) for v in corr))
 
 
-# ---------------------------------------------------------------------------
 # entry
-# ---------------------------------------------------------------------------
 
 
 def main() -> None:

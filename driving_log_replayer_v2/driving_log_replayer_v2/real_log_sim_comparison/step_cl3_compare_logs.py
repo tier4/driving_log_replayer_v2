@@ -48,9 +48,7 @@ from .lib._runtime_config import (
     build_runtime_config,
 )
 
-# ---------------------------------------------------------------------------
 # 設定 — main() で `_apply_runtime_config()` から上書きされる
-# ---------------------------------------------------------------------------
 
 VERBOSE = False
 BASE = Path(os.environ.get("BEST_MODEL_BASE_DIR") or Path(__file__).parent)
@@ -170,9 +168,7 @@ def _rebuild_logs(
 LOGS = _rebuild_logs(LITE_DIR)
 
 
-# ---------------------------------------------------------------------------
 # bag ローダー
-# ---------------------------------------------------------------------------
 
 
 # ローダー / 時刻整列 / 地図 OSM は `_io.py` と `_map.py` に移管済み。
@@ -185,9 +181,7 @@ def _resolve_map_osm() -> Path | None:
     return resolve_map_osm(os.environ.get("MAP_OSM_PATH"))
 
 
-# ---------------------------------------------------------------------------
 # プロット
-# ---------------------------------------------------------------------------
 
 
 def _tr(d: dict, df: pd.DataFrame) -> np.ndarray:
@@ -197,9 +191,7 @@ def _tr(d: dict, df: pd.DataFrame) -> np.ndarray:
     return df["t"].to_numpy(dtype=float) - float(d.get("t_launch", 0.0))
 
 
-# ---------------------------------------------------------------------------
 # 数値レポート
-# ---------------------------------------------------------------------------
 
 
 def nearest_point_distance(ref_xy: np.ndarray, query_xy: np.ndarray) -> np.ndarray:
@@ -542,9 +534,7 @@ def build_report(metrics: dict, data: dict) -> str:
     return "\n".join(lines)
 
 
-# ---------------------------------------------------------------------------
 # メイン
-# ---------------------------------------------------------------------------
 
 
 def _apply_runtime_config(cfg: RuntimeConfig) -> None:

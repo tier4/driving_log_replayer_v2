@@ -166,14 +166,12 @@ def fit_first_order_delay(
     }
 
 
-# ---------------------------------------------------------------------------
 # 方程式残差の SG 平滑化微分 (LHS) と診断評価
 #
 # 参照設計 ~/software/vehicle_model_fitting/design.md: 各 ODE を E = RHS(param) − LHS に整理する
 # (LHS = 状態微分)。本モジュールではこの残差を「推定量」には使わず (実データで τ が膨張するため)、
 # 出力誤差型で同定したパラメータの整合診断として `equation_residual_at_params` で評価する。
 # SG 平滑化微分 (savgol_derivative) は加速度/操舵微分のノイズを抑えて LHS を作るために用いる。
-# ---------------------------------------------------------------------------
 
 
 def _savgol_window(n: int, dt: float, window_s: float, polyorder: int) -> int | None:

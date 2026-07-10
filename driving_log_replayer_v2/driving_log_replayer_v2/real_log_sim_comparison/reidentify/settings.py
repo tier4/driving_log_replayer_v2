@@ -92,18 +92,5 @@ TAIGA_X_DEFAULTS = {
 
 RELEASE_MODEL_KEY = "delay_steer_acc_geared_for_diffusion_planner"
 
-# Acceleration source configuration
-# "accel"          : Use the original /localization/acceleration topic (has ~80ms LPF lag)
-# "kinematic_diff"  : Differentiate /localization/kinematic_state vx with diff+rolling mean.
-#                     rolling_window=10 samples is a fixed *sample count*, and kinematic_state
-#                     publishes at ~50Hz, so this is actually ~200ms of box-car smoothing --
-#                     worse than the "accel" LPF it was meant to replace. Confirmed by A/B tuning
-#                     (multi_dataset_tune.py --acceleration-source): kinematic_diff and accel score
-#                     ~equal, while kinematic_savgol scores ~6% better than both (score 15.62 vs
-#                     16.54/16.57, n_trials=150) and nearly matches the v1 baseline (15.34).
-# "velocity_diff"   : Differentiate /vehicle/status/velocity_status longitudinal_velocity with diff+rolling mean
-# "kinematic_savgol": Differentiate /localization/kinematic_state vx with Savitzky-Golay (current default) --
-#                     same 0.2s window as kinematic_diff's rolling mean, but a proper polynomial-fit
-#                     derivative instead of box-car averaging, so it tracks transients far better.
-# "velocity_savgol" : Differentiate /vehicle/status/velocity_status longitudinal_velocity with Savitzky-Golay
+# Differentiated velocity source for longitudinal acceleration fitting.
 ACCEL_SOURCE = "kinematic_savgol"

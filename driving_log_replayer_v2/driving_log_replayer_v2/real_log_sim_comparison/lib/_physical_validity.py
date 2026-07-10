@@ -56,11 +56,6 @@ from ._validation import require_non_empty_df
 
 CMD_TOPIC = "/control/command/control_cmd"
 
-# ---------------------------------------------------------------------------
-# 定数 (本モジュールが SSOT: single source of truth。physical_validity_report.py 等は
-#       ここから import する。値の由来は旧同定スクリプト identify_long_dynamics.py /
-#       identify_steer_dynamics.py の同定手順 — 削除済みのため git 履歴を参照)
-# ---------------------------------------------------------------------------
 WHEELBASE = 4.76012   # [m]
 STEER_BIAS = 0.0005   # [rad]
 VX_MIN_CURVE = 1.5    # [m/s]
@@ -88,16 +83,12 @@ def merged_model_params(model_params: dict) -> dict:
     """
     return merge_vehicle_model_params(load_sim_params(), model_params)
 
-# 縦方向 (SSOT は本モジュール。由来は旧 identify_long_dynamics.py の同定手順、git 履歴参照)
 _DA_THRESH_FIT = 0.15
 _VX_MIN_FIT = 0.5
 _DELAY_CANDIDATES_LONG = np.arange(0.0, 0.30 + 1e-9, _FIT_DT)
 _TAU_BOUNDS_LONG = (_FIT_DT, 0.5)
-# 縦方向 3段階交互最適化の Phase 1 (時定数の初期最適化) はスキップし、この固定値を
-# tau として与えて Phase 2 (遅延グリッドサーチ) 以降に渡す（per-dataset・横断同定の両方に適用）。
 _LONG_PHASE1_FIXED_TAU = 0.3
 
-# 操舵 (SSOT は本モジュール。由来は旧 identify_steer_dynamics.py の同定手順、git 履歴参照)
 _DSTEER_MIN = 0.001
 _DELAY_CANDIDATES_STEER = np.arange(0.0, 0.15 + 1e-9, _FIT_DT)
 _TAU_BOUNDS_STEER = (_FIT_DT, 2.0)
@@ -110,11 +101,6 @@ _SG_WINDOW_LONG = 0.2    # [s]
 _SG_WINDOW_STEER = 0.1   # [s]
 
 
-# ---------------------------------------------------------------------------
-# 共通ヘルパー
-# ---------------------------------------------------------------------------
-# 一次遅れ + 純粋遅延の数値カーネルは lib._fit_core (SSOT)。ここでは検証側の既定 DT
-# (_FIT_DT = 1/30) を注入する薄いラッパーだけ置く (多数の呼び出しが dt を省略するため)。
 def _sim_first_order(cmd, tau, n_delay, dt=_FIT_DT, y0=None):
     return _core_sim_first_order(cmd, tau, n_delay, dt, y0=y0)
 
@@ -216,9 +202,6 @@ def _pitch_range(bag_path: Path) -> tuple[float, float]:
     return 0.0, 0.0
 
 
-# ---------------------------------------------------------------------------
-# 縦方向: 単一データセット同定 (路面勾配補正込み)
-# ---------------------------------------------------------------------------
 def fit_long_single(bag_path: Path, acceleration_source: str = "accel") -> dict | None:
     """縦方向一次遅れモデルの単一データセット同定 (路面勾配補正込み)。
 
@@ -320,9 +303,6 @@ def fit_long_single(bag_path: Path, acceleration_source: str = "accel") -> dict 
     }
 
 
-# ---------------------------------------------------------------------------
-# 操舵: 単一データセット同定
-# ---------------------------------------------------------------------------
 def fit_steer_single(bag_path: Path) -> dict | None:
     """操舵一次遅れモデルの単一データセット同定。
 
@@ -396,10 +376,6 @@ def fit_steer_single(bag_path: Path) -> dict | None:
         "phase3_delay": fit.get("phase3_delay"),
     }
 
-
-# ---------------------------------------------------------------------------
-# 横方向 yaw: k_us/yaw 方程式残差分析用の実測配列抽出
-# ---------------------------------------------------------------------------
 def _extract_kus_arrays(bag_path: Path, steer_bias: float | None = None) -> dict | None:
     """k_us/yaw 分析用の vx/wz/steer_eff/dwz を単一データセットから抽出する。
 
@@ -589,10 +565,6 @@ def compute_yaw_equation_residual_data(
         "unit": "rad/s",
     }
 
-
-# ---------------------------------------------------------------------------
-# 時系列 (実測/指令/フィット/チューン値) — per-dataset 図・collection 横断図の共通計算
-# ---------------------------------------------------------------------------
 def compute_long_timeseries(
     bag_path: Path, fit: dict | None, models: dict[str, dict], acceleration_source: str = "accel",
 ) -> dict | None:
@@ -722,10 +694,6 @@ def compute_steer_timeseries(bag_path: Path, fit: dict | None, models: dict[str,
         "model_tune": model_tune,
     }
 
-
-# ---------------------------------------------------------------------------
-# collection 横断: データセット選定・縦方向横断フィット (有界 MCAP 再読込)
-# ---------------------------------------------------------------------------
 def pick_best_worst_entries(
     entries: list, per_ds_fit: dict[str, dict], rmse_key: str, n: int = _FIT_N_DATASET,
 ) -> list[tuple]:
@@ -1022,13 +990,9 @@ def fit_long_cross_dataset_bounded(
     delay_baseline = sim_params.get("acc_time_delay", 0.101)
     n_steps_init = int(round(delay_baseline / _FIT_DT))
 
-    # Phase 1: 時定数の初期最適化はスキップし、_LONG_PHASE1_FIXED_TAU を tau として固定した
-    # 上で Phase 2 (遅延グリッドサーチ) に渡す（fit_long_single と同じ方針、per-dataset・
-    # 横断同定の両方に適用）。
     phase1_tau = _LONG_PHASE1_FIXED_TAU
     res1_x = [1.0 / phase1_tau]
 
-    # Phase 2: 得られたパラメータ固定で delay をグリッドサーチ
     best_cost = None
     best_n = 0
     for delay_s in _DELAY_CANDIDATES_LONG:
@@ -1038,7 +1002,6 @@ def fit_long_cross_dataset_bounded(
             best_cost = cost
             best_n = n_delay
 
-    # Phase 3: 最良 delay 固定でパラメータを再最適化 (1-2縦方向ではPhase 3をスキップ)
     best_tau = phase1_tau
     best_delay = float(best_n * _FIT_DT)
     n_total_samples = sum(int(mask.sum()) for _, _, _, mask in processed_pooled)
@@ -1294,9 +1257,7 @@ def compute_cross_steer_rows(
     return _pick_longest_contiguous_timeseries_row(rows, pinned_uuids)
 
 
-# Perfect Tracking 評価用定数。
-# physical_validity_report.py の 1-5 は x/y heading 補正軌跡フィットへ移行済みだが、
-# step_cross_dataset.py は従来の Perfect Tracking 図を継続利用する。
+# step_cross_dataset.py が Perfect Tracking 図で使う評価用定数。
 _PERF_STRIDE = 5
 _DRIFT_A_TH = 0.3
 

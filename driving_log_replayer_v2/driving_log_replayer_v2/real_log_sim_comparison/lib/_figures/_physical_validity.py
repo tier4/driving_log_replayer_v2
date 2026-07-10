@@ -132,9 +132,7 @@ def _legend_entry(name: str, group: str, showlegend: bool, rank: int) -> dict:
     }
 
 
-# ---------------------------------------------------------------------------
 # per-dataset: 単一データセット時系列
-# ---------------------------------------------------------------------------
 def build_fig_long_single(ts: dict | None, fit: dict | None) -> go.Figure:
     """縦方向モデルフィット時系列 (単一データセット、実測/指令/同定値/モデル別チューン値)。"""
     if ts is None:
@@ -294,9 +292,7 @@ def build_fig_yaw_equation_residual(yaw_data: dict | None) -> go.Figure:
     )
 
 
-# ---------------------------------------------------------------------------
 # collection 横断: 最長連続時系列 + 横断フィット + モデル別チューン値
-# ---------------------------------------------------------------------------
 def build_fig_cross_long(rows_data: list[dict], cross_fit: dict) -> go.Figure:
     """dataset 横断 縦方向モデルフィット (最長連続時系列 + 横断最小二乗法同定値)。"""
     if not rows_data:
@@ -863,11 +859,9 @@ def build_fig_cross_steer(rows_data: list[dict]) -> go.Figure:
     )
 
 
-# ---------------------------------------------------------------------------
 # Perfect Tracking 系プロット。
 # build_fig_perfect_tracking_traj は GT vs model trajectory の汎用形なので、
 # physical_validity_report.py の x/y heading 補正軌跡フィットセクションでも label 差し替えで再利用する。
-# ---------------------------------------------------------------------------
 def build_fig_perfect_tracking_box(data: dict) -> go.Figure:
     """操舵理想追従のホライズン別誤差 Box Plot。"""
     fig = go.Figure()
