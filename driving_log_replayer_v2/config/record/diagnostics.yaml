@@ -1,0 +1,5 @@
+record:
+  - "^/tf$"
+  - "^/diagnostics$"
+  - "^/system/processing_time_checker/metrics$"
+  - "^/driving_log_replayer/.*"

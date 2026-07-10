@@ -26,8 +26,6 @@ from launch.substitutions import LaunchConfiguration
 from driving_log_replayer_v2.launch.util import output_dummy_result_bag
 from driving_log_replayer_v2.launch.util import output_dummy_result_jsonl
 
-RECORD_TOPIC = ""
-
 AUTOWARE_DISABLE = {}
 
 AUTOWARE_ARGS = {}

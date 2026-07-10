@@ -1,0 +1,11 @@
+record:
+  - "^/tf$"
+  - "^/diagnostics$"
+  - "^/system/processing_time_checker/metrics$"
+  - "^/perception/obstacle_segmentation/pointcloud$"
+  - "^/planning/trajectory$"
+  - "^/planning/scenario_planning/status/stop_reasons$"
+  - "^/driving_log_replayer_v2/.*"
+  - "^/driving_log_replayer/.*"
+  - "^/map/vector_map_marker$"
+  - "^/localization/kinematic_state$"

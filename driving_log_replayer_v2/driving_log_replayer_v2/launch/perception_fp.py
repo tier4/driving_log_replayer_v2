@@ -15,30 +15,6 @@
 from launch.actions import DeclareLaunchArgument
 from launch.substitutions import LaunchConfiguration
 
-RECORD_TOPIC = """^/tf$\
-|^/tf_static$\
-|^/diagnostics$\
-|^/system/processing_time_checker/metrics$\
-|^/awapi/autoware/get/status$\
-|^/sensing/camera/.*/compressed$\
-|^/sensing/camera/.*/camera_info$\
-|^/sensing/lidar/concatenated/pointcloud$\
-|^/perception/obstacle_segmentation/pointcloud$\
-|^/perception/object_recognition/detection/.*/debug/pipeline_latency_ms$\
-|^/perception/object_recognition/tracking/multi_object_tracker/debug/.*\
-|^/perception/object_recognition/prediction/map_based_prediction/debug/pipeline_latency_ms$\
-|^/perception/object_recognition/.*/objects$\
-|^/perception/object_recognition/objects$\
-|^/perception/object_recognition/detection/rois[0-9]+$\
-|^/perception/object_recognition/detection/objects_before_filter$\
-|^/sensing/.*detected_objects$\
-|^/sensing/.*tracked_objects$\
-|^/map/vector_map_marker$\
-|^/localization/kinematic_state$\
-|^/planning/trajectory_generator/neural_network_based_planner/diffusion_planner_node/output/predicted_objects$\
-"""
-
-
 AUTOWARE_DISABLE = {
     "localization": "false",
     "planning": "false",

@@ -1,0 +1,9 @@
+record:
+  - "^/tf$"
+  - "^/diagnostics$"
+  - "^/system/processing_time_checker/metrics$"
+  - "^/perception/.*/traffic_signals$"
+  - "^/perception/traffic_light_recognition/traffic_signals/markers$"
+  - "^/perception/traffic_light_recognition/.*/debug/rois/compressed$"
+  - "^/driving_log_replayer_v2/.*"
+  - "^/driving_log_replayer/.*"

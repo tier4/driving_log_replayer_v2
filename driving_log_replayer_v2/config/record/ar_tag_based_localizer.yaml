@@ -1,0 +1,6 @@
+record:
+  - "^/tf$"
+  - "^/diagnostics$"
+  - "^/system/processing_time_checker/metrics$"
+  - "^/localization/kinematic_state$"
+  - "^/driving_log_replayer/.*"
