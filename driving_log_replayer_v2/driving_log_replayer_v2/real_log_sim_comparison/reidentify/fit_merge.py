@@ -7,7 +7,6 @@ from dataclasses import dataclass, field
 import datetime
 import os
 from pathlib import Path
-import re
 import sys
 import traceback
 
@@ -519,51 +518,6 @@ def _discover(collection_dir: Path) -> list[tuple[str, Path]]:
     return result
 
 
-def discover_historical_models(scenario_path: Path, input_param_path: Path | None = None) -> dict[str, dict]:
-    historical_models = {}
-
-    # 1. Try loading from scenario.yaml
-    if scenario_path and scenario_path.exists():
-        try:
-            cfg = load_models_doc(scenario_path)
-            for name, spec in cfg.models.items():
-                if re.match(r"^v[0-9]+$", name):
-                    historical_models[name] = {
-                        "params": spec.params,
-                        "vehicle_model_type": spec.vehicle_model_type or "delay_steer_acc_geared_for_diffusion_planner"
-                    }
-        except Exception as e:
-            print(f"[WARN] Failed to load historical models from scenario: {e}", file=sys.stderr)
-
-    # 2. Try loading from simulator_model.param.yaml
-    if input_param_path and input_param_path.exists():
-        try:
-            with input_param_path.open("r", encoding="utf-8") as f:
-                param_yaml = yaml.safe_load(f) or {}
-
-            # Find ros__parameters block
-            ros_params = {}
-            for k1, v1 in param_yaml.items():
-                if isinstance(v1, dict) and "ros__parameters" in v1:
-                    ros_params = v1["ros__parameters"]
-                    break
-
-            from .settings import RELEASE_MODEL_KEY
-            planner_block = ros_params.get(RELEASE_MODEL_KEY, {})
-            if isinstance(planner_block, dict):
-                for key, val in planner_block.items():
-                    if re.match(r"^v[0-9]+$", key) and isinstance(val, dict):
-                        if key not in historical_models:
-                            historical_models[key] = {
-                                "params": val,
-                                "vehicle_model_type": "delay_steer_acc_geared_for_diffusion_planner"
-                            }
-        except Exception as e:
-            print(f"[WARN] Failed to load historical models from simulator_model.param.yaml: {e}", file=sys.stderr)
-
-    return historical_models
-
-
 def fit_merge(
     collection_dir: Path,
     scenario: Path,
@@ -577,7 +531,6 @@ def fit_merge(
     worst_w: float = WORST_W,
     verbose: bool = False,
     out_path: Path | None = None,
-    input_param: Path | None = None,
 ) -> dict:
     tasks = _discover(collection_dir)
     if not tasks:
@@ -713,7 +666,6 @@ def run(
     collection_dir: Path, scenario: Path, out: Path, *, case: str = "current", phase: int = 0,
     phase2_params_path: Path | None = None, n_trials: int = 50, n_jobs: int = 1,
     search_subsample: int | None = None, worst_w: float = WORST_W, verbose: bool = False,
-    input_param: Path | None = None,
 ) -> dict:
     phase2_params: dict = {}
     if phase2_params_path is not None and phase2_params_path.exists():
@@ -726,7 +678,7 @@ def run(
     result = fit_merge(
         collection_dir, scenario, case=case, phase=phase, phase2_params=phase2_params,
         n_trials=n_trials, n_jobs=n_jobs, search_subsample=search_subsample, worst_w=worst_w,
-        verbose=verbose, out_path=out, input_param=input_param,
+        verbose=verbose, out_path=out,
     )
     with out.open("w") as f:
         yaml.safe_dump(result, f, allow_unicode=True, sort_keys=False)
@@ -747,13 +699,11 @@ def main() -> None:
     ap.add_argument("--worst-weight", type=float, default=WORST_W)
     ap.add_argument("--verbose", action="store_true")
     ap.add_argument("--out", type=Path, required=True)
-    ap.add_argument("--input-param", type=Path, default=None, help="リリース用ベース simulator_model.param.yaml")
     args = ap.parse_args()
     run(
         args.collection_dir, args.scenario, args.out, case=args.case, phase=args.phase,
         phase2_params_path=args.phase_params, n_trials=args.n_trials, n_jobs=normalize_parallel_jobs(args.jobs),
         search_subsample=args.search_subsample, worst_w=args.worst_weight, verbose=args.verbose,
-        input_param=args.input_param,
     )
 
 

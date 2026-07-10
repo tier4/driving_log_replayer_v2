@@ -32,7 +32,7 @@ Physical Validity は複数データセットの collection が入口。
 | CL4 | DP軌跡比較 (`step_cl4_compare_dp_trajectory`) | `lite/{real, <sim>}.lite/` | `comparison/figures/dp_*.fig.json` | 1 |
 | Report HTML | HTML レポート生成 (`step_report_html`) | `comparison/` 配下の全 `*.fig.json` + 再生 HTML + 各 `.md` + 設定 YAML | `report.html` (バンドルフォルダ直下・plotly.js を 1 回インライン + 図スペックを gzip+base64 遅延展開する単一 HTML。`--collection-dir` でマルチ DS レポート) | 1 |
 | Cross Dataset | データセット横断分析 (`step_cross_dataset`) | collection 内全 DS の `metrics_closed_loop.json` + `cases_metrics.json` | `cross_dataset/{cross_*.fig.json, coverage_overview.fig.json, loo_stability.fig.json, cross_metrics.json, cross_summary.md}` (collection 単位・rollout 再実行なし) | 1 / collection |
-| Physical Validity | チューニング検証レポート生成 (`physical_validity_report.py`) | collection 内の real.lite 群 + `tuned_params.yaml` | `physical_validity_report.html` (collection root 直下。チューニング済み車両パラメータの物理的妥当性を実機ログからの独立同定と理論式の両面で検証する collection 単位レポート。`make local_multidataset_cloud_run` の Step 4 で実行) | 1 / collection |
+| Physical Validity | チューニング検証レポート生成 (`physical_validity_report.py`) | collection 内の real.lite 群 + `reidentify/tuned_params.yaml` | `reidentify/physical_validity_report.html` (チューニング済み車両パラメータの物理的妥当性を実機ログからの独立同定と理論式の両面で検証する collection 単位レポート。`make local_multidataset_cloud_run` の Step 4 で実行) | 1 / collection |
 
 成否はパイプラインの例外有無で決まる。全 stage が完走すれば `result.jsonl` に
 `Success: true`、いずれかの subprocess が非ゼロ終了またはタイムアウトすると
@@ -195,7 +195,7 @@ Stage CL2 (`step_cl2_run_sims`) が `scenario_test_runner` で sim を回した�
 
 **`report.html` と `physical_validity_report.html` の役割分担**: 前者は解析パイプラインの成果物で、
 scenario の Conditions に列挙された models 群を対象に自動生成される。後者はチューニングワークフロー
-（`make local_multidataset_cloud_run` Step 4）の成果物で、同定された `tuned_params.yaml` 1 点に対する
+（`make local_multidataset_cloud_run` Step 4）の成果物で、同定された `reidentify/tuned_params.yaml` 1 点に対する
 検証（score 再現・偏差テーブル・カーブビューア・closed-loop 比較）に特化する。物理妥当性の計算と図は
 どちらも同じ共有ライブラリ（`lib/_physical_validity.py`・`lib/_figures/_physical_validity.py`）を
 使っており、数式・定数の実装はそこに一本化されている。

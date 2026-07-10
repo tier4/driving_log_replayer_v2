@@ -5,7 +5,7 @@ from pathlib import Path
 
 from ..lib._accel_source import ACCEL_DELAY_MAP, ACCEL_SAVGOL_POLYORDER, ACCEL_SAVGOL_WINDOW_S
 
-DEFAULT_OUTPUT_DIR_NAME = "reidentify_v2"
+DEFAULT_OUTPUT_DIR_NAME = "reidentify"
 DEFAULT_INPUT_PARAM = Path(
     "/home/kotaroyoshimoto/workspace/x2_e2e_44/src/description/vehicle/"
     "j6_gen2_description/j6_gen2_description/config/simulator_model.param.yaml"

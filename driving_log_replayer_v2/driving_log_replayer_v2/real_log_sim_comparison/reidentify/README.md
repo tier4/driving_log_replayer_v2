@@ -1,128 +1,75 @@
-# reidentify (v2)
+# reidentify
 
-`real_log_sim_comparison` の `reidentify` パイプライン(実機ログから車両モデルの
-物理パラメータを同定する処理)を、`~/software/vehicle_model_fitting` を参考に
-依存の少ないシンプルな Python スクリプト集として再構成したもの。
+`real_log_sim_comparison` の車両モデル再同定パイプライン。
+複数データセットの `real.lite` / `reidentify_cache.csv` から物理パラメータを同定し、
+検証レポートとリリース用 `simulator_model.param.yaml` を生成する。
 
-旧パイプライン(`physical_tuning.py` / `multi_dataset_tune.py` /
-`physical_validity_report.py` / `release_model_params.py`、Makefile の
-`reidentify`/`fit_lon`/`fit_steer`/`fit_merge`/`fit_report` ターゲット)は
-そのまま残っており、当面併存する。
+## 正規入口
 
-## 目的
-
-collection ディレクトリ(複数データセットの `real.lite` を束ねたもの)から:
-1. 縦方向モデル(加速度の一次遅れ+むだ時間)を直接同定
-2. 操舵モデル(操舵の一次遅れ+むだ時間)+ アンダーステア勾配 (k_us) を直接同定
-3. N-step オープンループロールアウト評価を目的関数に、Optuna で warm-start 統合チューニング
-4. 簡易な物理妥当性レポート(matplotlib + テキスト)を生成
-5. `simulator_model.param.yaml` へのリリース用パラメータ埋め込み
-
-を行う。
-
-## ファイル構成
-
-```
-reidentify/
-├── README.md            # 本ファイル
-├── Makefile             # reidentify 単体の実行入口
-├── csv_schema.py          # CSV キャッシュの列スキーマ (extract.py / load_data.py 共有)
-├── extract.py              # [Step1] real.lite → dataset毎 CSV キャッシュ (ROS 依存はここだけ)
-├── gear.py                  # DRIVE 系 gear 判定 (ROS フリー、lib._io の値を複製)
-├── physical_constants.py     # k_us 定常旋回フィルタ閾値 (ROS フリー、lib._physical_validity の値を複製)
-├── settings.py                # reidentify 固有の閾値・探索範囲・既定パス
-├── scenario_params.py         # scenario.yaml から wheelbase を読む薄いヘルパー
-├── load_data.py                 # CSV 読込 → 同定用の resampled 配列 / rollout 用の生 DataFrame 群
-├── fit_core.py                   # lib/_fit_core.py (同定カーネル SSOT) の re-export
-├── fit_lon.py                     # [Step2] 縦方向直接同定 → phase1_acc.yaml
-├── fit_steer.py                    # [Step3] 操舵+k_us直接同定 → phase2_steer.yaml
-├── rollout.py                       # VehicleModel(ctypes 車両モデル) + N-step ロールアウト評価
-├── fit_merge.py                      # [Step4a] Optuna warm-start 統合 → tuned_params.yaml
-├── report.py                          # [Step4b] 簡易物理妥当性レポート (機能ダウングレード版)
-├── release_params.py                   # [Step4c] release_model_params.py の移設
-└── run_reidentify.py                    # 全体オーケストレーションのエントリポイント
-```
-
-## 実行方法
-
-`reidentify/` 単体で Makefile から実行できる。
+Makefile 入口:
 
 ```bash
-make run \
-    COLLECTION_DIR=<collection_dir> \
-    SCENARIO=<scenario.yaml> \
-    CASE=current \
-    N_TRIALS=50 \
-    N_JOBS=32
+make reidentify MULTI_BATCH_ROOT=<collection_dir> LOCAL_SCENARIO=<scenario.yaml>
 ```
 
-CSV キャッシュ済みで ROS setup を省略したい場合は、対象ステップを絞って実行する。
+個別ステップ:
 
 ```bash
-make run \
-    COLLECTION_DIR=<collection_dir> \
-    SCENARIO=<scenario.yaml> \
-    ONLY=fit_lon,fit_steer,fit_merge,report,release \
-    NO_SETUP=1
+make reidentify_extract
+make reidentify_fit_lon
+make reidentify_fit_steer
+make reidentify_fit_merge
+make reidentify_report
+make reidentify_release
+make reidentify_apply
+make reidentify_closed_loop
 ```
 
-各ステップは `make fit_lon` / `make fit_steer` / `make fit_merge` /
-`make report` / `make release` でも個別実行できる。
-
-Python module として直接呼ぶこともできる。
+Python 入口:
 
 ```bash
-source <workspace>/install/setup.bash  # extract 実行時は必要 (rclpy/rosbag2_py)
-python3 -m driving_log_replayer_v2.real_log_sim_comparison.reidentify.run_reidentify \
-    --collection-dir <collection_dir> --scenario <scenario.yaml> --case current \
-    --n-trials 50 --n-jobs 32
-```
-
-成果物は既定で `<collection_dir>/reidentify_v2/` 配下に出力される(旧パイプラインの
-`<collection_dir>/phase1_acc.yaml` 等と衝突しない)。
-
-`--only` で一部ステップだけ実行できる(例: CSV キャッシュ済みで extract 不要なら
-`--only fit_lon,fit_steer,fit_merge,report,release`。この場合 `extract.py` は
-import すらされないため ROS 環境の source は不要)。
-
-```bash
-python3 -m driving_log_replayer_v2.real_log_sim_comparison.reidentify.run_reidentify \
-    --collection-dir <collection_dir> --scenario <scenario.yaml> \
+python3 -m driving_log_replayer_v2.real_log_sim_comparison.reidentify.pipeline \
+    --collection-dir <collection_dir> \
+    --scenario <scenario.yaml> \
+    --case current \
     --only fit_lon,fit_steer,fit_merge,report,release
 ```
 
-## 依存ライブラリ
+`--only` は `extract,fit_lon,fit_steer,fit_merge,report,release` のカンマ区切り。
+CSV cache が既にある場合は `extract` を含めないことで ROS 依存を読み込まない。
 
-- 常時: `numpy`, `scipy`, `pandas`, `PyYAML`
-- `fit_merge`: `optuna`
-- `report`: `matplotlib`
-- `rollout`(`fit_merge` が内部で使用): `ctypes`(標準)、`ament_index_python`
-  (`libvehicle_model_wrapper.so` の解決。closed-loop 実 sim と同じコンパイル済み
-  車両モデルを使うことで同定精度の sim 忠実性を保つため、pure-python 再実装には
-  していない)
-- `extract` のみ: `rclpy`, `rosbag2_py`, `rosidl_runtime_py` (real.lite の読込)。
-  他のステップはこれらに一切依存しない。
+## 成果物
 
-## 旧パイプラインとの差分 (意図的な機能ダウングレード)
+成果物は `<collection_dir>/reidentify/` 配下に集約する。
 
-ユーザー合意の上で、以下は今回のシンプル化で持たない。必要な場合は旧
-`physical_validity_report.py` / `multi_dataset_tune.py` / `physical_tuning.py`
-を使うこと。
+```text
+reidentify/
+├── phase1_acc.yaml
+├── phase2_steer.yaml
+├── tuned_params.yaml
+├── physical_validity_report.html
+├── physical_validity_release_note.html
+├── metrics_cache.csv
+├── simulator_model.param.yaml
+└── tuned_scenario.yaml
+```
 
-- `fit_report` の plotly HTML レポート・地図オーバーレイ・モデル検証 viewer・
-  リリースノート生成 → `report.py` は matplotlib 図 + テキストサマリーのみ
-- `multi_dataset_tune.py` の `--ds-before`/`--ds-after` 録画日フィルタ、
-  `--lite-dir` 手動指定、`--report`/`--report-compare` 比較レポート
-- `physical_tuning.py` の `--skip-lon`/`--skip-steer` (scenario.yaml の値を
-  そのまま引き継ぐパススルー)
+`tuned_params.yaml` の YAML schema は既存パイプラインと同じ。
 
-出力 YAML (`phase1_acc.yaml` / `phase2_steer.yaml` / `tuned_params.yaml`) の
-スキーマは旧パイプラインと同一に保っている。
+## 処理ステップ
 
-## 現在の単純化方針
+1. `extract.py`: `real.lite` から dataset ごとの `reidentify_cache.csv` を生成する。
+2. `fit_lon.py`: 縦方向の一次遅れ、むだ時間、加速度scaleを直接同定する。
+3. `fit_steer.py`: 操舵一次遅れ、むだ時間、bias、scale、`k_us` を直接同定する。
+4. `fit_merge.py`: 直接同定値を warm-start / passthrough にして Optuna で統合最適化する。
+5. `physical_validity_report.py`: HTML検証レポートとリリースノートを生成する。
+6. `release_params.py`: `tuned_params.yaml` を `simulator_model.param.yaml` の `v100` に反映する。
 
-- reidentify 固有の閾値・探索範囲・既定パスは `settings.py` に集約する。
-- 縦方向/操舵/k_us の同定に十分なサンプルが無い場合、固定デフォルト値で
-  成果物を出さずにエラー終了する。
-- `report.py` は `tuned_params.yaml` の必須キーが欠けている場合、暗黙の
-  デフォルト値で描画せずエラー終了する。
+## 依存境界
+
+`extract.py` だけが `rclpy`, `rosbag2_py`, `rosidl_runtime_py` に依存する。
+`fit_lon.py` 以降は `reidentify_cache.csv` を入力にし、`pandas` / `numpy` / `ctypes`
+と既存の車両モデル共有ライブラリで動く。
+
+`fit_merge.py` は `rollout.py` 経由で `libvehicle_model_wrapper.so` を使う。
+これは closed-loop 実simと同じ車両モデル実装で N-step ロールアウトを評価するため。
