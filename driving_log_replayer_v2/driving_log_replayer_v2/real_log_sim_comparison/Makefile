@@ -32,7 +32,7 @@ RUN_PY := source "$(SETUP_BASH)" && MPLCONFIGDIR="$(MPLCONFIGDIR)" PYTHONPATH="$
 endif
 RUN_PY_NO_SETUP := MPLCONFIGDIR="$(MPLCONFIGDIR)" PYTHONPATH="$(PYTHONPATH_PREFIX):$${PYTHONPATH:-}" $(PYTHON)
 
-.PHONY: help local_cloud_run local_analysis_run local_batch_run local_cross_analysis_run local_multidataset_run local_multidataset_cloud_run prepare_multidataset issue_scenario collect_raw_rosbags open_loop_tune open_loop_batch physical_validity_report_nodata lite lite_ol lite_cl reidentify reidentify_extract reidentify_fit_lon reidentify_fit_steer reidentify_fit_merge reidentify_report reidentify_release reidentify_apply reidentify_closed_loop check_reidentify_topics check_reidentify_topics_all
+.PHONY: help local_cloud_run local_analysis_run local_batch_run local_cross_analysis_run local_multidataset_run local_multidataset_cloud_run prepare_multidataset issue_scenario collect_raw_rosbags open_loop_tune open_loop_batch physical_validity_report_nodata lite lite_ol lite_cl reidentify reidentify_extract reidentify_split reidentify_fit_lon reidentify_fit_steer reidentify_fit_merge reidentify_report reidentify_release reidentify_apply reidentify_closed_loop check_reidentify_topics check_reidentify_topics_all
 
 
 
@@ -72,6 +72,7 @@ help:
 	@echo "    lite_cl             CL向け: datasets/<uuid>/cl/{t4,scenario.yaml} を準備"
 	@echo "    reidentify          再同定のみ (reidentify_fit_lon→reidentify_fit_steer→reidentify_fit_merge→reidentify_report→reidentify_release; extract/sim なし)"
 	@echo "    reidentify_extract  Step1: 全 dataset の real.lite 抽出 + reidentify_cache.csv 生成"
+	@echo "    reidentify_split    seed 42・走行特性層化 70/15/15 → reidentify/split_manifest.yaml"
 	@echo "    reidentify_fit_lon  Step2: 縦方向 直接同定 → reidentify/phase1_acc.yaml"
 	@echo "    reidentify_fit_steer Step3: 操舵+k_us 直接同定 → reidentify/phase2_steer.yaml"
 	@echo "    reidentify_fit_merge Step4a: warm-start Optuna 統合 → reidentify/tuned_params.yaml"
@@ -210,6 +211,7 @@ RELEASE_NOTE_REPORT := $(REIDENTIFY_OUT_DIR)/physical_validity_release_note.html
 METRICS_CACHE   := $(REIDENTIFY_OUT_DIR)/metrics_cache.csv
 RELEASE_MODEL_PARAM := $(REIDENTIFY_OUT_DIR)/simulator_model.param.yaml
 TUNED_SCENARIO  := $(REIDENTIFY_OUT_DIR)/tuned_scenario.yaml
+SPLIT_MANIFEST  := $(REIDENTIFY_OUT_DIR)/split_manifest.yaml
 INPUT_PARAM      ?= /home/kotaroyoshimoto/workspace/x2_e2e_44/src/description/vehicle/j6_gen2_description/j6_gen2_description/config/simulator_model.param.yaml
 
 prepare_multidataset:
@@ -315,6 +317,14 @@ reidentify_extract:
 	@echo "[INFO] reidentify_extract: Generating reidentify CSV cache for ROS-free downstream steps..."
 	$(RUN_PY) -m driving_log_replayer_v2.real_log_sim_comparison.reidentify.extract \
 	    --collection-dir "$(MULTI_BATCH_ROOT)"
+
+# split: 固定 manifest を明示的に生成し、既存 manifest は再生成せず検証する。
+reidentify_split:
+	@mkdir -p "$(REIDENTIFY_OUT_DIR)"
+	$(RUN_PY) -m driving_log_replayer_v2.real_log_sim_comparison.reidentify.split \
+	    --collection-dir "$(MULTI_BATCH_ROOT)" \
+	    --out "$(SPLIT_MANIFEST)" \
+	    --seed 42
 
 # Step 2: 縦方向モデルの直接同定 → PHASE1_ACC。
 reidentify_fit_lon:
