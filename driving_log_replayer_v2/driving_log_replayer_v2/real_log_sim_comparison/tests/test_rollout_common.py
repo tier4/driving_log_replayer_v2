@@ -25,18 +25,6 @@ class _FakeVehicleModel:
         self._lib = _FakeLibrary()
         self._ptr = None
 
-    @property
-    def is_v50(self) -> bool:
-        return False
-
-    @property
-    def has_batch_v2(self) -> bool:
-        return False
-
-    @property
-    def has_slope_input(self) -> bool:
-        return False
-
     def reset_with_history_ptr(self, **kwargs) -> None:
         self.resets.append(kwargs)
 
