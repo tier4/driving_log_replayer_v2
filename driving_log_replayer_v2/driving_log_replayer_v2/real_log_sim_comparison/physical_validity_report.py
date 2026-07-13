@@ -81,6 +81,9 @@ from driving_log_replayer_v2.real_log_sim_comparison.lib._inline_assets import g
 from driving_log_replayer_v2.real_log_sim_comparison.lib._physical_validity_report_sections import (  # noqa: E402
     build_equation_residual_optimization_report_html,
 )
+from driving_log_replayer_v2.real_log_sim_comparison.reidentify.evaluation_v2 import (  # noqa: E402
+    render_evaluation_v2_html,
+)
 from driving_log_replayer_v2.real_log_sim_comparison.step_report_html import _RENDER_GLUE  # noqa: E402
 
 from driving_log_replayer_v2.real_log_sim_comparison.lib._physical_validity import (  # noqa: E402
@@ -512,7 +515,12 @@ def load_all_mcap(ds_list: list, steer_bias: float | None = None, n_jobs: int = 
 
 
 # HTML セクション組み立て
-def _build_sec_metrics(baseline_score: float | None, phase14_score: float, label: str = "current") -> str:
+def _build_sec_metrics(
+    baseline_score: float | None,
+    phase14_score: float,
+    n_dataset: int,
+    label: str = "current",
+) -> str:
     """各種メトリクスの直感的・物理的解説セクション。"""
     if baseline_score and baseline_score > 0:
         improvement_pct = (baseline_score - phase14_score) / baseline_score * 100
@@ -597,7 +605,7 @@ steer 系パラメータへの感度はほぼゼロ（逆もしかり）。こ�
 </ul>
 <p><b>なぜ正規化するか</b>:
 絶対誤差のまま集約すると、大カーブ・高速など「難しいシナリオ」（baseline 誤差が大きいデータセット）が
-スコアを支配してしまい、全 650 データセットで均等に改善できているかを測れない。
+スコアを支配してしまい、全 __N_DATASET__ データセットで均等に改善できているかを測れない。
 正規化により「baseline と比べてどれだけ改善したか」を全データセットで統一スケールで評価できる。
 </p>
 <table class="param-table">
@@ -612,7 +620,7 @@ steer 系パラメータへの感度はほぼゼロ（逆もしかり）。こ�
 <details>
 <summary>mean と worst</summary>
 <p>
-650 データセットの正規化スコアに対して 2 種類の集約を行う:
+__N_DATASET__ データセットの正規化スコアに対して 2 種類の集約を行う:
 </p>
 <ul>
   <li><b>mean</b>: 全データセットの平均。「全体的に良い設定」を測る。</li>
@@ -644,14 +652,18 @@ worst だけだと過度に保守的になる。両者を組み合わせるこ�
 __SCORE_BULLET__
 </ul>
 <div class="note">
-<b>直感的なスケール</b>: score が 1 下がると「全 650 データセット・全 4 ホライズンで平均的に
+<b>直感的なスケール</b>: score が 1 下がると「全 __N_DATASET__ データセット・全 4 ホライズンで平均的に
 nyaw が 1/8 改善した」相当（sum over 4 horizons × 2 terms (mean+0.5worst) でほぼ 8 で割る）。
 __NOTE_TEXT__
 </div>
 </details>
 </section>
 """
-    return tmpl.replace("__SCORE_BULLET__", score_bullet).replace("__NOTE_TEXT__", note_text)
+    return (
+        tmpl.replace("__SCORE_BULLET__", score_bullet)
+        .replace("__NOTE_TEXT__", note_text)
+        .replace("__N_DATASET__", str(n_dataset))
+    )
 
 
 _ACCEL_PHASE_NAMES: dict[str, str] = {"accel": "加速中", "cruise": "巡航中", "decel": "減速中"}
@@ -1708,6 +1720,7 @@ def _build_sec_deviation(
     expected_score: float | None = None,
     score_name: str = "robust_score",
     label: str = "phase14",
+    score_scope: str | None = None,
 ) -> str:
     """N-step Open Loop評価: 終端誤差テーブルセクション（tuned vs baseline）。"""
     if "model" in df.columns:
@@ -1718,6 +1731,7 @@ def _build_sec_deviation(
             expected_score=expected_score,
             score_name=score_name,
             label=label,
+            score_scope=score_scope,
         )
 
     horizons = sorted(df["h"].unique().tolist())
@@ -1738,7 +1752,20 @@ def _build_sec_deviation(
         })
 
     score_html = ""
-    if recomputed_score is not None and expected_score is not None:
+    if score_scope:
+        score_html = (
+            '<div class="note" style="border-color:#6c757d">'
+            f"YAML score は <code>{_html_stdlib.escape(score_scope)}</code> split で確定した値のため、"
+            "全有効データセットのレポートキャッシュとの再現比較は行わない。"
+            + (
+                f" 参考: all-valid <code>{_html_stdlib.escape(score_name)}</code> = "
+                f"<b>{recomputed_score:.4f}</b>。"
+                if recomputed_score is not None
+                else ""
+            )
+            + "</div>"
+        )
+    elif recomputed_score is not None and expected_score is not None:
         diff_pct = abs(recomputed_score - expected_score) / expected_score * 100 if expected_score else 0.0
         ok = diff_pct < 2.0
         color = "#28a745" if ok else "#dc3545"
@@ -1898,13 +1925,27 @@ def _build_sec_deviation_long(
     expected_score: float | None = None,
     score_name: str = "robust_score",
     label: str = "current",
+    score_scope: str | None = None,
 ) -> str:
     horizons = sorted(df["h"].unique().tolist())
     models = list(dict.fromkeys(df["model"].astype(str).tolist()))
     baseline_tag = "baseline" if "baseline" in models else models[0]
 
     score_html = ""
-    if recomputed_score is not None and expected_score is not None:
+    if score_scope:
+        score_html = (
+            '<div class="note" style="border-color:#6c757d">'
+            f"YAML score は <code>{_html_stdlib.escape(score_scope)}</code> split で確定した値のため、"
+            "全有効データセットのレポートキャッシュとの再現比較は行わない。"
+            + (
+                f" 参考: all-valid <code>{_html_stdlib.escape(score_name)}</code> = "
+                f"<b>{recomputed_score:.4f}</b>。"
+                if recomputed_score is not None
+                else ""
+            )
+            + "</div>"
+        )
+    elif recomputed_score is not None and expected_score is not None:
         diff_pct = abs(recomputed_score - expected_score) / expected_score * 100 if expected_score else 0.0
         ok = diff_pct < 2.0
         color = "#28a745" if ok else "#dc3545"
@@ -2152,11 +2193,17 @@ def build_html(
     steer_resid_opt_html: str = "",
     long_fit_rmse_html: str = "",
     steer_fit_rmse_html: str = "",
+    evaluation_v2_html: str = "",
 ) -> str:
     score = params.get("_score", "N/A")
     phase14_score = float(score) if isinstance(score, (int, float, str)) and str(score) != "N/A" else 0.0
-    sec_metrics = _build_sec_metrics(baseline_score=baseline_score, phase14_score=phase14_score, label=label)
-    
+    sec_metrics = _build_sec_metrics(
+        baseline_score=baseline_score,
+        phase14_score=phase14_score,
+        n_dataset=n_dataset,
+        label=label,
+    )
+
     sec_tuning = f"""
 <section id="sec-tuning">
 <h2>3. 総合最適化（パラメータ最適化）</h2>
@@ -2202,6 +2249,7 @@ def build_html(
   {f'<a href="#sec-perf-tracking">2-4. x/y 残差</a>' if perf_html else ""}
   <a href="#sec-tuning">3. 総合最適化</a>
   {f'<a href="#deviation">4-1. N-step評価</a>' if deviation_html else ""}
+  {f'<a href="#evaluation-v2">4-1b. Evaluation V2</a>' if evaluation_v2_html else ""}
   <a href="#curve-viewer">4-2. カーブビューア</a>
   {f'<a href="#sec-closed-loop">4-3. CL比較</a>' if closed_loop_html else ""}
 </nav>
@@ -2209,6 +2257,7 @@ def build_html(
 {perf_html}
 {sec_tuning}
 {deviation_html}
+{evaluation_v2_html}
 {sec3}
 {closed_loop_html}
 {_RENDER_GLUE}
@@ -2229,6 +2278,7 @@ def build_release_note_html(
     params_filename: str = "",
     n_dataset: int = 0,
     current_model: str = "current",
+    evaluation_v2_html: str = "",
 ) -> str:
     """N-step Open Loop評価とフィッティング評価だけを抜粋したリリースノート用の自己完結 HTML を返す。
 
@@ -2267,10 +2317,12 @@ def build_release_note_html(
 </p>
 <nav>
   <a href="#deviation">N-step Open Loop評価</a>
+  {f'<a href="#evaluation-v2">Evaluation V2</a>' if evaluation_v2_html else ""}
   <a href="#rn-fit">フィッティング評価</a>
 </nav>
 
 {deviation_section}
+{evaluation_v2_html}
 
 <section id="rn-fit">
 <h2>縦横モデルのフィッティング評価</h2>
@@ -2392,6 +2444,7 @@ def main() -> None:
 
     with open(args.params) as f:
         yaml_data = yaml.safe_load(f)
+    evaluation_v2_html = render_evaluation_v2_html(yaml_data.get("evaluation_v2"))
     params: dict = yaml_data.get("params", yaml_data)
     params["_score"] = yaml_data.get("score", "N/A")
     current_model, current_base_params, baseline_model, baseline_params, baseline_case = (
@@ -2559,6 +2612,16 @@ def main() -> None:
         and _metrics_cache_matches(args.metrics_cache, cache_identity)
     )
     baseline_score = None
+    score_metadata = yaml_data.get("metadata") if isinstance(yaml_data.get("metadata"), dict) else {}
+    raw_score_scope = score_metadata.get("score_split")
+    score_scope = (
+        None
+        if raw_score_scope in (None, "all", "all_valid")
+        else str(raw_score_scope)
+    )
+    score_function = score_metadata.get("score_function")
+    yaml_expected_score = float(yaml_data.get("score") or 0.0)
+    comparable_expected_score = yaml_expected_score if score_scope is None else None
     if cache_is_valid:
         # キャッシュあり → viewer データセット のみ load、メトリクスは CSV から読む
         print(f"\n[Phase 3b] DatasetCtx 構築 ({len(top_items)} データセット) ...")
@@ -2577,18 +2640,29 @@ def main() -> None:
         # score 再現検証（キャッシュロード時も実施）
         per_ds_arg, bl_arg = _rollout_score_args_from_df(df_rollout, args.case, baseline_case)
         agg = _agg_normalized(per_ds_arg, bl_arg)
-        expected = float(yaml_data.get("score") or 0.0)
         candidates = [
             ("robust_score", _robust_score(agg)),
             ("steer_score",  _steer_score(agg)),
             ("acc_score",    _acc_score(agg)),
         ]
-        if expected:
-            best_name, recomputed = min(candidates, key=lambda kv: abs(kv[1] - expected))
+        candidate_by_name = dict(candidates)
+        if score_function in candidate_by_name:
+            best_name, recomputed = str(score_function), candidate_by_name[str(score_function)]
+        elif comparable_expected_score:
+            best_name, recomputed = min(
+                candidates, key=lambda kv: abs(kv[1] - comparable_expected_score)
+            )
         else:
             best_name, recomputed = next(kv for kv in candidates if kv[0] == "steer_score")
-        diff_str = f"{abs(recomputed - expected) / expected * 100:.2f}%" if expected else "N/A"
-        print(f"  再現スコア: {recomputed:.4f} ({best_name})  期待値: {expected:.4f}  差: {diff_str}")
+        diff_str = (
+            f"{abs(recomputed - comparable_expected_score) / comparable_expected_score * 100:.2f}%"
+            if comparable_expected_score
+            else f"scope={score_scope or 'N/A'} のため比較省略"
+        )
+        print(
+            f"  再現スコア: {recomputed:.4f} ({best_name})  "
+            f"期待値: {yaml_expected_score:.4f}  差: {diff_str}"
+        )
         # baseline (k_us=0) の該当スコアを計算
         if best_name == "robust_score":
             baseline_score = _robust_score(_agg_normalized(list(bl_arg.items()), bl_arg))
@@ -2598,7 +2672,8 @@ def main() -> None:
             baseline_score = _steer_score(_agg_normalized(list(bl_arg.items()), bl_arg))
         print(f"  baseline {best_name}: {baseline_score:.4f}")
         deviation_html = _build_sec_deviation(
-            df_rollout, len(records), recomputed, expected, score_name=best_name, label=args.case,
+            df_rollout, len(records), recomputed, comparable_expected_score,
+            score_name=best_name, label=args.case, score_scope=score_scope,
         )
     elif args.metrics_cache:
         # キャッシュなし → 全データセット load（ついでに viewer データセット も取り出す）
@@ -2649,19 +2724,30 @@ def main() -> None:
         # score 再現検証
         per_ds_arg, bl_arg = _rollout_score_args_from_df(df_rollout, args.case, baseline_case)
         agg = _agg_normalized(per_ds_arg, bl_arg)
-        expected = float(yaml_data.get("score") or 0.0)
         # YAML の score は tuning --phase に応じて steer/acc/robust のいずれかなので最接近を選択
         candidates = [
             ("robust_score", _robust_score(agg)),
             ("steer_score",  _steer_score(agg)),
             ("acc_score",    _acc_score(agg)),
         ]
-        if expected:
-            best_name, recomputed = min(candidates, key=lambda kv: abs(kv[1] - expected))
+        candidate_by_name = dict(candidates)
+        if score_function in candidate_by_name:
+            best_name, recomputed = str(score_function), candidate_by_name[str(score_function)]
+        elif comparable_expected_score:
+            best_name, recomputed = min(
+                candidates, key=lambda kv: abs(kv[1] - comparable_expected_score)
+            )
         else:
             best_name, recomputed = next(kv for kv in candidates if kv[0] == "steer_score")
-        diff_str = f"{abs(recomputed - expected) / expected * 100:.2f}%" if expected else "N/A"
-        print(f"  再現スコア: {recomputed:.4f} ({best_name})  期待値: {expected:.4f}  差: {diff_str}")
+        diff_str = (
+            f"{abs(recomputed - comparable_expected_score) / comparable_expected_score * 100:.2f}%"
+            if comparable_expected_score
+            else f"scope={score_scope or 'N/A'} のため比較省略"
+        )
+        print(
+            f"  再現スコア: {recomputed:.4f} ({best_name})  "
+            f"期待値: {yaml_expected_score:.4f}  差: {diff_str}"
+        )
         # baseline (k_us=0) の該当スコアを計算
         if best_name == "robust_score":
             baseline_score = _robust_score(_agg_normalized(list(bl_arg.items()), bl_arg))
@@ -2671,7 +2757,8 @@ def main() -> None:
             baseline_score = _steer_score(_agg_normalized(list(bl_arg.items()), bl_arg))
         print(f"  baseline {best_name}: {baseline_score:.4f}")
         deviation_html = _build_sec_deviation(
-            df_rollout, len(records), recomputed, expected, score_name=best_name, label=args.case,
+            df_rollout, len(records), recomputed, comparable_expected_score,
+            score_name=best_name, label=args.case, score_scope=score_scope,
         )
     else:
         pass
@@ -3046,6 +3133,7 @@ def main() -> None:
         params, long_fig, steer_fig, kus_fig, viewer_sections, len(records),
         baseline_score=baseline_score,
         deviation_html=deviation_html,
+        evaluation_v2_html=evaluation_v2_html,
         label=phase_label,
         params_filename=args.params.name,
         perf_html=perf_html,
@@ -3077,6 +3165,7 @@ def main() -> None:
             params_filename=args.params.name,
             n_dataset=len(records),
             current_model=current_model,
+            evaluation_v2_html=evaluation_v2_html,
         )
         args.release_note_out.parent.mkdir(parents=True, exist_ok=True)
         args.release_note_out.write_text(release_note_html, encoding="utf-8")
