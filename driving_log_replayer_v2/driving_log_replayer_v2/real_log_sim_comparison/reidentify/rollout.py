@@ -195,7 +195,6 @@ def eval_rollout_rmse(
     t_cmd = g["t_cmd"]
     gt_x, gt_y, gt_yaw = g["gt_x"], g["gt_y"], g["gt_yaw"]
     gt_vx, gt_steer = g["gt_vx"], g["gt_steer"]
-    gt_steer_kinematic = g["gt_steer_kinematic"]
     gt_wz, gt_ax, gt_vy = g["gt_wz"], g["gt_ax"], g["gt_vy"]
 
     nfull_arr, rem_arr = g["nfull_arr"], g["rem_arr"]
@@ -215,7 +214,6 @@ def eval_rollout_rmse(
     gt_y_list = gt_y.tolist()
     gt_yaw_list = gt_yaw.tolist()
     gt_vx_list = gt_vx.tolist()
-    gt_steer_kinematic_list = gt_steer_kinematic.tolist()
     gt_ax_list = gt_ax.tolist()
     gt_wz_list = gt_wz.tolist()
     gt_vy_list = gt_vy.tolist()
@@ -267,7 +265,7 @@ def eval_rollout_rmse(
             continue
         model.reset_with_history_ptr(
             x=gt_x_list[k0], y=gt_y_list[k0], yaw=gt_yaw_list[k0], vx=gt_vx_list[k0],
-            steer_actual=gt_steer_kinematic_list[k0] + steer_bias, ax=gt_ax_list[k0],
+            steer_actual=gt_steer[k0] + steer_bias, ax=gt_ax_list[k0],
             acc_ptr=acc_ptrs[k0], n_acc=n_acc, steer_ptr=steer_ptrs[k0], n_steer=n_steer,
             wz=gt_wz_list[k0], vy=gt_vy_list[k0],
         )
