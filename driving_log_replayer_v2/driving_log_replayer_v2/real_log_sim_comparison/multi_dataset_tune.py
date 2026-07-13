@@ -1033,6 +1033,12 @@ def main() -> None:
 
     out_path = Path(args.out) if args.out else None
 
+    target_accel_source = (
+        normalize_accel_source(args.acceleration_source)
+        if args.acceleration_source
+        else cur_case.acceleration_source
+    )
+
     extra_enqueue: list[dict] | None = None
     if args.enqueue_params:
         extra_enqueue = []
@@ -1040,6 +1046,17 @@ def main() -> None:
             p = Path(path_str)
             with p.open("r") as f:
                 data = yaml.safe_load(f)
+            # Validate acceleration_source in enqueue_params
+            metadata = data.get("metadata")
+            if isinstance(metadata, dict) and "acceleration_source" in metadata:
+                enqueued_src = normalize_accel_source(metadata["acceleration_source"])
+                if enqueued_src != target_accel_source:
+                    print(
+                        f"ERROR: acceleration_source mismatch in enqueue_params '{path_str}'!\n"
+                        f"  File was tuned with '{enqueued_src}', but current tuning uses '{target_accel_source}'.",
+                        file=sys.stderr
+                    )
+                    sys.exit(1)
             extra_enqueue.append(data["params"])
         print(f"[INFO] extra enqueue: {len(extra_enqueue)} params loaded")
 
@@ -1049,6 +1066,17 @@ def main() -> None:
         p = Path(args.phase_params)
         with p.open("r") as f:
             phase_data = yaml.safe_load(f)
+        # Validate acceleration_source in phase_params
+        metadata = phase_data.get("metadata")
+        if isinstance(metadata, dict) and "acceleration_source" in metadata:
+            phase_src = normalize_accel_source(metadata["acceleration_source"])
+            if phase_src != target_accel_source:
+                print(
+                    f"ERROR: acceleration_source mismatch in phase_params '{args.phase_params}'!\n"
+                    f"  File was tuned with '{phase_src}', but current tuning uses '{target_accel_source}'.",
+                    file=sys.stderr
+                )
+                sys.exit(1)
         all_params = phase_data.get("params", phase_data)
         base_override = all_params
         acc_keys = {"acc_time_constant", "acc_time_delay"}
@@ -1098,6 +1126,7 @@ def main() -> None:
                         "n_datasets": len(lite_dirs),
                         "n_valid": len(ctxs),
                         "scenario": args.scenario,
+                        "acceleration_source": target_accel_source,
                         "timestamp": datetime.datetime.now().isoformat(timespec="seconds"),
                     },
                 },

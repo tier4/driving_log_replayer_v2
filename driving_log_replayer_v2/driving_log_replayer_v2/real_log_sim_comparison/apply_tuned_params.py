@@ -61,6 +61,19 @@ def main():
         for k, v in tuned_params.items():
             models[args.model]["params"][k] = v
         print(f"[INFO] Applied tuned parameters to '{args.model}': {tuned_params}")
+
+        # Validate and automatically update acceleration_source
+        metadata = params_data.get("metadata")
+        if isinstance(metadata, dict) and "acceleration_source" in metadata:
+            tuned_src = metadata["acceleration_source"]
+            current_src = models[args.model].get("acceleration_source")
+            if current_src != tuned_src:
+                print(
+                    f"[WARN] acceleration_source mismatch for model '{args.model}': "
+                    f"scenario.yaml has '{current_src}', but tuned_params.yaml has '{tuned_src}'."
+                )
+                print(f"[INFO] Automatically updating scenario.yaml models.{args.model}.acceleration_source to '{tuned_src}'")
+                models[args.model]["acceleration_source"] = tuned_src
     else:
         print(f"[WARN] Target model '{args.model}' not found in scenario.yaml models registry")
 

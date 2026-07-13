@@ -2454,6 +2454,30 @@ def main() -> None:
     tuned_params = {k: v for k, v in params.items() if not k.startswith("_")}
     current_eval_params = {**current_base_params, **tuned_params}
     comparison_specs = _build_comparison_specs(args.scenario, args.case, current_eval_params)
+
+    # Validate acceleration_source mismatch with tuned params
+    current_accel_source = next(
+        (s["acceleration_source"] for s in comparison_specs if s["tag"] == args.case),
+        "accel",
+    )
+    tuned_accel_source = None
+    if isinstance(yaml_data.get("metadata"), dict):
+        tuned_accel_source = yaml_data["metadata"].get("acceleration_source")
+
+    if tuned_accel_source is not None:
+        from driving_log_replayer_v2.real_log_sim_comparison.lib._accel_source import normalize_accel_source
+        tuned_accel_source = normalize_accel_source(tuned_accel_source)
+        norm_current_accel = normalize_accel_source(current_accel_source)
+        if tuned_accel_source != norm_current_accel:
+            print(
+                f"ERROR: acceleration_source mismatch!\n"
+                f"  The tuned params file '{args.params}' was tuned with '{tuned_accel_source}',\n"
+                f"  but the target model '{args.case}' in '{args.scenario}' is configured with '{current_accel_source}'.\n"
+                f"  Please run apply_tuned_params.py to sync them or check your configurations.",
+                file=sys.stderr
+            )
+            sys.exit(1)
+
     comparison_model_params = {spec["tag"]: spec["params"] for spec in comparison_specs}
     baseline_accel_source = next(
         (s["acceleration_source"] for s in comparison_specs if s["tag"] == baseline_case),
@@ -2557,6 +2581,7 @@ def main() -> None:
         (s["acceleration_source"] for s in comparison_specs if s["tag"] == args.case),
         "accel",
     )
+
     print(
         f"\n[Phase 2b] 縦方向・操舵 per-dataset フィット "
         f"(全 {n_fit_target} データセット並列, long accel_source={current_accel_source}) ..."
