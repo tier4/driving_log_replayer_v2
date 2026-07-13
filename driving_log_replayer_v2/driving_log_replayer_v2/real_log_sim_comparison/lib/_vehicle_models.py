@@ -117,6 +117,30 @@ def _build_taiga_dyn_args(p: dict[str, Any], sub_dt: float) -> tuple[float, ...]
     )
 
 
+def _build_dp_args(p: dict[str, Any], sub_dt: float) -> tuple[float, ...]:
+    values: list[float] = []
+    defaults = {
+        "debug_acc_scaling_factor": 1.0,
+        "debug_steer_scaling_factor": 1.0,
+        "k_us": 0.0,
+        "xy_heading_rate_coeff": 0.0,
+        "use_rk4": 0.0,
+    }
+    dp_args = _BASE_DELAY_ARGS + (
+        "xy_heading_rate_coeff",
+        "use_rk4",
+    )
+    for key in dp_args:
+        if key == "sub_dt":
+            values.append(float(sub_dt))
+        else:
+            val = _arg(p, key, defaults.get(key))
+            if key == "use_rk4":
+                val = 1.0 if bool(val) else 0.0
+            values.append(val)
+    return tuple(values)
+
+
 def _build_taiga_x_args(p: dict[str, Any], sub_dt: float) -> tuple[float, ...]:
     return (
         float(p["wheelbase"]),
@@ -188,12 +212,12 @@ VEHICLE_MODEL_SPECS: dict[str, VehicleModelSpec] = {
         model_type="delay_steer_acc_geared_for_diffusion_planner",
         sim_enum="DELAY_STEER_ACC_GEARED_FOR_DIFFUSION_PLANNER",
         factory_name="vm_create_delay_steer_acc_geared_for_diffusion_planner",
-        factory_arg_count=15,
-        build_args=_build_delay_args,
-        param_keys=_DELAY_PARAM_KEYS,
+        factory_arg_count=17,
+        build_args=_build_dp_args,
+        param_keys=_DELAY_PARAM_KEYS | frozenset({"xy_heading_rate_coeff", "use_rk4"}),
         namespaced_param_root="delay_steer_acc_geared_for_diffusion_planner",
         version_param_key="delay_steer_acc_geared_for_diffusion_planner.version",
-        namespaced_param_keys=_DP_NAMESPACED_PARAM_KEYS,
+        namespaced_param_keys=_DP_NAMESPACED_PARAM_KEYS | frozenset({"xy_heading_rate_coeff", "use_rk4"}),
     ),
     "ideal_steer_acc": VehicleModelSpec(
         model_type="ideal_steer_acc",

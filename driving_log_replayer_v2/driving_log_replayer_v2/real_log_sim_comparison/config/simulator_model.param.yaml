@@ -29,3 +29,5 @@
         debug_acc_scaling_factor: 1.0
         debug_steer_scaling_factor: 1.0
         k_us: 0.0
+        xy_heading_rate_coeff: 0.0
+        use_rk4: False
