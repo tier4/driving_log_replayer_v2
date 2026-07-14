@@ -20,4 +20,5 @@ record:
   - "^/api/operation_mode/state$"
   - "^/awapi/.*/get/.*$"
   - "^/perception_reproducer/rosbag_ego_odom$"
+  - "^/perception_reproducer/metrics$"
   - "^/sensing/gnss/septentrio/nav_sat_fix"

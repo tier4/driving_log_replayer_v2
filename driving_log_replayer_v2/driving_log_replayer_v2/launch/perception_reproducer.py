@@ -12,14 +12,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import json
-
 from launch import LaunchContext
 from launch.actions import DeclareLaunchArgument
-from launch.actions import LogInfo
 from launch.actions import OpaqueFunction
-from launch.actions import RegisterEventHandler
-from launch.event_handlers import OnProcessExit
 from launch.substitutions import LaunchConfiguration
 from launch_ros.actions import Node
 
@@ -30,8 +25,6 @@ from driving_log_replayer_v2.launch.use_case import launch_autoware
 from driving_log_replayer_v2.launch.use_case import launch_evaluator_node
 from driving_log_replayer_v2.launch.use_case import launch_goal_pose_node
 from driving_log_replayer_v2.launch.use_case import launch_initial_pose_node
-from driving_log_replayer_v2.pose import offset_pose_dict_forward
-from driving_log_replayer_v2.pose import pose_str_to_dict
 
 AUTOWARE_DISABLE = {}
 
@@ -46,69 +39,22 @@ NODE_PARAMS: dict[str, LaunchConfiguration] = {}
 USE_CASE_ARGS: list[DeclareLaunchArgument] = []
 
 
-def _get_post_engage_direct_initial_pose(conf: dict) -> str | None:
-    move_ego_forward_after_engage_m = float(conf["move_ego_forward_after_engage_m"])
-    if move_ego_forward_after_engage_m == 0.0:
-        return None
-    base_pose = conf["direct_initial_pose"]
-    if base_pose == "{}":
-        base_pose = conf["initial_pose"]
-    if base_pose == "{}":
-        return None
-    # Perturb ego after engage so the planner stops publishing a stopping trajectory.
-    shifted_pose_dict = offset_pose_dict_forward(
-        pose_str_to_dict(base_pose),
-        move_ego_forward_after_engage_m,
-    )
-    return json.dumps(shifted_pose_dict)
-
-
-def launch_engage_sequence(context: LaunchContext) -> list:
+def launch_engage_node(context: LaunchContext) -> list:
     conf = context.launch_configurations
 
-    engage_node = Node(
-        package="driving_log_replayer_v2",
-        namespace="/driving_log_replayer_v2",
-        executable="engage_node.py",
-        output="screen",
-        name="engage_node",
-        parameters=[
-            {
-                "use_sim_time": False,
-                "timeout_s": float(conf["timeout_s"]),
-            }
-        ],
-    )
-
-    def launch_post_engage_initial_pose_node(_: LaunchContext) -> list:
-        post_engage_direct_initial_pose = _get_post_engage_direct_initial_pose(conf)
-        if post_engage_direct_initial_pose is None:
-            return [LogInfo(msg="post_engage_initial_pose_node is not activated")]
-        return [
-            LogInfo(msg="engage_node exited. launching post_engage_initial_pose_node"),
-            Node(
-                package="driving_log_replayer_v2",
-                namespace="/driving_log_replayer_v2",
-                executable="initial_pose_node.py",
-                output="screen",
-                name="post_engage_initial_pose_node",
-                parameters=[
-                    {
-                        "use_sim_time": False,
-                        "initial_pose": "{}",
-                        "direct_initial_pose": post_engage_direct_initial_pose,
-                    }
-                ],
-            ),
-        ]
-
     return [
-        engage_node,
-        RegisterEventHandler(
-            OnProcessExit(
-                target_action=engage_node,
-                on_exit=[OpaqueFunction(function=launch_post_engage_initial_pose_node)],
-            )
+        Node(
+            package="driving_log_replayer_v2",
+            namespace="/driving_log_replayer_v2",
+            executable="engage_node.py",
+            output="screen",
+            name="engage_node",
+            parameters=[
+                {
+                    "use_sim_time": False,
+                    "timeout_s": float(conf["timeout_s"]),
+                }
+            ],
         ),
     ]
 
@@ -122,5 +68,5 @@ def launch_perception_reproducer_use_case() -> list:
         OpaqueFunction(function=launch_evaluator_node),
         OpaqueFunction(function=launch_initial_pose_node),
         OpaqueFunction(function=launch_goal_pose_node),
-        OpaqueFunction(function=launch_engage_sequence),
+        OpaqueFunction(function=launch_engage_node),
     ]

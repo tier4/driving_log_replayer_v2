@@ -169,6 +169,11 @@ Configuration options:
 - `reproduce_cool_down`: Cool down time for republishing (default: 80.0)
 - `tracked_object`: Publish tracked object
 - `search_radius`: Search radius for searching rosbag's ego odom messages (default: 1.5)
+- `auto_tackle_stuck`: Expand search radius then perturb ego when stuck in repeat (default: true in DLR)
+- `stuck_duration`: The reproducer will try to tackle stuck by expanding search radius then perturb ego when the duration is longer than this value (default: 5.0)
+- `expand_radius_scale`: One-shot search radius scale when stuck. For example, if `search_radius` is 1.5 m and `expand_radius_scale` is 3.0, the expand radius will be 1.5 m \* 3.0 = 4.5 m when stuck (default: 3.0)
+- `perturb_distance`: The reproducer will perturb ego by this distance when ego is still stuck after the expand radius is applied (default: 0.5)
+- `output_metrics`: Dump metrics JSON on shutdown under `$ROS_LOG_DIR/autoware_metrics/` (default: true in DLR)
 
 ### Route Method
 

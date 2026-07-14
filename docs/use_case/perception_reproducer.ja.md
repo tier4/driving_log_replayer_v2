@@ -169,6 +169,11 @@ Published topics:
 - `reproduce_cool_down`: 再パブリッシュのクールダウン時間（デフォルト: 80.0）
 - `tracked_object`: 追跡オブジェクトをパブリッシュする
 - `search_radius`: rosbagの自車オドメトリメッセージを検索する検索半径（デフォルト: 1.5）
+- `auto_tackle_stuck`: `repeat` でスタックしたとき、検索半径を拡大してから ego を perturb する（DLR ではデフォルト true）
+- `stuck_duration`: この秒数より長くスタックした場合、検索半径の拡大に続いて ego を perturb して stuck を解消しようとする（デフォルト: 5.0）
+- `expand_radius_scale`: stuck 時に一度だけ適用する検索半径のスケール。例: `search_radius` が 1.5 m、`expand_radius_scale` が 3.0 のとき、expand 半径は 1.5 m \* 3.0 = 4.5 m（デフォルト: 3.0）
+- `perturb_distance`: expand 後も stuck している場合に、この距離だけ ego を perturb する（デフォルト: 0.5）
+- `output_metrics`: 終了時に `$ROS_LOG_DIR/autoware_metrics/` へ metrics JSON を出力する（DLR ではデフォルト true）
 
 ### ルート設定方法
 
