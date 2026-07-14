@@ -78,6 +78,11 @@ class PerceptionReproducerConfig(BaseModel):
     search_radius: float = Field(1.5, ge=0.0)
     replay_route: bool = False
     move_ego_forward_after_engage_m: float = 0.1
+    auto_tackle_stuck: bool = True
+    stuck_duration: float = Field(5.0, ge=0.0)
+    expand_radius_scale: float = Field(3.0, gt=0.0)
+    perturb_distance: float = Field(0.5, ge=0.0)
+    output_metrics: bool = True
 
 
 class _DeprecatedTimeField:

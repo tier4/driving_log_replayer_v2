@@ -257,5 +257,15 @@ def launch_perception_reproducer(context: LaunchContext) -> list:
         cmd.extend(["--reproduce-cool-down", str(reproducer_config["reproduce_cool_down"])])
     if reproducer_config.get("replay_route", False):
         cmd.append("--replay-route")
+    if reproducer_config.get("auto_tackle_stuck", True):
+        cmd.append("--auto-tackle-stuck")
+    if reproducer_config.get("stuck_duration") is not None:
+        cmd.extend(["--stuck-duration", str(reproducer_config["stuck_duration"])])
+    if reproducer_config.get("expand_radius_scale") is not None:
+        cmd.extend(["--expand-radius-scale", str(reproducer_config["expand_radius_scale"])])
+    if reproducer_config.get("perturb_distance") is not None:
+        cmd.extend(["--perturb-distance", str(reproducer_config["perturb_distance"])])
+    if reproducer_config.get("output_metrics", True):
+        cmd.append("--output-metrics")
 
     return [ExecuteProcess(cmd=cmd, output="screen", on_exit=ShutdownOnce())]
