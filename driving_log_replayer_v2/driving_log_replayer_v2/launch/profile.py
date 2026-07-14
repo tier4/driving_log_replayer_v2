@@ -41,7 +41,8 @@ def _load_profile_yaml(profile_name: str, config_subdir: str) -> dict | None:
     with profile_file.open("r") as f:
         data = yaml.safe_load(f) or {}
     if not isinstance(data, dict):
-        raise TypeError(f"Profile '{profile_name}' must be a mapping: {profile_file}")
+        err_msg = f"Profile '{profile_name}' must be a mapping: {profile_file}"
+        raise TypeError(err_msg)
     return data
 
 
@@ -50,7 +51,8 @@ def load_publish_remap_topics(profile_name: str, profile_type: str) -> list[str]
         return []
 
     if profile_type not in ("publish", "remap"):
-        raise ValueError(f"Invalid profile_type: {profile_type}")
+        err_msg = f"Invalid profile_type: {profile_type}"
+        raise ValueError(err_msg)
     profile_dict = _load_profile_yaml(profile_name, "publish_and_remap")
     if profile_dict is None:
         return []
