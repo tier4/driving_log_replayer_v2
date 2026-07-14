@@ -113,3 +113,19 @@ def test_load_publish_remap_topics_planning_control() -> None:
 def test_load_publish_remap_topics_missing_profile_returns_empty() -> None:
     assert profile.load_publish_remap_topics("nonexistent_profile", "publish") == []
     assert profile.load_publish_remap_topics("", "publish") == []
+
+
+def test_load_publish_remap_topics_invalid_profile_type_raises() -> None:
+    with pytest.raises(ValueError, match="Invalid profile_type"):
+        profile.load_publish_remap_topics("planning_control", "invalid")
+
+
+def test_load_profile_yaml_non_mapping_raises(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    profile_file = tmp_path / "bad_profile.yaml"
+    profile_file.write_text("- not\n- a\n- mapping\n", encoding="utf-8")
+    monkeypatch.setattr(profile, "_get_profile_path", lambda *_args: profile_file)
+    with pytest.raises(TypeError, match="must be a mapping"):
+        profile._load_profile_yaml("bad_profile", "publish_and_remap")
