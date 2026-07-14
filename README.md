@@ -62,6 +62,13 @@ _DLR2_ANALYZER_COMPLETE=fish_source dlr2-analyzer > $HOME/.config/fish/completio
 
 refer [document](https://tier4.github.io/driving_log_replayer_v2/)
 
+### Topic profiles
+
+- `publish_profile` — `config/publish_and_remap/{name}.yaml` (rosbag play)
+- `record_profile` — `config/record/{name}.yaml` (result bag record; defaults to use_case name)
+
+Use `override_topics_regex` to override record topics directly.
+
 ## (For Developer) Release Process
 
 This package uses `catkin_pkg` to manage releases.

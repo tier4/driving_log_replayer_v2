@@ -12,7 +12,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from importlib import import_module
 import json
 from pathlib import Path
 
@@ -26,6 +25,8 @@ from launch.actions import TimerAction
 from launch_ros.actions import Node
 import yaml
 
+from driving_log_replayer_v2.launch.profile import build_record_topic_regex
+from driving_log_replayer_v2.launch.profile import load_publish_remap_topics
 from driving_log_replayer_v2.shutdown_once import ShutdownOnce
 
 PACKAGE_SHARE = get_package_share_directory("driving_log_replayer_v2")
@@ -36,27 +37,6 @@ def is_set_goal(goal_method: str, goal_pose: str | dict) -> bool:
     is_set_goal_from_scenario = goal_method == "set_goal_from_scenario" and goal_pose != "{}"
     is_set_goal_from_rosbag = goal_method == "set_goal_from_rosbag"
     return is_set_goal_from_scenario or is_set_goal_from_rosbag
-
-
-def extract_topics_from_profile(profile_name: str, profile_type: str) -> list[str]:
-    if not profile_name:
-        return []
-
-    assert profile_type in ["publish", "remap"]
-    profile_file = Path(
-        get_package_share_directory("driving_log_replayer_v2"),
-        "config",
-        "publish_and_remap",
-        f"{profile_name}.yaml",
-    )
-    # Make it work with symlink install as well.
-    if profile_file.is_symlink():
-        profile_file = profile_file.resolve()
-    if not profile_file.exists():
-        return []
-    with profile_file.open("r") as f:
-        profile_dict = yaml.safe_load(f)
-        return profile_dict.get(profile_type, [])
 
 
 def remap_str(topic: str) -> str:
@@ -87,7 +67,7 @@ def system_defined_remap(conf: dict) -> list[str]:
 def user_defined_publish(conf: dict) -> list[str]:
     publish_list = []
     if conf["publish_profile"] != "":
-        publish_list.extend(extract_topics_from_profile(conf["publish_profile"], "publish"))
+        publish_list.extend(load_publish_remap_topics(conf["publish_profile"], "publish"))
     return publish_list
 
 
@@ -97,11 +77,11 @@ def user_defined_remap(conf: dict) -> list[str]:
     user_remap_topics: list[str] = (
         conf["remap_arg"].split(",")
         if conf["remap_arg"] != ""
-        else extract_topics_from_profile(conf["remap_profile"], "remap")
+        else load_publish_remap_topics(conf["remap_profile"], "remap")
     )
 
     if conf["publish_profile"] != "":  # we support to remap topics in publish profile
-        user_remap_topics.extend(extract_topics_from_profile(conf["publish_profile"], "remap"))
+        user_remap_topics.extend(load_publish_remap_topics(conf["publish_profile"], "remap"))
 
     for topic in user_remap_topics:
         if topic.startswith("/"):
@@ -209,6 +189,18 @@ def launch_bag_player(
 
 def launch_bag_recorder(context: LaunchContext) -> list:
     conf = context.launch_configurations
+    record_topic_regex = build_record_topic_regex(conf)
+    if not record_topic_regex:
+        return [
+            LogInfo(
+                msg=(
+                    "Skip bag recorder because no record topics are configured "
+                    f"(use_case={conf.get('use_case')}, "
+                    f"record_profile={conf.get('record_profile', '')})."
+                )
+            )
+        ]
+
     record_cmd = [
         "ros2",
         "bag",
@@ -219,17 +211,14 @@ def launch_bag_recorder(context: LaunchContext) -> list:
         conf["result_bag_path"],
         "--qos-profile-overrides-path",
         QOS_PROFILE_PATH_STR,
+        "-e",
+        record_topic_regex,
     ]
     # For perception_reproducer, use real time instead of sim time.
     if conf["use_case"] != "perception_reproducer":
         record_cmd += ["--use-sim-time"]
     if conf["storage"] == "mcap":
         record_cmd += ["--storage-preset-profile", "zstd_fast"]
-    if conf["override_topics_regex"] == "":
-        launch_config = import_module(f"driving_log_replayer_v2.launch.{conf['use_case']}")
-        record_cmd += ["-e", launch_config.RECORD_TOPIC]
-    else:
-        record_cmd += ["-e", conf["override_topics_regex"]]
     return [ExecuteProcess(cmd=record_cmd)]
 
 

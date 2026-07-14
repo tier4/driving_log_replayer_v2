@@ -15,25 +15,6 @@
 from launch.actions import DeclareLaunchArgument
 from launch.substitutions import LaunchConfiguration
 
-RECORD_TOPIC = """^/diagnostics$\
-|^/system/processing_time_checker/metrics$\
-|^/sensing/lidar/concatenated/pointcloud$\
-|^/perception/object_recognition/objects$\
-|^/perception/obstacle_segmentation/pointcloud$\
-|^/perception/object_recognition/detection/rois(11|10|[0-9])$\
-|^/perception/traffic_light_recognition/camera(11|10|[0-9])/detection/rois$\
-|^/perception/traffic_light_recognition/camera(11|10|[0-9])/detection/rough/rois$\
-|^/perception/traffic_light_recognition/camera(11|10|[0-9])/classification/traffic_signals$\
-|^/perception/traffic_light_recognition/traffic_signals$\
-|^/tf$\
-|^/tf_static$\
-|^/planning/scenario_planning/lane_driving/behavior_planning/path$\
-|^/planning/trajectory$\
-|^/.*/virtual_wall/.*$\
-|^/.*/path_candidate/.*\
-|^/driving_log_replayer/.*\
-"""
-
 AUTOWARE_DISABLE = {}
 
 AUTOWARE_ARGS = {

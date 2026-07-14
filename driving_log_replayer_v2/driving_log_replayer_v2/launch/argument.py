@@ -102,6 +102,7 @@ def get_launch_arguments() -> list:
     remap_arg
     remap_profile
     publish_profile
+    record_profile
     publish_topic_from_rosbag
     with_optional_nodes
     """
@@ -178,6 +179,11 @@ def get_launch_arguments() -> list:
         "publish_profile",
         default_value="",
         description="Specify the name of the topics profile to publish topics. config/publish_and_remap/{profile_name}.yaml. Ex: publish_profile:=planning_control",
+    )
+    add_launch_arg(
+        "record_profile",
+        default_value="",
+        description="Specify the name of the record profile to control which topics are recorded. config/record/{profile_name}.yaml. Defaults to use_case name. Ex: record_profile:=planning_control",
     )
     add_launch_arg(
         "publish_topic_from_rosbag",

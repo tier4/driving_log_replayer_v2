@@ -15,18 +15,6 @@
 from launch.actions import DeclareLaunchArgument
 from launch.substitutions import LaunchConfiguration
 
-RECORD_TOPIC = """^/tf$\
-|^/diagnostics$\
-|^/system/processing_time_checker/metrics$\
-|^/sensing/lidar/concatenated/pointcloud$\
-|^/perception/object_recognition/detection/objects$\
-|^/perception/object_recognition/tracking/objects$\
-|^/perception/object_recognition/objects$\
-|^/sensing/camera/.*\
-|^/driving_log_replayer_v2/.*\
-|^/driving_log_replayer/.*\
-"""
-
 AUTOWARE_DISABLE = {
     "localization": "false",
     "planning": "false",

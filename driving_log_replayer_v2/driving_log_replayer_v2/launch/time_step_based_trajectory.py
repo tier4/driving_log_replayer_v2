@@ -15,28 +15,6 @@
 from launch.actions import DeclareLaunchArgument
 from launch.substitutions import LaunchConfiguration
 
-RECORD_TOPIC = """^/tf$\
-|^/tf_static$\
-|^/parameter_events$\
-|^/diagnostics$\
-|^/map/vector_map$\
-|^/map/vector_map_marker$\
-|^/perception/object_recognition/objects$\
-|^/perception/object_recognition/detection/objects$\
-|^/perception/object_recognition/tracking/objects$\
-|^/perception/traffic_light_recognition/traffic_signals$\
-|^/localization/kinematic_state$\
-|^/localization/initialization_state$\
-|^/localization/pose_with_covariance$\
-|^/localization/acceleration$\
-|^/system/processing_time_checker/metrics$\
-|^/driving_log_replayer/.*$\
-|^/api/.*/get/.*$\
-|^/awapi/.*/get/.*$\
-|^/sensing/gnss/septentrio/nav_sat_fix$\
-|^/planning/.*$\
-"""
-
 AUTOWARE_DISABLE = {
     "localization": "false",
     "perception": "false",

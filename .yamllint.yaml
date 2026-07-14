@@ -2,6 +2,7 @@ extends: default
 
 ignore: |
   *.param.yaml
+  driving_log_replayer_v2/config/record/**
 
 rules:
   braces:
