@@ -189,6 +189,18 @@ def launch_bag_player(
 
 def launch_bag_recorder(context: LaunchContext) -> list:
     conf = context.launch_configurations
+    record_topic_regex = build_record_topic_regex(conf)
+    if not record_topic_regex:
+        return [
+            LogInfo(
+                msg=(
+                    "Skip bag recorder because no record topics are configured "
+                    f"(use_case={conf.get('use_case')}, "
+                    f"record_profile={conf.get('record_profile', '')})."
+                )
+            )
+        ]
+
     record_cmd = [
         "ros2",
         "bag",
@@ -199,15 +211,14 @@ def launch_bag_recorder(context: LaunchContext) -> list:
         conf["result_bag_path"],
         "--qos-profile-overrides-path",
         QOS_PROFILE_PATH_STR,
+        "-e",
+        record_topic_regex,
     ]
     # For perception_reproducer, use real time instead of sim time.
     if conf["use_case"] != "perception_reproducer":
         record_cmd += ["--use-sim-time"]
     if conf["storage"] == "mcap":
         record_cmd += ["--storage-preset-profile", "zstd_fast"]
-    record_topic_regex = build_record_topic_regex(conf)
-    if record_topic_regex:
-        record_cmd += ["-e", record_topic_regex]
     return [ExecuteProcess(cmd=record_cmd)]
 
 
