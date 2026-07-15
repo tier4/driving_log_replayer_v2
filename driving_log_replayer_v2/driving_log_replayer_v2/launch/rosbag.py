@@ -222,6 +222,37 @@ def launch_bag_recorder(context: LaunchContext) -> list:
     return [ExecuteProcess(cmd=record_cmd)]
 
 
+def _append_perception_reproducer_options(cmd: list[str], reproducer_config: dict) -> None:
+    bool_flags = (
+        ("noise", False, "--noise"),
+        ("tracked_object", False, "--tracked-object"),
+        ("replay_route", False, "--replay-route"),
+        ("auto_tackle_stuck", True, "--auto-tackle-stuck"),
+        ("output_metrics", True, "--output-metrics"),
+    )
+    value_flags = (
+        ("search_radius", "--search-radius"),
+        ("reproduce_cool_down", "--reproduce-cool-down"),
+        ("stuck_duration", "--stuck-duration"),
+        ("expand_radius_scale", "--expand-radius-scale"),
+        ("perturb_distance", "--perturb-distance"),
+    )
+    value_defaults = {
+        "search_radius": 1.5,
+        "reproduce_cool_down": 999.0,
+        "stuck_duration": 5.0,
+        "expand_radius_scale": 3.0,
+        "perturb_distance": 0.5,
+    }
+    for key, default, flag in bool_flags:
+        if reproducer_config.get(key, default):
+            cmd.append(flag)
+    for key, flag in value_flags:
+        value = reproducer_config[key] if key in reproducer_config else value_defaults.get(key)
+        if value is not None:
+            cmd.extend([flag, str(value)])
+
+
 def launch_perception_reproducer(context: LaunchContext) -> list:
     """Launch perception_reproducer node from planning_debug_tools."""
     conf = context.launch_configurations
@@ -246,16 +277,6 @@ def launch_perception_reproducer(context: LaunchContext) -> list:
     ).as_posix()
 
     cmd = [executable, "-b", conf["input_bag"], "-f", rosbag_format]
-
-    if reproducer_config.get("noise", False):
-        cmd.append("--noise")
-    if reproducer_config.get("tracked_object", False):
-        cmd.append("--tracked-object")
-    if reproducer_config.get("search_radius") is not None:
-        cmd.extend(["--search-radius", str(reproducer_config["search_radius"])])
-    if reproducer_config.get("reproduce_cool_down") is not None:
-        cmd.extend(["--reproduce-cool-down", str(reproducer_config["reproduce_cool_down"])])
-    if reproducer_config.get("replay_route", False):
-        cmd.append("--replay-route")
+    _append_perception_reproducer_options(cmd, reproducer_config)
 
     return [ExecuteProcess(cmd=cmd, output="screen", on_exit=ShutdownOnce())]
