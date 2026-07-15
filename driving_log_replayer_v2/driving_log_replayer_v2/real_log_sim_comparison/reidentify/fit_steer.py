@@ -113,6 +113,7 @@ def fit_steer(
     phase1_params: dict,
     wheelbase: float,
     n_jobs: int = 1,
+    scenario: Path | None = None,
 ) -> dict:
     """collection 配下の全 CSV キャッシュから操舵モデル + k_us を直接同定する。"""
     tasks = discover_cached_datasets(collection_dir)
@@ -152,6 +153,7 @@ def fit_steer(
             "操舵の動的条件を満たすデータがありません "
             f"(各 dataset {MIN_FIT_SAMPLES} samples 以上が必要)。"
         )
+    stationary_meta: dict[str, float] = {}
     if response_targets:
         fitted_params = clamped_medians(
             fit_results,
@@ -164,7 +166,42 @@ def fit_steer(
         print(f"  同定結果: steer_time_constant = {params['steer_time_constant']:.4f} s")
         print(f"            steer_time_delay    = {params['steer_time_delay']:.4f} s")
         print(f"            steer_bias          = {params['steer_bias']:.6f} rad")
-        print(f"            steer_scaling       = {params['debug_steer_scaling_factor']:.4f}")
+
+        # τ/delay 確定後、scaling はプラトー (N-step rollout の定常誤差) で決め直す。
+        # 動的励起マスク上の静的ゲイン推定値 (dynamic_scale) は τ/delay の同定精度の
+        # ために残すが採用しない。同定コアは fit_plateau と共通の rollout 正式実装。
+        if "debug_steer_scaling_factor" in targets and scenario is not None:
+            from .fit_plateau import fit_scaling_channels  # noqa: PLC0415 (rollout 系の重い import を遅延)
+
+            dynamic_scale = params["debug_steer_scaling_factor"]
+            print("[fit_steer] プラトー scaling 同定 (rollout, τ/delay 固定)...")
+            plateau = fit_scaling_channels(
+                collection_dir, scenario,
+                case_name=TARGET_MODEL_NAME,
+                override_params=dict(params),
+                channels=(("steer", "debug_steer_scaling_factor"),),
+                n_jobs=n_jobs,
+            )
+            scale = plateau["fitted"]["debug_steer_scaling_factor"]
+            params["debug_steer_scaling_factor"] = scale
+            objective = plateau["objectives"]["steer"]
+            stationary_meta = {
+                "plateau_scale": scale,
+                "dynamic_scale": dynamic_scale,
+                "plateau_rmse_initial": objective["initial"],
+                "plateau_rmse_final": objective["final"],
+                "plateau_n_valid": plateau["metadata"]["n_valid"],
+            }
+            print(
+                f"            steer_scaling       = {scale:.4f} "
+                f"(動的フィット値 {dynamic_scale:.4f} を置換, "
+                f"plateau mean RMSE {objective['initial']:.4f}"
+                f" -> {objective['final']:.4f} deg)"
+            )
+        else:
+            if "debug_steer_scaling_factor" in targets:
+                print("  [WARN] scenario 未指定のため plateau scaling 同定をスキップ (動的フィット値を使用)")
+            print(f"            steer_scaling       = {params['debug_steer_scaling_factor']:.4f}")
 
     if "k_us" in targets:
         print("[fit_steer] k_us 直接同定を実行中...")
@@ -187,7 +224,7 @@ def fit_steer(
         "params": params,
         "metadata": stage_metadata(
             collection_dir, n_datasets=len(tasks), n_valid=n_valid,
-            wheelbase=wheelbase, phase=2, optimized=targets,
+            wheelbase=wheelbase, phase=2, optimized=targets, **stationary_meta,
         ),
     }
 
@@ -212,5 +249,8 @@ def run(
     wheelbase = float(wheelbase_value)
     print(f"[fit_steer] wheelbase = {wheelbase}")
 
-    result = fit_steer(collection_dir, phase1_params=phase1_params, wheelbase=wheelbase, n_jobs=n_jobs)
+    result = fit_steer(
+        collection_dir, phase1_params=phase1_params, wheelbase=wheelbase, n_jobs=n_jobs,
+        scenario=scenario,
+    )
     return write_phase_artifact(out, result)
