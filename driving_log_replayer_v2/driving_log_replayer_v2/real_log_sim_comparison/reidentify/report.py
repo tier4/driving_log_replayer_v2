@@ -625,7 +625,7 @@ def _render_document(
     params: Mapping[str, Any],
     frame: pd.DataFrame,
     failures: Mapping[str, Any],
-    physical_validity_sections: str,
+    physical_sections: physical_validity.PhysicalValiditySections,
     model_order: tuple[str, ...],
     extraction_summary: Mapping[str, Any],
     phase1_path: Path,
@@ -686,13 +686,12 @@ th {{ color:var(--muted); background:var(--wash); font-size:12px; }} th:first-ch
   <p class="source">Parameters: {_escape(tuned_path)}</p>
   <p class="source">Metrics: {_escape(metrics_path)}</p>
 </header>
-<section><h2>1. Extraction results</h2>{_render_failures(extraction_summary)}</section>
-<section><h2>2. Longitudinal direct identification</h2>{_render_artifact(phase1_path, parameter_title="phase1_acc.yaml")}</section>
-<section><h2>3. Steering direct identification</h2>{_render_artifact(phase2_path, parameter_title="phase2_steer.yaml")}</section>
-<section><h2>4. XY heading-rate direct identification</h2>{_render_artifact(phase3_path, parameter_title="phase3_xy.yaml")}</section>
+<section><h2>1. Extraction results</h2>{_render_failures(extraction_summary)}{physical_sections.prepare}</section>
+<section><h2>2. Longitudinal direct identification</h2>{_render_artifact(phase1_path, parameter_title="phase1_acc.yaml")}{physical_sections.longitudinal}</section>
+<section><h2>3. Steering direct identification</h2>{_render_artifact(phase2_path, parameter_title="phase2_steer.yaml")}{physical_sections.steering}{physical_sections.yaw}</section>
+<section><h2>4. XY heading-rate direct identification</h2>{_render_artifact(phase3_path, parameter_title="phase3_xy.yaml")}{physical_sections.xy}</section>
 <section><h2>5. Integrated optimization</h2>{_render_artifact(tuned_path, parameter_title="Final parameters")}<h3>Aggregate comparison</h3><p class="note">Raw columns are mean RMSE. Aggregate and distribution values use the configured optimization horizons; graphs use every available N. Lower is better. Score source identifies the stored aggregate score; parameter source identifies the parameters used for rollout evaluation.</p>{_render_aggregate(document, summary, model_order)}<h3>Error by horizon N</h3><p class="note">Each point is the mean RMSE across valid datasets. Every available N is plotted; lower is better.</p>{_render_horizon_charts(frame, model_order)}<h3>Dataset distributions</h3>{_render_dataset_distribution(summary, model_order)}</section>
 <section><h2>6. Released YAML</h2><p class="source">Released parameter YAML: {_escape(release_path)}</p></section>
-<section id="physical-validity"><h2>7. Physical validity</h2>{physical_validity_sections}</section>
 </main></body></html>
 """
 

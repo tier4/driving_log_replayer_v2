@@ -59,6 +59,17 @@ class ValidationStep:
     html: str
 
 
+@dataclass
+class PhysicalValiditySections:
+    """Physical-validity fragments, one per validation step; the caller decides placement."""
+
+    prepare: str
+    longitudinal: str
+    steering: str
+    yaw: str
+    xy: str
+
+
 def _number(value: Any) -> str:
     try:
         number = float(value)
@@ -306,10 +317,16 @@ def build_sections(
     *,
     scenario: Path,
     n_jobs: int = 1,
-) -> str:
-    """Build report fragments; the caller owns the enclosing HTML document."""
+) -> PhysicalValiditySections:
+    """Build report fragments; the caller places each fragment in its owning section."""
     started = perf_counter()
     context, prepared = prepare_datasets(collection_dir, params_path, scenario=scenario, n_jobs=n_jobs)
-    steps = [prepared, validate_longitudinal(context), validate_steering(context), validate_yaw(context), validate_xy(context)]
+    sections = PhysicalValiditySections(
+        prepare=prepared.html,
+        longitudinal=validate_longitudinal(context).html,
+        steering=validate_steering(context).html,
+        yaw=validate_yaw(context).html,
+        xy=validate_xy(context).html,
+    )
     print(f"[report] physical-validity complete: {perf_counter() - started:.1f}s")
-    return "\n".join(step.html for step in steps)
+    return sections
