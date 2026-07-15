@@ -27,8 +27,10 @@ from .stage_common import (
 
 # このステージが責任を持つキー集合。実行時に最適化を無効化しても不変なので import 時に確定する。
 _XY_KEYS = stage_targets(FIT_XY)
-_XY_HEADING_RATE_COEFF_BOUNDS = (-5.0, 5.0)
 _PHASE2_KEYS = stage_input_keys(FIT_XY)
+# 探索域は成果物に記録される制約 (direct_fit_bounds) と同一にする。
+_XY_HEADING_RATE_COEFF_BOUNDS = PARAMETER_CONSTRAINTS["xy_heading_rate_coeff"].direct_fit_bounds
+assert _XY_HEADING_RATE_COEFF_BOUNDS is not None
 
 
 def _fit_xy_heading_rate_coeff(datasets: list[dict], initial: float = 0.0) -> dict:

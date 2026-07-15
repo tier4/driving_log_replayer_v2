@@ -180,6 +180,7 @@ PARAMETER_CONSTRAINTS: dict[str, ParameterConstraint] = {
     "xy_heading_rate_coeff": ParameterConstraint(
         "xy_heading_rate_coeff", "位置積分時の heading 補正係数を、実データで確認済みの正の観測レンジに制限する。",
         bounds=(-0.005, 0.05), default=0.0,
+        direct_fit_bounds=(-0.005, 0.05),
         optimization_stages=frozenset({FIT_XY}),
     ),
 }

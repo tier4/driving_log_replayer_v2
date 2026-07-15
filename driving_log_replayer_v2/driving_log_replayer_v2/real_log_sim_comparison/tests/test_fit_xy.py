@@ -39,7 +39,7 @@ def _synthetic_trajectory(coeff: float, *, dt: float = 0.01, n: int = 4000) -> d
     }
 
 
-@pytest.mark.parametrize("known_coeff", [0.0, 0.02, -0.015])
+@pytest.mark.parametrize("known_coeff", [0.0, 0.02, 0.045, -0.004])
 def test_fit_xy_heading_rate_coeff_recovers_known_value(known_coeff: float) -> None:
     dataset = _synthetic_trajectory(known_coeff)
 
@@ -48,6 +48,23 @@ def test_fit_xy_heading_rate_coeff_recovers_known_value(known_coeff: float) -> N
     assert result["n"] > 0
     assert result["xy_heading_rate_coeff"] == pytest.approx(known_coeff, abs=5e-3)
     assert result["rmse"] < 0.05
+
+
+def test_fit_xy_heading_rate_coeff_stays_within_constraint_domain() -> None:
+    """真値が制約域外でも探索は域内に留まり、rmse は採用係数と整合すること。"""
+    lower, upper = PARAMETER_CONSTRAINTS["xy_heading_rate_coeff"].direct_fit_bounds
+    dataset = _synthetic_trajectory(-0.015)
+
+    result = _fit_xy_heading_rate_coeff([dataset])
+
+    assert lower <= result["xy_heading_rate_coeff"] <= upper
+    assert result["xy_heading_rate_coeff"] == pytest.approx(lower, abs=1e-3)
+    residual = np.concatenate(
+        fit_xy.xy_residual(dataset, result["xy_heading_rate_coeff"])
+    )
+    assert result["rmse"] == pytest.approx(
+        float(np.sqrt(np.mean(residual.astype(float) ** 2))), rel=1e-9,
+    )
 
 
 def test_fit_xy_heading_rate_coeff_merges_multiple_datasets() -> None:
