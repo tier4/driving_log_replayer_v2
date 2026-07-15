@@ -14,6 +14,7 @@ import yaml
 
 from .lib._physical_validity import (
     _simulate_first_order,
+    build_xy_columns,
     xy_residual,
     yaw_residual,
 )
@@ -106,17 +107,6 @@ def _models_from_inputs(params_path: Path, scenario: Path | None, case: str) -> 
     return models
 
 
-def _add_xy(dataset: dict[str, Any], source: dict[str, Any]) -> float:
-    kin = source["kinematic"]
-    if kin.empty:
-        raise ValueError("kinematic が空です")
-    t0 = max(float(source[topic]["t_ns"].iloc[0]) for topic in ("cmd", "accel", "steering", "velocity", "kinematic"))
-    t_grid = t0 + np.arange(len(dataset["vx"]), dtype=float) * 0.01e9
-    source_t = kin["t_ns"].to_numpy(dtype=float)
-    dataset["xy"] = tuple(np.interp(t_grid, source_t, kin[column].to_numpy(dtype=float)) for column in ("x", "y", "yaw", "vx", "wz"))
-    return t0
-
-
 def _fixed_metric(data: dict[str, Any], params: dict[str, Any], *, steer: bool) -> dict[str, Any]:
     metrics, _prediction, reason = _fixed_response(data, params, steer=steer)
     return metrics or {"rmse": float("nan"), "n": 0, "reason": reason or "評価不能"}
@@ -160,7 +150,7 @@ def _evaluate_dataset(
                 )
             if data is None:
                 raise ValueError("共通時間範囲が短すぎるか、必須信号が空です")
-            _add_xy(data, source)
+            build_xy_columns(data, source)
             data_by_source[acceleration_source] = data
 
         metrics = {name: {} for name in ("longitudinal", "steering", "yaw", "xy")}

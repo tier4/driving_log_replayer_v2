@@ -7,6 +7,7 @@ from typing import Any, Mapping
 
 FIT_LON = "fit_lon"
 FIT_STEER = "fit_steer"
+FIT_XY = "fit_xy"
 FIT_MERGE = "fit_merge"
 
 
@@ -173,6 +174,13 @@ PARAMETER_CONSTRAINTS: dict[str, ParameterConstraint] = {
     "wheelbase": ParameterConstraint(
         "wheelbase", "ホイールベースは車両幾何として正の有限値でなければならない。",
         bounds=(0.0, None), minimum_inclusive=False, default=4.76012,
+    ),
+    # 実データ (372 dataset, n=2,479,500) での直接同定値 +0.004278 を含み、
+    # 過去の固定値 +0.022 も包含する範囲。符号は一貫して正であることを確認済み。
+    "xy_heading_rate_coeff": ParameterConstraint(
+        "xy_heading_rate_coeff", "位置積分時の heading 補正係数を、実データで確認済みの正の観測レンジに制限する。",
+        bounds=(-0.005, 0.05), default=0.0,
+        optimization_stages=frozenset({FIT_XY}),
     ),
 }
 

@@ -7,8 +7,10 @@ so the numerical definitions remain usable without ROS or rosbag imports.
 from __future__ import annotations
 
 from collections.abc import Iterable
+from typing import Any
 
 import numpy as np
+import pandas as pd
 from scipy.optimize import minimize_scalar
 from scipy.signal import savgol_filter
 
@@ -107,6 +109,31 @@ def fit_k_us(datasets: list[dict], *, wheelbase: float = WHEELBASE) -> dict:
     parts = [part for part in parts if len(part)]
     residual = np.concatenate(parts) if parts else np.empty(0)
     return {"k_us": k, "rmse": float(np.sqrt(np.mean(residual ** 2))) if len(residual) else float("nan"), "n": int(len(residual))}
+
+
+def build_xy_columns(
+    dataset: dict[str, Any], source: dict[str, pd.DataFrame], *, dt: float = _FIT_DT,
+) -> float:
+    """kinematic トピックから x,y,yaw,vx,wz を dataset の時間グリッドへ補間し、``dataset["xy"]`` に積む。
+
+    ``dataset`` は :func:`reidentify.load_data.build_resampled` の戻り値 (等間隔グリッド上の
+    a_cmd/vx/... を持つ dict)、``source`` は :func:`reidentify.load_data.read_dataset_csv` の
+    戻り値 (topic 別 raw DataFrame) を想定する。戻り値は共通開始時刻 ``t0`` [ns]。
+    """
+    kin = source["kinematic"]
+    if kin.empty:
+        raise ValueError("kinematic が空です")
+    t0 = max(
+        float(source[topic]["t_ns"].iloc[0])
+        for topic in ("cmd", "accel", "steering", "velocity", "kinematic")
+    )
+    t_grid = t0 + np.arange(len(dataset["vx"]), dtype=float) * dt * 1e9
+    source_t = kin["t_ns"].to_numpy(dtype=float)
+    dataset["xy"] = tuple(
+        np.interp(t_grid, source_t, kin[column].to_numpy(dtype=float))
+        for column in ("x", "y", "yaw", "vx", "wz")
+    )
+    return t0
 
 
 def _xy_arrays(dataset: dict) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray]:

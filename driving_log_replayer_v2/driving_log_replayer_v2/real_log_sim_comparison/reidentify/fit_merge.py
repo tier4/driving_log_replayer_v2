@@ -53,6 +53,7 @@ _DIRECT_FIT_KEYS = frozenset(
         "steer_rate_lim",
         "k_us",
         "wheelbase",
+        "xy_heading_rate_coeff",
     }
 )
 
@@ -689,28 +690,28 @@ def fit_merge(
 
 def run(
     collection_dir: Path, scenario: Path, out: Path, *,
-    phase2_params_path: Path, metrics_out: Path,
+    phase3_params_path: Path, metrics_out: Path,
     n_trials: int = 50, n_jobs: int = 1,
 ) -> dict:
-    if not phase2_params_path.is_file():
-        raise FileNotFoundError(f"直接同定結果が見つかりません: {phase2_params_path}")
-    with phase2_params_path.open("r", encoding="utf-8") as stream:
+    if not phase3_params_path.is_file():
+        raise FileNotFoundError(f"直接同定結果が見つかりません: {phase3_params_path}")
+    with phase3_params_path.open("r", encoding="utf-8") as stream:
         data = yaml.safe_load(stream)
     if not isinstance(data, dict) or not isinstance(data.get("params"), dict):
-        raise ValueError(f"直接同定結果の params が不正です: {phase2_params_path}")
-    phase2_params = dict(data["params"])
-    missing = _DIRECT_FIT_KEYS - phase2_params.keys()
+        raise ValueError(f"直接同定結果の params が不正です: {phase3_params_path}")
+    direct_fit_params = dict(data["params"])
+    missing = _DIRECT_FIT_KEYS - direct_fit_params.keys()
     if missing:
         raise ValueError(f"直接同定結果に必須 params がありません: {sorted(missing)}")
-    validate_parameters(phase2_params, _DIRECT_FIT_KEYS, source="直接同定結果")
+    validate_parameters(direct_fit_params, _DIRECT_FIT_KEYS, source="直接同定結果")
     metadata = data.get("metadata")
-    if not isinstance(metadata, dict) or metadata.get("phase") != 2:
-        raise ValueError(f"直接同定結果の metadata.phase は 2 である必要があります: {phase2_params_path}")
-    print(f"[fit_merge] 直接同定値を warm-start / passthrough に使用: {phase2_params_path}")
+    if not isinstance(metadata, dict) or metadata.get("phase") != 3:
+        raise ValueError(f"直接同定結果の metadata.phase は 3 である必要があります: {phase3_params_path}")
+    print(f"[fit_merge] 直接同定値を warm-start / passthrough に使用: {phase3_params_path}")
 
     out.parent.mkdir(parents=True, exist_ok=True)
     result = fit_merge(
-        collection_dir, scenario, phase2_params=phase2_params,
+        collection_dir, scenario, phase2_params=direct_fit_params,
         n_trials=n_trials, n_jobs=n_jobs, metrics_out=metrics_out,
     )
     with out.open("w", encoding="utf-8") as stream:

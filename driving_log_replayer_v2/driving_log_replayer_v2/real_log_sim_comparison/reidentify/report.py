@@ -630,6 +630,7 @@ def _render_document(
     extraction_summary: Mapping[str, Any],
     phase1_path: Path,
     phase2_path: Path,
+    phase3_path: Path,
     release_path: Path,
 ) -> str:
     datasets = frame["dataset_id"].nunique()
@@ -688,9 +689,10 @@ th {{ color:var(--muted); background:var(--wash); font-size:12px; }} th:first-ch
 <section><h2>1. Extraction results</h2>{_render_failures(extraction_summary)}</section>
 <section><h2>2. Longitudinal direct identification</h2>{_render_artifact(phase1_path, parameter_title="phase1_acc.yaml")}</section>
 <section><h2>3. Steering direct identification</h2>{_render_artifact(phase2_path, parameter_title="phase2_steer.yaml")}</section>
-<section><h2>4. Integrated optimization</h2>{_render_artifact(tuned_path, parameter_title="Final parameters")}<h3>Aggregate comparison</h3><p class="note">Raw columns are mean RMSE. Aggregate and distribution values use the configured optimization horizons; graphs use every available N. Lower is better. Score source identifies the stored aggregate score; parameter source identifies the parameters used for rollout evaluation.</p>{_render_aggregate(document, summary, model_order)}<h3>Error by horizon N</h3><p class="note">Each point is the mean RMSE across valid datasets. Every available N is plotted; lower is better.</p>{_render_horizon_charts(frame, model_order)}<h3>Dataset distributions</h3>{_render_dataset_distribution(summary, model_order)}</section>
-<section><h2>5. Released YAML</h2><p class="source">Released parameter YAML: {_escape(release_path)}</p></section>
-<section id="physical-validity"><h2>6. Physical validity</h2>{physical_validity_sections}</section>
+<section><h2>4. XY heading-rate direct identification</h2>{_render_artifact(phase3_path, parameter_title="phase3_xy.yaml")}</section>
+<section><h2>5. Integrated optimization</h2>{_render_artifact(tuned_path, parameter_title="Final parameters")}<h3>Aggregate comparison</h3><p class="note">Raw columns are mean RMSE. Aggregate and distribution values use the configured optimization horizons; graphs use every available N. Lower is better. Score source identifies the stored aggregate score; parameter source identifies the parameters used for rollout evaluation.</p>{_render_aggregate(document, summary, model_order)}<h3>Error by horizon N</h3><p class="note">Each point is the mean RMSE across valid datasets. Every available N is plotted; lower is better.</p>{_render_horizon_charts(frame, model_order)}<h3>Dataset distributions</h3>{_render_dataset_distribution(summary, model_order)}</section>
+<section><h2>6. Released YAML</h2><p class="source">Released parameter YAML: {_escape(release_path)}</p></section>
+<section id="physical-validity"><h2>7. Physical validity</h2>{physical_validity_sections}</section>
 </main></body></html>
 """
 
@@ -707,6 +709,7 @@ def run(
     extraction_summary: Mapping[str, Any] | None = None,
     phase1_params: Path | str | None = None,
     phase2_params: Path | str | None = None,
+    phase3_params: Path | str | None = None,
     release_params: Path | str | None = None,
 ) -> Path:
     """Generate the unified ``report.html``."""
@@ -737,6 +740,7 @@ def run(
         extraction_summary if extraction_summary is not None else failures,
         Path(phase1_params) if phase1_params is not None else tuned_path,
         Path(phase2_params) if phase2_params is not None else tuned_path,
+        Path(phase3_params) if phase3_params is not None else tuned_path,
         Path(release_params) if release_params is not None else tuned_path,
     )
     out_path.parent.mkdir(parents=True, exist_ok=True)
