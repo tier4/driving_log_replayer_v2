@@ -13,7 +13,7 @@ import optuna
 import yaml
 
 from ..lib._accel_source import normalize_accel_source
-from ..lib._multi_agg import HORIZONS, aggregate_normalized, format_agg, robust_score
+from ..lib._multi_agg import aggregate_normalized, format_agg, robust_score
 from ..lib._parallel import (
     normalize_parallel_jobs,
     pool_chunksize,
@@ -31,14 +31,14 @@ from .parameter_constraints import (
     search_constraints,
     validate_parameters,
 )
-from .settings import BASELINE_MODEL_NAME, ROLLOUT_STRIDE, TARGET_MODEL_NAME
+from .settings import BASELINE_MODEL_NAME, HORIZONS, ROLLOUT_STRIDE, TARGET_MODEL_NAME
 
 _GT_KEYS = ("acc_time_delay", "steer_time_delay", "wheelbase", "sub_dt")
 _RMSE_KEYS = ("pos", "long", "lat", "yaw", "steer", "vx", "ax")
 # Keep the optimization objective on the established sparse horizons, while
-# exporting every available integer N up to the already-required N=100 for the
-# comparison report.  A dataset accepted by the sparse evaluation has valid
-# coverage at N=100, so all smaller horizons are available as well.
+# exporting every available integer N up to the maximum score horizon for the
+# comparison report. A dataset accepted by the sparse evaluation has valid
+# coverage at that maximum, so all smaller horizons are available as well.
 REPORT_HORIZONS = tuple(range(1, max(HORIZONS) + 1))
 _DIRECT_FIT_KEYS = frozenset(
     {
@@ -199,7 +199,7 @@ def _evaluate_comparison_report_metrics(
 def _finite_robust_score(aggregate: dict | None) -> float:
     if aggregate is None:
         return math.inf
-    score = robust_score(aggregate)
+    score = robust_score(aggregate, HORIZONS)
     return score if math.isfinite(score) and score >= 0.0 else math.inf
 
 
@@ -324,7 +324,7 @@ def _evaluate_candidate(
     if not aggregate:
         return per_dataset
     baselines = {ctx.dataset_id: ctx.base_metric for ctx in ctxs}
-    return aggregate_normalized(per_dataset, baselines)
+    return aggregate_normalized(per_dataset, baselines, HORIZONS)
 
 
 _SEARCH_CTXS: list[DatasetCtx] = []
@@ -541,7 +541,7 @@ def fit_merge(
     # 1. Evaluate baseline
     baselines = {ctx.dataset_id: ctx.base_metric for ctx in ctxs}
     baseline_metrics = [(ctx.dataset_id, ctx.base_metric) for ctx in ctxs]
-    baseline_agg = aggregate_normalized(baseline_metrics, baselines)
+    baseline_agg = aggregate_normalized(baseline_metrics, baselines, HORIZONS)
     baseline_score = _finite_robust_score(baseline_agg)
 
     # 2. Evaluate tuned (current)
@@ -559,7 +559,7 @@ def fit_merge(
         cur_case.acceleration_source,
         aggregate=False,
     )
-    tuned_agg = aggregate_normalized(tuned_metrics_list, baselines)
+    tuned_agg = aggregate_normalized(tuned_metrics_list, baselines, HORIZONS)
     tuned_score = _finite_robust_score(tuned_agg)
     if not math.isfinite(tuned_score):
         raise RuntimeError("最終パラメータで有限な rollout 指標を計算できませんでした")
@@ -611,7 +611,9 @@ def fit_merge(
     for display_name, _params, _model_type, acceleration_source in comparison_cases:
         if display_name in comparison_results:
             continue
-        aggregate = aggregate_normalized(comparison_sparse_metrics[display_name], baselines)
+        aggregate = aggregate_normalized(
+            comparison_sparse_metrics[display_name], baselines, HORIZONS,
+        )
         comparison_results[display_name] = {
             "score": float(_finite_robust_score(aggregate)),
             "by_h": clean_agg(aggregate),
@@ -624,7 +626,7 @@ def fit_merge(
     print("=" * 72)
     for name, data in comparison_results.items():
         dummy_agg = {"by_h": data["by_h"]}
-        print(f"  {format_agg(name, dummy_agg)}  score={data['score']:.4f}")
+        print(f"  {format_agg(name, dummy_agg, HORIZONS)}  score={data['score']:.4f}")
     print("=" * 72 + "\n")
 
     print(

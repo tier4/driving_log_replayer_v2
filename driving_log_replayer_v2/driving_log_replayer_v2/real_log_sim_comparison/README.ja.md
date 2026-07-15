@@ -68,8 +68,8 @@ raw bag -> CSV cache -> fit_lon -> fit_steer -> fit_merge -> release YAML -> rep
 ```
 
 `fit_merge` が `comparison_models` の全モデル（`current` は `tuned` 表記）の dataset別・horizon別 N-step 指標を `metrics.csv` に一度だけ
-書き出します。最適化スコアは従来どおり N=10/20/30/40/100 で算出し、レポート用指標は
-データが保証される N=1〜100 を1刻みで出力します。`report.html` はメトリクスごとの誤差推移を
+書き出します。最適化スコアは N=10/30/70/150/300 で算出し、レポート用指標は
+データが保証される N=1〜300 を1刻みで出力します。`report.html` はメトリクスごとの誤差推移を
 その CSV から描画し、同じ文書内で CSV キャッシュを一度だけ読んで縦方向・操舵・ヨー (`k_us`)・
 x/y 方程式残差も評価します。N-step 指標のロールアウトは再計算しません。scenario の
 `Evaluation.Conditions.comparison_models` に比較するケース名を列挙します（例:

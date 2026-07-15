@@ -10,6 +10,9 @@ RESAMPLE_DT = 0.01
 ROLLOUT_SUB_DT = 1.0 / 30.0
 ROLLOUT_STRIDE = 5
 
+# Sparse N-step horizons used by the cross-dataset optimization score.
+HORIZONS = (10, 30, 70, 150, 300)
+
 MIN_FIT_SAMPLES = 50
 MIN_K_US_SAMPLES = 10
 

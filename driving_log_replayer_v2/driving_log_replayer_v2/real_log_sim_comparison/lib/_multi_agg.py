@@ -4,12 +4,10 @@ from __future__ import annotations
 
 import statistics as stats
 
-HORIZONS = (10, 20, 30, 40, 100)
-
 # 直進・低ダイナミクス走行の極小 baseline で相対誤差が暴発しないようにする分母フロア。
-YAW_FLOOR  = {10: 0.06, 20: 0.12, 30: 0.18, 40: 0.24, 100: 1.0}    # deg
-LONG_FLOOR = {10: 1.0,  20: 2.0,  30: 3.25, 40: 4.5,  100: 50.0}  # cm
-LAT_FLOOR  = {10: 0.3,  20: 0.6,  30: 0.9,  40: 1.2,  100: 15.0}   # cm
+YAW_FLOOR  = {10: 0.06, 30: 0.18, 70: 0.42, 150: 0.90, 300: 1.80}  # deg
+LONG_FLOOR = {10: 1.0,  30: 3.0,  70: 7.0,  150: 15.0, 300: 30.0} # cm
+LAT_FLOOR  = {10: 0.3,  30: 0.9,  70: 2.1,  150: 4.5,  300: 9.0}  # cm
 
 POS_W = 0.5    # 縦・横 各成分の重み。pos を縦横に分けても yaw:位置 = 1:1 を維持する
 
@@ -32,7 +30,7 @@ def normalize_components(m: dict, baseline: dict, h: int) -> dict:
 def aggregate_normalized(
     per_ds_metrics: list[tuple[str, dict[int, dict]]],
     baselines: dict[str, dict[int, dict]],
-    horizons: tuple[int, ...] = HORIZONS,
+    horizons: tuple[int, ...],
 ) -> dict:
     """Dataset 横断で per-dataset 正規化した yaw/縦/横の mean と worst(max) を horizon 別に返す。
 
@@ -68,7 +66,7 @@ def aggregate_normalized(
 
 def robust_score(
     agg: dict,
-    horizons: tuple[int, ...] = HORIZONS,
+    horizons: tuple[int, ...],
 ) -> float:
     """ロバスト目的関数: 全 horizon の正規化 mean + worst (yaw + 0.5·縦 + 0.5·横)。小さいほど良い。
 
@@ -85,7 +83,7 @@ def robust_score(
     return s
 
 
-def format_agg(tag: str, agg: dict, horizons: tuple[int, ...] = HORIZONS) -> str:
+def format_agg(tag: str, agg: dict, horizons: tuple[int, ...]) -> str:
     """集約結果の 1 行サマリ (探索ログ用)。
 
     ``aggregate_normalized`` 形式を表示する。
