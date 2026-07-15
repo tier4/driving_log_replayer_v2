@@ -73,9 +73,17 @@ raw bag -> CSV cache -> fit_lon -> fit_steer -> fit_merge -> report -> release Y
 データが保証される N=1〜100 を1刻みで出力します。`report.html` はメトリクスごとの誤差推移を
 その CSV から描画するだけなので、同じロールアウトを再計算しません。
 
-`physical_validity.html` は同じ CSV キャッシュを一度だけ準備し、縦方向・操舵・ヨー (`k_us`)・
-x/y 方程式残差を独立に評価します。集約フィット値、RMSE/残差分布、代表時系列、
-有効データセット数、および除外理由を単一HTML内のセクションとして表示します。
+`physical_validity.html` は同じ CSV キャッシュを一度だけ読み、縦方向・操舵・ヨー (`k_us`)・
+x/y 方程式残差を独立に評価します。scenario の
+`Evaluation.Conditions.comparison_models` に比較するケース名を列挙します（例:
+`[baseline, v1, v1_rk4, current]`）。重複・未定義ケースはエラーで、`baseline` と
+`current` は必須です。
+
+各モデルは宣言済みパラメータで固定 RMSE 評価され、baseline 比・サンプル数・使用パラメータを
+比較表と分布で表示します。`baseline` と `v1` は確定済みモデルのためフィットせず、
+`v1_*` を含むその他のモデルと `current` だけに従来のフィット診断を表示します。
+`current` のみ scenario の `params` に `tuned_params.yaml` の `params` を上書きマージして使い、
+それ以外の比較モデルは scenario に書かれた値をそのまま使います。
 
 必須topicがない、データが空、有効区間が短すぎる dataset は理由を表示して除外します。
 同定可能な dataset が1件も残らない場合はエラー終了します。

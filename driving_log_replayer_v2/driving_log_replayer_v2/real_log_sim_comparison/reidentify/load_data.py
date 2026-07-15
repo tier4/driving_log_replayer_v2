@@ -48,7 +48,10 @@ def discover_cached_datasets(collection_dir: Path) -> list[tuple[str, Path]]:
     return result
 
 
-def build_resampled(dfs: dict[str, pd.DataFrame], dt: float, *, context: str) -> dict | None:
+def build_resampled(
+    dfs: dict[str, pd.DataFrame], dt: float, *, context: str,
+    acceleration_source: str = ACCEL_SOURCE,
+) -> dict | None:
     """同定用の信号を一定周期のグリッドへ補間する。
 
     戻り値: {a_cmd, a_act, d_cmd, d_act, vx, wz, gear_drive} (float32配列) | None。
@@ -75,7 +78,7 @@ def build_resampled(dfs: dict[str, pd.DataFrame], dt: float, *, context: str) ->
     a_cmd = np.interp(t_s, (df_cmd["t_ns"].values - t0) * 1e-9, df_cmd["cmd_accel"].values)
 
     a_act = accel_on_grid(
-        ACCEL_SOURCE,
+        acceleration_source,
         df_accel=df_accel,
         df_vel=df_vel,
         df_kin=df_kin,

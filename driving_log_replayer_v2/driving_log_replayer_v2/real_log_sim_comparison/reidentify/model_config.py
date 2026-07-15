@@ -26,6 +26,7 @@ class ModelSpec:
 @dataclass(frozen=True)
 class ModelConfig:
     models: dict[str, ModelSpec]
+    comparison_models: tuple[str, ...]
 
     def find_case(self, name: str) -> ModelSpec:
         try:
@@ -37,7 +38,7 @@ class ModelConfig:
 
 
 def load_model_config(path: str | Path) -> ModelConfig:
-    """Load only the baseline/current model data needed for reidentification."""
+    """Load model data and the physical-validity comparison contract."""
     scenario = Path(path)
     if not scenario.is_file():
         raise FileNotFoundError(f"scenario が見つかりません: {scenario}")
@@ -97,7 +98,21 @@ def load_model_config(path: str | Path) -> ModelConfig:
         )
         if not valid_wheelbase:
             raise ValueError(f"{scenario}: models.{name}.params.wheelbase に正の数値が必要です")
-    return ModelConfig(models=models)
+    raw_comparison_models = conditions.get("comparison_models")
+    if not isinstance(raw_comparison_models, list) or not raw_comparison_models:
+        raise ValueError(f"{scenario}: Evaluation.Conditions.comparison_models が必要です")
+    comparison_models = tuple(str(name) for name in raw_comparison_models)
+    if len(set(comparison_models)) != len(comparison_models):
+        raise ValueError(f"{scenario}: comparison_models に重複があります")
+    undefined = [name for name in comparison_models if name not in models]
+    if undefined:
+        raise ValueError(f"{scenario}: comparison_models に未定義モデルがあります: {undefined}")
+    comparison_missing = {BASELINE_MODEL_NAME, TARGET_MODEL_NAME} - set(comparison_models)
+    if comparison_missing:
+        raise ValueError(
+            f"{scenario}: comparison_models に必須モデルがありません: {sorted(comparison_missing)}"
+        )
+    return ModelConfig(models=models, comparison_models=comparison_models)
 
 
 def resolve_baseline_model(config: ModelConfig) -> tuple[str, dict, str]:
