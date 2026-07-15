@@ -3,7 +3,7 @@ ScenarioName: vehicle_model_reidentify
 
 Evaluation:
   Conditions:
-    comparison_models: [baseline, v1, v1_rk4, v1_c, current]
+    comparison_models: [baseline, v1, v1_rk4, v1_c, v1_p, current]
     models:
       baseline:
         vehicle_model_type: delay_steer_acc_geared_wo_fall_guard
@@ -23,9 +23,10 @@ Evaluation:
           xy_heading_rate_coeff: 0.0
 
       # 確定済みモデル: 物理妥当性レポートではフィットせず固定評価のみ行う。
+      # v1 のリリース時評価は raw /localization/acceleration 基準のため accel を使う。
       v1:
         vehicle_model_type: delay_steer_acc_geared_for_diffusion_planner
-        acceleration_source: kinematic_savgol
+        acceleration_source: accel
         params:
           wheelbase: 4.76012
           acc_time_delay: 0.1
@@ -43,7 +44,7 @@ Evaluation:
       # 検討中モデル: v1 の RK4 バリエーションとしてフィット診断も表示する。
       v1_rk4:
         vehicle_model_type: delay_steer_acc_geared_for_diffusion_planner
-        acceleration_source: kinematic_savgol
+        acceleration_source: accel
         params:
           wheelbase: 4.76012
           acc_time_delay: 0.1
@@ -63,7 +64,7 @@ Evaluation:
       # reidentify/fit_xy.py で 372 dataset (n=2,479,500) から同定した値 (2026-07-15)。
       v1_c:
         vehicle_model_type: delay_steer_acc_geared_for_diffusion_planner
-        acceleration_source: kinematic_savgol
+        acceleration_source: accel
         params:
           wheelbase: 4.76012
           acc_time_delay: 0.1
@@ -77,6 +78,29 @@ Evaluation:
           steer_rate_lim: 0.6
           k_us: 0.018
           xy_heading_rate_coeff: 0.004278
+
+      # 検討中モデル (p 系): v1 にプラトー直接同定の定常補正を追加し、GT を SG 系
+      # (steer_savgol + kinematic_savgol、旧 v1_sg を統合) で評価する ablation。
+      # 補正値は reidentify/fit_plateau.py が steer/ax の N=30 プラトー RMSE から
+      # 318 dataset で同定 (2026-07-16, SG 系 GT 基準)。時定数・むだ時間は v1 のまま固定。
+      # debug_acc_scaling_factor は探索下限 0.9 にクランプ (校正域を超える補正要求のサイン)。
+      v1_p:
+        vehicle_model_type: delay_steer_acc_geared_for_diffusion_planner
+        acceleration_source: kinematic_savgol
+        steering_source: steer_savgol
+        params:
+          wheelbase: 4.76012
+          acc_time_delay: 0.1
+          acc_time_constant: 0.3
+          debug_acc_scaling_factor: 0.9
+          steer_time_delay: 0.05
+          steer_time_constant: 0.15
+          debug_steer_scaling_factor: 1.015827
+          steer_dead_band: 0.0
+          steer_bias: 0.0
+          steer_rate_lim: 0.6
+          k_us: 0.018
+          xy_heading_rate_coeff: 0.0
 
       current:
         vehicle_model_type: delay_steer_acc_geared_for_diffusion_planner
