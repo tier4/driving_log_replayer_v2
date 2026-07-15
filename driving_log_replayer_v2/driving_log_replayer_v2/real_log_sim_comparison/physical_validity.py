@@ -68,15 +68,6 @@ def _number(value: Any) -> str:
     return f"{number:.6g}" if np.isfinite(number) else "—"
 
 
-def _table(headers: list[str], rows: list[list[Any]], empty_message: str) -> str:
-    head = "".join(f"<th>{html.escape(header)}</th>" for header in headers)
-    body = "".join(
-        "<tr>" + "".join(f"<td>{html.escape(str(value))}</td>" for value in row) + "</tr>"
-        for row in rows
-    ) or f'<tr><td colspan="{len(headers)}">{html.escape(empty_message)}</td></tr>'
-    return f"<table><thead><tr>{head}</tr></thead><tbody>{body}</tbody></table>"
-
-
 def _figure_html(fig: go.Figure, title: str) -> str:
     return f"<h3>{html.escape(title)}</h3>{fig.to_html(full_html=False, include_plotlyjs=False)}"
 
@@ -148,49 +139,43 @@ def prepare_datasets(
         except (OSError, ValueError, KeyError, TypeError) as exc:
             context.skipped.append(f"{dataset_id}: {exc}")
 
-    rows = [[item.dataset_id, len(item.data["vx"])] for item in context.datasets]
     skipped = "".join(f"<li>{html.escape(reason)}</li>" for reason in context.skipped)
     section = f"""<section id="prepare"><h2>準備</h2>
-<p>モデル: <code>{html.escape(model_type)}</code> / wheelbase: {_number(wheelbase)} m / 有効データセット: {len(rows)}</p>
-{_table(["dataset", "samples (10 ms)"], rows, "有効データなし")}
+<p>モデル: <code>{html.escape(model_type)}</code> / wheelbase: {_number(wheelbase)} m / 有効データセット: {len(context.datasets)}</p>
 <h3>除外理由</h3>{f'<ul>{skipped}</ul>' if skipped else '<p>なし</p>'}</section>"""
-    return context, ValidationStep("prepare", {"n_valid": len(rows), "skipped": context.skipped}, section)
+    return context, ValidationStep("prepare", {"n_valid": len(context.datasets), "skipped": context.skipped}, section)
 
 
 def validate_longitudinal(context: ValidationContext) -> ValidationStep:
-    rows: list[list[str]] = []
     values: list[float] = []
     series: list[dict[str, Any]] = []
     result: dict[str, Any] = {"datasets": {}}
     for item in context.datasets:
         fit = fit_longitudinal(item.data)
         result["datasets"][item.dataset_id] = fit
-        rows.append([item.dataset_id, _number(fit.get("tau") if fit else None), _number(fit.get("delay") if fit else None), _number(fit.get("rmse") if fit else None), str(fit.get("n", 0) if fit else 0)])
         if fit:
             values.append(float(fit["rmse"]))
             row = dict(item.timeseries)
             row["a_sim_cross_raw"] = _simulate_first_order(item.data["a_cmd"], fit["tau"], fit["delay"], 0.01).tolist()
             series.append(row)
-    section = "<section id=\"longitudinal\"><h2>縦方向</h2>" + _table(["dataset", "τ [s]", "delay [s]", "RMSE", "n"], rows, "フィット可能なデータなし") + _figure_html(_histogram(values, "縦方向フィット RMSE"), "RMSE 分布") + _figure_html(build_fig_cross_long(_pick_longest_contiguous_timeseries_row(series)), "代表時系列") + "</section>"
+    section = "<section id=\"longitudinal\"><h2>縦方向</h2>" + _figure_html(_histogram(values, "縦方向フィット RMSE"), "RMSE 分布") + _figure_html(build_fig_cross_long(_pick_longest_contiguous_timeseries_row(series)), "代表時系列") + "</section>"
     result["rmse"] = values
     return ValidationStep("longitudinal", result, section)
 
 
 def validate_steering(context: ValidationContext) -> ValidationStep:
-    rows: list[list[str]] = []
     values: list[float] = []
     series: list[dict[str, Any]] = []
     result: dict[str, Any] = {"datasets": {}}
     for item in context.datasets:
         fit = fit_steering(item.data)
         result["datasets"][item.dataset_id] = fit
-        rows.append([item.dataset_id, _number(fit.get("tau") if fit else None), _number(fit.get("delay") if fit else None), _number(fit.get("bias") if fit else None), _number(fit.get("rmse") if fit else None), str(fit.get("n", 0) if fit else 0)])
         if fit:
             values.append(float(fit["rmse"]))
             row = dict(item.timeseries)
             row["d_sim_fit_raw"] = (_simulate_first_order(item.data["d_cmd"], fit["tau"], fit["delay"], 0.01) + fit["bias"]).tolist()
             series.append(row)
-    section = "<section id=\"steering\"><h2>操舵</h2>" + _table(["dataset", "τ [s]", "delay [s]", "bias [rad]", "RMSE", "n"], rows, "フィット可能なデータなし") + _figure_html(_histogram(values, "操舵フィット RMSE"), "RMSE 分布") + _figure_html(build_fig_cross_steer(_pick_longest_contiguous_timeseries_row(series)), "代表時系列") + "</section>"
+    section = "<section id=\"steering\"><h2>操舵</h2>" + _figure_html(_histogram(values, "操舵フィット RMSE"), "RMSE 分布") + _figure_html(build_fig_cross_steer(_pick_longest_contiguous_timeseries_row(series)), "代表時系列") + "</section>"
     result["rmse"] = values
     return ValidationStep("steering", result, section)
 
@@ -198,21 +183,18 @@ def validate_steering(context: ValidationContext) -> ValidationStep:
 def validate_yaw(context: ValidationContext) -> ValidationStep:
     datasets = [item.data for item in context.datasets]
     fit = fit_k_us(datasets, wheelbase=context.wheelbase) if datasets else {"k_us": float("nan"), "rmse": float("nan"), "n": 0}
-    rows: list[list[str]] = []
     per_dataset: dict[str, dict[str, float | int]] = {}
     for item in context.datasets:
         residual = yaw_residual(item.data, k_us=float(fit["k_us"]), wheelbase=context.wheelbase)
         metrics = {"rmse": float(np.sqrt(np.mean(residual ** 2))) if len(residual) else float("nan"), "n": int(len(residual))}
         per_dataset[item.dataset_id] = metrics
-        rows.append([item.dataset_id, _number(metrics["rmse"]), str(metrics["n"])])
-    section = f"<section id=\"yaw\"><h2>yaw</h2><p>横断フィット: k_us={_number(fit['k_us'])}, RMSE={_number(fit['rmse'])}, n={fit['n']}</p>{_table(['dataset', 'RMSE', 'n'], rows, '評価可能なデータなし')}</section>"
+    section = f"<section id=\"yaw\"><h2>yaw</h2><p>横断フィット: k_us={_number(fit['k_us'])}, RMSE={_number(fit['rmse'])}, n={fit['n']}</p></section>"
     return ValidationStep("yaw", {"fit": fit, "datasets": per_dataset}, section)
 
 
 def validate_xy(context: ValidationContext) -> ValidationStep:
     datasets = [item.data for item in context.datasets]
     fit = fit_xy_heading_rate_coeff(datasets, initial=float(context.params.get("xy_heading_rate_coeff", 0.0))) if datasets else {"xy_heading_rate_coeff": float("nan"), "rmse": float("nan"), "n": 0}
-    rows: list[list[str]] = []
     per_dataset: dict[str, dict[str, float | int]] = {}
     residuals: list[float] = []
     for item in context.datasets:
@@ -220,9 +202,8 @@ def validate_xy(context: ValidationContext) -> ValidationStep:
         joined = np.concatenate((rx, ry))
         metrics = {"rmse": float(np.sqrt(np.mean(joined ** 2))) if len(joined) else float("nan"), "n": int(len(joined))}
         per_dataset[item.dataset_id] = metrics
-        rows.append([item.dataset_id, _number(metrics["rmse"]), str(metrics["n"])])
         residuals.extend(joined.tolist())
-    section = f"<section id=\"xy\"><h2>x/y</h2><p>横断 heading-rate 係数: {_number(fit['xy_heading_rate_coeff'])}, RMSE={_number(fit['rmse'])}, n={fit['n']}</p>{_table(['dataset', 'RMSE', 'n'], rows, '評価可能なデータなし')}{_figure_html(_histogram(residuals, 'x/y 残差'), '残差分布')}</section>"
+    section = f"<section id=\"xy\"><h2>x/y</h2><p>横断 heading-rate 係数: {_number(fit['xy_heading_rate_coeff'])}, RMSE={_number(fit['rmse'])}, n={fit['n']}</p>{_figure_html(_histogram(residuals, 'x/y 残差'), '残差分布')}</section>"
     return ValidationStep("xy", {"fit": fit, "datasets": per_dataset}, section)
 
 
@@ -230,7 +211,7 @@ def assemble_html(context: ValidationContext, steps: list[ValidationStep]) -> st
     """Aggregate already-rendered sections without performing verification work."""
     sections = "\n".join(step.html for step in steps)
     return f"""<!doctype html><html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>物理的妥当性検証</title>
-<style>body{{font-family:sans-serif;max-width:1200px;margin:2rem auto;line-height:1.5}}table{{border-collapse:collapse;margin:.5rem 0 1.5rem}}td,th{{border:1px solid #bbb;padding:.35rem .6rem;text-align:left}}section{{margin:2rem 0}}.plotly-graph-div{{max-width:100%}}</style>
+<style>body{{font-family:sans-serif;max-width:1200px;margin:2rem auto;line-height:1.5}}section{{margin:2rem 0}}.plotly-graph-div{{max-width:100%}}</style>
 <script>{get_plotlyjs()}</script></head><body><h1>車両モデル物理的妥当性検証</h1>{sections}</body></html>"""
 
 
