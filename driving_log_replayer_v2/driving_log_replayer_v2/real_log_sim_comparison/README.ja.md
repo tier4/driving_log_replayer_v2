@@ -88,17 +88,25 @@ x/y 方程式残差も評価します。N-step 指標のロールアウトは再
 必須topicがない、データが空、有効区間が短すぎる dataset は理由を表示して除外します。
 同定可能な dataset が1件も残らない場合はエラー終了します。
 
-## 単発解析: fit_plateau（プラトー直接同定）
+## スケーリングのプラトー同定（2段構成）
+
+各系統の直接同定は「τ・むだ時間を動的励起データの最小二乗で決定 → scaling factor を
+プラトー（N-step rollout の定常誤差、既定 N=30）の最小化で決定」の2段で行います。
+同定コアは rollout の正式評価を使う `fit_plateau.fit_scaling_channels` の1本に統一されて
+おり、fit_lon / fit_steer が τ/delay 確定後に自チャネルの scaling をこのコアで決め直します。
+steer 終端状態は steer 系のみ、ax 終端状態は acc 系のみに依存するため、目的関数は
+`J_steer(steer scaling)` と `J_ax(acc scaling)` の**独立な1次元フィット**に分離されます
+（`steer_bias` はモデル構造上 steer プラトーに影響しないため対象外）。
+
+### 単発解析: fit_plateau
 
 ```bash
 make fit_plateau ROOT=<collection> SCENARIO=<scenario.yaml>
 ```
 
-steer/ax の N-step 誤差が飽和するプラトー領域（既定 N=30）を使い、時定数・むだ時間を
-固定したまま定常パラメータ（steer/acc スケーリング）だけを軽量に直接同定します
-（`steer_bias` はモデル構造上 steer プラトーに影響しないため対象外）。パイプラインには
-組み込まれておらず、成果物 `<ROOT>/reidentify/plateau_params.yaml` の値を scenario.yaml の
-比較モデル（例: `v1_p`）へ手動転記して使います。`plateau_diagnostics.csv` に
+同じコアを任意の scenario ケース（既定 `v1`）を初期値として実行し、比較モデル
+（例: `v1_p`）向けの scaling を同定します。成果物 `<ROOT>/reidentify/plateau_params.yaml`
+の値を scenario.yaml へ手動転記して使います。`plateau_diagnostics.csv` に
 dataset 別の RMSE と署名付き平均誤差（系統/雑音の分解用）を出力します。
 
 GT ソースは scenario の各モデルで `acceleration_source`（`accel` | `kinematic_savgol` 等）と

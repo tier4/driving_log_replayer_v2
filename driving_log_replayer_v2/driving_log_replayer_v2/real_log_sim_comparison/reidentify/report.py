@@ -693,21 +693,30 @@ def _render_plateau_section(plateau_path: Path) -> str:
 定義式は次節の「評価関数の定義」参照</td>
 <td style="text-align:left">robust_score の act_horizons 項<br>(_multi_agg.py / settings.py)</td></tr>
 <tr><td style="text-align:left">② プラトー値は初期条件に依存しない定常忠実度指標</td>
-<td style="text-align:left">時定数・むだ時間を固定したまま<b>定常パラメータだけを軽量直接同定</b>できる
-(下記 fit_plateau)</td>
-<td style="text-align:left">reidentify/fit_plateau.py<br>(make fit_plateau)</td></tr>
+<td style="text-align:left">各系統で時定数・むだ時間を決定した後、<b>scaling factor をプラトー RMSE の
+最小化で決定</b>できる (下記)。fit_lon / fit_steer が τ/delay 確定後に呼び、単発解析
+make fit_plateau も同じコアを使う</td>
+<td style="text-align:left">fit_plateau.fit_scaling_channels<br>(3・4 章の各ステージ / make fit_plateau)</td></tr>
 <tr><td style="text-align:left">③ 長 horizon の yaw/位置ドリフト = 定常アクチュエータ誤差の積分</td>
 <td style="text-align:left">プラトーの<b>系統成分</b>削減が長期ドリフト削減に直結する
 (比較モデル v1_p は steer/ax 補正のみで yaw/long/lat も全面改善)</td>
 <td style="text-align:left">v1_p (scenario.yaml)</td></tr>
 </table></div>
-<h3>fit_plateau: プラトー定常同定の手順</h3>
-<p>初期値ケース (既定 v1) の \\(\\tau, L, k_{{us}}\\), rate limit を固定し、定常パラメータ
-\\(\\theta = (\\text{{steer scaling}}, \\text{{acc scaling}})\\) をプラトー horizon (既定 N=30) の
-全 dataset 平均 RMSE で直接同定する (Powell、探索域は parameter_constraints.py の SSOT):</p>
-\\[ J(\\theta) = \\frac{{\\overline{{\\text{{steer RMSE}}_{{N}}}}}}{{s_{{\\text{{steer}}}}}}
-             + \\frac{{\\overline{{\\text{{ax RMSE}}_{{N}}}}}}{{s_{{\\text{{ax}}}}}}
-\\quad (s = \\text{{baseline の平均プラトー: 等寄与化スケール}}) \\]
+<h3>スケーリングのプラトー同定: 系統別の 2 段構成</h3>
+<p>各系統の同定は「<b>τ・むだ時間を動的励起データの最小二乗で決定 → scaling factor を
+プラトー (定常残差) で決定</b>」の 2 段で行う。モデル構造上 steer 終端状態は steer 系のみ、
+ax 終端状態は acc 系のみに依存するため、目的関数は系統別に完全に分離した独立の
+1 次元フィットになる:</p>
+\\[ J_{{\\text{{steer}}}}(k_s) = \\overline{{\\text{{steer RMSE}}_{{N}}}},\\qquad
+   J_{{\\text{{ax}}}}(k_a) = \\overline{{\\text{{ax RMSE}}_{{N}}}}
+\\quad (\\text{{各チャネルの生単位、探索域は parameter\\_constraints.py の SSOT}}) \\]
+<p>実装は <b>rollout の正式評価 (fit_merge._eval) を使う単一のコア</b>
+(fit_plateau.fit_scaling_channels) に統一されている: 対象ケースの τ/L/k_us/rate limit を
+固定し、プラトー horizon (既定 N=30) の全 dataset 平均 RMSE を bounded スカラー探索で
+最小化する。呼び出しは 2 箇所 — <b>パイプライン内 (3・4 章)</b> では fit_lon / fit_steer が
+τ/delay 確定後に自チャネルの scaling をこのコアで決め直し (動的励起マスク上の同時推定値は
+τ/delay の同定精度のためだけに使い、採用しない)、<b>単発解析 (make fit_plateau)</b> では
+比較モデル (v1_p など) 向けに任意ケースを初期値として同定し診断 CSV も出力する。</p>
 <div class="note"><b>steer_bias は同定対象に含めない</b>: モデル構造上 steer 状態は
 steer_des × scaling に収束し、bias はヨーレート計算にのみ入るため、プラトー目的関数に対して
 <b>平坦 (同定不能)</b>。探索すると任意の値に漂流する。bias の同定は yaw を見る統合最適化
