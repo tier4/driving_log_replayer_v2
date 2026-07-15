@@ -6,7 +6,14 @@ import numpy as np
 import pandas as pd
 
 from ..lib._events import find_autonomous_start as _find_autonomous_start
-from ..lib._nstep_common import METRIC_KEYS, interp_or_zeros, local_ds, rms, to_seconds
+from ..lib._nstep_common import (
+    MEAN_METRIC_KEYS,
+    METRIC_KEYS,
+    interp_or_zeros,
+    local_ds,
+    rms,
+    to_seconds,
+)
 from .csv_schema import SIGNAL_TOPICS
 from ..lib._params_utils import load_sim_params
 from ..lib._validation import require_non_empty_df
@@ -189,10 +196,14 @@ def eval_rollout_rmse(
     horizons: tuple[int, ...],
     stride: int,
     gt: dict | None = None,
+    *,
+    include_mean: bool = False,
 ) -> dict[int, dict[str, float]]:
     """free-running N-step rollout の horizon 別終端誤差 RMSE を返す。
 
     返り値: {h: {"pos"[cm],"long"[cm],"lat"[cm],"yaw"[deg],"steer"[deg],"vx"[m/s],"ax"[m/s^2]}}
+    include_mean=True のとき、終端誤差の署名付き平均 (MEAN_METRIC_KEYS、err = GT - sim で
+    正 = モデルのアンダーシュート) を同じ単位で追加する (プラトーの系統/雑音分解の診断用)。
     """
     g = gt if gt is not None else _prepare_gt(data, t0_ns, params)
 
@@ -304,6 +315,8 @@ def eval_rollout_rmse(
         valid_mask = ~np.isnan(sim_x[:, i])
         if not np.any(valid_mask):
             res[h] = {metric: float("inf") for metric in METRIC_KEYS}
+            if include_mean:
+                res[h].update({metric: float("inf") for metric in MEAN_METRIC_KEYS})
             continue
 
         mx, my, myaw = sim_x[valid_mask, i], sim_y[valid_mask, i], sim_yaw[valid_mask, i]
@@ -340,5 +353,14 @@ def eval_rollout_rmse(
             "vx": rms(vx_err),
             "ax": rms(ax_err),
         }
+        if include_mean:
+            res[h].update({
+                "long_mean": float(np.mean(ds_long_err)) * 100.0,
+                "lat_mean": float(np.mean(ds_lat_err)) * 100.0,
+                "yaw_mean": float(np.mean(np.degrees(yaw_err))),
+                "steer_mean": float(np.mean(steer_err)) * 180.0 / np.pi,
+                "vx_mean": float(np.mean(vx_err)),
+                "ax_mean": float(np.mean(ax_err)),
+            })
 
     return res

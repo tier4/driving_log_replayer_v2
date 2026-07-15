@@ -7,6 +7,13 @@ import pandas as pd
 # N-step rollout error metrics, in the column order used by metrics.csv.
 METRIC_KEYS: tuple[str, ...] = ("pos", "long", "lat", "yaw", "steer", "vx", "ax")
 
+# 終端誤差の署名付き平均 (err = GT - sim、正 = モデルのアンダーシュート)。
+# eval_rollout_rmse(include_mean=True) のときのみ返る診断用キー。metrics.csv には出力しない。
+# pos は非負量 (誤差ノルム) のため署名付き平均を持たない。
+MEAN_METRIC_KEYS: tuple[str, ...] = (
+    "long_mean", "lat_mean", "yaw_mean", "steer_mean", "vx_mean", "ax_mean",
+)
+
 
 def to_seconds(frame: pd.DataFrame, t0_ns: int) -> pd.DataFrame:
     result = frame.copy()

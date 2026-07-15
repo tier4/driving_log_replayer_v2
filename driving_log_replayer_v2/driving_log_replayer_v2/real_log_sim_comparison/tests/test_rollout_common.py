@@ -3,6 +3,10 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
+from driving_log_replayer_v2.real_log_sim_comparison.lib._nstep_common import (
+    MEAN_METRIC_KEYS,
+    METRIC_KEYS,
+)
 from driving_log_replayer_v2.real_log_sim_comparison.reidentify import rollout
 
 
@@ -86,4 +90,82 @@ def test_rollout_marks_horizon_without_valid_samples_as_infinite(monkeypatch) ->
         gt=_ground_truth(vx=0.0),
     )
 
+    assert all(np.isinf(value) for value in result[1].values())
+
+
+class _FakeLibraryUndershoot:
+    """sim が GT を下回る (err = GT - sim > 0) 終端状態を返すフェイク。"""
+
+    @staticmethod
+    def vm_integrate_to_horizons(*args) -> None:
+        x_out, y_out, yaw_out, vx_out, ax_out, steer_out = args[-6:]
+        x_out[0] = 1.0
+        y_out[0] = 0.0
+        yaw_out[0] = 0.0
+        vx_out[0] = 4.5
+        ax_out[0] = -0.1
+        steer_out[0] = 0.15
+
+
+class _FakeVehicleModelUndershoot(_FakeVehicleModel):
+    def __init__(self, _params: dict, _dt: float, _model_type: str) -> None:
+        super().__init__(_params, _dt, _model_type)
+        self._lib = _FakeLibraryUndershoot()
+
+
+def test_rollout_default_result_has_no_mean_keys(monkeypatch) -> None:
+    monkeypatch.setattr(rollout, "VehicleModel", _FakeVehicleModel)
+
+    result = rollout.eval_rollout_rmse(
+        data={},
+        t0_ns=0,
+        params={"steer_bias": 0.0},
+        model_type="delay_steer_acc_geared_for_diffusion_planner",
+        horizons=(1,),
+        stride=1,
+        gt=_ground_truth(),
+    )
+
+    assert set(result[1]) == set(METRIC_KEYS)
+
+
+def test_rollout_include_mean_returns_signed_errors(monkeypatch) -> None:
+    monkeypatch.setattr(rollout, "VehicleModel", _FakeVehicleModelUndershoot)
+
+    result = rollout.eval_rollout_rmse(
+        data={},
+        t0_ns=0,
+        params={"steer_bias": 0.0},
+        model_type="delay_steer_acc_geared_for_diffusion_planner",
+        horizons=(1,),
+        stride=1,
+        gt=_ground_truth(),
+        include_mean=True,
+    )
+
+    metrics = result[1]
+    assert set(metrics) == set(METRIC_KEYS) | set(MEAN_METRIC_KEYS)
+    # err = GT - sim。GT steer=0.17, sim=0.15 → 正のアンダーシュート。
+    assert metrics["steer_mean"] == pytest.approx(np.degrees(0.02))
+    assert metrics["vx_mean"] == pytest.approx(0.5)
+    assert metrics["ax_mean"] == pytest.approx(0.1)
+    # サンプル 1 点なので RMSE = |mean|。
+    assert metrics["steer"] == pytest.approx(abs(metrics["steer_mean"]))
+
+
+def test_rollout_include_mean_marks_invalid_horizon_as_infinite(monkeypatch) -> None:
+    monkeypatch.setattr(rollout, "VehicleModel", _FakeVehicleModel)
+
+    result = rollout.eval_rollout_rmse(
+        data={},
+        t0_ns=0,
+        params={"steer_bias": 0.0},
+        model_type="delay_steer_acc_geared_for_diffusion_planner",
+        horizons=(1,),
+        stride=1,
+        gt=_ground_truth(vx=0.0),
+        include_mean=True,
+    )
+
+    assert set(result[1]) == set(METRIC_KEYS) | set(MEAN_METRIC_KEYS)
     assert all(np.isinf(value) for value in result[1].values())
