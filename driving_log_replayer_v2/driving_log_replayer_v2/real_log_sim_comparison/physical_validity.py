@@ -1,7 +1,6 @@
 """Parallel physical-validity sections for the unified reidentification report."""
 from __future__ import annotations
 
-import html
 import multiprocessing
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -19,6 +18,7 @@ from .lib._physical_validity import (
     yaw_residual,
 )
 from .lib._parallel import normalize_parallel_jobs, pool_chunksize, set_worker_thread_env_defaults
+from .lib._report_format import escape as _escape, format_number as _number
 from .reidentify.load_data import build_resampled, discover_cached_datasets, read_dataset_csv
 from .reidentify.model_config import ModelSpec, load_model_config
 
@@ -70,16 +70,8 @@ class PhysicalValiditySections:
     xy: str
 
 
-def _number(value: Any) -> str:
-    try:
-        number = float(value)
-    except (TypeError, ValueError):
-        return "—"
-    return f"{number:.6g}" if np.isfinite(number) else "—"
-
-
 def _figure_html(fig: go.Figure, title: str) -> str:
-    return f"<h3>{html.escape(title)}</h3>{fig.to_html(full_html=False, include_plotlyjs=False)}"
+    return f"<h3>{_escape(title)}</h3>{fig.to_html(full_html=False, include_plotlyjs=False)}"
 
 
 def _histogram_by_model(values: dict[str, list[float]], title: str) -> go.Figure:
@@ -212,9 +204,9 @@ def prepare_datasets(
         else:
             context.evaluations.append(evaluation)
     context.evaluations.sort(key=lambda evaluation: evaluation.dataset_id)
-    skipped = "".join(f"<li>{html.escape(reason)}</li>" for reason in context.skipped)
+    skipped = "".join(f"<li>{_escape(reason)}</li>" for reason in context.skipped)
     model_rows = "".join(
-        f"<li><code>{html.escape(model.name)}</code>: {html.escape(model.vehicle_model_type)} / accel={html.escape(model.acceleration_source)} ({'確定済み' if model.finalized else '検討中'})</li>"
+        f"<li><code>{_escape(model.name)}</code>: {_escape(model.vehicle_model_type)} / accel={_escape(model.acceleration_source)} ({'確定済み' if model.finalized else '検討中'})</li>"
         for model in models
     )
     section = f'''<section id="prepare"><h2>準備</h2><p>有効データセット: {len(context.evaluations)}</p>
@@ -254,7 +246,7 @@ def _summary_table(models: list[ComparedModel], results: dict[str, dict[str, Any
             ratio = rmse / baseline if np.isfinite(rmse) and np.isfinite(baseline) and baseline != 0 else float("nan")
         params = ", ".join(f"{key}={_number(model.params.get(key))}" for key in param_keys)
         reason = value.get("reason", "")
-        rows.append(f"<tr><th>{html.escape(model.name)}</th><td>{_number(rmse)}</td><td>{_number(ratio)}</td><td>{value.get('n', 0)}</td><td><code>{html.escape(params)}</code></td><td>{html.escape(reason)}</td></tr>")
+        rows.append(f"<tr><th>{_escape(model.name)}</th><td>{_number(rmse)}</td><td>{_number(ratio)}</td><td>{value.get('n', 0)}</td><td><code>{_escape(params)}</code></td><td>{_escape(reason)}</td></tr>")
     return "<table><thead><tr><th>モデル</th><th>固定評価 RMSE</th><th>baseline 比</th><th>サンプル数</th><th>使用パラメータ</th><th>評価不能理由</th></tr></thead><tbody>" + "".join(rows) + "</tbody></table>"
 
 

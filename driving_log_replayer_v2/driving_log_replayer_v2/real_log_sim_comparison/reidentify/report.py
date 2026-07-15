@@ -10,7 +10,6 @@ from __future__ import annotations
 
 from collections.abc import Iterable
 from collections.abc import Mapping
-import html
 import json
 import math
 from pathlib import Path
@@ -22,6 +21,7 @@ import yaml
 from plotly.offline import get_plotlyjs
 
 from .. import physical_validity
+from ..lib._report_format import escape as _escape, format_number as _format_number
 from .model_config import load_model_config
 from .settings import TARGET_MODEL_NAME
 
@@ -39,20 +39,6 @@ METRIC_UNITS = {
 MODEL_ORDER = ("baseline", "tuned")
 _ZERO_EPSILON = 1.0e-12
 _MODEL_COLORS = ("#667085", "#2563eb", "#16a34a", "#d97706", "#9333ea", "#0891b2", "#e11d48")
-
-
-def _escape(value: Any) -> str:
-    return html.escape(str(value), quote=True)
-
-
-def _format_number(value: Any) -> str:
-    try:
-        number = float(value)
-    except (TypeError, ValueError):
-        return "—"
-    if not math.isfinite(number):
-        return "—"
-    return f"{number:.6g}"
 
 
 def _format_param_value(value: Any) -> str:
@@ -598,14 +584,15 @@ def _load_artifact(path: Path) -> Mapping[str, Any]:
     return raw if isinstance(raw, Mapping) else {}
 
 
-def _render_artifact(path: Path, *, parameter_title: str = "Parameters") -> str:
-    document = _load_artifact(path)
+def _render_artifact_document(document: Mapping[str, Any], path: Path, *, parameter_title: str = "Parameters") -> str:
     params = document.get("params") if isinstance(document.get("params"), Mapping) else {}
-    metadata = document.get("metadata") if isinstance(document.get("metadata"), Mapping) else {}
     source = f'<p class="source">Artifact: {_escape(path)}</p>'
     param_table = _render_params(document, params) if params else '<p class="note">No parameter summary available.</p>'
-    metadata_rows = ((key, _format_param_value(value)) for key, value in sorted(metadata.items()))
     return f'<h3>{_escape(parameter_title)}</h3>{source}{param_table}'
+
+
+def _render_artifact(path: Path, *, parameter_title: str = "Parameters") -> str:
+    return _render_artifact_document(_load_artifact(path), path, parameter_title=parameter_title)
 
 
 def _comparison_model_order(scenario: Path) -> tuple[str, ...]:
@@ -690,7 +677,7 @@ th {{ color:var(--muted); background:var(--wash); font-size:12px; }} th:first-ch
 <section><h2>2. Longitudinal direct identification</h2>{_render_artifact(phase1_path, parameter_title="phase1_acc.yaml")}{physical_sections.longitudinal}</section>
 <section><h2>3. Steering direct identification</h2>{_render_artifact(phase2_path, parameter_title="phase2_steer.yaml")}{physical_sections.steering}{physical_sections.yaw}</section>
 <section><h2>4. XY heading-rate direct identification</h2>{_render_artifact(phase3_path, parameter_title="phase3_xy.yaml")}{physical_sections.xy}</section>
-<section><h2>5. Integrated optimization</h2>{_render_artifact(tuned_path, parameter_title="Final parameters")}<h3>Aggregate comparison</h3><p class="note">Raw columns are mean RMSE. Aggregate and distribution values use the configured optimization horizons; graphs use every available N. Lower is better. Score source identifies the stored aggregate score; parameter source identifies the parameters used for rollout evaluation.</p>{_render_aggregate(document, summary, model_order)}<h3>Error by horizon N</h3><p class="note">Each point is the mean RMSE across valid datasets. Every available N is plotted; lower is better.</p>{_render_horizon_charts(frame, model_order)}<h3>Dataset distributions</h3>{_render_dataset_distribution(summary, model_order)}</section>
+<section><h2>5. Integrated optimization</h2>{_render_artifact_document(document, tuned_path, parameter_title="Final parameters")}<h3>Aggregate comparison</h3><p class="note">Raw columns are mean RMSE. Aggregate and distribution values use the configured optimization horizons; graphs use every available N. Lower is better. Score source identifies the stored aggregate score; parameter source identifies the parameters used for rollout evaluation.</p>{_render_aggregate(document, summary, model_order)}<h3>Error by horizon N</h3><p class="note">Each point is the mean RMSE across valid datasets. Every available N is plotted; lower is better.</p>{_render_horizon_charts(frame, model_order)}<h3>Dataset distributions</h3>{_render_dataset_distribution(summary, model_order)}</section>
 <section><h2>6. Released YAML</h2><p class="source">Released parameter YAML: {_escape(release_path)}</p></section>
 </main></body></html>
 """
