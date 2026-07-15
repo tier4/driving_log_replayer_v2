@@ -107,11 +107,14 @@ def build_resampled(
 
 
 def build_rollout_data(
-    dfs: dict[str, pd.DataFrame], *, acceleration_source: str = "accel"
+    dfs: dict[str, pd.DataFrame], *,
+    acceleration_source: str = "accel",
+    steering_source: str = "steer",
 ) -> dict[str, pd.DataFrame]:
     """rollout 評価が使う DataFrame 群を組み立てる。"""
     df_vel = dfs["velocity"].rename(columns={"lon_vel": "vx"})
     from ..lib._accel_source import accel_dataframe_from_source
+    from ..lib._steer_source import steer_dataframe_from_source
 
     df_acc = accel_dataframe_from_source(
         acceleration_source,
@@ -121,12 +124,13 @@ def build_rollout_data(
         out_col="ax",
     )
     df_acc["ay"] = 0.0
+    df_steer = steer_dataframe_from_source(steering_source, df_steer=dfs["steering"])
     df_cmd = dfs["cmd"].rename(columns={"cmd_accel": "accel_des", "cmd_steer": "steer_des"})
     df_cmd = df_cmd[["t_ns", "accel_des", "steer_des"]]
     return {
         "mode": dfs["mode"],
         "vel": df_vel,
-        "steer": dfs["steering"],
+        "steer": df_steer,
         "kin": dfs["kinematic"],
         "acc": df_acc,
         "cmd": df_cmd,

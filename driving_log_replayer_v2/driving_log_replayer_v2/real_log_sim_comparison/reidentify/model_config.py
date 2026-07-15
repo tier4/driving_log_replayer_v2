@@ -9,6 +9,7 @@ import re
 import yaml
 
 from ..lib._accel_source import normalize_accel_source
+from ..lib._steer_source import normalize_steer_source
 from ..lib._vehicle_models import SUPPORTED_VMT
 from .settings import BASELINE_MODEL_NAME, TARGET_MODEL_NAME, TARGET_MODEL_TYPE
 
@@ -20,6 +21,7 @@ class ModelSpec:
     name: str
     vehicle_model_type: str
     acceleration_source: str
+    steering_source: str
     params: dict
 
 
@@ -75,6 +77,9 @@ def load_model_config(path: str | Path) -> ModelConfig:
             vehicle_model_type=model_type,
             acceleration_source=normalize_accel_source(
                 raw_spec.get("acceleration_source"), default="accel"
+            ),
+            steering_source=normalize_steer_source(
+                raw_spec.get("steering_source"), default="steer"
             ),
             params=dict(params),
         )
