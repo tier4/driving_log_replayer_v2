@@ -1,13 +1,18 @@
 #!/usr/bin/env python3
-"""プラトー領域の steer/ax RMSE から定常アクチュエータパラメータを直接同定する独立解析。
+"""プラトー領域の steer/ax RMSE から定常スケーリングを直接同定する独立解析。
 
 steer/ax の open-loop N-step 誤差は、初期状態の記憶が消える N≈20 (steer) / N≈9 (ax)
 以降、コマンド履歴だけで決まる定常誤差に飽和する (プラトー特性)。プラトー値は
-初期条件に依存しないアクチュエータ定常忠実度の指標なので、時定数・むだ時間を固定した
-まま定常パラメータ (steer_bias / steer・acc スケーリング) だけを軽量に直接同定できる。
+初期条件に依存しないアクチュエータ定常忠実度の指標なので、各系統の時定数・むだ時間を
+固定したまま scaling factor だけを軽量に直接同定できる。
 
-7 ステージパイプラインには組み込まない単発解析。結果は scenario.yaml の比較モデル
-(例: v1_p) へ手動転記する。実行例:
+モデル構造上 steer 終端状態は steer 系のみ、ax 終端状態は acc 系のみに依存するため、
+目的関数は系統別に完全に分離できる。「τ/delay 決定後の scaling 決定」は steer / ax の
+独立な 1 次元フィットとして fit_scaling_channels に実装されており、パイプラインの
+fit_lon / fit_steer も同じコアを τ/delay 確定後に呼ぶ (実装は rollout 正式評価の 1 本のみ)。
+
+この CLI は同じコアを任意ケース (既定 v1) を初期値に単発実行するもので、結果は
+scenario.yaml の比較モデル (例: v1_p) へ手動転記する。実行例:
 
     make fit_plateau ROOT=<collection> SCENARIO=<scenario.yaml>
 """
@@ -22,8 +27,7 @@ from pathlib import Path
 import statistics as stats
 import sys
 
-import numpy as np
-from scipy.optimize import minimize
+from scipy.optimize import minimize_scalar
 import yaml
 
 from ..lib._parallel import (
@@ -37,16 +41,22 @@ from .model_config import load_model_config, resolve_baseline_model
 from .parameter_constraints import PARAMETER_CONSTRAINTS
 from .settings import DEFAULT_OUTPUT_DIR_NAME, HORIZONS
 
-# 同定対象の定常パラメータ。時定数・むだ時間 (過渡特性) は対象外で case の値を固定する。
+# 系統別の (プラトー指標, 同定する scaling キー)。時定数・むだ時間 (過渡特性) は対象外で
+# case の値を固定する。steer 終端状態は steer 系のみ、ax 終端状態は acc 系のみに依存する
+# ため、各チャネルは独立の 1 次元フィットとして分離できる。
 # steer_bias は含めない: モデル構造上 steer 状態は steer_des·scaling に収束し、bias は
 # ヨーレート計算にのみ入る (sim_model_delay_steer_acc_geared_for_diffusion_planner.cpp)。
 # そのため steer/ax プラトー目的関数に対して平坦 (同定不能) で、探索すると任意の値に漂流する。
 # bias の同定は yaw を見る fit_merge に委ねる。
-THETA_KEYS = ("debug_steer_scaling_factor", "debug_acc_scaling_factor")
+CHANNELS: tuple[tuple[str, str], ...] = (
+    ("steer", "debug_steer_scaling_factor"),
+    ("ax", "debug_acc_scaling_factor"),
+)
+THETA_KEYS = tuple(key for _metric, key in CHANNELS)
 DEFAULT_CASE = "v1"
 # steer (N≈20)・ax (N≈9) の両方が飽和済みで、かつ HORIZONS ⊆ (base_metric を流用できる)。
 DEFAULT_HORIZON = 30
-# 無効 rollout 用の有限ペナルティ (Powell は inf より有限大値の方が安定)。
+# 無効 rollout 用の有限ペナルティ (有界スカラー探索は inf より有限大値の方が安定)。
 _PENALTY = 1.0e9
 
 # fork worker が COW で読み取り継承する globals (fit_merge の _SEARCH_* と同じパターン)。
@@ -78,41 +88,39 @@ def _eval_all(
     return list(pool.imap(_eval_one, tasks, chunksize=pool_chunksize(len(tasks), n_workers)))
 
 
-def _plateau_score(
-    steer_vals: list[float], ax_vals: list[float], scale_steer: float, scale_ax: float,
-) -> float:
-    """プラトー目的関数: steer/ax の全 dataset 平均 RMSE を baseline スケールで等寄与に合算。"""
-    return stats.mean(steer_vals) / scale_steer + stats.mean(ax_vals) / scale_ax
-
-
-def _plateau_terms(metrics: list[dict | None], horizon: int) -> tuple[list[float], list[float]] | None:
-    """全 dataset の steer/ax プラトー RMSE。ひとつでも無効なら None (ペナルティ)。"""
-    steer_vals: list[float] = []
-    ax_vals: list[float] = []
+def _plateau_channel_values(
+    metrics: list[dict | None], horizon: int, metric_key: str,
+) -> list[float] | None:
+    """全 dataset の単一チャネルのプラトー RMSE。ひとつでも無効なら None (ペナルティ)。"""
+    values: list[float] = []
     for metric in metrics:
         if metric is None:
             return None
-        steer = float(metric[horizon]["steer"])
-        ax = float(metric[horizon]["ax"])
-        if not (math.isfinite(steer) and math.isfinite(ax)):
+        value = float(metric[horizon][metric_key])
+        if not math.isfinite(value):
             return None
-        steer_vals.append(steer)
-        ax_vals.append(ax)
-    return steer_vals, ax_vals
+        values.append(value)
+    return values
 
 
-def fit_plateau(
+def fit_scaling_channels(
     collection_dir: Path,
     scenario: Path,
     *,
     case_name: str = DEFAULT_CASE,
+    override_params: dict | None = None,
+    channels: tuple[tuple[str, str], ...] = CHANNELS,
     horizon: int = DEFAULT_HORIZON,
     n_jobs: int = 1,
     acceleration_source: str | None = None,
     steering_source: str | None = None,
+    with_diagnostics: bool = False,
 ) -> dict:
-    """case のパラメータを初期値に、プラトー RMSE を最小化する定常パラメータを同定する。
+    """case のパラメータを初期値に、プラトー RMSE を最小化する scaling を系統別に同定する。
 
+    rollout の正式実装 (fit_merge._eval) を使う唯一のプラトー同定コアで、
+    単発解析 (fit_plateau CLI) と各ステージ (fit_lon / fit_steer) の両方から呼ばれる。
+    override_params は case パラメータへの上書き (ステージが確定させた τ/delay 等)。
     acceleration_source / steering_source を指定すると case の GT ソースを上書きする
     (例: v1 を初期値に SG 系 GT で同定して v1_p に転記する場合)。
     """
@@ -131,9 +139,10 @@ def fit_plateau(
     baseline_steer_source = cfg.models[baseline_case].steering_source
     case = cfg.find_case(case_name)
     base_params = dict(case.params)
-    for key in THETA_KEYS:
+    base_params.update(override_params or {})
+    for _metric, key in channels:
         if key not in base_params:
-            raise ValueError(f"scenario の '{case_name}' に {key} がありません")
+            raise ValueError(f"scenario の '{case_name}' + override に {key} がありません")
 
     set_worker_thread_env_defaults()
 
@@ -172,74 +181,74 @@ def fit_plateau(
         raise RuntimeError(f"{case_name} で有効な dataset が 0 件です")
     print(f"[fit_plateau] 有効 dataset: {len(_CTXS)}/{len(tasks)}", file=sys.stderr)
 
-    # steer/ax を等寄与にするスケール = baseline のプラトー平均 (load 時の base_metric を流用)。
-    scale_steer = stats.mean(float(ctx.base_metric[horizon]["steer"]) for ctx in _CTXS)
-    scale_ax = stats.mean(float(ctx.base_metric[horizon]["ax"]) for ctx in _CTXS)
-    if not (scale_steer > 0.0 and scale_ax > 0.0):
-        raise RuntimeError(f"baseline プラトーが退化しています (steer={scale_steer}, ax={scale_ax})")
-
-    bounds = []
-    for key in THETA_KEYS:
+    bounds: dict[str, tuple[float, float]] = {}
+    for _metric, key in channels:
         search_bounds = PARAMETER_CONSTRAINTS[key].search_bounds
         if search_bounds is None:
             raise RuntimeError(f"{key} に search_bounds がありません (SSOT を確認)")
-        bounds.append(search_bounds)
-    x0 = np.array([
-        min(hi, max(lo, float(base_params[key])))
-        for key, (lo, hi) in zip(THETA_KEYS, bounds)
-    ])
+        bounds[key] = search_bounds
 
     n_workers = normalize_parallel_jobs(n_jobs, n_tasks=len(_CTXS))
     pool = (
         multiprocessing.get_context("fork").Pool(n_workers) if n_workers > 1 else None
     )
-    n_evals = 0
-
-    def objective(theta: np.ndarray) -> float:
-        nonlocal n_evals
-        n_evals += 1
-        params = dict(base_params)
-        params.update({key: float(value) for key, value in zip(THETA_KEYS, theta)})
-        terms = _plateau_terms(
-            _eval_all(pool, params, (horizon,), n_workers=n_workers), horizon,
-        )
-        if terms is None:
-            return _PENALTY
-        steer_vals, ax_vals = terms
-        score = _plateau_score(steer_vals, ax_vals, scale_steer, scale_ax)
-        if n_evals % 10 == 1:
-            print(
-                f"[fit_plateau] eval {n_evals}: score={score:.6f} "
-                f"theta={dict(zip(THETA_KEYS, [round(float(v), 6) for v in theta]))}",
-                file=sys.stderr,
-            )
-        return score
 
     try:
-        initial_terms = _plateau_terms(kept_metrics, horizon)
-        assert initial_terms is not None
-        objective_initial = _plateau_score(*initial_terms, scale_steer, scale_ax)
-        result = minimize(
-            objective, x0, method="Powell", bounds=bounds,
-            options={"xtol": 1e-4, "ftol": 1e-6},
-        )
-        fitted = {
-            key: PARAMETER_CONSTRAINTS[key].clamp(float(value))
-            for key, value in zip(THETA_KEYS, result.x)
-        }
+        # 系統別に独立な 1 次元フィット: 各チャネルの目的関数は自チャネルの
+        # scaling にしか依存しないため、順序に依らず分離して解ける。
+        fitted: dict[str, float] = {}
+        objectives: dict[str, dict[str, float]] = {}
+        for metric_key, param_key in channels:
+            initial_values = _plateau_channel_values(kept_metrics, horizon, metric_key)
+            assert initial_values is not None
+            n_evals = 0
+
+            def objective(scale: float) -> float:
+                nonlocal n_evals
+                n_evals += 1
+                params = dict(base_params)
+                params[param_key] = float(scale)
+                values = _plateau_channel_values(
+                    _eval_all(pool, params, (horizon,), n_workers=n_workers),
+                    horizon, metric_key,
+                )
+                if values is None:
+                    return _PENALTY
+                score = stats.mean(values)
+                if n_evals % 5 == 1:
+                    print(
+                        f"[fit_plateau] {metric_key} eval {n_evals}: "
+                        f"{param_key}={float(scale):.6f} mean RMSE={score:.6f}",
+                        file=sys.stderr,
+                    )
+                return score
+
+            result = minimize_scalar(
+                objective, bounds=bounds[param_key], method="bounded",
+                options={"xatol": 1e-4},
+            )
+            fitted[param_key] = PARAMETER_CONSTRAINTS[param_key].clamp(float(result.x))
+            objectives[metric_key] = {
+                "initial": float(stats.mean(initial_values)),
+                "final": float(result.fun),
+                "n_evals": n_evals,
+            }
         fitted_params = dict(base_params)
         fitted_params.update(fitted)
 
-        # 診断: 過渡 (N=1, 10) とプラトー (N=horizon) で before/after の RMSE と署名付き平均。
+        # 診断 (任意): 過渡 (N=1, 10) とプラトー (N=horizon) で before/after の
+        # RMSE と署名付き平均。
         diag_horizons = tuple(sorted({1, 10, horizon}))
-        diag = {
-            case_name: _eval_all(
-                pool, base_params, diag_horizons, include_mean=True, n_workers=n_workers,
-            ),
-            f"{case_name}_p": _eval_all(
-                pool, fitted_params, diag_horizons, include_mean=True, n_workers=n_workers,
-            ),
-        }
+        diag = None
+        if with_diagnostics:
+            diag = {
+                case_name: _eval_all(
+                    pool, base_params, diag_horizons, include_mean=True, n_workers=n_workers,
+                ),
+                f"{case_name}_p": _eval_all(
+                    pool, fitted_params, diag_horizons, include_mean=True, n_workers=n_workers,
+                ),
+            }
     finally:
         if pool is not None:
             pool.close()
@@ -251,20 +260,18 @@ def fit_plateau(
         "diag_horizons": diag_horizons,
         "params": fitted_params,
         "fitted": fitted,
-        "objective_initial": float(objective_initial),
-        "objective_final": float(result.fun),
-        "scale_steer_deg": float(scale_steer),
-        "scale_ax_mps2": float(scale_ax),
-        "n_evals": n_evals,
+        # チャネル別の平均プラトー RMSE (steer: deg / ax: m/s^2 の生単位)。
+        "objectives": objectives,
         "dataset_ids": [ctx.dataset_id for ctx in _CTXS],
         "diagnostics": diag,
         "metadata": {
             "tuning_type": "plateau_direct_fit",
             "case": case_name,
+            "override_keys": sorted(override_params or {}),
             "horizon": horizon,
             "acceleration_source": _ACCEL_SOURCE,
             "steering_source": _STEER_SOURCE,
-            "theta_keys": list(THETA_KEYS),
+            "channels": [list(channel) for channel in channels],
             "n_datasets": len(tasks),
             "n_valid": len(_CTXS),
             "skipped": skipped,
@@ -300,17 +307,19 @@ def _write_diagnostics_csv(out: Path, result: dict) -> None:
 def _print_summary(result: dict) -> None:
     horizon = result["horizon"]
     case_name = result["case_name"]
-    print(f"\n[fit_plateau] 同定結果 (N={horizon}, evals={result['n_evals']}):")
-    for key, value in result["fitted"].items():
-        print(f"  {key} = {value:.6f}")
-    improvement = (
-        f" ({(1 - result['objective_final'] / result['objective_initial']):+.1%} 改善)"
-        if result["objective_initial"] > 0.0 else ""
-    )
-    print(
-        f"  objective: {result['objective_initial']:.6f} -> {result['objective_final']:.6f}"
-        + improvement
-    )
+    print(f"\n[fit_plateau] 同定結果 (N={horizon}, 系統別 1 次元フィット):")
+    units = {"steer": "deg", "ax": "m/s^2"}
+    for metric_key, param_key in CHANNELS:
+        obj = result["objectives"][metric_key]
+        improvement = (
+            f" ({(1 - obj['final'] / obj['initial']):+.1%} 改善)"
+            if obj["initial"] > 0.0 else ""
+        )
+        print(
+            f"  {metric_key:5s} {param_key} = {result['fitted'][param_key]:.6f}"
+            f"  mean RMSE {obj['initial']:.6f} -> {obj['final']:.6f} {units[metric_key]}"
+            f"{improvement} (evals={obj['n_evals']})"
+        )
     for model in (case_name, f"{case_name}_p"):
         metrics = [m for m in result["diagnostics"][model] if m is not None]
         if not metrics:
@@ -338,9 +347,10 @@ def run(
     acceleration_source: str | None = None,
     steering_source: str | None = None,
 ) -> dict:
-    result = fit_plateau(
+    result = fit_scaling_channels(
         collection_dir, scenario, case_name=case_name, horizon=horizon, n_jobs=n_jobs,
         acceleration_source=acceleration_source, steering_source=steering_source,
+        with_diagnostics=True,
     )
     out_dir.mkdir(parents=True, exist_ok=True)
 
@@ -351,10 +361,8 @@ def run(
                 "params": result["params"],
                 "metadata": {
                     **result["metadata"],
-                    "objective_initial": result["objective_initial"],
-                    "objective_final": result["objective_final"],
-                    "scale_steer_deg": result["scale_steer_deg"],
-                    "scale_ax_mps2": result["scale_ax_mps2"],
+                    # チャネル別の平均プラトー RMSE (steer: deg / ax: m/s^2)。
+                    "objectives": result["objectives"],
                 },
             },
             stream, sort_keys=True, allow_unicode=True,
