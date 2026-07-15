@@ -83,7 +83,8 @@ def test_report_metrics_use_every_dense_horizon(monkeypatch) -> None:
     calls: list[tuple[str, tuple[int, ...]]] = []
 
     def fake_eval(
-        _ctx, _params, model_type, _source, *, horizons=fit_merge.HORIZONS
+        _ctx, _params, model_type, _source, _steer_source="steer",
+        *, horizons=fit_merge.HORIZONS,
     ):
         calls.append((model_type, horizons))
         return {
@@ -114,7 +115,10 @@ def test_comparison_report_metrics_evaluate_every_declared_model(monkeypatch) ->
     context = fit_merge.DatasetCtx(dataset_id="dataset-a", dfs={}, t0_ns=0, base={})
     calls: list[str] = []
 
-    def fake_eval(_ctx, _params, model_type, _source, *, horizons=fit_merge.HORIZONS):
+    def fake_eval(
+        _ctx, _params, model_type, _source, _steer_source="steer",
+        *, horizons=fit_merge.HORIZONS,
+    ):
         calls.append(model_type)
         return {horizon: {key: float(horizon) for key in fit_merge._RMSE_KEYS} for horizon in horizons}
 
@@ -122,10 +126,10 @@ def test_comparison_report_metrics_evaluate_every_declared_model(monkeypatch) ->
     result = fit_merge._evaluate_comparison_report_metrics(
         [context],
         [
-            ("baseline", {}, "baseline-model", "accel"),
-            ("v1", {}, "v1-model", "accel"),
-            ("v1_rk4", {}, "rk4-model", "accel"),
-            ("tuned", {}, "tuned-model", "accel"),
+            ("baseline", {}, "baseline-model", "accel", "steer"),
+            ("v1", {}, "v1-model", "accel", "steer"),
+            ("v1_rk4", {}, "rk4-model", "accel", "steer"),
+            ("tuned", {}, "tuned-model", "accel", "steer_savgol"),
         ],
     )
 
@@ -144,12 +148,16 @@ def test_robust_search_parallel_evaluates_each_trial_once(monkeypatch) -> None:
                 "nlong_worst": 1.0,
                 "nlat_mean": 1.0,
                 "nlat_worst": 1.0,
+                "nsteer_mean": 1.0,
+                "nsteer_worst": 1.0,
+                "nax_mean": 1.0,
+                "nax_worst": 1.0,
             }
             for horizon in fit_merge.HORIZONS
         }
     }
 
-    def fake_evaluate_candidate(_ctxs, _params, _model_type, _source, **_kwargs):
+    def fake_evaluate_candidate(_ctxs, _params, _model_type, _source, _steer_source="steer", **_kwargs):
         return aggregate
 
     monkeypatch.setattr(fit_merge, "_evaluate_candidate", fake_evaluate_candidate)
@@ -175,7 +183,7 @@ def test_robust_search_parallel_evaluates_each_trial_once(monkeypatch) -> None:
 
 
 def test_robust_search_uses_direct_fit_for_single_trial(monkeypatch) -> None:
-    def fake_evaluate_candidate(_ctxs, params, _model_type, _source, **_kwargs):
+    def fake_evaluate_candidate(_ctxs, params, _model_type, _source, _steer_source="steer", **_kwargs):
         value = float(params["acc_time_constant"])
         return {
             "by_h": {
@@ -186,6 +194,10 @@ def test_robust_search_uses_direct_fit_for_single_trial(monkeypatch) -> None:
                     "nlong_worst": value,
                     "nlat_mean": value,
                     "nlat_worst": value,
+                    "nsteer_mean": value,
+                    "nsteer_worst": value,
+                    "nax_mean": value,
+                    "nax_worst": value,
                 }
                 for horizon in fit_merge.HORIZONS
             }
@@ -353,6 +365,8 @@ def test_fit_merge_skips_optuna_when_all_targets_are_disabled(
                 "nyaw_mean": 1.0, "nyaw_worst": 1.0,
                 "nlong_mean": 1.0, "nlong_worst": 1.0,
                 "nlat_mean": 1.0, "nlat_worst": 1.0,
+                "nsteer_mean": 1.0, "nsteer_worst": 1.0,
+                "nax_mean": 1.0, "nax_worst": 1.0,
             }
             for horizon in fit_merge.HORIZONS
         }
@@ -413,7 +427,7 @@ def test_rollout_gt_cache_is_bounded_to_active_trial(monkeypatch) -> None:
             "sub_dt": 1 / 30,
         },
     )
-    context.data_cache["accel"] = {}
+    context.data_cache[("accel", "steer")] = {}
     monkeypatch.setattr(
         fit_merge.rollout,
         "_prepare_gt",
