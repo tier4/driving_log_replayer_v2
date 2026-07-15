@@ -408,7 +408,27 @@ def robust_search(
                     for params in candidates
                 ]
             else:
-                scores = list(executor.map(_eval_search_candidate, candidates))
+                try:
+                    scores = list(executor.map(_eval_search_candidate, candidates))
+                except Exception as exc:  # noqa: BLE001 (worker may die outside Python)
+                    # A native dependency or external signal can terminate a
+                    # fork worker without returning its original exception.
+                    # Preserve the already completed Optuna trials and retry
+                    # this batch in the parent, which also prevents every
+                    # subsequent batch from failing with BrokenProcessPool.
+                    print(
+                        "[WARN] 並列 rollout worker が終了しました "
+                        f"({type(exc).__name__}: {exc}); このバッチ以降は逐次評価します",
+                        file=sys.stderr,
+                    )
+                    executor.shutdown(wait=False, cancel_futures=True)
+                    executor = None
+                    scores = [
+                        _finite_robust_score(
+                            _evaluate_candidate(ctxs, params, cur_model, cur_accel_source)
+                        )
+                        for params in candidates
+                    ]
 
             for trial, params, score in zip(trials, candidates, scores):
                 study.tell(trial, score)

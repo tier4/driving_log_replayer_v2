@@ -47,7 +47,7 @@ help:
 	@echo "  N_TRIALS=$(N_TRIALS) N_JOBS=$(N_JOBS) FORCE=$(FORCE) NO_SETUP=$(NO_SETUP)"
 	@echo "  従来互換: MULTI_BATCH_ROOT→ROOT, LOCAL_SCENARIO/LOCAL_SAMPLE_DIR→SCENARIO, REAL_LOG_SIM_COMPARISON_JOBS→N_JOBS"
 	@echo ""
-	@echo "成果物: <ROOT>/reidentify/{phase1_acc.yaml,phase2_steer.yaml,tuned_params.yaml,metrics.csv,report.html,simulator_model.param.yaml}"
+	@echo "成果物: <ROOT>/reidentify/{phase1_acc.yaml,phase2_steer.yaml,tuned_params.yaml,metrics.csv,report.html,physical_validity_report.html,simulator_model.param.yaml}"
 
 reidentify:
 	@test -n "$(strip $(ROOT))" || { echo "[ERROR] ROOT is required"; exit 2; }

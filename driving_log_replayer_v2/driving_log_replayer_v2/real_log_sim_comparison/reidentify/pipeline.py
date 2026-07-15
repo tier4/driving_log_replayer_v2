@@ -73,6 +73,7 @@ def _step_report(
     metrics_out: Path,
     extraction_summary: dict,
     fit_result: dict,
+    scenario: Path | None = None,
 ) -> None:
     from . import report  # noqa: PLC0415
 
@@ -86,6 +87,15 @@ def _step_report(
         out_dir / "report.html",
         failures=summary,
     )
+    if tuned_out.is_file() and (out_dir.parent / "datasets").is_dir():
+        from .. import physical_validity_report  # noqa: PLC0415
+
+        physical_validity_report.build_report(
+            out_dir.parent,
+            tuned_out,
+            out_dir / "physical_validity_report.html",
+            scenario=scenario,
+        )
 
 
 def _step_release(tuned_out: Path, out_dir: Path, input_param: Path) -> Path:
@@ -147,7 +157,7 @@ def main() -> None:
     )
 
     print("\n[pipeline] === 5/6 report ===")
-    _step_report(out_dir, tuned_out, metrics_out, extraction_summary, fit_result)
+    _step_report(out_dir, tuned_out, metrics_out, extraction_summary, fit_result, args.scenario)
 
     print("\n[pipeline] === 6/6 release ===")
     _step_release(tuned_out, out_dir, args.input_param)
