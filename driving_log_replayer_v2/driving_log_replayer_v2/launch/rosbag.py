@@ -237,12 +237,20 @@ def _append_perception_reproducer_options(cmd: list[str], reproducer_config: dic
         ("expand_radius_scale", "--expand-radius-scale"),
         ("perturb_distance", "--perturb-distance"),
     )
+    value_defaults = {
+        "search_radius": 1.5,
+        "reproduce_cool_down": 999.0,
+        "stuck_duration": 5.0,
+        "expand_radius_scale": 3.0,
+        "perturb_distance": 0.5,
+    }
     for key, default, flag in bool_flags:
         if reproducer_config.get(key, default):
             cmd.append(flag)
     for key, flag in value_flags:
-        if reproducer_config.get(key) is not None:
-            cmd.extend([flag, str(reproducer_config[key])])
+        value = reproducer_config[key] if key in reproducer_config else value_defaults.get(key)
+        if value is not None:
+            cmd.extend([flag, str(value)])
 
 
 def launch_perception_reproducer(context: LaunchContext) -> list:
