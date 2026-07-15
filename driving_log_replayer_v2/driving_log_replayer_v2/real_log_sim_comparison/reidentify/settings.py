@@ -15,6 +15,12 @@ ROLLOUT_STRIDE = 5
 # Sparse N-step horizons used by the cross-dataset optimization score.
 HORIZONS = (10, 30, 70, 150, 300)
 
+# robust_score のアクチュエータ (steer/ax) 項に使う horizon。HORIZONS のサブセットであること
+# (rollout の追加評価なしで済む。tests/test_multi_agg.py でアサート)。
+# steer/ax の open-loop 誤差は N≈20 (steer) / N≈9 (ax) で定常値に飽和するプラトー特性を持つため、
+# 過渡 (N=10: 時定数/むだ時間の情報) とプラトー (N=30: 定常ゲイン/バイアスの情報) の 2 点で足りる。
+ACT_SCORE_HORIZONS = (10, 30)
+
 MIN_FIT_SAMPLES = 50
 MIN_K_US_SAMPLES = 10
 
