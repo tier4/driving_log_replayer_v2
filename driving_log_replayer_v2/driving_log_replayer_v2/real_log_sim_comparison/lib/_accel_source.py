@@ -25,7 +25,11 @@ ACCEL_DELAY_MAP: dict[str, float] = {
     "velocity_savgol": 0.0,
 }
 
-ACCEL_SAVGOL_WINDOW_S = 0.2
+# savgol 微分の窓長。0.4 s (polyorder=2, 100 Hz) の実効カットオフは理想微分器比 -3dB で
+# 約 1.4 Hz。旧 0.2 s (カットオフ 2.76 Hz) + 2 Hz ゼロ位相 LPF のカスケードと同等の
+# 雑音フロア低減 (ax 残差 RMS 0.215→0.201, 12 dataset 実測) を別フィルタなしで窓に統合した値。
+# acc アクチュエータ帯域 1/(2πτ)≈0.53 Hz の ~2.7 倍を確保し過渡同定 (fit_lon) を損なわない。
+ACCEL_SAVGOL_WINDOW_S = 0.4
 ACCEL_SAVGOL_POLYORDER = 2
 
 
