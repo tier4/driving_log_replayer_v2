@@ -289,12 +289,25 @@ def _render_aggregate(document: Mapping[str, Any], frame: pd.DataFrame, model_or
         yaml_score = _yaml_score(document, model)
         derived_score = float(model_rows["normalized_score"].mean())
         score = yaml_score if yaml_score is not None else derived_score
-        source = "tuned_params.yaml" if yaml_score is not None else "normalized RMSE ratio"
+        score_source = (
+            f"tuned_params.yaml: comparison.{model}.score"
+            if yaml_score is not None
+            else "normalized RMSE ratio"
+        )
+        # ``fit_merge`` replaces only ``current`` (shown as ``tuned``) with the
+        # fitted parameters.  Every other comparison model is evaluated with its
+        # declared scenario parameters, including released models such as v1.
+        parameter_source = (
+            "tuned_params.yaml: params"
+            if model == "tuned"
+            else f"scenario.yaml: models.{model}.params (fixed)"
+        )
         rows.append(
             (
                 model,
                 _format_number(score),
-                source,
+                score_source,
+                parameter_source,
                 _format_number(derived_score),
                 *(_format_number(model_rows[metric].mean()) for metric in REQUIRED_METRICS),
             )
@@ -304,6 +317,7 @@ def _render_aggregate(document: Mapping[str, Any], frame: pd.DataFrame, model_or
             "Model",
             "Aggregate score",
             "Score source",
+            "Parameter source",
             "Mean normalized RMSE",
             *REQUIRED_METRICS,
         ),
@@ -591,8 +605,7 @@ def _render_artifact(path: Path, *, parameter_title: str = "Parameters") -> str:
     source = f'<p class="source">Artifact: {_escape(path)}</p>'
     param_table = _render_params(document, params) if params else '<p class="note">No parameter summary available.</p>'
     metadata_rows = ((key, _format_param_value(value)) for key, value in sorted(metadata.items()))
-    metadata_table = _table(("Metadata", "Value"), metadata_rows, css_class="params") if metadata else ""
-    return f'<h3>{_escape(parameter_title)}</h3>{source}{param_table}{metadata_table}'
+    return f'<h3>{_escape(parameter_title)}</h3>{source}{param_table}'
 
 
 def _comparison_model_order(scenario: Path) -> tuple[str, ...]:
@@ -675,7 +688,7 @@ th {{ color:var(--muted); background:var(--wash); font-size:12px; }} th:first-ch
 <section><h2>1. Extraction results</h2>{_render_failures(extraction_summary)}</section>
 <section><h2>2. Longitudinal direct identification</h2>{_render_artifact(phase1_path, parameter_title="phase1_acc.yaml")}</section>
 <section><h2>3. Steering direct identification</h2>{_render_artifact(phase2_path, parameter_title="phase2_steer.yaml")}</section>
-<section><h2>4. Integrated optimization</h2>{_render_artifact(tuned_path, parameter_title="Final parameters")}<h3>Aggregate comparison</h3><p class="note">Raw columns are mean RMSE. Aggregate and distribution values use the configured optimization horizons; graphs use every available N. Lower is better.</p>{_render_aggregate(document, summary, model_order)}<h3>Error by horizon N</h3><p class="note">Each point is the mean RMSE across valid datasets. Every available N is plotted; lower is better.</p>{_render_horizon_charts(frame, model_order)}<h3>Dataset distributions</h3>{_render_dataset_distribution(summary, model_order)}</section>
+<section><h2>4. Integrated optimization</h2>{_render_artifact(tuned_path, parameter_title="Final parameters")}<h3>Aggregate comparison</h3><p class="note">Raw columns are mean RMSE. Aggregate and distribution values use the configured optimization horizons; graphs use every available N. Lower is better. Score source identifies the stored aggregate score; parameter source identifies the parameters used for rollout evaluation.</p>{_render_aggregate(document, summary, model_order)}<h3>Error by horizon N</h3><p class="note">Each point is the mean RMSE across valid datasets. Every available N is plotted; lower is better.</p>{_render_horizon_charts(frame, model_order)}<h3>Dataset distributions</h3>{_render_dataset_distribution(summary, model_order)}</section>
 <section><h2>5. Released YAML</h2><p class="source">Released parameter YAML: {_escape(release_path)}</p></section>
 <section id="physical-validity"><h2>6. Physical validity</h2>{physical_validity_sections}</section>
 </main></body></html>
