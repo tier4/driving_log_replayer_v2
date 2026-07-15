@@ -20,7 +20,7 @@ make reidentify \
 `MULTI_BATCH_ROOT`、`LOCAL_SCENARIO`、`LOCAL_SAMPLE_DIR`、
 `REAL_LOG_SIM_COMPARISON_JOBS` も従来互換のフォールバックとして利用できます。
 
-任意変数は `N_TRIALS=640`、`N_JOBS=32`、`FORCE=0` です。
+任意変数は `N_TRIALS=160`、`N_JOBS=32`、`FORCE=0` です。
 ROS 2 環境をすでに読み込んでいる場合や単体テストでは `NO_SETUP=1` を指定できます。
 `FORCE=1` の場合だけ既存の CSV cache を再生成します。
 
@@ -51,9 +51,10 @@ global パラメータをトップレベルに反映し、レポートで評価�
 1. `extract`: 必要な7トピックを dataset ごとの `reidentify_cache.csv` に変換する。
 2. `fit_lon`: 縦方向の時定数、むだ時間、scale を直接同定する。
 3. `fit_steer`: 操舵応答、bias、scale、`k_us` を直接同定する。
-4. `fit_merge`: 直接同定値を warm-start にして統合最適化し、`comparison_models` の全モデルの N-step 指標を確定する。`current` は tuned として出力する。探索スコア用の N は従来の5点を維持し、レポート用には N=1〜100 を出力する。
-5. `release`: tuned params を入力パラメータ YAML の `v100` に反映する。
-6. `report`: 全工程の成果物、確定済み N-step 指標、物理的妥当性検証を統合した最終 HTML を生成する。N-step ロールアウトは再実行しない。
+4. `fit_xy`: 位置積分の heading 補正係数 `xy_heading_rate_coeff` を直接同定する。
+5. `fit_merge`: 直接同定値を warm-start にして統合最適化し、`comparison_models` の全モデルの N-step 指標を確定する。`current` は tuned として出力する。探索スコア用の N は従来の5点を維持し、レポート用には N=1〜300 を出力する。
+6. `release`: tuned params を入力パラメータ YAML の `v100` に反映する。
+7. `report`: 全工程の成果物、確定済み N-step 指標、物理的妥当性検証を統合した最終 HTML を生成する。N-step ロールアウトは再実行しない。
 
 ## 成果物
 
@@ -61,6 +62,7 @@ global パラメータをトップレベルに反映し、レポートで評価�
 <ROOT>/reidentify/
 ├── phase1_acc.yaml
 ├── phase2_steer.yaml
+├── phase3_xy.yaml
 ├── tuned_params.yaml
 ├── metrics.csv
 ├── report.html

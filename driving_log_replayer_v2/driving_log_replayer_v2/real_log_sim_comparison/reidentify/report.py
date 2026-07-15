@@ -22,7 +22,11 @@ from plotly.offline import get_plotlyjs
 
 from .. import physical_validity
 from ..lib._nstep_common import METRIC_KEYS
-from ..lib._report_format import escape as _escape, format_number as _format_number
+from ..lib._report_format import (
+    escape as _escape,
+    format_number as _format_number,
+    html_table as _table,
+)
 from .model_config import load_model_config
 from .settings import BASELINE_MODEL_NAME, TARGET_MODEL_NAME, TUNED_MODEL_DISPLAY_NAME
 
@@ -220,14 +224,6 @@ def _yaml_score(document: Mapping[str, Any], model: str) -> float | None:
     return score if math.isfinite(score) else None
 
 
-def _table(headers: Iterable[str], rows: Iterable[Iterable[Any]], *, css_class: str = "") -> str:
-    head = "".join(f"<th>{_escape(header)}</th>" for header in headers)
-    body = "".join(
-        "<tr>" + "".join(f"<td>{_escape(cell)}</td>" for cell in row) + "</tr>"
-        for row in rows
-    )
-    class_attr = f' class="{_escape(css_class)}"' if css_class else ""
-    return f'<div class="table-wrap"><table{class_attr}><thead><tr>{head}</tr></thead><tbody>{body}</tbody></table></div>'
 
 
 def _format_constraint_range(constraint: Mapping[str, Any]) -> str:

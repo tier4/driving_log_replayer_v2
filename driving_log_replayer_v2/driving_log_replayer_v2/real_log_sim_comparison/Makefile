@@ -47,7 +47,7 @@ help:
 	@echo "  N_TRIALS=$(N_TRIALS) N_JOBS=$(N_JOBS) FORCE=$(FORCE) NO_SETUP=$(NO_SETUP)"
 	@echo "  従来互換: MULTI_BATCH_ROOT→ROOT, LOCAL_SCENARIO/LOCAL_SAMPLE_DIR→SCENARIO, REAL_LOG_SIM_COMPARISON_JOBS→N_JOBS"
 	@echo ""
-	@echo "成果物: <ROOT>/reidentify/{phase1_acc.yaml,phase2_steer.yaml,tuned_params.yaml,metrics.csv,report.html,simulator_model.param.yaml}"
+	@echo "成果物: <ROOT>/reidentify/{phase1_acc.yaml,phase2_steer.yaml,phase3_xy.yaml,tuned_params.yaml,metrics.csv,report.html,simulator_model.param.yaml}"
 
 reidentify:
 	@test -n "$(strip $(ROOT))" || { echo "[ERROR] ROOT is required"; exit 2; }
@@ -60,7 +60,7 @@ reidentify:
 		test -f "$(ROS_SETUP)" || { echo "[ERROR] ROS setup not found: $(ROS_SETUP)"; exit 2; }; \
 		test -f "$(SETUP_BASH)" || { echo "[ERROR] ROS setup not found: $(SETUP_BASH) (build the workspace or use NO_SETUP=1)"; exit 2; }; \
 	fi
-	@echo "[INFO] reidentify: extract -> fit_lon -> fit_steer -> fit_merge -> release -> report"
+	@echo "[INFO] reidentify: extract -> fit_lon -> fit_steer -> fit_xy -> fit_merge -> release -> report"
 	$(RUN_PY) -m driving_log_replayer_v2.real_log_sim_comparison.reidentify.pipeline \
 		--root "$(ROOT)" \
 		--scenario "$(SCENARIO)" \

@@ -148,7 +148,8 @@ def main() -> None:
     parser.add_argument("--root", type=Path, required=True, help="datasets/ を持つ collection root")
     parser.add_argument("--scenario", type=Path, required=True)
     parser.add_argument("--input-param", type=Path, required=True)
-    parser.add_argument("--n-trials", type=int, default=640)
+    # Makefile の N_TRIALS 既定値と揃える。
+    parser.add_argument("--n-trials", type=int, default=160)
     parser.add_argument("--n-jobs", type=int, default=32)
     parser.add_argument("--force-extract", action="store_true", help="既存 reidentify_cache.csv も再生成する")
     args = parser.parse_args()

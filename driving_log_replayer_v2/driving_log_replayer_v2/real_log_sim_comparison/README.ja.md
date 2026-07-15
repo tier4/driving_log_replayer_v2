@@ -33,7 +33,7 @@ make reidentify \
 `REAL_LOG_SIM_COMPARISON_JOBS` は `N_JOBS` のフォールバックになります。
 新しい変数が設定されている場合は新しい変数を優先します。
 
-任意変数は `N_TRIALS=640`、`N_JOBS=32`、`FORCE=0` です。
+任意変数は `N_TRIALS=160`、`N_JOBS=32`、`FORCE=0` です。
 既存の `reidentify_cache.csv` を作り直す場合だけ `FORCE=1` を指定します。
 通常はワークスペースの `install/setup.bash` を自動で読み込みます。すでに必要な環境が
 設定済みの場合は `NO_SETUP=1` を利用できます。
@@ -50,6 +50,7 @@ make reidentify \
 └── reidentify/
     ├── phase1_acc.yaml
     ├── phase2_steer.yaml
+    ├── phase3_xy.yaml
     ├── tuned_params.yaml
     ├── metrics.csv
     ├── report.html
@@ -64,7 +65,7 @@ make reidentify \
 `make reidentify` は次の処理を必ずこの順で実行します。
 
 ```text
-raw bag -> CSV cache -> fit_lon -> fit_steer -> fit_merge -> release YAML -> report.html
+raw bag -> CSV cache -> fit_lon -> fit_steer -> fit_xy -> fit_merge -> release YAML -> report.html
 ```
 
 `fit_merge` が `comparison_models` の全モデル（`current` は `tuned` 表記）の dataset別・horizon別 N-step 指標を `metrics.csv` に一度だけ
@@ -77,10 +78,8 @@ x/y 方程式残差も評価します。N-step 指標のロールアウトは再
 `current` は必須です。
 
 各モデルは宣言済みパラメータで固定 RMSE 評価され、baseline 比・サンプル数・使用パラメータを
-比較表と分布で表示します。`baseline` と `v1` は確定済みモデルのためフィットせず、
-`v1_*` を含むその他のモデルと `current` だけに従来のフィット診断を表示します。
-`current` のみ scenario の `params` に `tuned_params.yaml` の `params` を上書きマージして使い、
-それ以外の比較モデルは scenario に書かれた値をそのまま使います。
+比較表と分布で表示します。`current` のみ scenario の `params` に `tuned_params.yaml` の
+`params` を上書きマージして使い、それ以外の比較モデルは scenario に書かれた値をそのまま使います。
 
 必須topicがない、データが空、有効区間が短すぎる dataset は理由を表示して除外します。
 同定可能な dataset が1件も残らない場合はエラー終了します。
