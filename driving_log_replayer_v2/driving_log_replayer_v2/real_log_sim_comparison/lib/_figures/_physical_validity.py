@@ -68,11 +68,13 @@ def build_fig_cross_steer(rows: list[dict]) -> go.Figure:
             continue
         cmd = _values(row, "d_cmd")
         actual = _values(row, "d_act_raw", "d_act")
-        fitted = _values(row, "d_sim_fit")
+        fitted = _values(row, "d_sim_fit_raw", "d_sim_fit")
         if cmd:
             add(t, cmd, "指令 δ_cmd")
         if actual:
             add(t, actual, "実測: δ_act / dot_δ_act")
+        if fitted:
+            add(t, fitted, "データセット別フィット: δ_sim")
         tuned = row.get("d_sim_models_raw", row.get("d_sim_models"))
         if isinstance(tuned, dict):
             for key, values in tuned.items():

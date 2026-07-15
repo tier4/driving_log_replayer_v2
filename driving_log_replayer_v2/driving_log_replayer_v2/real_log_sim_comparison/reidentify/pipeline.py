@@ -88,12 +88,12 @@ def _step_report(
         failures=summary,
     )
     if tuned_out.is_file() and (out_dir.parent / "datasets").is_dir():
-        from .. import physical_validity_report  # noqa: PLC0415
+        from .. import physical_validity  # noqa: PLC0415
 
-        physical_validity_report.build_report(
+        physical_validity.run(
             out_dir.parent,
             tuned_out,
-            out_dir / "physical_validity_report.html",
+            out_dir / "physical_validity.html",
             scenario=scenario,
         )
 

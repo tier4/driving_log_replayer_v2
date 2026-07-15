@@ -12,8 +12,6 @@ import numpy as np
 from scipy.optimize import minimize_scalar
 from scipy.signal import savgol_filter
 
-from ..reidentify import fit_core
-
 _FIT_DT = 0.01
 _FIT_DT_NS = _FIT_DT * 1e9
 WHEELBASE = 4.76012
@@ -143,16 +141,6 @@ def fit_xy_heading_rate_coeff(datasets: list[dict], initial: float = 0.0) -> dic
     parts = [np.concatenate(xy_residual(ds, coeff)) for ds in datasets]
     values = np.concatenate([part for part in parts if len(part)]) if any(len(p) for p in parts) else np.empty(0)
     return {"xy_heading_rate_coeff": coeff, "rmse": float(np.sqrt(np.mean(values ** 2))) if len(values) else float("nan"), "n": int(len(values))}
-
-
-def analyze_dataset(dataset: dict, *, wheelbase: float = WHEELBASE) -> dict:
-    long_fit = fit_longitudinal(dataset)
-    steer_fit = fit_steering(dataset)
-    return {
-        "longitudinal": long_fit,
-        "steering": steer_fit,
-        "yaw_rmse": float(np.sqrt(np.mean(yaw_residual(dataset, k_us=0.0, wheelbase=wheelbase) ** 2))) if len(yaw_residual(dataset, k_us=0.0, wheelbase=wheelbase)) else float("nan"),
-    }
 
 
 def _merge_contiguous_timeseries_rows(rows: list[dict]) -> list[dict]:

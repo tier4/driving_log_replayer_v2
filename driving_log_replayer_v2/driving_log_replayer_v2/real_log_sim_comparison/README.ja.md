@@ -53,7 +53,7 @@ make reidentify \
     ├── tuned_params.yaml
     ├── metrics.csv
     ├── report.html
-    ├── physical_validity_report.html
+    ├── physical_validity.html
     └── simulator_model.param.yaml
 ```
 
@@ -73,8 +73,9 @@ raw bag -> CSV cache -> fit_lon -> fit_steer -> fit_merge -> report -> release Y
 データが保証される N=1〜100 を1刻みで出力します。`report.html` はメトリクスごとの誤差推移を
 その CSV から描画するだけなので、同じロールアウトを再計算しません。
 
-`physical_validity_report.html` は同じ CSV キャッシュから、縦方向・操舵・ヨー (`k_us`)・
-x/y 方程式残差を独立に評価し、データセット別の RMSE と横断集計を表示します。
+`physical_validity.html` は同じ CSV キャッシュを一度だけ準備し、縦方向・操舵・ヨー (`k_us`)・
+x/y 方程式残差を独立に評価します。各検証のフィット、データセット別 RMSE、残差分布、
+代表時系列、および除外理由を単一HTML内のセクションとして表示します。
 
 必須topicがない、データが空、有効区間が短すぎる dataset は理由を表示して除外します。
 同定可能な dataset が1件も残らない場合はエラー終了します。
