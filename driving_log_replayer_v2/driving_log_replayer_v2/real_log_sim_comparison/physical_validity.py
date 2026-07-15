@@ -11,16 +11,13 @@ import numpy as np
 import plotly.graph_objects as go
 import yaml
 
-from .lib._physical_validity import (
-    _simulate_first_order,
-    build_xy_columns,
-    xy_residual,
-    yaw_residual,
-)
 from .lib._parallel import normalize_parallel_jobs, pool_chunksize, set_worker_thread_env_defaults
 from .lib._report_format import escape as _escape, format_number as _number
+from .reidentify.fit_core import simulate_first_order
 from .reidentify.load_data import build_resampled, discover_cached_datasets, read_dataset_csv
 from .reidentify.model_config import ModelSpec, load_model_config
+from .reidentify.residuals import build_xy_columns, rmse, xy_residual, yaw_residual
+from .reidentify.settings import LONG_DA_THRESH, LONG_VX_MIN, RESAMPLE_DT, STEER_DSTEER_MIN
 
 
 @dataclass
@@ -123,7 +120,7 @@ def _cross_metric(data: dict[str, Any], params: dict[str, Any], *, xy: bool) -> 
     else:
         residual = yaw_residual(data, k_us=float(second), wheelbase=float(first))
     return {
-        "rmse": float(np.sqrt(np.mean(residual ** 2))) if len(residual) else float("nan"),
+        "rmse": rmse(residual),
         "n": int(len(residual)),
     }
 
@@ -139,11 +136,11 @@ def _evaluate_dataset(
         data_by_source: dict[str, dict[str, Any]] = {}
         for acceleration_source in sources:
             if use_default_acceleration_source:
-                data = build_resampled(source, 0.01, context=f"physical_validity:{dataset_id}")
+                data = build_resampled(source, RESAMPLE_DT, context=f"physical_validity:{dataset_id}")
             else:
                 data = build_resampled(
                     source,
-                    0.01,
+                    RESAMPLE_DT,
                     context=f"physical_validity:{dataset_id}",
                     acceleration_source=acceleration_source,
                 )
@@ -218,16 +215,16 @@ def _fixed_response(data: dict[str, Any], params: dict[str, Any], *, steer: bool
         return None, None, reason or ("%s_time_delay は0以上である必要があります" % prefix)
     cmd = data["d_cmd"] if steer else data["a_cmd"]
     actual = data["d_act"] if steer else data["a_act"]
-    threshold = 0.1 if steer else 0.15
-    mask = data["gear_drive"] & (data["vx"] > 0.5) & (np.abs(np.gradient(cmd, 0.01)) > threshold)
+    threshold = STEER_DSTEER_MIN / RESAMPLE_DT if steer else LONG_DA_THRESH
+    mask = data["gear_drive"] & (data["vx"] > LONG_VX_MIN) & (np.abs(np.gradient(cmd, RESAMPLE_DT)) > threshold)
     bias = 0.0
     if steer:
         bias, bias_reason = _valid_number(params, "steer_bias")
         if bias_reason:
             return None, None, bias_reason
-    prediction = _simulate_first_order(cmd, tau, delay, 0.01) + bias
+    prediction = simulate_first_order(cmd, tau, delay, RESAMPLE_DT) + bias
     residual = prediction[mask] - actual[mask]
-    return {"rmse": float(np.sqrt(np.mean(residual ** 2))) if len(residual) else float("nan"), "n": int(len(residual))}, prediction, None
+    return {"rmse": rmse(residual), "n": int(len(residual))}, prediction, None
 
 
 def _summary_table(models: list[ComparedModel], results: dict[str, dict[str, Any]], param_keys: tuple[str, ...]) -> str:

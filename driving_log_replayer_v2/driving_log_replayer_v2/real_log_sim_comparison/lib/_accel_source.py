@@ -49,7 +49,7 @@ def _savgol_window(n: int, dt: float, window_s: float, polyorder: int) -> int | 
     return win
 
 
-def _savgol_derivative(values: np.ndarray, dt: float) -> np.ndarray:
+def savgol_derivative(values: np.ndarray, dt: float) -> np.ndarray:
     values = np.asarray(values, dtype=float)
     win = _savgol_window(len(values), dt, ACCEL_SAVGOL_WINDOW_S, ACCEL_SAVGOL_POLYORDER)
     if win is None:
@@ -94,7 +94,7 @@ def _native_savgol_df(df: pd.DataFrame, *, value_col: str, out_col: str) -> pd.D
     else:
         t_s = t_ns.astype(float) * 1e-9
         dt = float(np.median(np.diff(t_s)))
-        deriv = _savgol_derivative(values, max(dt, 1e-6))
+        deriv = savgol_derivative(values, max(dt, 1e-6))
     return pd.DataFrame({"t_ns": t_ns, out_col: deriv})
 
 
@@ -143,7 +143,7 @@ def accel_on_grid(
         src_df = df_kin if source == "kinematic_savgol" else df_vel
         value_col = kin_vx_col if source == "kinematic_savgol" else velocity_col
         vx_grid = np.interp(t_s, (src_df["t_ns"].to_numpy(dtype=float) - t0_ns) * 1e-9, src_df[value_col].to_numpy(dtype=float))
-        return _savgol_derivative(vx_grid, dt)
+        return savgol_derivative(vx_grid, dt)
 
     acc_df = accel_dataframe_from_source(
         source,

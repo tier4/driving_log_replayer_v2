@@ -7,10 +7,10 @@ import numpy as np
 import pytest
 import yaml
 
-from driving_log_replayer_v2.real_log_sim_comparison.lib._physical_validity import (
-    fit_xy_heading_rate_coeff,
-)
 from driving_log_replayer_v2.real_log_sim_comparison.reidentify import fit_xy
+from driving_log_replayer_v2.real_log_sim_comparison.reidentify.fit_xy import (
+    _fit_xy_heading_rate_coeff,
+)
 from driving_log_replayer_v2.real_log_sim_comparison.reidentify.parameter_constraints import (
     FIT_XY,
     PARAMETER_CONSTRAINTS,
@@ -43,7 +43,7 @@ def _synthetic_trajectory(coeff: float, *, dt: float = 0.01, n: int = 4000) -> d
 def test_fit_xy_heading_rate_coeff_recovers_known_value(known_coeff: float) -> None:
     dataset = _synthetic_trajectory(known_coeff)
 
-    result = fit_xy_heading_rate_coeff([dataset])
+    result = _fit_xy_heading_rate_coeff([dataset])
 
     assert result["n"] > 0
     assert result["xy_heading_rate_coeff"] == pytest.approx(known_coeff, abs=5e-3)
@@ -51,8 +51,8 @@ def test_fit_xy_heading_rate_coeff_recovers_known_value(known_coeff: float) -> N
 
 
 def test_fit_xy_heading_rate_coeff_merges_multiple_datasets() -> None:
-    single = fit_xy_heading_rate_coeff([_synthetic_trajectory(0.02)])
-    merged = fit_xy_heading_rate_coeff(
+    single = _fit_xy_heading_rate_coeff([_synthetic_trajectory(0.02)])
+    merged = _fit_xy_heading_rate_coeff(
         [_synthetic_trajectory(0.02), _synthetic_trajectory(0.02)]
     )
 

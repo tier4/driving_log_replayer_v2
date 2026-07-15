@@ -7,11 +7,13 @@ import math
 from pathlib import Path
 import sys
 
+import numpy as np
+from scipy.optimize import minimize_scalar
 import yaml
 
 from ..lib._parallel import normalize_parallel_jobs
-from ..lib._physical_validity import build_xy_columns, fit_xy_heading_rate_coeff
 from .load_data import build_resampled, discover_cached_datasets, read_dataset_csv
+from .residuals import build_xy_columns, rmse, xy_residual
 from .model_config import load_model_config
 from .parameter_constraints import (
     FIT_XY,
@@ -22,6 +24,7 @@ from .parameter_constraints import (
 from .settings import MIN_FIT_SAMPLES, RESAMPLE_DT, TARGET_MODEL_NAME
 
 _XY_KEYS = frozenset({"xy_heading_rate_coeff"})
+_XY_HEADING_RATE_COEFF_BOUNDS = (-5.0, 5.0)
 _PHASE2_KEYS = frozenset(
     {
         "acc_time_constant",
@@ -34,6 +37,19 @@ _PHASE2_KEYS = frozenset(
         "k_us",
     }
 )
+
+
+def _fit_xy_heading_rate_coeff(datasets: list[dict], initial: float = 0.0) -> dict:
+    """全 dataset をプールした残差二乗平均を最小化する係数を直接同定する。"""
+    def objective(coeff: float) -> float:
+        parts = [np.concatenate(xy_residual(ds, coeff)) for ds in datasets]
+        values = np.concatenate([part for part in parts if len(part)]) if any(len(p) for p in parts) else np.empty(0)
+        return float(np.mean(values * values)) if len(values) else float("inf")
+    result = minimize_scalar(objective, bounds=_XY_HEADING_RATE_COEFF_BOUNDS, method="bounded")
+    coeff = float(result.x) if result.success else float(initial)
+    parts = [np.concatenate(xy_residual(ds, coeff)) for ds in datasets]
+    values = np.concatenate([part for part in parts if len(part)]) if any(len(p) for p in parts) else np.empty(0)
+    return {"xy_heading_rate_coeff": coeff, "rmse": rmse(values), "n": int(len(values))}
 
 
 def _load_one(task: tuple[str, Path]) -> dict | None:
@@ -92,7 +108,7 @@ def fit_xy(
     if n_valid == 0:
         raise RuntimeError("同定に使えるデータセットが 0 件です。")
 
-    fit = fit_xy_heading_rate_coeff(datasets)
+    fit = _fit_xy_heading_rate_coeff(datasets)
     if fit["n"] < MIN_FIT_SAMPLES:
         raise RuntimeError(
             f"xy_heading_rate_coeff 直接同定に十分なサンプルがありません (n={fit['n']})。"

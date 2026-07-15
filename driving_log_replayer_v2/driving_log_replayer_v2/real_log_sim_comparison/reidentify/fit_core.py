@@ -23,6 +23,11 @@ def _simulate(cmd: np.ndarray, tau: float, delay_samples: int, dt: float) -> np.
     return lfilter([alpha], [1.0, -(1.0 - alpha)], delayed)
 
 
+def simulate_first_order(cmd: np.ndarray, tau: float, delay_s: float, dt: float) -> np.ndarray:
+    """Simulate the first-order delay response with the dead time given in seconds."""
+    return _simulate(np.asarray(cmd, dtype=float), tau, max(0, int(round(delay_s / dt))), dt)
+
+
 def fit_first_order_delay(
     cmd: np.ndarray,
     actual: np.ndarray,
