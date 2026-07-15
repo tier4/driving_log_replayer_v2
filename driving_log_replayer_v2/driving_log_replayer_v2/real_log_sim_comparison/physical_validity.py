@@ -17,7 +17,14 @@ from .reidentify.fit_core import simulate_first_order
 from .reidentify.load_data import build_resampled, discover_cached_datasets, read_dataset_csv
 from .reidentify.model_config import ModelSpec, load_model_config
 from .reidentify.residuals import build_xy_columns, rmse, xy_residual, yaw_residual
-from .reidentify.settings import LONG_DA_THRESH, LONG_VX_MIN, RESAMPLE_DT, STEER_DSTEER_MIN
+from .reidentify.settings import (
+    BASELINE_MODEL_NAME,
+    LONG_DA_THRESH,
+    LONG_VX_MIN,
+    RESAMPLE_DT,
+    STEER_DSTEER_MIN,
+    TARGET_MODEL_NAME,
+)
 
 
 @dataclass
@@ -97,7 +104,7 @@ def _models_from_inputs(params_path: Path, scenario: Path | None, case: str) -> 
     for name in config.comparison_models:
         spec: ModelSpec = config.find_case(name)
         params = dict(spec.params)
-        if name == "current":
+        if name == TARGET_MODEL_NAME:
             params.update(tuned_params)
         models.append(ComparedModel(name, spec.vehicle_model_type, spec.acceleration_source, params))
     return models
@@ -166,12 +173,12 @@ def prepare_datasets(
     params_path: Path,
     *,
     scenario: Path | None = None,
-    case: str = "current",
+    case: str = TARGET_MODEL_NAME,
     n_jobs: int = 1,
 ) -> tuple[ValidationContext, ValidationStep]:
     """Evaluate cached datasets in parallel while retaining only compact results."""
     models = _models_from_inputs(params_path, scenario, case)
-    current = next((model for model in models if model.name == "current"), models[0])
+    current = next((model for model in models if model.name == TARGET_MODEL_NAME), models[0])
     wheelbase, _ = _valid_number(current.params, "wheelbase", positive=True)
     context = ValidationContext(
         params=current.params, model_type=current.vehicle_model_type,
@@ -228,12 +235,12 @@ def _fixed_response(data: dict[str, Any], params: dict[str, Any], *, steer: bool
 
 
 def _summary_table(models: list[ComparedModel], results: dict[str, dict[str, Any]], param_keys: tuple[str, ...]) -> str:
-    baseline = results.get("baseline", {}).get("rmse", float("nan"))
+    baseline = results.get(BASELINE_MODEL_NAME, {}).get("rmse", float("nan"))
     rows = []
     for model in models:
         value = results[model.name]
         rmse = value.get("rmse", float("nan"))
-        if model.name == "baseline" and np.isfinite(rmse):
+        if model.name == BASELINE_MODEL_NAME and np.isfinite(rmse):
             ratio = 1.0
         else:
             ratio = rmse / baseline if np.isfinite(rmse) and np.isfinite(baseline) and baseline != 0 else float("nan")
@@ -261,7 +268,7 @@ def _response_step(context: ValidationContext, *, steer: bool) -> ValidationStep
         distributions[model.name] = samples
     keys = ("steer_time_constant", "steer_time_delay", "steer_bias") if steer else ("acc_time_constant", "acc_time_delay")
     section = f'<section id="{section_id}"><h2>{title}</h2>' + _summary_table(context.models, fixed, keys) + _figure_html(_histogram_by_model(distributions, f"{title}: モデル別固定評価 RMSE"), "固定評価 RMSE 分布") + "</section>"
-    return ValidationStep(section_id, {"models": fixed, "datasets": fixed.get("current", {}).get("datasets", {})}, section)
+    return ValidationStep(section_id, {"models": fixed, "datasets": fixed.get(TARGET_MODEL_NAME, {}).get("datasets", {})}, section)
 
 
 def validate_longitudinal(context: ValidationContext) -> ValidationStep:
@@ -285,7 +292,7 @@ def _cross_step(context: ValidationContext, *, xy: bool) -> ValidationStep:
         distributions[model.name] = samples
     keys = ("xy_heading_rate_coeff",) if xy else ("wheelbase", "k_us")
     section = f'<section id="{section_id}"><h2>{title}</h2>' + _summary_table(context.models, fixed, keys) + _figure_html(_histogram_by_model(distributions, f"{title}: モデル別固定評価 RMSE"), "固定評価 RMSE 分布") + "</section>"
-    return ValidationStep(section_id, {"models": fixed, "datasets": fixed.get("current", {}).get("datasets", {})}, section)
+    return ValidationStep(section_id, {"models": fixed, "datasets": fixed.get(TARGET_MODEL_NAME, {}).get("datasets", {})}, section)
 
 
 def validate_yaw(context: ValidationContext) -> ValidationStep:

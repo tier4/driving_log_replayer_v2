@@ -24,7 +24,7 @@ from .. import physical_validity
 from ..lib._nstep_common import METRIC_KEYS
 from ..lib._report_format import escape as _escape, format_number as _format_number
 from .model_config import load_model_config
-from .settings import TARGET_MODEL_NAME
+from .settings import BASELINE_MODEL_NAME, TARGET_MODEL_NAME, TUNED_MODEL_DISPLAY_NAME
 
 REQUIRED_COLUMNS = ("dataset_id", "model", "horizon")
 REQUIRED_METRICS = METRIC_KEYS
@@ -37,7 +37,7 @@ METRIC_UNITS = {
     "vx": "m/s",
     "ax": "m/s²",
 }
-MODEL_ORDER = ("baseline", "tuned")
+MODEL_ORDER = (BASELINE_MODEL_NAME, TUNED_MODEL_DISPLAY_NAME)
 _ZERO_EPSILON = 1.0e-12
 _MODEL_COLORS = ("#667085", "#2563eb", "#16a34a", "#d97706", "#9333ea", "#0891b2", "#e11d48")
 
@@ -110,7 +110,7 @@ def _coerce_metric_values(frame: pd.DataFrame) -> None:
         raise ValueError(message)
 
 
-def _validate_metric_coverage(frame: pd.DataFrame, model_order: tuple[str, ...] = MODEL_ORDER) -> None:
+def _validate_metric_coverage(frame: pd.DataFrame, model_order: tuple[str, ...]) -> None:
     models = set(frame["model"])
     missing_models = [model for model in model_order if model not in models]
     if missing_models:
@@ -124,7 +124,7 @@ def _validate_metric_coverage(frame: pd.DataFrame, model_order: tuple[str, ...] 
         raise ValueError(message)
 
     baseline_keys = set(
-        frame.loc[frame["model"] == "baseline", ["dataset_id", "horizon"]]
+        frame.loc[frame["model"] == BASELINE_MODEL_NAME, ["dataset_id", "horizon"]]
         .itertuples(index=False, name=None)
     )
     for model in model_order:
@@ -141,7 +141,7 @@ def _validate_metric_coverage(frame: pd.DataFrame, model_order: tuple[str, ...] 
             )
 
 
-def _load_metrics(path: Path, model_order: tuple[str, ...] = MODEL_ORDER) -> pd.DataFrame:
+def _load_metrics(path: Path, model_order: tuple[str, ...]) -> pd.DataFrame:
     if not path.is_file():
         message = f"Metrics CSV not found: {path}"
         raise FileNotFoundError(message)
@@ -155,7 +155,7 @@ def _load_metrics(path: Path, model_order: tuple[str, ...] = MODEL_ORDER) -> pd.
 
 
 def _add_normalized_scores(frame: pd.DataFrame) -> pd.DataFrame:
-    baseline = frame.loc[frame["model"] == "baseline"].set_index(["dataset_id", "horizon"])
+    baseline = frame.loc[frame["model"] == BASELINE_MODEL_NAME].set_index(["dataset_id", "horizon"])
     result = frame.copy()
     row_scores: list[float] = []
     for row in result.itertuples(index=False):
@@ -175,7 +175,7 @@ def _add_normalized_scores(frame: pd.DataFrame) -> pd.DataFrame:
     return result
 
 
-def _summary_frame(document: Mapping[str, Any], frame: pd.DataFrame, model_order: tuple[str, ...] = MODEL_ORDER) -> pd.DataFrame:
+def _summary_frame(document: Mapping[str, Any], frame: pd.DataFrame, model_order: tuple[str, ...]) -> pd.DataFrame:
     """Keep aggregate/distribution semantics on the optimization horizons."""
     metadata = document.get("metadata")
     if not isinstance(metadata, Mapping) or "score_horizons" not in metadata:
@@ -269,7 +269,7 @@ def _render_params(document: Mapping[str, Any], params: Mapping[str, Any]) -> st
     )
 
 
-def _render_aggregate(document: Mapping[str, Any], frame: pd.DataFrame, model_order: tuple[str, ...] = MODEL_ORDER) -> str:
+def _render_aggregate(document: Mapping[str, Any], frame: pd.DataFrame, model_order: tuple[str, ...]) -> str:
     rows = []
     for model in model_order:
         model_rows = frame.loc[frame["model"] == model]
@@ -286,7 +286,7 @@ def _render_aggregate(document: Mapping[str, Any], frame: pd.DataFrame, model_or
         # declared scenario parameters, including released models such as v1.
         parameter_source = (
             "tuned_params.yaml: params"
-            if model == "tuned"
+            if model == TUNED_MODEL_DISPLAY_NAME
             else f"scenario.yaml: models.{model}.params (fixed)"
         )
         rows.append(
@@ -340,7 +340,7 @@ def _x_ticks(lower: float, upper: float, *, max_intervals: int = 10) -> list[flo
     return ticks
 
 
-def _line_chart_svg(frame: pd.DataFrame, metric: str, model_order: tuple[str, ...] = MODEL_ORDER) -> str:
+def _line_chart_svg(frame: pd.DataFrame, metric: str, model_order: tuple[str, ...]) -> str:
     means = (
         frame.loc[frame["model"].isin(model_order)]
         .groupby(["horizon", "model"], sort=True)[metric]
@@ -446,7 +446,7 @@ def _line_chart_svg(frame: pd.DataFrame, metric: str, model_order: tuple[str, ..
     )
 
 
-def _render_horizon_charts(frame: pd.DataFrame, model_order: tuple[str, ...] = MODEL_ORDER) -> str:
+def _render_horizon_charts(frame: pd.DataFrame, model_order: tuple[str, ...]) -> str:
     return "".join(
         f'<article class="metric-chart"><h3>{_escape(metric)} RMSE '
         f'({_escape(METRIC_UNITS[metric])})</h3>'
@@ -469,7 +469,7 @@ def _dataset_scores(frame: pd.DataFrame) -> pd.DataFrame:
     )
 
 
-def _distribution_summary(dataset_scores: pd.DataFrame, model_order: tuple[str, ...] = MODEL_ORDER) -> str:
+def _distribution_summary(dataset_scores: pd.DataFrame, model_order: tuple[str, ...]) -> str:
     rows = []
     for model in model_order:
         values = dataset_scores[model]
@@ -545,9 +545,9 @@ def _histogram_svg(values: Iterable[float]) -> str:
     )
 
 
-def _render_dataset_distribution(frame: pd.DataFrame, model_order: tuple[str, ...] = MODEL_ORDER) -> str:
+def _render_dataset_distribution(frame: pd.DataFrame, model_order: tuple[str, ...]) -> str:
     scores = _dataset_scores(frame)
-    target = "tuned" if "tuned" in scores else model_order[-1]
+    target = TUNED_MODEL_DISPLAY_NAME if TUNED_MODEL_DISPLAY_NAME in scores else model_order[-1]
     worst = scores.sort_values(target, ascending=False).head(10)
     worst_rows = (
         (dataset_id, _format_number(row[target]))
@@ -601,7 +601,7 @@ def _comparison_model_order(scenario: Path) -> tuple[str, ...]:
         return MODEL_ORDER
     config = load_model_config(scenario)
     return tuple(
-        ("tuned" if name == TARGET_MODEL_NAME else name).lower()
+        (TUNED_MODEL_DISPLAY_NAME if name == TARGET_MODEL_NAME else name).lower()
         for name in config.comparison_models
     )
 

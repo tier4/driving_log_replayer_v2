@@ -33,7 +33,13 @@ from .parameter_constraints import (
     search_constraints,
     validate_parameters,
 )
-from .settings import BASELINE_MODEL_NAME, HORIZONS, ROLLOUT_STRIDE, TARGET_MODEL_NAME
+from .settings import (
+    BASELINE_MODEL_NAME,
+    HORIZONS,
+    ROLLOUT_STRIDE,
+    TARGET_MODEL_NAME,
+    TUNED_MODEL_DISPLAY_NAME,
+)
 from .stage_common import read_phase_artifact
 
 _GT_KEYS = ("acc_time_delay", "steer_time_delay", "wheelbase", "sub_dt")
@@ -562,13 +568,13 @@ def fit_merge(
             clean[int(h)] = {k: float(val) for k, val in v.items()}
         return clean
 
-    comparison_results["baseline"] = {
+    comparison_results[BASELINE_MODEL_NAME] = {
         "score": float(baseline_score),
         "by_h": clean_agg(baseline_agg),
         "acceleration_source": baseline_accel_source,
     }
 
-    comparison_results["tuned"] = {
+    comparison_results[TUNED_MODEL_DISPLAY_NAME] = {
         "score": float(tuned_score),
         "by_h": clean_agg(tuned_agg),
         "acceleration_source": cur_case.acceleration_source,
@@ -579,11 +585,11 @@ def fit_merge(
     # the final fitted parameters, and is presented as ``tuned``.
     comparison_cases: list[tuple[str, dict, str, str]] = []
     comparison_sparse_metrics: dict[str, list[tuple[str, dict]]] = {
-        "baseline": baseline_metrics,
-        "tuned": tuned_metrics_list,
+        BASELINE_MODEL_NAME: baseline_metrics,
+        TUNED_MODEL_DISPLAY_NAME: tuned_metrics_list,
     }
     for scenario_name in cfg.comparison_models:
-        display_name = "tuned" if scenario_name == TARGET_MODEL_NAME else scenario_name
+        display_name = TUNED_MODEL_DISPLAY_NAME if scenario_name == TARGET_MODEL_NAME else scenario_name
         case = cfg.find_case(scenario_name)
         if scenario_name == BASELINE_MODEL_NAME:
             params = baseline_params

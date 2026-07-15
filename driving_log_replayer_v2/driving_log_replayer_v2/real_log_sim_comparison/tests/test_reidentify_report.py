@@ -201,7 +201,9 @@ def test_chart_uses_numeric_horizon_spacing(tmp_path: Path) -> None:
     metrics = tmp_path / "metrics.csv"
     _write_metrics(metrics, (10.0, 20.0, 100.0))
 
-    rendered = report._line_chart_svg(report._load_metrics(metrics), "pos")
+    rendered = report._line_chart_svg(
+        report._load_metrics(metrics, report.MODEL_ORDER), "pos", report.MODEL_ORDER
+    )
 
     assert 'points="68.00,' in rendered
     assert "164.44," in rendered
@@ -211,11 +213,12 @@ def test_chart_uses_numeric_horizon_spacing(tmp_path: Path) -> None:
 def test_summary_keeps_configured_score_horizons(tmp_path: Path) -> None:
     metrics = tmp_path / "metrics.csv"
     _write_metrics(metrics, (1.0, 2.0, 3.0))
-    frame = report._add_normalized_scores(report._load_metrics(metrics))
+    frame = report._add_normalized_scores(report._load_metrics(metrics, report.MODEL_ORDER))
 
     summary = report._summary_frame(
         {"metadata": {"score_horizons": [1, 3]}},
         frame,
+        report.MODEL_ORDER,
     )
 
     assert set(summary["horizon"]) == {1.0, 3.0}

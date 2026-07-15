@@ -4,6 +4,8 @@ from __future__ import annotations
 DEFAULT_OUTPUT_DIR_NAME = "reidentify"
 BASELINE_MODEL_NAME = "baseline"
 TARGET_MODEL_NAME = "current"
+# フィット結果を公開するときの表示名 (metrics.csv の model 列・レポート)。
+TUNED_MODEL_DISPLAY_NAME = "tuned"
 TARGET_MODEL_TYPE = "delay_steer_acc_geared_for_diffusion_planner"
 
 RESAMPLE_DT = 0.01
