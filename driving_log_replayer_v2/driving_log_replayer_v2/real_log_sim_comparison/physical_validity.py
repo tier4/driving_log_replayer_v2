@@ -37,10 +37,6 @@ class ComparedModel:
     acceleration_source: str
     params: dict[str, Any]
 
-    @property
-    def finalized(self) -> bool:
-        return self.name in {"baseline", "v1"}
-
 
 @dataclass
 class ValidationContext:
@@ -206,7 +202,7 @@ def prepare_datasets(
     context.evaluations.sort(key=lambda evaluation: evaluation.dataset_id)
     skipped = "".join(f"<li>{_escape(reason)}</li>" for reason in context.skipped)
     model_rows = "".join(
-        f"<li><code>{_escape(model.name)}</code>: {_escape(model.vehicle_model_type)} / accel={_escape(model.acceleration_source)} ({'確定済み' if model.finalized else '検討中'})</li>"
+        f"<li><code>{_escape(model.name)}</code>: {_escape(model.vehicle_model_type)} / accel={_escape(model.acceleration_source)}</li>"
         for model in models
     )
     section = f'''<section id="prepare"><h2>準備</h2><p>有効データセット: {len(context.evaluations)}</p>
