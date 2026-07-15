@@ -5,9 +5,10 @@ from __future__ import annotations
 import statistics as stats
 
 # 直進・低ダイナミクス走行の極小 baseline で相対誤差が暴発しないようにする分母フロア。
-YAW_FLOOR  = {10: 0.06, 30: 0.18, 70: 0.42, 150: 0.90, 300: 1.80}  # deg
-LONG_FLOOR = {10: 1.0,  30: 3.0,  70: 7.0,  150: 15.0, 300: 30.0} # cm
-LAT_FLOOR  = {10: 0.3,  30: 0.9,  70: 2.1,  150: 4.5,  300: 9.0}  # cm
+# horizon N に比例させる (旧: N=10..300 の固定辞書と同値)。任意の horizon で使える。
+YAW_FLOOR_PER_STEP = 0.006  # deg/step
+LONG_FLOOR_PER_STEP = 0.1   # cm/step
+LAT_FLOOR_PER_STEP = 0.03   # cm/step
 
 POS_W = 0.5    # 縦・横 各成分の重み。pos を縦横に分けても yaw:位置 = 1:1 を維持する
 
@@ -21,9 +22,9 @@ def normalize_components(m: dict, baseline: dict, h: int) -> dict:
         "yaw": m["yaw"],
         "long": m["long"],
         "lat": m["lat"],
-        "nyaw": m["yaw"] / max(baseline["yaw"], YAW_FLOOR[h]),
-        "nlong": m["long"] / max(baseline["long"], LONG_FLOOR[h]),
-        "nlat": m["lat"] / max(baseline["lat"], LAT_FLOOR[h]),
+        "nyaw": m["yaw"] / max(baseline["yaw"], YAW_FLOOR_PER_STEP * h),
+        "nlong": m["long"] / max(baseline["long"], LONG_FLOOR_PER_STEP * h),
+        "nlat": m["lat"] / max(baseline["lat"], LAT_FLOOR_PER_STEP * h),
     }
 
 

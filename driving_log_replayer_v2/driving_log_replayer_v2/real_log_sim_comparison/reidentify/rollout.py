@@ -7,6 +7,7 @@ import pandas as pd
 
 from ..lib._events import find_autonomous_start as _find_autonomous_start
 from ..lib._nstep_common import METRIC_KEYS, interp_or_zeros, local_ds, rms, to_seconds
+from .csv_schema import SIGNAL_TOPICS
 from ..lib._params_utils import load_sim_params
 from ..lib._validation import require_non_empty_df
 from ..lib._vehicle_models import VehicleModel
@@ -58,8 +59,8 @@ def _prepare_gt(data: dict, t0_ns: int, params: dict) -> dict:
     df_cmd = to_seconds(df_cmd_raw, t0_ns).sort_values("t").reset_index(drop=True)
     df_gear = data.get("gear")
 
-    require_non_empty_df(df_cmd, name="/control/command/control_cmd", context=ROLL_OUT_CONTEXT)
-    require_non_empty_df(df_kin, name="/localization/kinematic_state", context=ROLL_OUT_CONTEXT)
+    require_non_empty_df(df_cmd, name=SIGNAL_TOPICS["cmd"], context=ROLL_OUT_CONTEXT)
+    require_non_empty_df(df_kin, name=SIGNAL_TOPICS["kinematic"], context=ROLL_OUT_CONTEXT)
 
     t_lo = 0.0
     t_hi_candidates = [df_cmd["t"].max(), df_kin["t"].max()]
@@ -76,8 +77,8 @@ def _prepare_gt(data: dict, t0_ns: int, params: dict) -> dict:
     df_acc = df_acc[(df_acc["t"] >= t_lo - 1) & (df_acc["t"] <= t_hi + 1)].reset_index(drop=True)
     df_steer = df_steer[(df_steer["t"] >= t_lo - 1) & (df_steer["t"] <= t_hi + 1)].reset_index(drop=True)
 
-    require_non_empty_df(df_cmd, name="/control/command/control_cmd", context=ROLL_OUT_CONTEXT)
-    require_non_empty_df(df_kin, name="/localization/kinematic_state", context=ROLL_OUT_CONTEXT)
+    require_non_empty_df(df_cmd, name=SIGNAL_TOPICS["cmd"], context=ROLL_OUT_CONTEXT)
+    require_non_empty_df(df_kin, name=SIGNAL_TOPICS["kinematic"], context=ROLL_OUT_CONTEXT)
 
     _t_kin_raw = df_kin["t"].values
     _yaw_raw = np.unwrap(df_kin["yaw"].values)

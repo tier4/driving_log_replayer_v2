@@ -5,6 +5,7 @@ import numpy as np
 import pandas as pd
 
 from ..lib._validation import MissingRequiredGearError, require_asof_mask
+from .csv_schema import SIGNAL_TOPICS
 
 GEAR_DRIVE = 2
 GEAR_DRIVE_18 = 19
@@ -31,7 +32,7 @@ def require_drive_gear_mask(
             target_t_ns,
             value_col="gear",
             predicate=is_drive_gear,
-            name="/vehicle/status/gear_status",
+            name=SIGNAL_TOPICS["gear"],
             context=context,
             missing_error=MissingRequiredGearError,
             leading_gap_fill=leading_gap_fill,
