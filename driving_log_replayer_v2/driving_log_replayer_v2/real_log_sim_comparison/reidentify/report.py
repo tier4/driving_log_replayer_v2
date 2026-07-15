@@ -1,9 +1,9 @@
 """
 Render the compact reidentification report from finalized artifacts.
 
-This module is intentionally presentation-only.  It reads the parameters and
-the per-dataset metrics written by ``fit_merge``; it never loads a bag, a CSV
-cache, or invokes rollout evaluation again.
+It combines the finalized N-step metrics with physical-validity diagnostics.
+The N-step metrics are read from ``fit_merge`` artifacts without rerunning a
+rollout; physical-validity diagnostics read the existing CSV cache once.
 """
 
 from __future__ import annotations
@@ -18,6 +18,9 @@ from typing import Any
 
 import pandas as pd
 import yaml
+from plotly.offline import get_plotlyjs
+
+from .. import physical_validity
 
 REQUIRED_COLUMNS = ("dataset_id", "model", "horizon")
 REQUIRED_METRICS = ("pos", "long", "lat", "yaw", "steer", "vx", "ax")
@@ -547,6 +550,7 @@ def _render_document(
     params: Mapping[str, Any],
     frame: pd.DataFrame,
     failures: Mapping[str, Any],
+    physical_validity_sections: str,
 ) -> str:
     datasets = frame["dataset_id"].nunique()
     horizons = frame["horizon"].nunique()
@@ -556,7 +560,7 @@ def _render_document(
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Reidentification report</title>
+<title>Reidentification and physical-validity report</title>
 <style>
 :root {{ color-scheme: light; --ink:#172033; --muted:#667085; --line:#d8dee9; --paper:#fff; --wash:#f5f7fa; --accent:#2563eb; --bad:#b42318; }}
 * {{ box-sizing:border-box; }}
@@ -593,12 +597,14 @@ th {{ color:var(--muted); background:var(--wash); font-size:12px; }} th:first-ch
 .horizon-chart .legend.baseline text {{ fill:#475467; }}
 .horizon-chart .legend.tuned text {{ fill:var(--accent); }}
 .ok {{ color:#067647; }}
+.plotly-graph-div {{ max-width:100%; }}
 </style>
+<script>{get_plotlyjs()}</script>
 </head>
 <body><main>
 <header>
-  <h1>Reidentification report</h1>
-  <p class="lede">Finalized metrics only — no rollout or simulation is run while building this report.</p>
+  <h1>Reidentification and physical-validity report</h1>
+  <p class="lede">N-step metrics are finalized artifacts; physical-validity diagnostics use the existing CSV cache.</p>
   <div class="stats"><div class="stat"><span>Valid datasets</span><strong>{datasets}</strong></div><div class="stat"><span>Horizons</span><strong>{horizons}</strong></div></div>
   <p class="source">Parameters: {_escape(tuned_path)}</p>
   <p class="source">Metrics: {_escape(metrics_path)}</p>
@@ -608,6 +614,7 @@ th {{ color:var(--muted); background:var(--wash); font-size:12px; }} th:first-ch
 <section><h2>Error by horizon N</h2><p class="note">Each point is the mean RMSE across valid datasets. Every available N is plotted; lower is better.</p>{_render_horizon_charts(frame)}</section>
 <section><h2>Dataset distributions</h2>{_render_dataset_distribution(summary)}</section>
 <section><h2>Skipped / failed datasets</h2>{_render_failures(failures)}</section>
+<section id="physical-validity"><h2>Physical validity</h2>{physical_validity_sections}</section>
 </main></body></html>
 """
 
@@ -618,13 +625,18 @@ def run(
     out: Path | str,
     *,
     failures: Mapping[str, Any],
+    collection_dir: Path | str,
+    scenario: Path | str,
 ) -> Path:
-    """Generate ``report.html`` without recalculating evaluation metrics."""
+    """Generate the unified ``report.html``."""
     tuned_path = Path(tuned_params)
     metrics_path = Path(metrics_csv)
     out_path = Path(out)
     document, params = _load_tuned_document(tuned_path)
     frame = _add_normalized_scores(_load_metrics(metrics_path))
+    physical_sections = physical_validity.build_sections(
+        Path(collection_dir), tuned_path, scenario=Path(scenario)
+    )
     rendered = _render_document(
         tuned_path,
         metrics_path,
@@ -632,6 +644,7 @@ def run(
         params,
         frame,
         failures,
+        physical_sections,
     )
     out_path.parent.mkdir(parents=True, exist_ok=True)
     out_path.write_text(rendered, encoding="utf-8")

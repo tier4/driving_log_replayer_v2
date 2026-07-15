@@ -53,7 +53,6 @@ make reidentify \
     ├── tuned_params.yaml
     ├── metrics.csv
     ├── report.html
-    ├── physical_validity.html
     └── simulator_model.param.yaml
 ```
 
@@ -71,10 +70,8 @@ raw bag -> CSV cache -> fit_lon -> fit_steer -> fit_merge -> report -> release Y
 `fit_merge` が baseline/tuned の dataset別・horizon別 N-step 指標を `metrics.csv` に一度だけ
 書き出します。最適化スコアは従来どおり N=10/20/30/40/100 で算出し、レポート用指標は
 データが保証される N=1〜100 を1刻みで出力します。`report.html` はメトリクスごとの誤差推移を
-その CSV から描画するだけなので、同じロールアウトを再計算しません。
-
-`physical_validity.html` は同じ CSV キャッシュを一度だけ読み、縦方向・操舵・ヨー (`k_us`)・
-x/y 方程式残差を独立に評価します。scenario の
+その CSV から描画し、同じ文書内で CSV キャッシュを一度だけ読んで縦方向・操舵・ヨー (`k_us`)・
+x/y 方程式残差も評価します。N-step 指標のロールアウトは再計算しません。scenario の
 `Evaluation.Conditions.comparison_models` に比較するケース名を列挙します（例:
 `[baseline, v1, v1_rk4, current]`）。重複・未定義ケースはエラーで、`baseline` と
 `current` は必須です。

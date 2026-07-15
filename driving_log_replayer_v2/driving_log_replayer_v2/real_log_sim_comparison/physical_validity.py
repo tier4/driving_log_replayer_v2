@@ -1,4 +1,4 @@
-"""Physical-validity verification for the models selected by a scenario.
+"""Physical-validity sections for the unified reidentification report.
 
 The CSV cache is read once per dataset.  Every selected model is then evaluated
 with its declared parameters; only experimental models additionally get the
@@ -6,7 +6,6 @@ data-driven fitting diagnostics.
 """
 from __future__ import annotations
 
-import argparse
 import html
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -14,7 +13,6 @@ from typing import Any
 
 import numpy as np
 import plotly.graph_objects as go
-from plotly.offline import get_plotlyjs
 import yaml
 
 from .lib._figures._physical_validity import build_fig_cross_long, build_fig_cross_steer
@@ -337,31 +335,13 @@ def validate_xy(context: ValidationContext) -> ValidationStep:
     return _cross_step(context, xy=True)
 
 
-def assemble_html(context: ValidationContext, steps: list[ValidationStep]) -> str:
-    sections = "\n".join(step.html for step in steps)
-    return f'''<!doctype html><html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>物理的妥当性検証</title>
-<style>body{{font-family:sans-serif;max-width:1200px;margin:2rem auto;line-height:1.5}}section{{margin:2rem 0}}.plotly-graph-div{{max-width:100%}}table{{border-collapse:collapse;width:100%}}th,td{{border:1px solid #bbb;padding:.35rem;text-align:left}}</style>
-<script>{get_plotlyjs()}</script></head><body><h1>車両モデル物理的妥当性検証</h1>{sections}</body></html>'''
-
-
-def run(collection_dir: Path, params_path: Path, output: Path, *, scenario: Path | None = None, case: str = "current") -> Path:
-    context, prepared = prepare_datasets(collection_dir, params_path, scenario=scenario, case=case)
+def build_sections(
+    collection_dir: Path,
+    params_path: Path,
+    *,
+    scenario: Path,
+) -> str:
+    """Build report fragments; the caller owns the enclosing HTML document."""
+    context, prepared = prepare_datasets(collection_dir, params_path, scenario=scenario)
     steps = [prepared, validate_longitudinal(context), validate_steering(context), validate_yaw(context), validate_xy(context)]
-    output.parent.mkdir(parents=True, exist_ok=True)
-    output.write_text(assemble_html(context, steps), encoding="utf-8")
-    return output
-
-
-def main() -> None:
-    parser = argparse.ArgumentParser(description="物理的妥当性検証レポート生成")
-    parser.add_argument("--params", type=Path, required=True)
-    parser.add_argument("--collection-dir", "--root", dest="collection_dir", type=Path, required=True)
-    parser.add_argument("--out", type=Path, required=True)
-    parser.add_argument("--scenario", type=Path)
-    parser.add_argument("--case", default="current")
-    args = parser.parse_args()
-    run(args.collection_dir, args.params, args.out, scenario=args.scenario, case=args.case)
-
-
-if __name__ == "__main__":
-    main()
+    return "\n".join(step.html for step in steps)
