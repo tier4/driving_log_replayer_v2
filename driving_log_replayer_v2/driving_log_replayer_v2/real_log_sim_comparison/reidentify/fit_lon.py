@@ -33,9 +33,8 @@ from .stage_common import (
     write_phase_artifact,
 )
 
-_LONG_KEYS = frozenset(
-    {"acc_time_constant", "acc_time_delay", "debug_acc_scaling_factor"}
-)
+# このステージが責任を持つキー集合。実行時に最適化を無効化しても不変なので import 時に確定する。
+_LONG_KEYS = stage_targets(FIT_LON)
 _ACC_TAU_FIT_BOUNDS = PARAMETER_CONSTRAINTS["acc_time_constant"].direct_fit_bounds
 _ACC_DELAY_FIT_CANDIDATES = PARAMETER_CONSTRAINTS["acc_time_delay"].direct_fit_candidates
 assert _ACC_TAU_FIT_BOUNDS is not None

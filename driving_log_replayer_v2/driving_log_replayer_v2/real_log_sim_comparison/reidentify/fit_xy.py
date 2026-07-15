@@ -8,7 +8,12 @@ import numpy as np
 from scipy.optimize import minimize_scalar
 
 from .load_data import build_resampled, discover_cached_datasets, read_dataset_csv
-from .parameter_constraints import FIT_XY, PARAMETER_CONSTRAINTS, stage_targets
+from .parameter_constraints import (
+    FIT_XY,
+    PARAMETER_CONSTRAINTS,
+    stage_input_keys,
+    stage_targets,
+)
 from .residuals import build_xy_columns, rmse, xy_residual
 from .settings import MIN_FIT_SAMPLES, RESAMPLE_DT
 from .stage_common import (
@@ -20,20 +25,10 @@ from .stage_common import (
     write_phase_artifact,
 )
 
-_XY_KEYS = frozenset({"xy_heading_rate_coeff"})
+# このステージが責任を持つキー集合。実行時に最適化を無効化しても不変なので import 時に確定する。
+_XY_KEYS = stage_targets(FIT_XY)
 _XY_HEADING_RATE_COEFF_BOUNDS = (-5.0, 5.0)
-_PHASE2_KEYS = frozenset(
-    {
-        "acc_time_constant",
-        "acc_time_delay",
-        "debug_acc_scaling_factor",
-        "steer_time_constant",
-        "steer_time_delay",
-        "debug_steer_scaling_factor",
-        "steer_bias",
-        "k_us",
-    }
-)
+_PHASE2_KEYS = stage_input_keys(FIT_XY)
 
 
 def _fit_xy_heading_rate_coeff(datasets: list[dict], initial: float = 0.0) -> dict:

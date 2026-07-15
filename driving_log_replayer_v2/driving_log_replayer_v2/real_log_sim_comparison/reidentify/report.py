@@ -21,12 +21,13 @@ import yaml
 from plotly.offline import get_plotlyjs
 
 from .. import physical_validity
+from ..lib._nstep_common import METRIC_KEYS
 from ..lib._report_format import escape as _escape, format_number as _format_number
 from .model_config import load_model_config
 from .settings import TARGET_MODEL_NAME
 
 REQUIRED_COLUMNS = ("dataset_id", "model", "horizon")
-REQUIRED_METRICS = ("pos", "long", "lat", "yaw", "steer", "vx", "ax")
+REQUIRED_METRICS = METRIC_KEYS
 METRIC_UNITS = {
     "pos": "cm",
     "long": "cm",

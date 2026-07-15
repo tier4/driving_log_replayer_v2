@@ -14,6 +14,7 @@ import yaml
 
 from ..lib._accel_source import normalize_accel_source
 from ..lib._multi_agg import aggregate_normalized, format_agg, robust_score
+from ..lib._nstep_common import METRIC_KEYS
 from ..lib._parallel import (
     normalize_parallel_jobs,
     pool_chunksize,
@@ -24,6 +25,7 @@ from . import rollout
 from .load_data import build_rollout_data, discover_cached_datasets, read_dataset_csv
 from .model_config import load_model_config, resolve_baseline_model
 from .parameter_constraints import (
+    ALL_CONSTRAINED_KEYS,
     PARAMETER_CONSTRAINTS,
     FIT_MERGE,
     build_constraint_audit,
@@ -35,28 +37,14 @@ from .settings import BASELINE_MODEL_NAME, HORIZONS, ROLLOUT_STRIDE, TARGET_MODE
 from .stage_common import read_phase_artifact
 
 _GT_KEYS = ("acc_time_delay", "steer_time_delay", "wheelbase", "sub_dt")
-_RMSE_KEYS = ("pos", "long", "lat", "yaw", "steer", "vx", "ax")
+_RMSE_KEYS = METRIC_KEYS
 # Keep the optimization objective on the established sparse horizons, while
 # exporting every available integer N up to the maximum score horizon for the
 # comparison report. A dataset accepted by the sparse evaluation has valid
 # coverage at that maximum, so all smaller horizons are available as well.
 REPORT_HORIZONS = tuple(range(1, max(HORIZONS) + 1))
-_DIRECT_FIT_KEYS = frozenset(
-    {
-        "acc_time_constant",
-        "acc_time_delay",
-        "debug_acc_scaling_factor",
-        "steer_time_constant",
-        "steer_time_delay",
-        "debug_steer_scaling_factor",
-        "steer_dead_band",
-        "steer_bias",
-        "steer_rate_lim",
-        "k_us",
-        "wheelbase",
-        "xy_heading_rate_coeff",
-    }
-)
+# fit_merge の入力成果物は制約登録済みの全パラメータを持っていなければならない。
+_DIRECT_FIT_KEYS = ALL_CONSTRAINED_KEYS
 
 
 @dataclass
@@ -637,18 +625,7 @@ def fit_merge(
     )
     report_metrics = _evaluate_comparison_report_metrics(ctxs, comparison_cases)
 
-    fieldnames = [
-        "dataset_id",
-        "model",
-        "horizon",
-        "pos",
-        "long",
-        "lat",
-        "yaw",
-        "steer",
-        "vx",
-        "ax",
-    ]
+    fieldnames = ["dataset_id", "model", "horizon", *METRIC_KEYS]
     metrics_out.parent.mkdir(parents=True, exist_ok=True)
     with metrics_out.open("w", encoding="utf-8", newline="") as stream:
         writer = csv.DictWriter(stream, fieldnames=fieldnames)

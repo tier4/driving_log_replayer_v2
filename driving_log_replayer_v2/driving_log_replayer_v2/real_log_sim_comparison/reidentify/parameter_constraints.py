@@ -185,12 +185,25 @@ PARAMETER_CONSTRAINTS: dict[str, ParameterConstraint] = {
 }
 
 
+DIRECT_FIT_STAGES: tuple[str, ...] = (FIT_LON, FIT_STEER, FIT_XY)
+ALL_CONSTRAINED_KEYS: frozenset[str] = frozenset(PARAMETER_CONSTRAINTS)
+
+
 def stage_targets(stage: str) -> frozenset[str]:
     """Return the parameters enabled for one identification stage."""
     return frozenset(
         name for name, constraint in PARAMETER_CONSTRAINTS.items()
         if stage in constraint.optimization_stages
     )
+
+
+def stage_input_keys(stage: str) -> frozenset[str]:
+    """Keys the stage's input artifact must contain: union of prior stage targets."""
+    prior = DIRECT_FIT_STAGES[: DIRECT_FIT_STAGES.index(stage)]
+    keys: frozenset[str] = frozenset()
+    for prior_stage in prior:
+        keys |= stage_targets(prior_stage)
+    return keys
 
 
 def search_constraints(stage: str = FIT_MERGE) -> dict[str, ParameterConstraint]:

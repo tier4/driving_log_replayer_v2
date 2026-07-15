@@ -6,7 +6,7 @@ import numpy as np
 import pandas as pd
 
 from ..lib._events import find_autonomous_start as _find_autonomous_start
-from ..lib._nstep_common import interp_or_zeros, local_ds, rms, to_seconds
+from ..lib._nstep_common import METRIC_KEYS, interp_or_zeros, local_ds, rms, to_seconds
 from ..lib._params_utils import load_sim_params
 from ..lib._validation import require_non_empty_df
 from ..lib._vehicle_models import VehicleModel
@@ -302,10 +302,7 @@ def eval_rollout_rmse(
     for i, h in enumerate(sorted_horizons):
         valid_mask = ~np.isnan(sim_x[:, i])
         if not np.any(valid_mask):
-            res[h] = {
-                metric: float("inf")
-                for metric in ("pos", "long", "lat", "yaw", "steer", "vx", "ax")
-            }
+            res[h] = {metric: float("inf") for metric in METRIC_KEYS}
             continue
 
         mx, my, myaw = sim_x[valid_mask, i], sim_y[valid_mask, i], sim_yaw[valid_mask, i]

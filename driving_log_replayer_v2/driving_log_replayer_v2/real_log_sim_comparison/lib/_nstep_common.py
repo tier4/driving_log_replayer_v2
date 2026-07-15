@@ -4,6 +4,9 @@ from __future__ import annotations
 import numpy as np
 import pandas as pd
 
+# N-step rollout error metrics, in the column order used by metrics.csv.
+METRIC_KEYS: tuple[str, ...] = ("pos", "long", "lat", "yaw", "steer", "vx", "ax")
+
 
 def to_seconds(frame: pd.DataFrame, t0_ns: int) -> pd.DataFrame:
     result = frame.copy()

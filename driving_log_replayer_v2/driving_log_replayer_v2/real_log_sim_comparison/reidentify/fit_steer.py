@@ -8,7 +8,12 @@ import numpy as np
 
 from . import fit_core
 from .load_data import discover_cached_datasets
-from .parameter_constraints import FIT_STEER, PARAMETER_CONSTRAINTS, stage_targets
+from .parameter_constraints import (
+    FIT_STEER,
+    PARAMETER_CONSTRAINTS,
+    stage_input_keys,
+    stage_targets,
+)
 from .physical_constants import DWZ_MAX, VX_MIN_CURVE, WZ_MIN
 from .settings import (
     MIN_FIT_SAMPLES,
@@ -34,12 +39,9 @@ from .stage_common import (
     write_phase_artifact,
 )
 
-_PHASE1_KEYS = frozenset(
-    {"acc_time_constant", "acc_time_delay", "debug_acc_scaling_factor"}
-)
-_STEER_RESPONSE_KEYS = frozenset(
-    {"steer_time_constant", "steer_time_delay", "steer_bias", "debug_steer_scaling_factor"}
-)
+# このステージが責任を持つキー集合。実行時に最適化を無効化しても不変なので import 時に確定する。
+_PHASE1_KEYS = stage_input_keys(FIT_STEER)
+_STEER_RESPONSE_KEYS = stage_targets(FIT_STEER) - frozenset({"k_us"})
 _STEER_TAU_FIT_BOUNDS = PARAMETER_CONSTRAINTS["steer_time_constant"].direct_fit_bounds
 _STEER_DELAY_FIT_CANDIDATES = PARAMETER_CONSTRAINTS["steer_time_delay"].direct_fit_candidates
 assert _STEER_TAU_FIT_BOUNDS is not None

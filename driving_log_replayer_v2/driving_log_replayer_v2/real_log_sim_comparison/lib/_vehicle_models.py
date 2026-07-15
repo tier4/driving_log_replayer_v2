@@ -83,25 +83,19 @@ def _build_dp_args(p: dict[str, Any], sub_dt: float) -> tuple[float, ...]:
         else:
             val = _arg(p, key, defaults.get(key))
             if key == "use_rk4":
+                # C++ ABI へ渡す bool トグル。フィット対象ではないため
+                # PARAMETER_CONSTRAINTS には登録しない (test_param_ssot が監視)。
                 val = 1.0 if bool(val) else 0.0
             values.append(val)
     return tuple(values)
 
 
 _DELAY_PARAM_KEYS = frozenset(_BASE_DELAY_ARGS)
-_DP_NAMESPACED_PARAM_KEYS = frozenset(
-    {
-        "acc_time_delay",
-        "acc_time_constant",
-        "steer_time_delay",
-        "steer_time_constant",
-        "steer_dead_band",
-        "steer_bias",
-        "debug_acc_scaling_factor",
-        "debug_steer_scaling_factor",
-        "k_us",
-    }
+# リリース YAML のグローバル欄に置くキー (バージョン名前空間の外)。
+_GLOBAL_ARG_KEYS = frozenset(
+    {"vel_lim", "steer_lim", "vel_rate_lim", "steer_rate_lim", "wheelbase", "sub_dt"}
 )
+_DP_NAMESPACED_PARAM_KEYS = _DELAY_PARAM_KEYS - _GLOBAL_ARG_KEYS
 
 
 VEHICLE_MODEL_SPECS: dict[str, VehicleModelSpec] = {
