@@ -69,7 +69,11 @@ raw bag -> CSV cache -> fit_lon -> fit_steer -> fit_xy -> fit_merge -> release Y
 ```
 
 `fit_merge` が `comparison_models` の全モデル（`current` は `tuned` 表記）の dataset別・horizon別 N-step 指標を `metrics.csv` に一度だけ
-書き出します。最適化スコアは N=10/30/70/150/300 で算出し、レポート用指標は
+書き出します。最適化スコアは yaw/縦/横 を N=10/30/70/150/300 で、steer/ax の
+アクチュエータ項を N=10/30 で算出して合算します（steer/ax の open-loop 誤差は
+N≈20 までに定常値へ飽和するプラトー特性を持つため、過渡とプラトーの代表 2 点で足ります。
+定義式は report.html の「評価関数の定義」を参照）。旧目的関数の値は `score_legacy` として
+`tuned_params.yaml` に併記されます。レポート用指標は
 データが保証される N=1〜300 を1刻みで出力します。`report.html` はメトリクスごとの誤差推移を
 その CSV から描画し、同じ文書内で CSV キャッシュを一度だけ読んで縦方向・操舵・ヨー (`k_us`)・
 x/y 方程式残差も評価します。N-step 指標のロールアウトは再計算しません。scenario の
@@ -83,5 +87,24 @@ x/y 方程式残差も評価します。N-step 指標のロールアウトは再
 
 必須topicがない、データが空、有効区間が短すぎる dataset は理由を表示して除外します。
 同定可能な dataset が1件も残らない場合はエラー終了します。
+
+## 単発解析: fit_plateau（プラトー直接同定）
+
+```bash
+make fit_plateau ROOT=<collection> SCENARIO=<scenario.yaml>
+```
+
+steer/ax の N-step 誤差が飽和するプラトー領域（既定 N=30）を使い、時定数・むだ時間を
+固定したまま定常パラメータ（steer/acc スケーリング）だけを軽量に直接同定します
+（`steer_bias` はモデル構造上 steer プラトーに影響しないため対象外）。パイプラインには
+組み込まれておらず、成果物 `<ROOT>/reidentify/plateau_params.yaml` の値を scenario.yaml の
+比較モデル（例: `v1_p`）へ手動転記して使います。`plateau_diagnostics.csv` に
+dataset 別の RMSE と署名付き平均誤差（系統/雑音の分解用）を出力します。
+
+GT ソースは scenario の各モデルで `acceleration_source`（`accel` | `kinematic_savgol` 等）と
+`steering_source`（`steer` | `steer_savgol`）を指定できます。`*_savgol` はゼロ位相の
+savgol 平滑化（窓 0.4 s、後段フィルタなしで LPF 相当を窓に統合）です。fit_plateau で
+case の GT を上書きするには `PLATEAU_ACCEL_SOURCE` / `PLATEAU_STEER_SOURCE` を指定します
+（例: p 系向けに `make fit_plateau PLATEAU_ACCEL_SOURCE=kinematic_savgol PLATEAU_STEER_SOURCE=steer_savgol`）。
 
 scenario の最小契約と成果物の詳細は [`reidentify/README.md`](reidentify/README.md) を参照してください。
