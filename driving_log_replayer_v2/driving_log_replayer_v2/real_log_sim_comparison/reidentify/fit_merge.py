@@ -32,6 +32,7 @@ from .parameter_constraints import (
     validate_parameters,
 )
 from .settings import BASELINE_MODEL_NAME, HORIZONS, ROLLOUT_STRIDE, TARGET_MODEL_NAME
+from .stage_common import read_phase_artifact
 
 _GT_KEYS = ("acc_time_delay", "steer_time_delay", "wheelbase", "sub_dt")
 _RMSE_KEYS = ("pos", "long", "lat", "yaw", "steer", "vx", "ax")
@@ -347,7 +348,7 @@ def _eval_search_candidate(params: dict) -> float:
 
 def robust_search(
     ctxs: list[DatasetCtx], cfg, *, n_trials: int = 200, n_jobs: int = 1,
-    phase2_params: dict,
+    direct_fit_params: dict,
 ) -> dict:
     """Optuna TPE でデータセット横断ロバスト最適化する。"""
     global _SEARCH_CTXS, _SEARCH_MODEL, _SEARCH_ACCEL_SOURCE  # noqa: PLW0603
@@ -369,12 +370,12 @@ def robust_search(
     delay_candidates = delay_constraint.search_candidates if delay_constraint else ()
     searched = set(constraints)
     validate_parameters(
-        phase2_params,
-        set(PARAMETER_CONSTRAINTS) & set(phase2_params),
+        direct_fit_params,
+        set(PARAMETER_CONSTRAINTS) & set(direct_fit_params),
         source="直接同定結果",
     )
     passthrough = {
-        key: value for key, value in phase2_params.items() if key not in searched
+        key: value for key, value in direct_fit_params.items() if key not in searched
     }
     cur_best.update(passthrough)
     validate_parameters(
@@ -411,7 +412,7 @@ def robust_search(
     print(f"\n## Optuna TPE ({TARGET_MODEL_NAME}, {n_trials} trials, {n_workers} jobs)")
 
     study = optuna.create_study(direction="minimize", sampler=sampler)
-    study.enqueue_trial(_make_enqueue(phase2_params))
+    study.enqueue_trial(_make_enqueue(direct_fit_params))
     best_params = dict(cur_best)
     best_score = init_score
 
@@ -501,7 +502,7 @@ def fit_merge(
     collection_dir: Path,
     scenario: Path,
     *,
-    phase2_params: dict,
+    direct_fit_params: dict,
     n_trials: int = 50,
     n_jobs: int = 1,
     metrics_out: Path,
@@ -537,7 +538,7 @@ def fit_merge(
         raise RuntimeError("有効な dataset が 0 件です")
 
     tuned_params = robust_search(
-        ctxs, cfg, n_trials=n_trials, n_jobs=n_jobs, phase2_params=phase2_params,
+        ctxs, cfg, n_trials=n_trials, n_jobs=n_jobs, direct_fit_params=direct_fit_params,
     )
     # 1. Evaluate baseline
     baselines = {ctx.dataset_id: ctx.base_metric for ctx in ctxs}
@@ -693,25 +694,15 @@ def run(
     phase3_params_path: Path, metrics_out: Path,
     n_trials: int = 50, n_jobs: int = 1,
 ) -> dict:
-    if not phase3_params_path.is_file():
-        raise FileNotFoundError(f"直接同定結果が見つかりません: {phase3_params_path}")
-    with phase3_params_path.open("r", encoding="utf-8") as stream:
-        data = yaml.safe_load(stream)
-    if not isinstance(data, dict) or not isinstance(data.get("params"), dict):
-        raise ValueError(f"直接同定結果の params が不正です: {phase3_params_path}")
-    direct_fit_params = dict(data["params"])
-    missing = _DIRECT_FIT_KEYS - direct_fit_params.keys()
-    if missing:
-        raise ValueError(f"直接同定結果に必須 params がありません: {sorted(missing)}")
+    direct_fit_params = read_phase_artifact(
+        phase3_params_path, expected_phase=3, required_keys=_DIRECT_FIT_KEYS, producer="fit_xy",
+    )
     validate_parameters(direct_fit_params, _DIRECT_FIT_KEYS, source="直接同定結果")
-    metadata = data.get("metadata")
-    if not isinstance(metadata, dict) or metadata.get("phase") != 3:
-        raise ValueError(f"直接同定結果の metadata.phase は 3 である必要があります: {phase3_params_path}")
     print(f"[fit_merge] 直接同定値を warm-start / passthrough に使用: {phase3_params_path}")
 
     out.parent.mkdir(parents=True, exist_ok=True)
     result = fit_merge(
-        collection_dir, scenario, phase2_params=direct_fit_params,
+        collection_dir, scenario, direct_fit_params=direct_fit_params,
         n_trials=n_trials, n_jobs=n_jobs, metrics_out=metrics_out,
     )
     with out.open("w", encoding="utf-8") as stream:

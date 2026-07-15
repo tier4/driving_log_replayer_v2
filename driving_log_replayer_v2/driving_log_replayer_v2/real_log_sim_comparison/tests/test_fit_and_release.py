@@ -55,7 +55,7 @@ def test_first_order_fit_recovers_delay_tau_and_scale() -> None:
 
 def test_robust_search_rejects_zero_trials() -> None:
     with pytest.raises(ValueError, match="at least 1"):
-        fit_merge.robust_search([], None, n_trials=0, phase2_params={})
+        fit_merge.robust_search([], None, n_trials=0, direct_fit_params={})
 
 
 def test_zero_rollout_metrics_are_not_valid_candidates() -> None:
@@ -167,7 +167,7 @@ def test_robust_search_parallel_evaluates_each_trial_once(monkeypatch) -> None:
     config = SimpleNamespace(find_case=lambda _name: case)
 
     result = fit_merge.robust_search(
-        [context], config, n_trials=4, n_jobs=2, phase2_params={}
+        [context], config, n_trials=4, n_jobs=2, direct_fit_params={}
     )
 
     assert isinstance(result, dict)
@@ -210,7 +210,7 @@ def test_robust_search_uses_direct_fit_for_single_trial(monkeypatch) -> None:
         config,
         n_trials=1,
         n_jobs=1,
-        phase2_params={"acc_time_constant": 0.1, "acc_time_delay": 0.1},
+        direct_fit_params={"acc_time_constant": 0.1, "acc_time_delay": 0.1},
     )
 
     assert params["acc_time_constant"] == pytest.approx(0.1)
@@ -220,7 +220,7 @@ def test_fit_merge_rejects_incomplete_direct_fit_artifact(tmp_path: Path) -> Non
     phase3 = tmp_path / "phase3.yaml"
     phase3.write_text("params: {}\nmetadata:\n  phase: 3\n", encoding="utf-8")
 
-    with pytest.raises(ValueError, match="必須 params"):
+    with pytest.raises(ValueError, match="missing="):
         fit_merge.run(
             tmp_path,
             tmp_path / "scenario.yaml",
@@ -253,7 +253,7 @@ def test_fit_merge_rejects_wrong_phase_metadata(tmp_path: Path) -> None:
         encoding="utf-8",
     )
 
-    with pytest.raises(ValueError, match="metadata.phase は 3"):
+    with pytest.raises(ValueError, match="metadata.phase"):
         fit_merge.run(
             tmp_path,
             tmp_path / "scenario.yaml",
@@ -367,10 +367,25 @@ def test_fit_merge_skips_optuna_when_all_targets_are_disabled(
 
     result = fit_merge.robust_search(
         [context], SimpleNamespace(find_case=lambda _name: case), n_trials=1,
-        phase2_params={"acc_time_constant": 0.2},
+        direct_fit_params={"acc_time_constant": 0.2},
     )
 
     assert result["acc_time_constant"] == pytest.approx(0.2)
+
+
+def test_fit_steer_requires_scenario_fallback_when_targets_disabled(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    for key in ("steer_time_constant", "steer_time_delay", "steer_bias",
+                "debug_steer_scaling_factor", "k_us"):
+        monkeypatch.setitem(
+            PARAMETER_CONSTRAINTS,
+            key,
+            replace(PARAMETER_CONSTRAINTS[key], optimization_stages=frozenset()),
+        )
+
+    with pytest.raises(ValueError, match="scenario 初期値がありません"):
+        fit_steer.fit_steer(tmp_path, phase1_params={}, wheelbase=4.7)
 
 
 def test_fit_steer_rejects_incomplete_longitudinal_artifact(tmp_path: Path) -> None:

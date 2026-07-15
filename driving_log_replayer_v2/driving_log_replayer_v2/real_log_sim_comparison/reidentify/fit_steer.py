@@ -2,18 +2,12 @@
 """操舵モデルと ``k_us`` の直接同定。"""
 from __future__ import annotations
 
-from concurrent.futures import ProcessPoolExecutor, as_completed
-import math
 from pathlib import Path
-import sys
 
 import numpy as np
-import yaml
 
 from . import fit_core
-from ..lib._parallel import normalize_parallel_jobs
-from .load_data import build_resampled, discover_cached_datasets, read_dataset_csv
-from .model_config import load_model_config
+from .load_data import discover_cached_datasets
 from .parameter_constraints import FIT_STEER, PARAMETER_CONSTRAINTS, stage_targets
 from .physical_constants import DWZ_MAX, VX_MIN_CURVE, WZ_MIN
 from .settings import (
@@ -29,6 +23,16 @@ from .settings import (
     STEER_VX_MIN,
     TARGET_MODEL_NAME,
 )
+from .stage_common import (
+    clamped_medians,
+    inherit_scenario_defaults,
+    load_resampled,
+    map_datasets,
+    read_phase_artifact,
+    require_disabled_fallbacks,
+    stage_metadata,
+    write_phase_artifact,
+)
 
 _PHASE1_KEYS = frozenset(
     {"acc_time_constant", "acc_time_delay", "debug_acc_scaling_factor"}
@@ -40,12 +44,6 @@ _STEER_TAU_FIT_BOUNDS = PARAMETER_CONSTRAINTS["steer_time_constant"].direct_fit_
 _STEER_DELAY_FIT_CANDIDATES = PARAMETER_CONSTRAINTS["steer_time_delay"].direct_fit_candidates
 assert _STEER_TAU_FIT_BOUNDS is not None
 assert _STEER_DELAY_FIT_CANDIDATES is not None
-
-
-def _load_one(task: tuple[str, Path]) -> dict | None:
-    ds_id, csv_path = task
-    dfs = read_dataset_csv(csv_path)
-    return build_resampled(dfs, RESAMPLE_DT, context=f"fit_steer:{ds_id}")
 
 
 def _fit_one_steer(ds: dict) -> tuple[float, float, float, float] | None:
@@ -101,7 +99,7 @@ def _process_one(
     task: tuple[str, Path],
 ) -> tuple[tuple[float, float, float, float] | None, tuple[np.ndarray, np.ndarray, np.ndarray]] | None:
     """CSV load・resample・直接同定・定常旋回抽出を同じ worker で行う。"""
-    dataset = _load_one(task)
+    dataset = load_resampled(task, stage="fit_steer")
     if dataset is None:
         return None
     return _fit_one_steer(dataset), _steady_turn_samples(dataset)
@@ -118,36 +116,29 @@ def fit_steer(
     tasks = discover_cached_datasets(collection_dir)
     targets = stage_targets(FIT_STEER)
     params = dict(phase1_params)
+    require_disabled_fallbacks(
+        params,
+        managed_keys=_STEER_RESPONSE_KEYS | frozenset({"k_us"}),
+        targets=targets,
+        stage="fit_steer",
+    )
     if not targets:
         return {
             "params": params,
-            "metadata": {
-                "collection_dir": str(collection_dir), "n_datasets": len(tasks), "n_valid": 0,
-                "wheelbase": wheelbase, "tuning_type": "physical_direct_fit", "phase": 2,
-                "optimized_parameters": [],
-            },
+            "metadata": stage_metadata(
+                collection_dir, n_datasets=len(tasks), n_valid=0,
+                wheelbase=wheelbase, phase=2, optimized=(),
+            ),
         }
-    n_workers = normalize_parallel_jobs(n_jobs, n_tasks=len(tasks))
-    print(f"[fit_steer] データセット並列ロード ({len(tasks)} 件)...")
 
-    n_valid = 0
-    fit_results: list[tuple[float, float, float, float]] = []
-    steady_samples: list[tuple[np.ndarray, np.ndarray, np.ndarray]] = []
-    with ProcessPoolExecutor(max_workers=n_workers) as pool:
-        futures = {pool.submit(_process_one, task): task[0] for task in tasks}
-        for future in as_completed(futures):
-            try:
-                result = future.result()
-            except Exception as exc:  # noqa: BLE001 (dataset-local input failure)
-                print(f"[fit_steer] SKIP {futures[future]}: {exc}", file=sys.stderr)
-                continue
-            if result is None:
-                continue
-            fit_result, samples = result
-            n_valid += 1
-            steady_samples.append(samples)
-            if fit_result is not None:
-                fit_results.append(fit_result)
+    loaded = [
+        result
+        for result in map_datasets(tasks, _process_one, stage="fit_steer", n_jobs=n_jobs)
+        if result is not None
+    ]
+    n_valid = len(loaded)
+    fit_results = [fit_result for fit_result, _samples in loaded if fit_result is not None]
+    steady_samples = [samples for _fit_result, samples in loaded]
 
     print(f"有効データセット数: {n_valid}")
     if n_valid == 0:
@@ -160,13 +151,10 @@ def fit_steer(
             f"(各 dataset {MIN_FIT_SAMPLES} samples 以上が必要)。"
         )
     if response_targets:
-        taus, delays, biases, dsfs = map(np.asarray, zip(*fit_results))
-        fitted_params = {
-            "steer_time_constant": PARAMETER_CONSTRAINTS["steer_time_constant"].clamp(float(np.median(taus))),
-            "steer_time_delay": PARAMETER_CONSTRAINTS["steer_time_delay"].clamp(float(np.median(delays))),
-            "steer_bias": PARAMETER_CONSTRAINTS["steer_bias"].clamp(float(np.median(biases))),
-            "debug_steer_scaling_factor": PARAMETER_CONSTRAINTS["debug_steer_scaling_factor"].clamp(float(np.median(dsfs))),
-        }
+        fitted_params = clamped_medians(
+            fit_results,
+            ("steer_time_constant", "steer_time_delay", "steer_bias", "debug_steer_scaling_factor"),
+        )
         params.update({key: value for key, value in fitted_params.items() if key in targets})
     params.setdefault("steer_dead_band", PARAMETER_CONSTRAINTS["steer_dead_band"].default)
     params.setdefault("steer_rate_lim", PARAMETER_CONSTRAINTS["steer_rate_lim"].default)
@@ -195,15 +183,10 @@ def fit_steer(
 
     return {
         "params": params,
-        "metadata": {
-            "collection_dir": str(collection_dir),
-            "n_datasets": len(tasks),
-            "n_valid": n_valid,
-            "wheelbase": wheelbase,
-            "tuning_type": "physical_direct_fit",
-            "phase": 2,
-            "optimized_parameters": sorted(targets),
-        },
+        "metadata": stage_metadata(
+            collection_dir, n_datasets=len(tasks), n_valid=n_valid,
+            wheelbase=wheelbase, phase=2, optimized=targets,
+        ),
     }
 
 
@@ -215,43 +198,17 @@ def run(
     scenario: Path,
     n_jobs: int = 1,
 ) -> dict:
-    if not phase1_params_path.is_file():
-        raise FileNotFoundError(f"fit_lon result not found: {phase1_params_path}")
-    phase1_data = yaml.safe_load(phase1_params_path.read_text(encoding="utf-8"))
-    if not isinstance(phase1_data, dict) or not isinstance(phase1_data.get("params"), dict):
-        raise ValueError(f"invalid fit_lon result: {phase1_params_path}")
-    phase1_params = dict(phase1_data["params"])
-    missing = _PHASE1_KEYS - phase1_params.keys()
-    invalid = [
-        key
-        for key in _PHASE1_KEYS & phase1_params.keys()
-        if not (
-            isinstance(phase1_params[key], (int, float))
-            and not isinstance(phase1_params[key], bool)
-            and math.isfinite(float(phase1_params[key]))
-        )
-    ]
-    metadata = phase1_data.get("metadata")
-    if missing or invalid or not isinstance(metadata, dict) or metadata.get("phase") != 1:
-        raise ValueError(
-            f"invalid fit_lon result: missing={sorted(missing)}, invalid={sorted(invalid)}, "
-            f"metadata.phase={metadata.get('phase') if isinstance(metadata, dict) else None}"
-        )
+    phase1_params = read_phase_artifact(
+        phase1_params_path, expected_phase=1, required_keys=_PHASE1_KEYS, producer="fit_lon",
+    )
     print(f"[fit_steer] fit_lon のパラメータを引き継ぎました: {list(phase1_params)}")
 
-    case_params = dict(load_model_config(scenario).find_case(TARGET_MODEL_NAME).params)
-    for key, value in case_params.items():
-        phase1_params.setdefault(key, value)
+    case_params = inherit_scenario_defaults(phase1_params, scenario, stage="fit_steer")
     wheelbase_value = case_params.get("wheelbase", case_params.get("wheel_base"))
     if wheelbase_value is None:
         raise ValueError(f"{scenario}: models.{TARGET_MODEL_NAME}.params.wheelbase が必要です")
     wheelbase = float(wheelbase_value)
-    print(f"[fit_steer] scenario.yaml からパラメータを引き継ぎました: {list(case_params)}")
     print(f"[fit_steer] wheelbase = {wheelbase}")
 
     result = fit_steer(collection_dir, phase1_params=phase1_params, wheelbase=wheelbase, n_jobs=n_jobs)
-    out.parent.mkdir(parents=True, exist_ok=True)
-    with out.open("w") as f:
-        yaml.safe_dump(result, f, allow_unicode=True, sort_keys=False)
-    print(f"✓ パラメータ保存完了: {out}")
-    return result
+    return write_phase_artifact(out, result)
