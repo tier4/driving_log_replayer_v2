@@ -40,7 +40,7 @@ Evaluation:
     auto_tackle_stuck: true # --auto-tackle-stuck: expand search radius then perturb ego when stuck in repeat
     stuck_duration: 5.0 # --stuck-duration [s]: the reproducer will try to tackle stuck by expanding search radius then perturb ego when the duration is longer than this value.
     expand_radius_scale: 3.0 # --expand-radius-scale: one-shot search radius scale when stuck, for example, if the search radius is 1.5m, the expand radius scale is 3.0, the expand radius will be 1.5m * 3.0 = 4.5m when stuck.
-    perturb_distance: 0.5 # --perturb-distance [m]: the reproducer will perturb ego by this distance when ego still stucked after the expand radius is applied.
+    perturb_distance: 0.5 # --perturb-distance [m]: the reproducer will perturb ego by this distance when ego still stuck after the expand radius is applied.
     output_metrics: true # --output-metrics: dump metrics JSON on shutdown
 
   Conditions:
