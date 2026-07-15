@@ -1,8 +1,9 @@
 """Parallel physical-validity sections for the unified reidentification report."""
 from __future__ import annotations
 
+from dataclasses import dataclass
+from dataclasses import field
 import multiprocessing
-from dataclasses import dataclass, field
 from pathlib import Path
 from time import perf_counter
 from typing import Any
@@ -11,20 +12,27 @@ import numpy as np
 import plotly.graph_objects as go
 import yaml
 
-from .lib._parallel import normalize_parallel_jobs, pool_chunksize, set_worker_thread_env_defaults
-from .lib._report_format import escape as _escape, format_number as _number
+from .lib._parallel import normalize_parallel_jobs
+from .lib._parallel import pool_chunksize
+from .lib._parallel import set_worker_thread_env_defaults
+from .lib._report_format import escape as _escape
+from .lib._report_format import format_number as _number
 from .reidentify.fit_core import simulate_first_order
-from .reidentify.load_data import build_resampled, discover_cached_datasets, read_dataset_csv
-from .reidentify.model_config import ModelSpec, load_model_config
-from .reidentify.residuals import build_xy_columns, rmse, xy_residual, yaw_residual
-from .reidentify.settings import (
-    BASELINE_MODEL_NAME,
-    LONG_DA_THRESH,
-    LONG_VX_MIN,
-    RESAMPLE_DT,
-    STEER_DSTEER_MIN,
-    TARGET_MODEL_NAME,
-)
+from .reidentify.load_data import build_resampled
+from .reidentify.load_data import discover_cached_datasets
+from .reidentify.load_data import read_dataset_csv
+from .reidentify.model_config import load_model_config
+from .reidentify.model_config import ModelSpec
+from .reidentify.residuals import build_xy_columns
+from .reidentify.residuals import rmse
+from .reidentify.residuals import xy_residual
+from .reidentify.residuals import yaw_residual
+from .reidentify.settings import BASELINE_MODEL_NAME
+from .reidentify.settings import LONG_DA_THRESH
+from .reidentify.settings import LONG_VX_MIN
+from .reidentify.settings import RESAMPLE_DT
+from .reidentify.settings import STEER_DSTEER_MIN
+from .reidentify.settings import TARGET_MODEL_NAME
 
 
 @dataclass
@@ -63,11 +71,121 @@ class ValidationStep:
 class PhysicalValiditySections:
     """Physical-validity fragments, one per validation step; the caller decides placement."""
 
+    equations: str
     prepare: str
     longitudinal: str
     steering: str
     yaw: str
     xy: str
+
+
+# RMSE 色分けバーの判定しきい値。ratio=RMSE/baseline に対し、改善/悪化/中立を分ける。
+_RATIO_GOOD = 0.99
+_RATIO_BAD = 1.01
+_RATIO_BAR_MAX = 2.0  # バー幅の飽和点 (baseline の 2 倍で 100% 幅)
+
+# 各直接同定セクションが参照する状態方程式行のアンカー ID。式は _build_equations_section が定義する。
+_EQ_ANCHORS = {
+    "longitudinal": ("eq-long", "状態方程式(縦方向)"),
+    "steering": ("eq-steer", "状態方程式(操舵)"),
+    "yaw": ("eq-yaw", "状態方程式(ヨー)"),
+    "xy": ("eq-xy", "状態方程式(位置 x/y)"),
+}
+
+
+def _eqref(section_id: str) -> str:
+    """Return the equation-reference line placed at the top of a section."""
+    anchor, label = _EQ_ANCHORS[section_id]
+    return (
+        f'<p class="eqref">🔗 <a href="#{anchor}">{_escape(label)}</a> の整合性を残差 RMSE で評価する。'
+        '記号の意味は <a href="#eq-notation">記号定義</a> を参照。</p>'
+    )
+
+
+_NOTATION_ROWS = (
+    (r"\(x, y\)", "地図平面上の車両位置", "m", "状態 / —(実測)"),
+    (r"\(\theta\)", "ヨー角(地図 X 軸からの回転)", "rad", "状態 / —(実測)"),
+    (r"\(v_x\)", "前進速度", "m/s", "状態 / —(実測)"),
+    (r"\(\delta_{\mathrm{act}}\)", "前輪実舵角(操舵アクチュエータ状態)", "rad", "状態 / —(実測)"),
+    (r"\(a_{\mathrm{act}}\)", "加速度アクチュエータ状態", "m/s²", "状態 / —(実測)"),
+    (r"\(\omega\)", r"ヨーレート(\(\dot\theta\))", "rad/s", "—(実測)"),
+    (r"\(a_{\mathrm{cmd}}, \delta_{\mathrm{cmd}}\)", "加速度指令 / 操舵指令", "m/s², rad", "入力"),
+    (r"\(a_{\mathrm{slope}}\)", "路面勾配による加速度成分", "m/s²", "入力"),
+    (r"\(\tau_a,\ T_a\)", "加速度の一次遅れ時定数 / むだ時間", "s", "<code>acc_time_constant</code>, <code>acc_time_delay</code>"),
+    (r"\(\tau_\delta,\ T_\delta\)", "操舵の一次遅れ時定数 / むだ時間", "s", "<code>steer_time_constant</code>, <code>steer_time_delay</code>"),
+    (r"\(\beta\)", "ステアバイアス(系統的操舵オフセット)", "rad", "<code>steer_bias</code>"),
+    (r"\(L\)", "ホイールベース", "m", "<code>wheelbase</code>"),
+    (r"\(k_{\mathrm{us}}\)", "アンダーステア係数", "rad·s²/m", "<code>k_us</code>"),
+    (r"\(c\)", "位置式の heading 補正係数", "s²/m", "<code>xy_heading_rate_coeff</code>"),
+)
+
+
+def _build_equations_section() -> str:
+    r"""
+    Build the equation hub centered on the state-space equations of motion.
+
+    数式ハブの中心は状態方程式 \(\dot{\mathbf{x}} = f(\mathbf{x}, \mathbf{u})\)。各直接同定は、その各行を
+    実測状態に当てはめてパラメータを同定し、両辺の残差 RMSE で整合性を評価する(rollout を伴わない
+    固定評価)。式は reidentify の実装 (residuals.py / fit_core._simulate) と一致させる。
+    """
+    rows = "".join(
+        f"<tr><td>{symbol}</td><td>{meaning}</td><td>{unit}</td><td>{impl}</td></tr>"
+        for symbol, meaning, unit, impl in _NOTATION_ROWS
+    )
+    return f"""<h3 id="eq-notation">記号の定義</h3>
+<p>シミュレータは状態 \\(\\mathbf{{x}} = (x, y, \\theta, v_x, \\delta_{{\\mathrm{{act}}}}, a_{{\\mathrm{{act}}}})\\) を
+入力 \\(\\mathbf{{u}} = (a_{{\\mathrm{{cmd}}}}, \\delta_{{\\mathrm{{cmd}}}})\\) で駆動する連続時間の状態方程式
+\\(\\dot{{\\mathbf{{x}}}} = f(\\mathbf{{x}}, \\mathbf{{u}})\\) を数値積分する。以降で用いる記号は次の通り。</p>
+<div class="table-wrap"><table class="params"><thead>
+<tr><th>記号</th><th>意味</th><th>単位</th><th>実装(状態 / 入力 / 設定パラメータ)</th></tr>
+</thead><tbody>{rows}</tbody></table></div>
+
+<h3>状態方程式(運動方程式)</h3>
+<p>本レポートの中心となる運動方程式は次の状態方程式である。操舵・加速度アクチュエータはむだ時間付きの
+一次遅れで表され、観測される操舵角は \\(\\delta = \\delta_{{\\mathrm{{act}}}} + \\beta\\)、位置式の実効方位は
+\\(\\theta_{{\\mathrm{{eff}}}} = \\theta - c\\,v_x\\,\\dot\\theta\\) とする。</p>
+<div class="eq-block">
+\\[ \\dot{{\\mathbf{{x}}}} =
+\\begin{{pmatrix}} \\dot x \\\\ \\dot y \\\\ \\dot\\theta \\\\ \\dot v_x \\\\ \\dot\\delta_{{\\mathrm{{act}}}} \\\\ \\dot a_{{\\mathrm{{act}}}} \\end{{pmatrix}}
+=
+\\begin{{pmatrix}}
+v_x \\cos\\theta_{{\\mathrm{{eff}}}} \\\\[2pt]
+v_x \\sin\\theta_{{\\mathrm{{eff}}}} \\\\[2pt]
+\\dfrac{{v_x \\tan\\delta_{{\\mathrm{{act}}}}}}{{L + k_{{\\mathrm{{us}}}}\\,v_x^{{2}}}} \\\\[6pt]
+a_{{\\mathrm{{act}}}} + a_{{\\mathrm{{slope}}}} \\\\[2pt]
+\\dfrac{{\\delta_{{\\mathrm{{cmd}}}}(t - T_\\delta) - \\delta_{{\\mathrm{{act}}}}}}{{\\tau_\\delta}} \\\\[6pt]
+\\dfrac{{a_{{\\mathrm{{cmd}}}}(t - T_a) - a_{{\\mathrm{{act}}}}}}{{\\tau_a}}
+\\end{{pmatrix}} \\]
+</div>
+<p>各直接同定セクションは、この状態方程式の該当行だけを取り出し、実測状態を代入して右辺(モデル予測)と
+左辺(実測)の差 \\(E\\) の RMSE を最小化する形でパラメータを同定する。以下は各行の再掲で、丸括弧内は
+その行で同定するパラメータを示す。</p>
+<div class="eq-block" id="eq-long">
+<p><b>縦方向 — 加速度アクチュエータ \\(\\dot a_{{\\mathrm{{act}}}}\\) の行</b>(同定: \\(\\tau_a, T_a\\))</p>
+\\[ \\dot a_{{\\mathrm{{act}}}} = \\frac{{a_{{\\mathrm{{cmd}}}}(t - T_a) - a_{{\\mathrm{{act}}}}}}{{\\tau_a}} \\]
+<p class="note">むだ時間 \\(T_a\\) だけ遅れた指令へ時定数 \\(\\tau_a\\) で一次遅れ追従する。固定評価では
+この行から予測した \\(a_{{\\mathrm{{act}}}}\\) と実測加速度の残差 RMSE を用い、加減速中(DRIVE・十分な速度・
+指令変化があるサンプル)のみで評価する。</p>
+</div>
+<div class="eq-block" id="eq-steer">
+<p><b>操舵 — 操舵アクチュエータ \\(\\dot\\delta_{{\\mathrm{{act}}}}\\) の行</b>(同定: \\(\\tau_\\delta, T_\\delta, \\beta\\))</p>
+\\[ \\dot\\delta_{{\\mathrm{{act}}}} = \\frac{{\\delta_{{\\mathrm{{cmd}}}}(t - T_\\delta) - \\delta_{{\\mathrm{{act}}}}}}{{\\tau_\\delta}},
+\\qquad \\delta = \\delta_{{\\mathrm{{act}}}} + \\beta \\]
+<p class="note">縦方向と同じ一次遅れ構造。観測される操舵角はステアバイアス \\(\\beta\\) を加えた \\(\\delta\\)。</p>
+</div>
+<div class="eq-block" id="eq-yaw">
+<p><b>ヨー — キネマティック単純モデルの \\(\\dot\\theta\\) の行</b>(同定: \\(L, k_{{\\mathrm{{us}}}}\\))</p>
+\\[ \\dot\\theta = \\omega = \\frac{{v_x \\tan\\delta_{{\\mathrm{{act}}}}}}{{L + k_{{\\mathrm{{us}}}}\\,v_x^{{2}}}} \\]
+<p class="note">外部入力を持つアクチュエータ応答ではなく、観測状態 \\(v_x, \\delta_{{\\mathrm{{act}}}}, \\omega\\) だけで
+閉じる関係。固定評価では右辺と実測ヨーレート \\(\\omega\\) の残差 RMSE を用いる。</p>
+</div>
+<div class="eq-block" id="eq-xy">
+<p><b>位置 — heading 補正付きキネマティクスの \\(\\dot x, \\dot y\\) の行</b>(同定: \\(c\\))</p>
+\\[ \\dot x = v_x \\cos\\theta_{{\\mathrm{{eff}}}}, \\qquad \\dot y = v_x \\sin\\theta_{{\\mathrm{{eff}}}},
+\\qquad \\theta_{{\\mathrm{{eff}}}} = \\theta - c\\,v_x\\,\\dot\\theta \\]
+<p class="note">固定評価では右辺と実測軌跡の数値微分(Savitzky-Golay で得た \\(\\dot x, \\dot y\\))の残差 RMSE を
+用いる(\\(x, y\\) の残差を結合)。</p>
+</div>"""
 
 
 def _figure_html(fig: go.Figure, title: str) -> str:
@@ -234,20 +352,64 @@ def _fixed_response(data: dict[str, Any], params: dict[str, Any], *, steer: bool
     return {"rmse": rmse(residual), "n": int(len(residual))}, prediction, None
 
 
+def _rmse_visual_cell(value: float, baseline: float, *, is_baseline: bool) -> str:
+    """
+    Render an RMSE value as a two-row cell (number + baseline-ratio bar).
+
+    RMSE を「数値 + baseline 比の色分け横棒バー」の 2 段セルで表示する。中央線 (50% 幅) が
+    baseline (ratio=1.0)。緑=改善 (ratio<_RATIO_GOOD)、赤=悪化 (ratio>_RATIO_BAD)、灰=中立。
+    バーが短いほど良い。
+    """
+    if not np.isfinite(value):
+        return '<td class="rmse-cell">—</td>'
+    ratio = value / baseline if np.isfinite(baseline) and baseline != 0 else float("nan")
+    if is_baseline:
+        ratio = 1.0
+    if np.isfinite(ratio):
+        width = min(max(ratio, 0.0), _RATIO_BAR_MAX) * 50.0
+        ratio_txt = f"{ratio:.2f}x"
+        pct_txt = f"{(1.0 - ratio) * 100.0:+.0f}%"
+        cls = "good" if ratio < _RATIO_GOOD else "bad" if ratio > _RATIO_BAD else "neutral"
+    else:
+        width, ratio_txt, pct_txt, cls = 50.0, "—", "—", "neutral"
+    title = f"RMSE={_number(value)}, baseline={_number(baseline)}, ratio={ratio_txt}, improvement={pct_txt}"
+    return (
+        f'<td class="rmse-cell" title="{_escape(title)}">'
+        f'<div class="rmse-main"><span class="rmse-value">{_number(value)}</span>'
+        f'<span class="rmse-ratio">{_escape(ratio_txt)} / {_escape(pct_txt)}</span></div>'
+        f'<div class="rmse-bar"><span class="rmse-fill {cls}" style="width:{width:.1f}%"></span></div>'
+        "</td>"
+    )
+
+
 def _summary_table(models: list[ComparedModel], results: dict[str, dict[str, Any]], param_keys: tuple[str, ...]) -> str:
     baseline = results.get(BASELINE_MODEL_NAME, {}).get("rmse", float("nan"))
     rows = []
     for model in models:
         value = results[model.name]
         rmse = value.get("rmse", float("nan"))
-        if model.name == BASELINE_MODEL_NAME and np.isfinite(rmse):
-            ratio = 1.0
-        else:
-            ratio = rmse / baseline if np.isfinite(rmse) and np.isfinite(baseline) and baseline != 0 else float("nan")
         params = ", ".join(f"{key}={_number(model.params.get(key))}" for key in param_keys)
         reason = value.get("reason", "")
-        rows.append(f"<tr><th>{_escape(model.name)}</th><td>{_number(rmse)}</td><td>{_number(ratio)}</td><td>{value.get('n', 0)}</td><td><code>{_escape(params)}</code></td><td>{_escape(reason)}</td></tr>")
-    return "<table><thead><tr><th>モデル</th><th>固定評価 RMSE</th><th>baseline 比</th><th>サンプル数</th><th>使用パラメータ</th><th>評価不能理由</th></tr></thead><tbody>" + "".join(rows) + "</tbody></table>"
+        model_style = ' style="color:#888"' if model.name == BASELINE_MODEL_NAME else ""
+        rows.append(
+            f"<tr><th{model_style}>{_escape(model.name)}</th>"
+            f"{_rmse_visual_cell(rmse, baseline, is_baseline=model.name == BASELINE_MODEL_NAME)}"
+            f"<td>{value.get('n', 0)}</td><td><code>{_escape(params)}</code></td>"
+            f"<td>{_escape(reason)}</td></tr>"
+        )
+    note = (
+        '<div class="note">固定評価 RMSE は <b>baseline を中央線 (1.0x=50% 幅)</b> とする横棒バーで表示。'
+        "<span class='rmse-legend good'>緑</span>=baseline より小さい残差(改善)、"
+        "<span class='rmse-legend bad'>赤</span>=大きい残差(悪化)、"
+        "<span class='rmse-legend neutral'>灰</span>=同等。バーが短いほど良い。</div>"
+    )
+    return (
+        "<table><thead><tr><th>モデル</th><th>固定評価 RMSE(baseline 比)</th>"
+        "<th>サンプル数</th><th>使用パラメータ</th><th>評価不能理由</th></tr></thead><tbody>"
+        + "".join(rows)
+        + "</tbody></table>"
+        + note
+    )
 
 
 def _response_step(context: ValidationContext, *, steer: bool) -> ValidationStep:
@@ -267,7 +429,7 @@ def _response_step(context: ValidationContext, *, steer: bool) -> ValidationStep
         }
         distributions[model.name] = samples
     keys = ("steer_time_constant", "steer_time_delay", "steer_bias") if steer else ("acc_time_constant", "acc_time_delay")
-    section = f'<section id="{section_id}"><h2>{title}</h2>' + _summary_table(context.models, fixed, keys) + _figure_html(_histogram_by_model(distributions, f"{title}: モデル別固定評価 RMSE"), "固定評価 RMSE 分布") + "</section>"
+    section = f'<section id="{section_id}"><h2>{title}</h2>' + _eqref(section_id) + _summary_table(context.models, fixed, keys) + _figure_html(_histogram_by_model(distributions, f"{title}: モデル別固定評価 RMSE"), "固定評価 RMSE 分布") + "</section>"
     return ValidationStep(section_id, {"models": fixed, "datasets": fixed.get(TARGET_MODEL_NAME, {}).get("datasets", {})}, section)
 
 
@@ -291,7 +453,7 @@ def _cross_step(context: ValidationContext, *, xy: bool) -> ValidationStep:
         fixed[model.name] = {"datasets": per_dataset, "rmse": float(np.sqrt(total_squared_error / n)) if n else float("nan"), "n": n, "reason": next((value.get("reason") for value in per_dataset.values() if value.get("reason")), "")}
         distributions[model.name] = samples
     keys = ("xy_heading_rate_coeff",) if xy else ("wheelbase", "k_us")
-    section = f'<section id="{section_id}"><h2>{title}</h2>' + _summary_table(context.models, fixed, keys) + _figure_html(_histogram_by_model(distributions, f"{title}: モデル別固定評価 RMSE"), "固定評価 RMSE 分布") + "</section>"
+    section = f'<section id="{section_id}"><h2>{title}</h2>' + _eqref(section_id) + _summary_table(context.models, fixed, keys) + _figure_html(_histogram_by_model(distributions, f"{title}: モデル別固定評価 RMSE"), "固定評価 RMSE 分布") + "</section>"
     return ValidationStep(section_id, {"models": fixed, "datasets": fixed.get(TARGET_MODEL_NAME, {}).get("datasets", {})}, section)
 
 
@@ -314,6 +476,7 @@ def build_sections(
     started = perf_counter()
     context, prepared = prepare_datasets(collection_dir, params_path, scenario=scenario, n_jobs=n_jobs)
     sections = PhysicalValiditySections(
+        equations=_build_equations_section(),
         prepare=prepared.html,
         longitudinal=validate_longitudinal(context).html,
         steering=validate_steering(context).html,

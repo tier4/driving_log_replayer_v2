@@ -40,6 +40,7 @@ def _stub_physical_validity(monkeypatch: pytest.MonkeyPatch) -> None:
         report.physical_validity,
         "build_sections",
         lambda *_args, **_kwargs: report.physical_validity.PhysicalValiditySections(
+            equations='<h3 id="eq-notation">記号の定義</h3><div id="eq-long"></div>',
             prepare='<section id="prepare">prepared</section>',
             longitudinal="",
             steering="",
@@ -119,12 +120,20 @@ def test_run_builds_unified_report_from_finalized_artifacts(tmp_path: Path, monk
     for metric in report.REQUIRED_METRICS:
         assert f"{metric} RMSE" in rendered
     assert "Dataset distributions" in rendered
-    assert "1. Extraction results" in rendered
-    assert "2. Longitudinal direct identification" in rendered
-    assert "3. Steering direct identification" in rendered
-    assert "4. XY heading-rate direct identification" in rendered
-    assert "5. Integrated optimization" in rendered
-    assert "6. Released YAML" in rendered
+    assert "1. 記号と運動方程式" in rendered
+    assert "2. Extraction results" in rendered
+    assert "3. Longitudinal direct identification" in rendered
+    assert "4. Steering direct identification" in rendered
+    assert "5. XY heading-rate direct identification" in rendered
+    assert "6. Integrated optimization" in rendered
+    assert "7. Released YAML" in rendered
+    # MathJax の CDN 参照と数式ハブ・目的関数のアンカーが埋め込まれること
+    assert "tex-svg.js" in rendered
+    assert 'id="eq-notation"' in rendered
+    assert 'id="eq-score"' in rendered
+    assert "robust_score" in rendered
+    # tuned の集約スコア (1.25) は baseline (2.5) より小さいので改善色が付く
+    assert 'class="score-good">1.25' in rendered
     assert "2.5" in rendered
     assert "1.25" in rendered
     assert "tuned_params.yaml: comparison.baseline.score" in rendered

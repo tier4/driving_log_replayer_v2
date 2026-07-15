@@ -170,9 +170,14 @@ def test_report_omits_detailed_fit_diagnostics_and_keeps_fixed_evaluations(tmp_p
     )
 
     combined = rendered.prepare + rendered.longitudinal + rendered.steering + rendered.yaw + rendered.xy
-    assert "current</th><td>" in combined
+    assert 'current</th><td class="rmse-cell"' in combined
     assert "acc_time_constant=0.9" in rendered.longitudinal
-    assert "baseline</th><td>" in combined
+    assert 'baseline</th><td class="rmse-cell"' in combined
+    # 数式ハブと各セクションの参照行が生成されること
+    assert 'id="eq-notation"' in rendered.equations
+    assert 'id="eq-yaw"' in rendered.equations
+    assert 'href="#eq-long"' in rendered.longitudinal
+    assert 'class="rmse-fill' in combined
     assert "acc_time_constant=0.2" in rendered.longitudinal
     assert "データ駆動フィット診断" not in combined
     assert "代表時系列" not in combined

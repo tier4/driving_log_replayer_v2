@@ -17,18 +17,18 @@ from time import perf_counter
 from typing import Any
 
 import pandas as pd
-import yaml
 from plotly.offline import get_plotlyjs
+import yaml
 
+from .model_config import load_model_config
+from .settings import BASELINE_MODEL_NAME
+from .settings import TARGET_MODEL_NAME
+from .settings import TUNED_MODEL_DISPLAY_NAME
 from .. import physical_validity
 from ..lib._nstep_common import METRIC_KEYS
-from ..lib._report_format import (
-    escape as _escape,
-    format_number as _format_number,
-    html_table as _table,
-)
-from .model_config import load_model_config
-from .settings import BASELINE_MODEL_NAME, TARGET_MODEL_NAME, TUNED_MODEL_DISPLAY_NAME
+from ..lib._report_format import escape as _escape
+from ..lib._report_format import format_number as _format_number
+from ..lib._report_format import html_table as _table
 
 REQUIRED_COLUMNS = ("dataset_id", "model", "horizon")
 REQUIRED_METRICS = METRIC_KEYS
@@ -44,6 +44,14 @@ METRIC_UNITS = {
 MODEL_ORDER = (BASELINE_MODEL_NAME, TUNED_MODEL_DISPLAY_NAME)
 _ZERO_EPSILON = 1.0e-12
 _MODEL_COLORS = ("#667085", "#2563eb", "#16a34a", "#d97706", "#9333ea", "#0891b2", "#e11d48")
+
+# 数式描画は MathJax (tex-svg) を CDN 参照する。plotly.js はオフライン用にインライン埋め込みだが、
+# 数式は CDN 配信(閲覧時にインターネット接続が必要)。旧 physical_validity_report と同方式。
+_MATHJAX_HEAD = (
+    "<script>window.MathJax={tex:{inlineMath:[['\\\\(','\\\\)']],"
+    "displayMath:[['\\\\[','\\\\]']]},svg:{fontCache:'global'}};</script>"
+    "<script async src='https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-svg.js'></script>"
+)
 
 
 def _format_param_value(value: Any) -> str:
@@ -265,8 +273,25 @@ def _render_params(document: Mapping[str, Any], params: Mapping[str, Any]) -> st
     )
 
 
+def _score_cell(score: float, baseline_score: float | None, *, is_baseline: bool) -> str:
+    """Color the aggregate-score cell by baseline ratio (green=better, red=worse)."""
+    text = _format_number(score)
+    if is_baseline or baseline_score is None or not math.isfinite(score) or not math.isfinite(baseline_score):
+        return f"<td>{text}</td>"
+    cls = "score-good" if score < baseline_score else "score-bad" if score > baseline_score else ""
+    return f'<td><span class="{cls}">{text}</span></td>' if cls else f"<td>{text}</td>"
+
+
 def _render_aggregate(document: Mapping[str, Any], frame: pd.DataFrame, model_order: tuple[str, ...]) -> str:
-    rows = []
+    def model_score(model: str) -> float:
+        yaml_score = _yaml_score(document, model)
+        derived = float(frame.loc[frame["model"] == model, "normalized_score"].mean())
+        return yaml_score if yaml_score is not None else derived
+
+    baseline_score = model_score(BASELINE_MODEL_NAME) if BASELINE_MODEL_NAME in model_order else None
+    headers = ("Model", "Aggregate score", "Score source", "Parameter source", "Mean normalized RMSE", *REQUIRED_METRICS)
+    head = "".join(f"<th>{_escape(h)}</th>" for h in headers)
+    body = ""
     for model in model_order:
         model_rows = frame.loc[frame["model"] == model]
         yaml_score = _yaml_score(document, model)
@@ -285,27 +310,15 @@ def _render_aggregate(document: Mapping[str, Any], frame: pd.DataFrame, model_or
             if model == TUNED_MODEL_DISPLAY_NAME
             else f"scenario.yaml: models.{model}.params (fixed)"
         )
-        rows.append(
-            (
-                model,
-                _format_number(score),
-                score_source,
-                parameter_source,
-                _format_number(derived_score),
-                *(_format_number(model_rows[metric].mean()) for metric in REQUIRED_METRICS),
-            )
+        cells = (
+            f"<td>{_escape(model)}</td>"
+            + _score_cell(score, baseline_score, is_baseline=model == BASELINE_MODEL_NAME)
+            + f"<td>{_escape(score_source)}</td><td>{_escape(parameter_source)}</td>"
+            + f"<td>{_escape(_format_number(derived_score))}</td>"
+            + "".join(f"<td>{_escape(_format_number(model_rows[metric].mean()))}</td>" for metric in REQUIRED_METRICS)
         )
-    return _table(
-        (
-            "Model",
-            "Aggregate score",
-            "Score source",
-            "Parameter source",
-            "Mean normalized RMSE",
-            *REQUIRED_METRICS,
-        ),
-        rows,
-    )
+        body += f"<tr>{cells}</tr>"
+    return f'<div class="table-wrap"><table><thead><tr>{head}</tr></thead><tbody>{body}</tbody></table></div>'
 
 
 def _x_ticks(lower: float, upper: float, *, max_intervals: int = 10) -> list[float]:
@@ -602,6 +615,36 @@ def _comparison_model_order(scenario: Path) -> tuple[str, ...]:
     )
 
 
+def _render_objective_equations() -> str:
+    """
+    Render the objective equations (N-step rollout, normalization, robust_score).
+
+    統合最適化セクションの目的関数を数式で提示する。式は fit_merge / _multi_agg が実際に
+    最適化する robust_score に一致させる。レポートの「Mean normalized RMSE」列・分布は
+    別定義(7 指標 RMSE 比の平均)なので明確に区別する。
+    """
+    return """<details id="eq-score"><summary>評価関数の定義(N-step rollout・正規化・robust_score)</summary>
+<p>各データセットについて、実機ログの初期状態から制御コマンドを <b>N ステップ前向き積分</b>し、
+実機軌跡との<b>終端誤差 RMSE</b> を horizon \\(N\\) 別に評価する(yaw [deg]・long [cm]・lat [cm] 等)。</p>
+<p>難易度の異なるデータセットを公平に集約するため、<b>baseline モデルの誤差でフロアクリップ付き正規化</b>する:</p>
+\\[ \\text{nyaw}_N = \\frac{\\text{yaw}_{\\mathrm{tuned}}}{\\max(\\text{yaw}_{\\mathrm{baseline}},\\; f_{\\mathrm{yaw}}\\cdot N)},
+\\quad (\\text{nlong}, \\text{nlat}\\ \\text{も同様}) \\]
+<p>フロア \\(f\\) は per-step 定数(yaw 0.006 deg・long 0.1 cm・lat 0.03 cm を \\(N\\) 倍)で、
+ほぼ直進のデータセットで分母がゼロ近くになる暴発を防ぐ。最終目的関数はホライズン等重みの
+mean + worst 合算(<b>小さいほど良い</b>):</p>
+\\[ \\text{score} = \\sum_{N} \\left[
+  \\left(\\overline{\\text{nyaw}} + 0.5\\,\\overline{\\text{nlong}} + 0.5\\,\\overline{\\text{nlat}}\\right)
++ 0.5\\left(\\widehat{\\text{nyaw}} + 0.5\\,\\widehat{\\text{nlong}} + 0.5\\,\\widehat{\\text{nlat}}\\right)
+\\right] \\]
+<p>ここで \\(\\overline{\\cdot}\\) は全データセットの mean、\\(\\widehat{\\cdot}\\) は worst(max)。yaw : 位置 = 1 : 1、
+worst 項の重み 0.5(mean の改善と worst の頑健性を半々で重視)。</p>
+<div class="note"><b>表の 2 つのスコアを混同しないこと</b>:
+<b>Aggregate score</b> 列は上記 \\(\\text{score}\\)(robust_score、最適化の目的関数)。
+一方 <b>Mean normalized RMSE</b> 列とデータセット分布は別定義で、pos/long/lat/yaw/steer/vx/ax の
+全 7 指標について各データセット・各 horizon の <b>RMSE を baseline 比にした値の平均</b>。用途が異なる。</div>
+</details>"""
+
+
 def _render_document(
     tuned_path: Path,
     metrics_path: Path,
@@ -659,7 +702,22 @@ th {{ color:var(--muted); background:var(--wash); font-size:12px; }} th:first-ch
 .horizon-chart .legend line {{ stroke-width:2; }} .horizon-chart .legend text {{ fill:var(--series-color); }}
 .ok {{ color:#067647; }}
 .plotly-graph-div {{ max-width:100%; }}
+nav {{ margin:8px 0 0; font-size:13px; }} nav a {{ margin-right:14px; white-space:nowrap; }}
+.eqref {{ color:var(--muted); font-size:13px; margin:0 0 10px; }}
+.eq-block {{ margin:14px 0; padding:2px 14px; border-left:3px solid var(--line); overflow-x:auto; }}
+.note {{ background:#fff8e1; border-left:4px solid #ffc107; color:var(--ink); padding:8px 12px; margin:8px 0; font-size:13px; border-radius:4px; }}
+details {{ margin:10px 0; }} details > summary {{ cursor:pointer; font-weight:600; color:var(--accent); padding:4px 0; }}
+.rmse-cell {{ min-width:190px; text-align:left; }}
+.rmse-main {{ display:flex; justify-content:space-between; align-items:baseline; gap:10px; }}
+.rmse-value {{ font-weight:600; }} .rmse-ratio {{ color:var(--muted); font-size:11px; white-space:nowrap; }}
+.rmse-bar {{ position:relative; height:10px; margin-top:5px; background:#f1f3f5; border-radius:999px; overflow:hidden; }}
+.rmse-bar::after {{ content:""; position:absolute; left:50%; top:0; bottom:0; border-left:1px solid rgba(0,0,0,.38); }}
+.rmse-fill {{ position:absolute; top:0; bottom:0; left:0; border-radius:999px; background:#adb5bd; }}
+.rmse-fill.good {{ background:#28a745; }} .rmse-fill.bad {{ background:#dc3545; }} .rmse-fill.neutral {{ background:#868e96; }}
+.rmse-legend {{ font-weight:600; }} .rmse-legend.good {{ color:#28a745; }} .rmse-legend.bad {{ color:#dc3545; }} .rmse-legend.neutral {{ color:#868e96; }}
+.score-good {{ color:#28a745; font-weight:600; }} .score-bad {{ color:#dc3545; }}
 </style>
+{_MATHJAX_HEAD}
 <script>{get_plotlyjs()}</script>
 </head>
 <body><main>
@@ -669,13 +727,19 @@ th {{ color:var(--muted); background:var(--wash); font-size:12px; }} th:first-ch
   <div class="stats"><div class="stat"><span>Valid datasets</span><strong>{datasets}</strong></div><div class="stat"><span>Horizons</span><strong>{horizons}</strong></div></div>
   <p class="source">Parameters: {_escape(tuned_path)}</p>
   <p class="source">Metrics: {_escape(metrics_path)}</p>
+  <nav>
+    <a href="#eq-notation">1. 記号と運動方程式</a><a href="#sec-extraction">2. Extraction</a>
+    <a href="#longitudinal">3. Longitudinal</a><a href="#steering">4. Steering</a>
+    <a href="#xy">5. XY</a><a href="#sec-optimization">6. Optimization</a><a href="#sec-released">7. Released</a>
+  </nav>
 </header>
-<section><h2>1. Extraction results</h2>{_render_failures(extraction_summary)}{physical_sections.prepare}</section>
-<section><h2>2. Longitudinal direct identification</h2>{_render_artifact(phase1_path, parameter_title="phase1_acc.yaml")}{physical_sections.longitudinal}</section>
-<section><h2>3. Steering direct identification</h2>{_render_artifact(phase2_path, parameter_title="phase2_steer.yaml")}{physical_sections.steering}{physical_sections.yaw}</section>
-<section><h2>4. XY heading-rate direct identification</h2>{_render_artifact(phase3_path, parameter_title="phase3_xy.yaml")}{physical_sections.xy}</section>
-<section><h2>5. Integrated optimization</h2>{_render_artifact_document(document, tuned_path, parameter_title="Final parameters")}<h3>Aggregate comparison</h3><p class="note">Raw columns are mean RMSE. Aggregate and distribution values use the configured optimization horizons; graphs use every available N. Lower is better. Score source identifies the stored aggregate score; parameter source identifies the parameters used for rollout evaluation.</p>{_render_aggregate(document, summary, model_order)}<h3>Error by horizon N</h3><p class="note">Each point is the mean RMSE across valid datasets. Every available N is plotted; lower is better.</p>{_render_horizon_charts(frame, model_order)}<h3>Dataset distributions</h3>{_render_dataset_distribution(summary, model_order)}</section>
-<section><h2>6. Released YAML</h2><p class="source">Released parameter YAML: {_escape(release_path)}</p></section>
+<section><h2>1. 記号と運動方程式</h2><p class="lede">以降の各セクションはここで定義した記号・残差式を参照する。</p>{physical_sections.equations}</section>
+<section id="sec-extraction"><h2>2. Extraction results</h2>{_render_failures(extraction_summary)}{physical_sections.prepare}</section>
+<section><h2>3. Longitudinal direct identification</h2>{_render_artifact(phase1_path, parameter_title="phase1_acc.yaml")}{physical_sections.longitudinal}</section>
+<section><h2>4. Steering direct identification</h2>{_render_artifact(phase2_path, parameter_title="phase2_steer.yaml")}{physical_sections.steering}{physical_sections.yaw}</section>
+<section><h2>5. XY heading-rate direct identification</h2>{_render_artifact(phase3_path, parameter_title="phase3_xy.yaml")}{physical_sections.xy}</section>
+<section id="sec-optimization"><h2>6. Integrated optimization</h2>{_render_artifact_document(document, tuned_path, parameter_title="Final parameters")}<h3>Aggregate comparison</h3>{_render_objective_equations()}<p class="note">Raw columns (pos/long/…) are mean RMSE. <b>Aggregate score</b> is the optimized robust_score; <b>Mean normalized RMSE</b> is the 7-metric ratio mean — see the objective definition above (<a href="#eq-score">🔗 評価関数の定義</a>). Aggregate/distribution values use the configured optimization horizons; graphs use every available N. Lower is better.</p>{_render_aggregate(document, summary, model_order)}<h3>Error by horizon N</h3><p class="note">Each point is the mean RMSE across valid datasets. Every available N is plotted; lower is better.</p>{_render_horizon_charts(frame, model_order)}<h3>Dataset distributions</h3>{_render_dataset_distribution(summary, model_order)}</section>
+<section id="sec-released"><h2>7. Released YAML</h2><p class="source">Released parameter YAML: {_escape(release_path)}</p></section>
 </main></body></html>
 """
 
