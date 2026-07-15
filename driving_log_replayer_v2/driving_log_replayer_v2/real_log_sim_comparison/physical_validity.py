@@ -1,41 +1,32 @@
-"""Physical-validity sections for the unified reidentification report.
-
-The CSV cache is read once per dataset.  Every selected model is then evaluated
-with its declared parameters; only experimental models additionally get the
-data-driven fitting diagnostics.
-"""
+"""Parallel physical-validity sections for the unified reidentification report."""
 from __future__ import annotations
 
 import html
+import multiprocessing
 from dataclasses import dataclass, field
 from pathlib import Path
+from time import perf_counter
 from typing import Any
 
 import numpy as np
 import plotly.graph_objects as go
 import yaml
 
-from .lib._figures._physical_validity import build_fig_cross_long, build_fig_cross_steer
 from .lib._physical_validity import (
-    _pick_longest_contiguous_timeseries_row,
     _simulate_first_order,
-    fit_k_us,
-    fit_longitudinal,
-    fit_steering,
-    fit_xy_heading_rate_coeff,
     xy_residual,
     yaw_residual,
 )
+from .lib._parallel import normalize_parallel_jobs, pool_chunksize, set_worker_thread_env_defaults
 from .reidentify.load_data import build_resampled, discover_cached_datasets, read_dataset_csv
 from .reidentify.model_config import ModelSpec, load_model_config
 
 
 @dataclass
-class PreparedDataset:
+class DatasetEvaluation:
     dataset_id: str
-    data: dict[str, Any]
-    data_by_source: dict[str, dict[str, Any]]
-    timeseries: dict[str, Any]
+    metrics: dict[str, dict[str, dict[str, Any]]] = field(default_factory=dict)
+    error: str | None = None
 
 
 @dataclass
@@ -56,7 +47,7 @@ class ValidationContext:
     model_type: str
     wheelbase: float
     models: list[ComparedModel] = field(default_factory=list)
-    datasets: list[PreparedDataset] = field(default_factory=list)
+    evaluations: list[DatasetEvaluation] = field(default_factory=list)
     skipped: list[str] = field(default_factory=list)
 
 
@@ -126,8 +117,73 @@ def _add_xy(dataset: dict[str, Any], source: dict[str, Any]) -> float:
     return t0
 
 
-def prepare_datasets(collection_dir: Path, params_path: Path, *, scenario: Path | None = None, case: str = "current") -> tuple[ValidationContext, ValidationStep]:
-    """Read each cache once and prepare the requested acceleration sources."""
+def _fixed_metric(data: dict[str, Any], params: dict[str, Any], *, steer: bool) -> dict[str, Any]:
+    metrics, _prediction, reason = _fixed_response(data, params, steer=steer)
+    return metrics or {"rmse": float("nan"), "n": 0, "reason": reason or "評価不能"}
+
+
+def _cross_metric(data: dict[str, Any], params: dict[str, Any], *, xy: bool) -> dict[str, Any]:
+    first, reason = _valid_number(
+        params, "xy_heading_rate_coeff" if xy else "wheelbase", positive=not xy
+    )
+    second, second_reason = (None, None) if xy else _valid_number(params, "k_us")
+    if reason or second_reason:
+        return {"rmse": float("nan"), "n": 0, "reason": reason or second_reason or "評価不能"}
+    if xy:
+        residual = np.concatenate(xy_residual(data, float(first)))
+    else:
+        residual = yaw_residual(data, k_us=float(second), wheelbase=float(first))
+    return {
+        "rmse": float(np.sqrt(np.mean(residual ** 2))) if len(residual) else float("nan"),
+        "n": int(len(residual)),
+    }
+
+
+def _evaluate_dataset(
+    task: tuple[str, Path, tuple[ComparedModel, ...], bool]
+) -> DatasetEvaluation:
+    """Read, resample, and evaluate one dataset without returning raw arrays."""
+    dataset_id, csv_path, models, use_default_acceleration_source = task
+    try:
+        source = read_dataset_csv(csv_path)
+        sources = tuple(dict.fromkeys(model.acceleration_source for model in models))
+        data_by_source: dict[str, dict[str, Any]] = {}
+        for acceleration_source in sources:
+            if use_default_acceleration_source:
+                data = build_resampled(source, 0.01, context=f"physical_validity:{dataset_id}")
+            else:
+                data = build_resampled(
+                    source,
+                    0.01,
+                    context=f"physical_validity:{dataset_id}",
+                    acceleration_source=acceleration_source,
+                )
+            if data is None:
+                raise ValueError("共通時間範囲が短すぎるか、必須信号が空です")
+            _add_xy(data, source)
+            data_by_source[acceleration_source] = data
+
+        metrics = {name: {} for name in ("longitudinal", "steering", "yaw", "xy")}
+        for model in models:
+            data = data_by_source[model.acceleration_source]
+            metrics["longitudinal"][model.name] = _fixed_metric(data, model.params, steer=False)
+            metrics["steering"][model.name] = _fixed_metric(data, model.params, steer=True)
+            metrics["yaw"][model.name] = _cross_metric(data, model.params, xy=False)
+            metrics["xy"][model.name] = _cross_metric(data, model.params, xy=True)
+        return DatasetEvaluation(dataset_id, metrics=metrics)
+    except (OSError, ValueError, KeyError, TypeError) as exc:
+        return DatasetEvaluation(dataset_id, error=str(exc))
+
+
+def prepare_datasets(
+    collection_dir: Path,
+    params_path: Path,
+    *,
+    scenario: Path | None = None,
+    case: str = "current",
+    n_jobs: int = 1,
+) -> tuple[ValidationContext, ValidationStep]:
+    """Evaluate cached datasets in parallel while retaining only compact results."""
     models = _models_from_inputs(params_path, scenario, case)
     current = next((model for model in models if model.name == "current"), models[0])
     wheelbase, _ = _valid_number(current.params, "wheelbase", positive=True)
@@ -135,45 +191,34 @@ def prepare_datasets(collection_dir: Path, params_path: Path, *, scenario: Path 
         params=current.params, model_type=current.vehicle_model_type,
         wheelbase=wheelbase if wheelbase is not None else float("nan"), models=models,
     )
-    sources = tuple(dict.fromkeys(model.acceleration_source for model in models))
-    for dataset_id, csv_path in discover_cached_datasets(collection_dir):
-        try:
-            source = read_dataset_csv(csv_path)
-            by_source: dict[str, dict[str, Any]] = {}
-            t0 = 0.0
-            for acceleration_source in sources:
-                # Keep the public legacy call shape when no scenario is used.
-                # Scenario-driven reports need the model's declared source.
-                if scenario is None:
-                    dataset = build_resampled(source, 0.01, context=f"physical_validity:{dataset_id}")
-                else:
-                    dataset = build_resampled(source, 0.01, context=f"physical_validity:{dataset_id}", acceleration_source=acceleration_source)
-                if dataset is None:
-                    raise ValueError("共通時間範囲が短すぎるか、必須信号が空です")
-                t0 = _add_xy(dataset, source)
-                by_source[acceleration_source] = dataset
-            data = by_source[current.acceleration_source]
-            context.datasets.append(PreparedDataset(dataset_id, data, by_source, {
-                "dataset_id": dataset_id, "label": dataset_id, "_t0_ns": t0,
-                "t": (np.arange(len(data["vx"]), dtype=float) * 0.01).tolist(),
-                "a_cmd_raw": data["a_cmd"].tolist(), "a_act_raw": data["a_act"].tolist(),
-                "d_cmd": data["d_cmd"].tolist(), "d_act_raw": data["d_act"].tolist(),
-                "vx": data["vx"].tolist(), "mask_dyn": data["gear_drive"].tolist(),
-            }))
-        except (OSError, ValueError, KeyError, TypeError) as exc:
-            context.skipped.append(f"{dataset_id}: {exc}")
+    tasks = [
+        (dataset_id, csv_path, tuple(models), scenario is None)
+        for dataset_id, csv_path in discover_cached_datasets(collection_dir)
+    ]
+    n_workers = normalize_parallel_jobs(n_jobs, n_tasks=len(tasks))
+    print(f"[report] physical-validity: {len(tasks)} datasets, {n_workers} worker(s)")
+    if n_workers == 1:
+        evaluations = [_evaluate_dataset(task) for task in tasks]
+    else:
+        chunksize = pool_chunksize(len(tasks), n_workers)
+        with multiprocessing.get_context("fork").Pool(
+            n_workers, initializer=set_worker_thread_env_defaults
+        ) as pool:
+            evaluations = list(pool.imap(_evaluate_dataset, tasks, chunksize=chunksize))
+    for evaluation in evaluations:
+        if evaluation.error:
+            context.skipped.append(f"{evaluation.dataset_id}: {evaluation.error}")
+        else:
+            context.evaluations.append(evaluation)
+    context.evaluations.sort(key=lambda evaluation: evaluation.dataset_id)
     skipped = "".join(f"<li>{html.escape(reason)}</li>" for reason in context.skipped)
     model_rows = "".join(
         f"<li><code>{html.escape(model.name)}</code>: {html.escape(model.vehicle_model_type)} / accel={html.escape(model.acceleration_source)} ({'確定済み' if model.finalized else '検討中'})</li>"
         for model in models
     )
-    section = f'''<section id="prepare"><h2>準備</h2><p>有効データセット: {len(context.datasets)}</p>
+    section = f'''<section id="prepare"><h2>準備</h2><p>有効データセット: {len(context.evaluations)}</p>
 <h3>比較モデル</h3><ul>{model_rows}</ul><h3>除外理由</h3>{f'<ul>{skipped}</ul>' if skipped else '<p>なし</p>'}</section>'''
-    return context, ValidationStep("prepare", {"n_valid": len(context.datasets), "skipped": context.skipped, "models": [m.name for m in models]}, section)
-
-
-def _data(item: PreparedDataset, model: ComparedModel) -> dict[str, Any]:
-    return item.data_by_source[model.acceleration_source]
+    return context, ValidationStep("prepare", {"n_valid": len(context.evaluations), "skipped": context.skipped, "models": [m.name for m in models]}, section)
 
 
 def _fixed_response(data: dict[str, Any], params: dict[str, Any], *, steer: bool) -> tuple[dict[str, Any] | None, np.ndarray | None, str | None]:
@@ -212,66 +257,24 @@ def _summary_table(models: list[ComparedModel], results: dict[str, dict[str, Any
     return "<table><thead><tr><th>モデル</th><th>固定評価 RMSE</th><th>baseline 比</th><th>サンプル数</th><th>使用パラメータ</th><th>評価不能理由</th></tr></thead><tbody>" + "".join(rows) + "</tbody></table>"
 
 
-def _cross_diagnostic_figure(data: dict[str, Any], *, xy: bool, value: float, wheelbase: float | None = None) -> go.Figure:
-    """Show a representative residual series for an experimental cross fit."""
-    if xy:
-        rx, ry = xy_residual(data, value)
-        residual = np.sqrt(rx * rx + ry * ry)
-        title = "x/y 残差の代表時系列"
-    else:
-        residual = yaw_residual(data, k_us=value, wheelbase=float(wheelbase))
-        title = "yaw 残差の代表時系列"
-    fig = go.Figure()
-    fig.add_trace(go.Scatter(x=np.arange(len(residual)) * 0.01, y=residual, name="残差"))
-    fig.update_layout(title=title, xaxis_title="有効区間の時間 [s]", yaxis_title="残差")
-    return fig
-
-
 def _response_step(context: ValidationContext, *, steer: bool) -> ValidationStep:
     title, section_id = ("操舵", "steering") if steer else ("縦方向", "longitudinal")
     fixed: dict[str, dict[str, Any]] = {}
     distributions: dict[str, list[float]] = {}
-    diagnostics = []
     for model in context.models:
-        per_dataset: dict[str, Any] = {}
-        samples: list[float] = []
-        required = ("steer_time_constant", "steer_time_delay", "steer_bias") if steer else ("acc_time_constant", "acc_time_delay")
-        missing_reason = next((reason for key in required for _value, reason in [_valid_number(model.params, key, positive=key.endswith("constant"))] if reason), "")
-        for item in context.datasets:
-            metrics, prediction, reason = _fixed_response(_data(item, model), model.params, steer=steer)
-            per_dataset[item.dataset_id] = metrics or {"rmse": float("nan"), "n": 0, "reason": reason}
-            if metrics and np.isfinite(metrics["rmse"]):
-                samples.append(metrics["rmse"])
+        per_dataset = {item.dataset_id: item.metrics[section_id][model.name] for item in context.evaluations}
+        samples = [value["rmse"] for value in per_dataset.values() if np.isfinite(value["rmse"])]
         n = sum(value.get("n", 0) for value in per_dataset.values())
         total_squared_error = sum(value.get("rmse", float("nan")) ** 2 * value.get("n", 0) for value in per_dataset.values() if np.isfinite(value.get("rmse", float("nan"))))
         fixed[model.name] = {
             "datasets": per_dataset,
             "rmse": float(np.sqrt(total_squared_error / n)) if n else float("nan"),
             "n": n,
-            "reason": missing_reason or next((value.get("reason") for value in per_dataset.values() if value.get("reason")), ""),
+            "reason": next((value.get("reason") for value in per_dataset.values() if value.get("reason")), ""),
         }
         distributions[model.name] = samples
-        if not model.finalized:
-            rows = []
-            for item in context.datasets:
-                data = _data(item, model)
-                fit = fit_steering(data) if steer else fit_longitudinal(data)
-                if fit:
-                    row = dict(item.timeseries)
-                    # The shared display row is based on current; replace its
-                    # source-dependent signals before showing another model.
-                    row.update({
-                        "a_cmd_raw": data["a_cmd"].tolist(), "a_act_raw": data["a_act"].tolist(),
-                        "d_cmd": data["d_cmd"].tolist(), "d_act_raw": data["d_act"].tolist(),
-                        "vx": data["vx"].tolist(), "mask_dyn": data["gear_drive"].tolist(),
-                    })
-                    key = "d_sim_fit_raw" if steer else "a_sim_cross_raw"
-                    row[key] = (_simulate_first_order(data["d_cmd"] if steer else data["a_cmd"], fit["tau"], fit["delay"], 0.01) + (fit.get("bias", 0.0) if steer else 0.0)).tolist()
-                    rows.append(row)
-            figure = build_fig_cross_steer(_pick_longest_contiguous_timeseries_row(rows)) if steer else build_fig_cross_long(_pick_longest_contiguous_timeseries_row(rows))
-            diagnostics.append(_figure_html(figure, f"{model.name}: データ駆動フィット診断"))
     keys = ("steer_time_constant", "steer_time_delay", "steer_bias") if steer else ("acc_time_constant", "acc_time_delay")
-    section = f'<section id="{section_id}"><h2>{title}</h2>' + _summary_table(context.models, fixed, keys) + _figure_html(_histogram_by_model(distributions, f"{title}: モデル別固定評価 RMSE"), "固定評価 RMSE 分布") + "".join(diagnostics) + "</section>"
+    section = f'<section id="{section_id}"><h2>{title}</h2>' + _summary_table(context.models, fixed, keys) + _figure_html(_histogram_by_model(distributions, f"{title}: モデル別固定評価 RMSE"), "固定評価 RMSE 分布") + "</section>"
     return ValidationStep(section_id, {"models": fixed, "datasets": fixed.get("current", {}).get("datasets", {})}, section)
 
 
@@ -287,43 +290,15 @@ def _cross_step(context: ValidationContext, *, xy: bool) -> ValidationStep:
     title, section_id = ("x/y", "xy") if xy else ("yaw", "yaw")
     fixed: dict[str, dict[str, Any]] = {}
     distributions: dict[str, list[float]] = {}
-    diagnostics: list[str] = []
     for model in context.models:
-        params = model.params
-        first, reason = _valid_number(params, "xy_heading_rate_coeff" if xy else "wheelbase", positive=not xy)
-        second, second_reason = (None, None) if xy else _valid_number(params, "k_us")
-        per_dataset: dict[str, Any] = {}
-        samples: list[float] = []
-        if reason or second_reason:
-            why = reason or second_reason
-            per_dataset = {item.dataset_id: {"rmse": float("nan"), "n": 0, "reason": why} for item in context.datasets}
-        else:
-            for item in context.datasets:
-                data = _data(item, model)
-                if xy:
-                    residual = np.concatenate(xy_residual(data, first))
-                else:
-                    residual = yaw_residual(data, k_us=second, wheelbase=first)
-                metric = {"rmse": float(np.sqrt(np.mean(residual ** 2))) if len(residual) else float("nan"), "n": int(len(residual))}
-                per_dataset[item.dataset_id] = metric
-                if np.isfinite(metric["rmse"]):
-                    samples.append(metric["rmse"])
+        per_dataset = {item.dataset_id: item.metrics[section_id][model.name] for item in context.evaluations}
+        samples = [value["rmse"] for value in per_dataset.values() if np.isfinite(value["rmse"])]
         n = sum(value["n"] for value in per_dataset.values())
         total_squared_error = sum(value["rmse"] ** 2 * value["n"] for value in per_dataset.values() if np.isfinite(value["rmse"]))
-        fixed[model.name] = {"datasets": per_dataset, "rmse": float(np.sqrt(total_squared_error / n)) if n else float("nan"), "n": n, "reason": reason or second_reason or ""}
+        fixed[model.name] = {"datasets": per_dataset, "rmse": float(np.sqrt(total_squared_error / n)) if n else float("nan"), "n": n, "reason": next((value.get("reason") for value in per_dataset.values() if value.get("reason")), "")}
         distributions[model.name] = samples
-        if not model.finalized and context.datasets:
-            data = [_data(item, model) for item in context.datasets]
-            fit = fit_xy_heading_rate_coeff(data, initial=float(first or 0.0)) if xy else fit_k_us(data, wheelbase=float(first))
-            diagnostics.append(f"<p>{html.escape(model.name)}: 横断フィット {html.escape('xy_heading_rate_coeff' if xy else 'k_us')}={_number(fit.get('xy_heading_rate_coeff', fit.get('k_us')))}, RMSE={_number(fit['rmse'])}, n={fit['n']}</p>")
-            representative = _data(context.datasets[0], model)
-            fit_value = float(fit.get("xy_heading_rate_coeff", fit.get("k_us", 0.0)))
-            diagnostics.append(_figure_html(
-                _cross_diagnostic_figure(representative, xy=xy, value=fit_value, wheelbase=float(first) if not xy else None),
-                f"{model.name}: 代表時系列",
-            ))
     keys = ("xy_heading_rate_coeff",) if xy else ("wheelbase", "k_us")
-    section = f'<section id="{section_id}"><h2>{title}</h2>' + _summary_table(context.models, fixed, keys) + _figure_html(_histogram_by_model(distributions, f"{title}: モデル別固定評価 RMSE"), "固定評価 RMSE 分布") + "".join(diagnostics) + "</section>"
+    section = f'<section id="{section_id}"><h2>{title}</h2>' + _summary_table(context.models, fixed, keys) + _figure_html(_histogram_by_model(distributions, f"{title}: モデル別固定評価 RMSE"), "固定評価 RMSE 分布") + "</section>"
     return ValidationStep(section_id, {"models": fixed, "datasets": fixed.get("current", {}).get("datasets", {})}, section)
 
 
@@ -340,8 +315,11 @@ def build_sections(
     params_path: Path,
     *,
     scenario: Path,
+    n_jobs: int = 1,
 ) -> str:
     """Build report fragments; the caller owns the enclosing HTML document."""
-    context, prepared = prepare_datasets(collection_dir, params_path, scenario=scenario)
+    started = perf_counter()
+    context, prepared = prepare_datasets(collection_dir, params_path, scenario=scenario, n_jobs=n_jobs)
     steps = [prepared, validate_longitudinal(context), validate_steering(context), validate_yaw(context), validate_xy(context)]
+    print(f"[report] physical-validity complete: {perf_counter() - started:.1f}s")
     return "\n".join(step.html for step in steps)

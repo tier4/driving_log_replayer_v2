@@ -76,6 +76,7 @@ def _step_report(
     extraction_summary: dict,
     fit_result: dict,
     scenario: Path,
+    n_jobs: int | None = None,
 ) -> None:
     from . import report  # noqa: PLC0415
 
@@ -83,14 +84,25 @@ def _step_report(
     fit_skipped = (fit_result.get("metadata") or {}).get("skipped") or []
     summary["skipped"] = [*(summary.get("skipped") or []), *fit_skipped]
     summary["n_skipped"] = int(summary.get("n_skipped", 0)) + len(fit_skipped)
-    report.run(
-        tuned_out,
-        metrics_out,
-        out_dir / "report.html",
-        failures=summary,
-        collection_dir=out_dir.parent,
-        scenario=scenario,
-    )
+    if n_jobs is None:
+        report.run(
+            tuned_out,
+            metrics_out,
+            out_dir / "report.html",
+            failures=summary,
+            collection_dir=out_dir.parent,
+            scenario=scenario,
+        )
+    else:
+        report.run(
+            tuned_out,
+            metrics_out,
+            out_dir / "report.html",
+            failures=summary,
+            collection_dir=out_dir.parent,
+            scenario=scenario,
+            n_jobs=n_jobs,
+        )
 
 
 def _step_release(tuned_out: Path, out_dir: Path, input_param: Path) -> Path:
@@ -152,7 +164,9 @@ def main() -> None:
     )
 
     print("\n[pipeline] === 5/6 report ===")
-    _step_report(out_dir, tuned_out, metrics_out, extraction_summary, fit_result, args.scenario)
+    _step_report(
+        out_dir, tuned_out, metrics_out, extraction_summary, fit_result, args.scenario, n_jobs
+    )
 
     print("\n[pipeline] === 6/6 release ===")
     _step_release(tuned_out, out_dir, args.input_param)

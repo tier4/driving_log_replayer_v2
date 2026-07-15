@@ -14,6 +14,7 @@ import html
 import json
 import math
 from pathlib import Path
+from time import perf_counter
 from typing import Any
 
 import pandas as pd
@@ -661,16 +662,22 @@ def run(
     failures: Mapping[str, Any],
     collection_dir: Path | str,
     scenario: Path | str,
+    n_jobs: int = 1,
 ) -> Path:
     """Generate the unified ``report.html``."""
     tuned_path = Path(tuned_params)
     metrics_path = Path(metrics_csv)
     out_path = Path(out)
+    started = perf_counter()
     document, params = _load_tuned_document(tuned_path)
     frame = _add_normalized_scores(_load_metrics(metrics_path))
+    metrics_elapsed = perf_counter() - started
+    physical_started = perf_counter()
     physical_sections = physical_validity.build_sections(
-        Path(collection_dir), tuned_path, scenario=Path(scenario)
+        Path(collection_dir), tuned_path, scenario=Path(scenario), n_jobs=n_jobs
     )
+    physical_elapsed = perf_counter() - physical_started
+    render_started = perf_counter()
     rendered = _render_document(
         tuned_path,
         metrics_path,
@@ -682,4 +689,9 @@ def run(
     )
     out_path.parent.mkdir(parents=True, exist_ok=True)
     out_path.write_text(rendered, encoding="utf-8")
+    print(
+        "[report] complete: "
+        f"metrics={metrics_elapsed:.1f}s physical-validity={physical_elapsed:.1f}s "
+        f"html={perf_counter() - render_started:.1f}s total={perf_counter() - started:.1f}s"
+    )
     return out_path
