@@ -64,10 +64,10 @@ make reidentify \
 `make reidentify` は次の処理を必ずこの順で実行します。
 
 ```text
-raw bag -> CSV cache -> fit_lon -> fit_steer -> fit_merge -> report -> release YAML
+raw bag -> CSV cache -> fit_lon -> fit_steer -> fit_merge -> release YAML -> report.html
 ```
 
-`fit_merge` が baseline/tuned の dataset別・horizon別 N-step 指標を `metrics.csv` に一度だけ
+`fit_merge` が `comparison_models` の全モデル（`current` は `tuned` 表記）の dataset別・horizon別 N-step 指標を `metrics.csv` に一度だけ
 書き出します。最適化スコアは従来どおり N=10/20/30/40/100 で算出し、レポート用指標は
 データが保証される N=1〜100 を1刻みで出力します。`report.html` はメトリクスごとの誤差推移を
 その CSV から描画し、同じ文書内で CSV キャッシュを一度だけ読んで縦方向・操舵・ヨー (`k_us`)・

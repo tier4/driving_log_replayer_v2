@@ -22,6 +22,8 @@ import yaml
 from plotly.offline import get_plotlyjs
 
 from .. import physical_validity
+from .model_config import load_model_config
+from .settings import TARGET_MODEL_NAME
 
 REQUIRED_COLUMNS = ("dataset_id", "model", "horizon")
 REQUIRED_METRICS = ("pos", "long", "lat", "yaw", "steer", "vx", "ax")
@@ -36,6 +38,7 @@ METRIC_UNITS = {
 }
 MODEL_ORDER = ("baseline", "tuned")
 _ZERO_EPSILON = 1.0e-12
+_MODEL_COLORS = ("#667085", "#2563eb", "#16a34a", "#d97706", "#9333ea", "#0891b2", "#e11d48")
 
 
 def _escape(value: Any) -> str:
@@ -120,9 +123,9 @@ def _coerce_metric_values(frame: pd.DataFrame) -> None:
         raise ValueError(message)
 
 
-def _validate_metric_coverage(frame: pd.DataFrame) -> None:
+def _validate_metric_coverage(frame: pd.DataFrame, model_order: tuple[str, ...] = MODEL_ORDER) -> None:
     models = set(frame["model"])
-    missing_models = [model for model in MODEL_ORDER if model not in models]
+    missing_models = [model for model in model_order if model not in models]
     if missing_models:
         message = f"Metrics CSV is missing required models: {missing_models}"
         raise ValueError(message)
@@ -137,27 +140,27 @@ def _validate_metric_coverage(frame: pd.DataFrame) -> None:
         frame.loc[frame["model"] == "baseline", ["dataset_id", "horizon"]]
         .itertuples(index=False, name=None)
     )
-    tuned_keys = set(
-        frame.loc[frame["model"] == "tuned", ["dataset_id", "horizon"]]
-        .itertuples(index=False, name=None)
-    )
-    if baseline_keys != tuned_keys:
-        missing_tuned = sorted(baseline_keys - tuned_keys)[:5]
-        missing_baseline = sorted(tuned_keys - baseline_keys)[:5]
-        message = (
-            "Baseline and tuned metrics must cover identical dataset/horizon pairs; "
-            f"missing_tuned={missing_tuned}, missing_baseline={missing_baseline}"
+    for model in model_order:
+        model_keys = set(
+            frame.loc[frame["model"] == model, ["dataset_id", "horizon"]]
+            .itertuples(index=False, name=None)
         )
-        raise ValueError(message)
+        if baseline_keys != model_keys:
+            missing_model = sorted(baseline_keys - model_keys)[:5]
+            missing_baseline = sorted(model_keys - baseline_keys)[:5]
+            raise ValueError(
+                "Baseline and comparison metrics must cover identical dataset/horizon pairs; "
+                f"model={model}, missing_model={missing_model}, missing_baseline={missing_baseline}"
+            )
 
 
-def _load_metrics(path: Path) -> pd.DataFrame:
+def _load_metrics(path: Path, model_order: tuple[str, ...] = MODEL_ORDER) -> pd.DataFrame:
     if not path.is_file():
         message = f"Metrics CSV not found: {path}"
         raise FileNotFoundError(message)
     frame = _select_metric_columns(pd.read_csv(path))
     _coerce_metric_values(frame)
-    _validate_metric_coverage(frame)
+    _validate_metric_coverage(frame, model_order)
 
     return frame.sort_values(["horizon", "dataset_id", "model"], kind="stable").reset_index(
         drop=True
@@ -185,7 +188,7 @@ def _add_normalized_scores(frame: pd.DataFrame) -> pd.DataFrame:
     return result
 
 
-def _summary_frame(document: Mapping[str, Any], frame: pd.DataFrame) -> pd.DataFrame:
+def _summary_frame(document: Mapping[str, Any], frame: pd.DataFrame, model_order: tuple[str, ...] = MODEL_ORDER) -> pd.DataFrame:
     """Keep aggregate/distribution semantics on the optimization horizons."""
     metadata = document.get("metadata")
     if not isinstance(metadata, Mapping) or "score_horizons" not in metadata:
@@ -209,7 +212,7 @@ def _summary_frame(document: Mapping[str, Any], frame: pd.DataFrame) -> pd.DataF
         message = f"Metrics CSV is missing configured score horizons: {missing}"
         raise ValueError(message)
     summary = frame.loc[frame["horizon"].isin(horizons)].copy()
-    expected_rows = frame["dataset_id"].nunique() * len(MODEL_ORDER) * len(horizons)
+    expected_rows = frame["dataset_id"].nunique() * len(model_order) * len(horizons)
     if len(summary) != expected_rows:
         message = "Configured score horizons must exist for every dataset and model."
         raise ValueError(message)
@@ -279,9 +282,9 @@ def _render_params(document: Mapping[str, Any], params: Mapping[str, Any]) -> st
     )
 
 
-def _render_aggregate(document: Mapping[str, Any], frame: pd.DataFrame) -> str:
+def _render_aggregate(document: Mapping[str, Any], frame: pd.DataFrame, model_order: tuple[str, ...] = MODEL_ORDER) -> str:
     rows = []
-    for model in MODEL_ORDER:
+    for model in model_order:
         model_rows = frame.loc[frame["model"] == model]
         yaml_score = _yaml_score(document, model)
         derived_score = float(model_rows["normalized_score"].mean())
@@ -336,17 +339,20 @@ def _x_ticks(lower: float, upper: float, *, max_intervals: int = 10) -> list[flo
     return ticks
 
 
-def _line_chart_svg(frame: pd.DataFrame, metric: str) -> str:
+def _line_chart_svg(frame: pd.DataFrame, metric: str, model_order: tuple[str, ...] = MODEL_ORDER) -> str:
     means = (
-        frame.loc[frame["model"].isin(MODEL_ORDER)]
+        frame.loc[frame["model"].isin(model_order)]
         .groupby(["horizon", "model"], sort=True)[metric]
         .mean()
     )
     horizons = sorted(float(value) for value in means.index.get_level_values("horizon").unique())
-    values = [float(means.loc[(horizon, model)]) for horizon in horizons for model in MODEL_ORDER]
+    values = [float(means.loc[(horizon, model)]) for horizon in horizons for model in model_order]
 
-    svg_width, svg_height = 960, 310
-    left, right, top, bottom = 68, 24, 48, 52
+    svg_width = 960
+    legend_columns = 4
+    legend_rows = math.ceil(len(model_order) / legend_columns)
+    svg_height = 310 + max(0, legend_rows - 1) * 18
+    left, right, top, bottom = 68, 24, 48 + max(0, legend_rows - 1) * 18, 52
     chart_width = svg_width - left - right
     chart_height = svg_height - top - bottom
 
@@ -388,7 +394,7 @@ def _line_chart_svg(frame: pd.DataFrame, metric: str) -> str:
 
     series = []
     point_radius = 4 if len(horizons) <= 30 else 2.5
-    for model in MODEL_ORDER:
+    for index, model in enumerate(model_order):
         points = [
             (horizon, float(means.loc[(horizon, model)]))
             for horizon in horizons
@@ -405,16 +411,17 @@ def _line_chart_svg(frame: pd.DataFrame, metric: str) -> str:
             for horizon, value in points
         )
         series.append(
-            f'<polyline class="series {model}" points="{coordinates}" />{circles}'
+            f'<polyline class="series {model}" style="--series-color:{_MODEL_COLORS[index % len(_MODEL_COLORS)]}" points="{coordinates}" />'
+            + circles.replace(f'class="point {model}"', f'class="point {model}" style="--series-color:{_MODEL_COLORS[index % len(_MODEL_COLORS)]}"')
         )
 
-    legend_x = left + chart_width - 190
+    legend_x = left + chart_width - 4 * 110
     legend = "".join(
-        f'<g class="legend {model}"><line x1="{legend_x + index * 100}" '
-        f'x2="{legend_x + 26 + index * 100}" y1="20" y2="20" />'
-        f'<circle cx="{legend_x + 13 + index * 100}" cy="20" r="4" />'
-        f'<text x="{legend_x + 32 + index * 100}" y="24">{model}</text></g>'
-        for index, model in enumerate(MODEL_ORDER)
+        f'<g class="legend {model}" style="--series-color:{_MODEL_COLORS[index % len(_MODEL_COLORS)]}"><line x1="{legend_x + (index % legend_columns) * 110}" '
+        f'x2="{legend_x + 26 + (index % legend_columns) * 110}" y1="{20 + (index // legend_columns) * 18}" y2="{20 + (index // legend_columns) * 18}" />'
+        f'<circle cx="{legend_x + 13 + (index % legend_columns) * 110}" cy="{20 + (index // legend_columns) * 18}" r="4" />'
+        f'<text x="{legend_x + 32 + (index % legend_columns) * 110}" y="{24 + (index // legend_columns) * 18}">{_escape(model)}</text></g>'
+        for index, model in enumerate(model_order)
     )
 
     unit = METRIC_UNITS[metric]
@@ -438,11 +445,11 @@ def _line_chart_svg(frame: pd.DataFrame, metric: str) -> str:
     )
 
 
-def _render_horizon_charts(frame: pd.DataFrame) -> str:
+def _render_horizon_charts(frame: pd.DataFrame, model_order: tuple[str, ...] = MODEL_ORDER) -> str:
     return "".join(
         f'<article class="metric-chart"><h3>{_escape(metric)} RMSE '
         f'({_escape(METRIC_UNITS[metric])})</h3>'
-        f'{_line_chart_svg(frame, metric)}</article>'
+        f'{_line_chart_svg(frame, metric, model_order)}</article>'
         for metric in REQUIRED_METRICS
     )
 
@@ -461,9 +468,9 @@ def _dataset_scores(frame: pd.DataFrame) -> pd.DataFrame:
     )
 
 
-def _distribution_summary(dataset_scores: pd.DataFrame) -> str:
+def _distribution_summary(dataset_scores: pd.DataFrame, model_order: tuple[str, ...] = MODEL_ORDER) -> str:
     rows = []
-    for model in MODEL_ORDER:
+    for model in model_order:
         values = dataset_scores[model]
         rows.append(
             (
@@ -537,29 +544,25 @@ def _histogram_svg(values: Iterable[float]) -> str:
     )
 
 
-def _render_dataset_distribution(frame: pd.DataFrame) -> str:
+def _render_dataset_distribution(frame: pd.DataFrame, model_order: tuple[str, ...] = MODEL_ORDER) -> str:
     scores = _dataset_scores(frame)
-    worst = scores.sort_values("tuned", ascending=False).head(10)
+    target = "tuned" if "tuned" in scores else model_order[-1]
+    worst = scores.sort_values(target, ascending=False).head(10)
     worst_rows = (
-        (dataset_id, _format_number(row["tuned"]))
+        (dataset_id, _format_number(row[target]))
         for dataset_id, row in worst.iterrows()
     )
     return (
-        _distribution_summary(scores)
-        + _histogram_svg(scores["tuned"])
-        + "<h3>Highest tuned dataset scores</h3>"
-        + _table(("Dataset", "Tuned normalized score"), worst_rows)
+        _distribution_summary(scores, model_order)
+        + _histogram_svg(scores[target])
+        + f"<h3>Highest {_escape(target)} dataset scores</h3>"
+        + _table(("Dataset", f"{target} normalized score"), worst_rows)
     )
 
 
 def _render_failures(summary: Mapping[str, Any]) -> str:
     count_keys = ("n_datasets", "n_cached", "n_extracted", "n_skipped", "n_failed")
     counts = {key: summary[key] for key in count_keys if key in summary}
-    records = [
-        (status, str(item["dataset_id"]), str(item["reason"]))
-        for key, status in (("skipped", "skipped"), ("failed", "failed"))
-        for item in summary.get(key, [])
-    ]
     count_labels = {
         "n_datasets": "Discovered",
         "n_cached": "Cached",
@@ -571,11 +574,35 @@ def _render_failures(summary: Mapping[str, Any]) -> str:
         f'<div class="stat"><span>{_escape(count_labels[key])}</span><strong>{_escape(value)}</strong></div>'
         for key, value in counts.items()
     )
-    if records:
-        details = _table(("Status", "Dataset", "Reason"), records)
-    else:
-        details = '<p class="ok">No datasets were skipped or failed.</p>'
-    return f'<div class="stats">{cards}</div>{details}'
+    return f'<div class="stats">{cards}</div>'
+
+
+def _load_artifact(path: Path) -> Mapping[str, Any]:
+    if not path.is_file():
+        return {}
+    raw = yaml.safe_load(path.read_text(encoding="utf-8"))
+    return raw if isinstance(raw, Mapping) else {}
+
+
+def _render_artifact(path: Path, *, parameter_title: str = "Parameters") -> str:
+    document = _load_artifact(path)
+    params = document.get("params") if isinstance(document.get("params"), Mapping) else {}
+    metadata = document.get("metadata") if isinstance(document.get("metadata"), Mapping) else {}
+    source = f'<p class="source">Artifact: {_escape(path)}</p>'
+    param_table = _render_params(document, params) if params else '<p class="note">No parameter summary available.</p>'
+    metadata_rows = ((key, _format_param_value(value)) for key, value in sorted(metadata.items()))
+    metadata_table = _table(("Metadata", "Value"), metadata_rows, css_class="params") if metadata else ""
+    return f'<h3>{_escape(parameter_title)}</h3>{source}{param_table}{metadata_table}'
+
+
+def _comparison_model_order(scenario: Path) -> tuple[str, ...]:
+    if not scenario.is_file():
+        return MODEL_ORDER
+    config = load_model_config(scenario)
+    return tuple(
+        ("tuned" if name == TARGET_MODEL_NAME else name).lower()
+        for name in config.comparison_models
+    )
 
 
 def _render_document(
@@ -586,10 +613,15 @@ def _render_document(
     frame: pd.DataFrame,
     failures: Mapping[str, Any],
     physical_validity_sections: str,
+    model_order: tuple[str, ...],
+    extraction_summary: Mapping[str, Any],
+    phase1_path: Path,
+    phase2_path: Path,
+    release_path: Path,
 ) -> str:
     datasets = frame["dataset_id"].nunique()
     horizons = frame["horizon"].nunique()
-    summary = _summary_frame(document, frame)
+    summary = _summary_frame(document, frame, model_order)
     return f"""<!doctype html>
 <html lang="en">
 <head>
@@ -623,14 +655,10 @@ th {{ color:var(--muted); background:var(--wash); font-size:12px; }} th:first-ch
 .horizon-chart text {{ fill:var(--muted); font-size:11px; }}
 .horizon-chart .x-tick,.horizon-chart .axis-title {{ text-anchor:middle; }}
 .horizon-chart .y-tick {{ text-anchor:end; }}
-.horizon-chart .series {{ fill:none; stroke-width:2; stroke-linejoin:round; stroke-linecap:round; }}
-.horizon-chart .series.baseline,.horizon-chart .legend.baseline line {{ stroke:#667085; }}
-.horizon-chart .series.tuned,.horizon-chart .legend.tuned line {{ stroke:var(--accent); }}
-.horizon-chart .point.baseline,.horizon-chart .legend.baseline circle {{ fill:#667085; }}
-.horizon-chart .point.tuned,.horizon-chart .legend.tuned circle {{ fill:var(--accent); }}
-.horizon-chart .legend line {{ stroke-width:2; }}
-.horizon-chart .legend.baseline text {{ fill:#475467; }}
-.horizon-chart .legend.tuned text {{ fill:var(--accent); }}
+.horizon-chart .series {{ fill:none; stroke:var(--series-color); stroke-width:2; stroke-linejoin:round; stroke-linecap:round; }}
+.horizon-chart .point,.horizon-chart .legend circle {{ fill:var(--series-color); }}
+.horizon-chart .legend line {{ stroke:var(--series-color); }}
+.horizon-chart .legend line {{ stroke-width:2; }} .horizon-chart .legend text {{ fill:var(--series-color); }}
 .ok {{ color:#067647; }}
 .plotly-graph-div {{ max-width:100%; }}
 </style>
@@ -644,12 +672,12 @@ th {{ color:var(--muted); background:var(--wash); font-size:12px; }} th:first-ch
   <p class="source">Parameters: {_escape(tuned_path)}</p>
   <p class="source">Metrics: {_escape(metrics_path)}</p>
 </header>
-<section><h2>Parameters</h2>{_render_params(document, params)}</section>
-<section><h2>Aggregate comparison</h2><p class="note">Raw columns are mean RMSE. Aggregate and distribution values use the configured optimization horizons; graphs use every available N. Lower is better.</p>{_render_aggregate(document, summary)}</section>
-<section><h2>Error by horizon N</h2><p class="note">Each point is the mean RMSE across valid datasets. Every available N is plotted; lower is better.</p>{_render_horizon_charts(frame)}</section>
-<section><h2>Dataset distributions</h2>{_render_dataset_distribution(summary)}</section>
-<section><h2>Skipped / failed datasets</h2>{_render_failures(failures)}</section>
-<section id="physical-validity"><h2>Physical validity</h2>{physical_validity_sections}</section>
+<section><h2>1. Extraction results</h2>{_render_failures(extraction_summary)}</section>
+<section><h2>2. Longitudinal direct identification</h2>{_render_artifact(phase1_path, parameter_title="phase1_acc.yaml")}</section>
+<section><h2>3. Steering direct identification</h2>{_render_artifact(phase2_path, parameter_title="phase2_steer.yaml")}</section>
+<section><h2>4. Integrated optimization</h2>{_render_artifact(tuned_path, parameter_title="Final parameters")}<h3>Aggregate comparison</h3><p class="note">Raw columns are mean RMSE. Aggregate and distribution values use the configured optimization horizons; graphs use every available N. Lower is better.</p>{_render_aggregate(document, summary, model_order)}<h3>Error by horizon N</h3><p class="note">Each point is the mean RMSE across valid datasets. Every available N is plotted; lower is better.</p>{_render_horizon_charts(frame, model_order)}<h3>Dataset distributions</h3>{_render_dataset_distribution(summary, model_order)}</section>
+<section><h2>5. Released YAML</h2><p class="source">Released parameter YAML: {_escape(release_path)}</p></section>
+<section id="physical-validity"><h2>6. Physical validity</h2>{physical_validity_sections}</section>
 </main></body></html>
 """
 
@@ -663,6 +691,10 @@ def run(
     collection_dir: Path | str,
     scenario: Path | str,
     n_jobs: int = 1,
+    extraction_summary: Mapping[str, Any] | None = None,
+    phase1_params: Path | str | None = None,
+    phase2_params: Path | str | None = None,
+    release_params: Path | str | None = None,
 ) -> Path:
     """Generate the unified ``report.html``."""
     tuned_path = Path(tuned_params)
@@ -670,11 +702,13 @@ def run(
     out_path = Path(out)
     started = perf_counter()
     document, params = _load_tuned_document(tuned_path)
-    frame = _add_normalized_scores(_load_metrics(metrics_path))
+    scenario_path = Path(scenario)
+    model_order = _comparison_model_order(scenario_path)
+    frame = _add_normalized_scores(_load_metrics(metrics_path, model_order))
     metrics_elapsed = perf_counter() - started
     physical_started = perf_counter()
     physical_sections = physical_validity.build_sections(
-        Path(collection_dir), tuned_path, scenario=Path(scenario), n_jobs=n_jobs
+        Path(collection_dir), tuned_path, scenario=scenario_path, n_jobs=n_jobs
     )
     physical_elapsed = perf_counter() - physical_started
     render_started = perf_counter()
@@ -686,6 +720,11 @@ def run(
         frame,
         failures,
         physical_sections,
+        model_order,
+        extraction_summary if extraction_summary is not None else failures,
+        Path(phase1_params) if phase1_params is not None else tuned_path,
+        Path(phase2_params) if phase2_params is not None else tuned_path,
+        Path(release_params) if release_params is not None else tuned_path,
     )
     out_path.parent.mkdir(parents=True, exist_ok=True)
     out_path.write_text(rendered, encoding="utf-8")

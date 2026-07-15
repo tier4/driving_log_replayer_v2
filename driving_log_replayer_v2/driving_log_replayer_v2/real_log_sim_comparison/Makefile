@@ -60,7 +60,7 @@ reidentify:
 		test -f "$(ROS_SETUP)" || { echo "[ERROR] ROS setup not found: $(ROS_SETUP)"; exit 2; }; \
 		test -f "$(SETUP_BASH)" || { echo "[ERROR] ROS setup not found: $(SETUP_BASH) (build the workspace or use NO_SETUP=1)"; exit 2; }; \
 	fi
-	@echo "[INFO] reidentify: extract -> fit_lon -> fit_steer -> fit_merge -> report -> release"
+	@echo "[INFO] reidentify: extract -> fit_lon -> fit_steer -> fit_merge -> release -> report"
 	$(RUN_PY) -m driving_log_replayer_v2.real_log_sim_comparison.reidentify.pipeline \
 		--root "$(ROOT)" \
 		--scenario "$(SCENARIO)" \

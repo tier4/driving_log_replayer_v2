@@ -31,7 +31,7 @@ from .parameter_constraints import (
     search_constraints,
     validate_parameters,
 )
-from .settings import ROLLOUT_STRIDE, TARGET_MODEL_NAME
+from .settings import BASELINE_MODEL_NAME, ROLLOUT_STRIDE, TARGET_MODEL_NAME
 
 _GT_KEYS = ("acc_time_delay", "steer_time_delay", "wheelbase", "sub_dt")
 _RMSE_KEYS = ("pos", "long", "lat", "yaw", "steer", "vx", "ax")
@@ -173,6 +173,27 @@ def _evaluate_report_metrics(
         baseline_metrics[ctx.dataset_id] = baseline_metric
         tuned_metrics[ctx.dataset_id] = tuned_metric
     return baseline_metrics, tuned_metrics
+
+
+def _evaluate_comparison_report_metrics(
+    ctxs: list[DatasetCtx],
+    comparison_cases: list[tuple[str, dict, str, str]],
+    *,
+    horizons: tuple[int, ...] = REPORT_HORIZONS,
+) -> dict[str, dict[str, dict]]:
+    """Evaluate every scenario comparison case at the dense report horizons."""
+    results: dict[str, dict[str, dict]] = {}
+    for name, params, model_type, acceleration_source in comparison_cases:
+        per_dataset: dict[str, dict] = {}
+        for ctx in ctxs:
+            metric = _eval(
+                ctx, params, model_type, acceleration_source, horizons=horizons,
+            )
+            if not _rollout_metric_is_finite(metric, horizons):
+                raise RuntimeError(f"レポート用 {name} rollout 指標が不正です: {ctx.dataset_id}")
+            per_dataset[ctx.dataset_id] = metric
+        results[name] = per_dataset
+    return results
 
 
 def _finite_robust_score(aggregate: dict | None) -> float:
@@ -563,6 +584,40 @@ def fit_merge(
         "acceleration_source": cur_case.acceleration_source,
     }
 
+    # Keep scenario ordering and evaluate every declared fixed comparison case.
+    # ``current`` is the only case whose scenario parameters are replaced with
+    # the final fitted parameters, and is presented as ``tuned``.
+    comparison_cases: list[tuple[str, dict, str, str]] = []
+    comparison_sparse_metrics: dict[str, list[tuple[str, dict]]] = {
+        "baseline": baseline_metrics,
+        "tuned": tuned_metrics_list,
+    }
+    for scenario_name in cfg.comparison_models:
+        display_name = "tuned" if scenario_name == TARGET_MODEL_NAME else scenario_name
+        case = cfg.find_case(scenario_name)
+        if scenario_name == BASELINE_MODEL_NAME:
+            params = baseline_params
+        elif scenario_name == TARGET_MODEL_NAME:
+            params = full_tuned_params
+        else:
+            params = dict(case.params)
+            comparison_sparse_metrics[display_name] = _evaluate_candidate(
+                ctxs, params, case.vehicle_model_type, case.acceleration_source, aggregate=False,
+            )
+        comparison_cases.append(
+            (display_name, params, case.vehicle_model_type, case.acceleration_source)
+        )
+
+    for display_name, _params, _model_type, acceleration_source in comparison_cases:
+        if display_name in comparison_results:
+            continue
+        aggregate = aggregate_normalized(comparison_sparse_metrics[display_name], baselines)
+        comparison_results[display_name] = {
+            "score": float(_finite_robust_score(aggregate)),
+            "by_h": clean_agg(aggregate),
+            "acceleration_source": acceleration_source,
+        }
+
     # Print N-step rollout comparison summary to console
     print("\n" + "=" * 72)
     print("N-step Rollout Performance Comparison (All Valid Datasets)")
@@ -576,15 +631,7 @@ def fit_merge(
         f"[INFO] レポート用 rollout を N={REPORT_HORIZONS[0]}.."
         f"{REPORT_HORIZONS[-1]} で評価"
     )
-    report_baselines, report_tuned = _evaluate_report_metrics(
-        ctxs,
-        baseline_params=baseline_params,
-        baseline_model_type=baseline_model_type,
-        baseline_acceleration_source=baseline_accel_source,
-        tuned_params=full_tuned_params,
-        tuned_model_type=cur_model,
-        tuned_acceleration_source=cur_case.acceleration_source,
-    )
+    report_metrics = _evaluate_comparison_report_metrics(ctxs, comparison_cases)
 
     fieldnames = [
         "dataset_id",
@@ -603,10 +650,8 @@ def fit_merge(
         writer = csv.DictWriter(stream, fieldnames=fieldnames)
         writer.writeheader()
         for ctx in ctxs:
-            for model, per_horizon in (
-                ("baseline", report_baselines[ctx.dataset_id]),
-                ("tuned", report_tuned[ctx.dataset_id]),
-            ):
+            for model, _params, _model_type, _source in comparison_cases:
+                per_horizon = report_metrics[model][ctx.dataset_id]
                 for horizon in REPORT_HORIZONS:
                     writer.writerow(
                         {

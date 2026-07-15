@@ -51,9 +51,9 @@ global パラメータをトップレベルに反映し、レポートで評価�
 1. `extract`: 必要な7トピックを dataset ごとの `reidentify_cache.csv` に変換する。
 2. `fit_lon`: 縦方向の時定数、むだ時間、scale を直接同定する。
 3. `fit_steer`: 操舵応答、bias、scale、`k_us` を直接同定する。
-4. `fit_merge`: 直接同定値を warm-start にして統合最適化し、baseline/tuned の N-step 指標も確定する。探索スコア用の N は従来の5点を維持し、レポート用には N=1〜100 を出力する。
-5. `report`: 確定済み N-step 指標と物理的妥当性検証を統合した HTML を生成する。N-step ロールアウトは再実行しない。
-6. `release`: tuned params を入力パラメータ YAML の `v100` に反映する。
+4. `fit_merge`: 直接同定値を warm-start にして統合最適化し、`comparison_models` の全モデルの N-step 指標を確定する。`current` は tuned として出力する。探索スコア用の N は従来の5点を維持し、レポート用には N=1〜100 を出力する。
+5. `release`: tuned params を入力パラメータ YAML の `v100` に反映する。
+6. `report`: 全工程の成果物、確定済み N-step 指標、物理的妥当性検証を統合した最終 HTML を生成する。N-step ロールアウトは再実行しない。
 
 ## 成果物
 

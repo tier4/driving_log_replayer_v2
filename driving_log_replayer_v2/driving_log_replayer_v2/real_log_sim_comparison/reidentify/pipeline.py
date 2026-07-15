@@ -71,8 +71,11 @@ def _step_fit_merge(
 
 def _step_report(
     out_dir: Path,
+    phase1_out: Path,
+    phase2_out: Path,
     tuned_out: Path,
     metrics_out: Path,
+    release_out: Path,
     extraction_summary: dict,
     fit_result: dict,
     scenario: Path,
@@ -92,6 +95,10 @@ def _step_report(
             failures=summary,
             collection_dir=out_dir.parent,
             scenario=scenario,
+            extraction_summary=extraction_summary,
+            phase1_params=phase1_out,
+            phase2_params=phase2_out,
+            release_params=release_out,
         )
     else:
         report.run(
@@ -101,6 +108,10 @@ def _step_report(
             failures=summary,
             collection_dir=out_dir.parent,
             scenario=scenario,
+            extraction_summary=extraction_summary,
+            phase1_params=phase1_out,
+            phase2_params=phase2_out,
+            release_params=release_out,
             n_jobs=n_jobs,
         )
 
@@ -113,7 +124,7 @@ def _step_release(tuned_out: Path, out_dir: Path, input_param: Path) -> Path:
 
 def main() -> None:
     parser = argparse.ArgumentParser(
-        description="reidentify pipeline (extract→fit_lon→fit_steer→fit_merge→report→release)"
+        description="reidentify pipeline (extract→fit_lon→fit_steer→fit_merge→release→report)"
     )
     parser.add_argument("--root", type=Path, required=True, help="datasets/ を持つ collection root")
     parser.add_argument("--scenario", type=Path, required=True)
@@ -163,13 +174,14 @@ def main() -> None:
         n_jobs,
     )
 
-    print("\n[pipeline] === 5/6 report ===")
-    _step_report(
-        out_dir, tuned_out, metrics_out, extraction_summary, fit_result, args.scenario, n_jobs
-    )
+    print("\n[pipeline] === 5/6 release ===")
+    release_out = _step_release(tuned_out, out_dir, args.input_param)
 
-    print("\n[pipeline] === 6/6 release ===")
-    _step_release(tuned_out, out_dir, args.input_param)
+    print("\n[pipeline] === 6/6 report ===")
+    _step_report(
+        out_dir, phase1_out, phase2_out, tuned_out, metrics_out, release_out,
+        extraction_summary, fit_result, args.scenario, n_jobs,
+    )
 
     print(f"\n[pipeline] 完了。成果物: {out_dir}")
 
