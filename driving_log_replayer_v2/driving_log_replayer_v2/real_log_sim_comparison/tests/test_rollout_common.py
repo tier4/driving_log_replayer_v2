@@ -29,16 +29,14 @@ class _FakeVehicleModel:
         self.resets.append(kwargs)
 
 
-def test_rollout_initializes_from_measured_steering(monkeypatch) -> None:
-    _FakeVehicleModel.resets.clear()
-    monkeypatch.setattr(rollout, "VehicleModel", _FakeVehicleModel)
+def _ground_truth(vx: float = 5.0) -> dict:
     zeros = np.zeros(2, dtype=np.float64)
-    gt = {
+    return {
         "t_cmd": np.array([0.0, 0.1]),
         "gt_x": np.array([0.0, 1.0]),
         "gt_y": zeros,
         "gt_yaw": zeros,
-        "gt_vx": np.full(2, 5.0),
+        "gt_vx": np.full(2, vx),
         "gt_steer": np.full(2, 0.17),
         "gt_steer_kinematic": np.full(2, -0.40),
         "gt_wz": zeros,
@@ -56,6 +54,11 @@ def test_rollout_initializes_from_measured_steering(monkeypatch) -> None:
         "steer_des_arr": zeros,
     }
 
+
+def test_rollout_initializes_from_measured_steering(monkeypatch) -> None:
+    _FakeVehicleModel.resets.clear()
+    monkeypatch.setattr(rollout, "VehicleModel", _FakeVehicleModel)
+
     rollout.eval_rollout_rmse(
         data={},
         t0_ns=0,
@@ -63,8 +66,24 @@ def test_rollout_initializes_from_measured_steering(monkeypatch) -> None:
         model_type="delay_steer_acc_geared_for_diffusion_planner",
         horizons=(1,),
         stride=1,
-        gt=gt,
+        gt=_ground_truth(),
     )
 
     assert _FakeVehicleModel.resets[0]["steer_actual"] == pytest.approx(0.19)
     assert _FakeVehicleModel.resets[0]["steer_actual"] != pytest.approx(-0.38)
+
+
+def test_rollout_marks_horizon_without_valid_samples_as_infinite(monkeypatch) -> None:
+    monkeypatch.setattr(rollout, "VehicleModel", _FakeVehicleModel)
+
+    result = rollout.eval_rollout_rmse(
+        data={},
+        t0_ns=0,
+        params={"steer_bias": 0.0},
+        model_type="delay_steer_acc_geared_for_diffusion_planner",
+        horizons=(1,),
+        stride=1,
+        gt=_ground_truth(vx=0.0),
+    )
+
+    assert all(np.isinf(value) for value in result[1].values())

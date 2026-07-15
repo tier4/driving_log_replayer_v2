@@ -24,8 +24,16 @@ if(BUILD_TESTING)
   find_package(ament_lint_auto REQUIRED)
   ament_lint_auto_find_test_dependencies()
   find_package(ament_cmake_pytest)
+  # The workspace may provide unrelated pytest entry-point plugins with
+  # incompatible dependencies. These tests use pytest core only.
+  set(ENV{PYTEST_DISABLE_PLUGIN_AUTOLOAD} "1")
   ament_add_pytest_test(driving_log_replayer_v2
     test
+    ENV "PYTEST_DISABLE_PLUGIN_AUTOLOAD=1"
+  )
+  ament_add_pytest_test(real_log_sim_comparison_reidentify
+    driving_log_replayer_v2/real_log_sim_comparison/tests
+    ENV "PYTEST_DISABLE_PLUGIN_AUTOLOAD=1"
   )
 endif()
 
@@ -52,29 +60,8 @@ install(PROGRAMS
   DESTINATION lib/${PROJECT_NAME}
 )
 
-# real_log_sim_comparison: ファイル散らばり解消のため evaluator_node は
-# driving_log_replayer_v2/real_log_sim_comparison/ 配下に集約。
-# launch から `<use_case>_evaluator_node.py` の固定命名で呼ばれるため RENAME で互換維持。
-install(PROGRAMS
-  driving_log_replayer_v2/real_log_sim_comparison/evaluator_node.py
-  DESTINATION lib/${PROJECT_NAME}
-  RENAME real_log_sim_comparison_evaluator_node.py
-)
-
 install(FILES "${ROS_REQUIREMENTS}"
   DESTINATION share/${PROJECT_NAME})
-
-# real_log_sim_comparison: sample も use case ディレクトリへ集約 (cloud / local 統一)。
-# share install パス sample/real_log_sim_comparison は cloud Web.Auto evaluator 互換のため維持
-# (登録済み scenario の Conditions が install-share の絶対パスを参照する)。
-# `install(DIRECTORY)` だと `--symlink-install` モードで PATTERN EXCLUDE が効かず
-# sample/out/ 配下の実行結果 (untracked, 数GB) まで symlink install されてしまうため、
-# 必要ファイルを明示列挙する。
-install(FILES
-  driving_log_replayer_v2/real_log_sim_comparison/sample/scenario.yaml
-  driving_log_replayer_v2/real_log_sim_comparison/sample/README.ja.md
-  DESTINATION share/${PROJECT_NAME}/sample/real_log_sim_comparison
-)
 
 ament_auto_package(INSTALL_TO_SHARE
   launch

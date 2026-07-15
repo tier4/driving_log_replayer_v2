@@ -1,219 +1,37 @@
 ScenarioFormatVersion: 3.0.0
-ScenarioName: real_log_sim_comparison
-ScenarioDescription: |
-  実機 rosbag (T4 dataset の input_bag) を SSOT として:
-    Stage 1-2: lite 化と実機ログ解析
-    Stage 3-4: 同走行を模擬する OpenSCENARIO を自動生成し Conditions.sim_runs の各 run で
-               closed-loop 再現、実機と N-way 比較
-    Stage 5-6: Conditions.cases の各 case で N-step VehicleModel 解析と集約
-SensorModel: aip_x2_gen2
-VehicleModel: j6_gen2
-Evaluation:
-  UseCaseName: planning_control
-  SubUseCaseName: real_log_sim_comparison
-  UseCaseFormatVersion: 0.1.0
-  # Datasets[0] の UUID = SSOT となる実機走行データを含む annotation-dataset の UUID。
-  # input_bag/*.{mcap,db3} が AUTONOMOUS 走行を含む実機 rosbag として全 stage で使用される。
-  # cloud: Web.Auto に登録する scenario の Datasets で指定。
-  # local: `make local_cloud_run` 前にこの UUID を対象走行へ書き換え、事前取得しておくこと:
-  #   webauto data annotation-dataset pull --project-id x2_dev \
-  #     --annotation-dataset-id <UUID> --include-intermediate-artifacts
-  Datasets:
-    # Override_E2E_x2j6gen2_odaiba_2026-05-12-A09
-    # (j6_gen2 実機 E2E 走行、お台場エリア、2026-05-12 記録)
-    # シナリオ比較適性: AUTONOMOUS 開始時に ego 停止 (v0≈0) し、停止→走行→停止の完全な
-    # start→goal (276m / 60s) を含む。旧 f20a29ab (takanawa) は AUTONOMOUS が走行中に始まり
-    # sim (停止初期化) と始点が不一致だったため、停止開始のこのデータセットに差し替え。
-    - 28443458-8d02-476d-b91c-528ea6027d18:
-        VehicleId: default
-  Conditions:
-    # 図タイトルに表示するシナリオ名 (任意。未指定なら ScenarioName を使用)
-    scenario_name: "Override_E2E_x2j6gen2_odaiba_2026-05-12-A09"
-    # 実機データ取得時の pilot-auto.x2 / DiffusionPlanner 重みの自由記述 (任意)。
-    # 実機の版・重みは外部 (車両デプロイ) のため自動取得できない。記録すると比較プロット・
-    # report.md の provenance に掲載され、sim 実行時の版・重み (自動取得) との差を解釈できる。
-    real_provenance: ""
-    # none: scenario 側で信号をセットしない (reproduce_perception の PerceptionReproducerSensor
-    # が実機 bag の信号 topic を直接 publish して所有するため、二重 publisher を避ける)。
-    traffic_signals: none
-    loop_waypoints: 0
-    # 実機 input_bag の検出物体・信号・占有格子を simple_sensor_simulator 内蔵の
-    # PerceptionReproducerSensor で sim 時刻同期再生 (先行車追従・赤信号停止の忠実再現)。
-    reproduce_perception: true
-    # scenario 開始から 8 秒間、実機 bag の ego 状態 (pose/twist/accel) を vehicle model に
-    # 注入してから closed-loop に切替 (EgoBagReplayer)。AUTONOMOUS 開始時に ego が速度を
-    # 持つ本データセットで、停止発進ではなく実機と同じ走行中状態から sim を始める。
-    ego_replay_duration: 8.0
-    # perception 再生を時刻同期ではなく sim ego 最近傍時刻のスナップショット再生にする。
-    # 時刻同期では sim ego のペース差で先行車が実機タイムラインどおり先行し抑制が弱まる
-    # (2026-06-11 計測: sim 巡航 3.19 vs 実機 2.34 m/s)。位置同期で先行車・信号を
-    # sim ego の進行度に合わせる。
-    replay_position_based: true
+ScenarioName: vehicle_model_reidentify
 
-    # ── モデルレジストリ ──────────────────────────────────────────────────────────
-    # 同列に名前付きで定義。cases / sim_runs は名前で呼び出す。
-    #
-    # フィールド:
-    #   vehicle_model_type: open-loop VehicleModel クラス名 (cases で必須)
-    #   vehicle_model:       closed-loop description パッケージ名 (sim_runs で必須)
-    #   params:              open/sim 共有の simulator_model パラメータ上書き (任意)
-    #   architecture_type:   sim 専用 (既定 awf/universe/20250130)
-    #   godot_executable:    sim 専用 (*_godot のとき必須)
-    #   dp_model_dir/release/package: sim 専用 DiffusionPlanner モデル切替 (任意)
-    #
-    # vehicle_model_type → sim enum 自動注入:
-    #   vehicle_model_type を持つ model が sim_runs に含まれると、loader が
-    #   simple_sensor_simulator.vehicle_model_type:=<ENUM> を自動注入する
-    #   (taiga_dyn→TAIGA_DYN, taiga_x→TAIGA_X, delay_steer_acc_geared_for_diffusion_planner→DELAY_...)。
-    #   perfect / godot は vehicle_model_type を持たないので注入しない。
+Evaluation:
+  Conditions:
     models:
-      # ── delay_steer_acc_geared_for_diffusion_planner 系 ──────────────────────────
       baseline:
-        # j6_gen2_description の DELAY_STEER_ACC_GEARED_WO_FALL_GUARD (dynamics 既定値)。
-        # open-loop でも closed-loop でも dynamics 既定値の基準線として使う。
         vehicle_model_type: delay_steer_acc_geared_wo_fall_guard
         acceleration_source: accel
         params:
+          wheelbase: 4.76012
           acc_time_delay: 0.1
           acc_time_constant: 0.1
+          debug_acc_scaling_factor: 1.0
           steer_time_delay: 0.17
           steer_time_constant: 0.15
+          debug_steer_scaling_factor: 1.0
           steer_dead_band: 0.0
           steer_bias: 0.0
-          debug_acc_scaling_factor: 1.0
-          debug_steer_scaling_factor: 1.0
+          steer_rate_lim: 5.0
           k_us: 0.0
-        vehicle_model: j6_gen2
-        architecture_type: awf/universe/20250130
-
-      v1:
-        # 現行リリース済み simulator_model.param.yaml の
-        # delay_steer_acc_geared_for_diffusion_planner.v1 を展開した比較対象。
-        vehicle_model_type: delay_steer_acc_geared_for_diffusion_planner
-        vehicle_model: j6_gen2
-        architecture_type: awf/universe/20250130
-        acceleration_source: accel
-        model_role: released
-        version: 1
-        source_param_path: /home/kotaroyoshimoto/workspace/x2_e2e_44/src/description/vehicle/j6_gen2_description/j6_gen2_description/config/simulator_model.param.yaml
-        params:
-          k_us: 0.006289
-          steer_time_constant: 0.19491
-          debug_steer_scaling_factor: 1.0061
-          acc_time_constant: 0.21204
-          steer_time_delay: 0.05
-          steer_rate_lim: 5.0
-          debug_acc_scaling_factor: 0.95012
-          steer_dead_band: 0.002529
-          steer_bias: -0.0000972
-          acc_time_delay: 0.1
-
-      v1_add_xy:
-        vehicle_model_type: delay_steer_acc_geared_for_diffusion_planner
-        vehicle_model: j6_gen2
-        architecture_type: awf/universe/20250130
-        acceleration_source: accel
-        model_role: released
-        version: 1
-        source_param_path: /home/kotaroyoshimoto/workspace/x2_e2e_44/src/description/vehicle/j6_gen2_description/j6_gen2_description/config/simulator_model.param.yaml
-        params:
-          k_us: 0.006289
-          steer_time_constant: 0.19491
-          debug_steer_scaling_factor: 1.0061
-          acc_time_constant: 0.21204
-          steer_time_delay: 0.05
-          steer_rate_lim: 5.0
-          debug_acc_scaling_factor: 0.95012
-          steer_dead_band: 0.002529
-          steer_bias: -0.0000972
-          acc_time_delay: 0.1
-          xy_heading_rate_coeff: 0.022
-          use_rk4: False
-
-      v1_rk4:
-        vehicle_model_type: delay_steer_acc_geared_for_diffusion_planner
-        vehicle_model: j6_gen2
-        architecture_type: awf/universe/20250130
-        acceleration_source: accel
-        model_role: released
-        version: 1
-        source_param_path: /home/kotaroyoshimoto/workspace/x2_e2e_44/src/description/vehicle/j6_gen2_description/j6_gen2_description/config/simulator_model.param.yaml
-        params:
-          k_us: 0.006289
-          steer_time_constant: 0.19491
-          debug_steer_scaling_factor: 1.0061
-          acc_time_constant: 0.21204
-          steer_time_delay: 0.05
-          steer_rate_lim: 5.0
-          debug_acc_scaling_factor: 0.95012
-          steer_dead_band: 0.002529
-          steer_bias: -0.0000972
-          acc_time_delay: 0.1
-          xy_heading_rate_coeff: 0.0
-          use_rk4: True
 
       current:
-        # 複数データセット・多エリア横断でロバスト同定した最善パラメータ調整版。
-        # E2E 自律走行 20 データセット・5 エリア横断 (takanawa / odaiba / kawasaki / omika / shiojiri) の
-        # open-loop N=20 rollout 終端誤差を、各データセットの normal 比に正規化 (分母は低ダイナミクス走行の
-        # 暴発防止のためフロアクリップ: yaw 0.12deg / pos 3cm) し、dataset 横断の mean+worst を balance する
-        # 目的関数で最小化して同定 (multi_dataset_tune.py + make local_multidataset_run)。
-        # 単一データセット同定の旧値 (k_us=0.005, steer_time_constant=0.30, debug_steer_scaling_factor=0.90)
-        # は 1 データセットに過適合していた。多エリア化で steer 側 proxy (steer_time_constant /
-        # debug_steer_scaling_factor) は汎化せず仕様値が最善、縦方向 acc_time_constant も過大だと特定エリア
-        # (shiojiri) の pos を悪化させるため引き下げ、以下に収束:
-        #   k_us=0.018 (物理 understeer, 実機直接推定 ~0.022 と整合), acc_time_constant=0.30,
-        #   steer_time_constant=0.15 / debug_steer_scaling_factor=1.0 (=仕様値)。
-        #   正規化 yaw@N20: mean 0.636 / worst 0.898 (normal=1.0)、正規化 pos@N20: mean 0.872 / worst 1.093。
-        #   kus0020 (yaw mean 0.656 / worst 1.111 / pos mean 0.954) を yaw mean・worst と pos mean で上回る。
-        # sim でも spec 値の steer_time_constant / debug_steer_scaling_factor を明示する
-        # (暗黙の description 既定に依存させない)。
         vehicle_model_type: delay_steer_acc_geared_for_diffusion_planner
-        vehicle_model: j6_gen2
-        architecture_type: awf/universe/20250130
-        # kinematic_diff (diff+10サンプル移動平均) は kinematic_state の実配信レート ~50Hz では
-        # 実時間 ~200ms の箱型平滑化になり、除去したかった accel の 80ms LPF より重い鈍化を
-        # 新たに持ち込んでいた。multi_dataset_tune.py --acceleration-source によるA/B比較
-        # (n_trials=150, 同一目的関数) で kinematic_diff/accel はほぼ同点 (score 16.57/16.54) だったが
-        # kinematic_savgol (同じ0.2秒窓だが Savitzky-Golay 平滑微分) は score 15.62 と ~6% 改善し
-        # v1 (15.34) にほぼ並んだため、こちらを既定にした。
         acceleration_source: kinematic_savgol
         params:
-          k_us: 0.018                       # 物理 understeer (実機推定 ~0.022 と整合)
-          steer_time_constant: 0.15         # = 仕様値 (steer 側 proxy は多エリアで汎化せず)
-          debug_steer_scaling_factor: 1.0   # = 仕様値 (同上)
-          acc_time_constant: 0.30           # 縦方向 (pos-mean 改善。0.45 超は shiojiri pos を悪化)
+          wheelbase: 4.76012
+          acc_time_delay: 0.1
+          acc_time_constant: 0.3
+          debug_acc_scaling_factor: 1.0
+          steer_time_delay: 0.05
+          steer_time_constant: 0.15
+          debug_steer_scaling_factor: 1.0
+          steer_dead_band: 0.0
+          steer_bias: 0.0
           steer_rate_lim: 0.6
-
-      # ── sim 専用 (vehicle_model_type なし → cases に含められない) ────────
-      perfect:
-        # 理想軌跡追従 (planner 出力を完全追従)。dynamics 誤差ゼロの上限基準。Godot binary 不要。
-        vehicle_model: j6_gen2_perfect_tracker
-        architecture_type: awf/universe/20250130
-
-      godot:
-        # 外部 Godot シム。cloud / local 共通で /opt 配下の Godot バイナリを使用。
-        # cloud: .webauto-ci/main/autoware-setup/run.sh が v0.6.2 を /opt に配置 (自動)。
-        # local: 同じ /opt に配置 or symlink する (詳細は README.ja.md)。
-        vehicle_model: j6_gen2_godot
-        architecture_type: awf/universe/20250130
-        godot_executable: /opt/godot_autoware_simulator/godot_autoware_simulator.x86_64
-
-    # ── cases: open-loop VehicleModel N-step 解析 (Stage 5/6) に使う名前リスト ──
-    # vehicle_model_type が必須。名前 = 出力ディレクトリ nstep/<name>/
-    cases:    [baseline, v1, v1_add_xy, v1_rk4, current]
-
-    # ── comparison_models: reidentify / physical_validity_report の比較対象 ──
-    # v2/v3 は models に定義して、このリストに追記するだけで N-step と方程式残差RMSE比較に出る。
-    comparison_models: [baseline, v1, v1_add_xy, v1_rk4, current]
-
-    # ── sim_runs: closed-loop シム実行 (Stage 3/4) に使う名前リスト ──
-    # vehicle_model が必須。名前 = 出力ディレクトリ lite/<name>.lite/
-    sim_runs: [baseline, current, godot]
-
-
-    # ── overlay: cases 集約 (Stage 6) の基準モデルと重ね描き種類 ──
-    overlay:
-      reference_tag: baseline
-      plots:
-        - cascade_error
+          k_us: 0.018

@@ -1,12 +1,4 @@
-"""DRIVE 系 gear 判定 (ROS フリー)。
-
-ロジックの SSOT は `lib/_io.py` の `GEAR_*` 定数・`is_drive_gear`・
-`require_drive_gear_mask` だが、`lib/_io.py` はモジュール先頭で
-`rosbag2_py`/`rclpy` を import するため、そこから1関数だけ import しても
-reidentify 側の ROS フリー方針が壊れてしまう。値・ロジックが乖離しないよう
-そのまま複製する (autoware_vehicle_msgs/GearReport の DRIVE 系 enum 値は
-安定した契約であり、乖離リスクは小さい)。
-"""
+"""ROS に依存しない DRIVE 系 gear 判定。"""
 from __future__ import annotations
 
 import numpy as np
@@ -45,4 +37,4 @@ def require_drive_gear_mask(
             leading_gap_fill=leading_gap_fill,
         )
     except MissingRequiredGearError as exc:
-        raise MissingRequiredGearError(f"{exc}. real.lite を再生成してください") from exc
+        raise MissingRequiredGearError(f"{exc}. input_bag を確認し、キャッシュを再生成してください") from exc

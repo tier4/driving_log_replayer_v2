@@ -1,13 +1,7 @@
-"""real_log_sim_comparison pipeline の入力バリデーション共通部品。
-
-目的:
-- 欠損トピック、空 DataFrame、必須列、時刻対応付けの検証を 1 箇所に集約する。
-- gear だけを特別扱いせず、他の必須トピックにも同じ fail-fast 方針を適用できるようにする。
-"""
+"""Small validation helpers used by the reidentify pipeline."""
 
 from __future__ import annotations
 
-from dataclasses import dataclass
 from typing import Callable
 
 import numpy as np
@@ -26,51 +20,6 @@ class MissingRequiredGearError(MissingRequiredDataError):
     """必須の gear_status が欠損している、または評価時刻範囲を覆えない。"""
 
 
-@dataclass(frozen=True)
-class RequiredTopic:
-    topic: str
-    reason: str
-
-
-REQUIRED_REAL_LITE_TOPICS: tuple[RequiredTopic, ...] = (
-    RequiredTopic("/system/operation_mode/state", "AUTONOMOUS 区間の切り出し"),
-    RequiredTopic("/vehicle/status/velocity_status", "速度応答"),
-    RequiredTopic("/vehicle/status/steering_status", "操舵応答"),
-    RequiredTopic("/vehicle/status/gear_status", "DRIVE 系区間だけを同定・評価に使うため"),
-    RequiredTopic("/localization/kinematic_state", "自車位置・姿勢・yaw rate"),
-    RequiredTopic("/localization/acceleration", "縦加速度応答"),
-    RequiredTopic("/control/command/control_cmd", "post-gate 制御指令"),
-)
-
-
-REQUIRED_SIM_LITE_TOPICS: tuple[RequiredTopic, ...] = (
-    RequiredTopic("/system/operation_mode/state", "AUTONOMOUS 区間の切り出し"),
-    RequiredTopic("/vehicle/status/velocity_status", "速度応答"),
-    RequiredTopic("/vehicle/status/steering_status", "操舵応答"),
-    RequiredTopic("/vehicle/status/gear_status", "DRIVE 系区間だけを同定・評価に使うため"),
-    RequiredTopic("/localization/kinematic_state", "自車位置・姿勢・yaw rate"),
-    RequiredTopic("/localization/acceleration", "縦加速度応答"),
-    RequiredTopic("/control/command/control_cmd", "post-gate 制御指令"),
-)
-
-
-def validate_required_topics(
-    present_topics: set[str],
-    requirements: list[RequiredTopic],
-    *,
-    context: str,
-    regeneration_hint: str = "入力 bag / lite bag を再生成してください",
-) -> None:
-    """必須トピックが存在することを検証する。"""
-    missing = [req for req in requirements if req.topic not in present_topics]
-    if not missing:
-        return
-    lines = [f"{context}: 必須トピックが欠損しています:"]
-    lines.extend(f"  - {req.topic}: {req.reason}" for req in missing)
-    lines.append(regeneration_hint)
-    raise MissingRequiredDataError("\n".join(lines))
-
-
 def require_non_empty_df(df: pd.DataFrame, *, name: str, context: str) -> None:
     """DataFrame が空でないことを検証する。"""
     if df.empty:
@@ -82,13 +31,6 @@ def require_columns(df: pd.DataFrame, columns: list[str], *, name: str, context:
     missing = [c for c in columns if c not in df.columns]
     if missing:
         raise DataValidationError(f"{context}: {name} に必須列がありません: {missing}")
-
-
-def require_sample_count(mask: np.ndarray | pd.Series, min_count: int, *, name: str, context: str) -> None:
-    """bool mask の True 数が閾値以上であることを検証する。"""
-    n = int(np.asarray(mask, dtype=bool).sum())
-    if n < min_count:
-        raise MissingRequiredDataError(f"{context}: {name} の有効サンプル数が不足しています ({n} < {min_count})")
 
 
 def asof_values(

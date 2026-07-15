@@ -1,1 +1,1 @@
-# real_log_sim_comparison 共有ユーティリティ (io / events / map / params / config 群)
+"""Numerical helpers used by the reidentify pipeline."""

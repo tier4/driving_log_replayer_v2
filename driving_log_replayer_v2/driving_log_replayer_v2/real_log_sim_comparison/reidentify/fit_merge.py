@@ -1,35 +1,58 @@
 #!/usr/bin/env python3
-"""[Step4a] Optuna warm-start 統合チューニング → tuned_params.yaml。"""
+"""直接同定値を初期値にした横断ロバスト最適化。"""
 from __future__ import annotations
 
-import argparse
+import csv
 from dataclasses import dataclass, field
 import datetime
-import os
+import math
 from pathlib import Path
 import sys
-import traceback
 
 import optuna
 import yaml
 
-from ..lib._collection import discover_collection
 from ..lib._accel_source import normalize_accel_source
-from ..lib._models_config import load_models_doc, resolve_baseline_model
-from ..lib._multi_agg import HORIZONS, WORST_W, acc_score, aggregate_normalized, format_agg, robust_score, steer_score
+from ..lib._multi_agg import HORIZONS, aggregate_normalized, format_agg, robust_score
 from ..lib._parallel import (
-    default_parallel_jobs,
     normalize_parallel_jobs,
     pool_chunksize,
     set_worker_thread_env_defaults,
 )
-from ..lib._vehicle_models import merge_vehicle_model_params
+from ..lib._vehicle_models import get_vehicle_model_spec, merge_vehicle_model_params
 from . import rollout
-from .csv_schema import CACHE_NAME
-from .load_data import build_rollout_data, read_dataset_csv
-from .settings import ROLLOUT_STRIDE, SEARCH_DELAY_CANDIDATES, SEARCH_SPACE_ACC, SEARCH_SPACE_STEER
+from .load_data import build_rollout_data, discover_cached_datasets, read_dataset_csv
+from .model_config import load_model_config, resolve_baseline_model
+from .settings import (
+    ROLLOUT_STRIDE,
+    SEARCH_DELAY_CANDIDATES,
+    SEARCH_SPACE_ACC,
+    SEARCH_SPACE_STEER,
+    TARGET_MODEL_NAME,
+)
 
 _GT_KEYS = ("acc_time_delay", "steer_time_delay", "wheelbase", "sub_dt")
+_RMSE_KEYS = ("pos", "long", "lat", "yaw", "steer", "vx", "ax")
+# Keep the optimization objective on the established sparse horizons, while
+# exporting every available integer N up to the already-required N=100 for the
+# comparison report.  A dataset accepted by the sparse evaluation has valid
+# coverage at N=100, so all smaller horizons are available as well.
+REPORT_HORIZONS = tuple(range(1, max(HORIZONS) + 1))
+_DIRECT_FIT_KEYS = frozenset(
+    {
+        "acc_time_constant",
+        "acc_time_delay",
+        "debug_acc_scaling_factor",
+        "steer_time_constant",
+        "steer_time_delay",
+        "debug_steer_scaling_factor",
+        "steer_dead_band",
+        "steer_bias",
+        "steer_rate_lim",
+        "k_us",
+        "wheelbase",
+    }
+)
 
 
 @dataclass
@@ -38,14 +61,11 @@ class DatasetCtx:
 
     dataset_id: str
     dfs: dict
-    data: dict
     t0_ns: int
     base: dict
     data_cache: dict[str, dict] = field(default_factory=dict)
     gt_cache: dict = field(default_factory=dict)
     base_metric: dict = field(default_factory=dict)
-    n_cmd_samples: int = 0
-    n_drive_samples: int = 0
 
 
 def _ctx_data(ctx: DatasetCtx, acceleration_source: str) -> dict:
@@ -57,6 +77,7 @@ def _ctx_data(ctx: DatasetCtx, acceleration_source: str) -> dict:
 
 def _eval(
     ctx: DatasetCtx, override: dict, model_type: str, acceleration_source: str = "accel",
+    *, horizons: tuple[int, ...] = HORIZONS,
 ) -> dict:
     """1 dataset・1 パラメータ組の horizon 別終端誤差 RMSE {h: {yaw,pos,long,lat,steer}}。"""
     params = merge_vehicle_model_params(ctx.base, override, model_type)
@@ -66,89 +87,144 @@ def _eval(
     gt = ctx.gt_cache.get(key)
     if gt is None:
         gt = rollout._prepare_gt(data, ctx.t0_ns, params)
-        ctx.gt_cache[key] = gt
+        # Delay candidates change between trials. Keeping only the active GT avoids
+        # retaining one large rollout payload for every Optuna trial.
+        ctx.gt_cache = {key: gt}
     rmse = rollout.eval_rollout_rmse(
-        data, ctx.t0_ns, params, model_type, horizons=HORIZONS, stride=ROLLOUT_STRIDE, gt=gt,
+        data, ctx.t0_ns, params, model_type, horizons=horizons, stride=ROLLOUT_STRIDE, gt=gt,
     )
-    return {h: rmse[h] for h in HORIZONS}
+    return {h: rmse[h] for h in horizons}
+
+
+def _rollout_metric_is_finite(
+    metric: dict, horizons: tuple[int, ...] = HORIZONS,
+) -> bool:
+    try:
+        return all(
+            math.isfinite(float(metric[h][key])) and float(metric[h][key]) >= 0.0
+            for h in horizons
+            for key in _RMSE_KEYS
+        )
+    except (KeyError, TypeError, ValueError):
+        return False
+
+
+def _rollout_metric_is_valid(
+    metric: dict, horizons: tuple[int, ...] = HORIZONS,
+) -> bool:
+    if not _rollout_metric_is_finite(metric, horizons):
+        return False
+    try:
+        informative = all(
+            any(float(metric[h][key]) > 0.0 for key in _RMSE_KEYS) for h in horizons
+        )
+    except (KeyError, TypeError, ValueError):
+        return False
+    return informative
 
 
 def _baseline_metric_is_valid(metric: dict) -> bool:
-    return all(metric[h]["yaw"] > 0 and (metric[h]["long"] > 0 or metric[h]["lat"] > 0) for h in HORIZONS)
-
-
-def _baseline_metric_summary(metric: dict) -> str:
-    return "  ".join(
-        f"baseline@N{h} yaw={metric[h]['yaw']:.4f} 縦={metric[h]['long']:.3f} 横={metric[h]['lat']:.3f}"
+    return _rollout_metric_is_valid(metric) and all(
+        float(metric[h]["yaw"]) > 0
+        and (float(metric[h]["long"]) > 0 or float(metric[h]["lat"]) > 0)
         for h in HORIZONS
     )
 
 
-def _gear_metric_summary(ctx: DatasetCtx) -> str:
-    if ctx.n_cmd_samples <= 0:
-        return "gear=0/0"
-    pct = 100.0 * ctx.n_drive_samples / ctx.n_cmd_samples
-    return f"gear DRIVE={ctx.n_drive_samples}/{ctx.n_cmd_samples} ({pct:.1f}%)"
+def _evaluate_report_metrics(
+    ctxs: list[DatasetCtx],
+    *,
+    baseline_params: dict,
+    baseline_model_type: str,
+    baseline_acceleration_source: str,
+    tuned_params: dict,
+    tuned_model_type: str,
+    tuned_acceleration_source: str,
+    horizons: tuple[int, ...] = REPORT_HORIZONS,
+) -> tuple[dict[str, dict], dict[str, dict]]:
+    """Evaluate dense report-only horizons without changing the search score."""
+    baseline_metrics: dict[str, dict] = {}
+    tuned_metrics: dict[str, dict] = {}
+    for ctx in ctxs:
+        baseline_metric = _eval(
+            ctx,
+            baseline_params,
+            baseline_model_type,
+            baseline_acceleration_source,
+            horizons=horizons,
+        )
+        tuned_metric = _eval(
+            ctx,
+            tuned_params,
+            tuned_model_type,
+            tuned_acceleration_source,
+            horizons=horizons,
+        )
+        if not _rollout_metric_is_finite(baseline_metric, horizons):
+            raise RuntimeError(
+                f"レポート用 baseline rollout 指標が不正です: {ctx.dataset_id}"
+            )
+        if not _rollout_metric_is_finite(tuned_metric, horizons):
+            raise RuntimeError(
+                f"レポート用 tuned rollout 指標が不正です: {ctx.dataset_id}"
+            )
+        baseline_metrics[ctx.dataset_id] = baseline_metric
+        tuned_metrics[ctx.dataset_id] = tuned_metric
+    return baseline_metrics, tuned_metrics
+
+
+def _finite_robust_score(aggregate: dict | None) -> float:
+    if aggregate is None:
+        return math.inf
+    score = robust_score(aggregate)
+    return score if math.isfinite(score) and score >= 0.0 else math.inf
 
 
 def _load_dataset_ctx(
     ds_id: str,
     csv_path: Path,
     *,
-    verbose: bool = False,
-    log: bool = True,
     baseline_model_type: str,
-    baseline_params: dict | None = None,
-    baseline_acceleration_source: str = "accel",
-) -> DatasetCtx | None:
-    """1 dataset を読み込み、baseline を検証した DatasetCtx を返す。失敗時は None。"""
+    baseline_params: dict,
+    baseline_acceleration_source: str,
+) -> tuple[DatasetCtx | None, str]:
+    """1 dataset を読み込み、baseline を検証した結果と失敗理由を返す。"""
     try:
         dfs = read_dataset_csv(csv_path)
         data = build_rollout_data(dfs, acceleration_source=baseline_acceleration_source)
         t0_ns = rollout.find_autonomous_start(data)
         base = rollout.build_params()
-        ctx = DatasetCtx(ds_id, dfs, data, t0_ns, base)
+        ctx = DatasetCtx(ds_id, dfs, t0_ns, base)
         ctx.data_cache[normalize_accel_source(baseline_acceleration_source)] = data
         ctx.base_metric = _eval(
             ctx,
-            baseline_params or {},
+            baseline_params,
             baseline_model_type,
             baseline_acceleration_source,
         )
-        if ctx.gt_cache:
-            gt0 = next(iter(ctx.gt_cache.values()))
-            valid_gear = gt0.get("valid_gear_arr", [])
-            ctx.n_cmd_samples = int(len(valid_gear))
-            ctx.n_drive_samples = int(sum(bool(v) for v in valid_gear))
         if not _baseline_metric_is_valid(ctx.base_metric):
-            print(f"[SKIP] {ds_id}: baseline 誤差が無効 (yaw/縦/横≤0 or NaN)", file=sys.stderr)
-            return None
+            reason = "baseline 誤差が無効 (yaw/縦/横≤0 or NaN)"
+            print(f"[SKIP] {ds_id}: {reason}", file=sys.stderr)
+            return None, reason
     except Exception as e:  # noqa: BLE001
-        msg = f"[SKIP] {ds_id}: ロード失敗 ({type(e).__name__}: {e})"
-        if verbose:
-            tb_lines = traceback.format_exc().strip().splitlines()
-            msg += "\n  " + "\n  ".join(tb_lines[-3:])
-        print(msg, file=sys.stderr)
-        return None
-
-    if log:
-        print(f"[load] {ds_id}: {_gear_metric_summary(ctx)}  {_baseline_metric_summary(ctx.base_metric)}")
-    return ctx
+        reason = f"ロード失敗 ({type(e).__name__}: {e})"
+        print(f"[SKIP] {ds_id}: {reason}", file=sys.stderr)
+        return None, reason
+    return ctx, ""
 
 
 # fork プールワーカーが参照する globals。fork 前に親 (load_datasets) がセットし、
 # 子プロセスは COW で読み取り専用に継承する (multiprocessing.Pool.imap はタスクを
 # pickle 転送するため、これらをクロージャで束ねると "can't pickle local object" になる)。
-_LOAD_VERBOSE: bool = False
 _LOAD_BASELINE_MODEL: str = ""
 _LOAD_BASELINE_PARAMS: dict = {}
-_LOAD_BASELINE_ACCEL_SOURCE: str = "accel"
+_LOAD_BASELINE_ACCEL_SOURCE: str = ""
 
 
-def _load_one(args: tuple[str, Path]) -> DatasetCtx | None:
+def _load_one(args: tuple[str, Path]) -> tuple[DatasetCtx | None, str]:
     ds_id, csv_path = args
     return _load_dataset_ctx(
-        ds_id, csv_path, verbose=_LOAD_VERBOSE, log=False,
+        ds_id, csv_path,
         baseline_model_type=_LOAD_BASELINE_MODEL,
         baseline_params=_LOAD_BASELINE_PARAMS,
         baseline_acceleration_source=_LOAD_BASELINE_ACCEL_SOURCE,
@@ -158,31 +234,32 @@ def _load_one(args: tuple[str, Path]) -> DatasetCtx | None:
 def load_datasets(
     tasks: list[tuple[str, Path]],
     n_jobs: int = 1,
-    verbose: bool = False,
     *,
     baseline_model_type: str,
-    baseline_params: dict | None = None,
-    baseline_acceleration_source: str = "accel",
-) -> list[DatasetCtx]:
+    baseline_params: dict,
+    baseline_acceleration_source: str,
+) -> tuple[list[DatasetCtx], list[dict[str, str]]]:
     """収集された CSV キャッシュを読み込み DatasetCtx を構築する (baseline 誤差も計算)。"""
     if n_jobs <= 1:
         ctxs: list[DatasetCtx] = []
+        failures: list[dict[str, str]] = []
         for ds_id, csv_path in tasks:
-            ctx = _load_dataset_ctx(
-                ds_id, csv_path, verbose=verbose, log=verbose,
+            ctx, reason = _load_dataset_ctx(
+                ds_id, csv_path,
                 baseline_model_type=baseline_model_type,
                 baseline_params=baseline_params,
                 baseline_acceleration_source=baseline_acceleration_source,
             )
             if ctx is not None:
                 ctxs.append(ctx)
+            elif reason:
+                failures.append({"dataset_id": ds_id, "reason": reason})
         print(f"[INFO] ロード完了: {len(ctxs)}/{len(tasks)} ({len(tasks) - len(ctxs)} SKIP)", file=sys.stderr)
-        return ctxs
+        return ctxs, failures
 
     import multiprocessing
 
-    global _LOAD_VERBOSE, _LOAD_BASELINE_MODEL, _LOAD_BASELINE_PARAMS, _LOAD_BASELINE_ACCEL_SOURCE  # noqa: PLW0603
-    _LOAD_VERBOSE = verbose
+    global _LOAD_BASELINE_MODEL, _LOAD_BASELINE_PARAMS, _LOAD_BASELINE_ACCEL_SOURCE  # noqa: PLW0603
     _LOAD_BASELINE_MODEL = baseline_model_type
     _LOAD_BASELINE_PARAMS = dict(baseline_params or {})
     _LOAD_BASELINE_ACCEL_SOURCE = normalize_accel_source(baseline_acceleration_source)
@@ -194,352 +271,184 @@ def load_datasets(
         results = list(pool.imap(_load_one, tasks, chunksize=chunksize))
 
     ctxs = []
-    for ctx in results:
+    failures = []
+    for (ctx, reason), (ds_id, _csv_path) in zip(results, tasks):
         if ctx is not None:
             ctxs.append(ctx)
-            if verbose:
-                print(f"[load] {ctx.dataset_id}: {_gear_metric_summary(ctx)}  {_baseline_metric_summary(ctx.base_metric)}")
-    n_skip = sum(1 for r in results if r is None)
+        elif reason:
+            failures.append({"dataset_id": ds_id, "reason": reason})
+    n_skip = len(failures)
     print(f"[INFO] ロード完了: {len(ctxs)}/{len(tasks)} ({n_skip} SKIP)", file=sys.stderr)
-    return ctxs
+    return ctxs, failures
 
 
-# 並列評価サポート (fork プールによる per-(trial × dataset) 並列化)
-
-_CTXS: list[DatasetCtx] = []
-
-
-def _worker_eval_one(args: tuple[int, int, dict, str, str]) -> tuple[int, int, str, dict]:
-    trial_idx, ctx_idx, override, model_type, acceleration_source = args
-    ctx = _CTXS[ctx_idx]
-    metrics = _eval(ctx, override, model_type, acceleration_source)
-    return trial_idx, ctx_idx, ctx.dataset_id, metrics
-
-
-def _eval_grid(
-    pool, ctxs: list[DatasetCtx], trials: list[dict], model_type: str, n_jobs: int = 1,
-    agg_fn=None, acceleration_source: str = "accel",
-) -> list[dict]:
-    baselines = {ctx.dataset_id: ctx.base_metric for ctx in ctxs}
-    _agg = agg_fn if agg_fn is not None else (lambda pm, bs: aggregate_normalized(pm, bs))
-
-    if pool is None:
-        result = []
-        for t in trials:
-            per_ds = [
-                (ctx.dataset_id, _eval(ctx, t, model_type, acceleration_source))
-                for ctx in ctxs
-            ]
-            result.append(_agg(per_ds, baselines))
-        return result
-
-    n_trials = len(trials)
-    n_ctxs = len(ctxs)
-    units = [
-        (ti, ci, trials[ti], model_type, acceleration_source)
-        for ti in range(n_trials)
-        for ci in range(n_ctxs)
+def _evaluate_candidate(
+    ctxs: list[DatasetCtx],
+    params: dict,
+    model_type: str,
+    acceleration_source: str,
+    *,
+    aggregate: bool = True,
+) -> dict | list[tuple[str, dict]] | None:
+    per_dataset = [
+        (ctx.dataset_id, _eval(ctx, params, model_type, acceleration_source))
+        for ctx in ctxs
     ]
-    chunksize = pool_chunksize(len(units), n_jobs)
-    raw = pool.map(_worker_eval_one, units, chunksize=chunksize)
+    if not all(_rollout_metric_is_valid(metric) for _, metric in per_dataset):
+        if aggregate:
+            return None
+        raise RuntimeError("最終パラメータの rollout 指標が不正です")
+    if not aggregate:
+        return per_dataset
+    baselines = {ctx.dataset_id: ctx.base_metric for ctx in ctxs}
+    return aggregate_normalized(per_dataset, baselines)
 
-    per_trial: list[list[tuple[str, dict]]] = [[] for _ in range(n_trials)]
-    for ti, _ci, ds_id, metrics in raw:
-        per_trial[ti].append((ds_id, metrics))
-    return [_agg(pm, baselines) for pm in per_trial]
+
+_SEARCH_CTXS: list[DatasetCtx] = []
+_SEARCH_MODEL = ""
+_SEARCH_ACCEL_SOURCE = ""
 
 
-def _run_worker(
-    worker_id: int, db_url: str, n_trials_w: int, n_trials: int, cur_best: dict,
-    continuous_space: dict, explore_delay: bool, delay_candidates: tuple[float, ...],
-    ctxs_search: list[DatasetCtx], cur_model: str, cur_accel_source: str, score_fn, worst_w: float, out_path,
-) -> None:
-    """fork プールワーカー: SQLite 経由で Optuna study.optimize を並列実行。"""
-    set_worker_thread_env_defaults()
-    study = optuna.load_study(study_name="robust_search", storage=db_url)
-
-    def _checkpoint(params: dict, score: float) -> None:
-        if out_path is None:
-            return
-        tmp = out_path.with_suffix(".tmp")
-        out_path.parent.mkdir(parents=True, exist_ok=True)
-        tmp.write_text(
-            yaml.safe_dump({"params": params, "score": score}, allow_unicode=True, sort_keys=False),
-            encoding="utf-8",
+def _eval_search_candidate(params: dict) -> float:
+    """fork worker entrypoint; dataset data is inherited read-only via COW."""
+    return _finite_robust_score(
+        _evaluate_candidate(
+            _SEARCH_CTXS,
+            params,
+            _SEARCH_MODEL,
+            _SEARCH_ACCEL_SOURCE,
         )
-        tmp.rename(out_path)
-
-    def worker_objective(trial: optuna.Trial) -> float:
-        params = dict(cur_best)
-        for pname, (lo, hi) in continuous_space.items():
-            params[pname] = trial.suggest_float(pname, lo, hi)
-        if explore_delay:
-            params["acc_time_delay"] = trial.suggest_categorical("acc_time_delay", delay_candidates)
-
-        agg = _eval_grid(
-            None, ctxs_search, [params], cur_model, 1, agg_fn=None,
-            acceleration_source=cur_accel_source,
-        )[0]
-        score = score_fn(agg, worst_w=worst_w)
-        try:
-            current_best = study.best_value
-        except ValueError:
-            current_best = float("inf")
-        if score < current_best:
-            _checkpoint(params, score)
-        return score
-
-    study.optimize(worker_objective, n_trials=n_trials_w)
+    )
 
 
 def robust_search(
-    ctxs: list[DatasetCtx], cfg, *, case_name: str = "current", n_trials: int = 200, n_jobs: int = 1,
-    search_subsample: int | None = None, out_path: Path | None = None, extra_enqueue: list[dict] | None = None,
-    worst_w: float = WORST_W, phase: int = 0, phase_fixed_params: dict | None = None,
-    base_override: dict | None = None,
+    ctxs: list[DatasetCtx], cfg, *, n_trials: int = 200, n_jobs: int = 1,
+    phase2_params: dict,
 ) -> dict:
-    """Optuna TPE でデータセット横断ロバスト最適化 (連続値 + 離散 delay)。
+    """Optuna TPE でデータセット横断ロバスト最適化する。"""
+    global _SEARCH_CTXS, _SEARCH_MODEL, _SEARCH_ACCEL_SOURCE  # noqa: PLW0603
 
-    phase: 0=全パラメータ同時最適化(既定), 1=acc のみ/long スコア, 2=steer のみ/yaw+lat スコア。
-    """
-    def _checkpoint(params: dict, score: float) -> None:
-        if out_path is None:
-            return
-        tmp = out_path.with_suffix(".tmp")
-        out_path.parent.mkdir(parents=True, exist_ok=True)
-        tmp.write_text(
-            yaml.safe_dump({"params": params, "score": score}, allow_unicode=True, sort_keys=False),
-            encoding="utf-8",
-        )
-        tmp.rename(out_path)
-
-    ctxs_search = ctxs[:search_subsample] if search_subsample else ctxs
-    cur_case = cfg.find_case(case_name)
+    if n_trials < 1:
+        raise ValueError("n_trials must be at least 1")
+    cur_case = cfg.find_case(TARGET_MODEL_NAME)
     cur_best = dict(cur_case.params)
     cur_model = cur_case.vehicle_model_type
     cur_accel_source = cur_case.acceleration_source
 
-    if search_subsample:
-        print(f"[INFO] search_subsample={search_subsample}: 探索は ctxs[:{min(search_subsample, len(ctxs))}] を使用 (全件={len(ctxs)})。")
-
     delay_candidates = SEARCH_DELAY_CANDIDATES
 
-    if phase == 1:
-        continuous_space: dict[str, tuple[float, float]] = dict(SEARCH_SPACE_ACC)
-        score_fn = acc_score
-        explore_delay = True
-        print("[Phase 1] acc パラメータ最適化 (long スコア)。steer 系は cur_best から固定。")
-    elif phase == 2:
-        continuous_space = dict(SEARCH_SPACE_STEER)
-        score_fn = steer_score
-        explore_delay = False
-        if phase_fixed_params:
-            cur_best.update(phase_fixed_params)
-            print(f"[Phase 2] steer パラメータ最適化 (yaw+lat スコア)。固定 acc params: {phase_fixed_params}")
-    else:
-        continuous_space = {**SEARCH_SPACE_STEER, **SEARCH_SPACE_ACC}
-        score_fn = robust_score
-        explore_delay = True
-
-    if base_override:
-        searched = set(continuous_space) | {"acc_time_delay"}
-        passthrough = {k: v for k, v in base_override.items() if k not in searched}
-        if passthrough:
-            cur_best.update(passthrough)
-            print(f"[Phase {phase}] 直接同定値を透過 (Optuna 非探索): {sorted(passthrough)}")
-
-    acc_delay_set: set[float] = set(delay_candidates) if explore_delay else set()
-    if "acc_time_delay" in cur_best:
-        acc_delay_set.add(float(cur_best["acc_time_delay"]))
-    else:
-        acc_delay_set.add(float(ctxs[0].base["acc_time_delay"]))
-    for ctx in ctxs:
-        for ad in acc_delay_set:
-            merged = dict(ctx.base)
-            merged.update(cur_best)
-            merged["acc_time_delay"] = ad
-            key = tuple(round(float(merged[k]), 9) for k in _GT_KEYS)
-            if key not in ctx.gt_cache:
-                ctx.gt_cache[key] = rollout._prepare_gt(ctx.data, ctx.t0_ns, merged)
+    continuous_space = {**SEARCH_SPACE_STEER, **SEARCH_SPACE_ACC}
+    searched = set(continuous_space) | {"acc_time_delay"}
+    passthrough = {
+        key: value for key, value in phase2_params.items() if key not in searched
+    }
+    cur_best.update(passthrough)
+    if passthrough:
+        print(f"[fit_merge] 直接同定値を透過 (Optuna 非探索): {sorted(passthrough)}")
 
     optuna.logging.set_verbosity(optuna.logging.WARNING)
-    sampler = optuna.samplers.TPESampler(multivariate=True, seed=42)
+    sampler = optuna.samplers.TPESampler(seed=42)
     delay_list = list(delay_candidates)
 
     def _make_enqueue(params: dict) -> dict:
-        eq: dict = {k: float(params[k]) for k in continuous_space if k in params}
-        if explore_delay:
-            if "acc_time_delay" in params:
-                v = float(params["acc_time_delay"])
-                eq["acc_time_delay"] = min(delay_list, key=lambda x: abs(x - v))
-            elif ctxs and "acc_time_delay" in ctxs[0].base:
-                spec_v = float(ctxs[0].base["acc_time_delay"])
-                eq["acc_time_delay"] = min(delay_list, key=lambda x: abs(x - spec_v))
-            else:
-                eq["acc_time_delay"] = delay_list[0]
+        eq = {
+            key: min(upper, max(lower, float(params[key])))
+            for key, (lower, upper) in continuous_space.items()
+            if key in params
+        }
+        value = float(params.get("acc_time_delay", ctxs[0].base["acc_time_delay"]))
+        eq["acc_time_delay"] = min(
+            delay_list, key=lambda candidate: abs(candidate - value)
+        )
         return eq
 
-    if n_jobs <= 1:
-        init_agg = _eval_grid(
-            None, ctxs_search, [cur_best], cur_model, 1, agg_fn=None,
-            acceleration_source=cur_accel_source,
-        )[0]
-        init_score = score_fn(init_agg, worst_w=worst_w)
-        print(f"\n## Optuna TPE ({case_name}, {n_trials} trials, cross-dataset normalized, worst_w={worst_w}, phase={phase})")
-        best_result: dict = {"params": dict(cur_best), "score": init_score, "agg": init_agg}
-        _checkpoint(cur_best, init_score)
+    init_agg = _evaluate_candidate(ctxs, cur_best, cur_model, cur_accel_source)
+    init_score = _finite_robust_score(init_agg)
+    n_workers = normalize_parallel_jobs(n_jobs, n_tasks=n_trials)
+    print(f"\n## Optuna TPE ({TARGET_MODEL_NAME}, {n_trials} trials, {n_workers} jobs)")
 
-        def objective(trial: optuna.Trial) -> float:
-            params = dict(cur_best)
-            for pname, (lo, hi) in continuous_space.items():
-                params[pname] = trial.suggest_float(pname, lo, hi)
-            if explore_delay:
-                params["acc_time_delay"] = trial.suggest_categorical("acc_time_delay", delay_candidates)
-            agg = _eval_grid(
-                None, ctxs_search, [params], cur_model, 1, agg_fn=None,
-                acceleration_source=cur_accel_source,
-            )[0]
-            score = score_fn(agg, worst_w=worst_w)
-            if score < best_result["score"]:
-                best_result.update({"params": dict(params), "score": score, "agg": agg})
-                _checkpoint(params, score)
-            return score
+    study = optuna.create_study(direction="minimize", sampler=sampler)
+    study.enqueue_trial(_make_enqueue(phase2_params))
+    best_params = dict(cur_best)
+    best_score = init_score
 
-        def _log_cb(study: optuna.Study, trial: optuna.trial.FrozenTrial) -> None:
-            if trial.state == optuna.trial.TrialState.COMPLETE:
-                print(f"trial {trial.number + 1:3d}/{n_trials}  score={trial.value:.4f}  best={study.best_value:.4f}  {trial.params}")
-
-        study = optuna.create_study(direction="minimize", sampler=sampler)
-        study.enqueue_trial(_make_enqueue(cur_best))
-        for ep in (extra_enqueue or []):
-            study.enqueue_trial(_make_enqueue(ep))
-        study.optimize(objective, n_trials=n_trials, callbacks=[_log_cb])
-
-        state = best_result["params"]
-        best_s = best_result["score"]
-        _checkpoint(state, best_s)
-
-        if search_subsample and len(ctxs_search) < len(ctxs):
-            print(f"[INFO] 最終 score を全 {len(ctxs)} データセットで評価中...")
-            full_agg = _eval_grid(
-                None, ctxs, [state], cur_model, 1, agg_fn=None,
-                acceleration_source=cur_accel_source,
-            )[0]
-            best_s = score_fn(full_agg, worst_w=worst_w)
-            print(format_agg("FINAL(全件)", full_agg) + f"  score={best_s:.4f}")
-            best_result.update({"score": best_s, "agg": full_agg})
-
-        return {"params": state, "agg": best_result["agg"], "score": best_s}
-
-    import tempfile
-    from multiprocessing import Process
-
-    db_fd, db_path = tempfile.mkstemp(suffix=".db")
-    os.close(db_fd)
-    db_url = f"sqlite:///{db_path}"
-
-    try:
-        init_agg = _eval_grid(
-            None, ctxs_search, [cur_best], cur_model, 1, agg_fn=None,
-            acceleration_source=cur_accel_source,
-        )[0]
-        init_score = score_fn(init_agg, worst_w=worst_w)
-        print(f"\n## Optuna TPE ({case_name}, {n_trials} trials, phase={phase}) [SQLite Process Parallel: {n_jobs} jobs]")
-        _checkpoint(cur_best, init_score)
-
-        study = optuna.create_study(
-            study_name="robust_search", storage=db_url, direction="minimize", sampler=sampler, load_if_exists=True,
+    def _sample(trial: optuna.Trial) -> dict:
+        params = dict(cur_best)
+        for pname, (lo, hi) in continuous_space.items():
+            params[pname] = trial.suggest_float(pname, lo, hi)
+        params["acc_time_delay"] = trial.suggest_categorical(
+            "acc_time_delay", delay_candidates
         )
-        study.enqueue_trial(_make_enqueue(cur_best))
-        for ep in (extra_enqueue or []):
-            study.enqueue_trial(_make_enqueue(ep))
+        return params
 
-        trials_per_worker = [n_trials // n_jobs] * n_jobs
-        for i in range(n_trials % n_jobs):
-            trials_per_worker[i] += 1
+    executor = None
+    completed = 0
+    try:
+        if n_workers > 1:
+            import multiprocessing
+            from concurrent.futures import ProcessPoolExecutor
 
-        processes = []
-        for worker_id, n_trials_w in enumerate(trials_per_worker):
-            if n_trials_w == 0:
-                continue
-            p = Process(
-                target=_run_worker,
-                args=(worker_id, db_url, n_trials_w, n_trials, cur_best, continuous_space, explore_delay,
-                      delay_candidates, ctxs_search, cur_model, cur_accel_source, score_fn, worst_w, out_path),
+            _SEARCH_CTXS = ctxs
+            _SEARCH_MODEL = cur_model
+            _SEARCH_ACCEL_SOURCE = cur_accel_source
+            executor = ProcessPoolExecutor(
+                max_workers=n_workers,
+                mp_context=multiprocessing.get_context("fork"),
+                initializer=set_worker_thread_env_defaults,
             )
-            p.start()
-            processes.append(p)
-        for p in processes:
-            p.join()
+        while completed < n_trials:
+            batch_size = min(n_workers, n_trials - completed)
+            trials = [study.ask() for _ in range(batch_size)]
+            candidates = [_sample(trial) for trial in trials]
+            if executor is None:
+                scores = [
+                    _finite_robust_score(
+                        _evaluate_candidate(ctxs, params, cur_model, cur_accel_source)
+                    )
+                    for params in candidates
+                ]
+            else:
+                scores = list(executor.map(_eval_search_candidate, candidates))
 
-        study = optuna.load_study(study_name="robust_search", storage=db_url)
-        best_trial = study.best_trial
-        best_params = best_trial.params
-        best_s = best_trial.value
-
-        state = dict(cur_best)
-        state.update(best_params)
-
-        print("[INFO] Optuna optimization complete. Re-evaluating best params...")
-        final_agg = _eval_grid(
-            None, ctxs_search, [state], cur_model, 1, agg_fn=None,
-            acceleration_source=cur_accel_source,
-        )[0]
-        _checkpoint(state, best_s)
-
-        if search_subsample and len(ctxs_search) < len(ctxs):
-            print(f"[INFO] 最終 score を全 {len(ctxs)} データセットで評価中...")
-            full_agg = _eval_grid(
-                None, ctxs, [state], cur_model, 1, agg_fn=None,
-                acceleration_source=cur_accel_source,
-            )[0]
-            best_s = score_fn(full_agg, worst_w=worst_w)
-            print(format_agg("FINAL(全件)", full_agg) + f"  score={best_s:.4f}")
-            final_agg = full_agg
-
-        return {"params": state, "agg": final_agg, "score": best_s}
+            for trial, params, score in zip(trials, candidates, scores):
+                study.tell(trial, score)
+                if score < best_score:
+                    best_params = dict(params)
+                    best_score = score
+                completed += 1
+                print(
+                    f"trial {trial.number + 1:3d}/{n_trials}  score={score:.4f}  "
+                    f"best={best_score:.4f}  {trial.params}"
+                )
     finally:
-        try:
-            if os.path.exists(db_path):
-                os.remove(db_path)
-        except Exception as e:
-            print(f"[WARN] Failed to delete temp database {db_path}: {e}")
+        if executor is not None:
+            executor.shutdown()
+        _SEARCH_CTXS = []
+        _SEARCH_MODEL = ""
+        _SEARCH_ACCEL_SOURCE = ""
 
-
-def _discover(collection_dir: Path) -> list[tuple[str, Path]]:
-    """収集ディレクトリ配下の CSV キャッシュ (reidentify_cache.csv) を列挙する。"""
-    result = []
-    for e in discover_collection(collection_dir):
-        if e.dir is None:
-            continue
-        csv_path = e.dir / CACHE_NAME
-        if csv_path.exists():
-            result.append((e.dataset_id, csv_path))
-    return result
+    if not math.isfinite(best_score):
+        raise RuntimeError("全ての探索候補で有限な rollout 指標を計算できませんでした")
+    return best_params
 
 
 def fit_merge(
     collection_dir: Path,
     scenario: Path,
     *,
-    case: str = "current",
-    phase: int = 0,
-    phase2_params: dict | None = None,
+    phase2_params: dict,
     n_trials: int = 50,
     n_jobs: int = 1,
-    search_subsample: int | None = None,
-    worst_w: float = WORST_W,
-    verbose: bool = False,
-    out_path: Path | None = None,
+    metrics_out: Path,
 ) -> dict:
-    tasks = _discover(collection_dir)
+    tasks = discover_cached_datasets(collection_dir)
     if not tasks:
-        raise RuntimeError(f"CSV キャッシュが見つかりません: {collection_dir} (先に extract.py を実行してください)")
+        raise RuntimeError(f"CSV キャッシュが見つかりません: {collection_dir}")
 
-    cfg = load_models_doc(scenario)
+    cfg = load_model_config(scenario)
     baseline_model_type, baseline_params, baseline_case = resolve_baseline_model(cfg)
     baseline_accel_source = cfg.models[baseline_case].acceleration_source
-    cur_case = cfg.find_case(case)
+    cur_case = cfg.find_case(TARGET_MODEL_NAME)
     cur_model = cur_case.vehicle_model_type
     print(
         f"[INFO] baseline model = {baseline_model_type} "
@@ -547,15 +456,14 @@ def fit_merge(
     )
     print(
         f"[INFO] current model  = {cur_model} "
-        f"('{case}' ケース, accel_source={cur_case.acceleration_source})"
+        f"('{TARGET_MODEL_NAME}' ケース, accel_source={cur_case.acceleration_source})"
     )
 
     set_worker_thread_env_defaults()
 
-    ctxs = load_datasets(
+    ctxs, fit_skipped = load_datasets(
         tasks,
         n_jobs=n_jobs,
-        verbose=verbose,
         baseline_model_type=baseline_model_type,
         baseline_params=baseline_params,
         baseline_acceleration_source=baseline_accel_source,
@@ -563,36 +471,34 @@ def fit_merge(
     if len(ctxs) < 1:
         raise RuntimeError("有効な dataset が 0 件です")
 
-    global _CTXS  # noqa: PLW0603
-    _CTXS = ctxs
-
-    phase_fixed_params: dict | None = None
-    base_override: dict | None = None
-    extra_enqueue: list[dict] | None = None
-    if phase2_params:
-        base_override = dict(phase2_params)
-        acc_keys = {"acc_time_constant", "acc_time_delay"}
-        phase_fixed_params = {k: v for k, v in base_override.items() if k in acc_keys} if phase == 2 else {}
-        extra_enqueue = [dict(phase2_params)]
-
-    result = robust_search(
-        ctxs, cfg, case_name=case, n_trials=n_trials, n_jobs=n_jobs, search_subsample=search_subsample,
-        out_path=out_path, extra_enqueue=extra_enqueue, worst_w=worst_w, phase=phase,
-        phase_fixed_params=phase_fixed_params, base_override=base_override,
+    tuned_params = robust_search(
+        ctxs, cfg, n_trials=n_trials, n_jobs=n_jobs, phase2_params=phase2_params,
     )
     # 1. Evaluate baseline
-    from ..lib._multi_agg import robust_score as score_fn
     baselines = {ctx.dataset_id: ctx.base_metric for ctx in ctxs}
     baseline_metrics = [(ctx.dataset_id, ctx.base_metric) for ctx in ctxs]
     baseline_agg = aggregate_normalized(baseline_metrics, baselines)
-    baseline_score = score_fn(baseline_agg, worst_w=worst_w)
+    baseline_score = _finite_robust_score(baseline_agg)
 
     # 2. Evaluate tuned (current)
-    tuned_params = result["params"]
-    full_tuned_params = dict(cur_case.params)
-    full_tuned_params.update(tuned_params)
-    tuned_agg = result["agg"]
-    tuned_score = result["score"]
+    merged_tuned_params = merge_vehicle_model_params(ctxs[0].base, tuned_params, cur_model)
+    model_keys = get_vehicle_model_spec(cur_model).param_keys
+    full_tuned_params = {
+        key: merged_tuned_params[key]
+        for key in sorted(model_keys)
+        if key in merged_tuned_params
+    }
+    tuned_metrics_list = _evaluate_candidate(
+        ctxs,
+        full_tuned_params,
+        cur_model,
+        cur_case.acceleration_source,
+        aggregate=False,
+    )
+    tuned_agg = aggregate_normalized(tuned_metrics_list, baselines)
+    tuned_score = _finite_robust_score(tuned_agg)
+    if not math.isfinite(tuned_score):
+        raise RuntimeError("最終パラメータで有限な rollout 指標を計算できませんでした")
 
     comparison_results = {}
 
@@ -607,31 +513,6 @@ def fit_merge(
         "by_h": clean_agg(baseline_agg),
         "acceleration_source": baseline_accel_source,
     }
-
-    for spec in cfg.comparison_models:
-        name = spec.name
-        if name == baseline_case or name == case:
-            continue
-        try:
-            h_model_type = spec.vehicle_model_type
-            if h_model_type is None:
-                continue
-            full_h_params = dict(spec.params)
-
-            # Evaluate using _eval_grid
-            h_agg = _eval_grid(
-                None, ctxs, [full_h_params], h_model_type, 1, agg_fn=None,
-                acceleration_source=spec.acceleration_source,
-            )[0]
-            h_score = score_fn(h_agg, worst_w=worst_w)
-
-            comparison_results[name] = {
-                "score": float(h_score),
-                "by_h": clean_agg(h_agg),
-                "acceleration_source": spec.acceleration_source,
-            }
-        except Exception as e:
-            print(f"[WARN] Failed to evaluate historical model {name}: {e}", file=sys.stderr)
 
     comparison_results["tuned"] = {
         "score": float(tuned_score),
@@ -648,64 +529,111 @@ def fit_merge(
         print(f"  {format_agg(name, dummy_agg)}  score={data['score']:.4f}")
     print("=" * 72 + "\n")
 
+    print(
+        f"[INFO] レポート用 rollout を N={REPORT_HORIZONS[0]}.."
+        f"{REPORT_HORIZONS[-1]} で評価"
+    )
+    report_baselines, report_tuned = _evaluate_report_metrics(
+        ctxs,
+        baseline_params=baseline_params,
+        baseline_model_type=baseline_model_type,
+        baseline_acceleration_source=baseline_accel_source,
+        tuned_params=full_tuned_params,
+        tuned_model_type=cur_model,
+        tuned_acceleration_source=cur_case.acceleration_source,
+    )
+
+    fieldnames = [
+        "dataset_id",
+        "model",
+        "horizon",
+        "pos",
+        "long",
+        "lat",
+        "yaw",
+        "steer",
+        "vx",
+        "ax",
+    ]
+    metrics_out.parent.mkdir(parents=True, exist_ok=True)
+    with metrics_out.open("w", encoding="utf-8", newline="") as stream:
+        writer = csv.DictWriter(stream, fieldnames=fieldnames)
+        writer.writeheader()
+        for ctx in ctxs:
+            for model, per_horizon in (
+                ("baseline", report_baselines[ctx.dataset_id]),
+                ("tuned", report_tuned[ctx.dataset_id]),
+            ):
+                for horizon in REPORT_HORIZONS:
+                    writer.writerow(
+                        {
+                            "dataset_id": ctx.dataset_id,
+                            "model": model,
+                            "horizon": horizon,
+                            **{
+                                metric: float(per_horizon[horizon][metric])
+                                for metric in fieldnames[3:]
+                            },
+                        }
+                    )
+    print(f"[INFO] dataset別 metrics 保存: {metrics_out}")
+
     return {
         "params": full_tuned_params,
-        "score": result["score"],
+        "score": float(tuned_score),
         "comparison": comparison_results,
         "metadata": {
             "collection_dir": str(collection_dir),
             "n_datasets": len(tasks),
             "n_valid": len(ctxs),
             "scenario": str(scenario),
+            "vehicle_model_type": cur_model,
+            "score_horizons": list(HORIZONS),
+            "report_horizons": list(REPORT_HORIZONS),
+            "skipped": fit_skipped,
             "timestamp": datetime.datetime.now().isoformat(timespec="seconds"),
         },
     }
 
 
 def run(
-    collection_dir: Path, scenario: Path, out: Path, *, case: str = "current", phase: int = 0,
-    phase2_params_path: Path | None = None, n_trials: int = 50, n_jobs: int = 1,
-    search_subsample: int | None = None, worst_w: float = WORST_W, verbose: bool = False,
+    collection_dir: Path, scenario: Path, out: Path, *,
+    phase2_params_path: Path, metrics_out: Path,
+    n_trials: int = 50, n_jobs: int = 1,
 ) -> dict:
-    phase2_params: dict = {}
-    if phase2_params_path is not None and phase2_params_path.exists():
-        with phase2_params_path.open("r") as f:
-            data = yaml.safe_load(f)
-        phase2_params = dict(data.get("params", data))
-        print(f"[fit_merge] 直接同定値を warm-start / passthrough に使用: {phase2_params_path}")
+    if not phase2_params_path.is_file():
+        raise FileNotFoundError(f"直接同定結果が見つかりません: {phase2_params_path}")
+    with phase2_params_path.open("r", encoding="utf-8") as stream:
+        data = yaml.safe_load(stream)
+    if not isinstance(data, dict) or not isinstance(data.get("params"), dict):
+        raise ValueError(f"直接同定結果の params が不正です: {phase2_params_path}")
+    phase2_params = dict(data["params"])
+    missing = _DIRECT_FIT_KEYS - phase2_params.keys()
+    if missing:
+        raise ValueError(f"直接同定結果に必須 params がありません: {sorted(missing)}")
+    invalid = []
+    for key in _DIRECT_FIT_KEYS:
+        value = phase2_params[key]
+        valid = (
+            isinstance(value, (int, float))
+            and not isinstance(value, bool)
+            and math.isfinite(float(value))
+        )
+        if not valid:
+            invalid.append(key)
+    if invalid:
+        raise ValueError(f"直接同定結果の params が有限数値ではありません: {sorted(invalid)}")
+    metadata = data.get("metadata")
+    if not isinstance(metadata, dict) or metadata.get("phase") != 2:
+        raise ValueError(f"直接同定結果の metadata.phase は 2 である必要があります: {phase2_params_path}")
+    print(f"[fit_merge] 直接同定値を warm-start / passthrough に使用: {phase2_params_path}")
 
     out.parent.mkdir(parents=True, exist_ok=True)
     result = fit_merge(
-        collection_dir, scenario, case=case, phase=phase, phase2_params=phase2_params,
-        n_trials=n_trials, n_jobs=n_jobs, search_subsample=search_subsample, worst_w=worst_w,
-        verbose=verbose, out_path=out,
+        collection_dir, scenario, phase2_params=phase2_params,
+        n_trials=n_trials, n_jobs=n_jobs, metrics_out=metrics_out,
     )
-    with out.open("w") as f:
-        yaml.safe_dump(result, f, allow_unicode=True, sort_keys=False)
+    with out.open("w", encoding="utf-8") as stream:
+        yaml.safe_dump(result, stream, allow_unicode=True, sort_keys=False)
     print(f"[INFO] FINAL params 保存: {out}")
     return result
-
-
-def main() -> None:
-    ap = argparse.ArgumentParser(description="Optuna warm-start 統合チューニング (Step4a)")
-    ap.add_argument("--collection-dir", type=Path, required=True)
-    ap.add_argument("--scenario", type=Path, required=True)
-    ap.add_argument("--case", default="current")
-    ap.add_argument("--phase", type=int, default=0, choices=[0, 1, 2])
-    ap.add_argument("--phase-params", type=Path, default=None, help="Step3 (fit_steer) の出力 YAML (warm-start兼passthrough)")
-    ap.add_argument("--n-trials", type=int, default=50)
-    ap.add_argument("--jobs", type=int, default=default_parallel_jobs())
-    ap.add_argument("--search-subsample", type=int, default=None)
-    ap.add_argument("--worst-weight", type=float, default=WORST_W)
-    ap.add_argument("--verbose", action="store_true")
-    ap.add_argument("--out", type=Path, required=True)
-    args = ap.parse_args()
-    run(
-        args.collection_dir, args.scenario, args.out, case=args.case, phase=args.phase,
-        phase2_params_path=args.phase_params, n_trials=args.n_trials, n_jobs=normalize_parallel_jobs(args.jobs),
-        search_subsample=args.search_subsample, worst_w=args.worst_weight, verbose=args.verbose,
-    )
-
-
-if __name__ == "__main__":
-    main()

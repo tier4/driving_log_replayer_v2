@@ -1,49 +1,18 @@
-"""Shared parallelism helpers for real_log_sim_comparison.
-
-All scripts should resolve their worker count through this module so CLI defaults,
-environment overrides, pool sizing, and chunk sizing stay consistent.
-"""
+"""Process-pool sizing helpers for reidentify."""
 
 from __future__ import annotations
 
 import os
 
-PARALLEL_JOBS_ENV = "REAL_LOG_SIM_COMPARISON_JOBS"
-
-
-def _cpu_count() -> int:
-    return max(1, os.cpu_count() or 1)
-
-
-def default_parallel_jobs(*, cap: int | None = None) -> int:
-    """Return the shared default worker count.
-
-    `REAL_LOG_SIM_COMPARISON_JOBS` overrides CPU count when set to a positive
-    integer. `cap` can keep lightweight commands conservative.
-    """
-    raw = os.environ.get(PARALLEL_JOBS_ENV)
-    if raw:
-        try:
-            value = int(raw)
-        except ValueError:
-            value = _cpu_count()
-    else:
-        value = _cpu_count()
-    value = max(1, value)
-    if cap is not None:
-        value = min(value, max(1, int(cap)))
-    return value
-
-
 def normalize_parallel_jobs(
-    n_jobs: int | None,
+    n_jobs: int,
     *,
     n_tasks: int | None = None,
-    default: int | None = None,
 ) -> int:
-    """Normalize and optionally clamp worker count to task count."""
-    value = int(n_jobs) if n_jobs and int(n_jobs) > 0 else (default or default_parallel_jobs())
-    value = max(1, value)
+    """Validate and optionally clamp worker count to task count."""
+    value = int(n_jobs)
+    if value < 1:
+        raise ValueError("n_jobs must be at least 1")
     if n_tasks is not None:
         value = min(value, max(1, int(n_tasks)))
     return value

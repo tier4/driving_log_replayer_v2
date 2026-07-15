@@ -1,4 +1,4 @@
-"""Acceleration source helpers shared by reidentify and report evaluation."""
+"""Acceleration source helpers used by reidentify."""
 
 from __future__ import annotations
 
@@ -160,24 +160,3 @@ def accel_on_grid(
         (acc_df["t_ns"].to_numpy(dtype=float) - t0_ns) * 1e-9,
         acc_df["accel"].to_numpy(dtype=float),
     )
-
-
-def rollout_data_with_accel_source(data: dict[str, pd.DataFrame], source: str) -> dict[str, pd.DataFrame]:
-    """Return rollout data with data['acc'] replaced by the selected source."""
-    source = normalize_accel_source(source)
-    if source == "accel":
-        return data
-    acc = accel_dataframe_from_source(
-        source,
-        df_accel=data["acc"],
-        df_vel=data["vel"],
-        df_kin=data["kin"],
-        accel_col="ax",
-        velocity_col="vx",
-        kin_vx_col="vx",
-        out_col="ax",
-    )
-    acc["ay"] = 0.0
-    out = dict(data)
-    out["acc"] = acc[["t_ns", "ax", "ay"]]
-    return out

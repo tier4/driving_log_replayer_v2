@@ -299,7 +299,10 @@ def eval_rollout_rmse(
     for i, h in enumerate(sorted_horizons):
         valid_mask = ~np.isnan(sim_x[:, i])
         if not np.any(valid_mask):
-            res[h] = {"pos": 0.0, "long": 0.0, "lat": 0.0, "yaw": 0.0, "steer": 0.0, "vx": 0.0, "ax": 0.0}
+            res[h] = {
+                metric: float("inf")
+                for metric in ("pos", "long", "lat", "yaw", "steer", "vx", "ax")
+            }
             continue
 
         mx, my, myaw = sim_x[valid_mask, i], sim_y[valid_mask, i], sim_yaw[valid_mask, i]

@@ -22,4 +22,3 @@ driving_log_replayer_v2 を用いてどのような評価を行えるか述べ�
 - [Time Step Based Trajectory](time_step_based_trajectory.ja.md)
 - [Perception FP](perception_fp.ja.md)
 - [Perception Reproducer](perception_reproducer.ja.md)
-- [Real Log / Sim Comparison](real_log_sim_comparison.ja.md)

@@ -1,18 +1,20 @@
 #!/usr/bin/env python3
-"""[Step2] 縦方向モデルの直接同定 → phase1_acc.yaml。"""
+"""縦方向モデルの直接同定。"""
 from __future__ import annotations
 
-import argparse
 from concurrent.futures import ProcessPoolExecutor, as_completed
 from pathlib import Path
+import sys
 
 import numpy as np
 import yaml
 
 from . import fit_core
-from ..lib._parallel import default_parallel_jobs, normalize_parallel_jobs
+from ..lib._accel_source import ACCEL_DELAY_MAP
+from ..lib._parallel import normalize_parallel_jobs
 from .load_data import build_resampled, discover_cached_datasets, read_dataset_csv
 from .settings import (
+    ACCEL_SOURCE,
     ACC_SCALE_BOUNDS,
     LONG_DA_THRESH,
     LONG_DELAY_GRID,
@@ -22,8 +24,6 @@ from .settings import (
     LONG_VX_MIN,
     MIN_FIT_SAMPLES,
     RESAMPLE_DT,
-    ACCEL_SOURCE,
-    ACCEL_DELAY_MAP,
 )
 
 
@@ -54,6 +54,14 @@ def _fit_one(ds: dict) -> tuple[float, float, float] | None:
     return fit["tau"], corrected_delay, fit["scale"]
 
 
+def _process_one(task: tuple[str, Path]) -> tuple[bool, tuple[float, float, float] | None]:
+    """CSV load・resample・直接同定を同じ worker 内で完結させる。"""
+    dataset = _load_one(task)
+    if dataset is None:
+        return False, None
+    return True, _fit_one(dataset)
+
+
 
 def fit_lon(collection_dir: Path, *, n_jobs: int = 1) -> dict:
     """collection 配下の全 CSV キャッシュから縦方向モデルを直接同定する。"""
@@ -61,37 +69,31 @@ def fit_lon(collection_dir: Path, *, n_jobs: int = 1) -> dict:
     n_workers = normalize_parallel_jobs(n_jobs, n_tasks=len(tasks))
     print(f"[fit_lon] データセット並列ロード ({len(tasks)} 件)...")
 
-    datasets: list[dict] = []
+    n_valid = 0
+    fit_results: list[tuple[float, float, float]] = []
     with ProcessPoolExecutor(max_workers=n_workers) as pool:
-        futs = [pool.submit(_load_one, t) for t in tasks]
-        for fut in as_completed(futs):
-            r = fut.result()
-            if r is not None:
-                datasets.append(r)
+        futures = {pool.submit(_process_one, task): task[0] for task in tasks}
+        for future in as_completed(futures):
+            try:
+                loaded, result = future.result()
+            except Exception as exc:  # noqa: BLE001 (dataset-local input failure)
+                print(f"[fit_lon] SKIP {futures[future]}: {exc}", file=sys.stderr)
+                continue
+            if loaded:
+                n_valid += 1
+            if result is not None:
+                fit_results.append(result)
 
-    print(f"有効データセット数: {len(datasets)}")
-    if not datasets:
-        raise RuntimeError("有効なデータセットが 0 件です (先に extract.py を実行してください)。")
+    print(f"有効データセット数: {n_valid}")
+    if n_valid == 0:
+        raise RuntimeError("同定に使えるデータセットが 0 件です。")
 
-    taus: list[float] = []
-    delays: list[float] = []
-    scales: list[float] = []
-    n_workers = normalize_parallel_jobs(n_jobs, n_tasks=len(datasets))
-    with ProcessPoolExecutor(max_workers=n_workers) as pool:
-        futs = [pool.submit(_fit_one, ds) for ds in datasets]
-        for fut in as_completed(futs):
-            res = fut.result()
-            if res is not None:
-                tau, delay, scale = res
-                taus.append(tau)
-                delays.append(delay)
-                scales.append(scale)
-
-    if not taus:
+    if not fit_results:
         raise RuntimeError(
             "縦方向の動的条件を満たすデータがありません "
             f"(各 dataset {MIN_FIT_SAMPLES} samples 以上が必要)。"
         )
+    taus, delays, scales = map(np.asarray, zip(*fit_results))
 
     params = {
         "acc_time_constant": float(np.clip(np.median(taus), *LONG_RESULT_TAU_BOUNDS)),
@@ -104,11 +106,10 @@ def fit_lon(collection_dir: Path, *, n_jobs: int = 1) -> dict:
 
     return {
         "params": params,
-        "score": 0.0,
         "metadata": {
             "collection_dir": str(collection_dir),
             "n_datasets": len(tasks),
-            "n_valid": len(datasets),
+            "n_valid": n_valid,
             "tuning_type": "physical_direct_fit",
             "phase": 1,
         },
@@ -122,16 +123,3 @@ def run(collection_dir: Path, out: Path, *, n_jobs: int = 1) -> dict:
         yaml.safe_dump(result, f, allow_unicode=True, sort_keys=False)
     print(f"✓ パラメータ保存完了: {out}")
     return result
-
-
-def main() -> None:
-    ap = argparse.ArgumentParser(description="縦方向モデルの直接同定 (Step2)")
-    ap.add_argument("--collection-dir", type=Path, required=True)
-    ap.add_argument("--out", type=Path, required=True)
-    ap.add_argument("--n-jobs", type=int, default=default_parallel_jobs())
-    args = ap.parse_args()
-    run(args.collection_dir, args.out, n_jobs=normalize_parallel_jobs(args.n_jobs))
-
-
-if __name__ == "__main__":
-    main()

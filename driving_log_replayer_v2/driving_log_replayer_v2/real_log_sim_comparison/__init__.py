@@ -1,1 +1,1 @@
-# real_log_sim_comparison analysis module
+"""Dedicated raw-log vehicle-model reidentification tool."""

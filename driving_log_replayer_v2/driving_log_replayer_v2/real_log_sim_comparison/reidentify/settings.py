@@ -1,15 +1,10 @@
-"""Shared settings for the simplified reidentify pipeline."""
+"""Shared settings for the reidentify pipeline."""
 from __future__ import annotations
 
-from pathlib import Path
-
-from ..lib._accel_source import ACCEL_DELAY_MAP, ACCEL_SAVGOL_POLYORDER, ACCEL_SAVGOL_WINDOW_S
-
 DEFAULT_OUTPUT_DIR_NAME = "reidentify"
-DEFAULT_INPUT_PARAM = Path(
-    "/home/kotaroyoshimoto/workspace/x2_e2e_44/src/description/vehicle/"
-    "j6_gen2_description/j6_gen2_description/config/simulator_model.param.yaml"
-)
+BASELINE_MODEL_NAME = "baseline"
+TARGET_MODEL_NAME = "current"
+TARGET_MODEL_TYPE = "delay_steer_acc_geared_for_diffusion_planner"
 
 RESAMPLE_DT = 0.01
 ROLLOUT_SUB_DT = 1.0 / 30.0
@@ -47,7 +42,7 @@ K_US_CLIP = 0.05
 
 SEARCH_DELAY_CANDIDATES = (0.0, 0.05, 0.10, 0.15, 0.20, 0.30, 0.40, 0.50)
 SEARCH_SPACE_ACC = {
-    "acc_time_constant": (0.05, 0.30),
+    "acc_time_constant": LONG_RESULT_TAU_BOUNDS,
     "debug_acc_scaling_factor": (0.80, 1.20),
 }
 
@@ -59,38 +54,13 @@ SEARCH_SPACE_STEER = {
     "steer_bias": (-0.01, 0.01),
 }
 
-REPORT_SAMPLE_DATASETS = 5
-REPORT_MAX_PLOT_DATASETS = 3
-REPORT_PLOT_WINDOW_S = 60.0
-REPORT_VALID_ACC_TAU_BOUNDS = (0.05, 1.0)
-REPORT_VALID_STEER_TAU_BOUNDS = (0.02, 1.0)
-
 ROLLING_SMOOTH_WINDOW_S = 0.3
 KINEMATIC_STEER_VX_MIN = 0.5
 BAD_INTERVAL_MIN_S = 0.001
 BAD_INTERVAL_MAX_S = 1.0
 ROLL_OUT_CONTEXT = "reidentify.rollout"
 
-TAIGA_DYN_DEFAULTS = {
-    "mass": 6560.0,
-    "inertia_z": 25868.2318,
-    "cg_offset_x": -0.94323,
-    "cornering_stiffness_front": 115830.0,
-    "cornering_stiffness_rear": 535860.0,
-    "vx_min_dyn": 1.0,
-}
-TAIGA_X_DEFAULTS = {
-    "track_width": 1.754,
-    "mass": 6560.0,
-    "inertia_z": 25868.2318,
-    "cg_offset_x": -0.94323,
-    "max_accel": 2.3,
-    "max_brake": 5.9,
-    "wheel_radius": 0.3725,
-    "taiga_x_fixed_dt": 1.0 / 1200.0,
-}
-
-RELEASE_MODEL_KEY = "delay_steer_acc_geared_for_diffusion_planner"
+RELEASE_MODEL_KEY = TARGET_MODEL_TYPE
 
 # Differentiated velocity source for longitudinal acceleration fitting.
 ACCEL_SOURCE = "kinematic_savgol"

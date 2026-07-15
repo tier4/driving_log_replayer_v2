@@ -30,21 +30,14 @@ _SIM_YAML = _DESC_DIR / "simulator_model.param.yaml"
 _INFO_YAML = _DESC_DIR / "vehicle_info.param.yaml"
 
 
-def load_sim_params(params_dir: Path | None = None) -> dict:
+def load_sim_params() -> dict:
     """
     simulator_model.param.yaml + vehicle_info.param.yaml から主要パラメータを返す。
 
-    params_dir: vehicle_info.param.yaml と simulator_model.param.yaml が置かれたディレクトリ。
-                None の場合は既定の j6_gen2_description/config/ を使用。
     YAML が読めない場合はフォールバック値を使用。
     """
-    if params_dir is not None:
-        d = Path(params_dir)
-        yaml_files = (d / "simulator_model.param.yaml", d / "vehicle_info.param.yaml")
-    else:
-        yaml_files = (_SIM_YAML, _INFO_YAML)
     params: dict = {}
-    for yaml_path in yaml_files:
+    for yaml_path in (_SIM_YAML, _INFO_YAML):
         try:
             import yaml  # PyYAML or ruamel.yaml
 

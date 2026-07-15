@@ -1,13 +1,4 @@
-"""データセット横断の正規化集約・ロバストスコア (multi_dataset_tune / step13 の共有純関数).
-
-per-dataset の N-step 終端誤差 RMSE (yaw/縦/横) を baseline 比で正規化してから
-dataset 横断の mean / worst(max) を取る。生の deg/cm は baseline 誤差の大きい dataset が
-支配し「全 dataset で良い」を達成できないため (= ロバスト化の核心)。
-
-正規化 baseline は cases.yaml の overlay.reference_tag ケース (無補正 delay モデル相当) の
-per-dataset メトリクスとする。rollout を伴わない集計 (step13) と rollout を伴う同定
-(multi_dataset_tune) の両方が同じ定義を共有する。
-"""
+"""Cross-dataset normalized scores used by reidentify optimization."""
 
 from __future__ import annotations
 
@@ -20,13 +11,7 @@ YAW_FLOOR  = {10: 0.06, 20: 0.12, 30: 0.18, 40: 0.24, 100: 1.0}    # deg
 LONG_FLOOR = {10: 1.0,  20: 2.0,  30: 3.25, 40: 4.5,  100: 50.0}  # cm
 LAT_FLOOR  = {10: 0.3,  20: 0.6,  30: 0.9,  40: 1.2,  100: 15.0}   # cm
 
-WORST_W = 0.5  # worst-case 項の重み (mean+worst 両方を balance する方針)
 POS_W = 0.5    # 縦・横 各成分の重み。pos を縦横に分けても yaw:位置 = 1:1 を維持する
-
-VX_FLOOR = {10: 0.02, 20: 0.04, 30: 0.06, 40: 0.08, 100: 0.12, 200: 0.15}  # m/s
-
-STEER_FLOOR = {10: 0.05, 20: 0.10, 30: 0.15, 40: 0.20, 100: 0.40, 200: 0.80}  # deg
-
 
 def normalize_components(m: dict, baseline: dict, h: int) -> dict:
     """1 dataset・1 horizon の誤差 RMSE をフロアクリップ付き baseline 比で正規化する。
@@ -52,7 +37,7 @@ def aggregate_normalized(
     """Dataset 横断で per-dataset 正規化した yaw/縦/横の mean と worst(max) を horizon 別に返す。
 
     per_ds_metrics: [(dataset_id, {h: {"yaw","long","lat"}})] — 評価対象の per-DS 誤差。
-    baselines: {dataset_id: {h: {"yaw","long","lat"}}} — 正規化基準 (reference_tag ケース)。
+    baselines: {dataset_id: {h: {"yaw","long","lat"}}} — baseline model の正規化基準。
     返り値:
       per_ds: [{dataset_id, by_h: {h: {yaw,long,lat, nyaw,nlong,nlat}}}]
       by_h:   {h: {nyaw_mean,nyaw_worst, nlong_mean,nlong_worst, nlat_mean,nlat_worst}}
@@ -84,112 +69,33 @@ def aggregate_normalized(
 def robust_score(
     agg: dict,
     horizons: tuple[int, ...] = HORIZONS,
-    worst_w: float = WORST_W,
 ) -> float:
     """ロバスト目的関数: 全 horizon の正規化 mean + worst (yaw + 0.5·縦 + 0.5·横)。小さいほど良い。
 
     horizon を等重みで集約する。縦・横は各 POS_W 倍で合算し yaw:位置 = 1:1 に保つ
     (pos を縦横へ分割しても yaw の相対重みが半減しないようにする)。mean だけだと縦/横の mean を
     稼ぐ proxy が特定エリアの worst を悪化させても採用されてしまうため、worst を重み付きで加えて
-    mean と worst を両立させる。worst_w でチューニング時に重みを調整できる (default=WORST_W=0.5)。
+    mean と worst を両立させる。worst-case 項の重みは 0.5 とする。
     """
     s = 0.0
     for h in horizons:
         b = agg["by_h"][h]
         s += b["nyaw_mean"] + POS_W * (b["nlong_mean"] + b["nlat_mean"])
-        s += worst_w * (b["nyaw_worst"] + POS_W * (b["nlong_worst"] + b["nlat_worst"]))
+        s += 0.5 * (b["nyaw_worst"] + POS_W * (b["nlong_worst"] + b["nlat_worst"]))
     return s
-
-
-def steer_score(
-    agg: dict,
-    horizons: tuple[int, ...] = HORIZONS,
-    worst_w: float = WORST_W,
-) -> float:
-    """ステアパラメータ専用スコア: yaw + lat のみ (long は無視)。小さいほど良い。
-
-    2フェーズ独立チューニングの Phase 2 用。long⊥steer が成立するため long を除外する。
-    """
-    s = 0.0
-    for h in horizons:
-        b = agg["by_h"][h]
-        s += b["nyaw_mean"] + POS_W * b["nlat_mean"]
-        s += worst_w * (b["nyaw_worst"] + POS_W * b["nlat_worst"])
-    return s
-
-
-def acc_score(
-    agg: dict,
-    horizons: tuple[int, ...] = HORIZONS,
-    worst_w: float = WORST_W,
-) -> float:
-    """加速度パラメータ専用スコア: long のみ (yaw/lat は無視)。小さいほど良い。
-
-    2フェーズ独立チューニングの Phase 1 用。long⊥steer が成立するため yaw/lat を除外する。
-    """
-    s = 0.0
-    for h in horizons:
-        b = agg["by_h"][h]
-        s += b["nlong_mean"]
-        s += worst_w * b["nlong_worst"]
-    return s
-
-
-def aggregate_component(
-    per_ds_metrics: list[tuple[str, dict]],
-    baselines: dict[str, dict],
-    key: str,
-    floor_by_h: dict[int, float],
-    horizons: tuple[int, ...] = HORIZONS,
-) -> dict:
-    """単一成分 (vx / steer) の dataset 横断 baseline 比集約。
-
-    per_ds_metrics: [(dataset_id, {h: {key: float, ...}})]
-    baselines:      {dataset_id: {h: {key: float, ...}}}
-    key:            集約する成分名 ("vx" or "steer")
-    floor_by_h:     {h: floor_value} — VX_FLOOR / STEER_FLOOR を渡す
-    返り値: {"per_ds": [...], "by_h": {h: {"n_mean", "n_worst"}}}
-    """
-    per_ds = []
-    for ds_id, m in per_ds_metrics:
-        by_h = {}
-        for h in horizons:
-            v = m[h][key]
-            b = baselines[ds_id][h][key]
-            by_h[h] = {"raw": v, "n": v / max(b, floor_by_h[h])}
-        per_ds.append({"dataset_id": ds_id, "by_h": by_h})
-
-    by_h_agg = {}
-    for h in horizons:
-        ns = [d["by_h"][h]["n"] for d in per_ds]
-        by_h_agg[h] = {"n_mean": stats.mean(ns), "n_worst": max(ns)}
-    return {"per_ds": per_ds, "by_h": by_h_agg}
-
-
-def score_formula_md(horizons: tuple[int, ...] = HORIZONS, worst_w: float = WORST_W) -> str:
-    """robust_score の定義を Markdown 1 行で返す (レポート埋め込み用)。"""
-    return (
-        f"`score = Σ_h (nyaw_mean + {POS_W}·(nlong_mean + nlat_mean)) "
-        f"+ {worst_w}·(nyaw_worst + {POS_W}·(nlong_worst + nlat_worst))`  "
-        f"(h ∈ {list(horizons)}、縦横各 {POS_W} で yaw:位置=1:1、小さいほど良い)"
-    )
 
 
 def format_agg(tag: str, agg: dict, horizons: tuple[int, ...] = HORIZONS) -> str:
     """集約結果の 1 行サマリ (探索ログ用)。
 
-    aggregate_normalized 形式 (nyaw_mean/...) と
-    aggregate_component 形式 (n_mean/n_worst) の両方に対応。
+    ``aggregate_normalized`` 形式を表示する。
     """
     seg = []
     for h in horizons:
         b = agg["by_h"][h]
-        if "n_mean" in b:
-            seg.append(f"N{h}[n_m={b['n_mean']:.3f}/w={b['n_worst']:.3f}]")
-        else:
-            seg.append(
-                f"N{h}[ny_m={b['nyaw_mean']:.3f}/w={b['nyaw_worst']:.3f} "
-                f"nlo_m={b['nlong_mean']:.3f}/w={b['nlong_worst']:.3f} "
-                f"nla_m={b['nlat_mean']:.3f}/w={b['nlat_worst']:.3f}]"
-            )
+        seg.append(
+            f"N{h}[ny_m={b['nyaw_mean']:.3f}/w={b['nyaw_worst']:.3f} "
+            f"nlo_m={b['nlong_mean']:.3f}/w={b['nlong_worst']:.3f} "
+            f"nla_m={b['nlat_mean']:.3f}/w={b['nlat_worst']:.3f}]"
+        )
     return f"{tag:14s} " + " ".join(seg)
