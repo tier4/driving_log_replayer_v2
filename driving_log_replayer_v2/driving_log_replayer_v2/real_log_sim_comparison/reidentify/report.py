@@ -630,19 +630,114 @@ def _render_objective_equations() -> str:
 \\[ \\text{nyaw}_N = \\frac{\\text{yaw}_{\\mathrm{tuned}}}{\\max(\\text{yaw}_{\\mathrm{baseline}},\\; f_{\\mathrm{yaw}}\\cdot N)},
 \\quad (\\text{nlong}, \\text{nlat}\\ \\text{も同様}) \\]
 <p>フロア \\(f\\) は per-step 定数(yaw 0.006 deg・long 0.1 cm・lat 0.03 cm を \\(N\\) 倍)で、
-ほぼ直進のデータセットで分母がゼロ近くになる暴発を防ぐ。最終目的関数はホライズン等重みの
-mean + worst 合算(<b>小さいほど良い</b>):</p>
+ほぼ直進のデータセットで分母がゼロ近くになる暴発を防ぐ。</p>
+<p>steer・ax も同様に baseline 比で正規化するが、両者は安定な 1 次遅れ系の状態量で
+open-loop 誤差が N≈20 (steer) / N≈9 (ax) までに定常値へ飽和する(プラトー特性)ため、
+フロアは \\(N\\) に比例させない<b>定数</b>(steer 0.12 deg・ax 0.10 m/s²、
+baseline per-dataset 分布の p10)とする:</p>
+\\[ \\text{nsteer}_N = \\frac{\\text{steer}_{\\mathrm{tuned}}}{\\max(\\text{steer}_{\\mathrm{baseline}},\\; 0.12)},
+\\quad \\text{nax}_N = \\frac{\\text{ax}_{\\mathrm{tuned}}}{\\max(\\text{ax}_{\\mathrm{baseline}},\\; 0.10)} \\]
+<p>最終目的関数はホライズン等重みの mean + worst 合算(<b>小さいほど良い</b>)。
+アクチュエータ項は同じ理由(プラトーで \\(N\\) 非依存)から全ホライズンでなく、
+過渡 \\(N=10\\)(時定数・むだ時間の情報)とプラトー \\(N=30\\)(定常ゲイン・バイアスの情報)の
+代表 2 点のみ、重み 0.5 で加算する:</p>
 \\[ \\text{score} = \\sum_{N} \\left[
   \\left(\\overline{\\text{nyaw}} + 0.5\\,\\overline{\\text{nlong}} + 0.5\\,\\overline{\\text{nlat}}\\right)
 + 0.5\\left(\\widehat{\\text{nyaw}} + 0.5\\,\\widehat{\\text{nlong}} + 0.5\\,\\widehat{\\text{nlat}}\\right)
+\\right]
++ \\sum_{N \\in \\{10,30\\}} 0.5\\left[
+  \\left(\\overline{\\text{nsteer}} + \\overline{\\text{nax}}\\right)
++ 0.5\\left(\\widehat{\\text{nsteer}} + \\widehat{\\text{nax}}\\right)
 \\right] \\]
 <p>ここで \\(\\overline{\\cdot}\\) は全データセットの mean、\\(\\widehat{\\cdot}\\) は worst(max)。yaw : 位置 = 1 : 1、
-worst 項の重み 0.5(mean の改善と worst の頑健性を半々で重視)。</p>
+worst 項の重み 0.5(mean の改善と worst の頑健性を半々で重視)。
+アクチュエータ項のない旧目的関数(yaw/long/lat のみ)の値は <b>score_legacy</b> として
+tuned_params.yaml に併記され、過去ランとの非退行監査に使う。</p>
 <div class="note"><b>表の 2 つのスコアを混同しないこと</b>:
 <b>Aggregate score</b> 列は上記 \\(\\text{score}\\)(robust_score、最適化の目的関数)。
 一方 <b>Mean normalized RMSE</b> 列とデータセット分布は別定義で、pos/long/lat/yaw/steer/vx/ax の
 全 7 指標について各データセット・各 horizon の <b>RMSE を baseline 比にした値の平均</b>。用途が異なる。</div>
 </details>"""
+
+
+def _render_plateau_section(plateau_path: Path) -> str:
+    """
+    Render the plateau-analysis methodology and the fit_plateau artifact (if present).
+
+    steer/ax の N-step 誤差プラトー特性と、それを活用した一連の手順 (目的関数への
+    アクチュエータ項統合・fit_plateau 定常同定・診断・GT 整備) を 1 箇所にまとめる。
+    数式・定数は _multi_agg.py / settings.py / fit_plateau.py の実装に一致させる。
+    """
+    if plateau_path.is_file():
+        artifact = _render_artifact(plateau_path, parameter_title="plateau_params.yaml")
+    else:
+        artifact = (
+            '<p class="note">plateau_params.yaml が見つかりません。単発解析 '
+            '<code>make fit_plateau ROOT=&lt;collection&gt; SCENARIO=&lt;scenario.yaml&gt;</code> '
+            "を実行すると生成されます (7 ステージパイプラインには含まれない)。</p>"
+        )
+    return f"""<h3>プラトー特性 (なぜ steer/ax の誤差は N≈10〜20 で頭打ちになるか)</h3>
+<p>steer・ax は安定な <b>1 次遅れ + むだ時間系の状態量</b>である。open-loop rollout では GT で
+同期した初期状態の記憶が washout 時間 \\(\\approx 3\\tau + L\\) で消え、以後の応答はコマンド履歴だけで
+決まるため、終端誤差は<b>定常過程</b> (モデルの定常ミスマッチ + 計測誤差) に飽和する:</p>
+\\[ \\lim_{{N\\to\\infty}} \\text{{RMSE}}(N) = \\sigma_{{\\infty}}
+\\quad (\\text{{washout}} \\approx 3\\tau + L \\approx 0.3\\text{{–}}0.6\\,\\mathrm{{s}}
+\\;\\Rightarrow\\; N \\approx 10\\text{{–}}20 \\;@\\;0.03\\,\\mathrm{{s/step}}) \\]
+<p>一方 yaw/long/lat はこれらの<b>積分</b>なので誤差が蓄積し、N とともに単調増加する。</p>
+<h3>プラトー特性から導かれる 3 つの手順</h3>
+<div class="table-wrap"><table>
+<tr><th>性質</th><th>活用手順</th><th>実装</th></tr>
+<tr><td style="text-align:left">① プラトー値は N 非依存</td>
+<td style="text-align:left">目的関数のアクチュエータ項は<b>定数フロア</b>・代表 2 horizon
+(N=10: 過渡 = 時定数/むだ時間の情報、N=30: プラトー = 定常ゲイン/バイアスの情報) のみで足りる。
+定義式は次節の「評価関数の定義」参照</td>
+<td style="text-align:left">robust_score の act_horizons 項<br>(_multi_agg.py / settings.py)</td></tr>
+<tr><td style="text-align:left">② プラトー値は初期条件に依存しない定常忠実度指標</td>
+<td style="text-align:left">時定数・むだ時間を固定したまま<b>定常パラメータだけを軽量直接同定</b>できる
+(下記 fit_plateau)</td>
+<td style="text-align:left">reidentify/fit_plateau.py<br>(make fit_plateau)</td></tr>
+<tr><td style="text-align:left">③ 長 horizon の yaw/位置ドリフト = 定常アクチュエータ誤差の積分</td>
+<td style="text-align:left">プラトーの<b>系統成分</b>削減が長期ドリフト削減に直結する
+(比較モデル v1_p は steer/ax 補正のみで yaw/long/lat も全面改善)</td>
+<td style="text-align:left">v1_p (scenario.yaml)</td></tr>
+</table></div>
+<h3>fit_plateau: プラトー定常同定の手順</h3>
+<p>初期値ケース (既定 v1) の \\(\\tau, L, k_{{us}}\\), rate limit を固定し、定常パラメータ
+\\(\\theta = (\\text{{steer scaling}}, \\text{{acc scaling}})\\) をプラトー horizon (既定 N=30) の
+全 dataset 平均 RMSE で直接同定する (Powell、探索域は parameter_constraints.py の SSOT):</p>
+\\[ J(\\theta) = \\frac{{\\overline{{\\text{{steer RMSE}}_{{N}}}}}}{{s_{{\\text{{steer}}}}}}
+             + \\frac{{\\overline{{\\text{{ax RMSE}}_{{N}}}}}}{{s_{{\\text{{ax}}}}}}
+\\quad (s = \\text{{baseline の平均プラトー: 等寄与化スケール}}) \\]
+<div class="note"><b>steer_bias は同定対象に含めない</b>: モデル構造上 steer 状態は
+steer_des × scaling に収束し、bias はヨーレート計算にのみ入るため、プラトー目的関数に対して
+<b>平坦 (同定不能)</b>。探索すると任意の値に漂流する。bias の同定は yaw を見る統合最適化
+(fit_merge) に委ねる。</div>
+<p>成果物: <code>plateau_params.yaml</code> (同定値) と <code>plateau_diagnostics.csv</code>
+(dataset 別の RMSE と署名付き平均誤差 err = GT − sim)。同定値は scenario.yaml の比較モデル
+(例: v1_p) へ手動転記して本レポートの固定評価に載せる。</p>
+<h3>診断: 系統/変動の分解と steer_dead_band の判定</h3>
+<p>plateau_diagnostics.csv の署名付き平均 (steer_mean / ax_mean) がプラトーの<b>系統成分</b>、
+RMSE との差が<b>変動成分</b>を表す。steer_dead_band (現在 0 固定) の探索解禁は
+「scaling/bias 補正後も per-dataset |steer_mean| が残存し、かつ残差が低操舵振幅域に集中する」
+場合のみとする。2026-07 分析 (318 datasets) では |steer_mean| 中央値 ≈ 0.06° ≪ プラトー RMSE
+0.35–0.41° で非系統成分支配のため、0 固定を維持。</p>
+<h3>プラトーの下限と GT の整備 (ノイズか、帯域内ミスマッチか)</h3>
+<p>残差の累積分散スペクトル (2026-07, 12 datasets) では、steer 残差の約 53%・ax 残差の約 42% が
+0.1 Hz 以下に集中し、2 Hz のゼロ位相 LPF を掛けても RMS は 5% 前後しか下がらない。
+つまりプラトーは計測ノイズの下限ではなく<b>帯域内・低周波の系統的ミスマッチ</b>
+(動作条件依存のゲイン/位相誤差) が支配的である。この知見に基づき:</p>
+<ul>
+<li><b>GT の平滑化は後段 LPF を足さず savgol の窓に統合</b>:
+ax は微分窓 0.2→0.4 s (実効カットオフ 2.76→1.42 Hz、acc 帯域 1/(2πτ)≈0.53 Hz の ~2.7 倍、
+lib/_accel_source.py)、steer は平滑化窓 0.4 s (カットオフ 2.55 Hz、steer 帯域 ≈1.06 Hz の
+~2.4 倍、lib/_steer_source.py の <code>steering_source: steer_savgol</code>) で、
+「生 GT + 2 Hz ゼロ位相 LPF カスケード」相当のフロア低減を窓のみで実現</li>
+<li><b>GT ソースの整合</b>: baseline / v1 系は raw ソース (accel は
+<code>/localization/acceleration</code> +0.080 s 遅延補償、steer は steering_status 生値)。
+<b>p 系 (v1_p) は定常補正パラメータ + SG 系 GT (steer_savgol + kinematic_savgol) の組</b>で、
+GT のみ SG 化した旧 v1_sg はここに統合した (窓 0.4 s では raw との ax 差は +1〜4% 程度)</li>
+</ul>
+{artifact}"""
 
 
 def _render_document(
@@ -659,6 +754,7 @@ def _render_document(
     phase2_path: Path,
     phase3_path: Path,
     release_path: Path,
+    plateau_path: Path,
 ) -> str:
     datasets = frame["dataset_id"].nunique()
     horizons = frame["horizon"].nunique()
@@ -730,7 +826,7 @@ details {{ margin:10px 0; }} details > summary {{ cursor:pointer; font-weight:60
   <nav>
     <a href="#eq-notation">1. 記号と運動方程式</a><a href="#sec-extraction">2. Extraction</a>
     <a href="#longitudinal">3. Longitudinal</a><a href="#steering">4. Steering</a>
-    <a href="#xy">5. XY</a><a href="#sec-optimization">6. Optimization</a><a href="#sec-released">7. Released</a>
+    <a href="#xy">5. XY</a><a href="#sec-plateau">6. Plateau</a><a href="#sec-optimization">7. Optimization</a><a href="#sec-released">8. Released</a>
   </nav>
 </header>
 <section><h2>1. 記号と運動方程式</h2><p class="lede">以降の各セクションはここで定義した記号・残差式を参照する。</p>{physical_sections.equations}</section>
@@ -738,8 +834,9 @@ details {{ margin:10px 0; }} details > summary {{ cursor:pointer; font-weight:60
 <section><h2>3. Longitudinal direct identification</h2>{_render_artifact(phase1_path, parameter_title="phase1_acc.yaml")}{physical_sections.longitudinal}</section>
 <section><h2>4. Steering direct identification</h2>{_render_artifact(phase2_path, parameter_title="phase2_steer.yaml")}{physical_sections.steering}{physical_sections.yaw}</section>
 <section><h2>5. XY heading-rate direct identification</h2>{_render_artifact(phase3_path, parameter_title="phase3_xy.yaml")}{physical_sections.xy}</section>
-<section id="sec-optimization"><h2>6. Integrated optimization</h2>{_render_artifact_document(document, tuned_path, parameter_title="Final parameters")}<h3>Aggregate comparison</h3>{_render_objective_equations()}<p class="note">Raw columns (pos/long/…) are mean RMSE. <b>Aggregate score</b> is the optimized robust_score; <b>Mean normalized RMSE</b> is the 7-metric ratio mean — see the objective definition above (<a href="#eq-score">🔗 評価関数の定義</a>). Aggregate/distribution values use the configured optimization horizons; graphs use every available N. Lower is better.</p>{_render_aggregate(document, summary, model_order)}<h3>Error by horizon N</h3><p class="note">Each point is the mean RMSE across valid datasets. Every available N is plotted; lower is better.</p>{_render_horizon_charts(frame, model_order)}<h3>Dataset distributions</h3>{_render_dataset_distribution(summary, model_order)}</section>
-<section id="sec-released"><h2>7. Released YAML</h2><p class="source">Released parameter YAML: {_escape(release_path)}</p></section>
+<section id="sec-plateau"><h2>6. Plateau analysis and stationary identification</h2><p class="lede">steer/ax の N-step 誤差プラトー特性と、それを活用した定常同定 (fit_plateau)・評価関数統合・GT 整備の手順。</p>{_render_plateau_section(plateau_path)}</section>
+<section id="sec-optimization"><h2>7. Integrated optimization</h2>{_render_artifact_document(document, tuned_path, parameter_title="Final parameters")}<h3>Aggregate comparison</h3>{_render_objective_equations()}<p class="note">Raw columns (pos/long/…) are mean RMSE. <b>Aggregate score</b> is the optimized robust_score; <b>Mean normalized RMSE</b> is the 7-metric ratio mean — see the objective definition above (<a href="#eq-score">🔗 評価関数の定義</a>). Aggregate/distribution values use the configured optimization horizons; graphs use every available N. Lower is better.</p>{_render_aggregate(document, summary, model_order)}<h3>Error by horizon N</h3><p class="note">Each point is the mean RMSE across valid datasets. Every available N is plotted; lower is better.</p>{_render_horizon_charts(frame, model_order)}<h3>Dataset distributions</h3>{_render_dataset_distribution(summary, model_order)}</section>
+<section id="sec-released"><h2>8. Released YAML</h2><p class="source">Released parameter YAML: {_escape(release_path)}</p></section>
 </main></body></html>
 """
 
@@ -789,6 +886,9 @@ def run(
         Path(phase2_params) if phase2_params is not None else tuned_path,
         Path(phase3_params) if phase3_params is not None else tuned_path,
         Path(release_params) if release_params is not None else tuned_path,
+        # fit_plateau は単発解析のためパイプラインから path が渡らない。成果物ディレクトリ
+        # (tuned_params.yaml の隣) にあれば表示し、なければ実行方法の案内を出す。
+        tuned_path.parent / "plateau_params.yaml",
     )
     out_path.parent.mkdir(parents=True, exist_ok=True)
     out_path.write_text(rendered, encoding="utf-8")

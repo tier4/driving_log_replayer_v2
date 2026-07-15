@@ -125,13 +125,23 @@ def test_run_builds_unified_report_from_finalized_artifacts(tmp_path: Path, monk
     assert "3. Longitudinal direct identification" in rendered
     assert "4. Steering direct identification" in rendered
     assert "5. XY heading-rate direct identification" in rendered
-    assert "6. Integrated optimization" in rendered
-    assert "7. Released YAML" in rendered
+    assert "6. Plateau analysis and stationary identification" in rendered
+    assert "7. Integrated optimization" in rendered
+    assert "8. Released YAML" in rendered
+    # プラトー節: 手順 (fit_plateau) と方法論の説明が含まれる。artifact 不在時は実行案内
+    assert "fit_plateau" in rendered
+    assert "steer_bias" in rendered
+    assert 'id="sec-plateau"' in rendered
+    assert "plateau_params.yaml が見つかりません" in rendered
     # MathJax の CDN 参照と数式ハブ・目的関数のアンカーが埋め込まれること
     assert "tex-svg.js" in rendered
     assert 'id="eq-notation"' in rendered
     assert 'id="eq-score"' in rendered
     assert "robust_score" in rendered
+    # objective v2: steer/ax アクチュエータ項 (プラトー特性・定数フロア) が数式に含まれること
+    assert "nsteer" in rendered
+    assert "nax" in rendered
+    assert "score_legacy" in rendered
     # tuned の集約スコア (1.25) は baseline (2.5) より小さいので改善色が付く
     assert 'class="score-good">1.25' in rendered
     assert "2.5" in rendered
