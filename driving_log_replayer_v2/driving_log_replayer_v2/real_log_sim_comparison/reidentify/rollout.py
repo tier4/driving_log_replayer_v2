@@ -12,10 +12,10 @@ from ..lib._validation import require_non_empty_df
 from ..lib._vehicle_models import VehicleModel
 from .gear import require_drive_gear_mask
 from .physical_constants import VX_MIN_CURVE
+from .parameter_constraints import PARAMETER_CONSTRAINTS
 from .settings import (
     BAD_INTERVAL_MAX_S,
     BAD_INTERVAL_MIN_S,
-    DEFAULT_WHEELBASE,
     KINEMATIC_STEER_VX_MIN,
     ROLLING_SMOOTH_WINDOW_S,
     ROLL_OUT_CONTEXT,
@@ -28,7 +28,10 @@ SUB_DT: float = ROLLOUT_SUB_DT
 def build_params(wheelbase: float | None = None) -> dict:
     """`vehicle_info.param.yaml` + N-step 解析固有の上書きで params dict を構築する。"""
     base = load_sim_params()
-    base.setdefault("wheelbase", base.get("wheel_base", DEFAULT_WHEELBASE))
+    base.setdefault(
+        "wheelbase",
+        base.get("wheel_base", PARAMETER_CONSTRAINTS["wheelbase"].default),
+    )
     base["sub_dt"] = SUB_DT
     if wheelbase is not None:
         base["wheelbase"] = float(wheelbase)

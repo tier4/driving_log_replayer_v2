@@ -239,9 +239,43 @@ def _table(headers: Iterable[str], rows: Iterable[Iterable[Any]], *, css_class: 
     return f'<div class="table-wrap"><table{class_attr}><thead><tr>{head}</tr></thead><tbody>{body}</tbody></table></div>'
 
 
-def _render_params(params: Mapping[str, Any]) -> str:
-    rows = ((name, _format_param_value(params[name])) for name in sorted(params))
-    return _table(("Parameter", "Tuned value"), rows, css_class="params")
+def _format_constraint_range(constraint: Mapping[str, Any]) -> str:
+    allowed = constraint.get("allowed_range")
+    if not isinstance(allowed, Mapping):
+        return "-"
+    minimum = allowed.get("minimum")
+    maximum = allowed.get("maximum")
+    left = "[" if allowed.get("minimum_inclusive", True) else "("
+    right = "]" if allowed.get("maximum_inclusive", True) else ")"
+    lower = "-∞" if minimum is None else _format_param_value(minimum)
+    upper = "∞" if maximum is None else _format_param_value(maximum)
+    return f"{left}{lower}, {upper}{right}"
+
+
+def _render_params(document: Mapping[str, Any], params: Mapping[str, Any]) -> str:
+    constraints = document.get("parameter_constraints")
+    if not isinstance(constraints, Mapping):
+        rows = ((name, _format_param_value(params[name])) for name in sorted(params))
+        return _table(("Parameter", "Tuned value"), rows, css_class="params")
+    rows = []
+    for name in sorted(params):
+        constraint = constraints.get(name)
+        if not isinstance(constraint, Mapping):
+            rows.append((name, _format_param_value(params[name]), "-", "-", "-"))
+            continue
+        search = constraint.get("search_candidates", "continuous")
+        rows.append((
+            name,
+            _format_param_value(params[name]),
+            _format_constraint_range(constraint),
+            _format_param_value(search),
+            constraint.get("reason", "-"),
+        ))
+    return _table(
+        ("Parameter", "Tuned value", "Allowed range", "Search candidates", "Reason"),
+        rows,
+        css_class="params",
+    )
 
 
 def _render_aggregate(document: Mapping[str, Any], frame: pd.DataFrame) -> str:
@@ -609,7 +643,7 @@ th {{ color:var(--muted); background:var(--wash); font-size:12px; }} th:first-ch
   <p class="source">Parameters: {_escape(tuned_path)}</p>
   <p class="source">Metrics: {_escape(metrics_path)}</p>
 </header>
-<section><h2>Parameters</h2>{_render_params(params)}</section>
+<section><h2>Parameters</h2>{_render_params(document, params)}</section>
 <section><h2>Aggregate comparison</h2><p class="note">Raw columns are mean RMSE. Aggregate and distribution values use the configured optimization horizons; graphs use every available N. Lower is better.</p>{_render_aggregate(document, summary)}</section>
 <section><h2>Error by horizon N</h2><p class="note">Each point is the mean RMSE across valid datasets. Every available N is plotted; lower is better.</p>{_render_horizon_charts(frame)}</section>
 <section><h2>Dataset distributions</h2>{_render_dataset_distribution(summary)}</section>

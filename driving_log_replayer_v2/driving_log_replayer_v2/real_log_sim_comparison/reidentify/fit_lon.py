@@ -13,19 +13,29 @@ from . import fit_core
 from ..lib._accel_source import ACCEL_DELAY_MAP
 from ..lib._parallel import normalize_parallel_jobs
 from .load_data import build_resampled, discover_cached_datasets, read_dataset_csv
+from .model_config import load_model_config
+from .parameter_constraints import (
+    FIT_LON,
+    PARAMETER_CONSTRAINTS,
+    stage_targets,
+    validate_parameters,
+)
 from .settings import (
     ACCEL_SOURCE,
-    ACC_SCALE_BOUNDS,
     LONG_DA_THRESH,
-    LONG_DELAY_GRID,
-    LONG_RESULT_DELAY_BOUNDS,
-    LONG_RESULT_TAU_BOUNDS,
-    LONG_TAU_BOUNDS,
     LONG_VX_MIN,
     MIN_FIT_SAMPLES,
     RESAMPLE_DT,
+    TARGET_MODEL_NAME,
 )
 
+_LONG_KEYS = frozenset(
+    {"acc_time_constant", "acc_time_delay", "debug_acc_scaling_factor"}
+)
+_ACC_TAU_FIT_BOUNDS = PARAMETER_CONSTRAINTS["acc_time_constant"].direct_fit_bounds
+_ACC_DELAY_FIT_CANDIDATES = PARAMETER_CONSTRAINTS["acc_time_delay"].direct_fit_candidates
+assert _ACC_TAU_FIT_BOUNDS is not None
+assert _ACC_DELAY_FIT_CANDIDATES is not None
 
 
 def _long_mask(ds: dict) -> np.ndarray:
@@ -46,7 +56,7 @@ def _fit_one(ds: dict) -> tuple[float, float, float] | None:
         return None
     fit = fit_core.fit_first_order_delay(
         ds["a_cmd"], ds["a_act"], mask, RESAMPLE_DT,
-        tau_bounds=LONG_TAU_BOUNDS, delay_candidates=LONG_DELAY_GRID, fit_scale=True,
+        tau_bounds=_ACC_TAU_FIT_BOUNDS, delay_candidates=_ACC_DELAY_FIT_CANDIDATES, fit_scale=True,
     )
     if fit is None:
         return None
@@ -63,9 +73,31 @@ def _process_one(task: tuple[str, Path]) -> tuple[bool, tuple[float, float, floa
 
 
 
-def fit_lon(collection_dir: Path, *, n_jobs: int = 1) -> dict:
+def fit_lon(
+    collection_dir: Path, *, n_jobs: int = 1, initial_params: dict | None = None,
+) -> dict:
     """collection 配下の全 CSV キャッシュから縦方向モデルを直接同定する。"""
     tasks = discover_cached_datasets(collection_dir)
+    targets = stage_targets(FIT_LON) & _LONG_KEYS
+    params = {
+        key: value for key, value in (initial_params or {}).items() if key in _LONG_KEYS
+    }
+    missing_fallback = (_LONG_KEYS - targets) - params.keys()
+    if missing_fallback:
+        raise ValueError(
+            "fit_lon で最適化を無効化した params の scenario 初期値がありません: "
+            f"{sorted(missing_fallback)}"
+        )
+    validate_parameters(params, frozenset(params), source="fit_lon の scenario 初期値")
+    if not targets:
+        return {
+            "params": params,
+            "metadata": {
+                "collection_dir": str(collection_dir), "n_datasets": len(tasks), "n_valid": 0,
+                "tuning_type": "physical_direct_fit", "phase": 1,
+                "optimized_parameters": [],
+            },
+        }
     n_workers = normalize_parallel_jobs(n_jobs, n_tasks=len(tasks))
     print(f"[fit_lon] データセット並列ロード ({len(tasks)} 件)...")
 
@@ -95,11 +127,12 @@ def fit_lon(collection_dir: Path, *, n_jobs: int = 1) -> dict:
         )
     taus, delays, scales = map(np.asarray, zip(*fit_results))
 
-    params = {
-        "acc_time_constant": float(np.clip(np.median(taus), *LONG_RESULT_TAU_BOUNDS)),
-        "acc_time_delay": float(np.clip(np.median(delays), *LONG_RESULT_DELAY_BOUNDS)),
-        "debug_acc_scaling_factor": float(np.clip(np.median(scales), *ACC_SCALE_BOUNDS)),
+    fitted_params = {
+        "acc_time_constant": PARAMETER_CONSTRAINTS["acc_time_constant"].clamp(float(np.median(taus))),
+        "acc_time_delay": PARAMETER_CONSTRAINTS["acc_time_delay"].clamp(float(np.median(delays))),
+        "debug_acc_scaling_factor": PARAMETER_CONSTRAINTS["debug_acc_scaling_factor"].clamp(float(np.median(scales))),
     }
+    params.update({key: value for key, value in fitted_params.items() if key in targets})
     print(f"  同定結果: acc_time_constant = {params['acc_time_constant']:.4f} s")
     print(f"            acc_time_delay    = {params['acc_time_delay']:.4f} s")
     print(f"            acc_scaling       = {params['debug_acc_scaling_factor']:.4f}")
@@ -112,12 +145,18 @@ def fit_lon(collection_dir: Path, *, n_jobs: int = 1) -> dict:
             "n_valid": n_valid,
             "tuning_type": "physical_direct_fit",
             "phase": 1,
+            "optimized_parameters": sorted(targets),
         },
     }
 
 
-def run(collection_dir: Path, out: Path, *, n_jobs: int = 1) -> dict:
-    result = fit_lon(collection_dir, n_jobs=n_jobs)
+def run(
+    collection_dir: Path, out: Path, *, n_jobs: int = 1, scenario: Path | None = None,
+) -> dict:
+    initial_params = None
+    if scenario is not None:
+        initial_params = dict(load_model_config(scenario).find_case(TARGET_MODEL_NAME).params)
+    result = fit_lon(collection_dir, n_jobs=n_jobs, initial_params=initial_params)
     out.parent.mkdir(parents=True, exist_ok=True)
     with out.open("w") as f:
         yaml.safe_dump(result, f, allow_unicode=True, sort_keys=False)

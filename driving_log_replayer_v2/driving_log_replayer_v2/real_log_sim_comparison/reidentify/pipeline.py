@@ -15,11 +15,13 @@ def _step_extract(collection_dir: Path, *, force: bool = False) -> dict:
     return extract.extract_collection(collection_dir, force=force)
 
 
-def _step_fit_lon(collection_dir: Path, out_dir: Path, n_jobs: int) -> Path:
+def _step_fit_lon(
+    collection_dir: Path, out_dir: Path, scenario: Path, n_jobs: int,
+) -> Path:
     from . import fit_lon  # noqa: PLC0415
 
     out = out_dir / "phase1_acc.yaml"
-    fit_lon.run(collection_dir, out, n_jobs=n_jobs)
+    fit_lon.run(collection_dir, out, n_jobs=n_jobs, scenario=scenario)
     return out
 
 
@@ -132,7 +134,7 @@ def main() -> None:
     extraction_summary = _step_extract(args.root, force=args.force_extract)
 
     print("\n[pipeline] === 2/6 fit_lon ===")
-    phase1_out = _step_fit_lon(args.root, out_dir, n_jobs)
+    phase1_out = _step_fit_lon(args.root, out_dir, args.scenario, n_jobs)
 
     print("\n[pipeline] === 3/6 fit_steer ===")
     phase2_out = _step_fit_steer(

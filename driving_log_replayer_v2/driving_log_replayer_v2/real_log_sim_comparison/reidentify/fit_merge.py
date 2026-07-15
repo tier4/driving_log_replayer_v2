@@ -23,13 +23,15 @@ from ..lib._vehicle_models import get_vehicle_model_spec, merge_vehicle_model_pa
 from . import rollout
 from .load_data import build_rollout_data, discover_cached_datasets, read_dataset_csv
 from .model_config import load_model_config, resolve_baseline_model
-from .settings import (
-    ROLLOUT_STRIDE,
-    SEARCH_DELAY_CANDIDATES,
-    SEARCH_SPACE_ACC,
-    SEARCH_SPACE_STEER,
-    TARGET_MODEL_NAME,
+from .parameter_constraints import (
+    PARAMETER_CONSTRAINTS,
+    FIT_MERGE,
+    build_constraint_audit,
+    clamp_search_parameters,
+    search_constraints,
+    validate_parameters,
 )
+from .settings import ROLLOUT_STRIDE, TARGET_MODEL_NAME
 
 _GT_KEYS = ("acc_time_delay", "steer_time_delay", "wheelbase", "sub_dt")
 _RMSE_KEYS = ("pos", "long", "lat", "yaw", "steer", "vx", "ax")
@@ -335,14 +337,29 @@ def robust_search(
     cur_model = cur_case.vehicle_model_type
     cur_accel_source = cur_case.acceleration_source
 
-    delay_candidates = SEARCH_DELAY_CANDIDATES
-
-    continuous_space = {**SEARCH_SPACE_STEER, **SEARCH_SPACE_ACC}
-    searched = set(continuous_space) | {"acc_time_delay"}
+    constraints = search_constraints(FIT_MERGE)
+    continuous_space = {
+        key: constraint.search_bounds
+        for key, constraint in constraints.items()
+        if constraint.search_bounds is not None
+    }
+    delay_constraint = constraints.get("acc_time_delay")
+    delay_candidates = delay_constraint.search_candidates if delay_constraint else ()
+    searched = set(constraints)
+    validate_parameters(
+        phase2_params,
+        set(PARAMETER_CONSTRAINTS) & set(phase2_params),
+        source="直接同定結果",
+    )
     passthrough = {
         key: value for key, value in phase2_params.items() if key not in searched
     }
     cur_best.update(passthrough)
+    validate_parameters(
+        cur_best,
+        set(PARAMETER_CONSTRAINTS) & set(cur_best),
+        source="scenario/current の初期値",
+    )
     if passthrough:
         print(f"[fit_merge] 直接同定値を透過 (Optuna 非探索): {sorted(passthrough)}")
 
@@ -356,14 +373,18 @@ def robust_search(
             for key, (lower, upper) in continuous_space.items()
             if key in params
         }
-        value = float(params.get("acc_time_delay", ctxs[0].base["acc_time_delay"]))
-        eq["acc_time_delay"] = min(
-            delay_list, key=lambda candidate: abs(candidate - value)
-        )
-        return eq
+        if delay_constraint is not None:
+            value = float(params.get("acc_time_delay", ctxs[0].base["acc_time_delay"]))
+            eq["acc_time_delay"] = min(
+                delay_list, key=lambda candidate: abs(candidate - value)
+            )
+        return clamp_search_parameters(eq, FIT_MERGE)
 
     init_agg = _evaluate_candidate(ctxs, cur_best, cur_model, cur_accel_source)
     init_score = _finite_robust_score(init_agg)
+    if not searched:
+        print("[fit_merge] 最適化対象がないため、直接同定値 / scenario 初期値を使用")
+        return cur_best
     n_workers = normalize_parallel_jobs(n_jobs, n_tasks=n_trials)
     print(f"\n## Optuna TPE ({TARGET_MODEL_NAME}, {n_trials} trials, {n_workers} jobs)")
 
@@ -376,10 +397,11 @@ def robust_search(
         params = dict(cur_best)
         for pname, (lo, hi) in continuous_space.items():
             params[pname] = trial.suggest_float(pname, lo, hi)
-        params["acc_time_delay"] = trial.suggest_categorical(
-            "acc_time_delay", delay_candidates
-        )
-        return params
+        if delay_constraint is not None:
+            params["acc_time_delay"] = trial.suggest_categorical(
+                "acc_time_delay", delay_candidates
+            )
+        return clamp_search_parameters(params, FIT_MERGE)
 
     executor = None
     completed = 0
@@ -449,6 +471,7 @@ def robust_search(
 
     if not math.isfinite(best_score):
         raise RuntimeError("全ての探索候補で有限な rollout 指標を計算できませんでした")
+    validate_parameters(best_params, set(PARAMETER_CONSTRAINTS) & set(best_params), source="最終探索候補")
     return best_params
 
 
@@ -613,6 +636,7 @@ def fit_merge(
             "skipped": fit_skipped,
             "timestamp": datetime.datetime.now().isoformat(timespec="seconds"),
         },
+        "parameter_constraints": build_constraint_audit(full_tuned_params),
     }
 
 
@@ -631,18 +655,7 @@ def run(
     missing = _DIRECT_FIT_KEYS - phase2_params.keys()
     if missing:
         raise ValueError(f"直接同定結果に必須 params がありません: {sorted(missing)}")
-    invalid = []
-    for key in _DIRECT_FIT_KEYS:
-        value = phase2_params[key]
-        valid = (
-            isinstance(value, (int, float))
-            and not isinstance(value, bool)
-            and math.isfinite(float(value))
-        )
-        if not valid:
-            invalid.append(key)
-    if invalid:
-        raise ValueError(f"直接同定結果の params が有限数値ではありません: {sorted(invalid)}")
+    validate_parameters(phase2_params, _DIRECT_FIT_KEYS, source="直接同定結果")
     metadata = data.get("metadata")
     if not isinstance(metadata, dict) or metadata.get("phase") != 2:
         raise ValueError(f"直接同定結果の metadata.phase は 2 である必要があります: {phase2_params_path}")
