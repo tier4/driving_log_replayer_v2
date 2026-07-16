@@ -884,3 +884,106 @@ def test_scenario_rejects_non_mapping_document(tmp_path: Path) -> None:
 
     with pytest.raises(ValueError, match="top-level"):
         load_model_config(scenario)
+
+
+def _synthetic_metric() -> dict:
+    return {h: {k: 1.0 + 0.001 * h for k in fit_merge._RMSE_KEYS} for h in fit_merge.HORIZONS}
+
+
+def _install_synthetic_evaluation(monkeypatch) -> None:
+    def fake_eval(_ctx, _params, _model_type, _accel="accel", _steer="steer",
+                  *, horizons=fit_merge.HORIZONS, include_mean=False):
+        return {h: {k: 1.0 + 0.001 * h for k in fit_merge._RMSE_KEYS} for h in horizons}
+
+    monkeypatch.setattr(fit_merge, "_eval", fake_eval)
+
+
+def _synthetic_ctxs() -> list:
+    ctxs = []
+    for ds_id in ("ds-a", "ds-b"):
+        ctx = fit_merge.DatasetCtx(dataset_id=ds_id, dfs={}, t0_ns=0, base={})
+        ctx.base_metric = _synthetic_metric()
+        ctxs.append(ctx)
+    return ctxs
+
+
+def test_evaluate_only_without_fit_roundtrips_to_report(tmp_path: Path, monkeypatch) -> None:
+    """fit 無効 (stages: []) の評価専用パスが metrics.csv + document を生成し report が描画できる。"""
+    from driving_log_replayer_v2.real_log_sim_comparison.reidentify import report
+
+    scenario = tmp_path / "scenario.yaml"
+    scenario.write_text(yaml.safe_dump({"Evaluation": {"Conditions": {
+        "comparison_models": ["baseline", "current"],
+        "fit": {"stages": []},
+        "models": {
+            "baseline": {"vehicle_model_type": "delay_steer_acc_geared_wo_fall_guard",
+                          "params": {"wheelbase": 4.7}},
+            "current": {"vehicle_model_type": "delay_steer_acc_geared_for_diffusion_planner",
+                         "params": {"wheelbase": 4.7}},
+        },
+    }}}), encoding="utf-8")
+
+    _install_synthetic_evaluation(monkeypatch)
+    baseline_bundle = ("delay_steer_acc_geared_wo_fall_guard", {"wheelbase": 4.7}, "accel", "steer")
+    monkeypatch.setattr(
+        fit_merge, "_load_ctxs",
+        lambda _c, _cfg, _n: (2, _synthetic_ctxs(), [], baseline_bundle),
+    )
+
+    out = tmp_path / "reidentify" / "tuned_params.yaml"
+    metrics = tmp_path / "reidentify" / "metrics.csv"
+    result = fit_merge.run_evaluate(
+        tmp_path, scenario, out, direct_fit_params_path=None, metrics_out=metrics, n_jobs=1,
+    )
+
+    assert result["params"] == {}  # fit なしなので tuned なし
+    assert set(result["comparison"]) == {"baseline", "current"}
+    assert out.is_file() and metrics.is_file()
+
+    monkeypatch.setattr(
+        report.physical_validity, "build_sections",
+        lambda *_a, **_k: report.physical_validity.PhysicalValiditySections(
+            equations="", prepare="", longitudinal="", steering="", yaw="", xy="", timeseries="",
+        ),
+    )
+    report_out = report.run(
+        out, metrics, tmp_path / "report.html", failures={},
+        collection_dir=tmp_path, scenario=scenario,
+    )
+    rendered = report_out.read_text(encoding="utf-8")
+    assert "8. Released YAML" in rendered
+    assert "リリース YAML は生成されていません" in rendered
+    assert "No parameter summary available" in rendered
+
+
+def test_build_comparison_document_includes_tuned_when_fit_ran(tmp_path: Path, monkeypatch) -> None:
+    """fit 実行時は tuned が comparison/metrics に含まれ document.params に反映される。"""
+    scenario = tmp_path / "scenario.yaml"
+    scenario.write_text(yaml.safe_dump({"Evaluation": {"Conditions": {
+        "comparison_models": ["baseline", "current"],
+        "models": {
+            "baseline": {"vehicle_model_type": "delay_steer_acc_geared_wo_fall_guard",
+                          "params": {"wheelbase": 4.7}},
+            "current": {"vehicle_model_type": "delay_steer_acc_geared_for_diffusion_planner",
+                         "params": {"wheelbase": 4.7}},
+        },
+    }}}), encoding="utf-8")
+    cfg = load_model_config(scenario)
+    _install_synthetic_evaluation(monkeypatch)
+
+    metrics = tmp_path / "metrics.csv"
+    tuned_params = {"wheelbase": 4.7, "k_us": 0.012}
+    result = fit_merge.build_comparison_document(
+        tmp_path, scenario, cfg, _synthetic_ctxs(),
+        n_datasets=2, fit_skipped=[],
+        baseline_bundle=("delay_steer_acc_geared_wo_fall_guard", {"wheelbase": 4.7}, "accel", "steer"),
+        tuned_params=tuned_params, metrics_out=metrics,
+    )
+
+    assert result["params"] == tuned_params
+    assert "tuned" in result["comparison"]
+    assert "current" not in result["comparison"]  # fit 対象は tuned として表示
+    import pandas as pd  # noqa: PLC0415
+
+    models = set(pd.read_csv(metrics)["model"].unique())
+    assert models == {"baseline", "tuned"}

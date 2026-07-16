@@ -219,6 +219,11 @@ def main() -> None:
     for stage_name, path in phase_paths.items():
         if stage_name not in direct_stages and path.exists():
             path.unlink()
+    # release をスキップする場合、前回実行の simulator_model.param.yaml が残っていると
+    # レポート 8 章が古いリリース値を今回のものとして表示してしまうため削除する。
+    released_path = out_dir / "simulator_model.param.yaml"
+    if cfg.release is None and released_path.exists():
+        released_path.unlink()
 
     # ステージ番号: extract + 実行する fit ステージ + evaluate/merge + [release] + report。
     total = 1 + len(cfg.fit.direct_stages) + 1 + (1 if cfg.release is not None else 0) + 1
