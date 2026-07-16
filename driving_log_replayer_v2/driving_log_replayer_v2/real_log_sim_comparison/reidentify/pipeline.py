@@ -184,6 +184,10 @@ def main() -> None:
     parser.add_argument("--n-trials", type=int, default=160)
     parser.add_argument("--n-jobs", type=int, default=32)
     parser.add_argument("--force-extract", action="store_true", help="既存 reidentify_cache.csv も再生成する")
+    parser.add_argument(
+        "--report-only", action="store_true",
+        help="extract/fit/release を行わず、既存の成果物から report.html だけを再生成する",
+    )
     args = parser.parse_args()
 
     if args.n_trials < 1:
@@ -197,7 +201,8 @@ def main() -> None:
         from .release_params import validate_input  # noqa: PLC0415
 
         cfg = load_model_config(args.scenario)
-        if cfg.release is not None:
+        # report-only は release 済み成果物を読むだけなので input-param を必要としない。
+        if cfg.release is not None and not args.report_only:
             if args.input_param is None:
                 parser.error("--input-param is required when the scenario declares a release")
             validate_input(args.input_param)
@@ -207,6 +212,27 @@ def main() -> None:
     n_jobs = normalize_parallel_jobs(args.n_jobs)
     out_dir = args.root / DEFAULT_OUTPUT_DIR_NAME
     out_dir.mkdir(parents=True, exist_ok=True)
+
+    if args.report_only:
+        # 高価な fit を再実行せず、既存成果物 (tuned_params.yaml / metrics.csv 等) から
+        # report.html だけを作り直す。report は ROS 非依存なので単体で回収できる。
+        tuned_out = out_dir / "tuned_params.yaml"
+        metrics_out = out_dir / "metrics.csv"
+        for required in (tuned_out, metrics_out):
+            if not required.is_file():
+                parser.error(f"--report-only requires an existing artifact: {required}")
+        release_out = out_dir / "simulator_model.param.yaml" if cfg.release is not None else None
+        print("\n[pipeline] === report-only ===")
+        _step_report(
+            out_dir,
+            out_dir / "phase1_acc.yaml",
+            out_dir / "phase2_steer.yaml",
+            out_dir / "phase3_xy.yaml",
+            tuned_out, metrics_out, release_out,
+            {}, {"metadata": {"skipped": []}}, args.scenario, n_jobs,
+        )
+        print(f"\n[pipeline] report-only 完了。成果物: {out_dir / 'report.html'}")
+        return
 
     direct_stages = cfg.fit.direct_stages
     target = cfg.fit.target

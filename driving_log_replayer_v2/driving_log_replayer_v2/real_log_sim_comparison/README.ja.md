@@ -70,6 +70,10 @@ raw bag -> CSV cache -> [fit_lon -> fit_steer -> fit_xy] -> [fit_merge | evaluat
 
 どのステージを実行するかは scenario の `Evaluation.Conditions.fit` / `release` で制御します。
 
+fit を完走済みで report だけ作り直したい場合（scenario 表示の調整・report 段階だけ失敗した実行の
+回収など）は、高価な再フィットなしで `make report` を実行します（既存の `tuned_params.yaml` /
+`metrics.csv` から `report.html` のみ再生成。ROS 非依存なので `NO_SETUP=1` でも可）。
+
 - `fit: {target: <case>, stages: [lon, steer, xy, merge]}` — `target` は同定の初期値/対象ケース
   （既定 `current`）。`stages` は `lon -> steer -> xy` の**連続する先頭部分**に加えて任意で `merge`
   を続けられます（歯抜け不可）。省略時は全ステージ、`[]` で fit を行わず固定比較のみになります。

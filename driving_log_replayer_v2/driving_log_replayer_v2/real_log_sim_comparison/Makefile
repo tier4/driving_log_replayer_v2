@@ -38,7 +38,7 @@ endif
 
 FORCE_EXTRACT := $(if $(filter 1 true TRUE yes YES,$(FORCE)),--force-extract,)
 
-.PHONY: help reidentify fit_plateau
+.PHONY: help reidentify report fit_plateau
 
 help:
 	@echo "車両モデル再同定"
@@ -62,6 +62,8 @@ help:
 	@echo ""
 	@echo "成果物: <ROOT>/reidentify/{phase1_acc.yaml,phase2_steer.yaml,phase3_xy.yaml,tuned_params.yaml,metrics.csv,report.html,simulator_model.param.yaml}"
 	@echo ""
+	@echo "  make report  # 既存成果物から report.html だけを再生成 (fit 再実行なし)"
+	@echo ""
 	@echo "単発解析 (パイプライン非組込):"
 	@echo "  make fit_plateau  # プラトー領域から定常アクチュエータパラメータを直接同定 -> plateau_params.yaml"
 	@echo "  make fit_plateau PLATEAU_CASE=<case>  # 初期値にする scenario ケースを指定 (既定: v2)"
@@ -84,6 +86,19 @@ reidentify:
 		$(if $(wildcard $(INPUT_PARAM)),--input-param "$(INPUT_PARAM)",) \
 		--n-trials "$(N_TRIALS)" \
 		--n-jobs "$(N_JOBS)" $(FORCE_EXTRACT)
+
+report:
+	@test -n "$(strip $(ROOT))" || { echo "[ERROR] ROOT is required"; exit 2; }
+	@test -n "$(strip $(SCENARIO))" || { echo "[ERROR] SCENARIO is required"; exit 2; }
+	@test -f "$(SCENARIO)" || { echo "[ERROR] scenario not found: $(SCENARIO)"; exit 2; }
+	@test -f "$(ROOT)/reidentify/tuned_params.yaml" || { echo "[ERROR] artifacts not found; run 'make reidentify' first"; exit 2; }
+	@# report は ROS 非依存なので既存成果物から fit 再実行なしで作り直せる。
+	@echo "[INFO] report-only: 既存成果物から report.html を再生成"
+	$(RUN_PY) -m driving_log_replayer_v2.real_log_sim_comparison.reidentify.pipeline \
+		--root "$(ROOT)" \
+		--scenario "$(SCENARIO)" \
+		--n-jobs "$(N_JOBS)" \
+		--report-only
 
 fit_plateau:
 	@test -n "$(strip $(ROOT))" || { echo "[ERROR] ROOT is required"; exit 2; }

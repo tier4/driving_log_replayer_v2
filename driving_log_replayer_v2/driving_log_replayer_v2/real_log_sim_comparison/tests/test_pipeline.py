@@ -186,6 +186,29 @@ def test_main_runs_merge_only_without_direct_fit(tmp_path: Path, monkeypatch) ->
     assert calls == ["extract", "fit_merge", "release", "report"]
 
 
+def test_main_report_only_regenerates_report_from_existing_artifacts(
+    tmp_path: Path, monkeypatch,
+) -> None:
+    """--report-only は fit/release を行わず、既存成果物から report だけ作り直す。"""
+    root, scenario, _input_param = _write_inputs(tmp_path)
+    out_dir = root / "reidentify"
+    out_dir.mkdir(parents=True)
+    (out_dir / "tuned_params.yaml").write_text("params: {}\n", encoding="utf-8")
+    (out_dir / "metrics.csv").write_text("dataset_id,model,horizon\n", encoding="utf-8")
+
+    calls: list[str] = []
+    _install_call_recorders(monkeypatch, calls, tmp_path)
+    monkeypatch.setattr(
+        sys, "argv",
+        ["pipeline", "--root", str(root), "--scenario", str(scenario),
+         "--n-jobs", "1", "--report-only"],
+    )
+
+    pipeline.main()
+
+    assert calls == ["report"]
+
+
 def test_report_step_generates_only_the_unified_report(
     tmp_path: Path, monkeypatch
 ) -> None:
