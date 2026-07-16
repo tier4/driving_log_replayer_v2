@@ -26,9 +26,18 @@ class ModelSpec:
 
 
 @dataclass(frozen=True)
+class ReleaseSpec:
+    """リリース対象の scenario ケースとバージョンスロット (v{version}) の指定。"""
+
+    model: str
+    version: int
+
+
+@dataclass(frozen=True)
 class ModelConfig:
     models: dict[str, ModelSpec]
     comparison_models: tuple[str, ...]
+    release: ReleaseSpec | None = None
 
     def find_case(self, name: str) -> ModelSpec:
         try:
@@ -117,7 +126,39 @@ def load_model_config(path: str | Path) -> ModelConfig:
         raise ValueError(
             f"{scenario}: comparison_models に必須モデルがありません: {sorted(comparison_missing)}"
         )
-    return ModelConfig(models=models, comparison_models=comparison_models)
+
+    release = _parse_release(scenario, conditions, models)
+    return ModelConfig(models=models, comparison_models=comparison_models, release=release)
+
+
+def _parse_release(
+    scenario: Path, conditions: dict, models: dict[str, ModelSpec],
+) -> ReleaseSpec | None:
+    """任意の Evaluation.Conditions.release ({model, version}) を検証して返す。
+
+    指定時は release ステージが tuned の代わりに指定ケースを v{version} スロットへ
+    リリースする。未指定時は従来どおり tuned → v100。
+    """
+    raw_release = conditions.get("release")
+    if raw_release is None:
+        return None
+    if not isinstance(raw_release, dict):
+        raise ValueError(f"{scenario}: release は mapping である必要があります")
+    model = str(raw_release.get("model") or "")
+    if model not in models:
+        raise ValueError(
+            f"{scenario}: release.model={model!r} が models にありません。"
+            f"定義済み: {sorted(models)}"
+        )
+    if models[model].vehicle_model_type != TARGET_MODEL_TYPE:
+        raise ValueError(
+            f"{scenario}: release.model={model!r} の vehicle_model_type は "
+            f"{TARGET_MODEL_TYPE!r} である必要があります"
+        )
+    version = raw_release.get("version")
+    if isinstance(version, bool) or not isinstance(version, int) or version < 1:
+        raise ValueError(f"{scenario}: release.version は正の整数が必要です: {version!r}")
+    return ReleaseSpec(model=model, version=version)
 
 
 def resolve_baseline_model(config: ModelConfig) -> tuple[str, dict, str]:

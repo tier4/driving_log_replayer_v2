@@ -49,12 +49,10 @@ def validate_input(input_param: Path) -> None:
     _load_input_document(Path(input_param))
 
 
-def release(input_param: Path, tuned_params: Path, out_dir: Path) -> Path:
-    """評価済みパラメータを target model の global 値と ``v100`` に反映する。"""
+def _load_tuned_release_params(tuned_params: Path) -> dict[str, Any]:
+    """tuned_params.yaml から release 対象パラメータを検証付きで読み込む。"""
     if not tuned_params.is_file():
         raise FileNotFoundError(f"Tuned parameters file not found: {tuned_params}")
-    out_dir.mkdir(parents=True, exist_ok=True)
-
     tuned_data = yaml.safe_load(tuned_params.read_text(encoding="utf-8"))
     if not isinstance(tuned_data, dict):
         raise ValueError("Tuned params YAML must contain a mapping.")
@@ -66,6 +64,52 @@ def release(input_param: Path, tuned_params: Path, out_dir: Path) -> Path:
         raise ValueError(
             f"Tuned params must target vehicle_model_type={TARGET_MODEL_TYPE!r}."
         )
+    return params
+
+
+def _load_case_release_params(scenario: Path, model_name: str) -> dict[str, Any]:
+    """scenario ケースのパラメータを rollout 既定値へマージして完全な param 集合にする。
+
+    scenario ケースは vel_lim 等の global 制限値を持たないため、評価パイプラインと
+    同じ既定 (rollout.build_params) を土台にマージする。
+    """
+    from ..lib._vehicle_models import merge_vehicle_model_params  # noqa: PLC0415
+    from . import rollout  # noqa: PLC0415 (遅延 import で release の基本経路を軽く保つ)
+    from .model_config import load_model_config  # noqa: PLC0415
+
+    case = load_model_config(scenario).find_case(model_name)
+    return merge_vehicle_model_params(
+        rollout.build_params(), dict(case.params), TARGET_MODEL_TYPE,
+    )
+
+
+def release(
+    input_param: Path, tuned_params: Path, out_dir: Path, *, scenario: Path | None = None,
+) -> Path:
+    """同定/指定パラメータを target model の global 値とバージョンスロットへ反映する。
+
+    scenario の ``Evaluation.Conditions.release`` ({model, version}) が指定されている
+    場合は、そのケースのパラメータを ``v{version}`` スロットに書き ``version`` で選択する
+    (tuned の v100 は書かない)。未指定時は従来どおり tuned → ``v100``。
+    """
+    out_dir.mkdir(parents=True, exist_ok=True)
+
+    release_spec = None
+    if scenario is not None:
+        from .model_config import load_model_config  # noqa: PLC0415
+
+        release_spec = load_model_config(scenario).release
+
+    if release_spec is not None:
+        params = _load_case_release_params(scenario, release_spec.model)
+        version = release_spec.version
+        print(
+            f"[INFO] release: scenario ケース '{release_spec.model}' を "
+            f"v{version} としてリリースします (tuned は含めません)"
+        )
+    else:
+        params = _load_tuned_release_params(tuned_params)
+        version = 100
 
     param_data, ros_params = _load_input_document(Path(input_param))
     model_params = ros_params[RELEASE_MODEL_KEY]
@@ -73,13 +117,20 @@ def release(input_param: Path, tuned_params: Path, out_dir: Path) -> Path:
     required = spec.namespaced_param_keys | _GLOBAL_PARAM_KEYS.keys()
     missing = required - params.keys()
     if missing:
-        raise ValueError(f"Tuned params are missing target model keys: {sorted(missing)}")
+        raise ValueError(f"Release params are missing target model keys: {sorted(missing)}")
+
+    # 指定リリースでは既存の確定バージョン (入力 YAML の v1 等) を黙って潰さない。
+    # tuned の v100 は候補スロットとして従来どおり上書き可。
+    if release_spec is not None and f"v{version}" in model_params:
+        raise ValueError(
+            f"Input already contains 'v{version}'; choose an unused release.version."
+        )
 
     for model_key, ros_key in _GLOBAL_PARAM_KEYS.items():
         ros_params[ros_key] = params[model_key]
 
-    model_params["version"] = 100
-    model_params["v100"] = {
+    model_params["version"] = version
+    model_params[f"v{version}"] = {
         key: params[key] for key in sorted(spec.namespaced_param_keys)
     }
 

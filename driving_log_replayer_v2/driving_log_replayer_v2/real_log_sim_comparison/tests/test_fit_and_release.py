@@ -548,6 +548,151 @@ def test_minimal_scenario_and_release_artifact(tmp_path: Path) -> None:
     assert document["/**"]["ros__parameters"]["wheel_base"] == 4.7
 
 
+def _release_scenario_document(release: dict | None) -> dict:
+    """release 指定つき最小 scenario を組み立てる (v2 = 固定リリース候補ケース)。"""
+    conditions = {
+        "comparison_models": ["baseline", "v2", "current"],
+        "models": {
+            "baseline": {
+                "vehicle_model_type": "delay_steer_acc_geared_wo_fall_guard",
+                "params": {"wheelbase": 4.7},
+            },
+            "v2": {
+                "vehicle_model_type": "delay_steer_acc_geared_for_diffusion_planner",
+                "params": {
+                    "wheelbase": 4.7,
+                    "acc_time_constant": 0.3,
+                    "debug_acc_scaling_factor": 0.9,
+                    "debug_steer_scaling_factor": 1.015827,
+                    "steer_rate_lim": 0.6,
+                    "k_us": 0.018,
+                },
+            },
+            "current": {
+                "vehicle_model_type": "delay_steer_acc_geared_for_diffusion_planner",
+                "params": {"wheelbase": 4.7},
+            },
+        },
+    }
+    if release is not None:
+        conditions["release"] = release
+    return {"Evaluation": {"Conditions": conditions}}
+
+
+def test_scenario_parses_release_spec(tmp_path: Path) -> None:
+    scenario = tmp_path / "scenario.yaml"
+    scenario.write_text(
+        yaml.safe_dump(_release_scenario_document({"model": "v2", "version": 2})),
+        encoding="utf-8",
+    )
+    config = load_model_config(scenario)
+    assert config.release is not None
+    assert config.release.model == "v2"
+    assert config.release.version == 2
+
+    scenario.write_text(
+        yaml.safe_dump(_release_scenario_document(None)), encoding="utf-8",
+    )
+    assert load_model_config(scenario).release is None
+
+
+@pytest.mark.parametrize(
+    ("release", "match"),
+    [
+        ({"model": "unknown", "version": 2}, "release.model"),
+        ({"model": "baseline", "version": 2}, "vehicle_model_type"),
+        ({"model": "v2", "version": 0}, "release.version"),
+        ({"model": "v2", "version": True}, "release.version"),
+    ],
+)
+def test_scenario_rejects_invalid_release_spec(tmp_path: Path, release, match) -> None:
+    scenario = tmp_path / "scenario.yaml"
+    scenario.write_text(
+        yaml.safe_dump(_release_scenario_document(release)), encoding="utf-8",
+    )
+    with pytest.raises(ValueError, match=match):
+        load_model_config(scenario)
+
+
+def test_release_writes_designated_case_into_version_slot(tmp_path: Path) -> None:
+    """release 指定時は指定ケースが v{N} スロットに入り、tuned の v100 は書かれない。"""
+    scenario = tmp_path / "scenario.yaml"
+    scenario.write_text(
+        yaml.safe_dump(_release_scenario_document({"model": "v2", "version": 2})),
+        encoding="utf-8",
+    )
+    source_param = tmp_path / "input.yaml"
+    source_param.write_text(
+        yaml.safe_dump(
+            {
+                "/**": {
+                    "ros__parameters": {
+                        "vehicle_model_type": "DELAY_STEER_ACC_GEARED_FOR_DIFFUSION_PLANNER",
+                        "delay_steer_acc_geared_for_diffusion_planner": {
+                            "version": 1,
+                            "v1": {"k_us": 0.0},
+                        },
+                    }
+                }
+            },
+            sort_keys=False,
+        ),
+        encoding="utf-8",
+    )
+
+    released = release_params.release(
+        source_param, tmp_path / "missing-tuned.yaml", tmp_path / "out",
+        scenario=scenario,
+    )
+
+    document = yaml.safe_load(released.read_text(encoding="utf-8"))
+    ros_params = document["/**"]["ros__parameters"]
+    model = ros_params["delay_steer_acc_geared_for_diffusion_planner"]
+    assert model["version"] == 2
+    assert model["v2"]["debug_acc_scaling_factor"] == 0.9
+    assert model["v2"]["debug_steer_scaling_factor"] == 1.015827
+    assert model["v2"]["k_us"] == 0.018
+    # scenario ケースにないキーは rollout 既定 (ローカル config の選択バージョン) から補完
+    assert model["v2"]["use_rk4"] is False
+    assert "v100" not in model
+    # 既存の確定バージョン v1 は保持され、global 値は指定ケース由来
+    assert model["v1"] == {"k_us": 0.0}
+    assert ros_params["steer_rate_lim"] == 0.6
+    assert ros_params["wheel_base"] == 4.7
+
+
+def test_release_rejects_overwriting_existing_version_slot(tmp_path: Path) -> None:
+    scenario = tmp_path / "scenario.yaml"
+    scenario.write_text(
+        yaml.safe_dump(_release_scenario_document({"model": "v2", "version": 1})),
+        encoding="utf-8",
+    )
+    source_param = tmp_path / "input.yaml"
+    source_param.write_text(
+        yaml.safe_dump(
+            {
+                "/**": {
+                    "ros__parameters": {
+                        "vehicle_model_type": "DELAY_STEER_ACC_GEARED_FOR_DIFFUSION_PLANNER",
+                        "delay_steer_acc_geared_for_diffusion_planner": {
+                            "version": 1,
+                            "v1": {"k_us": 0.0},
+                        },
+                    }
+                }
+            },
+            sort_keys=False,
+        ),
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ValueError, match="already contains 'v1'"):
+        release_params.release(
+            source_param, tmp_path / "missing-tuned.yaml", tmp_path / "out",
+            scenario=scenario,
+        )
+
+
 def test_scenario_rejects_non_target_current_model(tmp_path: Path) -> None:
     scenario = tmp_path / "scenario.yaml"
     scenario.write_text(

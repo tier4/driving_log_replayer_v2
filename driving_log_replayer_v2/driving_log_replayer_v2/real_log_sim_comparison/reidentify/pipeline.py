@@ -135,10 +135,12 @@ def _step_report(
         )
 
 
-def _step_release(tuned_out: Path, out_dir: Path, input_param: Path) -> Path:
+def _step_release(
+    tuned_out: Path, out_dir: Path, input_param: Path, scenario: Path | None = None,
+) -> Path:
     from . import release_params  # noqa: PLC0415
 
-    return release_params.release(input_param, tuned_out, out_dir)
+    return release_params.release(input_param, tuned_out, out_dir, scenario=scenario)
 
 
 def main() -> None:
@@ -198,7 +200,7 @@ def main() -> None:
     )
 
     print("\n[pipeline] === 6/7 release ===")
-    release_out = _step_release(tuned_out, out_dir, args.input_param)
+    release_out = _step_release(tuned_out, out_dir, args.input_param, args.scenario)
 
     print("\n[pipeline] === 7/7 report ===")
     _step_report(
