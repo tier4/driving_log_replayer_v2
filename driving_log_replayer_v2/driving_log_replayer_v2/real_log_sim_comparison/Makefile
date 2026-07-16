@@ -50,7 +50,11 @@ help:
 	@echo "入力（環境変数または make 変数で上書き可）:"
 	@echo "  ROOT=$(ROOT)"
 	@echo "  SCENARIO=$(SCENARIO)"
-	@echo "  INPUT_PARAM=$(INPUT_PARAM)"
+	@echo "  INPUT_PARAM=$(INPUT_PARAM)  # scenario が release を宣言した場合のみ必須"
+	@echo ""
+	@echo "実行ステージは scenario の Evaluation.Conditions.fit / release で制御:"
+	@echo "  fit: {target: <case>, stages: [lon, steer, xy, merge]}  # stages 省略=全実行, []=fit なし"
+	@echo "  release: {model: <case>|tuned, version: <N>}  # 省略時は release/YAML 出力なし"
 	@echo ""
 	@echo "任意変数:"
 	@echo "  N_TRIALS=$(N_TRIALS) N_JOBS=$(N_JOBS) FORCE=$(FORCE) NO_SETUP=$(NO_SETUP)"
@@ -65,19 +69,19 @@ help:
 reidentify:
 	@test -n "$(strip $(ROOT))" || { echo "[ERROR] ROOT is required"; exit 2; }
 	@test -n "$(strip $(SCENARIO))" || { echo "[ERROR] SCENARIO is required"; exit 2; }
-	@test -n "$(strip $(INPUT_PARAM))" || { echo "[ERROR] INPUT_PARAM is required"; exit 2; }
 	@test -d "$(ROOT)/datasets" || { echo "[ERROR] datasets directory not found: $(ROOT)/datasets"; exit 2; }
 	@test -f "$(SCENARIO)" || { echo "[ERROR] scenario not found: $(SCENARIO)"; exit 2; }
-	@test -f "$(INPUT_PARAM)" || { echo "[ERROR] input parameter file not found: $(INPUT_PARAM)"; exit 2; }
+	@# INPUT_PARAM は scenario が release を宣言した場合のみ必須。存在すれば渡し、
+	@# release 指定があるのに欠けている場合は pipeline がエラーにする。
 	@if [ "$(NO_SETUP)" != "1" ]; then \
 		test -f "$(ROS_SETUP)" || { echo "[ERROR] ROS setup not found: $(ROS_SETUP)"; exit 2; }; \
 		test -f "$(SETUP_BASH)" || { echo "[ERROR] ROS setup not found: $(SETUP_BASH) (build the workspace or use NO_SETUP=1)"; exit 2; }; \
 	fi
-	@echo "[INFO] reidentify: extract -> fit_lon -> fit_steer -> fit_xy -> fit_merge -> release -> report"
+	@echo "[INFO] reidentify: extract -> (scenario fit.stages) -> evaluate/merge -> [release] -> report"
 	$(RUN_PY) -m driving_log_replayer_v2.real_log_sim_comparison.reidentify.pipeline \
 		--root "$(ROOT)" \
 		--scenario "$(SCENARIO)" \
-		--input-param "$(INPUT_PARAM)" \
+		$(if $(wildcard $(INPUT_PARAM)),--input-param "$(INPUT_PARAM)",) \
 		--n-trials "$(N_TRIALS)" \
 		--n-jobs "$(N_JOBS)" $(FORCE_EXTRACT)
 

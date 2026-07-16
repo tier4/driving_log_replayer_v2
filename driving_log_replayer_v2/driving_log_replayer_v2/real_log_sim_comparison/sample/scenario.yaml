@@ -4,8 +4,13 @@ ScenarioName: vehicle_model_reidentify
 Evaluation:
   Conditions:
     comparison_models: [baseline, v1, v2, v2_rk4, v2_c, v2_t, current]
+    # fit 対象ケースと実行ステージ。target は同定の初期値/対象ケース (既定 current)。
+    # stages は lon->steer->xy の連続する先頭部分 + 任意で merge。省略時は全ステージ、
+    # [] で fit を行わず固定比較のみ。fit 出力は "tuned" として比較・release 対象になる。
+    fit: {target: current, stages: [lon, steer, xy, merge]}
     # release ステージの出力先: v2 ケースを simulator_model.param.yaml の v2 スロットへ
-    # リリースする (tuned の v100 は含めない)。未指定時は従来どおり tuned → v100。
+    # リリースする。model には scenario ケース名か fit 出力 "tuned" を指定。
+    # release を省略すると release ステージ (YAML 出力) はスキップされる。
     release: {model: v2, version: 2}
     # レポート 9 章 (時系列診断) の対象 dataset-id のリスト。指定すると release ケース
     # (未指定時は tuned) のパラメータで状態方程式の左辺・右辺・指令値を各データセットに

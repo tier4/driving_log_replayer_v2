@@ -62,11 +62,22 @@ make reidentify \
 
 ## 処理内容
 
-`make reidentify` は次の処理を必ずこの順で実行します。
+`make reidentify` は scenario の設定に従って次のステージを順に実行します。
 
 ```text
-raw bag -> CSV cache -> fit_lon -> fit_steer -> fit_xy -> fit_merge -> release YAML -> report.html
+raw bag -> CSV cache -> [fit_lon -> fit_steer -> fit_xy] -> [fit_merge | evaluate] -> [release YAML] -> report.html
 ```
+
+どのステージを実行するかは scenario の `Evaluation.Conditions.fit` / `release` で制御します。
+
+- `fit: {target: <case>, stages: [lon, steer, xy, merge]}` — `target` は同定の初期値/対象ケース
+  （既定 `current`）。`stages` は `lon -> steer -> xy` の**連続する先頭部分**に加えて任意で `merge`
+  を続けられます（歯抜け不可）。省略時は全ステージ、`[]` で fit を行わず固定比較のみになります。
+  `merge` を含まない場合は Optuna 統合最適化を行わず、直接同定の結果（あれば）を評価します。
+  fit 出力は `tuned` として比較表・リリース対象になります（ハードコードの `current` 特別扱いは廃止）。
+- `release: {model: <case>|tuned, version: <N>}` — 指定時のみ release ステージが動き、そのケース
+  （または fit 出力 `tuned`）を `simulator_model.param.yaml` の `v<N>` スロットへ書き `version: <N>`
+  で選択します。省略すると release（YAML 出力）はスキップされ、`--input-param` も不要です。
 
 `fit_merge` が `comparison_models` の全モデル（`current` は `tuned` 表記）の dataset別・horizon別 N-step 指標を `metrics.csv` に一度だけ
 書き出します。最適化スコアは yaw/縦/横 を N=10/30/70/150/300 で、steer/ax の
@@ -78,24 +89,28 @@ N≈20 までに定常値へ飽和するプラトー特性を持つため、過�
 その CSV から描画し、同じ文書内で CSV キャッシュを一度だけ読んで縦方向・操舵・ヨー (`k_us`)・
 x/y 方程式残差も評価します。N-step 指標のロールアウトは再計算しません。scenario の
 `Evaluation.Conditions.comparison_models` に比較するケース名を列挙します（例:
-`[baseline, v1, v2, v2_rk4, current]`）。重複・未定義ケースはエラーで、`baseline` と
-`current` は必須です。
+`[baseline, v1, v2, v2_rk4, current]`）。重複・未定義ケースはエラーで、`baseline` のみ必須です
+（`fit` が有効なときは fit 対象ケースが `tuned` として自動的に比較へ加わります）。
 
 各モデルは宣言済みパラメータで固定 RMSE 評価され、baseline 比・サンプル数・使用パラメータを
-比較表と分布で表示します。`current` のみ scenario の `params` に `tuned_params.yaml` の
-`params` を上書きマージして使い、それ以外の比較モデルは scenario に書かれた値をそのまま使います。
+比較表と分布で表示します。fit 対象ケース（既定 `current`）だけは scenario の `params` に
+`tuned_params.yaml` の `params` を上書きマージして `tuned` として表示し、それ以外の比較モデルは
+scenario に書かれた値をそのまま使います。
 
 必須topicがない、データが空、有効区間が短すぎる dataset は理由を表示して除外します。
 同定可能な dataset が1件も残らない場合はエラー終了します。
 
 ## リリース対象の指定
 
-release ステージは既定では tuned（統合最適化の結果）を `v100` スロットへ書き出しますが、
-scenario の `Evaluation.Conditions.release: {model: <case>, version: <N>}` を指定すると、
-そのケースのパラメータを `v<N>` スロットへ書き `version: <N>` で選択します
-（tuned の v100 は含めません。入力 YAML に既存の `v<N>` がある場合はエラー）。
+release ステージは scenario に `Evaluation.Conditions.release: {model: <case>|tuned, version: <N>}`
+が指定された場合のみ実行され、そのケース（または fit 出力 `tuned`）のパラメータを
+`v<N>` スロットへ書き `version: <N>` で選択します。自動（magic）な既定リリースはありません。
+release を省略すると release ステージ（`simulator_model.param.yaml` 出力）はスキップされ、
+`--input-param` も不要です。
 例: `release: {model: v2, version: 2}` — プラトー補正 + k_us 更新済みの固定ケース v2 を
-リリース候補として simulator_model.param.yaml に出力します。
+リリース候補として出力します。`release: {model: tuned, version: 100}` なら統合最適化の結果を出します。
+固定ケースの再リリースは入力 YAML に別内容の `v<N>` があるとエラー（同一内容は冪等に許可）。
+`tuned` は Optuna の再現性が保証されないため冪等ガードを外し、既存スロットを上書きします。
 
 ## スケーリングのプラトー同定（2段構成）
 
