@@ -163,6 +163,9 @@ def _load_metrics(path: Path, model_order: tuple[str, ...]) -> pd.DataFrame:
     _coerce_metric_values(frame)
     _validate_metric_coverage(frame, model_order)
 
+    # metrics.csv が model_order の上位集合を含む場合 (scenario で比較集合を減らした後の
+    # 再レポートや --report-only の再利用) に備え、描画対象を model_order に限定する。
+    frame = frame.loc[frame["model"].isin(model_order)]
     return frame.sort_values(["horizon", "dataset_id", "model"], kind="stable").reset_index(
         drop=True
     )

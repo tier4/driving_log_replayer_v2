@@ -987,3 +987,39 @@ def test_build_comparison_document_includes_tuned_when_fit_ran(tmp_path: Path, m
 
     models = set(pd.read_csv(metrics)["model"].unique())
     assert models == {"baseline", "tuned"}
+
+
+def test_build_comparison_document_omits_tuned_when_target_not_in_comparison(
+    tmp_path: Path, monkeypatch,
+) -> None:
+    """fit 対象を comparison_models に入れなければ tuned は比較に出ない (params は保持)。"""
+    scenario = tmp_path / "scenario.yaml"
+    scenario.write_text(yaml.safe_dump({"Evaluation": {"Conditions": {
+        "comparison_models": ["baseline", "v1"],  # 対象 current を含めない
+        "models": {
+            "baseline": {"vehicle_model_type": "delay_steer_acc_geared_wo_fall_guard",
+                          "params": {"wheelbase": 4.7}},
+            "v1": {"vehicle_model_type": "delay_steer_acc_geared_for_diffusion_planner",
+                    "params": {"wheelbase": 4.7}},
+            "current": {"vehicle_model_type": "delay_steer_acc_geared_for_diffusion_planner",
+                         "params": {"wheelbase": 4.7}},
+        },
+    }}}), encoding="utf-8")
+    cfg = load_model_config(scenario)
+    _install_synthetic_evaluation(monkeypatch)
+
+    metrics = tmp_path / "metrics.csv"
+    tuned_params = {"wheelbase": 4.7, "k_us": 0.012}
+    result = fit_merge.build_comparison_document(
+        tmp_path, scenario, cfg, _synthetic_ctxs(),
+        n_datasets=2, fit_skipped=[],
+        baseline_bundle=("delay_steer_acc_geared_wo_fall_guard", {"wheelbase": 4.7}, "accel", "steer"),
+        tuned_params=tuned_params, metrics_out=metrics,
+    )
+
+    assert "tuned" not in result["comparison"]
+    assert set(result["comparison"]) == {"baseline", "v1"}
+    assert result["params"] == tuned_params  # fit 結果は Final params として保持
+    import pandas as pd  # noqa: PLC0415
+
+    assert set(pd.read_csv(metrics)["model"].unique()) == {"baseline", "v1"}

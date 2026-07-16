@@ -93,11 +93,14 @@ N≈20 までに定常値へ飽和するプラトー特性を持つため、過�
 その CSV から描画し、同じ文書内で CSV キャッシュを一度だけ読んで縦方向・操舵・ヨー (`k_us`)・
 x/y 方程式残差も評価します。N-step 指標のロールアウトは再計算しません。scenario の
 `Evaluation.Conditions.comparison_models` に比較するケース名を列挙します（例:
-`[baseline, v1, v2, v2_rk4, current]`）。重複・未定義ケースはエラーで、`baseline` のみ必須です
-（`fit` が有効なときは fit 対象ケースが `tuned` として自動的に比較へ加わります）。
+`[baseline, v1, v2, current]`）。重複・未定義ケースはエラーで、`baseline` のみ必須です。
+fit 出力 `tuned` を比較表・グラフに載せたい場合は fit 対象ケース（既定 `current`）を
+comparison_models に**明記**します。明記しなければ `tuned` は比較には出ません（fit は実行され、
+結果は 7 章「Final parameters」および `tuned_params.yaml` に残り、`release: {model: tuned}` で
+リリースも可能です）。
 
 各モデルは宣言済みパラメータで固定 RMSE 評価され、baseline 比・サンプル数・使用パラメータを
-比較表と分布で表示します。fit 対象ケース（既定 `current`）だけは scenario の `params` に
+比較表と分布で表示します。comparison_models に明記した fit 対象ケースだけは scenario の `params` に
 `tuned_params.yaml` の `params` を上書きマージして `tuned` として表示し、それ以外の比較モデルは
 scenario に書かれた値をそのまま使います。
 

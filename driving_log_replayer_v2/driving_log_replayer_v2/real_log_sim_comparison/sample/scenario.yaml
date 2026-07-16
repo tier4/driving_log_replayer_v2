@@ -3,10 +3,13 @@ ScenarioName: vehicle_model_reidentify
 
 Evaluation:
   Conditions:
-    comparison_models: [baseline, v1, v2, v2_rk4, v2_c, v2_t, current]
+#    comparison_models: [baseline, v1, v2, v2_rk4, v2_c, v2_t, current]
+    comparison_models: [baseline, v1, v2]
     # fit 対象ケースと実行ステージ。target は同定の初期値/対象ケース (既定 current)。
     # stages は lon->steer->xy の連続する先頭部分 + 任意で merge。省略時は全ステージ、
-    # [] で fit を行わず固定比較のみ。fit 出力は "tuned" として比較・release 対象になる。
+    # [] で fit を行わず固定比較のみ。fit 出力 "tuned" を比較表・グラフに載せたい場合は
+    # fit 対象 (current) を comparison_models に明記する (未指定なら比較には出ない)。
+    # release: {model: tuned, ...} なら比較への明記なしでもリリースは可能。
     fit: {target: current, stages: [lon, steer, xy, merge]}
     # release ステージの出力先: v2 ケースを simulator_model.param.yaml の v2 スロットへ
     # リリースする。model には scenario ケース名か fit 出力 "tuned" を指定。

@@ -303,15 +303,11 @@ def comparison_display_order(config: ModelConfig) -> tuple[str, ...]:
     """レポート/metrics.csv に載せる比較モデルの表示名を順序付きで返す。
 
     comparison_models の順序を保ちつつ、fit 有効時は fit 対象ケースを "tuned" に
-    置換 (フィット結果で評価される) する。fit 対象が comparison_models に無い場合でも、
-    fit 出力を見せるため "tuned" を末尾に追加する。fit 無効時は素の comparison_models。
+    置換 (フィット結果で評価される) する。fit 出力 "tuned" を比較に載せたい場合は
+    fit 対象ケースを comparison_models に明記する (未指定なら比較には出さない)。
+    fit 無効時は素の comparison_models。
     """
-    order: list[str] = []
-    for name in config.comparison_models:
-        if config.fit.enabled and name == config.fit.target:
-            order.append(TUNED_MODEL_DISPLAY_NAME)
-        else:
-            order.append(name)
-    if config.fit.enabled and TUNED_MODEL_DISPLAY_NAME not in order:
-        order.append(TUNED_MODEL_DISPLAY_NAME)
-    return tuple(order)
+    return tuple(
+        TUNED_MODEL_DISPLAY_NAME if config.fit.enabled and name == config.fit.target else name
+        for name in config.comparison_models
+    )

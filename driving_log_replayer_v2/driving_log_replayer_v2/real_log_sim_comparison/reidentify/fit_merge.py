@@ -619,15 +619,17 @@ def build_comparison_document(
     baselines = {ctx.dataset_id: ctx.base_metric for ctx in ctxs}
     baseline_metrics = [(ctx.dataset_id, ctx.base_metric) for ctx in ctxs]
 
+    display_order = comparison_display_order(cfg)
+    # tuned を比較に載せるのは fit 対象が comparison_models に明記されたときだけ。
+    tuned_in_comparison = TUNED_MODEL_DISPLAY_NAME in display_order
     tuned_case = cfg.find_case(cfg.fit.target) if tuned_params is not None else None
     tuned_metrics_list = None
-    if tuned_params is not None:
+    if tuned_params is not None and tuned_in_comparison:
         tuned_metrics_list = _evaluate_candidate(
             ctxs, tuned_params, tuned_case.vehicle_model_type,
             tuned_case.acceleration_source, tuned_case.steering_source, aggregate=False,
         )
 
-    display_order = comparison_display_order(cfg)
     cases: list[tuple[str, dict, str, str, str]] = []
     sparse: dict[str, list[tuple[str, dict]]] = {}
     for display_name in display_order:
@@ -658,7 +660,7 @@ def build_comparison_document(
             "acceleration_source": accel,
             "steering_source": steer,
         }
-    if tuned_params is not None and not math.isfinite(
+    if tuned_in_comparison and not math.isfinite(
         comparison_results[TUNED_MODEL_DISPLAY_NAME]["score"]
     ):
         raise RuntimeError("最終パラメータで有限な rollout 指標を計算できませんでした")
@@ -728,7 +730,8 @@ def build_comparison_document(
     if tuned_params is not None:
         metadata["vehicle_model_type"] = tuned_case.vehicle_model_type
         result["params"] = tuned_params
-        result["score"] = comparison_results[TUNED_MODEL_DISPLAY_NAME]["score"]
+        if tuned_in_comparison:
+            result["score"] = comparison_results[TUNED_MODEL_DISPLAY_NAME]["score"]
         result["parameter_constraints"] = build_constraint_audit(tuned_params)
     else:
         # fit 非実行: report._load_tuned_document が params mapping を要求するため空で置く。
