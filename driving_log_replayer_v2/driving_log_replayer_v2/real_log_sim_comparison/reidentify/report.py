@@ -605,6 +605,58 @@ def _render_artifact(path: Path, *, parameter_title: str = "Parameters") -> str:
     return _render_artifact_document(_load_artifact(path), path, parameter_title=parameter_title)
 
 
+def _render_stage_plateau(path: Path, *, scale_key: str, unit: str) -> str:
+    """
+    Render the in-stage plateau scaling identification summary (sections 3/4).
+
+    fit_lon / fit_steer は τ/delay 確定後に scaling をプラトー RMSE 最小化で決め直し、
+    phase 成果物 metadata に plateau_scale / dynamic_scale / before-after RMSE を記録する。
+    記録がない (旧成果物・最適化無効) 場合は何も描画しない。
+    """
+    metadata = _load_artifact(path).get("metadata")
+    if not isinstance(metadata, Mapping) or "plateau_scale" not in metadata:
+        return ""
+    try:
+        plateau_scale = float(metadata["plateau_scale"])
+        dynamic_scale = float(metadata["dynamic_scale"])
+        rmse_initial = float(metadata["plateau_rmse_initial"])
+        rmse_final = float(metadata["plateau_rmse_final"])
+        n_valid = int(metadata["plateau_n_valid"])
+    except (KeyError, TypeError, ValueError):
+        return ""
+    improvement = (
+        f" ({1 - rmse_final / rmse_initial:+.1%})" if rmse_initial > 0.0 else ""
+    )
+    return f"""<h3>スケーリングのプラトー同定 (τ/むだ時間 固定)</h3>
+<p>τ/むだ時間の確定後、<code>{_escape(scale_key)}</code> は N-step rollout のプラトー
+mean RMSE を最小化して決定した (共通コア fit_scaling_channels、
+<a href="#sec-plateau">🔗 6 章</a>)。動的励起マスク上の同時推定値は τ/むだ時間の
+同定精度のために計算するが採用しない。</p>
+<div class="stats">
+<div class="stat"><span>採用値 (plateau)</span><strong>{plateau_scale:.4f}</strong></div>
+<div class="stat"><span>動的フィット値 (不採用)</span><strong>{dynamic_scale:.4f}</strong></div>
+<div class="stat"><span>plateau mean RMSE</span><strong>{rmse_initial:.4f} → {rmse_final:.4f} {_escape(unit)}{improvement}</strong></div>
+<div class="stat"><span>有効 dataset</span><strong>{n_valid}</strong></div>
+</div>"""
+
+
+def _render_release_spec(scenario: Path) -> str:
+    """scenario の release 指定 (固定ケース→バージョンスロット) を 8 章に表示する。"""
+    if not scenario.is_file():
+        return ""
+    release = load_model_config(scenario).release
+    if release is None:
+        return (
+            '<p class="note">release 指定なし: tuned (統合最適化の結果) を '
+            "v100 スロットへ書き出す既定動作。</p>"
+        )
+    return (
+        f'<p class="note">release 指定: scenario ケース <b>{_escape(release.model)}</b> を '
+        f"<b>v{release.version}</b> スロット (version: {release.version}) としてリリース。"
+        "tuned の v100 は含まれない。</p>"
+    )
+
+
 def _comparison_model_order(scenario: Path) -> tuple[str, ...]:
     if not scenario.is_file():
         return MODEL_ORDER
@@ -670,6 +722,25 @@ def _render_plateau_section(plateau_path: Path) -> str:
     """
     if plateau_path.is_file():
         artifact = _render_artifact(plateau_path, parameter_title="plateau_params.yaml")
+        metadata = _load_artifact(plateau_path).get("metadata")
+        objectives = metadata.get("objectives") if isinstance(metadata, Mapping) else None
+        if isinstance(objectives, Mapping):
+            units = {"steer": "deg", "ax": "m/s²"}
+            tiles = []
+            for metric_key, objective in objectives.items():
+                try:
+                    initial = float(objective["initial"])
+                    final = float(objective["final"])
+                except (KeyError, TypeError, ValueError):
+                    continue
+                improvement = f" ({1 - final / initial:+.1%})" if initial > 0.0 else ""
+                tiles.append(
+                    f'<div class="stat"><span>{_escape(metric_key)} plateau mean RMSE</span>'
+                    f"<strong>{initial:.4f} → {final:.4f}"
+                    f" {_escape(units.get(str(metric_key), ''))}{improvement}</strong></div>"
+                )
+            if tiles:
+                artifact += f'<div class="stats">{"".join(tiles)}</div>'
     else:
         artifact = (
             '<p class="note">plateau_params.yaml が見つかりません。単発解析 '
@@ -699,8 +770,8 @@ make fit_plateau も同じコアを使う</td>
 <td style="text-align:left">fit_plateau.fit_scaling_channels<br>(3・4 章の各ステージ / make fit_plateau)</td></tr>
 <tr><td style="text-align:left">③ 長 horizon の yaw/位置ドリフト = 定常アクチュエータ誤差の積分</td>
 <td style="text-align:left">プラトーの<b>系統成分</b>削減が長期ドリフト削減に直結する
-(比較モデル v1_p は steer/ax 補正のみで yaw/long/lat も全面改善)</td>
-<td style="text-align:left">v1_p (scenario.yaml)</td></tr>
+(比較モデル v2 は steer/ax 補正のみで yaw/long/lat も全面改善)</td>
+<td style="text-align:left">v2 (scenario.yaml)</td></tr>
 </table></div>
 <h3>スケーリングのプラトー同定: 系統別の 2 段構成</h3>
 <p>各系統の同定は「<b>τ・むだ時間を動的励起データの最小二乗で決定 → scaling factor を
@@ -716,14 +787,14 @@ ax 終端状態は acc 系のみに依存するため、目的関数は系統別
 最小化する。呼び出しは 2 箇所 — <b>パイプライン内 (3・4 章)</b> では fit_lon / fit_steer が
 τ/delay 確定後に自チャネルの scaling をこのコアで決め直し (動的励起マスク上の同時推定値は
 τ/delay の同定精度のためだけに使い、採用しない)、<b>単発解析 (make fit_plateau)</b> では
-比較モデル (v1_p など) 向けに任意ケースを初期値として同定し診断 CSV も出力する。</p>
+比較モデル (v2 など) 向けに任意ケースを初期値として同定し診断 CSV も出力する。</p>
 <div class="note"><b>steer_bias は同定対象に含めない</b>: モデル構造上 steer 状態は
 steer_des × scaling に収束し、bias はヨーレート計算にのみ入るため、プラトー目的関数に対して
 <b>平坦 (同定不能)</b>。探索すると任意の値に漂流する。bias の同定は yaw を見る統合最適化
 (fit_merge) に委ねる。</div>
 <p>成果物: <code>plateau_params.yaml</code> (同定値) と <code>plateau_diagnostics.csv</code>
 (dataset 別の RMSE と署名付き平均誤差 err = GT − sim)。同定値は scenario.yaml の比較モデル
-(例: v1_p) へ手動転記して本レポートの固定評価に載せる。</p>
+(例: v2) へ手動転記して本レポートの固定評価に載せる。</p>
 <h3>診断: 系統/変動の分解と steer_dead_band の判定</h3>
 <p>plateau_diagnostics.csv の署名付き平均 (steer_mean / ax_mean) がプラトーの<b>系統成分</b>、
 RMSE との差が<b>変動成分</b>を表す。steer_dead_band (現在 0 固定) の探索解禁は
@@ -743,7 +814,7 @@ lib/_accel_source.py)、steer は平滑化窓 0.4 s (カットオフ 2.55 Hz、s
 「生 GT + 2 Hz ゼロ位相 LPF カスケード」相当のフロア低減を窓のみで実現</li>
 <li><b>GT ソースの整合</b>: baseline / v1 系は raw ソース (accel は
 <code>/localization/acceleration</code> +0.080 s 遅延補償、steer は steering_status 生値)。
-<b>p 系 (v1_p) は定常補正パラメータ + SG 系 GT (steer_savgol + kinematic_savgol) の組</b>で、
+<b>p 系の v2 (旧 v1_p) は定常補正パラメータ + SG 系 GT (steer_savgol + kinematic_savgol) の組</b>で、
 GT のみ SG 化した旧 v1_sg はここに統合した (窓 0.4 s では raw との ax 差は +1〜4% 程度)</li>
 </ul>
 {artifact}"""
@@ -764,6 +835,7 @@ def _render_document(
     phase3_path: Path,
     release_path: Path,
     plateau_path: Path,
+    scenario_path: Path,
 ) -> str:
     datasets = frame["dataset_id"].nunique()
     horizons = frame["horizon"].nunique()
@@ -840,12 +912,12 @@ details {{ margin:10px 0; }} details > summary {{ cursor:pointer; font-weight:60
 </header>
 <section><h2>1. 記号と運動方程式</h2><p class="lede">以降の各セクションはここで定義した記号・残差式を参照する。</p>{physical_sections.equations}</section>
 <section id="sec-extraction"><h2>2. Extraction results</h2>{_render_failures(extraction_summary)}{physical_sections.prepare}</section>
-<section><h2>3. Longitudinal direct identification</h2>{_render_artifact(phase1_path, parameter_title="phase1_acc.yaml")}{physical_sections.longitudinal}</section>
-<section><h2>4. Steering direct identification</h2>{_render_artifact(phase2_path, parameter_title="phase2_steer.yaml")}{physical_sections.steering}{physical_sections.yaw}</section>
+<section><h2>3. Longitudinal direct identification</h2>{_render_artifact(phase1_path, parameter_title="phase1_acc.yaml")}{_render_stage_plateau(phase1_path, scale_key="debug_acc_scaling_factor", unit="m/s²")}{physical_sections.longitudinal}</section>
+<section><h2>4. Steering direct identification</h2>{_render_artifact(phase2_path, parameter_title="phase2_steer.yaml")}{_render_stage_plateau(phase2_path, scale_key="debug_steer_scaling_factor", unit="deg")}{physical_sections.steering}{physical_sections.yaw}</section>
 <section><h2>5. XY heading-rate direct identification</h2>{_render_artifact(phase3_path, parameter_title="phase3_xy.yaml")}{physical_sections.xy}</section>
 <section id="sec-plateau"><h2>6. Plateau analysis and stationary identification</h2><p class="lede">steer/ax の N-step 誤差プラトー特性と、それを活用した定常同定 (fit_plateau)・評価関数統合・GT 整備の手順。</p>{_render_plateau_section(plateau_path)}</section>
 <section id="sec-optimization"><h2>7. Integrated optimization</h2>{_render_artifact_document(document, tuned_path, parameter_title="Final parameters")}<h3>Aggregate comparison</h3>{_render_objective_equations()}<p class="note">Raw columns (pos/long/…) are mean RMSE. <b>Aggregate score</b> is the optimized robust_score; <b>Mean normalized RMSE</b> is the 7-metric ratio mean — see the objective definition above (<a href="#eq-score">🔗 評価関数の定義</a>). Aggregate/distribution values use the configured optimization horizons; graphs use every available N. Lower is better.</p>{_render_aggregate(document, summary, model_order)}<h3>Error by horizon N</h3><p class="note">Each point is the mean RMSE across valid datasets. Every available N is plotted; lower is better.</p>{_render_horizon_charts(frame, model_order)}<h3>Dataset distributions</h3>{_render_dataset_distribution(summary, model_order)}</section>
-<section id="sec-released"><h2>8. Released YAML</h2><p class="source">Released parameter YAML: {_escape(release_path)}</p></section>
+<section id="sec-released"><h2>8. Released YAML</h2>{_render_release_spec(scenario_path)}<p class="source">Released parameter YAML: {_escape(release_path)}</p></section>
 </main></body></html>
 """
 
@@ -898,6 +970,7 @@ def run(
         # fit_plateau は単発解析のためパイプラインから path が渡らない。成果物ディレクトリ
         # (tuned_params.yaml の隣) にあれば表示し、なければ実行方法の案内を出す。
         tuned_path.parent / "plateau_params.yaml",
+        scenario_path,
     )
     out_path.parent.mkdir(parents=True, exist_ok=True)
     out_path.write_text(rendered, encoding="utf-8")

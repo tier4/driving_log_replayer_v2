@@ -157,6 +157,48 @@ def test_run_builds_unified_report_from_finalized_artifacts(tmp_path: Path, monk
     assert 'id="prepare"' in rendered
 
 
+def test_render_stage_plateau_shows_adopted_and_dynamic_scale(tmp_path: Path) -> None:
+    """phase 成果物にプラトー同定記録があれば 3/4 章のサマリブロックを描画する。"""
+    phase = tmp_path / "phase2_steer.yaml"
+    phase.write_text(
+        yaml.safe_dump({
+            "params": {"debug_steer_scaling_factor": 1.0159},
+            "metadata": {
+                "plateau_scale": 1.0159,
+                "dynamic_scale": 1.0056,
+                "plateau_rmse_initial": 0.4243,
+                "plateau_rmse_final": 0.4209,
+                "plateau_n_valid": 318,
+            },
+        }),
+        encoding="utf-8",
+    )
+    rendered = report._render_stage_plateau(
+        phase, scale_key="debug_steer_scaling_factor", unit="deg",
+    )
+    assert "スケーリングのプラトー同定" in rendered
+    assert "1.0159" in rendered
+    assert "1.0056" in rendered
+    assert "0.4243 → 0.4209 deg" in rendered
+    assert "-0.8%" in rendered or "+0.8%" in rendered  # 改善率表示
+    assert 'href="#sec-plateau"' in rendered
+
+
+def test_render_stage_plateau_is_empty_without_record(tmp_path: Path) -> None:
+    """プラトー同定記録のない成果物 (旧形式・最適化無効) では何も描画しない。"""
+    phase = tmp_path / "phase1_acc.yaml"
+    phase.write_text(
+        yaml.safe_dump({"params": {"acc_time_constant": 0.13}, "metadata": {"phase": 1}}),
+        encoding="utf-8",
+    )
+    assert report._render_stage_plateau(
+        phase, scale_key="debug_acc_scaling_factor", unit="m/s²",
+    ) == ""
+    assert report._render_stage_plateau(
+        tmp_path / "missing.yaml", scale_key="debug_acc_scaling_factor", unit="m/s²",
+    ) == ""
+
+
 def test_run_plots_every_available_horizon(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     _stub_physical_validity(monkeypatch)
     tuned = tmp_path / "tuned.yaml"
