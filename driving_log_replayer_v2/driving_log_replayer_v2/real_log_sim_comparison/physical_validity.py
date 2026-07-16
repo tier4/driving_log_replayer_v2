@@ -3,6 +3,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from dataclasses import field
+import math
 import multiprocessing
 from pathlib import Path
 from time import perf_counter
@@ -12,17 +13,22 @@ import numpy as np
 import plotly.graph_objects as go
 import yaml
 
+from .lib._accel_source import savgol_derivative
 from .lib._parallel import imap_with_watchdog
 from .lib._parallel import normalize_parallel_jobs
 from .lib._parallel import pool_chunksize
 from .lib._parallel import set_worker_thread_env_defaults
 from .lib._report_format import escape as _escape
 from .lib._report_format import format_number as _number
+from .lib._steer_source import steer_dataframe_from_source
+from .reidentify.csv_schema import CACHE_NAME
+from .reidentify.fit_core import delay_command
 from .reidentify.fit_core import simulate_first_order
 from .reidentify.load_data import build_resampled
 from .reidentify.load_data import discover_cached_datasets
 from .reidentify.load_data import read_dataset_csv
 from .reidentify.model_config import load_model_config
+from .reidentify.model_config import ModelConfig
 from .reidentify.model_config import ModelSpec
 from .reidentify.residuals import build_xy_columns
 from .reidentify.residuals import rmse
@@ -49,6 +55,7 @@ class ComparedModel:
     vehicle_model_type: str
     acceleration_source: str
     params: dict[str, Any]
+    steering_source: str = "steer"
 
 
 @dataclass
@@ -78,6 +85,7 @@ class PhysicalValiditySections:
     steering: str
     yaw: str
     xy: str
+    timeseries: str
 
 
 # RMSE 色分けバーの判定しきい値。ratio=RMSE/baseline に対し、改善/悪化/中立を分ける。
@@ -225,7 +233,12 @@ def _models_from_inputs(params_path: Path, scenario: Path | None, case: str) -> 
         params = dict(spec.params)
         if name == TARGET_MODEL_NAME:
             params.update(tuned_params)
-        models.append(ComparedModel(name, spec.vehicle_model_type, spec.acceleration_source, params))
+        models.append(
+            ComparedModel(
+                name, spec.vehicle_model_type, spec.acceleration_source, params,
+                spec.steering_source,
+            )
+        )
     return models
 
 
@@ -469,6 +482,255 @@ def validate_xy(context: ValidationContext) -> ValidationStep:
     return _cross_step(context, xy=True)
 
 
+# --- 対象データセットの時系列診断 (レポート 9 章) ---
+
+# 1 トレースの最大表示点数。数値計算は RESAMPLE_DT のフルグリッドで行い、表示だけを
+# stride 間引きする (savgol 微分・積分を間引きの影響から切り離す)。
+_TIMESERIES_MAX_POINTS = 6000
+# 非 DRIVE 区間シェーディングの上限。超えたら描かない (vrect の DOM 肥大防止)。
+_TIMESERIES_MAX_SPANS = 32
+
+_TS_MEASURED_STYLE = {"color": "#172033", "width": 2}
+_TS_MODEL_STYLE = {"color": "#2563eb", "width": 2}
+_TS_CMD_STYLE = {"color": "#b42318", "width": 1.5, "dash": "dot"}
+
+
+def _timeseries_stride(n: int) -> int:
+    return max(1, math.ceil(n / _TIMESERIES_MAX_POINTS))
+
+
+def _non_drive_spans(gear_drive: np.ndarray, dt: float) -> list[tuple[float, float]]:
+    """非 DRIVE の連続区間を (開始秒, 終了秒) のリストで返す。"""
+    indices = np.flatnonzero(~np.asarray(gear_drive, dtype=bool))
+    if len(indices) == 0:
+        return []
+    groups = np.split(indices, np.flatnonzero(np.diff(indices) > 1) + 1)
+    return [(float(group[0]) * dt, float(group[-1] + 1) * dt) for group in groups]
+
+
+def _timeseries_figure(
+    title: str,
+    y_title: str,
+    t: np.ndarray,
+    traces: list[tuple[str, np.ndarray, dict]],
+    stride: int,
+    spans: list[tuple[float, float]],
+) -> go.Figure:
+    fig = go.Figure()
+    t_shown = np.round(t[::stride], 3)
+    for name, values, style in traces:
+        fig.add_trace(
+            go.Scatter(x=t_shown, y=np.round(values[::stride], 5), name=name, mode="lines", line=style)
+        )
+    if spans and len(spans) <= _TIMESERIES_MAX_SPANS:
+        for x0, x1 in spans:
+            fig.add_vrect(x0=x0, x1=x1, fillcolor="gray", opacity=0.15, line_width=0)
+    fig.update_layout(
+        title=title, xaxis_title="時刻 [s]", yaxis_title=y_title,
+        hovermode="x unified", legend={"orientation": "h"}, height=340,
+        margin={"t": 48, "b": 40, "l": 60, "r": 20},
+    )
+    return fig
+
+
+def _timeseries_figures(
+    data: dict[str, Any], params: dict[str, Any], dt: float,
+) -> tuple[list[tuple[str, go.Figure]] | None, str | None]:
+    """
+    状態方程式の左辺 (実測系)・右辺 (モデル系)・指令値の時系列 5 図を組み立てる。
+
+    微分量 (ジャーク/ステアレート) は微分方程式の両辺をそのまま比較し、状態量
+    (加速度/速度/ステア) は実測と右辺の積分 (一次遅れシミュレーション/加速度積分) を
+    重ね描きする。ジャーク・ステアレートの指令値は CSV キャッシュに存在しないため描かない。
+    """
+    tau_a, tau_a_reason = _valid_number(params, "acc_time_constant", positive=True)
+    delay_a, delay_a_reason = _valid_number(params, "acc_time_delay")
+    tau_d, tau_d_reason = _valid_number(params, "steer_time_constant", positive=True)
+    delay_d, delay_d_reason = _valid_number(params, "steer_time_delay")
+    bias, bias_reason = _valid_number(params, "steer_bias")
+    reason = next(
+        (item for item in (tau_a_reason, delay_a_reason, tau_d_reason, delay_d_reason, bias_reason) if item),
+        None,
+    )
+    if reason:
+        return None, reason
+    if delay_a < 0.0 or delay_d < 0.0:
+        return None, "acc/steer_time_delay は0以上である必要があります"
+
+    a_cmd = np.asarray(data["a_cmd"], dtype=float)
+    a_act = np.asarray(data["a_act"], dtype=float)
+    d_cmd = np.asarray(data["d_cmd"], dtype=float)
+    d_act = np.asarray(data["d_act"], dtype=float)
+    v_cmd = np.asarray(data["v_cmd"], dtype=float)
+    vx = np.asarray(data["vx"], dtype=float)
+    t = np.arange(len(a_act)) * dt
+    stride = _timeseries_stride(len(a_act))
+    spans = _non_drive_spans(data["gear_drive"], dt)
+
+    jerk_lhs = savgol_derivative(a_act, dt)
+    jerk_rhs = (delay_command(a_cmd, delay_a, dt) - a_act) / tau_a
+    acc_model = simulate_first_order(a_cmd, tau_a, delay_a, dt)
+    # 明示 Euler の時刻規約 (fit_core._simulate と同じ): 時刻 t[k] の状態は前サンプル
+    # までの積分。先頭をずらさないと t=0 で v(0) を再現しない。
+    v_model = np.empty_like(vx)
+    v_model[0] = vx[0]
+    v_model[1:] = vx[0] + np.cumsum(a_act[:-1]) * dt
+    steer_rate_lhs = savgol_derivative(d_act, dt)
+    steer_rate_rhs = (delay_command(d_cmd, delay_d, dt) - (d_act - bias)) / tau_d
+    steer_model = simulate_first_order(d_cmd, tau_d, delay_d, dt) + bias
+
+    figures = [
+        ("ジャーク: ȧ_act 行の両辺", _timeseries_figure(
+            "ジャーク", "ジャーク [m/s³]", t,
+            [
+                ("左辺: 実測ジャーク (a_act の savgol 微分)", jerk_lhs, _TS_MEASURED_STYLE),
+                ("右辺: (a_cmd(t−T_a) − a_act)/τ_a", jerk_rhs, _TS_MODEL_STYLE),
+            ], stride, spans,
+        )),
+        ("加速度: 実測とȧ_act 行右辺の積分", _timeseries_figure(
+            "加速度", "加速度 [m/s²]", t,
+            [
+                ("左辺: 実測加速度 a_act", a_act, _TS_MEASURED_STYLE),
+                ("右辺の積分: 一次遅れ予測", acc_model, _TS_MODEL_STYLE),
+                ("指令 a_cmd", a_cmd, _TS_CMD_STYLE),
+            ], stride, spans,
+        )),
+        ("速度: 実測とv̇_x 行右辺の積分", _timeseries_figure(
+            "速度", "速度 [m/s]", t,
+            [
+                ("左辺: 実測速度 v_x", vx, _TS_MEASURED_STYLE),
+                ("右辺の積分: v(0) + ∫a_act dt", v_model, _TS_MODEL_STYLE),
+                ("指令 cmd_vel", v_cmd, _TS_CMD_STYLE),
+            ], stride, spans,
+        )),
+        ("ステアレート: δ̇_act 行の両辺", _timeseries_figure(
+            "ステアレート", "ステアレート [rad/s]", t,
+            [
+                ("左辺: 実測ステアレート (δ の savgol 微分)", steer_rate_lhs, _TS_MEASURED_STYLE),
+                ("右辺: (δ_cmd(t−T_δ) − (δ − β))/τ_δ", steer_rate_rhs, _TS_MODEL_STYLE),
+            ], stride, spans,
+        )),
+        ("ステア: 実測とδ̇_act 行右辺の積分", _timeseries_figure(
+            "ステア", "ステア [rad]", t,
+            [
+                ("左辺: 実測ステア δ", d_act, _TS_MEASURED_STYLE),
+                ("右辺の積分: 一次遅れ予測 + β", steer_model, _TS_MODEL_STYLE),
+                ("指令 δ_cmd", d_cmd, _TS_CMD_STYLE),
+            ], stride, spans,
+        )),
+    ]
+    return figures, None
+
+
+def _timeseries_model(config: ModelConfig, tuned_params: dict[str, Any]) -> tuple[ComparedModel, str]:
+    """時系列診断に使うモデルケースを解決する (release 指定 > tuned フォールバック)。"""
+    if config.release is not None:
+        spec: ModelSpec = config.find_case(config.release.model)
+        params = dict(spec.params)
+        label = f"release ケース {spec.name} (scenario.yaml の release 指定)"
+    else:
+        spec = config.find_case(TARGET_MODEL_NAME)
+        params = dict(spec.params)
+        params.update(tuned_params)
+        label = "tuned (release 未指定のためフォールバック)"
+    return (
+        ComparedModel(
+            spec.name, spec.vehicle_model_type, spec.acceleration_source, params,
+            spec.steering_source,
+        ),
+        label,
+    )
+
+
+def _timeseries_stat(label: str, value: Any) -> str:
+    return f'<div class="stat"><span>{_escape(label)}</span><strong>{_escape(str(value))}</strong></div>'
+
+
+def build_timeseries_section(collection_dir: Path, params_path: Path, scenario: Path) -> str:
+    """
+    レポート 9 章 (対象データセットの時系列診断) の HTML 断片を構築する。
+
+    scenario の Evaluation.Conditions.plot_dataset で指定した 1 データセットについて、
+    状態方程式の左辺・右辺・指令値を時系列で重ね描きする。失敗はレポート全体を
+    止めず、理由を .note で返す。
+    """
+    try:
+        config = load_model_config(scenario)
+    except (OSError, ValueError) as exc:
+        return f'<p class="note">scenario の読み込みに失敗しました: {_escape(str(exc))}</p>'
+    dataset_id = config.plot_dataset
+    if dataset_id is None:
+        return (
+            '<p class="note">scenario の <code>Evaluation.Conditions.plot_dataset: '
+            "&lt;dataset-id&gt;</code> を指定すると、そのデータセットについて状態方程式の"
+            "左辺・右辺・指令値の時系列診断を表示します。</p>"
+        )
+    csv_path = Path(collection_dir) / "datasets" / dataset_id / CACHE_NAME
+    if not csv_path.is_file():
+        n_cached = len(discover_cached_datasets(Path(collection_dir)))
+        return (
+            f'<p class="note">plot_dataset={_escape(dataset_id)} のキャッシュ CSV が見つかりません: '
+            f"{_escape(str(csv_path))} (キャッシュ済み dataset: {n_cached} 件)</p>"
+        )
+    try:
+        tuned_document = yaml.safe_load(Path(params_path).read_text(encoding="utf-8")) or {}
+        tuned_params = dict(tuned_document.get("params", tuned_document))
+        model, label = _timeseries_model(config, tuned_params)
+        source = read_dataset_csv(csv_path)
+        source["steering"] = steer_dataframe_from_source(
+            model.steering_source, df_steer=source["steering"]
+        )
+        data = build_resampled(
+            source, RESAMPLE_DT,
+            context=f"timeseries:{dataset_id}",
+            acceleration_source=model.acceleration_source,
+        )
+        if data is None:
+            return (
+                f'<p class="note">plot_dataset={_escape(dataset_id)}: '
+                "共通時間範囲が短すぎるか、必須信号が空です。</p>"
+            )
+        figures, reason = _timeseries_figures(data, model.params, RESAMPLE_DT)
+        if figures is None:
+            return (
+                f'<p class="note">パラメータが不正なため描画できません: {_escape(reason or "")}</p>'
+            )
+        n = len(data["a_act"])
+        stride = _timeseries_stride(n)
+        stats = "".join(
+            _timeseries_stat(label, value)
+            for label, value in (
+                ("dataset", dataset_id),
+                ("τ_a [s]", _number(model.params.get("acc_time_constant"))),
+                ("T_a [s]", _number(model.params.get("acc_time_delay"))),
+                ("τ_δ [s]", _number(model.params.get("steer_time_constant"))),
+                ("T_δ [s]", _number(model.params.get("steer_time_delay"))),
+                ("β [rad]", _number(model.params.get("steer_bias"))),
+                ("accel source", model.acceleration_source),
+                ("steer source", model.steering_source),
+                ("点数", f"{n} (表示 1/{stride})"),
+            )
+        )
+        figures_html = "".join(_figure_html(fig, title) for title, fig in figures)
+    except (OSError, ValueError, KeyError, TypeError) as exc:
+        return (
+            f'<p class="note">plot_dataset={_escape(dataset_id)} の時系列診断の構築に失敗しました: '
+            f"{_escape(str(exc))}</p>"
+        )
+    notes = (
+        '<div class="note">左辺の微分は Savitzky-Golay (窓 0.4 s, polyorder 2)。むだ時間は '
+        f"{RESAMPLE_DT:g} s グリッドへ丸めて先頭ホールドでシフト (fit_core と同一の解釈)。"
+        "速度の右辺は v(0) からの純積分で、ドリフトは a_act の系統バイアスをそのまま示す。"
+        f"表示は 1/{stride} 間引き (数値計算はフルグリッド)。灰色帯 = 非 DRIVE 区間"
+        "(固定評価・同定はこの区間を除外している)。</div>"
+    )
+    return (
+        f"<p>使用パラメータ: <b>{_escape(label)}</b></p>"
+        f'<div class="stats">{stats}</div>'
+        f"{notes}{figures_html}"
+    )
+
+
 def build_sections(
     collection_dir: Path,
     params_path: Path,
@@ -486,6 +748,7 @@ def build_sections(
         steering=validate_steering(context).html,
         yaw=validate_yaw(context).html,
         xy=validate_xy(context).html,
+        timeseries=build_timeseries_section(collection_dir, params_path, scenario),
     )
     print(f"[report] physical-validity complete: {perf_counter() - started:.1f}s")
     return sections

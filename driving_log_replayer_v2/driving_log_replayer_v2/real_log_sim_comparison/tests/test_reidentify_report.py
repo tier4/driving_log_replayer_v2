@@ -46,6 +46,7 @@ def _stub_physical_validity(monkeypatch: pytest.MonkeyPatch) -> None:
             steering="",
             yaw="",
             xy="",
+            timeseries='<p id="ts-stub">timeseries stub</p>',
         ),
     )
 
@@ -128,6 +129,11 @@ def test_run_builds_unified_report_from_finalized_artifacts(tmp_path: Path, monk
     assert "6. Plateau analysis and stationary identification" in rendered
     assert "7. Integrated optimization" in rendered
     assert "8. Released YAML" in rendered
+    # 9 章: 時系列診断セクションが末尾に配置され、nav からリンクされること
+    assert "9. 対象データセットの時系列診断" in rendered
+    assert 'id="sec-timeseries"' in rendered
+    assert 'href="#sec-timeseries"' in rendered
+    assert 'id="ts-stub"' in rendered
     # プラトー節: 手順 (fit_plateau) と方法論の説明が含まれる。artifact 不在時は実行案内
     assert "fit_plateau" in rendered
     assert "steer_bias" in rendered
@@ -158,7 +164,7 @@ def test_run_builds_unified_report_from_finalized_artifacts(tmp_path: Path, monk
 
 
 def test_render_stage_plateau_shows_adopted_and_dynamic_scale(tmp_path: Path) -> None:
-    """phase 成果物にプラトー同定記録があれば 3/4 章のサマリブロックを描画する。"""
+    """Phase 成果物にプラトー同定記録があれば 3/4 章のサマリブロックを描画する。"""
     phase = tmp_path / "phase2_steer.yaml"
     phase.write_text(
         yaml.safe_dump({

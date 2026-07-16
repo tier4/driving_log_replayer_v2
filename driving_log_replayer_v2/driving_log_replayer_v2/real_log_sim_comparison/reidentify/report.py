@@ -641,7 +641,7 @@ mean RMSE を最小化して決定した (共通コア fit_scaling_channels、
 
 
 def _render_release_spec(scenario: Path) -> str:
-    """scenario の release 指定 (固定ケース→バージョンスロット) を 8 章に表示する。"""
+    """Scenario の release 指定 (固定ケース→バージョンスロット) を 8 章に表示する。"""
     if not scenario.is_file():
         return ""
     release = load_model_config(scenario).release
@@ -907,7 +907,7 @@ details {{ margin:10px 0; }} details > summary {{ cursor:pointer; font-weight:60
   <nav>
     <a href="#eq-notation">1. 記号と運動方程式</a><a href="#sec-extraction">2. Extraction</a>
     <a href="#longitudinal">3. Longitudinal</a><a href="#steering">4. Steering</a>
-    <a href="#xy">5. XY</a><a href="#sec-plateau">6. Plateau</a><a href="#sec-optimization">7. Optimization</a><a href="#sec-released">8. Released</a>
+    <a href="#xy">5. XY</a><a href="#sec-plateau">6. Plateau</a><a href="#sec-optimization">7. Optimization</a><a href="#sec-released">8. Released</a><a href="#sec-timeseries">9. Timeseries</a>
   </nav>
 </header>
 <section><h2>1. 記号と運動方程式</h2><p class="lede">以降の各セクションはここで定義した記号・残差式を参照する。</p>{physical_sections.equations}</section>
@@ -918,6 +918,7 @@ details {{ margin:10px 0; }} details > summary {{ cursor:pointer; font-weight:60
 <section id="sec-plateau"><h2>6. Plateau analysis and stationary identification</h2><p class="lede">steer/ax の N-step 誤差プラトー特性と、それを活用した定常同定 (fit_plateau)・評価関数統合・GT 整備の手順。</p>{_render_plateau_section(plateau_path)}</section>
 <section id="sec-optimization"><h2>7. Integrated optimization</h2>{_render_artifact_document(document, tuned_path, parameter_title="Final parameters")}<h3>Aggregate comparison</h3>{_render_objective_equations()}<p class="note">Raw columns (pos/long/…) are mean RMSE. <b>Aggregate score</b> is the optimized robust_score; <b>Mean normalized RMSE</b> is the 7-metric ratio mean — see the objective definition above (<a href="#eq-score">🔗 評価関数の定義</a>). Aggregate/distribution values use the configured optimization horizons; graphs use every available N. Lower is better.</p>{_render_aggregate(document, summary, model_order)}<h3>Error by horizon N</h3><p class="note">Each point is the mean RMSE across valid datasets. Every available N is plotted; lower is better.</p>{_render_horizon_charts(frame, model_order)}<h3>Dataset distributions</h3>{_render_dataset_distribution(summary, model_order)}</section>
 <section id="sec-released"><h2>8. Released YAML</h2>{_render_release_spec(scenario_path)}<p class="source">Released parameter YAML: {_escape(release_path)}</p></section>
+<section id="sec-timeseries"><h2>9. 対象データセットの時系列診断</h2><p class="lede">scenario の plot_dataset で指定した 1 データセットについて、状態方程式の各行(<a href="#eq-long">縦方向</a>/<a href="#eq-steer">操舵</a>)の左辺(実測系)と右辺(モデル予測系)、および指令値を時系列で重ね描きする。</p>{physical_sections.timeseries}</section>
 </main></body></html>
 """
 

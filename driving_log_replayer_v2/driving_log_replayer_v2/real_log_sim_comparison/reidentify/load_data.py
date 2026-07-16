@@ -6,10 +6,11 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
-from ..lib._accel_source import accel_on_grid
-from .csv_schema import CACHE_NAME, SIGNAL_COLUMNS
+from .csv_schema import CACHE_NAME
+from .csv_schema import SIGNAL_COLUMNS
 from .gear import require_drive_gear_mask
 from .settings import ACCEL_SOURCE
+from ..lib._accel_source import accel_on_grid
 
 
 def read_dataset_csv(csv_path: Path) -> dict[str, pd.DataFrame]:
@@ -52,9 +53,10 @@ def build_resampled(
     dfs: dict[str, pd.DataFrame], dt: float, *, context: str,
     acceleration_source: str = ACCEL_SOURCE,
 ) -> dict | None:
-    """同定用の信号を一定周期のグリッドへ補間する。
+    """
+    同定用の信号を一定周期のグリッドへ補間する。
 
-    戻り値: {a_cmd, a_act, d_cmd, d_act, vx, wz, gear_drive} (float32配列) | None。
+    戻り値: {a_cmd, a_act, d_cmd, d_act, v_cmd, vx, wz, gear_drive} (float32配列) | None。
     """
     df_cmd = dfs["cmd"]
     df_accel = dfs["accel"]
@@ -88,6 +90,7 @@ def build_resampled(
     )
 
     d_cmd = np.interp(t_s, (df_cmd["t_ns"].values - t0) * 1e-9, df_cmd["cmd_steer"].values)
+    v_cmd = np.interp(t_s, (df_cmd["t_ns"].values - t0) * 1e-9, df_cmd["cmd_vel"].values)
     d_act = np.interp(t_s, (df_steer["t_ns"].values - t0) * 1e-9, df_steer["steer"].values)
     vx = np.interp(t_s, (df_vel["t_ns"].values - t0) * 1e-9, df_vel["lon_vel"].values)
     wz = np.interp(t_s, (df_kin["t_ns"].values - t0) * 1e-9, df_kin["wz"].values)
@@ -100,6 +103,7 @@ def build_resampled(
         "a_act": a_act.astype(np.float32),
         "d_cmd": d_cmd.astype(np.float32),
         "d_act": d_act.astype(np.float32),
+        "v_cmd": v_cmd.astype(np.float32),
         "vx": vx.astype(np.float32),
         "wz": wz.astype(np.float32),
         "gear_drive": gear_drive,
@@ -111,7 +115,7 @@ def build_rollout_data(
     acceleration_source: str = "accel",
     steering_source: str = "steer",
 ) -> dict[str, pd.DataFrame]:
-    """rollout 評価が使う DataFrame 群を組み立てる。"""
+    """Rollout 評価が使う DataFrame 群を組み立てる。"""
     df_vel = dfs["velocity"].rename(columns={"lon_vel": "vx"})
     from ..lib._accel_source import accel_dataframe_from_source
     from ..lib._steer_source import steer_dataframe_from_source

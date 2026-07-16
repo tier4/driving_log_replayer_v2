@@ -8,10 +8,12 @@ import re
 
 import yaml
 
+from .settings import BASELINE_MODEL_NAME
+from .settings import TARGET_MODEL_NAME
+from .settings import TARGET_MODEL_TYPE
 from ..lib._accel_source import normalize_accel_source
 from ..lib._steer_source import normalize_steer_source
 from ..lib._vehicle_models import SUPPORTED_VMT
-from .settings import BASELINE_MODEL_NAME, TARGET_MODEL_NAME, TARGET_MODEL_TYPE
 
 _SAFE_NAME = re.compile(r"^[A-Za-z0-9_.-]+$")
 
@@ -38,6 +40,7 @@ class ModelConfig:
     models: dict[str, ModelSpec]
     comparison_models: tuple[str, ...]
     release: ReleaseSpec | None = None
+    plot_dataset: str | None = None
 
     def find_case(self, name: str) -> ModelSpec:
         try:
@@ -128,13 +131,20 @@ def load_model_config(path: str | Path) -> ModelConfig:
         )
 
     release = _parse_release(scenario, conditions, models)
-    return ModelConfig(models=models, comparison_models=comparison_models, release=release)
+    plot_dataset = _parse_plot_dataset(scenario, conditions)
+    return ModelConfig(
+        models=models,
+        comparison_models=comparison_models,
+        release=release,
+        plot_dataset=plot_dataset,
+    )
 
 
 def _parse_release(
     scenario: Path, conditions: dict, models: dict[str, ModelSpec],
 ) -> ReleaseSpec | None:
-    """任意の Evaluation.Conditions.release ({model, version}) を検証して返す。
+    """
+    任意の Evaluation.Conditions.release ({model, version}) を検証して返す。
 
     指定時は release ステージが tuned の代わりに指定ケースを v{version} スロットへ
     リリースする。未指定時は従来どおり tuned → v100。
@@ -159,6 +169,24 @@ def _parse_release(
     if isinstance(version, bool) or not isinstance(version, int) or version < 1:
         raise ValueError(f"{scenario}: release.version は正の整数が必要です: {version!r}")
     return ReleaseSpec(model=model, version=version)
+
+
+def _parse_plot_dataset(scenario: Path, conditions: dict) -> str | None:
+    """
+    任意の Evaluation.Conditions.plot_dataset (dataset-id) を検証して返す。
+
+    指定時はレポート末尾の時系列診断セクションが対象データセットを描画する。
+    dataset の実在確認は collection_dir を知るセクション構築側が行う。
+    """
+    raw_plot_dataset = conditions.get("plot_dataset")
+    if raw_plot_dataset is None:
+        return None
+    if not isinstance(raw_plot_dataset, str) or not _SAFE_NAME.fullmatch(raw_plot_dataset):
+        raise ValueError(
+            f"{scenario}: plot_dataset は英数字・'_.-' のみの dataset-id が必要です: "
+            f"{raw_plot_dataset!r}"
+        )
+    return raw_plot_dataset
 
 
 def resolve_baseline_model(config: ModelConfig) -> tuple[str, dict, str]:
