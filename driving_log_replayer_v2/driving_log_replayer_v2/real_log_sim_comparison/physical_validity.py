@@ -30,6 +30,7 @@ from .reidentify.load_data import read_dataset_csv
 from .reidentify.model_config import load_model_config
 from .reidentify.model_config import ModelConfig
 from .reidentify.model_config import ModelSpec
+from .reidentify.model_config import RELEASE_TUNED_NAME
 from .reidentify.residuals import build_xy_columns
 from .reidentify.residuals import rmse
 from .reidentify.residuals import xy_residual
@@ -231,7 +232,7 @@ def _models_from_inputs(params_path: Path, scenario: Path | None, case: str) -> 
     for name in config.comparison_models:
         spec: ModelSpec = config.find_case(name)
         params = dict(spec.params)
-        if name == TARGET_MODEL_NAME:
+        if config.fit.enabled and name == config.fit.target:
             params.update(tuned_params)
         models.append(
             ComparedModel(
@@ -623,16 +624,30 @@ def _timeseries_figures(
 
 
 def _timeseries_model(config: ModelConfig, tuned_params: dict[str, Any]) -> tuple[ComparedModel, str]:
-    """時系列診断に使うモデルケースを解決する (release 指定 > tuned フォールバック)。"""
-    if config.release is not None:
-        spec: ModelSpec = config.find_case(config.release.model)
+    """時系列診断に使うモデルケースを解決する。
+
+    優先順: (1) release が固定ケース指定 → そのケース、(2) release が "tuned" 指定 or
+    release 未指定で fit 有効 → fit 対象ケース + fit 結果、(3) fit 無効で release 未指定 →
+    最初の comparison モデルにフォールバック。
+    """
+    release = config.release
+    if release is not None and release.model != RELEASE_TUNED_NAME:
+        spec: ModelSpec = config.find_case(release.model)
         params = dict(spec.params)
         label = f"release ケース {spec.name} (scenario.yaml の release 指定)"
-    else:
-        spec = config.find_case(TARGET_MODEL_NAME)
+    elif config.fit.enabled:
+        spec = config.find_case(config.fit.target)
         params = dict(spec.params)
         params.update(tuned_params)
-        label = "tuned (release 未指定のためフォールバック)"
+        label = (
+            f"release tuned (fit 対象 {spec.name} + fit 結果)"
+            if release is not None
+            else f"tuned (release 未指定のためフォールバック, fit 対象 {spec.name})"
+        )
+    else:
+        spec = config.find_case(config.comparison_models[0])
+        params = dict(spec.params)
+        label = f"{spec.name} (fit 無効・release 未指定のためフォールバック)"
     return (
         ComparedModel(
             spec.name, spec.vehicle_model_type, spec.acceleration_source, params,

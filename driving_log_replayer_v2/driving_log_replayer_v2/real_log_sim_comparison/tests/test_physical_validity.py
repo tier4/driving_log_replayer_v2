@@ -326,6 +326,25 @@ def test_build_timeseries_section_renders_five_figures(tmp_path: Path, monkeypat
     assert "good" in rendered
 
 
+def test_timeseries_model_resolves_tuned_release(tmp_path: Path) -> None:
+    """release.model=='tuned' は fit 対象ケースへ fit 結果を重ねて解決する。"""
+    from driving_log_replayer_v2.real_log_sim_comparison.reidentify.model_config import (
+        load_model_config,
+    )
+
+    config = load_model_config(
+        _scenario(
+            tmp_path / "scenario.yaml", ["baseline", "current"],
+            release={"model": "tuned", "version": 2},
+        )
+    )
+    model, label = physical_validity._timeseries_model(config, {"k_us": 0.99})
+
+    assert model.name == "current"  # fit.target の既定
+    assert model.params["k_us"] == 0.99  # fit 結果が重ねられる
+    assert "tuned" in label
+
+
 def test_build_timeseries_section_renders_multiple_datasets(tmp_path: Path, monkeypatch) -> None:
     """リスト指定では各データセットを順に描画し、1 件の失敗が他を止めない。"""
     dataset_dir = tmp_path / "datasets" / "good"
