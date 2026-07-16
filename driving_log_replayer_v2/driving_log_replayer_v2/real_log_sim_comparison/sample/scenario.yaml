@@ -47,7 +47,7 @@ Evaluation:
       # 検討中モデル: v1 の RK4 バリエーションとしてフィット診断も表示する。
       v1_rk4:
         vehicle_model_type: delay_steer_acc_geared_for_diffusion_planner
-        acceleration_source: accel
+        acceleration_source: kinematic_savgol
         params:
           wheelbase: 4.76012
           acc_time_delay: 0.1
@@ -67,7 +67,7 @@ Evaluation:
       # reidentify/fit_xy.py で 372 dataset (n=2,479,500) から同定した値 (2026-07-15)。
       v1_c:
         vehicle_model_type: delay_steer_acc_geared_for_diffusion_planner
-        acceleration_source: accel
+        acceleration_source: kinematic_savgol
         params:
           wheelbase: 4.76012
           acc_time_delay: 0.1
