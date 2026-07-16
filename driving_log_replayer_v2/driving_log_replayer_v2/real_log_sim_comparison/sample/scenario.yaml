@@ -3,7 +3,10 @@ ScenarioName: vehicle_model_reidentify
 
 Evaluation:
   Conditions:
-    comparison_models: [baseline, v1, v1_rk4, v1_c, v1_p, current]
+    comparison_models: [baseline, v1, v1_rk4, v1_c, v2, current]
+    # release ステージの出力先: v2 ケースを simulator_model.param.yaml の v2 スロットへ
+    # リリースする (tuned の v100 は含めない)。未指定時は従来どおり tuned → v100。
+    release: {model: v2, version: 2}
     models:
       baseline:
         vehicle_model_type: delay_steer_acc_geared_wo_fall_guard
@@ -79,12 +82,14 @@ Evaluation:
           k_us: 0.018
           xy_heading_rate_coeff: 0.004278
 
-      # 検討中モデル (p 系): v1 にプラトー直接同定の定常補正を追加し、GT を SG 系
-      # (steer_savgol + kinematic_savgol、旧 v1_sg を統合) で評価する ablation。
+      # リリース候補 v2 (旧 v1_p): v1 にプラトー直接同定の定常補正を追加し、GT を SG 系
+      # (steer_savgol + kinematic_savgol、旧 v1_sg を統合) で評価する。
       # 補正値は reidentify/fit_plateau.py が steer/ax の N=30 プラトー RMSE から
       # 318 dataset で同定 (2026-07-16, SG 系 GT 基準)。時定数・むだ時間は v1 のまま固定。
       # debug_acc_scaling_factor は探索下限 0.9 にクランプ (校正域を超える補正要求のサイン)。
-      v1_p:
+      # 全指標で v1 を上回ることを確認済み (steer@300 0.393deg / ax 0.237 / yaw 5.74deg /
+      # long 431cm / lat 117cm)。上記 release 指定により v2 としてリリースされる。
+      v2:
         vehicle_model_type: delay_steer_acc_geared_for_diffusion_planner
         acceleration_source: kinematic_savgol
         steering_source: steer_savgol

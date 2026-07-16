@@ -12,7 +12,7 @@ steer/ax の open-loop N-step 誤差は、初期状態の記憶が消える N≈
 fit_lon / fit_steer も同じコアを τ/delay 確定後に呼ぶ (実装は rollout 正式評価の 1 本のみ)。
 
 この CLI は同じコアを任意ケース (既定 v1) を初期値に単発実行するもので、結果は
-scenario.yaml の比較モデル (例: v1_p) へ手動転記する。実行例:
+scenario.yaml の比較モデル (例: v2) へ手動転記する。実行例:
 
     make fit_plateau ROOT=<collection> SCENARIO=<scenario.yaml>
 """
@@ -122,7 +122,7 @@ def fit_scaling_channels(
     単発解析 (fit_plateau CLI) と各ステージ (fit_lon / fit_steer) の両方から呼ばれる。
     override_params は case パラメータへの上書き (ステージが確定させた τ/delay 等)。
     acceleration_source / steering_source を指定すると case の GT ソースを上書きする
-    (例: v1 を初期値に SG 系 GT で同定して v1_p に転記する場合)。
+    (例: v1 を初期値に SG 系 GT で同定して v2 に転記する場合)。
     """
     global _CTXS, _MODEL_TYPE, _ACCEL_SOURCE, _STEER_SOURCE  # noqa: PLW0603
 
