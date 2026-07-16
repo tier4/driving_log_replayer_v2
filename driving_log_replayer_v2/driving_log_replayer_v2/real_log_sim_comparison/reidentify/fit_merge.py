@@ -26,7 +26,7 @@ from ..lib._parallel import (
 from ..lib._vehicle_models import get_vehicle_model_spec, merge_vehicle_model_params
 from . import rollout
 from .load_data import build_rollout_data, discover_cached_datasets, read_dataset_csv
-from .model_config import load_model_config, resolve_baseline_model
+from .model_config import comparison_display_order, load_model_config, resolve_baseline_model
 from .parameter_constraints import (
     ALL_CONSTRAINED_KEYS,
     PARAMETER_CONSTRAINTS,
@@ -41,7 +41,6 @@ from .settings import (
     BASELINE_MODEL_NAME,
     HORIZONS,
     ROLLOUT_STRIDE,
-    TARGET_MODEL_NAME,
     TUNED_MODEL_DISPLAY_NAME,
 )
 from .stage_common import read_phase_artifact
@@ -395,7 +394,7 @@ def robust_search(
 
     if n_trials < 1:
         raise ValueError("n_trials must be at least 1")
-    cur_case = cfg.find_case(TARGET_MODEL_NAME)
+    cur_case = cfg.find_case(cfg.fit.target)
     cur_best = dict(cur_case.params)
     cur_model = cur_case.vehicle_model_type
     cur_accel_source = cur_case.acceleration_source
@@ -450,7 +449,7 @@ def robust_search(
         print("[fit_merge] 最適化対象がないため、直接同定値 / scenario 初期値を使用")
         return cur_best
     n_workers = normalize_parallel_jobs(n_jobs, n_tasks=n_trials)
-    print(f"\n## Optuna TPE ({TARGET_MODEL_NAME}, {n_trials} trials, {n_workers} jobs)")
+    print(f"\n## Optuna TPE ({cfg.fit.target}, {n_trials} trials, {n_workers} jobs)")
 
     study = optuna.create_study(direction="minimize", sampler=sampler)
     study.enqueue_trial(_make_enqueue(direct_fit_params))
@@ -552,36 +551,37 @@ def robust_search(
     return best_params
 
 
-def fit_merge(
-    collection_dir: Path,
-    scenario: Path,
-    *,
-    direct_fit_params: dict,
-    n_trials: int = 50,
-    n_jobs: int = 1,
-    metrics_out: Path,
-) -> dict:
+def _clean_agg(agg_dict: dict) -> dict:
+    return {
+        int(h): {k: float(val) for k, val in v.items()}
+        for h, v in agg_dict["by_h"].items()
+    }
+
+
+def _full_model_params(base: dict, params: dict, model_type: str) -> dict:
+    """探索/直接同定の param を model の全キーへマージし、リリース可能な完全集合にする。"""
+    merged = merge_vehicle_model_params(base, params, model_type)
+    model_keys = get_vehicle_model_spec(model_type).param_keys
+    return {key: merged[key] for key in sorted(model_keys) if key in merged}
+
+
+def _load_ctxs(
+    collection_dir: Path, cfg, n_jobs: int,
+) -> tuple[int, list[DatasetCtx], list[dict[str, str]], tuple[str, dict, str, str]]:
+    """CSV キャッシュを読み込み、baseline 情報付きの DatasetCtx 群を返す。"""
     tasks = discover_cached_datasets(collection_dir)
     if not tasks:
         raise RuntimeError(f"CSV キャッシュが見つかりません: {collection_dir}")
 
-    cfg = load_model_config(scenario)
     baseline_model_type, baseline_params, baseline_case = resolve_baseline_model(cfg)
     baseline_accel_source = cfg.models[baseline_case].acceleration_source
     baseline_steer_source = cfg.models[baseline_case].steering_source
-    cur_case = cfg.find_case(TARGET_MODEL_NAME)
-    cur_model = cur_case.vehicle_model_type
     print(
         f"[INFO] baseline model = {baseline_model_type} "
         f"(scenario.yaml の '{baseline_case}' ケース, accel_source={baseline_accel_source})"
     )
-    print(
-        f"[INFO] current model  = {cur_model} "
-        f"('{TARGET_MODEL_NAME}' ケース, accel_source={cur_case.acceleration_source})"
-    )
 
     set_worker_thread_env_defaults()
-
     ctxs, fit_skipped = load_datasets(
         tasks,
         n_jobs=n_jobs,
@@ -592,100 +592,76 @@ def fit_merge(
     )
     if len(ctxs) < 1:
         raise RuntimeError("有効な dataset が 0 件です")
-
-    tuned_params = robust_search(
-        ctxs, cfg, n_trials=n_trials, n_jobs=n_jobs, direct_fit_params=direct_fit_params,
+    baseline_bundle = (
+        baseline_model_type, baseline_params, baseline_accel_source, baseline_steer_source,
     )
-    # 1. Evaluate baseline
+    return len(tasks), ctxs, fit_skipped, baseline_bundle
+
+
+def build_comparison_document(
+    collection_dir: Path,
+    scenario: Path,
+    cfg,
+    ctxs: list[DatasetCtx],
+    *,
+    n_datasets: int,
+    fit_skipped: list[dict[str, str]],
+    baseline_bundle: tuple[str, dict, str, str],
+    tuned_params: dict | None,
+    metrics_out: Path,
+) -> dict:
+    """baseline + 固定比較ケース (+ 任意で tuned) を評価し metrics.csv と成果物 document を作る。
+
+    ``tuned_params`` が与えられれば fit 出力を "tuned" として比較・出力に含める。None なら
+    fit 非実行 (固定比較のみ) を表し、document の ``params`` は空にする。
+    """
+    baseline_model_type, baseline_params, baseline_accel, baseline_steer = baseline_bundle
     baselines = {ctx.dataset_id: ctx.base_metric for ctx in ctxs}
     baseline_metrics = [(ctx.dataset_id, ctx.base_metric) for ctx in ctxs]
-    baseline_agg = aggregate_normalized(baseline_metrics, baselines, HORIZONS)
-    baseline_score = _finite_robust_score(baseline_agg)
 
-    # 2. Evaluate tuned (current)
-    merged_tuned_params = merge_vehicle_model_params(ctxs[0].base, tuned_params, cur_model)
-    model_keys = get_vehicle_model_spec(cur_model).param_keys
-    full_tuned_params = {
-        key: merged_tuned_params[key]
-        for key in sorted(model_keys)
-        if key in merged_tuned_params
-    }
-    tuned_metrics_list = _evaluate_candidate(
-        ctxs,
-        full_tuned_params,
-        cur_model,
-        cur_case.acceleration_source,
-        cur_case.steering_source,
-        aggregate=False,
-    )
-    tuned_agg = aggregate_normalized(tuned_metrics_list, baselines, HORIZONS)
-    tuned_score = _finite_robust_score(tuned_agg)
-    if not math.isfinite(tuned_score):
-        raise RuntimeError("最終パラメータで有限な rollout 指標を計算できませんでした")
+    tuned_case = cfg.find_case(cfg.fit.target) if tuned_params is not None else None
+    tuned_metrics_list = None
+    if tuned_params is not None:
+        tuned_metrics_list = _evaluate_candidate(
+            ctxs, tuned_params, tuned_case.vehicle_model_type,
+            tuned_case.acceleration_source, tuned_case.steering_source, aggregate=False,
+        )
 
-    comparison_results = {}
-
-    def clean_agg(agg_dict: dict) -> dict:
-        clean = {}
-        for h, v in agg_dict["by_h"].items():
-            clean[int(h)] = {k: float(val) for k, val in v.items()}
-        return clean
-
-    comparison_results[BASELINE_MODEL_NAME] = {
-        "score": float(baseline_score),
-        "score_legacy": float(_finite_legacy_score(baseline_agg)),
-        "by_h": clean_agg(baseline_agg),
-        "acceleration_source": baseline_accel_source,
-        "steering_source": baseline_steer_source,
-    }
-
-    comparison_results[TUNED_MODEL_DISPLAY_NAME] = {
-        "score": float(tuned_score),
-        "score_legacy": float(_finite_legacy_score(tuned_agg)),
-        "by_h": clean_agg(tuned_agg),
-        "acceleration_source": cur_case.acceleration_source,
-        "steering_source": cur_case.steering_source,
-    }
-
-    # Keep scenario ordering and evaluate every declared fixed comparison case.
-    # ``current`` is the only case whose scenario parameters are replaced with
-    # the final fitted parameters, and is presented as ``tuned``.
-    comparison_cases: list[tuple[str, dict, str, str, str]] = []
-    comparison_sparse_metrics: dict[str, list[tuple[str, dict]]] = {
-        BASELINE_MODEL_NAME: baseline_metrics,
-        TUNED_MODEL_DISPLAY_NAME: tuned_metrics_list,
-    }
-    for scenario_name in cfg.comparison_models:
-        display_name = TUNED_MODEL_DISPLAY_NAME if scenario_name == TARGET_MODEL_NAME else scenario_name
-        case = cfg.find_case(scenario_name)
-        if scenario_name == BASELINE_MODEL_NAME:
-            params = baseline_params
-        elif scenario_name == TARGET_MODEL_NAME:
-            params = full_tuned_params
+    display_order = comparison_display_order(cfg)
+    cases: list[tuple[str, dict, str, str, str]] = []
+    sparse: dict[str, list[tuple[str, dict]]] = {}
+    for display_name in display_order:
+        if display_name == BASELINE_MODEL_NAME:
+            params, model_type = baseline_params, baseline_model_type
+            accel, steer = baseline_accel, baseline_steer
+            sparse[display_name] = baseline_metrics
+        elif display_name == TUNED_MODEL_DISPLAY_NAME:
+            params, model_type = tuned_params, tuned_case.vehicle_model_type
+            accel, steer = tuned_case.acceleration_source, tuned_case.steering_source
+            sparse[display_name] = tuned_metrics_list
         else:
-            params = dict(case.params)
-            comparison_sparse_metrics[display_name] = _evaluate_candidate(
-                ctxs, params, case.vehicle_model_type, case.acceleration_source,
-                case.steering_source, aggregate=False,
+            case = cfg.find_case(display_name)
+            params, model_type = dict(case.params), case.vehicle_model_type
+            accel, steer = case.acceleration_source, case.steering_source
+            sparse[display_name] = _evaluate_candidate(
+                ctxs, params, model_type, accel, steer, aggregate=False,
             )
-        comparison_cases.append(
-            (display_name, params, case.vehicle_model_type,
-             case.acceleration_source, case.steering_source)
-        )
+        cases.append((display_name, params, model_type, accel, steer))
 
-    for display_name, _params, _model_type, acceleration_source, steering_source in comparison_cases:
-        if display_name in comparison_results:
-            continue
-        aggregate = aggregate_normalized(
-            comparison_sparse_metrics[display_name], baselines, HORIZONS,
-        )
+    comparison_results: dict[str, dict] = {}
+    for display_name, _params, _model_type, accel, steer in cases:
+        aggregate = aggregate_normalized(sparse[display_name], baselines, HORIZONS)
         comparison_results[display_name] = {
             "score": float(_finite_robust_score(aggregate)),
             "score_legacy": float(_finite_legacy_score(aggregate)),
-            "by_h": clean_agg(aggregate),
-            "acceleration_source": acceleration_source,
-            "steering_source": steering_source,
+            "by_h": _clean_agg(aggregate),
+            "acceleration_source": accel,
+            "steering_source": steer,
         }
+    if tuned_params is not None and not math.isfinite(
+        comparison_results[TUNED_MODEL_DISPLAY_NAME]["score"]
+    ):
+        raise RuntimeError("最終パラメータで有限な rollout 指標を計算できませんでした")
 
     # Print N-step rollout comparison summary to console
     print("\n" + "=" * 72)
@@ -703,7 +679,7 @@ def fit_merge(
         f"[INFO] レポート用 rollout を N={REPORT_HORIZONS[0]}.."
         f"{REPORT_HORIZONS[-1]} で評価"
     )
-    report_metrics = _evaluate_comparison_report_metrics(ctxs, comparison_cases)
+    report_metrics = _evaluate_comparison_report_metrics(ctxs, cases)
 
     fieldnames = ["dataset_id", "model", "horizon", *METRIC_KEYS]
     metrics_out.parent.mkdir(parents=True, exist_ok=True)
@@ -711,7 +687,7 @@ def fit_merge(
         writer = csv.DictWriter(stream, fieldnames=fieldnames)
         writer.writeheader()
         for ctx in ctxs:
-            for model, _params, _model_type, _source, _steer_source in comparison_cases:
+            for model, _params, _model_type, _source, _steer_source in cases:
                 per_horizon = report_metrics[model][ctx.dataset_id]
                 for horizon in REPORT_HORIZONS:
                     writer.writerow(
@@ -727,32 +703,111 @@ def fit_merge(
                     )
     print(f"[INFO] dataset別 metrics 保存: {metrics_out}")
 
-    return {
-        "params": full_tuned_params,
-        "score": float(tuned_score),
-        "comparison": comparison_results,
-        "metadata": {
-            "collection_dir": str(collection_dir),
-            "n_datasets": len(tasks),
-            "n_valid": len(ctxs),
-            "scenario": str(scenario),
-            "vehicle_model_type": cur_model,
-            "score_horizons": list(HORIZONS),
-            # objective v2: yaw/long/lat に加え steer/ax のプラトー項を最適化する。
-            # v1 (score_legacy) は yaw/long/lat のみ。過去ランとの score 比較時はここを確認する。
-            "objective": {
-                "version": 2,
-                "act_horizons": list(ACT_SCORE_HORIZONS),
-                "act_w": ACT_W,
-                "steer_floor_deg": STEER_FLOOR_DEG,
-                "ax_floor_mps2": AX_FLOOR_MPS2,
-            },
-            "report_horizons": list(REPORT_HORIZONS),
-            "skipped": fit_skipped,
-            "timestamp": datetime.datetime.now().isoformat(timespec="seconds"),
+    metadata = {
+        "collection_dir": str(collection_dir),
+        "n_datasets": n_datasets,
+        "n_valid": len(ctxs),
+        "scenario": str(scenario),
+        "fit_stages": list(cfg.fit.stages),
+        "fit_target": cfg.fit.target if cfg.fit.enabled else None,
+        "score_horizons": list(HORIZONS),
+        # objective v2: yaw/long/lat に加え steer/ax のプラトー項を最適化する。
+        # v1 (score_legacy) は yaw/long/lat のみ。過去ランとの score 比較時はここを確認する。
+        "objective": {
+            "version": 2,
+            "act_horizons": list(ACT_SCORE_HORIZONS),
+            "act_w": ACT_W,
+            "steer_floor_deg": STEER_FLOOR_DEG,
+            "ax_floor_mps2": AX_FLOOR_MPS2,
         },
-        "parameter_constraints": build_constraint_audit(full_tuned_params),
+        "report_horizons": list(REPORT_HORIZONS),
+        "skipped": fit_skipped,
+        "timestamp": datetime.datetime.now().isoformat(timespec="seconds"),
     }
+    result: dict = {"comparison": comparison_results, "metadata": metadata}
+    if tuned_params is not None:
+        metadata["vehicle_model_type"] = tuned_case.vehicle_model_type
+        result["params"] = tuned_params
+        result["score"] = comparison_results[TUNED_MODEL_DISPLAY_NAME]["score"]
+        result["parameter_constraints"] = build_constraint_audit(tuned_params)
+    else:
+        # fit 非実行: report._load_tuned_document が params mapping を要求するため空で置く。
+        result["params"] = {}
+    return result
+
+
+def fit_merge(
+    collection_dir: Path,
+    scenario: Path,
+    *,
+    direct_fit_params: dict,
+    n_trials: int = 50,
+    n_jobs: int = 1,
+    metrics_out: Path,
+) -> dict:
+    cfg = load_model_config(scenario)
+    cur_case = cfg.find_case(cfg.fit.target)
+    print(
+        f"[INFO] fit target = {cur_case.vehicle_model_type} "
+        f"('{cfg.fit.target}' ケース, accel_source={cur_case.acceleration_source})"
+    )
+
+    n_datasets, ctxs, fit_skipped, baseline_bundle = _load_ctxs(collection_dir, cfg, n_jobs)
+
+    tuned_params = robust_search(
+        ctxs, cfg, n_trials=n_trials, n_jobs=n_jobs, direct_fit_params=direct_fit_params,
+    )
+    full_tuned_params = _full_model_params(
+        ctxs[0].base, tuned_params, cur_case.vehicle_model_type,
+    )
+    return build_comparison_document(
+        collection_dir, scenario, cfg, ctxs,
+        n_datasets=n_datasets, fit_skipped=fit_skipped, baseline_bundle=baseline_bundle,
+        tuned_params=full_tuned_params, metrics_out=metrics_out,
+    )
+
+
+def evaluate_only(
+    collection_dir: Path,
+    scenario: Path,
+    *,
+    direct_fit_params_path: Path | None,
+    n_jobs: int = 1,
+    metrics_out: Path,
+) -> dict:
+    """merge を実行しない評価専用パス (fit 完全スキップ or direct-fit のみ)。
+
+    ``direct_fit_params_path`` が与えられれば、その direct-fit 成果物を "tuned" として
+    評価に含める。None なら固定比較ケースのみ評価する。
+    """
+    cfg = load_model_config(scenario)
+    n_datasets, ctxs, fit_skipped, baseline_bundle = _load_ctxs(collection_dir, cfg, n_jobs)
+
+    tuned_params = None
+    if direct_fit_params_path is not None:
+        direct_fit_params = read_phase_artifact(
+            direct_fit_params_path,
+            expected_phase=_LAST_DIRECT_PHASE[cfg.fit.direct_stages[-1]],
+            required_keys=frozenset(),
+            producer="direct fit",
+        )
+        target_case = cfg.find_case(cfg.fit.target)
+        tuned_params = _full_model_params(
+            ctxs[0].base, direct_fit_params, target_case.vehicle_model_type,
+        )
+        print(f"[evaluate] direct-fit 成果物を tuned として評価: {direct_fit_params_path}")
+    else:
+        print("[evaluate] fit 非実行: 固定比較ケースのみ評価します")
+
+    return build_comparison_document(
+        collection_dir, scenario, cfg, ctxs,
+        n_datasets=n_datasets, fit_skipped=fit_skipped, baseline_bundle=baseline_bundle,
+        tuned_params=tuned_params, metrics_out=metrics_out,
+    )
+
+
+# direct-fit ステージ名 -> その成果物 metadata.phase (evaluate_only の read 検証用)。
+_LAST_DIRECT_PHASE = {"lon": 1, "steer": 2, "xy": 3}
 
 
 def run(
@@ -774,4 +829,20 @@ def run(
     with out.open("w", encoding="utf-8") as stream:
         yaml.safe_dump(result, stream, allow_unicode=True, sort_keys=False)
     print(f"[INFO] FINAL params 保存: {out}")
+    return result
+
+
+def run_evaluate(
+    collection_dir: Path, scenario: Path, out: Path, *,
+    direct_fit_params_path: Path | None, metrics_out: Path, n_jobs: int = 1,
+) -> dict:
+    """merge を実行しない評価専用ステージ。成果物 document を out へ書き出す。"""
+    out.parent.mkdir(parents=True, exist_ok=True)
+    result = evaluate_only(
+        collection_dir, scenario,
+        direct_fit_params_path=direct_fit_params_path, n_jobs=n_jobs, metrics_out=metrics_out,
+    )
+    with out.open("w", encoding="utf-8") as stream:
+        yaml.safe_dump(result, stream, allow_unicode=True, sort_keys=False)
+    print(f"[INFO] 評価成果物 保存: {out}")
     return result

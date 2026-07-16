@@ -12,6 +12,7 @@ import yaml
 from .settings import BASELINE_MODEL_NAME
 from .settings import TARGET_MODEL_NAME
 from .settings import TARGET_MODEL_TYPE
+from .settings import TUNED_MODEL_DISPLAY_NAME
 from ..lib._accel_source import normalize_accel_source
 from ..lib._steer_source import normalize_steer_source
 from ..lib._vehicle_models import SUPPORTED_VMT
@@ -296,3 +297,21 @@ def _parse_plot_dataset(scenario: Path, conditions: dict) -> tuple[str, ...]:
 def resolve_baseline_model(config: ModelConfig) -> tuple[str, dict, str]:
     baseline = config.models[BASELINE_MODEL_NAME]
     return baseline.vehicle_model_type, dict(baseline.params), baseline.name
+
+
+def comparison_display_order(config: ModelConfig) -> tuple[str, ...]:
+    """レポート/metrics.csv に載せる比較モデルの表示名を順序付きで返す。
+
+    comparison_models の順序を保ちつつ、fit 有効時は fit 対象ケースを "tuned" に
+    置換 (フィット結果で評価される) する。fit 対象が comparison_models に無い場合でも、
+    fit 出力を見せるため "tuned" を末尾に追加する。fit 無効時は素の comparison_models。
+    """
+    order: list[str] = []
+    for name in config.comparison_models:
+        if config.fit.enabled and name == config.fit.target:
+            order.append(TUNED_MODEL_DISPLAY_NAME)
+        else:
+            order.append(name)
+    if config.fit.enabled and TUNED_MODEL_DISPLAY_NAME not in order:
+        order.append(TUNED_MODEL_DISPLAY_NAME)
+    return tuple(order)

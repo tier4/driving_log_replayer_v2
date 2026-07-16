@@ -20,11 +20,11 @@ import pandas as pd
 from plotly.offline import get_plotlyjs
 import yaml
 
+from .model_config import comparison_display_order
 from .model_config import load_model_config
 from .release_params import GLOBAL_PARAM_KEYS
 from .settings import BASELINE_MODEL_NAME
 from .settings import RELEASE_MODEL_KEY
-from .settings import TARGET_MODEL_NAME
 from .settings import TUNED_MODEL_DISPLAY_NAME
 from .. import physical_validity
 from ..lib._nstep_common import METRIC_KEYS
@@ -697,10 +697,7 @@ def _comparison_model_order(scenario: Path) -> tuple[str, ...]:
     if not scenario.is_file():
         return MODEL_ORDER
     config = load_model_config(scenario)
-    return tuple(
-        (TUNED_MODEL_DISPLAY_NAME if name == TARGET_MODEL_NAME else name).lower()
-        for name in config.comparison_models
-    )
+    return tuple(name.lower() for name in comparison_display_order(config))
 
 
 def _render_objective_equations() -> str:
