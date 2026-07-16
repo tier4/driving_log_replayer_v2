@@ -86,30 +86,37 @@ def _load_case_release_params(scenario: Path, model_name: str) -> dict[str, Any]
 def release(
     input_param: Path, tuned_params: Path, out_dir: Path, *, scenario: Path | None = None,
 ) -> Path:
-    """同定/指定パラメータを target model の global 値とバージョンスロットへ反映する。
+    """scenario の release 指定に基づき、指定ケース (または fit 出力 tuned) を v{version} へ反映する。
 
-    scenario の ``Evaluation.Conditions.release`` ({model, version}) が指定されている
-    場合は、そのケースのパラメータを ``v{version}`` スロットに書き ``version`` で選択する
-    (tuned の v100 は書かない)。未指定時は従来どおり tuned → ``v100``。
+    ``Evaluation.Conditions.release`` ({model, version}) は必須。model が ``"tuned"`` の
+    ときは ``tuned_params`` (fit 出力) を、それ以外は指定 scenario ケースのパラメータを
+    ``v{version}`` スロットへ書き ``version`` で選択する。自動 (magic) な既定リリースはない。
     """
     out_dir.mkdir(parents=True, exist_ok=True)
 
-    release_spec = None
-    if scenario is not None:
-        from .model_config import load_model_config  # noqa: PLC0415
+    if scenario is None:
+        raise ValueError("release にはシナリオの Evaluation.Conditions.release 指定が必要です")
+    from .model_config import RELEASE_TUNED_NAME  # noqa: PLC0415
+    from .model_config import load_model_config  # noqa: PLC0415
 
-        release_spec = load_model_config(scenario).release
+    release_spec = load_model_config(scenario).release
+    if release_spec is None:
+        raise ValueError(
+            "scenario に Evaluation.Conditions.release がありません (release ステージは"
+            " release 指定がある場合のみ実行されます)"
+        )
 
-    if release_spec is not None:
+    version = release_spec.version
+    is_tuned = release_spec.model == RELEASE_TUNED_NAME
+    if is_tuned:
+        params = _load_tuned_release_params(tuned_params)
+        print(f"[INFO] release: fit 出力 tuned を v{version} としてリリースします")
+    else:
         params = _load_case_release_params(scenario, release_spec.model)
-        version = release_spec.version
         print(
             f"[INFO] release: scenario ケース '{release_spec.model}' を "
-            f"v{version} としてリリースします (tuned は含めません)"
+            f"v{version} としてリリースします"
         )
-    else:
-        params = _load_tuned_release_params(tuned_params)
-        version = 100
 
     param_data, ros_params = _load_input_document(Path(input_param))
     model_params = ros_params[RELEASE_MODEL_KEY]
@@ -121,10 +128,10 @@ def release(
 
     release_slot = {key: params[key] for key in sorted(spec.namespaced_param_keys)}
 
-    # 指定リリースでは既存の確定バージョン (入力 YAML の v1 等) を黙って潰さない。
-    # ただし同一内容の再リリース (リリース適用済み入力でのパイプライン再実行) は
-    # 何も変えないため冪等として許可する。tuned の v100 は候補スロットとして従来どおり上書き可。
-    if release_spec is not None:
+    # 固定ケースのリリースは既存の確定バージョン (入力 YAML の v1 等) を黙って潰さない。
+    # 同一内容の再リリース (リリース適用済み入力でのパイプライン再実行) は冪等として許可する。
+    # tuned は Optuna がビット同一の再現を保証しないため冪等ガードを外し、上書きを許可する。
+    if not is_tuned:
         existing_slot = model_params.get(f"v{version}")
         if existing_slot is not None and existing_slot != release_slot:
             raise ValueError(

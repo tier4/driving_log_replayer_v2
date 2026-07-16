@@ -464,6 +464,7 @@ def test_minimal_scenario_and_release_artifact(tmp_path: Path) -> None:
                 "Evaluation": {
                     "Conditions": {
                         "comparison_models": ["baseline", "current"],
+                        "release": {"model": "tuned", "version": 100},
                         "models": {
                             "baseline": {
                                 "vehicle_model_type": "delay_steer_acc_geared_wo_fall_guard",
@@ -534,7 +535,7 @@ def test_minimal_scenario_and_release_artifact(tmp_path: Path) -> None:
         encoding="utf-8",
     )
 
-    released = release_params.release(source_param, tuned, tmp_path / "out")
+    released = release_params.release(source_param, tuned, tmp_path / "out", scenario=scenario)
 
     assert released.name == "simulator_model.param.yaml"
     document = yaml.safe_load(released.read_text(encoding="utf-8"))
@@ -611,6 +612,26 @@ def test_scenario_rejects_invalid_release_spec(tmp_path: Path, release, match) -
         yaml.safe_dump(_release_scenario_document(release)), encoding="utf-8",
     )
     with pytest.raises(ValueError, match=match):
+        load_model_config(scenario)
+
+
+def test_scenario_accepts_tuned_release_when_fit_enabled(tmp_path: Path) -> None:
+    scenario = tmp_path / "scenario.yaml"
+    scenario.write_text(
+        yaml.safe_dump(_release_scenario_document({"model": "tuned", "version": 3})),
+        encoding="utf-8",
+    )
+    config = load_model_config(scenario)
+    assert config.release is not None
+    assert config.release.model == "tuned"
+
+
+def test_scenario_rejects_tuned_release_when_fit_disabled(tmp_path: Path) -> None:
+    document = _release_scenario_document({"model": "tuned", "version": 3})
+    document["Evaluation"]["Conditions"]["fit"] = {"stages": []}
+    scenario = tmp_path / "scenario.yaml"
+    scenario.write_text(yaml.safe_dump(document), encoding="utf-8")
+    with pytest.raises(ValueError, match="tuned.* は fit が有効"):
         load_model_config(scenario)
 
 
@@ -732,6 +753,70 @@ def test_release_is_idempotent_for_identical_version_slot(tmp_path: Path) -> Non
     assert yaml.safe_load(second.read_text(encoding="utf-8")) == yaml.safe_load(
         first.read_text(encoding="utf-8")
     )
+
+
+def _tuned_document() -> dict:
+    return {
+        "params": {
+            "acc_time_delay": 0.1, "acc_time_constant": 0.2,
+            "steer_time_delay": 0.05, "steer_time_constant": 0.3,
+            "steer_dead_band": 0.0, "steer_bias": 0.0,
+            "debug_acc_scaling_factor": 1.0, "debug_steer_scaling_factor": 1.0,
+            "k_us": 0.012, "xy_heading_rate_coeff": 0.0, "use_rk4": False,
+            "vel_lim": 50.0, "vel_rate_lim": 7.0, "steer_lim": 1.0,
+            "steer_rate_lim": 0.6, "wheelbase": 4.7,
+        },
+        "metadata": {"vehicle_model_type": "delay_steer_acc_geared_for_diffusion_planner"},
+    }
+
+
+def test_release_tuned_overwrites_existing_slot_without_idempotency_guard(tmp_path: Path) -> None:
+    """model: tuned は Optuna 非再現性のため、既存スロットを別内容でも上書き許可する。"""
+    scenario = tmp_path / "scenario.yaml"
+    scenario.write_text(
+        yaml.safe_dump(_release_scenario_document({"model": "tuned", "version": 2})),
+        encoding="utf-8",
+    )
+    source_param = tmp_path / "input.yaml"
+    source_param.write_text(
+        yaml.safe_dump(
+            {
+                "/**": {
+                    "ros__parameters": {
+                        "vehicle_model_type": "DELAY_STEER_ACC_GEARED_FOR_DIFFUSION_PLANNER",
+                        "delay_steer_acc_geared_for_diffusion_planner": {
+                            "version": 2,
+                            "v2": {"k_us": 0.999},
+                        },
+                    }
+                }
+            },
+            sort_keys=False,
+        ),
+        encoding="utf-8",
+    )
+    tuned = tmp_path / "tuned.yaml"
+    tuned.write_text(yaml.safe_dump(_tuned_document()), encoding="utf-8")
+
+    released = release_params.release(source_param, tuned, tmp_path / "out", scenario=scenario)
+    model = yaml.safe_load(released.read_text(encoding="utf-8"))["/**"]["ros__parameters"][
+        "delay_steer_acc_geared_for_diffusion_planner"
+    ]
+    assert model["version"] == 2
+    assert model["v2"]["k_us"] == 0.012  # 既存の 0.999 を上書き
+
+
+def test_release_requires_a_release_spec(tmp_path: Path) -> None:
+    """release 指定のない scenario / scenario=None は release でエラーにする。"""
+    source_param = tmp_path / "input.yaml"
+    source_param.write_text("x: 1\n", encoding="utf-8")
+    scenario = tmp_path / "scenario.yaml"
+    scenario.write_text(yaml.safe_dump(_release_scenario_document(None)), encoding="utf-8")
+
+    with pytest.raises(ValueError, match="release がありません"):
+        release_params.release(source_param, tmp_path / "t.yaml", tmp_path / "out", scenario=scenario)
+    with pytest.raises(ValueError, match="release 指定が必要"):
+        release_params.release(source_param, tmp_path / "t.yaml", tmp_path / "out")
 
 
 def test_scenario_rejects_non_target_current_model(tmp_path: Path) -> None:
