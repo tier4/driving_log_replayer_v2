@@ -10,7 +10,10 @@ Evaluation:
     # レポート 9 章 (時系列診断) の対象 dataset-id のリスト。指定すると release ケース
     # (未指定時は tuned) のパラメータで状態方程式の左辺・右辺・指令値を各データセットに
     # ついて時系列描画する。省略時は案内のみ。
-    # plot_dataset: [<dataset-id>, ...]
+    plot_dataset:
+      - 0a246ffe-e8a6-5027-94f6-b860ecdda887
+      - 2f9f3f24-dd96-5681-80ed-5fbc953df4a9
+      - 3b6b940c-c58f-5475-b5a0-4f1958568a0a
 
     models:
       baseline:
