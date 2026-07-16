@@ -119,20 +119,24 @@ def release(
     if missing:
         raise ValueError(f"Release params are missing target model keys: {sorted(missing)}")
 
+    release_slot = {key: params[key] for key in sorted(spec.namespaced_param_keys)}
+
     # 指定リリースでは既存の確定バージョン (入力 YAML の v1 等) を黙って潰さない。
-    # tuned の v100 は候補スロットとして従来どおり上書き可。
-    if release_spec is not None and f"v{version}" in model_params:
-        raise ValueError(
-            f"Input already contains 'v{version}'; choose an unused release.version."
-        )
+    # ただし同一内容の再リリース (リリース適用済み入力でのパイプライン再実行) は
+    # 何も変えないため冪等として許可する。tuned の v100 は候補スロットとして従来どおり上書き可。
+    if release_spec is not None:
+        existing_slot = model_params.get(f"v{version}")
+        if existing_slot is not None and existing_slot != release_slot:
+            raise ValueError(
+                f"Input already contains 'v{version}' with different values; "
+                "choose an unused release.version."
+            )
 
     for model_key, ros_key in _GLOBAL_PARAM_KEYS.items():
         ros_params[ros_key] = params[model_key]
 
     model_params["version"] = version
-    model_params[f"v{version}"] = {
-        key: params[key] for key in sorted(spec.namespaced_param_keys)
-    }
+    model_params[f"v{version}"] = release_slot
 
     out_file = out_dir / "simulator_model.param.yaml"
     with out_file.open("w", encoding="utf-8") as f:

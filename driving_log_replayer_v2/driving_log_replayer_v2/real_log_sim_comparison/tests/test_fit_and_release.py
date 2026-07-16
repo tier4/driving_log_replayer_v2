@@ -693,6 +693,47 @@ def test_release_rejects_overwriting_existing_version_slot(tmp_path: Path) -> No
         )
 
 
+def test_release_is_idempotent_for_identical_version_slot(tmp_path: Path) -> None:
+    """リリース適用済み入力での再実行は、同一内容の v{N} を冪等に許可する。"""
+    scenario = tmp_path / "scenario.yaml"
+    scenario.write_text(
+        yaml.safe_dump(_release_scenario_document({"model": "v2", "version": 2})),
+        encoding="utf-8",
+    )
+    source_param = tmp_path / "input.yaml"
+    source_param.write_text(
+        yaml.safe_dump(
+            {
+                "/**": {
+                    "ros__parameters": {
+                        "vehicle_model_type": "DELAY_STEER_ACC_GEARED_FOR_DIFFUSION_PLANNER",
+                        "delay_steer_acc_geared_for_diffusion_planner": {
+                            "version": 1,
+                            "v1": {"k_us": 0.0},
+                        },
+                    }
+                }
+            },
+            sort_keys=False,
+        ),
+        encoding="utf-8",
+    )
+
+    first = release_params.release(
+        source_param, tmp_path / "missing-tuned.yaml", tmp_path / "out1",
+        scenario=scenario,
+    )
+    # 1 回目の出力 (v2 適用済み) を入力にした再実行は同一内容なので成功する。
+    second = release_params.release(
+        first, tmp_path / "missing-tuned.yaml", tmp_path / "out2",
+        scenario=scenario,
+    )
+
+    assert yaml.safe_load(second.read_text(encoding="utf-8")) == yaml.safe_load(
+        first.read_text(encoding="utf-8")
+    )
+
+
 def test_scenario_rejects_non_target_current_model(tmp_path: Path) -> None:
     scenario = tmp_path / "scenario.yaml"
     scenario.write_text(
