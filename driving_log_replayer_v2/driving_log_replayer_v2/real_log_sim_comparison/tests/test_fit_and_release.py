@@ -128,13 +128,13 @@ def test_comparison_report_metrics_evaluate_every_declared_model(monkeypatch) ->
         [
             ("baseline", {}, "baseline-model", "accel", "steer"),
             ("v1", {}, "v1-model", "accel", "steer"),
-            ("v1_rk4", {}, "rk4-model", "accel", "steer"),
+            ("v2_rk4", {}, "rk4-model", "accel", "steer"),
             ("tuned", {}, "tuned-model", "accel", "steer_savgol"),
         ],
     )
 
     assert calls == ["baseline-model", "v1-model", "rk4-model", "tuned-model"]
-    assert list(result) == ["baseline", "v1", "v1_rk4", "tuned"]
+    assert list(result) == ["baseline", "v1", "v2_rk4", "tuned"]
     assert all(tuple(per_model["dataset-a"]) == fit_merge.REPORT_HORIZONS for per_model in result.values())
 
 

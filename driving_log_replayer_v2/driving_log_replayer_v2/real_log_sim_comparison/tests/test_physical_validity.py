@@ -47,7 +47,7 @@ def _scenario(
     models = {
         "baseline": {"vehicle_model_type": "delay_steer_acc_geared_wo_fall_guard", "params": common},
         "v1": {"vehicle_model_type": "delay_steer_acc_geared_wo_fall_guard", "params": common},
-        "v1_rk4": {"vehicle_model_type": "delay_steer_acc_geared_wo_fall_guard", "params": common},
+        "v2_rk4": {"vehicle_model_type": "delay_steer_acc_geared_wo_fall_guard", "params": common},
         "current": {"vehicle_model_type": "delay_steer_acc_geared_for_diffusion_planner", "params": common},
     }
     conditions: dict = {"comparison_models": comparison_models, "models": models}
@@ -374,7 +374,7 @@ def test_report_omits_detailed_fit_diagnostics_and_keeps_fixed_evaluations(tmp_p
     rendered = physical_validity.build_sections(
         tmp_path,
         params,
-        scenario=_scenario(tmp_path / "scenario.yaml", ["baseline", "v1", "v1_rk4", "current"]),
+        scenario=_scenario(tmp_path / "scenario.yaml", ["baseline", "v1", "v2_rk4", "current"]),
     )
 
     combined = rendered.prepare + rendered.longitudinal + rendered.steering + rendered.yaw + rendered.xy

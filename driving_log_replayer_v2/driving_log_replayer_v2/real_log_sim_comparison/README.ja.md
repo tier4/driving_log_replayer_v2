@@ -78,7 +78,7 @@ N≈20 までに定常値へ飽和するプラトー特性を持つため、過�
 その CSV から描画し、同じ文書内で CSV キャッシュを一度だけ読んで縦方向・操舵・ヨー (`k_us`)・
 x/y 方程式残差も評価します。N-step 指標のロールアウトは再計算しません。scenario の
 `Evaluation.Conditions.comparison_models` に比較するケース名を列挙します（例:
-`[baseline, v1, v1_rk4, current]`）。重複・未定義ケースはエラーで、`baseline` と
+`[baseline, v1, v2, v2_rk4, current]`）。重複・未定義ケースはエラーで、`baseline` と
 `current` は必須です。
 
 各モデルは宣言済みパラメータで固定 RMSE 評価され、baseline 比・サンプル数・使用パラメータを
@@ -94,7 +94,7 @@ release ステージは既定では tuned（統合最適化の結果）を `v100
 scenario の `Evaluation.Conditions.release: {model: <case>, version: <N>}` を指定すると、
 そのケースのパラメータを `v<N>` スロットへ書き `version: <N>` で選択します
 （tuned の v100 は含めません。入力 YAML に既存の `v<N>` がある場合はエラー）。
-例: `release: {model: v2, version: 2}` — プラトー補正済みの固定ケース v2 を
+例: `release: {model: v2, version: 2}` — プラトー補正 + k_us 更新済みの固定ケース v2 を
 リリース候補として simulator_model.param.yaml に出力します。
 
 ## スケーリングのプラトー同定（2段構成）
@@ -113,8 +113,8 @@ steer 終端状態は steer 系のみ、ax 終端状態は acc 系のみに依�
 make fit_plateau ROOT=<collection> SCENARIO=<scenario.yaml>
 ```
 
-同じコアを任意の scenario ケース（既定 `v1`）を初期値として実行し、比較モデル
-（例: `v2`）向けの scaling を同定します。成果物 `<ROOT>/reidentify/plateau_params.yaml`
+同じコアを任意の scenario ケース（既定 `v2`、`PLATEAU_CASE=<case>` で変更可）を
+初期値として実行し、比較モデル（例: 次期リリース候補）向けの scaling を同定します。成果物 `<ROOT>/reidentify/plateau_params.yaml`
 の値を scenario.yaml へ手動転記して使います。`plateau_diagnostics.csv` に
 dataset 別の RMSE と署名付き平均誤差（系統/雑音の分解用）を出力します。
 

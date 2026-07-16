@@ -60,6 +60,7 @@ help:
 	@echo ""
 	@echo "単発解析 (パイプライン非組込):"
 	@echo "  make fit_plateau  # プラトー領域から定常アクチュエータパラメータを直接同定 -> plateau_params.yaml"
+	@echo "  make fit_plateau PLATEAU_CASE=<case>  # 初期値にする scenario ケースを指定 (既定: v2)"
 
 reidentify:
 	@test -n "$(strip $(ROOT))" || { echo "[ERROR] ROOT is required"; exit 2; }
@@ -93,5 +94,6 @@ fit_plateau:
 		--root "$(ROOT)" \
 		--scenario "$(SCENARIO)" \
 		--n-jobs "$(N_JOBS)" \
+		$(if $(PLATEAU_CASE),--case "$(PLATEAU_CASE)",) \
 		$(if $(PLATEAU_ACCEL_SOURCE),--acceleration-source "$(PLATEAU_ACCEL_SOURCE)",) \
 		$(if $(PLATEAU_STEER_SOURCE),--steering-source "$(PLATEAU_STEER_SOURCE)",)

@@ -131,7 +131,11 @@ PARAMETER_CONSTRAINTS: dict[str, ParameterConstraint] = {
         optimization_stages=frozenset({FIT_LON, FIT_MERGE}),
     ),
     "debug_acc_scaling_factor": ParameterConstraint(
-        "debug_acc_scaling_factor", "加速度指令の校正誤差だけを表現し、未モデル化加速度を過大に吸収させない。",
+        "debug_acc_scaling_factor",
+        "加速度指令の校正誤差だけを表現し、未モデル化加速度を過大に吸収させない。"
+        "下限 0.8 への拡大検証 (2026-07-16, 318 dataset) では最適値が 0.800 と新下限にも"
+        "再クランプし (ax プラトー RMSE +4.3% 改善)、校正補正の域を超えて未モデル化加速度を"
+        "吸収し続ける構造起因の要求と判断して 0.9 を維持する。",
         search_bounds=(0.9, 1.1),
         optimization_stages=frozenset({FIT_LON, FIT_MERGE}),
     ),

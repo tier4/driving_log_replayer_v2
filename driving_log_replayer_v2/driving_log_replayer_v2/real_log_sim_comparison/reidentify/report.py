@@ -770,7 +770,8 @@ make fit_plateau も同じコアを使う</td>
 <td style="text-align:left">fit_plateau.fit_scaling_channels<br>(3・4 章の各ステージ / make fit_plateau)</td></tr>
 <tr><td style="text-align:left">③ 長 horizon の yaw/位置ドリフト = 定常アクチュエータ誤差の積分</td>
 <td style="text-align:left">プラトーの<b>系統成分</b>削減が長期ドリフト削減に直結する
-(比較モデル v2 は steer/ax 補正のみで yaw/long/lat も全面改善)</td>
+(比較モデル v2 の定常 steer/ax 補正は yaw/long/lat も全面改善。加えて v2 は k_us を
+0.018→0.012 に更新し、高速域の yaw/lat worst-case を全セル非劣化のまま削減)</td>
 <td style="text-align:left">v2 (scenario.yaml)</td></tr>
 </table></div>
 <h3>スケーリングのプラトー同定: 系統別の 2 段構成</h3>
@@ -787,14 +788,15 @@ ax 終端状態は acc 系のみに依存するため、目的関数は系統別
 最小化する。呼び出しは 2 箇所 — <b>パイプライン内 (3・4 章)</b> では fit_lon / fit_steer が
 τ/delay 確定後に自チャネルの scaling をこのコアで決め直し (動的励起マスク上の同時推定値は
 τ/delay の同定精度のためだけに使い、採用しない)、<b>単発解析 (make fit_plateau)</b> では
-比較モデル (v2 など) 向けに任意ケースを初期値として同定し診断 CSV も出力する。</p>
+比較モデル (次期リリース候補など) 向けに任意ケース (既定 v2) を初期値として同定し
+診断 CSV も出力する。</p>
 <div class="note"><b>steer_bias は同定対象に含めない</b>: モデル構造上 steer 状態は
 steer_des × scaling に収束し、bias はヨーレート計算にのみ入るため、プラトー目的関数に対して
 <b>平坦 (同定不能)</b>。探索すると任意の値に漂流する。bias の同定は yaw を見る統合最適化
 (fit_merge) に委ねる。</div>
 <p>成果物: <code>plateau_params.yaml</code> (同定値) と <code>plateau_diagnostics.csv</code>
 (dataset 別の RMSE と署名付き平均誤差 err = GT − sim)。同定値は scenario.yaml の比較モデル
-(例: v2) へ手動転記して本レポートの固定評価に載せる。</p>
+(例: 次期リリース候補) へ手動転記して本レポートの固定評価に載せる。</p>
 <h3>診断: 系統/変動の分解と steer_dead_band の判定</h3>
 <p>plateau_diagnostics.csv の署名付き平均 (steer_mean / ax_mean) がプラトーの<b>系統成分</b>、
 RMSE との差が<b>変動成分</b>を表す。steer_dead_band (現在 0 固定) の探索解禁は
@@ -812,10 +814,12 @@ ax は微分窓 0.2→0.4 s (実効カットオフ 2.76→1.42 Hz、acc 帯域 1
 lib/_accel_source.py)、steer は平滑化窓 0.4 s (カットオフ 2.55 Hz、steer 帯域 ≈1.06 Hz の
 ~2.4 倍、lib/_steer_source.py の <code>steering_source: steer_savgol</code>) で、
 「生 GT + 2 Hz ゼロ位相 LPF カスケード」相当のフロア低減を窓のみで実現</li>
-<li><b>GT ソースの整合</b>: baseline / v1 系は raw ソース (accel は
+<li><b>GT ソースの整合</b>: baseline / v1 は raw ソース (accel は
 <code>/localization/acceleration</code> +0.080 s 遅延補償、steer は steering_status 生値)。
-<b>p 系の v2 (旧 v1_p) は定常補正パラメータ + SG 系 GT (steer_savgol + kinematic_savgol) の組</b>で、
-GT のみ SG 化した旧 v1_sg はここに統合した (窓 0.4 s では raw との ax 差は +1〜4% 程度)</li>
+<b>v2 (旧 v1_p) は定常補正パラメータ + SG 系 GT (steer_savgol + kinematic_savgol) の組</b>で、
+GT のみ SG 化した旧 v1_sg はここに統合した (窓 0.4 s では raw との ax 差は +1〜4% 程度)。
+v2 ベースの ablation (v2_rk4 / v2_c / v2_t) と同定対象 current も
+同じ SG 系 GT に揃えている</li>
 </ul>
 {artifact}"""
 

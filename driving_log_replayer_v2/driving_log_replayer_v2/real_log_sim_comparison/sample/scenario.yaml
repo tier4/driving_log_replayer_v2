@@ -3,7 +3,7 @@ ScenarioName: vehicle_model_reidentify
 
 Evaluation:
   Conditions:
-    comparison_models: [baseline, v1, v1_rk4, v1_c, v2, current]
+    comparison_models: [baseline, v1, v2, v2_rk4, v2_c, v2_t, current]
     # release ステージの出力先: v2 ケースを simulator_model.param.yaml の v2 スロットへ
     # リリースする (tuned の v100 は含めない)。未指定時は従来どおり tuned → v100。
     release: {model: v2, version: 2}
@@ -52,51 +52,26 @@ Evaluation:
           k_us: 0.018
           xy_heading_rate_coeff: 0.0
 
-      # 検討中モデル: v1 の RK4 バリエーションとしてフィット診断も表示する。
-      v1_rk4:
-        vehicle_model_type: delay_steer_acc_geared_for_diffusion_planner
-        acceleration_source: kinematic_savgol
-        params:
-          wheelbase: 4.76012
-          acc_time_delay: 0.1
-          acc_time_constant: 0.3
-          debug_acc_scaling_factor: 1.0
-          steer_time_delay: 0.05
-          steer_time_constant: 0.15
-          debug_steer_scaling_factor: 1.0
-          steer_dead_band: 0.0
-          steer_bias: 0.0
-          steer_rate_lim: 0.6
-          k_us: 0.018
-          xy_heading_rate_coeff: 0.0
-          use_rk4: true
-
-      # 検討中モデル: v1 に xy_heading_rate_coeff の直接同定値のみを追加した ablation。
-      # reidentify/fit_xy.py で 372 dataset (n=2,479,500) から同定した値 (2026-07-15)。
-      v1_c:
-        vehicle_model_type: delay_steer_acc_geared_for_diffusion_planner
-        acceleration_source: kinematic_savgol
-        params:
-          wheelbase: 4.76012
-          acc_time_delay: 0.1
-          acc_time_constant: 0.3
-          debug_acc_scaling_factor: 1.0
-          steer_time_delay: 0.05
-          steer_time_constant: 0.15
-          debug_steer_scaling_factor: 1.0
-          steer_dead_band: 0.0
-          steer_bias: 0.0
-          steer_rate_lim: 0.6
-          k_us: 0.018
-          xy_heading_rate_coeff: 0.004278
-
-      # リリース候補 v2 (旧 v1_p): v1 にプラトー直接同定の定常補正を追加し、GT を SG 系
-      # (steer_savgol + kinematic_savgol、旧 v1_sg を統合) で評価する。
-      # 補正値は reidentify/fit_plateau.py が steer/ax の N=30 プラトー RMSE から
-      # 318 dataset で同定 (2026-07-16, SG 系 GT 基準)。時定数・むだ時間は v1 のまま固定。
-      # debug_acc_scaling_factor は探索下限 0.9 にクランプ (校正域を超える補正要求のサイン)。
-      # 全指標で v1 を上回ることを確認済み (steer@300 0.393deg / ax 0.237 / yaw 5.74deg /
-      # long 431cm / lat 117cm)。上記 release 指定により v2 としてリリースされる。
+      # リリース候補 v2 (旧 v1_p): v1 にプラトー直接同定の定常補正と k_us 更新を加え、
+      # GT を SG 系 (steer_savgol + kinematic_savgol、旧 v1_sg を統合) で評価する。
+      # 時定数・むだ時間は v1 のまま固定。構成要素は 2 つ:
+      # 1) 定常 scaling 補正: reidentify/fit_plateau.py が steer/ax の N=30 プラトー RMSE
+      #    から 318 dataset で同定 (2026-07-16, SG 系 GT 基準)。debug_acc_scaling_factor は
+      #    探索下限 0.9 にクランプ (校正域を超える補正要求のサイン)。下限 0.8 への拡大検証
+      #    (2026-07-16, 318 dataset) でも最適値は 0.800 と新下限に再クランプ (ax@N30
+      #    0.199→0.191)。乗算補正の域を超える構造起因の要求と判断し下限 0.9 を維持。
+      # 2) k_us 更新 0.018 → 0.012: tuned (fit_merge) の改善要因分解で、v1 から継承した
+      #    k_us=0.018 が高速域の yaw/lat worst-case 誤差の主因と判明 (k_us 単独変更で
+      #    robust_score 32.17 → 22.14@k_us=0.002)。ただし小さい k_us は短ホライズンの mean
+      #    を劣化させるため、318 dataset の 1 次元スイープで「全セル (mean/worst ×
+      #    N=10..300 × yaw/long/lat/steer/ax) が k_us=0.018 時点比 +2% 以内」を満たす
+      #    最小スコア点 k_us=0.012 (robust_score 27.11, -15.7%) を採用 (2026-07-16)。
+      # RK4 / xy_heading_rate_coeff / τ再同定 / acc scaling 下限拡大は v2_rk4 / v2_c / v2_t /
+      # 下限 0.8 検証でいずれも全面非劣化を満たさず不採用。
+      # 確定値 (318 dataset, 2026-07-16): steer@300 0.393deg / ax 0.237 / yaw 5.70deg /
+      # long 430cm / lat 114cm — 全ヘッドライン指標で v1 と k_us 更新前の v2 を上回る。
+      # yaw/lat の worst-case は 25〜35% 削減 (lat@150 worst 9.24→6.56, yaw@30 worst
+      # 4.02→2.87)。上記 release 指定により v2 としてリリースされる。
       v2:
         vehicle_model_type: delay_steer_acc_geared_for_diffusion_planner
         acceleration_source: kinematic_savgol
@@ -112,12 +87,82 @@ Evaluation:
           steer_dead_band: 0.0
           steer_bias: 0.0
           steer_rate_lim: 0.6
-          k_us: 0.018
+          k_us: 0.012
           xy_heading_rate_coeff: 0.0
 
+      # 検討中モデル: v2 に RK4 積分のみを追加した ablation (旧 v1_rk4 を v2 ベースへ置換)。
+      # GT・パラメータは v2 と同一で use_rk4 だけを立てる。
+      v2_rk4:
+        vehicle_model_type: delay_steer_acc_geared_for_diffusion_planner
+        acceleration_source: kinematic_savgol
+        steering_source: steer_savgol
+        params:
+          wheelbase: 4.76012
+          acc_time_delay: 0.1
+          acc_time_constant: 0.3
+          debug_acc_scaling_factor: 0.9
+          steer_time_delay: 0.05
+          steer_time_constant: 0.15
+          debug_steer_scaling_factor: 1.015827
+          steer_dead_band: 0.0
+          steer_bias: 0.0
+          steer_rate_lim: 0.6
+          k_us: 0.012
+          xy_heading_rate_coeff: 0.0
+          use_rk4: true
+
+      # 検討中モデル: v2 に xy_heading_rate_coeff の直接同定値のみを追加した ablation
+      # (旧 v1_c を v2 ベースへ置換)。値は reidentify/fit_xy.py で 372 dataset
+      # (n=2,479,500) から同定したもの (2026-07-15)。
+      v2_c:
+        vehicle_model_type: delay_steer_acc_geared_for_diffusion_planner
+        acceleration_source: kinematic_savgol
+        steering_source: steer_savgol
+        params:
+          wheelbase: 4.76012
+          acc_time_delay: 0.1
+          acc_time_constant: 0.3
+          debug_acc_scaling_factor: 0.9
+          steer_time_delay: 0.05
+          steer_time_constant: 0.15
+          debug_steer_scaling_factor: 1.015827
+          steer_dead_band: 0.0
+          steer_bias: 0.0
+          steer_rate_lim: 0.6
+          k_us: 0.012
+          xy_heading_rate_coeff: 0.004278
+
+      # 検討中モデル: v2 の GT/構成のまま τ・むだ時間を SG 系 GT で再同定した ablation
+      # (fit_lon/fit_steer の direct fit + 再同定 τ でのプラトー scaling、2026-07-16 run)。
+      # 1-step 残差は改善するが N-step rollout の robust_score は 36.85 と悪化する
+      # (v2 は k_us 更新前で 32.17、更新後で 27.11。1-step 直接同定と多段 rollout の
+      # ミスマッチ)。採用見送りの記録として残す。
+      # steer_time_constant は探索下限 0.05 にクランプ (SG 系 GT では操舵応答が従来想定より
+      # 速く見えることを示す)。
+      v2_t:
+        vehicle_model_type: delay_steer_acc_geared_for_diffusion_planner
+        acceleration_source: kinematic_savgol
+        steering_source: steer_savgol
+        params:
+          wheelbase: 4.76012
+          acc_time_delay: 0.01
+          acc_time_constant: 0.13257939434802885
+          debug_acc_scaling_factor: 0.9000560067164145
+          steer_time_delay: 0.05
+          steer_time_constant: 0.05
+          debug_steer_scaling_factor: 1.015805220310957
+          steer_dead_band: 0.0
+          steer_bias: -0.0006056849379092455
+          steer_rate_lim: 0.6
+          k_us: 0.018797133899293227
+          xy_heading_rate_coeff: 0.0
+
+      # 同定対象 (TARGET)。GT はリリース基準の v2 と同じ SG 系
+      # (kinematic_savgol + steer_savgol) に揃える。
       current:
         vehicle_model_type: delay_steer_acc_geared_for_diffusion_planner
         acceleration_source: kinematic_savgol
+        steering_source: steer_savgol
         params:
           wheelbase: 4.76012
           acc_time_delay: 0.1

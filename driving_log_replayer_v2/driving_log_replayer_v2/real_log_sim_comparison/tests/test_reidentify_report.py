@@ -233,16 +233,16 @@ def test_run_plots_all_scenario_comparison_models_in_declared_order(
     scenario = tmp_path / "scenario.yaml"
     model_type = "delay_steer_acc_geared_for_diffusion_planner"
     scenario.write_text(yaml.safe_dump({"Evaluation": {"Conditions": {
-        "comparison_models": ["baseline", "v1", "v1_rk4", "current"],
+        "comparison_models": ["baseline", "v1", "v2_rk4", "current"],
         "models": {
             name: {"vehicle_model_type": model_type, "params": {"wheelbase": 4.7}}
-            for name in ("baseline", "v1", "v1_rk4", "current")
+            for name in ("baseline", "v1", "v2_rk4", "current")
         },
     }}}), encoding="utf-8")
     tuned = tmp_path / "tuned.yaml"
     tuned.write_text("params: {}\n", encoding="utf-8")
     rows = []
-    for model, scale in (("baseline", 1.0), ("v1", 0.9), ("v1_rk4", 0.85), ("tuned", 0.8)):
+    for model, scale in (("baseline", 1.0), ("v1", 0.9), ("v2_rk4", 0.85), ("tuned", 0.8)):
         for horizon in (1, 2):
             rows.append({"dataset_id": "dataset-a", "model": model, "horizon": horizon,
                          **{metric: scale * horizon for metric in report.REQUIRED_METRICS}})
@@ -253,14 +253,14 @@ def test_run_plots_all_scenario_comparison_models_in_declared_order(
                         collection_dir=tmp_path, scenario=scenario)
     rendered = output.read_text(encoding="utf-8")
     first_chart = rendered[rendered.index('class="horizon-chart"'):]
-    assert [first_chart.index(f'class="series {model}"') for model in ("baseline", "v1", "v1_rk4", "tuned")] == sorted(
-        first_chart.index(f'class="series {model}"') for model in ("baseline", "v1", "v1_rk4", "tuned")
+    assert [first_chart.index(f'class="series {model}"') for model in ("baseline", "v1", "v2_rk4", "tuned")] == sorted(
+        first_chart.index(f'class="series {model}"') for model in ("baseline", "v1", "v2_rk4", "tuned")
     )
-    for model in ("baseline", "v1", "v1_rk4", "tuned"):
+    for model in ("baseline", "v1", "v2_rk4", "tuned"):
         assert rendered.count(f'class="series {model}"') == len(report.REQUIRED_METRICS)
         assert rendered.count(f'class="point {model}"') == 2 * len(report.REQUIRED_METRICS)
     assert "scenario.yaml: models.v1.params (fixed)" in rendered
-    assert "scenario.yaml: models.v1_rk4.params (fixed)" in rendered
+    assert "scenario.yaml: models.v2_rk4.params (fixed)" in rendered
     assert "tuned_params.yaml: params" in rendered
 
 

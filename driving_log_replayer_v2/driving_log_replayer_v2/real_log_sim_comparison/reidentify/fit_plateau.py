@@ -11,8 +11,8 @@ steer/ax の open-loop N-step 誤差は、初期状態の記憶が消える N≈
 独立な 1 次元フィットとして fit_scaling_channels に実装されており、パイプラインの
 fit_lon / fit_steer も同じコアを τ/delay 確定後に呼ぶ (実装は rollout 正式評価の 1 本のみ)。
 
-この CLI は同じコアを任意ケース (既定 v1) を初期値に単発実行するもので、結果は
-scenario.yaml の比較モデル (例: v2) へ手動転記する。実行例:
+この CLI は同じコアを任意ケース (既定 v2) を初期値に単発実行するもので、結果は
+scenario.yaml の比較モデル (例: v3 候補) へ手動転記する。実行例:
 
     make fit_plateau ROOT=<collection> SCENARIO=<scenario.yaml>
 """
@@ -54,7 +54,7 @@ CHANNELS: tuple[tuple[str, str], ...] = (
     ("ax", "debug_acc_scaling_factor"),
 )
 THETA_KEYS = tuple(key for _metric, key in CHANNELS)
-DEFAULT_CASE = "v1"
+DEFAULT_CASE = "v2"
 # steer (N≈20)・ax (N≈9) の両方が飽和済みで、かつ HORIZONS ⊆ (base_metric を流用できる)。
 DEFAULT_HORIZON = 30
 # 無効 rollout 用の有限ペナルティ (有界スカラー探索は inf より有限大値の方が安定)。
