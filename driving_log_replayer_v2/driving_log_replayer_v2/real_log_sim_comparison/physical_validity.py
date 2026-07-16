@@ -12,6 +12,7 @@ import numpy as np
 import plotly.graph_objects as go
 import yaml
 
+from .lib._parallel import imap_with_watchdog
 from .lib._parallel import normalize_parallel_jobs
 from .lib._parallel import pool_chunksize
 from .lib._parallel import set_worker_thread_env_defaults
@@ -312,10 +313,13 @@ def prepare_datasets(
         evaluations = [_evaluate_dataset(task) for task in tasks]
     else:
         chunksize = pool_chunksize(len(tasks), n_workers)
+        # 親プロセス側でも fork 前に呼ぶ (jemalloc bg thread 保持ロックの fork-time
+        # デッドロック対策、reidentify/fit_plateau.py 参照)。initializer は子側の保険。
+        set_worker_thread_env_defaults()
         with multiprocessing.get_context("fork").Pool(
             n_workers, initializer=set_worker_thread_env_defaults
         ) as pool:
-            evaluations = list(pool.imap(_evaluate_dataset, tasks, chunksize=chunksize))
+            evaluations = imap_with_watchdog(pool, _evaluate_dataset, tasks, chunksize=chunksize)
     for evaluation in evaluations:
         if evaluation.error:
             context.skipped.append(f"{evaluation.dataset_id}: {evaluation.error}")

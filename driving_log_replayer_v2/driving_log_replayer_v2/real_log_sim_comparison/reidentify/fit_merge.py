@@ -17,6 +17,8 @@ from ..lib._steer_source import normalize_steer_source
 from ..lib._multi_agg import ACT_W, AX_FLOOR_MPS2, STEER_FLOOR_DEG, aggregate_normalized, format_agg, robust_score
 from ..lib._nstep_common import METRIC_KEYS
 from ..lib._parallel import (
+    DEFAULT_IMAP_WATCHDOG_TIMEOUT_S,
+    imap_with_watchdog,
     normalize_parallel_jobs,
     pool_chunksize,
     set_worker_thread_env_defaults,
@@ -322,11 +324,13 @@ def load_datasets(
     _LOAD_BASELINE_ACCEL_SOURCE = normalize_accel_source(baseline_acceleration_source)
     _LOAD_BASELINE_STEER_SOURCE = normalize_steer_source(baseline_steering_source)
 
+    # 呼び出し元が fork 前に set_worker_thread_env_defaults() 済みであること
+    # (jemalloc bg thread 保持ロックの fork-time デッドロック対策、fit_plateau.py 参照)。
     mp_ctx = multiprocessing.get_context("fork")
     n_workers = normalize_parallel_jobs(n_jobs, n_tasks=len(tasks))
     chunksize = pool_chunksize(len(tasks), n_workers)
     with mp_ctx.Pool(n_workers) as pool:
-        results = list(pool.imap(_load_one, tasks, chunksize=chunksize))
+        results = imap_with_watchdog(pool, _load_one, tasks, chunksize=chunksize)
 
     ctxs = []
     failures = []
@@ -470,6 +474,9 @@ def robust_search(
             import multiprocessing
             from concurrent.futures import ProcessPoolExecutor
 
+            # fork worker が COW で ctxs を読み取り継承する (再ロード/再pickle を避ける)。
+            # pandas 連鎖 import の pyarrow が jemalloc bg thread を持つため、fork 直前に
+            # set_worker_thread_env_defaults() 済みであること (呼び出し元 identify() 参照)。
             _SEARCH_CTXS = ctxs
             _SEARCH_MODEL = cur_model
             _SEARCH_ACCEL_SOURCE = cur_accel_source
@@ -492,8 +499,17 @@ def robust_search(
                 ]
             else:
                 try:
-                    scores = list(executor.map(_eval_search_candidate, candidates))
-                except Exception as exc:  # noqa: BLE001 (worker may die outside Python)
+                    # timeout: fork 直後に worker がデッドロックした場合 (jemalloc 背景
+                    # スレッド等が fork 時にロックを保持していた場合など) に、応答のない
+                    # 1 worker のせいで永久にハングしないようにする。TimeoutError も
+                    # 下の except で捕捉し、逐次評価にフォールバックする。
+                    scores = list(
+                        executor.map(
+                            _eval_search_candidate, candidates,
+                            timeout=DEFAULT_IMAP_WATCHDOG_TIMEOUT_S,
+                        )
+                    )
+                except Exception as exc:  # noqa: BLE001 (worker may die outside Python, or watchdog timeout)
                     # A native dependency or external signal can terminate a
                     # fork worker without returning its original exception.
                     # Preserve the already completed Optuna trials and retry

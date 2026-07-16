@@ -31,6 +31,7 @@ from scipy.optimize import minimize_scalar
 import yaml
 
 from ..lib._parallel import (
+    imap_with_watchdog,
     normalize_parallel_jobs,
     pool_chunksize,
     set_worker_thread_env_defaults,
@@ -85,7 +86,9 @@ def _eval_all(
     tasks = [(idx, params, horizons, include_mean) for idx in range(len(_CTXS))]
     if pool is None:
         return [_eval_one(task) for task in tasks]
-    return list(pool.imap(_eval_one, tasks, chunksize=pool_chunksize(len(tasks), n_workers)))
+    return imap_with_watchdog(
+        pool, _eval_one, tasks, chunksize=pool_chunksize(len(tasks), n_workers),
+    )
 
 
 def _plateau_channel_values(
@@ -189,6 +192,12 @@ def fit_scaling_channels(
         bounds[key] = search_bounds
 
     n_workers = normalize_parallel_jobs(n_jobs, n_tasks=len(_CTXS))
+    # set_worker_thread_env_defaults() (147行目) を fork 前に呼び済み: pandas 連鎖 import の
+    # pyarrow が持つ jemalloc bg thread が fork の瞬間に内部ロックを保持していると、そのロックを
+    # 解放するスレッドが子プロセスに存在せず、子の最初の malloc でデッドロックしうるという既知の
+    # 危険パターンが疑われる (未確定、再現テストでは再現せず)。imap は投入順に結果を返すため、
+    # 1 worker がこれを踏むだけで全体がハングしうる。実際に起きた場合は下の _eval_all が使う
+    # imap_with_watchdog が一定時間で検出し、明確なエラーで失敗させる。
     pool = (
         multiprocessing.get_context("fork").Pool(n_workers) if n_workers > 1 else None
     )

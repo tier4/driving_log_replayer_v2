@@ -21,10 +21,19 @@ N_JOBS ?= $(or $(REAL_LOG_SIM_COMPARISON_JOBS),32)
 FORCE ?= 0
 NO_SETUP ?= 0
 
+# ARROW_DEFAULT_MEMORY_POOL=system: pandas が連鎖 import する pyarrow の既定アロケータを
+# jemalloc から system に強制する。fit_plateau の無限ハング事例 (worker 32個中1個だけ
+# fork 直後から一度もCPUを使わず futex 待ちのまま停止) の調査で、jemalloc の背景スレッド
+# が内部ロックを保持した瞬間に multiprocessing.get_context("fork") で fork すると、その
+# ロックを解放するスレッドが子に存在せず fork 直後の malloc でデッドロックするという既知
+# パターンが最有力の疑いとして浮上したが、再現テスト (1000試行超) では再現せず未確定。
+# 副作用のない対策のため疑いの段階で先に入れている
+# (reidentify/fit_plateau.py, reidentify/fit_merge.py の COW dataset 共有 fork が対象)。
+# 実際にハングを踏んだ場合は lib/_parallel.py の imap_with_watchdog が数分で検出し失敗する。
 ifeq ($(NO_SETUP),1)
-RUN_PY := PYTHONPATH="$(PYTHONPATH_PREFIX):$${PYTHONPATH:-}" $(PYTHON)
+RUN_PY := ARROW_DEFAULT_MEMORY_POOL=system PYTHONPATH="$(PYTHONPATH_PREFIX):$${PYTHONPATH:-}" $(PYTHON)
 else
-RUN_PY := source "$(ROS_SETUP)" && source "$(SETUP_BASH)" && PYTHONPATH="$(PYTHONPATH_PREFIX):$${PYTHONPATH:-}" $(PYTHON)
+RUN_PY := source "$(ROS_SETUP)" && source "$(SETUP_BASH)" && ARROW_DEFAULT_MEMORY_POOL=system PYTHONPATH="$(PYTHONPATH_PREFIX):$${PYTHONPATH:-}" $(PYTHON)
 endif
 
 FORCE_EXTRACT := $(if $(filter 1 true TRUE yes YES,$(FORCE)),--force-extract,)
