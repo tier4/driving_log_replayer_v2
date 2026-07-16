@@ -14,7 +14,16 @@ import yaml
 
 from ..lib._accel_source import normalize_accel_source
 from ..lib._steer_source import normalize_steer_source
-from ..lib._multi_agg import ACT_W, AX_FLOOR_MPS2, STEER_FLOOR_DEG, aggregate_normalized, format_agg, robust_score
+from ..lib._multi_agg import (
+    ACT_W,
+    AX_FLOOR_MPS2,
+    CVAR_Q,
+    FLOOR_TABLE,
+    STEER_FLOOR_DEG,
+    aggregate_normalized,
+    format_agg,
+    robust_score,
+)
 from ..lib._nstep_common import METRIC_KEYS
 from ..lib._parallel import (
     DEFAULT_IMAP_WATCHDOG_TIMEOUT_S,
@@ -210,20 +219,36 @@ def _evaluate_comparison_report_metrics(
     return results
 
 
+def _finite_score(aggregate: dict | None, **robust_kwargs) -> float:
+    """robust_score を無効値 (None / 非有限 / 負) は inf として評価する共通ラッパ。"""
+    if aggregate is None:
+        return math.inf
+    score = robust_score(aggregate, HORIZONS, **robust_kwargs)
+    return score if math.isfinite(score) and score >= 0.0 else math.inf
+
+
 def _finite_robust_score(aggregate: dict | None) -> float:
-    """最適化に使う目的関数 (objective v2): yaw/long/lat + steer/ax アクチュエータ項。"""
-    if aggregate is None:
-        return math.inf
-    score = robust_score(aggregate, HORIZONS, act_horizons=ACT_SCORE_HORIZONS)
-    return score if math.isfinite(score) and score >= 0.0 else math.inf
+    """最適化に使う目的関数 (objective v3): yaw/long/lat + steer/ax、worst 項は CVaR@90%。
+
+    v3 フロア (FLOOR_TABLE) で正規化した aggregate を渡すこと。
+    """
+    return _finite_score(aggregate, act_horizons=ACT_SCORE_HORIZONS, worst_stat="cvar")
 
 
-def _finite_legacy_score(aggregate: dict | None) -> float:
-    """旧目的関数 (objective v1: yaw/long/lat のみ)。過去ランとの比較・非退行監査用。"""
-    if aggregate is None:
-        return math.inf
-    score = robust_score(aggregate, HORIZONS)
-    return score if math.isfinite(score) and score >= 0.0 else math.inf
+def _finite_v2_score(legacy_aggregate: dict | None) -> float:
+    """objective v2 の厳密再現 (レガシーフロア + worst=max + act 項)。非退行監査用。
+
+    レガシーフロア (legacy_floors=True) の aggregate を渡すこと。
+    """
+    return _finite_score(legacy_aggregate, act_horizons=ACT_SCORE_HORIZONS)
+
+
+def _finite_v1_score(legacy_aggregate: dict | None) -> float:
+    """objective v1 の厳密再現 (レガシーフロア + worst=max、yaw/long/lat のみ)。監査用。
+
+    レガシーフロア (legacy_floors=True) の aggregate を渡すこと。
+    """
+    return _finite_score(legacy_aggregate)
 
 
 def _load_dataset_ctx(
@@ -569,6 +594,15 @@ def _load_ctxs(
     collection_dir: Path, cfg, n_jobs: int,
 ) -> tuple[int, list[DatasetCtx], list[dict[str, str]], tuple[str, dict, str, str]]:
     """CSV キャッシュを読み込み、baseline 情報付きの DatasetCtx 群を返す。"""
+    # HORIZONS を変えたのに FLOOR_TABLE を再校正し忘れた設定ミスは、重い dataset ロードや
+    # rollout に入る前 (最初の normalize_components より手前) にここで fail fast させる。
+    missing_floors = set(HORIZONS) - set(FLOOR_TABLE)
+    if missing_floors:
+        raise RuntimeError(
+            f"FLOOR_TABLE に horizon {sorted(missing_floors)} のフロアがありません。"
+            "settings.HORIZONS を変更した場合は lib/_multi_agg.py の FLOOR_TABLE を"
+            "baseline p10 で再校正してください"
+        )
     tasks = discover_cached_datasets(collection_dir)
     if not tasks:
         raise RuntimeError(f"CSV キャッシュが見つかりません: {collection_dir}")
@@ -653,9 +687,14 @@ def build_comparison_document(
     comparison_results: dict[str, dict] = {}
     for display_name, _params, _model_type, accel, steer in cases:
         aggregate = aggregate_normalized(sparse[display_name], baselines, HORIZONS)
+        # v2/v1 監査スコアはレガシーフロアで厳密再現する (rollout 再実行なし・集約のみ)。
+        legacy_aggregate = aggregate_normalized(
+            sparse[display_name], baselines, HORIZONS, legacy_floors=True,
+        )
         comparison_results[display_name] = {
             "score": float(_finite_robust_score(aggregate)),
-            "score_legacy": float(_finite_legacy_score(aggregate)),
+            "score_v2": float(_finite_v2_score(legacy_aggregate)),
+            "score_legacy": float(_finite_v1_score(legacy_aggregate)),
             "by_h": _clean_agg(aggregate),
             "acceleration_source": accel,
             "steering_source": steer,
@@ -673,7 +712,7 @@ def build_comparison_document(
         dummy_agg = {"by_h": data["by_h"]}
         print(
             f"  {format_agg(name, dummy_agg, HORIZONS)}  score={data['score']:.4f}"
-            f" (legacy={data['score_legacy']:.4f})"
+            f" (v2={data['score_v2']:.4f} v1={data['score_legacy']:.4f})"
         )
     print("=" * 72 + "\n")
 
@@ -713,14 +752,24 @@ def build_comparison_document(
         "fit_stages": list(cfg.fit.stages),
         "fit_target": cfg.fit.target if cfg.fit.enabled else None,
         "score_horizons": list(HORIZONS),
-        # objective v2: yaw/long/lat に加え steer/ax のプラトー項を最適化する。
-        # v1 (score_legacy) は yaw/long/lat のみ。過去ランとの score 比較時はここを確認する。
+        # objective v3: worst 項を max から CVaR@90% (上位 10% 平均) に置換し、yaw/long/lat の
+        # フロアを baseline 分布 p10 の horizon 別テーブルに再校正 (steer/ax と同じ方法論)。
+        # score_v2 (v2: レガシーフロア + max + act 項) / score_legacy (v1: 同 + act なし) は
+        # レガシーフロアで厳密再現しており、過去ランとの score 比較時はここを確認する。
         "objective": {
-            "version": 2,
+            "version": 3,
+            "worst_stat": "cvar",
+            "cvar_q": CVAR_Q,
             "act_horizons": list(ACT_SCORE_HORIZONS),
             "act_w": ACT_W,
+            "floor_method": "baseline p10 (openloop_j6_16_onwards, n=318, 2026-07-16)",
+            "floors_by_horizon": {
+                int(h): {key: float(value) for key, value in row.items()}
+                for h, row in FLOOR_TABLE.items()
+            },
             "steer_floor_deg": STEER_FLOOR_DEG,
             "ax_floor_mps2": AX_FLOOR_MPS2,
+            "audit_scores": "score_v2/score_legacy はレガシー per-step フロアで算出",
         },
         "report_horizons": list(REPORT_HORIZONS),
         "skipped": fit_skipped,

@@ -74,6 +74,7 @@ def test_run_builds_unified_report_from_finalized_artifacts(tmp_path: Path, monk
                     "baseline": {"score": 2.5},
                     "tuned": {"score": 1.25},
                 },
+                "metadata": {"objective": {"version": 3}},
             },
             sort_keys=False,
         ),
@@ -143,10 +144,14 @@ def test_run_builds_unified_report_from_finalized_artifacts(tmp_path: Path, monk
     assert 'id="eq-notation"' in rendered
     assert 'id="eq-score"' in rendered
     assert "robust_score" in rendered
-    # objective v2: steer/ax アクチュエータ項 (プラトー特性・定数フロア) が数式に含まれること
+    # objective v3: steer/ax アクチュエータ項・CVaR worst・監査スコアの説明が含まれること
     assert "nsteer" in rendered
     assert "nax" in rendered
+    assert "CVaR@90%" in rendered
+    assert "score_v2" in rendered
     assert "score_legacy" in rendered
+    # v3 成果物 (metadata.objective.version=3) には旧 objective 警告を出さない
+    assert "旧 objective で算出" not in rendered
     # tuned の集約スコア (1.25) は baseline (2.5) より小さいので改善色が付く
     assert 'class="score-good">1.25' in rendered
     assert "2.5" in rendered
@@ -160,6 +165,22 @@ def test_run_builds_unified_report_from_finalized_artifacts(tmp_path: Path, monk
     assert "bad&lt;script&gt;" not in rendered
     assert "missing &amp; short" not in rendered
     assert 'id="prepare"' in rendered
+
+
+@pytest.mark.parametrize("version", [None, 1, 2])
+def test_objective_equations_warn_for_pre_v3_artifacts(version: int | None) -> None:
+    """旧成果物 (objective v1/v2 や version 記録なし) の report-only 再生成では、
+    v3 数式の先頭に「スコアは旧定義で算出」の警告を挿入して誤読を防ぐこと。"""
+    rendered = report._render_objective_equations(version)
+    assert "旧 objective で算出" in rendered
+    expected = "記録なし" if version is None else f"v{version}"
+    assert expected in rendered
+
+
+def test_objective_version_reads_nested_metadata() -> None:
+    assert report._objective_version({"metadata": {"objective": {"version": 3}}}) == 3
+    assert report._objective_version({"metadata": {}}) is None
+    assert report._objective_version({}) is None
 
 
 def test_run_renders_released_parameters_table(

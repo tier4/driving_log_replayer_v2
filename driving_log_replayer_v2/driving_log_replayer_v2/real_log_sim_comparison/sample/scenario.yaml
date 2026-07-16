@@ -62,6 +62,9 @@ Evaluation:
 
       # リリース候補 v2 (旧 v1_p): v1 にプラトー直接同定の定常補正と k_us 更新を加え、
       # GT を SG 系 (steer_savgol + kinematic_savgol、旧 v1_sg を統合) で評価する。
+      # 注: 以下のコメントの robust_score 絶対値 (32.17 / 27.11 / 22.14 / 36.85) は
+      # objective v2 (レガシーフロア + worst=max) 当時の値。objective v3 以降のランで
+      # 比較する場合は tuned_params.yaml の score でなく score_v2 と突き合わせること。
       # 時定数・むだ時間は v1 のまま固定。構成要素は 2 つ:
       # 1) 定常 scaling 補正: reidentify/fit_plateau.py が steer/ax の N=30 プラトー RMSE
       #    から 318 dataset で同定 (2026-07-16, SG 系 GT 基準)。debug_acc_scaling_factor は

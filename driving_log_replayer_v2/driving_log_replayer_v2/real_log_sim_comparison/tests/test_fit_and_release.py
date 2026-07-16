@@ -31,6 +31,20 @@ from driving_log_replayer_v2.real_log_sim_comparison.reidentify.model_config imp
 )
 
 
+def _stub_aggregate(value: float = 1.0) -> dict:
+    """aggregate_normalized の by_h 形 (mean/worst/cvar × 全成分) を一様値で作るスタブ。"""
+    return {
+        "by_h": {
+            horizon: {
+                f"{key}_{stat}": value
+                for key in ("nyaw", "nlong", "nlat", "nsteer", "nax")
+                for stat in ("mean", "worst", "cvar")
+            }
+            for horizon in fit_merge.HORIZONS
+        }
+    }
+
+
 def test_first_order_fit_recovers_delay_tau_and_scale() -> None:
     dt = 0.01
     command = np.zeros(500)
@@ -139,26 +153,8 @@ def test_comparison_report_metrics_evaluate_every_declared_model(monkeypatch) ->
 
 
 def test_robust_search_parallel_evaluates_each_trial_once(monkeypatch) -> None:
-    aggregate = {
-        "by_h": {
-            horizon: {
-                "nyaw_mean": 1.0,
-                "nyaw_worst": 1.0,
-                "nlong_mean": 1.0,
-                "nlong_worst": 1.0,
-                "nlat_mean": 1.0,
-                "nlat_worst": 1.0,
-                "nsteer_mean": 1.0,
-                "nsteer_worst": 1.0,
-                "nax_mean": 1.0,
-                "nax_worst": 1.0,
-            }
-            for horizon in fit_merge.HORIZONS
-        }
-    }
-
     def fake_evaluate_candidate(_ctxs, _params, _model_type, _source, _steer_source="steer", **_kwargs):
-        return aggregate
+        return _stub_aggregate()
 
     monkeypatch.setattr(fit_merge, "_evaluate_candidate", fake_evaluate_candidate)
     context = fit_merge.DatasetCtx(
@@ -184,24 +180,7 @@ def test_robust_search_parallel_evaluates_each_trial_once(monkeypatch) -> None:
 
 def test_robust_search_uses_direct_fit_for_single_trial(monkeypatch) -> None:
     def fake_evaluate_candidate(_ctxs, params, _model_type, _source, _steer_source="steer", **_kwargs):
-        value = float(params["acc_time_constant"])
-        return {
-            "by_h": {
-                horizon: {
-                    "nyaw_mean": value,
-                    "nyaw_worst": value,
-                    "nlong_mean": value,
-                    "nlong_worst": value,
-                    "nlat_mean": value,
-                    "nlat_worst": value,
-                    "nsteer_mean": value,
-                    "nsteer_worst": value,
-                    "nax_mean": value,
-                    "nax_worst": value,
-                }
-                for horizon in fit_merge.HORIZONS
-            }
-        }
+        return _stub_aggregate(float(params["acc_time_constant"]))
 
     monkeypatch.setattr(fit_merge, "_evaluate_candidate", fake_evaluate_candidate)
     context = fit_merge.DatasetCtx(
@@ -359,19 +338,9 @@ def test_fit_merge_skips_optuna_when_all_targets_are_disabled(
                 optimization_stages=constraint.optimization_stages - {FIT_MERGE},
             ),
         )
-    aggregate = {
-        "by_h": {
-            horizon: {
-                "nyaw_mean": 1.0, "nyaw_worst": 1.0,
-                "nlong_mean": 1.0, "nlong_worst": 1.0,
-                "nlat_mean": 1.0, "nlat_worst": 1.0,
-                "nsteer_mean": 1.0, "nsteer_worst": 1.0,
-                "nax_mean": 1.0, "nax_worst": 1.0,
-            }
-            for horizon in fit_merge.HORIZONS
-        }
-    }
-    monkeypatch.setattr(fit_merge, "_evaluate_candidate", lambda *_args, **_kwargs: aggregate)
+    monkeypatch.setattr(
+        fit_merge, "_evaluate_candidate", lambda *_args, **_kwargs: _stub_aggregate(),
+    )
     context = fit_merge.DatasetCtx("dataset-a", {}, 0, {"acc_time_delay": 0.1})
     case = SimpleNamespace(
         params={"acc_time_constant": 0.3, "acc_time_delay": 0.1},

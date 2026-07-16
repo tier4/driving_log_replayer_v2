@@ -719,22 +719,55 @@ def _comparison_model_order(scenario: Path) -> tuple[str, ...]:
     return tuple(name.lower() for name in comparison_display_order(config))
 
 
-def _render_objective_equations() -> str:
+def _objective_version(document: Mapping[str, Any]) -> int | None:
+    """成果物 metadata の objective version (旧成果物や欠落は None)。"""
+    metadata = document.get("metadata")
+    if not isinstance(metadata, Mapping):
+        return None
+    objective = metadata.get("objective")
+    if not isinstance(objective, Mapping):
+        return None
+    try:
+        return int(objective["version"])
+    except (KeyError, TypeError, ValueError):
+        return None
+
+
+def _render_objective_equations(objective_version: int | None) -> str:
     """
     Render the objective equations (N-step rollout, normalization, robust_score).
 
     統合最適化セクションの目的関数を数式で提示する。式は fit_merge / _multi_agg が実際に
     最適化する robust_score に一致させる。レポートの「Mean normalized RMSE」列・分布は
     別定義(7 指標 RMSE 比の平均)なので明確に区別する。
+
+    以下の数式は objective v3 の定義。report-only 再生成で旧成果物
+    (metadata.objective.version != 3) を読んだ場合は、スコアが旧定義で算出されている旨の
+    警告を先頭に挿入する (score_v2 キーも存在しないため誤読を防ぐ)。
     """
-    return """<details id="eq-score"><summary>評価関数の定義(N-step rollout・正規化・robust_score)</summary>
+    warning = ""
+    if objective_version != 3:
+        found = "記録なし" if objective_version is None else f"v{objective_version}"
+        warning = (
+            '<p class="note"><b>⚠ この成果物は旧 objective で算出されています'
+            f"(metadata.objective.version: {found})。</b>"
+            "以下の数式は現行 objective v3 の定義であり、この成果物の Aggregate score とは"
+            "一致しません。旧ランとの比較は当時の定義 (report/YAML の記録) に従ってください。</p>"
+        )
+    return f"""<details id="eq-score"><summary>評価関数の定義(N-step rollout・正規化・robust_score)</summary>
+{warning}""" + """
 <p>各データセットについて、実機ログの初期状態から制御コマンドを <b>N ステップ前向き積分</b>し、
 実機軌跡との<b>終端誤差 RMSE</b> を horizon \\(N\\) 別に評価する(yaw [deg]・long [cm]・lat [cm] 等)。</p>
 <p>難易度の異なるデータセットを公平に集約するため、<b>baseline モデルの誤差でフロアクリップ付き正規化</b>する:</p>
-\\[ \\text{nyaw}_N = \\frac{\\text{yaw}_{\\mathrm{tuned}}}{\\max(\\text{yaw}_{\\mathrm{baseline}},\\; f_{\\mathrm{yaw}}\\cdot N)},
+\\[ \\text{nyaw}_N = \\frac{\\text{yaw}_{\\mathrm{tuned}}}{\\max(\\text{yaw}_{\\mathrm{baseline}},\\; f_{\\mathrm{yaw}}(N))},
 \\quad (\\text{nlong}, \\text{nlat}\\ \\text{も同様}) \\]
-<p>フロア \\(f\\) は per-step 定数(yaw 0.006 deg・long 0.1 cm・lat 0.03 cm を \\(N\\) 倍)で、
-ほぼ直進のデータセットで分母がゼロ近くになる暴発を防ぐ。</p>
+<p>フロア \\(f(N)\\) は <b>baseline モデルの per-dataset RMSE 分布の p10</b> を horizon 別に採用した
+テーブル(steer/ax フロアと同じ方法論。openloop_j6_16_onwards, 318 datasets, 2026-07-16)で、
+ほぼ直進のデータセットで分母がゼロ近くになる暴発を防ぐ。
+旧 per-step 線形フロア(yaw 0.006 deg・long 0.1 cm・lat 0.03 cm × \\(N\\))は実データの誤差成長と
+乖離していた(yaw は長 horizon で p10 の 2 倍 = 過剰クリップ、long/lat は p10 の 0.2〜0.3 倍で
+暴発を許す)ため objective v3 で再校正した。採用値は tuned_params.yaml の
+metadata.objective.floors_by_horizon に記録される。</p>
 <p>steer・ax も同様に baseline 比で正規化するが、両者は安定な 1 次遅れ系の状態量で
 open-loop 誤差が N≈20 (steer) / N≈9 (ax) までに定常値へ飽和する(プラトー特性)ため、
 フロアは \\(N\\) に比例させない<b>定数</b>(steer 0.12 deg・ax 0.10 m/s²、
@@ -753,10 +786,15 @@ baseline per-dataset 分布の p10)とする:</p>
   \\left(\\overline{\\text{nsteer}} + \\overline{\\text{nax}}\\right)
 + 0.5\\left(\\widehat{\\text{nsteer}} + \\widehat{\\text{nax}}\\right)
 \\right] \\]
-<p>ここで \\(\\overline{\\cdot}\\) は全データセットの mean、\\(\\widehat{\\cdot}\\) は worst(max)。yaw : 位置 = 1 : 1、
-worst 項の重み 0.5(mean の改善と worst の頑健性を半々で重視)。
-アクチュエータ項のない旧目的関数(yaw/long/lat のみ)の値は <b>score_legacy</b> として
-tuned_params.yaml に併記され、過去ランとの非退行監査に使う。</p>
+<p>ここで \\(\\overline{\\cdot}\\) は全データセットの mean、\\(\\widehat{\\cdot}\\) は
+<b>CVaR@90%(正規化比の上位 10% の平均)</b>。yaw : 位置 = 1 : 1、
+worst 項の重み 0.5(mean の改善と worst 側テールの頑健性を半々で重視)。
+旧 objective の worst=max は dataset 数が多いとき単一の外れ dataset が score を支配した
+(318 datasets の実測で worst 項が score の 61%、外れ 1 件除外で −9.3% 変動)ため、
+v3 で CVaR@90% に置換した(worst 項比率 46%・外れ 1 件除外の変動 −1.3%)。</p>
+<p>非退行監査用に、旧目的関数の値もレガシーフロアで厳密再現して tuned_params.yaml に併記する:
+<b>score_v2</b>(v2: レガシーフロア + worst=max + アクチュエータ項)と
+<b>score_legacy</b>(v1: 同 + アクチュエータ項なし)。過去ランとの score 比較にはこちらを使う。</p>
 <div class="note"><b>表の 2 つのスコアを混同しないこと</b>:
 <b>Aggregate score</b> 列は上記 \\(\\text{score}\\)(robust_score、最適化の目的関数)。
 一方 <b>Mean normalized RMSE</b> 列とデータセット分布は別定義で、pos/long/lat/yaw/steer/vx/ax の
@@ -910,7 +948,7 @@ details {{ margin:10px 0; }} details > summary {{ cursor:pointer; font-weight:60
 <section><h2>3. Longitudinal direct identification</h2>{_render_artifact(phase1_path, parameter_title="phase1_acc.yaml")}{_render_stage_plateau(phase1_path, scale_key="debug_acc_scaling_factor", unit="m/s²", channel="ax")}{physical_sections.longitudinal}</section>
 <section><h2>4. Steering direct identification</h2>{_render_artifact(phase2_path, parameter_title="phase2_steer.yaml")}{_render_stage_plateau(phase2_path, scale_key="debug_steer_scaling_factor", unit="deg", channel="steer")}{physical_sections.steering}{physical_sections.yaw}</section>
 <section><h2>5. XY heading-rate direct identification</h2>{_render_artifact(phase3_path, parameter_title="phase3_xy.yaml")}{physical_sections.xy}</section>
-<section id="sec-optimization"><h2>6. Integrated optimization</h2>{_render_artifact_document(document, tuned_path, parameter_title="Final parameters")}<h3>Aggregate comparison</h3>{_render_objective_equations()}<p class="note">Raw columns (pos/long/…) are mean RMSE. <b>Aggregate score</b> is the optimized robust_score; <b>Mean normalized RMSE</b> is the 7-metric ratio mean — see the objective definition above (<a href="#eq-score">🔗 評価関数の定義</a>). Aggregate/distribution values use the configured optimization horizons; graphs use every available N. Lower is better.</p>{_render_aggregate(document, summary, model_order)}<h3>Error by horizon N</h3><p class="note">Each point is the mean RMSE across valid datasets. Every available N is plotted; lower is better.</p>{_render_horizon_charts(frame, model_order)}<h3>Dataset distributions</h3>{_render_dataset_distribution(summary, model_order)}</section>
+<section id="sec-optimization"><h2>6. Integrated optimization</h2>{_render_artifact_document(document, tuned_path, parameter_title="Final parameters")}<h3>Aggregate comparison</h3>{_render_objective_equations(_objective_version(document))}<p class="note">Raw columns (pos/long/…) are mean RMSE. <b>Aggregate score</b> is the optimized robust_score; <b>Mean normalized RMSE</b> is the 7-metric ratio mean — see the objective definition above (<a href="#eq-score">🔗 評価関数の定義</a>). Aggregate/distribution values use the configured optimization horizons; graphs use every available N. Lower is better.</p>{_render_aggregate(document, summary, model_order)}<h3>Error by horizon N</h3><p class="note">Each point is the mean RMSE across valid datasets. Every available N is plotted; lower is better.</p>{_render_horizon_charts(frame, model_order)}<h3>Dataset distributions</h3>{_render_dataset_distribution(summary, model_order)}</section>
 <section id="sec-released"><h2>7. Released YAML</h2>{_render_release_spec(scenario_path, release_path)}<p class="source">Released parameter YAML: {_escape(release_path)}</p></section>
 <section id="sec-timeseries"><h2>8. 対象データセットの時系列診断</h2><p class="lede">scenario の plot_dataset で指定したデータセットのリストについて、状態方程式の各行(<a href="#eq-long">縦方向</a>/<a href="#eq-steer">操舵</a>)の左辺(実測系)と右辺(モデル予測系)、および指令値を時系列で重ね描きする。</p>{physical_sections.timeseries}</section>
 </main></body></html>
