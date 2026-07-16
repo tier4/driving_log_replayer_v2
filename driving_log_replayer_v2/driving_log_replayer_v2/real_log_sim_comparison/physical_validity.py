@@ -646,25 +646,8 @@ def _timeseries_stat(label: str, value: Any) -> str:
     return f'<div class="stat"><span>{_escape(label)}</span><strong>{_escape(str(value))}</strong></div>'
 
 
-def build_timeseries_section(collection_dir: Path, params_path: Path, scenario: Path) -> str:
-    """
-    レポート 9 章 (対象データセットの時系列診断) の HTML 断片を構築する。
-
-    scenario の Evaluation.Conditions.plot_dataset で指定した 1 データセットについて、
-    状態方程式の左辺・右辺・指令値を時系列で重ね描きする。失敗はレポート全体を
-    止めず、理由を .note で返す。
-    """
-    try:
-        config = load_model_config(scenario)
-    except (OSError, ValueError) as exc:
-        return f'<p class="note">scenario の読み込みに失敗しました: {_escape(str(exc))}</p>'
-    dataset_id = config.plot_dataset
-    if dataset_id is None:
-        return (
-            '<p class="note">scenario の <code>Evaluation.Conditions.plot_dataset: '
-            "&lt;dataset-id&gt;</code> を指定すると、そのデータセットについて状態方程式の"
-            "左辺・右辺・指令値の時系列診断を表示します。</p>"
-        )
+def _render_dataset_timeseries(collection_dir: Path, dataset_id: str, model: ComparedModel) -> str:
+    """1 データセット分の時系列診断フラグメントを返す。失敗は .note に変換する。"""
     csv_path = Path(collection_dir) / "datasets" / dataset_id / CACHE_NAME
     if not csv_path.is_file():
         n_cached = len(discover_cached_datasets(Path(collection_dir)))
@@ -673,9 +656,6 @@ def build_timeseries_section(collection_dir: Path, params_path: Path, scenario: 
             f"{_escape(str(csv_path))} (キャッシュ済み dataset: {n_cached} 件)</p>"
         )
     try:
-        tuned_document = yaml.safe_load(Path(params_path).read_text(encoding="utf-8")) or {}
-        tuned_params = dict(tuned_document.get("params", tuned_document))
-        model, label = _timeseries_model(config, tuned_params)
         source = read_dataset_csv(csv_path)
         source["steering"] = steer_dataframe_from_source(
             model.steering_source, df_steer=source["steering"]
@@ -697,38 +677,67 @@ def build_timeseries_section(collection_dir: Path, params_path: Path, scenario: 
             )
         n = len(data["a_act"])
         stride = _timeseries_stride(n)
-        stats = "".join(
-            _timeseries_stat(label, value)
-            for label, value in (
-                ("dataset", dataset_id),
-                ("τ_a [s]", _number(model.params.get("acc_time_constant"))),
-                ("T_a [s]", _number(model.params.get("acc_time_delay"))),
-                ("τ_δ [s]", _number(model.params.get("steer_time_constant"))),
-                ("T_δ [s]", _number(model.params.get("steer_time_delay"))),
-                ("β [rad]", _number(model.params.get("steer_bias"))),
-                ("accel source", model.acceleration_source),
-                ("steer source", model.steering_source),
-                ("点数", f"{n} (表示 1/{stride})"),
-            )
-        )
         figures_html = "".join(_figure_html(fig, title) for title, fig in figures)
     except (OSError, ValueError, KeyError, TypeError) as exc:
         return (
             f'<p class="note">plot_dataset={_escape(dataset_id)} の時系列診断の構築に失敗しました: '
             f"{_escape(str(exc))}</p>"
         )
+    return f'<p class="source">点数: {n} (表示 1/{stride})</p>{figures_html}'
+
+
+def build_timeseries_section(collection_dir: Path, params_path: Path, scenario: Path) -> str:
+    """
+    レポート 9 章 (対象データセットの時系列診断) の HTML 断片を構築する。
+
+    scenario の Evaluation.Conditions.plot_dataset で指定したデータセットのリストを
+    順に、状態方程式の左辺・右辺・指令値の時系列で重ね描きする。
+    失敗はレポート全体を止めず、データセット単位の .note に変換する。
+    """
+    try:
+        config = load_model_config(scenario)
+    except (OSError, ValueError) as exc:
+        return f'<p class="note">scenario の読み込みに失敗しました: {_escape(str(exc))}</p>'
+    if not config.plot_datasets:
+        return (
+            '<p class="note">scenario の <code>Evaluation.Conditions.plot_dataset: '
+            "[&lt;dataset-id&gt;, ...]</code> を指定すると、そのデータセットについて"
+            "状態方程式の左辺・右辺・指令値の時系列診断を表示します。</p>"
+        )
+    try:
+        tuned_document = yaml.safe_load(Path(params_path).read_text(encoding="utf-8")) or {}
+        tuned_params = dict(tuned_document.get("params", tuned_document))
+        model, label = _timeseries_model(config, tuned_params)
+    except (OSError, ValueError, KeyError, TypeError) as exc:
+        return f'<p class="note">パラメータの解決に失敗しました: {_escape(str(exc))}</p>'
+    stats = "".join(
+        _timeseries_stat(stat_label, value)
+        for stat_label, value in (
+            ("τ_a [s]", _number(model.params.get("acc_time_constant"))),
+            ("T_a [s]", _number(model.params.get("acc_time_delay"))),
+            ("τ_δ [s]", _number(model.params.get("steer_time_constant"))),
+            ("T_δ [s]", _number(model.params.get("steer_time_delay"))),
+            ("β [rad]", _number(model.params.get("steer_bias"))),
+            ("accel source", model.acceleration_source),
+            ("steer source", model.steering_source),
+        )
+    )
     notes = (
         '<div class="note">左辺の微分は Savitzky-Golay (窓 0.4 s, polyorder 2)。むだ時間は '
         f"{RESAMPLE_DT:g} s グリッドへ丸めて先頭ホールドでシフト (fit_core と同一の解釈)。"
         "速度の右辺は v(0) からの純積分で、ドリフトは a_act の系統バイアスをそのまま示す。"
-        f"表示は 1/{stride} 間引き (数値計算はフルグリッド)。灰色帯 = 非 DRIVE 区間"
-        "(固定評価・同定はこの区間を除外している)。</div>"
+        f"表示は最大 {_TIMESERIES_MAX_POINTS} 点/トレースへ間引き (数値計算はフルグリッド)。"
+        "灰色帯 = 非 DRIVE 区間(固定評価・同定はこの区間を除外している)。</div>"
     )
-    return (
-        f"<p>使用パラメータ: <b>{_escape(label)}</b></p>"
-        f'<div class="stats">{stats}</div>'
-        f"{notes}{figures_html}"
-    )
+    parts = [
+        f"<p>使用パラメータ: <b>{_escape(label)}</b></p>",
+        f'<div class="stats">{stats}</div>',
+        notes,
+    ]
+    for dataset_id in config.plot_datasets:
+        parts.append(f'<h3 class="ts-dataset">📈 dataset: {_escape(dataset_id)}</h3>')
+        parts.append(_render_dataset_timeseries(collection_dir, dataset_id, model))
+    return "".join(parts)
 
 
 def build_sections(

@@ -253,12 +253,23 @@ def test_plot_dataset_key_is_parsed_and_validated(tmp_path: Path) -> None:
     )
 
     config = load_model_config(_scenario(tmp_path / "s1.yaml", ["baseline", "current"]))
-    assert config.plot_dataset is None
+    assert config.plot_datasets == ()
     config = load_model_config(
-        _scenario(tmp_path / "s2.yaml", ["baseline", "current"], plot_dataset="dataset_1.2-a")
+        _scenario(tmp_path / "s2.yaml", ["baseline", "current"], plot_dataset=["dataset_1.2-a"])
     )
-    assert config.plot_dataset == "dataset_1.2-a"
-    for name, invalid in (("empty", ""), ("mapping", {"a": 1}), ("traversal", "../x")):
+    assert config.plot_datasets == ("dataset_1.2-a",)
+    config = load_model_config(
+        _scenario(tmp_path / "s3.yaml", ["baseline", "current"], plot_dataset=["ds-a", "ds-b"])
+    )
+    assert config.plot_datasets == ("ds-a", "ds-b")
+    for name, invalid in (
+        ("bare-string", "ds-a"),
+        ("mapping", {"a": 1}),
+        ("empty-entry", [""]),
+        ("traversal", ["../x"]),
+        ("non-str-entry", [{"a": 1}]),
+        ("duplicates", ["ds-a", "ds-a"]),
+    ):
         with np.testing.assert_raises_regex(ValueError, "plot_dataset"):
             load_model_config(
                 _scenario(tmp_path / f"bad-{name}.yaml", ["baseline", "current"], plot_dataset=invalid)
@@ -280,7 +291,7 @@ def test_build_timeseries_section_reports_missing_dataset(tmp_path: Path) -> Non
     rendered = physical_validity.build_timeseries_section(
         tmp_path,
         _params(tmp_path / "params.yaml"),
-        _scenario(tmp_path / "scenario.yaml", ["baseline", "current"], plot_dataset="missing"),
+        _scenario(tmp_path / "scenario.yaml", ["baseline", "current"], plot_dataset=["missing"]),
     )
     assert "missing" in rendered
     assert "見つかりません" in rendered
@@ -302,15 +313,45 @@ def test_build_timeseries_section_renders_five_figures(tmp_path: Path, monkeypat
         _params(tmp_path / "params.yaml"),
         _scenario(
             tmp_path / "scenario.yaml", ["baseline", "current"],
-            plot_dataset="good", release={"model": "current", "version": 2},
+            plot_dataset=["good"], release={"model": "current", "version": 2},
         ),
     )
 
     assert rendered.count("<h3>") == 5
     assert rendered.count("plotly-graph-div") >= 5
+    assert rendered.count('class="ts-dataset"') == 1
     assert "release ケース current" in rendered
     assert 'class="stats"' in rendered
     assert "good" in rendered
+
+
+def test_build_timeseries_section_renders_multiple_datasets(tmp_path: Path, monkeypatch) -> None:
+    """リスト指定では各データセットを順に描画し、1 件の失敗が他を止めない。"""
+    dataset_dir = tmp_path / "datasets" / "good"
+    dataset_dir.mkdir(parents=True)
+    (dataset_dir / "reidentify_cache.csv").write_text("stub", encoding="utf-8")
+    data, _params_unused = _timeseries_dataset(samples=500)
+    monkeypatch.setattr(physical_validity, "read_dataset_csv", lambda _path: {"steering": "df"})
+    monkeypatch.setattr(
+        physical_validity, "steer_dataframe_from_source", lambda _source, *, df_steer: df_steer
+    )
+    monkeypatch.setattr(physical_validity, "build_resampled", lambda *_args, **_kwargs: data)
+
+    rendered = physical_validity.build_timeseries_section(
+        tmp_path,
+        _params(tmp_path / "params.yaml"),
+        _scenario(
+            tmp_path / "scenario.yaml", ["baseline", "current"],
+            plot_dataset=["good", "missing"],
+        ),
+    )
+
+    assert rendered.count('class="ts-dataset"') == 2
+    assert rendered.count("plotly-graph-div") == 5
+    assert "見つかりません" in rendered
+    assert rendered.index("dataset: good") < rendered.index("dataset: missing")
+    # パラメータタイルはセクション先頭に 1 回だけ
+    assert rendered.count('class="stats"') == 1
 
 
 def test_report_omits_detailed_fit_diagnostics_and_keeps_fixed_evaluations(tmp_path: Path, monkeypatch) -> None:

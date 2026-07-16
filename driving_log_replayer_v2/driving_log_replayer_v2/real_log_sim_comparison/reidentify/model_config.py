@@ -40,7 +40,7 @@ class ModelConfig:
     models: dict[str, ModelSpec]
     comparison_models: tuple[str, ...]
     release: ReleaseSpec | None = None
-    plot_dataset: str | None = None
+    plot_datasets: tuple[str, ...] = ()
 
     def find_case(self, name: str) -> ModelSpec:
         try:
@@ -131,12 +131,12 @@ def load_model_config(path: str | Path) -> ModelConfig:
         )
 
     release = _parse_release(scenario, conditions, models)
-    plot_dataset = _parse_plot_dataset(scenario, conditions)
+    plot_datasets = _parse_plot_dataset(scenario, conditions)
     return ModelConfig(
         models=models,
         comparison_models=comparison_models,
         release=release,
-        plot_dataset=plot_dataset,
+        plot_datasets=plot_datasets,
     )
 
 
@@ -171,22 +171,29 @@ def _parse_release(
     return ReleaseSpec(model=model, version=version)
 
 
-def _parse_plot_dataset(scenario: Path, conditions: dict) -> str | None:
+def _parse_plot_dataset(scenario: Path, conditions: dict) -> tuple[str, ...]:
     """
-    任意の Evaluation.Conditions.plot_dataset (dataset-id) を検証して返す。
+    任意の Evaluation.Conditions.plot_dataset (dataset-id のリスト) を検証して返す。
 
-    指定時はレポート末尾の時系列診断セクションが対象データセットを描画する。
+    指定時はレポート末尾の時系列診断セクションが対象データセットを順に描画する。
     dataset の実在確認は collection_dir を知るセクション構築側が行う。
     """
     raw_plot_dataset = conditions.get("plot_dataset")
     if raw_plot_dataset is None:
-        return None
-    if not isinstance(raw_plot_dataset, str) or not _SAFE_NAME.fullmatch(raw_plot_dataset):
+        return ()
+    if not isinstance(raw_plot_dataset, list):
         raise ValueError(
-            f"{scenario}: plot_dataset は英数字・'_.-' のみの dataset-id が必要です: "
-            f"{raw_plot_dataset!r}"
+            f"{scenario}: plot_dataset は dataset-id のリストが必要です: {raw_plot_dataset!r}"
         )
-    return raw_plot_dataset
+    for entry in raw_plot_dataset:
+        if not isinstance(entry, str) or not _SAFE_NAME.fullmatch(entry):
+            raise ValueError(
+                f"{scenario}: plot_dataset は英数字・'_.-' のみの dataset-id の"
+                f"リストが必要です: {entry!r}"
+            )
+    if len(set(raw_plot_dataset)) != len(raw_plot_dataset):
+        raise ValueError(f"{scenario}: plot_dataset に重複があります: {raw_plot_dataset!r}")
+    return tuple(raw_plot_dataset)
 
 
 def resolve_baseline_model(config: ModelConfig) -> tuple[str, dict, str]:

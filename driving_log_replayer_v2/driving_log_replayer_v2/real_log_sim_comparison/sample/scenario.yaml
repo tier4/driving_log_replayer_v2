@@ -7,9 +7,10 @@ Evaluation:
     # release ステージの出力先: v2 ケースを simulator_model.param.yaml の v2 スロットへ
     # リリースする (tuned の v100 は含めない)。未指定時は従来どおり tuned → v100。
     release: {model: v2, version: 2}
-    # レポート 9 章 (時系列診断) の対象 dataset-id。指定すると release ケース (未指定時は
-    # tuned) のパラメータで状態方程式の左辺・右辺・指令値を時系列描画する。省略時は案内のみ。
-    # plot_dataset: <dataset-id>
+    # レポート 9 章 (時系列診断) の対象 dataset-id のリスト。指定すると release ケース
+    # (未指定時は tuned) のパラメータで状態方程式の左辺・右辺・指令値を各データセットに
+    # ついて時系列描画する。省略時は案内のみ。
+    # plot_dataset: [<dataset-id>, ...]
 
     models:
       baseline:
