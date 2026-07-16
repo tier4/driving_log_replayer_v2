@@ -88,6 +88,15 @@ x/y 方程式残差も評価します。N-step 指標のロールアウトは再
 必須topicがない、データが空、有効区間が短すぎる dataset は理由を表示して除外します。
 同定可能な dataset が1件も残らない場合はエラー終了します。
 
+## リリース対象の指定
+
+release ステージは既定では tuned（統合最適化の結果）を `v100` スロットへ書き出しますが、
+scenario の `Evaluation.Conditions.release: {model: <case>, version: <N>}` を指定すると、
+そのケースのパラメータを `v<N>` スロットへ書き `version: <N>` で選択します
+（tuned の v100 は含めません。入力 YAML に既存の `v<N>` がある場合はエラー）。
+例: `release: {model: v2, version: 2}` — プラトー補正済みの固定ケース v2 を
+リリース候補として simulator_model.param.yaml に出力します。
+
 ## スケーリングのプラトー同定（2段構成）
 
 各系統の直接同定は「τ・むだ時間を動的励起データの最小二乗で決定 → scaling factor を
@@ -105,7 +114,7 @@ make fit_plateau ROOT=<collection> SCENARIO=<scenario.yaml>
 ```
 
 同じコアを任意の scenario ケース（既定 `v1`）を初期値として実行し、比較モデル
-（例: `v1_p`）向けの scaling を同定します。成果物 `<ROOT>/reidentify/plateau_params.yaml`
+（例: `v2`）向けの scaling を同定します。成果物 `<ROOT>/reidentify/plateau_params.yaml`
 の値を scenario.yaml へ手動転記して使います。`plateau_diagnostics.csv` に
 dataset 別の RMSE と署名付き平均誤差（系統/雑音の分解用）を出力します。
 
