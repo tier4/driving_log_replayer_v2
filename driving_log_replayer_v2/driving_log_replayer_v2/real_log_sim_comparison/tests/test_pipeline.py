@@ -8,31 +8,27 @@ import yaml
 from driving_log_replayer_v2.real_log_sim_comparison.reidentify import pipeline
 
 
-def _write_inputs(tmp_path: Path) -> tuple[Path, Path, Path]:
+def _write_inputs(tmp_path: Path, *, conditions_extra: dict | None = None) -> tuple[Path, Path, Path]:
     root = tmp_path / "collection"
     (root / "datasets").mkdir(parents=True)
     scenario = tmp_path / "scenario.yaml"
-    scenario.write_text(
-        yaml.safe_dump(
-            {
-                "Evaluation": {
-                    "Conditions": {
-                        "comparison_models": ["baseline", "current"],
-                        "models": {
-                            "baseline": {
-                                "vehicle_model_type": "delay_steer_acc_geared_wo_fall_guard",
-                                "params": {"wheelbase": 4.7},
-                            },
-                            "current": {
-                                "vehicle_model_type": "delay_steer_acc_geared_for_diffusion_planner",
-                                "params": {"wheelbase": 4.7},
-                            },
-                        }
-                    }
-                }
+    conditions = {
+        "comparison_models": ["baseline", "current"],
+        "release": {"model": "current", "version": 2},
+        "models": {
+            "baseline": {
+                "vehicle_model_type": "delay_steer_acc_geared_wo_fall_guard",
+                "params": {"wheelbase": 4.7},
             },
-            sort_keys=False,
-        ),
+            "current": {
+                "vehicle_model_type": "delay_steer_acc_geared_for_diffusion_planner",
+                "params": {"wheelbase": 4.7},
+            },
+        },
+    }
+    conditions.update(conditions_extra or {})
+    scenario.write_text(
+        yaml.safe_dump({"Evaluation": {"Conditions": conditions}}, sort_keys=False),
         encoding="utf-8",
     )
     input_param = tmp_path / "simulator_model.param.yaml"
@@ -122,6 +118,72 @@ def test_main_runs_only_the_fixed_pipeline_in_order(
     pipeline.main()
 
     assert calls == ["extract", "fit_lon", "fit_steer", "fit_xy", "fit_merge", "release", "report"]
+
+
+def _install_call_recorders(monkeypatch, calls: list[str], tmp_path: Path) -> None:
+    recorders = {
+        "_step_extract": lambda *_a, **_k: calls.append("extract") or {},
+        "_step_fit_lon": lambda *_a, **_k: calls.append("fit_lon") or tmp_path / "phase1.yaml",
+        "_step_fit_steer": lambda *_a, **_k: calls.append("fit_steer") or tmp_path / "phase2.yaml",
+        "_step_fit_xy": lambda *_a, **_k: calls.append("fit_xy") or tmp_path / "phase3.yaml",
+        "_step_fit_merge": lambda *_a, **_k: (
+            calls.append("fit_merge") or tmp_path / "tuned.yaml",
+            tmp_path / "metrics.csv",
+            {"metadata": {"skipped": []}},
+        ),
+        "_step_evaluate": lambda *_a, **_k: (
+            calls.append("evaluate") or tmp_path / "tuned.yaml",
+            tmp_path / "metrics.csv",
+            {"metadata": {"skipped": []}},
+        ),
+        "_step_release": lambda *_a, **_k: calls.append("release") or tmp_path / "released.yaml",
+        "_step_report": lambda *_a, **_k: calls.append("report"),
+    }
+    for name, fn in recorders.items():
+        monkeypatch.setattr(pipeline, name, fn)
+
+
+def test_main_skips_disabled_fit_stages_and_release(tmp_path: Path, monkeypatch) -> None:
+    """fit.stages: [] は全 fit をスキップし evaluate を実行、release 未指定なら release も飛ばす。"""
+    root, scenario, _input_param = _write_inputs(
+        tmp_path, conditions_extra={"fit": {"stages": []}, "release": None},
+    )
+    # release: None は mapping 検証を通らないので削除する。
+    import yaml as _yaml  # noqa: PLC0415
+
+    doc = _yaml.safe_load(scenario.read_text(encoding="utf-8"))
+    doc["Evaluation"]["Conditions"].pop("release")
+    scenario.write_text(_yaml.safe_dump(doc, sort_keys=False), encoding="utf-8")
+
+    calls: list[str] = []
+    _install_call_recorders(monkeypatch, calls, tmp_path)
+    monkeypatch.setattr(
+        sys, "argv",
+        ["pipeline", "--root", str(root), "--scenario", str(scenario),
+         "--n-trials", "1", "--n-jobs", "1"],
+    )
+
+    pipeline.main()
+
+    assert calls == ["extract", "evaluate", "report"]
+
+
+def test_main_runs_merge_only_without_direct_fit(tmp_path: Path, monkeypatch) -> None:
+    """fit.stages: [merge] は direct-fit を飛ばして fit_merge のみ実行する。"""
+    root, scenario, input_param = _write_inputs(
+        tmp_path, conditions_extra={"fit": {"stages": ["merge"]}},
+    )
+    calls: list[str] = []
+    _install_call_recorders(monkeypatch, calls, tmp_path)
+    monkeypatch.setattr(
+        sys, "argv",
+        ["pipeline", "--root", str(root), "--scenario", str(scenario),
+         "--input-param", str(input_param), "--n-trials", "1", "--n-jobs", "1"],
+    )
+
+    pipeline.main()
+
+    assert calls == ["extract", "fit_merge", "release", "report"]
 
 
 def test_report_step_generates_only_the_unified_report(

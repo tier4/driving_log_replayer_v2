@@ -812,14 +812,29 @@ _LAST_DIRECT_PHASE = {"lon": 1, "steer": 2, "xy": 3}
 
 def run(
     collection_dir: Path, scenario: Path, out: Path, *,
-    phase3_params_path: Path, metrics_out: Path,
+    phase3_params_path: Path | None, metrics_out: Path,
     n_trials: int = 50, n_jobs: int = 1,
 ) -> dict:
-    direct_fit_params = read_phase_artifact(
-        phase3_params_path, expected_phase=3, required_keys=_DIRECT_FIT_KEYS, producer="fit_xy",
-    )
-    validate_parameters(direct_fit_params, _DIRECT_FIT_KEYS, source="直接同定結果")
-    print(f"[fit_merge] 直接同定値を warm-start / passthrough に使用: {phase3_params_path}")
+    if phase3_params_path is not None:
+        direct_fit_params = read_phase_artifact(
+            phase3_params_path, expected_phase=3, required_keys=_DIRECT_FIT_KEYS, producer="fit_xy",
+        )
+        validate_parameters(direct_fit_params, _DIRECT_FIT_KEYS, source="直接同定結果")
+        print(f"[fit_merge] 直接同定値を warm-start / passthrough に使用: {phase3_params_path}")
+    else:
+        # direct-fit の完全な連続プレフィックス (lon+steer+xy) が走っていない場合は、
+        # fit 対象ケースの scenario 初期値 (rollout 既定へマージ) を warm-start にする。
+        cfg = load_model_config(scenario)
+        target_case = cfg.find_case(cfg.fit.target)
+        full = merge_vehicle_model_params(
+            rollout.build_params(), dict(target_case.params), target_case.vehicle_model_type,
+        )
+        direct_fit_params = {key: full[key] for key in _DIRECT_FIT_KEYS if key in full}
+        validate_parameters(
+            direct_fit_params, _DIRECT_FIT_KEYS & set(direct_fit_params),
+            source=f"fit target '{cfg.fit.target}' の初期値",
+        )
+        print(f"[fit_merge] direct-fit 未実行: fit target '{cfg.fit.target}' の初期値で warm-start")
 
     out.parent.mkdir(parents=True, exist_ok=True)
     result = fit_merge(

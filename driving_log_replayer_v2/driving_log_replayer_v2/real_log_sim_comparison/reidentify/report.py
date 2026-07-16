@@ -1004,7 +1004,9 @@ def run(
         Path(phase1_params) if phase1_params is not None else tuned_path,
         Path(phase2_params) if phase2_params is not None else tuned_path,
         Path(phase3_params) if phase3_params is not None else tuned_path,
-        Path(release_params) if release_params is not None else tuned_path,
+        Path(release_params)
+        if release_params is not None
+        else tuned_path.parent / "simulator_model.param.yaml",
         # fit_plateau は単発解析のためパイプラインから path が渡らない。成果物ディレクトリ
         # (tuned_params.yaml の隣) にあれば表示し、なければ実行方法の案内を出す。
         tuned_path.parent / "plateau_params.yaml",

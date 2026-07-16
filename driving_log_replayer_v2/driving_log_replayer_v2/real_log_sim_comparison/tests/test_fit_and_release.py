@@ -172,7 +172,7 @@ def test_robust_search_parallel_evaluates_each_trial_once(monkeypatch) -> None:
         vehicle_model_type="delay_steer_acc_geared_for_diffusion_planner",
         acceleration_source="accel",
     )
-    config = SimpleNamespace(find_case=lambda _name: case)
+    config = SimpleNamespace(find_case=lambda _name: case, fit=SimpleNamespace(target="current"))
 
     result = fit_merge.robust_search(
         [context], config, n_trials=4, n_jobs=2, direct_fit_params={}
@@ -215,7 +215,7 @@ def test_robust_search_uses_direct_fit_for_single_trial(monkeypatch) -> None:
         vehicle_model_type="delay_steer_acc_geared_for_diffusion_planner",
         acceleration_source="accel",
     )
-    config = SimpleNamespace(find_case=lambda _name: case)
+    config = SimpleNamespace(find_case=lambda _name: case, fit=SimpleNamespace(target="current"))
 
     params = fit_merge.robust_search(
         [context],
@@ -380,7 +380,7 @@ def test_fit_merge_skips_optuna_when_all_targets_are_disabled(
     )
 
     result = fit_merge.robust_search(
-        [context], SimpleNamespace(find_case=lambda _name: case), n_trials=1,
+        [context], SimpleNamespace(find_case=lambda _name: case, fit=SimpleNamespace(target="current")), n_trials=1,
         direct_fit_params={"acc_time_constant": 0.2},
     )
 

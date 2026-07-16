@@ -16,12 +16,12 @@ def _step_extract(collection_dir: Path, *, force: bool = False) -> dict:
 
 
 def _step_fit_lon(
-    collection_dir: Path, out_dir: Path, scenario: Path, n_jobs: int,
+    collection_dir: Path, out_dir: Path, scenario: Path, n_jobs: int, target: str,
 ) -> Path:
     from . import fit_lon  # noqa: PLC0415
 
     out = out_dir / "phase1_acc.yaml"
-    fit_lon.run(collection_dir, out, n_jobs=n_jobs, scenario=scenario)
+    fit_lon.run(collection_dir, out, n_jobs=n_jobs, scenario=scenario, target=target)
     return out
 
 
@@ -31,6 +31,7 @@ def _step_fit_steer(
     phase1_out: Path,
     scenario: Path,
     n_jobs: int,
+    target: str,
 ) -> Path:
     from . import fit_steer  # noqa: PLC0415
 
@@ -41,12 +42,14 @@ def _step_fit_steer(
         phase1_params_path=phase1_out,
         scenario=scenario,
         n_jobs=n_jobs,
+        target=target,
     )
     return out
 
 
 def _step_fit_xy(
     collection_dir: Path, out_dir: Path, phase2_out: Path, scenario: Path, n_jobs: int,
+    target: str,
 ) -> Path:
     from . import fit_xy  # noqa: PLC0415
 
@@ -57,6 +60,7 @@ def _step_fit_xy(
         phase2_params_path=phase2_out,
         scenario=scenario,
         n_jobs=n_jobs,
+        target=target,
     )
     return out
 
@@ -65,7 +69,7 @@ def _step_fit_merge(
     collection_dir: Path,
     scenario: Path,
     out_dir: Path,
-    phase3_out: Path,
+    warm_start_out: Path | None,
     n_trials: int,
     n_jobs: int,
 ) -> tuple[Path, Path, dict]:
@@ -77,10 +81,33 @@ def _step_fit_merge(
         collection_dir,
         scenario,
         out,
-        phase3_params_path=phase3_out,
+        phase3_params_path=warm_start_out,
         n_trials=n_trials,
         n_jobs=n_jobs,
         metrics_out=metrics_out,
+    )
+    return out, metrics_out, result
+
+
+def _step_evaluate(
+    collection_dir: Path,
+    scenario: Path,
+    out_dir: Path,
+    direct_fit_out: Path | None,
+    n_jobs: int,
+) -> tuple[Path, Path, dict]:
+    """merge を実行しない評価専用ステージ (fit 完全スキップ / direct-fit のみ)。"""
+    from . import fit_merge  # noqa: PLC0415
+
+    out = out_dir / "tuned_params.yaml"
+    metrics_out = out_dir / "metrics.csv"
+    result = fit_merge.run_evaluate(
+        collection_dir,
+        scenario,
+        out,
+        direct_fit_params_path=direct_fit_out,
+        metrics_out=metrics_out,
+        n_jobs=n_jobs,
     )
     return out, metrics_out, result
 
@@ -92,7 +119,7 @@ def _step_report(
     phase3_out: Path,
     tuned_out: Path,
     metrics_out: Path,
-    release_out: Path,
+    release_out: Path | None,
     extraction_summary: dict,
     fit_result: dict,
     scenario: Path,
@@ -149,7 +176,10 @@ def main() -> None:
     )
     parser.add_argument("--root", type=Path, required=True, help="datasets/ を持つ collection root")
     parser.add_argument("--scenario", type=Path, required=True)
-    parser.add_argument("--input-param", type=Path, required=True)
+    parser.add_argument(
+        "--input-param", type=Path, default=None,
+        help="リリース基準の simulator_model.param.yaml。release 指定がある場合のみ必須",
+    )
     # Makefile の N_TRIALS 既定値と揃える。
     parser.add_argument("--n-trials", type=int, default=160)
     parser.add_argument("--n-jobs", type=int, default=32)
@@ -166,8 +196,11 @@ def main() -> None:
         from .model_config import load_model_config  # noqa: PLC0415
         from .release_params import validate_input  # noqa: PLC0415
 
-        load_model_config(args.scenario)
-        validate_input(args.input_param)
+        cfg = load_model_config(args.scenario)
+        if cfg.release is not None:
+            if args.input_param is None:
+                parser.error("--input-param is required when the scenario declares a release")
+            validate_input(args.input_param)
     except (FileNotFoundError, KeyError, TypeError, ValueError) as exc:
         parser.error(str(exc))
 
@@ -175,36 +208,68 @@ def main() -> None:
     out_dir = args.root / DEFAULT_OUTPUT_DIR_NAME
     out_dir.mkdir(parents=True, exist_ok=True)
 
-    print("\n[pipeline] === 1/7 extract ===")
+    direct_stages = cfg.fit.direct_stages
+    target = cfg.fit.target
+    phase_paths = {
+        "lon": out_dir / "phase1_acc.yaml",
+        "steer": out_dir / "phase2_steer.yaml",
+        "xy": out_dir / "phase3_xy.yaml",
+    }
+    # 実行しない direct-fit ステージの古い成果物はレポートの誤表示を避けるため削除する。
+    for stage_name, path in phase_paths.items():
+        if stage_name not in direct_stages and path.exists():
+            path.unlink()
+
+    # ステージ番号: extract + 実行する fit ステージ + evaluate/merge + [release] + report。
+    total = 1 + len(cfg.fit.direct_stages) + 1 + (1 if cfg.release is not None else 0) + 1
+    step = 0
+
+    def banner(name: str) -> None:
+        nonlocal step
+        step += 1
+        print(f"\n[pipeline] === {step}/{total} {name} ===")
+
+    banner("extract")
     extraction_summary = _step_extract(args.root, force=args.force_extract)
 
-    print("\n[pipeline] === 2/7 fit_lon ===")
-    phase1_out = _step_fit_lon(args.root, out_dir, args.scenario, n_jobs)
+    if "lon" in direct_stages:
+        banner("fit_lon")
+        _step_fit_lon(args.root, out_dir, args.scenario, n_jobs, target)
+    if "steer" in direct_stages:
+        banner("fit_steer")
+        _step_fit_steer(
+            args.root, out_dir, phase_paths["lon"], args.scenario, n_jobs, target,
+        )
+    if "xy" in direct_stages:
+        banner("fit_xy")
+        _step_fit_xy(args.root, out_dir, phase_paths["steer"], args.scenario, n_jobs, target)
 
-    print("\n[pipeline] === 3/7 fit_steer ===")
-    phase2_out = _step_fit_steer(
-        args.root, out_dir, phase1_out, args.scenario, n_jobs
+    # direct-fit の完全なプレフィックス (lon,steer,xy) が走ったときだけ phase3 を warm-start に使う。
+    last_direct_out = (
+        phase_paths["xy"] if direct_stages == ("lon", "steer", "xy") else None
     )
+    if cfg.fit.has_merge:
+        banner("fit_merge")
+        tuned_out, metrics_out, fit_result = _step_fit_merge(
+            args.root, args.scenario, out_dir, last_direct_out, args.n_trials, n_jobs,
+        )
+    else:
+        # merge を実行しない: direct-fit の最終成果物 (あれば) を tuned として評価する。
+        direct_fit_out = phase_paths[direct_stages[-1]] if direct_stages else None
+        banner("evaluate")
+        tuned_out, metrics_out, fit_result = _step_evaluate(
+            args.root, args.scenario, out_dir, direct_fit_out, n_jobs,
+        )
 
-    print("\n[pipeline] === 4/7 fit_xy ===")
-    phase3_out = _step_fit_xy(args.root, out_dir, phase2_out, args.scenario, n_jobs)
+    release_out = None
+    if cfg.release is not None:
+        banner("release")
+        release_out = _step_release(tuned_out, out_dir, args.input_param, args.scenario)
 
-    print("\n[pipeline] === 5/7 fit_merge ===")
-    tuned_out, metrics_out, fit_result = _step_fit_merge(
-        args.root,
-        args.scenario,
-        out_dir,
-        phase3_out,
-        args.n_trials,
-        n_jobs,
-    )
-
-    print("\n[pipeline] === 6/7 release ===")
-    release_out = _step_release(tuned_out, out_dir, args.input_param, args.scenario)
-
-    print("\n[pipeline] === 7/7 report ===")
+    banner("report")
     _step_report(
-        out_dir, phase1_out, phase2_out, phase3_out, tuned_out, metrics_out, release_out,
+        out_dir, phase_paths["lon"], phase_paths["steer"], phase_paths["xy"],
+        tuned_out, metrics_out, release_out,
         extraction_summary, fit_result, args.scenario, n_jobs,
     )
 

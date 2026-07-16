@@ -153,7 +153,8 @@ def test_comparison_models_validate_duplicates_unknown_and_required_cases(tmp_pa
     for models, message in [
         (["baseline", "baseline", "current"], "重複"),
         (["baseline", "missing", "current"], "未定義"),
-        (["baseline"], "必須モデル"),
+        # baseline のみ必須。baseline を欠く comparison_models はエラー。
+        (["current"], "必須モデル"),
     ]:
         with np.testing.assert_raises_regex(ValueError, message):
             load_model_config(_scenario(tmp_path / f"{message}.yaml", models))
