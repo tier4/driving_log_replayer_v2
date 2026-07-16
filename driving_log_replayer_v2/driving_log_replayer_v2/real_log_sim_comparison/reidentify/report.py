@@ -21,7 +21,9 @@ from plotly.offline import get_plotlyjs
 import yaml
 
 from .model_config import load_model_config
+from .release_params import GLOBAL_PARAM_KEYS
 from .settings import BASELINE_MODEL_NAME
+from .settings import RELEASE_MODEL_KEY
 from .settings import TARGET_MODEL_NAME
 from .settings import TUNED_MODEL_DISPLAY_NAME
 from .. import physical_validity
@@ -640,20 +642,54 @@ mean RMSE を最小化して決定した (共通コア fit_scaling_channels、
 </div>"""
 
 
-def _render_release_spec(scenario: Path) -> str:
-    """Scenario の release 指定 (固定ケース→バージョンスロット) を 8 章に表示する。"""
-    if not scenario.is_file():
-        return ""
-    release = load_model_config(scenario).release
-    if release is None:
-        return (
-            '<p class="note">release 指定なし: tuned (統合最適化の結果) を '
-            "v100 スロットへ書き出す既定動作。</p>"
-        )
+def _render_release_spec(scenario: Path, release_path: Path) -> str:
+    """Scenario の release 指定と、実際にリリースされた param 値を 8 章に表示する。"""
+    note = ""
+    if scenario.is_file():
+        release = load_model_config(scenario).release
+        if release is None:
+            note = '<p class="note">release 指定なし: リリース出力なし。</p>'
+        else:
+            note = (
+                f'<p class="note">release 指定: <b>{_escape(release.model)}</b> を '
+                f"<b>v{release.version}</b> スロット (version: {release.version}) "
+                "としてリリース。</p>"
+            )
+    return note + _render_release_params(release_path)
+
+
+def _render_release_params(release_path: Path) -> str:
+    """リリース YAML (simulator_model.param.yaml) の版スロット・global 値をテーブル表示する。"""
+    if not release_path.is_file():
+        return '<p class="note">リリース YAML は生成されていません (release 未指定)。</p>'
+    try:
+        raw = yaml.safe_load(release_path.read_text(encoding="utf-8"))
+        ros_params = raw["/**"]["ros__parameters"]
+        model_params = ros_params[RELEASE_MODEL_KEY]
+        version = model_params["version"]
+        slot = model_params[f"v{version}"]
+    except (KeyError, TypeError, AttributeError):
+        return '<p class="note">リリース YAML の形式が想定と異なり、パラメータを表示できません。</p>'
+    if not isinstance(slot, Mapping):
+        return '<p class="note">リリース YAML の版スロットが mapping ではありません。</p>'
+    slot_table = _table(
+        ("Parameter", "Released value"),
+        ((name, _format_param_value(slot[name])) for name in sorted(slot)),
+        css_class="params",
+    )
+    global_rows = [
+        (ros_key, _format_param_value(ros_params[ros_key]))
+        for ros_key in sorted(set(GLOBAL_PARAM_KEYS.values()))
+        if ros_key in ros_params
+    ]
+    global_table = (
+        _table(("Parameter", "Released value"), global_rows, css_class="params")
+        if global_rows
+        else '<p class="note">global 制限値がリリース YAML にありません。</p>'
+    )
     return (
-        f'<p class="note">release 指定: scenario ケース <b>{_escape(release.model)}</b> を '
-        f"<b>v{release.version}</b> スロット (version: {release.version}) としてリリース。"
-        "tuned の v100 は含まれない。</p>"
+        f"<h3>Released versioned parameters (v{_escape(version)})</h3>{slot_table}"
+        f"<h3>Released global limits</h3>{global_table}"
     )
 
 
@@ -921,7 +957,7 @@ details {{ margin:10px 0; }} details > summary {{ cursor:pointer; font-weight:60
 <section><h2>5. XY heading-rate direct identification</h2>{_render_artifact(phase3_path, parameter_title="phase3_xy.yaml")}{physical_sections.xy}</section>
 <section id="sec-plateau"><h2>6. Plateau analysis and stationary identification</h2><p class="lede">steer/ax の N-step 誤差プラトー特性と、それを活用した定常同定 (fit_plateau)・評価関数統合・GT 整備の手順。</p>{_render_plateau_section(plateau_path)}</section>
 <section id="sec-optimization"><h2>7. Integrated optimization</h2>{_render_artifact_document(document, tuned_path, parameter_title="Final parameters")}<h3>Aggregate comparison</h3>{_render_objective_equations()}<p class="note">Raw columns (pos/long/…) are mean RMSE. <b>Aggregate score</b> is the optimized robust_score; <b>Mean normalized RMSE</b> is the 7-metric ratio mean — see the objective definition above (<a href="#eq-score">🔗 評価関数の定義</a>). Aggregate/distribution values use the configured optimization horizons; graphs use every available N. Lower is better.</p>{_render_aggregate(document, summary, model_order)}<h3>Error by horizon N</h3><p class="note">Each point is the mean RMSE across valid datasets. Every available N is plotted; lower is better.</p>{_render_horizon_charts(frame, model_order)}<h3>Dataset distributions</h3>{_render_dataset_distribution(summary, model_order)}</section>
-<section id="sec-released"><h2>8. Released YAML</h2>{_render_release_spec(scenario_path)}<p class="source">Released parameter YAML: {_escape(release_path)}</p></section>
+<section id="sec-released"><h2>8. Released YAML</h2>{_render_release_spec(scenario_path, release_path)}<p class="source">Released parameter YAML: {_escape(release_path)}</p></section>
 <section id="sec-timeseries"><h2>9. 対象データセットの時系列診断</h2><p class="lede">scenario の plot_dataset で指定したデータセットのリストについて、状態方程式の各行(<a href="#eq-long">縦方向</a>/<a href="#eq-steer">操舵</a>)の左辺(実測系)と右辺(モデル予測系)、および指令値を時系列で重ね描きする。</p>{physical_sections.timeseries}</section>
 </main></body></html>
 """

@@ -163,6 +163,50 @@ def test_run_builds_unified_report_from_finalized_artifacts(tmp_path: Path, monk
     assert 'id="prepare"' in rendered
 
 
+def test_run_renders_released_parameters_table(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """8 章に、リリース YAML の版スロット値と global 制限値のテーブルが出ること。"""
+    _stub_physical_validity(monkeypatch)
+    tuned = tmp_path / "tuned_params.yaml"
+    tuned.write_text("params: {}\n", encoding="utf-8")
+    metrics = tmp_path / "metrics.csv"
+    _write_metrics(metrics)
+    release = tmp_path / "simulator_model.param.yaml"
+    release.write_text(
+        yaml.safe_dump(
+            {
+                "/**": {
+                    "ros__parameters": {
+                        "vehicle_model_type": "DELAY_STEER_ACC_GEARED_FOR_DIFFUSION_PLANNER",
+                        "steer_rate_lim": 0.6,
+                        "wheel_base": 4.76012,
+                        "delay_steer_acc_geared_for_diffusion_planner": {
+                            "version": 2,
+                            "v2": {"k_us": 0.012, "acc_time_constant": 0.3},
+                        },
+                    },
+                },
+            },
+            sort_keys=False,
+        ),
+        encoding="utf-8",
+    )
+
+    output = report.run(
+        tuned, metrics, tmp_path / "report.html", failures={},
+        collection_dir=tmp_path, scenario=tmp_path / "scenario.yaml",
+        release_params=release,
+    )
+    rendered = output.read_text(encoding="utf-8")
+    assert "Released versioned parameters (v2)" in rendered
+    assert "Released global limits" in rendered
+    assert "k_us" in rendered
+    assert "0.012" in rendered
+    assert "wheel_base" in rendered
+    assert "steer_rate_lim" in rendered
+
+
 def test_render_stage_plateau_shows_adopted_and_dynamic_scale(tmp_path: Path) -> None:
     """Phase 成果物にプラトー同定記録があれば 3/4 章のサマリブロックを描画する。"""
     phase = tmp_path / "phase2_steer.yaml"

@@ -21,7 +21,7 @@ from driving_log_replayer_v2.real_log_sim_comparison.reidentify.parameter_constr
     stage_targets,
 )
 from driving_log_replayer_v2.real_log_sim_comparison.reidentify.release_params import (
-    _GLOBAL_PARAM_KEYS,
+    GLOBAL_PARAM_KEYS,
 )
 from driving_log_replayer_v2.real_log_sim_comparison.reidentify.settings import (
     TARGET_MODEL_TYPE,
@@ -65,7 +65,7 @@ def test_target_model_passthrough_keys_are_documented() -> None:
 def test_release_global_keys_are_model_params() -> None:
     """リリース YAML のグローバル欄リネームマップのキーはモデルパラメータであること。"""
     spec = get_vehicle_model_spec(TARGET_MODEL_TYPE)
-    assert set(_GLOBAL_PARAM_KEYS) <= spec.param_keys
+    assert set(GLOBAL_PARAM_KEYS) <= spec.param_keys
 
 
 def test_direct_fit_keys_cover_all_constraints() -> None:

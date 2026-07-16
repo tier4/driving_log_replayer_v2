@@ -11,7 +11,7 @@ from ..lib._vehicle_models import get_vehicle_model_spec
 from .settings import RELEASE_MODEL_KEY
 from .settings import TARGET_MODEL_TYPE
 
-_GLOBAL_PARAM_KEYS = {
+GLOBAL_PARAM_KEYS = {
     "vel_lim": "vel_lim",
     "vel_rate_lim": "vel_rate_lim",
     "steer_lim": "steer_lim",
@@ -114,7 +114,7 @@ def release(
     param_data, ros_params = _load_input_document(Path(input_param))
     model_params = ros_params[RELEASE_MODEL_KEY]
     spec = get_vehicle_model_spec(TARGET_MODEL_TYPE)
-    required = spec.namespaced_param_keys | _GLOBAL_PARAM_KEYS.keys()
+    required = spec.namespaced_param_keys | GLOBAL_PARAM_KEYS.keys()
     missing = required - params.keys()
     if missing:
         raise ValueError(f"Release params are missing target model keys: {sorted(missing)}")
@@ -132,7 +132,7 @@ def release(
                 "choose an unused release.version."
             )
 
-    for model_key, ros_key in _GLOBAL_PARAM_KEYS.items():
+    for model_key, ros_key in GLOBAL_PARAM_KEYS.items():
         ros_params[ros_key] = params[model_key]
 
     model_params["version"] = version
