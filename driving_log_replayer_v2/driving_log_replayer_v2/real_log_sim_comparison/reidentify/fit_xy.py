@@ -15,7 +15,7 @@ from .parameter_constraints import (
     stage_targets,
 )
 from .residuals import build_xy_columns, rmse, xy_residual
-from .settings import MIN_FIT_SAMPLES, RESAMPLE_DT
+from .settings import MIN_FIT_SAMPLES, RESAMPLE_DT, TARGET_MODEL_NAME
 from .stage_common import (
     inherit_scenario_defaults,
     map_datasets,
@@ -112,13 +112,15 @@ def run(
     phase2_params_path: Path,
     scenario: Path,
     n_jobs: int = 1,
+    target: str = TARGET_MODEL_NAME,
 ) -> dict:
+    # direct-fit は連続プレフィックスなので fit_xy が走る時は必ず fit_steer が先行する。
     phase2_params = read_phase_artifact(
         phase2_params_path, expected_phase=2, required_keys=_PHASE2_KEYS, producer="fit_steer",
     )
     print(f"[fit_xy] fit_steer のパラメータを引き継ぎました: {list(phase2_params)}")
 
-    inherit_scenario_defaults(phase2_params, scenario, stage="fit_xy")
+    inherit_scenario_defaults(phase2_params, scenario, stage="fit_xy", target=target)
 
     result = fit_xy(collection_dir, phase2_params=phase2_params, n_jobs=n_jobs)
     return write_phase_artifact(out, result)

@@ -133,12 +133,14 @@ def read_phase_artifact(
     return params
 
 
-def inherit_scenario_defaults(params: dict, scenario: Path, *, stage: str) -> dict:
-    """scenario.yaml の対象ケース params を setdefault で継承し、ケース params を返す。"""
-    case_params = dict(load_model_config(scenario).find_case(TARGET_MODEL_NAME).params)
+def inherit_scenario_defaults(
+    params: dict, scenario: Path, *, stage: str, target: str = TARGET_MODEL_NAME,
+) -> dict:
+    """scenario.yaml の fit 対象ケース params を setdefault で継承し、ケース params を返す。"""
+    case_params = dict(load_model_config(scenario).find_case(target).params)
     for key, value in case_params.items():
         params.setdefault(key, value)
-    print(f"[{stage}] scenario.yaml からパラメータを引き継ぎました: {list(case_params)}")
+    print(f"[{stage}] scenario.yaml ({target}) からパラメータを引き継ぎました: {list(case_params)}")
     return case_params
 
 

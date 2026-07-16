@@ -5,6 +5,7 @@ from dataclasses import dataclass
 import math
 from pathlib import Path
 import re
+from typing import Any
 
 import yaml
 
@@ -16,6 +17,12 @@ from ..lib._steer_source import normalize_steer_source
 from ..lib._vehicle_models import SUPPORTED_VMT
 
 _SAFE_NAME = re.compile(r"^[A-Za-z0-9_.-]+$")
+
+# fit の direct-fit ステージ順 (連続プレフィックスの基準)。merge はこれらの後に任意で続く。
+DIRECT_FIT_STAGES = ("lon", "steer", "xy")
+FIT_STAGES = (*DIRECT_FIT_STAGES, "merge")
+# release.model にリテラルで指定できる「fit 出力」の名前 (scenario ケースではない)。
+RELEASE_TUNED_NAME = "tuned"
 
 
 @dataclass(frozen=True)
@@ -29,16 +36,37 @@ class ModelSpec:
 
 @dataclass(frozen=True)
 class ReleaseSpec:
-    """リリース対象の scenario ケースとバージョンスロット (v{version}) の指定。"""
+    """リリース対象 ({model, version})。model は scenario ケース名または "tuned"。"""
 
     model: str
     version: int
 
 
 @dataclass(frozen=True)
+class FitSpec:
+    """fit 対象ケース (target) と実行するステージ (連続プレフィックス + 任意 merge)。"""
+
+    target: str
+    stages: tuple[str, ...]
+
+    @property
+    def enabled(self) -> bool:
+        return bool(self.stages)
+
+    @property
+    def direct_stages(self) -> tuple[str, ...]:
+        return tuple(stage for stage in self.stages if stage in DIRECT_FIT_STAGES)
+
+    @property
+    def has_merge(self) -> bool:
+        return "merge" in self.stages
+
+
+@dataclass(frozen=True)
 class ModelConfig:
     models: dict[str, ModelSpec]
     comparison_models: tuple[str, ...]
+    fit: FitSpec
     release: ReleaseSpec | None = None
     plot_datasets: tuple[str, ...] = ()
 
@@ -96,16 +124,16 @@ def load_model_config(path: str | Path) -> ModelConfig:
             params=dict(params),
         )
 
-    missing = {BASELINE_MODEL_NAME, TARGET_MODEL_NAME} - models.keys()
-    if missing:
-        raise ValueError(f"{scenario}: models に必須定義がありません: {sorted(missing)}")
-    target = models[TARGET_MODEL_NAME]
-    if target.vehicle_model_type != TARGET_MODEL_TYPE:
-        raise ValueError(
-            f"{scenario}: models.{TARGET_MODEL_NAME}.vehicle_model_type は "
-            f"{TARGET_MODEL_TYPE!r} である必要があります"
-        )
-    for name in (BASELINE_MODEL_NAME, TARGET_MODEL_NAME):
+    if BASELINE_MODEL_NAME not in models:
+        raise ValueError(f"{scenario}: models に必須定義がありません: [{BASELINE_MODEL_NAME!r}]")
+
+    fit = _parse_fit(scenario, conditions, models)
+
+    # wheelbase は baseline に常に、fit 有効時は fit 対象ケースにも正の値が必要。
+    wheelbase_required = {BASELINE_MODEL_NAME}
+    if fit.enabled:
+        wheelbase_required.add(fit.target)
+    for name in sorted(wheelbase_required):
         wheelbase = models[name].params.get("wheelbase")
         valid_wheelbase = (
             isinstance(wheelbase, (int, float))
@@ -124,30 +152,93 @@ def load_model_config(path: str | Path) -> ModelConfig:
     undefined = [name for name in comparison_models if name not in models]
     if undefined:
         raise ValueError(f"{scenario}: comparison_models に未定義モデルがあります: {undefined}")
-    comparison_missing = {BASELINE_MODEL_NAME, TARGET_MODEL_NAME} - set(comparison_models)
-    if comparison_missing:
+    if BASELINE_MODEL_NAME not in comparison_models:
         raise ValueError(
-            f"{scenario}: comparison_models に必須モデルがありません: {sorted(comparison_missing)}"
+            f"{scenario}: comparison_models に必須モデルがありません: [{BASELINE_MODEL_NAME!r}]"
         )
 
-    release = _parse_release(scenario, conditions, models)
+    release = _parse_release(scenario, conditions, models, fit)
     plot_datasets = _parse_plot_dataset(scenario, conditions)
     return ModelConfig(
         models=models,
         comparison_models=comparison_models,
+        fit=fit,
         release=release,
         plot_datasets=plot_datasets,
     )
 
 
-def _parse_release(
+def _parse_fit(
     scenario: Path, conditions: dict, models: dict[str, ModelSpec],
+) -> FitSpec:
+    """
+    任意の Evaluation.Conditions.fit ({target, stages}) を検証して返す。
+
+    stages は {lon, steer, xy, merge} の部分集合で、direct-fit (lon/steer/xy) は
+    その順序の「連続する先頭部分」でなければならない (歯抜け不可)。merge は任意で後続する。
+    省略時は全ステージ (lon,steer,xy,merge)、target 既定は TARGET_MODEL_NAME。
+    """
+    raw_fit = conditions.get("fit")
+    target = TARGET_MODEL_NAME
+    stages: tuple[str, ...] = FIT_STAGES
+    if raw_fit is not None:
+        if not isinstance(raw_fit, dict):
+            raise ValueError(f"{scenario}: fit は mapping である必要があります")
+        if raw_fit.get("target") is not None:
+            target = str(raw_fit["target"])
+        if "stages" in raw_fit:
+            stages = _normalize_fit_stages(scenario, raw_fit["stages"])
+
+    if stages:
+        if target not in models:
+            raise ValueError(
+                f"{scenario}: fit.target={target!r} が models にありません。"
+                f"定義済み: {sorted(models)}"
+            )
+        if models[target].vehicle_model_type != TARGET_MODEL_TYPE:
+            raise ValueError(
+                f"{scenario}: fit.target={target!r} の vehicle_model_type は "
+                f"{TARGET_MODEL_TYPE!r} である必要があります"
+            )
+    return FitSpec(target=target, stages=stages)
+
+
+def _normalize_fit_stages(scenario: Path, raw_stages: Any) -> tuple[str, ...]:
+    if not isinstance(raw_stages, list):
+        raise ValueError(f"{scenario}: fit.stages はリストが必要です: {raw_stages!r}")
+    seen: list[str] = []
+    for entry in raw_stages:
+        name = str(entry)
+        if name not in FIT_STAGES:
+            raise ValueError(
+                f"{scenario}: fit.stages の不正な要素 {name!r} (許可: {list(FIT_STAGES)})"
+            )
+        if name in seen:
+            raise ValueError(f"{scenario}: fit.stages に重複があります: {name!r}")
+        seen.append(name)
+    direct = [stage for stage in seen if stage in DIRECT_FIT_STAGES]
+    expected_prefix = list(DIRECT_FIT_STAGES[: len(direct)])
+    if sorted(direct, key=DIRECT_FIT_STAGES.index) != direct or direct != expected_prefix:
+        raise ValueError(
+            f"{scenario}: fit.stages の direct-fit は {list(DIRECT_FIT_STAGES)} の"
+            f"連続する先頭部分である必要があります (歯抜け不可): {direct}"
+        )
+    # 正規化: direct-fit を規定順に並べ、merge があれば末尾へ。
+    ordered = list(expected_prefix)
+    if "merge" in seen:
+        ordered.append("merge")
+    return tuple(ordered)
+
+
+def _parse_release(
+    scenario: Path, conditions: dict, models: dict[str, ModelSpec], fit: FitSpec,
 ) -> ReleaseSpec | None:
     """
     任意の Evaluation.Conditions.release ({model, version}) を検証して返す。
 
-    指定時は release ステージが tuned の代わりに指定ケースを v{version} スロットへ
-    リリースする。未指定時は従来どおり tuned → v100。
+    release ステージは指定ケース (または fit 出力 "tuned") を v{version} スロットへ
+    リリースする。未指定時は release ステージをスキップする (自動リリースはしない)。
+    model には scenario ケース名、または fit 出力を指すリテラル "tuned" を指定できる。
     """
     raw_release = conditions.get("release")
     if raw_release is None:
@@ -155,12 +246,18 @@ def _parse_release(
     if not isinstance(raw_release, dict):
         raise ValueError(f"{scenario}: release は mapping である必要があります")
     model = str(raw_release.get("model") or "")
-    if model not in models:
+    if model == RELEASE_TUNED_NAME:
+        if not fit.enabled:
+            raise ValueError(
+                f"{scenario}: release.model={RELEASE_TUNED_NAME!r} は fit が有効"
+                " (fit.stages が非空) な場合のみ指定できます"
+            )
+    elif model not in models:
         raise ValueError(
             f"{scenario}: release.model={model!r} が models にありません。"
-            f"定義済み: {sorted(models)}"
+            f'定義済み: {sorted(models)} (または fit 出力を指す "{RELEASE_TUNED_NAME}")'
         )
-    if models[model].vehicle_model_type != TARGET_MODEL_TYPE:
+    elif models[model].vehicle_model_type != TARGET_MODEL_TYPE:
         raise ValueError(
             f"{scenario}: release.model={model!r} の vehicle_model_type は "
             f"{TARGET_MODEL_TYPE!r} である必要があります"

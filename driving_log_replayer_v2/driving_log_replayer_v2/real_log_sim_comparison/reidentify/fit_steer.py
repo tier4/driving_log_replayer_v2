@@ -114,6 +114,7 @@ def fit_steer(
     wheelbase: float,
     n_jobs: int = 1,
     scenario: Path | None = None,
+    target: str = TARGET_MODEL_NAME,
 ) -> dict:
     """collection 配下の全 CSV キャッシュから操舵モデル + k_us を直接同定する。"""
     tasks = discover_cached_datasets(collection_dir)
@@ -177,7 +178,7 @@ def fit_steer(
             print("[fit_steer] プラトー scaling 同定 (rollout, τ/delay 固定)...")
             plateau = fit_scaling_channels(
                 collection_dir, scenario,
-                case_name=TARGET_MODEL_NAME,
+                case_name=target,
                 override_params=dict(params),
                 channels=(("steer", "debug_steer_scaling_factor"),),
                 n_jobs=n_jobs,
@@ -236,21 +237,25 @@ def run(
     phase1_params_path: Path,
     scenario: Path,
     n_jobs: int = 1,
+    target: str = TARGET_MODEL_NAME,
 ) -> dict:
+    # direct-fit は連続プレフィックスなので fit_steer が走る時は必ず fit_lon が先行する。
     phase1_params = read_phase_artifact(
         phase1_params_path, expected_phase=1, required_keys=_PHASE1_KEYS, producer="fit_lon",
     )
     print(f"[fit_steer] fit_lon のパラメータを引き継ぎました: {list(phase1_params)}")
 
-    case_params = inherit_scenario_defaults(phase1_params, scenario, stage="fit_steer")
+    case_params = inherit_scenario_defaults(
+        phase1_params, scenario, stage="fit_steer", target=target,
+    )
     wheelbase_value = case_params.get("wheelbase", case_params.get("wheel_base"))
     if wheelbase_value is None:
-        raise ValueError(f"{scenario}: models.{TARGET_MODEL_NAME}.params.wheelbase が必要です")
+        raise ValueError(f"{scenario}: models.{target}.params.wheelbase が必要です")
     wheelbase = float(wheelbase_value)
     print(f"[fit_steer] wheelbase = {wheelbase}")
 
     result = fit_steer(
         collection_dir, phase1_params=phase1_params, wheelbase=wheelbase, n_jobs=n_jobs,
-        scenario=scenario,
+        scenario=scenario, target=target,
     )
     return write_phase_artifact(out, result)

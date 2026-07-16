@@ -72,7 +72,7 @@ def _process_one(task: tuple[str, Path]) -> tuple[bool, tuple[float, float, floa
 
 def fit_lon(
     collection_dir: Path, *, n_jobs: int = 1, initial_params: dict | None = None,
-    scenario: Path | None = None,
+    scenario: Path | None = None, target: str = TARGET_MODEL_NAME,
 ) -> dict:
     """collection 配下の全 CSV キャッシュから縦方向モデルを直接同定する。"""
     tasks = discover_cached_datasets(collection_dir)
@@ -126,7 +126,7 @@ def fit_lon(
             print("[fit_lon] プラトー scaling 同定 (rollout, τ/delay 固定)...")
             plateau = fit_scaling_channels(
                 collection_dir, scenario,
-                case_name=TARGET_MODEL_NAME,
+                case_name=target,
                 override_params=dict(params),
                 channels=(("ax", "debug_acc_scaling_factor"),),
                 n_jobs=n_jobs,
@@ -159,11 +159,13 @@ def fit_lon(
 
 def run(
     collection_dir: Path, out: Path, *, n_jobs: int = 1, scenario: Path | None = None,
+    target: str = TARGET_MODEL_NAME,
 ) -> dict:
     initial_params = None
     if scenario is not None:
-        initial_params = dict(load_model_config(scenario).find_case(TARGET_MODEL_NAME).params)
+        initial_params = dict(load_model_config(scenario).find_case(target).params)
     result = fit_lon(
         collection_dir, n_jobs=n_jobs, initial_params=initial_params, scenario=scenario,
+        target=target,
     )
     return write_phase_artifact(out, result)

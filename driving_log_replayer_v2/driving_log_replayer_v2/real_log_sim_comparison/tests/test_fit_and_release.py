@@ -757,7 +757,7 @@ def test_scenario_rejects_non_target_current_model(tmp_path: Path) -> None:
         encoding="utf-8",
     )
 
-    with pytest.raises(ValueError, match="models.current.vehicle_model_type"):
+    with pytest.raises(ValueError, match="fit.target='current' の vehicle_model_type"):
         load_model_config(scenario)
 
 
