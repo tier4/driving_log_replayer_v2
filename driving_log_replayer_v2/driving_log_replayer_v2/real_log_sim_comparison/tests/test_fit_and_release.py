@@ -951,7 +951,7 @@ def test_evaluate_only_without_fit_roundtrips_to_report(tmp_path: Path, monkeypa
         collection_dir=tmp_path, scenario=scenario,
     )
     rendered = report_out.read_text(encoding="utf-8")
-    assert "8. Released YAML" in rendered
+    assert "7. Released YAML" in rendered
     assert "リリース YAML は生成されていません" in rendered
     assert "No parameter summary available" in rendered
 

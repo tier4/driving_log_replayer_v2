@@ -246,7 +246,7 @@ def main() -> None:
         if stage_name not in direct_stages and path.exists():
             path.unlink()
     # release をスキップする場合、前回実行の simulator_model.param.yaml が残っていると
-    # レポート 8 章が古いリリース値を今回のものとして表示してしまうため削除する。
+    # レポート 7 章が古いリリース値を今回のものとして表示してしまうため削除する。
     released_path = out_dir / "simulator_model.param.yaml"
     if cfg.release is None and released_path.exists():
         released_path.unlink()

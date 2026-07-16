@@ -170,7 +170,7 @@ def fit_steer(
 
         # τ/delay 確定後、scaling はプラトー (N-step rollout の定常誤差) で決め直す。
         # 動的励起マスク上の静的ゲイン推定値 (dynamic_scale) は τ/delay の同定精度の
-        # ために残すが採用しない。同定コアは fit_plateau と共通の rollout 正式実装。
+        # ために残すが採用しない。同定コアは fit_plateau.fit_scaling_channels (rollout 正式評価)。
         if "debug_steer_scaling_factor" in targets and scenario is not None:
             from .fit_plateau import fit_scaling_channels  # noqa: PLC0415 (rollout 系の重い import を遅延)
 

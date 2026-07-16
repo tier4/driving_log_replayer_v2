@@ -483,7 +483,7 @@ def validate_xy(context: ValidationContext) -> ValidationStep:
     return _cross_step(context, xy=True)
 
 
-# --- 対象データセットの時系列診断 (レポート 9 章) ---
+# --- 対象データセットの時系列診断 (レポート 8 章) ---
 
 # 1 トレースの最大表示点数。数値計算は RESAMPLE_DT のフルグリッドで行い、表示だけを
 # stride 間引きする (savgol 微分・積分を間引きの影響から切り離す)。
@@ -703,7 +703,7 @@ def _render_dataset_timeseries(collection_dir: Path, dataset_id: str, model: Com
 
 def build_timeseries_section(collection_dir: Path, params_path: Path, scenario: Path) -> str:
     """
-    レポート 9 章 (対象データセットの時系列診断) の HTML 断片を構築する。
+    レポート 8 章 (対象データセットの時系列診断) の HTML 断片を構築する。
 
     scenario の Evaluation.Conditions.plot_dataset で指定したデータセットのリストを
     順に、状態方程式の左辺・右辺・指令値の時系列で重ね描きする。

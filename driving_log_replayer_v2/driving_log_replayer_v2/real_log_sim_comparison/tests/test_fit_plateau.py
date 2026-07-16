@@ -1,7 +1,6 @@
-"""fit_plateau (プラトー直接同定) の単体テスト。"""
+"""fit_plateau (プラトー直接同定の共有コア) の単体テスト。"""
 from __future__ import annotations
 
-import csv
 import math
 from pathlib import Path
 
@@ -67,32 +66,3 @@ def test_fit_scaling_channels_rejects_horizon_outside_score_horizons(tmp_path: P
         fit_plateau.fit_scaling_channels(
             tmp_path, tmp_path / "scenario.yaml", horizon=42,
         )
-
-
-def test_write_diagnostics_csv_schema(tmp_path: Path) -> None:
-    metric = {
-        h: {
-            "steer": 0.4, "ax": 0.2, "steer_mean": 0.1, "ax_mean": -0.05,
-            "yaw": 0.3, "long": 5.0, "lat": 1.0, "vx": 0.2, "pos": 5.1,
-        }
-        for h in (1, 10, 30)
-    }
-    result = {
-        "diag_horizons": (1, 10, 30),
-        "dataset_ids": ["ds-a", "ds-b"],
-        "diagnostics": {"v1": [metric, None], "v1_p": [metric, metric]},
-    }
-    out = tmp_path / "plateau_diagnostics.csv"
-    fit_plateau._write_diagnostics_csv(out, result)
-
-    with out.open() as stream:
-        rows = list(csv.DictReader(stream))
-    # v1 は ds-b が None なので 3 horizons、v1_p は 2 datasets × 3 horizons。
-    assert len(rows) == 3 + 6
-    assert set(rows[0]) == {
-        "dataset_id", "model", "horizon",
-        "steer", "ax", "steer_mean", "ax_mean", "yaw", "long", "lat", "vx", "pos",
-    }
-    assert {row["model"] for row in rows} == {"v1", "v1_p"}
-    assert float(rows[0]["steer"]) == pytest.approx(0.4)
-    assert float(rows[0]["ax_mean"]) == pytest.approx(-0.05)

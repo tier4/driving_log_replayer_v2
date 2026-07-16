@@ -96,7 +96,7 @@ x/y 方程式残差も評価します。N-step 指標のロールアウトは再
 `[baseline, v1, v2, current]`）。重複・未定義ケースはエラーで、`baseline` のみ必須です。
 fit 出力 `tuned` を比較表・グラフに載せたい場合は fit 対象ケース（既定 `current`）を
 comparison_models に**明記**します。明記しなければ `tuned` は比較には出ません（fit は実行され、
-結果は 7 章「Final parameters」および `tuned_params.yaml` に残り、`release: {model: tuned}` で
+結果は 6 章「Final parameters」および `tuned_params.yaml` に残り、`release: {model: tuned}` で
 リリースも可能です）。
 
 各モデルは宣言済みパラメータで固定 RMSE 評価され、baseline 比・サンプル数・使用パラメータを
@@ -123,27 +123,13 @@ release を省略すると release ステージ（`simulator_model.param.yaml` �
 
 各系統の直接同定は「τ・むだ時間を動的励起データの最小二乗で決定 → scaling factor を
 プラトー（N-step rollout の定常誤差、既定 N=30）の最小化で決定」の2段で行います。
-同定コアは rollout の正式評価を使う `fit_plateau.fit_scaling_channels` の1本に統一されて
-おり、fit_lon / fit_steer が τ/delay 確定後に自チャネルの scaling をこのコアで決め直します。
+同定コアは rollout の正式評価を使う `fit_plateau.fit_scaling_channels` の1本で、
+パイプライン（`make reidentify`）の fit_lon / fit_steer が τ/delay 確定後に自チャネルの
+scaling をこのコアで決め直します（独立したツール実行はありません）。
 steer 終端状態は steer 系のみ、ax 終端状態は acc 系のみに依存するため、目的関数は
 `J_steer(steer scaling)` と `J_ax(acc scaling)` の**独立な1次元フィット**に分離されます
-（`steer_bias` はモデル構造上 steer プラトーに影響しないため対象外）。
-
-### 単発解析: fit_plateau
-
-```bash
-make fit_plateau ROOT=<collection> SCENARIO=<scenario.yaml>
-```
-
-同じコアを任意の scenario ケース（既定 `v2`、`PLATEAU_CASE=<case>` で変更可）を
-初期値として実行し、比較モデル（例: 次期リリース候補）向けの scaling を同定します。成果物 `<ROOT>/reidentify/plateau_params.yaml`
-の値を scenario.yaml へ手動転記して使います。`plateau_diagnostics.csv` に
-dataset 別の RMSE と署名付き平均誤差（系統/雑音の分解用）を出力します。
-
-GT ソースは scenario の各モデルで `acceleration_source`（`accel` | `kinematic_savgol` 等）と
-`steering_source`（`steer` | `steer_savgol`）を指定できます。`*_savgol` はゼロ位相の
-savgol 平滑化（窓 0.4 s、後段フィルタなしで LPF 相当を窓に統合）です。fit_plateau で
-case の GT を上書きするには `PLATEAU_ACCEL_SOURCE` / `PLATEAU_STEER_SOURCE` を指定します
-（例: p 系向けに `make fit_plateau PLATEAU_ACCEL_SOURCE=kinematic_savgol PLATEAU_STEER_SOURCE=steer_savgol`）。
+（`steer_bias` はモデル構造上 steer プラトーに影響しないため対象外）。プラトー特性・GT 整備
+（`*_savgol` 平滑化）などの方法論解説は `report.html` の 1 章（記号と運動方程式）と
+系統別の 3・4 章にまとめています。
 
 scenario の最小契約と成果物の詳細は [`reidentify/README.md`](reidentify/README.md) を参照してください。

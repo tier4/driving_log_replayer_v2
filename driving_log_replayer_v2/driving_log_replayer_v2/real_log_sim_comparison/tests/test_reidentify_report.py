@@ -126,19 +126,18 @@ def test_run_builds_unified_report_from_finalized_artifacts(tmp_path: Path, monk
     assert "3. Longitudinal direct identification" in rendered
     assert "4. Steering direct identification" in rendered
     assert "5. XY heading-rate direct identification" in rendered
-    assert "6. Plateau analysis and stationary identification" in rendered
-    assert "7. Integrated optimization" in rendered
-    assert "8. Released YAML" in rendered
-    # 9 章: 時系列診断セクションが末尾に配置され、nav からリンクされること
-    assert "9. 対象データセットの時系列診断" in rendered
+    assert "6. Integrated optimization" in rendered
+    assert "7. Released YAML" in rendered
+    # 8 章: 時系列診断セクションが末尾に配置され、nav からリンクされること
+    assert "8. 対象データセットの時系列診断" in rendered
     assert 'id="sec-timeseries"' in rendered
     assert 'href="#sec-timeseries"' in rendered
     assert 'id="ts-stub"' in rendered
-    # プラトー節: 手順 (fit_plateau) と方法論の説明が含まれる。artifact 不在時は実行案内
+    # プラトー方法論: 共有理論 (1 章) と系統別の注記 (3・4 章) が本文に含まれること
     assert "fit_plateau" in rendered
-    assert "steer_bias" in rendered
-    assert 'id="sec-plateau"' in rendered
-    assert "plateau_params.yaml が見つかりません" in rendered
+    assert 'id="plateau-theory"' in rendered
+    assert "steer_bias" in rendered  # 4 章の steer 注記
+    assert "steer_dead_band" in rendered  # 4 章の dead_band 判定
     # MathJax の CDN 参照と数式ハブ・目的関数のアンカーが埋め込まれること
     assert "tex-svg.js" in rendered
     assert 'id="eq-notation"' in rendered
@@ -166,7 +165,7 @@ def test_run_builds_unified_report_from_finalized_artifacts(tmp_path: Path, monk
 def test_run_renders_released_parameters_table(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """8 章に、リリース YAML の版スロット値と global 制限値のテーブルが出ること。"""
+    """7 章に、リリース YAML の版スロット値と global 制限値のテーブルが出ること。"""
     _stub_physical_validity(monkeypatch)
     tuned = tmp_path / "tuned_params.yaml"
     tuned.write_text("params: {}\n", encoding="utf-8")
@@ -224,29 +223,35 @@ def test_render_stage_plateau_shows_adopted_and_dynamic_scale(tmp_path: Path) ->
         encoding="utf-8",
     )
     rendered = report._render_stage_plateau(
-        phase, scale_key="debug_steer_scaling_factor", unit="deg",
+        phase, scale_key="debug_steer_scaling_factor", unit="deg", channel="steer",
     )
     assert "スケーリングのプラトー同定" in rendered
     assert "1.0159" in rendered
     assert "1.0056" in rendered
     assert "0.4243 → 0.4209 deg" in rendered
     assert "-0.8%" in rendered or "+0.8%" in rendered  # 改善率表示
-    assert 'href="#sec-plateau"' in rendered
+    assert 'href="#plateau-theory"' in rendered  # 1 章の共有理論へのリンク
+    assert "採用値 (plateau)" in rendered  # データサマリブロック
 
 
-def test_render_stage_plateau_is_empty_without_record(tmp_path: Path) -> None:
-    """プラトー同定記録のない成果物 (旧形式・最適化無効) では何も描画しない。"""
+def test_render_stage_plateau_renders_note_without_record(tmp_path: Path) -> None:
+    """プラトー同定記録がなくても方法論ノートは描画し、採用値ブロックは省く。"""
     phase = tmp_path / "phase1_acc.yaml"
     phase.write_text(
         yaml.safe_dump({"params": {"acc_time_constant": 0.13}, "metadata": {"phase": 1}}),
         encoding="utf-8",
     )
-    assert report._render_stage_plateau(
-        phase, scale_key="debug_acc_scaling_factor", unit="m/s²",
-    ) == ""
-    assert report._render_stage_plateau(
+    note = report._render_stage_plateau(
+        phase, scale_key="debug_acc_scaling_factor", unit="m/s²", channel="ax",
+    )
+    assert "スケーリングのプラトー同定" in note  # 静的ノートは残る
+    assert "採用値 (plateau)" not in note  # データサマリは出ない
+    missing = report._render_stage_plateau(
         tmp_path / "missing.yaml", scale_key="debug_acc_scaling_factor", unit="m/s²",
-    ) == ""
+        channel="ax",
+    )
+    assert "スケーリングのプラトー同定" in missing
+    assert "採用値 (plateau)" not in missing
 
 
 def test_run_plots_every_available_horizon(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""プラトー領域の steer/ax RMSE から定常スケーリングを直接同定する独立解析。
+"""プラトー領域の steer/ax RMSE から定常スケーリングを直接同定する共有コア。
 
 steer/ax の open-loop N-step 誤差は、初期状態の記憶が消える N≈20 (steer) / N≈9 (ax)
 以降、コマンド履歴だけで決まる定常誤差に飽和する (プラトー特性)。プラトー値は
@@ -8,18 +8,13 @@ steer/ax の open-loop N-step 誤差は、初期状態の記憶が消える N≈
 
 モデル構造上 steer 終端状態は steer 系のみ、ax 終端状態は acc 系のみに依存するため、
 目的関数は系統別に完全に分離できる。「τ/delay 決定後の scaling 決定」は steer / ax の
-独立な 1 次元フィットとして fit_scaling_channels に実装されており、パイプラインの
-fit_lon / fit_steer も同じコアを τ/delay 確定後に呼ぶ (実装は rollout 正式評価の 1 本のみ)。
-
-この CLI は同じコアを任意ケース (既定 v2) を初期値に単発実行するもので、結果は
-scenario.yaml の比較モデル (例: v3 候補) へ手動転記する。実行例:
-
-    make fit_plateau ROOT=<collection> SCENARIO=<scenario.yaml>
+独立な 1 次元フィットとして fit_scaling_channels に実装されており (rollout 正式評価の
+1 本のみ)、パイプラインの fit_lon / fit_steer が τ/delay 確定後にこのコアを呼んで
+自チャネルの scaling を決め直す。CLI を持たない内部コアモジュールで、
+パイプライン (make reidentify) の一部としてのみ実行される。
 """
 from __future__ import annotations
 
-import argparse
-import csv
 import datetime
 import math
 import multiprocessing
@@ -28,7 +23,6 @@ import statistics as stats
 import sys
 
 from scipy.optimize import minimize_scalar
-import yaml
 
 from ..lib._parallel import (
     imap_with_watchdog,
@@ -40,7 +34,7 @@ from . import fit_merge
 from .load_data import discover_cached_datasets
 from .model_config import load_model_config, resolve_baseline_model
 from .parameter_constraints import PARAMETER_CONSTRAINTS
-from .settings import DEFAULT_OUTPUT_DIR_NAME, HORIZONS
+from .settings import HORIZONS
 
 # 系統別の (プラトー指標, 同定する scaling キー)。時定数・むだ時間 (過渡特性) は対象外で
 # case の値を固定する。steer 終端状態は steer 系のみ、ax 終端状態は acc 系のみに依存する
@@ -115,17 +109,12 @@ def fit_scaling_channels(
     channels: tuple[tuple[str, str], ...] = CHANNELS,
     horizon: int = DEFAULT_HORIZON,
     n_jobs: int = 1,
-    acceleration_source: str | None = None,
-    steering_source: str | None = None,
-    with_diagnostics: bool = False,
 ) -> dict:
     """case のパラメータを初期値に、プラトー RMSE を最小化する scaling を系統別に同定する。
 
     rollout の正式実装 (fit_merge._eval) を使う唯一のプラトー同定コアで、
-    単発解析 (fit_plateau CLI) と各ステージ (fit_lon / fit_steer) の両方から呼ばれる。
+    各ステージ (fit_lon / fit_steer) が τ/delay 確定後に呼ぶ。
     override_params は case パラメータへの上書き (ステージが確定させた τ/delay 等)。
-    acceleration_source / steering_source を指定すると case の GT ソースを上書きする
-    (例: v1 を初期値に SG 系 GT で同定して v2 に転記する場合)。
     """
     global _CTXS, _MODEL_TYPE, _ACCEL_SOURCE, _STEER_SOURCE  # noqa: PLW0603
 
@@ -162,8 +151,8 @@ def fit_scaling_channels(
         raise RuntimeError("有効な dataset が 0 件です")
 
     _MODEL_TYPE = case.vehicle_model_type
-    _ACCEL_SOURCE = acceleration_source or case.acceleration_source
-    _STEER_SOURCE = steering_source or case.steering_source
+    _ACCEL_SOURCE = case.acceleration_source
+    _STEER_SOURCE = case.steering_source
 
     # 初期パラメータで 1 回だけ親プロセスで評価し、GT キャッシュを温める
     # (theta は GT キーに影響しないため、fork 後の worker は準備済み GT を COW 継承する)。
@@ -244,20 +233,6 @@ def fit_scaling_channels(
             }
         fitted_params = dict(base_params)
         fitted_params.update(fitted)
-
-        # 診断 (任意): 過渡 (N=1, 10) とプラトー (N=horizon) で before/after の
-        # RMSE と署名付き平均。
-        diag_horizons = tuple(sorted({1, 10, horizon}))
-        diag = None
-        if with_diagnostics:
-            diag = {
-                case_name: _eval_all(
-                    pool, base_params, diag_horizons, include_mean=True, n_workers=n_workers,
-                ),
-                f"{case_name}_p": _eval_all(
-                    pool, fitted_params, diag_horizons, include_mean=True, n_workers=n_workers,
-                ),
-            }
     finally:
         if pool is not None:
             pool.close()
@@ -266,13 +241,11 @@ def fit_scaling_channels(
     return {
         "case_name": case_name,
         "horizon": horizon,
-        "diag_horizons": diag_horizons,
         "params": fitted_params,
         "fitted": fitted,
         # チャネル別の平均プラトー RMSE (steer: deg / ax: m/s^2 の生単位)。
         "objectives": objectives,
         "dataset_ids": [ctx.dataset_id for ctx in _CTXS],
-        "diagnostics": diag,
         "metadata": {
             "tuning_type": "plateau_direct_fit",
             "case": case_name,
@@ -289,129 +262,3 @@ def fit_scaling_channels(
             "timestamp": datetime.datetime.now().isoformat(timespec="seconds"),
         },
     }
-
-
-def _write_diagnostics_csv(out: Path, result: dict) -> None:
-    fieldnames = [
-        "dataset_id", "model", "horizon",
-        "steer", "ax", "steer_mean", "ax_mean", "yaw", "long", "lat", "vx", "pos",
-    ]
-    with out.open("w", encoding="utf-8", newline="") as stream:
-        writer = csv.DictWriter(stream, fieldnames=fieldnames)
-        writer.writeheader()
-        for model, metrics in result["diagnostics"].items():
-            for ds_id, metric in zip(result["dataset_ids"], metrics):
-                if metric is None:
-                    continue
-                for horizon in result["diag_horizons"]:
-                    row = metric[horizon]
-                    writer.writerow({
-                        "dataset_id": ds_id,
-                        "model": model,
-                        "horizon": horizon,
-                        **{key: float(row[key]) for key in fieldnames[3:]},
-                    })
-
-
-def _print_summary(result: dict) -> None:
-    horizon = result["horizon"]
-    case_name = result["case_name"]
-    print(f"\n[fit_plateau] 同定結果 (N={horizon}, 系統別 1 次元フィット):")
-    units = {"steer": "deg", "ax": "m/s^2"}
-    for metric_key, param_key in CHANNELS:
-        obj = result["objectives"][metric_key]
-        improvement = (
-            f" ({(1 - obj['final'] / obj['initial']):+.1%} 改善)"
-            if obj["initial"] > 0.0 else ""
-        )
-        print(
-            f"  {metric_key:5s} {param_key} = {result['fitted'][param_key]:.6f}"
-            f"  mean RMSE {obj['initial']:.6f} -> {obj['final']:.6f} {units[metric_key]}"
-            f"{improvement} (evals={obj['n_evals']})"
-        )
-    for model in (case_name, f"{case_name}_p"):
-        metrics = [m for m in result["diagnostics"][model] if m is not None]
-        if not metrics:
-            print(f"  {model:8s} 有効な診断 rollout がありません")
-            continue
-        steer_vals = [float(m[horizon]["steer"]) for m in metrics]
-        abs_means = [abs(float(m[horizon]["steer_mean"])) for m in metrics]
-        ax_vals = [float(m[horizon]["ax"]) for m in metrics]
-        print(
-            f"  {model:8s} steer@N{horizon}: mean={stats.mean(steer_vals):.4f}"
-            f" med={stats.median(steer_vals):.4f} deg"
-            f"  |steer_mean| med={stats.median(abs_means):.4f} deg"
-            f"  ax: mean={stats.mean(ax_vals):.4f} m/s^2"
-        )
-
-
-def run(
-    collection_dir: Path,
-    scenario: Path,
-    out_dir: Path,
-    *,
-    case_name: str = DEFAULT_CASE,
-    horizon: int = DEFAULT_HORIZON,
-    n_jobs: int = 1,
-    acceleration_source: str | None = None,
-    steering_source: str | None = None,
-) -> dict:
-    result = fit_scaling_channels(
-        collection_dir, scenario, case_name=case_name, horizon=horizon, n_jobs=n_jobs,
-        acceleration_source=acceleration_source, steering_source=steering_source,
-        with_diagnostics=True,
-    )
-    out_dir.mkdir(parents=True, exist_ok=True)
-
-    params_path = out_dir / "plateau_params.yaml"
-    with params_path.open("w", encoding="utf-8") as stream:
-        yaml.safe_dump(
-            {
-                "params": result["params"],
-                "metadata": {
-                    **result["metadata"],
-                    # チャネル別の平均プラトー RMSE (steer: deg / ax: m/s^2)。
-                    "objectives": result["objectives"],
-                },
-            },
-            stream, sort_keys=True, allow_unicode=True,
-        )
-    diag_path = out_dir / "plateau_diagnostics.csv"
-    _write_diagnostics_csv(diag_path, result)
-
-    _print_summary(result)
-    print(f"\n[fit_plateau] パラメータ保存: {params_path}")
-    print(f"[fit_plateau] 診断保存: {diag_path}")
-    print(f"[fit_plateau] scenario.yaml へ手動転記して comparison_models に登録してください")
-    return result
-
-
-def main() -> None:
-    parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--root", type=Path, required=True, help="datasets/ を持つ collection root")
-    parser.add_argument("--scenario", type=Path, required=True)
-    parser.add_argument("--case", default=DEFAULT_CASE, help=f"初期値にする scenario ケース名 (default: {DEFAULT_CASE})")
-    parser.add_argument("--horizon", type=int, default=DEFAULT_HORIZON, help=f"プラトー horizon (default: {DEFAULT_HORIZON})")
-    parser.add_argument("--n-jobs", type=int, default=1)
-    parser.add_argument("--out-dir", type=Path, default=None, help="成果物出力先 (default: <root>/reidentify)")
-    parser.add_argument(
-        "--acceleration-source", default=None,
-        help="GT の ax ソースを case 設定から上書き (accel | kinematic_savgol など)",
-    )
-    parser.add_argument(
-        "--steering-source", default=None,
-        help="GT の steer ソースを case 設定から上書き (steer | steer_savgol)",
-    )
-    args = parser.parse_args()
-
-    out_dir = args.out_dir if args.out_dir is not None else args.root / DEFAULT_OUTPUT_DIR_NAME
-    run(
-        args.root, args.scenario, out_dir,
-        case_name=args.case, horizon=args.horizon, n_jobs=args.n_jobs,
-        acceleration_source=args.acceleration_source,
-        steering_source=args.steering_source,
-    )
-
-
-if __name__ == "__main__":
-    main()

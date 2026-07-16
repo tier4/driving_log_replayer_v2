@@ -114,7 +114,7 @@ def fit_lon(
 
     # τ/delay 確定後、scaling はプラトー (N-step rollout の定常誤差) で決め直す。
     # 動的励起マスク上の同時推定値 (dynamic_scale) は τ/delay の同定精度のために
-    # 残すが採用しない。同定コアは fit_plateau と共通の rollout 正式実装。
+    # 残すが採用しない。同定コアは fit_plateau.fit_scaling_channels (rollout 正式評価)。
     plateau_meta: dict[str, float] = {}
     if "debug_acc_scaling_factor" in targets:
         if scenario is None:
