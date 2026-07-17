@@ -2,8 +2,8 @@
 Changelog for package driving_log_replayer
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-Forthcoming
------------
+3.18.7 (2026-07-17)
+-------------------
 * feat: support agnocast for rosbag record (`#386 <https://github.com/tier4/driving_log_replayer_v2/issues/386>`_)
 * feat(perception_reproducer): wire auto-tackle-stuck CLI and remove post-engage pose push (`#391 <https://github.com/tier4/driving_log_replayer_v2/issues/391>`_)
   Co-authored-by: Copilot Autofix powered by AI <175728472+Copilot@users.noreply.github.com>
