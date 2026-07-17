@@ -6,21 +6,25 @@ import math
 import statistics as stats
 
 # objective v3 のフロア: baseline モデルの per-dataset RMSE 分布の p10 を horizon 別に採用
-# (steer/ax フロアと同じ方法論。openloop_j6_16_onwards, 318 datasets, metrics.csv, 2026-07-16)。
+# (steer/ax フロアと同じ方法論)。2026-07-17 に新審判 (observation_frame:
+# localization_consistent + kinematic_rts/steer_savgol GT) で再校正
+# (openloop_j6_16_onwards, 318 datasets, metrics.csv)。twist ラグ由来の系統オフセット除去で
+# 短ホライズンの long フロアが下がった (long@10 1.5→1.0 / @30 5.3→3.9)。yaw/lat はほぼ不変。
 # score horizon は settings.HORIZONS に集約されているため、テーブル外の h は fail fast にする。
 FLOOR_TABLE: dict[int, dict[str, float]] = {
-    10:  {"yaw": 0.069, "long": 1.5,   "lat": 0.24},
-    30:  {"yaw": 0.176, "long": 5.3,   "lat": 1.0},
-    70:  {"yaw": 0.364, "long": 18.4,  "lat": 3.9},
-    150: {"yaw": 0.635, "long": 66.3,  "lat": 14.6},
-    300: {"yaw": 0.893, "long": 175.3, "lat": 32.9},
+    10:  {"yaw": 0.067, "long": 1.0,   "lat": 0.24},
+    30:  {"yaw": 0.172, "long": 3.9,   "lat": 1.03},
+    70:  {"yaw": 0.363, "long": 16.4,  "lat": 3.98},
+    150: {"yaw": 0.641, "long": 65.9,  "lat": 14.4},
+    300: {"yaw": 0.883, "long": 168.8, "lat": 32.6},
 }
 
 # steer/ax は安定な 1 次遅れ系の状態量で、open-loop 誤差が N≈20 (steer) / N≈9 (ax) で
 # 定常値に飽和する (プラトー特性)。そのためフロアは N に比例させず定数とする。
 # 値は baseline モデルの per-dataset RMSE 分布 (N=10/30, 318 datasets) の p10。
-STEER_FLOOR_DEG = 0.12   # deg (baseline steer@N=10/30 p10 = 0.128/0.131)
-AX_FLOOR_MPS2 = 0.10     # m/s^2 (baseline ax@N=10/30 p10 = 0.105/0.112)
+# 新審判 (2026-07-17) でも steer 0.123/0.126, ax 0.105/0.110 とほぼ不変のため据え置き。
+STEER_FLOOR_DEG = 0.12   # deg (baseline steer@N=10/30 p10 = 0.123/0.126)
+AX_FLOOR_MPS2 = 0.10     # m/s^2 (baseline ax@N=10/30 p10 = 0.105/0.110)
 
 POS_W = 0.5    # 縦・横 各成分の重み。pos を縦横に分けても yaw:位置 = 1:1 を維持する
 ACT_W = 0.5    # アクチュエータ (steer/ax) 成分の重み。robust_score の act_horizons 項で使用

@@ -800,7 +800,10 @@ def build_comparison_document(
             "cvar_q": CVAR_Q,
             "act_horizons": list(ACT_SCORE_HORIZONS),
             "act_w": ACT_W,
-            "floor_method": "baseline p10 (openloop_j6_16_onwards, n=318, 2026-07-16)",
+            "floor_method": (
+                "baseline p10 (openloop_j6_16_onwards, n=318, 2026-07-17, "
+                "observation_frame=localization_consistent + kinematic_rts GT)"
+            ),
             "floors_by_horizon": {
                 int(h): {key: float(value) for key, value in row.items()}
                 for h, row in FLOOR_TABLE.items()
