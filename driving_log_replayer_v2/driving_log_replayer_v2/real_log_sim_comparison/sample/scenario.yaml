@@ -232,7 +232,10 @@ Evaluation:
 
       # 同定対象 (TARGET)。v3 候補の再同定 (2026-07-17): localization_consistent 審判 +
       # kinematic_rts GT の下で、v2 と同じ基本構造 (fit.freeze で構造項を凍結) を
-      # lon→steer→xy→merge のフルパイプラインで作り直す。初期値は同定前の素の値。
+      # lon→steer→xy→merge のフルパイプラインで作り直す。
+      # 初期値 = v2 パラメータ (warm start)。素の初期値 (scaling 1.0 / k_us 0.018) からの
+      # 160 trials は score 18.52 (v2 18.86 比 −1.8%) に達したがセル別ゲートは全面 FAIL
+      # (steer/ax mean +15〜25%) — 目的関数とゲートの乖離のため、v2 近傍からの精密化に切替。
       current:
         vehicle_model_type: delay_steer_acc_geared_for_diffusion_planner
         acceleration_source: kinematic_rts
@@ -241,12 +244,12 @@ Evaluation:
           wheelbase: 4.76012
           acc_time_delay: 0.1
           acc_time_constant: 0.3
-          debug_acc_scaling_factor: 1.0
+          debug_acc_scaling_factor: 0.9
           steer_time_delay: 0.05
           steer_time_constant: 0.15
-          debug_steer_scaling_factor: 1.0
+          debug_steer_scaling_factor: 1.015827
           steer_dead_band: 0.0
           steer_bias: 0.0
           steer_rate_lim: 0.6
-          k_us: 0.018
+          k_us: 0.012
           xy_heading_rate_coeff: 0.0
