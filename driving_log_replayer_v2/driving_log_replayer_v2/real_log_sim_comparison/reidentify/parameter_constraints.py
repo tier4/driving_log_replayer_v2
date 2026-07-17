@@ -219,6 +219,14 @@ PARAMETER_CONSTRAINTS: dict[str, ParameterConstraint] = {
         search_bounds=(0.0, 1.1), default=0.0,
         optimization_stages=frozenset({FIT_MERGE}),
     ),
+    "steer_relaxation_length": ParameterConstraint(
+        "steer_relaxation_length",
+        "タイヤ緩和長 [m]。ヨー式が使うステアを τ_rel = L_rel / max(v, 1) の一次遅れでなます。"
+        "0 で無効 (v2 と bit 一致)。根拠: 計測ステア (SG) の実効ラグ ≈117ms に対しヨー応答は"
+        "≈200ms 相当で、steer τ 短縮単独は N-step 全面悪化 (2026-07-17)。両者の分離が構造要求。",
+        search_bounds=(0.0, 3.0), default=0.0,
+        optimization_stages=frozenset({FIT_MERGE}),
+    ),
 }
 
 

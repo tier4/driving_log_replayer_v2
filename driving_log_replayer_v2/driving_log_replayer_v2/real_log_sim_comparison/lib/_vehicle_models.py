@@ -71,11 +71,13 @@ def _build_dp_args(p: dict[str, Any], sub_dt: float) -> tuple[float, ...]:
         "debug_steer_scaling_factor": 1.0,
         "k_us": 0.0,
         "xy_heading_rate_coeff": 0.0,
-        # v3 構造項。中立値 0.0 で v2 と bit 一致 (brake_* の 0 は「対称値を継承」のセンチネル)。
+        # v3 構造項。中立値 0.0 で v2 と bit 一致 (brake_* の 0 は「対称値を継承」のセンチネル、
+        # steer_relaxation_length の 0 は無効 = ヨーは STEER 状態を直接使用)。
         "lon_drag_c0": 0.0,
         "lon_drag_c2": 0.0,
         "brake_time_constant": 0.0,
         "brake_scaling_factor": 0.0,
+        "steer_relaxation_length": 0.0,
         "use_rk4": 0.0,
     }
     # C ABI (vm_create_delay_steer_acc_geared_for_diffusion_planner_v3) の引数順と
@@ -86,6 +88,7 @@ def _build_dp_args(p: dict[str, Any], sub_dt: float) -> tuple[float, ...]:
         "lon_drag_c2",
         "brake_time_constant",
         "brake_scaling_factor",
+        "steer_relaxation_length",
         "use_rk4",
     )
     for key in dp_args:
@@ -107,13 +110,14 @@ _GLOBAL_ARG_KEYS = frozenset(
     {"vel_lim", "steer_lim", "vel_rate_lim", "steer_rate_lim", "wheelbase", "sub_dt"}
 )
 _DP_NAMESPACED_PARAM_KEYS = _DELAY_PARAM_KEYS - _GLOBAL_ARG_KEYS
-# diffusion_planner 派生の追加キー (v2: xy_heading_rate_coeff/use_rk4、v3: drag/brake)。
+# diffusion_planner 派生の追加キー (v2: xy_heading_rate_coeff/use_rk4、v3: drag/brake/緩和長)。
 _DP_EXTRA_KEYS = (
     "xy_heading_rate_coeff",
     "lon_drag_c0",
     "lon_drag_c2",
     "brake_time_constant",
     "brake_scaling_factor",
+    "steer_relaxation_length",
     "use_rk4",
 )
 
@@ -129,7 +133,7 @@ VEHICLE_MODEL_SPECS: dict[str, VehicleModelSpec] = {
     "delay_steer_acc_geared_for_diffusion_planner": VehicleModelSpec(
         sim_enum="DELAY_STEER_ACC_GEARED_FOR_DIFFUSION_PLANNER",
         factory_name="vm_create_delay_steer_acc_geared_for_diffusion_planner_v3",
-        factory_arg_count=21,
+        factory_arg_count=22,
         build_args=_build_dp_args,
         param_keys=_DELAY_PARAM_KEYS | frozenset(_DP_EXTRA_KEYS),
         namespaced_param_root="delay_steer_acc_geared_for_diffusion_planner",
