@@ -147,6 +147,7 @@ def fit_scaling_channels(
         baseline_params=baseline_params,
         baseline_acceleration_source=baseline_accel_source,
         baseline_steering_source=baseline_steer_source,
+        observation_frame=getattr(cfg, "observation_frame", "raw"),
     )
     if not ctxs:
         raise RuntimeError("有効な dataset が 0 件です")

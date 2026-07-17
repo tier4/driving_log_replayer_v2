@@ -239,6 +239,7 @@ def screen_params(
         baseline_params=baseline_params,
         baseline_acceleration_source=cfg.models[baseline_case].acceleration_source,
         baseline_steering_source=cfg.models[baseline_case].steering_source,
+        observation_frame=getattr(cfg, "observation_frame", "raw"),
     )
     if splits:
         keep = _split_filter([ctx.dataset_id for ctx in ctxs], splits)
