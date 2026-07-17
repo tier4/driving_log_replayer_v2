@@ -33,6 +33,7 @@ def _scenario(
     *,
     plot_dataset: object | None = None,
     release: dict | None = None,
+    fit: dict | None = None,
 ) -> Path:
     common = {
         "wheelbase": 4.7,
@@ -55,6 +56,8 @@ def _scenario(
         conditions["plot_dataset"] = plot_dataset
     if release is not None:
         conditions["release"] = release
+    if fit is not None:
+        conditions["fit"] = fit
     path.write_text(yaml.safe_dump({"Evaluation": {"Conditions": conditions}}, sort_keys=False), encoding="utf-8")
     return path
 
@@ -160,88 +163,110 @@ def test_comparison_models_validate_duplicates_unknown_and_required_cases(tmp_pa
             load_model_config(_scenario(tmp_path / f"{message}.yaml", models))
 
 
-def _timeseries_dataset(samples: int = 2000, dt: float = 0.01) -> tuple[dict, dict]:
-    """滑らかな指令に対する厳密な一次遅れ応答から合成データセットを作る。"""
-    from driving_log_replayer_v2.real_log_sim_comparison.reidentify.fit_core import (
-        simulate_first_order,
+def _timeseries_source(samples: int = 400, dt: float = 1.0 / 30.0) -> dict:
+    """C++ 駆動 8 章用の合成 7-topic ソース (rollout._prepare_gt が読める形)。"""
+    import pandas as pd
+
+    t_ns = (np.arange(samples) * dt * 1e9).astype(np.int64) + 1_000_000_000
+    time = np.arange(samples) * dt
+
+    def frame(**cols):
+        return pd.DataFrame({"t_ns": t_ns, **cols})
+
+    return {
+        "mode": frame(mode=np.zeros(samples, dtype=int)),
+        "velocity": frame(lon_vel=np.full(samples, 5.0)),
+        "steering": frame(steer=np.full(samples, 0.01)),
+        "gear": frame(gear=np.full(samples, 2, dtype=int)),
+        "kinematic": frame(
+            x=5.0 * time, y=np.zeros(samples), yaw=np.zeros(samples),
+            pitch=np.zeros(samples), vx=np.full(samples, 5.0),
+            vy=np.zeros(samples), wz=np.zeros(samples),
+        ),
+        "accel": frame(accel=np.zeros(samples)),
+        "cmd": frame(
+            cmd_vel=np.full(samples, 5.0), cmd_accel=0.5 * np.sin(0.5 * time),
+            cmd_steer=np.full(samples, 0.01),
+        ),
+    }
+
+
+_TS_COMMON_PARAMS = {
+    "wheelbase": 4.7,
+    "acc_time_delay": 0.1,
+    "acc_time_constant": 0.2,
+    "steer_time_delay": 0.1,
+    "steer_time_constant": 0.2,
+    "steer_bias": 0.0,
+    "k_us": 0.01,
+    "xy_heading_rate_coeff": 0.0,
+}
+
+
+def _timeseries_compared_model() -> physical_validity.ComparedModel:
+    return physical_validity.ComparedModel(
+        "current", "delay_steer_acc_geared_for_diffusion_planner", "accel",
+        dict(_TS_COMMON_PARAMS), "steer", "none",
     )
 
-    params = {
-        "acc_time_constant": 0.2,
-        "acc_time_delay": 0.1,
-        "steer_time_constant": 0.25,
-        "steer_time_delay": 0.05,
-        "steer_bias": 0.01,
-    }
-    time = np.arange(samples) * dt
-    a_cmd = 0.5 * np.sin(0.5 * time)
-    a_act = simulate_first_order(a_cmd, params["acc_time_constant"], params["acc_time_delay"], dt)
-    d_cmd = 0.1 * np.sin(0.3 * time)
-    d_act = simulate_first_order(d_cmd, params["steer_time_constant"], params["steer_time_delay"], dt) + params["steer_bias"]
-    # 明示 Euler の時刻規約: 時刻 t[k] の速度は前サンプルまでの加速度積分。
-    vx = np.empty(samples)
-    vx[0] = 5.0
-    vx[1:] = 5.0 + np.cumsum(a_act[:-1]) * dt
-    data = {
-        "a_cmd": a_cmd,
-        "a_act": a_act,
-        "d_cmd": d_cmd,
-        "d_act": d_act,
-        "v_cmd": vx + 0.5,
-        "vx": vx,
-        "wz": np.zeros(samples),
-        "gear_drive": np.ones(samples, dtype=bool),
-    }
-    return data, params
+
+class _TimeseriesFakeLib:
+    """vm_integrate_to_horizons の全 horizon へ定常値を書くフェイク。"""
+
+    @staticmethod
+    def vm_integrate_to_horizons(*args):
+        n_valid = int(args[8].value)
+        for out, value in zip(args[-6:], (1.0, 0.0, 0.0, 5.0, 0.0, 0.01)):
+            for i in range(n_valid):
+                out[i] = value
 
 
-def test_timeseries_figures_match_state_equation_rows() -> None:
-    dt = 0.01
-    data, params = _timeseries_dataset(dt=dt)
-    figures, reason = physical_validity._timeseries_figures(data, params, dt)
+class _TimeseriesFakeModel:
+    def __init__(self, *_args, **_kwargs):
+        self._lib = _TimeseriesFakeLib()
+        self._ptr = None
+
+    def reset_with_history_ptr(self, **_kwargs):
+        pass
+
+
+def _patch_fake_vehicle_model(monkeypatch) -> None:
+    from driving_log_replayer_v2.real_log_sim_comparison.reidentify import rollout
+
+    monkeypatch.setattr(rollout, "VehicleModel", _TimeseriesFakeModel)
+
+
+def test_timeseries_figures_use_cpp_model_and_render_six_rows(monkeypatch) -> None:
+    """モデル側系列は C++ モデル (ここではフェイク) で生成し、6 図を返す。"""
+    _patch_fake_vehicle_model(monkeypatch)
+    figures, n, reason = physical_validity._timeseries_figures(
+        _timeseries_source(), _timeseries_compared_model()
+    )
 
     assert reason is None
-    assert [len(figure.data) for _title, figure in figures] == [2, 3, 3, 2, 3]
+    assert n > 0
     titles = [title for title, _figure in figures]
-    assert any("ジャーク" in title for title in titles)
-    assert any("ステアレート" in title for title in titles)
-
-    # 状態量グラフ: 右辺の積分 (一次遅れ予測/加速度積分) が合成 GT を再現する
-    acc_figure = figures[1][1]
-    np.testing.assert_allclose(np.asarray(acc_figure.data[1].y), np.round(data["a_act"], 5), atol=1e-5)
-    vel_figure = figures[2][1]
-    np.testing.assert_allclose(np.asarray(vel_figure.data[1].y), np.round(data["vx"], 5), atol=1e-5)
-    steer_figure = figures[4][1]
-    np.testing.assert_allclose(np.asarray(steer_figure.data[1].y), np.round(data["d_act"], 5), atol=1e-5)
-
-    # 微分量グラフ: 滑らかな入力では左辺 (savgol 微分) と右辺 (状態方程式) が一致する
-    interior = slice(100, -100)
-    for index in (0, 3):
-        figure = figures[index][1]
-        lhs = np.asarray(figure.data[0].y, dtype=float)[interior]
-        rhs = np.asarray(figure.data[1].y, dtype=float)[interior]
-        scale = max(float(np.max(np.abs(rhs))), 1e-9)
-        assert float(np.sqrt(np.mean((lhs - rhs) ** 2))) < 0.05 * scale
+    assert len(figures) == 6
+    assert any("C++ 1-step" in title for title in titles)
+    assert any("ヨーレート" in title for title in titles)
+    assert [len(figure.data) for _title, figure in figures] == [2, 3, 2, 2, 3, 2]
 
 
-def test_timeseries_figures_report_invalid_params() -> None:
-    data, params = _timeseries_dataset(samples=500)
-    del params["steer_bias"]
-    figures, reason = physical_validity._timeseries_figures(data, params, 0.01)
+def test_timeseries_figures_report_short_series(monkeypatch) -> None:
+    _patch_fake_vehicle_model(monkeypatch)
+    figures, _n, reason = physical_validity._timeseries_figures(
+        _timeseries_source(samples=8), _timeseries_compared_model()
+    )
     assert figures is None
-    assert "steer_bias" in reason
-
-    data, params = _timeseries_dataset(samples=500)
-    params["acc_time_delay"] = -0.1
-    figures, reason = physical_validity._timeseries_figures(data, params, 0.01)
-    assert figures is None
-    assert "time_delay" in reason
+    assert "短すぎ" in (reason or "")
 
 
-def test_timeseries_figures_decimate_long_traces() -> None:
-    samples = 3 * physical_validity._TIMESERIES_MAX_POINTS
-    data, params = _timeseries_dataset(samples=samples)
-    figures, reason = physical_validity._timeseries_figures(data, params, 0.01)
+def test_timeseries_figures_decimate_long_traces(monkeypatch) -> None:
+    _patch_fake_vehicle_model(monkeypatch)
+    samples = physical_validity._TIMESERIES_MAX_POINTS + 2000
+    figures, _n, reason = physical_validity._timeseries_figures(
+        _timeseries_source(samples=samples), _timeseries_compared_model()
+    )
     assert reason is None
     for _title, figure in figures:
         for trace in figure.data:
@@ -298,16 +323,14 @@ def test_build_timeseries_section_reports_missing_dataset(tmp_path: Path) -> Non
     assert "見つかりません" in rendered
 
 
-def test_build_timeseries_section_renders_five_figures(tmp_path: Path, monkeypatch) -> None:
+def test_build_timeseries_section_renders_six_figures(tmp_path: Path, monkeypatch) -> None:
     dataset_dir = tmp_path / "datasets" / "good"
     dataset_dir.mkdir(parents=True)
     (dataset_dir / "reidentify_cache.csv").write_text("stub", encoding="utf-8")
-    data, _params_unused = _timeseries_dataset(samples=500)
-    monkeypatch.setattr(physical_validity, "read_dataset_csv", lambda _path: {"steering": "df"})
+    _patch_fake_vehicle_model(monkeypatch)
     monkeypatch.setattr(
-        physical_validity, "steer_dataframe_from_source", lambda _source, *, df_steer: df_steer
+        physical_validity, "read_dataset_csv", lambda _path: _timeseries_source()
     )
-    monkeypatch.setattr(physical_validity, "build_resampled", lambda *_args, **_kwargs: data)
 
     rendered = physical_validity.build_timeseries_section(
         tmp_path,
@@ -318,12 +341,30 @@ def test_build_timeseries_section_renders_five_figures(tmp_path: Path, monkeypat
         ),
     )
 
-    assert rendered.count("<h3>") == 5
-    assert rendered.count("plotly-graph-div") >= 5
+    assert rendered.count("<h3>") == 6
+    assert rendered.count("plotly-graph-div") >= 6
     assert rendered.count('class="ts-dataset"') == 1
     assert "release ケース current" in rendered
     assert 'class="stats"' in rendered
+    assert "C++" in rendered
     assert "good" in rendered
+
+
+def test_build_timeseries_section_refuses_without_release_or_fit(tmp_path: Path) -> None:
+    """release も fit も無い場合は代替モデルを描かず、明示的に描画拒否する。"""
+    rendered = physical_validity.build_timeseries_section(
+        tmp_path,
+        _params(tmp_path / "params.yaml"),
+        _scenario(
+            tmp_path / "scenario.yaml", ["baseline", "current"],
+            plot_dataset=["good"],
+            fit={"target": "current", "stages": []},
+        ),
+    )
+    assert "描画されません" in rendered
+    assert "代替モデル" in rendered
+    assert "plotly-graph-div" not in rendered
+    assert "baseline" not in rendered.split("描画されません")[1][:200]
 
 
 def test_timeseries_model_resolves_tuned_release(tmp_path: Path) -> None:
@@ -350,12 +391,10 @@ def test_build_timeseries_section_renders_multiple_datasets(tmp_path: Path, monk
     dataset_dir = tmp_path / "datasets" / "good"
     dataset_dir.mkdir(parents=True)
     (dataset_dir / "reidentify_cache.csv").write_text("stub", encoding="utf-8")
-    data, _params_unused = _timeseries_dataset(samples=500)
-    monkeypatch.setattr(physical_validity, "read_dataset_csv", lambda _path: {"steering": "df"})
+    _patch_fake_vehicle_model(monkeypatch)
     monkeypatch.setattr(
-        physical_validity, "steer_dataframe_from_source", lambda _source, *, df_steer: df_steer
+        physical_validity, "read_dataset_csv", lambda _path: _timeseries_source()
     )
-    monkeypatch.setattr(physical_validity, "build_resampled", lambda *_args, **_kwargs: data)
 
     rendered = physical_validity.build_timeseries_section(
         tmp_path,
@@ -367,7 +406,7 @@ def test_build_timeseries_section_renders_multiple_datasets(tmp_path: Path, monk
     )
 
     assert rendered.count('class="ts-dataset"') == 2
-    assert rendered.count("plotly-graph-div") == 5
+    assert rendered.count("plotly-graph-div") == 6
     assert "見つかりません" in rendered
     assert rendered.index("dataset: good") < rendered.index("dataset: missing")
     # パラメータタイルはセクション先頭に 1 回だけ

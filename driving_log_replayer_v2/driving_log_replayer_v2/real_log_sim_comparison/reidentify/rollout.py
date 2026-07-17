@@ -70,7 +70,7 @@ def _lowpass_signal(values: np.ndarray, t: np.ndarray, cutoff_hz: float) -> np.n
     from scipy.signal import butter, filtfilt
 
     b, a = butter(2, cutoff_hz / nyq)
-    padlen = 3 * (max(len(a), len(b)) - 1)
+    padlen = 3 * max(len(a), len(b))  # scipy filtfilt の既定 padlen
     if len(values) <= padlen:
         win = 2 * max(1, int(round(0.5 / (cutoff_hz * dt)))) + 1
         return pd.Series(values).rolling(win, center=True, min_periods=1).mean().values

@@ -25,6 +25,7 @@ from .reidentify.csv_schema import CACHE_NAME
 from .reidentify.fit_core import delay_command
 from .reidentify.fit_core import simulate_first_order
 from .reidentify.load_data import build_resampled
+from .reidentify.load_data import build_rollout_data
 from .reidentify.load_data import discover_cached_datasets
 from .reidentify.load_data import read_dataset_csv
 from .reidentify.model_config import load_model_config
@@ -57,6 +58,7 @@ class ComparedModel:
     acceleration_source: str
     params: dict[str, Any]
     steering_source: str = "steer"
+    slope_source: str = "none"
 
 
 @dataclass
@@ -516,6 +518,7 @@ def _timeseries_figure(
     traces: list[tuple[str, np.ndarray, dict]],
     stride: int,
     spans: list[tuple[float, float]],
+    decel_spans: list[tuple[float, float]] | None = None,
 ) -> go.Figure:
     fig = go.Figure()
     t_shown = np.round(t[::stride], 3)
@@ -526,6 +529,10 @@ def _timeseries_figure(
     if spans and len(spans) <= _TIMESERIES_MAX_SPANS:
         for x0, x1 in spans:
             fig.add_vrect(x0=x0, x1=x1, fillcolor="gray", opacity=0.15, line_width=0)
+    if decel_spans and len(decel_spans) <= _TIMESERIES_MAX_SPANS:
+        # 減速区間 (加減速分離が効く場所) をオレンジで示す。
+        for x0, x1 in decel_spans:
+            fig.add_vrect(x0=x0, x1=x1, fillcolor="#ff7f0e", opacity=0.10, line_width=0)
     fig.update_layout(
         title=title, xaxis_title="時刻 [s]", yaxis_title=y_title,
         hovermode="x unified", legend={"orientation": "h"}, height=340,
@@ -534,101 +541,157 @@ def _timeseries_figure(
     return fig
 
 
+def _mask_spans(t: np.ndarray, mask: np.ndarray) -> list[tuple[float, float]]:
+    """真の連続区間を (開始秒, 終了秒) のリストで返す (非一様時刻グリッド対応)。"""
+    indices = np.flatnonzero(np.asarray(mask, dtype=bool))
+    if len(indices) == 0:
+        return []
+    groups = np.split(indices, np.flatnonzero(np.diff(indices) > 1) + 1)
+    return [(float(t[group[0]]), float(t[min(group[-1] + 1, len(t) - 1)])) for group in groups]
+
+
+# 窓リスタート幅 (コマンド interval 数)。~10 s @ 30 Hz。窓ごとに GT 状態へリセットして
+# free-run し、モデル軌跡を実測に重ねる (発散を防ぎつつ N-step 挙動を見せる)。
+_TS_WINDOW_INTERVALS = 300
+# 減速ハイライトのしきい値 (窓平均でなく瞬時指令) [m/s²]。analyze.regime と同じ境界。
+_TS_DECEL_A_CMD = -0.3
+
+
 def _timeseries_figures(
-    data: dict[str, Any], params: dict[str, Any], dt: float,
-) -> tuple[list[tuple[str, go.Figure]] | None, str | None]:
+    source: dict[str, Any], model: ComparedModel,
+) -> tuple[list[tuple[str, go.Figure]] | None, int, str | None]:
     """
-    状態方程式の左辺 (実測系)・右辺 (モデル系)・指令値の時系列 5 図を組み立てる。
+    C++ 車両モデル (リリース実装そのもの) で 8 章の時系列 6 図を組み立てる。
 
-    微分量 (ジャーク/ステアレート) は微分方程式の両辺をそのまま比較し、状態量
-    (加速度/速度/ステア) は実測と右辺の積分 (一次遅れシミュレーション/加速度積分) を
-    重ね描きする。ジャーク・ステアレートの指令値は CSV キャッシュに存在しないため描かない。
+    モデル側の系列は Python の簡略式ではなく、ctypes wrapper 経由の C++ モデルを
+    2 通りに走らせて得る (簡略式はモデル進化 — brake split / 実効ステア等 — から
+    取り残されるため使わない):
+      (a) 1-step 予測: 各時刻で GT 状態にリセットして 1 interval 積分 → 微分方程式の
+          右辺相当 (ジャーク行・ステアレート行の「両辺」比較)
+      (b) 窓リスタート free-run (窓幅 ~10 s): 窓頭で GT 状態にリセットして自由走行 →
+          状態量 (加速度/速度/ステア/ヨーレート) の実測 vs モデル軌跡
+    返り値: (figures, n_points, error_reason)。
     """
-    tau_a, tau_a_reason = _valid_number(params, "acc_time_constant", positive=True)
-    delay_a, delay_a_reason = _valid_number(params, "acc_time_delay")
-    tau_d, tau_d_reason = _valid_number(params, "steer_time_constant", positive=True)
-    delay_d, delay_d_reason = _valid_number(params, "steer_time_delay")
-    bias, bias_reason = _valid_number(params, "steer_bias")
-    reason = next(
-        (item for item in (tau_a_reason, delay_a_reason, tau_d_reason, delay_d_reason, bias_reason) if item),
-        None,
+    from .lib._vehicle_models import merge_vehicle_model_params
+    from .reidentify import rollout
+
+    data = build_rollout_data(
+        source,
+        acceleration_source=model.acceleration_source,
+        steering_source=model.steering_source,
     )
-    if reason:
-        return None, reason
-    if delay_a < 0.0 or delay_d < 0.0:
-        return None, "acc/steer_time_delay は0以上である必要があります"
+    t0_ns = rollout.find_autonomous_start(data)
+    params = merge_vehicle_model_params(
+        rollout.build_params(), dict(model.params), model.vehicle_model_type
+    )
+    g = rollout._prepare_gt(data, t0_ns, params)
+    t = np.asarray(g["t_cmd"], dtype=float)
+    n = len(t)
+    if n < 10:
+        return None, n, "コマンド系列が短すぎます"
+    gt_ax = np.asarray(g["gt_ax"], dtype=float)
+    gt_vx = np.asarray(g["gt_vx"], dtype=float)
+    gt_steer = np.asarray(g["gt_steer"], dtype=float)
+    gt_yaw = np.asarray(g["gt_yaw"], dtype=float)
+    gt_wz = np.asarray(g["gt_wz"], dtype=float)
+    a_cmd = np.asarray(g["accel_des_arr"], dtype=float)
+    d_cmd = np.asarray(g["steer_des_arr"], dtype=float)
+    iv = np.asarray(g["iv_arr"], dtype=float)
 
-    a_cmd = np.asarray(data["a_cmd"], dtype=float)
-    a_act = np.asarray(data["a_act"], dtype=float)
-    d_cmd = np.asarray(data["d_cmd"], dtype=float)
-    d_act = np.asarray(data["d_act"], dtype=float)
-    v_cmd = np.asarray(data["v_cmd"], dtype=float)
-    vx = np.asarray(data["vx"], dtype=float)
-    t = np.arange(len(a_act)) * dt
-    stride = _timeseries_stride(len(a_act))
-    spans = _non_drive_spans(data["gear_drive"], dt)
+    # (a) 1-step 予測 (毎 interval、GT 状態リセット)。
+    k1, sim1 = rollout._rollout_sim_states(
+        g, params, model.vehicle_model_type, [1], 1, slope_source=model.slope_source,
+    )
+    jerk_rhs = np.full(n, np.nan)
+    steer_rate_rhs = np.full(n, np.nan)
+    jerk_rhs[k1] = (sim1["ax"][:, 0] - gt_ax[k1]) / iv[k1]
+    steer_rate_rhs[k1] = (sim1["steer"][:, 0] - gt_steer[k1]) / iv[k1]
+    jerk_lhs = np.gradient(gt_ax, t)
+    steer_rate_lhs = np.gradient(gt_steer, t)
 
-    jerk_lhs = savgol_derivative(a_act, dt)
-    jerk_rhs = (delay_command(a_cmd, delay_a, dt) - a_act) / tau_a
-    acc_model = simulate_first_order(a_cmd, tau_a, delay_a, dt)
-    # 明示 Euler の時刻規約 (fit_core._simulate と同じ): 時刻 t[k] の状態は前サンプル
-    # までの積分。先頭をずらさないと t=0 で v(0) を再現しない。
-    v_model = np.empty_like(vx)
-    v_model[0] = vx[0]
-    v_model[1:] = vx[0] + np.cumsum(a_act[:-1]) * dt
-    steer_rate_lhs = savgol_derivative(d_act, dt)
-    steer_rate_rhs = (delay_command(d_cmd, delay_d, dt) - (d_act - bias)) / tau_d
-    steer_model = simulate_first_order(d_cmd, tau_d, delay_d, dt) + bias
+    # (b) 窓リスタート free-run。
+    window = _TS_WINDOW_INTERVALS
+    horizons = list(range(1, window + 1))
+    k_w, sim_w = rollout._rollout_sim_states(
+        g, params, model.vehicle_model_type, horizons, window,
+        slope_source=model.slope_source,
+    )
+    traj = {key: np.full(n, np.nan) for key in ("ax", "vx", "steer", "yaw")}
+    for wi, k0 in enumerate(k_w):
+        end = min(window, n - 1 - int(k0))
+        if end <= 0:
+            continue
+        sl = slice(int(k0) + 1, int(k0) + 1 + end)
+        for key in traj:
+            traj[key][sl] = sim_w[key][wi, :end]
+        # ヨーレート差分の起点として窓頭 (リセット点 = GT) を埋める。
+        if not np.isnan(sim_w["yaw"][wi, 0]):
+            traj["yaw"][int(k0)] = gt_yaw[int(k0)]
+    wz_model = np.full(n, np.nan)
+    wz_model[1:] = np.diff(traj["yaw"]) / np.diff(t)
+
+    stride = _timeseries_stride(n)
+    spans = _mask_spans(t, ~np.asarray(g["valid_gear_arr"], dtype=bool))
+    decel_spans = _mask_spans(t, a_cmd < _TS_DECEL_A_CMD)
 
     figures = [
-        ("ジャーク: ȧ_act 行の両辺", _timeseries_figure(
+        ("ジャーク: ȧ_act 行の両辺 (C++ 1-step)", _timeseries_figure(
             "ジャーク", "ジャーク [m/s³]", t,
             [
-                ("左辺: 実測ジャーク (a_act の savgol 微分)", jerk_lhs, _TS_MEASURED_STYLE),
-                ("右辺: (a_cmd(t−T_a) − a_act)/τ_a", jerk_rhs, _TS_MODEL_STYLE),
-            ], stride, spans,
+                ("左辺: 実測ジャーク (a_act の勾配差分)", jerk_lhs, _TS_MEASURED_STYLE),
+                ("右辺: C++ モデル 1-step 予測 Δa/Δt", jerk_rhs, _TS_MODEL_STYLE),
+            ], stride, spans, decel_spans,
         )),
-        ("加速度: 実測とȧ_act 行右辺の積分", _timeseries_figure(
+        ("加速度: 実測 vs C++ モデル軌跡 (窓リスタート free-run)", _timeseries_figure(
             "加速度", "加速度 [m/s²]", t,
             [
-                ("左辺: 実測加速度 a_act", a_act, _TS_MEASURED_STYLE),
-                ("右辺の積分: 一次遅れ予測", acc_model, _TS_MODEL_STYLE),
+                ("実測加速度 a_act", gt_ax, _TS_MEASURED_STYLE),
+                ("C++ モデル a (窓 free-run)", traj["ax"], _TS_MODEL_STYLE),
                 ("指令 a_cmd", a_cmd, _TS_CMD_STYLE),
-            ], stride, spans,
+            ], stride, spans, decel_spans,
         )),
-        ("速度: 実測とv̇_x 行右辺の積分", _timeseries_figure(
+        ("速度: 実測 vs C++ モデル軌跡", _timeseries_figure(
             "速度", "速度 [m/s]", t,
             [
-                ("左辺: 実測速度 v_x", vx, _TS_MEASURED_STYLE),
-                ("右辺の積分: v(0) + ∫a_act dt", v_model, _TS_MODEL_STYLE),
-                ("指令 cmd_vel", v_cmd, _TS_CMD_STYLE),
-            ], stride, spans,
+                ("実測速度 v_x", gt_vx, _TS_MEASURED_STYLE),
+                ("C++ モデル v_x (窓 free-run)", traj["vx"], _TS_MODEL_STYLE),
+            ], stride, spans, decel_spans,
         )),
-        ("ステアレート: δ̇_act 行の両辺", _timeseries_figure(
+        ("ステアレート: δ̇_act 行の両辺 (C++ 1-step)", _timeseries_figure(
             "ステアレート", "ステアレート [rad/s]", t,
             [
-                ("左辺: 実測ステアレート (δ の savgol 微分)", steer_rate_lhs, _TS_MEASURED_STYLE),
-                ("右辺: (δ_cmd(t−T_δ) − (δ − β))/τ_δ", steer_rate_rhs, _TS_MODEL_STYLE),
+                ("左辺: 実測ステアレート (δ の勾配差分)", steer_rate_lhs, _TS_MEASURED_STYLE),
+                ("右辺: C++ モデル 1-step 予測 Δδ/Δt", steer_rate_rhs, _TS_MODEL_STYLE),
             ], stride, spans,
         )),
-        ("ステア: 実測とδ̇_act 行右辺の積分", _timeseries_figure(
+        ("ステア: 実測 vs C++ モデル軌跡", _timeseries_figure(
             "ステア", "ステア [rad]", t,
             [
-                ("左辺: 実測ステア δ", d_act, _TS_MEASURED_STYLE),
-                ("右辺の積分: 一次遅れ予測 + β", steer_model, _TS_MODEL_STYLE),
+                ("実測ステア δ", gt_steer, _TS_MEASURED_STYLE),
+                ("C++ モデル δ (窓 free-run)", traj["steer"], _TS_MODEL_STYLE),
                 ("指令 δ_cmd", d_cmd, _TS_CMD_STYLE),
             ], stride, spans,
         )),
+        ("ヨーレート: 実測 vs C++ モデル軌跡 (実効ステア/緩和長の見どころ)", _timeseries_figure(
+            "ヨーレート", "ヨーレート [rad/s]", t,
+            [
+                ("実測ヨーレート w_z", gt_wz, _TS_MEASURED_STYLE),
+                ("C++ モデル w_z (モデル yaw の差分)", wz_model, _TS_MODEL_STYLE),
+            ], stride, spans,
+        )),
     ]
-    return figures, None
+    return figures, n, None
 
 
-def _timeseries_model(config: ModelConfig, tuned_params: dict[str, Any]) -> tuple[ComparedModel, str]:
+def _timeseries_model(
+    config: ModelConfig, tuned_params: dict[str, Any],
+) -> tuple[ComparedModel | None, str]:
     """時系列診断に使うモデルケースを解決する。
 
     優先順: (1) release が固定ケース指定 → そのケース、(2) release が "tuned" 指定 or
-    release 未指定で fit 有効 → fit 対象ケース + fit 結果、(3) fit 無効で release 未指定 →
-    最初の comparison モデルにフォールバック。
+    release 未指定で fit 有効 → fit 対象ケース + fit 結果。どちらも無い場合は
+    **描画しない (None)**: それっぽい別モデルを黙って表示することは何も出さないより
+    有害なため、代替モデルへのフォールバックは行わない。
     """
     release = config.release
     if release is not None and release.model != RELEASE_TUNED_NAME:
@@ -642,16 +705,18 @@ def _timeseries_model(config: ModelConfig, tuned_params: dict[str, Any]) -> tupl
         label = (
             f"release tuned (fit 対象 {spec.name} + fit 結果)"
             if release is not None
-            else f"tuned (release 未指定のためフォールバック, fit 対象 {spec.name})"
+            else f"tuned (release 未指定, fit 対象 {spec.name})"
         )
     else:
-        spec = config.find_case(config.comparison_models[0])
-        params = dict(spec.params)
-        label = f"{spec.name} (fit 無効・release 未指定のためフォールバック)"
+        return None, (
+            "scenario に release (固定ケース) も有効な fit も指定されていないため、"
+            "対象モデルを特定できません。誤解を招くため代替モデルの描画は行いません。"
+            "描画するには release: {model: <case>, ...} か fit を scenario に指定してください。"
+        )
     return (
         ComparedModel(
             spec.name, spec.vehicle_model_type, spec.acceleration_source, params,
-            spec.steering_source,
+            spec.steering_source, getattr(spec, "slope_source", "none"),
         ),
         label,
     )
@@ -672,28 +737,16 @@ def _render_dataset_timeseries(collection_dir: Path, dataset_id: str, model: Com
         )
     try:
         source = read_dataset_csv(csv_path)
-        source["steering"] = steer_dataframe_from_source(
-            model.steering_source, df_steer=source["steering"]
-        )
-        data = build_resampled(
-            source, RESAMPLE_DT,
-            context=f"timeseries:{dataset_id}",
-            acceleration_source=model.acceleration_source,
-        )
-        if data is None:
-            return (
-                f'<p class="note">plot_dataset={_escape(dataset_id)}: '
-                "共通時間範囲が短すぎるか、必須信号が空です。</p>"
-            )
-        figures, reason = _timeseries_figures(data, model.params, RESAMPLE_DT)
+        figures, n, reason = _timeseries_figures(source, model)
         if figures is None:
             return (
-                f'<p class="note">パラメータが不正なため描画できません: {_escape(reason or "")}</p>'
+                f'<p class="note">plot_dataset={_escape(dataset_id)}: 描画できません: '
+                f'{_escape(reason or "")}</p>'
             )
-        n = len(data["a_act"])
         stride = _timeseries_stride(n)
         figures_html = "".join(_figure_html(fig, title) for title, fig in figures)
-    except (OSError, ValueError, KeyError, TypeError) as exc:
+    except (OSError, ValueError, KeyError, TypeError, RuntimeError, FileNotFoundError) as exc:
+        # C++ モデル (.so) 未ビルド等も含め、失敗は明示的に報告する (代替描画はしない)。
         return (
             f'<p class="note">plot_dataset={_escape(dataset_id)} の時系列診断の構築に失敗しました: '
             f"{_escape(str(exc))}</p>"
@@ -725,24 +778,35 @@ def build_timeseries_section(collection_dir: Path, params_path: Path, scenario: 
         model, label = _timeseries_model(config, tuned_params)
     except (OSError, ValueError, KeyError, TypeError) as exc:
         return f'<p class="note">パラメータの解決に失敗しました: {_escape(str(exc))}</p>'
+    if model is None:
+        return f'<div class="note"><b>時系列診断は描画されません。</b> {_escape(label)}</div>'
     stats = "".join(
         _timeseries_stat(stat_label, value)
         for stat_label, value in (
             ("τ_a [s]", _number(model.params.get("acc_time_constant"))),
             ("T_a [s]", _number(model.params.get("acc_time_delay"))),
+            ("K_brk", _number(model.params.get("brake_scaling_factor"))),
+            ("τ_brk [s]", _number(model.params.get("brake_time_constant"))),
             ("τ_δ [s]", _number(model.params.get("steer_time_constant"))),
             ("T_δ [s]", _number(model.params.get("steer_time_delay"))),
+            ("L_rel [m]", _number(model.params.get("steer_relaxation_length"))),
             ("β [rad]", _number(model.params.get("steer_bias"))),
             ("accel source", model.acceleration_source),
             ("steer source", model.steering_source),
         )
     )
     notes = (
-        '<div class="note">左辺の微分は Savitzky-Golay (窓 0.4 s, polyorder 2)。むだ時間は '
-        f"{RESAMPLE_DT:g} s グリッドへ丸めて先頭ホールドでシフト (fit_core と同一の解釈)。"
-        "速度の右辺は v(0) からの純積分で、ドリフトは a_act の系統バイアスをそのまま示す。"
-        f"表示は最大 {_TIMESERIES_MAX_POINTS} 点/トレースへ間引き (数値計算はフルグリッド)。"
-        "灰色帯 = 非 DRIVE 区間(固定評価・同定はこの区間を除外している)。</div>"
+        '<div class="note"><b>モデル側の系列は C++ 車両モデル (リリース実装そのもの) で生成</b>: '
+        '簡略な Python 再実装はモデル進化 (加減速分離・実効ステア等) から取り残されるため使わない。'
+        '「両辺」図は毎 interval GT 状態にリセットした 1-step 予測、「軌跡」図は窓幅 '
+        f'~{_TS_WINDOW_INTERVALS} interval (~10 s) ごとに GT 状態へリセットした free-run。'
+        '時間軸はコマンド時刻 (~30 Hz)。'
+        f'表示は最大 {_TIMESERIES_MAX_POINTS} 点/トレースへ間引き (数値計算はフル系列)。'
+        '<b>オレンジ帯 = 減速区間 (a_cmd &lt; '
+        f'{_TS_DECEL_A_CMD:g} m/s²)</b> — 加減速分離 (K_brk/τ_brk) の効果はここで見る。'
+        'ヨーレート図は実効ステア (緩和長 L_rel) の効果が旋回過渡の立ち上がりに現れる。'
+        '灰色帯 = 非 DRIVE 区間、途切れ = 停止近傍等の評価除外区間 (描画対象外)。'
+        '要ビルド済み .so (simple_sensor_simulator)。</div>'
     )
     parts = [
         f"<p>使用パラメータ: <b>{_escape(label)}</b></p>",
