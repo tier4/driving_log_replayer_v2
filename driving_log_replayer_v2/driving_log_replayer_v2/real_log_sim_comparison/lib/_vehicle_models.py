@@ -78,6 +78,8 @@ def _build_dp_args(p: dict[str, Any], sub_dt: float) -> tuple[float, ...]:
         "brake_time_constant": 0.0,
         "brake_scaling_factor": 0.0,
         "steer_relaxation_length": 0.0,
+        "brake_bite_gain": 0.0,
+        "brake_bite_time_constant": 0.0,
         "use_rk4": 0.0,
     }
     # C ABI (vm_create_delay_steer_acc_geared_for_diffusion_planner_v3) の引数順と
@@ -89,6 +91,8 @@ def _build_dp_args(p: dict[str, Any], sub_dt: float) -> tuple[float, ...]:
         "brake_time_constant",
         "brake_scaling_factor",
         "steer_relaxation_length",
+        "brake_bite_gain",
+        "brake_bite_time_constant",
         "use_rk4",
     )
     for key in dp_args:
@@ -118,6 +122,8 @@ _DP_EXTRA_KEYS = (
     "brake_time_constant",
     "brake_scaling_factor",
     "steer_relaxation_length",
+    "brake_bite_gain",
+    "brake_bite_time_constant",
     "use_rk4",
 )
 
@@ -133,7 +139,7 @@ VEHICLE_MODEL_SPECS: dict[str, VehicleModelSpec] = {
     "delay_steer_acc_geared_for_diffusion_planner": VehicleModelSpec(
         sim_enum="DELAY_STEER_ACC_GEARED_FOR_DIFFUSION_PLANNER",
         factory_name="vm_create_delay_steer_acc_geared_for_diffusion_planner_v3",
-        factory_arg_count=22,
+        factory_arg_count=24,
         build_args=_build_dp_args,
         param_keys=_DELAY_PARAM_KEYS | frozenset(_DP_EXTRA_KEYS),
         namespaced_param_root="delay_steer_acc_geared_for_diffusion_planner",

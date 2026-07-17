@@ -240,3 +240,32 @@ def test_lowpass_short_series_falls_back() -> None:
     out = _lowpass_signal(values, t, cutoff_hz=0.1)
     assert out.shape == values.shape
     assert np.all(np.isfinite(out))
+
+
+def test_localization_observation_accel_view_matches_fit_convention() -> None:
+    """LPF+遅延の観測モデル: ステップ応答が一次遅れ + むだ時間の形になる。"""
+    from driving_log_replayer_v2.real_log_sim_comparison.lib import _localization_observation as lo
+
+    dt = 0.01
+    n = 200
+    a_true = np.zeros(n)
+    a_true[50:] = 1.0
+    view = lo.accel_localization_view(a_true, dt)
+    # むだ時間 0.02 s: ステップ後 2 サンプルまでは応答しない。
+    assert view[51] == pytest.approx(0.0, abs=1e-9)
+    # 一次遅れ: τ=0.15 s 後に ~63% (むだ時間分ずらして評価)。
+    k63 = 50 + 2 + int(round(0.15 / dt))
+    assert 0.5 < view[k63] < 0.75
+    assert view[-1] == pytest.approx(1.0, abs=0.02)
+
+
+def test_localization_observation_pose_view_lags_and_scales() -> None:
+    from driving_log_replayer_v2.real_log_sim_comparison.lib import _localization_observation as lo
+
+    t = np.arange(0.0, 10.0, 0.01)
+    ds_true = 8.0 * t  # 等速 8 m/s の累積変位
+    view = lo.pose_displacement_localization_view(ds_true, t)
+    # 遅延 93 ms + スケール 0.996: 変位は 8·0.996·(t−0.093)。
+    k = 500
+    expected = 8.0 * lo.TWIST_VX_SCALE * (t[k] - lo.POSE_LAG_S)
+    assert view[k] == pytest.approx(expected, abs=1e-6)

@@ -219,6 +219,20 @@ PARAMETER_CONSTRAINTS: dict[str, ParameterConstraint] = {
         search_bounds=(0.0, 1.1), default=0.0,
         optimization_stages=frozenset({FIT_MERGE}),
     ),
+    "brake_bite_gain": ParameterConstraint(
+        "brake_bite_gain",
+        "制動初期の bite (washout) ゲイン ΔK。実測 (2026-07-17, dev 292): 達成率は onset ~0.89 →"
+        "持続 ~0.67 へフェードし、ΔK ≈ 0.2 相当。0 で無効 (v2 と bit 一致)。",
+        search_bounds=(0.0, 0.5), default=0.0,
+        optimization_stages=frozenset({FIT_MERGE}),
+    ),
+    "brake_bite_time_constant": ParameterConstraint(
+        "brake_bite_time_constant",
+        "bite washout の LPF 時定数 τ_fade [s]。実測のフェード時定数 ~1 s を含む範囲。"
+        "0 はセンチネルで bite 無効。",
+        search_bounds=(0.0, 3.0), default=0.0,
+        optimization_stages=frozenset({FIT_MERGE}),
+    ),
     "steer_relaxation_length": ParameterConstraint(
         "steer_relaxation_length",
         "タイヤ緩和長 [m]。ヨー式が使うステアを τ_rel = L_rel / max(v, 1) の一次遅れでなます。"
