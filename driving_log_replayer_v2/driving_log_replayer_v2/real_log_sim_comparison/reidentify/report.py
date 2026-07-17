@@ -661,6 +661,122 @@ def _render_stage_plateau(path: Path, *, scale_key: str, unit: str, channel: str
 </div>"""
 
 
+def _render_lon_brake_split(
+    frame: pd.DataFrame, model_order: tuple[str, ...], analysis_dir: Path,
+) -> str:
+    """3 章: 加減速分離 (brake split) の構造・同定方法論・効果を描画する。
+
+    解説と方程式は静的、ax の N-step 比較表は metrics.csv (frame) から、レジーム別
+    実測表は make analyze の成果物 (analysis/regime_metrics.csv) があれば描画する。
+    """
+    parts: list[str] = ['<h3 id="brake-split">加減速分離 (brake split)</h3>']
+    parts.append(
+        '<p>実車の縦系応答は加速と減速で異なる (レジーム分離同定 2026-07-17)。'
+        '加速度チャネルの一次遅れは、<b>遅延済み生指令の符号</b>で時定数とゲインを切り替える:</p>'
+        '<div class="eq-block">\\[\\dot a_{ped} = -\\frac{a_{ped}(t{-}d_a) - K\\,u_a(t{-}d_a)}{\\tau},'
+        '\\qquad (K,\\tau)=\\begin{cases}(K_{acc},\\ \\tau_{acc}) & u_a^{raw}(t{-}d_a)\\ge 0\\\\'
+        '(K_{brk},\\ \\tau_{brk}) & u_a^{raw}(t{-}d_a)<0\\end{cases}\\]</div>'
+        '<p><code>brake_scaling_factor</code> / <code>brake_time_constant</code> が '
+        '\\(K_{brk}, \\tau_{brk}\\)。<b>&le;0 はセンチネル</b>で対称値 '
+        '(\\(K_{acc}, \\tau_{acc}\\)) を継承し、v2 と bit 一致に退化する。</p>'
+    )
+    parts.append(
+        '<h3>同定方法論: レジーム分離 (2026-07-17)</h3>'
+        '<p>集約目的 (robust_score や全シーン ax RMS) は coast/throttle 窓が支配的で brake 側の'
+        '効果が希釈される。そこで per-start 窓を窓平均指令で brake (&lt; &minus;0.3 m/s²) / coast / '
+        'throttle (&gt; +0.3 m/s²) に分類し、<b>各レジームの ax N-step RMS を独立に最小化</b>した。</p>'
+        '<ul>'
+        '<li><b>v2 の実態</b>: ax 誤差は brake レジームに集中 (RMS が coast の約 2 倍、'
+        'バイアス +0.11〜0.15 m/s² = sim が過減速)。throttle/coast はバイアス &asymp;0。</li>'
+        '<li><b>throttle 側</b>: レジーム内再同定は &minus;6.7% を示すが、グローバルには ax &plusmn;0% で'
+        'テールを微劣化させる (SG 平滑 GT への過適合、v2_t と同型) — <b>v2 値を維持</b>。</li>'
+        '<li><b>brake 側</b>: 定常マップ実測ゲイン &asymp;0.7 の単独適用は N=30 の long/pos を'
+        '+13〜19% 破綻させる (応答の形が崩れる)。<b>ゲインと τ の同時同定が必須</b>で、'
+        '位置追従と両立する境界 \\(K_{brk}=0.84,\\ \\tau_{brk}=0.60\\) を採用 '
+        '(全 318 dataset で score-horizon 全セル mean/cvar +2% 非劣化 PASS)。</li>'
+        '<li><b>GT アーティファクトの示唆</b>: ax GT (kinematic_savgol、窓 0.4 s) はブレーキ過渡の'
+        '減速ピークをなますため実測ゲインを過小評価する。アーティファクトフリーな位置 (long) が'
+        '許容する範囲でゲインを確定した (savgol GT の言う 0.72 ではなく 0.84)。</li>'
+        '</ul>'
+    )
+
+    # ax N-step 比較表 (metrics.csv 由来)。
+    ref = "v2" if "v2" in model_order else model_order[0]
+    table_horizons = [h for h in (5, 10, 30, 70, 150, 300) if h in set(frame["horizon"])]
+    if table_horizons:
+        ax_mean = (
+            frame[frame["horizon"].isin(table_horizons)]
+            .groupby(["model", "horizon"])["ax"].mean()
+        )
+        head = "".join(f"<th>N={h}</th>" for h in table_horizons)
+        rows = []
+        for model in model_order:
+            cells = []
+            for h in table_horizons:
+                try:
+                    value = float(ax_mean.loc[(model, h)])
+                    ref_value = float(ax_mean.loc[(ref, h)])
+                except KeyError:
+                    cells.append("<td>—</td>")
+                    continue
+                text = f"{value:.4f}"
+                if model != ref and ref_value > 0:
+                    diff = (value / ref_value - 1) * 100
+                    cls = "score-good" if diff < -0.05 else ("score-bad" if diff > 0.05 else "")
+                    text += f' <span class="{cls}">({diff:+.1f}%)</span>'
+                cells.append(f"<td>{text}</td>")
+            rows.append(f"<tr><td>{_escape(model)}</td>{''.join(cells)}</tr>")
+        parts.append(
+            f'<h3>ax mean RMSE の N-step 比較 [m/s²]</h3>'
+            f'<p class="note">括弧は {_escape(ref)} 比。加減速分離の効果は短ホライズン'
+            ' (N&le;30、アクチュエータ過渡) に現れる。</p>'
+            f'<div class="table-wrap"><table><thead><tr><th>Model</th>{head}</tr></thead>'
+            f'<tbody>{"".join(rows)}</tbody></table></div>'
+        )
+
+    # レジーム別実測表 (make analyze の成果物があれば)。
+    regime_csv = analysis_dir / "regime_metrics.csv"
+    if regime_csv.is_file():
+        try:
+            regime = pd.read_csv(regime_csv)
+            case = ""
+            meta_path = analysis_dir / "residuals_meta.json"
+            if meta_path.is_file():
+                case = str(json.loads(meta_path.read_text(encoding="utf-8")).get("case", ""))
+            sub = regime[regime["target"] == "err_ax"]
+            r_horizons = sorted(set(sub["horizon"]))
+            head = "".join(f"<th>N={h}</th>" for h in r_horizons)
+            rows = []
+            for name in ("brake", "coast", "throttle"):
+                cells = []
+                for h in r_horizons:
+                    row = sub[(sub["regime"] == name) & (sub["horizon"] == h)]
+                    if row.empty:
+                        cells.append("<td>—</td>")
+                    else:
+                        r = row.iloc[0]
+                        cells.append(
+                            f"<td>{r['rms']:.3f} <span class='rmse-ratio'>({r['mean']:+.3f})</span></td>"
+                        )
+                rows.append(f"<tr><td>{name}</td>{''.join(cells)}</tr>")
+            parts.append(
+                f'<h3>レジーム別 err_ax [m/s²] (make analyze'
+                f'{f", case={_escape(case)}" if case else ""})</h3>'
+                '<p class="note">値は RMS (括弧は署名付き平均 = バイアス、err = GT &minus; sim で'
+                '正はモデルの過減速/アンダーシュート)。窓平均指令による分類。</p>'
+                f'<div class="table-wrap"><table><thead><tr><th>Regime</th>{head}</tr></thead>'
+                f'<tbody>{"".join(rows)}</tbody></table></div>'
+            )
+        except Exception:  # noqa: BLE001 (レポートは成果物欠損に寛容)
+            pass
+    else:
+        parts.append(
+            '<p class="note">レジーム別実測表は <code>make analyze ANALYZE_STAGES=traces,regime</code>'
+            ' の成果物 (analysis/regime_metrics.csv) があるときに表示される。</p>'
+        )
+    return "".join(parts)
+
+
 def _render_release_spec(scenario: Path, release_path: Path) -> str:
     """Scenario の release 指定と、実際にリリースされた param 値を 7 章に表示する。"""
     note = ""
@@ -866,6 +982,7 @@ def _render_document(
     phase3_path: Path,
     release_path: Path,
     scenario_path: Path,
+    analysis_dir: Path,
 ) -> str:
     datasets = frame["dataset_id"].nunique()
     horizons = frame["horizon"].nunique()
@@ -942,7 +1059,7 @@ details {{ margin:10px 0; }} details > summary {{ cursor:pointer; font-weight:60
 </header>
 <section><h2>1. 記号と運動方程式</h2><p class="lede">以降の各セクションはここで定義した記号・残差式を参照する。</p>{physical_sections.equations}{_render_plateau_theory()}</section>
 <section id="sec-extraction"><h2>2. Extraction results</h2>{_render_failures(extraction_summary)}{physical_sections.prepare}</section>
-<section><h2>3. Longitudinal direct identification</h2>{_render_artifact(phase1_path, parameter_title="phase1_acc.yaml")}{_render_stage_plateau(phase1_path, scale_key="debug_acc_scaling_factor", unit="m/s²", channel="ax")}{physical_sections.longitudinal}</section>
+<section><h2>3. Longitudinal direct identification</h2>{_render_artifact(phase1_path, parameter_title="phase1_acc.yaml")}{_render_stage_plateau(phase1_path, scale_key="debug_acc_scaling_factor", unit="m/s²", channel="ax")}{_render_lon_brake_split(frame, model_order, analysis_dir)}{physical_sections.longitudinal}</section>
 <section><h2>4. Steering direct identification</h2>{_render_artifact(phase2_path, parameter_title="phase2_steer.yaml")}{_render_stage_plateau(phase2_path, scale_key="debug_steer_scaling_factor", unit="deg", channel="steer")}{physical_sections.steering}{physical_sections.yaw}</section>
 <section><h2>5. XY heading-rate direct identification</h2>{_render_artifact(phase3_path, parameter_title="phase3_xy.yaml")}{physical_sections.xy}</section>
 <section id="sec-optimization"><h2>6. Integrated optimization</h2>{_render_artifact_document(document, tuned_path, parameter_title="Final parameters")}<h3>Aggregate comparison</h3>{_render_objective_equations(_objective_version(document))}<p class="note">Raw columns (pos/long/…) are mean RMSE. <b>Aggregate score</b> is the optimized robust_score; <b>Mean normalized RMSE</b> is the 7-metric ratio mean — see the objective definition above (<a href="#eq-score">🔗 評価関数の定義</a>). Aggregate/distribution values use the configured optimization horizons; graphs use every available N. Lower is better.</p>{_render_aggregate(document, summary, model_order)}<h3>Error by horizon N</h3><p class="note">Each point is the mean RMSE across valid datasets. Every available N is plotted; lower is better.</p>{_render_horizon_charts(frame, model_order)}<h3>Dataset distributions</h3>{_render_dataset_distribution(summary, model_order)}</section>
@@ -1000,6 +1117,7 @@ def run(
         if release_params is not None
         else tuned_path.parent / "simulator_model.param.yaml",
         scenario_path,
+        tuned_path.parent / "analysis",
     )
     out_path.parent.mkdir(parents=True, exist_ok=True)
     out_path.write_text(rendered, encoding="utf-8")
