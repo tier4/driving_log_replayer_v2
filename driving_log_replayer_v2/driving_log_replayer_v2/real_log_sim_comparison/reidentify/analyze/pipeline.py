@@ -14,6 +14,7 @@
   tail        — A2: CVaR テール特性 (metrics.csv + traces から、追加 rollout なし)
   etfe        — A3: cmd→achieved の周波数応答 (1 次+むだ時間の適合性チェック)
   gt          — 加速度 GT の品質診断 (積分整合性×レジーム + ノイズフロア、RTS 候補込み)
+  obs         — localization 観測モデルの同定 (accel topic の LPF+むだ時間、pose–twist ラグ/スケール)
   report      — analysis.html の生成 (存在する成果物のみから描画)
 """
 from __future__ import annotations
@@ -29,6 +30,7 @@ from ..load_data import discover_cached_datasets
 from .conditioned import analyze_conditioned, counterfactual_corrections
 from .etfe import analyze_etfe
 from .gt_quality import analyze_gt_quality
+from .observation_model import analyze_observation_model
 from .oracle import characterize_tail, fit_per_dataset_oracle
 from .pitch_sign import verify_pitch_sign
 from .regime import analyze_regimes
@@ -39,7 +41,7 @@ from .steady_state import analyze_steady_state
 
 ALL_STAGES: tuple[str, ...] = (
     "split", "pitch-sign", "traces", "conditioned", "regime", "steady",
-    "oracle", "tail", "etfe", "gt", "report",
+    "oracle", "tail", "etfe", "gt", "obs", "report",
 )
 DEFAULT_CASE = "v2"
 
@@ -227,6 +229,22 @@ def _step_gt(out_dir: Path, root: Path, scenario: Path, splits: tuple[str, ...])
         )
 
 
+def _step_obs(out_dir: Path, root: Path, splits: tuple[str, ...]) -> None:
+    result = analyze_observation_model(root, splits=splits)
+    _write_json(out_dir / "observation_model.json", result)
+    acc = result["accel_topic"]
+    pt = result["pose_twist"]
+    print(
+        f"[analyze:obs] accel topic: d={acc['delay_s']['median']*1000:.0f} ms "
+        f"tau={acc['tau_s']['median']*1000:.0f} ms (残差 {acc['fit_rms']:.4f} / "
+        f"無補正 {acc['raw_rms']:.4f}, n={acc['n_datasets']})"
+    )
+    print(
+        f"[analyze:obs] pose–twist: lag={pt['lag_s']*1000:+.0f} ms scale={pt['scale']*100:+.2f}%/path "
+        f"pitch={pt['pitch_coef_m']:+.2f} m R²={pt['r2']:.3f} (n={pt['n_windows']})"
+    )
+
+
 def _step_report(out_dir: Path) -> None:
     path = write_analysis_report(out_dir)
     print(f"[analyze:report] {path}")
@@ -279,6 +297,8 @@ def main() -> int:
         _step_etfe(out_dir, args.root, args.scenario, args.case, splits)
     if "gt" in stages:
         _step_gt(out_dir, args.root, args.scenario, splits)
+    if "obs" in stages:
+        _step_obs(out_dir, args.root, splits)
     if "report" in stages:
         _step_report(out_dir)
     print(f"[analyze] 完了: {out_dir}")

@@ -777,6 +777,103 @@ def _render_lon_brake_split(
     return "".join(parts)
 
 
+def _load_json(path: Path) -> dict | None:
+    if not path.is_file():
+        return None
+    try:
+        return json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return None
+
+
+def _render_observation_model(analysis_dir: Path) -> str:
+    """9 章: localization 観測モデル (むだ時間・時定数・ラグ/スケールの同定)。
+
+    車両動特性 (3/4 章) と同じ「むだ時間 + 時定数」の枠組みで localization の出力特性を
+    同定した結果を表示する。値は make analyze ANALYZE_STAGES=obs の成果物
+    (analysis/observation_model.json) から。無ければ SSOT 定数 (lib/_localization_observation)
+    をフォールバック表示する。
+    """
+    from ..lib import _localization_observation as lo
+
+    obs = _load_json(analysis_dir / "observation_model.json")
+
+    parts = [
+        '<p class="lede">車両ではなく localization EKF の出力特性。'
+        'モデルが再現すべき対象ではなく、評価系の視点変換と本番シミュレータの出力側で反映する対象。</p>'
+    ]
+    parts.append(
+        '<h3>/localization/acceleration の観測特性</h3>'
+        '<p>加速度チャネル (3 章) と同じ「むだ時間 + 一次遅れ」の同定。真値プロキシは'
+        ' RTS 平滑加速度 (kinematic vx 由来):</p>'
+        '<div class="eq-block">\\[a_{loc}(t) = \\mathrm{LPF}_1\\!\\left(a_{true};\\ \\tau_{loc}\\right)(t - d_{loc})\\]</div>'
+    )
+    if obs and "accel_topic" in obs:
+        acc = obs["accel_topic"]
+        parts.append(
+            '<div class="stats">'
+            f'<div class="stat"><span>むだ時間 d_loc</span><strong>{acc["delay_s"]["median"]*1000:.0f} ms</strong></div>'
+            f'<div class="stat"><span>時定数 τ_loc</span><strong>{acc["tau_s"]["median"]*1000:.0f} ms</strong></div>'
+            f'<div class="stat"><span>残差 RMS</span><strong>{acc["fit_rms"]:.4f} m/s² (無補正 {acc["raw_rms"]:.4f})</strong></div>'
+            f'<div class="stat"><span>datasets</span><strong>{acc["n_datasets"]}</strong></div>'
+            '</div>'
+            f'<p class="note">IQR: d {acc["delay_s"]["p25"]*1000:.0f}–{acc["delay_s"]["p75"]*1000:.0f} ms / '
+            f'τ {acc["tau_s"]["p25"]*1000:.0f}–{acc["tau_s"]["p75"]*1000:.0f} ms。'
+            'IQR 幅ゼロは全 dataset が同一最適点を選んだことを示す (特性が普遍的)。'
+            'この位相遅れのため加速度 GT にはこのトピックを直接使わず、'
+            '速度微分系 (kinematic_savgol / kinematic_rts) を使っている。'
+            '本番では逆に、モデルの真値加速度をこの LPF+遅延に通して publish することで'
+            '実機と同じ位相特性を下流へ渡せる。</p>'
+        )
+    else:
+        parts.append(
+            f'<p class="note">同定成果物なし — SSOT 既定値: τ={lo.ACCEL_LPF_TAU_S*1000:.0f} ms, '
+            f'd={lo.ACCEL_DELAY_S*1000:.0f} ms '
+            '(<code>make analyze ANALYZE_STAGES=obs</code> で再同定・表示)。</p>'
+        )
+    parts.append(
+        '<h3>pose–twist の位相差・スケール差</h3>'
+        '<p>pose 変位と twist 積分の窓差分 (1 s 窓) を Δv・走行距離・Δpitch で回帰分解する:</p>'
+        '<div class="eq-block">\\[\\Delta\\!\\left(s_{pose} - \\!\\int v_{twist}\\,dt\\right) '
+        '= L_{pose}\\,\\Delta v + c_{scale}\\,\\mathrm{path} + c_{pitch}\\,\\Delta\\theta + c_0\\]</div>'
+    )
+    if obs and "pose_twist" in obs:
+        pt = obs["pose_twist"]
+        parts.append(
+            '<div class="stats">'
+            f'<div class="stat"><span>pose 実効ラグ L_pose</span><strong>{pt["lag_s"]*1000:+.0f} ms</strong></div>'
+            f'<div class="stat"><span>スケール差 c_scale</span><strong>{pt["scale"]*100:+.2f} %/path</strong></div>'
+            f'<div class="stat"><span>ピッチ係数</span><strong>{pt["pitch_coef_m"]:+.2f} m</strong></div>'
+            f'<div class="stat"><span>R²</span><strong>{pt["r2"]:.3f}</strong></div>'
+            f'<div class="stat"><span>窓数</span><strong>{pt["n_windows"]}</strong></div>'
+            '</div>'
+        )
+        regimes = pt.get("regime_delta_cm", {})
+        if regimes:
+            rows = "".join(
+                f'<tr><td>{_escape(name)}</td><td>{v["mean"]:+.2f}</td><td>{v["median"]:+.2f}</td><td>{v["n"]}</td></tr>'
+                for name, v in regimes.items()
+            )
+            parts.append(
+                '<h4>レジーム別 pose−twist 変位差 [cm / 1 s 窓]</h4>'
+                '<div class="table-wrap"><table><thead><tr><th>Regime</th><th>mean</th>'
+                f'<th>median</th><th>n</th></tr></thead><tbody>{rows}</tbody></table></div>'
+            )
+        parts.append(
+            '<p class="note"><b>意味</b>: ピッチ係数 ≈ 0 でピッチ投影説は棄却され、不整合の実体は'
+            ' EKF の pose–twist 位相差とスケール差。N-step 評価は ax/vx = twist 系、long/pos = pose 系'
+            'という 2 系統の GT を混用しているため、制動中の不整合 (~5 cm / 1 s 窓、long の p10 フロアと'
+            '同オーダー) が「ax は減速を弱めろ / 位置は強めろ」という矛盾要求を生む。縦系同定の一貫化には'
+            '視点変換 (lib/_localization_observation) による縦方向参照の統一が必要。</p>'
+        )
+    else:
+        parts.append(
+            f'<p class="note">同定成果物なし — SSOT 既定値: L_pose={lo.POSE_LAG_S*1000:.0f} ms, '
+            f'twist スケール={lo.TWIST_VX_SCALE:.4f}。</p>'
+        )
+    return "".join(parts)
+
+
 def _render_release_spec(scenario: Path, release_path: Path) -> str:
     """Scenario の release 指定と、実際にリリースされた param 値を 7 章に表示する。"""
     note = ""
@@ -1054,7 +1151,7 @@ details {{ margin:10px 0; }} details > summary {{ cursor:pointer; font-weight:60
   <nav>
     <a href="#eq-notation">1. 記号と運動方程式</a><a href="#sec-extraction">2. Extraction</a>
     <a href="#longitudinal">3. Longitudinal</a><a href="#steering">4. Steering</a>
-    <a href="#xy">5. XY</a><a href="#sec-optimization">6. Optimization</a><a href="#sec-released">7. Released</a><a href="#sec-timeseries">8. Timeseries</a>
+    <a href="#xy">5. XY</a><a href="#sec-optimization">6. Optimization</a><a href="#sec-released">7. Released</a><a href="#sec-timeseries">8. Timeseries</a><a href="#sec-observation">9. Localization obs.</a>
   </nav>
 </header>
 <section><h2>1. 記号と運動方程式</h2><p class="lede">以降の各セクションはここで定義した記号・残差式を参照する。</p>{physical_sections.equations}{_render_plateau_theory()}</section>
@@ -1065,6 +1162,7 @@ details {{ margin:10px 0; }} details > summary {{ cursor:pointer; font-weight:60
 <section id="sec-optimization"><h2>6. Integrated optimization</h2>{_render_artifact_document(document, tuned_path, parameter_title="Final parameters")}<h3>Aggregate comparison</h3>{_render_objective_equations(_objective_version(document))}<p class="note">Raw columns (pos/long/…) are mean RMSE. <b>Aggregate score</b> is the optimized robust_score; <b>Mean normalized RMSE</b> is the 7-metric ratio mean — see the objective definition above (<a href="#eq-score">🔗 評価関数の定義</a>). Aggregate/distribution values use the configured optimization horizons; graphs use every available N. Lower is better.</p>{_render_aggregate(document, summary, model_order)}<h3>Error by horizon N</h3><p class="note">Each point is the mean RMSE across valid datasets. Every available N is plotted; lower is better.</p>{_render_horizon_charts(frame, model_order)}<h3>Dataset distributions</h3>{_render_dataset_distribution(summary, model_order)}</section>
 <section id="sec-released"><h2>7. Released YAML</h2>{_render_release_spec(scenario_path, release_path)}<p class="source">Released parameter YAML: {_escape(release_path)}</p></section>
 <section id="sec-timeseries"><h2>8. 対象データセットの時系列診断</h2><p class="lede">scenario の plot_dataset で指定したデータセットについて、実測系列と <b>C++ 車両モデル (リリース実装) の予測系列</b>を重ね描きする: 微分行(<a href="#eq-long">縦方向</a>/<a href="#eq-steer">操舵</a>)の両辺 (1-step 予測)、および加速度/速度/ステア/ヨーレートの窓リスタート free-run 軌跡と指令値。対象モデルは release 指定 (または fit 結果) のみ — 特定できない場合は描画しない。</p>{physical_sections.timeseries}</section>
+<section id="sec-observation"><h2>9. Localization observation model</h2>{_render_observation_model(analysis_dir)}</section>
 </main></body></html>
 """
 
