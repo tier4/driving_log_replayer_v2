@@ -259,13 +259,15 @@ def test_localization_observation_accel_view_matches_fit_convention() -> None:
     assert view[-1] == pytest.approx(1.0, abs=0.02)
 
 
-def test_localization_observation_pose_view_lags_and_scales() -> None:
+def test_localization_observation_twist_view_lags_and_scales() -> None:
     from driving_log_replayer_v2.real_log_sim_comparison.lib import _localization_observation as lo
 
-    t = np.arange(0.0, 10.0, 0.01)
-    ds_true = 8.0 * t  # 等速 8 m/s の累積変位
-    view = lo.pose_displacement_localization_view(ds_true, t)
-    # 遅延 93 ms + スケール 0.996: 変位は 8·0.996·(t−0.093)。
+    dt = 0.01
+    t = np.arange(0.0, 10.0, dt)
+    v_true = 8.0 + 0.5 * t  # 一定加速の真値速度
+    view = lo.twist_vx_localization_view(v_true, dt)
+    # 遅延 93 ms (グリッド丸め 9 サンプル) + 1/スケール: v_twist = v_true(t−0.093)/0.996。
     k = 500
-    expected = 8.0 * lo.TWIST_VX_SCALE * (t[k] - lo.POSE_LAG_S)
-    assert view[k] == pytest.approx(expected, abs=1e-6)
+    k_lag = int(round(lo.TWIST_VX_LAG_S / dt))
+    expected = v_true[k - k_lag] / lo.TWIST_VX_SCALE
+    assert view[k] == pytest.approx(expected, abs=1e-9)

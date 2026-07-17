@@ -4,19 +4,39 @@ ScenarioName: vehicle_model_reidentify
 Evaluation:
   Conditions:
 #    comparison_models: [baseline, v1, v2, v2_rk4, v2_c, v2_t, v3_slope, current]
-    comparison_models: [baseline, v1, v2, v3]
+    comparison_models: [baseline, v1, v2, current]
+    # ---- GT フレーム (審判の定義、2026-07-17 再設計) ----
+    # localization_consistent: pose を真値アンカーとし、観測モデル同定値 (report 9 章:
+    # twist vx の実効遅延 +93 ms / スケール +0.4% 過大、R²=0.74) で twist を pose と
+    # 運動学整合させる (vx を前進 + ×0.996。pose は指令→応答チェーンと整合済みのため無補正)。
+    # raw フレームでは「ax/vx (twist 系) は減速を弱めろ / long (pose 系) は強めろ」という
+    # 矛盾要求が生じ、縦系の構造改善 (brake 分離・bite 等) が全て採用ゲートで棄却された。
+    observation_frame: localization_consistent
     # fit 対象ケースと実行ステージ。target は同定の初期値/対象ケース (既定 current)。
     # stages は lon->steer->xy の連続する先頭部分 + 任意で merge。省略時は全ステージ、
     # [] で fit を行わず固定比較のみ。fit 出力 "tuned" を比較表・グラフに載せたい場合は
     # fit 対象 (current) を comparison_models に明記する (未指定なら比較には出ない)。
     # release: {model: tuned, ...} なら比較への明記なしでもリリースは可能。
-    fit: {target: current, stages: [lon, steer, xy, merge]}
+    # freeze: v3 候補の再構築 (2026-07-17) は「v2 と同じ基本構造」で行う — 構造項
+    # (drag / brake 分割 / bite / 緩和長) はセンチネル 0 に凍結し関節探索から除外する。
+    # 構造項は新審判での基本構造ベースライン確定後に単独 ablation で再判定する。
+    fit:
+      target: current
+      stages: [lon, steer, xy, merge]
+      freeze:
+        - lon_drag_c0
+        - lon_drag_c2
+        - brake_time_constant
+        - brake_scaling_factor
+        - brake_bite_gain
+        - brake_bite_time_constant
+        - steer_relaxation_length
     # release ステージの出力先: v2 ケースを simulator_model.param.yaml の v2 スロットへ
     # リリースする。model には scenario ケース名か fit 出力 "tuned" を指定。
     # release を省略すると release ステージ (YAML 出力) はスキップされる。
-    # 注: v3 (L_rel=0.2) は 2026-07-17 に一度リリースしたが、厳格ゲートが許す最大値では
-    # score −1.2% に留まり N-step 平均カーブ上ほぼ同一のため「同等性能はリリースしない」
-    # 判断で撤回。v3 ケースは検討中候補として保持 (下記コメント参照)。
+    # 注: 旧 v3 (L_rel=0.2) は 2026-07-17 に一度リリース後、score −1.2% と同等性能のため
+    # 撤回。その後 GT の pose–twist 不整合 (観測モデル同定で確定) が縦系評価を歪めていた
+    # ことが判明し、v3 候補は localization_consistent 審判の下で基本構造から再構築中。
     release: {model: v2, version: 2}
     # レポート 9 章 (時系列診断) の対象 dataset-id のリスト。指定すると release ケース
     # (未指定時は tuned) のパラメータで状態方程式の左辺・右辺・指令値を各データセットに
@@ -27,9 +47,14 @@ Evaluation:
       - 3b6b940c-c58f-5475-b5a0-4f1958568a0a
 
     models:
+      # 正規化基準 (robust_score / FLOOR_TABLE の分母)。GT ソースは審判再設計 (2026-07-17)
+      # で比較対象と同一系 (kinematic_rts + steer_savgol) に統一 — kinematic_rts は GT 品質
+      # 診断 (analysis gt_quality) で kinematic_savgol を積分整合性×ノイズの両軸で支配。
+      # 旧評価 (accel 生トピック + 0.08 s シフト基準) の値とは直接比較できない。
       baseline:
         vehicle_model_type: delay_steer_acc_geared_wo_fall_guard
-        acceleration_source: accel
+        acceleration_source: kinematic_rts
+        steering_source: steer_savgol
         params:
           wheelbase: 4.76012
           acc_time_delay: 0.1
@@ -45,10 +70,12 @@ Evaluation:
           xy_heading_rate_coeff: 0.0
 
       # 確定済みモデル: 物理妥当性レポートではフィットせず固定評価のみ行う。
-      # v1 のリリース時評価は raw /localization/acceleration 基準のため accel を使う。
+      # v1 のリリース時評価は raw /localization/acceleration 基準だったが、比較カーブの
+      # GT を揃えるため審判再設計 (2026-07-17) で kinematic_rts + steer_savgol に統一。
       v1:
         vehicle_model_type: delay_steer_acc_geared_for_diffusion_planner
-        acceleration_source: accel
+        acceleration_source: kinematic_rts
+        steering_source: steer_savgol
         params:
           wheelbase: 4.76012
           acc_time_delay: 0.1
@@ -86,9 +113,11 @@ Evaluation:
       # long 430cm / lat 114cm — 全ヘッドライン指標で v1 と k_us 更新前の v2 を上回る。
       # yaw/lat の worst-case は 25〜35% 削減 (lat@150 worst 9.24→6.56, yaw@30 worst
       # 4.02→2.87)。上記 release 指定により v2 としてリリースされる。
+      # GT ソースは審判再設計 (2026-07-17) で kinematic_rts に更新 (同定当時は
+      # kinematic_savgol)。パラメータはリリース済み v2 のまま。
       v2:
         vehicle_model_type: delay_steer_acc_geared_for_diffusion_planner
-        acceleration_source: kinematic_savgol
+        acceleration_source: kinematic_rts
         steering_source: steer_savgol
         params:
           wheelbase: 4.76012
@@ -171,47 +200,9 @@ Evaluation:
           k_us: 0.018797133899293227
           xy_heading_rate_coeff: 0.0
 
-      # 検討中モデル v3 (リリース撤回 2026-07-17): v2 + 実効ステア (タイヤ緩和長 0.2 m)。
-      # dense 全セル非劣化ゲート (2100 セル) を violation 0 で通過するが、score −1.2% と
-      # N-step 平均カーブ上ほぼ同一のためリリース見送り (同等性能はリリースしない方針)。
-      # L_rel=0.6 なら score −5.35% (yaw@30 mean −4.6%) だが CVaR テール 4 セルが超過 —
-      # テールゲート/目的関数の再設計か、テール (高 ay) に効く追加構造とのセットで再挑戦する。
-      # ヨー式が使うステアを τ_rel = L_rel / max(v, 1) の一次遅れでなます (速度依存ラグ)。
-      # 根拠 (2026-07-17 残差分析キャンペーン + gate スイープ, analysis.html / gate.py):
-      # 1) 構造要求: 計測ステア (SG) の実効ラグ ≈117ms に対しヨー応答は ≈200ms 相当。
-      #    steer τ 短縮単独は N-step 全面悪化 (τ=0.10 で yaw@10 +15% / τ=0.05 で +36%) し、
-      #    「ステア角センサ応答」と「ヨーを生む実効ステア (タイヤ横力の緩和)」の分離が必要。
-      # 2) L_rel 1 次元スイープ (v2 比、全セル mean/cvar +2% 非劣化ゲート):
-      #    L=0.6 で robust_score −5.35% だが yaw/lat の CVaR テール 4 セルが超過。
-      #    L=0.25 は dev PASS / 全 318 で 1 セル (+2.03%) 超過。
-      #    L=0.2 が「全セル非劣化 (dev 248 PASS / 全 318 PASS) を満たす最大値」で
-      #    robust_score −1.2% (yaw@30 mean ≈ −4%)。holdout 64 は yaw@30 cvar +2.8% の
-      #    1 セルのみ (テール 7 本の統計ノイズ範囲) — v2 の k_us スイープと同じ方法論。
-      # 3) τ_rel ∝ 1/v は err_lat の速度依存 (効果量 17%)・CVaR テール=高 ay とも整合。
-      # 縦系 (slope 給電 / brake 分割 / drag) は単独・関節探索とも CVaR テールとトレードし
-      # ゲート不通過 (2026-07-17 記録)。v3.1 以降の候補として analysis 成果物に保持。
-      v3:
-        vehicle_model_type: delay_steer_acc_geared_for_diffusion_planner
-        acceleration_source: kinematic_savgol
-        steering_source: steer_savgol
-        params:
-          wheelbase: 4.76012
-          acc_time_delay: 0.1
-          acc_time_constant: 0.3
-          debug_acc_scaling_factor: 0.9
-          steer_time_delay: 0.05
-          steer_time_constant: 0.15
-          debug_steer_scaling_factor: 1.015827
-          steer_dead_band: 0.0
-          steer_bias: 0.0
-          steer_rate_lim: 0.6
-          k_us: 0.012
-          xy_heading_rate_coeff: 0.0
-          lon_drag_c0: 0.0
-          lon_drag_c2: 0.0
-          brake_time_constant: 0.0
-          brake_scaling_factor: 0.0
-          steer_relaxation_length: 0.2
+      # 旧 v3 候補 (v2 + steer_relaxation_length 0.2) は 2026-07-17 に取り下げ。
+      # 旧審判 (raw フレーム) での ablation 記録は git 履歴と analysis 成果物を参照。
+      # 実効ステア (緩和長) 構造は新審判での基本構造ベースライン確定後に再判定する。
 
       # 検討中モデル (v3 候補 1): v2 + SLOPE_ACCX フィード (slope_source: pitch)。
       # パラメータは v2 と同一で、rollout 入力として +g·sin(pitch_lf) を給電する ablation。
@@ -239,11 +230,12 @@ Evaluation:
           k_us: 0.012
           xy_heading_rate_coeff: 0.0
 
-      # 同定対象 (TARGET)。GT はリリース基準の v2 と同じ SG 系
-      # (kinematic_savgol + steer_savgol) に揃える。
+      # 同定対象 (TARGET)。v3 候補の再同定 (2026-07-17): localization_consistent 審判 +
+      # kinematic_rts GT の下で、v2 と同じ基本構造 (fit.freeze で構造項を凍結) を
+      # lon→steer→xy→merge のフルパイプラインで作り直す。初期値は同定前の素の値。
       current:
         vehicle_model_type: delay_steer_acc_geared_for_diffusion_planner
-        acceleration_source: kinematic_savgol
+        acceleration_source: kinematic_rts
         steering_source: steer_savgol
         params:
           wheelbase: 4.76012

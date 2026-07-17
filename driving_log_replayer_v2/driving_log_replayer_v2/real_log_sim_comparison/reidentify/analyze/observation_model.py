@@ -9,9 +9,11 @@
    dataset ごとに (d, τ) をグリッド最小二乗で同定し、分布 (中央値/IQR) を報告する。
 
 2. pose–twist の位相差・スケール差:
-     Δ(pose 変位 − ∫twist vx dt) = L_pose·Δv + c_scale·path + c_pitch·Δpitch + c0
-   の窓回帰 (1 s 窓)。L_pose = pose の実効ラグ、c_scale = 速度スケール差。
-   c_pitch ≈ 0 ならピッチ投影説は棄却。レジーム別の変位差も併record する。
+     Δ(pose 変位 − ∫twist vx dt) = L_tw·Δv + c_scale·path + c_pitch·Δpitch + c0
+   の窓回帰 (1 s 窓)。L_tw が正 = twist vx が pose (地図アンカー) に対して実効遅延
+   (pose 遅れなら係数は負になる — 符号解釈は 2026-07-17 に整合フレームの実データ検証で
+   訂正済み)。c_scale = 速度スケール差。c_pitch ≈ 0 ならピッチ投影説は棄却。
+   レジーム別の変位差も併記録する。
 
 これらは車両ではなく localization の性質であり、モデルが再現すべきではない。
 オフライン評価では視点変換 (lib/_localization_observation) で吸収し、本番

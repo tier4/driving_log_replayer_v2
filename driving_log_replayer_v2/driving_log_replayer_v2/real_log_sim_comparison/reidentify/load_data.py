@@ -125,10 +125,11 @@ def build_rollout_data(
     """Rollout 評価が使う DataFrame 群を組み立てる。
 
     observation_frame="localization_consistent" のとき、kinematic_state を pose アンカーの
-    整合フレームへ補正してから GT を組み立てる (pose +POSE_LAG_S 前進 / twist vx ×0.996、
-    lib/_localization_observation 参照)。kinematic_* 系の加速度 GT は補正済み vx から導出
-    されるため、cmd→ax→vx→long の縦系チェーンが単一系統で閉じる。velocity トピック
-    (車両側 velocity report) と accel 生トピックは localization 系ではないため補正しない。
+    整合フレームへ補正してから GT を組み立てる (twist vx を +TWIST_VX_LAG_S 前進 + ×0.996、
+    pose は無補正。lib/_localization_observation 参照)。kinematic_* 系の加速度 GT は補正済み
+    vx から導出されるため、cmd→ax→vx→long の縦系チェーンが単一系統で閉じる。velocity
+    トピック (車両側 velocity report) と accel 生トピックは localization 系ではないため
+    補正しない。
     """
     df_vel = dfs["velocity"].rename(columns={"lon_vel": "vx"})
     from ..lib._accel_source import accel_dataframe_from_source

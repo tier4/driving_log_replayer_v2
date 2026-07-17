@@ -835,13 +835,17 @@ def _render_observation_model(analysis_dir: Path) -> str:
         '<h3>pose–twist の位相差・スケール差</h3>'
         '<p>pose 変位と twist 積分の窓差分 (1 s 窓) を Δv・走行距離・Δpitch で回帰分解する:</p>'
         '<div class="eq-block">\\[\\Delta\\!\\left(s_{pose} - \\!\\int v_{twist}\\,dt\\right) '
-        '= L_{pose}\\,\\Delta v + c_{scale}\\,\\mathrm{path} + c_{pitch}\\,\\Delta\\theta + c_0\\]</div>'
+        '= L_{tw}\\,\\Delta v + c_{scale}\\,\\mathrm{path} + c_{pitch}\\,\\Delta\\theta + c_0\\]</div>'
+        '<p class="note">Δv 係数 L_tw が正であることは <b>twist vx が pose (地図アンカー) に'
+        '対して実効的に遅れている</b>ことを意味する (pose が遅れているなら pose 変位 ≈ 真値変位'
+        ' − L·Δv となり係数は負になる)。pose のタイミングは指令→応答チェーンの同定と整合して'
+        'おり、整合フレームの補正は twist 側 (前進 + スケール) に適用する。</p>'
     )
     if obs and "pose_twist" in obs:
         pt = obs["pose_twist"]
         parts.append(
             '<div class="stats">'
-            f'<div class="stat"><span>pose 実効ラグ L_pose</span><strong>{pt["lag_s"]*1000:+.0f} ms</strong></div>'
+            f'<div class="stat"><span>twist vx 実効遅延 L_tw</span><strong>{pt["lag_s"]*1000:+.0f} ms</strong></div>'
             f'<div class="stat"><span>スケール差 c_scale</span><strong>{pt["scale"]*100:+.2f} %/path</strong></div>'
             f'<div class="stat"><span>ピッチ係数</span><strong>{pt["pitch_coef_m"]:+.2f} m</strong></div>'
             f'<div class="stat"><span>R²</span><strong>{pt["r2"]:.3f}</strong></div>'
@@ -863,12 +867,13 @@ def _render_observation_model(analysis_dir: Path) -> str:
             '<p class="note"><b>意味</b>: ピッチ係数 ≈ 0 でピッチ投影説は棄却され、不整合の実体は'
             ' EKF の pose–twist 位相差とスケール差。N-step 評価は ax/vx = twist 系、long/pos = pose 系'
             'という 2 系統の GT を混用しているため、制動中の不整合 (~5 cm / 1 s 窓、long の p10 フロアと'
-            '同オーダー) が「ax は減速を弱めろ / 位置は強めろ」という矛盾要求を生む。縦系同定の一貫化には'
-            '視点変換 (lib/_localization_observation) による縦方向参照の統一が必要。</p>'
+            '同オーダー) が「ax は減速を弱めろ / 位置は強めろ」という矛盾要求を生む。縦系同定の一貫化は'
+            ' scenario の observation_frame: localization_consistent (twist vx を +L_tw 前進 +'
+            ' ×スケールで pose と整合) が行う。</p>'
         )
     else:
         parts.append(
-            f'<p class="note">同定成果物なし — SSOT 既定値: L_pose={lo.POSE_LAG_S*1000:.0f} ms, '
+            f'<p class="note">同定成果物なし — SSOT 既定値: twist vx 遅延={lo.TWIST_VX_LAG_S*1000:.0f} ms, '
             f'twist スケール={lo.TWIST_VX_SCALE:.4f}。</p>'
         )
     return "".join(parts)

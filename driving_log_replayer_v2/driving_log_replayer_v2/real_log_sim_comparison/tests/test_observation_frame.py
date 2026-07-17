@@ -16,10 +16,11 @@ import pytest
 import yaml
 
 from driving_log_replayer_v2.real_log_sim_comparison.lib._localization_observation import (
-    POSE_LAG_S,
+    TWIST_VX_LAG_S,
     TWIST_VX_SCALE,
     consistent_kinematic_frame,
     normalize_observation_frame,
+    twist_vx_localization_view,
 )
 from driving_log_replayer_v2.real_log_sim_comparison.reidentify import fit_merge
 from driving_log_replayer_v2.real_log_sim_comparison.reidentify.load_data import (
@@ -31,17 +32,19 @@ from driving_log_replayer_v2.real_log_sim_comparison.reidentify.model_config imp
 
 
 def _synthetic_kin(n: int = 2000, dt: float = 0.01) -> tuple[pd.DataFrame, np.ndarray, np.ndarray]:
-    """真値 (v_true, s_true) から localization 観測 (pose ラグ + twist 過大) を合成する。"""
+    """真値 (v_true, s_true) から localization 観測 (twist 遅延 + 過大) を合成する。
+
+    pose は真値位置 (地図アンカー)。twist vx は真値速度を +TWIST_VX_LAG_S 遅れて
+    1/TWIST_VX_SCALE 倍過大に出力する (実測の観測モデル、report 9 章)。
+    """
     t = np.arange(n) * dt
     v_true = 10.0 + np.sin(0.5 * t)
     s_true = np.concatenate([[0.0], np.cumsum((v_true[1:] + v_true[:-1]) * 0.5 * dt)])
-    # pose は真値位置を +POSE_LAG_S 遅れて出力し、twist vx は 1/scale 倍過大。
-    s_pose = np.interp(t - POSE_LAG_S, t, s_true)
-    vx_twist = v_true / TWIST_VX_SCALE
+    vx_twist = np.interp(t - TWIST_VX_LAG_S, t, v_true) / TWIST_VX_SCALE
     df = pd.DataFrame(
         {
             "t_ns": (t * 1e9).astype(np.int64),
-            "x": s_pose,
+            "x": s_true,
             "y": np.zeros(n),
             "yaw": np.zeros(n),
             "vx": vx_twist,
@@ -49,7 +52,7 @@ def _synthetic_kin(n: int = 2000, dt: float = 0.01) -> tuple[pd.DataFrame, np.nd
             "pitch": np.zeros(n),
         }
     )
-    return df, t, s_true
+    return df, t, v_true
 
 
 def test_normalize_observation_frame_accepts_known_and_rejects_unknown() -> None:
@@ -61,15 +64,15 @@ def test_normalize_observation_frame_accepts_known_and_rejects_unknown() -> None
 
 
 def test_consistent_frame_restores_pose_twist_kinematic_consistency() -> None:
-    df, t, s_true = _synthetic_kin()
-    x_before = df["x"].to_numpy().copy()
+    df, t, v_true = _synthetic_kin()
+    vx_before = df["vx"].to_numpy().copy()
     out = consistent_kinematic_frame(df)
 
-    # pose の実効ラグが除去され真値位置へ戻る (先頭のラグ分と末尾の外挿クランプ域は除く)。
-    core = slice(20, len(t) - 20)
-    np.testing.assert_allclose(out["x"].to_numpy()[core], s_true[core], atol=1e-4)
-    # twist vx はスケール補正で真値速度へ戻る。
-    np.testing.assert_allclose(out["vx"].to_numpy(), 10.0 + np.sin(0.5 * t), atol=1e-9)
+    # twist vx の実効遅延とスケールが除去され真値速度へ戻る (両端の外挿クランプ域は除く)。
+    core = slice(10, len(t) - 20)
+    np.testing.assert_allclose(out["vx"].to_numpy()[core], v_true[core], atol=1e-4)
+    # pose は真値アンカーとして無補正。
+    np.testing.assert_allclose(out["x"].to_numpy(), df["x"].to_numpy())
 
     # 補正後は「pose 変位 = ∫vx dt」が窓によらず成立する (raw では系統的に食い違う)。
     dt = 0.01
@@ -79,34 +82,30 @@ def test_consistent_frame_restores_pose_twist_kinematic_consistency() -> None:
     disp_twist = np.sum((vx[k0:k1] + vx[k0 + 1 : k1 + 1]) * 0.5 * dt)
     assert disp_pose == pytest.approx(disp_twist, abs=2e-3)
 
-    raw_disp_pose = df["x"].iloc[k1] - df["x"].iloc[k0]
     raw_vx = df["vx"].to_numpy()
     raw_disp_twist = np.sum((raw_vx[k0:k1] + raw_vx[k0 + 1 : k1 + 1]) * 0.5 * dt)
-    assert abs(raw_disp_pose - raw_disp_twist) > 0.3  # 元の不整合 (~0.4 m / 100 m)
+    assert abs(disp_pose - raw_disp_twist) > 0.3  # 元の不整合 (~0.4 m / 100 m)
 
     # 元の DataFrame は不変。
-    np.testing.assert_allclose(df["x"].to_numpy(), x_before)
+    np.testing.assert_allclose(df["vx"].to_numpy(), vx_before)
 
 
-def test_consistent_frame_interpolates_yaw_across_pi_wrap() -> None:
-    n, dt = 500, 0.01
+def test_twist_view_is_inverse_of_consistent_frame() -> None:
+    """本番 publisher 向け視点変換 (真値→twist) が整合フレーム補正の逆変換になっている。"""
+    n, dt = 2000, 0.01
     t = np.arange(n) * dt
-    yaw_true = np.pi - 0.5 + 0.4 * t  # ±π 跨ぎを含む単調増加
-    yaw_wrapped = ((yaw_true + np.pi) % (2 * np.pi)) - np.pi
+    v_true = 10.0 + np.sin(0.5 * t)
+    vx_twist = twist_vx_localization_view(v_true, dt)
     df = pd.DataFrame(
         {
             "t_ns": (t * 1e9).astype(np.int64),
-            "x": np.zeros(n), "y": np.zeros(n),
-            "yaw": yaw_wrapped,
-            "vx": np.full(n, 5.0), "wz": np.zeros(n), "pitch": np.zeros(n),
+            "x": np.zeros(n), "y": np.zeros(n), "yaw": np.zeros(n),
+            "vx": vx_twist, "wz": np.zeros(n), "pitch": np.zeros(n),
         }
     )
     out = consistent_kinematic_frame(df)
-    # unwrap 済み連続系列として +lag 前進した値になる (跨ぎ点での中間値破綻がない)。
-    core = slice(0, n - 20)
-    np.testing.assert_allclose(
-        out["yaw"].to_numpy()[core], np.unwrap(yaw_wrapped)[core] + 0.4 * POSE_LAG_S, atol=1e-6,
-    )
+    core = slice(20, n - 20)
+    np.testing.assert_allclose(out["vx"].to_numpy()[core], v_true[core], atol=5e-3)
 
 
 def _synthetic_dfs() -> dict[str, pd.DataFrame]:
@@ -134,16 +133,22 @@ def test_build_rollout_data_applies_consistent_frame_to_kin_and_derived_accel() 
 
     # raw は従来どおり無補正。
     np.testing.assert_allclose(raw["kin"]["vx"], dfs["kinematic"]["vx"])
-    # consistent は vx スケール補正済みの kin を返し、kinematic_* 系の加速度 GT も
-    # 補正済み vx から導出される (振幅が ×TWIST_VX_SCALE)。
+    # consistent は twist vx を +lag 前進 + ×scale した kin を返し、kinematic_* 系の
+    # 加速度 GT も補正済み vx から導出される (同じ位相前進 + スケール)。
+    t = dfs["kinematic"]["t_ns"].to_numpy(float) * 1e-9
+    raw_vx = dfs["kinematic"]["vx"].to_numpy(float)
     np.testing.assert_allclose(
-        consistent["kin"]["vx"], dfs["kinematic"]["vx"] * TWIST_VX_SCALE,
-    )
-    core = slice(100, -100)
-    np.testing.assert_allclose(
-        consistent["acc"]["ax"].to_numpy()[core],
-        raw["acc"]["ax"].to_numpy()[core] * TWIST_VX_SCALE,
+        consistent["kin"]["vx"],
+        np.interp(t + TWIST_VX_LAG_S, t, raw_vx) * TWIST_VX_SCALE,
         atol=1e-9,
+    )
+    core = slice(100, len(t) - 100)
+    t_acc = raw["acc"]["t_ns"].to_numpy(float) * 1e-9
+    expected_ax = np.interp(
+        t_acc + TWIST_VX_LAG_S, t_acc, raw["acc"]["ax"].to_numpy(float),
+    ) * TWIST_VX_SCALE
+    np.testing.assert_allclose(
+        consistent["acc"]["ax"].to_numpy()[core], expected_ax[core], atol=1e-4,
     )
     with pytest.raises(ValueError, match="observation_frame"):
         build_rollout_data(dfs, observation_frame="bogus")
