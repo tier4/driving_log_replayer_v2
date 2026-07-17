@@ -2,6 +2,14 @@
 Changelog for package driving_log_replayer
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
+Forthcoming
+-----------
+* feat: support agnocast for rosbag record (`#386 <https://github.com/tier4/driving_log_replayer_v2/issues/386>`_)
+* feat(perception_reproducer): wire auto-tackle-stuck CLI and remove post-engage pose push (`#391 <https://github.com/tier4/driving_log_replayer_v2/issues/391>`_)
+  Co-authored-by: Copilot Autofix powered by AI <175728472+Copilot@users.noreply.github.com>
+* feat: record_profile (`#390 <https://github.com/tier4/driving_log_replayer_v2/issues/390>`_)
+* Contributors: Kem (TiankuiXian), Masato Saeki
+
 3.18.6 (2026-07-06)
 -------------------
 * feat: ignore target_uuids in scenario using args (`#387 <https://github.com/tier4/driving_log_replayer_v2/issues/387>`_)
