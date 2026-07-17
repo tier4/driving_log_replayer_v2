@@ -743,7 +743,7 @@ def _render_objective_equations(objective_version: int | None) -> str:
 
     以下の数式は objective v3 の定義。report-only 再生成で旧成果物
     (metadata.objective.version != 3) を読んだ場合は、スコアが旧定義で算出されている旨の
-    警告を先頭に挿入する (score_v2 キーも存在しないため誤読を防ぐ)。
+    警告を先頭に挿入する。
     """
     warning = ""
     if objective_version != 3:
@@ -792,9 +792,6 @@ worst 項の重み 0.5(mean の改善と worst 側テールの頑健性を半々
 旧 objective の worst=max は dataset 数が多いとき単一の外れ dataset が score を支配した
 (318 datasets の実測で worst 項が score の 61%、外れ 1 件除外で −9.3% 変動)ため、
 v3 で CVaR@90% に置換した(worst 項比率 46%・外れ 1 件除外の変動 −1.3%)。</p>
-<p>非退行監査用に、旧目的関数の値もレガシーフロアで厳密再現して tuned_params.yaml に併記する:
-<b>score_v2</b>(v2: レガシーフロア + worst=max + アクチュエータ項)と
-<b>score_legacy</b>(v1: 同 + アクチュエータ項なし)。過去ランとの score 比較にはこちらを使う。</p>
 <div class="note"><b>表の 2 つのスコアを混同しないこと</b>:
 <b>Aggregate score</b> 列は上記 \\(\\text{score}\\)(robust_score、最適化の目的関数)。
 一方 <b>Mean normalized RMSE</b> 列とデータセット分布は別定義で、pos/long/lat/yaw/steer/vx/ax の

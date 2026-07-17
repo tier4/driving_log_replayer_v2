@@ -8,10 +8,7 @@ from driving_log_replayer_v2.real_log_sim_comparison.lib._multi_agg import (
     AX_FLOOR_MPS2,
     CVAR_Q,
     FLOOR_TABLE,
-    LAT_FLOOR_PER_STEP,
-    LONG_FLOOR_PER_STEP,
     STEER_FLOOR_DEG,
-    YAW_FLOOR_PER_STEP,
     aggregate_normalized,
     cvar_worst,
     normalize_components,
@@ -21,21 +18,6 @@ from driving_log_replayer_v2.real_log_sim_comparison.reidentify.settings import 
     ACT_SCORE_HORIZONS,
     HORIZONS,
 )
-
-# per-step 化前の固定辞書 (N=10..300)。v1/v2 監査パスがこの値を再現し続けることを固定する。
-_LEGACY_FLOORS = {
-    "yaw": {10: 0.06, 30: 0.18, 70: 0.42, 150: 0.90, 300: 1.80},
-    "long": {10: 1.0, 30: 3.0, 70: 7.0, 150: 15.0, 300: 30.0},
-    "lat": {10: 0.3, 30: 0.9, 70: 2.1, 150: 4.5, 300: 9.0},
-}
-
-
-@pytest.mark.parametrize("h", sorted(_LEGACY_FLOORS["yaw"]))
-def test_per_step_floors_reproduce_legacy_values(h: int) -> None:
-    assert YAW_FLOOR_PER_STEP * h == pytest.approx(_LEGACY_FLOORS["yaw"][h])
-    assert LONG_FLOOR_PER_STEP * h == pytest.approx(_LEGACY_FLOORS["long"][h])
-    assert LAT_FLOOR_PER_STEP * h == pytest.approx(_LEGACY_FLOORS["lat"][h])
-
 
 def test_floor_table_covers_score_horizons_and_is_monotonic() -> None:
     """v3 フロアテーブルは score horizon を全被覆し、h について単調増加であること。"""
@@ -55,17 +37,6 @@ def test_normalize_components_rejects_horizon_outside_floor_table() -> None:
     assert h not in HORIZONS
     with pytest.raises(ValueError, match="FLOOR_TABLE"):
         normalize_components(m, baseline, h)
-
-
-def test_legacy_floors_work_for_any_horizon() -> None:
-    """v1/v2 監査パス (legacy_floors=True) は任意 horizon で per-step フロアが機能すること。"""
-    m = {"yaw": 1.0, "long": 1.0, "lat": 1.0}
-    tiny_baseline = {"yaw": 1e-9, "long": 1e-9, "lat": 1e-9}
-    h = 42  # HORIZONS に含まれない horizon
-    normalized = normalize_components(m, tiny_baseline, h, legacy_floors=True)
-    assert normalized["nyaw"] == pytest.approx(1.0 / (YAW_FLOOR_PER_STEP * h))
-    assert normalized["nlong"] == pytest.approx(1.0 / (LONG_FLOOR_PER_STEP * h))
-    assert normalized["nlat"] == pytest.approx(1.0 / (LAT_FLOOR_PER_STEP * h))
 
 
 def test_v3_floor_clips_tiny_baseline() -> None:
@@ -124,19 +95,19 @@ def _uniform_by_h(metric: dict, horizons: tuple[int, ...]) -> dict:
     return {h: dict(metric) for h in horizons}
 
 
-def test_robust_score_without_act_horizons_matches_legacy() -> None:
-    """act_horizons=() (デフォルト) は旧目的関数 (yaw/long/lat のみ) と一致すること。"""
+def test_robust_score_without_act_horizons_uses_motion_components_only() -> None:
+    """act_horizons=() は yaw/long/lat のみを集約すること。"""
     horizons = (10, 30)
     baseline = _make_metric(yaw=1.0, long=10.0, lat=3.0, steer=0.5, ax=0.3)
     m = _make_metric(yaw=0.5, long=5.0, lat=1.5, steer=1.0, ax=0.6)
     baselines = {"ds": _uniform_by_h(baseline, horizons)}
     agg = aggregate_normalized([("ds", _uniform_by_h(m, horizons))], baselines, horizons)
 
-    # steer/ax が倍悪化していても legacy スコアには影響しない。
-    legacy = robust_score(agg, horizons)
+    # steer/ax が倍悪化していても、act_horizons 未指定のスコアには影響しない。
+    motion_only = robust_score(agg, horizons)
     # 1 dataset なので mean = worst。per-horizon: (nyaw + 0.5(nlong+nlat))·1.5 = 0.5·1.5 + ...
     expected_per_h = (0.5 + 0.5 * (0.5 + 0.5)) * 1.5
-    assert legacy == pytest.approx(expected_per_h * len(horizons))
+    assert motion_only == pytest.approx(expected_per_h * len(horizons))
 
 
 def test_robust_score_adds_actuator_terms_for_act_horizons() -> None:
@@ -147,11 +118,11 @@ def test_robust_score_adds_actuator_terms_for_act_horizons() -> None:
     baselines = {"ds": _uniform_by_h(baseline, horizons)}
     agg = aggregate_normalized([("ds", _uniform_by_h(m, horizons))], baselines, horizons)
 
-    legacy = robust_score(agg, horizons)
+    motion_only = robust_score(agg, horizons)
     score = robust_score(agg, horizons, act_horizons=(10,))
     # nsteer = 1.0/0.5 = 2.0, nax = 0.6/0.3 = 2.0。1 dataset なので mean = worst。
     expected_act = ACT_W * (2.0 + 2.0) + 0.5 * ACT_W * (2.0 + 2.0)
-    assert score == pytest.approx(legacy + expected_act)
+    assert score == pytest.approx(motion_only + expected_act)
 
 
 def test_aggregate_normalized_reports_actuator_mean_and_worst() -> None:

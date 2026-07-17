@@ -9,7 +9,6 @@ from driving_log_replayer_v2.real_log_sim_comparison.lib._vehicle_models import 
     VEHICLE_MODEL_SPECS,
     get_vehicle_model_spec,
 )
-from driving_log_replayer_v2.real_log_sim_comparison.reidentify import fit_merge
 from driving_log_replayer_v2.real_log_sim_comparison.reidentify.parameter_constraints import (
     ALL_CONSTRAINED_KEYS,
     DIRECT_FIT_STAGES,
@@ -66,10 +65,6 @@ def test_release_global_keys_are_model_params() -> None:
     """リリース YAML のグローバル欄リネームマップのキーはモデルパラメータであること。"""
     spec = get_vehicle_model_spec(TARGET_MODEL_TYPE)
     assert set(GLOBAL_PARAM_KEYS) <= spec.param_keys
-
-
-def test_direct_fit_keys_cover_all_constraints() -> None:
-    assert fit_merge._DIRECT_FIT_KEYS == ALL_CONSTRAINED_KEYS
 
 
 def test_stage_targets_are_nonempty_and_chained() -> None:

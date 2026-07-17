@@ -148,8 +148,6 @@ def test_run_builds_unified_report_from_finalized_artifacts(tmp_path: Path, monk
     assert "nsteer" in rendered
     assert "nax" in rendered
     assert "CVaR@90%" in rendered
-    assert "score_v2" in rendered
-    assert "score_legacy" in rendered
     # v3 成果物 (metadata.objective.version=3) には旧 objective 警告を出さない
     assert "旧 objective で算出" not in rendered
     # tuned の集約スコア (1.25) は baseline (2.5) より小さいので改善色が付く

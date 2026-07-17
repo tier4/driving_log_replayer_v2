@@ -5,22 +5,8 @@ from __future__ import annotations
 import math
 import statistics as stats
 
-# v1/v2 監査用のレガシーフロア (per-step 線形)。objective v3 は FLOOR_TABLE を使う。
-# 直進・低ダイナミクス走行の極小 baseline で相対誤差が暴発しないようにする分母フロア。
-# horizon N に比例させる (旧: N=10..300 の固定辞書と同値)。任意の horizon で使える。
-YAW_FLOOR_PER_STEP = 0.006  # deg/step
-LONG_FLOOR_PER_STEP = 0.1   # cm/step
-LAT_FLOOR_PER_STEP = 0.03   # cm/step
-LEGACY_FLOOR_PER_STEP = {
-    "yaw": YAW_FLOOR_PER_STEP,
-    "long": LONG_FLOOR_PER_STEP,
-    "lat": LAT_FLOOR_PER_STEP,
-}
-
 # objective v3 のフロア: baseline モデルの per-dataset RMSE 分布の p10 を horizon 別に採用
 # (steer/ax フロアと同じ方法論。openloop_j6_16_onwards, 318 datasets, metrics.csv, 2026-07-16)。
-# レガシー per-step 線形フロアは実データの誤差成長と乖離していた (yaw は長 horizon で p10 の
-# 2 倍 = 過剰クリップ、long/lat は p10 の 0.2〜0.3 倍でクリップがほぼ機能せず ratio 暴発を許す)。
 # score horizon は settings.HORIZONS に集約されているため、テーブル外の h は fail fast にする。
 FLOOR_TABLE: dict[int, dict[str, float]] = {
     10:  {"yaw": 0.069, "long": 1.5,   "lat": 0.24},
@@ -52,31 +38,28 @@ def cvar_worst(values: list[float]) -> float:
     return stats.mean(ordered[:k])
 
 
-def _floor(key: str, h: int, *, legacy: bool) -> float:
-    if legacy:
-        return LEGACY_FLOOR_PER_STEP[key] * h
+def _floor(key: str, h: int) -> float:
     if h not in FLOOR_TABLE:
         raise ValueError(f"FLOOR_TABLE に horizon N={h} のフロアがありません (対応: {sorted(FLOOR_TABLE)})")
     return FLOOR_TABLE[h][key]
 
 
-def normalize_components(m: dict, baseline: dict, h: int, *, legacy_floors: bool = False) -> dict:
+def normalize_components(m: dict, baseline: dict, h: int) -> dict:
     """1 dataset・1 horizon の誤差 RMSE をフロアクリップ付き baseline 比で正規化する。
 
     m / baseline: {"yaw" [deg], "long" [cm], "lat" [cm]} (rmse_by_horizon の値)。
     返り値は生値 + 正規化値 {yaw, long, lat, nyaw, nlong, nlat}。
     m / baseline の両方に steer [deg] / ax [m/s^2] があれば nsteer / nax も返す。
     steer/ax のフロアはプラトー特性 (誤差が N 非依存に飽和) により h を掛けない定数。
-    legacy_floors=True は v1/v2 監査用に旧 per-step 線形フロアで正規化する (任意の h で有効)。
-    デフォルト (v3) は FLOOR_TABLE の horizon のみ受け付ける。
+    FLOOR_TABLE に定義された horizon のみを受け付ける。
     """
     out = {
         "yaw": m["yaw"],
         "long": m["long"],
         "lat": m["lat"],
-        "nyaw": m["yaw"] / max(baseline["yaw"], _floor("yaw", h, legacy=legacy_floors)),
-        "nlong": m["long"] / max(baseline["long"], _floor("long", h, legacy=legacy_floors)),
-        "nlat": m["lat"] / max(baseline["lat"], _floor("lat", h, legacy=legacy_floors)),
+        "nyaw": m["yaw"] / max(baseline["yaw"], _floor("yaw", h)),
+        "nlong": m["long"] / max(baseline["long"], _floor("long", h)),
+        "nlat": m["lat"] / max(baseline["lat"], _floor("lat", h)),
     }
     if "steer" in m and "steer" in baseline:
         out["steer"] = m["steer"]
@@ -91,8 +74,6 @@ def aggregate_normalized(
     per_ds_metrics: list[tuple[str, dict[int, dict]]],
     baselines: dict[str, dict[int, dict]],
     horizons: tuple[int, ...],
-    *,
-    legacy_floors: bool = False,
 ) -> dict:
     """Dataset 横断で per-dataset 正規化した yaw/縦/横の mean・worst(max)・cvar を horizon 別に返す。
 
@@ -101,13 +82,13 @@ def aggregate_normalized(
     返り値:
       per_ds: [{dataset_id, by_h: {h: {yaw,long,lat, nyaw,nlong,nlat}}}]
       by_h:   {h: {nyaw_mean,nyaw_worst,nyaw_cvar, nlong_..., nlat_...}}
-    worst は max (v1/v2 監査・レポート用)、cvar は CVaR@90% (objective v3 用)。
+    worst は max、cvar は CVaR@90%。
     """
     per_ds = [
         {
             "dataset_id": ds_id,
             "by_h": {
-                h: normalize_components(m[h], baselines[ds_id][h], h, legacy_floors=legacy_floors)
+                h: normalize_components(m[h], baselines[ds_id][h], h)
                 for h in horizons
             },
         }
@@ -147,7 +128,7 @@ def robust_score(
     稼ぐ proxy が特定エリアの worst を悪化させても採用されてしまうため、worst を重み付きで加えて
     mean と worst を両立させる。worst-case 項の重みは 0.5 とする。
 
-    worst_stat は worst 項の統計量: "max" (v1/v2、単一最悪値) か "cvar" (v3、CVaR@90% =
+    worst_stat は worst 項の統計量: "max" (単一最悪値) か "cvar" (CVaR@90% =
     上位 10% 平均)。max は dataset 数が多いとき単一の外れ dataset に score が支配されるため、
     最適化には cvar を使う。
 
@@ -155,7 +136,7 @@ def robust_score(
     act_w·(nsteer_mean + nax_mean) + 0.5·act_w·(nsteer_worst + nax_worst) を加算する。
     steer/ax の open-loop 誤差は N≈20 までに定常値へ飽和する (プラトー特性) ため、
     全 horizon でなく過渡 (N=10) とプラトー (N=30) の代表 2 点に限定するのが前提。
-    デフォルト act_horizons=() ・worst_stat="max" は旧目的関数 (yaw/long/lat のみ) と完全一致する。
+    デフォルト act_horizons=() では yaw/long/lat のみを集約する。
     """
     if worst_stat == "max":
         suffix = "worst"

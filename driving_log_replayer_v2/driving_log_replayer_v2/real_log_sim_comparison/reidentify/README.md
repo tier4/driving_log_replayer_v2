@@ -17,8 +17,6 @@ make reidentify \
 
 既定入力は、従来と同じ `ROOT=/home/kotaroyoshimoto/data/openloop_j6_16_onwards`、
 `SCENARIO=sample/scenario.yaml`、description package の `simulator_model.param.yaml` です。
-`MULTI_BATCH_ROOT`、`LOCAL_SCENARIO`、`LOCAL_SAMPLE_DIR`、
-`REAL_LOG_SIM_COMPARISON_JOBS` も従来互換のフォールバックとして利用できます。
 
 任意変数は `N_TRIALS=160`、`N_JOBS=32`、`FORCE=0` です。
 ROS 2 環境をすでに読み込んでいる場合や単体テストでは `NO_SETUP=1` を指定できます。
