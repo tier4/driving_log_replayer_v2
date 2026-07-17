@@ -139,9 +139,13 @@ def release(
     if not is_tuned:
         existing_slot = model_params.get(f"v{version}")
         if existing_slot is not None:
+            normalized = apply_constraint_defaults(dict(existing_slot))
+            # 制約 SSOT 外の passthrough キーは registry の中立既定で補完する
+            # (use_rk4 追加前にデプロイされたスロットとの冪等比較のため)。
+            normalized.setdefault("use_rk4", False)
             existing_normalized = {
                 key: value
-                for key, value in apply_constraint_defaults(dict(existing_slot)).items()
+                for key, value in normalized.items()
                 if key in spec.namespaced_param_keys
             }
             if existing_normalized != release_slot:

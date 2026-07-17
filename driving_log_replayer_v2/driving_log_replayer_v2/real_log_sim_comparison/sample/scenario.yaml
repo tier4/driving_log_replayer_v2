@@ -11,10 +11,13 @@ Evaluation:
     # fit 対象 (current) を comparison_models に明記する (未指定なら比較には出ない)。
     # release: {model: tuned, ...} なら比較への明記なしでもリリースは可能。
     fit: {target: current, stages: [lon, steer, xy, merge]}
-    # release ステージの出力先: v3 ケースを simulator_model.param.yaml の v3 スロットへ
+    # release ステージの出力先: v2 ケースを simulator_model.param.yaml の v2 スロットへ
     # リリースする。model には scenario ケース名か fit 出力 "tuned" を指定。
     # release を省略すると release ステージ (YAML 出力) はスキップされる。
-    release: {model: v3, version: 3}
+    # 注: v3 (L_rel=0.2) は 2026-07-17 に一度リリースしたが、厳格ゲートが許す最大値では
+    # score −1.2% に留まり N-step 平均カーブ上ほぼ同一のため「同等性能はリリースしない」
+    # 判断で撤回。v3 ケースは検討中候補として保持 (下記コメント参照)。
+    release: {model: v2, version: 2}
     # レポート 9 章 (時系列診断) の対象 dataset-id のリスト。指定すると release ケース
     # (未指定時は tuned) のパラメータで状態方程式の左辺・右辺・指令値を各データセットに
     # ついて時系列描画する。省略時は案内のみ。
@@ -168,7 +171,11 @@ Evaluation:
           k_us: 0.018797133899293227
           xy_heading_rate_coeff: 0.0
 
-      # リリース候補 v3: v2 + 実効ステア (タイヤ緩和長 steer_relaxation_length=0.2 m)。
+      # 検討中モデル v3 (リリース撤回 2026-07-17): v2 + 実効ステア (タイヤ緩和長 0.2 m)。
+      # dense 全セル非劣化ゲート (2100 セル) を violation 0 で通過するが、score −1.2% と
+      # N-step 平均カーブ上ほぼ同一のためリリース見送り (同等性能はリリースしない方針)。
+      # L_rel=0.6 なら score −5.35% (yaw@30 mean −4.6%) だが CVaR テール 4 セルが超過 —
+      # テールゲート/目的関数の再設計か、テール (高 ay) に効く追加構造とのセットで再挑戦する。
       # ヨー式が使うステアを τ_rel = L_rel / max(v, 1) の一次遅れでなます (速度依存ラグ)。
       # 根拠 (2026-07-17 残差分析キャンペーン + gate スイープ, analysis.html / gate.py):
       # 1) 構造要求: 計測ステア (SG) の実効ラグ ≈117ms に対しヨー応答は ≈200ms 相当。
