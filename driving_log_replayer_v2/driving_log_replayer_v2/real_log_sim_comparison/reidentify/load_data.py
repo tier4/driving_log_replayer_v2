@@ -120,17 +120,31 @@ def build_rollout_data(
     dfs: dict[str, pd.DataFrame], *,
     acceleration_source: str = "accel",
     steering_source: str = "steer",
+    observation_frame: str = "raw",
 ) -> dict[str, pd.DataFrame]:
-    """Rollout 評価が使う DataFrame 群を組み立てる。"""
+    """Rollout 評価が使う DataFrame 群を組み立てる。
+
+    observation_frame="localization_consistent" のとき、kinematic_state を pose アンカーの
+    整合フレームへ補正してから GT を組み立てる (pose +POSE_LAG_S 前進 / twist vx ×0.996、
+    lib/_localization_observation 参照)。kinematic_* 系の加速度 GT は補正済み vx から導出
+    されるため、cmd→ax→vx→long の縦系チェーンが単一系統で閉じる。velocity トピック
+    (車両側 velocity report) と accel 生トピックは localization 系ではないため補正しない。
+    """
     df_vel = dfs["velocity"].rename(columns={"lon_vel": "vx"})
     from ..lib._accel_source import accel_dataframe_from_source
+    from ..lib._localization_observation import consistent_kinematic_frame, normalize_observation_frame
     from ..lib._steer_source import steer_dataframe_from_source
+
+    frame = normalize_observation_frame(observation_frame)
+    df_kin = dfs["kinematic"]
+    if frame == "localization_consistent":
+        df_kin = consistent_kinematic_frame(df_kin)
 
     df_acc = accel_dataframe_from_source(
         acceleration_source,
         df_accel=dfs["accel"],
         df_vel=dfs["velocity"],
-        df_kin=dfs["kinematic"],
+        df_kin=df_kin,
         out_col="ax",
     )
     df_acc["ay"] = 0.0
@@ -141,7 +155,7 @@ def build_rollout_data(
         "mode": dfs["mode"],
         "vel": df_vel,
         "steer": df_steer,
-        "kin": dfs["kinematic"],
+        "kin": df_kin,
         "acc": df_acc,
         "cmd": df_cmd,
         "gear": dfs["gear"],

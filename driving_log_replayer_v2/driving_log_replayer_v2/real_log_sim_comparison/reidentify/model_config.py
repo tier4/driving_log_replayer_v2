@@ -14,8 +14,10 @@ from .settings import TARGET_MODEL_NAME
 from .settings import TARGET_MODEL_TYPE
 from .settings import TUNED_MODEL_DISPLAY_NAME
 from ..lib._accel_source import normalize_accel_source
+from ..lib._localization_observation import normalize_observation_frame
 from ..lib._steer_source import normalize_steer_source
 from ..lib._vehicle_models import SUPPORTED_VMT
+from .parameter_constraints import PARAMETER_CONSTRAINTS
 
 _SAFE_NAME = re.compile(r"^[A-Za-z0-9_.-]+$")
 
@@ -57,10 +59,16 @@ class ReleaseSpec:
 
 @dataclass(frozen=True)
 class FitSpec:
-    """fit 対象ケース (target) と実行するステージ (連続プレフィックス + 任意 merge)。"""
+    """fit 対象ケース (target) と実行するステージ (連続プレフィックス + 任意 merge)。
+
+    freeze は fit_merge の関節探索から除外するパラメータ名のリスト。凍結されたキーは
+    warm-start (直接同定値 / scenario 初期値) のまま透過される。構造項を無効値 (センチネル 0)
+    に固定して v2 と同じ基本構造で再同定する用途を想定。
+    """
 
     target: str
     stages: tuple[str, ...]
+    freeze: tuple[str, ...] = ()
 
     @property
     def enabled(self) -> bool:
@@ -82,6 +90,10 @@ class ModelConfig:
     fit: FitSpec
     release: ReleaseSpec | None = None
     plot_datasets: tuple[str, ...] = ()
+    # GT フレーム (審判の性質なので model 単位でなく scenario 全体で単一)。
+    # "localization_consistent" で pose–twist を観測モデル同定値で整合させる
+    # (lib/_localization_observation.OBSERVATION_FRAMES 参照)。
+    observation_frame: str = "raw"
 
     def find_case(self, name: str) -> ModelSpec:
         try:
@@ -173,12 +185,17 @@ def load_model_config(path: str | Path) -> ModelConfig:
 
     release = _parse_release(scenario, conditions, models, fit)
     plot_datasets = _parse_plot_dataset(scenario, conditions)
+    try:
+        observation_frame = normalize_observation_frame(conditions.get("observation_frame"))
+    except ValueError as exc:
+        raise ValueError(f"{scenario}: {exc}") from exc
     return ModelConfig(
         models=models,
         comparison_models=comparison_models,
         fit=fit,
         release=release,
         plot_datasets=plot_datasets,
+        observation_frame=observation_frame,
     )
 
 
@@ -195,6 +212,7 @@ def _parse_fit(
     raw_fit = conditions.get("fit")
     target = TARGET_MODEL_NAME
     stages: tuple[str, ...] = FIT_STAGES
+    freeze: tuple[str, ...] = ()
     if raw_fit is not None:
         if not isinstance(raw_fit, dict):
             raise ValueError(f"{scenario}: fit は mapping である必要があります")
@@ -202,6 +220,8 @@ def _parse_fit(
             target = str(raw_fit["target"])
         if "stages" in raw_fit:
             stages = _normalize_fit_stages(scenario, raw_fit["stages"])
+        if raw_fit.get("freeze") is not None:
+            freeze = _normalize_fit_freeze(scenario, raw_fit["freeze"])
 
     if stages:
         if target not in models:
@@ -214,7 +234,24 @@ def _parse_fit(
                 f"{scenario}: fit.target={target!r} の vehicle_model_type は "
                 f"{TARGET_MODEL_TYPE!r} である必要があります"
             )
-    return FitSpec(target=target, stages=stages)
+    return FitSpec(target=target, stages=stages, freeze=freeze)
+
+
+def _normalize_fit_freeze(scenario: Path, raw_freeze: Any) -> tuple[str, ...]:
+    if not isinstance(raw_freeze, list):
+        raise ValueError(f"{scenario}: fit.freeze はパラメータ名のリストが必要です: {raw_freeze!r}")
+    seen: list[str] = []
+    for entry in raw_freeze:
+        name = str(entry)
+        if name not in PARAMETER_CONSTRAINTS:
+            raise ValueError(
+                f"{scenario}: fit.freeze の不明なパラメータ {name!r}"
+                f" (制約登録済み: {sorted(PARAMETER_CONSTRAINTS)})"
+            )
+        if name in seen:
+            raise ValueError(f"{scenario}: fit.freeze に重複があります: {name!r}")
+        seen.append(name)
+    return tuple(seen)
 
 
 def _normalize_fit_stages(scenario: Path, raw_stages: Any) -> tuple[str, ...]:

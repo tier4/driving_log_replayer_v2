@@ -25,11 +25,61 @@
 
 from __future__ import annotations
 
+from typing import Any
+
 import numpy as np
+import pandas as pd
 
 # pose–twist 窓回帰 (2026-07-17, R²=0.73) の同定値。
 POSE_LAG_S = 0.093          # pose の twist に対する実効遅延 [s]
 TWIST_VX_SCALE = 0.996      # v_pose / v_twist (twist が ~0.4% 過大)
+
+# N-step 評価の GT フレーム。
+#   raw                     — 従来どおり localization 出力をそのまま GT に使う
+#   localization_consistent — pose をアンカー (地図固定・変位の真値) とし、観測モデルの
+#                             同定値で pose–twist を運動学的に整合させる:
+#                             pose 系列を +POSE_LAG_S 前進、twist vx を ×TWIST_VX_SCALE。
+#                             raw フレームでは「ax/vx (twist 系) は減速を弱めろ / long (pose 系)
+#                             は強めろ」という矛盾要求が生じ、縦系の構造改善が全て採用ゲートで
+#                             棄却された (2026-07-17 根本原因分析、report 9 章)。
+OBSERVATION_FRAMES = ("raw", "localization_consistent")
+
+
+def normalize_observation_frame(value: Any, *, default: str = "raw") -> str:
+    frame = default if value is None else str(value)
+    if frame not in OBSERVATION_FRAMES:
+        raise ValueError(
+            f"未対応の observation_frame: {frame!r} (対応: {OBSERVATION_FRAMES})"
+        )
+    return frame
+
+
+def consistent_kinematic_frame(
+    df_kin: pd.DataFrame,
+    *,
+    lag_s: float = POSE_LAG_S,
+    twist_scale: float = TWIST_VX_SCALE,
+) -> pd.DataFrame:
+    """kinematic_state を pose アンカーの整合フレームへ補正した copy を返す。
+
+    - pose 系列 (x, y, yaw, pitch) を +lag_s 前進させ、EKF pose の実効遅延を除去する
+    - twist vx を ×twist_scale して pose 変位 (地図アンカー) と積分整合させる
+    wz はジャイロ由来でどちらの系統誤差も持たないため補正しない。yaw は unwrap して
+    補間する (±π 跨ぎ対策) ため、返り値の yaw は unwrap 済み連続系列になる。
+    """
+    df_kin = df_kin.sort_values("t_ns").reset_index(drop=True)
+    out = df_kin.copy()
+    t = df_kin["t_ns"].to_numpy(dtype=np.float64) * 1e-9
+    t_q = t + lag_s
+    for col in ("x", "y", "pitch"):
+        if col in out.columns:
+            out[col] = np.interp(t_q, t, df_kin[col].to_numpy(dtype=np.float64))
+    if "yaw" in out.columns:
+        yaw = np.unwrap(df_kin["yaw"].to_numpy(dtype=np.float64))
+        out["yaw"] = np.interp(t_q, t, yaw)
+    if "vx" in out.columns:
+        out["vx"] = df_kin["vx"].to_numpy(dtype=np.float64) * twist_scale
+    return out
 
 # /localization/acceleration の観測モデル (2026-07-17, 43 datasets 一致)。
 ACCEL_LPF_TAU_S = 0.15      # 一次 LPF 時定数 [s]

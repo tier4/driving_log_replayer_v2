@@ -395,7 +395,7 @@ def test_rollout_gt_cache_is_bounded_to_active_trial(monkeypatch) -> None:
             "sub_dt": 1 / 30,
         },
     )
-    context.data_cache[("accel", "steer")] = {}
+    context.data_cache[("accel", "steer", "raw")] = {}
     monkeypatch.setattr(
         fit_merge.rollout,
         "_prepare_gt",

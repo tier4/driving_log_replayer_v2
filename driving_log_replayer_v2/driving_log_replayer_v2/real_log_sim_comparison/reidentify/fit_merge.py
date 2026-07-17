@@ -13,6 +13,7 @@ import optuna
 import yaml
 
 from ..lib._accel_source import normalize_accel_source
+from ..lib._localization_observation import normalize_observation_frame
 from ..lib._steer_source import normalize_steer_source
 from ..lib._multi_agg import (
     ACT_W,
@@ -69,7 +70,11 @@ _DIRECT_FIT_KEYS = ALL_CONSTRAINED_KEYS
 
 @dataclass
 class DatasetCtx:
-    """1 データセットの rollout 実行コンテキスト。"""
+    """1 データセットの rollout 実行コンテキスト。
+
+    observation_frame は GT フレーム (審判の性質)。scenario 全体で単一の値を取り、
+    この ctx から構築される全ての rollout データ / GT に適用される。
+    """
 
     dataset_id: str
     dfs: dict
@@ -78,15 +83,21 @@ class DatasetCtx:
     data_cache: dict[str, dict] = field(default_factory=dict)
     gt_cache: dict = field(default_factory=dict)
     base_metric: dict = field(default_factory=dict)
+    observation_frame: str = "raw"
 
 
 def _ctx_data(
     ctx: DatasetCtx, acceleration_source: str, steering_source: str = "steer",
 ) -> dict:
-    key = (normalize_accel_source(acceleration_source), normalize_steer_source(steering_source))
+    key = (
+        normalize_accel_source(acceleration_source),
+        normalize_steer_source(steering_source),
+        ctx.observation_frame,
+    )
     if key not in ctx.data_cache:
         ctx.data_cache[key] = build_rollout_data(
             ctx.dfs, acceleration_source=key[0], steering_source=key[1],
+            observation_frame=ctx.observation_frame,
         )
     return ctx.data_cache[key]
 
@@ -105,7 +116,10 @@ def _eval(
     source = normalize_accel_source(acceleration_source)
     steer_source = normalize_steer_source(steering_source)
     data = _ctx_data(ctx, source, steer_source)
-    key = (source, steer_source, *tuple(round(float(params[k]), 9) for k in _GT_KEYS))
+    key = (
+        source, steer_source, ctx.observation_frame,
+        *tuple(round(float(params[k]), 9) for k in _GT_KEYS),
+    )
     gt = ctx.gt_cache.get(key)
     if gt is None:
         gt = rollout._prepare_gt(data, ctx.t0_ns, params)
@@ -248,20 +262,24 @@ def _load_dataset_ctx(
     baseline_params: dict,
     baseline_acceleration_source: str,
     baseline_steering_source: str = "steer",
+    observation_frame: str = "raw",
 ) -> tuple[DatasetCtx | None, str]:
     """1 dataset を読み込み、baseline を検証した結果と失敗理由を返す。"""
     try:
         dfs = read_dataset_csv(csv_path)
+        frame = normalize_observation_frame(observation_frame)
         cache_key = (
             normalize_accel_source(baseline_acceleration_source),
             normalize_steer_source(baseline_steering_source),
+            frame,
         )
         data = build_rollout_data(
             dfs, acceleration_source=cache_key[0], steering_source=cache_key[1],
+            observation_frame=frame,
         )
         t0_ns = rollout.find_autonomous_start(data)
         base = rollout.build_params()
-        ctx = DatasetCtx(ds_id, dfs, t0_ns, base)
+        ctx = DatasetCtx(ds_id, dfs, t0_ns, base, observation_frame=frame)
         ctx.data_cache[cache_key] = data
         ctx.base_metric = _eval(
             ctx,
@@ -288,6 +306,7 @@ _LOAD_BASELINE_MODEL: str = ""
 _LOAD_BASELINE_PARAMS: dict = {}
 _LOAD_BASELINE_ACCEL_SOURCE: str = ""
 _LOAD_BASELINE_STEER_SOURCE: str = "steer"
+_LOAD_OBSERVATION_FRAME: str = "raw"
 
 
 def _load_one(args: tuple[str, Path]) -> tuple[DatasetCtx | None, str]:
@@ -298,6 +317,7 @@ def _load_one(args: tuple[str, Path]) -> tuple[DatasetCtx | None, str]:
         baseline_params=_LOAD_BASELINE_PARAMS,
         baseline_acceleration_source=_LOAD_BASELINE_ACCEL_SOURCE,
         baseline_steering_source=_LOAD_BASELINE_STEER_SOURCE,
+        observation_frame=_LOAD_OBSERVATION_FRAME,
     )
 
 
@@ -309,6 +329,7 @@ def load_datasets(
     baseline_params: dict,
     baseline_acceleration_source: str,
     baseline_steering_source: str = "steer",
+    observation_frame: str = "raw",
 ) -> tuple[list[DatasetCtx], list[dict[str, str]]]:
     """収集された CSV キャッシュを読み込み DatasetCtx を構築する (baseline 誤差も計算)。"""
     if n_jobs <= 1:
@@ -321,6 +342,7 @@ def load_datasets(
                 baseline_params=baseline_params,
                 baseline_acceleration_source=baseline_acceleration_source,
                 baseline_steering_source=baseline_steering_source,
+                observation_frame=observation_frame,
             )
             if ctx is not None:
                 ctxs.append(ctx)
@@ -331,11 +353,12 @@ def load_datasets(
 
     import multiprocessing
 
-    global _LOAD_BASELINE_MODEL, _LOAD_BASELINE_PARAMS, _LOAD_BASELINE_ACCEL_SOURCE, _LOAD_BASELINE_STEER_SOURCE  # noqa: PLW0603
+    global _LOAD_BASELINE_MODEL, _LOAD_BASELINE_PARAMS, _LOAD_BASELINE_ACCEL_SOURCE, _LOAD_BASELINE_STEER_SOURCE, _LOAD_OBSERVATION_FRAME  # noqa: PLW0603
     _LOAD_BASELINE_MODEL = baseline_model_type
     _LOAD_BASELINE_PARAMS = dict(baseline_params or {})
     _LOAD_BASELINE_ACCEL_SOURCE = normalize_accel_source(baseline_acceleration_source)
     _LOAD_BASELINE_STEER_SOURCE = normalize_steer_source(baseline_steering_source)
+    _LOAD_OBSERVATION_FRAME = normalize_observation_frame(observation_frame)
 
     # 呼び出し元が fork 前に set_worker_thread_env_defaults() 済みであること
     # (jemalloc bg thread 保持ロックの fork-time デッドロック対策、fit_plateau.py 参照)。
@@ -422,6 +445,14 @@ def robust_search(
     cur_slope_source = getattr(cur_case, "slope_source", "none")
 
     constraints = search_constraints(FIT_MERGE)
+    # scenario の fit.freeze で指定されたキーは探索空間から除外する。凍結キーは
+    # passthrough (直接同定値 / scenario 初期値) のまま透過される。構造項をセンチネル 0
+    # に固定して基本構造のみで再同定する用途 (v3 再構築, 2026-07-17)。
+    freeze = frozenset(getattr(cfg.fit, "freeze", ()) or ())
+    frozen_searched = sorted(freeze & set(constraints))
+    if frozen_searched:
+        constraints = {k: v for k, v in constraints.items() if k not in freeze}
+        print(f"[fit_merge] fit.freeze により探索から凍結: {frozen_searched}")
     continuous_space = {
         key: constraint.search_bounds
         for key, constraint in constraints.items()
@@ -616,9 +647,11 @@ def _load_ctxs(
     baseline_model_type, baseline_params, baseline_case = resolve_baseline_model(cfg)
     baseline_accel_source = cfg.models[baseline_case].acceleration_source
     baseline_steer_source = cfg.models[baseline_case].steering_source
+    observation_frame = normalize_observation_frame(getattr(cfg, "observation_frame", None))
     print(
         f"[INFO] baseline model = {baseline_model_type} "
-        f"(scenario.yaml の '{baseline_case}' ケース, accel_source={baseline_accel_source})"
+        f"(scenario.yaml の '{baseline_case}' ケース, accel_source={baseline_accel_source}, "
+        f"observation_frame={observation_frame})"
     )
 
     set_worker_thread_env_defaults()
@@ -629,6 +662,7 @@ def _load_ctxs(
         baseline_params=baseline_params,
         baseline_acceleration_source=baseline_accel_source,
         baseline_steering_source=baseline_steer_source,
+        observation_frame=observation_frame,
     )
     if len(ctxs) < 1:
         raise RuntimeError("有効な dataset が 0 件です")
@@ -755,6 +789,8 @@ def build_comparison_document(
         "scenario": str(scenario),
         "fit_stages": list(cfg.fit.stages),
         "fit_target": cfg.fit.target if cfg.fit.enabled else None,
+        "fit_freeze": sorted(getattr(cfg.fit, "freeze", ()) or ()),
+        "observation_frame": normalize_observation_frame(getattr(cfg, "observation_frame", None)),
         "score_horizons": list(HORIZONS),
         # objective v3: worst 項は CVaR@90% (上位 10% 平均) を使い、yaw/long/lat の
         # フロアは baseline 分布 p10 の horizon 別テーブルに再校正する。
