@@ -13,6 +13,7 @@
 # limitations under the License.
 
 import json
+import os
 from pathlib import Path
 
 from ament_index_python.packages import get_package_prefix
@@ -204,7 +205,7 @@ def launch_bag_recorder(context: LaunchContext) -> list:
     record_cmd = [
         "ros2",
         "bag",
-        "record",
+        "record_agnocast" if os.getenv("ENABLE_AGNOCAST") == "1" else "record",
         "-s",
         conf["storage"],
         "-o",
