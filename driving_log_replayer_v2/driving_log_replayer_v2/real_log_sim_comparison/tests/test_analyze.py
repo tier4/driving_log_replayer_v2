@@ -6,6 +6,7 @@ import pytest
 
 from driving_log_replayer_v2.real_log_sim_comparison.reidentify.analyze import (
     conditioned,
+    gt_quality,
     pitch_sign,
     regime,
     steady_state,
@@ -177,6 +178,50 @@ def test_regime_split_detects_brake_bias() -> None:
     assert ax30.loc["brake", "mean"] == pytest.approx(0.2, abs=0.03)
     assert abs(ax30.loc["throttle", "mean"]) < 0.03
     assert ax30.loc["brake", "mean_ci_lo"] > ax30.loc["throttle", "mean_ci_hi"]
+
+
+def test_rts_smoother_beats_wide_savgol_on_transients() -> None:
+    """RTS は広窓 savgol より過渡忠実 (積分整合) かつノイズを抑えられる。"""
+    rng = np.random.default_rng(3)
+    dt = 0.01
+    n = 6000
+    t = np.arange(n) * dt
+    # ブレーキ様の鋭い減速パルスを含む真の加速度。
+    a_true = 0.4 * np.sin(2 * np.pi * 0.1 * t)
+    a_true[2000:2150] -= 1.5
+    v_true = 8.0 + np.cumsum(a_true) * dt
+    vx_meas = v_true + rng.normal(0.0, 0.03, n)
+
+    a_rts = gt_quality.rts_smooth_accel(vx_meas, dt, q_jerk=0.2)
+    a_sg = gt_quality._savgol_deriv_window(vx_meas, dt, 0.4)
+
+    # q=0.2 は現行 savgol 0.4 s を過渡・雑音の両軸で支配する (合成検証 2026-07-17)。
+    pulse = slice(1950, 2250)
+    calm = slice(3000, 5000)
+    rmse_rts = float(np.sqrt(np.mean((a_rts[pulse] - a_true[pulse]) ** 2)))
+    rmse_sg = float(np.sqrt(np.mean((a_sg[pulse] - a_true[pulse]) ** 2)))
+    noise_rts = float(np.std(a_rts[calm] - a_true[calm]))
+    noise_sg = float(np.std(a_sg[calm] - a_true[calm]))
+    assert rmse_rts < rmse_sg
+    assert noise_rts < noise_sg * 1.05
+
+
+def test_integral_consistency_penalizes_smoothing_loss() -> None:
+    """減衰した GT は Δv 整合性誤差が大きく出る。"""
+    dt = 0.01
+    n = 4000
+    a_true = np.zeros(n)
+    a_true[1000:1150] = -2.0
+    vx = 8.0 + np.cumsum(a_true) * dt
+    a_cmd = a_true.copy()
+    gear = np.ones(n, dtype=bool)
+    masks = gt_quality._regime_masks(a_cmd, gear, dt, 1.0)
+    exact = gt_quality._integral_consistency(a_true, vx, dt, 1.0, masks)
+    damped = gt_quality._integral_consistency(0.7 * a_true, vx, dt, 1.0, masks)
+    # サンプリング規約の O(dt) 差のみ許容し、減衰 GT との 1 桁以上の分離を確認する。
+    assert exact["brake"] < 0.02
+    assert damped["brake"] > 0.1
+    assert damped["brake"] > 5 * exact["brake"]
 
 
 def test_lowpass_separates_slow_component() -> None:
