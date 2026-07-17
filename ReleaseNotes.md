@@ -1,5 +1,15 @@
 # Release Notes
 
+## Version 3.18.7
+
+Minor Tweak
+
+| Module             | Feature      | Brief summary                                               | Pull request                                                        | Contributor                                   |
+| ------------------ | ------------ | ----------------------------------------------------------- | ------------------------------------------------------------------- | --------------------------------------------- |
+| `common`           | rosbag       | support agnocast for rosbag record                          | [#386](https://github.com/tier4/driving_log_replayer_v2/issues/386) | [MasatoSaeki](https://github.com/MasatoSaeki) |
+| `planning_control` | internal cli | wire auto-tackle-stuck CLI and remove post-engage pose push | [#391](https://github.com/tier4/driving_log_replayer_v2/issues/391) | [xtk8532704](https://github.com/xtk8532704)   |
+| `config`           | save topic   | record_profile                                              | [#390](https://github.com/tier4/driving_log_replayer_v2/issues/390) | [xtk8532704](https://github.com/xtk8532704)   |
+
 ## Version 3.18.6
 
 Minor Tweak
