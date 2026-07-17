@@ -45,3 +45,7 @@ RELEASE_MODEL_KEY = TARGET_MODEL_TYPE
 
 # Differentiated velocity source for longitudinal acceleration fitting.
 ACCEL_SOURCE = "kinematic_savgol"
+
+# pitch の勾配成分 (低域) とサスペンション成分 (ダイブ/スクワット、a_cmd と交絡) の
+# 分離カットオフ。残差スペクトル分析 (2026-07) で系統残差の主部が <0.1 Hz にあることに合わせる。
+PITCH_LF_CUTOFF_HZ = 0.1

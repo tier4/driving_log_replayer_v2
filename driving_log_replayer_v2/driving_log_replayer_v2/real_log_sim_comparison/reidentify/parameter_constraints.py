@@ -187,11 +187,56 @@ PARAMETER_CONSTRAINTS: dict[str, ParameterConstraint] = {
         direct_fit_bounds=(-0.005, 0.05),
         optimization_stages=frozenset({FIT_XY}),
     ),
+    # ---- v3 構造項 (2026-07-17 残差分析キャンペーンの証拠に基づく。analysis.html 参照) ----
+    # 定常マップで throttle ゲイン ≈1.0 / brake ゲイン ≈0.7 の非対称を確認。単一項スクリーニング
+    # (gate screen, dev 248) では brake ゲイン単独変更 (0.7) が N=30 long/pos cvar を +13〜19%
+    # 悪化させた — 定常ゲインだけ弱めると応答の形が崩れるため、brake は gain と τ の同時同定が
+    # 必須。よって直接値の手動指定ではなく fit_merge の関節探索対象として登録する。
+    # 全 default=0.0 (センチネル/無効) で v2 と bit 一致。
+    "lon_drag_c0": ParameterConstraint(
+        "lon_drag_c0",
+        "転がり抵抗相当の定数減速度 [m/s²]。0 で無効 (v2 と bit 一致)。物理オーダ (μ_rr·g) に制限。",
+        search_bounds=(0.0, 0.3), default=0.0,
+        optimization_stages=frozenset({FIT_MERGE}),
+    ),
+    "lon_drag_c2": ParameterConstraint(
+        "lon_drag_c2",
+        "空力抵抗係数 [1/m] (減速度 = c2·v²)。0 で無効。15 m/s で ≤0.45 m/s² となる範囲に制限。",
+        search_bounds=(0.0, 0.002), default=0.0,
+        optimization_stages=frozenset({FIT_MERGE}),
+    ),
+    "brake_time_constant": ParameterConstraint(
+        "brake_time_constant",
+        "減速指令時の一次遅れ時定数 [s]。0 はセンチネル (acc_time_constant を継承 = v2 と同挙動)。"
+        "0 近傍の正値は MIN_TIME_CONSTANT へクランプされる (センチネルとの不連続に注意)。",
+        search_bounds=(0.0, 1.5), default=0.0,
+        optimization_stages=frozenset({FIT_MERGE}),
+    ),
+    "brake_scaling_factor": ParameterConstraint(
+        "brake_scaling_factor",
+        "減速指令時の scaling。0 はセンチネル (debug_acc_scaling_factor を継承 = v2 と同挙動)。"
+        "定常マップの brake ゲイン実測 ≈0.69–0.72 を含む範囲に制限。",
+        search_bounds=(0.0, 1.1), default=0.0,
+        optimization_stages=frozenset({FIT_MERGE}),
+    ),
 }
 
 
 DIRECT_FIT_STAGES: tuple[str, ...] = (FIT_LON, FIT_STEER, FIT_XY)
 ALL_CONSTRAINED_KEYS: frozenset[str] = frozenset(PARAMETER_CONSTRAINTS)
+# default を持たない制約キー。ステージ成果物 (phase artifact) はこの集合を必ず含むこと。
+# default を持つキーは省略可で、apply_constraint_defaults() が補完する。
+REQUIRED_ARTIFACT_KEYS: frozenset[str] = frozenset(
+    name for name, constraint in PARAMETER_CONSTRAINTS.items() if constraint.default is None
+)
+
+
+def apply_constraint_defaults(params: dict) -> dict:
+    """default を持つ制約キーを setdefault で補完する (in-place、戻り値は同じ dict)。"""
+    for name, constraint in PARAMETER_CONSTRAINTS.items():
+        if constraint.default is not None:
+            params.setdefault(name, constraint.default)
+    return params
 
 
 def stage_targets(stage: str) -> frozenset[str]:

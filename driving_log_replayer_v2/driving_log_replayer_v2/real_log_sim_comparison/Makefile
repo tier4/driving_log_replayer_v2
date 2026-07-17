@@ -9,15 +9,11 @@ ROS_SETUP ?= /opt/ros/humble/setup.bash
 PYTHON ?= python3
 PYTHONPATH_PREFIX := $(abspath $(MAKEFILE_DIR)/../..)
 
-MULTI_BATCH_ROOT ?= /home/kotaroyoshimoto/data/openloop_j6_16_onwards
-LOCAL_SAMPLE_DIR ?= $(MAKEFILE_DIR)/sample
-LOCAL_SCENARIO ?= $(LOCAL_SAMPLE_DIR)/scenario.yaml
-
-ROOT ?= $(MULTI_BATCH_ROOT)
-SCENARIO ?= $(LOCAL_SCENARIO)
+ROOT ?= /home/kotaroyoshimoto/data/openloop_j6_16_onwards
+SCENARIO ?= $(MAKEFILE_DIR)/sample/scenario.yaml
 INPUT_PARAM ?= $(WS_ROOT)/src/description/vehicle/j6_gen2_description/j6_gen2_description/config/simulator_model.param.yaml
 N_TRIALS ?= 160
-N_JOBS ?= $(or $(REAL_LOG_SIM_COMPARISON_JOBS),32)
+N_JOBS ?= 32
 FORCE ?= 0
 NO_SETUP ?= 0
 
@@ -38,7 +34,13 @@ endif
 
 FORCE_EXTRACT := $(if $(filter 1 true TRUE yes YES,$(FORCE)),--force-extract,)
 
-.PHONY: help reidentify report
+.PHONY: help reidentify report analyze
+
+# 分析対象ケースとステージ (make analyze 用)。
+ANALYZE_CASE ?= v2
+# oracle は重い (dataset ごとに ~60 rollout 評価) ため既定から外す。
+# 必要時: make analyze ANALYZE_STAGES=oracle,tail,report
+ANALYZE_STAGES ?= split,pitch-sign,traces,conditioned,regime,steady,tail,etfe,report
 
 help:
 	@echo "車両モデル再同定"
@@ -58,11 +60,13 @@ help:
 	@echo ""
 	@echo "任意変数:"
 	@echo "  N_TRIALS=$(N_TRIALS) N_JOBS=$(N_JOBS) FORCE=$(FORCE) NO_SETUP=$(NO_SETUP)"
-	@echo "  従来互換: MULTI_BATCH_ROOT→ROOT, LOCAL_SCENARIO/LOCAL_SAMPLE_DIR→SCENARIO, REAL_LOG_SIM_COMPARISON_JOBS→N_JOBS"
 	@echo ""
 	@echo "成果物: <ROOT>/reidentify/{phase1_acc.yaml,phase2_steer.yaml,phase3_xy.yaml,tuned_params.yaml,metrics.csv,report.html,simulator_model.param.yaml}"
 	@echo ""
-	@echo "  make report  # 既存成果物から report.html だけを再生成 (fit 再実行なし)"
+	@echo "  make report   # 既存成果物から report.html だけを再生成 (fit 再実行なし)"
+	@echo "  make analyze  # 残差分析キャンペーン (v3 構造仮説の証拠収集、reidentify 非破壊)"
+	@echo "                # 変数: ANALYZE_CASE=$(ANALYZE_CASE) ANALYZE_STAGES=$(ANALYZE_STAGES)"
+	@echo "                # 成果物: <ROOT>/reidentify/analysis/"
 
 reidentify:
 	@test -n "$(strip $(ROOT))" || { echo "[ERROR] ROOT is required"; exit 2; }
@@ -82,6 +86,23 @@ reidentify:
 		$(if $(wildcard $(INPUT_PARAM)),--input-param "$(INPUT_PARAM)",) \
 		--n-trials "$(N_TRIALS)" \
 		--n-jobs "$(N_JOBS)" $(FORCE_EXTRACT)
+
+analyze:
+	@test -n "$(strip $(ROOT))" || { echo "[ERROR] ROOT is required"; exit 2; }
+	@test -n "$(strip $(SCENARIO))" || { echo "[ERROR] SCENARIO is required"; exit 2; }
+	@test -d "$(ROOT)/datasets" || { echo "[ERROR] datasets directory not found: $(ROOT)/datasets"; exit 2; }
+	@test -f "$(SCENARIO)" || { echo "[ERROR] scenario not found: $(SCENARIO)"; exit 2; }
+	@if [ "$(NO_SETUP)" != "1" ]; then \
+		test -f "$(ROS_SETUP)" || { echo "[ERROR] ROS setup not found: $(ROS_SETUP)"; exit 2; }; \
+		test -f "$(SETUP_BASH)" || { echo "[ERROR] ROS setup not found: $(SETUP_BASH) (build the workspace or use NO_SETUP=1)"; exit 2; }; \
+	fi
+	@echo "[INFO] analyze: 残差分析キャンペーン (stages=$(ANALYZE_STAGES), case=$(ANALYZE_CASE))"
+	$(RUN_PY) -m driving_log_replayer_v2.real_log_sim_comparison.reidentify.analyze.pipeline \
+		--root "$(ROOT)" \
+		--scenario "$(SCENARIO)" \
+		--case "$(ANALYZE_CASE)" \
+		--stages "$(ANALYZE_STAGES)" \
+		--n-jobs "$(N_JOBS)"
 
 report:
 	@test -n "$(strip $(ROOT))" || { echo "[ERROR] ROOT is required"; exit 2; }

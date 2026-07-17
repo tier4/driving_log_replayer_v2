@@ -56,7 +56,7 @@ def build_resampled(
     """
     同定用の信号を一定周期のグリッドへ補間する。
 
-    戻り値: {a_cmd, a_act, d_cmd, d_act, v_cmd, vx, wz, gear_drive} (float32配列) | None。
+    戻り値: {a_cmd, a_act, d_cmd, d_act, v_cmd, vx, wz, pitch, gear_drive} (float32配列) | None。
     """
     df_cmd = dfs["cmd"]
     df_accel = dfs["accel"]
@@ -94,6 +94,11 @@ def build_resampled(
     d_act = np.interp(t_s, (df_steer["t_ns"].values - t0) * 1e-9, df_steer["steer"].values)
     vx = np.interp(t_s, (df_vel["t_ns"].values - t0) * 1e-9, df_vel["lon_vel"].values)
     wz = np.interp(t_s, (df_kin["t_ns"].values - t0) * 1e-9, df_kin["wz"].values)
+    if "pitch" in df_kin.columns:
+        pitch = np.interp(t_s, (df_kin["t_ns"].values - t0) * 1e-9, df_kin["pitch"].values)
+    else:
+        # 旧スキーマの CSV キャッシュ互換 (pitch 列なし)。
+        pitch = np.zeros_like(t_s)
     gear_drive = require_drive_gear_mask(
         df_gear, t_ns.astype(np.int64), context=context, allow_leading_gap=True,
     )
@@ -106,6 +111,7 @@ def build_resampled(
         "v_cmd": v_cmd.astype(np.float32),
         "vx": vx.astype(np.float32),
         "wz": wz.astype(np.float32),
+        "pitch": pitch.astype(np.float32),
         "gear_drive": gear_drive,
     }
 

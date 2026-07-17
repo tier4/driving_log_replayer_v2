@@ -153,6 +153,49 @@ def test_rollout_include_mean_returns_signed_errors(monkeypatch) -> None:
     assert metrics["steer"] == pytest.approx(abs(metrics["steer_mean"]))
 
 
+def test_terminal_errors_match_signed_error_convention(monkeypatch) -> None:
+    """eval_rollout_terminal_errors は include_mean と同じ署名規約 (err = GT - sim)。"""
+    monkeypatch.setattr(rollout, "VehicleModel", _FakeVehicleModelUndershoot)
+
+    df = rollout.eval_rollout_terminal_errors(
+        data={},
+        t0_ns=0,
+        params={"steer_bias": 0.0},
+        model_type="delay_steer_acc_geared_for_diffusion_planner",
+        horizons=(1,),
+        stride=1,
+        gt=_ground_truth(),
+    )
+
+    assert list(df.columns) == list(rollout.TERMINAL_ERROR_COLUMNS)
+    assert len(df) == 1
+    row = df.iloc[0]
+    assert row["horizon"] == 1
+    assert row["err_steer_deg"] == pytest.approx(np.degrees(0.02))
+    assert row["err_vx"] == pytest.approx(0.5)
+    assert row["err_ax"] == pytest.approx(0.1)
+    # フェイク GT に pitch が無い場合はゼロ埋めで動作する。
+    assert row["pitch_mean"] == pytest.approx(0.0)
+    assert row["pitch_lf_mean"] == pytest.approx(0.0)
+
+
+def test_terminal_errors_empty_when_no_valid_start(monkeypatch) -> None:
+    monkeypatch.setattr(rollout, "VehicleModel", _FakeVehicleModel)
+
+    df = rollout.eval_rollout_terminal_errors(
+        data={},
+        t0_ns=0,
+        params={"steer_bias": 0.0},
+        model_type="delay_steer_acc_geared_for_diffusion_planner",
+        horizons=(1,),
+        stride=1,
+        gt=_ground_truth(vx=0.0),
+    )
+
+    assert df.empty
+    assert list(df.columns) == list(rollout.TERMINAL_ERROR_COLUMNS)
+
+
 def test_rollout_include_mean_marks_invalid_horizon_as_infinite(monkeypatch) -> None:
     monkeypatch.setattr(rollout, "VehicleModel", _FakeVehicleModel)
 

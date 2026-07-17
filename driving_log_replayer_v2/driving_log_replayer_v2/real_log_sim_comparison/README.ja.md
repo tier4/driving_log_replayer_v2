@@ -28,11 +28,6 @@ make reidentify \
 - `SCENARIO`: `sample/scenario.yaml`
 - `INPUT_PARAM`: `<WS_ROOT>/src/description/vehicle/j6_gen2_description/j6_gen2_description/config/simulator_model.param.yaml`
 
-従来の環境変数も互換入力として利用できます。`MULTI_BATCH_ROOT` は `ROOT`、
-`LOCAL_SCENARIO` は `SCENARIO`、`LOCAL_SAMPLE_DIR` はその配下の `scenario.yaml`、
-`REAL_LOG_SIM_COMPARISON_JOBS` は `N_JOBS` のフォールバックになります。
-新しい変数が設定されている場合は新しい変数を優先します。
-
 任意変数は `N_TRIALS=160`、`N_JOBS=32`、`FORCE=0` です。
 既存の `reidentify_cache.csv` を作り直す場合だけ `FORCE=1` を指定します。
 通常はワークスペースの `install/setup.bash` を自動で読み込みます。すでに必要な環境が
@@ -89,9 +84,7 @@ fit を完走済みで report だけ作り直したい場合（scenario 表示�
 N≈20 までに定常値へ飽和するプラトー特性を持つため、過渡とプラトーの代表 2 点で足ります。
 定義式は report.html の「評価関数の定義」を参照）。worst 側テールは単一最悪値（max）でなく
 CVaR@90%（正規化比の上位 10% の平均）で評価し、正規化フロアは baseline 誤差分布の p10 を
-horizon 別に採用します（objective v3）。旧目的関数の値は `score_v2`（v2: レガシーフロア +
-max + アクチュエータ項）と `score_legacy`（v1: 同 + アクチュエータ項なし）として
-`tuned_params.yaml` に併記され、過去ランとの非退行監査に使えます。レポート用指標は
+horizon 別に採用します（objective v3）。レポート用指標は
 データが保証される N=1〜300 を1刻みで出力します。`report.html` はメトリクスごとの誤差推移を
 その CSV から描画し、同じ文書内で CSV キャッシュを一度だけ読んで縦方向・操舵・ヨー (`k_us`)・
 x/y 方程式残差も評価します。N-step 指標のロールアウトは再計算しません。scenario の
@@ -136,3 +129,52 @@ steer 終端状態は steer 系のみ、ax 終端状態は acc 系のみに依�
 系統別の 3・4 章にまとめています。
 
 scenario の最小契約と成果物の詳細は [`reidentify/README.md`](reidentify/README.md) を参照してください。
+
+## 残差分析キャンペーン（make analyze）
+
+v3 以降の構造仮説を証拠付きで確定させるための分析ステージ群です。`make reidentify` の
+成果物・挙動には影響せず、成果物は `<ROOT>/reidentify/analysis/`（analysis.html ほか）に
+出力されます。
+
+```bash
+make analyze                     # 既定: split,pitch-sign,traces,conditioned,regime,steady,tail,etfe,report
+make analyze ANALYZE_STAGES=oracle,report   # 重い per-dataset oracle のみ追加実行
+```
+
+- `split` — dataset_id の sha1 による dev/holdout 決定的分割（分析・fit は dev、最終判定は holdout 併用）
+- `pitch-sign` — コースト区間回帰による pitch 符号規約の検証（slope 給電の前提）
+- `traces` — per-start 署名付き N-step 終端誤差の抽出（`rollout.eval_rollout_terminal_errors`）
+- `conditioned` — 特徴量条件付き残差（2 段集計 + bootstrap CI + BH 補正）と反実仮想 RMSE 予測
+- `regime` — 縦レジーム分割評価（brake / coast / throttle 別の RMSE・バイアス）
+- `steady` — 定常 Hammerstein マップ（静的ゲインの非線形・非対称の直接推定）
+- `oracle` — per-dataset scaling oracle（構造欠落 vs 個体差の切り分け、重い）
+- `tail` — CVaR テールの走行条件特性（metrics.csv から、追加 rollout なし）
+- `etfe` — cmd→achieved 周波数応答の適合性チェック（閉ループバイアスのため同定には不使用）
+
+## 採用ゲート（reidentify.gate）
+
+v2 採用時に手作業だったセル別非劣化判定（mean/cvar × horizon × 指標が参照モデル比
++2% 以内）を成文化した CLI です。
+
+```bash
+# metrics.csv からのリリース級判定（dense horizon）
+python3 -m ...reidentify.gate metrics --metrics <ROOT>/reidentify/metrics.csv \
+  --candidate tuned --reference v2
+
+# パラメータ上書き候補の速報スクリーニング（score horizon のみ、直接 rollout）
+python3 -m ...reidentify.gate screen --root <ROOT> --scenario sample/scenario.yaml \
+  --case v2 --set brake_scaling_factor=0.8 --slope-source pitch --n-jobs 32 --splits dev
+```
+
+## SLOPE_ACCX 給電（slope_source）と v3 構造項
+
+scenario の各 case は `slope_source: none|pitch` を持てます。`pitch` のとき rollout は
+`+g·sin(pitch_lf)`（localization pitch の <0.1 Hz 成分、符号はコースト回帰で検証済み）を
+SLOPE_ACCX に給電します。実機経路（simple_planning_simulator の
+`enable_road_slope_simulation`）は実勾配を給電しているため、`none`（従来）は
+「無勾配で同定し勾配ありの sim にリリースする」系統不整合を含む点に注意してください。
+
+モデルには v3 構造項として `lon_drag_c0` / `lon_drag_c2`（走行抵抗、VX 右辺）、
+`brake_time_constant` / `brake_scaling_factor`（減速指令時の非対称応答、<=0 は対称値継承の
+センチネル）が追加されています（両シミュレータ実装 + wrapper `_v3`/`_v2` 新シンボル、
+中立値で v2 と bit 一致）。探索・検証域の SSOT は `reidentify/parameter_constraints.py`。

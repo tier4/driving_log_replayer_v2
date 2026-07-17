@@ -121,6 +121,10 @@ def release(
     param_data, ros_params = _load_input_document(Path(input_param))
     model_params = ros_params[RELEASE_MODEL_KEY]
     spec = get_vehicle_model_spec(TARGET_MODEL_TYPE)
+    # 制約 default を持つキー (v3 構造項等) は省略可 — 中立値で明示補完してスロットへ書く。
+    from .parameter_constraints import apply_constraint_defaults  # noqa: PLC0415
+
+    params = apply_constraint_defaults(dict(params))
     required = spec.namespaced_param_keys | GLOBAL_PARAM_KEYS.keys()
     missing = required - params.keys()
     if missing:
@@ -130,14 +134,21 @@ def release(
 
     # 固定ケースのリリースは既存の確定バージョン (入力 YAML の v1 等) を黙って潰さない。
     # 同一内容の再リリース (リリース適用済み入力でのパイプライン再実行) は冪等として許可する。
+    # 比較は default 正規化後に行う (旧スロットに新キーが無くても中立値なら同一内容とみなす)。
     # tuned は Optuna がビット同一の再現を保証しないため冪等ガードを外し、上書きを許可する。
     if not is_tuned:
         existing_slot = model_params.get(f"v{version}")
-        if existing_slot is not None and existing_slot != release_slot:
-            raise ValueError(
-                f"Input already contains 'v{version}' with different values; "
-                "choose an unused release.version."
-            )
+        if existing_slot is not None:
+            existing_normalized = {
+                key: value
+                for key, value in apply_constraint_defaults(dict(existing_slot)).items()
+                if key in spec.namespaced_param_keys
+            }
+            if existing_normalized != release_slot:
+                raise ValueError(
+                    f"Input already contains 'v{version}' with different values; "
+                    "choose an unused release.version."
+                )
 
     for model_key, ros_key in GLOBAL_PARAM_KEYS.items():
         ros_params[ros_key] = params[model_key]

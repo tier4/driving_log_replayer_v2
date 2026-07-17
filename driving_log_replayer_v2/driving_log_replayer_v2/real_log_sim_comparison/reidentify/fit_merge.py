@@ -40,6 +40,8 @@ from .parameter_constraints import (
     ALL_CONSTRAINED_KEYS,
     PARAMETER_CONSTRAINTS,
     FIT_MERGE,
+    REQUIRED_ARTIFACT_KEYS,
+    apply_constraint_defaults,
     build_constraint_audit,
     clamp_search_parameters,
     search_constraints,
@@ -91,12 +93,13 @@ def _ctx_data(
 
 def _eval(
     ctx: DatasetCtx, override: dict, model_type: str, acceleration_source: str = "accel",
-    steering_source: str = "steer",
+    steering_source: str = "steer", slope_source: str = "none",
     *, horizons: tuple[int, ...] = HORIZONS, include_mean: bool = False,
 ) -> dict:
     """1 dataset・1 パラメータ組の horizon 別終端誤差 RMSE {h: {yaw,pos,long,lat,steer}}。
 
     include_mean=True のとき署名付き平均誤差 (MEAN_METRIC_KEYS) も含む (診断用)。
+    slope_source は SLOPE_ACCX の給電ソース (GT には影響しないため gt_cache キー外)。
     """
     params = merge_vehicle_model_params(ctx.base, override, model_type)
     source = normalize_accel_source(acceleration_source)
@@ -111,7 +114,7 @@ def _eval(
         ctx.gt_cache = {key: gt}
     rmse = rollout.eval_rollout_rmse(
         data, ctx.t0_ns, params, model_type, horizons=horizons, stride=ROLLOUT_STRIDE, gt=gt,
-        include_mean=include_mean,
+        include_mean=include_mean, slope_source=slope_source,
     )
     return {h: rmse[h] for h in horizons}
 
@@ -162,6 +165,7 @@ def _evaluate_report_metrics(
     tuned_model_type: str,
     tuned_acceleration_source: str,
     tuned_steering_source: str = "steer",
+    tuned_slope_source: str = "none",
     horizons: tuple[int, ...] = REPORT_HORIZONS,
 ) -> tuple[dict[str, dict], dict[str, dict]]:
     """Evaluate dense report-only horizons without changing the search score."""
@@ -182,6 +186,7 @@ def _evaluate_report_metrics(
             tuned_model_type,
             tuned_acceleration_source,
             tuned_steering_source,
+            tuned_slope_source,
             horizons=horizons,
         )
         if not _rollout_metric_is_finite(baseline_metric, horizons):
@@ -199,17 +204,17 @@ def _evaluate_report_metrics(
 
 def _evaluate_comparison_report_metrics(
     ctxs: list[DatasetCtx],
-    comparison_cases: list[tuple[str, dict, str, str, str]],
+    comparison_cases: list[tuple[str, dict, str, str, str, str]],
     *,
     horizons: tuple[int, ...] = REPORT_HORIZONS,
 ) -> dict[str, dict[str, dict]]:
     """Evaluate every scenario comparison case at the dense report horizons."""
     results: dict[str, dict[str, dict]] = {}
-    for name, params, model_type, acceleration_source, steering_source in comparison_cases:
+    for name, params, model_type, acceleration_source, steering_source, slope_source in comparison_cases:
         per_dataset: dict[str, dict] = {}
         for ctx in ctxs:
             metric = _eval(
-                ctx, params, model_type, acceleration_source, steering_source,
+                ctx, params, model_type, acceleration_source, steering_source, slope_source,
                 horizons=horizons,
             )
             if not _rollout_metric_is_finite(metric, horizons):
@@ -233,22 +238,6 @@ def _finite_robust_score(aggregate: dict | None) -> float:
     v3 フロア (FLOOR_TABLE) で正規化した aggregate を渡すこと。
     """
     return _finite_score(aggregate, act_horizons=ACT_SCORE_HORIZONS, worst_stat="cvar")
-
-
-def _finite_v2_score(legacy_aggregate: dict | None) -> float:
-    """objective v2 の厳密再現 (レガシーフロア + worst=max + act 項)。非退行監査用。
-
-    レガシーフロア (legacy_floors=True) の aggregate を渡すこと。
-    """
-    return _finite_score(legacy_aggregate, act_horizons=ACT_SCORE_HORIZONS)
-
-
-def _finite_v1_score(legacy_aggregate: dict | None) -> float:
-    """objective v1 の厳密再現 (レガシーフロア + worst=max、yaw/long/lat のみ)。監査用。
-
-    レガシーフロア (legacy_floors=True) の aggregate を渡すこと。
-    """
-    return _finite_score(legacy_aggregate)
 
 
 def _load_dataset_ctx(
@@ -374,11 +363,15 @@ def _evaluate_candidate(
     model_type: str,
     acceleration_source: str,
     steering_source: str = "steer",
+    slope_source: str = "none",
     *,
     aggregate: bool = True,
 ) -> dict | list[tuple[str, dict]] | None:
     per_dataset = [
-        (ctx.dataset_id, _eval(ctx, params, model_type, acceleration_source, steering_source))
+        (
+            ctx.dataset_id,
+            _eval(ctx, params, model_type, acceleration_source, steering_source, slope_source),
+        )
         for ctx in ctxs
     ]
     if not all(_rollout_metric_is_valid(metric) for _, metric in per_dataset):
@@ -395,6 +388,7 @@ _SEARCH_CTXS: list[DatasetCtx] = []
 _SEARCH_MODEL = ""
 _SEARCH_ACCEL_SOURCE = ""
 _SEARCH_STEER_SOURCE = "steer"
+_SEARCH_SLOPE_SOURCE = "none"
 
 
 def _eval_search_candidate(params: dict) -> float:
@@ -406,6 +400,7 @@ def _eval_search_candidate(params: dict) -> float:
             _SEARCH_MODEL,
             _SEARCH_ACCEL_SOURCE,
             _SEARCH_STEER_SOURCE,
+            _SEARCH_SLOPE_SOURCE,
         )
     )
 
@@ -415,7 +410,7 @@ def robust_search(
     direct_fit_params: dict,
 ) -> dict:
     """Optuna TPE でデータセット横断ロバスト最適化する。"""
-    global _SEARCH_CTXS, _SEARCH_MODEL, _SEARCH_ACCEL_SOURCE, _SEARCH_STEER_SOURCE  # noqa: PLW0603
+    global _SEARCH_CTXS, _SEARCH_MODEL, _SEARCH_ACCEL_SOURCE, _SEARCH_STEER_SOURCE, _SEARCH_SLOPE_SOURCE  # noqa: PLW0603
 
     if n_trials < 1:
         raise ValueError("n_trials must be at least 1")
@@ -424,6 +419,7 @@ def robust_search(
     cur_model = cur_case.vehicle_model_type
     cur_accel_source = cur_case.acceleration_source
     cur_steer_source = getattr(cur_case, "steering_source", "steer")
+    cur_slope_source = getattr(cur_case, "slope_source", "none")
 
     constraints = search_constraints(FIT_MERGE)
     continuous_space = {
@@ -468,7 +464,9 @@ def robust_search(
             )
         return clamp_search_parameters(eq, FIT_MERGE)
 
-    init_agg = _evaluate_candidate(ctxs, cur_best, cur_model, cur_accel_source, cur_steer_source)
+    init_agg = _evaluate_candidate(
+        ctxs, cur_best, cur_model, cur_accel_source, cur_steer_source, cur_slope_source,
+    )
     init_score = _finite_robust_score(init_agg)
     if not searched:
         print("[fit_merge] 最適化対象がないため、直接同定値 / scenario 初期値を使用")
@@ -505,6 +503,7 @@ def robust_search(
             _SEARCH_MODEL = cur_model
             _SEARCH_ACCEL_SOURCE = cur_accel_source
             _SEARCH_STEER_SOURCE = cur_steer_source
+            _SEARCH_SLOPE_SOURCE = cur_slope_source
             executor = ProcessPoolExecutor(
                 max_workers=n_workers,
                 mp_context=multiprocessing.get_context("fork"),
@@ -517,7 +516,10 @@ def robust_search(
             if executor is None:
                 scores = [
                     _finite_robust_score(
-                        _evaluate_candidate(ctxs, params, cur_model, cur_accel_source, cur_steer_source)
+                        _evaluate_candidate(
+                            ctxs, params, cur_model, cur_accel_source, cur_steer_source,
+                            cur_slope_source,
+                        )
                     )
                     for params in candidates
                 ]
@@ -548,7 +550,10 @@ def robust_search(
                     executor = None
                     scores = [
                         _finite_robust_score(
-                            _evaluate_candidate(ctxs, params, cur_model, cur_accel_source, cur_steer_source)
+                            _evaluate_candidate(
+                                ctxs, params, cur_model, cur_accel_source, cur_steer_source,
+                                cur_slope_source,
+                            )
                         )
                         for params in candidates
                     ]
@@ -569,6 +574,7 @@ def robust_search(
         _SEARCH_CTXS = []
         _SEARCH_MODEL = ""
         _SEARCH_ACCEL_SOURCE = ""
+        _SEARCH_SLOPE_SOURCE = "none"
 
     if not math.isfinite(best_score):
         raise RuntimeError("全ての探索候補で有限な rollout 指標を計算できませんでした")
@@ -661,43 +667,42 @@ def build_comparison_document(
     if tuned_params is not None and tuned_in_comparison:
         tuned_metrics_list = _evaluate_candidate(
             ctxs, tuned_params, tuned_case.vehicle_model_type,
-            tuned_case.acceleration_source, tuned_case.steering_source, aggregate=False,
+            tuned_case.acceleration_source, tuned_case.steering_source,
+            getattr(tuned_case, "slope_source", "none"), aggregate=False,
         )
 
-    cases: list[tuple[str, dict, str, str, str]] = []
+    cases: list[tuple[str, dict, str, str, str, str]] = []
     sparse: dict[str, list[tuple[str, dict]]] = {}
     for display_name in display_order:
         if display_name == BASELINE_MODEL_NAME:
             params, model_type = baseline_params, baseline_model_type
             accel, steer = baseline_accel, baseline_steer
+            slope = "none"
             sparse[display_name] = baseline_metrics
         elif display_name == TUNED_MODEL_DISPLAY_NAME:
             params, model_type = tuned_params, tuned_case.vehicle_model_type
             accel, steer = tuned_case.acceleration_source, tuned_case.steering_source
+            slope = getattr(tuned_case, "slope_source", "none")
             sparse[display_name] = tuned_metrics_list
         else:
             case = cfg.find_case(display_name)
             params, model_type = dict(case.params), case.vehicle_model_type
             accel, steer = case.acceleration_source, case.steering_source
+            slope = getattr(case, "slope_source", "none")
             sparse[display_name] = _evaluate_candidate(
-                ctxs, params, model_type, accel, steer, aggregate=False,
+                ctxs, params, model_type, accel, steer, slope, aggregate=False,
             )
-        cases.append((display_name, params, model_type, accel, steer))
+        cases.append((display_name, params, model_type, accel, steer, slope))
 
     comparison_results: dict[str, dict] = {}
-    for display_name, _params, _model_type, accel, steer in cases:
+    for display_name, _params, _model_type, accel, steer, slope in cases:
         aggregate = aggregate_normalized(sparse[display_name], baselines, HORIZONS)
-        # v2/v1 監査スコアはレガシーフロアで厳密再現する (rollout 再実行なし・集約のみ)。
-        legacy_aggregate = aggregate_normalized(
-            sparse[display_name], baselines, HORIZONS, legacy_floors=True,
-        )
         comparison_results[display_name] = {
             "score": float(_finite_robust_score(aggregate)),
-            "score_v2": float(_finite_v2_score(legacy_aggregate)),
-            "score_legacy": float(_finite_v1_score(legacy_aggregate)),
             "by_h": _clean_agg(aggregate),
             "acceleration_source": accel,
             "steering_source": steer,
+            "slope_source": slope,
         }
     if tuned_in_comparison and not math.isfinite(
         comparison_results[TUNED_MODEL_DISPLAY_NAME]["score"]
@@ -712,7 +717,6 @@ def build_comparison_document(
         dummy_agg = {"by_h": data["by_h"]}
         print(
             f"  {format_agg(name, dummy_agg, HORIZONS)}  score={data['score']:.4f}"
-            f" (v2={data['score_v2']:.4f} v1={data['score_legacy']:.4f})"
         )
     print("=" * 72 + "\n")
 
@@ -728,7 +732,7 @@ def build_comparison_document(
         writer = csv.DictWriter(stream, fieldnames=fieldnames)
         writer.writeheader()
         for ctx in ctxs:
-            for model, _params, _model_type, _source, _steer_source in cases:
+            for model, _params, _model_type, _source, _steer_source, _slope_source in cases:
                 per_horizon = report_metrics[model][ctx.dataset_id]
                 for horizon in REPORT_HORIZONS:
                     writer.writerow(
@@ -752,10 +756,8 @@ def build_comparison_document(
         "fit_stages": list(cfg.fit.stages),
         "fit_target": cfg.fit.target if cfg.fit.enabled else None,
         "score_horizons": list(HORIZONS),
-        # objective v3: worst 項を max から CVaR@90% (上位 10% 平均) に置換し、yaw/long/lat の
-        # フロアを baseline 分布 p10 の horizon 別テーブルに再校正 (steer/ax と同じ方法論)。
-        # score_v2 (v2: レガシーフロア + max + act 項) / score_legacy (v1: 同 + act なし) は
-        # レガシーフロアで厳密再現しており、過去ランとの score 比較時はここを確認する。
+        # objective v3: worst 項は CVaR@90% (上位 10% 平均) を使い、yaw/long/lat の
+        # フロアは baseline 分布 p10 の horizon 別テーブルに再校正する。
         "objective": {
             "version": 3,
             "worst_stat": "cvar",
@@ -769,7 +771,6 @@ def build_comparison_document(
             },
             "steer_floor_deg": STEER_FLOOR_DEG,
             "ax_floor_mps2": AX_FLOOR_MPS2,
-            "audit_scores": "score_v2/score_legacy はレガシー per-step フロアで算出",
         },
         "report_horizons": list(REPORT_HORIZONS),
         "skipped": fit_skipped,
@@ -868,9 +869,12 @@ def run(
     n_trials: int = 50, n_jobs: int = 1,
 ) -> dict:
     if phase3_params_path is not None:
+        # default を持つ制約キー (v3 構造項等) は成果物で省略可 — setdefault で中立補完する。
         direct_fit_params = read_phase_artifact(
-            phase3_params_path, expected_phase=3, required_keys=_DIRECT_FIT_KEYS, producer="fit_xy",
+            phase3_params_path, expected_phase=3, required_keys=REQUIRED_ARTIFACT_KEYS,
+            producer="fit_xy",
         )
+        apply_constraint_defaults(direct_fit_params)
         validate_parameters(direct_fit_params, _DIRECT_FIT_KEYS, source="直接同定結果")
         print(f"[fit_merge] 直接同定値を warm-start / passthrough に使用: {phase3_params_path}")
     else:
@@ -882,6 +886,7 @@ def run(
             rollout.build_params(), dict(target_case.params), target_case.vehicle_model_type,
         )
         direct_fit_params = {key: full[key] for key in _DIRECT_FIT_KEYS if key in full}
+        apply_constraint_defaults(direct_fit_params)
         validate_parameters(
             direct_fit_params, _DIRECT_FIT_KEYS & set(direct_fit_params),
             source=f"fit target '{cfg.fit.target}' の初期値",

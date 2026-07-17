@@ -59,13 +59,14 @@ _CTXS: list[fit_merge.DatasetCtx] = []
 _MODEL_TYPE = ""
 _ACCEL_SOURCE = ""
 _STEER_SOURCE = "steer"
+_SLOPE_SOURCE = "none"
 
 
 def _eval_one(args: tuple[int, dict, tuple[int, ...], bool]) -> dict | None:
     idx, params, horizons, include_mean = args
     try:
         return fit_merge._eval(
-            _CTXS[idx], params, _MODEL_TYPE, _ACCEL_SOURCE, _STEER_SOURCE,
+            _CTXS[idx], params, _MODEL_TYPE, _ACCEL_SOURCE, _STEER_SOURCE, _SLOPE_SOURCE,
             horizons=horizons, include_mean=include_mean,
         )
     except Exception as e:  # noqa: BLE001
@@ -116,7 +117,7 @@ def fit_scaling_channels(
     各ステージ (fit_lon / fit_steer) が τ/delay 確定後に呼ぶ。
     override_params は case パラメータへの上書き (ステージが確定させた τ/delay 等)。
     """
-    global _CTXS, _MODEL_TYPE, _ACCEL_SOURCE, _STEER_SOURCE  # noqa: PLW0603
+    global _CTXS, _MODEL_TYPE, _ACCEL_SOURCE, _STEER_SOURCE, _SLOPE_SOURCE  # noqa: PLW0603
 
     if horizon not in HORIZONS:
         raise ValueError(f"horizon は最適化ホライズン {HORIZONS} から選んでください: {horizon}")
@@ -153,6 +154,7 @@ def fit_scaling_channels(
     _MODEL_TYPE = case.vehicle_model_type
     _ACCEL_SOURCE = case.acceleration_source
     _STEER_SOURCE = case.steering_source
+    _SLOPE_SOURCE = getattr(case, "slope_source", "none")
 
     # 初期パラメータで 1 回だけ親プロセスで評価し、GT キャッシュを温める
     # (theta は GT キーに影響しないため、fork 後の worker は準備済み GT を COW 継承する)。

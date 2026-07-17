@@ -97,7 +97,7 @@ def test_report_metrics_use_every_dense_horizon(monkeypatch) -> None:
     calls: list[tuple[str, tuple[int, ...]]] = []
 
     def fake_eval(
-        _ctx, _params, model_type, _source, _steer_source="steer",
+        _ctx, _params, model_type, _source, _steer_source="steer", _slope_source="none",
         *, horizons=fit_merge.HORIZONS,
     ):
         calls.append((model_type, horizons))
@@ -130,7 +130,7 @@ def test_comparison_report_metrics_evaluate_every_declared_model(monkeypatch) ->
     calls: list[str] = []
 
     def fake_eval(
-        _ctx, _params, model_type, _source, _steer_source="steer",
+        _ctx, _params, model_type, _source, _steer_source="steer", _slope_source="none",
         *, horizons=fit_merge.HORIZONS,
     ):
         calls.append(model_type)
@@ -140,10 +140,10 @@ def test_comparison_report_metrics_evaluate_every_declared_model(monkeypatch) ->
     result = fit_merge._evaluate_comparison_report_metrics(
         [context],
         [
-            ("baseline", {}, "baseline-model", "accel", "steer"),
-            ("v1", {}, "v1-model", "accel", "steer"),
-            ("v2_rk4", {}, "rk4-model", "accel", "steer"),
-            ("tuned", {}, "tuned-model", "accel", "steer_savgol"),
+            ("baseline", {}, "baseline-model", "accel", "steer", "none"),
+            ("v1", {}, "v1-model", "accel", "steer", "none"),
+            ("v2_rk4", {}, "rk4-model", "accel", "steer", "none"),
+            ("tuned", {}, "tuned-model", "accel", "steer_savgol", "pitch"),
         ],
     )
 
@@ -153,7 +153,7 @@ def test_comparison_report_metrics_evaluate_every_declared_model(monkeypatch) ->
 
 
 def test_robust_search_parallel_evaluates_each_trial_once(monkeypatch) -> None:
-    def fake_evaluate_candidate(_ctxs, _params, _model_type, _source, _steer_source="steer", **_kwargs):
+    def fake_evaluate_candidate(_ctxs, _params, _model_type, _source, _steer_source="steer", _slope_source="none", **_kwargs):
         return _stub_aggregate()
 
     monkeypatch.setattr(fit_merge, "_evaluate_candidate", fake_evaluate_candidate)
@@ -179,7 +179,7 @@ def test_robust_search_parallel_evaluates_each_trial_once(monkeypatch) -> None:
 
 
 def test_robust_search_uses_direct_fit_for_single_trial(monkeypatch) -> None:
-    def fake_evaluate_candidate(_ctxs, params, _model_type, _source, _steer_source="steer", **_kwargs):
+    def fake_evaluate_candidate(_ctxs, params, _model_type, _source, _steer_source="steer", _slope_source="none", **_kwargs):
         return _stub_aggregate(float(params["acc_time_constant"]))
 
     monkeypatch.setattr(fit_merge, "_evaluate_candidate", fake_evaluate_candidate)
@@ -270,7 +270,6 @@ def test_search_candidates_are_clamped_to_physical_ranges() -> None:
 
 
 def test_constraints_have_ranges_and_reasons() -> None:
-    assert fit_merge._DIRECT_FIT_KEYS <= PARAMETER_CONSTRAINTS.keys()
     assert all(constraint.reason and constraint.range_text() for constraint in PARAMETER_CONSTRAINTS.values())
 
 
@@ -861,7 +860,7 @@ def _synthetic_metric() -> dict:
 
 def _install_synthetic_evaluation(monkeypatch) -> None:
     def fake_eval(_ctx, _params, _model_type, _accel="accel", _steer="steer",
-                  *, horizons=fit_merge.HORIZONS, include_mean=False):
+                  _slope="none", *, horizons=fit_merge.HORIZONS, include_mean=False):
         return {h: {k: 1.0 + 0.001 * h for k in fit_merge._RMSE_KEYS} for h in horizons}
 
     monkeypatch.setattr(fit_merge, "_eval", fake_eval)

@@ -26,6 +26,17 @@ FIT_STAGES = (*DIRECT_FIT_STAGES, "merge")
 RELEASE_TUNED_NAME = "tuned"
 
 
+# SLOPE_ACCX の給電ソース。"none" = 勾配ゼロ (従来)、"pitch" = +g·sin(pitch_lf)。
+SLOPE_SOURCES = ("none", "pitch")
+
+
+def normalize_slope_source(value: Any, *, default: str = "none") -> str:
+    source = default if value is None else str(value)
+    if source not in SLOPE_SOURCES:
+        raise ValueError(f"未対応の slope_source: {source!r} (対応: {SLOPE_SOURCES})")
+    return source
+
+
 @dataclass(frozen=True)
 class ModelSpec:
     name: str
@@ -33,6 +44,7 @@ class ModelSpec:
     acceleration_source: str
     steering_source: str
     params: dict
+    slope_source: str = "none"
 
 
 @dataclass(frozen=True)
@@ -123,6 +135,7 @@ def load_model_config(path: str | Path) -> ModelConfig:
                 raw_spec.get("steering_source"), default="steer"
             ),
             params=dict(params),
+            slope_source=normalize_slope_source(raw_spec.get("slope_source")),
         )
 
     if BASELINE_MODEL_NAME not in models:

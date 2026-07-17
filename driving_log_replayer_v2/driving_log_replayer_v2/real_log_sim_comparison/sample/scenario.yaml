@@ -63,8 +63,8 @@ Evaluation:
       # リリース候補 v2 (旧 v1_p): v1 にプラトー直接同定の定常補正と k_us 更新を加え、
       # GT を SG 系 (steer_savgol + kinematic_savgol、旧 v1_sg を統合) で評価する。
       # 注: 以下のコメントの robust_score 絶対値 (32.17 / 27.11 / 22.14 / 36.85) は
-      # objective v2 (レガシーフロア + worst=max) 当時の値。objective v3 以降のランで
-      # 比較する場合は tuned_params.yaml の score でなく score_v2 と突き合わせること。
+      # objective v2 (レガシーフロア + worst=max) 当時の値であり、objective v3 の score とは
+      # 直接比較できない。
       # 時定数・むだ時間は v1 のまま固定。構成要素は 2 つ:
       # 1) 定常 scaling 補正: reidentify/fit_plateau.py が steer/ax の N=30 プラトー RMSE
       #    から 318 dataset で同定 (2026-07-16, SG 系 GT 基準)。debug_acc_scaling_factor は
@@ -166,6 +166,32 @@ Evaluation:
           steer_bias: -0.0006056849379092455
           steer_rate_lim: 0.6
           k_us: 0.018797133899293227
+          xy_heading_rate_coeff: 0.0
+
+      # 検討中モデル (v3 候補 1): v2 + SLOPE_ACCX フィード (slope_source: pitch)。
+      # パラメータは v2 と同一で、rollout 入力として +g·sin(pitch_lf) を給電する ablation。
+      # 根拠 (2026-07-17 残差分析キャンペーン, analysis.html):
+      #   - pitch 符号のコースト回帰: 符号一致率 100% (正 pitch = ノーズ下げ = 下り)
+      #   - err_ax@N=30 vs g·sin(pitch_lf): 回帰係数 +0.87 ≈ 1 (dataset 符号一致率 74%)
+      #   - 実機経路 (universe simple_planning_simulator は enable_road_slope_simulation: true)
+      #     が実勾配を給電しているのに同定は無勾配という系統不整合の解消
+      v3_slope:
+        vehicle_model_type: delay_steer_acc_geared_for_diffusion_planner
+        acceleration_source: kinematic_savgol
+        steering_source: steer_savgol
+        slope_source: pitch
+        params:
+          wheelbase: 4.76012
+          acc_time_delay: 0.1
+          acc_time_constant: 0.3
+          debug_acc_scaling_factor: 0.9
+          steer_time_delay: 0.05
+          steer_time_constant: 0.15
+          debug_steer_scaling_factor: 1.015827
+          steer_dead_band: 0.0
+          steer_bias: 0.0
+          steer_rate_lim: 0.6
+          k_us: 0.012
           xy_heading_rate_coeff: 0.0
 
       # 同定対象 (TARGET)。GT はリリース基準の v2 と同じ SG 系

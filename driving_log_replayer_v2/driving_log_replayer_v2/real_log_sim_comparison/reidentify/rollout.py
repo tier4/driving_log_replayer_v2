@@ -19,12 +19,13 @@ from ..lib._params_utils import load_sim_params
 from ..lib._validation import require_non_empty_df
 from ..lib._vehicle_models import VehicleModel
 from .gear import require_drive_gear_mask
-from .physical_constants import VX_MIN_CURVE
+from .physical_constants import GRAVITY, VX_MIN_CURVE
 from .parameter_constraints import PARAMETER_CONSTRAINTS
 from .settings import (
     BAD_INTERVAL_MAX_S,
     BAD_INTERVAL_MIN_S,
     KINEMATIC_STEER_VX_MIN,
+    PITCH_LF_CUTOFF_HZ,
     ROLLING_SMOOTH_WINDOW_S,
     ROLL_OUT_CONTEXT,
     ROLLOUT_SUB_DT,
@@ -53,6 +54,27 @@ def find_autonomous_start(data: dict) -> int:
 
 
 # N-step オープンループ解析
+
+
+def _lowpass_signal(values: np.ndarray, t: np.ndarray, cutoff_hz: float) -> np.ndarray:
+    """零位相ローパス (Butterworth 2 次 + filtfilt)。短い系列は移動平均へフォールバック。"""
+    values = np.asarray(values, dtype=float)
+    if len(values) < 3:
+        return values
+    dt = float(np.median(np.diff(t)))
+    if not np.isfinite(dt) or dt <= 0.0:
+        return values
+    nyq = 0.5 / dt
+    if cutoff_hz >= nyq:
+        return values
+    from scipy.signal import butter, filtfilt
+
+    b, a = butter(2, cutoff_hz / nyq)
+    padlen = 3 * (max(len(a), len(b)) - 1)
+    if len(values) <= padlen:
+        win = 2 * max(1, int(round(0.5 / (cutoff_hz * dt)))) + 1
+        return pd.Series(values).rolling(win, center=True, min_periods=1).mean().values
+    return filtfilt(b, a, values)
 
 
 def _prepare_gt(data: dict, t0_ns: int, params: dict) -> dict:
@@ -117,6 +139,17 @@ def _prepare_gt(data: dict, t0_ns: int, params: dict) -> dict:
     gt_ay = np.interp(t_cmd, t_kin, df_kin["ay_pos"].values)
     gt_steer = interp_or_zeros(t_cmd, t_steer, df_steer["steer"].values)
 
+    # pitch: 勾配成分 (低域 <PITCH_LF_CUTOFF_HZ) とサスペンション成分 (ダイブ/スクワット、
+    # a_cmd と交絡) を分離して両方持つ。分析 (reidentify.analyze) 用で rollout 自体は未使用。
+    if "pitch" in df_kin.columns:
+        _pitch_raw = df_kin["pitch"].values
+        _pitch_lf = _lowpass_signal(_pitch_raw, t_kin, PITCH_LF_CUTOFF_HZ)
+    else:
+        _pitch_raw = np.zeros_like(t_kin)
+        _pitch_lf = _pitch_raw
+    gt_pitch = np.interp(t_cmd, t_kin, _pitch_raw)
+    gt_pitch_lf = np.interp(t_cmd, t_kin, _pitch_lf)
+
     gt_dwz = np.gradient(gt_wz, t_cmd)
 
     _wb = params["wheelbase"]
@@ -178,6 +211,7 @@ def _prepare_gt(data: dict, t0_ns: int, params: dict) -> dict:
         "t_cmd": t_cmd,
         "gt_x": gt_x, "gt_y": gt_y, "gt_yaw": gt_yaw, "gt_vx": gt_vx, "gt_wz": gt_wz,
         "gt_vy": gt_vy, "gt_ax": gt_ax, "gt_ay": gt_ay, "gt_steer": gt_steer, "gt_dwz": gt_dwz,
+        "gt_pitch": gt_pitch, "gt_pitch_lf": gt_pitch_lf,
         "gt_steer_kinematic": gt_steer_kinematic,
         "iv_arr": _iv_arr, "nfull_arr": _nfull_arr, "rem_arr": _rem_arr,
         "bad_iv_cumsum": _bad_iv_cumsum,
@@ -188,25 +222,35 @@ def _prepare_gt(data: dict, t0_ns: int, params: dict) -> dict:
     }
 
 
-def eval_rollout_rmse(
-    data: dict,
-    t0_ns: int,
+def resolve_slope_accx(g: dict, slope_source: str) -> np.ndarray | None:
+    """slope_source から SLOPE_ACCX 系列 [m/s^2] を作る。"none" では None (勾配ゼロ)。
+
+    "pitch": +g·sin(pitch_lf)。符号規約はコースト回帰で経験的に検証済み
+    (正 pitch = ノーズ下げ = 下り、dvx/dt を加速させる向き。analysis pitch-sign 参照)。
+    低域成分 (勾配) のみを使い、サスペンション pitch (a_cmd と交絡) は含めない。
+    """
+    if slope_source == "none":
+        return None
+    if slope_source == "pitch":
+        return GRAVITY * np.sin(np.asarray(g["gt_pitch_lf"], dtype=np.float64))
+    raise ValueError(f"未対応の slope_source: {slope_source!r} (対応: none/pitch)")
+
+
+def _rollout_sim_states(
+    g: dict,
     params: dict,
     model_type: str,
-    horizons: tuple[int, ...],
+    sorted_horizons: list[int],
     stride: int,
-    gt: dict | None = None,
-    *,
-    include_mean: bool = False,
-) -> dict[int, dict[str, float]]:
-    """free-running N-step rollout の horizon 別終端誤差 RMSE を返す。
+    slope_source: str = "none",
+) -> tuple[np.ndarray, dict[str, np.ndarray]]:
+    """free-running N-step rollout を実行し horizon 別の終端 sim 状態を返す共有コア。
 
-    返り値: {h: {"pos"[cm],"long"[cm],"lat"[cm],"yaw"[deg],"steer"[deg],"vx"[m/s],"ax"[m/s^2]}}
-    include_mean=True のとき、終端誤差の署名付き平均 (MEAN_METRIC_KEYS、err = GT - sim で
-    正 = モデルのアンダーシュート) を同じ単位で追加する (プラトーの系統/雑音分解の診断用)。
+    eval_rollout_rmse (RMSE 集約) と eval_rollout_terminal_errors (per-start 分析) が共用する。
+    返り値: (k0_arr, sim)。sim は {"x","y","yaw","vx","ax","steer"} で各配列
+    shape=(len(k0_arr), len(sorted_horizons))。無効 start / 未到達 horizon は NaN。
+    slope_source != "none" のとき SLOPE_ACCX を給電する (vm_integrate_to_horizons_v2 経由)。
     """
-    g = gt if gt is not None else _prepare_gt(data, t0_ns, params)
-
     t_cmd = g["t_cmd"]
     gt_x, gt_y, gt_yaw = g["gt_x"], g["gt_y"], g["gt_yaw"]
     gt_vx, gt_steer = g["gt_vx"], g["gt_steer"]
@@ -215,15 +259,16 @@ def eval_rollout_rmse(
     nfull_arr, rem_arr = g["nfull_arr"], g["rem_arr"]
     bc, bg = g["bad_iv_cumsum"], g["bad_gear_cumsum"]
     acc_hist_all, steer_hist_all = g["acc_hist_all"], g["steer_hist_all"]
-    cos_y_arr, sin_y_arr = g["cos_y_arr"], g["sin_y_arr"]
     accel_des, steer_des = g["accel_des_arr"], g["steer_des_arr"]
 
     steer_bias = params["steer_bias"]
     model = VehicleModel(params, SUB_DT, model_type)
 
     n = len(t_cmd)
-    sorted_horizons = sorted(horizons)
     min_h = sorted_horizons[0]
+
+    slope_arr = resolve_slope_accx(g, slope_source)
+    slope_list = slope_arr.tolist() if slope_arr is not None else None
 
     gt_x_list = gt_x.tolist()
     gt_y_list = gt_y.tolist()
@@ -275,6 +320,8 @@ def eval_rollout_rmse(
     sim_ax = np.full((num_steps, _n_sh), np.nan, dtype=np.float64)
     sim_steer = np.full((num_steps, _n_sh), np.nan, dtype=np.float64)
 
+    _p_slope = slope_arr.ctypes.data_as(_cdbl_p) if slope_arr is not None else None
+
     for step_idx, k0 in enumerate(k0_range):
         if gt_vx_list[k0] <= VX_MIN_CURVE:
             continue
@@ -283,6 +330,7 @@ def eval_rollout_rmse(
             steer_actual=gt_steer[k0] + steer_bias, ax=gt_ax_list[k0],
             acc_ptr=acc_ptrs[k0], n_acc=n_acc, steer_ptr=steer_ptrs[k0], n_steer=n_steer,
             wz=gt_wz_list[k0], vy=gt_vy_list[k0],
+            slope_accx0=slope_list[k0] if slope_list is not None else 0.0,
         )
         n_valid = 0
         for h in sorted_horizons:
@@ -296,11 +344,19 @@ def eval_rollout_rmse(
         if n_valid == 0:
             continue
 
-        model._lib.vm_integrate_to_horizons(
-            model._ptr, ctypes.c_int(sorted_horizons[n_valid - 1]), ctypes.c_int(k0),
-            _p_ad, _p_sd, _p_nf, _p_rem, 1e-6, ctypes.c_int(n_valid), _p_h,
-            _p_xo, _p_yo, _p_yawo, _p_vxo, _p_axo, _p_steero,
-        )
+        if _p_slope is None:
+            # 旧シンボル経由 (slope なし)。テストのフェイク実装との互換も保つ。
+            model._lib.vm_integrate_to_horizons(
+                model._ptr, ctypes.c_int(sorted_horizons[n_valid - 1]), ctypes.c_int(k0),
+                _p_ad, _p_sd, _p_nf, _p_rem, 1e-6, ctypes.c_int(n_valid), _p_h,
+                _p_xo, _p_yo, _p_yawo, _p_vxo, _p_axo, _p_steero,
+            )
+        else:
+            model._lib.vm_integrate_to_horizons_v2(
+                model._ptr, ctypes.c_int(sorted_horizons[n_valid - 1]), ctypes.c_int(k0),
+                _p_ad, _p_sd, _p_slope, _p_nf, _p_rem, 1e-6, ctypes.c_int(n_valid), _p_h,
+                _p_xo, _p_yo, _p_yawo, _p_vxo, _p_axo, _p_steero,
+            )
 
         sim_x[step_idx, :n_valid] = _x_out[:n_valid]
         sim_y[step_idx, :n_valid] = _y_out[:n_valid]
@@ -309,8 +365,46 @@ def eval_rollout_rmse(
         sim_ax[step_idx, :n_valid] = _ax_out[:n_valid]
         sim_steer[step_idx, :n_valid] = _steer_buf[:n_valid]
 
-    res = {}
     k0_arr = np.array(list(k0_range), dtype=np.intp)
+    return k0_arr, {
+        "x": sim_x, "y": sim_y, "yaw": sim_yaw,
+        "vx": sim_vx, "ax": sim_ax, "steer": sim_steer,
+    }
+
+
+def eval_rollout_rmse(
+    data: dict,
+    t0_ns: int,
+    params: dict,
+    model_type: str,
+    horizons: tuple[int, ...],
+    stride: int,
+    gt: dict | None = None,
+    *,
+    include_mean: bool = False,
+    slope_source: str = "none",
+) -> dict[int, dict[str, float]]:
+    """free-running N-step rollout の horizon 別終端誤差 RMSE を返す。
+
+    返り値: {h: {"pos"[cm],"long"[cm],"lat"[cm],"yaw"[deg],"steer"[deg],"vx"[m/s],"ax"[m/s^2]}}
+    include_mean=True のとき、終端誤差の署名付き平均 (MEAN_METRIC_KEYS、err = GT - sim で
+    正 = モデルのアンダーシュート) を同じ単位で追加する (プラトーの系統/雑音分解の診断用)。
+    """
+    g = gt if gt is not None else _prepare_gt(data, t0_ns, params)
+
+    gt_x, gt_y, gt_yaw = g["gt_x"], g["gt_y"], g["gt_yaw"]
+    gt_vx, gt_steer = g["gt_vx"], g["gt_steer"]
+    gt_ax = g["gt_ax"]
+    cos_y_arr, sin_y_arr = g["cos_y_arr"], g["sin_y_arr"]
+
+    sorted_horizons = sorted(horizons)
+    k0_arr, sim = _rollout_sim_states(
+        g, params, model_type, sorted_horizons, stride, slope_source=slope_source,
+    )
+    sim_x, sim_y, sim_yaw = sim["x"], sim["y"], sim["yaw"]
+    sim_vx, sim_ax, sim_steer = sim["vx"], sim["ax"], sim["steer"]
+
+    res = {}
     for i, h in enumerate(sorted_horizons):
         valid_mask = ~np.isnan(sim_x[:, i])
         if not np.any(valid_mask):
@@ -364,3 +458,128 @@ def eval_rollout_rmse(
             })
 
     return res
+
+
+# eval_rollout_terminal_errors が返す列。誤差列は metrics.csv と同じ単位・符号規約
+# (err = GT - sim、long/lat は cm、yaw/steer は deg、vx は m/s、ax は m/s^2)。
+# 特徴量列は SI (pitch は rad、*_mean は窓 [k0, k0+h] の平均)。
+TERMINAL_ERROR_COLUMNS: tuple[str, ...] = (
+    "k0", "t0", "horizon",
+    "err_long_cm", "err_lat_cm", "err_yaw_deg", "err_steer_deg", "err_vx", "err_ax",
+    "gt_vx0", "gt_vx_end", "gt_ax_end", "gt_steer_end",
+    "vx_mean", "pitch_mean", "pitch_lf_mean",
+    "a_cmd_mean", "a_cmd_end", "jerk_cmd_abs_mean",
+    "steer_cmd_end", "steer_rate_mean", "steer_rate_abs_mean",
+    "ay_mean",
+)
+
+
+def eval_rollout_terminal_errors(
+    data: dict,
+    t0_ns: int,
+    params: dict,
+    model_type: str,
+    horizons: tuple[int, ...],
+    stride: int,
+    gt: dict | None = None,
+    *,
+    slope_source: str = "none",
+) -> pd.DataFrame:
+    """free-running N-step rollout の per-start 署名付き終端誤差と条件付け特徴量を返す。
+
+    eval_rollout_rmse の RMS 集約前の情報を列挙する分析用の姉妹関数 (reidentify.analyze が
+    使用)。行 = (開始インデックス k0, horizon) の有効な組。列は TERMINAL_ERROR_COLUMNS。
+    """
+    g = gt if gt is not None else _prepare_gt(data, t0_ns, params)
+
+    t_cmd = g["t_cmd"]
+    n = len(t_cmd)
+    gt_x, gt_y, gt_yaw = g["gt_x"], g["gt_y"], g["gt_yaw"]
+    gt_vx, gt_steer = g["gt_vx"], g["gt_steer"]
+    gt_wz, gt_ax = g["gt_wz"], g["gt_ax"]
+    cos_y_arr, sin_y_arr = g["cos_y_arr"], g["sin_y_arr"]
+    accel_des, steer_des = g["accel_des_arr"], g["steer_des_arr"]
+    gt_pitch = g.get("gt_pitch")
+    if gt_pitch is None:
+        gt_pitch = np.zeros(n, dtype=float)
+    gt_pitch_lf = g.get("gt_pitch_lf")
+    if gt_pitch_lf is None:
+        gt_pitch_lf = gt_pitch
+
+    sorted_horizons = sorted(horizons)
+    k0_arr, sim = _rollout_sim_states(
+        g, params, model_type, sorted_horizons, stride, slope_source=slope_source,
+    )
+
+    # 窓 [k0, k0+h] (両端含む) 平均を cumsum で O(1) 計算するための前処理。
+    ay = gt_vx * gt_wz
+    if n > 1:
+        jerk_cmd_abs = np.abs(np.gradient(accel_des, t_cmd))
+        steer_rate = np.gradient(steer_des, t_cmd)
+    else:
+        jerk_cmd_abs = np.zeros(n, dtype=float)
+        steer_rate = np.zeros(n, dtype=float)
+
+    def _cs(arr: np.ndarray) -> np.ndarray:
+        return np.concatenate([[0.0], np.cumsum(np.asarray(arr, dtype=float))])
+
+    cs_vx = _cs(gt_vx)
+    cs_pitch = _cs(gt_pitch)
+    cs_pitch_lf = _cs(gt_pitch_lf)
+    cs_a_cmd = _cs(accel_des)
+    cs_jerk_abs = _cs(jerk_cmd_abs)
+    cs_steer_rate = _cs(steer_rate)
+    cs_steer_rate_abs = _cs(np.abs(steer_rate))
+    cs_ay = _cs(ay)
+
+    def _win_mean(cs_arr: np.ndarray, k0s: np.ndarray, h: int) -> np.ndarray:
+        return (cs_arr[k0s + h + 1] - cs_arr[k0s]) / float(h + 1)
+
+    frames: list[pd.DataFrame] = []
+    for i, h in enumerate(sorted_horizons):
+        valid_mask = ~np.isnan(sim["x"][:, i])
+        if not np.any(valid_mask):
+            continue
+        k0s = k0_arr[valid_mask]
+        k_end = k0s + h
+
+        mx, my, myaw = sim["x"][valid_mask, i], sim["y"][valid_mask, i], sim["yaw"][valid_mask, i]
+        mvx, m_ax, msteer = sim["vx"][valid_mask, i], sim["ax"][valid_mask, i], sim["steer"][valid_mask, i]
+
+        g_x, g_y, g_yaw = gt_x[k_end], gt_y[k_end], gt_yaw[k_end]
+        g_x0, g_y0 = gt_x[k0s], gt_y[k0s]
+        cos_y, sin_y = cos_y_arr[k_end], sin_y_arr[k_end]
+
+        real_ds_long, real_ds_lat = local_ds(g_x - g_x0, g_y - g_y0, cos_y, sin_y)
+        sim_ds_long, sim_ds_lat = local_ds(mx - g_x0, my - g_y0, cos_y, sin_y)
+        yaw_err = ((g_yaw - myaw + np.pi) % (2 * np.pi)) - np.pi
+
+        frames.append(pd.DataFrame({
+            "k0": k0s.astype(np.int64),
+            "t0": t_cmd[k0s],
+            "horizon": np.full(len(k0s), h, dtype=np.int64),
+            "err_long_cm": (real_ds_long - sim_ds_long) * 100.0,
+            "err_lat_cm": (real_ds_lat - sim_ds_lat) * 100.0,
+            "err_yaw_deg": np.degrees(yaw_err),
+            "err_steer_deg": np.degrees(gt_steer[k_end] - msteer),
+            "err_vx": gt_vx[k_end] - mvx,
+            "err_ax": gt_ax[k_end] - m_ax,
+            "gt_vx0": gt_vx[k0s],
+            "gt_vx_end": gt_vx[k_end],
+            "gt_ax_end": gt_ax[k_end],
+            "gt_steer_end": gt_steer[k_end],
+            "vx_mean": _win_mean(cs_vx, k0s, h),
+            "pitch_mean": _win_mean(cs_pitch, k0s, h),
+            "pitch_lf_mean": _win_mean(cs_pitch_lf, k0s, h),
+            "a_cmd_mean": _win_mean(cs_a_cmd, k0s, h),
+            "a_cmd_end": accel_des[k_end],
+            "jerk_cmd_abs_mean": _win_mean(cs_jerk_abs, k0s, h),
+            "steer_cmd_end": steer_des[k_end],
+            "steer_rate_mean": _win_mean(cs_steer_rate, k0s, h),
+            "steer_rate_abs_mean": _win_mean(cs_steer_rate_abs, k0s, h),
+            "ay_mean": _win_mean(cs_ay, k0s, h),
+        }))
+
+    if not frames:
+        return pd.DataFrame({col: pd.Series(dtype=float) for col in TERMINAL_ERROR_COLUMNS})
+    return pd.concat(frames, ignore_index=True)[list(TERMINAL_ERROR_COLUMNS)]

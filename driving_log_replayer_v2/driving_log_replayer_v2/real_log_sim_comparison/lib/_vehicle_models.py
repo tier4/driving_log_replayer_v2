@@ -71,10 +71,21 @@ def _build_dp_args(p: dict[str, Any], sub_dt: float) -> tuple[float, ...]:
         "debug_steer_scaling_factor": 1.0,
         "k_us": 0.0,
         "xy_heading_rate_coeff": 0.0,
+        # v3 構造項。中立値 0.0 で v2 と bit 一致 (brake_* の 0 は「対称値を継承」のセンチネル)。
+        "lon_drag_c0": 0.0,
+        "lon_drag_c2": 0.0,
+        "brake_time_constant": 0.0,
+        "brake_scaling_factor": 0.0,
         "use_rk4": 0.0,
     }
+    # C ABI (vm_create_delay_steer_acc_geared_for_diffusion_planner_v3) の引数順と
+    # 一字一句同順であること (C++ 側ゴールデンテストと test_param_ssot が監視)。
     dp_args = _BASE_DELAY_ARGS + (
         "xy_heading_rate_coeff",
+        "lon_drag_c0",
+        "lon_drag_c2",
+        "brake_time_constant",
+        "brake_scaling_factor",
         "use_rk4",
     )
     for key in dp_args:
@@ -96,6 +107,15 @@ _GLOBAL_ARG_KEYS = frozenset(
     {"vel_lim", "steer_lim", "vel_rate_lim", "steer_rate_lim", "wheelbase", "sub_dt"}
 )
 _DP_NAMESPACED_PARAM_KEYS = _DELAY_PARAM_KEYS - _GLOBAL_ARG_KEYS
+# diffusion_planner 派生の追加キー (v2: xy_heading_rate_coeff/use_rk4、v3: drag/brake)。
+_DP_EXTRA_KEYS = (
+    "xy_heading_rate_coeff",
+    "lon_drag_c0",
+    "lon_drag_c2",
+    "brake_time_constant",
+    "brake_scaling_factor",
+    "use_rk4",
+)
 
 
 VEHICLE_MODEL_SPECS: dict[str, VehicleModelSpec] = {
@@ -108,13 +128,13 @@ VEHICLE_MODEL_SPECS: dict[str, VehicleModelSpec] = {
     ),
     "delay_steer_acc_geared_for_diffusion_planner": VehicleModelSpec(
         sim_enum="DELAY_STEER_ACC_GEARED_FOR_DIFFUSION_PLANNER",
-        factory_name="vm_create_delay_steer_acc_geared_for_diffusion_planner",
-        factory_arg_count=17,
+        factory_name="vm_create_delay_steer_acc_geared_for_diffusion_planner_v3",
+        factory_arg_count=21,
         build_args=_build_dp_args,
-        param_keys=_DELAY_PARAM_KEYS | frozenset({"xy_heading_rate_coeff", "use_rk4"}),
+        param_keys=_DELAY_PARAM_KEYS | frozenset(_DP_EXTRA_KEYS),
         namespaced_param_root="delay_steer_acc_geared_for_diffusion_planner",
         version_param_key="delay_steer_acc_geared_for_diffusion_planner.version",
-        namespaced_param_keys=_DP_NAMESPACED_PARAM_KEYS | frozenset({"xy_heading_rate_coeff", "use_rk4"}),
+        namespaced_param_keys=_DP_NAMESPACED_PARAM_KEYS | frozenset(_DP_EXTRA_KEYS),
     ),
 }
 
@@ -254,6 +274,14 @@ def _load_lib() -> ctypes.CDLL:
     lib.vm_reset_state.restype = None
     lib.vm_reset_state.argtypes = [c_void_p] + [c_double] * 8
 
+    if not hasattr(lib, "vm_reset_state_v2"):
+        raise RuntimeError(
+            "libvehicle_model_wrapper.so に vm_reset_state_v2 が未 export です。"
+            " simple_sensor_simulator を再ビルドしてください。"
+        )
+    lib.vm_reset_state_v2.restype = None
+    lib.vm_reset_state_v2.argtypes = [c_void_p] + [c_double] * 9
+
     lib.vm_set_queues.restype = None
     lib.vm_set_queues.argtypes = [
         c_void_p,
@@ -275,6 +303,33 @@ def _load_lib() -> ctypes.CDLL:
         c_void_p,
         ctypes.c_int,
         ctypes.c_int,
+        _c_dbl_p,
+        _c_dbl_p,
+        _c_int_p,
+        _c_dbl_p,
+        c_double,
+        ctypes.c_int,
+        _c_int_p,
+        _c_dbl_p,
+        _c_dbl_p,
+        _c_dbl_p,
+        _c_dbl_p,
+        _c_dbl_p,
+        _c_dbl_p,
+    ]
+
+    # v2: steer_des の直後に nullable な slope_accx 配列 (None で SLOPE_ACCX=0、旧と bit 一致)。
+    if not hasattr(lib, "vm_integrate_to_horizons_v2"):
+        raise RuntimeError(
+            "libvehicle_model_wrapper.so に vm_integrate_to_horizons_v2 が未 export です。"
+            " simple_sensor_simulator を再ビルドしてください。"
+        )
+    lib.vm_integrate_to_horizons_v2.restype = None
+    lib.vm_integrate_to_horizons_v2.argtypes = [
+        c_void_p,
+        ctypes.c_int,
+        ctypes.c_int,
+        _c_dbl_p,
         _c_dbl_p,
         _c_dbl_p,
         _c_int_p,
@@ -333,8 +388,13 @@ class VehicleModel:
         n_steer: int,
         wz: float = 0.0,
         vy: float = 0.0,
+        slope_accx0: float = 0.0,
     ) -> None:
-        self._lib.vm_reset_state(self._ptr, x, y, yaw, vx, steer_actual, ax, wz, vy)
+        # slope_accx0 は開始点の勾配加速度。PEDAL_ACCX 初期値を ax − slope − drag で逆算する
+        # (0.0 なら旧 vm_reset_state と bit 一致)。
+        self._lib.vm_reset_state_v2(
+            self._ptr, x, y, yaw, vx, steer_actual, ax, wz, vy, slope_accx0,
+        )
         self._lib.vm_set_queues(
             self._ptr,
             acc_ptr,
