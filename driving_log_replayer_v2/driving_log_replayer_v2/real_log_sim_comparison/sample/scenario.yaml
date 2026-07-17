@@ -4,7 +4,7 @@ ScenarioName: vehicle_model_reidentify
 Evaluation:
   Conditions:
 #    comparison_models: [baseline, v1, v2, v2_rk4, v2_c, v2_t, v3_slope, current]
-    comparison_models: [baseline, v1, v2, current]
+    comparison_models: [baseline, v1, v2, v3]
     # ---- GT フレーム (審判の定義、2026-07-17 再設計) ----
     # localization_consistent: pose を真値アンカーとし、観測モデル同定値 (report 9 章:
     # twist vx の実効遅延 +93 ms / スケール +0.4% 過大、R²=0.74) で twist を pose と
@@ -20,9 +20,12 @@ Evaluation:
     # freeze: v3 候補の再構築 (2026-07-17) は「v2 と同じ基本構造」で行う — 構造項
     # (drag / brake 分割 / bite / 緩和長) はセンチネル 0 に凍結し関節探索から除外する。
     # 構造項は新審判での基本構造ベースライン確定後に単独 ablation で再判定する。
+    # 注: 8 次元関節 TPE (160 trials) の score 最適点はセル別ゲートと乖離する
+    # (steer/ax mean +15〜25% で FAIL) ため、v3 は gate screen による少数次元スイープで
+    # 確定した (v2 の k_us / 旧 L_rel と同じ方法論)。fit はスイープ完了につき無効化。
     fit:
       target: current
-      stages: [lon, steer, xy, merge]
+      stages: []
       freeze:
         - lon_drag_c0
         - lon_drag_c2
@@ -200,9 +203,44 @@ Evaluation:
           k_us: 0.018797133899293227
           xy_heading_rate_coeff: 0.0
 
-      # 旧 v3 候補 (v2 + steer_relaxation_length 0.2) は 2026-07-17 に取り下げ。
-      # 旧審判 (raw フレーム) での ablation 記録は git 履歴と analysis 成果物を参照。
-      # 実効ステア (緩和長) 構造は新審判での基本構造ベースライン確定後に再判定する。
+      # v3 候補 (2026-07-17, localization_consistent 審判): v2 と同じ基本構造のまま
+      # 縦系の位相パラメータのみ新審判で再同定した。変更は 2 つ:
+      #   acc_time_delay 0.1 → 0.0 / acc_time_constant 0.3 → 0.45
+      # 根拠 (gate screen + dense 全セルゲート, v2 基準 mean/cvar +2% 非劣化, 2026-07-17):
+      # 1) 旧審判の acc_time_delay 0.1 は twist vx の観測遅延 (+93 ms) を車両むだ時間として
+      #    誤同定していた分を含む。整合フレームでは delay=0 が単独で全 35 セル PASS
+      #    (dev 全セル平均 −2.55%)。むだ時間を除いた立ち上がりは一次遅れ側で表現され
+      #    τ = 0.45 が最適 (0.5 同等、0.6 はセル違反)。
+      # 2) 確定値の dense 判定 (2100 セル = mean/cvar × N=1..300 × 7 指標):
+      #    all 318 / dev 248 / holdout 70 のすべてで違反 0 セル PASS、
+      #    全セル平均 −4.20% (dev −4.12% / holdout −4.38%)。dev score −1.81%。
+      # 3) 制約なし 8 次元 TPE (160 trials) の score 最適点はセル別ゲートと乖離
+      #    (steer/ax mean +15〜25% で FAIL) — v3 は v2 の k_us と同じ「ゲート拘束スイープ」
+      #    で決定した。
+      # 見送った近傍候補 (いずれも将来の判断材料として記録):
+      #  - steer_time_delay 0.05→0.0 追加: dev score −2.96% まで伸びるが、dense で
+      #    N=3〜6 yaw の 4 セルが +2.6〜3.7% 超過 (絶対値 +0.001〜0.0015 deg)。
+      #  - steer_time_constant 0.15→0.18: score −5.65% だがセル違反 — テール構造課題
+      #    (旧 L_rel と同型)。scaling 0.9 は新審判でも正当 (1.0/0.95 はセル違反)。
+      # 旧 v3 候補 (raw 審判での v2 + steer_relaxation_length 0.2) は取り下げ済み —
+      # 記録は git 履歴を参照。緩和長構造は新審判ベースラインの確定後に再判定する。
+      v3:
+        vehicle_model_type: delay_steer_acc_geared_for_diffusion_planner
+        acceleration_source: kinematic_rts
+        steering_source: steer_savgol
+        params:
+          wheelbase: 4.76012
+          acc_time_delay: 0.0
+          acc_time_constant: 0.45
+          debug_acc_scaling_factor: 0.9
+          steer_time_delay: 0.05
+          steer_time_constant: 0.15
+          debug_steer_scaling_factor: 1.015827
+          steer_dead_band: 0.0
+          steer_bias: 0.0
+          steer_rate_lim: 0.6
+          k_us: 0.012
+          xy_heading_rate_coeff: 0.0
 
       # 検討中モデル (v3 候補 1): v2 + SLOPE_ACCX フィード (slope_source: pitch)。
       # パラメータは v2 と同一で、rollout 入力として +g·sin(pitch_lf) を給電する ablation。
