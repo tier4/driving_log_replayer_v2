@@ -1,5 +1,13 @@
 # Release Notes
 
+## Version 3.18.8
+
+Minor Tweak
+
+| Module                  | Feature       | Brief summary                                       | Pull request                                                        | Contributor                             |
+| ----------------------- | ------------- | --------------------------------------------------- | ------------------------------------------------------------------- | --------------------------------------- |
+| `obstacle_segmentation` | visualization | publish the detection marker when detection is null | [#394](https://github.com/tier4/driving_log_replayer_v2/issues/394) | [BBBBBing](https://github.com/BBBBBing) |
+
 ## Version 3.18.7
 
 Minor Tweak

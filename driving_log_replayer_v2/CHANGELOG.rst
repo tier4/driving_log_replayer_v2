@@ -2,6 +2,12 @@
 Changelog for package driving_log_replayer
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
+Forthcoming
+-----------
+* feat: publish the detection marker when detection is null (`#394 <https://github.com/tier4/driving_log_replayer_v2/issues/394>`_)
+  Co-authored-by: MasatoSaeki <masato.saeki@tier4.jp>
+* Contributors: Binyi_Wu
+
 3.18.7 (2026-07-17)
 -------------------
 * feat: support agnocast for rosbag record (`#386 <https://github.com/tier4/driving_log_replayer_v2/issues/386>`_)
