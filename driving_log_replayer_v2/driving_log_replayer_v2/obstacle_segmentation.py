@@ -436,7 +436,8 @@ def build_detection_frame_output(
     *,
     frame_success: str | None,
 ) -> tuple[MarkerArray, PointCloud2, ObstacleSegmentationMarkerArray, dict]:
-    """検知結果(success/fail/warning)から marker/pcd/graph/info をまとめて生成する共通処理.
+    """
+    検知結果(success/fail/warning)から marker/pcd/graph/info をまとめて生成する共通処理.
 
     frame_success:
       - "Success"/"Fail"/"Warn": Detection を評価する場合。success コンテナの色/状態を
@@ -510,7 +511,7 @@ class Detection(EvaluationItem):
             self.summary = "Invalid"
             # Detection条件が無く評価しない場合でも、可視化/記録用に marker/detection
             # だけは検知結果から生成して publish する。
-            # jsonl の報告は従来どおり "Invalid" のまま（合否には一切影響しない）。
+            # jsonl の報告は従来どおり "Invalid" のまま (pass/failに影響なし)
             marker_array, _, _, _ = build_detection_frame_output(
                 frame_result,
                 header,
