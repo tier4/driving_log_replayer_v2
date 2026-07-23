@@ -12,6 +12,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import os
+from pathlib import Path
+
 from launch import LaunchContext
 from launch import LaunchDescription
 from launch.actions import ExecuteProcess
@@ -22,6 +25,7 @@ from launch.event_handlers import OnProcessExit
 
 from driving_log_replayer_v2.launch.argument import ensure_arg_compatibility
 from driving_log_replayer_v2.launch.argument import get_launch_arguments
+from simulation_report_orchestrator import create_orchestrator_action, report_requested
 
 
 def parse_launch_arguments(context: LaunchContext) -> list:
@@ -34,6 +38,20 @@ def parse_launch_arguments(context: LaunchContext) -> list:
 
 
 def launch_setup(context: LaunchContext) -> list:
+    conf = context.launch_configurations
+    if report_requested():
+        return [
+            create_orchestrator_action(
+                context,
+                "log_v2",
+                output_dir=conf["output_dir"],
+                argument_names={a.name for a in get_launch_arguments()} - {"output_dir"},
+                title=Path(conf["scenario_path"]).stem,
+                paths={"input_bag": conf["input_bag"]},
+                metadata={"caller": "driving_log_replayer_v2", "use_case": conf["use_case"]},
+            )
+        ]
+
     arguments = parse_launch_arguments(context)
     launch_base_cmd = ["ros2", "launch", "driving_log_replayer_v2"]
     # Specify the output dir from the parent because it will be created in the child process if the output dir is not specified.
