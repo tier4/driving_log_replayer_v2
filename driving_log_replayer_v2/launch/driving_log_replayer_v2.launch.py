@@ -25,7 +25,7 @@ from launch.event_handlers import OnProcessExit
 
 from driving_log_replayer_v2.launch.argument import ensure_arg_compatibility
 from driving_log_replayer_v2.launch.argument import get_launch_arguments
-from simulation_report_orchestrator import create_orchestrator_action, report_requested
+from simulation_report_orchestrator import create_simulation_report_action, simulation_report_requested
 
 
 def parse_launch_arguments(context: LaunchContext) -> list:
@@ -39,9 +39,9 @@ def parse_launch_arguments(context: LaunchContext) -> list:
 
 def launch_setup(context: LaunchContext) -> list:
     conf = context.launch_configurations
-    if report_requested():
+    if simulation_report_requested():
         return [
-            create_orchestrator_action(
+            create_simulation_report_action(
                 context,
                 "log_v2",
                 output_dir=conf["output_dir"],
