@@ -45,10 +45,8 @@ def launch_setup(context: LaunchContext) -> list:
                 context,
                 "log_v2",
                 output_dir=conf["output_dir"],
-                argument_names={a.name for a in get_launch_arguments()} - {"output_dir"},
                 title=Path(conf["scenario_path"]).stem,
                 paths={"input_bag": conf["input_bag"]},
-                metadata={"caller": "driving_log_replayer_v2", "use_case": conf["use_case"]},
             )
         ]
 
