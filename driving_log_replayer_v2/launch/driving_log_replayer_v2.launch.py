@@ -25,7 +25,7 @@ from launch.event_handlers import OnProcessExit
 
 from driving_log_replayer_v2.launch.argument import ensure_arg_compatibility
 from driving_log_replayer_v2.launch.argument import get_launch_arguments
-from simulation_report_orchestrator import create_simulation_report_action, simulation_report_requested
+from simulation_report_runner import create_simulation_report_action, simulation_report_requested
 
 
 def parse_launch_arguments(context: LaunchContext) -> list:
