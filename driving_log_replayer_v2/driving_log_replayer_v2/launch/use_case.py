@@ -26,6 +26,7 @@ from launch.actions import OpaqueFunction
 from launch.actions import UnsetEnvironmentVariable
 from launch.launch_description_sources import AnyLaunchDescriptionSource
 from launch_ros.actions import Node
+from launch_ros.actions import SetParameter
 from rosidl_runtime_py import message_to_ordereddict
 
 from driving_log_replayer_v2.launch.argument import add_use_case_arguments
@@ -177,12 +178,18 @@ def launch_topic_state_monitor(context: LaunchContext) -> list:
         "topic_state_monitor.yaml",
     )
     return [
-        IncludeLaunchDescription(
-            AnyLaunchDescriptionSource(component_state_monitor_launch_file.as_posix()),
-            launch_arguments={
-                "file": topic_monitor_config_path.as_posix(),
-                "mode": "logging_simulation",
-            }.items(),
+        GroupAction(
+            [
+                SetParameter(name="use_sim_time", value=True),
+                IncludeLaunchDescription(
+                    AnyLaunchDescriptionSource(component_state_monitor_launch_file.as_posix()),
+                    launch_arguments={
+                        "file": topic_monitor_config_path.as_posix(),
+                        "mode": "logging_simulation",
+                    }.items(),
+                ),
+            ],
+            scoped=True,
         ),
     ]
 
