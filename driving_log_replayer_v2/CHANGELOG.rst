@@ -2,8 +2,8 @@
 Changelog for package driving_log_replayer
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-Forthcoming
------------
+3.18.9 (2026-07-31)
+-------------------
 * fix: introduce use_sim_time as global parameter (`#396 <https://github.com/tier4/driving_log_replayer_v2/issues/396>`_)
 * Contributors: Masato Saeki
 
