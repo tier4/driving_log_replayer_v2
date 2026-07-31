@@ -1,5 +1,13 @@
 # Release Notes
 
+## Version 3.18.9
+
+Minor Tweak
+
+| Module   | Feature       | Brief summary                              | Pull request                                                        | Contributor                                   |
+| -------- | ------------- | ------------------------------------------ | ------------------------------------------------------------------- | --------------------------------------------- |
+| `common` | ros parameter | introduce use_sim_time as global parameter | [#396](https://github.com/tier4/driving_log_replayer_v2/issues/396) | [MasatoSaeki](https://github.com/MasatoSaeki) |
+
 ## Version 3.18.8
 
 Minor Tweak
