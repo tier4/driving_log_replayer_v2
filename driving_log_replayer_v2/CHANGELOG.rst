@@ -2,6 +2,11 @@
 Changelog for package driving_log_replayer
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
+Forthcoming
+-----------
+* fix: introduce use_sim_time as global parameter (`#396 <https://github.com/tier4/driving_log_replayer_v2/issues/396>`_)
+* Contributors: Masato Saeki
+
 3.18.8 (2026-07-22)
 -------------------
 * feat: publish the detection marker when detection is null (`#394 <https://github.com/tier4/driving_log_replayer_v2/issues/394>`_)
