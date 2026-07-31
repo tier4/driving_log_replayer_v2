@@ -26,6 +26,7 @@ from launch.actions import OpaqueFunction
 from launch.actions import UnsetEnvironmentVariable
 from launch.launch_description_sources import AnyLaunchDescriptionSource
 from launch_ros.actions import Node
+from launch_ros.actions import SetParameter
 from rosidl_runtime_py import message_to_ordereddict
 
 from driving_log_replayer_v2.launch.argument import add_use_case_arguments
@@ -132,6 +133,7 @@ def launch_evaluator_node(context: LaunchContext) -> list:
         output_dummy_result_jsonl(conf["result_jsonl_path"])
         return [LogInfo(msg="evaluator_node is not launched due to record only mode")]
     params = {
+        # if use_case is perception_reproducer, use_sim_time is overridden to False
         "use_sim_time": conf["use_case"] != "perception_reproducer",
         "scenario_path": conf["scenario_path"],
         "t4_dataset_path": conf["t4_dataset_path"],
@@ -196,6 +198,7 @@ def launch_initial_pose_node(context: LaunchContext) -> list:
         return [LogInfo(msg="initial_pose_node is not activated")]
 
     params = {
+        # if use_case is perception_reproducer, use_sim_time is overridden to False
         "use_sim_time": conf["use_case"] != "perception_reproducer",
         "initial_pose": initial_pose,
         "direct_initial_pose": direct_initial_pose,
@@ -243,6 +246,7 @@ def launch_goal_pose_node(context: LaunchContext) -> list:
         ]
 
     params = {
+        # if use_case is perception_reproducer, use_sim_time is overridden to False
         "use_sim_time": conf["use_case"] != "perception_reproducer",
         "goal_pose": goal_pose,
     }
@@ -261,6 +265,8 @@ def launch_goal_pose_node(context: LaunchContext) -> list:
 
 def launch_use_case() -> list:
     return [
+        # Once for all DLR-side nodes. Survives Autoware's scoped GroupAction (forwarding=True).
+        SetParameter(name="use_sim_time", value=True),
         OpaqueFunction(function=add_use_case_arguments),  # after ensure_arg_compatibility
         OpaqueFunction(function=launch_autoware),
         OpaqueFunction(function=launch_optional_nodes),
