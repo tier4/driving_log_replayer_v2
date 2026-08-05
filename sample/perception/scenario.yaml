@@ -33,7 +33,7 @@ Evaluation:
     evaluation_config_dict:
       evaluation_task: detection # detection/tracking/prediction. Evaluates objects for the specified task.
       # --- Object Filter Conditions ---
-      target_labels: [car, bicycle, pedestrian, motorbike, unknown] # Labels to be evaluated
+      target_labels: [car, truck, bus, bicycle, motorbike, pedestrian, unknown, hazard, animal] # Labels to be evaluated
       max_x_position: 200 # Maximum x-position for evaluation. Objects with absolute x-coordinates > this value are excluded. Lower limit cannot be set.
       max_y_position: 200 # Maximum y-position for evaluation. Objects with absolute y-coordinates > this value are excluded. Lower limit cannot be set.
       # max_distance: null # Max distance from base_link (mutually exclusive with max_x/y_position). Lower limit cannot be set.
@@ -41,7 +41,7 @@ Evaluation:
       # confidence_threshold: null # Confidence threshold for estimated objects to be evaluated
       # target_uuids: null # Specify UUIDs to evaluate only specific ground truths. If null, all are targeted.
       # --- Object Matching Conditions ---
-      max_matchable_radii: [5.0, 3.0, 3.0, 3.0, 3.0] # Maximum radius for matching. No matching occurs beyond these distances.
+      max_matchable_radii: [3.0, 5.0, 5.0, 3.0, 3.0, 3.0, 3.0, 3.0, 3.0] # Maximum radius for matching. No matching occurs beyond these distances.
       merge_similar_labels: false # Whether to merge similar labels: https://github.com/tier4/autoware_perception_evaluation/blob/develop/docs/en/perception/label.md
       matching_label_policy: allow_unknown # default/allow_unknown/allow_any/allow_same_group (Match only same labels / Unknown matches all labels / All labels match each other / Match only within the same group(vehicle and vru))
       # allow_matching_unknown: true # Whether to match with 'unknown' labels. Same as matching_label_policy: allow_unknown. Priority given to matching_label_policy.
@@ -51,15 +51,51 @@ Evaluation:
       # count_label_number: false # Count objects per label during t4_dataset load. Default is true.
       # --- Score Types and Thresholds ---
       # Also used if CriteriaMethod is set to metrics_score.
-      center_distance_thresholds: [[1.0, 1.0, 1.0, 1.0, 1.0], [2.0, 2.0, 2.0, 2.0, 2.0]] # Thresholds for center-distance matching (Inner list length = labels, outer list = number of thresholds)
-      plane_distance_thresholds: [2.0, 30.0] # Thresholds for planar distance matching
-      iou_2d_thresholds: [0.5] # Thresholds for 2D IoU matching
-      iou_3d_thresholds: [0.5] # Thresholds for 3D IoU matching
-      min_point_numbers: [0, 0, 0, 0, 0] # Min point count in ground truth bbox. If 0, all ground truth objects are evaluated.
+      center_distance_thresholds: # Thresholds for center-distance matching (Inner list length = labels, outer list = number of thresholds)
+        - - 1
+          - 1
+          - 1
+          - 1
+          - 1
+          - 0.5
+          - 1
+          - 1
+          - 0.5
+        - - 2
+          - 2
+          - 2
+          - 2
+          - 2
+          - 1
+          - 2
+          - 2
+          - 1
+      plane_distance_thresholds: # Thresholds for planar distance matching
+        - - 2
+          - 2
+          - 2
+          - 2
+          - 2
+          - 1
+          - 2
+          - 2
+          - 1
+        - - 3
+          - 3
+          - 3
+          - 3
+          - 3
+          - 1.5
+          - 3
+          - 3
+          - 1.5
+      # iou_2d_thresholds: [0.5] # Thresholds for 2D IoU matching
+      # iou_3d_thresholds: [0.5] # Thresholds for 3D IoU matching
+      min_point_numbers: [0, 0, 0, 0, 0, 0, 0, 0, 0] # Min point count in ground truth bbox. If 0, all ground truth objects are evaluated.
   CriticalObjectFilterConfig: # Config for dynamic (per-frame) object filtering
-    target_labels: [car, bicycle, pedestrian, motorbike, unknown]
-    max_x_position_list: [200.0, 200.0, 200.0, 200.0, 200.0] # If no special filtering is needed, set same as max_x_position. Must be a list matching number of target labels.
-    max_y_position_list: [200.0, 200.0, 200.0, 200.0, 200.0] # If no special filtering is needed, set same as max_y_position. Must be a list matching number of target labels.
+    target_labels: [car, truck, bus, bicycle, motorbike, pedestrian, unknown, hazard, animal]
+    max_x_position_list: [200.0, 200.0, 200.0, 200.0, 200.0, 200.0, 200.0, 200.0, 200.0] # If no special filtering is needed, set same as max_x_position. Must be a list matching number of target labels.
+    max_y_position_list: [200.0, 200.0, 200.0, 200.0, 200.0, 200.0, 200.0, 200.0, 200.0] # If no special filtering is needed, set same as max_y_position. Must be a list matching number of target labels.
     # max_distance_list: null
     # min_distance_list: null
     # min_point_numbers: [0, 0, 0, 0, 0]
@@ -67,8 +103,8 @@ Evaluation:
     # target_uuids: null
     # ignore_attributes: [cycle_state.without_rider]
   PerceptionPassFailConfig: # Config for dynamic (per-frame) object filtering to determine pass/fail
-    target_labels: [car, bicycle, pedestrian, motorbike, unknown]
-    matching_threshold_list: [2.0, 2.0, 2.0, 2.0, 2.0] # Used only for num_gt_tp/num_gt. Same as plane_distance_thresholds.
+    target_labels: [car, truck, bus, bicycle, motorbike, pedestrian, unknown, hazard, animal]
+    matching_threshold_list: [2.0, 2.0, 2.0, 2.0, 2.0, 1.0, 2.0, 2.0, 1.0] # Used only for num_gt_tp/num_gt. Same as plane_distance_thresholds.
     # confidence_threshold_list: null
 include_use_case:
   UseCaseName: planning_control
