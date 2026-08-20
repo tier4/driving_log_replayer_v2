@@ -142,7 +142,18 @@ perception では、シナリオに指定した条件で perception_eval が評�
           "Total": "Success or Fail",
           "Frame": "Success or Fail"
         },
-        "Info": {}
+        "Info": {
+          "FpObjects": [
+            {
+              "label": "非検知エリア内で検出されたオブジェクトのラベル",
+              "uuid": "オブジェクトのUUID、無い場合はnull",
+              "position": { "x": 0.0, "y": 0.0, "z": 0.0 },
+              "velocity": { "x": 0.0, "y": 0.0, "z": 0.0 },
+              "orientation": { "x": 0.0, "y": 0.0, "z": 0.0, "w": 1.0 },
+              "shape": { "x": 0.0, "y": 0.0, "z": 0.0 }
+            }
+          ]
+        }
       }
     },
     "criteria_name": {
@@ -160,6 +171,10 @@ perception では、シナリオに指定した条件で perception_eval が評�
   }
 }
 ```
+
+`Info` には非検知エリア内で検出された内容が入る。合格フレームでは空となる。
+bbox の topic では `FpObjects`（バウンディングボックスがエリアに入ったオブジェクトごとに 1 エントリ）、
+pointcloud の topic では `FpPointCount`（エリア内の点群数）が入る。
 
 警告のフォーマット
 

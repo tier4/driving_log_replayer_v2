@@ -281,8 +281,49 @@ class PerceptionFP(EvaluationItem):
                     "Total": self.success_str(),
                     "Frame": "Success" if not is_in_non_detection_area else "Fail",
                 },
-                "Info": {},
+                "Info": self.summarize_fp_objects(),
             },
+        }
+
+    @staticmethod
+    def _fill_xyz(values: tuple[float, float, float] | None) -> dict | None:
+        if values is None:
+            return None
+        return {"x": values[0], "y": values[1], "z": values[2]}
+
+    def summarize_fp_objects(self) -> dict:
+        """
+        Describe what was found inside the non-detection area, for result.jsonl.
+
+        Empty on passing frames. Object entries mirror
+        FrameDescriptionWriter.object_to_description, but are built locally so this
+        module stays importable without a ROS environment.
+        """
+        if isinstance(self._fp_objects, np.ndarray):
+            if self._fp_objects.size == 0:
+                return {}
+            return {"FpPointCount": int(self._fp_objects.shape[0])}
+        if not self._fp_objects:
+            return {}
+        return {
+            "FpObjects": [
+                {
+                    "label": obj.semantic_label.name,
+                    "uuid": obj.uuid,
+                    "position": self._fill_xyz(obj.state.position),
+                    "velocity": self._fill_xyz(obj.state.velocity),
+                    "orientation": {
+                        "x": obj.state.orientation.x,
+                        "y": obj.state.orientation.y,
+                        "z": obj.state.orientation.z,
+                        "w": obj.state.orientation.w,
+                    }
+                    if obj.state.orientation is not None
+                    else None,
+                    "shape": self._fill_xyz(obj.state.size),
+                }
+                for obj in self._fp_objects
+            ],
         }
 
     def is_in_non_detection_area(
