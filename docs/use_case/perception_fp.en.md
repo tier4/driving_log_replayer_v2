@@ -175,7 +175,7 @@ Format of each frame:
 
 `Info` describes what was found inside the non-detection area and is empty on passing frames.
 For bbox topics it holds `FpObjects` (one entry per object whose bounding box entered the area);
-for pointcloud topics it holds `FpPointCount` (the number of points inside the area).
+for pointcloud topics it holds `FpPoints` (the coordinate of points inside the area(list[list[float]])).
 
 Warning Data Format:
 

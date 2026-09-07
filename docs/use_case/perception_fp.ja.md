@@ -174,7 +174,7 @@ perception では、シナリオに指定した条件で perception_eval が評�
 
 `Info` には非検知エリア内で検出された内容が入る。合格フレームでは空となる。
 bbox の topic では `FpObjects`（バウンディングボックスがエリアに入ったオブジェクトごとに 1 エントリ）、
-pointcloud の topic では `FpPointCount`（エリア内の点群数）が入る。
+pointcloud の topic では `FpPoints`（エリア内の点群の座標(list[list[float]])）が入る。
 
 警告のフォーマット
 

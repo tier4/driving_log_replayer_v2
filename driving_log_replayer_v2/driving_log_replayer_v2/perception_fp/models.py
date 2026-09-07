@@ -302,7 +302,7 @@ class PerceptionFP(EvaluationItem):
         if isinstance(self._fp_objects, np.ndarray):
             if self._fp_objects.size == 0:
                 return {}
-            return {"FpPointCount": int(self._fp_objects.shape[0])}
+            return {"FpPoints": self._fp_objects.tolist()}
         if not self._fp_objects:
             return {}
         return {
