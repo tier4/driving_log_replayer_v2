@@ -2,8 +2,8 @@
 Changelog for package driving_log_replayer
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-Forthcoming
------------
+3.18.10 (2026-09-08)
+--------------------
 * feat(perception_fp): record objects found in the non-detection area in result.jsonl (`#398 <https://github.com/tier4/driving_log_replayer_v2/issues/398>`_)
   Co-authored-by: Claude Fable 5 <noreply@anthropic.com>
   Co-authored-by: MasatoSaeki <masato.saeki@tier4.jp>
