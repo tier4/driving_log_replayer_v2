@@ -1,5 +1,13 @@
 # Release Notes
 
+## Version 3.18.10
+
+Minor Tweak
+
+| Module          | Feature      | Brief summary                                                  | Pull request                                                        | Contributor                       |
+| --------------- | ------------ | -------------------------------------------------------------- | ------------------------------------------------------------------- | --------------------------------- |
+| `perception_fp` | result.jsonl | record objects found in the non-detection area in result.jsonl | [#398](https://github.com/tier4/driving_log_replayer_v2/issues/398) | [ogrex](https://github.com/ogrex) |
+
 ## Version 3.18.9
 
 Minor Tweak
