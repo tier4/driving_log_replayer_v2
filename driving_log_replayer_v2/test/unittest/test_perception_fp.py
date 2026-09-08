@@ -154,6 +154,17 @@ def test_in_non_detection_area(
                 "Total": "Fail",
                 "Frame": "Fail",
             },
-            "Info": {},
+            "Info": {
+                "FpObjects": [
+                    {
+                        "label": "car",
+                        "uuid": None,
+                        "position": {"x": 0.5, "y": 1.0, "z": 3.0},
+                        "velocity": {"x": 1.0, "y": 2.0, "z": 3.0},
+                        "orientation": {"x": 0.0, "y": 0.0, "z": 0.0, "w": 1.0},
+                        "shape": {"x": 1.0, "y": 2.0, "z": 6.0},
+                    },
+                ],
+            },
         },
     }

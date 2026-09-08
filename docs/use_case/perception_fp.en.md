@@ -143,7 +143,18 @@ Format of each frame:
           "Total": "Success or Fail",
           "Frame": "Success or Fail"
         },
-        "Info": {}
+        "Info": {
+          "FpObjects": [
+            {
+              "label": "Label of the object detected inside the non-detection area",
+              "uuid": "UUID of the object, or null",
+              "position": { "x": 0.0, "y": 0.0, "z": 0.0 },
+              "velocity": { "x": 0.0, "y": 0.0, "z": 0.0 },
+              "orientation": { "x": 0.0, "y": 0.0, "z": 0.0, "w": 1.0 },
+              "shape": { "x": 0.0, "y": 0.0, "z": 0.0 }
+            }
+          ]
+        }
       }
     },
     "criteria_name": {
@@ -161,6 +172,10 @@ Format of each frame:
   }
 }
 ```
+
+`Info` describes what was found inside the non-detection area and is empty on passing frames.
+For bbox topics it holds `FpObjects` (one entry per object whose bounding box entered the area);
+for pointcloud topics it holds `FpPoints` (the coordinate of points inside the area(list[list[float]])).
 
 Warning Data Format:
 
