@@ -2,6 +2,13 @@
 Changelog for package driving_log_replayer
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
+Forthcoming
+-----------
+* feat(perception_fp): record objects found in the non-detection area in result.jsonl (`#398 <https://github.com/tier4/driving_log_replayer_v2/issues/398>`_)
+  Co-authored-by: Claude Fable 5 <noreply@anthropic.com>
+  Co-authored-by: MasatoSaeki <masato.saeki@tier4.jp>
+* Contributors: lei.gu
+
 3.18.9 (2026-07-31)
 -------------------
 * fix: introduce use_sim_time as global parameter (`#396 <https://github.com/tier4/driving_log_replayer_v2/issues/396>`_)
