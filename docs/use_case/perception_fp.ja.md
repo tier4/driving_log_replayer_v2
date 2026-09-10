@@ -143,6 +143,8 @@ perception では、シナリオに指定した条件で perception_eval が評�
           "Frame": "Success or Fail"
         },
         "Info": {
+          "FrameId": "map",
+          "EgoPose": { "frame_id": "map", "position": { "x": 0.0, "y": 0.0, "z": 0.0 }, "yaw": 0.0 },
           "FpObjects": [
             {
               "label": "非検知エリア内で検出されたオブジェクトのラベル",
@@ -150,7 +152,9 @@ perception では、シナリオに指定した条件で perception_eval が評�
               "position": { "x": 0.0, "y": 0.0, "z": 0.0 },
               "velocity": { "x": 0.0, "y": 0.0, "z": 0.0 },
               "orientation": { "x": 0.0, "y": 0.0, "z": 0.0, "w": 1.0 },
-              "shape": { "x": 0.0, "y": 0.0, "z": 0.0 }
+              "shape": { "x": 0.0, "y": 0.0, "z": 0.0 },
+              "position_base_link": { "x": 0.0, "y": 0.0, "z": 0.0 },
+              "yaw_base_link": 0.0
             }
           ]
         }
@@ -175,6 +179,7 @@ perception では、シナリオに指定した条件で perception_eval が評�
 `Info` には非検知エリア内で検出された内容が入る。合格フレームでは空となる。
 bbox の topic では `FpObjects`（バウンディングボックスがエリアに入ったオブジェクトごとに 1 エントリ）、
 pointcloud の topic では `FpPoints`（エリア内の点群の座標(list[list[float]])）が入る。
+`FrameId` はオブジェクトが publish されていた座標系（通常 `map`）、`EgoPose` はそのフレームでの自車（base_link 原点）の `map` 上の位置と yaw、各オブジェクトの `position_base_link` / `yaw_base_link` は同じオブジェクトを自車から見た座標である。これにより rosbag を再生しなくても非検知エリアと一緒に自車周りに描画できる。
 
 警告のフォーマット
 

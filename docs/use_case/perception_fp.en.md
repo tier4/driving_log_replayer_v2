@@ -144,6 +144,8 @@ Format of each frame:
           "Frame": "Success or Fail"
         },
         "Info": {
+          "FrameId": "map",
+          "EgoPose": { "frame_id": "map", "position": { "x": 0.0, "y": 0.0, "z": 0.0 }, "yaw": 0.0 },
           "FpObjects": [
             {
               "label": "Label of the object detected inside the non-detection area",
@@ -151,7 +153,9 @@ Format of each frame:
               "position": { "x": 0.0, "y": 0.0, "z": 0.0 },
               "velocity": { "x": 0.0, "y": 0.0, "z": 0.0 },
               "orientation": { "x": 0.0, "y": 0.0, "z": 0.0, "w": 1.0 },
-              "shape": { "x": 0.0, "y": 0.0, "z": 0.0 }
+              "shape": { "x": 0.0, "y": 0.0, "z": 0.0 },
+              "position_base_link": { "x": 0.0, "y": 0.0, "z": 0.0 },
+              "yaw_base_link": 0.0
             }
           ]
         }
@@ -176,6 +180,7 @@ Format of each frame:
 `Info` describes what was found inside the non-detection area and is empty on passing frames.
 For bbox topics it holds `FpObjects` (one entry per object whose bounding box entered the area);
 for pointcloud topics it holds `FpPoints` (the coordinate of points inside the area(list[list[float]])).
+`FrameId` is the frame the objects were published in (normally `map`), `EgoPose` places the ego vehicle (base_link origin) in `map` at that frame, and each object additionally carries `position_base_link` / `yaw_base_link`: the same object seen from the ego vehicle, so a viewer can draw it around the ego together with the non-detection area without replaying the bag.
 
 Warning Data Format:
 
