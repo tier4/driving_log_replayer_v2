@@ -323,9 +323,15 @@ class PerceptionRunner(Runner):
             PerceptionInvalidReason.NO_GROUND_TRUTH,
             PerceptionInvalidReason.IGNORED_FRAME,
         }:
-            self.perc_result.set_info_frame(frame_result.data, frame_result.skip_counter)
+            # NOTE: frame_result.data is None for an invalid frame, report the reason instead so
+            #       that the skipped frames can be told apart in result.jsonl.
+            self.perc_result.set_info_frame(
+                {"Reason": frame_result.invalid_reason.name}, frame_result.skip_counter
+            )
         elif frame_result.invalid_reason == PerceptionInvalidReason.INVALID_ESTIMATED_OBJECTS:
-            self.perc_result.set_warn_frame(frame_result.data, frame_result.skip_counter)
+            self.perc_result.set_warn_frame(
+                {"Reason": frame_result.invalid_reason.name}, frame_result.skip_counter
+            )
         else:
             err_msg = f"Unknown invalid_reason: {frame_result.invalid_reason}"
             raise TypeError(err_msg)
@@ -346,7 +352,10 @@ class PerceptionRunner(Runner):
             perception_degradation_topic = self._degradation_topics[
                 0
             ]  # head topic is perception degradation topic
-            self.perc_result.set_final_metrics(final_metrics[perception_degradation_topic])
+            self.perc_result.set_final_metrics(
+                final_metrics[perception_degradation_topic],
+                self.perc_eval_manager.get_frame_coverage(perception_degradation_topic),
+            )
             res_str = self.perc_result_writer.write_result_with_time(
                 self.perc_result,
                 self._rosbag_manager.get_last_subscribed_timestamp(),

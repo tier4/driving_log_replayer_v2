@@ -14,6 +14,7 @@
 
 from __future__ import annotations
 
+from collections import Counter
 import logging
 from os.path import expandvars
 from pathlib import Path
@@ -64,6 +65,7 @@ class PerceptionEvaluator(Evaluator):
         # NOTE: this class uses the perception_eval package, so not use parent logger, which means not call super().__init__()
         # instance variables
         self.__skip_counter = 0
+        self.__skip_reasons: Counter[str] = Counter()
         self.__frame_id_str = frame_id_str
         self.__critical_object_filter_config: CriticalObjectFilterConfig
         self.__frame_pass_fail_config: PerceptionPassFailConfig
@@ -148,15 +150,10 @@ class PerceptionEvaluator(Evaluator):
             isinstance(data.estimated_objects, list)
             and all(isinstance(obj, DynamicObject) for obj in data.estimated_objects)
         ):
-            self.__skip_counter += 1
             self.__logger.warning(
                 "Estimated objects is invalid for timestamp: %s", converted_data.header_timestamp
             )
-            return FrameResult(
-                is_valid=False,
-                invalid_reason=PerceptionInvalidReason.INVALID_ESTIMATED_OBJECTS,
-                skip_counter=self.__skip_counter,
-            )
+            return self.__skip_frame(PerceptionInvalidReason.INVALID_ESTIMATED_OBJECTS)
 
         ground_truth_now_frame = self.__evaluator.get_ground_truth_now_frame(
             converted_data.header_timestamp,
@@ -164,15 +161,19 @@ class PerceptionEvaluator(Evaluator):
         )
 
         if ground_truth_now_frame is None:
-            self.__skip_counter += 1
             self.__logger.warning(
                 "Ground truth not found for timestamp %s", converted_data.header_timestamp
             )
-            return FrameResult(
-                is_valid=False,
-                invalid_reason=PerceptionInvalidReason.NO_GROUND_TRUTH,
-                skip_counter=self.__skip_counter,
+            return self.__skip_frame(PerceptionInvalidReason.NO_GROUND_TRUTH)
+
+        # NOTE: decide to ignore the frame before add_frame_result(), otherwise the ignored frame
+        #       is kept in frame_results and pollutes the pkl, the metrics and the analyzer.
+        if int(ground_truth_now_frame.frame_name) in self.__ignore_frames:
+            self.__logger.info(
+                "Frame %s is ignored for evaluation.",
+                ground_truth_now_frame.frame_name,
             )
+            return self.__skip_frame(PerceptionInvalidReason.IGNORED_FRAME)
 
         frame_result: PerceptionFrameResult = self.__evaluator.add_frame_result(
             unix_time=converted_data.header_timestamp,
@@ -181,18 +182,6 @@ class PerceptionEvaluator(Evaluator):
             critical_object_filter_config=self.__critical_object_filter_config,
             frame_pass_fail_config=self.__frame_pass_fail_config,
         )
-
-        if int(frame_result.frame_name) in self.__ignore_frames:
-            self.__skip_counter += 1
-            self.__logger.info(
-                "Frame %s is ignored for evaluation.",
-                frame_result.frame_name,
-            )
-            return FrameResult(
-                is_valid=False,
-                invalid_reason=PerceptionInvalidReason.IGNORED_FRAME,
-                skip_counter=self.__skip_counter,
-            )
 
         # TODO: add topic delay
         self.__logger.info(
@@ -207,6 +196,40 @@ class PerceptionEvaluator(Evaluator):
         # TODO: decide whether to add skip counter or not
 
         return FrameResult(is_valid=True, data=frame_result, skip_counter=self.__skip_counter)
+
+    def __skip_frame(self, invalid_reason: PerceptionInvalidReason) -> FrameResult:
+        """Count the skipped frame and its reason, then build the invalid FrameResult."""
+        self.__skip_counter += 1
+        self.__skip_reasons[invalid_reason.name] += 1
+        return FrameResult(
+            is_valid=False,
+            invalid_reason=invalid_reason,
+            skip_counter=self.__skip_counter,
+        )
+
+    def get_frame_coverage(self) -> dict:
+        """
+        Get how much of the ground truth of the dataset was actually evaluated.
+
+        Returns:
+            dict: `GtFrames` is the number of ground truth frames of the dataset window,
+                `GtFramesEvaluated` is the number of distinct ground truth frames bound to at least
+                one valid evaluated estimate, `Coverage` is their ratio and `SkipReasons` is the
+                histogram of the reasons why a frame was not evaluated.
+
+        """
+        num_gt_frames = len(self.__evaluator.ground_truth_frames)
+        evaluated_frame_names = {
+            frame_result.frame_name for frame_result in self.__evaluator.frame_results
+        }
+        num_evaluated = len(evaluated_frame_names)
+        coverage = round(num_evaluated / num_gt_frames, 4) if num_gt_frames > 0 else 0.0
+        return {
+            "GtFrames": num_gt_frames,
+            "GtFramesEvaluated": num_evaluated,
+            "Coverage": coverage,
+            "SkipReasons": dict(sorted(self.__skip_reasons.items())),
+        }
 
     def get_evaluation_config(self) -> PerceptionEvaluationConfig:
         return self.__evaluator.evaluator_config
@@ -275,6 +298,13 @@ class PerceptionEvaluator(Evaluator):
     def __remove_ignored_frames(
         self, frame_results: list[PerceptionFrameResult]
     ) -> list[PerceptionFrameResult]:
+        """
+        Drop the frames ignored by frame_name.
+
+        NOTE: kept as a safety net. Since the ignore decision is taken before add_frame_result(),
+        the ignored frames are not in frame_results anymore, but frame results loaded from an old
+        pkl or added by another code path may still contain them.
+        """
         return [
             frame_result
             for frame_result in frame_results
