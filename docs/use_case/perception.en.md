@@ -145,12 +145,18 @@ Frames listed in `ignore_frames` are excluded from the evaluation: they are not 
 
 `ignore_frames` can be set in the scenario (`Evaluation.ignore_frames`) or as a launch argument, which has the higher priority. The value is a comma-separated list of the following tokens.
 
-| Token | Meaning                                                                 | Example |
-| ----- | ----------------------------------------------------------------------- | ------- |
-| `N`   | Frame whose t4_dataset frame index (`FrameName`) is N.                  | `3`     |
-| `A-B` | Frames whose t4_dataset frame index is between A and B (both included). | `0-4`   |
+| Token     | Meaning                                                                                  | Example   |
+| --------- | ---------------------------------------------------------------------------------------- | --------- |
+| `N`       | Frame whose t4_dataset frame index (`FrameName`) is N.                                   | `3`       |
+| `A-B`     | Frames whose t4_dataset frame index is between A and B (both included).                  | `0-4`     |
+| `first:N` | First N evaluated frames, by position in the sequence of the evaluated frames.            | `first:2` |
+| `last:N`  | Last N evaluated frames, by position in the sequence of the evaluated frames.             | `last:1`  |
 
-e.g. `ignore_frames: "0-4,10"`
+e.g. `ignore_frames: "0-4,10,first:1,last:2"`
+
+`N` and `A-B` are matched against the frame index of the dataset, while `first:N` and `last:N` are matched against the position of the frame in the sequence of the frames which would be evaluated, so they can be used without knowing the frame indices of the dataset. They are typically used to drop the head and the tail of the scene where the ego vehicle or the perception module is not settled yet.
+
+`last:N` cannot be decided while the rosbag is read, so the writing of the last N evaluated frames is delayed until the end of the rosbag, and they are then written as ignored frames. The frames ignored by `last:N` are removed from the frame results before the metrics, the analysis and the coverage are computed.
 
 ## Topic name and data type used by evaluation script
 

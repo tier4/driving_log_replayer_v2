@@ -26,6 +26,7 @@ if TYPE_CHECKING:
     from perception_eval.config import PerceptionEvaluationConfig
     from perception_eval.tool import PerceptionAnalyzer3D
 
+    from driving_log_replayer_v2.post_process.evaluation_manager import IgnoreFrames
     from driving_log_replayer_v2.scenario import ScenarioType
 
 
@@ -60,7 +61,7 @@ class PerceptionEvaluationManager(EvaluationManager):
         t4_dataset_path: str,
         result_archive_path: str,
         evaluation_topics_with_task: dict[str, list[str]],
-        ignore_frames: list[int],
+        ignore_frames: IgnoreFrames,
     ) -> None:
         self._evaluators = {
             topic: PerceptionEvaluator(

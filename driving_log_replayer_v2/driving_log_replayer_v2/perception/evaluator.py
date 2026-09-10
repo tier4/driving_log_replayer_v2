@@ -40,6 +40,7 @@ if TYPE_CHECKING:
     from perception_eval.evaluation.metrics import MetricsScore
 
     from driving_log_replayer_v2.perception.runner import PerceptionEvalData
+    from driving_log_replayer_v2.post_process.evaluation_manager import IgnoreFrames
     from driving_log_replayer_v2.post_process.runner import ConvertedData
 
 
@@ -60,12 +61,14 @@ class PerceptionEvaluator(Evaluator):
         evaluation_topic: str,
         evaluation_task: str,
         frame_id_str: str,
-        ignore_frames: list[int],
+        ignore_frames: IgnoreFrames,
     ) -> None:
         # NOTE: this class uses the perception_eval package, so not use parent logger, which means not call super().__init__()
         # instance variables
         self.__skip_counter = 0
+        self.__evaluated_frame_position = 0  # 1-based position of the evaluated frames
         self.__skip_reasons: Counter[str] = Counter()
+        self.__tail_frames_ignored = False
         self.__frame_id_str = frame_id_str
         self.__critical_object_filter_config: CriticalObjectFilterConfig
         self.__frame_pass_fail_config: PerceptionPassFailConfig
@@ -168,10 +171,14 @@ class PerceptionEvaluator(Evaluator):
 
         # NOTE: decide to ignore the frame before add_frame_result(), otherwise the ignored frame
         #       is kept in frame_results and pollutes the pkl, the metrics and the analyzer.
-        if int(ground_truth_now_frame.frame_name) in self.__ignore_frames:
+        self.__evaluated_frame_position += 1
+        if self.__ignore_frames.should_ignore(
+            int(ground_truth_now_frame.frame_name), self.__evaluated_frame_position
+        ):
             self.__logger.info(
-                "Frame %s is ignored for evaluation.",
+                "Frame %s (evaluated frame position %d) is ignored for evaluation.",
                 ground_truth_now_frame.frame_name,
+                self.__evaluated_frame_position,
             )
             return self.__skip_frame(PerceptionInvalidReason.IGNORED_FRAME)
 
@@ -207,6 +214,34 @@ class PerceptionEvaluator(Evaluator):
             skip_counter=self.__skip_counter,
         )
 
+    def __ignore_tail_frames(self) -> None:
+        """
+        Drop the last N evaluated frames from frame_results for the `last:N` setting.
+
+        `last:N` cannot be decided while streaming, so it is applied here, before the frame results
+        are saved and before the metrics, the analyzer and the coverage are computed.
+        """
+        if self.__tail_frames_ignored:
+            return
+        self.__tail_frames_ignored = True
+        num_ignore = self.__ignore_frames.last
+        if num_ignore <= 0:
+            return
+        frame_results = self.__evaluator.frame_results
+        num_ignore = min(num_ignore, len(frame_results))
+        ignored_frame_names = [
+            frame_result.frame_name
+            for frame_result in frame_results[len(frame_results) - num_ignore :]
+        ]
+        del frame_results[len(frame_results) - num_ignore :]
+        self.__skip_counter += num_ignore
+        self.__skip_reasons[PerceptionInvalidReason.IGNORED_FRAME.name] += num_ignore
+        self.__logger.info(
+            "Last %d evaluated frames are ignored for evaluation (frame_name: %s).",
+            num_ignore,
+            ", ".join(ignored_frame_names),
+        )
+
     def get_frame_coverage(self) -> dict:
         """
         Get how much of the ground truth of the dataset was actually evaluated.
@@ -218,6 +253,7 @@ class PerceptionEvaluator(Evaluator):
                 histogram of the reasons why a frame was not evaluated.
 
         """
+        self.__ignore_tail_frames()
         num_gt_frames = len(self.__evaluator.ground_truth_frames)
         evaluated_frame_names = {
             frame_result.frame_name for frame_result in self.__evaluator.frame_results
@@ -238,6 +274,7 @@ class PerceptionEvaluator(Evaluator):
         return self.__result_archive_w_topic_path
 
     def save_frame_results(self) -> None:
+        self.__ignore_tail_frames()
         self.__logger.info("Saving frame results for topic: %s", self.__evaluation_topic)
         with Path(expandvars(self.__result_archive_w_topic_path.joinpath("scene_result.pkl"))).open(
             "wb"
@@ -249,6 +286,7 @@ class PerceptionEvaluator(Evaluator):
             pickle.dump(self.__evaluator.evaluator_config, pkl_file)
 
     def get_evaluation_results(self, *, save_frame_results: bool) -> dict:
+        self.__ignore_tail_frames()
         self.__logger.info("Evaluating topic: %s", self.__evaluation_topic)
         if save_frame_results:
             self.save_frame_results()

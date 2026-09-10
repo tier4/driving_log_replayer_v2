@@ -39,6 +39,7 @@ from driving_log_replayer_v2.perception.planning_factor import PlanningFactorEva
 from driving_log_replayer_v2.perception.topics import load_evaluation_topics
 import driving_log_replayer_v2.perception_eval_conversions as eval_conversions
 from driving_log_replayer_v2.planning_control import PlanningFactorResult
+from driving_log_replayer_v2.post_process.evaluation_manager import TailIgnoreBuffer
 from driving_log_replayer_v2.post_process.ros2_utils import get_topic_metadata
 from driving_log_replayer_v2.post_process.ros2_utils import lookup_transform
 from driving_log_replayer_v2.post_process.runner import ConvertedData
@@ -152,6 +153,10 @@ class PerceptionRunner(Runner):
             ignore_frames,
             enable_analysis,
         )
+
+        # NOTE: the parsed setting is taken from the evaluation manager because the scenario is
+        #       used as fallback when the launch argument is not set.
+        self._tail_ignore_buffer = TailIgnoreBuffer(self.perc_eval_manager.get_ignore_frames().last)
 
     def _modify_scenario(self, scenario: PerceptionScenario) -> PerceptionScenario:
         if self._ignore_target_uuids == "true":
@@ -289,6 +294,56 @@ class PerceptionRunner(Runner):
                 )
             return
 
+        if self._tail_ignore_buffer.enabled:
+            # delay the writing until it is known that the frame is not one of the last N frames
+            for deferred in self._tail_ignore_buffer.push(
+                (frame_result, header, subscribed_timestamp_nanosec),
+                is_valid=frame_result.is_valid,
+            ):
+                self._write_perception_result(*deferred)
+            return
+
+        self._write_perception_result(frame_result, header, subscribed_timestamp_nanosec)
+
+    def _flush_tail_ignore_buffer(self) -> None:
+        """Write the last N valid frames as ignored frames (`last:N`)."""
+        num_ignored = 0
+        for (
+            frame_result,
+            header,
+            subscribed_timestamp_nanosec,
+        ), is_valid in self._tail_ignore_buffer.flush():
+            if is_valid:
+                num_ignored += 1
+                # NOTE: PerceptionEvaluator increments its skip counter by the number of the
+                #       ignored tail frames as well, so keep the counter consistent here.
+                self._write_ignored_frame(
+                    frame_result.skip_counter + num_ignored,
+                    header,
+                    subscribed_timestamp_nanosec,
+                )
+            else:
+                self._write_perception_result(frame_result, header, subscribed_timestamp_nanosec)
+
+    def _write_ignored_frame(
+        self, skip_counter: int, header: Header, subscribed_timestamp_nanosec: int
+    ) -> None:
+        """Write the result line of a frame ignored by the `last:N` setting."""
+        self.perc_result.set_info_frame(
+            {"Reason": PerceptionInvalidReason.IGNORED_FRAME.name}, skip_counter
+        )
+        res_str = self.perc_result_writer.write_result_with_time(
+            self.perc_result, subscribed_timestamp_nanosec
+        )
+        self._rosbag_manager.write_results(
+            "/driving_log_replayer_v2/perception/results",
+            String(data=res_str),
+            header.stamp,
+        )
+
+    def _write_perception_result(
+        self, frame_result: FrameResult, header: Header, subscribed_timestamp_nanosec: int
+    ) -> None:
         if frame_result.is_valid:
             # NOTE: In offline evaluation using rosbag with SequentialReader(), messages are processed one-by-one.
             #       So it is impossible to get transform of future unless explicitly set the tf of future in the buffer.
@@ -346,6 +401,9 @@ class PerceptionRunner(Runner):
         )
 
     def _evaluate_on_post_process(self) -> None:
+        # write the frames delayed by the last:N setting before the final result line
+        self._flush_tail_ignore_buffer()
+
         if self._enable_metrics_details == "true":
             final_metrics: dict[str, dict] = self.perc_eval_manager.get_evaluation_results()
 
