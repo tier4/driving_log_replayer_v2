@@ -185,6 +185,24 @@ class PerceptionEvaluationManager(EvaluationManager):
             for topic, evaluator in self._evaluators.items()
         }
 
+    def get_frame_coverage(self, topic_name: str | None = None) -> dict | dict[str, dict]:
+        """
+        Get the ground truth frame coverage for each/specific evaluation topic.
+
+        Args:
+            topic_name (str | None): Name of the topic to get the coverage. If None, get all coverages.
+
+        Returns:
+            dict | dict[str, dict]: The coverage information. See PerceptionEvaluator.get_frame_coverage().
+
+        """
+        if topic_name is not None:
+            evaluator = self._evaluators[topic_name]
+            return evaluator.get_frame_coverage()
+        return {
+            topic: evaluator.get_frame_coverage() for topic, evaluator in self._evaluators.items()
+        }
+
     def get_analyzer(
         self, topic_name: str | None = None
     ) -> PerceptionAnalyzer3D | dict[str, PerceptionAnalyzer3D]:

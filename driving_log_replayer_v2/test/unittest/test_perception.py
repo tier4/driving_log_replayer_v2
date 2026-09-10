@@ -31,9 +31,11 @@ from perception_eval.evaluation.result.perception_frame_result import Perception
 from pyquaternion import Quaternion
 import pytest
 
+from driving_log_replayer_v2.perception.models import Conditions
 from driving_log_replayer_v2.perception.models import Criteria
 from driving_log_replayer_v2.perception.models import Filter
 from driving_log_replayer_v2.perception.models import Perception
+from driving_log_replayer_v2.perception.models import PerceptionResult
 from driving_log_replayer_v2.perception.models import PerceptionScenario
 from driving_log_replayer_v2.scenario import load_sample_scenario
 
@@ -282,3 +284,50 @@ def test_perception_fail_tp_hard(
         },
     }
     assert frame_dict["Scores"] == {"num_tp": 50.0}
+
+
+@pytest.fixture
+def create_perception_result() -> PerceptionResult:
+    condition = Conditions(
+        Criterion=[
+            Criteria(
+                PassRate=95.0,
+                CriteriaMethod="num_tp",
+                CriteriaLevel="normal",
+                Filter=Filter(Distance=None),
+            )
+        ]
+    )
+    return PerceptionResult(condition)
+
+
+def test_perception_result_info_frame(create_perception_result: PerceptionResult) -> None:
+    """Test that the skip line carries the reason why the frame was not evaluated."""
+    result = create_perception_result
+
+    result.set_info_frame({"Reason": "NO_GROUND_TRUTH"}, 3)
+    assert result.frame == {"Info": {"Reason": "NO_GROUND_TRUTH"}, "FrameSkip": 3}
+
+    result.set_info_frame({"Reason": "IGNORED_FRAME"}, 4)
+    assert result.frame == {"Info": {"Reason": "IGNORED_FRAME"}, "FrameSkip": 4}
+
+    result.set_warn_frame({"Reason": "INVALID_ESTIMATED_OBJECTS"}, 5)
+    assert result.frame == {"Warning": {"Reason": "INVALID_ESTIMATED_OBJECTS"}, "FrameSkip": 5}
+
+
+def test_perception_result_final_metrics(create_perception_result: PerceptionResult) -> None:
+    """Test that the coverage is reported next to the metrics, without changing FinalScore."""
+    result = create_perception_result
+
+    final_metrics = {"Score": {}, "Error": {}, "ConfusionMatrix": {}}
+    result.set_final_metrics(final_metrics)
+    assert result.frame == {"FinalScore": final_metrics}
+
+    frame_coverage = {
+        "GtFrames": 320,
+        "GtFramesEvaluated": 300,
+        "Coverage": 0.9375,
+        "SkipReasons": {"IGNORED_FRAME": 3, "NO_GROUND_TRUTH": 17},
+    }
+    result.set_final_metrics(final_metrics, frame_coverage)
+    assert result.frame == {"FinalScore": final_metrics, **frame_coverage}
