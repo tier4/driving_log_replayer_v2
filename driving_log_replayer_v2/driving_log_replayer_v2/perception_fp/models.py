@@ -263,6 +263,11 @@ class PerceptionFP(EvaluationItem):
             return {"Info": "Not in evaluation topic type"}
 
         self.total += 1
+        # kept for summarize_fp_objects: FpObjects are published in `frame_id` (usually map),
+        # the dashboards draw them around the ego vehicle, so the base_link view is derived here
+        self._data_frame_id = frame_id
+        self._map_to_base_link = map_to_base_link
+        self._base_link_to_map = base_link_to_map
 
         is_in_non_detection_area = self.is_in_non_detection_area(
             frame_id, data, map_to_base_link, base_link_to_map, is_valid_timestamp=True
@@ -291,13 +296,68 @@ class PerceptionFP(EvaluationItem):
             return None
         return {"x": values[0], "y": values[1], "z": values[2]}
 
+    @staticmethod
+    def _transform_point(matrix: np.ndarray, point: tuple[float, float, float]) -> dict:
+        p = matrix @ np.array([point[0], point[1], point[2], 1.0])
+        return {"x": float(p[0]), "y": float(p[1]), "z": float(p[2])}
+
+    @staticmethod
+    def _matrix_yaw(matrix: np.ndarray) -> float:
+        """Yaw (rad) of the rotation part of a 4x4 homogeneous transform."""
+        return float(np.arctan2(matrix[1, 0], matrix[0, 0]))
+
+    @staticmethod
+    def _quaternion_yaw(orientation: Any) -> float | None:
+        if orientation is None:
+            return None
+        x, y, z, w = orientation.x, orientation.y, orientation.z, orientation.w
+        return float(np.arctan2(2.0 * (w * z + x * y), 1.0 - 2.0 * (y * y + z * z)))
+
+    @staticmethod
+    def _wrap_angle(angle: float) -> float:
+        return float((angle + np.pi) % (2.0 * np.pi) - np.pi)
+
+    def _to_base_link(self, obj: DynamicObject) -> tuple[dict | None, float | None]:
+        """
+        Position and yaw of an object in base_link, whatever frame it was published in.
+
+        Uses the same map<->base_link transform the polygon check used for this frame, so
+        the object lands exactly where it was judged against the (base_link) area.
+        """
+        data_frame_id = getattr(self, "_data_frame_id", None)
+        yaw = self._quaternion_yaw(obj.state.orientation)
+        if obj.state.position is None:
+            return None, None
+        if data_frame_id == "base_link":
+            return self._fill_xyz(obj.state.position), yaw
+        matrix = getattr(self, "_map_to_base_link", None)
+        if data_frame_id != "map" or matrix is None:
+            return None, None
+        position = self._transform_point(matrix, obj.state.position)
+        if yaw is None:
+            return position, None
+        return position, self._wrap_angle(yaw + self._matrix_yaw(matrix))
+
+    def _ego_pose(self) -> dict | None:
+        """Ego (base_link origin) in map at this frame: what a viewer needs to overlay both frames."""
+        matrix = getattr(self, "_base_link_to_map", None)
+        if matrix is None:
+            return None
+        return {
+            "frame_id": "map",
+            "position": self._transform_point(matrix, (0.0, 0.0, 0.0)),
+            "yaw": self._matrix_yaw(matrix),
+        }
+
     def summarize_fp_objects(self) -> dict:
         """
         Describe what was found inside the non-detection area, for result.jsonl.
 
         Empty on passing frames. Object entries mirror
         FrameDescriptionWriter.object_to_description, but are built locally so this
-        module stays importable without a ROS environment.
+        module stays importable without a ROS environment. `position`/`orientation` are
+        as published (see `FrameId`); `position_base_link`/`yaw_base_link` are the same
+        object seen from the ego vehicle, and `EgoPose` places base_link in map.
         """
         if isinstance(self._fp_objects, np.ndarray):
             if self._fp_objects.size == 0:
@@ -305,8 +365,10 @@ class PerceptionFP(EvaluationItem):
             return {"FpPoints": self._fp_objects.tolist()}
         if not self._fp_objects:
             return {}
-        return {
-            "FpObjects": [
+        fp_objects = []
+        for obj in self._fp_objects:
+            position_base_link, yaw_base_link = self._to_base_link(obj)
+            fp_objects.append(
                 {
                     "label": obj.semantic_label.name,
                     "uuid": obj.uuid,
@@ -321,9 +383,14 @@ class PerceptionFP(EvaluationItem):
                     if obj.state.orientation is not None
                     else None,
                     "shape": self._fill_xyz(obj.state.size),
+                    "position_base_link": position_base_link,
+                    "yaw_base_link": yaw_base_link,
                 }
-                for obj in self._fp_objects
-            ],
+            )
+        return {
+            "FrameId": getattr(self, "_data_frame_id", None),
+            "EgoPose": self._ego_pose(),
+            "FpObjects": fp_objects,
         }
 
     def is_in_non_detection_area(
