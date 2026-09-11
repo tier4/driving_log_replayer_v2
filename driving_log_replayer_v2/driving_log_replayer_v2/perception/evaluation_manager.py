@@ -26,6 +26,7 @@ if TYPE_CHECKING:
     from perception_eval.config import PerceptionEvaluationConfig
     from perception_eval.tool import PerceptionAnalyzer3D
 
+    from driving_log_replayer_v2.post_process.evaluation_manager import IgnoreFrames
     from driving_log_replayer_v2.scenario import ScenarioType
 
 
@@ -60,7 +61,7 @@ class PerceptionEvaluationManager(EvaluationManager):
         t4_dataset_path: str,
         result_archive_path: str,
         evaluation_topics_with_task: dict[str, list[str]],
-        ignore_frames: list[int],
+        ignore_frames: IgnoreFrames,
     ) -> None:
         self._evaluators = {
             topic: PerceptionEvaluator(
@@ -183,6 +184,24 @@ class PerceptionEvaluationManager(EvaluationManager):
         return {
             topic: evaluator.get_evaluation_results(save_frame_results=True)
             for topic, evaluator in self._evaluators.items()
+        }
+
+    def get_frame_coverage(self, topic_name: str | None = None) -> dict | dict[str, dict]:
+        """
+        Get the ground truth frame coverage for each/specific evaluation topic.
+
+        Args:
+            topic_name (str | None): Name of the topic to get the coverage. If None, get all coverages.
+
+        Returns:
+            dict | dict[str, dict]: The coverage information. See PerceptionEvaluator.get_frame_coverage().
+
+        """
+        if topic_name is not None:
+            evaluator = self._evaluators[topic_name]
+            return evaluator.get_frame_coverage()
+        return {
+            topic: evaluator.get_frame_coverage() for topic, evaluator in self._evaluators.items()
         }
 
     def get_analyzer(

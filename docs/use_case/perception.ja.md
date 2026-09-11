@@ -135,6 +135,25 @@ FrameSkipは評価をskipした回数のカウンタ。
 
 - フィルタ条件によって真値と認識結果がフィルタされ評価されなかった場合(評価結果PassFailのオブジェクトの中身が空の場合)
 
+### ignore_frames
+
+`ignore_frames` に指定したフレームは評価対象外となる。frame results に追加されないので、メトリクス、pickle ファイル、解析結果のいずれにも含まれない。`FrameSkip` のカウント対象となり、result.jsonl には `{"Info": {"Reason": "IGNORED_FRAME"}}` として出力される。
+
+`ignore_frames` はシナリオ (`Evaluation.ignore_frames`) と launch 引数で設定でき、launch 引数の方が優先される。値は以下のトークンをカンマ区切りで並べたもの。
+
+| トークン  | 意味                                                             | 例        |
+| --------- | ---------------------------------------------------------------- | --------- |
+| `N`       | t4_dataset のフレームインデックス (`FrameName`) が N のフレーム。 | `3`       |
+| `A-B`     | t4_dataset のフレームインデックスが A 以上 B 以下のフレーム。     | `0-4`     |
+| `first:N` | 評価したフレームのうち、順番が最初の N フレーム。                 | `first:2` |
+| `last:N`  | 評価したフレームのうち、順番が最後の N フレーム。                 | `last:1`  |
+
+例: `ignore_frames: "0-4,10,first:1,last:2"`
+
+`N` と `A-B` は dataset のフレームインデックスに対する指定だが、`first:N` と `last:N` は評価対象となるフレームの順番に対する指定なので、dataset のフレームインデックスを調べなくても使用できる。自車や認識モジュールの状態が安定していないシーンの先頭・末尾を除外する用途を想定している。
+
+`last:N` は rosbag を読んでいる途中では確定できないため、評価したフレームのうち最後の N フレームは書き出しを rosbag の最後まで遅延させ、除外フレームとして書き出す。`last:N` で除外されたフレームは、メトリクス・解析・カバレッジの計算前に frame results から削除される。
+
 ## 評価スクリプトが使用する Topic 名とデータ型
 
 pass/fail を判定する topic は scenario.yaml で定義する evaluation_task に基づく。
@@ -289,7 +308,9 @@ perception では、シナリオに指定した条件で perception_eval が評�
 ```json
 {
   "Frame": {
-    "Info": "情報のメッセージ",
+    "Info": {
+      "Reason": "評価されなかった理由。NO_GROUND_TRUTH: 受信したobjectのヘッダー時刻の前後75msec以内に真値が存在しない。IGNORED_FRAME: ignore_frames の設定で評価対象外になった。"
+    },
     "FrameSkip": "評価が飛ばされた回数の合計。objectの評価を依頼したがdatasetに75msec以内の真値がなく場合、または、footprint.pointsの数が1か2の場合に発生する"
   }
 }
@@ -300,7 +321,9 @@ perception では、シナリオに指定した条件で perception_eval が評�
 ```json
 {
   "Frame": {
-    "Warning": "警告のメッセージ",
+    "Warning": {
+      "Reason": "評価されなかった理由。INVALID_ESTIMATED_OBJECTS: 受信したobjectを変換できなかった(footprint.pointsの数が1か2の場合など)。"
+    },
     "FrameSkip": "評価が飛ばされた回数の合計。objectの評価を依頼したがdatasetに75msec以内の真値がなく場合、または、footprint.pointsの数が1か2の場合に発生する"
   }
 }
@@ -476,6 +499,28 @@ evaluation_taskがfp_validationの場合
   }
 }
 ```
+
+真値カバレッジ
+
+最終行には、デグレード評価トピックについて dataset の真値をどれだけ評価できたかも出力される。`FinalScore` と並べて書かれ、`Result.Summary` は変更されない。
+
+```json
+{
+  "Frame": {
+    "FinalScore": {},
+    "GtFrames": "dataset の評価区間に含まれる真値フレーム数",
+    "GtFramesEvaluated": "有効に評価された推定結果に紐付いた真値フレーム数(重複なし)",
+    "Coverage": "GtFramesEvaluated / GtFrames を小数第4位で丸めた値",
+    "SkipReasons": {
+      "INVALID_ESTIMATED_OBJECTS": "受信したobjectを変換できずスキップしたフレーム数",
+      "NO_GROUND_TRUTH": "75msec以内に真値が見つからずスキップしたフレーム数",
+      "IGNORED_FRAME": "ignore_frames の設定で評価対象外にしたフレーム数"
+    }
+  }
+}
+```
+
+`Coverage` が想定より低い場合、dataset の真値フレームが一度も評価されていないことを意味する(真値の時刻に十分近いobjectのメッセージが無い場合など)。そのフレームの TP も FN もメトリクスに含まれない。
 
 ### pickle ファイル
 

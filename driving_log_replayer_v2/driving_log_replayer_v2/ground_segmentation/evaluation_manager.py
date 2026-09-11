@@ -12,9 +12,16 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from __future__ import annotations
+
+from typing import TYPE_CHECKING
+
 from driving_log_replayer_v2.ground_segmentation.evaluator import GroundSegmentationEvaluator
 from driving_log_replayer_v2.ground_segmentation.models import GroundSegmentationScenario
 from driving_log_replayer_v2.post_process.evaluation_manager import EvaluationManager
+
+if TYPE_CHECKING:
+    from driving_log_replayer_v2.post_process.evaluation_manager import IgnoreFrames
 
 
 class GroundSegmentationEvaluationManager(EvaluationManager):
@@ -41,7 +48,7 @@ class GroundSegmentationEvaluationManager(EvaluationManager):
         t4_dataset_path: str,
         result_archive_path: str,
         evaluation_topics_with_task: dict[str, list[str]],
-        ignore_frames: list[int],
+        ignore_frames: IgnoreFrames,
     ) -> None:
         evaluation_condition = self._scenario.Evaluation.Conditions
         evaluation_topics = [
