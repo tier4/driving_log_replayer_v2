@@ -2,8 +2,8 @@
 Changelog for package driving_log_replayer
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-Forthcoming
------------
+3.18.11 (2026-09-15)
+--------------------
 * feat(perception): record the semantic segmentation pointcloud (`#404 <https://github.com/tier4/driving_log_replayer_v2/issues/404>`_)
   Co-authored-by: Claude Opus 5 <noreply@anthropic.com>
 * Contributors: lei.gu
