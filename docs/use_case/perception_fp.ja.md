@@ -144,7 +144,11 @@ perception では、シナリオに指定した条件で perception_eval が評�
         },
         "Info": {
           "FrameId": "map",
-          "EgoPose": { "frame_id": "map", "position": { "x": 0.0, "y": 0.0, "z": 0.0 }, "yaw": 0.0 },
+          "EgoPose": {
+            "frame_id": "map",
+            "position": { "x": 0.0, "y": 0.0, "z": 0.0 },
+            "yaw": 0.0
+          },
           "FpObjects": [
             {
               "label": "非検知エリア内で検出されたオブジェクトのラベル",

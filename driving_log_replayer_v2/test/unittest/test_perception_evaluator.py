@@ -101,8 +101,13 @@ def create_converted_data(frame_index: int) -> SimpleNamespace:
     )
 
 
-def test_ignored_frame_does_not_reach_add_frame_result() -> None:
-    """An ignored frame must not be added to frame_results, the pkl, the metrics or the analyzer."""
+def test_ignored_frame_still_reaches_add_frame_result_for_the_pkl() -> None:
+    """
+    Ignored frames are still added to frame_results, kept for the pkl.
+
+    They are only excluded from metrics/analysis later, by __remove_ignored_frames() in
+    get_evaluation_results().
+    """
     evaluator, inner_evaluator = create_evaluator(parse_ignore_frames("1,3"))
 
     results = [evaluator.evaluate_frame(create_converted_data(i)) for i in range(5)]
@@ -110,20 +115,29 @@ def test_ignored_frame_does_not_reach_add_frame_result() -> None:
     assert [result.is_valid for result in results] == [True, False, True, False, True]
     assert results[1].invalid_reason == PerceptionInvalidReason.IGNORED_FRAME
     assert results[3].invalid_reason == PerceptionInvalidReason.IGNORED_FRAME
-    # the ignored frames never entered perception_eval
-    assert inner_evaluator.added_frame_names == ["0", "2", "4"]
-    assert [frame.frame_name for frame in inner_evaluator.frame_results] == ["0", "2", "4"]
+    # ignored frames are still added, so they are kept in the pkl
+    assert inner_evaluator.added_frame_names == ["0", "1", "2", "3", "4"]
+    assert [frame.frame_name for frame in inner_evaluator.frame_results] == [
+        "0",
+        "1",
+        "2",
+        "3",
+        "4",
+    ]
+    # but excluded from the set get_evaluation_results() scores
+    scored = _remove_ignored_frames(evaluator, inner_evaluator.frame_results)
+    assert [frame.frame_name for frame in scored] == ["0", "2", "4"]
 
 
 def test_first_n_ignores_by_position_not_by_frame_name() -> None:
     """first:N drops the first N evaluated frames, whatever their dataset index is."""
     evaluator, inner_evaluator = create_evaluator(parse_ignore_frames("first:2"))
 
-    # frame 0 has no estimate at all, so the first evaluated frames are 1 and 2
     results = [evaluator.evaluate_frame(create_converted_data(i)) for i in range(1, 5)]
 
     assert [result.is_valid for result in results] == [False, False, True, True]
-    assert inner_evaluator.added_frame_names == ["3", "4"]
+    # ignored frames are still added (kept for the pkl); only their position matters, not frame_name
+    assert inner_evaluator.added_frame_names == ["1", "2", "3", "4"]
 
 
 def test_skip_reason_is_reported_for_every_skip() -> None:
@@ -181,7 +195,14 @@ def _apply_tail_ignore(evaluator: PerceptionEvaluator) -> None:
 
 def _get_frame_coverage(evaluator: PerceptionEvaluator) -> dict:
     """get_frame_coverage() is now a private helper of get_evaluation_results(); call it directly."""
-    return getattr(evaluator, "_PerceptionEvaluator__get_frame_coverage")()
+    prefix = "_PerceptionEvaluator__"
+    return getattr(evaluator, prefix + "get_frame_coverage")()
+
+
+def _remove_ignored_frames(evaluator: PerceptionEvaluator, frame_results: list) -> list:
+    """Call the private helper get_evaluation_results() uses to drop N/A-B/first:N ignored frames."""
+    prefix = "_PerceptionEvaluator__"
+    return getattr(evaluator, prefix + "remove_ignored_frames")(frame_results)
 
 
 def test_last_n_frames_are_removed_before_the_coverage_and_the_metrics() -> None:

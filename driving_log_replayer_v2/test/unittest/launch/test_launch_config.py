@@ -32,6 +32,7 @@ def test_perception_record_profile() -> None:
         "^/tf$|^/tf_static$|^/diagnostics$|^/system/processing_time_checker/metrics$"
         "|^/awapi/autoware/get/status$|^/sensing/camera/.*/compressed$"
         "|^/sensing/camera/.*/camera_info$|^/sensing/lidar/concatenated/pointcloud$"
+        "|^/perception/segmented/pointcloud$"
         "|^/perception/object_recognition/detection/.*/debug/pipeline_latency_ms$"
         "|^/perception/object_recognition/tracking/multi_object_tracker/debug/.*"
         "|^/perception/object_recognition/prediction/map_based_prediction/debug/pipeline_latency_ms$"
