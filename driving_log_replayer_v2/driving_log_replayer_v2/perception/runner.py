@@ -323,6 +323,11 @@ class PerceptionRunner(Runner):
                     subscribed_timestamp_nanosec,
                 )
             else:
+                # NOTE: is_valid is False for frames already invalid for a reason other than
+                #       last:N (NO_GROUND_TRUTH, INVALID_ESTIMATED_OBJECTS, or already ignored by
+                #       N/A-B/first:N). They are not part of the last:N tail-ignore decision, so
+                #       write them as-is with their own invalid_reason/skip_counter; they were only
+                #       buffered to keep result.jsonl in the original order.
                 self._write_perception_result(frame_result, header, subscribed_timestamp_nanosec)
 
     def _write_ignored_frame(
