@@ -284,11 +284,11 @@ class PerceptionEvaluator(Evaluator):
         self, frame_results: list[PerceptionFrameResult]
     ) -> list[PerceptionFrameResult]:
         """
-        Drop the frames ignored by frame_name.
+        Drop the frames ignored by frame_name (`N`/`A-B`) or by position (`first:N`).
 
-        NOTE: kept as a safety net. Since the ignore decision is taken before add_frame_result(),
-        the ignored frames are not in frame_results anymore, but frame results loaded from an old
-        pkl or added by another code path may still contain them.
+        NOTE: the ignore decision in evaluate_frame() happens after add_frame_result(), so that the
+        frame result is still retained in `frame_results` (and thus in the pkl) for inspection. This
+        method removes them from the list used for metrics/analysis/coverage.
         """
         return [
             frame_result

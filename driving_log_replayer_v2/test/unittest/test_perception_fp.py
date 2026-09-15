@@ -156,7 +156,11 @@ def test_in_non_detection_area(
             },
             "Info": {
                 "FrameId": "map",
-                "EgoPose": {"frame_id": "map", "position": {"x": 0.0, "y": 0.0, "z": 0.0}, "yaw": 0.0},
+                "EgoPose": {
+                    "frame_id": "map",
+                    "position": {"x": 0.0, "y": 0.0, "z": 0.0},
+                    "yaw": 0.0,
+                },
                 "FpObjects": [
                     {
                         "label": "car",
@@ -176,7 +180,8 @@ def test_in_non_detection_area(
 
 
 def test_fp_objects_are_also_reported_in_base_link(create_criteria: Criteria) -> None:
-    """Objects arrive in map; the dashboards draw around the ego, so base_link is derived.
+    """
+    Objects arrive in map; the dashboards draw around the ego, so base_link is derived.
 
     Ego at map (100, 50) heading +90 deg. An object 5 m ahead of the ego (and inside the
     map-frame area once the area is expressed around the ego) must come back as
@@ -229,7 +234,11 @@ def test_fp_objects_are_also_reported_in_base_link(create_criteria: Criteria) ->
     fp = info["FpObjects"][0]
     assert fp["position"] == {"x": 100.0, "y": 55.0, "z": 0.0}, "published position stays untouched"
     assert np.allclose(
-        [fp["position_base_link"]["x"], fp["position_base_link"]["y"], fp["position_base_link"]["z"]],
+        [
+            fp["position_base_link"]["x"],
+            fp["position_base_link"]["y"],
+            fp["position_base_link"]["z"],
+        ],
         [5.0, 0.0, 0.0],
     )
     assert np.isclose(fp["yaw_base_link"], 0.0)

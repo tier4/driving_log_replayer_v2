@@ -17,10 +17,10 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from driving_log_replayer_v2.ground_segmentation.evaluator import GroundSegmentationEvaluator
-from driving_log_replayer_v2.ground_segmentation.models import GroundSegmentationScenario
 from driving_log_replayer_v2.post_process.evaluation_manager import EvaluationManager
 
 if TYPE_CHECKING:
+    from driving_log_replayer_v2.ground_segmentation.models import GroundSegmentationScenario
     from driving_log_replayer_v2.post_process.evaluation_manager import IgnoreFrames
 
 

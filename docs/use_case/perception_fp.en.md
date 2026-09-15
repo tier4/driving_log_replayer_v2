@@ -145,7 +145,11 @@ Format of each frame:
         },
         "Info": {
           "FrameId": "map",
-          "EgoPose": { "frame_id": "map", "position": { "x": 0.0, "y": 0.0, "z": 0.0 }, "yaw": 0.0 },
+          "EgoPose": {
+            "frame_id": "map",
+            "position": { "x": 0.0, "y": 0.0, "z": 0.0 },
+            "yaw": 0.0
+          },
           "FpObjects": [
             {
               "label": "Label of the object detected inside the non-detection area",
