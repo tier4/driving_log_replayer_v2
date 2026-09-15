@@ -203,69 +203,6 @@ class PerceptionEvaluator(Evaluator):
 
         return FrameResult(is_valid=True, data=frame_result, skip_counter=self.__skip_counter)
 
-    def __skip_frame(self, invalid_reason: PerceptionInvalidReason) -> FrameResult:
-        """Count the skipped frame and its reason, then build the invalid FrameResult."""
-        self.__skip_counter += 1
-        self.__skip_reasons[invalid_reason.name] += 1
-        return FrameResult(
-            is_valid=False,
-            invalid_reason=invalid_reason,
-            skip_counter=self.__skip_counter,
-        )
-
-    def __ignore_tail_frames(
-        self, frame_results: list[PerceptionFrameResult]
-    ) -> list[PerceptionFrameResult]:
-        """
-        Drop the last N evaluated frames from frame_results for the `last:N` setting.
-
-        `last:N` cannot be decided while streaming, so it is applied here, before the frame results
-        are saved and before the metrics, the analyzer and the coverage are computed.
-        """
-        last_ignore_frames = self.__ignore_frames.last
-        if last_ignore_frames <= 0:
-            return frame_results
-        last_ignore_frames = min(last_ignore_frames, len(frame_results))
-        ignored_frame_names = [
-            frame_result.frame_name
-            for frame_result in frame_results[len(frame_results) - last_ignore_frames :]
-        ]
-        self.__skip_counter += last_ignore_frames
-        self.__skip_reasons[PerceptionInvalidReason.IGNORED_FRAME.name] += last_ignore_frames
-        self.__logger.info(
-            "Last %d evaluated frames are ignored for evaluation (frame_name: %s).",
-            last_ignore_frames,
-            ", ".join(ignored_frame_names),
-        )
-        return frame_results[: len(frame_results) - last_ignore_frames]
-
-    def __get_frame_coverage(self) -> dict:
-        """
-        Get how much of the ground truth of the dataset was actually evaluated.
-
-        Returns:
-            dict: `GtFrames` is the number of ground truth frames of the dataset window,
-                `GtFramesEvaluated` is the number of distinct ground truth frames bound to at least
-                one valid evaluated estimate, `Coverage` is their ratio and `SkipReasons` is the
-                histogram of the reasons why a frame was not evaluated.
-
-        NOTE: `last:N` is only reflected here once `get_evaluation_results()` has already run,
-        same precondition as `get_analyzer()`. This method does not apply it itself.
-
-        """
-        num_gt_frames = len(self.__evaluator.ground_truth_frames)
-        evaluated_frame_names = {
-            frame_result.frame_name for frame_result in self.__evaluator.frame_results
-        }
-        num_evaluated = len(evaluated_frame_names)
-        coverage = round(num_evaluated / num_gt_frames, 4) if num_gt_frames > 0 else 0.0
-        return {
-            "GtFrames": num_gt_frames,
-            "GtFramesEvaluated": num_evaluated,
-            "Coverage": coverage,
-            "SkipReasons": dict(sorted(self.__skip_reasons.items())),
-        }
-
     def get_evaluation_config(self) -> PerceptionEvaluationConfig:
         return self.__evaluator.evaluator_config
 
@@ -333,6 +270,16 @@ class PerceptionEvaluator(Evaluator):
             or (evaluation_task == "fp_validation" and self.__frame_id_str in ("base_link", "map"))
         )
 
+    def __skip_frame(self, invalid_reason: PerceptionInvalidReason) -> FrameResult:
+        """Count the skipped frame and its reason, then build the invalid FrameResult."""
+        self.__skip_counter += 1
+        self.__skip_reasons[invalid_reason.name] += 1
+        return FrameResult(
+            is_valid=False,
+            invalid_reason=invalid_reason,
+            skip_counter=self.__skip_counter,
+        )
+
     def __remove_ignored_frames(
         self, frame_results: list[PerceptionFrameResult]
     ) -> list[PerceptionFrameResult]:
@@ -348,6 +295,59 @@ class PerceptionEvaluator(Evaluator):
             for frame_result in frame_results
             if int(frame_result.frame_name) not in self.__ignore_frames
         ]
+
+    def __ignore_tail_frames(
+        self, frame_results: list[PerceptionFrameResult]
+    ) -> list[PerceptionFrameResult]:
+        """
+        Drop the last N evaluated frames from frame_results for the `last:N` setting.
+
+        `last:N` cannot be decided while streaming, so it is applied here, before the frame results
+        are saved and before the metrics, the analyzer and the coverage are computed.
+        """
+        last_ignore_frames = self.__ignore_frames.last
+        if last_ignore_frames <= 0:
+            return frame_results
+        last_ignore_frames = min(last_ignore_frames, len(frame_results))
+        ignored_frame_names = [
+            frame_result.frame_name
+            for frame_result in frame_results[len(frame_results) - last_ignore_frames :]
+        ]
+        self.__skip_counter += last_ignore_frames
+        self.__skip_reasons[PerceptionInvalidReason.IGNORED_FRAME.name] += last_ignore_frames
+        self.__logger.info(
+            "Last %d evaluated frames are ignored for evaluation (frame_name: %s).",
+            last_ignore_frames,
+            ", ".join(ignored_frame_names),
+        )
+        return frame_results[: len(frame_results) - last_ignore_frames]
+
+    def __get_frame_coverage(self) -> dict:
+        """
+        Get how much of the ground truth of the dataset was actually evaluated.
+
+        Returns:
+            dict: `GtFrames` is the number of ground truth frames of the dataset window,
+                `GtFramesEvaluated` is the number of distinct ground truth frames bound to at least
+                one valid evaluated estimate, `Coverage` is their ratio and `SkipReasons` is the
+                histogram of the reasons why a frame was not evaluated.
+
+        NOTE: `last:N` is only reflected here once `get_evaluation_results()` has already run,
+        same precondition as `get_analyzer()`. This method does not apply it itself.
+
+        """
+        num_gt_frames = len(self.__evaluator.ground_truth_frames)
+        evaluated_frame_names = {
+            frame_result.frame_name for frame_result in self.__evaluator.frame_results
+        }
+        num_evaluated = len(evaluated_frame_names)
+        coverage = round(num_evaluated / num_gt_frames, 4) if num_gt_frames > 0 else 0.0
+        return {
+            "GtFrames": num_gt_frames,
+            "GtFramesEvaluated": num_evaluated,
+            "Coverage": coverage,
+            "SkipReasons": dict(sorted(self.__skip_reasons.items())),
+        }
 
     def __get_scene_results(self) -> MetricsScore:
         num_critical_fail: int = sum(
