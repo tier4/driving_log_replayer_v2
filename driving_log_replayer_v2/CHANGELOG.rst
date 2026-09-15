@@ -2,6 +2,12 @@
 Changelog for package driving_log_replayer
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
+Forthcoming
+-----------
+* feat(perception): record the semantic segmentation pointcloud (`#404 <https://github.com/tier4/driving_log_replayer_v2/issues/404>`_)
+  Co-authored-by: Claude Opus 5 <noreply@anthropic.com>
+* Contributors: lei.gu
+
 3.18.10 (2026-09-08)
 --------------------
 * feat(perception_fp): record objects found in the non-detection area in result.jsonl (`#398 <https://github.com/tier4/driving_log_replayer_v2/issues/398>`_)
