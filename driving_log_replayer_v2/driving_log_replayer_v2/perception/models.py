@@ -244,17 +244,48 @@ class PerceptionResult(ResultBase):
             self._frame[criterion.name] = criterion.set_frame(frame)
         self.update()
 
-    def set_info_frame(self, msg: str, skip: int) -> None:
+    def set_info_frame(self, msg: str | dict | None, skip: int) -> None:
+        """
+        Set the frame of a skipped frame which is not an error.
+
+        Args:
+            msg (str | dict | None): Information about the skipped frame.
+                The runner passes `{"Reason": <PerceptionInvalidReason name>}`, e.g.
+                `{"Reason": "NO_GROUND_TRUTH"}`.
+            skip (int): Total number of skipped frames.
+
+        """
         self._frame = {
             "Info": msg,
             "FrameSkip": skip,
         }
 
-    def set_warn_frame(self, msg: str, skip: int) -> None:
+    def set_warn_frame(self, msg: str | dict | None, skip: int) -> None:
+        """
+        Set the frame of a skipped frame which is suspicious.
+
+        Args:
+            msg (str | dict | None): Information about the skipped frame.
+                The runner passes `{"Reason": <PerceptionInvalidReason name>}`, e.g.
+                `{"Reason": "INVALID_ESTIMATED_OBJECTS"}`.
+            skip (int): Total number of skipped frames.
+
+        """
         self._frame = {
             "Warning": msg,
             "FrameSkip": skip,
         }
 
-    def set_final_metrics(self, final_metrics: dict) -> None:
+    def set_final_metrics(self, final_metrics: dict, frame_coverage: dict | None = None) -> None:
+        """
+        Set the final frame which holds the metrics of the whole scene.
+
+        Args:
+            final_metrics (dict): Metrics of the whole scene.
+            frame_coverage (dict | None): Ground truth frame coverage of the degradation topic.
+                See PerceptionEvaluator.get_frame_coverage().
+
+        """
         self._frame = {"FinalScore": final_metrics}
+        if frame_coverage is not None:
+            self._frame.update(frame_coverage)
