@@ -28,6 +28,7 @@ from driving_log_replayer_v2_msgs.msg import GroundSegmentationEvalResult
 
 if TYPE_CHECKING:
     from driving_log_replayer_v2.ground_segmentation.models import Conditions
+    from driving_log_replayer_v2.post_process.evaluation_manager import IgnoreFrames
     from driving_log_replayer_v2.post_process.runner import ConvertedData
 
 
@@ -45,7 +46,7 @@ class GroundSegmentationEvaluator(Evaluator):
         result_archive_path: str,
         evaluation_topic: str,
         conditions: Conditions,
-        ignore_frames: list[int],
+        ignore_frames: IgnoreFrames,
     ) -> None:
         # additional instance variables
         self._skip_counter = 0
