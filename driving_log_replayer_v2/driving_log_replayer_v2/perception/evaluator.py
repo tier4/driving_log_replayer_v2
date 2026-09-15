@@ -166,15 +166,6 @@ class PerceptionEvaluator(Evaluator):
             )
             return self.__skip_frame(PerceptionInvalidReason.NO_GROUND_TRUTH)
 
-        # NOTE: decide to ignore the frame before add_frame_result(), otherwise the ignored frame
-        #       is kept in frame_results and pollutes the pkl, the metrics and the analyzer.
-        if int(ground_truth_now_frame.frame_name) in self.__ignore_frames:
-            self.__logger.info(
-                "Frame %s is ignored for evaluation.",
-                ground_truth_now_frame.frame_name,
-            )
-            return self.__skip_frame(PerceptionInvalidReason.IGNORED_FRAME)
-
         frame_result: PerceptionFrameResult = self.__evaluator.add_frame_result(
             unix_time=converted_data.header_timestamp,
             ground_truth_now_frame=ground_truth_now_frame,
@@ -182,6 +173,15 @@ class PerceptionEvaluator(Evaluator):
             critical_object_filter_config=self.__critical_object_filter_config,
             frame_pass_fail_config=self.__frame_pass_fail_config,
         )
+
+        # NOTE: frame result is retained within `self.__evaluator` (i.e., it is also saved in the pkl).
+        # However, it is not included in the results of criteria calculations or in metrics such as mAP calculated by `log`.
+        if int(ground_truth_now_frame.frame_name) in self.__ignore_frames:
+            self.__logger.info(
+                "Frame %s is ignored for evaluation. But the frame result is still added to the evaluator for logging.",
+                ground_truth_now_frame.frame_name,
+            )
+            return self.__skip_frame(PerceptionInvalidReason.IGNORED_FRAME)
 
         # TODO: add topic delay
         self.__logger.info(
@@ -298,13 +298,6 @@ class PerceptionEvaluator(Evaluator):
     def __remove_ignored_frames(
         self, frame_results: list[PerceptionFrameResult]
     ) -> list[PerceptionFrameResult]:
-        """
-        Drop the frames ignored by frame_name.
-
-        NOTE: kept as a safety net. Since the ignore decision is taken before add_frame_result(),
-        the ignored frames are not in frame_results anymore, but frame results loaded from an old
-        pkl or added by another code path may still contain them.
-        """
         return [
             frame_result
             for frame_result in frame_results

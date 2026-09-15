@@ -137,14 +137,14 @@ FrameSkipは評価をskipした回数のカウンタ。
 
 ### ignore_frames
 
-`ignore_frames` に指定したフレームは評価対象外となる。frame results に追加されないので、メトリクス、pickle ファイル、解析結果のいずれにも含まれない。`FrameSkip` のカウント対象となり、result.jsonl には `{"Info": {"Reason": "IGNORED_FRAME"}}` として出力される。
+`ignore_frames` に指定したフレームは評価対象外となり、解析結果にも含まれない。。但し、frame results には追加される(=pickle ファイルには残る)。`FrameSkip` のカウント対象となり、result.jsonl には `{"Info": {"Reason": "IGNORED_FRAME"}}` として出力される。
 
 `ignore_frames` はシナリオ (`Evaluation.ignore_frames`) と launch 引数で設定でき、launch 引数の方が優先される。値は以下のトークンをカンマ区切りで並べたもの。
 
-| トークン | 意味                                                              | 例     |
-| -------- | ----------------------------------------------------------------- | ------ |
-| `N`      | t4_dataset のフレームインデックス (`FrameName`) が N のフレーム。 | `3`    |
-| `A-B`    | t4_dataset のフレームインデックスが A 以上 B 以下のフレーム。      | `0-4`  |
+| トークン | 意味                                                              | 例    |
+| -------- | ----------------------------------------------------------------- | ----- |
+| `N`      | t4_dataset のフレームインデックス (`FrameName`) が N のフレーム。 | `3`   |
+| `A-B`    | t4_dataset のフレームインデックスが A 以上 B 以下のフレーム。     | `0-4` |
 
 例: `ignore_frames: "0-4,10"`
 
