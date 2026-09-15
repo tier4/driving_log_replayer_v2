@@ -155,6 +155,8 @@ def test_in_non_detection_area(
                 "Frame": "Fail",
             },
             "Info": {
+                "FrameId": "map",
+                "EgoPose": {"frame_id": "map", "position": {"x": 0.0, "y": 0.0, "z": 0.0}, "yaw": 0.0},
                 "FpObjects": [
                     {
                         "label": "car",
@@ -163,8 +165,94 @@ def test_in_non_detection_area(
                         "velocity": {"x": 1.0, "y": 2.0, "z": 3.0},
                         "orientation": {"x": 0.0, "y": 0.0, "z": 0.0, "w": 1.0},
                         "shape": {"x": 1.0, "y": 2.0, "z": 6.0},
+                        # identity transform: base_link == map here
+                        "position_base_link": {"x": 0.5, "y": 1.0, "z": 3.0},
+                        "yaw_base_link": 0.0,
                     },
                 ],
             },
         },
     }
+
+
+def test_fp_objects_are_also_reported_in_base_link(create_criteria: Criteria) -> None:
+    """Objects arrive in map; the dashboards draw around the ego, so base_link is derived.
+
+    Ego at map (100, 50) heading +90 deg. An object 5 m ahead of the ego (and inside the
+    map-frame area once the area is expressed around the ego) must come back as
+    base_link (5, 0) with yaw 0 relative to the ego.
+    """
+    theta = np.pi / 2
+    base_link_to_map = np.array(
+        [
+            [np.cos(theta), -np.sin(theta), 0.0, 100.0],
+            [np.sin(theta), np.cos(theta), 0.0, 50.0],
+            [0.0, 0.0, 1.0, 0.0],
+            [0.0, 0.0, 0.0, 1.0],
+        ]
+    )
+    map_to_base_link = np.linalg.inv(base_link_to_map)
+    # area given in base_link: 0..10 m ahead, +-1.5 m -> the object 5 m ahead is inside
+    criteria = create_criteria.model_copy(
+        update={
+            "non_detection_area": NonDetectionArea(
+                frame_id="base_link",
+                polygon=[[10.0, 1.5, 0.0], [10.0, -1.5, 0.0], [0.0, -1.5, 0.0], [0.0, 1.5, 0.0]],
+            )
+        }
+    )
+    obj = DynamicObject(
+        unix_time=123,
+        frame_id=FrameID.MAP,
+        position=(100.0, 55.0, 0.0),  # 5 m ahead of an ego heading +y
+        orientation=Quaternion(axis=[0, 0, 1], angle=theta),  # same heading as the ego
+        shape=Shape(ShapeType.BOUNDING_BOX, (1.0, 1.0, 1.0)),
+        velocity=(0.0, 0.0, 0.0),
+        semantic_score=0.5,
+        semantic_label=Label(AutowareLabel.CAR, "car"),
+    )
+    perception_fp = PerceptionFP(name=criteria.criteria_name, condition=criteria)
+    result = perception_fp.set_frame(
+        timestamp=obj.unix_time * 1e3,
+        frame_id="map",
+        data=[obj],
+        map_to_base_link=map_to_base_link,
+        base_link_to_map=base_link_to_map,
+    )
+    info = result["PassFail"]["Info"]
+    assert result["PassFail"]["Result"]["Frame"] == "Fail"
+    assert info["FrameId"] == "map"
+    assert np.allclose(
+        [info["EgoPose"]["position"]["x"], info["EgoPose"]["position"]["y"]], [100.0, 50.0]
+    )
+    assert np.isclose(info["EgoPose"]["yaw"], theta)
+    fp = info["FpObjects"][0]
+    assert fp["position"] == {"x": 100.0, "y": 55.0, "z": 0.0}, "published position stays untouched"
+    assert np.allclose(
+        [fp["position_base_link"]["x"], fp["position_base_link"]["y"], fp["position_base_link"]["z"]],
+        [5.0, 0.0, 0.0],
+    )
+    assert np.isclose(fp["yaw_base_link"], 0.0)
+
+
+def test_passing_frame_keeps_info_empty(create_criteria: Criteria) -> None:
+    obj = DynamicObject(
+        unix_time=123,
+        frame_id=FrameID.MAP,
+        position=(50.0, 50.0, 0.0),  # far outside the area
+        orientation=Quaternion(),
+        shape=Shape(ShapeType.BOUNDING_BOX, (1.0, 1.0, 1.0)),
+        velocity=(0.0, 0.0, 0.0),
+        semantic_score=0.5,
+        semantic_label=Label(AutowareLabel.CAR, "car"),
+    )
+    perception_fp = PerceptionFP(name=create_criteria.criteria_name, condition=create_criteria)
+    result = perception_fp.set_frame(
+        timestamp=obj.unix_time * 1e3,
+        frame_id="map",
+        data=[obj],
+        map_to_base_link=np.eye(4),
+        base_link_to_map=np.eye(4),
+    )
+    assert result["PassFail"]["Result"]["Frame"] == "Success"
+    assert result["PassFail"]["Info"] == {}
