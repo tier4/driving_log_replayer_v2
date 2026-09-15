@@ -145,14 +145,14 @@ Frames specified in `ignore_frames` are excluded from evaluation and are not inc
 
 `ignore_frames` can be set in the scenario (`Evaluation.ignore_frames`) or as a launch argument, which has the higher priority. The value is a comma-separated list of the following tokens.
 
-| Token     | Meaning                                                                                  | Example   |
-| --------- | ---------------------------------------------------------------------------------------- | --------- |
-| `N`       | Frame whose t4_dataset frame index (`FrameName`) is N.                                   | `3`       |
-| `A-B`     | Frames whose t4_dataset frame index is between A and B (both included).                  | `0-4`     |
-| `first:N` | First N evaluated frames, by position in the sequence of the evaluated frames.            | `first:2` |
-| `last:N`  | Last N evaluated frames, by position in the sequence of the evaluated frames.             | `last:1`  |
+| Token     | Meaning                                                                        | Example   |
+| --------- | ------------------------------------------------------------------------------ | --------- |
+| `N`       | Frame whose t4_dataset frame index (`FrameName`) is N.                         | `3`       |
+| `A-B`     | Frames whose t4_dataset frame index is between A and B (both included).        | `0-4`     |
+| `first:N` | First N evaluated frames, by position in the sequence of the evaluated frames. | `first:2` |
+| `last:N`  | Last N evaluated frames, by position in the sequence of the evaluated frames.  | `last:1`  |
 
-e.g. `ignore_frames: "0-4,10,first:1,last:2"`
+e.g. `ignore_frames:="0-4,10,first:1,last:2"`
 
 `N` and `A-B` are matched against the frame index of the dataset, while `first:N` and `last:N` are matched against the position of the frame in the sequence of the frames which would be evaluated, so they can be used without knowing the frame indices of the dataset. They are typically used to drop the head and the tail of the scene where the ego vehicle or the perception module is not settled yet.
 

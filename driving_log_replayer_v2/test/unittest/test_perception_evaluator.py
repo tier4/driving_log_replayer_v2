@@ -81,7 +81,6 @@ def create_evaluator(
         "skip_counter": 0,
         "evaluated_frame_position": 0,
         "skip_reasons": Counter(),
-        "tail_frames_ignored": False,
         "evaluator": inner_evaluator,
         "ignore_frames": ignore_frames,
         "logger": logging.getLogger("test_perception_evaluator"),
@@ -147,7 +146,7 @@ def test_skip_reason_is_reported_for_every_skip() -> None:
     # every skipped frame is counted, whatever its reason is
     assert [result.skip_counter for result in (no_gt, invalid_result, ignored)] == [1, 2, 3]
 
-    assert evaluator.get_frame_coverage()["SkipReasons"] == {
+    assert _get_frame_coverage(evaluator)["SkipReasons"] == {
         "IGNORED_FRAME": 1,
         "INVALID_ESTIMATED_OBJECTS": 1,
         "NO_GROUND_TRUTH": 1,
@@ -164,12 +163,25 @@ def test_frame_coverage_reports_the_scored_denominator() -> None:
     # no ground truth for these
     evaluator.evaluate_frame(create_converted_data(99))
 
-    assert evaluator.get_frame_coverage() == {
+    assert _get_frame_coverage(evaluator) == {
         "GtFrames": 5,
         "GtFramesEvaluated": 3,
         "Coverage": 0.6,
         "SkipReasons": {"NO_GROUND_TRUTH": 1},
     }
+
+
+def _apply_tail_ignore(evaluator: PerceptionEvaluator) -> None:
+    """Simulate what get_evaluation_results() does to frame_results before __get_frame_coverage()."""
+    prefix = "_PerceptionEvaluator__"
+    inner = getattr(evaluator, prefix + "evaluator")
+    ignore_tail_frames = getattr(evaluator, prefix + "ignore_tail_frames")
+    inner.frame_results = ignore_tail_frames(inner.frame_results)
+
+
+def _get_frame_coverage(evaluator: PerceptionEvaluator) -> dict:
+    """get_frame_coverage() is now a private helper of get_evaluation_results(); call it directly."""
+    return getattr(evaluator, "_PerceptionEvaluator__get_frame_coverage")()
 
 
 def test_last_n_frames_are_removed_before_the_coverage_and_the_metrics() -> None:
@@ -186,8 +198,11 @@ def test_last_n_frames_are_removed_before_the_coverage_and_the_metrics() -> None
         "4",
     ]
 
-    coverage = evaluator.get_frame_coverage()
+    # get_evaluation_results() applies last:N to frame_results before get_frame_coverage() reads it
+    _apply_tail_ignore(evaluator)
     assert [frame.frame_name for frame in inner_evaluator.frame_results] == ["0", "1", "2"]
+
+    coverage = _get_frame_coverage(evaluator)
     assert coverage == {
         "GtFrames": 5,
         "GtFramesEvaluated": 3,
@@ -195,13 +210,13 @@ def test_last_n_frames_are_removed_before_the_coverage_and_the_metrics() -> None
         "SkipReasons": {"IGNORED_FRAME": 2},
     }
 
-    # applied only once, a second call must not drop two more frames
-    assert evaluator.get_frame_coverage() == coverage
+    # get_frame_coverage() no longer mutates state, so calling it again must not change the result
+    assert _get_frame_coverage(evaluator) == coverage
 
 
 def test_no_gt_frame_gives_zero_coverage() -> None:
     evaluator, _ = create_evaluator(IgnoreFrames(), num_gt_frames=0)
-    assert evaluator.get_frame_coverage() == {
+    assert _get_frame_coverage(evaluator) == {
         "GtFrames": 0,
         "GtFramesEvaluated": 0,
         "Coverage": 0.0,

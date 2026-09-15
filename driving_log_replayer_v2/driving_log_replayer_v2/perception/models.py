@@ -283,7 +283,8 @@ class PerceptionResult(ResultBase):
         Args:
             final_metrics (dict): Metrics of the whole scene.
             frame_coverage (dict | None): Ground truth frame coverage of the degradation topic.
-                See PerceptionEvaluator.get_frame_coverage().
+                This is the second element of the tuple returned by
+                PerceptionEvaluator.get_evaluation_results().
 
         """
         self._frame = {"FinalScore": final_metrics}

@@ -405,14 +405,15 @@ class PerceptionRunner(Runner):
         self._flush_tail_ignore_buffer()
 
         if self._enable_metrics_details == "true":
-            final_metrics: dict[str, dict] = self.perc_eval_manager.get_evaluation_results()
+            final_metrics: dict[str, tuple[dict, dict]] = (
+                self.perc_eval_manager.get_evaluation_results()
+            )
 
             perception_degradation_topic = self._degradation_topics[
                 0
             ]  # head topic is perception degradation topic
             self.perc_result.set_final_metrics(
-                final_metrics[perception_degradation_topic],
-                self.perc_eval_manager.get_frame_coverage(perception_degradation_topic),
+                *final_metrics[perception_degradation_topic],
             )
             res_str = self.perc_result_writer.write_result_with_time(
                 self.perc_result,
