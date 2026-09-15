@@ -141,7 +141,7 @@ FrameSkip is a counter for the number of times evaluation is skipped.
 
 ### ignore_frames
 
-Frames listed in `ignore_frames` are excluded from the evaluation: they are not added to the frame results, so they are in neither the metrics, the pickle file nor the analysis. They are counted in `FrameSkip` and reported in result.jsonl as `{"Info": {"Reason": "IGNORED_FRAME"}}`.
+Frames specified in `ignore_frames` are excluded from evaluation and are not included in the analysis results. However, they are added to the `frame results` (i.e., they remain in the `pickle` file). They are counted in `FrameSkip` and reported in result.jsonl as `{"Info": {"Reason": "IGNORED_FRAME"}}`.
 
 `ignore_frames` can be set in the scenario (`Evaluation.ignore_frames`) or as a launch argument, which has the higher priority. The value is a comma-separated list of the following tokens.
 

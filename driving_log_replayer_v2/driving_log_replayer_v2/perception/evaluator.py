@@ -169,8 +169,16 @@ class PerceptionEvaluator(Evaluator):
             )
             return self.__skip_frame(PerceptionInvalidReason.NO_GROUND_TRUTH)
 
-        # NOTE: decide to ignore the frame before add_frame_result(), otherwise the ignored frame
-        #       is kept in frame_results and pollutes the pkl, the metrics and the analyzer.
+        frame_result: PerceptionFrameResult = self.__evaluator.add_frame_result(
+            unix_time=converted_data.header_timestamp,
+            ground_truth_now_frame=ground_truth_now_frame,
+            estimated_objects=data.estimated_objects,
+            critical_object_filter_config=self.__critical_object_filter_config,
+            frame_pass_fail_config=self.__frame_pass_fail_config,
+        )
+
+        # NOTE: frame result is retained within `self.__evaluator` (i.e., it is also saved in the pkl).
+        # However, it is not included in the results of criteria calculations or in metrics such as mAP calculated by `log`.
         self.__evaluated_frame_position += 1
         if self.__ignore_frames.should_ignore(
             int(ground_truth_now_frame.frame_name), self.__evaluated_frame_position
@@ -181,14 +189,6 @@ class PerceptionEvaluator(Evaluator):
                 self.__evaluated_frame_position,
             )
             return self.__skip_frame(PerceptionInvalidReason.IGNORED_FRAME)
-
-        frame_result: PerceptionFrameResult = self.__evaluator.add_frame_result(
-            unix_time=converted_data.header_timestamp,
-            ground_truth_now_frame=ground_truth_now_frame,
-            estimated_objects=data.estimated_objects,
-            critical_object_filter_config=self.__critical_object_filter_config,
-            frame_pass_fail_config=self.__frame_pass_fail_config,
-        )
 
         # TODO: add topic delay
         self.__logger.info(

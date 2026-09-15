@@ -61,10 +61,12 @@ def create_2d_detector_container(
     roi_to_semantic_segmentation_remap_path = Path(
         yolox_package_dir, "config", "roi_to_semseg_label_remap.csv"
     ).as_posix()
+    roi_remap_path = Path(yolox_package_dir, "config", "roi_label_remap.csv").as_posix()
     yolox_params = {
         "model_path": yolox_model_path,
         "label_path": yolox_label_path,
         "color_map_path": yolox_color_map_path,
+        "roi_remap_path": roi_remap_path,
         "roi_to_semantic_segmentation_remap_path": roi_to_semantic_segmentation_remap_path,
     }
     yolox_node = ComposableNode(

@@ -1,5 +1,21 @@
 # Release Notes
 
+## Version 3.18.12
+
+Minor Tweak
+
+| Module          | Feature      | Brief summary                                  | Pull request                                                        | Contributor                       |
+| --------------- | ------------ | ---------------------------------------------- | ------------------------------------------------------------------- | --------------------------------- |
+| `perception_fp` | result.jsonl | report FpObjects in base_link and the ego pose | [#401](https://github.com/tier4/driving_log_replayer_v2/issues/401) | [ogrex](https://github.com/ogrex) |
+
+## Version 3.18.11
+
+Minor Tweak
+
+| Module       | Feature | Brief summary                               | Pull request                                                        | Contributor                       |
+| ------------ | ------- | ------------------------------------------- | ------------------------------------------------------------------- | --------------------------------- |
+| `perception` | topic   | record the semantic segmentation pointcloud | [#404](https://github.com/tier4/driving_log_replayer_v2/issues/404) | [ogrex](https://github.com/ogrex) |
+
 ## Version 3.18.10
 
 Minor Tweak
