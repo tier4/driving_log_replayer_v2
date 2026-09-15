@@ -2,6 +2,12 @@
 Changelog for package driving_log_replayer
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
+Forthcoming
+-----------
+* feat(perception_fp): report FpObjects in base_link and the ego pose (`#401 <https://github.com/tier4/driving_log_replayer_v2/issues/401>`_)
+  Co-authored-by: Claude Fable 5.1 <noreply@anthropic.com>
+* Contributors: lei.gu
+
 3.18.11 (2026-09-15)
 --------------------
 * feat(perception): record the semantic segmentation pointcloud (`#404 <https://github.com/tier4/driving_log_replayer_v2/issues/404>`_)
