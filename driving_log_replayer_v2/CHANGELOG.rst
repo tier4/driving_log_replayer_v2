@@ -2,8 +2,8 @@
 Changelog for package driving_log_replayer
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-Forthcoming
------------
+3.18.13 (2026-09-17)
+--------------------
 * chore: apply ci and fix test (`#410 <https://github.com/tier4/driving_log_replayer_v2/issues/410>`_)
 * feat(perception): allow ignoring frames by their position with first:N / last:N (`#403 <https://github.com/tier4/driving_log_replayer_v2/issues/403>`_)
   Co-authored-by: Claude Opus 5 (1M context) <noreply@anthropic.com>
