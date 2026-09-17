@@ -1,5 +1,13 @@
 # Release Notes
 
+## Version 3.18.14
+
+Minor Tweak
+
+| Module   | Feature | Brief summary                          | Pull request                                                        | Contributor                                   |
+| -------- | ------- | -------------------------------------- | ------------------------------------------------------------------- | --------------------------------------------- |
+| `config` | record  | feat: record all objects in perception | [#413](https://github.com/tier4/driving_log_replayer_v2/issues/413) | [MasatoSaeki](https://github.com/MasatoSaeki) |
+
 ## Version 3.18.13
 
 Minor Tweak
