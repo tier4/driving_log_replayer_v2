@@ -2,6 +2,11 @@
 Changelog for package driving_log_replayer
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
+Forthcoming
+-----------
+* feat: record all objects in perception (`#413 <https://github.com/tier4/driving_log_replayer_v2/issues/413>`_)
+* Contributors: Masato Saeki
+
 3.18.13 (2026-09-17)
 --------------------
 * chore: apply ci and fix test (`#410 <https://github.com/tier4/driving_log_replayer_v2/issues/410>`_)
