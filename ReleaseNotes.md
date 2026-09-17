@@ -1,5 +1,16 @@
 # Release Notes
 
+## Version 3.18.13
+
+Minor Tweak
+
+| Module               | Feature      | Brief summary                                                          | Pull request                                                        | Contributor                                   |
+| -------------------- | ------------ | ---------------------------------------------------------------------- | ------------------------------------------------------------------- | --------------------------------------------- |
+| `common`             | ci/cd        | chore: apply ci and fix test                                           | [#410](https://github.com/tier4/driving_log_replayer_v2/issues/410) | [MasatoSaeki](https://github.com/MasatoSaeki) |
+| `perception`         | evaluation   | allow ignoring frames by their position with first:N / last:N          | [#403](https://github.com/tier4/driving_log_replayer_v2/issues/403) | [ogrex](https://github.com/ogrex)             |
+| `perception`         | result.jsonl | report why a frame was skipped and how much ground truth was evaluated | [#402](https://github.com/tier4/driving_log_replayer_v2/issues/402) | [ogrex](https://github.com/ogrex)             |
+| `camera_2d_detector` | launcher     | pass roi_remap_path to the YOLOX node                                  | [#409](https://github.com/tier4/driving_log_replayer_v2/issues/409) | [ogrex](https://github.com/ogrex)             |
+
 ## Version 3.18.12
 
 Minor Tweak

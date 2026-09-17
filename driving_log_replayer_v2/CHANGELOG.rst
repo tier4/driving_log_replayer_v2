@@ -2,6 +2,19 @@
 Changelog for package driving_log_replayer
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
+Forthcoming
+-----------
+* chore: apply ci and fix test (`#410 <https://github.com/tier4/driving_log_replayer_v2/issues/410>`_)
+* feat(perception): allow ignoring frames by their position with first:N / last:N (`#403 <https://github.com/tier4/driving_log_replayer_v2/issues/403>`_)
+  Co-authored-by: Claude Opus 5 (1M context) <noreply@anthropic.com>
+  Co-authored-by: MasatoSaeki <masato.saeki@tier4.jp>
+* feat(perception): report why a frame was skipped and how much ground truth was evaluated (`#402 <https://github.com/tier4/driving_log_replayer_v2/issues/402>`_)
+  Co-authored-by: Claude Opus 5 (1M context) <noreply@anthropic.com>
+  Co-authored-by: MasatoSaeki <masato.saeki@tier4.jp>
+* fix(camera_2d_detector): pass roi_remap_path to the YOLOX node (`#409 <https://github.com/tier4/driving_log_replayer_v2/issues/409>`_)
+  Co-authored-by: Claude Opus 5 <noreply@anthropic.com>
+* Contributors: Masato Saeki, lei.gu
+
 3.18.12 (2026-09-15)
 --------------------
 * feat(perception_fp): report FpObjects in base_link and the ego pose (`#401 <https://github.com/tier4/driving_log_replayer_v2/issues/401>`_)
