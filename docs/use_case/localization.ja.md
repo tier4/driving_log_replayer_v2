@@ -211,9 +211,15 @@ Evaluation:
 `logging_simulator` 終了後 `autoware_localization_evaluation_scripts` を通じて、localization に関連する diagnostics が想定以上の ERROR を出していないかを評価する。具体的には以下の名前の diagnostics について評価する。
 
 - ndt_scan_matcher: scan_matching_status
-- localization: ekf_localizer
-- localization_error_monitor: ellipse_error_status
-- localization: pose_instability_detector
+- [ndt_scan_matcher: scan_matching_status](https://github.com/autowarefoundation/autoware_core/blob/main/localization/autoware_ndt_scan_matcher/README.md#scan_matching_status)
+- [localization: ekf_localizer](https://github.com/autowarefoundation/autoware_core/blob/main/localization/autoware_ekf_localizer/README.md#diagnostics): pose_no_update_count[^*]
+- [localization: ekf_localizer](https://github.com/autowarefoundation/autoware_core/blob/main/localization/autoware_ekf_localizer/README.md#diagnostics): twist_no_update_count[^*]
+- [localization: ekf_localizer](https://github.com/autowarefoundation/autoware_core/blob/main/localization/autoware_ekf_localizer/README.md#diagnostics): cov_ellipse_long_axis_size[^*]
+- [localization: ekf_localizer](https://github.com/autowarefoundation/autoware_core/blob/main/localization/autoware_ekf_localizer/README.md#diagnostics): cov_ellipse_lateral_direction_size[^*]
+- [localization_error_monitor: ellipse_error_status](https://github.com/autowarefoundation/autoware_universe/blob/main/localization/autoware_localization_error_monitor/README.md#purpose)
+- [localization: pose_instability_detector](https://github.com/autowarefoundation/autoware_universe/blob/main/localization/autoware_pose_instability_detector/README.md#autoware_pose_instability_detector)
+
+[^*]: この4つは旧バージョンでは"localization: ekf_localizer"に統合されている。
 
 詳細な処理は [`autoware_localization_evaluation_scripts`](https://github.com/autowarefoundation/autoware_tools/tree/main/localization/autoware_localization_evaluation_scripts) の README を参照すること。
 
