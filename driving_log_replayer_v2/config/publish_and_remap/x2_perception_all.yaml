@@ -25,3 +25,5 @@ remap:
   - /perception/object_recognition/detection/rois3
   - /perception/object_recognition/detection/rois4
   - /perception/object_recognition/detection/rois5
+  - /perception/object_recognition/detection/rois9
+  - /perception/object_recognition/detection/rois10
