@@ -1,5 +1,13 @@
 # Release Notes
 
+## Version 3.18.15
+
+Minor Tweak
+
+| Module       | Feature     | Brief summary                                                   | Pull request                                                        | Contributor                                     |
+| ------------ | ----------- | --------------------------------------------------------------- | ------------------------------------------------------------------- | ----------------------------------------------- |
+| `perception` | 2d detector | publish_topic_from_rosbag crash and 2d detector color map param | [#416](https://github.com/tier4/driving_log_replayer_v2/issues/416) | [badai-nguyen](https://github.com/badai-nguyen) |
+
 ## Version 3.18.14
 
 Minor Tweak
