@@ -65,7 +65,7 @@ def create_2d_detector_container(
     yolox_params = {
         "model_path": yolox_model_path,
         "label_path": yolox_label_path,
-        "color_map_path": yolox_color_map_path,
+        "semantic_segmentation_color_map_path": yolox_color_map_path,
         "roi_remap_path": roi_remap_path,
         "roi_to_semantic_segmentation_remap_path": roi_to_semantic_segmentation_remap_path,
     }
