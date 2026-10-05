@@ -2,6 +2,13 @@
 Changelog for package driving_log_replayer
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
+Forthcoming
+-----------
+* fix: publish_topic_from_rosbag crash and 2d detector color map param (`#416 <https://github.com/tier4/driving_log_replayer_v2/issues/416>`_)
+  Co-authored-by: Claude Opus 5.5 <noreply@anthropic.com>
+  Co-authored-by: lei.gu <lei.gu@tier4.jp>
+* Contributors: badai nguyen
+
 3.18.14 (2026-09-17)
 --------------------
 * feat: record all objects in perception (`#413 <https://github.com/tier4/driving_log_replayer_v2/issues/413>`_)
