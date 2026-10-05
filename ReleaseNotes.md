@@ -1,5 +1,64 @@
 # Release Notes
 
+## Version 3.18.14
+
+Minor Tweak
+
+| Module   | Feature | Brief summary                          | Pull request                                                        | Contributor                                   |
+| -------- | ------- | -------------------------------------- | ------------------------------------------------------------------- | --------------------------------------------- |
+| `config` | record  | feat: record all objects in perception | [#413](https://github.com/tier4/driving_log_replayer_v2/issues/413) | [MasatoSaeki](https://github.com/MasatoSaeki) |
+
+## Version 3.18.13
+
+Minor Tweak
+
+| Module               | Feature      | Brief summary                                                          | Pull request                                                        | Contributor                                   |
+| -------------------- | ------------ | ---------------------------------------------------------------------- | ------------------------------------------------------------------- | --------------------------------------------- |
+| `common`             | ci/cd        | chore: apply ci and fix test                                           | [#410](https://github.com/tier4/driving_log_replayer_v2/issues/410) | [MasatoSaeki](https://github.com/MasatoSaeki) |
+| `perception`         | evaluation   | allow ignoring frames by their position with first:N / last:N          | [#403](https://github.com/tier4/driving_log_replayer_v2/issues/403) | [ogrex](https://github.com/ogrex)             |
+| `perception`         | result.jsonl | report why a frame was skipped and how much ground truth was evaluated | [#402](https://github.com/tier4/driving_log_replayer_v2/issues/402) | [ogrex](https://github.com/ogrex)             |
+| `camera_2d_detector` | launcher     | pass roi_remap_path to the YOLOX node                                  | [#409](https://github.com/tier4/driving_log_replayer_v2/issues/409) | [ogrex](https://github.com/ogrex)             |
+
+## Version 3.18.12
+
+Minor Tweak
+
+| Module          | Feature      | Brief summary                                  | Pull request                                                        | Contributor                       |
+| --------------- | ------------ | ---------------------------------------------- | ------------------------------------------------------------------- | --------------------------------- |
+| `perception_fp` | result.jsonl | report FpObjects in base_link and the ego pose | [#401](https://github.com/tier4/driving_log_replayer_v2/issues/401) | [ogrex](https://github.com/ogrex) |
+
+## Version 3.18.11
+
+Minor Tweak
+
+| Module       | Feature | Brief summary                               | Pull request                                                        | Contributor                       |
+| ------------ | ------- | ------------------------------------------- | ------------------------------------------------------------------- | --------------------------------- |
+| `perception` | topic   | record the semantic segmentation pointcloud | [#404](https://github.com/tier4/driving_log_replayer_v2/issues/404) | [ogrex](https://github.com/ogrex) |
+
+## Version 3.18.10
+
+Minor Tweak
+
+| Module          | Feature      | Brief summary                                                  | Pull request                                                        | Contributor                       |
+| --------------- | ------------ | -------------------------------------------------------------- | ------------------------------------------------------------------- | --------------------------------- |
+| `perception_fp` | result.jsonl | record objects found in the non-detection area in result.jsonl | [#398](https://github.com/tier4/driving_log_replayer_v2/issues/398) | [ogrex](https://github.com/ogrex) |
+
+## Version 3.18.9
+
+Minor Tweak
+
+| Module   | Feature       | Brief summary                              | Pull request                                                        | Contributor                                   |
+| -------- | ------------- | ------------------------------------------ | ------------------------------------------------------------------- | --------------------------------------------- |
+| `common` | ros parameter | introduce use_sim_time as global parameter | [#396](https://github.com/tier4/driving_log_replayer_v2/issues/396) | [MasatoSaeki](https://github.com/MasatoSaeki) |
+
+## Version 3.18.8
+
+Minor Tweak
+
+| Module                  | Feature       | Brief summary                                       | Pull request                                                        | Contributor                             |
+| ----------------------- | ------------- | --------------------------------------------------- | ------------------------------------------------------------------- | --------------------------------------- |
+| `obstacle_segmentation` | visualization | publish the detection marker when detection is null | [#394](https://github.com/tier4/driving_log_replayer_v2/issues/394) | [BBBBBing](https://github.com/BBBBBing) |
+
 ## Version 3.18.7
 
 Minor Tweak

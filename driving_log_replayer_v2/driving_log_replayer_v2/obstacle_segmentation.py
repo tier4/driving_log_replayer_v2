@@ -430,6 +430,65 @@ def set_ego_point(map_to_baselink: TransformStamped) -> Point:
     return Point(x=t.x, y=t.y, z=t.z)
 
 
+def build_detection_frame_output(
+    frame_result: SensingFrameResult,
+    header: Header,
+    *,
+    frame_success: str | None,
+) -> tuple[MarkerArray, PointCloud2, ObstacleSegmentationMarkerArray, dict]:
+    """
+    検知結果(success/fail/warning)から marker/pcd/graph/info をまとめて生成する共通処理.
+
+    frame_success:
+      - "Success"/"Fail"/"Warn": Detection を評価する場合。success コンテナの色/状態を
+        フレーム合否に従って決める。
+      - None: Detection: null で評価しない場合。success コンテナは緑/OK 固定で可視化する。
+    """
+    marker_array = MarkerArray()
+    pcd = np.zeros(0, dtype=[("x", np.float32), ("y", np.float32), ("z", np.float32)])
+    graph_detection = ObstacleSegmentationMarkerArray()
+    info: dict = {}
+    counter = 0
+
+    ok = frame_success is None or frame_success == "Success"
+    success_color = (
+        ColorRGBA(r=0.0, g=1.0, b=0.0, a=0.3) if ok else ColorRGBA(r=1.0, g=0.0, b=0.0, a=0.3)
+    )
+    success_status = ObstacleSegmentationMarker.OK if ok else ObstacleSegmentationMarker.ERROR
+
+    for container, container_type, color, status in (
+        (frame_result.detection_success_results, "DetectionSuccess", success_color, success_status),
+        (
+            frame_result.detection_fail_results,
+            "DetectionFail",
+            ColorRGBA(r=1.0, g=0.0, b=0.0, a=0.3),
+            ObstacleSegmentationMarker.ERROR,
+        ),
+        (
+            frame_result.detection_warning_results,
+            "DetectionWarn",
+            ColorRGBA(r=1.0, g=0.65, b=0.0, a=0.3),
+            ObstacleSegmentationMarker.WARN,
+        ),
+    ):
+        counter = summarize_frame_container(
+            container,
+            container_type,
+            header,
+            color,
+            info,
+            counter,
+            marker_array,
+            pcd,
+            graph_detection,
+            status,
+        )
+
+    pcd_detection = ros2_numpy.msgify(PointCloud2, pcd)
+    pcd_detection.header = header
+    return marker_array, pcd_detection, graph_detection, info
+
+
 @dataclass
 class Detection(EvaluationItem):
     name: str = "Detection"
@@ -450,9 +509,17 @@ class Detection(EvaluationItem):
         if self.condition is None:
             self.success = True
             self.summary = "Invalid"
+            # Detection条件が無く評価しない場合でも、可視化/記録用に marker/detection
+            # だけは検知結果から生成して publish する。
+            # jsonl の報告は従来どおり "Invalid" のまま (pass/failに影響なし)
+            marker_array, _, _, _ = build_detection_frame_output(
+                frame_result,
+                header,
+                frame_success=None,
+            )
             return (
                 {"Result": {"Total": self.success_str(), "Frame": "Invalid"}, "Info": {}},
-                None,
+                marker_array,
                 None,
                 None,
             )
@@ -474,69 +541,11 @@ class Detection(EvaluationItem):
         self.success = current_rate >= self.condition.PassRate
         self.summary = f"{self.name} ({self.success_str()}): {self.passed} / {self.total} -> {current_rate:.2f}% (Warn: {self.warn})"
 
-        # initialize
-        marker_array = MarkerArray()
-        # create detection pcd
-        pcd = np.zeros(
-            0,
-            dtype=[("x", np.float32), ("y", np.float32), ("z", np.float32)],
-        )
-        counter = 0
-        graph_detection = ObstacleSegmentationMarkerArray()
-
-        color_success = (
-            ColorRGBA(r=0.0, g=1.0, b=0.0, a=0.3)
-            if frame_success == "Success"
-            else ColorRGBA(r=1.0, g=0.0, b=0.0, a=0.3)
-        )
-        info = {}
-        counter = summarize_frame_container(
-            frame_result.detection_success_results,
-            "DetectionSuccess",
+        marker_array, pcd_detection, graph_detection, info = build_detection_frame_output(
+            frame_result,
             header,
-            color_success,
-            info,
-            counter,
-            marker_array,
-            pcd,
-            graph_detection,
-            (
-                ObstacleSegmentationMarker.OK
-                if frame_success == "Success"
-                else ObstacleSegmentationMarker.ERROR
-            ),
+            frame_success=frame_success,
         )
-
-        color_fail = ColorRGBA(r=1.0, g=0.0, b=0.0, a=0.3)
-        counter = summarize_frame_container(
-            frame_result.detection_fail_results,
-            "DetectionFail",
-            header,
-            color_fail,
-            info,
-            counter,
-            marker_array,
-            pcd,
-            graph_detection,
-            ObstacleSegmentationMarker.ERROR,
-        )
-
-        color_warn = ColorRGBA(r=1.0, g=0.65, b=0.0, a=0.3)
-        counter = summarize_frame_container(
-            frame_result.detection_warning_results,
-            "DetectionWarn",
-            header,
-            color_warn,
-            info,
-            counter,
-            marker_array,
-            pcd,
-            graph_detection,
-            ObstacleSegmentationMarker.WARN,
-        )
-
-        pcd_detection = ros2_numpy.msgify(PointCloud2, pcd)
-        pcd_detection.header = header
         return (
             {"Result": {"Total": self.success_str(), "Frame": frame_success}, "Info": info},
             marker_array,

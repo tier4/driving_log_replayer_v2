@@ -26,6 +26,7 @@ if TYPE_CHECKING:
     from perception_eval.config import PerceptionEvaluationConfig
     from perception_eval.tool import PerceptionAnalyzer3D
 
+    from driving_log_replayer_v2.post_process.evaluation_manager import IgnoreFrames
     from driving_log_replayer_v2.scenario import ScenarioType
 
 
@@ -60,7 +61,7 @@ class PerceptionEvaluationManager(EvaluationManager):
         t4_dataset_path: str,
         result_archive_path: str,
         evaluation_topics_with_task: dict[str, list[str]],
-        ignore_frames: list[int],
+        ignore_frames: IgnoreFrames,
     ) -> None:
         self._evaluators = {
             topic: PerceptionEvaluator(
@@ -166,7 +167,9 @@ class PerceptionEvaluationManager(EvaluationManager):
         for evaluator in self._evaluators.values():
             evaluator.save_frame_results()
 
-    def get_evaluation_results(self, topic_name: str | None = None) -> dict | dict[str, dict]:
+    def get_evaluation_results(
+        self, topic_name: str | None = None
+    ) -> tuple[dict, dict] | dict[str, tuple[dict, dict]]:
         """
         Get the evaluation results for each/specific evaluation topic. If called, frame results are also saved.
 
@@ -174,7 +177,7 @@ class PerceptionEvaluationManager(EvaluationManager):
             topic_name (str | None): Name of the topic to get the evaluation results. If None, get all evaluation results.
 
         Returns:
-            dict | dict[str, dict]: The evaluation results.
+            tuple[dict, dict] | dict[str, tuple[dict, dict]]: The evaluation results and frame coverage.
 
         """
         if topic_name is not None:

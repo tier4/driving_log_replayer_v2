@@ -2,6 +2,54 @@
 Changelog for package driving_log_replayer
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
+3.18.14 (2026-09-17)
+--------------------
+* feat: record all objects in perception (`#413 <https://github.com/tier4/driving_log_replayer_v2/issues/413>`_)
+* Contributors: Masato Saeki
+
+3.18.13 (2026-09-17)
+--------------------
+* chore: apply ci and fix test (`#410 <https://github.com/tier4/driving_log_replayer_v2/issues/410>`_)
+* feat(perception): allow ignoring frames by their position with first:N / last:N (`#403 <https://github.com/tier4/driving_log_replayer_v2/issues/403>`_)
+  Co-authored-by: Claude Opus 5 (1M context) <noreply@anthropic.com>
+  Co-authored-by: MasatoSaeki <masato.saeki@tier4.jp>
+* feat(perception): report why a frame was skipped and how much ground truth was evaluated (`#402 <https://github.com/tier4/driving_log_replayer_v2/issues/402>`_)
+  Co-authored-by: Claude Opus 5 (1M context) <noreply@anthropic.com>
+  Co-authored-by: MasatoSaeki <masato.saeki@tier4.jp>
+* fix(camera_2d_detector): pass roi_remap_path to the YOLOX node (`#409 <https://github.com/tier4/driving_log_replayer_v2/issues/409>`_)
+  Co-authored-by: Claude Opus 5 <noreply@anthropic.com>
+* Contributors: Masato Saeki, lei.gu
+
+3.18.12 (2026-09-15)
+--------------------
+* feat(perception_fp): report FpObjects in base_link and the ego pose (`#401 <https://github.com/tier4/driving_log_replayer_v2/issues/401>`_)
+  Co-authored-by: Claude Fable 5.1 <noreply@anthropic.com>
+* Contributors: lei.gu
+
+3.18.11 (2026-09-15)
+--------------------
+* feat(perception): record the semantic segmentation pointcloud (`#404 <https://github.com/tier4/driving_log_replayer_v2/issues/404>`_)
+  Co-authored-by: Claude Opus 5 <noreply@anthropic.com>
+* Contributors: lei.gu
+
+3.18.10 (2026-09-08)
+--------------------
+* feat(perception_fp): record objects found in the non-detection area in result.jsonl (`#398 <https://github.com/tier4/driving_log_replayer_v2/issues/398>`_)
+  Co-authored-by: Claude Fable 5 <noreply@anthropic.com>
+  Co-authored-by: MasatoSaeki <masato.saeki@tier4.jp>
+* Contributors: lei.gu
+
+3.18.9 (2026-07-31)
+-------------------
+* fix: introduce use_sim_time as global parameter (`#396 <https://github.com/tier4/driving_log_replayer_v2/issues/396>`_)
+* Contributors: Masato Saeki
+
+3.18.8 (2026-07-22)
+-------------------
+* feat: publish the detection marker when detection is null (`#394 <https://github.com/tier4/driving_log_replayer_v2/issues/394>`_)
+  Co-authored-by: MasatoSaeki <masato.saeki@tier4.jp>
+* Contributors: Binyi_Wu
+
 3.18.7 (2026-07-17)
 -------------------
 * feat: support agnocast for rosbag record (`#386 <https://github.com/tier4/driving_log_replayer_v2/issues/386>`_)

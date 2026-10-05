@@ -33,7 +33,9 @@ def select_launch(context: LaunchContext) -> list:
     if conf["use_case"] == "ndt_convergence":
         return launch_ndt_convergence(context)
     if conf["use_case"] == "perception_reproducer":
+        # closed loop
         return launch_perception_reproducer_use_case()
+    # open loop
     return launch_use_case()
 
 
