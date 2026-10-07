@@ -58,6 +58,25 @@ Evaluation:
       iou_2d_thresholds: [0.5] # Thresholds for 2D IoU matching
       iou_3d_thresholds: [0.5] # Thresholds for 3D IoU matching
       min_point_numbers: [0, 0, 0, 0, 0] # Min point count in ground truth bbox. If 0, all ground truth objects are evaluated.
+      # --- Driving-aware detection metrics (optional, perception_eval >= 1.4) ---
+      # When set, advanced_detection_metrics.json and advanced_detection_samples.npz are written next to scene_result.pkl.
+      # advanced_detection_metrics:
+      #   score_source: existence_probability # semantic_score (default) / existence_probability. Score used by the components below; mAP is not affected.
+      #   polygon_shapes: as_box # skip (default) / as_box. How POLYGON-shaped objects are handled.
+      #   filters: # Views in addition to the unfiltered one. corridor/region/collision need the lanelet2 map of the t4_dataset.
+      #     - { name: corridor, type: corridor, width_m: 3.0 }
+      #     - { name: road, type: region, regions: [road, road_shoulder, crosswalk] }
+      #     - { name: collision, type: collision, horizon_s: 4.0 }
+      #   components: # Metrics computed on every view
+      #     - { type: corner_error, tp_threshold: 2.0, percentiles: [95.0] }
+      #     - { type: heading_flip }
+      #     - { type: nearest_surface_error }
+      #     - { type: calibration }
+      #     - { type: confident_error }
+      #     - { type: confusion_matrix }
+      #     - { type: critical_fp_fn }
+      #     - { type: collision_weighted_map }
+      #   map: { resolver: t4_scene_directory } # lanelet2_map.osm is resolved from <t4_dataset>/map/ of the evaluated scene
   CriticalObjectFilterConfig: # Config for dynamic (per-frame) object filtering
     target_labels: [car, bicycle, pedestrian, motorbike, unknown]
     max_x_position_list: [200.0, 200.0, 200.0, 200.0, 200.0] # If no special filtering is needed, set same as max_x_position. Must be a list matching number of target labels.
