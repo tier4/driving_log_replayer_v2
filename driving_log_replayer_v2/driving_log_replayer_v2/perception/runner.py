@@ -431,6 +431,9 @@ class PerceptionRunner(Runner):
             )
         else:
             self.perc_eval_manager.save_frame_results()
+            # the driving-aware detection metrics are pooled over the scenes afterwards, so their
+            # per-scene outputs are written next to scene_result.pkl even without metrics details
+            self.perc_eval_manager.write_advanced_detection_outputs()
 
     def _analysis(self) -> None:
         if self.perc_eval_manager.get_degradation_evaluation_task() != "fp_validation":

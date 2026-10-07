@@ -531,6 +531,17 @@ evaluation_taskがfp_validationの場合
 pickle ファイルは python のオブジェクトをファイルとして保存したものであり、perception_eval の PerceptionEvaluationManager.frame_results を保存している。
 pickle ファイルに記録した object をすべて読み込み、dataset の平均の指標を出力することでデータセット評価が行える。
 
+### 走行考慮検出評価の出力ファイル
+
+`evaluation_config_dict` に `advanced_detection_metrics` を設定した場合([サンプルシナリオ](https://github.com/tier4/driving_log_replayer_v2/blob/develop/sample/perception/scenario.yaml)のコメントアウトされた例を参照。perception_eval 1.4 以降が必要)、`enable_metrics_details` の設定に関わらず、`result_archive/<topic>/` の `scene_result.pkl` の隣に以下の 2 ファイルが出力される。`fp_validation` では出力されない。
+
+| ファイル                          | 内容                                                                                                                                                                                                                                                                                                                                                                     |
+| --------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `advanced_detection_metrics.json` | シナリオ単位のレポート(strict JSON、未定義の値は `null`)。`status`(`ok` / `empty` / `error`)、評価した topic・task・frame id、データセット名と lanelet2 地図の有無、設定とオブジェクトフィルタのダイジェスト、フレーム数(`frame_results`, `ignored`, `evaluated`, `skipped`, `prepared`)、フィルタ毎のカバレッジ、メトリクスの `values`、perception_eval の `warnings`。 |
+| `advanced_detection_samples.npz`  | 値の計算元となったフレーム毎のサンプル(perception_eval の `PreparedSamples.to_npz`)。データベース評価の各シーンを再生せずに後からプールするためのもの。sha256 はレポートの `samples_file` に記録される。`status` が `error` の場合は出力されない。                                                                                                                       |
+
+`ignore_frames` に指定したフレームは他のメトリクスと同様に両ファイルから除外されるが、`scene_result.pkl` には残る。メトリクスを計算できない場合(perception_eval が古い、地図が無い等)も評価自体には影響せず、レポートが `status: error` と理由(`error`)付きで出力される。
+
 ### データベース評価の結果ファイル
 
 シナリオに複数の dataset を記述したデータベース評価の場合には、結果出力先ディレクトリに database_result.json というファイルが出力される。

@@ -1,5 +1,13 @@
 # Release Notes
 
+## Version 3.18.16
+
+Minor Tweak
+
+| Module       | Feature    | Brief summary                                                                                  | Pull request                                                        | Contributor                       |
+| ------------ | ---------- | ---------------------------------------------------------------------------------------------- | ------------------------------------------------------------------- | --------------------------------- |
+| `perception` | evaluation | write the driving-aware detection metric outputs to the result archive (existence_probability) | [#420](https://github.com/tier4/driving_log_replayer_v2/pull/420) | [ogrex](https://github.com/ogrex) |
+
 ## Version 3.18.15
 
 Minor Tweak
