@@ -167,6 +167,24 @@ class PerceptionEvaluationManager(EvaluationManager):
         for evaluator in self._evaluators.values():
             evaluator.save_frame_results()
 
+    def write_advanced_detection_outputs(self, topic_name: str | None = None) -> None:
+        """
+        Write the driving-aware detection metric outputs for each/specific evaluation topic.
+
+        Writes `advanced_detection_metrics.json` and `advanced_detection_samples.npz` next to
+        `scene_result.pkl` when `advanced_detection_metrics` is configured in the scenario.
+
+        Args:
+            topic_name (str | None): Name of the topic to write the outputs for. If None, write them for all topics.
+
+        """
+        if topic_name is not None:
+            evaluator = self._evaluators[topic_name]
+            evaluator.write_advanced_detection_outputs()
+            return
+        for evaluator in self._evaluators.values():
+            evaluator.write_advanced_detection_outputs()
+
     def get_evaluation_results(
         self, topic_name: str | None = None
     ) -> tuple[dict, dict] | dict[str, tuple[dict, dict]]:
