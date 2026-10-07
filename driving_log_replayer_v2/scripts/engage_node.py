@@ -26,6 +26,7 @@ from rclpy.executors import MultiThreadedExecutor
 from rclpy.node import Node
 from rclpy.task import Future
 from rclpy.time import Time
+from tier4_system_msgs.srv import ResetDiagGraph
 
 if TYPE_CHECKING:
     from autoware_common_msgs.msg import ResponseStatus
@@ -37,9 +38,17 @@ class EngageNode(Node):
 
         self.declare_parameter("timeout_s", 80.0)
         self._timeout_s = self.get_parameter("timeout_s").get_parameter_value().double_value
+        self.declare_parameter("diagnostic_reset_delay_s", 20.0)
+        self._reset_delay_s = (
+            self.get_parameter("diagnostic_reset_delay_s").get_parameter_value().double_value
+        )
 
         self._current_state: int | None = None
         self._engage_running: bool = False
+        self._reset_clock = Clock(clock_type=ClockType.STEADY_TIME)
+        self._reset_start_time: Time | None = None
+        self._reset_running = False
+        self._reset_complete = False
 
         self._state_subscription = self.create_subscription(
             AutowareState,
@@ -52,6 +61,7 @@ class EngageNode(Node):
             ChangeOperationMode,
             "/api/operation_mode/change_to_autonomous",
         )
+        self._reset_client = self.create_client(ResetDiagGraph, "/diagnostics_graph/reset")
 
         while not self._engage_client.wait_for_service(timeout_sec=1.0):
             self.get_logger().warning("engage service not available, waiting again...")
@@ -88,12 +98,38 @@ class EngageNode(Node):
             rclpy.shutdown()
             return
 
+        if self._current_state not in (
+            AutowareState.WAITING_FOR_ROUTE,
+            AutowareState.PLANNING,
+            AutowareState.WAITING_FOR_ENGAGE,
+        ):
+            return
+
+        # Clear startup latches once; retain latching during the actual test.
+        if not self._reset_complete:
+            if self._reset_start_time is not None:
+                reset_elapsed = (self._reset_clock.now() - self._reset_start_time).nanoseconds / 1e9
+                if reset_elapsed >= self._reset_delay_s:
+                    self.call_reset_service()
+            return
+
         # Call engage service if in WAITING_FOR_ENGAGE state
         if self._current_state == AutowareState.WAITING_FOR_ENGAGE:
             self.call_engage_service()
 
     def state_callback(self, msg: AutowareState) -> None:
         self._current_state = msg.state
+
+        # Later states cover a missed WaitingForRoute message when this node starts late.
+        if self._reset_start_time is None and msg.state in (
+            AutowareState.WAITING_FOR_ROUTE,
+            AutowareState.PLANNING,
+            AutowareState.WAITING_FOR_ENGAGE,
+        ):
+            self._reset_start_time = self._reset_clock.now()
+            self.get_logger().info(
+                f"Waiting {self._reset_delay_s}s before resetting startup diagnostic latches...",
+            )
 
         if msg.state == AutowareState.DRIVING:
             state_name = self._get_state_name(msg.state)
@@ -102,8 +138,35 @@ class EngageNode(Node):
             )
             rclpy.shutdown()
 
+    def call_reset_service(self) -> None:
+        if self._reset_running or self._reset_complete:
+            return
+        if not self._reset_client.service_is_ready():
+            self.get_logger().warning(
+                "Diagnostic reset service not available, waiting...", throttle_duration_sec=5.0
+            )
+            return
+        self._reset_running = True
+        self.get_logger().info("Resetting startup diagnostic latches once...")
+        future = self._reset_client.call_async(ResetDiagGraph.Request())
+        future.add_done_callback(self.reset_callback)
+
+    def reset_callback(self, future: Future) -> None:
+        if future.exception() is not None:
+            self.get_logger().error(f"Diagnostic reset failed: {future.exception()}")
+            rclpy.shutdown()
+            return
+        result: ResetDiagGraph.Response | None = future.result()
+        if result is None or not result.status.success:
+            message = result.status.message if result is not None else "No response"
+            self.get_logger().error(f"Diagnostic reset failed: {message}. Shutting down...")
+            rclpy.shutdown()
+            return
+        self._reset_complete = True
+        self.get_logger().info("Diagnostic reset succeeded; continuing engagement.")
+
     def call_engage_service(self) -> None:
-        if self._engage_running:
+        if self._engage_running or not self._reset_complete:
             return
         self.get_logger().info(
             f"call engage service time: {self._current_time.sec}.{self._current_time.nanosec}",
@@ -149,7 +212,7 @@ def main() -> None:
     executor.add_node(engage_node)
     executor.spin()
     engage_node.destroy_node()
-    rclpy.shutdown()
+    rclpy.try_shutdown()
 
 
 if __name__ == "__main__":
