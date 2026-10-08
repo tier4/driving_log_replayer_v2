@@ -15,15 +15,10 @@
 from __future__ import annotations
 
 import argparse
-from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 from typing import TYPE_CHECKING
-from typing import TypeVar
 
-from autoware_perception_msgs.msg import DetectedObjects
-from autoware_perception_msgs.msg import PredictedObjects
-from autoware_perception_msgs.msg import TrackedObjects
 from std_msgs.msg import Header
 from std_msgs.msg import String
 
@@ -36,8 +31,11 @@ from driving_log_replayer_v2.perception.models import PerceptionScenario
 from driving_log_replayer_v2.perception.planning_factor import convert_to_planning_factor
 from driving_log_replayer_v2.perception.planning_factor import PlanningFactorEvalData
 from driving_log_replayer_v2.perception.planning_factor import PlanningFactorEvaluationManager
+from driving_log_replayer_v2.perception.t4perceval_adapter.conversions import convert_objects_msg
+from driving_log_replayer_v2.perception.t4perceval_adapter.conversions import header_stamp_ns
+from driving_log_replayer_v2.perception.t4perceval_adapter.writers import ground_truth_markers
+from driving_log_replayer_v2.perception.t4perceval_adapter.writers import result_markers
 from driving_log_replayer_v2.perception.topics import load_evaluation_topics
-import driving_log_replayer_v2.perception_eval_conversions as eval_conversions
 from driving_log_replayer_v2.planning_control import PlanningFactorResult
 from driving_log_replayer_v2.post_process.evaluation_manager import TailIgnoreBuffer
 from driving_log_replayer_v2.post_process.ros2_utils import get_topic_metadata
@@ -47,73 +45,41 @@ from driving_log_replayer_v2.post_process.runner import Runner
 from driving_log_replayer_v2.post_process.runner import UseCaseInfo
 
 if TYPE_CHECKING:
+    from autoware_perception_msgs.msg import DetectedObjects
+    from autoware_perception_msgs.msg import PredictedObjects
+    from autoware_perception_msgs.msg import TrackedObjects
     from geometry_msgs.msg import TransformStamped
-    from perception_eval.common.object import DynamicObject
-    from perception_eval.config import PerceptionEvaluationConfig
-    from perception_eval.evaluation.result.perception_frame_result import PerceptionFrameResult
-    from perception_eval.tool import PerceptionAnalyzer3D
     from rosbag2_py import TopicMetadata
     from visualization_msgs.msg import MarkerArray
 
+    from driving_log_replayer_v2.perception.analyze import PerceptionAnalysis
+    from driving_log_replayer_v2.perception.t4perceval_adapter.conversions import ConversionContext
+    from driving_log_replayer_v2.perception.t4perceval_adapter.frame_result import (
+        PerceptionFrameRecord,
+    )
     from driving_log_replayer_v2.post_process.evaluator import FrameResult
     from driving_log_replayer_v2.result import ResultWriter
 
 
-PerceptionMsgType = TypeVar("PerceptionMsgType", DetectedObjects, TrackedObjects, PredictedObjects)
-
-
-@dataclass(frozen=True, slots=True)
-class PerceptionEvalData:
-    interpolation: bool
-    estimated_objects: list[DynamicObject] | str  # str for error message
-
-
-def convert_to_perception_eval(
-    msg: PerceptionMsgType,
+def convert_to_t4perceval(
+    msg: DetectedObjects | TrackedObjects | PredictedObjects,
     subscribed_timestamp_nanosec: int,
-    evaluation_config: PerceptionEvaluationConfig,
+    context: ConversionContext,
 ) -> ConvertedData:
-    """Convert ROS message to PerceptionEvalData."""
-    header_timestamp_microsec: int = eval_conversions.unix_time_microsec_from_ros_msg(msg.header)
-    subscribed_timestamp_microsec: int = eval_conversions.unix_time_microsec_from_ros_time_nanosec(
-        subscribed_timestamp_nanosec
-    )
-    estimated_objects: list[DynamicObject] | str = (
-        eval_conversions.list_dynamic_object_from_ros_msg(
-            header_timestamp_microsec,
-            msg.objects,
-            evaluation_config,
-        )
-    )
-    if isinstance(msg, DetectedObjects):
-        interpolation: bool = False
-    elif isinstance(msg, TrackedObjects | PredictedObjects):
-        interpolation: bool = True
-    else:
-        err_msg = f"Unknown message type: {type(msg)}"
-        raise TypeError(err_msg)
-
+    """Convert a ROS object message to an EstimationFrame (or an error message)."""
     return ConvertedData(
-        header_timestamp=header_timestamp_microsec,
-        subscribed_timestamp=subscribed_timestamp_microsec,
-        data=PerceptionEvalData(interpolation, estimated_objects),
+        header_timestamp=header_stamp_ns(msg.header),
+        subscribed_timestamp=subscribed_timestamp_nanosec,
+        data=convert_objects_msg(msg, context),
     )
 
 
 def convert_to_ros_msg(
-    frame: PerceptionFrameResult,
+    frame: PerceptionFrameRecord,
     header: Header,
 ) -> tuple[MarkerArray, MarkerArray]:
-    """Convert PerceptionFrameResult to ROS MarkerArray messages."""
-    marker_ground_truth = eval_conversions.frame_ground_truth_to_ros_box_and_uuid(
-        frame.frame_ground_truth, header
-    )
-
-    marker_results = eval_conversions.pass_fail_result_to_ros_points_array(
-        frame.pass_fail_result,
-        header,
-    )
-    return marker_ground_truth, marker_results
+    """Convert a PerceptionFrameRecord to ROS MarkerArray messages."""
+    return ground_truth_markers(frame, header), result_markers(frame, header)
 
 
 class PerceptionRunner(Runner):
@@ -266,11 +232,11 @@ class PerceptionRunner(Runner):
         if self.is_planning_factor() and topic_name.startswith("/planning/planning_factors/"):
             return convert_to_planning_factor(msg, subscribed_timestamp_nanosec, topic_name)
 
-        # convert ros to perception_eval
-        return convert_to_perception_eval(
+        # convert ros to t4perceval
+        return convert_to_t4perceval(
             msg,
             subscribed_timestamp_nanosec,
-            self.perc_eval_manager.get_evaluation_config(topic_name),
+            self.perc_eval_manager.get_conversion_context(topic_name),
         )
 
     def _write_result(
@@ -434,7 +400,7 @@ class PerceptionRunner(Runner):
 
     def _analysis(self) -> None:
         if self.perc_eval_manager.get_degradation_evaluation_task() != "fp_validation":
-            analyzers: dict[str, PerceptionAnalyzer3D] = self.perc_eval_manager.get_analyzer()
+            analyzers: dict[str, PerceptionAnalysis] = self.perc_eval_manager.get_analyzer()
 
             # TODO: analysis other topic
             perception_degradation_topic = self._degradation_topics[

@@ -16,6 +16,7 @@
 from __future__ import annotations
 
 import argparse
+from dataclasses import dataclass
 from typing import Any
 from typing import TYPE_CHECKING
 
@@ -40,7 +41,7 @@ from visualization_msgs.msg import MarkerArray
 
 from driving_log_replayer_v2.ground_segmentation.runner import convert_to_ground_seg
 from driving_log_replayer_v2.perception.evaluator import PerceptionInvalidReason
-from driving_log_replayer_v2.perception.runner import convert_to_perception_eval
+import driving_log_replayer_v2.perception_eval_conversions as eval_conversions
 from driving_log_replayer_v2.perception_fp.evaluation_manager import PerceptionFPEvaluationManager
 from driving_log_replayer_v2.perception_fp.models import PerceptionFPData
 from driving_log_replayer_v2.perception_fp.models import PerceptionFPResult
@@ -252,6 +253,44 @@ def convert_fp_objects_to_ros_msg(header: Header, data: dict[str, PerceptionFPDa
     return fp_objects_marker
 
 
+@dataclass(frozen=True, slots=True)
+class PerceptionEvalData:
+    interpolation: bool
+    estimated_objects: list[DynamicObject] | str  # str for error message
+
+
+def convert_to_perception_eval(
+    msg: DetectedObjects | TrackedObjects | PredictedObjects,
+    subscribed_timestamp_nanosec: int,
+    evaluation_config: PerceptionEvaluationConfig,
+) -> ConvertedData:
+    """Convert ROS message to PerceptionEvalData."""
+    header_timestamp_microsec: int = eval_conversions.unix_time_microsec_from_ros_msg(msg.header)
+    subscribed_timestamp_microsec: int = eval_conversions.unix_time_microsec_from_ros_time_nanosec(
+        subscribed_timestamp_nanosec
+    )
+    estimated_objects: list[DynamicObject] | str = (
+        eval_conversions.list_dynamic_object_from_ros_msg(
+            header_timestamp_microsec,
+            msg.objects,
+            evaluation_config,
+        )
+    )
+    if isinstance(msg, DetectedObjects):
+        interpolation: bool = False
+    elif isinstance(msg, TrackedObjects | PredictedObjects):
+        interpolation: bool = True
+    else:
+        err_msg = f"Unknown message type: {type(msg)}"
+        raise TypeError(err_msg)
+
+    return ConvertedData(
+        header_timestamp=header_timestamp_microsec,
+        subscribed_timestamp=subscribed_timestamp_microsec,
+        data=PerceptionEvalData(interpolation, estimated_objects),
+    )
+
+
 class PerceptionFPRunner(Runner):
     def __init__(
         self,
@@ -338,7 +377,7 @@ class PerceptionFPRunner(Runner):
         subscribed_timestamp_nanosec: int,
     ) -> ConvertedData:
         _ = topic_name  # unused
-        if isinstance(msg, (DetectedObjects, PredictedObjects, TrackedObjects)):
+        if isinstance(msg, DetectedObjects | PredictedObjects | TrackedObjects):
             perception_eval_config = PerceptionEvaluationConfig(
                 frame_id=msg.header.frame_id,
                 evaluation_config_dict={

@@ -27,7 +27,7 @@ Evaluation:
       # confidence_threshold: null # Threshold of confidence for the estimated object to be evaluated
       # target_uuids: null # If you want to evaluate only specific ground truths, specify the UUIDs of the ground truths to be evaluated. If null, use all
       max_matchable_radii: [5.0, 3.0, 3.0, 3.0, 3.0]
-      merge_similar_labels: false # Whether or not to merge similar labels https://github.com/tier4/autoware_perception_evaluation/blob/develop/docs/en/perception/label.md#merge-similar-labels-option
+      merge_similar_labels: false # Whether or not to merge similar labels (bus/truck -> car, motorbike -> bicycle), see the label table in driving_log_replayer_v2/perception/t4perceval_adapter/labels.py
       allow_matching_unknown: true # Whether or not to match objects whose labels are unknown
       ignore_attributes: [cycle_state.without_rider] # ignore labels with the specified attribute, name in attribute.json of t4_dataset
       center_distance_thresholds: [[1.0, 1.0, 1.0, 1.0, 1.0], [2.0, 2.0, 2.0, 2.0, 2.0]] # Threshold for center-to-center distance [m] matching

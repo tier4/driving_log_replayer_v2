@@ -23,9 +23,9 @@ from pydantic import BaseModel
 from pydantic import field_validator
 from pydantic import model_validator
 
-from driving_log_replayer_v2.criteria import PerceptionCriteria
-from driving_log_replayer_v2.perception_eval_conversions import FrameDescriptionWriter
-from driving_log_replayer_v2.perception_eval_conversions import summarize_pass_fail_result
+from driving_log_replayer_v2.criteria.perception_t4 import PerceptionCriteria
+from driving_log_replayer_v2.perception.t4perceval_adapter.writers import FrameDescriptionWriter
+from driving_log_replayer_v2.perception.t4perceval_adapter.writers import summarize_pass_fail
 from driving_log_replayer_v2.planning_control import (
     Conditions as PlanningFactorConditions,  # noqa: TC001
 )
@@ -35,7 +35,9 @@ from driving_log_replayer_v2.scenario import number
 from driving_log_replayer_v2.scenario import Scenario
 
 if TYPE_CHECKING:
-    from perception_eval.evaluation.result.perception_frame_result import PerceptionFrameResult
+    from driving_log_replayer_v2.perception.t4perceval_adapter.frame_result import (
+        PerceptionFrameRecord,
+    )
 
 
 UNIX_TIME_MAX_64: int = (1 << 63) - 1
@@ -178,7 +180,7 @@ class Perception(EvaluationItem):
             filters=self.condition.Filter,
         )
 
-    def set_frame(self, frame: PerceptionFrameResult) -> dict:
+    def set_frame(self, frame: PerceptionFrameRecord) -> dict:
         frame_success = "Fail"
         # ret_frame might be filtered frame result or original frame result.
         result, scores, ret_frame = self.criteria.get_result(frame)
@@ -197,12 +199,10 @@ class Perception(EvaluationItem):
         return {
             "PassFail": {
                 "Result": {"Total": self.success_str(), "Frame": frame_success},
-                "Info": summarize_pass_fail_result(ret_frame.pass_fail_result),
+                "Info": summarize_pass_fail(ret_frame),
             },
             "Scores": scores,
-            "Objects": FrameDescriptionWriter.extract_pass_fail_objects_description(
-                ret_frame.pass_fail_result,
-            ),
+            "Objects": FrameDescriptionWriter.extract_pass_fail_objects_description(ret_frame),
         }
 
 
@@ -231,7 +231,7 @@ class PerceptionResult(ResultBase):
 
     def set_frame(
         self,
-        frame: PerceptionFrameResult,
+        frame: PerceptionFrameRecord,
         skip: int,
         map_to_baselink: dict,
     ) -> None:

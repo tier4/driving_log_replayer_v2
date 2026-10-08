@@ -31,7 +31,7 @@ import simplejson as json
 if TYPE_CHECKING:
     from perception_eval.evaluation.result.perception_frame_result import PerceptionFrameResult
 
-from driving_log_replayer_v2.criteria import PerceptionCriteria
+from driving_log_replayer_v2.criteria.perception import PerceptionCriteria
 from driving_log_replayer_v2.perception_eval_conversions import summarize_pass_fail_result
 from driving_log_replayer_v2.result import EvaluationItem
 from driving_log_replayer_v2.result import ResultBase

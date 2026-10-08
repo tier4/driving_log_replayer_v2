@@ -43,14 +43,17 @@ Evaluation:
       # confidence_threshold: null # Confidence threshold for estimated objects to be evaluated
       # target_uuids: null # Specify UUIDs to evaluate only specific ground truths. If null, all are targeted.
       # --- Object Matching Conditions ---
-      max_matchable_radii: [5.0, 3.0, 3.0, 3.0, 3.0] # Maximum radius for matching. No matching occurs beyond these distances.
-      merge_similar_labels: false # Whether to merge similar labels: https://github.com/tier4/autoware_perception_evaluation/blob/develop/docs/en/perception/label.md
+      max_matchable_radii: [5.0, 3.0, 3.0, 3.0, 3.0] # Maximum center distance for matching. No matching occurs beyond these distances.
+      merge_similar_labels: false # Whether to merge similar labels (bus/truck -> car, motorbike -> bicycle), see the label table in driving_log_replayer_v2/perception/t4perceval_adapter/labels.py
       matching_label_policy: allow_unknown # default/allow_unknown/allow_any/allow_same_group (Match only same labels / Unknown matches all labels / All labels match each other / Match only within the same group(vehicle and vru))
       # allow_matching_unknown: true # Whether to match with 'unknown' labels. Same as matching_label_policy: allow_unknown. Priority given to matching_label_policy.
-      # matching_class_agnostic_fps: true # Allow all labels to match (Detection task only; subject to development changes). Used only when matching_label_policy is 'default'.
+      # matching_class_agnostic_fps: true # No effect with t4perceval, a warning is logged.
       # --- Ground Truth Loading Conditions ---
       ignore_attributes: [cycle_state.without_rider] # Ignore labels with specific attributes defined in t4_dataset's attribute.json
-      # count_label_number: false # Count objects per label during t4_dataset load. Default is true.
+      # count_label_number: false # No effect with t4perceval, a warning is logged.
+      # prediction_num_modes: 10 # prediction only: maximum number of predicted paths per object
+      # prediction_num_timesteps: 40 # prediction only: maximum number of poses per predicted path (without the current pose)
+      # future_seconds: 8.0 # prediction only: how far ahead the ground truth trajectories are loaded
       # --- Score Types and Thresholds ---
       # Also used if CriteriaMethod is set to metrics_score.
       center_distance_thresholds: [[1.0, 1.0, 1.0, 1.0, 1.0], [2.0, 2.0, 2.0, 2.0, 2.0]] # Thresholds for center-distance matching (Inner list length = labels, outer list = number of thresholds)

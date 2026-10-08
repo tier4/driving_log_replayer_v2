@@ -132,8 +132,9 @@ The perception evaluation output is marked as `Error` when condition for `Normal
 Only add 1 to FrameSkip in the following cases.
 FrameSkip is a counter for the number of times evaluation is skipped.
 
-- No Ground Truth exists within 75msec before or after the received object's header time.
-- If the number of footprint.points of the received object is 1 or 2 (this condition will be removed when "perception_eval" is updated)
+- No Ground Truth exists within 75msec before or after the received object's header time. The nearest Ground Truth frame is used, the Ground Truth is not interpolated to the header time.
+- If the number of footprint.points of the received object is 1 or 2
+- If the predicted paths of the received object exceed the shape set by `prediction_num_modes` / `prediction_num_timesteps` (prediction only)
 
 ### Skipping evaluation(NoGTNoObject)
 
@@ -141,7 +142,7 @@ FrameSkip is a counter for the number of times evaluation is skipped.
 
 ### ignore_frames
 
-Frames specified in `ignore_frames` are excluded from evaluation and are not included in the analysis results. However, they are added to the `frame results` (i.e., they remain in the `pickle` file). They are counted in `FrameSkip` and reported in result.jsonl as `{"Info": {"Reason": "IGNORED_FRAME"}}`.
+Frames specified in `ignore_frames` are excluded from evaluation and are not included in the analysis results. However, they are added to the `frame results` (i.e., they remain in the `scene_result.t4eval` recording). They are counted in `FrameSkip` and reported in result.jsonl as `{"Info": {"Reason": "IGNORED_FRAME"}}`.
 
 `ignore_frames` can be set in the scenario (`Evaluation.ignore_frames`) or as a launch argument, which has the higher priority. The value is a comma-separated list of the following tokens.
 
@@ -195,17 +196,20 @@ The results obtained through the evaluation are also written in rosbag.
 
 ## Dependent libraries
 
-The perception evaluation step bases on the [perception_eval](https://github.com/tier4/autoware_perception_evaluation) library.
+The perception evaluation step bases on the [t4perceval](https://github.com/ktro2828/t4perceval) library.
+It is installed with pip from `requirements/<distro>.txt` when the package is built, together with `t4-devkit`, which loads the `t4_dataset`.
 
 ### Division of roles of driving_log_replayer_v2 with dependent libraries
 
-`driving_log_replayer_v2` package is in charge of the part of the relationship with ROS and the part that determines pass/fail. The actual perception evaluation is conducted in [perception_eval](https://github.com/tier4/autoware_perception_evaluation) library.
-The [perception_eval](https://github.com/tier4/autoware_perception_evaluation) is a ROS-independent library, it cannot receive ROS objects. Also, ROS timestamps use nanoseconds while the `t4_dataset` format is based on microseconds (because it uses `nuScenes`), so the values must be properly converted before using the library's functions.
+`driving_log_replayer_v2` package is in charge of the part of the relationship with ROS, the object filters of the scenario and the part that determines pass/fail. The matching of objects and the metrics are computed by [t4perceval](https://github.com/ktro2828/t4perceval).
+[t4perceval](https://github.com/ktro2828/t4perceval) is a ROS-independent library which stores objects as columns and evaluates them with systems. The adapter in `driving_log_replayer_v2/perception/t4perceval_adapter` converts the Autoware object messages into its archetypes, loads the `t4_dataset` with the Autoware label table of `perception_eval`, builds the filter and matching systems from the scenario, and reads the results back.
 
-`driving_log_replayer_v2` subscribes the topic output from the perception module of Autoware, converts it to the data format defined in [perception_eval](https://github.com/tier4/autoware_perception_evaluation), and passes it on.
-It is also responsible for publishing and visualizing the evaluation results from [perception_eval](https://github.com/tier4/autoware_perception_evaluation) on proper ROS topic.
+`driving_log_replayer_v2` subscribes the topic output from the perception module of Autoware, converts it, and evaluates every message against the nearest Ground Truth frame.
+It is also responsible for publishing and visualizing the evaluation results on proper ROS topic.
 
-[perception_eval](https://github.com/tier4/autoware_perception_evaluation) is in charge of the part that compares the detection results passed from `driving_log_replayer_v2` with ground truth data, calculates the index, and outputs the evaluations.
+The following settings of `evaluation_config_dict` have no effect with [t4perceval](https://github.com/ktro2828/t4perceval) and only log a warning: `label_prefix`, `count_label_number`, `matching_class_agnostic_fps`. `max_matchable_radii` is applied by `driving_log_replayer_v2` as a maximum center distance of a match. The optional keys `prediction_num_modes` (default 10), `prediction_num_timesteps` (default 40) and `future_seconds` (default 8.0) fix the shape of the predicted paths for the prediction task.
+
+Note that `fp_validation` is not available in this use case anymore, use the `perception_fp` use case instead.
 
 ## About simulation
 
@@ -271,7 +275,7 @@ See [sample](https://github.com/tier4/driving_log_replayer_v2/blob/develop/sampl
 
 See [sample](https://github.com/tier4/driving_log_replayer_v2/blob/develop/sample/perception/result.json).
 
-The evaluation results by [perception_eval](https://github.com/tier4/autoware_perception_evaluation) under the conditions specified in the scenario are output for each frame.
+The evaluation results by [t4perceval](https://github.com/ktro2828/t4perceval) under the conditions specified in the scenario are output for each frame.
 Only the final line has a different format from the other lines since the final metrics are calculated after all data has been flushed.
 
 The format of each frame and the metrics format are shown below.
@@ -406,9 +410,21 @@ When the `evaluation_task` is detection or tracking
           "label1": "APH(Plane Distance) rate of label1"
         }
       },
-      "MOTA": {"https://github.com/tier4/autoware_perception_evaluation/blob/develop/docs/en/perception/metrics.md#tracking"},
-      "MOTA": {"https://github.com/tier4/autoware_perception_evaluation/blob/develop/docs/en/perception/metrics.md#tracking"},
-      "IDswitch": {"https://github.com/tier4/autoware_perception_evaluation/blob/develop/docs/en/perception/metrics.md#id-switch"},
+      "MOTA(Center Distance)": {
+        "ALL": "MOTA for all labels, tracking and prediction only",
+        "label0": "MOTA of label0"
+      },
+      "MOTP(Center Distance)": {
+        "ALL": "MOTP for all labels, tracking and prediction only",
+        "label0": "MOTP of label0"
+      },
+      "IDswitch(Center Distance)": {
+        "ALL": "ID switches for all labels, tracking and prediction only",
+        "label0": "ID switches of label0"
+      },
+      "ADE": { "ALL": "average displacement error, prediction only", "label0": "ADE of label0" },
+      "FDE": { "ALL": "final displacement error, prediction only", "label0": "FDE of label0" },
+      "MissRate": { "ALL": "miss rate, prediction only", "label0": "miss rate of label0" },
       "Error": {
         "ALL": {
           "average": {
@@ -525,14 +541,20 @@ The final line also reports how much of the Ground Truth of the dataset was actu
 
 A `Coverage` lower than expected means that Ground Truth frames of the dataset were never scored, e.g. because no objects message was published close enough to the annotation, so neither the TP nor the FN of those frames are in the metrics.
 
-### pickle file
+### Recording of the scene
 
 In database evaluation, it is necessary to replay multiple rosbags, but due to the ROS specification, it is impossible to use multiple bags in a single launch.
 Since one rosbag, i.e., one `t4_dataset`, requires one launch, it is necessary to execute as many launches as the number of datasets contained in the database evaluation.
 
-Since database evaluation cannot be done in a single launch, perception outputs a file `scene_result.pkl` in addition to `result.jsonl` file.
-A pickle file is a python object saved as a file, PerceptionEvaluationManager.frame_results of [perception_eval](https://github.com/tier4/autoware_perception_evaluation).
-The dataset evaluation can be performed by reading all the objects recorded in the pickle file and outputting the index of the dataset's average.
+Since database evaluation cannot be done in a single launch, perception outputs the following files in the archive directory of each evaluated topic, in addition to `result.jsonl` file.
+
+- `scene_result.t4eval/`: the [t4perceval](https://github.com/ktro2828/t4perceval) recording of the scene (the estimations, the Ground Truth, the pass/fail verdicts and the metrics as parquet files plus `manifest.json`).
+- `evaluation_config.json`: the parsed evaluation settings.
+- `frame_index.json`: the frame name and the timestamps of every evaluated frame.
+- `analysis_result.csv`: the metrics per distance range.
+
+The dataset evaluation can be performed by reading every recording and outputting the index of the dataset's average with `perception_database_result.py -r <directory>`.
+The earlier `scene_result.pkl` / `evaluation_config.pkl` files of `perception_eval` are not written anymore and cannot be read.
 
 ### Result file of database evaluation
 

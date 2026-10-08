@@ -20,7 +20,7 @@ import numpy as np
 from perception_eval.common.object import DynamicObject
 
 from driving_log_replayer_v2.perception.evaluator import PerceptionInvalidReason
-from driving_log_replayer_v2.perception.runner import PerceptionEvalData
+from driving_log_replayer_v2.perception_fp.runner import PerceptionEvalData
 from driving_log_replayer_v2.post_process.evaluator import Evaluator
 from driving_log_replayer_v2.post_process.evaluator import FrameResult
 

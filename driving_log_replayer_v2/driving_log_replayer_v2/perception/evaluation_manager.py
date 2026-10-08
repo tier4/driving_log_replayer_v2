@@ -17,15 +17,17 @@ from __future__ import annotations
 import copy
 from typing import TYPE_CHECKING
 
+from driving_log_replayer_v2.criteria.perception_t4 import FRAME_METRICS_METHODS
+from driving_log_replayer_v2.criteria.perception_t4 import load_methods
 from driving_log_replayer_v2.perception.evaluator import PerceptionEvaluator
 from driving_log_replayer_v2.post_process.evaluation_manager import EvaluationManager
 
 if TYPE_CHECKING:
     from pathlib import Path
 
-    from perception_eval.config import PerceptionEvaluationConfig
-    from perception_eval.tool import PerceptionAnalyzer3D
-
+    from driving_log_replayer_v2.perception.analyze import PerceptionAnalysis
+    from driving_log_replayer_v2.perception.t4perceval_adapter.config import EvaluationConfig
+    from driving_log_replayer_v2.perception.t4perceval_adapter.conversions import ConversionContext
     from driving_log_replayer_v2.post_process.evaluation_manager import IgnoreFrames
     from driving_log_replayer_v2.scenario import ScenarioType
 
@@ -63,6 +65,7 @@ class PerceptionEvaluationManager(EvaluationManager):
         evaluation_topics_with_task: dict[str, list[str]],
         ignore_frames: IgnoreFrames,
     ) -> None:
+        compute_frame_metrics = self._needs_frame_metrics()
         self._evaluators = {
             topic: PerceptionEvaluator(
                 copy.deepcopy(self._scenario.Evaluation.PerceptionEvaluationConfig),
@@ -73,13 +76,25 @@ class PerceptionEvaluationManager(EvaluationManager):
                 topic,
                 task
                 if self._degradation_evaluation_task != "fp_validation"
-                else "fp_validation",  # NOTE: The t4dataset used in fp_validation is specialized, so it cannot be performed concurrently with other evaluation tasks.
+                else "fp_validation",  # NOTE: fp_validation is rejected by the evaluator, use the perception_fp use case.
                 "base_link" if task == "detection" else "map",
                 ignore_frames,
+                compute_frame_metrics=compute_frame_metrics,
             )
             for task, topics in evaluation_topics_with_task.items()
             for topic in topics
         }
+
+    def _needs_frame_metrics(self) -> bool:
+        """Whether a criterion of the scenario scores the per-frame mAP (metrics_score)."""
+        for criteria in self._scenario.Evaluation.Conditions.Criterion:
+            if criteria.CriteriaMethod is None:
+                continue
+            if any(
+                method in FRAME_METRICS_METHODS for method in load_methods(criteria.CriteriaMethod)
+            ):
+                return True
+        return False
 
     def _set_degradation_topics(self, degradation_topic: str) -> None:
         # NOTE: argument has higher priority than scenario setting
@@ -115,15 +130,15 @@ class PerceptionEvaluationManager(EvaluationManager):
 
     def get_evaluation_config(
         self, topic_name: str | None = None
-    ) -> PerceptionEvaluationConfig | dict[str, PerceptionEvaluationConfig]:
+    ) -> EvaluationConfig | dict[str, EvaluationConfig]:
         """
-        Get the PerceptionEvaluationConfig for each/specific topic.
+        Get the EvaluationConfig for each/specific topic.
 
         Args:
             topic_name (str | None): Name of the topic to get the evaluation config. If None, get all evaluation configs.
 
         Returns:
-            PerceptionEvaluationConfig | dict[str, PerceptionEvaluationConfig]: The evaluation config(s).
+            EvaluationConfig | dict[str, EvaluationConfig]: The evaluation config(s).
 
         """
         if topic_name is not None:
@@ -133,6 +148,10 @@ class PerceptionEvaluationManager(EvaluationManager):
             topic: evaluator.get_evaluation_config()
             for topic, evaluator in self._evaluators.items()
         }
+
+    def get_conversion_context(self, topic_name: str) -> ConversionContext:
+        """Get what the ROS message conversion of a topic needs (config and registries)."""
+        return self._evaluators[topic_name].conversion_context
 
     def get_archive_path(self, topic_name: str | None = None) -> Path | dict[str, Path]:
         """
@@ -190,15 +209,15 @@ class PerceptionEvaluationManager(EvaluationManager):
 
     def get_analyzer(
         self, topic_name: str | None = None
-    ) -> PerceptionAnalyzer3D | dict[str, PerceptionAnalyzer3D]:
+    ) -> PerceptionAnalysis | dict[str, PerceptionAnalysis]:
         """
-        Get the PerceptionAnalyzer3D for each/specific evaluation topic.
+        Get the PerceptionAnalysis for each/specific evaluation topic.
 
         Args:
             topic_name (str | None): Name of the topic to get the analyzer. If None, get all analyzers.
 
         Returns:
-            PerceptionAnalyzer3D | dict[str, PerceptionAnalyzer3D]: The analyzer(s).
+            PerceptionAnalysis | dict[str, PerceptionAnalysis]: The analyzer(s).
 
         """
         if topic_name is not None:

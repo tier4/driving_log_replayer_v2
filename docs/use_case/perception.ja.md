@@ -128,8 +128,9 @@ Criterion:
 以下の場合に、FrameSkipに1足す処理のみ行う。
 FrameSkipは評価をskipした回数のカウンタ。
 
-- 受信したobjectのヘッダー時刻の前後75msec以内に真値が存在しない場合
-- 受信したobjectのfootprint.pointsの数が1か2の場合(この条件はperception_evalが更新されたらなくなる予定)
+- 受信したobjectのヘッダー時刻の前後75msec以内に真値が存在しない場合。最も近い真値フレームが使われ、真値はヘッダー時刻に補間されない。
+- 受信したobjectのfootprint.pointsの数が1か2の場合
+- 受信したobjectのpredicted pathsが `prediction_num_modes` / `prediction_num_timesteps` で設定した形状を超える場合(predictionのみ)
 
 ### 評価スキップNoGTNoObject
 
@@ -137,7 +138,7 @@ FrameSkipは評価をskipした回数のカウンタ。
 
 ### ignore_frames
 
-`ignore_frames` に指定したフレームは評価対象外となり、解析結果にも含まれない。。但し、frame results には追加される(=pickle ファイルには残る)。`FrameSkip` のカウント対象となり、result.jsonl には `{"Info": {"Reason": "IGNORED_FRAME"}}` として出力される。
+`ignore_frames` に指定したフレームは評価対象外となり、解析結果にも含まれない。。但し、frame results には追加される(=scene_result.t4eval の recording には残る)。`FrameSkip` のカウント対象となり、result.jsonl には `{"Info": {"Reason": "IGNORED_FRAME"}}` として出力される。
 
 `ignore_frames` はシナリオ (`Evaluation.ignore_frames`) と launch 引数で設定でき、launch 引数の方が優先される。値は以下のトークンをカンマ区切りで並べたもの。
 
@@ -191,18 +192,20 @@ pass/fail とは関係なしに分析をしたい topic はターミナル引数
 
 ## 依存ライブラリ
 
-認識機能の評価は[perception_eval](https://github.com/tier4/autoware_perception_evaluation)に依存している。
+認識機能の評価は[t4perceval](https://github.com/ktro2828/t4perceval)に依存している。
+パッケージのビルド時に `requirements/<distro>.txt` から pip でインストールされ、t4_dataset を読み込む `t4-devkit` も一緒にインストールされる。
 
 ### 依存ライブラリとの driving_log_replayer_v2 の役割分担
 
-driving_log_replayer_v2 が ROS との関係部分や pass/fail を判定する部分を担当する。perception_eval がデータセットを使って実際に評価する部分を担当するという分担になっている。
-perception_eval は ROS 非依存のライブラリなので、ROS のオブジェクトを受け取ることができない。
-また、timestamp が ROS ではナノ秒、t4_dataset は `nuScenes` をベースしているためマイクロ秒が採用されている。
-このため、ライブラリ使用前に適切な変換が必要となる。
+driving_log_replayer_v2 が ROS との関係部分、シナリオで指定したオブジェクトのフィルタ、pass/fail を判定する部分を担当する。オブジェクトのマッチングと指標の計算は [t4perceval](https://github.com/ktro2828/t4perceval) が担当する。
+[t4perceval](https://github.com/ktro2828/t4perceval) は ROS 非依存のライブラリで、オブジェクトを列として保持し、system で評価する。`driving_log_replayer_v2/perception/t4perceval_adapter` の adapter が Autoware のオブジェクトメッセージを archetype に変換し、perception_eval の Autoware ラベル表を使って t4_dataset を読み込み、シナリオからフィルタとマッチングの system を組み立て、結果を読み戻す。
 
-また、perception_eval から返ってくる評価結果を ROS の topic で 保存し可視化する部分も担当する。
+driving_log_replayer_v2 は Autoware の perception モジュールが出力する topic を subscribe し、変換して、最も近い真値フレームに対して各メッセージを評価する。
+また、評価結果を ROS の topic で保存し可視化する部分も担当する。
 
-perception_eval は、driving_log_replayer_v2 から渡された検知結果と GroundTruth を比較して指標を計算し、評価を出力する部分を担当する。
+`evaluation_config_dict` の `label_prefix`、`count_label_number`、`matching_class_agnostic_fps` は [t4perceval](https://github.com/ktro2828/t4perceval) では効果がなく、警告のみ出力する。`max_matchable_radii` は driving_log_replayer_v2 がマッチングの最大中心距離として適用する。省略可能な `prediction_num_modes`(既定 10)、`prediction_num_timesteps`(既定 40)、`future_seconds`(既定 8.0)は prediction で predicted paths の形状を固定する。
+
+なお、このユースケースでは `fp_validation` は使用できない。`perception_fp` ユースケースを使うこと。
 
 ## simulation
 
@@ -268,7 +271,7 @@ clock は、ros2 bag play の--clock オプションによって出力してい�
 
 [サンプル](https://github.com/tier4/driving_log_replayer_v2/blob/develop/sample/perception/result.json)参照
 
-perception では、シナリオに指定した条件で perception_eval が評価した結果を各 frame 毎に出力する。
+perception では、シナリオに指定した条件で [t4perceval](https://github.com/ktro2828/t4perceval) が評価した結果を各 frame 毎に出力する。
 全てのデータを流し終わったあとに、最終的なメトリクスを計算しているため、最終行だけ、他の行と形式が異なる。
 
 以下に、各フレームのフォーマットとメトリクスのフォーマットを示す。
@@ -403,9 +406,24 @@ evaluation_taskがdetectionまたはtrackingの場合
           "label1": "label1のAPH率(Plane Distance)"
         }
       },
-      "MOTA": {"https://github.com/tier4/autoware_perception_evaluation/blob/develop/docs/ja/perception/metrics.md#tracking"},
-      "MOTA": {"https://github.com/tier4/autoware_perception_evaluation/blob/develop/docs/ja/perception/metrics.md#tracking"},
-      "IDswitch": {"https://github.com/tier4/autoware_perception_evaluation/blob/develop/docs/ja/perception/metrics.md#id-switch"},
+      "MOTA(Center Distance)": {
+        "ALL": "すべてのラベルのMOTA(tracking, predictionのみ)",
+        "label0": "label0のMOTA"
+      },
+      "MOTP(Center Distance)": {
+        "ALL": "すべてのラベルのMOTP(tracking, predictionのみ)",
+        "label0": "label0のMOTP"
+      },
+      "IDswitch(Center Distance)": {
+        "ALL": "すべてのラベルのID switch数(tracking, predictionのみ)",
+        "label0": "label0のID switch数"
+      },
+      "ADE": { "ALL": "すべてのラベルの平均変位誤差(predictionのみ)", "label0": "label0のADE" },
+      "FDE": { "ALL": "すべてのラベルの最終変位誤差(predictionのみ)", "label0": "label0のFDE" },
+      "MissRate": {
+        "ALL": "すべてのラベルのmiss rate(predictionのみ)",
+        "label0": "label0のmiss rate"
+      },
       "Error": {
         "ALL": {
           "average": {
@@ -522,14 +540,20 @@ evaluation_taskがfp_validationの場合
 
 `Coverage` が想定より低い場合、dataset の真値フレームが一度も評価されていないことを意味する(真値の時刻に十分近いobjectのメッセージが無い場合など)。そのフレームの TP も FN もメトリクスに含まれない。
 
-### pickle ファイル
+### シーンの recording
 
 データベース評価では、複数の bag を再生する必要があるが、ROS の仕様上、1 回の launch で、複数の bag を利用することは出来ない。
 1 つの bag、すなわち 1 つの t4_dataset に対して launch を 1 回叩くことなるので、データベース評価では、含まれるデータセットの数だけ launch を実行する必要がある。
 
-データベース評価は 1 回の launch で評価できないため、perception では、result.jsonl の他に scene_result.pkl というファイルを出力する。
-pickle ファイルは python のオブジェクトをファイルとして保存したものであり、perception_eval の PerceptionEvaluationManager.frame_results を保存している。
-pickle ファイルに記録した object をすべて読み込み、dataset の平均の指標を出力することでデータセット評価が行える。
+データベース評価は 1 回の launch で評価できないため、perception では、result.jsonl の他に、評価した topic ごとのアーカイブディレクトリに以下のファイルを出力する。
+
+- `scene_result.t4eval/`: シーンの [t4perceval](https://github.com/ktro2828/t4perceval) recording(推定結果、真値、pass/fail の判定、指標を parquet ファイルとして保存したものと `manifest.json`)
+- `evaluation_config.json`: パースした評価設定
+- `frame_index.json`: 評価した各フレームの frame name と timestamp
+- `analysis_result.csv`: 距離範囲ごとの指標
+
+すべての recording を読み込み、dataset の平均の指標を `perception_database_result.py -r <directory>` で出力することでデータセット評価が行える。
+perception_eval が出力していた `scene_result.pkl` / `evaluation_config.pkl` は出力されず、読み込むこともできない。
 
 ### データベース評価の結果ファイル
 

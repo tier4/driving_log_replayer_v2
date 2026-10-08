@@ -14,22 +14,8 @@
 
 import sys
 
-from perception_eval.common import DynamicObject
-from perception_eval.common.dataset import FrameGroundTruth
-from perception_eval.common.evaluation_task import EvaluationTask
-from perception_eval.common.label import AutowareLabel
-from perception_eval.common.label import Label
-from perception_eval.common.schema import FrameID
-from perception_eval.common.shape import Shape
-from perception_eval.common.shape import ShapeType
-from perception_eval.config import PerceptionEvaluationConfig
-from perception_eval.evaluation.metrics import MetricsScoreConfig
-from perception_eval.evaluation.result.object_result import DynamicObjectWithPerceptionResult
-from perception_eval.evaluation.result.perception_frame_config import CriticalObjectFilterConfig
-from perception_eval.evaluation.result.perception_frame_config import PerceptionPassFailConfig
-from perception_eval.evaluation.result.perception_frame_result import PerceptionFrameResult
-from pyquaternion import Quaternion
 import pytest
+from t4perceval_test_utils import make_record
 
 from driving_log_replayer_v2.perception.models import Conditions
 from driving_log_replayer_v2.perception.models import Criteria
@@ -87,54 +73,6 @@ def test_filter_distance_min_max_reversed() -> None:
 
 
 @pytest.fixture
-def create_frame_result() -> PerceptionFrameResult:
-    scenario: PerceptionScenario = load_sample_scenario("perception", PerceptionScenario)
-    evaluation_config_dict = scenario.Evaluation.PerceptionEvaluationConfig[
-        "evaluation_config_dict"
-    ]
-    critical_object_filter_config = scenario.Evaluation.CriticalObjectFilterConfig
-    perception_pass_fail_config = scenario.Evaluation.PerceptionPassFailConfig
-    evaluation_config_dict["label_prefix"] = "autoware"
-    m_params: dict = {
-        "target_labels": evaluation_config_dict["target_labels"],
-        "center_distance_thresholds": evaluation_config_dict.get("center_distance_thresholds"),
-        "plane_distance_thresholds": evaluation_config_dict.get("plane_distance_thresholds"),
-        "iou_2d_thresholds": evaluation_config_dict.get("iou_2d_thresholds"),
-        "iou_3d_thresholds": evaluation_config_dict.get("iou_3d_thresholds"),
-    }
-    evaluation_config: PerceptionEvaluationConfig = PerceptionEvaluationConfig(
-        dataset_paths=["/tmp/dlr"],  # noqa
-        frame_id="base_link",
-        result_root_directory="/tmp/dlr/result/{TIME}",  # noqa
-        evaluation_config_dict=evaluation_config_dict,
-        load_raw_data=False,
-    )
-
-    return PerceptionFrameResult(
-        object_results=None,
-        nuscene_object_results=[],
-        frame_ground_truth=FrameGroundTruth(123, "12", []),
-        metrics_config=MetricsScoreConfig(
-            EvaluationTask.DETECTION,
-            **m_params,
-        ),
-        critical_object_filter_config=CriticalObjectFilterConfig(
-            evaluation_config,
-            critical_object_filter_config["target_labels"],
-            max_x_position_list=critical_object_filter_config["max_x_position_list"],
-            max_y_position_list=critical_object_filter_config["max_y_position_list"],
-        ),
-        frame_pass_fail_config=PerceptionPassFailConfig(
-            evaluation_config,
-            perception_pass_fail_config["target_labels"],
-            matching_threshold_list=perception_pass_fail_config["matching_threshold_list"],
-        ),
-        unix_time=123,
-        target_labels=[AutowareLabel.CAR],
-    )
-
-
-@pytest.fixture
 def create_tp_normal() -> Perception:
     return Perception(
         name="criteria0",
@@ -164,52 +102,20 @@ def create_tp_hard() -> Perception:
     )
 
 
-@pytest.fixture
-def create_dynamic_object() -> DynamicObjectWithPerceptionResult:
-    dynamic_obj = DynamicObject(
-        123,
-        FrameID.BASE_LINK,
-        (1.0, 2.0, 3.0),
-        Quaternion(),
-        Shape(ShapeType.BOUNDING_BOX, (1.0, 1.0, 1.0)),
-        (1.0, 2.0, 3.0),
-        0.5,
-        Label(AutowareLabel.CAR, "car"),
-    )
-    return DynamicObjectWithPerceptionResult(dynamic_obj, None, True)  # noqa
-
-
-def test_perception_fail_has_no_object(
-    create_tp_normal: Perception,
-    create_frame_result: PerceptionFrameResult,
-) -> None:
+def test_perception_fail_has_no_object(create_tp_normal: Perception) -> None:
     evaluation_item = create_tp_normal
-    result = create_frame_result
-    # add no tp_object_results, fp_object_results
-    frame_dict = evaluation_item.set_frame(result)
+    # no tp, fp or fn objects
+    frame_dict = evaluation_item.set_frame(make_record())
     # check total is not changed (skip count)
     assert evaluation_item.total == 99  # noqa
     assert evaluation_item.success is True  # default is True
     assert frame_dict == {"NoGTNoObj": 1}
 
 
-def test_perception_success_tp_normal(
-    create_tp_normal: Perception,
-    create_frame_result: PerceptionFrameResult,
-    create_dynamic_object: DynamicObjectWithPerceptionResult,
-) -> None:
+def test_perception_success_tp_normal(create_tp_normal: Perception) -> None:
     evaluation_item = create_tp_normal
-    result = create_frame_result
-    tp_objects_results: list[DynamicObjectWithPerceptionResult] = [
-        create_dynamic_object for i in range(5)
-    ]
-    fp_objects_results: list[DynamicObjectWithPerceptionResult] = [
-        create_dynamic_object for i in range(5)
-    ]
-    result.pass_fail_result.tp_object_results = tp_objects_results
-    result.pass_fail_result.fp_object_results = fp_objects_results
     # score 50.0 >= NORMAL(50.0)
-    frame_dict = evaluation_item.set_frame(result)
+    frame_dict = evaluation_item.set_frame(make_record(tp=5, fp=5))
     assert evaluation_item.success is True
     assert evaluation_item.summary == "criteria0 (Success): 95 / 100 -> 95.00%"
     assert frame_dict["PassFail"] == {
@@ -222,25 +128,13 @@ def test_perception_success_tp_normal(
         },
     }
     assert frame_dict["Scores"] == {"num_tp": 50.0}
+    assert len(frame_dict["Objects"]) == 15  # noqa: PLR2004
 
 
-def test_perception_fail_tp_normal(
-    create_tp_normal: Perception,
-    create_frame_result: PerceptionFrameResult,
-    create_dynamic_object: DynamicObjectWithPerceptionResult,
-) -> None:
+def test_perception_fail_tp_normal(create_tp_normal: Perception) -> None:
     evaluation_item = create_tp_normal
-    result = create_frame_result
-    tp_objects_results: list[DynamicObjectWithPerceptionResult] = [
-        create_dynamic_object for i in range(5)
-    ]
-    fp_objects_results: list[DynamicObjectWithPerceptionResult] = [
-        create_dynamic_object for i in range(10)
-    ]
-    result.pass_fail_result.tp_object_results = tp_objects_results
-    result.pass_fail_result.fp_object_results = fp_objects_results
     # score 33.3 < NORMAL(50.0)
-    frame_dict = evaluation_item.set_frame(result)
+    frame_dict = evaluation_item.set_frame(make_record(tp=5, fp=10))
     assert evaluation_item.success is False
     assert evaluation_item.summary == "criteria0 (Fail): 94 / 100 -> 94.00%"
     assert frame_dict["PassFail"] == {
@@ -255,23 +149,10 @@ def test_perception_fail_tp_normal(
     # only check PassFail part because Scores will be 3.3333...
 
 
-def test_perception_fail_tp_hard(
-    create_tp_hard: Perception,
-    create_frame_result: PerceptionFrameResult,
-    create_dynamic_object: DynamicObjectWithPerceptionResult,
-) -> None:
+def test_perception_fail_tp_hard(create_tp_hard: Perception) -> None:
     evaluation_item = create_tp_hard
-    result = create_frame_result
-    tp_objects_results: list[DynamicObjectWithPerceptionResult] = [
-        create_dynamic_object for i in range(5)
-    ]
-    fp_objects_results: list[DynamicObjectWithPerceptionResult] = [
-        create_dynamic_object for i in range(5)
-    ]
-    result.pass_fail_result.tp_object_results = tp_objects_results
-    result.pass_fail_result.fp_object_results = fp_objects_results
     # score 50.0 < HARD(75.0)
-    frame_dict = evaluation_item.set_frame(result)
+    frame_dict = evaluation_item.set_frame(make_record(tp=5, fp=5))
     assert evaluation_item.success is False
     assert evaluation_item.summary == "criteria0 (Fail): 94 / 100 -> 94.00%"
     assert frame_dict["PassFail"] == {
@@ -299,6 +180,20 @@ def create_perception_result() -> PerceptionResult:
         ]
     )
     return PerceptionResult(condition)
+
+
+def test_perception_result_set_frame(create_perception_result: PerceptionResult) -> None:
+    """Test that a frame line carries the ego pose, the frame name and the criteria."""
+    result = create_perception_result
+    result.set_frame(make_record(tp=1, frame_name="12"), 2, map_to_baselink={"dummy": 1})
+    assert result.frame["Ego"] == {"TransformStamped": {"dummy": 1}}
+    assert result.frame["FrameName"] == "12"
+    assert result.frame["FrameSkip"] == 2  # noqa: PLR2004
+    assert result.frame["criteria_0"]["PassFail"]["Result"] == {
+        "Total": "Success",
+        "Frame": "Success",
+    }
+    assert result.success is True
 
 
 def test_perception_result_info_frame(create_perception_result: PerceptionResult) -> None:

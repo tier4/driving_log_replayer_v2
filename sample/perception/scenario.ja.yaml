@@ -43,14 +43,17 @@ Evaluation:
       # confidence_threshold: null # 評価対象の estimated object の confidence の閾値
       # target_uuids: null # 特定の ground truth のみに対して評価を行いたい場合，対象とする ground truth の UUID を指定する。nullなら全てが対象
       # --- 物体のマッチング条件 ---
-      max_matchable_radii: [5.0, 3.0, 3.0, 3.0, 3.0] # マッチング時の最大マッチング距離。これを超えてマッチングすることはない。
-      merge_similar_labels: false # 類似のラベルをマージするか https://github.com/tier4/autoware_perception_evaluation/blob/develop/docs/ja/perception/label.md
+      max_matchable_radii: [5.0, 3.0, 3.0, 3.0, 3.0] # マッチング時の最大中心距離。これを超えてマッチングすることはない。
+      merge_similar_labels: false # 類似のラベルをマージするか(bus/truck -> car, motorbike -> bicycle)。driving_log_replayer_v2/perception/t4perceval_adapter/labels.py のラベル表を参照
       matching_label_policy: allow_unknown # default/allow_unknown/allow_any/allow_same_group 先頭から順に、同じラベルのみマッチングを許可、unknownは他全てのラベルとマッチングを許可、全てのラベル同士のマッチングを許可、同じグループ内のみマッチングを許可(vehicleとvru)
       # allow_matching_unknown: true # ラベルがunknownのオブジェクトとマッチングさせるか。つまりmatching_label_policy: allow_unknown と同じ意味。matching_label_policyを指定した場合はそちらが優先される。
-      # matching_class_agnostic_fps: true # 全てのラベル同士のマッチングを許可 (evaluation_taskがdetectionの場合のみ。また開発進捗で変化する) matching_label_policyがdefaultの時のみ値が使用される デフォルトはfalse
+      # matching_class_agnostic_fps: true # t4perceval では効果なし。警告のみ出力される
       # ground truthの読み込み条件
       ignore_attributes: [cycle_state.without_rider] # 指定した属性を持つラベルを無視する。t4_datasetのattribute.jsonのnameを指定する
-      # count_label_number: false # t4datasetロード時に、ラベルごとのオブジェクト数をカウントする。デフォルトはtrue
+      # count_label_number: false # t4perceval では効果なし。警告のみ出力される
+      # prediction_num_modes: 10 # predictionのみ: オブジェクトあたりのpredicted pathの最大数
+      # prediction_num_timesteps: 40 # predictionのみ: predicted pathあたりの最大pose数(現在のposeを除く)
+      # future_seconds: 8.0 # predictionのみ: 真値の軌跡を何秒先まで読み込むか
       # --- スコアの種類と閾値 ---
       # CriteriaMethodがmetrics_scoreの場合も利用される。
       center_distance_thresholds: [[1.0, 1.0, 1.0, 1.0, 1.0], [2.0, 2.0, 2.0, 2.0, 2.0]] # 中心間距離マッチング時の閾値 (最も内側のリストの長さはラベルの数、その次のリストの長さは閾値の数)

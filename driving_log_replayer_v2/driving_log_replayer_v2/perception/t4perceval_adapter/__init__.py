@@ -1,4 +1,4 @@
-# Copyright (c) 2023 TIER IV.inc
+# Copyright (c) 2026 TIER IV.inc
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -12,8 +12,11 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from .common import CriteriaLevel
-from .common import CriteriaMethod
-from .common import SuccessFail
+"""
+Adapter between driving_log_replayer_v2 and t4perceval.
 
-__all__ = ("CriteriaLevel", "CriteriaMethod", "SuccessFail")
+t4perceval stores objects as columns in an entity-component store and evaluates them with
+systems. This package maps the scenario settings, the ROS messages, the T4 dataset and the
+per-frame pass/fail verdict of the perception use case onto that model, and reads the
+results back in the shape result.jsonl expects.
+"""

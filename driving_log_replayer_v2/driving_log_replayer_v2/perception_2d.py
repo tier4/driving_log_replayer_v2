@@ -18,7 +18,7 @@ from typing import Literal
 from perception_eval.evaluation.result.perception_frame_result import PerceptionFrameResult
 from pydantic import BaseModel
 
-from driving_log_replayer_v2.criteria import PerceptionCriteria
+from driving_log_replayer_v2.criteria.perception import PerceptionCriteria
 from driving_log_replayer_v2.result import EvaluationItem
 from driving_log_replayer_v2.result import ResultBase
 from driving_log_replayer_v2.scenario import number

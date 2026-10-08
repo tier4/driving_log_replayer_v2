@@ -3,3 +3,6 @@ pydantic>=2.5.1 # python3-pydantic is old (1.8.2-1)
 transforms3d==0.4.2 # python3-transforms3d is old (0.3.1)
 numpy<2 # If not specified, numpy 2 will be installed with nuscenes-devkit installation
 nuscenes-devkit>=1.1.9,<1.2.0 # python3-nuscenes-devkit-pip is new (1.2.0)
+# evaluation library of the perception use case (git only, pinned to a commit); the [t4] extra pulls t4-devkit,
+# whose rerun-sdk dependency resolves to 0.23.x under the numpy<2 pin above
+t4perceval[t4] @ git+https://github.com/ktro2828/t4perceval@a9b9fa99525119e5d2848b8779aebd4ef6195517
