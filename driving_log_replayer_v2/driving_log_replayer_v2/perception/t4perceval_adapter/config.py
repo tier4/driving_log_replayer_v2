@@ -93,12 +93,12 @@ class CriticalObjectFilterConfig:
     """Per-frame object filter, the former `CriticalObjectFilterConfig`."""
 
     target_labels: tuple[str, ...]
-    max_x_position: PerLabel | None = None
-    max_y_position: PerLabel | None = None
-    max_distance: PerLabel | None = None
-    min_distance: PerLabel | None = None
-    min_num_points: dict[str, int] | None = None
-    confidence_threshold: PerLabel | None = None
+    max_x_position: float | None = None
+    max_y_position: float | None = None
+    max_distance: float | None = None
+    min_distance: float | None = None
+    min_num_points: int | None = None
+    confidence_threshold: float | None = None
     target_uuids: tuple[str, ...] | None = None
     ignore_attributes: tuple[str, ...] = ()
 
@@ -109,7 +109,7 @@ class PassFailConfig:
 
     target_labels: tuple[str, ...]
     matching_threshold: PerLabel | None = None
-    confidence_threshold: PerLabel | None = None
+    confidence_threshold: float | None = None
 
 
 @dataclass(frozen=True)
@@ -128,7 +128,7 @@ class EvaluationConfig:
     confidence_threshold: float | None = None
     target_uuids: tuple[str, ...] | None = None
     ignore_attributes: tuple[str, ...] = ()
-    min_num_points: dict[str, int] | None = None
+    min_num_points: int | None = None
     max_matchable_radii: PerLabel | None = None
     center_distance_thresholds: tuple[PerLabel, ...] = ()
     center_distance_bev_thresholds: tuple[PerLabel, ...] = ()
@@ -215,6 +215,29 @@ def _per_label(
         return {label: cast(v) for label, v in zip(labels, value, strict=True)}
     err_msg = f"{name} must be a number or a list, got {value!r}"
     raise TypeError(err_msg)
+
+
+def _uniform(
+    value: Any,
+    labels: tuple[str, ...],
+    name: str,
+    *,
+    cast: type = float,
+) -> Any:
+    """
+    Turn a scalar or a per-label list of an object filter into one threshold.
+
+    The object filters apply one threshold to every label, so a per-label list must repeat
+    the same value.
+    """
+    per_label = _per_label(value, labels, name, cast=cast)
+    if per_label is None:
+        return None
+    values = set(per_label.values())
+    if len(values) != 1:
+        err_msg = f"{name} must have the same value for every target label, got {value!r}"
+        raise ValueError(err_msg)
+    return values.pop()
 
 
 def _threshold_sets(value: Any, labels: tuple[str, ...], name: str) -> tuple[PerLabel, ...]:
@@ -316,33 +339,33 @@ def from_scenario(
     )
     critical = CriticalObjectFilterConfig(
         target_labels=critical_labels,
-        max_x_position=_per_label(
+        max_x_position=_uniform(
             critical_object_filter_config.get("max_x_position_list"),
             critical_labels,
             "max_x_position_list",
         ),
-        max_y_position=_per_label(
+        max_y_position=_uniform(
             critical_object_filter_config.get("max_y_position_list"),
             critical_labels,
             "max_y_position_list",
         ),
-        max_distance=_per_label(
+        max_distance=_uniform(
             critical_object_filter_config.get("max_distance_list"),
             critical_labels,
             "max_distance_list",
         ),
-        min_distance=_per_label(
+        min_distance=_uniform(
             critical_object_filter_config.get("min_distance_list"),
             critical_labels,
             "min_distance_list",
         ),
-        min_num_points=_per_label(
+        min_num_points=_uniform(
             critical_object_filter_config.get("min_point_numbers"),
             critical_labels,
             "min_point_numbers",
             cast=int,
         ),
-        confidence_threshold=_per_label(
+        confidence_threshold=_uniform(
             critical_object_filter_config.get("confidence_threshold_list"),
             critical_labels,
             "confidence_threshold_list",
@@ -361,7 +384,7 @@ def from_scenario(
             pass_fail_labels,
             "matching_threshold_list",
         ),
-        confidence_threshold=_per_label(
+        confidence_threshold=_uniform(
             perception_pass_fail_config.get("confidence_threshold_list"),
             pass_fail_labels,
             "confidence_threshold_list",
@@ -384,7 +407,7 @@ def from_scenario(
         ),
         target_uuids=_optional_uuids(eval_dict.get("target_uuids")),
         ignore_attributes=tuple(eval_dict.get("ignore_attributes") or ()),
-        min_num_points=_per_label(
+        min_num_points=_uniform(
             eval_dict.get("min_point_numbers"), target_labels, "min_point_numbers", cast=int
         ),
         max_matchable_radii=_per_label(

@@ -281,9 +281,9 @@ def test_target_uuids_keep_only_those_ground_truths(registry: LabelRegistry) -> 
     assert matches.fn_gt.tolist() == []
 
 
-def test_min_point_numbers_per_label(registry: LabelRegistry) -> None:
+def test_min_point_numbers(registry: LabelRegistry) -> None:
     instances = InstanceRegistry()
-    config = make_config(min_point_numbers=(5, 0, 0, 0, 0))
+    config = make_config(min_point_numbers=(5, 5, 5, 5, 5))
     estimation = tracks(registry, instances, [], [], [])
     ground_truth = tracks(
         registry,
@@ -296,12 +296,17 @@ def test_min_point_numbers_per_label(registry: LabelRegistry) -> None:
     store, matches = run_frame(
         config, registry, instances, estimation, ground_truth, gt_has_num_points=True
     )
-    # the car with 3 points is dropped, the pedestrian has no minimum: 2 kept ground truths
+    # one threshold for every label: only the car with 10 points is kept
     kept = store.range(
         GROUND_TRUTH_KEPT_BASE_LINK_PATH, timeline=FRAME, time_range=TimeRange.single(FRAME_INDEX)
     ).to_chunk()
-    assert kept.num_rows == 2  # noqa: PLR2004
-    assert matches.fn_gt.tolist() == [0, 1]
+    assert kept.num_rows == 1
+    assert matches.fn_gt.tolist() == [0]
+
+
+def test_min_point_numbers_must_be_uniform() -> None:
+    with pytest.raises(ValueError, match="same value for every target label"):
+        make_config(min_point_numbers=(5, 0, 0, 0, 0))
 
 
 def test_empty_frame(registry: LabelRegistry) -> None:

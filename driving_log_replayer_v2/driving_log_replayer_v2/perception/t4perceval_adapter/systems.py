@@ -22,7 +22,6 @@ perception_eval's label matching policy becomes `class_agnostic` of the matchers
 
 from __future__ import annotations
 
-from typing import Any
 from typing import TYPE_CHECKING
 
 from t4perceval.system import ApplyMaskSystem
@@ -53,6 +52,7 @@ from driving_log_replayer_v2.perception.t4perceval_adapter.labels import is_clas
 
 if TYPE_CHECKING:
     from collections.abc import Callable
+    from collections.abc import Iterable
 
     from t4perceval.system import System
     from t4perceval.system.matching.base import MatchingSystem
@@ -133,45 +133,14 @@ def valid_threshold_sets(family: str, sets: tuple[PerLabel, ...]) -> list[PerLab
 # -- masks ----------------------------------------------------------------------------------
 
 
-def per_label_masks(
-    source: str,
-    name: str,
-    values: dict[str, Any],
-    make_mask: Callable[[str, Any], System],
-) -> tuple[list[System], str]:
+def _loosest(values: Iterable[float | None], pick: Callable[..., float]) -> float | None:
     """
-    Build `(label AND threshold)` masks per label, OR-ed into `<source>/filter/<name>`.
+    OR the bounds given by several configs (global, critical, pass/fail) into one.
 
-    Args:
-        source (str): Entity the masks describe.
-        name (str): Name of the combined mask.
-        values (dict[str, Any]): Label -> threshold value.
-        make_mask (Callable[[str, Any], System]): Builds the threshold mask of one label from
-            `(mask name, value)`.
-
-    Returns:
-        tuple[list[System], str]: The systems in run order and the combined mask path.
-
+    `pick` is `max` for an upper bound and `min` for a lower bound; unset bounds are skipped.
     """
-    systems: list[System] = []
-    targets: list[str] = []
-    for index, (label, value) in enumerate(values.items()):
-        label_mask = FilterByLabelSystem.on(source, name=f"{name}_{index}_label", labels=[label])
-        value_mask = make_mask(f"{name}_{index}_value", value)
-        combined = f"{source}/filter/{name}_{index}"
-        systems.extend(
-            [
-                label_mask,
-                value_mask,
-                CombineMasksSystem.of(
-                    [str(label_mask.target), str(value_mask.target)], combined, mode="all"
-                ),
-            ]
-        )
-        targets.append(combined)
-    target = f"{source}/filter/{name}"
-    systems.append(CombineMasksSystem.of(targets, target, mode="any"))
-    return systems, target
+    given = [value for value in values if value is not None]
+    return pick(given) if given else None
 
 
 def _side_masks(
@@ -181,134 +150,79 @@ def _side_masks(
     has_num_points: bool,
     has_instance_id: bool,
 ) -> tuple[list[System], str]:
-    """Masks of one side (estimation or ground truth), AND-ed into `<native>/filter/critical`."""
+    """
+    Masks of one side (estimation or ground truth), AND-ed into `<native>/filter/critical`.
+
+    Every filter applies one threshold to every label; when the global and the critical
+    settings both bound the same quantity, a row passes if it satisfies either of them, so
+    the looser bound is used.
+    """
     native = ESTIMATION_PATH if is_estimation else GROUND_TRUTH_PATH
     base_link = in_base_link(native)
+    critical = config.critical
     systems: list[System] = []
-    masks: list[str] = []
-
-    def add(system: System) -> None:
-        systems.append(system)
-        masks.append(str(system.target))
-
-    def add_per_label(
-        source: str, name: str, values: dict[str, Any] | None, make: Callable[[str, Any], System]
-    ) -> None:
-        if not values:
-            return
-        per_label, target = per_label_masks(source, name, values, make)
-        systems.extend(per_label)
-        masks.append(target)
 
     # labels: the global target_labels and the critical target_labels both apply
-    labels = tuple(dict.fromkeys((*config.target_labels, *config.critical.target_labels)))
-    add(FilterByLabelSystem.on(native, name="target_labels", labels=list(labels)))
+    labels = [label for label in config.target_labels if label in critical.target_labels]
+    systems.append(FilterByLabelSystem.on(native, name="target_labels", labels=labels))
 
     # region / distance, in base_link
-    if config.max_x_position is not None or config.max_y_position is not None:
+    max_x = _loosest((config.max_x_position, critical.max_x_position), max)
+    max_y = _loosest((config.max_y_position, critical.max_y_position), max)
+    if max_x is not None or max_y is not None:
         max_xy = (
-            config.max_x_position if config.max_x_position is not None else float("inf"),
-            config.max_y_position if config.max_y_position is not None else float("inf"),
+            max_x if max_x is not None else float("inf"),
+            max_y if max_y is not None else float("inf"),
         )
-        add(FilterByRegionSystem.symmetric(base_link, name="region", max_xy=max_xy))
-    if config.max_distance is not None or config.min_distance is not None:
-        add(
+        systems.append(FilterByRegionSystem.symmetric(base_link, name="region", max_xy=max_xy))
+    max_distance = _loosest((config.max_distance, critical.max_distance), max)
+    min_distance = _loosest((config.min_distance, critical.min_distance), min)
+    if max_distance is not None or min_distance is not None:
+        systems.append(
             FilterByDistanceSystem.on(
                 base_link,
                 name="distance",
-                min_distance=config.min_distance or 0.0,
-                max_distance=config.max_distance
-                if config.max_distance is not None
-                else float("inf"),
+                min_distance=min_distance or 0.0,
+                max_distance=max_distance if max_distance is not None else float("inf"),
                 bev=True,
             )
         )
-    add_per_label(
-        base_link,
-        "critical_max_x",
-        config.critical.max_x_position,
-        lambda name, value: FilterByRegionSystem.symmetric(
-            base_link, name=name, max_xy=(value, float("inf"))
-        ),
-    )
-    add_per_label(
-        base_link,
-        "critical_max_y",
-        config.critical.max_y_position,
-        lambda name, value: FilterByRegionSystem.symmetric(
-            base_link, name=name, max_xy=(float("inf"), value)
-        ),
-    )
-    add_per_label(
-        base_link,
-        "critical_max_distance",
-        config.critical.max_distance,
-        lambda name, value: FilterByDistanceSystem.on(
-            base_link, name=name, max_distance=value, bev=True
-        ),
-    )
-    add_per_label(
-        base_link,
-        "critical_min_distance",
-        config.critical.min_distance,
-        lambda name, value: FilterByDistanceSystem.on(
-            base_link, name=name, min_distance=value, bev=True
-        ),
-    )
 
     if is_estimation:
-        if config.confidence_threshold is not None:
-            add(
+        min_confidence = _loosest(
+            (
+                config.confidence_threshold,
+                critical.confidence_threshold,
+                config.pass_fail.confidence_threshold,
+            ),
+            min,
+        )
+        if min_confidence is not None:
+            systems.append(
                 FilterByConfidenceSystem.on(
-                    native, name="confidence", min_confidence=config.confidence_threshold
+                    native, name="confidence", min_confidence=min_confidence
                 )
             )
-        add_per_label(
-            native,
-            "critical_confidence",
-            config.critical.confidence_threshold,
-            lambda name, value: FilterByConfidenceSystem.on(
-                native, name=name, min_confidence=value
-            ),
-        )
-        add_per_label(
-            native,
-            "pass_fail_confidence",
-            config.pass_fail.confidence_threshold,
-            lambda name, value: FilterByConfidenceSystem.on(
-                native, name=name, min_confidence=value
-            ),
-        )
     else:
-        target_uuids = config.critical.target_uuids or config.target_uuids
+        target_uuids = critical.target_uuids or config.target_uuids
         if target_uuids and has_instance_id:
-            add(
+            systems.append(
                 FilterByInstanceSystem.on(
                     native,
                     name="target_uuids",
                     instances=[f"gt/{uuid}" for uuid in target_uuids],
                 )
             )
-        if has_num_points:
-            add_per_label(
-                native,
-                "min_num_points",
-                config.min_num_points,
-                lambda name, value: FilterByNumPointsSystem.on(
-                    native, name=name, min_num_points=value
-                ),
-            )
-            add_per_label(
-                native,
-                "critical_min_num_points",
-                config.critical.min_num_points,
-                lambda name, value: FilterByNumPointsSystem.on(
-                    native, name=name, min_num_points=value
-                ),
+        min_num_points = _loosest((config.min_num_points, critical.min_num_points), min)
+        if has_num_points and min_num_points:
+            systems.append(
+                FilterByNumPointsSystem.on(native, name="num_points", min_num_points=min_num_points)
             )
 
     target = f"{native}/filter/critical"
-    systems.append(CombineMasksSystem.of(masks, target, mode="all"))
+    systems.append(
+        CombineMasksSystem.of([str(system.target) for system in systems], target, mode="all")
+    )
     return systems, target
 
 

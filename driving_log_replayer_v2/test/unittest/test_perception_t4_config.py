@@ -75,9 +75,9 @@ def test_sample_scenario_is_parsed() -> None:
         dict.fromkeys(labels, 30.0),
     )
     assert config.iou_2d_thresholds == (dict.fromkeys(labels, 0.5),)
-    assert config.min_num_points == dict.fromkeys(labels, 0)
+    assert config.min_num_points == 0
     assert config.ignore_attributes == ("cycle_state.without_rider",)
-    assert config.critical.max_x_position == dict.fromkeys(labels, 200.0)
+    assert config.critical.max_x_position == 200.0  # noqa: PLR2004
     assert config.pass_fail.matching_threshold == dict.fromkeys(labels, 2.0)
     assert config.trajectory_shape is None
     assert set(config.threshold_families) == {
