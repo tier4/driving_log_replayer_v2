@@ -302,7 +302,13 @@ def from_scenario(
 
     policy = eval_dict.get("matching_label_policy")
     if policy is None:
-        policy = "allow_unknown" if eval_dict.get("allow_matching_unknown", False) else "default"
+        if eval_dict.get("allow_matching_unknown", False):
+            err_msg = (
+                "allow_matching_unknown: true (matching_label_policy: allow_unknown) is not "
+                "supported with t4perceval."
+            )
+            raise ValueError(err_msg)
+        policy = "default"
     policy = validate_matching_label_policy(str(policy))
 
     critical_labels = _as_labels(

@@ -15,22 +15,16 @@
 """
 t4perceval systems and pipelines of the perception use case.
 
-The matchers here add perception_eval's label matching policy and `max_matchable_radii`
-on top of the t4perceval matchers. The pipelines map the scenario settings onto filters,
-matchers and metrics.
+The pipelines map the scenario settings onto the t4perceval filters, matchers and metrics:
+perception_eval's label matching policy becomes `class_agnostic` of the matchers and
+`max_matchable_radii` becomes their `max_matchable_distance`.
 """
 
 from __future__ import annotations
 
 from typing import Any
-from typing import ClassVar
 from typing import TYPE_CHECKING
 
-from attrs import define
-from attrs import field
-import numpy as np
-from t4perceval.descriptors import CLASS_ID
-from t4perceval.descriptors import POSITION
 from t4perceval.system import ApplyMaskSystem
 from t4perceval.system import AveragePrecisionHeadingSystem
 from t4perceval.system import AveragePrecisionSystem
@@ -55,16 +49,13 @@ from t4perceval.system import TransformEntitySystem
 from t4perceval.system.matching.threshold import Thresholds
 
 from driving_log_replayer_v2.perception.t4perceval_adapter.ground_truth import GROUND_TRUTH_PATH
-from driving_log_replayer_v2.perception.t4perceval_adapter.labels import policy_matrix
+from driving_log_replayer_v2.perception.t4perceval_adapter.labels import is_class_agnostic
 
 if TYPE_CHECKING:
     from collections.abc import Callable
 
-    from t4perceval.core.view import EntityView
     from t4perceval.system import System
-    from t4perceval.system.base import SystemContext
-    from t4perceval.typing import NDArrayBool
-    from t4perceval.typing import NDArrayF64
+    from t4perceval.system.matching.base import MatchingSystem
 
     from driving_log_replayer_v2.perception.t4perceval_adapter.config import EvaluationConfig
     from driving_log_replayer_v2.perception.t4perceval_adapter.config import PerLabel
@@ -106,97 +97,18 @@ def to_thresholds(values: PerLabel) -> Thresholds:
     return Thresholds(max(values.values()), by_class=dict(values))
 
 
-class LabelPolicyMixin:
-    """
-    Feasibility of perception_eval: label policy and `max_matchable_radii`.
-
-    The concrete classes below declare the two attrs fields; this mixin only holds the
-    shared logic because attrs slotted classes cannot share a slotted base.
-    """
-
-    policy: str
-    matchable_radii: Thresholds | None
-
-    def _feasible(
-        self,
-        score: NDArrayF64,
-        est_view: EntityView,
-        gt_view: EntityView,
-        ctx: SystemContext,
-    ) -> NDArrayBool:
-        est_class = est_view.component(CLASS_ID).values
-        gt_class = gt_view.component(CLASS_ID).values
-        threshold = self.threshold.resolve(gt_class, ctx.labels)[None, :]
-
-        feasible = np.isfinite(score)
-        feasible &= score >= threshold if self.HIGHER_IS_BETTER else score <= threshold
-        feasible &= policy_matrix(self.policy, est_class, gt_class, ctx.labels)
-
-        if self.matchable_radii is not None:
-            est_position = est_view.component(POSITION).values
-            gt_position = gt_view.component(POSITION).values
-            center = np.linalg.norm(est_position[:, None, :] - gt_position[None, :, :], axis=-1)
-            radii = self.matchable_radii.resolve(gt_class, ctx.labels)[None, :]
-            feasible &= center <= radii
-        return feasible
+def max_matchable_distance(config: EvaluationConfig) -> Thresholds | None:
+    """`max_matchable_radii` as the `max_matchable_distance` of the t4perceval matchers."""
+    radii = config.max_matchable_radii
+    return to_thresholds(radii) if radii else None
 
 
-def _optional_thresholds(value: Any) -> Thresholds | None:
-    if value is None or isinstance(value, Thresholds):
-        return value
-    if isinstance(value, dict):
-        return to_thresholds(value)
-    return Thresholds.coerce(value)
-
-
-@define(slots=True)
-class PolicyCenterDistanceMatchingSystem(LabelPolicyMixin, CenterDistanceMatchingSystem):
-    policy: str = field(default="default", kw_only=True)
-    matchable_radii: Thresholds | None = field(
-        default=None, converter=_optional_thresholds, kw_only=True
-    )
-
-
-@define(slots=True)
-class PolicyCenterDistanceBEVMatchingSystem(LabelPolicyMixin, CenterDistanceBEVMatchingSystem):
-    policy: str = field(default="default", kw_only=True)
-    matchable_radii: Thresholds | None = field(
-        default=None, converter=_optional_thresholds, kw_only=True
-    )
-
-
-@define(slots=True)
-class PolicyPlaneDistanceMatchingSystem(LabelPolicyMixin, PlaneDistanceMatchingSystem):
-    MATCHING_NAME: ClassVar[str] = "pass_fail"
-
-    policy: str = field(default="default", kw_only=True)
-    matchable_radii: Thresholds | None = field(
-        default=None, converter=_optional_thresholds, kw_only=True
-    )
-
-
-@define(slots=True)
-class PolicyIoUBEVMatchingSystem(LabelPolicyMixin, IoUBEVMatchingSystem):
-    policy: str = field(default="default", kw_only=True)
-    matchable_radii: Thresholds | None = field(
-        default=None, converter=_optional_thresholds, kw_only=True
-    )
-
-
-@define(slots=True)
-class PolicyIoU3DMatchingSystem(LabelPolicyMixin, IoU3DMatchingSystem):
-    policy: str = field(default="default", kw_only=True)
-    matchable_radii: Thresholds | None = field(
-        default=None, converter=_optional_thresholds, kw_only=True
-    )
-
-
-MATCHERS: dict[str, type] = {
-    "center_distance": PolicyCenterDistanceMatchingSystem,
-    "center_distance_bev": PolicyCenterDistanceBEVMatchingSystem,
-    "plane_distance": PolicyPlaneDistanceMatchingSystem,
-    "iou_2d": PolicyIoUBEVMatchingSystem,
-    "iou_3d": PolicyIoU3DMatchingSystem,
+MATCHERS: dict[str, type[MatchingSystem]] = {
+    "center_distance": CenterDistanceMatchingSystem,
+    "center_distance_bev": CenterDistanceBEVMatchingSystem,
+    "plane_distance": PlaneDistanceMatchingSystem,
+    "iou_2d": IoUBEVMatchingSystem,
+    "iou_3d": IoU3DMatchingSystem,
 }
 
 
@@ -424,8 +336,8 @@ def _sweep(
                 ground_truth,
                 target=matching,
                 threshold=to_thresholds(values),
-                policy=config.matching_label_policy,
-                matchable_radii=config.max_matchable_radii,
+                class_agnostic=is_class_agnostic(config.matching_label_policy),
+                max_matchable_distance=max_matchable_distance(config),
             )
         )
         ap_target = f"{root}/metrics/ap/{family}/{index}"
@@ -488,16 +400,16 @@ def build_frame_pipeline(
     pass_fail_threshold = (
         to_thresholds(config.pass_fail.matching_threshold)
         if config.pass_fail.matching_threshold
-        else PolicyPlaneDistanceMatchingSystem.DEFAULT_THRESHOLD
+        else PlaneDistanceMatchingSystem.DEFAULT_THRESHOLD
     )
     systems.append(
-        PolicyPlaneDistanceMatchingSystem.between(
+        PlaneDistanceMatchingSystem.between(
             ESTIMATION_KEPT_BASE_LINK_PATH,
             GROUND_TRUTH_KEPT_BASE_LINK_PATH,
             target=PASS_FAIL_MATCHING_PATH,
             threshold=pass_fail_threshold,
-            policy=config.matching_label_policy,
-            matchable_radii=config.max_matchable_radii,
+            class_agnostic=is_class_agnostic(config.matching_label_policy),
+            max_matchable_distance=max_matchable_distance(config),
         )
     )
     if compute_frame_metrics:
@@ -542,16 +454,16 @@ def build_scene_pipeline(config: EvaluationConfig) -> Pipeline:
     pass_fail_threshold = (
         to_thresholds(config.pass_fail.matching_threshold)
         if config.pass_fail.matching_threshold
-        else PolicyPlaneDistanceMatchingSystem.DEFAULT_THRESHOLD
+        else PlaneDistanceMatchingSystem.DEFAULT_THRESHOLD
     )
     systems.append(
-        PolicyPlaneDistanceMatchingSystem.between(
+        PlaneDistanceMatchingSystem.between(
             ESTIMATION_KEPT_BASE_LINK_PATH,
             GROUND_TRUTH_KEPT_BASE_LINK_PATH,
             target=CONFUSION_MATCHING_PATH,
             threshold=pass_fail_threshold,
-            policy="allow_any",
-            matchable_radii=config.max_matchable_radii,
+            class_agnostic=True,
+            max_matchable_distance=max_matchable_distance(config),
         )
     )
     systems.append(

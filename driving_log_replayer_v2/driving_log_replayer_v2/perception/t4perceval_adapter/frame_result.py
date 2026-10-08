@@ -35,7 +35,7 @@ from t4perceval.descriptors import VELOCITY
 
 from driving_log_replayer_v2.perception.t4perceval_adapter.conversions import strip_namespace
 from driving_log_replayer_v2.perception.t4perceval_adapter.ground_truth import restamp
-from driving_log_replayer_v2.perception.t4perceval_adapter.labels import policy_matrix
+from driving_log_replayer_v2.perception.t4perceval_adapter.labels import is_class_agnostic
 from driving_log_replayer_v2.perception.t4perceval_adapter.systems import PASS_FAIL_MATCHING_PATH
 
 if TYPE_CHECKING:
@@ -374,10 +374,9 @@ class PerceptionFrameRecord:
         """Whether each TP pair satisfies the label policy, `is_label_correct` of perception_eval."""
         est_class = self.estimation.class_id[self.matches.tp_est]
         gt_class = self.ground_truth.class_id[self.matches.tp_gt]
-        if len(est_class) == 0:
-            return np.empty(0, dtype=np.bool_)
-        matrix = policy_matrix(self.policy, est_class, gt_class, self.labels)
-        return np.diagonal(matrix)
+        if is_class_agnostic(self.policy):
+            return np.ones(len(est_class), dtype=np.bool_)
+        return est_class == gt_class
 
     # -- errors -------------------------------------------------------------------------
 

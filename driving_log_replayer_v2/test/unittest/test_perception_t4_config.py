@@ -61,7 +61,7 @@ def test_sample_scenario_is_parsed() -> None:
     config = load_sample_config()
     labels = ("car", "bicycle", "pedestrian", "motorbike", "unknown")
     assert config.target_labels == labels
-    assert config.matching_label_policy == "allow_unknown"
+    assert config.matching_label_policy == "default"
     assert config.max_x_position == 200.0  # noqa: PLR2004
     assert config.max_matchable_radii == dict(zip(labels, (5.0, 3.0, 3.0, 3.0, 3.0), strict=True))
     # nested thresholds: one set per inner list
@@ -145,21 +145,37 @@ def test_fp_validation_is_rejected() -> None:
         load_sample_config(evaluation_task="fp_validation")
 
 
-def test_allow_matching_unknown_sets_the_policy() -> None:
+def test_allow_matching_unknown_is_rejected() -> None:
     scenario: PerceptionScenario = load_sample_scenario("perception", PerceptionScenario)
     evaluation = scenario.Evaluation
     eval_dict = evaluation.PerceptionEvaluationConfig["evaluation_config_dict"]
     del eval_dict["matching_label_policy"]
     eval_dict["allow_matching_unknown"] = True
-    config = from_scenario(
-        evaluation.PerceptionEvaluationConfig,
-        evaluation.CriticalObjectFilterConfig,
-        evaluation.PerceptionPassFailConfig,
-        evaluation_task="tracking",
-        frame_id="map",
+    with pytest.raises(ValueError, match="allow_matching_unknown"):
+        from_scenario(
+            evaluation.PerceptionEvaluationConfig,
+            evaluation.CriticalObjectFilterConfig,
+            evaluation.PerceptionPassFailConfig,
+            evaluation_task="tracking",
+            frame_id="map",
+        )
+
+
+@pytest.mark.parametrize("policy", ["allow_unknown", "allow_same_group"])
+def test_unsupported_matching_label_policy_is_rejected(policy: str) -> None:
+    scenario: PerceptionScenario = load_sample_scenario("perception", PerceptionScenario)
+    evaluation = scenario.Evaluation
+    evaluation.PerceptionEvaluationConfig["evaluation_config_dict"]["matching_label_policy"] = (
+        policy
     )
-    assert config.matching_label_policy == "allow_unknown"
-    assert config.frame_id == "map"
+    with pytest.raises(ValueError, match="matching_label_policy"):
+        from_scenario(
+            evaluation.PerceptionEvaluationConfig,
+            evaluation.CriticalObjectFilterConfig,
+            evaluation.PerceptionPassFailConfig,
+            evaluation_task="detection",
+            frame_id="base_link",
+        )
 
 
 def test_config_round_trips_through_dict() -> None:

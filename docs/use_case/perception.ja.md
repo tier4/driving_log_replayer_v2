@@ -203,7 +203,7 @@ driving_log_replayer_v2 が ROS との関係部分、シナリオで指定した
 driving_log_replayer_v2 は Autoware の perception モジュールが出力する topic を subscribe し、変換して、最も近い真値フレームに対して各メッセージを評価する。
 また、評価結果を ROS の topic で保存し可視化する部分も担当する。
 
-`evaluation_config_dict` の `label_prefix`、`count_label_number`、`matching_class_agnostic_fps` は [t4perceval](https://github.com/ktro2828/t4perceval) では効果がなく、警告のみ出力する。`max_matchable_radii` は driving_log_replayer_v2 がマッチングの最大中心距離として適用する。省略可能な `prediction_num_modes`(既定 10)、`prediction_num_timesteps`(既定 40)、`future_seconds`(既定 8.0)は prediction で predicted paths の形状を固定する。
+`evaluation_config_dict` の `label_prefix`、`count_label_number`、`matching_class_agnostic_fps` は [t4perceval](https://github.com/ktro2828/t4perceval) では効果がなく、警告のみ出力する。`matching_label_policy` は `default` と `allow_any` のみサポートし、`allow_unknown`、`allow_same_group`、`allow_matching_unknown: true` はエラーになる。`max_matchable_radii` は t4perceval のマッチャーの `max_matchable_distance`(マッチングの最大中心距離)として適用する。省略可能な `prediction_num_modes`(既定 10)、`prediction_num_timesteps`(既定 40)、`future_seconds`(既定 8.0)は prediction で predicted paths の形状を固定する。
 
 なお、このユースケースでは `fp_validation` は使用できない。`perception_fp` ユースケースを使うこと。
 

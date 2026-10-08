@@ -14,13 +14,12 @@
 
 import logging
 
-import numpy as np
 import pytest
 
 from driving_log_replayer_v2.perception.t4perceval_adapter.labels import AUTOWARE_LABELS
 from driving_log_replayer_v2.perception.t4perceval_adapter.labels import build_label_registry
+from driving_log_replayer_v2.perception.t4perceval_adapter.labels import is_class_agnostic
 from driving_log_replayer_v2.perception.t4perceval_adapter.labels import MERGED_LABELS
-from driving_log_replayer_v2.perception.t4perceval_adapter.labels import policy_matrix
 from driving_log_replayer_v2.perception.t4perceval_adapter.labels import t4_category_aliases
 
 
@@ -78,44 +77,13 @@ def test_unknown_dataset_category_becomes_unknown() -> None:
     assert any("weird" in message for message in handler.messages)
 
 
-@pytest.fixture
-def classes() -> dict[str, int]:
-    registry = build_label_registry()
-    return {name: registry.class_id(name) for name in registry.names}
+def test_policy_class_agnostic() -> None:
+    assert not is_class_agnostic("default")
+    assert is_class_agnostic("allow_any")
+    assert is_class_agnostic("ALLOW_ANY")
 
 
-def test_policy_default_is_same_label(classes: dict[str, int]) -> None:
-    registry = build_label_registry()
-    est = np.asarray([classes["car"], classes["unknown"]], dtype=np.int32)
-    gt = np.asarray([classes["car"], classes["truck"]], dtype=np.int32)
-    expected = np.asarray([[True, False], [False, False]])
-    assert np.array_equal(policy_matrix("default", est, gt, registry), expected)
-
-
-def test_policy_allow_unknown(classes: dict[str, int]) -> None:
-    registry = build_label_registry()
-    est = np.asarray([classes["car"], classes["unknown"], classes["hazard"]], dtype=np.int32)
-    gt = np.asarray([classes["car"], classes["truck"]], dtype=np.int32)
-    expected = np.asarray([[True, False], [True, True], [True, True]])
-    assert np.array_equal(policy_matrix("allow_unknown", est, gt, registry), expected)
-
-
-def test_policy_allow_same_group(classes: dict[str, int]) -> None:
-    registry = build_label_registry()
-    est = np.asarray([classes["car"], classes["bicycle"], classes["unknown"]], dtype=np.int32)
-    gt = np.asarray([classes["truck"], classes["pedestrian"], classes["animal"]], dtype=np.int32)
-    expected = np.asarray([[True, False, False], [False, True, True], [True, True, True]])
-    assert np.array_equal(policy_matrix("allow_same_group", est, gt, registry), expected)
-
-
-def test_policy_allow_any(classes: dict[str, int]) -> None:
-    registry = build_label_registry()
-    est = np.asarray([classes["car"]], dtype=np.int32)
-    gt = np.asarray([classes["truck"], classes["pedestrian"]], dtype=np.int32)
-    assert policy_matrix("allow_any", est, gt, registry).all()
-
-
-def test_policy_rejects_unknown_name() -> None:
-    registry = build_label_registry()
+@pytest.mark.parametrize("policy", ["strict", "allow_unknown", "allow_same_group"])
+def test_policy_rejects_unsupported_name(policy: str) -> None:
     with pytest.raises(ValueError, match="matching_label_policy"):
-        policy_matrix("strict", np.zeros(1, np.int32), np.zeros(1, np.int32), registry)
+        is_class_agnostic(policy)

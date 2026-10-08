@@ -26,16 +26,12 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-import numpy as np
 from t4perceval import LabelRegistry
 from t4perceval.label import ClassInfo
 
 if TYPE_CHECKING:
     from collections.abc import Iterable
     import logging
-
-    from t4perceval.typing import NDArrayBool
-    from t4perceval.typing import NDArrayI32
 
 AUTOWARE_LABELS: tuple[str, ...] = (
     "unknown",
@@ -53,18 +49,8 @@ AUTOWARE_LABELS: tuple[str, ...] = (
 MERGED_LABELS: tuple[str, ...] = ("unknown", "car", "bicycle", "pedestrian", "animal")
 """Labels that remain when `merge_similar_labels` is on: bus/truck -> car, motorbike -> bicycle."""
 
-LABEL_GROUPS: dict[str, tuple[str, ...]] = {
-    "vehicle": ("car", "truck", "bus"),
-    "vru": ("bicycle", "motorbike", "pedestrian", "animal"),
-}
-"""Label groups of perception_eval's `allow_same_group` matching policy."""
-
-MATCHING_LABEL_POLICIES: tuple[str, ...] = (
-    "default",
-    "allow_unknown",
-    "allow_same_group",
-    "allow_any",
-)
+MATCHING_LABEL_POLICIES: tuple[str, ...] = ("default", "allow_any")
+"""Supported matching label policies of perception_eval: `allow_unknown` and `allow_same_group` are not."""
 
 # Pairs of (label, category name) shared by both merge settings.
 # Copied from perception_eval.common.label._get_autoware_pairs.
@@ -220,62 +206,11 @@ def validate_matching_label_policy(policy: str) -> str:
     return normalized
 
 
-def _group_ids(labels: LabelRegistry) -> dict[int, int]:
-    groups: dict[int, int] = {}
-    for group_index, members in enumerate(LABEL_GROUPS.values()):
-        for member in members:
-            class_id = labels.class_id_or(member, -1)
-            if class_id >= 0:
-                groups[class_id] = group_index
-    return groups
-
-
-def policy_matrix(
-    policy: str,
-    est_class: NDArrayI32,
-    gt_class: NDArrayI32,
-    labels: LabelRegistry,
-) -> NDArrayBool:
+def is_class_agnostic(policy: str) -> bool:
     """
-    Return which (estimation, ground truth) pairs the label policy allows to match.
+    Whether the label policy lets every pair of labels match.
 
-    Reproduces `MatchingLabelPolicy.is_matchable` of perception_eval:
-        default: same label.
-        allow_unknown: same label, or the estimation is `unknown` or `hazard`.
-        allow_same_group: same label group, or the estimation is `unknown` or `hazard`.
-        allow_any: every pair.
-
-    Args:
-        policy (str): One of `MATCHING_LABEL_POLICIES`.
-        est_class (NDArrayI32): Class ids of the estimations, shape (N,).
-        gt_class (NDArrayI32): Class ids of the ground truths, shape (M,).
-        labels (LabelRegistry): Registry resolving the special labels.
-
-    Returns:
-        NDArrayBool: Matrix of shape (N, M).
-
+    `default` matches the same label only and `allow_any` matches every pair, which are the
+    `class_agnostic` switch of the t4perceval matchers.
     """
-    policy = validate_matching_label_policy(policy)
-    est_class = np.asarray(est_class, dtype=np.int32)
-    gt_class = np.asarray(gt_class, dtype=np.int32)
-    if policy == "allow_any":
-        return np.ones((len(est_class), len(gt_class)), dtype=np.bool_)
-
-    same = est_class[:, None] == gt_class[None, :]
-    if policy == "default":
-        return same
-
-    wildcard_ids = [
-        class_id
-        for class_id in (labels.class_id_or("unknown", -1), labels.class_id_or("hazard", -1))
-        if class_id >= 0
-    ]
-    est_wildcard = np.isin(est_class, wildcard_ids)[:, None]
-    if policy == "allow_unknown":
-        return same | est_wildcard
-
-    groups = _group_ids(labels)
-    est_group = np.asarray([groups.get(int(c), -1) for c in est_class], dtype=np.int64)
-    gt_group = np.asarray([groups.get(int(c), -1) for c in gt_class], dtype=np.int64)
-    same_group = (est_group[:, None] == gt_group[None, :]) & (est_group[:, None] >= 0)
-    return same | same_group | est_wildcard
+    return validate_matching_label_policy(policy) == "allow_any"

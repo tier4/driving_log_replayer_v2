@@ -45,8 +45,7 @@ Evaluation:
       # --- Object Matching Conditions ---
       max_matchable_radii: [5.0, 3.0, 3.0, 3.0, 3.0] # Maximum center distance for matching. No matching occurs beyond these distances.
       merge_similar_labels: false # Whether to merge similar labels (bus/truck -> car, motorbike -> bicycle), see the label table in driving_log_replayer_v2/perception/t4perceval_adapter/labels.py
-      matching_label_policy: allow_unknown # default/allow_unknown/allow_any/allow_same_group (Match only same labels / Unknown matches all labels / All labels match each other / Match only within the same group(vehicle and vru))
-      # allow_matching_unknown: true # Whether to match with 'unknown' labels. Same as matching_label_policy: allow_unknown. Priority given to matching_label_policy.
+      matching_label_policy: default # default/allow_any (Match only same labels / All labels match each other)
       # matching_class_agnostic_fps: true # No effect with t4perceval, a warning is logged.
       # --- Ground Truth Loading Conditions ---
       ignore_attributes: [cycle_state.without_rider] # Ignore labels with specific attributes defined in t4_dataset's attribute.json

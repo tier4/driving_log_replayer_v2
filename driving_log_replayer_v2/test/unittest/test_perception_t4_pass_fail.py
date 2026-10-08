@@ -208,7 +208,7 @@ def test_label_policy_default_rejects_other_labels(registry: LabelRegistry) -> N
     assert strict.fp_est.tolist() == [0]
     assert strict.fn_gt.tolist() == [0]
     _, loose = run_frame(
-        make_config(policy="allow_unknown"), registry, instances, estimation, ground_truth
+        make_config(policy="allow_any"), registry, instances, estimation, ground_truth
     )
     assert loose.tp_est.tolist() == [0]
 
