@@ -203,7 +203,9 @@ driving_log_replayer_v2 が ROS との関係部分、シナリオで指定した
 driving_log_replayer_v2 は Autoware の perception モジュールが出力する topic を subscribe し、変換して、最も近い真値フレームに対して各メッセージを評価する。
 また、評価結果を ROS の topic で保存し可視化する部分も担当する。
 
-`evaluation_config_dict` の `label_prefix`、`count_label_number`、`matching_class_agnostic_fps` は [t4perceval](https://github.com/ktro2828/t4perceval) では効果がなく、警告のみ出力する。オブジェクトのフィルタは全ラベルに1つの閾値を適用する。`min_point_numbers`、`max_x_position_list`、`confidence_threshold_list` などのラベルごとのリストは全て同じ値にする必要があり、全体設定と critical 設定が同じ量を制限する場合はどちらかを満たせば通過する(緩い方を使う)。`matching_label_policy` は `default` と `allow_any` のみサポートし、`allow_unknown`、`allow_same_group`、`allow_matching_unknown: true` はエラーになる。`max_matchable_radii` は t4perceval のマッチャーの `max_matchable_distance`(マッチングの最大中心距離)として適用する。省略可能な `prediction_num_modes`(既定 10)、`prediction_num_timesteps`(既定 40)、`future_seconds`(既定 8.0)は prediction で predicted paths の形状を固定する。
+`evaluation_config_dict` の `label_prefix`、`count_label_number`、`matching_class_agnostic_fps` は [t4perceval](https://github.com/ktro2828/t4perceval) では効果がなく、警告のみ出力する。オブジェクトのフィルタは全ラベルに1つの閾値を適用する。`min_point_numbers`、`max_x_position_list`、`confidence_threshold_list` などのラベルごとのリストは全て同じ値にする必要があり、全体設定と critical 設定が同じ量を制限する場合はどちらかを満たせば通過する(緩い方を使う)。`matching_label_policy` は `default` と `allow_any` のみサポートし、`allow_unknown`、`allow_same_group`、`allow_matching_unknown: true` はエラーになる。`max_matchable_radii` は t4perceval のマッチャーの `max_matchable_distance`(マッチングの最大中心距離)として適用する。省略可能な `prediction_num_modes`(既定 10)と `prediction_num_timesteps`(既定 40)は受信した object の predicted paths をパディングする形状、`future_seconds`(既定 8.0)は真値の軌跡を何秒先まで読み込むか(形状はデータセットから決まる)で、いずれも prediction 用である。`top_ks`(既定 `[1, 3, 6]`)は変位指標が確信度の高い順に何個の mode を評価するかを並べる。
+
+オブジェクトは推定結果の確信度が高い順に貪欲にマッチングされる(nuScenes 方式、perception_eval と同じ)。`MOTA`、`MOTP`、`IDswitch`、`ADE`、`FDE`、`MissRate` の `ALL` はラベルの平均ではなく全オブジェクトをまとめて計算した値であり、`MOTA` は負になり得る。
 
 なお、このユースケースでは `fp_validation` は使用できない。`perception_fp` ユースケースを使うこと。
 
@@ -418,10 +420,16 @@ evaluation_taskがdetectionまたはtrackingの場合
         "ALL": "すべてのラベルのID switch数(tracking, predictionのみ)",
         "label0": "label0のID switch数"
       },
-      "ADE": { "ALL": "すべてのラベルの平均変位誤差(predictionのみ)", "label0": "label0のADE" },
-      "FDE": { "ALL": "すべてのラベルの最終変位誤差(predictionのみ)", "label0": "label0のFDE" },
-      "MissRate": {
-        "ALL": "すべてのラベルのmiss rate(predictionのみ)",
+      "ADE1": {
+        "ALL": "最も確信度の高いmodeの平均変位誤差(predictionのみ。top_ksの値ごとにキーがあり、既定ではADE1, ADE3, ADE6)",
+        "label0": "label0のADE"
+      },
+      "FDE1": {
+        "ALL": "最終変位誤差(predictionのみ。top_ksの値ごとにキーがある)",
+        "label0": "label0のFDE"
+      },
+      "MissRate1": {
+        "ALL": "すべてのラベルのmiss rate(predictionのみ)(top_ksの値ごとにキーがある)",
         "label0": "label0のmiss rate"
       },
       "Error": {

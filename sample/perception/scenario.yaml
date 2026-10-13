@@ -50,9 +50,10 @@ Evaluation:
       # --- Ground Truth Loading Conditions ---
       ignore_attributes: [cycle_state.without_rider] # Ignore labels with specific attributes defined in t4_dataset's attribute.json
       # count_label_number: false # No effect with t4perceval, a warning is logged.
-      # prediction_num_modes: 10 # prediction only: maximum number of predicted paths per object
-      # prediction_num_timesteps: 40 # prediction only: maximum number of poses per predicted path (without the current pose)
-      # future_seconds: 8.0 # prediction only: how far ahead the ground truth trajectories are loaded
+      # prediction_num_modes: 10 # prediction only: number of predicted paths per received object (padded up to it)
+      # prediction_num_timesteps: 40 # prediction only: number of poses per predicted path without the current pose (padded up to it)
+      # future_seconds: 8.0 # prediction only: how far ahead the ground truth trajectories are loaded; their shape is fitted from the dataset
+      # top_ks: [1, 3, 6] # prediction only: how many of the most confident modes the displacement metrics score (one key per value: ADE1, ADE3, ...)
       # --- Score Types and Thresholds ---
       # Also used if CriteriaMethod is set to metrics_score.
       center_distance_thresholds: [[1.0, 1.0, 1.0, 1.0, 1.0], [2.0, 2.0, 2.0, 2.0, 2.0]] # Thresholds for center-distance matching (Inner list length = labels, outer list = number of thresholds)

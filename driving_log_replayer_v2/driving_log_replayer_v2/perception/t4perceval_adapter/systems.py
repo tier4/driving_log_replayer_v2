@@ -17,7 +17,8 @@ t4perceval systems and pipelines of the perception use case.
 
 The pipelines map the scenario settings onto the t4perceval filters, matchers and metrics:
 perception_eval's label matching policy becomes `class_agnostic` of the matchers and
-`max_matchable_radii` becomes their `max_matchable_distance`.
+`max_matchable_radii` becomes their `max_matchable_distance`. Every matcher assigns pairs
+greedily in descending estimation confidence (nuScenes style), as perception_eval did.
 """
 
 from __future__ import annotations
@@ -95,6 +96,10 @@ GROUND_TRUTH_KEPT_BASE_LINK_PATH = in_base_link(GROUND_TRUTH_KEPT_PATH)
 def to_thresholds(values: PerLabel) -> Thresholds:
     """Per-label mapping -> `Thresholds`. The default covers labels outside the mapping."""
     return Thresholds(max(values.values()), by_class=dict(values))
+
+
+ASSIGNMENT = "greedy"
+"""Pair assignment of every matcher: nuScenes-style, in descending estimation confidence."""
 
 
 def max_matchable_distance(config: EvaluationConfig) -> Thresholds | None:
@@ -252,6 +257,7 @@ def _sweep(
                 threshold=to_thresholds(values),
                 class_agnostic=is_class_agnostic(config.matching_label_policy),
                 max_matchable_distance=max_matchable_distance(config),
+                assignment=ASSIGNMENT,
             )
         )
         ap_target = f"{root}/metrics/ap/{family}/{index}"
@@ -324,6 +330,7 @@ def build_frame_pipeline(
             threshold=pass_fail_threshold,
             class_agnostic=is_class_agnostic(config.matching_label_policy),
             max_matchable_distance=max_matchable_distance(config),
+            assignment=ASSIGNMENT,
         )
     )
     if compute_frame_metrics:
@@ -361,7 +368,7 @@ def build_scene_pipeline(config: EvaluationConfig) -> Pipeline:
                 ESTIMATION_KEPT_PATH,
                 GROUND_TRUTH_KEPT_PATH,
                 target=DISPLACEMENT_PATH,
-                top_k=max(config.top_ks) if config.top_ks else 1,
+                top_k=config.top_ks,
                 miss_tolerance=config.miss_tolerance,
             )
         )
@@ -378,6 +385,7 @@ def build_scene_pipeline(config: EvaluationConfig) -> Pipeline:
             threshold=pass_fail_threshold,
             class_agnostic=True,
             max_matchable_distance=max_matchable_distance(config),
+            assignment=ASSIGNMENT,
         )
     )
     systems.append(

@@ -207,7 +207,9 @@ It is installed with pip from `requirements/<distro>.txt` when the package is bu
 `driving_log_replayer_v2` subscribes the topic output from the perception module of Autoware, converts it, and evaluates every message against the nearest Ground Truth frame.
 It is also responsible for publishing and visualizing the evaluation results on proper ROS topic.
 
-The following settings of `evaluation_config_dict` have no effect with [t4perceval](https://github.com/ktro2828/t4perceval) and only log a warning: `label_prefix`, `count_label_number`, `matching_class_agnostic_fps`. The object filters apply one threshold to every label: a per-label list such as `min_point_numbers`, `max_x_position_list` or `confidence_threshold_list` must repeat the same value, and when the global and the critical settings bound the same quantity an object passes if it satisfies either (the looser one is used). `matching_label_policy` supports only `default` and `allow_any`; `allow_unknown`, `allow_same_group` and `allow_matching_unknown: true` are rejected. `max_matchable_radii` is applied as the `max_matchable_distance` of the t4perceval matchers, the maximum center distance of a match. The optional keys `prediction_num_modes` (default 10), `prediction_num_timesteps` (default 40) and `future_seconds` (default 8.0) fix the shape of the predicted paths for the prediction task.
+The following settings of `evaluation_config_dict` have no effect with [t4perceval](https://github.com/ktro2828/t4perceval) and only log a warning: `label_prefix`, `count_label_number`, `matching_class_agnostic_fps`. The object filters apply one threshold to every label: a per-label list such as `min_point_numbers`, `max_x_position_list` or `confidence_threshold_list` must repeat the same value, and when the global and the critical settings bound the same quantity an object passes if it satisfies either (the looser one is used). `matching_label_policy` supports only `default` and `allow_any`; `allow_unknown`, `allow_same_group` and `allow_matching_unknown: true` are rejected. `max_matchable_radii` is applied as the `max_matchable_distance` of the t4perceval matchers, the maximum center distance of a match. The optional keys `prediction_num_modes` (default 10) and `prediction_num_timesteps` (default 40) are the shape the predicted paths of the received objects are padded to, and `future_seconds` (default 8.0) is how far ahead the Ground Truth trajectories are loaded (their shape is fitted from the dataset); all three are for the prediction task. `top_ks` (default `[1, 3, 6]`) lists how many of the most confident modes the displacement metrics score.
+
+Objects are matched greedily in descending estimation confidence (nuScenes style), as perception_eval did. The `ALL` entry of `MOTA`, `MOTP`, `IDswitch`, `ADE`, `FDE` and `MissRate` is computed over every object pooled, not as the mean of the labels, and `MOTA` can be negative.
 
 Note that `fp_validation` is not available in this use case anymore, use the `perception_fp` use case instead.
 
@@ -422,9 +424,18 @@ When the `evaluation_task` is detection or tracking
         "ALL": "ID switches for all labels, tracking and prediction only",
         "label0": "ID switches of label0"
       },
-      "ADE": { "ALL": "average displacement error, prediction only", "label0": "ADE of label0" },
-      "FDE": { "ALL": "final displacement error, prediction only", "label0": "FDE of label0" },
-      "MissRate": { "ALL": "miss rate, prediction only", "label0": "miss rate of label0" },
+      "ADE1": {
+        "ALL": "average displacement error of the most confident mode, prediction only; one key per value of top_ks (ADE1, ADE3, ADE6 by default)",
+        "label0": "ADE of label0"
+      },
+      "FDE1": {
+        "ALL": "final displacement error, prediction only; one key per value of top_ks",
+        "label0": "FDE of label0"
+      },
+      "MissRate1": {
+        "ALL": "miss rate, prediction only; one key per value of top_ks",
+        "label0": "miss rate of label0"
+      },
       "Error": {
         "ALL": {
           "average": {

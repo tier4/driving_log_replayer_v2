@@ -136,10 +136,14 @@ class EvaluationConfig:
     iou_2d_thresholds: tuple[PerLabel, ...] = ()
     iou_3d_thresholds: tuple[PerLabel, ...] = ()
     top_ks: tuple[int, ...] = (1, 3, 6)
+    """Numbers of most confident modes scored by the displacement metrics, one key per value."""
     miss_tolerance: float = 2.0
     prediction_num_modes: int = 10
+    """Number of modes the predicted paths of the estimation are padded to (prediction only)."""
     prediction_num_timesteps: int = 40
+    """Number of steps the predicted paths of the estimation are padded to (prediction only)."""
     future_seconds: float = 8.0
+    """How far ahead the ground truth trajectories are loaded; their shape is fitted per scene."""
     critical: CriticalObjectFilterConfig = field(
         default_factory=lambda: CriticalObjectFilterConfig(target_labels=())
     )
@@ -276,6 +280,15 @@ def _optional_uuids(value: Any) -> tuple[str, ...] | None:
     return tuple(str(uuid) for uuid in value)
 
 
+def _top_ks(value: Any) -> tuple[int, ...]:
+    """Distinct positive mode counts, in the given order (t4perceval rejects duplicates and 0)."""
+    top_ks = tuple(dict.fromkeys(int(k) for k in value))
+    if not top_ks or min(top_ks) < 1:
+        err_msg = f"top_ks must hold positive integers, got {value!r}"
+        raise ValueError(err_msg)
+    return top_ks
+
+
 def from_scenario(
     perception_evaluation_config: dict,
     critical_object_filter_config: dict,
@@ -391,7 +404,7 @@ def from_scenario(
         ),
     )
 
-    top_ks = tuple(int(k) for k in eval_dict.get("top_ks", (1, 3, 6)))
+    top_ks = _top_ks(eval_dict.get("top_ks", (1, 3, 6)))
     return EvaluationConfig(
         evaluation_task=evaluation_task,
         frame_id=frame_id,

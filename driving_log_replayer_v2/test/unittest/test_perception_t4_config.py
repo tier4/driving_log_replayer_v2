@@ -140,6 +140,30 @@ def test_unknown_target_label_is_rejected() -> None:
         )
 
 
+def test_top_ks_are_deduplicated_and_positive() -> None:
+    scenario: PerceptionScenario = load_sample_scenario("perception", PerceptionScenario)
+    evaluation = scenario.Evaluation
+    eval_dict = evaluation.PerceptionEvaluationConfig["evaluation_config_dict"]
+    eval_dict["top_ks"] = [3, 1, 3]
+    config = from_scenario(
+        evaluation.PerceptionEvaluationConfig,
+        evaluation.CriticalObjectFilterConfig,
+        evaluation.PerceptionPassFailConfig,
+        evaluation_task="prediction",
+        frame_id="map",
+    )
+    assert config.top_ks == (3, 1)
+    eval_dict["top_ks"] = [0]
+    with pytest.raises(ValueError, match="top_ks"):
+        from_scenario(
+            evaluation.PerceptionEvaluationConfig,
+            evaluation.CriticalObjectFilterConfig,
+            evaluation.PerceptionPassFailConfig,
+            evaluation_task="prediction",
+            frame_id="map",
+        )
+
+
 def test_fp_validation_is_rejected() -> None:
     with pytest.raises(ValueError, match="fp_validation"):
         load_sample_config(evaluation_task="fp_validation")

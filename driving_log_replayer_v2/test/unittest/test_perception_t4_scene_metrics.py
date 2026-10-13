@@ -19,7 +19,12 @@ import pandas as pd
 import pytest
 from t4perceval import FRAME
 from t4perceval import InstanceRegistry
+from t4perceval import MetricValues
+from t4perceval import Store
+from t4perceval import TimePoint
+from t4perceval.component import ALL_CLASSES
 from t4perceval_test_utils import make_labels
+from t4perceval_test_utils import make_prediction_record
 from t4perceval_test_utils import make_record
 
 from driving_log_replayer_v2.perception.analyze import analyze
@@ -37,6 +42,7 @@ from driving_log_replayer_v2.perception.t4perceval_adapter.scene_metrics import 
 from driving_log_replayer_v2.perception.t4perceval_adapter.scene_metrics import final_score
 from driving_log_replayer_v2.perception.t4perceval_adapter.scene_metrics import pass_fail_rates
 from driving_log_replayer_v2.perception.t4perceval_adapter.scene_metrics import read_archive
+from driving_log_replayer_v2.perception.t4perceval_adapter.scene_metrics import read_metric
 from driving_log_replayer_v2.perception.t4perceval_adapter.scene_metrics import run_scene_pipeline
 from driving_log_replayer_v2.perception.t4perceval_adapter.scene_metrics import write_archive
 from driving_log_replayer_v2.perception.t4perceval_adapter.systems import ESTIMATION_KEPT_PATH
@@ -132,6 +138,51 @@ def test_final_score_keys(records: list) -> None:
         "car": {"car": 3, "pedestrian": 0},
         "pedestrian": {"car": 0, "pedestrian": 0},
     }
+
+
+def test_prediction_displacement_keys() -> None:
+    """ADE/FDE/MissRate are reported per top_ks value, with ALL from the pooled row."""
+    registry = make_labels()
+    records = [
+        make_prediction_record(registry=registry, frame_index=1, est_speed=1.0, gt_speed=2.0),
+        make_prediction_record(registry=registry, frame_index=2, est_speed=1.0, gt_speed=1.0),
+    ]
+    config = make_config("prediction")
+    store = build_scene_store(records)
+    run_scene_pipeline(store, config, registry, InstanceRegistry())
+    score = final_score(store, records, config, registry)
+    for k in config.top_ks:
+        assert set(score[f"ADE{k}"]) == {"ALL", *LABELS}
+        assert f"FDE{k}" in score
+        assert f"MissRate{k}" in score
+    # 1 s steps: displacements 1, 2, 3, 4 m in frame 1 and 0 in frame 2 -> ADE 1.25, FDE 2.0
+    assert score["ADE1"]["car"] == pytest.approx(1.25)
+    assert score["FDE1"]["car"] == pytest.approx(2.0)
+    assert score["ADE1"]["ALL"] == pytest.approx(1.25)
+    assert np.isnan(score["ADE1"]["pedestrian"])
+    assert "MOTA(Center Distance)" in score
+
+
+def test_read_metric_prefers_the_pooled_row() -> None:
+    """ALL comes from the all-class row of the metric, not from the mean of the labels."""
+    registry = make_labels()
+    store = Store()
+    rows = [
+        (registry.class_id("car"), float("nan"), 0.2, 4),
+        (registry.class_id("pedestrian"), float("nan"), 0.4, 2),
+        (ALL_CLASSES, 1.0, 0.5, 6),  # a per-threshold aggregate is not the pooled row
+        (ALL_CLASSES, float("nan"), 0.9, 6),
+    ]
+    store.log("/metrics/pooled", MetricValues.from_rows(rows), at=TimePoint.at(frame=1))
+    assert read_metric(store, "/metrics/pooled", registry, LABELS) == {
+        "ALL": pytest.approx(0.9),
+        "car": pytest.approx(0.2),
+        "pedestrian": pytest.approx(0.4),
+    }
+    # without an all-class row, ALL falls back to the mean of the labels that have a value
+    store.log("/metrics/plain", MetricValues.from_rows(rows[:2]), at=TimePoint.at(frame=1))
+    assert read_metric(store, "/metrics/plain", registry, LABELS)["ALL"] == pytest.approx(0.3)
+    assert read_metric(store, "/metrics/none", registry, LABELS) is None
 
 
 def test_error_statistics_shape(records: list) -> None:

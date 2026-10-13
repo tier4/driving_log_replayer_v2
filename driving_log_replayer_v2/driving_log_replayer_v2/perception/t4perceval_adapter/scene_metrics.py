@@ -146,22 +146,33 @@ def read_metric(
     """
     Read a `MetricValues` entity as `{"ALL": value, "<label>": value}`.
 
-    The per-class rows are averaged per class (over thresholds when the metric has several),
-    `ALL` is the mean of the target labels that have a value. None when nothing was logged.
+    The per-class rows are averaged per class (over thresholds when the metric has several).
+    `ALL` is the all-class row of the metric (the mean of the class APs for mAP, the value over
+    every object pooled for CLEAR and the displacement metrics); when the entity holds no such
+    row, it is the mean of the target labels that have a value. None when nothing was logged.
     """
     view = store.range(path, timeline=FRAME, time_range=TimeRange.everything())
     if not len(view):
         return None
     metric = view.materialize(MetricValues)
     per_class: dict[int, list[float]] = defaultdict(list)
-    for class_id, value in zip(metric.class_id.values, metric.value.values, strict=True):
+    aggregate: list[float] = []
+    for class_id, threshold, value in zip(
+        metric.class_id.values, metric.threshold.values, metric.value.values, strict=True
+    ):
         if int(class_id) == ALL_CLASSES:
+            if np.isnan(threshold):
+                aggregate.append(float(value))
             continue
         per_class[int(class_id)].append(float(value))
     result: dict[str, float] = {"ALL": float("nan")}
     for label in target_labels:
         result[label] = _nan_mean(per_class.get(labels.class_id(label), []))
-    result["ALL"] = _nan_mean([result[label] for label in target_labels])
+    result["ALL"] = (
+        aggregate[0]
+        if len(aggregate) == 1
+        else _nan_mean([result[label] for label in target_labels])
+    )
     return result
 
 
@@ -217,9 +228,10 @@ def final_score(
             metric_paths.append((f"MOTP({mode})", f"/metrics/clear/{family}/motp"))
             metric_paths.append((f"IDswitch({mode})", f"/metrics/clear/{family}/id_switch"))
     if config.evaluation_task == "prediction":
-        metric_paths.append(("ADE", f"{DISPLACEMENT_PATH}/ade"))
-        metric_paths.append(("FDE", f"{DISPLACEMENT_PATH}/fde"))
-        metric_paths.append(("MissRate", f"{DISPLACEMENT_PATH}/miss_rate"))
+        for k in config.top_ks:
+            metric_paths.append((f"ADE{k}", f"{DISPLACEMENT_PATH}/ade{k}"))
+            metric_paths.append((f"FDE{k}", f"{DISPLACEMENT_PATH}/fde{k}"))
+            metric_paths.append((f"MissRate{k}", f"{DISPLACEMENT_PATH}/miss_rate{k}"))
 
     score: dict[str, dict[str, float]] = pass_fail_rates(records, target_labels)
     for key, path in metric_paths:

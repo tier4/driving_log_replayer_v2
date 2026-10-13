@@ -230,6 +230,26 @@ def test_max_matchable_radii_gates_the_match(registry: LabelRegistry) -> None:
     assert gated.tp_est.tolist() == []
 
 
+def test_assignment_is_greedy_in_confidence_order(registry: LabelRegistry) -> None:
+    """The more confident estimation keeps the ground truth, even when another lies closer."""
+    instances = InstanceRegistry()
+    ground_truth = tracks(registry, instances, [[10.0, 0.0, 0.0]], ["car"], ["g0"])
+    close = tracks(registry, instances, [[10.2, 0.0, 0.0]], ["car"], ["e0"], confidence=0.3)
+    confident = tracks(registry, instances, [[11.0, 0.0, 0.0]], ["car"], ["e1"], confidence=0.9)
+    estimation = Trackings3D(
+        position=np.concatenate([close.position.values, confident.position.values]),
+        quaternion=np.concatenate([close.quaternion.values, confident.quaternion.values]),
+        size=np.concatenate([close.size.values, confident.size.values]),
+        class_id=np.concatenate([close.class_id.values, confident.class_id.values]),
+        confidence=np.concatenate([close.confidence.values, confident.confidence.values]),
+        instance_id=np.concatenate([close.instance_id.values, confident.instance_id.values]),
+        velocity=np.concatenate([close.velocity.values, confident.velocity.values]),
+    )
+    _, matches = run_frame(make_config(), registry, instances, estimation, ground_truth)
+    assert matches.tp_est.tolist() == [1]
+    assert matches.fp_est.tolist() == [0]
+
+
 def test_filters_apply_in_base_link_for_map_data(registry: LabelRegistry) -> None:
     instances = InstanceRegistry()
     config = make_config(evaluation_task="tracking", max_x_position=50.0)

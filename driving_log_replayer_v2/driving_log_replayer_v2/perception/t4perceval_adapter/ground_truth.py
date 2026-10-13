@@ -41,7 +41,9 @@ if TYPE_CHECKING:
 
     from driving_log_replayer_v2.perception.t4perceval_adapter.config import EvaluationConfig
 
-GROUND_TRUTH_PATH = "/ground_truth/objects"
+GROUND_TRUTH_ROOT = "/ground_truth"
+GROUND_TRUTH_PATH = f"{GROUND_TRUTH_ROOT}/objects"
+GROUND_TRUTH_NAMESPACE = "gt"
 EGO_TRANSFORM_PATH = "/tf/base_link"
 DEFAULT_TOLERANCE_NS = 75_000_000
 """Maximum time difference between an estimation and its ground truth frame (75 ms)."""
@@ -264,17 +266,19 @@ def load_ground_truth(
         dict.fromkeys((*config.ignore_attributes, *config.critical.ignore_attributes))
     )
     is_prediction = config.evaluation_task == "prediction"
+    # entity_root files the objects at GROUND_TRUTH_PATH; the namespace stays explicit because
+    # systems.py builds `gt/<uuid>` for target_uuids and conversions.strip_namespace strips it.
+    # The ground truth trajectory shape is fitted from the scene by the importer.
     options = ImportOptions(
+        entity_root=GROUND_TRUTH_ROOT,
+        instance_namespace=GROUND_TRUTH_NAMESPACE,
         kind_3d="predictions" if is_prediction else "trackings",
         coords=config.frame_id,
         future_seconds=config.future_seconds if is_prediction else 0.0,
-        num_modes=config.prediction_num_modes if is_prediction else None,
-        num_timesteps=config.prediction_num_timesteps if is_prediction else None,
         velocity="always",
         num_points="auto",
         visibility="auto",
         unknown_labels="unknown",
-        instance_namespace="gt",
         strict=False,
     )
     if ignore_attributes:

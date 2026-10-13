@@ -21,6 +21,7 @@ from typing import TYPE_CHECKING
 import numpy as np
 from t4perceval import Detections3D
 from t4perceval import LabelRegistry
+from t4perceval import Predictions3D
 from t4perceval import TimePoint
 from t4perceval.transform.apply import transform_chunk
 from t4perceval.transform.compose import identity
@@ -74,6 +75,103 @@ def make_table(
         native, identity(), target_frame="base_link", entity_path=in_base_link(path)
     )
     return ObjectTable(native, base_link, tuple(uuids) if uuids else tuple([None] * count))
+
+
+def make_prediction_table(
+    positions: Sequence[Sequence[float]],
+    labels: Sequence[str],
+    registry: LabelRegistry,
+    *,
+    path: str,
+    instance_ids: Sequence[int],
+    speed: float,
+    num_modes: int = 1,
+    num_timesteps: int = 4,
+    frame_index: int = 1,
+    timestamp_ns: int = TIMESTAMP_NS,
+    uuids: Sequence[str | None] | None = None,
+) -> ObjectTable:
+    """Build an ObjectTable of predictions moving along +x at `speed` m/s, 1 s per step."""
+    count = len(positions)
+    position = np.asarray(positions, dtype=np.float64).reshape(count, 3)
+    steps = np.arange(1, num_timesteps + 1, dtype=np.float64)
+    waypoints = np.zeros((count, num_modes, num_timesteps, 3), dtype=np.float64)
+    for mode in range(num_modes):
+        waypoints[:, mode, :, 0] = position[:, None, 0] + speed * steps[None, :]
+        waypoints[:, mode, :, 1] = position[:, None, 1]
+        waypoints[:, mode, :, 2] = position[:, None, 2]
+    predictions = Predictions3D(
+        position=position,
+        quaternion=[[0.0, 0.0, 0.0, 1.0]] * count,
+        size=[[1.0, 1.0, 1.0]] * count,
+        class_id=registry.encode(labels),
+        confidence=[0.5] * count,
+        instance_id=np.asarray(instance_ids, dtype=np.int64),
+        waypoints=waypoints,
+        mode_confidence=np.full((count, num_modes), 1.0 / num_modes),
+        velocity=np.full((count, 3), np.nan),
+        mode_valid=np.ones((count, num_modes), dtype=np.bool_),
+        timestep_valid=np.ones((count, num_modes, num_timesteps), dtype=np.bool_),
+        time_offset=np.tile((steps * 1_000_000_000).astype(np.int64), (count, 1)),
+    )
+    native = predictions.to_chunk(
+        path, at=TimePoint.at(frame=frame_index, timestamp_ns=timestamp_ns), frame_id="base_link"
+    )
+    base_link = transform_chunk(
+        native, identity(), target_frame="base_link", entity_path=in_base_link(path)
+    )
+    return ObjectTable(native, base_link, tuple(uuids) if uuids else tuple([None] * count))
+
+
+def make_prediction_record(
+    *,
+    registry: LabelRegistry | None = None,
+    frame_index: int = 1,
+    est_speed: float = 1.0,
+    gt_speed: float = 1.0,
+) -> PerceptionFrameRecord:
+    """One TP pair of predictions whose paths differ by `gt_speed - est_speed` m/s."""
+    registry = registry if registry is not None else make_labels()
+    estimation = make_prediction_table(
+        [[1.0, 0.0, 0.0]],
+        ["car"],
+        registry,
+        path=ESTIMATION_KEPT_PATH,
+        instance_ids=[0],
+        speed=est_speed,
+        frame_index=frame_index,
+        uuids=["est-0"],
+    )
+    ground_truth = make_prediction_table(
+        [[1.0, 0.0, 0.0]],
+        ["car"],
+        registry,
+        path=GROUND_TRUTH_KEPT_PATH,
+        instance_ids=[1],
+        speed=gt_speed,
+        frame_index=frame_index,
+        uuids=["gt-0"],
+    )
+    matches = MatchTable(
+        est_index=np.asarray([0], dtype=np.int64),
+        gt_index=np.asarray([0], dtype=np.int64),
+        status=np.asarray([0], dtype=np.int8),
+        score=np.asarray([0.0], dtype=np.float64),
+        threshold=np.asarray([2.0], dtype=np.float64),
+    )
+    return PerceptionFrameRecord(
+        frame_index=frame_index,
+        frame_name=str(frame_index),
+        unix_time_ns=TIMESTAMP_NS + frame_index,
+        ground_truth_unix_time_ns=TIMESTAMP_NS + frame_index,
+        frame_id="base_link",
+        labels=registry,
+        policy="default",
+        estimation=estimation,
+        ground_truth=ground_truth,
+        matches=matches,
+        frame_metrics={},
+    )
 
 
 def make_record(
