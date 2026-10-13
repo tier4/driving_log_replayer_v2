@@ -13,6 +13,7 @@
 # limitations under the License.
 
 from dataclasses import dataclass
+import inspect
 import json
 from pathlib import Path
 
@@ -53,6 +54,12 @@ from visualization_msgs.msg import MarkerArray
 """
 In autoware_perception_evaluation, unix_time is defined as microseconds.
 """
+
+# perception_eval >= 1.4 accepts the existence_probability of the ROS objects; older versions do not
+# have the keyword, so it is only passed when the installed DynamicObject knows it.
+DYNAMIC_OBJECT_ACCEPTS_EXISTENCE_PROBABILITY: bool = (
+    "existence_probability" in inspect.signature(DynamicObject.__init__).parameters
+)
 
 
 def unix_time_microsec_from_ros_msg(ros_header: Header) -> int:
@@ -538,6 +545,11 @@ def list_dynamic_object_from_ros_msg(
             shape_type = ShapeType.POLYGON
 
         assert len(evaluator_config.frame_ids) == 1, "Only one frame id is supported"
+        optional_kwargs = {}
+        if DYNAMIC_OBJECT_ACCEPTS_EXISTENCE_PROBABILITY:
+            optional_kwargs["existence_probability"] = float(
+                perception_object.existence_probability
+            )
         estimated_object = DynamicObject(
             unix_time=unix_time_microsec,
             frame_id=evaluator_config.frame_ids[0],
@@ -596,6 +608,7 @@ def list_dynamic_object_from_ros_msg(
             ]
             if isinstance(perception_object, PredictedObject)
             else None,
+            **optional_kwargs,
         )
         estimated_objects.append(estimated_object)
     return estimated_objects
