@@ -2,8 +2,8 @@
 Changelog for package driving_log_replayer
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-Forthcoming
------------
+3.18.17 (2026-10-14)
+--------------------
 * refactor(camera_2d_detector): run the 2D detector from autoware_single_camera_2d_detection_launch (`#421 <https://github.com/tier4/driving_log_replayer_v2/issues/421>`_)
   Co-authored-by: Claude Opus 5.5 <noreply@anthropic.com>
 * Contributors: badai nguyen
