@@ -1,5 +1,13 @@
 # Release Notes
 
+## Version 3.18.17
+
+Minor Tweak
+
+| Module   | Feature  | Brief summary                                                       | Pull request                                                      | Contributor                                     |
+| -------- | -------- | ------------------------------------------------------------------- | ----------------------------------------------------------------- | ----------------------------------------------- |
+| `common` | launcher | run the 2D detector from autoware_single_camera_2d_detection_launch | [#421](https://github.com/tier4/driving_log_replayer_v2/pull/421) | [badai-nguyen](https://github.com/badai-nguyen) |
+
 ## Version 3.18.16
 
 Minor Tweak
