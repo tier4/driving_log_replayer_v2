@@ -26,11 +26,11 @@ from launch.actions import OpaqueFunction
 from launch.actions import UnsetEnvironmentVariable
 from launch.launch_description_sources import AnyLaunchDescriptionSource
 from launch_ros.actions import Node
+from launch_ros.actions import PushRosNamespace
 from launch_ros.actions import SetParameter
 from rosidl_runtime_py import message_to_ordereddict
 
 from driving_log_replayer_v2.launch.argument import add_use_case_arguments
-from driving_log_replayer_v2.launch.camera_2d_detector import launch_camera_2d_detector
 from driving_log_replayer_v2.launch.rosbag import is_set_goal
 from driving_log_replayer_v2.launch.rosbag import launch_bag_player
 from driving_log_replayer_v2.launch.rosbag import launch_bag_recorder
@@ -86,6 +86,48 @@ def launch_autoware(context: LaunchContext) -> list:
             scoped=True,  # Scoped to the Autoware group only, close the environment change
             forwarding=True,
         ),
+    ]
+
+
+def launch_camera_2d_detector(context: LaunchContext) -> list:
+    """
+    Launch the 2D detector (tensorrt_yolox, optionally bytetrack) for each camera of camera_ids.
+
+    Runs the same single camera pipeline, model and parameter files as the vehicle; they are
+    set in autoware_single_camera_2d_detection_launch and autoware_perception_config.
+    """
+    conf = context.launch_configurations
+    camera_ids = [camera_id.strip() for camera_id in conf.get("camera_ids", "").split(",")]
+    camera_ids = [camera_id for camera_id in camera_ids if camera_id]
+    if not camera_ids:
+        return [
+            LogInfo(
+                msg="2D detector cannot be launched because no camera IDs specified for 2D detector."
+            )
+        ]
+    detector_launch_file = Path(
+        get_package_share_directory("autoware_single_camera_2d_detection_launch"),
+        "launch",
+        "single_camera_2d_detection.launch.xml",
+    )
+    image_type = conf.get("image_type", "image_raw")
+    return [
+        GroupAction(
+            [
+                PushRosNamespace("/perception/object_recognition/detection"),
+                IncludeLaunchDescription(
+                    AnyLaunchDescriptionSource(detector_launch_file.as_posix()),
+                    launch_arguments={
+                        "camera_namespace": f"camera{camera_id}",
+                        "camera_index": camera_id,
+                        "input/image": f"/sensing/camera/camera{camera_id}/{image_type}",
+                        "use_bytetrack": conf.get("use_bytetrack", "false"),
+                    }.items(),
+                ),
+            ],
+            scoped=True,  # the arguments of one camera do not leak into the next
+        )
+        for camera_id in camera_ids
     ]
 
 
