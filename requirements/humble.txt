@@ -5,4 +5,4 @@ numpy<2 # If not specified, numpy 2 will be installed with nuscenes-devkit insta
 nuscenes-devkit>=1.1.9,<1.2.0 # python3-nuscenes-devkit-pip is new (1.2.0)
 # evaluation library of the perception use case (git only, pinned to a commit); the [t4] extra pulls t4-devkit,
 # whose rerun-sdk dependency resolves to 0.23.x under the numpy<2 pin above
-t4perceval[t4] @ git+https://github.com/ktro2828/t4perceval@5967e2f7dea0c3129a16f2d0113fc4be4f86fce1
+t4perceval[t4] @ git+https://github.com/ktro2828/t4perceval@295e760fa45e531633f48fda9cb4131acf52e4d9
