@@ -2,8 +2,8 @@
 Changelog for package driving_log_replayer
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-Forthcoming
------------
+3.18.16 (2026-10-14)
+--------------------
 * feat(perception): write driving-aware metric outputs to the result archive (`#420 <https://github.com/tier4/driving_log_replayer_v2/issues/420>`_)
   Co-authored-by: Claude Fable 5.1 <noreply@anthropic.com>
 * feat(perception): pass existence_probability to perception_eval (`#419 <https://github.com/tier4/driving_log_replayer_v2/issues/419>`_)
