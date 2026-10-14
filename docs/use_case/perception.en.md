@@ -534,6 +534,17 @@ Since database evaluation cannot be done in a single launch, perception outputs 
 A pickle file is a python object saved as a file, PerceptionEvaluationManager.frame_results of [perception_eval](https://github.com/tier4/autoware_perception_evaluation).
 The dataset evaluation can be performed by reading all the objects recorded in the pickle file and outputting the index of the dataset's average.
 
+### Driving-aware detection metrics files
+
+When `advanced_detection_metrics` is set in `evaluation_config_dict` (see the commented example in [the sample scenario](https://github.com/tier4/driving_log_replayer_v2/blob/develop/sample/perception/scenario.yaml), needs perception_eval 1.4 or later), two more files are written into `result_archive/<topic>/` next to `scene_result.pkl`, whether `enable_metrics_details` is set or not. They are not written for `fp_validation`.
+
+| File                              | Content                                                                                                                                                                                                                                                                                                                                                                                                                                 |
+| --------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `advanced_detection_metrics.json` | Per-scenario report (strict JSON, undefined values are `null`): `status` (`ok` / `empty` / `error`), the evaluated topic, task and frame id, the dataset name and whether its lanelet2 map was found, the digests of the configuration and of the object filter, the frame counts (`frame_results`, `ignored`, `evaluated`, `skipped`, `prepared`), the per-filter coverage, the metric `values` and the `warnings` of perception_eval. |
+| `advanced_detection_samples.npz`  | The prepared per-frame samples (`PreparedSamples.to_npz` of perception_eval) the values were computed from, so that the scenes of a database evaluation can be pooled afterwards without replaying them. Its sha256 is recorded in `samples_file` of the report. Not written when `status` is `error`.                                                                                                                                  |
+
+The frames listed in `ignore_frames` are left out of both files, like for the other metrics, but they stay in `scene_result.pkl`. When the metrics cannot be computed (e.g. the installed perception_eval is too old or the map is missing), the evaluation itself is not affected: the report is written with `status: error` and the reason in `error`.
+
 ### Result file of database evaluation
 
 In the case of a database evaluation with multiple datasets in the scenario, a file named `database_result.json` is output to the results directory.

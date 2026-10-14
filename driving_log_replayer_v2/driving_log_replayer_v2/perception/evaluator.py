@@ -15,6 +15,7 @@
 from __future__ import annotations
 
 from collections import Counter
+import copy
 import logging
 from os.path import expandvars
 from pathlib import Path
@@ -32,6 +33,7 @@ from perception_eval.manager import PerceptionEvaluationManager
 from perception_eval.tool import PerceptionAnalyzer3D
 from perception_eval.util.logger_config import configure_logger
 
+from driving_log_replayer_v2.perception import advanced_metrics
 from driving_log_replayer_v2.post_process.evaluator import Evaluator
 from driving_log_replayer_v2.post_process.evaluator import FrameResult
 from driving_log_replayer_v2.post_process.evaluator import InvalidReason
@@ -77,6 +79,11 @@ class PerceptionEvaluator(Evaluator):
         self.__logger: logging.Logger
         self.__evaluation_topic = evaluation_topic
         self.__ignore_frames = ignore_frames
+        self.__ignored_frames_removed = False  # set once get_evaluation_results() dropped them
+        self.__advanced_outputs_written = False
+        self.__num_frame_results = 0  # before the ignored frames are removed
+        self.__t4_dataset_path = t4_dataset_path
+        self.__evaluation_task = evaluation_task
 
         perception_evaluation_config["evaluation_config_dict"]["label_prefix"] = "autoware"
 
@@ -86,6 +93,10 @@ class PerceptionEvaluator(Evaluator):
             )
             raise ValueError(err_msg)
         perception_evaluation_config["evaluation_config_dict"]["evaluation_task"] = evaluation_task
+        # raw dict, kept for the digest of the advanced detection metrics report
+        self.__evaluation_config_dict: dict = copy.deepcopy(
+            perception_evaluation_config["evaluation_config_dict"]
+        )
 
         self.__result_archive_w_topic_path = Path(result_archive_path)
         self.__result_archive_w_topic_path.mkdir(exist_ok=True)
@@ -227,13 +238,21 @@ class PerceptionEvaluator(Evaluator):
         if self.__evaluator.evaluator_config.evaluation_task == "fp_validation":
             final_metrics = self.__get_fp_results()
         else:
+            self.__num_frame_results = len(self.__evaluator.frame_results)
             self.__evaluator.frame_results = self.__ignore_tail_frames(
                 self.__evaluator.frame_results
             )
             self.__evaluator.frame_results = self.__remove_ignored_frames(
                 self.__evaluator.frame_results
             )
-            _ = self.__get_scene_results()  # TODO: use this result
+            self.__ignored_frames_removed = True
+            scene_result = self.__get_scene_results()  # TODO: use the mAP part of this result
+            # the advanced detection metrics were computed by get_scene_result(), reuse them
+            self.__write_advanced_detection_outputs(
+                self.__evaluator.frame_results,
+                num_frame_results=self.__num_frame_results,
+                scene_result=scene_result,
+            )
             self.__analyzer = PerceptionAnalyzer3D(self.__evaluator.evaluator_config)
             self.__analyzer.add(self.__evaluator.frame_results)
             result = self.__analyzer.analyze()
@@ -261,6 +280,129 @@ class PerceptionEvaluator(Evaluator):
             return self.__analyzer
         err_msg = "Analyzer is not available. Please call get_evaluation_results() first."
         raise RuntimeError(err_msg)
+
+    def write_advanced_detection_outputs(self) -> None:
+        """
+        Write the driving-aware detection metric outputs next to scene_result.pkl.
+
+        Writes `advanced_detection_metrics.json` and `advanced_detection_samples.npz` into the
+        result archive of the topic when `advanced_detection_metrics` is configured in
+        `evaluation_config_dict`. Nothing is written for fp_validation or without the section.
+
+        The frames ignored by `ignore_frames` are left out without touching `frame_results` (the
+        pkl keeps them), so this can be called instead of `get_evaluation_results()`.
+        """
+        if self.__advanced_outputs_written:
+            # get_evaluation_results() already wrote them from the same frames
+            return
+        frame_results = self.__evaluator.frame_results
+        if self.__ignored_frames_removed:
+            # get_evaluation_results() already dropped the ignored frames
+            self.__write_advanced_detection_outputs(
+                frame_results, num_frame_results=self.__num_frame_results
+            )
+            return
+        kept_frame_results, ignored_frame_names = self.__split_ignored_frames(frame_results)
+        self.__write_advanced_detection_outputs(
+            kept_frame_results,
+            num_frame_results=len(frame_results),
+            ignored_frame_names=ignored_frame_names,
+        )
+
+    def __split_ignored_frames(
+        self, frame_results: list[PerceptionFrameResult]
+    ) -> tuple[list[PerceptionFrameResult], list[str]]:
+        """
+        Select the frames like `__ignore_tail_frames` + `__remove_ignored_frames`, without side effects.
+
+        Returns:
+            tuple[list[PerceptionFrameResult], list[str]]: The frames to evaluate (a new list,
+                `frame_results` is not modified) and the `frame_name` of the ignored frames.
+
+        """
+        num_tail = min(max(self.__ignore_frames.last, 0), len(frame_results))
+        head = frame_results[: len(frame_results) - num_tail]
+        tail = frame_results[len(frame_results) - num_tail :]
+        ignored_frame_names = [frame_result.frame_name for frame_result in tail]
+        kept = []
+        for frame_result in head:
+            if int(frame_result.frame_name) in self.__ignore_frames:
+                ignored_frame_names.append(frame_result.frame_name)
+            else:
+                kept.append(frame_result)
+        return kept, ignored_frame_names
+
+    def __write_advanced_detection_outputs(
+        self,
+        frame_results: list[PerceptionFrameResult],
+        *,
+        num_frame_results: int,
+        ignored_frame_names: list[str] | None = None,
+        scene_result: MetricsScore | None = None,
+    ) -> None:
+        """
+        Compute (or reuse from `scene_result`) and write the advanced detection metric outputs.
+
+        Args:
+            frame_results (list[PerceptionFrameResult]): Frames to evaluate. Not modified.
+            num_frame_results (int): Number of frame results before the ignored frames were removed.
+            ignored_frame_names (list[str] | None): `frame_name` of the frames still in
+                `frame_results` which must be left out (None: already removed).
+            scene_result (MetricsScore | None): Scene result whose `detection_prepared` /
+                `detection_metric_report` are reused when present, to run the suite only once.
+
+        """
+        if self.__evaluation_task == "fp_validation":
+            return
+        metrics_config = self.__evaluator.evaluator_config.metrics_config
+        advanced_config = advanced_metrics.get_advanced_config(metrics_config)
+        if advanced_config is None:
+            return
+
+        ignored_frame_names = list(ignored_frame_names or [])
+        if ignored_frame_names:
+            evaluated_frame_results = advanced_metrics.select_frame_results(
+                frame_results, ignored_frame_names
+            )
+        else:
+            evaluated_frame_results = list(frame_results)
+        meta = advanced_metrics.ReportMeta(
+            topic=self.__evaluation_topic,
+            evaluation_task=self.__evaluation_task,
+            frame_id=self.__frame_id_str,
+            t4_dataset_path=self.__t4_dataset_path,
+            evaluation_config_dict=self.__evaluation_config_dict,
+            advanced_config=advanced_config,
+            num_frame_results=num_frame_results,
+            num_ignored_frames=num_frame_results - len(evaluated_frame_results),
+        )
+        out_dir = self.__result_archive_w_topic_path
+        self.__logger.info(
+            "Writing the advanced detection metric outputs for topic: %s", self.__evaluation_topic
+        )
+        try:
+            prepared = getattr(scene_result, "detection_prepared", None)
+            report = getattr(scene_result, "detection_metric_report", None)
+            if prepared is None or report is None:
+                computed = advanced_metrics.compute(
+                    evaluated_frame_results, metrics_config, ignored_frame_names=()
+                )
+                prepared, report = computed if computed is not None else (None, None)
+            advanced_metrics.write_outputs(out_dir, prepared=prepared, report=report, meta=meta)
+            self.__advanced_outputs_written = True
+        except Exception as err:
+            self.__logger.exception(
+                "Failed to compute the advanced detection metrics for topic: %s",
+                self.__evaluation_topic,
+            )
+            advanced_metrics.write_outputs(
+                out_dir,
+                prepared=None,
+                report=None,
+                meta=meta,
+                error=f"{type(err).__name__}: {err}",
+            )
+            self.__advanced_outputs_written = True
 
     def __check_evaluation_task_and_frame_id(self, evaluation_task: str) -> bool:
         # for fp_validation, it can be either base_link or map because it can handle DetectedObjects, TrackedObjects and PredictedObjects.
