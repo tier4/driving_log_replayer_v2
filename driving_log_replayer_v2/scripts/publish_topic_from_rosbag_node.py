@@ -18,8 +18,21 @@ import rclpy
 from rclpy.duration import Duration
 from rclpy.executors import MultiThreadedExecutor
 from rclpy.node import Node
+from rclpy.qos import DurabilityPolicy
+from rclpy.qos import HistoryPolicy
+from rclpy.qos import QoSProfile
+from rclpy.qos import ReliabilityPolicy
 
 from driving_log_replayer_v2.rosbag import RosbagReader
+
+# camera_info subscribers in the perception stack request transient_local.
+# A volatile publisher never connects to them, so the one-shot message is dropped.
+LATCHED_QOS = QoSProfile(
+    reliability=ReliabilityPolicy.RELIABLE,
+    durability=DurabilityPolicy.TRANSIENT_LOCAL,
+    history=HistoryPolicy.KEEP_LAST,
+    depth=1,
+)
 
 
 class PublishTopicFromRosbagNode(Node):
@@ -51,9 +64,11 @@ class PublishTopicFromRosbagNode(Node):
         for topic in topic_list:
             topic_type = topic_name2type.get(topic)
             if topic_type is not None:
-                self._publisher_map[topic] = self.create_publisher(topic_type, topic, 10)
+                self._publisher_map[topic] = self.create_publisher(topic_type, topic, LATCHED_QOS)
             else:
-                self.get_logger().error(f"Topic {topic} not found in the rosbag.")
+                self.get_logger().warning(
+                    f"Topic {topic} not found in the rosbag. Skip publishing."
+                )
 
         # create timer
         self.create_timer(self.TIMER_PERIOD, self.publish)
@@ -74,7 +89,8 @@ def main() -> None:
     executor.add_node(publish_topic_from_rosbag_node)
     executor.spin()
     publish_topic_from_rosbag_node.destroy_node()
-    rclpy.shutdown()
+    if rclpy.ok():
+        rclpy.shutdown()
 
 
 if __name__ == "__main__":

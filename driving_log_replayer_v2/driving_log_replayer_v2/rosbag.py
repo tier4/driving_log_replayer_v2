@@ -36,11 +36,13 @@ class RosbagReader:
         )
         self._reader = SequentialReader()
         self._reader.open(storage_options, converter_options)
-        self._topic_list = topic_list
         self._topic_name2type = {}
         for topic in self._reader.get_all_topics_and_types():
             if topic.name in topic_list:
                 self._topic_name2type[topic.name] = get_message(topic.type)
+        # Topics absent from the bag must not stay in the read list. Otherwise
+        # read_first_messages() scans the whole bag waiting for them.
+        self._topic_list = [topic for topic in topic_list if topic in self._topic_name2type]
 
     def get_topic_name2type(self) -> dict[str, Any]:
         return self._topic_name2type
