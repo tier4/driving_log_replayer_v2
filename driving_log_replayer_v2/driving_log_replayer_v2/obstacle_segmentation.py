@@ -236,7 +236,7 @@ def summarize_frame_container(
     pcd: np.ndarray,
     graph_detection: ObstacleSegmentationMarkerArray,
     result_status: int,
-) -> int:
+) -> tuple[int, np.ndarray]:
     for result in container:
         pcd_result = np.zeros(
             result.inside_pointcloud_num,
@@ -269,7 +269,7 @@ def summarize_frame_container(
             bbox_uuid=result.ground_truth_object.uuid,
         )
         graph_detection.markers.append(marker)
-    return counter
+    return counter, pcd
 
 
 def get_sensing_frame_config(
@@ -471,7 +471,7 @@ def build_detection_frame_output(
             ObstacleSegmentationMarker.WARN,
         ),
     ):
-        counter = summarize_frame_container(
+        counter, pcd = summarize_frame_container(
             container,
             container_type,
             header,

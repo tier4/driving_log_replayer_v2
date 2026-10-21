@@ -34,12 +34,14 @@ from perception_eval.evaluation.sensing.sensing_result import DynamicObjectWithS
 from pydantic import ValidationError
 from pyquaternion import Quaternion as PyQuaternion
 import pytest
+import ros2_numpy
 from shapely.geometry import Point as ShapelyPoint
 from shapely.geometry import Polygon
 from shapely.geometry.polygon import orient
 from std_msgs.msg import Header
 from visualization_msgs.msg import Marker
 
+from driving_log_replayer_v2.obstacle_segmentation import build_detection_frame_output
 from driving_log_replayer_v2.obstacle_segmentation import Detection
 from driving_log_replayer_v2.obstacle_segmentation import DetectionCondition
 from driving_log_replayer_v2.obstacle_segmentation import get_non_detection_area_in_base_link
@@ -136,6 +138,52 @@ def create_dynamic_object() -> DynamicObjectWithSensingResult:
     )
     pointcloud = np.array([[1.0, 1.0, 1.0, 0.5], [1.2, 1.2, 1.2, 0.5]])
     return DynamicObjectWithSensingResult(dynamic_obj, pointcloud, 1.0, 1)
+
+
+@pytest.mark.parametrize(
+    "container_counts", [(1, 0, 0), (0, 1, 0), (0, 0, 1), (2, 1, 1), (0, 0, 0)]
+)
+def test_detection_pointcloud_contains_all_bbox_points(
+    create_frame_result: SensingFrameResult,
+    create_dynamic_object: DynamicObjectWithSensingResult,
+    container_counts: tuple[int, int, int],
+) -> None:
+    expected_points = []
+    for container, count in zip(
+        (
+            create_frame_result.detection_success_results,
+            create_frame_result.detection_fail_results,
+            create_frame_result.detection_warning_results,
+        ),
+        container_counts,
+        strict=True,
+    ):
+        for _ in range(count):
+            # Different coordinates and sizes expose lost or overwritten bbox results.
+            point_count = len(expected_points) + 1
+            points = np.full((point_count, 4), point_count * 0.1)
+            result = DynamicObjectWithSensingResult(
+                create_dynamic_object.ground_truth_object, points, 1.0, 1
+            )
+            container.append(result)
+            expected_points.append(points[:, :3])
+
+    header = Header(frame_id="base_link")
+    header.stamp.sec = 123
+    header.stamp.nanosec = 456
+    markers, cloud, graph, _ = build_detection_frame_output(
+        create_frame_result, header, frame_success="Success"
+    )
+
+    decoded = ros2_numpy.numpify(cloud).reshape(-1)
+    actual_points = np.column_stack([decoded[axis] for axis in ("x", "y", "z")])
+    expected = np.concatenate(expected_points) if expected_points else np.empty((0, 3))
+    np.testing.assert_allclose(actual_points, expected)
+    assert cloud.header == header
+    assert cloud.width == len(expected)
+    assert len(cloud.data) == len(expected) * cloud.point_step
+    assert sum(marker.number_of_pointcloud for marker in graph.markers) == len(expected)
+    assert len(markers.markers) == 2 * sum(container_counts)
 
 
 @pytest.fixture
