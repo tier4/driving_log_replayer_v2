@@ -283,7 +283,9 @@ class Runner(ABC):
                 topic_name, msg, subscribed_timestamp_nanosec
             )
             if topic_name in self._degradation_topics:
-                self._write_result(frame_result, msg.header, subscribed_timestamp_nanosec)
+                # some messages such as TrafficLightGroupArray have stamp instead of header
+                header = msg.header if hasattr(msg, "header") else Header(stamp=msg.stamp)
+                self._write_result(frame_result, header, subscribed_timestamp_nanosec)
         self._evaluate_on_post_process()
         self._close()
         self._merge_results()

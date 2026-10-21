@@ -233,7 +233,9 @@ class RosBagManager:
             if allow_future_tf:
                 while pending:
                     p_topic_name, p_msg, p_subscribed_timestamp_nanosec = pending[0]
-                    if self._is_can_lookup_transform(p_msg.header.stamp):
+                    # some messages such as TrafficLightGroupArray have stamp instead of header
+                    p_stamp = p_msg.header.stamp if hasattr(p_msg, "header") else p_msg.stamp
+                    if self._is_can_lookup_transform(p_stamp):
                         pending.popleft()
                         yield p_topic_name, p_msg, p_subscribed_timestamp_nanosec
                     else:
