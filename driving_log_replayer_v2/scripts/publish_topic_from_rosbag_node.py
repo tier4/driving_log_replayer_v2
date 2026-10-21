@@ -14,8 +14,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from typing import Any
+
 import rclpy
-from rclpy.duration import Duration
 from rclpy.executors import MultiThreadedExecutor
 from rclpy.node import Node
 from rclpy.qos import DurabilityPolicy
@@ -25,19 +26,19 @@ from rclpy.qos import ReliabilityPolicy
 
 from driving_log_replayer_v2.rosbag import RosbagReader
 
-# camera_info subscribers in the perception stack request transient_local.
-# A volatile publisher never connects to them, so the one-shot message is dropped.
-LATCHED_QOS = QoSProfile(
-    reliability=ReliabilityPolicy.RELIABLE,
-    durability=DurabilityPolicy.TRANSIENT_LOCAL,
+# roi_*_fusion camera_info subscribers use best_effort + volatile (see fusion_node.cpp).
+# Under Agnocast they only see messages published after the R2A bridge matches, so a
+# one-shot transient_local publish that then shuts down never initializes projectors.
+CAMERA_INFO_QOS = QoSProfile(
+    reliability=ReliabilityPolicy.BEST_EFFORT,
+    durability=DurabilityPolicy.VOLATILE,
     history=HistoryPolicy.KEEP_LAST,
     depth=1,
 )
 
 
 class PublishTopicFromRosbagNode(Node):
-    SLEEP_DURATION_BETWEEN_PUBLISH = Duration(seconds=0.1)
-    TIMER_PERIOD = 0.1
+    TIMER_PERIOD = 1.0
 
     def __init__(self) -> None:
         super().__init__("publish_topic_from_rosbag_node")
@@ -54,6 +55,7 @@ class PublishTopicFromRosbagNode(Node):
         topic_list = topics_with_comma.split(",") if topics_with_comma != "" else []
         if len(topic_list) == 0:
             rclpy.shutdown()
+            return
 
         # load the rosbag
         self._rosbag_reader = RosbagReader(bag_dir, topic_list)
@@ -64,22 +66,35 @@ class PublishTopicFromRosbagNode(Node):
         for topic in topic_list:
             topic_type = topic_name2type.get(topic)
             if topic_type is not None:
-                self._publisher_map[topic] = self.create_publisher(topic_type, topic, LATCHED_QOS)
+                self._publisher_map[topic] = self.create_publisher(
+                    topic_type, topic, CAMERA_INFO_QOS
+                )
             else:
                 self.get_logger().warning(
                     f"Topic {topic} not found in the rosbag. Skip publishing."
                 )
 
-        # create timer
+        # Cache first messages once. read_first_messages() consumes the topic list.
+        self._cached_messages: list[tuple[str, Any]] = [
+            (topic_name, msg)
+            for topic_name, msg, _ in self._rosbag_reader.read_first_messages()
+        ]
+        if len(self._cached_messages) == 0:
+            self.get_logger().warning("No messages found to publish from the rosbag.")
+            rclpy.shutdown()
+            return
+
+        self.get_logger().info(
+            f"Republishing {len(self._cached_messages)} topic(s) at {self.TIMER_PERIOD} Hz "
+            "until shutdown so Agnocast R2A bridges can deliver camera_info."
+        )
         self.create_timer(self.TIMER_PERIOD, self.publish)
 
     def publish(self) -> None:
-        for topic_name, msg, _ in self._rosbag_reader.read_first_messages():
-            self._publisher_map[topic_name].publish(msg)
-            self._clock.sleep_for(
-                self.SLEEP_DURATION_BETWEEN_PUBLISH
-            )  # sleep to wait for Autoware to process the message
-        rclpy.shutdown()
+        for topic_name, msg in self._cached_messages:
+            publisher = self._publisher_map.get(topic_name)
+            if publisher is not None:
+                publisher.publish(msg)
 
 
 def main() -> None:
