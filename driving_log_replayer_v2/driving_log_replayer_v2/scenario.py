@@ -20,17 +20,20 @@ from typing import TypeVar
 
 from ament_index_python.packages import get_package_share_directory
 from pydantic import BaseModel
+from pydantic import model_validator
 from pydantic import ValidationError
 from rclpy.clock import Clock
 import yaml
 
+from driving_log_replayer_v2.additional_launches import SimulationSettings
+from driving_log_replayer_v2.additional_launches import validate_launch_support
 from driving_log_replayer_v2.result import ResultWriter
 
 number = int | float
 
 
 class Scenario(BaseModel):
-    ScenarioFormatVersion: Literal["3.0.0", "3.1.0", "3.2.0"]
+    ScenarioFormatVersion: Literal["3.0.0", "3.1.0", "3.2.0", "3.3.0"]
     ScenarioName: str
     ScenarioDescription: str
     SensorModel: str
@@ -39,6 +42,22 @@ class Scenario(BaseModel):
     Evaluation: dict
     include_use_case: dict | None = None
     publish_profile: str | None = None
+    Simulation: SimulationSettings | None = None
+
+    @model_validator(mode="after")
+    def validate_simulation(self) -> "Scenario":
+        if self.Simulation is not None:
+            evaluation = (
+                self.Evaluation.model_dump()
+                if isinstance(self.Evaluation, BaseModel)
+                else self.Evaluation
+            )
+            validate_launch_support(
+                self.ScenarioFormatVersion,
+                evaluation.get("UseCaseName", ""),
+                self.Simulation.AdditionalLaunches,
+            )
+        return self
 
 
 def load_scenario(scenario_path: Path, scenario_class: Callable) -> Any:

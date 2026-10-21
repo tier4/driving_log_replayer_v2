@@ -29,6 +29,7 @@ from launch_ros.actions import Node
 from launch_ros.actions import SetParameter
 from rosidl_runtime_py import message_to_ordereddict
 
+from driving_log_replayer_v2.launch.additional_launches import launch_additional_launches
 from driving_log_replayer_v2.launch.argument import add_use_case_arguments
 from driving_log_replayer_v2.launch.camera_2d_detector import launch_camera_2d_detector
 from driving_log_replayer_v2.launch.rosbag import is_set_goal
@@ -269,6 +270,7 @@ def launch_use_case() -> list:
         SetParameter(name="use_sim_time", value=True),
         OpaqueFunction(function=add_use_case_arguments),  # after ensure_arg_compatibility
         OpaqueFunction(function=launch_autoware),
+        OpaqueFunction(function=launch_additional_launches),
         OpaqueFunction(function=launch_optional_nodes),
         OpaqueFunction(function=launch_map_height_fitter),
         OpaqueFunction(function=launch_evaluator_node),

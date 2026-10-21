@@ -55,7 +55,7 @@ include_use_case:
 
 Describe the version information of the scenario format. Use the semantic version.
 
-Current Version is 3.1.0
+The latest supported version is 3.3.0. Versions 3.0.0, 3.1.0, and 3.2.0 remain supported.
 
 Minor versions are updated each time the format is updated.
 
@@ -78,6 +78,32 @@ Specify `vehicle_model` as an argument in `autoware_launch/launch/logging_simula
 ### publish_profile
 
 (Optional) Specify the name of the topics profile to control which topics are published during simulation. The profile file should be located at `config/publish_and_remap/{profile_name}.yaml`, such as `planning_control`. If not specified, all available topics will be published.
+
+### Simulation.AdditionalLaunches
+
+Optional in ScenarioFormatVersion 3.3.0. Start additional, long-running launch processes alongside Autoware without adding hardware-specific DLR arguments. Initially supported only for `obstacle_segmentation` with `record_only:=false`.
+
+```yaml
+ScenarioFormatVersion: 3.3.0
+Simulation:
+  AdditionalLaunches:
+    - package: aip_hd785_gen2_perception_launch
+      file: radars_replay.launch.xml
+      arguments:
+        use_sim_time: "true"
+```
+
+This radar example requires a separately installed replay-only launch in the AIP package; DLR does not supply it or depend on that package. Keep the existing `Evaluation` section, including `UseCaseFormatVersion: 0.3.0`, for obstacle segmentation. Evaluation-topic remapping is a separate feature and is not implemented by this setting. Both extensions are planned to share scenario version 3.3.0; this branch implements only additional launches.
+
+- `package` and `file` are required. Resolve `file` below the installed package's `launch/` directory; nested directories and `.launch.py`, `.launch.xml`, `.launch.yaml`, and `.launch.yml` are supported. Absolute paths, `..`, escaping symlinks, missing files/packages, identical entries, and direct recursive DLR launches are rejected before simulation.
+- `arguments` defaults to `{}`. Keys are launch-argument names and values must be quoted strings, including booleans and numbers. Arguments are passed as separate command arguments without a shell. The additional launch must declare and apply its own `use_sim_time`; the parent's `SetParameter` does not cross the process boundary.
+- Omit `Simulation`, use `null`/`{}`, or omit/set `AdditionalLaunches: []` to retain existing behavior. `AdditionalLaunches: null` and unknown keys in these new settings are invalid. A nonempty list on an older scenario version, another use case, or record-only mode is rejected. `with_autoware:=false` is allowed; the caller supplies the other pipeline nodes.
+- Additional launches are requested before the evaluator/player, but process creation does not guarantee node readiness. The existing `play_delay` is unchanged. Verify subscriptions before bag playback and allow sufficient startup time; no readiness handshake or automatic restart is provided.
+- Any additional launch that exits before DLR shutdown, even with exit code 0, fails the run and stops the simulation. Each supplied launch must shut itself down if an essential child node dies. DLR cannot detect an individual node failure while its containing launch stays alive. Normal DLR shutdown signals the child launches and uses ROS launch's standard termination timeouts.
+- `result_archive/additional_launches.json` records a run ID, resolved launch paths, SHA-256, package versions, and supplied arguments. Unexpected exits produce `additional_launch_failure.json`. Post-processing preserves existing frames and appends a terminal `AdditionalLaunchFailed` result, even when no result bag exists; it skips bag/plot analysis for that failed run. Run IDs prevent a previous run's failure marker from overriding the current run.
+- This setting does not change bag publication/remapping/recording profiles, evaluation subscriptions, or TopicRate diagnostics. Configure recording separately if the additional outputs are needed. Launch arguments are recorded in plain text, so do not pass secrets in them.
+
+See [the example scenario](https://github.com/tier4/driving_log_replayer_v2/blob/develop/sample/obstacle_segmentation/scenario_additional_launches.yaml). The standard `driving_log_replayer_v2.launch.py` entry point and existing CLI remain unchanged. Before using a new scenario on Evaluator, deploy a DLR image that supports 3.3.0 and verify that the scenario service preserves the new fields.
 
 ### Evaluation
 

@@ -27,6 +27,7 @@ from launch.actions import OpaqueFunction
 from launch.actions import RegisterEventHandler
 from launch.event_handlers import OnProcessExit
 
+from driving_log_replayer_v2.additional_launches import finalize_additional_launch_failure
 from driving_log_replayer_v2.ground_segmentation.runner import (
     evaluate as evaluate_ground_segmentation,
 )
@@ -293,6 +294,17 @@ def time_step_based_trajectory(conf: dict[str, str]) -> ProcessInfo:
 
 
 def post_process(context: LaunchContext) -> list:
+    conf = context.launch_configurations
+    if conf["use_case"] == "obstacle_segmentation" and finalize_additional_launch_failure(
+        conf["scenario_path"], conf["result_archive_path"], conf["result_jsonl_path"]
+    ):
+        # The recorder may not have produced a bag yet. Keep the original artifacts and
+        # terminal failure instead of allowing metadata/plot errors to hide the cause.
+        return [LogInfo(msg="AdditionalLaunchFailed: saved failure result; skipping analysis.")]
+    return analyze_recorded_results(context)
+
+
+def analyze_recorded_results(context: LaunchContext) -> list:
     conf = context.launch_configurations
     create_metadata_yaml(conf["result_bag_path"])
 

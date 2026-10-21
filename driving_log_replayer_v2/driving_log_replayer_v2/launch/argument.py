@@ -24,6 +24,9 @@ from launch.actions import DeclareLaunchArgument
 from launch.actions import LogInfo
 import yaml
 
+from driving_log_replayer_v2.additional_launches import parse_additional_launches
+from driving_log_replayer_v2.additional_launches import resolve_additional_launches
+
 HUMBLE_ROSBAG2_METADATA_VERSION = 5
 
 
@@ -347,6 +350,10 @@ def ensure_arg_compatibility(context: LaunchContext) -> list:
 
     scenario_path, dataset_dir, output_dir = prepare_paths(conf)
     yaml_obj = load_scenario(scenario_path)
+    # Validate the optional extension before any Autoware or evaluation process starts.
+    resolve_additional_launches(
+        parse_additional_launches(yaml_obj, record_only=conf["record_only"] != "false")
+    )
     datasets = yaml_obj["Evaluation"]["Datasets"]
     dataset_index = get_dataset_index_from_conf(conf, datasets)
     if isinstance(dataset_dir, str):
