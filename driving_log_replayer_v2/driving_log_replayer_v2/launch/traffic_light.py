@@ -23,6 +23,6 @@ AUTOWARE_DISABLE = {
 
 AUTOWARE_ARGS = {}
 
-NODE_PARAMS: dict[str, LaunchConfiguration] = {"map_path": LaunchConfiguration("map_path")}
+NODE_PARAMS: dict[str, LaunchConfiguration] = {}
 
 USE_CASE_ARGS: list[DeclareLaunchArgument] = []
