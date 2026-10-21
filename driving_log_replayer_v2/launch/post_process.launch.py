@@ -38,6 +38,7 @@ from driving_log_replayer_v2.perception_fp.runner import evaluate as evaluate_pe
 from driving_log_replayer_v2.result import MultiResultEditor
 from driving_log_replayer_v2.result import ResultAnalyzer
 from driving_log_replayer_v2.rosbag import create_metadata_yaml
+from driving_log_replayer_v2.traffic_light.runner import evaluate as evaluate_traffic_light
 
 
 @dataclass(frozen=True, slots=True)
@@ -199,6 +200,38 @@ def ground_segmentation() -> ProcessInfo:
     )
 
 
+def traffic_light() -> ProcessInfo:
+    def _run_traffic_light(context: LaunchContext) -> list:
+        conf = context.launch_configurations
+
+        absolute_result_jsonl_path = Path(expandvars(conf["result_jsonl_path"]))
+        absolute_result_jsonl_path.unlink()
+        evaluate_traffic_light(
+            conf["scenario_path"],
+            conf["result_bag_path"],
+            conf["t4_dataset_path"],
+            conf["result_jsonl_path"],
+            conf["result_archive_path"],
+            conf["storage"],
+            "",  # use degradation_topic of the scenario
+            conf["enable_analysis"],
+        )
+        shutil.rmtree(
+            Path(conf["result_bag_path"]).as_posix(),
+        )
+        shutil.move(
+            Path(conf["result_archive_path"]).joinpath("result_bag").as_posix(),
+            Path(conf["result_bag_path"]).as_posix(),
+        )
+        return [LogInfo(msg="traffic_light post process finished.")]
+
+    traffic_light_action = OpaqueFunction(function=_run_traffic_light)
+    return ProcessInfo(
+        process_list=[LogInfo(msg="run traffic_light analysis."), traffic_light_action],
+        last_action=traffic_light_action,
+    )
+
+
 def planning_control(conf: dict[str, str]) -> ProcessInfo:
     # merge diagnostic result.jsonl
     diag_result_path = Path(conf["result_archive_path"]).joinpath("diag_result.jsonl")
@@ -304,6 +337,8 @@ def post_process(context: LaunchContext) -> list:
         process_info = perception_fp()
     elif conf["use_case"] == "ground_segmentation":
         process_info = ground_segmentation()
+    elif conf["use_case"] == "traffic_light":
+        process_info = traffic_light()
     elif conf["use_case"] == "planning_control":
         process_info = planning_control(conf)
     elif conf["use_case"] == "time_step_based_trajectory":
