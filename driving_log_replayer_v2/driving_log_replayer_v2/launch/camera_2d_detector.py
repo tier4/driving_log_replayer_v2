@@ -23,7 +23,7 @@ from launch_ros.actions import PushRosNamespace
 from launch_ros.descriptions import ComposableNode
 
 
-def create_2d_detector_container(
+def create_2d_detector_nodes(
     yolox_param_file: str,
     yolox_model_path: str,
     yolox_label_path: str,
@@ -31,9 +31,13 @@ def create_2d_detector_container(
     use_bytetrack: str,
     camera_id: str,
     image_type: str,
-) -> GroupAction:
+) -> list:
     """
-    Create a container with composable nodes for 2D object detection from camera images.
+    Create composable nodes for 2D object detection from one camera.
+
+    One process per camera keeps a TensorRT builder resident (~450MiB each). On an 8GB GPU
+    five of those fill the device before inference, so the caller loads every camera into
+    a single container.
 
     Args:
         yolox_param_file: Path to the YOLOX parameter file.
@@ -45,7 +49,7 @@ def create_2d_detector_container(
         image_type: Type of image topic (e.g., 'image_raw', 'image_rect_color').
 
     Returns:
-        GroupAction containing the detector container.
+        Composable nodes for this camera (decompressor, YOLOX, optional ByteTrack).
 
     """
     base_ns = "/perception/object_recognition/detection"
@@ -121,26 +125,18 @@ def create_2d_detector_container(
         )
         composable_nodes.append(bytetrack_node)
 
-    container = ComposableNodeContainer(
-        name=f"camera_2d_detector_container{camera_id}",
-        namespace="",
-        package="rclcpp_components",
-        executable="component_container",
-        composable_node_descriptions=composable_nodes,
-        output="screen",
-    )
-    return GroupAction([PushRosNamespace(base_ns), container])
+    return composable_nodes
 
 
 def launch_camera_2d_detector(context: LaunchContext) -> list:
     """
-    Launch 2D detector containers for all specified cameras if enabled in configuration.
+    Launch one 2D detector container for every specified camera.
 
     Args:
         context: LaunchContext containing launch configurations.
 
     Returns:
-        List of GroupAction objects for each camera detector container.
+        A GroupAction with a single container, or a log message when no camera id is set.
 
     """
     conf = context.launch_configurations
@@ -156,17 +152,33 @@ def launch_camera_2d_detector(context: LaunchContext) -> list:
                 msg="2D detector cannot be launched because no camera IDs specified for 2D detector."
             )
         ]
-    camera_ids = camera_ids_str.split(",")
+    camera_ids = [camera_id.strip() for camera_id in camera_ids_str.split(",") if camera_id.strip()]
     image_type = conf.get("image_type", "image_raw")
-    return [
-        create_2d_detector_container(
-            yolox_param_file,
-            yolox_model_path,
-            yolox_label_path,
-            yolox_color_map_path,
-            use_bytetrack,
-            camera_id,
-            image_type,
+    # Single-threaded so the five cameras share one TensorRT builder and do not
+    # allocate five preprocess buffers at the same time.
+    composable_nodes = []
+    for camera_id in camera_ids:
+        composable_nodes.extend(
+            create_2d_detector_nodes(
+                yolox_param_file,
+                yolox_model_path,
+                yolox_label_path,
+                yolox_color_map_path,
+                use_bytetrack,
+                camera_id,
+                image_type,
+            )
         )
-        for camera_id in camera_ids
+    container = ComposableNodeContainer(
+        name="camera_2d_detector_container",
+        namespace="",
+        package="rclcpp_components",
+        executable="component_container",
+        composable_node_descriptions=composable_nodes,
+        output="screen",
+    )
+    return [
+        GroupAction(
+            [PushRosNamespace("/perception/object_recognition/detection"), container]
+        )
     ]
