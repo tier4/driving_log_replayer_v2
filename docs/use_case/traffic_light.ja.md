@@ -74,14 +74,33 @@ Autoware Foundationのmainでは、`false`になっているが、実車両で�
 
 launch を立ち上げると以下のことが実行され、評価される。
 
-1. launch で評価ノード(`traffic_light_evaluator_node`)と `logging_simulator.launch`、`ros2 bag play`コマンドを立ち上げる
+1. `logging_simulator.launch`、`ros2 bag play`コマンドを立ち上げる
 2. bag から出力されたセンサーデータを autoware が受け取って、カメラデータを出力し、perception モジュールが認識を行う
-3. 評価ノードが/perception/traffic_light_recognition/traffic_signals を subscribe して、コールバックで perception_eval の関数を用いて評価し結果をファイルに記録する
-4. bag の再生が終了すると自動で launch が終了して評価が終了する
+3. そこで出力された対象の topic を rosbag に保存しておく
+4. rosbag の再生が終了した後、保存した rosbag を1つのメッセージごとに parse し、評価対象の topic を perception_eval の関数を用いて評価し結果をファイルに記録する
+
+評価対象の topic は、シナリオの `degradation_topic` で指定する。省略した場合は `/perception/traffic_light_recognition/traffic_signals` を評価する。
+
+### 記録済みの rosbag の評価
+
+シミュレーションを行わずに、記録済みの rosbag を評価することもできる。
+rosbag には、評価対象の topic と、map から base_link への tf を含む `/tf` が入っている必要がある。
+
+```shell
+python3 -m driving_log_replayer_v2.traffic_light.runner \
+  --scenario-path <scenario.yaml> \
+  --rosbag-dir-path <評価する rosbag> \
+  --t4-dataset-path <t4_dataset> \
+  --result-jsonl-path <出力先>/result.jsonl \
+  --result-archive-path <出力先>/result_archive \
+  --storage mcap
+```
+
+`--degradation-topic` を指定すると、シナリオの `degradation_topic` より優先される。
 
 ## 評価結果
 
-topic の subscribe 1 回につき、以下に記述する判定結果が出力される。
+評価対象の topic の 1 メッセージにつき、以下に記述する判定結果が出力される。
 
 ### 正常
 
@@ -100,19 +119,20 @@ perception_eval の評価関数を実行して以下の条件を満たすとき
 
 - 受信したobjectのヘッダー時刻の前後75msec以内に真値が存在しない場合
 
-## 評価ノードが使用する Topic 名とデータ型
+## 評価で使用する Topic 名とデータ型
 
-Subscribed topics:
+評価で読み出す topic:
 
-| topic 名                                              | データ型                                     |
-| ----------------------------------------------------- | -------------------------------------------- |
-| /perception/traffic_light_recognition/traffic_signals | tier4_perception_msgs/msg/TrafficSignalArray |
+| topic 名                                                                           | データ型                                            |
+| ---------------------------------------------------------------------------------- | --------------------------------------------------- |
+| `degradation_topic` (省略時 /perception/traffic_light_recognition/traffic_signals) | autoware_perception_msgs/msg/TrafficLightGroupArray |
+| /tf                                                                                | tf2_msgs/msg/TFMessage                              |
 
-Published topics:
+結果の rosbag に書き出す topic:
 
-| topic 名 | データ型 |
-| -------- | -------- |
-| -        | -        |
+| topic 名                                       | データ型            |
+| ---------------------------------------------- | ------------------- |
+| /driving_log_replayer_v2/traffic_light/results | std_msgs/msg/String |
 
 ## logging_simulator.launch に渡す引数
 
@@ -133,8 +153,8 @@ perception_eval は ROS 非依存のライブラリなので、ROS のオブジ�
 また、timestamp が ROS ではナノ秒、t4_dataset は `nuScenes` をベースしているためミリ秒が採用されている。
 このため、ライブラリ使用前に適切な変換が必要となる。
 
-driving_log_replayer_v2 は、autoware の perception モジュールから出力された topic を subscribe し、perception_eval で定義されている class に合わせたデータ形式に変換して渡す。
-また、perception_eval から返ってくる評価結果の ROS の topic で publish し可視化する部分も担当する。
+driving_log_replayer_v2 は、autoware の perception モジュールから出力された topic を記録済みの rosbag から読み出し、perception_eval で定義されている class に合わせたデータ形式に変換して渡す。
+また、perception_eval から返ってくる評価結果を ROS の topic として結果の rosbag に書き出す部分も担当する。
 
 perception_eval は、driving_log_replayer_v2 から渡された検知結果と GroundTruth を比較して指標を計算し、結果を出力する部分を担当する。
 
@@ -311,6 +331,7 @@ perception では、シナリオに指定した条件で perception_eval が評�
 
 データベース評価は 1 回の launch で評価できないため、perception では、result.jsonl の他に scene_result.pkl というファイルを出力する。
 pickle ファイルは python のオブジェクトをファイルとして保存したものであり、perception_eval の PerceptionEvaluationManager.frame_results を保存している。
+出力先は `result_archive/<評価対象の topic 名の / を . に置き換えた名前>/scene_result.pkl` である。同じディレクトリに、Fail したフレームの情報を `fail_info.json` として出力する。
 pickle ファイルに記録した object をすべて読み込み、dataset の平均の指標を出力することでデータセット評価が行える。
 
 ### データベース評価の結果ファイル
