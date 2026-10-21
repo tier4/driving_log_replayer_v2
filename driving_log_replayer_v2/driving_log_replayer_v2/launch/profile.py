@@ -13,9 +13,12 @@
 # limitations under the License.
 
 from pathlib import Path
+import re
 
 from ament_index_python.packages import get_package_share_directory
 import yaml
+
+from driving_log_replayer_v2.evaluation_topic import configured_evaluation_topic
 
 
 def _get_profile_path(profile_name: str, config_subdir: str) -> Path:
@@ -87,9 +90,18 @@ def load_record_patterns(profile_name: str) -> list[str]:
     return [str(pattern) for pattern in record_patterns]
 
 
-def build_record_topic_regex(conf: dict) -> str:
+def build_base_record_topic_regex(conf: dict) -> str:
     if conf.get("override_topics_regex", "") != "":
         return conf["override_topics_regex"]
 
     patterns = load_record_patterns(get_record_profile_name(conf))
     return "|".join(patterns)
+
+
+def build_record_topic_regex(conf: dict) -> str:
+    base = build_base_record_topic_regex(conf)
+    target = configured_evaluation_topic(conf)
+    if target is None:
+        return base
+    exact = [f"^{re.escape(topic)}$" for topic in target.recording_topics()]
+    return "|".join(([f"({base})"] if base else []) + exact)

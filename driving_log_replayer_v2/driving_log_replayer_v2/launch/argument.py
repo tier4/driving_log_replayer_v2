@@ -26,6 +26,9 @@ import yaml
 
 from driving_log_replayer_v2.additional_launches import parse_additional_launches
 from driving_log_replayer_v2.additional_launches import resolve_additional_launches
+from driving_log_replayer_v2.evaluation_topic import CONFIG_KEY
+from driving_log_replayer_v2.evaluation_topic import parse_evaluation_topic
+from driving_log_replayer_v2.evaluation_topic import reject_scenario_execution_settings
 
 HUMBLE_ROSBAG2_METADATA_VERSION = 5
 
@@ -159,9 +162,24 @@ def get_launch_arguments() -> list:
         description="Do only bag record without starting evaluator node",
     )
     add_launch_arg(
+        "additional_launches",
+        default_value="[]",
+        description="JSON array of additional package/file/arguments launch specifications",
+    )
+    add_launch_arg(
+        "evaluation_topic",
+        default_value="",
+        description="Evaluated PointCloud2 topic; also added to result_bag",
+    )
+    add_launch_arg(
+        "evaluation_topic_rate",
+        default_value="legacy",
+        description="JSON monitor {module,node_name_suffix} or null to disable. Omitted: legacy when evaluation_topic is omitted, disabled otherwise",
+    )
+    add_launch_arg(
         "override_topics_regex",
         default_value="",
-        description=r"use allowlist. Ex: override_topics_regex:=\^/tf\$\|/sensing/lidar/concatenated/pointcloud\|\^/perception/.\*/objects\$",
+        description=r"Base recording allowlist; EvaluationTopic adds its topic and, when monitored, /diagnostics.  Ex: override_topics_regex:=\^/tf\$\|/sensing/lidar/concatenated/pointcloud\|\^/perception/.\*/objects\$",
     )
     add_launch_arg(
         "storage",
@@ -351,8 +369,14 @@ def ensure_arg_compatibility(context: LaunchContext) -> list:
     scenario_path, dataset_dir, output_dir = prepare_paths(conf)
     yaml_obj = load_scenario(scenario_path)
     # Validate the optional extension before any Autoware or evaluation process starts.
+    reject_scenario_execution_settings(yaml_obj)
+    conf["use_case"] = yaml_obj["Evaluation"]["UseCaseName"]
     resolve_additional_launches(
-        parse_additional_launches(yaml_obj, record_only=conf["record_only"] != "false")
+        parse_additional_launches(conf, record_only=conf["record_only"] != "false")
+    )
+    evaluation_topic = parse_evaluation_topic(conf, record_only=conf["record_only"] != "false")
+    conf[CONFIG_KEY] = (
+        evaluation_topic.model_dump_json() if evaluation_topic is not None else "null"
     )
     datasets = yaml_obj["Evaluation"]["Datasets"]
     dataset_index = get_dataset_index_from_conf(conf, datasets)

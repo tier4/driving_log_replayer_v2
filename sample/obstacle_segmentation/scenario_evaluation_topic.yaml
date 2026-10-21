@@ -1,0 +1,40 @@
+# Execution settings are launch arguments; see launch_arguments.md.
+ScenarioFormatVersion: 3.2.0
+ScenarioName: obstacle_segmentation-evaluation-topic
+ScenarioDescription: obstacle_segmentation-evaluation-topic
+SensorModel: sample_sensor_kit
+VehicleModel: sample_vehicle
+Evaluation:
+  UseCaseName: obstacle_segmentation
+  UseCaseFormatVersion: 0.3.0
+  Datasets:
+  - sample_dataset:
+      VehicleId: default
+  Conditions:
+    Detection:
+      PassRate: 99.0
+      BoundingBoxConfig:
+      - dcb2b352232fff50c4fad23718f31611:
+          Start: null
+          End: null
+    NonDetection:
+      PassRate: 99.0
+      ProposedArea:
+        polygon_2d:
+        - - 10.0
+          - 1.5
+        - - 10.0
+          - -1.5
+        - - 0.0
+          - -1.5
+        - - 0.0
+          - 1.5
+        z_min: 0.0
+        z_max: 1.5
+  SensingEvaluationConfig:
+    evaluation_config_dict:
+      evaluation_task: sensing
+      target_uuids: null
+      box_scale_0m: 1.0
+      box_scale_100m: 1.0
+      min_points_threshold: 1

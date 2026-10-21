@@ -29,6 +29,7 @@ from pydantic import ConfigDict
 from pydantic import Field
 from pydantic import field_validator
 from pydantic import model_validator
+from pydantic import RootModel
 from pydantic import StrictStr
 from pydantic import StringConstraints
 import yaml
@@ -68,50 +69,24 @@ class AdditionalLaunch(BaseModel):
         return value
 
 
-class SimulationSettings(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-
-    AdditionalLaunches: list[AdditionalLaunch] = Field(default_factory=list)
-
+class AdditionalLaunchList(RootModel[list[AdditionalLaunch]]):
     @model_validator(mode="after")
-    def unique_launches(self) -> "SimulationSettings":
+    def unique_launches(self) -> "AdditionalLaunchList":
         keys = [
-            (item.package, item.file, tuple(sorted(item.arguments.items())))
-            for item in self.AdditionalLaunches
+            (item.package, item.file, tuple(sorted(item.arguments.items()))) for item in self.root
         ]
         if len(keys) != len(set(keys)):
-            msg = "identical AdditionalLaunches entries are not allowed"
+            msg = "identical additional_launches entries are not allowed"
             raise ValueError(msg)
         return self
 
 
-def validate_launch_support(
-    version: str, use_case: str, launches: list[AdditionalLaunch], *, record_only: bool = False
-) -> None:
-    if not launches:
-        return
-    if version != "3.3.0":
-        msg = "Simulation.AdditionalLaunches requires ScenarioFormatVersion 3.3.0"
+def parse_additional_launches(conf: dict, *, record_only: bool = False) -> list[AdditionalLaunch]:
+    launches = AdditionalLaunchList.model_validate_json(conf.get("additional_launches", "[]")).root
+    if launches and (conf.get("use_case") != "obstacle_segmentation" or record_only):
+        msg = "additional_launches supports only obstacle_segmentation with record_only=false"
         raise ValueError(msg)
-    if use_case != "obstacle_segmentation" or record_only:
-        msg = "AdditionalLaunches currently supports obstacle_segmentation with record_only=false"
-        raise ValueError(msg)
-
-
-def parse_additional_launches(
-    scenario: dict, *, record_only: bool = False
-) -> list[AdditionalLaunch]:
-    simulation = scenario.get("Simulation")
-    if simulation is None:
-        return []
-    settings = SimulationSettings.model_validate(simulation)
-    validate_launch_support(
-        scenario.get("ScenarioFormatVersion", ""),
-        scenario.get("Evaluation", {}).get("UseCaseName", ""),
-        settings.AdditionalLaunches,
-        record_only=record_only,
-    )
-    return settings.AdditionalLaunches
+    return launches
 
 
 @dataclass(frozen=True)
@@ -145,7 +120,16 @@ def resolve_additional_launches(launches: list[AdditionalLaunch]) -> list[Resolv
         # Colcon --symlink-install may make share/launch a symlink into the source tree.
         launch_dir = (share / "launch").resolve()
         path = (launch_dir / specification.file).resolve()
-        if not path.is_relative_to(launch_dir) or not path.is_file():
+        package_xml = share / "package.xml"
+        launch_dirs = [launch_dir]
+        # ament_cmake also installs individual launch files as symlinks. Its installed
+        # package.xml identifies the source package; keep targets inside that launch tree.
+        if package_xml.is_file():
+            launch_dirs.append((package_xml.resolve().parent / "launch").resolve())
+        if (
+            not any(path.is_relative_to(directory) for directory in launch_dirs)
+            or not path.is_file()
+        ):
             msg = f"Additional launch must be an existing file below {launch_dir}: {path}"
             raise ValueError(msg)
         if specification.package == "driving_log_replayer_v2" and path.name in {
@@ -159,7 +143,6 @@ def resolve_additional_launches(launches: list[AdditionalLaunch]) -> list[Resolv
             msg = f"Duplicate resolved additional launch: {path}"
             raise ValueError(msg)
         seen.add(key)
-        package_xml = share / "package.xml"
         # Read installed package metadata, not XML supplied in the scenario.
         version = None
         if package_xml.is_file():
@@ -168,12 +151,8 @@ def resolve_additional_launches(launches: list[AdditionalLaunch]) -> list[Resolv
     return resolved
 
 
-def load_additional_launches(
-    scenario_path: str, *, record_only: bool = False
-) -> list[ResolvedLaunch]:
-    with Path(scenario_path).open() as stream:
-        scenario = yaml.safe_load(stream)
-    return resolve_additional_launches(parse_additional_launches(scenario, record_only=record_only))
+def load_additional_launches(conf: dict, *, record_only: bool = False) -> list[ResolvedLaunch]:
+    return resolve_additional_launches(parse_additional_launches(conf, record_only=record_only))
 
 
 def write_json_atomically(path: Path, value: dict) -> None:
@@ -202,11 +181,9 @@ def finalize_additional_launch_failure(
     """Append a terminal failure after all simulation writers have stopped, before bag analysis."""
     with Path(scenario_path).open() as stream:
         scenario = yaml.safe_load(stream)
-    if not parse_additional_launches(scenario):
-        return False
     archive = Path(archive_path)
     failure_path = archive / FAILURE_NAME
-    if not failure_path.is_file():
+    if not failure_path.is_file() or not (archive / MANIFEST_NAME).is_file():
         return False
     failure = json.loads(failure_path.read_text())
     manifest = json.loads((archive / MANIFEST_NAME).read_text())

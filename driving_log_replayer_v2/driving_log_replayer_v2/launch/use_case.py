@@ -27,8 +27,11 @@ from launch.actions import UnsetEnvironmentVariable
 from launch.launch_description_sources import AnyLaunchDescriptionSource
 from launch_ros.actions import Node
 from launch_ros.actions import SetParameter
+from launch_ros.parameter_descriptions import ParameterValue
 from rosidl_runtime_py import message_to_ordereddict
 
+from driving_log_replayer_v2.evaluation_topic import configured_evaluation_topic
+from driving_log_replayer_v2.evaluation_topic import DEFAULT_POINTCLOUD_TOPIC
 from driving_log_replayer_v2.launch.additional_launches import launch_additional_launches
 from driving_log_replayer_v2.launch.argument import add_use_case_arguments
 from driving_log_replayer_v2.launch.camera_2d_detector import launch_camera_2d_detector
@@ -146,6 +149,12 @@ def launch_evaluator_node(context: LaunchContext) -> list:
     launch_config = import_module(f"driving_log_replayer_v2.launch.{conf['use_case']}")
     params |= launch_config.NODE_PARAMS
 
+    target = configured_evaluation_topic(conf)
+    remappings = []
+    if target is not None:
+        remappings = [(DEFAULT_POINTCLOUD_TOPIC, target.topic)]
+        params["evaluation_topic_config"] = ParameterValue(target.model_dump_json(), value_type=str)
+
     evaluator_name = conf["use_case"] + "_evaluator"
 
     return [
@@ -156,6 +165,7 @@ def launch_evaluator_node(context: LaunchContext) -> list:
             output="screen",
             name=evaluator_name,
             parameters=[params],
+            remappings=remappings,
             on_exit=ShutdownOnce(),
         ),
     ]

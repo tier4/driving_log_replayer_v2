@@ -44,6 +44,11 @@ from std_msgs.msg import String
 from tier4_api_msgs.msg import AwapiAutowareStatus
 from visualization_msgs.msg import MarkerArray
 
+from driving_log_replayer_v2.evaluation_topic import CONFIG_KEY
+from driving_log_replayer_v2.evaluation_topic import configured_evaluation_topic
+from driving_log_replayer_v2.evaluation_topic import DEFAULT_POINTCLOUD_TOPIC
+from driving_log_replayer_v2.evaluation_topic import DIAGNOSTIC_WARNING_INTERVAL_SEC
+from driving_log_replayer_v2.evaluation_topic import TopicRateDiagnosticState
 from driving_log_replayer_v2.evaluator import DLREvaluatorV2
 from driving_log_replayer_v2.evaluator import evaluator_main
 from driving_log_replayer_v2.lanelet2_util import road_lanelets_from_file
@@ -111,6 +116,21 @@ class ObstacleSegmentationEvaluator(DLREvaluatorV2):
         )
 
         self._scenario: ObstacleSegmentationScenario
+        raw_target = self.declare_parameter("evaluation_topic_config", "null").value
+        self.__evaluation_topic = configured_evaluation_topic({CONFIG_KEY: raw_target})
+        self.__rate_state = (
+            TopicRateDiagnosticState(self.__evaluation_topic.topic_rate)
+            if self.__evaluation_topic is not None
+            else None
+        )
+        if self.__evaluation_topic is not None:
+            resolved = self.resolve_topic_name(DEFAULT_POINTCLOUD_TOPIC)
+            if resolved != self.__evaluation_topic.topic:
+                error_msg = "EvaluationTopic requires the DLR launch topic remapping"
+                raise ValueError(error_msg)
+            self.get_logger().info(
+                f"EvaluationTopic: {resolved}, topic_rate={self.__evaluation_topic.topic_rate}"
+            )
         self.__s_cfg = self._scenario.Evaluation.SensingEvaluationConfig
         self.__s_cfg["evaluation_config_dict"]["label_prefix"] = "autoware"
 
@@ -305,6 +325,8 @@ class ObstacleSegmentationEvaluator(DLREvaluatorV2):
             sensing_frame_config=sensing_frame_config,
         )
 
+        topic_rate, rate_metadata = self.current_topic_rate()
+
         # write result
         (
             marker_detection,
@@ -318,17 +340,19 @@ class ObstacleSegmentationEvaluator(DLREvaluatorV2):
             DLREvaluatorV2.transform_stamped_with_euler_angle(map_to_baselink),
             self.__latest_stop_reasons,
             pcd_header,
-            topic_rate=self.__topic_rate,
+            topic_rate=topic_rate,
+            topic_rate_evaluation=rate_metadata,
         )
         res_str = self._result_writer.write_result(self._result)
         self._pub_result.publish(String(data=res_str))
 
-        topic_rate_data = ObstacleSegmentationMarker()
-        topic_rate_data.header = msg.header
-        topic_rate_data.status = (
-            ObstacleSegmentationMarker.OK if self.__topic_rate else ObstacleSegmentationMarker.ERROR
-        )
-        self.__pub_graph_topic_rate.publish(topic_rate_data)
+        if topic_rate is not None:
+            topic_rate_data = ObstacleSegmentationMarker()
+            topic_rate_data.header = msg.header
+            topic_rate_data.status = (
+                ObstacleSegmentationMarker.OK if topic_rate else ObstacleSegmentationMarker.ERROR
+            )
+            self.__pub_graph_topic_rate.publish(topic_rate_data)
 
         if marker_detection is not None:
             self.__pub_marker_detection.publish(marker_detection)
@@ -349,7 +373,21 @@ class ObstacleSegmentationEvaluator(DLREvaluatorV2):
                 if msg_reason.reason == "ObstacleStop":
                     self.__latest_stop_reasons.append(message_to_ordereddict(msg_reason))
 
+    def current_topic_rate(self) -> tuple[bool | None, dict | None]:
+        if self.__rate_state is None:
+            return self.__topic_rate, None
+        result, metadata = self.__rate_state.snapshot(self.get_clock().now().nanoseconds * 1e-9)
+        if metadata["state"] == "Invalid":
+            self.get_logger().warning(
+                f"TopicRate Invalid: {metadata['diagnostic_name']} ({metadata['reason']})",
+                throttle_duration_sec=DIAGNOSTIC_WARNING_INTERVAL_SEC,
+            )
+        return result, metadata
+
     def diag_cb(self, msg: DiagnosticArray) -> None:
+        if self.__rate_state is not None:
+            self.__rate_state.update(msg, self.get_clock().now().nanoseconds * 1e-9)
+            return
         if len(msg.status) == 0:
             return
         diag_status: DiagnosticStatus = msg.status[0]

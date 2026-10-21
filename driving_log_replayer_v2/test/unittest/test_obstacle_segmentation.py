@@ -42,11 +42,13 @@ from std_msgs.msg import Header
 from visualization_msgs.msg import Marker
 
 from driving_log_replayer_v2.obstacle_segmentation import build_detection_frame_output
+from driving_log_replayer_v2.obstacle_segmentation import Conditions
 from driving_log_replayer_v2.obstacle_segmentation import Detection
 from driving_log_replayer_v2.obstacle_segmentation import DetectionCondition
 from driving_log_replayer_v2.obstacle_segmentation import get_non_detection_area_in_base_link
 from driving_log_replayer_v2.obstacle_segmentation import NonDetection
 from driving_log_replayer_v2.obstacle_segmentation import NonDetectionCondition
+from driving_log_replayer_v2.obstacle_segmentation import ObstacleSegmentationResult
 from driving_log_replayer_v2.obstacle_segmentation import ObstacleSegmentationScenario
 from driving_log_replayer_v2.obstacle_segmentation import ProposedAreaCondition
 from driving_log_replayer_v2.obstacle_segmentation import transform_proposed_area
@@ -696,3 +698,56 @@ def draw_search_range() -> None:
     ax.autoscale()
     ax.grid()
     plt.show()
+
+
+@pytest.mark.parametrize("rate", [True, None])
+def test_detection_monitor_disabled_keeps_pointcloud_checks(
+    create_detection: Detection,
+    create_frame_result: SensingFrameResult,
+    create_dynamic_object: DynamicObjectWithSensingResult,
+    *,
+    rate: bool | None,
+) -> None:
+    create_frame_result.detection_success_results = [create_dynamic_object]
+    result, _, _, _ = create_detection.set_frame(create_frame_result, Header(), topic_rate=rate)
+    assert result["Result"]["Frame"] == "Success"
+    create_frame_result.detection_success_results = []
+    result, _, _, _ = create_detection.set_frame(create_frame_result, Header(), topic_rate=rate)
+    assert result["Result"]["Frame"] == "Fail"
+
+
+@pytest.mark.parametrize("rate", [True, None])
+def test_non_detection_monitor_disabled_keeps_false_positive_checks(
+    create_non_detection: NonDetection,
+    *,
+    rate: bool | None,
+) -> None:
+    result, _, _ = create_non_detection.set_frame([], Header(), topic_rate=rate)
+    assert result["Result"]["Frame"] == "Success"
+    points = np.array([[1.0, 1.0, 1.0, 0.5]])
+    result, _, _ = create_non_detection.set_frame([points], Header(), topic_rate=rate)
+    assert result["Result"]["Frame"] == "Fail"
+
+
+def test_result_serializes_disabled_rate_without_marking_it_healthy(
+    create_frame_result: SensingFrameResult,
+) -> None:
+    result = ObstacleSegmentationResult(Conditions(Detection=None, NonDetection=None))
+    result.set_frame(
+        create_frame_result,
+        0,
+        {},
+        [],
+        Header(),
+        topic_rate=None,
+        topic_rate_evaluation={"enabled": False, "state": "Skipped"},
+    )
+    assert result.frame["TopicRate"] is None
+    assert result.frame["TopicRateEvaluation"] == {"enabled": False, "state": "Skipped"}
+
+
+def test_result_legacy_jsonl_keeps_boolean_string(create_frame_result: SensingFrameResult) -> None:
+    result = ObstacleSegmentationResult(Conditions(Detection=None, NonDetection=None))
+    result.set_frame(create_frame_result, 0, {}, [], Header(), topic_rate=True)
+    assert result.frame["TopicRate"] == "True"
+    assert "TopicRateEvaluation" not in result.frame

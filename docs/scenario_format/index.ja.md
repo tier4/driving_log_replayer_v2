@@ -79,32 +79,6 @@ autoware_launch/launch/logging_simulator.launch.xml の引数の vehicle_model �
 
 (オプション) Publishするトピックを制御するためのトピックプロファイル名を指定する。プロファイルファイルは `config/publish_and_remap/{profile_name}.yaml` に配置する必要がある、例: `planning_control`。指定しない場合は、Rosbag中すべてのトピックがPublishされる。
 
-### Simulation.AdditionalLaunches
-
-ScenarioFormatVersion 3.3.0 からのオプション。Autoware と並行して常駐する追加 launch を起動する。DLR にハードウェア専用引数を追加せず、シナリオに必要な処理を指定する。初期対応は `obstacle_segmentation`、`record_only:=false` のみ。
-
-```yaml
-ScenarioFormatVersion: 3.3.0
-Simulation:
-  AdditionalLaunches:
-    - package: aip_hd785_gen2_perception_launch
-      file: radars_replay.launch.xml
-      arguments:
-        use_sim_time: "true"
-```
-
-この radar の例は、AIP 側に再生専用 launch を別途追加・インストールして使用する。DLR は当該 launch を提供せず、AIP パッケージへの依存も追加しない。既存の `Evaluation` 設定と `UseCaseFormatVersion: 0.3.0` は維持する。評価対象トピックの remap は別機能であり、この設定では変更されない。両機能は ScenarioFormatVersion 3.3.0 にまとめる方針だが、本ブランチの実装対象は追加 launch のみ。
-
-- `package` と `file` は必須。インストール済みパッケージの `launch/` 配下から相対パスで解決する。サブディレクトリと `.launch.py`、`.launch.xml`、`.launch.yaml`、`.launch.yml` に対応。絶対パス、`..`、範囲外を指す symlink、存在しない package/file、同一エントリ、DLR 自身を直接再帰起動する指定はシミュレーション開始前に拒否する。
-- `arguments` は省略時 `{}`。キーは launch 引数名、値は文字列。真偽値・数値も引用符で囲む。シェルを使わず引数を個別に渡す。親の `SetParameter` は別プロセスへ伝わらないため、追加 launch 側で `use_sim_time` を宣言し、ノードへ適用する。
-- `Simulation` の省略・`null`・`{}`、`AdditionalLaunches` の省略・`[]` では既存の動作を維持する。`AdditionalLaunches: null` や新設定内の未知のキーはエラー。空でないリストを旧バージョン、他ユースケース、record-only で指定した場合もエラー。`with_autoware:=false` は許可するが、残りのパイプラインは呼び出し側で用意する。
-- evaluator/player より前に追加 launch の起動を要求するが、ノードの準備完了は保証しない。既存の `play_delay` は変更しない。bag 再生前の subscription と起動時間を確認する。準備完了ハンドシェイクや自動再起動は提供しない。
-- DLR の終了前に追加 launch が終了した場合、終了コード 0 も含めて失敗とし、シミュレーションを停止する。重要な子ノードが終了したら、追加 launch 自体も終了するよう各 launch を構成する。launch が生きたままの個別ノード故障は DLR から検出できない。DLR の通常終了時は子 launch へ停止シグナルを送り、ROS launch 標準の終了待ち・強制終了を利用する。
-- `result_archive/additional_launches.json` に実行 ID、解決したパス、SHA-256、package version、指定引数を保存する。予期しない終了は `additional_launch_failure.json` に保存。後処理は既存フレームを残し、最終結果へ `AdditionalLaunchFailed` を追記する。bag 未生成でも Fail を出力し、その失敗実行では bag/plot 解析をスキップする。実行 ID により前回の失敗マーカーを区別する。
-- bag の publish/remap/record 設定、評価 subscription、TopicRate 診断は変更しない。追加出力を保存する場合は別途記録対象を設定する。指定引数は平文で記録されるため、認証情報を渡さない。
-
-[サンプルシナリオ](https://github.com/tier4/driving_log_replayer_v2/blob/develop/sample/obstacle_segmentation/scenario_additional_launches.yaml)を参照。起動入口は従来の `driving_log_replayer_v2.launch.py` のままで、追加 CLI 引数は不要。Evaluator で使用する前に、3.3.0 対応 DLR イメージと、新しい設定を保存・配信できるシナリオサービスを確認する。
-
 ### Evaluation
 
 シミュレーションの評価条件を定義する。
@@ -230,3 +204,78 @@ Evaluationで指定したユースケースとは別のユースケースの評�
 Evaluatorでは、result.jsonlの最終行を処理して、成否の判定が行われるので、Evaluationの結果result.jsonlと、include_use_caseで出力されるresult.jsonlの結果をpost_processでマージする必要がある。
 
 現状、planning_controlでdiagnosticsを評価する機能が実装されている。
+
+### 実行設定はlaunch引数で指定
+
+追加launch・評価topic・参照診断はシナリオに書かず、ローカルでは`ros2 launch`引数、
+Evaluatorでは`.webauto-ci.yml`の`simulations[].simulator.parameters`へ同名の文字列を指定します。
+シナリオの再生成・ScenarioFormatVersionやUseCaseFormatVersionの引き上げは不要です。
+バージョン3.0.0〜3.3.0の既存シナリオを使用できます。
+
+```bash
+ros2 launch driving_log_replayer_v2 driving_log_replayer_v2.launch.py \
+  scenario_path:=/path/to/scenario.yaml \
+  additional_launches:='[{"package":"aip_hd785_gen2_perception_launch","file":"radars_replay.launch.xml","arguments":{"use_sim_time":"true"}}]' \
+  evaluation_topic:=/perception/radar_lidar_fusion/debug/appended_radar_points \
+  evaluation_topic_rate:='null'
+```
+
+上記は起動引数部分の例です。通常のt4_dataset_path等の引数は別途指定してください。
+汎用の追加launch機能であり、AIPのradar launch自体は別途インストールが必要です。
+DLRへAIPパッケージや専用topic monitorの依存は追加しません。
+
+| 引数 | 型・既定値 | 意味 |
+| --- | --- | --- |
+| additional_launches | JSON配列の文字列、既定`[]` | `package`・`file`・任意の`arguments`。argumentsの値も文字列 |
+| evaluation_topic | ROS完全修飾topic名、既定空文字 | 評価器のPointCloud2購読先。記録対象にも追加 |
+| evaluation_topic_rate | JSONオブジェクトまたはJSON `null`の文字列。既定内部値`legacy` | moduleとnode_name_suffixで既存診断を選択。新monitorは起動しない |
+
+| evaluation_topic | evaluation_topic_rate | 動作 |
+| --- | --- | --- |
+| 省略 | 省略 | 元の点群と固定診断、従来の結果・記録動作を維持 |
+| 指定 | 省略／`null` | 指定topicを評価・記録、レート条件はSkipped |
+| 省略 | `null` | 元の点群を評価・記録、レート条件はSkipped |
+| 指定／省略 | JSON設定あり | 指定topic（省略なら元の点群）を評価し、指定診断を参照 |
+
+`legacy`は省略検出用の既定値です。明示的に監視したい場合は次のJSONを指定します。
+
+```bash
+evaluation_topic_rate:='{"module":"perception","node_name_suffix":"obstacle_segmentation_pointcloud"}'
+```
+
+生成される診断名は`topic_state_monitor_obstacle_segmentation_pointcloud: perception_topic_status`。
+トピック名から診断名を推測しません。実際のAutoware設定と対応させてください。
+/diagnosticsの全statusを検索し、同名が複数あれば最悪レベルを使います。
+OK/WARNはレート条件を満たし、ERROR/STALEは満たしません。Hzしきい値はAutoware側の設定に従います。
+指定診断が未受信・ROS時刻で2秒超の期限切れなら、5秒間隔で抑制した警告と
+`TopicRateEvaluation.state: Invalid`、理由`NotReceived`または`Expired`を記録します。
+`TopicRate`はFalseとなりレート条件を満たしません。設定したのに見つからない場合を自動Skipしません。
+無関係な診断は期限を更新せず、古い診断・時刻巻戻り・再生pauseに対応します。
+監視無効では`TopicRate: null`と`TopicRateEvaluation: {enabled: false, state: Skipped}`を記録し、
+レート条件だけを合否から除外します。点群の検知・非検知・PassRateは適用し、擬似OK graphは出しません。
+最終結果の独立した失敗ラッチは追加しません。点群が来ない間の最終合否・NoDataは既存処理に従います。
+
+新しい非既定引数はobstacle_segmentation、record_only:=falseのみ対応します。
+追加launchは評価器/playerより前に起動を要求しますが、準備完了は保証しません。
+必要に応じplay_delayを設定し、/clockが必要な追加launchにはuse_sim_timeを明示します。
+追加launchの異常終了（終了コード0を含む）は実行失敗として停止・resultへ反映します。
+重要な子ノードの終了時には追加launch自体が終了するよう構成してください。
+result_archive/additional_launches.jsonへ実行ID、解決パス、SHA256、引数を保存し、
+失敗はadditional_launch_failure.jsonへ保存します。通常停止・過去の実行IDは失敗にしません。
+
+recorderは従来のbase（override_topics_regex ＞ record_profile ＞ use_case標準profile）に
+評価topicを完全一致で追加し、監視有効時は/diagnosticsも追加します。別の記録引数は不要です。
+override指定時も追加されます。元のprofileと元点群は削除しません。指定なしなら既存regex・空profile時のskipを維持します。
+補助cluster点群・他debug topicは必要なら既存record_profile/overrideへ別途含めてください。
+記録対象追加はpublisher・QoS一致・全件記録の保証ではありません。
+追加前後の点群を保存すると容量・I/Oが増えます。bag playerの/unused remapは変更しません。
+
+旧案のシナリオ内`Simulation.AdditionalLaunches`（非空）または`Evaluation.EvaluationTopic`（非null）は
+無視せず移行エラーにします。空・nullの旧指定は従来動作として扱います。
+設定は親からpre/simulation/postへ1引数ずつ転送し、各子で再検証します。
+評価器へは正規化済みJSONを文字列ROSパラメータで渡し、購読先とrecord先の一致を保ちます。
+実行イメージを機能対応コミットへ固定し、起動ログで設定反映を確認してください。
+analyzerは新モードの状態を`3_topic_rate_evaluation.json`にも保存します。
+受信周期Hzグラフは参考値で、診断による合否とは別です。
+
+CLI記述例は`sample/obstacle_segmentation/launch_arguments.md`にまとめています。

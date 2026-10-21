@@ -66,9 +66,7 @@ def launch_additional_launches(context: LaunchContext) -> list:
     # Other use cases retain the existing actions and do not resolve extra packages.
     if conf["use_case"] != "obstacle_segmentation":
         return []
-    launches = load_additional_launches(
-        conf["scenario_path"], record_only=conf["record_only"] != "false"
-    )
+    launches = load_additional_launches(conf, record_only=conf["record_only"] != "false")
     if not launches:
         return []
     archive = Path(conf["result_archive_path"])

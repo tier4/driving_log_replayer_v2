@@ -203,6 +203,7 @@ class JsonlParser:
         self.stamp = []
         self.detection = []
         self.non_detection = []
+        self.topic_rate_evaluations: list[dict] = []
         self._dist_type = dist_type
         self._read_jsonl_results(filepath)
         self._modify_center_from_baselink_to_overhang(config.overhang_from_baselink)
@@ -233,6 +234,15 @@ class JsonlParser:
             except (KeyError, IndexError):
                 pass
 
+            metadata = json_dict.get("Frame", {}).get("TopicRateEvaluation")
+            if metadata is not None:
+                self.topic_rate_evaluations.append(
+                    {
+                        "frame": json_dict["Frame"].get("FrameName"),
+                        "topic_rate": json_dict["Frame"].get("TopicRate"),
+                        **metadata,
+                    }
+                )
             self.summary.update_condition(json_dict)
             self.frame.append(Frame(json_dict))
             self.stamp.append(Stamp(json_dict))
@@ -272,8 +282,17 @@ class JsonlParser:
                 for frame in uuid_points:
                     writer.writerow([frame[2], frame[0], frame[1]])
 
+    def save_topic_rate_evaluations(self, path: Path) -> None:
+        if not self.topic_rate_evaluations:
+            return
+        with path.open("w") as stream:
+            json.dump(self.topic_rate_evaluations, stream, indent=2)
+            stream.write("\n")
+
     def get_topic_rate(self) -> list:
         ret = []
+        if not self.stamp:
+            return ret
         index = 1
         previous_time = self.stamp[0].timestamp_system
         for frame in self.stamp:

@@ -499,7 +499,7 @@ class Detection(EvaluationItem):
         frame_result: SensingFrameResult,
         header: Header,
         *,
-        topic_rate: bool,
+        topic_rate: bool | None,
     ) -> tuple[
         dict,
         MarkerArray | None,
@@ -532,7 +532,7 @@ class Detection(EvaluationItem):
         elif (
             len(frame_result.detection_fail_results) == 0
             and len(frame_result.detection_success_results) != 0
-            and topic_rate
+            and topic_rate is not False
         ):
             frame_success = "Success"
             self.passed += 1
@@ -563,7 +563,7 @@ class NonDetection(EvaluationItem):
         pcd_list: list[np.ndarray],
         header: Header,
         *,
-        topic_rate: bool,
+        topic_rate: bool | None,
     ) -> tuple[dict, PointCloud2 | None, ObstacleSegmentationMarker | None]:
         if self.condition is None:
             self.success = True
@@ -577,7 +577,7 @@ class NonDetection(EvaluationItem):
 
         self.total += 1
         frame_success = "Fail"
-        if len(pcd_list) == 0 and topic_rate:
+        if len(pcd_list) == 0 and topic_rate is not False:
             frame_success = "Success"
             self.passed += 1
 
@@ -667,7 +667,8 @@ class ObstacleSegmentationResult(ResultBase):
         stop_reasons: list[dict],
         header: Header,
         *,
-        topic_rate: bool,
+        topic_rate: bool | None,
+        topic_rate_evaluation: dict | None = None,
     ) -> tuple[
         MarkerArray | None,
         PointCloud2 | None,
@@ -680,8 +681,10 @@ class ObstacleSegmentationResult(ResultBase):
             "FrameName": frame.frame_name,
             "FrameSkip": skip,
             "StopReasons": stop_reasons,
-            "TopicRate": str(topic_rate),
+            "TopicRate": None if topic_rate is None else str(topic_rate),
         }
+        if topic_rate_evaluation is not None:
+            out_frame["TopicRateEvaluation"] = topic_rate_evaluation
         (
             out_frame["Detection"],
             marker_detection,

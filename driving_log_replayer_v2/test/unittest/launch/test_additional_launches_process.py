@@ -73,6 +73,7 @@ service = LaunchService()
 service.context.launch_configurations.update(
     use_case="obstacle_segmentation", record_only="false",
     scenario_path=str(directory / "scenario.yaml"),
+    additional_launches=(directory / "launches.json").read_text(),
     result_archive_path=str(directory / "archive"),
 )
 def stop_when_ready(context):
@@ -121,12 +122,12 @@ def write_scenario(directory: Path, mode: str, *, sibling: bool = False) -> None
     launches = [specification("child", mode)]
     if sibling:
         launches.insert(0, specification("sibling", "hold"))
+    (directory / "launches.json").write_text(json.dumps(launches))
     (directory / "scenario.yaml").write_text(
         yaml.safe_dump(
             {
                 "ScenarioFormatVersion": "3.3.0",
                 "Evaluation": {"UseCaseName": "obstacle_segmentation"},
-                "Simulation": {"AdditionalLaunches": launches},
             }
         )
     )

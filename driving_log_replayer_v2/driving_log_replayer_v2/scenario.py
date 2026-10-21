@@ -25,8 +25,7 @@ from pydantic import ValidationError
 from rclpy.clock import Clock
 import yaml
 
-from driving_log_replayer_v2.additional_launches import SimulationSettings
-from driving_log_replayer_v2.additional_launches import validate_launch_support
+from driving_log_replayer_v2.evaluation_topic import reject_scenario_execution_settings
 from driving_log_replayer_v2.result import ResultWriter
 
 number = int | float
@@ -42,22 +41,12 @@ class Scenario(BaseModel):
     Evaluation: dict
     include_use_case: dict | None = None
     publish_profile: str | None = None
-    Simulation: SimulationSettings | None = None
 
-    @model_validator(mode="after")
-    def validate_simulation(self) -> "Scenario":
-        if self.Simulation is not None:
-            evaluation = (
-                self.Evaluation.model_dump()
-                if isinstance(self.Evaluation, BaseModel)
-                else self.Evaluation
-            )
-            validate_launch_support(
-                self.ScenarioFormatVersion,
-                evaluation.get("UseCaseName", ""),
-                self.Simulation.AdditionalLaunches,
-            )
-        return self
+    @model_validator(mode="before")
+    @classmethod
+    def validate_execution_settings(cls, value: dict) -> dict:
+        reject_scenario_execution_settings(value)
+        return value
 
 
 def load_scenario(scenario_path: Path, scenario_class: Callable) -> Any:

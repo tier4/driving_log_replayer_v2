@@ -35,6 +35,7 @@ def visualize(input_jsonl: Path, output_dir: Path, config_yaml: Path, dist_type:
     # Create summary
     parser.summary.update(parser)
     parser.summary.save(output_dir / "0_summary")
+    parser.save_topic_rate_evaluations(output_dir / "3_topic_rate_evaluation.json")
 
     # Plot
     bird_view_plot = BirdViewPlot()
@@ -69,7 +70,12 @@ def visualize(input_jsonl: Path, output_dir: Path, config_yaml: Path, dist_type:
 
     topic_rate_plot = LinePlot()
     topic_rate_plot.add_data(parser.get_topic_rate(), legend="Rate")
-    topic_rate_plot.plot(title="Frame rate (0.5倍速)", xlabel="Frame", ylabel="周期[Hz]")
+    title = (
+        "評価フレーム受信周期 (参考・診断判定とは別)"
+        if parser.topic_rate_evaluations
+        else "Frame rate (0.5倍速)"
+    )
+    topic_rate_plot.plot(title=title, xlabel="Frame", ylabel="周期[Hz]")
     topic_rate_plot.save_plot(
         output_dir / "3_frame_rate",
     )

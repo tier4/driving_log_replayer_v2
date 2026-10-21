@@ -67,11 +67,10 @@ def package(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
 
 
 def configured_scenario(scenario: dict, **overrides: object) -> dict:
-    scenario["Simulation"] = {
-        "AdditionalLaunches": [
-            {"package": "test_additional_launch", "file": "helper.launch.py", **overrides}
-        ]
-    }
+    scenario["additional_launches"] = json.dumps(
+        [{"package": "test_additional_launch", "file": "helper.launch.py", **overrides}]
+    )
+    scenario["use_case"] = scenario["Evaluation"]["UseCaseName"]
     return scenario
 
 
@@ -104,13 +103,11 @@ def test_reject_invalid_entry(scenario: dict, overrides: dict) -> None:
     configured_scenario(scenario, **overrides)
     with pytest.raises(ValidationError):
         parse_additional_launches(scenario)
-    with pytest.raises(ValidationError):
-        Scenario(**scenario)
 
 
-@pytest.mark.parametrize("settings", [{"AdditionalLaunches": None}, {"AdditionalLaunch": []}, []])
-def test_reject_invalid_simulation(scenario: dict, settings: object) -> None:
-    scenario["Simulation"] = settings
+@pytest.mark.parametrize("settings", [{"AdditionalLaunches": None}, {"AdditionalLaunch": []}, None])
+def test_reject_invalid_launch_json(scenario: dict, settings: object) -> None:
+    scenario["additional_launches"] = json.dumps(settings)
     with pytest.raises(ValidationError):
         parse_additional_launches(scenario)
 
@@ -120,17 +117,16 @@ def test_support_constraints(scenario: dict) -> None:
     with pytest.raises(ValueError, match="record_only=false"):
         parse_additional_launches(scenario, record_only=True)
     scenario["ScenarioFormatVersion"] = "3.2.0"
-    with pytest.raises(ValueError, match=r"3\.3\.0"):
-        parse_additional_launches(scenario)
+    assert parse_additional_launches(scenario)
     scenario["ScenarioFormatVersion"] = "3.3.0"
-    scenario["Evaluation"]["UseCaseName"] = "localization"
-    with pytest.raises(ValidationError, match="obstacle_segmentation"):
-        Scenario(**scenario)
+    scenario["use_case"] = "localization"
+    with pytest.raises(ValueError, match="obstacle_segmentation"):
+        parse_additional_launches(scenario)
 
 
 def test_duplicate_entries(scenario: dict) -> None:
     configured_scenario(scenario)
-    scenario["Simulation"]["AdditionalLaunches"] *= 2
+    scenario["additional_launches"] = json.dumps(json.loads(scenario["additional_launches"]) * 2)
     with pytest.raises(ValidationError, match="identical"):
         parse_additional_launches(scenario)
 
@@ -166,7 +162,7 @@ def test_obstacle_use_case_accepts_new_settings() -> None:
     configured_scenario(scenario)
     model = obstacle_scenario(**scenario)
     assert model.Evaluation.UseCaseFormatVersion == "0.3.0"
-    assert model.Simulation.AdditionalLaunches[0].package == "test_additional_launch"
+    assert parse_additional_launches(scenario)[0].package == "test_additional_launch"
 
 
 def test_missing_package() -> None:
@@ -188,7 +184,12 @@ def test_launch_validation_precedes_dataset_and_autoware(
     )
     context = LaunchContext()
     context.launch_configurations.update(
-        dataset_dir="", t4_dataset_path="", remap_arg="", remap_profile="", record_only="false"
+        dataset_dir="",
+        t4_dataset_path="",
+        remap_arg="",
+        remap_profile="",
+        record_only="false",
+        additional_launches=scenario["additional_launches"],
     )
     # No Evaluation.Datasets or bag exists: reject the extension before touching either.
     with pytest.raises(ValidationError, match="relative launch"):
@@ -214,6 +215,29 @@ def test_launch_directory_symlink_install(package: Path, tmp_path: Path) -> None
         [AdditionalLaunch(package="pkg", file="helper.launch.py")]
     )
     assert resolved[0].path == source / "helper.launch.py"
+
+
+def test_launch_file_symlink_install(package: Path, tmp_path: Path) -> None:
+    source = tmp_path / "source_package"
+    (source / "launch").mkdir(parents=True)
+    source_file = source / "launch" / "helper.launch.py"
+    source_file.write_text("# source launch\n")
+    (package / "package.xml").rename(source / "package.xml")
+    (package / "package.xml").symlink_to(source / "package.xml")
+    installed_file = package / "launch" / "helper.launch.py"
+    installed_file.unlink()
+    installed_file.symlink_to(source_file)
+    specification = AdditionalLaunch(package="pkg", file="helper.launch.py")
+    resolved = resolve_additional_launches([specification])
+    assert resolved[0].path == source_file
+    assert resolved[0].manifest()["package_version"] == "1.2.3"
+
+    outside = tmp_path / "outside.launch.py"
+    outside.write_text("# outside the source package\n")
+    source_file.unlink()
+    source_file.symlink_to(outside)
+    with pytest.raises(ValueError, match="existing file"):
+        resolve_additional_launches([specification])
 
 
 def test_recursive_launch(package: Path) -> None:
@@ -326,6 +350,7 @@ def test_post_process_failure_precedes_missing_bag(
         result_archive_path=str(tmp_path),
         result_jsonl_path=str(tmp_path / "result.jsonl"),
         result_bag_path=str(tmp_path / "missing_bag"),
+        additional_launches=scenario["additional_launches"],
     )
     assert module.post_process(context)
     assert json.loads((tmp_path / "result.jsonl").read_text().splitlines()[-1])["Result"] == {

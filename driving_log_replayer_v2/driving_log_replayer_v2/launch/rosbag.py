@@ -26,6 +26,7 @@ from launch.actions import TimerAction
 from launch_ros.actions import Node
 import yaml
 
+from driving_log_replayer_v2.evaluation_topic import configured_evaluation_topic
 from driving_log_replayer_v2.launch.profile import build_record_topic_regex
 from driving_log_replayer_v2.launch.profile import load_publish_remap_topics
 from driving_log_replayer_v2.shutdown_once import ShutdownOnce
@@ -220,7 +221,24 @@ def launch_bag_recorder(context: LaunchContext) -> list:
         record_cmd += ["--use-sim-time"]
     if conf["storage"] == "mcap":
         record_cmd += ["--storage-preset-profile", "zstd_fast"]
-    return [ExecuteProcess(cmd=record_cmd)]
+    target = configured_evaluation_topic(conf)
+    actions = [ExecuteProcess(cmd=record_cmd)]
+    if target is not None:
+        source = (
+            "override_topics_regex"
+            if conf.get("override_topics_regex")
+            else f"record_profile={conf.get('record_profile') or conf['use_case']}"
+        )
+        actions.insert(
+            0,
+            LogInfo(
+                msg=(
+                    f"EvaluationTopic recorder: base={source}, added={target.recording_topics()}, "
+                    f"regex={record_topic_regex}"
+                )
+            ),
+        )
+    return actions
 
 
 def _append_perception_reproducer_options(cmd: list[str], reproducer_config: dict) -> None:
