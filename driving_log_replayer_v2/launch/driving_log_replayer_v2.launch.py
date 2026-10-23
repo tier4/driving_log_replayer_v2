@@ -33,6 +33,17 @@ def parse_launch_arguments(context: LaunchContext) -> list:
     return launch_args
 
 
+def simulation_env(context: LaunchContext) -> dict[str, str] | None:
+    # Perception replay publishes full LiDAR scans. With Agnocast each of those
+    # processes maps a private shm pool, and the Evaluator container's /dev/shm
+    # cannot back those writes (SIGBUS in the nebula containers). The same
+    # scenarios pass with Agnocast off, which keeps the clouds on the normal heap
+    # and uses the CPU preprocessor. Vehicle runs are unchanged.
+    if context.launch_configurations.get("use_case") == "perception":
+        return {"ENABLE_AGNOCAST": "0"}
+    return None
+
+
 def launch_setup(context: LaunchContext) -> list:
     arguments = parse_launch_arguments(context)
     launch_base_cmd = ["ros2", "launch", "driving_log_replayer_v2"]
@@ -43,7 +54,13 @@ def launch_setup(context: LaunchContext) -> list:
     pre_process_cmd = [*launch_base_cmd, "pre_process.launch.py", *launch_post_fix]
     pre_process = ExecuteProcess(cmd=pre_process_cmd, output="screen", name="pre_process")
     simulation_cmd = [*launch_base_cmd, "simulation.launch.py", *launch_post_fix]
-    simulation = ExecuteProcess(cmd=simulation_cmd, output="screen", name="simulation")
+    agnocast_env = simulation_env(context)
+    simulation = ExecuteProcess(
+        cmd=simulation_cmd,
+        output="screen",
+        name="simulation",
+        additional_env=agnocast_env,
+    )
     start_simulation = RegisterEventHandler(
         OnProcessExit(
             target_action=pre_process,
@@ -59,8 +76,13 @@ def launch_setup(context: LaunchContext) -> list:
         )
     )
     log_args = LogInfo(msg=f"{arguments=}")
+    log_agnocast = LogInfo(
+        msg="perception replay sets ENABLE_AGNOCAST=0"
+        if agnocast_env
+        else "simulation keeps the inherited ENABLE_AGNOCAST"
+    )
 
-    return [log_args, pre_process, start_simulation, start_post_process]
+    return [log_args, log_agnocast, pre_process, start_simulation, start_post_process]
 
 
 def generate_launch_description() -> LaunchDescription:
