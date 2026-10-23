@@ -208,11 +208,11 @@ time_offset:
 
 ```yaml
 autoware_args:
-  sensing: bool
-  perception: bool
-  localization: bool
-  planning: bool
-  control: bool
+  sensing: str
+  perception: str
+  localization: str
+  planning: str
+  control: str
 ```
 
 ### include_use_case

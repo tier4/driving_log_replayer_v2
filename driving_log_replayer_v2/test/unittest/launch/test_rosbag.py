@@ -16,29 +16,34 @@ from unittest.mock import patch
 
 # rosbag.py resolves the package share directory at import time.
 with patch("ament_index_python.packages.get_package_share_directory", return_value="/tmp"):  # noqa: S108
-    from driving_log_replayer_v2.launch.rosbag import component_defined_remap
+    from driving_log_replayer_v2.launch.rosbag import user_defined_remap
 
-CONCATENATED_POINTCLOUD_REMAP = (
-    "/sensing/lidar/concatenated/pointcloud:=/unused/sensing/lidar/concatenated/pointcloud"
-)
-
-
-def test_component_defined_remap_sensing_true() -> None:
-    conf = {"with_autoware": "true", "sensing": "true"}
-    assert component_defined_remap(conf) == [CONCATENATED_POINTCLOUD_REMAP]
+CONCAT_TOPIC = "/sensing/lidar/concatenated/pointcloud"
+CONCAT_REMAP = f"{CONCAT_TOPIC}:=/unused{CONCAT_TOPIC}"
+OTHER_REMAP = "/perception/objects:=/unused/perception/objects"
 
 
-def test_component_defined_remap_sensing_not_set() -> None:
-    # sensing is launched by default
-    conf = {"with_autoware": "true"}
-    assert component_defined_remap(conf) == [CONCATENATED_POINTCLOUD_REMAP]
+def _make_conf(with_autoware: str, sensing: str | None) -> dict:
+    conf = {
+        "with_autoware": with_autoware,
+        "remap_arg": f"{CONCAT_TOPIC},/perception/objects",
+        "remap_profile": "",
+        "publish_profile": "",
+    }
+    if sensing is not None:
+        conf["sensing"] = sensing
+    return conf
 
 
-def test_component_defined_remap_sensing_false() -> None:
-    conf = {"with_autoware": "true", "sensing": "false"}
-    assert component_defined_remap(conf) == []
+def test_user_defined_remap_sensing_true() -> None:
+    assert user_defined_remap(_make_conf("true", "true")) == [CONCAT_REMAP, OTHER_REMAP]
 
 
-def test_component_defined_remap_without_autoware() -> None:
-    conf = {"with_autoware": "false", "sensing": "true"}
-    assert component_defined_remap(conf) == []
+def test_user_defined_remap_sensing_false_excludes_concat() -> None:
+    assert user_defined_remap(_make_conf("true", "false")) == [OTHER_REMAP]
+
+
+def test_user_defined_remap_without_autoware_keeps_concat() -> None:
+    # sensing is not evaluated when autoware is not launched
+    assert user_defined_remap(_make_conf("false", None)) == [CONCAT_REMAP, OTHER_REMAP]
+    assert user_defined_remap(_make_conf("false", "false")) == [CONCAT_REMAP, OTHER_REMAP]

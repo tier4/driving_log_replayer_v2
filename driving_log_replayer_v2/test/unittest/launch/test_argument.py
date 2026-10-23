@@ -35,13 +35,16 @@ def test_check_launch_component_without_autoware() -> None:
 def test_check_launch_component_default() -> None:
     # diagnostics has no AUTOWARE_DISABLE
     conf = _make_conf("diagnostics", {})
-    assert check_launch_component(conf) == {
+    expected = {
         "sensing": "true",
         "localization": "true",
         "perception": "true",
         "planning": "true",
         "control": "true",
     }
+    assert check_launch_component(conf) == expected
+    # default values are also stored in conf
+    assert {k: conf[k] for k in expected} == expected
 
 
 def test_check_launch_component_scenario_bool_to_str() -> None:
@@ -51,9 +54,9 @@ def test_check_launch_component_scenario_bool_to_str() -> None:
     assert result["planning"] == "true"
     assert conf["sensing"] == "false"
     assert conf["planning"] == "true"
-    # not specified
+    # not specified: default value is also stored in conf
     assert result["control"] == "true"
-    assert "control" not in conf
+    assert conf["control"] == "true"
 
 
 def test_check_launch_component_scenario_over_launch_config() -> None:

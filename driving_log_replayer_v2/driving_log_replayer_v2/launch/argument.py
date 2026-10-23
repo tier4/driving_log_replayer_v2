@@ -86,6 +86,7 @@ def check_launch_component(conf: dict) -> dict:
                 conf[component] = arg_disable[component]
         # default setting is true if not set by CLI argument, scenario file, or launch_config.py
         launch_component[component] = conf.get(component, "true")
+        conf[component] = launch_component[component]  # update conf with default value
     return launch_component
 
 
