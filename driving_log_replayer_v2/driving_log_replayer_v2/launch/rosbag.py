@@ -86,7 +86,11 @@ def user_defined_remap(conf: dict) -> list[str]:
 
     for topic in user_remap_topics:
         if topic.startswith("/"):
-            if conf["with_autoware"] == "true" and conf["sensing"] == "false" and topic == "/sensing/lidar/concatenated/pointcloud":
+            if (
+                conf["with_autoware"] == "true"
+                and conf["sensing"] == "false"
+                and topic == "/sensing/lidar/concatenated/pointcloud"
+            ):
                 continue  # when sensing is disabled, use the rosbag topic
             user_remap_str = remap_str(topic)
             if user_remap_str not in remap_list:
