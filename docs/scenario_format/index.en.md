@@ -45,6 +45,7 @@ Evaluation:
         GoalPose: Dictionary # optional; omit this key or use {} to disable the pose
         goal_method: String # optional, default: set_goal_from_scenario
         time_offset: Dictionary # optional, default: {}
+        autoware_args: Dictionary # optional, default: {}
 include_use_case:
   UseCaseName: String
   UseCaseFormatVersion: String
@@ -194,6 +195,25 @@ GoalPose:
 time_offset:
   start: float # the start time [s]
   duration: float # the duration [s]
+```
+
+#### autoware_args
+
+(Optional) Specify which Autoware components to launch or not. `true` launches the component and `false` does not. Components that are not specified follow the use case setting (`AUTOWARE_DISABLE`); if that is not set either, the component is launched. Place it at the same level as `GoalPose` in the dataset section of the scenario YAML.
+
+The priority is as follows.
+
+1. CLI arguments (e.g. `sensing:=false`)
+2. `autoware_args` in the scenario
+3. Use case setting (`AUTOWARE_DISABLE` in `launch/<use_case>.py`)
+
+```yaml
+autoware_args:
+  sensing: bool
+  perception: bool
+  localization: bool
+  planning: bool
+  control: bool
 ```
 
 ### include_use_case

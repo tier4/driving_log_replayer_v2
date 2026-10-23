@@ -198,7 +198,13 @@ time_offset:
 
 #### autoware_args
 
-(オプション) autowareで起動する/しないコンポーネントを指定する。優先順位は CLI arguments > scenario arguments > launch_config.py
+（オプション）Autowareで起動する/しないコンポーネントを指定する。`true` で起動し、`false` で起動しない。未指定のコンポーネントは、use_caseごとの設定（`AUTOWARE_DISABLE`）に従う。それも無い場合は起動する。シナリオYAMLのデータセットセクションで `GoalPose` と同じ階層に配置する。
+
+優先順位は次の通り。
+
+1. CLIの引数（`sensing:=false` など）
+2. シナリオの `autoware_args`
+3. use_caseごとの設定（`launch/<use_case>.py` の `AUTOWARE_DISABLE`）
 
 ```yaml
 autoware_args:
