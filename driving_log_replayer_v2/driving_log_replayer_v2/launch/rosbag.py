@@ -72,6 +72,13 @@ def user_defined_publish(conf: dict) -> list[str]:
     return publish_list
 
 
+def component_defined_remap(conf: dict) -> list[str]:
+    remap_list = []
+    if conf["with_autoware"] == "true" and conf.get("sensing", "true") == "true":
+        add_remap("/sensing/lidar/concatenated/pointcloud", remap_list)
+    return remap_list
+
+
 def user_defined_remap(conf: dict) -> list[str]:
     remap_list = []
     # user defined remap
@@ -164,6 +171,7 @@ def launch_bag_player(
     remap_list = ["--remap"]
     remap_list.extend(system_defined_remap(conf))
     remap_list.extend(user_defined_remap(conf))
+    remap_list.extend(component_defined_remap(conf))
     if len(remap_list) != 1:
         play_cmd.extend(remap_list)
     bag_player = (

@@ -74,13 +74,18 @@ def check_launch_component(conf: dict) -> dict:
     if callable(arg_disable):
         arg_disable = arg_disable(conf)
     # update autoware component launch or not
-    autoware_components = ["sensing", "localization", "perception", "planning", "control"]
     launch_component = {}
+    autoware_components = ["sensing", "localization", "perception", "planning", "control"]
+    # priority: argument > scenario file > launch_config.py
+    scenario_autoware_args = json.loads(conf["scenario_autoware_args"])
     for component in autoware_components:
-        # argument has higher priority than the launch_config.py setting.
-        if conf.get(component) is None and arg_disable.get(component) is not None:
-            conf[component] = arg_disable[component]
-        launch_component[component] = conf.get(component, "true")  # only for logging
+        if conf.get(component) is None:  # not set by CLI argument
+            if component in scenario_autoware_args:
+                conf[component] = str(scenario_autoware_args[component]).lower()
+            elif arg_disable.get(component) is not None:
+                conf[component] = arg_disable[component]
+        # default setting is true if not set by CLI argument, scenario file, or launch_config.py
+        launch_component[component] = conf.get(component, "true")
     return launch_component
 
 
@@ -242,6 +247,7 @@ def update_conf_with_dataset_info(
     conf["goal_pose"] = json.dumps(dataset_info.get("GoalPose", {}))
     conf["goal_method"] = dataset_info.get("goal_method", "set_goal_from_scenario")
     conf["time_offset"] = json.dumps(dataset_info.get("time_offset", {}))
+    conf["scenario_autoware_args"] = json.dumps(dataset_info.get("autoware_args", {}))
     conf["t4_dataset_path"] = t4_dataset_path.as_posix()
     if "vehicle_model" not in conf:
         conf["vehicle_model"] = yaml_obj["VehicleModel"]

@@ -45,6 +45,7 @@ Evaluation:
         GoalPose: Dictionary # optional, 省略時は {} として扱われる (無効化する場合はキーを省略するか {} を指定すること)
         goal_method: String # optional, default: set_goal_from_scenario
         time_offset: Dictionary # optional, default: {}
+        autoware_args: Dictionary # optional, default: {}
 include_use_case:
   UseCaseName: String
   UseCaseFormatVersion: String
@@ -193,6 +194,19 @@ GoalPose:
 time_offset:
   start: float # rosbag再生開始時刻 [s]
   duration: float # rosbag再生時間 [s]
+```
+
+#### autoware_args
+
+(オプション) autowareで起動する/しないコンポーネントを指定する。優先順位は CLI arguments > scenario arguments > launch_config.py
+
+```yaml
+autoware_args:
+  sensing: bool
+  perception: bool
+  localization: bool
+  planning: bool
+  control: bool
 ```
 
 ### include_use_case
