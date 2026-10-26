@@ -22,6 +22,9 @@ publish:
   - /localization/acceleration
   - /localization/kinematic_state
   - /tf
+  # perception (for collision_detector)
+  - /perception/object_recognition/objects
+  - /perception/obstacle_segmentation/pointcloud
   # system / mrm
   - /system/emergency/control_cmd
   - /system/emergency/gear_cmd

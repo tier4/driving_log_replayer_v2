@@ -1,0 +1,25 @@
+# This publishing topics is to test control_validator and collision_detector only with the E2E planner's (diffusion planner) trajectory and the control outputs in the rosbag
+# Note this config should be used with `planning:=false`, `control:=false` and `with_optional_nodes:=control_validator,collision_detector`
+publish:
+  # planning outputs
+  - /planning/trajectory # not remapped, it is the input of control_validator
+  - /planning/mission_planning/route
+
+  # control outputs (inputs of control_validator)
+  - /control/command/control_cmd
+  - /control/trajectory_follower/lateral/predicted_trajectory
+
+  # vehicle
+  - /vehicle/status/steering_status
+  - /vehicle/status/velocity_status
+  - /vehicle/status/control_mode
+  - /vehicle/status/gear_status
+  # localization
+  - /localization/acceleration
+  - /localization/kinematic_state
+  - /tf
+  # perception (for collision_detector)
+  - /perception/object_recognition/objects
+  - /perception/obstacle_segmentation/pointcloud
+  # other
+  - /api/operation_mode/state
