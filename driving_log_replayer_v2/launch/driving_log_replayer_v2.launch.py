@@ -36,11 +36,15 @@ def parse_launch_arguments(context: LaunchContext) -> list:
 def simulation_env(context: LaunchContext) -> dict[str, str] | None:
     # Perception replay publishes full LiDAR scans. With Agnocast each of those
     # processes maps a private shm pool, and the Evaluator container's /dev/shm
-    # cannot back those writes (SIGBUS in the nebula containers). The same
-    # scenarios pass with Agnocast off, which keeps the clouds on the normal heap
-    # and uses the CPU preprocessor. Vehicle runs are unchanged.
+    # cannot back those writes (SIGBUS in the nebula containers). Keep Agnocast
+    # off and run the per-LiDAR CUDA preprocessor instead of the CPU one, whose
+    # empty clouds drop nearby PCOff objects. Concatenation stays on the CPU.
+    # Vehicle runs are unchanged.
     if context.launch_configurations.get("use_case") == "perception":
-        return {"ENABLE_AGNOCAST": "0"}
+        return {
+            "ENABLE_AGNOCAST": "0",
+            "USE_CUDA_POINTCLOUD_PREPROCESSOR": "1",
+        }
     return None
 
 
@@ -77,9 +81,11 @@ def launch_setup(context: LaunchContext) -> list:
     )
     log_args = LogInfo(msg=f"{arguments=}")
     log_agnocast = LogInfo(
-        msg="perception replay sets ENABLE_AGNOCAST=0"
-        if agnocast_env
-        else "simulation keeps the inherited ENABLE_AGNOCAST"
+        msg=(
+            "perception replay sets ENABLE_AGNOCAST=0 and USE_CUDA_POINTCLOUD_PREPROCESSOR=1"
+            if agnocast_env
+            else "simulation keeps the inherited ENABLE_AGNOCAST"
+        )
     )
 
     return [log_args, log_agnocast, pre_process, start_simulation, start_post_process]
