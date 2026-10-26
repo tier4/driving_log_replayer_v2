@@ -1,5 +1,3 @@
-#!/usr/bin/env python3
-
 # Copyright (c) 2023 TIER IV.inc
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -14,15 +12,13 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import logging
-from os.path import expandvars
+from __future__ import annotations
+
 from pathlib import Path
+import pickle
 import sys
 from typing import TYPE_CHECKING
 
-from autoware_perception_msgs.msg import TrafficLightGroup
-from autoware_perception_msgs.msg import TrafficLightGroupArray
-from geometry_msgs.msg import TransformStamped
 import lanelet2  # noqa
 from lanelet2.core import BasicPoint2d
 from lanelet2.core import LineString3d
@@ -30,76 +26,78 @@ from lanelet2.geometry import distance
 from lanelet2.geometry import to2D
 from perception_eval.common.object2d import DynamicObject2D
 from perception_eval.common.schema import FrameID
-from perception_eval.common.transform import TransformDict
 from perception_eval.config import PerceptionEvaluationConfig
-from perception_eval.evaluation.metrics import MetricsScore
 from perception_eval.evaluation.result.perception_frame_config import CriticalObjectFilterConfig
 from perception_eval.evaluation.result.perception_frame_config import PerceptionPassFailConfig
 from perception_eval.manager import PerceptionEvaluationManager
 from perception_eval.tool import PerceptionAnalyzer2D
-from perception_eval.util.logger_config import configure_logger
-import rclpy
-from std_msgs.msg import String
 
-from driving_log_replayer_v2.evaluator import DLREvaluatorV2
-from driving_log_replayer_v2.evaluator import evaluator_main
 from driving_log_replayer_v2.lanelet2_util import load_map
-import driving_log_replayer_v2.perception_eval_conversions as eval_conversions
-from driving_log_replayer_v2.traffic_light import FailResultHolder
-from driving_log_replayer_v2.traffic_light import get_traffic_light_label_str
-from driving_log_replayer_v2.traffic_light import TrafficLightResult
-from driving_log_replayer_v2.traffic_light import TrafficLightScenario
+from driving_log_replayer_v2.post_process.evaluator import Evaluator
+from driving_log_replayer_v2.post_process.evaluator import FrameResult
+from driving_log_replayer_v2.post_process.evaluator import InvalidReason
+from driving_log_replayer_v2.traffic_light.models import FailResultHolder
+from driving_log_replayer_v2.traffic_light.models import get_traffic_light_label_str
 
 if TYPE_CHECKING:
+    from autoware_perception_msgs.msg import TrafficLightGroup
+    from geometry_msgs.msg import TransformStamped
+    from perception_eval.common.transform import TransformDict
+    from perception_eval.evaluation.metrics import MetricsScore
     from perception_eval.evaluation.result.perception_frame_result import PerceptionFrameResult
 
+    from driving_log_replayer_v2.post_process.evaluation_manager import IgnoreFrames
+    from driving_log_replayer_v2.post_process.runner import ConvertedData
+    from driving_log_replayer_v2.traffic_light.runner import TrafficLightData
 
-class TrafficLightEvaluator(DLREvaluatorV2):
-    def __init__(self, name: str) -> None:
-        super().__init__(
-            name,
-            TrafficLightScenario,
-            TrafficLightResult,
-            "/driving_log_replayer/traffic_light/results",
+
+class TrafficLightInvalidReason(InvalidReason):
+    NO_GROUND_TRUTH = "No Ground Truth"
+
+
+class TrafficLightEvaluator(Evaluator):
+    def __init__(
+        self,
+        perception_evaluation_config: dict,
+        critical_object_filter_config: dict,
+        perception_pass_fail_config: dict,
+        t4_dataset_path: str,
+        result_archive_path: str,
+        evaluation_topic: str,
+        ignore_frames: IgnoreFrames,
+    ) -> None:
+        super().__init__(result_archive_path, evaluation_topic)
+        self.__ignore_frames = ignore_frames  # not use yet
+        self._result_archive_w_topic_path = Path(result_archive_path).joinpath(
+            evaluation_topic.lstrip("/").replace("/", ".")
         )
-        self._scenario: TrafficLightScenario
-        self._result: TrafficLightResult
 
-        self.declare_parameter("map_path", "")
-        map_path = Path(
-            expandvars(
-                self.get_parameter("map_path").get_parameter_value().string_value,
-            ),
-            "lanelet2_map.osm",
-        ).as_posix()
+        map_path = Path(t4_dataset_path, "map", "lanelet2_map.osm").as_posix()
         self.__lanelet_map = load_map(map_path)
-        self.fail_result_holder = FailResultHolder(self._perception_eval_log_path)
+        self.fail_result_holder = FailResultHolder(self._result_archive_w_topic_path)
 
-        self.__p_cfg = self._scenario.Evaluation.PerceptionEvaluationConfig
-        self.__c_cfg = self._scenario.Evaluation.CriticalObjectFilterConfig
-        self.__f_cfg = self._scenario.Evaluation.PerceptionPassFailConfig
+        self.__p_cfg = perception_evaluation_config
+        self.__c_cfg = critical_object_filter_config
+        self.__f_cfg = perception_pass_fail_config
         self.__evaluation_task = self.__p_cfg["evaluation_config_dict"]["evaluation_task"]
         self.__p_cfg["evaluation_config_dict"]["label_prefix"] = "traffic_light"
         self.__p_cfg["evaluation_config_dict"]["count_label_number"] = True
         self.__camera_type: str = self.__p_cfg["camera_type"]
         if not self.check_evaluation_task():
-            rclpy.shutdown()
+            err_msg = f"Unexpected evaluation task: {self.__evaluation_task}"
+            raise ValueError(err_msg)
 
         evaluation_config: PerceptionEvaluationConfig = PerceptionEvaluationConfig(
-            dataset_paths=self._t4_dataset_paths,
+            dataset_paths=[t4_dataset_path],
             frame_id=self.__camera_type,
             result_root_directory=Path(
-                self._perception_eval_log_path,
+                self._result_archive_w_topic_path,
+                "perception_eval_log",
                 "result",
                 "{TIME}",
             ).as_posix(),
             evaluation_config_dict=self.__p_cfg["evaluation_config_dict"],
             load_raw_data=False,
-        )
-        _ = configure_logger(
-            log_file_directory=evaluation_config.log_directory,
-            console_log_level=logging.INFO,
-            file_log_level=logging.INFO,
         )
         # どれを注目物体とするかのparam
         self.__critical_object_filter_config: CriticalObjectFilterConfig = (
@@ -116,29 +114,20 @@ class TrafficLightEvaluator(DLREvaluatorV2):
         self.__evaluator = PerceptionEvaluationManager(
             evaluation_config=evaluation_config,
         )
-        self.__sub_traffic_signals = self.create_subscription(
-            TrafficLightGroupArray,
-            self._scenario.Evaluation.degradation_topic
-            if self._scenario.Evaluation.degradation_topic is not None
-            else "/perception/traffic_light_recognition/traffic_signals",
-            self.traffic_signals_cb,
-            1,
-        )
         self.__skip_counter = 0
 
     def check_evaluation_task(self) -> bool:
         if self.__evaluation_task != "classification2d":
-            self.get_logger().error(
-                f"Unexpected evaluation task: {self.__evaluation_task}",
+            self._logger.error(
+                "Unexpected evaluation task: %s",
+                self.__evaluation_task,
             )
             return False
         return True
 
-    def timer_cb(self) -> None:
-        super().timer_cb(register_shutdown_func=self.write_metrics)
-
-    def write_metrics(self) -> None:
-        self.save_pkl(self.__evaluator.frame_results)
+    def get_final_metrics(self) -> dict:
+        with self._result_archive_w_topic_path.joinpath("scene_result.pkl").open("wb") as f:
+            pickle.dump(self.__evaluator.frame_results, f)
         self.get_final_result()
         score_dict = {}
         conf_mat_dict = {}
@@ -149,10 +138,8 @@ class TrafficLightEvaluator(DLREvaluatorV2):
             score_dict = result.score.to_dict()
         if result.confusion_matrix is not None:
             conf_mat_dict = result.confusion_matrix.to_dict()
-        final_metrics = {"Score": score_dict, "ConfusionMatrix": conf_mat_dict}
-        self._result.set_final_metrics(final_metrics)
         self.fail_result_holder.save()
-        self._result_writer.write_result(self._result)
+        return {"Score": score_dict, "ConfusionMatrix": conf_mat_dict}
 
     def list_dynamic_object_2d_from_ros_msg(
         self,
@@ -170,7 +157,6 @@ class TrafficLightEvaluator(DLREvaluatorV2):
             signal_pos = self.get_traffic_light_pos(
                 signal.traffic_light_group_id, cam2map, map_to_baselink
             )
-            # debug self.get_logger().error(f"{signal_pos=}")
 
             estimated_object = DynamicObject2D(
                 unix_time=unix_time,
@@ -214,8 +200,9 @@ class TrafficLightEvaluator(DLREvaluatorV2):
             p2d = BasicPoint2d(ego_position.x, ego_position.y)
             return self.get_min_traffic_light_distance(traffic_light_obj.trafficLights, p2d)
 
+    @staticmethod
     def get_min_traffic_light_distance(
-        self, traffic_lights: list[LineString3d], p2d: BasicPoint2d
+        traffic_lights: list[LineString3d], p2d: BasicPoint2d
     ) -> tuple[float, float, float, float]:
         min_distance: float = sys.float_info.max
         for tl in traffic_lights:
@@ -224,36 +211,38 @@ class TrafficLightEvaluator(DLREvaluatorV2):
             if cur_distance < min_distance:
                 min_tl = tl
                 min_distance = cur_distance
-        min_tl_center = tuple(
+        min_tl_center = (
             (getattr(min_tl[0], attr) + getattr(min_tl[1], attr)) / 2.0 for attr in ("x", "y", "z")
         )
         return (*min_tl_center, min_distance)
 
-    def traffic_signals_cb(self, msg: TrafficLightGroupArray) -> None:
-        map_to_baselink = self.lookup_transform(msg.stamp)
-        header_timestamp_microsec: int = eval_conversions.unix_time_microsec_from_ros_timestamp(
-            msg.stamp
-        )
+    def evaluate_frame(self, converted_data: ConvertedData) -> FrameResult:
+        data: TrafficLightData = converted_data.data
+        map_to_baselink = data.map_to_baselink
+        header_timestamp_microsec: int = converted_data.header_timestamp
         ground_truth_now_frame = self.__evaluator.get_ground_truth_now_frame(
             header_timestamp_microsec
         )
 
         if ground_truth_now_frame is None:
             self.__skip_counter += 1
-            return
+            return FrameResult(
+                is_valid=False,
+                invalid_reason=TrafficLightInvalidReason.NO_GROUND_TRUTH,
+                skip_counter=self.__skip_counter,
+            )
 
         cam2map = ground_truth_now_frame.transforms[(FrameID.CAM_TRAFFIC_LIGHT, FrameID.MAP)]
 
         for obj in ground_truth_now_frame.objects:
             x, y, z, _ = self.get_traffic_light_pos_and_dist(obj.uuid, map_to_baselink)
-            # _ replace with dist and then self.get_logger().error(f"{dist=}")
             # transform to camera coordinate system
             position = cam2map.inv().transform((x, y, z))
             obj.set_position(position)
 
         estimated_objects = self.list_dynamic_object_2d_from_ros_msg(
             header_timestamp_microsec,
-            msg.traffic_light_groups,
+            data.traffic_light_groups,
             cam2map,
             map_to_baselink,
         )
@@ -264,27 +253,12 @@ class TrafficLightEvaluator(DLREvaluatorV2):
             critical_object_filter_config=self.__critical_object_filter_config,
             frame_pass_fail_config=self.__frame_pass_fail_config,
         )
-        self._result.set_frame(
-            frame_result,
-            self.__skip_counter,
-            DLREvaluatorV2.transform_stamped_with_euler_angle(map_to_baselink),
-        )
         self.fail_result_holder.add_frame(frame_result)
-        res_str = self._result_writer.write_result(self._result)
-        self._pub_result.publish(String(data=res_str))
+        return FrameResult(is_valid=True, data=frame_result, skip_counter=self.__skip_counter)
 
     def get_final_result(self) -> MetricsScore:
         final_metric_score = self.__evaluator.get_scene_result()
 
         # final result
-        logging.info("final metrics result %s", final_metric_score)
+        self._logger.info("final metrics result %s", final_metric_score)
         return final_metric_score
-
-
-@evaluator_main
-def main() -> DLREvaluatorV2:
-    return TrafficLightEvaluator("traffic_light_evaluator")
-
-
-if __name__ == "__main__":
-    main()
