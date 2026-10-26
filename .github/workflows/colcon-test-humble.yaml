@@ -25,12 +25,12 @@ jobs:
       image: ${{ matrix.docker_image }}
     steps:
       - name: Cancel Previous Runs
-        uses: styfle/cancel-workflow-action@85880fa0301c86cca9da44039ee3bb12d3bedbfa # 0.12.1
+        uses: styfle/cancel-workflow-action@0.12.1
         with:
           access_token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Checkout
-        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        uses: actions/checkout@v5.1.0
 
       - name: Search packages in this repository
         id: list_packages
@@ -38,12 +38,12 @@ jobs:
           echo package_list=$(colcon list --names-only | sed -e ':loop; N; $!b loop; s/\n/ /g') >> $GITHUB_OUTPUT
 
       - name: Setup ROS environment
-        uses: ros-tooling/setup-ros@2b7b7e10fd30ff131dfb33248ddd71c5ba31dd30 # 0.7.15
+        uses: ros-tooling/setup-ros@0.7.15
         with:
           required-ros-distributions: ${{ matrix.ros_distribution }}
 
       - name: build and test
-        uses: ros-tooling/action-ros-ci@3a640b10f09b756dabe556dac5413aba369f71b0 # v0.4
+        uses: ros-tooling/action-ros-ci@0.4.8
         id: actions_ros_ci_step
         with:
           package-name: ${{ steps.list_packages.outputs.package_list }}
@@ -62,7 +62,7 @@ jobs:
           colcon-mixin-repository: https://raw.githubusercontent.com/colcon/colcon-mixin-repository/b8436aa16c0bdbc01081b12caa253cbf16e0fb82/index.yaml
 
       - name: Upload Unit Test Output
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        uses: actions/upload-artifact@v4.6.2
         if: ${{ !cancelled() && !github.event.pull_request.head.repo.fork }}
         with:
           name: colcon-logs
@@ -73,7 +73,7 @@ jobs:
         run: sed -E -i 's/^([[:space:]]*<source>[[:space:]]*)(.*\/)(driving_log_replayer_v2\/driving_log_replayer_v2)/\1.\/driving_log_replayer_v2/' /__w/driving_log_replayer_v2/driving_log_replayer_v2/ros_ws/build/driving_log_replayer_v2/pytest_cov/driving_log_replayer_v2/coverage.xml
 
       - name: Upload Coverage File
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        uses: actions/upload-artifact@v4.6.2
         if: ${{ !cancelled() && !github.event.pull_request.head.repo.fork }}
         with:
           name: colcon-logs
@@ -86,7 +86,7 @@ jobs:
           DEBIAN_FRONTEND=noninteractive apt-get install -y unzip
 
       - name: SonarQube Scan
-        uses: SonarSource/sonarqube-scan-action@fd88b7d7ccbaefd23d8f36f73b59db7a3d246602 # v6
+        uses: SonarSource/sonarqube-scan-action@v6.0.0
         if: ${{ !github.event.pull_request.head.repo.fork }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
