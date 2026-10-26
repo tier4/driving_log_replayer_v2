@@ -36,8 +36,8 @@ from driving_log_replayer_v2.lanelet2_util import load_map
 from driving_log_replayer_v2.post_process.evaluator import Evaluator
 from driving_log_replayer_v2.post_process.evaluator import FrameResult
 from driving_log_replayer_v2.post_process.evaluator import InvalidReason
-from driving_log_replayer_v2.traffic_light import FailResultHolder
-from driving_log_replayer_v2.traffic_light import get_traffic_light_label_str
+from driving_log_replayer_v2.traffic_light.models import FailResultHolder
+from driving_log_replayer_v2.traffic_light.models import get_traffic_light_label_str
 
 if TYPE_CHECKING:
     from autoware_perception_msgs.msg import TrafficLightGroup

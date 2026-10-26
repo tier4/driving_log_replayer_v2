@@ -21,7 +21,7 @@ from driving_log_replayer_v2.traffic_light.evaluator import TrafficLightEvaluato
 
 if TYPE_CHECKING:
     from driving_log_replayer_v2.post_process.evaluation_manager import IgnoreFrames
-    from driving_log_replayer_v2.traffic_light import TrafficLightScenario
+    from driving_log_replayer_v2.traffic_light.models import TrafficLightScenario
 
 
 class TrafficLightEvaluationManager(EvaluationManager):

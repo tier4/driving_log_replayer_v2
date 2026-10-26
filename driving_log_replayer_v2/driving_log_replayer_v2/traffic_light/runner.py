@@ -29,9 +29,9 @@ from driving_log_replayer_v2.post_process.ros2_utils import lookup_transform
 from driving_log_replayer_v2.post_process.runner import ConvertedData
 from driving_log_replayer_v2.post_process.runner import Runner
 from driving_log_replayer_v2.post_process.runner import UseCaseInfo
-from driving_log_replayer_v2.traffic_light import TrafficLightResult
-from driving_log_replayer_v2.traffic_light import TrafficLightScenario
 from driving_log_replayer_v2.traffic_light.evaluation_manager import TrafficLightEvaluationManager
+from driving_log_replayer_v2.traffic_light.models import TrafficLightResult
+from driving_log_replayer_v2.traffic_light.models import TrafficLightScenario
 
 if TYPE_CHECKING:
     from autoware_perception_msgs.msg import TrafficLightGroup
