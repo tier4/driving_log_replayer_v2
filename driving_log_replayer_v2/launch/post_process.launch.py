@@ -329,20 +329,17 @@ def post_process(context: LaunchContext) -> list:
     conf = context.launch_configurations
     create_metadata_yaml(conf["result_bag_path"])
 
-    if conf["use_case"] == "localization":
-        process_info = localization(conf)
-    elif conf["use_case"] == "perception":
-        process_info = perception()
-    elif conf["use_case"] == "perception_fp":
-        process_info = perception_fp()
-    elif conf["use_case"] == "ground_segmentation":
-        process_info = ground_segmentation()
-    elif conf["use_case"] == "traffic_light":
-        process_info = traffic_light()
-    elif conf["use_case"] == "planning_control":
-        process_info = planning_control(conf)
-    elif conf["use_case"] == "time_step_based_trajectory":
-        process_info = time_step_based_trajectory(conf)
+    use_case_process = {
+        "localization": lambda: localization(conf),
+        "perception": perception,
+        "perception_fp": perception_fp,
+        "ground_segmentation": ground_segmentation,
+        "traffic_light": traffic_light,
+        "planning_control": lambda: planning_control(conf),
+        "time_step_based_trajectory": lambda: time_step_based_trajectory(conf),
+    }
+    if conf["use_case"] in use_case_process:
+        process_info = use_case_process[conf["use_case"]]()
     else:
         process_info = ProcessInfo(
             process_list=[LogInfo(msg=f"{conf['use_case']} does not have specific post process.")],
