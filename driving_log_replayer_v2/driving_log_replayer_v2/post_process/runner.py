@@ -26,6 +26,7 @@ from typing_extensions import Self
 
 from driving_log_replayer_v2.post_process.evaluation_manager import ManagerType
 from driving_log_replayer_v2.post_process.evaluator import FrameResult
+from driving_log_replayer_v2.post_process.ros2_utils import get_header
 from driving_log_replayer_v2.post_process.ros2_utils import RosBagManager
 from driving_log_replayer_v2.result import MultiResultEditor
 from driving_log_replayer_v2.result import ResultBaseType
@@ -283,8 +284,7 @@ class Runner(ABC):
                 topic_name, msg, subscribed_timestamp_nanosec
             )
             if topic_name in self._degradation_topics:
-                # some messages such as TrafficLightGroupArray have stamp instead of header
-                header = msg.header if hasattr(msg, "header") else Header(stamp=msg.stamp)
+                header = get_header(msg)
                 self._write_result(frame_result, header, subscribed_timestamp_nanosec)
         self._evaluate_on_post_process()
         self._close()
