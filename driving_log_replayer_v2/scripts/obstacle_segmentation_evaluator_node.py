@@ -44,6 +44,7 @@ from std_msgs.msg import String
 from tier4_api_msgs.msg import AwapiAutowareStatus
 from visualization_msgs.msg import MarkerArray
 
+from driving_log_replayer_v2.box_scale import resolve_box_scales
 from driving_log_replayer_v2.evaluation_topic import CONFIG_KEY
 from driving_log_replayer_v2.evaluation_topic import configured_evaluation_topic
 from driving_log_replayer_v2.evaluation_topic import DEFAULT_POINTCLOUD_TOPIC
@@ -172,6 +173,7 @@ class ObstacleSegmentationEvaluator(DLREvaluatorV2):
             file_log_level=logging.INFO,
         )
 
+        self.initialize_box_scales(evaluation_config)
         self.__evaluator = SensingEvaluationManager(evaluation_config=evaluation_config)
 
         self.__latest_stop_reasons: list[dict] = []
@@ -225,6 +227,27 @@ class ObstacleSegmentationEvaluator(DLREvaluatorV2):
         )
         self.__skip_counter = 0
         self.__topic_rate = False
+
+    def initialize_box_scales(self, evaluation_config: SensingEvaluationConfig) -> None:
+        self.__detection_scale, self.__non_detection_box_scale = resolve_box_scales(
+            self._scenario.Evaluation.Conditions, evaluation_config.metrics_params
+        )
+        self.__common_metrics = evaluation_config.metrics_params
+        self.__common_filtering = evaluation_config.filtering_params
+        for name, scale, condition in (
+            ("Detection", self.__detection_scale, self._scenario.Evaluation.Conditions.Detection),
+            (
+                "NonDetection",
+                self.__non_detection_box_scale,
+                self._scenario.Evaluation.Conditions.NonDetection,
+            ),
+        ):
+            override = condition.BoxScale if condition is not None else None
+            sources = {
+                key: "individual" if getattr(override, key, None) is not None else "common"
+                for key in ("box_scale_0m", "box_scale_100m")
+            }
+            self.get_logger().info(f"BoxScale {name}: {scale}, sources={sources}")
 
     def timer_cb(self) -> None:
         super().timer_cb(
@@ -307,6 +330,9 @@ class ObstacleSegmentationEvaluator(DLREvaluatorV2):
         frame_ok, sensing_frame_config = get_sensing_frame_config(
             pcd_header,
             self._scenario,
+            detection_scale=self.__detection_scale,
+            common_filtering=self.__common_filtering,
+            common_metrics=self.__common_metrics,
         )
         if not frame_ok:
             self.__skip_counter += 1
@@ -323,6 +349,7 @@ class ObstacleSegmentationEvaluator(DLREvaluatorV2):
             pointcloud=pointcloud,
             non_detection_areas=non_detection_areas,
             sensing_frame_config=sensing_frame_config,
+            non_detection_box_scale=self.__non_detection_box_scale,
         )
 
         topic_rate, rate_metadata = self.current_topic_rate()

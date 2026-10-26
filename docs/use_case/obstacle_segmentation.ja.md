@@ -155,6 +155,39 @@ clock は、ros2 bag play の--clock オプションによって出力してい�
 
 [サンプル](https://github.com/tier4/driving_log_replayer_v2/blob/develop/sample/obstacle_segmentation/scenario.ja.yaml)参照
 
+
+### Detection／NonDetectionのBoxScale分離
+
+`UseCaseFormatVersion: 0.4.0`では、各条件の`BoxScale`に個別の倍率を指定できます。
+以下は設定の抜粋です。完全な例は[sample](https://github.com/tier4/driving_log_replayer_v2/blob/develop/sample/obstacle_segmentation/scenario_box_scale.yaml)を参照してください。
+
+```yaml
+Evaluation:
+  UseCaseFormatVersion: 0.4.0
+  Conditions:
+    Detection:
+      PassRate: 99.0
+      BoundingBoxConfig: null
+      BoxScale:
+        box_scale_0m: 1.0
+        box_scale_100m: 1.2
+    NonDetection:
+      PassRate: 99.0
+      # ProposedArea is required here, as in the existing scenarios.
+      BoxScale:
+        box_scale_0m: 1.5
+        box_scale_100m: 2.0
+```
+
+- 旧`0.3.0`も使用できます。個別の`BoxScale`を使う場合だけ`0.4.0`へ変更してください。ScenarioFormatVersionの変更は不要です。
+- `BoxScale`の省略／null／`{}`、各値の省略／nullは、それぞれ共通の`SensingEvaluationConfig.evaluation_config_dict`へ戻ります。共通値の省略時は1.0です。片側の倍率を反対側へ流用しません。
+- 個別値は有限の正数のみです。共通倍率への明示的nullはエラーです。0.3.0でnull以外のBoxScaleを指定した場合もエラーです。
+- DetectionはBBox内の点を数える倍率、NonDetectionは正解物体の点を評価領域から除外する倍率です。ProposedArea自体の拡縮ではありません。
+- NonDetectionの2段階の除外には同じ専用倍率を渡します。DetectionのUUID選択や時間帯、条件自体がnullの場合のInvalidは従来どおりです。
+- 倍率は平面形状のみに適用し、高さは変更しません。100m超も線形外挿します。下降する設定では遠方で0以下になり得ます。クランプは行いません。
+- BBox markerは倍率適用前の正解形状のままです。実効倍率と個別／共通の取得元は起動ログに出力します。
+- 対応するperception_eval（BoundingBoxScaleConfigとnon_detection_box_scale引数を含む版）が必要です。旧APIの場合は起動時に明示的に停止し、個別値を無視しません。
+
 ### 評価結果フォーマット
 
 [サンプル](https://github.com/tier4/driving_log_replayer_v2/blob/develop/sample/obstalce_segmentation/result.json)参照

@@ -17,6 +17,7 @@ from dataclasses import dataclass
 from pathlib import Path
 import sys
 from typing import Literal
+from typing import TYPE_CHECKING
 
 from ament_index_python.packages import get_package_share_directory
 from builtin_interfaces.msg import Duration
@@ -33,6 +34,9 @@ from perception_eval.evaluation.sensing.sensing_result import DynamicObjectWithS
 from pydantic import BaseModel
 from pydantic import conlist
 from pydantic import field_validator
+from pydantic import model_serializer
+from pydantic import model_validator
+from pydantic import SerializerFunctionWrapHandler
 import ros2_numpy
 from rosidl_runtime_py import message_to_ordereddict
 from sensor_msgs.msg import PointCloud2
@@ -45,6 +49,8 @@ from visualization_msgs.msg import Marker
 from visualization_msgs.msg import MarkerArray
 import yaml
 
+from driving_log_replayer_v2.box_scale import BoxScaleCondition
+from driving_log_replayer_v2.box_scale import resolve_box_scales
 import driving_log_replayer_v2.perception_eval_conversions as eval_conversions
 from driving_log_replayer_v2.result import EvaluationItem
 from driving_log_replayer_v2.result import ResultBase
@@ -59,6 +65,9 @@ from driving_log_replayer_v2_analyzer.data.obstacle_segmentation import JsonlPar
 from driving_log_replayer_v2_analyzer.plot import PlotBase
 from driving_log_replayer_v2_msgs.msg import ObstacleSegmentationMarker
 from driving_log_replayer_v2_msgs.msg import ObstacleSegmentationMarkerArray
+
+if TYPE_CHECKING:
+    from perception_eval.evaluation.sensing.bounding_box_scale_config import BoundingBoxScaleConfig
 
 
 def get_goal_pose_from_rosbag(path: str) -> PoseStamped:
@@ -120,24 +129,45 @@ class BoundingBoxCondition(BaseModel):
 class DetectionCondition(BaseModel):
     PassRate: number
     BoundingBoxConfig: list[dict[str, BoundingBoxCondition]] | None
+    BoxScale: BoxScaleCondition | None = None
 
 
 class NonDetectionCondition(BaseModel):
     PassRate: number
     ProposedArea: ProposedAreaCondition
+    BoxScale: BoxScaleCondition | None = None
 
 
 class Conditions(BaseModel):
     Detection: DetectionCondition | None
     NonDetection: NonDetectionCondition | None
 
+    @model_serializer(mode="wrap")
+    def serialize_conditions(self, handler: SerializerFunctionWrapHandler) -> dict:
+        serialized = handler(self)
+        # Keep legacy result.jsonl Condition keys when no override was specified.
+        for condition in serialized.values():
+            if isinstance(condition, dict) and condition.get("BoxScale") is None:
+                condition.pop("BoxScale", None)
+        return serialized
+
 
 class Evaluation(BaseModel):
     UseCaseName: Literal["obstacle_segmentation"]
-    UseCaseFormatVersion: Literal["0.3.0"]
+    UseCaseFormatVersion: Literal["0.3.0", "0.4.0"]
     Datasets: list[dict]
     Conditions: Conditions
     SensingEvaluationConfig: dict
+
+    @model_validator(mode="after")
+    def validate_box_scale_version(self) -> "Evaluation":
+        if self.UseCaseFormatVersion == "0.3.0" and any(
+            condition is not None and condition.BoxScale is not None
+            for condition in (self.Conditions.Detection, self.Conditions.NonDetection)
+        ):
+            msg = "BoxScale requires obstacle_segmentation UseCaseFormatVersion: 0.4.0"
+            raise ValueError(msg)
+        return self
 
 
 class ObstacleSegmentationScenario(Scenario):
@@ -275,36 +305,38 @@ def summarize_frame_container(
 def get_sensing_frame_config(
     pcd_header: Header,
     scenario: ObstacleSegmentationScenario,
+    *,
+    detection_scale: "BoundingBoxScaleConfig | None" = None,
+    common_filtering: dict | None = None,
+    common_metrics: dict | None = None,
 ) -> tuple[bool, SensingFrameConfig | None]:
-    detection_config = scenario.Evaluation.Conditions.Detection
-    if detection_config is None:
-        return True, None
-    bbox_conf = detection_config.BoundingBoxConfig
-    if bbox_conf is None:
-        return True, None
-    target_uuids = []
-    for uuid_dict in bbox_conf:
-        for uuid, v in uuid_dict.items():
-            # uuid: str, v: Dict
-            start = v.Start
-            end = v.End
-            if start is None:
-                start = 0.0
-            if end is None:
-                end = sys.float_info.max
-            stamp_float = pcd_header.stamp.sec + (pcd_header.stamp.nanosec / pow(10, 9))
-            if start <= stamp_float <= end:
-                target_uuids.append(uuid)
-    if target_uuids == []:
-        return False, None
     e_conf = scenario.Evaluation.SensingEvaluationConfig["evaluation_config_dict"]
-    sensing_frame_config = SensingFrameConfig(
+    if common_metrics is None:
+        common_metrics = e_conf
+    if common_filtering is None:
+        common_filtering = e_conf
+    if detection_scale is None:
+        detection_scale, _ = resolve_box_scales(scenario.Evaluation.Conditions, common_metrics)
+    detection_config = scenario.Evaluation.Conditions.Detection
+    bbox_conf = detection_config.BoundingBoxConfig if detection_config is not None else None
+    target_uuids = common_filtering.get("target_uuids")
+    if bbox_conf is not None:
+        target_uuids = []
+        for uuid_dict in bbox_conf:
+            for uuid, value in uuid_dict.items():
+                start = 0.0 if value.Start is None else value.Start
+                end = sys.float_info.max if value.End is None else value.End
+                stamp_float = pcd_header.stamp.sec + pcd_header.stamp.nanosec / 1e9
+                if start <= stamp_float <= end:
+                    target_uuids.append(uuid)
+        if not target_uuids:
+            return False, None
+    return True, SensingFrameConfig(
         target_uuids=target_uuids,
-        box_scale_0m=e_conf["box_scale_0m"],
-        box_scale_100m=e_conf["box_scale_100m"],
-        min_points_threshold=e_conf["min_points_threshold"],
+        box_scale_0m=detection_scale.box_scale_0m,
+        box_scale_100m=detection_scale.box_scale_100m,
+        min_points_threshold=common_metrics.get("min_points_threshold", 1),
     )
-    return True, sensing_frame_config
 
 
 def get_proposed_area_list_point_stamped(

@@ -152,6 +152,39 @@ State the information necessary for the evaluation.
 
 See [sample](https://github.com/tier4/driving_log_replayer_v2/blob/develop/sample/obstacle_segmentation/scenario.yaml).
 
+
+### Independent Detection and NonDetection BoxScale
+
+Use obstacle_segmentation `UseCaseFormatVersion: 0.4.0` for per-condition overrides.
+The following excerpt omits other required scenario fields; see `sample/obstacle_segmentation/scenario_box_scale.yaml` for a complete example.
+
+```yaml
+Evaluation:
+  UseCaseFormatVersion: 0.4.0
+  Conditions:
+    Detection:
+      PassRate: 99.0
+      BoundingBoxConfig: null
+      BoxScale:
+        box_scale_0m: 1.0
+        box_scale_100m: 1.2
+    NonDetection:
+      PassRate: 99.0
+      # ProposedArea is required here, as in the existing scenarios.
+      BoxScale:
+        box_scale_0m: 1.5
+        box_scale_100m: 2.0
+```
+
+- Existing 0.3.0 scenarios remain supported. Only scenarios using non-null BoxScale require 0.4.0. ScenarioFormatVersion does not change.
+- Omitted/null/empty BoxScale and omitted/null endpoints fall back independently to the common evaluation_config_dict values (default 1.0). Neither condition inherits the other condition's overrides.
+- Individual values must be finite positive numbers. Null common values and non-null overrides in 0.3.0 are errors.
+- Detection scales the bbox used to count points. NonDetection scales the GT-object exclusion bbox, not ProposedArea. Both exclusion stages receive the same explicit scale.
+- Existing UUID selection, frame-wide time-window skips, disabled conditions, result fields and TopicRate behavior are retained.
+- Scaling affects the footprint only, not height. Linear extrapolation beyond 100m is unchanged, including non-positive extrapolation for decreasing endpoints. There is no clamp.
+- Markers still display unscaled GT boxes. Startup logs show effective endpoints and individual/common sources.
+- The matching perception_eval API (BoundingBoxScaleConfig and non_detection_box_scale) is required. An old API fails explicitly at startup instead of silently ignoring overrides.
+
 ### Evaluation Result Format
 
 See [sample](https://github.com/tier4/driving_log_replayer_v2/blob/develop/sample/obstacle_segmentation/result.json).
