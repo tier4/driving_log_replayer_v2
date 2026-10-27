@@ -8,9 +8,15 @@ on:
     - cron: 0 0 * * 0
   workflow_dispatch:
 
+permissions: {}
+
 jobs:
   colcon-test:
     runs-on: ubuntu-latest
+    permissions:
+      actions: write # styfle/cancel-workflow-action
+      contents: read
+      pull-requests: read # SonarQube PR decoration
     # PEP 668: for rosdep pip rules
     # https://docs.ros.org/en/independent/api/rosdep/html/pip_and_pep_668.html
     env:
@@ -35,6 +41,8 @@ jobs:
 
       - name: Checkout
         uses: actions/checkout@v5.1.0
+        with:
+          persist-credentials: false
 
       - name: Search packages in this repository
         id: list_packages

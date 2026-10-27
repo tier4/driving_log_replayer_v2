@@ -45,6 +45,7 @@ Evaluation:
         GoalPose: Dictionary # optional, 省略時は {} として扱われる (無効化する場合はキーを省略するか {} を指定すること)
         goal_method: String # optional, default: set_goal_from_scenario
         time_offset: Dictionary # optional, default: {}
+        autoware_args: Dictionary # optional, default: {}
 include_use_case:
   UseCaseName: String
   UseCaseFormatVersion: String
@@ -193,6 +194,25 @@ GoalPose:
 time_offset:
   start: float # rosbag再生開始時刻 [s]
   duration: float # rosbag再生時間 [s]
+```
+
+#### autoware_args
+
+（オプション）Autowareで起動する/しないコンポーネントを指定する。`true` で起動し、`false` で起動しない。未指定のコンポーネントは、use_caseごとの設定（`AUTOWARE_DISABLE`）に従う。それも無い場合は起動する。シナリオYAMLのデータセットセクションで `GoalPose` と同じ階層に配置する。
+
+優先順位は次の通り。
+
+1. CLIの引数（`sensing:=false` など）
+2. シナリオの `autoware_args`
+3. use_caseごとの設定（`launch/<use_case>.py` の `AUTOWARE_DISABLE`）
+
+```yaml
+autoware_args:
+  sensing: str
+  perception: str
+  localization: str
+  planning: str
+  control: str
 ```
 
 ### include_use_case

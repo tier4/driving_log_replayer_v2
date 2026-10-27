@@ -4,12 +4,18 @@ on:
   pull_request:
   workflow_dispatch:
 
+permissions: {}
+
 jobs:
   pre-commit:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     steps:
       - name: Checkout repository
         uses: actions/checkout@v5.1.0
+        with:
+          persist-credentials: false
       - name: Setup Python
         uses: actions/setup-python@v6.3.0
         with:
