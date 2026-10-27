@@ -1,5 +1,16 @@
 # Release Notes
 
+## Version 3.19.0
+
+Major changes
+
+| Module          | Feature      | Brief summary                                     | Pull request                                                        | Contributor                                   |
+| --------------- | ------------ | ------------------------------------------------- | ------------------------------------------------------------------- | --------------------------------------------- |
+| `common`        | ci           | remove unnecessary file                           | [#439](https://github.com/tier4/driving_log_replayer_v2/issues/439) | [MasatoSaeki](https://github.com/MasatoSaeki) |
+| `common`        | ci           | update the autoware_msgs for new perception label | [#438](https://github.com/tier4/driving_log_replayer_v2/issues/438) | [MasatoSaeki](https://github.com/MasatoSaeki) |
+| `common`        | scenario     | add new key `autoware_args` in scenario file      | [#426](https://github.com/tier4/driving_log_replayer_v2/issues/426) | [MasatoSaeki](https://github.com/MasatoSaeki) |
+| `traffic_light` | post-process | run traffic light evaluation in post process      | [#427](https://github.com/tier4/driving_log_replayer_v2/issues/427) | [interimadd](https://github.com/interimadd)   |
+
 ## Version 3.18.17
 
 Minor Tweak

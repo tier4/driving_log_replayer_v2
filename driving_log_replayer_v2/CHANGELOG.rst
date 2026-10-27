@@ -2,6 +2,15 @@
 Changelog for package driving_log_replayer
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
+3.19.0 (2026-10-28)
+-------------------
+* fix: remove unnecessary file (`#439 <https://github.com/tier4/driving_log_replayer_v2/issues/439>`_)
+* fix(ci): update the autoware_msgs for new perception label (`#438 <https://github.com/tier4/driving_log_replayer_v2/issues/438>`_)
+* feat(scenario): add new key `autoware_args` in scenario file (`#426 <https://github.com/tier4/driving_log_replayer_v2/issues/426>`_)
+* feat(traffic_light): run traffic light evaluation in post process (`#427 <https://github.com/tier4/driving_log_replayer_v2/issues/427>`_)
+  Co-authored-by: Claude Opus 5.5 <noreply@anthropic.com>
+* Contributors: Masato Saeki, Takahisa Ishikawa
+
 3.18.17 (2026-10-14)
 --------------------
 * refactor(camera_2d_detector): run the 2D detector from autoware_single_camera_2d_detection_launch (`#421 <https://github.com/tier4/driving_log_replayer_v2/issues/421>`_)
