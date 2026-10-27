@@ -74,14 +74,33 @@ Because `true` is a setting that recognition results are sent from another compu
 
 Launching the file executes the following steps:
 
-1. Execute launch of evaluation node (`traffic_light_evaluator_node`), `logging_simulator.launch` file and `ros2 bag play` command
+1. Launch the commands `logging_simulator.launch` and `ros2 bag play`.
 2. Autoware receives sensor data output from input rosbag and outputs camera, and the perception module performs recognition.
-3. The evaluation node subscribes to `/perception/traffic_light_recognition/traffic_signals` and evaluates data. The result is dumped into a file.
-4. When the playback of the rosbag is finished, Autoware's launch is automatically terminated, and the evaluation is completed.
+3. Record the output topics in the bag file.
+4. After rosbag playback is finished, parse the saved rosbag one message at a time and evaluate the target topic with perception_eval. The result is dumped into a file.
+
+You set the target topic with `degradation_topic` in the scenario. If you omit it, `/perception/traffic_light_recognition/traffic_signals` is evaluated.
+
+### Evaluation of a recorded rosbag
+
+You can also evaluate a recorded rosbag without a simulation.
+The rosbag must contain the target topic and `/tf` with the transform from map to base_link.
+
+```shell
+python3 -m driving_log_replayer_v2.traffic_light.runner \
+  --scenario-path <scenario.yaml> \
+  --rosbag-dir-path <rosbag to evaluate> \
+  --t4-dataset-path <t4_dataset> \
+  --result-jsonl-path <output_dir>/result.jsonl \
+  --result-archive-path <output_dir>/result_archive \
+  --storage mcap
+```
+
+If you set `--degradation-topic`, it has priority over `degradation_topic` in the scenario.
 
 ## Evaluation results
 
-The results are calculated for each subscription. The format and available states are described below.
+The results are calculated for each message of the target topic. The format and available states are described below.
 
 ### Perception Normal
 
@@ -94,19 +113,20 @@ When the following conditions are satisfied by executing the evaluation function
 
 The perception evaluation output is marked as `Error` when condition for `Normal` is not met.
 
-## Topic name and data type used by evaluation node
+## Topic name and data type used by evaluation
 
-Subscribed topics:
+Topics read for the evaluation:
 
-| Topic name                                            | Data type                                    |
-| ----------------------------------------------------- | -------------------------------------------- |
-| /perception/traffic_light_recognition/traffic_signals | tier4_perception_msgs/msg/TrafficSignalArray |
+| Topic name                                                                           | Data type                                           |
+| ------------------------------------------------------------------------------------ | --------------------------------------------------- |
+| `degradation_topic` (default: /perception/traffic_light_recognition/traffic_signals) | autoware_perception_msgs/msg/TrafficLightGroupArray |
+| /tf                                                                                  | tf2_msgs/msg/TFMessage                              |
 
-Published topics:
+Topics written to the result rosbag:
 
-| Topic name | Data type |
-| ---------- | --------- |
-| -          | -         |
+| Topic name                                     | Data type           |
+| ---------------------------------------------- | ------------------- |
+| /driving_log_replayer_v2/traffic_light/results | std_msgs/msg/String |
 
 ## Arguments passed to logging_simulator.launch
 
@@ -125,8 +145,8 @@ The perception evaluation step bases on the [perception_eval](https://github.com
 `driving_log_replayer_v2` package is in charge of the connection with ROS. The actual perception evaluation is conducted in [perception_eval](https://github.com/tier4/autoware_perception_evaluation) library.
 The [perception_eval](https://github.com/tier4/autoware_perception_evaluation) is a ROS-independent library, it cannot receive ROS objects. Also, ROS timestamps use nanoseconds while the `t4_dataset` format is based on milliseconds (because it uses `nuScenes`), so the values must be properly converted before using the library's functions.
 
-`driving_log_replayer_v2` subscribes the topic output from the perception module of Autoware, converts it to the data format defined in [perception_eval](https://github.com/tier4/autoware_perception_evaluation), and passes it on.
-It is also responsible for publishing and visualizing the evaluation results from [perception_eval](https://github.com/tier4/autoware_perception_evaluation) on proper ROS topic.
+`driving_log_replayer_v2` reads the topic output from the perception module of Autoware from the recorded rosbag, converts it to the data format defined in [perception_eval](https://github.com/tier4/autoware_perception_evaluation), and passes it on.
+It also writes the evaluation results from [perception_eval](https://github.com/tier4/autoware_perception_evaluation) to the result rosbag as a ROS topic.
 
 [perception_eval](https://github.com/tier4/autoware_perception_evaluation) is in charge of the part that compares the detection results passed from `driving_log_replayer_v2` with ground truth data, calculates the index, and outputs the results.
 
@@ -302,6 +322,7 @@ Since one rosbag, i.e., one `t4_dataset`, requires one launch, it is necessary t
 
 Since database evaluation cannot be done in a single launch, perception outputs a file `scene_result.pkl` in addition to `result.jsonl` file.
 A pickle file is a python object saved as a file, PerceptionEvaluationManager.frame_results of [perception_eval](https://github.com/tier4/autoware_perception_evaluation).
+The file is saved as `result_archive/<target topic name with / replaced by .>/scene_result.pkl`. The same directory also contains `fail_info.json`, which lists the failed frames.
 The dataset evaluation can be performed by reading all the objects recorded in the pickle file and outputting the index of the dataset's average.
 
 ### Result file of database evaluation

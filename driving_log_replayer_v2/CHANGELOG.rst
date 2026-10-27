@@ -2,6 +2,73 @@
 Changelog for package driving_log_replayer
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
+3.19.0 (2026-10-28)
+-------------------
+* fix: remove unnecessary file (`#439 <https://github.com/tier4/driving_log_replayer_v2/issues/439>`_)
+* fix(ci): update the autoware_msgs for new perception label (`#438 <https://github.com/tier4/driving_log_replayer_v2/issues/438>`_)
+* feat(scenario): add new key `autoware_args` in scenario file (`#426 <https://github.com/tier4/driving_log_replayer_v2/issues/426>`_)
+* feat(traffic_light): run traffic light evaluation in post process (`#427 <https://github.com/tier4/driving_log_replayer_v2/issues/427>`_)
+  Co-authored-by: Claude Opus 5.5 <noreply@anthropic.com>
+* Contributors: Masato Saeki, Takahisa Ishikawa
+
+3.18.17 (2026-10-14)
+--------------------
+* refactor(camera_2d_detector): run the 2D detector from autoware_single_camera_2d_detection_launch (`#421 <https://github.com/tier4/driving_log_replayer_v2/issues/421>`_)
+  Co-authored-by: Claude Opus 5.5 <noreply@anthropic.com>
+* Contributors: badai nguyen
+
+3.18.16 (2026-10-14)
+--------------------
+* feat(perception): write driving-aware metric outputs to the result archive (`#420 <https://github.com/tier4/driving_log_replayer_v2/issues/420>`_)
+  Co-authored-by: Claude Fable 5.1 <noreply@anthropic.com>
+* feat(perception): pass existence_probability to perception_eval (`#419 <https://github.com/tier4/driving_log_replayer_v2/issues/419>`_)
+  Co-authored-by: Claude Fable 5.1 <noreply@anthropic.com>
+* Contributors: lei.gu
+
+3.18.15 (2026-10-06)
+--------------------
+* fix: publish_topic_from_rosbag crash and 2d detector color map param (`#416 <https://github.com/tier4/driving_log_replayer_v2/issues/416>`_)
+  Co-authored-by: Claude Opus 5.5 <noreply@anthropic.com>
+  Co-authored-by: lei.gu <lei.gu@tier4.jp>
+* Contributors: badai nguyen
+
+3.18.14 (2026-09-17)
+--------------------
+* feat: record all objects in perception (`#413 <https://github.com/tier4/driving_log_replayer_v2/issues/413>`_)
+* Contributors: Masato Saeki
+
+3.18.13 (2026-09-17)
+--------------------
+* chore: apply ci and fix test (`#410 <https://github.com/tier4/driving_log_replayer_v2/issues/410>`_)
+* feat(perception): allow ignoring frames by their position with first:N / last:N (`#403 <https://github.com/tier4/driving_log_replayer_v2/issues/403>`_)
+  Co-authored-by: Claude Opus 5 (1M context) <noreply@anthropic.com>
+  Co-authored-by: MasatoSaeki <masato.saeki@tier4.jp>
+* feat(perception): report why a frame was skipped and how much ground truth was evaluated (`#402 <https://github.com/tier4/driving_log_replayer_v2/issues/402>`_)
+  Co-authored-by: Claude Opus 5 (1M context) <noreply@anthropic.com>
+  Co-authored-by: MasatoSaeki <masato.saeki@tier4.jp>
+* fix(camera_2d_detector): pass roi_remap_path to the YOLOX node (`#409 <https://github.com/tier4/driving_log_replayer_v2/issues/409>`_)
+  Co-authored-by: Claude Opus 5 <noreply@anthropic.com>
+* Contributors: Masato Saeki, lei.gu
+
+3.18.12 (2026-09-15)
+--------------------
+* feat(perception_fp): report FpObjects in base_link and the ego pose (`#401 <https://github.com/tier4/driving_log_replayer_v2/issues/401>`_)
+  Co-authored-by: Claude Fable 5.1 <noreply@anthropic.com>
+* Contributors: lei.gu
+
+3.18.11 (2026-09-15)
+--------------------
+* feat(perception): record the semantic segmentation pointcloud (`#404 <https://github.com/tier4/driving_log_replayer_v2/issues/404>`_)
+  Co-authored-by: Claude Opus 5 <noreply@anthropic.com>
+* Contributors: lei.gu
+
+3.18.10 (2026-09-08)
+--------------------
+* feat(perception_fp): record objects found in the non-detection area in result.jsonl (`#398 <https://github.com/tier4/driving_log_replayer_v2/issues/398>`_)
+  Co-authored-by: Claude Fable 5 <noreply@anthropic.com>
+  Co-authored-by: MasatoSaeki <masato.saeki@tier4.jp>
+* Contributors: lei.gu
+
 3.18.9 (2026-07-31)
 -------------------
 * fix: introduce use_sim_time as global parameter (`#396 <https://github.com/tier4/driving_log_replayer_v2/issues/396>`_)

@@ -139,6 +139,25 @@ FrameSkip is a counter for the number of times evaluation is skipped.
 
 - When the Ground Truth and the recognition objects are filtered by the filter condition and not evaluated (when the content of the evaluation result PassFail object is empty).
 
+### ignore_frames
+
+Frames specified in `ignore_frames` are excluded from evaluation and are not included in the analysis results. However, they are added to the `frame results` (i.e., they remain in the `pickle` file). They are counted in `FrameSkip` and reported in result.jsonl as `{"Info": {"Reason": "IGNORED_FRAME"}}`.
+
+`ignore_frames` can be set in the scenario (`Evaluation.ignore_frames`) or as a launch argument, which has the higher priority. The value is a comma-separated list of the following tokens.
+
+| Token     | Meaning                                                                        | Example   |
+| --------- | ------------------------------------------------------------------------------ | --------- |
+| `N`       | Frame whose t4_dataset frame index (`FrameName`) is N.                         | `3`       |
+| `A-B`     | Frames whose t4_dataset frame index is between A and B (both included).        | `0-4`     |
+| `first:N` | First N evaluated frames, by position in the sequence of the evaluated frames. | `first:2` |
+| `last:N`  | Last N evaluated frames, by position in the sequence of the evaluated frames.  | `last:1`  |
+
+e.g. `ignore_frames:="0-4,10,first:1,last:2"`
+
+`N` and `A-B` are matched against the frame index of the dataset, while `first:N` and `last:N` are matched against the position of the frame in the sequence of the frames which would be evaluated, so they can be used without knowing the frame indices of the dataset. They are typically used to drop the head and the tail of the scene where the ego vehicle or the perception module is not settled yet.
+
+`last:N` cannot be decided while the rosbag is read, so the writing of the last N evaluated frames is delayed until the end of the rosbag, and they are then written as ignored frames. The frames ignored by `last:N` are removed from the frame results before the metrics, the analysis and the coverage are computed.
+
 ## Topic name and data type used by evaluation script
 
 The topic to determine pass/fail is based on the evaluation_task defined in scenario.yaml.
@@ -292,7 +311,9 @@ Information Data Format:
 ```json
 {
   "Frame": {
-    "Info": "Information Message",
+    "Info": {
+      "Reason": "Why the frame was not evaluated. NO_GROUND_TRUTH: there is no Ground Truth within 75msec of the header time of the received objects. IGNORED_FRAME: the frame is excluded by the ignore_frames setting."
+    },
     "FrameSkip": "Total number of times the evaluation was skipped. This occurs when you request the evaluation of an object but there is no ground truth value within 75msec in the dataset or footprint.points is 1 or 2."
   }
 }
@@ -303,7 +324,9 @@ Warning Data Format:
 ```json
 {
   "Frame": {
-    "Warning": "Warning Message",
+    "Warning": {
+      "Reason": "Why the frame was not evaluated. INVALID_ESTIMATED_OBJECTS: the received objects could not be converted, e.g. the number of footprint.points is 1 or 2."
+    },
     "FrameSkip": "The total number of times the evaluation was skipped, which occurs when the evaluation of an object is requested but there is no Ground Truth in the dataset within 75msec, or when the number of footprint.points is 1 or 2."
   }
 }
@@ -480,6 +503,28 @@ When the `evaluation_task` is fp_validation
 }
 ```
 
+Ground Truth Coverage:
+
+The final line also reports how much of the Ground Truth of the dataset was actually evaluated, for the degradation topic. It is written next to `FinalScore` and does not change `Result.Summary`.
+
+```json
+{
+  "Frame": {
+    "FinalScore": {},
+    "GtFrames": "Number of Ground Truth frames of the dataset window",
+    "GtFramesEvaluated": "Number of distinct Ground Truth frames which were bound to at least one valid evaluated estimate",
+    "Coverage": "GtFramesEvaluated / GtFrames, rounded to 4 decimals",
+    "SkipReasons": {
+      "INVALID_ESTIMATED_OBJECTS": "Number of frames skipped because the received objects could not be converted",
+      "NO_GROUND_TRUTH": "Number of frames skipped because no Ground Truth was found within 75msec",
+      "IGNORED_FRAME": "Number of frames excluded by the ignore_frames setting"
+    }
+  }
+}
+```
+
+A `Coverage` lower than expected means that Ground Truth frames of the dataset were never scored, e.g. because no objects message was published close enough to the annotation, so neither the TP nor the FN of those frames are in the metrics.
+
 ### pickle file
 
 In database evaluation, it is necessary to replay multiple rosbags, but due to the ROS specification, it is impossible to use multiple bags in a single launch.
@@ -488,6 +533,17 @@ Since one rosbag, i.e., one `t4_dataset`, requires one launch, it is necessary t
 Since database evaluation cannot be done in a single launch, perception outputs a file `scene_result.pkl` in addition to `result.jsonl` file.
 A pickle file is a python object saved as a file, PerceptionEvaluationManager.frame_results of [perception_eval](https://github.com/tier4/autoware_perception_evaluation).
 The dataset evaluation can be performed by reading all the objects recorded in the pickle file and outputting the index of the dataset's average.
+
+### Driving-aware detection metrics files
+
+When `advanced_detection_metrics` is set in `evaluation_config_dict` (see the commented example in [the sample scenario](https://github.com/tier4/driving_log_replayer_v2/blob/develop/sample/perception/scenario.yaml), needs perception_eval 1.4 or later), two more files are written into `result_archive/<topic>/` next to `scene_result.pkl`, whether `enable_metrics_details` is set or not. They are not written for `fp_validation`.
+
+| File                              | Content                                                                                                                                                                                                                                                                                                                                                                                                                                 |
+| --------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `advanced_detection_metrics.json` | Per-scenario report (strict JSON, undefined values are `null`): `status` (`ok` / `empty` / `error`), the evaluated topic, task and frame id, the dataset name and whether its lanelet2 map was found, the digests of the configuration and of the object filter, the frame counts (`frame_results`, `ignored`, `evaluated`, `skipped`, `prepared`), the per-filter coverage, the metric `values` and the `warnings` of perception_eval. |
+| `advanced_detection_samples.npz`  | The prepared per-frame samples (`PreparedSamples.to_npz` of perception_eval) the values were computed from, so that the scenes of a database evaluation can be pooled afterwards without replaying them. Its sha256 is recorded in `samples_file` of the report. Not written when `status` is `error`.                                                                                                                                  |
+
+The frames listed in `ignore_frames` are left out of both files, like for the other metrics, but they stay in `scene_result.pkl`. When the metrics cannot be computed (e.g. the installed perception_eval is too old or the map is missing), the evaluation itself is not affected: the report is written with `status: error` and the reason in `error`.
 
 ### Result file of database evaluation
 

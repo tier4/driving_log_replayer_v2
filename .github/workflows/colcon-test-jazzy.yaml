@@ -2,15 +2,23 @@ name: colcon-test (jazzy)
 
 on:
   pull_request:
-    types: [opened, synchronize]
+    types: [opened, synchronize, labeled]
     paths: [driving_log_replayer_v2/**, .github/workflows/colcon-test-jazzy.yaml]
   schedule:
     - cron: 0 0 * * 0
   workflow_dispatch:
 
+permissions: {}
+
 jobs:
   colcon-test:
+    # run on the "run-ci" label for pull requests created by GITHUB_TOKEN, which do not trigger workflows
+    if: github.event.action != 'labeled' || github.event.label.name == 'run-ci'
     runs-on: ubuntu-latest
+    permissions:
+      actions: write # styfle/cancel-workflow-action
+      contents: read
+      pull-requests: read # SonarQube PR decoration
     # PEP 668: for rosdep pip rules
     # https://docs.ros.org/en/independent/api/rosdep/html/pip_and_pep_668.html
     env:
@@ -34,7 +42,9 @@ jobs:
           access_token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Checkout
-        uses: actions/checkout@v5
+        uses: actions/checkout@v5.1.0
+        with:
+          persist-credentials: false
 
       - name: Search packages in this repository
         id: list_packages
@@ -47,7 +57,7 @@ jobs:
           required-ros-distributions: ${{ matrix.ros_distribution }}
 
       - name: build and test
-        uses: ros-tooling/action-ros-ci@v0.4
+        uses: ros-tooling/action-ros-ci@0.4.8
         id: actions_ros_ci_step
         with:
           package-name: ${{ steps.list_packages.outputs.package_list }}
@@ -66,7 +76,7 @@ jobs:
           colcon-mixin-repository: https://raw.githubusercontent.com/colcon/colcon-mixin-repository/b8436aa16c0bdbc01081b12caa253cbf16e0fb82/index.yaml
 
       - name: Upload Unit Test Output
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v4.6.2
         if: ${{ !cancelled() && !github.event.pull_request.head.repo.fork }}
         with:
           name: colcon-logs
@@ -77,7 +87,7 @@ jobs:
         run: sed -E -i 's/^([[:space:]]*<source>[[:space:]]*)(.*\/)(driving_log_replayer_v2\/driving_log_replayer_v2)/\1.\/driving_log_replayer_v2/' /__w/driving_log_replayer_v2/driving_log_replayer_v2/ros_ws/build/driving_log_replayer_v2/pytest_cov/driving_log_replayer_v2/coverage.xml
 
       - name: Upload Coverage File
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v4.6.2
         if: ${{ !cancelled() && !github.event.pull_request.head.repo.fork }}
         with:
           name: colcon-logs

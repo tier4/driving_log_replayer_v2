@@ -1,6 +1,6 @@
 [project]
 name = "driving-log-replayer-v2"
-version = "3.18.9"
+version = "3.19.0"
 authors = [
   { name = "Masato Saeki", email = "masato.saeki@tier4.jp" },
   { name = "Kotaro Uetake", email = "kotaro.uetake@tier4.jp" },
@@ -31,7 +31,7 @@ dlr2-analyzer = "driving_log_replayer_v2_analyzer:main"
 [project.optional-dependencies]
 docs = [
     "mkdocs>=1.5.3",
-    "mkdocs-material>=9.5.9",
+    "mkdocs-material>=9.7.7",
     "mkdocs-awesome-pages-plugin>=2.9.2",
     "mkdocs-static-i18n>=1.2.0",
     "mdx-truly-sane-lists>=1.3",

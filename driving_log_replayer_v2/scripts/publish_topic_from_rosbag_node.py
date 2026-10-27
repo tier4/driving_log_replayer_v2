@@ -41,6 +41,7 @@ class PublishTopicFromRosbagNode(Node):
         topic_list = topics_with_comma.split(",") if topics_with_comma != "" else []
         if len(topic_list) == 0:
             rclpy.shutdown()
+            return
 
         # load the rosbag
         self._rosbag_reader = RosbagReader(bag_dir, topic_list)
@@ -74,7 +75,7 @@ def main() -> None:
     executor.add_node(publish_topic_from_rosbag_node)
     executor.spin()
     publish_topic_from_rosbag_node.destroy_node()
-    rclpy.shutdown()
+    rclpy.try_shutdown()
 
 
 if __name__ == "__main__":

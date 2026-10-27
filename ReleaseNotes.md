@@ -1,5 +1,84 @@
 # Release Notes
 
+## Version 3.19.0
+
+Major changes
+
+| Module          | Feature      | Brief summary                                     | Pull request                                                        | Contributor                                   |
+| --------------- | ------------ | ------------------------------------------------- | ------------------------------------------------------------------- | --------------------------------------------- |
+| `common`        | ci           | remove unnecessary file                           | [#439](https://github.com/tier4/driving_log_replayer_v2/issues/439) | [MasatoSaeki](https://github.com/MasatoSaeki) |
+| `common`        | ci           | update the autoware_msgs for new perception label | [#438](https://github.com/tier4/driving_log_replayer_v2/issues/438) | [MasatoSaeki](https://github.com/MasatoSaeki) |
+| `common`        | scenario     | add new key `autoware_args` in scenario file      | [#426](https://github.com/tier4/driving_log_replayer_v2/issues/426) | [MasatoSaeki](https://github.com/MasatoSaeki) |
+| `traffic_light` | post-process | run traffic light evaluation in post process      | [#427](https://github.com/tier4/driving_log_replayer_v2/issues/427) | [interimadd](https://github.com/interimadd)   |
+
+## Version 3.18.17
+
+Minor Tweak
+
+| Module   | Feature  | Brief summary                                                       | Pull request                                                      | Contributor                                     |
+| -------- | -------- | ------------------------------------------------------------------- | ----------------------------------------------------------------- | ----------------------------------------------- |
+| `common` | launcher | run the 2D detector from autoware_single_camera_2d_detection_launch | [#421](https://github.com/tier4/driving_log_replayer_v2/pull/421) | [badai-nguyen](https://github.com/badai-nguyen) |
+
+## Version 3.18.16
+
+Minor Tweak
+
+| Module       | Feature    | Brief summary                                                                                  | Pull request                                                      | Contributor                       |
+| ------------ | ---------- | ---------------------------------------------------------------------------------------------- | ----------------------------------------------------------------- | --------------------------------- |
+| `perception` | evaluation | write the driving-aware detection metric outputs to the result archive (existence_probability) | [#420](https://github.com/tier4/driving_log_replayer_v2/pull/420) | [ogrex](https://github.com/ogrex) |
+| `perception` | evaluation | pass existence_probability to perception_eval                                                  | [#419](https://github.com/tier4/driving_log_replayer_v2/pull/419) | [ogrex](https://github.com/ogrex) |
+
+## Version 3.18.15
+
+Minor Tweak
+
+| Module       | Feature     | Brief summary                                                   | Pull request                                                        | Contributor                                     |
+| ------------ | ----------- | --------------------------------------------------------------- | ------------------------------------------------------------------- | ----------------------------------------------- |
+| `perception` | 2d detector | publish_topic_from_rosbag crash and 2d detector color map param | [#416](https://github.com/tier4/driving_log_replayer_v2/issues/416) | [badai-nguyen](https://github.com/badai-nguyen) |
+
+## Version 3.18.14
+
+Minor Tweak
+
+| Module   | Feature | Brief summary                          | Pull request                                                        | Contributor                                   |
+| -------- | ------- | -------------------------------------- | ------------------------------------------------------------------- | --------------------------------------------- |
+| `config` | record  | feat: record all objects in perception | [#413](https://github.com/tier4/driving_log_replayer_v2/issues/413) | [MasatoSaeki](https://github.com/MasatoSaeki) |
+
+## Version 3.18.13
+
+Minor Tweak
+
+| Module               | Feature      | Brief summary                                                          | Pull request                                                        | Contributor                                   |
+| -------------------- | ------------ | ---------------------------------------------------------------------- | ------------------------------------------------------------------- | --------------------------------------------- |
+| `common`             | ci/cd        | chore: apply ci and fix test                                           | [#410](https://github.com/tier4/driving_log_replayer_v2/issues/410) | [MasatoSaeki](https://github.com/MasatoSaeki) |
+| `perception`         | evaluation   | allow ignoring frames by their position with first:N / last:N          | [#403](https://github.com/tier4/driving_log_replayer_v2/issues/403) | [ogrex](https://github.com/ogrex)             |
+| `perception`         | result.jsonl | report why a frame was skipped and how much ground truth was evaluated | [#402](https://github.com/tier4/driving_log_replayer_v2/issues/402) | [ogrex](https://github.com/ogrex)             |
+| `camera_2d_detector` | launcher     | pass roi_remap_path to the YOLOX node                                  | [#409](https://github.com/tier4/driving_log_replayer_v2/issues/409) | [ogrex](https://github.com/ogrex)             |
+
+## Version 3.18.12
+
+Minor Tweak
+
+| Module          | Feature      | Brief summary                                  | Pull request                                                        | Contributor                       |
+| --------------- | ------------ | ---------------------------------------------- | ------------------------------------------------------------------- | --------------------------------- |
+| `perception_fp` | result.jsonl | report FpObjects in base_link and the ego pose | [#401](https://github.com/tier4/driving_log_replayer_v2/issues/401) | [ogrex](https://github.com/ogrex) |
+
+## Version 3.18.11
+
+Minor Tweak
+
+| Module       | Feature | Brief summary                               | Pull request                                                        | Contributor                       |
+| ------------ | ------- | ------------------------------------------- | ------------------------------------------------------------------- | --------------------------------- |
+| `perception` | topic   | record the semantic segmentation pointcloud | [#404](https://github.com/tier4/driving_log_replayer_v2/issues/404) | [ogrex](https://github.com/ogrex) |
+
+## Version 3.18.10
+
+Minor Tweak
+
+| Module          | Feature      | Brief summary                                                  | Pull request                                                        | Contributor                       |
+| --------------- | ------------ | -------------------------------------------------------------- | ------------------------------------------------------------------- | --------------------------------- |
+| `perception_fp` | result.jsonl | record objects found in the non-detection area in result.jsonl | [#398](https://github.com/tier4/driving_log_replayer_v2/issues/398) | [ogrex](https://github.com/ogrex) |
+
 ## Version 3.18.9
 
 Minor Tweak

@@ -25,6 +25,7 @@ from driving_log_replayer_v2.post_process.evaluator import Evaluator
 from driving_log_replayer_v2.post_process.evaluator import FrameResult
 
 if TYPE_CHECKING:
+    from driving_log_replayer_v2.post_process.evaluation_manager import IgnoreFrames
     from driving_log_replayer_v2.post_process.runner import ConvertedData
 
 
@@ -33,7 +34,7 @@ class PerceptionFPEvaluator(Evaluator):
         self,
         result_archive_path: str,
         evaluation_topic: str,
-        ignore_frames: list[int],
+        ignore_frames: IgnoreFrames,
     ) -> None:
         # additional instance variables
         self._skip_counter = 0
