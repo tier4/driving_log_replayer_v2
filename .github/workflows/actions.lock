@@ -8,7 +8,6 @@ workflows:
         - 'actions/upload-artifact@v4.6.2'
         - 'ros-tooling/action-ros-ci@0.4.8'
         - 'ros-tooling/setup-ros@0.7.15'
-        - 'sonarsource/sonarqube-scan-action@v6.0.0'
         - 'styfle/cancel-workflow-action@0.12.1'
     '.github/workflows/colcon-test-jazzy.yaml':
         - 'actions/checkout@v5.1.0'
@@ -16,6 +15,8 @@ workflows:
         - 'ros-tooling/action-ros-ci@0.4.8'
         - 'ros-tooling/setup-ros@0.7.15'
         - 'styfle/cancel-workflow-action@0.12.1'
+    '.github/workflows/create-release-pr.yaml':
+        - 'actions/create-github-app-token@v2.1.4'
     '.github/workflows/deploy-document.yaml':
         - 'actions/cache@v4.3.0'
         - 'actions/checkout@v5.1.0'
@@ -26,6 +27,10 @@ workflows:
         - 'actions/checkout@v5.1.0'
         - 'actions/setup-python@v6.3.0'
         - 'pre-commit/action@v3.0.1'
+    '.github/workflows/prepare-release.yaml':
+        - 'actions/checkout@v5.1.0'
+        - 'actions/create-github-app-token@v2.1.4'
+        - 'actions/setup-python@v6.3.0'
     '.github/workflows/spell-check.yaml':
         - 'actions/checkout@v5.1.0'
         - 'autowarefoundation/autoware-github-actions@v1.69.1'
@@ -45,6 +50,11 @@ dependencies:
         commit: 'sha1-fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09'
         owner_id: 44036562
         repo_id: 197814629
+    'actions/create-github-app-token@v2.1.4':
+        ref: 'v2.1.4'
+        commit: 'sha1-67018539274d69449ef7c02e8e71183d1719ab42'
+        owner_id: 44036562
+        repo_id: 642580244
     'actions/setup-python@v6.3.0':
         ref: 'v6.3.0'
         commit: 'sha1-ece7cb06caefa5fff74198d8649806c4678c61a1'
@@ -84,11 +94,6 @@ dependencies:
         commit: 'sha1-2b7b7e10fd30ff131dfb33248ddd71c5ba31dd30'
         owner_id: 56298472
         repo_id: 215879926
-    'sonarsource/sonarqube-scan-action@v6.0.0':
-        ref: 'v6.0.0'
-        commit: 'sha1-fd88b7d7ccbaefd23d8f36f73b59db7a3d246602'
-        owner_id: 545988
-        repo_id: 366408409
     'streetsidesoftware/cspell-action@v9':
         ref: 'v9'
         commit: 'sha1-ce1816e4ce36532956ac6e983737392774b6e169'
