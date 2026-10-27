@@ -106,7 +106,7 @@ Only the signed tag is created locally by a maintainer.
    gh pr create --base develop --head "chore/prepare-release-${VERSION}" --title "chore: release ${VERSION}" --body ""
    ```
 
-3. Create a pull request from `develop` to `main`, and merge it with a **merge commit** (do not squash or rebase). 
+3. Create a pull request from `develop` to `main`, and merge it with a **merge commit** (do not squash or rebase).
    The documentation is deployed by merging to `main`.
 
    ```shell
