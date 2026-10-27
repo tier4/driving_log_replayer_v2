@@ -19,7 +19,8 @@ jobs:
       # Inlined from autowarefoundation/autoware-github-actions/spell-check
       # because it uses streetsidesoftware/cspell-action@v9, which is not pinned to a commit SHA.
       - name: Install dict packages
-        run: |
+        # The dictionaries intentionally track upstream, same as autoware-github-actions/spell-check.
+        run: | # zizmor: ignore[adhoc-packages]
           npm install https://github.com/autowarefoundation/autoware-spell-check-dict
           npm install https://github.com/tier4/cspell-dicts
       - name: Retrieve remote dictionary
