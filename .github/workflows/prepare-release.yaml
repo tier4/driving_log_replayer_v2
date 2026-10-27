@@ -14,7 +14,8 @@ jobs:
   prepare-release:
     runs-on: ubuntu-latest
     permissions:
-      contents: read
+      contents: write # push the release branch
+      pull-requests: write # create the pull request
     env:
       VERSION: ${{ inputs.version }}
     steps:
@@ -24,22 +25,13 @@ jobs:
             echo "invalid version: ${VERSION}" >&2
             exit 1
           fi
-      - name: Create GitHub App token
-        id: app-token
-        uses: actions/create-github-app-token@v2.1.4
-        with:
-          app-id: ${{ secrets.RELEASE_APP_ID }}
-          private-key: ${{ secrets.RELEASE_APP_PRIVATE_KEY }}
-          permission-contents: write
-          permission-pull-requests: write
       - name: Checkout develop
         uses: actions/checkout@v5.1.0
         with:
           ref: develop
           fetch-depth: 0
           fetch-tags: true
-          token: ${{ steps.app-token.outputs.token }}
-          persist-credentials: true
+          persist-credentials: true # required to push the release branch
       - uses: actions/setup-python@v6.3.0
         with:
           python-version: "3.10"
@@ -79,7 +71,7 @@ jobs:
           git push origin "chore/prepare-release-${VERSION}"
       - name: Create pull request
         env:
-          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           gh pr create \
             --base develop \
