@@ -102,7 +102,8 @@ Only the signed tag is created locally by a maintainer.
 2. Create a pull request to `develop` and merge it.
 3. Create a pull request from `develop` to `main`, and merge it with a **merge commit** (do not squash or rebase).
    The documentation is deployed by merging to `main`.
-4. Create and push the signed tag on `main`.
+4. Create and push the signed tag.
+   The tag is created on the develop commit merged into `main` (the second parent of the merge commit), not on the merge commit, so that the tag is reachable from `develop`.
 
    ```shell
    scripts/tag_release.sh <version>
