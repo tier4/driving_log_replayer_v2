@@ -3,7 +3,7 @@ name: colcon-test (humble)
 on:
   pull_request:
     types: [opened, synchronize, labeled]
-    paths: [driving_log_replayer_v2/**, .github/workflows/colcon-test.yaml]
+    paths: [driving_log_replayer_v2/**, .github/workflows/colcon-test-humble.yaml]
   schedule:
     - cron: 0 0 * * 0
   workflow_dispatch:
