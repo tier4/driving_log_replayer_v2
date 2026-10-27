@@ -83,30 +83,41 @@ Only the signed tag is created locally by a maintainer.
 1. Create a release branch from `develop`, update the files, and push it.
 
    ```shell
+   VERSION=<version>
    git checkout develop
    git pull origin develop
-   git checkout -b chore/prepare-release-<version>
+   git checkout -b chore/prepare-release-${VERSION}
    # create change log
    catkin_generate_changelog
    # edit CHANGELOG.rst
    # update package version in pyproject.toml (and uv.lock)
    # edit ReleaseNotes.md
-   git commit -s -am "chore: release <version>"
-   # update CHANGELOG.rst and package.xml, then commit and create a git tag
-   catkin_prepare_release --version <version> --no-push
+   git commit -s -am "chore: release ${VERSION}"
+   # update CHANGELOG.rst and package.xml, then commit and create a git tag (any message will fine)
+   catkin_prepare_release --version ${VERSION} --no-push
    # the signed tag is created in step 4, so delete the tag created by the command
-   git tag -d <version>
-   git push origin chore/prepare-release-<version>
+   git tag -d ${VERSION}
+   git push origin chore/prepare-release-${VERSION}
    ```
 
 2. Create a pull request to `develop` and merge it.
+
+   ```shell
+   gh pr create --base develop --head "chore/prepare-release-${VERSION}" --title "chore: release ${VERSION}" --body ""
+   ```
+
 3. Create a pull request from `develop` to `main`, and merge it with a **merge commit** (do not squash or rebase).
    The documentation is deployed by merging to `main`.
+
+   ```shell
+   gh pr create --base main --head develop --title "chore: sync main with develop (${VERSION})" --body ""
+   ```
+
 4. Create and push the signed tag.
    The tag is created on the develop commit merged into `main` (the second parent of the merge commit), not on the merge commit, so that the tag is reachable from `develop`.
 
    ```shell
-   scripts/tag_release.sh <version>
+   ./scripts/tag_release.sh ${VERSION}
    ```
 
 ## (For Developer) Workflow Dependency Lockfile
