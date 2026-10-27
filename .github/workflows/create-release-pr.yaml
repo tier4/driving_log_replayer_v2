@@ -22,6 +22,7 @@ jobs:
         with:
           app-id: ${{ secrets.RELEASE_APP_ID }}
           private-key: ${{ secrets.RELEASE_APP_PRIVATE_KEY }}
+          permission-pull-requests: write
       - name: Create develop -> main pull request
         env:
           GH_TOKEN: ${{ steps.app-token.outputs.token }}
