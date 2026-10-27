@@ -267,6 +267,7 @@ def update_conf_with_dataset_info(
         "perception_fp",
         "ground_segmentation",
         "time_step_based_trajectory",
+        "traffic_light",
     ]:
         conf["record_only"] = "true"
 

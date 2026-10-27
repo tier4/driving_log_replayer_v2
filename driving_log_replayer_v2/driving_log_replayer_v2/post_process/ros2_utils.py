@@ -34,6 +34,7 @@ from rosbag2_py import SequentialWriter
 from rosbag2_py import StorageOptions
 from rosbag2_py import TopicMetadata
 from rosidl_runtime_py.utilities import get_message
+from std_msgs.msg import Header
 from tf2_ros import Buffer
 from tf2_ros import Duration
 from tf2_ros import TransformException
@@ -233,7 +234,7 @@ class RosBagManager:
             if allow_future_tf:
                 while pending:
                     p_topic_name, p_msg, p_subscribed_timestamp_nanosec = pending[0]
-                    if self._is_can_lookup_transform(p_msg.header.stamp):
+                    if self._is_can_lookup_transform(get_header(p_msg).stamp):
                         pending.popleft()
                         yield p_topic_name, p_msg, p_subscribed_timestamp_nanosec
                     else:
@@ -324,6 +325,11 @@ class RosBagManager:
         """Close the rosbag writer."""
         del self._writer
         Reindexer().reindex(self._writer_storage_options)
+
+
+def get_header(msg: Any) -> Header:
+    # some messages such as TrafficLightGroupArray have stamp instead of header
+    return msg.header if hasattr(msg, "header") else Header(stamp=msg.stamp)
 
 
 def lookup_transform(

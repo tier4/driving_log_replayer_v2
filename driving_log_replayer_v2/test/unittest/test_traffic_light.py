@@ -27,10 +27,10 @@ from perception_eval.evaluation.result.perception_frame_result import Perception
 import pytest
 
 from driving_log_replayer_v2.scenario import load_sample_scenario
-from driving_log_replayer_v2.traffic_light import Criteria
-from driving_log_replayer_v2.traffic_light import Filter
-from driving_log_replayer_v2.traffic_light import Perception
-from driving_log_replayer_v2.traffic_light import TrafficLightScenario
+from driving_log_replayer_v2.traffic_light.models import Criteria
+from driving_log_replayer_v2.traffic_light.models import Filter
+from driving_log_replayer_v2.traffic_light.models import Perception
+from driving_log_replayer_v2.traffic_light.models import TrafficLightScenario
 
 
 def test_scenario() -> None:
