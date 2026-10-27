@@ -4,12 +4,18 @@ on:
   pull_request:
   workflow_dispatch:
 
+permissions: {}
+
 jobs:
   spell-check:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     steps:
       - name: Checkout repository
         uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          persist-credentials: false
       - name: Run spell-check
         uses: autowarefoundation/autoware-github-actions/spell-check@3419182c5e20616d2ca4c81c73ef94199eb26172 # v1
         with:

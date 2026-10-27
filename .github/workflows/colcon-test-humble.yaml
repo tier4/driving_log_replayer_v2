@@ -8,9 +8,15 @@ on:
     - cron: 0 0 * * 0
   workflow_dispatch:
 
+permissions: {}
+
 jobs:
   colcon-test:
     runs-on: ubuntu-latest
+    permissions:
+      actions: write # styfle/cancel-workflow-action
+      contents: read
+      pull-requests: read # SonarQube PR decoration
     strategy:
       fail-fast: false
       matrix:
@@ -31,6 +37,8 @@ jobs:
 
       - name: Checkout
         uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          persist-credentials: false
 
       - name: Search packages in this repository
         id: list_packages
