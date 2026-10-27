@@ -2,12 +2,15 @@ name: spell-check
 
 on:
   pull_request:
+    types: [opened, synchronize, reopened, labeled]
   workflow_dispatch:
 
 permissions: {}
 
 jobs:
   spell-check:
+    # run on the "run-ci" label for pull requests created by GITHUB_TOKEN, which do not trigger workflows
+    if: github.event.action != 'labeled' || github.event.label.name == 'run-ci'
     runs-on: ubuntu-latest
     permissions:
       contents: read
