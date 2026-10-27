@@ -77,22 +77,36 @@ Refer [this page](https://wiki.ros.org/bloom/Tutorials/ReleaseCatkinPackage)
 
 ### Release command
 
-Can only be executed by users with repository maintainer privileges
+Direct push to `develop` and `main` is not allowed, so the release is done through pull requests.
+Only the signed tag is created locally by a maintainer.
 
-```shell
-# create change log
-catkin_generate_changelog
-# edit CHANGELOG.rst
-# update package version in pyproject.toml
-# edit ReleaseNotes.md
-# commit and create pull request
-# merge pull request
-catkin_prepare_release
-# When you type the command, it automatically updates CHANGELOG.rst and creates a git tag
-git checkout main
-git merge develop
-git push origin main
-```
+1. Create a release branch from `develop`, update the files, and push it.
+
+   ```shell
+   git checkout develop
+   git pull origin develop
+   git checkout -b chore/prepare-release-<version>
+   # create change log
+   catkin_generate_changelog
+   # edit CHANGELOG.rst
+   # update package version in pyproject.toml (and uv.lock)
+   # edit ReleaseNotes.md
+   git commit -s -am "chore: release <version>"
+   # update CHANGELOG.rst and package.xml, then commit and create a git tag
+   catkin_prepare_release --version <version> --no-push
+   # the signed tag is created in step 4, so delete the tag created by the command
+   git tag -d <version>
+   git push origin chore/prepare-release-<version>
+   ```
+
+2. Create a pull request to `develop` and merge it.
+3. Create a pull request from `develop` to `main`, and merge it with a **merge commit** (do not squash or rebase).
+   The documentation is deployed by merging to `main`.
+4. Create and push the signed tag on `main`.
+
+   ```shell
+   scripts/tag_release.sh <version>
+   ```
 
 ## (For Developer) Workflow Dependency Lockfile
 
