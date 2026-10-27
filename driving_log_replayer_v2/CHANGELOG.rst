@@ -2,8 +2,8 @@
 Changelog for package driving_log_replayer
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-Forthcoming
------------
+3.19.0 (2026-10-28)
+-------------------
 * fix: remove unnecessary file (`#439 <https://github.com/tier4/driving_log_replayer_v2/issues/439>`_)
 * fix(ci): update the autoware_msgs for new perception label (`#438 <https://github.com/tier4/driving_log_replayer_v2/issues/438>`_)
 * feat(scenario): add new key `autoware_args` in scenario file (`#426 <https://github.com/tier4/driving_log_replayer_v2/issues/426>`_)
