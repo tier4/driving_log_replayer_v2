@@ -93,7 +93,7 @@ Only the signed tag is created locally by a maintainer.
    # update package version in pyproject.toml (and uv.lock)
    # edit ReleaseNotes.md
    git commit -s -am "chore: release ${VERSION}"
-   # update CHANGELOG.rst and package.xml, then commit and create a git tag
+   # update CHANGELOG.rst and package.xml, then commit and create a git tag (any message will fine)
    catkin_prepare_release --version ${VERSION} --no-push
    # the signed tag is created in step 4, so delete the tag created by the command
    git tag -d ${VERSION}
