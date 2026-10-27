@@ -1,7 +1,7 @@
 name: lint-pull-request
 
 on:
-  pull_request_target: # zizmor: ignore[dangerous-triggers] no checkout or untrusted code execution
+  pull_request:
     types:
       - opened
       - edited
