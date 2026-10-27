@@ -2,7 +2,7 @@ name: colcon-test (jazzy)
 
 on:
   pull_request:
-    types: [opened, synchronize]
+    types: [opened, synchronize, labeled]
     paths: [driving_log_replayer_v2/**, .github/workflows/colcon-test-jazzy.yaml]
   schedule:
     - cron: 0 0 * * 0
@@ -12,6 +12,8 @@ permissions: {}
 
 jobs:
   colcon-test:
+    # run on the "run-ci" label for pull requests created by GITHUB_TOKEN, which do not trigger workflows
+    if: github.event.action != 'labeled' || github.event.label.name == 'run-ci'
     runs-on: ubuntu-latest
     permissions:
       actions: write # styfle/cancel-workflow-action
