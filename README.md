@@ -77,6 +77,8 @@ Refer [this page](https://wiki.ros.org/bloom/Tutorials/ReleaseCatkinPackage)
 
 ### Release command
 
+Only the signed tag is created locally by a maintainer.
+
 1. Run the `prepare-release` workflow (Actions tab) with the release version (e.g. `X.Y.Z`).
    It runs `catkin_generate_changelog` and `catkin_prepare_release`, updates the version in `pyproject.toml` / `uv.lock`, and creates a pull request `chore/prepare-release-<version>` to `develop`.
 2. Review CHANGELOG.rst, add the entry to `ReleaseNotes.md` on the pull request branch, and merge the pull request.
