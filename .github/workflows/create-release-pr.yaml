@@ -1,0 +1,39 @@
+name: create-release-pr
+
+on:
+  pull_request:
+    types: [closed]
+    branches: [develop]
+
+permissions: {}
+
+jobs:
+  create-release-pr:
+    if: github.event.pull_request.merged == true && startsWith(github.event.pull_request.head.ref, 'chore/prepare-release-')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    env:
+      HEAD_REF: ${{ github.event.pull_request.head.ref }}
+    steps:
+      - name: Create GitHub App token
+        id: app-token
+        uses: actions/create-github-app-token@v2.1.4
+        with:
+          app-id: ${{ secrets.RELEASE_APP_ID }}
+          private-key: ${{ secrets.RELEASE_APP_PRIVATE_KEY }}
+      - name: Create develop -> main pull request
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          REPOSITORY: ${{ github.repository }}
+        run: |
+          version="${HEAD_REF#chore/prepare-release-}"
+          gh pr create \
+            --repo "${REPOSITORY}" \
+            --base main \
+            --head develop \
+            --title "chore: release ${version}" \
+            --body "Merge develop into main for release ${version}.
+
+          **Merge with a merge commit (do not squash or rebase).**
+          After merge, create the signed tag with \`scripts/tag_release.sh ${version}\`."
