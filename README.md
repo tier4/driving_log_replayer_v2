@@ -77,10 +77,7 @@ Refer [this page](https://wiki.ros.org/bloom/Tutorials/ReleaseCatkinPackage)
 
 ### Release command
 
-Direct push to `develop` and `main` is not allowed, so the release is done through pull requests.
-Only the signed tag is created locally by a maintainer.
-
-1. Run the `prepare-release` workflow (Actions tab) with the release version (e.g. `3.18.18`).
+1. Run the `prepare-release` workflow (Actions tab) with the release version (e.g. `X.Y.Z`).
    It runs `catkin_generate_changelog` and `catkin_prepare_release`, updates the version in `pyproject.toml` / `uv.lock`, and creates a pull request `chore/prepare-release-<version>` to `develop`.
 2. Review CHANGELOG.rst, add the entry to `ReleaseNotes.md` on the pull request branch, and merge the pull request.
 3. The `create-release-pr` workflow creates a pull request from `develop` to `main`. Merge it with a **merge commit** (do not squash or rebase). The documentation is deployed by merging to `main`.
@@ -89,9 +86,6 @@ Only the signed tag is created locally by a maintainer.
    ```shell
    scripts/tag_release.sh <version>
    ```
-
-The workflows use a GitHub App. Set the repository secrets `RELEASE_APP_ID` and `RELEASE_APP_PRIVATE_KEY`.
-The App needs `Contents` and `Pull requests` write permissions.
 
 ## (For Developer) Workflow Dependency Lockfile
 
