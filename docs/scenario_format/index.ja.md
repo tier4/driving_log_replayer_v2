@@ -208,6 +208,7 @@ time_offset:
 
 ```yaml
 autoware_args:
+  vehicle: str
   sensing: str
   perception: str
   localization: str

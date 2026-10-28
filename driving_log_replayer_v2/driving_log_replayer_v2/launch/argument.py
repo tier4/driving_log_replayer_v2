@@ -75,7 +75,7 @@ def check_launch_component(conf: dict) -> dict:
         arg_disable = arg_disable(conf)
     # update autoware component launch or not
     launch_component = {}
-    autoware_components = ["sensing", "localization", "perception", "planning", "control"]
+    autoware_components = ["vehicle", "sensing", "localization", "perception", "planning", "control"]
     # priority: argument > scenario file > launch_config.py
     scenario_autoware_args = json.loads(conf["scenario_autoware_args"])
     for component in autoware_components:

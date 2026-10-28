@@ -209,6 +209,7 @@ The priority is as follows.
 
 ```yaml
 autoware_args:
+  vehicle: str
   sensing: str
   perception: str
   localization: str
