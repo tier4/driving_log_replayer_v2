@@ -208,12 +208,15 @@ time_offset:
 
 ```yaml
 autoware_args:
+  vehicle: str
   sensing: str
   perception: str
   localization: str
   planning: str
   control: str
 ```
+
+`vehicle: false` の場合、vehicle コンポーネント（`robot_state_publisher`、`vehicle_interface`）を起動しないため、TFはbagに記録された `/tf_static` のみから供給される。評価対象のAutowareに `VehicleId`・individual_params が無い別車両で収録したデータセットを評価する場合に使用する。
 
 ### include_use_case
 

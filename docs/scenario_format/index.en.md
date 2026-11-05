@@ -209,12 +209,15 @@ The priority is as follows.
 
 ```yaml
 autoware_args:
+  vehicle: str
   sensing: str
   perception: str
   localization: str
   planning: str
   control: str
 ```
+
+`vehicle: false` does not launch the vehicle components (`robot_state_publisher` and `vehicle_interface`), so TF is provided only by `/tf_static` recorded in the bag. Use it to evaluate a dataset recorded on a vehicle whose `VehicleId` / individual parameters are not available in the Autoware being evaluated.
 
 ### include_use_case
 
