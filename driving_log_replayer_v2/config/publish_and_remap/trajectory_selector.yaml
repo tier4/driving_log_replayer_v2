@@ -27,8 +27,9 @@ publish:
   - /localization/kinematic_state
   - /tf
   # perception
+  - /perception/object_recognition/tracking/objects
+  - /perception/obstacle_segmentation/pointcloud
   - /perception/traffic_light_recognition/traffic_signals
-  - /perception/object_recognition/objects
   # planning inputs
   - /planning/mission_planning/route
   - /planning/mission_planning/state
