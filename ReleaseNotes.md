@@ -1,5 +1,14 @@
 # Release Notes
 
+## Version 3.19.1
+
+Minor Tweak
+
+| Module   | Feature  | Brief summary                                     | Pull request                                                      | Contributor                                               |
+| -------- | -------- | ------------------------------------------------- | ----------------------------------------------------------------- | --------------------------------------------------------- |
+| `common` | scenario | allow vehicle in autoware_args                    | [#449](https://github.com/tier4/driving_log_replayer_v2/pull/449) | [YoshiRi](https://github.com/YoshiRi)                     |
+| `common` | topic    | use `map_based_prediction` in trajectory_selector | [#448](https://github.com/tier4/driving_log_replayer_v2/pull/448) | [Kazunori-Nakajima](https://github.com/Kazunori-Nakajima) |
+
 ## Version 3.19.0
 
 Major changes

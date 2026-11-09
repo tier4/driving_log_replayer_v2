@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Create and push a signed tag for a release on origin/main.
+# Create and push a signed tag for a release on the develop commit merged into origin/main.
 # Usage: scripts/tag_release.sh <version>   e.g. scripts/tag_release.sh 3.18.18
 set -euo pipefail
 
@@ -25,18 +25,23 @@ if git ls-remote --exit-code --tags origin "refs/tags/${version}" >/dev/null 2>&
     exit 1
 fi
 
-target="$(git rev-parse origin/main)"
+# origin/main is a merge commit of develop. Tag the merged develop commit (the second parent)
+# so that the tag is reachable from develop (for git describe and catkin_generate_changelog).
+if ! target="$(git rev-parse -q --verify origin/main^2)"; then
+    echo "origin/main is not a merge commit. Is the develop to main pull request merged with a merge commit?" >&2
+    exit 1
+fi
 
-# the version on main must match the requested version
+# the version on the merged develop commit must match the requested version
 for pkg in driving_log_replayer_v2 driving_log_replayer_v2_analyzer driving_log_replayer_v2_msgs; do
     pkg_version="$(git show "${target}:${pkg}/package.xml" | sed -n 's|.*<version>\(.*\)</version>.*|\1|p' | head -n 1)"
     if [ "${pkg_version}" != "${version}" ]; then
-        echo "${pkg}/package.xml version is ${pkg_version} on origin/main, expected ${version}. Is the release PR merged?" >&2
+        echo "${pkg}/package.xml version is ${pkg_version} on the second parent of origin/main, expected ${version}. Is the release PR merged?" >&2
         exit 1
     fi
 done
 
-echo "Tag ${version} will be created on origin/main:"
+echo "Tag ${version} will be created on the develop commit merged into origin/main:"
 git log -1 --oneline "${target}"
 read -r -p "Continue? [y/N] " answer
 if [ "${answer}" != "y" ]; then

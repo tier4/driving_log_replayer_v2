@@ -36,6 +36,7 @@ def test_check_launch_component_default() -> None:
     # diagnostics has no AUTOWARE_DISABLE
     conf = _make_conf("diagnostics", {})
     expected = {
+        "vehicle": "true",
         "sensing": "true",
         "localization": "true",
         "perception": "true",
@@ -73,3 +74,12 @@ def test_check_launch_component_cli_over_scenario() -> None:
     result = check_launch_component(conf)
     assert result["perception"] == "false"  # CLI wins
     assert result["sensing"] == "false"  # scenario file
+
+
+def test_check_launch_component_scenario_vehicle() -> None:
+    # vehicle (robot_state_publisher, vehicle_interface) can be disabled from the scenario file
+    conf = _make_conf("diagnostics", {"vehicle": False, "sensing": False})
+    result = check_launch_component(conf)
+    assert result["vehicle"] == "false"
+    assert conf["vehicle"] == "false"
+    assert result["sensing"] == "false"
