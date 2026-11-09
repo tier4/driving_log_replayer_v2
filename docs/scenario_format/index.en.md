@@ -219,6 +219,9 @@ autoware_args:
 
 `vehicle: false` does not launch the vehicle components (`robot_state_publisher` and `vehicle_interface`), so TF is provided only by `/tf_static` recorded in the bag. Use it to evaluate a dataset recorded on a vehicle whose `VehicleId` / individual parameters are not available in the Autoware being evaluated.
 
+> [!WARNING]
+> This package launches Autoware with `launch_vehicle_interface: true` for all use cases except `perception_reproducer`. When `vehicle: false`, the whole vehicle component is not launched, so `vehicle_interface` is not launched either, regardless of the value of `launch_vehicle_interface`.
+
 ### include_use_case
 
 Use this when you want to perform evaluation with a different use case simultaneously with the use case specified in Evaluation.
