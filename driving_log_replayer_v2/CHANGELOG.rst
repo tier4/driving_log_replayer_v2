@@ -2,6 +2,14 @@
 Changelog for package driving_log_replayer
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
+Forthcoming
+-----------
+* feat(scenario): allow vehicle in autoware_args (`#449 <https://github.com/tier4/driving_log_replayer_v2/issues/449>`_)
+  Co-authored-by: Claude Opus 5.5 <noreply@anthropic.com>
+  Co-authored-by: MasatoSaeki <masato.saeki@tier4.jp>
+* feat: use `map_based_prediction` in trajectory_selector (`#448 <https://github.com/tier4/driving_log_replayer_v2/issues/448>`_)
+* Contributors: Kazunori-Nakajima, Yoshi Ri
+
 3.19.0 (2026-10-28)
 -------------------
 * fix: remove unnecessary file (`#439 <https://github.com/tier4/driving_log_replayer_v2/issues/439>`_)
