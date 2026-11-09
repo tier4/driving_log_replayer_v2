@@ -2,8 +2,8 @@
 Changelog for package driving_log_replayer
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-Forthcoming
------------
+3.19.1 (2026-11-10)
+-------------------
 * feat(scenario): allow vehicle in autoware_args (`#449 <https://github.com/tier4/driving_log_replayer_v2/issues/449>`_)
   Co-authored-by: Claude Opus 5.5 <noreply@anthropic.com>
   Co-authored-by: MasatoSaeki <masato.saeki@tier4.jp>
