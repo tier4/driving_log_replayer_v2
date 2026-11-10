@@ -17,9 +17,9 @@ from dataclasses import field
 import sys
 from typing import Literal
 
-from diagnostic_msgs.msg import DiagnosticArray
-from diagnostic_msgs.msg import DiagnosticStatus
 from pydantic import BaseModel
+from tier4_metric_msgs.msg import Metric
+from tier4_metric_msgs.msg import MetricArray
 
 from driving_log_replayer_v2.result import EvaluationItem
 from driving_log_replayer_v2.result import ResultBase
@@ -188,13 +188,15 @@ class ObjectMetricsClassContainer:
                 condition=v,
             )
 
-    def set_frame(self, msg: DiagnosticArray) -> dict:
+    def set_frame(self, msg: MetricArray) -> dict:
         diag_array_class: dict[OBJECT_CLASSIFICATION, dict[str, dict]] = {}
         frame_result: dict[OBJECT_CLASSIFICATION, dict] = {}
-        # Add diag data separately for each class.
-        for diag_status in msg.status:
-            diag_status: DiagnosticStatus
-            class_name, diag_dict = ObjectMetricsClassContainer.get_classname_and_value(diag_status)
+        # Add metric data separately for each class.
+        for status_name, values in ObjectMetricsClassContainer.group_metrics(msg).items():
+            class_name, diag_dict = ObjectMetricsClassContainer.get_classname_and_value(
+                status_name,
+                values,
+            )
             if diag_array_class.get(class_name) is None:
                 diag_array_class[class_name] = {}
             diag_array_class[class_name].update(diag_dict)
@@ -212,16 +214,29 @@ class ObjectMetricsClassContainer:
         return frame_result
 
     @classmethod
-    def get_classname_and_value(cls, diag: DiagnosticStatus) -> tuple[str, dict[str, dict]]:
+    def group_metrics(cls, msg: MetricArray) -> dict[str, dict[str, float]]:
+        # metric.name is "<status_name>/<key>" (e.g. "lateral_deviation_CAR/mean")
+        grouped: dict[str, dict[str, float]] = {}
+        for metric in msg.metric_array:
+            metric: Metric
+            status_name, sep, key = metric.name.rpartition("/")
+            if sep == "" or key not in METRICS_KEY_TUPLE:
+                continue
+            grouped.setdefault(status_name, {})[key] = float(metric.value)
+        return grouped
+
+    @classmethod
+    def get_classname_and_value(
+        cls,
+        status_name: str,
+        values: dict[str, float],  # min, max, mean, metric_value
+    ) -> tuple[str, dict[str, dict]]:
         rtn_class_name = ""
         for class_name in OBJECT_CLASSIFICATION_TUPLE:
-            if class_name in diag.name:
+            if class_name in status_name:
                 rtn_class_name = class_name
                 break
-        status_name_removed_class = diag.name.replace(f"_{rtn_class_name}", "")
-        values = {
-            value.key: float(value.value) for value in diag.values
-        }  # min, max, mean, metric_value
+        status_name_removed_class = status_name.replace(f"_{rtn_class_name}", "")
         return rtn_class_name, {status_name_removed_class: values}
 
     def update(self) -> tuple[bool, str]:
@@ -259,7 +274,7 @@ class AnnotationlessPerceptionResult(ResultBase):
     def update(self) -> None:
         self._success, self._summary = self.__obj_container.update()
 
-    def set_frame(self, msg: DiagnosticArray) -> None:
+    def set_frame(self, msg: MetricArray) -> None:
         self._frame = self.__obj_container.set_frame(msg)
         self.update()
 
