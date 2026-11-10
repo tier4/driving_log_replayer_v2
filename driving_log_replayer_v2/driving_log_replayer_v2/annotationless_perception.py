@@ -222,7 +222,11 @@ class ObjectMetricsClassContainer:
             status_name, sep, key = metric.name.rpartition("/")
             if sep == "" or key not in METRICS_KEY_TUPLE:
                 continue
-            grouped.setdefault(status_name, {})[key] = float(metric.value)
+            try:
+                value = float(metric.value)
+            except (TypeError, ValueError):
+                continue
+            grouped.setdefault(status_name, {})[key] = value
         return grouped
 
     @classmethod
