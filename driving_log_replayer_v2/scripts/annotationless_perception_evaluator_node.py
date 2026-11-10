@@ -15,8 +15,8 @@
 # limitations under the License.
 
 
-from diagnostic_msgs.msg import DiagnosticArray
 from std_msgs.msg import String
+from tier4_metric_msgs.msg import MetricArray
 
 from driving_log_replayer_v2.annotationless_perception import AnnotationlessPerceptionResult
 from driving_log_replayer_v2.annotationless_perception import AnnotationlessPerceptionScenario
@@ -35,14 +35,14 @@ class AnnotationlessPerceptionEvaluator(DLREvaluatorV2):
         self._scenario: AnnotationlessPerceptionScenario
         self._result: AnnotationlessPerceptionResult
 
-        self.__sub_diagnostics = self.create_subscription(
-            DiagnosticArray,
+        self.__sub_metrics = self.create_subscription(
+            MetricArray,
             "/perception/perception_online_evaluator/metrics",
-            self.diagnostics_cb,
+            self.metrics_cb,
             1,
         )
 
-    def diagnostics_cb(self, msg: DiagnosticArray) -> None:
+    def metrics_cb(self, msg: MetricArray) -> None:
         self._result.set_frame(msg)
         res_str = self._result_writer.write_result(self._result)
         self._pub_result.publish(String(data=res_str))
