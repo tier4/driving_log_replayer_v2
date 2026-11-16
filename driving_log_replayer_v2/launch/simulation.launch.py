@@ -23,6 +23,7 @@ from driving_log_replayer_v2.launch.ndt_convergence import launch_ndt_convergenc
 from driving_log_replayer_v2.launch.perception_reproducer import (
     launch_perception_reproducer_use_case,
 )
+from driving_log_replayer_v2.launch.traffic_light_bag2bag import launch_traffic_light_bag2bag
 from driving_log_replayer_v2.launch.use_case import launch_use_case
 from driving_log_replayer_v2.rosbag import create_metadata_yaml
 
@@ -32,6 +33,8 @@ def select_launch(context: LaunchContext) -> list:
     create_metadata_yaml(conf["input_bag"])
     if conf["use_case"] == "ndt_convergence":
         return launch_ndt_convergence(context)
+    if conf["use_case"] == "traffic_light" and conf.get("traffic_light_runner") == "bag2bag":
+        return launch_traffic_light_bag2bag(context)
     if conf["use_case"] == "perception_reproducer":
         # closed loop
         return launch_perception_reproducer_use_case()
