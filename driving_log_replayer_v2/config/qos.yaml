@@ -33,3 +33,8 @@
   history: keep_last
   depth: 1
   durability: transient_local
+/api/operation_mode/state:
+  reliability: reliable
+  history: keep_last
+  depth: 1
+  durability: transient_local
