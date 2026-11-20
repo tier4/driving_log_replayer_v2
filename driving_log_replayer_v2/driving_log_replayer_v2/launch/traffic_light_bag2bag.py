@@ -49,19 +49,17 @@ def write_map_bag(map_dir: Path, map_bag: Path, storage: str) -> None:
         ],
         ["ros2", "bag", "record", "-s", storage, "-o", map_bag.as_posix(), MAP_TOPIC],
     ]  # fmt: skip
+    echo_map = [
+        "ros2", "topic", "echo", "--once", "--no-arr",
+        "--qos-durability", "transient_local", "--qos-reliability", "reliable",
+        MAP_TOPIC, "autoware_map_msgs/msg/LaneletMapBin",
+    ]  # fmt: skip
     processes = [
         subprocess.Popen(cmd, stdout=subprocess.DEVNULL, start_new_session=True) for cmd in commands
     ]
     try:
         # Wait until the map is published.
-        subprocess.run(
-            [
-                "ros2", "topic", "echo", "--once", "--no-arr",
-                "--qos-durability", "transient_local", "--qos-reliability", "reliable",
-                MAP_TOPIC, "autoware_map_msgs/msg/LaneletMapBin",
-            ],
-            stdout=subprocess.DEVNULL, timeout=MAP_TIMEOUT_S, check=True,
-        )  # fmt: skip
+        subprocess.run(echo_map, stdout=subprocess.DEVNULL, timeout=MAP_TIMEOUT_S, check=True)
         time.sleep(1)  # ros2 bag record subscribes after it discovers the topic, later than echo
     finally:
         for process in processes:
