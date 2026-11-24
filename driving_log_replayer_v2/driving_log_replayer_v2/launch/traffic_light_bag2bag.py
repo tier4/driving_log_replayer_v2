@@ -111,7 +111,12 @@ def launch_traffic_light_bag2bag(context: LaunchContext) -> list:
         "--recognition-config", conf["bag2bag_recognition_config"],
         "--fusion-config", conf["bag2bag_fusion_config"],
     ]  # fmt: skip
-    runner = ExecuteProcess(cmd=cmd, output="screen", name="traffic_light_bag2bag")
+    runner = ExecuteProcess(
+        cmd=cmd,
+        output="screen",
+        name="traffic_light_bag2bag",
+        additional_env={"OMP_WAIT_POLICY": "passive"},
+    )
     return [
         runner,
         RegisterEventHandler(
