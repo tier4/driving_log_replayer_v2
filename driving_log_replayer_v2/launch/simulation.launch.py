@@ -34,7 +34,7 @@ def select_launch(context: LaunchContext) -> list:
     if conf["use_case"] == "ndt_convergence":
         return launch_ndt_convergence(context)
     if conf["use_case"] == "traffic_light" and conf.get("traffic_light_runner") == "bag2bag":
-        return launch_traffic_light_bag2bag(context)
+        return launch_traffic_light_bag2bag()
     if conf["use_case"] == "perception_reproducer":
         # closed loop
         return launch_perception_reproducer_use_case()

@@ -23,6 +23,7 @@ from launch import LaunchContext
 from launch.actions import DeclareLaunchArgument
 from launch.actions import EmitEvent
 from launch.actions import ExecuteProcess
+from launch.actions import OpaqueFunction
 from launch.actions import RegisterEventHandler
 from launch.actions import TimerAction
 from launch.event_handlers import OnProcessExit
@@ -32,6 +33,8 @@ from launch.events.process import SignalProcess
 from launch.launch_description_sources import AnyLaunchDescriptionSource
 from launch.utilities import perform_substitutions
 import yaml
+
+from driving_log_replayer_v2.launch.argument import add_use_case_arguments
 
 MAP_TOPIC = "/map/vector_map"
 MAP_TIMEOUT_S = 60.0
@@ -49,7 +52,7 @@ def camera_numbers(launch_file: str) -> str:
     raise ValueError(msg)
 
 
-def launch_traffic_light_bag2bag(context: LaunchContext) -> list:
+def run_bag2bag(context: LaunchContext) -> list:
     """
     Write result_bag with the bag2bag runner in place of Autoware and ros2 bag play / record.
 
@@ -146,4 +149,13 @@ def launch_traffic_light_bag2bag(context: LaunchContext) -> list:
         RegisterEventHandler(
             OnProcessExit(target_action=bag2bag_runner, on_exit=lambda *_: shutil.rmtree(tmp_dir))
         ),
+    ]
+
+
+def launch_traffic_light_bag2bag() -> list:
+    return [
+        # A separate OpaqueFunction, since the declared arguments are set in the launch configurations
+        # after the OpaqueFunction that returns them.
+        OpaqueFunction(function=add_use_case_arguments),
+        OpaqueFunction(function=run_bag2bag),
     ]
