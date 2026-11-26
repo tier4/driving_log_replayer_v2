@@ -30,4 +30,29 @@ USE_CASE_ARGS: list[DeclareLaunchArgument] = [
         "enable_analysis",
         default_value="false",
     ),
+    DeclareLaunchArgument(
+        "traffic_light_runner",
+        default_value="logging_simulator",
+        description="logging_simulator (default) runs Autoware and ros2 bag play / record. bag2bag runs traffic_light_pipeline_bag2bag_runner in place of them.",
+    ),
+    DeclareLaunchArgument(
+        "bag2bag_ml_model_path",
+        default_value="",
+        description="--ml-model-path of the bag2bag runner. Required when traffic_light_runner is bag2bag.",
+    ),
+    DeclareLaunchArgument(
+        "bag2bag_camera_launch",
+        default_value="",
+        description="Launch file whose camera_namespaces default gives --camera of the bag2bag runner. Required when traffic_light_runner is bag2bag.",
+    ),
+    DeclareLaunchArgument(
+        "bag2bag_recognition_config",
+        default_value="",
+        description="--recognition-config of the bag2bag runner. Required when traffic_light_runner is bag2bag.",
+    ),
+    DeclareLaunchArgument(
+        "bag2bag_fusion_config",
+        default_value="",
+        description="--fusion-config of the bag2bag runner. Required when traffic_light_runner is bag2bag.",
+    ),
 ]

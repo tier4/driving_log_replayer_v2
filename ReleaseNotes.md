@@ -1,5 +1,13 @@
 # Release Notes
 
+## Version 3.19.2
+
+Minor Tweak
+
+| Module          | Feature  | Brief summary           | Pull request                                                      | Contributor                                 |
+| --------------- | -------- | ----------------------- | ----------------------------------------------------------------- | ------------------------------------------- |
+| `traffic_light` | new mode | add bag2bag runner mode | [#455](https://github.com/tier4/driving_log_replayer_v2/pull/455) | [interimadd](https://github.com/interimadd) |
+
 ## Version 3.19.1
 
 Minor Tweak
