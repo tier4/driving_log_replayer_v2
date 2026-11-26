@@ -2,8 +2,8 @@
 Changelog for package driving_log_replayer
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-Forthcoming
------------
+3.19.2 (2026-11-27)
+-------------------
 * feat(traffic_light): add bag2bag runner mode (`#455 <https://github.com/tier4/driving_log_replayer_v2/issues/455>`_)
 * Contributors: Takahisa Ishikawa
 
