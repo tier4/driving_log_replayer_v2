@@ -131,6 +131,86 @@ def launch_camera_2d_detector(context: LaunchContext) -> list:
     ]
 
 
+def get_control_param_path(*param_file: str) -> str:
+    return Path(
+        get_package_share_directory("autoware_launch"), "config", "control", *param_file
+    ).as_posix()
+
+
+def get_vehicle_info_param_path(context: LaunchContext) -> str:
+    # the vehicle info set by Autoware does not reach the nodes outside of the Autoware group
+    return Path(
+        get_package_share_directory(
+            f"{context.launch_configurations['vehicle_model']}_description"
+        ),
+        "config",
+        "vehicle_info.param.yaml",
+    ).as_posix()
+
+
+def launch_control_validator(context: LaunchContext) -> list:
+    """
+    Launch control_validator without the control component.
+
+    Used with control:=false to evaluate the validator with the control_cmd and predicted_trajectory in the rosbag.
+    The remaps and parameters are the same as tier4_control_launch.
+    """
+    return [
+        Node(
+            package="autoware_control_validator",
+            executable="autoware_control_validator_node",
+            namespace="/control",
+            name="control_validator",
+            output="screen",
+            parameters=[
+                get_vehicle_info_param_path(context),
+                get_control_param_path("control_validator", "control_validator.param.yaml"),
+            ],
+            remappings=[
+                ("~/input/control_cmd", "/control/command/control_cmd"),
+                ("~/input/kinematics", "/localization/kinematic_state"),
+                ("~/input/operational_mode_state", "/api/operation_mode/state"),
+                ("~/input/measured_acceleration", "/localization/acceleration"),
+                ("~/input/lanelet2_map", "/map/vector_map"),
+                ("~/input/reference_trajectory", "/planning/trajectory"),
+                (
+                    "~/input/predicted_trajectory",
+                    "/control/trajectory_follower/lateral/predicted_trajectory",
+                ),
+                ("~/output/validation_status", "~/validation_status"),
+            ],
+        ),
+    ]
+
+
+def launch_collision_detector(context: LaunchContext) -> list:
+    """
+    Launch collision_detector without the control component.
+
+    The remaps and parameters are the same as tier4_control_launch.
+    """
+    return [
+        Node(
+            package="autoware_collision_detector",
+            executable="autoware_collision_detector_node",
+            namespace="/control",
+            name="collision_detector",
+            output="screen",
+            parameters=[
+                get_vehicle_info_param_path(context),
+                get_control_param_path(
+                    "autoware_collision_detector", "collision_detector.param.yaml"
+                ),
+            ],
+            remappings=[
+                ("~/input/odometry", "/localization/kinematic_state"),
+                ("~/input/pointcloud", "/perception/obstacle_segmentation/pointcloud"),
+                ("~/input/objects", "/perception/object_recognition/objects"),
+            ],
+        ),
+    ]
+
+
 def launch_optional_nodes(context: LaunchContext) -> list:
     nodes_list = context.launch_configurations["with_optional_nodes"].split(",")
     optional_nodes = []
@@ -150,6 +230,12 @@ def launch_optional_nodes(context: LaunchContext) -> list:
                 AnyLaunchDescriptionSource(detector_launch_file.as_posix()),
             )
         )
+    if "control_validator" in nodes_list:
+        optional_nodes.append(LogInfo(msg="launching control_validator......"))
+        optional_nodes.extend(launch_control_validator(context))
+    if "collision_detector" in nodes_list:
+        optional_nodes.append(LogInfo(msg="launching collision_detector......"))
+        optional_nodes.extend(launch_collision_detector(context))
     if len(optional_nodes) == 0:
         optional_nodes.append(LogInfo(msg="no optional nodes to launch."))
     return optional_nodes
