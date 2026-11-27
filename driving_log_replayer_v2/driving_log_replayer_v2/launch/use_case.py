@@ -94,7 +94,7 @@ def launch_camera_2d_detector(context: LaunchContext) -> list:
     Launch the 2D detector (tensorrt_yolox, optionally bytetrack) for each camera of camera_ids.
 
     Runs the same single camera pipeline, model and parameter files as the vehicle; they are
-    set in autoware_single_camera_2d_detection_launch and autoware_perception_config.
+    set in pilot_auto_perception_launch/camera_object_detection2d.launch.xml.
     """
     conf = context.launch_configurations
     camera_ids = [camera_id.strip() for camera_id in conf.get("camera_ids", "").split(",")]
@@ -106,9 +106,9 @@ def launch_camera_2d_detector(context: LaunchContext) -> list:
             )
         ]
     detector_launch_file = Path(
-        get_package_share_directory("autoware_single_camera_2d_detection_launch"),
+        get_package_share_directory("pilot_auto_perception_launch"),
         "launch",
-        "single_camera_2d_detection.launch.xml",
+        "camera_object_detection2d.launch.xml",
     )
     image_type = conf.get("image_type", "image_raw")
     return [
@@ -118,10 +118,9 @@ def launch_camera_2d_detector(context: LaunchContext) -> list:
                 IncludeLaunchDescription(
                     AnyLaunchDescriptionSource(detector_launch_file.as_posix()),
                     launch_arguments={
-                        "camera_namespace": f"camera{camera_id}",
+                        "camera_name": f"camera{camera_id}",
                         "camera_index": camera_id,
                         "input/image": f"/sensing/camera/camera{camera_id}/{image_type}",
-                        "use_bytetrack": conf.get("use_bytetrack", "false"),
                     }.items(),
                 ),
             ],
