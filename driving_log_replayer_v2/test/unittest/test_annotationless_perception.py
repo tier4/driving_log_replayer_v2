@@ -15,11 +15,15 @@
 from typing import Literal
 
 import pytest
+from tier4_metric_msgs.msg import Metric
+from tier4_metric_msgs.msg import MetricArray
 
 from driving_log_replayer_v2.annotationless_perception import AnnotationlessPerceptionScenario
+from driving_log_replayer_v2.annotationless_perception import Conditions
 from driving_log_replayer_v2.annotationless_perception import DiagValue
 from driving_log_replayer_v2.annotationless_perception import LowerUpper
 from driving_log_replayer_v2.annotationless_perception import ObjectMetrics
+from driving_log_replayer_v2.annotationless_perception import ObjectMetricsClassContainer
 from driving_log_replayer_v2.scenario import load_sample_scenario
 
 
@@ -111,3 +115,42 @@ def test_create_literal_from_tuple() -> None:
 
     literal_using_tuple = Literal[class_tuple]
     assert literal_using_tuple == class_literal
+
+
+def test_group_metrics_from_metric_array() -> None:
+    msg = MetricArray(
+        metric_array=[
+            Metric(name="lateral_deviation_CAR/min", value="0.1"),
+            Metric(name="lateral_deviation_CAR/max", value="0.3"),
+            Metric(name="lateral_deviation_CAR/mean", value="0.2"),
+            Metric(name="predicted_path_deviation_BUS_5.00/mean", value="1.5"),
+            Metric(name="objects_count_CAR_20.00/metric_value", value="4"),
+            Metric(name="no_key_metric", value="1.0"),
+        ],
+    )
+    assert ObjectMetricsClassContainer.group_metrics(msg) == {
+        "lateral_deviation_CAR": {"min": 0.1, "max": 0.3, "mean": 0.2},
+        "predicted_path_deviation_BUS_5.00": {"mean": 1.5},
+        "objects_count_CAR_20.00": {"metric_value": 4.0},
+    }
+
+
+def test_container_set_frame_from_metric_array() -> None:
+    condition = Conditions(
+        ClassConditions={
+            "CAR": {
+                "lateral_deviation": DiagValue(mean=LowerUpper(lower=0.0, upper=0.5)),
+            },
+        },
+    )
+    container = ObjectMetricsClassContainer(condition)
+    msg = MetricArray(
+        metric_array=[
+            Metric(name="lateral_deviation_CAR/min", value="0.1"),
+            Metric(name="lateral_deviation_CAR/max", value="0.3"),
+            Metric(name="lateral_deviation_CAR/mean", value="0.2"),
+        ],
+    )
+    frame = container.set_frame(msg)
+    assert frame["CAR"]["Result"]["Frame"] == "Success"
+    assert frame["CAR"]["Metrics"]["lateral_deviation"] == {"min": 0.1, "max": 0.3, "mean": 0.2}
