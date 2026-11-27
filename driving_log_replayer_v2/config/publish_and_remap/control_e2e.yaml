@@ -1,0 +1,47 @@
+# This publishing topics is to test the control module (control_validator etc.) with the E2E planner's (diffusion planner) trajectory in the rosbag
+# Note this config should be used with `planning:=false` and `control:=true`
+# The following topics are not published because the control module generates them:
+#   /control/command/control_cmd, /control/trajectory_follower/control_cmd, /control/trajectory_follower/lateral/predicted_trajectory,
+#   /control/shift_decider/gear_cmd, /system/operation_mode/state
+publish:
+  # planning outputs
+  - /planning/trajectory # not remapped, it is the input of the control module
+  - /planning/mission_planning/route
+  - /planning/hazard_lights_cmd
+  - /planning/turn_indicators_cmd
+
+  # vehicle
+  - /vehicle/status/steering_status
+  - /vehicle/status/velocity_status
+  - /vehicle/status/turn_indicators_status
+  - /vehicle/status/control_mode
+  - /vehicle/status/gear_status
+  # sensing
+  - /sensing/imu/imu_data
+  # localization
+  - /localization/acceleration
+  - /localization/kinematic_state
+  - /tf
+  # perception (for collision_detector)
+  - /perception/object_recognition/objects
+  - /perception/obstacle_segmentation/pointcloud
+  # system / mrm
+  - /system/emergency/control_cmd
+  - /system/emergency/gear_cmd
+  - /system/emergency/hazard_lights_cmd
+  - /system/emergency/turn_indicators_cmd
+  - /system/fail_safe/mrm_state
+  # `/control/external_cmd_selector` outputs
+  - /control/external_cmd_selector/current_selector_mode
+  - /external/selected/gear_cmd
+  - /external/selected/hazard_lights_cmd
+  - /external/selected/heartbeat
+  - /external/selected/pedals_cmd
+  - /external/selected/steering_cmd
+  - /external/selected/turn_indicators_cmd
+  # other
+  - /autoware/state
+  - /api/operation_mode/state
+  # - /system/operation_mode/state # from `/control/autoware_operation_mode_transition_manager`
+  # - /autoware/engage # from `/control/autoware_operation_mode_transition_manager`
+  # - /api/autoware/get/engage # from `/control/vehicle_cmd_gate`
