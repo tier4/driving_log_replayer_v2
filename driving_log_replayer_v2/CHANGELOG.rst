@@ -2,8 +2,8 @@
 Changelog for package driving_log_replayer
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-Forthcoming
------------
+3.19.3 (2026-11-27)
+-------------------
 * feat(launch): add control_validator and collision_detector as with_optional_nodes (`#454 <https://github.com/tier4/driving_log_replayer_v2/issues/454>`_)
 * Contributors: olikumar
 
