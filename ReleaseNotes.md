@@ -1,5 +1,13 @@
 # Release Notes
 
+## Version 3.19.3
+
+Minor Tweak
+
+| Module   | Feature            | Brief summary                                                       | Pull request                                                      | Contributor                             |
+| -------- | ------------------ | ------------------------------------------------------------------- | ----------------------------------------------------------------- | --------------------------------------- |
+| `common` | new optional nodes | add control_validator and collision_detector as with_optional_nodes | [#454](https://github.com/tier4/driving_log_replayer_v2/pull/454) | [olikumar](https://github.com/olikumar) |
+
 ## Version 3.19.2
 
 Minor Tweak
